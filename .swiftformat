@@ -1,0 +1,18 @@
+# Layout-only rules: preserve program tokens, literals, and meaningful phase boundaries.
+--min-version 0.63.0
+--swift-version 6.0
+--rules braces,consecutiveBlankLines,elseOnSameLine,indent,linebreaks,spaceAroundBraces,spaceAroundBrackets,spaceAroundGenerics,spaceAroundOperators,spaceAroundParens,spaceInsideBraces,spaceInsideBrackets,spaceInsideGenerics,spaceInsideParens,trailingSpace,wrap,wrapArguments,wrapFunctionBodies,wrapIfStatementBodies,wrapLoopBodies,wrapMultilineStatementBraces,wrapPropertyBodies
+--indent tab
+--tab-width 4
+--smart-tabs disabled
+--max-width 100
+--allman true
+--else-position next-line
+--empty-braces linebreak
+--wrap-arguments before-first
+--wrap-parameters before-first
+--wrap-collections preserve
+--allow-partial-wrapping false
+--closing-paren balanced
+--call-site-paren balanced
+--indent-strings false
