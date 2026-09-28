@@ -17,6 +17,7 @@ let package = Package(
 				"Application/Reducers/Composer/ComposerReducer+SubmissionLifecycle.swift",
 				"Application/Reducers/Composer/ComposerReducer.swift",
 				"Application/Reducers/Connection/ConnectionReducer.swift",
+				"Application/Reducers/Conversation/ConversationContentReducer.swift",
 				"Application/Services/CodexService.swift",
 				"CodexClient/AppServer/AppServer+Executable.swift",
 				"CodexClient/AppServer/AppServer+Interactions.swift",
