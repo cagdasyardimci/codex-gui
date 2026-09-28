@@ -49,6 +49,7 @@ let package = Package(
 				"Features/ProjectContext/ProjectContextPresentation.swift",
 				"Features/Shared/FeaturePresentationOwner.swift",
 				"Persistence/LocalStorage.swift",
+				"Persistence/ReviewMarkerStore.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
@@ -86,6 +87,8 @@ let package = Package(
 				"Features/Conversation/ConversationContent.swift",
 				"Features/ProjectContext/ConversationBookmarkKind+Labels.swift",
 				"Features/ProjectContext/ProjectContextItemKind+Labels.swift",
+				"Persistence/DraftImageStore.swift",
+				"Persistence/ProjectContextStore.swift",
 				"Persistence/WindowLayoutStore.swift",
 				"main.swift",
 			]
