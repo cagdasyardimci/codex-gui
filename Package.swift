@@ -14,6 +14,9 @@ let package = Package(
 			exclude: [
 			],
 			sources: [
+				"CodexClient/AccountProtocolModels.swift",
+				"CodexClient/AppServerError.swift",
+				"CodexClient/ConversationProtocolModels.swift",
 				"main.swift",
 			]
 		),
