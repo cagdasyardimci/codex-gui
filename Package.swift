@@ -12,6 +12,7 @@ let package = Package(
 		.executableTarget(
 			name: "CodexGUI",
 			exclude: [
+				"Persistence/LocalStorage.swift",
 			],
 			sources: [
 				"CodexClient/AccountProtocolModels.swift",
