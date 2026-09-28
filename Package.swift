@@ -18,6 +18,7 @@ let package = Package(
 				"CodexClient/AppServer/AppServer+Notifications.swift",
 				"CodexClient/AppServer/AppServer+Requests.swift",
 				"CodexClient/AppServer/AppServer.swift",
+				"Features/Conversation/ComposerInputs.swift",
 				"Persistence/LocalStorage.swift",
 			],
 			sources: [
