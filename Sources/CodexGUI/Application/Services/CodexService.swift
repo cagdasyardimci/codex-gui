@@ -1,0 +1,285 @@
+import Foundation
+
+@MainActor
+protocol CodexService: AnyObject
+{
+	var onEvent: ((AppServerEvent) -> Void)?
+	{
+		get set
+	}
+	var onDisconnect: ((String) -> Void)?
+	{
+		get set
+	}
+	var backendDiagnostics: BackendDiagnosticsSnapshot
+	{
+		get
+	}
+
+	func executableVersion() async throws -> String
+	func connect() async throws
+	func disconnect()
+	func accountStatus() async throws -> AccountStatus
+	func startBrowserLogin() async throws -> URL
+	func models() async throws -> [ModelOption]
+	func skills(for directory: URL) async throws -> SkillCatalog
+	func rateLimits() async throws -> AccountRateLimitsSnapshot
+	func threads(for directory: URL) async throws -> [ThreadSummary]
+	func threads(
+		for directory: URL,
+		archived: Bool
+	) async throws -> [ThreadSummary]
+	func renameThread(
+		id: String,
+		name: String
+	) async throws
+	func archiveThread(id: String) async throws
+	func unarchiveThread(id: String) async throws
+	func startThread(
+		in directory: URL,
+		model: String?
+	) async throws -> ThreadDetail
+	func resumeThread(id: String) async throws -> ThreadDetail
+	func resumeThread(
+		id: String,
+		expectedDirectory: URL?
+	) async throws -> ThreadDetail
+	func readThread(id: String) async throws -> ThreadDetail
+	func loadEarlierTurns(
+		threadId: String,
+		cursor: String
+	) async throws -> (
+		turns: [CodexTurn],
+		nextCursor: String?
+	)
+	func startTurn(
+		threadId: String,
+		text: String,
+		model: String?,
+		effort: String?
+	) async throws
+		-> CodexTurn
+	func startTurn(
+		threadId: String,
+		text: String,
+		model: String?,
+		effort: String?,
+		skills: [SkillReference]
+	) async throws -> CodexTurn
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference]
+	) async throws -> CodexTurn
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?
+	) async throws -> CodexTurn
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences
+	) async throws -> CodexTurn
+	func steerTurn(
+		threadId: String,
+		expectedTurnId: String,
+		text: String
+	) async throws -> String
+	func steerTurn(
+		threadId: String,
+		expectedTurnId: String,
+		inputs: [TurnInput]
+	) async throws -> String
+	func interrupt(
+		threadId: String,
+		turnId: String
+	) async throws
+	func respond(
+		to requestID: String,
+		with response: InteractionResponse
+	) throws
+}
+
+extension CodexService
+{
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences
+	) async throws -> CodexTurn
+	{
+		guard preferences == .standard
+		else
+		{
+			throw AppServerError.protocolError(
+				"This Codex service does not support the selected approval policy or fast mode."
+			)
+		}
+		return try await startTurn(
+			threadId: threadId,
+			inputs: inputs,
+			model: model,
+			effort: effort,
+			skills: skills,
+			cwd: cwd
+		)
+	}
+
+	func resumeThread(
+		id: String,
+		expectedDirectory: URL?
+	) async throws -> ThreadDetail
+	{
+		let detail = try await resumeThread(id: id)
+		try CheckoutIdentity.validate(
+			cwd: detail.summary.cwd,
+			expectedDirectory: expectedDirectory
+		)
+		return detail
+	}
+
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?
+	) async throws -> CodexTurn
+	{
+		guard cwd == nil
+		else
+		{
+			throw AppServerError.protocolError(
+				"This Codex service cannot start a turn in a verified checkout."
+			)
+		}
+		return try await startTurn(
+			threadId: threadId,
+			inputs: inputs,
+			model: model,
+			effort: effort,
+			skills: skills
+		)
+	}
+
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference]
+	) async throws -> CodexTurn
+	{
+		guard inputs.count == 1, case .text(let text) = inputs[0]
+		else
+		{
+			throw AppServerError
+				.protocolError("This Codex service cannot send context attachments.")
+		}
+		return try await startTurn(
+			threadId: threadId,
+			text: text,
+			model: model,
+			effort: effort,
+			skills: skills
+		)
+	}
+
+	func steerTurn(
+		threadId: String,
+		expectedTurnId: String,
+		inputs: [TurnInput]
+	) async throws -> String
+	{
+		guard inputs.count == 1, case .text(let text) = inputs[0]
+		else
+		{
+			throw AppServerError.protocolError(
+				"This Codex service cannot steer with context attachments."
+			)
+		}
+		return try await steerTurn(
+			threadId: threadId,
+			expectedTurnId: expectedTurnId,
+			text: text
+		)
+	}
+
+	func skills(for directory: URL) async throws -> SkillCatalog
+	{
+		throw AppServerError.protocolError("This Codex service cannot list skills.")
+	}
+
+	func rateLimits() async throws -> AccountRateLimitsSnapshot
+	{
+		throw AppServerError.protocolError("This Codex service cannot read rate limits.")
+	}
+
+	func startTurn(
+		threadId: String,
+		text: String,
+		model: String?,
+		effort: String?,
+		skills: [SkillReference]
+	) async throws -> CodexTurn
+	{
+		guard skills.isEmpty
+		else
+		{
+			throw AppServerError.protocolError("This Codex service cannot invoke skills.")
+		}
+		return try await startTurn(
+			threadId: threadId,
+			text: text,
+			model: model,
+			effort: effort
+		)
+	}
+
+	func threads(
+		for directory: URL,
+		archived: Bool
+	) async throws -> [ThreadSummary]
+	{
+		guard !archived
+		else
+		{
+			throw AppServerError
+				.protocolError("This Codex service cannot list archived conversations.")
+		}
+		return try await threads(for: directory)
+	}
+
+	func renameThread(
+		id: String,
+		name: String
+	) async throws
+	{
+		throw AppServerError.protocolError("This Codex service cannot rename conversations.")
+	}
+
+	func archiveThread(id: String) async throws
+	{
+		throw AppServerError.protocolError("This Codex service cannot archive conversations.")
+	}
+
+	func unarchiveThread(id: String) async throws
+	{
+		throw AppServerError.protocolError("This Codex service cannot unarchive conversations.")
+	}
+}
