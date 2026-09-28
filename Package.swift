@@ -37,6 +37,7 @@ let package = Package(
 				"CodexClient/SkillProtocolModels.swift",
 				"CodexClient/StderrReader.swift",
 				"CodexClient/UsageProtocolModels.swift",
+				"Features/Conversation/ConversationContent.swift",
 				"main.swift",
 			]
 		),
