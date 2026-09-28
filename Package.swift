@@ -17,6 +17,9 @@ let package = Package(
 				"CodexClient/AccountProtocolModels.swift",
 				"CodexClient/AppServerError.swift",
 				"CodexClient/ConversationProtocolModels.swift",
+				"CodexClient/InteractionProtocolModels.swift",
+				"CodexClient/JSONLineFramer.swift",
+				"CodexClient/ModelProtocolModels.swift",
 				"main.swift",
 			]
 		),
