@@ -48,6 +48,7 @@ let package = Package(
 			exclude: [
 				"CodexClient/AppServerIntegrationTests.swift",
 				"CodexClient/AppServerWorkspaceIsolationTests.swift",
+				"CodexClient/BackendTests.swift",
 			],
 			sources: [
 				"CodexClient/ApprovalDecisionTests.swift",
