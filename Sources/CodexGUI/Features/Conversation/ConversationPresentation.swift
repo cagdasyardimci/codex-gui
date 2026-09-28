@@ -1,0 +1,292 @@
+import Foundation
+
+struct ConversationPresentation: Equatable
+{
+	struct Transcript: Equatable
+	{
+		let owner: FeaturePresentationOwner
+		let entries: [ConversationEntry]
+		let canLoadEarlierTurns: Bool
+		var selectedThreadID: String?
+		{
+			owner.selectedThreadID
+		}
+	}
+
+	struct Location: Equatable
+	{
+		let owner: FeaturePresentationOwner
+		let selectedBranch: String?
+		let selectedCheckoutPath: String?
+		var projectPath: String?
+		{
+			owner.projectPath
+		}
+	}
+
+	struct Navigation: Equatable
+	{
+		let owner: FeaturePresentationOwner
+		let bookmarks: [ConversationBookmark]
+		let navigationTargets: [ConversationJumpTarget]
+	}
+
+	struct Status: Equatable
+	{
+		let owner: FeaturePresentationOwner
+		let executionState: ExecutionState
+		let statusMessage: String?
+		let activeThreadID: String?
+		let activeExecutionState: ExecutionState?
+		let activePlan: TurnPlanUpdate?
+		let activeActivity: String?
+		let jumpError: String?
+		let jumpLoading: Bool
+		var selectedThreadID: String?
+		{
+			owner.selectedThreadID
+		}
+	}
+
+	struct RequestContext: Equatable
+	{
+		let owner: FeaturePresentationOwner
+		let includedItemCount: Int
+		let selectedSkill: ProjectSkillSelection?
+		let skillAvailable: Bool
+		let includedContextText: String
+		let draftContextSummary: String
+
+		init(
+			_ snapshot: ConversationSnapshot,
+			owner: FeaturePresentationOwner
+		)
+		{
+			self.owner = owner
+			includedItemCount = snapshot.projectContext.items.filter(\.isIncluded).count
+			selectedSkill = snapshot.projectContext.selectedSkill
+			skillAvailable = selectedSkill.map
+			{
+				selected in
+				let matching = snapshot.skillCatalog?.skills.filter
+				{
+					$0.enabled && $0.name == selected.name
+				} ?? []
+				return matching.contains
+				{
+					$0.path == selected.path
+				} || matching.count == 1
+			} ?? false
+			includedContextText = snapshot.projectContext.includedContextText
+			draftContextSummary = snapshot.draftContext.map
+			{
+				"\($0.kind.title): \($0.detail)"
+			}
+			.joined(separator: "\n")
+		}
+	}
+
+	struct Preferences: Equatable
+	{
+		let owner: FeaturePresentationOwner
+		let models: [ModelOption]
+		let selectedModelID: String?
+		let selectedEffort: String?
+		let fastMode: Bool
+		let approvalMode: ApprovalMode
+		let preferenceWarning: String?
+	}
+
+	struct Composer: Equatable
+	{
+		let owner: FeaturePresentationOwner
+		let draftLifetime: Int
+		let draft: String
+		let draftContext: [ComposerContextItem]
+		let reusableReferences: [ComposerContextItem]
+		let canSend: Bool
+		let canSteer: Bool
+		let activeThreadID: String?
+		let activeExecutionState: ExecutionState?
+		var projectPath: String?
+		{
+			owner.projectPath
+		}
+		var selectedThreadID: String?
+		{
+			owner.selectedThreadID
+		}
+	}
+
+	/// Cards retain local answers while their complete captured callback payload is unchanged.
+	struct Interactions: Equatable
+	{
+		private struct Question: Equatable
+		{
+			struct Option: Equatable
+			{
+				let label: String; let description: String
+			}
+			let id: String
+			let header: String
+			let question: String
+			let options: [Option]
+			let allowsOther: Bool
+			let isSecret: Bool
+		}
+		private struct Key: Equatable
+		{
+			let id: String
+			let threadID: String
+			let turnID: String
+			let itemID: String
+			let approvalID: String?
+			let kind: String
+			let reason: String?
+			let command: String?
+			let cwd: String?
+			let grantRoot: String?
+			let networkHost: String?
+			let networkProtocol: String?
+			let questions: [Question]
+			let requestedPermissions: NSDictionary?
+			let additionalPermissions: NSDictionary?
+			let decisions: [ApprovalDecision]?
+		}
+		let owner: FeaturePresentationOwner
+		let values: [PendingInteraction]
+		private var keys: [Key]
+		{
+			values.map
+			{
+				value in
+				Key(
+					id: value.id,
+					threadID: value.threadId,
+					turnID: value.turnId,
+					itemID: value.itemId,
+					approvalID: value.approvalId,
+					kind: String(reflecting: value.kind),
+					reason: value.reason,
+					command: value.command,
+					cwd: value.cwd,
+					grantRoot: value.grantRoot,
+					networkHost: value.networkHost,
+					networkProtocol: value.networkProtocol,
+					questions: value.questions.map
+					{
+						Question(
+							id: $0.id,
+							header: $0.header,
+							question: $0.question,
+							options: $0.options.map
+							{
+								Question.Option(
+									label: $0.label,
+									description: $0.description
+								)
+							},
+							allowsOther: $0.allowsOther,
+							isSecret: $0.isSecret
+						)
+					},
+					requestedPermissions: value.requestedPermissions.map(NSDictionary.init),
+					additionalPermissions: value.additionalPermissions.map(NSDictionary.init),
+					decisions: value.availableDecisions
+				)
+			}
+		}
+		static func == (lhs: Self, rhs: Self) -> Bool
+		{
+			lhs.owner == rhs.owner && lhs.keys == rhs.keys
+		}
+	}
+
+	let transcript: Transcript
+	let location: Location
+	let navigation: Navigation
+	let status: Status
+	let requestContext: RequestContext
+	let preferences: Preferences
+	let composer: Composer
+	let interactions: Interactions
+	var owner: FeaturePresentationOwner
+	{
+		transcript.owner
+	}
+
+	init(
+		_ snapshot: ConversationSnapshot,
+		ownerIdentity: String? = nil
+	)
+	{
+		let owner = FeaturePresentationOwner(
+			snapshot,
+			storeIdentity: ownerIdentity
+		)
+		transcript = Transcript(
+			owner: owner,
+			entries: snapshot.entries,
+			canLoadEarlierTurns: snapshot.canLoadEarlierTurns
+		)
+		let workspace = snapshot.taskWorkspaces.first
+		{
+			$0.id == snapshot.selectedTaskWorkspaceID && $0.checkoutPath == snapshot.projectPath
+		}
+		location = Location(
+			owner: owner,
+			selectedBranch: workspace?.branch,
+			selectedCheckoutPath: workspace?.checkoutPath
+		)
+		navigation = Navigation(
+			owner: owner,
+			bookmarks: snapshot.projectContext.bookmarks,
+			navigationTargets: snapshot.navigationTargets.filter
+			{
+				$0.threadID == snapshot.selectedThreadID
+			}
+		)
+		status = Status(
+			owner: owner,
+			executionState: snapshot.executionState,
+			statusMessage: snapshot.statusMessage,
+			activeThreadID: snapshot.activeThreadID,
+			activeExecutionState: snapshot.activeExecutionState,
+			activePlan: snapshot.activeThreadID != nil
+				&& snapshot.activeThreadID == snapshot.selectedThreadID ? snapshot.activePlan : nil,
+			activeActivity: snapshot.activeThreadID != nil
+				&& snapshot.activeThreadID == snapshot.selectedThreadID
+				? snapshot.activeActivity : nil,
+			jumpError: snapshot.jumpError,
+			jumpLoading: snapshot.jumpLoading
+		)
+		requestContext = RequestContext(
+			snapshot,
+			owner: owner
+		)
+		preferences = Preferences(
+			owner: owner,
+			models: snapshot.models,
+			selectedModelID: snapshot.selectedModelID,
+			selectedEffort: snapshot.selectedEffort,
+			fastMode: snapshot.fastMode,
+			approvalMode: snapshot.approvalMode,
+			preferenceWarning: snapshot.preferenceWarning
+		)
+		composer = Composer(
+			owner: owner,
+			draftLifetime: snapshot.composerDraftLifetime,
+			draft: snapshot.draft,
+			draftContext: snapshot.draftContext,
+			reusableReferences: snapshot.reusableReferences,
+			canSend: snapshot.canSend,
+			canSteer: snapshot.canSteer,
+			activeThreadID: snapshot.activeThreadID,
+			activeExecutionState: snapshot.activeExecutionState
+		)
+		interactions = Interactions(
+			owner: owner,
+			values: snapshot.pendingInteractions
+		)
+	}
+}

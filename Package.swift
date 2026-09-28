@@ -45,6 +45,7 @@ let package = Package(
 				"Features/Changes/ReviewModels.swift",
 				"Features/Changes/ReviewPresentation.swift",
 				"Features/Conversation/ComposerInputs.swift",
+				"Features/Conversation/ConversationPresentation.swift",
 				"Persistence/LocalStorage.swift",
 			],
 			sources: [
