@@ -20,6 +20,7 @@ let package = Package(
 				"Application/Reducers/Conversation/ConversationContentReducer.swift",
 				"Application/Reducers/Conversation/ConversationReducer.swift",
 				"Application/Reducers/Execution/ExecutionReducer+Observation.swift",
+				"Application/Reducers/Execution/ExecutionReducer+Reconciliation.swift",
 				"Application/Reducers/Execution/ExecutionReducer.swift",
 				"Application/Services/CodexService.swift",
 				"CodexClient/AppServer/AppServer+Executable.swift",
