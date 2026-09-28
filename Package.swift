@@ -15,6 +15,8 @@ let package = Package(
 				"Application/Services/CodexService.swift",
 				"CodexClient/AppServer/AppServer+Executable.swift",
 				"CodexClient/AppServer/AppServer+Interactions.swift",
+				"CodexClient/AppServer/AppServer+Notifications.swift",
+				"CodexClient/AppServer/AppServer+Requests.swift",
 				"CodexClient/AppServer/AppServer.swift",
 				"Persistence/LocalStorage.swift",
 			],
