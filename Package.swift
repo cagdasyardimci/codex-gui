@@ -101,6 +101,8 @@ let package = Package(
 				"CodexClient/AppServerIntegrationTests.swift",
 				"CodexClient/AppServerWorkspaceIsolationTests.swift",
 				"CodexClient/BackendTests.swift",
+				"Persistence/LocalStorageTests.swift",
+				"Persistence/ReviewMarkerStoreTests.swift",
 			],
 			sources: [
 				"Application/Runtime/Support/MockCodexService.swift",
