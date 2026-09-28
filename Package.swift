@@ -12,7 +12,8 @@ let package = Package(
 		.executableTarget(
 			name: "CodexGUI",
 			exclude: [
-				"Application/Reducers/Composer/ComposerContext.swift",
+				"Application/Presentation/PresentationModels.swift",
+				"Application/Presentation/WorkspaceSelectors.swift",
 				"Application/Reducers/Composer/ComposerReducer+Drafts.swift",
 				"Application/Reducers/Composer/ComposerReducer+SubmissionLifecycle.swift",
 				"Application/Reducers/Composer/ComposerReducer.swift",
@@ -44,6 +45,8 @@ let package = Package(
 				"App/AppKitLayout.swift",
 				"App/BoundedContentScrollView.swift",
 				"App/DesktopTheme.swift",
+				"Application/Presentation/UserMessagePresenter.swift",
+				"Application/Reducers/Composer/ComposerContext.swift",
 				"Application/Reducers/Conversation/HistoryPageScope.swift",
 				"Application/Reducers/Execution/TaskCommandLifetime.swift",
 				"Application/State/CheckoutIdentity.swift",
