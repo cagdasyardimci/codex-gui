@@ -47,6 +47,7 @@ let package = Package(
 				"Features/Navigation/NavigationPresentation.swift",
 				"Features/Navigation/UsagePresentation.swift",
 				"Features/ProjectContext/ProjectContextPresentation.swift",
+				"Features/Shared/FeaturePresentationOwner.swift",
 				"Persistence/LocalStorage.swift",
 			],
 			sources: [
