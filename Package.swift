@@ -31,6 +31,7 @@ let package = Package(
 				"Application/State/WorkspaceDomainEvent.swift",
 				"Application/State/WorkspaceEligibility.swift",
 				"Application/State/WorkspaceIntent.swift",
+				"Application/State/WorkspaceModel.swift",
 				"CodexClient/AppServer/AppServer+Executable.swift",
 				"CodexClient/AppServer/AppServer+Interactions.swift",
 				"CodexClient/AppServer/AppServer+Notifications.swift",
