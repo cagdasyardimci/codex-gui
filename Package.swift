@@ -30,6 +30,7 @@ let package = Package(
 				"Application/Reducers/Navigation/ProjectProductivity.swift",
 				"Application/Reducers/Preferences/PreferenceOperations.swift",
 				"Application/Reducers/Preferences/PreferenceReducer.swift",
+				"Application/Reducers/Review/ReviewReducer.swift",
 				"Application/Runtime/WorkspaceOperationHandle.swift",
 				"Application/Runtime/WorkspacePersistenceScheduler.swift",
 				"Application/Runtime/WorkspacePublicationCoordinator.swift",
