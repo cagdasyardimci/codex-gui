@@ -103,6 +103,9 @@ let package = Package(
 				"CodexClient/BackendTests.swift",
 				"Persistence/LocalStorageTests.swift",
 				"Persistence/ReviewMarkerStoreTests.swift",
+				"Support/ConversationPresentationTestFixture.swift",
+				"Support/ReviewModelTestFixture.swift",
+				"Support/WorkspaceTestFixture.swift",
 			],
 			sources: [
 				"Application/Runtime/Support/MockCodexService.swift",
