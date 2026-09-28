@@ -38,6 +38,7 @@ let package = Package(
 				"CodexClient/StderrReader.swift",
 				"CodexClient/UsageProtocolModels.swift",
 				"Features/Conversation/ConversationContent.swift",
+				"Persistence/WindowLayoutStore.swift",
 				"main.swift",
 			]
 		),
