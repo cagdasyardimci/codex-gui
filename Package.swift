@@ -13,6 +13,9 @@ let package = Package(
 			name: "CodexGUI",
 			exclude: [
 				"Application/Services/CodexService.swift",
+				"CodexClient/AppServer/AppServer+Executable.swift",
+				"CodexClient/AppServer/AppServer+Interactions.swift",
+				"CodexClient/AppServer/AppServer.swift",
 				"Persistence/LocalStorage.swift",
 			],
 			sources: [
