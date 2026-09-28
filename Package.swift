@@ -15,6 +15,9 @@ let package = Package(
 				"Persistence/LocalStorage.swift",
 			],
 			sources: [
+				"App/AppKitLayout.swift",
+				"App/BoundedContentScrollView.swift",
+				"App/DesktopTheme.swift",
 				"CodexClient/AccountProtocolModels.swift",
 				"CodexClient/AppServerError.swift",
 				"CodexClient/ConversationProtocolModels.swift",
