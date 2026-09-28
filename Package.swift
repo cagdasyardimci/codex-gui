@@ -20,6 +20,9 @@ let package = Package(
 				"CodexClient/InteractionProtocolModels.swift",
 				"CodexClient/JSONLineFramer.swift",
 				"CodexClient/ModelProtocolModels.swift",
+				"CodexClient/ProtocolModels.swift",
+				"CodexClient/SkillProtocolModels.swift",
+				"CodexClient/UsageProtocolModels.swift",
 				"main.swift",
 			]
 		),
