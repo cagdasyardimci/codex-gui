@@ -1,0 +1,360 @@
+import Foundation
+
+/// Execution backend events retain owner guards and command completion barriers.
+extension ExecutionReducer
+{
+	static func reduceObservation(
+		_ action: ExecutionAction,
+		model: inout WorkspaceModel
+	) -> WorkspaceReduction
+	{
+		var result = WorkspaceReduction()
+		switch action
+		{
+		case .backendObserved(
+			let context,
+			let event
+		):
+			guard valid(
+				context,
+				model
+			)
+			else
+			{
+				return result
+			}
+			observe(
+				event,
+				context: context,
+				model: &model,
+				result: &result
+			)
+		default: break
+		}
+		return result
+	}
+
+	private static func acceptsContent(
+		threadID: String,
+		turnID: String,
+		itemID: String? = nil,
+		model: WorkspaceModel
+	) -> Bool
+	{
+		if model.execution.commandLifetime
+			.owns(
+				threadID: threadID,
+				turnID: turnID,
+				itemID: itemID
+			)
+		{
+			return true
+		}
+		if let owner = model.execution.activeThreadID
+		{
+			return threadID == owner && model.execution.activeTurnID == turnID
+		}
+		return threadID == model.conversations.selectedConversation.threadID
+	}
+
+	private static func observe(
+		_ event: AppServerEvent,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		let selectedThreadID = model.conversations.selectedConversation.threadID
+		switch event
+		{
+		case .turnStarted(
+			let threadID,
+			let turn
+		):
+			guard model.connection.isConnected,
+					model.execution
+					.activeThreadID == threadID ||
+					(model.execution.activeThreadID == nil && selectedThreadID == threadID),
+					model.execution.activeTurnID == nil || model.execution.activeTurnID == turn.id
+			else
+			{
+				return
+			}
+			model.execution.activeThreadID = threadID
+			model.execution.activeTurnID = turn.id
+			model.execution.owner?.submission.threadID = threadID
+			model.execution.owner?.submission.turnID = turn.id
+			if !model.execution.stopRequested && !model.execution.needsReconciliation
+			{
+				model.execution.state = .running; model.execution.statusMessage = nil
+			}
+			requestInterruption(
+				model: &model,
+				result: &result
+			)
+		case .turnCompleted(
+			let threadID,
+			let turn
+		):
+			guard model.execution
+				.activeThreadID == threadID ||
+				(model.execution.activeThreadID == nil && selectedThreadID == threadID),
+				model.execution.activeTurnID == turn.id
+			else
+			{
+				return
+			}
+			recordCommandObservation(
+				threadID: threadID,
+				turns: [turn],
+				model: &model
+			)
+			model.execution.commandLifetime.reconcile(
+				threadID: threadID,
+				turns: [turn]
+			)
+			result.effects.append(.persistCommands(
+				context,
+				Array(model.execution.commandLifetime.pending)
+			))
+			model.execution.activeThreadID = threadID
+			model.execution.activeTurnID = nil
+			model.execution.agentOutcome = turn.status == "interrupted" ? .stopped :
+				(turn.status == "failed" ? .failed(turn.error ?? "Codex reported a failed task.") :
+					.completed)
+			model.execution.pendingInteractions.removeAll()
+			model.execution.pendingResponses.removeAll()
+			model.execution.pendingSteering = nil
+			if model.execution.needsReconciliation
+			{
+				model.execution.state = .failed
+				model.execution.statusMessage =
+					"Codex reported a task outcome after the request timed out. "
+						+ "Refresh this conversation before sending again."
+			}
+			else if turn.status == "failed"
+			{
+				model.execution.state = .failed; model.execution.statusMessage = turn
+					.error ?? "Codex reported a failed task."
+			}
+			else if turn.status == "interrupted"
+			{
+				model.execution.state = .stopped; model.execution
+					.statusMessage = "Agent interrupted."
+			}
+			else
+			{
+				model.execution.state = .completed
+				model.execution.statusMessage = model.execution.stopRequested
+					? "Task completed before Stop took effect."
+					: "Task completed."
+			}
+			model.execution.outcomeMessage = model.execution.statusMessage
+			if model.execution.commandLifetime.hasPendingCommands
+			{
+				model.execution.deferredTurnOutcome = model.execution.state
+				model.execution.deferredTurnMessage = model.execution.statusMessage
+				model.execution.reconcilingCommandOutcome = !model.execution.hasUncertainRequest
+				model.execution.needsReconciliation = true
+				model.execution.state = .stopping
+				model.execution.statusMessage =
+					"The agent finished this turn. An approved command is still "
+						+ "awaiting its exit; Stop does not confirm command cancellation."
+				model.execution.outcomeMessage = model.execution.statusMessage
+			}
+			model.execution.stopRequested = false
+			model.execution.interruptRequestSent = false
+			model.execution.pendingInterruption = nil
+			model.execution.activePlan = nil
+			model.execution.activeActivity = nil
+			if !model.execution.commandLifetime
+				.hasPendingCommands
+			{
+				result.presentationCommands.append(.taskFinished)
+			}
+			var readContext = context
+			readContext.threadID = threadID
+			readContext.turnID = turn.id
+			result.domainEvents
+				.append(.completedHistoryReadRequested(ConversationReadOperation(
+					context: readContext,
+					commandRevision: model.execution.commandEventRevisions[threadID, default: 0],
+					purpose: .completion
+				)))
+		case .itemStarted(
+			let threadID,
+			let turnID,
+			let item
+		), .itemCompleted(
+			let threadID,
+			let turnID,
+			let item
+		):
+			guard acceptsContent(
+				threadID: threadID,
+				turnID: turnID,
+				itemID: item.id,
+				model: model
+			)
+			else
+			{
+				return
+			}
+			model.execution.commandEventRevisions[threadID, default: 0] += 1
+			model.execution.commandLifetime.observe(
+				item,
+				threadID: threadID,
+				turnID: turnID
+			)
+			result.effects.append(.persistCommands(
+				context,
+				Array(model.execution.commandLifetime.pending)
+			))
+			if item.type == "commandExecution" || item.type == "mcpToolCall"
+			{
+				model.execution.activeActivity = ["completed", "failed", "declined"]
+					.contains(item.status ?? "")
+					? nil : (item.command ?? item.type)
+			}
+			finishDeferred(
+				model: &model,
+				result: &result
+			)
+		case .commandOutputDelta(
+			let threadID,
+			let turnID,
+			let itemID,
+			_
+		):
+			guard acceptsContent(
+				threadID: threadID,
+				turnID: turnID,
+				itemID: itemID,
+				model: model
+			)
+			else
+			{
+				return
+			}
+			model.execution.commandEventRevisions[threadID, default: 0] += 1
+		case .agentMessageDelta(
+			let threadID,
+			let turnID,
+			_,
+			_
+		),
+		.fileChangeUpdated(
+			let threadID,
+			let turnID,
+			_,
+			_
+		), .diffUpdated(
+			let threadID,
+			let turnID,
+			_
+		):
+			guard acceptsContent(
+				threadID: threadID,
+				turnID: turnID,
+				model: model
+			)
+			else
+			{
+				return
+			}
+		case .planUpdated(let plan):
+			guard plan.threadId == model.execution.activeThreadID,
+					plan.turnId == model.execution.activeTurnID
+			else
+			{
+				return
+			}
+			model.execution.activePlan = plan
+		case .toolProgress(
+			let threadID,
+			let turnID,
+			_,
+			let message
+		):
+			guard threadID == model.execution.activeThreadID,
+					turnID == model.execution.activeTurnID
+			else
+			{
+				return
+			}
+			model.execution.activeActivity = message
+		case .interaction(let interaction):
+			guard model.connection.isConnected,
+					interaction.threadId == model.execution.activeThreadID,
+					interaction.turnId == model.execution.activeTurnID
+			else
+			{
+				return
+			}
+			model.execution.pendingInteractions.removeAll
+			{
+				$0.id == interaction.id
+			}
+			model.execution.pendingInteractions.append(interaction)
+			updateAwaitingState(&model.execution)
+		case .interactionResolved(
+			let threadID,
+			let requestID
+		):
+			guard model.execution.pendingInteractions
+				.contains(where:
+					{
+						$0.id == requestID && $0.threadId == threadID
+					})
+			else
+			{
+				return
+			}
+			model.execution.pendingInteractions
+				.removeAll
+				{
+					$0.id == requestID && $0.threadId == threadID
+				}
+			updateAwaitingState(&model.execution)
+		case .error(
+			let threadID,
+			let turnID,
+			let message,
+			let willRetry
+		):
+			if !threadID.isEmpty && threadID != model.execution
+				.activeThreadID && threadID != selectedThreadID
+			{
+				return
+			}
+			model.execution.statusMessage = message
+			if !willRetry && threadID == model.execution.activeThreadID && turnID == model.execution
+				.activeTurnID
+			{
+				model.execution.state = .failed
+				model.execution.activeTurnID = nil
+				model.execution.pendingInteractions.removeAll()
+				if model.execution.commandLifetime.hasPendingCommands
+				{
+					model.execution.deferredTurnOutcome = .failed
+					model.execution.deferredTurnMessage = message
+					model.execution.reconcilingCommandOutcome = true
+					model.execution.needsReconciliation = true
+					model.execution.statusMessage =
+						"\(message) A command has no confirmed exit; refresh this task "
+							+ "before removing its checkout."
+				}
+				else
+				{
+					result.presentationCommands.append(.taskFinished)
+				}
+			}
+		default: break
+		}
+		// Accepted content updates are composed before the shared publication.
+		result.domainEvents.insert(
+			.backendObserved(event),
+			at: 0
+		)
+	}
+}
