@@ -1,0 +1,798 @@
+import Foundation
+
+/// One value owner for conversation selection, canonical history and ordered streaming content.
+@MainActor
+enum ConversationReducer
+{
+	static let reducer = WorkspaceReducer(reduce: reduce)
+	static func acceptsNewChat(
+		_ context: OperationContext,
+		model: WorkspaceModel
+	) -> Bool
+	{
+		valid(
+			context,
+			model
+		) && model.conversations.boundThreadID == nil
+			&& model.conversations.pendingManagement == nil
+			&& !(model.execution.state.isBusy && model.execution.activeThreadID == nil)
+			&& WorkspaceLifecycleReducer.accepts(
+				.conversations(.newChatOpened(context)),
+				model: model
+			)
+	}
+	static func adoptPreparedSelection(
+		_ key: ConversationKey,
+		model: inout WorkspaceModel
+	)
+	{
+		model.conversations.selectedConversation = key
+	}
+	static func valid(
+		_ context: OperationContext,
+		_ model: WorkspaceModel
+	) -> Bool
+	{
+		context.belongsTo(
+			workspace: model.identity,
+			generation: model.connection.generation
+		)
+	}
+	static func reduce(
+		_ model: inout WorkspaceModel,
+		_ action: WorkspaceAction
+	) -> WorkspaceReduction
+	{
+		var result = WorkspaceReduction()
+		switch action
+		{
+		case .connection(.projectOpened(
+			let identity,
+			let selectedThreadID
+		)):
+			guard model.identity == identity, !model.execution.isTaskActive
+			else
+			{
+				return result
+			}
+			let bound = model.conversations.boundThreadID
+			model.conversations = ConversationsModel()
+			model.conversations.boundThreadID = bound
+			model.conversations.selectedConversation = selectedThreadID
+				.map(ConversationKey.thread) ?? .newChat
+		case .connection(.projectRestored(
+			let context,
+			_,
+			let selectedThreadID
+		)):
+			guard context.belongsTo(
+				workspace: model.identity,
+				generation: model.connection.generation
+			),
+				model.conversations.boundThreadID == nil || model.conversations
+				.boundThreadID == selectedThreadID
+			else
+			{
+				return result
+			}
+			model.conversations.selectedConversation = selectedThreadID
+				.map(ConversationKey.thread) ?? .newChat
+		case .conversations(let intent):
+			reduceConversations(
+				intent,
+				model: &model,
+				result: &result
+			)
+		default: break
+		}
+		return result
+	}
+	private static func select(
+		_ key: ConversationKey,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		model.conversations.selectedConversation = key
+		model.conversations.pendingSelection = nil
+		model.conversations.pendingReads = model.conversations.pendingReads
+			.filter
+			{
+				$0.key.purpose != .selection
+			}
+		model.conversations.error = nil
+		let threadID: String?
+		switch key
+		{
+		case .newChat: threadID = nil; case .thread(let id): threadID = id
+		}
+		result.domainEvents.append(.conversationSelectionChanged(threadID))
+		let executionAction: ExecutionAction = threadID.map
+		{
+			.conversationSelected(
+				threadID: $0,
+				recovering: true
+			)
+		} ?? .conversationCleared
+		let execution = ExecutionReducer.reduce(
+			&model,
+			.execution(executionAction)
+		)
+		result.effects.append(contentsOf: execution.effects)
+		result.domainEvents.append(contentsOf: execution.domainEvents)
+		result.presentationCommands.append(contentsOf: execution.presentationCommands)
+		if !model.conversations
+			.showingArchived
+		{
+			model.conversations.pendingSelectionPersistence = context
+			result.effects.append(.persistConversationSelection(
+				context,
+				threadID: threadID
+			))
+		}
+	}
+	private static func requestHistory(
+		_ operation: ConversationReadOperation,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		guard valid(
+			operation.context,
+			model
+		), let threadID = operation.context.threadID,
+		model.conversations.boundThreadID == nil || model.conversations
+		.boundThreadID == threadID,
+		operation.commandRevision == model.execution.commandEventRevisions[
+			threadID,
+			default: 0
+		],
+		operation.purpose != .selection || model.conversations
+		.selectedConversation == .thread(threadID)
+		else
+		{
+			return
+		}
+		var captured = operation
+		captured.contentRevision = model.conversations.contentRevisions[threadID, default: 0]
+		model.conversations.pendingReads[operation.key] = captured
+		if operation
+			.purpose == .selection
+		{
+			model.conversations.pendingSelection = operation.context
+		}
+		result.effects.append(.readConversationHistory(captured))
+	}
+	private static func reduceConversations(
+		_ action: ConversationsAction,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		switch action
+		{
+		case .newChatRequested: break
+		case .newChatOpened(let context):
+			guard acceptsNewChat(
+				context,
+				model: model
+			)
+			else
+			{
+				return
+			}
+			model.conversations.showingArchived = false
+			select(
+				.newChat,
+				context: context,
+				model: &model,
+				result: &result
+			)
+		case .selectionRequested(let context):
+			guard valid(
+				context,
+				model
+			), let threadID = context.threadID,
+			model.conversations.pendingManagement == nil,
+			model.conversations.boundThreadID == nil || model.conversations
+			.boundThreadID == threadID,
+			!(model.execution.state.isBusy && model.execution.activeThreadID == nil)
+			else
+			{
+				return
+			}
+			let previous = model.conversations.selectedConversation
+			if model.conversations.showingArchived && threadID == model.execution
+				.activeThreadID
+			{
+				model.conversations.showingArchived = false; model.conversations.pendingList = nil
+			}
+			select(
+				.thread(threadID),
+				context: context,
+				model: &model,
+				result: &result
+			)
+			if model.execution
+				.activeThreadID == threadID &&
+				(model.execution.state
+					.isBusy || (
+						!model.execution.needsReconciliation && previous != .thread(threadID)
+					))
+			{
+				return
+			}
+			requestHistory(
+				ConversationReadOperation(
+					context: context,
+					commandRevision: model.execution.commandEventRevisions[
+						threadID,
+						default: 0
+					],
+					purpose: .selection
+				),
+				model: &model,
+				result: &result
+			)
+		case .archivedFilterRequested(
+			let context,
+			let archived
+		):
+			guard valid(
+				context,
+				model
+			), !(model.execution.state.isBusy && model.execution.activeThreadID == nil),
+			model.conversations.pendingManagement == nil
+			else
+			{
+				return
+			}
+			model.conversations.showingArchived = archived
+			model.conversations.pendingList = nil
+			select(
+				context.threadID.map(ConversationKey.thread) ?? .newChat,
+				context: context,
+				model: &model,
+				result: &result
+			)
+		case .threadListRequested(let operation):
+			guard valid(
+				operation.context,
+				model
+			),
+				operation.archived == model.conversations.showingArchived,
+				operation.boundThreadID == model.conversations.boundThreadID
+			else
+			{
+				return
+			}
+			model.conversations.pendingList = operation
+			result.effects.append(.readConversationList(operation))
+		case .threadListReceived(
+			let operation,
+			let observation
+		):
+			guard valid(
+				operation.context,
+				model
+			), let pending = model.conversations.pendingList,
+			pending.context == operation.context, pending.archived == operation.archived,
+			pending.boundThreadID == operation.boundThreadID,
+			operation.archived == model.conversations.showingArchived,
+			operation.boundThreadID == model.conversations.boundThreadID
+			else
+			{
+				return
+			}
+			model.conversations.pendingList = nil
+			switch observation
+			{
+			case .succeeded(let threads): model.conversations.threads = threads; model.conversations
+				.error = nil; result.domainEvents.append(.conversationContentChanged)
+				result.domainEvents.append(.conversationListAccepted(operation))
+			case .failed(let failure):
+				model.conversations.error = "Could not load conversations: \(failure.message)"
+			}
+		case .historyRequested(let operation): requestHistory(
+				operation,
+				model: &model,
+				result: &result
+			)
+		case .historyReceived(
+			let operation,
+			let observation
+		):
+
+			guard valid(
+				operation.context,
+				model
+			),
+				let pending = model.conversations.pendingReads[operation.key],
+				pending.context == operation.context,
+				pending.commandRevision == operation.commandRevision,
+				pending.contentRevision == operation.contentRevision,
+				let threadID = operation.context.threadID,
+				operation
+				.purpose != .selection ||
+				(model.conversations.pendingSelection == operation.context && model.conversations
+					.selectedConversation == .thread(threadID))
+			else
+			{
+				return
+			}
+			model.conversations.pendingReads.removeValue(forKey: operation.key)
+			if model.execution.pendingReconciliation?.context == operation.context
+			{
+				model.execution.pendingReconciliation = nil
+			}
+			if operation.purpose == .selection
+			{
+				model.conversations.pendingSelection = nil
+			}
+			guard model.execution.commandEventRevisions[threadID, default: 0] == operation
+				.commandRevision,
+				model.conversations.contentRevisions[threadID, default: 0] == operation
+				.contentRevision
+			else
+			{
+				result.domainEvents.append(.conversationHistoryFinished(
+					.history(operation),
+					.succeeded(false)
+				))
+				return
+			}
+			switch observation
+			{
+			case .failed(let failure):
+				result.domainEvents.append(.conversationHistoryFinished(
+					.history(operation),
+					.failed(failure)
+				))
+				if operation.purpose == .selection
+				{
+					model.conversations.error = "Could not open conversation: \(failure.message)"
+				}
+				else
+				{
+					model.conversations.error = "Could not read conversation: \(failure.message)"
+				}
+				if operation.purpose == .recovery
+				{
+					model.execution.needsReconciliation = true; model.execution.state = .failed
+					model.execution.statusMessage =
+						"Could not check the previous request: \(failure.message). "
+							+ "Use Refresh or Reconnect to try again."
+					model.conversations.error = model.execution.statusMessage
+				}
+			case .succeeded(let detail):
+				guard detail.summary.id == threadID,
+						operation.purpose != .completion || model.execution
+						.activeThreadID != threadID || model.execution.activeTurnID == nil
+				else
+				{
+					result.domainEvents.append(.conversationHistoryFinished(
+						.history(operation),
+						.succeeded(false)
+					))
+					return
+				}
+				let recovery = ReconciliationOperation(
+					context: operation.context,
+					commandRevision: operation.commandRevision,
+					contentOnly: operation.purpose == .search
+				)
+				let executionAction: ExecutionAction
+				switch operation.purpose
+				{
+				case .completion: executionAction = .completedHistoryReceived(
+						recovery,
+						.succeeded(detail)
+					)
+				case .selection, .recovery: executionAction = .historyObserved(
+						recovery,
+						detail
+					)
+				case .search: executionAction = .historyObserved(
+						recovery,
+						detail
+					)
+				}
+				let execution = ExecutionReducer.reduce(
+					&model,
+					.execution(executionAction)
+				)
+				result.effects.append(contentsOf: execution.effects)
+				let composer = ComposerReducer.reduce(
+					&model,
+					.execution(executionAction)
+				)
+				result.effects.append(contentsOf: composer.effects)
+				result.domainEvents.append(contentsOf: composer.domainEvents)
+				result.presentationCommands.append(contentsOf: composer.presentationCommands)
+				// Accepted history uses the shared pure content reducer.
+				result.domainEvents.append(contentsOf: execution.domainEvents)
+				result.presentationCommands.append(contentsOf: execution.presentationCommands)
+				result.domainEvents.append(.conversationHistoryFinished(
+					.history(operation),
+					.succeeded(true)
+				))
+				model.conversations.lastAppliedHistoryRequestID = operation.context.requestID
+				model.conversations.error = nil
+			}
+		case .earlierTurnsRequested(let operation):
+			guard valid(
+				operation.context,
+				model
+			), let threadID = operation.context.threadID,
+			operation.pageScope.projectPath == model.identity.canonicalCheckoutPath,
+			operation.pageScope.generation == model.connection.generation,
+			operation.commandRevision == model.execution.commandEventRevisions[
+				threadID,
+				default: 0
+			],
+			model.conversations.content[.thread(threadID)]?.nextTurnsCursor == operation
+			.pageScope.cursor
+			else
+			{
+				return
+			}
+			if let current = model.conversations.historyLoads[threadID],
+				current.pageScope == operation.pageScope,
+				current.commandRevision == operation.commandRevision
+			{
+				return
+			}
+			model.conversations.historyLoads[threadID] = operation
+			result.effects.append(.readConversationPage(operation))
+		case .earlierTurnsReceived(
+			let operation,
+			let observation
+		):
+			guard valid(
+				operation.context,
+				model
+			), let threadID = operation.context.threadID,
+			let pending = model.conversations.historyLoads[threadID],
+			pending.context == operation.context,
+			pending.pageScope == operation.pageScope,
+			pending.commandRevision == operation.commandRevision,
+			operation.pageScope.projectPath == model.identity.canonicalCheckoutPath,
+			operation.pageScope.generation == model.connection.generation
+			else
+			{
+				return
+			}
+			model.conversations.historyLoads.removeValue(forKey: threadID)
+			guard model.conversations.content[.thread(threadID)]?.nextTurnsCursor == operation
+				.pageScope.cursor,
+				operation.commandRevision == model.execution.commandEventRevisions[
+					threadID,
+					default: 0
+				]
+			else
+			{
+				result.domainEvents.append(.conversationHistoryFinished(
+					.page(operation),
+					.succeeded(false)
+				))
+				return
+			}
+			switch observation
+			{
+			case .failed(let failure):
+				result.domainEvents.append(.conversationHistoryFinished(
+					.page(operation),
+					.failed(failure)
+				))
+				model.conversations.error = "Could not load earlier messages: \(failure.message)"
+			case .succeeded(let page):
+				let liveTurnID = model.execution.activeThreadID == threadID ? model.execution
+					.activeTurnID : nil
+				ConversationContentReducer.updateContent(
+					for: threadID,
+					model: &model
+				)
+				{
+					content in
+					let streamedEntries = content.entries
+						.filter
+						{
+							liveTurnID.map
+							{
+								$0 + ":"
+							}.map($0.id.hasPrefix) == true
+						}
+					var known = Set(content.loadedTurns.map(\.id))
+					let earlier = page.turns.filter
+					{
+						known.insert($0.id).inserted
+					}
+					content.loadedTurns.insert(
+						contentsOf: earlier,
+						at: 0
+					)
+					content.hasLoadedHistory = true
+					content.nextTurnsCursor = page.nextCursor == operation.pageScope
+						.cursor ? nil : page.nextCursor
+					content.entries = ConversationContentReducer.entries(for: content.loadedTurns)
+					for entry in streamedEntries
+					{
+						if let index = content.entries
+							.firstIndex(where:
+								{
+									$0.id == entry.id
+								})
+						{
+							content.entries[index] = entry
+						}
+						else
+						{
+							content.entries.append(entry)
+						}
+					}
+					ConversationContentReducer.reviewSourceChanged(
+						content: &content,
+						threadID: threadID
+					)
+				}
+				result.domainEvents.append(.conversationContentChanged)
+				model.conversations.contentRevisions[threadID, default: 0] += 1
+				result.domainEvents.append(.conversationHistoryFinished(
+					.page(operation),
+					.succeeded(true)
+				))
+				model.conversations.lastAppliedPageRequestID = operation.context.requestID
+				model.conversations.error = nil
+			}
+		case .managementRequested(let operation):
+			guard WorkspaceEligibility(model: model).acceptsManagement(operation)
+			else
+			{
+				return
+			}
+			if case .rename(
+				_,
+				let name
+			) = operation,
+				name.trimmingCharacters(in: .whitespacesAndNewlines)
+				.isEmpty
+			{
+				model.conversations.error = "Enter a conversation name."; return
+			}
+			model.conversations.pendingManagement = operation
+			model.conversations.pendingManagementArchived = model.conversations.showingArchived
+			result.effects.append(.manageConversation(operation))
+		case .managementFinished(
+			let context,
+			let observation
+		):
+			guard valid(
+				context,
+				model
+			), let pending = model.conversations.pendingManagement,
+			pending.context == context,
+			context.threadID.map(ConversationKey.thread) == model.conversations
+			.selectedConversation,
+			model.conversations.pendingManagementArchived == model.conversations
+			.showingArchived
+			else
+			{
+				return
+			}
+			model.conversations.pendingManagement = nil
+			switch observation
+			{
+			case .failed(let failure):
+				model.conversations.error = "Could not change conversation: \(failure.message)"
+			case .succeeded:
+				model.conversations.error = nil
+				switch pending
+				{
+				case .rename: break
+				case .archive: select(
+						.newChat,
+						context: context,
+						model: &model,
+						result: &result
+					)
+				case .unarchive:
+					model.conversations.showingArchived = false
+					select(
+						.thread(context.threadID!),
+						context: context,
+						model: &model,
+						result: &result
+					)
+					requestHistory(
+						ConversationReadOperation(
+							context: context,
+							commandRevision: model.execution.commandEventRevisions[
+								context.threadID!,
+								default: 0
+							],
+							purpose: .recovery
+						),
+						model: &model,
+						result: &result
+					)
+				}
+				let list = ConversationListOperation(
+					context: context,
+					archived: model.conversations.showingArchived,
+					boundThreadID: model.conversations.boundThreadID
+				)
+				model.conversations.pendingList = list
+				result.effects.append(.readConversationList(list))
+			}
+		case .selectionPersistenceFinished(
+			let context,
+			let resultValue
+		):
+			guard valid(
+				context,
+				model
+			), model.conversations.pendingSelectionPersistence == context
+			else
+			{
+				return
+			}
+			model.conversations.pendingSelectionPersistence = nil
+			if case .failed(let failure) = resultValue
+			{
+				model.conversations.error = failure.message
+			}
+		case .selectionReceived, .itemStarted, .itemFinished, .agentMessageDelta,
+				.commandOutputDelta, .fileChangesReceived, .aggregateDiffReceived: break
+		}
+	}
+	/// Composes accepted feature transitions into canonical conversation content.
+	static func reduceDomainEvent(
+		_ model: inout WorkspaceModel,
+		_ event: WorkspaceDomainEvent
+	) -> WorkspaceReduction
+	{
+		var result = WorkspaceReduction()
+		switch event
+		{
+		case .connectionBegan, .connectionDisconnected:
+			model.conversations.pendingReads.removeAll()
+			model.conversations.historyLoads.removeAll()
+			model.conversations.pendingList = nil
+			model.conversations.pendingSelection = nil
+			model.conversations.pendingManagement = nil
+		case .submissionAccepted(let submission):
+			if let threadID = submission.context.threadID
+			{
+				model.conversations.contentRevisions[threadID, default: 0] += 1
+			}
+			ConversationContentReducer.updateConversation(
+				submission.conversation,
+				model: &model
+			)
+			{
+				content in
+				ConversationContentReducer.resetChanges(&content)
+				content.entries.append(ConversationEntry(
+					id: "local:\(submission.context.requestID)",
+					kind: .user,
+					title: "You",
+					body: UserMessagePresenter.body(for: submission.inputs)
+				))
+			}
+		case .completedHistoryReadRequested(let operation):
+			requestHistory(
+				operation,
+				model: &model,
+				result: &result
+			)
+		case .submissionPrepared(let prepared):
+			model.conversations.contentRevisions[prepared.thread.summary.id, default: 0] += 1
+			if prepared.submission.context.threadID == nil
+			{
+				let key = ConversationKey.thread(prepared.thread.summary.id)
+				model.conversations.content[key] = model.conversations
+					.content[.newChat] ?? ConversationContentModel()
+				model.conversations.content[.newChat] = ConversationContentModel()
+				model.conversations.threads.removeAll
+				{
+					$0.id == prepared.thread.summary.id
+				}
+				model.conversations.threads.insert(
+					prepared.thread.summary,
+					at: 0
+				)
+				if model.conversations.selectedConversation == key
+				{
+					model.conversations.selectedConversation = key
+
+					var context = prepared.submission.context; context.threadID = prepared.thread
+						.summary.id
+					model.conversations.pendingSelectionPersistence = context
+					result.effects.append(.persistConversationSelection(
+						context,
+						threadID: prepared.thread.summary.id
+					))
+				}
+			}
+			if let workspace = prepared
+				.workspace
+			{
+				model.conversations.boundThreadID = workspace.threadID
+			}
+		case .backendObserved(let event):
+			switch event
+			{
+			case .turnStarted(
+				let threadID,
+				_
+			), .turnCompleted(
+				let threadID,
+				_
+			),
+			.itemStarted(
+				let threadID,
+				_,
+				_
+			), .itemCompleted(
+				let threadID,
+				_,
+				_
+			),
+			.agentMessageDelta(
+				let threadID,
+				_,
+				_,
+				_
+			), .commandOutputDelta(
+				let threadID,
+				_,
+				_,
+				_
+			),
+			.fileChangeUpdated(
+				let threadID,
+				_,
+				_,
+				_
+			), .diffUpdated(
+				let threadID,
+				_,
+				_
+			):
+				model.conversations.contentRevisions[threadID, default: 0] += 1
+			default: break
+			}
+			ConversationContentReducer.observe(
+				event,
+				model: &model
+			)
+		case .historyAccepted(
+			let detail,
+			_
+		):
+			model.conversations.contentRevisions[detail.summary.id, default: 0] += 1
+			ConversationContentReducer.merge(
+				detail,
+				model: &model
+			)
+		default: break
+		}
+		return result
+	}
+}
+
+extension ThreadManagementOperation
+{
+	var context: OperationContext
+	{
+		switch self
+		{
+		case .rename(
+			let context,
+			_
+		), .archive(let context),
+		.unarchive(let context): return context
+		}
+	}
+}
