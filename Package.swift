@@ -12,6 +12,9 @@ let package = Package(
 		.executableTarget(
 			name: "CodexGUI",
 			exclude: [
+				"Application/Reducers/Composer/ComposerContext.swift",
+				"Application/Reducers/Composer/ComposerReducer+Drafts.swift",
+				"Application/Reducers/Composer/ComposerReducer.swift",
 				"Application/Services/CodexService.swift",
 				"CodexClient/AppServer/AppServer+Executable.swift",
 				"CodexClient/AppServer/AppServer+Interactions.swift",
