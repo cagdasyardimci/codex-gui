@@ -97,11 +97,14 @@ let package = Package(
 			name: "CodexGUITests",
 			dependencies: ["CodexGUI"],
 			exclude: [
+				"Application/Runtime/Support/ControlledUsageClock.swift",
 				"CodexClient/AppServerIntegrationTests.swift",
 				"CodexClient/AppServerWorkspaceIsolationTests.swift",
 				"CodexClient/BackendTests.swift",
 			],
 			sources: [
+				"Application/Runtime/Support/MockCodexService.swift",
+				"Application/Runtime/Support/PublicationGate.swift",
 				"CodexClient/ApprovalDecisionTests.swift",
 				"CodexClient/BackendDiagnosticsTests.swift",
 			]
