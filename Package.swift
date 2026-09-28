@@ -14,6 +14,7 @@ let package = Package(
 			exclude: [
 				"Application/Reducers/Composer/ComposerContext.swift",
 				"Application/Reducers/Composer/ComposerReducer+Drafts.swift",
+				"Application/Reducers/Composer/ComposerReducer+SubmissionLifecycle.swift",
 				"Application/Reducers/Composer/ComposerReducer.swift",
 				"Application/Services/CodexService.swift",
 				"CodexClient/AppServer/AppServer+Executable.swift",
