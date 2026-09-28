@@ -52,6 +52,7 @@ let package = Package(
 				"Application/Reducers/Execution/TaskCommandLifetime.swift",
 				"Application/Reducers/Navigation/MessageSearch.swift",
 				"Application/Reducers/Preferences/RunPreferences.swift",
+				"Application/Reducers/Review/GitDiffParser.swift",
 				"Application/Services/CodexService.swift",
 				"Application/State/CheckoutIdentity.swift",
 				"CodexClient/AccountProtocolModels.swift",
