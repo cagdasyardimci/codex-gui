@@ -42,5 +42,17 @@ let package = Package(
 				"main.swift",
 			]
 		),
+		.testTarget(
+			name: "CodexGUITests",
+			dependencies: ["CodexGUI"],
+			exclude: [
+				"CodexClient/AppServerIntegrationTests.swift",
+				"CodexClient/AppServerWorkspaceIsolationTests.swift",
+			],
+			sources: [
+				"CodexClient/ApprovalDecisionTests.swift",
+				"CodexClient/BackendDiagnosticsTests.swift",
+			]
+		),
 	]
 )
