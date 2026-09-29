@@ -44,6 +44,8 @@ let package = Package(
 				"Application/Runtime/WorkspacePersistenceScheduler.swift",
 				"Application/Runtime/WorkspacePublicationCoordinator.swift",
 				"Application/Runtime/WorkspaceStateStore.swift",
+				"Application/Runtime/WorkspaceStoreFactory.swift",
+				"Application/Runtime/WorkspaceStoreInputs.swift",
 				"Application/State/OperationContext.swift",
 				"Application/State/WorkspaceAction.swift",
 				"Application/State/WorkspaceDomainEvent.swift",
