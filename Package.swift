@@ -144,6 +144,7 @@ let package = Package(
 				"Workspaces/GitWorktreeManagerTests.swift",
 				"Workspaces/TaskWorkspaceCoordinatorTests.swift",
 				"Workspaces/TaskWorkspaceLocationsTests.swift",
+				"Workspaces/WorkspaceCoordinatorReducerTests.swift",
 			],
 			sources: [
 				"Application/Runtime/Support/MockCodexService.swift",
