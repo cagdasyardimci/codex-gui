@@ -13,6 +13,7 @@ let package = Package(
 			name: "CodexGUI",
 			exclude: [
 				"App/InspectorViewController.swift",
+				"Features/ProjectContext/ProjectContextViewController.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
