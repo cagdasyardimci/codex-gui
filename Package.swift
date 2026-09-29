@@ -142,6 +142,7 @@ let package = Package(
 				"Support/ReviewModelTestFixture.swift",
 				"Support/WorkspaceTestFixture.swift",
 				"Workspaces/GitWorktreeManagerTests.swift",
+				"Workspaces/TaskWorkspaceCoordinatorTests.swift",
 			],
 			sources: [
 				"Application/Runtime/Support/MockCodexService.swift",
