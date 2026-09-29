@@ -50,6 +50,7 @@ let package = Package(
 				"Features/Shared/FeaturePresentationOwner.swift",
 				"Persistence/LocalStorage.swift",
 				"Persistence/ReviewMarkerStore.swift",
+				"Persistence/TaskWorkspaceStore.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
