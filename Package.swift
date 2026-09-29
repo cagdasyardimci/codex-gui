@@ -13,7 +13,6 @@ let package = Package(
 			name: "CodexGUI",
 			exclude: [
 				"App/InspectorViewController.swift",
-				"App/StatusPopoverView.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
@@ -21,6 +20,7 @@ let package = Package(
 				"App/BoundedContentScrollView.swift",
 				"App/DesktopTheme.swift",
 				"App/SettingsWindowController.swift",
+				"App/StatusPopoverView.swift",
 				"App/TaskNotifications.swift",
 				"Application/Composition/ConversationReviewComposition.swift",
 				"Application/Composition/WorkspaceDomainComposition.swift",
@@ -120,7 +120,10 @@ let package = Package(
 				"Features/Navigation/MessageSearchController.swift",
 				"Features/Navigation/NavigationPresentation.swift",
 				"Features/Navigation/NavigationSidebarItem.swift",
+				"Features/Navigation/NavigationSidebarItemsBuilder.swift",
+				"Features/Navigation/ProjectInfoPopoverView.swift",
 				"Features/Navigation/UsagePresentation.swift",
+				"Features/Navigation/UsageSummaryView.swift",
 				"Features/ProjectContext/ConversationBookmarkKind+Labels.swift",
 				"Features/ProjectContext/ProjectContextItemKind+Labels.swift",
 				"Features/ProjectContext/ProjectContextPresentation.swift",
