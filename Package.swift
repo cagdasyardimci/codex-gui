@@ -12,14 +12,13 @@ let package = Package(
 		.executableTarget(
 			name: "CodexGUI",
 			exclude: [
-				"App/InspectorViewController.swift",
-				"Features/ProjectContext/ProjectContextViewController.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
 				"App/BackendDetailsView.swift",
 				"App/BoundedContentScrollView.swift",
 				"App/DesktopTheme.swift",
+				"App/InspectorViewController.swift",
 				"App/SettingsWindowController.swift",
 				"App/StatusPopoverView.swift",
 				"App/TaskNotifications.swift",
@@ -128,6 +127,8 @@ let package = Package(
 				"Features/ProjectContext/ConversationBookmarkKind+Labels.swift",
 				"Features/ProjectContext/ProjectContextItemKind+Labels.swift",
 				"Features/ProjectContext/ProjectContextPresentation.swift",
+				"Features/ProjectContext/ProjectContextViewController.swift",
+				"Features/ProjectContext/ProjectTextEditor.swift",
 				"Features/Shared/FeaturePresentationOwner.swift",
 				"Persistence/DraftImageStore.swift",
 				"Persistence/LocalStorage.swift",
