@@ -50,7 +50,7 @@ let package = Package(
 				"Features/Shared/FeaturePresentationOwner.swift",
 				"Persistence/LocalStorage.swift",
 				"Persistence/ReviewMarkerStore.swift",
-				"Persistence/TaskWorkspaceStore.swift",
+				"Workspaces/WorkspaceLifecycleGitRunner.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
@@ -90,7 +90,10 @@ let package = Package(
 				"Features/ProjectContext/ProjectContextItemKind+Labels.swift",
 				"Persistence/DraftImageStore.swift",
 				"Persistence/ProjectContextStore.swift",
+				"Persistence/TaskWorkspaceStore.swift",
 				"Persistence/WindowLayoutStore.swift",
+				"Workspaces/TaskWorkspace.swift",
+				"Workspaces/TaskWorkspaceLocations.swift",
 				"main.swift",
 			]
 		),
