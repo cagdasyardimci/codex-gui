@@ -36,6 +36,7 @@ let package = Package(
 				"Application/Reducers/Usage/UsageReducer.swift",
 				"Application/Reducers/WorkspaceLifecycle/WorkspaceLifecycleReducer+Admission.swift",
 				"Application/Reducers/WorkspaceLifecycle/WorkspaceLifecycleReducer+Reduction.swift",
+				"Application/Reducers/WorkspaceLifecycle/WorkspaceLifecycleReducer+Startup.swift",
 				"Application/Reducers/WorkspaceLifecycle/WorkspaceLifecycleReducer.swift",
 				"Application/Runtime/WorkspaceOperationHandle.swift",
 				"Application/Runtime/WorkspacePersistenceScheduler.swift",
