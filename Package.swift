@@ -12,6 +12,8 @@ let package = Package(
 		.executableTarget(
 			name: "CodexGUI",
 			exclude: [
+				"App/InspectorViewController.swift",
+				"App/SettingsWindowController.swift",
 				"App/TaskNotifications.swift",
 				"Application/Composition/ConversationReviewComposition.swift",
 				"Application/Composition/WorkspaceDomainComposition.swift",
@@ -82,6 +84,7 @@ let package = Package(
 			],
 			sources: [
 				"App/AppKitLayout.swift",
+				"App/BackendDetailsView.swift",
 				"App/BoundedContentScrollView.swift",
 				"App/DesktopTheme.swift",
 				"Application/Presentation/UserMessagePresenter.swift",
