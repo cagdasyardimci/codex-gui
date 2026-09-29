@@ -115,6 +115,7 @@ let package = Package(
 				"Features/Conversation/ModelEffortPopoverView.swift",
 				"Features/Conversation/ModelEffortSelectionButton.swift",
 				"Features/Conversation/ScrollableTextPreview.swift",
+				"Features/Conversation/TranscriptPreparationCoordinator.swift",
 				"Features/Navigation/NavigationPresentation.swift",
 				"Features/Navigation/UsagePresentation.swift",
 				"Features/ProjectContext/ConversationBookmarkKind+Labels.swift",
