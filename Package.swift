@@ -110,6 +110,8 @@ let package = Package(
 				"Features/Conversation/ConversationFlowLayout.swift",
 				"Features/Conversation/ConversationPresentation.swift",
 				"Features/Conversation/EffortPopoverStyle.swift",
+				"Features/Conversation/EffortSlider.swift",
+				"Features/Conversation/InteractionCardView.swift",
 				"Features/Navigation/NavigationPresentation.swift",
 				"Features/Navigation/UsagePresentation.swift",
 				"Features/ProjectContext/ConversationBookmarkKind+Labels.swift",
