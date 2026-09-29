@@ -67,6 +67,7 @@ let package = Package(
 				"Features/Shared/FeaturePresentationOwner.swift",
 				"Persistence/LocalStorage.swift",
 				"Persistence/ReviewMarkerStore.swift",
+				"Workspaces/WorkspaceCoordinatorModel.swift",
 				"Workspaces/WorkspaceLifecycleGitRunner.swift",
 				"Workspaces/WorkspaceLifecycleOperations.swift",
 			],
