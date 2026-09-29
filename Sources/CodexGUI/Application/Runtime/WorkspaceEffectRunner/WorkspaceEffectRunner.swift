@@ -1,0 +1,591 @@
+import Foundation
+
+/// Each runner uses its checkout/session's dedicated CodexService connection.
+/// Persistence scheduling can be shared; backend callback ownership cannot be shared.
+@MainActor
+final class WorkspaceEffectRunner
+{
+	// Internal implementation members are shared by the responsibility extensions.
+	// Operation identity and group lifetime remain coordinated by this runtime.
+
+	enum Purpose: Hashable
+	{
+		case connection, version, selection, account, preparation, submission, draft, interruption,
+				steering, recovery, completedHistory, adoption, acknowledgement
+		case reviewRead(
+			ConversationKey,
+			String,
+			Int,
+			Int,
+			[ReviewMarkerIdentity]
+		)
+		case reviewWrite(
+			ReviewMarkerIdentity,
+			Int
+		)
+		case models, signIn, preference
+		case release(UUID)
+		case history(
+			ConversationReadPurpose,
+			String?
+		)
+		case page(
+			String?,
+			String
+		)
+		case contextLoad(Int), contextSave(Int), skills(Int)
+		case list, management, selectionPersistence
+		case response(String)
+		case sourceStartup, inputPreparation, unsentRelease, preferenceRestoration
+		case composerHydration(String?), diagnostics, reusable(
+			ConversationKey,
+			Int,
+			[String]
+		)
+		case usage(Int)
+	}
+
+	struct RequestKey: Hashable
+	{
+		let workspace: WorkspaceIdentity
+		let generation: Int
+		let requestID: UUID
+
+		init(_ context: OperationContext)
+		{
+			workspace = context.workspace
+			generation = context.generation
+			requestID = context.requestID
+		}
+	}
+
+	struct EffectKey: Hashable
+	{
+		let request: RequestKey
+		let purpose: Purpose
+	}
+
+	struct PendingEffect
+	{
+		let task: Task<Void, Never>
+		let effect: WorkspaceEffect
+		let handle: WorkspaceOperationHandle
+	}
+
+	let usageRuntime: UsageRuntime
+	var usageDeadlineTask: Task<Void, Never>?
+	var usageDeadline: UsageDeadlineOperation?
+	let service: any CodexService
+	let storage: LocalStorage?
+	let reviewMarkerStore: ReviewMarkerStore?
+	var reservedReviewResults: [EffectKey: WorkspaceAction] = [:]
+	let taskWorkspaceManager: GitWorktreeManager?
+	var retainedContexts: [UUID: UUID] = [:]
+	var retainedSubmissions: [UUID: ComposerSubmission] = [:]
+	var preparedThreadIDs: [UUID: String] = [:]
+	var reservedPersistence: [EffectKey: Task<Void, Error>] = [:]
+	var durableReferences: Set<UUID> = []
+	let projectContextStore: ProjectContextStore
+	var reservedContextLoads: [EffectKey: Result<ProjectContext, Error>] = [:]
+	let persistence: WorkspacePersistenceScheduler
+	let deliver: (WorkspaceAction, @escaping () -> Void) -> Void
+	private let mapEvent: (OperationContext, AppServerEvent) -> [WorkspaceAction]
+	var tasks: [EffectKey: PendingEffect] = [:]
+	var accepted: Set<EffectKey> = []
+	var handles: [RequestKey: WorkspaceOperationHandle] = [:]
+	private var completedRequests: [RequestKey] = []
+	private let completedRequestLimit: Int
+	var subscription: OperationContext?
+	var hasObservedSubscription = false
+	var isShutdown = false
+
+	init(
+		service: any CodexService,
+		storage: LocalStorage? = nil,
+		reviewMarkerStore: ReviewMarkerStore? = nil,
+		taskWorkspace: TaskWorkspace? = nil,
+		taskWorkspaceManager: GitWorktreeManager? = nil,
+		persistence: WorkspacePersistenceScheduler,
+		projectContextStore: ProjectContextStore = ProjectContextStore(),
+		completedRequestLimit: Int = 128,
+		usageRuntime: UsageRuntime = UsageRuntime(),
+		mapEvent: @escaping (
+			OperationContext,
+			AppServerEvent
+		) -> [WorkspaceAction],
+		deliver: @escaping (
+			WorkspaceAction,
+			@escaping () -> Void
+		) -> Void
+	)
+	{
+		self.service = service
+		self.usageRuntime = usageRuntime
+		self.storage = storage
+		self.reviewMarkerStore = reviewMarkerStore
+		self.taskWorkspaceManager = taskWorkspaceManager
+		self.persistence = persistence
+		self.projectContextStore = projectContextStore
+		self.completedRequestLimit = max(
+			0,
+			completedRequestLimit
+		)
+		self.mapEvent = mapEvent
+		self.deliver = deliver
+	}
+
+	var runningOperationCount: Int
+	{
+		tasks.count
+	}
+
+	var retainedOperationCount: Int
+	{
+		handles.count
+	}
+
+	func operation(for context: OperationContext) -> WorkspaceOperationHandle?
+	{
+		handles[RequestKey(context)]
+	}
+
+	func shutdown()
+	{
+		guard !isShutdown
+		else
+		{
+			return
+		}
+		isShutdown = true
+		usageDeadlineTask?.cancel()
+		usageDeadlineTask = nil
+		usageDeadline = nil
+		for submission in Array(retainedSubmissions.values)
+		{
+			finalizeReservationOnShutdown(submission)
+		}
+		retainedContexts.removeAll()
+		retainedSubmissions.removeAll()
+		preparedThreadIDs.removeAll()
+		reservedPersistence.removeAll()
+		reservedContextLoads.removeAll()
+		reservedReviewResults.removeAll()
+		durableReferences.removeAll()
+		detachSubscription()
+		let pending = tasks.values
+		tasks.removeAll()
+		for operation in pending
+		{
+			operation.task.cancel()
+			operation.handle.finishedEffect(.cancelled)
+		}
+		for handle in handles.values
+		{
+			handle.cancelRemainingEffects()
+		}
+		accepted.removeAll()
+		handles.removeAll()
+		completedRequests.removeAll()
+	}
+
+	func identity(of effect: WorkspaceEffect) -> (OperationContext, Purpose)?
+	{
+		switch effect
+		{
+		case .readReviewMarkers(let operation): return (operation.context, .reviewRead(
+				operation.conversation,
+				operation.turnID,
+				operation.sourceRevision,
+				operation.markerRevision,
+				operation.identities
+			))
+		case .writeReviewMarker(let operation): return (
+				operation.context,
+				.reviewWrite(
+					operation.identity,
+					operation.markerRevision
+				)
+			)
+		case .respond(let operation): return (operation.context, .response(operation.interactionID))
+		case .interrupt(let operation): return (operation.context, .interruption)
+		case .steer(let operation): return (operation.context, .steering)
+		case .readRecovery(let operation): return (operation.context, .recovery)
+		case .readCompletedHistory(let operation): return (operation.context, .completedHistory)
+		case .persistPreparedConversation(let write): return (
+				write.prepared.submission.context,
+				.adoption
+			)
+		case .acknowledgeSubmission(let write): return (write.submission.context, .acknowledgement)
+		case .releaseSubmission(let operation): return (
+				operation.context,
+				.release(operation.submission.context.requestID)
+			)
+		case .validateComposerInput(let operation): return (operation.context, .inputPreparation)
+		case .releaseUnsentSubmission(let submission): return (submission.context, .unsentRelease)
+		case .restoreSourceStartup(let context): return (context, .sourceStartup)
+		case .restorePreferences(let context): return (context, .preferenceRestoration)
+		case .restoreComposer(let context): return (context, .composerHydration(context.threadID))
+		case .readBackendDiagnostics(let context): return (context, .diagnostics)
+		case .validateReusableReferences(let operation): return (
+				operation.context,
+				.reusable(
+					operation.conversation,
+					operation.revision,
+					operation.items.map
+					{
+						[$0.id, $0.path ?? "", $0.excerpt ?? ""].joined(separator: "\u{0}")
+					}
+				)
+			)
+		case .connect(let context): return (context, .connection)
+		case .readExecutableVersion(let context): return (context, .version)
+		case .readSelection(let context): return (context, .selection)
+		case .readConversationHistory(let operation): return (
+				operation.context,
+				.history(
+					operation.purpose,
+					operation.context.threadID
+				)
+			)
+		case .readConversationPage(let operation): return (
+				operation.context,
+				.page(
+					operation.context.threadID,
+					operation.pageScope.cursor
+				)
+			)
+		case .readConversationList(let operation): return (operation.context, .list)
+		case .manageConversation(let operation): return (managementContext(operation), .management)
+		case .persistConversationSelection(
+			let context,
+			_
+		): return (context, .selectionPersistence)
+		case .readAccount(let context): return (context, .account)
+		case .loadProjectContext(let operation): return (
+				operation.context,
+				.contextLoad(operation.revision)
+			)
+		case .saveProjectContext(let operation): return (
+				operation.context,
+				.contextSave(operation.revision)
+			)
+		case .readSkills(let operation): return (operation.context, .skills(operation.attempt))
+		case .readModels(let context): return (context, .models)
+		case .beginSignIn(let context): return (context, .signIn)
+		case .persistPreference(let write): return (write.context, .preference)
+		case .readUsage(let operation): return (operation.context, .usage(operation.attempt))
+		case .prepareSubmission(let submission): return (submission.context, .preparation)
+		case .startSubmission(let prepared): return (prepared.submission.context, .submission)
+		case .persistDraft(let write): return (write.context, .draft)
+		default: return nil
+		}
+	}
+
+	func beginSynchronous(
+		_ effect: WorkspaceEffect,
+		context: OperationContext
+	) -> WorkspaceOperationHandle?
+	{
+		guard let (_, purpose) = identity(of: effect)
+		else
+		{
+			return nil
+		}
+		let request = RequestKey(context)
+		guard accepted.insert(EffectKey(
+			request: request,
+			purpose: purpose
+		)).inserted
+		else
+		{
+			return nil
+		}
+		let previous = handles[request]
+		let handle = previous?.completion == nil
+			? (previous ?? WorkspaceOperationHandle(context: context))
+			: WorkspaceOperationHandle(context: context)
+		if previous?.completion != nil
+		{
+			completedRequests.removeAll
+			{
+				$0 == request
+			}
+		}
+		handles[request] = handle
+		handle.acceptedEffect()
+		return handle
+	}
+
+	func completeSynchronous(
+		_ action: WorkspaceAction,
+		context: OperationContext,
+		handle: WorkspaceOperationHandle,
+		completion: WorkspaceOperationCompletion
+	)
+	{
+		deliver(action)
+		{
+			handle.finishedEffect(completion)
+			self.retireCompletedRequest(RequestKey(context))
+		}
+	}
+
+	func start(
+		_ effect: WorkspaceEffect,
+		context: OperationContext,
+		purpose: Purpose,
+		managedWorkspace: TaskWorkspace?
+	)
+	{
+		let request = RequestKey(context)
+		let key = EffectKey(
+			request: request,
+			purpose: purpose
+		)
+		reserve(
+			[effect],
+			workspace: context.workspace
+		)
+		guard accepted.insert(key).inserted
+		else
+		{
+			return
+		}
+		let transportContinuation = handles.first
+		{
+			$0.key.workspace.sessionID == request.workspace.sessionID
+				&& $0.key.generation == request.generation && $0.key.requestID == request.requestID
+				&& $0.value.completion == nil
+				&& accepted.contains(EffectKey(
+					request: $0.key,
+					purpose: .version
+				))
+		}.map(\.value)
+		let previous = handles[request] ?? transportContinuation
+		if previous?.completion != nil
+		{
+			completedRequests.removeAll
+			{
+				$0 == request
+			}
+		}
+		let handle = previous?.completion == nil
+			? (previous ?? WorkspaceOperationHandle(context: context))
+			: WorkspaceOperationHandle(context: context)
+		handles[request] = handle
+		handle.acceptedEffect()
+		let persistenceTask = reservedPersistence.removeValue(forKey: key)
+		let contextLoadResult = reservedContextLoads.removeValue(forKey: key)
+
+		let task = Task
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			let action: WorkspaceAction
+			let completion: WorkspaceOperationCompletion
+			do
+			{
+				action = try await self.perform(
+					effect,
+					context: context,
+					persistenceTask: persistenceTask,
+					contextLoadResult: contextLoadResult,
+					managedWorkspace: managedWorkspace
+				)
+				completion = .finished
+			}
+			catch
+			{
+				let failure = self.failure(
+					for: effect,
+					message: error.localizedDescription
+				)
+				action = self.failureAction(
+					for: effect,
+					context: context,
+					failure: failure
+				)
+				completion = .failed(failure)
+			}
+			// Cancellation retires the local task even if a service ignores Task cancellation.
+			guard !Task.isCancelled, self.tasks[key] != nil
+			else
+			{
+				return
+			}
+			self.tasks.removeValue(forKey: key)
+			self.deliver(action)
+			{
+				// Chained effects are accepted before the completed effect leaves the group.
+				handle.finishedEffect(completion)
+				self.retireCompletedRequest(request)
+			}
+		}
+		tasks[key] = PendingEffect(
+			task: task,
+			effect: effect,
+			handle: handle
+		)
+	}
+
+	private func managementContext(_ operation: ThreadManagementOperation) -> OperationContext
+	{
+		switch operation
+		{
+		case .rename(
+			let context,
+			_
+		), .archive(let context), .unarchive(let context): return context
+		}
+	}
+
+	func scheduleUsageDeadline(_ operation: UsageDeadlineOperation)
+	{
+		usageDeadlineTask?.cancel()
+		usageDeadline = operation
+		usageDeadlineTask = Task
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			do
+			{
+				try await self.usageRuntime.waitUntil(operation.deadline)
+			}
+			catch
+			{
+				return
+			}
+			guard !Task.isCancelled, !self.isShutdown, self.usageDeadline == operation
+			else
+			{
+				return
+			}
+			self.usageDeadlineTask = nil
+			self.usageDeadline = nil
+			self.deliver(.usage(.freshnessDeadlineElapsed(
+				operation,
+				now: self.usageRuntime.now()
+			)))
+			{
+			}
+		}
+	}
+
+	func cancel(_ context: OperationContext)
+	{
+		let request = RequestKey(context)
+		let keys = tasks.keys.filter
+		{
+			$0.request == request
+		}
+		for key in keys
+		{
+			guard let pending = tasks.removeValue(forKey: key)
+			else
+			{
+				continue
+			}
+			pending.task.cancel()
+			let failure = failure(
+				for: pending.effect,
+				message: "Local operation cancelled; no remote outcome is established."
+			)
+			deliver(failureAction(
+				for: pending.effect,
+				context: pending.handle.context,
+				failure: failure
+			))
+			{
+				pending.handle.finishedEffect(.cancelled)
+				self.retireCompletedRequest(request)
+			}
+		}
+	}
+
+	/// Recently completed requests deduplicate replay; callers own their returned handles.
+	/// Active groups are never evicted, and completion bookkeeping has a fixed bound.
+	private func retireCompletedRequest(_ request: RequestKey)
+	{
+		guard handles[request]?.completion != nil,
+				!completedRequests.contains(request)
+		else
+		{
+			return
+		}
+		completedRequests.append(request)
+		while completedRequests.count > completedRequestLimit
+		{
+			let expired = completedRequests.removeFirst()
+			handles.removeValue(forKey: expired)
+			accepted = accepted.filter
+			{
+				$0.request != expired
+			}
+		}
+	}
+
+	func attachSubscription(_ context: OperationContext)
+	{
+		subscription = context
+		hasObservedSubscription = true
+		service.onEvent =
+		{
+			[weak self] event in
+			guard let self, self.subscription == context, !self.isShutdown
+			else
+			{
+				return
+			}
+			// Event freshness belongs to purpose-specific reducers, not request-ID filtering here.
+			for action in self.mapEvent(
+				context,
+				event
+			)
+			{
+				self.deliver(
+					action,
+					{
+					}
+				)
+			}
+		}
+		service.onDisconnect =
+		{
+			[weak self] message in
+			guard let self, self.subscription == context, !self.isShutdown
+			else
+			{
+				return
+			}
+			self.deliver(
+				.connection(.disconnected(
+					workspace: context.workspace,
+					generation: context.generation,
+					message: message
+				)),
+				{
+				}
+			)
+		}
+	}
+
+	func detachSubscription()
+	{
+		guard subscription != nil
+		else
+		{
+			return
+		}
+		subscription = nil
+		service.onEvent = nil
+		service.onDisconnect = nil
+	}
+}
