@@ -141,6 +141,7 @@ let package = Package(
 				"Support/ConversationPresentationTestFixture.swift",
 				"Support/ReviewModelTestFixture.swift",
 				"Support/WorkspaceTestFixture.swift",
+				"Workspaces/GitWorktreeManagerTests.swift",
 			],
 			sources: [
 				"Application/Runtime/Support/MockCodexService.swift",
