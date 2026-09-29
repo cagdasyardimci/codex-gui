@@ -51,6 +51,7 @@ let package = Package(
 				"Persistence/LocalStorage.swift",
 				"Persistence/ReviewMarkerStore.swift",
 				"Workspaces/WorkspaceLifecycleGitRunner.swift",
+				"Workspaces/WorkspaceLifecycleOperations.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
