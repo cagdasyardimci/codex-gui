@@ -14,6 +14,7 @@ let package = Package(
 			exclude: [
 				"App/InspectorViewController.swift",
 				"App/SettingsWindowController.swift",
+				"App/StatusPopoverView.swift",
 				"App/TaskNotifications.swift",
 				"Application/Composition/ConversationReviewComposition.swift",
 				"Application/Composition/WorkspaceDomainComposition.swift",
