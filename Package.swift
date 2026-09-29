@@ -12,6 +12,7 @@ let package = Package(
 		.executableTarget(
 			name: "CodexGUI",
 			exclude: [
+				"App/TaskNotifications.swift",
 				"Application/Composition/ConversationReviewComposition.swift",
 				"Application/Composition/WorkspaceDomainComposition.swift",
 				"Application/Composition/WorkspaceLifecycleComposition.swift",
