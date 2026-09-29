@@ -102,6 +102,7 @@ let package = Package(
 				"Features/Changes/ReviewModels.swift",
 				"Features/Changes/ReviewPresentation.swift",
 				"Features/Changes/ReviewValidationView.swift",
+				"Features/CommandPalette/CommandPaletteController.swift",
 				"Features/Conversation/ConversationContent.swift",
 				"Features/Conversation/ConversationPresentation.swift",
 				"Features/Navigation/NavigationPresentation.swift",
