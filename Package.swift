@@ -14,7 +14,6 @@ let package = Package(
 			exclude: [
 				"App/InspectorViewController.swift",
 				"App/StatusPopoverView.swift",
-				"Features/Conversation/ComposerInputs.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
@@ -104,6 +103,7 @@ let package = Package(
 				"Features/Changes/ReviewValidationView.swift",
 				"Features/CommandPalette/CommandPaletteController.swift",
 				"Features/Conversation/ApprovalPolicyPopoverView.swift",
+				"Features/Conversation/ComposerInputs.swift",
 				"Features/Conversation/ComposerPopoverPanel.swift",
 				"Features/Conversation/ConversationCollectionItem.swift",
 				"Features/Conversation/ConversationContent.swift",
@@ -112,6 +112,9 @@ let package = Package(
 				"Features/Conversation/EffortPopoverStyle.swift",
 				"Features/Conversation/EffortSlider.swift",
 				"Features/Conversation/InteractionCardView.swift",
+				"Features/Conversation/ModelEffortPopoverView.swift",
+				"Features/Conversation/ModelEffortSelectionButton.swift",
+				"Features/Conversation/ScrollableTextPreview.swift",
 				"Features/Navigation/NavigationPresentation.swift",
 				"Features/Navigation/UsagePresentation.swift",
 				"Features/ProjectContext/ConversationBookmarkKind+Labels.swift",
