@@ -74,6 +74,8 @@ let package = Package(
 				"Workspaces/WorkspaceCoordinatorModel.swift",
 				"Workspaces/WorkspaceCoordinatorReducer/WorkspaceCoordinatorReducer+Cleanup.swift",
 				"Workspaces/WorkspaceCoordinatorReducer/WorkspaceCoordinatorReducer+Creation.swift",
+				"Workspaces/WorkspaceCoordinatorReducer/WorkspaceCoordinatorReducer+Quit.swift",
+				"Workspaces/WorkspaceCoordinatorReducer/WorkspaceCoordinatorReducer+Recovery.swift",
 				"Workspaces/WorkspaceCoordinatorReducer/WorkspaceCoordinatorReducer.swift",
 				"Workspaces/WorkspaceLifecycleGitRunner.swift",
 				"Workspaces/WorkspaceLifecycleOperations.swift",
