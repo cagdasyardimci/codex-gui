@@ -40,6 +40,8 @@ let package = Package(
 				"Application/Reducers/WorkspaceLifecycle/WorkspaceLifecycleReducer.swift",
 				"Application/Runtime/WorkspaceEffectRunner/WorkspaceEffectRunner+Execution.swift",
 				"Application/Runtime/WorkspaceEffectRunner/WorkspaceEffectRunner+Reservations.swift",
+				"Application/Runtime/WorkspaceEffectRunner/WorkspaceEffectRunner+Results.swift",
+				"Application/Runtime/WorkspaceEffectRunner/WorkspaceEffectRunner+Routing.swift",
 				"Application/Runtime/WorkspaceEffectRunner/WorkspaceEffectRunner.swift",
 				"Application/Runtime/WorkspaceEffects.swift",
 				"Application/Runtime/WorkspaceHydration.swift",
