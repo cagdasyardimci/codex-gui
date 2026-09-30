@@ -12,6 +12,8 @@ let package = Package(
 		.executableTarget(
 			name: "CodexGUI",
 			exclude: [
+				"App/AppDelegate.swift",
+				"App/WindowPaneController.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
