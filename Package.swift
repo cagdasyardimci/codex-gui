@@ -13,6 +13,9 @@ let package = Package(
 			name: "CodexGUI",
 			exclude: [
 				"App/AppDelegate.swift",
+				"App/MainWindowController/MainWindowController+ActionBindings.swift",
+				"App/MainWindowController/MainWindowController+ToolbarAndPanels.swift",
+				"App/MainWindowController/MainWindowController.swift",
 				"App/WindowPaneController.swift",
 			],
 			sources: [

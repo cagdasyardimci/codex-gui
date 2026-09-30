@@ -1,0 +1,295 @@
+import AppKit
+
+@MainActor
+final class MainWindowController: NSWindowController, NSToolbarDelegate
+{
+	private let sourceStore: WorkspaceStateStore
+	let coordinator: TaskWorkspaceCoordinator?
+	var currentStore: WorkspaceStateStore
+	{
+		coordinator?.selectedStore ?? sourceStore
+	}
+	private var publicationObserver: WorkspacePublicationCoordinator?
+	// These members are shared by the action-binding and toolbar extensions.
+	let onOpenProjectRequest: () -> Void
+	let onInsertPathRequest: () -> Void
+	let navigation = NavigationViewController()
+	let conversation = ConversationViewController()
+	let inspector = InspectorViewController()
+	let commandPalette = CommandPaletteController()
+	let messageSearch = MessageSearchController()
+	let settings = SettingsWindowController()
+	let statusView = StatusPopoverView(frame: .zero)
+	let statusButton = NSButton(
+		title: "Disconnected",
+		target: nil,
+		action: nil
+	)
+	let titleLabel = NSTextField(labelWithString: "New chat")
+	let titlePill = DesktopSurface(
+		DesktopTheme.chrome,
+		cornerRadius: 7,
+		bordered: true
+	)
+	var statusPopover: NSPopover?
+	let paneController: WindowPaneController
+	var latestSnapshot: ConversationSnapshot?
+	var onSnapshot: ((ConversationSnapshot) -> Void)?
+
+	init(
+		store: WorkspaceStateStore,
+		onOpenProject: @escaping () -> Void,
+		onInsertPath: @escaping () -> Void,
+		layoutStore: WindowLayoutStore? = nil,
+		coordinator: TaskWorkspaceCoordinator? = nil
+	)
+	{
+		self.sourceStore = store
+		self.onOpenProjectRequest = onOpenProject
+		self.onInsertPathRequest = onInsertPath
+		self.coordinator = coordinator
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 1200,
+				height: 760
+			),
+			styleMask: [.titled, .closable, .miniaturizable, .resizable],
+			backing: .buffered,
+			defer: false
+		)
+		window.title = "Codex GUI"
+		window.titleVisibility = .hidden
+		window.titlebarAppearsTransparent = true
+		window.titlebarSeparatorStyle = .none
+		window.toolbarStyle = .unifiedCompact
+		window.backgroundColor = DesktopTheme.chrome
+		window.center()
+
+		paneController = WindowPaneController(
+			navigation: navigation,
+			conversation: conversation,
+			inspector: inspector,
+			layoutStore: layoutStore
+		)
+		window.contentViewController = paneController.split
+
+		super.init(window: window)
+		shouldCascadeWindows = false
+		configureToolbarControls()
+
+		let toolbar = NSToolbar(identifier: "CodexGUIToolbar")
+		toolbar.delegate = self
+		toolbar.displayMode = .iconOnly
+		toolbar.sizeMode = .small
+		window.toolbar = toolbar
+		updateMinimumWindowSize()
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(windowChromeDidUpdate),
+			name: NSWindow.didUpdateNotification,
+			object: window
+		)
+		paneController.restoreLayout(in: window)
+		if let coordinator
+		{
+			coordinator.onChange =
+			{
+				[weak self] in
+				self?.renderSnapshot($0)
+			}
+			renderSnapshot(coordinator.currentSnapshot)
+		}
+		else
+		{
+			publicationObserver = WorkspacePublicationCoordinator(
+				store: sourceStore,
+				render:
+				{
+					[weak self] in self?.renderSnapshot($0)
+				},
+				command:
+				{
+					command in
+					if case .openSignIn(let url) = command
+					{
+						NSWorkspace.shared.open(url)
+					}
+				}
+			)
+		}
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(windowDidClose),
+			name: NSWindow.willCloseNotification,
+			object: window
+		)
+
+	}
+
+	func renderSnapshot(_ snapshot: ConversationSnapshot)
+	{
+		self.latestSnapshot = snapshot
+		let target = WorkspaceIntentTarget(
+			store: currentStore,
+			snapshot: snapshot,
+			coordinator: coordinator
+		)
+		configureNavigationActions(target: target)
+		configureSettingsAndStatusActions(target: target)
+		configureInspectorActions(target: target)
+		configureMessageSearchActions(target: target)
+		configureConversationActions(target: target)
+
+		let selectedThread = snapshot.threads.first
+		{
+			$0.id == snapshot.selectedThreadID
+		}
+		let title = selectedThread?.name ?? selectedThread?.preview ?? "New chat"
+		self.titleLabel.stringValue = title
+		self.titleLabel.toolTip = title
+		self.window?.title = "\(title) — Codex GUI"
+
+		let status = WorkspaceStatusPresentation(
+			snapshot,
+			ownerIdentity: target.presentationIdentity
+		)
+		self.settings.render(status)
+		self.statusView.render(status)
+		let executionState = status.executionState
+		self.statusButton.title = executionState.title
+		self.statusButton.contentTintColor = Self.statusColor(executionState)
+		self.statusButton.toolTip = executionState.title
+		self.statusButton
+			.setAccessibilityLabel("\(executionState.title). Open account and backend status")
+
+		self.navigation.render(NavigationPresentation(snapshot))
+		self.conversation.render(ConversationPresentation(
+			snapshot,
+			ownerIdentity: target.presentationIdentity
+		))
+		self.inspector.render(ReviewPresentation(
+			snapshot,
+			ownerIdentity: target.presentationIdentity
+		))
+		self.inspector.changes.render(ReviewPresentation(
+			snapshot,
+			ownerIdentity: target.presentationIdentity
+		))
+
+		renderProjectContext(snapshot)
+		self.messageSearch.render(
+			snapshot.messageSearch,
+			loading: snapshot.searchLoading,
+			unavailableReason: snapshot.searchError
+		)
+
+		if let target = snapshot.pendingJumpItemID
+		{
+			self.conversation.jumpToEntry(id: target)
+		}
+		self.onSnapshot?(snapshot)
+	}
+
+	private func renderProjectContext(_ snapshot: ConversationSnapshot)
+	{
+		inspector.projectContext.render(ProjectContextPresentation(snapshot))
+	}
+
+	@objc private func windowDidClose()
+	{
+		publicationObserver?.cancel()
+		publicationObserver = nil
+		coordinator?.onChange = nil
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
+	override func showWindow(_ sender: Any?)
+	{
+		super.showWindow(sender)
+		// Toolbar attachment changes chrome height while preserving the content minimum.
+		// Apply the supported full-window minimum after the toolbar has been laid out.
+		window?.layoutIfNeeded()
+		updateMinimumWindowSize()
+		paneController.didPresentWindow()
+	}
+
+	@objc private func windowChromeDidUpdate()
+	{
+		updateMinimumWindowSize()
+	}
+
+	private func updateMinimumWindowSize()
+	{
+		guard let window
+		else
+		{
+			return
+		}
+		let chromeHeight = max(
+			0,
+			window.frame.height - window.contentLayoutRect.height
+		)
+		let minimumContentSize = NSSize(
+			width: 800,
+			height: max(
+				1,
+				500 - chromeHeight
+			)
+		)
+		guard window.contentMinSize != minimumContentSize
+		else
+		{
+			return
+		}
+		window.contentMinSize = minimumContentSize
+	}
+
+	func insertPath(
+		_ path: String,
+		target: WorkspaceIntentTarget? = nil
+	)
+	{
+		if let target, !target.accepts(.editDraft(""))
+		{
+			return
+		}
+		conversation.insertPath(path)
+	}
+	func focusSearch()
+	{
+		paneController.setSidebarCollapsed(false)
+		navigation.focusSearch()
+	}
+
+	func dispatchCurrent(_ intent: WorkspaceIntent)
+	{
+		let snapshot = coordinator?.currentSnapshot ?? sourceStore.currentSnapshot
+		WorkspaceIntentTarget(
+			store: currentStore,
+			snapshot: snapshot,
+			coordinator: coordinator
+		)
+		.dispatch(intent)
+	}
+
+	func openProject(_ url: URL)
+	{
+		dispatchCurrent(.openProject(url))
+	}
+
+	func createTask()
+	{
+		navigation.presentNewTask()
+	}
+
+	func saveLayout()
+	{
+		paneController.saveLayout()
+	}
+}
