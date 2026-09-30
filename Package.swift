@@ -201,6 +201,7 @@ let package = Package(
 				"Features/Conversation/TranscriptPreparationCoordinatorTests.swift",
 				"Features/Navigation/NavigationSummaryTests.swift",
 				"Features/Navigation/NavigationViewControllerTests.swift",
+				"Features/ProjectContext/ProjectContextUITests.swift",
 				"Persistence/ReviewMarkerStoreTests.swift",
 				"Support/ConversationPresentationTestFixture.swift",
 				"Support/ReviewModelTestFixture.swift",
