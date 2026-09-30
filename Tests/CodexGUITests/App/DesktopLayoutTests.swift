@@ -1,0 +1,167 @@
+import AppKit
+import Testing
+
+@testable import CodexGUI
+
+@MainActor
+@Suite(
+	"Desktop conversation layout",
+	.serialized
+)
+struct DesktopLayoutTests
+{
+	@Test func populatedChatKeepsSupportedFramesAcrossAppearanceAndResize() async throws
+	{
+		_ = NSApplication.shared
+		let output = ProcessInfo.processInfo.environment["CODEX_GUI_UI_EVIDENCE_DIRECTORY"].map
+		{
+			URL(fileURLWithPath: $0)
+		}
+		if let output
+		{
+			try FileManager.default.createDirectory(
+				at: output,
+				withIntermediateDirectories: true
+			)
+		}
+		let suite = "UIPolishEvidence.\(UUID())"
+		let defaults = try #require(UserDefaults(suiteName: suite))
+		defer
+		{
+			defaults.removePersistentDomain(forName: suite)
+		}
+		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		let controller = MainWindowController(
+			store: state.store,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			}
+		)
+		let window = try #require(controller.window)
+		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let conversation = try #require(
+			split.splitViewItems[1].viewController as? ConversationViewController
+		)
+		let thread = try #require(
+			ThreadSummary(json: [
+				"id": "polish-preview",
+				"name": "Polish the Codex GUI",
+				"cwd": "/tmp/codex-gui",
+			])
+		)
+		let model = try #require(
+			ModelOption(json: [
+				"model": "synthetic-sol",
+				"displayName": "Sol (UI fixture)",
+				"isDefault": true,
+				"supportedReasoningEfforts": [["reasoningEffort": "high"]],
+			])
+		)
+		let entries = [
+			ConversationEntry(
+				id: "user",
+				kind: .user,
+				title: "You",
+				body:
+				"Polish the Codex GUI to match the ChatGPT desktop app.\n"
+					+ "Keep the native controls, make the chat easier to read, and "
+					+ "refine the composer."
+			),
+			ConversationEntry(
+				id: "answer",
+				kind: .agent,
+				title: "Codex",
+				body:
+				"The interface now has a quieter sidebar, a compact title "
+					+ "bar, and a rounded composer.\n\n- Messages use a centered "
+					+ "reading column.\n- User messages appear in rounded "
+					+ "bubbles.\n- Changes and context are grouped into cards.\n\n"
+					+ "The interface uses native AppKit controls:\n\n```swift\nlet "
+					+ "composer = DesktopSurface(\n  DesktopTheme.input, "
+					+ "cornerRadius: 22)\n```"
+			),
+		]
+		let snapshot = ConversationSnapshot(
+			projectPath: "/tmp/codex-gui",
+			threads: [thread],
+			selectedThreadID: thread.id,
+			entries: entries,
+			canLoadEarlierTurns: false,
+			changedFiles: [ChangeFile(
+				path: "Interface.swift",
+				status: "Modified"
+			)],
+			diff: "@@ -1 +1 @@\n-// Previous interface\n+// Refined native interface\n",
+			draft: "",
+			canSend: true,
+			accountDescription: "Synthetic UI fixture",
+			backendDescription: "Synthetic UI fixture",
+			executionState: .ready,
+			statusMessage: nil,
+			models: [model],
+			selectedModelID: model.id,
+			selectedEffort: "high",
+			pendingInteractions: [],
+			recentProjects: []
+		)
+		controller.renderSnapshot(snapshot)
+		controller.showWindow(nil)
+		defer
+		{
+			window.orderOut(nil)
+		}
+		await conversation.waitForRendering()
+		for (name, appearance) in [("dark", NSAppearance.Name.darkAqua), ("light", .aqua)]
+		{
+			window.appearance = NSAppearance(named: appearance)
+			for size in [NSSize(
+				width: 1200,
+				height: 760
+			), NSSize(
+				width: 800,
+				height: 500
+			)]
+			{
+				window.setFrame(
+					NSRect(
+						origin: window.frame.origin,
+						size: size
+					),
+					display: true
+				)
+				window.layoutIfNeeded()
+				try await Task.sleep(for: .milliseconds(150))
+				window.layoutIfNeeded()
+				#expect(window.frame.size == size)
+				#expect(split.splitViewItems[2].isCollapsed == (size.width == 800))
+				#expect(split.splitViewItems[1].viewController.view.frame.width >= 360)
+				#expect(split.view.fittingSize.width <= split.view.bounds.width + 1)
+				#expect(split.view.fittingSize.height <= split.view.bounds.height + 1)
+				if let output
+				{
+					let content = try #require(window.contentView)
+					content.displayIfNeeded()
+					let bitmap = try #require(content
+						.bitmapImageRepForCachingDisplay(in: content.bounds))
+					content.cacheDisplay(
+						in: content.bounds,
+						to: bitmap
+					)
+					let png = try #require(bitmap.representation(
+						using: .png,
+						properties: [:]
+					))
+					try png.write(
+						to: output
+							.appendingPathComponent(
+								"\(name)-\(Int(size.width))x\(Int(size.height)).png"
+							)
+					)
+				}
+			}
+		}
+	}
+}

@@ -175,6 +175,7 @@ let package = Package(
 			name: "CodexGUITests",
 			dependencies: ["CodexGUI"],
 			exclude: [
+				"App/TaskNotificationsTests.swift",
 				"CodexClient/AppServerIntegrationTests.swift",
 				"CodexClient/AppServerWorkspaceIsolationTests.swift",
 				"CodexClient/BackendTests.swift",
@@ -185,6 +186,8 @@ let package = Package(
 				"Workspaces/TaskWorkspaceLocationsTests.swift",
 			],
 			sources: [
+				"App/BackendDetailsViewTests.swift",
+				"App/DesktopLayoutTests.swift",
 				"Application/Runtime/Support/ControlledUsageClock.swift",
 				"Application/Runtime/Support/MockCodexService.swift",
 				"Application/Runtime/Support/PublicationGate.swift",
