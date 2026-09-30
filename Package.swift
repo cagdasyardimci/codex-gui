@@ -184,6 +184,7 @@ let package = Package(
 				"App/TaskWorkspaceWindowLayoutTests.swift",
 				"App/WindowLayoutTests.swift",
 				"App/WorkspaceIntentRoutingTests.swift",
+				"Application/Composition/WorkspaceDomainCompositionTests.swift",
 				"Application/Presentation/UserMessagePresenterTests.swift",
 				"Application/Reducers/Composer/ComposerContextTests.swift",
 				"Application/Reducers/Composer/ComposerReducerTests.swift",
