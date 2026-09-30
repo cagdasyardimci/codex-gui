@@ -17,6 +17,9 @@ let package = Package(
 				"App/MainWindowController/MainWindowController+ToolbarAndPanels.swift",
 				"App/MainWindowController/MainWindowController.swift",
 				"App/WindowPaneController.swift",
+				"Features/Navigation/NavigationViewController/NavigationViewController+Controls.swift",
+				"Features/Navigation/NavigationViewController/NavigationViewController+ModalWorkflows.swift",
+				"Features/Navigation/NavigationViewController/NavigationViewController.swift",
 			],
 			sources: [
 				"App/AppKitLayout.swift",
