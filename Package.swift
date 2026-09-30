@@ -188,6 +188,8 @@ let package = Package(
 			sources: [
 				"App/BackendDetailsViewTests.swift",
 				"App/DesktopLayoutTests.swift",
+				"App/TaskWorkspaceModalOwnershipTests.swift",
+				"App/TaskWorkspaceWindowLayoutTests.swift",
 				"Application/Runtime/Support/ControlledUsageClock.swift",
 				"Application/Runtime/Support/MockCodexService.swift",
 				"Application/Runtime/Support/PublicationGate.swift",
