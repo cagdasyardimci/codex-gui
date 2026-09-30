@@ -192,6 +192,7 @@ let package = Package(
 				"CodexClient/BackendDiagnosticsTests.swift",
 				"Features/Changes/ChangesReviewViewControllerTests.swift",
 				"Features/Changes/ChangesViewControllerTests.swift",
+				"Features/Changes/ReviewModelsTests.swift",
 				"Persistence/ReviewMarkerStoreTests.swift",
 				"Support/ConversationPresentationTestFixture.swift",
 				"Support/ReviewModelTestFixture.swift",
