@@ -17,6 +17,7 @@ let package = Package(
 				"App/MainWindowController/MainWindowController+ToolbarAndPanels.swift",
 				"App/MainWindowController/MainWindowController.swift",
 				"App/WindowPaneController.swift",
+				"Features/Conversation/ConversationViewController/ConversationViewController+Attachments.swift",
 				"Features/Conversation/ConversationViewController/ConversationViewController.swift",
 			],
 			sources: [
