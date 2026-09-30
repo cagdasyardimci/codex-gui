@@ -193,6 +193,8 @@ let package = Package(
 				"Features/Changes/ChangesReviewViewControllerTests.swift",
 				"Features/Changes/ChangesViewControllerTests.swift",
 				"Features/Changes/ReviewModelsTests.swift",
+				"Features/Conversation/ConversationContentTests.swift",
+				"Features/Conversation/ConversationLongHistoryLayoutTests.swift",
 				"Persistence/ReviewMarkerStoreTests.swift",
 				"Support/ConversationPresentationTestFixture.swift",
 				"Support/ReviewModelTestFixture.swift",
