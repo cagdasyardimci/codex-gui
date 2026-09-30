@@ -195,6 +195,7 @@ let package = Package(
 				"Features/Changes/ReviewModelsTests.swift",
 				"Features/Conversation/ConversationContentTests.swift",
 				"Features/Conversation/ConversationLongHistoryLayoutTests.swift",
+				"Features/Conversation/ConversationViewControllerTests.swift",
 				"Persistence/ReviewMarkerStoreTests.swift",
 				"Support/ConversationPresentationTestFixture.swift",
 				"Support/ReviewModelTestFixture.swift",
