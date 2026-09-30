@@ -177,6 +177,8 @@ let package = Package(
 			exclude: [
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Composer.swift",
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Conversation.swift",
+				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Execution.swift",
+				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Helpers.swift",
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests.swift",
 			],
 			sources: [
