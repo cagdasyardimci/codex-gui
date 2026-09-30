@@ -176,6 +176,7 @@ let package = Package(
 			dependencies: ["CodexGUI"],
 			exclude: [
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Composer.swift",
+				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Conversation.swift",
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests.swift",
 			],
 			sources: [
