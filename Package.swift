@@ -200,6 +200,8 @@ let package = Package(
 				"Application/Runtime/Support/PublicationGate.swift",
 				"Application/Runtime/WorkspaceLifecycleRuntimeTests.swift",
 				"Application/Runtime/WorkspaceRuntimeTests.swift",
+				"Application/Runtime/WorkspaceSourceStartupTests.swift",
+				"Application/Runtime/WorkspaceStoreFactoryTests.swift",
 				"Application/State/CheckoutIdentityTests.swift",
 				"Application/State/WorkspaceEligibilityTests.swift",
 				"Application/State/WorkspaceModelTests.swift",
