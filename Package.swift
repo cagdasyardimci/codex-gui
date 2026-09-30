@@ -199,6 +199,7 @@ let package = Package(
 				"Application/Runtime/Support/MockCodexService.swift",
 				"Application/Runtime/Support/PublicationGate.swift",
 				"Application/Runtime/WorkspaceLifecycleRuntimeTests.swift",
+				"Application/Runtime/WorkspaceRuntimeTests.swift",
 				"Application/State/CheckoutIdentityTests.swift",
 				"Application/State/WorkspaceEligibilityTests.swift",
 				"Application/State/WorkspaceModelTests.swift",
