@@ -190,6 +190,7 @@ let package = Package(
 				"Application/Reducers/Conversation/ConversationReducerTests.swift",
 				"Application/Reducers/Navigation/ContextNavigationReducerTests.swift",
 				"Application/Reducers/Navigation/ProjectContextTests.swift",
+				"Application/Reducers/Preferences/PreferenceReducerTests.swift",
 				"Application/Runtime/Support/ControlledUsageClock.swift",
 				"Application/Runtime/Support/MockCodexService.swift",
 				"Application/Runtime/Support/PublicationGate.swift",
