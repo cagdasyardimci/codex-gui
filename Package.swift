@@ -175,6 +175,8 @@ let package = Package(
 			name: "CodexGUITests",
 			dependencies: ["CodexGUI"],
 			exclude: [
+				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Composer.swift",
+				"Application/Runtime/ApplicationStateTests/ApplicationStateTests.swift",
 			],
 			sources: [
 				"App/BackendDetailsViewTests.swift",
