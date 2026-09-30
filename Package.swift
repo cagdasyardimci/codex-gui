@@ -192,6 +192,7 @@ let package = Package(
 				"App/TaskWorkspaceModalOwnershipTests.swift",
 				"App/TaskWorkspaceWindowLayoutTests.swift",
 				"App/WindowLayoutTests.swift",
+				"Application/Presentation/UserMessagePresenterTests.swift",
 				"Application/Runtime/Support/ControlledUsageClock.swift",
 				"Application/Runtime/Support/MockCodexService.swift",
 				"Application/Runtime/Support/PublicationGate.swift",
