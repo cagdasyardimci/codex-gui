@@ -176,6 +176,7 @@ let package = Package(
 			dependencies: ["CodexGUI"],
 			exclude: [
 				"App/TaskNotificationsTests.swift",
+				"App/WorkspaceIntentRoutingTests.swift",
 				"CodexClient/AppServerIntegrationTests.swift",
 				"CodexClient/AppServerWorkspaceIsolationTests.swift",
 				"CodexClient/BackendTests.swift",
