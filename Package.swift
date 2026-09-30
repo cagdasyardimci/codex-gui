@@ -178,6 +178,7 @@ let package = Package(
 				"App/TaskNotificationsTests.swift",
 				"App/WorkspaceIntentRoutingTests.swift",
 				"Application/Reducers/Composer/ComposerContextTests.swift",
+				"Application/Reducers/Composer/ComposerReducerTests.swift",
 				"CodexClient/AppServerIntegrationTests.swift",
 				"CodexClient/AppServerWorkspaceIsolationTests.swift",
 				"CodexClient/BackendTests.swift",
