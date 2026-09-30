@@ -193,6 +193,7 @@ let package = Package(
 				"Application/Reducers/Preferences/PreferenceReducerTests.swift",
 				"Application/Reducers/Review/GitDiffParserTests.swift",
 				"Application/Reducers/Review/ReviewReducerTests.swift",
+				"Application/Reducers/Usage/UsageReducerTests.swift",
 				"Application/Runtime/Support/ControlledUsageClock.swift",
 				"Application/Runtime/Support/MockCodexService.swift",
 				"Application/Runtime/Support/PublicationGate.swift",
