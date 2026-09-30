@@ -177,6 +177,7 @@ let package = Package(
 			exclude: [
 				"App/TaskNotificationsTests.swift",
 				"App/WorkspaceIntentRoutingTests.swift",
+				"Application/Reducers/Composer/ComposerContextTests.swift",
 				"CodexClient/AppServerIntegrationTests.swift",
 				"CodexClient/AppServerWorkspaceIsolationTests.swift",
 				"CodexClient/BackendTests.swift",
