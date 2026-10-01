@@ -94,13 +94,20 @@ extension ConversationViewController
 			}
 			return frame.maxY > visibleTop
 		}
-		guard let index, entries.indices.contains(index),
-				let separator = entries[index].id.firstIndex(of: ":")
+		if let index, displayedRows.indices.contains(index),
+			case .turnStatus(let timing) = displayedRows[index]
+		{
+			turnNavigationRail.updateActiveTurn(timing.turnID)
+			return
+		}
+		guard let index, displayedRows.indices.contains(index),
+				let sourceID = displayedRows[index].sourceEntryID,
+				let separator = sourceID.firstIndex(of: ":")
 		else
 		{
 			turnNavigationRail.updateActiveTurn(nil)
 			return
 		}
-		turnNavigationRail.updateActiveTurn(String(entries[index].id[..<separator]))
+		turnNavigationRail.updateActiveTurn(String(sourceID[..<separator]))
 	}
 }

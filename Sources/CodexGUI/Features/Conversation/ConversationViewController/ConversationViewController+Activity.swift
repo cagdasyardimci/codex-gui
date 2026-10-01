@@ -1,0 +1,82 @@
+import AppKit
+
+@MainActor
+extension ConversationViewController
+{
+	func captureActivityOutputPositions()
+	{
+		for item in collectionView.visibleItems()
+		{
+			guard let activity = item as? ConversationActivityCollectionItem,
+					let id = activity.activityID,
+					let position = activity.outputReadingPosition()
+			else
+			{
+				continue
+			}
+			activityOutputPositions[id] = position
+		}
+	}
+
+	func toggleActivity(_ row: ConversationActivityRow)
+	{
+		if row.kind == .group || row.kind == .image
+		{
+			if !collapsedGroupIDs.insert(row.groupID).inserted
+			{
+				collapsedGroupIDs.remove(row.groupID)
+			}
+		}
+		else if !expandedActivityIDs.insert(row.id).inserted
+		{
+			expandedActivityIDs.remove(row.id)
+		}
+		prepareEntries(
+			requestedEntries,
+			context: requestedContext,
+			force: true
+		)
+	}
+
+	func updateTurnStatusTimer()
+	{
+		turnStatusTimer?.invalidate()
+		turnStatusTimer = nil
+		guard transcriptIsVisible, timingExecutionState.isBusy,
+				requestedTurnTimings.contains(where:
+				{
+					$0.status == "inProgress" && $0.startedAt != nil
+				})
+		else
+		{
+			return
+		}
+		let context = requestedContext
+		let timer = Timer(
+			timeInterval: 1,
+			repeats: true
+		)
+		{
+			[weak self] _ in
+			MainActor.assumeIsolated
+			{
+				guard let self, self.requestedContext == context,
+						self.timingExecutionState.isBusy
+				else
+				{
+					return
+				}
+				for item in self.collectionView.visibleItems()
+				{
+					(item as? ConversationTurnStatusCollectionItem)?.refresh(now: Date())
+				}
+			}
+		}
+		turnStatusTimer = timer
+		RunLoop.main.add(
+			timer,
+			forMode: .common
+		)
+	}
+
+}

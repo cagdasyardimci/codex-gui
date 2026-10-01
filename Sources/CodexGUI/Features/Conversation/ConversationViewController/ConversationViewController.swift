@@ -139,6 +139,21 @@ final class ConversationViewController: NSViewController,
 	)
 	let interactionStack = NSStackView()
 	var entries: [ConversationEntry] = []
+	var displayedRows: [ConversationTranscriptRow] = []
+	var collapsedGroupIDs = Set<String>()
+	var expandedActivityIDs = Set<String>()
+	var activityOutputPositions: [
+		String: ConversationActivityCollectionItem.OutputReadingPosition
+	] =
+		[:]
+	var requestedTurnTimings: [ConversationTurnTiming] = []
+	var turnStatusTimer: Timer?
+	var transcriptIsVisible = true
+	var timingExecutionState: ExecutionState = .disconnected
+	var onOpenActivityFile: (String) -> Void =
+	{
+		NSWorkspace.shared.open(URL(fileURLWithPath: $0))
+	}
 	private var renderedInteractions: ConversationPresentation.Interactions?
 	var expandedEntryIDs = Set<String>()
 	var projectPath: String?
@@ -147,6 +162,21 @@ final class ConversationViewController: NSViewController,
 	var bookmarks: [ConversationBookmark] = []
 	var jumpTargets: [ConversationJumpTarget] = []
 	var requestedJumpItemID: String?
+
+	override func viewDidDisappear()
+	{
+		super.viewDidDisappear()
+		transcriptIsVisible = false
+		turnStatusTimer?.invalidate()
+		turnStatusTimer = nil
+	}
+
+	override func viewDidAppear()
+	{
+		super.viewDidAppear()
+		transcriptIsVisible = true
+		updateTurnStatusTimer()
+	}
 
 	override func loadView()
 	{
@@ -391,7 +421,9 @@ final class ConversationViewController: NSViewController,
 		}
 		if previous?.status != snapshot.status
 		{
+			timingExecutionState = snapshot.status.executionState
 			renderTaskStatus(snapshot.status)
+			updateTurnStatusTimer()
 		}
 		if previous?.requestContext != snapshot.requestContext
 		{
@@ -404,6 +436,7 @@ final class ConversationViewController: NSViewController,
 			renderModelAndApprovalPreferences(snapshot.preferences)
 		}
 		if previous?.transcript != snapshot.transcript
+			|| previous?.status.executionState != snapshot.status.executionState
 		{
 			loadEarlierButton.isHidden = !snapshot.transcript.canLoadEarlierTurns
 			transcriptUtilityRow?.isHidden = snapshot.transcript.entries.isEmpty

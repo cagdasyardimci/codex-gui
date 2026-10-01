@@ -13,9 +13,12 @@ extension ConversationViewController
 		{
 			scrollToBottom()
 		}
-		else if let anchor, let index = entries.firstIndex(where:
+		else if let anchor, let index = displayedRows.firstIndex(where:
 			{
 				$0.id == anchor.entryID
+			}) ?? displayedRows.firstIndex(where:
+			{
+				anchor.sourceEntryID != nil && $0.sourceEntryID == anchor.sourceEntryID
 			}),
 			let attributes = collectionView.layoutAttributesForItem(
 				at: IndexPath(
@@ -75,15 +78,47 @@ extension ConversationViewController
 
 	func scrollToRequestedItem()
 	{
-		guard let requestedJumpItemID,
-				let index = entries.firstIndex(where:
-				{
-					$0.id == requestedJumpItemID
-				})
+		guard let requestedJumpItemID
 		else
 		{
 			return
 		}
+		if let group = ConversationTranscriptRow.make(
+			entries: entries,
+			projectPath: projectPath
+		).compactMap(
+			{
+				row -> ConversationActivityRow? in
+				guard case .activity(let activity) = row,
+						activity.sourceEntryID == requestedJumpItemID,
+						activity.kind != .group
+				else
+				{
+					return nil
+				}
+				return activity
+			}
+		).first, collapsedGroupIDs.remove(group.groupID) != nil
+		{
+			prepareEntries(
+				requestedEntries,
+				context: requestedContext,
+				force: true
+			)
+			return
+		}
+		guard let index = displayedRows.firstIndex(where:
+			{
+				$0.id == requestedJumpItemID
+			}) ?? displayedRows.firstIndex(where:
+			{
+				$0.sourceEntryID == requestedJumpItemID
+			})
+		else
+		{
+			return
+		}
+
 		collectionView.scrollToItems(
 			at: [IndexPath(
 				item: index,
@@ -114,20 +149,25 @@ extension ConversationViewController
 		let index = collectionView.selectionIndexPaths.first?.item
 		bookmarkButton.isEnabled = index.map
 		{
-			entries.indices.contains($0)
+			displayedRows.indices.contains($0)
+				&& displayedRows[$0].sourceEntryID != nil
 		} == true
 	}
 
 	@objc func bookmarkSelected()
 	{
 		guard let index = collectionView.selectionIndexPaths.first?.item,
-				entries.indices.contains(index), let selectedThreadID,
-				let separator = entries[index].id.firstIndex(of: ":")
+				displayedRows.indices.contains(index),
+				let sourceID = displayedRows[index].sourceEntryID,
+				let entry = entries.first(where:
+				{
+					$0.id == sourceID
+				}),
+				let selectedThreadID, let separator = entry.id.firstIndex(of: ":")
 		else
 		{
 			return
 		}
-		let entry = entries[index]
 		let turnID = String(entry.id[..<separator])
 		let itemID = String(entry.id[entry.id.index(after: separator)...])
 		let existing = bookmarks.first
@@ -203,14 +243,14 @@ extension ConversationViewController
 
 	private func scrollToBottom()
 	{
-		guard !entries.isEmpty
+		guard !displayedRows.isEmpty
 		else
 		{
 			return
 		}
 		collectionView.scrollToItems(
 			at: [IndexPath(
-				item: entries.count - 1,
+				item: displayedRows.count - 1,
 				section: 0
 			)],
 			scrollPosition: .bottom
@@ -283,7 +323,8 @@ extension ConversationViewController
 			collectionView.indexPathsForVisibleItems().compactMap
 			{
 				indexPath in
-				entries.indices.contains(indexPath.item) ? entries[indexPath.item].id : nil
+				displayedRows.indices.contains(indexPath.item) ? displayedRows[indexPath.item]
+					.id : nil
 			}
 		)
 		let width = ConversationFlowLayout.contentWidth(in: collectionView.bounds.width)

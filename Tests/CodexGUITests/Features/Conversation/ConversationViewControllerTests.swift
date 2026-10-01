@@ -833,6 +833,379 @@ struct ConversationViewControllerTests
 		}.first
 	}
 
+	@Test func activityDisclosuresSurviveStreamingAndJumpExpandsBackingSource() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		var entry = ConversationEntry(
+			id: "turn:command",
+			kind: .command,
+			title: "Command",
+			body: "",
+			activity: .command(ConversationCommand(
+				command: "echo hello",
+				cwd: "/tmp",
+				output: "",
+				status: "inProgress",
+				exitCode: nil,
+				durationMs: nil,
+				actions: []
+			))
+		)
+		controller.render(snapshot([entry]))
+		await controller.waitForRendering()
+		guard case .activity(let command) = controller.displayedRows[1]
+		else
+		{
+			Issue.record("Expected command activity"); return
+		}
+		controller.toggleActivity(command)
+		await controller.waitForRendering()
+		entry.activity = .command(ConversationCommand(
+			command: "echo hello",
+			cwd: "/tmp",
+			output: "hello",
+			status: "completed",
+			exitCode: 0,
+			durationMs: 20,
+			actions: []
+		))
+		controller.render(snapshot([entry]))
+		await controller.waitForRendering()
+		guard case .activity(let streamed) = controller.displayedRows[1],
+				case .activity(let group) = controller.displayedRows[0]
+		else
+		{
+			Issue.record("Expected retained activities"); return
+		}
+		#expect(streamed.expanded)
+		#expect(streamed.command?.output == "hello")
+		controller.toggleActivity(group)
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.count == 1)
+		controller.jumpToEntry(id: entry.id)
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.count == 2)
+		#expect(controller.requestedJumpItemID == nil)
+		#expect(controller.bookmarkButton.isEnabled)
+		#expect(controller.entries == [entry])
+	}
+
+	@Test func retainedActivityCallbacksCannotChangeOrOpenAnotherOwner() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let entry = ConversationEntry(
+			id: "turn:read",
+			kind: .command,
+			title: "Read",
+			body: "",
+			activity: .command(ConversationCommand(
+				command: "cat file",
+				cwd: "/tmp",
+				output: "",
+				status: "completed",
+				exitCode: 0,
+				durationMs: nil,
+				actions: [CodexCommandAction(
+					kind: .read,
+					command: "cat file",
+					path: "file"
+				)]
+			))
+		)
+		var initial = snapshot([entry])
+		initial.workspaceOwner = ConversationPresentationTestFixture
+			.presentationOwner(sessionID: UUID())
+		controller.render(initial)
+		await controller.waitForRendering()
+		let retained = controller.collectionView(
+			controller.collectionView,
+			itemForRepresentedObjectAt: IndexPath(
+				item: 1,
+				section: 0
+			)
+		)
+		var opened: [String] = []
+		controller.onOpenActivityFile =
+		{
+			opened.append($0)
+		}
+		var replacement = snapshot([entry])
+		replacement.workspaceOwner = ConversationPresentationTestFixture
+			.presentationOwner(sessionID: UUID())
+		controller.render(replacement)
+		_ = retained.perform(NSSelectorFromString("toggle"))
+		_ = retained.perform(NSSelectorFromString("openFile"))
+		await controller.waitForRendering()
+		_ = retained.perform(NSSelectorFromString("toggle"))
+		_ = retained.perform(NSSelectorFromString("openFile"))
+		#expect(opened.isEmpty)
+		#expect(controller.expandedActivityIDs.isEmpty)
+		#expect(controller.collapsedGroupIDs.isEmpty)
+	}
+
+	@Test func terminalExecutionStopsTimingAndTimingRowsCannotBeBookmarked() async
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let entry = ConversationEntry(
+			id: "turn:user",
+			kind: .user,
+			title: "You",
+			body: "Request"
+		)
+		var active = snapshot([entry])
+		active.activeThreadID = "replay"
+		active.activeTurnID = "turn"
+		active.turnTimings = [ConversationTurnTiming(
+			turnID: "turn",
+			status: "inProgress",
+			startedAt: Date(timeIntervalSince1970: 1)
+		)]
+		controller.render(active)
+		await controller.waitForRendering()
+		#expect(controller.turnStatusTimer != nil)
+		controller.collectionView.selectItems(
+			at: [IndexPath(
+				item: 1,
+				section: 0
+			)],
+			scrollPosition: .top
+		)
+		controller.updateBookmarkButton()
+		#expect(!controller.bookmarkButton.isEnabled)
+		var terminal = snapshot(
+			[entry],
+			executionState: .disconnected
+		)
+		terminal.turnTimings = active.turnTimings
+		controller.render(terminal)
+		await controller.waitForRendering()
+		#expect(controller.turnStatusTimer == nil)
+		guard case .turnStatus(let timing) = controller.displayedRows[1]
+		else
+		{
+			Issue.record("Expected timing row"); return
+		}
+		#expect(timing.status == "statusUnknown")
+		#expect(timing.completedAt == nil)
+		#expect(timing.durationMs == nil)
+		controller.viewDidDisappear()
+	}
+
+	@Test func innerShellReadingPositionSurvivesDisclosureAndStaysScoped() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let command = ConversationCommand(
+			command: "echo output",
+			cwd: "/tmp",
+			output: String(
+				repeating: "line of output\n",
+				count: 200
+			),
+			status: "completed",
+			exitCode: 0,
+			durationMs: nil,
+			actions: []
+		)
+		let entry = ConversationEntry(
+			id: "turn:command",
+			kind: .command,
+			title: "Command",
+			body: "",
+			activity: .command(command)
+		)
+		controller.render(snapshot([entry]))
+		await controller.waitForRendering()
+		guard case .activity(let row) = controller.displayedRows[1]
+		else
+		{
+			return
+		}
+		controller.toggleActivity(row)
+		await controller.waitForRendering()
+		let item = try #require(controller.collectionView(
+			controller.collectionView,
+			itemForRepresentedObjectAt: IndexPath(
+				item: 1,
+				section: 0
+			)
+		)
+			as? ConversationActivityCollectionItem)
+		func layout(_ item: ConversationActivityCollectionItem)
+		{
+			item.view.frame = NSRect(
+				x: 0,
+				y: 0,
+				width: 500,
+				height: 314
+			)
+			item.view.layoutSubtreeIfNeeded()
+			item.viewDidLayout()
+		}
+		layout(item)
+		item.restoreOutputReadingPosition(.init(
+			origin: NSPoint(
+				x: 0,
+				y: 80
+			),
+			selection: NSRange(
+				location: 20,
+				length: 10
+			)
+		))
+		layout(item)
+		controller.collectionView(
+			controller.collectionView,
+			didEndDisplaying: item,
+			forRepresentedObjectAt: IndexPath(
+				item: 1,
+				section: 0
+			)
+		)
+		#expect(try #require(controller.activityOutputPositions[row.id]).origin.y == 80)
+		controller.toggleActivity(row)
+		await controller.waitForRendering()
+		controller.toggleActivity(row)
+		await controller.waitForRendering()
+		let reopened = try #require(controller.collectionView(
+			controller.collectionView,
+			itemForRepresentedObjectAt: IndexPath(
+				item: 1,
+				section: 0
+			)
+		)
+			as? ConversationActivityCollectionItem)
+		layout(reopened)
+		#expect(try #require(reopened.outputReadingPosition()).origin.y == 80)
+		#expect(try #require(reopened.outputReadingPosition()).selection.length == 10)
+		var other = snapshot([entry])
+		other.workspaceOwner = ConversationPresentationTestFixture
+			.presentationOwner(sessionID: UUID())
+		controller.render(other)
+		await controller.waitForRendering()
+		#expect(controller.activityOutputPositions.isEmpty)
+	}
+
+	@Test func onlyMatchingActiveTurnCanTickAndHistoricalOutcomeStaysUnknown() async
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let entries = ["old", "new"].map
+		{
+			ConversationEntry(
+				id: "\($0):user",
+				kind: .user,
+				title: "You",
+				body: "Request"
+			)
+		}
+		var active = snapshot(entries)
+		active.activeThreadID = "replay"
+		active.activeTurnID = "new"
+		active.turnTimings = ["old", "new"].map
+		{
+			ConversationTurnTiming(
+				turnID: $0,
+				status: "inProgress",
+				startedAt: Date()
+			)
+		}
+		controller.render(active)
+		await controller.waitForRendering()
+		#expect(controller.requestedTurnTimings.map(\.status) == ["statusUnknown", "inProgress"])
+		#expect(controller.turnStatusTimer != nil)
+		active.activeThreadID = "other"
+		controller.render(active)
+		await controller.waitForRendering()
+		#expect(controller.requestedTurnTimings.allSatisfy
+		{
+			$0.status == "statusUnknown"
+		})
+		#expect(controller.turnStatusTimer == nil)
+		#expect(active.turnTimings.allSatisfy
+		{
+			$0.status == "inProgress"
+		})
+	}
+
+	@Test func compactActivityFramesPreserveMessageSpacingAndBottomNavigation() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 900,
+				height: 700
+			),
+			styleMask: [.titled, .resizable],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = controller
+		let command = ConversationCommand(
+			command: "echo output",
+			cwd: "/tmp",
+			output: "",
+			status: "completed",
+			exitCode: 0,
+			durationMs: nil,
+			actions: []
+		)
+		let commands = ["a", "b"].map
+		{
+			ConversationEntry(
+				id: "turn:\($0)",
+				kind: .command,
+				title: "Command",
+				body: "",
+				activity: .command(command)
+			)
+		}
+		let messages = (0 ..< 50).map
+		{
+			ConversationEntry(
+				id: "turn:message-\($0)",
+				kind: .agent,
+				title: "Codex",
+				body: "Answer"
+			)
+		}
+		controller.render(snapshot(commands + messages))
+		await controller.waitForRendering()
+		controller.view.layoutSubtreeIfNeeded()
+		let collection = controller.collectionView
+		collection.layoutSubtreeIfNeeded()
+		let frames = try controller.displayedRows.indices.map
+		{
+			try #require(collection.layoutAttributesForItem(at: IndexPath(
+				item: $0,
+				section: 0
+			)))
+			.frame
+		}
+		#expect(abs(frames[1].minY - frames[0].minY - 30) < 1)
+		#expect(abs(frames[2].minY - frames[1].minY - 30) < 1)
+		#expect(abs(frames[3].minY - frames[2].maxY - 18) < 1)
+		#expect(abs(frames[4].minY - frames[3].maxY - 18) < 1)
+		let layout = try #require(collection.collectionViewLayout)
+		#expect(frames.allSatisfy
+		{
+			$0.maxY <= layout.collectionViewContentSize.height
+		})
+		controller.jumpToEntry(id: try #require(messages.last).id)
+		#expect(controller.requestedJumpItemID == nil)
+		#expect(collection.selectionIndexPaths.first?.item == controller.displayedRows.count - 1)
+		let rectFrames = layout.layoutAttributesForElements(in: frames[2]).map(\.frame)
+		#expect(rectFrames.contains(frames[2]))
+		window.orderOut(nil)
+	}
+
 	private func snapshot(
 		_ entries: [ConversationEntry],
 		executionState: ExecutionState = .running,

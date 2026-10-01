@@ -6,6 +6,9 @@ struct ConversationPresentation: Equatable
 	{
 		let owner: FeaturePresentationOwner
 		let entries: [ConversationEntry]
+		var turnTimings: [ConversationTurnTiming] = []
+		var activeThreadID: String? = nil
+		var activeTurnID: String? = nil
 		let canLoadEarlierTurns: Bool
 		var selectedThreadID: String?
 		{
@@ -227,6 +230,9 @@ struct ConversationPresentation: Equatable
 		transcript = Transcript(
 			owner: owner,
 			entries: snapshot.entries,
+			turnTimings: snapshot.turnTimings,
+			activeThreadID: snapshot.activeThreadID,
+			activeTurnID: snapshot.activeTurnID,
 			canLoadEarlierTurns: snapshot.canLoadEarlierTurns
 		)
 		let workspace = snapshot.taskWorkspaces.first

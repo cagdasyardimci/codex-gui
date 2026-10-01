@@ -77,6 +77,19 @@ extension ConversationViewController
 	{
 		let layout = ConversationFlowLayout()
 		layout.minimumLineSpacing = 18
+		layout.verticalGap =
+		{
+			[weak self] index in
+			guard let self, self.displayedRows.indices.contains(index), index > 0,
+					case .activity(let current) = self.displayedRows[index],
+					case .activity(let previous) = self.displayedRows[index - 1],
+					current.groupID == previous.groupID
+			else
+			{
+				return 18
+			}
+			return 0
+		}
 		layout.sectionInset = NSEdgeInsets(
 			top: 20,
 			left: 16,
@@ -89,6 +102,14 @@ extension ConversationViewController
 		collectionView.register(
 			ConversationCollectionItem.self,
 			forItemWithIdentifier: NSUserInterfaceItemIdentifier("conversationItem")
+		)
+		collectionView.register(
+			ConversationActivityCollectionItem.self,
+			forItemWithIdentifier: NSUserInterfaceItemIdentifier("activityItem")
+		)
+		collectionView.register(
+			ConversationTurnStatusCollectionItem.self,
+			forItemWithIdentifier: NSUserInterfaceItemIdentifier("turnStatusItem")
 		)
 		collectionView.dataSource = self
 		collectionView.delegate = self
@@ -145,7 +166,7 @@ extension ConversationViewController
 		numberOfItemsInSection section: Int
 	) -> Int
 	{
-		entries.count
+		displayedRows.count
 	}
 
 	func collectionView(
@@ -153,16 +174,69 @@ extension ConversationViewController
 		itemForRepresentedObjectAt indexPath: IndexPath
 	) -> NSCollectionViewItem
 	{
+		let row = displayedRows[indexPath.item]
+		let context = renderedContext
+		switch row
+		{
+		case .activity(let activity):
+			let item = collectionView.makeItem(
+				withIdentifier: NSUserInterfaceItemIdentifier("activityItem"),
+				for: indexPath
+			)
+			(item as? ConversationActivityCollectionItem)?.configure(
+				activity,
+				onToggle:
+				{
+					[weak self] in
+					guard let self, self.renderedContext == context,
+							self.requestedContext == context
+					else
+					{
+						return
+					}
+					self.toggleActivity(activity)
+				},
+				onOpenFile:
+				{
+					[weak self] path in
+					guard let self, self.renderedContext == context,
+							self.requestedContext == context
+					else
+					{
+						return
+					}
+					self.onOpenActivityFile(path)
+				}
+			)
+			if let position = activityOutputPositions[activity.id]
+			{
+				(item as? ConversationActivityCollectionItem)?
+					.restoreOutputReadingPosition(position)
+			}
+			return item
+		case .turnStatus(let timing):
+			let item = collectionView.makeItem(
+				withIdentifier: NSUserInterfaceItemIdentifier("turnStatusItem"),
+				for: indexPath
+			)
+			(item as? ConversationTurnStatusCollectionItem)?.configure(
+				timing,
+				now: Date()
+			)
+			return item
+		case .message: break
+		}
 		let item = collectionView.makeItem(
 			withIdentifier: NSUserInterfaceItemIdentifier("conversationItem"),
 			for: indexPath
 		)
-		guard let item = item as? ConversationCollectionItem
+		guard let item = item as? ConversationCollectionItem,
+				case .message(let entry) = row
 		else
 		{
 			return item
 		}
-		let entry = entries[indexPath.item]
+
 		guard let content = preparedContents[entry.id]
 		else
 		{
@@ -175,7 +249,7 @@ extension ConversationViewController
 		)
 		{
 			[weak self] in
-			guard let self
+			guard let self, self.renderedContext == context, self.requestedContext == context
 			else
 			{
 				return
@@ -204,7 +278,23 @@ extension ConversationViewController
 	) -> NSSize
 	{
 		let width = ConversationFlowLayout.contentWidth(in: collectionView.bounds.width)
-		let entry = entries[indexPath.item]
+		let row = displayedRows[indexPath.item]
+		switch row
+		{
+		case .activity(let activity):
+			return ConversationActivityCollectionItem.itemSize(
+				row: activity,
+				width: width
+			)
+		case .turnStatus:
+			return ConversationTurnStatusCollectionItem.itemSize(width: width)
+		case .message: break
+		}
+		guard case .message(let entry) = row
+		else
+		{
+			return .zero
+		}
 		guard let content = preparedContents[entry.id]
 		else
 		{
@@ -251,12 +341,12 @@ extension ConversationViewController
 		forRepresentedObjectAt indexPath: IndexPath
 	)
 	{
-		guard liveResizeInProgress, entries.indices.contains(indexPath.item)
+		guard liveResizeInProgress, displayedRows.indices.contains(indexPath.item)
 		else
 		{
 			return
 		}
-		let id = entries[indexPath.item].id
+		let id = displayedRows[indexPath.item].id
 		liveResizeVisibleIDs.insert(id)
 		let width = ConversationFlowLayout.contentWidth(in: collectionView.bounds.width)
 		if let measured = measuredItemSizes[id], measured.size.width != width
@@ -271,12 +361,18 @@ extension ConversationViewController
 		forRepresentedObjectAt indexPath: IndexPath
 	)
 	{
-		guard liveResizeInProgress, entries.indices.contains(indexPath.item)
+		if requestedContext == renderedContext,
+			let activity = item as? ConversationActivityCollectionItem,
+			let id = activity.activityID, let position = activity.outputReadingPosition()
+		{
+			activityOutputPositions[id] = position
+		}
+		guard liveResizeInProgress, displayedRows.indices.contains(indexPath.item)
 		else
 		{
 			return
 		}
-		liveResizeVisibleIDs.remove(entries[indexPath.item].id)
+		liveResizeVisibleIDs.remove(displayedRows[indexPath.item].id)
 	}
 
 	func waitForRendering() async
@@ -287,13 +383,36 @@ extension ConversationViewController
 	func prepareTranscript(_ snapshot: ConversationPresentation.Transcript)
 	{
 		let context = snapshot.owner.transcriptIdentity
+		let displayTimings = snapshot.turnTimings.map
+		{
+			timing in
+			guard timing.status == "inProgress",
+					!(timingExecutionState.isBusy
+					&& snapshot.selectedThreadID != nil
+					&& snapshot.activeThreadID == snapshot.selectedThreadID
+					&& snapshot.activeTurnID == timing.turnID)
+			else
+			{
+				return timing
+			}
+			return ConversationTurnTiming(
+				turnID: timing.turnID,
+				status: "statusUnknown",
+				startedAt: timing.startedAt,
+				completedAt: timing.completedAt,
+				durationMs: timing.durationMs
+			)
+		}
+		let timingsChanged = requestedTurnTimings != displayTimings
+		requestedTurnTimings = displayTimings
 		prepareEntries(
 			snapshot.entries,
-			context: context
+			context: context,
+			force: timingsChanged
 		)
 	}
 
-	private func prepareEntries(
+	func prepareEntries(
 		_ nextEntries: [ConversationEntry],
 		context: String?,
 		force: Bool = false
@@ -307,6 +426,11 @@ extension ConversationViewController
 		if requestedContext != context
 		{
 			expandedEntryIDs.removeAll()
+			collapsedGroupIDs.removeAll()
+			expandedActivityIDs.removeAll()
+			activityOutputPositions.removeAll()
+			turnStatusTimer?.invalidate()
+			turnStatusTimer = nil
 		}
 		requestedEntries = nextEntries
 		requestedContext = context
@@ -335,6 +459,7 @@ extension ConversationViewController
 	{
 		let entryID: String
 		let offset: CGFloat
+		var sourceEntryID: String? = nil
 	}
 
 	func readingAnchor() -> ReadingAnchor?
@@ -352,14 +477,15 @@ extension ConversationViewController
 				{
 					$0.frame.minY < $1.frame.minY
 				}).first,
-			let index = first.indexPath?.item, entries.indices.contains(index)
+			let index = first.indexPath?.item, displayedRows.indices.contains(index)
 		else
 		{
 			return nil
 		}
 		return ReadingAnchor(
-			entryID: entries[index].id,
-			offset: visible.minY - first.frame.minY
+			entryID: displayedRows[index].id,
+			offset: visible.minY - first.frame.minY,
+			sourceEntryID: displayedRows[index].sourceEntryID
 		)
 	}
 
@@ -370,17 +496,28 @@ extension ConversationViewController
 	)
 	{
 		let contextChanged = renderedContext != context
+		if !contextChanged
+		{
+			captureActivityOutputPositions()
+		}
 		let shouldFollowOutput = contextChanged || isNearBottom
 		let anchor = shouldFollowOutput ? nil : readingAnchor()
-		let previousEntries = entries
+		let nextRows = ConversationTranscriptRow.make(
+			entries: nextEntries,
+			timings: requestedTurnTimings,
+			projectPath: projectPath,
+			collapsedGroupIDs: collapsedGroupIDs,
+			expandedActivityIDs: expandedActivityIDs
+		)
+		let previousRows = displayedRows
 		let previousContents = preparedContents
 		let sharedCount = min(
-			previousEntries.count,
-			nextEntries.count
+			previousRows.count,
+			nextRows.count
 		)
 		let sharedIDsMatch = (0 ..< sharedCount).allSatisfy
 		{
-			previousEntries[$0].id == nextEntries[$0].id
+			previousRows[$0].id == nextRows[$0].id
 		}
 		preparedContents = contents
 		if contextChanged
@@ -400,16 +537,17 @@ extension ConversationViewController
 		if contextChanged && renderedContext != nil
 		{
 			entries = nextEntries
+			displayedRows = nextRows
 			replaceCollectionView()
 		}
 		renderedContext = context
-		if !contextChanged && sharedIDsMatch && nextEntries.count >= previousEntries.count
+		if !contextChanged && sharedIDsMatch && nextRows.count >= previousRows.count
 		{
 			let changed = (0 ..< sharedCount).filter
 			{
-				previousEntries[$0] != nextEntries[$0]
-					|| previousContents[previousEntries[$0].id]?.attributedString
-					!= contents[nextEntries[$0].id]?.attributedString
+				previousRows[$0] != nextRows[$0]
+					|| previousContents[previousRows[$0].id]?.attributedString
+					!= contents[nextRows[$0].id]?.attributedString
 			}.map
 			{
 				IndexPath(
@@ -417,7 +555,7 @@ extension ConversationViewController
 					section: 0
 				)
 			}
-			let added = (sharedCount ..< nextEntries.count).map
+			let added = (sharedCount ..< nextRows.count).map
 			{
 				IndexPath(
 					item: $0,
@@ -427,6 +565,7 @@ extension ConversationViewController
 			collectionView.performBatchUpdates
 			{
 				entries = nextEntries
+				displayedRows = nextRows
 				if !changed.isEmpty
 				{
 					collectionView.reloadItems(at: Set(changed))
@@ -440,8 +579,10 @@ extension ConversationViewController
 		else
 		{
 			entries = nextEntries
+			displayedRows = nextRows
 			collectionView.reloadData()
 		}
+		(collectionView.collectionViewLayout as? ConversationFlowLayout)?.invalidateContentMetrics()
 		turnNavigationRail.render(ConversationTurnSummary.make(from: entries))
 		view.layoutSubtreeIfNeeded()
 		collectionView.layoutSubtreeIfNeeded()
@@ -451,6 +592,7 @@ extension ConversationViewController
 		)
 		readingPositionChanged()
 		scrollToRequestedItem()
+		updateTurnStatusTimer()
 	}
 
 	private func displayedBody(for entry: ConversationEntry) -> String

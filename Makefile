@@ -24,8 +24,12 @@ build:
 	swift build
 
 test:
-	# Transient native popovers need a separate SwiftPM test-host lifecycle.
-	swift test $(TEST_FLAGS) --skip TaskWorkspaceWindowLayoutTests
-	swift test $(TEST_FLAGS) --filter TaskWorkspaceWindowLayoutTests
+	# AppKit tests share the process-wide application and run serially.
+	# Shown native windows and popovers need separate SwiftPM test-host lifecycles.
+	swift test $(TEST_FLAGS) --no-parallel --skip 'WindowLayoutTests|closedWindowDetachesItsStorePublicationObserver|shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning'
+	swift test $(TEST_FLAGS) --no-parallel --filter '^CodexGUITests.WindowLayoutTests'
+	swift test $(TEST_FLAGS) --no-parallel --filter TaskWorkspaceWindowLayoutTests
+	swift test $(TEST_FLAGS) --no-parallel --filter closedWindowDetachesItsStorePublicationObserver
+	swift test $(TEST_FLAGS) --no-parallel --filter shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning
 
 check: lint build test

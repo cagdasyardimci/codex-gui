@@ -7,6 +7,9 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 	static let minimumHorizontalInset: CGFloat = 16
 	private var preparedWidth: CGFloat?
 	private var updatingCenteringInsets = false
+	var verticalGap: ((Int) -> CGFloat)?
+	private var compactAttributes: [IndexPath: NSCollectionViewLayoutAttributes] = [:]
+	private var compactContentSize: NSSize?
 
 	static func contentWidth(in availableWidth: CGFloat) -> CGFloat
 	{
@@ -46,7 +49,67 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 			context.invalidateFlowLayoutAttributes = true
 			invalidateLayout(with: context)
 		}
+		compactAttributes.removeAll()
+		compactContentSize = nil
 		super.prepare()
+		guard let collectionView, let verticalGap
+		else
+		{
+			return
+		}
+		var removedSpacing: CGFloat = 0
+		for index in 0 ..< collectionView.numberOfItems(inSection: 0)
+		{
+			let path = IndexPath(
+				item: index,
+				section: 0
+			)
+			guard let original = super.layoutAttributesForItem(at: path),
+					let attributes = original.copy() as? NSCollectionViewLayoutAttributes
+			else
+			{
+				continue
+			}
+			if index > 0
+			{
+				removedSpacing += minimumLineSpacing - verticalGap(index)
+			}
+			attributes.frame.origin.y -= removedSpacing
+			compactAttributes[path] = attributes
+		}
+		let originalSize = super.collectionViewContentSize
+		compactContentSize = NSSize(
+			width: originalSize.width,
+			height: max(
+				0,
+				originalSize.height - removedSpacing
+			)
+		)
+	}
+
+	override var collectionViewContentSize: NSSize
+	{
+		compactContentSize ?? super.collectionViewContentSize
+	}
+
+	override func layoutAttributesForItem(at indexPath: IndexPath)
+		-> NSCollectionViewLayoutAttributes?
+	{
+		compactAttributes[indexPath] ?? super.layoutAttributesForItem(at: indexPath)
+	}
+
+	override func layoutAttributesForElements(in rect: NSRect)
+		-> [NSCollectionViewLayoutAttributes]
+	{
+		guard verticalGap != nil
+		else
+		{
+			return super.layoutAttributesForElements(in: rect)
+		}
+		return compactAttributes.values.filter
+		{
+			$0.frame.intersects(rect)
+		}
 	}
 
 	override func shouldInvalidateLayout(forBoundsChange newBounds: NSRect) -> Bool
