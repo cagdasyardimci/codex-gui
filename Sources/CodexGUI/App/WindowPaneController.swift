@@ -297,6 +297,79 @@ private final class ConversationSplitView: NSSplitView
 {
 	var onDividerInteractionEnded: ((Int) -> Void)?
 
+	private var dividerTrackingArea: NSTrackingArea?
+	private var dividerHovered = false
+	private var dividerDragging = false
+
+	override func updateTrackingAreas()
+	{
+		super.updateTrackingAreas()
+		if let dividerTrackingArea
+		{
+			removeTrackingArea(dividerTrackingArea)
+		}
+		let area = NSTrackingArea(
+			rect: .zero,
+			options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
+			owner: self,
+			userInfo: nil
+		)
+		addTrackingArea(area)
+		dividerTrackingArea = area
+		if let window
+		{
+			updateDividerHover(at: convert(
+				window.mouseLocationOutsideOfEventStream,
+				from: nil
+			))
+		}
+	}
+
+	override func mouseEntered(with event: NSEvent)
+	{
+		updateDividerHover(at: convert(
+			event.locationInWindow,
+			from: nil
+		))
+	}
+
+	override func mouseMoved(with event: NSEvent)
+	{
+		updateDividerHover(at: convert(
+			event.locationInWindow,
+			from: nil
+		))
+	}
+
+	override func mouseExited(with event: NSEvent)
+	{
+		dividerHovered = false
+		needsDisplay = true
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
+	private func updateDividerHover(at location: NSPoint)
+	{
+		let hovered = subviews.first.map
+		{
+			$0.frame.width > 0
+				&& abs(location.x - $0.frame.maxX - dividerThickness / 2) <= 6
+				&& bounds.contains(location)
+		} ?? false
+		guard hovered != dividerHovered
+		else
+		{
+			return
+		}
+		dividerHovered = hovered
+		needsDisplay = true
+	}
+
 	override func mouseDown(with event: NSEvent)
 	{
 		let location = convert(
@@ -307,7 +380,18 @@ private final class ConversationSplitView: NSSplitView
 		{
 			abs(location.x - subviews[$0].frame.maxX - dividerThickness / 2) <= 6
 		}
+		dividerDragging = dividerIndex == 0
+		needsDisplay = true
 		super.mouseDown(with: event)
+		dividerDragging = false
+		if let window
+		{
+			updateDividerHover(at: convert(
+				window.mouseLocationOutsideOfEventStream,
+				from: nil
+			))
+		}
+		needsDisplay = true
 		if let dividerIndex
 		{
 			onDividerInteractionEnded?(dividerIndex)
@@ -320,7 +404,10 @@ private final class ConversationSplitView: NSSplitView
 				abs(rect.minX - firstPane.frame.maxX) > dividerThickness
 		else
 		{
-			super.drawDivider(in: rect)
+			let color = dividerHovered || dividerDragging
+				? DesktopTheme.highlightedPaneDivider : DesktopTheme.paneDivider
+			color.setFill()
+			rect.fill()
 			return
 		}
 		DesktopTheme.canvas.setFill()

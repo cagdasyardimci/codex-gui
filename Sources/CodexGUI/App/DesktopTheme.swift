@@ -20,8 +20,8 @@ enum DesktopTheme
 		dark: 0x2D2D2D
 	)
 	static let chrome = color(
-		light: 0xF2F3F5,
-		dark: 0x26282F
+		light: 0xF7F7F7,
+		dark: 0x242424
 	)
 	static let input = color(
 		light: 0xF0F0F0,
@@ -34,6 +34,14 @@ enum DesktopTheme
 	static let border = color(
 		light: 0xE4E4E4,
 		dark: 0x363636
+	)
+	static let paneDivider = color(
+		light: 0xE4E4E4,
+		dark: 0x363636
+	)
+	static let highlightedPaneDivider = color(
+		light: 0xD1D1D2,
+		dark: 0x4A4A4A
 	)
 	static let userBubble = color(
 		light: 0xECECEC,
