@@ -38,7 +38,7 @@ final class ConversationViewController: NSViewController,
 		target: nil,
 		action: nil
 	)
-	private let activityLabel = NSTextField(labelWithString: "")
+	private let activityLabel = CurrentActionLabel(labelWithString: "")
 	private var activePlan: TurnPlanUpdate?
 	private var planPopover: NSPopover?
 	let modelEffortButton = ModelEffortSelectionButton(
@@ -167,6 +167,7 @@ final class ConversationViewController: NSViewController,
 	{
 		super.viewDidDisappear()
 		transcriptIsVisible = false
+		activityLabel.presentationIsVisible = false
 		turnStatusTimer?.invalidate()
 		turnStatusTimer = nil
 	}
@@ -175,6 +176,7 @@ final class ConversationViewController: NSViewController,
 	{
 		super.viewDidAppear()
 		transcriptIsVisible = true
+		activityLabel.presentationIsVisible = true
 		updateTurnStatusTimer()
 	}
 
@@ -511,6 +513,9 @@ final class ConversationViewController: NSViewController,
 		activityLabel.toolTip = activityLabel.stringValue
 		activityLabel.isHidden = activityLabel.stringValue.isEmpty
 		activityLabel.superview?.isHidden = planButton.isHidden && activityLabel.isHidden
+		activityLabel.actionIsActive = viewingActiveTask
+			&& snapshot.activeExecutionState?.isBusy == true
+			&& !(snapshot.activeActivity ?? "").isEmpty
 	}
 
 	private func renderRequestContext(_ snapshot: ConversationPresentation.RequestContext)
