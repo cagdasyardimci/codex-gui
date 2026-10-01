@@ -153,6 +153,7 @@ extension ConversationViewController
 		composer.isAutomaticTextReplacementEnabled = false
 		composer.font = .systemFont(ofSize: 15)
 		composer.textColor = .labelColor
+		composer.insertionPointColor = .labelColor
 		composer.drawsBackground = false
 		composer.textContainerInset = NSSize(
 			width: 4,
@@ -232,7 +233,8 @@ extension ConversationViewController
 		stopButton.setAccessibilityLabel("Stop current task")
 		for button in [sendButton, steerButton, stopButton]
 		{
-			let symbol: DesktopIcon = button === stopButton ? .stopCircleFilled : .arrowUp
+			let symbol: DesktopIcon = button === stopButton
+				? .stopCircleFilled : (button === sendButton ? .arrowUpLg : .arrowUp)
 			DesktopTheme.styleButton(
 				button,
 				icon: symbol,
@@ -240,12 +242,15 @@ extension ConversationViewController
 			)
 			button.image = DesktopIcons.image(
 				symbol,
-				size: 28
+				size: button === sendButton ? 16 : 28
 			)
 			button.imagePosition = .imageOnly
 			button.widthAnchor.constraint(equalToConstant: 28).isActive = true
 			button.heightAnchor.constraint(equalToConstant: 28).isActive = true
 		}
+		sendButton.wantsLayer = true
+		sendButton.layer?.cornerRadius = 14
+		sendButton.contentTintColor = .white
 		sendButton.toolTip = "Send message (⌘Return)"
 		steerButton.toolTip = "Steer the active turn (⇧⌘Return)"
 	}
@@ -337,7 +342,14 @@ extension ConversationViewController
 			snapshot.canSteer
 				&& (!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 					|| !snapshot.draftContext.isEmpty)
-		sendButton.contentTintColor = sendButton.isEnabled ? .systemBlue : .tertiaryLabelColor
+		sendButton.contentTintColor = .white
+		sendButton.layer?.backgroundColor = sendButton.isEnabled
+			? NSColor(
+				srgbRed: 59 / 255,
+				green: 130 / 255,
+				blue: 246 / 255,
+				alpha: 1
+			).cgColor : NSColor.tertiaryLabelColor.cgColor
 		steerButton.contentTintColor = steerButton.isEnabled ? .systemBlue : .tertiaryLabelColor
 		stopButton.isEnabled =
 			viewingActiveTask
