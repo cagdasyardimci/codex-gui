@@ -22,16 +22,12 @@ extension MainWindowController
 		statusButton.action = #selector(showStatus)
 		DesktopTheme.styleButton(
 			statusButton,
-			symbol: "circle.fill"
+			icon: .emptyCircleFilled
 		)
-		statusButton.image = NSImage(
-			systemSymbolName: "circle.fill",
-			accessibilityDescription: nil
-		)?
-			.withSymbolConfiguration(NSImage.SymbolConfiguration(
-				pointSize: 6,
-				weight: .regular
-			))
+		statusButton.image = DesktopIcons.image(
+			.emptyCircleFilled,
+			size: 6
+		)
 		statusButton.font = .systemFont(ofSize: 11)
 		statusButton.setAccessibilityLabel("Open account and backend status")
 		AppKitLayout.compressHorizontally(statusButton)
@@ -123,8 +119,8 @@ extension MainWindowController
 		{
 		case ToolbarItem.sidebar:
 			item.label = "Sidebar"
-			item.image = NSImage(
-				systemSymbolName: "sidebar.left",
+			item.image = DesktopIcons.image(
+				.sidebar,
 				accessibilityDescription: "Toggle sidebar"
 			)
 			item.target = self
@@ -135,48 +131,48 @@ extension MainWindowController
 			item.visibilityPriority = .low
 		case ToolbarItem.openProject:
 			item.label = "Open Project"
-			item.image = NSImage(
-				systemSymbolName: "folder",
+			item.image = DesktopIcons.image(
+				.folder,
 				accessibilityDescription: "Open project"
 			)
 			item.target = self
 			item.action = #selector(openProjectPicker)
 		case ToolbarItem.newChat:
 			item.label = "New Chat"
-			item.image = NSImage(
-				systemSymbolName: "plus",
+			item.image = DesktopIcons.image(
+				.plus,
 				accessibilityDescription: "New chat"
 			)
 			item.target = self
 			item.action = #selector(newChat)
 		case ToolbarItem.review:
 			item.label = "Changes"
-			item.image = NSImage(
-				systemSymbolName: "doc.text.magnifyingglass",
+			item.image = DesktopIcons.image(
+				.fileDocument,
 				accessibilityDescription: "Toggle changes"
 			)
 			item.target = self
 			item.action = #selector(toggleReview)
 		case ToolbarItem.projectContext:
 			item.label = "Context"
-			item.image = NSImage(
-				systemSymbolName: "pin",
+			item.image = DesktopIcons.image(
+				.pin,
 				accessibilityDescription: "Project context"
 			)
 			item.target = self
 			item.action = #selector(showProjectContext)
 		case ToolbarItem.commandPalette:
 			item.label = "Commands"
-			item.image = NSImage(
-				systemSymbolName: "command",
+			item.image = DesktopIcons.image(
+				.keyboardShortcut,
 				accessibilityDescription: "Command palette"
 			)
 			item.target = self
 			item.action = #selector(showCommandPalette)
 		case ToolbarItem.searchMessages:
 			item.label = "Search Messages"
-			item.image = NSImage(
-				systemSymbolName: "text.magnifyingglass",
+			item.image = DesktopIcons.image(
+				.search,
 				accessibilityDescription: "Search message contents"
 			)
 			item.target = self

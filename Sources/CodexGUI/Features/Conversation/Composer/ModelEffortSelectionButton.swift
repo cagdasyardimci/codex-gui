@@ -18,8 +18,6 @@ final class ModelEffortSelectionButton: NSButton
 		static let chevronArmWidth: CGFloat = 3
 		// Preserve the existing extra point beyond the chevron's 8-point span.
 		static let chevronExtraWidthAllowance: CGFloat = 1
-		static let chevronVerticalOffset: CGFloat = 1.5
-		static let chevronLineWidth: CGFloat = 1.2
 
 		static var boltReservedWidth: CGFloat
 		{
@@ -41,19 +39,13 @@ final class ModelEffortSelectionButton: NSButton
 	{
 		let boltRect: NSRect
 		let textRect: NSRect
-		let chevronStart: NSPoint
-		let chevronTip: NSPoint
-		let chevronEnd: NSPoint
+		let chevronOriginX: CGFloat
 	}
 
 	private var summary: String?
 	private var effortTitle: String?
 	private var fastMode = false
 	private var isPickerPresented = false
-	private let boltSymbol = NSImage(
-		systemSymbolName: "bolt.fill",
-		accessibilityDescription: nil
-	)
 	private weak var observedWindow: NSWindow?
 
 	override init(frame frameRect: NSRect)
@@ -216,26 +208,11 @@ final class ModelEffortSelectionButton: NSButton
 		)
 
 		let chevronOriginX = textRect.maxX + LayoutMetrics.titleToChevronSpacing
-		// Flipped views increase Y downward; keep the tip visually below both arms.
-		let upwardYDirection: CGFloat = isFlipped ? -1 : 1
-		let armY = bounds.midY + upwardYDirection * LayoutMetrics.chevronVerticalOffset
-		let tipY = bounds.midY - upwardYDirection * LayoutMetrics.chevronVerticalOffset
 
 		return ContentLayout(
 			boltRect: boltRect,
 			textRect: textRect,
-			chevronStart: NSPoint(
-				x: chevronOriginX,
-				y: armY
-			),
-			chevronTip: NSPoint(
-				x: chevronOriginX + LayoutMetrics.chevronArmWidth,
-				y: tipY
-			),
-			chevronEnd: NSPoint(
-				x: chevronOriginX + LayoutMetrics.chevronSpanWidth,
-				y: armY
-			)
+			chevronOriginX: chevronOriginX
 		)
 	}
 
@@ -244,15 +221,11 @@ final class ModelEffortSelectionButton: NSButton
 		tint: NSColor
 	)
 	{
-		let sizeConfiguration = NSImage.SymbolConfiguration(
-			pointSize: 12,
-			weight: .regular
+		DesktopIcons.draw(
+			.bolt,
+			in: rect,
+			tint: tint
 		)
-		let sizedSymbol = boltSymbol?.withSymbolConfiguration(sizeConfiguration)
-		let colorConfiguration = NSImage.SymbolConfiguration(paletteColors: [tint])
-		let tintedSymbol = sizedSymbol?.withSymbolConfiguration(colorConfiguration)
-
-		tintedSymbol?.draw(in: rect)
 	}
 
 	private func drawTitle(
@@ -291,15 +264,16 @@ final class ModelEffortSelectionButton: NSButton
 		tint: NSColor
 	)
 	{
-		let chevron = NSBezierPath()
-		chevron.move(to: layout.chevronStart)
-		chevron.line(to: layout.chevronTip)
-		chevron.line(to: layout.chevronEnd)
-		chevron.lineWidth = LayoutMetrics.chevronLineWidth
-		chevron.lineCapStyle = .round
-
-		tint.setStroke()
-		chevron.stroke()
+		DesktopIcons.draw(
+			.chevronDown,
+			in: NSRect(
+				x: layout.chevronOriginX - 2,
+				y: bounds.midY - 5,
+				width: 10,
+				height: 10
+			),
+			tint: tint
+		)
 	}
 
 	private func selectionOutline() -> NSBezierPath

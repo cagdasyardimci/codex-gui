@@ -510,7 +510,7 @@ final class ComposerContextView: NSView
 
 		DesktopTheme.styleButton(
 			inspectButton,
-			symbol: "info.circle"
+			icon: .infoCircle
 		)
 
 		inspectButton.imagePosition = .imageOnly
@@ -531,7 +531,7 @@ final class ComposerContextView: NSView
 
 		DesktopTheme.styleButton(
 			removeButton,
-			symbol: "xmark.circle"
+			icon: .xCircle
 		)
 
 		removeButton.imagePosition = .imageOnly

@@ -37,13 +37,13 @@ final class TaskSidebarCellView: NSTableCellView
 		archiveButton.action = #selector(archiveTask)
 		DesktopTheme.styleButton(
 			archiveButton,
-			symbol: "archivebox"
+			icon: .archive
 		)
 		deleteButton.target = self
 		deleteButton.action = #selector(deleteTask)
 		DesktopTheme.styleButton(
 			deleteButton,
-			symbol: "trash"
+			icon: .trash
 		)
 		for button in [archiveButton, deleteButton]
 		{

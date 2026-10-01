@@ -42,7 +42,7 @@ extension ConversationViewController
 		latestButton.setAccessibilityLabel("Return to latest message")
 		DesktopTheme.styleButton(
 			latestButton,
-			symbol: "arrow.down"
+			icon: .arrowDown
 		)
 		latestButton.imagePosition = .imageOnly
 		latestButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
@@ -53,7 +53,7 @@ extension ConversationViewController
 			.setAccessibilityLabel("Bookmark the selected message as an answer or decision")
 		DesktopTheme.styleButton(
 			bookmarkButton,
-			symbol: "bookmark"
+			icon: .savedXs
 		)
 		bookmarkButton.imagePosition = .imageOnly
 		bookmarkButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
@@ -67,7 +67,7 @@ extension ConversationViewController
 		loadEarlierButton.setAccessibilityLabel("Load earlier messages in this conversation")
 		DesktopTheme.styleButton(
 			loadEarlierButton,
-			symbol: "clock.arrow.circlepath"
+			icon: .history
 		)
 		loadEarlierButton.widthAnchor.constraint(lessThanOrEqualToConstant: 150).isActive = true
 		loadEarlierButton.lineBreakMode = .byTruncatingTail

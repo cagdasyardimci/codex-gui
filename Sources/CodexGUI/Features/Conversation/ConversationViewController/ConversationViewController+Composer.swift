@@ -43,10 +43,7 @@ extension ConversationViewController
 		}
 
 		let projectIcon = NSImageView()
-		projectIcon.image = NSImage(
-			systemSymbolName: "folder",
-			accessibilityDescription: nil
-		)
+		projectIcon.image = DesktopIcons.image(.folder)
 		projectIcon.contentTintColor = .secondaryLabelColor
 		projectIcon.widthAnchor.constraint(equalToConstant: 14).isActive = true
 		projectIcon.heightAnchor.constraint(equalToConstant: 14).isActive = true
@@ -120,7 +117,7 @@ extension ConversationViewController
 		approvalPolicyButton.action = #selector(showApprovalPolicy)
 		DesktopTheme.styleButton(
 			approvalPolicyButton,
-			symbol: "hand.raised"
+			icon: .handRaised
 		)
 		approvalPolicyButton.font = .systemFont(ofSize: 13)
 		approvalPolicyButton.lineBreakMode = .byTruncatingTail
@@ -210,14 +207,10 @@ extension ConversationViewController
 		addContextButton.target = self
 		addContextButton.action = #selector(chooseContextAction)
 		addContextButton.setAccessibilityLabel("Add attachments or inspect request context")
-		addContextButton.item(at: 0)?.image = NSImage(
-			systemSymbolName: "plus",
-			accessibilityDescription: nil
-		)?
-			.withSymbolConfiguration(NSImage.SymbolConfiguration(
-				pointSize: 15,
-				weight: .regular
-			))
+		addContextButton.item(at: 0)?.image = DesktopIcons.image(
+			.plus,
+			size: 15
+		)
 		(addContextButton.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
 		addContextButton.contentTintColor = .labelColor
 		addContextButton.imagePosition = .imageOnly
@@ -239,16 +232,16 @@ extension ConversationViewController
 		stopButton.setAccessibilityLabel("Stop current task")
 		for button in [sendButton, steerButton, stopButton]
 		{
-			let symbol = button === stopButton ? "stop.circle.fill" : "arrow.up.circle.fill"
+			let symbol: DesktopIcon = button === stopButton ? .stopCircleFilled : .arrowUp
 			DesktopTheme.styleButton(
 				button,
-				symbol: symbol,
+				icon: symbol,
 				prominent: true
 			)
-			button.image = button.image?.withSymbolConfiguration(NSImage.SymbolConfiguration(
-				pointSize: 28,
-				weight: .regular
-			))
+			button.image = DesktopIcons.image(
+				symbol,
+				size: 28
+			)
 			button.imagePosition = .imageOnly
 			button.widthAnchor.constraint(equalToConstant: 28).isActive = true
 			button.heightAnchor.constraint(equalToConstant: 28).isActive = true
@@ -299,21 +292,17 @@ extension ConversationViewController
 				.foregroundColor: approvalTint,
 			]
 		)
-		let approvalSymbol: String
+		let approvalSymbol: DesktopIcon
 		switch approvalMode
 		{
-		case .askForApproval: approvalSymbol = "hand.raised"
-		case .approveForMe: approvalSymbol = "checkmark.shield"
-		case .fullAccess: approvalSymbol = "exclamationmark.shield"
+		case .askForApproval: approvalSymbol = .handRaised
+		case .approveForMe: approvalSymbol = .shieldCheck
+		case .fullAccess: approvalSymbol = .warning
 		}
-		approvalPolicyButton.image = NSImage(
-			systemSymbolName: approvalSymbol,
-			accessibilityDescription: nil
-		)?
-			.withSymbolConfiguration(NSImage.SymbolConfiguration(
-				pointSize: 13,
-				weight: .regular
-			))
+		approvalPolicyButton.image = DesktopIcons.image(
+			approvalSymbol,
+			size: 13
+		)
 	}
 
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)

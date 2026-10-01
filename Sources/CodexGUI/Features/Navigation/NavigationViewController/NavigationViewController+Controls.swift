@@ -12,7 +12,7 @@ extension NavigationViewController
 		refreshButton.setAccessibilityLabel("Refresh conversations")
 		DesktopTheme.styleButton(
 			refreshButton,
-			symbol: "arrow.clockwise"
+			icon: .arrowRotateCw
 		)
 		refreshButton.imagePosition = .imageOnly
 		refreshButton.toolTip = "Refresh conversations"
@@ -28,7 +28,7 @@ extension NavigationViewController
 		searchButton.setAccessibilityLabel("Search conversation titles and previews")
 		DesktopTheme.styleButton(
 			searchButton,
-			symbol: "magnifyingglass"
+			icon: .search
 		)
 		searchButton.imagePosition = .imageOnly
 		searchButton.toolTip = "Search conversation titles and previews"
@@ -49,16 +49,11 @@ extension NavigationViewController
 		newChatButton.setAccessibilityLabel("Start a new conversation")
 		DesktopTheme.styleButton(
 			newChatButton,
-			symbol: "square.and.pencil"
+			icon: .chatCompose
 		)
 		newChatButton.font = .systemFont(ofSize: 14)
 		newChatButton.contentTintColor = .labelColor
-		newChatButton.image = newChatButton.image?.withSymbolConfiguration(
-			NSImage.SymbolConfiguration(
-				pointSize: 16,
-				weight: .regular
-			)
-		)
+		newChatButton.image = DesktopIcons.image(.chatCompose)
 		newChatButton.alignment = .left
 	}
 
@@ -71,7 +66,7 @@ extension NavigationViewController
 		projectActionsButton.setAccessibilityLabel("Project and conversation actions")
 		DesktopTheme.styleButton(
 			projectActionsButton,
-			symbol: "ellipsis"
+			icon: .dotsHorizontal
 		)
 		projectActionsButton.imagePosition = .imageOnly
 		projectActionsButton.toolTip = "Project and conversation actions"
@@ -93,7 +88,7 @@ extension NavigationViewController
 		openButton.setAccessibilityLabel("Open repository")
 		DesktopTheme.styleButton(
 			openButton,
-			symbol: "folder.badge.plus"
+			icon: .folderPlus
 		)
 		openButton.font = .systemFont(ofSize: 11)
 
@@ -147,7 +142,7 @@ extension NavigationViewController
 		renameButton.setAccessibilityLabel("Rename selected conversation")
 		DesktopTheme.styleButton(
 			renameButton,
-			symbol: "pencil"
+			icon: .pencil
 		)
 		renameButton.font = .systemFont(ofSize: 11)
 
@@ -156,7 +151,7 @@ extension NavigationViewController
 		archiveButton.setAccessibilityLabel("Archive or restore selected conversation")
 		DesktopTheme.styleButton(
 			archiveButton,
-			symbol: "archivebox"
+			icon: .archive
 		)
 		archiveButton.font = .systemFont(ofSize: 11)
 

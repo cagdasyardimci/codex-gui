@@ -42,7 +42,7 @@ enum DesktopTheme
 
 	static func styleButton(
 		_ button: NSButton,
-		symbol: String? = nil,
+		icon: DesktopIcon? = nil,
 		prominent: Bool = false
 	)
 	{
@@ -54,16 +54,12 @@ enum DesktopTheme
 			weight: prominent ? .medium : .regular
 		)
 		button.contentTintColor = prominent ? .labelColor : .secondaryLabelColor
-		if let symbol
+		if let icon
 		{
-			button.image = NSImage(
-				systemSymbolName: symbol,
-				accessibilityDescription: nil
-			)?
-				.withSymbolConfiguration(NSImage.SymbolConfiguration(
-					pointSize: 13,
-					weight: .regular
-				))
+			button.image = DesktopIcons.image(
+				icon,
+				size: 13
+			)
 			button.imagePosition = .imageLeading
 		}
 		button.toolTip = button.toolTip ?? button.title

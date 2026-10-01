@@ -88,7 +88,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 		expandButton.action = #selector(toggleExpanded)
 		DesktopTheme.styleButton(
 			expandButton,
-			symbol: "chevron.down"
+			icon: .chevronDown
 		)
 		expandButton.heightAnchor.constraint(equalToConstant: Self.buttonHeight).isActive = true
 		expandButton.isHidden = true
@@ -217,10 +217,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 
 		expandButton.isHidden = !entry.isExpandable
 		expandButton.title = expanded ? "Hide output" : "Show output"
-		expandButton.image = NSImage(
-			systemSymbolName: expanded ? "chevron.up" : "chevron.down",
-			accessibilityDescription: nil
-		)
+		expandButton.image = DesktopIcons.image(expanded ? .chevronUp : .chevronDown)
 		expandButton.setAccessibilityLabel(expandButton.title)
 		expandButton.toolTip = expandButton.title
 		// Keep unused controls outside the hierarchy so collection-view reuse cannot expose them.
@@ -262,7 +259,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 			button.tag = index
 			DesktopTheme.styleButton(
 				button,
-				symbol: "doc.on.doc"
+				icon: .copy
 			)
 			button.lineBreakMode = .byTruncatingTail
 			bodyTextView.addSubview(button)

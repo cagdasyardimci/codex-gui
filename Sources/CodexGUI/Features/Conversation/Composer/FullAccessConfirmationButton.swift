@@ -13,45 +13,57 @@ final class FullAccessConfirmationButton: NSButton
 
 	override func draw(_ dirtyRect: NSRect)
 	{
+		drawBackground()
+		drawTitleAndWarningIcon()
+	}
+
+	private func drawBackground()
+	{
 		let background = confirmsFullAccess
 			? NSColor.systemRed.withAlphaComponent(0.1) : DesktopTheme.input
-		background.setFill()
-		NSBezierPath(
+		let backgroundPath = NSBezierPath(
 			roundedRect: bounds,
 			xRadius: 18,
 			yRadius: 18
-		).fill()
+		)
+		background.setFill()
+		backgroundPath.fill()
+
 		if cell?.isHighlighted == true
 		{
 			NSColor.labelColor.withAlphaComponent(0.06).setFill()
-			NSBezierPath(
-				roundedRect: bounds,
-				xRadius: 18,
-				yRadius: 18
-			).fill()
+			backgroundPath.fill()
 		}
+	}
+
+	private func drawTitleAndWarningIcon()
+	{
 		let attributes: [NSAttributedString.Key: Any] = [
 			.font: font ?? NSFont.systemFont(ofSize: 14),
 			.foregroundColor: confirmsFullAccess ? NSColor.systemRed : NSColor.labelColor,
 		]
 		let titleSize = (title as NSString).size(withAttributes: attributes)
 		let iconWidth: CGFloat = confirmsFullAccess ? 14 : 0
-		let spacing: CGFloat = confirmsFullAccess ? 6 : 0
-		let originX = bounds.midX - (titleSize.width + iconWidth + spacing) / 2
+		let iconToTitleSpacing: CGFloat = confirmsFullAccess ? 6 : 0
+		let contentWidth = titleSize.width + iconWidth + iconToTitleSpacing
+		let contentOriginX = bounds.midX - contentWidth / 2
+
 		if confirmsFullAccess
 		{
-			image?.withSymbolConfiguration(NSImage.SymbolConfiguration(
-				paletteColors: [.systemRed]
-			))?.draw(in: NSRect(
-				x: originX,
-				y: bounds.midY - 7,
-				width: iconWidth,
-				height: 14
-			))
+			DesktopIcons.draw(
+				.triangleExclamationErrorWarning,
+				in: NSRect(
+					x: contentOriginX,
+					y: bounds.midY - 7,
+					width: iconWidth,
+					height: 14
+				),
+				tint: .systemRed
+			)
 		}
 		(title as NSString).draw(
 			at: NSPoint(
-				x: originX + iconWidth + spacing,
+				x: contentOriginX + iconWidth + iconToTitleSpacing,
 				y: bounds.midY - titleSize.height / 2
 			),
 			withAttributes: attributes

@@ -463,7 +463,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		openButton.toolTip = "Open selected file in preferred editor"
 		DesktopTheme.styleButton(
 			openButton,
-			symbol: "arrow.up.forward.app"
+			icon: .externalLink
 		)
 		editorStatus.textColor = .secondaryLabelColor
 		editorStatus.font = .systemFont(ofSize: 11)

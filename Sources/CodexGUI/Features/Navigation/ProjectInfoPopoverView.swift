@@ -26,16 +26,21 @@ final class ProjectInfoPopoverView: NSView
 		configureLabels()
 		configureActions()
 
+		installProjectInfoLayout()
+	}
+
+	private func installProjectInfoLayout()
+	{
 		let header = AppKitLayout.horizontalStack(
-			[icon("folder"), nameLabel, NSView(), pinButton],
+			[icon(.folder), nameLabel, NSView(), pinButton],
 			spacing: 7
 		)
 		let counts = AppKitLayout.horizontalStack(
-			[icon("bubble.left"), countLabel],
+			[icon(.chat), countLabel],
 			spacing: 7
 		)
 		let path = AppKitLayout.horizontalStack(
-			[icon("folder"), pathLabel],
+			[icon(.folder), pathLabel],
 			spacing: 7
 		)
 		let topSeparator = separator()
@@ -96,7 +101,7 @@ final class ProjectInfoPopoverView: NSView
 		pinButton.setButtonType(.toggle)
 		DesktopTheme.styleButton(
 			pinButton,
-			symbol: "pin"
+			icon: .pin
 		)
 		pinButton.imagePosition = .imageOnly
 
@@ -104,7 +109,7 @@ final class ProjectInfoPopoverView: NSView
 		editButton.action = #selector(editProject)
 		DesktopTheme.styleButton(
 			editButton,
-			symbol: "gearshape"
+			icon: .settings
 		)
 		editButton.font = .systemFont(ofSize: 12)
 		editButton.alignment = .left
@@ -147,14 +152,10 @@ final class ProjectInfoPopoverView: NSView
 	)
 	{
 		pinButton.state = isPinned ? .on : .off
-		pinButton.image = NSImage(
-			systemSymbolName: isPinned ? "pin.fill" : "pin",
-			accessibilityDescription: nil
-		)?
-			.withSymbolConfiguration(NSImage.SymbolConfiguration(
-				pointSize: 13,
-				weight: .regular
-			))
+		pinButton.image = DesktopIcons.image(
+			isPinned ? .pinFilled : .pin,
+			size: 13
+		)
 		pinButton.setAccessibilityLabel(isPinned ? "Unpin project \(name)" : "Pin project \(name)")
 		pinButton.toolTip = isPinned ? "Unpin project" : "Pin project"
 	}
@@ -182,17 +183,13 @@ final class ProjectInfoPopoverView: NSView
 		countLabel.setAccessibilityLabel("\(countLabel.stringValue). \(countLabel.toolTip ?? "")")
 	}
 
-	private func icon(_ symbol: String) -> NSImageView
+	private func icon(_ symbol: DesktopIcon) -> NSImageView
 	{
 		let image = NSImageView()
-		image.image = NSImage(
-			systemSymbolName: symbol,
-			accessibilityDescription: nil
-		)?
-			.withSymbolConfiguration(NSImage.SymbolConfiguration(
-				pointSize: 13,
-				weight: .regular
-			))
+		image.image = DesktopIcons.image(
+			symbol,
+			size: 13
+		)
 		image.contentTintColor = .secondaryLabelColor
 		image.setAccessibilityElement(false)
 		image.widthAnchor.constraint(equalToConstant: 14).isActive = true
@@ -248,14 +245,29 @@ final class ProjectSidebarCellView: NSTableCellView
 		actionStack.addArrangedSubview(infoButton)
 		actionStack.addArrangedSubview(newChatButton)
 
-		let folder = NSImageView()
-		folder.image = NSImage(
-			systemSymbolName: "folder",
-			accessibilityDescription: nil
+		let folder = makeFolderIcon()
+		let label = makeProjectTitle()
+
+		configureActions()
+
+		installProjectCellLayout(
+			folder: folder,
+			label: label
 		)
+	}
+
+	private func makeFolderIcon() -> NSImageView
+	{
+		let folder = NSImageView()
+		folder.image = DesktopIcons.image(.folder)
 		folder.contentTintColor = .secondaryLabelColor
 		folder.setAccessibilityElement(false)
 
+		return folder
+	}
+
+	private func makeProjectTitle() -> NSTextField
+	{
 		let label = NSTextField(labelWithString: "")
 		label.font = .systemFont(
 			ofSize: 14,
@@ -270,8 +282,14 @@ final class ProjectSidebarCellView: NSTableCellView
 		label.cell?.isScrollable = false
 		label.allowsExpansionToolTips = false
 
-		configureActions()
+		return label
+	}
 
+	private func installProjectCellLayout(
+		folder: NSImageView,
+		label: NSTextField
+	)
+	{
 		for child in [folder, label, actionStack]
 		{
 			addSubview(child)
@@ -316,7 +334,7 @@ final class ProjectSidebarCellView: NSTableCellView
 		infoButton.action = #selector(showInfo)
 		DesktopTheme.styleButton(
 			infoButton,
-			symbol: "ellipsis"
+			icon: .dotsHorizontal
 		)
 		infoButton.imagePosition = .imageOnly
 
@@ -324,7 +342,7 @@ final class ProjectSidebarCellView: NSTableCellView
 		newChatButton.action = #selector(startChat)
 		DesktopTheme.styleButton(
 			newChatButton,
-			symbol: "square.and.pencil"
+			icon: .chatCompose
 		)
 		newChatButton.imagePosition = .imageOnly
 	}
@@ -344,9 +362,10 @@ final class ProjectSidebarCellView: NSTableCellView
 	)
 	{
 		isCurrentProject = isCurrent
-		imageView?.image = NSImage(
-			systemSymbolName: isExpanded ? "folder.fill" : "folder",
-			accessibilityDescription: isExpanded ? "Expanded project" :
+		imageView?.image = DesktopIcons.image(
+			isExpanded ? .folderOpen : .folder,
+			accessibilityDescription: isExpanded ?
+				"Expanded project" :
 				"Collapsed project"
 		)
 		textField?.stringValue = name

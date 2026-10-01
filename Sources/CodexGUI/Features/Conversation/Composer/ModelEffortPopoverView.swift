@@ -83,7 +83,7 @@ final class ModelEffortPopoverView: NSViewController
 		fastButton.action = #selector(toggleFastMode)
 		DesktopTheme.styleButton(
 			fastButton,
-			symbol: "bolt"
+			icon: .bolt
 		)
 		fastButton.imagePosition = .imageOnly
 
@@ -91,7 +91,7 @@ final class ModelEffortPopoverView: NSViewController
 		resetButton.action = #selector(resetPreferences)
 		DesktopTheme.styleButton(
 			resetButton,
-			symbol: "arrow.counterclockwise"
+			icon: .arrowRotateCcw
 		)
 		resetButton.imagePosition = .imageOnly
 		resetButton.contentTintColor = EffortPopoverStyle.icon
@@ -103,21 +103,16 @@ final class ModelEffortPopoverView: NSViewController
 	{
 		DesktopTheme.styleButton(
 			modelMenuButton,
-			symbol: "chevron.right"
+			icon: .chevronRight
 		)
 		modelMenuButton.target = self
 		modelMenuButton.action = #selector(showModelMenu)
 		modelMenuButton.font = .systemFont(ofSize: 12)
 		modelMenuButton.contentTintColor = EffortPopoverStyle.model
-		let chevron = NSImage(
-			systemSymbolName: "chevron.right",
-			accessibilityDescription: nil
+		modelMenuButton.image = DesktopIcons.image(
+			.chevronRight,
+			size: 9
 		)
-		let symbolConfiguration = NSImage.SymbolConfiguration(
-			pointSize: 9,
-			weight: .regular
-		)
-		modelMenuButton.image = chevron?.withSymbolConfiguration(symbolConfiguration)
 		modelMenuButton.imagePosition = .imageTrailing
 		modelMenuButton.lineBreakMode = .byTruncatingMiddle
 		modelMenuButton.setAccessibilityLabel("Choose Codex model")
@@ -289,26 +284,31 @@ final class ModelEffortPopoverView: NSViewController
 		{
 			seenEfforts.insert($0).inserted
 		}
-		return uniqueEfforts.enumerated().sorted
+		let orderedEfforts = uniqueEfforts.enumerated().sorted
 		{
 			lhs, rhs in
 			let leftOrder = effortOrder(lhs.element)
 			let rightOrder = effortOrder(rhs.element)
 			return leftOrder == rightOrder ? lhs.offset < rhs.offset : leftOrder < rightOrder
-		}.map(\.element)
+		}
+		return orderedEfforts.map(\.element)
 	}
 
 	private func updateModelSelectionTitle()
 	{
-		modelMenuButton.title =
-			selectedModelID.map
-				{
-					id in
-					models.first
-					{
-						$0.id == id
-					}?.displayName ?? "Unavailable: \(id)"
-				} ?? "Default model"
+		if let selectedModelID
+		{
+			let selectedModel = models.first
+			{
+				$0.id == selectedModelID
+			}
+			modelMenuButton.title = selectedModel?.displayName ?? "Unavailable: \(selectedModelID)"
+		}
+		else
+		{
+			modelMenuButton.title = "Default model"
+		}
+
 		modelMenuButton.toolTip = modelMenuButton.title
 		modelMenuButton.setAccessibilityValue(modelMenuButton.title)
 	}
@@ -399,18 +399,7 @@ final class ModelEffortPopoverView: NSViewController
 	{
 		let menu = NSMenu()
 		menu.autoenablesItems = false
-		var choices: [(id: String?, title: String)] = [(nil, "Default model")]
-		choices.append(contentsOf: models.map
-		{
-			($0.id, $0.displayName)
-		})
-		if let selectedModelID, !models.contains(where:
-			{
-				$0.id == selectedModelID
-			})
-		{
-			choices.append((selectedModelID, "Unavailable: \(selectedModelID)"))
-		}
+		let choices = modelMenuChoices()
 		for (index, choice) in choices.enumerated()
 		{
 			let item = NSMenuItem(
@@ -425,6 +414,23 @@ final class ModelEffortPopoverView: NSViewController
 			menu.addItem(item)
 		}
 		return menu
+	}
+
+	private func modelMenuChoices() -> [(id: String?, title: String)]
+	{
+		var choices: [(id: String?, title: String)] = [(nil, "Default model")]
+		choices.append(contentsOf: models.map
+		{
+			($0.id, $0.displayName)
+		})
+		if let selectedModelID, !models.contains(where:
+			{
+				$0.id == selectedModelID
+			})
+		{
+			choices.append((selectedModelID, "Unavailable: \(selectedModelID)"))
+		}
+		return choices
 	}
 
 	@objc private func showModelMenu()

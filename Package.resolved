@@ -1,0 +1,14 @@
+{
+  "originHash" : "820ae3ab24be36160dfee332e39f963881cf7ab5c8e2d4d79493617577cfc56f",
+  "pins" : [
+    {
+      "identity" : "apps-sdk-ui-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Pmen225/apps-sdk-ui-swift",
+      "state" : {
+        "revision" : "07cd708b3670948155d913f863ed4f0d8529ab2e"
+      }
+    }
+  ],
+  "version" : 3
+}

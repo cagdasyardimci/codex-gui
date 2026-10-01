@@ -4,7 +4,7 @@ A native AppKit client for local Codex coding conversations. It runs an installe
 
 ## Requirements
 
-- macOS 13 or later and Apple Command Line Tools. This repository was built and observed on macOS 26 with Swift 6.3.1.
+- macOS 14 or later and Apple Command Line Tools. This repository was built and observed on macOS 26 with Swift 6.3.1.
 - Codex CLI 0.153.2 or later, available through `PATH`, a common Homebrew or nvm path, or `CODEX_EXECUTABLE`. Version 0.153.2 is the tested protocol baseline; later versions may change the experimental app-server interface.
 - A Codex account signed in through the CLI or the app's **Sign In…** button.
 
@@ -21,11 +21,20 @@ For an optimized release bundle, run `./scripts/bundle.sh release`, then
 use the same bundle path. Launching the bare `.build/release/CodexGUI` executable
 does not provide the bundle identity required by macOS window tabs and notifications.
 
-`make check` runs the style driver regression checks, strict formatting validation, `swift build`, and Swift Testing. Formatting requires SwiftFormat 0.63.0 or later (`brew install swiftformat`) and Python 3. `make format` applies the checked-in style rules. The installed Command Line Tools on this machine place Swift Testing outside SwiftPM's default search path, so the Makefile supplies the framework and macro paths. Its Testing framework targets macOS 14; the application target remains macOS 13. Tests on macOS 13 have not been verified. See [conventions](CONVENTIONS.md) for naming and component rules.
+`make check` runs the style driver regression checks, strict formatting validation, `swift build`, and Swift Testing. Formatting requires SwiftFormat 0.63.0 or later (`brew install swiftformat`) and Python 3. `make format` applies the checked-in style rules. The installed Command Line Tools on this machine place Swift Testing outside SwiftPM's default search path, so the Makefile supplies the framework and macro paths. The application and testing framework both require macOS 14 or later. See [conventions](CONVENTIONS.md) for naming and component rules.
 
 For development, `swift run CodexGUI` starts the executable directly with desktop notifications unavailable. macOS notification access requires an app bundle identity; `scripts/bundle.sh` creates and ad hoc signs that bundle. Settings shows the notification status for the current launch.
 
 In VS Code, use `./scripts/bundle.sh` as the pre-launch task and `${workspaceFolder}/.build/CodexGUI.app/Contents/MacOS/CodexGUI` as the launch program for both debugging and **Run Without Debugging**. A Run task can use `open .build/CodexGUI.app` after bundling. Swift extension launch configurations that run the bare executable remain usable with notifications unavailable. IDE configuration stays local and is ignored by Git.
+
+## Interface icons
+
+Interface icons use the MIT-licensed, unofficial
+[Apps SDK UI Swift port](https://github.com/Pmen225/apps-sdk-ui-swift), pinned to commit
+`07cd708b3670948155d913f863ed4f0d8529ab2e`. The original artwork comes from OpenAI.
+`DesktopIcons` supplies independent template images to AppKit controls and handles tinting
+for custom drawing. The app bundle includes the package's SVG resources and licence notices.
+The port also contains SwiftUI components; the application continues to use AppKit controls.
 
 ## Project structure
 
@@ -76,7 +85,7 @@ Run `make check` for strict formatting, build, and automated regression coverage
 
 The automated suite covers implemented protocol, runtime and presentation behavior. Native
 and live acceptance requirements are listed in the [validation guide](docs/validation.md).
-Execution on macOS 13 remains unverified. See the [CLI compatibility policy](docs/cli-compatibility.md) for protocol assumptions and limits.
+Execution on the minimum macOS 14 target remains unverified. See the [CLI compatibility policy](docs/cli-compatibility.md) for protocol assumptions and limits.
 
 ## License
 

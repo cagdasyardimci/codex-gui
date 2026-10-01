@@ -252,14 +252,14 @@ final class ConversationViewController: NSViewController,
 		returnToTaskButton.setAccessibilityLabel("Return to active task conversation")
 		DesktopTheme.styleButton(
 			returnToTaskButton,
-			symbol: "arrow.turn.up.left"
+			icon: .undo
 		)
 		planButton.target = self
 		planButton.action = #selector(showPlan)
 		planButton.setAccessibilityLabel("Show reported task plan")
 		DesktopTheme.styleButton(
 			planButton,
-			symbol: "checklist"
+			icon: .notebookCheck
 		)
 		activityLabel.font = .systemFont(ofSize: 12)
 		activityLabel.textColor = .secondaryLabelColor

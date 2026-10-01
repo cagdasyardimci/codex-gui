@@ -23,80 +23,13 @@ final class FullAccessConfirmationView: NSViewController
 			cornerRadius: 18,
 			bordered: true
 		)
-		let warning = symbol(
-			"exclamationmark.triangle",
-			tint: .labelColor
-		)
-		let title = NSTextField(labelWithString: "Turn on Full Access?")
-		title.font = .systemFont(
-			ofSize: 20,
-			weight: .semibold
-		)
-		let heading = AppKitLayout.horizontalStack(
-			[warning, title],
-			spacing: 10
-		)
-		let introduction = wrappingLabel(
-			"Codex will be able to run commands, use the internet, and create and edit "
-				+ "files anywhere on this computer without your permission. This includes "
-				+ "but is not limited to:",
-			size: 14
-		)
-		introduction.preferredMaxLayoutWidth = 478
+		let heading = makeHeading()
+		let introduction = makeIntroduction()
 
-		let capabilities = DesktopSurface(
-			DesktopTheme.input,
-			cornerRadius: 16
-		)
-		let rows = AppKitLayout.verticalStack(
-			[
-				capability(
-					"Files and folders",
-					description: "Read, create, modify, upload, or delete files "
-						+ "anywhere on this computer",
-					symbol: "folder.fill",
-					tint: .systemBlue
-				),
-				separator(),
-				capability(
-					"Terminal commands",
-					description: "Run commands, install software, and change system settings",
-					symbol: "terminal.fill",
-					tint: ApprovalPopoverStyle.icon
-				),
-				separator(),
-				capability(
-					"Internet and connected apps",
-					description: "Access websites, send data, and use enabled plugins",
-					symbol: "globe",
-					tint: .systemCyan
-				),
-			],
-			spacing: 10
-		)
-		AppKitLayout.pin(
-			rows,
-			to: capabilities,
-			inset: 16
-		)
-		for row in rows.arrangedSubviews
-		{
-			row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
-		}
+		let capabilities = makeCapabilitiesSection()
 
 		configureRiskText()
-		configureButton(
-			cancelButton,
-			confirm: false
-		)
-		configureButton(
-			confirmButton,
-			confirm: true
-		)
-		let actions = AppKitLayout.horizontalStack(
-			[NSView(), cancelButton, confirmButton],
-			spacing: 12
-		)
+		let actions = makeActionRow()
 		let stack = AppKitLayout.verticalStack(
 			[heading, introduction, capabilities, riskText, actions],
 			spacing: 14
@@ -113,6 +46,98 @@ final class FullAccessConfirmationView: NSViewController
 		surface.widthAnchor.constraint(equalToConstant: 518).isActive = true
 		surface.heightAnchor.constraint(greaterThanOrEqualToConstant: 422).isActive = true
 		view = surface
+	}
+
+	private func makeHeading() -> NSStackView
+	{
+		let warning = symbol(
+			.triangleExclamationErrorWarning,
+			tint: .labelColor
+		)
+		let title = NSTextField(labelWithString: "Turn on Full Access?")
+		title.font = .systemFont(
+			ofSize: 20,
+			weight: .semibold
+		)
+		let heading = AppKitLayout.horizontalStack(
+			[warning, title],
+			spacing: 10
+		)
+		return heading
+	}
+
+	private func makeIntroduction() -> NSTextField
+	{
+		let introduction = wrappingLabel(
+			"Codex will be able to run commands, use the internet, and create and edit "
+				+ "files anywhere on this computer without your permission. This includes "
+				+ "but is not limited to:",
+			size: 14
+		)
+		introduction.preferredMaxLayoutWidth = 478
+		return introduction
+	}
+
+	private func makeActionRow() -> NSStackView
+	{
+		configureButton(
+			cancelButton,
+			confirm: false
+		)
+		configureButton(
+			confirmButton,
+			confirm: true
+		)
+		let actions = AppKitLayout.horizontalStack(
+			[NSView(), cancelButton, confirmButton],
+			spacing: 12
+		)
+		return actions
+	}
+
+	private func makeCapabilitiesSection() -> NSView
+	{
+		let capabilities = DesktopSurface(
+			DesktopTheme.input,
+			cornerRadius: 16
+		)
+		let rows = AppKitLayout.verticalStack(
+			[
+				capability(
+					"Files and folders",
+					description: "Read, create, modify, upload, or delete files "
+						+ "anywhere on this computer",
+					icon: .folderOpen,
+					tint: .systemBlue
+				),
+				separator(),
+				capability(
+					"Terminal commands",
+					description: "Run commands, install software, and change system settings",
+					icon: .terminal,
+					tint: ApprovalPopoverStyle.icon
+				),
+				separator(),
+				capability(
+					"Internet and connected apps",
+					description: "Access websites, send data, and use enabled plugins",
+					icon: .globeRealTimeSearch,
+					tint: .systemCyan
+				),
+			],
+			spacing: 10
+		)
+		AppKitLayout.pin(
+			rows,
+			to: capabilities,
+			inset: 16
+		)
+		for row in rows.arrangedSubviews
+		{
+			row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
+		}
+
+		return capabilities
 	}
 
 	private func configureRiskText()
@@ -161,10 +186,7 @@ final class FullAccessConfirmationView: NSViewController
 		button.keyEquivalent = confirm ? "\r" : "\u{1b}"
 		if confirm
 		{
-			button.image = NSImage(
-				systemSymbolName: "exclamationmark.triangle",
-				accessibilityDescription: nil
-			)
+			button.image = DesktopIcons.image(.triangleExclamationErrorWarning)
 			button.imagePosition = .imageLeading
 		}
 		button.widthAnchor.constraint(equalToConstant: confirm ? 114 : 86).isActive = true
@@ -174,7 +196,7 @@ final class FullAccessConfirmationView: NSViewController
 	private func capability(
 		_ title: String,
 		description: String,
-		symbol name: String,
+		icon name: DesktopIcon,
 		tint: NSColor
 	) -> NSView
 	{
@@ -183,18 +205,20 @@ final class FullAccessConfirmationView: NSViewController
 			ofSize: 13,
 			weight: .semibold
 		)
+		let descriptionLabel = wrappingLabel(
+			description,
+			size: 12
+		)
 		let labels = AppKitLayout.verticalStack(
-			[heading, wrappingLabel(
-				description,
-				size: 12
-			)],
+			[heading, descriptionLabel],
 			spacing: 3
 		)
+		let icon = symbol(
+			name,
+			tint: tint
+		)
 		let row = AppKitLayout.horizontalStack(
-			[symbol(
-				name,
-				tint: tint
-			), labels],
+			[icon, labels],
 			spacing: 14
 		)
 		labels.trailingAnchor.constraint(equalTo: row.trailingAnchor).isActive = true
@@ -218,15 +242,12 @@ final class FullAccessConfirmationView: NSViewController
 	}
 
 	private func symbol(
-		_ name: String,
+		_ name: DesktopIcon,
 		tint: NSColor
 	) -> NSImageView
 	{
 		let image = NSImageView()
-		image.image = NSImage(
-			systemSymbolName: name,
-			accessibilityDescription: nil
-		)
+		image.image = DesktopIcons.image(name)
 		image.contentTintColor = tint
 		image.widthAnchor.constraint(equalToConstant: 22).isActive = true
 		image.heightAnchor.constraint(equalToConstant: 22).isActive = true

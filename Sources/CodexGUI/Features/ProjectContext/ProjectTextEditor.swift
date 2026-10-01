@@ -106,7 +106,7 @@ final class ProjectTextEditor: NSViewController
 		chooseFileButton.setAccessibilityLabel("Choose a reference file")
 		DesktopTheme.styleButton(
 			chooseFileButton,
-			symbol: "folder"
+			icon: .folder
 		)
 		pathField.setContentCompressionResistancePriority(
 			.defaultLow,

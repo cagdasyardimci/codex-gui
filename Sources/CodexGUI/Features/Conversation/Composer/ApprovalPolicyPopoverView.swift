@@ -30,29 +30,10 @@ final class ApprovalPolicyPopoverView: NSViewController
 			NSColor.textBackgroundColor,
 			cornerRadius: 10
 		)
-		let heading = NSTextField(labelWithString: "How should Codex actions be approved?")
-		heading.font = .systemFont(ofSize: 13)
-		heading.textColor = ApprovalPopoverStyle.secondary
-		heading.setAccessibilityLabel(heading.stringValue)
-		let header = NSStackView(views: [heading, NSView()])
-		header.orientation = .horizontal
-		header.spacing = 8
-		let modes: [ApprovalMode] = [.askForApproval, .approveForMe, .fullAccess]
-		rows = modes.map
-		{
-			mode in
-			let row = ApprovalPolicyRow(mode: mode)
-			row.target = self
-			row.action = #selector(selectRow(_:))
-			row.onNavigate =
-			{
-				[weak self] offset in self?.moveFocus(
-					from: mode,
-					offset: offset
-				)
-			}
-			return row
-		}
+		let header = makeHeadingRow()
+
+		rows = makePolicyRows()
+
 		let arrangedViews: [NSView] = [header] + rows
 		let stack = AppKitLayout.verticalStack(
 			arrangedViews,
@@ -73,12 +54,48 @@ final class ApprovalPolicyPopoverView: NSViewController
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 			row.heightAnchor.constraint(equalToConstant: 42).isActive = true
 		}
+
 		for index in rows.indices
 		{
 			rows[index].nextKeyView = rows[(index + 1) % rows.count]
 		}
+
 		view = surface
 		render(mode: selectedMode)
+	}
+
+	private func makeHeadingRow() -> NSStackView
+	{
+		let heading = NSTextField(labelWithString: "How should Codex actions be approved?")
+		heading.font = .systemFont(ofSize: 13)
+		heading.textColor = ApprovalPopoverStyle.secondary
+		heading.setAccessibilityLabel(heading.stringValue)
+
+		let header = NSStackView(views: [heading, NSView()])
+		header.orientation = .horizontal
+		header.spacing = 8
+
+		return header
+	}
+
+	private func makePolicyRows() -> [ApprovalPolicyRow]
+	{
+		let modes: [ApprovalMode] = [.askForApproval, .approveForMe, .fullAccess]
+		return modes.map
+		{
+			mode in
+			let row = ApprovalPolicyRow(mode: mode)
+			row.target = self
+			row.action = #selector(selectRow(_:))
+			row.onNavigate =
+			{
+				[weak self] offset in self?.moveFocus(
+					from: mode,
+					offset: offset
+				)
+			}
+			return row
+		}
 	}
 
 	override func viewDidAppear()
@@ -161,6 +178,15 @@ private final class ApprovalPolicyRow: NSButton
 		setAccessibilityLabel(mode.title)
 		setAccessibilityHelp(mode.description)
 
+		configureLabels()
+		configureSymbols()
+		installContents()
+
+		render(selected: false)
+	}
+
+	private func configureLabels()
+	{
 		titleLabel.stringValue = mode.title
 		titleLabel.font = .systemFont(ofSize: 13)
 		switch mode
@@ -176,27 +202,23 @@ private final class ApprovalPolicyRow: NSButton
 		explanation.font = .systemFont(ofSize: 12)
 		explanation.maximumNumberOfLines = 1
 		explanation.lineBreakMode = .byClipping
+	}
 
-		let symbol: String
+	private func configureSymbols()
+	{
+		let symbol: DesktopIcon
 		switch mode
 		{
-		case .askForApproval: symbol = "hand.raised"
-		case .approveForMe: symbol = "checkmark.shield"
-		case .fullAccess: symbol = "exclamationmark.shield"
+		case .askForApproval: symbol = .handRaised
+		case .approveForMe: symbol = .shieldCheck
+		case .fullAccess: symbol = .warning
 		}
-		symbolView.image = NSImage(
-			systemSymbolName: symbol,
-			accessibilityDescription: nil
-		)
-		if mode == .approveForMe
-		{
-			symbolView.image = Self.reviewerSymbol()
-		}
-		checkView.image = NSImage(
-			systemSymbolName: "checkmark",
-			accessibilityDescription: nil
-		)
+		symbolView.image = DesktopIcons.image(symbol)
+		checkView.image = DesktopIcons.image(.check)
+	}
 
+	private func installContents()
+	{
 		let children: [NSView] = [titleLabel, explanation, symbolView, checkView]
 		for child in children
 		{
@@ -245,101 +267,11 @@ private final class ApprovalPolicyRow: NSButton
 			checkView.widthAnchor.constraint(equalToConstant: 14),
 			checkView.heightAnchor.constraint(equalToConstant: 14),
 		])
-		render(selected: false)
 	}
 
 	required init?(coder: NSCoder)
 	{
 		nil
-	}
-
-	private static func reviewerSymbol() -> NSImage
-	{
-		let image = NSImage(
-			size: NSSize(
-				width: 16,
-				height: 18
-			),
-			flipped: false
-		)
-		{
-			_ in
-			NSColor.black.setStroke()
-			let shield = NSBezierPath()
-			shield.move(to: NSPoint(
-				x: 8,
-				y: 17
-			))
-			shield.line(to: NSPoint(
-				x: 14,
-				y: 14
-			))
-			shield.line(to: NSPoint(
-				x: 14,
-				y: 8
-			))
-			shield.curve(
-				to: NSPoint(
-					x: 8,
-					y: 1
-				),
-				controlPoint1: NSPoint(
-					x: 14,
-					y: 4
-				),
-				controlPoint2: NSPoint(
-					x: 11,
-					y: 1
-				)
-			)
-			shield.curve(
-				to: NSPoint(
-					x: 2,
-					y: 8
-				),
-				controlPoint1: NSPoint(
-					x: 5,
-					y: 1
-				),
-				controlPoint2: NSPoint(
-					x: 2,
-					y: 4
-				)
-			)
-			shield.line(to: NSPoint(
-				x: 2,
-				y: 14
-			))
-			shield.close()
-			shield.lineWidth = 1.3
-			shield.stroke()
-			let prompt = NSBezierPath()
-			prompt.move(to: NSPoint(
-				x: 5,
-				y: 11
-			))
-			prompt.line(to: NSPoint(
-				x: 7,
-				y: 9
-			))
-			prompt.line(to: NSPoint(
-				x: 5,
-				y: 7
-			))
-			prompt.move(to: NSPoint(
-				x: 9,
-				y: 7
-			))
-			prompt.line(to: NSPoint(
-				x: 11,
-				y: 7
-			))
-			prompt.lineWidth = 1.3
-			prompt.stroke()
-			return true
-		}
-		image.isTemplate = true
-		return image
 	}
 
 	override var acceptsFirstResponder: Bool

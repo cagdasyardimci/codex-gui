@@ -9,7 +9,11 @@ esac
 swift build -c "$configuration"
 app=".build/CodexGUI.app"
 mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/Resources"
 cp ".build/$configuration/CodexGUI" "$app/Contents/MacOS/CodexGUI"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+for resource_bundle in .build/$configuration/*.bundle(N); do
+  ditto "$resource_bundle" "$app/Contents/Resources/${resource_bundle:t}"
+done
 codesign --force --sign - "$app"
 print "Built $app ($configuration)"

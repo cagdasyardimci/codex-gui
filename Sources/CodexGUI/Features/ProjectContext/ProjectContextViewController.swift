@@ -70,9 +70,10 @@ final class ProjectContextViewController: NSViewController
 			draftSelectionGeneration += 1
 		}
 		self.draftOwnerIdentity = draftOwnerIdentity
-		guard
+		let shouldRebuildProjectContext =
 			context != self.context || models != self.models || skills != availableSkills
-			|| statusMessage != self.statusMessage || ownerIdentity != self.ownerIdentity
+				|| statusMessage != self.statusMessage || ownerIdentity != self.ownerIdentity
+		guard shouldRebuildProjectContext
 		else
 		{
 			return
@@ -406,7 +407,7 @@ final class ProjectContextViewController: NSViewController
 		button.setAccessibilityLabel(title)
 		DesktopTheme.styleButton(
 			button,
-			symbol: "plus"
+			icon: .plus
 		)
 		add(button)
 	}
@@ -445,9 +446,9 @@ final class ProjectContextViewController: NSViewController
 
 	private func addPromptRow(_ prompt: SavedPrompt)
 	{
-		let selected = prompt.id == context.selectedPromptID
+		let isSelectedPrompt = prompt.id == context.selectedPromptID
 		let button = NSButton(
-			title: "\(selected ? "✓ " : "")\(prompt.title)…",
+			title: "\(isSelectedPrompt ? "✓ " : "")\(prompt.title)…",
 			target: self,
 			action: #selector(inspectPrompt(_:))
 		)
@@ -456,7 +457,7 @@ final class ProjectContextViewController: NSViewController
 		button.setAccessibilityLabel("Inspect saved prompt \(prompt.title)")
 		DesktopTheme.styleButton(
 			button,
-			symbol: "text.quote"
+			icon: .quote
 		)
 		add(button)
 	}
@@ -475,7 +476,7 @@ final class ProjectContextViewController: NSViewController
 			)
 		DesktopTheme.styleButton(
 			button,
-			symbol: "bookmark"
+			icon: .savedXs
 		)
 		add(button)
 	}
@@ -624,32 +625,10 @@ final class ProjectContextViewController: NSViewController
 		{
 			return
 		}
-		let alert = NSAlert()
-		alert.messageText = prompt.title
-		alert.informativeText =
-			"Review these saved instructions before inserting them into the draft."
-		let instructions = NSTextView()
-		instructions.string = prompt.instructions
-		instructions.isEditable = false
-		instructions.isSelectable = true
-		instructions.font = .systemFont(ofSize: 13)
-		instructions.setAccessibilityLabel("Saved prompt instructions")
-		let scrollView = NSScrollView()
-		scrollView.documentView = instructions
-		scrollView.hasVerticalScroller = true
-		scrollView.frame = NSRect(
-			x: 0,
-			y: 0,
-			width: min(
-				440,
-				window.frame.width - 80
-			),
-			height: 220
+		let alert = makePromptReviewAlert(
+			prompt,
+			in: window
 		)
-		alert.accessoryView = scrollView
-		alert.addButton(withTitle: "Insert into Draft")
-		alert.addButton(withTitle: "Edit…")
-		alert.addButton(withTitle: "Close")
 		context.selectedPromptID = id
 		onUpdate?(context)
 		rebuild()
@@ -672,6 +651,52 @@ final class ProjectContextViewController: NSViewController
 				self.editPrompt(prompt)
 			}
 		}
+	}
+
+	private func makePromptReviewAlert(
+		_ prompt: SavedPrompt,
+		in window: NSWindow
+	) -> NSAlert
+	{
+		let alert = NSAlert()
+		alert.messageText = prompt.title
+		alert.informativeText =
+			"Review these saved instructions before inserting them into the draft."
+		let scrollView = makePromptInstructionsView(
+			prompt,
+			in: window
+		)
+		alert.accessoryView = scrollView
+		alert.addButton(withTitle: "Insert into Draft")
+		alert.addButton(withTitle: "Edit…")
+		alert.addButton(withTitle: "Close")
+		return alert
+	}
+
+	private func makePromptInstructionsView(
+		_ prompt: SavedPrompt,
+		in window: NSWindow
+	) -> NSScrollView
+	{
+		let instructions = NSTextView()
+		instructions.string = prompt.instructions
+		instructions.isEditable = false
+		instructions.isSelectable = true
+		instructions.font = .systemFont(ofSize: 13)
+		instructions.setAccessibilityLabel("Saved prompt instructions")
+		let scrollView = NSScrollView()
+		scrollView.documentView = instructions
+		scrollView.hasVerticalScroller = true
+		scrollView.frame = NSRect(
+			x: 0,
+			y: 0,
+			width: min(
+				440,
+				window.frame.width - 80
+			),
+			height: 220
+		)
+		return scrollView
 	}
 
 	@objc private func selectSkill(_ sender: NSPopUpButton)

@@ -17,7 +17,7 @@ final class UsageSummaryView: NSView
 
 		DesktopTheme.styleButton(
 			button,
-			symbol: "chart.bar"
+			icon: .barChart
 		)
 		button.alignment = .left
 		button.cell?.lineBreakMode = .byTruncatingTail
@@ -224,17 +224,7 @@ final class UsageSummaryView: NSView
 
 	@objc private func showDetails()
 	{
-		let label = NSTextField(wrappingLabelWithString: details)
-		label.font = .systemFont(ofSize: 12)
-		label.setAccessibilityLabel("Backend reported usage details")
-
-		let controller = NSViewController()
-		let container = DesktopSurface(DesktopTheme.elevated)
-		AppKitLayout.pin(
-			label,
-			to: container
-		)
-		controller.view = container
+		let controller = makeDetailsController()
 
 		let popover = NSPopover()
 		popover.contentViewController = controller
@@ -254,4 +244,22 @@ final class UsageSummaryView: NSView
 			preferredEdge: .maxY
 		)
 	}
+
+	private func makeDetailsController() -> NSViewController
+	{
+		let label = NSTextField(wrappingLabelWithString: details)
+		label.font = .systemFont(ofSize: 12)
+		label.setAccessibilityLabel("Backend reported usage details")
+
+		let controller = NSViewController()
+		let container = DesktopSurface(DesktopTheme.elevated)
+		AppKitLayout.pin(
+			label,
+			to: container
+		)
+		controller.view = container
+
+		return controller
+	}
+
 }
