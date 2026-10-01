@@ -18,6 +18,7 @@ format:
 
 lint:
 	python3 scripts/test-swift-style.py
+	python3 scripts/test-run-swift-tests.py
 	python3 scripts/swift-style.py --check
 
 build:
@@ -26,10 +27,10 @@ build:
 test:
 	# AppKit tests share the process-wide application and run serially.
 	# Shown native windows and popovers need separate SwiftPM test-host lifecycles.
-	swift test $(TEST_FLAGS) --no-parallel --skip 'WindowLayoutTests|closedWindowDetachesItsStorePublicationObserver|shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning'
-	swift test $(TEST_FLAGS) --no-parallel --filter '^CodexGUITests.WindowLayoutTests'
-	swift test $(TEST_FLAGS) --no-parallel --filter TaskWorkspaceWindowLayoutTests
-	swift test $(TEST_FLAGS) --no-parallel --filter closedWindowDetachesItsStorePublicationObserver
-	swift test $(TEST_FLAGS) --no-parallel --filter shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --skip 'WindowLayoutTests|closedWindowDetachesItsStorePublicationObserver|shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning'
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter '^CodexGUITests.WindowLayoutTests'
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter TaskWorkspaceWindowLayoutTests
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter closedWindowDetachesItsStorePublicationObserver
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning
 
 check: lint build test
