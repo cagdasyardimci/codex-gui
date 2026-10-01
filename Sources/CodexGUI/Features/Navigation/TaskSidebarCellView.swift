@@ -26,10 +26,19 @@ final class TaskSidebarCellView: NSTableCellView
 	private let actions = NSStackView()
 	private var hoverTrackingArea: NSTrackingArea?
 
+	private enum Layout
+	{
+		static let actionButtonWidth: CGFloat = 20
+		static let actionButtonHeight: CGFloat = 22
+		static let actionSpacing: CGFloat = 4
+		static let unreadIndicatorSize: CGFloat = 8
+		static let progressRingSize: CGFloat = 16
+	}
+
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
-		let label = NSTextField(labelWithString: "")
+		let label = HoverScrollingTextField(labelWithString: "")
 		label.font = .systemFont(ofSize: 14)
 		label.lineBreakMode = .byTruncatingTail
 		label.maximumNumberOfLines = 1
@@ -42,6 +51,13 @@ final class TaskSidebarCellView: NSTableCellView
 		)
 		textField = label
 
+		configureActionButtons()
+		configureUnreadIndicator()
+		installCellSubviews(titleField: label)
+	}
+
+	private func configureActionButtons()
+	{
 		archiveButton.target = self
 		archiveButton.action = #selector(archiveTask)
 		DesktopTheme.styleButton(
@@ -60,50 +76,61 @@ final class TaskSidebarCellView: NSTableCellView
 			button.toolTip = button.title
 			button.setAccessibilityLabel(button.title + " task")
 			actions.addArrangedSubview(button)
-			button.widthAnchor.constraint(equalToConstant: 20).isActive = true
-			button.heightAnchor.constraint(equalToConstant: 22).isActive = true
+			button.widthAnchor.constraint(equalToConstant: Layout.actionButtonWidth).isActive = true
+			button.heightAnchor.constraint(equalToConstant: Layout.actionButtonHeight)
+				.isActive = true
 		}
 		actions.orientation = .horizontal
-		actions.spacing = 4
+		actions.spacing = Layout.actionSpacing
 		// Keep the title's available width fixed when hover actions appear.
 		actions.alphaValue = 0
+	}
+
+	private func configureUnreadIndicator()
+	{
 		unreadDot.wantsLayer = true
 		unreadDot.layer?.backgroundColor = NSColor.systemBlue.cgColor
-		unreadDot.layer?.cornerRadius = 4
+		unreadDot.layer?.cornerRadius = Layout.unreadIndicatorSize / 2
 		unreadDot.isHidden = true
 		unreadDot.setAccessibilityElement(false)
-		for child in [label, progressRing, unreadDot, actions]
+	}
+
+	private func installCellSubviews(titleField: NSTextField)
+	{
+		for child in [titleField, progressRing, unreadDot, actions]
 		{
 			addSubview(child)
 			child.translatesAutoresizingMaskIntoConstraints = false
 		}
 		NSLayoutConstraint.activate([
-			unreadDot.widthAnchor.constraint(equalToConstant: 8),
-			unreadDot.heightAnchor.constraint(equalToConstant: 8),
+			unreadDot.widthAnchor.constraint(equalToConstant: Layout.unreadIndicatorSize),
+			unreadDot.heightAnchor.constraint(equalToConstant: Layout.unreadIndicatorSize),
 			unreadDot.centerXAnchor.constraint(equalTo: progressRing.centerXAnchor),
 			unreadDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-			progressRing.widthAnchor.constraint(equalToConstant: 16),
+			progressRing.widthAnchor.constraint(equalToConstant: Layout.progressRingSize),
 			progressRing.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
 				constant: -4
 			),
-			progressRing.heightAnchor.constraint(equalToConstant: 16),
+			progressRing.heightAnchor.constraint(equalToConstant: Layout.progressRingSize),
 			progressRing.centerYAnchor.constraint(equalTo: centerYAnchor),
-			label.leadingAnchor.constraint(
+			titleField.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
 				constant: 26
 			),
-			label.trailingAnchor.constraint(
+			titleField.trailingAnchor.constraint(
 				equalTo: actions.leadingAnchor,
 				constant: -4
 			),
-			label.centerYAnchor.constraint(equalTo: centerYAnchor),
+			titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
 			actions.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
 				constant: -2
 			),
 			actions.centerYAnchor.constraint(equalTo: centerYAnchor),
-			actions.widthAnchor.constraint(equalToConstant: 44),
+			actions.widthAnchor.constraint(
+				equalToConstant: Layout.actionButtonWidth * 2 + Layout.actionSpacing
+			),
 		])
 	}
 
@@ -152,6 +179,7 @@ final class TaskSidebarCellView: NSTableCellView
 	override func mouseEntered(with event: NSEvent)
 	{
 		actions.alphaValue = 1
+		(textField as? HoverScrollingTextField)?.setHovered(true)
 		progressRing.alphaValue = 0
 		unreadDot.alphaValue = 0
 		hoverCard?.show(beside: self)
@@ -193,6 +221,7 @@ final class TaskSidebarCellView: NSTableCellView
 	@objc private func dismissHoverCard()
 	{
 		hoverCard?.dismiss()
+		(textField as? HoverScrollingTextField)?.setHovered(false)
 		actions.alphaValue = 0
 		progressRing.alphaValue = 1
 		unreadDot.alphaValue = 1

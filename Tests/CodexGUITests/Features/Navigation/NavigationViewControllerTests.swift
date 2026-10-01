@@ -129,7 +129,7 @@ struct NavigationViewControllerTests
 		#expect(controller.chatsTable.selectedRow == 1)
 	}
 
-	@Test func taskTitleStaysStillAndHoverCardUsesMetadataForItsOwnRow() async throws
+	@Test func taskTitleScrollsOnceAndHoverCardUsesMetadataForItsOwnRow() async throws
 	{
 		_ = NSApplication.shared
 		let controller = NavigationViewController()
@@ -171,13 +171,14 @@ struct NavigationViewControllerTests
 		window.makeKeyAndOrderFront(nil)
 		defer
 		{
-			cell.removeFromSuperview(); window.orderOut(nil)
+			cell.removeFromSuperview()
+			window.orderOut(nil)
 		}
 		cell.setTurnRunning(true)
 		cell.layoutSubtreeIfNeeded()
 		#expect(cell.progressRing.frame.maxX == cell.bounds.maxX - 4)
 		#expect(cell.progressRing.alphaValue == 1)
-		let label = try #require(cell.textField)
+		let label = try #require(cell.textField as? HoverScrollingTextField)
 		let restingFrame = label.frame
 		#expect(label.alignmentRect(forFrame: restingFrame).minX == 26)
 		#expect(label.lineBreakMode == .byTruncatingTail)
@@ -202,6 +203,18 @@ struct NavigationViewControllerTests
 		#expect(cell.archiveButton.superview?.alphaValue == 1)
 		cell.setTurnRunning(true)
 		#expect(cell.progressRing.alphaValue == 0)
+		label.advanceScrolling(elapsed: 1.6)
+		if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+		{
+			#expect(label.scrollOffset > 0)
+			label.advanceScrolling(elapsed: 60)
+			let finishedOffset = label.scrollOffset
+			#expect(finishedOffset > 0)
+			label.advanceScrolling(elapsed: 120)
+			#expect(label.scrollOffset == finishedOffset)
+			label.stringValue = label.stringValue
+			#expect(label.scrollOffset == finishedOffset)
+		}
 		let panel = try #require(cell.hoverCard?.panel)
 		#expect(panel.isVisible)
 		#expect(panel.parent === window)
@@ -221,6 +234,7 @@ struct NavigationViewControllerTests
 		#expect(archived == "hovered")
 		#expect(controller.selectedThreadID == "another")
 		cell.mouseExited(with: event)
+		#expect(label.scrollOffset == 0)
 		#expect(cell.progressRing.alphaValue == 1)
 		#expect(cell.unreadDot.alphaValue == 1)
 		#expect(cell.archiveButton.superview?.alphaValue == 0)
@@ -229,6 +243,8 @@ struct NavigationViewControllerTests
 		cell.layoutSubtreeIfNeeded()
 		label.stringValue = "Short"
 		cell.mouseEntered(with: event)
+		label.advanceScrolling(elapsed: 1.6)
+		#expect(label.scrollOffset == 0)
 		#expect(label.frame == restingFrame)
 		#expect(cell.hoverCard?.panel != nil)
 		NotificationCenter.default.post(
