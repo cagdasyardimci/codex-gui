@@ -77,6 +77,14 @@ Open a Git repository with **Open Project…** or choose a recent project. Selec
 
 The conversation shows streamed messages, reported plans, command and tool activity, and approval or question requests. **Steer** sends a follow-up to the active turn. **Stop** waits for a reported agent outcome and any known commands to report their outcomes; an interrupted agent turn does not guarantee command cancellation. The Changes pane selects historical turns, opens changed files, prepares targeted revision requests, and shows observed command results with their source and freshness. Drafts and unresolved command identities are stored per project and chat in `UserDefaults`; conversation records stay with Codex.
 
+Read, search, and command actions appear in compact activity groups. A group's disclosure
+controls its list; each command's disclosure independently opens selectable Shell details.
+Chevrons appear while hovering the row; disclosure controls also support keyboard access.
+File links open the reported file in its system application, and viewed images have local
+thumbnail previews. Turn durations use reported timestamps. See the
+[activity presentation design](docs/activity-presentation-design.md) for grouping, identity,
+and streaming behavior.
+
 If a request or connection fails after sending, the app keeps the draft and blocks another Send until the conversation is read again. Use **Refresh** or **Reconnect**, or open the conversation from the chat list. The app never resends the prompt automatically. **New Task Checkout…** creates a separate Git worktree from committed `HEAD`; source edits stay in place. The task picker switches between independent running tasks and their approvals, context, progress, and reviews. Task Actions removes only a verified, clean checkout after its execution and command outcomes are known; its branch remains. Quitting during work offers to keep the app open or request a stop, and an unknown command outcome keeps the app open.
 
 ## Validation
