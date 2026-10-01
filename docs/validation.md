@@ -42,3 +42,9 @@ outcomes and cleanup/quit refusal. Temporary Git repositories cover clean checko
 creation, dirty and ignored-file refusal, ownership mismatches, retained branches,
 failed-removal recovery and independent task identities. Native observation of these
 workflows remains a separate acceptance step.
+
+## Release checklist
+
+Before using a new CLI version, regenerate and inspect its app-server schemas, run the
+fixture and automated checks, then exercise recovery in a disposable repository. Keep
+notification, live-model and platform acceptance evidence separate from source tests.
