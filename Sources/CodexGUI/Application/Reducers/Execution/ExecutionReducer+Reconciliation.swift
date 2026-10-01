@@ -89,11 +89,12 @@ extension ExecutionReducer
 			}
 			// A scoped accepted read can also retry local reference finalization.
 			model.execution.lastReconciledRequestID = operation.context.requestID
-			if operation.contentOnly || model.execution
-				.activeThreadID != nil &&
-				(model.execution.activeThreadID != detail.summary.id || (!model.execution
-						.needsReconciliation && model.execution.activeTurnID != nil
-						&& model.execution.agentOutcome == nil))
+			// An uncertain steering request does not revoke a live turn's execution ownership.
+			let preservesLiveTurn = model.execution.activeTurnID != nil
+				&& model.execution.agentOutcome == nil
+				&& (!model.execution.needsReconciliation || model.execution.state.isBusy)
+			if operation.contentOnly || model.execution.activeThreadID != nil
+				&& (model.execution.activeThreadID != detail.summary.id || preservesLiveTurn)
 			{
 				recordCommandObservation(
 					threadID: detail.summary.id,
