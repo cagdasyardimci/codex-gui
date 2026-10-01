@@ -120,7 +120,8 @@ enum WorkspaceStoreFactory
 				var actions: [WorkspaceAction] =
 					[.execution(.backendObserved(
 						observation,
-						event
+						event,
+						observedAt: Date()
 					))]
 				if case .accountUpdated = event
 				{

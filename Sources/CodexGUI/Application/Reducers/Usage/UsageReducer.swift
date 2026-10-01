@@ -44,61 +44,12 @@ enum UsageReducer
 				let read,
 				let observation
 			):
-				guard valid(
-					read.context.workspace,
-					generation: read.context.generation,
-					model: model
-				),
-					let pending = model.usage.pendingRefresh,
-					pending.context == read.context, pending.readsStarted == read.attempt
-				else
-				{
-					return result
-				}
-				switch observation
-				{
-				case .succeeded(let observation):
-					model.usage.snapshot = observation.snapshot
-					model.usage.fetchedAt = observation.fetchedAt
-					model.usage.freshnessDeadline = observation.freshnessDeadline
-					model.usage.error = nil
-					model.usage.needsRefresh = false
-				case .failed(let failure):
-					model.usage.error = "Usage unavailable: \(failure.message)"
-					model.usage.needsRefresh = true
-				}
-				if model.usage.refreshPending, read.attempt < 3
-				{
-					model.usage.refreshPending = false
-					model.usage.needsRefresh = true
-					model.usage.pendingRefresh?.readsStarted += 1
-					result.effects.append(.readUsage(UsageReadOperation(
-						context: read.context,
-						attempt: read.attempt + 1
-					)))
-				}
-				else
-				{
-					model.usage.pendingRefresh = nil
-					if model.usage.refreshPending
-					{
-						model.usage.needsRefresh = true
-						model.usage.error = "Usage changed repeatedly while refreshing. "
-							+ "Reconnect to check the latest limits."
-					}
-					model.usage.refreshPending = false
-					if !model.usage.needsRefresh, let fetchedAt = model.usage.fetchedAt,
-						let deadline = model.usage.freshnessDeadline
-					{
-						let operation = UsageDeadlineOperation(
-							read: read,
-							fetchedAt: fetchedAt,
-							deadline: deadline
-						)
-						model.usage.pendingDeadline = operation
-						result.effects.append(.scheduleUsageDeadline(operation))
-					}
-				}
+				receiveLimits(
+					read,
+					observation: observation,
+					model: &model,
+					result: &result
+				)
 			case .freshnessDeadlineElapsed(
 				let operation,
 				let now
@@ -119,7 +70,8 @@ enum UsageReducer
 			}
 		case .execution(.backendObserved(
 			let context,
-			.rateLimitsUpdated
+			.rateLimitsUpdated,
+			_
 		)):
 			guard valid(
 				context.workspace,
@@ -173,6 +125,83 @@ enum UsageReducer
 		default: break
 		}
 		return result
+	}
+
+	private static func receiveLimits(
+		_ read: UsageReadOperation,
+		observation: OperationResult<UsageObservation>,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		guard valid(
+			read.context.workspace,
+			generation: read.context.generation,
+			model: model
+		),
+			let pending = model.usage.pendingRefresh,
+			pending.context == read.context, pending.readsStarted == read.attempt
+		else
+		{
+			return
+		}
+		switch observation
+		{
+		case .succeeded(let observation):
+			model.usage.snapshot = observation.snapshot
+			model.usage.fetchedAt = observation.fetchedAt
+			model.usage.freshnessDeadline = observation.freshnessDeadline
+			model.usage.error = nil
+			model.usage.needsRefresh = false
+		case .failed(let failure):
+			model.usage.error = "Usage unavailable: \(failure.message)"
+			model.usage.needsRefresh = true
+		}
+		finishRefreshAttempt(
+			read,
+			model: &model,
+			result: &result
+		)
+	}
+
+	private static func finishRefreshAttempt(
+		_ read: UsageReadOperation,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		if model.usage.refreshPending, read.attempt < 3
+		{
+			model.usage.refreshPending = false
+			model.usage.needsRefresh = true
+			model.usage.pendingRefresh?.readsStarted += 1
+			result.effects.append(.readUsage(UsageReadOperation(
+				context: read.context,
+				attempt: read.attempt + 1
+			)))
+		}
+		else
+		{
+			model.usage.pendingRefresh = nil
+			if model.usage.refreshPending
+			{
+				model.usage.needsRefresh = true
+				model.usage.error = "Usage changed repeatedly while refreshing. "
+					+ "Reconnect to check the latest limits."
+			}
+			model.usage.refreshPending = false
+			if !model.usage.needsRefresh, let fetchedAt = model.usage.fetchedAt,
+				let deadline = model.usage.freshnessDeadline
+			{
+				let operation = UsageDeadlineOperation(
+					read: read,
+					fetchedAt: fetchedAt,
+					deadline: deadline
+				)
+				model.usage.pendingDeadline = operation
+				result.effects.append(.scheduleUsageDeadline(operation))
+			}
+		}
 	}
 
 	private static func valid(

@@ -10,7 +10,10 @@ enum WorkspaceDomainEvent
 	case conversationListAccepted(ConversationListOperation)
 	case submissionAccepted(ComposerSubmission)
 	case submissionPrepared(PreparedSubmission)
-	case backendObserved(AppServerEvent)
+	case backendObserved(
+		AppServerEvent,
+		observedAt: Date? = nil
+	)
 	case historyAccepted(
 		ThreadDetail,
 		threadID: String

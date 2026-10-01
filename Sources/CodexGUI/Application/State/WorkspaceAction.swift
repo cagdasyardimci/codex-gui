@@ -62,7 +62,8 @@ enum ExecutionAction
 	)
 	case backendObserved(
 		OperationContext,
-		AppServerEvent
+		AppServerEvent,
+		observedAt: Date? = nil
 	)
 	case completedHistoryRequested(ReconciliationOperation)
 	case completedHistoryReceived(

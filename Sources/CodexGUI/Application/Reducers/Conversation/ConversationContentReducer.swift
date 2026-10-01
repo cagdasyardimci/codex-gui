@@ -214,7 +214,8 @@ enum ConversationContentReducer
 	}
 	static func observe(
 		_ event: AppServerEvent,
-		model: inout WorkspaceModel
+		model: inout WorkspaceModel,
+		observedAt: Date? = nil
 	)
 	{
 		switch event
@@ -231,7 +232,8 @@ enum ConversationContentReducer
 				content in
 				content.content.turnTimings[turn.id] = ConversationTurnTiming(
 					turn: turn,
-					previous: content.content.turnTimings[turn.id]
+					previous: content.content.turnTimings[turn.id],
+					observedAt: observedAt
 				)
 				content.changedFiles = []; content.diff = ""; content.changesByItemID = [:]
 				content.hasAggregateDiff = false
@@ -248,7 +250,8 @@ enum ConversationContentReducer
 				content in
 				content.content.turnTimings[turn.id] = ConversationTurnTiming(
 					turn: turn,
-					previous: content.content.turnTimings[turn.id]
+					previous: content.content.turnTimings[turn.id],
+					observedAt: observedAt
 				)
 				for item in turn.items
 				{

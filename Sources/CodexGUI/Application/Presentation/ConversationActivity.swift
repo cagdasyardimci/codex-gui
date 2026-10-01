@@ -42,13 +42,17 @@ struct ConversationTurnTiming: Equatable
 
 	init(
 		turn: CodexTurn,
-		previous: ConversationTurnTiming? = nil
+		previous: ConversationTurnTiming? = nil,
+		observedAt: Date? = nil
 	)
 	{
 		turnID = turn.id
 		status = turn.status
+		// Only live observations supply a local fallback; history must not invent elapsed time.
 		startedAt = turn.startedAt ?? previous?.startedAt
+			?? (turn.status == "inProgress" ? observedAt : nil)
 		completedAt = turn.completedAt ?? previous?.completedAt
+			?? (turn.status != "inProgress" && startedAt != nil ? observedAt : nil)
 		durationMs = turn.durationMs ?? previous?.durationMs
 	}
 }

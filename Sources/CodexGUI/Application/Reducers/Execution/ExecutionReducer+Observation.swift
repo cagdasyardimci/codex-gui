@@ -13,7 +13,8 @@ extension ExecutionReducer
 		{
 		case .backendObserved(
 			let context,
-			let event
+			let event,
+			let observedAt
 		):
 			guard valid(
 				context,
@@ -26,6 +27,7 @@ extension ExecutionReducer
 			observe(
 				event,
 				context: context,
+				observedAt: observedAt,
 				model: &model,
 				result: &result
 			)
@@ -41,12 +43,11 @@ extension ExecutionReducer
 		model: WorkspaceModel
 	) -> Bool
 	{
-		if model.execution.commandLifetime
-			.owns(
-				threadID: threadID,
-				turnID: turnID,
-				itemID: itemID
-			)
+		if model.execution.commandLifetime.owns(
+			threadID: threadID,
+			turnID: turnID,
+			itemID: itemID
+		)
 		{
 			return true
 		}
@@ -60,6 +61,7 @@ extension ExecutionReducer
 	private static func observe(
 		_ event: AppServerEvent,
 		context: OperationContext,
+		observedAt: Date?,
 		model: inout WorkspaceModel,
 		result: inout WorkspaceReduction
 	)
@@ -72,8 +74,7 @@ extension ExecutionReducer
 			let turn
 		):
 			guard model.connection.isConnected,
-					model.execution
-					.activeThreadID == threadID ||
+					model.execution.activeThreadID == threadID ||
 					(model.execution.activeThreadID == nil && selectedThreadID == threadID),
 					model.execution.activeTurnID == nil || model.execution.activeTurnID == turn.id
 			else
@@ -86,7 +87,8 @@ extension ExecutionReducer
 			model.execution.owner?.submission.turnID = turn.id
 			if !model.execution.stopRequested && !model.execution.needsReconciliation
 			{
-				model.execution.state = .running; model.execution.statusMessage = nil
+				model.execution.state = .running
+				model.execution.statusMessage = nil
 			}
 			requestInterruption(
 				model: &model,
@@ -96,91 +98,43 @@ extension ExecutionReducer
 			let threadID,
 			let turn
 		):
-			guard model.execution
-				.activeThreadID == threadID ||
+			guard model.execution.activeThreadID == threadID ||
 				(model.execution.activeThreadID == nil && selectedThreadID == threadID),
 				model.execution.activeTurnID == turn.id
 			else
 			{
 				return
 			}
-			recordCommandObservation(
+			let commandPersistenceEffect = reconcileCommands(
 				threadID: threadID,
 				turns: [turn],
+				context: context,
 				model: &model
 			)
-			model.execution.commandLifetime.reconcile(
+			result.effects.append(commandPersistenceEffect)
+			recordCompletedAgentTurn(
+				turn,
 				threadID: threadID,
-				turns: [turn]
+				model: &model
 			)
-			result.effects.append(.persistCommands(
-				context,
-				Array(model.execution.commandLifetime.pending)
-			))
-			model.execution.activeThreadID = threadID
-			model.execution.activeTurnID = nil
-			model.execution.agentOutcome = turn.status == "interrupted" ? .stopped :
-				(turn.status == "failed" ? .failed(turn.error ?? "Codex reported a failed task.") :
-					.completed)
-			model.execution.pendingInteractions.removeAll()
-			model.execution.pendingResponses.removeAll()
-			model.execution.pendingSteering = nil
-			if model.execution.needsReconciliation
-			{
-				model.execution.state = .failed
-				model.execution.statusMessage =
-					"Codex reported a task outcome after the request timed out. "
-						+ "Refresh this conversation before sending again."
-			}
-			else if turn.status == "failed"
-			{
-				model.execution.state = .failed; model.execution.statusMessage = turn
-					.error ?? "Codex reported a failed task."
-			}
-			else if turn.status == "interrupted"
-			{
-				model.execution.state = .stopped; model.execution
-					.statusMessage = "Agent interrupted."
-			}
-			else
-			{
-				model.execution.state = .completed
-				model.execution.statusMessage = model.execution.stopRequested
-					? "Task completed before Stop took effect."
-					: "Task completed."
-			}
-			model.execution.outcomeMessage = model.execution.statusMessage
-			if model.execution.commandLifetime.hasPendingCommands
-			{
-				model.execution.deferredTurnOutcome = model.execution.state
-				model.execution.deferredTurnMessage = model.execution.statusMessage
-				model.execution.reconcilingCommandOutcome = !model.execution.hasUncertainRequest
-				model.execution.needsReconciliation = true
-				model.execution.state = .stopping
-				model.execution.statusMessage =
-					"The agent finished this turn. An approved command is still "
-						+ "awaiting its exit; Stop does not confirm command cancellation."
-				model.execution.outcomeMessage = model.execution.statusMessage
-			}
+			deferCompletionForPendingCommands(&model)
+
 			model.execution.stopRequested = false
 			model.execution.interruptRequestSent = false
 			model.execution.pendingInterruption = nil
 			model.execution.activePlan = nil
 			model.execution.activeActivity = nil
-			if !model.execution.commandLifetime
-				.hasPendingCommands
+			if !model.execution.commandLifetime.hasPendingCommands
 			{
 				result.presentationCommands.append(.taskFinished)
 			}
-			var readContext = context
-			readContext.threadID = threadID
-			readContext.turnID = turn.id
-			result.domainEvents
-				.append(.completedHistoryReadRequested(ConversationReadOperation(
-					context: readContext,
-					commandRevision: model.execution.commandEventRevisions[threadID, default: 0],
-					purpose: .completion
-				)))
+			requestCompletedTurnHistory(
+				turn,
+				threadID: threadID,
+				context: context,
+				model: model,
+				result: &result
+			)
 		case .itemStarted(
 			let threadID,
 			let turnID,
@@ -242,8 +196,7 @@ extension ExecutionReducer
 			let turnID,
 			_,
 			_
-		),
-		.fileChangeUpdated(
+		), .fileChangeUpdated(
 			let threadID,
 			let turnID,
 			_,
@@ -301,20 +254,18 @@ extension ExecutionReducer
 			let threadID,
 			let requestID
 		):
-			guard model.execution.pendingInteractions
-				.contains(where:
-					{
-						$0.id == requestID && $0.threadId == threadID
-					})
+			guard model.execution.pendingInteractions.contains(where:
+				{
+					$0.id == requestID && $0.threadId == threadID
+				})
 			else
 			{
 				return
 			}
-			model.execution.pendingInteractions
-				.removeAll
-				{
-					$0.id == requestID && $0.threadId == threadID
-				}
+			model.execution.pendingInteractions.removeAll
+			{
+				$0.id == requestID && $0.threadId == threadID
+			}
 			updateAwaitingState(&model.execution)
 		case .error(
 			let threadID,
@@ -353,8 +304,89 @@ extension ExecutionReducer
 		}
 		// Accepted content updates are composed before the shared publication.
 		result.domainEvents.insert(
-			.backendObserved(event),
+			.backendObserved(
+				event,
+				observedAt: observedAt
+			),
 			at: 0
 		)
 	}
+
+	private static func recordCompletedAgentTurn(
+		_ turn: CodexTurn,
+		threadID: String,
+		model: inout WorkspaceModel
+	)
+	{
+		model.execution.activeThreadID = threadID
+		model.execution.activeTurnID = nil
+		model.execution.agentOutcome = turn.status == "interrupted" ? .stopped :
+			(turn.status == "failed" ? .failed(turn.error ?? "Codex reported a failed task.") :
+				.completed)
+		model.execution.pendingInteractions.removeAll()
+		model.execution.pendingResponses.removeAll()
+		model.execution.pendingSteering = nil
+		if model.execution.needsReconciliation
+		{
+			model.execution.state = .failed
+			model.execution.statusMessage =
+				"Codex reported a task outcome after the request timed out. "
+					+ "Refresh this conversation before sending again."
+		}
+		else if turn.status == "failed"
+		{
+			model.execution.state = .failed
+			model.execution.statusMessage = turn
+				.error ?? "Codex reported a failed task."
+		}
+		else if turn.status == "interrupted"
+		{
+			model.execution.state = .stopped
+			model.execution
+				.statusMessage = "Agent interrupted."
+		}
+		else
+		{
+			model.execution.state = .completed
+			model.execution.statusMessage = model.execution.stopRequested
+				? "Task completed before Stop took effect."
+				: "Task completed."
+		}
+		model.execution.outcomeMessage = model.execution.statusMessage
+	}
+
+	private static func deferCompletionForPendingCommands(_ model: inout WorkspaceModel)
+	{
+		if model.execution.commandLifetime.hasPendingCommands
+		{
+			model.execution.deferredTurnOutcome = model.execution.state
+			model.execution.deferredTurnMessage = model.execution.statusMessage
+			model.execution.reconcilingCommandOutcome = !model.execution.hasUncertainRequest
+			model.execution.needsReconciliation = true
+			model.execution.state = .stopping
+			model.execution.statusMessage =
+				"The agent finished this turn. An approved command is still "
+					+ "awaiting its exit; Stop does not confirm command cancellation."
+			model.execution.outcomeMessage = model.execution.statusMessage
+		}
+	}
+
+	private static func requestCompletedTurnHistory(
+		_ turn: CodexTurn,
+		threadID: String,
+		context: OperationContext,
+		model: WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		var readContext = context
+		readContext.threadID = threadID
+		readContext.turnID = turn.id
+		result.domainEvents.append(.completedHistoryReadRequested(ConversationReadOperation(
+			context: readContext,
+			commandRevision: model.execution.commandEventRevisions[threadID, default: 0],
+			purpose: .completion
+		)))
+	}
+
 }

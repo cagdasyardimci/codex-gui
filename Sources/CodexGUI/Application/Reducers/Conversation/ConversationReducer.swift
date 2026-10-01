@@ -730,7 +730,10 @@ enum ConversationReducer
 			{
 				model.conversations.boundThreadID = workspace.threadID
 			}
-		case .backendObserved(let event):
+		case .backendObserved(
+			let event,
+			let observedAt
+		):
 			switch event
 			{
 			case .turnStarted(
@@ -775,7 +778,8 @@ enum ConversationReducer
 			}
 			ConversationContentReducer.observe(
 				event,
-				model: &model
+				model: &model,
+				observedAt: observedAt
 			)
 		case .historyAccepted(
 			let detail,

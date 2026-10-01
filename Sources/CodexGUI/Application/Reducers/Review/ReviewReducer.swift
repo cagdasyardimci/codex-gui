@@ -200,119 +200,43 @@ enum ReviewReducer
 			let identity,
 			let reviewed
 		)):
-			let key = ConversationKey.thread(identity.reference.threadID)
-			guard valid(
-				context,
-				model
-			), context.threadID == identity.reference.threadID,
-			model.conversations.selectedConversation == key,
-			let turn = selectedTurn(
-				model,
-				key
-			), identities(turn).contains(identity),
-			var review = model.review.conversations[key]
+			guard applyRequestedMarker(
+				context: context,
+				identity: identity,
+				reviewed: reviewed,
+				model: &model,
+				result: &result
+			)
 			else
 			{
 				return result
 			}
-			review.markerRevision += 1
-			review.pendingMarkerLoad = nil
-			review.loadedMarkerSnapshot = nil
-			let operation = ReviewMarkerWriteOperation(
-				context: context,
-				conversation: key,
-				identity: identity,
-				reviewed: reviewed,
-				sourceRevision: review.sourceRevision,
-				markerRevision: review.markerRevision
-			)
-			review.pendingMarkerWrites[identity.reference] = operation
-			review.markerFingerprints[identity.reference] = reviewed ? identity.fingerprint : nil
-			review.error = nil
-			model.review.conversations[key] = review
-			result.effects.append(.writeReviewMarker(operation))
 		case .review(.markersReceived(
 			let operation,
 			let outcome
 		)):
-			guard valid(
-				operation.context,
-				model
-			),
-				var review = model.review.conversations[operation.conversation],
-				review.pendingMarkerLoad == operation
+			guard applyReceivedMarkers(
+				operation: operation,
+				outcome: outcome,
+				model: &model
+			)
 			else
 			{
 				return result
 			}
-			// A matching ticket always retires, even when its conversation is offscreen.
-			// A superseded ticket cannot retire a newer read or alter its source snapshot.
-			review.pendingMarkerLoad = nil
-			guard model.conversations.content[operation.conversation]?.reviewSourceRevision
-				== operation.sourceRevision,
-				review.sourceRevision == operation.sourceRevision,
-				review.markerRevision == operation.markerRevision,
-				review.selectedTurnID == operation.turnID,
-				let turn = selectedTurn(
-					model,
-					operation.conversation
-				),
-				identities(turn) == operation.identities
-			else
-			{
-				review.loadedMarkerSnapshot = nil
-				model.review.conversations[operation.conversation] = review
-				return result
-			}
-
-			switch outcome
-			{
-			case .succeeded(let marked):
-				let accepted = Set(marked).intersection(operation.identities)
-				for identity in operation.identities
-				{
-					review.markerFingerprints[identity.reference] = accepted.contains(identity)
-						? identity.fingerprint : nil
-				}
-				review.error = nil
-			case .failed(let failure): review.error = failure.message
-			}
-			model.review.conversations[operation.conversation] = review
 		case .review(.markerPersistenceFinished(
 			let operation,
 			let outcome
 		)):
-			guard valid(
-				operation.context,
-				model
-			),
-				var review = model.review.conversations[operation.conversation],
-				review.pendingMarkerWrites[operation.identity.reference] == operation
+			guard finishMarkerPersistence(
+				operation: operation,
+				outcome: outcome,
+				model: &model
+			)
 			else
 			{
 				return result
 			}
-			review.pendingMarkerWrites[operation.identity.reference] = nil
-			if model.conversations.selectedConversation == operation.conversation,
-				review.markerRevision == operation.markerRevision,
-				review.sourceRevision == operation.sourceRevision,
-				selectedTurn(
-				model,
-				operation.conversation
-				).map(
-				{
-					identities($0)
-						.contains(operation.identity)
-				}
-				) == true
-			{
-				switch outcome
-				{
-				case .succeeded: review.error = nil
-				case .failed(let failure): review.error = failure.message
-				}
-			}
-			model.review.conversations[operation.conversation] = review
 		default: break
 		}
 		if let context = observationContext(action), valid(
@@ -327,6 +251,140 @@ enum ReviewReducer
 			result: &result
 		)
 		return result
+	}
+
+	private static func applyRequestedMarker(
+		context: OperationContext,
+		identity: ReviewMarkerIdentity,
+		reviewed: Bool,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	) -> Bool
+	{
+		let key = ConversationKey.thread(identity.reference.threadID)
+		guard valid(
+			context,
+			model
+		), context.threadID == identity.reference.threadID,
+		model.conversations.selectedConversation == key,
+		let turn = selectedTurn(
+			model,
+			key
+		), identities(turn).contains(identity),
+		var review = model.review.conversations[key]
+		else
+		{
+			return false
+		}
+		review.markerRevision += 1
+		review.pendingMarkerLoad = nil
+		review.loadedMarkerSnapshot = nil
+		let operation = ReviewMarkerWriteOperation(
+			context: context,
+			conversation: key,
+			identity: identity,
+			reviewed: reviewed,
+			sourceRevision: review.sourceRevision,
+			markerRevision: review.markerRevision
+		)
+		review.pendingMarkerWrites[identity.reference] = operation
+		review.markerFingerprints[identity.reference] = reviewed ? identity.fingerprint : nil
+		review.error = nil
+		model.review.conversations[key] = review
+		result.effects.append(.writeReviewMarker(operation))
+		return true
+	}
+
+	private static func applyReceivedMarkers(
+		operation: ReviewMarkerReadOperation,
+		outcome: OperationResult<[ReviewMarkerIdentity]>,
+		model: inout WorkspaceModel
+	) -> Bool
+	{
+		guard valid(
+			operation.context,
+			model
+		),
+			var review = model.review.conversations[operation.conversation],
+			review.pendingMarkerLoad == operation
+		else
+		{
+			return false
+		}
+		// A matching ticket always retires, even when its conversation is offscreen.
+		// A superseded ticket cannot retire a newer read or alter its source snapshot.
+		review.pendingMarkerLoad = nil
+		guard model.conversations.content[operation.conversation]?.reviewSourceRevision
+			== operation.sourceRevision,
+			review.sourceRevision == operation.sourceRevision,
+			review.markerRevision == operation.markerRevision,
+			review.selectedTurnID == operation.turnID,
+			let turn = selectedTurn(
+				model,
+				operation.conversation
+			),
+			identities(turn) == operation.identities
+		else
+		{
+			review.loadedMarkerSnapshot = nil
+			model.review.conversations[operation.conversation] = review
+			return false
+		}
+
+		switch outcome
+		{
+		case .succeeded(let marked):
+			let accepted = Set(marked).intersection(operation.identities)
+			for identity in operation.identities
+			{
+				review.markerFingerprints[identity.reference] = accepted.contains(identity)
+					? identity.fingerprint : nil
+			}
+			review.error = nil
+		case .failed(let failure): review.error = failure.message
+		}
+		model.review.conversations[operation.conversation] = review
+		return true
+	}
+
+	private static func finishMarkerPersistence(
+		operation: ReviewMarkerWriteOperation,
+		outcome: OperationResult<Void>,
+		model: inout WorkspaceModel
+	) -> Bool
+	{
+		guard valid(
+			operation.context,
+			model
+		),
+			var review = model.review.conversations[operation.conversation],
+			review.pendingMarkerWrites[operation.identity.reference] == operation
+		else
+		{
+			return false
+		}
+		review.pendingMarkerWrites[operation.identity.reference] = nil
+		if model.conversations.selectedConversation == operation.conversation,
+			review.markerRevision == operation.markerRevision,
+			review.sourceRevision == operation.sourceRevision,
+			selectedTurn(
+			model,
+			operation.conversation
+			).map(
+			{
+				identities($0)
+					.contains(operation.identity)
+			}
+			) == true
+		{
+			switch outcome
+			{
+			case .succeeded: review.error = nil
+			case .failed(let failure): review.error = failure.message
+			}
+		}
+		model.review.conversations[operation.conversation] = review
+		return true
 	}
 
 	/// Runs after accepted content composition and before the store publishes its atomic value.
@@ -380,30 +438,13 @@ enum ReviewReducer
 			var review = model.review.conversations[key] ?? ConversationReviewModel()
 			if review.sourceRevision != content.reviewSourceRevision
 			{
-				let followed = review.selectedTurnID == nil
+				let wasFollowingLatestTurn = review.selectedTurnID == nil
 					|| review.selectedTurnID == review.turns.last?.turnID
-				review.turns = threadID(key).map
-				{
-					thread in
-					content.loadedTurns.enumerated().map
-					{
-						index, turn in
-						ReviewAnalyzer.review(
-							threadID: thread,
-							turn: turn,
-							earlierTurns: Array(content.loadedTurns.prefix(index)),
-							laterTurns: Array(content.loadedTurns.dropFirst(index + 1)),
-							hasEarlierHistory: content.nextTurnsCursor != nil,
-							hasLaterLiveChanges: content.liveChangeTurnID != nil
-								&& (content.loadedTurns.firstIndex(where:
-									{
-										$0.id == content.liveChangeTurnID
-									})
-									?? content.loadedTurns.count) > index
-						)
-					}
-				} ?? []
-				if followed || !review.turns.contains(where:
+				review.turns = analyzedTurns(
+					in: content,
+					conversation: key
+				)
+				if wasFollowingLatestTurn || !review.turns.contains(where:
 					{
 						$0.turnID == review.selectedTurnID
 					})
@@ -435,7 +476,9 @@ enum ReviewReducer
 			{
 				continue
 			}
-			var scoped = context; scoped.threadID = turn.threadID; scoped.turnID = turn.turnID
+			var scoped = context
+			scoped.threadID = turn.threadID
+			scoped.turnID = turn.turnID
 			let operation = ReviewMarkerReadOperation(
 				context: scoped,
 				conversation: key,
@@ -447,6 +490,37 @@ enum ReviewReducer
 			model.review.conversations[key]?.pendingMarkerLoad = operation
 			model.review.conversations[key]?.loadedMarkerSnapshot = snapshot
 			result.effects.append(.readReviewMarkers(operation))
+		}
+	}
+
+	private static func analyzedTurns(
+		in content: ConversationContentModel,
+		conversation: ConversationKey
+	) -> [ReviewTurn]
+	{
+		guard let threadID = threadID(conversation)
+		else
+		{
+			return []
+		}
+
+		return content.loadedTurns.enumerated().map
+		{
+			index, turn in
+			let hasLaterLiveChanges = content.liveChangeTurnID != nil
+				&& (content.loadedTurns.firstIndex(where:
+					{
+						$0.id == content.liveChangeTurnID
+					}) ?? content.loadedTurns.count) > index
+
+			return ReviewAnalyzer.review(
+				threadID: threadID,
+				turn: turn,
+				earlierTurns: Array(content.loadedTurns.prefix(index)),
+				laterTurns: Array(content.loadedTurns.dropFirst(index + 1)),
+				hasEarlierHistory: content.nextTurnsCursor != nil,
+				hasLaterLiveChanges: hasLaterLiveChanges
+			)
 		}
 	}
 
@@ -479,6 +553,7 @@ enum ReviewReducer
 		)): return context
 		case .execution(.backendObserved(
 			let context,
+			_,
 			_
 		)),
 		.execution(.reconciliationFinished(

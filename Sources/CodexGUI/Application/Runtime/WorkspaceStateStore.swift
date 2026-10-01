@@ -483,7 +483,10 @@ final class WorkspaceStateStore
 		{
 			switch event
 			{
-			case .backendObserved(let event):
+			case .backendObserved(
+				let event,
+				_
+			):
 				switch event
 				{
 				case .itemStarted, .itemCompleted, .agentMessageDelta,

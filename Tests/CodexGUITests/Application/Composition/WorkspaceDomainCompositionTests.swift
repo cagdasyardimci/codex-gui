@@ -133,7 +133,8 @@ struct WorkspaceDomainCompositionTests
 			_, action in
 			guard case .execution(.backendObserved(
 				_,
-				let event
+				let event,
+				_
 			)) = action
 			else
 			{

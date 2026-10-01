@@ -6,6 +6,42 @@ import Testing
 @MainActor
 struct WorkspaceStoreFactoryTests
 {
+	@Test func factoryCapturesLiveTurnTimesWhenBackendOmitsThem() async throws
+	{
+		let (store, service, _, defaults, suite) = fixture()
+		defer
+		{
+			store.shutdown()
+			defaults.removePersistentDomain(forName: suite)
+		}
+		await store.inputs.connect()
+		let before = Date()
+		service.emit(.turnStarted(
+			threadId: service.thread.id,
+			turn: service.turn
+		))
+		let timing = try #require(store.currentSnapshot.turnTimings.first)
+		let start = try #require(timing.startedAt)
+		#expect(start >= before && start <= Date())
+		service.emit(.turnStarted(
+			threadId: service.thread.id,
+			turn: service.turn
+		))
+		#expect(store.currentSnapshot.turnTimings.first?.startedAt == start)
+		service.emit(.turnCompleted(
+			threadId: service.thread.id,
+			turn: CodexTurn(
+				id: service.turn.id,
+				status: "completed",
+				items: [],
+				error: nil
+			)
+		))
+		let completed = try #require(store.currentSnapshot.turnTimings.first)
+		#expect(completed.startedAt == start)
+		#expect(try #require(completed.completedAt) >= start)
+	}
+
 	private func fixture(
 		publicationWait: @escaping @MainActor () async -> Void =
 		{
