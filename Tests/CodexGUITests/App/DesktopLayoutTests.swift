@@ -147,7 +147,13 @@ struct DesktopLayoutTests
 					width: 32,
 					height: 32
 				))
-				#expect(split.view.frame.minX == 53)
+				let workspaceFrame = split.view.convert(
+					split.view.bounds,
+					to: content
+				)
+				#expect(workspaceFrame.minX == 53)
+				#expect(abs(workspaceFrame.maxX - (content.bounds.maxX - 4)) < 0.5)
+				#expect(abs(workspaceFrame.minY - (content.bounds.minY + 4)) < 0.5)
 				#expect(window.toolbar?.items.contains
 				{
 					$0.itemIdentifier.rawValue == "status"

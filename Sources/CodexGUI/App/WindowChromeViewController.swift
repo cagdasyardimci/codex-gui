@@ -21,12 +21,14 @@ final class WindowChromeViewController: NSViewController
 			DesktopTheme.selection,
 			cornerRadius: 16
 		)
-		let divider = DesktopSurface(DesktopTheme.border)
-		for child in [column, split.view, divider]
+		let panel = RoundedContentPanel()
+		for child in [column, panel]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 			view.addSubview(child)
 		}
+		split.view.translatesAutoresizingMaskIntoConstraints = false
+		panel.addSubview(split.view)
 		avatar.translatesAutoresizingMaskIntoConstraints = false
 		accountButton.translatesAutoresizingMaskIntoConstraints = false
 		column.addSubview(avatar)
@@ -46,19 +48,72 @@ final class WindowChromeViewController: NSViewController
 			avatar.heightAnchor.constraint(equalToConstant: 32),
 			accountButton.centerXAnchor.constraint(equalTo: avatar.centerXAnchor),
 			accountButton.centerYAnchor.constraint(equalTo: avatar.centerYAnchor),
-			divider.leadingAnchor.constraint(equalTo: column.trailingAnchor),
-			divider.topAnchor.constraint(equalTo: view.topAnchor),
-			divider.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-			divider.widthAnchor.constraint(equalToConstant: 1),
-			split.view.leadingAnchor.constraint(equalTo: divider.trailingAnchor),
-			split.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-			split.view.topAnchor.constraint(equalTo: view.topAnchor),
-			split.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+			panel.leadingAnchor.constraint(equalTo: column.trailingAnchor),
+			panel.trailingAnchor.constraint(
+				equalTo: view.trailingAnchor,
+				constant: -4
+			),
+			panel.topAnchor.constraint(equalTo: view.topAnchor),
+			panel.bottomAnchor.constraint(
+				equalTo: view.bottomAnchor,
+				constant: -4
+			),
+			split.view.leadingAnchor.constraint(
+				equalTo: panel.leadingAnchor,
+				constant: 1
+			),
+			split.view.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
+			split.view.topAnchor.constraint(equalTo: panel.topAnchor),
+			split.view.bottomAnchor.constraint(equalTo: panel.bottomAnchor),
 		])
 	}
 
 	required init?(coder: NSCoder)
 	{
 		nil
+	}
+}
+
+/// Clips workspace content and draws its rounded border inside the window chrome.
+@MainActor
+private final class RoundedContentPanel: NSView
+{
+	// The inner curve accounts for the 4-point inset from the window corner.
+	private let cornerRadius: CGFloat = 16
+
+	override init(frame frameRect: NSRect)
+	{
+		super.init(frame: frameRect)
+		wantsLayer = true
+		layer?.cornerRadius = cornerRadius
+		layer?.cornerCurve = .continuous
+		layer?.borderWidth = 1
+		layer?.masksToBounds = true
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
+	override func layout()
+	{
+		super.layout()
+		let radius = min(
+			cornerRadius,
+			bounds.height / 2,
+			bounds.width
+		)
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		layer?.cornerRadius = radius
+		layer?.borderColor = DesktopTheme.border.cgColor
+		CATransaction.commit()
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsLayout = true
 	}
 }
