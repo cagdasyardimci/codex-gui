@@ -286,8 +286,16 @@ extension ConversationViewController
 		approvalPolicyButton.title = approvalMode.title
 		approvalPolicyButton.toolTip = "\(approvalMode.title): \(approvalMode.description)"
 		approvalPolicyButton.setAccessibilityLabel("Approval policy: \(approvalMode.title)")
-		approvalPolicyButton.contentTintColor =
-			approvalMode == .fullAccess ? .systemOrange : .secondaryLabelColor
+		let approvalTint: NSColor = approvalMode == .fullAccess
+			? ApprovalPopoverStyle.fullAccess : .secondaryLabelColor
+		approvalPolicyButton.contentTintColor = approvalTint
+		approvalPolicyButton.attributedTitle = NSAttributedString(
+			string: approvalMode.title,
+			attributes: [
+				.font: NSFont.systemFont(ofSize: 13),
+				.foregroundColor: approvalTint,
+			]
+		)
 		let approvalSymbol: String
 		switch approvalMode
 		{

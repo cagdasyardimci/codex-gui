@@ -14,8 +14,8 @@ final class ApprovalPolicyPopoverView: NSViewController
 			bundle: nil
 		)
 		preferredContentSize = NSSize(
-			width: 440,
-			height: 220
+			width: 434,
+			height: 159
 		)
 	}
 
@@ -27,13 +27,16 @@ final class ApprovalPolicyPopoverView: NSViewController
 	override func loadView()
 	{
 		let surface = DesktopSurface(
-			DesktopTheme.inspector,
-			cornerRadius: 16
+			NSColor.textBackgroundColor,
+			cornerRadius: 10
 		)
-		let heading = NSTextField(labelWithString: "How should actions be approved?")
+		let heading = NSTextField(labelWithString: "How should Codex actions be approved?")
 		heading.font = .systemFont(ofSize: 13)
-		heading.textColor = .secondaryLabelColor
+		heading.textColor = ApprovalPopoverStyle.secondary
 		heading.setAccessibilityLabel(heading.stringValue)
+		let header = NSStackView(views: [heading, NSView()])
+		header.orientation = .horizontal
+		header.spacing = 8
 		let modes: [ApprovalMode] = [.askForApproval, .approveForMe, .fullAccess]
 		rows = modes.map
 		{
@@ -50,24 +53,25 @@ final class ApprovalPolicyPopoverView: NSViewController
 			}
 			return row
 		}
-		let arrangedViews: [NSView] = [heading] + rows
+		let arrangedViews: [NSView] = [header] + rows
 		let stack = AppKitLayout.verticalStack(
 			arrangedViews,
-			spacing: 2
+			spacing: 0
 		)
 		stack.setCustomSpacing(
-			10,
-			after: heading
+			6,
+			after: header
 		)
 		AppKitLayout.pin(
 			stack,
 			to: surface,
-			inset: 12
+			inset: 8
 		)
+		header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		for row in rows
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-			row.heightAnchor.constraint(equalToConstant: 54).isActive = true
+			row.heightAnchor.constraint(equalToConstant: 42).isActive = true
 		}
 		for index in rows.indices
 		{
@@ -139,7 +143,7 @@ private final class ApprovalPolicyRow: NSButton
 	let mode: ApprovalMode
 	var onNavigate: ((Int) -> Void)?
 	private let titleLabel = NSTextField(labelWithString: "")
-	private let explanation = NSTextField(wrappingLabelWithString: "")
+	private let explanation = NSTextField(labelWithString: "")
 	private let symbolView = NSImageView()
 	private let checkView = NSImageView()
 	private var tracking: NSTrackingArea?
@@ -159,9 +163,19 @@ private final class ApprovalPolicyRow: NSButton
 
 		titleLabel.stringValue = mode.title
 		titleLabel.font = .systemFont(ofSize: 13)
-		explanation.stringValue = mode.description
+		switch mode
+		{
+		case .askForApproval:
+			explanation.stringValue = "Always ask to edit external files and use the internet"
+		case .approveForMe:
+			explanation.stringValue = "Only ask for actions detected as potentially unsafe"
+		case .fullAccess:
+			explanation.stringValue =
+				"Unrestricted access to the internet and any file on your computer"
+		}
 		explanation.font = .systemFont(ofSize: 12)
-		explanation.maximumNumberOfLines = 2
+		explanation.maximumNumberOfLines = 1
+		explanation.lineBreakMode = .byClipping
 
 		let symbol: String
 		switch mode
@@ -174,6 +188,10 @@ private final class ApprovalPolicyRow: NSButton
 			systemSymbolName: symbol,
 			accessibilityDescription: nil
 		)
+		if mode == .approveForMe
+		{
+			symbolView.image = Self.reviewerSymbol()
+		}
 		checkView.image = NSImage(
 			systemSymbolName: "checkmark",
 			accessibilityDescription: nil
@@ -189,22 +207,22 @@ private final class ApprovalPolicyRow: NSButton
 		NSLayoutConstraint.activate([
 			symbolView.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
-				constant: 8
+				constant: 2
 			),
 			symbolView.centerYAnchor.constraint(equalTo: centerYAnchor),
 			symbolView.widthAnchor.constraint(equalToConstant: 16),
 			symbolView.heightAnchor.constraint(equalToConstant: 18),
 			titleLabel.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
-				constant: 32
+				constant: 24
 			),
 			titleLabel.topAnchor.constraint(
 				equalTo: topAnchor,
-				constant: 6
+				constant: 3
 			),
 			titleLabel.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
-				constant: -28
+				constant: -22
 			),
 			explanation.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
 			explanation.topAnchor.constraint(
@@ -213,7 +231,7 @@ private final class ApprovalPolicyRow: NSButton
 			),
 			explanation.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
-				constant: -28
+				constant: -22
 			),
 			explanation.bottomAnchor.constraint(
 				lessThanOrEqualTo: bottomAnchor,
@@ -221,7 +239,7 @@ private final class ApprovalPolicyRow: NSButton
 			),
 			checkView.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
-				constant: -8
+				constant: -2
 			),
 			checkView.centerYAnchor.constraint(equalTo: centerYAnchor),
 			checkView.widthAnchor.constraint(equalToConstant: 14),
@@ -235,6 +253,95 @@ private final class ApprovalPolicyRow: NSButton
 		nil
 	}
 
+	private static func reviewerSymbol() -> NSImage
+	{
+		let image = NSImage(
+			size: NSSize(
+				width: 16,
+				height: 18
+			),
+			flipped: false
+		)
+		{
+			_ in
+			NSColor.black.setStroke()
+			let shield = NSBezierPath()
+			shield.move(to: NSPoint(
+				x: 8,
+				y: 17
+			))
+			shield.line(to: NSPoint(
+				x: 14,
+				y: 14
+			))
+			shield.line(to: NSPoint(
+				x: 14,
+				y: 8
+			))
+			shield.curve(
+				to: NSPoint(
+					x: 8,
+					y: 1
+				),
+				controlPoint1: NSPoint(
+					x: 14,
+					y: 4
+				),
+				controlPoint2: NSPoint(
+					x: 11,
+					y: 1
+				)
+			)
+			shield.curve(
+				to: NSPoint(
+					x: 2,
+					y: 8
+				),
+				controlPoint1: NSPoint(
+					x: 5,
+					y: 1
+				),
+				controlPoint2: NSPoint(
+					x: 2,
+					y: 4
+				)
+			)
+			shield.line(to: NSPoint(
+				x: 2,
+				y: 14
+			))
+			shield.close()
+			shield.lineWidth = 1.3
+			shield.stroke()
+			let prompt = NSBezierPath()
+			prompt.move(to: NSPoint(
+				x: 5,
+				y: 11
+			))
+			prompt.line(to: NSPoint(
+				x: 7,
+				y: 9
+			))
+			prompt.line(to: NSPoint(
+				x: 5,
+				y: 7
+			))
+			prompt.move(to: NSPoint(
+				x: 9,
+				y: 7
+			))
+			prompt.line(to: NSPoint(
+				x: 11,
+				y: 7
+			))
+			prompt.lineWidth = 1.3
+			prompt.stroke()
+			return true
+		}
+		image.isTemplate = true
+		return image
+	}
+
 	override var acceptsFirstResponder: Bool
 	{
 		true
@@ -244,10 +351,11 @@ private final class ApprovalPolicyRow: NSButton
 	{
 		self.selected = selected
 		let highlightsFullAccess = selected && mode == .fullAccess
-		let tint: NSColor = highlightsFullAccess ? .systemOrange : .labelColor
+		let tint: NSColor = highlightsFullAccess
+			? ApprovalPopoverStyle.fullAccess : ApprovalPopoverStyle.primary
 		titleLabel.textColor = tint
-		explanation.textColor = highlightsFullAccess ? tint : .secondaryLabelColor
-		symbolView.contentTintColor = selected ? tint : .secondaryLabelColor
+		explanation.textColor = highlightsFullAccess ? tint : ApprovalPopoverStyle.secondary
+		symbolView.contentTintColor = highlightsFullAccess ? tint : ApprovalPopoverStyle.primary
 		checkView.contentTintColor = tint
 		checkView.isHidden = !selected
 		setAccessibilityValue(selected ? "Selected" : "Not selected")
@@ -317,6 +425,44 @@ private final class ApprovalPolicyRow: NSButton
 		case 119: onNavigate?(.max)
 		case 36, 76, 49: performClick(nil)
 		default: super.keyDown(with: event)
+		}
+	}
+}
+
+enum ApprovalPopoverStyle
+{
+	static let fullAccess = NSColor(
+		srgbRed: 1,
+		green: 0.29,
+		blue: 0,
+		alpha: 1
+	)
+	static let primary = color(
+		light: 0.13,
+		dark: 0.9
+	)
+	static let secondary = color(
+		light: 0.57,
+		dark: 0.6
+	)
+	static let icon = color(
+		light: 0.33,
+		dark: 0.75
+	)
+
+	private static func color(
+		light: CGFloat,
+		dark: CGFloat
+	) -> NSColor
+	{
+		NSColor(name: nil)
+		{
+			appearance in
+			NSColor(
+				white: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+					? dark : light,
+				alpha: 1
+			)
 		}
 	}
 }
