@@ -4,6 +4,7 @@ import AppKit
 @MainActor
 final class TurnNavigationRail: NSView
 {
+	private static let markHeight: CGFloat = 14
 	var onJump: ((ConversationTurnSummary) -> Void)?
 	var onBookmark: ((ConversationTurnSummary) -> Void)?
 	var isBookmarked: ((ConversationTurnSummary) -> Bool)?
@@ -12,6 +13,7 @@ final class TurnNavigationRail: NSView
 	private let scrollView = NSScrollView()
 	private let document = NSView()
 	private var marks: [TurnNavigationMark] = []
+	private var hoveredEntryID: String?
 	private(set) var previewPanel: NSPanel?
 	private var previewTurnID: String?
 	private var dismissal: DispatchWorkItem?
@@ -46,6 +48,7 @@ final class TurnNavigationRail: NSView
 		summaries = next
 		if identitiesChanged
 		{
+			hoveredEntryID = nil
 			dismissPreview()
 			marks.forEach
 			{
@@ -70,11 +73,19 @@ final class TurnNavigationRail: NSView
 					{
 						return
 					}
+					self?.hoveredEntryID = mark.entryID
+					self?.updateMarkAppearance()
 					self?.showPreview(for: mark)
 				}
 				mark.onExit =
 				{
-					[weak self] in self?.scheduleDismissal()
+					[weak self, weak mark] in
+					if self?.hoveredEntryID == mark?.entryID
+					{
+						self?.hoveredEntryID = nil
+						self?.updateMarkAppearance()
+					}
+					self?.scheduleDismissal()
 				}
 				document.addSubview(mark)
 				return mark
@@ -100,7 +111,7 @@ final class TurnNavigationRail: NSView
 		super.layout()
 		let height = min(
 			bounds.height,
-			CGFloat(marks.count) * 14
+			CGFloat(marks.count) * Self.markHeight
 		)
 		scrollView.frame = NSRect(
 			x: 0,
@@ -112,15 +123,15 @@ final class TurnNavigationRail: NSView
 			x: 0,
 			y: 0,
 			width: bounds.width,
-			height: CGFloat(marks.count) * 14
+			height: CGFloat(marks.count) * Self.markHeight
 		)
 		for (index, mark) in marks.enumerated()
 		{
 			mark.frame = NSRect(
 				x: 0,
-				y: document.bounds.height - CGFloat(index + 1) * 14,
+				y: document.bounds.height - CGFloat(index + 1) * Self.markHeight,
 				width: bounds.width,
-				height: 14
+				height: Self.markHeight
 			)
 		}
 	}
@@ -128,9 +139,34 @@ final class TurnNavigationRail: NSView
 	func updateActiveTurn(_ turnID: String?)
 	{
 		activeTurnID = turnID
+		updateMarkAppearance()
+	}
+
+	private func updateMarkAppearance()
+	{
+		let highlightedIndex = summaries.firstIndex
+		{
+			if let hoveredEntryID
+			{
+				return $0.entryID == hoveredEntryID
+			}
+			return $0.turnID == activeTurnID
+		}
 		for (index, mark) in marks.enumerated()
 		{
-			mark.isCurrent = summaries[index].turnID == turnID
+			mark.isEmphasized = index == highlightedIndex
+			let distance = highlightedIndex.map
+			{
+				abs(index - $0)
+			}
+			mark.lineWidth = distance.map
+			{
+				// Four tapering marks on either side make a nine-mark triangle.
+				max(
+					8,
+					26 - CGFloat($0) * 4.5
+				)
+			} ?? 8
 			mark.needsDisplay = true
 		}
 	}
@@ -311,8 +347,16 @@ final class TurnNavigationRail: NSView
 private final class TurnNavigationMark: NSButton
 {
 	var entryID = ""
-	var isCurrent = false
-	private var isHovered = false
+	var isEmphasized = false
+	var lineWidth: CGFloat = 8
+	private static let highlightedColor = gray(
+		light: 0x80,
+		dark: 0xE6
+	)
+	private static let ordinaryColor = gray(
+		light: 0xD5,
+		dark: 0x41
+	)
 	var onEnter: (() -> Void)?
 	var onExit: (() -> Void)?
 
@@ -334,26 +378,45 @@ private final class TurnNavigationMark: NSButton
 
 	override func mouseEntered(with event: NSEvent)
 	{
-		isHovered = true
-		needsDisplay = true
 		onEnter?()
 	}
 	override func mouseExited(with event: NSEvent)
 	{
-		isHovered = false
-		needsDisplay = true
 		onExit?()
+	}
+
+	private static func gray(
+		light: CGFloat,
+		dark: CGFloat
+	) -> NSColor
+	{
+		NSColor(name: nil)
+		{
+			appearance in
+			let value = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+			return NSColor(
+				srgbRed: value / 255,
+				green: value / 255,
+				blue: value / 255,
+				alpha: 1
+			)
+		}
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
 	}
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		(isCurrent || isHovered ? NSColor.labelColor : NSColor.tertiaryLabelColor).setFill()
-		let width: CGFloat = isCurrent || isHovered ? 26 : 18
+		(isEmphasized ? Self.highlightedColor : Self.ordinaryColor).setFill()
 		NSBezierPath(
 			roundedRect: NSRect(
 				x: 3,
 				y: bounds.midY - 1,
-				width: width,
+				width: lineWidth,
 				height: 2
 			),
 			xRadius: 1,
