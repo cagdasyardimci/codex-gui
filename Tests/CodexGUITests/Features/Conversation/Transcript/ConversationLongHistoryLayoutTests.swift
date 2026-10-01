@@ -371,12 +371,9 @@ struct ConversationLongHistoryLayoutTests
 		let manager = try #require(text.layoutManager as? ConversationMarkdownLayoutManager)
 		let container = try #require(text.textContainer)
 		manager.ensureLayout(for: container)
-		let buttons = text.subviews.compactMap
+		let buttons = allButtons(in: item.view).filter
 		{
-			$0 as? NSButton
-		}.filter
-		{
-			$0.title.hasPrefix("Copy code")
+			($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
 		}.sorted
 		{
 			$0.tag < $1.tag
@@ -386,8 +383,9 @@ struct ConversationLongHistoryLayoutTests
 		{
 			let button = buttons[index]
 			#expect(button.tag == index)
-			#expect(button.title == "Copy code \(index + 1)")
-			#expect(button.superview === text)
+			#expect(button.accessibilityLabel() == "Copy code block \(index + 1)")
+			#expect(button.title.isEmpty && button.imagePosition == .imageOnly)
+			#expect(button.superview !== text)
 			let card = try #require(manager.codeBlockRect(
 				atCharacter: range.location,
 				in: container
@@ -402,9 +400,13 @@ struct ConversationLongHistoryLayoutTests
 				dx: text.textContainerOrigin.x,
 				dy: text.textContainerOrigin.y
 			)
-			#expect(header.contains(button.frame))
-			#expect(card.contains(button.frame))
-			#expect(text.bounds.contains(button.frame))
+			let buttonFrame = text.convert(
+				button.bounds,
+				from: button
+			)
+			#expect(header.contains(buttonFrame))
+			#expect(card.contains(buttonFrame))
+			#expect(text.bounds.contains(buttonFrame))
 			if index < 3
 			{
 				#expect((text.string as NSString).substring(with: range) == content
@@ -594,6 +596,17 @@ struct ConversationLongHistoryLayoutTests
 		case 1: "> quoted history with `inline code` and 😀"
 		case 2: "| Name | Value |\n| :--- | ---: |\n| earlier result | 42 |"
 		default: "~~~text\n  exact code 😀\n~~~"
+		}
+	}
+
+	private func allButtons(in view: NSView) -> [NSButton]
+	{
+		((view as? NSButton).map
+		{
+			[$0]
+		} ?? []) + view.subviews.flatMap
+		{
+			allButtons(in: $0)
 		}
 	}
 

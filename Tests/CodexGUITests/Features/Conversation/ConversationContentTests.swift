@@ -319,20 +319,36 @@ struct ConversationContentTests
 
 		let buttons = allButtons(in: item.view).filter
 		{
-			$0.title.hasPrefix("Copy code")
+			($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
 		}
 		let textView = try #require(findTextView(in: item.view))
-		#expect(buttons.map(\.title) == ["Copy code 1", "Copy code 2"])
+		#expect(buttons.map
+		{
+			$0.accessibilityLabel()
+		} == [
+			"Copy code block 1",
+			"Copy code block 2"
+		])
 		try #require(buttons.count == 2)
 		#expect(buttons.allSatisfy
 		{
-			$0.superview === textView
+			$0.superview !== textView && $0.title.isEmpty && $0.imagePosition == .imageOnly
 		})
 		#expect(buttons.allSatisfy
 		{
-			$0.frame.maxX <= textView.bounds.width
+			textView.convert(
+				$0.bounds,
+				from: $0
+			).maxX <= textView.bounds.width
 		})
-		#expect(buttons[0].frame.minY < buttons[1].frame.minY)
+		#expect(textView.convert(
+			buttons[0].bounds,
+			from: buttons[0]
+		).minY
+			< textView.convert(
+				buttons[1].bounds,
+				from: buttons[1]
+			).minY)
 		for (index, range) in content.codeBlockRanges.enumerated()
 		{
 			#expect(

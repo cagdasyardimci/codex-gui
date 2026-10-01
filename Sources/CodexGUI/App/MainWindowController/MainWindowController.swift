@@ -48,7 +48,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		self.onOpenProjectRequest = onOpenProject
 		self.onInsertPathRequest = onInsertPath
 		self.coordinator = coordinator
-		let window = NSWindow(
+		let window = DesktopWindow(
 			contentRect: NSRect(
 				x: 0,
 				y: 0,
@@ -60,6 +60,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			defer: false
 		)
 		window.title = "Codex GUI"
+		window.acceptsMouseMovedEvents = true
 		window.titleVisibility = .hidden
 		window.titlebarAppearsTransparent = true
 		window.titlebarSeparatorStyle = .none

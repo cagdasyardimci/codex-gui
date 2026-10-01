@@ -53,7 +53,7 @@ struct ConversationMarkdownRenderingTests
 		#expect(content.codeBlocks.isEmpty)
 		#expect(allButtons(in: item.view).allSatisfy
 		{
-			!$0.title.hasPrefix("Copy code")
+			!($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
 		})
 		#expect(textView.isSelectable)
 		#expect(!textView.isEditable)
@@ -668,7 +668,7 @@ struct ConversationMarkdownRenderingTests
 			#expect(pasteboard.string(forType: .string) == "  let value = \"😀\"  \n")
 			#expect(allButtons(in: item.view).filter
 			{
-				$0.title.hasPrefix("Copy code")
+				($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
 			}.count == 1)
 		}
 		#expect(body.hasPrefix("# User heading"))
@@ -721,7 +721,7 @@ struct ConversationMarkdownRenderingTests
 		let textView = try #require(findTextView(in: item.view))
 		let buttons = allButtons(in: item.view).filter
 		{
-			$0.title.hasPrefix("Copy code")
+			($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
 		}
 		try #require(buttons.count == 1)
 		let range = try #require(content.codeBlockRanges.first)
@@ -743,9 +743,14 @@ struct ConversationMarkdownRenderingTests
 			in: container
 		))
 		#expect(header.minY < line.minY)
-		#expect(abs(buttons[0].frame.minY - (textView.textContainerOrigin.y + header.minY)) < 0.5)
-		#expect(buttons[0].superview === textView)
-		#expect(buttons[0].frame.maxX <= textView.bounds.width)
+		let buttonFrame = textView.convert(
+			buttons[0].bounds,
+			from: buttons[0]
+		)
+		#expect(abs(buttonFrame.midY - (textView.textContainerOrigin.y + header.midY)) < 0.5)
+		#expect(buttons[0].superview !== textView)
+		#expect(buttons[0].title.isEmpty && buttons[0].imagePosition == .imageOnly)
+		#expect(buttonFrame.maxX <= textView.bounds.width)
 	}
 
 	@Test func nativeCodeCardsStaySeparateAndLeaveTheFollowingMarkerVisible() async throws
@@ -785,10 +790,10 @@ struct ConversationMarkdownRenderingTests
 			manager.ensureLayout(for: container)
 			let buttons = allButtons(in: item.view).filter
 			{
-				$0.title.hasPrefix("Copy code")
+				($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
 			}.sorted
 			{
-				$0.frame.minY < $1.frame.minY
+				$0.tag < $1.tag
 			}
 			try #require(buttons.count == 3)
 			var cards: [NSRect] = []
@@ -802,8 +807,12 @@ struct ConversationMarkdownRenderingTests
 					atCharacter: range.location,
 					in: container
 				))
-				#expect(abs(buttons[index].frame.minY
-						- (textView.textContainerOrigin.y + header.minY)) < 0.5)
+				let buttonFrame = textView.convert(
+					buttons[index].bounds,
+					from: buttons[index]
+				)
+				#expect(abs(buttonFrame.midY
+						- (textView.textContainerOrigin.y + header.midY)) < 0.5)
 				#expect(card.contains(header))
 				#expect(card.minX >= 0 && card.maxX <= container.size.width + 0.5)
 				#expect((textView.string as NSString).substring(with: range)
@@ -947,7 +956,7 @@ struct ConversationMarkdownRenderingTests
 				#expect(nestedRail.maxY >= quotedBottom - 0.5)
 				let buttons = allButtons(in: item.view).filter
 				{
-					$0.title.hasPrefix("Copy code")
+					($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
 				}.sorted
 				{
 					$0.tag < $1.tag
@@ -991,7 +1000,10 @@ struct ConversationMarkdownRenderingTests
 					#expect(header.offsetBy(
 						dx: text.textContainerOrigin.x,
 						dy: text.textContainerOrigin.y
-					).contains(buttons[index].frame))
+					).contains(text.convert(
+						buttons[index].bounds,
+						from: buttons[index]
+					)))
 					if let previous = cards.last
 					{
 						#expect(card.minY - previous.maxY >= 7.5)
