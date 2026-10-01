@@ -6,6 +6,41 @@ import Testing
 @Suite @MainActor
 struct NavigationViewControllerTests
 {
+	@Test func progressRingStopsWhenDetachedOrCellIsReused() throws
+	{
+		_ = NSApplication.shared
+		let cell = TaskSidebarCellView(frame: NSRect(
+			x: 0,
+			y: 0,
+			width: 240,
+			height: 30
+		))
+		let window = NSWindow(
+			contentRect: cell.frame,
+			styleMask: [],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.close()
+		}
+		cell.setTurnRunning(true)
+		window.contentView?.addSubview(cell)
+		cell.layoutSubtreeIfNeeded()
+		let ringLayer = try #require(cell.progressRing.layer?.sublayers?.first)
+		#expect(ringLayer.animation(forKey: "taskRotation") != nil)
+		cell.removeFromSuperview()
+		#expect(ringLayer.animation(forKey: "taskRotation") == nil)
+		window.contentView?.addSubview(cell)
+		#expect(ringLayer.animation(forKey: "taskRotation") != nil)
+		cell.setTurnRunning(false)
+		#expect(ringLayer.animation(forKey: "taskRotation") == nil)
+		#expect(cell.progressRing.isHidden)
+		cell.removeFromSuperview()
+	}
+
 	@Test func projectTasksExpandFiveThenTenInRecentOrder() throws
 	{
 		_ = NSApplication.shared
@@ -138,7 +173,10 @@ struct NavigationViewControllerTests
 		{
 			cell.removeFromSuperview(); window.orderOut(nil)
 		}
+		cell.setTurnRunning(true)
 		cell.layoutSubtreeIfNeeded()
+		#expect(cell.progressRing.frame.maxX == cell.bounds.maxX - 4)
+		#expect(cell.progressRing.alphaValue == 1)
 		let label = try #require(cell.textField)
 		let restingFrame = label.frame
 		#expect(label.alignmentRect(forFrame: restingFrame).minX == 26)
@@ -156,7 +194,14 @@ struct NavigationViewControllerTests
 			trackingNumber: 0,
 			userData: nil
 		))
+		cell.setTurnRunning(false)
+		cell.setUnread(true)
 		cell.mouseEntered(with: event)
+		#expect(cell.unreadDot.alphaValue == 0)
+		#expect(cell.progressRing.alphaValue == 0)
+		#expect(cell.archiveButton.superview?.alphaValue == 1)
+		cell.setTurnRunning(true)
+		#expect(cell.progressRing.alphaValue == 0)
 		let panel = try #require(cell.hoverCard?.panel)
 		#expect(panel.isVisible)
 		#expect(panel.parent === window)
@@ -176,6 +221,9 @@ struct NavigationViewControllerTests
 		#expect(archived == "hovered")
 		#expect(controller.selectedThreadID == "another")
 		cell.mouseExited(with: event)
+		#expect(cell.progressRing.alphaValue == 1)
+		#expect(cell.unreadDot.alphaValue == 1)
+		#expect(cell.archiveButton.superview?.alphaValue == 0)
 		#expect(cell.hoverCard?.panel == nil)
 		#expect(!panel.isVisible)
 		cell.layoutSubtreeIfNeeded()
@@ -188,6 +236,7 @@ struct NavigationViewControllerTests
 			object: window
 		)
 		#expect(cell.hoverCard?.panel == nil)
+		#expect(cell.progressRing.alphaValue == 1)
 	}
 
 	@Test func streamedTranscriptAndUsageDoNotRebuildTaskPicker() throws
@@ -288,26 +337,30 @@ struct NavigationViewControllerTests
 		{
 			selectedThread = $0
 		}
-		var sidebarSnapshot = ConversationSnapshot(
-			projectPath: "/tmp/replay",
-			threads: [workingThread, historyThread],
-			selectedThreadID: "working",
-			entries: [],
-			canLoadEarlierTurns: false,
-			changedFiles: [],
-			diff: "",
-			draft: "",
-			canSend: false,
-			accountDescription: "Mock",
-			backendDescription: "Mock",
-			executionState: .running,
-			statusMessage: nil,
-			models: [],
-			selectedModelID: nil,
-			selectedEffort: nil,
-			pendingInteractions: [],
-			recentProjects: []
-		)
+		func makeSidebarSnapshot(selectedThreadID: String) -> ConversationSnapshot
+		{
+			ConversationSnapshot(
+				projectPath: "/tmp/replay",
+				threads: [workingThread, historyThread],
+				selectedThreadID: selectedThreadID,
+				entries: [],
+				canLoadEarlierTurns: false,
+				changedFiles: [],
+				diff: "",
+				draft: "",
+				canSend: false,
+				accountDescription: "Mock",
+				backendDescription: "Mock",
+				executionState: .running,
+				statusMessage: nil,
+				models: [],
+				selectedModelID: nil,
+				selectedEffort: nil,
+				pendingInteractions: [],
+				recentProjects: []
+			)
+		}
+		var sidebarSnapshot = makeSidebarSnapshot(selectedThreadID: "working")
 		sidebarSnapshot.activeThreadID = "working"
 		sidebarSnapshot.activeExecutionState = .awaitingApproval
 		controller.render(sidebarSnapshot)
@@ -325,6 +378,92 @@ struct NavigationViewControllerTests
 			byExtendingSelection: false
 		)
 		#expect(selectedThread == "history")
+
+		sidebarSnapshot.activeExecutionState = .running
+		controller.render(sidebarSnapshot)
+		let runningCell = try #require(controller.tableView(
+			table,
+			viewFor: nil,
+			row: 1
+		)
+			as? TaskSidebarCellView)
+		let historyCell = try #require(controller.tableView(
+			table,
+			viewFor: nil,
+			row: 2
+		)
+			as? TaskSidebarCellView)
+		#expect(runningCell.progressRing.isRunning)
+		#expect(!runningCell.progressRing.isHidden)
+		#expect(runningCell.textField?.stringValue == "Active work")
+		#expect(!historyCell.progressRing.isRunning)
+		#expect(historyCell.progressRing.isHidden)
+		for state in [ExecutionState.awaitingApproval,
+						.awaitingAnswer,
+						.stopping,
+						.completed,
+						.stopped,
+						.failed,
+						.disconnected]
+		{
+			sidebarSnapshot.activeExecutionState = state
+			controller.render(sidebarSnapshot)
+			let cell = try #require(controller.tableView(
+				table,
+				viewFor: nil,
+				row: 1
+			)
+				as? TaskSidebarCellView)
+			#expect(!cell.progressRing.isRunning)
+			#expect(cell.progressRing.isHidden)
+		}
+
+		sidebarSnapshot = makeSidebarSnapshot(selectedThreadID: "history")
+		sidebarSnapshot.activeThreadID = "working"
+		sidebarSnapshot.activeExecutionState = .completed
+		sidebarSnapshot.activeExecutionState = .running
+		controller.render(sidebarSnapshot)
+		sidebarSnapshot.activeExecutionState = .completed
+		controller.render(sidebarSnapshot)
+		let unreadCell = try #require(controller.tableView(
+			table,
+			viewFor: nil,
+			row: 1
+		)
+			as? TaskSidebarCellView)
+		#expect(!unreadCell.unreadDot.isHidden)
+		#expect(unreadCell.progressRing.isHidden)
+		#expect(unreadCell.textField?.stringValue == "Active work")
+		#expect(unreadCell.textField?.textColor == .labelColor)
+		#expect(unreadCell.accessibilityLabel()?.contains("Unread result") == true)
+		unreadCell.frame = NSRect(
+			x: 0,
+			y: 0,
+			width: 240,
+			height: 30
+		)
+		unreadCell.layoutSubtreeIfNeeded()
+		#expect(unreadCell.unreadDot.frame.midX == unreadCell.progressRing.frame.midX)
+		#expect(unreadCell.unreadDot.frame.width == 8)
+		sidebarSnapshot = makeSidebarSnapshot(selectedThreadID: "working")
+		sidebarSnapshot.activeThreadID = "working"
+		sidebarSnapshot.activeExecutionState = .completed
+		controller.render(sidebarSnapshot)
+		#expect(controller.unreadThreadIDs.isEmpty)
+		sidebarSnapshot = makeSidebarSnapshot(selectedThreadID: "history")
+		sidebarSnapshot.activeThreadID = "working"
+		sidebarSnapshot.activeExecutionState = .completed
+		controller.render(sidebarSnapshot)
+		#expect(controller.unreadThreadIDs.isEmpty)
+		sidebarSnapshot.activeExecutionState = .running
+		controller.render(sidebarSnapshot)
+		sidebarSnapshot.activeExecutionState = .completed
+		sidebarSnapshot.taskOutcomeUncertain = true
+		controller.render(sidebarSnapshot)
+		#expect(controller.unreadThreadIDs.isEmpty)
+		sidebarSnapshot.taskOutcomeUncertain = false
+		controller.render(sidebarSnapshot)
+		#expect(controller.unreadThreadIDs == ["working"])
 
 		sidebarSnapshot.activeThreadID = nil
 		sidebarSnapshot.activeExecutionState = .running

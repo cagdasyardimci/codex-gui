@@ -21,6 +21,8 @@ final class TaskSidebarCellView: NSTableCellView
 			hoverCard?.dismiss()
 		}
 	}
+	let progressRing = TaskProgressRingView(frame: .zero)
+	let unreadDot = NSView(frame: .zero)
 	private let actions = NSStackView()
 	private var hoverTrackingArea: NSTrackingArea?
 
@@ -65,12 +67,28 @@ final class TaskSidebarCellView: NSTableCellView
 		actions.spacing = 4
 		// Keep the title's available width fixed when hover actions appear.
 		actions.alphaValue = 0
-		for child in [label, actions]
+		unreadDot.wantsLayer = true
+		unreadDot.layer?.backgroundColor = NSColor.systemBlue.cgColor
+		unreadDot.layer?.cornerRadius = 4
+		unreadDot.isHidden = true
+		unreadDot.setAccessibilityElement(false)
+		for child in [label, progressRing, unreadDot, actions]
 		{
 			addSubview(child)
 			child.translatesAutoresizingMaskIntoConstraints = false
 		}
 		NSLayoutConstraint.activate([
+			unreadDot.widthAnchor.constraint(equalToConstant: 8),
+			unreadDot.heightAnchor.constraint(equalToConstant: 8),
+			unreadDot.centerXAnchor.constraint(equalTo: progressRing.centerXAnchor),
+			unreadDot.centerYAnchor.constraint(equalTo: centerYAnchor),
+			progressRing.widthAnchor.constraint(equalToConstant: 16),
+			progressRing.trailingAnchor.constraint(
+				equalTo: trailingAnchor,
+				constant: -4
+			),
+			progressRing.heightAnchor.constraint(equalToConstant: 16),
+			progressRing.centerYAnchor.constraint(equalTo: centerYAnchor),
 			label.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
 				constant: 26
@@ -92,6 +110,16 @@ final class TaskSidebarCellView: NSTableCellView
 	required init?(coder: NSCoder)
 	{
 		nil
+	}
+
+	func setTurnRunning(_ running: Bool)
+	{
+		progressRing.setRunning(running)
+	}
+
+	func setUnread(_ unread: Bool)
+	{
+		unreadDot.isHidden = !unread
 	}
 
 	func setActionsEnabled(_ enabled: Bool)
@@ -124,17 +152,18 @@ final class TaskSidebarCellView: NSTableCellView
 	override func mouseEntered(with event: NSEvent)
 	{
 		actions.alphaValue = 1
+		progressRing.alphaValue = 0
+		unreadDot.alphaValue = 0
 		hoverCard?.show(beside: self)
 	}
 	override func mouseExited(with event: NSEvent)
 	{
-		actions.alphaValue = 0
-		hoverCard?.dismiss()
+		dismissHoverCard()
 	}
 
 	override func viewWillMove(toWindow newWindow: NSWindow?)
 	{
-		hoverCard?.dismiss()
+		dismissHoverCard()
 		NotificationCenter.default.removeObserver(self)
 		super.viewWillMove(toWindow: newWindow)
 		if let newWindow
@@ -165,6 +194,8 @@ final class TaskSidebarCellView: NSTableCellView
 	{
 		hoverCard?.dismiss()
 		actions.alphaValue = 0
+		progressRing.alphaValue = 1
+		unreadDot.alphaValue = 1
 	}
 
 	override func mouseDown(with event: NSEvent)

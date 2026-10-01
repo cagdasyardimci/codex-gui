@@ -155,6 +155,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		taskPicker.itemArray
 	}
 
+	var unreadThreadIDs: Set<String> = []
+	private var unreadTracker = TaskUnreadTracker()
 	private var renderedPresentation: NavigationPresentation?
 	private var renderedManagementAvailability = false
 
@@ -179,6 +181,9 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		{
 			return
 		}
+		let nextUnreadThreadIDs = unreadTracker.observe(snapshot)
+		let unreadChanged = unreadThreadIDs != nextUnreadThreadIDs
+		unreadThreadIDs = nextUnreadThreadIDs
 		renderedPresentation = snapshot
 		let nextProject = snapshot.projectPath.map
 		{
@@ -214,7 +219,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 
 		let shouldReloadSidebar =
 			threads != snapshot.threads || selectedThreadID != snapshot.selectedThreadID
-				|| activeThreadChanged || activeStateChanged || projectsChanged
+				|| activeThreadChanged || activeStateChanged || projectsChanged || unreadChanged
 				|| previousCanStartProjectChat != canStartProjectChat
 				|| renderedManagementAvailability != snapshot.canManageThreads
 

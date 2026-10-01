@@ -46,14 +46,20 @@ extension NavigationViewController
 		let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 		visibleThreads = threads.filter
 		{
-			query.isEmpty
-				|| [$0.name, $0.preview, $0.id].compactMap
-				{
-					$0
-				}.contains
-				{
-					$0.localizedCaseInsensitiveContains(query)
-				}
+			thread in
+			guard !query.isEmpty
+			else
+			{
+				return true
+			}
+			let searchableText = [thread.name, thread.preview, thread.id].compactMap
+			{
+				$0
+			}
+			return searchableText.contains
+			{
+				$0.localizedCaseInsensitiveContains(query)
+			}
 		}
 		rebuildSidebarItems()
 		searchButton.contentTintColor = query.isEmpty ? .secondaryLabelColor : .controlAccentColor
@@ -129,25 +135,7 @@ extension NavigationViewController
 		}
 		if case .showMore = sidebarItems[row]
 		{
-			let cell = NSTableCellView(frame: .zero)
-			let button = NSButton(
-				title: "Show more",
-				target: self,
-				action: #selector(showMoreTasks)
-			)
-			button.isBordered = false
-			button.contentTintColor = .secondaryLabelColor
-			button.translatesAutoresizingMaskIntoConstraints = false
-			cell.addSubview(button)
-			NSLayoutConstraint.activate([
-				button.leadingAnchor.constraint(
-					equalTo: cell.leadingAnchor,
-					constant: 26
-				),
-				button.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-				button.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor),
-			])
-			return cell
+			return makeShowMoreCell()
 		}
 		if case .project(let project) = sidebarItems[row]
 		{
@@ -161,6 +149,40 @@ extension NavigationViewController
 		{
 			return nil
 		}
+		return taskCell(
+			in: tableView,
+			thread: thread
+		)
+	}
+
+	private func makeShowMoreCell() -> NSTableCellView
+	{
+		let cell = NSTableCellView(frame: .zero)
+		let button = NSButton(
+			title: "Show more",
+			target: self,
+			action: #selector(showMoreTasks)
+		)
+		button.isBordered = false
+		button.contentTintColor = .secondaryLabelColor
+		button.translatesAutoresizingMaskIntoConstraints = false
+		cell.addSubview(button)
+		NSLayoutConstraint.activate([
+			button.leadingAnchor.constraint(
+				equalTo: cell.leadingAnchor,
+				constant: 26
+			),
+			button.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+			button.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor),
+		])
+		return cell
+	}
+
+	private func taskCell(
+		in tableView: NSTableView,
+		thread: ThreadSummary
+	) -> TaskSidebarCellView
+	{
 		let identifier = NSUserInterfaceItemIdentifier("conversationTitle")
 		let cell = tableView.makeView(
 			withIdentifier: identifier,
@@ -179,10 +201,17 @@ extension NavigationViewController
 		}
 
 		let isActiveTask = thread.id == activeThreadID
+		let isTurnRunning = isActiveTask && activeExecutionState == .running
+		cell.setTurnRunning(isTurnRunning)
+		let isUnread = unreadThreadIDs.contains(thread.id)
+		cell.setUnread(isUnread && !isTurnRunning)
+		let showsInlineStatus =
+			isActiveTask && !isTurnRunning && activeExecutionState != .completed
 		let name = thread.name ?? thread.preview ?? thread.id
 		let state = activeExecutionState?.title ?? "Running"
-		cell.textField?.stringValue = isActiveTask ? "●  \(name) · \(state)" : name
-		cell.textField?.textColor = isActiveTask ? activeTaskColor : .labelColor
+		cell.textField?.stringValue =
+			showsInlineStatus ? "●  \(name) · \(state)" : name
+		cell.textField?.textColor = showsInlineStatus ? activeTaskColor : .labelColor
 		cell.textField?.toolTip = nil
 		let project = thread.cwd.isEmpty ? currentProject : URL(fileURLWithPath: thread.cwd)
 		cell.hoverCard = TaskHoverCard(
@@ -194,7 +223,8 @@ extension NavigationViewController
 			updatedAt: thread.updatedAt
 		)
 		cell.setAccessibilityLabel(
-			isActiveTask ? "\(state) task, open chat \(name)" : "Open chat \(name)"
+			isUnread ? "Unread result, open chat \(name)"
+				: isActiveTask ? "\(state) task, open chat \(name)" : "Open chat \(name)"
 		)
 		return cell
 	}
