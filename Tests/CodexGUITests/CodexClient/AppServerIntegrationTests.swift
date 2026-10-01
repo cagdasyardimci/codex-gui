@@ -230,109 +230,9 @@ struct AppServerIntegrationTests
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let responseLog = directory.appendingPathComponent("interaction-responses.json")
-		let executable = try mockExecutable(
+		let executable = try makeInteractionFlowExecutable(
 			in: directory,
-			script: """
-			#!/usr/bin/env python3
-			import json
-			import sys
-
-			if '--version' in sys.argv:
-			    print('codex-cli 0.153.2')
-			    sys.exit(0)
-
-			def send(message):
-			    print(json.dumps(message), flush=True)
-
-			def request(request_id, method, params):
-			    send({'id': request_id, 'method': method, 'params': params})
-
-			def approval(request_id, method):
-			    request(request_id, method, {
-			        'threadId': 'thread-1', 'turnId': 'turn-1', 'itemId': 'command-1',
-			        'reason': 'Mock approval', 'command': 'echo hello', 'cwd': '/tmp'
-			    })
-
-			responses = []
-			for line in sys.stdin:
-			    message = json.loads(line)
-			    method = message.get('method')
-			    request_id = message.get('id')
-			    if method == 'initialize':
-			        send({'id': request_id, 'result': {'userAgent': 'mock'}})
-			    elif method == 'model/list':
-			        send({'id': request_id, 'result': {'data': [{
-			            'model': 'gpt-6-sol', 'displayName': 'GPT-6 Sol',
-			            'supportedReasoningEfforts': [{'reasoningEffort': 'high'}],
-			            'defaultReasoningEffort': 'high', 'isDefault': True
-			        }], 'nextCursor': None}})
-			    elif method == 'thread/start':
-			        send({'id': request_id, 'result': {'thread': {
-			            'id': 'thread-1', 'preview': '', 'cwd': message['params']['cwd'],
-			            'status': {'type': 'idle'}
-			        }, 'cwd': message['params']['cwd']}})
-			    elif method == 'turn/start':
-			        turn = {'id': 'turn-1', 'status': 'inProgress', 'items': []}
-			        send({'id': request_id, 'result': {'turn': turn}})
-			        send({'method': 'turn/started', 'params': {
-			            'threadId': 'thread-1', 'turn': turn
-			        }})
-			        send({'method': 'item/started', 'params': {
-			            'threadId': 'thread-1', 'turnId': 'turn-1',
-			            'item': {'id': 'command-1', 'type': 'commandExecution',
-			                     'command': 'echo hello', 'cwd': '/tmp', 'status': 'inProgress'}
-			        }})
-			        send({'method': 'item/commandExecution/outputDelta', 'params': {
-			            'threadId': 'thread-1', 'turnId': 'turn-1',
-			            'itemId': 'command-1', 'delta': 'hello\\n'
-			        }})
-			        approval(100, 'item/commandExecution/requestApproval')
-			    elif request_id in (100, 101, 102, 103) and method is None:
-			        responses.append(message)
-			        send({'method': 'serverRequest/resolved', 'params': {
-			            'threadId': 'thread-1', 'requestId': request_id
-			        }})
-			        if request_id == 100:
-			            approval(101, 'item/commandExecution/requestApproval')
-			        elif request_id == 101:
-			            approval(102, 'item/fileChange/requestApproval')
-			        elif request_id == 102:
-			            request(103, 'item/tool/requestUserInput', {
-			                'threadId': 'thread-1', 'turnId': 'turn-1', 'itemId': 'question-1',
-			                'isBlocking': True, 'autoResolutionMs': None,
-			                'questions': [{
-			                    'id': 'choice', 'header': 'Choice', 'question': 'Which option?',
-			                    'isOther': False, 'isSecret': False,
-			                    'options': [{'label': 'A', 'description': 'Option A'}]
-			                }]
-			            })
-			        elif request_id == 103:
-			            with open('\(responseLog.path)', 'w') as output:
-			                json.dump(responses, output)
-			            change = {'path': 'README.md', 'kind': 'update',
-			                      'diff': '@@ -1 +1 @@\\n-old\\n+new\\n'}
-			            send({'method': 'item/fileChange/patchUpdated', 'params': {
-			                'threadId': 'thread-1', 'turnId': 'turn-1',
-			                'itemId': 'change-1', 'changes': [change]
-			            }})
-			            send({'method': 'turn/diff/updated', 'params': {
-			                'threadId': 'thread-1', 'turnId': 'turn-1',
-			                'diff': 'diff --git a/README.md b/README.md\\n'
-			            }})
-			            send({'method': 'item/completed', 'params': {
-			                'threadId': 'thread-1', 'turnId': 'turn-1',
-			                'item': {'id': 'change-1', 'type': 'fileChange',
-			                         'status': 'completed', 'changes': [change]}
-			            }})
-			            send({'method': 'item/agentMessage/delta', 'params': {
-			                'threadId': 'thread-1', 'turnId': 'turn-1',
-			                'itemId': 'message-1', 'delta': 'Done.'
-			            }})
-			            send({'method': 'turn/completed', 'params': {
-			                'threadId': 'thread-1',
-			                'turn': {'id': 'turn-1', 'status': 'completed', 'items': []}
-			            }})
-			"""
+			responseLog: responseLog
 		)
 
 		let server = AppServer(
@@ -996,62 +896,10 @@ struct AppServerIntegrationTests
 		)
 		let requestLog = directory.appendingPathComponent("cwd-requests.json")
 		let responseMode = directory.appendingPathComponent("cwd-response-mode")
-		let executable = try mockExecutable(
+		let executable = try makeCheckoutValidationExecutable(
 			in: directory,
-			script: """
-			#!/usr/bin/env python3
-			import json
-			from pathlib import Path
-			import sys
-
-			if '--version' in sys.argv:
-			    print('codex-cli 0.153.2')
-			    sys.exit(0)
-
-			threads = {}
-			requests = []
-			response_mode = Path('\(responseMode.path)')
-			def send(message):
-			    print(json.dumps(message), flush=True)
-
-			for line in sys.stdin:
-			    message = json.loads(line)
-			    method = message.get('method')
-			    params = message.get('params', {})
-			    request_id = message.get('id')
-			    mode = response_mode.read_text() if response_mode.exists() else ''
-			    if method == 'initialize':
-			        send({'id': request_id, 'result': {}})
-			        continue
-			    requests.append(message)
-			    with open('\(requestLog.path)', 'w') as output:
-			        json.dump(requests, output)
-			    if method == 'thread/start':
-			        thread_id = 'thread-' + str(len(threads) + 1)
-			        threads[thread_id] = params['cwd']
-			        result = {'thread': {'id': thread_id, 'cwd': params['cwd']},
-			                  'cwd': params['cwd']}
-			        if mode == 'start-summary':
-			            result['thread']['cwd'] = '/wrong-checkout'
-			        elif mode == 'start-result':
-			            result['cwd'] = '/wrong-checkout'
-			    elif method == 'thread/resume':
-			        cwd = threads[params['threadId']]
-			        result = {'thread': {'id': params['threadId'], 'cwd': cwd}, 'cwd': cwd}
-			    elif method == 'thread/turns/list':
-			        result = {'data': [], 'nextCursor': None}
-			    elif method == 'thread/list':
-			        result = {'data': [{'id': thread_id, 'cwd': cwd}
-			                           for thread_id, cwd in threads.items()
-			                           if cwd == params['cwd']], 'nextCursor': None}
-			        if mode == 'list':
-			            result['data'].append({'id': 'foreign-thread', 'cwd': '/wrong-checkout'})
-			    elif method == 'turn/start':
-			        result = {'turn': {'id': 'turn-1', 'status': 'inProgress', 'items': []}}
-			    else:
-			        continue
-			    send({'id': request_id, 'result': result})
-			"""
+			requestLog: requestLog,
+			responseMode: responseMode
 		)
 
 		let server = AppServer(
@@ -1212,7 +1060,8 @@ struct AppServerIntegrationTests
 			                'cwd': params['cwd'], 'status': {'type': 'idle'}
 			            }], 'nextCursor': None}
 			        send({'id': request_id, 'result': result})
-			    elif method in ('thread/name/set', 'thread/archive', 'thread/unarchive'):
+			    elif method in ('thread/name/set', 'thread/archive',
+			                    'thread/unarchive', 'thread/delete'):
 			        record(message)
 			        result = {}
 			        if method == 'thread/unarchive':
@@ -1248,6 +1097,7 @@ struct AppServerIntegrationTests
 		)
 		try await server.archiveThread(id: "active-first")
 		try await server.unarchiveThread(id: "archived-first")
+		try await server.deleteThread(id: "active-second")
 
 		let data = try Data(contentsOf: requestLog)
 		let requests = try #require(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
@@ -1283,6 +1133,7 @@ struct AppServerIntegrationTests
 				"thread/name/set",
 				"thread/archive",
 				"thread/unarchive",
+				"thread/delete",
 			]
 		)
 		#expect(
@@ -1301,6 +1152,8 @@ struct AppServerIntegrationTests
 				"threadId": "archived-first"
 			]
 		)
+		#expect(managementRequests[3]["params"] as? [String: String] ==
+			["threadId": "active-second"])
 	}
 
 	@Test func backendFailureCapturesBoundedDetailsAndReconnectResetsThem() async throws
@@ -1666,68 +1519,9 @@ struct AppServerIntegrationTests
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let requestLog = directory.appendingPathComponent("skill-turn-request.json")
-		let executable = try mockExecutable(
+		let executable = try makeSkillCatalogExecutable(
 			in: directory,
-			script: """
-			#!/usr/bin/env python3
-			import json
-			import sys
-
-			if '--version' in sys.argv:
-			    print('codex-cli 0.153.2')
-			    sys.exit(0)
-
-			def send(message):
-			    print(json.dumps(message), flush=True)
-
-			for line in sys.stdin:
-			    message = json.loads(line)
-			    method = message.get('method')
-			    request_id = message.get('id')
-			    if method == 'initialize':
-			        send({'id': request_id, 'result': {}})
-			    elif method == 'skills/list':
-			        cwd = message['params']['cwds'][0]
-			        send({'id': request_id, 'result': {'data': [{
-			            'cwd': cwd,
-			            'skills': [{
-			                'name': 'review', 'description': 'Review a change',
-			                'path': '/tmp/review/SKILL.md', 'scope': 'repo', 'enabled': True,
-			                'pluginId': None,
-			                'interface': {
-			                    'displayName': 'Review', 'shortDescription': 'Check code',
-			                    'defaultPrompt': 'Review this change',
-			                    'iconSmallUrl': None, 'iconLargeUrl': None
-			                }
-			            }],
-			            'errors': [{'path': '/tmp/broken/SKILL.md', 'message': 'Invalid metadata'}]
-			        }]}})
-			        send({'method': 'skills/changed', 'params': {}})
-			    elif method == 'account/rateLimits/read':
-			        limits = {
-			            'limitId': 'codex', 'limitName': None,
-			            'primary': {'usedPercent': 12.5, 'windowDurationMins': 300,
-			                        'resetsAt': 1730947200},
-			            'secondary': None, 'credits': None, 'individualLimit': None,
-			            'spendControlReached': None, 'planType': 'plus',
-			            'rateLimitReachedType': None
-			        }
-			        send({'id': request_id, 'result': {
-			            'rateLimits': limits, 'rateLimitsByLimitId': {'codex': limits},
-			            'rateLimitResetCredits': {'availableCount': 1, 'credits': None},
-			            'accountId': 'account-1',
-			            'rateLimitUpsell': None
-			        }})
-			        send({'method': 'account/rateLimits/updated', 'params': {
-			            'rateLimits': limits
-			        }})
-			    elif method == 'turn/start':
-			        with open('\(requestLog.path)', 'w') as output:
-			            json.dump(message, output)
-			        send({'id': request_id, 'result': {'turn': {
-			            'id': 'turn-1', 'status': 'inProgress', 'items': [], 'error': None
-			        }}})
-			"""
+			requestLog: requestLog
 		)
 
 		let server = AppServer(
@@ -1800,6 +1594,252 @@ struct AppServerIntegrationTests
 		#expect(input[1]["type"] as? String == "skill")
 		#expect(input[1]["name"] as? String == "review")
 		#expect(input[1]["path"] as? String == "/tmp/review/SKILL.md")
+	}
+
+	private func makeInteractionFlowExecutable(
+		in directory: URL,
+		responseLog: URL
+	) throws -> URL
+	{
+		return try mockExecutable(
+			in: directory,
+			script: """
+			#!/usr/bin/env python3
+			import json
+			import sys
+
+			if '--version' in sys.argv:
+			    print('codex-cli 0.153.2')
+			    sys.exit(0)
+
+			def send(message):
+			    print(json.dumps(message), flush=True)
+
+			def request(request_id, method, params):
+			    send({'id': request_id, 'method': method, 'params': params})
+
+			def approval(request_id, method):
+			    request(request_id, method, {
+			        'threadId': 'thread-1', 'turnId': 'turn-1', 'itemId': 'command-1',
+			        'reason': 'Mock approval', 'command': 'echo hello', 'cwd': '/tmp'
+			    })
+
+			responses = []
+			for line in sys.stdin:
+			    message = json.loads(line)
+			    method = message.get('method')
+			    request_id = message.get('id')
+			    if method == 'initialize':
+			        send({'id': request_id, 'result': {'userAgent': 'mock'}})
+			    elif method == 'model/list':
+			        send({'id': request_id, 'result': {'data': [{
+			            'model': 'gpt-6-sol', 'displayName': 'GPT-6 Sol',
+			            'supportedReasoningEfforts': [{'reasoningEffort': 'high'}],
+			            'defaultReasoningEffort': 'high', 'isDefault': True
+			        }], 'nextCursor': None}})
+			    elif method == 'thread/start':
+			        send({'id': request_id, 'result': {'thread': {
+			            'id': 'thread-1', 'preview': '', 'cwd': message['params']['cwd'],
+			            'status': {'type': 'idle'}
+			        }, 'cwd': message['params']['cwd']}})
+			    elif method == 'turn/start':
+			        turn = {'id': 'turn-1', 'status': 'inProgress', 'items': []}
+			        send({'id': request_id, 'result': {'turn': turn}})
+			        send({'method': 'turn/started', 'params': {
+			            'threadId': 'thread-1', 'turn': turn
+			        }})
+			        send({'method': 'item/started', 'params': {
+			            'threadId': 'thread-1', 'turnId': 'turn-1',
+			            'item': {'id': 'command-1', 'type': 'commandExecution',
+			                     'command': 'echo hello', 'cwd': '/tmp', 'status': 'inProgress'}
+			        }})
+			        send({'method': 'item/commandExecution/outputDelta', 'params': {
+			            'threadId': 'thread-1', 'turnId': 'turn-1',
+			            'itemId': 'command-1', 'delta': 'hello\\n'
+			        }})
+			        approval(100, 'item/commandExecution/requestApproval')
+			    elif request_id in (100, 101, 102, 103) and method is None:
+			        responses.append(message)
+			        send({'method': 'serverRequest/resolved', 'params': {
+			            'threadId': 'thread-1', 'requestId': request_id
+			        }})
+			        if request_id == 100:
+			            approval(101, 'item/commandExecution/requestApproval')
+			        elif request_id == 101:
+			            approval(102, 'item/fileChange/requestApproval')
+			        elif request_id == 102:
+			            request(103, 'item/tool/requestUserInput', {
+			                'threadId': 'thread-1', 'turnId': 'turn-1', 'itemId': 'question-1',
+			                'isBlocking': True, 'autoResolutionMs': None,
+			                'questions': [{
+			                    'id': 'choice', 'header': 'Choice', 'question': 'Which option?',
+			                    'isOther': False, 'isSecret': False,
+			                    'options': [{'label': 'A', 'description': 'Option A'}]
+			                }]
+			            })
+			        elif request_id == 103:
+			            with open('\(responseLog.path)', 'w') as output:
+			                json.dump(responses, output)
+			            change = {'path': 'README.md', 'kind': 'update',
+			                      'diff': '@@ -1 +1 @@\\n-old\\n+new\\n'}
+			            send({'method': 'item/fileChange/patchUpdated', 'params': {
+			                'threadId': 'thread-1', 'turnId': 'turn-1',
+			                'itemId': 'change-1', 'changes': [change]
+			            }})
+			            send({'method': 'turn/diff/updated', 'params': {
+			                'threadId': 'thread-1', 'turnId': 'turn-1',
+			                'diff': 'diff --git a/README.md b/README.md\\n'
+			            }})
+			            send({'method': 'item/completed', 'params': {
+			                'threadId': 'thread-1', 'turnId': 'turn-1',
+			                'item': {'id': 'change-1', 'type': 'fileChange',
+			                         'status': 'completed', 'changes': [change]}
+			            }})
+			            send({'method': 'item/agentMessage/delta', 'params': {
+			                'threadId': 'thread-1', 'turnId': 'turn-1',
+			                'itemId': 'message-1', 'delta': 'Done.'
+			            }})
+			            send({'method': 'turn/completed', 'params': {
+			                'threadId': 'thread-1',
+			                'turn': {'id': 'turn-1', 'status': 'completed', 'items': []}
+			            }})
+			"""
+		)
+	}
+
+	private func makeCheckoutValidationExecutable(
+		in directory: URL,
+		requestLog: URL,
+		responseMode: URL
+	) throws -> URL
+	{
+		return try mockExecutable(
+			in: directory,
+			script: """
+			#!/usr/bin/env python3
+			import json
+			from pathlib import Path
+			import sys
+
+			if '--version' in sys.argv:
+			    print('codex-cli 0.153.2')
+			    sys.exit(0)
+
+			threads = {}
+			requests = []
+			response_mode = Path('\(responseMode.path)')
+			def send(message):
+			    print(json.dumps(message), flush=True)
+
+			for line in sys.stdin:
+			    message = json.loads(line)
+			    method = message.get('method')
+			    params = message.get('params', {})
+			    request_id = message.get('id')
+			    mode = response_mode.read_text() if response_mode.exists() else ''
+			    if method == 'initialize':
+			        send({'id': request_id, 'result': {}})
+			        continue
+			    requests.append(message)
+			    with open('\(requestLog.path)', 'w') as output:
+			        json.dump(requests, output)
+			    if method == 'thread/start':
+			        thread_id = 'thread-' + str(len(threads) + 1)
+			        threads[thread_id] = params['cwd']
+			        result = {'thread': {'id': thread_id, 'cwd': params['cwd']},
+			                  'cwd': params['cwd']}
+			        if mode == 'start-summary':
+			            result['thread']['cwd'] = '/wrong-checkout'
+			        elif mode == 'start-result':
+			            result['cwd'] = '/wrong-checkout'
+			    elif method == 'thread/resume':
+			        cwd = threads[params['threadId']]
+			        result = {'thread': {'id': params['threadId'], 'cwd': cwd}, 'cwd': cwd}
+			    elif method == 'thread/turns/list':
+			        result = {'data': [], 'nextCursor': None}
+			    elif method == 'thread/list':
+			        result = {'data': [{'id': thread_id, 'cwd': cwd}
+			                           for thread_id, cwd in threads.items()
+			                           if cwd == params['cwd']], 'nextCursor': None}
+			        if mode == 'list':
+			            result['data'].append({'id': 'foreign-thread', 'cwd': '/wrong-checkout'})
+			    elif method == 'turn/start':
+			        result = {'turn': {'id': 'turn-1', 'status': 'inProgress', 'items': []}}
+			    else:
+			        continue
+			    send({'id': request_id, 'result': result})
+			"""
+		)
+	}
+
+	private func makeSkillCatalogExecutable(
+		in directory: URL,
+		requestLog: URL
+	) throws -> URL
+	{
+		return try mockExecutable(
+			in: directory,
+			script: """
+			#!/usr/bin/env python3
+			import json
+			import sys
+
+			if '--version' in sys.argv:
+			    print('codex-cli 0.153.2')
+			    sys.exit(0)
+
+			def send(message):
+			    print(json.dumps(message), flush=True)
+
+			for line in sys.stdin:
+			    message = json.loads(line)
+			    method = message.get('method')
+			    request_id = message.get('id')
+			    if method == 'initialize':
+			        send({'id': request_id, 'result': {}})
+			    elif method == 'skills/list':
+			        cwd = message['params']['cwds'][0]
+			        send({'id': request_id, 'result': {'data': [{
+			            'cwd': cwd,
+			            'skills': [{
+			                'name': 'review', 'description': 'Review a change',
+			                'path': '/tmp/review/SKILL.md', 'scope': 'repo', 'enabled': True,
+			                'pluginId': None,
+			                'interface': {
+			                    'displayName': 'Review', 'shortDescription': 'Check code',
+			                    'defaultPrompt': 'Review this change',
+			                    'iconSmallUrl': None, 'iconLargeUrl': None
+			                }
+			            }],
+			            'errors': [{'path': '/tmp/broken/SKILL.md', 'message': 'Invalid metadata'}]
+			        }]}})
+			        send({'method': 'skills/changed', 'params': {}})
+			    elif method == 'account/rateLimits/read':
+			        limits = {
+			            'limitId': 'codex', 'limitName': None,
+			            'primary': {'usedPercent': 12.5, 'windowDurationMins': 300,
+			                        'resetsAt': 1730947200},
+			            'secondary': None, 'credits': None, 'individualLimit': None,
+			            'spendControlReached': None, 'planType': 'plus',
+			            'rateLimitReachedType': None
+			        }
+			        send({'id': request_id, 'result': {
+			            'rateLimits': limits, 'rateLimitsByLimitId': {'codex': limits},
+			            'rateLimitResetCredits': {'availableCount': 1, 'credits': None},
+			            'accountId': 'account-1',
+			            'rateLimitUpsell': None
+			        }})
+			        send({'method': 'account/rateLimits/updated', 'params': {
+			            'rateLimits': limits
+			        }})
+			    elif method == 'turn/start':
+			        with open('\(requestLog.path)', 'w') as output:
+			            json.dump(message, output)
+			        send({'id': request_id, 'result': {'turn': {
+			            'id': 'turn-1', 'status': 'inProgress', 'items': [], 'error': None
+			        }}})
+			"""
+		)
 	}
 
 	private func temporaryDirectory() throws -> URL

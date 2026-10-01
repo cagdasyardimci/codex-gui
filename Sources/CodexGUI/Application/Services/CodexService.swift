@@ -33,6 +33,7 @@ protocol CodexService: AnyObject
 		id: String,
 		name: String
 	) async throws
+	func deleteThread(id: String) async throws
 	func archiveThread(id: String) async throws
 	func unarchiveThread(id: String) async throws
 	func startThread(
@@ -271,6 +272,11 @@ extension CodexService
 	) async throws
 	{
 		throw AppServerError.protocolError("This Codex service cannot rename conversations.")
+	}
+
+	func deleteThread(id: String) async throws
+	{
+		throw AppServerError.protocolError("This Codex service cannot delete conversations.")
 	}
 
 	func archiveThread(id: String) async throws

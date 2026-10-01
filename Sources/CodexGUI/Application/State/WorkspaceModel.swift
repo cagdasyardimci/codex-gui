@@ -180,6 +180,7 @@ enum ThreadManagementOperation
 	)
 	case archive(OperationContext)
 	case unarchive(OperationContext)
+	case delete(OperationContext)
 }
 
 struct ConversationsModel

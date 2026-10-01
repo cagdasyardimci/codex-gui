@@ -80,6 +80,81 @@ struct ConversationReducerTests
 		return result
 	}
 
+	@Test func sidebarManagementTargetsUnselectedTaskAndPreservesViewedConversation()
+	{
+		for permanentlyDelete in [false, true]
+		{
+			var model = fixture()
+			model.conversations.threads = [ThreadSummary(json: [
+				"id": "other",
+				"cwd": "/tmp/conversation"
+			])!]
+			model.conversations
+				.content[.thread("other")] = ConversationContentModel(hasLoadedHistory: true)
+			let captured = context(
+				model,
+				threadID: "other"
+			)
+			let operation: ThreadManagementOperation = permanentlyDelete ? .delete(captured) :
+				.archive(captured)
+			let started = reduce(
+				&model,
+				.conversations(.managementRequested(operation))
+			)
+			#expect(started.effects.count == 1)
+			#expect(model.conversations.pendingManagement?.context == captured)
+			let finished = reduce(
+				&model,
+				.conversations(.managementFinished(
+					captured,
+					.succeeded(())
+				))
+			)
+			#expect(model.conversations.selectedConversation == .thread("thread"))
+			#expect(model.conversations.pendingManagement == nil)
+			#expect(!finished.effects.isEmpty)
+			if permanentlyDelete
+			{
+				#expect(model.conversations.content[.thread("other")] == nil)
+				#expect(model.conversations.threads.isEmpty)
+			}
+		}
+	}
+
+	@Test func deleteRejectsUnknownTaskAndRetainsHistoryOnBackendFailure()
+	{
+		var model = fixture()
+		let unknown = context(
+			model,
+			threadID: "unknown"
+		)
+		#expect(reduce(
+			&model,
+			.conversations(.managementRequested(.delete(unknown)))
+		).effects
+			.isEmpty)
+		let captured = context(model)
+		model.conversations
+			.content[.thread("thread")] = ConversationContentModel(hasLoadedHistory: true)
+		_ = reduce(
+			&model,
+			.conversations(.managementRequested(.delete(captured)))
+		)
+		_ = reduce(
+			&model,
+			.conversations(.managementFinished(
+				captured,
+				.failed(OperationFailure(
+					message: "Rejected",
+					outcomeIsUncertain: false
+				))
+			))
+		)
+		#expect(model.conversations.selectedConversation == .thread("thread"))
+		#expect(model.conversations.content[.thread("thread")]?.hasLoadedHistory == true)
+		#expect(model.conversations.error?.contains("Rejected") == true)
+	}
+
 	@Test func rejectedConnectionAndProjectIntentsCannotDiscardCurrentConversationWork()
 	{
 		var model = fixture()

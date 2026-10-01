@@ -170,6 +170,14 @@ extension AppServer
 		)
 	}
 
+	func deleteThread(id: String) async throws
+	{
+		_ = try await request(
+			"thread/delete",
+			params: ["threadId": id]
+		)
+	}
+
 	func archiveThread(id: String) async throws
 	{
 		_ = try await request(

@@ -242,6 +242,17 @@ struct WorkspaceStoreInputs
 					.archive(context))))
 	}
 
+	func manageSidebarTask(
+		_ id: String,
+		permanentlyDelete: Bool
+	)
+	{
+		let context = workspaceStore.operationContext(threadID: id)
+		workspaceStore.dispatch(.conversations(.managementRequested(
+			permanentlyDelete ? .delete(context) : .archive(context)
+		)))
+	}
+
 	func selectReviewTurn(_ id: String)
 	{
 		workspaceStore.dispatch(.review(.turnSelected(

@@ -176,6 +176,7 @@ extension WorkspaceEffectRunner
 					name: name
 				)
 			case .archive: try await service.archiveThread(id: threadID)
+			case .delete: try await service.deleteThread(id: threadID)
 			case .unarchive: try await service.unarchiveThread(id: threadID)
 			}
 			return .conversations(.managementFinished(

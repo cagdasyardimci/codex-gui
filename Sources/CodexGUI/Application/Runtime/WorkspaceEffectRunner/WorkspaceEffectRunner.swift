@@ -439,7 +439,7 @@ final class WorkspaceEffectRunner
 		case .rename(
 			let context,
 			_
-		), .archive(let context), .unarchive(let context): return context
+		), .archive(let context), .unarchive(let context), .delete(let context): return context
 		}
 	}
 

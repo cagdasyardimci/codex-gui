@@ -86,7 +86,7 @@ struct WorkspaceEligibility
 
 	var canManageThreads: Bool
 	{
-		ownerAvailable && model.conversations.selectedConversation.threadID != nil
+		ownerAvailable
 			&& model.connection.isConnected && !model.execution.isTaskActive
 			&& !model.execution.needsReconciliation && !model.execution.hasUncertainRequest
 			&& model.composer.uncertainSubmissions.isEmpty
@@ -137,19 +137,26 @@ struct WorkspaceEligibility
 
 	func acceptsManagement(_ operation: ThreadManagementOperation) -> Bool
 	{
-		guard canManageThreads, operation.context.belongsTo(
-			workspace: model.identity,
-			generation: model.connection
-				.generation
-		),
-			operation.context.threadID == model.conversations.selectedConversation.threadID
+		guard let threadID = operation.context.threadID, canManageThreads,
+				operation.context.belongsTo(
+				workspace: model.identity,
+				generation: model.connection
+					.generation
+				),
+				threadID == model.conversations.selectedConversation.threadID
+				|| model.conversations.threads.contains(where:
+				{
+					$0.id == threadID
+				})
 		else
 		{
 			return false
 		}
 		switch operation
 		{
-		case .rename: return true
+		case .rename: return operation.context.threadID == model.conversations.selectedConversation
+			.threadID
+		case .delete: return true
 		case .archive: return !model.conversations.showingArchived
 		case .unarchive: return model.conversations.showingArchived
 		}

@@ -12,6 +12,7 @@ enum WorkspaceIntent
 	)
 	case newChat, newChatInProject(URL), openProject(URL), selectThread(String), refreshThreads
 	case setArchived(Bool), renameThread(String), archiveThread
+	case archiveTask(String), deleteTask(String)
 	case selectModel(String?), selectEffort(String?), selectApprovalMode(ApprovalMode),
 			setFastMode(Bool)
 	case toggleProjectPin(URL), renameProject(
@@ -197,6 +198,14 @@ final class WorkspaceIntentTarget
 		case .setArchived(let enabled): inputs.setArchivedFilter(enabled)
 		case .renameThread(let name): inputs.renameSelectedThread(name)
 		case .archiveThread: inputs.archiveSelectedThread()
+		case .archiveTask(let id): inputs.manageSidebarTask(
+				id,
+				permanentlyDelete: false
+			)
+		case .deleteTask(let id): inputs.manageSidebarTask(
+				id,
+				permanentlyDelete: true
+			)
 		case .selectModel(let id): inputs.selectModel(id)
 		case .selectEffort(let effort): inputs.selectEffort(effort)
 		case .selectApprovalMode(let mode): inputs.selectApprovalMode(mode)

@@ -572,8 +572,6 @@ enum ConversationReducer
 				model
 			), let pending = model.conversations.pendingManagement,
 			pending.context == context,
-			context.threadID.map(ConversationKey.thread) == model.conversations
-			.selectedConversation,
 			model.conversations.pendingManagementArchived == model.conversations
 			.showingArchived
 			else
@@ -590,12 +588,24 @@ enum ConversationReducer
 				switch pending
 				{
 				case .rename: break
-				case .archive: select(
-						.newChat,
-						context: context,
-						model: &model,
-						result: &result
-					)
+				case .archive, .delete:
+					if context.threadID == model.conversations.selectedConversation.threadID
+					{
+						select(
+							.newChat,
+							context: context,
+							model: &model,
+							result: &result
+						)
+					}
+					if case .delete = pending, let id = context.threadID
+					{
+						model.conversations.content.removeValue(forKey: .thread(id))
+						model.conversations.threads.removeAll
+						{
+							$0.id == id
+						}
+					}
 				case .unarchive:
 					model.conversations.showingArchived = false
 					select(
@@ -792,7 +802,7 @@ extension ThreadManagementOperation
 			let context,
 			_
 		), .archive(let context),
-		.unarchive(let context): return context
+		.unarchive(let context), .delete(let context): return context
 		}
 	}
 }
