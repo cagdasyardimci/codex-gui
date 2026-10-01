@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class ConversationCollectionItem: NSCollectionViewItem
+final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDelegate
 {
 	private static let rowSpacing: CGFloat = 6
 	private static let titleHeight: CGFloat = 16
@@ -9,7 +9,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 	private static let bodyMeasurer = ConversationBodyMeasurer()
 
 	private let titleLabel = NSTextField(labelWithString: "")
-	private let bodyTextView = NSTextView()
+	private let bodyTextView = ConversationMarkdownTextView()
 	private let messageContainer = NSView()
 	private let contentStack = NSStackView()
 	private let userSurface = DesktopSurface(
@@ -38,7 +38,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 	private var kind: ConversationEntryKind = .agent
 	private var isExpandable = false
 	private var codeBlocks: [String] = []
-	private var copyButtonLayoutSize: NSSize?
+	private var updatingCopyButtonFrames = false
 	private weak var observedClipView: NSClipView?
 	private var cachedLayoutMetrics:
 		(availableWidth: CGFloat, messageWidth: CGFloat, bodyHeight: CGFloat)?
@@ -78,6 +78,8 @@ final class ConversationCollectionItem: NSCollectionViewItem
 		bodyTextView.isHorizontallyResizable = false
 		bodyTextView.isVerticallyResizable = false
 		bodyTextView.drawsBackground = false
+		bodyTextView.textContainer?.replaceLayoutManager(ConversationMarkdownLayoutManager())
+		bodyTextView.layoutManager?.delegate = self
 		bodyTextView.textContainerInset = .zero
 		bodyTextView.textContainer?.lineFragmentPadding = 0
 		bodyTextView.textContainer?.widthTracksTextView = true
@@ -146,7 +148,6 @@ final class ConversationCollectionItem: NSCollectionViewItem
 				object: clipView
 			)
 		}
-		copyButtonLayoutSize = nil
 		refreshVisibleGeometry()
 	}
 
@@ -200,7 +201,6 @@ final class ConversationCollectionItem: NSCollectionViewItem
 		kind = entry.kind
 		isExpandable = entry.isExpandable
 		cachedLayoutMetrics = nil
-		copyButtonLayoutSize = nil
 		titleLabel.stringValue = entry.title
 		titleLabel.setAccessibilityLabel(entry.title)
 		titleLabel.isHidden = kind == .user || kind == .agent
@@ -210,6 +210,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 			content,
 			kind: kind
 		))
+		bodyTextView.updateSourceAccessibilityHelp()
 		bodyTextView.setAccessibilityLabel("\(entry.title) content")
 		view.setAccessibilityLabel(entry.title)
 
@@ -314,6 +315,77 @@ final class ConversationCollectionItem: NSCollectionViewItem
 		}
 	}
 
+	static func textReadingAnchor(
+		content: PreparedConversationContent,
+		width: CGFloat,
+		kind: ConversationEntryKind,
+		offset: CGFloat
+	) -> (character: Int, offset: CGFloat)?
+	{
+		bodyMeasurer.readingAnchor(
+			of: displayText(
+				content,
+				kind: kind
+			),
+			atY: offset - bodyOriginY(for: kind),
+			width: readingTextWidth(
+				content: content,
+				width: width,
+				kind: kind
+			)
+		)
+	}
+
+	static func textReadingOffset(
+		content: PreparedConversationContent,
+		width: CGFloat,
+		kind: ConversationEntryKind,
+		character: Int,
+		lineOffset: CGFloat
+	) -> CGFloat?
+	{
+		guard let lineY = bodyMeasurer.lineOrigin(
+			of: displayText(
+				content,
+				kind: kind
+			),
+			atCharacter: character,
+			width: readingTextWidth(
+				content: content,
+				width: width,
+				kind: kind
+			)
+		)
+		else
+		{
+			return nil
+		}
+		return bodyOriginY(for: kind) + lineY + lineOffset
+	}
+
+	private static func readingTextWidth(
+		content: PreparedConversationContent,
+		width: CGFloat,
+		kind: ConversationEntryKind
+	) -> CGFloat
+	{
+		max(
+			1,
+			messageWidth(
+				content: content,
+				availableWidth: width,
+				kind: kind
+			)
+				- 2 * contentInset(for: kind).width
+		)
+	}
+
+	private static func bodyOriginY(for kind: ConversationEntryKind) -> CGFloat
+	{
+		let titleAllowance = kind == .user || kind == .agent ? 0 : titleHeight + rowSpacing
+		return contentInset(for: kind).height + titleAllowance
+	}
+
 	private static func presentation(for kind: ConversationEntryKind) -> Int
 	{
 		switch kind
@@ -384,7 +456,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 		kind: ConversationEntryKind
 	) -> NSAttributedString
 	{
-		guard kind != .agent
+		guard kind != .agent && kind != .user
 		else
 		{
 			return content.attributedString
@@ -397,18 +469,15 @@ final class ConversationCollectionItem: NSCollectionViewItem
 				length: text.length
 			)
 			let paragraph = NSMutableParagraphStyle()
-			paragraph.lineSpacing = kind == .user ? 4 : 2
-			paragraph.lineBreakMode = kind == .user ? .byWordWrapping : .byCharWrapping
+			paragraph.lineSpacing = 2
+			paragraph.lineBreakMode = .byCharWrapping
 			text.addAttributes(
 				[
-					.font: kind == .user
-						? NSFont.systemFont(ofSize: 15)
-						: NSFont.monospacedSystemFont(
-							ofSize: 11,
-							weight: .regular
-						),
-					.foregroundColor: kind == .user ? NSColor.labelColor : NSColor
-						.secondaryLabelColor,
+					.font: NSFont.monospacedSystemFont(
+						ofSize: 11,
+						weight: .regular
+					),
+					.foregroundColor: NSColor.secondaryLabelColor,
 					.paragraphStyle: paragraph,
 				],
 				range: range
@@ -476,12 +545,17 @@ final class ConversationCollectionItem: NSCollectionViewItem
 	{
 		guard !copyButtons.isEmpty, view.window != nil, !view.isHiddenOrHasHiddenAncestor,
 				!view.visibleRect.isEmpty, bodyTextView.bounds.width > 0,
-				copyButtonLayoutSize != bodyTextView.bounds.size,
+				!updatingCopyButtonFrames,
 				let content, let layout = bodyTextView.layoutManager,
 				let container = bodyTextView.textContainer
 		else
 		{
 			return
+		}
+		updatingCopyButtonFrames = true
+		defer
+		{
+			updatingCopyButtonFrames = false
 		}
 		layout.ensureLayout(for: container)
 		for (index, button) in copyButtons.enumerated()
@@ -492,32 +566,82 @@ final class ConversationCollectionItem: NSCollectionViewItem
 				continue
 			}
 			let range = content.codeBlockRanges[index]
-			let location = min(
+			let characterLocation = min(
 				range.location,
 				max(
 					0,
-					layout.numberOfGlyphs - 1
+					bodyTextView.string.utf16.count - 1
 				)
 			)
-			let line = layout.lineFragmentRect(
+			let location = layout.glyphIndexForCharacter(at: characterLocation)
+			let header = (layout as? ConversationMarkdownLayoutManager)?.codeBlockHeaderRect(
+				atCharacter: characterLocation,
+				in: container
+			)
+			let line = header ?? layout.lineFragmentRect(
 				forGlyphAt: location,
 				effectiveRange: nil
 			)
 			let origin = bodyTextView.textContainerOrigin
-			button.frame = NSRect(
-				x: max(
-					0,
-					bodyTextView.bounds.width - 94
-				),
+			let card = (layout as? ConversationMarkdownLayoutManager)?.codeBlockRect(
+				atCharacter: characterLocation,
+				in: container
+			)
+			let left = max(
+				0,
+				origin.x + (card?.minX ?? 0)
+			)
+			let right = min(
+				bodyTextView.bounds.width,
+				origin.x + (card?.maxX ?? container.size.width)
+			)
+			let availableWidth = max(
+				0,
+				right - left
+			)
+			let inset = min(
+				4,
+				availableWidth / 2
+			)
+			let width = min(
+				90,
+				availableWidth - 2 * inset
+			)
+			let frame = NSRect(
+				x: right - inset - width,
 				y: origin.y + line.minY,
-				width: min(
-					90,
-					bodyTextView.bounds.width
-				),
+				width: width,
 				height: Self.buttonHeight
 			)
+			if button.frame != frame
+			{
+				button.frame = frame
+			}
 		}
-		copyButtonLayoutSize = bodyTextView.bounds.size
+	}
+
+	nonisolated func layoutManager(
+		_ layoutManager: NSLayoutManager,
+		didCompleteLayoutFor textContainer: NSTextContainer?,
+		atEnd _: Bool
+	)
+	{
+		// This text view and its TextKit layout are owned by the main actor.
+		precondition(Thread.isMainThread)
+		let managerID = ObjectIdentifier(layoutManager)
+		let containerID = textContainer.map(ObjectIdentifier.init)
+		MainActor.assumeIsolated
+		{
+			guard managerID == bodyTextView.layoutManager.map(ObjectIdentifier.init),
+					containerID == bodyTextView.textContainer.map(ObjectIdentifier.init)
+			else
+			{
+				return
+			}
+			// Attachment layout can finish after a frame update at the same bounds size.
+			// Request a native layout pass rather than querying TextKit inside its callback.
+			viewIfLoaded?.needsLayout = true
+		}
 	}
 
 	@objc private func toggleExpanded()
@@ -544,7 +668,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 private final class ConversationBodyMeasurer
 {
 	private let storage = NSTextStorage()
-	private let layout = NSLayoutManager()
+	private let layout = ConversationMarkdownLayoutManager()
 	private let container = NSTextContainer(
 		size: NSSize(
 			width: 1,
@@ -565,6 +689,75 @@ private final class ConversationBodyMeasurer
 		width: CGFloat
 	) -> CGFloat
 	{
+		prepare(
+			text,
+			width: width
+		)
+		return max(
+			1,
+			ceil(layout.usedRect(for: container).height) + 2
+		)
+	}
+
+	func readingAnchor(
+		of text: NSAttributedString,
+		atY y: CGFloat,
+		width: CGFloat
+	) -> (character: Int, offset: CGFloat)?
+	{
+		prepare(
+			text,
+			width: width
+		)
+		guard layout.numberOfGlyphs > 0, y >= 0, y <= layout.usedRect(for: container).maxY
+		else
+		{
+			return nil
+		}
+		let glyph = min(
+			layout.numberOfGlyphs - 1,
+			layout.glyphIndex(
+				for: NSPoint(
+					x: 0,
+					y: y
+				),
+				in: container
+			)
+		)
+		let line = layout.lineFragmentRect(
+			forGlyphAt: glyph,
+			effectiveRange: nil
+		)
+		return (layout.characterIndexForGlyph(at: glyph), y - line.minY)
+	}
+
+	func lineOrigin(
+		of text: NSAttributedString,
+		atCharacter character: Int,
+		width: CGFloat
+	) -> CGFloat?
+	{
+		prepare(
+			text,
+			width: width
+		)
+		guard character >= 0, character < storage.length, layout.numberOfGlyphs > 0
+		else
+		{
+			return nil
+		}
+		let glyph = layout.glyphIndexForCharacter(at: character)
+		return layout.lineFragmentRect(
+			forGlyphAt: glyph,
+			effectiveRange: nil
+		).minY
+	}
+
+	private func prepare(
+		_ text: NSAttributedString,
+		width: CGFloat
+	)
+	{
 		if self.text !== text
 		{
 			storage.setAttributedString(text)
@@ -578,9 +771,5 @@ private final class ConversationBodyMeasurer
 			)
 		}
 		layout.ensureLayout(for: container)
-		return max(
-			1,
-			ceil(layout.usedRect(for: container).height) + 2
-		)
 	}
 }

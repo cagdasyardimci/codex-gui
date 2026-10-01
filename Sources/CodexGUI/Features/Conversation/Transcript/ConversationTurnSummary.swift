@@ -33,11 +33,11 @@ struct ConversationTurnSummary: Equatable
 			else if entry.kind == .agent, let index = indices[turnID]
 			{
 				let excerpt = String(entry.body.prefix(400))
-				summaries[index].reply = ConversationContentParser.parse(
+				let parsed = ConversationContentParser.parse(
 					excerpt,
 					markdown: true
 				)
-				.runs.map(\.text).joined()
+				summaries[index].reply = ConversationPlainTextRenderer.render(parsed)
 			}
 		}
 		return summaries

@@ -438,7 +438,8 @@ extension ConversationViewController
 		{
 			TranscriptPreparationCoordinator.ContentKey(
 				body: displayedBody(for: $0),
-				markdown: $0.kind == .agent
+				markdown: $0.kind == .agent || $0.kind == .user,
+				preserveSoftBreaks: $0.kind == .user
 			)
 		}
 		transcriptPreparation.prepare(

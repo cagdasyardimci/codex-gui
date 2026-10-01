@@ -271,6 +271,48 @@ struct TurnNavigationTests
 		#expect(summary.reply == "Implemented changes:\n\n• First change\n• Second change")
 	}
 
+	@Test func replyPreviewSeparatesBlocksAndKeepsHardBreaksCodeAndTableText()
+	{
+		let body = "Intro soft\ncontinuation  \nhard break\n\n"
+			+ "- first\n- second\n\n"
+			+ "```text\n  exact 😀\n\nnext  \n```\n\n"
+			+ "| Name | Value |\n| --- | --- |\n| alpha | 42 |\n\nAfter."
+		let summary = ConversationTurnSummary.make(from: [
+			entry(
+				"turn:request",
+				.user,
+				"Request"
+			),
+			entry(
+				"turn:reply",
+				.agent,
+				body
+			),
+		])[0]
+		#expect(summary.reply == "Intro soft continuation\nhard break\n\n"
+			+ "• first\n• second\n\n  exact 😀\n\nnext  \n\n"
+			+ "Name\nValue\nalpha\n42\n\nAfter.")
+	}
+
+	@Test func replyPreviewKeepsQuotedParagraphBoundaryInsideOneListItem()
+	{
+		let summary = ConversationTurnSummary.make(from: [
+			entry(
+				"turn:request",
+				.user,
+				"Request"
+			),
+			entry(
+				"turn:reply",
+				.agent,
+				"- > first\n  >\n  > second"
+			),
+		])[0]
+		#expect(summary.reply.hasPrefix("• "))
+		#expect(summary.reply.contains("first\n\nsecond"))
+		#expect(!summary.reply.contains("│"))
+	}
+
 	@Test func compactPreviewUsesAllThreeLinesForContent() throws
 	{
 		_ = NSApplication.shared

@@ -6,6 +6,170 @@ import Testing
 @Suite @MainActor
 struct ConversationViewControllerTests
 {
+	@Test func userAndAgentMarkdownRenderWhileOtherRolesKeepLiteralSource() async throws
+	{
+		_ = NSApplication.shared
+		let body = "# Shared heading\n\n**bold** [site](https://example.com/path)\n\n"
+			+ "| Name | Value |\n| --- | --- |\n| item | 42 |\n\n"
+			+ "```swift\n  let value = \"😀\"  \n```"
+		let kinds: [ConversationEntryKind] = [.user, .agent, .command, .tool, .notice]
+		let entries = kinds.enumerated().map
+		{
+			index, kind in
+			ConversationEntry(
+				id: "role-\(index)",
+				kind: kind,
+				title: "Role",
+				body: body
+			)
+		}
+		let controller = ConversationViewController()
+		controller.render(snapshot(entries))
+		await controller.waitForRendering()
+		#expect(controller.entries == entries)
+		for entry in entries
+		{
+			let content = try #require(controller.preparedContents[entry.id])
+			let display = content.attributedString
+			if entry.kind == .user || entry.kind == .agent
+			{
+				#expect(!display.string.contains("# Shared heading"))
+				#expect(display.string.contains("Shared heading"))
+				#expect(!display.string.contains("**bold**"))
+				#expect(content.codeBlocks == ["  let value = \"😀\"  \n"])
+				let link = (display.string as NSString).range(of: "site")
+				#expect((display.attribute(
+					.link,
+					at: link.location,
+					effectiveRange: nil
+				)
+					as? URL)?.absoluteString == "https://example.com/path")
+				let cell = (display.string as NSString).range(of: "item")
+				let paragraph = try #require(display.attribute(
+					.paragraphStyle,
+					at: cell.location,
+					effectiveRange: nil
+				) as? NSParagraphStyle)
+				#expect(paragraph.textBlocks.first is NSTextTableBlock)
+			}
+			else
+			{
+				#expect(display.string == body)
+				#expect(content.codeBlocks.isEmpty)
+				#expect(content.codeBlockRanges.isEmpty)
+				#expect(display.attribute(
+					.link,
+					at: 0,
+					effectiveRange: nil
+				) == nil)
+			}
+			#expect(entry.body == body)
+		}
+	}
+
+	@Test func userSoftBreaksRemainVisibleWithoutChangingAgentOrLiteralPreparation() async throws
+	{
+		_ = NSApplication.shared
+		let body = "First line\nSecond line\n\n**formatted**"
+		let entries: [ConversationEntry] = [
+			ConversationEntry(
+				id: "user",
+				kind: .user,
+				title: "You",
+				body: body
+			),
+			ConversationEntry(
+				id: "agent",
+				kind: .agent,
+				title: "Codex",
+				body: body
+			),
+			ConversationEntry(
+				id: "tool",
+				kind: .tool,
+				title: "Tool",
+				body: body
+			),
+		]
+		let controller = ConversationViewController()
+		controller.render(snapshot(entries))
+		await controller.waitForRendering()
+		let user = try #require(controller.preparedContents["user"])
+		let agent = try #require(controller.preparedContents["agent"])
+		let tool = try #require(controller.preparedContents["tool"])
+		#expect(user.attributedString.string == "First line\nSecond line\nformatted")
+		#expect(agent.attributedString.string == "First line Second line\nformatted")
+		#expect(tool.attributedString.string == body)
+		#expect(user !== agent)
+		#expect(controller.entries == entries)
+	}
+
+	@Test func canonicalScreenshotPromptUsesRichUserPreparationWithoutChangingItsSource(
+	) async throws
+	{
+		_ = NSApplication.shared
+		let body = ConversationMarkdownTestFixture.paritySource
+		let entry = ConversationEntry(
+			id: "canonical-user",
+			kind: .user,
+			title: "You",
+			body: body
+		)
+		let controller = ConversationViewController()
+		controller.render(snapshot([entry]))
+		await controller.waitForRendering()
+		let content = try #require(controller.preparedContents[entry.id])
+		let text = content.attributedString
+		#expect(controller.entries == [entry])
+		#expect(controller.entries.first?.body == body)
+		#expect(text.string.contains("Markdown Rendering Test"))
+		#expect(!text.string.contains("# Markdown Rendering Test"))
+		#expect(text.string.contains("This is a soft line break.\n"
+				+ "This should continue the same paragraph."))
+		#expect(text.string.contains("FINAL_MARKER"))
+		#expect(text.string.contains("TABLE_END_MARKER"))
+		#expect(text.string.contains("Inline math: $E = mc^2$"))
+		#expect(text.string.contains("<span>HTML_PROBE</span>"))
+		#expect(!text.string.contains("│"))
+		#expect(text.string.contains("◦ Nested bullet"))
+		#expect(text.string.contains("▪ Third-level bullet"))
+		try #require(content.codeBlocks.count == 4)
+		try #require(content.codeBlockRanges.count == 4)
+		for index in 0 ..< 3
+		{
+			#expect((text.string as NSString).substring(with: content.codeBlockRanges[index])
+				== content.codeBlocks[index])
+		}
+		#expect(content.codeBlocks[3] == "flowchart LR\n"
+			+ "    A[Markdown source] --> B[Parser]\n"
+			+ "    B --> C[Rendered content]\n")
+		let mathSource = "$$\n\\int_0^1 x^2\\,dx = \\frac{1}{3}\n$$"
+		let diagramSource = "```mermaid\n" + content.codeBlocks[3] + "```"
+		var richSources: [String] = []
+		text.enumerateAttribute(
+			.conversationSourceText,
+			in: NSRange(
+				location: 0,
+				length: text.length
+			)
+		)
+		{
+			value, range, _ in
+			if let source = value as? String
+			{
+				richSources.append(source)
+				#expect((text.string as NSString).substring(with: range) == "\u{FFFC}")
+				#expect(text.attribute(
+					.attachment,
+					at: range.location,
+					effectiveRange: nil
+				)
+					is NSTextAttachment)
+			}
+		}
+		#expect(richSources == [mathSource, diagramSource])
+	}
+
 	@Test func sameTranscriptInAnotherStoreCancelsOldPreparationAndKeepsCurrentDraft() async throws
 	{
 		_ = NSApplication.shared
@@ -857,7 +1021,8 @@ struct ConversationViewControllerTests
 		guard case .activity(let command) = controller.displayedRows[1]
 		else
 		{
-			Issue.record("Expected command activity"); return
+			Issue.record("Expected command activity")
+			return
 		}
 		controller.toggleActivity(command)
 		await controller.waitForRendering()
@@ -876,7 +1041,8 @@ struct ConversationViewControllerTests
 				case .activity(let group) = controller.displayedRows[0]
 		else
 		{
-			Issue.record("Expected retained activities"); return
+			Issue.record("Expected retained activities")
+			return
 		}
 		#expect(streamed.expanded)
 		#expect(streamed.command?.output == "hello")
@@ -986,7 +1152,8 @@ struct ConversationViewControllerTests
 		guard case .turnStatus(let timing) = controller.displayedRows[1]
 		else
 		{
-			Issue.record("Expected timing row"); return
+			Issue.record("Expected timing row")
+			return
 		}
 		#expect(timing.status == "statusUnknown")
 		#expect(timing.completedAt == nil)
@@ -1046,7 +1213,7 @@ struct ConversationViewControllerTests
 			item.viewDidLayout()
 		}
 		layout(item)
-		item.restoreOutputReadingPosition(.init(
+		item.restoreOutputReadingPosition(ConversationActivityCollectionItem.OutputReadingPosition(
 			origin: NSPoint(
 				x: 0,
 				y: 80

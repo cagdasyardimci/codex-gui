@@ -35,7 +35,9 @@ struct ConversationContentTests
 		let body = """
 		# Heading
 		- first
+
 		2. second [site](https://example.com/path)
+
 		```swift
 		let value = "  exact  "
 		```
@@ -57,7 +59,7 @@ struct ConversationContentTests
 				at: heading.location,
 				effectiveRange: nil
 			) as? NSFont
-		#expect(headingFont?.pointSize == 18)
+		#expect(headingFont?.pointSize == 24)
 		let link = (text as NSString).range(of: "site")
 		let url =
 			content.attributedString.attribute(
@@ -73,6 +75,16 @@ struct ConversationContentTests
 		_ = NSApplication.shared
 		let body = """
 		\(String(repeating: "Long output with text that wraps at a narrow pane width. ", count: 12))
+
+		> A quoted paragraph with **emphasis** and `inline code`.
+
+		- first item
+		  - nested item with text that wraps at a narrow width
+
+		| Name | Result |
+		| :--- | ---: |
+		| long table content that needs to wrap in a narrow pane | 42 |
+
 		```text
 		first
 		```
@@ -311,6 +323,7 @@ struct ConversationContentTests
 		}
 		let textView = try #require(findTextView(in: item.view))
 		#expect(buttons.map(\.title) == ["Copy code 1", "Copy code 2"])
+		try #require(buttons.count == 2)
 		#expect(buttons.allSatisfy
 		{
 			$0.superview === textView

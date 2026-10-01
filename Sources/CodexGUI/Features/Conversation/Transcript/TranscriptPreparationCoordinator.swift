@@ -8,6 +8,18 @@ final class TranscriptPreparationCoordinator
 	{
 		let body: String
 		let markdown: Bool
+		let preserveSoftBreaks: Bool
+
+		init(
+			body: String,
+			markdown: Bool,
+			preserveSoftBreaks: Bool = false
+		)
+		{
+			self.body = body
+			self.markdown = markdown
+			self.preserveSoftBreaks = preserveSoftBreaks
+		}
 	}
 
 	private let contentCache = ConversationContentCache()
@@ -54,7 +66,8 @@ final class TranscriptPreparationCoordinator
 				{
 					contents[entry.id] = await contentCache.content(
 						body: key.body,
-						markdown: key.markdown
+						markdown: key.markdown,
+						preserveSoftBreaks: key.preserveSoftBreaks
 					)
 				}
 			}
