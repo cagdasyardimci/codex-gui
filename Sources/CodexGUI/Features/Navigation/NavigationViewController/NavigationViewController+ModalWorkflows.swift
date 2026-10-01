@@ -2,6 +2,37 @@ import AppKit
 
 extension NavigationViewController
 {
+	func confirmDeleteTask(_ thread: ThreadSummary)
+	{
+		guard canManageSidebarTasks, let window = view.window
+		else
+		{
+			return
+		}
+		let name = thread.name ?? thread.preview ?? thread.id
+		let alert = NSAlert()
+		alert.messageText = "Delete task permanently?"
+		alert.informativeText = "The conversation “\(name)” will be permanently deleted. "
+			+ "This cannot be undone."
+		alert.alertStyle = .warning
+		alert.addButton(withTitle: "Cancel")
+		alert.addButton(withTitle: "Delete Permanently")
+		alert.buttons.last?.hasDestructiveAction = true
+		let capturedScope = modalScope
+		let complete = onDeleteTask
+		alert.beginSheetModal(for: window)
+		{
+			[weak self] response in
+			guard response == .alertSecondButtonReturn, self?.modalScope == capturedScope,
+					self?.canManageSidebarTasks == true
+			else
+			{
+				return
+			}
+			complete?(thread.id)
+		}
+	}
+
 	func editProject(_ project: URL)
 	{
 		guard let window = view.window

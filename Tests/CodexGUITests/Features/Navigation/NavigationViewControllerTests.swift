@@ -6,6 +6,101 @@ import Testing
 @Suite @MainActor
 struct NavigationViewControllerTests
 {
+	@Test func projectCanCollapseWithoutChangingSelectedTask() throws
+	{
+		_ = NSApplication.shared
+		let controller = NavigationViewController()
+		_ = controller.view
+		let project = URL(fileURLWithPath: "/tmp/sidebar").standardizedFileURL
+			.resolvingSymlinksInPath()
+		controller.currentProject = project
+		controller.threads = [try #require(ThreadSummary(json: ["id": "task", "name": "Task"]))]
+		controller.selectedThreadID = "task"
+		controller.filterThreads()
+		#expect(controller.chatsTable.numberOfRows == 2)
+		let expanded = try #require(controller.tableView(
+			controller.chatsTable,
+			viewFor: nil,
+			row: 0
+		)
+			as? ProjectSidebarCellView)
+		let expandedIcon = expanded.imageView?.image
+		controller.activateProject(project)
+		#expect(controller.chatsTable.numberOfRows == 1)
+		#expect(controller.selectedThreadID == "task")
+		#expect(controller.currentProject == project)
+		let collapsed = try #require(controller.tableView(
+			controller.chatsTable,
+			viewFor: nil,
+			row: 0
+		)
+			as? ProjectSidebarCellView)
+		#expect(collapsed.imageView?.image != expandedIcon)
+		controller.filterThreads()
+		#expect(controller.chatsTable.numberOfRows == 1)
+		controller.activateProject(project)
+		#expect(controller.chatsTable.numberOfRows == 2)
+		#expect(controller.chatsTable.selectedRow == 1)
+	}
+
+	@Test func taskTitleStaysFixedOnHoverAndArchiveTargetsItsOwnRow() throws
+	{
+		_ = NSApplication.shared
+		let controller = NavigationViewController()
+		_ = controller.view
+		controller.threads = [try #require(ThreadSummary(json: [
+			"id": "hovered",
+			"name": "A task title long enough to require truncation in the sidebar"
+		]))]
+		controller.selectedThreadID = "another"
+		controller.canManageSidebarTasks = true
+		controller.filterThreads()
+		let cell = try #require(controller.tableView(
+			controller.chatsTable,
+			viewFor: nil,
+			row: 0
+		)
+			as? TaskSidebarCellView)
+		cell.frame = NSRect(
+			x: 0,
+			y: 0,
+			width: 240,
+			height: 30
+		)
+		cell.layoutSubtreeIfNeeded()
+		let label = try #require(cell.textField)
+		let restingFrame = label.frame
+		#expect(label.alignmentRect(forFrame: restingFrame).minX == 26)
+		#expect(label.lineBreakMode == .byTruncatingTail)
+		#expect(label.cell?.isScrollable == false)
+		#expect(!label.allowsExpansionToolTips)
+		let event = try #require(NSEvent.enterExitEvent(
+			with: .mouseEntered,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: 0,
+			context: nil,
+			eventNumber: 0,
+			trackingNumber: 0,
+			userData: nil
+		))
+		cell.mouseEntered(with: event)
+		cell.layoutSubtreeIfNeeded()
+		#expect(label.frame == restingFrame)
+		var archived: String?
+		controller.onArchiveTask =
+		{
+			archived = $0
+		}
+		cell.archiveButton.performClick(nil)
+		#expect(archived == "hovered")
+		#expect(controller.selectedThreadID == "another")
+		cell.mouseExited(with: event)
+		cell.layoutSubtreeIfNeeded()
+		#expect(label.frame == restingFrame)
+	}
+
 	@Test func streamedTranscriptAndUsageDoNotRebuildTaskPicker() throws
 	{
 		_ = NSApplication.shared

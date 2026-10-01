@@ -74,7 +74,6 @@ extension NavigationViewController
 		returnToTaskButton.isEnabled =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID != snapshot.selectedThreadID
 		returnToTaskButton.isHidden = !returnToTaskButton.isEnabled
-		archivedButton.state = snapshot.showingArchived ? .on : .off
 		projectActionsButton.contentTintColor =
 			snapshot
 				.showingArchived || activeState != nil ? .controlAccentColor : .secondaryLabelColor
@@ -99,46 +98,89 @@ extension NavigationViewController
 		taskActions.autoenablesItems = false
 		for workspace in snapshot.taskWorkspaces
 		{
-			let state =
-				workspace.executionState?.isBusy == true
-					? "● \(workspace.executionState!.title) · " : ""
-			let issue = workspace.issue.map
-			{
-				" · \($0)"
-			} ?? ""
-			taskPicker.addItem(withTitle: "\(state)\(workspace.title)\(issue)")
-			taskPicker.lastItem?.representedObject = workspace.id
-			taskPicker.lastItem?.isEnabled =
-				workspace.phase == .active
-					&& (workspace.issue == nil
-						|| workspace.issue == TaskWorkspaceRecoveryKind.removalInterrupted.rawValue)
-			taskPicker.lastItem?.toolTip =
-				"\(workspace.checkoutPath)\n\(workspace.branch)"
-					+
-					(workspace
-						.sourceWasDirty ? "\nSource had uncommitted changes at creation." : "")
-			if workspace.phase == .active
-			{
-				let item = taskActions.addItem(
-					withTitle: "Remove checkout: \(workspace.title)",
-					action: #selector(removeWorkspace(_:)),
-					keyEquivalent: ""
-				)
-				item.target = self
-				item.representedObject = workspace.id
-				item.isEnabled = workspace.canRemoveCheckout
-			}
-			else if workspace.phase == .preparing
-			{
-				let item = taskActions.addItem(
-					withTitle: "Cancel incomplete creation: \(workspace.title)",
-					action: #selector(cancelWorkspaceCreation(_:)),
-					keyEquivalent: ""
-				)
-				item.target = self
-				item.representedObject = workspace.id
-			}
+			appendWorkspaceChoice(workspace)
+			appendWorkspaceAction(
+				workspace,
+				to: taskActions
+			)
 		}
+		appendWorkspaceManagementItems(
+			snapshot,
+			taskActions: taskActions
+		)
+
+		selectedWorkspaceID = snapshot.selectedTaskWorkspaceID
+		restoreWorkspaceSelection()
+		taskSummaryLabel.stringValue =
+			[snapshot.taskStatusSummary, snapshot.taskWorkspaceMessage].compactMap
+				{
+					$0
+				}
+				.joined(separator: " · ")
+		taskSummaryLabel.toolTip = taskSummaryLabel.stringValue
+		taskSummaryLabel.isHidden = taskSummaryLabel.stringValue.isEmpty
+	}
+
+	private func appendWorkspaceChoice(_ workspace: TaskWorkspaceChoice)
+	{
+		let statePrefix: String
+		if let executionState = workspace.executionState, executionState.isBusy
+		{
+			statePrefix = "● \(executionState.title) · "
+		}
+		else
+		{
+			statePrefix = ""
+		}
+		let issue = workspace.issue.map
+		{
+			" · \($0)"
+		} ?? ""
+		taskPicker.addItem(withTitle: "\(statePrefix)\(workspace.title)\(issue)")
+		taskPicker.lastItem?.representedObject = workspace.id
+		taskPicker.lastItem?.isEnabled =
+			workspace.phase == .active
+				&& (workspace.issue == nil
+					|| workspace.issue == TaskWorkspaceRecoveryKind.removalInterrupted.rawValue)
+		let sourceStateNote = workspace.sourceWasDirty
+			? "\nSource had uncommitted changes at creation." : ""
+		taskPicker.lastItem?.toolTip =
+			"\(workspace.checkoutPath)\n\(workspace.branch)" + sourceStateNote
+	}
+
+	private func appendWorkspaceAction(
+		_ workspace: TaskWorkspaceChoice,
+		to taskActions: NSMenu
+	)
+	{
+		if workspace.phase == .active
+		{
+			let item = taskActions.addItem(
+				withTitle: "Remove checkout: \(workspace.title)",
+				action: #selector(removeWorkspace(_:)),
+				keyEquivalent: ""
+			)
+			item.target = self
+			item.representedObject = workspace.id
+			item.isEnabled = workspace.canRemoveCheckout
+		}
+		else if workspace.phase == .preparing
+		{
+			let item = taskActions.addItem(
+				withTitle: "Cancel incomplete creation: \(workspace.title)",
+				action: #selector(cancelWorkspaceCreation(_:)),
+				keyEquivalent: ""
+			)
+			item.target = self
+			item.representedObject = workspace.id
+		}
+	}
+
+	private func appendWorkspaceManagementItems(
+		_ snapshot: NavigationPresentation,
+		taskActions: NSMenu
+	)
+	{
 		taskPicker.menu?.addItem(.separator())
 		let create = taskPicker.menu?.addItem(
 			withTitle: "New Task Checkout…",
@@ -157,16 +199,6 @@ extension NavigationViewController
 			actions.submenu = taskActions
 			taskPicker.menu?.addItem(actions)
 		}
-		selectedWorkspaceID = snapshot.selectedTaskWorkspaceID
-		restoreWorkspaceSelection()
-		taskSummaryLabel.stringValue =
-			[snapshot.taskStatusSummary, snapshot.taskWorkspaceMessage].compactMap
-				{
-					$0
-				}
-				.joined(separator: " · ")
-		taskSummaryLabel.toolTip = taskSummaryLabel.stringValue
-		taskSummaryLabel.isHidden = taskSummaryLabel.stringValue.isEmpty
 	}
 
 	@objc func selectWorkspace()

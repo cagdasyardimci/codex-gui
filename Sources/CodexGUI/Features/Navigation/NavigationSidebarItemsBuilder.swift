@@ -7,7 +7,8 @@ enum NavigationSidebarItemsBuilder
 		recentProjects: [URL],
 		currentProject: URL?,
 		pinnedProjectPaths: Set<String>,
-		visibleThreads: [ThreadSummary]
+		visibleThreads: [ThreadSummary],
+		isCurrentProjectCollapsed: Bool = false
 	) -> [NavigationSidebarItem]
 	{
 		var candidates = recentProjects
@@ -47,7 +48,7 @@ enum NavigationSidebarItemsBuilder
 		for project in projects
 		{
 			items.append(.project(project))
-			if project == currentProject
+			if project == currentProject && !isCurrentProjectCollapsed
 			{
 				items.append(contentsOf: visibleThreads.map
 				{

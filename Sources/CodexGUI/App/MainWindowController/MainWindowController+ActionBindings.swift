@@ -79,6 +79,14 @@ extension MainWindowController
 		{
 			target.dispatch(.renameThread($0))
 		}
+		navigation.onArchiveTask =
+		{
+			target.dispatch(.archiveTask($0))
+		}
+		navigation.onDeleteTask =
+		{
+			target.dispatch(.deleteTask($0))
+		}
 		navigation.onArchiveThread =
 		{
 			target.dispatch(.archiveThread)

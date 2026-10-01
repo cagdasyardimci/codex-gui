@@ -262,6 +262,13 @@ final class ProjectSidebarCellView: NSTableCellView
 			weight: .regular
 		)
 		label.lineBreakMode = .byTruncatingTail
+		label.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		label.cell?.usesSingleLineMode = true
+		label.cell?.isScrollable = false
+		label.allowsExpansionToolTips = false
 
 		configureActions()
 
@@ -331,11 +338,17 @@ final class ProjectSidebarCellView: NSTableCellView
 		project: URL,
 		name: String,
 		isCurrent: Bool,
+		isExpanded: Bool = false,
 		isPinned: Bool,
 		canStartChat: Bool
 	)
 	{
 		isCurrentProject = isCurrent
+		imageView?.image = NSImage(
+			systemSymbolName: isExpanded ? "folder.fill" : "folder",
+			accessibilityDescription: isExpanded ? "Expanded project" :
+				"Collapsed project"
+		)
 		textField?.stringValue = name
 		textField?.font = .systemFont(
 			ofSize: 14,

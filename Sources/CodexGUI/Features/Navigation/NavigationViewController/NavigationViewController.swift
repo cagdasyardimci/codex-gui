@@ -17,6 +17,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var onSetArchivedFilter: ((Bool) -> Void)?
 	var onRenameThread: ((String) -> Void)?
 	var onArchiveThread: (() -> Void)?
+	var onArchiveTask: ((String) -> Void)?
+	var onDeleteTask: ((String) -> Void)?
 	var onToggleProjectPin: ((URL) -> Void)?
 	var onRenameProject: ((URL, String) -> Void)?
 	var onNewChatInProject: ((URL) -> Void)?
@@ -51,11 +53,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	let projectActionsPopover = NSPopover()
 	let projectInfoPopover = NSPopover()
 	let projectInfoView = ProjectInfoPopoverView(frame: .zero)
-	let archivedButton = NSButton(
-		checkboxWithTitle: "Archived",
-		target: nil,
-		action: nil
-	)
 	let renameButton = NSButton(
 		title: "Rename…",
 		target: nil,
@@ -80,6 +77,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var visibleThreads: [ThreadSummary] = []
 	var recentProjects: [URL] = []
 	var currentProject: URL?
+	var isCurrentProjectCollapsed = false
 	var pinnedProjectPaths: Set<String> = []
 	var projectDisplayNames: [String: String] = [:]
 	var projectInfoProject: URL?
@@ -92,6 +90,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var activeThreadID: String?
 	var activeExecutionState: ExecutionState?
 	private var canManageSelectedThread = false
+	var canManageSidebarTasks = false
 
 	override func loadView()
 	{
@@ -156,6 +155,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	}
 
 	private var renderedPresentation: NavigationPresentation?
+	private var renderedManagementAvailability = false
 
 	func render(_ snapshot: ConversationSnapshot)
 	{
@@ -187,6 +187,10 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			currentProject != nextProject || recentProjects != snapshot.recentProjects
 				|| pinnedProjectPaths != snapshot.pinnedProjectPaths
 				|| projectDisplayNames != snapshot.projectDisplayNames
+		if currentProject != nextProject
+		{
+			isCurrentProjectCollapsed = false
+		}
 		currentProject = nextProject
 		recentProjects = snapshot.recentProjects
 		pinnedProjectPaths = snapshot.pinnedProjectPaths
@@ -210,7 +214,9 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			threads != snapshot.threads || selectedThreadID != snapshot.selectedThreadID
 				|| activeThreadChanged || activeStateChanged || projectsChanged
 				|| previousCanStartProjectChat != canStartProjectChat
+				|| renderedManagementAvailability != snapshot.canManageThreads
 
+		renderedManagementAvailability = snapshot.canManageThreads
 		if shouldReloadSidebar
 		{
 			threads = snapshot.threads
@@ -240,8 +246,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		currentProjectActiveTaskCount = activeState?.isBusy == true ? 1 : 0
 		canStartProjectChat = newChatButton.isEnabled && activeState?.isBusy != true
 		chatsTable.isEnabled = !waitingForThreadID
-		archivedButton.isEnabled = !waitingForThreadID
 		canManageSelectedThread = snapshot.canManageThreads
+		canManageSidebarTasks = snapshot.canManageThreads
 		archiveButton.title = snapshot.showingArchived ? "Restore" : "Archive"
 		archiveButton.toolTip = archiveButton.title
 	}
@@ -267,11 +273,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			renameButton.toolTip = "Rename \(title)"
 			archiveButton.toolTip = "\(archiveButton.title) \(title)"
 		}
-	}
-
-	@objc func toggleArchived()
-	{
-		onSetArchivedFilter?(archivedButton.state == .on)
 	}
 
 	@objc func archiveThread()

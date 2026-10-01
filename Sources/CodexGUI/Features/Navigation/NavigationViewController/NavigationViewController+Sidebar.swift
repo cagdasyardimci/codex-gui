@@ -69,7 +69,8 @@ extension NavigationViewController
 			recentProjects: recentProjects,
 			currentProject: currentProject,
 			pinnedProjectPaths: pinnedProjectPaths,
-			visibleThreads: visibleThreads
+			visibleThreads: visibleThreads,
+			isCurrentProjectCollapsed: isCurrentProjectCollapsed
 		)
 		updatingSidebarSelection = true
 		defer
@@ -138,33 +139,20 @@ extension NavigationViewController
 			return nil
 		}
 		let identifier = NSUserInterfaceItemIdentifier("conversationTitle")
-		let cell =
-			tableView.makeView(
-				withIdentifier: identifier,
-				owner: self
-			) as? NSTableCellView
-			?? NSTableCellView()
+		let cell = tableView.makeView(
+			withIdentifier: identifier,
+			owner: self
+		)
+			as? TaskSidebarCellView ?? TaskSidebarCellView(frame: .zero)
 		cell.identifier = identifier
-
-		if cell.textField == nil
+		cell.setActionsEnabled(canManageSidebarTasks)
+		cell.onArchive =
 		{
-			let label = NSTextField(labelWithString: "")
-			label.font = .systemFont(ofSize: 14)
-			label.lineBreakMode = .byTruncatingTail
-			cell.addSubview(label)
-			label.translatesAutoresizingMaskIntoConstraints = false
-			NSLayoutConstraint.activate([
-				label.leadingAnchor.constraint(
-					equalTo: cell.leadingAnchor,
-					constant: 50
-				),
-				label.trailingAnchor.constraint(
-					equalTo: cell.trailingAnchor,
-					constant: -10
-				),
-				label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-			])
-			cell.textField = label
+			[weak self] in self?.onArchiveTask?(thread.id)
+		}
+		cell.onDelete =
+		{
+			[weak self] in self?.confirmDeleteTask(thread)
 		}
 
 		let isActiveTask = thread.id == activeThreadID
@@ -196,6 +184,7 @@ extension NavigationViewController
 			project: project,
 			name: displayName(for: project),
 			isCurrent: project == currentProject,
+			isExpanded: project == currentProject && !isCurrentProjectCollapsed,
 			isPinned: pinnedProjectPaths.contains(projectKey(for: project)),
 			canStartChat: canStartProjectChat
 		)
@@ -248,15 +237,39 @@ extension NavigationViewController
 		switch sidebarItems[row]
 		{
 		case .project(let project):
-			if project != currentProject
+			if NSApp.currentEvent?.type == .keyDown
 			{
-				onSelectRecentProject?(project)
+				activateProject(project)
 			}
 		case .thread(let thread):
 			if thread.id != selectedThreadID
 			{
 				onSelectThread?(thread.id)
 			}
+		}
+	}
+
+	@objc func sidebarClicked()
+	{
+		let row = chatsTable.clickedRow
+		guard sidebarItems.indices.contains(row), case .project(let project) = sidebarItems[row]
+		else
+		{
+			return
+		}
+		activateProject(project)
+	}
+
+	func activateProject(_ project: URL)
+	{
+		if project == currentProject
+		{
+			isCurrentProjectCollapsed.toggle()
+			filterThreads()
+		}
+		else
+		{
+			onSelectRecentProject?(project)
 		}
 	}
 

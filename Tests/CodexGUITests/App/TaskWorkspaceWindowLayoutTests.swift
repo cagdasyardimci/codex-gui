@@ -283,6 +283,7 @@ struct TaskWorkspaceWindowLayoutTests
 		)
 		window.makeKeyAndOrderFront(nil)
 		openActions.performClick(nil)
+		#expect(findVisibleControl(label: "Show archived conversations") == nil)
 		let picker =
 			try #require(findVisibleControl(label: "Selected task checkout") as? NSPopUpButton)
 		#expect(picker.itemArray.contains
@@ -315,7 +316,6 @@ struct TaskWorkspaceWindowLayoutTests
 			for label in [
 				"Selected task checkout",
 				"Running task summary",
-				"Show archived conversations",
 			]
 			{
 				let control = try #require(findVisibleControl(label: label))

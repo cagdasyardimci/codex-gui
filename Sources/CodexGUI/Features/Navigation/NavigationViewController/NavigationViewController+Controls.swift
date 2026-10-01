@@ -142,12 +142,6 @@ extension NavigationViewController
 
 	func configureThreadManagementControls()
 	{
-		archivedButton.target = self
-		archivedButton.action = #selector(toggleArchived)
-		archivedButton.setAccessibilityLabel("Show archived conversations")
-		archivedButton.controlSize = .small
-		archivedButton.font = .systemFont(ofSize: 11)
-
 		renameButton.target = self
 		renameButton.action = #selector(renameThread)
 		renameButton.setAccessibilityLabel("Rename selected conversation")
@@ -185,6 +179,8 @@ extension NavigationViewController
 		chatsTable.backgroundColor = .clear
 		chatsTable.usesAlternatingRowBackgroundColors = false
 		chatsTable.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+		chatsTable.target = self
+		chatsTable.action = #selector(sidebarClicked)
 		chatsTable.delegate = self
 		chatsTable.dataSource = self
 		chatsTable.setAccessibilityLabel("Projects and saved conversations")
@@ -225,7 +221,6 @@ extension NavigationViewController
 				taskRow,
 				taskSummaryLabel,
 				activeTaskRow,
-				archivedButton,
 				managementRow
 			],
 			spacing: 10
