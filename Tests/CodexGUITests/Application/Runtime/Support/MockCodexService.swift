@@ -47,6 +47,7 @@ final class MockCodexService: CodexService
 		(modelID: String?, effort: String?, preferences: RunPreferences)
 	] =
 		[]
+	var capturedTurnServiceTiers: [String?] = []
 	var startTurnError: Error?
 	var readThreadError: Error?
 	var readThreadCount = 0
@@ -120,6 +121,7 @@ final class MockCodexService: CodexService
 		}
 		return "codex-cli 0.153.2"
 	}
+
 	func connect() async throws
 	{
 		connectionCount += 1
@@ -131,6 +133,7 @@ final class MockCodexService: CodexService
 			}
 		}
 	}
+
 	func disconnect()
 	{
 	}
@@ -148,6 +151,7 @@ final class MockCodexService: CodexService
 	{
 		URL(string: "https://example.com/login")!
 	}
+
 	func models() async throws -> [ModelOption]
 	{
 		if let modelsError
@@ -156,6 +160,7 @@ final class MockCodexService: CodexService
 		}
 		return availableModels
 	}
+
 	func skills(for directory: URL) async throws -> SkillCatalog
 	{
 		skillReadCount += 1
@@ -176,10 +181,13 @@ final class MockCodexService: CodexService
 			errors: []
 		)
 	}
+
 	func rateLimits() async throws -> AccountRateLimitsSnapshot
 	{
 		rateLimitReadCount += 1
-		if suspendNextRateLimitRead || suspendRateLimitReadNumbers.contains(rateLimitReadCount)
+		let shouldSuspendRead =
+			suspendNextRateLimitRead || suspendRateLimitReadNumbers.contains(rateLimitReadCount)
+		if shouldSuspendRead
 		{
 			suspendNextRateLimitRead = false
 			return try await withCheckedThrowingContinuation
@@ -190,6 +198,7 @@ final class MockCodexService: CodexService
 		}
 		return fixtureRateLimits
 	}
+
 	func threads(for directory: URL) async throws -> [ThreadSummary]
 	{
 		fixtureDirectory = directory
@@ -201,6 +210,7 @@ final class MockCodexService: CodexService
 			)]
 		} ?? [])
 	}
+
 	func threads(
 		for directory: URL,
 		archived: Bool
@@ -434,15 +444,7 @@ final class MockCodexService: CodexService
 	) async throws -> CodexTurn
 	{
 		sentInputRequests.append(inputs)
-		let text = inputs.compactMap
-		{
-			input -> String? in
-			if case .text(let text) = input
-			{
-				return text
-			}
-			return nil
-		}.joined(separator: "\n")
+		let text = textContent(in: inputs)
 		return try await startTurn(
 			threadId: threadId,
 			text: text,
@@ -469,6 +471,36 @@ final class MockCodexService: CodexService
 			model: model,
 			effort: effort,
 			skills: skills
+		)
+	}
+
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?,
+		serviceTier: String?
+	) async throws -> CodexTurn
+	{
+		guard collaborationMode == nil
+		else
+		{
+			throw AppServerError
+				.requestRejected("This Codex service cannot set collaboration mode.")
+		}
+		capturedTurnServiceTiers.append(serviceTier)
+		return try await startTurn(
+			threadId: threadId,
+			inputs: inputs,
+			model: model,
+			effort: effort,
+			skills: skills,
+			cwd: cwd,
+			preferences: preferences
 		)
 	}
 
@@ -516,7 +548,17 @@ final class MockCodexService: CodexService
 	) async throws -> String
 	{
 		steeredInputRequests.append(inputs)
-		let text = inputs.compactMap
+		let text = textContent(in: inputs)
+		return try await steerTurn(
+			threadId: threadId,
+			expectedTurnId: expectedTurnId,
+			text: text
+		)
+	}
+
+	private func textContent(in inputs: [TurnInput]) -> String
+	{
+		let textInputs = inputs.compactMap
 		{
 			input -> String? in
 			if case .text(let text) = input
@@ -524,12 +566,8 @@ final class MockCodexService: CodexService
 				return text
 			}
 			return nil
-		}.joined(separator: "\n")
-		return try await steerTurn(
-			threadId: threadId,
-			expectedTurnId: expectedTurnId,
-			text: text
-		)
+		}
+		return textInputs.joined(separator: "\n")
 	}
 
 	func finishPendingRead(with detail: ThreadDetail)

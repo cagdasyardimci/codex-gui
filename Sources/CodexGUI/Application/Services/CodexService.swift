@@ -46,6 +46,26 @@ protocol CodexService: AnyObject
 		expectedDirectory: URL?
 	) async throws -> ThreadDetail
 	func readThread(id: String) async throws -> ThreadDetail
+	func forkThread(
+		id: String,
+		expectedDirectory: URL?
+	) async throws -> ThreadDetail
+	func compactThread(id: String) async throws
+	func startReview(
+		threadId: String,
+		target: ReviewTarget
+	) async throws -> ReviewStartResult
+	func startReview(
+		threadId: String,
+		target: ReviewTarget,
+		delivery: ReviewDelivery
+	)
+		async throws -> ReviewStartResult
+	func collaborationModes() async throws -> [CollaborationModePreset]
+	func updateThreadSettings(
+		id: String,
+		settings: ThreadSettingsUpdate
+	) async throws
 	func loadEarlierTurns(
 		threadId: String,
 		cursor: String
@@ -91,6 +111,27 @@ protocol CodexService: AnyObject
 		cwd: URL?,
 		preferences: RunPreferences
 	) async throws -> CodexTurn
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?
+	) async throws -> CodexTurn
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?,
+		serviceTier: String?
+	) async throws -> CodexTurn
 	func steerTurn(
 		threadId: String,
 		expectedTurnId: String,
@@ -113,6 +154,117 @@ protocol CodexService: AnyObject
 
 extension CodexService
 {
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?,
+		serviceTier: String?
+	) async throws -> CodexTurn
+	{
+		guard !preferences.fastMode
+		else
+		{
+			throw AppServerError
+				.requestRejected("This Codex service cannot select a fast service tier.")
+		}
+		guard serviceTier == nil || serviceTier == "default"
+		else
+		{
+			throw AppServerError.requestRejected("This Codex service cannot select a service tier.")
+		}
+		return try await startTurn(
+			threadId: threadId,
+			inputs: inputs,
+			model: model,
+			effort: effort,
+			skills: skills,
+			cwd: cwd,
+			preferences: preferences,
+			collaborationMode: collaborationMode
+		)
+	}
+
+	func forkThread(
+		id: String,
+		expectedDirectory: URL?
+	) async throws -> ThreadDetail
+	{
+		throw AppServerError.requestRejected("This Codex service cannot fork conversations.")
+	}
+
+	func compactThread(id: String) async throws
+	{
+		throw AppServerError.requestRejected("This Codex service cannot compact conversations.")
+	}
+
+	func startReview(
+		threadId: String,
+		target: ReviewTarget
+	) async throws -> ReviewStartResult
+	{
+		try await startReview(
+			threadId: threadId,
+			target: target,
+			delivery: .inline
+		)
+	}
+
+	func startReview(
+		threadId: String,
+		target: ReviewTarget,
+		delivery: ReviewDelivery
+	)
+		async throws -> ReviewStartResult
+	{
+		throw AppServerError.requestRejected("This Codex service cannot start a review.")
+	}
+
+	func collaborationModes() async throws -> [CollaborationModePreset]
+	{
+		throw AppServerError.requestRejected("This Codex service cannot list collaboration modes.")
+	}
+
+	func updateThreadSettings(
+		id: String,
+		settings: ThreadSettingsUpdate
+	) async throws
+	{
+		throw AppServerError.requestRejected("This Codex service cannot update thread settings.")
+	}
+
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?
+	) async throws -> CodexTurn
+	{
+		guard collaborationMode == nil
+		else
+		{
+			throw AppServerError
+				.requestRejected("This Codex service cannot set collaboration mode.")
+		}
+		return try await startTurn(
+			threadId: threadId,
+			inputs: inputs,
+			model: model,
+			effort: effort,
+			skills: skills,
+			cwd: cwd,
+			preferences: preferences
+		)
+	}
+
 	func startTurn(
 		threadId: String,
 		inputs: [TurnInput],

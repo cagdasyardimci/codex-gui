@@ -12,6 +12,53 @@ extension AppServer
 		let turnID = parameters["turnId"] as? String ?? ""
 		switch method
 		{
+		case "thread/tokenUsage/updated":
+			guard !threadID.isEmpty, !turnID.isEmpty,
+					let rawUsage = parameters["tokenUsage"] as? [String: Any],
+					let usage = ThreadTokenUsage(json: rawUsage)
+			else
+			{
+				return
+			}
+			onEvent?(.tokenUsageUpdated(
+				threadId: threadID,
+				turnId: turnID,
+				usage: usage
+			))
+		case "thread/settings/updated":
+			guard !threadID.isEmpty,
+					let rawSettings = parameters["threadSettings"] as? [String: Any],
+					let settings = ThreadSettings(json: rawSettings)
+			else
+			{
+				return
+			}
+			onEvent?(.threadSettingsUpdated(
+				threadId: threadID,
+				settings: settings
+			))
+		case "thread/status/changed":
+			guard !threadID.isEmpty,
+					let rawStatus = parameters["status"] as? [String: Any],
+					let status = ThreadStatus(json: rawStatus)
+			else
+			{
+				return
+			}
+			onEvent?(.threadStatusChanged(
+				threadId: threadID,
+				status: status
+			))
+		case "thread/compacted":
+			guard !threadID.isEmpty, !turnID.isEmpty
+			else
+			{
+				return
+			}
+			onEvent?(.contextCompacted(
+				threadId: threadID,
+				turnId: turnID
+			))
 		case "turn/started":
 			if let turn = (parameters["turn"] as? [String: Any]).flatMap(CodexTurn.init(json:))
 			{
@@ -107,24 +154,7 @@ extension AppServer
 				)
 			)
 		case "serverRequest/resolved":
-			guard let wireID = parameters["requestId"].flatMap(JSONRPCRequestID.init(json:)),
-					let resolvedThreadID = parameters["threadId"] as? String
-			else
-			{
-				return
-			}
-			let requestID = wireID.key
-			if let pendingRequest = interactions[requestID],
-				pendingRequest.threadId != resolvedThreadID
-			{
-				return
-			}
-			interactions.removeValue(forKey: requestID)
-			answeredInteractions.remove(requestID)
-			onEvent?(.interactionResolved(
-				threadId: resolvedThreadID,
-				requestID: requestID
-			))
+			resolvePendingInteraction(from: parameters)
 		case "account/updated", "account/login/completed":
 			onEvent?(.accountUpdated)
 		case "skills/changed":
@@ -145,4 +175,27 @@ extension AppServer
 			break
 		}
 	}
+
+	private func resolvePendingInteraction(from parameters: [String: Any])
+	{
+		guard let wireID = parameters["requestId"].flatMap(JSONRPCRequestID.init(json:)),
+				let resolvedThreadID = parameters["threadId"] as? String
+		else
+		{
+			return
+		}
+		let requestID = wireID.key
+		if let pendingRequest = interactions[requestID],
+			pendingRequest.threadId != resolvedThreadID
+		{
+			return
+		}
+		interactions.removeValue(forKey: requestID)
+		answeredInteractions.remove(requestID)
+		onEvent?(.interactionResolved(
+			threadId: resolvedThreadID,
+			requestID: requestID
+		))
+	}
+
 }

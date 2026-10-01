@@ -6,6 +6,7 @@ enum AppServerError: LocalizedError
 	case incompatibleVersion(String)
 	case disconnected
 	case protocolError(String)
+	case requestRejected(String)
 	case invalidInteraction(String)
 	case requestTimedOut(String)
 
@@ -17,7 +18,8 @@ enum AppServerError: LocalizedError
 		case .incompatibleVersion(let version):
 			"Codex CLI \(version) is older than the supported app-server protocol (0.153.2)."
 		case .disconnected: "Codex app-server disconnected. Reconnect to refresh state."
-		case .protocolError(let message), .invalidInteraction(let message): message
+		case .protocolError(let message), .requestRejected(let message),
+				.invalidInteraction(let message): message
 		case .requestTimedOut(let method):
 			if method == "turn/start"
 			{

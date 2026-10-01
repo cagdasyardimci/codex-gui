@@ -38,6 +38,7 @@ struct ThreadDetail
 	let summary: ThreadSummary
 	let turns: [CodexTurn]
 	let nextTurnsCursor: String?
+	var settings: ThreadSettings? = nil
 }
 
 struct CodexTurn
@@ -195,27 +196,15 @@ struct CodexItem
 		}
 		self.id = id
 		self.type = type
-		if type == "userMessage"
-		{
-			let content = json["content"] as? [[String: Any]] ?? []
-			self.references = content.enumerated().compactMap
-			{
-				index, value in
-				UserMessageReference(
-					json: value,
-					id: "\(id):\(index)"
-				)
-			}
-			self.text = content.compactMap
-			{
-				$0["text"] as? String
-			}.joined(separator: "\n")
-		}
-		else
-		{
-			self.text = json["text"] as? String
-			self.references = []
-		}
+
+		let content = Self.decodeContent(
+			from: json,
+			id: id,
+			type: type
+		)
+		self.text = content.text
+		self.references = content.references
+
 		self.command = json["command"] as? String
 		self.commandActions = (json["commandActions"] as? [[String: Any]] ?? [])
 			.compactMap(CodexCommandAction.init(json:))
@@ -228,6 +217,46 @@ struct CodexItem
 		self.changes = (json["changes"] as? [[String: Any]] ?? [])
 			.compactMap(FileChange.init(json:))
 	}
+
+	private static func decodeContent(
+		from json: [String: Any],
+		id: String,
+		type: String
+	) -> (text: String?, references: [UserMessageReference])
+	{
+		let text: String?
+		let references: [UserMessageReference]
+		let isReviewModeItem = type == "enteredReviewMode" || type == "exitedReviewMode"
+		if type == "userMessage"
+		{
+			let content = json["content"] as? [[String: Any]] ?? []
+			references = content.enumerated().compactMap
+			{
+				index, value in
+				UserMessageReference(
+					json: value,
+					id: "\(id):\(index)"
+				)
+			}
+			text = content.compactMap
+			{
+				$0["text"] as? String
+			}.joined(separator: "\n")
+		}
+		else if isReviewModeItem
+		{
+			text = json["review"] as? String
+			references = []
+		}
+		else
+		{
+			text = json["text"] as? String
+			references = []
+		}
+
+		return (text, references)
+	}
+
 }
 
 struct UserMessageReference: Equatable

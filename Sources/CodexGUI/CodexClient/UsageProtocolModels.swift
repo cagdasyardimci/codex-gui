@@ -1,5 +1,67 @@
 import Foundation
 
+struct TokenUsageBreakdown: Equatable
+{
+	let inputTokens: Int64
+	let cachedInputTokens: Int64
+	let cacheWriteInputTokens: Int64
+	let outputTokens: Int64
+	let reasoningOutputTokens: Int64
+	let totalTokens: Int64
+
+	init?(json: [String: Any])
+	{
+		guard let input = Self.count(json["inputTokens"]),
+				let cached = Self.count(json["cachedInputTokens"]),
+				let output = Self.count(json["outputTokens"]),
+				let reasoning = Self.count(json["reasoningOutputTokens"]),
+				let total = Self.count(json["totalTokens"])
+		else
+		{
+			return nil
+		}
+		self.inputTokens = input
+		self.cachedInputTokens = cached
+		self.cacheWriteInputTokens = Self.count(json["cacheWriteInputTokens"]) ?? 0
+		self.outputTokens = output
+		self.reasoningOutputTokens = reasoning
+		self.totalTokens = total
+	}
+
+	private static func count(_ value: Any?) -> Int64?
+	{
+		guard let parsed = value.flatMap(JSONRPCRequestID.init(json:)),
+				case .integer(let count) = parsed
+		else
+		{
+			return nil
+		}
+		return count
+	}
+}
+
+struct ThreadTokenUsage: Equatable
+{
+	let last: TokenUsageBreakdown
+	let total: TokenUsageBreakdown
+	let modelContextWindow: Int64?
+
+	init?(json: [String: Any])
+	{
+		guard let rawLast = json["last"] as? [String: Any],
+				let last = TokenUsageBreakdown(json: rawLast),
+				let rawTotal = json["total"] as? [String: Any],
+				let total = TokenUsageBreakdown(json: rawTotal)
+		else
+		{
+			return nil
+		}
+		self.last = last
+		self.total = total
+		self.modelContextWindow = (json["modelContextWindow"] as? NSNumber)?.int64Value
+	}
+}
+
 struct RateLimitWindow: Equatable
 {
 	let usedPercent: Double

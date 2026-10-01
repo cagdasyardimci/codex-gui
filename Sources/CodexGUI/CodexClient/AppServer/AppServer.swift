@@ -73,6 +73,7 @@ final class AppServer: CodexService
 		let process = Process()
 		process.executableURL = executable
 		process.arguments = ["app-server", "--stdio"]
+
 		let stdin = Pipe()
 		let stdout = Pipe()
 		let stderr = Pipe()
@@ -93,91 +94,18 @@ final class AppServer: CodexService
 		do
 		{
 			try process.run()
-			let diagnosticGeneration = diagnostics.beginConnection(cliVersion: version)
-			let stderrReader = try StderrReader(
-				handle: stderr.fileHandleForReading,
-				diagnostics: diagnostics,
-				generation: diagnosticGeneration
+			let diagnosticGeneration = try startProcessDiagnostics(
+				for: process,
+				stderr: stderr.fileHandleForReading,
+				version: version
 			)
-			self.stderrReader = stderrReader
-			stderrReader.start()
-			process.terminationHandler =
-			{
-				[weak self, weak process] _ in
-				Task
-				{
-					@MainActor [weak self, weak process] in
-					guard let self, let process, self.process === process
-					else
-					{
-						return
-					}
-					self.captureTerminationDiagnostics(
-						process,
-						for: diagnosticGeneration,
-						using: stderrReader,
-						message: "Codex app-server exited."
-					)
-				}
-			}
-
-			let lineFramer = JSONLineFramer()
-			messageTask = Task.detached
-			{
-				[weak self, lineFramer] in
-				for await data in stream
-				{
-					if data.isEmpty
-					{
-						await self?.failedForConnection(
-							generation,
-							diagnosticGeneration: diagnosticGeneration,
-							message: "Codex app-server closed its output."
-						)
-						return
-					}
-					for line in lineFramer.append(data)
-					{
-						guard let value = (try? JSONSerialization
-							.jsonObject(with: line)) as? [String: Any]
-						else
-						{
-							await self?.reportInvalidMessage(for: generation)
-							continue
-						}
-						let message = ParsedProtocolMessage(value: value)
-						await self?.receiveMessage(
-							message.value,
-							for: generation
-						)
-					}
-				}
-			}
-
-			let frameContinuation = self.frameContinuation
-			stdout.fileHandleForReading.readabilityHandler =
-			{
-				handle in
-				frameContinuation?.yield(handle.availableData)
-			}
-
-			_ = try await request(
-				"initialize",
-				params: [
-					"clientInfo": [
-						"name": "codex_gui_appkit",
-						"title": "Codex GUI AppKit",
-						"version": "0.1.0",
-					],
-					"capabilities": ["experimentalApi": true, "requestAttestation": false],
-				]
+			startMessageDelivery(
+				from: stream,
+				stdout: stdout.fileHandleForReading,
+				generation: generation,
+				diagnosticGeneration: diagnosticGeneration
 			)
-			guard generation == connectionGeneration
-			else
-			{
-				throw AppServerError.disconnected
-			}
-			try send(["method": "initialized"])
+			try await initializeProtocol(for: generation)
 		}
 		catch
 		{
@@ -187,6 +115,111 @@ final class AppServer: CodexService
 			}
 			throw error
 		}
+	}
+
+	private func startProcessDiagnostics(
+		for process: Process,
+		stderr: FileHandle,
+		version: String
+	) throws -> UUID
+	{
+		let diagnosticGeneration = diagnostics.beginConnection(cliVersion: version)
+		let stderrReader = try StderrReader(
+			handle: stderr,
+			diagnostics: diagnostics,
+			generation: diagnosticGeneration
+		)
+		self.stderrReader = stderrReader
+		stderrReader.start()
+		process.terminationHandler =
+		{
+			[weak self, weak process] _ in
+			Task
+			{
+				@MainActor [weak self, weak process] in
+				guard let self, let process, self.process === process
+				else
+				{
+					return
+				}
+				self.captureTerminationDiagnostics(
+					process,
+					for: diagnosticGeneration,
+					using: stderrReader,
+					message: "Codex app-server exited."
+				)
+			}
+		}
+		return diagnosticGeneration
+	}
+
+	private func startMessageDelivery(
+		from stream: AsyncStream<Data>,
+		stdout: FileHandle,
+		generation: UUID,
+		diagnosticGeneration: UUID
+	)
+	{
+		let lineFramer = JSONLineFramer()
+		messageTask = Task.detached
+		{
+			[weak self, lineFramer] in
+			for await data in stream
+			{
+				if data.isEmpty
+				{
+					await self?.failedForConnection(
+						generation,
+						diagnosticGeneration: diagnosticGeneration,
+						message: "Codex app-server closed its output."
+					)
+					return
+				}
+				for line in lineFramer.append(data)
+				{
+					guard let value = (try? JSONSerialization
+						.jsonObject(with: line)) as? [String: Any]
+					else
+					{
+						await self?.reportInvalidMessage(for: generation)
+						continue
+					}
+					let message = ParsedProtocolMessage(value: value)
+					await self?.receiveMessage(
+						message.value,
+						for: generation
+					)
+				}
+			}
+		}
+
+		let frameContinuation = self.frameContinuation
+		stdout.readabilityHandler =
+		{
+			handle in
+			frameContinuation?.yield(handle.availableData)
+		}
+	}
+
+	private func initializeProtocol(for generation: UUID) async throws
+	{
+		_ = try await request(
+			"initialize",
+			params: [
+				"clientInfo": [
+					"name": "codex_gui_appkit",
+					"title": "Codex GUI AppKit",
+					"version": "0.1.0",
+				],
+				"capabilities": ["experimentalApi": true, "requestAttestation": false],
+			]
+		)
+		guard generation == connectionGeneration
+		else
+		{
+			throw AppServerError.disconnected
+		}
+		try send(["method": "initialized"])
 	}
 
 	func request(
@@ -199,17 +232,18 @@ final class AppServer: CodexService
 		{
 			throw AppServerError.disconnected
 		}
-		let id = nextID
+		let requestID = nextID
 		nextID += 1
 		let timeout = requestTimeout
+
 		let data: Data = try await withCheckedThrowingContinuation
 		{
 			continuation in
-			pending[id] = continuation
+			pending[requestID] = continuation
 			do
 			{
-				try send(["id": id, "method": method, "params": params])
-				requestTimeouts[id] = Task
+				try send(["id": requestID, "method": method, "params": params])
+				requestTimeouts[requestID] = Task
 				{
 					[weak self] in
 					try? await Task.sleep(for: timeout)
@@ -219,17 +253,18 @@ final class AppServer: CodexService
 						return
 					}
 					self?.timeOutRequest(
-						id,
+						requestID,
 						method: method
 					)
 				}
 			}
 			catch
 			{
-				pending.removeValue(forKey: id)
+				pending.removeValue(forKey: requestID)
 				continuation.resume(throwing: error)
 			}
 		}
+
 		guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 		else
 		{
@@ -285,6 +320,11 @@ final class AppServer: CodexService
 			}
 			return
 		}
+		completePendingRequest(from: message)
+	}
+
+	private func completePendingRequest(from message: [String: Any])
+	{
 		if let wireID = message["id"].flatMap(JSONRPCRequestID.init(json:)),
 			case .integer(let integerID) = wireID, let id = Int(exactly: integerID),
 			let continuation = pending.removeValue(forKey: id)
@@ -295,13 +335,18 @@ final class AppServer: CodexService
 			{
 				continuation.resume(returning: data)
 			}
+			else if message["result"] == nil,
+					let error = message["error"] as? [String: Any],
+					let code = error["code"].flatMap(JSONRPCRequestID.init(json:)),
+					case .integer = code,
+					let errorMessage = error["message"] as? String
+			{
+				continuation.resume(throwing: AppServerError.requestRejected(errorMessage))
+			}
 			else
 			{
-				let error = message["error"] as? [String: Any]
 				continuation.resume(
-					throwing: AppServerError.protocolError(
-						error?["message"] as? String ?? "Invalid response from app-server"
-					)
+					throwing: AppServerError.protocolError("Invalid response from app-server")
 				)
 			}
 			return
@@ -412,6 +457,16 @@ final class AppServer: CodexService
 	func disconnect()
 	{
 		connectionGeneration = UUID()
+		stopProcessTransport()
+
+		interactions.removeAll()
+		answeredInteractions.removeAll()
+
+		failPendingRequests()
+	}
+
+	private func stopProcessTransport()
+	{
 		output?.readabilityHandler = nil
 		stderrReader?.cancel()
 		stderrReader = nil
@@ -431,17 +486,18 @@ final class AppServer: CodexService
 		output = nil
 		errorOutput = nil
 
-		interactions.removeAll()
-		answeredInteractions.removeAll()
+	}
 
-		let operations = pending
+	private func failPendingRequests()
+	{
+		let pendingRequests = pending
 		pending.removeAll()
 		for timeout in requestTimeouts.values
 		{
 			timeout.cancel()
 		}
 		requestTimeouts.removeAll()
-		for continuation in operations.values
+		for continuation in pendingRequests.values
 		{
 			continuation.resume(throwing: AppServerError.disconnected)
 		}

@@ -219,7 +219,8 @@ extension AppServer
 		return ThreadDetail(
 			summary: summary,
 			turns: [],
-			nextTurnsCursor: nil
+			nextTurnsCursor: nil,
+			settings: ThreadSettings(json: result)
 		)
 	}
 
@@ -259,7 +260,8 @@ extension AppServer
 		return ThreadDetail(
 			summary: summary,
 			turns: page.turns,
-			nextTurnsCursor: page.nextCursor
+			nextTurnsCursor: page.nextCursor,
+			settings: ThreadSettings(json: result)
 		)
 	}
 
@@ -398,18 +400,104 @@ extension AppServer
 		preferences: RunPreferences
 	) async throws -> CodexTurn
 	{
+		try await startTurn(
+			threadId: threadId,
+			inputs: inputs,
+			model: model,
+			effort: effort,
+			skills: skills,
+			cwd: cwd,
+			preferences: preferences,
+			collaborationMode: nil
+		)
+	}
+
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?
+	) async throws -> CodexTurn
+	{
+		try await startTurn(
+			threadId: threadId,
+			inputs: inputs,
+			model: model,
+			effort: effort,
+			skills: skills,
+			cwd: cwd,
+			preferences: preferences,
+			collaborationMode: collaborationMode,
+			serviceTier: preferences.serviceTierForTurn
+		)
+	}
+
+	func startTurn(
+		threadId: String,
+		inputs: [TurnInput],
+		model: String?,
+		effort: String?,
+		skills: [SkillReference],
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?,
+		serviceTier: String?
+	) async throws -> CodexTurn
+	{
+		let turnServiceTier = try validatedServiceTier(
+			serviceTier,
+			for: preferences
+		)
 		let protocolInputs = makeProtocolInputs(
 			for: inputs,
 			skills: skills
 		)
 
+		let parameters = makeTurnStartParameters(
+			threadId: threadId,
+			protocolInputs: protocolInputs,
+			model: model,
+			effort: effort,
+			cwd: cwd,
+			preferences: preferences,
+			collaborationMode: collaborationMode,
+			serviceTier: turnServiceTier
+		)
+
+		let result = try await request(
+			"turn/start",
+			params: parameters
+		)
+		guard let turn = result["turn"] as? [String: Any], let parsed = CodexTurn(json: turn)
+		else
+		{
+			throw AppServerError.protocolError("Codex did not return a turn ID.")
+		}
+		return parsed
+	}
+
+	private func makeTurnStartParameters(
+		threadId: String,
+		protocolInputs: [[String: Any]],
+		model: String?,
+		effort: String?,
+		cwd: URL?,
+		preferences: RunPreferences,
+		collaborationMode: CollaborationMode?,
+		serviceTier: String
+	) -> [String: Any]
+	{
 		var parameters: [String: Any] = [
 			"threadId": threadId,
 			"input": protocolInputs,
 			"approvalPolicy": preferences.approvalPolicy.rawValue,
 			"approvalsReviewer": preferences.approvalsReviewer.rawValue,
 			"sandboxPolicy": preferences.sandboxPolicy.protocolValue,
-			"serviceTierForTurn": preferences.serviceTierForTurn,
+			"serviceTierForTurn": serviceTier,
 		]
 		if let model
 		{
@@ -423,16 +511,29 @@ extension AppServer
 		{
 			parameters["cwd"] = cwd.standardizedFileURL.path
 		}
-		let result = try await request(
-			"turn/start",
-			params: parameters
-		)
-		guard let turn = result["turn"] as? [String: Any], let parsed = CodexTurn(json: turn)
+		if let collaborationMode
+		{
+			parameters["collaborationMode"] = collaborationMode.protocolValue
+		}
+		return parameters
+	}
+
+	private func validatedServiceTier(
+		_ serviceTier: String?,
+		for preferences: RunPreferences
+	) throws -> String
+	{
+		guard preferences.fastMode
 		else
 		{
-			throw AppServerError.protocolError("Codex did not return a turn ID.")
+			return "default"
 		}
-		return parsed
+		guard let serviceTier, !serviceTier.isEmpty, serviceTier != "default"
+		else
+		{
+			throw AppServerError.requestRejected("Fast mode requires an advertised service tier.")
+		}
+		return serviceTier
 	}
 
 	private func makeProtocolInputs(
@@ -440,10 +541,12 @@ extension AppServer
 		skills: [SkillReference]
 	) -> [[String: Any]]
 	{
-		let invocation = skills.map
+		let skillInvocations = skills.map
 		{
 			"$\($0.name)"
-		}.joined(separator: " ")
+		}
+		let invocation = skillInvocations.joined(separator: " ")
+
 		var turnInputs = inputs
 		if !invocation.isEmpty
 		{
@@ -514,7 +617,7 @@ extension AppServer
 		)
 	}
 
-	private func loadTurns(
+	func loadTurns(
 		threadId: String,
 		cursor: String? = nil
 	) async throws -> (
@@ -536,8 +639,9 @@ extension AppServer
 			"thread/turns/list",
 			params: parameters
 		)
-		let turns = (result["data"] as? [[String: Any]] ?? [])
-			.compactMap(CodexTurn.init(json:)).reversed()
-		return (Array(turns), result["nextCursor"] as? String)
+		let rawTurns = result["data"] as? [[String: Any]] ?? []
+		let decodedTurns = rawTurns.compactMap(CodexTurn.init(json:))
+		let chronologicalTurns = Array(decodedTurns.reversed())
+		return (chronologicalTurns, result["nextCursor"] as? String)
 	}
 }
