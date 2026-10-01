@@ -179,7 +179,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			ownerIdentity: target.presentationIdentity
 		))
 
-		renderProjectContext(snapshot)
 		self.messageSearch.render(
 			snapshot.messageSearch,
 			loading: snapshot.searchLoading,
@@ -191,11 +190,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			self.conversation.jumpToEntry(id: target)
 		}
 		self.onSnapshot?(snapshot)
-	}
-
-	private func renderProjectContext(_ snapshot: ConversationSnapshot)
-	{
-		inspector.projectContext.render(ProjectContextPresentation(snapshot))
 	}
 
 	@objc private func windowDidClose()

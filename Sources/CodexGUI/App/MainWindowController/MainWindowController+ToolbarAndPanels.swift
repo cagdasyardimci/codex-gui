@@ -10,7 +10,6 @@ extension MainWindowController
 		static let openProject = NSToolbarItem.Identifier("openProject")
 		static let newChat = NSToolbarItem.Identifier("newChat")
 		static let review = NSToolbarItem.Identifier("review")
-		static let projectContext = NSToolbarItem.Identifier("projectContext")
 		static let commandPalette = NSToolbarItem.Identifier("commandPalette")
 		static let searchMessages = NSToolbarItem.Identifier("searchMessages")
 	}
@@ -72,7 +71,6 @@ extension MainWindowController
 			ToolbarItem.openProject,
 			ToolbarItem.newChat,
 			ToolbarItem.review,
-			ToolbarItem.projectContext,
 			ToolbarItem.commandPalette,
 			ToolbarItem.searchMessages,
 			.flexibleSpace,
@@ -90,7 +88,6 @@ extension MainWindowController
 			ToolbarItem.searchMessages,
 			ToolbarItem.commandPalette,
 			ToolbarItem.review,
-			ToolbarItem.projectContext,
 		]
 	}
 
@@ -147,14 +144,6 @@ extension MainWindowController
 			)
 			item.target = self
 			item.action = #selector(toggleReview)
-		case ToolbarItem.projectContext:
-			item.label = "Context"
-			item.image = DesktopIcons.image(
-				.pin,
-				accessibilityDescription: "Project context"
-			)
-			item.target = self
-			item.action = #selector(showProjectContext)
 		case ToolbarItem.commandPalette:
 			item.label = "Commands"
 			item.image = DesktopIcons.image(
@@ -185,11 +174,6 @@ extension MainWindowController
 	@objc private func newChat()
 	{
 		dispatchCurrent(.newChat)
-	}
-	@objc func showProjectContext()
-	{
-		paneController.setReviewCollapsed(false)
-		inspector.show(.projectContext)
 	}
 
 	@objc func showCommandPalette()
@@ -222,11 +206,6 @@ extension MainWindowController
 				destination: .action("new")
 			),
 			PaletteCommand(
-				title: "Project Context",
-				detail: "Inspect reusable context",
-				destination: .action("context")
-			),
-			PaletteCommand(
 				title: "Search Messages",
 				detail: "Search loaded conversation contents",
 				destination: .action("search")
@@ -255,11 +234,9 @@ extension MainWindowController
 			case .project(let url): target.dispatch(.openProject(url))
 			case .conversation(let id): target.dispatch(.selectThread(id))
 			case .action("new"): target.dispatch(.newChat)
-			case .action("context"): self.showProjectContext()
 			case .action("search"): self.showMessageSearch()
 			case .action("changes"):
 				self.paneController.setReviewCollapsed(false)
-				self.inspector.show(.changes)
 			case .action: break
 			}
 		}

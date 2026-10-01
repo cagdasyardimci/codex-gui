@@ -241,13 +241,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		)
 		commandPaletteItem.keyEquivalentModifierMask = [.command, .shift]
 		commandPaletteItem.target = self
-		let projectContextItem = editMenu.addItem(
-			withTitle: "Project Context",
-			action: #selector(showProjectContext),
-			keyEquivalent: "j"
-		)
-		projectContextItem.keyEquivalentModifierMask = [.command, .shift]
-		projectContextItem.target = self
 		editItem.submenu = editMenu
 		return editItem
 	}
@@ -324,10 +317,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 	@objc private func showCommandPalette()
 	{
 		mainWindowController?.showCommandPalette()
-	}
-	@objc private func showProjectContext()
-	{
-		mainWindowController?.showProjectContext()
 	}
 	@objc private func refreshConversations()
 	{

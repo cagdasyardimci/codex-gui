@@ -107,7 +107,7 @@ struct TaskWorkspaceWindowLayoutTests
 		}
 		snapshot.selectedTaskWorkspaceID = snapshot.taskWorkspaces.last?.id
 		controller.renderSnapshot(snapshot)
-		controller.showProjectContext()
+		controller.paneController.setReviewCollapsed(false)
 		window.setFrame(
 			NSRect(
 				origin: window.frame.origin,

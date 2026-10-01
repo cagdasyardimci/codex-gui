@@ -123,18 +123,6 @@ extension MainWindowController
 
 	func configureInspectorActions(target: WorkspaceIntentTarget)
 	{
-		inspector.projectContext.onUpdate =
-		{
-			target.dispatch(.updateProjectContext($0))
-		}
-		inspector.projectContext.onInsertPrompt =
-		{
-			target.dispatch(.insertPrompt($0))
-		}
-		inspector.projectContext.onOpenBookmark =
-		{
-			target.dispatch(.jumpBookmark($0))
-		}
 		inspector.changes.onSelectReviewTurn =
 		{
 			target.dispatch(.selectReview($0))

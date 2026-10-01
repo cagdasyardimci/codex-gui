@@ -177,30 +177,13 @@ struct WindowLayoutTests
 			#expect(selection.title == "GPT6-ASTRA High")
 			#expect(selection.toolTip == "GPT6-ASTRA High")
 		}
-		let tabs = try #require(findChangesTabs(in: inspector.changes.view))
-		for tab in [1, 0, 1]
-		{
-			tabs.selectedSegment = tab
-			_ = tabs.target?.perform(
-				tabs.action,
-				with: tabs
-			)
-			window.update()
-			split.view.layoutSubtreeIfNeeded()
-			#expect(window.minSize == NSSize(
-				width: 800,
-				height: 500
-			))
-			#expect(window.frame.size == NSSize(
-				width: 800,
-				height: 500
-			))
-			let inspectorScroll = try #require(inspector.changes.view as? NSScrollView)
-			#expect(
-				try #require(inspectorScroll.documentView).frame.height
-					>= inspectorScroll.contentSize.height
-			)
-		}
+		#expect(findChangesTabs(in: inspector.changes.view) == nil)
+		let inspectorScroll = try #require(inspector.changes.view as? NSScrollView)
+		#expect(
+			try #require(inspectorScroll.documentView).frame.height
+				>= inspectorScroll.contentSize.height
+		)
+
 	}
 
 	private func activateToolbarItem(

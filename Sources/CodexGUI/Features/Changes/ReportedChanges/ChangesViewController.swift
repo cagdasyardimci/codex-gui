@@ -20,12 +20,8 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		action: nil
 	)
 	private let actionsButton = NSPopUpButton()
-	private let contentSelector = DesktopSegmentedControl()
 	let diffTextView = NSTextView()
 	private let diffScrollView = NSScrollView()
-	private let validationView = ReviewValidationView(frame: .zero)
-	private let contentHost = NSView()
-	private var displayedContent: NSView?
 	let openButton = NSButton(
 		title: "Open",
 		target: nil,
@@ -107,6 +103,14 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 			for: .horizontal
 		)
 
+		configureFileListScrolling()
+		configureDiffHeight()
+
+		view = makeReviewLayout()
+	}
+
+	private func configureFileListScrolling()
+	{
 		filesScrollView.documentView = filesTable
 		filesScrollView.hasVerticalScroller = true
 		filesScrollView.autohidesScrollers = true
@@ -115,34 +119,28 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		preferredFilesHeight.priority = .defaultHigh
 		preferredFilesHeight.isActive = true
 		filesScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
+	}
 
-		showContent(diffScrollView)
-		contentHost.heightAnchor.constraint(greaterThanOrEqualToConstant: 110).isActive = true
-		let preferredContentHeight = contentHost.heightAnchor.constraint(equalToConstant: 110)
+	private func configureDiffHeight()
+	{
+		diffScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 110).isActive = true
+		let preferredContentHeight = diffScrollView.heightAnchor.constraint(equalToConstant: 110)
 		preferredContentHeight.priority = .defaultLow
 		preferredContentHeight.isActive = true
-		contentHost.setContentHuggingPriority(
+		diffScrollView.setContentHuggingPriority(
 			.defaultLow,
 			for: .vertical
 		)
+	}
 
-		let reviewRow = AppKitLayout.horizontalStack(
-			[reviewedButton, actionsButton],
-			spacing: 4
-		)
-		self.reviewRow = reviewRow
-		reviewedButton.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		reviewedButton.controlSize = .small
-		reviewedButton.font = .systemFont(ofSize: 11)
+	private func makeReviewLayout() -> NSView
+	{
+		let reviewRow = makeReviewActionsRow()
 		let summary = group([turnButton, originLabel, filesScrollView])
 		let details = group([
 			sectionButton,
 			reviewRow,
-			contentSelector,
-			contentHost,
+			diffScrollView,
 			openButton,
 			editorStatus,
 		])
@@ -162,7 +160,23 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 			inset: 0
 		)
 		scrollView.drawsBackground = false
-		view = scrollView
+		return scrollView
+	}
+
+	private func makeReviewActionsRow() -> NSStackView
+	{
+		let reviewRow = AppKitLayout.horizontalStack(
+			[reviewedButton, actionsButton],
+			spacing: 4
+		)
+		self.reviewRow = reviewRow
+		reviewedButton.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		reviewedButton.controlSize = .small
+		reviewedButton.font = .systemFont(ofSize: 11)
+		return reviewRow
 	}
 
 	private func group(_ controls: [NSView]) -> NSView
@@ -257,7 +271,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		}
 		updatingFileSelection = false
 		updateSelectedFile(preserveHunk: sameTurn)
-		validationView.render(review?.validations ?? [])
 	}
 
 	func numberOfRows(in tableView: NSTableView) -> Int
@@ -398,26 +411,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		actionsButton.isEnabled = false
 		DesktopTheme.stylePopup(actionsButton)
 
-		contentSelector.segmentCount = 2
-		contentSelector.setLabel(
-			"Diff",
-			forSegment: 0
-		)
-		contentSelector.setLabel(
-			"Commands",
-			forSegment: 1
-		)
-		contentSelector.selectedSegment = 0
-		contentSelector.target = self
-		contentSelector.action = #selector(changeContentTab)
-		contentSelector.setAccessibilityLabel("Changes detail tab")
-		contentSelector.segmentStyle = .texturedRounded
-		contentSelector.selectedSegmentBezelColor = DesktopTheme.input
-		contentSelector.controlSize = .small
-		contentSelector.font = .systemFont(
-			ofSize: 11,
-			weight: .medium
-		)
 	}
 
 	private func configureDiff()
@@ -636,28 +629,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		}
 		actionsButton.selectItem(at: 0)
 		onPrepareChangeRequest?(kind, reference)
-	}
-
-	@objc private func changeContentTab()
-	{
-		let showCommands = contentSelector.selectedSegment == 1
-		showContent(showCommands ? validationView : diffScrollView)
-	}
-
-	private func showContent(_ content: NSView)
-	{
-		guard displayedContent !== content
-		else
-		{
-			return
-		}
-		displayedContent?.removeFromSuperview()
-		displayedContent = content
-		AppKitLayout.pin(
-			content,
-			to: contentHost,
-			inset: 0
-		)
 	}
 
 	@objc private func openSelectedFile()

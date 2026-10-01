@@ -91,7 +91,7 @@ struct ChangesReviewViewControllerTests
 		#expect(selectedTurnID == "turn-2")
 	}
 
-	@Test func commandEvidenceShowsOutcomeScopeAndCurrency() throws
+	@Test func diffRemainsVisibleWithoutCommandsTab() throws
 	{
 		_ = NSApplication.shared
 		let review = reviewTurn(
@@ -104,29 +104,19 @@ struct ChangesReviewViewControllerTests
 			turns: [review],
 			selected: review
 		))
-		let tab = try #require(segmentedControl(
+		#expect(segmentedControl(
 			in: controller.view,
 			label: "Changes detail tab"
-		))
-		tab.selectedSegment = 1
-		sendAction(from: tab)
-
-		let outcome = try #require(
-			label(
-				in: controller.view,
-				accessibilityLabel: "Command outcome and code state"
-			)
-		)
-		let output = try #require(textView(
+		) == nil)
+		#expect(textView(
 			in: controller.view,
 			label: "Observed command output"
+		) == nil)
+		let diff = try #require(textView(
+			in: controller.view,
+			label: "Reported diff for selected file or section"
 		))
-		#expect(outcome.stringValue.contains("Command succeeded"))
-		#expect(outcome.stringValue.contains("Outdated"))
-		#expect(output.string.contains("Command origin: thread thread-a, turn turn-1"))
-		#expect(output.string.contains("Reported code state: before-edit"))
-		#expect(output.string.contains("What this command checked is unknown."))
-		#expect(output.string.contains("1 test passed"))
+		#expect(diff.string.contains("+new value"))
 
 		let empty = ReviewTurn(
 			threadID: "thread-a",
@@ -140,7 +130,7 @@ struct ChangesReviewViewControllerTests
 			turns: [review, empty],
 			selected: empty
 		))
-		#expect(outcome.stringValue == "Validation unobserved for this turn.")
+		#expect(diff.string == "No file changes reported for this turn.")
 	}
 
 	@Test func binaryChangeIsLabeledWithoutInventingTextSections() throws
