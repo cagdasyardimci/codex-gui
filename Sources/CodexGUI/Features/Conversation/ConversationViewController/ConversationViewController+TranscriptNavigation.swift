@@ -335,6 +335,7 @@ extension ConversationViewController
 
 	@objc func readingPositionChanged()
 	{
+		updateTurnNavigationPosition()
 		latestButton.isHidden = entries.isEmpty || isNearBottom
 		if liveResizeInProgress
 		{

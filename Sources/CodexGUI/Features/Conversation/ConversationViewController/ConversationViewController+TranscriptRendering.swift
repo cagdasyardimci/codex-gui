@@ -442,6 +442,7 @@ extension ConversationViewController
 			entries = nextEntries
 			collectionView.reloadData()
 		}
+		turnNavigationRail.render(ConversationTurnSummary.make(from: entries))
 		view.layoutSubtreeIfNeeded()
 		collectionView.layoutSubtreeIfNeeded()
 		restoreReadingPosition(

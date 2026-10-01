@@ -69,6 +69,7 @@ final class ConversationViewController: NSViewController,
 		action: nil
 	)
 	let conversationScrollView = NSScrollView()
+	let turnNavigationRail = TurnNavigationRail()
 	private var transcriptUtilityRow: NSStackView?
 	private var centeredReadingRows: [(content: NSView, row: NSView)] = []
 	private let emptyStateLabel = NSTextField(wrappingLabelWithString: "What can I help with?")
@@ -170,11 +171,28 @@ final class ConversationViewController: NSViewController,
 			spacing: 6
 		)
 		transcriptUtilityRow = utilityRow
+		let transcriptArea = NSView()
+		transcriptArea.addSubview(conversationScrollView)
+		conversationScrollView.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			conversationScrollView.leadingAnchor.constraint(
+				equalTo: transcriptArea.leadingAnchor,
+				constant: 40
+			),
+			conversationScrollView.trailingAnchor
+				.constraint(equalTo: transcriptArea.trailingAnchor),
+			conversationScrollView.topAnchor.constraint(equalTo: transcriptArea.topAnchor),
+			conversationScrollView.bottomAnchor.constraint(equalTo: transcriptArea.bottomAnchor),
+		])
+		transcriptArea.setContentHuggingPriority(
+			.defaultLow,
+			for: .vertical
+		)
 		let stack = AppKitLayout.verticalStack(
 			[
 				centeredReadingRow(headerStack),
 				centeredReadingRow(utilityRow),
-				conversationScrollView,
+				transcriptArea,
 				centeredReadingRow(requestDetailsScrollView),
 				centeredReadingRow(composerArea),
 			],
@@ -229,6 +247,7 @@ final class ConversationViewController: NSViewController,
 				constant: -32
 			),
 		])
+		configureTurnNavigation(in: container)
 		view = container
 	}
 
@@ -346,7 +365,12 @@ final class ConversationViewController: NSViewController,
 		if previous?.owner != snapshot.owner
 			|| previous?.composer.draftLifetime != snapshot.composer.draftLifetime
 		{
+			turnNavigationRail.dismissPreview()
 			selectionGeneration += 1
+		}
+		if previous?.owner != snapshot.owner
+		{
+			turnNavigationRail.render([])
 		}
 		if indexProjectPath != snapshot.owner.projectPath
 		{
@@ -362,6 +386,7 @@ final class ConversationViewController: NSViewController,
 		{
 			bookmarks = snapshot.navigation.bookmarks
 			renderJumpTargets(snapshot.navigation.navigationTargets)
+			turnNavigationRail.refreshBookmark()
 			updateBookmarkButton()
 		}
 		if previous?.status != snapshot.status
