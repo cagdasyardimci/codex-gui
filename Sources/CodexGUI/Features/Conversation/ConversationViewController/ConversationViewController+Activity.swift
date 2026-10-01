@@ -40,13 +40,19 @@ extension ConversationViewController
 
 	func updateTurnStatusTimer()
 	{
-		turnStatusTimer?.invalidate()
-		turnStatusTimer = nil
 		guard transcriptIsVisible, timingExecutionState.isBusy,
 				requestedTurnTimings.contains(where:
 				{
 					$0.status == "inProgress" && $0.startedAt != nil
 				})
+		else
+		{
+			turnStatusTimer?.invalidate()
+			turnStatusTimer = nil
+			return
+		}
+		// Streaming updates must not postpone the next tick by recreating the timer.
+		guard turnStatusTimer == nil
 		else
 		{
 			return

@@ -5,6 +5,42 @@ import Testing
 
 struct ConversationTranscriptRowTests
 {
+	@Test func liveClockAppearsBeforeFirstItemAndIsNotDuplicatedWhenReplyArrives()
+	{
+		let timing = ConversationTurnTiming(
+			turnID: "turn",
+			status: "inProgress",
+			startedAt: Date(timeIntervalSince1970: 1000)
+		)
+		let user = ConversationEntry(
+			id: "local:request",
+			kind: .user,
+			title: "You",
+			body: "Request"
+		)
+		#expect(ConversationTranscriptRow.make(
+			entries: [user],
+			timings: [timing],
+			projectPath: nil
+		) == [.message(user), .turnStatus(timing)])
+		let reply = ConversationEntry(
+			id: "turn:reply",
+			kind: .agent,
+			title: "Codex",
+			body: "Reply"
+		)
+		#expect(ConversationTranscriptRow.make(
+			entries: [user, reply],
+			timings: [timing],
+			projectPath: nil
+		) == [.message(user), .turnStatus(timing), .message(reply)])
+		#expect(ConversationTranscriptRow.make(
+			entries: [],
+			timings: [timing],
+			projectPath: nil
+		) == [.turnStatus(timing)])
+	}
+
 	@Test func groupsPreserveDuplicateReadsAndBreakAtCommentaryAndImages()
 	{
 		let read = CodexCommandAction(
@@ -84,7 +120,8 @@ struct ConversationTranscriptRowTests
 		guard case .activity(let action) = rows.last
 		else
 		{
-			Issue.record("Missing action"); return
+			Issue.record("Missing action")
+			return
 		}
 		#expect(action.kind == .command)
 		#expect(action.title == "Ran original shell")

@@ -4,19 +4,29 @@ import AppKit
 final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 {
 	private let label = NSTextField(labelWithString: "")
+	private let divider = NSBox()
 	private var timing: ConversationTurnTiming?
 
 	override func loadView()
 	{
 		view = NSView()
-		label.font = .systemFont(ofSize: 12)
+		label.font = .systemFont(ofSize: 14)
 		label.textColor = .secondaryLabelColor
 		label.lineBreakMode = .byTruncatingTail
-		AppKitLayout.pin(
-			label,
-			to: view,
-			inset: 0
-		)
+		label.translatesAutoresizingMaskIntoConstraints = false
+		divider.boxType = .separator
+		divider.translatesAutoresizingMaskIntoConstraints = false
+		view.addSubview(label)
+		view.addSubview(divider)
+		NSLayoutConstraint.activate([
+			label.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+			label.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+			label.topAnchor.constraint(equalTo: view.topAnchor),
+			divider.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+			divider.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+			divider.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+			divider.heightAnchor.constraint(equalToConstant: 1),
+		])
 	}
 
 	func configure(
@@ -50,7 +60,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 				1,
 				width
 			),
-			height: 24
+			height: 32
 		)
 	}
 
@@ -66,7 +76,14 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		}
 		let working = timing.status == "inProgress"
 		let seconds: Double?
-		if let milliseconds = timing.durationMs, milliseconds.isFinite
+		if working, let started = timing.startedAt
+		{
+			seconds = max(
+				0,
+				now.timeIntervalSince(started)
+			)
+		}
+		else if let milliseconds = timing.durationMs, milliseconds.isFinite
 		{
 			seconds = max(
 				0,
@@ -78,13 +95,6 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 			seconds = max(
 				0,
 				completed.timeIntervalSince(started)
-			)
-		}
-		else if working, let started = timing.startedAt
-		{
-			seconds = max(
-				0,
-				now.timeIntervalSince(started)
 			)
 		}
 		else

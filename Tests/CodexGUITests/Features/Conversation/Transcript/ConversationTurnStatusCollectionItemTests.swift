@@ -6,6 +6,19 @@ import Testing
 @Suite @MainActor
 struct ConversationTurnStatusCollectionItemTests
 {
+	@Test func activeClockUsesCurrentTimeEvenWithPartialDuration()
+	{
+		let start = Date(timeIntervalSince1970: 1000)
+		#expect(text(
+			timing(
+				status: "inProgress",
+				start: start,
+				duration: 1000
+			),
+			now: start.addingTimeInterval(48)
+		) == "Working for 48s")
+	}
+
 	@Test func activeClockAdvancesAndTerminalDurationFreezes()
 	{
 		let start = Date(timeIntervalSince1970: 1000)
