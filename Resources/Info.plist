@@ -4,6 +4,7 @@
 <key>CFBundleIdentifier</key><string>local.codexgui.appkit</string>
 <key>CFBundleName</key><string>Codex GUI</string>
 <key>CFBundleExecutable</key><string>CodexGUI</string>
+<key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>

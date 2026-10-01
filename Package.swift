@@ -20,7 +20,8 @@ let package = Package(
 			dependencies: [.product(
 				name: "OpenAIStyle",
 				package: "apps-sdk-ui-swift"
-			)]
+			)],
+			resources: [.copy("Resources/AppIcon.icns")]
 		),
 		.testTarget(
 			name: "CodexGUITests",
