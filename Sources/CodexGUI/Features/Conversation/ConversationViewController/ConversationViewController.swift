@@ -101,6 +101,9 @@ final class ConversationViewController: NSViewController,
 	var resizeReadingAnchor: ReadingAnchor?
 	var resizeContext: String?
 	var visibleResizeRefreshTimer: Timer?
+	var widthChangeReadingPosition: WidthChangeReadingPosition?
+	var widthChangeRestoreTask: Task<Void, Never>?
+	var restoringWidthChangeReadingPosition = false
 	var requestedEntries: [ConversationEntry] = []
 	var renderedContext: String?
 	var requestedContext: String?

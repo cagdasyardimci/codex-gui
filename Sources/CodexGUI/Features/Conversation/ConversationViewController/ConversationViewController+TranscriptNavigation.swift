@@ -28,6 +28,20 @@ extension ConversationViewController
 			)
 		{
 			let clip = conversationScrollView.contentView
+			var offset = anchor.offset
+			if let character = anchor.textLocation,
+				case .message(let entry) = displayedRows[index],
+				let content = preparedContents[entry.id],
+				let textOffset = ConversationCollectionItem.textReadingOffset(
+				content: content,
+				width: attributes.frame.width,
+				kind: entry.kind,
+				character: character,
+				lineOffset: anchor.textOffset
+				)
+			{
+				offset = textOffset
+			}
 			let maximumY = max(
 				0,
 				collectionView.bounds.height - clip.bounds.height
@@ -39,13 +53,76 @@ extension ConversationViewController
 						maximumY,
 						max(
 							0,
-							attributes.frame.minY + anchor.offset
+							attributes.frame.minY + offset
 						)
 					)
 				)
 			)
 			conversationScrollView.reflectScrolledClipView(clip)
 		}
+	}
+
+	struct WidthChangeReadingPosition
+	{
+		let context: String?
+		let followOutput: Bool
+		let anchor: ReadingAnchor?
+	}
+
+	func captureWidthChangeReadingPosition(using attributes: [NSCollectionViewLayoutAttributes])
+	{
+		guard !liveResizeInProgress, !restoringWidthChangeReadingPosition,
+				!displayedRows.isEmpty, requestedContext == renderedContext
+		else
+		{
+			return
+		}
+		if let position = widthChangeReadingPosition, position.context == renderedContext
+		{
+			return
+		}
+		cancelWidthChangeReadingPosition()
+		let followsOutput = isNearBottom
+		let anchor = followsOutput ? nil : readingAnchor(using: attributes)
+		widthChangeReadingPosition = WidthChangeReadingPosition(
+			context: renderedContext,
+			followOutput: followsOutput,
+			anchor: anchor
+		)
+		widthChangeRestoreTask = Task
+		{
+			[weak self] in
+			await Task.yield()
+			guard !Task.isCancelled, let self,
+					let position = self.widthChangeReadingPosition,
+					position.context == self.renderedContext,
+					position.context == self.requestedContext
+			else
+			{
+				return
+			}
+			self.restoringWidthChangeReadingPosition = true
+			defer
+			{
+				self.restoringWidthChangeReadingPosition = false
+				self.widthChangeReadingPosition = nil
+				self.widthChangeRestoreTask = nil
+			}
+			self.view.layoutSubtreeIfNeeded()
+			self.collectionView.layoutSubtreeIfNeeded()
+			self.restoreReadingPosition(
+				followOutput: position.followOutput,
+				anchor: position.anchor
+			)
+			self.readingPositionChanged()
+		}
+	}
+
+	func cancelWidthChangeReadingPosition()
+	{
+		widthChangeRestoreTask?.cancel()
+		widthChangeRestoreTask = nil
+		widthChangeReadingPosition = nil
 	}
 
 	func renderJumpTargets(_ targets: [ConversationJumpTarget])
@@ -119,6 +196,7 @@ extension ConversationViewController
 			return
 		}
 
+		cancelWidthChangeReadingPosition()
 		collectionView.scrollToItems(
 			at: [IndexPath(
 				item: index,
@@ -264,6 +342,7 @@ extension ConversationViewController
 		{
 			return
 		}
+		cancelWidthChangeReadingPosition()
 		resizeContext = renderedContext
 		resizeFollowingOutput = isNearBottom
 		resizeReadingAnchor = resizeFollowingOutput ? nil : readingAnchor()
@@ -306,6 +385,7 @@ extension ConversationViewController
 
 	@objc func transcriptDidLiveScroll(_ notification: Notification)
 	{
+		cancelWidthChangeReadingPosition()
 		guard liveResizeInProgress
 		else
 		{
@@ -386,6 +466,7 @@ extension ConversationViewController
 
 	@objc func showLatestMessage()
 	{
+		cancelWidthChangeReadingPosition()
 		if liveResizeInProgress
 		{
 			resizeContext = renderedContext

@@ -13,6 +13,12 @@ extension ConversationViewController
 		conversationScrollView.drawsBackground = false
 		conversationScrollView.borderType = .noBorder
 		conversationScrollView.contentView.postsBoundsChangedNotifications = true
+		observeTranscriptChanges()
+		configureTranscriptNavigationButtons()
+	}
+
+	private func observeTranscriptChanges()
+	{
 		NotificationCenter.default.addObserver(
 			self,
 			selector: #selector(readingPositionChanged),
@@ -37,6 +43,10 @@ extension ConversationViewController
 			name: NSScrollView.didLiveScrollNotification,
 			object: conversationScrollView
 		)
+	}
+
+	private func configureTranscriptNavigationButtons()
+	{
 		latestButton.target = self
 		latestButton.action = #selector(showLatestMessage)
 		latestButton.setAccessibilityLabel("Return to latest message")
@@ -76,6 +86,11 @@ extension ConversationViewController
 	private func configureCollectionView()
 	{
 		let layout = ConversationFlowLayout()
+		layout.willChangeContentWidth =
+		{
+			[weak self] attributes in
+			self?.captureWidthChangeReadingPosition(using: attributes)
+		}
 		layout.minimumLineSpacing = 18
 		layout.verticalGap =
 		{
@@ -386,11 +401,12 @@ extension ConversationViewController
 		let displayTimings = snapshot.turnTimings.map
 		{
 			timing in
-			guard timing.status == "inProgress",
-					!(timingExecutionState.isBusy
+			let hasConfirmedActiveExecution =
+				timingExecutionState.isBusy
 					&& snapshot.selectedThreadID != nil
 					&& snapshot.activeThreadID == snapshot.selectedThreadID
-					&& snapshot.activeTurnID == timing.turnID)
+					&& snapshot.activeTurnID == timing.turnID
+			guard timing.status == "inProgress", !hasConfirmedActiveExecution
 			else
 			{
 				return timing
@@ -425,6 +441,7 @@ extension ConversationViewController
 		}
 		if requestedContext != context
 		{
+			cancelWidthChangeReadingPosition()
 			expandedEntryIDs.removeAll()
 			collapsedGroupIDs.removeAll()
 			expandedActivityIDs.removeAll()
@@ -461,6 +478,8 @@ extension ConversationViewController
 		let entryID: String
 		let offset: CGFloat
 		var sourceEntryID: String? = nil
+		var textLocation: Int? = nil
+		var textOffset: CGFloat = 0
 	}
 
 	func readingAnchor() -> ReadingAnchor?
@@ -468,26 +487,45 @@ extension ConversationViewController
 		let visible = conversationScrollView.contentView.bounds
 		let candidates =
 			collectionView.collectionViewLayout?.layoutAttributesForElements(in: visible) ?? []
-		guard
-			let first = candidates.filter(
-				{
-					$0.representedElementCategory == .item
-				}
-			)
-			.sorted(by:
-				{
-					$0.frame.minY < $1.frame.minY
-				}).first,
-			let index = first.indexPath?.item, displayedRows.indices.contains(index)
+		return readingAnchor(using: candidates)
+	}
+
+	func readingAnchor(using candidates: [NSCollectionViewLayoutAttributes]) -> ReadingAnchor?
+	{
+		let visible = conversationScrollView.contentView.bounds
+		let visibleItems = candidates.filter
+		{
+			$0.representedElementCategory == .item
+				&& $0.frame.maxY > visible.minY && $0.frame.minY < visible.maxY
+		}
+		let itemsFromTop = visibleItems.sorted
+		{
+			$0.frame.minY < $1.frame.minY
+		}
+		guard let first = itemsFromTop.first,
+				let index = first.indexPath?.item, displayedRows.indices.contains(index)
 		else
 		{
 			return nil
 		}
-		return ReadingAnchor(
+		var anchor = ReadingAnchor(
 			entryID: displayedRows[index].id,
 			offset: visible.minY - first.frame.minY,
 			sourceEntryID: displayedRows[index].sourceEntryID
 		)
+		if case .message(let entry) = displayedRows[index],
+			let content = preparedContents[entry.id],
+			let text = ConversationCollectionItem.textReadingAnchor(
+			content: content,
+			width: first.frame.width,
+			kind: entry.kind,
+			offset: anchor.offset
+			)
+		{
+			anchor.textLocation = text.character
+			anchor.textOffset = text.offset
+		}
+		return anchor
 	}
 
 	private func applyEntries(
@@ -497,6 +535,10 @@ extension ConversationViewController
 	)
 	{
 		let contextChanged = renderedContext != context
+		if contextChanged
+		{
+			cancelWidthChangeReadingPosition()
+		}
 		if !contextChanged
 		{
 			captureActivityOutputPositions()
@@ -542,7 +584,9 @@ extension ConversationViewController
 			replaceCollectionView()
 		}
 		renderedContext = context
-		if !contextChanged && sharedIDsMatch && nextRows.count >= previousRows.count
+		let canUpdateRowsInPlace =
+			!contextChanged && sharedIDsMatch && nextRows.count >= previousRows.count
+		if canUpdateRowsInPlace
 		{
 			let changed = (0 ..< sharedCount).filter
 			{

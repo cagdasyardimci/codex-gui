@@ -8,6 +8,7 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 	private var preparedWidth: CGFloat?
 	private var updatingCenteringInsets = false
 	var verticalGap: ((Int) -> CGFloat)?
+	var willChangeContentWidth: (([NSCollectionViewLayoutAttributes]) -> Void)?
 	private var compactAttributes: [IndexPath: NSCollectionViewLayoutAttributes] = [:]
 	private var compactContentSize: NSSize?
 
@@ -24,10 +25,23 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 
 	override func prepare()
 	{
+		updateCenteredContentWidth()
+		compactAttributes.removeAll()
+		compactContentSize = nil
+		super.prepare()
+		prepareCompactActivitySpacing()
+	}
+
+	private func updateCenteredContentWidth()
+	{
 		// A clip-view frame change can reach prepare after the collection's bounds
 		// already changed. Compare against the width used for the cached metrics.
 		if let width = collectionView?.bounds.width, width != preparedWidth
 		{
+			if preparedWidth != nil
+			{
+				willChangeContentWidth?(Array(compactAttributes.values))
+			}
 			preparedWidth = width
 			let horizontalInset = max(
 				Self.minimumHorizontalInset,
@@ -49,9 +63,10 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 			context.invalidateFlowLayoutAttributes = true
 			invalidateLayout(with: context)
 		}
-		compactAttributes.removeAll()
-		compactContentSize = nil
-		super.prepare()
+	}
+
+	private func prepareCompactActivitySpacing()
+	{
 		guard let collectionView, let verticalGap
 		else
 		{
