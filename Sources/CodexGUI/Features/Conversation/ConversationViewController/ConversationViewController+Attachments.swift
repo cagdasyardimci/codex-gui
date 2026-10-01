@@ -20,7 +20,11 @@ extension ConversationViewController
 		doCommandBy commandSelector: Selector
 	) -> Bool
 	{
-		guard textView === composer, fileSearchPopover?.isShown == true
+		if textView === composer, handleSlashCommandKey(commandSelector)
+		{
+			return true
+		}
+		guard textView === composer, !composer.hasMarkedText(), fileSearchPopover?.isShown == true
 		else
 		{
 			return false
@@ -40,6 +44,7 @@ extension ConversationViewController
 		if commandSelector == #selector(NSResponder.cancelOperation(_:))
 		{
 			fileSearchPopover?.close()
+			fileSelectionReceiver = nil
 			completionRange = nil
 			return true
 		}
@@ -152,14 +157,16 @@ extension ConversationViewController
 			length: cursor - marker.location
 		)
 		fileSearchWasCompletion = true
+		fileSelectionReceiver = nil
 		presentFileSearch(
 			query: query,
 			focusField: false
 		)
 	}
 
-	@objc private func openFileSearch()
+	@objc func openFileSearch()
 	{
+		fileSelectionReceiver = nil
 		completionRange = nil
 		fileSearchWasCompletion = false
 		presentFileSearch(
@@ -326,7 +333,9 @@ extension ConversationViewController
 		}
 		self.completionRange = nil
 		fileSearchPopover?.close()
-		onAddContext?(
+		let receiver = fileSelectionReceiver ?? onAddContext
+		fileSelectionReceiver = nil
+		receiver?(
 			ComposerContextItem(
 				kind: .fileReference,
 				title: URL(fileURLWithPath: path).lastPathComponent,

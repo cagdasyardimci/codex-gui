@@ -7,6 +7,7 @@ final class ConversationViewController: NSViewController,
 	NSCollectionViewDataSource, NSCollectionViewDelegateFlowLayout, NSTextViewDelegate,
 	NSSearchFieldDelegate
 {
+	var onSlashCommand: ((SlashCommandInvocation) -> Void)?
 	var onSend: (() -> Void)?
 	var onSteer: ((String) -> Void)?
 	var onStop: (() -> Void)?
@@ -117,10 +118,17 @@ final class ConversationViewController: NSViewController,
 	let projectBranchLabel = NSTextField(labelWithString: "")
 	var projectContextStrip: NSStackView?
 	let addContextButton = NSPopUpButton()
+	let planModeLabel = NSTextField(labelWithString: "Plan mode")
 	var fileSearchPopover: NSPopover?
+	var fileSelectionReceiver: ((ComposerContextItem) -> Void)?
 	var fileSearchField: NSSearchField?
 	var fileResultsStack: NSStackView?
 	var completionRange: NSRange?
+	let slashCommandController = SlashCommandPopoverView()
+	var slashCommandPopover: ComposerPopoverPanel?
+	var slashCompletionRange: NSRange?
+	var slashCompletionGeneration = 0
+	var slashCompletionText: String?
 	var fileSearchWasCompletion = false
 	var fileIndex: ProjectFileIndex?
 	var indexProjectPath: String?
@@ -401,6 +409,13 @@ final class ConversationViewController: NSViewController,
 			|| previous?.composer.draftLifetime != snapshot.composer.draftLifetime
 		{
 			turnNavigationRail.dismissPreview()
+			dismissSlashCommands()
+			fileSearchPopover?.close()
+			fileSelectionReceiver = nil
+			configurePreferenceCallbacks()
+			modelEffortPopover?.close()
+			approvalPolicyPopover?.close()
+			completionRange = nil
 			selectionGeneration += 1
 		}
 		if previous?.owner != snapshot.owner

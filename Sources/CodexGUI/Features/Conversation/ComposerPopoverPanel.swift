@@ -4,6 +4,8 @@ import AppKit
 final class ComposerPopoverPanel: NSObject
 {
 	var onPresentationChange: ((Bool) -> Void)?
+	var preservesParentKeyboardFocus = false
+	var shouldDismissForEscape: (() -> Bool)?
 	private(set) var isShown = false
 	private let controller: NSViewController
 	private let panel = ComposerOverlayPanel(
@@ -75,7 +77,14 @@ final class ComposerPopoverPanel: NSObject
 			panel,
 			ordered: .above
 		)
-		panel.makeKeyAndOrderFront(nil)
+		if preservesParentKeyboardFocus
+		{
+			panel.orderFront(nil)
+		}
+		else
+		{
+			panel.makeKeyAndOrderFront(nil)
+		}
 		installEventMonitors()
 		onPresentationChange?(true)
 	}
@@ -230,6 +239,11 @@ final class ComposerPopoverPanel: NSObject
 			if event.keyCode == 53,
 				event.window === panel || event.window === parentWindow
 			{
+				guard shouldDismissForEscape?() != false
+				else
+				{
+					return true
+				}
 				dismiss(returnFocus: true)
 				return false
 			}

@@ -2,7 +2,10 @@ import AppKit
 
 extension NavigationViewController
 {
-	func confirmDeleteTask(_ thread: ThreadSummary)
+	func confirmDeleteTask(
+		_ thread: ThreadSummary,
+		completion: ((String) -> Void)? = nil
+	)
 	{
 		guard canManageSidebarTasks, let window = view.window
 		else
@@ -19,7 +22,7 @@ extension NavigationViewController
 		alert.addButton(withTitle: "Delete Permanently")
 		alert.buttons.last?.hasDestructiveAction = true
 		let capturedScope = modalScope
-		let complete = onDeleteTask
+		let complete = completion ?? onDeleteTask
 		alert.beginSheetModal(for: window)
 		{
 			[weak self] response in
@@ -115,6 +118,11 @@ extension NavigationViewController
 
 	@objc func renameThread()
 	{
+		presentRenameThread()
+	}
+
+	func presentRenameThread(completion: ((String) -> Void)? = nil)
+	{
 		guard renameButton.isEnabled, let window = view.window,
 				let thread = threads.first(where:
 				{
@@ -140,7 +148,7 @@ extension NavigationViewController
 		alert.addButton(withTitle: "Cancel")
 		alert.window.initialFirstResponder = field
 		let capturedScope = modalScope
-		let complete = onRenameThread
+		let complete = completion ?? onRenameThread
 		alert.beginSheetModal(for: window)
 		{
 			[weak self] response in

@@ -265,15 +265,15 @@ extension MainWindowController
 		settings.setNotificationStatus(message)
 	}
 
-	@objc private func showStatus()
+	@objc func showStatus()
 	{
 		let controller = NSViewController()
 		controller.view = statusView
 		let popover = NSPopover()
 		popover.contentViewController = controller
 		popover.contentSize = NSSize(
-			width: 330,
-			height: 215
+			width: 380,
+			height: 320
 		)
 		popover.behavior = .transient
 		statusPopover = popover

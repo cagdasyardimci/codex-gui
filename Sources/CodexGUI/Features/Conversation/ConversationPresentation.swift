@@ -109,6 +109,9 @@ struct ConversationPresentation: Equatable
 		let reusableReferences: [ComposerContextItem]
 		let canSend: Bool
 		let canSteer: Bool
+		let planMode: Bool
+		let planModeStatus: String?
+		let slashCommandUnavailableReasons: [SlashCommandID: String]
 		let activeThreadID: String?
 		let activeExecutionState: ExecutionState?
 		var projectPath: String?
@@ -287,6 +290,9 @@ struct ConversationPresentation: Equatable
 			reusableReferences: snapshot.reusableReferences,
 			canSend: snapshot.canSend,
 			canSteer: snapshot.canSteer,
+			planMode: snapshot.planMode,
+			planModeStatus: snapshot.planModeStatus,
+			slashCommandUnavailableReasons: snapshot.slashCommandUnavailableReasons,
 			activeThreadID: snapshot.activeThreadID,
 			activeExecutionState: snapshot.activeExecutionState
 		)

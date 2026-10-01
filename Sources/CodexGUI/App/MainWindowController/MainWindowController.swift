@@ -115,11 +115,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 				},
 				command:
 				{
-					command in
-					if case .openSignIn(let url) = command
-					{
-						NSWorkspace.shared.open(url)
-					}
+					[weak self] command in
+					self?.handlePresentationCommand(command)
 				}
 			)
 		}

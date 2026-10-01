@@ -12,6 +12,7 @@ struct PaletteCommand: Equatable
 	let title: String
 	let detail: String
 	let destination: Destination
+	var isEnabled = true
 }
 
 @MainActor
@@ -21,6 +22,7 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 	var onChoose: ((PaletteCommand.Destination) -> Void)?
 
 	private let searchField = NSSearchField()
+	private let explanationLabel = NSTextField(wrappingLabelWithString: "")
 	private let tableView = NSTableView()
 	private let emptyLabel = NSTextField(labelWithString: "No matching commands")
 	private let closeButton = NSButton(
@@ -34,11 +36,36 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 	override func loadView()
 	{
 		let container = NSView()
+		configureSearchField()
+		let scrollView = makeCommandsScrollView()
+		configureStatusAndCloseControls()
+
+		let stack = AppKitLayout.verticalStack([
+			explanationLabel,
+			searchField,
+			scrollView,
+			emptyLabel,
+			closeButton
+		])
+		AppKitLayout.pin(
+			stack,
+			to: container
+		)
+		scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+		scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+		view = container
+	}
+
+	private func configureSearchField()
+	{
 		searchField.placeholderString = "Find a project, conversation, or action"
 		searchField.setAccessibilityLabel("Search commands")
 		searchField.delegate = self
 		searchField.sendsSearchStringImmediately = true
+	}
 
+	private func makeCommandsScrollView() -> NSScrollView
+	{
 		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("command"))
 		tableView.addTableColumn(column)
 		tableView.headerView = nil
@@ -51,31 +78,40 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		let scrollView = NSScrollView()
 		scrollView.documentView = tableView
 		scrollView.hasVerticalScroller = true
+		return scrollView
+	}
 
+	private func configureStatusAndCloseControls()
+	{
 		emptyLabel.textColor = .secondaryLabelColor
 		closeButton.target = self
 		closeButton.action = #selector(close)
 		closeButton.setAccessibilityLabel("Close command palette")
-		let stack = AppKitLayout.verticalStack([searchField, scrollView, emptyLabel, closeButton])
-		AppKitLayout.pin(
-			stack,
-			to: container
-		)
-		scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
-		view = container
+		explanationLabel.textColor = .secondaryLabelColor
+		explanationLabel.font = .systemFont(ofSize: 12)
+		explanationLabel.isHidden = true
 	}
 
 	func present(
 		in window: NSWindow,
-		commands: [PaletteCommand]
+		commands: [PaletteCommand],
+		title: String = "Command Palette",
+		searchPlaceholder: String = "Find a project, conversation, or action",
+		emptyMessage: String = "No matching commands",
+		informativeText: String? = nil
 	)
 	{
+		_ = view
 		self.commands = commands
+		explanationLabel.stringValue = informativeText ?? ""
+		explanationLabel.isHidden = informativeText == nil
+		searchField.placeholderString = searchPlaceholder
+		searchField.setAccessibilityLabel(searchPlaceholder)
+		emptyLabel.stringValue = emptyMessage
 		searchField.stringValue = ""
 		filterCommands()
 		let sheet = NSWindow(contentViewController: self)
-		sheet.title = "Command Palette"
+		sheet.title = title
 		sheet.setContentSize(NSSize(
 			width: min(
 				560,
@@ -84,7 +120,7 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 					window.frame.width - 80
 				)
 			),
-			height: 360
+			height: informativeText == nil ? 360 : 420
 		))
 		window.beginSheet(sheet)
 		{
@@ -149,7 +185,7 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		else
 		{
 			tableView.selectRowIndexes(
-				IndexSet(integer: 0),
+				IndexSet(integer: visibleCommands.firstIndex(where: \.isEnabled) ?? 0),
 				byExtendingSelection: false
 			)
 		}
@@ -174,17 +210,8 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		}
 		let command = visibleCommands[row]
 		let cell = NSTableCellView()
-		let title = NSTextField(labelWithString: command.title)
-		title.font = .systemFont(
-			ofSize: 13,
-			weight: .medium
-		)
-		title.lineBreakMode = .byTruncatingTail
-
-		let detail = NSTextField(labelWithString: command.detail)
-		detail.font = .systemFont(ofSize: 11)
-		detail.textColor = .secondaryLabelColor
-		detail.lineBreakMode = .byTruncatingMiddle
+		let title = makeCommandTitle(command)
+		let detail = makeCommandDetail(command)
 
 		let stack = AppKitLayout.verticalStack([title, detail])
 		stack.spacing = 2
@@ -197,9 +224,41 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		return cell
 	}
 
+	private func makeCommandTitle(_ command: PaletteCommand) -> NSTextField
+	{
+		let title = NSTextField(labelWithString: command.title)
+		title.font = .systemFont(
+			ofSize: 13,
+			weight: .medium
+		)
+		title.lineBreakMode = .byTruncatingTail
+		title.textColor = command.isEnabled ? .labelColor : .tertiaryLabelColor
+
+		return title
+	}
+
+	private func makeCommandDetail(_ command: PaletteCommand) -> NSTextField
+	{
+		let detail = NSTextField(labelWithString: command.detail)
+		detail.font = .systemFont(ofSize: 11)
+		detail.textColor = .secondaryLabelColor
+		detail.lineBreakMode = .byTruncatingMiddle
+
+		return detail
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
+		shouldSelectRow row: Int
+	) -> Bool
+	{
+		visibleCommands.indices.contains(row) && visibleCommands[row].isEnabled
+	}
+
 	@objc private func chooseSelected()
 	{
-		guard visibleCommands.indices.contains(tableView.selectedRow)
+		guard visibleCommands.indices.contains(tableView.selectedRow),
+				visibleCommands[tableView.selectedRow].isEnabled
 		else
 		{
 			return

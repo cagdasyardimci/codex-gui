@@ -162,6 +162,10 @@ extension MainWindowController
 
 	func configureConversationActions(target: WorkspaceIntentTarget)
 	{
+		conversation.onSlashCommand =
+		{
+			target.dispatch(.slashCommand($0))
+		}
 		conversation.onDraftChange =
 		{
 			target.dispatch(.editDraft($0))

@@ -28,6 +28,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 			coordinator: coordinator
 		)
 		mainWindowController = controller
+		configureNotificationCallbacks(controller: controller)
+
+		controller.showWindow(nil)
+		NSApp.activate(ignoringOtherApps: true)
+
+		configureCoordinatorCallbacks(controller: controller)
+
+		coordinator.start()
+	}
+
+	private func configureNotificationCallbacks(controller: MainWindowController)
+	{
 		notifications.onStatusChange =
 		{
 			[weak controller] message in
@@ -49,13 +61,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 			{
 				[weak self] snapshot in self?.notifications.observe(snapshot)
 			}
+	}
 
-		controller.showWindow(nil)
-		NSApp.activate(ignoringOtherApps: true)
-
+	private func configureCoordinatorCallbacks(controller: MainWindowController)
+	{
 		coordinator.onPresentationCommand =
 		{
-			command in
+			[weak controller] command in
+			if case .slashCommand = command
+			{
+				controller?.handlePresentationCommand(command)
+			}
 			if case .openSignIn(let url) = command
 			{
 				NSWorkspace.shared.open(url)
@@ -73,8 +89,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 			self.pendingQuit = nil
 			NSApp.reply(toApplicationShouldTerminate: approved)
 		}
-
-		coordinator.start()
 	}
 
 	func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool

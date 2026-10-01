@@ -7,7 +7,7 @@ extension ConversationViewController
 	func makeComposerArea() -> NSStackView
 	{
 		let attachmentRow = AppKitLayout.horizontalStack(
-			[addContextButton, approvalPolicyButton],
+			[addContextButton, approvalPolicyButton, planModeLabel],
 			spacing: 16
 		)
 		let actionRow = AppKitLayout.horizontalStack(
@@ -92,21 +92,7 @@ extension ConversationViewController
 		refreshModelEffortButton()
 		modelEffortButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-		modelEffortController.onSelectModel =
-		{
-			[weak self] modelID in
-			self?.onSelectModel?(modelID)
-		}
-		modelEffortController.onSelectEffort =
-		{
-			[weak self] effort in
-			self?.onSelectEffort?(effort)
-		}
-		modelEffortController.onSetFastMode =
-		{
-			[weak self] enabled in
-			self?.onSetFastMode?(enabled)
-		}
+		configurePreferenceCallbacks()
 		modelEffortController.onPreferredContentSizeChange =
 		{
 			[weak self] in
@@ -122,11 +108,6 @@ extension ConversationViewController
 		approvalPolicyButton.font = .systemFont(ofSize: 13)
 		approvalPolicyButton.lineBreakMode = .byTruncatingTail
 		approvalPolicyButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
-		approvalPolicyController.onSelect =
-		{
-			[weak self] mode in
-			self?.requestApprovalMode(mode)
-		}
 		for popup in [jumpButton, addContextButton]
 		{
 			DesktopTheme.stylePopup(popup)
@@ -138,8 +119,35 @@ extension ConversationViewController
 		preferenceWarningLabel.isHidden = true
 	}
 
+	func configurePreferenceCallbacks()
+	{
+		modelEffortController.onSelectModel =
+		{
+			[weak self] in self?.onSelectModel?($0)
+		}
+		modelEffortController.onSelectEffort =
+		{
+			[weak self] in self?.onSelectEffort?($0)
+		}
+		modelEffortController.onSetFastMode =
+		{
+			[weak self] in self?.onSetFastMode?($0)
+		}
+		approvalPolicyController.onSelect =
+		{
+			[weak self] in self?.requestApprovalMode($0)
+		}
+	}
+
 	func configureComposerControls()
 	{
+		planModeLabel.font = .systemFont(
+			ofSize: 12,
+			weight: .medium
+		)
+		planModeLabel.textColor = .systemBlue
+		planModeLabel.setAccessibilityLabel("Plan mode enabled")
+		planModeLabel.isHidden = true
 		interactionStack.orientation = .vertical
 		interactionStack.alignment = .leading
 		interactionStack.spacing = 8
@@ -312,11 +320,45 @@ extension ConversationViewController
 
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)
 	{
+		planModeLabel.stringValue = snapshot.planModeStatus ?? "Plan mode"
+		planModeLabel.isHidden = !snapshot.planMode && snapshot.planModeStatus == nil
+		planModeLabel.textColor = snapshot.planModeStatus == nil ? .systemBlue : .systemOrange
+		planModeLabel.setAccessibilityLabel(planModeLabel.stringValue)
+		planModeLabel.toolTip = snapshot.planModeStatus == nil ? "Plan mode enabled"
+			: "Run /plan to choose Reapply Plan or Reset Default after reconnecting."
+		slashCommandController.unavailableReason =
+		{
+			snapshot.slashCommandUnavailableReasons[$0]
+		}
+		if slashCompletionRange != nil,
+			let query = SlashCommandParser.completionQuery(
+			in: composer.string,
+			selectedRange: composer.selectedRange()
+			)
+		{
+			slashCommandController.render(prefix: query.prefix)
+		}
+		let isSlashInput: Bool
+		switch SlashCommandParser.parse(snapshot.draft)
+		{
+		case .text: isSlashInput = false
+		case .command, .error: isSlashInput = true
+		}
 		let viewingActiveTask =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
 
 		if composer.string != snapshot.draft
 		{
+			dismissSlashCommands()
+			if fileSelectionReceiver != nil || fileSearchWasCompletion
+			{
+				fileSearchPopover?.close()
+				fileSelectionReceiver = nil
+				completionRange = nil
+			}
+			modelEffortPopover?.close()
+			approvalPolicyPopover?.close()
+			configurePreferenceCallbacks()
 			composer.string = snapshot.draft
 			updateComposerHeight()
 		}
@@ -333,13 +375,13 @@ extension ConversationViewController
 		}
 
 		sendButton.isEnabled =
-			snapshot.canSend
+			(snapshot.canSend || isSlashInput)
 				&& (!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 					|| !snapshot.draftContext.isEmpty)
 		steerButton.isHidden = !viewingActiveTask || snapshot.activeExecutionState != .running
 		sendButton.isHidden = !steerButton.isHidden
 		steerButton.isEnabled =
-			snapshot.canSteer
+			(snapshot.canSteer || isSlashInput)
 				&& (!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 					|| !snapshot.draftContext.isEmpty)
 		sendButton.contentTintColor = .white
@@ -368,7 +410,7 @@ extension ConversationViewController
 		}
 		onDraftChange?(composer.string)
 		updateComposerHeight()
-		showAtFileCompletionIfNeeded()
+		updateComposerCompletion()
 	}
 
 	func renderProjectLocation(_ snapshot: ConversationPresentation.Location)
@@ -460,8 +502,9 @@ extension ConversationViewController
 		)
 	}
 
-	@objc private func showModelAndEffort()
+	@objc func showModelAndEffort()
 	{
+		configurePreferenceCallbacks()
 		approvalPolicyPopover?.close()
 		if modelEffortPopover?.isShown == true
 		{
@@ -475,6 +518,10 @@ extension ConversationViewController
 			{
 				[weak self] presented in
 				self?.modelEffortController.setPresented(presented)
+				if !presented
+				{
+					self?.configurePreferenceCallbacks()
+				}
 				self?.refreshModelEffortButton()
 			}
 			modelEffortPopover = popover
@@ -485,8 +532,9 @@ extension ConversationViewController
 		)
 	}
 
-	@objc private func showApprovalPolicy()
+	@objc func showApprovalPolicy()
 	{
+		configurePreferenceCallbacks()
 		modelEffortPopover?.close()
 		if approvalPolicyPopover == nil
 		{
@@ -503,7 +551,10 @@ extension ConversationViewController
 		)
 	}
 
-	func requestApprovalMode(_ mode: ApprovalMode)
+	func requestApprovalMode(
+		_ mode: ApprovalMode,
+		completion: ((ApprovalMode) -> Void)? = nil
+	)
 	{
 		approvalPolicyPopover?.close()
 		guard fullAccessConfirmationPanel == nil
@@ -514,7 +565,7 @@ extension ConversationViewController
 		guard mode == .fullAccess, approvalMode != .fullAccess
 		else
 		{
-			onSelectApprovalMode?(mode)
+			(completion ?? onSelectApprovalMode)?(mode)
 			return
 		}
 		guard let window = view.window, window.attachedSheet == nil
@@ -524,7 +575,7 @@ extension ConversationViewController
 		}
 
 		// Capture the requesting workspace's callback before a later render can replace it.
-		let applyMode = onSelectApprovalMode
+		let applyMode = completion ?? onSelectApprovalMode
 		let confirmation = FullAccessConfirmationView()
 		let panel = FullAccessConfirmationPanel(
 			contentRect: .zero,
