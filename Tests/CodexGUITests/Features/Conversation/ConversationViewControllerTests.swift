@@ -331,7 +331,7 @@ struct ConversationViewControllerTests
 			}
 		)
 		let window = try #require(windowController.window)
-		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let split = windowController.paneController.split
 		let controller = try #require(
 			split.splitViewItems[1].viewController as? ConversationViewController
 		)

@@ -21,7 +21,7 @@ struct ConversationLongHistoryLayoutTests
 			}
 		)
 		let window = try #require(main.window)
-		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let split = main.paneController.split
 		let controller = try #require(
 			split.splitViewItems[1].viewController as? ConversationViewController
 		)

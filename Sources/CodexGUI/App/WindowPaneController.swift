@@ -121,8 +121,7 @@ final class WindowPaneController
 		{
 			return
 		}
-		let navigationCollapsed =
-			(window.contentViewController as? NSSplitViewController)?.splitViewItems[0].isCollapsed
+		let navigationCollapsed = split.splitViewItems[0].isCollapsed
 		layoutStore?.layout = WindowLayout(
 			frame: window.frame,
 			navigationWidth: expandedNavigationWidth,
@@ -136,18 +135,12 @@ final class WindowPaneController
 
 	func toggleSidebar()
 	{
-		guard let split = window?.contentViewController as? NSSplitViewController
-		else
-		{
-			return
-		}
 		setSidebarCollapsed(!split.splitViewItems[0].isCollapsed)
 	}
 
 	func setSidebarCollapsed(_ collapsed: Bool)
 	{
-		guard let split = window?.contentViewController as? NSSplitViewController,
-				split.splitViewItems[0].isCollapsed != collapsed
+		guard split.splitViewItems[0].isCollapsed != collapsed
 		else
 		{
 			return
@@ -164,8 +157,7 @@ final class WindowPaneController
 
 	private func applyResponsivePaneLayout(force: Bool = false)
 	{
-		guard hasPresentedWindow, !isApplyingPaneLayout,
-				let split = window?.contentViewController as? NSSplitViewController
+		guard hasPresentedWindow, !isApplyingPaneLayout
 		else
 		{
 			return
@@ -242,8 +234,7 @@ final class WindowPaneController
 
 	private func rememberDividerChoice(at index: Int)
 	{
-		guard !isApplyingPaneLayout,
-				let split = window?.contentViewController as? NSSplitViewController
+		guard !isApplyingPaneLayout
 		else
 		{
 			return

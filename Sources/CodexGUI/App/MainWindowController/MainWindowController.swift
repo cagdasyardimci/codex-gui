@@ -21,7 +21,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	let settings = SettingsWindowController()
 	let statusView = StatusPopoverView(frame: .zero)
 	let statusButton = NSButton(
-		title: "Disconnected",
+		title: "",
 		target: nil,
 		action: nil
 	)
@@ -73,7 +73,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			inspector: inspector,
 			layoutStore: layoutStore
 		)
-		window.contentViewController = paneController.split
+		window.contentViewController = WindowChromeViewController(
+			split: paneController.split,
+			accountButton: statusButton
+		)
 
 		super.init(window: window)
 		shouldCascadeWindows = false
@@ -158,9 +161,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		self.settings.render(status)
 		self.statusView.render(status)
 		let executionState = status.executionState
-		self.statusButton.title = executionState.title
-		self.statusButton.contentTintColor = Self.statusColor(executionState)
-		self.statusButton.toolTip = executionState.title
+		self.statusButton.toolTip = "\(status.accountDescription) · \(executionState.title)"
 		self.statusButton
 			.setAccessibilityLabel("\(executionState.title). Open account and backend status")
 

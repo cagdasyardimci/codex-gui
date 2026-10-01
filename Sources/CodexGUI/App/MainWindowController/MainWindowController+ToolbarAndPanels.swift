@@ -13,26 +13,23 @@ extension MainWindowController
 		static let projectContext = NSToolbarItem.Identifier("projectContext")
 		static let commandPalette = NSToolbarItem.Identifier("commandPalette")
 		static let searchMessages = NSToolbarItem.Identifier("searchMessages")
-		static let status = NSToolbarItem.Identifier("status")
 	}
 
 	func configureToolbarControls()
 	{
 		statusButton.target = self
 		statusButton.action = #selector(showStatus)
-		DesktopTheme.styleButton(
-			statusButton,
-			icon: .emptyCircleFilled
-		)
+		statusButton.bezelStyle = .inline
+		statusButton.isBordered = false
 		statusButton.image = DesktopIcons.image(
-			.emptyCircleFilled,
-			size: 6
+			.user,
+			size: 18
 		)
-		statusButton.font = .systemFont(ofSize: 11)
+		statusButton.imagePosition = .imageOnly
+		statusButton.contentTintColor = .labelColor
 		statusButton.setAccessibilityLabel("Open account and backend status")
-		AppKitLayout.compressHorizontally(statusButton)
-		statusButton.widthAnchor.constraint(equalToConstant: 105).isActive = true
-		statusButton.heightAnchor.constraint(equalToConstant: 26).isActive = true
+		statusButton.widthAnchor.constraint(equalToConstant: 32).isActive = true
+		statusButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
 
 		titleLabel.font = .systemFont(
 			ofSize: 13,
@@ -78,7 +75,6 @@ extension MainWindowController
 			ToolbarItem.projectContext,
 			ToolbarItem.commandPalette,
 			ToolbarItem.searchMessages,
-			ToolbarItem.status,
 			.flexibleSpace,
 		]
 	}
@@ -91,7 +87,6 @@ extension MainWindowController
 			ToolbarItem.conversationTitle,
 			ToolbarItem.newChat,
 			.flexibleSpace,
-			ToolbarItem.status,
 			ToolbarItem.searchMessages,
 			ToolbarItem.commandPalette,
 			ToolbarItem.review,
@@ -105,12 +100,11 @@ extension MainWindowController
 		willBeInsertedIntoToolbar flag: Bool
 	) -> NSToolbarItem?
 	{
-		if itemIdentifier == ToolbarItem.navigationSeparator,
-			let split = window?.contentViewController as? NSSplitViewController
+		if itemIdentifier == ToolbarItem.navigationSeparator
 		{
 			return NSTrackingSeparatorToolbarItem(
 				identifier: itemIdentifier,
-				splitView: split.splitView,
+				splitView: paneController.split.splitView,
 				dividerIndex: 0
 			)
 		}
@@ -177,25 +171,11 @@ extension MainWindowController
 			)
 			item.target = self
 			item.action = #selector(showMessageSearch)
-		case ToolbarItem.status:
-			item.label = "Status"
-			item.view = statusButton
 		default:
 			return nil
 		}
 		item.toolTip = item.label
 		return item
-	}
-
-	static func statusColor(_ state: ExecutionState) -> NSColor
-	{
-		switch state
-		{
-		case .running, .completed: .systemGreen
-		case .awaitingApproval, .awaitingAnswer, .stopping: .systemOrange
-		case .failed: .systemRed
-		case .ready, .stopped, .disconnected: .secondaryLabelColor
-		}
 	}
 
 	@objc private func openProjectPicker()
@@ -323,7 +303,7 @@ extension MainWindowController
 		popover.show(
 			relativeTo: statusButton.bounds,
 			of: statusButton,
-			preferredEdge: .maxY
+			preferredEdge: .maxX
 		)
 	}
 

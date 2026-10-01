@@ -41,7 +41,7 @@ struct DesktopLayoutTests
 			}
 		)
 		let window = try #require(controller.window)
-		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let split = controller.paneController.split
 		let conversation = try #require(
 			split.splitViewItems[1].viewController as? ConversationViewController
 		)
@@ -136,6 +136,22 @@ struct DesktopLayoutTests
 				try await Task.sleep(for: .milliseconds(150))
 				window.layoutIfNeeded()
 				#expect(window.frame.size == size)
+				let content = try #require(window.contentView)
+				let accountFrame = controller.statusButton.convert(
+					controller.statusButton.bounds,
+					to: content
+				)
+				#expect(abs(accountFrame.midX - 26) < 1)
+				#expect(abs(accountFrame.minY - 12) < 1)
+				#expect(accountFrame.size == NSSize(
+					width: 32,
+					height: 32
+				))
+				#expect(split.view.frame.minX == 53)
+				#expect(window.toolbar?.items.contains
+				{
+					$0.itemIdentifier.rawValue == "status"
+				} == false)
 				#expect(split.splitViewItems[2].isCollapsed == (size.width == 800))
 				#expect(split.splitViewItems[1].viewController.view.frame.width >= 360)
 				#expect(split.view.fittingSize.width <= split.view.bounds.width + 1)
@@ -163,5 +179,13 @@ struct DesktopLayoutTests
 				}
 			}
 		}
+		controller.paneController.setSidebarCollapsed(true)
+		window.layoutIfNeeded()
+		#expect(split.splitViewItems[0].isCollapsed)
+		#expect(controller.statusButton.window === window)
+		#expect(!controller.statusButton.isHiddenOrHasHiddenAncestor)
+		controller.paneController.setSidebarCollapsed(false)
+		window.layoutIfNeeded()
+		#expect(!split.splitViewItems[0].isCollapsed)
 	}
 }

@@ -26,7 +26,7 @@ struct WindowLayoutTests
 			}
 		)
 		let window = try #require(controller.window)
-		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let split = controller.paneController.split
 		#expect(split.splitViewItems[1].maximumThickness == NSSplitViewItem.unspecifiedDimension)
 		let navigation = try #require(
 			split.splitViewItems[0].viewController as? NavigationViewController
@@ -326,7 +326,7 @@ struct WindowLayoutTests
 		{
 			window.orderOut(nil)
 		}
-		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let split = first.paneController.split
 		split.view.layoutSubtreeIfNeeded()
 		#expect(window.frame == expectedFrame)
 		#expect(abs(split.splitViewItems[0].viewController.view.frame.width - 240) < 2)
@@ -365,7 +365,7 @@ struct WindowLayoutTests
 			layoutStore: store
 		)
 		let restored = try #require(second.window)
-		let restoredSplit = try #require(restored.contentViewController as? NSSplitViewController)
+		let restoredSplit = second.paneController.split
 		second.showWindow(nil)
 		defer
 		{

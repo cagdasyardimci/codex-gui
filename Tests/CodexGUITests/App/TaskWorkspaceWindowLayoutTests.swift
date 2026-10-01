@@ -30,7 +30,7 @@ struct TaskWorkspaceWindowLayoutTests
 			}
 		)
 		let window = try #require(controller.window)
-		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let split = controller.paneController.split
 		let conversation = try #require(
 			split.splitViewItems[1].viewController as? ConversationViewController
 		)
@@ -127,14 +127,9 @@ struct TaskWorkspaceWindowLayoutTests
 			height: 500
 		))
 		#expect(split.view.fittingSize.height <= window.contentLayoutRect.height)
-		let toolbarStatus = try #require(
-			window.toolbar?.items.compactMap
-			{
-				$0.view as? NSButton
-			}.first
-		)
-		#expect(toolbarStatus.fittingSize.width <= 105)
-		#expect(toolbarStatus.toolTip == "Awaiting approval")
+		#expect(controller.statusButton.fittingSize.width <= 32)
+		#expect(controller.statusButton.toolTip
+			== "\(snapshot.accountDescription) · Awaiting approval")
 		let details = try #require(findRequestDetails(in: conversation.view))
 		#expect(!details.isHidden)
 		#expect(details.frame.height >= 36 && details.frame.height <= 140)
@@ -180,7 +175,7 @@ struct TaskWorkspaceWindowLayoutTests
 			}
 		)
 		let window = try #require(controller.window)
-		let split = try #require(window.contentViewController as? NSSplitViewController)
+		let split = controller.paneController.split
 		let navigation = try #require(
 			split.splitViewItems[0].viewController as? NavigationViewController
 		)
