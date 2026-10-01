@@ -180,6 +180,8 @@ let package = Package(
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Execution.swift",
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Helpers.swift",
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Navigation.swift",
+				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Persistence.swift",
+				"Application/Runtime/ApplicationStateTests/ApplicationStateTests+Preferences.swift",
 				"Application/Runtime/ApplicationStateTests/ApplicationStateTests.swift",
 			],
 			sources: [
