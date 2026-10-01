@@ -317,9 +317,13 @@ struct ConversationContentTests
 		))
 		item.view.layoutSubtreeIfNeeded()
 
+		// Hover controls can change stacking order; identify blocks by their stable labels.
 		let buttons = allButtons(in: item.view).filter
 		{
 			($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
+		}.sorted
+		{
+			($0.accessibilityLabel() ?? "") < ($1.accessibilityLabel() ?? "")
 		}
 		let textView = try #require(findTextView(in: item.view))
 		#expect(buttons.map

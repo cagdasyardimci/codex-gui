@@ -342,7 +342,7 @@ struct ConversationMarkdownRenderingTests
 			#expect(try paragraph(
 				in: text,
 				at: lastLine
-			).paragraphSpacing == 16)
+			).paragraphSpacing == 32)
 		}
 		let native = makeNativeLayout(
 			text,
