@@ -6,15 +6,44 @@ case "$configuration" in
   debug|release) ;;
   *) print -u2 "Usage: $0 [debug|release]"; exit 2 ;;
 esac
-swift build -c "$configuration"
+# Swift Build resolves package resources from Contents/Resources in a signed macOS app.
+swift build --build-system swiftbuild -c "$configuration"
+product_directory=$(swift build --build-system swiftbuild -c "$configuration" --show-bin-path)
 app=".build/CodexGUI.app"
 mkdir -p "$app/Contents/MacOS"
 mkdir -p "$app/Contents/Resources"
-cp ".build/$configuration/CodexGUI" "$app/Contents/MacOS/CodexGUI"
+cp "$product_directory/CodexGUI" "$app/Contents/MacOS/CodexGUI"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 cp Sources/CodexGUI/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
-for resource_bundle in .build/$configuration/*.bundle(N); do
-  ditto "$resource_bundle" "$app/Contents/Resources/${resource_bundle:t}"
+for resource_bundle in "$product_directory"/*.bundle(N); do
+  resource_destination="$app/Contents/Resources/${resource_bundle:t}"
+  rm -rf "$resource_destination"
+  ditto "$resource_bundle" "$resource_destination"
 done
+markdown_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-markdown"
+cmark_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-cmark"
+mkdir -p "$markdown_licenses" "$cmark_licenses"
+cp -f .build/checkouts/swift-markdown/LICENSE.txt "$markdown_licenses/LICENSE.txt"
+cp -f .build/checkouts/swift-markdown/NOTICE.txt "$markdown_licenses/NOTICE.txt"
+cp -f .build/checkouts/swift-cmark/COPYING "$cmark_licenses/COPYING"
+highlighter_licenses="$app/Contents/Resources/ThirdPartyLicenses/HighlighterSwift"
+math_licenses="$app/Contents/Resources/ThirdPartyLicenses/SwiftMath"
+mermaid_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-mermaid"
+mkdir -p "$highlighter_licenses/Sources/Assets" \
+  "$math_licenses/Sources/SwiftMath/mathFonts.bundle" \
+  "$mermaid_licenses/Vendor/MermaidLayoutDagre"
+cp -f .build/checkouts/HighlighterSwift/LICENCE.md "$highlighter_licenses/LICENCE.md"
+cp -f .build/checkouts/HighlighterSwift/Sources/Assets/LICENCE \
+  "$highlighter_licenses/Sources/Assets/LICENCE"
+cp -f .build/checkouts/SwiftMath/LICENSE "$math_licenses/LICENSE"
+cp -f .build/checkouts/SwiftMath/Sources/SwiftMath/mathFonts.bundle/LICENSE \
+  "$math_licenses/Sources/SwiftMath/mathFonts.bundle/LICENSE"
+cp -f .build/checkouts/SwiftMath/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LICENSE.txt \
+  "$math_licenses/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LICENSE.txt"
+cp -f .build/checkouts/swift-mermaid/LICENSE "$mermaid_licenses/LICENSE"
+cp -f .build/checkouts/swift-mermaid/THIRD-PARTY-NOTICES.md \
+  "$mermaid_licenses/THIRD-PARTY-NOTICES.md"
+cp -f .build/checkouts/swift-mermaid/Vendor/MermaidLayoutDagre/LICENSE \
+  "$mermaid_licenses/Vendor/MermaidLayoutDagre/LICENSE"
 codesign --force --sign - "$app"
 print "Built $app ($configuration)"
