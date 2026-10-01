@@ -33,3 +33,12 @@ the tests pass. Review unexpected runtime exits separately from test outcomes.
 
 See [CLI compatibility](cli-compatibility.md) for the tested protocol baseline and
 [native QA](native-qa.md) for interaction and live acceptance requirements.
+
+## Command and checkout safeguards
+
+Regression coverage exercises an interrupted agent with a still-pending command,
+late results from the exact command owner, stale history reads, recovered unknown
+outcomes and cleanup/quit refusal. Temporary Git repositories cover clean checkout
+creation, dirty and ignored-file refusal, ownership mismatches, retained branches,
+failed-removal recovery and independent task identities. Native observation of these
+workflows remains a separate acceptance step.
