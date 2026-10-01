@@ -1,0 +1,35 @@
+# Validation
+
+## Automated checks
+
+Run `make check` to validate style-driver regressions, Swift formatting, the application
+build and Swift Testing. Native popover layout tests run in a separate test-host lifecycle.
+The complete suite contains 385 Swift tests across 50 suites and 12 Python style-driver
+tests. Tests cover protocol framing and request ownership, reducer transitions, stale
+results, ordered persistence, workspace recovery, late command outcomes, cleanup and
+quit barriers, transcript preparation, review and native layout.
+
+Run `python3 scripts/check-qa-backend.py` for the isolated backend fixture checker and
+`git diff --check` for whitespace errors. `scripts/bundle.sh` creates and ad hoc signs
+the development app bundle. These checks do not require a live model turn.
+
+## Native and live acceptance
+
+Use [native QA](native-qa.md) for a fresh isolated synthetic app-server and disposable
+Git fixture. Verify exact window frames, composer focus and context restoration,
+reading position during streaming, approval ownership, independent Stop and steering,
+late command cleanup protection, normal quit/relaunch and retained worktree branches.
+
+Controlled service tests and synthetic AppKit tests establish their asserted behavior;
+they do not establish live execution, OS notification delivery or physical input.
+Live model turns, rename/archive requests, approvals, Stop, steering, complete interrupted-command recovery,
+native image drag/drop, exact copied code bytes, live account usage, light/dark parity
+and macOS 13 execution require separate observation. No additional native or live
+acceptance result is claimed by the automated checks.
+
+The application targets macOS 13; the installed Swift Testing framework targets macOS
+14. Existing toolchain and synthetic AppKit constraint warnings may remain even when
+the tests pass. Review unexpected runtime exits separately from test outcomes.
+
+See [CLI compatibility](cli-compatibility.md) for the tested protocol baseline and
+[native QA](native-qa.md) for interaction and live acceptance requirements.
