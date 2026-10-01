@@ -58,6 +58,7 @@ final class ConversationViewController: NSViewController,
 	)
 	let approvalPolicyController = ApprovalPolicyPopoverView()
 	var approvalPolicyPopover: NSPopover?
+	var fullAccessConfirmationPanel: NSPanel?
 	var approvalMode: ApprovalMode = .askForApproval
 	let preferenceWarningLabel = NSTextField(wrappingLabelWithString: "")
 	private var requestContextText = ""

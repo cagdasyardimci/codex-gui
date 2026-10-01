@@ -128,8 +128,7 @@ extension ConversationViewController
 		approvalPolicyController.onSelect =
 		{
 			[weak self] mode in
-			self?.onSelectApprovalMode?(mode)
-			self?.approvalPolicyPopover?.close()
+			self?.requestApprovalMode(mode)
 		}
 		for popup in [jumpButton, addContextButton]
 		{
@@ -501,6 +500,67 @@ extension ConversationViewController
 			of: approvalPolicyButton,
 			preferredEdge: .maxY
 		)
+	}
+
+	func requestApprovalMode(_ mode: ApprovalMode)
+	{
+		approvalPolicyPopover?.close()
+		guard fullAccessConfirmationPanel == nil
+		else
+		{
+			return
+		}
+		guard mode == .fullAccess, approvalMode != .fullAccess
+		else
+		{
+			onSelectApprovalMode?(mode)
+			return
+		}
+		guard let window = view.window, window.attachedSheet == nil
+		else
+		{
+			return
+		}
+
+		// Capture the requesting workspace's callback before a later render can replace it.
+		let applyMode = onSelectApprovalMode
+		let confirmation = FullAccessConfirmationView()
+		let panel = FullAccessConfirmationPanel(
+			contentRect: .zero,
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		panel.isReleasedWhenClosed = false
+		panel.isOpaque = false
+		panel.backgroundColor = .clear
+		panel.hasShadow = true
+		panel.contentViewController = confirmation
+		confirmation.view.layoutSubtreeIfNeeded()
+		panel.setContentSize(confirmation.view.fittingSize)
+		confirmation.onDecision =
+		{
+			[weak window, weak panel] confirmed in
+			guard let window, let panel
+			else
+			{
+				return
+			}
+			window.endSheet(
+				panel,
+				returnCode: confirmed ? .OK : .cancel
+			)
+		}
+		fullAccessConfirmationPanel = panel
+		window.beginSheet(panel)
+		{
+			[weak self] response in
+			self?.fullAccessConfirmationPanel = nil
+			if response == .OK
+			{
+				applyMode?(.fullAccess)
+			}
+		}
 	}
 
 }
