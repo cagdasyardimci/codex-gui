@@ -218,6 +218,10 @@ extension NavigationViewController
 		{
 			rowView.isCurrentProject = project == currentProject
 		}
+		else
+		{
+			rowView.isTaskRow = true
+		}
 		return rowView
 	}
 

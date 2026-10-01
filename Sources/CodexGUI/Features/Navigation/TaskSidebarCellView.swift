@@ -20,7 +20,7 @@ final class TaskSidebarCellView: NSTableCellView
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
-		let label = NSTextField(labelWithString: "")
+		let label = HoverScrollingTextField(labelWithString: "")
 		label.font = .systemFont(ofSize: 14)
 		label.lineBreakMode = .byTruncatingTail
 		label.maximumNumberOfLines = 1
@@ -117,10 +117,12 @@ final class TaskSidebarCellView: NSTableCellView
 	override func mouseEntered(with event: NSEvent)
 	{
 		actions.alphaValue = 1
+		(textField as? HoverScrollingTextField)?.setHovered(true)
 	}
 	override func mouseExited(with event: NSEvent)
 	{
 		actions.alphaValue = 0
+		(textField as? HoverScrollingTextField)?.setHovered(false)
 	}
 
 	@objc private func archiveTask()
