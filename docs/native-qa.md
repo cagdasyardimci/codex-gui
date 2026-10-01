@@ -10,6 +10,23 @@ Select **Markdown and streaming**. Inspect headings, emphasis, the documentation
 
 Send any short message to start a roughly 32-second synthetic stream. Scroll to an earlier message while it runs. The reading position should stay stable; **Latest Message** should return to the end. Copy each code block into the composer and compare its indentation and trailing newline with `scripts/qa-backend.py`.
 
+## Activity presentation checks
+
+Select **Activity groups and details**. Confirm two separate reads of `file with spaces.swift`,
+a search row, compact command rows, and a separate image thumbnail. The historical turn reports
+2 minutes 4 seconds. Expand a command's Shell details, close its group, then reopen the group:
+the command should retain its disclosure state. File links open only the temporary fixture.
+The synthetic command with exit code 2 must show failure even though its item status is completed.
+Move the pointer onto each activity header: its disclosure chevron should appear. Move away:
+the chevron should disappear while the row keeps the same spacing and remains operable by keyboard.
+
+Inspect the long command output by scrolling inside its bounded Shell panel. Resize the window
+and check that previews truncate while expanded commands wrap. Send any short message for a
+roughly 9-second synthetic command stream. Inspect the live duration, open its details, and
+confirm streamed output updates the existing row. Scroll away during streaming, then return
+with **Latest Message**. Stop another stream and inspect the interrupted duration. Switch chats
+while a command is expanded and check that another chat does not inherit its controls or output.
+
 ## Context and native interaction checks
 
 Choose a model and effort, select a conversation, type an unsent multiline draft, resize the window/panes, and quit. Relaunch the same QA bundle with the same `CODEX_EXECUTABLE`, `CODEX_GUI_QA_STATE`, and `CODEX_GUI_WORKSPACE_ROOT` environment paths. Check conversation, draft, model/effort, and layout restoration.

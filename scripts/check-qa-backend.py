@@ -185,6 +185,45 @@ def check_unavailable(directory):
         backend.close()
 
 
+def check_activity(directory):
+    backend = Backend(directory)
+    try:
+        backend.request('thread/list', {'cwd': str(directory)})
+        history = backend.request('thread/turns/list', {'threadId': 'qa-activity'})['data']
+        turn = history[0]
+        assert turn['durationMs'] == 124000
+        assert turn['completedAt'] - turn['startedAt'] == 124
+        reads = [item for item in turn['items']
+                 if item.get('commandActions', [{}])[0].get('type') == 'read']
+        assert len(reads) == 2 and reads[0]['id'] != reads[1]['id']
+        assert reads[0]['commandActions'] == reads[1]['commandActions']
+        failed = next(item for item in turn['items'] if item['id'] == 'activity-failure')
+        assert failed['status'] == 'completed' and failed['exitCode'] == 2
+        image = next(item for item in turn['items'] if item['type'] == 'imageView')
+        assert image['path'] == str(Path(directory) / 'activity-preview.png')
+
+        started = backend.request('turn/start', {
+            'threadId': 'qa-activity', 'input': [{'type': 'text', 'text': 'Stream activity.'}],
+        })
+        turn_id = started['turn']['id']
+        backend.wait_for(lambda message: message.get('method') == 'item/commandExecution/outputDelta')
+        backend.request('turn/interrupt', {'threadId': 'qa-activity', 'turnId': turn_id})
+        completed = backend.wait_for(lambda message: message.get('method') == 'turn/completed'
+                                    and message['params']['turn']['id'] == turn_id)[0]['params']['turn']
+        assert completed['status'] == 'interrupted'
+        assert completed['durationMs'] >= 0 and completed['completedAt'] >= completed['startedAt']
+        command = next(item for item in completed['items'] if item['type'] == 'commandExecution')
+        deltas = [message['params']['delta'] for message in backend.messages
+                  if message.get('method') == 'item/commandExecution/outputDelta'
+                  and message['params']['turnId'] == turn_id]
+        assert command['aggregatedOutput'] == ''.join(deltas)
+        assert command['commandActions'][0]['type'] == 'unknown'
+        restored = backend.request('thread/turns/list', {'threadId': 'qa-activity'})['data']
+        assert next(turn for turn in restored if turn['id'] == turn_id) == completed
+    finally:
+        backend.close()
+
+
 def check_checkout_cwds(directory):
     alpha = Path(directory) / 'worktree-alpha'
     beta = Path(directory) / 'worktree-beta'
@@ -440,11 +479,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix='codex-gui-qa-check-') as root:
         check_available(Path(root) / 'available')
         check_unavailable(Path(root) / 'unavailable')
+        check_activity(Path(root) / 'activity')
         check_checkout_cwds(Path(root) / 'cwd')
         check_interleaved_approvals(Path(root) / 'interleaved')
         check_independent_client_persistence(Path(root) / 'independent-clients')
         check_late_command_after_stop(Path(root) / 'late-command-after-stop')
-    print('Synthetic QA backend checks passed (review, skills, exact cwds, interleaved approvals, independent client persistence, late command after Stop).')
+    print('Synthetic QA backend checks passed (activity, review, skills, exact cwds, interleaved approvals, independent client persistence, late command after Stop).')
 
 
 if __name__ == '__main__':

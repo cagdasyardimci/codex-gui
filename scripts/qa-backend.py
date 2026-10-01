@@ -38,6 +38,7 @@ threads = state.setdefault('threads', [
     {'id': 'qa-task-control', 'name': 'Active task ownership', 'preview': 'Synthetic task-control fixture', 'archived': False},
     {'id': 'qa-review', 'name': 'Review and validation', 'preview': 'Synthetic multi-turn review fixture', 'archived': False},
     {'id': 'qa-context', 'name': 'Project context and history', 'preview': 'Synthetic reuse and search fixture', 'archived': False},
+    {'id': 'qa-activity', 'name': 'Activity groups and details', 'preview': 'Read, search, command, image, and timing fixture', 'archived': False},
 ])
 markdown = '''# Reading acceptance
 
@@ -152,6 +153,10 @@ def bind_legacy_threads(cwd):
 
 def history(thread_id, cursor=None):
     cwd = thread_cwd(thread_id)
+    if thread_id == 'qa-activity':
+        with history_lock:
+            saved_turns = json.loads(json.dumps(streamed_turns.get(thread_id, [])))
+        return [activity_history(cwd)] + saved_turns, None
     items = [{'id': f'message-{i}', 'type': 'agentMessage',
               'text': f'## Earlier message {i}\n\n' + 'Readable conversation history. ' * 8} for i in range(160)]
     items += [{'id': 'long-command', 'type': 'commandExecution', 'status': 'completed',
@@ -240,6 +245,91 @@ def history(thread_id, cursor=None):
     return [{'id': f'{thread_id}-history', 'status': 'completed', 'items': items}] + saved_turns, None
 
 
+def activity_history(cwd):
+    """Representative activity metadata; the displayed commands are never executed."""
+    read_command = "sed -n '1,3p' 'file with spaces.swift'"
+    search_command = "rg -n greeting 'file with spaces.swift'"
+    return {
+        'id': 'qa-activity-history', 'status': 'completed',
+        'startedAt': 1790848800, 'completedAt': 1790848924, 'durationMs': 124000,
+        'items': [
+            {'id': 'activity-request', 'type': 'userMessage',
+             'content': [{'type': 'text', 'text': 'Inspect the fixture and show the activity details.'}]},
+            {'id': 'activity-commentary', 'type': 'agentMessage',
+             'text': 'I will inspect the file, search its contents, and show command details.'},
+            *[{'id': f'activity-read-{index}', 'type': 'commandExecution',
+               'command': read_command, 'cwd': cwd, 'status': 'completed', 'exitCode': 0,
+               'commandActions': [{'type': 'read', 'command': read_command,
+                                   'name': 'file with spaces.swift', 'path': 'file with spaces.swift'}],
+               'aggregatedOutput': '// Native editor handoff fixture\nlet greeting = "Hello"\nprint(greeting)\n',
+               'durationMs': 12} for index in range(2)],
+            {'id': 'activity-search', 'type': 'commandExecution',
+             'command': search_command, 'cwd': cwd, 'status': 'completed', 'exitCode': 0,
+             'commandActions': [{'type': 'search', 'command': search_command,
+                                 'query': 'greeting', 'path': 'file with spaces.swift'}],
+             'aggregatedOutput': '2:let greeting = "Hello"\n3:print(greeting)\n'},
+            {'id': 'activity-shell', 'type': 'commandExecution',
+             'command': "python3 - <<'PY'\nprint('Synthetic output; no Python command ran.')\nPY",
+             'cwd': cwd, 'status': 'completed', 'exitCode': 0, 'durationMs': 1800,
+             'commandActions': [{'type': 'unknown', 'command': 'python3 - synthetic fixture'}],
+             'aggregatedOutput': ''.join(f'ACTIVITY_OUTPUT_{index:03d}: literal * [] < > &\n' for index in range(80))},
+            {'id': 'activity-next-commentary', 'type': 'agentMessage',
+             'text': 'The two reads remain separate. This next command reports a failure.'},
+            {'id': 'activity-failure', 'type': 'commandExecution',
+             'command': 'synthetic-check --fixture', 'cwd': cwd, 'status': 'completed',
+             'aggregatedOutput': 'Synthetic validation failure; no command ran.\n', 'exitCode': 2},
+            {'id': 'activity-image', 'type': 'imageView', 'path': str(Path(cwd) / 'activity-preview.png')},
+            {'id': 'activity-answer', 'type': 'agentMessage',
+             'text': 'Activity fixture complete. Expand groups and individual commands independently.'},
+        ],
+    }
+
+
+def run_activity_turn(thread_id, turn_id, item_id, stop_event, cwd):
+    """Stream command output and timestamps without invoking a model or subprocess."""
+    started = time.time()
+    item = {'id': item_id, 'type': 'agentMessage',
+            'text': 'Streaming synthetic command output for the activity presentation check.'}
+    command = {'id': f'activity-stream-{turn_id}', 'type': 'commandExecution',
+               'command': 'synthetic-stream --lines 30', 'cwd': cwd,
+               'status': 'inProgress', 'aggregatedOutput': '',
+               'commandActions': [{'type': 'unknown', 'command': 'synthetic-stream --lines 30'}]}
+    turn = {'id': turn_id, 'status': 'inProgress', 'startedAt': int(started),
+            'items': [dict(item), dict(command)]}
+    with history_lock:
+        streamed_turns.setdefault(thread_id, []).append(turn)
+        active_turns[thread_id] = {
+            'turnId': turn_id, 'turn': turn, 'item': item, 'stopEvent': stop_event,
+        }
+    send({'method': 'turn/started', 'params': {'threadId': thread_id, 'turn': turn}})
+    for value in (item, command):
+        send({'method': 'item/started', 'params': {
+            'threadId': thread_id, 'turnId': turn_id, 'item': value}})
+    send({'method': 'item/completed', 'params': {
+        'threadId': thread_id, 'turnId': turn_id, 'item': item}})
+    for index in range(30):
+        if stop_event.wait(0.3):
+            break
+        delta = f'LIVE_ACTIVITY_{index:02d}: synthetic output\n'
+        with history_lock:
+            command['aggregatedOutput'] += delta
+            turn['items'] = [dict(item), dict(command)]
+        send({'method': 'item/commandExecution/outputDelta', 'params': {
+            'threadId': thread_id, 'turnId': turn_id, 'itemId': command['id'], 'delta': delta}})
+    ended = time.time()
+    with history_lock:
+        command['status'] = 'completed'
+        command['exitCode'] = 0
+        command['durationMs'] = round((ended - started) * 1000)
+        turn.update(status='interrupted' if stop_event.is_set() else 'completed',
+                    completedAt=int(ended), durationMs=command['durationMs'],
+                    items=[dict(item), dict(command)])
+        active_turns.pop(thread_id, None)
+    send({'method': 'item/completed', 'params': {
+        'threadId': thread_id, 'turnId': turn_id, 'item': command}})
+    send({'method': 'turn/completed', 'params': {'threadId': thread_id, 'turn': turn}})
+
+
 def next_turn_id(thread_id):
     global turn_counter
     with history_lock:
@@ -279,6 +369,9 @@ def finish_late_command_after_stop(thread_id, turn, item, command_item, stop_eve
 
 
 def run_turn(thread_id, turn_id, item_id, stop_event, cwd, late_command_after_stop=False):
+    if thread_id == 'qa-activity':
+        run_activity_turn(thread_id, turn_id, item_id, stop_event, cwd)
+        return
     is_task_control = thread_id.startswith(('qa-task-control', 'qa-created-'))
     item = {'id': item_id, 'type': 'agentMessage', 'text': ''}
     turn = {'id': turn_id, 'status': 'inProgress', 'items': [item]}
