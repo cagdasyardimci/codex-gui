@@ -8,6 +8,25 @@ final class SlashCommandMenuRowView: NSTableRowView
 		.normal
 	}
 
+	var isHovered = false
+	{
+		didSet
+		{
+			if isHovered != oldValue
+			{
+				needsDisplay = true
+			}
+		}
+	}
+
+	override func drawBackground(in dirtyRect: NSRect)
+	{
+		if isHovered && !isSelected
+		{
+			drawHighlight()
+		}
+	}
+
 	override func drawSelection(in dirtyRect: NSRect)
 	{
 		drawHighlight()

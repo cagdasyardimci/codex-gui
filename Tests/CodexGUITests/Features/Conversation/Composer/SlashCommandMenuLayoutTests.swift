@@ -10,6 +10,88 @@ import Testing
 )
 struct SlashCommandMenuLayoutTests
 {
+	@Test func pointerMovementAndScrollingClearPreviousHoverWithoutChangingKeyboardSelection(
+	) throws
+	{
+		_ = NSApplication.shared
+		let menu = SlashCommandPopoverView()
+		menu.render(prefix: "")
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 720,
+				height: 316
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = menu
+		defer
+		{
+			window.orderOut(nil)
+		}
+		window.layoutIfNeeded()
+		let scroll = try #require(menu.view.subviews.first?.subviews.first as? NSScrollView)
+		let table = try #require(scroll.documentView as? SlashCommandMenuTableView)
+		table.scrollRowToVisible(0)
+		let first = try #require(table.rowView(
+			atRow: 1,
+			makeIfNecessary: true
+		)
+			as? SlashCommandMenuRowView)
+		let second = try #require(table.rowView(
+			atRow: 2,
+			makeIfNecessary: true
+		)
+			as? SlashCommandMenuRowView)
+		func movePointer(to row: Int) throws
+		{
+			let rect = table.rect(ofRow: row)
+			let location = table.convert(
+				NSPoint(
+					x: rect.midX,
+					y: rect.midY
+				),
+				to: nil
+			)
+			let event = try #require(NSEvent.mouseEvent(
+				with: .mouseMoved,
+				location: location,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: window.windowNumber,
+				context: nil,
+				eventNumber: 0,
+				clickCount: 0,
+				pressure: 0
+			))
+			table.mouseMoved(with: event)
+		}
+		try movePointer(to: 1)
+		#expect(first.isHovered)
+		#expect(!second.isHovered)
+		try movePointer(to: 2)
+		#expect(!first.isHovered)
+		#expect(second.isHovered)
+		scroll.contentView.scroll(to: NSPoint(
+			x: 0,
+			y: 56
+		))
+		scroll.reflectScrolledClipView(scroll.contentView)
+		#expect(!first.isHovered)
+		#expect(!second.isHovered)
+		try movePointer(to: 3)
+		#expect(table.hoveredRow == 3)
+		#expect(menu.selectedCommand?.id == .new)
+		table.refreshHover(at: nil)
+		#expect(table.hoveredRow == nil)
+		#expect(!first.isHovered)
+		#expect(!second.isHovered)
+	}
+
 	@Test func panelTracksAnchorWidthInsteadOfKeepingItsInitialPreferredWidth() throws
 	{
 		_ = NSApplication.shared
@@ -39,7 +121,8 @@ struct SlashCommandMenuLayoutTests
 		panel.preservesParentKeyboardFocus = true
 		defer
 		{
-			panel.close(); parent.orderOut(nil)
+			panel.close()
+			parent.orderOut(nil)
 		}
 		panel.show(
 			relativeTo: anchor.bounds,

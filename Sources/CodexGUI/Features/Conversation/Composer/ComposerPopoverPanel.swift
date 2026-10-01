@@ -37,6 +37,7 @@ final class ComposerPopoverPanel: NSObject
 		panel.isReleasedWhenClosed = false
 		panel.becomesKeyOnlyIfNeeded = false
 		panel.animationBehavior = .none
+		panel.acceptsMouseMovedEvents = true
 	}
 
 	func show(
@@ -103,7 +104,7 @@ final class ComposerPopoverPanel: NSObject
 		{
 			return
 		}
-		let restoreFocus =
+		let shouldRestoreFocus =
 			returnFocus && panel.isKeyWindow && NSApp.isActive
 				&& anchor?.window === parentWindow
 		let window = parentWindow
@@ -130,7 +131,7 @@ final class ComposerPopoverPanel: NSObject
 		anchorSuperview = nil
 		menuTrackingDepth = 0
 		onPresentationChange?(false)
-		if restoreFocus, let window, window.isVisible, let focusTarget
+		if shouldRestoreFocus, let window, window.isVisible, let focusTarget
 		{
 			window.makeKey()
 			window.makeFirstResponder(focusTarget)
@@ -238,8 +239,9 @@ final class ComposerPopoverPanel: NSObject
 		}
 		if event.type == .keyDown
 		{
-			if event.keyCode == 53,
-				event.window === panel || event.window === parentWindow
+			let belongsToPresentation = event.window === panel || event.window === parentWindow
+			let shouldHandleEscape = event.keyCode == 53 && belongsToPresentation
+			if shouldHandleEscape
 			{
 				guard shouldDismissForEscape?() != false
 				else
@@ -334,17 +336,24 @@ final class ComposerPopoverPanel: NSObject
 			return
 		}
 		panel.appearance = window.effectiveAppearance
-		let margin: CGFloat = 8
-		let requested = controller.preferredContentSize
+		let screenEdgeInset: CGFloat = 8
+		let anchorToPanelSpacing: CGFloat = 8
+		let requestedSize = controller.preferredContentSize
+		let requestedWidth = matchesAnchorWidth ? screenRect.width : requestedSize.width
+		let availableWidth = max(
+			1,
+			visibleFrame.width - 2 * screenEdgeInset
+		)
+		let availableHeight = max(
+			1,
+			visibleFrame.height - 2 * screenEdgeInset
+		)
 		let width = min(
 			max(
 				1,
-				matchesAnchorWidth ? screenRect.width : requested.width
+				requestedWidth
 			),
-			max(
-				1,
-				visibleFrame.width - 2 * margin
-			)
+			availableWidth
 		)
 		// Borderless AppKit panels also consult their controller's preferred width during layout.
 		if matchesAnchorWidth, controller.preferredContentSize.width != width
@@ -355,26 +364,23 @@ final class ComposerPopoverPanel: NSObject
 		let height = min(
 			max(
 				1,
-				requested.height
+				requestedSize.height
 			),
-			max(
-				1,
-				visibleFrame.height - 2 * margin
-			)
+			availableHeight
 		)
 		let x = min(
 			max(
 				screenRect.midX - width / 2,
-				visibleFrame.minX + margin
+				visibleFrame.minX + screenEdgeInset
 			),
-			visibleFrame.maxX - width - margin
+			visibleFrame.maxX - width - screenEdgeInset
 		)
 		let y = min(
 			max(
-				screenRect.maxY + 8,
-				visibleFrame.minY + margin
+				screenRect.maxY + anchorToPanelSpacing,
+				visibleFrame.minY + screenEdgeInset
 			),
-			visibleFrame.maxY - height - margin
+			visibleFrame.maxY - height - screenEdgeInset
 		)
 		let frame = NSRect(
 			x: x,

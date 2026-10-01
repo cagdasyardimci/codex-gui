@@ -18,7 +18,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	}
 	var onChoose: ((SlashCommandDescriptor) -> Void)?
 	var unavailableReason: ((SlashCommandID) -> String?)?
-	private let table = NSTableView()
+	private let table = SlashCommandMenuTableView()
 	private let scroll = NSScrollView()
 	private let emptyLabel = NSTextField(labelWithString: "No matching commands or skills")
 	private(set) var commands: [SlashCommandDescriptor] = []
@@ -76,18 +76,11 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	func render(prefix: String)
 	{
 		_ = view
-		let previous = selectedCommand?.id
-		let previousSkill = selectedSkill?.path
+		let previousCommandID = selectedCommand?.id
+		let previousSkillPath = selectedSkill?.path
 		commands = SlashCommandRegistry.matching(prefix: prefix)
-		matchingSkills = availableSkills.filter
-		{
-			$0.enabled && (prefix.isEmpty || $0.name.lowercased().hasPrefix(prefix.lowercased())
-				|| ($0.displayName?.lowercased().hasPrefix(prefix.lowercased()) ?? false))
-		}.sorted
-		{
-			($0.displayName ?? $0.name).localizedStandardCompare($1.displayName ?? $1.name)
-				== .orderedAscending
-		}
+		matchingSkills = skillsMatching(prefix: prefix)
+
 		let height = CGFloat(min(
 			11,
 			max(
@@ -102,11 +95,12 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		guard rowCount > 0
 		else
 		{
-			table.deselectAll(nil); return
+			table.deselectAll(nil)
+			return
 		}
 		if let index = matchingSkills.firstIndex(where:
 			{
-				$0.path == previousSkill
+				$0.path == previousSkillPath
 			})
 		{
 			selectRow(commands.count + 1 + index)
@@ -115,9 +109,27 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		{
 			selectRow(commands.firstIndex(where:
 				{
-					$0.id == previous
+					$0.id == previousCommandID
 				})
 				?? (commands.isEmpty ? 1 : 0))
+		}
+	}
+
+	private func skillsMatching(prefix: String) -> [AvailableSkill]
+	{
+		let matchingSkills = availableSkills.filter
+		{
+			skill in
+			let matchesName = skill.name.lowercased().hasPrefix(prefix.lowercased())
+			let matchesDisplayName =
+				skill.displayName?.lowercased().hasPrefix(prefix.lowercased()) ?? false
+			let matchesPrefix = prefix.isEmpty || matchesName || matchesDisplayName
+			return skill.enabled && matchesPrefix
+		}
+		return matchingSkills.sorted
+		{
+			($0.displayName ?? $0.name).localizedStandardCompare($1.displayName ?? $1.name)
+				== .orderedAscending
 		}
 	}
 
@@ -194,69 +206,31 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		{
 			return nil
 		}
-		let command = commands[row]
+		return commandCell(commands[row])
+	}
+
+	private func commandCell(_ command: SlashCommandDescriptor) -> NSView
+	{
 		let reason = unavailableReason?(command.id)
 		let presentation = SlashCommandMenuPresentation(command.id)
-		let title = NSTextField(labelWithString: presentation.title)
-		title.font = .systemFont(ofSize: 13)
-		title.textColor = reason == nil ? .labelColor : .secondaryLabelColor
-		title.setContentCompressionResistancePriority(
-			.required,
-			for: .horizontal
+		let title = makeCommandTitleLabel(
+			presentation.title,
+			isAvailable: reason == nil
 		)
+		let detail = makeDescriptionLabel(command.description)
+		let icon = makeRowIcon(symbol: presentation.symbol)
 
-		let detail = NSTextField(labelWithString: command.description)
-		detail.font = .systemFont(ofSize: 13)
-		detail.textColor = .tertiaryLabelColor
-		detail.lineBreakMode = .byTruncatingTail
-		detail.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		detail.setContentHuggingPriority(
-			.defaultLow,
-			for: .horizontal
-		)
-
-		let icon = NSImageView()
-		icon.image = NSImage(
-			systemSymbolName: presentation.symbol,
-			accessibilityDescription: nil
-		)
-		icon.contentTintColor = .secondaryLabelColor
-		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
 		let contents = AppKitLayout.horizontalStack(
 			[icon, title, detail],
 			spacing: 8
 		)
 		if presentation.opensPicker
 		{
-			let chevron = NSImageView()
-			chevron.image = NSImage(
-				systemSymbolName: "chevron.right",
-				accessibilityDescription: nil
-			)
-			chevron.contentTintColor = .tertiaryLabelColor
-			chevron.widthAnchor.constraint(equalToConstant: 10).isActive = true
-			chevron.heightAnchor.constraint(equalToConstant: 12).isActive = true
+			let chevron = makePickerChevron()
 			contents.addArrangedSubview(chevron)
 		}
 		contents.distribution = .fill
-		let cell = NSTableCellView()
-		cell.addSubview(contents)
-		contents.translatesAutoresizingMaskIntoConstraints = false
-		NSLayoutConstraint.activate([
-			contents.leadingAnchor.constraint(
-				equalTo: cell.leadingAnchor,
-				constant: 10
-			),
-			contents.trailingAnchor.constraint(
-				equalTo: cell.trailingAnchor,
-				constant: -10
-			),
-			contents.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-		])
+		let cell = makeInlineCell(contents: contents)
 		cell.toolTip = reason ?? command.description
 		cell.setAccessibilityLabel("/\(command.name). \(command.description)"
 			+ (reason.map
@@ -264,6 +238,24 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 				". " + $0
 			} ?? ""))
 		return cell
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
+		didAdd rowView: NSTableRowView,
+		forRow row: Int
+	)
+	{
+		(rowView as? SlashCommandMenuRowView)?.isHovered = table.hoveredRow == row
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
+		didRemove rowView: NSTableRowView,
+		forRow row: Int
+	)
+	{
+		(rowView as? SlashCommandMenuRowView)?.isHovered = false
 	}
 
 	func tableView(
@@ -288,18 +280,49 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 	private func skillCell(_ skill: AvailableSkill) -> NSView
 	{
-		let icon = NSImageView()
-		icon.image = NSImage(
-			systemSymbolName: "shippingbox",
-			accessibilityDescription: nil
+		let icon = makeRowIcon(symbol: "shippingbox")
+		let title = makeSkillTitleLabel(skill.displayName ?? skill.name)
+		let detail = makeDescriptionLabel(skill.shortDescription ?? skill.description)
+		let scope = makeSkillScopeLabel(skill.scope)
+		let contents = AppKitLayout.horizontalStack(
+			[icon, title, detail, scope],
+			spacing: 8
 		)
-		icon.contentTintColor = .secondaryLabelColor
-		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
-		let title = NSTextField(labelWithString: skill.displayName ?? skill.name)
+		contents.distribution = .fill
+		let cell = makeInlineCell(contents: contents)
+		cell.toolTip = skill.description
+		cell.setAccessibilityLabel(
+			"Skill \(skill.name). \(skill.description). \(scope.stringValue)"
+		)
+		return cell
+	}
+
+	private func makeCommandTitleLabel(
+		_ text: String,
+		isAvailable: Bool
+	) -> NSTextField
+	{
+		let title = NSTextField(labelWithString: text)
+		title.font = .systemFont(ofSize: 13)
+		title.textColor = isAvailable ? .labelColor : .secondaryLabelColor
+		title.setContentCompressionResistancePriority(
+			.required,
+			for: .horizontal
+		)
+		return title
+	}
+
+	private func makeSkillTitleLabel(_ text: String) -> NSTextField
+	{
+		let title = NSTextField(labelWithString: text)
 		title.font = .systemFont(ofSize: 13)
 		title.lineBreakMode = .byTruncatingTail
-		let detail = NSTextField(labelWithString: skill.shortDescription ?? skill.description)
+		return title
+	}
+
+	private func makeDescriptionLabel(_ text: String) -> NSTextField
+	{
+		let detail = NSTextField(labelWithString: text)
 		detail.font = .systemFont(ofSize: 13)
 		detail.textColor = .tertiaryLabelColor
 		detail.lineBreakMode = .byTruncatingTail
@@ -311,38 +334,66 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 			.defaultLow,
 			for: .horizontal
 		)
-		let scope = NSTextField(labelWithString: skill.scope == "user" ? "Personal"
-			: skill.scope.capitalized)
+		return detail
+	}
+
+	private func makeRowIcon(symbol: String) -> NSImageView
+	{
+		let icon = NSImageView()
+		icon.image = NSImage(
+			systemSymbolName: symbol,
+			accessibilityDescription: nil
+		)
+		icon.contentTintColor = .secondaryLabelColor
+		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+		return icon
+	}
+
+	private func makePickerChevron() -> NSImageView
+	{
+		let chevron = NSImageView()
+		chevron.image = NSImage(
+			systemSymbolName: "chevron.right",
+			accessibilityDescription: nil
+		)
+		chevron.contentTintColor = .tertiaryLabelColor
+		chevron.widthAnchor.constraint(equalToConstant: 10).isActive = true
+		chevron.heightAnchor.constraint(equalToConstant: 12).isActive = true
+		return chevron
+	}
+
+	private func makeSkillScopeLabel(_ scopeName: String) -> NSTextField
+	{
+		let scope = NSTextField(labelWithString: scopeName == "user" ? "Personal"
+			: scopeName.capitalized)
 		scope.font = .systemFont(ofSize: 12)
 		scope.textColor = .secondaryLabelColor
 		scope.setContentCompressionResistancePriority(
 			.required,
 			for: .horizontal
 		)
-		let contents = AppKitLayout.horizontalStack(
-			[icon, title, detail, scope],
-			spacing: 8
-		)
-		contents.distribution = .fill
+		return scope
+	}
+
+	private func makeInlineCell(contents: NSStackView) -> NSTableCellView
+	{
+		let horizontalInset: CGFloat = 10
 		let cell = NSTableCellView()
 		cell.addSubview(contents)
 		contents.translatesAutoresizingMaskIntoConstraints = false
+
 		NSLayoutConstraint.activate([
 			contents.leadingAnchor.constraint(
 				equalTo: cell.leadingAnchor,
-				constant: 10
+				constant: horizontalInset
 			),
 			contents.trailingAnchor.constraint(
 				equalTo: cell.trailingAnchor,
-				constant: -10
+				constant: -horizontalInset
 			),
 			contents.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
 		])
-		cell.toolTip = skill.description
-		cell
-			.setAccessibilityLabel(
-				"Skill \(skill.name). \(skill.description). \(scope.stringValue)"
-			)
 		return cell
 	}
 
