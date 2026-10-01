@@ -7,7 +7,7 @@ extension WorkspaceLifecycleReducer
 		_ action: WorkspaceLifecycleAction
 	) -> WorkspaceReduction
 	{
-		var result = WorkspaceReduction()
+		let result = WorkspaceReduction()
 		switch action
 		{
 		case .managedRecordRecoveryConflicted(

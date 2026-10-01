@@ -158,6 +158,86 @@ struct ConversationContentTests
 		}
 	}
 
+	@Test func reusedMessagesKeepUnusedControlsOutsideTheirMeasuredLayout() async throws
+	{
+		_ = NSApplication.shared
+		let body = String(
+			repeating: "Long message line that wraps.\n",
+			count: 60
+		) + "Final reading marker"
+		let content = await ConversationContentCache().content(
+			body: body,
+			markdown: false
+		)
+		let item = ConversationCollectionItem()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 320,
+				height: 2000
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.contentViewController = item
+		for (kind, expandable) in [
+			(ConversationEntryKind.command, true),
+			(.agent, false),
+			(.user, false),
+			(.tool, true),
+			(.notice, false),
+			(.agent, true),
+		]
+		{
+			let textView = try #require(findTextView(in: item.view))
+			let stack = try #require(textView.superview as? NSStackView)
+			let previousControls = stack.views
+			item.configure(
+				ConversationEntry(
+					id: "reused",
+					kind: kind,
+					title: "Message title",
+					body: body,
+					isExpandable: expandable
+				),
+				content: content,
+				expanded: true,
+				onToggle:
+				{
+				}
+			)
+			// Re-exposing controls from a previous reuse must not add unmeasured title/button rows.
+			for control in previousControls
+			{
+				control.isHidden = false
+			}
+			let size = ConversationCollectionItem.itemSize(
+				content: content,
+				width: 320,
+				expandable: expandable,
+				kind: kind
+			)
+			window.setContentSize(size)
+			item.view.layoutSubtreeIfNeeded()
+			let hasTitle = kind != .agent && kind != .user
+			#expect(stack.views.compactMap
+			{
+				$0 as? NSTextField
+			}.count == (hasTitle ? 1 : 0))
+			#expect(allButtons(in: item.view).count == (expandable ? 1 : 0))
+			#expect(item.view.bounds.contains(textView.convert(
+				textView.bounds,
+				to: item.view
+			)))
+			let layout = try #require(textView.layoutManager)
+			let container = try #require(textView.textContainer)
+			layout.ensureLayout(for: container)
+			#expect(layout.usedRect(for: container).height <= textView.bounds.height)
+		}
+	}
+
 	@Test func longerAndTildeFencesKeepShorterDelimitersInsideCode() async
 	{
 		let body = """

@@ -27,6 +27,7 @@ struct WindowLayoutTests
 		)
 		let window = try #require(controller.window)
 		let split = try #require(window.contentViewController as? NSSplitViewController)
+		#expect(split.splitViewItems[1].maximumThickness == NSSplitViewItem.unspecifiedDimension)
 		let navigation = try #require(
 			split.splitViewItems[0].viewController as? NavigationViewController
 		)

@@ -16,6 +16,11 @@ make check
 open .build/CodexGUI.app
 ```
 
+For an optimized release bundle, run `./scripts/bundle.sh release`, then
+`open .build/CodexGUI.app`. The script defaults to a debug build; both configurations
+use the same bundle path. Launching the bare `.build/release/CodexGUI` executable
+does not provide the bundle identity required by macOS window tabs and notifications.
+
 `make check` runs the style driver regression checks, strict formatting validation, `swift build`, and Swift Testing. Formatting requires SwiftFormat 0.63.0 or later (`brew install swiftformat`) and Python 3. `make format` applies the checked-in style rules. The installed Command Line Tools on this machine place Swift Testing outside SwiftPM's default search path, so the Makefile supplies the framework and macro paths. Its Testing framework targets macOS 14; the application target remains macOS 13. Tests on macOS 13 have not been verified. See [conventions](CONVENTIONS.md) for naming and component rules.
 
 For development, `swift run CodexGUI` starts the executable directly with desktop notifications unavailable. macOS notification access requires an app bundle identity; `scripts/bundle.sh` creates and ad hoc signs that bundle. Settings shows the notification status for the current launch.

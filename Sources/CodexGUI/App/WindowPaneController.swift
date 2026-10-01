@@ -277,7 +277,7 @@ final class WindowPaneController
 	private static func pane(
 		_ controller: NSViewController,
 		minimumWidth: CGFloat,
-		maximumWidth: CGFloat = .greatestFiniteMagnitude,
+		maximumWidth: CGFloat = NSSplitViewItem.unspecifiedDimension,
 		holdingPriority: NSLayoutConstraint.Priority = .defaultLow
 	) -> NSSplitViewItem
 	{

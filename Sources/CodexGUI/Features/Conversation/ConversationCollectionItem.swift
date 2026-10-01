@@ -11,6 +11,7 @@ final class ConversationCollectionItem: NSCollectionViewItem
 	private let titleLabel = NSTextField(labelWithString: "")
 	private let bodyTextView = NSTextView()
 	private let messageContainer = NSView()
+	private let contentStack = NSStackView()
 	private let userSurface = DesktopSurface(
 		DesktopTheme.userBubble,
 		cornerRadius: 20
@@ -92,10 +93,11 @@ final class ConversationCollectionItem: NSCollectionViewItem
 		expandButton.heightAnchor.constraint(equalToConstant: Self.buttonHeight).isActive = true
 		expandButton.isHidden = true
 
-		let stack = AppKitLayout.verticalStack(
-			[titleLabel, bodyTextView, expandButton],
-			spacing: Self.rowSpacing
-		)
+		let stack = contentStack
+		stack.orientation = .vertical
+		stack.alignment = .leading
+		stack.spacing = Self.rowSpacing
+		stack.addArrangedSubview(bodyTextView)
 		stack.translatesAutoresizingMaskIntoConstraints = false
 		messageContainer.addSubview(stack)
 		leadingInsetConstraint = stack.leadingAnchor.constraint(
@@ -221,6 +223,23 @@ final class ConversationCollectionItem: NSCollectionViewItem
 		)
 		expandButton.setAccessibilityLabel(expandButton.title)
 		expandButton.toolTip = expandButton.title
+		// Keep unused controls outside the hierarchy so collection-view reuse cannot expose them.
+		var arrangedViews: [NSView] = [bodyTextView]
+		if !titleLabel.isHidden
+		{
+			arrangedViews.insert(
+				titleLabel,
+				at: 0
+			)
+		}
+		if isExpandable
+		{
+			arrangedViews.append(expandButton)
+		}
+		contentStack.setViews(
+			arrangedViews,
+			in: .top
+		)
 		updateBodyHeight()
 		updateCopyButtonFrames()
 	}
