@@ -8,8 +8,48 @@ enum NavigationSidebarItemsBuilder
 		currentProject: URL?,
 		pinnedProjectPaths: Set<String>,
 		visibleThreads: [ThreadSummary],
-		isCurrentProjectCollapsed: Bool = false
+		isCurrentProjectCollapsed: Bool = false,
+		projectTaskLimit: Int = 5
 	) -> [NavigationSidebarItem]
+	{
+		let projects = orderedProjects(
+			recentProjects: recentProjects,
+			currentProject: currentProject,
+			pinnedProjectPaths: pinnedProjectPaths
+		)
+		var items: [NavigationSidebarItem] = []
+		for project in projects
+		{
+			items.append(.project(project))
+			let shouldShowProjectTasks = project == currentProject && !isCurrentProjectCollapsed
+			if shouldShowProjectTasks
+			{
+				let recentThreads = threadsInRecentOrder(visibleThreads)
+				items.append(contentsOf: recentThreads.prefix(projectTaskLimit).map
+				{
+					.thread($0)
+				})
+				if recentThreads.count > projectTaskLimit
+				{
+					items.append(.showMore)
+				}
+			}
+		}
+		if currentProject == nil
+		{
+			items.append(contentsOf: visibleThreads.map
+			{
+				.thread($0)
+			})
+		}
+		return items
+	}
+
+	private static func orderedProjects(
+		recentProjects: [URL],
+		currentProject: URL?,
+		pinnedProjectPaths: Set<String>
+	) -> [URL]
 	{
 		var candidates = recentProjects
 		if let currentProject, !candidates.contains(currentProject)
@@ -35,34 +75,26 @@ enum NavigationSidebarItemsBuilder
 			}
 			return URL(fileURLWithPath: key)
 		}
-		let projects =
-			uniqueProjects.filter
-				{
-					pinnedProjectPaths.contains($0.path)
-				}
-				+ uniqueProjects.filter
-				{
-					!pinnedProjectPaths.contains($0.path)
-				}
-		var items: [NavigationSidebarItem] = []
-		for project in projects
+		let pinnedProjects = uniqueProjects.filter
 		{
-			items.append(.project(project))
-			if project == currentProject && !isCurrentProjectCollapsed
-			{
-				items.append(contentsOf: visibleThreads.map
-				{
-					.thread($0)
-				})
-			}
+			pinnedProjectPaths.contains($0.path)
 		}
-		if currentProject == nil
+		let unpinnedProjects = uniqueProjects.filter
 		{
-			items.append(contentsOf: visibleThreads.map
-			{
-				.thread($0)
-			})
+			!pinnedProjectPaths.contains($0.path)
 		}
-		return items
+		return pinnedProjects + unpinnedProjects
 	}
+
+	private static func threadsInRecentOrder(_ threads: [ThreadSummary]) -> [ThreadSummary]
+	{
+		threads.enumerated().sorted
+		{
+			lhs, rhs in
+			let leftDate = lhs.element.updatedAt ?? .distantPast
+			let rightDate = rhs.element.updatedAt ?? .distantPast
+			return leftDate == rightDate ? lhs.offset < rhs.offset : leftDate > rightDate
+		}.map(\.element)
+	}
+
 }

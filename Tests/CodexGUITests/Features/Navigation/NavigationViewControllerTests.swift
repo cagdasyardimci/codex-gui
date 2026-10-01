@@ -6,6 +6,57 @@ import Testing
 @Suite @MainActor
 struct NavigationViewControllerTests
 {
+	@Test func projectTasksExpandFiveThenTenInRecentOrder() throws
+	{
+		_ = NSApplication.shared
+		let controller = NavigationViewController()
+		_ = controller.view
+		let project = URL(fileURLWithPath: "/tmp/paged-sidebar")
+		controller.currentProject = project
+		controller.threads = try (0 ..< 26).map
+		{
+			index in
+			try #require(ThreadSummary(json: ["id": "task-\(index)", "updatedAt": Double(index)]))
+		}
+		controller.filterThreads()
+		func taskIDs() -> [String]
+		{
+			controller.sidebarItems.compactMap
+			{
+				if case .thread(let thread) = $0
+				{
+					return thread.id
+				}
+				return nil
+			}
+		}
+		#expect(taskIDs() == (21 ... 25).reversed().map
+		{
+			"task-\($0)"
+		})
+		#expect(controller.chatsTable.numberOfRows == 7)
+		let cell = try #require(controller.tableView(
+			controller.chatsTable,
+			viewFor: nil,
+			row: 6
+		))
+		let button = try #require(cell.subviews.first as? NSButton)
+		#expect(button.title == "Show more")
+		button.performClick(nil)
+		#expect(taskIDs().count == 15)
+		controller.filterThreads()
+		#expect(taskIDs().count == 15)
+		controller.showMoreTasks()
+		#expect(taskIDs().count == 25)
+		controller.showMoreTasks()
+		#expect(taskIDs().count == 26)
+		#expect(controller.chatsTable.numberOfRows == 27)
+		controller.activateProject(project)
+		#expect(controller.chatsTable.numberOfRows == 1)
+		controller.activateProject(project)
+		#expect(taskIDs().count == 5)
+	}
+
 	@Test func projectCanCollapseWithoutChangingSelectedTask() throws
 	{
 		_ = NSApplication.shared

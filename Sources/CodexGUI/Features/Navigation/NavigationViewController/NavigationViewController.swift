@@ -78,6 +78,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var recentProjects: [URL] = []
 	var currentProject: URL?
 	var isCurrentProjectCollapsed = false
+	var projectTaskLimit = 5
 	var pinnedProjectPaths: Set<String> = []
 	var projectDisplayNames: [String: String] = [:]
 	var projectInfoProject: URL?
@@ -190,6 +191,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		if currentProject != nextProject
 		{
 			isCurrentProjectCollapsed = false
+			projectTaskLimit = 5
 		}
 		currentProject = nextProject
 		recentProjects = snapshot.recentProjects

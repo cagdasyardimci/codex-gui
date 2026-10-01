@@ -70,7 +70,8 @@ extension NavigationViewController
 			currentProject: currentProject,
 			pinnedProjectPaths: pinnedProjectPaths,
 			visibleThreads: visibleThreads,
-			isCurrentProjectCollapsed: isCurrentProjectCollapsed
+			isCurrentProjectCollapsed: isCurrentProjectCollapsed,
+			projectTaskLimit: projectTaskLimit
 		)
 		updatingSidebarSelection = true
 		defer
@@ -125,6 +126,28 @@ extension NavigationViewController
 		else
 		{
 			return nil
+		}
+		if case .showMore = sidebarItems[row]
+		{
+			let cell = NSTableCellView(frame: .zero)
+			let button = NSButton(
+				title: "Show more",
+				target: self,
+				action: #selector(showMoreTasks)
+			)
+			button.isBordered = false
+			button.contentTintColor = .secondaryLabelColor
+			button.translatesAutoresizingMaskIntoConstraints = false
+			cell.addSubview(button)
+			NSLayoutConstraint.activate([
+				button.leadingAnchor.constraint(
+					equalTo: cell.leadingAnchor,
+					constant: 26
+				),
+				button.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+				button.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor),
+			])
+			return cell
 		}
 		if case .project(let project) = sidebarItems[row]
 		{
@@ -245,6 +268,8 @@ extension NavigationViewController
 			{
 				activateProject(project)
 			}
+		case .showMore:
+			break
 		case .thread(let thread):
 			if thread.id != selectedThreadID
 			{
@@ -269,12 +294,49 @@ extension NavigationViewController
 		if project == currentProject
 		{
 			isCurrentProjectCollapsed.toggle()
+			projectTaskLimit = 5
 			filterThreads()
 		}
 		else
 		{
 			onSelectRecentProject?(project)
 		}
+	}
+
+	@objc func showMoreTasks()
+	{
+		guard !isCurrentProjectCollapsed, currentProject != nil,
+				sidebarItems.contains(where:
+				{
+					if case .showMore = $0
+					{
+						return true
+					}
+					return false
+				})
+		else
+		{
+			return
+		}
+		projectTaskLimit += 10
+		filterThreads()
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
+		shouldSelectRow row: Int
+	) -> Bool
+	{
+		guard sidebarItems.indices.contains(row)
+		else
+		{
+			return false
+		}
+		if case .showMore = sidebarItems[row]
+		{
+			return false
+		}
+		return true
 	}
 
 	private var activeTaskColor: NSColor
