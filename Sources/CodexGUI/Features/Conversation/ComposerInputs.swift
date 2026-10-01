@@ -121,7 +121,8 @@ final class ContextComposerTextView: NSTextView
 		{
 			return
 		}
-		let origin = textContainerOrigin
+		var origin = textContainerOrigin
+		origin.x += textContainer?.lineFragmentPadding ?? 0
 		(placeholder as NSString).draw(
 			at: origin,
 			withAttributes: [
