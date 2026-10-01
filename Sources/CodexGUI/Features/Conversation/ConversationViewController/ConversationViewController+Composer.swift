@@ -8,7 +8,7 @@ extension ConversationViewController
 	{
 		let attachmentRow = AppKitLayout.horizontalStack(
 			[addContextButton, approvalPolicyButton],
-			spacing: 8
+			spacing: 16
 		)
 		let actionRow = AppKitLayout.horizontalStack(
 			[sendButton, steerButton, stopButton],
@@ -23,8 +23,9 @@ extension ConversationViewController
 			lessThanOrEqualTo: composerToolbar.widthAnchor
 		).isActive = true
 		let composerSurface = DesktopSurface(
-			DesktopTheme.input,
-			cornerRadius: 22
+			DesktopTheme.canvas,
+			cornerRadius: 16,
+			bordered: true
 		)
 		let composerStack = AppKitLayout.verticalStack(
 			[attachmentDetailsScrollView, composerScrollView, composerToolbar],
@@ -218,8 +219,10 @@ extension ConversationViewController
 				pointSize: 15,
 				weight: .regular
 			))
+		(addContextButton.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
+		addContextButton.contentTintColor = .labelColor
 		addContextButton.imagePosition = .imageOnly
-		addContextButton.widthAnchor.constraint(equalToConstant: 32).isActive = true
+		addContextButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
 		addContextButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
 		addContextButton.toolTip = "Add Context…"
 		sendButton.target = self
@@ -272,6 +275,7 @@ extension ConversationViewController
 		{
 			"\($0.displayName) \(effortTitle)"
 		}
+		latestModelEffortTitle = effortTitle
 		latestFastMode = snapshot.fastMode
 		refreshModelEffortButton()
 		modelEffortController.render(
@@ -450,6 +454,7 @@ extension ConversationViewController
 	{
 		modelEffortButton.update(
 			summary: latestModelEffortSummary,
+			effortTitle: latestModelEffortTitle,
 			fastMode: latestFastMode,
 			isPickerPresented: modelEffortPopover?.isShown == true
 		)

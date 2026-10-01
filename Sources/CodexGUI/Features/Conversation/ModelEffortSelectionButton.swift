@@ -15,10 +15,10 @@ final class ModelEffortSelectionButton: NSButton
 		)
 		static let boltToTitleSpacing: CGFloat = 6
 		static let titleToChevronSpacing: CGFloat = 6
-		static let chevronArmWidth: CGFloat = 4
+		static let chevronArmWidth: CGFloat = 3
 		// Preserve the existing extra point beyond the chevron's 8-point span.
 		static let chevronExtraWidthAllowance: CGFloat = 1
-		static let chevronVerticalOffset: CGFloat = 2
+		static let chevronVerticalOffset: CGFloat = 1.5
 		static let chevronLineWidth: CGFloat = 1.2
 
 		static var boltReservedWidth: CGFloat
@@ -47,6 +47,7 @@ final class ModelEffortSelectionButton: NSButton
 	}
 
 	private var summary: String?
+	private var effortTitle: String?
 	private var fastMode = false
 	private var isPickerPresented = false
 	private let boltSymbol = NSImage(
@@ -61,7 +62,7 @@ final class ModelEffortSelectionButton: NSButton
 
 		isBordered = false
 		bezelStyle = .inline
-		focusRingType = .exterior
+		focusRingType = .none
 		font = .systemFont(ofSize: 13)
 		image = nil
 
@@ -79,6 +80,7 @@ final class ModelEffortSelectionButton: NSButton
 
 	func update(
 		summary: String?,
+		effortTitle: String? = nil,
 		fastMode: Bool,
 		isPickerPresented: Bool
 	)
@@ -87,6 +89,7 @@ final class ModelEffortSelectionButton: NSButton
 		{
 			$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
 		}
+		self.effortTitle = effortTitle
 		self.fastMode = fastMode
 		self.isPickerPresented = isPickerPresented
 		title = displayedTitle
@@ -149,9 +152,8 @@ final class ModelEffortSelectionButton: NSButton
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		let hasKeyboardFocus = window?.isKeyWindow == true && window?.firstResponder === self
 		let shouldDrawSelectionBackground =
-			isPickerPresented || cell?.isHighlighted == true || hasKeyboardFocus
+			isPickerPresented || cell?.isHighlighted == true
 
 		if shouldDrawSelectionBackground
 		{
@@ -261,14 +263,27 @@ final class ModelEffortSelectionButton: NSButton
 		let paragraphStyle = NSMutableParagraphStyle()
 		paragraphStyle.lineBreakMode = .byTruncatingMiddle
 
-		(displayedTitle as NSString).draw(
-			in: rect,
-			withAttributes: [
+		let title = NSMutableAttributedString(
+			string: displayedTitle,
+			attributes: [
 				.font: textFont,
-				.foregroundColor: tint,
+				.foregroundColor: isEnabled ? NSColor.labelColor : tint,
 				.paragraphStyle: paragraphStyle,
 			]
 		)
+		if !isPickerPresented, let effortTitle, displayedTitle.hasSuffix(" " + effortTitle)
+		{
+			let effortRange = NSRange(
+				location: title.length - (effortTitle as NSString).length,
+				length: (effortTitle as NSString).length
+			)
+			title.addAttribute(
+				.foregroundColor,
+				value: tint,
+				range: effortRange
+			)
+		}
+		title.draw(in: rect)
 	}
 
 	private func drawChevron(

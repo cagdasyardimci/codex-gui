@@ -33,7 +33,7 @@ final class ComposerToolbarView: NSView
 			),
 			preferenceControl.trailingAnchor.constraint(
 				equalTo: actionControls.leadingAnchor,
-				constant: -8
+				constant: -16
 			),
 			preferenceControl.centerYAnchor.constraint(equalTo: centerYAnchor),
 			preferenceControl.topAnchor.constraint(greaterThanOrEqualTo: topAnchor),
@@ -48,7 +48,7 @@ final class ComposerToolbarView: NSView
 			preferenceControl.leadingAnchor.constraint(equalTo: leadingAnchor),
 			preferenceControl.trailingAnchor.constraint(
 				lessThanOrEqualTo: actionControls.leadingAnchor,
-				constant: -8
+				constant: -16
 			),
 			preferenceControl.centerYAnchor.constraint(equalTo: actionControls.centerYAnchor),
 			preferenceControl.topAnchor.constraint(

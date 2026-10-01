@@ -48,6 +48,7 @@ final class ConversationViewController: NSViewController,
 	)
 	var modelEffortPopover: ComposerPopoverPanel?
 	var latestModelEffortSummary: String?
+	var latestModelEffortTitle: String?
 	var latestFastMode = false
 	let modelEffortController = ModelEffortPopoverView()
 	let approvalPolicyButton = NSButton(
