@@ -14,13 +14,20 @@ final class TaskSidebarCellView: NSTableCellView
 		target: nil,
 		action: nil
 	)
+	var hoverCard: TaskHoverCard?
+	{
+		willSet
+		{
+			hoverCard?.dismiss()
+		}
+	}
 	private let actions = NSStackView()
 	private var hoverTrackingArea: NSTrackingArea?
 
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
-		let label = HoverScrollingTextField(labelWithString: "")
+		let label = NSTextField(labelWithString: "")
 		label.font = .systemFont(ofSize: 14)
 		label.lineBreakMode = .byTruncatingTail
 		label.maximumNumberOfLines = 1
@@ -117,18 +124,60 @@ final class TaskSidebarCellView: NSTableCellView
 	override func mouseEntered(with event: NSEvent)
 	{
 		actions.alphaValue = 1
-		(textField as? HoverScrollingTextField)?.setHovered(true)
+		hoverCard?.show(beside: self)
 	}
 	override func mouseExited(with event: NSEvent)
 	{
 		actions.alphaValue = 0
-		(textField as? HoverScrollingTextField)?.setHovered(false)
+		hoverCard?.dismiss()
+	}
+
+	override func viewWillMove(toWindow newWindow: NSWindow?)
+	{
+		hoverCard?.dismiss()
+		NotificationCenter.default.removeObserver(self)
+		super.viewWillMove(toWindow: newWindow)
+		if let newWindow
+		{
+			for name in [NSWindow.didResignKeyNotification,
+							NSWindow.willCloseNotification,
+							NSWindow.willMoveNotification,
+							NSWindow.didResizeNotification]
+			{
+				NotificationCenter.default.addObserver(
+					self,
+					selector: #selector(dismissHoverCard),
+					name: name,
+					object: newWindow
+				)
+			}
+			enclosingScrollView?.contentView.postsBoundsChangedNotifications = true
+			NotificationCenter.default.addObserver(
+				self,
+				selector: #selector(dismissHoverCard),
+				name: NSView.boundsDidChangeNotification,
+				object: enclosingScrollView?.contentView
+			)
+		}
+	}
+
+	@objc private func dismissHoverCard()
+	{
+		hoverCard?.dismiss()
+		actions.alphaValue = 0
+	}
+
+	override func mouseDown(with event: NSEvent)
+	{
+		dismissHoverCard()
+		super.mouseDown(with: event)
 	}
 
 	@objc private func archiveTask()
 	{
 		if archiveButton.isEnabled
 		{
+			dismissHoverCard()
 			onArchive?()
 		}
 	}
@@ -137,6 +186,7 @@ final class TaskSidebarCellView: NSTableCellView
 	{
 		if deleteButton.isEnabled
 		{
+			dismissHoverCard()
 			onDelete?()
 		}
 	}

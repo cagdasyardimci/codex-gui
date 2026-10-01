@@ -94,14 +94,16 @@ struct NavigationViewControllerTests
 		#expect(controller.chatsTable.selectedRow == 1)
 	}
 
-	@Test func taskTitleScrollsWithinFixedFrameAndArchiveTargetsItsOwnRow() throws
+	@Test func taskTitleStaysStillAndHoverCardUsesMetadataForItsOwnRow() async throws
 	{
 		_ = NSApplication.shared
 		let controller = NavigationViewController()
 		_ = controller.view
 		controller.threads = [try #require(ThreadSummary(json: [
 			"id": "hovered",
-			"name": "A task title long enough to require truncation in the sidebar"
+			"name": "A task title long enough to require truncation in the sidebar",
+			"preview": "The original request should not be the hover card",
+			"cwd": "/tmp/codex-gui"
 		]))]
 		controller.selectedThreadID = "another"
 		controller.canManageSidebarTasks = true
@@ -118,8 +120,26 @@ struct NavigationViewControllerTests
 			width: 240,
 			height: 30
 		)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 600,
+				height: 400
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentView?.addSubview(cell)
+		window.makeKeyAndOrderFront(nil)
+		defer
+		{
+			cell.removeFromSuperview(); window.orderOut(nil)
+		}
 		cell.layoutSubtreeIfNeeded()
-		let label = try #require(cell.textField as? HoverScrollingTextField)
+		let label = try #require(cell.textField)
 		let restingFrame = label.frame
 		#expect(label.alignmentRect(forFrame: restingFrame).minX == 26)
 		#expect(label.lineBreakMode == .byTruncatingTail)
@@ -137,16 +157,14 @@ struct NavigationViewControllerTests
 			userData: nil
 		))
 		cell.mouseEntered(with: event)
-		label.advanceScrolling(elapsed: 1.6)
-		if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-		{
-			#expect(label.scrollOffset > 0)
-			label.advanceScrolling(elapsed: 60)
-			let finishedOffset = label.scrollOffset
-			#expect(finishedOffset > 0)
-			label.advanceScrolling(elapsed: 120)
-			#expect(label.scrollOffset == finishedOffset)
-		}
+		let panel = try #require(cell.hoverCard?.panel)
+		#expect(panel.isVisible)
+		#expect(panel.parent === window)
+		#expect(panel.animationBehavior == .none)
+		#expect(panel.ignoresMouseEvents)
+		#expect(label.toolTip == nil)
+		#expect(cell.hoverCard?.title == label.stringValue)
+		#expect(cell.hoverCard?.projectName == "codex-gui")
 		cell.layoutSubtreeIfNeeded()
 		#expect(label.frame == restingFrame)
 		var archived: String?
@@ -158,13 +176,18 @@ struct NavigationViewControllerTests
 		#expect(archived == "hovered")
 		#expect(controller.selectedThreadID == "another")
 		cell.mouseExited(with: event)
-		#expect(label.scrollOffset == 0)
+		#expect(cell.hoverCard?.panel == nil)
+		#expect(!panel.isVisible)
 		cell.layoutSubtreeIfNeeded()
 		label.stringValue = "Short"
 		cell.mouseEntered(with: event)
-		label.advanceScrolling(elapsed: 1.6)
-		#expect(label.scrollOffset == 0)
 		#expect(label.frame == restingFrame)
+		#expect(cell.hoverCard?.panel != nil)
+		NotificationCenter.default.post(
+			name: NSWindow.didResignKeyNotification,
+			object: window
+		)
+		#expect(cell.hoverCard?.panel == nil)
 	}
 
 	@Test func streamedTranscriptAndUsageDoNotRebuildTaskPicker() throws

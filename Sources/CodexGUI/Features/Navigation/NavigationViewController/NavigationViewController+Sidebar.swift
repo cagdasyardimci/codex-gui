@@ -183,7 +183,16 @@ extension NavigationViewController
 		let state = activeExecutionState?.title ?? "Running"
 		cell.textField?.stringValue = isActiveTask ? "●  \(name) · \(state)" : name
 		cell.textField?.textColor = isActiveTask ? activeTaskColor : .labelColor
-		cell.textField?.toolTip = thread.preview
+		cell.textField?.toolTip = nil
+		let project = thread.cwd.isEmpty ? currentProject : URL(fileURLWithPath: thread.cwd)
+		cell.hoverCard = TaskHoverCard(
+			title: name,
+			projectName: project.map
+			{
+				displayName(for: $0)
+			} ?? "",
+			updatedAt: thread.updatedAt
+		)
 		cell.setAccessibilityLabel(
 			isActiveTask ? "\(state) task, open chat \(name)" : "Open chat \(name)"
 		)
