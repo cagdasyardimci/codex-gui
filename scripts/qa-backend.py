@@ -268,7 +268,8 @@ def summary(t):
         if active:
             flags = ['waitingOnApproval'] if active.get('waitingOnApproval') else []
             status = {'type': 'active', 'activeFlags': flags}
-    return {**t, 'cwd': t.get('cwd', state.get('cwd', os.getcwd())),
+    public = {key: value for key, value in t.items() if key not in ('fixtureTurns', 'settings')}
+    return {**public, 'cwd': t.get('cwd', state.get('cwd', os.getcwd())),
             'status': status, 'turns': []}
 
 
@@ -287,8 +288,61 @@ def bind_legacy_threads(cwd):
         thread.setdefault('cwd', cwd)
 
 
+def thread_settings(thread):
+    """Return the app-server's effective settings, separate from the thread summary."""
+    models = state.get('models', ['gpt-6-astra', 'gpt-5.6-luna'])
+    return {
+        'model': models[0], 'modelProvider': 'openai',
+        'cwd': thread_cwd(thread['id']), 'reasoningEffort': 'medium',
+        'serviceTier': None, 'collaborationMode': {
+            'mode': 'default', 'settings': {'model': models[0], 'reasoning_effort': 'medium',
+                                           'developer_instructions': None}},
+        'approvalPolicy': 'on-request', 'approvalsReviewer': 'user',
+        'sandboxPolicy': {'type': 'workspaceWrite', 'writableRoots': [thread_cwd(thread['id'])],
+                          'networkAccess': False, 'excludeTmpdirEnvVar': False,
+                          'excludeSlashTmp': False},
+        **thread.get('settings', {}),
+    }
+
+
+def valid_collaboration_mode(value):
+    if not isinstance(value, dict) or value.get('mode') not in ('plan', 'default'):
+        return False
+    settings = value.get('settings')
+    if not isinstance(settings, dict) or settings.get('model') not in state.get(
+            'models', ['gpt-6-astra', 'gpt-5.6-luna']):
+        return False
+    return ('reasoning_effort' in settings and
+            (settings['reasoning_effort'] is None or
+             settings['reasoning_effort'] in ('low', 'medium', 'high')) and
+            'developer_instructions' in settings and
+            (settings['developer_instructions'] is None or
+             isinstance(settings['developer_instructions'], str)))
+
+
+def thread_response(thread):
+    settings = thread_settings(thread)
+    # Read/start/resume/fork cannot verify collaboration mode; only the settings event can.
+    settings.pop('collaborationMode')
+    settings['sandbox'] = settings.pop('sandboxPolicy')
+    return {'thread': summary(thread), **settings}
+
+
+def token_usage():
+    last = {'inputTokens': 1200, 'cachedInputTokens': 400, 'cacheWriteInputTokens': 0,
+            'outputTokens': 80, 'reasoningOutputTokens': 20, 'totalTokens': 1280}
+    total = {key: value * 2 for key, value in last.items()}
+    return {'last': last, 'total': total, 'modelContextWindow': 128000}
+
+
 def history(thread_id, cursor=None):
     cwd = thread_cwd(thread_id)
+    thread = thread_for_id(thread_id)
+    if thread and 'fixtureTurns' in thread:
+        with history_lock:
+            copied = json.loads(json.dumps(thread['fixtureTurns']))
+            saved_turns = json.loads(json.dumps(streamed_turns.get(thread_id, [])))
+        return copied + saved_turns, None
     if thread_id == 'qa-activity':
         with history_lock:
             saved_turns = json.loads(json.dumps(streamed_turns.get(thread_id, [])))
@@ -487,6 +541,55 @@ def next_turn_id(thread_id):
         return f'qa-{thread_id}-turn-{turn_counter}', f'stream-message-{turn_counter}'
 
 
+def command_turn(thread_id, item_types):
+    turn_id, item_id = next_turn_id(thread_id)
+    items = [{'id': f'{item_id}-{index}', 'type': kind}
+             for index, kind in enumerate(item_types)]
+    for item in items:
+        if item['type'] in ('enteredReviewMode', 'exitedReviewMode'):
+            item['review'] = 'Synthetic review of the requested target.'
+        elif item['type'] == 'agentMessage':
+            item['text'] = 'Synthetic review complete; no model or project write occurred.'
+    turn = {'id': turn_id, 'status': 'inProgress', 'items': [], 'error': None}
+    stop_event = threading.Event()
+    with history_lock:
+        streamed_turns.setdefault(thread_id, []).append(turn)
+        active_turns[thread_id] = {
+            'turnId': turn_id, 'turn': turn, 'item': items[0], 'stopEvent': stop_event,
+        }
+    return turn, items, stop_event
+
+
+def begin_command_turn(thread_id, turn, items):
+    send({'method': 'turn/started', 'params': {'threadId': thread_id, 'turn': turn}})
+    send({'method': 'thread/status/changed', 'params': {
+        'threadId': thread_id, 'status': {'type': 'active', 'activeFlags': []}}})
+    send({'method': 'item/started', 'params': {
+        'threadId': thread_id, 'turnId': turn['id'], 'item': items[0]}})
+
+
+def finish_command_turn(thread_id, turn, items, stop_event, already_started=False):
+    # Compact must acknowledge first; review deliberately sends its first events before the reply.
+    time.sleep(0.05)
+    if not already_started:
+        begin_command_turn(thread_id, turn, items)
+    for index, item in enumerate(items):
+        if index:
+            send({'method': 'item/started', 'params': {
+                'threadId': thread_id, 'turnId': turn['id'], 'item': item}})
+        send({'method': 'item/completed', 'params': {
+            'threadId': thread_id, 'turnId': turn['id'], 'item': item}})
+    send({'method': 'thread/tokenUsage/updated', 'params': {
+        'threadId': thread_id, 'turnId': turn['id'], 'tokenUsage': token_usage()}})
+    with history_lock:
+        turn['items'] = json.loads(json.dumps(items))
+        turn['status'] = 'interrupted' if stop_event.is_set() else 'completed'
+        active_turns.pop(thread_id, None)
+    send({'method': 'turn/completed', 'params': {'threadId': thread_id, 'turn': turn}})
+    send({'method': 'thread/status/changed', 'params': {
+        'threadId': thread_id, 'status': {'type': 'idle'}}})
+
+
 def finish_late_command_after_stop(thread_id, turn, item, command_item, stop_event, cwd):
     """Simulate command lifetime beyond interruption; no subprocess is executed."""
     stop_event.wait(240)
@@ -627,6 +730,8 @@ def run_turn(thread_id, turn_id, item_id, stop_event, cwd, late_command_after_st
         turn['status'] = 'interrupted' if stop_event.is_set() else 'completed'
         turn['items'] = [dict(item)]
     send({'method': 'item/completed', 'params': {'threadId': thread_id, 'turnId': turn['id'], 'item': item}})
+    send({'method': 'thread/tokenUsage/updated', 'params': {
+        'threadId': thread_id, 'turnId': turn['id'], 'tokenUsage': token_usage()}})
     send({'method': 'turn/completed', 'params': {'threadId': thread_id, 'turn': turn}})
     with history_lock:
         active_turns.pop(thread_id, None)
@@ -646,6 +751,19 @@ for line in sys.stdin:
         continue
     if 'id' not in request:
         continue
+    if method in ('thread/fork', 'thread/compact/start', 'review/start', 'thread/settings/update'):
+        refresh_saved_threads()
+        t = thread_for_id(params.get('threadId'))
+        if t is None:
+            send({'id': request['id'], 'error': {
+                'code': -32001, 'message': 'Synthetic conversation does not exist.'}})
+            continue
+        with history_lock:
+            busy = t['id'] in active_turns
+        if busy:
+            send({'id': request['id'], 'error': {
+                'code': -32002, 'message': 'Synthetic conversation has an active turn.'}})
+            continue
     if method == 'initialize':
         result = {}
     elif method == 'account/read':
@@ -687,7 +805,19 @@ for line in sys.stdin:
     elif method == 'model/list':
         models = state.get('models', ['gpt-6-astra', 'gpt-5.6-luna'])
         result = {'data': [{'id': m, 'model': m, 'displayName': m.upper(), 'isDefault': i == 0,
-                            'supportedReasoningEfforts': [{'reasoningEffort': e} for e in ['low', 'medium', 'high']]} for i, m in enumerate(models)], 'nextCursor': None}
+                            'description': 'Synthetic model; no model calls.', 'hidden': False,
+                            'defaultReasoningEffort': 'medium', 'defaultServiceTier': None,
+                            'supportsPersonality': False,
+                            'serviceTiers': [{'id': 'fast', 'name': 'Fast',
+                                             'description': 'Synthetic fast tier; no paid request.'}],
+                            'supportedReasoningEfforts': [{'reasoningEffort': e,
+                                                         'description': f'Synthetic {e} effort.'}
+                                                        for e in ['low', 'medium', 'high']]} for i, m in enumerate(models)], 'nextCursor': None}
+    elif method == 'collaborationMode/list':
+        result = {'data': [
+            {'name': 'Plan', 'mode': 'plan', 'model': None, 'reasoning_effort': None},
+            {'name': 'Default', 'mode': 'default', 'model': None, 'reasoning_effort': None},
+        ]}
     elif method == 'thread/list':
         refresh_saved_threads()
         cwd_filter = params.get('cwd')
@@ -718,16 +848,92 @@ for line in sys.stdin:
         if method == 'thread/resume' and params.get('cwd') is not None:
             t['cwd'] = params['cwd']
             save(t)
-        result = {'thread': summary(t)}
-        if method == 'thread/resume':
-            result['cwd'] = thread_cwd(t['id'])
+        result = {'thread': summary(t)} if method == 'thread/read' else thread_response(t)
     elif method == 'thread/start':
         cwd = params.get('cwd', os.getcwd())
         t = {'id': f'qa-created-{uuid.uuid4().hex}', 'name': None, 'preview': '',
              'archived': False, 'cwd': cwd}
         threads.append(t)
         save(t)
-        result = {'thread': summary(t), 'cwd': cwd}
+        result = thread_response(t)
+    elif method == 'thread/fork':
+        if params.get('excludeTurns') is not True or params.get('deferGoalContinuation') is not True:
+            send({'id': request['id'], 'error': {
+                'code': -32602, 'message': 'Synthetic fork requires excluded turns and deferred goals.'}})
+            continue
+        copied_turns, cursor = history(t['id'])
+        while cursor:
+            older, cursor = history(t['id'], cursor)
+            copied_turns.extend(older)
+        forked = {'id': f'qa-forked-{uuid.uuid4().hex}', 'name': t.get('name'),
+                  'preview': t.get('preview', ''), 'archived': False, 'cwd': thread_cwd(t['id']),
+                  'settings': json.loads(json.dumps(t.get('settings', {}))),
+                  'fixtureTurns': json.loads(json.dumps(copied_turns))}
+        threads.append(forked)
+        save(forked)
+        trace({'method': method, **params, 'forkedThreadId': forked['id'], 'cwd': forked['cwd']})
+        result = thread_response(forked)
+    elif method == 'thread/compact/start':
+        if set(params) != {'threadId'}:
+            send({'id': request['id'], 'error': {
+                'code': -32602, 'message': 'Synthetic compaction accepts only threadId.'}})
+            continue
+        turn, items, stop_event = command_turn(t['id'], ['contextCompaction'])
+        trace({'method': method, 'threadId': t['id'], 'turnId': turn['id']})
+        send({'id': request['id'], 'result': {}})
+        threading.Thread(target=finish_command_turn,
+                         args=(t['id'], turn, items, stop_event), daemon=True).start()
+        continue
+    elif method == 'review/start':
+        target = params.get('target')
+        valid_target = isinstance(target, dict) and target.get('type') in (
+            'uncommittedChanges', 'baseBranch', 'commit', 'custom')
+        required = {'baseBranch': 'branch', 'commit': 'sha', 'custom': 'instructions'}
+        if valid_target and target['type'] in required:
+            field = required[target['type']]
+            valid_target = isinstance(target.get(field), str) and bool(target[field].strip())
+        if not valid_target or params.get('delivery') != 'inline':
+            send({'id': request['id'], 'error': {
+                'code': -32602, 'message': 'Synthetic review requires a valid target and inline delivery.'}})
+            continue
+        turn, items, stop_event = command_turn(
+            t['id'], ['enteredReviewMode', 'agentMessage', 'exitedReviewMode'])
+        trace({'method': method, **params, 'turnId': turn['id']})
+        begin_command_turn(t['id'], turn, items)
+        send({'id': request['id'], 'result': {'reviewThreadId': t['id'], 'turn': turn}})
+        threading.Thread(target=finish_command_turn,
+                         args=(t['id'], turn, items, stop_event, True), daemon=True).start()
+        continue
+    elif method == 'thread/settings/update':
+        allowed = {'threadId', 'model', 'effort', 'serviceTier', 'collaborationMode'}
+        mode = params.get('collaborationMode')
+        if (set(params) - allowed or
+                ('collaborationMode' in params and not valid_collaboration_mode(mode)) or
+                ('model' in params and params['model'] not in state.get(
+                    'models', ['gpt-6-astra', 'gpt-5.6-luna'])) or
+                ('effort' in params and params['effort'] not in ('low', 'medium', 'high')) or
+                ('serviceTier' in params and params['serviceTier'] not in (None, 'fast'))):
+            send({'id': request['id'], 'error': {
+                'code': -32602, 'message': 'Synthetic thread settings are invalid.'}})
+            continue
+        settings = t.setdefault('settings', {})
+        for field in ('model', 'serviceTier', 'collaborationMode'):
+            if field in params:
+                settings[field] = params[field]
+        if 'effort' in params:
+            settings['reasoningEffort'] = params['effort']
+        if mode:
+            settings['model'] = mode['settings']['model']
+            settings['reasoningEffort'] = mode['settings']['reasoning_effort']
+        save(t)
+        effective = thread_settings(t)
+        trace({'method': method, **params})
+        notification_settings = {key: value for key, value in effective.items()
+                                 if key != 'reasoningEffort'}
+        notification_settings['effort'] = effective['reasoningEffort']
+        send({'method': 'thread/settings/updated', 'params': {
+            'threadId': t['id'], 'threadSettings': notification_settings}})
+        result = {}
     elif method == 'thread/turns/list':
         turns, next_cursor = history(params.get('threadId'), params.get('cursor'))
         result = {'data': turns, 'nextCursor': next_cursor}
@@ -751,13 +957,24 @@ for line in sys.stdin:
                 'code': -32001, 'message': 'Synthetic conversation does not exist.'
             }})
             continue
+        if 'collaborationMode' in params:
+            if not valid_collaboration_mode(params['collaborationMode']):
+                send({'id': request['id'], 'error': {
+                    'code': -32602, 'message': 'Synthetic turn collaboration mode is invalid.'}})
+                continue
+            t.setdefault('settings', {})['collaborationMode'] = params['collaborationMode']
+            t['settings']['model'] = params['collaborationMode']['settings']['model']
+            t['settings']['reasoningEffort'] = params['collaborationMode']['settings']['reasoning_effort']
+            save(t)
         if params.get('cwd') is not None:
             t['cwd'] = params['cwd']
             save(t)
         cwd = thread_cwd(t['id'])
         trace({'method': method, 'threadId': params.get('threadId'),
                'input': params.get('input', []), 'model': params.get('model'),
-               'effort': params.get('effort'), 'cwd': cwd})
+               'effort': params.get('effort'), 'cwd': cwd,
+               'collaborationMode': params.get('collaborationMode'),
+               'serviceTier': params.get('serviceTier')})
         turn_id, item_id = next_turn_id(params['threadId'])
         stop_event = threading.Event()
         text = ' '.join(part.get('text', '') for part in params.get('input', [])

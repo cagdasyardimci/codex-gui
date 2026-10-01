@@ -68,6 +68,17 @@ class Backend:
                 return message.get('result', {})
             self.messages.append(message)
 
+    def request_error(self, method, params, code):
+        request_id = self.next_id
+        self.next_id += 1
+        self.send({'id': request_id, 'method': method, 'params': params})
+        while True:
+            message = self._next_message()
+            if message.get('id') == request_id:
+                assert message.get('error', {}).get('code') == code, message
+                return message['error']
+            self.messages.append(message)
+
     def wait_for(self, predicate, count=1, timeout=5):
         deadline = time.monotonic() + timeout
         while True:
@@ -574,6 +585,154 @@ def check_late_command_after_stop(directory):
         backend.close()
 
 
+def check_slash_lifecycle(directory):
+    backend = Backend(directory)
+    try:
+        backend.request('thread/list', {'cwd': str(directory)})
+        backend.request_error('thread/compact/start', {'threadId': 'missing'}, -32001)
+        backend.request_error('thread/compact/start', {
+            'threadId': 'qa-navigation', 'turnId': 'wrong'}, -32602)
+
+        request_id = backend.next_id
+        backend.next_id += 1
+        backend.send({'id': request_id, 'method': 'thread/compact/start',
+                      'params': {'threadId': 'qa-navigation'}})
+        first = backend._next_message()
+        assert first == {'id': request_id, 'result': {}}, first
+        backend.request_error('review/start', {
+            'threadId': 'qa-navigation', 'target': {'type': 'uncommittedChanges'},
+            'delivery': 'inline'}, -32002)
+        compact = backend.wait_for(lambda message: message.get('method') == 'turn/completed'
+                                   and message['params']['threadId'] == 'qa-navigation')[0]
+        compact_turn = compact['params']['turn']
+        assert compact_turn['status'] == 'completed'
+        assert [item['type'] for item in compact_turn['items']] == ['contextCompaction']
+        compact_events = [message for message in backend.messages
+                          if message.get('params', {}).get('turnId') == compact_turn['id']
+                          or message.get('params', {}).get('turn', {}).get('id') == compact_turn['id']]
+        assert [message['method'] for message in compact_events] == [
+            'turn/started', 'item/started', 'item/completed',
+            'thread/tokenUsage/updated', 'turn/completed']
+        usage = next(message['params']['tokenUsage'] for message in compact_events
+                     if message['method'] == 'thread/tokenUsage/updated')
+        assert usage['modelContextWindow'] == 128000
+        assert usage['last']['cachedInputTokens'] == 400
+        assert usage['last']['cacheWriteInputTokens'] == 0
+        assert usage['total']['totalTokens'] == 2560
+
+        targets = [
+            {'type': 'uncommittedChanges'}, {'type': 'baseBranch', 'branch': 'main'},
+            {'type': 'commit', 'sha': 'abc123', 'title': 'Fixture commit'},
+            {'type': 'custom', 'instructions': 'Check exact source compatibility.'},
+        ]
+        for target in targets:
+            previous_count = len(backend.messages)
+            review = backend.request('review/start', {
+                'threadId': 'qa-navigation', 'target': target, 'delivery': 'inline'})
+            assert review['reviewThreadId'] == 'qa-navigation'
+            review_id = review['turn']['id']
+            before_response = backend.messages[previous_count:]
+            assert any(message.get('method') == 'turn/started'
+                       and message['params']['turn']['id'] == review_id for message in before_response)
+            entered = next(message['params']['item'] for message in before_response
+                           if message.get('method') == 'item/started')
+            assert entered['type'] == 'enteredReviewMode' and 'review' in entered and 'text' not in entered
+            completed = backend.wait_for(lambda message: message.get('method') == 'turn/completed'
+                                         and message['params']['turn']['id'] == review_id)[0]
+            assert completed['params']['turn']['status'] == 'completed'
+            assert [item['type'] for item in completed['params']['turn']['items']] == [
+                'enteredReviewMode', 'agentMessage', 'exitedReviewMode']
+        backend.request_error('review/start', {
+            'threadId': 'qa-navigation', 'target': {'type': 'commit'}, 'delivery': 'inline'}, -32602)
+        backend.request_error('thread/fork', {
+            'threadId': 'qa-navigation', 'excludeTurns': True}, -32602)
+        source_history = backend.request('thread/turns/list', {'threadId': 'qa-navigation'})['data']
+        fork = backend.request('thread/fork', {
+            'threadId': 'qa-navigation', 'excludeTurns': True, 'deferGoalContinuation': True})
+        fork_id = fork['thread']['id']
+        assert fork_id != 'qa-navigation'
+        assert fork['cwd'] == fork['thread']['cwd'] == str(directory)
+        assert fork['sandbox']['type'] == 'workspaceWrite'
+        assert fork['thread']['status']['type'] == 'idle' and fork['thread']['turns'] == []
+        assert backend.request('thread/turns/list', {'threadId': fork_id})['data'] == source_history
+        backend.request('thread/name/set', {'threadId': fork_id, 'name': 'Independent fork'})
+        assert backend.request('thread/read', {'threadId': 'qa-navigation'})['thread']['name'] != 'Independent fork'
+        trace = [json.loads(line) for line in backend.trace.read_text().splitlines()]
+        assert not any(entry['method'] == 'turn/start' for entry in trace)
+        backend.close()
+        backend = Backend(directory)
+        assert backend.request('thread/turns/list', {'threadId': fork_id})['data'] == source_history
+    finally:
+        backend.close()
+
+
+def check_slash_settings(directory):
+    backend = Backend(directory)
+    try:
+        backend.request('thread/list', {'cwd': str(directory)})
+        models = backend.request('model/list', {})['data']
+        assert models[0]['defaultReasoningEffort'] == 'medium'
+        assert models[0]['defaultServiceTier'] is None and not models[0]['supportsPersonality']
+        assert models[0]['serviceTiers'][0] == {
+            'id': 'fast', 'name': 'Fast', 'description': 'Synthetic fast tier; no paid request.'}
+        presets = backend.request('collaborationMode/list', {})['data']
+        assert [preset['mode'] for preset in presets] == ['plan', 'default']
+        mode = {'mode': 'plan', 'settings': {
+            'model': 'gpt-5.6-luna', 'reasoning_effort': 'low', 'developer_instructions': None}}
+        assert backend.request('thread/settings/update', {
+            'threadId': 'qa-navigation', 'collaborationMode': mode, 'serviceTier': 'fast'}) == {}
+        changed = backend.wait_for(lambda message: message.get('method') == 'thread/settings/updated')[0]
+        effective = changed['params']['threadSettings']
+        assert effective['collaborationMode'] == mode and effective['model'] == 'gpt-5.6-luna'
+        assert effective['effort'] == 'low' and effective['cwd'] == str(directory)
+        assert effective['serviceTier'] == 'fast'
+        assert effective['sandboxPolicy']['type'] == 'workspaceWrite'
+        records = [json.loads(line) for line in backend.trace.read_text().splitlines()]
+        assert [entry['method'] for entry in records] == ['thread/settings/update']
+        fork = backend.request('thread/fork', {
+            'threadId': 'qa-navigation', 'excludeTurns': True, 'deferGoalContinuation': True})
+        assert 'collaborationMode' not in fork and fork['serviceTier'] == 'fast'
+        backend.request('thread/settings/update', {'threadId': 'qa-navigation', 'serviceTier': None})
+        assert backend.request('thread/resume', {'threadId': 'qa-navigation'})['serviceTier'] is None
+        backend.request_error('thread/settings/update', {
+            'threadId': 'qa-navigation', 'collaborationMode': {'mode': 'plan'}}, -32602)
+        backend.request_error('thread/settings/update', {
+            'threadId': 'qa-navigation', 'model': 'unavailable-model'}, -32602)
+        backend.close()
+        backend = Backend(directory)
+        resumed = backend.request('thread/resume', {'threadId': 'qa-navigation'})
+        assert 'collaborationMode' not in resumed
+        assert set(backend.request('thread/read', {'threadId': 'qa-navigation'})) == {'thread'}
+        saved = json.loads(backend.state.read_text())
+        restored = next(thread for thread in saved['threads'] if thread['id'] == 'qa-navigation')
+        assert restored['settings']['collaborationMode'] == mode
+        backend.request('thread/settings/update', {'threadId': 'qa-navigation', 'serviceTier': None})
+        event = backend.wait_for(lambda message: message.get('method') == 'thread/settings/updated')[0]
+        assert event['params']['threadSettings']['collaborationMode'] == mode
+
+        inputs = [{'type': 'text', 'text': '  Preserve this inline plan exactly.\nSecond line.',
+                   'text_elements': []},
+                  {'type': 'image', 'url': 'data:image/png;base64,c3ludGhldGlj'},
+                  {'type': 'skill', 'name': 'qa-review', 'path': '/tmp/fixture/SKILL.md'}]
+        started = backend.request('turn/start', {
+            'threadId': 'qa-navigation', 'input': inputs, 'model': 'gpt-5.6-luna',
+            'effort': 'low', 'collaborationMode': mode})
+        turn_id = started['turn']['id']
+        backend.wait_for(lambda message: message.get('method') == 'turn/started'
+                         and message['params']['turn']['id'] == turn_id)
+        backend.request_error('thread/settings/update', {
+            'threadId': 'qa-navigation', 'serviceTier': 'fast'}, -32002)
+        backend.request('turn/interrupt', {'threadId': 'qa-navigation', 'turnId': turn_id})
+        backend.wait_for(lambda message: message.get('method') == 'turn/completed'
+                         and message['params']['turn']['id'] == turn_id)
+        records = [json.loads(line) for line in backend.trace.read_text().splitlines()]
+        start = next(entry for entry in records if entry['method'] == 'turn/start')
+        assert start['collaborationMode'] == mode and start['input'] == inputs
+        assert start['cwd'] == str(directory)
+    finally:
+        backend.close()
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix='codex-gui-qa-check-') as root:
         check_available(Path(root) / 'available')
@@ -584,7 +743,9 @@ def main():
         check_interleaved_approvals(Path(root) / 'interleaved')
         check_independent_client_persistence(Path(root) / 'independent-clients')
         check_late_command_after_stop(Path(root) / 'late-command-after-stop')
-    print('Synthetic QA backend checks passed (identical user/assistant Markdown and rich probes, Markdown phases and Unicode, activity, review, skills, exact cwds, interleaved approvals, independent client persistence, late command after Stop).')
+        check_slash_lifecycle(Path(root) / 'slash-lifecycle')
+        check_slash_settings(Path(root) / 'slash-settings')
+    print('Synthetic QA backend checks passed (identical user/assistant Markdown and rich probes, Markdown phases and Unicode, activity, review, skills, exact cwds, interleaved approvals, independent client persistence, late command after Stop, slash compact/review/fork lifecycle and plan/settings).')
 
 
 if __name__ == '__main__':
