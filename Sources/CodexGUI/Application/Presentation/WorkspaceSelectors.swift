@@ -327,6 +327,7 @@ struct WorkspaceSelectors
 			viewingActiveThread || activeThreadID == nil
 				? executionState : (isConnected ? .ready : .disconnected)
 		var snapshot = ConversationSnapshot(
+			turnTimings: ConversationContentReducer.timings(for: viewedContent.content),
 			projectPath: project?.path,
 			threads: threads,
 			selectedThreadID: selectedThreadID,
@@ -359,6 +360,7 @@ struct WorkspaceSelectors
 			showingArchived: showingArchived,
 			canManageThreads: WorkspaceEligibility(model: model).canManageThreads,
 			activeThreadID: activeThreadID,
+			activeTurnID: activeTurnID,
 			activeExecutionState: activeThreadID == nil && !executionState.isBusy
 				? nil : executionState,
 			taskOutcomeUncertain: needsReconciliation || hasUncertainRequest,

@@ -161,6 +161,7 @@ struct ComposerModel
 struct ConversationContentModel
 {
 	var loadedTurns: [CodexTurn] = []
+	var turnTimings: [String: ConversationTurnTiming] = [:]
 	var hasLoadedHistory = false
 	var nextTurnsCursor: String?
 	var entries: [ConversationEntry] = []

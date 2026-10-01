@@ -46,18 +46,27 @@ struct CodexTurn
 	let status: String
 	let items: [CodexItem]
 	let error: String?
+	let startedAt: Date?
+	let completedAt: Date?
+	let durationMs: Double?
 
 	init(
 		id: String,
 		status: String,
 		items: [CodexItem],
-		error: String?
+		error: String?,
+		startedAt: Date? = nil,
+		completedAt: Date? = nil,
+		durationMs: Double? = nil
 	)
 	{
 		self.id = id
 		self.status = status
 		self.items = items
 		self.error = error
+		self.startedAt = startedAt
+		self.completedAt = completedAt
+		self.durationMs = durationMs
 	}
 
 	init?(json: [String: Any])
@@ -71,6 +80,15 @@ struct CodexTurn
 		self.status = json["status"] as? String ?? "inProgress"
 		self.items = (json["items"] as? [[String: Any]] ?? []).compactMap(CodexItem.init(json:))
 		self.error = (json["error"] as? [String: Any])?["message"] as? String
+		self.startedAt = (json["startedAt"] as? NSNumber).map
+		{
+			Date(timeIntervalSince1970: $0.doubleValue)
+		}
+		self.completedAt = (json["completedAt"] as? NSNumber).map
+		{
+			Date(timeIntervalSince1970: $0.doubleValue)
+		}
+		self.durationMs = (json["durationMs"] as? NSNumber)?.doubleValue
 	}
 }
 
@@ -158,6 +176,8 @@ struct CodexItem
 	let type: String
 	let text: String?
 	let command: String?
+	let commandActions: [CodexCommandAction]
+	let imagePath: String?
 	let cwd: String?
 	let output: String?
 	let status: String?
@@ -197,6 +217,9 @@ struct CodexItem
 			self.references = []
 		}
 		self.command = json["command"] as? String
+		self.commandActions = (json["commandActions"] as? [[String: Any]] ?? [])
+			.compactMap(CodexCommandAction.init(json:))
+		self.imagePath = type == "imageView" ? json["path"] as? String : nil
 		self.cwd = json["cwd"] as? String
 		self.output = json["aggregatedOutput"] as? String
 		self.status = json["status"] as? String

@@ -171,6 +171,13 @@ enum ConversationContentReducer
 		{
 			content in
 			content.loadedTurns = detail.turns
+			for turn in detail.turns
+			{
+				content.content.turnTimings[turn.id] = ConversationTurnTiming(
+					turn: turn,
+					previous: content.content.turnTimings[turn.id]
+				)
+			}
 			content.hasLoadedHistory = true
 			content.nextTurnsCursor = detail.nextTurnsCursor
 			if content.loadedTurns
@@ -214,7 +221,7 @@ enum ConversationContentReducer
 		{
 		case .turnStarted(
 			let threadID,
-			_
+			let turn
 		):
 			updateContent(
 				for: threadID,
@@ -222,6 +229,10 @@ enum ConversationContentReducer
 			)
 			{
 				content in
+				content.content.turnTimings[turn.id] = ConversationTurnTiming(
+					turn: turn,
+					previous: content.content.turnTimings[turn.id]
+				)
 				content.changedFiles = []; content.diff = ""; content.changesByItemID = [:]
 				content.hasAggregateDiff = false
 			}
@@ -235,6 +246,18 @@ enum ConversationContentReducer
 			)
 			{
 				content in
+				content.content.turnTimings[turn.id] = ConversationTurnTiming(
+					turn: turn,
+					previous: content.content.turnTimings[turn.id]
+				)
+				for item in turn.items
+				{
+					upsert(
+						item,
+						turnID: turn.id,
+						content: &content
+					)
+				}
 				if let index = content.loadedTurns.firstIndex(where:
 					{
 						$0.id == turn.id
@@ -275,7 +298,8 @@ enum ConversationContentReducer
 				upsert(
 					item,
 					turnID: turnID,
-					content: &content
+					content: &content,
+					preserveProvisionalOutput: isItemStarted(event)
 				)
 				updateRecordedItem(
 					item,
@@ -423,7 +447,10 @@ enum ConversationContentReducer
 			id: turn.id,
 			status: turn.status,
 			items: items,
-			error: turn.error
+			error: turn.error,
+			startedAt: turn.startedAt,
+			completedAt: turn.completedAt,
+			durationMs: turn.durationMs
 		)
 		reviewSourceChanged(
 			content: &content,
@@ -434,11 +461,12 @@ enum ConversationContentReducer
 	static func upsert(
 		_ item: CodexItem,
 		turnID: String,
-		content: inout ConversationProjection
+		content: inout ConversationProjection,
+		preserveProvisionalOutput: Bool = false
 	)
 	{
 		let id = "\(turnID):\(item.id)"
-		let entry = Self.entry(
+		var entry = Self.entry(
 			for: item,
 			id: id
 		)
@@ -447,6 +475,14 @@ enum ConversationContentReducer
 				$0.id == id
 			})
 		{
+			if preserveProvisionalOutput, item.output == nil,
+				case .command(var command) = entry.activity,
+				case .command(let previous) = content.entries[index].activity
+			{
+				command.output = previous.output
+				entry.activity = .command(command)
+				entry.body = commandBody(command)
+			}
 			content.entries[index] = entry
 		}
 		else
@@ -474,8 +510,23 @@ enum ConversationContentReducer
 				$0.id == id
 			})
 		{
-			content.entries[index].body += fragment
-			content.entries[index].isExpandable = content.entries[index].body.count > 2_000
+			if case .command(var command) = content.entries[index].activity
+			{
+				guard command.status == "running" || command.status == "inProgress"
+				else
+				{
+					return
+				}
+				command.output += fragment
+				content.entries[index].activity = .command(command)
+				content.entries[index].body = commandBody(command)
+				content.entries[index].isExpandable = true
+			}
+			else
+			{
+				content.entries[index].body += fragment
+				content.entries[index].isExpandable = content.entries[index].body.count > 2_000
+			}
 		}
 		else
 		{
@@ -483,7 +534,17 @@ enum ConversationContentReducer
 				id: id,
 				kind: kind,
 				title: title,
-				body: fragment
+				body: fragment,
+				isExpandable: kind == .command,
+				activity: kind == .command ? .command(ConversationCommand(
+					command: "",
+					cwd: nil,
+					output: fragment,
+					status: "running",
+					exitCode: nil,
+					durationMs: nil,
+					actions: []
+				)) : nil
 			))
 		}
 	}
@@ -585,7 +646,28 @@ enum ConversationContentReducer
 				kind: .command,
 				title: "Command · \(item.status ?? "running")",
 				body: body,
-				isExpandable: body.count > 2_000
+				isExpandable: true,
+				activity: .command(ConversationCommand(
+					command: command,
+					cwd: item.cwd,
+					output: output,
+					status: item.status ?? "running",
+					exitCode: item.exitCode,
+					durationMs: item.durationMs,
+					actions: item.commandActions
+				))
+			)
+		case "imageView":
+			return ConversationEntry(
+				id: id,
+				kind: .tool,
+				title: "Viewed an image",
+				body: item.imagePath ?? "",
+				isExpandable: item.imagePath != nil,
+				activity: item.imagePath.map
+				{
+					.image(path: $0)
+				}
 			)
 		case "fileChange":
 			let names = item.changes.map
@@ -606,6 +688,42 @@ enum ConversationContentReducer
 				body: item.text ?? item.output ?? ""
 			)
 		}
+	}
+
+	static func isItemStarted(_ event: AppServerEvent) -> Bool
+	{
+		if case .itemStarted = event
+		{
+			return true
+		}
+		return false
+	}
+
+	static func commandBody(_ command: ConversationCommand) -> String
+	{
+		command.output.isEmpty ? "$ \(command.command)" :
+			"$ \(command.command)\n\(command.output)"
+	}
+
+	static func timings(for content: ConversationContentModel) -> [ConversationTurnTiming]
+	{
+		let loadedIDs = Set(content.loadedTurns.map(\.id))
+		let loaded = content.loadedTurns.map
+		{
+			ConversationTurnTiming(
+				turn: $0,
+				previous: content.turnTimings[$0.id]
+			)
+		}
+		let provisional = content.turnTimings.values.filter
+		{
+			!loadedIDs.contains($0.turnID)
+		}
+		.sorted
+		{
+			$0.turnID < $1.turnID
+		}
+		return loaded + provisional
 	}
 
 	static func diff(for changes: [FileChange]) -> String

@@ -54,6 +54,7 @@ struct ConversationEntry: Equatable
 	var title: String
 	var body: String
 	var isExpandable: Bool = false
+	var activity: ConversationActivity? = nil
 }
 
 struct ChangeFile: Equatable
@@ -77,6 +78,7 @@ struct TaskWorkspaceChoice: Equatable
 
 struct ConversationSnapshot
 {
+	var turnTimings: [ConversationTurnTiming] = []
 	var workspaceOwner: WorkspaceLifecycleOwnerReference? = nil
 	var workspaceSelectionEpoch = 0
 	var composerDraftLifetime = 0
@@ -108,6 +110,7 @@ struct ConversationSnapshot
 	var showingArchived = false
 	var canManageThreads = false
 	var activeThreadID: String? = nil
+	var activeTurnID: String? = nil
 	var activeExecutionState: ExecutionState? = nil
 	var taskOutcomeUncertain = false
 	var canSteer = false
