@@ -111,6 +111,7 @@ struct ConversationPresentation: Equatable
 		let canSteer: Bool
 		let planMode: Bool
 		let planModeStatus: String?
+		var availableSkills: [AvailableSkill] = []
 		let slashCommandUnavailableReasons: [SlashCommandID: String]
 		let activeThreadID: String?
 		let activeExecutionState: ExecutionState?
@@ -131,7 +132,8 @@ struct ConversationPresentation: Equatable
 		{
 			struct Option: Equatable
 			{
-				let label: String; let description: String
+				let label: String
+				let description: String
 			}
 			let id: String
 			let header: String
@@ -255,17 +257,16 @@ struct ConversationPresentation: Equatable
 				$0.threadID == snapshot.selectedThreadID
 			}
 		)
+		let isViewingActiveThread =
+			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
 		status = Status(
 			owner: owner,
 			executionState: snapshot.executionState,
 			statusMessage: snapshot.statusMessage,
 			activeThreadID: snapshot.activeThreadID,
 			activeExecutionState: snapshot.activeExecutionState,
-			activePlan: snapshot.activeThreadID != nil
-				&& snapshot.activeThreadID == snapshot.selectedThreadID ? snapshot.activePlan : nil,
-			activeActivity: snapshot.activeThreadID != nil
-				&& snapshot.activeThreadID == snapshot.selectedThreadID
-				? snapshot.activeActivity : nil,
+			activePlan: isViewingActiveThread ? snapshot.activePlan : nil,
+			activeActivity: isViewingActiveThread ? snapshot.activeActivity : nil,
 			jumpError: snapshot.jumpError,
 			jumpLoading: snapshot.jumpLoading
 		)
@@ -292,6 +293,7 @@ struct ConversationPresentation: Equatable
 			canSteer: snapshot.canSteer,
 			planMode: snapshot.planMode,
 			planModeStatus: snapshot.planModeStatus,
+			availableSkills: snapshot.skillCatalog?.skills.filter(\.enabled) ?? [],
 			slashCommandUnavailableReasons: snapshot.slashCommandUnavailableReasons,
 			activeThreadID: snapshot.activeThreadID,
 			activeExecutionState: snapshot.activeExecutionState

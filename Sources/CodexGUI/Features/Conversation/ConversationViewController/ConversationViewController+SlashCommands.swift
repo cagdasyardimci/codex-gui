@@ -11,7 +11,8 @@ extension ConversationViewController
 			dismissSlashCommands()
 			if fileSearchWasCompletion
 			{
-				fileSearchPopover?.close(); completionRange = nil
+				fileSearchPopover?.close()
+				completionRange = nil
 			}
 			return
 		}
@@ -22,7 +23,8 @@ extension ConversationViewController
 		{
 			if fileSearchWasCompletion
 			{
-				fileSearchPopover?.close(); completionRange = nil
+				fileSearchPopover?.close()
+				completionRange = nil
 			}
 			slashCompletionRange = query.tokenRange
 			slashCompletionGeneration = selectionGeneration
@@ -44,7 +46,8 @@ extension ConversationViewController
 					[weak self] shown in
 					if !shown
 					{
-						self?.slashCompletionRange = nil; self?.slashCompletionText = nil
+						self?.slashCompletionRange = nil
+						self?.slashCompletionText = nil
 					}
 				}
 				slashCommandController.onChoose =
@@ -54,6 +57,10 @@ extension ConversationViewController
 						command,
 						execute: true
 					)
+				}
+				slashCommandController.onChooseSkill =
+				{
+					[weak self] skill in self?.chooseSlashSkill(skill)
 				}
 				slashCommandPopover = popover
 			}
@@ -108,6 +115,10 @@ extension ConversationViewController
 					execute: selector == #selector(NSResponder.insertNewline(_:))
 				)
 			}
+			else if let skill = slashCommandController.selectedSkill
+			{
+				chooseSlashSkill(skill)
+			}
 			else if selector == #selector(NSResponder.insertNewline(_:))
 			{
 				dismissSlashCommands()
@@ -130,7 +141,8 @@ extension ConversationViewController
 				!composer.hasMarkedText()
 		else
 		{
-			dismissSlashCommands(); return
+			dismissSlashCommands()
+			return
 		}
 		let generation = selectionGeneration
 		let performCommand = onSlashCommand
@@ -159,6 +171,41 @@ extension ConversationViewController
 			case .text: break
 			}
 		}
+	}
+
+	func chooseSlashSkill(_ skill: AvailableSkill)
+	{
+		guard slashCompletionGeneration == selectionGeneration,
+				let range = slashCompletionRange, slashCompletionText == composer.string,
+				NSMaxRange(range) <= (composer.string as NSString).length,
+				!composer.hasMarkedText(),
+				slashCommandController.availableSkills
+				.contains(where:
+				{
+					$0.path == skill.path && $0.enabled
+				})
+		else
+		{
+			dismissSlashCommands()
+			return
+		}
+		let generation = selectionGeneration
+		let selectSkill = onSelectSkill
+		let updateDraft = onDraftChange
+		dismissSlashCommands()
+		composer.insertText(
+			"",
+			replacementRange: range
+		)
+		updateDraft?(composer.string)
+		guard selectionGeneration == generation
+		else
+		{
+			return
+		}
+		selectSkill?(skill)
+		updateComposerHeight()
+		view.window?.makeFirstResponder(composer)
 	}
 
 	func textViewDidChangeSelection(_ notification: Notification)

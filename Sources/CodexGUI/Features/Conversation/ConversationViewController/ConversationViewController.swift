@@ -7,6 +7,7 @@ final class ConversationViewController: NSViewController,
 	NSCollectionViewDataSource, NSCollectionViewDelegateFlowLayout, NSTextViewDelegate,
 	NSSearchFieldDelegate
 {
+	var onSelectSkill: ((AvailableSkill) -> Void)?
 	var onSlashCommand: ((SlashCommandInvocation) -> Void)?
 	var onSend: (() -> Void)?
 	var onSteer: ((String) -> Void)?

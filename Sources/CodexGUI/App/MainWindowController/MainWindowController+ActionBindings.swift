@@ -13,7 +13,8 @@ extension MainWindowController
 				else
 				{
 					return
-				}; self?.onOpenProjectRequest()
+				}
+				self?.onOpenProjectRequest()
 			}
 		navigation.onSelectRecentProject =
 		{
@@ -162,6 +163,26 @@ extension MainWindowController
 
 	func configureConversationActions(target: WorkspaceIntentTarget)
 	{
+		let skillStore = currentStore
+		conversation.onSelectSkill =
+		{
+			skill in
+			guard skillStore.currentSnapshot.skillCatalog?.skills.contains(where:
+				{
+					$0.path == skill.path && $0.enabled
+				}) == true
+			else
+			{
+				return
+			}
+			var context = skillStore.currentSnapshot.projectContext
+			context.selectedSkill = ProjectSkillSelection(
+				name: skill.name,
+				description: skill.description,
+				path: skill.path
+			)
+			target.dispatch(.updateProjectContext(context))
+		}
 		conversation.onSlashCommand =
 		{
 			target.dispatch(.slashCommand($0))
@@ -234,7 +255,8 @@ extension MainWindowController
 				else
 				{
 					return
-				}; self?.onInsertPathRequest()
+				}
+				self?.onInsertPathRequest()
 			}
 		conversation.onLoadEarlierTurns =
 		{

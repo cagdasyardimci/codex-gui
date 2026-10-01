@@ -235,6 +235,100 @@ struct ComposerSlashCommandTests
 		#expect(commands == [.model])
 	}
 
+	@Test func skillsFilterByDisplayNameSkipHeadingAndAttachWithoutSending() throws
+	{
+		let controller = makeController(text: "/")
+		let skill = try #require(AvailableSkill(json: [
+			"name": "dashboard",
+			"description": "Create a dashboard",
+			"path": "/skills/dashboard",
+			"scope": "user",
+			"enabled": true,
+			"interface": ["displayName": "Analytics Dashboard"],
+		]))
+		var next = snapshot(draft: "/")
+		next.skillCatalog = SkillCatalog(
+			skills: [skill],
+			errors: []
+		)
+		controller.render(next)
+		for _ in controller.slashCommandController.commands
+		{
+			controller.slashCommandController.moveSelection(by: 1)
+		}
+		#expect(controller.slashCommandController.selectedSkill == skill)
+		controller.slashCommandController.moveSelection(by: -1)
+		#expect(controller.slashCommandController.selectedCommand?.id == .copy)
+		controller.composer.string = "/ANAL keep this prompt"
+		controller.composer.setSelectedRange(NSRange(
+			location: 5,
+			length: 0
+		))
+		controller.updateComposerCompletion()
+		#expect(controller.slashCommandController.commands.isEmpty)
+		#expect(controller.slashCommandController.selectedSkill == skill)
+		var selected: AvailableSkill?
+		var sends = 0
+		controller.onSelectSkill =
+		{
+			selected = $0
+		}
+		controller.onSend =
+		{
+			sends += 1
+		}
+		#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertNewline(_:))))
+		#expect(selected == skill)
+		#expect(controller.composer.string == " keep this prompt")
+		#expect(sends == 0)
+		#expect(controller.slashCompletionRange == nil)
+	}
+
+	@Test func removedSkillAndReplacedDraftCannotAttachStaleSelection() throws
+	{
+		let controller = makeController(text: "/dashboard")
+		let skill = try #require(AvailableSkill(json: [
+			"name": "dashboard",
+			"description": "Create a dashboard",
+			"path": "/skills/dashboard",
+			"scope": "user",
+			"enabled": true,
+		]))
+		var next = snapshot(draft: "/dashboard")
+		next.skillCatalog = SkillCatalog(
+			skills: [skill],
+			errors: []
+		)
+		controller.render(next)
+		controller.updateComposerCompletion()
+		var selections = 0
+		controller.onSelectSkill =
+		{
+			_ in selections += 1
+		}
+		next.skillCatalog = nil
+		controller.render(next)
+		controller.chooseSlashSkill(skill)
+		#expect(selections == 0)
+		#expect(controller.composer.string == "/dashboard")
+		next.skillCatalog = SkillCatalog(
+			skills: [skill],
+			errors: []
+		)
+		controller.render(next)
+		controller.updateComposerCompletion()
+		controller.onDraftChange =
+		{
+			_ in
+			var replacement = snapshot(draft: "Replacement")
+			replacement.composerDraftLifetime = 2
+			controller.render(replacement)
+		}
+		controller.chooseSlashSkill(skill)
+		#expect(selections == 0)
+		#expect(controller.composer.string == "Replacement")
+	}
+
 	private func makeController(text: String) -> ConversationViewController
 	{
 		_ = NSApplication.shared

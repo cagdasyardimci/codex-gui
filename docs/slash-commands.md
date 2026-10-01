@@ -10,6 +10,13 @@ The completion panel follows the composer width and uses compact icon/title/desc
 rows in light and dark appearances. Unavailable commands keep their descriptions;
 the reason is provided in the row tooltip and accessibility label.
 
+Enabled skills from the current checkout's catalog appear directly under a **Skills**
+heading, sorted by display name, with descriptions and scope labels. Typing after `/`
+filters command names and skill names/display names. Arrow keys skip the section heading.
+Clicking a skill or pressing Tab/Return selects it for the next message and removes only
+the slash token, preserving the rest of the draft without sending it. `/skills` remains
+available to open the full picker, including its **No skill** option.
+
 Only an initial `/name` token is a command; leading spaces and tabs are allowed.
 URLs, paths such as `/Users/example/source.swift`, fenced text and a slash later in a
 sentence remain ordinary text. Unknown command names and invalid arguments display

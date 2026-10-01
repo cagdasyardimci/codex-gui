@@ -4,15 +4,23 @@ import AppKit
 @MainActor
 final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NSTableViewDelegate
 {
+	var onChooseSkill: ((AvailableSkill) -> Void)?
+	var availableSkills: [AvailableSkill] = []
+	private(set) var matchingSkills: [AvailableSkill] = []
+	var selectedSkill: AvailableSkill?
+	{
+		let index = table.selectedRow - commands.count - 1
+		return matchingSkills.indices.contains(index) ? matchingSkills[index] : nil
+	}
 	private var rowCount: Int
 	{
-		commands.count
+		commands.count + (matchingSkills.isEmpty ? 0 : matchingSkills.count + 1)
 	}
 	var onChoose: ((SlashCommandDescriptor) -> Void)?
 	var unavailableReason: ((SlashCommandID) -> String?)?
 	private let table = NSTableView()
 	private let scroll = NSScrollView()
-	private let emptyLabel = NSTextField(labelWithString: "No matching commands")
+	private let emptyLabel = NSTextField(labelWithString: "No matching commands or skills")
 	private(set) var commands: [SlashCommandDescriptor] = []
 	var selectedCommand: SlashCommandDescriptor?
 	{
@@ -69,7 +77,17 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	{
 		_ = view
 		let previous = selectedCommand?.id
+		let previousSkill = selectedSkill?.path
 		commands = SlashCommandRegistry.matching(prefix: prefix)
+		matchingSkills = availableSkills.filter
+		{
+			$0.enabled && (prefix.isEmpty || $0.name.lowercased().hasPrefix(prefix.lowercased())
+				|| ($0.displayName?.lowercased().hasPrefix(prefix.lowercased()) ?? false))
+		}.sorted
+		{
+			($0.displayName ?? $0.name).localizedStandardCompare($1.displayName ?? $1.name)
+				== .orderedAscending
+		}
 		let height = CGFloat(min(
 			11,
 			max(
@@ -86,10 +104,21 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		{
 			table.deselectAll(nil); return
 		}
-		selectRow(commands.firstIndex(where:
+		if let index = matchingSkills.firstIndex(where:
 			{
-				$0.id == previous
-			}) ?? 0)
+				$0.path == previousSkill
+			})
+		{
+			selectRow(commands.count + 1 + index)
+		}
+		else
+		{
+			selectRow(commands.firstIndex(where:
+				{
+					$0.id == previous
+				})
+				?? (commands.isEmpty ? 1 : 0))
+		}
 	}
 
 	func moveSelection(by delta: Int)
@@ -99,10 +128,15 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		{
 			return
 		}
+		var index = table.selectedRow + delta
+		if !matchingSkills.isEmpty && index == commands.count
+		{
+			index += delta > 0 ? 1 : -1
+		}
 		selectRow(min(
 			max(
-				0,
-				table.selectedRow + delta
+				commands.isEmpty ? 1 : 0,
+				index
 			),
 			rowCount - 1
 		))
@@ -132,6 +166,29 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		row: Int
 	) -> NSView?
 	{
+		if !matchingSkills.isEmpty && row == commands.count
+		{
+			let heading = NSTextField(labelWithString: "Skills")
+			heading.font = .systemFont(ofSize: 12)
+			heading.textColor = .secondaryLabelColor
+			let cell = NSTableCellView()
+			AppKitLayout.pin(
+				heading,
+				to: cell,
+				inset: 8
+			)
+			return cell
+		}
+		if row > commands.count
+		{
+			let index = row - commands.count - 1
+			guard matchingSkills.indices.contains(index)
+			else
+			{
+				return nil
+			}
+			return skillCell(matchingSkills[index])
+		}
 		guard commands.indices.contains(row)
 		else
 		{
@@ -214,7 +271,79 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		rowViewForRow row: Int
 	) -> NSTableRowView?
 	{
+		if !matchingSkills.isEmpty && row == commands.count
+		{
+			return NSTableRowView()
+		}
 		return SlashCommandMenuRowView()
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
+		shouldSelectRow row: Int
+	) -> Bool
+	{
+		matchingSkills.isEmpty || row != commands.count
+	}
+
+	private func skillCell(_ skill: AvailableSkill) -> NSView
+	{
+		let icon = NSImageView()
+		icon.image = NSImage(
+			systemSymbolName: "shippingbox",
+			accessibilityDescription: nil
+		)
+		icon.contentTintColor = .secondaryLabelColor
+		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+		let title = NSTextField(labelWithString: skill.displayName ?? skill.name)
+		title.font = .systemFont(ofSize: 13)
+		title.lineBreakMode = .byTruncatingTail
+		let detail = NSTextField(labelWithString: skill.shortDescription ?? skill.description)
+		detail.font = .systemFont(ofSize: 13)
+		detail.textColor = .tertiaryLabelColor
+		detail.lineBreakMode = .byTruncatingTail
+		detail.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		detail.setContentHuggingPriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		let scope = NSTextField(labelWithString: skill.scope == "user" ? "Personal"
+			: skill.scope.capitalized)
+		scope.font = .systemFont(ofSize: 12)
+		scope.textColor = .secondaryLabelColor
+		scope.setContentCompressionResistancePriority(
+			.required,
+			for: .horizontal
+		)
+		let contents = AppKitLayout.horizontalStack(
+			[icon, title, detail, scope],
+			spacing: 8
+		)
+		contents.distribution = .fill
+		let cell = NSTableCellView()
+		cell.addSubview(contents)
+		contents.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			contents.leadingAnchor.constraint(
+				equalTo: cell.leadingAnchor,
+				constant: 10
+			),
+			contents.trailingAnchor.constraint(
+				equalTo: cell.trailingAnchor,
+				constant: -10
+			),
+			contents.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+		])
+		cell.toolTip = skill.description
+		cell
+			.setAccessibilityLabel(
+				"Skill \(skill.name). \(skill.description). \(scope.stringValue)"
+			)
+		return cell
 	}
 
 	@objc private func chooseSelected()
@@ -222,6 +351,10 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		if let selectedCommand
 		{
 			onChoose?(selectedCommand)
+		}
+		else if let selectedSkill
+		{
+			onChooseSkill?(selectedSkill)
 		}
 	}
 }
