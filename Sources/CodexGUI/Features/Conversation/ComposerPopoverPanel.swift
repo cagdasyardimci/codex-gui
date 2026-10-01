@@ -5,6 +5,7 @@ final class ComposerPopoverPanel: NSObject
 {
 	var onPresentationChange: ((Bool) -> Void)?
 	var preservesParentKeyboardFocus = false
+	var matchesAnchorWidth = false
 	var shouldDismissForEscape: (() -> Bool)?
 	private(set) var isShown = false
 	private let controller: NSViewController
@@ -55,6 +56,7 @@ final class ComposerPopoverPanel: NSObject
 		self.anchor = anchor
 		anchorSuperview = anchor.superview
 		parentWindow = window
+		panel.appearance = window.effectiveAppearance
 		anchorRect = rect
 		anchorsToBounds = rect == anchor.bounds
 		isShown = true
@@ -331,18 +333,25 @@ final class ComposerPopoverPanel: NSObject
 		{
 			return
 		}
+		panel.appearance = window.effectiveAppearance
 		let margin: CGFloat = 8
 		let requested = controller.preferredContentSize
 		let width = min(
 			max(
 				1,
-				requested.width
+				matchesAnchorWidth ? screenRect.width : requested.width
 			),
 			max(
 				1,
 				visibleFrame.width - 2 * margin
 			)
 		)
+		// Borderless AppKit panels also consult their controller's preferred width during layout.
+		if matchesAnchorWidth, controller.preferredContentSize.width != width
+		{
+			controller.preferredContentSize.width = width
+		}
+
 		let height = min(
 			max(
 				1,

@@ -4,9 +4,14 @@ import AppKit
 @MainActor
 final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NSTableViewDelegate
 {
+	private var rowCount: Int
+	{
+		commands.count
+	}
 	var onChoose: ((SlashCommandDescriptor) -> Void)?
 	var unavailableReason: ((SlashCommandID) -> String?)?
 	private let table = NSTableView()
+	private let scroll = NSScrollView()
 	private let emptyLabel = NSTextField(labelWithString: "No matching commands")
 	private(set) var commands: [SlashCommandDescriptor] = []
 	var selectedCommand: SlashCommandDescriptor?
@@ -19,37 +24,44 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("slashCommand"))
 		table.addTableColumn(column)
 		table.headerView = nil
-		table.rowHeight = 48
+		table.style = .plain
+		table.rowHeight = 28
+		table.intercellSpacing = .zero
+		table.backgroundColor = .clear
+		table.selectionHighlightStyle = .regular
+		table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
 		table.dataSource = self
 		table.delegate = self
 		table.target = self
 		table.action = #selector(chooseSelected)
 		table.setAccessibilityLabel("Slash commands. Use arrow keys to select, Tab to insert, "
 			+ "Return to run, Escape to dismiss.")
-		let scroll = NSScrollView()
 		scroll.documentView = table
 		scroll.hasVerticalScroller = true
+		scroll.autohidesScrollers = true
+		scroll.scrollerStyle = .overlay
+		scroll.drawsBackground = false
+		scroll.contentView.drawsBackground = false
 		emptyLabel.textColor = .secondaryLabelColor
 		let stack = AppKitLayout.verticalStack(
 			[scroll, emptyLabel],
 			spacing: 4
 		)
 		let container = DesktopSurface(
-			DesktopTheme.chrome,
-			cornerRadius: 12,
+			DesktopTheme.slashMenu,
+			cornerRadius: 22,
 			bordered: true
 		)
 		AppKitLayout.pin(
 			stack,
 			to: container,
-			inset: 6
+			inset: 4
 		)
 		scroll.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		scroll.heightAnchor.constraint(equalToConstant: 270).isActive = true
 		view = container
 		preferredContentSize = NSSize(
-			width: 430,
-			height: 294
+			width: 720,
+			height: 316
 		)
 	}
 
@@ -58,9 +70,18 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		_ = view
 		let previous = selectedCommand?.id
 		commands = SlashCommandRegistry.matching(prefix: prefix)
+		let height = CGFloat(min(
+			11,
+			max(
+				1,
+				rowCount
+			)
+		)) * table.rowHeight
+		scroll.isHidden = rowCount == 0
+		preferredContentSize.height = height + 8
 		table.reloadData()
-		emptyLabel.isHidden = !commands.isEmpty
-		guard !commands.isEmpty
+		emptyLabel.isHidden = rowCount > 0
+		guard rowCount > 0
 		else
 		{
 			table.deselectAll(nil); return
@@ -73,7 +94,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 	func moveSelection(by delta: Int)
 	{
-		guard !commands.isEmpty
+		guard rowCount > 0
 		else
 		{
 			return
@@ -83,7 +104,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 				0,
 				table.selectedRow + delta
 			),
-			commands.count - 1
+			rowCount - 1
 		))
 	}
 
@@ -102,7 +123,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 	func numberOfRows(in tableView: NSTableView) -> Int
 	{
-		commands.count
+		rowCount
 	}
 
 	func tableView(
@@ -118,26 +139,82 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		}
 		let command = commands[row]
 		let reason = unavailableReason?(command.id)
-		let title = NSTextField(labelWithString: "/" + command.name)
-		title.font = .systemFont(
-			ofSize: 13,
-			weight: .medium
+		let presentation = SlashCommandMenuPresentation(command.id)
+		let title = NSTextField(labelWithString: presentation.title)
+		title.font = .systemFont(ofSize: 13)
+		title.textColor = reason == nil ? .labelColor : .secondaryLabelColor
+		title.setContentCompressionResistancePriority(
+			.required,
+			for: .horizontal
 		)
-		let detail = NSTextField(labelWithString: reason ?? command.description)
-		detail.font = .systemFont(ofSize: 11)
-		detail.textColor = reason == nil ? .secondaryLabelColor : .systemOrange
+
+		let detail = NSTextField(labelWithString: command.description)
+		detail.font = .systemFont(ofSize: 13)
+		detail.textColor = .tertiaryLabelColor
 		detail.lineBreakMode = .byTruncatingTail
-		let cell = NSTableCellView()
-		AppKitLayout.pin(
-			AppKitLayout.verticalStack(
-				[title, detail],
-				spacing: 2
-			),
-			to: cell,
-			inset: 5
+		detail.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
 		)
-		cell.setAccessibilityLabel("/\(command.name). \(reason ?? command.description)")
+		detail.setContentHuggingPriority(
+			.defaultLow,
+			for: .horizontal
+		)
+
+		let icon = NSImageView()
+		icon.image = NSImage(
+			systemSymbolName: presentation.symbol,
+			accessibilityDescription: nil
+		)
+		icon.contentTintColor = .secondaryLabelColor
+		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+		let contents = AppKitLayout.horizontalStack(
+			[icon, title, detail],
+			spacing: 8
+		)
+		if presentation.opensPicker
+		{
+			let chevron = NSImageView()
+			chevron.image = NSImage(
+				systemSymbolName: "chevron.right",
+				accessibilityDescription: nil
+			)
+			chevron.contentTintColor = .tertiaryLabelColor
+			chevron.widthAnchor.constraint(equalToConstant: 10).isActive = true
+			chevron.heightAnchor.constraint(equalToConstant: 12).isActive = true
+			contents.addArrangedSubview(chevron)
+		}
+		contents.distribution = .fill
+		let cell = NSTableCellView()
+		cell.addSubview(contents)
+		contents.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			contents.leadingAnchor.constraint(
+				equalTo: cell.leadingAnchor,
+				constant: 10
+			),
+			contents.trailingAnchor.constraint(
+				equalTo: cell.trailingAnchor,
+				constant: -10
+			),
+			contents.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+		])
+		cell.toolTip = reason ?? command.description
+		cell.setAccessibilityLabel("/\(command.name). \(command.description)"
+			+ (reason.map
+			{
+				". " + $0
+			} ?? ""))
 		return cell
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
+		rowViewForRow row: Int
+	) -> NSTableRowView?
+	{
+		return SlashCommandMenuRowView()
 	}
 
 	@objc private func chooseSelected()

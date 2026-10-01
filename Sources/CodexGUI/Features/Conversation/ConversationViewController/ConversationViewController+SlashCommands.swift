@@ -32,6 +32,7 @@ extension ConversationViewController
 			{
 				let popover = ComposerPopoverPanel(contentViewController: slashCommandController)
 				popover.preservesParentKeyboardFocus = true
+				popover.matchesAnchorWidth = true
 				popover
 					.shouldDismissForEscape =
 					{
@@ -61,8 +62,8 @@ extension ConversationViewController
 			if slashCommandPopover?.isShown != true, composer.window?.isVisible == true
 			{
 				slashCommandPopover?.show(
-					relativeTo: composerScrollView.bounds,
-					of: composerScrollView
+					relativeTo: composerSurface.bounds,
+					of: composerSurface
 				)
 			}
 			return

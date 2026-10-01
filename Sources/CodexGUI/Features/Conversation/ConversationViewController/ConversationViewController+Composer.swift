@@ -22,11 +22,6 @@ extension ConversationViewController
 		attachmentRow.widthAnchor.constraint(
 			lessThanOrEqualTo: composerToolbar.widthAnchor
 		).isActive = true
-		let composerSurface = DesktopSurface(
-			DesktopTheme.canvas,
-			cornerRadius: 16,
-			bordered: true
-		)
 		let composerStack = AppKitLayout.verticalStack(
 			[attachmentDetailsScrollView, composerScrollView, composerToolbar],
 			spacing: 6

@@ -7,6 +7,14 @@ enum DesktopTheme
 		light: 0xFFFFFF,
 		dark: 0x181818
 	)
+	static let slashMenu = color(
+		light: 0xFFFFFF,
+		dark: 0x2D2D2D
+	)
+	static let slashMenuSelection = color(
+		light: 0xF1F2F2,
+		dark: 0x3C3C3C
+	)
 	static let sidebar = color(
 		light: 0xF7F7F7,
 		dark: 0x1E1E1E

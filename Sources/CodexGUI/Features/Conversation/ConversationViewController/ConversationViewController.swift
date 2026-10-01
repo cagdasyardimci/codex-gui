@@ -110,6 +110,11 @@ final class ConversationViewController: NSViewController,
 	var requestedContext: String?
 	let composer = ContextComposerTextView()
 	let composerScrollView = NSScrollView()
+	let composerSurface = DesktopSurface(
+		DesktopTheme.canvas,
+		cornerRadius: 16,
+		bordered: true
+	)
 	var composerHeightConstraint: NSLayoutConstraint?
 	let contextView = ComposerContextView()
 	lazy var attachmentDetailsScrollView = BoundedContentScrollView(views: [contextView])

@@ -6,6 +6,10 @@ completion without changing the draft. IME marked text and Shift-Return keep the
 normal text-entry behavior. Command availability includes the current checkout, chat,
 active operation and supported backend settings.
 
+The completion panel follows the composer width and uses compact icon/title/description
+rows in light and dark appearances. Unavailable commands keep their descriptions;
+the reason is provided in the row tooltip and accessibility label.
+
 Only an initial `/name` token is a command; leading spaces and tabs are allowed.
 URLs, paths such as `/Users/example/source.swift`, fenced text and a slash later in a
 sentence remain ordinary text. Unknown command names and invalid arguments display
