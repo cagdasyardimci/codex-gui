@@ -50,6 +50,10 @@ enum WorkspaceEffect
 	case readConversationPage(HistoryLoadOperation)
 	case readConversationList(ConversationListOperation)
 	case manageConversation(ThreadManagementOperation)
+	case forkConversation(SlashCommandPresentationRequest)
+	case compactConversation(ComposerCommandTurnOperation)
+	case startConversationReview(ComposerCommandTurnOperation)
+	case updateCommandSettings(ComposerCommandSettingsOperation)
 	case persistConversationSelection(
 		OperationContext,
 		threadID: String?

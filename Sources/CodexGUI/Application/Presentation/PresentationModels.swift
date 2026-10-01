@@ -139,4 +139,10 @@ struct ConversationSnapshot
 	var selectedTaskWorkspaceID: UUID? = nil
 	var taskStatusSummary: String? = nil
 	var taskWorkspaceMessage: String? = nil
+	var slashCommandUnavailableReasons: [SlashCommandID: String] = [:]
+	var planMode = false
+	var planModeStatus: String? = nil
+	var threadTokenUsage: ThreadTokenUsage? = nil
+	var threadStatus: ThreadStatus? = nil
+	var threadSettings: ThreadSettings? = nil
 }

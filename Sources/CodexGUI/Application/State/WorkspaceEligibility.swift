@@ -11,10 +11,17 @@ struct WorkspaceEligibility
 		{
 			return "\(error) Reconnect before sending."
 		}
-		if model.contextNavigation.pendingContextLoad?.revision == model.contextNavigation
-			.contextRevision
+		let isProjectContextLoading =
+			model.contextNavigation.pendingContextLoad?.revision
+				== model.contextNavigation.contextRevision
+		if isProjectContextLoading
 		{
 			return "Project context is loading."
+		}
+		if model.preferences.runPreferences.fastMode,
+			let reason = FastModeAvailability.unavailableReason(in: model)
+		{
+			return "\(reason) Disable fast mode before sending."
 		}
 		return model.preferences.warning(skillWarning: ProjectProductivity.skillWarning(
 			context: model.contextNavigation.projectContext,
@@ -60,26 +67,36 @@ struct WorkspaceEligibility
 
 	var canSend: Bool
 	{
-		ownerAvailable && model.connection.isConnected && !model.execution.isTaskActive
-			&& model.execution.state != .disconnected && !model.execution.needsReconciliation
-			&& !model.execution.hasUncertainRequest && model.composer.uncertainSubmissions.isEmpty
-			&& model.lifecycle.pendingInputPreparation == nil && !model.conversations
-			.showingArchived
-			&& model.conversations.pendingSelection == nil && model.conversations
-			.pendingManagement == nil
+		ownerAvailable
+			&& model.connection.isConnected
+			&& !model.execution.isTaskActive
+			&& model.execution.state != .disconnected
+			&& !model.execution.needsReconciliation
+			&& !model.execution.hasUncertainRequest
+			&& model.composer.uncertainSubmissions.isEmpty
+			&& model.lifecycle.pendingInputPreparation == nil
+			&& !model.conversations.showingArchived
+			&& model.conversations.pendingSelection == nil
+			&& model.conversations.pendingManagement == nil
 			&& preferenceWarning == nil
+			&& !model.composerCommands.blocksNewWork
 	}
 
 	var canSteer: Bool
 	{
-		ownerAvailable && model.connection.isConnected && model.execution.state.isBusy
-			&& model.execution.state != .stopping && model.execution.pendingSteering == nil
-			&& !model.execution.needsReconciliation && !model.execution.hasUncertainRequest
-			&& model.lifecycle
-			.pendingInputPreparation == nil
-			&& model.conversations.pendingManagement == nil && model.conversations
-			.pendingSelection == nil
-			&& !model.conversations.showingArchived && model.execution.activeTurnID != nil
+		ownerAvailable
+			&& model.connection.isConnected
+			&& model.execution.state.isBusy
+			&& model.execution.state != .stopping
+			&& model.execution.pendingSteering == nil
+			&& !model.execution.needsReconciliation
+			&& !model.execution.hasUncertainRequest
+			&& model.lifecycle.pendingInputPreparation == nil
+			&& model.conversations.pendingManagement == nil
+			&& model.conversations.pendingSelection == nil
+			&& !model.composerCommands.blocksNewWork
+			&& !model.conversations.showingArchived
+			&& model.execution.activeTurnID != nil
 			&& model.execution.activeThreadID != nil
 			&& model.conversations.selectedConversation.threadID == model.execution.activeThreadID
 	}
@@ -87,12 +104,15 @@ struct WorkspaceEligibility
 	var canManageThreads: Bool
 	{
 		ownerAvailable
-			&& model.connection.isConnected && !model.execution.isTaskActive
-			&& !model.execution.needsReconciliation && !model.execution.hasUncertainRequest
+			&& model.connection.isConnected
+			&& !model.execution.isTaskActive
+			&& !model.execution.needsReconciliation
+			&& !model.execution.hasUncertainRequest
 			&& model.composer.uncertainSubmissions.isEmpty
-			&& model.lifecycle.pendingInputPreparation == nil && model.conversations
-			.pendingSelection == nil
+			&& model.lifecycle.pendingInputPreparation == nil
+			&& model.conversations.pendingSelection == nil
 			&& model.conversations.pendingManagement == nil
+			&& !model.composerCommands.blocksNewWork
 	}
 
 	func acceptsSubmission(_ submission: ComposerSubmission) -> Bool
@@ -118,20 +138,22 @@ struct WorkspaceEligibility
 	{
 		switch operation
 		{
-		case .submission(let submission): return canSend && matches(
+		case .submission(let submission):
+			return canSend && matches(
 				submission,
 				steering: false
 			)
 				&& hasSourceContent(submission.draft)
-		case .steering(let steering): return canSteer && steering.context == steering.submission
-			.context
-			&& steering.context.threadID == model.execution.activeThreadID
-			&& steering.context.turnID == model.execution.activeTurnID
-			&& matches(
-				steering.submission,
-				steering: true
-			) &&
-			hasSourceContent(steering.submission.draft)
+		case .steering(let steering):
+			return canSteer
+				&& steering.context == steering.submission.context
+				&& steering.context.threadID == model.execution.activeThreadID
+				&& steering.context.turnID == model.execution.activeTurnID
+				&& matches(
+					steering.submission,
+					steering: true
+				)
+				&& hasSourceContent(steering.submission.draft)
 		}
 	}
 
@@ -140,8 +162,7 @@ struct WorkspaceEligibility
 		guard let threadID = operation.context.threadID, canManageThreads,
 				operation.context.belongsTo(
 				workspace: model.identity,
-				generation: model.connection
-					.generation
+				generation: model.connection.generation
 				),
 				threadID == model.conversations.selectedConversation.threadID
 				|| model.conversations.threads.contains(where:
@@ -154,8 +175,8 @@ struct WorkspaceEligibility
 		}
 		switch operation
 		{
-		case .rename: return operation.context.threadID == model.conversations.selectedConversation
-			.threadID
+		case .rename:
+			return operation.context.threadID == model.conversations.selectedConversation.threadID
 		case .delete: return true
 		case .archive: return !model.conversations.showingArchived
 		case .unarchive: return model.conversations.showingArchived
@@ -167,18 +188,43 @@ struct WorkspaceEligibility
 		steering: Bool
 	) -> Bool
 	{
-		let current = model.composer.drafts[submission.conversation] ?? ComposerDraft()
+		let currentDraft = model.composer.drafts[submission.conversation] ?? ComposerDraft()
 		return submission.context.belongsTo(
 			workspace: model.identity,
 			generation: model.connection.generation
 		)
 			&& submission.conversation == model.conversations.selectedConversation
 			&& submission.context.threadID == submission.conversation.threadID
-			&& current.revision == submission.draft.revision && current.lifetime == submission.draft
-			.lifetime
-			&& current.context == submission.draft.context
-			&& (steering || current.text == submission.draft.text)
-			&& (submission.projectContextRevision ?? 0) == model.contextNavigation.contextRevision
+			&& matchesCapturedDraft(
+				currentDraft,
+				submission: submission,
+				steering: steering
+			)
+			&& matchesCapturedPreferences(
+				submission,
+				steering: steering
+			)
+			&& model.composer.pendingSubmissions[submission.context.requestID] == nil
+	}
+
+	private func matchesCapturedDraft(
+		_ currentDraft: ComposerDraft,
+		submission: ComposerSubmission,
+		steering: Bool
+	) -> Bool
+	{
+		currentDraft.revision == submission.draft.revision
+			&& currentDraft.lifetime == submission.draft.lifetime
+			&& currentDraft.context == submission.draft.context
+			&& (steering || currentDraft.text == submission.draft.text)
+	}
+
+	private func matchesCapturedPreferences(
+		_ submission: ComposerSubmission,
+		steering: Bool
+	) -> Bool
+	{
+		(submission.projectContextRevision ?? 0) == model.contextNavigation.contextRevision
 			&& (steering || submission.skills == (ProjectProductivity.resolvedSkill(
 				context: model.contextNavigation.projectContext,
 				in: model.contextNavigation.skillCatalog
@@ -189,20 +235,21 @@ struct WorkspaceEligibility
 			&& submission.modelID == model.preferences.selectedModelID
 			&& submission.effort == model.preferences.selectedEffort
 			&& submission.preferences == model.preferences.runPreferences
-			&& model.composer.pendingSubmissions[submission.context.requestID] == nil
+			&& (steering || !submission.preferences.fastMode
+				|| submission.serviceTier == FastModeAvailability.serviceTier(in: model))
 	}
 
 	private func hasSourceContent(_ draft: ComposerDraft) -> Bool
 	{
-		!draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.context
-			.contains
+		let hasDraftText = !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+		return hasDraftText || draft.context.contains
+		{
+			switch $0.kind
 			{
-				switch $0.kind
-				{
-				case .fileReference, .image: return $0.path?.isEmpty == false
-				case .textExcerpt: return $0.path?.isEmpty == false && $0.excerpt?.isEmpty == false
-				}
+			case .fileReference, .image: return $0.path?.isEmpty == false
+			case .textExcerpt: return $0.path?.isEmpty == false && $0.excerpt?.isEmpty == false
 			}
+		}
 	}
 
 	private func hasInput(_ submission: ComposerSubmission) -> Bool
@@ -214,13 +261,50 @@ struct WorkspaceEligibility
 		{
 			return false
 		}
-		let expected = ProjectProductivity.requestText(
-			context: model.contextNavigation.projectContext,
-			draft: submission.draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard let submittedText = ComposerPromptText.submittedText(
+			submission.draft.text,
+			collaborationMode: submission.collaborationMode
 		)
-		var textParts = [expected]
-		var remaining = Array(submission.inputs.dropFirst())
-		for item in submission.draft.context
+		else
+		{
+			return false
+		}
+		let expectedRequestText = ProjectProductivity.requestText(
+			context: model.contextNavigation.projectContext,
+			draft: submittedText
+		)
+		var textParts = [expectedRequestText]
+		var remainingInputs = Array(submission.inputs.dropFirst())
+		guard appendValidatedContextDescriptions(
+			submission.draft.context,
+			remainingInputs: &remainingInputs,
+			textParts: &textParts
+		)
+		else
+		{
+			return false
+		}
+		guard remainingInputs.isEmpty
+		else
+		{
+			return false
+		}
+
+		let nonemptyTextParts = textParts.filter
+		{
+			!$0.isEmpty
+		}
+		let expectedSubmittedText = nonemptyTextParts.joined(separator: "\n\n")
+		return text == expectedSubmittedText
+	}
+
+	private func appendValidatedContextDescriptions(
+		_ items: [ComposerContextItem],
+		remainingInputs: inout [TurnInput],
+		textParts: inout [String]
+	) -> Bool
+	{
+		for item in items
 		{
 			switch item.kind
 			{
@@ -229,7 +313,7 @@ struct WorkspaceEligibility
 						case .mention(
 						let name,
 						let resolvedPath
-						) = remaining.first,
+						) = remainingInputs.first,
 						name == URL(fileURLWithPath: path).lastPathComponent,
 						resolvedPath.hasPrefix(checkout + "/")
 				else
@@ -237,7 +321,7 @@ struct WorkspaceEligibility
 					return false
 				}
 				textParts.append(UserMessageContextDescription.file(path: path))
-				remaining.removeFirst()
+				remainingInputs.removeFirst()
 			case .textExcerpt:
 				guard let path = item.path, let excerpt = item.excerpt
 				else
@@ -246,28 +330,25 @@ struct WorkspaceEligibility
 				}
 				let firstLine = item.firstLine ?? 1
 				let lastLine = item.lastLine ?? firstLine
-				let numbered = excerpt.components(separatedBy: "\n").enumerated().map
+				let excerptLines = excerpt.components(separatedBy: "\n")
+				let numberedLines = excerptLines.enumerated().map
 				{
 					"\(firstLine + $0.offset): \($0.element)"
-				}.joined(separator: "\n")
-				textParts
-					.append(
-						"Selected code from \(path), lines \(firstLine)–\(lastLine):\n\(numbered)"
-					)
+				}
+				let numbered = numberedLines.joined(separator: "\n")
+				textParts.append(
+					"Selected code from \(path), lines \(firstLine)–\(lastLine):\n\(numbered)"
+				)
 			case .image:
-				guard let path = item.path, remaining.first == .localImage(path: path)
+				guard let path = item.path, remainingInputs.first == .localImage(path: path)
 				else
 				{
 					return false
 				}
 				textParts.append(UserMessageContextDescription.image(title: item.title))
-				remaining.removeFirst()
+				remainingInputs.removeFirst()
 			}
 		}
-		return remaining.isEmpty && text == textParts.filter
-		{
-			!$0.isEmpty
-		}
-		.joined(separator: "\n\n")
+		return true
 	}
 }

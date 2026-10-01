@@ -7,6 +7,7 @@ enum WorkspaceAction
 	case connection(ConnectionAction)
 	case execution(ExecutionAction)
 	case composer(ComposerAction)
+	case composerCommand(ComposerCommandAction)
 	case conversations(ConversationsAction)
 	case review(ReviewAction)
 	case contextNavigation(ContextNavigationAction)

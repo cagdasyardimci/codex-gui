@@ -163,7 +163,9 @@ extension WorkspaceLifecycleReducer
 				retainedContextRequestID: captured
 					.retainedContextRequestID,
 				projectContextRevision: captured
-					.projectContextRevision
+					.projectContextRevision,
+				collaborationMode: captured.collaborationMode,
+				serviceTier: captured.serviceTier
 			)
 			let action: WorkspaceAction
 			switch operation
@@ -202,8 +204,8 @@ extension WorkspaceLifecycleReducer
 				&model,
 				action
 			)
-			result.effects += composer.effects; result.domainEvents += composer
-				.domainEvents
+			result.effects += composer.effects
+			result.domainEvents += composer.domainEvents
 			result.presentationCommands += composer.presentationCommands
 			if result.effects.isEmpty
 			{

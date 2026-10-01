@@ -9,6 +9,7 @@ struct WorkspaceModel
 	var connection = ConnectionModel()
 	var execution = ExecutionModel()
 	var composer = ComposerModel()
+	var composerCommands = ComposerCommandModel()
 	var conversations = ConversationsModel()
 	var review = ReviewModel()
 	var contextNavigation = ContextNavigationModel()
@@ -119,6 +120,8 @@ struct ComposerSubmission
 	let preferences: RunPreferences
 	let retainedContextRequestID: UUID
 	var projectContextRevision: Int? = nil
+	var collaborationMode: CollaborationMode? = nil
+	var serviceTier: String? = nil
 }
 
 enum ComposerPersistenceKey: Equatable

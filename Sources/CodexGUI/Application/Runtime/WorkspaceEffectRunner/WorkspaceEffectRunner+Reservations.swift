@@ -8,7 +8,10 @@ extension WorkspaceEffectRunner
 		tasks.values.filter
 		{
 			isPersistenceCapable($0.effect)
-		}.count + reservedPersistence.count
+		}.count + reservedPersistence.count + reservedComposerCommands.values.filter
+		{
+			!$0.isCancelled
+		}.count
 	}
 
 	/// Wait whole finite groups so accepted outcomes can reduce and accept their write chains.
@@ -19,6 +22,9 @@ extension WorkspaceEffectRunner
 			let groups = tasks.values.filter
 			{
 				isPersistenceCapable($0.effect)
+			}.map(\.handle) + reservedComposerCommands.values.filter
+			{
+				!$0.isCancelled
 			}.map(\.handle)
 			guard !groups.isEmpty
 			else
@@ -57,6 +63,8 @@ extension WorkspaceEffectRunner
 				.restorePreferences,
 				.restoreComposer, .loadProjectContext, .readConversationList, .manageConversation,
 				.readSelection, .readRecovery, .readCompletedHistory: return true
+		case .forkConversation, .compactConversation, .startConversationReview,
+				.updateCommandSettings: return true
 		case .readConversationHistory(let operation):
 			return operation.purpose == .selection || operation.purpose == .recovery
 				|| operation.purpose == .completion
@@ -95,6 +103,13 @@ extension WorkspaceEffectRunner
 			}
 			switch effect
 			{
+			case .forkConversation, .compactConversation, .startConversationReview,
+					.updateCommandSettings:
+				reserveComposerCommand(
+					effect,
+					context: context,
+					key: key
+				)
 			case .loadProjectContext(let operation):
 				if reservedContextLoads[key] == nil
 				{

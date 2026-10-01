@@ -35,6 +35,7 @@ final class WorkspaceEffectRunner
 		)
 		case contextLoad(Int), contextSave(Int), skills(Int)
 		case list, management, selectionPersistence
+		case composerCommand
 		case response(String)
 		case sourceStartup, inputPreparation, unsentRelease, preferenceRestoration
 		case composerHydration(String?), diagnostics, reusable(
@@ -72,6 +73,13 @@ final class WorkspaceEffectRunner
 		let handle: WorkspaceOperationHandle
 	}
 
+	struct ReservedComposerCommand
+	{
+		let effect: WorkspaceEffect
+		let handle: WorkspaceOperationHandle
+		var isCancelled = false
+	}
+
 	let usageRuntime: UsageRuntime
 	var usageDeadlineTask: Task<Void, Never>?
 	var usageDeadline: UsageDeadlineOperation?
@@ -91,6 +99,7 @@ final class WorkspaceEffectRunner
 	let deliver: (WorkspaceAction, @escaping () -> Void) -> Void
 	private let mapEvent: (OperationContext, AppServerEvent) -> [WorkspaceAction]
 	var tasks: [EffectKey: PendingEffect] = [:]
+	var reservedComposerCommands: [EffectKey: ReservedComposerCommand] = [:]
 	var accepted: Set<EffectKey> = []
 	var handles: [RequestKey: WorkspaceOperationHandle] = [:]
 	private var completedRequests: [RequestKey] = []
@@ -136,7 +145,10 @@ final class WorkspaceEffectRunner
 
 	var runningOperationCount: Int
 	{
-		tasks.count
+		tasks.count + reservedComposerCommands.values.filter
+		{
+			!$0.isCancelled
+		}.count
 	}
 
 	var retainedOperationCount: Int
@@ -183,6 +195,7 @@ final class WorkspaceEffectRunner
 		{
 			handle.cancelRemainingEffects()
 		}
+		reservedComposerCommands.removeAll()
 		accepted.removeAll()
 		handles.removeAll()
 		completedRequests.removeAll()
@@ -255,6 +268,11 @@ final class WorkspaceEffectRunner
 				)
 			)
 		case .readConversationList(let operation): return (operation.context, .list)
+		case .forkConversation(let request): return (request.context, .composerCommand)
+		case .compactConversation(let operation), .startConversationReview(let operation):
+			return (operation.request.context, .composerCommand)
+		case .updateCommandSettings(let operation):
+			return (operation.request.context, .composerCommand)
 		case .manageConversation(let operation): return (managementContext(operation), .management)
 		case .persistConversationSelection(
 			let context,
@@ -346,10 +364,22 @@ final class WorkspaceEffectRunner
 			[effect],
 			workspace: context.workspace
 		)
-		guard accepted.insert(key).inserted
+		let reservedCommand = reservedComposerCommands.removeValue(forKey: key)
+		if let reservedCommand
+		{
+			guard !reservedCommand.isCancelled, reservedCommand.handle.completion == nil
+			else
+			{
+				return
+			}
+		}
 		else
 		{
-			return
+			guard accepted.insert(key).inserted
+			else
+			{
+				return
+			}
 		}
 		let transportContinuation = handles.first
 		{
@@ -361,7 +391,7 @@ final class WorkspaceEffectRunner
 					purpose: .version
 				))
 		}.map(\.value)
-		let previous = handles[request] ?? transportContinuation
+		let previous = reservedCommand?.handle ?? handles[request] ?? transportContinuation
 		if previous?.completion != nil
 		{
 			completedRequests.removeAll
@@ -373,7 +403,10 @@ final class WorkspaceEffectRunner
 			? (previous ?? WorkspaceOperationHandle(context: context))
 			: WorkspaceOperationHandle(context: context)
 		handles[request] = handle
-		handle.acceptedEffect()
+		if reservedCommand == nil
+		{
+			handle.acceptedEffect()
+		}
 		let persistenceTask = reservedPersistence.removeValue(forKey: key)
 		let contextLoadResult = reservedContextLoads.removeValue(forKey: key)
 
@@ -482,6 +515,34 @@ final class WorkspaceEffectRunner
 	func cancel(_ context: OperationContext)
 	{
 		let request = RequestKey(context)
+		let reservedKeys = reservedComposerCommands.keys.filter
+		{
+			$0.request == request
+		}
+		for key in reservedKeys
+		{
+			guard var reserved = reservedComposerCommands[key], !reserved.isCancelled
+			else
+			{
+				continue
+			}
+			// Keep cancellation until start consumes it, even if replay history expires.
+			reserved.isCancelled = true
+			reservedComposerCommands[key] = reserved
+			let failure = failure(
+				for: reserved.effect,
+				message: "Local operation cancelled; no remote outcome is established."
+			)
+			deliver(failureAction(
+				for: reserved.effect,
+				context: reserved.handle.context,
+				failure: failure
+			))
+			{
+				reserved.handle.finishedEffect(.cancelled)
+				self.retireCompletedRequest(request)
+			}
+		}
 		let keys = tasks.keys.filter
 		{
 			$0.request == request
@@ -508,6 +569,37 @@ final class WorkspaceEffectRunner
 				self.retireCompletedRequest(request)
 			}
 		}
+	}
+
+	/// Command operation handles must exist before pending command state reaches observers.
+	func reserveComposerCommand(
+		_ effect: WorkspaceEffect,
+		context: OperationContext,
+		key: EffectKey
+	)
+	{
+		guard reservedComposerCommands[key] == nil, accepted.insert(key).inserted
+		else
+		{
+			return
+		}
+		let previous = handles[key.request]
+		if previous?.completion != nil
+		{
+			completedRequests.removeAll
+			{
+				$0 == key.request
+			}
+		}
+		let handle = previous?.completion == nil
+			? (previous ?? WorkspaceOperationHandle(context: context))
+			: WorkspaceOperationHandle(context: context)
+		handles[key.request] = handle
+		handle.acceptedEffect()
+		reservedComposerCommands[key] = ReservedComposerCommand(
+			effect: effect,
+			handle: handle
+		)
 	}
 
 	/// Recently completed requests deduplicate replay; callers own their returned handles.

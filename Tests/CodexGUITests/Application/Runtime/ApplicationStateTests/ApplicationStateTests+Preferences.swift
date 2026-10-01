@@ -17,6 +17,7 @@ extension ApplicationStateTests
 			"model": "captured-model",
 			"isDefault": true,
 			"supportedReasoningEfforts": [["reasoningEffort": "medium"]],
+			"serviceTiers": [["id": "express", "name": "Fast", "description": "Fixture fast tier"]],
 		])!]
 		let state = WorkspaceTestFixture(
 			server: service,
@@ -33,6 +34,7 @@ extension ApplicationStateTests
 		state.inputs.selectEffort("medium")
 		state.inputs.selectApprovalMode(.approveForMe)
 		state.inputs.setFastMode(true)
+		#expect(state.currentSnapshot.fastMode)
 		state.inputs.updateDraft("Captured request")
 		service.suspendThreadStart = true
 		let submission = try #require(state.inputs.send())
@@ -58,6 +60,7 @@ extension ApplicationStateTests
 			approvalMode: .approveForMe,
 			fastMode: true
 		))
+		#expect(service.capturedTurnServiceTiers.first == "express")
 		#expect(state.currentSnapshot.approvalMode == .fullAccess)
 		#expect(!state.currentSnapshot.fastMode)
 	}

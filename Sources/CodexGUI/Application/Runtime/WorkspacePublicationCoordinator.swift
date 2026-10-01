@@ -3,22 +3,26 @@ import Foundation
 enum WorkspacePresentationCommand
 {
 	case openSignIn(URL)
+	case slashCommand(SlashCommandPresentationRequest)
 	case taskFinished
 }
+
 struct WorkspacePublication
 {
 	let model: WorkspaceModel
 	let coalescible: Bool
 	let commands: [WorkspacePresentationCommand]
 }
+
 @MainActor
 final class WorkspacePublicationCoordinator
 {
 	private weak var store: WorkspaceStateStore?
-	private var token: UUID?
-	private var pending: Task<Void, Never>?
+	private var observerToken: UUID?
+	private var pendingPublication: Task<Void, Never>?
 	private let render: (ConversationSnapshot) -> Void
-	private let command: (WorkspacePresentationCommand) -> Void
+	private let handleCommand: (WorkspacePresentationCommand) -> Void
+
 	init(
 		store: WorkspaceStateStore,
 		render: @escaping (ConversationSnapshot) -> Void,
@@ -28,35 +32,54 @@ final class WorkspacePublicationCoordinator
 		}
 	)
 	{
-		self.store = store; self.render = render; self.command = command
-		token = store.observePublications
+		self.store = store
+		self.render = render
+		handleCommand = command
+
+		observerToken = store.observePublications
 		{
-			[weak self] publication in self?.receive(publication)
+			[weak self] publication in
+			self?.receive(publication)
 		}
 	}
+
 	private func receive(_ publication: WorkspacePublication)
 	{
-		for value in publication.commands
+		for presentationCommand in publication.commands
 		{
-			command(value)
+			handleCommand(presentationCommand)
 		}
+
 		guard let store
 		else
 		{
 			return
 		}
-		if !publication
-			.coalescible
+		if !publication.coalescible
 		{
-			pending?.cancel(); pending = nil; render(store.currentSnapshot); return
+			pendingPublication?.cancel()
+			pendingPublication = nil
+			render(store.currentSnapshot)
+			return
 		}
-		guard pending == nil
+		scheduleCoalescedPublication(
+			for: store,
+			identity: publication.model.identity
+		)
+	}
+
+	private func scheduleCoalescedPublication(
+		for store: WorkspaceStateStore,
+		identity: WorkspaceIdentity
+	)
+	{
+		guard pendingPublication == nil
 		else
 		{
 			return
 		}
-		let identity = publication.model.identity
-		pending = Task
+
+		pendingPublication = Task
 		{
 			[weak self, weak store] in
 			guard let store
@@ -71,19 +94,24 @@ final class WorkspacePublicationCoordinator
 			{
 				return
 			}
-			self.pending = nil; self.render(store.currentSnapshot)
+			self.pendingPublication = nil
+			self.render(store.currentSnapshot)
 		}
 	}
+
 	func cancel()
 	{
-		pending?.cancel(); pending = nil
-		if let token
+		pendingPublication?.cancel()
+		pendingPublication = nil
+		if let observerToken
 		{
-			store?.removePublicationObserver(token)
-		}; token = nil
+			store?.removePublicationObserver(observerToken)
+		}
+		observerToken = nil
 	}
+
 	deinit
 	{
-		pending?.cancel()
+		pendingPublication?.cancel()
 	}
 }

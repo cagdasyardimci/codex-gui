@@ -105,6 +105,7 @@ enum WorkspaceStoreFactory
 						ContextNavigationReducer.reducer,
 						PreferenceReducer.reducer,
 						UsageReducer.reducer,
+						ComposerCommandReducer.reducer,
 						WorkspaceLifecycleReducer.reducer],
 			reduceDomainEvent: WorkspaceDomainComposition.reduceDomainEvent,
 			usageRuntime: dependencies.usageRuntime,

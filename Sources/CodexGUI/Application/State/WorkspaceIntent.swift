@@ -3,28 +3,68 @@ import Foundation
 /// View proposals are captured with the rendered owner; reducers still decide admission.
 enum WorkspaceIntent
 {
-	case editDraft(String), attachContext(ComposerContextItem), removeContext(String),
-			reuseReference(String)
-	case send, steer(String), stop
+	case editDraft(String)
+	case attachContext(ComposerContextItem)
+	case removeContext(String)
+	case reuseReference(String)
+	case send
+	case steer(String)
+	case stop
+	case slashCommand(SlashCommandInvocation)
+	case acknowledgeSlashCommand(SlashCommandPresentationRequest)
+	case completeSlashCommand(
+		SlashCommandPresentationRequest,
+		SlashCommandInvocation
+	)
+	case recoverFork(
+		SlashCommandPresentationRequest,
+		ForkRecoveryChoice
+	)
+	case retryPlanSettings(
+		SlashCommandPresentationRequest,
+		CollaborationModeKind
+	)
 	case respond(
 		PendingInteraction,
 		InteractionResponse
 	)
-	case newChat, newChatInProject(URL), openProject(URL), selectThread(String), refreshThreads
-	case setArchived(Bool), renameThread(String), archiveThread
-	case archiveTask(String), deleteTask(String)
-	case selectModel(String?), selectEffort(String?), selectApprovalMode(ApprovalMode),
-			setFastMode(Bool)
-	case toggleProjectPin(URL), renameProject(
+
+	case newChat
+	case newChatInProject(URL)
+	case openProject(URL)
+	case selectThread(String)
+	case refreshThreads
+	case setArchived(Bool)
+	case renameThread(String)
+	case archiveThread
+	case archiveTask(String)
+	case deleteTask(String)
+
+	case selectModel(String?)
+	case selectEffort(String?)
+	case selectApprovalMode(ApprovalMode)
+	case setFastMode(Bool)
+	case toggleProjectPin(URL)
+	case renameProject(
 		URL,
 		String
-	), signIn, reconnect
-	case updateProjectContext(ProjectContext), insertPrompt(String),
-			toggleBookmark(ConversationBookmark)
-	case jumpBookmark(ConversationBookmark), jumpTarget(ConversationJumpTarget),
-			jumpHit(MessageSearchHit)
-	case search(String), loadMoreSearch, acknowledgeJump, loadEarlierTurns
-	case selectReview(String), setReviewed(
+	)
+	case signIn
+	case reconnect
+
+	case updateProjectContext(ProjectContext)
+	case insertPrompt(String)
+	case toggleBookmark(ConversationBookmark)
+	case jumpBookmark(ConversationBookmark)
+	case jumpTarget(ConversationJumpTarget)
+	case jumpHit(MessageSearchHit)
+	case search(String)
+	case loadMoreSearch
+	case acknowledgeJump
+	case loadEarlierTurns
+
+	case selectReview(String)
+	case setReviewed(
 		Bool,
 		ReviewReference
 	)
@@ -32,13 +72,19 @@ enum WorkspaceIntent
 		ReviewRequestKind,
 		ReviewReference
 	)
-	case selectWorkspace(UUID?), createTask(String), removeWorkspace(UUID), cancelCreation(UUID)
+
+	case selectWorkspace(UUID?)
+	case createTask(String)
+	case removeWorkspace(UUID)
+	case cancelCreation(UUID)
 
 	fileprivate var scope: Scope
 	{
 		switch self
 		{
-		case .editDraft, .attachContext, .removeContext, .reuseReference, .send, .steer,
+		case .slashCommand, .acknowledgeSlashCommand, .completeSlashCommand, .retryPlanSettings,
+				.recoverFork,
+				.editDraft, .attachContext, .removeContext, .reuseReference, .send, .steer,
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
@@ -149,6 +195,32 @@ final class WorkspaceIntentTarget
 		case .attachContext(let item): inputs.addDraftContext(item)
 		case .removeContext(let id): inputs.removeDraftContext(id: id)
 		case .reuseReference(let id): inputs.reuseReference(id: id)
+		case .slashCommand(let invocation): operation = inputs.performSlashCommand(invocation)
+		case .acknowledgeSlashCommand(let request): inputs.acknowledgeSlashCommand(request)
+		case .completeSlashCommand(
+			let request,
+			let invocation
+		):
+			operation = inputs.completeSlashCommand(
+				request,
+				invocation: invocation
+			)
+		case .recoverFork(
+			let request,
+			let choice
+		):
+			inputs.recoverFork(
+				request,
+				choice: choice
+			)
+		case .retryPlanSettings(
+			let request,
+			let mode
+		):
+			operation = inputs.retryPlanSettings(
+				request,
+				mode: mode
+			)
 		case .send: operation = inputs.send()
 		case .steer(let text): inputs.steer(text)
 		case .stop:
@@ -164,23 +236,15 @@ final class WorkspaceIntentTarget
 			let interaction,
 			let response
 		):
-			guard store.model.execution.agentOutcome == nil,
-					let capturedSubmissionID = executionOwner?.submission.requestID,
-					store.model.execution.owner?.submission.requestID == capturedSubmissionID,
-					store.model.execution.pendingInteractions.contains(where:
-					{
-						$0.id == interaction.id && $0.threadId == interaction.threadId && $0
-							.turnId == interaction.turnId && $0.itemId == interaction.itemId && $0
-							.approvalId == interaction.approvalId
-					})
+			guard respondToCapturedInteraction(
+				interaction,
+				response: response,
+				inputs: inputs
+			)
 			else
 			{
 				return false
 			}
-			operation = inputs.respond(
-				to: interaction,
-				with: response
-			)
 		case .newChat: inputs.newChat()
 		case .newChatInProject(let url):
 			if store.model.identity.canonicalCheckoutPath == url.standardizedFileURL
@@ -225,7 +289,8 @@ final class WorkspaceIntentTarget
 			else
 			{
 				return
-			}; await inputs.connect()
+			}
+			await inputs.connect()
 		}
 		case .updateProjectContext(let context): inputs.updateProjectContext(context)
 		case .insertPrompt(let id): inputs.insertSavedPrompt(id: id)
@@ -253,31 +318,13 @@ final class WorkspaceIntentTarget
 				reference: reference
 			)
 		case .selectWorkspace(let id):
-			guard let coordinator
+			guard selectCapturedWorkspace(
+				id,
+				intent: intent
+			)
 			else
 			{
 				return false
-			}
-			if let id
-			{
-				guard records[id] == coordinator.model.workspaces[id]
-				else
-				{
-					return false
-				}
-				Task
-				{
-					guard self.accepts(intent),
-							self.records[id] == coordinator.model.workspaces[id]
-					else
-					{
-						return
-					}; await coordinator.selectWorkspace(id)
-				}
-			}
-			else
-			{
-				coordinator.selectSourceCheckout()
 			}
 		case .createTask(let name):
 			guard let coordinator
@@ -291,11 +338,64 @@ final class WorkspaceIntentTarget
 				else
 				{
 					return
-				}; await coordinator.createTask(named: name)
+				}
+				await coordinator.createTask(named: name)
 			}
 		case .removeWorkspace(let id), .cancelCreation(let id):
-			guard let coordinator, let expected = records[id],
-					expected == coordinator.model.workspaces[id]
+			guard removeCapturedWorkspace(
+				id,
+				intent: intent
+			)
+			else
+			{
+				return false
+			}
+		}
+		return true
+	}
+
+	private func respondToCapturedInteraction(
+		_ interaction: PendingInteraction,
+		response: InteractionResponse,
+		inputs: WorkspaceStoreInputs
+	) -> Bool
+	{
+		guard store.model.execution.agentOutcome == nil,
+				let capturedSubmissionID = executionOwner?.submission.requestID,
+				store.model.execution.owner?.submission.requestID == capturedSubmissionID,
+				store.model.execution.pendingInteractions.contains(where:
+				{
+					pendingInteraction in
+					pendingInteraction.id == interaction.id
+						&& pendingInteraction.threadId == interaction.threadId
+						&& pendingInteraction.turnId == interaction.turnId
+						&& pendingInteraction.itemId == interaction.itemId
+						&& pendingInteraction.approvalId == interaction.approvalId
+				})
+		else
+		{
+			return false
+		}
+		operation = inputs.respond(
+			to: interaction,
+			with: response
+		)
+		return true
+	}
+
+	private func selectCapturedWorkspace(
+		_ id: UUID?,
+		intent: WorkspaceIntent
+	) -> Bool
+	{
+		guard let coordinator
+		else
+		{
+			return false
+		}
+		if let id
+		{
+			guard records[id] == coordinator.model.workspaces[id]
 			else
 			{
 				return false
@@ -303,19 +403,47 @@ final class WorkspaceIntentTarget
 			Task
 			{
 				guard self.accepts(intent),
-						coordinator.model.workspaces[id] == expected
+						self.records[id] == coordinator.model.workspaces[id]
 				else
 				{
 					return
 				}
-				if case .removeWorkspace = intent
-				{
-					await coordinator.removeCheckout(id: id)
-				}
-				else
-				{
-					await coordinator.cancelIncompleteCreation(id: id)
-				}
+				await coordinator.selectWorkspace(id)
+			}
+		}
+		else
+		{
+			coordinator.selectSourceCheckout()
+		}
+		return true
+	}
+
+	private func removeCapturedWorkspace(
+		_ id: UUID,
+		intent: WorkspaceIntent
+	) -> Bool
+	{
+		guard let coordinator, let expected = records[id],
+				expected == coordinator.model.workspaces[id]
+		else
+		{
+			return false
+		}
+		Task
+		{
+			guard self.accepts(intent),
+					coordinator.model.workspaces[id] == expected
+			else
+			{
+				return
+			}
+			if case .removeWorkspace = intent
+			{
+				await coordinator.removeCheckout(id: id)
+			}
+			else
+			{
+				await coordinator.cancelIncompleteCreation(id: id)
 			}
 		}
 		return true
@@ -331,27 +459,5 @@ final class WorkspaceIntentTarget
 		{
 			store.inputs.openProject(url)
 		}
-	}
-}
-
-/// Account and execution chrome do not need transcript or composer values.
-struct WorkspaceStatusPresentation: Equatable
-{
-	let executionState: ExecutionState
-	let accountDescription: String
-	let backendDescription: String
-	let usage: UsagePresentation
-	init(
-		_ snapshot: ConversationSnapshot,
-		ownerIdentity: String? = nil
-	)
-	{
-		executionState = snapshot.activeExecutionState ?? snapshot.executionState
-		accountDescription = snapshot.accountDescription
-		backendDescription = snapshot.backendDescription
-		usage = UsagePresentation(
-			snapshot,
-			ownerIdentity: ownerIdentity
-		)
 	}
 }

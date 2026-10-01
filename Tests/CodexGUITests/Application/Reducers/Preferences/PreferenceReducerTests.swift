@@ -81,7 +81,8 @@ struct PreferenceReducerTests
 				case .model(let value) = write.value
 		else
 		{
-			Issue.record("Expected captured model write"); return
+			Issue.record("Expected captured model write")
+			return
 		}
 		#expect(value.modelID == "second")
 		#expect(value.effort == nil)
@@ -199,45 +200,66 @@ struct PreferenceReducerTests
 	{
 		let defaults = UserDefaults(suiteName: "PreferenceTests.\(UUID())")!
 		let storage = LocalStorage(defaults: defaults)
-		let a = store(storage)
-		let b = store(storage)
-		a.dispatch(.preferences(.approvalModeSelected(
-			a.operationContext(),
+		let fastModel = ModelOption(json: [
+			"model": "fast-capable",
+			"isDefault": true,
+			"serviceTiers": [["id": "express", "name": "Fast", "description": "Fixture fast tier"]],
+		])!
+		let firstStore = store(
+			storage,
+			models: [fastModel]
+		)
+		let secondStore = store(
+			storage,
+			models: [fastModel]
+		)
+		firstStore.dispatch(.preferences(.approvalModeSelected(
+			firstStore.operationContext(),
 			.fullAccess
 		)))
-		#expect(b.model.preferences.runPreferences.approvalMode == .fullAccess)
-		b.dispatch(.preferences(.fastModeSelected(
-			b.operationContext(),
+		#expect(secondStore.model.preferences.runPreferences.approvalMode == .fullAccess)
+		secondStore.dispatch(.preferences(.fastModeSelected(
+			secondStore.operationContext(),
 			true
 		)))
-		#expect(a.model.preferences.runPreferences == RunPreferences(
+		#expect(firstStore.model.preferences.runPreferences == RunPreferences(
 			approvalMode: .fullAccess,
 			fastMode: true
 		))
-		a.dispatch(.preferences(.projectPinToggled(
-			a.operationContext(),
+		firstStore.dispatch(.preferences(.projectPinToggled(
+			firstStore.operationContext(),
 			canonicalPath: "/project"
 		)))
-		#expect(b.model.preferences.pinnedProjectPaths.contains("/project"))
-		b.dispatch(.preferences(.projectRenamed(
-			b.operationContext(),
+		#expect(secondStore.model.preferences.pinnedProjectPaths.contains("/project"))
+		secondStore.dispatch(.preferences(.projectRenamed(
+			secondStore.operationContext(),
 			canonicalPath: "/project",
 			name: " Local "
 		)))
-		#expect(a.model.preferences.projectDisplayNames["/project"] == "Local")
-		a.dispatch(.preferences(.modelSelected(
-			a.operationContext(),
+		#expect(firstStore.model.preferences.projectDisplayNames["/project"] == "Local")
+		firstStore.dispatch(.preferences(.modelSelected(
+			firstStore.operationContext(),
 			nil
 		)))
-		let c = store(storage)
-		#expect(c.model.preferences.hasStoredModelPreference)
-		#expect(c.model.preferences.selectedModelID == nil)
+		let hydratedStore = store(
+			storage,
+			models: [fastModel]
+		)
+		#expect(hydratedStore.model.preferences.runPreferences == RunPreferences(
+			approvalMode: .fullAccess,
+			fastMode: true
+		))
+		#expect(hydratedStore.model.preferences.hasStoredModelPreference)
+		#expect(hydratedStore.model.preferences.selectedModelID == nil)
 		#expect(defaults.dictionary(forKey: "CodexGUI.modelPreference") as? [String: String] == [
 			"model": "",
 			"effort": ""
 		])
-		#expect(c.model.preferences.recentProjects.contains(URL(fileURLWithPath: "/project")))
-		a.shutdown(); b.shutdown(); c.shutdown()
+		#expect(hydratedStore.model.preferences.recentProjects
+			.contains(URL(fileURLWithPath: "/project")))
+		firstStore.shutdown()
+		secondStore.shutdown()
+		hydratedStore.shutdown()
 	}
 
 	@Test func supersededPersistenceFailureCannotReplaceLatestSuccess()
@@ -312,7 +334,8 @@ struct PreferenceReducerTests
 		guard case .openSignIn(let commandURL) = accepted.presentationCommands.first
 		else
 		{
-			Issue.record("Expected typed sign-in presentation command"); return
+			Issue.record("Expected typed sign-in presentation command")
+			return
 		}
 		#expect(commandURL == url)
 		#expect(model.preferences.statusMessage == "Continue signing in through your browser.")
@@ -345,7 +368,8 @@ struct PreferenceReducerTests
 		guard case .saveProjectContext(let write) = selected.effects.first
 		else
 		{
-			Issue.record("Expected canonical project context save"); return
+			Issue.record("Expected canonical project context save")
+			return
 		}
 		#expect(write.context == captured)
 		#expect(write.revision == 5)
@@ -480,10 +504,15 @@ struct PreferenceReducerTests
 							}])!
 	}
 
-	private func store(_ storage: LocalStorage) -> WorkspaceStateStore
+	private func store(
+		_ storage: LocalStorage,
+		models: [ModelOption] = []
+	) -> WorkspaceStateStore
 	{
-		WorkspaceStateStore(
-			model: fixture(),
+		var model = fixture()
+		model.preferences.models = models
+		return WorkspaceStateStore(
+			model: model,
 			service: AppServer(),
 			storage: storage,
 			persistence: storage.workspacePersistenceScheduler,

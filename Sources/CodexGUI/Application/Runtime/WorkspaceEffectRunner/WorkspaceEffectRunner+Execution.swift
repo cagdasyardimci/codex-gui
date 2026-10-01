@@ -13,6 +13,13 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .forkConversation, .compactConversation, .startConversationReview,
+				.updateCommandSettings:
+			return await performComposerCommand(
+				effect,
+				context: context,
+				managedWorkspace: managedWorkspace
+			)
 		case .readReviewMarkers, .writeReviewMarker:
 			guard let identity = identity(of: effect),
 					let action = reservedReviewResults.removeValue(
@@ -323,7 +330,9 @@ extension WorkspaceEffectRunner
 				effort: submission.effort,
 				skills: submission.skills,
 				cwd: managedWorkspace == nil ? nil : directory,
-				preferences: submission.preferences
+				preferences: submission.preferences,
+				collaborationMode: submission.collaborationMode,
+				serviceTier: submission.serviceTier
 			)
 			return .execution(.submissionAcknowledged(
 				context,
@@ -454,7 +463,7 @@ extension WorkspaceEffectRunner
 		return URL(fileURLWithPath: path)
 	}
 
-	private func readConversation(
+	func readConversation(
 		_ context: OperationContext,
 		allowsUnselectedCheckout: Bool = false,
 		managedWorkspace: TaskWorkspace? = nil

@@ -11,7 +11,9 @@ extension WorkspaceEffectRunner
 		let uncertain: Bool
 		switch effect
 		{
-		case .prepareSubmission, .startSubmission, .steer: uncertain = true
+		case .prepareSubmission, .startSubmission, .steer, .forkConversation,
+				.compactConversation, .startConversationReview,
+				.updateCommandSettings: uncertain = true
 		default: uncertain = false
 		}
 		return OperationFailure(
@@ -28,6 +30,26 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .forkConversation(let request):
+			return .composerCommand(.forkFinished(
+				request,
+				.failed(failure)
+			))
+		case .compactConversation(let operation):
+			return .composerCommand(.compactAcknowledged(
+				operation,
+				.failed(failure)
+			))
+		case .startConversationReview(let operation):
+			return .composerCommand(.reviewAcknowledged(
+				operation,
+				.failed(failure)
+			))
+		case .updateCommandSettings(let operation):
+			return .composerCommand(.settingsFinished(
+				operation,
+				.failed(failure)
+			))
 		case .readReviewMarkers(let operation): return .review(.markersReceived(
 				operation,
 				.failed(failure)

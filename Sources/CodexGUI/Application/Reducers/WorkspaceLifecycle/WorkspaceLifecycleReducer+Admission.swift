@@ -25,6 +25,7 @@ extension WorkspaceLifecycleReducer
 		model.lifecycle.managedOwnershipConflict != nil || model.execution.blocksCleanup
 			|| hasUnresolvedComposer(model)
 			|| model.conversations.pendingManagement != nil
+			|| model.composerCommands.blocksNewWork
 	}
 
 	static func accepts(
@@ -120,6 +121,8 @@ extension WorkspaceLifecycleReducer
 		}
 		switch action
 		{
+		case .composerCommand(.requested), .composerCommand(.acknowledged),
+				.composerCommand(.settingsRetryRequested): return false
 		case .connection(.connectRequested), .connection(.projectOpened): return false
 		case .execution(.submissionRequested), .execution(.steeringRequested): return false
 		case .composer(.draftEdited), .composer(.contextAttached), .composer(.contextRemoved),

@@ -30,6 +30,44 @@ enum PreferenceReducer
 		}
 		switch action
 		{
+		case .restored, .modelSelected, .effortSelected, .approvalModeSelected,
+				.fastModeSelected, .projectPinToggled, .projectRenamed, .projectRemembered:
+			result = reducePreferenceChanges(
+				action,
+				model: &model
+			)
+		case .accountRefreshRequested, .modelsRefreshRequested, .signInRequested,
+				.modelsReceived, .accountReceived, .signInURLReceived:
+			result = reduceAccountAndCatalog(
+				action,
+				model: &model
+			)
+		case .persistenceFinished(
+			let context,
+			let observation
+		):
+			finishPreferencePersistence(
+				context: context,
+				observation: observation,
+				model: &model
+			)
+		}
+
+		registerPreferenceWrites(
+			in: result.effects,
+			model: &model
+		)
+		return result
+	}
+
+	private static func reducePreferenceChanges(
+		_ action: PreferencesAction,
+		model: inout WorkspaceModel
+	) -> WorkspaceReduction
+	{
+		var result = WorkspaceReduction()
+		switch action
+		{
 		case .restored(let value):
 			model.preferences.globalModelPreference = value.modelPreference
 			model.preferences.runPreferences = value.runPreferences
@@ -113,6 +151,12 @@ enum PreferenceReducer
 			{
 				return result
 			}
+			if enabled, let reason = FastModeAvailability.unavailableReason(in: model)
+			{
+				model.preferences.statusMessage = reason
+				return result
+			}
+			model.preferences.statusMessage = nil
 			model.preferences.runPreferences = RunPreferences(
 				approvalMode: model.preferences.runPreferences.approvalMode,
 				fastMode: enabled
@@ -188,6 +232,19 @@ enum PreferenceReducer
 				context: context,
 				value: .recent(path: path)
 			))]
+		default: break
+		}
+		return result
+	}
+
+	private static func reduceAccountAndCatalog(
+		_ action: PreferencesAction,
+		model: inout WorkspaceModel
+	) -> WorkspaceReduction
+	{
+		var result = WorkspaceReduction()
+		switch action
+		{
 		case .accountRefreshRequested(let context):
 			guard PreferenceScope.accepts(
 				context,
@@ -286,44 +343,57 @@ enum PreferenceReducer
 			case .failed(let failure):
 				model.preferences.statusMessage = "Could not start sign-in: \(failure.message)"
 			}
-		case .persistenceFinished(
-			let context,
-			let observation
-		):
-			guard PreferenceScope.accepts(
-				context,
-				model: model
-			),
-				let key = model.preferences.pendingPreferenceWrites
-				.first(where:
-					{
-						$0.value == context
-					})?.key
-			else
-			{
-				return result
-			}
-			model.preferences.pendingPreferenceWrites.removeValue(forKey: key)
-			if case .failed(let failure) = observation
-			{
-				model.preferences.preferenceWriteErrors[key] = failure.message
-			}
-			else
-			{
-				model.preferences.preferenceWriteErrors.removeValue(forKey: key)
-			}
-			model.preferences.persistenceError = model.preferences.preferenceWriteErrors.values
-				.sorted().first
+		default: break
 		}
-		for effect in result.effects
+		return result
+	}
+
+	private static func finishPreferencePersistence(
+		context: OperationContext,
+		observation: OperationResult<Void>,
+		model: inout WorkspaceModel
+	)
+	{
+		guard PreferenceScope.accepts(
+			context,
+			model: model
+		),
+			let key = model.preferences.pendingPreferenceWrites
+			.first(where:
+				{
+					$0.value == context
+				})?.key
+		else
+		{
+			return
+		}
+		model.preferences.pendingPreferenceWrites.removeValue(forKey: key)
+		if case .failed(let failure) = observation
+		{
+			model.preferences.preferenceWriteErrors[key] = failure.message
+		}
+		else
+		{
+			model.preferences.preferenceWriteErrors.removeValue(forKey: key)
+		}
+		model.preferences.persistenceError = model.preferences.preferenceWriteErrors.values
+			.sorted().first
+	}
+
+	private static func registerPreferenceWrites(
+		in effects: [WorkspaceEffect],
+		model: inout WorkspaceModel
+	)
+	{
+		for effect in effects
 		{
 			if case .persistPreference(let write) = effect
 			{
 				model.preferences.pendingPreferenceWrites[write.key] = write.context
 			}
 		}
-		return result
 	}
+
 	static func synchronize(_ model: inout WorkspaceModel)
 	{
 		model.preferences.projectModelPreference = model.contextNavigation.projectContext

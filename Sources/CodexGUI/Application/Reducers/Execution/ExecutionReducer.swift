@@ -360,7 +360,19 @@ enum ExecutionReducer
 				action,
 				model: &model
 			)
-		case .backendObserved:
+		case .backendObserved(
+			_,
+			let event,
+			_
+		):
+			guard ComposerCommandReducer.acceptsExecutionEvent(
+				event,
+				model: model
+			)
+			else
+			{
+				return result
+			}
 			return reduceObservation(
 				action,
 				model: &model

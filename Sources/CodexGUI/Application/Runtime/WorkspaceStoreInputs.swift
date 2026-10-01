@@ -216,6 +216,7 @@ struct WorkspaceStoreInputs
 	{
 		selectors.preferenceWarning
 	}
+
 	func renameSelectedThread(_ name: String)
 	{
 		guard canManageSelectedThread, let selectedThreadID
@@ -534,6 +535,7 @@ struct WorkspaceStoreInputs
 			project
 		)))
 	}
+
 	func renameProject(
 		_ project: URL,
 		name: String
@@ -563,23 +565,52 @@ struct WorkspaceStoreInputs
 	@discardableResult
 	func send() -> WorkspaceOperationHandle?
 	{
-		guard project != nil, isConnected, !isTaskActive,
-				executionState != .disconnected,
-				!needsReconciliation, loadingThreadID == nil,
-				!showingArchived, !managementRequestActive, !workspaceCleanupInProgress,
-				preferenceWarning == nil
+		let collaborationMode: CollaborationMode?
+		switch prepareComposerCommandInput(
+			draft,
+			steering: false
+		)
+		{
+		case .handled(let operation): return operation
+		case .message(
+			_,
+			let mode
+		): collaborationMode = mode
+		}
+		guard WorkspaceEligibility(model: store.model).canSend
 		else
 		{
 			return nil
 		}
 		let submittedDraft = draft
-		let draftText = submittedDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard let draftText = ComposerPromptText.submittedText(
+			submittedDraft,
+			collaborationMode: collaborationMode
+		)
+		else
+		{
+			return nil
+		}
 		let submittedContext = draftContext
 		guard !draftText.isEmpty || !submittedContext.isEmpty
 		else
 		{
 			return nil
 		}
+		let submission = captureSubmission(
+			draftText: draftText,
+			collaborationMode: collaborationMode
+		)
+		workspaceStore
+			.dispatch(.workspaceLifecycle(.inputPreparationRequested(.submission(submission))))
+		return workspaceStore.operation(for: submission.context)
+	}
+
+	private func captureSubmission(
+		draftText: String,
+		collaborationMode: CollaborationMode?
+	) -> ComposerSubmission
+	{
 		let requestText = ProjectProductivity.requestText(
 			context: projectContext,
 			draft: draftText
@@ -597,7 +628,7 @@ struct WorkspaceStoreInputs
 		let submittedRunPreferences = runPreferences
 		let originatingThreadID = selectedThreadID
 		let context = workspaceStore.operationContext(threadID: originatingThreadID)
-		let submission = ComposerSubmission(
+		return ComposerSubmission(
 			context: context,
 			conversation: originatingThreadID
 				.map(ConversationKey.thread) ?? .newChat,
@@ -608,11 +639,11 @@ struct WorkspaceStoreInputs
 			effort: effort,
 			preferences: submittedRunPreferences,
 			retainedContextRequestID: UUID(),
-			projectContextRevision: store.model.contextNavigation.contextRevision
+			projectContextRevision: store.model.contextNavigation.contextRevision,
+			collaborationMode: collaborationMode,
+			serviceTier: submittedRunPreferences.fastMode
+				? FastModeAvailability.serviceTier(in: store.model) : "default"
 		)
-		workspaceStore
-			.dispatch(.workspaceLifecycle(.inputPreparationRequested(.submission(submission))))
-		return workspaceStore.operation(for: context)
 	}
 
 	@discardableResult
@@ -626,6 +657,18 @@ struct WorkspaceStoreInputs
 
 	func steer(_ text: String)
 	{
+		let submittedPrompt: String
+		switch prepareComposerCommandInput(
+			text,
+			steering: true
+		)
+		{
+		case .handled: return
+		case .message(
+			let message,
+			_
+		): submittedPrompt = message
+		}
 		guard project != nil, let activeThreadID, let activeTurnID,
 				selectedThreadID == activeThreadID,
 				isConnected, executionState.isBusy, executionState != .stopping,
@@ -635,7 +678,7 @@ struct WorkspaceStoreInputs
 		{
 			return
 		}
-		let instruction = text.trimmingCharacters(in: .whitespacesAndNewlines)
+		let instruction = submittedPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 		let submittedContext = draftContext
 		guard !instruction.isEmpty || !submittedContext.isEmpty
 		else
@@ -702,6 +745,7 @@ struct WorkspaceStoreInputs
 	{
 		store.dispatch(.workspaceLifecycle(.bootstrapRequested(store.operationContext())))
 	}
+
 	func connect() async
 	{
 		let initial = store.operationContext()
@@ -719,12 +763,14 @@ struct WorkspaceStoreInputs
 		guard taskWorkspace == nil
 		else
 		{
-			report("Select the source checkout before opening another project."); return
+			report("Select the source checkout before opening another project.")
+			return
 		}
 		guard !isTaskActive, !managementRequestActive, !workspaceCleanupInProgress
 		else
 		{
-			report("Finish or stop the current task before changing projects."); return
+			report("Finish or stop the current task before changing projects.")
+			return
 		}
 		let canonical = url.standardizedFileURL
 		store.dispatch(.workspaceLifecycle(.projectOpeningRequested(
@@ -750,6 +796,7 @@ struct WorkspaceStoreInputs
 	{
 		store.dispatch(.workspaceLifecycle(.refreshRequested(store.operationContext())))
 	}
+
 	func setArchivedFilter(_ archived: Bool)
 	{
 		guard project != nil, archived != showingArchived

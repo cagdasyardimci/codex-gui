@@ -34,7 +34,8 @@ struct WorkspaceSelectors
 	}
 	var statusMessage: String?
 	{
-		model.lifecycle.statusMessage ?? model.lifecycle.managedOwnershipConflict ?? model
+		model.composerCommands.error ?? model.lifecycle.statusMessage
+			?? model.lifecycle.managedOwnershipConflict ?? model
 			.conversations.error ?? model.preferences
 			.statusMessage
 			?? model.preferences.persistenceError ?? model.execution.statusMessage
@@ -308,6 +309,10 @@ struct WorkspaceSelectors
 	}
 	func visibleStatusMessage(viewingActiveThread: Bool) -> String?
 	{
+		if let commandError = model.composerCommands.error
+		{
+			return commandError
+		}
 		guard viewingActiveThread
 		else
 		{
@@ -342,7 +347,7 @@ struct WorkspaceSelectors
 			draft: draft,
 			draftContext: draftContext,
 			reusableReferences: reusableReferences,
-			canSend: WorkspaceEligibility(model: model).canSend,
+			canSend: WorkspaceEligibility(model: model).canSend || composerCommandAvailable,
 			accountDescription: accountDescription,
 			backendDescription: backendDescription,
 			executionState: visibleExecutionState,
@@ -364,7 +369,7 @@ struct WorkspaceSelectors
 			activeExecutionState: activeThreadID == nil && !executionState.isBusy
 				? nil : executionState,
 			taskOutcomeUncertain: needsReconciliation || hasUncertainRequest,
-			canSteer: WorkspaceEligibility(model: model).canSteer,
+			canSteer: WorkspaceEligibility(model: model).canSteer || composerCommandAvailable,
 			activePlan: activePlan,
 			activeActivity: activeActivity,
 			skillCatalog: skillCatalog,
@@ -395,6 +400,33 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		snapshot.slashCommandUnavailableReasons = Dictionary(uniqueKeysWithValues:
+			SlashCommandRegistry.commands.compactMap
+			{
+				descriptor in
+				ComposerCommandReducer.unavailableReason(
+					descriptor.id,
+					model: model
+				)
+				.map
+				{
+					(descriptor.id, $0)
+				}
+			})
+		if let id = model.conversations.selectedConversation.threadID
+		{
+			snapshot.threadTokenUsage = model.composerCommands.tokenUsage[id]
+			snapshot.threadStatus = model.composerCommands.threadStatuses[id]
+			snapshot.threadSettings = model.composerCommands.threadSettings[id]
+		}
+		snapshot.planMode = model.composerCommands.planModes[
+			model.conversations.selectedConversation
+		] == .plan
+		if let pending = model.composerCommands.pendingSettings
+		{
+			snapshot.planModeStatus = pending.outcomeUncertain
+				? "Plan mode unknown — run /plan to reapply or reset." : "Plan mode pending…"
+		}
 		snapshot.workspaceOwner = WorkspaceLifecycleReducer.reference(model)
 		snapshot.composerDraftLifetime = composerDraft.lifetime
 		return snapshot

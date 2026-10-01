@@ -90,7 +90,8 @@ final class WorkspaceStateStore
 			activeThreadID: model.execution.activeThreadID,
 			unresolvedCommands: model.execution.commandLifetime
 				.hasPendingCommands,
-			remoteOutcomeUncertain: model.execution.hasUncertainRequest || model.lifecycle
+			remoteOutcomeUncertain: model.execution.hasUncertainRequest
+				|| model.composerCommands.uncertainFork != nil || model.lifecycle
 				.managedOwnershipConflict != nil,
 			needsReconciliation: model.execution.needsReconciliation,
 			composerOutcomeUncertain: WorkspaceLifecycleReducer
@@ -98,7 +99,7 @@ final class WorkspaceStateStore
 			pendingLocalWrites: runner
 				.pendingAcceptedPersistenceCount > 0,
 			managementInProgress: model.conversations
-				.pendingManagement != nil,
+				.pendingManagement != nil || model.composerCommands.blocksNewWork,
 			cleanupReservation: model.lifecycle.cleanupReservation?
 				.requestID
 		)
