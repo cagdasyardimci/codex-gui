@@ -4,7 +4,8 @@ A native AppKit client for local Codex coding conversations. It runs an installe
 
 ## Requirements
 
-- macOS 14 or later and Apple Command Line Tools. This repository was built and observed on macOS 26 with Swift 6.3.1.
+- macOS 14 or later, Apple Command Line Tools, and Swift 6.2 or later (required by Swift Markdown 0.9.0). This repository was built and observed on macOS 26 with Swift 6.3.1.
+- App bundling requires the Swift Build backend (`swift build --build-system swiftbuild`). This packaging path is verified with Swift 6.3.1; Swift 6.2 alone does not establish backend availability.
 - Codex CLI 0.153.2 or later, available through `PATH`, a common Homebrew or nvm path, or `CODEX_EXECUTABLE`. Version 0.153.2 is the tested protocol baseline; later versions may change the experimental app-server interface.
 - A Codex account signed in through the CLI or the app's **Sign In…** button.
 
@@ -27,7 +28,7 @@ For development, `swift run CodexGUI` starts the executable directly with deskto
 
 In VS Code, use `./scripts/bundle.sh` as the pre-launch task and `${workspaceFolder}/.build/CodexGUI.app/Contents/MacOS/CodexGUI` as the launch program for both debugging and **Run Without Debugging**. A Run task can use `open .build/CodexGUI.app` after bundling. Swift extension launch configurations that run the bare executable remain usable with notifications unavailable. IDE configuration stays local and is ignored by Git.
 
-## Interface icons
+## Interface dependencies
 
 Interface icons use the MIT-licensed, unofficial
 [Apps SDK UI Swift port](https://github.com/Pmen225/apps-sdk-ui-swift), pinned to commit
@@ -35,6 +36,15 @@ Interface icons use the MIT-licensed, unofficial
 `DesktopIcons` supplies independent template images to AppKit controls and handles tinting
 for custom drawing. The app bundle includes the package's SVG resources and licence notices.
 The port also contains SwiftUI components; the application continues to use AppKit controls.
+
+Markdown parsing uses [Swift Markdown](https://github.com/swiftlang/swift-markdown) 0.9.0,
+licensed under Apache 2.0 with the Runtime Library Exception, and its Swift cmark dependency.
+Code coloring uses [HighlighterSwift](https://github.com/smittytone/HighlighterSwift) 3.1.0
+(MIT, with BSD 3-Clause Highlight.js assets). Display math uses
+[SwiftMath](https://github.com/mgriebling/SwiftMath) 1.7.3 (MIT, with separate math-font notices).
+Native flowchart layout uses [swift-mermaid](https://github.com/Australware/swift-mermaid) 0.3.0
+(MIT, including its vendored MermaidLayoutDagre notice). These versions are pinned; the app
+bundle includes their license and notice files under `Contents/Resources/ThirdPartyLicenses`.
 
 ## Project structure
 
@@ -46,11 +56,21 @@ The port also contains SwiftUI components; the application continues to use AppK
 Within `Application/`, `State/` holds shared values and actions, `Runtime/` holds stores and
 effect execution, `Reducers/<feature>/` groups feature transitions and their supporting values,
 `Composition/` coordinates related feature transitions, `Presentation/` holds selectors and
-snapshot helpers, and `Services/` defines the backend interface. Tests follow these groups.
+snapshot helpers, and `Services/` holds backend and filesystem service interfaces and implementations.
+`Services/Git/` groups Git comparison, baseline capture and their implementation support;
+`Runtime/Review/` groups Git review and summary execution. Tests follow these groups.
 Feature presentation types live beside their views; `Features/Shared/` holds presentation ownership
 shared across features. Durable task records belong to `Persistence/`; checkout lifecycle remains
 in `Workspaces/`. Files named `OwnerType+Concern.swift` extend that owner rather than declaring
 a separate controller or runtime component.
+
+`Features/Conversation/Composer/` groups input controls and command menus;
+`Transcript/` groups parsing, rendering, collection items and turn navigation.
+`Features/Changes/RepositoryComparison/` owns repository comparison controls and navigation;
+`ReportedChanges/` owns the reported-turn review UI; `Diff/` contains diff rendering and file
+presentation helpers shared within Changes. Review models and analysis belong to
+`Application/Reducers/Review/`. `Features/Usage/` owns usage presentation and controls, while
+`App/WindowLayout/` groups window panes, split views and layout transitions.
 
 Components split across several files use owner-named subfolders where this reduces directory
 clutter. Each such folder keeps the main file and its extensions together; independent components
@@ -76,6 +96,19 @@ contracts.
 Open a Git repository with **Open Project…** or choose a recent project. Select a saved chat or choose **New Chat**. Enter a prompt and press **Send** or Command-Return. The composer supports project-file search and `@file` completion, image paste and attachments, selected code ranges, and reusable references. Inspect or remove supplied context before sending. Model and reasoning options come from the connected backend.
 
 The conversation shows streamed messages, reported plans, command and tool activity, and approval or question requests. **Steer** sends a follow-up to the active turn. **Stop** waits for a reported agent outcome and any known commands to report their outcomes; an interrupted agent turn does not guarantee command cancellation. The Changes pane selects historical turns, opens changed files, prepares targeted revision requests, and shows observed command results with their source and freshness. Drafts and unresolved command identities are stored per project and chat in `UserDefaults`; conversation records stay with Codex.
+
+User and agent messages use Swift Markdown's CommonMark/GFM parser and native AppKit attributed text.
+Headings, nested and task lists, emphasis, strikethrough, quotes, links, code blocks, and aligned
+tables are selectable. Code blocks use native cards with language headers, syntax coloring
+where supported, and copy controls. Closed display-math blocks using `$$` or `\[...\]` render
+with SwiftMath.
+Mermaid fences support a bounded native `flowchart`/`graph` subset with simple nodes and
+`-->` edges; other diagram types and syntax remain readable source. Unsupported or malformed
+math/diagrams and open streaming fences retain readable text. HTML and inline `$...$` math
+remain literal, and Markdown images appear as labels with their source. Parsing runs outside
+the main actor; AppKit creates the text, table attributes, and rich attachments on the main
+actor. The transcript has no web view or SwiftUI host. Command and tool output retains its
+literal text.
 
 Read, search, and command actions appear in compact activity groups. A group's disclosure
 controls its list; each command's disclosure independently opens selectable Shell details.

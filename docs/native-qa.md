@@ -6,9 +6,74 @@ The backend never calls a model or edits project files. Its model names are fixt
 
 ## Reading checks
 
-Select **Markdown and streaming**. Inspect headings, emphasis, the documentation link, nested and numbered lists, both code blocks, and `FINAL_READING_MARKER`. Resize the window and toggle Changes. Text and copy controls should fit. Expand the 1,000-line command output and inspect its literal punctuation.
+The static reading fixture contains the canonical **Markdown Rendering Test** prompt, including
+its instruction prefix, once as a user message and once as an assistant message. Inspect both
+roles; a formatted assistant message alone does
+not establish that user messages use the renderer. Both must retain every heading, list item,
+table cell, code line, link label, escape, and trailing marker. User-message background and
+alignment may differ, but Markdown syntax must receive the same supported formatting.
 
-Send any short message to start a roughly 32-second synthetic stream. Scroll to an earlier message while it runs. The reading position should stay stable; **Latest Message** should return to the end. Copy each code block into the composer and compare its indentation and trailing newline with `scripts/qa-backend.py`.
+Select **Markdown and streaming**. Inspect three heading levels; bold, italic, combined bold/italic,
+and strikethrough; the documentation link; nested, numbered, and checked/unchecked task lists;
+the quote with its nested list; the thematic rule; and both code blocks. The table has left,
+center, and right alignment, styled cells, a link, and Unicode. At wide and minimum window sizes,
+with Changes open and closed, its long cell must wrap and every row must remain readable.
+Check `TABLE_END_MARKER`, `CODE_END_MARKER`, and `FINAL_MARKER` below their corresponding blocks. Expand the
+1,000-line command output and inspect its literal punctuation.
+
+Repeat in light and dark appearance. Select and copy ordinary text, a heading, and table text
+into the composer. Unicode before `UNICODE_BOLD_MARKER` and `UNICODE_CODE_MARKER` must not shift
+their styling or selection ranges. Copy each code block into the composer and compare its
+indentation, literal punctuation, Unicode, and trailing newline with `scripts/qa-backend.py`.
+Check that each copy button belongs to its corresponding block and remains reachable after resize.
+
+The fixture also checks reference links, an ordered list starting at three, nested quotations,
+an escaped table pipe, indented code, decoded entities, and an explicit hard break. The display
+math uses `$$` delimiters; the Mermaid fence describes a three-node flowchart. Record whether
+each rich probe is rendered or shown as literal source, and confirm `FINAL_MARKER` remains
+readable. Their presence in a fixture or a passing protocol check does not establish rich
+rendering support.
+
+For supported display math, inspect that the complete equation is centered in the available
+message content width. For the supported Mermaid flowchart, all three nodes, their full labels,
+and both arrows must fit inside the card at wide/narrow widths. The rightmost **Rendered content**
+node must not be cropped at the card edge. Check this after toggling Changes as well as resizing.
+Adjacent Python and Swift cards need a visible gap; the indented-code card must end before
+`CODE_END_MARKER`. Card backgrounds must not cover the following heading, paragraph, or marker.
+Check `TABLE_END_MARKER`, `CODE_END_MARKER`, `FINAL_MARKER`, and `EMPTY_FENCE_END_MARKER` in both
+roles. Native checks must use the final gated build; screenshots of an earlier build do not
+verify subsequent source fixes.
+
+The supplied reference screenshots show formatted Markdown in user bubbles: styled headings
+and inline text, hanging/nested list indents, task markers, quote rails, aligned table cells,
+separate monospaced code panels, decoded escapes/entities, and a horizontal rule. Their display
+math and Mermaid flowchart render visually; their inline `$E = mc^2$` and raw HTML remain
+literal. The GUI comparison screenshots show the same user-message source literally, including
+heading markers, formatting delimiters, table pipes, code fences, and link definitions. These
+images establish the rendering difference, but do not establish selection, copying, link
+activation, appearance handling, streaming, or native view implementation. Check those behaviors
+separately after the source and test gates pass.
+
+An additional identical user/assistant edge fixture checks a continuous quote rail across
+paragraphs, a nested quote, a long Unicode code line that wraps inside its card, and an empty
+code fence followed by `EMPTY_FENCE_END_MARKER`. Inspect these at narrow/wide widths without
+changing the canonical screenshot-comparison source.
+
+Send any short message to start a roughly 32-second synthetic stream. Its 16 chunks deliberately
+pause with incomplete bold, link, strikethrough, table, and code-fence syntax. Inspect those
+intermediate states, then check that the completed result has a native table and code block with
+one `STREAM_START_MARKER` and one `STREAM_END_MARKER`. The code includes U+2028 and U+2029 Unicode
+separators; copying must preserve them without losing the following text. Scroll to an earlier
+message while a second stream runs. The reading position should stay stable; **Latest Message**
+should return to the end. Stop a third stream mid-syntax and confirm its accumulated text remains
+readable. Switching away and back must preserve the completed and interrupted message text.
+
+`python3 scripts/check-qa-backend.py` checks identical user/assistant source, fixture and rich-probe
+completeness, chunk delivery, exact final content, interruption, and history restoration with a
+shortened synthetic interval. It does not
+verify the renderer, visual appearance, selection, copy buttons, or reading position. Source
+inspection and AppKit view tests should separately verify the view hierarchy contains no web
+view or SwiftUI host; a screenshot alone cannot establish the rendering implementation.
 
 ## Activity presentation checks
 

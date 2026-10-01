@@ -40,39 +40,175 @@ threads = state.setdefault('threads', [
     {'id': 'qa-context', 'name': 'Project context and history', 'preview': 'Synthetic reuse and search fixture', 'archived': False},
     {'id': 'qa-activity', 'name': 'Activity groups and details', 'preview': 'Read, search, command, image, and timing fixture', 'archived': False},
 ])
-markdown = '''# Reading acceptance
+markdown = r'''Return the Markdown below exactly. Preserve its line breaks, indentation, punctuation, and code fences. Do not add commentary or wrap the entire response in a code fence.
 
-A paragraph with **bold text**, *emphasis*, `inline_code`, and an [Apple documentation link](https://developer.apple.com/documentation/appkit).
+# Markdown Rendering Test
 
-## Lists stay separate
+START_MARKER
 
-- First bullet wraps across several words in a narrow conversation pane without clipping its final line.
+## 1. Inline formatting and Unicode
+
+Plain text, **bold**, *italic*, ***bold italic***, ~~strikethrough~~, and `inline_code`.
+
+Unicode before styled text: 👩🏽‍💻 café é Türkçe 日本語 — **UNICODE_BOLD_MARKER** and `UNICODE_CODE_MARKER`.
+
+A [documentation link](https://developer.apple.com/documentation/appkit) and a [reference link][appkit].
+
+Inline code must remain literal: `**not bold** <tag> & []()`.
+
+## 2. Paragraphs and line breaks
+
+This is a soft line break.
+This should continue the same paragraph.
+
+This is a forced hard break.\
+This should start a new line without a paragraph-sized gap.
+
+This is a separate paragraph.
+
+## 3. Lists
+
+- First bullet contains enough words to wrap when the conversation is narrow. Its continuation should align with the text.
 - Second bullet
   - Nested bullet
+    - Third-level bullet with **bold text**
+  - Another nested bullet
 
-1. First numbered item
-2. Second numbered item
+3. Numbered list starting at three
+4. Another numbered item
+   1. Nested numbered item
+   2. Another nested item
 
-> A quoted paragraph remains readable in either appearance.
+- [x] Completed task
+- [ ] Pending task
+  - [x] Nested completed task
 
-## Exact code copy
+## 4. Block quotes
+
+> A quoted paragraph with **bold**, *italic*, and a [link](https://example.com).
+>
+> A second quoted paragraph.
+>
+> - First quoted list item
+> - Second quoted list item
+>
+> > A nested quotation.
+
+## 5. Tables
+
+| Left aligned | Center aligned | Right aligned |
+| :--- | :---: | ---: |
+| A longer cell should wrap naturally across several words when the window is narrow. | **Center bold** | 12.50 |
+| [AppKit](https://developer.apple.com/documentation/appkit) | `table_code` | 1234 |
+| 👩🏽‍💻 café é 日本語 | ~~obsolete~~ | 7 |
+| Escaped pipe: A \| B | *Center italic* | -42 |
+
+TABLE_END_MARKER — this paragraph must remain visible below the table.
+
+## 6. Code blocks and copying
+
+Unicode before the first code block: 👩🏽‍💻 café é 日本語.
 
 ```python
 def greet(name):
     return f"Hello, {name}!"
 
-print(greet("World"))
+print(greet("Türkçe 👩🏽‍💻 日本語"))
+literal = "* [] < > & ` ** not Markdown"
 ```
 
 ```swift
 let message = "Second block"
 print(message)
+let unicode = "café é 👩🏽‍💻 日本語"
 ```
 
-### Final heading
+### Heading immediately after code
 
-FINAL_READING_MARKER — this paragraph must remain visible below both code blocks.
+The two code blocks should remain visually separate, and each copy control should belong to its own block.
+
+Indented code:
+
+    first line
+        indented second line
+
+    final line
+
+CODE_END_MARKER
+
+## 7. Escaping and separators
+
+\*Literal asterisks\* and \_literal underscores\_.
+
+Entities: &amp; &lt; &gt; &quot;.
+
+---
+
+Text after the horizontal rule.
+
+## 8. Additional capability probes
+
+Raw HTML: <span>HTML_PROBE</span>
+
+Inline math: $E = mc^2$
+
+Display math:
+
+$$
+\int_0^1 x^2\,dx = \frac{1}{3}
+$$
+
+```mermaid
+flowchart LR
+    A[Markdown source] --> B[Parser]
+    B --> C[Rendered content]
+```
+
+## Final heading
+
+FINAL_MARKER — this must remain readable after resizing, selecting text, and copying code.
+
+[appkit]: https://developer.apple.com/documentation/appkit
 '''
+
+markdown_native_edges = '''## Native layout edge probes
+
+> First quoted paragraph has enough words to wrap when the user bubble or conversation pane is narrow.
+>
+> A second quoted paragraph should share the same continuous outer quote rail.
+>
+> > A nested quotation remains inside the outer quote.
+
+```swift
+let longLine = "CODE_WRAP_MARKER — a long literal line with spaces, Unicode 👩🏽‍💻 café é 日本語, and punctuation * [] < > & that must remain inside its native code card."
+```
+
+```text
+```
+
+EMPTY_FENCE_END_MARKER — an empty fence must not hide this following paragraph.
+'''
+
+# Each chunk leaves representative incomplete syntax until the next arrives.
+# The normal interval is two seconds so native observation can inspect each phase.
+markdown_stream_chunks = [
+    '# Streamed Markdown\n\nSTREAM_START_MARKER — Unicode 👩🏽‍💻 café é 日本語.\n\n',
+    'A partial **bo',
+    'ld** range and an incomplete [documentation',
+    ' link](https://developer.apple.com/documentation/appkit).\n\n',
+    'A partial ~~strike',
+    'through~~ range with ***bold italic*** text.\n\n',
+    '- [x] Completed streamed task\n- [ ] Pending streamed task\n',
+    '  - Nested streamed bullet\n\n> Streamed quotation with **bold** text.\n\n',
+    '| Left | Center | Right |\n',
+    '| :--- | :---: | ---: |\n',
+    '| A streamed cell wraps at narrow widths. | `table_code` | 42 |\n\n',
+    '```swi',
+    'ft\nlet message = "Streamed 👩🏽‍💻 café é 日本語"\n',
+    'let separators = "line\u2028paragraph\u2029end"\nprint(message)\n',
+    '```\n\n---\n\n',
+    'STREAM_END_MARKER — all chunks must remain visible without duplication.\n',
+]
 
 
 def send(message):
@@ -163,6 +299,16 @@ def history(thread_id, cursor=None):
                'command': 'synthetic-output', 'exitCode': 0,
                'aggregatedOutput': ''.join(f'OUTPUT_{i:04d}: literal * [] < > & \\n\n' for i in range(1000))},
               {'id': 'rich-message', 'type': 'agentMessage', 'text': markdown}]
+    if thread_id == 'qa-reading':
+        # Same source in both roles isolates presentation from protocol content.
+        items.insert(-1, {'id': 'rich-user-message', 'type': 'userMessage',
+                          'content': [{'type': 'text', 'text': markdown}]})
+        items += [
+            {'id': 'native-edge-user-message', 'type': 'userMessage',
+             'content': [{'type': 'text', 'text': markdown_native_edges}]},
+            {'id': 'native-edge-message', 'type': 'agentMessage',
+             'text': markdown_native_edges},
+        ]
     if thread_id == 'qa-navigation':
         items = [{'id': 'navigation-message', 'type': 'agentMessage', 'text': 'Conversation management fixture.'},
                  {'id': 'qa-change', 'type': 'fileChange', 'status': 'completed',
@@ -242,7 +388,11 @@ def history(thread_id, cursor=None):
         return turns[1:], 'qa-context-older'
     with history_lock:
         saved_turns = json.loads(json.dumps(streamed_turns.get(thread_id, [])))
-    return [{'id': f'{thread_id}-history', 'status': 'completed', 'items': items}] + saved_turns, None
+    turns = [{'id': f'{thread_id}-history', 'status': 'completed', 'items': items}] + saved_turns
+    # The app-server wire page is newest first; AppServer reverses it for presentation.
+    if thread_id == 'qa-reading':
+        turns.reverse()
+    return turns, None
 
 
 def activity_history(cwd):
@@ -461,10 +611,14 @@ def run_turn(thread_id, turn_id, item_id, stop_event, cwd, late_command_after_st
 
     stream_count = 240 if is_task_control else 160
     stream_interval = 1.0 if is_task_control else 0.2
-    for i in range(stream_count):
+    deltas = [f'\n- Streamed line {i}: readable output while browsing earlier messages.'
+              for i in range(stream_count)]
+    if thread_id == 'qa-reading':
+        deltas = markdown_stream_chunks
+        stream_interval = max(0.01, min(5.0, float(state.get('qaMarkdownStreamIntervalSeconds', 2.0))))
+    for delta in deltas:
         if stop_event.wait(stream_interval):
             break
-        delta = f'\n- Streamed line {i}: readable output while browsing earlier messages.'
         with history_lock:
             item['text'] += delta
             turn['items'] = [dict(item)]

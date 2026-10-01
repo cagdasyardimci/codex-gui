@@ -224,6 +224,105 @@ def check_activity(directory):
         backend.close()
 
 
+def check_markdown(directory):
+    backend = Backend(directory, initial_state={'qaMarkdownStreamIntervalSeconds': 0.01})
+    try:
+        backend.request('thread/list', {'cwd': str(directory)})
+        history = backend.request('thread/turns/list', {'threadId': 'qa-reading'})['data']
+        reading = next(item['text'] for turn in history for item in turn['items']
+                       if item['id'] == 'rich-message')
+        user = next(item for turn in history for item in turn['items']
+                    if item['id'] == 'rich-user-message')
+        assert user['type'] == 'userMessage'
+        assert user['content'] == [{'type': 'text', 'text': reading}], (
+            'User and assistant acceptance fixtures must contain identical Markdown source.')
+        edges = next(item['text'] for turn in history for item in turn['items']
+                     if item['id'] == 'native-edge-message')
+        edge_user = next(item for turn in history for item in turn['items']
+                         if item['id'] == 'native-edge-user-message')
+        assert edge_user['content'] == [{'type': 'text', 'text': edges}]
+        assert '>\n> A second quoted paragraph' in edges
+        assert '> > A nested quotation' in edges
+        assert '```text\n```\n\nEMPTY_FENCE_END_MARKER' in edges
+        assert 'CODE_WRAP_MARKER' in edges
+        instruction = ('Return the Markdown below exactly. Preserve its line breaks, indentation, '
+                       'punctuation, and code fences. Do not add commentary or wrap the entire '
+                       'response in a code fence.\n\n')
+        assert reading.startswith(instruction), 'Keep the user prompt instruction as source data.'
+        for syntax in ('# Markdown Rendering Test', '## 5. Tables', '## Final heading',
+                       '***bold italic***', '~~strikethrough~~', '- [x] Completed task',
+                       '- [ ] Pending task', '3. Numbered list starting at three',
+                       '   1. Nested numbered item', '> - First quoted list item',
+                       '> > A nested quotation.', '| :--- | :---: | ---: |',
+                       r'| Escaped pipe: A \| B |', '[reference link][appkit]',
+                       '[appkit]: https://developer.apple.com/documentation/appkit',
+                       'TABLE_END_MARKER', '\n---\n', 'FINAL_MARKER', 'CODE_END_MARKER',
+                       r'\*Literal asterisks\*', r'\_literal underscores\_',
+                       'break.\\\nThis should start a new line',
+                       '    first line\n        indented second line\n\n    final line',
+                       'Entities: &amp; &lt; &gt; &quot;.', '<span>HTML_PROBE</span>',
+                       'Inline math: $E = mc^2$',
+                       '$$\n\\int_0^1 x^2\\,dx = \\frac{1}{3}\n$$',
+                       '```mermaid\nflowchart LR\n',
+                       '    A[Markdown source] --> B[Parser]\n    B --> C[Rendered content]'):
+            assert syntax in reading, f'Missing native Markdown fixture feature: {syntax}'
+        expected_code = ('def greet(name):\n    return f"Hello, {name}!"\n\n'
+                         'print(greet("Türkçe 👩🏽‍💻 日本語"))\n'
+                         'literal = "* [] < > & ` ** not Markdown"\n')
+        assert '```python\n' + expected_code + '```' in reading
+        assert '👩🏽‍💻 café é Türkçe 日本語 — **UNICODE_BOLD_MARKER**' in reading
+
+        started = backend.request('turn/start', {
+            'threadId': 'qa-reading', 'input': [{'type': 'text', 'text': 'Stream Markdown.'}],
+        })['turn']['id']
+        completed = backend.wait_for(lambda message: message.get('method') == 'turn/completed'
+                                    and message['params']['turn']['id'] == started)[0]['params']['turn']
+        deltas = [message['params']['delta'] for message in backend.messages
+                  if message.get('method') == 'item/agentMessage/delta'
+                  and message['params']['turnId'] == started]
+        assert len(deltas) == 16, 'Each incomplete native reading phase must reach the client.'
+        assert deltas[1].endswith('**bo')
+        assert deltas[2].endswith('[documentation')
+        assert deltas[4].endswith('~~strike')
+        assert deltas[8] == '| Left | Center | Right |\n'
+        assert deltas[11] == '```swi'
+        assert '\u2028' in deltas[13] and '\u2029' in deltas[13]
+        text = ''.join(deltas)
+        assert completed['status'] == 'completed'
+        assert completed['items'][0]['text'] == text
+        assert text.count('STREAM_START_MARKER') == text.count('STREAM_END_MARKER') == 1
+        assert '```swift\nlet message = "Streamed 👩🏽‍💻 café é 日本語"\n' in text
+        assert 'print(message)\n```' in text
+        restored = backend.request('thread/turns/list', {'threadId': 'qa-reading'})['data']
+        assert restored[0]['id'] == started, 'Wire history must put the newest turn first.'
+        assert next(turn for turn in restored if turn['id'] == started) == completed
+
+        second = backend.request('turn/start', {
+            'threadId': 'qa-reading', 'input': [{'type': 'text', 'text': 'Stop partial Markdown.'}],
+        })['turn']['id']
+        backend.wait_for(lambda message: message.get('method') == 'item/agentMessage/delta'
+                         and message['params']['turnId'] == second, count=2)
+        backend.request('turn/interrupt', {'threadId': 'qa-reading', 'turnId': second})
+        stopped = backend.wait_for(lambda message: message.get('method') == 'turn/completed'
+                                  and message['params']['turn']['id'] == second)[0]['params']['turn']
+        stopped_deltas = [message['params']['delta'] for message in backend.messages
+                          if message.get('method') == 'item/agentMessage/delta'
+                          and message['params']['turnId'] == second]
+        assert stopped['status'] == 'interrupted'
+        assert stopped['items'][0]['text'] == ''.join(stopped_deltas)
+        restored = backend.request('thread/turns/list', {'threadId': 'qa-reading'})['data']
+        assert restored[0] == stopped
+        assert restored[-1]['id'] == 'qa-reading-history'
+        assert next(item['text'] for item in restored[-1]['items']
+                    if item['id'] == 'rich-message') == reading
+        assert next(item for item in restored[-1]['items']
+                    if item['id'] == 'rich-user-message') == user
+        assert next(item for item in restored[-1]['items']
+                    if item['id'] == 'native-edge-user-message') == edge_user
+    finally:
+        backend.close()
+
+
 def check_checkout_cwds(directory):
     alpha = Path(directory) / 'worktree-alpha'
     beta = Path(directory) / 'worktree-beta'
@@ -480,11 +579,12 @@ def main():
         check_available(Path(root) / 'available')
         check_unavailable(Path(root) / 'unavailable')
         check_activity(Path(root) / 'activity')
+        check_markdown(Path(root) / 'markdown')
         check_checkout_cwds(Path(root) / 'cwd')
         check_interleaved_approvals(Path(root) / 'interleaved')
         check_independent_client_persistence(Path(root) / 'independent-clients')
         check_late_command_after_stop(Path(root) / 'late-command-after-stop')
-    print('Synthetic QA backend checks passed (activity, review, skills, exact cwds, interleaved approvals, independent client persistence, late command after Stop).')
+    print('Synthetic QA backend checks passed (identical user/assistant Markdown and rich probes, Markdown phases and Unicode, activity, review, skills, exact cwds, interleaved approvals, independent client persistence, late command after Stop).')
 
 
 if __name__ == '__main__':
