@@ -257,7 +257,7 @@ extension MainWindowController
 			case .action("new"): target.dispatch(.newChat)
 			case .action("search"): self.showMessageSearch()
 			case .action("changes"):
-				self.paneController.setReviewCollapsed(false)
+				self.openCurrentChanges()
 			case .action: break
 			}
 		}
@@ -347,6 +347,6 @@ extension MainWindowController
 
 	@objc private func toggleReview()
 	{
-		paneController.toggleReview()
+		openCurrentChanges(toggleIfShowing: true)
 	}
 }
