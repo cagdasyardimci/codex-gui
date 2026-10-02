@@ -13,12 +13,8 @@ final class PinnedSummaryViewController: NSViewController
 	{
 		stack.orientation = .vertical
 		stack.alignment = .leading
-		stack.spacing = 6
-		view = AppKitLayout.scrollableContent(
-			stack,
-			inset: 4
-		)
-		(view as? NSScrollView)?.drawsBackground = false
+		stack.spacing = 8
+		view = makeScrollView()
 	}
 
 	func render(_ presentation: PinnedSummaryPresentation)
@@ -41,7 +37,9 @@ final class PinnedSummaryViewController: NSViewController
 			stack.removeArrangedSubview($0)
 			$0.removeFromSuperview()
 		}
-		add(header(presentation.contextName))
+		let heading = header(presentation.contextName)
+		heading.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		add(heading)
 		addChanges(presentation)
 		addDivider()
 		addAgents(presentation)
@@ -55,10 +53,9 @@ final class PinnedSummaryViewController: NSViewController
 			symbol: nil,
 			destination: .changes
 		)
-		changes.image = PinnedSummaryIcons.image(.changes)
 		changes.contentTintColor = .labelColor
-		// Borderless image buttons otherwise compress their title away inside a stack row.
-		let readableWidth = ceil(changes.attributedTitle.size().width) + 24
+		// Keep the Changes title readable beside the icon and optional totals.
+		let readableWidth = ceil(changes.attributedTitle.size().width) + 4
 		changes.widthAnchor.constraint(greaterThanOrEqualToConstant: readableWidth).isActive = true
 		changes.setContentCompressionResistancePriority(
 			.defaultHigh,
@@ -74,9 +71,18 @@ final class PinnedSummaryViewController: NSViewController
 			for: .horizontal
 		)
 		let row = AppKitLayout.horizontalStack(
-			[changes, spacer],
-			spacing: 8
+			[
+				iconButton(
+					PinnedSummaryIcons.image(.changes),
+					title: "Changes",
+					destination: .changes
+				),
+				changes,
+				spacer
+			],
+			spacing: 12
 		)
+		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
 		if let totals = presentation.sections.changes.value
 		{
 			let additions = label(
@@ -111,7 +117,7 @@ final class PinnedSummaryViewController: NSViewController
 		{
 			return
 		}
-		add(label("Subagents"))
+		addSectionHeading(label("Subagents"))
 		if let agents = section.value
 		{
 			let completed = "\(agents.completedCount) done"
@@ -147,16 +153,21 @@ final class PinnedSummaryViewController: NSViewController
 			"+",
 			label: "Sources action unavailable"
 		)
-		add(AppKitLayout.horizontalStack(
+		addSectionHeading(AppKitLayout.horizontalStack(
 			[sources, NSView(), plus],
 			spacing: 8
 		))
 		for source in presentation.sourcePreviews
 		{
-			add(sourceRow(
+			let row = sourceRow(
 				source,
 				presentation: presentation
-			))
+			)
+			add(row)
+			stack.setCustomSpacing(
+				2,
+				after: row
+			)
 		}
 		if presentation.sections.sources.value?.isEmpty == true
 		{
@@ -171,13 +182,22 @@ final class PinnedSummaryViewController: NSViewController
 			symbol: nil,
 			destination: .sources
 		)
-		all.image = PinnedSummaryIcons.image(.viewAll)
-		all.contentTintColor = .tertiaryLabelColor
 		all.attributedTitle = attributedTitle(
 			"View all",
 			color: .tertiaryLabelColor
 		)
-		add(all)
+		let icon = iconButton(
+			DesktopIcons.image(.addSources),
+			title: "View all",
+			destination: .sources
+		)
+		icon.contentTintColor = .tertiaryLabelColor
+		let row = AppKitLayout.horizontalStack(
+			[icon, all],
+			spacing: 12
+		)
+		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
+		add(row)
 	}
 
 	private func sourceRow(
@@ -186,7 +206,7 @@ final class PinnedSummaryViewController: NSViewController
 	) -> NSView
 	{
 		let imageView = NSImageView()
-		let size: CGFloat = source.kind == .attachment ? 20 : 16
+		let size: CGFloat = 18
 		imageView.image = sourceImage(for: source)
 		imageView.contentTintColor = .secondaryLabelColor
 		imageView.imageScaling = .scaleProportionallyUpOrDown
@@ -229,7 +249,7 @@ final class PinnedSummaryViewController: NSViewController
 			equalTo: row.widthAnchor,
 			constant: -size - 12
 		).isActive = true
-		row.heightAnchor.constraint(greaterThanOrEqualToConstant: 24).isActive = true
+		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
 		if let path = source.thumbnailPath
 		{
 			let owner = presentation.owner
@@ -278,6 +298,7 @@ final class PinnedSummaryViewController: NSViewController
 			views,
 			spacing: 4
 		)
+		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
 		// Reserve the four fixed glyph widths and four gaps; the status uses the remainder.
 		let artworkWidth = CGFloat(views.count - 1) * (16 + 4)
 		summary.widthAnchor.constraint(
@@ -401,13 +422,64 @@ final class PinnedSummaryViewController: NSViewController
 		view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 	}
 
+	private func addSectionHeading(_ heading: NSView)
+	{
+		heading.heightAnchor.constraint(equalToConstant: 20).isActive = true
+		add(heading)
+	}
+
+	private func iconButton(
+		_ image: NSImage?,
+		title: String,
+		destination: ContextPanelDestination
+	) -> NSButton
+	{
+		let icon = button(
+			title,
+			symbol: nil,
+			destination: destination
+		)
+		icon.image = image
+		icon.imagePosition = .imageOnly
+		icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
+		icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
+		return icon
+	}
+
+	private func makeScrollView() -> NSScrollView
+	{
+		let scrollView = NSScrollView()
+		scrollView.drawsBackground = false
+		scrollView.hasVerticalScroller = true
+		scrollView.autohidesScrollers = true
+		let document = PinnedSummaryDocumentView()
+		document.translatesAutoresizingMaskIntoConstraints = false
+		stack.translatesAutoresizingMaskIntoConstraints = false
+		document.addSubview(stack)
+		scrollView.documentView = document
+		// Extra card height stays below the summary instead of stretching its rows.
+		let preferredBottom = stack.bottomAnchor.constraint(equalTo: document.bottomAnchor)
+		preferredBottom.priority = NSLayoutConstraint.Priority(1)
+		NSLayoutConstraint.activate([
+			document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+			document.heightAnchor
+				.constraint(greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
+			stack.topAnchor.constraint(equalTo: document.topAnchor),
+			stack.leadingAnchor.constraint(equalTo: document.leadingAnchor),
+			stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
+			stack.bottomAnchor.constraint(lessThanOrEqualTo: document.bottomAnchor),
+			preferredBottom,
+		])
+		return scrollView
+	}
+
 	private func addDivider()
 	{
 		let divider = DesktopSurface(DesktopTheme.border)
 		add(divider)
 		divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
 		stack.setCustomSpacing(
-			10,
+			8,
 			after: divider
 		)
 	}
@@ -443,5 +515,13 @@ final class PinnedSummaryViewController: NSViewController
 			return
 		}
 		onNavigate?(request)
+	}
+}
+
+private final class PinnedSummaryDocumentView: NSView
+{
+	override var isFlipped: Bool
+	{
+		true
 	}
 }
