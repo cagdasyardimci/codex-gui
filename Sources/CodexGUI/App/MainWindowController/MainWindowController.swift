@@ -33,6 +33,14 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	)
 	var statusPopover: NSPopover?
 	let paneController: WindowPaneController
+	var summaryChangesProvider: ((FeaturePresentationOwner) -> SummarySection<SummaryChangeTotals>)?
+	var summaryVisibility = PinnedSummaryVisibility()
+	var summaryReconciliation = ContextSummaryReconciliation()
+	let summaryToggleButton = PinnedSummaryToggleButton(
+		title: "",
+		target: nil,
+		action: nil
+	)
 	var latestSnapshot: ConversationSnapshot?
 	var onSnapshot: ((ConversationSnapshot) -> Void)?
 
@@ -172,6 +180,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			snapshot,
 			ownerIdentity: target.presentationIdentity
 		))
+		renderPinnedSummary(
+			snapshot,
+			target: target
+		)
 		self.inspector.changes.render(ReviewPresentation(
 			snapshot,
 			ownerIdentity: target.presentationIdentity

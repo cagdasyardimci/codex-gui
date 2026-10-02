@@ -9,6 +9,7 @@ extension MainWindowController
 		static let conversationTitle = NSToolbarItem.Identifier("conversationTitle")
 		static let openProject = NSToolbarItem.Identifier("openProject")
 		static let newChat = NSToolbarItem.Identifier("newChat")
+		static let summary = NSToolbarItem.Identifier("pinnedSummary")
 		static let review = NSToolbarItem.Identifier("review")
 		static let commandPalette = NSToolbarItem.Identifier("commandPalette")
 		static let searchMessages = NSToolbarItem.Identifier("searchMessages")
@@ -70,6 +71,7 @@ extension MainWindowController
 			ToolbarItem.conversationTitle,
 			ToolbarItem.openProject,
 			ToolbarItem.newChat,
+			ToolbarItem.summary,
 			ToolbarItem.review,
 			ToolbarItem.commandPalette,
 			ToolbarItem.searchMessages,
@@ -87,6 +89,7 @@ extension MainWindowController
 			.flexibleSpace,
 			ToolbarItem.searchMessages,
 			ToolbarItem.commandPalette,
+			ToolbarItem.summary,
 			ToolbarItem.review,
 		]
 	}
@@ -136,6 +139,24 @@ extension MainWindowController
 			)
 			item.target = self
 			item.action = #selector(newChat)
+		case ToolbarItem.summary:
+			item.label = "Toggle pinned summary"
+			summaryToggleButton.target = self
+			summaryToggleButton.action = #selector(togglePinnedSummary)
+			summaryToggleButton.setButtonType(.toggle)
+			summaryToggleButton.bezelStyle = .texturedRounded
+			summaryToggleButton.isBordered = false
+			summaryToggleButton.contentTintColor = .labelColor
+			summaryToggleButton.image = PinnedSummaryIcons.image(
+				.toggle,
+				size: 16,
+				accessibilityDescription: "Toggle pinned summary"
+			)
+			summaryToggleButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
+			summaryToggleButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+			summaryToggleButton.toolTip = "Toggle pinned summary"
+			summaryToggleButton.setAccessibilityLabel("Toggle pinned summary")
+			item.view = summaryToggleButton
 		case ToolbarItem.review:
 			item.label = "Changes"
 			item.image = DesktopIcons.image(
