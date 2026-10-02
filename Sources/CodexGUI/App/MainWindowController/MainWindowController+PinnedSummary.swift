@@ -108,15 +108,18 @@ extension MainWindowController
 			snapshot: snapshot,
 			coordinator: coordinator
 		)
-		inspector.showSummary()
-		renderPinnedSummary(
-			snapshot,
-			target: target
-		)
-		// The inspector opens to make the explicit reveal observable at supported widths.
-		if summaryVisibility.isVisible(for: owner)
+		inspector.animateSummaryVisibilityChange
 		{
-			paneController.setReviewCollapsed(false)
+			inspector.showSummary()
+			renderPinnedSummary(
+				snapshot,
+				target: target
+			)
+			// The inspector opens to make the explicit reveal observable at supported widths.
+			if summaryVisibility.isVisible(for: owner)
+			{
+				paneController.setReviewCollapsed(false)
+			}
 		}
 	}
 

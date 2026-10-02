@@ -20,6 +20,8 @@ final class InspectorViewController: NSViewController
 	private let projectLabel = NSTextField(labelWithString: "Project")
 	private var preferredBoxHeight: NSLayoutConstraint?
 	private var hasReviewContent = false
+	private var summaryTransition: PinnedSummaryTransition?
+	private var summaryTransitionRevision = 0
 
 	override func loadView()
 	{
@@ -65,6 +67,10 @@ final class InspectorViewController: NSViewController
 	)
 	{
 		_ = view
+		if renderedOwner != presentation.owner || summaryVisible != visible
+		{
+			cancelSummaryTransition()
+		}
 		if renderedOwner != presentation.owner
 		{
 			isShowingDetails = false
@@ -84,12 +90,17 @@ final class InspectorViewController: NSViewController
 
 	func setExpandedConversation(_ active: Bool)
 	{
+		if isShowingExpandedConversation != active
+		{
+			cancelSummaryTransition()
+		}
 		isShowingExpandedConversation = active
 		updateContentVisibility()
 	}
 
 	func showReportedChanges()
 	{
+		cancelSummaryTransition()
 		_ = view
 		isShowingTools = false
 		isShowingDetails = true
@@ -98,6 +109,7 @@ final class InspectorViewController: NSViewController
 
 	func showToolsTab()
 	{
+		cancelSummaryTransition()
 		_ = view
 		toolsTabs.openNewTab()
 		isShowingTools = true
@@ -107,6 +119,7 @@ final class InspectorViewController: NSViewController
 	/// Clears the previous surface before caching the opening transition, preserving pane geometry.
 	func hideContentForToolsOpening()
 	{
+		cancelSummaryTransition()
 		_ = view
 		inspectorBox?.isHidden = true
 		toolsTabs.view.isHidden = true
@@ -114,6 +127,7 @@ final class InspectorViewController: NSViewController
 
 	func showToolsPane()
 	{
+		cancelSummaryTransition()
 		_ = view
 		if toolsTabs.tabCount == 0
 		{
@@ -128,6 +142,75 @@ final class InspectorViewController: NSViewController
 		isShowingTools = false
 		updateContentVisibility()
 		onToolsClose?(isShowingDetails || summaryVisible)
+	}
+
+	func animateSummaryVisibilityChange(_ updates: () -> Void)
+	{
+		cancelSummaryTransition()
+		_ = view
+		guard !isShowingTools,
+				!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+		else
+		{
+			updates()
+			return
+		}
+		let wasDisplayed = isSummaryDisplayed
+		let closingTransition = wasDisplayed
+			? inspectorBox.flatMap
+			{
+				PinnedSummaryTransition(view: $0)
+			} : nil
+		updates()
+		view.window?.layoutIfNeeded()
+		view.layoutSubtreeIfNeeded()
+		let isDisplayed = isSummaryDisplayed
+		guard wasDisplayed != isDisplayed
+		else
+		{
+			return
+		}
+		let transition = isDisplayed
+			? inspectorBox.flatMap
+			{
+				PinnedSummaryTransition(view: $0)
+			} : closingTransition
+		guard let transition
+		else
+		{
+			return
+		}
+		summaryTransitionRevision += 1
+		let revision = summaryTransitionRevision
+		summaryTransition = transition
+		transition.animate(appearing: isDisplayed)
+		{
+			[weak self] in
+			guard let self, self.summaryTransitionRevision == revision
+			else
+			{
+				return
+			}
+			self.summaryTransition = nil
+		}
+	}
+
+	private var isSummaryDisplayed: Bool
+	{
+		guard summaryVisible, !isShowingDetails,
+				!isShowingTools, let inspectorBox
+		else
+		{
+			return false
+		}
+		return !inspectorBox.isHiddenOrHasHiddenAncestor
+	}
+
+	private func cancelSummaryTransition()
+	{
+		summaryTransitionRevision += 1
+		summaryTransition?.cancel()
+		summaryTransition = nil
 	}
 
 	private func updateContentVisibility()
