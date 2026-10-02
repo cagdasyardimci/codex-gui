@@ -104,6 +104,14 @@ final class InspectorViewController: NSViewController
 		updateContentVisibility()
 	}
 
+	/// Clears the previous surface before caching the opening transition, preserving pane geometry.
+	func hideContentForToolsOpening()
+	{
+		_ = view
+		inspectorBox?.isHidden = true
+		toolsTabs.view.isHidden = true
+	}
+
 	func showToolsPane()
 	{
 		_ = view

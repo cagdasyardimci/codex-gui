@@ -425,9 +425,10 @@ extension MainWindowController
 		)
 	}
 
-	func updateToolsToolbarControls()
+	func updateToolsToolbarControls(allowDuringExpansion: Bool = false)
 	{
-		guard let toolbar = window?.toolbar
+		guard let toolbar = window?.toolbar,
+				allowDuringExpansion || !paneController.isAnimatingToolsExpansion
 		else
 		{
 			return
@@ -466,6 +467,10 @@ extension MainWindowController
 		}
 		if isOpen
 		{
+			inspector.toolsTabs.tabBarView.alphaValue = min(
+				1,
+				paneController.tabViewportWidth / inspector.toolsTabs.minimumTabBarWidth
+			)
 			let width = toolsTabBarWidth()
 			if toolsTabBarWidthConstraint?.constant != width
 			{
@@ -542,7 +547,12 @@ extension MainWindowController
 		paneController.onToolsExpansionLayoutChanged =
 		{
 			[weak self] in
-			self?.updateToolsToolbarControls()
+			self?.updateToolsToolbarControls(allowDuringExpansion: true)
+			self?.window?.layoutIfNeeded()
+		}
+		paneController.onToolsExpansionFinished =
+		{
+			[weak self] in self?.updateToolsToolbarControls()
 		}
 		inspector.toolsTabs.onToggleSummary =
 		{

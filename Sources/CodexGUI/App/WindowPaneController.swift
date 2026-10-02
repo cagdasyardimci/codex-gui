@@ -24,6 +24,10 @@ final class WindowPaneController
 	private var reviewAutomaticallyCollapsed = false
 	private var hasPresentedWindow = false
 	private var isApplyingPaneLayout = false
+	private(set) var isAnimatingToolsExpansion = false
+	private var toolsExpansionRevision = 0
+	private var toolsPaneTransition: ToolsPaneTransition?
+	var onToolsExpansionFinished: (() -> Void)?
 	var onToolsExpansionLayoutChanged: (() -> Void)?
 	private var lastAppliedSplitWidth: CGFloat?
 
@@ -39,7 +43,7 @@ final class WindowPaneController
 
 	var tabViewportWidth: CGFloat
 	{
-		if isToolsExpanded
+		if isToolsExpanded, !isAnimatingToolsExpansion
 		{
 			let navigationWidth = split.splitViewItems[0].isCollapsed
 				? 0 : expandedNavigationWidth + split.splitView.dividerThickness
@@ -118,6 +122,10 @@ final class WindowPaneController
 			[weak self] index in
 			self?.rememberDividerChoice(at: index)
 		}
+		splitView.onDividerInteractionBegan =
+		{
+			[weak self] in self?.cancelToolsPaneAnimation()
+		}
 
 	}
 
@@ -195,6 +203,7 @@ final class WindowPaneController
 		{
 			return
 		}
+		cancelToolsPaneAnimation()
 		split.splitViewItems[0].isCollapsed = collapsed
 		applyResponsivePaneLayout(force: true)
 	}
@@ -206,12 +215,17 @@ final class WindowPaneController
 		{
 			setToolsExpanded(false)
 		}
+		else
+		{
+			cancelToolsPaneAnimation()
+		}
 		applyResponsivePaneLayout(force: true)
 	}
 
 	func toggleToolsExpanded()
 	{
-		guard usesToolsSizing, isToolsExpanded || !reviewPane.isCollapsed
+		guard usesToolsSizing, isToolsExpanded || !reviewPane.isCollapsed,
+				!isAnimatingToolsExpansion
 		else
 		{
 			return
@@ -221,7 +235,10 @@ final class WindowPaneController
 			expandedToolsWidth = reviewViewportWidth
 		}
 		reviewVisibility = .expanded
-		setToolsExpanded(!isToolsExpanded)
+		setToolsExpanded(
+			!isToolsExpanded,
+			animated: !isToolsExpanded
+		)
 		applyResponsivePaneLayout(force: true)
 	}
 
@@ -232,6 +249,7 @@ final class WindowPaneController
 		{
 			return
 		}
+		cancelToolsPaneAnimation()
 		updateExpandedPaneContent()
 		onToolsExpansionLayoutChanged?()
 	}
@@ -265,18 +283,33 @@ final class WindowPaneController
 
 	func openToolsPane()
 	{
-		inspector.showToolsPane()
-		reviewVisibility = .expanded
-		applyResponsivePaneLayout(force: true)
-	}
-
-	private func setToolsExpanded(_ expanded: Bool)
-	{
-		guard isToolsExpanded != expanded
+		guard !isAnimatingToolsExpansion
 		else
 		{
 			return
 		}
+		let transition = prepareToolsPaneAnimation(
+			animated: true,
+			openingToolsPane: true
+		)
+		inspector.hideContentForToolsOpening()
+		inspector.showToolsPane()
+		reviewVisibility = .expanded
+		animateToolsPane(transition)
+	}
+
+	private func setToolsExpanded(
+		_ expanded: Bool,
+		animated: Bool = false
+	)
+	{
+		guard isToolsExpanded != expanded || isAnimatingToolsExpansion
+		else
+		{
+			return
+		}
+		cancelToolsPaneAnimation()
+		let transition = prepareToolsPaneAnimation(animated: animated)
 		isToolsExpanded = expanded
 		inspector.toolsTabs.setExpanded(expanded)
 		if !expanded
@@ -284,6 +317,94 @@ final class WindowPaneController
 			inspector.setExpandedConversation(false)
 		}
 		updateExpandedPaneContent()
+		animateToolsPane(transition)
+	}
+
+	private func prepareToolsPaneAnimation(
+		animated: Bool,
+		openingToolsPane: Bool = false
+	) -> ToolsPaneTransition?
+	{
+		guard animated, hasPresentedWindow,
+				!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+				let transition = ToolsPaneTransition(
+				splitView: split.splitView,
+				navigationPane: split.splitViewItems[0],
+				conversationPane: conversationPane,
+				reviewPane: reviewPane,
+				openingToolsPane: openingToolsPane
+				)
+		else
+		{
+			return nil
+		}
+		toolsPaneTransition = transition
+		isAnimatingToolsExpansion = true
+		conversation.beginPaneResize()
+		transition.prepare()
+		return transition
+	}
+
+	private func animateToolsPane(_ transition: ToolsPaneTransition?)
+	{
+		let target = reviewLayout(width: split.splitView.bounds.width)
+		guard let transition, !target.collapsed
+		else
+		{
+			cancelToolsPaneAnimation()
+			applyResponsivePaneLayout(force: true)
+			return
+		}
+		toolsExpansionRevision += 1
+		let revision = toolsExpansionRevision
+		toolsPaneTransition = transition
+		isAnimatingToolsExpansion = true
+		(split.splitView as? ConversationSplitView)?.showsReviewDivider =
+			usesToolsSizing && !target.collapsed && !isToolsExpanded
+		transition.animate(
+			toReviewWidth: target.width,
+			conversationCollapsed: isToolsExpanded,
+			reviewCollapsed: target.collapsed,
+			progress:
+			{
+				[weak self] in self?.onToolsExpansionLayoutChanged?()
+			},
+			completion:
+			{
+				[weak self] in
+				guard let self, self.toolsExpansionRevision == revision
+				else
+				{
+					return
+				}
+				self.toolsPaneTransition = nil
+				self.isAnimatingToolsExpansion = false
+				self.applyResponsivePaneLayout(force: true)
+				self.conversation.endPaneResize()
+				self.onToolsExpansionLayoutChanged?()
+				self.onToolsExpansionFinished?()
+			}
+		)
+	}
+
+	private func cancelToolsPaneAnimation()
+	{
+		guard let transition = toolsPaneTransition
+		else
+		{
+			return
+		}
+		toolsExpansionRevision += 1
+		toolsPaneTransition = nil
+		isAnimatingToolsExpansion = false
+		let wasApplyingPaneLayout = isApplyingPaneLayout
+		isApplyingPaneLayout = true
+		transition.cancel()
+		isApplyingPaneLayout = wasApplyingPaneLayout
+		applyResponsivePaneLayout(force: true)
+		conversation.endPaneResize()
+		onToolsExpansionLayoutChanged?()
+		onToolsExpansionFinished?()
 	}
 
 	private func updateInspectorSizing()
@@ -308,6 +429,14 @@ final class WindowPaneController
 		guard hasPresentedWindow, !isApplyingPaneLayout
 		else
 		{
+			return
+		}
+		if isAnimatingToolsExpansion
+		{
+			if toolsPaneTransition?.splitWidthChanged == true
+			{
+				cancelToolsPaneAnimation()
+			}
 			return
 		}
 		let width = split.splitView.bounds.width
@@ -418,7 +547,7 @@ final class WindowPaneController
 
 	private func rememberDividerChoice(at index: Int)
 	{
-		guard !isApplyingPaneLayout
+		guard !isApplyingPaneLayout, !isAnimatingToolsExpansion
 		else
 		{
 			return
@@ -490,6 +619,7 @@ private final class ConversationSplitViewController: NSSplitViewController
 private final class ConversationSplitView: NSSplitView
 {
 	var onDividerInteractionEnded: ((Int) -> Void)?
+	var onDividerInteractionBegan: (() -> Void)?
 	var showsReviewDivider = false
 	{
 		didSet
@@ -586,6 +716,10 @@ private final class ConversationSplitView: NSSplitView
 		}
 		dividerDragging = dividerIndex == 0
 		needsDisplay = true
+		if dividerIndex != nil
+		{
+			onDividerInteractionBegan?()
+		}
 		super.mouseDown(with: event)
 		dividerDragging = false
 		if let window
