@@ -26,11 +26,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		action: nil
 	)
 	let titleLabel = NSTextField(labelWithString: "New chat")
-	let titlePill = DesktopSurface(
-		DesktopTheme.chrome,
-		cornerRadius: 7,
-		bordered: true
-	)
+	let titleContainer = NSView()
+	let navigationToolbarSeparator = ToolbarSeparatorView(constrained: false)
 	var statusPopover: NSPopover?
 	let paneController: WindowPaneController
 	var summaryChangesProvider: ((FeaturePresentationOwner) -> SummarySection<SummaryChangeTotals>)?
@@ -91,10 +88,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		shouldCascadeWindows = false
 		configureToolbarControls()
 
-		let toolbar = NSToolbar(identifier: "CodexGUIToolbar")
+		let toolbar = NSToolbar(identifier: "CodexGUIConversationToolbar")
 		toolbar.delegate = self
 		toolbar.displayMode = .iconOnly
 		toolbar.sizeMode = .small
+		toolbar.allowsUserCustomization = false
+		toolbar.autosavesConfiguration = false
 		window.toolbar = toolbar
 		updateMinimumWindowSize()
 		NotificationCenter.default.addObserver(
@@ -102,6 +101,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			selector: #selector(windowChromeDidUpdate),
 			name: NSWindow.didUpdateNotification,
 			object: window
+		)
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(windowChromeDidUpdate),
+			name: NSSplitView.didResizeSubviewsNotification,
+			object: paneController.split.splitView
 		)
 		paneController.restoreLayout(in: window)
 		if let coordinator
@@ -221,12 +226,14 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		// Apply the supported full-window minimum after the toolbar has been laid out.
 		window?.layoutIfNeeded()
 		updateMinimumWindowSize()
+		updateNavigationToolbarSeparator()
 		paneController.didPresentWindow()
 	}
 
 	@objc private func windowChromeDidUpdate()
 	{
 		updateMinimumWindowSize()
+		updateNavigationToolbarSeparator()
 	}
 
 	private func updateMinimumWindowSize()

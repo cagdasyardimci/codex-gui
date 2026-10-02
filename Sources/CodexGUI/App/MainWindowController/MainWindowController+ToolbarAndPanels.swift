@@ -4,15 +4,32 @@ extension MainWindowController
 {
 	private enum ToolbarItem
 	{
+		static let navigationControls = NSToolbarItem.Identifier("navigationControls")
+		static let trailingControls = NSToolbarItem.Identifier("trailingControls")
+		static let back = NSToolbarItem.Identifier("back")
+		static let forward = NSToolbarItem.Identifier("forward")
+		static let sidebarPlaceholder = NSToolbarItem.Identifier("sidebarPlaceholder")
 		static let sidebar = NSToolbarItem.Identifier("sidebar")
 		static let navigationSeparator = NSToolbarItem.Identifier("navigationSeparator")
+		static let projectContext = NSToolbarItem.Identifier("projectContext")
 		static let conversationTitle = NSToolbarItem.Identifier("conversationTitle")
 		static let openProject = NSToolbarItem.Identifier("openProject")
 		static let newChat = NSToolbarItem.Identifier("newChat")
+		static let moreOptions = NSToolbarItem.Identifier("moreOptions")
 		static let summary = NSToolbarItem.Identifier("pinnedSummary")
+		static let summarySeparator = NSToolbarItem.Identifier("summarySeparator")
+		static let newTab = NSToolbarItem.Identifier("newTab")
 		static let review = NSToolbarItem.Identifier("review")
 		static let commandPalette = NSToolbarItem.Identifier("commandPalette")
 		static let searchMessages = NSToolbarItem.Identifier("searchMessages")
+	}
+
+	private enum ToolbarLayout
+	{
+		static let controlSize: CGFloat = 28
+		static let controlSpacing: CGFloat = 6
+		static let titleSpacing: CGFloat = 8
+		static let maximumTitleWidth: CGFloat = 280
 	}
 
 	func configureToolbarControls()
@@ -31,47 +48,144 @@ extension MainWindowController
 		statusButton.widthAnchor.constraint(equalToConstant: 32).isActive = true
 		statusButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
 
+		configureToolbarTitle()
+		configureSummaryToggle()
+	}
+
+	private func configureToolbarTitle()
+	{
 		titleLabel.font = .systemFont(
-			ofSize: 13,
+			ofSize: 14,
 			weight: .regular
 		)
+		titleLabel.isBordered = false
+		titleLabel.isBezeled = false
+		titleLabel.drawsBackground = false
 		titleLabel.lineBreakMode = .byTruncatingTail
 		titleLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
 		titleLabel.setAccessibilityLabel("Conversation title")
-		titleLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 280).isActive = true
+		titleLabel.widthAnchor.constraint(
+			lessThanOrEqualToConstant: ToolbarLayout.maximumTitleWidth
+		).isActive = true
 
-		titlePill.addSubview(titleLabel)
-		titlePill.translatesAutoresizingMaskIntoConstraints = false
+		let projectIcon = makeProjectContextIcon()
+		titleContainer.addSubview(projectIcon)
+		titleContainer.addSubview(titleLabel)
+		titleContainer.translatesAutoresizingMaskIntoConstraints = false
+		projectIcon.translatesAutoresizingMaskIntoConstraints = false
 		titleLabel.translatesAutoresizingMaskIntoConstraints = false
-		titlePill.setAccessibilityElement(false)
+		titleContainer.setAccessibilityElement(false)
 		NSLayoutConstraint.activate([
+			projectIcon.leadingAnchor.constraint(equalTo: titleContainer.leadingAnchor),
+			projectIcon.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
 			titleLabel.leadingAnchor.constraint(
-				equalTo: titlePill.leadingAnchor,
-				constant: 12
+				equalTo: projectIcon.trailingAnchor,
+				constant: ToolbarLayout.titleSpacing
 			),
-			titleLabel.trailingAnchor.constraint(
-				equalTo: titlePill.trailingAnchor,
-				constant: -12
+			titleLabel.trailingAnchor.constraint(equalTo: titleContainer.trailingAnchor),
+			titleLabel.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+			titleContainer.widthAnchor.constraint(
+				lessThanOrEqualToConstant: ToolbarLayout.controlSize + ToolbarLayout.titleSpacing
+					+ ToolbarLayout.maximumTitleWidth
 			),
-			titleLabel.centerYAnchor.constraint(equalTo: titlePill.centerYAnchor),
-			titlePill.widthAnchor.constraint(greaterThanOrEqualToConstant: 100),
-			titlePill.widthAnchor.constraint(lessThanOrEqualToConstant: 304),
-			titlePill.heightAnchor.constraint(equalToConstant: 32),
+			titleContainer.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize),
 		])
+	}
+
+	func updateNavigationToolbarSeparator()
+	{
+		guard let window,
+				let chromeView = window.contentView?.superview,
+				titleContainer.window === window,
+				window.toolbar?.isVisible == true,
+				let navigationView = paneController.split.splitView.subviews.first
+		else
+		{
+			navigationToolbarSeparator.isHidden = true
+			return
+		}
+
+		let splitView = paneController.split.splitView
+		let dividerPosition = NSPoint(
+			x: navigationView.frame.maxX + splitView.dividerThickness / 2,
+			y: splitView.bounds.midY
+		)
+		let dividerInChrome = splitView.convert(
+			dividerPosition,
+			to: chromeView
+		)
+		let titleInChrome = titleContainer.convert(
+			titleContainer.bounds,
+			to: chromeView
+		)
+		let scale = window.backingScaleFactor
+		let separatorFrame = NSRect(
+			x: ((dividerInChrome.x - 0.5) * scale).rounded() / scale,
+			y: titleInChrome.midY - 9,
+			width: 1,
+			height: 18
+		)
+		// Draw above the native chrome without intercepting the tracking separator's drag area.
+		if navigationToolbarSeparator.superview !== chromeView
+		{
+			chromeView.addSubview(navigationToolbarSeparator)
+		}
+		if navigationToolbarSeparator.frame != separatorFrame
+		{
+			navigationToolbarSeparator.frame = separatorFrame
+		}
+		let isHidden = paneController.split.splitViewItems[0].isCollapsed || titleContainer.isHidden
+		if navigationToolbarSeparator.isHidden != isHidden
+		{
+			navigationToolbarSeparator.isHidden = isHidden
+		}
+	}
+
+	private func configureSummaryToggle()
+	{
+		summaryToggleButton.target = self
+		summaryToggleButton.action = #selector(togglePinnedSummary)
+		summaryToggleButton.setButtonType(.toggle)
+		summaryToggleButton.bezelStyle = .texturedRounded
+		summaryToggleButton.isBordered = false
+		summaryToggleButton.contentTintColor = .labelColor
+		summaryToggleButton.image = PinnedSummaryIcons.image(
+			.toggle,
+			size: 16,
+			accessibilityDescription: "Toggle pinned summary"
+		)
+		summaryToggleButton.imagePosition = .imageOnly
+		summaryToggleButton.widthAnchor.constraint(
+			equalToConstant: ToolbarLayout.controlSize
+		).isActive = true
+		summaryToggleButton.heightAnchor.constraint(
+			equalToConstant: ToolbarLayout.controlSize
+		).isActive = true
+		summaryToggleButton.toolTip = "Toggle pinned summary"
+		summaryToggleButton.setAccessibilityLabel("Toggle pinned summary")
 	}
 
 	func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier]
 	{
 		[
+			ToolbarItem.navigationControls,
+			ToolbarItem.trailingControls,
+			ToolbarItem.back,
+			ToolbarItem.forward,
+			ToolbarItem.sidebarPlaceholder,
 			ToolbarItem.sidebar,
 			ToolbarItem.navigationSeparator,
+			ToolbarItem.projectContext,
 			ToolbarItem.conversationTitle,
 			ToolbarItem.openProject,
 			ToolbarItem.newChat,
+			ToolbarItem.moreOptions,
 			ToolbarItem.summary,
+			ToolbarItem.summarySeparator,
+			ToolbarItem.newTab,
 			ToolbarItem.review,
 			ToolbarItem.commandPalette,
 			ToolbarItem.searchMessages,
@@ -82,15 +196,11 @@ extension MainWindowController
 	func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier]
 	{
 		[
-			ToolbarItem.sidebar,
+			ToolbarItem.navigationControls,
 			ToolbarItem.navigationSeparator,
 			ToolbarItem.conversationTitle,
-			ToolbarItem.newChat,
 			.flexibleSpace,
-			ToolbarItem.searchMessages,
-			ToolbarItem.commandPalette,
-			ToolbarItem.summary,
-			ToolbarItem.review,
+			ToolbarItem.trailingControls,
 		]
 	}
 
@@ -111,17 +221,45 @@ extension MainWindowController
 		let item = NSToolbarItem(itemIdentifier: itemIdentifier)
 		switch itemIdentifier
 		{
-		case ToolbarItem.sidebar:
-			item.label = "Sidebar"
-			item.image = DesktopIcons.image(
-				.sidebar,
-				accessibilityDescription: "Toggle sidebar"
+		case ToolbarItem.navigationControls:
+			item.label = "Navigation"
+			item.view = makeNavigationControls()
+		case ToolbarItem.trailingControls:
+			item.label = "Conversation controls"
+			item.view = makeTrailingControls()
+		case ToolbarItem.back:
+			return makeDisabledToolbarItem(
+				identifier: itemIdentifier,
+				image: DesktopIcons.image(.arrowLeft),
+				label: "Back"
 			)
-			item.target = self
-			item.action = #selector(toggleSidebar)
+		case ToolbarItem.forward:
+			return makeDisabledToolbarItem(
+				identifier: itemIdentifier,
+				image: DesktopIcons.image(.arrowRight),
+				label: "Forward"
+			)
+		case ToolbarItem.sidebarPlaceholder:
+			return makeDisabledToolbarItem(
+				identifier: itemIdentifier,
+				image: DesktopIcons.image(.sidebar),
+				label: "Toggle sidebar"
+			)
+		case ToolbarItem.sidebar:
+			item.label = "Toggle projects navigation"
+			let button = makeToolbarButton(
+				image: DesktopIcons.image(.sidebar),
+				label: item.label
+			)
+			button.target = self
+			button.action = #selector(toggleSidebar)
+			item.view = button
+		case ToolbarItem.projectContext:
+			item.label = "Project context"
+			item.view = makeProjectContextIcon()
 		case ToolbarItem.conversationTitle:
 			item.label = "Conversation"
-			item.view = titlePill
+			item.view = titleContainer
 			item.visibilityPriority = .low
 		case ToolbarItem.openProject:
 			item.label = "Open Project"
@@ -141,22 +279,22 @@ extension MainWindowController
 			item.action = #selector(newChat)
 		case ToolbarItem.summary:
 			item.label = "Toggle pinned summary"
-			summaryToggleButton.target = self
-			summaryToggleButton.action = #selector(togglePinnedSummary)
-			summaryToggleButton.setButtonType(.toggle)
-			summaryToggleButton.bezelStyle = .texturedRounded
-			summaryToggleButton.isBordered = false
-			summaryToggleButton.contentTintColor = .labelColor
-			summaryToggleButton.image = PinnedSummaryIcons.image(
-				.toggle,
-				size: 16,
-				accessibilityDescription: "Toggle pinned summary"
-			)
-			summaryToggleButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
-			summaryToggleButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
-			summaryToggleButton.toolTip = "Toggle pinned summary"
-			summaryToggleButton.setAccessibilityLabel("Toggle pinned summary")
 			item.view = summaryToggleButton
+		case ToolbarItem.moreOptions:
+			return makeDisabledToolbarItem(
+				identifier: itemIdentifier,
+				image: PinnedSummaryIcons.image(.ellipsis),
+				label: "More options"
+			)
+		case ToolbarItem.summarySeparator:
+			item.label = "Separator"
+			item.view = ToolbarSeparatorView()
+		case ToolbarItem.newTab:
+			return makeDisabledToolbarItem(
+				identifier: itemIdentifier,
+				image: DesktopIcons.image(.plusSquareAdd),
+				label: "New tab"
+			)
 		case ToolbarItem.review:
 			item.label = "Changes"
 			item.image = DesktopIcons.image(
@@ -184,8 +322,119 @@ extension MainWindowController
 		default:
 			return nil
 		}
+		item.isBordered = false
 		item.toolTip = item.label
 		return item
+	}
+
+	private func makeProjectContextIcon() -> NSImageView
+	{
+		let imageView = NSImageView()
+		imageView.image = DesktopIcons.image(.folder)
+		imageView.contentTintColor = .labelColor
+		imageView.setAccessibilityLabel("Project context")
+		imageView.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
+		imageView.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)
+			.isActive = true
+		return imageView
+	}
+
+	private func makeNavigationControls() -> NSStackView
+	{
+		makeToolbarControlStack([
+			makeToolbarButton(
+				image: DesktopIcons.image(.arrowLeft),
+				label: "Back",
+				isEnabled: false
+			),
+			makeToolbarButton(
+				image: DesktopIcons.image(.arrowRight),
+				label: "Forward",
+				isEnabled: false
+			),
+			makeToolbarButton(
+				image: DesktopIcons.image(.sidebar),
+				label: "Toggle sidebar",
+				isEnabled: false
+			),
+		])
+	}
+
+	private func makeTrailingControls() -> NSStackView
+	{
+		makeToolbarControlStack([
+			makeToolbarButton(
+				image: PinnedSummaryIcons.image(.ellipsis),
+				label: "More options",
+				isEnabled: false
+			),
+			summaryToggleButton,
+			ToolbarSeparatorView(),
+			makeToolbarButton(
+				image: DesktopIcons.image(.plusSquareAdd),
+				label: "New tab",
+				isEnabled: false
+			),
+		])
+	}
+
+	private func makeToolbarControlStack(_ controls: [NSView]) -> NSStackView
+	{
+		let stack = NSStackView(views: controls)
+		stack.orientation = .horizontal
+		stack.alignment = .centerY
+		stack.spacing = ToolbarLayout.controlSpacing
+		stack.setAccessibilityElement(false)
+		stack.setContentHuggingPriority(
+			.required,
+			for: .horizontal
+		)
+		stack.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
+		return stack
+	}
+
+	private func makeDisabledToolbarItem(
+		identifier: NSToolbarItem.Identifier,
+		image: NSImage,
+		label: String
+	) -> NSToolbarItem
+	{
+		let item = NSToolbarItem(itemIdentifier: identifier)
+		item.label = label
+		item.toolTip = label
+		item.view = makeToolbarButton(
+			image: image,
+			label: label,
+			isEnabled: false
+		)
+		item.isBordered = false
+		item.autovalidates = false
+		item.isEnabled = false
+		return item
+	}
+
+	private func makeToolbarButton(
+		image: NSImage,
+		label: String,
+		isEnabled: Bool = true
+	) -> NSButton
+	{
+		let button = NSButton(
+			title: "",
+			target: nil,
+			action: nil
+		)
+		button.bezelStyle = .inline
+		button.isBordered = false
+		button.image = image
+		button.imagePosition = .imageOnly
+		button.contentTintColor = .labelColor
+		button.isEnabled = isEnabled
+		button.toolTip = label
+		button.setAccessibilityLabel(label)
+		button.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
+		button.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
+		return button
 	}
 
 	@objc private func openProjectPicker()

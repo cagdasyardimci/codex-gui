@@ -135,15 +135,9 @@ struct WindowLayoutTests
 			if showReview
 			{
 				// At the compact width, hide the sidebar before opening the review pane.
-				// Both panes remain accessible through their toolbar controls.
-				try activateToolbarItem(
-					"sidebar",
-					in: window
-				)
-				try activateToolbarItem(
-					"review",
-					in: window
-				)
+				// Review geometry is independent of toolbar chrome.
+				controller.paneController.toggleSidebar()
+				controller.paneController.toggleReview()
 			}
 			try await Task.sleep(for: .milliseconds(30))
 			window.layoutIfNeeded()
@@ -184,25 +178,6 @@ struct WindowLayoutTests
 				>= inspectorScroll.contentSize.height
 		)
 
-	}
-
-	private func activateToolbarItem(
-		_ identifier: String,
-		in window: NSWindow
-	) throws
-	{
-		let item = try #require(
-			window.toolbar?.items.first
-			{
-				$0.itemIdentifier.rawValue == identifier
-			}
-		)
-		let action = try #require(item.action)
-		#expect(NSApp.sendAction(
-			action,
-			to: item.target,
-			from: item
-		))
 	}
 
 	private func findChangesTabs(in view: NSView) -> NSSegmentedControl?
@@ -313,23 +288,8 @@ struct WindowLayoutTests
 		split.view.layoutSubtreeIfNeeded()
 		#expect(window.frame == expectedFrame)
 		#expect(abs(split.splitViewItems[0].viewController.view.frame.width - 240) < 2)
-		let reviewToggle = try #require(
-			window.toolbar?.items.first
-			{
-				$0.itemIdentifier.rawValue == "review"
-			}
-		)
-		let action = try #require(reviewToggle.action)
-		_ = NSApp.sendAction(
-			action,
-			to: reviewToggle.target,
-			from: reviewToggle
-		)
-		_ = NSApp.sendAction(
-			action,
-			to: reviewToggle.target,
-			from: reviewToggle
-		)
+		first.paneController.toggleReview()
+		first.paneController.toggleReview()
 		#expect(split.splitViewItems[2].isCollapsed)
 		first.saveLayout()
 		let saved = try #require(store.layout)
