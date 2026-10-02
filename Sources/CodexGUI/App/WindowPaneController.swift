@@ -7,6 +7,8 @@ final class WindowPaneController
 	private weak var window: NSWindow?
 	private let navigation: NavigationViewController
 	private let inspector: InspectorViewController
+	private let conversationContainer: ClippedPaneViewController
+	private let reviewContainer: ClippedPaneViewController
 	let split: NSSplitViewController
 	private let reviewPane: NSSplitViewItem
 	private let layoutStore: WindowLayoutStore?
@@ -28,6 +30,14 @@ final class WindowPaneController
 		self.navigation = navigation
 		self.inspector = inspector
 		self.layoutStore = layoutStore
+		conversationContainer = ClippedPaneViewController(
+			content: conversation,
+			minimumContentWidth: WindowPaneLayout.conversationMinimumWidth
+		)
+		reviewContainer = ClippedPaneViewController(
+			content: inspector,
+			minimumContentWidth: WindowPaneLayout.reviewMinimumWidth
+		)
 		let split = ConversationSplitViewController()
 		let splitView = ConversationSplitView(frame: .zero)
 		split.splitView = splitView
@@ -44,12 +54,12 @@ final class WindowPaneController
 		split.addSplitViewItem(navigationPane)
 		split.addSplitViewItem(
 			Self.pane(
-				conversation,
+				conversationContainer,
 				minimumWidth: WindowPaneLayout.conversationMinimumWidth
 			)
 		)
 		reviewPane = Self.pane(
-			inspector,
+			reviewContainer,
 			minimumWidth: WindowPaneLayout.reviewMinimumWidth,
 			maximumWidth: WindowPaneLayout.reviewMaximumWidth,
 			holdingPriority: WindowPaneLayout.sideHoldingPriority

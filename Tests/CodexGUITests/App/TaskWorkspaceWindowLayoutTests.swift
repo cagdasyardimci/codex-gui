@@ -32,7 +32,7 @@ struct TaskWorkspaceWindowLayoutTests
 		let window = try #require(controller.window)
 		let split = controller.paneController.split
 		let conversation = try #require(
-			split.splitViewItems[1].viewController as? ConversationViewController
+			split.splitViewItems[1].viewController.children.first as? ConversationViewController
 		)
 		let directory =
 			"/tmp/native-final/task-workspaces/checkouts/"
@@ -180,10 +180,10 @@ struct TaskWorkspaceWindowLayoutTests
 			split.splitViewItems[0].viewController as? NavigationViewController
 		)
 		let conversation = try #require(
-			split.splitViewItems[1].viewController as? ConversationViewController
+			split.splitViewItems[1].viewController.children.first as? ConversationViewController
 		)
 		let inspector = try #require(split.splitViewItems[2]
-			.viewController as? InspectorViewController)
+			.viewController.children.first as? InspectorViewController)
 		let thread = try #require(
 			ThreadSummary(json: [
 				"id": "alpha",

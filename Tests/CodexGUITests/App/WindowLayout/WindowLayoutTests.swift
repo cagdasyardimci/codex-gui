@@ -32,7 +32,7 @@ struct WindowLayoutTests
 			split.splitViewItems[0].viewController as? NavigationViewController
 		)
 		let inspector = try #require(split.splitViewItems[2]
-			.viewController as? InspectorViewController)
+			.viewController.children.first as? InspectorViewController)
 		let model = try #require(
 			ModelOption(json: [
 				"model": "gpt-6-astra",
@@ -106,7 +106,7 @@ struct WindowLayoutTests
 		navigation.render(snapshot)
 		inspector.changes.render(snapshot)
 		let conversation = try #require(
-			split.splitViewItems[1].viewController as? ConversationViewController
+			split.splitViewItems[1].viewController.children.first as? ConversationViewController
 		)
 		conversation.render(snapshot)
 		controller.showWindow(nil)

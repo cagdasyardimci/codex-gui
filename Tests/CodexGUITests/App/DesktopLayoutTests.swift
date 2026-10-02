@@ -43,7 +43,7 @@ struct DesktopLayoutTests
 		let window = try #require(controller.window)
 		let split = controller.paneController.split
 		let conversation = try #require(
-			split.splitViewItems[1].viewController as? ConversationViewController
+			split.splitViewItems[1].viewController.children.first as? ConversationViewController
 		)
 		let thread = try #require(
 			ThreadSummary(json: [
