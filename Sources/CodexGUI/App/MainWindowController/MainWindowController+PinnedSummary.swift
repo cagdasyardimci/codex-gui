@@ -12,70 +12,22 @@ extension MainWindowController
 			storeIdentity: target.presentationIdentity
 		)
 		let firstPresentation = summaryReconciliation.owner == nil
-		if summaryReconciliation.owner != owner
-		{
-			closeSourcesPanel()
-		}
 		summaryReconciliation.select(owner)
-		_ = inspector.view
-		inspector.panels.register(
-			sources,
-			for: .sources,
-			providesHeader: true
-		)
-		sources.onClose =
-		{
-			[weak self] in self?.closeSourcesPanel()
-		}
-		inspector.onCloseDetail =
-		{
-			[weak self] destination in
-			if destination == .sources
-			{
-				self?.closeSourcesPanel()
-			}
-		}
 		if target.accepts(.loadEarlierTurns)
 		{
-			let update = ContextSummaryUpdate(
+			var sections = ContextSummarySections()
+			sections.changes = summaryChangesProvider?(owner)
+				?? .unavailable("Repository comparison integration unavailable")
+			sections.sources = .unavailable("Sources integration unavailable")
+			// Detail providers are not part of the standalone summary implementation.
+			sections.availableDestinations = []
+			summaryReconciliation.accept(ContextSummaryUpdate(
 				owner: owner,
 				revision: summaryReconciliation.revision + 1,
-				sections: ContextSummarySelector.sections(
-					model: target.store.model,
-					chatID: snapshot.selectedThreadID,
-					changes: summaryChangesProvider?(owner) ?? .unavailable("Totals unavailable")
-				)
-			)
-			summaryReconciliation.accept(update)
+				sections: sections
+			))
 		}
 		var sections = summaryReconciliation.sections
-		sections.changesContext = gitSummary.scopeDescription
-		sections.availableDestinations.formIntersection(inspector.panels.availableDestinations)
-		if let sources = sections.sources.value,
-			!inspector.panels.supportsRecordNavigation(.sources)
-		{
-			// Previews stay readable without implying an unregistered resource action.
-			let previews = sources.map
-			{
-				source in
-				var source = source
-				source.detailRecordID = nil
-				return source
-			}
-			switch sections.sources
-			{
-			case .available: sections.sources = .available(previews)
-			case .loading: sections.sources = .loading(previous: previews)
-			case .failed(
-				let reason,
-				_
-			): sections.sources = .failed(
-					reason,
-					previous: previews
-				)
-			case .unavailable: break
-			}
-		}
 		if currentStore.isRetired || currentStore.model.lifecycle.isShutdown
 		{
 			sections = ContextSummarySections()
@@ -83,12 +35,6 @@ extension MainWindowController
 			sections.sources = .unavailable("Workspace unavailable")
 			sections.availableDestinations = []
 		}
-		let presentation = PinnedSummaryPresentation(
-			snapshot,
-			ownerIdentity: target.presentationIdentity,
-			sections: sections
-		)
-		// Visibility keys use stable store identity; reconnects do not reset a user's choice.
 		let visibilityOwner = FeaturePresentationOwner(
 			snapshot,
 			storeIdentity: String(describing: ObjectIdentifier(target.store))
@@ -101,30 +47,18 @@ extension MainWindowController
 			self?.summaryToggleButton.setAccessibilityValue(displayed ? "Visible" : "Hidden")
 		}
 		inspector.renderSummary(
-			presentation,
+			PinnedSummaryPresentation(
+				snapshot,
+				ownerIdentity: target.presentationIdentity,
+				sections: sections
+			),
 			visible: visible
 		)
 		if firstPresentation, visible, snapshot.projectPath != nil
 		{
 			paneController.setReviewCollapsed(false)
 		}
-		inspector.summary.onNavigate =
-		{
-			[weak self] request in
-			guard let self, request.owner == owner,
-					target.accepts(.loadEarlierTurns)
-			else
-			{
-				return
-			}
-			switch request.destination
-			{
-			case .sources: self.openSources(request)
-			case .subagents: self.openSubagents(request)
-			case .changes: self.openGitChanges(request)
-			case .workspaceFiles, .reportedChanges: break
-			}
-		}
+		inspector.summary.onNavigate = nil
 	}
 
 	/// Future Git integration projects its canonical comparison for the captured owner.
@@ -173,7 +107,6 @@ extension MainWindowController
 			snapshot: snapshot,
 			coordinator: coordinator
 		)
-		closeSourcesPanel()
 		inspector.showSummary()
 		renderPinnedSummary(
 			snapshot,
@@ -182,6 +115,35 @@ extension MainWindowController
 		// The inspector opens to make the explicit reveal observable at supported widths.
 		if summaryVisibility.isVisible(for: owner)
 		{
+			paneController.setReviewCollapsed(false)
+		}
+	}
+
+	func openCurrentChanges(toggleIfShowing: Bool = false)
+	{
+		guard let snapshot = latestSnapshot
+		else
+		{
+			return
+		}
+		let target = WorkspaceIntentTarget(
+			store: currentStore,
+			snapshot: snapshot,
+			coordinator: coordinator
+		)
+		guard snapshot.projectPath != nil, target.accepts(.loadEarlierTurns)
+		else
+		{
+			return
+		}
+		if toggleIfShowing, inspector.isShowingDetails,
+			!paneController.split.splitViewItems[2].isCollapsed
+		{
+			paneController.toggleReview()
+		}
+		else
+		{
+			inspector.showReportedChanges()
 			paneController.setReviewCollapsed(false)
 		}
 	}

@@ -256,10 +256,7 @@ final class PinnedSummaryViewController: NSViewController
 		case .tool: PinnedSummaryIcons.image(.appTools)
 		case .web: PinnedSummaryIcons.image(.webSearch)
 		case .attachment:
-			GitReviewReferenceIcons.fileImage(
-				relativePath: source.label,
-				size: 20
-			)
+			DesktopIcons.image(.fileDocument)
 		case .folder: DesktopIcons.image(.folder)
 		}
 	}
