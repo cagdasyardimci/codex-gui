@@ -7,6 +7,7 @@ final class ClippedPaneViewController: NSViewController
 	private let contentController: NSViewController
 	private let minimumContentWidth: CGFloat
 	private var presentedController: NSViewController?
+	private var asideController: NSViewController?
 
 	init(
 		content: NSViewController,
@@ -39,6 +40,10 @@ final class ClippedPaneViewController: NSViewController
 	/// Transfers the live controller without leaving another viewport responsible for its frame.
 	func detachContent()
 	{
+		setAside(
+			nil,
+			width: 0
+		)
 		(view as? ClippedPaneViewport)?.setContent(
 			nil,
 			minimumWidth: minimumContentWidth
@@ -76,6 +81,36 @@ final class ClippedPaneViewController: NSViewController
 		view.layoutSubtreeIfNeeded()
 	}
 
+	func setAside(
+		_ controller: NSViewController?,
+		width: CGFloat
+	)
+	{
+		guard controller !== presentedController
+		else
+		{
+			return
+		}
+		if asideController !== controller
+		{
+			(view as? ClippedPaneViewport)?.setAside(
+				nil,
+				width: 0
+			)
+			asideController?.removeFromParent()
+			asideController = controller
+			if let controller
+			{
+				controller.removeFromParent()
+				addChild(controller)
+			}
+		}
+		(view as? ClippedPaneViewport)?.setAside(
+			controller?.view,
+			width: width
+		)
+		view.layoutSubtreeIfNeeded()
+	}
 }
 
 /// The content's minimum width must not become the split item's minimum width.
@@ -84,6 +119,8 @@ private final class ClippedPaneViewport: NSView
 	private var content: NSView?
 	private let mainRegion = NSView()
 	private var minimumContentWidth: CGFloat
+	private var aside: NSView?
+	private var asideWidth: CGFloat = 0
 
 	init(
 		content: NSView?,
@@ -123,6 +160,29 @@ private final class ClippedPaneViewport: NSView
 		needsLayout = true
 	}
 
+	func setAside(
+		_ aside: NSView?,
+		width: CGFloat
+	)
+	{
+		if self.aside !== aside
+		{
+			self.aside?.removeFromSuperview()
+			self.aside = aside
+			if let aside
+			{
+				aside.translatesAutoresizingMaskIntoConstraints = true
+				aside.autoresizingMask = []
+				addSubview(aside)
+			}
+		}
+		asideWidth = aside == nil ? 0 : max(
+			0,
+			width
+		)
+		needsLayout = true
+	}
+
 	required init?(coder: NSCoder)
 	{
 		nil
@@ -142,10 +202,14 @@ private final class ClippedPaneViewport: NSView
 		{
 			return
 		}
+		let visibleAsideWidth = min(
+			asideWidth,
+			bounds.width
+		)
 		mainRegion.frame = NSRect(
 			x: bounds.minX,
 			y: bounds.minY,
-			width: bounds.width,
+			width: bounds.width - visibleAsideWidth,
 			height: bounds.height
 		)
 		let contentFrame = NSRect(
@@ -153,13 +217,23 @@ private final class ClippedPaneViewport: NSView
 			y: 0,
 			width: max(
 				minimumContentWidth,
-				bounds.width
+				bounds.width - visibleAsideWidth
 			),
 			height: bounds.height
 		)
 		if content.frame != contentFrame
 		{
 			content.frame = contentFrame
+		}
+		if let aside
+		{
+			aside.frame = NSRect(
+				x: bounds.maxX - visibleAsideWidth,
+				y: bounds.minY,
+				width: visibleAsideWidth,
+				height: bounds.height
+			)
+			aside.layoutSubtreeIfNeeded()
 		}
 		content.layoutSubtreeIfNeeded()
 	}

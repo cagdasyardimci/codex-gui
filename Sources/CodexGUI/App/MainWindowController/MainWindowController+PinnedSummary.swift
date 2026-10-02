@@ -97,7 +97,9 @@ extension MainWindowController
 			storeIdentity: String(describing: ObjectIdentifier(currentStore))
 		)
 		let visible = summaryVisibility.isVisible(for: owner)
-		let hiddenByContainer = inspector.isShowingTools || inspector.isShowingDetails
+		let expandedConversation = paneController.isShowingExpandedConversation
+		let hiddenByContainer = (inspector.isShowingTools && !inspector
+			.isSummaryBesideExpandedConversation) || inspector.isShowingDetails
 			|| paneController.split.splitViewItems[2].isCollapsed
 		if !visible || !hiddenByContainer
 		{
@@ -110,13 +112,20 @@ extension MainWindowController
 		)
 		inspector.animateSummaryVisibilityChange
 		{
-			inspector.showSummary()
+			if expandedConversation
+			{
+				inspector.showSummaryBesideExpandedConversation()
+			}
+			else
+			{
+				inspector.showSummary()
+			}
 			renderPinnedSummary(
 				snapshot,
 				target: target
 			)
 			// The inspector opens to make the explicit reveal observable at supported widths.
-			if summaryVisibility.isVisible(for: owner)
+			if !expandedConversation, summaryVisibility.isVisible(for: owner)
 			{
 				paneController.setReviewCollapsed(false)
 			}

@@ -270,15 +270,43 @@ final class WindowPaneController
 				conversation,
 				minimumWidth: WindowPaneLayout.conversationMinimumWidth
 			)
-			inspector.setExpandedConversation(true)
+			inspector.setExpandedConversation(
+				true,
+				resetSummary: false
+			)
+			updateExpandedSummaryLayout()
 		}
 		else
 		{
-			inspector.setExpandedConversation(false)
+			inspector.setExpandedConversation(
+				false,
+				resetSummary: !isToolsExpanded || !inspector.isShowingTools
+			)
 			reviewContainer.detachContent()
 			conversationContainer.restoreContent()
 			reviewContainer.restoreContent()
 		}
+	}
+
+	private func updateExpandedSummaryLayout()
+	{
+		guard conversationIsInExpandedPane
+		else
+		{
+			return
+		}
+		let width = min(
+			expandedReviewWidth,
+			max(
+				WindowPaneLayout.reviewMinimumWidth,
+				reviewViewportWidth - WindowPaneLayout
+					.conversationMinimumWidth
+			)
+		)
+		reviewContainer.setAside(
+			inspector.isSummaryBesideExpandedConversation ? inspector : nil,
+			width: width
+		)
 	}
 
 	func openToolsPane()
@@ -314,7 +342,10 @@ final class WindowPaneController
 		inspector.toolsTabs.setExpanded(expanded)
 		if !expanded
 		{
-			inspector.setExpandedConversation(false)
+			inspector.setExpandedConversation(
+				false,
+				resetSummary: true
+			)
 		}
 		updateExpandedPaneContent()
 		animateToolsPane(transition)
@@ -409,6 +440,10 @@ final class WindowPaneController
 
 	private func updateInspectorSizing()
 	{
+		if isShowingExpandedConversation
+		{
+			updateExpandedSummaryLayout()
+		}
 		guard usesToolsSizing != inspector.isShowingTools
 		else
 		{
@@ -493,6 +528,7 @@ final class WindowPaneController
 				)
 			}
 		}
+		updateExpandedSummaryLayout()
 	}
 
 	private func applyPaneVisibility(

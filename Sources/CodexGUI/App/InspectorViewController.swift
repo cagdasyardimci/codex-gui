@@ -8,6 +8,7 @@ final class InspectorViewController: NSViewController
 	let toolsTabs = ToolsTabViewController()
 	private(set) var isShowingTools = false
 	private var isShowingExpandedConversation = false
+	private var expandedConversationSummaryRevealed = false
 	var onToolsClose: ((Bool) -> Void)?
 	var onPaneContentChange: (() -> Void)?
 	private var summaryVisible = true
@@ -74,6 +75,7 @@ final class InspectorViewController: NSViewController
 		if renderedOwner != presentation.owner
 		{
 			isShowingDetails = false
+			expandedConversationSummaryRevealed = false
 		}
 		renderedOwner = presentation.owner
 		summaryVisible = visible
@@ -88,13 +90,33 @@ final class InspectorViewController: NSViewController
 		updateContentVisibility()
 	}
 
-	func setExpandedConversation(_ active: Bool)
+	var isSummaryBesideExpandedConversation: Bool
+	{
+		isShowingTools && isShowingExpandedConversation && expandedConversationSummaryRevealed
+			&& summaryVisible
+	}
+
+	func setExpandedConversation(
+		_ active: Bool,
+		resetSummary: Bool
+	)
 	{
 		if isShowingExpandedConversation != active
 		{
 			cancelSummaryTransition()
 		}
 		isShowingExpandedConversation = active
+		if resetSummary
+		{
+			expandedConversationSummaryRevealed = false
+		}
+		updateContentVisibility()
+	}
+
+	func showSummaryBesideExpandedConversation()
+	{
+		expandedConversationSummaryRevealed = true
+		isShowingDetails = false
 		updateContentVisibility()
 	}
 
@@ -148,7 +170,7 @@ final class InspectorViewController: NSViewController
 	{
 		cancelSummaryTransition()
 		_ = view
-		guard !isShowingTools,
+		guard !isShowingTools || (isShowingExpandedConversation && !isSummaryDisplayed),
 				!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 		else
 		{
@@ -198,7 +220,7 @@ final class InspectorViewController: NSViewController
 	private var isSummaryDisplayed: Bool
 	{
 		guard summaryVisible, !isShowingDetails,
-				!isShowingTools, let inspectorBox
+				!isShowingTools || isSummaryBesideExpandedConversation, let inspectorBox
 		else
 		{
 			return false
@@ -218,7 +240,7 @@ final class InspectorViewController: NSViewController
 		let showDetails = isShowingDetails && !isShowingTools
 		summary.view.isHidden = showDetails || !summaryVisible
 		changes.view.isHidden = !showDetails
-		let showSummary = !isShowingTools && summaryVisible
+		let showSummary = !isShowingTools ? summaryVisible : isSummaryBesideExpandedConversation
 		inspectorBox?.isHidden = !showDetails && !showSummary
 		toolsTabs.view.isHidden = !isShowingTools || isShowingExpandedConversation
 		projectLabel.isHidden = !showDetails
