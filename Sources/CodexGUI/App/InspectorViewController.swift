@@ -5,6 +5,11 @@ final class InspectorViewController: NSViewController
 {
 	let changes = ChangesViewController()
 	let summary = PinnedSummaryViewController()
+	let toolsTabs = ToolsTabViewController()
+	private(set) var isShowingTools = false
+	private var isShowingExpandedConversation = false
+	var onToolsClose: ((Bool) -> Void)?
+	var onPaneContentChange: (() -> Void)?
 	private var summaryVisible = true
 	private(set) var isShowingDetails = false
 	private var renderedOwner: FeaturePresentationOwner?
@@ -25,6 +30,21 @@ final class InspectorViewController: NSViewController
 		installInspectorContent(in: box)
 
 		view = container
+		addChild(toolsTabs)
+		AppKitLayout.pin(
+			toolsTabs.view,
+			to: container,
+			inset: 0
+		)
+		toolsTabs.view.isHidden = true
+		toolsTabs.onCloseLastTab =
+		{
+			[weak self] in self?.closeToolsPane()
+		}
+		toolsTabs.onClosePane =
+		{
+			[weak self] in self?.closeToolsPane()
+		}
 		addChild(summary)
 		AppKitLayout.pin(
 			summary.view,
@@ -57,26 +77,64 @@ final class InspectorViewController: NSViewController
 
 	func showSummary()
 	{
+		isShowingTools = false
 		isShowingDetails = false
+		updateContentVisibility()
+	}
+
+	func setExpandedConversation(_ active: Bool)
+	{
+		isShowingExpandedConversation = active
 		updateContentVisibility()
 	}
 
 	func showReportedChanges()
 	{
 		_ = view
+		isShowingTools = false
 		isShowingDetails = true
 		updateContentVisibility()
 	}
 
+	func showToolsTab()
+	{
+		_ = view
+		toolsTabs.openNewTab()
+		isShowingTools = true
+		updateContentVisibility()
+	}
+
+	func showToolsPane()
+	{
+		_ = view
+		if toolsTabs.tabCount == 0
+		{
+			toolsTabs.openNewTab()
+		}
+		isShowingTools = true
+		updateContentVisibility()
+	}
+
+	func closeToolsPane()
+	{
+		isShowingTools = false
+		updateContentVisibility()
+		onToolsClose?(isShowingDetails || summaryVisible)
+	}
+
 	private func updateContentVisibility()
 	{
-		summary.view.isHidden = isShowingDetails || !summaryVisible
-		changes.view.isHidden = !isShowingDetails
-		inspectorBox?.isHidden = !isShowingDetails && !summaryVisible
-		projectLabel.isHidden = !isShowingDetails
-		headerDivider.isHidden = !isShowingDetails
-		onSummaryDisplayChange?(!isShowingDetails && summaryVisible)
+		let showDetails = isShowingDetails && !isShowingTools
+		summary.view.isHidden = showDetails || !summaryVisible
+		changes.view.isHidden = !showDetails
+		let showSummary = !isShowingTools && summaryVisible
+		inspectorBox?.isHidden = !showDetails && !showSummary
+		toolsTabs.view.isHidden = !isShowingTools || isShowingExpandedConversation
+		projectLabel.isHidden = !showDetails
+		headerDivider.isHidden = !showDetails
+		onSummaryDisplayChange?(showSummary && !showDetails)
 		updateBoxHeight()
+		onPaneContentChange?()
 	}
 
 	private func makeInspectorBox(in container: NSView) -> NSView

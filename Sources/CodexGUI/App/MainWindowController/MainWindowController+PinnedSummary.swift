@@ -44,6 +44,7 @@ extension MainWindowController
 		{
 			[weak self] displayed in
 			self?.summaryToggleButton.state = displayed ? .on : .off
+			self?.inspector.toolsTabs.setSummaryVisible(displayed)
 			self?.summaryToggleButton.setAccessibilityValue(displayed ? "Visible" : "Hidden")
 		}
 		inspector.renderSummary(
@@ -96,7 +97,7 @@ extension MainWindowController
 			storeIdentity: String(describing: ObjectIdentifier(currentStore))
 		)
 		let visible = summaryVisibility.isVisible(for: owner)
-		let hiddenByContainer = inspector.isShowingDetails
+		let hiddenByContainer = inspector.isShowingTools || inspector.isShowingDetails
 			|| paneController.split.splitViewItems[2].isCollapsed
 		if !visible || !hiddenByContainer
 		{
@@ -136,7 +137,7 @@ extension MainWindowController
 		{
 			return
 		}
-		if toggleIfShowing, inspector.isShowingDetails,
+		if toggleIfShowing, !inspector.isShowingTools, inspector.isShowingDetails,
 			!paneController.split.splitViewItems[2].isCollapsed
 		{
 			paneController.toggleReview()

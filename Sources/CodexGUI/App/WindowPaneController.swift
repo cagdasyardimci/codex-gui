@@ -7,18 +7,49 @@ final class WindowPaneController
 	private weak var window: NSWindow?
 	private let navigation: NavigationViewController
 	private let inspector: InspectorViewController
+	private let conversation: ConversationViewController
 	private let conversationContainer: ClippedPaneViewController
 	private let reviewContainer: ClippedPaneViewController
+	private var conversationIsInExpandedPane = false
 	let split: NSSplitViewController
 	private let reviewPane: NSSplitViewItem
+	private let conversationPane: NSSplitViewItem
+	private(set) var isToolsExpanded = false
 	private let layoutStore: WindowLayoutStore?
 	private var expandedNavigationWidth = WindowPaneLayout.navigationWidth
 	private var expandedReviewWidth = WindowPaneLayout.reviewWidth
+	private var expandedToolsWidth = WindowPaneLayout.reviewWidth
+	private var usesToolsSizing = false
 	private var reviewVisibility: WindowReviewVisibility = .automatic
 	private var reviewAutomaticallyCollapsed = false
 	private var hasPresentedWindow = false
 	private var isApplyingPaneLayout = false
+	var onToolsExpansionLayoutChanged: (() -> Void)?
 	private var lastAppliedSplitWidth: CGFloat?
+
+	var reviewViewportWidth: CGFloat
+	{
+		reviewPane.isCollapsed ? 0 : reviewPane.viewController.view.frame.width
+	}
+
+	var isShowingExpandedConversation: Bool
+	{
+		isToolsExpanded && inspector.isShowingTools && inspector.toolsTabs.isConversationSelected
+	}
+
+	var tabViewportWidth: CGFloat
+	{
+		if isToolsExpanded
+		{
+			let navigationWidth = split.splitViewItems[0].isCollapsed
+				? 0 : expandedNavigationWidth + split.splitView.dividerThickness
+			return max(
+				0,
+				split.splitView.bounds.width - navigationWidth
+			)
+		}
+		return reviewViewportWidth
+	}
 
 	init(
 		navigation: NavigationViewController,
@@ -29,6 +60,7 @@ final class WindowPaneController
 	{
 		self.navigation = navigation
 		self.inspector = inspector
+		self.conversation = conversation
 		self.layoutStore = layoutStore
 		conversationContainer = ClippedPaneViewController(
 			content: conversation,
@@ -52,12 +84,12 @@ final class WindowPaneController
 		navigationPane.canCollapse = true
 		navigationPane.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
 		split.addSplitViewItem(navigationPane)
-		split.addSplitViewItem(
-			Self.pane(
-				conversationContainer,
-				minimumWidth: WindowPaneLayout.conversationMinimumWidth
-			)
+		conversationPane = Self.pane(
+			conversationContainer,
+			minimumWidth: WindowPaneLayout.conversationMinimumWidth
 		)
+		conversationPane.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
+		split.addSplitViewItem(conversationPane)
 		reviewPane = Self.pane(
 			reviewContainer,
 			minimumWidth: WindowPaneLayout.reviewMinimumWidth,
@@ -69,6 +101,14 @@ final class WindowPaneController
 		split.addSplitViewItem(reviewPane)
 
 		self.split = split
+		inspector.toolsTabs.onTabSelectionChange =
+		{
+			[weak self] in self?.updateExpandedTabSelection()
+		}
+		inspector.onPaneContentChange =
+		{
+			[weak self] in self?.updateInspectorSizing()
+		}
 		split.onLayout =
 		{
 			[weak self] in self?.applyResponsivePaneLayout()
@@ -162,6 +202,104 @@ final class WindowPaneController
 	func setReviewCollapsed(_ collapsed: Bool)
 	{
 		reviewVisibility = collapsed ? .collapsed : .expanded
+		if collapsed
+		{
+			setToolsExpanded(false)
+		}
+		applyResponsivePaneLayout(force: true)
+	}
+
+	func toggleToolsExpanded()
+	{
+		guard usesToolsSizing, isToolsExpanded || !reviewPane.isCollapsed
+		else
+		{
+			return
+		}
+		if !isToolsExpanded
+		{
+			expandedToolsWidth = reviewViewportWidth
+		}
+		reviewVisibility = .expanded
+		setToolsExpanded(!isToolsExpanded)
+		applyResponsivePaneLayout(force: true)
+	}
+
+	private func updateExpandedTabSelection()
+	{
+		guard isToolsExpanded
+		else
+		{
+			return
+		}
+		updateExpandedPaneContent()
+		onToolsExpansionLayoutChanged?()
+	}
+
+	private func updateExpandedPaneContent()
+	{
+		let showConversation = isShowingExpandedConversation
+		guard conversationIsInExpandedPane != showConversation
+		else
+		{
+			return
+		}
+		conversationIsInExpandedPane = showConversation
+		if showConversation
+		{
+			conversationContainer.detachContent()
+			reviewContainer.present(
+				conversation,
+				minimumWidth: WindowPaneLayout.conversationMinimumWidth
+			)
+			inspector.setExpandedConversation(true)
+		}
+		else
+		{
+			inspector.setExpandedConversation(false)
+			reviewContainer.detachContent()
+			conversationContainer.restoreContent()
+			reviewContainer.restoreContent()
+		}
+	}
+
+	func openToolsPane()
+	{
+		inspector.showToolsPane()
+		reviewVisibility = .expanded
+		applyResponsivePaneLayout(force: true)
+	}
+
+	private func setToolsExpanded(_ expanded: Bool)
+	{
+		guard isToolsExpanded != expanded
+		else
+		{
+			return
+		}
+		isToolsExpanded = expanded
+		inspector.toolsTabs.setExpanded(expanded)
+		if !expanded
+		{
+			inspector.setExpandedConversation(false)
+		}
+		updateExpandedPaneContent()
+	}
+
+	private func updateInspectorSizing()
+	{
+		guard usesToolsSizing != inspector.isShowingTools
+		else
+		{
+			return
+		}
+		usesToolsSizing = inspector.isShowingTools
+		if !usesToolsSizing
+		{
+			setToolsExpanded(false)
+		}
+		reviewPane.maximumThickness = usesToolsSizing
+			? NSSplitViewItem.unspecifiedDimension : WindowPaneLayout.reviewMaximumWidth
 		applyResponsivePaneLayout(force: true)
 	}
 
@@ -189,29 +327,18 @@ final class WindowPaneController
 			isApplyingPaneLayout = false
 		}
 		lastAppliedSplitWidth = width
-		let navigationWidth = split.splitViewItems[0].isCollapsed ? 0 : expandedNavigationWidth
+		let collapseConversation = isToolsExpanded
 		let dividerWidth = split.splitView.dividerThickness
-		let reviewDividerSpace = dividerWidth * (navigationWidth > 0 ? 2 : 1)
-		let availableReviewWidth =
-			width - navigationWidth - reviewDividerSpace - WindowPaneLayout.conversationMinimumWidth
-		let collapseReview: Bool
-		switch reviewVisibility
-		{
-		case .collapsed:
-			collapseReview = true
-		case .automatic:
-			collapseReview =
-				width - navigationWidth - reviewDividerSpace - expandedReviewWidth
-					< WindowPaneLayout.conversationComfortableWidth
-		case .expanded:
-			collapseReview = availableReviewWidth < WindowPaneLayout.reviewMinimumWidth
-		}
+		let target = reviewLayout(width: width)
+		let collapseReview = target.collapsed
 		reviewAutomaticallyCollapsed = reviewVisibility != .collapsed && collapseReview
 		let reviewCollapseChanged = reviewPane.isCollapsed != collapseReview
-		if reviewCollapseChanged
-		{
-			reviewPane.isCollapsed = collapseReview
-		}
+		applyPaneVisibility(
+			conversationCollapsed: collapseConversation,
+			reviewCollapsed: collapseReview
+		)
+		(split.splitView as? ConversationSplitView)?.showsReviewDivider =
+			usesToolsSizing && !collapseReview && !isToolsExpanded
 		// Ordinary resizing has already laid out the split view. Only a pane transition or an
 		// explicit restore needs another pass before measuring the pane widths.
 		if reviewCollapseChanged || force
@@ -226,13 +353,10 @@ final class WindowPaneController
 				ofDividerAt: 0
 			)
 		}
-		if !reviewPane.isCollapsed
+		if !reviewPane.isCollapsed, !isToolsExpanded
 		{
-			let visibleReviewWidth = min(
-				expandedReviewWidth,
-				availableReviewWidth
-			)
-			if abs(inspector.view.frame.width - visibleReviewWidth) >= 0.5
+			let visibleReviewWidth = target.width
+			if abs(reviewViewportWidth - visibleReviewWidth) >= 0.5
 			{
 				split.splitView.setPosition(
 					width - visibleReviewWidth - dividerWidth,
@@ -240,6 +364,56 @@ final class WindowPaneController
 				)
 			}
 		}
+	}
+
+	private func applyPaneVisibility(
+		conversationCollapsed: Bool,
+		reviewCollapsed: Bool
+	)
+	{
+		conversationPane.canCollapse = true
+		// Release the outgoing pane before opening the incoming pane. Temporarily showing both
+		// expanded panes lets AppKit increase the window width to satisfy their minimum sizes.
+		if conversationCollapsed, !conversationPane.isCollapsed
+		{
+			conversationPane.isCollapsed = true
+		}
+		if reviewCollapsed, !reviewPane.isCollapsed
+		{
+			reviewPane.isCollapsed = true
+		}
+		if !conversationCollapsed, conversationPane.isCollapsed
+		{
+			conversationPane.isCollapsed = false
+		}
+		if !reviewCollapsed, reviewPane.isCollapsed
+		{
+			reviewPane.isCollapsed = false
+		}
+		conversationPane.canCollapse = conversationCollapsed
+	}
+
+	private func reviewLayout(width: CGFloat) -> (collapsed: Bool, width: CGFloat)
+	{
+		let navigationWidth = split.splitViewItems[0].isCollapsed ? 0 : expandedNavigationWidth
+		let conversationWidth = isToolsExpanded ? 0 : WindowPaneLayout.conversationMinimumWidth
+		let dividerCount = (navigationWidth > 0 ? 1 : 0) + (isToolsExpanded ? 0 : 1)
+		let dividerSpace = split.splitView.dividerThickness * CGFloat(dividerCount)
+		let available = width - navigationWidth - dividerSpace - conversationWidth
+		let preferred = usesToolsSizing ? expandedToolsWidth : expandedReviewWidth
+		let collapsed: Bool
+		switch reviewVisibility
+		{
+		case .collapsed: collapsed = true
+		case .automatic:
+			collapsed = width - navigationWidth - dividerSpace - preferred
+				< WindowPaneLayout.conversationComfortableWidth
+		case .expanded: collapsed = available < WindowPaneLayout.reviewMinimumWidth
+		}
+		return (collapsed, isToolsExpanded ? available : min(
+			preferred,
+			available
+		))
 	}
 
 	private func rememberDividerChoice(at index: Int)
@@ -258,10 +432,20 @@ final class WindowPaneController
 		else if index == 1
 		{
 			reviewVisibility = reviewPane.isCollapsed ? .collapsed : .expanded
-			if !reviewPane.isCollapsed, !reviewAutomaticallyCollapsed
+			if !reviewPane.isCollapsed, !reviewAutomaticallyCollapsed, !isToolsExpanded
 			{
-				expandedReviewWidth = WindowPaneLayout
-					.restoredReviewWidth(inspector.view.frame.width)
+				if usesToolsSizing
+				{
+					expandedToolsWidth = max(
+						WindowPaneLayout.reviewMinimumWidth,
+						reviewViewportWidth
+					)
+				}
+				else
+				{
+					expandedReviewWidth = WindowPaneLayout
+						.restoredReviewWidth(reviewViewportWidth)
+				}
 			}
 		}
 		applyResponsivePaneLayout(force: true)
@@ -306,6 +490,16 @@ private final class ConversationSplitViewController: NSSplitViewController
 private final class ConversationSplitView: NSSplitView
 {
 	var onDividerInteractionEnded: ((Int) -> Void)?
+	var showsReviewDivider = false
+	{
+		didSet
+		{
+			if showsReviewDivider != oldValue
+			{
+				needsDisplay = true
+			}
+		}
+	}
 
 	private var dividerTrackingArea: NSTrackingArea?
 	private var dividerHovered = false
@@ -420,7 +614,7 @@ private final class ConversationSplitView: NSSplitView
 			rect.fill()
 			return
 		}
-		DesktopTheme.canvas.setFill()
+		(showsReviewDivider ? DesktopTheme.paneDivider : DesktopTheme.canvas).setFill()
 		rect.fill()
 	}
 }

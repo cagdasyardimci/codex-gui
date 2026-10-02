@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 extension MainWindowController
 {
@@ -6,6 +7,8 @@ extension MainWindowController
 	{
 		static let navigationControls = NSToolbarItem.Identifier("navigationControls")
 		static let trailingControls = NSToolbarItem.Identifier("trailingControls")
+		static let toolsSeparator = NSToolbarItem.Identifier("toolsSeparator")
+		static let toolsTabBar = NSToolbarItem.Identifier("toolsTabBar")
 		static let back = NSToolbarItem.Identifier("back")
 		static let forward = NSToolbarItem.Identifier("forward")
 		static let sidebarPlaceholder = NSToolbarItem.Identifier("sidebarPlaceholder")
@@ -28,6 +31,7 @@ extension MainWindowController
 	{
 		static let controlSize: CGFloat = 28
 		static let controlSpacing: CGFloat = 6
+		static let horizontalInset: CGFloat = 8
 		static let titleSpacing: CGFloat = 8
 		static let maximumTitleWidth: CGFloat = 280
 	}
@@ -50,6 +54,7 @@ extension MainWindowController
 
 		configureToolbarTitle()
 		configureSummaryToggle()
+		configureToolsToolbarControls()
 	}
 
 	private func configureToolbarTitle()
@@ -78,6 +83,7 @@ extension MainWindowController
 		projectIcon.translatesAutoresizingMaskIntoConstraints = false
 		titleLabel.translatesAutoresizingMaskIntoConstraints = false
 		titleContainer.setAccessibilityElement(false)
+		titleContainer.clipsToBounds = false
 		NSLayoutConstraint.activate([
 			projectIcon.leadingAnchor.constraint(equalTo: titleContainer.leadingAnchor),
 			projectIcon.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
@@ -98,7 +104,6 @@ extension MainWindowController
 	func updateNavigationToolbarSeparator()
 	{
 		guard let window,
-				let chromeView = window.contentView?.superview,
 				titleContainer.window === window,
 				window.toolbar?.isVisible == true,
 				let navigationView = paneController.split.splitView.subviews.first
@@ -108,30 +113,27 @@ extension MainWindowController
 			return
 		}
 
+		let toolbarView = titleContainer
 		let splitView = paneController.split.splitView
 		let dividerPosition = NSPoint(
 			x: navigationView.frame.maxX + splitView.dividerThickness / 2,
 			y: splitView.bounds.midY
 		)
-		let dividerInChrome = splitView.convert(
+		let dividerInToolbar = splitView.convert(
 			dividerPosition,
-			to: chromeView
-		)
-		let titleInChrome = titleContainer.convert(
-			titleContainer.bounds,
-			to: chromeView
+			to: toolbarView
 		)
 		let scale = window.backingScaleFactor
 		let separatorFrame = NSRect(
-			x: ((dividerInChrome.x - 0.5) * scale).rounded() / scale,
-			y: titleInChrome.midY - 9,
+			x: ((dividerInToolbar.x - 0.5) * scale).rounded() / scale,
+			y: toolbarView.bounds.midY - 9,
 			width: 1,
 			height: 18
 		)
-		// Draw above the native chrome without intercepting the tracking separator's drag area.
-		if navigationToolbarSeparator.superview !== chromeView
+		// Keep the marker in our toolbar view and pass dragging through to the native separator.
+		if navigationToolbarSeparator.superview !== toolbarView
 		{
-			chromeView.addSubview(navigationToolbarSeparator)
+			toolbarView.addSubview(navigationToolbarSeparator)
 		}
 		if navigationToolbarSeparator.frame != separatorFrame
 		{
@@ -173,6 +175,8 @@ extension MainWindowController
 		[
 			ToolbarItem.navigationControls,
 			ToolbarItem.trailingControls,
+			ToolbarItem.toolsSeparator,
+			ToolbarItem.toolsTabBar,
 			ToolbarItem.back,
 			ToolbarItem.forward,
 			ToolbarItem.sidebarPlaceholder,
@@ -218,9 +222,29 @@ extension MainWindowController
 				dividerIndex: 0
 			)
 		}
+		if itemIdentifier == ToolbarItem.toolsSeparator
+		{
+			return NSTrackingSeparatorToolbarItem(
+				identifier: itemIdentifier,
+				splitView: paneController.split.splitView,
+				dividerIndex: 1
+			)
+		}
 		let item = NSToolbarItem(itemIdentifier: itemIdentifier)
 		switch itemIdentifier
 		{
+		case ToolbarItem.toolsTabBar:
+			item.label = "Tabs"
+			let tabBar = inspector.toolsTabs.tabBarView
+			tabBar.clipsToBounds = false
+			if toolsTabBarWidthConstraint == nil
+			{
+				let width = tabBar.widthAnchor.constraint(equalToConstant: toolsTabBarWidth())
+				width.isActive = true
+				toolsTabBarWidthConstraint = width
+			}
+			item.view = tabBar
+			item.visibilityPriority = .high
 		case ToolbarItem.navigationControls:
 			item.label = "Navigation"
 			item.view = makeNavigationControls()
@@ -290,11 +314,8 @@ extension MainWindowController
 			item.label = "Separator"
 			item.view = ToolbarSeparatorView()
 		case ToolbarItem.newTab:
-			return makeDisabledToolbarItem(
-				identifier: itemIdentifier,
-				image: DesktopIcons.image(.plusSquareAdd),
-				label: "New tab"
-			)
+			item.label = "New tab"
+			item.view = makeNewTabButton()
 		case ToolbarItem.review:
 			item.label = "Changes"
 			item.image = DesktopIcons.image(
@@ -369,13 +390,199 @@ extension MainWindowController
 				isEnabled: false
 			),
 			summaryToggleButton,
-			ToolbarSeparatorView(),
-			makeToolbarButton(
-				image: DesktopIcons.image(.plusSquareAdd),
-				label: "New tab",
-				isEnabled: false
-			),
+			toolsClosedToolbarSeparator,
+			makeNewTabButton(),
 		])
+	}
+
+	private func makeNewTabButton() -> NSButton
+	{
+		toolsPaneButton
+	}
+
+	private func configureToolsToolbarControls()
+	{
+		toolsPaneButton.bezelStyle = .texturedRounded
+		toolsPaneButton.isBordered = false
+		toolsPaneButton.imagePosition = .imageOnly
+		toolsPaneButton.contentTintColor = .labelColor
+		toolsPaneButton.target = self
+		toolsPaneButton.action = #selector(toggleToolsPane)
+		toolsPaneButton.image = DesktopIcons.image(.plusSquareAdd)
+		toolsPaneButton.toolTip = "Open tab pane"
+		toolsPaneButton.setAccessibilityLabel("Open tab pane")
+		toolsPaneButton.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)
+			.isActive = true
+		toolsPaneButton.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)
+			.isActive = true
+	}
+
+	private func toolsTabBarWidth() -> CGFloat
+	{
+		max(
+			inspector.toolsTabs.minimumTabBarWidth,
+			paneController.tabViewportWidth - 16
+		)
+	}
+
+	func updateToolsToolbarControls()
+	{
+		guard let toolbar = window?.toolbar
+		else
+		{
+			return
+		}
+		let isOpen = inspector
+			.isShowingTools &&
+			(paneController.isToolsExpanded || !paneController.split.splitViewItems[2].isCollapsed)
+		let isExpanded = paneController.isToolsExpanded
+		if toolsToolbarIsOpen != isOpen || toolsToolbarIsExpanded != isExpanded
+		{
+			toolsToolbarIsOpen = isOpen
+			toolsToolbarIsExpanded = isExpanded
+			toolsPaneButton.isHidden = isOpen
+			toolsClosedToolbarSeparator.isHidden = isOpen
+			let identifiers: [NSToolbarItem.Identifier]
+			if isOpen, isExpanded
+			{
+				identifiers = [ToolbarItem.navigationControls,
+								ToolbarItem.navigationSeparator,
+								.flexibleSpace,
+								ToolbarItem.toolsTabBar]
+			}
+			else if isOpen
+			{
+				identifiers = toolbarDefaultItemIdentifiers(toolbar)
+					+ [ToolbarItem.toolsSeparator, ToolbarItem.toolsTabBar]
+			}
+			else
+			{
+				identifiers = toolbarDefaultItemIdentifiers(toolbar)
+			}
+			updateToolbarItems(
+				identifiers,
+				in: toolbar
+			)
+		}
+		if isOpen
+		{
+			let width = toolsTabBarWidth()
+			if toolsTabBarWidthConstraint?.constant != width
+			{
+				toolsTabBarWidthConstraint?.constant = width
+			}
+			updateToolsToolbarSeparator(isExpanded: isExpanded)
+		}
+	}
+
+	private func updateToolbarItems(
+		_ identifiers: [NSToolbarItem.Identifier],
+		in toolbar: NSToolbar
+	)
+	{
+		var sharedCount = 0
+		while sharedCount < min(
+			toolbar.items.count,
+			identifiers.count
+		),
+			toolbar.items[sharedCount].itemIdentifier == identifiers[sharedCount]
+		{
+			sharedCount += 1
+		}
+		while toolbar.items.count > sharedCount
+		{
+			toolbar.removeItem(at: toolbar.items.count - 1)
+		}
+		for index in sharedCount ..< identifiers.count
+		{
+			toolbar.insertItem(
+				withItemIdentifier: identifiers[index],
+				at: index
+			)
+		}
+	}
+
+	private func updateToolsToolbarSeparator(isExpanded: Bool)
+	{
+		let tabBar = inspector.toolsTabs.tabBarView
+		guard let window, tabBar.window === window
+		else
+		{
+			return
+		}
+		if toolsToolbarSeparator.superview !== tabBar
+		{
+			tabBar.addSubview(toolsToolbarSeparator)
+		}
+		let splitView = paneController.split.splitView
+		let position = NSPoint(
+			x: splitView.subviews[1].frame.maxX + splitView.dividerThickness / 2,
+			y: 0
+		)
+		let divider = splitView.convert(
+			position,
+			to: tabBar
+		)
+		let scale = window.backingScaleFactor
+		let frame = NSRect(
+			x: ((divider.x - 0.5) * scale).rounded() / scale,
+			y: tabBar.bounds.midY - 9,
+			width: 1,
+			height: 18
+		)
+		if toolsToolbarSeparator.frame != frame
+		{
+			toolsToolbarSeparator.frame = frame
+		}
+		toolsToolbarSeparator.isHidden = isExpanded
+	}
+
+	private func configureToolsPaneClosing()
+	{
+		paneController.onToolsExpansionLayoutChanged =
+		{
+			[weak self] in
+			self?.updateToolsToolbarControls()
+		}
+		inspector.toolsTabs.onToggleSummary =
+		{
+			[weak self] in self?.togglePinnedSummary()
+		}
+		inspector.toolsTabs.onToggleExpanded =
+		{
+			[weak self] in self?.toggleToolsExpanded()
+		}
+		inspector.onToolsClose =
+		{
+			[weak self] hasContent in
+			guard let self
+			else
+			{
+				return
+			}
+			self.paneController.setReviewCollapsed(!hasContent)
+			self.updateToolsToolbarControls()
+		}
+	}
+
+	@objc private func toggleToolsExpanded()
+	{
+		paneController.toggleToolsExpanded()
+		updateToolsToolbarControls()
+	}
+
+	@objc private func toggleToolsPane()
+	{
+		configureToolsPaneClosing()
+		if inspector.isShowingTools, !paneController.split.splitViewItems[2].isCollapsed
+		{
+			inspector.closeToolsPane()
+		}
+		else
+		{
+			paneController.openToolsPane()
+		}
+		updateToolsToolbarControls()
 	}
 
 	private func makeToolbarControlStack(_ controls: [NSView]) -> NSStackView

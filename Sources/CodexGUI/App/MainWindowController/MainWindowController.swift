@@ -28,6 +28,16 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	let titleLabel = NSTextField(labelWithString: "New chat")
 	let titleContainer = NSView()
 	let navigationToolbarSeparator = ToolbarSeparatorView(constrained: false)
+	let toolsPaneButton = NSButton(
+		title: "",
+		target: nil,
+		action: nil
+	)
+	var toolsToolbarIsOpen: Bool?
+	var toolsToolbarIsExpanded: Bool?
+	let toolsClosedToolbarSeparator = ToolbarSeparatorView()
+	let toolsToolbarSeparator = ToolbarSeparatorView(constrained: false)
+	var toolsTabBarWidthConstraint: NSLayoutConstraint?
 	var statusPopover: NSPopover?
 	let paneController: WindowPaneController
 	var summaryChangesProvider: ((FeaturePresentationOwner) -> SummarySection<SummaryChangeTotals>)?
@@ -163,6 +173,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		let title = selectedThread?.name ?? selectedThread?.preview ?? "New chat"
 		self.titleLabel.stringValue = title
 		self.titleLabel.toolTip = title
+		self.inspector.toolsTabs.setConversationTitle(title)
 		self.window?.title = "\(title) — Codex GUI"
 
 		let status = WorkspaceStatusPresentation(
@@ -234,6 +245,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	{
 		updateMinimumWindowSize()
 		updateNavigationToolbarSeparator()
+		updateToolsToolbarControls()
 	}
 
 	private func updateMinimumWindowSize()
