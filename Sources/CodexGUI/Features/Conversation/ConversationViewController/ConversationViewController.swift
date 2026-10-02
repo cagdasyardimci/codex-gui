@@ -73,7 +73,12 @@ final class ConversationViewController: NSViewController,
 	let conversationScrollView = NSScrollView()
 	let turnNavigationRail = TurnNavigationRail()
 	private var transcriptUtilityRow: NSStackView?
-	private var centeredReadingRows: [(content: NSView, row: NSView)] = []
+	private var centeredReadingRows: [(
+		content: NSView,
+		row: NSView,
+		horizontalConstraints: [NSLayoutConstraint]
+	)] = []
+	private var paneResizeControlConstraints: [NSLayoutConstraint] = []
 	private let emptyStateLabel = NSTextField(wrappingLabelWithString: "What can I help with?")
 	let latestButton = NSButton(
 		title: "Latest Message",
@@ -97,6 +102,11 @@ final class ConversationViewController: NSViewController,
 	}
 	var measuredItemSizes: [String: MeasuredItemSize] = [:]
 	var liveResizeInProgress = false
+	enum TranscriptResizeReason
+	{
+		case window, pane
+	}
+	var transcriptResizeReasons = Set<TranscriptResizeReason>()
 	var liveResizeVisibleIDs = Set<String>()
 	var needsFinalResizeMetrics = false
 	var resizeFollowingOutput = false
@@ -371,24 +381,71 @@ final class ConversationViewController: NSViewController,
 		let preferredWidth = content.widthAnchor.constraint(equalTo: row.widthAnchor)
 		// Yield to AppKit's window-resize priorities so the inner cap cannot limit the window.
 		preferredWidth.priority = .defaultLow
-		NSLayoutConstraint.activate([
+		let horizontalConstraints = [
 			content.centerXAnchor.constraint(equalTo: row.centerXAnchor),
-			content.topAnchor.constraint(equalTo: row.topAnchor),
-			content.bottomAnchor.constraint(equalTo: row.bottomAnchor),
 			content.widthAnchor.constraint(
 				lessThanOrEqualToConstant: ConversationFlowLayout.maximumContentWidth
 			),
 			content.widthAnchor.constraint(lessThanOrEqualTo: row.widthAnchor),
 			preferredWidth,
+		]
+		NSLayoutConstraint.activate(horizontalConstraints + [
+			content.topAnchor.constraint(equalTo: row.topAnchor),
+			content.bottomAnchor.constraint(equalTo: row.bottomAnchor),
 		])
 		row.isHidden = content.isHidden
-		centeredReadingRows.append((content: content, row: row))
+		centeredReadingRows.append((
+			content: content,
+			row: row,
+			horizontalConstraints: horizontalConstraints
+		))
 		return row
+	}
+
+	func beginPaneResize()
+	{
+		guard !transcriptResizeReasons.contains(.pane)
+		else
+		{
+			return
+		}
+		view.layoutSubtreeIfNeeded()
+		beginTranscriptResize(reason: .pane)
+		for entry in centeredReadingRows where !entry.row.isHidden
+		{
+			let frame = entry.content.frame
+			NSLayoutConstraint.deactivate(entry.horizontalConstraints)
+			paneResizeControlConstraints.append(contentsOf: [
+				entry.content.widthAnchor.constraint(equalToConstant: frame.width),
+				entry.content.leadingAnchor.constraint(
+					equalTo: entry.row.leadingAnchor,
+					constant: frame.minX
+				),
+			])
+		}
+		NSLayoutConstraint.activate(paneResizeControlConstraints)
+	}
+
+	func endPaneResize()
+	{
+		guard transcriptResizeReasons.contains(.pane)
+		else
+		{
+			return
+		}
+		NSLayoutConstraint.deactivate(paneResizeControlConstraints)
+		paneResizeControlConstraints.removeAll()
+		for entry in centeredReadingRows
+		{
+			NSLayoutConstraint.activate(entry.horizontalConstraints)
+		}
+		view.layoutSubtreeIfNeeded()
+		endTranscriptResize(reason: .pane)
 	}
 
 	private func updateReadingRowVisibility()
 	{
-		for (content, row) in centeredReadingRows where row.isHidden != content.isHidden
+		for (content, row, _) in centeredReadingRows where row.isHidden != content.isHidden
 		{
 			row.isHidden = content.isHidden
 		}

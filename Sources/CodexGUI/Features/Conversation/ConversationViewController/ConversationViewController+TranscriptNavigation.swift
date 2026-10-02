@@ -342,6 +342,16 @@ extension ConversationViewController
 		{
 			return
 		}
+		beginTranscriptResize(reason: .window)
+	}
+
+	func beginTranscriptResize(reason: TranscriptResizeReason)
+	{
+		guard transcriptResizeReasons.insert(reason).inserted, !liveResizeInProgress
+		else
+		{
+			return
+		}
 		cancelWidthChangeReadingPosition()
 		resizeContext = renderedContext
 		resizeFollowingOutput = isNearBottom
@@ -353,7 +363,18 @@ extension ConversationViewController
 
 	@objc func transcriptDidEndLiveResize(_ notification: Notification)
 	{
-		guard notification.object as? NSWindow === view.window, liveResizeInProgress
+		guard notification.object as? NSWindow === view.window
+		else
+		{
+			return
+		}
+		endTranscriptResize(reason: .window)
+	}
+
+	func endTranscriptResize(reason: TranscriptResizeReason)
+	{
+		guard transcriptResizeReasons.remove(reason) != nil, transcriptResizeReasons.isEmpty,
+				liveResizeInProgress
 		else
 		{
 			return
