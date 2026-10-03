@@ -55,7 +55,8 @@ final class ToolsPaneTransition
 		navigationPane: NSSplitViewItem,
 		conversationPane: NSSplitViewItem,
 		reviewPane: NSSplitViewItem,
-		openingToolsPane: Bool = false
+		openingToolsPane: Bool = false,
+		startingReviewWidth: CGFloat? = nil
 	)
 	{
 		guard splitView.bounds.width > 0
@@ -72,8 +73,8 @@ final class ToolsPaneTransition
 		initialWidth = splitView.bounds.width
 		navigationWidth = navigationPane.isCollapsed ? nil : navigationPane.viewController.view
 			.frame.width
-		initialReviewWidth = openingToolsPane || reviewPane.isCollapsed
-			? 0 : reviewPane.viewController.view.frame.width
+		initialReviewWidth = startingReviewWidth ?? (openingToolsPane || reviewPane.isCollapsed
+			? 0 : reviewPane.viewController.view.frame.width)
 		finalConversationCollapsed = conversationPane.isCollapsed
 		finalReviewCollapsed = reviewPane.isCollapsed
 	}
@@ -145,12 +146,10 @@ final class ToolsPaneTransition
 					1,
 					(CACurrentMediaTime() - started) / Self.duration
 				)
-				let eased = Self.easeInEaseOut(elapsed)
-				self.applyReviewWidth(
-					self
-						.initialReviewWidth + (finalWidth - self.initialReviewWidth) *
-						CGFloat(eased)
-				)
+				let eased = TransitionEasing.easeInEaseOut(elapsed)
+				let widthChange = finalWidth - self.initialReviewWidth
+				let currentWidth = self.initialReviewWidth + widthChange * CGFloat(eased)
+				self.applyReviewWidth(currentWidth)
 				progress()
 				guard !Task.isCancelled, self.isPrepared
 				else
@@ -223,33 +222,5 @@ final class ToolsPaneTransition
 		reviewPane.isCollapsed = finalReviewCollapsed
 		conversationSettings.restore(conversationPane)
 		reviewSettings.restore(reviewPane)
-	}
-
-	private static func easeInEaseOut(_ fraction: Double) -> Double
-	{
-		guard fraction > 0, fraction < 1
-		else
-		{
-			return fraction
-		}
-		var lower = 0.0
-		var upper = 1.0
-		for _ in 0 ..< 12
-		{
-			let parameter = (lower + upper) / 2
-			let inverse = 1 - parameter
-			let time = 3 * inverse * inverse * parameter * 0.42
-				+ 3 * inverse * parameter * parameter * 0.58 + parameter * parameter * parameter
-			if time < fraction
-			{
-				lower = parameter
-			}
-			else
-			{
-				upper = parameter
-			}
-		}
-		let parameter = (lower + upper) / 2
-		return 3 * (1 - parameter) * parameter * parameter + parameter * parameter * parameter
 	}
 }
