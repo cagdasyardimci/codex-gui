@@ -21,13 +21,24 @@ final class ToolsTabViewController: NSViewController
 	var onToggleExpanded: (() -> Void)?
 	var onToggleSummary: (() -> Void)?
 	var onTabSelectionChange: (() -> Void)?
+	var onOpenChanges: (() -> Void)?
+	var onChangesSelectionChange: (() -> Void)?
+	var onChangesTabClosed: (() -> Void)?
 	private(set) var tabCount = 0
 	private(set) var selectedTabID: UUID?
 	private(set) var isConversationSelected = false
+	private(set) var changesTabID: UUID?
+	var isChangesSelected: Bool
+	{
+		!isConversationSelected && selectedTabID == changesTabID && changesTabID != nil
+	}
 	private var isExpanded = false
 	private var conversationTitle = "New chat"
 	private var tabIDs: [UUID] = []
 	private let tabStack = NSStackView()
+	private let contentHost = NSView()
+	private var toolsContent: NSView?
+	private weak var changesController: NSViewController?
 	private let tabScrollView = NSScrollView()
 	private lazy var tabBar = makeTabHeader()
 	private var preferredTabAreaWidth: NSLayoutConstraint?
@@ -56,7 +67,7 @@ final class ToolsTabViewController: NSViewController
 	static func paneIcon() -> NSImage
 	{
 		let configuration = NSImage.SymbolConfiguration(
-			pointSize: 16,
+			pointSize: 11,
 			weight: .regular
 		)
 		let image = NSImage(
@@ -64,7 +75,7 @@ final class ToolsTabViewController: NSViewController
 			accessibilityDescription: nil
 		)?.withSymbolConfiguration(configuration) ?? DesktopIcons.image(
 			.sidebarRight,
-			size: 16
+			size: 12
 		)
 		image.isTemplate = true
 		return image
@@ -76,25 +87,85 @@ final class ToolsTabViewController: NSViewController
 		view = container
 
 		_ = tabBar
-		let toolsContent = makeToolsContent()
-		toolsContent.translatesAutoresizingMaskIntoConstraints = false
-		container.addSubview(toolsContent)
+		AppKitLayout.pin(
+			contentHost,
+			to: container,
+			inset: 0
+		)
+		installToolsContent()
+		renderTabs()
+	}
 
+	private func installToolsContent()
+	{
+		let toolsContent = makeToolsContent()
+		self.toolsContent = toolsContent
+		toolsContent.translatesAutoresizingMaskIntoConstraints = false
+		contentHost.addSubview(toolsContent)
 		NSLayoutConstraint.activate([
 			toolsContent.leadingAnchor.constraint(
-				equalTo: container.leadingAnchor,
+				equalTo: contentHost.leadingAnchor,
 				constant: Layout.contentInset
 			),
 			toolsContent.trailingAnchor.constraint(
-				equalTo: container.trailingAnchor,
+				equalTo: contentHost.trailingAnchor,
 				constant: -Layout.contentInset
 			),
 			toolsContent.topAnchor.constraint(
-				equalTo: container.topAnchor,
+				equalTo: contentHost.topAnchor,
 				constant: 32
 			),
 		])
+	}
+
+	func showChanges(_ controller: NSViewController)
+	{
+		guard let selectedTabID
+		else
+		{
+			return
+		}
+		let selectionChanged = isConversationSelected || (changesTabID != nil &&
+			changesTabID != selectedTabID)
+		if let changesTabID, changesTabID != selectedTabID
+		{
+			self.selectedTabID = changesTabID
+		}
+		else
+		{
+			changesTabID = selectedTabID
+		}
+		isConversationSelected = false
+		_ = view
+		if controller.parent !== self
+		{
+			controller.view.removeFromSuperview()
+			controller.removeFromParent()
+			addChild(controller)
+			AppKitLayout.pin(
+				controller.view,
+				to: contentHost,
+				inset: 0
+			)
+		}
+		changesController = controller
 		renderTabs()
+		if selectionChanged
+		{
+			onTabSelectionChange?()
+		}
+	}
+
+	func detachChanges()
+	{
+		guard let changesController, changesController.parent === self
+		else
+		{
+			return
+		}
+		changesController.view.removeFromSuperview()
+		changesController.removeFromParent()
+		showSelectedContent()
 	}
 
 	func openNewTab()
@@ -108,6 +179,7 @@ final class ToolsTabViewController: NSViewController
 
 		_ = view
 		renderTabs()
+		onChangesSelectionChange?()
 		if wasShowingConversation
 		{
 			onTabSelectionChange?()
@@ -145,6 +217,10 @@ final class ToolsTabViewController: NSViewController
 		expandButton?.toolTip = label
 		expandButton?.setAccessibilityLabel(label)
 		renderTabs()
+		if !expanded && isChangesSelected
+		{
+			onChangesSelectionChange?()
+		}
 	}
 
 	func setSummaryVisible(_ visible: Bool)
@@ -285,7 +361,8 @@ final class ToolsTabViewController: NSViewController
 			size: 18
 		)
 		button.imagePosition = .imageLeading
-		button.isEnabled = false
+		button.target = self
+		button.action = #selector(openChanges)
 		button.setAccessibilityLabel("Changes")
 		AppKitLayout.pin(
 			button,
@@ -298,12 +375,29 @@ final class ToolsTabViewController: NSViewController
 
 	private func renderTabs()
 	{
+		showSelectedContent()
+		updatePreferredTabAreaWidth()
+
+		let selectedTab = rebuildTabViews()
+		revealSelectedTab(selectedTab)
+	}
+
+	private func updatePreferredTabAreaWidth()
+	{
 		let visibleTabCount = tabCount + (isExpanded ? 1 : 0)
-		preferredTabAreaWidth?.constant = CGFloat(visibleTabCount) * Layout.tabWidth
-			+ CGFloat(max(
-				0,
-				visibleTabCount - 1
-			)) * Layout.tabSpacing + Layout.tabSpacing + Layout.controlSize
+		let tabsWidth = CGFloat(visibleTabCount) * Layout.tabWidth
+		let tabGapCount = max(
+			0,
+			visibleTabCount - 1
+		)
+		let tabGapsWidth = CGFloat(tabGapCount) * Layout.tabSpacing
+		let tabsAndGapsWidth = tabsWidth + tabGapsWidth
+		preferredTabAreaWidth?.constant =
+			tabsAndGapsWidth + Layout.tabSpacing + Layout.controlSize
+	}
+
+	private func rebuildTabViews() -> NSView?
+	{
 		for tab in tabStack.arrangedSubviews
 		{
 			tabStack.removeArrangedSubview(tab)
@@ -324,6 +418,7 @@ final class ToolsTabViewController: NSViewController
 			let selected = !isConversationSelected && tabID == selectedTabID
 			let tab = makeTab(
 				at: index,
+				id: tabID,
 				selected: selected
 			)
 			addTabView(tab)
@@ -336,6 +431,11 @@ final class ToolsTabViewController: NSViewController
 		{
 			tabStack.addArrangedSubview(addTabButton)
 		}
+		return selectedTab
+	}
+
+	private func revealSelectedTab(_ selectedTab: NSView?)
+	{
 		if tabBar.superview != nil, tabBar.bounds.width > 0
 		{
 			tabBar.layoutSubtreeIfNeeded()
@@ -348,6 +448,15 @@ final class ToolsTabViewController: NSViewController
 				}
 				tabStack.scrollToVisible(visibleRect)
 			}
+		}
+	}
+
+	private func showSelectedContent()
+	{
+		toolsContent?.isHidden = isChangesSelected
+		if let changesController, changesController.parent === self
+		{
+			changesController.view.isHidden = !isChangesSelected
 		}
 	}
 
@@ -392,11 +501,13 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeTab(
 		at index: Int,
+		id: UUID,
 		selected: Bool
 	) -> NSView
 	{
+		let isChanges = id == changesTabID
 		let selectButton = NSButton(
-			title: "New tab",
+			title: isChanges ? "Changes" : "New tab",
 			target: self,
 			action: #selector(selectTab(_:))
 		)
@@ -405,9 +516,17 @@ final class ToolsTabViewController: NSViewController
 			prominent: selected
 		)
 		selectButton.alignment = .left
+		if isChanges
+		{
+			selectButton.image = PinnedSummaryIcons.image(
+				.changes,
+				size: 16
+			)
+			selectButton.imagePosition = .imageLeading
+		}
 		selectButton.font = .systemFont(ofSize: 13)
 		selectButton.tag = index
-		selectButton.setAccessibilityLabel("New tab \(index + 1)")
+		selectButton.setAccessibilityLabel("\(isChanges ? "Changes" : "New tab") \(index + 1)")
 		selectButton.setAccessibilityValue(selected ? "Selected" : "Not selected")
 		let closeButton = makeIconButton(
 			.x,
@@ -499,6 +618,11 @@ final class ToolsTabViewController: NSViewController
 		openNewTab()
 	}
 
+	@objc private func openChanges()
+	{
+		onOpenChanges?()
+	}
+
 	@objc private func closePane()
 	{
 		onClosePane?()
@@ -525,6 +649,7 @@ final class ToolsTabViewController: NSViewController
 		isConversationSelected = false
 		renderTabs()
 		onTabSelectionChange?()
+		onChangesSelectionChange?()
 	}
 
 	@objc private func selectConversation()
@@ -537,6 +662,7 @@ final class ToolsTabViewController: NSViewController
 		isConversationSelected = true
 		renderTabs()
 		onTabSelectionChange?()
+		onChangesSelectionChange?()
 	}
 
 	@objc private func closeTab(_ sender: NSButton)
@@ -547,6 +673,11 @@ final class ToolsTabViewController: NSViewController
 			return
 		}
 		let removedTabID = tabIDs.remove(at: sender.tag)
+		if removedTabID == changesTabID
+		{
+			changesTabID = nil
+			onChangesTabClosed?()
+		}
 		tabCount = tabIDs.count
 		if removedTabID == selectedTabID
 		{
@@ -556,6 +687,7 @@ final class ToolsTabViewController: NSViewController
 			)]
 		}
 		renderTabs()
+		onChangesSelectionChange?()
 		if tabIDs.isEmpty
 		{
 			onCloseLastTab?()
