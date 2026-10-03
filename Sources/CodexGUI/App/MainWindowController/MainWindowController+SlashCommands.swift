@@ -186,7 +186,7 @@ extension MainWindowController
 			showStatus()
 			acknowledge()
 		case .diff:
-			paneController.setReviewCollapsed(false)
+			openCurrentChanges()
 			acknowledge()
 		case .copy:
 			guard let response = Self.latestAgentResponse(in: snapshot)

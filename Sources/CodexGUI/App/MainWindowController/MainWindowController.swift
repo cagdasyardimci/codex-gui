@@ -16,6 +16,9 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	let navigation = NavigationViewController()
 	let conversation = ConversationViewController()
 	let inspector = InspectorViewController()
+	var gitSummary = GitSummaryReconciliation()
+	let summaryGitLoader = GitSummaryBackgroundLoader()
+	private var toolbarVisibilityBeforeGitReview: Bool?
 	let commandPalette = CommandPaletteController()
 	let messageSearch = MessageSearchController()
 	let settings = SettingsWindowController()
@@ -28,16 +31,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	let titleLabel = NSTextField(labelWithString: "New chat")
 	let titleContainer = NSView()
 	let navigationToolbarSeparator = ToolbarSeparatorView(constrained: false)
-	let toolsPaneButton = NSButton(
-		title: "",
-		target: nil,
-		action: nil
-	)
-	var toolsToolbarIsOpen: Bool?
-	var toolsToolbarIsExpanded: Bool?
-	let toolsClosedToolbarSeparator = ToolbarSeparatorView()
-	let toolsToolbarSeparator = ToolbarSeparatorView(constrained: false)
-	var toolsTabBarWidthConstraint: NSLayoutConstraint?
+	let toolsToolbar = ToolsToolbarCoordinator()
 	var statusPopover: NSPopover?
 	let paneController: WindowPaneController
 	var summaryChangesProvider: ((FeaturePresentationOwner) -> SummarySection<SummaryChangeTotals>)?
@@ -63,6 +57,39 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		self.onOpenProjectRequest = onOpenProject
 		self.onInsertPathRequest = onInsertPath
 		self.coordinator = coordinator
+		let window = Self.makeWindow()
+
+		paneController = WindowPaneController(
+			navigation: navigation,
+			conversation: conversation,
+			inspector: inspector,
+			layoutStore: layoutStore
+		)
+		window.contentViewController = WindowChromeViewController(
+			split: paneController.split,
+			accountButton: statusButton
+		)
+
+		super.init(window: window)
+		shouldCascadeWindows = false
+		configureInspectorCallbacks()
+		configureToolbarControls()
+
+		installConversationToolbar(in: window)
+		updateMinimumWindowSize()
+		observeWindowChrome(in: window)
+		paneController.restoreLayout(in: window)
+		observeWorkspacePublications()
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(windowDidClose),
+			name: NSWindow.willCloseNotification,
+			object: window
+		)
+	}
+
+	private static func makeWindow() -> DesktopWindow
+	{
 		let window = DesktopWindow(
 			contentRect: NSRect(
 				x: 0,
@@ -83,21 +110,43 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		window.backgroundColor = DesktopTheme.chrome
 		window.center()
 
-		paneController = WindowPaneController(
-			navigation: navigation,
-			conversation: conversation,
-			inspector: inspector,
-			layoutStore: layoutStore
-		)
-		window.contentViewController = WindowChromeViewController(
-			split: paneController.split,
-			accountButton: statusButton
-		)
+		return window
+	}
 
-		super.init(window: window)
-		shouldCascadeWindows = false
-		configureToolbarControls()
+	private func configureInspectorCallbacks()
+	{
+		inspector.onDetailGeometryChange =
+		{
+			[weak self] wide in self?.paneController.setWorkspaceFilesExpanded(wide)
+		}
+		inspector.onGitReviewDisplayChange =
+		{
+			[weak self] focused in self?.setGitReviewFocused(focused)
+		}
+		inspector.gitChanges.onToggleExpanded =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.inspector.setGitReviewFocused(!self.paneController.isGitReviewFocused)
+		}
+		inspector.gitChanges.onTogglePanel =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.inspector.setGitReviewFocused(!self.paneController.isGitReviewFocused)
+		}
+	}
 
+	private func installConversationToolbar(in window: NSWindow)
+	{
 		let toolbar = NSToolbar(identifier: "CodexGUIConversationToolbar")
 		toolbar.delegate = self
 		toolbar.displayMode = .iconOnly
@@ -105,7 +154,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		toolbar.allowsUserCustomization = false
 		toolbar.autosavesConfiguration = false
 		window.toolbar = toolbar
-		updateMinimumWindowSize()
+	}
+
+	private func observeWindowChrome(in window: NSWindow)
+	{
 		NotificationCenter.default.addObserver(
 			self,
 			selector: #selector(windowChromeDidUpdate),
@@ -118,7 +170,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			name: NSSplitView.didResizeSubviewsNotification,
 			object: paneController.split.splitView
 		)
-		paneController.restoreLayout(in: window)
+	}
+
+	private func observeWorkspacePublications()
+	{
 		if let coordinator
 		{
 			coordinator.onChange =
@@ -143,13 +198,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 				}
 			)
 		}
-		NotificationCenter.default.addObserver(
-			self,
-			selector: #selector(windowDidClose),
-			name: NSWindow.willCloseNotification,
-			object: window
-		)
-
 	}
 
 	func renderSnapshot(_ snapshot: ConversationSnapshot)
@@ -166,32 +214,22 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		configureMessageSearchActions(target: target)
 		configureConversationActions(target: target)
 
-		let selectedThread = snapshot.threads.first
-		{
-			$0.id == snapshot.selectedThreadID
-		}
-		let title = selectedThread?.name ?? selectedThread?.preview ?? "New chat"
-		self.titleLabel.stringValue = title
-		self.titleLabel.toolTip = title
-		self.inspector.toolsTabs.setConversationTitle(title)
-		self.window?.title = "\(title) — Codex GUI"
+		updateConversationTitle(snapshot)
 
-		let status = WorkspaceStatusPresentation(
+		renderWorkspaceStatus(
 			snapshot,
-			ownerIdentity: target.presentationIdentity
+			target: target
 		)
-		self.settings.render(status)
-		self.statusView.render(status)
-		let executionState = status.executionState
-		self.statusButton.toolTip = "\(status.accountDescription) · \(executionState.title)"
-		self.statusButton
-			.setAccessibilityLabel("\(executionState.title). Open account and backend status")
 
 		self.navigation.render(NavigationPresentation(snapshot))
 		self.conversation.render(ConversationPresentation(
 			snapshot,
 			ownerIdentity: target.presentationIdentity
 		))
+		configureGitSummary(
+			target: target,
+			snapshot: snapshot
+		)
 		self.inspector.render(ReviewPresentation(
 			snapshot,
 			ownerIdentity: target.presentationIdentity
@@ -218,8 +256,67 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		self.onSnapshot?(snapshot)
 	}
 
+	private func updateConversationTitle(_ snapshot: ConversationSnapshot)
+	{
+		let selectedThread = snapshot.threads.first
+		{
+			$0.id == snapshot.selectedThreadID
+		}
+		let title = selectedThread?.name ?? selectedThread?.preview ?? "New chat"
+		self.titleLabel.stringValue = title
+		self.titleLabel.toolTip = title
+		self.inspector.toolsTabs.setConversationTitle(title)
+		self.window?.title = "\(title) — Codex GUI"
+	}
+
+	private func renderWorkspaceStatus(
+		_ snapshot: ConversationSnapshot,
+		target: WorkspaceIntentTarget
+	)
+	{
+		let status = WorkspaceStatusPresentation(
+			snapshot,
+			ownerIdentity: target.presentationIdentity
+		)
+		self.settings.render(status)
+		self.statusView.render(status)
+		let executionState = status.executionState
+		self.statusButton.toolTip = "\(status.accountDescription) · \(executionState.title)"
+		self.statusButton
+			.setAccessibilityLabel("\(executionState.title). Open account and backend status")
+	}
+
+	private func setGitReviewFocused(_ focused: Bool)
+	{
+		paneController.setGitReviewFocused(focused)
+		(window?.contentViewController as? WindowChromeViewController)?.setGitReviewFocused(focused)
+		if focused
+		{
+			if toolbarVisibilityBeforeGitReview == nil
+			{
+				toolbarVisibilityBeforeGitReview = window?.toolbar?.isVisible
+			}
+			window?.toolbar?.isVisible = false
+		}
+		else
+		{
+			if let visible = toolbarVisibilityBeforeGitReview
+			{
+				window?.toolbar?.isVisible = visible
+				toolbarVisibilityBeforeGitReview = nil
+			}
+			if inspector.isShowingDetails, inspector.panels.destination == .changes
+			{
+				paneController.setReviewCollapsed(false)
+			}
+		}
+	}
+
 	@objc private func windowDidClose()
 	{
+		inspector.setGitReviewFocused(false)
+		inspector.gitChanges.close()
+		summaryGitLoader.cancel()
 		publicationObserver?.cancel()
 		publicationObserver = nil
 		coordinator?.onChange = nil

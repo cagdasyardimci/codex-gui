@@ -78,6 +78,100 @@ struct GitReviewHostLayoutTests
 		}
 	}
 
+	@Test func changesOpensBesideChatAndOnlyExplicitExpansionHidesToolbar() throws
+	{
+		_ = NSApplication.shared
+		let suite = "GitReviewOpening.\(UUID())"
+		let defaults = try #require(UserDefaults(suiteName: suite))
+		defer
+		{
+			defaults.removePersistentDomain(forName: suite)
+		}
+		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		let controller = MainWindowController(
+			store: state.store,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			}
+		)
+		let window = try #require(controller.window)
+		defer
+		{
+			window.close()
+		}
+		let panes = controller.paneController
+		panes.didPresentWindow()
+		panes.setSidebarCollapsed(false)
+		window.toolbar?.isVisible = true
+		let original = state.currentSnapshot
+		var model = WorkspaceModel(identity: WorkspaceIdentity(
+			sessionID: UUID(),
+			canonicalCheckoutPath: "/fixture"
+		))
+		model.conversations.selectedConversation = .thread("chat")
+		let presentation = PinnedSummaryPresentation(
+			WorkspaceSelectors.snapshot(
+				model: model,
+				now: .distantPast
+			),
+			ownerIdentity: "fixture",
+			sections: ContextSummarySelector.sections(
+				model: model,
+				chatID: "chat"
+			)
+		)
+		controller.inspector.renderSummary(
+			presentation,
+			visible: true
+		)
+		#expect(controller.inspector.open(ContextPanelRequest(
+			owner: presentation.owner,
+			destination: .changes
+		)))
+		panes.setReviewCollapsed(false)
+		window.layoutIfNeeded()
+		#expect(!controller.inspector.isGitReviewFocused)
+		#expect(!panes.isGitReviewFocused)
+		#expect(!panes.split.splitViewItems[0].isCollapsed)
+		#expect(!panes.split.splitViewItems[1].isCollapsed)
+		#expect(!panes.isReviewCollapsed)
+		#expect(window.toolbar?.isVisible == true)
+		let detailFrame = controller.inspector.panels.view.convert(
+			controller.inspector.panels.view.bounds,
+			to: controller.inspector.view
+		)
+		#expect(abs(detailFrame.minX) < 2)
+		#expect(abs(detailFrame.minY) < 2)
+		#expect(abs(detailFrame.width - controller.inspector.view.bounds.width) < 2)
+		#expect(abs(detailFrame.height - controller.inspector.view.bounds.height) < 2)
+		controller.inspector.gitChanges.onToggleExpanded?()
+		window.layoutIfNeeded()
+		#expect(panes.isGitReviewFocused)
+		#expect(panes.split.splitViewItems[1].isCollapsed)
+		#expect(window.toolbar?.isVisible == false)
+		controller.inspector.gitChanges.onTogglePanel?()
+		window.layoutIfNeeded()
+		#expect(!panes.isGitReviewFocused)
+		#expect(!panes.split.splitViewItems[0].isCollapsed)
+		#expect(!panes.split.splitViewItems[1].isCollapsed)
+		#expect(!panes.isReviewCollapsed)
+		#expect(window.toolbar?.isVisible == true)
+		#expect(controller.inspector.isShowingDetails)
+		controller.inspector.gitChanges.onToggleExpanded?()
+		controller.inspector.showSummary()
+		window.layoutIfNeeded()
+		#expect(!panes.isGitReviewFocused)
+		#expect(!panes.split.splitViewItems[1].isCollapsed)
+		#expect(window.toolbar?.isVisible == true)
+		#expect(state.currentSnapshot.selectedThreadID == original.selectedThreadID)
+		#expect(state.currentSnapshot.draft == original.draft)
+		#expect(panes.split.splitViewItems[1].viewController.children.first === controller
+			.conversation)
+	}
+
 	@Test func inspectorRestoresFocusOnBackOtherDetailAndOwnerChange() throws
 	{
 		_ = NSApplication.shared

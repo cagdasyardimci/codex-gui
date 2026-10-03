@@ -1,5 +1,4 @@
 import AppKit
-import QuartzCore
 
 extension MainWindowController
 {
@@ -54,27 +53,16 @@ extension MainWindowController
 
 		configureToolbarTitle()
 		configureSummaryToggle()
-		configureToolsToolbarControls()
+		toolsToolbar.configureOpenButton(
+			target: self,
+			action: #selector(toggleToolsPane),
+			controlSize: ToolbarLayout.controlSize
+		)
 	}
 
 	private func configureToolbarTitle()
 	{
-		titleLabel.font = .systemFont(
-			ofSize: 14,
-			weight: .regular
-		)
-		titleLabel.isBordered = false
-		titleLabel.isBezeled = false
-		titleLabel.drawsBackground = false
-		titleLabel.lineBreakMode = .byTruncatingTail
-		titleLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		titleLabel.setAccessibilityLabel("Conversation title")
-		titleLabel.widthAnchor.constraint(
-			lessThanOrEqualToConstant: ToolbarLayout.maximumTitleWidth
-		).isActive = true
+		configureTitleLabel()
 
 		let projectIcon = makeProjectContextIcon()
 		titleContainer.addSubview(projectIcon)
@@ -99,6 +87,26 @@ extension MainWindowController
 			),
 			titleContainer.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize),
 		])
+	}
+
+	private func configureTitleLabel()
+	{
+		titleLabel.font = .systemFont(
+			ofSize: 14,
+			weight: .regular
+		)
+		titleLabel.isBordered = false
+		titleLabel.isBezeled = false
+		titleLabel.drawsBackground = false
+		titleLabel.lineBreakMode = .byTruncatingTail
+		titleLabel.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		titleLabel.setAccessibilityLabel("Conversation title")
+		titleLabel.widthAnchor.constraint(
+			lessThanOrEqualToConstant: ToolbarLayout.maximumTitleWidth
+		).isActive = true
 	}
 
 	func updateNavigationToolbarSeparator()
@@ -234,17 +242,11 @@ extension MainWindowController
 		switch itemIdentifier
 		{
 		case ToolbarItem.toolsTabBar:
-			item.label = "Tabs"
-			let tabBar = inspector.toolsTabs.tabBarView
-			tabBar.clipsToBounds = false
-			if toolsTabBarWidthConstraint == nil
-			{
-				let width = tabBar.widthAnchor.constraint(equalToConstant: toolsTabBarWidth())
-				width.isActive = true
-				toolsTabBarWidthConstraint = width
-			}
-			item.view = tabBar
-			item.visibilityPriority = .high
+			toolsToolbar.configureTabBarItem(
+				item,
+				paneController: paneController,
+				inspector: inspector
+			)
 		case ToolbarItem.navigationControls:
 			item.label = "Navigation"
 			item.view = makeNavigationControls()
@@ -315,7 +317,7 @@ extension MainWindowController
 			item.view = ToolbarSeparatorView()
 		case ToolbarItem.newTab:
 			item.label = "New tab"
-			item.view = makeNewTabButton()
+			item.view = toolsToolbar.openButton
 		case ToolbarItem.review:
 			item.label = "Changes"
 			item.image = DesktopIcons.image(
@@ -390,156 +392,26 @@ extension MainWindowController
 				isEnabled: false
 			),
 			summaryToggleButton,
-			toolsClosedToolbarSeparator,
-			makeNewTabButton(),
+			toolsToolbar.closedSeparator,
+			toolsToolbar.openButton,
 		])
-	}
-
-	private func makeNewTabButton() -> NSButton
-	{
-		toolsPaneButton
-	}
-
-	private func configureToolsToolbarControls()
-	{
-		toolsPaneButton.bezelStyle = .texturedRounded
-		toolsPaneButton.isBordered = false
-		toolsPaneButton.imagePosition = .imageOnly
-		toolsPaneButton.contentTintColor = .labelColor
-		toolsPaneButton.target = self
-		toolsPaneButton.action = #selector(toggleToolsPane)
-		toolsPaneButton.image = DesktopIcons.image(.plusSquareAdd)
-		toolsPaneButton.toolTip = "Open tab pane"
-		toolsPaneButton.setAccessibilityLabel("Open tab pane")
-		toolsPaneButton.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)
-			.isActive = true
-		toolsPaneButton.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)
-			.isActive = true
-	}
-
-	private func toolsTabBarWidth() -> CGFloat
-	{
-		max(
-			inspector.toolsTabs.minimumTabBarWidth,
-			paneController.tabViewportWidth - 16
-		)
 	}
 
 	func updateToolsToolbarControls(allowDuringExpansion: Bool = false)
 	{
-		guard let toolbar = window?.toolbar,
-				allowDuringExpansion || !paneController.isAnimatingToolsExpansion
+		guard let toolbar = window?.toolbar
 		else
 		{
 			return
 		}
-		let isOpen = inspector
-			.isShowingTools &&
-			(paneController.isToolsExpanded || !paneController.split.splitViewItems[2].isCollapsed)
-		let isExpanded = paneController.isToolsExpanded
-		if toolsToolbarIsOpen != isOpen || toolsToolbarIsExpanded != isExpanded
-		{
-			toolsToolbarIsOpen = isOpen
-			toolsToolbarIsExpanded = isExpanded
-			toolsPaneButton.isHidden = isOpen
-			toolsClosedToolbarSeparator.isHidden = isOpen
-			let identifiers: [NSToolbarItem.Identifier]
-			if isOpen, isExpanded
-			{
-				identifiers = [ToolbarItem.navigationControls,
-								ToolbarItem.navigationSeparator,
-								.flexibleSpace,
-								ToolbarItem.toolsTabBar]
-			}
-			else if isOpen
-			{
-				identifiers = toolbarDefaultItemIdentifiers(toolbar)
-					+ [ToolbarItem.toolsSeparator, ToolbarItem.toolsTabBar]
-			}
-			else
-			{
-				identifiers = toolbarDefaultItemIdentifiers(toolbar)
-			}
-			updateToolbarItems(
-				identifiers,
-				in: toolbar
-			)
-		}
-		if isOpen
-		{
-			inspector.toolsTabs.tabBarView.alphaValue = min(
-				1,
-				paneController.tabViewportWidth / inspector.toolsTabs.minimumTabBarWidth
-			)
-			let width = toolsTabBarWidth()
-			if toolsTabBarWidthConstraint?.constant != width
-			{
-				toolsTabBarWidthConstraint?.constant = width
-			}
-			updateToolsToolbarSeparator(isExpanded: isExpanded)
-		}
-	}
-
-	private func updateToolbarItems(
-		_ identifiers: [NSToolbarItem.Identifier],
-		in toolbar: NSToolbar
-	)
-	{
-		var sharedCount = 0
-		while sharedCount < min(
-			toolbar.items.count,
-			identifiers.count
-		),
-			toolbar.items[sharedCount].itemIdentifier == identifiers[sharedCount]
-		{
-			sharedCount += 1
-		}
-		while toolbar.items.count > sharedCount
-		{
-			toolbar.removeItem(at: toolbar.items.count - 1)
-		}
-		for index in sharedCount ..< identifiers.count
-		{
-			toolbar.insertItem(
-				withItemIdentifier: identifiers[index],
-				at: index
-			)
-		}
-	}
-
-	private func updateToolsToolbarSeparator(isExpanded: Bool)
-	{
-		let tabBar = inspector.toolsTabs.tabBarView
-		guard let window, tabBar.window === window
-		else
-		{
-			return
-		}
-		if toolsToolbarSeparator.superview !== tabBar
-		{
-			tabBar.addSubview(toolsToolbarSeparator)
-		}
-		let splitView = paneController.split.splitView
-		let position = NSPoint(
-			x: splitView.subviews[1].frame.maxX + splitView.dividerThickness / 2,
-			y: 0
+		toolsToolbar.update(
+			toolbar: toolbar,
+			window: window,
+			paneController: paneController,
+			inspector: inspector,
+			defaultIdentifiers: toolbarDefaultItemIdentifiers(toolbar),
+			allowDuringExpansion: allowDuringExpansion
 		)
-		let divider = splitView.convert(
-			position,
-			to: tabBar
-		)
-		let scale = window.backingScaleFactor
-		let frame = NSRect(
-			x: ((divider.x - 0.5) * scale).rounded() / scale,
-			y: tabBar.bounds.midY - 9,
-			width: 1,
-			height: 18
-		)
-		if toolsToolbarSeparator.frame != frame
-		{
-			toolsToolbarSeparator.frame = frame
-		}
-		toolsToolbarSeparator.isHidden = isExpanded
 	}
 
 	private func configureToolsPaneClosing()
@@ -561,6 +433,14 @@ extension MainWindowController
 		inspector.toolsTabs.onToggleExpanded =
 		{
 			[weak self] in self?.toggleToolsExpanded()
+		}
+		inspector.toolsTabs.onOpenChanges =
+		{
+			[weak self] in self?.openChangesToolTab()
+		}
+		inspector.onToolChangesSelected =
+		{
+			[weak self] in self?.openCurrentChangesInToolTab()
 		}
 		inspector.onToolsClose =
 		{
@@ -591,6 +471,23 @@ extension MainWindowController
 		else
 		{
 			paneController.openToolsPane()
+		}
+		updateToolsToolbarControls()
+	}
+
+	func openChangesToolTab()
+	{
+		configureToolsPaneClosing()
+		if !inspector.isShowingTools || paneController.isReviewCollapsed
+		{
+			paneController.openToolsPane
+			{
+				openCurrentChangesInToolTab()
+			}
+		}
+		else
+		{
+			openCurrentChangesInToolTab()
 		}
 		updateToolsToolbarControls()
 	}
@@ -699,7 +596,7 @@ extension MainWindowController
 			),
 			PaletteCommand(
 				title: "Changes",
-				detail: "Inspect the selected turn's changes",
+				detail: "Compare repository changes without editing Git state",
 				destination: .action("changes")
 			),
 		]

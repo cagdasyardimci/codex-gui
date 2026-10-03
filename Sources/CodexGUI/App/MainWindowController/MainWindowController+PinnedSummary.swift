@@ -13,14 +13,24 @@ extension MainWindowController
 		)
 		let firstPresentation = summaryReconciliation.owner == nil
 		summaryReconciliation.select(owner)
+		let visibilityOwner = FeaturePresentationOwner(
+			snapshot,
+			storeIdentity: String(describing: ObjectIdentifier(target.store))
+		)
+		let visible = summaryVisibility.isVisible(for: visibilityOwner)
+		if visible, snapshot.projectPath != nil, target.accepts(.loadEarlierTurns),
+			!currentStore.isRetired, !currentStore.model.lifecycle.isShutdown
+		{
+			summaryGitLoader.loadIfNeeded(for: owner)
+		}
 		if target.accepts(.loadEarlierTurns)
 		{
 			var sections = ContextSummarySections()
 			sections.changes = summaryChangesProvider?(owner)
-				?? .unavailable("Repository comparison integration unavailable")
+				?? .unavailable("Open Changes to load a repository comparison")
 			sections.sources = .unavailable("Sources integration unavailable")
-			// Detail providers are not part of the standalone summary implementation.
-			sections.availableDestinations = []
+			// Sources and Subagents remain unavailable until their integration is restored.
+			sections.availableDestinations = [.changes]
 			summaryReconciliation.accept(ContextSummaryUpdate(
 				owner: owner,
 				revision: summaryReconciliation.revision + 1,
@@ -28,6 +38,7 @@ extension MainWindowController
 			))
 		}
 		var sections = summaryReconciliation.sections
+		sections.changesContext = gitSummary.scopeDescription
 		if currentStore.isRetired || currentStore.model.lifecycle.isShutdown
 		{
 			sections = ContextSummarySections()
@@ -35,11 +46,6 @@ extension MainWindowController
 			sections.sources = .unavailable("Workspace unavailable")
 			sections.availableDestinations = []
 		}
-		let visibilityOwner = FeaturePresentationOwner(
-			snapshot,
-			storeIdentity: String(describing: ObjectIdentifier(target.store))
-		)
-		let visible = summaryVisibility.isVisible(for: visibilityOwner)
 		inspector.onSummaryDisplayChange =
 		{
 			[weak self] displayed in
@@ -59,7 +65,20 @@ extension MainWindowController
 		{
 			paneController.setReviewCollapsed(false)
 		}
-		inspector.summary.onNavigate = nil
+		inspector.summary.onNavigate =
+		{
+			[weak self] request in
+			guard request.owner == owner, target.accepts(.loadEarlierTurns),
+					request.destination == .changes
+			else
+			{
+				return
+			}
+			self?.openGitChanges(
+				request,
+				inToolTab: true
+			)
+		}
 	}
 
 	/// Future Git integration projects its canonical comparison for the captured owner.
@@ -110,6 +129,15 @@ extension MainWindowController
 			snapshot: snapshot,
 			coordinator: coordinator
 		)
+		let revealing = !visible || hiddenByContainer
+		if revealing, summaryVisibility.isVisible(for: owner),
+			snapshot.projectPath != nil, target.accepts(.loadEarlierTurns)
+		{
+			summaryGitLoader.refresh(for: FeaturePresentationOwner(
+				snapshot,
+				storeIdentity: target.presentationIdentity
+			))
+		}
 		inspector.animateSummaryVisibilityChange
 		{
 			if expandedConversation
@@ -149,15 +177,30 @@ extension MainWindowController
 		{
 			return
 		}
-		if toggleIfShowing, !inspector.isShowingTools, inspector.isShowingDetails,
-			!paneController.split.splitViewItems[2].isCollapsed
+		let request = ContextPanelRequest(
+			owner: FeaturePresentationOwner(
+				snapshot,
+				storeIdentity: target.presentationIdentity
+			),
+			destination: .changes
+		)
+		if toggleIfShowing, inspector.panels.destination == .changes,
+			!inspector.panels.view.isHidden, paneController.isGitReviewFocused
+		{
+			inspector.showSummary()
+		}
+		else if toggleIfShowing, inspector.panels.destination == .changes,
+				!inspector.panels.view.isHidden, !paneController.isReviewCollapsed
 		{
 			paneController.toggleReview()
+			if paneController.isReviewCollapsed
+			{
+				inspector.gitChanges.close()
+			}
 		}
 		else
 		{
-			inspector.showReportedChanges()
-			paneController.setReviewCollapsed(false)
+			openGitChanges(request)
 		}
 	}
 }
