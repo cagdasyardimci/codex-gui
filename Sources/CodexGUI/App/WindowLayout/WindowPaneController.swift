@@ -27,6 +27,8 @@ final class WindowPaneController
 	private(set) var isAnimatingToolsExpansion = false
 	private var toolsExpansionRevision = 0
 	private var toolsPaneTransition: ToolsPaneTransition?
+	private var reviewDragSettings: ReviewDragSettings?
+	private var lastDraggedReviewWidth: CGFloat?
 	var onToolsExpansionFinished: (() -> Void)?
 	var onToolsExpansionLayoutChanged: (() -> Void)?
 	private var lastAppliedSplitWidth: CGFloat?
@@ -53,6 +55,27 @@ final class WindowPaneController
 			)
 		}
 		return reviewViewportWidth
+	}
+
+	private var workspaceFilesExpanded = false
+	private var workspaceFilesWidth: CGFloat = 760
+	private var savedGitReviewLayout: GitReviewLayout?
+	private(set) var isGitReviewFocused = false
+
+	private struct GitReviewLayout
+	{
+		let navigationCollapsed: Bool
+		let conversationCollapsed: Bool
+		let conversationCanCollapse: Bool
+		let reviewVisibility: WindowReviewVisibility
+		let workspaceFilesExpanded: Bool
+	}
+
+	private struct ReviewDragSettings
+	{
+		let minimumThickness: CGFloat
+		let canCollapse: Bool
+		let canCollapseFromWindowResize: Bool
 	}
 
 	init(
@@ -115,16 +138,29 @@ final class WindowPaneController
 		}
 		split.onLayout =
 		{
-			[weak self] in self?.applyResponsivePaneLayout()
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			if self.reviewDragSettings != nil, !self.reviewPane.isCollapsed
+			{
+				self.lastDraggedReviewWidth = self.reviewViewportWidth
+			}
+			self.applyResponsivePaneLayout()
 		}
 		splitView.onDividerInteractionEnded =
 		{
-			[weak self] index in
-			self?.rememberDividerChoice(at: index)
+			[weak self] index, requestedWidth in
+			self?.endDividerInteraction(
+				at: index,
+				requestedWidth: requestedWidth
+			)
 		}
 		splitView.onDividerInteractionBegan =
 		{
-			[weak self] in self?.cancelToolsPaneAnimation()
+			[weak self] index in self?.beginDividerInteraction(at: index)
 		}
 
 	}
@@ -179,15 +215,17 @@ final class WindowPaneController
 		{
 			return
 		}
-		let navigationCollapsed = split.splitViewItems[0].isCollapsed
+		let navigationCollapsed = savedGitReviewLayout?.navigationCollapsed
+			?? split.splitViewItems[0].isCollapsed
 		layoutStore?.layout = WindowLayout(
 			frame: window.frame,
 			navigationWidth: expandedNavigationWidth,
 			reviewWidth: expandedReviewWidth,
-			reviewCollapsed: reviewVisibility == .collapsed,
+			reviewCollapsed: (savedGitReviewLayout?.reviewVisibility ?? reviewVisibility) ==
+				.collapsed,
 			navigationCollapsed: navigationCollapsed,
 			paneGeometryVersion: WindowPaneLayout.version,
-			reviewVisibility: reviewVisibility
+			reviewVisibility: savedGitReviewLayout?.reviewVisibility ?? reviewVisibility
 		)
 	}
 
@@ -208,8 +246,62 @@ final class WindowPaneController
 		applyResponsivePaneLayout(force: true)
 	}
 
+	func setGitReviewFocused(_ focused: Bool)
+	{
+		guard focused != isGitReviewFocused
+		else
+		{
+			return
+		}
+		isGitReviewFocused = focused
+		let navigationPane = split.splitViewItems[0]
+		let conversationPane = split.splitViewItems[1]
+		if focused
+		{
+			savedGitReviewLayout = GitReviewLayout(
+				navigationCollapsed: navigationPane.isCollapsed,
+				conversationCollapsed: conversationPane.isCollapsed,
+				conversationCanCollapse: conversationPane.canCollapse,
+				reviewVisibility: reviewVisibility,
+				workspaceFilesExpanded: workspaceFilesExpanded
+			)
+			conversationPane.canCollapse = true
+			reviewPane.maximumThickness = NSSplitViewItem.unspecifiedDimension
+			navigationPane.isCollapsed = true
+			conversationPane.isCollapsed = true
+			reviewPane.isCollapsed = false
+		}
+		else if let saved = savedGitReviewLayout
+		{
+			savedGitReviewLayout = nil
+			navigationPane.isCollapsed = saved.navigationCollapsed
+			conversationPane.isCollapsed = saved.conversationCollapsed
+			conversationPane.canCollapse = saved.conversationCanCollapse
+			reviewVisibility = saved.reviewVisibility
+			workspaceFilesExpanded = saved.workspaceFilesExpanded
+			reviewPane.maximumThickness = workspaceFilesExpanded ? 1000 : WindowPaneLayout
+				.reviewMaximumWidth
+		}
+		applyResponsivePaneLayout(force: true)
+	}
+
+	func setWorkspaceFilesExpanded(_ expanded: Bool)
+	{
+		workspaceFilesExpanded = expanded
+		if !isGitReviewFocused && !inspector.isShowingTools
+		{
+			reviewPane.maximumThickness = expanded ? 1000 : WindowPaneLayout.reviewMaximumWidth
+		}
+		applyResponsivePaneLayout(force: true)
+	}
+
 	func setReviewCollapsed(_ collapsed: Bool)
 	{
+		guard !isGitReviewFocused
+		else
+		{
+			return
+		}
 		reviewVisibility = collapsed ? .collapsed : .expanded
 		if collapsed
 		{
@@ -309,7 +401,9 @@ final class WindowPaneController
 		)
 	}
 
-	func openToolsPane()
+	func openToolsPane(configureContent: () -> Void =
+	{
+	})
 	{
 		guard !isAnimatingToolsExpansion
 		else
@@ -322,6 +416,7 @@ final class WindowPaneController
 		)
 		inspector.hideContentForToolsOpening()
 		inspector.showToolsPane()
+		configureContent()
 		reviewVisibility = .expanded
 		animateToolsPane(transition)
 	}
@@ -353,7 +448,8 @@ final class WindowPaneController
 
 	private func prepareToolsPaneAnimation(
 		animated: Bool,
-		openingToolsPane: Bool = false
+		openingToolsPane: Bool = false,
+		startingReviewWidth: CGFloat? = nil
 	) -> ToolsPaneTransition?
 	{
 		guard animated, hasPresentedWindow,
@@ -363,7 +459,8 @@ final class WindowPaneController
 				navigationPane: split.splitViewItems[0],
 				conversationPane: conversationPane,
 				reviewPane: reviewPane,
-				openingToolsPane: openingToolsPane
+				openingToolsPane: openingToolsPane,
+				startingReviewWidth: startingReviewWidth
 				)
 		else
 		{
@@ -379,7 +476,7 @@ final class WindowPaneController
 	private func animateToolsPane(_ transition: ToolsPaneTransition?)
 	{
 		let target = reviewLayout(width: split.splitView.bounds.width)
-		guard let transition, !target.collapsed
+		guard let transition
 		else
 		{
 			cancelToolsPaneAnimation()
@@ -393,7 +490,7 @@ final class WindowPaneController
 		(split.splitView as? ConversationSplitView)?.showsReviewDivider =
 			usesToolsSizing && !target.collapsed && !isToolsExpanded
 		transition.animate(
-			toReviewWidth: target.width,
+			toReviewWidth: target.collapsed ? 0 : target.width,
 			conversationCollapsed: isToolsExpanded,
 			reviewCollapsed: target.collapsed,
 			progress:
@@ -410,6 +507,8 @@ final class WindowPaneController
 				}
 				self.toolsPaneTransition = nil
 				self.isAnimatingToolsExpansion = false
+				self.restoreReviewDragSettings()
+				self.applyReviewMinimumWidth()
 				self.applyResponsivePaneLayout(force: true)
 				self.conversation.endPaneResize()
 				self.onToolsExpansionLayoutChanged?()
@@ -431,6 +530,8 @@ final class WindowPaneController
 		let wasApplyingPaneLayout = isApplyingPaneLayout
 		isApplyingPaneLayout = true
 		transition.cancel()
+		restoreReviewDragSettings()
+		applyReviewMinimumWidth()
 		isApplyingPaneLayout = wasApplyingPaneLayout
 		applyResponsivePaneLayout(force: true)
 		conversation.endPaneResize()
@@ -454,8 +555,14 @@ final class WindowPaneController
 		{
 			setToolsExpanded(false)
 		}
+		if !isAnimatingToolsExpansion
+		{
+			applyReviewMinimumWidth()
+		}
 		reviewPane.maximumThickness = usesToolsSizing
-			? NSSplitViewItem.unspecifiedDimension : WindowPaneLayout.reviewMaximumWidth
+			? NSSplitViewItem
+			.unspecifiedDimension :
+			(workspaceFilesExpanded ? 1000 : WindowPaneLayout.reviewMaximumWidth)
 		applyResponsivePaneLayout(force: true)
 	}
 
@@ -491,6 +598,12 @@ final class WindowPaneController
 			isApplyingPaneLayout = false
 		}
 		lastAppliedSplitWidth = width
+		if isGitReviewFocused
+		{
+			reviewPane.isCollapsed = false
+			split.view.layoutSubtreeIfNeeded()
+			return
+		}
 		let collapseConversation = isToolsExpanded
 		let dividerWidth = split.splitView.dividerThickness
 		let target = reviewLayout(width: width)
@@ -558,32 +671,26 @@ final class WindowPaneController
 		conversationPane.canCollapse = conversationCollapsed
 	}
 
-	private func reviewLayout(width: CGFloat) -> (collapsed: Bool, width: CGFloat)
+	private func reviewLayout(width: CGFloat) -> WindowPaneLayoutPolicy.ReviewLayout
 	{
-		let navigationWidth = split.splitViewItems[0].isCollapsed ? 0 : expandedNavigationWidth
-		let conversationWidth = isToolsExpanded ? 0 : WindowPaneLayout.conversationMinimumWidth
-		let dividerCount = (navigationWidth > 0 ? 1 : 0) + (isToolsExpanded ? 0 : 1)
-		let dividerSpace = split.splitView.dividerThickness * CGFloat(dividerCount)
-		let available = width - navigationWidth - dividerSpace - conversationWidth
-		let preferred = usesToolsSizing ? expandedToolsWidth : expandedReviewWidth
-		let collapsed: Bool
-		switch reviewVisibility
-		{
-		case .collapsed: collapsed = true
-		case .automatic:
-			collapsed = width - navigationWidth - dividerSpace - preferred
-				< WindowPaneLayout.conversationComfortableWidth
-		case .expanded: collapsed = available < WindowPaneLayout.reviewMinimumWidth
-		}
-		return (collapsed, isToolsExpanded ? available : min(
-			preferred,
-			available
-		))
+		WindowPaneLayoutPolicy.reviewLayout(
+			width: width,
+			navigationCollapsed: split.splitViewItems[0].isCollapsed,
+			navigationWidth: expandedNavigationWidth,
+			dividerThickness: split.splitView.dividerThickness,
+			isToolsExpanded: isToolsExpanded,
+			usesToolsSizing: usesToolsSizing,
+			workspaceFilesExpanded: workspaceFilesExpanded,
+			expandedToolsWidth: expandedToolsWidth,
+			workspaceFilesWidth: workspaceFilesWidth,
+			expandedReviewWidth: expandedReviewWidth,
+			reviewVisibility: reviewVisibility
+		)
 	}
 
 	private func rememberDividerChoice(at index: Int)
 	{
-		guard !isApplyingPaneLayout, !isAnimatingToolsExpansion
+		guard !isApplyingPaneLayout, !isAnimatingToolsExpansion, !isGitReviewFocused
 		else
 		{
 			return
@@ -602,8 +709,18 @@ final class WindowPaneController
 				if usesToolsSizing
 				{
 					expandedToolsWidth = max(
-						WindowPaneLayout.reviewMinimumWidth,
+						WindowPaneLayout.toolsMinimumWidth,
 						reviewViewportWidth
+					)
+				}
+				else if workspaceFilesExpanded
+				{
+					workspaceFilesWidth = min(
+						1000,
+						max(
+							220,
+							reviewViewportWidth
+						)
 					)
 				}
 				else
@@ -614,6 +731,91 @@ final class WindowPaneController
 			}
 		}
 		applyResponsivePaneLayout(force: true)
+	}
+
+	func beginDividerInteraction(at index: Int)
+	{
+		cancelToolsPaneAnimation()
+		guard index == 1, usesToolsSizing, inspector.isShowingTools,
+				!isToolsExpanded, !isGitReviewFocused, !reviewPane.isCollapsed
+		else
+		{
+			return
+		}
+		reviewDragSettings = ReviewDragSettings(
+			minimumThickness: reviewPane.minimumThickness,
+			canCollapse: reviewPane.canCollapse,
+			canCollapseFromWindowResize: reviewPane.canCollapseFromWindowResize
+		)
+		lastDraggedReviewWidth = reviewViewportWidth
+		reviewPane.minimumThickness = WindowPaneLayout.toolsMinimumWidth
+		reviewPane.canCollapse = false
+		reviewPane.canCollapseFromWindowResize = false
+	}
+
+	func endDividerInteraction(
+		at index: Int,
+		requestedWidth: CGFloat? = nil
+	)
+	{
+		guard index == 1, reviewDragSettings != nil
+		else
+		{
+			restoreReviewDragSettings()
+			rememberDividerChoice(at: index)
+			return
+		}
+		let endingWidth = reviewPane.isCollapsed
+			? lastDraggedReviewWidth ?? 0 : reviewViewportWidth
+		let targetWidth = requestedWidth ?? endingWidth
+		guard reviewPane.isCollapsed || targetWidth < WindowPaneLayout.toolsMinimumWidth
+		else
+		{
+			restoreReviewDragSettings()
+			rememberDividerChoice(at: index)
+			return
+		}
+		reviewVisibility = .collapsed
+		let transition = prepareToolsPaneAnimation(
+			animated: true,
+			startingReviewWidth: endingWidth
+		)
+		if let transition
+		{
+			animateToolsPane(transition)
+		}
+		else
+		{
+			restoreReviewDragSettings()
+			applyResponsivePaneLayout(force: true)
+			onToolsExpansionLayoutChanged?()
+			onToolsExpansionFinished?()
+		}
+	}
+
+	private func restoreReviewDragSettings()
+	{
+		guard let reviewDragSettings
+		else
+		{
+			return
+		}
+		self.reviewDragSettings = nil
+		lastDraggedReviewWidth = nil
+		reviewPane.minimumThickness = reviewDragSettings.minimumThickness
+		reviewPane.canCollapse = reviewDragSettings.canCollapse
+		reviewPane.canCollapseFromWindowResize = reviewDragSettings.canCollapseFromWindowResize
+	}
+
+	private func applyReviewMinimumWidth()
+	{
+		reviewPane.minimumThickness = usesToolsSizing
+			? WindowPaneLayout.toolsMinimumWidth : WindowPaneLayout.reviewMinimumWidth
+	}
+
+	var isReviewCollapsed: Bool
+	{
+		reviewPane.isCollapsed
 	}
 
 	func toggleReview()
@@ -636,155 +838,5 @@ final class WindowPaneController
 		pane.maximumThickness = maximumWidth
 		pane.holdingPriority = holdingPriority
 		return pane
-	}
-}
-
-@MainActor
-private final class ConversationSplitViewController: NSSplitViewController
-{
-	var onLayout: (() -> Void)?
-
-	override func viewDidLayout()
-	{
-		super.viewDidLayout()
-		onLayout?()
-	}
-}
-
-@MainActor
-private final class ConversationSplitView: NSSplitView
-{
-	var onDividerInteractionEnded: ((Int) -> Void)?
-	var onDividerInteractionBegan: (() -> Void)?
-	var showsReviewDivider = false
-	{
-		didSet
-		{
-			if showsReviewDivider != oldValue
-			{
-				needsDisplay = true
-			}
-		}
-	}
-
-	private var dividerTrackingArea: NSTrackingArea?
-	private var dividerHovered = false
-	private var dividerDragging = false
-
-	override func updateTrackingAreas()
-	{
-		super.updateTrackingAreas()
-		if let dividerTrackingArea
-		{
-			removeTrackingArea(dividerTrackingArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(area)
-		dividerTrackingArea = area
-		if let window
-		{
-			updateDividerHover(at: convert(
-				window.mouseLocationOutsideOfEventStream,
-				from: nil
-			))
-		}
-	}
-
-	override func mouseEntered(with event: NSEvent)
-	{
-		updateDividerHover(at: convert(
-			event.locationInWindow,
-			from: nil
-		))
-	}
-
-	override func mouseMoved(with event: NSEvent)
-	{
-		updateDividerHover(at: convert(
-			event.locationInWindow,
-			from: nil
-		))
-	}
-
-	override func mouseExited(with event: NSEvent)
-	{
-		dividerHovered = false
-		needsDisplay = true
-	}
-
-	override func viewDidChangeEffectiveAppearance()
-	{
-		super.viewDidChangeEffectiveAppearance()
-		needsDisplay = true
-	}
-
-	private func updateDividerHover(at location: NSPoint)
-	{
-		let hovered = subviews.first.map
-		{
-			$0.frame.width > 0
-				&& abs(location.x - $0.frame.maxX - dividerThickness / 2) <= 6
-				&& bounds.contains(location)
-		} ?? false
-		guard hovered != dividerHovered
-		else
-		{
-			return
-		}
-		dividerHovered = hovered
-		needsDisplay = true
-	}
-
-	override func mouseDown(with event: NSEvent)
-	{
-		let location = convert(
-			event.locationInWindow,
-			from: nil
-		)
-		let dividerIndex = subviews.indices.dropLast().first
-		{
-			abs(location.x - subviews[$0].frame.maxX - dividerThickness / 2) <= 6
-		}
-		dividerDragging = dividerIndex == 0
-		needsDisplay = true
-		if dividerIndex != nil
-		{
-			onDividerInteractionBegan?()
-		}
-		super.mouseDown(with: event)
-		dividerDragging = false
-		if let window
-		{
-			updateDividerHover(at: convert(
-				window.mouseLocationOutsideOfEventStream,
-				from: nil
-			))
-		}
-		needsDisplay = true
-		if let dividerIndex
-		{
-			onDividerInteractionEnded?(dividerIndex)
-		}
-	}
-
-	override func drawDivider(in rect: NSRect)
-	{
-		guard let firstPane = subviews.first,
-				abs(rect.minX - firstPane.frame.maxX) > dividerThickness
-		else
-		{
-			let color = dividerHovered || dividerDragging
-				? DesktopTheme.highlightedPaneDivider : DesktopTheme.paneDivider
-			color.setFill()
-			rect.fill()
-			return
-		}
-		(showsReviewDivider ? DesktopTheme.paneDivider : DesktopTheme.canvas).setFill()
-		rect.fill()
 	}
 }

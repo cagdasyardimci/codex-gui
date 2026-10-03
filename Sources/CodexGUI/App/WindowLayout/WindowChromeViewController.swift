@@ -4,6 +4,24 @@ import AppKit
 @MainActor
 final class WindowChromeViewController: NSViewController
 {
+	private var accountColumn: NSView!
+	private var panel: RoundedContentPanel!
+	private var accountWidth: NSLayoutConstraint!
+	private var trailingInset: NSLayoutConstraint!
+	private var bottomInset: NSLayoutConstraint!
+	private var splitInset: NSLayoutConstraint!
+
+	func setGitReviewFocused(_ focused: Bool)
+	{
+		accountColumn.isHidden = focused
+		accountWidth.constant = focused ? 0 : 52
+		trailingInset.constant = focused ? 0 : -4
+		bottomInset.constant = focused ? 0 : -4
+		splitInset.constant = focused ? 0 : 1
+		panel.isGitReviewFocused = focused
+		view.needsLayout = true
+	}
+
 	init(
 		split: NSSplitViewController,
 		accountButton: NSButton
@@ -22,6 +40,21 @@ final class WindowChromeViewController: NSViewController
 			cornerRadius: 16
 		)
 		let panel = RoundedContentPanel()
+		self.accountColumn = column
+		self.panel = panel
+		accountWidth = column.widthAnchor.constraint(equalToConstant: 52)
+		trailingInset = panel.trailingAnchor.constraint(
+			equalTo: view.trailingAnchor,
+			constant: -4
+		)
+		bottomInset = panel.bottomAnchor.constraint(
+			equalTo: view.bottomAnchor,
+			constant: -4
+		)
+		splitInset = split.view.leadingAnchor.constraint(
+			equalTo: panel.leadingAnchor,
+			constant: 1
+		)
 		for child in [column, panel]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
@@ -38,7 +71,7 @@ final class WindowChromeViewController: NSViewController
 			column.leadingAnchor.constraint(equalTo: view.leadingAnchor),
 			column.topAnchor.constraint(equalTo: view.topAnchor),
 			column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-			column.widthAnchor.constraint(equalToConstant: 52),
+			accountWidth,
 			avatar.centerXAnchor.constraint(equalTo: column.centerXAnchor),
 			avatar.bottomAnchor.constraint(
 				equalTo: column.bottomAnchor,
@@ -49,19 +82,10 @@ final class WindowChromeViewController: NSViewController
 			accountButton.centerXAnchor.constraint(equalTo: avatar.centerXAnchor),
 			accountButton.centerYAnchor.constraint(equalTo: avatar.centerYAnchor),
 			panel.leadingAnchor.constraint(equalTo: column.trailingAnchor),
-			panel.trailingAnchor.constraint(
-				equalTo: view.trailingAnchor,
-				constant: -4
-			),
+			trailingInset,
 			panel.topAnchor.constraint(equalTo: view.topAnchor),
-			panel.bottomAnchor.constraint(
-				equalTo: view.bottomAnchor,
-				constant: -4
-			),
-			split.view.leadingAnchor.constraint(
-				equalTo: panel.leadingAnchor,
-				constant: 1
-			),
+			bottomInset,
+			splitInset,
 			split.view.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
 			split.view.topAnchor.constraint(equalTo: panel.topAnchor),
 			split.view.bottomAnchor.constraint(equalTo: panel.bottomAnchor),
@@ -80,6 +104,13 @@ private final class RoundedContentPanel: NSView
 {
 	// The inner curve accounts for the 4-point inset from the window corner.
 	private let cornerRadius: CGFloat = 16
+	var isGitReviewFocused = false
+	{
+		didSet
+		{
+			needsLayout = true
+		}
+	}
 
 	override init(frame frameRect: NSRect)
 	{
@@ -106,7 +137,8 @@ private final class RoundedContentPanel: NSView
 		)
 		CATransaction.begin()
 		CATransaction.setDisableActions(true)
-		layer?.cornerRadius = radius
+		layer?.cornerRadius = isGitReviewFocused ? 0 : radius
+		layer?.borderWidth = isGitReviewFocused ? 0 : 1
 		layer?.borderColor = DesktopTheme.border.cgColor
 		CATransaction.commit()
 	}

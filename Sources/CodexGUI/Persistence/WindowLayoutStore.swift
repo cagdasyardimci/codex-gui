@@ -8,6 +8,7 @@ enum WindowPaneLayout
 	static let navigationMaximumWidth: CGFloat = 280
 	static let reviewWidth: CGFloat = 326
 	static let reviewMinimumWidth: CGFloat = 220
+	static let toolsMinimumWidth: CGFloat = 340
 	static let reviewMaximumWidth: CGFloat = 360
 	static let conversationMinimumWidth: CGFloat = 360
 	static let conversationComfortableWidth: CGFloat = 560
