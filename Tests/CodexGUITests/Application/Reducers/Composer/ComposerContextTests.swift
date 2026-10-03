@@ -502,7 +502,7 @@ struct ComposerContextTests
 		) == [original, next])
 	}
 
-	@Test func fileSearchIncludesSourceAndSkipsBuildDirectories() throws
+	@Test func fileSearchIncludesSourceAndSkipsBuildDirectories() async throws
 	{
 		let project = try temporaryProject()
 		defer
@@ -529,7 +529,9 @@ struct ComposerContextTests
 			atomically: true,
 			encoding: .utf8
 		)
-		let index = ProjectFileIndex.load(projectPath: project.path)
+		let index = try #require(await FileSystemProjectFileIndexService().load(
+			projectPath: project.path
+		))
 		#expect(index.search("Exam") == ["Sources/Example.swift"])
 	}
 

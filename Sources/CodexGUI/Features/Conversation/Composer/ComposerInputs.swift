@@ -42,6 +42,7 @@ final class ComposerToolbarView: NSView
 			actionControls.topAnchor.constraint(equalTo: topAnchor),
 			actionControls.bottomAnchor.constraint(equalTo: bottomAnchor),
 		]
+
 		compactConstraints = [
 			leadingControls.leadingAnchor.constraint(equalTo: leadingAnchor),
 			leadingControls.topAnchor.constraint(equalTo: topAnchor),
@@ -74,7 +75,8 @@ final class ComposerToolbarView: NSView
 
 	override func layout()
 	{
-		let shouldUseCompactLayout = bounds.width < 440
+		let compactLayoutWidthThreshold: CGFloat = 440
+		let shouldUseCompactLayout = bounds.width < compactLayoutWidthThreshold
 		if shouldUseCompactLayout != isCompact
 		{
 			NSLayoutConstraint.deactivate(isCompact ? compactConstraints : wideConstraints)
@@ -215,120 +217,6 @@ final class ContextComposerTextView: NSTextView
 	}
 }
 
-struct ProjectFileIndex
-{
-	let files: [String]
-
-	static func load(projectPath: String) -> ProjectFileIndex
-	{
-		let projectRoot = URL(fileURLWithPath: projectPath)
-		let ignoredDirectories: Set<String> = [
-			".git",
-			".build",
-			"node_modules",
-			"DerivedData",
-			"build",
-			"dist",
-			".next",
-		]
-		guard let enumerator = FileManager.default.enumerator(atPath: projectRoot.path)
-		else
-		{
-			return ProjectFileIndex(files: [])
-		}
-		var files: [String] = []
-		while let relativePath = enumerator.nextObject() as? String, files.count < 50_000
-		{
-			if Task.isCancelled
-			{
-				break
-			}
-			let name = URL(fileURLWithPath: relativePath).lastPathComponent
-			var isDirectory: ObjCBool = false
-			let exists = FileManager.default.fileExists(
-				atPath: projectRoot.appendingPathComponent(relativePath).path,
-				isDirectory: &isDirectory
-			)
-			guard exists
-			else
-			{
-				continue
-			}
-			if isDirectory.boolValue
-			{
-				let shouldSkipDirectory = name.hasPrefix(".") || ignoredDirectories.contains(name)
-					|| name.hasSuffix(".app") || name.hasSuffix(".xcodeproj")
-				if shouldSkipDirectory
-				{
-					enumerator.skipDescendants()
-				}
-				continue
-			}
-			guard !name.hasPrefix(".")
-			else
-			{
-				continue
-			}
-			files.append(relativePath)
-		}
-		return ProjectFileIndex(files: files.sorted())
-	}
-
-	func search(
-		_ query: String,
-		limit: Int = 12
-	) -> [String]
-	{
-		let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-		guard !normalizedQuery.isEmpty
-		else
-		{
-			return Array(files.prefix(limit))
-		}
-		return files.compactMap
-		{
-			path -> (path: String, score: Int)? in
-			let lowercasedPath = path.lowercased()
-			let fileName = URL(fileURLWithPath: path).lastPathComponent.lowercased()
-			let score: Int
-			if fileName == normalizedQuery
-			{
-				score = 0
-			}
-			else if fileName.hasPrefix(normalizedQuery)
-			{
-				score = 1
-			}
-			else if fileName.contains(normalizedQuery)
-			{
-				score = 2
-			}
-			else if lowercasedPath.hasPrefix(normalizedQuery)
-			{
-				score = 3
-			}
-			else if lowercasedPath.contains(normalizedQuery)
-			{
-				score = 4
-			}
-			else
-			{
-				return nil
-			}
-			return (path, score)
-		}
-		.sorted
-		{
-			left, right in
-			left.score == right.score
-				? left.path.count < right.path.count
-				: left.score < right.score
-		}
-		.prefix(limit)
-		.map(\.path)
-	}
-}
-
 @MainActor
 final class ComposerContextView: NSView
 {
@@ -342,6 +230,7 @@ final class ComposerContextView: NSView
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
+
 		itemStack.orientation = .vertical
 		itemStack.alignment = .leading
 		itemStack.spacing = 8
@@ -381,7 +270,8 @@ final class ComposerContextView: NSView
 		reusable: [ComposerContextItem]
 	)
 	{
-		guard currentItems != items || self.reusable != reusable
+		let contextChanged = currentItems != items || self.reusable != reusable
+		guard contextChanged
 		else
 		{
 			return
@@ -570,6 +460,13 @@ final class ComposerContextView: NSView
 		alert.messageText = "\(item.kind.title): \(item.detail)"
 		alert.addButton(withTitle: "Close")
 
+		alert.accessoryView = makeInspectionAccessory(for: item)
+
+		alert.beginSheetModal(for: window)
+	}
+
+	private func makeInspectionAccessory(for item: ComposerContextItem) -> NSView?
+	{
 		if item.kind == .image, let path = item.path,
 			let image = NSImage(contentsOfFile: path)
 		{
@@ -581,26 +478,24 @@ final class ComposerContextView: NSView
 				width: 400,
 				height: 280
 			)
-			alert.accessoryView = preview
+			return preview
 		}
 		else if let excerpt = item.excerpt
 		{
-			alert.accessoryView =
-				ScrollableTextPreview.make(
-					text: excerpt,
-					size: NSSize(
-						width: 440,
-						height: 220
-					),
-					font: .monospacedSystemFont(
-						ofSize: 12,
-						weight: .regular
-					),
-					accessibilityLabel: "Attached code excerpt"
-				).scrollView
+			return ScrollableTextPreview.make(
+				text: excerpt,
+				size: NSSize(
+					width: 440,
+					height: 220
+				),
+				font: .monospacedSystemFont(
+					ofSize: 12,
+					weight: .regular
+				),
+				accessibilityLabel: "Attached code excerpt"
+			).scrollView
 		}
-
-		alert.beginSheetModal(for: window)
+		return nil
 	}
 
 	private var currentItems: [ComposerContextItem] = []

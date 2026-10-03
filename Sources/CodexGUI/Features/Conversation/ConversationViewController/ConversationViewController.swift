@@ -146,9 +146,7 @@ final class ConversationViewController: NSViewController,
 	var slashCompletionGeneration = 0
 	var slashCompletionText: String?
 	var fileSearchWasCompletion = false
-	var fileIndex: ProjectFileIndex?
-	var indexProjectPath: String?
-	var indexTask: Task<Void, Never>?
+	let fileIndexRuntime = ProjectFileIndexRuntime()
 	let sendButton = NSButton(
 		title: "Send",
 		target: nil,
@@ -485,10 +483,12 @@ final class ConversationViewController: NSViewController,
 		{
 			turnNavigationRail.render([])
 		}
-		if indexProjectPath != snapshot.owner.projectPath
+		fileIndexRuntime.onChange =
 		{
-			loadFileIndex(for: snapshot.owner.projectPath)
+			[weak self] in
+			self?.updateFileResults(query: self?.fileSearchField?.stringValue ?? "")
 		}
+		fileIndexRuntime.select(snapshot.owner)
 		projectPath = snapshot.owner.projectPath
 		selectedThreadID = snapshot.owner.selectedThreadID
 		if previous?.location != snapshot.location

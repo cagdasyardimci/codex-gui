@@ -75,33 +75,6 @@ extension ConversationViewController
 		return false
 	}
 
-	func loadFileIndex(for path: String?)
-	{
-		indexTask?.cancel()
-		indexProjectPath = path
-		fileIndex = nil
-		guard let path
-		else
-		{
-			return
-		}
-		indexTask = Task
-		{
-			[weak self] in
-			let index = await Task.detached(priority: .userInitiated)
-			{
-				ProjectFileIndex.load(projectPath: path)
-			}.value
-			guard let self, !Task.isCancelled, self.indexProjectPath == path
-			else
-			{
-				return
-			}
-			self.fileIndex = index
-			self.updateFileResults(query: self.fileSearchField?.stringValue ?? "")
-		}
-	}
-
 	func showAtFileCompletionIfNeeded()
 	{
 		let text = composer.string as NSString
@@ -277,7 +250,7 @@ extension ConversationViewController
 		fileSearchPopover = popover
 	}
 
-	private func updateFileResults(query: String)
+	func updateFileResults(query: String)
 	{
 		guard let stack = fileResultsStack
 		else
@@ -289,7 +262,7 @@ extension ConversationViewController
 			stack.removeArrangedSubview(view)
 			view.removeFromSuperview()
 		}
-		guard let fileIndex
+		guard let fileIndex = fileIndexRuntime.index
 		else
 		{
 			stack.addArrangedSubview(NSTextField(labelWithString: "Searching project files…"))
