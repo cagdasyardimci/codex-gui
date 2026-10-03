@@ -1,5 +1,15 @@
 import Foundation
 
+private struct SubmissionStoppedBeforeSend: Error
+{
+}
+
+struct SubmissionStartFailure: Error
+{
+	let failure: OperationFailure
+	let pendingCapture: PendingGitTurnBaselineCapture?
+}
+
 /// Finite backend and persistence effects with checkout ownership validation.
 extension WorkspaceEffectRunner
 {
@@ -13,6 +23,29 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .bindGitTurnBaseline(let operation):
+			try Task.checkCancellation()
+			guard isGitTurnBaselineBindingCurrent(operation)
+			else
+			{
+				throw CancellationError()
+			}
+			let result = await gitTurnBaselineService.bind(
+				operation.reference,
+				turnID: operation.turnID
+			)
+			return .execution(.gitTurnBaselineBindingFinished(
+				context,
+				threadID: operation.reference.identity.threadID,
+				turnID: operation.turnID,
+				result
+			))
+		case .discardGitTurnBaseline(let operation):
+			await gitTurnBaselineService.discard(operation.reference)
+			return .execution(.gitTurnBaselineDiscarded(
+				operation.context,
+				operation.reference.identity.id
+			))
 		case .forkConversation, .compactConversation, .startConversationReview,
 				.updateCommandSettings:
 			return await performComposerCommand(
@@ -268,79 +301,17 @@ extension WorkspaceEffectRunner
 				.succeeded(account)
 			))
 		case .prepareSubmission(let submission):
-			guard let path = context.workspace.canonicalCheckoutPath
-			else
-			{
-				throw AppServerError.protocolError("Submission requires a checkout.")
-			}
-			let directory = URL(fileURLWithPath: path)
-			try await verifyWorkspace(managedWorkspace)
-			let detail: ThreadDetail
-			if let threadID = context.threadID
-			{
-				detail = try await service.resumeThread(
-					id: threadID,
-					expectedDirectory: managedWorkspace == nil ? nil : directory
-				)
-			}
-			else
-			{
-				detail = try await service.startThread(
-					in: directory,
-					model: submission.modelID
-				)
-			}
-			try Task.checkCancellation()
-			try validateThread(
-				detail.summary,
-				workspace: managedWorkspace
+			return try await prepareSubmission(
+				submission,
+				context: context,
+				managedWorkspace: managedWorkspace
 			)
-			preparedThreadIDs[submission.retainedContextRequestID] = detail.summary.id
-			var boundWorkspace = managedWorkspace
-			if context.threadID == nil, let current = managedWorkspace,
-				let manager = taskWorkspaceManager
-			{
-				boundWorkspace = try await manager.bindThread(
-					id: current.id,
-					threadID: detail.summary.id
-				)
-			}
-			return .execution(.submissionPrepared(
-				context,
-				.succeeded(PreparedSubmission(
-					submission: submission,
-					thread: detail,
-					workspace: boundWorkspace
-				))
-			))
 		case .startSubmission(let prepared):
-			let submission = prepared.submission
-			let detail = prepared.thread
-			guard let path = context.workspace.canonicalCheckoutPath
-			else
-			{
-				throw AppServerError.protocolError("Submission requires a checkout.")
-			}
-			let directory = URL(fileURLWithPath: path)
-			try await verifyWorkspace(managedWorkspace)
-			let turn = try await service.startTurn(
-				threadId: detail.summary.id,
-				inputs: submission.inputs,
-				model: submission.modelID,
-				effort: submission.effort,
-				skills: submission.skills,
-				cwd: managedWorkspace == nil ? nil : directory,
-				preferences: submission.preferences,
-				collaborationMode: submission.collaborationMode,
-				serviceTier: submission.serviceTier
+			return try await startPreparedSubmission(
+				prepared,
+				context: context,
+				managedWorkspace: managedWorkspace
 			)
-			return .execution(.submissionAcknowledged(
-				context,
-				SubmissionAcknowledgement(
-					thread: detail.summary,
-					turn: turn
-				)
-			))
 		case .interrupt(let operation):
 			try await service.interrupt(
 				threadId: operation.context.threadID!,
@@ -418,8 +389,9 @@ extension WorkspaceEffectRunner
 					.protocolError("Submission release has no captured reservation.")
 			}
 			try await persistenceTask?.value
-			if preparedThreadIDs[submission.retainedContextRequestID] != nil || submission.context
-				.threadID != nil
+			let hasBoundThread = preparedThreadIDs[submission.retainedContextRequestID] != nil
+				|| submission.context.threadID != nil
+			if hasBoundThread
 			{
 				durableReferences.insert(submission.retainedContextRequestID)
 			}
@@ -450,6 +422,228 @@ extension WorkspaceEffectRunner
 			))
 		default:
 			preconditionFailure("Subscription and cancellation effects are synchronous.")
+		}
+	}
+
+	private func prepareSubmission(
+		_ submission: ComposerSubmission,
+		context: OperationContext,
+		managedWorkspace: TaskWorkspace?
+	) async throws -> WorkspaceAction
+	{
+		guard let path = context.workspace.canonicalCheckoutPath
+		else
+		{
+			throw AppServerError.protocolError("Submission requires a checkout.")
+		}
+		let directory = URL(fileURLWithPath: path)
+		try await verifyWorkspace(managedWorkspace)
+		let detail: ThreadDetail
+		if let threadID = context.threadID
+		{
+			detail = try await service.resumeThread(
+				id: threadID,
+				expectedDirectory: managedWorkspace == nil ? nil : directory
+			)
+		}
+		else
+		{
+			detail = try await service.startThread(
+				in: directory,
+				model: submission.modelID
+			)
+		}
+
+		try Task.checkCancellation()
+		try validateThread(
+			detail.summary,
+			workspace: managedWorkspace
+		)
+		preparedThreadIDs[submission.retainedContextRequestID] = detail.summary.id
+		var boundWorkspace = managedWorkspace
+		if context.threadID == nil, let current = managedWorkspace,
+			let manager = taskWorkspaceManager
+		{
+			boundWorkspace = try await manager.bindThread(
+				id: current.id,
+				threadID: detail.summary.id
+			)
+		}
+
+		return .execution(.submissionPrepared(
+			context,
+			.succeeded(PreparedSubmission(
+				submission: submission,
+				thread: detail,
+				workspace: boundWorkspace
+			))
+		))
+	}
+
+	private func startPreparedSubmission(
+		_ prepared: PreparedSubmission,
+		context: OperationContext,
+		managedWorkspace: TaskWorkspace?
+	) async throws -> WorkspaceAction
+	{
+		let submission = prepared.submission
+		let detail = prepared.thread
+		guard let path = context.workspace.canonicalCheckoutPath
+		else
+		{
+			throw AppServerError.protocolError("Submission requires a checkout.")
+		}
+		let directory = URL(fileURLWithPath: path)
+		try await verifyWorkspace(managedWorkspace)
+		try Task.checkCancellation()
+		guard isSubmissionCurrent(context)
+		else
+		{
+			throw CancellationError()
+		}
+		if isSubmissionStopped(context)
+		{
+			return .execution(.submissionCancelledBeforeSend(context))
+		}
+
+		let baselineResult = await gitTurnBaselineService.capture(GitTurnBaselineCaptureRequest(
+			context: context,
+			threadID: detail.summary.id,
+			repositoryRoot: path
+		))
+		let baseline: GitTurnBaselineReference?
+		if case .captured(let reference) = baselineResult
+		{
+			baseline = reference
+		}
+		else
+		{
+			baseline = nil
+		}
+
+		// Capture may suspend. Revalidate execution ownership before sending backend work.
+		do
+		{
+			try await validateSubmissionAfterCapture(
+				context,
+				managedWorkspace: managedWorkspace
+			)
+		}
+		catch
+		{
+			if let baseline
+			{
+				await gitTurnBaselineService.discard(baseline)
+			}
+			if error is SubmissionStoppedBeforeSend
+			{
+				return .execution(.submissionCancelledBeforeSend(context))
+			}
+			throw error
+		}
+
+		let turn = try await startTurnPreservingBaseline(
+			submission,
+			context: context,
+			detail: detail,
+			directory: directory,
+			managedWorkspace: managedWorkspace,
+			baseline: baseline
+		)
+
+		return .execution(.submissionAcknowledged(
+			context,
+			SubmissionAcknowledgement(
+				thread: detail.summary,
+				turn: turn,
+				gitTurnBaseline: baseline,
+				gitTurnBaselineResult: baselineResult
+			)
+		))
+	}
+
+	private func startTurnPreservingBaseline(
+		_ submission: ComposerSubmission,
+		context: OperationContext,
+		detail: ThreadDetail,
+		directory: URL,
+		managedWorkspace: TaskWorkspace?,
+		baseline: GitTurnBaselineReference?
+	) async throws -> CodexTurn
+	{
+		do
+		{
+			return try await service.startTurn(
+				threadId: detail.summary.id,
+				inputs: submission.inputs,
+				model: submission.modelID,
+				effort: submission.effort,
+				skills: submission.skills,
+				cwd: managedWorkspace == nil ? nil : directory,
+				preferences: submission.preferences,
+				collaborationMode: submission.collaborationMode,
+				serviceTier: submission.serviceTier
+			)
+		}
+		catch
+		{
+			let definitelyRejected: Bool
+			if let serverError = error as? AppServerError,
+				case .requestRejected = serverError
+			{
+				definitelyRejected = true
+			}
+			else
+			{
+				definitelyRejected = false
+			}
+			if definitelyRejected, let baseline
+			{
+				await gitTurnBaselineService.discard(baseline)
+			}
+			let pending = !definitelyRejected ? baseline.map
+			{
+				PendingGitTurnBaselineCapture(
+					context: context,
+					reference: $0,
+					previousTurnIDs: Set(detail.turns.map(\.id))
+				)
+			} : nil
+			throw SubmissionStartFailure(
+				failure: OperationFailure(
+					message: error.localizedDescription,
+					outcomeIsUncertain: !definitelyRejected
+				),
+				pendingCapture: pending
+			)
+		}
+	}
+
+	private func validateSubmissionAfterCapture(
+		_ context: OperationContext,
+		managedWorkspace: TaskWorkspace?
+	) async throws
+	{
+		try Task.checkCancellation()
+		guard isSubmissionCurrent(context)
+		else
+		{
+			throw CancellationError()
+		}
+		if isSubmissionStopped(context)
+		{
+			throw SubmissionStoppedBeforeSend()
+		}
+		try await verifyWorkspace(managedWorkspace)
+		try Task.checkCancellation()
+		guard isSubmissionCurrent(context)
+		else
+		{
+			throw CancellationError()
+		}
+		if isSubmissionStopped(context)
+		{
+			throw SubmissionStoppedBeforeSend()
 		}
 	}
 

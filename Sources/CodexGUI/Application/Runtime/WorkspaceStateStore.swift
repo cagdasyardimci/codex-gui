@@ -71,6 +71,7 @@ final class WorkspaceStateStore
 	{
 		model.lifecycle.managedWorkspace
 	}
+
 	func now() -> Date
 	{
 		factoryDependencies.usageRuntime.now()
@@ -104,6 +105,7 @@ final class WorkspaceStateStore
 				.requestID
 		)
 	}
+
 	func reserveCleanup(_ request: WorkspaceCleanupRequest) -> Bool
 	{
 		guard !isDraining, !isShutdown
@@ -114,6 +116,7 @@ final class WorkspaceStateStore
 		dispatch(.workspaceLifecycle(.cleanupReserved(request)))
 		return model.lifecycle.cleanupReservation == request
 	}
+
 	func acceptRecoveredManagedRecord(
 		_ reference: WorkspaceLifecycleOwnerReference,
 		expected: TaskWorkspace,
@@ -126,6 +129,7 @@ final class WorkspaceStateStore
 			recovered: recovered
 		)))
 	}
+
 	func acceptManagedRecordRecoveryConflict(
 		_ reference: WorkspaceLifecycleOwnerReference,
 		expected: TaskWorkspace,
@@ -145,6 +149,7 @@ final class WorkspaceStateStore
 	{
 		dispatch(.workspaceLifecycle(.cleanupReleased(request)))
 	}
+
 	func freezeInputsForQuit(_ request: WorkspaceQuitRequest) -> Bool
 	{
 		let reference = WorkspaceLifecycleReducer.reference(model)
@@ -169,6 +174,7 @@ final class WorkspaceStateStore
 			reference: reference
 		)
 	}
+
 	func thawInputsAfterQuit(_ request: WorkspaceQuitRequest)
 	{
 		dispatch(.workspaceLifecycle(.quitThawed(
@@ -176,6 +182,7 @@ final class WorkspaceStateStore
 			WorkspaceLifecycleReducer.reference(model)
 		)))
 	}
+
 	func awaitAcceptedPersistence() async throws
 	{
 		try await runner.awaitAcceptedPersistence()
@@ -185,14 +192,17 @@ final class WorkspaceStateStore
 			throw WorkspacePersistenceBarrierError(message: message)
 		}
 	}
+
 	func drainPersistence(projectPath: String? = nil) async throws
 	{
 		try await runner.drainPersistence(projectPath: projectPath)
 	}
+
 	@discardableResult
 	func observePublications(_ observer: @escaping (WorkspacePublication) -> Void) -> UUID
 	{
-		let id = UUID(); guard !isShutdown
+		let id = UUID()
+		guard !isShutdown
 		else
 		{
 			return id
@@ -202,8 +212,10 @@ final class WorkspaceStateStore
 			model: model,
 			coalescible: false,
 			commands: []
-		)); return id
+		))
+		return id
 	}
+
 	func removePublicationObserver(_ id: UUID)
 	{
 		publicationObservers.removeValue(forKey: id)
@@ -212,6 +224,7 @@ final class WorkspaceStateStore
 	init(
 		model: WorkspaceModel,
 		service: any CodexService,
+		gitTurnBaselineService: any GitTurnBaselineService = LocalGitTurnBaselineService.shared,
 		storage: LocalStorage? = nil,
 		reviewMarkerStore: ReviewMarkerStore? = nil,
 		taskWorkspace: TaskWorkspace? = nil,
@@ -255,6 +268,49 @@ final class WorkspaceStateStore
 		self.makeRequestID = makeRequestID
 		runner = WorkspaceEffectRunner(
 			service: service,
+			gitTurnBaselineService: gitTurnBaselineService,
+			isSubmissionCurrent:
+			{
+				[weak self] context in
+				guard let self, !self.isShutdown
+				else
+				{
+					return false
+				}
+				return context.belongsTo(
+					workspace: self.model.identity,
+					generation: self.model.connection.generation
+				) && self.model.execution.owner?.submission.isSameRequest(as: context) == true
+			},
+			isSubmissionStopped:
+			{
+				[weak self] context in
+				guard let self, !self.isShutdown
+				else
+				{
+					return false
+				}
+				return self.model.execution.stopRequested
+					&& self.model.execution.owner?.submission.isSameRequest(as: context) == true
+			},
+			isGitTurnBaselineBindingCurrent:
+			{
+				[weak self] operation in
+				guard let self, !self.isShutdown,
+						operation.context.belongsTo(
+						workspace: self.model.identity,
+						generation: self.model.connection.generation
+						),
+						let binding = self.model.execution.gitTurnBaselineBindings[
+						operation.reference.identity.threadID
+						]
+				else
+				{
+					return false
+				}
+				return binding.context.isSameRequest(as: operation.context)
+					&& binding.turnID == operation.turnID && binding.result == nil
+			},
 			storage: storage,
 			reviewMarkerStore: reviewMarkerStore,
 			taskWorkspace: taskWorkspace,
@@ -355,56 +411,19 @@ final class WorkspaceStateStore
 			)
 			else
 			{
-				next.afterReduction(); continue
+				next.afterReduction()
+				continue
 			}
-			var effects: [WorkspaceEffect] = []
-			var domainEvents: [WorkspaceDomainEvent] = []
-			var presentationCommands: [WorkspacePresentationCommand] = []
-			for reducer in reducers
-			{
-				let reduction = reducer.reduce(
-					&model,
-					next.action
-				)
-				effects.append(contentsOf: reduction.effects)
-				domainEvents.append(contentsOf: reduction.domainEvents)
-				presentationCommands.append(contentsOf: reduction.presentationCommands)
-
-			}
-			// Accepted domain observations finish value reduction before callbacks.
-			var domainEventIndex = 0
-			while domainEventIndex < domainEvents.count
-			{
-				let event = domainEvents[domainEventIndex]
-				domainEventIndex += 1
-				let reduction = reduceDomainEvent(
-					&model,
-					event
-				)
-				effects.append(contentsOf: reduction.effects)
-				domainEvents.append(contentsOf: reduction.domainEvents)
-				presentationCommands.append(contentsOf: reduction.presentationCommands)
-				let semanticContext = operationContext(threadID: WorkspaceSelectors(
-					model: model,
-					now: now()
-				).selectedThreadID)
-				let lifecycle = WorkspaceLifecycleComposition.reduceDomainEvent(
-					&model,
-					event,
-					context: semanticContext
-				)
-				effects.append(contentsOf: lifecycle.effects)
-				domainEvents.append(contentsOf: lifecycle.domainEvents)
-				presentationCommands.append(contentsOf: lifecycle.presentationCommands)
-			}
+			var reduction = reduceAction(next.action)
+			reduceDomainEvents(in: &reduction)
 			runner.reserve(
-				effects,
+				reduction.effects,
 				workspace: model.identity,
 				managedWorkspace: model.lifecycle.managedWorkspace
 			)
 			publish(
-				events: domainEvents,
-				commands: presentationCommands,
+				events: reduction.domainEvents,
+				commands: reduction.presentationCommands,
 				action: next.action
 			)
 			guard !isShutdown
@@ -413,13 +432,59 @@ final class WorkspaceStateStore
 				break
 			}
 			runner.accept(
-				effects,
+				reduction.effects,
 				workspace: model.identity,
 				managedWorkspace: model.lifecycle.managedWorkspace
 			)
 			next.afterReduction()
 		}
 		queuedActions.removeAll(keepingCapacity: true)
+	}
+
+	private func reduceAction(_ action: WorkspaceAction) -> WorkspaceReduction
+	{
+		var accumulated = WorkspaceReduction()
+		for reducer in reducers
+		{
+			let reduction = reducer.reduce(
+				&model,
+				action
+			)
+			accumulated.effects.append(contentsOf: reduction.effects)
+			accumulated.domainEvents.append(contentsOf: reduction.domainEvents)
+			accumulated.presentationCommands.append(contentsOf: reduction.presentationCommands)
+		}
+		return accumulated
+	}
+
+	private func reduceDomainEvents(in accumulated: inout WorkspaceReduction)
+	{
+		// Accepted domain observations finish value reduction before callbacks.
+		var domainEventIndex = 0
+		while domainEventIndex < accumulated.domainEvents.count
+		{
+			let event = accumulated.domainEvents[domainEventIndex]
+			domainEventIndex += 1
+			let reduction = reduceDomainEvent(
+				&model,
+				event
+			)
+			accumulated.effects.append(contentsOf: reduction.effects)
+			accumulated.domainEvents.append(contentsOf: reduction.domainEvents)
+			accumulated.presentationCommands.append(contentsOf: reduction.presentationCommands)
+			let semanticContext = operationContext(threadID: WorkspaceSelectors(
+				model: model,
+				now: now()
+			).selectedThreadID)
+			let lifecycle = WorkspaceLifecycleComposition.reduceDomainEvent(
+				&model,
+				event,
+				context: semanticContext
+			)
+			accumulated.effects.append(contentsOf: lifecycle.effects)
+			accumulated.domainEvents.append(contentsOf: lifecycle.domainEvents)
+			accumulated.presentationCommands.append(contentsOf: lifecycle.presentationCommands)
+		}
 	}
 
 	@discardableResult
@@ -475,6 +540,36 @@ final class WorkspaceStateStore
 	)
 	{
 		let snapshot = model
+		let publication = WorkspacePublication(
+			model: snapshot,
+			coalescible: shouldCoalescePublication(
+				events: events,
+				commands: commands,
+				action: action
+			),
+			commands: commands
+		)
+		for observer in Array(publicationObservers.values)
+		{
+			observer(publication)
+		}
+		for id in observerOrder
+		{
+			guard !isShutdown
+			else
+			{
+				return
+			}
+			observers[id]?(snapshot)
+		}
+	}
+
+	private func shouldCoalescePublication(
+		events: [WorkspaceDomainEvent],
+		commands: [WorkspacePresentationCommand],
+		action: WorkspaceAction
+	) -> Bool
+	{
 		var coalescible = false
 		if case .workspaceLifecycle(.reusableReferencesReceived) = action
 		{
@@ -492,33 +587,20 @@ final class WorkspaceStateStore
 				{
 				case .itemStarted, .itemCompleted, .agentMessageDelta,
 						.commandOutputDelta, .fileChangeUpdated,
-						.diffUpdated: coalescible = true; default: break
+						.diffUpdated:
+					coalescible = true
+				default:
+					break
 				}
-			default: break
+			default:
+				break
 			}
 		}
 		if !commands.isEmpty
 		{
 			coalescible = false
 		}
-		let publication = WorkspacePublication(
-			model: snapshot,
-			coalescible: coalescible,
-			commands: commands
-		)
-		for observer in Array(publicationObservers.values)
-		{
-			observer(publication)
-		}
-		for id in observerOrder
-		{
-			guard !isShutdown
-			else
-			{
-				return
-			}
-			observers[id]?(snapshot)
-		}
+		return coalescible
 	}
 }
 

@@ -71,6 +71,8 @@ enum WorkspaceEffect
 	case cancelUsageRefresh(OperationContext)
 	case prepareSubmission(ComposerSubmission)
 	case startSubmission(PreparedSubmission)
+	case bindGitTurnBaseline(GitTurnBaselineBindingOperation)
+	case discardGitTurnBaseline(GitTurnBaselineDiscardOperation)
 	case persistDraft(WorkspaceDraftWrite)
 	case subscribe(OperationContext)
 	case detachSubscription
@@ -127,6 +129,33 @@ struct PreparedSubmission
 	let submission: ComposerSubmission
 	let thread: ThreadDetail
 	var workspace: TaskWorkspace? = nil
+}
+
+struct GitTurnBaselineBindingOperation
+{
+	let context: OperationContext
+	let reference: GitTurnBaselineReference
+	let turnID: String
+}
+
+struct PendingGitTurnBaselineCapture: Sendable
+{
+	let context: OperationContext
+	let reference: GitTurnBaselineReference
+	let previousTurnIDs: Set<String>
+}
+
+struct GitTurnBaselineDiscardOperation
+{
+	let context: OperationContext
+	let reference: GitTurnBaselineReference
+}
+
+struct GitTurnBaselineBindingStatus
+{
+	let context: OperationContext
+	let turnID: String
+	var result: GitTurnBaselineResult?
 }
 
 struct WorkspaceDraftWrite

@@ -51,6 +51,14 @@ enum ExecutionReducer
 				return result
 			}
 			model.execution.owner = ExecutionOwner(submission: submission.context)
+			if let pending = model.execution.pendingGitTurnBaselineCapture
+			{
+				result.effects.append(.discardGitTurnBaseline(GitTurnBaselineDiscardOperation(
+					context: submission.context,
+					reference: pending.reference
+				)))
+				model.execution.pendingGitTurnBaselineCapture = nil
+			}
 			model.execution.agentOutcome = nil
 			model.execution.submissionRequest = submission.context
 			model.execution.activeThreadID = submission.context.threadID
@@ -65,7 +73,7 @@ enum ExecutionReducer
 			model.execution.interruptRequestSent = false
 			model.execution.activePlan = nil
 			model.execution.activeActivity = nil
-			result.effects = [.prepareSubmission(submission)]
+			result.effects.append(.prepareSubmission(submission))
 			result.domainEvents = [.submissionAccepted(submission)]
 		case .submissionPrepared(
 			let context,
@@ -150,6 +158,12 @@ enum ExecutionReducer
 						+ "sending again."
 				return result
 			}
+			GitTurnBaselineLifecycle.acknowledge(
+				acknowledgement,
+				context: context,
+				model: &model,
+				result: &result
+			)
 			if model.execution.state == .running || model.execution.state == .stopping
 			{
 				model.execution.activeTurnID = acknowledgement.turn.id
@@ -165,6 +179,58 @@ enum ExecutionReducer
 			{
 				model.execution.statusMessage = nil
 			}
+		case .submissionCancelledBeforeSend(let context):
+			guard owns(
+				context,
+				model
+			), model.execution.stopRequested,
+			model.execution.submissionRequest?.isSameRequest(as: context) == true
+			else
+			{
+				return result
+			}
+			model.execution.submissionRequest = nil
+			model.execution.stopRequested = false
+			model.execution.stopContext = nil
+			model.execution.state = .completed
+			model.execution.statusMessage = "Request canceled before the task started."
+			result.presentationCommands = [.taskFinished]
+		case .submissionStartFailed(
+			let context,
+			let failure,
+			let pending
+		):
+			guard owns(
+				context,
+				model
+			)
+			else
+			{
+				return result
+			}
+			if failure.outcomeIsUncertain
+			{
+				model.execution.pendingGitTurnBaselineCapture = pending
+			}
+			failSubmission(
+				failure,
+				model: &model,
+				result: &result
+			)
+		case .gitTurnBaselineBindingFinished(
+			let context,
+			let threadID,
+			let turnID,
+			let observation
+		):
+			GitTurnBaselineLifecycle.finishBinding(
+				observation,
+				context: context,
+				threadID: threadID,
+				turnID: turnID,
+				model: &model
+			)
+		case .gitTurnBaselineDiscarded: break
 		case .submissionFailed(
 			let context,
 			let failure
@@ -307,8 +373,7 @@ enum ExecutionReducer
 			model.execution.activeThreadID == operation.context.threadID,
 			model.execution.activeTurnID == operation.context.turnID,
 			model.execution.pendingResponses[operation.interactionID] == nil,
-			model.execution.pendingInteractions
-			.contains(where:
+			model.execution.pendingInteractions.contains(where:
 				{
 					$0.id == operation.interactionID
 				})
@@ -326,8 +391,7 @@ enum ExecutionReducer
 				context,
 				model
 			),
-				let operation = model.execution.pendingResponses.values
-				.first(where:
+				let operation = model.execution.pendingResponses.values.first(where:
 					{
 						$0.context == context
 					})
@@ -401,8 +465,7 @@ enum ExecutionReducer
 		valid(
 			context,
 			model
-		) && model.execution.owner?.submission
-			.isSameRequest(as: context) == true
+		) && model.execution.owner?.submission.isSameRequest(as: context) == true
 	}
 
 	static func requestInterruption(
@@ -433,12 +496,22 @@ enum ExecutionReducer
 	)
 	{
 		model.execution.submissionRequest = nil
-		model.execution.needsReconciliation = true
-		model.execution.hasUncertainRequest = true
+		model.execution.needsReconciliation = failure.outcomeIsUncertain
+		model.execution.hasUncertainRequest = failure.outcomeIsUncertain
 		model.execution.state = model.connection.isConnected ? .failed : .disconnected
-		model.execution.statusMessage =
-			"Request outcome is uncertain. Reopen this conversation before "
-				+ "trying again. \(failure.message)"
+		if failure.outcomeIsUncertain
+		{
+			model.execution.statusMessage =
+				"Request outcome is uncertain. Reopen this conversation before "
+					+ "trying again. \(failure.message)"
+		}
+		else
+		{
+			model.execution.stopRequested = false
+			model.execution.stopContext = nil
+			model.execution.statusMessage = "Could not start the task: \(failure.message)"
+			result.presentationCommands.append(.taskFinished)
+		}
 
 	}
 
@@ -449,14 +522,16 @@ enum ExecutionReducer
 		{
 			return
 		}
-		if execution.pendingInteractions
-			.contains(where:
-				{
-					if case .question = $0.kind
-					{
-						return true
-					}; return false
-				})
+		let hasPendingQuestion = execution.pendingInteractions.contains
+		{
+			if case .question = $0.kind
+			{
+				return true
+			}
+			return false
+		}
+
+		if hasPendingQuestion
 		{
 			execution.state = .awaitingAnswer
 		}

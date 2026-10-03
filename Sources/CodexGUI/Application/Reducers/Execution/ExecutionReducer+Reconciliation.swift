@@ -85,22 +85,19 @@ extension ExecutionReducer
 			let preservesLiveTurn = model.execution.activeTurnID != nil
 				&& model.execution.agentOutcome == nil
 				&& (!model.execution.needsReconciliation || model.execution.state.isBusy)
-			if operation.contentOnly || model.execution.activeThreadID != nil
+			let shouldPreserveExecutionOwner = operation.contentOnly
+				|| model.execution.activeThreadID != nil
 				&& (model.execution.activeThreadID != detail.summary.id || preservesLiveTurn)
+
+			if shouldPreserveExecutionOwner
 			{
-				recordCommandObservation(
+				let commandPersistenceEffect = reconcileCommands(
 					threadID: detail.summary.id,
 					turns: detail.turns,
+					context: operation.context,
 					model: &model
 				)
-				model.execution.commandLifetime.reconcile(
-					threadID: detail.summary.id,
-					turns: detail.turns
-				)
-				result.effects.append(.persistCommands(
-					operation.context,
-					Array(model.execution.commandLifetime.pending)
-				))
+				result.effects.append(commandPersistenceEffect)
 				result.domainEvents = [.historyAccepted(
 					detail,
 					threadID: detail.summary.id
@@ -141,19 +138,13 @@ extension ExecutionReducer
 			result.domainEvents.append(.completedHistoryRefreshed)
 			if case .succeeded(let detail) = observation
 			{
-				recordCommandObservation(
+				let commandPersistenceEffect = reconcileCommands(
 					threadID: detail.summary.id,
 					turns: detail.turns,
+					context: operation.context,
 					model: &model
 				)
-				model.execution.commandLifetime.reconcile(
-					threadID: detail.summary.id,
-					turns: detail.turns
-				)
-				result.effects = [.persistCommands(
-					operation.context,
-					Array(model.execution.commandLifetime.pending)
-				)]
+				result.effects = [commandPersistenceEffect]
 				result.domainEvents.append(.historyAccepted(
 					detail,
 					threadID: detail.summary.id
@@ -213,8 +204,123 @@ extension ExecutionReducer
 	{
 		let threadID = detail.summary.id
 		model.execution.lastReconciledRequestID = context.requestID
+		GitTurnBaselineLifecycle.resolvePendingCapture(
+			detail,
+			model: &model,
+			result: &result
+		)
 		let recoveringOwner = model.execution.needsReconciliation && model.execution
 			.activeThreadID == threadID
+		recoverRunningTurnOwner(
+			detail,
+			context: context,
+			model: &model,
+			result: &result
+		)
+
+		let commandPersistenceEffect = reconcileCommands(
+			threadID: threadID,
+			turns: detail.turns,
+			context: context,
+			model: &model
+		)
+		result.effects.append(commandPersistenceEffect)
+		result.domainEvents.append(.historyAccepted(
+			detail,
+			threadID: threadID
+		))
+		if model.execution.commandLifetime.hasPendingCommands
+		{
+			model.execution.activeThreadID = threadID
+			if let turn = detail.turns.first(where:
+				{
+					model.execution.commandLifetime.owns(
+						threadID: threadID,
+						turnID: $0.id
+					) && $0.status != "inProgress" && $0.status != "running"
+				})
+			{
+				model.execution.deferredTurnOutcome = turn.status == "interrupted" ? .stopped :
+					(turn.status == "failed" ? .failed : .completed)
+				model.execution.deferredTurnMessage =
+					"The agent turn finished; approved commands have now reported "
+						+ "their outcomes."
+				model.execution.reconcilingCommandOutcome = true
+			}
+			model.execution.needsReconciliation = true
+			model.execution.state = .failed
+			model.execution.statusMessage =
+				"An approved command has no confirmed exit. Refresh this task to "
+					+ "check its outcome; its checkout remains protected."
+		}
+		else if let turn = detail.turns.last,
+				turn.status == "inProgress" || turn.status == "running"
+		{
+			model.execution.activeThreadID = threadID
+			model.execution.needsReconciliation = true
+			model.execution.state = .failed
+			model.execution.statusMessage =
+				"The latest task is still marked as running. Refresh this "
+					+ "conversation before sending another request."
+		}
+		else if model.execution.pendingGitTurnBaselineCapture != nil
+		{
+			model.execution.needsReconciliation = true
+			model.execution.hasUncertainRequest = true
+			model.execution.state = .failed
+			model.execution.statusMessage =
+				"The previous request remains uncertain. Refresh this conversation to check "
+					+ "whether a turn began."
+		}
+		else
+		{
+			model.execution.needsReconciliation = false
+			model.execution.deferredTurnOutcome = nil
+			model.execution.deferredTurnMessage = nil
+			model.execution.reconcilingCommandOutcome = false
+			model.execution.state = .ready
+			model.execution.statusMessage = model.execution.hasUncertainRequest
+				? "Conversation refreshed. Review the saved draft before sending; "
+				+ "the request was not resent." : nil
+			model.execution.hasUncertainRequest = false
+			if recoveringOwner
+			{
+				model.execution.activeThreadID = nil
+				model.execution.outcomeMessage = nil
+			}
+		}
+	}
+
+	static func reconcileCommands(
+		threadID: String,
+		turns: [CodexTurn],
+		context: OperationContext,
+		model: inout WorkspaceModel
+	) -> WorkspaceEffect
+	{
+		recordCommandObservation(
+			threadID: threadID,
+			turns: turns,
+			model: &model
+		)
+		model.execution.commandLifetime.reconcile(
+			threadID: threadID,
+			turns: turns
+		)
+		return .persistCommands(
+			context,
+			Array(model.execution.commandLifetime.pending)
+		)
+	}
+
+	private static func recoverRunningTurnOwner(
+		_ detail: ThreadDetail,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		let threadID = detail.summary.id
 		if let turn = detail.turns.last,
 			turn.status == "inProgress" || turn.status == "running"
 		{
@@ -246,74 +352,6 @@ extension ExecutionReducer
 				model: &model,
 				result: &result
 			)
-		}
-		recordCommandObservation(
-			threadID: threadID,
-			turns: detail.turns,
-			model: &model
-		)
-		model.execution.commandLifetime.reconcile(
-			threadID: threadID,
-			turns: detail.turns
-		)
-		result.effects.append(.persistCommands(
-			context,
-			Array(model.execution.commandLifetime.pending)
-		))
-		result.domainEvents.append(.historyAccepted(
-			detail,
-			threadID: threadID
-		))
-		if model.execution.commandLifetime.hasPendingCommands
-		{
-			model.execution.activeThreadID = threadID
-			if let turn = detail.turns.first(where:
-				{
-					model.execution.commandLifetime.owns(
-						threadID: threadID,
-						turnID: $0.id
-					) && $0.status != "inProgress" && $0.status != "running"
-				})
-			{
-				model.execution.deferredTurnOutcome = turn
-					.status == "interrupted" ? .stopped :
-					(turn.status == "failed" ? .failed : .completed)
-				model.execution.deferredTurnMessage =
-					"The agent turn finished; approved commands have now reported "
-						+ "their outcomes."
-				model.execution.reconcilingCommandOutcome = true
-			}
-			model.execution.needsReconciliation = true
-			model.execution.state = .failed
-			model.execution.statusMessage =
-				"An approved command has no confirmed exit. Refresh this task to "
-					+ "check its outcome; its checkout remains protected."
-		}
-		else if let turn = detail.turns.last,
-				turn.status == "inProgress" || turn.status == "running"
-		{
-			model.execution.activeThreadID = threadID
-			model.execution.needsReconciliation = true
-			model.execution.state = .failed
-			model.execution.statusMessage =
-				"The latest task is still marked as running. Refresh this "
-					+ "conversation before sending another request."
-		}
-		else
-		{
-			model.execution.needsReconciliation = false
-			model.execution.deferredTurnOutcome = nil
-			model.execution.deferredTurnMessage = nil
-			model.execution.reconcilingCommandOutcome = false
-			model.execution.state = .ready
-			model.execution.statusMessage = model.execution.hasUncertainRequest
-				? "Conversation refreshed. Review the saved draft before sending; "
-				+ "the request was not resent." : nil
-			model.execution.hasUncertainRequest = false
-			if recoveringOwner
-			{
-				model.execution.activeThreadID = nil; model.execution.outcomeMessage = nil
-			}
 		}
 	}
 

@@ -41,6 +41,9 @@ struct ExecutionOwner: Equatable
 
 struct ExecutionModel
 {
+	var gitTurnBaselineRevisions: [String: Int] = [:]
+	var gitTurnBaselineBindings: [String: GitTurnBaselineBindingStatus] = [:]
+	var pendingGitTurnBaselineCapture: PendingGitTurnBaselineCapture?
 	var owner: ExecutionOwner?
 	var activeThreadID: String?
 	var activeTurnID: String?
@@ -93,7 +96,8 @@ enum ConversationKey: Hashable
 	{
 		switch self
 		{
-		case .newChat: return nil; case .thread(let id): return id
+		case .newChat: return nil
+		case .thread(let id): return id
 		}
 	}
 }
@@ -164,6 +168,8 @@ struct ComposerModel
 struct ConversationContentModel
 {
 	var loadedTurns: [CodexTurn] = []
+	/// The latest actual source turn observed independently of local execution ownership.
+	var latestObservedGitTurnID: String?
 	var turnTimings: [String: ConversationTurnTiming] = [:]
 	var hasLoadedHistory = false
 	var nextTurnsCursor: String?

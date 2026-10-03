@@ -54,6 +54,7 @@ extension WorkspaceEffectRunner
 		switch effect
 		{
 		case .validateComposerInput, .releaseUnsentSubmission, .prepareSubmission, .startSubmission,
+				.bindGitTurnBaseline, .discardGitTurnBaseline,
 				.steer, .persistDraft,
 				.persistPreparedConversation, .acknowledgeSubmission, .releaseSubmission,
 				.persistPreference, .writeReviewMarker, .saveProjectContext,
@@ -341,8 +342,10 @@ extension WorkspaceEffectRunner
 		let retainedID = submission.retainedContextRequestID
 		let boundThreadID = preparedThreadIDs[retainedID] ?? submission.context.threadID
 		// Unknown preparation outcomes keep their lease until real backend ownership resolves.
-		guard boundThreadID != nil || submission.draft.context.isEmpty,
-				durableReferences.contains(retainedID) || submission.draft.context.isEmpty
+		let hasNoAttachments = submission.draft.context.isEmpty
+		let hasResolvedThread = boundThreadID != nil || hasNoAttachments
+		let hasDurableReferences = durableReferences.contains(retainedID) || hasNoAttachments
+		guard hasResolvedThread, hasDurableReferences
 		else
 		{
 			return false

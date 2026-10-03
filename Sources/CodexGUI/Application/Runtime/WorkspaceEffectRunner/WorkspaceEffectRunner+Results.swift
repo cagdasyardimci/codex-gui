@@ -30,6 +30,18 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .bindGitTurnBaseline(let operation):
+			return .execution(.gitTurnBaselineBindingFinished(
+				context,
+				threadID: operation.reference.identity.threadID,
+				turnID: operation.turnID,
+				.unavailable(.failed(failure.message))
+			))
+		case .discardGitTurnBaseline(let operation):
+			return .execution(.gitTurnBaselineDiscarded(
+				context,
+				operation.reference.identity.id
+			))
 		case .forkConversation(let request):
 			return .composerCommand(.forkFinished(
 				request,

@@ -44,6 +44,8 @@ final class WorkspaceEffectRunner
 			[String]
 		)
 		case usage(Int)
+		case gitTurnBaselineBinding(String)
+		case gitTurnBaselineDiscard(UUID)
 	}
 
 	struct RequestKey: Hashable
@@ -84,6 +86,10 @@ final class WorkspaceEffectRunner
 	var usageDeadlineTask: Task<Void, Never>?
 	var usageDeadline: UsageDeadlineOperation?
 	let service: any CodexService
+	let gitTurnBaselineService: any GitTurnBaselineService
+	let isSubmissionCurrent: (OperationContext) -> Bool
+	let isSubmissionStopped: (OperationContext) -> Bool
+	let isGitTurnBaselineBindingCurrent: (GitTurnBaselineBindingOperation) -> Bool
 	let storage: LocalStorage?
 	let reviewMarkerStore: ReviewMarkerStore?
 	var reservedReviewResults: [EffectKey: WorkspaceAction] = [:]
@@ -110,6 +116,19 @@ final class WorkspaceEffectRunner
 
 	init(
 		service: any CodexService,
+		gitTurnBaselineService: any GitTurnBaselineService = LocalGitTurnBaselineService.shared,
+		isSubmissionCurrent: @escaping (OperationContext) -> Bool =
+		{
+			_ in true
+		},
+		isSubmissionStopped: @escaping (OperationContext) -> Bool =
+		{
+			_ in false
+		},
+		isGitTurnBaselineBindingCurrent: @escaping (GitTurnBaselineBindingOperation) -> Bool =
+		{
+			_ in true
+		},
 		storage: LocalStorage? = nil,
 		reviewMarkerStore: ReviewMarkerStore? = nil,
 		taskWorkspace: TaskWorkspace? = nil,
@@ -129,6 +148,10 @@ final class WorkspaceEffectRunner
 	)
 	{
 		self.service = service
+		self.gitTurnBaselineService = gitTurnBaselineService
+		self.isSubmissionCurrent = isSubmissionCurrent
+		self.isSubmissionStopped = isSubmissionStopped
+		self.isGitTurnBaselineBindingCurrent = isGitTurnBaselineBindingCurrent
 		self.usageRuntime = usageRuntime
 		self.storage = storage
 		self.reviewMarkerStore = reviewMarkerStore
@@ -294,6 +317,10 @@ final class WorkspaceEffectRunner
 		case .readUsage(let operation): return (operation.context, .usage(operation.attempt))
 		case .prepareSubmission(let submission): return (submission.context, .preparation)
 		case .startSubmission(let prepared): return (prepared.submission.context, .submission)
+		case .bindGitTurnBaseline(let operation):
+			return (operation.context, .gitTurnBaselineBinding(operation.turnID))
+		case .discardGitTurnBaseline(let operation):
+			return (operation.context, .gitTurnBaselineDiscard(operation.reference.identity.id))
 		case .persistDraft(let write): return (write.context, .draft)
 		default: return nil
 		}
@@ -433,16 +460,28 @@ final class WorkspaceEffectRunner
 			}
 			catch
 			{
-				let failure = self.failure(
-					for: effect,
-					message: error.localizedDescription
-				)
-				action = self.failureAction(
-					for: effect,
-					context: context,
-					failure: failure
-				)
-				completion = .failed(failure)
+				if let startFailure = error as? SubmissionStartFailure
+				{
+					action = .execution(.submissionStartFailed(
+						context,
+						startFailure.failure,
+						startFailure.pendingCapture
+					))
+					completion = .failed(startFailure.failure)
+				}
+				else
+				{
+					let failure = self.failure(
+						for: effect,
+						message: error.localizedDescription
+					)
+					action = self.failureAction(
+						for: effect,
+						context: context,
+						failure: failure
+					)
+					completion = .failed(failure)
+				}
 			}
 			// Cancellation retires the local task even if a service ignores Task cancellation.
 			guard !Task.isCancelled, self.tasks[key] != nil

@@ -242,6 +242,7 @@ struct WorkspaceRuntimeTests
 				switch action
 				{
 				case .execution(.submissionRequested(let submission)):
+					model.execution.owner = ExecutionOwner(submission: submission.context)
 					return [.prepareSubmission(submission)]
 				case .execution(.submissionPrepared(
 					_,

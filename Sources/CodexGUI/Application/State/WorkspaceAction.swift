@@ -91,6 +91,22 @@ enum ExecutionAction
 		OperationContext,
 		SubmissionAcknowledgement
 	)
+	case submissionCancelledBeforeSend(OperationContext)
+	case submissionStartFailed(
+		OperationContext,
+		OperationFailure,
+		PendingGitTurnBaselineCapture?
+	)
+	case gitTurnBaselineBindingFinished(
+		OperationContext,
+		threadID: String,
+		turnID: String,
+		GitTurnBaselineResult
+	)
+	case gitTurnBaselineDiscarded(
+		OperationContext,
+		UUID
+	)
 	case submissionFailed(
 		OperationContext,
 		OperationFailure
@@ -150,6 +166,8 @@ struct SubmissionAcknowledgement
 {
 	let thread: ThreadSummary
 	let turn: CodexTurn
+	var gitTurnBaseline: GitTurnBaselineReference? = nil
+	var gitTurnBaselineResult: GitTurnBaselineResult? = nil
 }
 
 enum ComposerAction

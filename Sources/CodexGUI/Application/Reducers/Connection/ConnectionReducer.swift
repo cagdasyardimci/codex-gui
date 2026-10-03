@@ -145,6 +145,7 @@ enum ConnectionReducer
 			{
 				return result
 			}
+			let pendingCapture = model.execution.pendingGitTurnBaselineCapture
 			model.identity = identity
 			// Source transport initialization belongs to the same session even if its first
 			// checkout is selected before the finite connection request acknowledges.
@@ -157,7 +158,14 @@ enum ConnectionReducer
 				generation: model.connection.generation,
 				requestID: identity.sessionID
 			)
-			result.effects = [
+			if let pendingCapture
+			{
+				result.effects.append(.discardGitTurnBaseline(GitTurnBaselineDiscardOperation(
+					context: context,
+					reference: pendingCapture.reference
+				)))
+			}
+			result.effects += [
 				.subscribe(context),
 				.restoreExecution(
 					context,
