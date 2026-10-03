@@ -5,6 +5,76 @@ import Testing
 
 struct GitReviewStateTests
 {
+	@Test @MainActor
+	func reentrantReloadDuringLoadingKeepsNewestRead() async throws
+	{
+		let service = ControlledReviewComparisonService()
+		let runtime = GitReviewRuntime(service: service)
+		runtime.activate(owner: owner())
+		let first = try #require(runtime.state.pendingRequest)
+		_ = try await service.request(generation: first.generation)
+		var didReenter = false
+		runtime.onChange =
+		{
+			state in
+			if state.pendingRequest?.generation == first.generation + 1,
+				!didReenter
+			{
+				didReenter = true
+				runtime.reload()
+			}
+		}
+		runtime.reload()
+		let latest = try #require(runtime.state.pendingRequest)
+		#expect(didReenter)
+		#expect(latest.generation == first.generation + 2)
+		_ = try await service.request(generation: latest.generation)
+		await service.finish(
+			generation: first.generation,
+			result: .snapshot(snapshot(first))
+		)
+		await service.finish(
+			generation: latest.generation,
+			result: .snapshot(snapshot(latest))
+		)
+		try await waitForReview
+		{
+			runtime.state.snapshot?.request == latest
+		}
+		#expect(runtime.state.snapshot?.request == latest)
+		runtime.close()
+	}
+
+	@Test @MainActor
+	func reentrantCloseDuringLoadingInvalidatesActiveRead() async throws
+	{
+		let service = ControlledReviewComparisonService()
+		let runtime = GitReviewRuntime(service: service)
+		runtime.activate(owner: owner())
+		let first = try #require(runtime.state.pendingRequest)
+		_ = try await service.request(generation: first.generation)
+		var didClose = false
+		runtime.onChange =
+		{
+			state in
+			if state.pendingRequest?.generation == first.generation + 1,
+				!didClose
+			{
+				didClose = true
+				runtime.close()
+			}
+		}
+		runtime.reload()
+		#expect(didClose)
+		#expect(!runtime.state.isOpen)
+		await service.finish(
+			generation: first.generation,
+			result: .snapshot(snapshot(first))
+		)
+		await Task.yield()
+		#expect(runtime.state.snapshot == nil)
+		#expect(runtime.state.pendingRequest == nil)
+	}
 
 	@Test func reducerKeepsPresentationChoicesOutOfComparisonReads() throws
 	{
@@ -108,30 +178,30 @@ struct GitReviewStateTests
 		state.scope = .staged
 		let secondOptional = state.beginRequest()
 		let second = try #require(secondOptional)
-		let accepted1 = state.accept(
+		let acceptedRetiredRequest = state.accept(
 			.snapshot(snapshot(first)),
 			request: first
 		)
-		#expect(!accepted1)
-		let accepted2 = state.accept(
+		#expect(!acceptedRetiredRequest)
+		let acceptedCurrentRequest = state.accept(
 			.snapshot(snapshot(second)),
 			request: second
 		)
-		#expect(accepted2)
+		#expect(acceptedCurrentRequest)
 		state.activate(owner: owner("another"))
-		let accepted3 = state.accept(
+		let acceptedForeignOwnerRequest = state.accept(
 			.snapshot(snapshot(second)),
 			request: second
 		)
-		#expect(!accepted3)
+		#expect(!acceptedForeignOwnerRequest)
 		let thirdOptional = state.beginRequest()
 		let third = try #require(thirdOptional)
 		state.close()
-		let accepted4 = state.accept(
+		let acceptedClosedRequest = state.accept(
 			.snapshot(snapshot(third)),
 			request: third
 		)
-		#expect(!accepted4)
+		#expect(!acceptedClosedRequest)
 		#expect(state.snapshot == nil)
 	}
 
@@ -146,11 +216,11 @@ struct GitReviewStateTests
 		let currentOptional = state.beginRequest()
 		let current = try #require(currentOptional)
 		#expect(old.generation < current.generation)
-		let accepted5 = state.accept(
+		let acceptedPreviousLifetime = state.accept(
 			.snapshot(snapshot(old)),
 			request: old
 		)
-		#expect(!accepted5)
+		#expect(!acceptedPreviousLifetime)
 		#expect(state.pendingRequest == current)
 	}
 
@@ -160,11 +230,11 @@ struct GitReviewStateTests
 		state.activate(owner: owner())
 		let requestOptional = state.beginRequest()
 		let request = try #require(requestOptional)
-		let accepted6 = state.accept(
+		let acceptedInitialSnapshot = state.accept(
 			.snapshot(snapshot(request)),
 			request: request
 		)
-		#expect(accepted6)
+		#expect(acceptedInitialSnapshot)
 		state.filter = "no matches"
 		state.options.ignoreImports = true
 		#expect(state.summary == .available(SummaryChangeTotals(
@@ -176,11 +246,11 @@ struct GitReviewStateTests
 		let replacement = try #require(replacementOptional)
 		#expect(state.isStale)
 		#expect(state.copyCommand == nil)
-		let accepted7 = state.accept(
+		let acceptedReplacementFailure = state.accept(
 			.unavailable(.repositoryChanged),
 			request: replacement
 		)
-		#expect(accepted7)
+		#expect(acceptedReplacementFailure)
 		#expect(state.snapshot != nil)
 		#expect(state.copyCommand == nil)
 	}
@@ -191,23 +261,23 @@ struct GitReviewStateTests
 		state.activate(owner: owner())
 		let firstOptional = state.beginRequest()
 		let first = try #require(firstOptional)
-		let accepted8 = state.accept(
+		let acceptedFirstSnapshot = state.accept(
 			.snapshot(snapshot(first)),
 			request: first
 		)
-		#expect(accepted8)
+		#expect(acceptedFirstSnapshot)
 		state.options.expandedGapIDs = ["gap"]
 		state.expandedDirectories.removeAll()
 		let secondOptional = state.beginRequest()
 		let second = try #require(secondOptional)
-		let accepted9 = state.accept(
+		let acceptedUnchangedSnapshot = state.accept(
 			.snapshot(snapshot(
 				second,
 				id: "new"
 			)),
 			request: second
 		)
-		#expect(accepted9)
+		#expect(acceptedUnchangedSnapshot)
 		#expect(state.snapshot?.id == "snapshot")
 		#expect(state.options.expandedGapIDs == ["gap"])
 		#expect(state.expandedDirectories.isEmpty)
@@ -221,12 +291,58 @@ struct GitReviewStateTests
 		let first = try #require(firstOptional)
 		let secondOptional = state.beginRequest()
 		let second = try #require(secondOptional)
-		let accepted10 = state.accept(
+		let acceptedMismatchedSnapshot = state.accept(
 			.snapshot(snapshot(first)),
 			request: second
 		)
-		#expect(!accepted10)
+		#expect(!acceptedMismatchedSnapshot)
 		#expect(state.pendingRequest == second)
+	}
+
+	@Test @MainActor
+	func failedRuntimePollingKeepsRevisionFailureVisibleUntilExplicitRetry() async
+	{
+		let runtime = GitReviewRuntime(service: MissingRevisionComparisonService())
+		await withCheckedContinuation
+		{
+			completion in
+			runtime.onChange =
+			{
+				state in
+				if state.failure == .invalidRevision("missing-review-revision")
+				{
+					runtime.onChange = nil
+					completion.resume()
+				}
+			}
+			runtime.activate(owner: owner())
+		}
+		let failedGeneration = runtime.state.generation
+		for _ in 0 ..< 3
+		{
+			runtime.refreshIfNeeded()
+		}
+		#expect(runtime.state.generation == failedGeneration)
+		#expect(runtime.state.pendingRequest == nil)
+		#expect(runtime.state.failure == .invalidRevision("missing-review-revision"))
+		#expect(runtime.state.copyCommand == nil)
+		await withCheckedContinuation
+		{
+			completion in
+			runtime.onChange =
+			{
+				state in
+				if state.failure != nil
+				{
+					runtime.onChange = nil
+					completion.resume()
+				}
+			}
+			runtime.reload()
+		}
+		#expect(runtime.state.generation > failedGeneration)
+		#expect(runtime.state.pendingRequest == nil)
+		runtime.close()
 	}
 
 	@Test func latestTurnAndCapturePublicationInvalidateOnlyLastTurnRequests() throws
@@ -322,6 +438,145 @@ struct GitReviewStateTests
 		state.close()
 		#expect(state.lastTurnID == nil)
 		#expect(state.baselineRevision == 0)
+	}
+
+	@Test @MainActor
+	func matchingCaptureFailureRetainsItsPreciseUnavailableReason() async
+	{
+		let runtime = GitReviewRuntime(service: MissingRevisionComparisonService())
+		let captureFailure = GitComparisonFailure
+			.lastTurnBaselineUnavailable("Tracked file capture exceeds the configured limit.")
+		await waitForFailure(runtime)
+		{
+			runtime.activate(
+				owner: owner(),
+				lastTurnID: "latest",
+				baselineRevision: 1,
+				baselineFailure: captureFailure
+			)
+		}
+		await waitForFailure(runtime)
+		{
+			runtime.selectScope(.lastTurn)
+		}
+		#expect(runtime.state.failure == captureFailure)
+		#expect(runtime.state.pendingRequest == nil)
+		runtime.close()
+	}
+
+	@Test @MainActor
+	func turnChangeAndFinishedBindingRetryFailedLastTurnExactlyOnce() async
+	{
+		let runtime = GitReviewRuntime(
+			service: MissingRevisionComparisonService(),
+			automaticRefreshEnabled: true
+		)
+		await waitForFailure(runtime)
+		{
+			runtime.activate(
+				owner: owner(),
+				lastTurnID: "first",
+				baselineRevision: 1
+			)
+		}
+		await waitForFailure(runtime)
+		{
+			runtime.selectScope(.lastTurn)
+		}
+		let initialGeneration = runtime.state.generation
+		await waitForFailure(runtime)
+		{
+			runtime.updateContext(
+				lastTurnID: "latest",
+				baselineRevision: 1
+			)
+		}
+		#expect(runtime.state.generation > initialGeneration)
+		#expect(runtime.state.lastTurnID == "latest")
+		let pendingBindingGeneration = runtime.state.generation
+		await waitForFailure(runtime)
+		{
+			runtime.updateContext(
+				lastTurnID: "latest",
+				baselineRevision: 2
+			)
+		}
+		#expect(runtime.state.generation > pendingBindingGeneration)
+		let finishedGeneration = runtime.state.generation
+		runtime.updateContext(
+			lastTurnID: "latest",
+			baselineRevision: 2
+		)
+		runtime.refreshIfNeeded()
+		#expect(runtime.state.generation == finishedGeneration)
+		await waitForFailure(runtime)
+		{
+			runtime.selectScope(.uncommitted)
+		}
+		let otherScopeGeneration = runtime.state.generation
+		runtime.updateContext(
+			lastTurnID: "next",
+			baselineRevision: 3
+		)
+		#expect(runtime.state.generation == otherScopeGeneration)
+		runtime.close()
+	}
+
+	@Test @MainActor
+	func automaticUpdatesStayDisabledUntilExplicitRefresh() async
+	{
+		let runtime = GitReviewRuntime(service: MissingRevisionComparisonService())
+		#expect(!runtime.automaticRefreshEnabled)
+		await waitForFailure(runtime)
+		{
+			runtime.activate(owner: owner())
+		}
+		await waitForFailure(runtime)
+		{
+			runtime.selectScope(.lastTurn)
+		}
+		var publishedGenerations: [Int] = []
+		runtime.onChange =
+		{
+			publishedGenerations.append($0.generation)
+		}
+		runtime.updateContext(
+			lastTurnID: "next",
+			baselineRevision: 1
+		)
+		#expect(publishedGenerations.count == 1)
+		#expect(runtime.state.pendingRequest == nil)
+		let generation = runtime.state.generation
+		runtime.refreshIfNeeded()
+		#expect(runtime.state.generation == generation)
+		await waitForFailure(runtime)
+		{
+			runtime.reload()
+		}
+		#expect(runtime.state.generation > generation)
+		runtime.close()
+	}
+
+	@MainActor
+	private func waitForFailure(
+		_ runtime: GitReviewRuntime,
+		perform: () -> Void
+	) async
+	{
+		await withCheckedContinuation
+		{
+			completion in
+			runtime.onChange =
+			{
+				state in
+				if state.failure != nil
+				{
+					runtime.onChange = nil
+					completion.resume()
+				}
+			}
+			perform()
+		}
 	}
 
 	@MainActor
