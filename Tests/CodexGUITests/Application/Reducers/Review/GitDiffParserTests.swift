@@ -178,4 +178,34 @@ struct GitDiffParserTests
 		#expect(!hunks[0].text.contains("diff --git"))
 		#expect(!hunks[0].text.contains("+second"))
 	}
+
+	@Test func markerTabsAndQuotedModeOnlyHeadersKeepPathIdentity()
+	{
+		let modeOnly = #"""
+		diff --git "a/\303\247\tname" "b/\303\247\tname"
+		old mode 100644
+		new mode 100755
+		"""#
+		let renamed = "diff --git a/source b/destination\nrename from source\n"
+			+ "rename to destination\n--- a/source\t\n+++ b/destination\t\n"
+		let diff = modeOnly + "\n" + renamed
+		#expect(GitDiffParser.filePaths(in: diff) == ["ç\tname", "destination"])
+		#expect(GitDiffParser.selectedDiff(
+			for: "destination",
+			in: diff
+		).contains("rename to destination"))
+	}
+
+	@Test func reportedMarkersPreserveLiteralTabAndQuotedNullPath()
+	{
+		let tabbed = "diff --git a/old b/new\n--- a/old\t\n+++ b/new\t\n"
+		#expect(GitDiffParser.filePaths(in: tabbed) == ["new\t"])
+		#expect(GitDiffParser.selectedDiff(
+			for: "new\t",
+			in: tabbed
+		).contains("+++ b/new\t"))
+
+		let quotedNull = "diff --git a/old b/new\n--- a/old\n+++ \"/dev/null\"\n"
+		#expect(GitDiffParser.filePaths(in: quotedNull) == ["/dev/null"])
+	}
 }

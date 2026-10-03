@@ -5,16 +5,7 @@ enum GitDiffParser
 {
 	static func decodedPath(_ value: String) -> String?
 	{
-		guard value.first == "\""
-		else
-		{
-			return value
-		}
-		var cursor = value.startIndex
-		return parseToken(
-			value,
-			at: &cursor
-		)
+		GitPatchSyntax.decodedPath(value)
 	}
 
 	/// Destination paths in report order; deletions retain their original path.
@@ -221,8 +212,6 @@ enum GitDiffParser
 		{
 			return ([], [])
 		}
-		let headerPaths = String(header.dropFirst("diff --git ".count))
-
 		// Synthetic headers are useful for diffs that contain paths with spaces.
 		var old: [String] = []
 		var new: [String] = []
@@ -263,196 +252,39 @@ enum GitDiffParser
 			}
 		}
 
-		if let pair = syntheticHeaderPaths(headerPaths)
+		if let pair = GitPatchSyntax.unquotedHeaderCandidates(header).first(where:
+			{
+				!$0.old.isEmpty && !$0.new.trimmingCharacters(in: .whitespaces).isEmpty
+			})
 		{
 			old.append(pair.old)
-			new.append(pair.new)
+			new.append(pair.new.trimmingCharacters(in: .whitespaces))
 		}
-		else if let pair = tokenizedHeaderPaths(headerPaths)
+		else if let pair = GitPatchSyntax.headerFields(header)
 		{
-			old.append(pair.old)
-			new.append(pair.new)
+			old.append(removingSidePrefix(
+				pair.old,
+				side: "a"
+			))
+			new.append(removingSidePrefix(
+				pair.new,
+				side: "b"
+			))
 		}
 		return (old, new)
 	}
 
-	private static func syntheticHeaderPaths(_ header: String) -> (old: String, new: String)?
-	{
-		guard header.hasPrefix("a/")
-		else
-		{
-			return nil
-		}
-		let source = header.dropFirst(2)
-		let delimiter = " b/"
-		guard let split = source.range(of: delimiter)
-		else
-		{
-			return nil
-		}
-		let old = String(source[..<split.lowerBound])
-		let new = String(source[split.upperBound...]).trimmingCharacters(in: .whitespaces)
-		guard !old.isEmpty, !new.isEmpty
-		else
-		{
-			return nil
-		}
-		return (old, new)
-	}
-
-	private static func tokenizedHeaderPaths(_ header: String) -> (old: String, new: String)?
-	{
-		var cursor = header.startIndex
-		guard let oldToken = parseToken(
-			header,
-			at: &cursor
-		),
-			let newToken = parseToken(
-				header,
-				at: &cursor
-			)
-		else
-		{
-			return nil
-		}
-		return (removingSidePrefix(
-			oldToken,
-			side: "a"
-		), removingSidePrefix(
-			newToken,
-			side: "b"
-		))
-	}
-
-	private static func parseToken(
-		_ text: String,
-		at cursor: inout String.Index
-	) -> String?
-	{
-		while cursor < text.endIndex && text[cursor]
-			.isWhitespace
-		{
-			cursor = text.index(after: cursor)
-		}
-		guard cursor < text.endIndex
-		else
-		{
-			return nil
-		}
-		if text[cursor] != "\""
-		{
-			return parseUnquotedToken(
-				text,
-				at: &cursor
-			)
-		}
-		return parseQuotedToken(
-			text,
-			at: &cursor
-		)
-	}
-
-	private static func parseUnquotedToken(
-		_ text: String,
-		at cursor: inout String.Index
-	) -> String
-	{
-		let tokenStart = cursor
-		while cursor < text.endIndex && !text[cursor].isWhitespace
-		{
-			cursor = text.index(after: cursor)
-		}
-		return String(text[tokenStart ..< cursor])
-	}
-
-	// Git quotes paths as UTF-8 bytes, including up to three octal digits per escaped byte.
-	private static func parseQuotedToken(
-		_ text: String,
-		at cursor: inout String.Index
-	) -> String?
-	{
-		cursor = text.index(after: cursor)
-		var decodedBytes: [UInt8] = []
-		while cursor < text.endIndex
-		{
-			let character = text[cursor]
-			cursor = text.index(after: cursor)
-			if character == "\""
-			{
-				return String(
-					decoding: decodedBytes,
-					as: UTF8.self
-				)
-			}
-			if character != "\\"
-			{
-				decodedBytes.append(contentsOf: String(character).utf8)
-				continue
-			}
-			guard cursor < text.endIndex
-			else
-			{
-				return nil
-			}
-			let escaped = text[cursor]
-			cursor = text.index(after: cursor)
-			switch escaped
-			{
-			case "t": decodedBytes.append(9)
-			case "n": decodedBytes.append(10)
-			case "r": decodedBytes.append(13)
-			case "\\", "\"": decodedBytes.append(contentsOf: String(escaped).utf8)
-			case "0" ... "7":
-				var digits = String(escaped)
-				for _ in 0 ..< 2
-					where cursor < text.endIndex && ("0" ... "7").contains(text[cursor])
-				{
-					digits.append(text[cursor])
-					cursor = text.index(after: cursor)
-				}
-				guard let byte = UInt8(
-					digits,
-					radix: 8
-				)
-				else
-				{
-					return nil
-				}
-				decodedBytes.append(byte)
-			default: decodedBytes.append(contentsOf: String(escaped).utf8)
-			}
-		}
-		return nil
-	}
-
+	/// Reported diffs keep literal unquoted marker suffixes supplied by the backend.
 	private static func appendHeaderPath(
 		_ value: String,
 		side: String,
 		to paths: inout [String]
 	)
 	{
-		guard value != "/dev/null"
+		guard value != "/dev/null", let path = GitPatchSyntax.decodedPath(value)
 		else
 		{
 			return
-		}
-		let path: String
-		if value.first == "\""
-		{
-			var index = value.startIndex
-			guard let token = parseToken(
-				value,
-				at: &index
-			)
-			else
-			{
-				return
-			}
-			path = token
-		}
-		else
-		{
-			path = value
 		}
 		paths.append(removingSidePrefix(
 			path,
