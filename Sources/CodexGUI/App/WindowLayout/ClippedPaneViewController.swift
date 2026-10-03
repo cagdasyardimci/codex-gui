@@ -119,8 +119,10 @@ private final class ClippedPaneViewport: NSView
 	private var content: NSView?
 	private let mainRegion = NSView()
 	private var minimumContentWidth: CGFloat
+	private var minimumContentHeight: CGFloat = 0
 	private var aside: NSView?
 	private var asideWidth: CGFloat = 0
+	private var minimumAsideHeight: CGFloat = 0
 
 	init(
 		content: NSView?,
@@ -154,6 +156,9 @@ private final class ClippedPaneViewport: NSView
 		}
 		// No width constraint crosses the clipping boundary. The native divider can therefore
 		// move all the way to zero while the content retains a supported layout width.
+		// Measure while detached, before a zero frame can produce autoresizing constraints.
+		minimumContentHeight = content.fittingSize.height
+		updateContentFrames()
 		content.translatesAutoresizingMaskIntoConstraints = true
 		content.autoresizingMask = []
 		mainRegion.addSubview(content)
@@ -165,21 +170,24 @@ private final class ClippedPaneViewport: NSView
 		width: CGFloat
 	)
 	{
+		asideWidth = aside == nil ? 0 : max(
+			0,
+			width
+		)
 		if self.aside !== aside
 		{
 			self.aside?.removeFromSuperview()
 			self.aside = aside
 			if let aside
 			{
+				minimumAsideHeight = aside.fittingSize.height
+				updateContentFrames()
 				aside.translatesAutoresizingMaskIntoConstraints = true
 				aside.autoresizingMask = []
 				addSubview(aside)
 			}
 		}
-		asideWidth = aside == nil ? 0 : max(
-			0,
-			width
-		)
+		updateContentFrames()
 		needsLayout = true
 	}
 
@@ -191,25 +199,31 @@ private final class ClippedPaneViewport: NSView
 	override func setFrameSize(_ newSize: NSSize)
 	{
 		super.setFrameSize(newSize)
+		updateContentFrames()
 		needsLayout = true
 	}
 
 	override func layout()
 	{
+		updateContentFrames()
 		super.layout()
-		guard let content
-		else
-		{
-			return
-		}
+		aside?.layoutSubtreeIfNeeded()
+		content?.layoutSubtreeIfNeeded()
+	}
+
+	/// Update frames before Auto Layout visits descendants, including before first attachment.
+	private func updateContentFrames()
+	{
 		let visibleAsideWidth = min(
 			asideWidth,
 			bounds.width
 		)
+		let visibleContentWidth = bounds.width - visibleAsideWidth
+
 		mainRegion.frame = NSRect(
 			x: bounds.minX,
 			y: bounds.minY,
-			width: bounds.width - visibleAsideWidth,
+			width: visibleContentWidth,
 			height: bounds.height
 		)
 		let contentFrame = NSRect(
@@ -217,11 +231,14 @@ private final class ClippedPaneViewport: NSView
 			y: 0,
 			width: max(
 				minimumContentWidth,
-				bounds.width - visibleAsideWidth
+				visibleContentWidth
 			),
-			height: bounds.height
+			height: max(
+				minimumContentHeight,
+				bounds.height
+			)
 		)
-		if content.frame != contentFrame
+		if let content, content.frame != contentFrame
 		{
 			content.frame = contentFrame
 		}
@@ -230,11 +247,12 @@ private final class ClippedPaneViewport: NSView
 			aside.frame = NSRect(
 				x: bounds.maxX - visibleAsideWidth,
 				y: bounds.minY,
-				width: visibleAsideWidth,
-				height: bounds.height
+				width: asideWidth,
+				height: max(
+					minimumAsideHeight,
+					bounds.height
+				)
 			)
-			aside.layoutSubtreeIfNeeded()
 		}
-		content.layoutSubtreeIfNeeded()
 	}
 }
