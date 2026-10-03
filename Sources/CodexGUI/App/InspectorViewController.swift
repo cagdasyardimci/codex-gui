@@ -3,6 +3,19 @@ import AppKit
 @MainActor
 final class InspectorViewController: NSViewController
 {
+	private enum Layout
+	{
+		static let boxInset: CGFloat = 12
+		static let summaryTrailingInset: CGFloat = 8
+		static let contentInset: CGFloat = 16
+		static let summaryWidth: CGFloat = 300
+		static let initialBoxHeight: CGFloat = 300
+		static let detailHeight: CGFloat = 440
+		static let summaryHeight: CGFloat = 320
+	}
+
+	let gitChanges = GitChangesViewController()
+	let panels = ContextPanelShell()
 	let changes = ChangesViewController()
 	let summary = PinnedSummaryViewController()
 	let toolsTabs = ToolsTabViewController()
@@ -11,10 +24,11 @@ final class InspectorViewController: NSViewController
 	private var expandedConversationSummaryRevealed = false
 	var onToolsClose: ((Bool) -> Void)?
 	var onPaneContentChange: (() -> Void)?
+	var onToolChangesSelected: (() -> Void)?
 	private var summaryVisible = true
 	private(set) var isShowingDetails = false
 	private var renderedOwner: FeaturePresentationOwner?
-	private weak var inspectorBox: NSView?
+	private weak var inspectorBox: InspectorBoxSurface?
 	private let headerDivider = DesktopSurface(DesktopTheme.border)
 	var onSummaryDisplayChange: ((Bool) -> Void)?
 	private let content = NSView()
@@ -23,6 +37,31 @@ final class InspectorViewController: NSViewController
 	private var hasReviewContent = false
 	private var summaryTransition: PinnedSummaryTransition?
 	private var summaryTransitionRevision = 0
+
+	private var fullHeightConstraint: NSLayoutConstraint?
+	private var maximumHeightConstraint: NSLayoutConstraint?
+	var onDetailGeometryChange: ((Bool) -> Void)?
+	var onCloseDetail: ((ContextPanelDestination?) -> Void)?
+	private var boxEdgeConstraints: [NSLayoutConstraint] = []
+	private var summaryLeadingConstraint: NSLayoutConstraint?
+	private var summaryWidthLimitConstraint: NSLayoutConstraint?
+	private var summaryPreferredWidthConstraint: NSLayoutConstraint?
+	private var contentEdgeConstraints: [NSLayoutConstraint] = []
+	private(set) var isGitReviewFocused = false
+	var onGitReviewDisplayChange: ((Bool) -> Void)?
+
+	func setGitReviewFocused(_ focused: Bool)
+	{
+		guard focused != isGitReviewFocused
+		else
+		{
+			return
+		}
+		isGitReviewFocused = focused
+		gitChanges.isExpanded = focused
+		onGitReviewDisplayChange?(focused)
+		updateContentVisibility()
+	}
 
 	override func loadView()
 	{
@@ -33,6 +72,14 @@ final class InspectorViewController: NSViewController
 		installInspectorContent(in: box)
 
 		view = container
+		installToolsPane(in: container)
+		configureToolsPaneCallbacks()
+		configureDetailPanels()
+		installSummaryAndDetailContent()
+	}
+
+	private func installToolsPane(in container: NSView)
+	{
 		addChild(toolsTabs)
 		AppKitLayout.pin(
 			toolsTabs.view,
@@ -40,6 +87,10 @@ final class InspectorViewController: NSViewController
 			inset: 0
 		)
 		toolsTabs.view.isHidden = true
+	}
+
+	private func configureToolsPaneCallbacks()
+	{
 		toolsTabs.onCloseLastTab =
 		{
 			[weak self] in self?.closeToolsPane()
@@ -48,18 +99,79 @@ final class InspectorViewController: NSViewController
 		{
 			[weak self] in self?.closeToolsPane()
 		}
+		toolsTabs.onChangesSelectionChange =
+		{
+			[weak self] in
+			guard let self, self.isShowingTools, self.toolsTabs.isChangesSelected
+			else
+			{
+				return
+			}
+			self.attachGitChangesToSelectedToolTab()
+			self.onToolChangesSelected?()
+		}
+		toolsTabs.onChangesTabClosed =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.toolsTabs.detachChanges()
+			self.gitChanges.close()
+		}
+	}
+
+	private func configureDetailPanels()
+	{
+		panels.register(
+			gitChanges,
+			for: .changes,
+			providesHeader: true
+		)
+		panels.register(
+			changes,
+			for: .reportedChanges
+		)
+		gitChanges.onClose =
+		{
+			[weak self] in self?.showSummary()
+		}
+		gitChanges.onShowReportedChanges =
+		{
+			[weak self] in
+			guard let self, let owner = self.renderedOwner
+			else
+			{
+				return
+			}
+			self.open(ContextPanelRequest(
+				owner: owner,
+				destination: .reportedChanges
+			))
+		}
+	}
+
+	private func installSummaryAndDetailContent()
+	{
 		addChild(summary)
 		AppKitLayout.pin(
 			summary.view,
 			to: content,
 			inset: 0
 		)
-		addChild(changes)
+		addChild(panels)
 		AppKitLayout.pin(
-			changes.view,
+			panels.view,
 			to: content,
 			inset: 0
 		)
+		panels.view.isHidden = true
+		panels.onClose =
+		{
+			[weak self] in self?.showSummary()
+		}
 	}
 
 	func renderSummary(
@@ -68,12 +180,18 @@ final class InspectorViewController: NSViewController
 	)
 	{
 		_ = view
-		if renderedOwner != presentation.owner || summaryVisible != visible
+		let ownerChanged = renderedOwner != presentation.owner
+		if ownerChanged || summaryVisible != visible
 		{
 			cancelSummaryTransition()
 		}
-		if renderedOwner != presentation.owner
+		if ownerChanged
 		{
+			if gitChanges.runtime.state.isOpen
+			{
+				gitChanges.close()
+			}
+			setGitReviewFocused(false)
 			isShowingDetails = false
 			expandedConversationSummaryRevealed = false
 		}
@@ -81,10 +199,57 @@ final class InspectorViewController: NSViewController
 		summaryVisible = visible
 		summary.render(presentation)
 		updateContentVisibility()
+		if isShowingTools && toolsTabs.isChangesSelected &&
+			(ownerChanged || !gitChanges.runtime.state.isOpen)
+		{
+			onToolChangesSelected?()
+		}
+	}
+
+	@discardableResult
+	func open(_ request: ContextPanelRequest) -> Bool
+	{
+		guard request.owner == renderedOwner,
+				panels.availableDestinations.contains(request.destination)
+		else
+		{
+			return false
+		}
+		if request.destination != .changes, gitChanges.runtime.state.isOpen
+		{
+			gitChanges.close()
+		}
+		if request.destination == .changes
+		{
+			toolsTabs.detachChanges()
+			gitChanges.showsInternalChangesTab = true
+		}
+		guard panels.open(request)
+		else
+		{
+			return false
+		}
+		cancelSummaryTransition()
+		isShowingTools = false
+		isShowingDetails = true
+		// Opening a detail uses the right inspector. Full-width Changes requires
+		// the explicit expand or panel control.
+		setGitReviewFocused(false)
+		if request.destination == .changes
+		{
+			gitChanges.isExpanded = false
+		}
+		updateContentVisibility()
+		return true
 	}
 
 	func showSummary()
 	{
+		if gitChanges.runtime.state.isOpen
+		{
+			gitChanges.close()
+		}
+		setGitReviewFocused(false)
 		isShowingTools = false
 		isShowingDetails = false
 		updateContentVisibility()
@@ -115,6 +280,11 @@ final class InspectorViewController: NSViewController
 
 	func showSummaryBesideExpandedConversation()
 	{
+		if gitChanges.runtime.state.isOpen
+		{
+			gitChanges.close()
+		}
+		setGitReviewFocused(false)
 		expandedConversationSummaryRevealed = true
 		isShowingDetails = false
 		updateContentVisibility()
@@ -122,15 +292,24 @@ final class InspectorViewController: NSViewController
 
 	func showReportedChanges()
 	{
-		cancelSummaryTransition()
-		_ = view
-		isShowingTools = false
-		isShowingDetails = true
-		updateContentVisibility()
+		guard let owner = renderedOwner
+		else
+		{
+			return
+		}
+		open(ContextPanelRequest(
+			owner: owner,
+			destination: .reportedChanges
+		))
 	}
 
 	func showToolsTab()
 	{
+		if gitChanges.runtime.state.isOpen && toolsTabs.changesTabID == nil
+		{
+			gitChanges.close()
+		}
+		setGitReviewFocused(false)
 		cancelSummaryTransition()
 		_ = view
 		toolsTabs.openNewTab()
@@ -149,6 +328,11 @@ final class InspectorViewController: NSViewController
 
 	func showToolsPane()
 	{
+		if gitChanges.runtime.state.isOpen && toolsTabs.changesTabID == nil
+		{
+			gitChanges.close()
+		}
+		setGitReviewFocused(false)
 		cancelSummaryTransition()
 		_ = view
 		if toolsTabs.tabCount == 0
@@ -157,10 +341,52 @@ final class InspectorViewController: NSViewController
 		}
 		isShowingTools = true
 		updateContentVisibility()
+		if toolsTabs.isChangesSelected
+		{
+			attachGitChangesToSelectedToolTab()
+			onToolChangesSelected?()
+		}
+	}
+
+	func showGitChangesInSelectedToolTab(
+		owner: FeaturePresentationOwner,
+		lastTurnID: String?,
+		baselineRevision: Int,
+		baselineFailure: GitComparisonFailure?
+	)
+	{
+		guard isShowingTools, toolsTabs.selectedTabID != nil
+		else
+		{
+			return
+		}
+		gitChanges.showsInternalChangesTab = false
+		toolsTabs.showChanges(gitChanges)
+		gitChanges.activate(
+			owner: owner,
+			lastTurnID: lastTurnID,
+			baselineRevision: baselineRevision,
+			baselineFailure: baselineFailure
+		)
+	}
+
+	private func attachGitChangesToSelectedToolTab()
+	{
+		guard toolsTabs.isChangesSelected
+		else
+		{
+			return
+		}
+		gitChanges.showsInternalChangesTab = false
+		toolsTabs.showChanges(gitChanges)
 	}
 
 	func closeToolsPane()
 	{
+		if isShowingDetails, panels.destination == .changes, gitChanges.parent !== panels
+		{
+			isShowingDetails = false
+		}
 		isShowingTools = false
 		updateContentVisibility()
 		onToolsClose?(isShowingDetails || summaryVisible)
@@ -239,49 +465,106 @@ final class InspectorViewController: NSViewController
 	{
 		let showDetails = isShowingDetails && !isShowingTools
 		summary.view.isHidden = showDetails || !summaryVisible
-		changes.view.isHidden = !showDetails
+		panels.view.isHidden = !showDetails
+
 		let showSummary = !isShowingTools ? summaryVisible : isSummaryBesideExpandedConversation
 		inspectorBox?.isHidden = !showDetails && !showSummary
 		toolsTabs.view.isHidden = !isShowingTools || isShowingExpandedConversation
-		projectLabel.isHidden = !showDetails
-		headerDivider.isHidden = !showDetails
+
+		let fullBleedChanges = showDetails && panels.destination == .changes
+		inspectorBox?.isFullBleed = fullBleedChanges
+		boxEdgeConstraints[0].isActive = showDetails
+		summaryLeadingConstraint?.isActive = !showDetails
+		summaryWidthLimitConstraint?.isActive = !showDetails
+		summaryPreferredWidthConstraint?.isActive = !showDetails
+		projectLabel.isHidden = !showDetails || fullBleedChanges
+		headerDivider.isHidden = !showDetails || fullBleedChanges
+		updateInspectorGeometry(
+			showDetails: showDetails,
+			fullBleedChanges: fullBleedChanges
+		)
+
+		let wideDetail = showDetails && [.changes].contains(panels.destination)
+		onDetailGeometryChange?(wideDetail)
 		onSummaryDisplayChange?(showSummary && !showDetails)
 		updateBoxHeight()
 		onPaneContentChange?()
 	}
 
+	private func updateInspectorGeometry(
+		showDetails: Bool,
+		fullBleedChanges: Bool
+	)
+	{
+		for (index, constraint) in boxEdgeConstraints.enumerated()
+		{
+			let isTrailingOrBottomEdge = index == 1 || index == 3
+			constraint.constant = fullBleedChanges
+				? 0 : (isTrailingOrBottomEdge ? -Layout.boxInset : Layout.boxInset)
+			if index == 1, !showDetails
+			{
+				constraint.constant = -Layout.summaryTrailingInset
+			}
+		}
+		fullHeightConstraint?.constant = fullBleedChanges ? 0 : -Layout.boxInset
+		for (index, constraint) in contentEdgeConstraints.enumerated()
+		{
+			let isTrailingOrBottomEdge = index == 1 || index == 3
+			constraint.constant = fullBleedChanges
+				? 0 : (isTrailingOrBottomEdge ? -Layout.contentInset : Layout.contentInset)
+		}
+		let fullHeightDetail = showDetails && [.changes]
+			.contains(panels.destination)
+		maximumHeightConstraint?.isActive = !fullHeightDetail
+		fullHeightConstraint?.isActive = fullHeightDetail
+	}
+
 	private func makeInspectorBox(in container: NSView) -> NSView
 	{
-		let box = DesktopSurface(
-			DesktopTheme.inspector,
-			cornerRadius: 16
-		)
+		let box = InspectorBoxSurface()
 		box.translatesAutoresizingMaskIntoConstraints = false
 		container.addSubview(box)
 		inspectorBox = box
-		let preferredHeight = box.heightAnchor.constraint(equalToConstant: 300)
+		let preferredHeight = box.heightAnchor.constraint(equalToConstant: Layout.initialBoxHeight)
 		// The box may yield space without raising the window's minimum content height.
 		preferredHeight.priority = NSLayoutConstraint.Priority(1)
 		preferredBoxHeight = preferredHeight
-		NSLayoutConstraint.activate([
+		maximumHeightConstraint = box.heightAnchor
+			.constraint(lessThanOrEqualToConstant: Layout.detailHeight)
+		fullHeightConstraint = box.bottomAnchor.constraint(
+			equalTo: container.bottomAnchor,
+			constant: -Layout.boxInset
+		)
+		boxEdgeConstraints = [
 			box.leadingAnchor.constraint(
 				equalTo: container.leadingAnchor,
-				constant: 12
+				constant: Layout.boxInset
 			),
 			box.trailingAnchor.constraint(
 				equalTo: container.trailingAnchor,
-				constant: -12
+				constant: -Layout.boxInset
 			),
 			box.topAnchor.constraint(
 				equalTo: container.topAnchor,
-				constant: 12
+				constant: Layout.boxInset
 			),
 			box.bottomAnchor.constraint(
 				lessThanOrEqualTo: container.bottomAnchor,
-				constant: -12
+				constant: -Layout.boxInset
 			),
-			box.heightAnchor.constraint(lessThanOrEqualToConstant: 440),
-			preferredHeight,
+		]
+		summaryLeadingConstraint = box.leadingAnchor.constraint(
+			greaterThanOrEqualTo: container.leadingAnchor,
+			constant: Layout.boxInset
+		)
+		summaryWidthLimitConstraint = box.widthAnchor
+			.constraint(lessThanOrEqualToConstant: Layout.summaryWidth)
+		let preferredSummaryWidth = box.widthAnchor.constraint(equalToConstant: Layout.summaryWidth)
+		preferredSummaryWidth.priority = NSLayoutConstraint.Priority(999)
+		summaryPreferredWidthConstraint = preferredSummaryWidth
+		NSLayoutConstraint.activate(boxEdgeConstraints + [
+			maximumHeightConstraint!,
+			preferredHeight
 		])
 		return box
 	}
@@ -308,11 +591,27 @@ final class InspectorViewController: NSViewController
 			[projectLabel, divider, content],
 			spacing: 12
 		)
-		AppKitLayout.pin(
-			stack,
-			to: box,
-			inset: 16
-		)
+		box.addSubview(stack)
+		stack.translatesAutoresizingMaskIntoConstraints = false
+		contentEdgeConstraints = [
+			stack.leadingAnchor.constraint(
+				equalTo: box.leadingAnchor,
+				constant: Layout.contentInset
+			),
+			stack.trailingAnchor.constraint(
+				equalTo: box.trailingAnchor,
+				constant: -Layout.contentInset
+			),
+			stack.topAnchor.constraint(
+				equalTo: box.topAnchor,
+				constant: Layout.contentInset
+			),
+			stack.bottomAnchor.constraint(
+				equalTo: box.bottomAnchor,
+				constant: -Layout.contentInset
+			),
+		]
+		NSLayoutConstraint.activate(contentEdgeConstraints)
 		projectLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		divider.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
@@ -353,6 +652,35 @@ final class InspectorViewController: NSViewController
 
 	private func updateBoxHeight()
 	{
-		preferredBoxHeight?.constant = isShowingDetails ? (hasReviewContent ? 440 : 300) : 320
+		preferredBoxHeight?.constant = isShowingDetails ? Layout.detailHeight : Layout.summaryHeight
+	}
+}
+
+@MainActor
+private final class InspectorBoxSurface: NSView
+{
+	var isFullBleed = false
+	{
+		didSet
+		{
+			needsDisplay = true
+		}
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
+	override func draw(_ dirtyRect: NSRect)
+	{
+		DesktopTheme.inspector.setFill()
+		let radius: CGFloat = isFullBleed ? 0 : 16
+		NSBezierPath(
+			roundedRect: bounds,
+			xRadius: radius,
+			yRadius: radius
+		).fill()
 	}
 }

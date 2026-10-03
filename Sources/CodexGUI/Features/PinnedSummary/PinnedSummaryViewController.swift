@@ -9,6 +9,15 @@ final class PinnedSummaryViewController: NSViewController
 	private var thumbnailTasks: [Task<Void, Never>] = []
 	private var actions: [NSButton: ContextPanelRequest] = [:]
 
+	private enum Layout
+	{
+		static let contentRowHeight: CGFloat = 28
+		static let sourceIconSize: CGFloat = 18
+		static let sourceRowSpacing: CGFloat = 12
+		static let agentIconSize: CGFloat = 16
+		static let agentRowSpacing: CGFloat = 4
+	}
+
 	override func loadView()
 	{
 		stack.orientation = .vertical
@@ -26,6 +35,19 @@ final class PinnedSummaryViewController: NSViewController
 		}
 		self.presentation = presentation
 		_ = view
+		clearRenderedContent()
+
+		let heading = header(presentation.contextName)
+		heading.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		add(heading)
+		addChanges(presentation)
+		addDivider()
+		addAgents(presentation)
+		addSources(presentation)
+	}
+
+	private func clearRenderedContent()
+	{
 		thumbnailTasks.forEach
 		{
 			$0.cancel()
@@ -37,16 +59,23 @@ final class PinnedSummaryViewController: NSViewController
 			stack.removeArrangedSubview($0)
 			$0.removeFromSuperview()
 		}
-		let heading = header(presentation.contextName)
-		heading.heightAnchor.constraint(equalToConstant: 24).isActive = true
-		add(heading)
-		addChanges(presentation)
-		addDivider()
-		addAgents(presentation)
-		addSources(presentation)
 	}
 
 	private func addChanges(_ presentation: PinnedSummaryPresentation)
+	{
+		let row = makeChangesRow(presentation)
+		add(row)
+		if let scope = presentation.sections.changesContext
+		{
+			add(statusLabel(scope))
+		}
+		if let message = presentation.sections.changes.message
+		{
+			add(statusLabel(message))
+		}
+	}
+
+	private func makeChangesRow(_ presentation: PinnedSummaryPresentation) -> NSStackView
 	{
 		let changes = button(
 			"Changes",
@@ -82,31 +111,35 @@ final class PinnedSummaryViewController: NSViewController
 			],
 			spacing: 12
 		)
-		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
+		row.heightAnchor.constraint(equalToConstant: Layout.contentRowHeight).isActive = true
 		if let totals = presentation.sections.changes.value
 		{
 			let additions = label(
-				"+\(totals.additions)",
+				"+\(formattedCount(totals.additions))",
 				color: .systemGreen
 			)
 			additions.setAccessibilityLabel("\(totals.additions) additions")
 			let deletions = label(
-				"−\(totals.deletions)",
+				"-\(formattedCount(totals.deletions))",
 				color: .systemRed
 			)
 			deletions.setAccessibilityLabel("\(totals.deletions) deletions")
 			row.addArrangedSubview(additions)
 			row.addArrangedSubview(deletions)
+			row.setCustomSpacing(
+				4,
+				after: additions
+			)
 		}
-		add(row)
-		if let scope = presentation.sections.changesContext
-		{
-			add(statusLabel(scope))
-		}
-		if let message = presentation.sections.changes.message
-		{
-			add(statusLabel(message))
-		}
+		return row
+	}
+
+	private func formattedCount(_ value: Int) -> String
+	{
+		let formatter = NumberFormatter()
+		formatter.numberStyle = .decimal
+		formatter.locale = Locale(identifier: "en_US")
+		return formatter.string(from: NSNumber(value: value)) ?? String(value)
 	}
 
 	private func addAgents(_ presentation: PinnedSummaryPresentation)
@@ -140,23 +173,7 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func addSources(_ presentation: PinnedSummaryPresentation)
 	{
-		let sources = button(
-			"Sources",
-			symbol: nil,
-			destination: .sources
-		)
-		sources.attributedTitle = attributedTitle(
-			"Sources",
-			color: .secondaryLabelColor
-		)
-		let plus = unresolvedButton(
-			"+",
-			label: "Sources action unavailable"
-		)
-		addSectionHeading(AppKitLayout.horizontalStack(
-			[sources, NSView(), plus],
-			spacing: 8
-		))
+		addSectionHeading(makeSourcesHeading())
 		for source in presentation.sourcePreviews
 		{
 			let row = sourceRow(
@@ -177,6 +194,32 @@ final class PinnedSummaryViewController: NSViewController
 		{
 			add(statusLabel(message))
 		}
+		add(makeViewAllSourcesRow())
+	}
+
+	private func makeSourcesHeading() -> NSStackView
+	{
+		let sources = button(
+			"Sources",
+			symbol: nil,
+			destination: .sources
+		)
+		sources.attributedTitle = attributedTitle(
+			"Sources",
+			color: .secondaryLabelColor
+		)
+		let plus = unresolvedButton(
+			"+",
+			label: "Sources action unavailable"
+		)
+		return AppKitLayout.horizontalStack(
+			[sources, NSView(), plus],
+			spacing: 8
+		)
+	}
+
+	private func makeViewAllSourcesRow() -> NSStackView
+	{
 		let all = button(
 			"View all",
 			symbol: nil,
@@ -196,8 +239,8 @@ final class PinnedSummaryViewController: NSViewController
 			[icon, all],
 			spacing: 12
 		)
-		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
-		add(row)
+		row.heightAnchor.constraint(equalToConstant: Layout.contentRowHeight).isActive = true
+		return row
 	}
 
 	private func sourceRow(
@@ -206,13 +249,13 @@ final class PinnedSummaryViewController: NSViewController
 	) -> NSView
 	{
 		let imageView = NSImageView()
-		let size: CGFloat = 18
+		let iconSize = Layout.sourceIconSize
 		imageView.image = sourceImage(for: source)
 		imageView.contentTintColor = .secondaryLabelColor
 		imageView.imageScaling = .scaleProportionallyUpOrDown
 		imageView.setAccessibilityElement(false)
-		imageView.widthAnchor.constraint(equalToConstant: size).isActive = true
-		imageView.heightAnchor.constraint(equalToConstant: size).isActive = true
+		imageView.widthAnchor.constraint(equalToConstant: iconSize).isActive = true
+		imageView.heightAnchor.constraint(equalToConstant: iconSize).isActive = true
 
 		let text: NSView
 		if let request = presentation.sourceRequest(for: source)
@@ -243,13 +286,13 @@ final class PinnedSummaryViewController: NSViewController
 		)
 		let row = AppKitLayout.horizontalStack(
 			[imageView, text],
-			spacing: 12
+			spacing: Layout.sourceRowSpacing
 		)
 		text.widthAnchor.constraint(
 			equalTo: row.widthAnchor,
-			constant: -size - 12
+			constant: -iconSize - Layout.sourceRowSpacing
 		).isActive = true
-		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
+		row.heightAnchor.constraint(equalToConstant: Layout.contentRowHeight).isActive = true
 		if let path = source.thumbnailPath
 		{
 			let owner = presentation.owner
@@ -289,18 +332,19 @@ final class PinnedSummaryViewController: NSViewController
 			let image = NSImageView()
 			image.image = artwork
 			image.setAccessibilityElement(false)
-			image.widthAnchor.constraint(equalToConstant: 16).isActive = true
-			image.heightAnchor.constraint(equalToConstant: 16).isActive = true
+			image.widthAnchor.constraint(equalToConstant: Layout.agentIconSize).isActive = true
+			image.heightAnchor.constraint(equalToConstant: Layout.agentIconSize).isActive = true
 			return image
 		}
 		views.append(summary)
 		let row = AppKitLayout.horizontalStack(
 			views,
-			spacing: 4
+			spacing: Layout.agentRowSpacing
 		)
-		row.heightAnchor.constraint(equalToConstant: 28).isActive = true
+		row.heightAnchor.constraint(equalToConstant: Layout.contentRowHeight).isActive = true
 		// Reserve the four fixed glyph widths and four gaps; the status uses the remainder.
-		let artworkWidth = CGFloat(views.count - 1) * (16 + 4)
+		let artworkCount = views.count - 1
+		let artworkWidth = CGFloat(artworkCount) * (Layout.agentIconSize + Layout.agentRowSpacing)
 		summary.widthAnchor.constraint(
 			equalTo: row.widthAnchor,
 			constant: -artworkWidth
