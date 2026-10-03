@@ -1,0 +1,277 @@
+import Foundation
+import Testing
+
+@testable import CodexGUI
+
+struct GitDiffPresentationTests
+{
+	@Test func gapExpansionUsesSnapshotAndPreservesLogicalLineNumbers() throws
+	{
+		let context = (1 ... 12).map
+		{
+			" line \($0)"
+		}.joined(separator: "\n")
+		let snapshot = fixture("\(context)\n-old\n+new")
+		var presentation = GitDiffPresentation(snapshot: snapshot)
+		let folded = try #require(presentation.file("Sources/Test.swift"))
+		let gap = try #require(folded.rows.first
+		{
+			$0.kind == .gap
+		})
+		#expect(gap.hiddenLineCount == 6)
+		#expect(gap.canExpand)
+		#expect(folded.rows.filter
+		{
+			$0.kind == .context
+		}.count == 6)
+		#expect(folded.rows.last?.newLine == 13)
+		presentation.options.expandedGapIDs.insert(try #require(gap.gapID))
+		let expanded = try #require(presentation.file("Sources/Test.swift"))
+		#expect(expanded.rows.count == 14)
+		#expect(expanded.rows[5].oldLine == 6)
+		#expect(expanded.rows[5].newLine == 6)
+		#expect(presentation.snapshot.patch == snapshot.patch)
+		presentation.options.loadFullFiles = false
+		let unavailable = try #require(presentation.file("Sources/Test.swift"))
+		#expect(unavailable.rows.contains
+		{
+			$0.kind == .gap && !$0.canExpand
+		})
+	}
+
+	@Test func sixContextLinesRemainUnfoldedAndGapIDsAreSnapshotScoped() throws
+	{
+		let six = (1 ... 6).map
+		{
+			" context \($0)"
+		}.joined(separator: "\n")
+		let presentation = GitDiffPresentation(snapshot: fixture("\(six)\n+added"))
+		let file = try #require(presentation.file("Sources/Test.swift"))
+		#expect(!file.rows.contains
+		{
+			$0.kind == .gap
+		})
+		let seven = six + "\n seventh\n+added"
+		let first = GitDiffPresentation(snapshot: fixture(
+			seven,
+			id: "first"
+		))
+		let second = GitDiffPresentation(snapshot: fixture(
+			seven,
+			id: "second"
+		))
+		let firstID = first.file("Sources/Test.swift")?.rows.first
+		{
+			$0.kind == .gap
+		}?.id
+		let secondID = second.file("Sources/Test.swift")?.rows.first
+		{
+			$0.kind == .gap
+		}?.id
+		#expect(firstID != secondID)
+	}
+
+	@Test func whitespaceFilteringPreservesRealChangesAndRawTotals() throws
+	{
+		let snapshot = fixture("-let a = 1\n-let b = 2\n+let a=1\n+let b = 3")
+		var presentation = GitDiffPresentation(snapshot: snapshot)
+		presentation.options.ignoreWhitespace = true
+		let file = try #require(presentation.file("Sources/Test.swift"))
+		#expect(file.rows.filter
+		{
+			$0.kind == .deletion
+		}.map(\.text) == ["let b = 2"])
+		#expect(file.rows.filter
+		{
+			$0.kind == .addition
+		}.map(\.text) == ["let b = 3"])
+		#expect(file.rows.first
+		{
+			$0.kind == .context
+		}?.oldLine == 1)
+		#expect(snapshot.additions == 2)
+		#expect(snapshot.deletions == 2)
+		#expect(presentation.snapshot.patch == snapshot.patch)
+	}
+
+	@Test func wordSpansUseUTF16OffsetsWithoutHighlightingUnchangedTokens() throws
+	{
+		let presentation = GitDiffPresentation(
+			snapshot: fixture("-let emoji = \"😀\"; old()\n+let emoji = \"😀\"; new()")
+		)
+		let rows = try #require(presentation.file("Sources/Test.swift")).rows
+		#expect(rows.count == 2)
+		for (row, expected) in zip(
+			rows,
+			["old", "new"]
+		)
+		{
+			let range = try #require(row.changedRanges.first)
+			#expect((row.text as NSString).substring(with: range) == expected)
+			#expect(range.location == 18)
+		}
+	}
+
+	@Test func importFilteringUsesLimitedLanguageSyntaxAndRetainsMultilineSource() throws
+	{
+		var swift = GitDiffPresentation(snapshot: fixture("-import Alpha\n+import Beta\n+work()"))
+		swift.options.ignoreImports = true
+		#expect(swift.file("Sources/Test.swift")?.rows.map(\.text) == ["work()"])
+		var python = GitDiffPresentation(
+			snapshot: fixture(
+				"-from alpha import value\n+import beta as b\n+run()",
+				path: "test.py"
+			)
+		)
+		python.options.ignoreImports = true
+		#expect(python.file("test.py")?.rows.map(\.text) == ["run()"])
+		var unknown = GitDiffPresentation(
+			snapshot: fixture(
+				"-import Alpha\n+import Beta",
+				path: "test.txt"
+			)
+		)
+		unknown.options.ignoreImports = true
+		#expect(unknown.file("test.txt")?.rows.count == 2)
+		var multiline = GitDiffPresentation(
+			snapshot: fixture(" \"\"\"\n-import Alpha\n+import Beta\n \"\"\"")
+		)
+		multiline.options.ignoreImports = true
+		#expect(multiline.file("Sources/Test.swift")?.rows.count == 4)
+	}
+
+	@Test func treeFilteringRetainsAncestryAndExpansionControlsVisibility()
+	{
+		let snapshot = fixture(
+			"-old\n+new",
+			path: "Sources/Nested/Test.swift"
+		)
+		let presentation = GitDiffPresentation(snapshot: snapshot)
+		#expect(presentation.treeRows().map(\.path) == ["Sources"])
+		let expanded = presentation.treeRows(expandedDirectories: ["Sources", "Sources/Nested"])
+		#expect(expanded.map(\.depth) == [0, 1, 2])
+		#expect(expanded.last?.fileID == "Sources/Nested/Test.swift")
+		let filtered = presentation.treeRows(filter: "TEST")
+		#expect(filtered.map(\.path) == ["Sources", "Sources/Nested", "Sources/Nested/Test.swift"])
+		#expect(filtered.last?.id == expanded.last?.id)
+		#expect(presentation.treeRows(filter: "absent").isEmpty)
+	}
+
+	@Test func blankLinesAndUnicodeSeparatorsRemainLogicalSourceRows() throws
+	{
+		let presentation = GitDiffPresentation(snapshot: fixture(" \n-old\u{2028}line\n+new"))
+		let rows = try #require(presentation.file("Sources/Test.swift")).rows
+		#expect(rows.count == 3)
+		#expect(rows[0].text.isEmpty)
+		#expect(rows[1].text == "old\u{2028}line")
+		#expect(rows[1].oldLine == 2)
+		#expect(rows[2].newLine == 2)
+	}
+
+	@Test func projectionCacheReusesRowsAcrossGapExpansionAndResetsForContentOptions() throws
+	{
+		let context = (1 ... 12).map
+		{
+			" line \($0)"
+		}.joined(separator: "\n")
+		let snapshot = fixture("\(context)\n-old\n+new")
+		var presentation = GitDiffPresentation(snapshot: snapshot)
+		var cache = GitDiffProjectionCache()
+		cache.prepare(for: presentation)
+		#expect(cache.cachedFileIDs.isEmpty)
+		let file = try #require(snapshot.files.first)
+		let folded = cache.file(
+			file,
+			presentation: presentation
+		)
+		let gap = try #require(folded.rows.first
+		{
+			$0.kind == .gap
+		})
+		#expect(cache.projectionCount == 1)
+		presentation.options.expandedGapIDs.insert(try #require(gap.gapID))
+		let expanded = cache.file(
+			file,
+			presentation: presentation
+		)
+		#expect(expanded.rows.count == 14)
+		#expect(cache.projectionCount == 1)
+		presentation.options.ignoreWhitespace = true
+		cache.prepare(for: presentation)
+		#expect(cache.cachedFileIDs.isEmpty)
+		_ = cache.file(
+			file,
+			presentation: presentation
+		)
+		#expect(cache.projectionCount == 2)
+		presentation = GitDiffPresentation(snapshot: fixture(
+			"-old\n+new",
+			id: "next"
+		))
+		cache.prepare(for: presentation)
+		#expect(cache.cachedFileIDs.isEmpty)
+	}
+
+	private func fixture(
+		_ content: String,
+		path: String = "Sources/Test.swift",
+		id: String = "snapshot"
+	) -> GitComparisonSnapshot
+	{
+		let patch = "@@ -1 +1 @@\n" + content + "\n"
+		let lines = content.components(separatedBy: "\n")
+		let file = GitComparisonFile(
+			oldPath: path,
+			newPath: path,
+			kind: .modified,
+			additions: lines.filter
+			{
+				$0.hasPrefix("+")
+			}.count,
+			deletions: lines.filter
+			{
+				$0.hasPrefix("-")
+			}.count,
+			isBinary: false,
+			patch: patch,
+			hunks: [GitComparisonHunk(
+				header: "@@ -1 +1 @@",
+				text: patch,
+				oldStart: 1,
+				newStart: 1
+			)]
+		)
+		return GitComparisonSnapshot(
+			request: GitComparisonRequest(
+				owner: FeaturePresentationOwner(ConversationSnapshot(
+					projectPath: "/neutral",
+					threads: [],
+					selectedThreadID: "fixture",
+					entries: [],
+					canLoadEarlierTurns: false,
+					changedFiles: [],
+					diff: "",
+					draft: "",
+					canSend: false,
+					accountDescription: "Test",
+					backendDescription: "Test",
+					executionState: .ready,
+					statusMessage: nil,
+					models: [],
+					selectedModelID: nil,
+					selectedEffort: nil,
+					pendingInteractions: [],
+					recentProjects: []
+				)),
+				repositoryRoot: "/neutral/repository",
+				scope: .unstaged,
+				generation: 1
+			),
+			id: id,
+			resolvedBase: "base",
+			resolvedTarget: "target",
+			patch: Data(patch.utf8),
+			files: [file]
+		)
+	}
+}
