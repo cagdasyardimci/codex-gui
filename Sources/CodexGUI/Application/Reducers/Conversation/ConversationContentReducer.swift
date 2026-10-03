@@ -170,21 +170,15 @@ enum ConversationContentReducer
 		)
 		{
 			content in
-			content.loadedTurns = detail.turns
-			for turn in detail.turns
-			{
-				content.content.turnTimings[turn.id] = ConversationTurnTiming(
-					turn: turn,
-					previous: content.content.turnTimings[turn.id]
-				)
-			}
-			content.hasLoadedHistory = true
-			content.nextTurnsCursor = detail.nextTurnsCursor
-			if content.loadedTurns
-				.contains(where:
-					{
-						$0.id == content.liveChangeTurnID && $0.status != "inProgress"
-					})
+			replaceLoadedHistory(
+				detail,
+				content: &content
+			)
+
+			if content.loadedTurns.contains(where:
+				{
+					$0.id == content.liveChangeTurnID && $0.status != "inProgress"
+				})
 			{
 				content.liveChangeTurnID = nil
 			}
@@ -192,25 +186,70 @@ enum ConversationContentReducer
 				content: &content,
 				threadID: detail.summary.id
 			)
-			content.entries = entries(for: detail.turns)
-			if let latestTurn = detail.turns
-				.last
-			{
-				applyReview(
-					for: latestTurn,
-					content: &content
-				)
-			}
-			else
-			{
-				resetChanges(&content)
-			}
+			rebuildHistoryEntriesAndChanges(
+				detail.turns,
+				content: &content
+			)
 		}
 	}
+
+	private static func replaceLoadedHistory(
+		_ detail: ThreadDetail,
+		content: inout ConversationProjection
+	)
+	{
+		let observedTurnID = content.content.latestObservedGitTurnID
+		let observedStillRunning = observedTurnID.flatMap
+		{
+			content.content.turnTimings[$0]
+		}?
+		.status == "inProgress"
+		let historyIncludesObserved = detail.turns.contains(where:
+			{
+				$0.id == observedTurnID
+			})
+		content.loadedTurns = detail.turns
+		// A read captured before an external start cannot roll its live identity back.
+		if !observedStillRunning || historyIncludesObserved
+		{
+			content.content.latestObservedGitTurnID = detail.turns.last?.id
+		}
+		for turn in detail.turns
+		{
+			content.content.turnTimings[turn.id] = ConversationTurnTiming(
+				turn: turn,
+				previous: content.content.turnTimings[turn.id]
+			)
+		}
+		content.hasLoadedHistory = true
+		content.nextTurnsCursor = detail.nextTurnsCursor
+	}
+
+	private static func rebuildHistoryEntriesAndChanges(
+		_ turns: [CodexTurn],
+		content: inout ConversationProjection
+	)
+	{
+		content.entries = entries(for: turns)
+		if let latestTurn = turns.last
+		{
+			applyReview(
+				for: latestTurn,
+				content: &content
+			)
+		}
+		else
+		{
+			resetChanges(&content)
+		}
+	}
+
 	static func resetChanges(_ content: inout ConversationProjection)
 	{
-		content.changedFiles = []; content.diff = ""; content.changesByItemID = [:]; content
-			.hasAggregateDiff = false
+		content.changedFiles = []
+		content.diff = ""
+		content.changesByItemID = [:]
+		content.hasAggregateDiff = false
 	}
 	static func observe(
 		_ event: AppServerEvent,
@@ -230,13 +269,13 @@ enum ConversationContentReducer
 			)
 			{
 				content in
+				content.content.latestObservedGitTurnID = turn.id
 				content.content.turnTimings[turn.id] = ConversationTurnTiming(
 					turn: turn,
 					previous: content.content.turnTimings[turn.id],
 					observedAt: observedAt
 				)
-				content.changedFiles = []; content.diff = ""; content.changesByItemID = [:]
-				content.hasAggregateDiff = false
+				resetChanges(&content)
 			}
 		case .turnCompleted(
 			let threadID,
@@ -248,6 +287,25 @@ enum ConversationContentReducer
 			)
 			{
 				content in
+				// A late completion for an older turn must not replace a newer observed start.
+				let latest = content.content.latestObservedGitTurnID
+				let latestIsRunning = latest.flatMap
+				{
+					content.content.turnTimings[$0]
+				}?
+				.status == "inProgress"
+				let completedIndex = content.loadedTurns.firstIndex(where:
+					{
+						$0.id == turn.id
+					})
+				let isOlderLoadedTurn = completedIndex.map
+				{
+					$0 < content.loadedTurns.count - 1
+				} ?? false
+				if latest == nil || latest == turn.id || (!latestIsRunning && !isOlderLoadedTurn)
+				{
+					content.content.latestObservedGitTurnID = turn.id
+				}
 				content.content.turnTimings[turn.id] = ConversationTurnTiming(
 					turn: turn,
 					previous: content.content.turnTimings[turn.id],
@@ -286,8 +344,7 @@ enum ConversationContentReducer
 			let threadID,
 			let turnID,
 			let item
-		),
-		.itemCompleted(
+		), .itemCompleted(
 			let threadID,
 			let turnID,
 			let item
@@ -560,8 +617,7 @@ enum ConversationContentReducer
 		let changes = turn.items.filter
 		{
 			$0.type == "fileChange" && $0.status == "completed"
-		}
-		.flatMap(\.changes)
+		}.flatMap(\.changes)
 		content.changedFiles = changes.map
 		{
 			ChangeFile(
@@ -594,8 +650,7 @@ enum ConversationContentReducer
 		items.keys.sorted().flatMap
 		{
 			items[$0] ?? []
-		}
-		.map
+		}.map
 		{
 			ChangeFile(
 				path: $0.path,
@@ -721,8 +776,7 @@ enum ConversationContentReducer
 		let provisional = content.turnTimings.values.filter
 		{
 			!loadedIDs.contains($0.turnID)
-		}
-		.sorted
+		}.sorted
 		{
 			$0.turnID < $1.turnID
 		}

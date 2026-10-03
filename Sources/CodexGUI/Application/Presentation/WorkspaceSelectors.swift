@@ -19,12 +19,14 @@ struct WorkspaceSelectors
 	}
 	var workspaceCleanupInProgress: Bool
 	{
-		model.lifecycle.cleanupReservation != nil || model.lifecycle
-			.quitReservation != nil ||
-			(model.lifecycle.managedWorkspace.map
-			{
-				$0.phase != .active
-			} ?? false)
+		let hasCleanupReservation = model.lifecycle.cleanupReservation != nil
+		let hasQuitReservation = model.lifecycle.quitReservation != nil
+		let hasInactiveWorkspace = model.lifecycle.managedWorkspace.map
+		{
+			$0.phase != .active
+		} ?? false
+
+		return hasCleanupReservation || hasQuitReservation || hasInactiveWorkspace
 	}
 	var isTaskActive: Bool
 	{
@@ -47,11 +49,12 @@ struct WorkspaceSelectors
 	}
 	var selectedThreadID: String?
 	{
-		if case .thread(let id) = model.conversations
-			.selectedConversation
+		if case .thread(let id) = model.conversations.selectedConversation
 		{
 			return id
-		}; return nil
+		}
+
+		return nil
 	}
 	var activeThreadID: String?
 	{
@@ -243,16 +246,19 @@ struct WorkspaceSelectors
 
 	var reusableReferences: [ComposerContextItem]
 	{
-		reusableReferenceCandidates
-			.filter
+		reusableReferenceCandidates.filter
+		{
+			candidate in
+			guard candidate.kind == .image
+			else
 			{
-				$0
-					.kind != .image ||
-					($0.path.map
-					{
-						model.lifecycle.validatedImagePaths.contains($0)
-					} ?? false)
+				return true
 			}
+			return candidate.path.map
+			{
+				model.lifecycle.validatedImagePaths.contains($0)
+			} ?? false
+		}
 	}
 	var reusableReferenceCandidates: [ComposerContextItem]
 	{
@@ -325,23 +331,74 @@ struct WorkspaceSelectors
 		return activeTaskOutcomeMessage ?? statusMessage
 	}
 
+	/// History is ordered oldest to newest. An in-flight turn can precede history publication,
+	/// but a completed or older active identity must never replace newer loaded source history.
+	var lastGitTurnID: String?
+	{
+		let content = viewedContent.content
+		let turns = content.loadedTurns
+		let latest = content.latestObservedGitTurnID ?? turns.last?.id
+		guard selectedThreadID != nil, selectedThreadID == activeThreadID,
+				executionState.isBusy, let activeTurnID
+		else
+		{
+			return latest
+		}
+		if let observed = content.latestObservedGitTurnID, observed != activeTurnID,
+			content.turnTimings[observed]?.status == "inProgress"
+		{
+			return observed
+		}
+		if let activeIndex = turns.firstIndex(where:
+			{
+				$0.id == activeTurnID
+			}),
+			activeIndex < turns.count - 1
+		{
+			return latest
+		}
+		return activeTurnID
+	}
+
+	var gitTurnBaselineFailure: GitComparisonFailure?
+	{
+		guard let threadID = selectedThreadID,
+				let binding = model.execution.gitTurnBaselineBindings[threadID],
+				binding.context.workspace == model.identity,
+				binding.turnID == lastGitTurnID,
+				let result = binding.result,
+				case .unavailable(let failure) = result
+		else
+		{
+			return nil
+		}
+		return failure
+	}
+
 	func makeSnapshot() -> ConversationSnapshot
 	{
 		let viewingActiveThread = selectedThreadID != nil && selectedThreadID == activeThreadID
 		let visibleExecutionState: ExecutionState =
 			viewingActiveThread || activeThreadID == nil
 				? executionState : (isConnected ? .ready : .disconnected)
+		let canLoadEarlierTurns = viewedContent.nextTurnsCursor != nil
+			&& selectedThreadID.flatMap
+			{
+				historyPageRequests[$0]
+			} == nil
+		let pendingJumpIsVisible = selectedThreadID == pendingJumpThreadID
+			&& viewedContent.entries.contains(where:
+				{
+					$0.id == pendingJumpItemID
+				})
+
 		var snapshot = ConversationSnapshot(
 			turnTimings: ConversationContentReducer.timings(for: viewedContent.content),
 			projectPath: project?.path,
 			threads: threads,
 			selectedThreadID: selectedThreadID,
 			entries: viewedContent.entries,
-			canLoadEarlierTurns: viewedContent.nextTurnsCursor != nil
-				&& selectedThreadID.flatMap
-				{
-					historyPageRequests[$0]
-				} == nil,
+			canLoadEarlierTurns: canLoadEarlierTurns,
 			changedFiles: viewedContent.changedFiles,
 			diff: viewedContent.diff,
 			draft: draft,
@@ -366,6 +423,16 @@ struct WorkspaceSelectors
 			canManageThreads: WorkspaceEligibility(model: model).canManageThreads,
 			activeThreadID: activeThreadID,
 			activeTurnID: activeTurnID,
+			lastGitTurnID: lastGitTurnID,
+			gitTurnBaselineRevision: selectedThreadID
+				.map
+				{
+					model.execution.gitTurnBaselineRevisions[
+						$0,
+						default: 0
+					]
+				} ?? 0,
+			gitTurnBaselineFailure: gitTurnBaselineFailure,
 			activeExecutionState: activeThreadID == nil && !executionState.isBusy
 				? nil : executionState,
 			taskOutcomeUncertain: needsReconciliation || hasUncertainRequest,
@@ -389,12 +456,7 @@ struct WorkspaceSelectors
 			projectContextError: model.contextNavigation.contextError,
 			messageSearch: model.contextNavigation.messageSearch,
 			navigationTargets: model.contextNavigation.navigationTargets,
-			pendingJumpItemID: selectedThreadID == pendingJumpThreadID
-				&& viewedContent.entries.contains(where:
-					{
-						$0.id == pendingJumpItemID
-					})
-				? pendingJumpItemID : nil,
+			pendingJumpItemID: pendingJumpIsVisible ? pendingJumpItemID : nil,
 			jumpLoading: jumpLoading,
 			jumpError: jumpError,
 			searchLoading: searchLoading,

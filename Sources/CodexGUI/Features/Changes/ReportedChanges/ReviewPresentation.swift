@@ -82,6 +82,9 @@ struct ReviewPresentation: Equatable
 	struct Key: Equatable
 	{
 		let owner: FeaturePresentationOwner
+		let lastGitTurnID: String?
+		let gitTurnBaselineRevision: Int
+		let gitTurnBaselineFailure: GitComparisonFailure?
 		let turns: [TurnChoice]
 		let selectedReviewTurnID: String?
 		let selectedReviewThreadID: String?
@@ -120,6 +123,9 @@ struct ReviewPresentation: Equatable
 				snapshot,
 				storeIdentity: ownerIdentity
 			),
+			lastGitTurnID: snapshot.lastGitTurnID,
+			gitTurnBaselineRevision: snapshot.gitTurnBaselineRevision,
+			gitTurnBaselineFailure: snapshot.gitTurnBaselineFailure,
 			turns: snapshot.reviewTurns.map
 			{
 				TurnChoice(
