@@ -6,6 +6,25 @@ extension ConversationViewController
 {
 	func makeComposerArea() -> NSStackView
 	{
+		let composerToolbar = makeComposerToolbar()
+		installComposerStack(toolbar: composerToolbar)
+		let contextStrip = makeProjectContextStrip()
+		let composerArea = AppKitLayout.verticalStack(
+			[contextStrip, composerSurface],
+			spacing: 4
+		)
+		composerArea.alignment = .centerX
+		composerSurface.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
+		contextStrip.widthAnchor.constraint(
+			equalTo: composerArea.widthAnchor,
+			constant: -24
+		).isActive = true
+
+		return composerArea
+	}
+
+	private func makeComposerToolbar() -> ComposerToolbarView
+	{
 		let attachmentRow = AppKitLayout.horizontalStack(
 			[addContextButton, approvalPolicyButton, planModeLabel],
 			spacing: 16
@@ -22,6 +41,11 @@ extension ConversationViewController
 		attachmentRow.widthAnchor.constraint(
 			lessThanOrEqualTo: composerToolbar.widthAnchor
 		).isActive = true
+		return composerToolbar
+	}
+
+	private func installComposerStack(toolbar composerToolbar: ComposerToolbarView)
+	{
 		let composerStack = AppKitLayout.verticalStack(
 			[attachmentDetailsScrollView, composerScrollView, composerToolbar],
 			spacing: 6
@@ -36,7 +60,10 @@ extension ConversationViewController
 		{
 			row.widthAnchor.constraint(equalTo: composerStack.widthAnchor).isActive = true
 		}
+	}
 
+	private func makeProjectContextStrip() -> NSStackView
+	{
 		let projectIcon = NSImageView()
 		projectIcon.image = DesktopIcons.image(.folder)
 		projectIcon.contentTintColor = .secondaryLabelColor
@@ -61,18 +88,7 @@ extension ConversationViewController
 		contextStrip.heightAnchor.constraint(equalToConstant: 28).isActive = true
 		contextStrip.isHidden = true
 		projectContextStrip = contextStrip
-		let composerArea = AppKitLayout.verticalStack(
-			[contextStrip, composerSurface],
-			spacing: 4
-		)
-		composerArea.alignment = .centerX
-		composerSurface.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
-		contextStrip.widthAnchor.constraint(
-			equalTo: composerArea.widthAnchor,
-			constant: -24
-		).isActive = true
-
-		return composerArea
+		return contextStrip
 	}
 
 	func configurePreferenceControls()
@@ -146,7 +162,16 @@ extension ConversationViewController
 		interactionStack.orientation = .vertical
 		interactionStack.alignment = .leading
 		interactionStack.spacing = 8
+		interactionStack.isHidden = true
 
+		configureDraftEditor()
+		configureContextPreviews()
+		configureContextActionButton()
+		configureSubmissionButtons()
+	}
+
+	private func configureDraftEditor()
+	{
 		composer.isEditable = true
 		composer.isSelectable = true
 		composer.isRichText = false
@@ -185,6 +210,10 @@ extension ConversationViewController
 				title: title
 			)
 		}
+	}
+
+	private func configureContextPreviews()
+	{
 		contextView.onRemove =
 		{
 			[weak self] id in self?.onRemoveContext?(id)
@@ -197,7 +226,10 @@ extension ConversationViewController
 		attachmentDetailsScrollView.borderType = .noBorder
 		requestDetailsScrollView.drawsBackground = false
 		requestDetailsScrollView.borderType = .noBorder
+	}
 
+	private func configureContextActionButton()
+	{
 		addContextButton.pullsDown = true
 		addContextButton.addItems(withTitles: [
 			"Add Context…",
@@ -221,6 +253,10 @@ extension ConversationViewController
 		addContextButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
 		addContextButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
 		addContextButton.toolTip = "Add Context…"
+	}
+
+	private func configureSubmissionButtons()
+	{
 		sendButton.target = self
 		sendButton.action = #selector(send)
 		sendButton.keyEquivalent = "\r"
@@ -260,14 +296,13 @@ extension ConversationViewController
 
 	func renderModelAndApprovalPreferences(_ snapshot: ConversationPresentation.Preferences)
 	{
-		let selectedModel =
-			snapshot.models.first(where:
-				{
-					$0.id == snapshot.selectedModelID
-				})
-			??
-			(snapshot.selectedModelID == nil ? snapshot.models
-				.first(where: \.isDefault) : nil)
+		let requestedModel = snapshot.models.first
+		{
+			$0.id == snapshot.selectedModelID
+		}
+		let defaultModel = snapshot.selectedModelID == nil
+			? snapshot.models.first(where: \.isDefault) : nil
+		let selectedModel = requestedModel ?? defaultModel
 		let effortTitle = ModelEffortPopoverView.effortTitle(
 			snapshot.selectedEffort ?? selectedModel?.defaultReasoningEffort
 		)
@@ -340,7 +375,7 @@ extension ConversationViewController
 		case .text: isSlashInput = false
 		case .command, .error: isSlashInput = true
 		}
-		let viewingActiveTask =
+		let isViewingActiveTask =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
 
 		if composer.string != snapshot.draft
@@ -370,16 +405,16 @@ extension ConversationViewController
 			addContextButton.item(at: index)?.isEnabled = snapshot.projectPath != nil
 		}
 
-		sendButton.isEnabled =
-			(snapshot.canSend || isSlashInput)
-				&& (!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-					|| !snapshot.draftContext.isEmpty)
-		steerButton.isHidden = !viewingActiveTask || snapshot.activeExecutionState != .running
+		let hasMessageContent =
+			!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				|| !snapshot.draftContext.isEmpty
+		let canSubmitMessage = snapshot.canSend || isSlashInput
+		let canSteerMessage = snapshot.canSteer || isSlashInput
+
+		sendButton.isEnabled = canSubmitMessage && hasMessageContent
+		steerButton.isHidden = !isViewingActiveTask || snapshot.activeExecutionState != .running
 		sendButton.isHidden = !steerButton.isHidden
-		steerButton.isEnabled =
-			(snapshot.canSteer || isSlashInput)
-				&& (!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-					|| !snapshot.draftContext.isEmpty)
+		steerButton.isEnabled = canSteerMessage && hasMessageContent
 		sendButton.contentTintColor = .white
 		sendButton.layer?.backgroundColor = sendButton.isEnabled
 			? NSColor(
@@ -389,11 +424,11 @@ extension ConversationViewController
 				alpha: 1
 			).cgColor : NSColor.tertiaryLabelColor.cgColor
 		steerButton.contentTintColor = steerButton.isEnabled ? .systemBlue : .tertiaryLabelColor
-		stopButton.isEnabled =
-			viewingActiveTask
-				&& (snapshot.activeExecutionState == .running
-					|| snapshot.activeExecutionState == .awaitingApproval
-					|| snapshot.activeExecutionState == .awaitingAnswer)
+		let hasStoppableExecution =
+			snapshot.activeExecutionState == .running
+				|| snapshot.activeExecutionState == .awaitingApproval
+				|| snapshot.activeExecutionState == .awaitingAnswer
+		stopButton.isEnabled = isViewingActiveTask && hasStoppableExecution
 		stopButton.isHidden = !stopButton.isEnabled
 	}
 

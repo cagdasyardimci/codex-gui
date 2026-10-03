@@ -227,7 +227,27 @@ final class ConversationViewController: NSViewController,
 			[loadEarlierButton, flexibleSpace(), bookmarkButton, jumpButton, latestButton],
 			spacing: 6
 		)
+		// These rows only have content after a snapshot supplies it. Keep the
+		// first fitting pass from reserving their empty heights.
+		activeTaskRow.isHidden = true
+		progressRow.isHidden = true
+		utilityRow.isHidden = true
 		transcriptUtilityRow = utilityRow
+		let transcriptArea = makeTranscriptArea()
+		installConversationStack(
+			in: container,
+			headerStack: headerStack,
+			utilityRow: utilityRow,
+			transcriptArea: transcriptArea,
+			composerArea: composerArea
+		)
+		configureEmptyState(in: container)
+		configureTurnNavigation(in: container)
+		view = container
+	}
+
+	private func makeTranscriptArea() -> NSView
+	{
 		let transcriptArea = NSView()
 		transcriptArea.addSubview(conversationScrollView)
 		conversationScrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -245,6 +265,17 @@ final class ConversationViewController: NSViewController,
 			.defaultLow,
 			for: .vertical
 		)
+		return transcriptArea
+	}
+
+	private func installConversationStack(
+		in container: NSView,
+		headerStack: NSStackView,
+		utilityRow: NSStackView,
+		transcriptArea: NSView,
+		composerArea: NSStackView
+	)
+	{
 		let stack = AppKitLayout.verticalStack(
 			[
 				centeredReadingRow(headerStack),
@@ -286,6 +317,10 @@ final class ConversationViewController: NSViewController,
 			.defaultLow,
 			for: .vertical
 		)
+	}
+
+	private func configureEmptyState(in container: NSView)
+	{
 		emptyStateLabel.font = .systemFont(
 			ofSize: 26,
 			weight: .regular
@@ -304,8 +339,6 @@ final class ConversationViewController: NSViewController,
 				constant: -32
 			),
 		])
-		configureTurnNavigation(in: container)
-		view = container
 	}
 
 	private func configureTaskStatusControls() -> (NSStackView, NSStackView)
@@ -554,9 +587,9 @@ final class ConversationViewController: NSViewController,
 		stateLabel.isHidden =
 			snapshot.statusMessage == nil && snapshot.executionState != .disconnected
 				&& snapshot.executionState != .failed
-		let viewingActiveTask =
+		let isViewingActiveTask =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
-		let taskIsElsewhere = snapshot.activeExecutionState != nil && !viewingActiveTask
+		let taskIsElsewhere = snapshot.activeExecutionState != nil && !isViewingActiveTask
 		activeTaskLabel.stringValue =
 			taskIsElsewhere
 				? "\(snapshot.activeExecutionState?.title ?? "Task active") in another conversation"
@@ -565,7 +598,7 @@ final class ConversationViewController: NSViewController,
 		returnToTaskButton.isEnabled = snapshot.activeThreadID != nil
 		returnToTaskButton.isHidden = !taskIsElsewhere
 
-		let updatedPlan = viewingActiveTask ? snapshot.activePlan : nil
+		let updatedPlan = isViewingActiveTask ? snapshot.activePlan : nil
 		if activePlan != updatedPlan
 		{
 			planPopover?.close()
@@ -584,7 +617,7 @@ final class ConversationViewController: NSViewController,
 		let jumpStatus = snapshot
 			.jumpError ?? (snapshot.jumpLoading ? "Loading target message…" : "")
 		activityLabel.stringValue = [
-			viewingActiveTask ? snapshot.activeActivity ?? "" : "",
+			isViewingActiveTask ? snapshot.activeActivity ?? "" : "",
 			jumpStatus,
 		]
 		.filter
@@ -594,7 +627,7 @@ final class ConversationViewController: NSViewController,
 		activityLabel.toolTip = activityLabel.stringValue
 		activityLabel.isHidden = activityLabel.stringValue.isEmpty
 		activityLabel.superview?.isHidden = planButton.isHidden && activityLabel.isHidden
-		activityLabel.actionIsActive = viewingActiveTask
+		activityLabel.actionIsActive = isViewingActiveTask
 			&& snapshot.activeExecutionState?.isBusy == true
 			&& !(snapshot.activeActivity ?? "").isEmpty
 	}
