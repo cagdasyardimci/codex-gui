@@ -52,10 +52,11 @@ enum ComposerContextBuilder
 			}
 		}
 
-		let combinedText = textParts.filter
+		let nonemptyTextParts = textParts.filter
 		{
 			!$0.isEmpty
-		}.joined(separator: "\n\n")
+		}
+		let combinedText = nonemptyTextParts.joined(separator: "\n\n")
 		return [.text(combinedText)] + contextInputs
 	}
 
@@ -93,10 +94,12 @@ enum ComposerContextBuilder
 	{
 		let firstLine = item.firstLine ?? 1
 		let lastLine = item.lastLine ?? firstLine
-		let numbered = excerpt.components(separatedBy: "\n").enumerated().map
+		let excerptLines = excerpt.components(separatedBy: "\n")
+		let numberedLines = excerptLines.enumerated().map
 		{
 			"\(firstLine + $0.offset): \($0.element)"
-		}.joined(separator: "\n")
-		return "Selected code from \(path), lines \(firstLine)–\(lastLine):\n\(numbered)"
+		}
+		let numberedExcerpt = numberedLines.joined(separator: "\n")
+		return "Selected code from \(path), lines \(firstLine)–\(lastLine):\n\(numberedExcerpt)"
 	}
 }
