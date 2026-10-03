@@ -21,14 +21,6 @@ extension ExecutionReducer
 				return result
 			}
 			model.execution.pendingReconciliation = operation
-			result = ConversationReducer.reduce(
-				&model,
-				.conversations(.historyRequested(ConversationReadOperation(
-					context: operation.context,
-					commandRevision: operation.commandRevision,
-					purpose: .recovery
-				)))
-			)
 
 		case .reconciliationFinished(
 			let context,
@@ -132,14 +124,6 @@ extension ExecutionReducer
 			{
 				return result
 			}
-			result = ConversationReducer.reduce(
-				&model,
-				.conversations(.historyRequested(ConversationReadOperation(
-					context: operation.context,
-					commandRevision: operation.commandRevision,
-					purpose: .completion
-				)))
-			)
 		case .completedHistoryReceived(
 			let operation,
 			let observation
@@ -258,6 +242,10 @@ extension ExecutionReducer
 			}
 			model.execution.activeThreadID = threadID
 			model.execution.activeTurnID = turn.id
+			requestInterruption(
+				model: &model,
+				result: &result
+			)
 		}
 		recordCommandObservation(
 			threadID: threadID,

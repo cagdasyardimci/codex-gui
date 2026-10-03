@@ -60,7 +60,7 @@ extension ComposerCommandReducer
 		)
 		if selection.threadID != request.context.threadID
 		{
-			result.mergeCommandReduction(ConversationReducer.reduce(
+			result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
 				&model,
 				.conversations(.selectionRequested(selection))
 			))
@@ -163,8 +163,7 @@ extension ComposerCommandReducer
 			let id,
 			let turnID,
 			_
-		),
-		.agentMessageDelta(
+		), .agentMessageDelta(
 			let id,
 			let turnID,
 			_,
@@ -174,8 +173,7 @@ extension ComposerCommandReducer
 			let turnID,
 			_,
 			_
-		),
-		.fileChangeUpdated(
+		), .fileChangeUpdated(
 			let id,
 			let turnID,
 			_,
@@ -184,8 +182,7 @@ extension ComposerCommandReducer
 			let id,
 			let turnID,
 			_
-		),
-		.toolProgress(
+		), .toolProgress(
 			let id,
 			let turnID,
 			_,

@@ -273,7 +273,7 @@ enum ComposerCommandReducer
 				model: &model,
 				result: &result
 			)
-			result.mergeCommandReduction(ConversationReducer.reduce(
+			result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
 				&model,
 				.conversations(.newChatOpened(context))
 			))
@@ -305,7 +305,7 @@ enum ComposerCommandReducer
 			)
 			var selection = context
 			selection.threadID = argument
-			result.mergeCommandReduction(ConversationReducer.reduce(
+			result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
 				&model,
 				.conversations(.selectionRequested(selection))
 			))
@@ -503,8 +503,7 @@ enum ComposerCommandReducer
 			let mode = CollaborationMode(
 				mode: next,
 				model: selected.id,
-				reasoningEffort: model.preferences
-					.selectedEffort ?? selected.defaultReasoningEffort
+				reasoningEffort: model.preferences.selectedEffort ?? selected.defaultReasoningEffort
 			)
 			if context.threadID == nil
 			{

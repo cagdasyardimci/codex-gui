@@ -240,8 +240,8 @@ enum WorkspaceLifecycleComposition
 					context,
 					model: &model
 				)
-				result.effects += refreshed.effects; result.domainEvents += refreshed
-					.domainEvents
+				result.effects += refreshed.effects
+				result.domainEvents += refreshed.domainEvents
 				result.presentationCommands += refreshed.presentationCommands
 			}
 		case .conversationSelectionChanged:
@@ -351,11 +351,7 @@ enum WorkspaceLifecycleComposition
 			action
 		)
 		let reducers = [
-			ExecutionReducer.reducer,
-			ComposerReducer.reducer,
-			ConversationReducer.reducer,
-			ReviewReducer.reducer,
-			ContextNavigationReducer.reducer,
+			WorkspaceFeatureComposition.reducer,
 			PreferenceReducer.reducer,
 			UsageReducer.reducer
 		]
@@ -384,6 +380,25 @@ enum WorkspaceLifecycleComposition
 			model: &model,
 			force: true
 		)
+		refreshAccountData(
+			context,
+			model: &model,
+			result: &result
+		)
+		refreshProjectData(
+			context,
+			model: &model,
+			result: &result
+		)
+		return result
+	}
+
+	private static func refreshAccountData(
+		_ context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
 		let actions: [WorkspaceAction] = [
 			.preferences(.accountRefreshRequested(context)),
 			.preferences(.modelsRefreshRequested(context)),
@@ -410,6 +425,14 @@ enum WorkspaceLifecycleComposition
 			result.domainEvents += reduction.domainEvents
 			result.presentationCommands += reduction.presentationCommands
 		}
+	}
+
+	private static func refreshProjectData(
+		_ context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
 		if model.identity.canonicalCheckoutPath != nil
 		{
 			model.lifecycle.recoveryListRequestID = context.requestID
@@ -440,6 +463,6 @@ enum WorkspaceLifecycleComposition
 			result.domainEvents += skills.domainEvents
 			result.presentationCommands += skills.presentationCommands
 		}
-		return result
 	}
+
 }

@@ -505,7 +505,7 @@ struct ContextNavigationReducerTests
 			revision: 3
 		)
 		model.composer.drafts[.thread("other")] = ComposerDraft(text: "Independent")
-		let result = reduce(
+		let result = WorkspaceFeatureComposition.reduce(
 			&model,
 			.contextNavigation(.savedPromptInserted(
 				context(

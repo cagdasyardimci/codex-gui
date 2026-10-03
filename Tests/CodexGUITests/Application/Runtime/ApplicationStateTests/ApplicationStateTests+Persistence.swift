@@ -222,12 +222,7 @@ extension ApplicationStateTests
 			service: service,
 			storage: storage,
 			persistence: scheduler,
-			reducers: [
-				ExecutionReducer.reducer,
-				ComposerReducer.reducer,
-				ConversationReducer.reducer,
-				ReviewReducer.reducer
-			],
+			reducers: [WorkspaceFeatureComposition.reducer],
 			reduceDomainEvent: ConversationReviewComposition.reduceDomainEvent
 		)
 		defer
@@ -405,7 +400,8 @@ extension ApplicationStateTests
 		let second = makeStore()
 		defer
 		{
-			first.shutdown(); second.shutdown()
+			first.shutdown()
+			second.shutdown()
 		}
 		let firstContext = first.operationContext(threadID: "A")
 		let secondContext = second.operationContext(threadID: "B")
@@ -481,7 +477,8 @@ extension ApplicationStateTests
 		let second = makeStore()
 		defer
 		{
-			first.shutdown(); second.shutdown()
+			first.shutdown()
+			second.shutdown()
 		}
 		let firstContext = first.operationContext(threadID: "same-thread")
 		let secondContext = second.operationContext(threadID: "same-thread")
@@ -573,7 +570,8 @@ extension ApplicationStateTests
 		)
 		defer
 		{
-			first.shutdown(); second.shutdown()
+			first.shutdown()
+			second.shutdown()
 		}
 		let prepared = PreparedSubmission(
 			submission: submission,

@@ -206,10 +206,7 @@ extension ApplicationStateTests
 				{
 					_ in
 				}),
-			reducers: [
-				ConversationReducer.reducer,
-				ReviewReducer.reducer
-			],
+			reducers: [WorkspaceFeatureComposition.reducer],
 			reduceDomainEvent: ConversationReviewComposition
 				.reduceDomainEvent
 		)
@@ -315,12 +312,7 @@ extension ApplicationStateTests
 				{
 					_ in
 				}),
-			reducers: [
-				ExecutionReducer.reducer,
-				ComposerReducer.reducer,
-				ConversationReducer.reducer,
-				ReviewReducer.reducer
-			],
+			reducers: [WorkspaceFeatureComposition.reducer],
 			reduceDomainEvent: ConversationReviewComposition.reduceDomainEvent
 		)
 		defer

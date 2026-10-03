@@ -179,8 +179,8 @@ extension WorkspaceLifecycleReducer
 						canonicalPath: opening.identity.canonicalCheckoutPath!
 					))
 				)
-				result.effects += remembered.effects; result.domainEvents += remembered
-					.domainEvents
+				result.effects += remembered.effects
+				result.domainEvents += remembered.domainEvents
 				result.presentationCommands += remembered.presentationCommands
 			}
 		case .archivedSelectionRequested(
@@ -221,7 +221,7 @@ extension WorkspaceLifecycleReducer
 				requestID: context.requestID,
 				threadID: threadID
 			)
-			result = ConversationReducer.reduce(
+			result = WorkspaceFeatureComposition.reduceConversation(
 				&model,
 				.conversations(.archivedFilterRequested(
 					selected,
@@ -232,8 +232,8 @@ extension WorkspaceLifecycleReducer
 				selected,
 				model: &model
 			)
-			result.effects += refreshed.effects; result.domainEvents += refreshed
-				.domainEvents
+			result.effects += refreshed.effects
+			result.domainEvents += refreshed.domainEvents
 			result.presentationCommands += refreshed.presentationCommands
 		case .initialHydrationRequested(let context):
 			guard valid(

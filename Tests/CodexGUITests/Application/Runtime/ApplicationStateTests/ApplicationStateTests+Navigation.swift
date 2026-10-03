@@ -34,7 +34,8 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.projectPath == project.path)
 		if afterVersion
 		{
-			service.pendingConnection?.resume(); service.pendingConnection = nil
+			service.pendingConnection?.resume()
+			service.pendingConnection = nil
 		}
 		else
 		{
@@ -76,12 +77,7 @@ extension ApplicationStateTests
 					{
 						_ in
 					}),
-				reducers: [
-					ExecutionReducer.reducer,
-					ComposerReducer.reducer,
-					ConversationReducer.reducer,
-					ReviewReducer.reducer
-				],
+				reducers: [WorkspaceFeatureComposition.reducer],
 				reduceDomainEvent: ConversationReviewComposition.reduceDomainEvent
 			)
 			defer
@@ -193,12 +189,7 @@ extension ApplicationStateTests
 					{
 						_ in
 					}),
-				reducers: [
-					ExecutionReducer.reducer,
-					ComposerReducer.reducer,
-					ConversationReducer.reducer,
-					ReviewReducer.reducer
-				],
+				reducers: [WorkspaceFeatureComposition.reducer],
 				reduceDomainEvent: ConversationReviewComposition.reduceDomainEvent
 			)
 			defer
@@ -307,12 +298,7 @@ extension ApplicationStateTests
 					{
 						_ in
 					}),
-				reducers: [
-					ExecutionReducer.reducer,
-					ComposerReducer.reducer,
-					ConversationReducer.reducer,
-					ReviewReducer.reducer
-				],
+				reducers: [WorkspaceFeatureComposition.reducer],
 				reduceDomainEvent: ConversationReviewComposition.reduceDomainEvent
 			)
 			defer
@@ -394,12 +380,7 @@ extension ApplicationStateTests
 				{
 					_ in
 				}),
-			reducers: [
-				ExecutionReducer.reducer,
-				ComposerReducer.reducer,
-				ConversationReducer.reducer,
-				ReviewReducer.reducer
-			],
+			reducers: [WorkspaceFeatureComposition.reducer],
 			reduceDomainEvent: ConversationReviewComposition.reduceDomainEvent
 		)
 		defer

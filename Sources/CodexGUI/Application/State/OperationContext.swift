@@ -2,7 +2,7 @@ import Foundation
 
 /// Captured at the effect boundary after CheckoutIdentity validates the filesystem target.
 /// The session distinguishes two stores using the same canonical checkout.
-struct WorkspaceIdentity: Equatable, Hashable
+struct WorkspaceIdentity: Equatable, Hashable, Sendable
 {
 	let sessionID: UUID
 	/// Nil identifies a source session before a checkout is selected; it is never a wildcard.
@@ -10,7 +10,7 @@ struct WorkspaceIdentity: Equatable, Hashable
 }
 
 /// A request exists before the backend assigns a thread or turn to a new submission.
-struct OperationContext: Equatable
+struct OperationContext: Equatable, Sendable
 {
 	let workspace: WorkspaceIdentity
 	let generation: Int
@@ -36,7 +36,7 @@ struct OperationContext: Equatable
 }
 
 /// Payload failures are values; runtime Error instances stay at the effect boundary.
-struct OperationFailure: Equatable
+struct OperationFailure: Equatable, Sendable
 {
 	let message: String
 	let outcomeIsUncertain: Bool
@@ -79,7 +79,7 @@ struct InterruptionOperation
 	let context: OperationContext
 }
 
-struct ReconciliationOperation
+struct ReconciliationOperation: Equatable
 {
 	let context: OperationContext
 	let commandRevision: Int

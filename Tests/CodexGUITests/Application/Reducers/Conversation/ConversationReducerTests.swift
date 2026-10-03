@@ -61,15 +61,10 @@ struct ConversationReducerTests
 		_ action: WorkspaceAction
 	) -> WorkspaceReduction
 	{
-		var result = ConversationReducer.reduce(
+		let result = WorkspaceFeatureComposition.reduce(
 			&model,
 			action
 		)
-		let review = ReviewReducer.reduce(
-			&model,
-			action
-		)
-		result.effects.append(contentsOf: review.effects)
 		for change in result.domainEvents
 		{
 			_ = ConversationReviewComposition.reduceDomainEvent(
@@ -78,6 +73,29 @@ struct ConversationReducerTests
 			)
 		}
 		return result
+	}
+
+	@Test func directConversationReducerKeepsListRequestsFeatureLocal()
+	{
+		var model = fixture()
+		let operation = ConversationListOperation(
+			context: context(model),
+			archived: false,
+			boundThreadID: nil
+		)
+		let result = ConversationReducer.reduce(
+			&model,
+			.conversations(.threadListRequested(operation))
+		)
+		#expect(model.conversations.pendingList?.context == operation.context)
+		#expect(result.effects.contains
+		{
+			if case .readConversationList = $0
+			{
+				return true
+			}
+			return false
+		})
 	}
 
 	@Test func sidebarManagementTargetsUnselectedTaskAndPreservesViewedConversation()
@@ -131,8 +149,7 @@ struct ConversationReducerTests
 		#expect(reduce(
 			&model,
 			.conversations(.managementRequested(.delete(unknown)))
-		).effects
-			.isEmpty)
+		).effects.isEmpty)
 		let captured = context(model)
 		model.conversations
 			.content[.thread("thread")] = ConversationContentModel(hasLoadedHistory: true)
@@ -343,8 +360,7 @@ struct ConversationReducerTests
 			context: OperationContext(
 				workspace: model.identity,
 				generation: 0,
-				requestID: current
-					.context.requestID,
+				requestID: current.context.requestID,
 				threadID: "thread"
 			),
 			pageScope: HistoryPageScope(
@@ -381,8 +397,7 @@ struct ConversationReducerTests
 			for result in [OperationResult<HistoryPage>.succeeded(HistoryPage(
 				turns: [turn("obsolete")],
 				nextCursor: nil
-			)),
-			.failed(
+			)), .failed(
 				OperationFailure(
 					message: "obsolete",
 					outcomeIsUncertain: false
@@ -463,11 +478,10 @@ struct ConversationReducerTests
 			"latest"
 		])
 		#expect(model.review.conversations[.thread("thread")]?.selectedTurnID == "latest")
-		#expect(model.review.conversations[.thread("thread")]?.turns
-			.allSatisfy
-			{
-				$0.threadID == "thread"
-			} == true)
+		#expect(model.review.conversations[.thread("thread")]?.turns.allSatisfy
+		{
+			$0.threadID == "thread"
+		} == true)
 		#expect(model.conversations.historyLoads["thread"] == nil)
 	}
 }

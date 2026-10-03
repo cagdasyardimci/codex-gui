@@ -17,11 +17,7 @@ extension ApplicationStateTests
 				{
 					_ in
 				}),
-			reducers: [ExecutionReducer.reducer,
-						ComposerReducer.reducer,
-						ConversationReducer.reducer,
-						ReviewReducer.reducer,
-						ContextNavigationReducer.reducer],
+			reducers: [WorkspaceFeatureComposition.reducer],
 			reduceDomainEvent: WorkspaceDomainComposition.reduceDomainEvent
 		)
 	}

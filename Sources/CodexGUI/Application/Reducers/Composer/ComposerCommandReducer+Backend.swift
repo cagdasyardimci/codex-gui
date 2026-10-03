@@ -9,12 +9,13 @@ extension ComposerCommandReducer
 	) -> WorkspaceReduction
 	{
 		let content = model.conversations.content[request.conversation]
+		let previousTurnIDs = Set(content?.loadedTurns.map(\.id) ?? [])
 		let operation = ComposerCommandTurnOperation(
 			request: request,
 			kind: kind,
-			previousTurnIDs: Set(content?.loadedTurns
-				.map(\.id) ?? [])
+			previousTurnIDs: previousTurnIDs
 		)
+
 		model.composerCommands.pendingTurn = operation
 		model.execution.owner = ExecutionOwner(submission: request.context)
 		model.execution.submissionRequest = request.context
@@ -33,6 +34,7 @@ extension ComposerCommandReducer
 		model.execution.pendingInterruption = nil
 		model.execution.activePlan = nil
 		model.execution.activeActivity = nil
+
 		let effect: WorkspaceEffect
 		switch kind
 		{
@@ -103,7 +105,7 @@ extension ComposerCommandReducer
 				)
 				var selection = request.context
 				selection.threadID = detail.summary.id
-				result.mergeCommandReduction(ConversationReducer.reduce(
+				result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
 					&model,
 					.conversations(.selectionRequested(selection))
 				))
@@ -200,8 +202,7 @@ extension ComposerCommandReducer
 					.execution(.backendObserved(
 						operation.request.context,
 						.turnStarted(
-							threadId: started
-								.reviewThreadId,
+							threadId: started.reviewThreadId,
 							turn: started.turn
 						)
 					))
@@ -211,11 +212,9 @@ extension ComposerCommandReducer
 					result.mergeCommandReduction(ExecutionReducer.reduce(
 						&model,
 						.execution(.backendObserved(
-							operation.request
-								.context,
+							operation.request.context,
 							.turnCompleted(
-								threadId: started
-									.reviewThreadId,
+								threadId: started.reviewThreadId,
 								turn: started.turn
 							)
 						))
@@ -424,6 +423,28 @@ extension ComposerCommandReducer
 		}
 	}
 
+	private static func markCommandsUncertainAfterDisconnect(_ model: inout WorkspaceModel)
+	{
+		if let fork = model.composerCommands.pendingFork
+		{
+			model.composerCommands.uncertainFork = fork.context
+			model.composerCommands.pendingFork = nil
+			model.composerCommands.error = "Fork may have been saved. Reconnect and use /fork "
+				+ "to inspect chats or continue the original."
+		}
+		if model.composerCommands.pendingSettings != nil
+		{
+			if !model.execution.needsReconciliation
+			{
+				model.composerCommands.settingsIntroducedReconciliation = true
+			}
+			model.execution.needsReconciliation = true
+			model.composerCommands.pendingSettings?.outcomeUncertain = true
+			model.composerCommands.pendingSettings?.transportFinished = true
+		}
+		model.composerCommands.pendingTurn?.transportFinished = true
+	}
+
 	static func reduceDomainEvent(
 		_ model: inout WorkspaceModel,
 		_ event: WorkspaceDomainEvent
@@ -443,24 +464,7 @@ extension ComposerCommandReducer
 			)
 			return result
 		case .connectionDisconnected:
-			if let fork = model.composerCommands.pendingFork
-			{
-				model.composerCommands.uncertainFork = fork.context
-				model.composerCommands.pendingFork = nil
-				model.composerCommands.error = "Fork may have been saved. Reconnect and use /fork "
-					+ "to inspect chats or continue the original."
-			}
-			if model.composerCommands.pendingSettings != nil
-			{
-				if !model.execution.needsReconciliation
-				{
-					model.composerCommands.settingsIntroducedReconciliation = true
-				}
-				model.execution.needsReconciliation = true
-				model.composerCommands.pendingSettings?.outcomeUncertain = true
-				model.composerCommands.pendingSettings?.transportFinished = true
-			}
-			model.composerCommands.pendingTurn?.transportFinished = true
+			markCommandsUncertainAfterDisconnect(&model)
 			return result
 		case .submissionAccepted(let submission):
 			if let mode = submission.collaborationMode

@@ -16,6 +16,7 @@ struct WorkspaceStoreDependencies
 	let manager: GitWorktreeManager?
 	let usageRuntime: UsageRuntime
 	let publicationWait: @MainActor () async -> Void
+
 	init(
 		service: any CodexService = AppServer(),
 		storage: LocalStorage = LocalStorage(),
@@ -31,11 +32,15 @@ struct WorkspaceStoreDependencies
 			}
 	)
 	{
-		self.service = service; self.storage = storage; self.reviewMarkerStore = reviewMarkerStore
-		self.projectContextStore = projectContextStore; self.manager = manager
+		self.service = service
+		self.storage = storage
+		self.reviewMarkerStore = reviewMarkerStore
+		self.projectContextStore = projectContextStore
+		self.manager = manager
 		self.usageRuntime = usageRuntime ?? UsageRuntime(freshnessDuration: usageFreshnessDuration)
 		self.publicationWait = publicationWait
 	}
+
 	func replacing(
 		service: any CodexService,
 		manager: GitWorktreeManager?
@@ -98,11 +103,7 @@ enum WorkspaceStoreFactory
 			persistence: dependencies.storage.workspacePersistenceScheduler,
 			projectContextStore: dependencies.projectContextStore,
 			reducers: [ConnectionReducer.reducer,
-						ExecutionReducer.reducer,
-						ComposerReducer.reducer,
-						ConversationReducer.reducer,
-						ReviewReducer.reducer,
-						ContextNavigationReducer.reducer,
+						WorkspaceFeatureComposition.reducer,
 						PreferenceReducer.reducer,
 						UsageReducer.reducer,
 						ComposerCommandReducer.reducer,

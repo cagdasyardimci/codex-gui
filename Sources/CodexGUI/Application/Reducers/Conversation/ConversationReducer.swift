@@ -5,6 +5,18 @@ import Foundation
 enum ConversationReducer
 {
 	static let reducer = WorkspaceReducer(reduce: reduce)
+	struct AcceptedHistory
+	{
+		let operation: ConversationReadOperation
+		let executionAction: ExecutionAction
+	}
+	struct AcceptedSelection
+	{
+		let executionAction: ExecutionAction
+		let effectIndex: Int
+		let domainEventIndex: Int
+		let presentationCommandIndex: Int
+	}
 	static func acceptsNewChat(
 		_ context: OperationContext,
 		model: WorkspaceModel
@@ -43,7 +55,29 @@ enum ConversationReducer
 		_ action: WorkspaceAction
 	) -> WorkspaceReduction
 	{
+		var (result, acceptedHistory, _) = reduceForComposition(
+			&model,
+			action
+		)
+		if let acceptedHistory
+		{
+			finishAcceptedHistory(
+				acceptedHistory,
+				model: &model,
+				result: &result
+			)
+		}
+		return result
+	}
+
+	static func reduceForComposition(
+		_ model: inout WorkspaceModel,
+		_ action: WorkspaceAction
+	) -> (WorkspaceReduction, AcceptedHistory?, AcceptedSelection?)
+	{
 		var result = WorkspaceReduction()
+		var acceptedHistory: AcceptedHistory?
+		var acceptedSelection: AcceptedSelection?
 		switch action
 		{
 		case .connection(.projectOpened(
@@ -53,7 +87,7 @@ enum ConversationReducer
 			guard model.identity == identity, !model.execution.isTaskActive
 			else
 			{
-				return result
+				return (result, nil, nil)
 			}
 			let bound = model.conversations.boundThreadID
 			model.conversations = ConversationsModel()
@@ -73,7 +107,7 @@ enum ConversationReducer
 				.boundThreadID == selectedThreadID
 			else
 			{
-				return result
+				return (result, nil, nil)
 			}
 			model.conversations.selectedConversation = selectedThreadID
 				.map(ConversationKey.thread) ?? .newChat
@@ -81,31 +115,49 @@ enum ConversationReducer
 			reduceConversations(
 				intent,
 				model: &model,
-				result: &result
+				result: &result,
+				acceptedHistory: &acceptedHistory,
+				acceptedSelection: &acceptedSelection
 			)
 		default: break
 		}
-		return result
+		return (result, acceptedHistory, acceptedSelection)
 	}
-	private static func select(
-		_ key: ConversationKey,
-		context: OperationContext,
+
+	static func finishAcceptedHistory(
+		_ accepted: AcceptedHistory,
 		model: inout WorkspaceModel,
 		result: inout WorkspaceReduction
 	)
 	{
+		result.domainEvents.append(.conversationHistoryFinished(
+			.history(accepted.operation),
+			.succeeded(true)
+		))
+		model.conversations.lastAppliedHistoryRequestID = accepted.operation.context.requestID
+		model.conversations.error = nil
+	}
+
+	private static func select(
+		_ key: ConversationKey,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction,
+		acceptedSelection: inout AcceptedSelection?
+	)
+	{
 		model.conversations.selectedConversation = key
 		model.conversations.pendingSelection = nil
-		model.conversations.pendingReads = model.conversations.pendingReads
-			.filter
-			{
-				$0.key.purpose != .selection
-			}
+		model.conversations.pendingReads = model.conversations.pendingReads.filter
+		{
+			$0.key.purpose != .selection
+		}
 		model.conversations.error = nil
 		let threadID: String?
 		switch key
 		{
-		case .newChat: threadID = nil; case .thread(let id): threadID = id
+		case .newChat: threadID = nil
+		case .thread(let id): threadID = id
 		}
 		result.domainEvents.append(.conversationSelectionChanged(threadID))
 		let executionAction: ExecutionAction = threadID.map
@@ -115,15 +167,13 @@ enum ConversationReducer
 				recovering: true
 			)
 		} ?? .conversationCleared
-		let execution = ExecutionReducer.reduce(
-			&model,
-			.execution(executionAction)
+		acceptedSelection = AcceptedSelection(
+			executionAction: executionAction,
+			effectIndex: result.effects.count,
+			domainEventIndex: result.domainEvents.count,
+			presentationCommandIndex: result.presentationCommands.count
 		)
-		result.effects.append(contentsOf: execution.effects)
-		result.domainEvents.append(contentsOf: execution.domainEvents)
-		result.presentationCommands.append(contentsOf: execution.presentationCommands)
-		if !model.conversations
-			.showingArchived
+		if !model.conversations.showingArchived
 		{
 			model.conversations.pendingSelectionPersistence = context
 			result.effects.append(.persistConversationSelection(
@@ -132,6 +182,7 @@ enum ConversationReducer
 			))
 		}
 	}
+
 	private static func requestHistory(
 		_ operation: ConversationReadOperation,
 		model: inout WorkspaceModel,
@@ -142,8 +193,7 @@ enum ConversationReducer
 			operation.context,
 			model
 		), let threadID = operation.context.threadID,
-		model.conversations.boundThreadID == nil || model.conversations
-		.boundThreadID == threadID,
+		model.conversations.boundThreadID == nil || model.conversations.boundThreadID == threadID,
 		operation.commandRevision == model.execution.commandEventRevisions[
 			threadID,
 			default: 0
@@ -157,17 +207,19 @@ enum ConversationReducer
 		var captured = operation
 		captured.contentRevision = model.conversations.contentRevisions[threadID, default: 0]
 		model.conversations.pendingReads[operation.key] = captured
-		if operation
-			.purpose == .selection
+		if operation.purpose == .selection
 		{
 			model.conversations.pendingSelection = operation.context
 		}
 		result.effects.append(.readConversationHistory(captured))
 	}
+
 	private static func reduceConversations(
 		_ action: ConversationsAction,
 		model: inout WorkspaceModel,
-		result: inout WorkspaceReduction
+		result: inout WorkspaceReduction,
+		acceptedHistory: inout AcceptedHistory?,
+		acceptedSelection: inout AcceptedSelection?
 	)
 	{
 		switch action
@@ -187,7 +239,8 @@ enum ConversationReducer
 				.newChat,
 				context: context,
 				model: &model,
-				result: &result
+				result: &result,
+				acceptedSelection: &acceptedSelection
 			)
 		case .selectionRequested(let context):
 			guard valid(
@@ -203,23 +256,23 @@ enum ConversationReducer
 				return
 			}
 			let previous = model.conversations.selectedConversation
-			if model.conversations.showingArchived && threadID == model.execution
-				.activeThreadID
+			if model.conversations.showingArchived && threadID == model.execution.activeThreadID
 			{
-				model.conversations.showingArchived = false; model.conversations.pendingList = nil
+				model.conversations.showingArchived = false
+				model.conversations.pendingList = nil
 			}
 			select(
 				.thread(threadID),
 				context: context,
 				model: &model,
-				result: &result
+				result: &result,
+				acceptedSelection: &acceptedSelection
 			)
-			if model.execution
-				.activeThreadID == threadID &&
-				(model.execution.state
-					.isBusy || (
-						!model.execution.needsReconciliation && previous != .thread(threadID)
-					))
+			let shouldKeepExistingHistory = model.execution.activeThreadID == threadID
+				&& (model.execution.state.isBusy
+					|| (!model.execution.needsReconciliation && previous != .thread(threadID)))
+
+			if shouldKeepExistingHistory
 			{
 				return
 			}
@@ -254,7 +307,8 @@ enum ConversationReducer
 				context.threadID.map(ConversationKey.thread) ?? .newChat,
 				context: context,
 				model: &model,
-				result: &result
+				result: &result,
+				acceptedSelection: &acceptedSelection
 			)
 		case .threadListRequested(let operation):
 			guard valid(
@@ -288,8 +342,9 @@ enum ConversationReducer
 			model.conversations.pendingList = nil
 			switch observation
 			{
-			case .succeeded(let threads): model.conversations.threads = threads; model.conversations
-				.error = nil; result.domainEvents.append(.conversationContentChanged)
+			case .succeeded(let threads): model.conversations.threads = threads
+				model.conversations.error = nil
+				result.domainEvents.append(.conversationContentChanged)
 				result.domainEvents.append(.conversationListAccepted(operation))
 			case .failed(let failure):
 				model.conversations.error = "Could not load conversations: \(failure.message)"
@@ -313,8 +368,7 @@ enum ConversationReducer
 				pending.commandRevision == operation.commandRevision,
 				pending.contentRevision == operation.contentRevision,
 				let threadID = operation.context.threadID,
-				operation
-				.purpose != .selection ||
+				operation.purpose != .selection ||
 				(model.conversations.pendingSelection == operation.context && model.conversations
 					.selectedConversation == .thread(threadID))
 			else
@@ -359,7 +413,8 @@ enum ConversationReducer
 				}
 				if operation.purpose == .recovery
 				{
-					model.execution.needsReconciliation = true; model.execution.state = .failed
+					model.execution.needsReconciliation = true
+					model.execution.state = .failed
 					model.execution.statusMessage =
 						"Could not check the previous request: \(failure.message). "
 							+ "Use Refresh or Reconnect to try again."
@@ -398,27 +453,10 @@ enum ConversationReducer
 						detail
 					)
 				}
-				let execution = ExecutionReducer.reduce(
-					&model,
-					.execution(executionAction)
+				acceptedHistory = AcceptedHistory(
+					operation: operation,
+					executionAction: executionAction
 				)
-				result.effects.append(contentsOf: execution.effects)
-				let composer = ComposerReducer.reduce(
-					&model,
-					.execution(executionAction)
-				)
-				result.effects.append(contentsOf: composer.effects)
-				result.domainEvents.append(contentsOf: composer.domainEvents)
-				result.presentationCommands.append(contentsOf: composer.presentationCommands)
-				// Accepted history uses the shared pure content reducer.
-				result.domainEvents.append(contentsOf: execution.domainEvents)
-				result.presentationCommands.append(contentsOf: execution.presentationCommands)
-				result.domainEvents.append(.conversationHistoryFinished(
-					.history(operation),
-					.succeeded(true)
-				))
-				model.conversations.lastAppliedHistoryRequestID = operation.context.requestID
-				model.conversations.error = nil
 			}
 		case .earlierTurnsRequested(let operation):
 			guard valid(
@@ -495,45 +533,12 @@ enum ConversationReducer
 				)
 				{
 					content in
-					let streamedEntries = content.entries
-						.filter
-						{
-							liveTurnID.map
-							{
-								$0 + ":"
-							}.map($0.id.hasPrefix) == true
-						}
-					var known = Set(content.loadedTurns.map(\.id))
-					let earlier = page.turns.filter
-					{
-						known.insert($0.id).inserted
-					}
-					content.loadedTurns.insert(
-						contentsOf: earlier,
-						at: 0
-					)
-					content.hasLoadedHistory = true
-					content.nextTurnsCursor = page.nextCursor == operation.pageScope
-						.cursor ? nil : page.nextCursor
-					content.entries = ConversationContentReducer.entries(for: content.loadedTurns)
-					for entry in streamedEntries
-					{
-						if let index = content.entries
-							.firstIndex(where:
-								{
-									$0.id == entry.id
-								})
-						{
-							content.entries[index] = entry
-						}
-						else
-						{
-							content.entries.append(entry)
-						}
-					}
-					ConversationContentReducer.reviewSourceChanged(
-						content: &content,
-						threadID: threadID
+					prependHistoryPage(
+						page,
+						operation: operation,
+						liveTurnID: liveTurnID,
+						threadID: threadID,
+						content: &content
 					)
 				}
 				result.domainEvents.append(.conversationContentChanged)
@@ -555,10 +560,10 @@ enum ConversationReducer
 				_,
 				let name
 			) = operation,
-				name.trimmingCharacters(in: .whitespacesAndNewlines)
-				.isEmpty
+				name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 			{
-				model.conversations.error = "Enter a conversation name."; return
+				model.conversations.error = "Enter a conversation name."
+				return
 			}
 			model.conversations.pendingManagement = operation
 			model.conversations.pendingManagementArchived = model.conversations.showingArchived
@@ -572,8 +577,7 @@ enum ConversationReducer
 				model
 			), let pending = model.conversations.pendingManagement,
 			pending.context == context,
-			model.conversations.pendingManagementArchived == model.conversations
-			.showingArchived
+			model.conversations.pendingManagementArchived == model.conversations.showingArchived
 			else
 			{
 				return
@@ -595,7 +599,8 @@ enum ConversationReducer
 							.newChat,
 							context: context,
 							model: &model,
-							result: &result
+							result: &result,
+							acceptedSelection: &acceptedSelection
 						)
 					}
 					if case .delete = pending, let id = context.threadID
@@ -612,7 +617,8 @@ enum ConversationReducer
 						.thread(context.threadID!),
 						context: context,
 						model: &model,
-						result: &result
+						result: &result,
+						acceptedSelection: &acceptedSelection
 					)
 					requestHistory(
 						ConversationReadOperation(
@@ -656,6 +662,58 @@ enum ConversationReducer
 				.commandOutputDelta, .fileChangesReceived, .aggregateDiffReceived: break
 		}
 	}
+
+	private static func prependHistoryPage(
+		_ page: HistoryPage,
+		operation: HistoryLoadOperation,
+		liveTurnID: String?,
+		threadID: String,
+		content: inout ConversationProjection
+	)
+	{
+		let liveEntryPrefix = liveTurnID.map
+		{
+			$0 + ":"
+		}
+		let streamedEntries = content.entries.filter
+		{
+			entry in
+			liveEntryPrefix.map(entry.id.hasPrefix) == true
+		}
+
+		var knownTurnIDs = Set(content.loadedTurns.map(\.id))
+		let earlier = page.turns.filter
+		{
+			knownTurnIDs.insert($0.id).inserted
+		}
+		content.loadedTurns.insert(
+			contentsOf: earlier,
+			at: 0
+		)
+		content.hasLoadedHistory = true
+		content.nextTurnsCursor = page.nextCursor == operation.pageScope
+			.cursor ? nil : page.nextCursor
+		content.entries = ConversationContentReducer.entries(for: content.loadedTurns)
+		for entry in streamedEntries
+		{
+			if let index = content.entries.firstIndex(where:
+				{
+					$0.id == entry.id
+				})
+			{
+				content.entries[index] = entry
+			}
+			else
+			{
+				content.entries.append(entry)
+			}
+		}
+		ConversationContentReducer.reviewSourceChanged(
+			content: &content,
+			threadID: threadID
+		)
+	}
+
 	/// Composes accepted feature transitions into canonical conversation content.
 	static func reduceDomainEvent(
 		_ model: inout WorkspaceModel,
@@ -716,8 +774,8 @@ enum ConversationReducer
 				{
 					model.conversations.selectedConversation = key
 
-					var context = prepared.submission.context; context.threadID = prepared.thread
-						.summary.id
+					var context = prepared.submission.context
+					context.threadID = prepared.thread.summary.id
 					model.conversations.pendingSelectionPersistence = context
 					result.effects.append(.persistConversationSelection(
 						context,
@@ -725,8 +783,7 @@ enum ConversationReducer
 					))
 				}
 			}
-			if let workspace = prepared
-				.workspace
+			if let workspace = prepared.workspace
 			{
 				model.conversations.boundThreadID = workspace.threadID
 			}
@@ -742,8 +799,7 @@ enum ConversationReducer
 			), .turnCompleted(
 				let threadID,
 				_
-			),
-			.itemStarted(
+			), .itemStarted(
 				let threadID,
 				_,
 				_
@@ -751,8 +807,7 @@ enum ConversationReducer
 				let threadID,
 				_,
 				_
-			),
-			.agentMessageDelta(
+			), .agentMessageDelta(
 				let threadID,
 				_,
 				_,
@@ -762,8 +817,7 @@ enum ConversationReducer
 				_,
 				_,
 				_
-			),
-			.fileChangeUpdated(
+			), .fileChangeUpdated(
 				let threadID,
 				_,
 				_,
@@ -805,8 +859,7 @@ extension ThreadManagementOperation
 		case .rename(
 			let context,
 			_
-		), .archive(let context),
-		.unarchive(let context), .delete(let context): return context
+		), .archive(let context), .unarchive(let context), .delete(let context): return context
 		}
 	}
 }

@@ -78,41 +78,7 @@ extension ContextNavigationReducer
 				return
 			}
 			model.contextNavigation.contextError = observation.failure?.message
-		case .savedPromptInserted(
-			let context,
-			let promptID
-		):
-			guard valid(
-				context,
-				model
-			), selected(
-				context,
-				model
-			),
-				let text = ProjectProductivity.insertSavedPrompt(
-					context: model.contextNavigation.projectContext,
-					id: promptID,
-					into: (model.composer
-						.drafts[model.conversations.selectedConversation] ?? ComposerDraft()).text
-				)
-			else
-			{
-				return
-			}
-			let key = model.conversations.selectedConversation
-			let revision = (model.composer.drafts[key] ?? ComposerDraft()).revision + 1
-			append(
-				ComposerReducer.reduce(
-					&model,
-					.composer(.draftEdited(
-						context,
-						conversation: key,
-						text: text,
-						revision: revision
-					))
-				),
-				to: &result
-			)
+		case .savedPromptInserted: break
 		case .bookmarkToggled(
 			let context,
 			let bookmark
@@ -175,7 +141,8 @@ extension ContextNavigationReducer
 			{
 				return
 			}
-			let followUp = model.contextNavigation.skillRefreshPending && operation.attempt == 0
+			let shouldRefreshAgain = model.contextNavigation.skillRefreshPending
+				&& operation.attempt == 0
 			model.contextNavigation.pendingSkillRefresh = nil
 			model.contextNavigation.skillRefreshPending = false
 			switch observation
@@ -189,7 +156,7 @@ extension ContextNavigationReducer
 			case .failed(let failure): model.contextNavigation.skillCatalog = nil
 				model.contextNavigation.skillError = "Skills unavailable: \(failure.message)"
 			}
-			if followUp
+			if shouldRefreshAgain
 			{
 				requestSkills(
 					SkillsRefreshOperation(
@@ -202,6 +169,39 @@ extension ContextNavigationReducer
 			}
 		default: break
 		}
+	}
+
+	static func savedPromptDraftAction(
+		context: OperationContext,
+		promptID: String,
+		model: WorkspaceModel
+	) -> WorkspaceAction?
+	{
+		guard valid(
+			context,
+			model
+		), selected(
+			context,
+			model
+		),
+			let text = ProjectProductivity.insertSavedPrompt(
+				context: model.contextNavigation.projectContext,
+				id: promptID,
+				into: (model.composer
+					.drafts[model.conversations.selectedConversation] ?? ComposerDraft()).text
+			)
+		else
+		{
+			return nil
+		}
+		let key = model.conversations.selectedConversation
+		let revision = (model.composer.drafts[key] ?? ComposerDraft()).revision + 1
+		return .composer(.draftEdited(
+			context,
+			conversation: key,
+			text: text,
+			revision: revision
+		))
 	}
 
 	private static func save(
@@ -226,7 +226,8 @@ extension ContextNavigationReducer
 		else
 		{
 			model.contextNavigation
-				.contextError = "Open a project before saving project context."; return
+				.contextError = "Open a project before saving project context."
+			return
 		}
 		model.contextNavigation.pendingContextSave = operation
 		result.effects.append(.saveProjectContext(operation))
@@ -249,7 +250,8 @@ extension ContextNavigationReducer
 		}
 		if model.contextNavigation.pendingSkillRefresh != nil
 		{
-			model.contextNavigation.skillRefreshPending = true; return
+			model.contextNavigation.skillRefreshPending = true
+			return
 		}
 		model.contextNavigation.pendingSkillRefresh = operation
 		result.effects.append(.readSkills(operation))
