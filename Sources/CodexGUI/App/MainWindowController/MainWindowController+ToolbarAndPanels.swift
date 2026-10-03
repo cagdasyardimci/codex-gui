@@ -3,7 +3,7 @@ import QuartzCore
 
 extension MainWindowController
 {
-	private enum ToolbarItem
+	enum ToolbarItem
 	{
 		static let navigationControls = NSToolbarItem.Identifier("navigationControls")
 		static let trailingControls = NSToolbarItem.Identifier("trailingControls")
