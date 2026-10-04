@@ -45,7 +45,7 @@ struct ConversationMarkdownRenderingTests
 		)
 		let inline = try paragraph(
 			in: content.attributedString,
-			at: "literal *code*"
+			at: "literal\u{00A0}*code*"
 		)
 		#expect(inline.tailIndent == 0)
 		#expect(inline.headIndent == ordinary.headIndent)
@@ -411,10 +411,13 @@ struct ConversationMarkdownRenderingTests
 				at: "code"
 			) as? String == "text")
 			let background = NSColor.controlBackgroundColor
-			#expect(foreground == .labelColor)
-			#expect(link == .linkColor)
+			#expect(foreground == ConversationAttributedStringRenderer.proseColor)
+			#expect(link == ConversationAttributedStringRenderer.linkColor)
 			appearance.performAsCurrentDrawingAppearance
 			{
+				let expected = name == .darkAqua ? NSColor.white : .labelColor
+				#expect(foreground.usingColorSpace(.deviceRGB) == expected
+					.usingColorSpace(.deviceRGB))
 				#expect(foreground.usingColorSpace(.deviceRGB) != background
 					.usingColorSpace(.deviceRGB))
 			}
@@ -425,7 +428,7 @@ struct ConversationMarkdownRenderingTests
 	{
 		let content = await prepare("- **first  \n  second**\n\nordinary  \ncontinuation\n\nnext")
 		let text = content.attributedString
-		#expect(text.string == "• first\nsecond\nordinary\ncontinuation\nnext")
+		#expect(text.string == "•\tfirst\nsecond\nordinary\ncontinuation\nnext")
 		let first = try paragraph(
 			in: text,
 			at: "first"
@@ -438,7 +441,7 @@ struct ConversationMarkdownRenderingTests
 		#expect(first.firstLineHeadIndent < first.headIndent)
 		#expect(second.firstLineHeadIndent == second.headIndent)
 		#expect(second.headIndent == first.headIndent)
-		#expect(second.paragraphSpacing == 5)
+		#expect(second.paragraphSpacing == 10)
 		#expect(try paragraph(
 			in: text,
 			at: "ordinary"
@@ -446,11 +449,11 @@ struct ConversationMarkdownRenderingTests
 		#expect(try paragraph(
 			in: text,
 			at: "continuation"
-		).paragraphSpacing == 10)
+		).paragraphSpacing == 14.5)
 		#expect(try paragraph(
 			in: text,
 			at: "next"
-		).paragraphSpacing == 10)
+		).paragraphSpacing == 14.5)
 		#expect(NSFontManager.shared.traits(of: try font(
 			in: text,
 			at: "second"
@@ -612,7 +615,21 @@ struct ConversationMarkdownRenderingTests
 			try #require(referenceView.layoutManager).ensureLayout(
 				for: try #require(referenceView.textContainer)
 			)
-			#expect(storage == nativeReference)
+			// TextKit retains this private substitution hint only on the first layout.
+			// Compare the rendered font and all public attributes after stripping the hint.
+			let actual = NSMutableAttributedString(attributedString: storage)
+			let expected = NSMutableAttributedString(attributedString: nativeReference)
+			for text in [actual, expected]
+			{
+				text.removeAttribute(
+					NSAttributedString.Key("NSOriginalFont"),
+					range: NSRange(
+						location: 0,
+						length: text.length
+					)
+				)
+			}
+			#expect(actual == expected)
 			#expect(!textView.string.contains("# User heading"))
 			#expect(textView.isSelectable && !textView.isEditable)
 			#expect(try font(

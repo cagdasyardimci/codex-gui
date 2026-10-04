@@ -53,6 +53,7 @@ enum ConversationTranscriptRow: Equatable
 	{
 		var rows: [Self] = []
 		var pending: [ConversationEntry] = []
+		var pendingChanges: [ConversationEntry] = []
 		var emittedTimings = Set<String>()
 		var timingsByTurnID: [String: ConversationTurnTiming] = [:]
 		timingsByTurnID.reserveCapacity(timings.count)
@@ -115,6 +116,21 @@ enum ConversationTranscriptRow: Equatable
 		}
 		for entry in entries
 		{
+			if let previous = pendingChanges.last,
+				previous.id.components(separatedBy: ":").first != entry.id
+				.components(separatedBy: ":").first
+			{
+				appendPendingActivityGroup()
+				rows.append(contentsOf: pendingChanges.map(Self.message))
+				pendingChanges.removeAll()
+			}
+			if entry.activity.isFileChange
+			{
+				appendPendingActivityGroup()
+				appendTiming(for: entry)
+				pendingChanges.append(entry)
+				continue
+			}
 			if let previous = pending.last,
 				previous.id.components(separatedBy: ":").first
 				!= entry.id.components(separatedBy: ":").first
@@ -169,6 +185,7 @@ enum ConversationTranscriptRow: Equatable
 			}
 		}
 		appendPendingActivityGroup()
+		rows.append(contentsOf: pendingChanges.map(Self.message))
 		// Show the clock while waiting for the first canonical item of a live turn.
 		for timing in timings where timing.status == "inProgress"
 			&& timing.startedAt != nil && !emittedTimings.contains(timing.turnID)

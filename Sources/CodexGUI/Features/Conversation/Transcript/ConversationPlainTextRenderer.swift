@@ -28,7 +28,7 @@ enum ConversationPlainTextRenderer
 				}
 				nextBoundary = boundaries.next()
 			}
-			guard !run.style.codeHeader
+			guard !run.style.codeHeader && !run.style.fileLinkIcon && !run.style.codePadding
 			else
 			{
 				continue

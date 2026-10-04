@@ -4,6 +4,25 @@ import AppKit
 @MainActor
 enum ConversationAttributedStringRenderer
 {
+	static let linkColor = NSColor(name: nil)
+	{
+		appearance in
+		appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+			? NSColor(
+				srgbRed: 87.0 / 255,
+				green: 133.0 / 255,
+				blue: 209.0 / 255,
+				alpha: 1
+			) : .linkColor
+	}
+
+	static let proseColor = NSColor(name: nil)
+	{
+		appearance in
+		appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+			? .white : .labelColor
+	}
+
 	static func render(_ runs: [ConversationTextRun]) -> NSAttributedString
 	{
 		let result = NSMutableAttributedString(string: "")
@@ -42,12 +61,30 @@ enum ConversationAttributedStringRenderer
 				budget: &richBudget
 			)
 			result.append(NSAttributedString(
-				string: run.text,
+				string: displayText(for: run),
 				attributes: attributes
 			))
 		}
 		applyCodeHighlighting(to: result)
 		return NSAttributedString(attributedString: result)
+	}
+
+	private static func displayText(for run: ConversationTextRun) -> String
+	{
+		if run.style.code
+		{
+			return run.text.replacingOccurrences(
+				of: " ",
+				with: "\u{00A0}"
+			)
+		}
+		guard run.style.listDepth > 0, !run.style.listContinuation,
+				["• ", "◦ ", "▪ ", "☑ ", "☐ "].contains(run.text)
+		else
+		{
+			return run.text
+		}
+		return String(run.text.dropLast()) + "\t"
 	}
 
 	private static func decoratedAttributes(
@@ -60,9 +97,34 @@ enum ConversationAttributedStringRenderer
 			.foregroundColor: foregroundColor(for: run.style),
 			.paragraphStyle: paragraph,
 		]
+		if run.style.listDepth > 0, ["• ", "◦ ", "▪ "].contains(run.text)
+		{
+			attributes[.font] = NSFont.systemFont(
+				ofSize: 14,
+				weight: .bold
+			)
+			if run.text == "• "
+			{
+				// Enlarge the dot without changing the list's line height or tab position.
+				attributes[.strokeWidth] = -7
+			}
+		}
+		if !run.style.code, displayText(for: run) != run.text
+		{
+			attributes[.conversationSourceText] = run.text
+		}
 		if run.style.code
 		{
 			attributes[.conversationInlineCode] = true
+			if run.style.codePadding
+			{
+				attributes[.kern] = -3
+				attributes[.conversationSourceText] = ""
+			}
+			else
+			{
+				attributes[.conversationInlineCodeSource] = run.text
+			}
 		}
 		if let blockID = run.style.codeBlockID
 		{
@@ -100,7 +162,44 @@ enum ConversationAttributedStringRenderer
 		if let link = run.style.link, let url = URL(string: link)
 		{
 			attributes[.link] = url
-			attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+			attributes[.underlineStyle] = 0
+			if run.style.fileLinkIcon
+			{
+				let attachment = NSTextAttachment()
+				let icon = DesktopIcons.image(
+					.code,
+					size: 14
+				)
+				icon.isTemplate = false
+				let color = linkColor
+				attachment.image = NSImage(
+					size: NSSize(
+						width: 18,
+						height: 14
+					),
+					flipped: false
+				)
+				{
+					bounds in
+					icon.draw(in: NSRect(
+						x: 0,
+						y: -2.5,
+						width: 16,
+						height: 19
+					))
+					color.setFill()
+					bounds.fill(using: .sourceAtop)
+					return true
+				}
+				attachment.bounds = NSRect(
+					x: 0,
+					y: -1.5,
+					width: 18,
+					height: 14
+				)
+				attributes[.attachment] = attachment
+				attributes[.conversationSourceText] = ""
+			}
 		}
 		return attributes
 	}
@@ -278,8 +377,8 @@ enum ConversationAttributedStringRenderer
 		let paragraph = NSMutableParagraphStyle()
 		let wrapsCharacters = style.codeBlock || style.monospaced
 		paragraph.lineBreakMode = wrapsCharacters ? .byCharWrapping : .byWordWrapping
-		paragraph.lineSpacing = wrapsCharacters ? 2 : 4
-		paragraph.paragraphSpacing = style.listDepth > 0 ? 5 : 10
+		paragraph.lineSpacing = wrapsCharacters ? 2 : (style.listDepth > 0 ? 3.5 : 5.5)
+		paragraph.paragraphSpacing = style.listDepth > 0 ? (style.listEnd ? 10 : 2) : 14.5
 		if style.heading > 0
 		{
 			paragraph.paragraphSpacingBefore = style.heading <= 2 ? 16 : 12
@@ -313,7 +412,12 @@ enum ConversationAttributedStringRenderer
 		paragraph.headIndent = paragraph.firstLineHeadIndent
 		if style.listDepth > 0
 		{
-			paragraph.headIndent += CGFloat(ConversationMarkdownMetrics.listIndent)
+			paragraph.firstLineHeadIndent += 9
+			paragraph.headIndent += 28
+			paragraph.tabStops = [NSTextTab(
+				textAlignment: .left,
+				location: paragraph.headIndent
+			)]
 			if style.listContinuation || style.paragraphContinuation
 			{
 				paragraph.firstLineHeadIndent = paragraph.headIndent
@@ -366,10 +470,26 @@ enum ConversationAttributedStringRenderer
 			case 2: size = 20
 			case 3: size = 18
 			case 4: size = 16
-			default: size = 15
+			default: size = 14
 			}
 		}
-		let weight: NSFont.Weight = style.bold || style.heading > 0 ? .bold : .regular
+		let weight: NSFont.Weight
+		if style.heading > 0
+		{
+			weight = .bold
+		}
+		else if style.bold
+		{
+			weight = .semibold
+		}
+		else if style.code
+		{
+			weight = .medium
+		}
+		else
+		{
+			weight = .regular
+		}
 		let base = style.code || style.codeBlock || style.monospaced
 			? NSFont.monospacedSystemFont(
 				ofSize: size,
@@ -394,9 +514,9 @@ enum ConversationAttributedStringRenderer
 		}
 		if style.link != nil
 		{
-			return .linkColor
+			return linkColor
 		}
-		return style.quoteDepth > 0 ? .secondaryLabelColor : .labelColor
+		return style.quoteDepth > 0 ? .secondaryLabelColor : proseColor
 	}
 
 	private static func tableColumnWidths(in runs: [ConversationTextRun]) -> [Int: [CGFloat]]

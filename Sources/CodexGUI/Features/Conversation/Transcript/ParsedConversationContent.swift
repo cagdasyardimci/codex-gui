@@ -28,6 +28,7 @@ struct ConversationTextStyle: Sendable
 	var bold = false
 	var italic = false
 	var code = false
+	var codePadding = false
 	var codeBlock = false
 	var codeBlockEnd = false
 	var codeBlockID: Int?
@@ -40,6 +41,8 @@ struct ConversationTextStyle: Sendable
 	var link: String?
 	var listDepth = 0
 	var listContinuation = false
+	var listEnd = false
+	var fileLinkIcon = false
 	var paragraphContinuation = false
 	var suppressParagraphSpacing = false
 	var quoteDepth = 0

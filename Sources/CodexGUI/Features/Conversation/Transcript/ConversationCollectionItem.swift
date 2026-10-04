@@ -288,6 +288,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		bodyTextView.isHorizontallyResizable = false
 		bodyTextView.isVerticallyResizable = false
 		bodyTextView.drawsBackground = false
+		bodyTextView.linkTextAttributes = [
+			.foregroundColor: ConversationAttributedStringRenderer.linkColor,
+			.underlineStyle: 0,
+		]
 		bodyTextView.textContainer?.replaceLayoutManager(ConversationMarkdownLayoutManager())
 		bodyTextView.layoutManager?.delegate = self
 		bodyTextView.textContainerInset = .zero

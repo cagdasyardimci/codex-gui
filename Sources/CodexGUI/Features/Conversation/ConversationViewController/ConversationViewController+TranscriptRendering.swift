@@ -80,6 +80,13 @@ extension ConversationViewController
 		layout.verticalGap =
 		{
 			[weak self] index in
+			if let self, self.displayedRows.indices.contains(index), index > 0,
+				case .message(let entry) = self.displayedRows[index],
+				case .fileChanges = entry.activity,
+				case .message(let previous) = self.displayedRows[index - 1], previous.kind == .agent
+			{
+				return 8
+			}
 			guard let self, self.displayedRows.indices.contains(index), index > 0,
 					case .activity(let current) = self.displayedRows[index],
 					case .activity(let previous) = self.displayedRows[index - 1],
@@ -110,6 +117,10 @@ extension ConversationViewController
 		collectionView.register(
 			ConversationTurnStatusCollectionItem.self,
 			forItemWithIdentifier: NSUserInterfaceItemIdentifier("turnStatusItem")
+		)
+		collectionView.register(
+			ConversationFileChangeCollectionItem.self,
+			forItemWithIdentifier: NSUserInterfaceItemIdentifier("fileChangeItem")
 		)
 		collectionView.dataSource = self
 		collectionView.delegate = self
@@ -164,7 +175,15 @@ extension ConversationViewController
 		{
 		case .activity: identifier = "activityItem"
 		case .turnStatus: identifier = "turnStatusItem"
-		case .message: identifier = "conversationItem"
+		case .message(let entry):
+			if case .fileChanges = entry.activity
+			{
+				identifier = "fileChangeItem"
+			}
+			else
+			{
+				identifier = "conversationItem"
+			}
 		}
 		let item = collectionView.makeItem(
 			withIdentifier: NSUserInterfaceItemIdentifier(identifier),
@@ -183,6 +202,18 @@ extension ConversationViewController
 	)
 	{
 		let context = renderedContext
+		if case .message(let entry) = row,
+			case .fileChanges(
+			let changes,
+			let status
+			) = entry.activity
+		{
+			(item as? ConversationFileChangeCollectionItem)?.configure(
+				changes,
+				status: status
+			)
+			return
+		}
 		switch row
 		{
 		case .activity(let activity):
@@ -282,7 +313,14 @@ extension ConversationViewController
 			)
 		case .turnStatus:
 			return ConversationTurnStatusCollectionItem.itemSize(width: width)
-		case .message: break
+		case .message(let entry):
+			if case .fileChanges = entry.activity
+			{
+				return NSSize(
+					width: width,
+					height: 66
+				)
+			}
 		}
 		guard case .message(let entry) = row
 		else
@@ -726,8 +764,14 @@ extension ConversationViewController
 	{
 		switch (previous, next)
 		{
-		case (.message, .message), (.activity, .activity), (.turnStatus, .turnStatus): true
-		default: false
+		case (.message(let lhs), .message(let rhs)):
+			if case .fileChanges = lhs.activity
+			{
+				return rhs.activity.isFileChange
+			}
+			return !rhs.activity.isFileChange
+		case (.activity, .activity), (.turnStatus, .turnStatus): return true
+		default: return false
 		}
 	}
 

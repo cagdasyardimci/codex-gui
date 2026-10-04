@@ -49,7 +49,7 @@ struct ConversationContentTests
 		)
 		let text = content.attributedString.string
 
-		#expect(text.contains("Heading\n• first\n2. second site"))
+		#expect(text.contains("Heading\n•\tfirst\n2. second site"))
 		#expect(!text.contains("```"))
 		#expect(content.codeBlocks == ["let value = \"  exact  \"\n"])
 		let heading = (text as NSString).range(of: "Heading")

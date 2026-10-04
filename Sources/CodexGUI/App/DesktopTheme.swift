@@ -166,16 +166,19 @@ final class DesktopSurface: NSView
 	private let color: NSColor
 	private let cornerRadius: CGFloat
 	private let bordered: Bool
+	private let borderWidth: CGFloat
 
 	init(
 		_ color: NSColor,
 		cornerRadius: CGFloat = 0,
-		bordered: Bool = false
+		bordered: Bool = false,
+		borderWidth: CGFloat = 1
 	)
 	{
 		self.color = color
 		self.cornerRadius = cornerRadius
 		self.bordered = bordered
+		self.borderWidth = borderWidth
 		super.init(frame: .zero)
 	}
 
@@ -198,7 +201,7 @@ final class DesktopSurface: NSView
 	override func draw(_ dirtyRect: NSRect)
 	{
 		color.setFill()
-		let inset: CGFloat = bordered ? 0.5 : 0
+		let inset: CGFloat = bordered ? borderWidth / 2 : 0
 		let path = NSBezierPath(
 			roundedRect: bounds.insetBy(
 				dx: inset,
@@ -211,7 +214,7 @@ final class DesktopSurface: NSView
 		if bordered
 		{
 			DesktopTheme.border.setStroke()
-			path.lineWidth = 1
+			path.lineWidth = borderWidth
 			path.stroke()
 		}
 	}

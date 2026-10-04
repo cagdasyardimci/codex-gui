@@ -807,7 +807,11 @@ enum ConversationContentReducer
 				id: id,
 				kind: .tool,
 				title: "File changes · \(item.status ?? "unconfirmed")",
-				body: names
+				body: names,
+				activity: .fileChanges(
+					item.changes,
+					status: item.status ?? "unconfirmed"
+				)
 			)
 		default:
 			return ConversationEntry(

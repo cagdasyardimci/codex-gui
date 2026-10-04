@@ -103,7 +103,7 @@ struct ConversationMarkdownParserTests
 	@Test func nestedEmphasisStrikethroughAndInlineCodeRemainSeparate()
 	{
 		let parsed = parse("***both*** ~~deleted~~ `literal *markers*` ordinary")
-		#expect(text(parsed) == "both deleted literal *markers* ordinary")
+		#expect(text(parsed) == "both deleted \u{00A0}literal *markers*\u{00A0} ordinary")
 		#expect(parsed.runs.contains
 		{
 			$0.text == "both" && $0.style.bold && $0.style.italic

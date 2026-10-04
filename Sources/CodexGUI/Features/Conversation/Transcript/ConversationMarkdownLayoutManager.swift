@@ -3,6 +3,7 @@ import AppKit
 extension NSAttributedString.Key
 {
 	static let conversationSourceText = NSAttributedString.Key("conversationSourceText")
+	static let conversationInlineCodeSource = NSAttributedString.Key("conversationInlineCodeSource")
 	static let conversationInlineCode = NSAttributedString.Key("conversationInlineCode")
 	static let conversationCodeBlockID = NSAttributedString.Key("conversationCodeBlockID")
 	static let conversationCodeHeader = NSAttributedString.Key("conversationCodeHeader")
@@ -488,18 +489,26 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 			)
 			{
 				rect, _ in
-				let background = rect.offsetBy(
-					dx: origin.x,
-					dy: origin.y
-				).insetBy(
-					dx: -3,
-					dy: 0
+				let font = storage.attribute(
+					.font,
+					at: range.location,
+					effectiveRange: nil
+				) as? NSFont
+				let height = min(
+					rect.height,
+					(font?.pointSize ?? 13) + 4
 				)
-				NSColor.controlBackgroundColor.setFill()
+				let background = NSRect(
+					x: origin.x + rect.minX,
+					y: origin.y + rect.midY - height / 2,
+					width: rect.width,
+					height: height
+				)
+				NSColor.labelColor.withAlphaComponent(0.09).setFill()
 				NSBezierPath(
 					roundedRect: background,
-					xRadius: 4,
-					yRadius: 4
+					xRadius: 6,
+					yRadius: 6
 				).fill()
 			}
 		}

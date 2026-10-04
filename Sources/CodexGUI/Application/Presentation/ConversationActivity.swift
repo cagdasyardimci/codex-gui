@@ -15,6 +15,10 @@ enum ConversationActivity: Equatable
 {
 	case command(ConversationCommand)
 	case image(path: String)
+	case fileChanges(
+		[FileChange],
+		status: String
+	)
 }
 
 struct ConversationTurnTiming: Equatable
@@ -54,5 +58,17 @@ struct ConversationTurnTiming: Equatable
 		completedAt = turn.completedAt ?? previous?.completedAt
 			?? (turn.status != "inProgress" && startedAt != nil ? observedAt : nil)
 		durationMs = turn.durationMs ?? previous?.durationMs
+	}
+}
+
+extension Optional where Wrapped == ConversationActivity
+{
+	var isFileChange: Bool
+	{
+		if case .fileChanges = self
+		{
+			return true
+		}
+		return false
 	}
 }

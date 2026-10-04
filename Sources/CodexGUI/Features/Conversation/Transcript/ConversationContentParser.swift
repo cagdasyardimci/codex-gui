@@ -272,6 +272,18 @@ enum ConversationContentParser
 					)
 				}
 			}
+			// Leave the final item separated from the following prose block.
+			for index in paragraphStart ..< runs.count
+				where runs[index].style.listDepth == itemStyle.listDepth
+			{
+				var finalStyle = runs[index].style
+				finalStyle.listEnd = true
+				runs[index] = ConversationTextRun(
+					text: runs[index].text,
+					style: finalStyle
+				)
+			}
+
 		}
 
 		func bulletMarker(depth: Int) -> String
@@ -556,9 +568,19 @@ enum ConversationContentParser
 				case is LineBreak: appendHardBreak(style: style)
 				case let code as InlineCode:
 					inlineStyle.code = true
+					var paddingStyle = inlineStyle
+					paddingStyle.codePadding = true
+					append(
+						"\u{00A0}",
+						style: paddingStyle
+					)
 					append(
 						code.code,
 						style: inlineStyle
+					)
+					append(
+						"\u{00A0}",
+						style: paddingStyle
 					)
 				case is Strong:
 					inlineStyle.bold = true
@@ -580,6 +602,16 @@ enum ConversationContentParser
 					)
 				case let link as Link:
 					inlineStyle.link = link.destination
+					if let destination = link.destination,
+						destination.hasPrefix("/") || destination.hasPrefix("file://")
+					{
+						var iconStyle = inlineStyle
+						iconStyle.fileLinkIcon = true
+						append(
+							"\u{FFFC}",
+							style: iconStyle
+						)
+					}
 					appendInlines(
 						link.children,
 						style: inlineStyle

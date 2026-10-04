@@ -1,10 +1,40 @@
 import AppKit
 
+/// Matches the reference's grayscale antialiasing while retaining native font metrics.
+@MainActor
+enum ConversationTextDrawing
+{
+	static func withAntialiasing(_ draw: () -> Void)
+	{
+		guard let context = NSGraphicsContext.current?.cgContext
+		else
+		{
+			draw()
+			return
+		}
+		context.saveGState()
+		defer
+		{
+			context.restoreGState()
+		}
+		context.setShouldSmoothFonts(false)
+		draw()
+	}
+}
+
 /// Native rich content keeps its original source available to selection copy and accessible help.
 @MainActor
 final class ConversationMarkdownTextView: NSTextView
 {
 	private var updatingFrameSize = false
+
+	override func draw(_ dirtyRect: NSRect)
+	{
+		ConversationTextDrawing.withAntialiasing
+		{
+			super.draw(dirtyRect)
+		}
+	}
 
 	override func setFrameSize(_ newSize: NSSize)
 	{
@@ -113,7 +143,7 @@ final class ConversationMarkdownTextView: NSTextView
 		)
 		{
 			value, _, _ in
-			if let source = value as? String
+			if let source = value as? String, !source.isEmpty
 			{
 				sources.append(source)
 			}
@@ -146,7 +176,29 @@ final class ConversationMarkdownTextView: NSTextView
 			{
 				return
 			}
-			if let source = attributes[.conversationSourceText] as? String
+			if let source = attributes[.conversationInlineCodeSource] as? String
+			{
+				var sourceRange = NSRange()
+				_ = storage.attribute(
+					.conversationInlineCodeSource,
+					at: runRange.location,
+					longestEffectiveRange: &sourceRange,
+					in: NSRange(
+						location: 0,
+						length: storage.length
+					)
+				)
+				let original = source as NSString
+				let offset = runRange.location - sourceRange.location
+				if offset + runRange.length <= original.length
+				{
+					result += original.substring(with: NSRange(
+						location: offset,
+						length: runRange.length
+					))
+				}
+			}
+			else if let source = attributes[.conversationSourceText] as? String
 			{
 				result += source
 			}
