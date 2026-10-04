@@ -4,16 +4,27 @@ import AppKit
 @MainActor
 final class TurnNavigationRail: NSView
 {
+	private struct TurnLocation
+	{
+		let summaryIndex: Int
+		var markIndex: Int
+	}
+
 	private static let markHeight: CGFloat = 14
 	var onJump: ((ConversationTurnSummary) -> Void)?
 	var onBookmark: ((ConversationTurnSummary) -> Void)?
 	var isBookmarked: ((ConversationTurnSummary) -> Bool)?
+	// Reports the rail's writes independently of AppKit's inherited dirty flags.
+	var onMarkAppearanceUpdate: ((Int) -> Void)?
 	private(set) var summaries: [ConversationTurnSummary] = []
 	private(set) var activeTurnID: String?
 	private let scrollView = NSScrollView()
 	private let document = NSView()
 	private var marks: [TurnNavigationMark] = []
+	private var entryIndices: [String: Int] = [:]
+	private var turnLocations: [String: TurnLocation] = [:]
 	private var hoveredEntryID: String?
+	private var highlightedIndex: Int?
 	private(set) var previewPanel: NSPanel?
 	private var previewTurnID: String?
 	private var dismissal: DispatchWorkItem?
@@ -46,6 +57,7 @@ final class TurnNavigationRail: NSView
 		}
 		let identitiesChanged = summaries.map(\.entryID) != next.map(\.entryID)
 		summaries = next
+		indexSummaries()
 		if identitiesChanged
 		{
 			hoveredEntryID = nil
@@ -91,19 +103,47 @@ final class TurnNavigationRail: NSView
 				return mark
 			}
 		}
-		else if let previewTurnID, let mark = marks.first(where:
-			{
-				mark in next.contains
-				{
-					$0.turnID == previewTurnID && $0.entryID == mark.entryID
-				}
-			})
+		else if let previewTurnID, let location = turnLocations[previewTurnID]
 		{
-			showPreview(for: mark)
+			showPreview(for: marks[location.markIndex])
 		}
 		isHidden = next.isEmpty
-		updateActiveTurn(activeTurnID)
+		updateMarkAppearance(force: identitiesChanged)
 		needsLayout = true
+	}
+
+	private func indexSummaries()
+	{
+		var entryIndices: [String: Int] = [:]
+		entryIndices.reserveCapacity(summaries.count)
+		for (index, summary) in summaries.enumerated() where entryIndices[summary.entryID] == nil
+		{
+			entryIndices[summary.entryID] = index
+		}
+
+		var turnLocations: [String: TurnLocation] = [:]
+		turnLocations.reserveCapacity(summaries.count)
+		for (index, summary) in summaries.enumerated()
+		{
+			let markIndex = entryIndices[summary.entryID] ?? index
+			if let location = turnLocations[summary.turnID]
+			{
+				// A duplicate entry can put the first matching preview mark before this turn.
+				if markIndex < location.markIndex
+				{
+					turnLocations[summary.turnID]?.markIndex = markIndex
+				}
+			}
+			else
+			{
+				turnLocations[summary.turnID] = TurnLocation(
+					summaryIndex: index,
+					markIndex: markIndex
+				)
+			}
+		}
+		self.entryIndices = entryIndices
+		self.turnLocations = turnLocations
 	}
 
 	override func layout()
@@ -142,47 +182,102 @@ final class TurnNavigationRail: NSView
 		updateMarkAppearance()
 	}
 
-	private func updateMarkAppearance()
+	private func updateMarkAppearance(force: Bool = false)
 	{
-		let highlightedIndex = summaries.firstIndex
+		let nextHighlightedIndex: Int?
+		if let hoveredEntryID
 		{
-			if let hoveredEntryID
-			{
-				return $0.entryID == hoveredEntryID
-			}
-			return $0.turnID == activeTurnID
+			nextHighlightedIndex = entryIndices[hoveredEntryID]
 		}
-		for (index, mark) in marks.enumerated()
+		else
 		{
-			mark.isEmphasized = index == highlightedIndex
-			let distance = highlightedIndex.map
+			nextHighlightedIndex = activeTurnID.flatMap
 			{
-				abs(index - $0)
+				turnLocations[$0]?.summaryIndex
 			}
-			mark.lineWidth = distance.map
-			{
-				// Four tapering marks on either side make a nine-mark triangle.
-				max(
-					8,
-					26 - CGFloat($0) * 4.5
-				)
-			} ?? 8
-			mark.needsDisplay = true
 		}
-	}
-
-	func refreshBookmark()
-	{
-		guard let summary = summaries.first(where:
-			{
-				$0.turnID == previewTurnID
-			}),
-			let preview = previewPanel?.contentView as? TurnSummaryPreview
+		guard force || nextHighlightedIndex != highlightedIndex
 		else
 		{
 			return
 		}
-		preview.setBookmarked(isBookmarked?(summary) == true)
+		let previousHighlightedIndex = highlightedIndex
+		highlightedIndex = nextHighlightedIndex
+		if force
+		{
+			for index in marks.indices
+			{
+				updateMarkAppearance(
+					at: index,
+					force: true
+				)
+			}
+			return
+		}
+		let previousRange = previousHighlightedIndex.map(appearanceRange)
+		let nextRange = nextHighlightedIndex.map(appearanceRange)
+		if let previousRange
+		{
+			for index in previousRange
+			{
+				updateMarkAppearance(at: index)
+			}
+		}
+		if let nextRange
+		{
+			for index in nextRange where previousRange?.contains(index) != true
+			{
+				updateMarkAppearance(at: index)
+			}
+		}
+	}
+
+	private func appearanceRange(_ index: Int) -> Range<Int>
+	{
+		// Four tapering marks on either side make a nine-mark triangle.
+		max(
+			0,
+			index - 4
+		) ..< min(
+			marks.count,
+			index + 5
+		)
+	}
+
+	private func updateMarkAppearance(
+		at index: Int,
+		force: Bool = false
+	)
+	{
+		let mark = marks[index]
+		let isEmphasized = index == highlightedIndex
+		let lineWidth = highlightedIndex.map
+		{
+			max(
+				8,
+				26 - CGFloat(abs(index - $0)) * 4.5
+			)
+		} ?? 8
+		guard force || mark.isEmphasized != isEmphasized || mark.lineWidth != lineWidth
+		else
+		{
+			return
+		}
+		mark.isEmphasized = isEmphasized
+		mark.lineWidth = lineWidth
+		mark.needsDisplay = true
+		onMarkAppearanceUpdate?(index)
+	}
+
+	func refreshBookmark()
+	{
+		guard let previewTurnID, let location = turnLocations[previewTurnID],
+				let preview = previewPanel?.contentView as? TurnSummaryPreview
+		else
+		{
+			return
+		}
+		preview.setBookmarked(isBookmarked?(summaries[location.summaryIndex]) == true)
 	}
 
 	func dismissPreview()
@@ -209,29 +304,24 @@ final class TurnNavigationRail: NSView
 
 	@objc private func jump(_ mark: TurnNavigationMark)
 	{
-		guard let summary = summaries.first(where:
-			{
-				$0.entryID == mark.entryID
-			})
+		guard let index = entryIndices[mark.entryID]
 		else
 		{
 			return
 		}
 		dismissPreview()
-		onJump?(summary)
+		onJump?(summaries[index])
 	}
 
 	private func showPreview(for mark: TurnNavigationMark)
 	{
 		guard window != nil,
-				let summary = summaries.first(where:
-				{
-					$0.entryID == mark.entryID
-				})
+				let index = entryIndices[mark.entryID]
 		else
 		{
 			return
 		}
+		let summary = summaries[index]
 
 		if previewTurnID == summary.turnID,
 			let preview = previewPanel?.contentView as? TurnSummaryPreview
@@ -344,7 +434,7 @@ final class TurnNavigationRail: NSView
 }
 
 @MainActor
-private final class TurnNavigationMark: NSButton
+final class TurnNavigationMark: NSButton
 {
 	var entryID = ""
 	var isEmphasized = false
