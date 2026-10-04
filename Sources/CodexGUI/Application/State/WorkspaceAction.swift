@@ -344,6 +344,11 @@ enum ContextNavigationAction
 		query: String
 	)
 	case moreSearchHistoryRequested(OperationContext)
+	case searchDismissed(OperationContext)
+	case messageSearchFinished(
+		MessageSearchOperation,
+		OperationResult<MessageSearchResults>
+	)
 	case jumpRequested(ConversationJumpOperation)
 	case jumpAcknowledged(requestID: UUID)
 	case skillsRefreshRequested(SkillsRefreshOperation)

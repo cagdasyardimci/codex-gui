@@ -370,6 +370,19 @@ extension WorkspaceEffectRunner
 					continue
 				}
 				cancel(context)
+			case .cancelMessageSearch(let operation):
+				guard operation.context.workspace.sessionID == workspace.sessionID
+				else
+				{
+					continue
+				}
+				cancel(
+					operation.context,
+					purpose: .messageSearch(
+						operation.historyRevision,
+						operation.query
+					)
+				)
 			case .cancel(let context):
 				guard context.workspace == workspace
 				else

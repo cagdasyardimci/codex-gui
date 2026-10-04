@@ -24,13 +24,54 @@ extension ContextNavigationReducer
 			}
 			model.contextNavigation.pendingSearch = nil
 			model.contextNavigation.searchError = nil
-			model.contextNavigation.messageSearch = MessageSearch.search(
+			_ = updateSearchIndex(model: &model)
+			scheduleMessageSearch(
+				context,
 				query: query,
-				threads: searchableThreads(model),
-				totalThreadCount: model
-					.conversations.threads
-					.count
+				model: &model,
+				result: &result
 			)
+		case .searchDismissed(let context):
+			guard valid(
+				context,
+				model
+			)
+			else
+			{
+				return
+			}
+			cancelMessageSearch(
+				model: &model,
+				result: &result
+			)
+			model.contextNavigation.messageSearch = nil
+			model.contextNavigation.messageSearchContext = nil
+			model.contextNavigation.pendingSearch = nil
+			model.contextNavigation.searchError = nil
+		case .messageSearchFinished(
+			let operation,
+			let observation
+		):
+			guard valid(
+				operation.context,
+				model
+			),
+				model.contextNavigation.pendingMessageSearch == operation,
+				model.contextNavigation.searchIndexRevision == operation.historyRevision,
+				model.contextNavigation.messageSearch?.query == operation.query
+			else
+			{
+				return
+			}
+			model.contextNavigation.pendingMessageSearch = nil
+			switch observation
+			{
+			case .succeeded(let results):
+				model.contextNavigation.messageSearch = results
+			case .failed(let failure):
+				model.contextNavigation.searchError = "Could not search messages: " + failure
+					.message
+			}
 		case .moreSearchHistoryRequested(let context):
 			requestMoreSearchHistory(
 				context,
@@ -445,19 +486,102 @@ extension ContextNavigationReducer
 		model.contextNavigation.pendingJump?.pendingRead = nextRead
 	}
 
-	static func refreshIndex(model: inout WorkspaceModel)
+	private static func updateSearchIndex(model: inout WorkspaceModel) -> Bool
 	{
+		let source = MessageSearchIndexSource(model)
+		guard source != model.contextNavigation.searchIndexSource
+		else
+		{
+			return false
+		}
 		let threads = searchableThreads(model)
+		model.contextNavigation.searchIndexSource = source
+		model.contextNavigation.searchableThreads = threads
+		model.contextNavigation.searchIndexRevision += 1
 		model.contextNavigation.navigationTargets = ProjectProductivity
 			.navigationTargets(threads: threads)
-		if let query = model.contextNavigation.messageSearch?.query
-		{
-			model.contextNavigation.messageSearch = MessageSearch.search(
-				query: query,
-				threads: threads,
-				totalThreadCount: model.conversations.threads.count
-			)
-		}
+		return true
 	}
 
+	static func refreshIndex(
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		guard updateSearchIndex(model: &model),
+				let query = model.contextNavigation.messageSearch?.query
+		else
+		{
+			return
+		}
+		if query.isEmpty
+		{
+			model.contextNavigation.messageSearch = MessageSearch.pendingResults(
+				query: query,
+				threads: model.contextNavigation.searchableThreads,
+				totalThreadCount: model.conversations.threads.count
+			)
+			return
+		}
+		guard let context = model.contextNavigation.messageSearchContext
+		else
+		{
+			return
+		}
+		scheduleMessageSearch(
+			context,
+			query: query,
+			model: &model,
+			result: &result
+		)
+	}
+
+	static func cancelMessageSearch(
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		if let operation = model.contextNavigation.pendingMessageSearch
+		{
+			result.effects.append(.cancelMessageSearch(operation))
+		}
+		model.contextNavigation.pendingMessageSearch = nil
+	}
+
+	static func scheduleMessageSearch(
+		_ context: OperationContext,
+		query: String,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		cancelMessageSearch(
+			model: &model,
+			result: &result
+		)
+		let threads = model.contextNavigation.searchableThreads
+		let pending = MessageSearch.pendingResults(
+			query: query,
+			threads: threads,
+			totalThreadCount: model.conversations.threads.count
+		)
+		model.contextNavigation.messageSearch = pending
+		model.contextNavigation.messageSearchContext = pending.query.isEmpty ? nil : context
+		guard !pending.query.isEmpty, !threads.isEmpty
+		else
+		{
+			return
+		}
+		let operation = MessageSearchOperation(
+			context: context,
+			query: pending.query,
+			historyRevision: model.contextNavigation.searchIndexRevision
+		)
+		model.contextNavigation.pendingMessageSearch = operation
+		result.effects.append(.searchMessages(
+			operation,
+			threads: threads,
+			totalThreadCount: model.conversations.threads.count
+		))
+	}
 }

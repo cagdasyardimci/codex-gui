@@ -83,6 +83,7 @@ struct WorkspaceSelectors
 	var searchLoading: Bool
 	{
 		model.contextNavigation.pendingSearch != nil
+			|| model.contextNavigation.pendingMessageSearch != nil
 	}
 	var searchError: String?
 	{

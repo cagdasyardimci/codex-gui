@@ -350,6 +350,11 @@ struct ContextNavigationModel
 	var pendingSkillRefresh: SkillsRefreshOperation?
 	var skillRefreshPending = false
 	var messageSearch: MessageSearchResults?
+	var messageSearchContext: OperationContext?
+	var pendingMessageSearch: MessageSearchOperation?
+	var searchIndexSource: MessageSearchIndexSource?
+	var searchableThreads: [SearchableThread] = []
+	var searchIndexRevision = 0
 	var navigationTargets: [ConversationJumpTarget] = []
 	var pendingSearch: NavigationSearchOperation?
 	var searchError: String?

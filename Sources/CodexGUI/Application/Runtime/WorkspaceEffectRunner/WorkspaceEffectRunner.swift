@@ -34,6 +34,10 @@ final class WorkspaceEffectRunner
 			String
 		)
 		case contextLoad(Int), contextSave(Int), skills(Int)
+		case messageSearch(
+			Int,
+			String
+		)
 		case list, management, selectionPersistence
 		case composerCommand
 		case response(String)
@@ -312,6 +316,15 @@ final class WorkspaceEffectRunner
 				.contextSave(operation.revision)
 			)
 		case .readSkills(let operation): return (operation.context, .skills(operation.attempt))
+		case .searchMessages(
+			let operation,
+			_,
+			_
+		):
+			return (operation.context, .messageSearch(
+				operation.historyRevision,
+				operation.query
+			))
 		case .readModels(let context): return (context, .models)
 		case .beginSignIn(let context): return (context, .signIn)
 		case .persistPreference(let write): return (write.context, .preference)
@@ -403,7 +416,7 @@ final class WorkspaceEffectRunner
 		}
 		else
 		{
-			guard accepted.insert(key).inserted
+			guard acceptEffectKey(key)
 			else
 			{
 				return
@@ -505,6 +518,48 @@ final class WorkspaceEffectRunner
 		)
 	}
 
+	/// History refreshes share a captured search request. Its latest revision also
+	/// rejects older replay without retaining every completed history revision.
+	private func acceptEffectKey(_ key: EffectKey) -> Bool
+	{
+		guard case .messageSearch(
+			let revision,
+			_
+		) = key.purpose
+		else
+		{
+			return accepted.insert(key).inserted
+		}
+		var superseded: [EffectKey] = []
+		for previous in accepted where previous.request == key.request
+		{
+			guard case .messageSearch(
+				let previousRevision,
+				_
+			) = previous.purpose
+			else
+			{
+				continue
+			}
+			guard previousRevision <= revision
+			else
+			{
+				return false
+			}
+			if previousRevision < revision
+			{
+				superseded.append(previous)
+			}
+		}
+		guard accepted.insert(key).inserted
+		else
+		{
+			return false
+		}
+		accepted.subtract(superseded)
+		return true
+	}
+
 	private func managementContext(_ operation: ThreadManagementOperation) -> OperationContext
 	{
 		switch operation
@@ -552,12 +607,15 @@ final class WorkspaceEffectRunner
 		}
 	}
 
-	func cancel(_ context: OperationContext)
+	func cancel(
+		_ context: OperationContext,
+		purpose: Purpose? = nil
+	)
 	{
 		let request = RequestKey(context)
 		let reservedKeys = reservedComposerCommands.keys.filter
 		{
-			$0.request == request
+			$0.request == request && (purpose == nil || $0.purpose == purpose)
 		}
 		for key in reservedKeys
 		{
@@ -585,7 +643,7 @@ final class WorkspaceEffectRunner
 		}
 		let keys = tasks.keys.filter
 		{
-			$0.request == request
+			$0.request == request && (purpose == nil || $0.purpose == purpose)
 		}
 		for key in keys
 		{

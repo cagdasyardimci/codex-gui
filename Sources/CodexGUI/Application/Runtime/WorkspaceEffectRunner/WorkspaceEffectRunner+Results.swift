@@ -184,6 +184,15 @@ extension WorkspaceEffectRunner
 				operation,
 				.failed(failure)
 			))
+		case .searchMessages(
+			let operation,
+			_,
+			_
+		):
+			return .contextNavigation(.messageSearchFinished(
+				operation,
+				.failed(failure)
+			))
 		case .readUsage(let operation): return .usage(.limitsReceived(
 				operation,
 				.failed(failure)

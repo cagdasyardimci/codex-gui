@@ -269,6 +269,20 @@ extension WorkspaceEffectRunner
 				operation,
 				.succeeded(())
 			))
+		case .searchMessages(
+			let operation,
+			let threads,
+			let totalThreadCount
+		):
+			let results = try await searchMessagesInBackground(
+				operation,
+				threads: threads,
+				totalThreadCount: totalThreadCount
+			)
+			return .contextNavigation(.messageSearchFinished(
+				operation,
+				.succeeded(results)
+			))
 		case .readSkills(let operation):
 			guard (0 ... 1).contains(operation.attempt)
 			else
@@ -446,6 +460,38 @@ extension WorkspaceEffectRunner
 			))
 		default:
 			preconditionFailure("Subscription and cancellation effects are synchronous.")
+		}
+	}
+
+	private func searchMessagesInBackground(
+		_ operation: MessageSearchOperation,
+		threads: [SearchableThread],
+		totalThreadCount: Int
+	) async throws -> MessageSearchResults
+	{
+		let searchTask = Task.detached(priority: .userInitiated)
+		{
+			try Task.checkCancellation()
+			let results = MessageSearch.search(
+				query: operation.query,
+				threads: threads,
+				totalThreadCount: totalThreadCount,
+				isCancelled:
+				{
+					Task.isCancelled
+				}
+			)
+			try Task.checkCancellation()
+			return results
+		}
+
+		return try await withTaskCancellationHandler
+		{
+			try await searchTask.value
+		}
+		onCancel:
+		{
+			searchTask.cancel()
 		}
 	}
 

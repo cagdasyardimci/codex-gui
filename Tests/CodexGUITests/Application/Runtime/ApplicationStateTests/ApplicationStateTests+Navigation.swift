@@ -819,12 +819,17 @@ extension ApplicationStateTests
 		state.inputs.searchMessages("needle")
 		#expect(state.currentSnapshot.messageSearch?.scope.loadedThreadCount == 1)
 		#expect(state.currentSnapshot.messageSearch?.scope.totalThreadCount == 2)
+		try #require(await waitUntil
+		{
+			!state.currentSnapshot.searchLoading
+		})
 		#expect(state.currentSnapshot.messageSearch?.hits.count == 1)
 		state.inputs.loadMoreSearchHistory()
 		#expect(
 			await waitUntil
 			{
 				state.currentSnapshot.messageSearch?.scope.loadedThreadCount == 2
+					&& !state.currentSnapshot.searchLoading
 			}
 		)
 		#expect(state.currentSnapshot.messageSearch?.hits.count == 2)
@@ -988,7 +993,7 @@ extension ApplicationStateTests
 			service.pendingEarlierRead = nil
 			try #require(await waitUntil
 			{
-				state.currentSnapshot.reviewTurns.count == 2
+				state.currentSnapshot.reviewTurns.count == 2 && !state.currentSnapshot.searchLoading
 			})
 			#expect(state.currentSnapshot.reviewTurns.map(\.turnID) == ["older-turn", "latest"])
 			#expect(service.earlierReadCursors == ["older"])

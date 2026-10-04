@@ -62,6 +62,12 @@ enum WorkspaceEffect
 	case loadProjectContext(ContextLoadOperation)
 	case saveProjectContext(ContextSaveOperation)
 	case readSkills(SkillsRefreshOperation)
+	case searchMessages(
+		MessageSearchOperation,
+		threads: [SearchableThread],
+		totalThreadCount: Int
+	)
+	case cancelMessageSearch(MessageSearchOperation)
 	case readModels(OperationContext)
 	case beginSignIn(OperationContext)
 	case persistPreference(PreferenceWrite)

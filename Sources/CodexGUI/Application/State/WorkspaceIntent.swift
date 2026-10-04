@@ -59,6 +59,7 @@ enum WorkspaceIntent
 	case jumpTarget(ConversationJumpTarget)
 	case jumpHit(MessageSearchHit)
 	case search(String)
+	case dismissSearch
 	case loadMoreSearch
 	case acknowledgeJump
 	case loadEarlierTurns
@@ -299,6 +300,7 @@ final class WorkspaceIntentTarget
 		case .jumpTarget(let target): inputs.jumpToNavigationTarget(target)
 		case .jumpHit(let hit): inputs.jumpToSearchHit(hit)
 		case .search(let query): inputs.searchMessages(query)
+		case .dismissSearch: inputs.dismissMessageSearch()
 		case .loadMoreSearch: inputs.loadMoreSearchHistory()
 		case .acknowledgeJump: inputs.acknowledgeJump()
 		case .loadEarlierTurns: inputs.loadEarlierTurns()

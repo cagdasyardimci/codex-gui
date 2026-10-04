@@ -389,6 +389,13 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	func dismissMessageSearch()
+	{
+		workspaceStore.dispatch(.contextNavigation(.searchDismissed(
+			workspaceStore.operationContext()
+		)))
+	}
+
 	func jumpToSearchHit(_ hit: MessageSearchHit)
 	{
 		requestJump(

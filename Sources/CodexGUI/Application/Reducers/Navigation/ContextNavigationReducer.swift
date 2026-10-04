@@ -34,6 +34,10 @@ enum ContextNavigationReducer
 			{
 				return result
 			}
+			cancelMessageSearch(
+				model: &model,
+				result: &result
+			)
 			model.contextNavigation = ContextNavigationModel()
 		case .contextNavigation(let intent):
 			reduceIntent(
@@ -65,7 +69,8 @@ enum ContextNavigationReducer
 				model: &model,
 				result: &result
 			)
-		case .searchRequested, .moreSearchHistoryRequested, .jumpRequested, .jumpAcknowledged:
+		case .searchRequested, .searchDismissed, .messageSearchFinished,
+				.moreSearchHistoryRequested, .jumpRequested, .jumpAcknowledged:
 			reduceHistoryIntent(
 				action,
 				model: &model,
@@ -92,6 +97,24 @@ enum ContextNavigationReducer
 		switch event
 		{
 		case .connectionBegan, .connectionDisconnected:
+			cancelMessageSearch(
+				model: &model,
+				result: &result
+			)
+			if let query = model.contextNavigation.messageSearch?.query,
+				let previousContext = model.contextNavigation.messageSearchContext
+			{
+				scheduleMessageSearch(
+					OperationContext(
+						workspace: model.identity,
+						generation: model.connection.generation,
+						requestID: previousContext.requestID
+					),
+					query: query,
+					model: &model,
+					result: &result
+				)
+			}
 			if let load = model.contextNavigation.pendingContextLoad,
 				load.revision == model.contextNavigation.contextRevision
 			{
@@ -156,13 +179,19 @@ enum ContextNavigationReducer
 				model: &model,
 				result: &result
 			)
-			refreshIndex(model: &model)
+			refreshIndex(
+				model: &model,
+				result: &result
+			)
 			resolveJump(
 				model: &model,
 				result: &result
 			)
 		case .historyAccepted, .conversationContentChanged, .backendObserved:
-			refreshIndex(model: &model)
+			refreshIndex(
+				model: &model,
+				result: &result
+			)
 			resolveJump(
 				model: &model,
 				result: &result

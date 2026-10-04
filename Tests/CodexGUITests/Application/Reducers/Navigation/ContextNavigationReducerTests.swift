@@ -495,6 +495,380 @@ struct ContextNavigationReducerTests
 			"The referenced message is in older history. Load more messages and try again.")
 	}
 
+	private func searchableFixture() throws -> WorkspaceModel
+	{
+		var model = fixture()
+		let item = try #require(CodexItem(json: [
+			"id": "answer",
+			"type": "agentMessage",
+			"text": "needle first"
+		]))
+		model.conversations.content[.thread("thread")]?.loadedTurns = [CodexTurn(
+			id: "turn",
+			status: "completed",
+			items: [item],
+			error: nil
+		)]
+		return model
+	}
+
+	@Test func streamedTokensDoNotRefreshSearchableHistory() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let pending = try #require(model.contextNavigation.pendingMessageSearch)
+		let revision = model.contextNavigation.searchIndexRevision
+		let targets = model.contextNavigation.navigationTargets
+		for _ in 0 ..< 100
+		{
+			let result = ContextNavigationReducer.reduceDomainEvent(
+				&model,
+				.backendObserved(.agentMessageDelta(
+					threadId: "thread",
+					turnId: "live",
+					itemId: "answer",
+					text: "token"
+				))
+			)
+			#expect(result.effects.isEmpty)
+		}
+		#expect(model.contextNavigation.searchIndexRevision == revision)
+		#expect(model.contextNavigation.pendingMessageSearch == pending)
+		#expect(model.contextNavigation.navigationTargets == targets)
+	}
+
+	@Test func historyChangesReplaceSearchAndRejectEarlierRevision() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		let oldResults = MessageSearch.search(
+			query: old.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		let item = try #require(CodexItem(json: [
+			"id": "new-answer",
+			"type": "agentMessage",
+			"text": "needle second"
+		]))
+		ConversationContentReducer.updateContent(
+			for: "thread",
+			model: &model
+		)
+		{
+			$0.loadedTurns.append(CodexTurn(
+				id: "new-turn",
+				status: "completed",
+				items: [item],
+				error: nil
+			))
+		}
+		let changed = ContextNavigationReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		let current = try #require(model.contextNavigation.pendingMessageSearch)
+		#expect(current.historyRevision > old.historyRevision)
+		#expect(changed.effects.contains
+		{
+			if case .cancelMessageSearch(let operation) = $0
+			{
+				return operation == old
+			}
+			return false
+		})
+		reduce(
+			&model,
+			.contextNavigation(.messageSearchFinished(
+				old,
+				.succeeded(oldResults)
+			))
+		)
+		#expect(model.contextNavigation.pendingMessageSearch == current)
+		#expect(model.contextNavigation.messageSearch?.hits.isEmpty == true)
+		let results = MessageSearch.search(
+			query: current.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		reduce(
+			&model,
+			.contextNavigation(.messageSearchFinished(
+				current,
+				.succeeded(results)
+			))
+		)
+		#expect(model.contextNavigation.messageSearch?.hits.count == 2)
+		#expect(model.contextNavigation.pendingMessageSearch == nil)
+	}
+
+	@Test func canonicalHistoryEditsInvalidateAnIndexedSearch() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		let revision = try #require(model.conversations.content[.thread("thread")])
+			.loadedHistoryRevision
+		let item = try #require(CodexItem(json: [
+			"id": "new-answer",
+			"type": "agentMessage",
+			"text": "needle second"
+		]))
+		model.conversations.content[.thread("thread")]?.loadedTurns.append(CodexTurn(
+			id: "new-turn",
+			status: "completed",
+			items: [item],
+			error: nil
+		))
+		#expect(model.conversations.content[.thread("thread")]?.loadedHistoryRevision
+			== revision + 1)
+		let changed = ContextNavigationReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		let current = try #require(model.contextNavigation.pendingMessageSearch)
+		#expect(current.historyRevision > old.historyRevision)
+		#expect(changed.effects.contains
+		{
+			if case .cancelMessageSearch(let operation) = $0
+			{
+				return operation == old
+			}
+			return false
+		})
+		let results = MessageSearch.search(
+			query: current.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		#expect(results.hits.map(\.itemID) == ["answer", "new-answer"])
+	}
+
+	@Test func equivalentUnicodeRenameRefreshesTheDisplayedSearchTitle() throws
+	{
+		var model = try searchableFixture()
+		let oldTitle = "Café"
+		let currentTitle = "Cafe\u{301}"
+		#expect(oldTitle == currentTitle)
+		model.conversations.threads = [try #require(ThreadSummary(json: [
+			"id": "thread",
+			"name": oldTitle
+		]))]
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		model.conversations.threads = [try #require(ThreadSummary(json: [
+			"id": "thread",
+			"name": currentTitle
+		]))]
+		_ = ContextNavigationReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		let current = try #require(model.contextNavigation.pendingMessageSearch)
+		#expect(current.historyRevision > old.historyRevision)
+		let results = MessageSearch.search(
+			query: current.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		#expect(results.hits.count == 1)
+		#expect(results.hits.first?.threadTitle.utf8.elementsEqual(currentTitle.utf8) == true)
+	}
+
+	@Test func replacedAndDismissedSearchesCannotPublishLateResults() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "first"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "second"
+			))
+		)
+		let current = try #require(model.contextNavigation.pendingMessageSearch)
+		let failure = OperationFailure(
+			message: "stale failure",
+			outcomeIsUncertain: false
+		)
+		reduce(
+			&model,
+			.contextNavigation(.messageSearchFinished(
+				old,
+				.failed(failure)
+			))
+		)
+		#expect(model.contextNavigation.pendingMessageSearch == current)
+		#expect(model.contextNavigation.searchError == nil)
+		let results = MessageSearch.search(
+			query: current.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		let dismissed = reduce(
+			&model,
+			.contextNavigation(.searchDismissed(context(model)))
+		)
+		#expect(dismissed.effects.count == 1)
+		reduce(
+			&model,
+			.contextNavigation(.messageSearchFinished(
+				current,
+				.succeeded(results)
+			))
+		)
+		#expect(model.contextNavigation.messageSearch == nil)
+		#expect(model.contextNavigation.messageSearchContext == nil)
+		#expect(model.contextNavigation.pendingMessageSearch == nil)
+		ConversationContentReducer
+			.updateContent(
+				for: "thread",
+				model: &model
+			)
+			{
+				$0.nextTurnsCursor = nil
+			}
+		let changed = ContextNavigationReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		#expect(changed.effects.isEmpty)
+	}
+
+	@Test func reconnectRenewsSearchAndRejectsPreviousGeneration() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		model.connection.generation += 1
+		_ = ContextNavigationReducer.reduceDomainEvent(
+			&model,
+			.connectionBegan
+		)
+		let current = try #require(model.contextNavigation.pendingMessageSearch)
+		#expect(current.context.generation == model.connection.generation)
+		#expect(current.context.requestID == old.context.requestID)
+		let results = MessageSearch.search(
+			query: old.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		reduce(
+			&model,
+			.contextNavigation(.messageSearchFinished(
+				old,
+				.succeeded(results)
+			))
+		)
+		#expect(model.contextNavigation.pendingMessageSearch == current)
+		#expect(model.contextNavigation.messageSearch?.hits.isEmpty == true)
+	}
+
+	@Test func blankSearchCancelsComputationAndRetainsHistoryScope() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let result = reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "  "
+			))
+		)
+		#expect(result.effects.count == 1)
+		#expect(model.contextNavigation.pendingMessageSearch == nil)
+		#expect(model.contextNavigation.messageSearchContext == nil)
+		#expect(model.contextNavigation.messageSearch?.query == "")
+		#expect(model.contextNavigation.messageSearch?.scope.canLoadMore == true)
+	}
+
+	@Test func blankSearchUpdatesScopeAfterLoadingEarlierHistory() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "  "
+			))
+		)
+		#expect(model.contextNavigation.messageSearch?.scope.canLoadMore == true)
+		reduce(
+			&model,
+			.contextNavigation(.moreSearchHistoryRequested(context(model)))
+		)
+		let load = try #require(model.conversations.historyLoads["thread"])
+		let result = reduce(
+			&model,
+			.conversations(.earlierTurnsReceived(
+				load,
+				.succeeded(HistoryPage(
+					turns: [],
+					nextCursor: nil
+				))
+			))
+		)
+		let search = try #require(model.contextNavigation.messageSearch)
+		#expect(search.query.isEmpty)
+		#expect(search.scope.loadedThreadCount == 1)
+		#expect(search.scope.threadsWithEarlierTurns == 0)
+		#expect(!search.scope.canLoadMore)
+		#expect(model.contextNavigation.pendingMessageSearch == nil)
+		#expect(model.contextNavigation.messageSearchContext == nil)
+		#expect(!result.effects.contains
+		{
+			if case .searchMessages = $0
+			{
+				return true
+			}
+			return false
+		})
+	}
+
 	@Test func inspectedPromptUpdatesOnlyTheCurrentDraftWithoutSubmitting()
 	{
 		var model = fixture()
