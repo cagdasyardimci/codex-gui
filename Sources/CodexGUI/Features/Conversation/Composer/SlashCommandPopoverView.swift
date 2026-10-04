@@ -22,6 +22,14 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	private let scroll = NSScrollView()
 	private let emptyLabel = NSTextField(labelWithString: "No matching commands or skills")
 	private(set) var commands: [SlashCommandDescriptor] = []
+	private var catalog = SlashCommandMenuCatalog()
+	private var commandUnavailableReasons: [String?] = []
+	private var hasRenderedPresentation = false
+	private var localeObserver: (any NSObjectProtocol)?
+	var catalogPreparationCount: Int
+	{
+		catalog.preparationCount
+	}
 	var selectedCommand: SlashCommandDescriptor?
 	{
 		commands.indices.contains(table.selectedRow) ? commands[table.selectedRow] : nil
@@ -29,6 +37,23 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 	override func loadView()
 	{
+		if let localeObserver
+		{
+			NotificationCenter.default.removeObserver(localeObserver)
+		}
+		localeObserver = NotificationCenter.default.addObserver(
+			forName: NSLocale.currentLocaleDidChangeNotification,
+			object: nil,
+			queue: .main
+		)
+		{
+			[weak self] _ in
+			MainActor.assumeIsolated
+			{
+				self?.catalog.invalidateLocale()
+			}
+		}
+		hasRenderedPresentation = false
 		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("slashCommand"))
 		table.addTableColumn(column)
 		table.headerView = nil
@@ -76,10 +101,52 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	func render(prefix: String)
 	{
 		_ = view
+		let matching = catalog.matching(
+			prefix: prefix,
+			availableSkills: availableSkills,
+			localeIdentifier: Locale.current.identifier
+		)
+		// Availability belongs to the current callback even when the catalog and query
+		// are unchanged.
+		let reasons = matching.commands.map
+		{
+			unavailableReason?($0.id)
+		}
+		let sameCommands = commands.count == matching.commands.count
+			&& zip(
+				commands,
+				matching.commands
+			).allSatisfy
+			{
+				$0.id == $1.id
+			}
+		let sameReasons = commandUnavailableReasons.count == reasons.count
+			&& zip(
+				commandUnavailableReasons,
+				reasons
+			).allSatisfy
+			{
+				SlashCommandMenuCatalog.sameText(
+					$0,
+					$1
+				)
+			}
+		let retainsPresentation = hasRenderedPresentation && sameCommands && sameReasons
+			&& SlashCommandMenuCatalog.sameSkills(
+				matchingSkills,
+				matching.skills
+			)
 		let previousCommandID = selectedCommand?.id
 		let previousSkillPath = selectedSkill?.path
-		commands = SlashCommandRegistry.matching(prefix: prefix)
-		matchingSkills = skillsMatching(prefix: prefix)
+		commands = matching.commands
+		matchingSkills = matching.skills
+		commandUnavailableReasons = reasons
+		guard !retainsPresentation
+		else
+		{
+			return
+		}
+		hasRenderedPresentation = true
 
 		let height = CGFloat(min(
 			11,
@@ -115,21 +182,11 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		}
 	}
 
-	private func skillsMatching(prefix: String) -> [AvailableSkill]
+	isolated deinit
 	{
-		let matchingSkills = availableSkills.filter
+		if let localeObserver
 		{
-			skill in
-			let matchesName = skill.name.lowercased().hasPrefix(prefix.lowercased())
-			let matchesDisplayName =
-				skill.displayName?.lowercased().hasPrefix(prefix.lowercased()) ?? false
-			let matchesPrefix = prefix.isEmpty || matchesName || matchesDisplayName
-			return skill.enabled && matchesPrefix
-		}
-		return matchingSkills.sorted
-		{
-			($0.displayName ?? $0.name).localizedStandardCompare($1.displayName ?? $1.name)
-				== .orderedAscending
+			NotificationCenter.default.removeObserver(localeObserver)
 		}
 	}
 
@@ -206,12 +263,17 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		{
 			return nil
 		}
-		return commandCell(commands[row])
+		return commandCell(
+			commands[row],
+			reason: commandUnavailableReasons[row]
+		)
 	}
 
-	private func commandCell(_ command: SlashCommandDescriptor) -> NSView
+	private func commandCell(
+		_ command: SlashCommandDescriptor,
+		reason: String?
+	) -> NSView
 	{
-		let reason = unavailableReason?(command.id)
 		let presentation = SlashCommandMenuPresentation(command.id)
 		let title = makeCommandTitleLabel(
 			presentation.title,
