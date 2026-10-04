@@ -25,12 +25,15 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 	private let storageRoot: URL
 	private let limits: GitTurnBaselineLimits
 	private var records: [UUID: GitTurnBaselineRecord] = [:]
+	private var metadataByteCounts: [UUID: Int] = [:]
+	private let removeStoredRecordOperation: (@Sendable (UUID) async -> Void)?
 	private var loadTask: Task<[GitTurnBaselineRecord], Never>?
 	private var loaded = false
 
 	init(
 		storageRoot: URL? = nil,
-		limits: GitTurnBaselineLimits = GitTurnBaselineLimits()
+		limits: GitTurnBaselineLimits = GitTurnBaselineLimits(),
+		removeStoredRecord: (@Sendable (UUID) async -> Void)? = nil
 	)
 	{
 		self.storageRoot = storageRoot ?? FileManager.default.urls(
@@ -41,6 +44,7 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 			isDirectory: true
 		)
 		self.limits = limits
+		removeStoredRecordOperation = removeStoredRecord
 	}
 
 	func capture(_ request: GitTurnBaselineCaptureRequest) async -> GitTurnBaselineResult
@@ -66,15 +70,15 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 		case .success(let record):
 			if Task.isCancelled
 			{
-				await removeRecord(record)
+				await removeStoredRecord(record)
 				return .unavailable(.cancelled)
 			}
-			records[record.reference.identity.id] = record
+			retainRecord(record)
 			await enforceRetention()
 			if Task.isCancelled
 			{
-				records.removeValue(forKey: record.reference.identity.id)
-				await removeRecord(record)
+				removeRetainedRecord(record.reference.identity.id)
+				await removeStoredRecord(record)
 				return .unavailable(.cancelled)
 			}
 			guard records[record.reference.identity.id] != nil
@@ -137,11 +141,11 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 		}
 		if hasNewerAcceptedBaseline
 		{
-			records.removeValue(forKey: reference.identity.id)
-			await removeRecord(updated)
+			removeRetainedRecord(reference.identity.id)
+			await removeStoredRecord(updated)
 			return .unavailable(.lastTurnBaselineUnavailable("A newer turn baseline is retained."))
 		}
-		records[reference.identity.id] = updated
+		retainRecord(updated)
 		let obsoleteAcceptedBaselines = records.values.filter
 		{
 			$0.reference.identity.id != reference.identity.id
@@ -154,8 +158,8 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 		}
 		for previous in obsoleteAcceptedBaselines
 		{
-			records.removeValue(forKey: previous.reference.identity.id)
-			await removeRecord(previous)
+			removeRetainedRecord(previous.reference.identity.id)
+			await removeStoredRecord(previous)
 		}
 		await enforceRetention()
 		guard records[reference.identity.id] != nil
@@ -269,8 +273,8 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 		{
 			return
 		}
-		records.removeValue(forKey: reference.identity.id)
-		await removeRecord(record)
+		removeRetainedRecord(reference.identity.id)
+		await removeStoredRecord(record)
 	}
 
 	private func sameChat(
@@ -325,14 +329,14 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 			}
 			else
 			{
-				records[record.reference.identity.id] = record
+				retainRecord(record)
 			}
 		}
 		loaded = true
 		loadTask = nil
 		for record in obsolete
 		{
-			await removeRecord(record)
+			await removeStoredRecord(record)
 		}
 		await enforceRetention()
 	}
@@ -356,8 +360,8 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 				{
 					break
 				}
-				records.removeValue(forKey: oldest.reference.identity.id)
-				await removeRecord(oldest)
+				removeRetainedRecord(oldest.reference.identity.id)
+				await removeStoredRecord(oldest)
 			}
 		}
 		while retainedBytesExceedLimit(Array(records.values))
@@ -375,8 +379,8 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 			{
 				break
 			}
-			records.removeValue(forKey: oldest.reference.identity.id)
-			await removeRecord(oldest)
+			removeRetainedRecord(oldest.reference.identity.id)
+			await removeStoredRecord(oldest)
 		}
 	}
 
@@ -386,25 +390,44 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 		var total = 0
 		for record in candidates
 		{
-			guard let metadata = try? JSONEncoder().encode(record),
+			guard let metadataBytes = metadataByteCounts[record.reference.identity.id],
 					record.reference.byteCount <= limits.maximumRetainedBytes - total
 			else
 			{
 				return true
 			}
 			total += record.reference.byteCount
-			guard metadata.count <= limits.maximumRetainedBytes - total
+			guard metadataBytes <= limits.maximumRetainedBytes - total
 			else
 			{
 				return true
 			}
-			total += metadata.count
+			total += metadataBytes
 		}
 		return false
 	}
 
-	private func removeRecord(_ record: GitTurnBaselineRecord) async
+	/// Missing sizes represent encoding failure and must never count as zero retained bytes.
+	private func retainRecord(_ record: GitTurnBaselineRecord)
 	{
+		let id = record.reference.identity.id
+		records[id] = record
+		metadataByteCounts[id] = (try? JSONEncoder().encode(record))?.count
+	}
+
+	private func removeRetainedRecord(_ id: UUID)
+	{
+		records.removeValue(forKey: id)
+		metadataByteCounts.removeValue(forKey: id)
+	}
+
+	private func removeStoredRecord(_ record: GitTurnBaselineRecord) async
+	{
+		if let removeStoredRecordOperation
+		{
+			await removeStoredRecordOperation(record.reference.identity.id)
+			return
+		}
 		let root = storageRoot
 		let removalLimits = limits
 		await Task.detached
