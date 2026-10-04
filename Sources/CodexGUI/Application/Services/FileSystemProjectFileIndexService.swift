@@ -25,15 +25,6 @@ struct FileSystemProjectFileIndexService: ProjectFileIndexService
 	private static func enumerate(projectPath: String) -> ProjectFileIndex?
 	{
 		let projectRoot = URL(fileURLWithPath: projectPath)
-		let ignoredDirectories: Set<String> = [
-			".git",
-			".build",
-			"node_modules",
-			"DerivedData",
-			"build",
-			"dist",
-			".next",
-		]
 		guard let enumerator = FileManager.default.enumerator(atPath: projectRoot.path)
 		else
 		{
@@ -41,6 +32,7 @@ struct FileSystemProjectFileIndexService: ProjectFileIndexService
 		}
 		let maximumIndexedFiles = 50_000
 		var files: [String] = []
+		var isReusableWithProjectObservation = true
 		while let relativePath = enumerator.nextObject() as? String,
 				files.count < maximumIndexedFiles
 		{
@@ -49,11 +41,24 @@ struct FileSystemProjectFileIndexService: ProjectFileIndexService
 				return nil
 			}
 			let name = URL(fileURLWithPath: relativePath).lastPathComponent
+			// Inspect the link itself before checking whether its destination currently exists.
+			let fileType = enumerator.fileAttributes?[.type] as? FileAttributeType
+			let isSymbolicLink = fileType == .typeSymbolicLink
 			var isDirectory: ObjCBool = false
 			let exists = FileManager.default.fileExists(
 				atPath: projectRoot.appendingPathComponent(relativePath).path,
 				isDirectory: &isDirectory
 			)
+			if isSymbolicLink, !name.hasPrefix(".")
+			{
+				let targetIsIgnoredDirectory = exists && isDirectory.boolValue
+					&& ProjectFileIndexPathPolicy.ignoresDirectory(named: name)
+				if !targetIsIgnoredDirectory
+				{
+					// External link targets can change without an event inside the checkout.
+					isReusableWithProjectObservation = false
+				}
+			}
 			guard exists
 			else
 			{
@@ -61,9 +66,7 @@ struct FileSystemProjectFileIndexService: ProjectFileIndexService
 			}
 			if isDirectory.boolValue
 			{
-				let shouldSkipDirectory = name.hasPrefix(".") || ignoredDirectories.contains(name)
-					|| name.hasSuffix(".app") || name.hasSuffix(".xcodeproj")
-				if shouldSkipDirectory
+				if ProjectFileIndexPathPolicy.ignoresDirectory(named: name)
 				{
 					enumerator.skipDescendants()
 				}
@@ -81,6 +84,9 @@ struct FileSystemProjectFileIndexService: ProjectFileIndexService
 		{
 			return nil
 		}
-		return ProjectFileIndex(files: files.sorted())
+		return ProjectFileIndex(
+			files: files.sorted(),
+			isReusableWithProjectObservation: isReusableWithProjectObservation
+		)
 	}
 }

@@ -3,6 +3,7 @@ import Foundation
 struct ProjectFileIndex: Sendable
 {
 	let files: [String]
+	let isReusableWithProjectObservation: Bool
 	private let searchableFiles: [SearchableFile]
 
 	private struct SearchableFile: Sendable
@@ -32,9 +33,13 @@ struct ProjectFileIndex: Sendable
 		}
 	}
 
-	init(files: [String])
+	init(
+		files: [String],
+		isReusableWithProjectObservation: Bool = true
+	)
 	{
 		self.files = files
+		self.isReusableWithProjectObservation = isReusableWithProjectObservation
 		searchableFiles = files.map
 		{
 			SearchableFile(
