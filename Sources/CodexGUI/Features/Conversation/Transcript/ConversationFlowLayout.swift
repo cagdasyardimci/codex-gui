@@ -10,6 +10,8 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 	var verticalGap: ((Int) -> CGFloat)?
 	var willChangeContentWidth: (([NSCollectionViewLayoutAttributes]) -> Void)?
 	private var compactAttributes: [IndexPath: NSCollectionViewLayoutAttributes] = [:]
+	private var verticallyOrderedAttributes: [NSCollectionViewLayoutAttributes] = []
+	private var prefixMaximumY: [CGFloat] = []
 	private var compactContentSize: NSSize?
 
 	static func contentWidth(in availableWidth: CGFloat) -> CGFloat
@@ -26,7 +28,9 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 	override func prepare()
 	{
 		updateCenteredContentWidth()
-		compactAttributes.removeAll()
+		compactAttributes.removeAll(keepingCapacity: true)
+		verticallyOrderedAttributes.removeAll(keepingCapacity: true)
+		prefixMaximumY.removeAll(keepingCapacity: true)
 		compactContentSize = nil
 		super.prepare()
 		prepareCompactActivitySpacing()
@@ -40,7 +44,7 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 		{
 			if preparedWidth != nil
 			{
-				willChangeContentWidth?(Array(compactAttributes.values))
+				willChangeContentWidth?(verticallyOrderedAttributes)
 			}
 			preparedWidth = width
 			let horizontalInset = max(
@@ -73,6 +77,7 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 			return
 		}
 		var removedSpacing: CGFloat = 0
+		var requiresSorting = false
 		for index in 0 ..< collectionView.numberOfItems(inSection: 0)
 		{
 			let path = IndexPath(
@@ -91,6 +96,28 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 			}
 			attributes.frame.origin.y -= removedSpacing
 			compactAttributes[path] = attributes
+			if let previous = verticallyOrderedAttributes.last,
+				previous.frame.minY > attributes.frame.minY
+			{
+				requiresSorting = true
+			}
+			verticallyOrderedAttributes.append(attributes)
+		}
+		if requiresSorting
+		{
+			verticallyOrderedAttributes.sort
+			{
+				$0.frame.minY < $1.frame.minY
+			}
+		}
+		var maximumY = -CGFloat.infinity
+		for attributes in verticallyOrderedAttributes
+		{
+			maximumY = max(
+				maximumY,
+				attributes.frame.maxY
+			)
+			prefixMaximumY.append(maximumY)
 		}
 		let originalSize = super.collectionViewContentSize
 		compactContentSize = NSSize(
@@ -121,10 +148,39 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 		{
 			return super.layoutAttributesForElements(in: rect)
 		}
-		return compactAttributes.values.filter
+		// Prefix maxima also find a tall overlapping row whose origin is above the
+		// viewport. The usual single-column transcript only visits visible rows.
+		var lower = 0
+		var upper = prefixMaximumY.count
+		while lower < upper
 		{
-			$0.frame.intersects(rect)
+			let middle = lower + (upper - lower) / 2
+			if prefixMaximumY[middle] < rect.minY
+			{
+				lower = middle + 1
+			}
+			else
+			{
+				upper = middle
+			}
 		}
+		var visible: [NSCollectionViewLayoutAttributes] = []
+		for index in lower ..< verticallyOrderedAttributes.count
+		{
+			let attributes = verticallyOrderedAttributes[index]
+			// A zero-height Foundation rect intersects the row's leading edge.
+			// Leave boundary inclusion to intersects after the conservative scan.
+			guard attributes.frame.minY <= rect.maxY
+			else
+			{
+				break
+			}
+			if attributes.frame.intersects(rect)
+			{
+				visible.append(attributes)
+			}
+		}
+		return visible
 	}
 
 	override func shouldInvalidateLayout(forBoundsChange newBounds: NSRect) -> Bool
@@ -179,6 +235,14 @@ final class ConversationFlowLayout: NSCollectionViewFlowLayout
 	{
 		let context = NSCollectionViewFlowLayoutInvalidationContext()
 		context.invalidateFlowLayoutDelegateMetrics = true
+		context.invalidateFlowLayoutAttributes = true
+		invalidateLayout(with: context)
+	}
+
+	func invalidateContentAttributes()
+	{
+		let context = NSCollectionViewFlowLayoutInvalidationContext()
+		context.invalidateFlowLayoutDelegateMetrics = false
 		context.invalidateFlowLayoutAttributes = true
 		invalidateLayout(with: context)
 	}
