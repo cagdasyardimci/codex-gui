@@ -54,14 +54,18 @@ enum ConversationTranscriptRow: Equatable
 		var rows: [Self] = []
 		var pending: [ConversationEntry] = []
 		var emittedTimings = Set<String>()
+		var timingsByTurnID: [String: ConversationTurnTiming] = [:]
+		timingsByTurnID.reserveCapacity(timings.count)
+		for timing in timings where timingsByTurnID[timing.turnID] == nil
+		{
+			timingsByTurnID[timing.turnID] = timing
+		}
+
 		func appendTiming(for entry: ConversationEntry)
 		{
 			let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
 			guard emittedTimings.insert(turnID).inserted,
-					let timing = timings.first(where:
-					{
-						$0.turnID == turnID
-					}),
+					let timing = timingsByTurnID[turnID],
 					timing.startedAt != nil || timing.durationMs != nil
 			else
 			{

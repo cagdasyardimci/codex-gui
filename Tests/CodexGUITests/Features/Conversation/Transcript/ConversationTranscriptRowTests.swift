@@ -199,6 +199,229 @@ struct ConversationTranscriptRowTests
 		#expect(action.command?.command == "python3  -\n  script")
 	}
 
+	@Test func duplicateTimingsKeepTheFirstMatchEvenWithoutAClock()
+	{
+		let first = ConversationTurnTiming(
+			turnID: "first",
+			status: "completed"
+		)
+		let laterFirst = ConversationTurnTiming(
+			turnID: "first",
+			status: "inProgress",
+			startedAt: Date(timeIntervalSince1970: 1000)
+		)
+		let second = ConversationTurnTiming(
+			turnID: "second",
+			status: "completed",
+			durationMs: 2000
+		)
+		let laterSecond = ConversationTurnTiming(
+			turnID: "second",
+			status: "completed",
+			durationMs: 9000
+		)
+		let firstRequest = messageEntry(
+			"first:request",
+			kind: .user
+		)
+		let firstReply = messageEntry("first:reply:part")
+		let secondRequest = messageEntry(
+			"second:request",
+			kind: .user
+		)
+		let secondReply = messageEntry("second:reply")
+		let rows = ConversationTranscriptRow.make(
+			entries: [firstRequest, firstReply, secondRequest, secondReply],
+			timings: [first, laterFirst, second, laterSecond],
+			projectPath: nil
+		)
+		#expect(rows == [
+			.message(firstRequest),
+			.message(firstReply),
+			.message(secondRequest),
+			.turnStatus(second),
+			.message(secondReply)
+		])
+	}
+
+	@Test func timingPlacementPreservesMixedRowsMissingClocksAndTrailingRunningOrder()
+	{
+		let entries = [
+			messageEntry(
+				"user:request",
+				kind: .user
+			),
+			commandEntry(
+				"command:first",
+				actions: []
+			),
+			commandEntry(
+				"command:second",
+				actions: []
+			),
+			ConversationEntry(
+				id: "image:item",
+				kind: .tool,
+				title: "Image",
+				body: "",
+				activity: .image(path: "picture.png")
+			),
+			messageEntry(
+				"missing:notice",
+				kind: .notice
+			),
+			messageEntry("plain"),
+			ConversationEntry(
+				id: "empty:tool",
+				kind: .tool,
+				title: "Tool",
+				body: "  \n"
+			)
+		]
+		let clocks = ["image", "command", "user", "plain"].map
+		{
+			ConversationTurnTiming(
+				turnID: $0,
+				status: "completed",
+				durationMs: 1000
+			)
+		}
+		let empty = ConversationTurnTiming(
+			turnID: "empty",
+			status: "inProgress",
+			startedAt: Date(timeIntervalSince1970: 1000)
+		)
+		let waiting = ConversationTurnTiming(
+			turnID: "waiting",
+			status: "inProgress",
+			startedAt: Date(timeIntervalSince1970: 2000)
+		)
+		let duplicateWaiting = ConversationTurnTiming(
+			turnID: "waiting",
+			status: "inProgress",
+			startedAt: Date(timeIntervalSince1970: 3000)
+		)
+		let rows = ConversationTranscriptRow.make(
+			entries: entries,
+			timings: clocks + [empty, waiting, duplicateWaiting, ConversationTurnTiming(
+				turnID: "unstarted",
+				status: "inProgress"
+			), ConversationTurnTiming(
+				turnID: "historical",
+				status: "completed",
+				durationMs: 4000
+			)],
+			projectPath: "/project"
+		)
+		#expect(rows.map(\.id) == [
+			"user:request",
+			"timing:user",
+			"timing:command",
+			"activity-group:command:first",
+			"command:first",
+			"command:second",
+			"timing:image",
+			"image:item",
+			"missing:notice",
+			"timing:plain",
+			"plain",
+			"timing:empty",
+			"timing:waiting",
+			"timing:waiting"
+		])
+		let timings = rows.compactMap
+		{
+			row -> ConversationTurnTiming? in
+			guard case .turnStatus(let timing) = row
+			else
+			{
+				return nil
+			}
+			return timing
+		}
+		#expect(timings == [clocks[2],
+							clocks[1],
+							clocks[0],
+							clocks[3],
+							empty,
+							waiting,
+							duplicateWaiting])
+	}
+
+	@Test func historyPrependsAndReplyUpdatesKeepTimingOrderAndRowIdentities()
+	{
+		let request = messageEntry(
+			"latest:request",
+			kind: .user
+		)
+		var reply = messageEntry("latest:reply")
+		let liveTiming = ConversationTurnTiming(
+			turnID: "latest",
+			status: "inProgress",
+			startedAt: Date(timeIntervalSince1970: 1000)
+		)
+		let current = ConversationTranscriptRow.make(
+			entries: [request, reply],
+			timings: [liveTiming],
+			projectPath: nil
+		)
+		var historyEntries: [ConversationEntry] = []
+		var historyTimings: [ConversationTurnTiming] = []
+		var expectedHistory: [ConversationTranscriptRow] = []
+		for index in 0 ..< 1000
+		{
+			let user = messageEntry(
+				"history-\(index):request",
+				kind: .user
+			)
+			let agent = messageEntry("history-\(index):reply")
+			let timing = ConversationTurnTiming(
+				turnID: "history-\(index)",
+				status: "completed",
+				durationMs: Double(index + 1)
+			)
+			historyEntries.append(contentsOf: [user, agent])
+			historyTimings.append(timing)
+			expectedHistory.append(contentsOf: [
+				.message(user),
+				.turnStatus(timing),
+				.message(agent)
+			])
+		}
+		let timings = [liveTiming] + Array(historyTimings.reversed())
+		let loaded = ConversationTranscriptRow.make(
+			entries: historyEntries + [request, reply],
+			timings: timings,
+			projectPath: nil
+		)
+		#expect(loaded == expectedHistory + current)
+		reply.body = "The streamed reply grew."
+		let updated = ConversationTranscriptRow.make(
+			entries: historyEntries + [request, reply],
+			timings: timings,
+			projectPath: nil
+		)
+		#expect(updated.map(\.id) == loaded.map(\.id))
+		#expect(updated == expectedHistory + [
+			.message(request),
+			.turnStatus(liveTiming),
+			.message(reply)
+		])
+	}
+
+	private func messageEntry(
+		_ id: String,
+		kind: ConversationEntryKind = .agent
+	) -> ConversationEntry
+	{
+		ConversationEntry(
+			id: id,
+			kind: kind,
+			title: "Message",
+			body: "Body"
+		)
+	}
+
 	private func commandEntry(
 		_ id: String,
 		actions: [CodexCommandAction]
