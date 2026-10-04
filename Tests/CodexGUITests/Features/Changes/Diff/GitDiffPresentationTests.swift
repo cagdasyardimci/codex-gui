@@ -112,6 +112,127 @@ struct GitDiffPresentationTests
 		}
 	}
 
+	@Test func wordDiffLineLimitKeepsItsExactBoundaryAndWholeLineUTF16Ranges() throws
+	{
+		let prefix = String(
+			repeating: "a ",
+			count: 1023
+		)
+		let old = prefix + "old "
+		let new = prefix + "new "
+		let boundary = GitDiffPresentation(snapshot: fixture("-\(old)\n+\(new)"))
+		let boundaryRows = try #require(boundary.file("Sources/Test.swift")).rows
+		#expect(boundaryRows.map(\.changedRanges) == [
+			[NSRange(
+				location: 2046,
+				length: 3
+			)],
+			[NSRange(
+				location: 2046,
+				length: 3
+			)],
+		])
+
+		for (oldText, newText) in [(old + "😀", new), (old, new + "😀")]
+		{
+			let oversized = GitDiffPresentation(snapshot: fixture("-\(oldText)\n+\(newText)"))
+			let rows = try #require(oversized.file("Sources/Test.swift")).rows
+			#expect(rows.map(\.changedRanges) == [
+				[NSRange(
+					location: 0,
+					length: (oldText as NSString).length
+				)],
+				[NSRange(
+					location: 0,
+					length: (newText as NSString).length
+				)],
+			])
+		}
+	}
+
+	@Test func oversizedWordDiffLinesLeaveTheFileBudgetForFollowingPairs() throws
+	{
+		let oversized = String(
+			repeating: "+",
+			count: 16_384
+		)
+		let prefix = String(
+			repeating: "a ",
+			count: 1023
+		)
+		let old = prefix + "old "
+		let new = prefix + "new "
+		var blocks = ["-\(oversized)\n+😀"]
+		blocks.append(contentsOf: (0 ..< 4).map
+		{
+			_ in "-\(old)\n+\(new)"
+		})
+		blocks.append("-old tail()\n+new tail()")
+		let presentation = GitDiffPresentation(snapshot: fixture(blocks.joined(separator: "\n")))
+		let rows = try #require(presentation.file("Sources/Test.swift")).rows
+		#expect(rows.count == 12)
+		#expect(rows[0].changedRanges == [NSRange(
+			location: 0,
+			length: oversized.utf16.count
+		)])
+		#expect(rows[1].changedRanges == [NSRange(
+			location: 0,
+			length: 2
+		)])
+		for row in rows[2 ..< 10]
+		{
+			#expect(row.changedRanges == [NSRange(
+				location: 2046,
+				length: 3
+			)])
+		}
+		for row in rows[10 ..< 12]
+		{
+			#expect(row.changedRanges == [NSRange(
+				location: 0,
+				length: row.text.utf16.count
+			)])
+		}
+	}
+
+	@Test func aPairBeyondTheRemainingWordBudgetDoesNotConsumeTheRemainder() throws
+	{
+		let prefix = String(
+			repeating: "a ",
+			count: 1023
+		)
+		var blocks = (0 ..< 3).map
+		{
+			_ in "-\(prefix)old \n+\(prefix)new "
+		}
+		let shorterPrefix = String(
+			repeating: "a ",
+			count: 1022
+		)
+		blocks.append("-\(shorterPrefix)old \n+\(shorterPrefix)new ")
+		blocks.append("-call old\n+call new")
+		blocks.append("-old!\n+new!")
+		let presentation = GitDiffPresentation(snapshot: fixture(blocks.joined(separator: "\n")))
+		let rows = try #require(presentation.file("Sources/Test.swift")).rows
+		#expect(rows.count == 12)
+		#expect(rows[8].changedRanges == [NSRange(
+			location: 0,
+			length: 8
+		)])
+		#expect(rows[9].changedRanges == [NSRange(
+			location: 0,
+			length: 8
+		)])
+		#expect(rows[10].changedRanges == [NSRange(
+			location: 0,
+			length: 3
+		)])
+		#expect(rows[11].changedRanges == [NSRange(
+			location: 0,
+			length: 3
+		)])
+	}
+
 	@Test func importFilteringUsesLimitedLanguageSyntaxAndRetainsMultilineSource() throws
 	{
 		var swift = GitDiffPresentation(snapshot: fixture("-import Alpha\n+import Beta\n+work()"))

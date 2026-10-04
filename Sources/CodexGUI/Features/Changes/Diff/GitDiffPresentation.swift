@@ -47,6 +47,8 @@ struct GitDiffTreeRow: Identifiable, Equatable
 /// A pure projection of immutable comparison bytes. Counts always belong to the raw snapshot.
 struct GitDiffPresentation: Equatable, Sendable
 {
+	private static let wordTokenExpression = try? NSRegularExpression(pattern: #"\w+|\s+|[^\w\s]"#)
+
 	let snapshot: GitComparisonSnapshot
 	var options = GitDiffPresentationOptions()
 
@@ -402,33 +404,58 @@ struct GitDiffPresentation: Equatable, Sendable
 				new
 			)
 		}
-		let pattern = #"\w+|\s+|[^\w\s]"#
-		guard let expression = try? NSRegularExpression(pattern: pattern)
+		guard let expression = wordTokenExpression
 		else
 		{
 			return ([], [])
 		}
-		func tokens(_ text: String) -> [(text: String, range: NSRange)]
+		func tokens(
+			_ text: String,
+			maximumCount: Int
+		) -> [(text: String, range: NSRange)]?
 		{
 			let value = text as NSString
-			return expression.matches(
+			var result: [(text: String, range: NSRange)] = []
+			var exceededLimit = false
+			expression.enumerateMatches(
 				in: text,
 				range: NSRange(
 					location: 0,
 					length: value.length
 				)
 			)
-			.map
 			{
-				(value.substring(with: $0.range), $0.range)
+				match, _, stop in
+				guard let match
+				else
+				{
+					return
+				}
+				guard result.count < maximumCount
+				else
+				{
+					exceededLimit = true
+					stop.pointee = true
+					return
+				}
+				result.append((value.substring(with: match.range), match.range))
 			}
+			return exceededLimit ? nil : result
 		}
-		let oldTokens = tokens(old)
-		let newTokens = tokens(new)
-		// Bound the quadratic diff work for generated or minified source lines.
-		let tokenCount = oldTokens.count + newTokens.count
-		guard oldTokens.count <= 2048, newTokens.count <= 2048,
-				tokenCount <= remainingTokenBudget
+		// Stop tokenizing once a line cannot fit the existing line or file budget.
+		guard let oldTokens = tokens(
+			old,
+			maximumCount: min(
+				2048,
+				remainingTokenBudget
+			)
+		), let newTokens = tokens(
+			new,
+			maximumCount: min(
+				2048,
+				remainingTokenBudget - oldTokens.count
+			)
+		)
 		else
 		{
 			return wholeLineSpans(
@@ -436,7 +463,7 @@ struct GitDiffPresentation: Equatable, Sendable
 				new
 			)
 		}
-		remainingTokenBudget -= tokenCount
+		remainingTokenBudget -= oldTokens.count + newTokens.count
 		let difference = newTokens.map(\.text).difference(from: oldTokens.map(\.text))
 		var oldRanges: [NSRange] = []
 		var newRanges: [NSRange] = []
