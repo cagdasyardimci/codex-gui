@@ -84,8 +84,19 @@ final class GitDiffLineRuler: NSRulerView
 		{
 			return
 		}
-		for (index, row) in rows.enumerated()
+		let sourceDirtyRect = source.convert(
+			gutterRect,
+			from: self
+		).offsetBy(
+			dx: 0,
+			dy: -2
+		)
+		for index in source.visualRowIndices(
+			from: sourceDirtyRect.minY,
+			through: sourceDirtyRect.maxY
+		)
 		{
+			let row = rows[index]
 			let sourceRect = source.visualRowRect(at: index)
 			let position = convert(
 				NSPoint(

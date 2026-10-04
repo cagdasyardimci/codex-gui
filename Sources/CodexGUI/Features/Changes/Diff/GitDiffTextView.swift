@@ -317,8 +317,12 @@ final class GitDiffTextView: NSTextView
 	override func drawBackground(in rect: NSRect)
 	{
 		super.drawBackground(in: rect)
-		for (index, row) in rows.enumerated()
+		for index in visualRowIndices(
+			from: rect.minY,
+			through: rect.maxY
+		)
 		{
+			let row = rows[index]
 			let stripe = visualRowRect(at: index)
 			guard stripe.intersects(rect)
 			else
