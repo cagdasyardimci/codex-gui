@@ -72,9 +72,16 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 
 	override func viewWillMove(toWindow newWindow: NSWindow?)
 	{
+		resetInteraction()
+		super.viewWillMove(toWindow: newWindow)
+	}
+
+	func resetInteraction()
+	{
 		hideCopyTooltip()
 		isHovered = false
-		super.viewWillMove(toWindow: newWindow)
+		contentTintColor = .secondaryLabelColor
+		needsDisplay = true
 	}
 
 	@objc private func showCopyTooltip()
@@ -199,7 +206,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		cornerRadius: 12,
 		bordered: true
 	)
-	private var copyButtons: [NSButton] = []
+	private var copyButtons: [CodeCopyButton] = []
+	private var configuredEntryID: Data?
 	private let expandButton = NSButton(
 		title: "Show output",
 		target: nil,
@@ -220,6 +228,17 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private weak var observedClipView: NSClipView?
 	private var cachedLayoutMetrics:
 		(availableWidth: CGFloat, messageWidth: CGFloat, bodyHeight: CGFloat)?
+
+	override func prepareForReuse()
+	{
+		super.prepareForReuse()
+		removeCodeCopyButtons(startingAt: 0)
+		configuredEntryID = nil
+		onToggle = nil
+		content = nil
+		codeBlocks.removeAll()
+		cachedLayoutMetrics = nil
+	}
 
 	override func loadView()
 	{
@@ -392,6 +411,12 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	)
 	{
 		_ = view
+		let entryID = Data(entry.id.utf8)
+		if configuredEntryID != entryID
+		{
+			removeCodeCopyButtons(startingAt: 0)
+			configuredEntryID = entryID
+		}
 		self.content = content
 		self.onToggle = onToggle
 		kind = entry.kind
@@ -410,7 +435,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		bodyTextView.setAccessibilityLabel("\(entry.title) content")
 		view.setAccessibilityLabel(entry.title)
 
-		rebuildCodeCopyButtons(for: content)
+		updateCodeCopyButtons(for: content)
 
 		expandButton.isHidden = !entry.isExpandable
 		expandButton.title = expanded ? "Hide output" : "Show output"
@@ -438,22 +463,17 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		updateCopyButtonFrames()
 	}
 
-	private func rebuildCodeCopyButtons(for content: PreparedConversationContent)
+	private func updateCodeCopyButtons(for content: PreparedConversationContent)
 	{
-		for button in copyButtons
-		{
-			button.removeFromSuperview()
-		}
-		copyButtons.removeAll()
 		codeBlocks = content.codeBlocks
-		for index in codeBlocks.indices
+		removeCodeCopyButtons(startingAt: codeBlocks.count)
+		while copyButtons.count < codeBlocks.count
 		{
 			let button = CodeCopyButton(
 				title: "",
 				target: self,
 				action: #selector(copyCode(_:))
 			)
-			button.tag = index
 			DesktopTheme.styleButton(
 				button,
 				icon: .copy
@@ -468,8 +488,36 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				relativeTo: contentStack
 			)
 			copyButtons.append(button)
+		}
+		for (index, button) in copyButtons.enumerated()
+		{
+			button.tag = index
+			button.target = self
+			button.action = #selector(copyCode(_:))
 			button.setAccessibilityLabel("Copy code block \(index + 1)")
 		}
+	}
+
+	private func removeCodeCopyButtons(startingAt index: Int)
+	{
+		guard index < copyButtons.count
+		else
+		{
+			return
+		}
+		for button in copyButtons[index...]
+		{
+			if button.window?.firstResponder === button
+			{
+				button.window?.makeFirstResponder(bodyTextView)
+			}
+			button.resetInteraction()
+			button.target = nil
+			button.action = nil
+			button.tag = -1
+			button.removeFromSuperview()
+		}
+		copyButtons.removeSubrange(index...)
 	}
 
 	static func itemSize(
@@ -829,6 +877,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			)
 			if button.frame != frame
 			{
+				button.resetInteraction()
 				button.frame = frame
 				button.window?.invalidateCursorRects(for: button)
 			}
@@ -866,14 +915,29 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 
 	@objc private func copyCode(_ sender: NSButton)
 	{
-		guard codeBlocks.indices.contains(sender.tag)
+		writeCodeBlock(
+			from: sender,
+			to: .general
+		)
+	}
+
+	func writeCodeBlock(
+		from button: NSButton,
+		to pasteboard: NSPasteboard
+	)
+	{
+		guard copyButtons.contains(where:
+			{
+				$0 === button
+			}),
+			codeBlocks.indices.contains(button.tag)
 		else
 		{
 			return
 		}
-		NSPasteboard.general.clearContents()
-		NSPasteboard.general.setString(
-			codeBlocks[sender.tag],
+		pasteboard.clearContents()
+		pasteboard.setString(
+			codeBlocks[button.tag],
 			forType: .string
 		)
 	}
