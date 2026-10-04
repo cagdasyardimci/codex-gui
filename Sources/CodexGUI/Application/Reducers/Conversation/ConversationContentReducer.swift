@@ -48,6 +48,10 @@ struct ConversationProjection
 		{
 			content.entries = newValue
 		}
+		_modify
+		{
+			yield &content.entries
+		}
 	}
 	var changedFiles: [ChangeFile]
 	{
@@ -382,40 +386,32 @@ enum ConversationContentReducer
 			let itemID,
 			let text
 		):
-			updateContent(
-				for: threadID,
-				model: &model
+			append(
+				text,
+				to: "\(turnID):\(itemID)",
+				kind: .agent,
+				title: "Codex",
+				content: &model.conversations.content[
+					.thread(threadID),
+					default: ConversationContentModel()
+				]
 			)
-			{
-				content in
-				append(
-					text,
-					to: "\(turnID):\(itemID)",
-					kind: .agent,
-					title: "Codex",
-					content: &content
-				)
-			}
 		case .commandOutputDelta(
 			let threadID,
 			let turnID,
 			let itemID,
 			let text
 		):
-			updateContent(
-				for: threadID,
-				model: &model
+			append(
+				text,
+				to: "\(turnID):\(itemID)",
+				kind: .command,
+				title: "Command",
+				content: &model.conversations.content[
+					.thread(threadID),
+					default: ConversationContentModel()
+				]
 			)
-			{
-				content in
-				append(
-					text,
-					to: "\(turnID):\(itemID)",
-					kind: .command,
-					title: "Command",
-					content: &content
-				)
-			}
 		case .fileChangeUpdated(
 			let threadID,
 			_,
@@ -530,10 +526,16 @@ enum ConversationContentReducer
 			for: item,
 			id: id
 		)
-		if let index = content.entries.firstIndex(where:
-			{
-				$0.id == id
-			})
+		let hasFormattedCommandBody: Bool
+		if case .command = entry.activity
+		{
+			hasFormattedCommandBody = true
+		}
+		else
+		{
+			hasFormattedCommandBody = false
+		}
+		if let index = content.content.entryIndex(for: id)
 		{
 			if preserveProvisionalOutput, item.output == nil,
 				case .command(var command) = entry.activity,
@@ -543,11 +545,20 @@ enum ConversationContentReducer
 				entry.activity = .command(command)
 				entry.body = commandBody(command)
 			}
-			content.entries[index] = entry
+			content.content.updateEntry(
+				at: index,
+				hasFormattedCommandBody: hasFormattedCommandBody
+			)
+			{
+				$0 = entry
+			}
 		}
 		else
 		{
-			content.entries.append(entry)
+			content.content.appendEntry(
+				entry,
+				hasFormattedCommandBody: hasFormattedCommandBody
+			)
 		}
 		if item.type == "fileChange"
 		{
@@ -562,35 +573,53 @@ enum ConversationContentReducer
 		to id: String,
 		kind: ConversationEntryKind,
 		title: String,
-		content: inout ConversationProjection
+		content: inout ConversationContentModel
 	)
 	{
-		if let index = content.entries.firstIndex(where:
-			{
-				$0.id == id
-			})
+		if let index = content.entryIndex(for: id)
 		{
-			if case .command(var command) = content.entries[index].activity
+			let formatsCommandBody: Bool
+			if case .command(let command) = content.entries[index].activity
 			{
 				guard command.status == "running" || command.status == "inProgress"
 				else
 				{
 					return
 				}
-				command.output += fragment
-				content.entries[index].activity = .command(command)
-				content.entries[index].body = commandBody(command)
-				content.entries[index].isExpandable = true
+				formatsCommandBody = true
 			}
 			else
 			{
-				content.entries[index].body += fragment
-				content.entries[index].isExpandable = content.entries[index].body.count > 2_000
+				formatsCommandBody = false
+			}
+			let hasFormattedCommandBody = content.formattedCommandEntries.contains(index)
+			content.updateEntry(
+				at: index,
+				hasFormattedCommandBody: formatsCommandBody
+			)
+			{
+				entry in
+				if case .command(let command) = entry.activity
+				{
+					appendCommandOutput(
+						fragment,
+						command: command,
+						hasFormattedCommandBody: hasFormattedCommandBody,
+						entry: &entry
+					)
+				}
+				else
+				{
+					appendMessageText(
+						fragment,
+						entry: &entry
+					)
+				}
 			}
 		}
 		else
 		{
-			content.entries.append(ConversationEntry(
+			content.appendEntry(ConversationEntry(
 				id: id,
 				kind: kind,
 				title: title,
@@ -607,6 +636,48 @@ enum ConversationContentReducer
 				)) : nil
 			))
 		}
+	}
+
+	private static func appendCommandOutput(
+		_ fragment: String,
+		command: ConversationCommand,
+		hasFormattedCommandBody: Bool,
+		entry: inout ConversationEntry
+	)
+	{
+		let outputWasEmpty = command.output.isEmpty
+		var updatedCommand = command
+		updatedCommand.output += fragment
+		entry.activity = .command(updatedCommand)
+
+		if hasFormattedCommandBody
+		{
+			if outputWasEmpty, !fragment.isEmpty
+			{
+				entry.body += "\n"
+			}
+			entry.body += fragment
+		}
+		else
+		{
+			entry.body = commandBody(updatedCommand)
+		}
+		entry.isExpandable = true
+	}
+
+	private static func appendMessageText(
+		_ fragment: String,
+		entry: inout ConversationEntry
+	)
+	{
+		entry.body += fragment
+		let maximumCollapsedMessageCharacters = 2_000
+		// Probe only the expansion threshold instead of counting the entire growing message.
+		entry.isExpandable = entry.body.index(
+			entry.body.startIndex,
+			offsetBy: maximumCollapsedMessageCharacters + 1,
+			limitedBy: entry.body.endIndex
+		) != nil
 	}
 
 	static func applyReview(

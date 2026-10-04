@@ -175,12 +175,86 @@ struct ConversationContentModel
 	var hasLoadedHistory = false
 	var nextTurnsCursor: String?
 	var entries: [ConversationEntry] = []
+	{
+		didSet
+		{
+			entryIndices = nil
+			formattedCommandEntries = []
+		}
+	}
+	/// Direct replacement and memberwise initialization rebuild the first-match lookup lazily.
+	private(set) var entryIndices: [String: Int]?
+	/// Indexed mutations retain formatting knowledge; other writes must canonicalize it again.
+	private(set) var formattedCommandEntries: Set<Int> = []
 	var changedFiles: [ChangeFile] = []
 	var diff = ""
 	var changesByItemID: [String: [FileChange]] = [:]
 	var hasAggregateDiff = false
 	var liveChangeTurnID: String?
 	var reviewSourceRevision = 0
+
+	mutating func entryIndex(for id: String) -> Int?
+	{
+		if entryIndices == nil
+		{
+			var indices: [String: Int] = [:]
+			for (index, entry) in entries.enumerated() where indices[entry.id] == nil
+			{
+				indices[entry.id] = index
+			}
+			entryIndices = indices
+		}
+		return entryIndices?[id]
+	}
+
+	mutating func updateEntry(
+		at index: Int,
+		hasFormattedCommandBody: Bool = false,
+		_ update: (inout ConversationEntry) -> Void
+	)
+	{
+		let id = entries[index].id
+		let indices = entryIndices
+		var formattedEntries = formattedCommandEntries
+		update(&entries[index])
+		if entries[index].id == id
+		{
+			entryIndices = indices
+		}
+		if hasFormattedCommandBody
+		{
+			if !formattedEntries.contains(index)
+			{
+				formattedEntries.insert(index)
+			}
+		}
+		else if formattedEntries.contains(index)
+		{
+			formattedEntries.remove(index)
+		}
+		formattedCommandEntries = formattedEntries
+	}
+
+	mutating func appendEntry(
+		_ entry: ConversationEntry,
+		hasFormattedCommandBody: Bool = false
+	)
+	{
+		let index = entries.count
+		var indices = entryIndices
+		var formattedEntries = formattedCommandEntries
+		entries.append(entry)
+		if indices?[entry.id] == nil
+		{
+			indices?[entry.id] = index
+		}
+		entryIndices = indices
+		if hasFormattedCommandBody
+		{
+			formattedEntries.insert(index)
+		}
+		formattedCommandEntries = formattedEntries
+	}
 }
 
 enum ThreadManagementOperation
