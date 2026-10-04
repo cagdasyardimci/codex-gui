@@ -265,6 +265,71 @@ struct GitCodeWrapLayoutTests
 		}
 	}
 
+	@Test func wrappedGlyphsStayInsideVisibleColumnsAfterResize() throws
+	{
+		let rows = [
+			GitDiffRow(
+				id: "long",
+				kind: .context,
+				text: "\tpython3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) "
+					+ String(
+						repeating: "WindowLayoutTests|",
+						count: 20
+					),
+				oldLine: 30,
+				newLine: 29
+			),
+		]
+		for preference in [GitDiffLayoutPreference.unified, .split]
+		{
+			let diff = GitAdaptiveDiffView(
+				rows: rows,
+				path: "Makefile"
+			)
+			diff.layoutPreference = preference
+			diff.wrapsCode = true
+			let window = host(
+				diff,
+				width: 900
+			)
+			defer
+			{
+				window.close()
+			}
+			for width in [CGFloat(900), 560, 1100]
+			{
+				window.setContentSize(NSSize(
+					width: width,
+					height: 600
+				))
+				settle(window)
+				for source in descendants(diff).compactMap(
+					{
+						$0 as? GitDiffTextView
+					}
+				)
+				{
+					let scroll = try #require(source.enclosingScrollView)
+					let manager = try #require(source.layoutManager)
+					let container = try #require(source.textContainer)
+					let visible = source.convert(
+						scroll.contentView.bounds,
+						from: scroll.contentView
+					)
+					#expect(source.frame.maxX <= visible.maxX + 0.5)
+					#expect(!scroll.hasHorizontalScroller)
+					#expect(source.string == rows[0].text)
+					manager
+						.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container))
+						{
+							_, used, _, _, _ in
+							#expect(used.maxX + source.textContainerOrigin.x <= visible.maxX + 0.5)
+						}
+				}
+			}
+		}
+	}
+
 	private func host(
 		_ content: NSView,
 		width: CGFloat

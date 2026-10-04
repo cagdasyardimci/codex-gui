@@ -211,9 +211,11 @@ final class GitUnifiedCodeView: NSView
 
 	private func layoutWrappedSource()
 	{
+		// AppKit reserves the line-number ruler through the clip view's content insets.
+		let clip = scroll.contentView
 		let width = max(
 			1,
-			scroll.contentView.bounds.width
+			clip.bounds.width - clip.contentInsets.left - clip.contentInsets.right
 		)
 		let containerSize = NSSize(
 			width: max(
