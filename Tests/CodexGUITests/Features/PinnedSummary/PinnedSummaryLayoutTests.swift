@@ -69,6 +69,16 @@ struct PinnedSummaryLayoutTests
 		window.layoutIfNeeded()
 		inspector.view.layoutSubtreeIfNeeded()
 		let scroll = try #require(inspector.summary.view as? NSScrollView)
+		let box = try #require(inspector.view.subviews.first)
+		#expect(inspector.summary.preferredContentHeight > 0)
+		#expect(abs(scroll.convert(
+			.zero,
+			to: box
+		).x - 20) < 1)
+		#expect(abs(box.frame.height - min(
+			440,
+			inspector.summary.preferredContentHeight + 20
+		)) < 1)
 		let document = try #require(scroll.documentView)
 		let all = try #require(descendants(document).compactMap
 		{

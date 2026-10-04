@@ -8,10 +8,11 @@ final class InspectorViewController: NSViewController
 		static let boxInset: CGFloat = 12
 		static let summaryTrailingInset: CGFloat = 8
 		static let contentInset: CGFloat = 16
+		static let summaryHorizontalInset: CGFloat = 20
+		static let summaryVerticalInset: CGFloat = 10
 		static let summaryWidth: CGFloat = 300
 		static let initialBoxHeight: CGFloat = 300
 		static let detailHeight: CGFloat = 440
-		static let summaryHeight: CGFloat = 320
 	}
 
 	let gitChanges = GitChangesViewController()
@@ -510,8 +511,21 @@ final class InspectorViewController: NSViewController
 		for (index, constraint) in contentEdgeConstraints.enumerated()
 		{
 			let isTrailingOrBottomEdge = index == 1 || index == 3
-			constraint.constant = fullBleedChanges
-				? 0 : (isTrailingOrBottomEdge ? -Layout.contentInset : Layout.contentInset)
+			let inset: CGFloat
+			if fullBleedChanges
+			{
+				inset = 0
+			}
+			else if !showDetails
+			{
+				inset = index < 2
+					? Layout.summaryHorizontalInset : Layout.summaryVerticalInset
+			}
+			else
+			{
+				inset = Layout.contentInset
+			}
+			constraint.constant = isTrailingOrBottomEdge ? -inset : inset
 		}
 		let fullHeightDetail = showDetails && [.changes]
 			.contains(panels.destination)
@@ -652,7 +666,12 @@ final class InspectorViewController: NSViewController
 
 	private func updateBoxHeight()
 	{
-		preferredBoxHeight?.constant = isShowingDetails ? Layout.detailHeight : Layout.summaryHeight
+		preferredBoxHeight?.constant = isShowingDetails
+			? Layout.detailHeight
+			: min(
+				Layout.detailHeight,
+				summary.preferredContentHeight + 2 * Layout.summaryVerticalInset
+			)
 	}
 }
 

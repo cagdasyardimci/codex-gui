@@ -18,6 +18,12 @@ final class PinnedSummaryViewController: NSViewController
 		static let agentRowSpacing: CGFloat = 4
 	}
 
+	var preferredContentHeight: CGFloat
+	{
+		_ = view
+		return ceil(stack.fittingSize.height)
+	}
+
 	override func loadView()
 	{
 		stack.orientation = .vertical
@@ -65,10 +71,6 @@ final class PinnedSummaryViewController: NSViewController
 	{
 		let row = makeChangesRow(presentation)
 		add(row)
-		if let scope = presentation.sections.changesContext
-		{
-			add(statusLabel(scope))
-		}
 		if let message = presentation.sections.changes.message
 		{
 			add(statusLabel(message))
