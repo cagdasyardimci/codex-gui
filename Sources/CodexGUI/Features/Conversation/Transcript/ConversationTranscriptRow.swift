@@ -87,6 +87,13 @@ enum ConversationTranscriptRow: Equatable
 				projectPath: projectPath,
 				expandedActivityIDs: expandedActivityIDs
 			)
+			// A single action is already its own expandable header.
+			if actions.count == 1
+			{
+				rows.append(.activity(actions[0]))
+				pending.removeAll()
+				return
+			}
 			let title = activityGroupTitle(
 				actions: actions,
 				entries: pending
@@ -113,6 +120,13 @@ enum ConversationTranscriptRow: Equatable
 				!= entry.id.components(separatedBy: ":").first
 			{
 				appendPendingActivityGroup()
+			}
+			// Invisible protocol items must not split adjacent visible commands.
+			if entry.kind == .tool, entry.activity == nil,
+				entry.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			{
+				appendTiming(for: entry)
+				continue
 			}
 			if case .command = entry.activity
 			{
@@ -217,7 +231,7 @@ enum ConversationTranscriptRow: Equatable
 					} ?? "")
 				case .unknown:
 					kind = .command
-					title = "Ran \(preview(command.command))"
+					title = "Ran \(preview(action.command))"
 				}
 				let filePath = kind == .read ? resolvedPath(
 					action.path,

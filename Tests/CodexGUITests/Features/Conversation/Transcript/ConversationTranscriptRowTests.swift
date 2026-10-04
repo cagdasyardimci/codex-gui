@@ -93,7 +93,6 @@ struct ConversationTranscriptRowTests
 			.read,
 			.command,
 			.image,
-			.group,
 			.command
 		])
 		#expect(activities[0].title == "Read files, ran commands")
@@ -103,7 +102,7 @@ struct ConversationTranscriptRowTests
 		#expect(activities[4].expanded)
 	}
 
-	@Test func shellNamesDoNotOverrideUnknownMetadataAndExpansionDoesNotRequireOutput()
+	@Test func unknownActionUsesDecodedCommandAndExpansionDoesNotRequireOutput()
 	{
 		let entry = commandEntry(
 			"turn:a",
@@ -124,9 +123,10 @@ struct ConversationTranscriptRowTests
 			return
 		}
 		#expect(action.kind == .command)
-		#expect(action.title == "Ran original shell")
+		#expect(action.title == "Ran rg pattern file")
 		#expect(action.expanded)
 		#expect(action.command?.output == "")
+		#expect(action.command?.command == "original shell")
 	}
 
 	@Test func collapsedGroupPreservesSourceTargetAndDifferentTurnsStartNewGroups()
@@ -143,7 +143,7 @@ struct ConversationTranscriptRowTests
 			projectPath: nil,
 			collapsedGroupIDs: ["activity-group:one:a"]
 		)
-		#expect(rows.count == 3)
+		#expect(rows.count == 2)
 		#expect(rows[0].sourceEntryID == "one:a")
 		#expect(rows[1].sourceEntryID == "two:b")
 	}
@@ -195,8 +195,82 @@ struct ConversationTranscriptRowTests
 		{
 			return
 		}
-		#expect(action.title == "Ran python3 - script")
+		#expect(action.title == "Ran python3")
 		#expect(action.command?.command == "python3  -\n  script")
+	}
+
+	@MainActor
+	@Test func historyGroupsCommandsAcrossInvisibleItemsWithoutRepeatingSingletonHeaders() throws
+	{
+		// Mirrors the tail of Find codebase optimizations: commentary, commands,
+		// hidden sleep/reasoning items, commentary, then another command group.
+		let rawItems: [[String: Any]] = [
+			["id": "before", "type": "agentMessage", "text": "Checking the final files."],
+			[
+				"id": "check",
+				"type": "commandExecution",
+				"command": "/bin/zsh -lc 'python3 check.py'",
+				"commandActions": [["type": "unknown", "command": "python3 check.py"]]
+			],
+			["id": "reasoning", "type": "reasoning", "summary": []],
+			["id": "after", "type": "agentMessage", "text": "Creating the commits."],
+			[
+				"id": "publish",
+				"type": "commandExecution",
+				"command": "/bin/zsh -lc 'python3 publish.py'",
+				"commandActions": [["type": "unknown", "command": "python3 publish.py"]]
+			],
+			["id": "sleep", "type": "sleep", "durationMs": 30000],
+			["id": "hidden", "type": "reasoning", "summary": []],
+			["id": "status",
+				"type": "commandExecution",
+				"command": "/bin/zsh -lc 'git status'",
+				"commandActions": [["type": "unknown", "command": "git status"]]],
+			["id": "final", "type": "agentMessage", "text": "Committed."],
+		]
+		let history = try ConversationHistoryDecoder.decode(ProtocolJSONPayload(value: [
+			"data": [["id": "turn", "status": "completed", "items": rawItems]],
+		]))
+		let entries = ConversationContentReducer.entries(for: history.turns)
+		let rows = ConversationTranscriptRow.make(
+			entries: entries,
+			projectPath: nil
+		)
+		#expect(rows.map(\.id) == [
+			"turn:before",
+			"turn:check",
+			"turn:after",
+			"activity-group:turn:publish",
+			"turn:publish",
+			"turn:status",
+			"turn:final",
+		])
+		let activities = rows.compactMap
+		{
+			if case .activity(let activity) = $0
+			{
+				return activity
+			}
+			return nil as ConversationActivityRow?
+		}
+		#expect(activities.map(\.title) == [
+			"Ran python3 check.py",
+			"Ran commands",
+			"Ran python3 publish.py",
+			"Ran git status",
+		])
+		let collapsed = ConversationTranscriptRow.make(
+			entries: entries,
+			projectPath: nil,
+			collapsedGroupIDs: ["activity-group:turn:publish"]
+		)
+		#expect(collapsed.map(\.id) == [
+			"turn:before",
+			"turn:check",
+			"turn:after",
+			"activity-group:turn:publish",
+			"turn:final",
+		])
 	}
 
 	@Test func duplicateTimingsKeepTheFirstMatchEvenWithoutAClock()
