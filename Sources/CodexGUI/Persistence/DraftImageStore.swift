@@ -16,13 +16,20 @@ enum DraftImageStoreError: LocalizedError
 }
 
 /// Owns only the PNG copies that the composer creates for durable draft attachments.
-struct DraftImageStore
+struct DraftImageStore: Sendable
 {
 	private static let maximumImageBytes = 20 * 1024 * 1024
 
 	private let directory: URL
+	private let preparePNG: @Sendable (DraftImageSource) throws -> Data
 
-	init(directory: URL? = nil)
+	init(
+		directory: URL? = nil,
+		preparePNG: @escaping @Sendable (DraftImageSource) throws -> Data =
+		{
+			try $0.pngData()
+		}
+	)
 	{
 		self.directory =
 			directory
@@ -35,15 +42,22 @@ struct DraftImageStore
 					"CodexGUI/DraftImages",
 					isDirectory: true
 				)
+		self.preparePNG = preparePNG
 	}
 
+	/// Compatibility for callers that already own an AppKit image. Live imports use snapshots.
+	@MainActor
 	func importImage(
 		_ image: NSImage,
 		title: String = "Screenshot"
 	) throws -> ComposerContextItem
 	{
-		let pngData = try validatedPNGData(for: image)
-		let imageURL = try writeImageCopy(pngData)
+		guard let source = DraftImageSource(image: image)
+		else
+		{
+			throw DraftImageStoreError.unsupported
+		}
+		let imageURL = try importImageCopy(source)
 
 		return ComposerContextItem(
 			kind: .image,
@@ -52,40 +66,78 @@ struct DraftImageStore
 		)
 	}
 
-	private func validatedPNGData(for image: NSImage) throws -> Data
+	func importImage(_ source: DraftImageSource) async throws -> URL
 	{
-		guard let tiffData = image.tiffRepresentation,
-				let bitmap = NSBitmapImageRep(data: tiffData),
-				let pngData = bitmap.representation(
-				using: .png,
-				properties: [:]
-				)
-		else
+		let worker = Task.detached(priority: .userInitiated)
 		{
-			throw DraftImageStoreError.unsupported
+			try importImageCopy(source)
 		}
+		return try await withTaskCancellationHandler
+		{
+			let imageURL = try await worker.value
+			do
+			{
+				try Task.checkCancellation()
+				return imageURL
+			}
+			catch
+			{
+				await discardImportedCopy(imageURL)
+				throw error
+			}
+		}
+		onCancel:
+		{
+			worker.cancel()
+		}
+	}
+
+	private func importImageCopy(_ source: DraftImageSource) throws -> URL
+	{
+		try Task.checkCancellation()
+		let pngData = try preparePNG(source)
+		try Task.checkCancellation()
 		guard pngData.count <= Self.maximumImageBytes
 		else
 		{
 			throw DraftImageStoreError.tooLarge
 		}
 
-		return pngData
+		return try writeImageCopy(pngData)
 	}
 
 	private func writeImageCopy(_ pngData: Data) throws -> URL
 	{
+		try Task.checkCancellation()
 		try FileManager.default.createDirectory(
 			at: directory,
 			withIntermediateDirectories: true
 		)
 		let imageURL = directory.appendingPathComponent("\(UUID().uuidString).png")
-		try pngData.write(
-			to: imageURL,
-			options: .atomic
-		)
+		do
+		{
+			try Task.checkCancellation()
+			try pngData.write(
+				to: imageURL,
+				options: .atomic
+			)
+			try Task.checkCancellation()
+		}
+		catch
+		{
+			try? FileManager.default.removeItem(at: imageURL)
+			throw error
+		}
 
 		return imageURL
+	}
+
+	func discardImportedCopy(_ imageURL: URL) async
+	{
+		await Task.detached(priority: .utility)
+		{
+			removeOwnedCopy(at: imageURL.path)
+		}.value
 	}
 
 	/// Returns a normalized path only for a generated PNG inside this store.
