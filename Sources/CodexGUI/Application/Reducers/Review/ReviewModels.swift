@@ -1,7 +1,7 @@
 import Foundation
 
 /// A reported change belongs to one Codex turn, even when the repository has moved on.
-struct ReviewTurn
+struct ReviewTurn: Equatable
 {
 	let threadID: String
 	let turnID: String
@@ -22,7 +22,7 @@ enum ReviewFileKind: String, Equatable
 	case unsupported
 }
 
-struct ReviewFile
+struct ReviewFile: Equatable
 {
 	let path: String
 	let previousPath: String?
@@ -44,7 +44,7 @@ struct ReviewFile
 	}
 }
 
-struct ReviewHunk
+struct ReviewHunk: Equatable
 {
 	/// Stable within one file version, including duplicate hunk headers.
 	let id: String
@@ -70,7 +70,7 @@ enum ReviewValidationCurrency: String, Equatable
 	case uncertain
 }
 
-struct ReviewValidation
+struct ReviewValidation: Equatable
 {
 	let threadID: String
 	let turnID: String

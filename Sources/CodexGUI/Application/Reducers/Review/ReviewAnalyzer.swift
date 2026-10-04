@@ -2,6 +2,79 @@ import Foundation
 
 enum ReviewAnalyzer
 {
+	static func reviews(
+		threadID: String,
+		turns: [CodexTurn],
+		hasEarlierHistory: Bool = false,
+		liveChangeTurnID: String? = nil,
+		parsedChanges: inout [String: ReviewParsedChanges]
+	) -> [ReviewTurn]
+	{
+		let turnIDs = Set(turns.map(\.id))
+		for turnID in parsedChanges.keys where !turnIDs.contains(turnID)
+		{
+			parsedChanges.removeValue(forKey: turnID)
+		}
+
+		let parsedTurns = turns.map
+		{
+			turn in
+			let changes = completedChanges(in: turn)
+			if let cached = parsedChanges[turn.id], sameChanges(
+				cached.changes,
+				changes
+			)
+			{
+				return cached
+			}
+			let parsed = parse(changes)
+			parsedChanges[turn.id] = parsed
+			return parsed
+		}
+
+		var laterChanges = Array(
+			repeating: false,
+			count: turns.count
+		)
+		var encounteredEdit = false
+		for index in turns.indices.reversed()
+		{
+			laterChanges[index] = encounteredEdit
+			encounteredEdit = encounteredEdit || !parsedTurns[index].changes.isEmpty
+		}
+		let liveChangeIndex = liveChangeTurnID.map
+		{
+			id in
+			turns.firstIndex(where:
+				{
+					$0.id == id
+				}) ?? turns.count
+		}
+
+		var state = historyFingerprint(
+			threadID: threadID,
+			hasEarlierHistory: hasEarlierHistory
+		)
+		return turns.indices.map
+		{
+			index in
+			let hasLaterChanges = laterChanges[index] ||
+				(liveChangeIndex.map
+				{
+					$0 > index
+				} ?? false)
+			return analyze(
+				threadID: threadID,
+				turn: turns[index],
+				parsed: parsedTurns[index],
+				state: &state,
+				laterTurns: turns[(index + 1)...],
+				hasEarlierHistory: hasEarlierHistory,
+				hasLaterChanges: hasLaterChanges
+			)
+		}
+	}
+
 	static func review(
 		threadID: String,
 		turn: CodexTurn,
@@ -11,11 +84,33 @@ enum ReviewAnalyzer
 		hasLaterLiveChanges: Bool = false
 	) -> ReviewTurn
 	{
-		let earlierChanges = earlierTurns.flatMap
+		var state = historyFingerprint(
+			threadID: threadID,
+			hasEarlierHistory: hasEarlierHistory
+		)
+		for earlierTurn in earlierTurns
 		{
-			completedChanges(in: $0)
+			for change in completedChanges(in: earlierTurn)
+			{
+				state.append(changeIdentity(change))
+			}
 		}
-		let changes = completedChanges(in: turn)
+		return analyze(
+			threadID: threadID,
+			turn: turn,
+			parsed: parse(completedChanges(in: turn)),
+			state: &state,
+			laterTurns: laterTurns[...],
+			hasEarlierHistory: hasEarlierHistory,
+			hasLaterChanges: hasLaterLiveChanges || laterTurns.contains
+			{
+				$0.items.contains(where: isCompletedEdit)
+			}
+		)
+	}
+
+	private static func parse(_ changes: [FileChange]) -> ReviewParsedChanges
+	{
 		var pathsInOrder: [String] = []
 		var changesByPath: [String: [FileChange]] = [:]
 		for change in changes
@@ -32,107 +127,140 @@ enum ReviewAnalyzer
 			path in
 			changesByPath[path].map(makeFile)
 		}
-		let allLaterChanges = laterTurns.flatMap
-		{
-			completedChanges(in: $0)
-		}
-		let finalState = codeStateID(
-			threadID: threadID,
-			hasEarlierHistory: hasEarlierHistory,
-			changes: earlierChanges + changes
+		return ReviewParsedChanges(
+			changes: changes,
+			identities: changes.map(changeIdentity),
+			files: files
 		)
+	}
 
-		var changesBeforeCommand = earlierChanges
+	private static func analyze(
+		threadID: String,
+		turn: CodexTurn,
+		parsed: ReviewParsedChanges,
+		state: inout Fingerprint,
+		laterTurns: ArraySlice<CodexTurn>,
+		hasEarlierHistory: Bool,
+		hasLaterChanges: Bool
+	) -> ReviewTurn
+	{
+		var laterEdits = Array(
+			repeating: false,
+			count: turn.items.count
+		)
+		var encounteredEdit = false
+		for index in turn.items.indices.reversed()
+		{
+			laterEdits[index] = encounteredEdit
+			encounteredEdit = encounteredEdit || isCompletedEdit(turn.items[index])
+		}
+		var changeIndex = 0
 		var validations: [ReviewValidation] = []
 		for (index, item) in turn.items.enumerated()
 		{
 			if item.type == "fileChange", item.status == "completed"
 			{
-				changesBeforeCommand += item.changes
+				for _ in item.changes
+				{
+					state.append(parsed.identities[changeIndex])
+					changeIndex += 1
+				}
 			}
 			guard item.type == "commandExecution", let command = item.command
 			else
 			{
 				continue
 			}
-			let hasLaterChangesInTurn = turn.items.dropFirst(index + 1).contains
-			{
-				$0.type == "fileChange" && $0.status == "completed" && !$0.changes.isEmpty
-			}
-			let validationIsOutdated =
-				hasLaterChangesInTurn || !allLaterChanges.isEmpty || hasLaterLiveChanges
-			let outcome = commandOutcome(for: item)
-			let stateID = codeStateID(
+			validations.append(validation(
 				threadID: threadID,
-				hasEarlierHistory: hasEarlierHistory,
-				changes: changesBeforeCommand
-			)
-			validations.append(
-				ReviewValidation(
-					threadID: threadID,
-					turnID: turn.id,
-					itemID: item.id,
-					command: command,
-					cwd: item.cwd,
-					output: item.output,
-					exitCode: item.exitCode,
-					outcome: outcome,
-					currency: validationIsOutdated ? .outdated : .uncertain,
-					codeStateID: stateID,
-					hasUnknownEarlierHistory: hasEarlierHistory
-				)
-			)
+				turnID: turn.id,
+				item: item,
+				command: command,
+				isOutdated: laterEdits[index] || hasLaterChanges,
+				stateID: state.identity,
+				hasEarlierHistory: hasEarlierHistory
+			))
 		}
 
-		if !files.isEmpty
+		let finalState = state.identity
+		if !parsed.files.isEmpty
 		{
-			let laterStateChanged = !allLaterChanges.isEmpty || hasLaterLiveChanges
-			for laterTurn in laterTurns
-			{
-				var encounteredEdit = false
-				for item in laterTurn.items
-				{
-					if item.type == "fileChange", item.status == "completed", !item.changes.isEmpty
-					{
-						encounteredEdit = true
-						break
-					}
-					guard item.type == "commandExecution",
-							let command = item.command
-					else
-					{
-						continue
-					}
-					let outcome = commandOutcome(for: item)
-					validations.append(
-						ReviewValidation(
-							threadID: threadID,
-							turnID: laterTurn.id,
-							itemID: item.id,
-							command: command,
-							cwd: item.cwd,
-							output: item.output,
-							exitCode: item.exitCode,
-							outcome: outcome,
-							currency: laterStateChanged ? .outdated : .uncertain,
-							codeStateID: finalState,
-							hasUnknownEarlierHistory: hasEarlierHistory
-						)
-					)
-				}
-				if encounteredEdit
-				{
-					break
-				}
-			}
+			validations.append(contentsOf: validationsBeforeNextEdit(
+				in: laterTurns,
+				threadID: threadID,
+				stateID: finalState,
+				hasEarlierHistory: hasEarlierHistory,
+				hasLaterChanges: hasLaterChanges
+			))
 		}
 
 		return ReviewTurn(
 			threadID: threadID,
 			turnID: turn.id,
-			files: files,
+			files: parsed.files,
 			validations: validations,
 			codeStateID: finalState,
+			hasUnknownEarlierHistory: hasEarlierHistory
+		)
+	}
+
+	private static func validationsBeforeNextEdit(
+		in turns: ArraySlice<CodexTurn>,
+		threadID: String,
+		stateID: String,
+		hasEarlierHistory: Bool,
+		hasLaterChanges: Bool
+	) -> [ReviewValidation]
+	{
+		var validations: [ReviewValidation] = []
+		for turn in turns
+		{
+			for item in turn.items
+			{
+				if isCompletedEdit(item)
+				{
+					return validations
+				}
+				guard item.type == "commandExecution", let command = item.command
+				else
+				{
+					continue
+				}
+				validations.append(validation(
+					threadID: threadID,
+					turnID: turn.id,
+					item: item,
+					command: command,
+					isOutdated: hasLaterChanges,
+					stateID: stateID,
+					hasEarlierHistory: hasEarlierHistory
+				))
+			}
+		}
+		return validations
+	}
+
+	private static func validation(
+		threadID: String,
+		turnID: String,
+		item: CodexItem,
+		command: String,
+		isOutdated: Bool,
+		stateID: String,
+		hasEarlierHistory: Bool
+	) -> ReviewValidation
+	{
+		ReviewValidation(
+			threadID: threadID,
+			turnID: turnID,
+			itemID: item.id,
+			command: command,
+			cwd: item.cwd,
+			output: item.output,
+			exitCode: item.exitCode,
+			outcome: commandOutcome(for: item),
+			currency: isOutdated ? .outdated : .uncertain,
+			codeStateID: stateID,
 			hasUnknownEarlierHistory: hasEarlierHistory
 		)
 	}
@@ -231,6 +359,51 @@ enum ReviewAnalyzer
 		.flatMap(\.changes)
 	}
 
+	private static func isCompletedEdit(_ item: CodexItem) -> Bool
+	{
+		item.type == "fileChange" && item.status == "completed" && !item.changes.isEmpty
+	}
+
+	private static func sameChanges(
+		_ lhs: [FileChange],
+		_ rhs: [FileChange]
+	) -> Bool
+	{
+		guard lhs.count == rhs.count
+		else
+		{
+			return false
+		}
+		return zip(
+			lhs,
+			rhs
+		).allSatisfy
+		{
+			left, right in
+			// String equality permits canonical Unicode equivalents; fingerprints use UTF-8.
+			left.path.utf8.elementsEqual(right.path.utf8)
+				&& left.kind.utf8.elementsEqual(right.kind.utf8)
+				&& samePath(
+					left.movePath,
+					right.movePath
+				)
+				&& left.diff.utf8.elementsEqual(right.diff.utf8)
+		}
+	}
+
+	private static func samePath(
+		_ lhs: String?,
+		_ rhs: String?
+	) -> Bool
+	{
+		switch (lhs, rhs)
+		{
+		case (nil, nil): return true
+		case (.some(let left), .some(let right)): return left.utf8.elementsEqual(right.utf8)
+		default: return false
+		}
+	}
+
 	private static func commandOutcome(for item: CodexItem) -> ReviewValidationOutcome
 	{
 		if let exitCode = item.exitCode
@@ -248,17 +421,16 @@ enum ReviewAnalyzer
 		return .unobserved
 	}
 
-	private static func codeStateID(
+	private static func historyFingerprint(
 		threadID: String,
-		hasEarlierHistory: Bool,
-		changes: [FileChange]
+		hasEarlierHistory: Bool
 	)
-		-> String
+		-> Fingerprint
 	{
-		fingerprint(
-			[threadID, hasEarlierHistory ? "earlier-history-not-loaded" : "loaded-history"]
-				+ changes.map(changeIdentity)
-		)
+		var state = Fingerprint()
+		state.append(threadID)
+		state.append(hasEarlierHistory ? "earlier-history-not-loaded" : "loaded-history")
+		return state
 	}
 
 	private static func changeIdentity(_ change: FileChange) -> String
@@ -269,8 +441,19 @@ enum ReviewAnalyzer
 	/// Deterministic FNV-1a over UTF-8; local identity only, not a security digest.
 	private static func fingerprint(_ parts: [String]) -> String
 	{
-		var value: UInt64 = 14_695_981_039_346_656_037
+		var state = Fingerprint()
 		for part in parts
+		{
+			state.append(part)
+		}
+		return state.identity
+	}
+
+	private struct Fingerprint
+	{
+		private var value: UInt64 = 14_695_981_039_346_656_037
+
+		mutating func append(_ part: String)
 		{
 			for byte in part.utf8
 			{
@@ -278,9 +461,13 @@ enum ReviewAnalyzer
 			}
 			value = (value ^ 0xff) &* 1_099_511_628_211
 		}
-		return String(
-			value,
-			radix: 16
-		)
+
+		var identity: String
+		{
+			String(
+				value,
+				radix: 16
+			)
+		}
 	}
 }
