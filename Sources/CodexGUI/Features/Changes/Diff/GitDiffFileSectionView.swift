@@ -338,6 +338,7 @@ final class GitDiffFileSectionView: NSStackView
 			action: action
 		)
 		control.isBordered = false
+		control.focusRingType = .none
 		control.contentTintColor = .secondaryLabelColor
 		control.toolTip = title
 		control.setAccessibilityLabel(title)

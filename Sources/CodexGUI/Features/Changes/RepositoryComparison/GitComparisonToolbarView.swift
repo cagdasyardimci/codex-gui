@@ -44,10 +44,10 @@ final class GitComparisonToolbarView: NSStackView
 	{
 		static let compactRevisionThreshold: CGFloat = 520
 		static let compactToolbarThreshold: CGFloat = 640
-		static let baseRevisionWidth: CGFloat = 190
-		static let targetRevisionWidth: CGFloat = 130
-		static let compactBaseRevisionWidth: CGFloat = 140
-		static let compactTargetRevisionWidth: CGFloat = 100
+		static let baseRevisionWidth: CGFloat = 100
+		static let targetRevisionWidth: CGFloat = 100
+		static let compactBaseRevisionWidth: CGFloat = 80
+		static let compactTargetRevisionWidth: CGFloat = 80
 	}
 
 	private var usesCompactRevisions = false
@@ -90,12 +90,17 @@ final class GitComparisonToolbarView: NSStackView
 		scopeButton.target = target
 		scopeButton.action = action
 		scopeButton.isBordered = false
+		scopeButton.focusRingType = .none
 		scopeButton.font = .systemFont(ofSize: 14)
-		scopeButton.image = GitReviewReferenceIcons.image(
-			.chevronDown,
-			size: 12
-		)
+		scopeButton.image = NSImage(
+			systemSymbolName: "chevron.down",
+			accessibilityDescription: nil
+		)?.withSymbolConfiguration(.init(
+			pointSize: 11,
+			weight: .regular
+		))
 		scopeButton.imagePosition = .imageTrailing
+		scopeButton.contentTintColor = .labelColor
 		additionsLabel.textColor = .systemGreen
 		deletionsLabel.textColor = .systemRed
 		for count in [additionsLabel, deletionsLabel]
@@ -151,10 +156,14 @@ final class GitComparisonToolbarView: NSStackView
 			),
 			action: actions.revisionMenu
 		)
-		let refs = pill(AppKitLayout.horizontalStack(
-			[baseField, arrow, targetField, revisionMenu],
-			spacing: 8
-		))
+		let refs = pill(
+			AppKitLayout.horizontalStack(
+				[baseField, arrow, targetField, revisionMenu],
+				spacing: 8
+			),
+			verticalInset: 4
+		)
+		refs.heightAnchor.constraint(equalToConstant: 36).isActive = true
 		refs.setAccessibilityElement(true)
 		refs.setAccessibilityLabel("Revision comparison")
 		revisionComparison = refs

@@ -25,6 +25,7 @@ enum GitReviewControls
 	static func styleReferenceButton(_ control: NSButton)
 	{
 		control.isBordered = false
+		control.focusRingType = .none
 		control.contentTintColor = .secondaryLabelColor
 		control.widthAnchor.constraint(equalToConstant: 28).isActive = true
 		control.heightAnchor.constraint(equalToConstant: 28).isActive = true
