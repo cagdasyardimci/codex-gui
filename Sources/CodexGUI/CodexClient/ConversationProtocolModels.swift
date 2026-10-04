@@ -41,7 +41,7 @@ struct ThreadDetail
 	var settings: ThreadSettings? = nil
 }
 
-struct CodexTurn
+struct CodexTurn: Sendable
 {
 	let id: String
 	let status: String
@@ -148,7 +148,7 @@ struct TurnPlanUpdate: Equatable
 	}
 }
 
-struct FileChange: Equatable
+struct FileChange: Equatable, Sendable
 {
 	let path: String
 	let kind: String
@@ -171,7 +171,7 @@ struct FileChange: Equatable
 	}
 }
 
-struct CodexItem
+struct CodexItem: Sendable
 {
 	let id: String
 	let type: String
@@ -259,9 +259,9 @@ struct CodexItem
 
 }
 
-struct UserMessageReference: Equatable
+struct UserMessageReference: Equatable, Sendable
 {
-	enum Kind: Equatable
+	enum Kind: Equatable, Sendable
 	{
 		case fileReference
 		case image

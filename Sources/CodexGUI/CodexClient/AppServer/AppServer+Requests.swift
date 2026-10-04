@@ -625,6 +625,7 @@ extension AppServer
 		nextCursor: String?
 	)
 	{
+		let generation = connectionGeneration
 		var parameters: [String: Any] = [
 			"threadId": threadId,
 			"limit": 50,
@@ -639,9 +640,31 @@ extension AppServer
 			"thread/turns/list",
 			params: parameters
 		)
-		let rawTurns = result["data"] as? [[String: Any]] ?? []
-		let decodedTurns = rawTurns.compactMap(CodexTurn.init(json:))
-		let chronologicalTurns = Array(decodedTurns.reversed())
-		return (chronologicalTurns, result["nextCursor"] as? String)
+		try Task.checkCancellation()
+		guard generation == connectionGeneration
+		else
+		{
+			throw AppServerError.disconnected
+		}
+		let payload = ProtocolJSONPayload(value: result)
+		let decoding = Task.detached(priority: .userInitiated)
+		{
+			try ConversationHistoryDecoder.decode(payload)
+		}
+		let page = try await withTaskCancellationHandler
+		{
+			try await decoding.value
+		}
+		onCancel:
+		{
+			decoding.cancel()
+		}
+		try Task.checkCancellation()
+		guard generation == connectionGeneration
+		else
+		{
+			throw AppServerError.disconnected
+		}
+		return (page.turns, page.nextCursor)
 	}
 }

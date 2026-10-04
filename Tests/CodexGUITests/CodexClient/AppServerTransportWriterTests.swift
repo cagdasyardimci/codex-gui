@@ -314,6 +314,35 @@ struct AppServerTransportWriterTests
 		try await blocker.wait()
 	}
 
+	@Test func historyPagePreservesCursorRequestOrderAndUnicodeContent() async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		let page = try await fixture.server.loadTurns(
+			threadId: "thread",
+			cursor: "older-cursor"
+		)
+		#expect(page.turns.map(\.id) == ["earlier", "latest"])
+		#expect(page.nextCursor == "next-cursor")
+		let text = try #require(page.turns.last?.items.first?.text)
+		#expect(text.utf8.elementsEqual("é e\u{0301}🧪\u{2028}終\nsecond".utf8))
+		let request = try #require(fixture.messages().first
+		{
+			$0["method"] as? String == "thread/turns/list"
+		})
+		let params = try #require(request["params"] as? [String: Any])
+		#expect(params["threadId"] as? String == "thread")
+		#expect(params["cursor"] as? String == "older-cursor")
+		#expect(params["limit"] as? Int == 50)
+		#expect(params["sortDirection"] as? String == "desc")
+		#expect(params["itemsView"] as? String == "full")
+	}
+
 	private func drainWritesBeforeMainActorCleanup(_ fixture: PausedProtocolWriterFixture) throws
 	{
 		try fixture.release()

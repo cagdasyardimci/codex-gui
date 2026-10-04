@@ -1,8 +1,8 @@
 import Foundation
 
-struct CodexCommandAction: Equatable
+struct CodexCommandAction: Equatable, Sendable
 {
-	enum Kind: String, Equatable
+	enum Kind: String, Equatable, Sendable
 	{
 		case read
 		case search
