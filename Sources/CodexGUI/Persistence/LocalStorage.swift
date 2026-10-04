@@ -713,15 +713,26 @@ final class LocalStorage
 			return
 		}
 
-		let referencedImagePaths = referencedOwnedImagePaths()
+		let pendingItems = contextByPendingRequestID.values.flatMap
+		{
+			$0
+		}
+		// Live requests protect their images before persisted ownership needs to be read.
+		let unleasedCandidates = ownedCandidates.subtracting(ownedImagePaths(in: pendingItems))
+		guard !unleasedCandidates.isEmpty
+		else
+		{
+			return
+		}
+		let referencedImagePaths = persistedOwnedImagePaths()
 
-		for path in ownedCandidates.subtracting(referencedImagePaths)
+		for path in unleasedCandidates.subtracting(referencedImagePaths)
 		{
 			imageStore.removeOwnedCopy(at: path)
 		}
 	}
 
-	private func referencedOwnedImagePaths() -> Set<String>
+	private func persistedOwnedImagePaths() -> Set<String>
 	{
 		let draftItems = contextRecords(forKey: Key.draftContext).values.flatMap
 		{
@@ -731,12 +742,7 @@ final class LocalStorage
 			}
 		}
 		let sentItems = sentReferenceRecords().map(\.item)
-		let pendingItems = contextByPendingRequestID.values.flatMap
-		{
-			$0
-		}
-		// Pending requests retain their attachments even if their draft has been edited.
-		return ownedImagePaths(in: draftItems + sentItems + pendingItems)
+		return ownedImagePaths(in: draftItems + sentItems)
 	}
 
 	private func ownedImagePaths(in items: [ComposerContextItem]) -> Set<String>
