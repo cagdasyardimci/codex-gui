@@ -17,15 +17,20 @@ struct TaskNotificationTracker
 
 	mutating func observe(_ snapshot: ConversationSnapshot) -> TaskNotificationEvent?
 	{
-		let state = snapshot.activeExecutionState ?? snapshot.executionState
+		observe(TaskNotificationPresentation(snapshot: snapshot))
+	}
+
+	mutating func observe(_ presentation: TaskNotificationPresentation) -> TaskNotificationEvent?
+	{
+		let state = presentation.executionState
 		let hasJustFinished =
 			(state == .completed || state == .failed) && previousState?.isBusy == true
 		let terminalOwner = hasJustFinished ? previousThreadID : nil
-		let threadID = snapshot.activeThreadID ?? terminalOwner
+		let threadID = presentation.activeThreadID ?? terminalOwner
 		defer
 		{
 			previousState = state
-			if let activeThreadID = snapshot.activeThreadID
+			if let activeThreadID = presentation.activeThreadID
 			{
 				previousThreadID = activeThreadID
 			}
@@ -37,7 +42,7 @@ struct TaskNotificationTracker
 			return nil
 		}
 		let name =
-			snapshot.threads.first(where:
+			presentation.threads.first(where:
 				{
 					$0.id == threadID
 				}).flatMap
@@ -59,7 +64,7 @@ struct TaskNotificationTracker
 				body: name
 			)
 		case .completed:
-			guard !snapshot.taskOutcomeUncertain
+			guard !presentation.taskOutcomeUncertain
 			else
 			{
 				return nil
@@ -70,7 +75,7 @@ struct TaskNotificationTracker
 				body: name
 			)
 		case .failed:
-			guard !snapshot.taskOutcomeUncertain
+			guard !presentation.taskOutcomeUncertain
 			else
 			{
 				return nil
@@ -93,14 +98,19 @@ struct TaskNotificationCollection
 
 	mutating func observe(_ snapshot: ConversationSnapshot) -> TaskNotificationEvent?
 	{
-		let owner = snapshot.workspaceOwner
+		observe(TaskNotificationPresentation(snapshot: snapshot))
+	}
+
+	mutating func observe(_ presentation: TaskNotificationPresentation) -> TaskNotificationEvent?
+	{
+		let owner = presentation.workspaceOwner
 			.map
 			{
 				"\($0.owner)|\($0.workspace.canonicalCheckoutPath ?? "")"
-			} ?? snapshot
+			} ?? presentation
 			.projectPath ?? "source-without-project"
-		var event = trackers[owner, default: TaskNotificationTracker()].observe(snapshot)
-		event?.owner = snapshot.workspaceOwner
+		var event = trackers[owner, default: TaskNotificationTracker()].observe(presentation)
+		event?.owner = presentation.workspaceOwner
 		return event
 	}
 }
@@ -156,7 +166,12 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 
 	func observe(_ snapshot: ConversationSnapshot)
 	{
-		guard let event = tracker.observe(snapshot), let center
+		observe(TaskNotificationPresentation(snapshot: snapshot))
+	}
+
+	func observe(_ presentation: TaskNotificationPresentation)
+	{
+		guard let event = tracker.observe(presentation), let center
 		else
 		{
 			return

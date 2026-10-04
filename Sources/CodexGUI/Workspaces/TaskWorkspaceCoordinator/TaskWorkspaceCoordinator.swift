@@ -14,7 +14,7 @@ final class TaskWorkspaceCoordinator
 {
 	typealias StoreFactory = (WorkspaceStoreConfiguration) -> WorkspaceStateStore
 	var onChange: ((ConversationSnapshot) -> Void)?
-	var onTaskSnapshot: ((ConversationSnapshot) -> Void)?
+	var onTaskSnapshot: ((TaskNotificationPresentation) -> Void)?
 	var onAllTasksFinished: (() -> Void)?
 	var onStopAllFailed: (() -> Void)?
 	var onConfirmQuit: ((WorkspaceQuitRequest) -> Void)?

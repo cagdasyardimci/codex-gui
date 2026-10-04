@@ -123,9 +123,9 @@ extension TaskWorkspaceCoordinator
 		):
 			if let store = store(for: current.reference)
 			{
-				onTaskSnapshot?(decorated(
-					store.currentSnapshot,
-					owner: current.reference.owner
+				onTaskSnapshot?(TaskNotificationPresentation(
+					model: store.model,
+					owner: current.reference
 				))
 			}
 			if previous?.requiresRemoteStop == true, !current.requiresRemoteStop,
