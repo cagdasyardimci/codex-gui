@@ -169,6 +169,9 @@ struct MessageSearchRuntimeTests
 				writeDraft:
 				{
 					_ in
+				},
+				waitForDraftEdits:
+				{
 				}
 			),
 			completedRequestLimit: 4,

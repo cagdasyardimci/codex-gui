@@ -19,17 +19,27 @@ extension WorkspaceEffectRunner
 	{
 		while true
 		{
-			let groups = tasks.values.filter
+			let persistenceEffects = tasks.filter
 			{
-				isPersistenceCapable($0.effect)
-			}.map(\.handle) + reservedComposerCommands.values.filter
+				isPersistenceCapable($0.value.effect)
+			}
+			let composerCommands = reservedComposerCommands.filter
 			{
-				!$0.isCancelled
-			}.map(\.handle)
+				!$0.value.isCancelled
+			}
+			let groups = persistenceEffects.values.map(\.handle)
+				+ composerCommands.values.map(\.handle)
 			guard !groups.isEmpty
 			else
 			{
 				return
+			}
+			let paths = Set((Array(persistenceEffects.keys) + Array(composerCommands.keys))
+				.compactMap(\.request.workspace.canonicalCheckoutPath))
+			let flushScope = persistence.beginFlushing(projectPaths: paths)
+			defer
+			{
+				persistence.endFlushing(flushScope)
 			}
 			for group in groups
 			{

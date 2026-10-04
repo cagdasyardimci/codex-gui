@@ -335,12 +335,20 @@ struct WorkspaceRuntimeTests
 		let releaseWrite = RuntimeSignal()
 		let barrierStarted = RuntimeSignal()
 		var barrierFinished = false
-		let persistence = WorkspacePersistenceScheduler
-		{
-			_ in
-			writeStarted.signal()
-			await releaseWrite.wait()
-		}
+		var debounceCalls = 0
+		let persistence = WorkspacePersistenceScheduler(
+			writeDraft:
+			{
+				_ in
+				writeStarted.signal()
+				await releaseWrite.wait()
+			},
+			waitForDraftEdits:
+			{
+				debounceCalls += 1
+				try? await Task.sleep(for: .seconds(30))
+			}
+		)
 		// The runtime barrier must include a full selection read and any reduced child writes.
 		let reducer = WorkspaceReducer(reduceEffects:
 			{
@@ -391,6 +399,7 @@ struct WorkspaceRuntimeTests
 		releaseWrite.signal()
 		try await barrier.value
 		#expect(barrierFinished)
+		#expect(debounceCalls == 0)
 		#expect(store.operation(for: context)?.completion == .finished)
 		store.shutdown()
 	}

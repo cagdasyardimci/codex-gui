@@ -20,9 +20,44 @@ final class WorkspacePersistenceScheduler
 	{
 		let sequence: Int
 		let task: Task<Void, Error>
+		let draftReservation: DraftReservation?
+	}
+
+	@MainActor
+	private final class DraftReservation
+	{
+		let workspace: WorkspaceIdentity
+		let generation: Int
+		var isSuperseded = false
+		var isFlushRequested = false
+		var debounceTask: Task<Void, Never>?
+
+		init(context: OperationContext)
+		{
+			workspace = context.workspace
+			generation = context.generation
+		}
+
+		func isOwned(by context: OperationContext) -> Bool
+		{
+			workspace == context.workspace && generation == context.generation
+		}
+
+		func supersede()
+		{
+			isSuperseded = true
+			debounceTask?.cancel()
+		}
+
+		func flush()
+		{
+			isFlushRequested = true
+			debounceTask?.cancel()
+		}
 	}
 
 	private let writeDraft: (WorkspaceDraftWrite) async throws -> Void
+	private let waitForDraftEdits: @MainActor () async -> Void
 	private let rememberReferences: (WorkspaceSentReferenceWrite) async throws -> Void
 	private let reserveContext: ([ComposerContextItem]) -> UUID?
 	private let releaseContext: (UUID) -> Void
@@ -34,11 +69,27 @@ final class WorkspacePersistenceScheduler
 	}
 	private var failedTransactions: [FailedTransaction] = []
 	private var pending: [Key: PendingWrite] = [:]
+	private var flushingScopes: [UUID: Set<String>] = [:]
 	private var sequence = 0
 
-	init(writeDraft: @escaping (WorkspaceDraftWrite) async throws -> Void)
+	convenience init(writeDraft: @escaping (WorkspaceDraftWrite) async throws -> Void)
+	{
+		self.init(
+			writeDraft: writeDraft,
+			waitForDraftEdits:
+			{
+				try? await Task.sleep(for: .milliseconds(150))
+			}
+		)
+	}
+
+	init(
+		writeDraft: @escaping (WorkspaceDraftWrite) async throws -> Void,
+		waitForDraftEdits: @escaping @MainActor () async -> Void
+	)
 	{
 		self.writeDraft = writeDraft
+		self.waitForDraftEdits = waitForDraftEdits
 		rememberReferences =
 		{
 			_ in
@@ -56,6 +107,10 @@ final class WorkspacePersistenceScheduler
 	init(
 		writeDraft: @escaping (WorkspaceDraftWrite) async throws -> Void,
 		rememberReferences: @escaping (WorkspaceSentReferenceWrite) async throws -> Void,
+		waitForDraftEdits: @escaping @MainActor () async -> Void =
+		{
+			try? await Task.sleep(for: .milliseconds(150))
+		},
 		reserveContext: @escaping ([ComposerContextItem]) -> UUID? =
 		{
 			_ in nil
@@ -67,6 +122,7 @@ final class WorkspacePersistenceScheduler
 	)
 	{
 		self.writeDraft = writeDraft
+		self.waitForDraftEdits = waitForDraftEdits
 		self.rememberReferences = rememberReferences
 		self.reserveContext = reserveContext
 		self.releaseContext = releaseContext
@@ -147,7 +203,8 @@ final class WorkspacePersistenceScheduler
 		enqueue(
 			context: write.context,
 			values: [.draft(write.conversation)],
-			retainedItems: write.draft.context
+			retainedItems: write.draft.context,
+			coalescingDraft: true
 		)
 		{
 			[writeDraft] in
@@ -260,6 +317,10 @@ final class WorkspacePersistenceScheduler
 			}
 			for write in writes
 			{
+				write.draftReservation?.flush()
+			}
+			for write in writes
+			{
 				_ = await write.task.result
 			}
 		}
@@ -275,6 +336,34 @@ final class WorkspacePersistenceScheduler
 		}
 	}
 
+	func flush(projectPath: String? = nil)
+	{
+		let path = projectPath.map(canonicalPath)
+		for (key, write) in pending where path == nil || key.projectPath == path
+		{
+			write.draftReservation?.flush()
+		}
+	}
+
+	/// A finite accepted group can discover child writes while its caller is waiting.
+	/// Keep those checkout paths immediate until that group has settled.
+	func beginFlushing(projectPaths: Set<String>) -> UUID
+	{
+		let id = UUID()
+		let paths = Set(projectPaths.map(canonicalPath))
+		flushingScopes[id] = paths
+		for path in paths
+		{
+			flush(projectPath: path)
+		}
+		return id
+	}
+
+	func endFlushing(_ id: UUID)
+	{
+		flushingScopes.removeValue(forKey: id)
+	}
+
 	private func canonicalPath(_ path: String) -> String
 	{
 		URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
@@ -284,6 +373,7 @@ final class WorkspacePersistenceScheduler
 		context: OperationContext,
 		values: [ValueKey],
 		retainedItems: [ComposerContextItem],
+		coalescingDraft: Bool = false,
 		operation: @escaping () async throws -> Void
 	) -> Task<Void, Error>
 	{
@@ -295,28 +385,36 @@ final class WorkspacePersistenceScheduler
 				throw AppServerError.protocolError("Persistence requires a checkout.")
 			}
 		}
-		let canonicalPath = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
-			.path
+		let canonicalProjectPath = canonicalPath(path)
 		let keys = Set(values.map
 		{
 			Key(
-				projectPath: canonicalPath,
+				projectPath: canonicalProjectPath,
 				value: $0
 			)
 		})
 		let retentionID = retainedItems.isEmpty ? nil : reserveContext(retainedItems)
 		let predecessors = keys.compactMap
 		{
-			pending[$0]?.task
+			pending[$0]
 		}
+		let draftReservation = coalescingDraft ? DraftReservation(context: context) : nil
+		configureDraftCoalescing(
+			reservation: draftReservation,
+			context: context,
+			projectPath: canonicalProjectPath,
+			predecessors: predecessors
+		)
+
 		sequence += 1
 		let currentSequence = sequence
 		let task = Task
 		{
+			await self.awaitDraftCoalescingDelay(draftReservation)
 			// Failed predecessors establish ordering but cannot poison a later independent write.
 			for previous in predecessors
 			{
-				_ = await previous.result
+				_ = await previous.task.result
 			}
 			defer
 			{
@@ -324,6 +422,14 @@ final class WorkspacePersistenceScheduler
 				{
 					self.pending.removeValue(forKey: key)
 				}
+			}
+			if draftReservation?.isSuperseded == true
+			{
+				if let retentionID
+				{
+					self.releaseContext(retentionID)
+				}
+				return
 			}
 			do
 			{
@@ -347,10 +453,65 @@ final class WorkspacePersistenceScheduler
 		{
 			pending[key] = PendingWrite(
 				sequence: currentSequence,
-				task: task
+				task: task,
+				draftReservation: draftReservation
 			)
 		}
 		return task
+	}
+
+	private func configureDraftCoalescing(
+		reservation: DraftReservation?,
+		context: OperationContext,
+		projectPath: String,
+		predecessors: [PendingWrite]
+	)
+	{
+		let hasActiveFlushScope = flushingScopes.values.contains
+		{
+			$0.contains(projectPath)
+		}
+		if hasActiveFlushScope
+		{
+			reservation?.flush()
+		}
+
+		// Other owners, transfers, and acknowledgements remain persistence boundaries.
+		for predecessor in predecessors
+		{
+			let belongsToConsecutiveEdits = reservation != nil
+				&& predecessor.draftReservation?.isOwned(by: context) == true
+			if belongsToConsecutiveEdits
+			{
+				predecessor.draftReservation?.supersede()
+			}
+			else
+			{
+				predecessor.draftReservation?.flush()
+			}
+		}
+	}
+
+	private func awaitDraftCoalescingDelay(_ reservation: DraftReservation?) async
+	{
+		guard let reservation
+		else
+		{
+			return
+		}
+		let shouldDelayWrite = !reservation.isSuperseded && !reservation.isFlushRequested
+		guard shouldDelayWrite
+		else
+		{
+			return
+		}
+		let debounceTask = Task
+		{
+			await self.waitForDraftEdits()
+		}
+		reservation.debounceTask = debounceTask
+		await debounceTask.value
+		reservation.debounceTask = nil
 	}
 
 	private func settleSuccessfulTransaction(
