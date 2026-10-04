@@ -93,21 +93,33 @@ enum GitDiffParser
 	/// Preserve section boundaries when successive changes contain separate Git headers.
 	static func hunks(in diff: String) -> [(header: String, text: String)]
 	{
+		hunks(in: diff.components(separatedBy: "\n")).hunks
+	}
+
+	/// Reuses LF-separated patch lines and counts changes while visiting each hunk body.
+	static func hunks(
+		in lines: [String]
+	) -> (hunks: [(header: String, text: String)], additions: Int, deletions: Int)
+	{
 		var hunks: [(header: String, text: String)] = []
-		var header: String?
-		var content: [String] = []
+		var currentHeader: String?
+		var hunkLines: [String] = []
+		var additions = 0
+		var deletions = 0
+
 		func finishCurrentHunk()
 		{
-			guard let currentHeader = header
+			guard let header = currentHeader
 			else
 			{
 				return
 			}
-			hunks.append((currentHeader, content.joined(separator: "\n")))
-			header = nil
-			content = []
+			hunks.append((header, hunkLines.joined(separator: "\n")))
+			currentHeader = nil
+			hunkLines = []
 		}
-		for line in diff.components(separatedBy: "\n")
+
+		for line in lines
 		{
 			if line.hasPrefix("diff --git ")
 			{
@@ -116,15 +128,24 @@ enum GitDiffParser
 			if line.hasPrefix("@@ ")
 			{
 				finishCurrentHunk()
-				header = line
+				currentHeader = line
 			}
-			if header != nil
+			if currentHeader != nil
 			{
-				content.append(line)
+				hunkLines.append(line)
+				if line.hasPrefix("+")
+				{
+					additions += 1
+				}
+				else if line.hasPrefix("-")
+				{
+					deletions += 1
+				}
 			}
 		}
+
 		finishCurrentHunk()
-		return hunks
+		return (hunks, additions, deletions)
 	}
 
 	private static func sections(in diff: String) -> [String]
