@@ -200,6 +200,8 @@ struct TranscriptPreparationCoordinatorTests
 		#expect(published["turn:legacy-command"]?.attributedString.string == "$ legacy\n")
 		#expect(published["turn:legacy-image"]?.attributedString.string == "Fallback image text")
 		#expect(published["turn:reply"]?.attributedString.string == "first second")
+		let summary = try #require(coordinator.turnSummaries.first)
+		#expect(summary.reply == "first second")
 	}
 
 	@Test func changingBetweenFallbackTextAndActivityPrunesUnusedPreparedEntries() async
@@ -230,4 +232,49 @@ struct TranscriptPreparationCoordinatorTests
 		#expect(publishedIDs == [[entry.id], [], [entry.id]])
 	}
 
+	@Test func acceptedGenerationPublishesMatchingMessageContentAndTurnPreview() async throws
+	{
+		let coordinator = TranscriptPreparationCoordinator()
+		var publishedBodies: [String] = []
+		var publishedReplies: [String] = []
+		for body in ["**Old** reply", "**Latest** reply"]
+		{
+			let entries = [
+				ConversationEntry(
+					id: "turn:request",
+					kind: .user,
+					title: "You",
+					body: "Request"
+				),
+				ConversationEntry(
+					id: "turn:reply",
+					kind: .agent,
+					title: "Codex",
+					body: body
+				),
+			]
+			coordinator.prepare(
+				entries,
+				keys: entries.map
+				{
+					TranscriptPreparationCoordinator.ContentKey.make(
+						for: $0,
+						expanded: false
+					)
+				},
+				context: body
+			)
+			{
+				contents in
+				publishedBodies.append(contents["turn:reply"]?.attributedString.string ?? "")
+				publishedReplies.append(coordinator.turnSummaries.first?.reply ?? "")
+			}
+		}
+		await coordinator.waitForRendering()
+		#expect(publishedBodies == ["Latest reply"])
+		#expect(publishedReplies == publishedBodies)
+		let summary = try #require(coordinator.turnSummaries.first)
+		#expect(summary.entryID == "turn:request")
+		#expect(summary.reply == "Latest reply")
+	}
 }

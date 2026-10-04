@@ -66,6 +66,8 @@ final class TranscriptPreparationCoordinator
 	}
 
 	private let contentCache = ConversationContentCache()
+	private let navigationCache = ConversationTurnSummary.Cache()
+	private(set) var turnSummaries: [ConversationTurnSummary] = []
 	private var preparedContents: [String: PreparedConversationContent] = [:]
 	private var preparedKeys: [String: ContentKey] = [:]
 	private var preparationTask: Task<Void, Never>?
@@ -79,6 +81,7 @@ final class TranscriptPreparationCoordinator
 	func prepare(
 		_ nextEntries: [ConversationEntry],
 		keys: [ContentKey?],
+		context: String? = nil,
 		onPrepared: @escaping ([String: PreparedConversationContent]) -> Void
 	)
 	{
@@ -89,7 +92,7 @@ final class TranscriptPreparationCoordinator
 		let existingKeys = preparedKeys
 		preparationTask = Task
 		{
-			[weak self, contentCache] in
+			[weak self, contentCache, navigationCache] in
 			var contents: [String: PreparedConversationContent] = [:]
 			for (entry, key) in zip(
 				nextEntries,
@@ -124,6 +127,15 @@ final class TranscriptPreparationCoordinator
 			{
 				return
 			}
+			let summaries = await navigationCache.make(
+				from: ConversationTurnSummary.sources(from: nextEntries),
+				context: context
+			)
+			guard let summaries, !Task.isCancelled, generation == self.renderGeneration
+			else
+			{
+				return
+			}
 			self.preparedKeys = Dictionary(uniqueKeysWithValues: zip(
 				nextEntries,
 				keys
@@ -136,6 +148,7 @@ final class TranscriptPreparationCoordinator
 				}
 			})
 			self.preparedContents = contents
+			self.turnSummaries = summaries
 			onPrepared(contents)
 		}
 	}

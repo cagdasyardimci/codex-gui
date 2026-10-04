@@ -460,7 +460,8 @@ extension ConversationViewController
 		}
 		transcriptPreparation.prepare(
 			nextEntries,
-			keys: keys
+			keys: keys,
+			context: context
 		)
 		{
 			[weak self] contents in
@@ -627,7 +628,7 @@ extension ConversationViewController
 			collectionView.reloadData()
 		}
 		(collectionView.collectionViewLayout as? ConversationFlowLayout)?.invalidateContentMetrics()
-		turnNavigationRail.render(ConversationTurnSummary.make(from: entries))
+		turnNavigationRail.render(transcriptPreparation.turnSummaries)
 		view.layoutSubtreeIfNeeded()
 		collectionView.layoutSubtreeIfNeeded()
 		restoreReadingPosition(

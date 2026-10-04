@@ -248,7 +248,10 @@ struct ConversationLongHistoryLayoutTests
 		let window = try #require(main.window)
 		let split = main.paneController.split
 		let controller = try #require(
-			split.splitViewItems[1].viewController as? ConversationViewController
+			split.splitViewItems[1].viewController.children.compactMap
+			{
+				$0 as? ConversationViewController
+			}.first
 		)
 		split.view.layoutSubtreeIfNeeded()
 		let collection = try #require(findCollection(in: controller.view))
