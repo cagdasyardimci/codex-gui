@@ -26,7 +26,8 @@ struct GitTurnBaselineTreeReader
 		{
 			throw GitTurnBaselineReadError.failure(.notGitRepository)
 		}
-		let before = try manifest(commands)
+		var manifests = GitTurnBaselineManifestReader(commands: commands)
+		let before = try manifests.read()
 		let paths = Set(before.paths + additionalPaths).sorted()
 		guard paths.count <= limits.maximumPaths
 		else
@@ -35,7 +36,7 @@ struct GitTurnBaselineTreeReader
 		}
 		let first = try readAll(paths)
 		let second = try readAll(paths)
-		let after = try manifest(commands)
+		let after = try manifests.read()
 		guard before == after, first == second
 		else
 		{
@@ -44,70 +45,6 @@ struct GitTurnBaselineTreeReader
 		return GitTurnBaselineTree(
 			files: first,
 			indexManifest: before.index
-		)
-	}
-
-	private struct Manifest: Equatable
-	{
-		let paths: [String]
-		let index: Data
-		let headTree: Data
-	}
-
-	private func manifest(_ commands: GitTurnBaselineGitCommands) throws -> Manifest
-	{
-		let index = try commands.run(["ls-files", "--stage", "-z"])
-		let head = try? commands.run(["rev-parse", "--verify", "HEAD"])
-		let headTree = head == nil ? Data() : try commands.run([
-			"ls-tree",
-			"--full-tree",
-			"-rz",
-			"HEAD"
-		])
-		var paths: Set<String> = []
-		for (bytes, isIndex) in [(index, true), (headTree, false)]
-		{
-			try Task.checkCancellation()
-			guard let text = String(
-				data: bytes,
-				encoding: .utf8
-			)
-			else
-			{
-				throw unavailable("A tracked filename has unsupported encoding.")
-			}
-			for record in text.split(separator: "\0")
-			{
-				try Task.checkCancellation()
-				guard let delimiter = record.firstIndex(of: "\t")
-				else
-				{
-					throw unavailable("The Git tracked-file manifest is invalid.")
-				}
-				let path = String(record[record.index(after: delimiter)...])
-				let fields = record[..<delimiter].split(separator: " ")
-				guard fields.count == 3, Self.validPath(path)
-				else
-				{
-					throw unavailable("The Git tracked-file manifest contains an invalid path.")
-				}
-				if fields[0] == "160000"
-				{
-					throw unavailable("Submodules are not supported by Last Turn capture.")
-				}
-				if isIndex && fields[2] != "0"
-				{
-					throw unavailable(
-						"Resolve the index conflicts before capturing a turn baseline."
-					)
-				}
-				paths.insert(path)
-			}
-		}
-		return Manifest(
-			paths: paths.sorted(),
-			index: index,
-			headTree: headTree
 		)
 	}
 
