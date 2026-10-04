@@ -89,7 +89,28 @@ extension NavigationViewController
 		return activeState
 	}
 
-	func renderTaskWorkspaces(_ snapshot: NavigationPresentation)
+	func renderTaskWorkspaces(
+		_ snapshot: NavigationPresentation,
+		rebuildMenu: Bool
+	)
+	{
+		if rebuildMenu
+		{
+			rebuildWorkspaceMenu(snapshot)
+		}
+		selectedWorkspaceID = snapshot.selectedTaskWorkspaceID
+		restoreWorkspaceSelection()
+		taskSummaryLabel.stringValue =
+			[snapshot.taskStatusSummary, snapshot.taskWorkspaceMessage].compactMap
+				{
+					$0
+				}
+				.joined(separator: " · ")
+		taskSummaryLabel.toolTip = taskSummaryLabel.stringValue
+		taskSummaryLabel.isHidden = taskSummaryLabel.stringValue.isEmpty
+	}
+
+	private func rebuildWorkspaceMenu(_ snapshot: NavigationPresentation)
 	{
 		taskPicker.removeAllItems()
 		taskPicker.addItem(withTitle: "Source checkout")
@@ -108,17 +129,6 @@ extension NavigationViewController
 			snapshot,
 			taskActions: taskActions
 		)
-
-		selectedWorkspaceID = snapshot.selectedTaskWorkspaceID
-		restoreWorkspaceSelection()
-		taskSummaryLabel.stringValue =
-			[snapshot.taskStatusSummary, snapshot.taskWorkspaceMessage].compactMap
-				{
-					$0
-				}
-				.joined(separator: " · ")
-		taskSummaryLabel.toolTip = taskSummaryLabel.stringValue
-		taskSummaryLabel.isHidden = taskSummaryLabel.stringValue.isEmpty
 	}
 
 	private func appendWorkspaceChoice(_ workspace: TaskWorkspaceChoice)

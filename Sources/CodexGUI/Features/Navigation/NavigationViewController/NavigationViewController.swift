@@ -176,7 +176,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			draftLifetime: snapshot.draftLifetime,
 			projectPath: snapshot.projectPath
 		)
-		guard renderedPresentation != snapshot
+		let previousPresentation = renderedPresentation
+		guard previousPresentation != snapshot
 		else
 		{
 			return
@@ -204,7 +205,26 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		projectDisplayNames = snapshot.projectDisplayNames
 		let previousCanStartProjectChat = canStartProjectChat
 
-		renderTaskWorkspaces(snapshot)
+		let menuOwnerChanged =
+			previousPresentation?.owner.projectIdentity != snapshot.owner.projectIdentity
+		let canCreateTask = !snapshot.recentProjects.isEmpty || snapshot.projectPath != nil
+		let couldCreateTask = previousPresentation.map
+		{
+			!$0.recentProjects.isEmpty || $0.projectPath != nil
+		}
+		let workspaceMenuMatches = previousPresentation.map
+		{
+			NavigationMenuContent.sameWorkspaces(
+				$0.taskWorkspaces,
+				snapshot.taskWorkspaces
+			)
+		} ?? false
+		let taskMenuChanged =
+			menuOwnerChanged || !workspaceMenuMatches || couldCreateTask != canCreateTask
+		renderTaskWorkspaces(
+			snapshot,
+			rebuildMenu: taskMenuChanged
+		)
 
 		let activeThreadChanged = activeThreadID != snapshot.activeThreadID
 		let activeStateChanged = activeExecutionState != snapshot.activeExecutionState
@@ -232,7 +252,18 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		}
 		updateManagementButtons()
 
-		renderRecentProjects(snapshot.recentProjects)
+		let projectNamesMatch = previousPresentation.map
+		{
+			NavigationMenuContent.sameProjectNames(
+				$0.projectDisplayNames,
+				snapshot.projectDisplayNames
+			)
+		} ?? false
+		if menuOwnerChanged || previousPresentation?.recentProjects != snapshot.recentProjects
+			|| !projectNamesMatch
+		{
+			renderRecentProjects(snapshot.recentProjects)
+		}
 		if projectActionsPopover.isShown
 		{
 			resizeProjectActionsPopover()
