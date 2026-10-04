@@ -5,8 +5,8 @@ import Testing
 @MainActor
 struct WorkspaceSourceStartupTests
 {
-	@Test("Source startup restores the latest valid checkout and its draft before observation")
-	func latestProjectIsHydratedSynchronously() throws
+	@Test("Source startup restores its checkout and draft while context loads before submission")
+	func latestProjectIsHydratedBeforeSubmission() async throws
 	{
 		let fixture = try SourceStartupFixture()
 		defer
@@ -60,22 +60,28 @@ struct WorkspaceSourceStartupTests
 		#expect(store.model.identity.canonicalCheckoutPath == latest.path)
 		#expect(store.model.lifecycle.pendingSourceStartup == nil)
 		#expect(store.operation(for: context)?.completion == .finished)
-		var first: ConversationSnapshot?
+		var observedSnapshot: ConversationSnapshot?
 		store.observePublications
 		{
 			publication in
-			first = WorkspaceSelectors(
+			observedSnapshot = WorkspaceSelectors(
 				model: publication.model,
 				now: .distantPast
 			).makeSnapshot()
 		}
-		#expect(first?.projectPath == latest.path)
-		#expect(first?.selectedThreadID == "latest-thread")
-		#expect(first?.draft == "Latest draft")
-		#expect(first?.selectedModelID == "project-model")
-		#expect(first?.selectedEffort == "high")
-		#expect(first?.projectContext == projectContext)
-		#expect(first?.canSend == false)
+		#expect(observedSnapshot?.projectPath == latest.path)
+		#expect(observedSnapshot?.selectedThreadID == "latest-thread")
+		#expect(observedSnapshot?.draft == "Latest draft")
+		#expect(observedSnapshot?.canSend == false)
+		#expect(WorkspaceEligibility(model: store.model).preferenceWarning
+			== "Project context is loading.")
+		let load = try #require(store.model.contextNavigation.pendingContextLoad)
+		let loadHandle = try #require(store.operation(for: load.context))
+		#expect(await loadHandle.wait() == .finished)
+		#expect(observedSnapshot?.selectedModelID == "project-model")
+		#expect(observedSnapshot?.selectedEffort == "high")
+		#expect(observedSnapshot?.projectContext == projectContext)
+		#expect(observedSnapshot?.canSend == false)
 	}
 
 	@Test("A source without a stored project restores global preferences without a checkout")
@@ -169,7 +175,7 @@ struct WorkspaceSourceStartupTests
 	}
 
 	@Test("Source startup preserves a corrupt project context and exposes its load failure")
-	func corruptContextIsUntouched() throws
+	func corruptContextIsUntouched() async throws
 	{
 		let fixture = try SourceStartupFixture()
 		defer
@@ -192,6 +198,9 @@ struct WorkspaceSourceStartupTests
 		}
 		store.dispatch(.workspaceLifecycle(.sourceStartupRequested(store.operationContext())))
 		#expect(store.model.identity.canonicalCheckoutPath == project.path)
+		let load = try #require(store.model.contextNavigation.pendingContextLoad)
+		let handle = try #require(store.operation(for: load.context))
+		_ = await handle.wait()
 		#expect(store.currentSnapshot.projectContextError != nil)
 		#expect(try Data(contentsOf: path) == bytes)
 	}

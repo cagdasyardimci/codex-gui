@@ -8,7 +8,8 @@ extension WorkspaceEffectRunner
 		tasks.values.filter
 		{
 			isPersistenceCapable($0.effect)
-		}.count + reservedPersistence.count + reservedComposerCommands.values.filter
+		}.count + reservedPersistence.count + reservedContextLoads.count
+		+ reservedComposerCommands.values.filter
 		{
 			!$0.isCancelled
 		}.count
@@ -32,6 +33,12 @@ extension WorkspaceEffectRunner
 			guard !groups.isEmpty
 			else
 			{
+				// Reservations can outlive cancellation or shutdown before effect start.
+				for path in contextPersistencePaths
+				{
+					try await projectContextStore.persistenceWorker
+						.drain(canonicalProjectPath: path)
+				}
 				return
 			}
 			let paths = Set((Array(persistenceEffects.keys) + Array(composerCommands.keys))
@@ -51,12 +58,15 @@ extension WorkspaceEffectRunner
 	func drainPersistence(projectPath: String? = nil) async throws
 	{
 		try await persistence.drain(projectPath: projectPath)
+		try await projectContextStore.persistenceWorker.drain(canonicalProjectPath: projectPath)
 	}
 
 	func hasPendingPersistence(projectPath: String? = nil) -> Bool
 	{
 		pendingAcceptedPersistenceCount > 0 || persistence
 			.hasPendingWrites(projectPath: projectPath)
+			|| projectContextStore.persistenceWorker
+			.hasPendingPersistence(canonicalProjectPath: projectPath)
 	}
 
 	private func isPersistenceCapable(_ effect: WorkspaceEffect) -> Bool
@@ -126,13 +136,18 @@ extension WorkspaceEffectRunner
 				{
 					do
 					{
-						let project = try conversationDirectory(operation.context)
-						reservedContextLoads[key] = .success(try projectContextStore
-							.load(for: project))
+						let requestedProject = try conversationDirectory(operation.context)
+						let project = requestedProject.standardizedFileURL.resolvingSymlinksInPath()
+						contextPersistencePaths.insert(project.path)
+						reservedContextLoads[key] = projectContextStore
+							.enqueueLoad(canonicalProjectPath: project.path)
 					}
 					catch
 					{
-						reservedContextLoads[key] = .failure(error)
+						reservedContextLoads[key] = Task
+						{
+							throw error
+						}
 					}
 				}
 			case .saveProjectContext(let operation):
@@ -140,14 +155,13 @@ extension WorkspaceEffectRunner
 				{
 					do
 					{
-						let project = try conversationDirectory(operation.context)
-						try projectContextStore.save(
+						let requestedProject = try conversationDirectory(operation.context)
+						let project = requestedProject.standardizedFileURL.resolvingSymlinksInPath()
+						contextPersistencePaths.insert(project.path)
+						reservedPersistence[key] = projectContextStore.enqueueSave(
 							operation.value,
-							for: project
+							canonicalProjectPath: project.path
 						)
-						reservedPersistence[key] = Task
-						{
-						}
 					}
 					catch
 					{

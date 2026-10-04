@@ -17,7 +17,7 @@ extension WorkspaceEffectRunner
 		_ effect: WorkspaceEffect,
 		context: OperationContext,
 		persistenceTask: Task<Void, Error>?,
-		contextLoadResult: Result<ProjectContext, Error>?,
+		contextLoadTask: Task<ProjectContext, Error>?,
 		managedWorkspace: TaskWorkspace?
 	) async throws -> WorkspaceAction
 	{
@@ -254,14 +254,14 @@ extension WorkspaceEffectRunner
 				.succeeded(())
 			))
 		case .loadProjectContext(let operation):
-			guard let contextLoadResult
+			guard let contextLoadTask
 			else
 			{
 				throw AppServerError.protocolError("Project context load was not reserved.")
 			}
 			return .contextNavigation(.contextReceived(
 				operation,
-				.succeeded(try contextLoadResult.get())
+				.succeeded(try await contextLoadTask.value)
 			))
 		case .saveProjectContext(let operation):
 			try await persistenceTask?.value

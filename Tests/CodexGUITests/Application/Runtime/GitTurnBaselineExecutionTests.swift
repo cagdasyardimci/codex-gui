@@ -23,7 +23,7 @@ struct GitTurnBaselineExecutionTests
 				.startSubmission(prepared),
 				context: prepared.submission.context,
 				persistenceTask: nil,
-				contextLoadResult: nil,
+				contextLoadTask: nil,
 				managedWorkspace: nil
 			)
 		}
@@ -66,7 +66,7 @@ struct GitTurnBaselineExecutionTests
 				.startSubmission(prepared),
 				context: prepared.submission.context,
 				persistenceTask: nil,
-				contextLoadResult: nil,
+				contextLoadTask: nil,
 				managedWorkspace: nil
 			)
 		}
@@ -110,7 +110,7 @@ struct GitTurnBaselineExecutionTests
 				.startSubmission(prepared),
 				context: prepared.submission.context,
 				persistenceTask: nil,
-				contextLoadResult: nil,
+				contextLoadTask: nil,
 				managedWorkspace: nil
 			)
 		}
@@ -145,7 +145,7 @@ struct GitTurnBaselineExecutionTests
 				.startSubmission(prepared),
 				context: prepared.submission.context,
 				persistenceTask: nil,
-				contextLoadResult: nil,
+				contextLoadTask: nil,
 				managedWorkspace: nil
 			)
 		}
@@ -185,7 +185,7 @@ struct GitTurnBaselineExecutionTests
 				.startSubmission(prepared),
 				context: prepared.submission.context,
 				persistenceTask: nil,
-				contextLoadResult: nil,
+				contextLoadTask: nil,
 				managedWorkspace: nil
 			)
 		}
@@ -226,7 +226,7 @@ struct GitTurnBaselineExecutionTests
 					.startSubmission(prepared),
 					context: prepared.submission.context,
 					persistenceTask: nil,
-					contextLoadResult: nil,
+					contextLoadTask: nil,
 					managedWorkspace: nil
 				)
 			}

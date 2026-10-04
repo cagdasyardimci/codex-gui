@@ -105,7 +105,8 @@ final class WorkspaceEffectRunner
 	var reservedPersistence: [EffectKey: Task<Void, Error>] = [:]
 	var durableReferences: Set<UUID> = []
 	let projectContextStore: ProjectContextStore
-	var reservedContextLoads: [EffectKey: Result<ProjectContext, Error>] = [:]
+	var reservedContextLoads: [EffectKey: Task<ProjectContext, Error>] = [:]
+	var contextPersistencePaths: Set<String> = []
 	let persistence: WorkspacePersistenceScheduler
 	let deliver: (WorkspaceAction, @escaping () -> Void) -> Void
 	private let mapEvent: (OperationContext, AppServerEvent) -> [WorkspaceAction]
@@ -449,7 +450,7 @@ final class WorkspaceEffectRunner
 			handle.acceptedEffect()
 		}
 		let persistenceTask = reservedPersistence.removeValue(forKey: key)
-		let contextLoadResult = reservedContextLoads.removeValue(forKey: key)
+		let contextLoadTask = reservedContextLoads.removeValue(forKey: key)
 
 		let task = Task
 		{
@@ -467,7 +468,7 @@ final class WorkspaceEffectRunner
 					effect,
 					context: context,
 					persistenceTask: persistenceTask,
-					contextLoadResult: contextLoadResult,
+					contextLoadTask: contextLoadTask,
 					managedWorkspace: managedWorkspace
 				)
 				completion = .finished

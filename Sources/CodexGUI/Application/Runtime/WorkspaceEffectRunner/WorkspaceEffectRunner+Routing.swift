@@ -18,56 +18,6 @@ extension WorkspaceEffectRunner
 		{
 			switch effect
 			{
-			case .loadProjectContext(let operation):
-				let context = operation.context
-				guard context.workspace == workspace,
-						let (_, purpose) = identity(of: effect),
-						let handle = beginSynchronous(
-						effect,
-						context: context
-						)
-				else
-				{
-					continue
-				}
-				let key = EffectKey(
-					request: RequestKey(context),
-					purpose: purpose
-				)
-				let action: WorkspaceAction
-				let completion: WorkspaceOperationCompletion
-				do
-				{
-					guard let reserved = reservedContextLoads.removeValue(forKey: key)
-					else
-					{
-						throw AppServerError.protocolError("Project context load was not reserved.")
-					}
-					action = .contextNavigation(.contextReceived(
-						operation,
-						.succeeded(try reserved.get())
-					))
-					completion = .finished
-				}
-				catch
-				{
-					let failure = failure(
-						for: effect,
-						message: error.localizedDescription
-					)
-					action = failureAction(
-						for: effect,
-						context: context,
-						failure: failure
-					)
-					completion = .failed(failure)
-				}
-				completeSynchronous(
-					action,
-					context: context,
-					handle: handle,
-					completion: completion
-				)
 			case .restoreSourceStartup(let context):
 				guard managedWorkspace == nil, context.workspace == workspace,
 						workspace.canonicalCheckoutPath == nil,
