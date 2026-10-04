@@ -190,14 +190,33 @@ extension ConversationViewController
 	) -> NSCollectionViewItem
 	{
 		let row = displayedRows[indexPath.item]
+		let identifier: String
+		switch row
+		{
+		case .activity: identifier = "activityItem"
+		case .turnStatus: identifier = "turnStatusItem"
+		case .message: identifier = "conversationItem"
+		}
+		let item = collectionView.makeItem(
+			withIdentifier: NSUserInterfaceItemIdentifier(identifier),
+			for: indexPath
+		)
+		configureTranscriptItem(
+			item,
+			for: row
+		)
+		return item
+	}
+
+	private func configureTranscriptItem(
+		_ item: NSCollectionViewItem,
+		for row: ConversationTranscriptRow
+	)
+	{
 		let context = renderedContext
 		switch row
 		{
 		case .activity(let activity):
-			let item = collectionView.makeItem(
-				withIdentifier: NSUserInterfaceItemIdentifier("activityItem"),
-				for: indexPath
-			)
 			(item as? ConversationActivityCollectionItem)?.configure(
 				activity,
 				onToggle:
@@ -228,34 +247,26 @@ extension ConversationViewController
 				(item as? ConversationActivityCollectionItem)?
 					.restoreOutputReadingPosition(position)
 			}
-			return item
+			return
 		case .turnStatus(let timing):
-			let item = collectionView.makeItem(
-				withIdentifier: NSUserInterfaceItemIdentifier("turnStatusItem"),
-				for: indexPath
-			)
 			(item as? ConversationTurnStatusCollectionItem)?.configure(
 				timing,
 				now: Date()
 			)
-			return item
+			return
 		case .message: break
 		}
-		let item = collectionView.makeItem(
-			withIdentifier: NSUserInterfaceItemIdentifier("conversationItem"),
-			for: indexPath
-		)
 		guard let item = item as? ConversationCollectionItem,
 				case .message(let entry) = row
 		else
 		{
-			return item
+			return
 		}
 
 		guard let content = preparedContents[entry.id]
 		else
 		{
-			return item
+			return
 		}
 		item.configure(
 			entry,
@@ -283,7 +294,6 @@ extension ConversationViewController
 				force: true
 			)
 		}
-		return item
 	}
 
 	func collectionView(
@@ -562,6 +572,22 @@ extension ConversationViewController
 		{
 			previousRows[$0].id == nextRows[$0].id
 		}
+		let canUpdateRowsInPlace =
+			!contextChanged && sharedIDsMatch && nextRows.count >= previousRows.count
+		let changed = canUpdateRowsInPlace ? (0 ..< sharedCount).filter
+		{
+			previousRows[$0] != nextRows[$0]
+				|| previousContents[previousRows[$0].id]?.attributedString
+				!= contents[nextRows[$0].id]?.attributedString
+		}.map
+		{
+			IndexPath(
+				item: $0,
+				section: 0
+			)
+		} : []
+		let previousSizes = transcriptItemSizes(at: changed)
+
 		preparedContents = contents
 		if contextChanged
 		{
@@ -584,50 +610,27 @@ extension ConversationViewController
 			replaceCollectionView()
 		}
 		renderedContext = context
-		let canUpdateRowsInPlace =
-			!contextChanged && sharedIDsMatch && nextRows.count >= previousRows.count
+		entries = nextEntries
+		displayedRows = nextRows
+
 		if canUpdateRowsInPlace
 		{
-			let changed = (0 ..< sharedCount).filter
-			{
-				previousRows[$0] != nextRows[$0]
-					|| previousContents[previousRows[$0].id]?.attributedString
-					!= contents[nextRows[$0].id]?.attributedString
-			}.map
-			{
-				IndexPath(
-					item: $0,
-					section: 0
-				)
-			}
-			let added = (sharedCount ..< nextRows.count).map
-			{
-				IndexPath(
-					item: $0,
-					section: 0
-				)
-			}
-			collectionView.performBatchUpdates
-			{
-				entries = nextEntries
-				displayedRows = nextRows
-				if !changed.isEmpty
-				{
-					collectionView.reloadItems(at: Set(changed))
-				}
-				if !added.isEmpty
-				{
-					collectionView.insertItems(at: Set(added))
-				}
-			}
+			updateTranscriptItems(
+				at: changed,
+				previousRows: previousRows,
+				sharedCount: sharedCount
+			)
+			invalidateTranscriptLayout(
+				for: changed,
+				previousRows: previousRows,
+				previousSizes: previousSizes
+			)
 		}
 		else
 		{
-			entries = nextEntries
-			displayedRows = nextRows
 			collectionView.reloadData()
 		}
-		(collectionView.collectionViewLayout as? ConversationFlowLayout)?.invalidateContentMetrics()
+
 		turnNavigationRail.render(transcriptPreparation.turnSummaries)
 		view.layoutSubtreeIfNeeded()
 		collectionView.layoutSubtreeIfNeeded()
@@ -638,6 +641,140 @@ extension ConversationViewController
 		readingPositionChanged()
 		scrollToRequestedItem()
 		updateTurnStatusTimer()
+	}
+
+	private func transcriptItemSizes(at paths: [IndexPath]) -> [IndexPath: NSSize]
+	{
+		Dictionary(uniqueKeysWithValues: paths.compactMap
+		{
+			path -> (IndexPath, NSSize)? in
+			collectionView.collectionViewLayout?.layoutAttributesForItem(at: path).map
+			{
+				(path, $0.frame.size)
+			}
+		})
+	}
+
+	private func updateTranscriptItems(
+		at changedPaths: [IndexPath],
+		previousRows: [ConversationTranscriptRow],
+		sharedCount: Int
+	)
+	{
+		let replacedPaths = Set(changedPaths.filter
+		{
+			!Self.shareCollectionItemClass(
+				previousRows[$0.item],
+				displayedRows[$0.item]
+			)
+		})
+		let addedPaths = Set((sharedCount ..< displayedRows.count).map
+		{
+			IndexPath(
+				item: $0,
+				section: 0
+			)
+		})
+		let requiresCollectionUpdates = !replacedPaths.isEmpty || !addedPaths.isEmpty
+		if requiresCollectionUpdates
+		{
+			collectionView.performBatchUpdates
+			{
+				if !replacedPaths.isEmpty
+				{
+					collectionView.reloadItems(at: replacedPaths)
+				}
+				if !addedPaths.isEmpty
+				{
+					collectionView.insertItems(at: addedPaths)
+				}
+			}
+		}
+
+		for path in changedPaths where !replacedPaths.contains(path)
+		{
+			if let item = collectionView.item(at: path)
+			{
+				configureTranscriptItem(
+					item,
+					for: displayedRows[path.item]
+				)
+			}
+		}
+	}
+
+	private func invalidateTranscriptLayout(
+		for changedPaths: [IndexPath],
+		previousRows: [ConversationTranscriptRow],
+		previousSizes: [IndexPath: NSSize]
+	)
+	{
+		guard let layout = collectionView.collectionViewLayout as? ConversationFlowLayout
+		else
+		{
+			return
+		}
+		let metricsChanged = changedPaths.contains
+		{
+			path in
+			previousSizes[path] != self.collectionView(
+				collectionView,
+				layout: layout,
+				sizeForItemAt: path
+			)
+		}
+		if metricsChanged
+		{
+			layout.invalidateContentMetrics()
+			return
+		}
+
+		let spacingChanged = changedPaths.contains
+		{
+			path in
+			[path.item, path.item + 1].contains
+			{
+				Self.hasCompactActivityGap(
+					at: $0,
+					in: previousRows
+				)
+					!= Self.hasCompactActivityGap(
+						at: $0,
+						in: displayedRows
+					)
+			}
+		}
+		if spacingChanged
+		{
+			layout.invalidateContentAttributes()
+		}
+	}
+
+	private static func shareCollectionItemClass(
+		_ previous: ConversationTranscriptRow,
+		_ next: ConversationTranscriptRow
+	) -> Bool
+	{
+		switch (previous, next)
+		{
+		case (.message, .message), (.activity, .activity), (.turnStatus, .turnStatus): true
+		default: false
+		}
+	}
+
+	private static func hasCompactActivityGap(
+		at index: Int,
+		in rows: [ConversationTranscriptRow]
+	) -> Bool
+	{
+		guard index > 0, rows.indices.contains(index),
+				case .activity(let current) = rows[index],
+				case .activity(let previous) = rows[index - 1]
+		else
+		{
+			return false
+		}
+		return current.groupID == previous.groupID
 	}
 
 }
