@@ -57,21 +57,6 @@ extension ConversationViewController
 		latestButton.imagePosition = .imageOnly
 		latestButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
 		latestButton.isHidden = true
-		bookmarkButton.target = self
-		bookmarkButton.action = #selector(bookmarkSelected)
-		bookmarkButton
-			.setAccessibilityLabel("Bookmark the selected message as an answer or decision")
-		DesktopTheme.styleButton(
-			bookmarkButton,
-			icon: .savedXs
-		)
-		bookmarkButton.imagePosition = .imageOnly
-		bookmarkButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		bookmarkButton.isEnabled = false
-		jumpButton.target = self
-		jumpButton.action = #selector(jumpToSelectedTarget)
-		jumpButton.setAccessibilityLabel("Jump to a request, changed file, or failure")
-		jumpButton.widthAnchor.constraint(lessThanOrEqualToConstant: 180).isActive = true
 		loadEarlierButton.target = self
 		loadEarlierButton.action = #selector(loadEarlierTurns)
 		loadEarlierButton.setAccessibilityLabel("Load earlier messages in this conversation")
@@ -147,22 +132,6 @@ extension ConversationViewController
 		configureCollectionView()
 		conversationScrollView.documentView = collectionView
 		conversationScrollView.contentView.scroll(to: .zero)
-	}
-
-	func collectionView(
-		_ collectionView: NSCollectionView,
-		didSelectItemsAt indexPaths: Set<IndexPath>
-	)
-	{
-		updateBookmarkButton()
-	}
-
-	func collectionView(
-		_ collectionView: NSCollectionView,
-		didDeselectItemsAt indexPaths: Set<IndexPath>
-	)
-	{
-		updateBookmarkButton()
 	}
 
 	func jumpToEntry(id: String)

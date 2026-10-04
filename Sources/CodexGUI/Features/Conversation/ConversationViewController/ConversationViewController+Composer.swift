@@ -119,11 +119,8 @@ extension ConversationViewController
 		approvalPolicyButton.font = .systemFont(ofSize: 13)
 		approvalPolicyButton.lineBreakMode = .byTruncatingTail
 		approvalPolicyButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
-		for popup in [jumpButton, addContextButton]
-		{
-			DesktopTheme.stylePopup(popup)
-			AppKitLayout.compressHorizontally(popup)
-		}
+		DesktopTheme.stylePopup(addContextButton)
+		AppKitLayout.compressHorizontally(addContextButton)
 		preferenceWarningLabel.font = .systemFont(ofSize: 12)
 		preferenceWarningLabel.textColor = .systemOrange
 		preferenceWarningLabel.setAccessibilityLabel("Model preference warning")

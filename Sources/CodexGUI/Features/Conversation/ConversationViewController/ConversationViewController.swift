@@ -27,7 +27,6 @@ final class ConversationViewController: NSViewController,
 	var onRespond: ((PendingInteraction, InteractionResponse) -> Void)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
 	var onJumpDisplayed: (() -> Void)?
-	var onJumpTarget: ((ConversationJumpTarget) -> Void)?
 
 	private let stateLabel = NSTextField(labelWithString: "Disconnected")
 	private let activeTaskLabel = NSTextField(wrappingLabelWithString: "")
@@ -86,12 +85,6 @@ final class ConversationViewController: NSViewController,
 		target: nil,
 		action: nil
 	)
-	let bookmarkButton = NSButton(
-		title: "Bookmark Selected…",
-		target: nil,
-		action: nil
-	)
-	let jumpButton = NSPopUpButton()
 	let transcriptPreparation = TranscriptPreparationCoordinator()
 	var preparedContents: [String: PreparedConversationContent] = [:]
 	struct MeasuredItemSize
@@ -190,7 +183,6 @@ final class ConversationViewController: NSViewController,
 	var lastImageImportID: UUID?
 	var composerSubmissionPresentation: ConversationPresentation.Composer?
 	var bookmarks: [ConversationBookmark] = []
-	var jumpTargets: [ConversationJumpTarget] = []
 	var requestedJumpItemID: String?
 
 	deinit
@@ -237,9 +229,12 @@ final class ConversationViewController: NSViewController,
 			row.widthAnchor.constraint(equalTo: headerStack.widthAnchor).isActive = true
 		}
 		let utilityRow = AppKitLayout.horizontalStack(
-			[loadEarlierButton, flexibleSpace(), bookmarkButton, jumpButton, latestButton],
+			[loadEarlierButton, flexibleSpace(), latestButton],
 			spacing: 6
 		)
+		// The horizontal spacer has no intrinsic height. Keep it from taking the
+		// transcript's vertical space when both navigation buttons are hidden.
+		utilityRow.heightAnchor.constraint(equalToConstant: 24).isActive = true
 		// These rows only have content after a snapshot supplies it. Keep the
 		// first fitting pass from reserving their empty heights.
 		activeTaskRow.isHidden = true
@@ -487,6 +482,12 @@ final class ConversationViewController: NSViewController,
 		endTranscriptResize(reason: .pane)
 	}
 
+	func updateTranscriptUtilityRowVisibility()
+	{
+		transcriptUtilityRow?.isHidden = loadEarlierButton.isHidden && latestButton.isHidden
+		updateReadingRowVisibility()
+	}
+
 	private func updateReadingRowVisibility()
 	{
 		for (content, row, _) in centeredReadingRows where row.isHidden != content.isHidden
@@ -545,9 +546,7 @@ final class ConversationViewController: NSViewController,
 		if previous?.navigation != snapshot.navigation
 		{
 			bookmarks = snapshot.navigation.bookmarks
-			renderJumpTargets(snapshot.navigation.navigationTargets)
 			turnNavigationRail.refreshBookmark()
-			updateBookmarkButton()
 		}
 		if previous?.status != snapshot.status
 		{
@@ -569,8 +568,7 @@ final class ConversationViewController: NSViewController,
 			|| previous?.status.executionState != snapshot.status.executionState
 		{
 			loadEarlierButton.isHidden = !snapshot.transcript.canLoadEarlierTurns
-			transcriptUtilityRow?.isHidden = snapshot.transcript.entries.isEmpty
-				&& !snapshot.transcript.canLoadEarlierTurns
+			updateTranscriptUtilityRowVisibility()
 			emptyStateLabel.isHidden = !snapshot.transcript.entries.isEmpty
 				|| snapshot.transcript.selectedThreadID != nil
 			prepareTranscript(snapshot.transcript)
@@ -591,7 +589,6 @@ final class ConversationViewController: NSViewController,
 			requestDetailsScrollView.updateContentHeight()
 		}
 		updateReadingRowVisibility()
-		updateBookmarkButton()
 	}
 
 	private func renderTaskStatus(_ snapshot: ConversationPresentation.Status)

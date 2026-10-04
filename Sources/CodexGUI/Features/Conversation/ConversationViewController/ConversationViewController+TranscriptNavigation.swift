@@ -125,34 +125,6 @@ extension ConversationViewController
 		widthChangeReadingPosition = nil
 	}
 
-	func renderJumpTargets(_ targets: [ConversationJumpTarget])
-	{
-		guard targets != jumpTargets
-		else
-		{
-			return
-		}
-		jumpTargets = targets
-		jumpButton.removeAllItems()
-		jumpButton.addItem(withTitle: "Jump to…")
-		jumpButton.item(at: 0)?.isEnabled = false
-		for target in targets
-		{
-			let category: String
-			switch target.kind
-			{
-			case .userRequest: category = "Request"
-			case .changedFile: category = "File"
-			case .failure: category = "Failure"
-			}
-			jumpButton.addItem(withTitle: "\(category): \(target.title)")
-			jumpButton.lastItem?.representedObject = target.id
-			jumpButton.lastItem?.toolTip = target.title
-		}
-		jumpButton.selectItem(at: 0)
-		jumpButton.isEnabled = !targets.isEmpty
-	}
-
 	func scrollToRequestedItem()
 	{
 		guard let requestedJumpItemID
@@ -218,97 +190,7 @@ extension ConversationViewController
 			resizeReadingAnchor = readingAnchor()
 		}
 		self.requestedJumpItemID = nil
-		updateBookmarkButton()
 		onJumpDisplayed?()
-	}
-
-	func updateBookmarkButton()
-	{
-		let index = collectionView.selectionIndexPaths.first?.item
-		bookmarkButton.isEnabled = index.map
-		{
-			displayedRows.indices.contains($0)
-				&& displayedRows[$0].sourceEntryID != nil
-		} == true
-	}
-
-	@objc func bookmarkSelected()
-	{
-		guard let index = collectionView.selectionIndexPaths.first?.item,
-				displayedRows.indices.contains(index),
-				let sourceID = displayedRows[index].sourceEntryID,
-				let entry = entries.first(where:
-				{
-					$0.id == sourceID
-				}),
-				let selectedThreadID, let separator = entry.id.firstIndex(of: ":")
-		else
-		{
-			return
-		}
-		let turnID = String(entry.id[..<separator])
-		let itemID = String(entry.id[entry.id.index(after: separator)...])
-		let existing = bookmarks.first
-		{
-			$0.threadID == selectedThreadID && $0.turnID == turnID && $0.itemID == itemID
-		}
-		if let existing
-		{
-			onToggleBookmark?(existing)
-			return
-		}
-		let alert = NSAlert()
-		alert.messageText = "Bookmark Message"
-		alert.informativeText = String(entry.body.prefix(300))
-		alert.addButton(withTitle: "Answer")
-		alert.addButton(withTitle: "Decision")
-		alert.addButton(withTitle: "Cancel")
-		guard let window = view.window
-		else
-		{
-			return
-		}
-		let generation = selectionGeneration
-		alert.beginSheetModal(for: window)
-		{
-			[weak self] response in
-			guard self?.selectionGeneration == generation
-			else
-			{
-				return
-			}
-			let kind: ConversationBookmarkKind
-			switch response
-			{
-			case .alertFirstButtonReturn: kind = .answer
-			case .alertSecondButtonReturn: kind = .decision
-			default: return
-			}
-			self?.onToggleBookmark?(
-				ConversationBookmark(
-					threadID: selectedThreadID,
-					turnID: turnID,
-					itemID: itemID,
-					kind: kind,
-					label: String(entry.body.prefix(100))
-				)
-			)
-		}
-	}
-
-	@objc func jumpToSelectedTarget()
-	{
-		guard let id = jumpButton.selectedItem?.representedObject as? String,
-				let target = jumpTargets.first(where:
-				{
-					$0.id == id
-				})
-		else
-		{
-			return
-		}
-		onJumpTarget?(target)
-		jumpButton.selectItem(at: 0)
 	}
 
 	var isNearBottom: Bool
@@ -479,6 +361,7 @@ extension ConversationViewController
 	{
 		updateTurnNavigationPosition()
 		latestButton.isHidden = entries.isEmpty || isNearBottom
+		updateTranscriptUtilityRowVisibility()
 		if liveResizeInProgress
 		{
 			updateLiveResizeVisibleItems()

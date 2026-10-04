@@ -338,58 +338,6 @@ struct ConversationViewControllerTests
 		}.first
 	}
 
-	@Test func bookmarkAvailabilityTracksSelectionWithoutAnotherRender() async throws
-	{
-		_ = NSApplication.shared
-		let controller = ConversationViewController()
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 700,
-				height: 760
-			),
-			styleMask: [.titled, .resizable],
-			backing: .buffered,
-			defer: false
-		)
-		window.contentViewController = controller
-		window.setContentSize(NSSize(
-			width: 700,
-			height: 760
-		))
-		controller.render(
-			snapshot([ConversationEntry(
-				id: "turn:answer",
-				kind: .agent,
-				title: "Codex",
-				body: "Answer"
-			)])
-		)
-		await controller.waitForRendering()
-		let collection = try #require(findCollection(in: controller.view))
-		let bookmark = try #require(findButton(
-			in: controller.view,
-			title: "Bookmark Selected…"
-		))
-		let selected: Set<IndexPath> = [IndexPath(
-			item: 0,
-			section: 0
-		)]
-		#expect(!bookmark.isEnabled)
-
-		// Programmatic selection does not send the delegate events that a user click sends.
-		collection.selectItems(
-			at: selected,
-			scrollPosition: []
-		)
-		collection.delegate?.collectionView?(collection, didSelectItemsAt: selected)
-		#expect(bookmark.isEnabled)
-		collection.deselectItems(at: selected)
-		collection.delegate?.collectionView?(collection, didDeselectItemsAt: selected)
-		#expect(!bookmark.isEnabled)
-	}
-
 	@Test func smallWindowKeepsDraftContextAndApprovalDetailsScrollable() throws
 	{
 		_ = NSApplication.shared
@@ -1056,7 +1004,6 @@ struct ConversationViewControllerTests
 		await controller.waitForRendering()
 		#expect(controller.displayedRows.count == 2)
 		#expect(controller.requestedJumpItemID == nil)
-		#expect(controller.bookmarkButton.isEnabled)
 		#expect(controller.entries == [entry])
 	}
 
@@ -1114,7 +1061,7 @@ struct ConversationViewControllerTests
 		#expect(controller.collapsedGroupIDs.isEmpty)
 	}
 
-	@Test func terminalExecutionStopsTimingAndTimingRowsCannotBeBookmarked() async
+	@Test func terminalExecutionStopsTiming() async
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
@@ -1135,15 +1082,6 @@ struct ConversationViewControllerTests
 		controller.render(active)
 		await controller.waitForRendering()
 		#expect(controller.turnStatusTimer != nil)
-		controller.collectionView.selectItems(
-			at: [IndexPath(
-				item: 1,
-				section: 0
-			)],
-			scrollPosition: .top
-		)
-		controller.updateBookmarkButton()
-		#expect(!controller.bookmarkButton.isEnabled)
 		var terminal = snapshot(
 			[entry],
 			executionState: .disconnected

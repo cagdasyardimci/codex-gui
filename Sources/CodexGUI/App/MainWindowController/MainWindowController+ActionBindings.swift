@@ -290,10 +290,6 @@ extension MainWindowController
 		{
 			target.dispatch(.toggleBookmark($0))
 		}
-		conversation.onJumpTarget =
-		{
-			target.dispatch(.jumpTarget($0))
-		}
 		conversation.onJumpDisplayed =
 		{
 			target.dispatch(.acknowledgeJump)

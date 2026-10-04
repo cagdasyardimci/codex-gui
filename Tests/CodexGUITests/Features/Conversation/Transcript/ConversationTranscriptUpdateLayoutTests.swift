@@ -6,6 +6,108 @@ import Testing
 @Suite @MainActor
 struct ConversationTranscriptUpdateLayoutTests
 {
+	@Test(arguments: [false, true])
+	func scrollingToEndKeepsTranscriptRowsInTheViewport(canLoadEarlierTurns: Bool) async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 900,
+				height: 760
+			),
+			styleMask: [.titled, .resizable],
+			backing: .buffered,
+			defer: false
+		)
+		window.contentViewController = controller
+		window.setContentSize(NSSize(
+			width: 900,
+			height: 760
+		))
+		defer
+		{
+			controller.cancelWidthChangeReadingPosition()
+			controller.collectionView.dataSource = nil
+			controller.collectionView.delegate = nil
+			window.contentViewController = nil
+			window.isReleasedWhenClosed = false
+			window.close()
+		}
+		let entries = (0 ..< 160).map
+		{
+			index in
+			if index % 4 != 0
+			{
+				return ConversationEntry(
+					id: "turn:command-\(index)",
+					kind: .command,
+					title: "Command",
+					body: "",
+					activity: .command(ConversationCommand(
+						command: "git status",
+						cwd: nil,
+						output: "Complete",
+						status: "completed",
+						exitCode: 0,
+						durationMs: 1,
+						actions: []
+					))
+				)
+			}
+			return ConversationEntry(
+				id: "turn:entry-\(index)",
+				kind: .agent,
+				title: "Codex",
+				body: "Message \(index)\n\n" + String(
+					repeating: "Transcript text. ",
+					count: 40
+				)
+			)
+		}
+		controller.render(snapshot(
+			Array(entries.prefix(100)),
+			canLoadEarlierTurns: canLoadEarlierTurns
+		))
+		await controller.waitForRendering()
+		for end in [120, 140, 160]
+		{
+			controller.render(snapshot(
+				Array(entries.prefix(end)),
+				canLoadEarlierTurns: canLoadEarlierTurns
+			))
+			await controller.waitForRendering()
+		}
+		let collection = controller.collectionView
+		let scroll = controller.conversationScrollView
+		let layout = try #require(collection.collectionViewLayout)
+		for fraction in [CGFloat(0), 0.5, 1, 0.25, 1]
+		{
+			controller.view.layoutSubtreeIfNeeded()
+			let bottom = layout.collectionViewContentSize.height - scroll.contentSize.height
+			scroll.contentView.scroll(to: NSPoint(
+				x: 0,
+				y: bottom * fraction
+			))
+			scroll.reflectScrolledClipView(scroll.contentView)
+			collection.layoutSubtreeIfNeeded()
+			controller.view.layoutSubtreeIfNeeded()
+			#expect(scroll.frame.height > window.contentLayoutRect.height / 2)
+			#expect(controller.latestButton.isHidden == (fraction == 1))
+			let visible = layout.layoutAttributesForElements(in: collection.visibleRect)
+			#expect(!visible.isEmpty)
+			for attributes in visible
+			{
+				let path = try #require(attributes.indexPath)
+				let item = try #require(collection.item(at: path))
+				#expect(item.view.frame == attributes.frame)
+			}
+			#expect(abs(collection.frame.height - layout.collectionViewContentSize.height) < 1)
+		}
+	}
+
 	@Test func streamingReusesFixedHeightRowsAndRefreshesGrownRowsWithoutMovingTheReader(
 	) async throws
 	{
@@ -141,14 +243,17 @@ struct ConversationTranscriptUpdateLayoutTests
 		}
 	}
 
-	private func snapshot(_ entries: [ConversationEntry]) -> ConversationSnapshot
+	private func snapshot(
+		_ entries: [ConversationEntry],
+		canLoadEarlierTurns: Bool = false
+	) -> ConversationSnapshot
 	{
 		ConversationSnapshot(
 			projectPath: "/tmp/layout-streaming",
 			threads: [],
 			selectedThreadID: "reading",
 			entries: entries,
-			canLoadEarlierTurns: false,
+			canLoadEarlierTurns: canLoadEarlierTurns,
 			changedFiles: [],
 			diff: "",
 			draft: "",
