@@ -50,6 +50,23 @@ final class ReviewMarkerStore
 		)
 	}
 
+	/// One fresh snapshot belongs to each read operation, including file and hunk identities.
+	func reviewedIdentities(
+		projectPath: String,
+		identities: [ReviewMarkerIdentity]
+	) -> [ReviewMarkerIdentity]
+	{
+		let storedMarkers = markers()
+		return identities.filter
+		{
+			identity in
+			storedMarkers[key(
+				projectPath: projectPath,
+				reference: identity.reference
+			)] == identity.fingerprint
+		}
+	}
+
 	private func markers() -> [String: String]
 	{
 		defaults.dictionary(forKey: storageKey) as? [String: String] ?? [:]

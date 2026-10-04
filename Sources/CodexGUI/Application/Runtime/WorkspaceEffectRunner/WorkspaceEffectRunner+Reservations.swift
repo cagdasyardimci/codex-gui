@@ -174,15 +174,10 @@ extension WorkspaceEffectRunner
 			case .readReviewMarkers(let operation):
 				if reservedReviewResults[key] == nil
 				{
-					let marked = operation.identities.filter
-					{
-						identity in
-						reviewMarkerStore?.isReviewed(
-							projectPath: context.workspace.canonicalCheckoutPath ?? "",
-							reference: identity.reference,
-							fingerprint: identity.fingerprint
-						) == true
-					}
+					let marked = reviewMarkerStore?.reviewedIdentities(
+						projectPath: context.workspace.canonicalCheckoutPath ?? "",
+						identities: operation.identities
+					) ?? []
 					reservedReviewResults[key] = .review(.markersReceived(
 						operation,
 						.succeeded(marked)
