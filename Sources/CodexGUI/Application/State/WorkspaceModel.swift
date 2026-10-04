@@ -173,16 +173,37 @@ struct ConversationContentModel
 		didSet
 		{
 			loadedUserReferences = ConversationHistoryReferences.collect(from: loadedTurns)
+			loadedHistoryRevision += 1
 		}
 	}
 	/// Canonical references are stable while provisional entries stream.
 	/// Memberwise initialization bypasses observers, so selectors can derive an uncached value.
 	private(set) var loadedUserReferences: [UserMessageReference]?
+	/// Searchable history changes independently of provisional streaming entries.
+	private(set) var loadedHistoryRevision = 0
 	/// The latest actual source turn observed independently of local execution ownership.
 	var latestObservedGitTurnID: String?
 	var turnTimings: [String: ConversationTurnTiming] = [:]
 	var hasLoadedHistory = false
+	{
+		didSet
+		{
+			if hasLoadedHistory != oldValue
+			{
+				loadedHistoryRevision += 1
+			}
+		}
+	}
 	var nextTurnsCursor: String?
+	{
+		didSet
+		{
+			if nextTurnsCursor != oldValue
+			{
+				loadedHistoryRevision += 1
+			}
+		}
+	}
 	var entries: [ConversationEntry] = []
 	{
 		didSet

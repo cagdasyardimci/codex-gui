@@ -325,6 +325,7 @@ struct ConversationStreamingReducerTests
 			"canonical fresh",
 			"second duplicate"
 		])
+		#expect(streamed.loadedHistoryRevision == retained.loadedHistoryRevision)
 		#expect(streamed.loadedUserReferences?.map(\.path) == ["/tmp/retained-reference.png"])
 		#expect(retained.entries[1].body == "canonical")
 

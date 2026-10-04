@@ -159,6 +159,13 @@ struct NavigationSearchOperation
 	var read: NavigationHistoryRead?
 }
 
+struct MessageSearchOperation: Equatable, Sendable
+{
+	let context: OperationContext
+	let query: String
+	let historyRevision: Int
+}
+
 struct ConversationJumpOperation
 {
 	let context: OperationContext

@@ -1,6 +1,6 @@
 import Foundation
 
-struct SearchableThread
+struct SearchableThread: Sendable
 {
 	let threadID: String
 	let title: String
@@ -9,7 +9,7 @@ struct SearchableThread
 	let hasEarlierTurns: Bool
 }
 
-struct MessageSearchScope: Equatable
+struct MessageSearchScope: Equatable, Sendable
 {
 	let loadedThreadCount: Int
 	let totalThreadCount: Int
@@ -37,7 +37,7 @@ struct MessageSearchScope: Equatable
 	}
 }
 
-struct MessageSearchHit: Equatable, Identifiable
+struct MessageSearchHit: Equatable, Identifiable, Sendable
 {
 	let threadID: String
 	let threadTitle: String
@@ -52,7 +52,7 @@ struct MessageSearchHit: Equatable, Identifiable
 	}
 }
 
-struct MessageSearchResults: Equatable
+struct MessageSearchResults: Equatable, Sendable
 {
 	let query: String
 	let scope: MessageSearchScope
@@ -61,38 +61,60 @@ struct MessageSearchResults: Equatable
 
 enum MessageSearch
 {
-	static func search(
+	static func pendingResults(
 		query: String,
 		threads: [SearchableThread],
 		totalThreadCount: Int
 	) -> MessageSearchResults
 	{
-		let searchText = query.trimmingCharacters(in: .whitespacesAndNewlines)
-		let scope = MessageSearchScope(
-			loadedThreadCount: threads.count,
-			totalThreadCount: max(
-				totalThreadCount,
-				threads.count
+		MessageSearchResults(
+			query: query.trimmingCharacters(in: .whitespacesAndNewlines),
+			scope: MessageSearchScope(
+				loadedThreadCount: threads.count,
+				totalThreadCount: max(
+					totalThreadCount,
+					threads.count
+				),
+				threadsWithEarlierTurns: threads.filter(\.hasEarlierTurns).count
 			),
-			threadsWithEarlierTurns: threads.filter(\.hasEarlierTurns).count
+			hits: []
 		)
+	}
+
+	static func search(
+		query: String,
+		threads: [SearchableThread],
+		totalThreadCount: Int,
+		isCancelled: () -> Bool =
+		{
+			false
+		}
+	) -> MessageSearchResults
+	{
+		let pending = pendingResults(
+			query: query,
+			threads: threads,
+			totalThreadCount: totalThreadCount
+		)
+		let searchText = pending.query
+		let scope = pending.scope
 		guard !searchText.isEmpty
 		else
 		{
-			return MessageSearchResults(
-				query: searchText,
-				scope: scope,
-				hits: []
-			)
+			return pending
 		}
 
 		var hits: [MessageSearchHit] = []
-		for thread in threads
+		searchThreads: for thread in threads
 		{
 			for turn in thread.turns
 			{
 				for item in turn.items
 				{
+					if isCancelled()
+					{
+						break searchThreads
+					}
 					guard let matchedText = firstMatchingText(
 						in: item,
 						query: searchText

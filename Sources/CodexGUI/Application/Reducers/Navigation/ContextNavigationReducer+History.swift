@@ -181,7 +181,17 @@ extension ContextNavigationReducer
 
 	static func searchableThreads(_ model: WorkspaceModel) -> [SearchableThread]
 	{
-		model.conversations.content.compactMap
+		let titles = Dictionary(
+			model.conversations.threads.map
+			{
+				($0.id, $0.name ?? $0.id)
+			},
+			uniquingKeysWith:
+			{
+				first, _ in first
+			}
+		)
+		return model.conversations.content.compactMap
 		{
 			key, value -> SearchableThread? in
 			guard case .thread(let id) = key, value.hasLoadedHistory
@@ -191,11 +201,7 @@ extension ContextNavigationReducer
 			}
 			return SearchableThread(
 				threadID: id,
-				title: model.conversations.threads
-					.first(where:
-						{
-							$0.id == id
-						})?.name ?? id,
+				title: titles[id] ?? id,
 				turns: value.loadedTurns,
 				hasEarlierTurns: value.nextTurnsCursor != nil
 			)
