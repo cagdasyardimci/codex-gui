@@ -308,12 +308,14 @@ final class ProjectContextViewController: NSViewController
 		let efforts = model?.supportedReasoningEfforts ?? []
 		for effort in efforts
 		{
-			effortButton.addItem(withTitle: effort.capitalized)
+			effortButton.addItem(withTitle: ModelEffortPopoverView.effortTitle(effort))
 			effortButton.lastItem?.representedObject = effort
 		}
 		if let effort = context.modelPreference?.effort, !efforts.contains(effort)
 		{
-			effortButton.addItem(withTitle: "Unavailable: \(effort)")
+			effortButton.addItem(
+				withTitle: "Unavailable: \(ModelEffortPopoverView.effortTitle(effort))"
+			)
 			effortButton.lastItem?.representedObject = effort
 		}
 		effortButton.selectItem(

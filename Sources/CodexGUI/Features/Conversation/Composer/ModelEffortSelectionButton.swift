@@ -221,8 +221,7 @@ final class ModelEffortSelectionButton: NSButton
 		tint: NSColor
 	)
 	{
-		DesktopIcons.draw(
-			.bolt,
+		DesktopIcons.drawFilledBolt(
 			in: rect,
 			tint: tint
 		)

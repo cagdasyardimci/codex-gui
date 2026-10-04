@@ -372,6 +372,12 @@ final class ModelEffortPopoverView: NSViewController
 	{
 		slider.fastMode = fastMode
 		fastButton.state = fastMode ? .on : .off
+		fastButton.image = fastMode
+			? DesktopIcons.filledBoltImage(size: 13)
+			: DesktopIcons.image(
+				.bolt,
+				size: 13
+			)
 		fastButton.contentTintColor = fastMode ? EffortPopoverStyle.blue : EffortPopoverStyle.icon
 		fastButton.toolTip = fastMode ? "Disable fast mode" : "Enable fast mode"
 		fastButton.setAccessibilityLabel(fastButton.toolTip)
@@ -385,7 +391,16 @@ final class ModelEffortPopoverView: NSViewController
 		{
 			return "Default effort"
 		}
-		return effort == "low" ? "Light" : effort.capitalized
+		switch effort.lowercased()
+		{
+		case "low": return "Light"
+		case "medium": return "Medium"
+		case "high": return "High"
+		case "xhigh": return "Extra High"
+		case "max": return "Max"
+		case "ultra": return "Ultra"
+		default: return effort.capitalized
+		}
 	}
 
 	private static func effortOrder(_ effort: String) -> Int
