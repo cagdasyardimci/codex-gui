@@ -169,6 +169,15 @@ struct ComposerModel
 struct ConversationContentModel
 {
 	var loadedTurns: [CodexTurn] = []
+	{
+		didSet
+		{
+			loadedUserReferences = ConversationHistoryReferences.collect(from: loadedTurns)
+		}
+	}
+	/// Canonical references are stable while provisional entries stream.
+	/// Memberwise initialization bypasses observers, so selectors can derive an uncached value.
+	private(set) var loadedUserReferences: [UserMessageReference]?
 	/// The latest actual source turn observed independently of local execution ownership.
 	var latestObservedGitTurnID: String?
 	var turnTimings: [String: ConversationTurnTiming] = [:]

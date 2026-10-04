@@ -274,36 +274,36 @@ struct WorkspaceSelectors
 		{
 			$0.path
 		})
-		for item in viewedContent.loadedTurns.flatMap(\.items) where item.type == "userMessage"
+		let content = viewedContent.content
+		let historyReferences = content.loadedUserReferences
+			?? ConversationHistoryReferences.collect(from: content.loadedTurns)
+		for reference in historyReferences where !knownPaths.contains(reference.path)
 		{
-			for reference in item.references where !knownPaths.contains(reference.path)
+			switch reference.kind
 			{
-				switch reference.kind
+			case .fileReference:
+				guard reference.path.hasPrefix(projectPath + "/")
+				else
 				{
-				case .fileReference:
-					guard reference.path.hasPrefix(projectPath + "/")
-					else
-					{
-						continue
-					}
-					references.append(
-						ComposerContextItem(
-							id: reference.id,
-							kind: .fileReference,
-							title: reference.name,
-							path: String(reference.path.dropFirst(projectPath.count + 1))
-						)
-					)
-				case .image:
-					references.append(
-						ComposerContextItem(
-							id: reference.id,
-							kind: .image,
-							title: reference.name,
-							path: reference.path
-						)
-					)
+					continue
 				}
+				references.append(
+					ComposerContextItem(
+						id: reference.id,
+						kind: .fileReference,
+						title: reference.name,
+						path: String(reference.path.dropFirst(projectPath.count + 1))
+					)
+				)
+			case .image:
+				references.append(
+					ComposerContextItem(
+						id: reference.id,
+						kind: .image,
+						title: reference.name,
+						path: reference.path
+					)
+				)
 			}
 		}
 		return references

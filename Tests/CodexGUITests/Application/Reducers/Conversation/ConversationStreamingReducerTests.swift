@@ -325,6 +325,7 @@ struct ConversationStreamingReducerTests
 			"canonical fresh",
 			"second duplicate"
 		])
+		#expect(streamed.loadedUserReferences?.map(\.path) == ["/tmp/retained-reference.png"])
 		#expect(retained.entries[1].body == "canonical")
 
 		merge(
@@ -336,6 +337,7 @@ struct ConversationStreamingReducerTests
 			model: &model
 		)
 		#expect(model.conversations.content[conversation]?.entries.map(\.body) == ["new"])
+		#expect(model.conversations.content[conversation]?.loadedUserReferences?.isEmpty == true)
 	}
 
 	@Test func prependedHistoryKeepsStreamingAgentAndCommandEntriesAtTheirNewIndices()
