@@ -30,6 +30,7 @@ final class AppServer: CodexService
 			permissions: [String: Any]?
 		)] = [:]
 	var answeredInteractions = Set<String>()
+	var pendingInteractionWrites: [String: ProtocolWriteTicket] = [:]
 	private(set) var connectionGeneration = UUID()
 	private let diagnostics = BackendDiagnosticsBuffer()
 	var onEvent: ((AppServerEvent) -> Void)?
@@ -673,6 +674,12 @@ final class AppServer: CodexService
 
 		interactions.removeAll()
 		answeredInteractions.removeAll()
+		let answerWrites = pendingInteractionWrites.values
+		pendingInteractionWrites.removeAll()
+		for write in answerWrites
+		{
+			write.fail(AppServerError.disconnected)
+		}
 
 		failPendingRequests()
 	}

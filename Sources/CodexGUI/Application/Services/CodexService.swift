@@ -150,10 +150,33 @@ protocol CodexService: AnyObject
 		to requestID: String,
 		with response: InteractionResponse
 	) throws
+	func respondAndWait(
+		to requestID: String,
+		with response: InteractionResponse
+	) async throws
+	/// Nil means this implementation cannot establish whether a response reached its transport.
+	func responseMayHaveBeenSent(to requestID: String) -> Bool?
 }
 
 extension CodexService
 {
+	func responseMayHaveBeenSent(to requestID: String) -> Bool?
+	{
+		nil
+	}
+
+	func respondAndWait(
+		to requestID: String,
+		with response: InteractionResponse
+	) async throws
+	{
+		try Task.checkCancellation()
+		try respond(
+			to: requestID,
+			with: response
+		)
+	}
+
 	func startTurn(
 		threadId: String,
 		inputs: [TurnInput],

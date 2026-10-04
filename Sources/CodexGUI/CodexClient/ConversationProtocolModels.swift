@@ -148,7 +148,7 @@ struct TurnPlanUpdate: Equatable
 	}
 }
 
-struct FileChange
+struct FileChange: Equatable
 {
 	let path: String
 	let kind: String

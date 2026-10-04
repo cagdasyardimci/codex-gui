@@ -114,6 +114,84 @@ struct AppServerTransportWriterTests
 		#expect(fixture.methods().prefix(3) == ["initialize", "initialized", "fixture/blocker"])
 	}
 
+	@Test func synchronousApprovalKeepsMetadataUntilAcknowledgmentAndCannotCrossReconnect(
+	) async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try await fixture.server.connect()
+		try await waitUntil
+		{
+			fixture.server.interactions["integer:42"] != nil && fixture.isPaused
+		}
+		let blocked = try fixture.server.send([
+			"method": "fixture/blocker",
+			"params": ["text": String(
+				repeating: "x",
+				count: 1_048_576
+			)],
+		])
+		try await waitUntil
+		{
+			blocked.hasIncompleteFrame
+		}
+		try fixture.server.respond(
+			to: "integer:42",
+			with: .approval(.accept)
+		)
+		let answer = try #require(fixture.server.pendingInteractionWrites["integer:42"])
+		#expect(fixture.server.interactions["integer:42"] != nil)
+		#expect(!fixture.server.answeredInteractions.contains("integer:42"))
+		#expect(!answer.mayHaveBeenSent)
+		#expect(fixture.server.responseMayHaveBeenSent(to: "integer:42") == false)
+		#expect(throws: AppServerError.self)
+		{
+			try fixture.server.respond(
+				to: "integer:42",
+				with: .approval(.accept)
+			)
+		}
+		let oldGeneration = fixture.server.connectionGeneration
+		fixture.server.disconnect()
+		do
+		{
+			try await answer.wait()
+			Issue.record("An old connection acknowledged a queued approval.")
+		}
+		catch let failure as ProtocolWriteFailure
+		{
+			#expect(!failure.mayHaveBeenSent)
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		try await waitUntil
+		{
+			fixture.server.interactions["integer:42"] != nil
+		}
+		#expect(fixture.server.connectionGeneration != oldGeneration)
+		#expect(fixture.server.pendingInteractionWrites["integer:42"] == nil)
+		#expect(!fixture.server.answeredInteractions.contains("integer:42"))
+		#expect(fixture.server.responseMayHaveBeenSent(to: "integer:42") == false)
+		try await fixture.server.respondAndWait(
+			to: "integer:42",
+			with: .approval(.accept)
+		)
+		#expect(fixture.server.answeredInteractions.contains("integer:42"))
+		#expect(fixture.server.pendingInteractionWrites["integer:42"] == nil)
+		#expect(fixture.server.responseMayHaveBeenSent(to: "integer:42") == true)
+		try await waitUntil
+		{
+			fixture.methods().contains("approval")
+		}
+		#expect(fixture.methods().filter
+		{
+			$0 == "approval"
+		}.count == 1)
+	}
+
 	@Test func queuedRequestCancellationStopsWritingBeforeMainActorCleanup() async throws
 	{
 		let fixture = try fixture()
@@ -163,6 +241,73 @@ struct AppServerTransportWriterTests
 		catch let failure as ProtocolWriteFailure
 		{
 			#expect(failure.cause is CancellationError)
+			#expect(!failure.mayHaveBeenSent)
+			#expect(!failure.requiresDisconnect)
+		}
+		try await blocker.wait()
+	}
+
+	@Test func resolvedInteractionStopsQueuedResponseBeforePublishingEvent() async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.server.onEvent = nil
+			fixture.close()
+		}
+		try await fixture.server.connect()
+		try await waitUntil
+		{
+			fixture.server.interactions["integer:42"] != nil && fixture.isPaused
+		}
+		let blocker = try fixture.server.send([
+			"method": "fixture/blocker",
+			"params": ["text": String(
+				repeating: "x",
+				count: 1_048_576
+			)],
+		])
+		try await waitUntil
+		{
+			blocker.hasIncompleteFrame
+		}
+		try fixture.server.respond(
+			to: "integer:42",
+			with: .approval(.accept)
+		)
+		let response = try #require(fixture.server.pendingInteractionWrites["integer:42"])
+		var resolutionPublished = false
+		fixture.server.onEvent =
+		{
+			if case .interactionResolved = $0
+			{
+				resolutionPublished = true
+				do
+				{
+					try drainWritesBeforeMainActorCleanup(fixture)
+				}
+				catch
+				{
+					Issue.record("The writer queue could not drain: \(error)")
+				}
+			}
+		}
+		fixture.server.receiveNotification(
+			method: "serverRequest/resolved",
+			parameters: ["requestId": 42, "threadId": "thread"]
+		)
+		#expect(resolutionPublished)
+		#expect(fixture.server.interactions["integer:42"] == nil)
+		#expect(fixture.server.pendingInteractionWrites["integer:42"] == nil)
+		#expect(!fixture.methods().contains("approval"))
+
+		do
+		{
+			try await response.wait()
+			Issue.record("The resolved request's queued response unexpectedly reached the pipe.")
+		}
+		catch let failure as ProtocolWriteFailure
+		{
 			#expect(!failure.mayHaveBeenSent)
 			#expect(!failure.requiresDisconnect)
 		}

@@ -192,10 +192,23 @@ extension AppServer
 		}
 		interactions.removeValue(forKey: requestID)
 		answeredInteractions.remove(requestID)
+		let pendingWrite = pendingInteractionWrites.removeValue(forKey: requestID)
+		let generation = connectionGeneration
+		// Stop queued responses before an event callback can let the writer advance.
+		let writeFailure = pendingWrite?.fail(
+			AppServerError.invalidInteraction("This request has already been resolved.")
+		)
 		onEvent?(.interactionResolved(
 			threadId: resolvedThreadID,
 			requestID: requestID
 		))
+		if let writeFailure
+		{
+			transportWriteFailed(
+				writeFailure,
+				generation: generation
+			)
+		}
 	}
 
 }

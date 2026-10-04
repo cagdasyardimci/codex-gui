@@ -3,13 +3,60 @@ import Foundation
 // Owns server request decoding and validation of interaction responses.
 extension AppServer
 {
+	private struct QueuedInteractionResponse
+	{
+		let generation: UUID
+		let requestID: String
+		let threadID: String
+		let ticket: ProtocolWriteTicket
+	}
+
 	func respond(
 		to requestID: String,
 		with response: InteractionResponse
 	) throws
 	{
+		let queued = try enqueueInteractionResponse(
+			to: requestID,
+			with: response
+		)
+		Task
+		{
+			[weak self] in
+			try? await self?.finishInteractionResponse(queued)
+		}
+	}
+
+	func respondAndWait(
+		to requestID: String,
+		with response: InteractionResponse
+	) async throws
+	{
+		try Task.checkCancellation()
+		let queued = try enqueueInteractionResponse(
+			to: requestID,
+			with: response
+		)
+		try await finishInteractionResponse(queued)
+	}
+
+	func responseMayHaveBeenSent(to requestID: String) -> Bool?
+	{
+		if let ticket = pendingInteractionWrites[requestID]
+		{
+			return ticket.mayHaveBeenSent
+		}
+		return answeredInteractions.contains(requestID)
+	}
+
+	private func enqueueInteractionResponse(
+		to requestID: String,
+		with response: InteractionResponse
+	) throws -> QueuedInteractionResponse
+	{
 		guard let pendingRequest = interactions[requestID],
-				!answeredInteractions.contains(requestID)
+				!answeredInteractions.contains(requestID),
+				pendingInteractionWrites[requestID] == nil
 		else
 		{
 			throw AppServerError.invalidInteraction("This request has already been resolved.")
@@ -20,8 +67,57 @@ extension AppServer
 			availableDecisions: pendingRequest.decisions,
 			requestedPermissions: pendingRequest.permissions
 		)
-		try send(["id": pendingRequest.id.wireValue, "result": result])
-		answeredInteractions.insert(requestID)
+		let ticket = try enqueueMessage(["id": pendingRequest.id.wireValue, "result": result])
+		pendingInteractionWrites[requestID] = ticket
+		return QueuedInteractionResponse(
+			generation: connectionGeneration,
+			requestID: requestID,
+			threadID: pendingRequest.threadId,
+			ticket: ticket
+		)
+	}
+
+	private func finishInteractionResponse(_ queued: QueuedInteractionResponse) async throws
+	{
+		do
+		{
+			try await queued.ticket.wait()
+			try Task.checkCancellation()
+			guard queued.generation == connectionGeneration
+			else
+			{
+				throw queued.ticket.fail(AppServerError.disconnected)
+			}
+			guard pendingInteractionWrites[queued.requestID] === queued.ticket
+			else
+			{
+				return
+			}
+			pendingInteractionWrites.removeValue(forKey: queued.requestID)
+			if interactions[queued.requestID]?.threadId == queued.threadID
+			{
+				answeredInteractions.insert(queued.requestID)
+			}
+		}
+		catch
+		{
+			let failure = queued.ticket.fail(error)
+			if queued.generation == connectionGeneration
+			{
+				// Keep possibly sent responses reserved until resolution or disconnect.
+				// Retrying could approve a command twice after local cancellation.
+				if !failure.mayHaveBeenSent,
+					pendingInteractionWrites[queued.requestID] === queued.ticket
+				{
+					pendingInteractionWrites.removeValue(forKey: queued.requestID)
+				}
+				transportWriteFailed(
+					failure,
+					generation: queued.generation
+				)
+			}
+			throw failure
+		}
 	}
 
 	private func validatedInteractionResult(
