@@ -28,6 +28,7 @@ final class TaskWorkspaceCoordinator
 	var tokens: [WorkspaceLifecycleOwner: UUID] = [:]
 	var publicationTokens: [WorkspaceLifecycleOwner: UUID] = [:]
 	var pendingPublication: Task<Void, Never>?
+	var taskPresentationCache = TaskWorkspacePresentationCache()
 	var jobs: [UUID: [UUID: Task<Void, Never>]] = [:]
 	private var waiters: [UUID: [CheckedContinuation<Void, Never>]] = [:]
 	var dispatchDepth = 0

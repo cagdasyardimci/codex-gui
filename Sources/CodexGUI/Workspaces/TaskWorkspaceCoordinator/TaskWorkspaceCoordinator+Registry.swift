@@ -144,80 +144,9 @@ extension TaskWorkspaceCoordinator
 			snapshot.selectedTaskWorkspaceID = id
 		}
 		snapshot.taskWorkspaceMessage = model.message
-		snapshot.taskWorkspaces = taskWorkspaceChoices()
-		let running = model.owners.values.filter(\.requiresRemoteStop).count
-		let waiting = model.owners.values.filter
-		{
-			$0.executionState == .awaitingApproval || $0.executionState == .awaitingAnswer
-		}.count
-		snapshot.taskStatusSummary = running == 0 ? nil :
-			"\(running) running task\(running == 1 ? "" : "s")" +
-			(waiting == 0 ? "" : " · \(waiting) need a response")
+		let taskPresentation = taskPresentationCache.presentation(for: model)
+		snapshot.taskWorkspaces = taskPresentation.choices
+		snapshot.taskStatusSummary = taskPresentation.statusSummary
 		return snapshot
 	}
-
-	private func taskWorkspaceChoices() -> [TaskWorkspaceChoice]
-	{
-		let visibleWorkspaces = model.workspaces.values.filter
-		{
-			workspace in
-			workspace.sourceProjectPath == model.source.canonicalCheckoutPath || model.owners
-				.contains
-				{
-					owner, observation in
-					guard case .managed(
-						let workspaceID,
-						_
-					) = owner
-					else
-					{
-						return false
-					}
-					return workspaceID == workspace.id && observation.requiresRemoteStop
-				}
-		}
-		let orderedWorkspaces = visibleWorkspaces.sorted
-		{
-			$0.createdAt < $1.createdAt
-		}
-		return orderedWorkspaces.map
-		{
-			taskWorkspaceChoice(for: $0)
-		}
-	}
-
-	private func taskWorkspaceChoice(for workspace: TaskWorkspace) -> TaskWorkspaceChoice
-	{
-		let observation = model.owners.first
-		{
-			owner, _ in
-			guard case .managed(
-				let workspaceID,
-				_
-			) = owner
-			else
-			{
-				return false
-			}
-			return workspaceID == workspace.id
-		}?.value
-		let canRemoveCheckout =
-			(workspace.phase == .active || workspace.phase == .removing)
-				&& (workspace.threadID == nil || observation != nil)
-				&& observation?.blocksCleanup != true
-				&& observation?.cleanupReservation == nil
-
-		return TaskWorkspaceChoice(
-			id: workspace.id,
-			title: workspace.taskID.components(separatedBy: "|").first ?? workspace.taskID,
-			checkoutPath: workspace.checkoutPath,
-			branch: workspace.branch,
-			sourceWasDirty: workspace.sourceWasDirty,
-			phase: workspace.phase,
-			executionState: observation?.executionState,
-			issue: model.recoveryIssues[workspace.id]?.rawValue,
-			canRemoveCheckout: canRemoveCheckout
-		)
-	}
-
 }
