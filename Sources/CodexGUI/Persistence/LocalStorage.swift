@@ -273,6 +273,11 @@ final class LocalStorage
 		let projectPath = canonicalPath(for: project)
 		let draftKey = Self.draftKey(for: threadID)
 		var drafts = storedDrafts()
+		if let previousText = drafts[projectPath]?[draftKey],
+			previousText.utf8.elementsEqual(text.utf8)
+		{
+			return
+		}
 		drafts[projectPath, default: [:]][draftKey] = text
 		defaults.set(
 			drafts,
@@ -301,6 +306,13 @@ final class LocalStorage
 		let projectPath = canonicalPath(for: project)
 		let draftKey = Self.draftKey(for: threadID)
 		let previousItems = records[projectPath]?[draftKey] ?? []
+		if sameContext(
+			previousItems,
+			items
+		)
+		{
+			return
+		}
 		records[projectPath, default: [:]][draftKey] = items
 		guard saveContextRecords(
 			records,
@@ -493,6 +505,57 @@ final class LocalStorage
 	private func storedDrafts() -> [String: [String: String]]
 	{
 		defaults.dictionary(forKey: Key.drafts) as? [String: [String: String]] ?? [:]
+	}
+
+	private func sameContext(
+		_ first: [ComposerContextItem],
+		_ second: [ComposerContextItem]
+	) -> Bool
+	{
+		guard first.count == second.count
+		else
+		{
+			return false
+		}
+		return zip(
+			first,
+			second
+		).allSatisfy
+		{
+			left, right in
+			left.kind == right.kind && left.firstLine == right.firstLine
+				&& left.lastLine == right.lastLine
+				&& sameStoredText(
+					left.id,
+					right.id
+				)
+				&& sameStoredText(
+					left.title,
+					right.title
+				)
+				&& sameStoredText(
+					left.path,
+					right.path
+				)
+				&& sameStoredText(
+					left.excerpt,
+					right.excerpt
+				)
+		}
+	}
+
+	private func sameStoredText(
+		_ first: String?,
+		_ second: String?
+	) -> Bool
+	{
+		switch (first, second)
+		{
+		case (nil, nil): return true
+		case (.some(let first), .some(let second)):
+			return first.utf8.elementsEqual(second.utf8)
+		default: return false
+		}
 	}
 
 	private func contextRecords(forKey key: String) -> [String: [String: [ComposerContextItem]]]
