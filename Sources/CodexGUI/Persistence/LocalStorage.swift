@@ -26,7 +26,15 @@ final class LocalStorage
 
 	private let defaults: UserDefaults
 	private let imageStore: DraftImageStore
+	private let sentReferenceDecoder: JSONDecoder
+	private let resolveProjectPath: (URL) -> String
 	private var contextByPendingRequestID: [UUID: [ComposerContextItem]] = [:]
+	private struct ContextSnapshot
+	{
+		let data: Data?
+		let records: [String: [String: [ComposerContextItem]]]
+	}
+	private var contextSnapshots: [String: ContextSnapshot] = [:]
 
 	/// All workspace sessions sharing these draft keys must share their write queue.
 	lazy var workspacePersistenceScheduler = WorkspacePersistenceScheduler(storage: self)
@@ -108,6 +116,12 @@ final class LocalStorage
 		let threadID: String
 		let item: ComposerContextItem
 	}
+	private struct SentReferenceSnapshot
+	{
+		let data: Data?
+		let records: [SentReferenceRecord]
+	}
+	private var sentReferenceSnapshot: SentReferenceSnapshot?
 
 	struct ModelPreference: Equatable
 	{
@@ -117,11 +131,18 @@ final class LocalStorage
 
 	init(
 		defaults: UserDefaults = .standard,
-		imageStore: DraftImageStore = DraftImageStore()
+		imageStore: DraftImageStore = DraftImageStore(),
+		sentReferenceDecoder: JSONDecoder = JSONDecoder(),
+		resolveProjectPath: @escaping (URL) -> String =
+		{
+			$0.standardizedFileURL.resolvingSymlinksInPath().path
+		}
 	)
 	{
 		self.defaults = defaults
 		self.imageStore = imageStore
+		self.sentReferenceDecoder = sentReferenceDecoder
+		self.resolveProjectPath = resolveProjectPath
 		migrateLegacyValues()
 	}
 
@@ -330,9 +351,16 @@ final class LocalStorage
 		threadID: String
 	) -> [ComposerContextItem]
 	{
-		sentReferenceRecords().filter
+		let records = sentReferenceRecords()
+		guard !records.isEmpty
+		else
 		{
-			$0.projectPath == canonicalPath(for: project) && $0.threadID == threadID
+			return []
+		}
+		let projectPath = canonicalPath(for: project)
+		return records.filter
+		{
+			$0.projectPath == projectPath && $0.threadID == threadID
 		}.map(\.item)
 	}
 
@@ -377,6 +405,10 @@ final class LocalStorage
 		defaults.set(
 			data,
 			forKey: Key.sentReferences
+		)
+		sentReferenceSnapshot = SentReferenceSnapshot(
+			data: data,
+			records: records
 		)
 		return true
 	}
@@ -560,26 +592,43 @@ final class LocalStorage
 
 	private func contextRecords(forKey key: String) -> [String: [String: [ComposerContextItem]]]
 	{
-		guard let data = defaults.data(forKey: key)
-		else
+		let data = defaults.data(forKey: key)
+		if let snapshot = contextSnapshots[key], snapshot.data == data
 		{
-			return [:]
+			return snapshot.records
 		}
-		return (try? JSONDecoder().decode(
-			[String: [String: [ComposerContextItem]]].self,
-			from: data
-		))
-			?? [:]
+		let records = data.flatMap
+		{
+			try? JSONDecoder().decode(
+				[String: [String: [ComposerContextItem]]].self,
+				from: $0
+			)
+		} ?? [:]
+		contextSnapshots[key] = ContextSnapshot(
+			data: data,
+			records: records
+		)
+		return records
 	}
 
 	private func sentReferenceRecords() -> [SentReferenceRecord]
 	{
-		guard let data = defaults.data(forKey: Key.sentReferences)
-		else
+		let data = defaults.data(forKey: Key.sentReferences)
+		if let snapshot = sentReferenceSnapshot, snapshot.data == data
 		{
-			return []
+			return snapshot.records
 		}
-		if let records = try? JSONDecoder().decode(
+		let records = data.map(decodedSentReferenceRecords) ?? []
+		sentReferenceSnapshot = SentReferenceSnapshot(
+			data: data,
+			records: records
+		)
+		return records
+	}
+
+	private func decodedSentReferenceRecords(from data: Data) -> [SentReferenceRecord]
+	{
+		if let records = try? sentReferenceDecoder.decode(
 			[SentReferenceRecord].self,
 			from: data
 		)
@@ -594,7 +643,7 @@ final class LocalStorage
 		// Earlier builds stored sent references by project and thread. Preserve
 		// those records when switching to globally ordered retention.
 		guard
-			let legacy = try? JSONDecoder().decode(
+			let legacy = try? sentReferenceDecoder.decode(
 				[String: [String: [ComposerContextItem]]].self,
 				from: data
 			)
@@ -716,12 +765,16 @@ final class LocalStorage
 			data,
 			forKey: key
 		)
+		contextSnapshots[key] = ContextSnapshot(
+			data: data,
+			records: records
+		)
 		return true
 	}
 
 	private func canonicalPath(for url: URL) -> String
 	{
-		url.standardizedFileURL.resolvingSymlinksInPath().path
+		resolveProjectPath(url)
 	}
 
 	private static func draftKey(for threadID: String?) -> String
