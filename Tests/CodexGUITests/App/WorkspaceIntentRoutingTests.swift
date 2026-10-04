@@ -40,6 +40,43 @@ struct WorkspaceIntentRoutingTests
 		#expect(store.currentSnapshot.draft == "Current")
 	}
 
+	@Test func importedImagesRequireCapturedDraftAndReducerAcceptance() async throws
+	{
+		let (store, _) = makeStore()
+		defer
+		{
+			store.shutdown()
+		}
+		await store.inputs.connect()
+		let target = WorkspaceIntentTarget(
+			store: store,
+			snapshot: store.currentSnapshot
+		)
+		let accepted = ComposerContextItem(
+			kind: .image,
+			title: "Accepted image",
+			path: "/tmp/accepted-image.png"
+		)
+		#expect(target.attachImportedImage(accepted))
+		#expect(store.model.composer.drafts[target.conversation]?.context
+			.contains(accepted) == true)
+		store.inputs.newChat()
+		let rejected = ComposerContextItem(
+			kind: .image,
+			title: "Rejected image",
+			path: "/tmp/rejected-image.png"
+		)
+		#expect(!target.attachImportedImage(rejected))
+		let current = WorkspaceIntentTarget(
+			store: store,
+			snapshot: store.currentSnapshot
+		)
+		#expect(store.freezeInputsForQuit(WorkspaceQuitRequest(requestID: UUID())))
+		#expect(!current.attachImportedImage(rejected))
+		#expect(store.model.composer.drafts[current.conversation]?.context
+			.contains(rejected) != true)
+	}
+
 	@Test func returningToTheSameStoreDoesNotReviveASelectedWindowCallback() async throws
 	{
 		let (store, _) = makeStore()

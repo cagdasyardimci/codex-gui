@@ -340,28 +340,117 @@ extension ConversationViewController
 	func attachImage(
 		_ image: NSImage,
 		title: String,
-		receiver: ((ComposerContextItem) -> Void)? = nil
+		receiver: ((ComposerContextItem) -> Bool)? = nil
 	)
 	{
-		do
+		guard let source = DraftImageSource(image: image)
+		else
 		{
-			let item = try DraftImageStore().importImage(
-				image,
-				title: title
-			)
-			if let receiver
+			showContextError(DraftImageStoreError.unsupported.localizedDescription)
+			return
+		}
+		attachImage(
+			source,
+			title: title,
+			receiver: receiver
+		)
+	}
+
+	func attachImage(
+		_ source: DraftImageSource,
+		title: String,
+		receiver: ((ComposerContextItem) -> Bool)? = nil
+	)
+	{
+		let generation = selectionGeneration
+		let receiveAttachment = receiver ?? makeImageAttachmentReceiver()
+		let store = draftImageStore
+		let requestID = UUID()
+		let previousImport = lastImageImportID.flatMap
+		{
+			imageImportTasks[$0]
+		}
+		let task = Task
+		{
+			[weak self] in
+			defer
 			{
-				receiver(item)
+				self?.finishImageImport(requestID)
 			}
+			// Serialize preparation and delivery to retain repeated paste/drop order.
+			await previousImport?.value
+			do
+			{
+				try Task.checkCancellation()
+				let imageURL = try await store.importImage(source)
+				guard !Task.isCancelled, let self, self.selectionGeneration == generation
+				else
+				{
+					await store.discardImportedCopy(imageURL)
+					return
+				}
+				let item = ComposerContextItem(
+					kind: .image,
+					title: title,
+					path: imageURL.path
+				)
+				if !receiveAttachment(item)
+				{
+					await store.discardImportedCopy(imageURL)
+				}
+			}
+			catch
+			{
+				guard !(error is CancellationError), !Task.isCancelled,
+						let self, self.selectionGeneration == generation
+				else
+				{
+					return
+				}
+				self.showContextError(error.localizedDescription)
+			}
+		}
+		imageImportTasks[requestID] = task
+		lastImageImportID = requestID
+		updateSendState()
+	}
+
+	private func makeImageAttachmentReceiver() -> (ComposerContextItem) -> Bool
+	{
+		let generation = selectionGeneration
+		let receiveAttachment = onImportImageContext
+		let receiveImage: (ComposerContextItem) -> Bool =
+		{
+			[weak self] item in
+			guard let self, self.selectionGeneration == generation
 			else
 			{
-				onAddContext?(item)
+				return false
 			}
+			return receiveAttachment?(item) ?? false
 		}
-		catch
+		return receiveImage
+	}
+
+	func cancelImageImports()
+	{
+		for task in imageImportTasks.values
 		{
-			showContextError(error.localizedDescription)
+			task.cancel()
 		}
+		imageImportTasks.removeAll()
+		lastImageImportID = nil
+		updateSendState()
+	}
+
+	private func finishImageImport(_ requestID: UUID)
+	{
+		imageImportTasks[requestID] = nil
+		if lastImageImportID == requestID
+		{
+			lastImageImportID = nil
+		}
+		updateSendState()
 	}
 
 	@objc private func chooseImage()
@@ -372,7 +461,7 @@ extension ConversationViewController
 			return
 		}
 		let generation = selectionGeneration
-		let receiveAttachment = makeContextAttachmentReceiver()
+		let receiveAttachment = makeImageAttachmentReceiver()
 		let panel = NSOpenPanel()
 		panel.prompt = "Attach Image"
 		panel.canChooseFiles = true
@@ -382,14 +471,13 @@ extension ConversationViewController
 		panel.beginSheetModal(for: window)
 		{
 			[weak self] response in
-			guard response == .OK, self?.selectionGeneration == generation, let url = panel.url,
-					let image = NSImage(contentsOf: url)
+			guard response == .OK, self?.selectionGeneration == generation, let url = panel.url
 			else
 			{
 				return
 			}
 			self?.attachImage(
-				image,
+				.file(url),
 				title: url.lastPathComponent,
 				receiver: receiveAttachment
 			)

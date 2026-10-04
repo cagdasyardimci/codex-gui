@@ -195,6 +195,10 @@ extension MainWindowController
 		{
 			target.dispatch(.attachContext($0))
 		}
+		conversation.onImportImageContext =
+		{
+			target.attachImportedImage($0)
+		}
 		conversation.onRemoveContext =
 		{
 			target.dispatch(.removeContext($0))

@@ -122,7 +122,10 @@ extension ConversationViewController
 			else if selector == #selector(NSResponder.insertNewline(_:))
 			{
 				dismissSlashCommands()
-				onSend?()
+				if imageImportTasks.isEmpty
+				{
+					onSend?()
+				}
 			}
 			return true
 		}
@@ -162,7 +165,7 @@ extension ConversationViewController
 		updateComposerHeight()
 		view.window?.makeFirstResponder(composer)
 		dismissSlashCommands()
-		if shouldExecute, selectionGeneration == generation
+		if shouldExecute, selectionGeneration == generation, imageImportTasks.isEmpty
 		{
 			switch SlashCommandParser.parse(composer.string)
 			{

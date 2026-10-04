@@ -15,6 +15,7 @@ final class ConversationViewController: NSViewController,
 	var onReturnToActiveTask: (() -> Void)?
 	var onDraftChange: ((String) -> Void)?
 	var onAddContext: ((ComposerContextItem) -> Void)?
+	var onImportImageContext: ((ComposerContextItem) -> Bool)?
 	var onRemoveContext: ((String) -> Void)?
 	var onReuseContext: ((String) -> Void)?
 	var onSelectModel: ((String?) -> Void)?
@@ -184,9 +185,21 @@ final class ConversationViewController: NSViewController,
 	var projectPath: String?
 	var selectedThreadID: String?
 	var selectionGeneration = 0
+	var draftImageStore = DraftImageStore()
+	var imageImportTasks: [UUID: Task<Void, Never>] = [:]
+	var lastImageImportID: UUID?
+	var composerSubmissionPresentation: ConversationPresentation.Composer?
 	var bookmarks: [ConversationBookmark] = []
 	var jumpTargets: [ConversationJumpTarget] = []
 	var requestedJumpItemID: String?
+
+	deinit
+	{
+		for task in imageImportTasks.values
+		{
+			task.cancel()
+		}
+	}
 
 	override func viewDidDisappear()
 	{
@@ -511,6 +524,7 @@ final class ConversationViewController: NSViewController,
 			approvalPolicyPopover?.close()
 			completionRange = nil
 			selectionGeneration += 1
+			cancelImageImports()
 		}
 		if previous?.owner != snapshot.owner
 		{

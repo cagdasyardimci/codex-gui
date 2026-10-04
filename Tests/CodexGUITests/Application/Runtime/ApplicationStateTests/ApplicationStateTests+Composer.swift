@@ -80,6 +80,8 @@ extension ApplicationStateTests
 		service.finishTurnStart(with: service.nextTurn)
 		_ = await submission.wait()
 		#expect(state.currentSnapshot.draft == "Submitted text")
+		try await state.store.awaitAcceptedPersistence()
+		#expect(state.currentSnapshot.draft == "Submitted text")
 		#expect(storage.draft(
 			for: project,
 			threadID: service.thread.id
@@ -377,6 +379,11 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.selectedThreadID == nil)
 		#expect(state.currentSnapshot.draft == "Later request")
 		#expect(state.currentSnapshot.draftContext == [laterItem])
+		try await state.store.awaitAcceptedPersistence()
+		#expect(storage.draft(
+			for: project,
+			threadID: service.thread.id
+		).isEmpty)
 		#expect(storage.draft(
 			for: project,
 			threadID: nil
@@ -606,6 +613,7 @@ extension ApplicationStateTests
 			}
 		)
 		#expect(storage.selectedThreadID(for: project) == nil)
+		try await state.store.awaitAcceptedPersistence()
 		#expect(storage.draft(
 			for: project,
 			threadID: service.thread.id

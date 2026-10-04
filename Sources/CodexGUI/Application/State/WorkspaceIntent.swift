@@ -180,6 +180,20 @@ final class WorkspaceIntentTarget
 		return true
 	}
 
+	/// The import worker retains its generated copy only after the draft accepts it.
+	func attachImportedImage(_ item: ComposerContextItem) -> Bool
+	{
+		guard dispatch(.attachContext(item))
+		else
+		{
+			return false
+		}
+		return store.model.composer.drafts[conversation]?.context.contains
+		{
+			$0.id == item.id && $0.path == item.path
+		} == true
+	}
+
 	@discardableResult
 	func dispatch(_ intent: WorkspaceIntent) -> Bool
 	{

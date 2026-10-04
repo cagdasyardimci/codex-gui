@@ -210,6 +210,13 @@ extension ConversationViewController
 				title: title
 			)
 		}
+		composer.onImageSource =
+		{
+			[weak self] source, title in self?.attachImage(
+				source,
+				title: title
+			)
+		}
 	}
 
 	private func configureContextPreviews()
@@ -350,6 +357,7 @@ extension ConversationViewController
 
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)
 	{
+		composerSubmissionPresentation = snapshot
 		planModeLabel.stringValue = snapshot.planModeStatus ?? "Plan mode"
 		planModeLabel.isHidden = !snapshot.planMode && snapshot.planModeStatus == nil
 		planModeLabel.textColor = snapshot.planModeStatus == nil ? .systemBlue : .systemOrange
@@ -369,15 +377,6 @@ extension ConversationViewController
 		{
 			slashCommandController.render(prefix: query.prefix)
 		}
-		let isSlashInput: Bool
-		switch SlashCommandParser.parse(snapshot.draft)
-		{
-		case .text: isSlashInput = false
-		case .command, .error: isSlashInput = true
-		}
-		let isViewingActiveTask =
-			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
-
 		if composer.string != snapshot.draft
 		{
 			dismissSlashCommands()
@@ -404,6 +403,26 @@ extension ConversationViewController
 		{
 			addContextButton.item(at: index)?.isEnabled = snapshot.projectPath != nil
 		}
+		updateSendState()
+	}
+
+	func updateSendState()
+	{
+		guard let snapshot = composerSubmissionPresentation
+		else
+		{
+			sendButton.isEnabled = false
+			steerButton.isEnabled = false
+			return
+		}
+		let isSlashInput: Bool
+		switch SlashCommandParser.parse(snapshot.draft)
+		{
+		case .text: isSlashInput = false
+		case .command, .error: isSlashInput = true
+		}
+		let isViewingActiveTask =
+			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
 
 		let hasMessageContent =
 			!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -411,10 +430,15 @@ extension ConversationViewController
 		let canSubmitMessage = snapshot.canSend || isSlashInput
 		let canSteerMessage = snapshot.canSteer || isSlashInput
 
-		sendButton.isEnabled = canSubmitMessage && hasMessageContent
+		let imagesAreReady = imageImportTasks.isEmpty
+		sendButton.isEnabled = canSubmitMessage && hasMessageContent && imagesAreReady
 		steerButton.isHidden = !isViewingActiveTask || snapshot.activeExecutionState != .running
 		sendButton.isHidden = !steerButton.isHidden
-		steerButton.isEnabled = canSteerMessage && hasMessageContent
+		steerButton.isEnabled = canSteerMessage && hasMessageContent && imagesAreReady
+		sendButton.toolTip = imagesAreReady
+			? "Send message (⌘Return)" : "Preparing image attachment…"
+		steerButton.toolTip = imagesAreReady
+			? "Steer the active turn (⇧⌘Return)" : "Preparing image attachment…"
 		sendButton.contentTintColor = .white
 		sendButton.layer?.backgroundColor = sendButton.isEnabled
 			? NSColor(
@@ -507,10 +531,20 @@ extension ConversationViewController
 
 	@objc private func send()
 	{
+		guard imageImportTasks.isEmpty
+		else
+		{
+			return
+		}
 		onSend?()
 	}
 	@objc private func steer()
 	{
+		guard imageImportTasks.isEmpty
+		else
+		{
+			return
+		}
 		onSteer?(composer.string)
 	}
 	@objc private func stop()
