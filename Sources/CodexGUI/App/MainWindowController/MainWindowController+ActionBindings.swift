@@ -147,6 +147,16 @@ extension MainWindowController
 
 	func configureMessageSearchActions(target: WorkspaceIntentTarget)
 	{
+		let store = target.store
+		let owner = target.reference
+		let storeIdentity = ObjectIdentifier(store)
+		if messageSearchStoreIdentity != storeIdentity || messageSearchOwner != owner
+		{
+			// Retire the previous owner's query before callbacks are rebound to another store.
+			messageSearch.dismiss()
+		}
+		messageSearchStoreIdentity = storeIdentity
+		messageSearchOwner = owner
 		messageSearch.onSearch =
 		{
 			target.dispatch(.search($0))
@@ -158,6 +168,16 @@ extension MainWindowController
 		messageSearch.onLoadMore =
 		{
 			target.dispatch(.loadMoreSearch)
+		}
+		messageSearch.onDismiss =
+		{
+			guard WorkspaceLifecycleReducer.reference(store.model) == owner
+			else
+			{
+				return
+			}
+			// Dismissal also retires a store that is no longer the selected UI owner.
+			store.inputs.dismissMessageSearch()
 		}
 	}
 

@@ -21,6 +21,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	private var toolbarVisibilityBeforeGitReview: Bool?
 	let commandPalette = CommandPaletteController()
 	let messageSearch = MessageSearchController()
+	var messageSearchStoreIdentity: ObjectIdentifier?
+	var messageSearchOwner: WorkspaceLifecycleOwnerReference?
 	let settings = SettingsWindowController()
 	let statusView = StatusPopoverView(frame: .zero)
 	let statusButton = NSButton(
@@ -320,6 +322,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		publicationObserver?.cancel()
 		publicationObserver = nil
 		coordinator?.onChange = nil
+		messageSearch.dismiss()
 	}
 
 	required init?(coder: NSCoder)

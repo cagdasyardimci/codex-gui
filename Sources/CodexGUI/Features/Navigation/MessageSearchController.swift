@@ -2,11 +2,12 @@ import AppKit
 
 @MainActor
 final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
-	NSTableViewDataSource, NSTableViewDelegate
+	NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate
 {
 	var onSearch: ((String) -> Void)?
 	var onOpenHit: ((MessageSearchHit) -> Void)?
 	var onLoadMore: (() -> Void)?
+	var onDismiss: (() -> Void)?
 
 	private let searchField = NSSearchField()
 	private let scopeLabel = NSTextField(wrappingLabelWithString: "")
@@ -23,6 +24,7 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 		action: nil
 	)
 	private var results: MessageSearchResults?
+	private var presentedSheet: NSWindow?
 
 	override func loadView()
 	{
@@ -97,7 +99,15 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 
 	func present(in window: NSWindow)
 	{
+		guard presentedSheet == nil
+		else
+		{
+			presentedSheet?.makeFirstResponder(searchField)
+			return
+		}
 		let sheet = NSWindow(contentViewController: self)
+		sheet.delegate = self
+		sheet.isReleasedWhenClosed = false
 		sheet.title = "Search Messages"
 		sheet.setContentSize(NSSize(
 			width: min(
@@ -109,7 +119,20 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 			),
 			height: 480
 		))
+		presentedSheet = sheet
 		window.beginSheet(sheet)
+		{
+			[weak self, weak sheet] _ in
+			guard let sheet
+			else
+			{
+				return
+			}
+			self?.finishSheetPresentation(
+				sheet,
+				endingSheet: false
+			)
+		}
 		sheet.makeFirstResponder(searchField)
 		onSearch?(searchField.stringValue)
 	}
@@ -209,11 +232,9 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 			return
 		}
 		let hit = results.hits[tableView.selectedRow]
-		if let sheet = view.window, let parent = sheet.sheetParent
-		{
-			parent.endSheet(sheet)
-		}
-		onOpenHit?(hit)
+		let openHit = onOpenHit
+		close()
+		openHit?(hit)
 	}
 
 	@objc private func loadMore()
@@ -223,9 +244,52 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 
 	@objc private func close()
 	{
-		if let sheet = view.window, let parent = sheet.sheetParent
+		dismiss()
+	}
+
+	func dismiss()
+	{
+		guard let sheet = presentedSheet
+		else
+		{
+			return
+		}
+		finishSheetPresentation(
+			sheet,
+			endingSheet: true
+		)
+	}
+
+	func windowWillClose(_ notification: Notification)
+	{
+		guard let sheet = notification.object as? NSWindow
+		else
+		{
+			return
+		}
+		finishSheetPresentation(
+			sheet,
+			endingSheet: true
+		)
+	}
+
+	private func finishSheetPresentation(
+		_ sheet: NSWindow,
+		endingSheet: Bool
+	)
+	{
+		guard presentedSheet === sheet
+		else
+		{
+			return
+		}
+		// A completion from a retired sheet must not dismiss its replacement owner's search.
+		presentedSheet = nil
+		let dismissed = onDismiss
+		if endingSheet, let parent = sheet.sheetParent
 		{
 			parent.endSheet(sheet)
 		}
+		dismissed?()
 	}
 }

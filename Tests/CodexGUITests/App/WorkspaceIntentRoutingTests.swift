@@ -654,6 +654,9 @@ struct WorkspaceIntentRoutingTests
 			{
 			}
 		)
+		controller.showMessageSearch()
+		controller.messageSearch.onSearch?("needle")
+		#expect(store.model.contextNavigation.messageSearchContext != nil)
 		var drafts: [String] = []
 		controller.onSnapshot =
 		{
@@ -662,8 +665,56 @@ struct WorkspaceIntentRoutingTests
 		store.inputs.updateDraft("Visible")
 		#expect(drafts == ["Visible"])
 		controller.window?.close()
+		#expect(store.model.contextNavigation.messageSearch == nil)
+		#expect(store.model.contextNavigation.messageSearchContext == nil)
+		#expect(store.model.contextNavigation.pendingMessageSearch == nil)
 		store.inputs.updateDraft("Closed")
 		#expect(drafts == ["Visible"])
+	}
+
+	@Test func searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding(
+	) async throws
+	{
+		_ = NSApplication.shared
+		let (first, service) = makeStore(threadID: "first-thread")
+		let (next, _) = makeStore(threadID: "next-thread")
+		defer
+		{
+			first.shutdown()
+			next.shutdown()
+		}
+		await first.inputs.connect()
+		await next.inputs.connect()
+		let controller = MainWindowController(
+			store: first,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			}
+		)
+		let window = try #require(controller.window)
+		controller.showMessageSearch()
+		let sheet = try #require(window.attachedSheet)
+		controller.messageSearch.onSearch?("first query")
+		_ = await first.inputs.selectThread(service.thread.id)?.wait()
+		#expect(window.attachedSheet === sheet)
+		#expect(first.model.contextNavigation.messageSearch?.query == "first query")
+		first.inputs.newChat()
+		#expect(window.attachedSheet === sheet)
+		#expect(first.model.contextNavigation.messageSearchContext != nil)
+		next.inputs.searchMessages("next query")
+		controller.configureMessageSearchActions(target: WorkspaceIntentTarget(
+			store: next,
+			snapshot: next.currentSnapshot
+		))
+		#expect(window.attachedSheet == nil)
+		#expect(first.model.contextNavigation.messageSearch == nil)
+		#expect(first.model.contextNavigation.messageSearchContext == nil)
+		#expect(first.model.contextNavigation.pendingMessageSearch == nil)
+		#expect(next.model.contextNavigation.messageSearch?.query == "next query")
+		#expect(next.model.contextNavigation.messageSearchContext != nil)
 	}
 
 	@Test func responseAdmissionKeepsTheFirstTicketAndAllowsRetryOnlyAfterSettlement() async throws

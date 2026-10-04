@@ -27,10 +27,12 @@ build:
 test:
 	# AppKit tests share the process-wide application and run serially.
 	# Shown native windows and popovers need separate SwiftPM test-host lifecycles.
-	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --skip 'WindowLayoutTests|closedWindowDetachesItsStorePublicationObserver|shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning'
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --skip 'WindowLayoutTests|closedWindowDetachesItsStorePublicationObserver|shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning|searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding|MessageSearchSheetLifecycleTests'
 	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter '^CodexGUITests.WindowLayoutTests'
 	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter TaskWorkspaceWindowLayoutTests
 	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter closedWindowDetachesItsStorePublicationObserver
 	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding
+	python3 scripts/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel --filter MessageSearchSheetLifecycleTests
 
 check: lint build test
