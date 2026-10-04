@@ -185,7 +185,7 @@ extension AppServer
 				willRetry: false
 			)
 		)
-		try? send([
+		_ = try? send([
 			"id": id,
 			"result": [
 				"action": "decline",
@@ -208,7 +208,7 @@ extension AppServer
 				willRetry: false
 			)
 		)
-		try? send(["id": id, "result": ["decision": "abort"]])
+		_ = try? send(["id": id, "result": ["decision": "abort"]])
 	}
 
 	private func rejectUnsupportedInteraction(
@@ -225,7 +225,7 @@ extension AppServer
 				willRetry: false
 			)
 		)
-		try? send([
+		_ = try? send([
 			"id": id,
 			"error": ["code": -32601, "message": "Unsupported by this client"]
 		])

@@ -1,10 +1,5 @@
 import Foundation
 
-private struct ParsedProtocolMessage: @unchecked Sendable
-{
-	let value: [String: Any]
-}
-
 /// Owns the child process and newline-delimited JSON transport. All mutable state stays on the main
 /// actor.
 @MainActor
@@ -15,6 +10,7 @@ final class AppServer: CodexService
 	let versionCheckTimeout: DispatchTimeInterval
 	private var process: Process?
 	private var input: FileHandle?
+	private var messageWriter: ProtocolMessageWriter?
 	private var output: FileHandle?
 	private var errorOutput: FileHandle?
 	private var stderrReader: StderrReader?
@@ -22,7 +18,8 @@ final class AppServer: CodexService
 	private var frameContinuation: AsyncStream<Data>.Continuation?
 	private var messageTask: Task<Void, Never>?
 	private var nextID = 1
-	private var pending: [Int: CheckedContinuation<Data, Error>] = [:]
+	private var pending: [Int: CheckedContinuation<ProtocolJSONPayload, Error>] = [:]
+	private var requestWrites: [Int: ProtocolWriteTicket] = [:]
 	private var requestTimeouts: [Int: Task<Void, Never>] = [:]
 	var interactions:
 		[String: (
@@ -94,6 +91,21 @@ final class AppServer: CodexService
 		do
 		{
 			try process.run()
+			messageWriter = try ProtocolMessageWriter(
+				handle: stdin.fileHandleForWriting,
+				reportIOFailure:
+				{
+					[weak self] failure in
+					Task
+					{
+						@MainActor [weak self] in
+						self?.transportWriteFailed(
+							failure,
+							generation: generation
+						)
+					}
+				}
+			)
 			let diagnosticGeneration = try startProcessDiagnostics(
 				for: process,
 				stderr: stderr.fileHandleForReading,
@@ -184,7 +196,7 @@ final class AppServer: CodexService
 						await self?.reportInvalidMessage(for: generation)
 						continue
 					}
-					let message = ParsedProtocolMessage(value: value)
+					let message = ProtocolJSONPayload(value: value)
 					await self?.receiveMessage(
 						message.value,
 						for: generation
@@ -219,7 +231,13 @@ final class AppServer: CodexService
 		{
 			throw AppServerError.disconnected
 		}
-		try send(["method": "initialized"])
+		let initialized = try send(["method": "initialized"])
+		try await initialized.wait()
+		guard generation == connectionGeneration
+		else
+		{
+			throw AppServerError.disconnected
+		}
 	}
 
 	func request(
@@ -234,55 +252,180 @@ final class AppServer: CodexService
 		}
 		let requestID = nextID
 		nextID += 1
-		let timeout = requestTimeout
+		let generation = connectionGeneration
+		try Task.checkCancellation()
+		let ticket = makeRequestWriteTicket(
+			for: requestID,
+			generation: generation
+		)
 
-		let data: Data = try await withCheckedThrowingContinuation
+		let message: ProtocolJSONPayload = try await withTaskCancellationHandler
 		{
-			continuation in
-			pending[requestID] = continuation
-			do
+			try await withCheckedThrowingContinuation
 			{
-				try send(["id": requestID, "method": method, "params": params])
-				requestTimeouts[requestID] = Task
+				continuation in
+				pending[requestID] = continuation
+				// Install the deadline before the writer can serialize or touch a full pipe.
+				installRequestDeadline(
+					requestID,
+					method: method,
+					generation: generation
+				)
+
+				do
 				{
-					[weak self] in
-					try? await Task.sleep(for: timeout)
-					guard !Task.isCancelled
-					else
-					{
-						return
-					}
-					self?.timeOutRequest(
-						requestID,
-						method: method
+					requestWrites[requestID] = try enqueueMessage(
+						["id": requestID, "method": method, "params": params],
+						ticket: ticket
 					)
 				}
+				catch
+				{
+					requestTimeouts.removeValue(forKey: requestID)?.cancel()
+					pending.removeValue(forKey: requestID)?.resume(throwing: error)
+				}
 			}
-			catch
+		}
+		onCancel:
+		{
+			// The writer must observe cancellation before actor cleanup can run.
+			ticket.fail(CancellationError())
+			Task
 			{
-				pending.removeValue(forKey: requestID)
-				continuation.resume(throwing: error)
+				@MainActor [weak self] in
+				self?.cancelRequest(
+					requestID,
+					generation: generation
+				)
 			}
 		}
 
-		guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-		else
-		{
-			throw AppServerError.protocolError("Invalid response from app-server")
-		}
-		return result
+		return message.value
 	}
 
-	func send(_ value: [String: Any]) throws
+	private func makeRequestWriteTicket(
+		for requestID: Int,
+		generation: UUID
+	) -> ProtocolWriteTicket
 	{
-		guard let input, process?.isRunning == true
+		ProtocolWriteTicket(completion:
+			{
+				[weak self] result in
+				guard case .failure(let failure) = result
+				else
+				{
+					return
+				}
+				Task
+				{
+					@MainActor [weak self] in
+					self?.requestWriteFailed(
+						requestID,
+						failure: failure,
+						generation: generation
+					)
+				}
+			})
+	}
+
+	private func installRequestDeadline(
+		_ requestID: Int,
+		method: String,
+		generation: UUID
+	)
+	{
+		let timeout = requestTimeout
+		requestTimeouts[requestID] = Task
+		{
+			[weak self] in
+			try? await Task.sleep(for: timeout)
+			guard !Task.isCancelled
+			else
+			{
+				return
+			}
+			self?.timeOutRequest(
+				requestID,
+				method: method,
+				generation: generation
+			)
+		}
+	}
+
+	@discardableResult
+	func send(_ value: [String: Any]) throws -> ProtocolWriteTicket
+	{
+		let generation = connectionGeneration
+		let ticket = ProtocolWriteTicket(completion:
+			{
+				[weak self] result in
+				guard case .failure(let failure) = result
+				else
+				{
+					return
+				}
+				Task
+				{
+					@MainActor [weak self] in
+					self?.transportWriteFailed(
+						failure,
+						generation: generation
+					)
+				}
+			})
+		return try enqueueMessage(
+			value,
+			ticket: ticket
+		)
+	}
+
+	func enqueueMessage(
+		_ value: [String: Any],
+		ticket: ProtocolWriteTicket = ProtocolWriteTicket()
+	) throws -> ProtocolWriteTicket
+	{
+		guard let messageWriter, process?.isRunning == true
 		else
 		{
-			throw AppServerError.disconnected
+			throw ProtocolWriteFailure(
+				cause: AppServerError.disconnected,
+				mayHaveBeenSent: false,
+				requiresDisconnect: false
+			)
 		}
-		var data = try JSONSerialization.data(withJSONObject: value)
-		data.append(0x0A)
-		try input.write(contentsOf: data)
+		let payload: ProtocolJSONValue
+		do
+		{
+			payload = try ProtocolJSONValue(snapshot: value)
+		}
+		catch
+		{
+			throw ProtocolWriteFailure(
+				cause: error,
+				mayHaveBeenSent: false,
+				requiresDisconnect: false
+			)
+		}
+		return messageWriter.enqueue(
+			payload,
+			ticket: ticket
+		)
+	}
+
+	func transportWriteFailed(
+		_ failure: ProtocolWriteFailure,
+		generation: UUID
+	)
+	{
+		guard generation == connectionGeneration
+		else
+		{
+			return
+		}
+		if failure.requiresDisconnect
+		{
+			failed("Codex app-server input failed: \(failure.localizedDescription)")
+		}
 	}
 
 	private func receiveMessage(
@@ -330,10 +473,11 @@ final class AppServer: CodexService
 			let continuation = pending.removeValue(forKey: id)
 		{
 			requestTimeouts.removeValue(forKey: id)?.cancel()
-			if let result = message["result"] as? [String: Any],
-				let data = try? JSONSerialization.data(withJSONObject: result)
+			requestWrites.removeValue(forKey: id)
+			if let result = message["result"] as? [String: Any]
 			{
-				continuation.resume(returning: data)
+				// The transport already decoded this JSON object off the main actor.
+				continuation.resume(returning: ProtocolJSONPayload(value: result))
 			}
 			else if message["result"] == nil,
 					let error = message["error"] as? [String: Any],
@@ -436,11 +580,79 @@ final class AppServer: CodexService
 
 	private func timeOutRequest(
 		_ id: Int,
-		method: String
+		method: String,
+		generation: UUID
 	)
 	{
-		requestTimeouts.removeValue(forKey: id)
-		pending.removeValue(forKey: id)?.resume(throwing: AppServerError.requestTimedOut(method))
+		guard generation == connectionGeneration, let continuation = pending.removeValue(forKey: id)
+		else
+		{
+			return
+		}
+		requestTimeouts.removeValue(forKey: id)?.cancel()
+		let failure = requestWrites.removeValue(forKey: id)?
+			.fail(AppServerError.requestTimedOut(method))
+		if let failure, !failure.mayHaveBeenSent
+		{
+			continuation.resume(throwing: failure)
+		}
+		else
+		{
+			continuation.resume(throwing: AppServerError.requestTimedOut(method))
+		}
+		if let failure
+		{
+			transportWriteFailed(
+				failure,
+				generation: generation
+			)
+		}
+	}
+
+	private func cancelRequest(
+		_ id: Int,
+		generation: UUID
+	)
+	{
+		guard generation == connectionGeneration, let continuation = pending.removeValue(forKey: id)
+		else
+		{
+			return
+		}
+		requestTimeouts.removeValue(forKey: id)?.cancel()
+		let failure = requestWrites.removeValue(forKey: id)?.fail(CancellationError())
+		continuation.resume(throwing: failure ?? ProtocolWriteFailure(
+			cause: CancellationError(),
+			mayHaveBeenSent: false,
+			requiresDisconnect: false
+		))
+		if let failure
+		{
+			transportWriteFailed(
+				failure,
+				generation: generation
+			)
+		}
+	}
+
+	private func requestWriteFailed(
+		_ id: Int,
+		failure: ProtocolWriteFailure,
+		generation: UUID
+	)
+	{
+		guard generation == connectionGeneration
+		else
+		{
+			return
+		}
+		requestTimeouts.removeValue(forKey: id)?.cancel()
+		requestWrites.removeValue(forKey: id)
+		pending.removeValue(forKey: id)?.resume(throwing: failure)
+		transportWriteFailed(
+			failure,
+			generation: generation
+		)
 	}
 
 	private func failed(_ message: String)
@@ -467,6 +679,8 @@ final class AppServer: CodexService
 
 	private func stopProcessTransport()
 	{
+		messageWriter?.retire()
+		messageWriter = nil
 		output?.readabilityHandler = nil
 		stderrReader?.cancel()
 		stderrReader = nil
@@ -492,14 +706,21 @@ final class AppServer: CodexService
 	{
 		let pendingRequests = pending
 		pending.removeAll()
+		let writes = requestWrites
+		requestWrites.removeAll()
 		for timeout in requestTimeouts.values
 		{
 			timeout.cancel()
 		}
 		requestTimeouts.removeAll()
-		for continuation in pendingRequests.values
+		for (id, continuation) in pendingRequests
 		{
-			continuation.resume(throwing: AppServerError.disconnected)
+			let failure = writes[id]?.fail(AppServerError.disconnected)
+			continuation.resume(throwing: failure ?? ProtocolWriteFailure(
+				cause: AppServerError.disconnected,
+				mayHaveBeenSent: false,
+				requiresDisconnect: false
+			))
 		}
 	}
 }
