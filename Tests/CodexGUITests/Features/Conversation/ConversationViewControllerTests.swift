@@ -497,7 +497,10 @@ struct ConversationViewControllerTests
 		let window = try #require(windowController.window)
 		let split = windowController.paneController.split
 		let controller = try #require(
-			split.splitViewItems[1].viewController as? ConversationViewController
+			split.splitViewItems[1].viewController.children.compactMap
+			{
+				$0 as? ConversationViewController
+			}.first
 		)
 		let collection = try #require(findCollection(in: controller.view))
 		var entries = (0 ..< 30).map
