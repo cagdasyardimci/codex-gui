@@ -235,7 +235,6 @@ final class GitUnifiedCodeView: NSView
 		}
 		if let container = source.textContainer, let manager = source.layoutManager
 		{
-			manager.ensureLayout(for: container)
 			source.updateVisualRowRects()
 			let usedHeight = ceil(max(
 				manager.usedRect(for: container).maxY,
@@ -327,6 +326,7 @@ final class GitUnifiedCodeView: NSView
 
 		let selection = source.selectedRange()
 		source.textStorage?.setAttributedString(attributed)
+		source.invalidateVisualRowGeometry()
 		if NSMaxRange(selection) <= attributed.length
 		{
 			source.setSelectedRange(selection)

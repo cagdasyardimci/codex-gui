@@ -17,16 +17,110 @@ final class GitDiffTextView: NSTextView
 				}
 				return offset
 			}
+			invalidateVisualRowGeometry()
 		}
 	}
 	var placeholderIndices: Set<Int> = []
 	var drawsRoundedChangeHighlights = false
 	var additionalVisualLines: [Int] = []
+	{
+		didSet
+		{
+			if oldValue != additionalVisualLines
+			{
+				invalidateVisualRowGeometry()
+			}
+		}
+	}
 	private(set) var visualRowRects: [NSRect] = []
 	private(set) var visualLineCounts: [Int] = []
+	private(set) var visualGeometryBuildCount = 0
 	private var rowStartOffsets: [Int] = []
+	private var rowIndex = GitDiffRowIndex(rectangles: [])
+	private var visualGeometryKey: VisualGeometryKey?
+	private weak var observedTextStorage: NSTextStorage?
+
+	private struct VisualGeometryKey: Equatable
+	{
+		let container: ObjectIdentifier?
+		let manager: ObjectIdentifier?
+		let containerSize: NSSize?
+		let lineFragmentPadding: CGFloat?
+		let origin: NSPoint
+		let inset: NSSize
+		let width: CGFloat
+	}
+
+	private struct VisualRowMeasurements
+	{
+		let starts: [CGFloat]
+		let lineCounts: [Int]
+	}
+
+	func invalidateVisualRowGeometry()
+	{
+		visualGeometryKey = nil
+	}
+
+	@objc private func invalidateGeometryAfterTextEditing(_ notification: Notification)
+	{
+		invalidateVisualRowGeometry()
+	}
+
+	private func observeTextStorage()
+	{
+		guard observedTextStorage !== textStorage
+		else
+		{
+			return
+		}
+		NotificationCenter.default.removeObserver(
+			self,
+			name: NSTextStorage.didProcessEditingNotification,
+			object: observedTextStorage
+		)
+		observedTextStorage = textStorage
+		if let textStorage
+		{
+			NotificationCenter.default.addObserver(
+				self,
+				selector: #selector(invalidateGeometryAfterTextEditing(_:)),
+				name: NSTextStorage.didProcessEditingNotification,
+				object: textStorage
+			)
+		}
+		invalidateVisualRowGeometry()
+	}
+
+	private func currentGeometryKey() -> VisualGeometryKey
+	{
+		VisualGeometryKey(
+			container: textContainer.map(ObjectIdentifier.init),
+			manager: layoutManager.map(ObjectIdentifier.init),
+			containerSize: textContainer?.containerSize,
+			lineFragmentPadding: textContainer?.lineFragmentPadding,
+			origin: textContainerOrigin,
+			inset: textContainerInset,
+			width: bounds.width
+		)
+	}
 
 	func updateVisualRowRects()
+	{
+		observeTextStorage()
+		guard visualGeometryKey != currentGeometryKey()
+		else
+		{
+			return
+		}
+
+		measureVisualRows()
+		rowIndex = GitDiffRowIndex(rectangles: visualRowRects)
+		visualGeometryKey = currentGeometryKey()
+		visualGeometryBuildCount += 1
+	}
+
+	private func measureVisualRows()
 	{
 		guard let layoutManager, let textContainer
 		else
@@ -47,9 +141,23 @@ final class GitDiffTextView: NSTextView
 			return
 		}
 		layoutManager.ensureLayout(for: textContainer)
+		let measurements = measureRowFragments(using: layoutManager)
+		visualLineCounts = measurements.lineCounts
+		let usedBottom = max(
+			layoutManager.usedRect(for: textContainer).maxY,
+			layoutManager.extraLineFragmentRect.maxY
+		) + textContainerOrigin.y
+		visualRowRects = makeVisualRowRectangles(
+			from: measurements,
+			usedBottom: usedBottom
+		)
+	}
+
+	private func measureRowFragments(using layoutManager: NSLayoutManager) -> VisualRowMeasurements
+	{
 		let textLength = (string as NSString).length
 		var starts: [CGFloat] = []
-		var counts: [Int] = []
+		var lineCounts: [Int] = []
 		for (index, row) in rows.enumerated()
 		{
 			let length = (row.text as NSString).length + (index + 1 < rows.count ? 1 : 0)
@@ -68,7 +176,7 @@ final class GitDiffTextView: NSTextView
 					} ?? 0,
 					extra.minY
 				))
-				counts.append(1)
+				lineCounts.append(1)
 				continue
 			}
 			let glyphs = layoutManager.glyphRange(
@@ -92,28 +200,34 @@ final class GitDiffTextView: NSTextView
 				glyphIndex = NSMaxRange(fragment)
 			}
 			starts.append(fragmentStarts.first ?? 0)
-			counts.append(max(
+			lineCounts.append(max(
 				1,
 				fragmentStarts.count
 			))
 		}
-		visualLineCounts = counts
-		let usedBottom = max(
-			layoutManager.usedRect(for: textContainer).maxY,
-			layoutManager.extraLineFragmentRect.maxY
-		) + textContainerOrigin.y
-		visualRowRects = rows.indices.map
+		return VisualRowMeasurements(
+			starts: starts,
+			lineCounts: lineCounts
+		)
+	}
+
+	private func makeVisualRowRectangles(
+		from measurements: VisualRowMeasurements,
+		usedBottom: CGFloat
+	) -> [NSRect]
+	{
+		rows.indices.map
 		{
 			index in
-			let top = starts[index]
+			let top = measurements.starts[index]
 			let extra = additionalVisualLines.indices.contains(index)
 				? additionalVisualLines[index] : 0
-			let expectedBottom = top + CGFloat(counts[index] + extra)
+			let expectedBottom = top + CGFloat(measurements.lineCounts[index] + extra)
 				* GitUnifiedCodeView.lineHeight
-			let bottom = index + 1 < starts.count
+			let bottom = index + 1 < measurements.starts.count
 				? max(
 					expectedBottom,
-					starts[index + 1]
+					measurements.starts[index + 1]
 				)
 				: max(
 					expectedBottom,
@@ -126,6 +240,18 @@ final class GitDiffTextView: NSTextView
 				height: bottom - top
 			)
 		}
+	}
+
+	func visualRowIndices(
+		from minimumY: CGFloat,
+		through maximumY: CGFloat
+	) -> Range<Int>
+	{
+		updateVisualRowRects()
+		return rowIndex.candidates(
+			from: minimumY,
+			through: maximumY
+		)
 	}
 
 	func visualRowRect(at index: Int) -> NSRect
