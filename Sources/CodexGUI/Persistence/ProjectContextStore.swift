@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 enum ProjectContextStoreError: LocalizedError
@@ -31,15 +30,8 @@ enum ProjectContextStoreError: LocalizedError
 @MainActor
 final class ProjectContextStore
 {
-	private struct Document: Codable
-	{
-		let version: Int
-		let projectPath: String
-		let context: ProjectContext
-	}
-
-	private let directory: URL
-	private let fileManager: FileManager
+	let persistenceWorker: ProjectContextPersistenceWorker
+	private let fileStorage: ProjectContextFileStorage
 
 	init(
 		directory: URL = FileManager.default.urls(
@@ -52,77 +44,20 @@ final class ProjectContextStore
 		fileManager: FileManager = .default
 	)
 	{
-		self.directory = directory
-		self.fileManager = fileManager
+		let canonicalDirectory = directory.standardizedFileURL.resolvingSymlinksInPath()
+		let worker = ProjectContextPersistenceWorker
+			.shared(forCanonicalDirectory: canonicalDirectory)
+		self.persistenceWorker = worker
+		fileStorage = ProjectContextFileStorage(
+			directory: canonicalDirectory,
+			fileManager: fileManager,
+			accessLock: worker.accessLock
+		)
 	}
 
 	func load(for project: URL) throws -> ProjectContext
 	{
-		let fileURL = fileURL(for: project)
-		guard fileManager.fileExists(atPath: fileURL.path)
-		else
-		{
-			return ProjectContext()
-		}
-
-		let document = try readDocument(at: fileURL)
-		try validateDocument(
-			document,
-			for: project
-		)
-
-		return document.context
-	}
-
-	private func readDocument(at fileURL: URL) throws -> Document
-	{
-		let data: Data
-		do
-		{
-			data = try Data(contentsOf: fileURL)
-		}
-		catch
-		{
-			throw ProjectContextStoreError.unreadable(
-				fileURL,
-				error
-			)
-		}
-
-		let document: Document
-		do
-		{
-			document = try JSONDecoder().decode(
-				Document.self,
-				from: data
-			)
-		}
-		catch
-		{
-			throw ProjectContextStoreError.unreadable(
-				fileURL,
-				error
-			)
-		}
-
-		return document
-	}
-
-	private func validateDocument(
-		_ document: Document,
-		for project: URL
-	) throws
-	{
-		guard document.version == 1
-		else
-		{
-			throw ProjectContextStoreError.unsupportedVersion(document.version)
-		}
-		guard document.projectPath == canonicalPath(for: project)
-		else
-		{
-			throw ProjectContextStoreError.wrongProject
-		}
+		try fileStorage.load(for: project)
 	}
 
 	func save(
@@ -130,50 +65,64 @@ final class ProjectContextStore
 		for project: URL
 	) throws
 	{
-		let fileURL = fileURL(for: project)
-		// Refuse to replace data that this version cannot read.
-		if fileManager.fileExists(atPath: fileURL.path)
+		try fileStorage.save(
+			context,
+			for: project
+		)
+	}
+
+	func enqueueLoad(for project: URL) -> Task<ProjectContext, Error>
+	{
+		let capturedPath = project.standardizedFileURL.resolvingSymlinksInPath().path
+		return enqueueLoad(canonicalProjectPath: capturedPath)
+	}
+
+	/// The caller already captured the accepted checkout; do not resolve it again.
+	func enqueueLoad(canonicalProjectPath path: String) -> Task<ProjectContext, Error>
+	{
+		persistenceWorker.enqueue(
+			canonicalProjectPath: path,
+			isWrite: false
+		)
 		{
-			_ = try load(for: project)
+			[fileStorage] in
+			try fileStorage.load(canonicalProjectPath: path)
 		}
+	}
 
-		try fileManager.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
+	func enqueueSave(
+		_ context: ProjectContext,
+		for project: URL
+	) -> Task<Void, Error>
+	{
+		let capturedPath = project.standardizedFileURL.resolvingSymlinksInPath().path
+		return enqueueSave(
+			context,
+			canonicalProjectPath: capturedPath
 		)
+	}
 
-		let document = Document(
-			version: 1,
-			projectPath: canonicalPath(for: project),
-			context: context
+	func enqueueSave(
+		_ context: ProjectContext,
+		canonicalProjectPath path: String
+	) -> Task<Void, Error>
+	{
+		// This bucket identity remains fixed even if its former checkout becomes a symlink.
+		persistenceWorker.enqueue(
+			canonicalProjectPath: path,
+			isWrite: true
 		)
-
-		let encoder = JSONEncoder()
-		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-		let data = try encoder.encode(document)
-
-		try data.write(
-			to: fileURL,
-			options: .atomic
-		)
+		{
+			[fileStorage] in
+			try fileStorage.save(
+				context,
+				canonicalProjectPath: path
+			)
+		}
 	}
 
 	func fileURL(for project: URL) -> URL
 	{
-		let path = canonicalPath(for: project)
-		let digest = SHA256.hash(data: Data(path.utf8))
-		let filename = digest.map
-		{
-			String(
-				format: "%02x",
-				$0
-			)
-		}.joined() + ".json"
-		return directory.appendingPathComponent(filename)
-	}
-
-	private func canonicalPath(for project: URL) -> String
-	{
-		project.standardizedFileURL.resolvingSymlinksInPath().path
+		fileStorage.fileURL(for: project)
 	}
 }

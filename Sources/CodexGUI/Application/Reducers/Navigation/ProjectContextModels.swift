@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProjectContextItemKind: String, Codable, CaseIterable
+enum ProjectContextItemKind: String, Codable, CaseIterable, Sendable
 {
 	case specification
 	case referenceFile
@@ -8,7 +8,7 @@ enum ProjectContextItemKind: String, Codable, CaseIterable
 	case decision
 }
 
-struct ProjectContextItem: Codable, Equatable, Identifiable
+struct ProjectContextItem: Codable, Equatable, Identifiable, Sendable
 {
 	var id: String
 	var kind: ProjectContextItemKind
@@ -38,7 +38,7 @@ struct ProjectContextItem: Codable, Equatable, Identifiable
 	}
 }
 
-struct SavedPrompt: Codable, Equatable, Identifiable
+struct SavedPrompt: Codable, Equatable, Identifiable, Sendable
 {
 	var id: String
 	var title: String
@@ -57,7 +57,7 @@ struct SavedPrompt: Codable, Equatable, Identifiable
 }
 
 /// A remembered selection. The backend's current skill list remains authoritative for availability.
-struct ProjectSkillSelection: Codable, Equatable
+struct ProjectSkillSelection: Codable, Equatable, Sendable
 {
 	var name: String
 	var description: String
@@ -69,7 +69,7 @@ struct ProjectSkillSelection: Codable, Equatable
 	}
 }
 
-struct ProjectModelPreference: Codable, Equatable
+struct ProjectModelPreference: Codable, Equatable, Sendable
 {
 	/// Nil values explicitly select the backend default. A nil preference falls back to global
 	/// choice.
@@ -77,7 +77,7 @@ struct ProjectModelPreference: Codable, Equatable
 	var effort: String?
 }
 
-enum ConversationBookmarkKind: String, Codable, CaseIterable
+enum ConversationBookmarkKind: String, Codable, CaseIterable, Sendable
 {
 	case userRequest
 	case answer
@@ -87,7 +87,7 @@ enum ConversationBookmarkKind: String, Codable, CaseIterable
 }
 
 /// Backend identities survive a changed conversation title and allow a jump after history reload.
-struct ConversationBookmark: Codable, Equatable, Identifiable
+struct ConversationBookmark: Codable, Equatable, Identifiable, Sendable
 {
 	var id: String
 	var threadID: String
@@ -117,7 +117,7 @@ struct ConversationBookmark: Codable, Equatable, Identifiable
 	}
 }
 
-struct ProjectContext: Codable, Equatable
+struct ProjectContext: Codable, Equatable, Sendable
 {
 	var items: [ProjectContextItem] = []
 	var savedPrompts: [SavedPrompt] = []
