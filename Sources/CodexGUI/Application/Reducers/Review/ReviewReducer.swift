@@ -442,7 +442,8 @@ enum ReviewReducer
 					|| review.selectedTurnID == review.turns.last?.turnID
 				review.turns = analyzedTurns(
 					in: content,
-					conversation: key
+					conversation: key,
+					parsedChanges: &review.parsedChanges
 				)
 				if wasFollowingLatestTurn || !review.turns.contains(where:
 					{
@@ -495,7 +496,8 @@ enum ReviewReducer
 
 	private static func analyzedTurns(
 		in content: ConversationContentModel,
-		conversation: ConversationKey
+		conversation: ConversationKey,
+		parsedChanges: inout [String: ReviewParsedChanges]
 	) -> [ReviewTurn]
 	{
 		guard let threadID = threadID(conversation)
@@ -504,24 +506,13 @@ enum ReviewReducer
 			return []
 		}
 
-		return content.loadedTurns.enumerated().map
-		{
-			index, turn in
-			let hasLaterLiveChanges = content.liveChangeTurnID != nil
-				&& (content.loadedTurns.firstIndex(where:
-					{
-						$0.id == content.liveChangeTurnID
-					}) ?? content.loadedTurns.count) > index
-
-			return ReviewAnalyzer.review(
-				threadID: threadID,
-				turn: turn,
-				earlierTurns: Array(content.loadedTurns.prefix(index)),
-				laterTurns: Array(content.loadedTurns.dropFirst(index + 1)),
-				hasEarlierHistory: content.nextTurnsCursor != nil,
-				hasLaterLiveChanges: hasLaterLiveChanges
-			)
-		}
+		return ReviewAnalyzer.reviews(
+			threadID: threadID,
+			turns: content.loadedTurns,
+			hasEarlierHistory: content.nextTurnsCursor != nil,
+			liveChangeTurnID: content.liveChangeTurnID,
+			parsedChanges: &parsedChanges
+		)
 	}
 
 	private static func threadID(_ key: ConversationKey) -> String?

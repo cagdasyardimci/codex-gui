@@ -145,6 +145,38 @@ struct ReviewReducerTests
 			== Set(next.identities.map(\.reference)))
 	}
 
+	@Test func sourceRefreshKeepsUnchangedParsingAndReplacesOnlyEditedTurn() throws
+	{
+		var model = fixture()
+		let first = try #require(model.review.conversations[.thread("thread")]?
+			.parsedChanges["first"])
+		let latest = try #require(model.review.conversations[.thread("thread")]?
+			.parsedChanges["latest"])
+		model.conversations.content[.thread("thread")]?.reviewSourceRevision += 1
+		_ = ReviewReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		#expect(model.review.conversations[.thread("thread")]?.parsedChanges["first"] === first)
+		#expect(model.review.conversations[.thread("thread")]?.parsedChanges["latest"] === latest)
+		model.conversations.content[.thread("thread")]?.loadedTurns[1] = turn(
+			"latest",
+			addition: "edited"
+		)
+		model.conversations.content[.thread("thread")]?.reviewSourceRevision += 1
+		_ = ReviewReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		#expect(model.review.conversations[.thread("thread")]?.parsedChanges["first"] === first)
+		#expect(model.review.conversations[.thread("thread")]?.parsedChanges["latest"] !== latest)
+		#expect(ReviewReducer.selectedTurn(
+			model,
+			.thread("thread")
+		)?.files.first?.diff
+			.contains("+edited") == true)
+	}
+
 	@Test func changedSourceReadRetiresOnlyItsMatchingTicketWithoutCachingOldMarkers()
 	{
 		var model = fixture()

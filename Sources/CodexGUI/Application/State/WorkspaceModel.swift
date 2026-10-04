@@ -322,6 +322,7 @@ struct ConversationsModel
 struct ConversationReviewModel
 {
 	var turns: [ReviewTurn] = []
+	var parsedChanges: [String: ReviewParsedChanges] = [:]
 	var selectedTurnID: String?
 	var sourceRevision = -1
 	var markerRevision = 0
