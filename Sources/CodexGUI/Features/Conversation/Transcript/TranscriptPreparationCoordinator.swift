@@ -20,6 +20,49 @@ final class TranscriptPreparationCoordinator
 			self.markdown = markdown
 			self.preserveSoftBreaks = preserveSoftBreaks
 		}
+
+		static func make(
+			for entry: ConversationEntry,
+			expanded: Bool
+		) -> Self?
+		{
+			// Commands and images use activity rows, without prepared message text.
+			guard entry.activity == nil
+			else
+			{
+				return nil
+			}
+			let collapsed = entry.isExpandable && !expanded
+			let body = collapsed ? collapsedPreview(of: entry.body) : entry.body
+			return Self(
+				body: body,
+				markdown: entry.kind == .agent || entry.kind == .user,
+				preserveSoftBreaks: entry.kind == .user
+			)
+		}
+
+		static func collapsedPreview(of body: String) -> String
+		{
+			var preview = ""
+			var separators = 0
+			for scalar in body.unicodeScalars
+			{
+				if CharacterSet.newlines.contains(scalar)
+				{
+					if separators == 1
+					{
+						return preview
+					}
+					separators += 1
+					preview += "\n"
+				}
+				else
+				{
+					preview.unicodeScalars.append(scalar)
+				}
+			}
+			return preview
+		}
 	}
 
 	private let contentCache = ConversationContentCache()
@@ -35,7 +78,7 @@ final class TranscriptPreparationCoordinator
 
 	func prepare(
 		_ nextEntries: [ConversationEntry],
-		keys: [ContentKey],
+		keys: [ContentKey?],
 		onPrepared: @escaping ([String: PreparedConversationContent]) -> Void
 	)
 	{
@@ -58,6 +101,11 @@ final class TranscriptPreparationCoordinator
 				{
 					return
 				}
+				guard let key
+				else
+				{
+					continue
+				}
 				if existingKeys[entry.id] == key, let prepared = existingContents[entry.id]
 				{
 					contents[entry.id] = prepared
@@ -77,9 +125,16 @@ final class TranscriptPreparationCoordinator
 				return
 			}
 			self.preparedKeys = Dictionary(uniqueKeysWithValues: zip(
-				nextEntries.map(\.id),
+				nextEntries,
 				keys
-			))
+			).compactMap
+			{
+				entry, key in
+				key.map
+				{
+					(entry.id, $0)
+				}
+			})
 			self.preparedContents = contents
 			onPrepared(contents)
 		}

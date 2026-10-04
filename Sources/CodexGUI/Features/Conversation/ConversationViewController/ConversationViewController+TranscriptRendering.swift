@@ -453,10 +453,9 @@ extension ConversationViewController
 		requestedContext = context
 		let keys = nextEntries.map
 		{
-			TranscriptPreparationCoordinator.ContentKey(
-				body: displayedBody(for: $0),
-				markdown: $0.kind == .agent || $0.kind == .user,
-				preserveSoftBreaks: $0.kind == .user
+			TranscriptPreparationCoordinator.ContentKey.make(
+				for: $0,
+				expanded: expandedEntryIDs.contains($0.id)
 			)
 		}
 		transcriptPreparation.prepare(
@@ -638,17 +637,6 @@ extension ConversationViewController
 		readingPositionChanged()
 		scrollToRequestedItem()
 		updateTurnStatusTimer()
-	}
-
-	private func displayedBody(for entry: ConversationEntry) -> String
-	{
-		guard entry.isExpandable && !expandedEntryIDs.contains(entry.id)
-		else
-		{
-			return entry.body
-		}
-		let lines = entry.body.components(separatedBy: .newlines)
-		return lines.prefix(2).joined(separator: "\n")
 	}
 
 }
