@@ -35,9 +35,9 @@ struct GitTurnBaselineTreeReader
 			throw unavailable("Tracked-file count exceeds the capture limit.")
 		}
 		let first = try readAll(paths)
-		let second = try readAll(paths)
+		let contentsAreUnchanged = try contentsMatch(first)
 		let after = try manifests.read()
-		guard before == after, first == second
+		guard before == after, contentsAreUnchanged
 		else
 		{
 			throw GitTurnBaselineReadError.failure(.repositoryChanged)
@@ -46,6 +46,27 @@ struct GitTurnBaselineTreeReader
 			files: first,
 			indexManifest: before.index
 		)
+	}
+
+	/// Reads every captured path again without retaining another complete tree.
+	func contentsMatch(_ captured: [GitTurnBaselineContent]) throws -> Bool
+	{
+		try Task.checkCancellation()
+		var bytes = 0
+		var matches = true
+		for expected in captured
+		{
+			try Task.checkCancellation()
+			let content = try read(expected.entry.path)
+			bytes += content.bytes.count
+			guard bytes <= limits.maximumCaptureBytes
+			else
+			{
+				throw unavailable("Tracked content exceeds the 64 MiB capture limit.")
+			}
+			matches = matches && content == expected
+		}
+		return matches
 	}
 
 	private func readAll(_ paths: [String]) throws -> [GitTurnBaselineContent]
