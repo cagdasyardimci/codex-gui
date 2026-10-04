@@ -417,7 +417,8 @@ enum GitComparisonPatchParser
 			oldPath = kind == .added ? nil : fallback
 			newPath = kind == .deleted ? nil : fallback
 		}
-		let hunks = GitDiffParser.hunks(in: patch).map
+		let parsed = GitDiffParser.hunks(in: lines)
+		let hunks = parsed.hunks.map
 		{
 			hunk in
 			GitComparisonHunk(
@@ -433,22 +434,12 @@ enum GitComparisonPatchParser
 				)
 			)
 		}
-		let hunkLines = hunks.flatMap
-		{
-			$0.text.components(separatedBy: "\n").dropFirst()
-		}
 		return GitComparisonFile(
 			oldPath: oldPath,
 			newPath: newPath,
 			kind: kind,
-			additions: hunkLines.filter
-			{
-				$0.hasPrefix("+")
-			}.count,
-			deletions: hunkLines.filter
-			{
-				$0.hasPrefix("-")
-			}.count,
+			additions: parsed.additions,
+			deletions: parsed.deletions,
 			isBinary: metadata
 				.contains
 				{
