@@ -5,6 +5,7 @@ import Foundation
 enum ExecutionReducer
 {
 	static let reducer = WorkspaceReducer(reduce: reduce)
+	static let uncertainResponseWarningPrefix = "Response delivery is uncertain. "
 
 	static func reduce(
 		_ model: inout WorkspaceModel,
@@ -399,16 +400,17 @@ enum ExecutionReducer
 			{
 				return result
 			}
-			model.execution.pendingResponses.removeValue(forKey: operation.interactionID)
 			guard model.execution.activeThreadID == context.threadID,
 					model.execution.activeTurnID == context.turnID
 			else
 			{
+				model.execution.pendingResponses.removeValue(forKey: operation.interactionID)
 				return result
 			}
 			switch observation
 			{
 			case .succeeded:
+				model.execution.pendingResponses.removeValue(forKey: operation.interactionID)
 				model.execution.pendingInteractions.removeAll
 				{
 					$0.id == operation.interactionID
@@ -416,7 +418,18 @@ enum ExecutionReducer
 				updateAwaitingState(&model.execution)
 				model.execution.statusMessage = nil
 			case .failed(let failure):
-				model.execution.statusMessage = "Could not submit response: \(failure.message)"
+				if failure.outcomeIsUncertain
+				{
+					// The transport still reserves a possibly sent response; do not admit a retry.
+					model.execution.statusMessage = uncertainResponseWarningPrefix
+						+ "Wait for Codex to resolve this request before retrying. "
+						+ failure.message
+				}
+				else
+				{
+					model.execution.pendingResponses.removeValue(forKey: operation.interactionID)
+					model.execution.statusMessage = "Could not submit response: \(failure.message)"
+				}
 			}
 		case .reconciliationRequested, .reconciliationFinished, .historyObserved,
 				.completedHistoryRequested, .completedHistoryReceived:

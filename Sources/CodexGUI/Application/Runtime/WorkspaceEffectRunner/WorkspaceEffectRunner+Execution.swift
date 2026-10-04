@@ -66,6 +66,30 @@ extension WorkspaceEffectRunner
 				throw AppServerError.protocolError("Review operation was not reserved.")
 			}
 			return action
+		case .respond(let operation):
+			try Task.checkCancellation()
+			let ownsCurrentTransport = !hasObservedSubscription
+				|| (subscription?.workspace == operation.context.workspace
+					&& subscription?.generation == operation.context.generation)
+			guard ownsCurrentTransport
+			else
+			{
+				throw AppServerError.disconnected
+			}
+
+			let key = EffectKey(
+				request: RequestKey(operation.context),
+				purpose: .response(operation.interactionID)
+			)
+			tasks[key]?.hasStartedResponse = true
+			try await service.respondAndWait(
+				to: operation.interactionID,
+				with: operation.response
+			)
+			return .execution(.interactionResponseFinished(
+				operation.context,
+				.succeeded(())
+			))
 		case .validateComposerInput(let operation):
 			return try preparedComposerInput(operation)
 		case .releaseUnsentSubmission(let submission):
@@ -592,6 +616,10 @@ extension WorkspaceEffectRunner
 				case .requestRejected = serverError
 			{
 				definitelyRejected = true
+			}
+			else if let writeFailure = error as? ProtocolWriteFailure
+			{
+				definitelyRejected = !writeFailure.mayHaveBeenSent
 			}
 			else
 			{

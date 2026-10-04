@@ -73,6 +73,7 @@ final class WorkspaceEffectRunner
 		let task: Task<Void, Never>
 		let effect: WorkspaceEffect
 		let handle: WorkspaceOperationHandle
+		var hasStartedResponse = false
 	}
 
 	struct ReservedComposerCommand
@@ -473,7 +474,7 @@ final class WorkspaceEffectRunner
 				{
 					let failure = self.failure(
 						for: effect,
-						message: error.localizedDescription
+						error: error
 					)
 					action = self.failureAction(
 						for: effect,
@@ -595,8 +596,8 @@ final class WorkspaceEffectRunner
 			}
 			pending.task.cancel()
 			let failure = failure(
-				for: pending.effect,
-				message: "Local operation cancelled; no remote outcome is established."
+				forCancelled: pending,
+				context: context
 			)
 			deliver(failureAction(
 				for: pending.effect,

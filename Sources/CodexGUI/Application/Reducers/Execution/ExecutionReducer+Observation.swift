@@ -266,6 +266,21 @@ extension ExecutionReducer
 			{
 				$0.id == requestID && $0.threadId == threadID
 			}
+			if model.execution.pendingResponses[requestID]?.context.threadID == threadID
+			{
+				model.execution.pendingResponses.removeValue(forKey: requestID)
+				let shouldClearResponseStatus = model.execution.pendingResponses.isEmpty
+					&& !model.execution.needsReconciliation
+					&& !model.execution.hasUncertainRequest
+					&& model.execution.state != .stopping
+					&& model.execution.statusMessage?.hasPrefix(
+						uncertainResponseWarningPrefix
+					) == true
+				if shouldClearResponseStatus
+				{
+					model.execution.statusMessage = nil
+				}
+			}
 			updateAwaitingState(&model.execution)
 		case .error(
 			let threadID,
@@ -285,6 +300,7 @@ extension ExecutionReducer
 				model.execution.state = .failed
 				model.execution.activeTurnID = nil
 				model.execution.pendingInteractions.removeAll()
+				model.execution.pendingResponses.removeAll()
 				if model.execution.commandLifetime.hasPendingCommands
 				{
 					model.execution.deferredTurnOutcome = .failed

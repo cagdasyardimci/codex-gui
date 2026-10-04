@@ -337,46 +337,6 @@ extension WorkspaceEffectRunner
 					)
 				}
 			case .taskFinished: break
-			case .respond(let operation):
-				guard operation.context.workspace == workspace,
-						let handle = beginSynchronous(
-						effect,
-						context: operation.context
-						)
-				else
-				{
-					continue
-				}
-				let result: OperationResult<Void>
-				let completion: WorkspaceOperationCompletion
-				do
-				{
-					try service.respond(
-						to: operation.interactionID,
-						with: operation.response
-					)
-					result = .succeeded(())
-					completion = .finished
-				}
-				catch
-				{
-					let failure = OperationFailure(
-						message: error.localizedDescription,
-						outcomeIsUncertain: false
-					)
-					result = .failed(failure)
-					completion = .failed(failure)
-				}
-				completeSynchronous(
-					.execution(.interactionResponseFinished(
-						operation.context,
-						result
-					)),
-					context: operation.context,
-					handle: handle,
-					completion: completion
-				)
-
 			case .subscribe(let context):
 				guard context.workspace == workspace
 				else

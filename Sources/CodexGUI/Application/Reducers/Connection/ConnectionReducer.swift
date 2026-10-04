@@ -43,6 +43,7 @@ enum ConnectionReducer
 			model.connection.pendingConnection = context
 			model.connection.isConnected = false
 			model.connection.statusMessage = "Connecting to Codex…"
+			model.execution.pendingResponses.removeAll()
 			model.execution.state = .disconnected
 			// A viewed-history load does not make a terminal execution owner uncertain.
 			let ownerNeedsRecovery = model.execution.hasUncertainRequest
@@ -125,6 +126,7 @@ enum ConnectionReducer
 			model.execution.activePlan = nil
 			model.execution.activeActivity = nil
 			model.execution.pendingInteractions.removeAll()
+			model.execution.pendingResponses.removeAll()
 			model.execution.statusMessage =
 				"\(message) Reopen the conversation to check what finished. "
 					+ "Nothing was resent."

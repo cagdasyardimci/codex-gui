@@ -730,15 +730,16 @@ struct TaskWorkspaceCoordinatorTests
 			.map(\.id) == [alphaApproval.id])
 		#expect(fixture.coordinator.currentSnapshot.diff.contains("+alpha"))
 		#expect(fixture.coordinator.currentSnapshot.activePlan == nil)
-		alpha.state.inputs.respond(
+		#expect(alpha.state.inputs.respond(
 			to: betaApproval,
 			with: .approval(.accept)
-		)
+		) == nil)
 		#expect(alpha.service.respondedRequestIDs.isEmpty)
-		alpha.state.inputs.respond(
+		let response = try #require(alpha.state.inputs.respond(
 			to: alphaApproval,
 			with: .approval(.accept)
-		)
+		))
+		#expect(await response.wait() == .finished)
 		#expect(alpha.service.respondedRequestIDs == [alphaApproval.id])
 		#expect(beta.service.respondedRequestIDs.isEmpty)
 		#expect(beta.state.currentSnapshot.pendingInteractions.count == 1)

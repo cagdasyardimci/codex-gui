@@ -456,6 +456,8 @@ struct WorkspaceIntentRoutingTests
 			}]
 		)
 		var deliveries: [(WorkspaceAction, () -> Void)] = []
+		let deliverySignals = AsyncStream<Void>.makeStream()
+		var deliveryIterator = deliverySignals.stream.makeAsyncIterator()
 		let runner = WorkspaceEffectRunner(
 			service: service,
 			persistence: seed.factoryDependencies.storage.workspacePersistenceScheduler,
@@ -465,11 +467,14 @@ struct WorkspaceIntentRoutingTests
 			},
 			deliver:
 			{
-				deliveries.append(($0, $1))
+				action, complete in
+				deliveries.append((action, complete))
+				deliverySignals.continuation.yield(())
 			}
 		)
 		defer
 		{
+			deliverySignals.continuation.finish()
 			runner.shutdown()
 			store.shutdown()
 		}
@@ -497,6 +502,7 @@ struct WorkspaceIntentRoutingTests
 		)
 		responses.removeAll()
 		let oldReply = try #require(runner.operation(for: oldContext))
+		try #require(await deliveryIterator.next() != nil)
 		#expect(oldReply.completion == nil)
 		try #require(deliveries.count == 1)
 		service.complete(status: "completed")
@@ -543,6 +549,8 @@ struct WorkspaceIntentRoutingTests
 			workspace: store.model.identity
 		)
 		let currentReply = try #require(runner.operation(for: currentContext))
+		try #require(await deliveryIterator.next() != nil)
+		#expect(oldReply.completion == nil)
 		#expect(currentReply.completion == nil)
 		try #require(deliveries.count == 2)
 		store.dispatch(deliveries[0].0)

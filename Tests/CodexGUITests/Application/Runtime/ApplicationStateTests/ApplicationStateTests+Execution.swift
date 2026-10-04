@@ -72,10 +72,11 @@ extension ApplicationStateTests
 			))
 		}
 		service.responseError = AppServerError.requestTimedOut("request/respond")
-		state.inputs.respond(
+		let response = try #require(state.inputs.respond(
 			to: interaction,
 			with: .approval(.accept)
-		)
+		))
+		_ = await response.wait()
 		#expect(state.currentSnapshot.activeExecutionState == .stopped)
 		#expect(state.currentSnapshot.statusMessage == "Agent interrupted.")
 		#expect(state.currentSnapshot.pendingInteractions.isEmpty)
@@ -309,10 +310,11 @@ extension ApplicationStateTests
 		)
 		#expect(state.currentSnapshot.executionState == .awaitingAnswer)
 
-		state.inputs.respond(
+		let approvalResponse = try #require(state.inputs.respond(
 			to: approval,
 			with: .approval(.decline)
-		)
+		))
+		_ = await approvalResponse.wait()
 		#expect(state.currentSnapshot.pendingInteractions.map(\.id) == ["permission", "question"])
 		#expect(state.currentSnapshot.executionState == .awaitingAnswer)
 
@@ -323,13 +325,14 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.pendingInteractions.map(\.id) == ["permission"])
 		#expect(state.currentSnapshot.executionState == .awaitingApproval)
 
-		state.inputs.respond(
+		let permissionResponse = try #require(state.inputs.respond(
 			to: permission,
 			with: .permissions(
 				granted: [:],
 				scope: .turn
 			)
-		)
+		))
+		_ = await permissionResponse.wait()
 		#expect(state.currentSnapshot.pendingInteractions.isEmpty)
 		#expect(state.currentSnapshot.executionState == .running)
 		#expect(service.respondedRequestIDs == ["approval", "permission"])
@@ -431,10 +434,11 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.entries.last?.body == "Working on A")
 		#expect(state.currentSnapshot.diff.contains("a.txt"))
 		#expect(state.currentSnapshot.pendingInteractions.map(\.id) == ["approval-a"])
-		state.inputs.respond(
+		let approvalResponse = try #require(state.inputs.respond(
 			to: approval,
 			with: .approval(.decline)
-		)
+		))
+		_ = await approvalResponse.wait()
 		#expect(service.respondedRequestIDs == ["approval-a"])
 
 		state.inputs.selectThread("thread-2")

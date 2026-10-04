@@ -56,6 +56,7 @@ struct ExecutionModel
 	var commandLifetime = TaskCommandLifetime()
 	var commandEventRevisions: [String: Int] = [:]
 	var pendingInteractions: [PendingInteraction] = []
+	/// A possibly sent response remains reserved until server resolution or disconnection.
 	var pendingResponses: [String: InteractionResponseOperation] = [:]
 	var pendingSteering: OperationContext?
 	var pendingInterruption: InterruptionOperation?

@@ -4,6 +4,54 @@ import Foundation
 extension WorkspaceEffectRunner
 {
 	func failure(
+		forCancelled pending: PendingEffect,
+		context: OperationContext
+	) -> OperationFailure
+	{
+		let message = "Local operation cancelled; no remote outcome is established."
+		guard case .respond(let operation) = pending.effect,
+				pending.hasStartedResponse
+		else
+		{
+			return failure(
+				for: pending.effect,
+				message: message
+			)
+		}
+
+		let ownsCurrentTransport = !hasObservedSubscription
+			|| (subscription?.workspace == context.workspace
+				&& subscription?.generation == context.generation)
+		let mayHaveBeenSent = ownsCurrentTransport
+			? (service.responseMayHaveBeenSent(to: operation.interactionID) ?? true)
+			: true
+		return OperationFailure(
+			message: message,
+			outcomeIsUncertain: mayHaveBeenSent
+		)
+	}
+
+	func failure(
+		for effect: WorkspaceEffect,
+		error: Error
+	) -> OperationFailure
+	{
+		if case .respond = effect, let writeFailure = error as? ProtocolWriteFailure
+		{
+			return OperationFailure(
+				message: writeFailure.localizedDescription,
+				outcomeIsUncertain: writeFailure.mayHaveBeenSent
+			)
+		}
+
+		// An unsent final RPC does not disprove mutations from earlier RPCs in a command.
+		return failure(
+			for: effect,
+			message: error.localizedDescription
+		)
+	}
+
+	func failure(
 		for effect: WorkspaceEffect,
 		message: String
 	) -> OperationFailure
@@ -161,6 +209,10 @@ extension WorkspaceEffectRunner
 				.failed(failure)
 			))
 		case .interrupt: return .execution(.interruptionFinished(
+				context,
+				.failed(failure)
+			))
+		case .respond: return .execution(.interactionResponseFinished(
 				context,
 				.failed(failure)
 			))
