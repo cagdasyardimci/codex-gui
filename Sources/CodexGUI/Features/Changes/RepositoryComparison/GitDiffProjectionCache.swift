@@ -15,13 +15,20 @@ struct GitDiffProjectionCache
 	private static let maximumCachedFileCount = 32
 
 	private var key: Key?
-	private var rowsByFileID: [String: [[GitDiffRow]]] = [:]
+	// Git paths retain their bytes even when Swift considers their Unicode forms equivalent.
+	private var rowsByFileID: [Data: [[GitDiffRow]]] = [:]
 	private(set) var projectionCount = 0
 	private(set) var requestCount = 0
 
 	var cachedFileIDs: Set<String>
 	{
-		Set(rowsByFileID.keys)
+		Set(rowsByFileID.keys.map
+		{
+			String(
+				decoding: $0,
+				as: UTF8.self
+			)
+		})
 	}
 
 	mutating func clear()
@@ -37,8 +44,9 @@ struct GitDiffProjectionCache
 	{
 		requestCount += 1
 		prepare(for: presentation)
+		let fileIdentity = Data(file.id.utf8)
 		let rows: [[GitDiffRow]]
-		if let cached = rowsByFileID[file.id]
+		if let cached = rowsByFileID[fileIdentity]
 		{
 			rows = cached
 		}
@@ -50,7 +58,7 @@ struct GitDiffProjectionCache
 			{
 				rowsByFileID.removeValue(forKey: evictedID)
 			}
-			rowsByFileID[file.id] = rows
+			rowsByFileID[fileIdentity] = rows
 			projectionCount += 1
 		}
 		return presentation.file(

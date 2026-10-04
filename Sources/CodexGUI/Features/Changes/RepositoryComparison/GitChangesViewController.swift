@@ -73,9 +73,11 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	private var contentScroll = NSScrollView()
 	private let sections = GitChangesSectionsView()
 	private var treeRows: [GitDiffTreeRow] = []
-	private var fileSections: [String: NSView] = [:]
+	private var fileSections: [Data: GitDiffFileSectionView] = [:]
+	private var fileSectionKeys: [Data: GitDiffFileSectionKey] = [:]
 	private(set) var projectionCache = GitDiffProjectionCache()
 	private var renderedSnapshotID: String?
+	private var renderedOwner: FeaturePresentationOwner?
 	private var renderedOptions: GitDiffPresentationOptions?
 	private var rendering = false
 	private var navigatorHidden = false
@@ -686,50 +688,118 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	)
 	{
 		let snapshot = presentation.snapshot
-		if renderedSnapshotID != snapshot.id || renderedOptions != presentation.options
-			|| renderedSelectedFileID != displayedFileID
+		let needsSectionUpdate = renderedSnapshotID != snapshot.id
+			|| renderedOptions != presentation.options
+			|| renderedSelectedFileID != displayedFileID || renderedOwner != snapshot.request.owner
+		guard needsSectionUpdate
+		else
 		{
-			let origin = contentScroll.contentView.bounds.origin
-			removeSections()
-			let files = usesSingleFile
-				? snapshot.files.filter
-				{
-					$0.id == displayedFileID
-				} : snapshot.files
-			for file in files
-			{
-				let rows = collapsedFileIDs.contains(file.id)
-					? nil : projectionCache.file(
-						file,
-						presentation: presentation
-					).rows
-				let section = GitDiffFileSectionView(
-					file: file,
-					rows: rows,
-					isCollapsed: collapsedFileIDs.contains(file.id),
-					layoutPreference: diffLayoutPreference,
-					wrapsCode: wrapsCode,
-					onToggleFileDiff:
-					{
-						[weak self] button in self?.toggleFileDiff(button)
-					},
-					onExpandGap:
-					{
-						[weak self] button in self?.expandGap(button)
-					}
-				)
-				diffViews.append(contentsOf: section.diffViews)
-				sections.addArrangedSubview(section)
-				section.widthAnchor.constraint(equalTo: sections.widthAnchor).isActive = true
-				fileSections[file.id] = section
-			}
-			renderedSnapshotID = snapshot.id
-			renderedOptions = presentation.options
-			renderedSelectedFileID = displayedFileID
-			sections.layoutSubtreeIfNeeded()
-			contentScroll.contentView.scroll(to: usesSingleFile ? .zero : origin)
-			contentScroll.reflectScrolledClipView(contentScroll.contentView)
+			return
 		}
+		let origin = contentScroll.contentView.bounds.origin
+		let changesDisplayedFile = renderedSnapshotID != snapshot.id
+			|| renderedOwner != snapshot.request.owner
+			|| renderedSelectedFileID != displayedFileID
+		let files = usesSingleFile
+			? snapshot.files.filter
+			{
+				$0.id == displayedFileID
+			} : snapshot.files
+		reconcileFileSections(
+			files,
+			presentation: presentation
+		)
+
+		renderedSnapshotID = snapshot.id
+		renderedOwner = snapshot.request.owner
+		renderedOptions = presentation.options
+		renderedSelectedFileID = displayedFileID
+		sections.layoutSubtreeIfNeeded()
+		contentScroll.contentView
+			.scroll(to: usesSingleFile && changesDisplayedFile ? .zero : origin)
+		contentScroll.reflectScrolledClipView(contentScroll.contentView)
+	}
+
+	private func reconcileFileSections(
+		_ files: [GitComparisonFile],
+		presentation: GitDiffPresentation
+	)
+	{
+		var nextKeys: [Data: GitDiffFileSectionKey] = [:]
+		for file in files
+		{
+			nextKeys[Data(file.id.utf8)] = GitDiffFileSectionKey(
+				file: file,
+				presentation: presentation,
+				isCollapsed: collapsedFileIDs.contains(file.id)
+			)
+		}
+		for (id, section) in fileSections where fileSectionKeys[id] != nextKeys[id]
+		{
+			sections.removeArrangedSubview(section)
+			section.removeFromSuperview()
+			fileSections.removeValue(forKey: id)
+		}
+
+		for (index, file) in files.enumerated()
+		{
+			let fileIdentity = Data(file.id.utf8)
+			if let section = fileSections[fileIdentity]
+			{
+				if !sections.arrangedSubviews.indices.contains(index)
+					|| sections.arrangedSubviews[index] !== section
+				{
+					sections.removeArrangedSubview(section)
+					sections.insertArrangedSubview(
+						section,
+						at: index
+					)
+				}
+				continue
+			}
+			let section = makeFileSection(
+				file,
+				presentation: presentation
+			)
+			sections.insertArrangedSubview(
+				section,
+				at: index
+			)
+			section.widthAnchor.constraint(equalTo: sections.widthAnchor).isActive = true
+			fileSections[fileIdentity] = section
+		}
+		fileSectionKeys = nextKeys
+		diffViews = files.flatMap
+		{
+			fileSections[Data($0.id.utf8)]?.diffViews ?? []
+		}
+	}
+
+	private func makeFileSection(
+		_ file: GitComparisonFile,
+		presentation: GitDiffPresentation
+	) -> GitDiffFileSectionView
+	{
+		let isCollapsed = collapsedFileIDs.contains(file.id)
+		let rows = isCollapsed ? nil : projectionCache.file(
+			file,
+			presentation: presentation
+		).rows
+		return GitDiffFileSectionView(
+			file: file,
+			rows: rows,
+			isCollapsed: isCollapsed,
+			layoutPreference: diffLayoutPreference,
+			wrapsCode: wrapsCode,
+			onToggleFileDiff:
+			{
+				[weak self] button in self?.toggleFileDiff(button)
+			},
+			onExpandGap:
+			{
+				[weak self] button in self?.expandGap(button)
+			}
+		)
 	}
 
 	private func updateComparisonControls(_ state: GitReviewState) -> Bool
@@ -837,7 +907,9 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			section.removeFromSuperview()
 		}
 		fileSections = [:]
+		fileSectionKeys = [:]
 		renderedSnapshotID = nil
+		renderedOwner = nil
 		renderedOptions = nil
 		renderedSelectedFileID = nil
 	}
@@ -975,7 +1047,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	private func scrollToFile(_ id: String)
 	{
-		guard let section = fileSections[id]
+		guard let section = fileSections[Data(id.utf8)]
 		else
 		{
 			return
@@ -1236,7 +1308,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	private func refreshSections()
 	{
-		renderedSnapshotID = nil
+		renderedOptions = nil
 		render(runtime.state)
 	}
 

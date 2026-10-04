@@ -98,7 +98,7 @@ struct GitReviewToolbarBehaviorTests
 		{
 			$0 as? GitAdaptiveDiffView
 		}.count == 2)
-		#expect(controller.projectionCache.requestCount == initialRequests + 3)
+		#expect(controller.projectionCache.requestCount == initialRequests + 2)
 		#expect(controller.projectionCache.projectionCount == initialProjections)
 		#expect(controller.runtime.state.selectedFileID == selectedFileID)
 		#expect(controller.runtime.state.expandedDirectories == directories)
