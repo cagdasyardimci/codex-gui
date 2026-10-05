@@ -44,36 +44,22 @@ extension NavigationViewController
 			return
 		}
 		projectInfoPopover.performClose(nil)
-		let alert = NSAlert()
-		alert.messageText = "Edit Project"
-		alert.informativeText =
-			"Set a local display name. The repository folder remains at \(project.path)."
-		let field = NSTextField(string: projectDisplayNames[projectKey(for: project)] ?? "")
-		field.placeholderString = project.lastPathComponent
-		field.frame = NSRect(
-			x: 0,
-			y: 0,
-			width: 320,
-			height: 24
-		)
-		field.setAccessibilityLabel("Local project display name")
-		alert.accessoryView = field
-		alert.addButton(withTitle: "Save")
-		alert.addButton(withTitle: "Cancel")
-		alert.window.initialFirstResponder = field
-		let capturedScope = modalScope
 		let complete = onRenameProject
-		alert.beginSheetModal(for: window)
+		presentTextEntrySheet(
+			in: window,
+			title: "Edit Project",
+			informativeText:
+			"Set a local display name. The repository folder remains at \(project.path).",
+			value: projectDisplayNames[projectKey(for: project)] ?? "",
+			placeholder: project.lastPathComponent,
+			accessibilityLabel: "Local project display name",
+			actionTitle: "Save"
+		)
 		{
-			[weak self] response in
-			guard response == .alertFirstButtonReturn, self?.modalScope == capturedScope
-			else
-			{
-				return
-			}
+			value in
 			complete?(
 				project,
-				field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+				value.trimmingCharacters(in: .whitespacesAndNewlines)
 			)
 		}
 	}
@@ -86,33 +72,18 @@ extension NavigationViewController
 			return
 		}
 		projectActionsPopover.performClose(nil)
-		let alert = NSAlert()
-		alert.messageText = "New Task Checkout"
-		alert.informativeText = "The task starts from the source repository's committed HEAD."
-		let field = NSTextField(string: "")
-		field.placeholderString = "Task name"
-		field.frame = NSRect(
-			x: 0,
-			y: 0,
-			width: 320,
-			height: 24
-		)
-		field.setAccessibilityLabel("Task name")
-		alert.accessoryView = field
-		alert.addButton(withTitle: "Create Task")
-		alert.addButton(withTitle: "Cancel")
-		alert.window.initialFirstResponder = field
-		let capturedScope = modalScope
 		let complete = onCreateTask
-		alert.beginSheetModal(for: window)
+		presentTextEntrySheet(
+			in: window,
+			title: "New Task Checkout",
+			informativeText: "The task starts from the source repository's committed HEAD.",
+			value: "",
+			placeholder: "Task name",
+			accessibilityLabel: "Task name",
+			actionTitle: "Create Task"
+		)
 		{
-			[weak self] response in
-			guard response == .alertFirstButtonReturn, self?.modalScope == capturedScope
-			else
-			{
-				return
-			}
-			complete?(field.stringValue)
+			value in complete?(value)
 		}
 	}
 
@@ -133,32 +104,59 @@ extension NavigationViewController
 			return
 		}
 		projectActionsPopover.performClose(nil)
+		let complete = completion ?? onRenameThread
+		presentTextEntrySheet(
+			in: window,
+			title: "Rename Conversation",
+			value: thread.name ?? thread.preview ?? "",
+			accessibilityLabel: "Conversation name",
+			actionTitle: "Rename",
+			requiredThreadID: thread.id
+		)
+		{
+			value in complete?(value)
+		}
+	}
+
+	private func presentTextEntrySheet(
+		in window: NSWindow,
+		title: String,
+		informativeText: String = "",
+		value: String,
+		placeholder: String? = nil,
+		accessibilityLabel: String,
+		actionTitle: String,
+		requiredThreadID: String? = nil,
+		completion: @escaping (String) -> Void
+	)
+	{
 		let alert = NSAlert()
-		alert.messageText = "Rename Conversation"
-		let field = NSTextField(string: thread.name ?? thread.preview ?? "")
+		alert.messageText = title
+		alert.informativeText = informativeText
+		let field = NSTextField(string: value)
+		field.placeholderString = placeholder
 		field.frame = NSRect(
 			x: 0,
 			y: 0,
 			width: 320,
 			height: 24
 		)
-		field.setAccessibilityLabel("Conversation name")
+		field.setAccessibilityLabel(accessibilityLabel)
 		alert.accessoryView = field
-		alert.addButton(withTitle: "Rename")
+		alert.addButton(withTitle: actionTitle)
 		alert.addButton(withTitle: "Cancel")
 		alert.window.initialFirstResponder = field
 		let capturedScope = modalScope
-		let complete = completion ?? onRenameThread
 		alert.beginSheetModal(for: window)
 		{
 			[weak self] response in
 			guard response == .alertFirstButtonReturn, self?.modalScope == capturedScope,
-					self?.selectedThreadID == thread.id
+					requiredThreadID == nil || self?.selectedThreadID == requiredThreadID
 			else
 			{
 				return
 			}
-			complete?(field.stringValue)
+			completion(field.stringValue)
 		}
 	}
 }
