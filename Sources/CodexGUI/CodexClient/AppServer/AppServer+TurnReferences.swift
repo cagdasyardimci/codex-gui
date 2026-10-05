@@ -52,7 +52,9 @@ extension AppServer
 	{
 		let generation = connectionGeneration
 		var cursor: String?
-		var visited: Set<String> = []
+		var cursorTracker = PaginationCursorTracker(
+			repeatedCursorMessage: "Codex repeated the turn item cursor."
+		)
 		var items: [CodexItem] = []
 		repeat
 		{
@@ -70,40 +72,20 @@ extension AppServer
 				"thread/items/list",
 				params: parameters
 			)
-			try Task.checkCancellation()
-			guard generation == connectionGeneration
-			else
+			let page = try await decodeProtocolPayload(
+				ProtocolJSONPayload(value: result),
+				generation: generation,
+				priority: .userInitiated
+			)
 			{
-				throw AppServerError.disconnected
-			}
-			let payload = ProtocolJSONPayload(value: result)
-			let decoding = Task.detached(priority: .userInitiated)
-			{
+				payload in
 				try TurnItemPageDecoder.decode(
 					payload,
 					turnID: reference.id
 				)
 			}
-			let page = try await withTaskCancellationHandler
-			{
-				try await decoding.value
-			}
-			onCancel:
-			{
-				decoding.cancel()
-			}
-			try Task.checkCancellation()
-			guard generation == connectionGeneration
-			else
-			{
-				throw AppServerError.disconnected
-			}
 			items.append(contentsOf: page.items)
-			cursor = page.nextCursor
-			if let cursor, !visited.insert(cursor).inserted
-			{
-				throw AppServerError.protocolError("Codex repeated the turn item cursor.")
-			}
+			cursor = try cursorTracker.advance(to: page.nextCursor)
 		}
 		while cursor != nil
 		return CodexTurn(

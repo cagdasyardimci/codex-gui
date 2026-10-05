@@ -37,7 +37,8 @@ struct ConversationHistoryDecoderTests
 			"data": turns,
 			"nextCursor": "older\u{2028}cursor",
 		]))
-		let legacy = Array(turns.compactMap(CodexTurn.init(json:)).reversed())
+		let legacyDecodedTurns = turns.compactMap(CodexTurn.init(json:))
+		let legacy = Array(legacyDecodedTurns.reversed())
 		#expect(page.turns.map(\.id) == ["earlier", "latest"])
 		#expect(page.nextCursor == "older\u{2028}cursor")
 		for (actual, expected) in zip(

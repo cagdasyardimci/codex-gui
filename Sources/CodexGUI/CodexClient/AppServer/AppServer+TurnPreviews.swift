@@ -10,7 +10,7 @@ extension AppServer
 	) async throws -> CodexTurn
 	{
 		let generation = connectionGeneration
-		func page(_ direction: String) async throws -> DecodedTurnItemPage
+		func loadItemPage(sortedBy direction: String) async throws -> DecodedTurnItemPage
 		{
 			let result = try await request(
 				"thread/items/list",
@@ -21,37 +21,27 @@ extension AppServer
 					"sortDirection": direction,
 				]
 			)
-			try Task.checkCancellation()
-			guard generation == connectionGeneration
-			else
+			return try await decodeProtocolPayload(
+				ProtocolJSONPayload(value: result),
+				generation: generation,
+				priority: .utility
+			)
 			{
-				throw AppServerError.disconnected
-			}
-			let payload = ProtocolJSONPayload(value: result)
-			let decoding = Task.detached(priority: .utility)
-			{
+				payload in
 				try TurnItemPageDecoder.decode(
 					payload,
 					turnID: reference.id
 				)
 			}
-			return try await withTaskCancellationHandler
-			{
-				try await decoding.value
-			}
-			onCancel:
-			{
-				decoding.cancel()
-			}
 		}
-		let first = try await page("asc")
-		var items = first.items
-		let complete = first.nextCursor == nil
-		if !complete
+		let firstPage = try await loadItemPage(sortedBy: "asc")
+		var items = firstPage.items
+		let itemsAreComplete = firstPage.nextCursor == nil
+		if !itemsAreComplete
 		{
-			let last = try await page("desc")
+			let lastPage = try await loadItemPage(sortedBy: "desc")
 			var seen = Set(items.map(\.id))
-			items.append(contentsOf: last.items.reversed().filter
+			items.append(contentsOf: lastPage.items.reversed().filter
 			{
 				seen.insert($0.id).inserted
 			})
@@ -74,7 +64,7 @@ extension AppServer
 			startedAt: reference.startedAt,
 			completedAt: reference.completedAt,
 			durationMs: reference.durationMs,
-			itemsAreComplete: complete
+			itemsAreComplete: itemsAreComplete
 		)
 	}
 }

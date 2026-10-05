@@ -314,6 +314,46 @@ struct AppServerTransportWriterTests
 		try await blocker.wait()
 	}
 
+	@Test(arguments: ["model/list", "thread/list"])
+	func listingRejectsRepeatedCursorBeforeRequestingAnotherPage(_ method: String) async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		do
+		{
+			if method == "model/list"
+			{
+				_ = try await fixture.server.models()
+			}
+			else
+			{
+				_ = try await fixture.server.threads(for: fixture.directory)
+			}
+			Issue.record("A repeated list cursor was accepted for \(method).")
+		}
+		catch AppServerError.protocolError(let message)
+		{
+			let expected = method == "model/list"
+				? "Codex repeated the model list cursor."
+				: "Codex repeated the conversation list cursor."
+			#expect(message == expected)
+		}
+		let requests = fixture.messages().filter
+		{
+			$0["method"] as? String == method
+		}
+		#expect(requests.count == 2)
+		let first = try #require(requests.first?["params"] as? [String: Any])
+		let second = try #require(requests.last?["params"] as? [String: Any])
+		#expect(first["cursor"] == nil)
+		#expect(second["cursor"] as? String == "repeated-list-cursor")
+	}
+
 	@Test func historyPagePreservesCursorRequestOrderAndUnicodeContent() async throws
 	{
 		let fixture = try fixture()
@@ -542,6 +582,7 @@ struct AppServerTransportWriterTests
 		    sys.exit(0)
 
 		directory = pathlib.Path(__file__).parent
+		list_counts = {}
 		def send(value):
 		    print(json.dumps(value, ensure_ascii=False), flush=True)
 
@@ -560,6 +601,15 @@ struct AppServerTransportWriterTests
 		        (directory / 'paused').touch()
 		        while not (directory / 'release').exists():
 		            time.sleep(0.005)
+		    elif method in ('model/list', 'thread/list'):
+		        list_counts[method] = list_counts.get(method, 0) + 1
+		        if method == 'model/list':
+		            rows = [{'model': 'fixture-model', 'displayName': 'Fixture model'}]
+		        else:
+		            rows = [{'id': 'listed-thread', 'cwd': message['params']['cwd']}]
+		        # Terminate even without cycle rejection so a regression cannot hang the test.
+		        cursor = 'repeated-list-cursor' if list_counts[method] < 3 else None
+		        send({'id': message['id'], 'result': {'data': rows, 'nextCursor': cursor}})
 		    elif method == 'thread/turns/list':
 		        text = chr(0xE9) + ' e' + chr(0x301) + '🧪' + chr(0x2028) + '終'
 		        send({'id': message['id'], 'result': {'nextCursor': 'next-cursor', 'data': [

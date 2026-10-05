@@ -16,22 +16,16 @@ extension AppServer
 			]
 		)
 		guard let thread = result["thread"] as? [String: Any],
-				let summary = ThreadSummary(json: thread), summary.id != id,
-				let returnedCwd = result["cwd"] as? String, returnedCwd == summary.cwd
+				let summary = ThreadSummary(json: thread), summary.id != id
 		else
 		{
 			throw AppServerError.protocolError("Codex returned an invalid forked conversation.")
 		}
-		try CheckoutIdentity.validate(
-			cwd: summary.cwd,
-			expectedDirectory: expectedDirectory
-		)
-		let page = try await loadTurns(threadId: summary.id)
-		return ThreadDetail(
-			summary: summary,
-			turns: page.turns,
-			nextTurnsCursor: page.nextCursor,
-			settings: ThreadSettings(json: result)
+		return try await hydrateValidatedThread(
+			summary,
+			result: result,
+			expectedDirectory: expectedDirectory,
+			invalidResponseMessage: "Codex returned an invalid forked conversation."
 		)
 	}
 

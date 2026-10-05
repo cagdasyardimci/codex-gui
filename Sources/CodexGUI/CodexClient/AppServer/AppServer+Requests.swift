@@ -39,6 +39,9 @@ extension AppServer
 	func models() async throws -> [ModelOption]
 	{
 		var modelOptions: [ModelOption] = []
+		var cursorTracker = PaginationCursorTracker(
+			repeatedCursorMessage: "Codex repeated the model list cursor."
+		)
 		var cursor: String?
 		repeat
 		{
@@ -53,7 +56,7 @@ extension AppServer
 			)
 			modelOptions += (result["data"] as? [[String: Any]] ?? [])
 				.compactMap(ModelOption.init(json:))
-			cursor = result["nextCursor"] as? String
+			cursor = try cursorTracker.advance(to: result["nextCursor"] as? String)
 		}
 		while cursor != nil
 		return modelOptions
@@ -119,6 +122,9 @@ extension AppServer
 	{
 		let cwd = directory.standardizedFileURL.path
 		var threadSummaries: [ThreadSummary] = []
+		var cursorTracker = PaginationCursorTracker(
+			repeatedCursorMessage: "Codex repeated the conversation list cursor."
+		)
 		var cursor: String?
 		repeat
 		{
@@ -153,7 +159,7 @@ extension AppServer
 					.protocolError("Codex returned a conversation from another checkout.")
 			}
 			threadSummaries += page
-			cursor = result["nextCursor"] as? String
+			cursor = try cursorTracker.advance(to: result["nextCursor"] as? String)
 		}
 		while cursor != nil
 		return threadSummaries
@@ -246,22 +252,16 @@ extension AppServer
 			]
 		)
 		guard let thread = result["thread"] as? [String: Any],
-				let summary = ThreadSummary(json: thread), summary.id == id,
-				let returnedCwd = result["cwd"] as? String, returnedCwd == summary.cwd
+				let summary = ThreadSummary(json: thread), summary.id == id
 		else
 		{
 			throw AppServerError.protocolError("Codex could not resume this conversation.")
 		}
-		try CheckoutIdentity.validate(
-			cwd: summary.cwd,
-			expectedDirectory: expectedDirectory
-		)
-		let page = try await loadTurns(threadId: id)
-		return ThreadDetail(
-			summary: summary,
-			turns: page.turns,
-			nextTurnsCursor: page.nextCursor,
-			settings: ThreadSettings(json: result)
+		return try await hydrateValidatedThread(
+			summary,
+			result: result,
+			expectedDirectory: expectedDirectory,
+			invalidResponseMessage: "Codex could not resume this conversation."
 		)
 	}
 
@@ -640,30 +640,14 @@ extension AppServer
 			"thread/turns/list",
 			params: parameters
 		)
-		try Task.checkCancellation()
-		guard generation == connectionGeneration
-		else
+		let page = try await decodeProtocolPayload(
+			ProtocolJSONPayload(value: result),
+			generation: generation,
+			priority: .userInitiated
+		)
 		{
-			throw AppServerError.disconnected
-		}
-		let payload = ProtocolJSONPayload(value: result)
-		let decoding = Task.detached(priority: .userInitiated)
-		{
+			payload in
 			try ConversationHistoryDecoder.decode(payload)
-		}
-		let page = try await withTaskCancellationHandler
-		{
-			try await decoding.value
-		}
-		onCancel:
-		{
-			decoding.cancel()
-		}
-		try Task.checkCancellation()
-		guard generation == connectionGeneration
-		else
-		{
-			throw AppServerError.disconnected
 		}
 		return (page.turns, page.nextCursor)
 	}
