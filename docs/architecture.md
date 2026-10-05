@@ -20,6 +20,15 @@ Runtime jobs, subscriptions, task handles and waiters remain outside model state
 Persistence scheduling preserves accepted-write order and supports draining writes
 before checkout removal or application termination.
 
+Follow-up conversation reads return through `WorkspaceStoreInputs`, which captures fresh
+request identity and clock values. Filesystem-backed checkout validation occurs before
+the read is proposed; reducers revalidate that captured ownership against current state.
+`ConversationTurnPreview` in `Application/State/` holds canonical compact preview values.
+Runtime receives the application service `ConversationPreviewPreparing`; `AppDelegate` injects
+the transcript's `ConversationMarkdownPreviewPreparer`. The runner prepares Markdown-to-plain-text
+previews off the main actor with cancellation propagation before returning typed results.
+Reducers consume these prepared values.
+
 ## Ownership and recovery
 
 Execution ownership is independent of the displayed conversation. Results must match
@@ -44,9 +53,42 @@ when an intent is reduced. Publication is coalesced while all accepted backend e
 are processed in order. Transcript preparation runs asynchronously and superseded
 renders are cancelled without changing AppKit's ownership of focus and scrolling.
 
+`Features/Sources/` owns source inventory, detail views, result cards and tab hover previews.
+`Features/PinnedSummary/` owns the compact summary card; `App/` owns inspector and tool-tab
+integration. Both Sources and transcript attachments use `Features/Shared/SourceThumbnailLoader`.
+The shared actor bounds input decoding, prepares pixels off the main actor and reuses decoded
+thumbnails. `CodexClient/InlineImageData` handles inline payload identification and bounded
+decoding; `Application/Services/LocalAttachmentURL` resolves local paths and file URLs.
+The thumbnail `NSCache` is configured for 64 entries and 16 MiB of estimated pixel/key cost,
+separate from workspace content residency. File reads and decoded inline payloads are bounded
+to 32 MiB; maximum image dimensions are 80 pixels for Sources, 320 for transcript thumbnails
+and 1600 for inline previews. AppKit views retain generation checks and cancellation on reuse.
+
+Pure reported-patch composition belongs to `Application/Reducers/Review/ConversationNetFileChanges`.
+`ConversationNetFileChangePreparation` prepares those results off the main actor and retains
+exact inputs and outputs for reuse within the same transcript context. Its reusable cache
+defaults to 256 entries and 8 MiB. `TranscriptPreparationCoordinator` publishes prepared text,
+navigation summaries and net file changes together only for the accepted render generation.
+Current resident content can produce results larger than the reusable cache budget; those
+results are available to the current render without entering that cache. Folded completed
+work defers hidden message preparation until disclosure or navigation reveals it.
+
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and
 [validation](validation.md) for verification commands and acceptance limits.
 
+## Recorded latest Git turn
+
+`ConversationReportedGitTurn` in `Application/Reducers/Conversation/` retains the known latest
+editing turn's identity and available timestamps independently of loaded transcript bodies.
+`ConversationReportedGitTurnProjection` in `Application/Presentation/` resolves that identity
+against currently resident reported changes. Missing or evicted payload is unavailable;
+an authoritative completed file-change report containing no changes produces an empty result.
+Older loaded edits cannot replace a known later editing turn without trusted ordering evidence.
+
+All conversation View changes actions continue to open the shared latest-edit Last Turn
+comparison. The recorded identity does not retain a separate unbounded patch cache. When its
+reported payload is unavailable, the comparison retains its captured-baseline fallback and
+explicit unavailability behavior.
 
 ## Conversation content residency
 

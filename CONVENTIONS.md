@@ -31,6 +31,10 @@ captured-tree storage models that are not workspace state. `Runtime/Review/` own
 and summary execution. Feature-specific command models stay in `Reducers/Composer/`; review
 models and analysis stay in `Reducers/Review/`. Shared baseline identities and references
 remain in `State/`.
+Canonical compact turn previews also belong to `State/`. Prepare Markdown through an injected
+service before reducers accept preview values; feature rendering and reusable preparation
+caches stay outside workspace model state. Pure reported-patch composition belongs to
+`Reducers/Review/`; transcript preparation may cache its results beside the transcript views.
 Feature-specific presentation types stay beside their views, with shared presentation ownership
 in `Features/Shared/`. `Persistence/` also owns durable task workspace records; `Workspaces/`
 retains checkout locations, Git lifecycle and coordination.
@@ -39,10 +43,15 @@ Within `Features/Conversation/`, use `Composer/` for input controls and command 
 `Transcript/` for parsing, rendering, collection items, preparation and turn navigation.
 Within `Features/Changes/`, use `RepositoryComparison/` for repository comparison controls and
 navigation, `ReportedChanges/` for reported-turn review UI, and `Diff/` for shared diff rendering
-and file presentation helpers. Usage views and presentation values belong to `Features/Usage/`;
-summary thumbnails belong to `Features/PinnedSummary/`. `App/WindowLayout/` groups pane and split
-view controls, layout policies and transitions. Keep window integration tests in `Tests/App/`;
-tests of layout components may use its `WindowLayout/` subgroup.
+and file presentation helpers. Usage views and presentation values belong to `Features/Usage/`.
+`Features/PinnedSummary/` owns the summary card and its compact section presentations;
+`Features/Sources/` owns source inventory, details, result cards, audio metadata and tab hover
+previews. Shared attachment thumbnail preparation belongs to `Features/Shared/`.
+`CodexClient/InlineImageData.swift` identifies inline image payloads;
+`Application/Services/LocalAttachmentURL.swift` resolves local attachment paths and file URLs.
+Keep these shared values independent of feature views. `App/WindowLayout/` groups pane and split
+view controls, layout policies and transitions. Keep window integration tests in
+`Tests/CodexGUITests/App/`; tests of layout components may use its `WindowLayout/` subgroup.
 
 Name extension-only source and test files `OwnerType+Concern.swift`, using the exact extended
 type as the owner. Put extensions of different owners in separate files. A file defining a
@@ -71,6 +80,9 @@ effects. Reducers do not read storage, call the backend, schedule tasks, read cl
 identifiers. Accepted domain events compose related feature changes before publication.
 `WorkspaceEffectRunner` performs scoped backend, filesystem and persistence work and returns
 typed results. Runtime jobs, subscriptions, handles and waiters stay outside model state.
+Follow-up reads return through `WorkspaceStoreInputs` for fresh request identity and clock
+capture. Perform filesystem-backed checkout validation before proposing a read, then let the
+reducer revalidate the captured ownership against current workspace values.
 
 `TaskWorkspaceCoordinator` keeps the store registry and runs checkout lifecycle effects;
 `WorkspaceCoordinatorReducer` owns selection, creation, recovery, cleanup and aggregate quit

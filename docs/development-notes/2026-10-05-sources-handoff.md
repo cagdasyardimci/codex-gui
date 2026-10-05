@@ -1,3 +1,13 @@
+# Historical Sources implementation handoff: 2026-10-05
+
+This is an archived record of the October 5, 2026 implementation session. Status claims,
+commit identifiers, authorization records and coordination instructions below apply
+only to that session. The original notes are preserved verbatim.
+
+Current component contracts and verification requirements are maintained in the
+[architecture](../architecture.md) and [validation](../validation.md) guides.
+
+```text
 
 SOURCES TERMINAL EXCLUSION — 2026-10-05
 User explicitly requested terminal commands not be Sources. Canonical Sources
@@ -63,3 +73,4 @@ User explicitly authorized committing the rest of repository changes. Grouping
 remaining window styling, collapsed transcript work, image loading, QA script
 executable mode, and documentation/coordination notes into separate commits.
 No builds/tests/visual QA run. Existing working contents retained as authored.
+```
