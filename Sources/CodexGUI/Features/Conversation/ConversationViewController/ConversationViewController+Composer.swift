@@ -8,17 +8,12 @@ extension ConversationViewController
 	{
 		let composerToolbar = makeComposerToolbar()
 		installComposerStack(toolbar: composerToolbar)
-		let contextStrip = makeProjectContextStrip()
 		let composerArea = AppKitLayout.verticalStack(
-			[contextStrip, composerSurface],
-			spacing: 4
+			[composerSurface],
+			spacing: 0
 		)
 		composerArea.alignment = .centerX
 		composerSurface.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
-		contextStrip.widthAnchor.constraint(
-			equalTo: composerArea.widthAnchor,
-			constant: -24
-		).isActive = true
 
 		return composerArea
 	}
@@ -60,35 +55,6 @@ extension ConversationViewController
 		{
 			row.widthAnchor.constraint(equalTo: composerStack.widthAnchor).isActive = true
 		}
-	}
-
-	private func makeProjectContextStrip() -> NSStackView
-	{
-		let projectIcon = NSImageView()
-		projectIcon.image = DesktopIcons.image(.folder)
-		projectIcon.contentTintColor = .secondaryLabelColor
-		projectIcon.widthAnchor.constraint(equalToConstant: 14).isActive = true
-		projectIcon.heightAnchor.constraint(equalToConstant: 14).isActive = true
-		for label in [projectLocationLabel, projectBranchLabel]
-		{
-			label.font = .systemFont(ofSize: 12)
-			label.textColor = .secondaryLabelColor
-			label.lineBreakMode = .byTruncatingMiddle
-			label.setContentCompressionResistancePriority(
-				.defaultLow,
-				for: .horizontal
-			)
-		}
-		projectLocationLabel.setAccessibilityLabel("Project and local checkout")
-		projectBranchLabel.setAccessibilityLabel("Selected task checkout branch")
-		let contextStrip = AppKitLayout.horizontalStack(
-			[projectIcon, projectLocationLabel, flexibleSpace(), projectBranchLabel],
-			spacing: 8
-		)
-		contextStrip.heightAnchor.constraint(equalToConstant: 28).isActive = true
-		contextStrip.isHidden = true
-		projectContextStrip = contextStrip
-		return contextStrip
 	}
 
 	func configurePreferenceControls()
@@ -463,23 +429,6 @@ extension ConversationViewController
 		onDraftChange?(composer.string)
 		updateComposerHeight()
 		updateComposerCompletion()
-	}
-
-	func renderProjectLocation(_ snapshot: ConversationPresentation.Location)
-	{
-		guard let path = snapshot.projectPath
-		else
-		{
-			projectContextStrip?.isHidden = true
-			return
-		}
-		let projectName = URL(fileURLWithPath: path).lastPathComponent
-		projectLocationLabel.stringValue = "\(projectName) · Local"
-		projectLocationLabel.toolTip = path
-		projectBranchLabel.stringValue = snapshot.selectedBranch ?? ""
-		projectBranchLabel.toolTip = snapshot.selectedCheckoutPath
-		projectBranchLabel.isHidden = projectBranchLabel.stringValue.isEmpty
-		projectContextStrip?.isHidden = false
 	}
 
 	func updateComposerHeight()

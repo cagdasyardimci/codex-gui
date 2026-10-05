@@ -16,17 +16,6 @@ struct ConversationPresentation: Equatable
 		}
 	}
 
-	struct Location: Equatable
-	{
-		let owner: FeaturePresentationOwner
-		let selectedBranch: String?
-		let selectedCheckoutPath: String?
-		var projectPath: String?
-		{
-			owner.projectPath
-		}
-	}
-
 	struct Navigation: Equatable
 	{
 		var turnReferences: [ConversationTurnReference] = []
@@ -215,7 +204,6 @@ struct ConversationPresentation: Equatable
 	}
 
 	let transcript: Transcript
-	let location: Location
 	let navigation: Navigation
 	let status: Status
 	let requestContext: RequestContext
@@ -243,15 +231,6 @@ struct ConversationPresentation: Equatable
 			activeThreadID: snapshot.activeThreadID,
 			activeTurnID: snapshot.activeTurnID,
 			canLoadEarlierTurns: snapshot.canLoadEarlierTurns
-		)
-		let workspace = snapshot.taskWorkspaces.first
-		{
-			$0.id == snapshot.selectedTaskWorkspaceID && $0.checkoutPath == snapshot.projectPath
-		}
-		location = Location(
-			owner: owner,
-			selectedBranch: workspace?.branch,
-			selectedCheckoutPath: workspace?.checkoutPath
 		)
 		navigation = Navigation(
 			turnReferences: snapshot.turnReferences,

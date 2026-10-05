@@ -132,9 +132,6 @@ final class ConversationViewController: NSViewController,
 	let contextView = ComposerContextView()
 	lazy var attachmentDetailsScrollView = BoundedContentScrollView(views: [contextView])
 	lazy var requestDetailsScrollView = BoundedContentScrollView(views: [interactionStack])
-	let projectLocationLabel = NSTextField(labelWithString: "")
-	let projectBranchLabel = NSTextField(labelWithString: "")
-	var projectContextStrip: NSStackView?
 	let addContextButton = NSPopUpButton()
 	let planModeLabel = NSTextField(labelWithString: "Plan mode")
 	var fileSearchPopover: NSPopover?
@@ -570,10 +567,6 @@ final class ConversationViewController: NSViewController,
 		fileIndexRuntime.select(snapshot.owner)
 		projectPath = snapshot.owner.projectPath
 		selectedThreadID = snapshot.owner.selectedThreadID
-		if previous?.location != snapshot.location
-		{
-			renderProjectLocation(snapshot.location)
-		}
 		if previous?.navigation != snapshot.navigation
 		{
 			bookmarks = snapshot.navigation.bookmarks
