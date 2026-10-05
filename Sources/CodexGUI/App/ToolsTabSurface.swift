@@ -6,6 +6,7 @@ final class ToolsTabSurface: NSView
 	private let isSelected: Bool
 	private var isHovered = false
 	private var hoverTrackingArea: NSTrackingArea?
+	var onHoverChange: ((Bool) -> Void)?
 
 	init(isSelected: Bool)
 	{
@@ -36,10 +37,15 @@ final class ToolsTabSurface: NSView
 		hoverTrackingArea = area
 		if let window
 		{
+			let previouslyHovered = isHovered
 			isHovered = bounds.contains(convert(
 				window.mouseLocationOutsideOfEventStream,
 				from: nil
 			))
+			if previouslyHovered != isHovered
+			{
+				onHoverChange?(isHovered)
+			}
 		}
 		needsDisplay = true
 	}
@@ -47,13 +53,25 @@ final class ToolsTabSurface: NSView
 	override func mouseEntered(with event: NSEvent)
 	{
 		isHovered = true
+		onHoverChange?(true)
 		needsDisplay = true
 	}
 
 	override func mouseExited(with event: NSEvent)
 	{
 		isHovered = false
+		onHoverChange?(false)
 		needsDisplay = true
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		if window == nil
+		{
+			isHovered = false
+			onHoverChange?(false)
+		}
 	}
 
 	override func viewDidChangeEffectiveAppearance()

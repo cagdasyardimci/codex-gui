@@ -46,6 +46,7 @@ final class ToolsTabViewController: NSViewController
 	private var toolsContent: NSView?
 	private weak var changesController: NSViewController?
 	private weak var sourcesController: NSViewController?
+	private let sourcesHoverPreview = SourcesTabHoverPreview()
 	private let tabScrollView = NSScrollView()
 	private lazy var tabBar = makeTabHeader()
 	private var preferredTabAreaWidth: NSLayoutConstraint?
@@ -227,6 +228,7 @@ final class ToolsTabViewController: NSViewController
 
 	func detachSources()
 	{
+		sourcesHoverPreview.dismiss()
 		guard let sourcesController, sourcesController.parent === self
 		else
 		{
@@ -479,6 +481,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func rebuildTabViews() -> NSView?
 	{
+		sourcesHoverPreview.dismiss()
 		for tab in tabStack.arrangedSubviews
 		{
 			tabStack.removeArrangedSubview(tab)
@@ -629,11 +632,37 @@ final class ToolsTabViewController: NSViewController
 			action: #selector(closeTab(_:))
 		)
 		closeButton.tag = index
-		return makeTabSurface(
+		let tab = makeTabSurface(
 			selectButton,
 			trailingButton: closeButton,
 			selected: selected
 		)
+		if isSources, let surface = tab as? ToolsTabSurface
+		{
+			surface.onHoverChange =
+			{
+				[weak self, weak surface] hovered in
+				guard let self
+				else
+				{
+					return
+				}
+				if hovered, let surface,
+					let controller = self.sourcesController as? ConversationSourcesViewController,
+					controller.parent === self
+				{
+					self.sourcesHoverPreview.show(
+						sources: controller.sources,
+						below: surface
+					)
+				}
+				else
+				{
+					self.sourcesHoverPreview.dismiss()
+				}
+			}
+		}
+		return tab
 	}
 
 	private func makeTabSurface(
