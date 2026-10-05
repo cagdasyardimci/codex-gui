@@ -53,22 +53,36 @@ struct ConversationLocalSources
 			default: return LocalAttachmentURL.resolve(path)
 			}
 		}
+		var iconIdentifier: DesktopIcon
+		{
+			switch kind
+			{
+			case .image: .fileImage
+			case .folder: .folder
+			case .audio: .fileAudio
+			case .pdf: .fileDocument
+			case .file: .file
+			case .page: .document
+			case .web: .globe
+			case .tool:
+				switch name
+				{
+				case "Terminal": .terminal
+				case "Space": .stack
+				case "ChatGPT App Tools": .openaiLogoRegular
+				default: .tools
+				}
+			}
+		}
 		var summary: SummarySourceReference
 		{
 			let summaryKind: SummarySourceReference.Kind
-			let icon: DesktopIcon?
 			switch kind
 			{
-			case .image: summaryKind = .attachment; icon = .fileImage
-			case .folder: summaryKind = .folder; icon = .folder
-			case .audio: summaryKind = .attachment; icon = .fileAudio
-			case .pdf: summaryKind = .attachment; icon = .fileDocument
-			case .file: summaryKind = .attachment; icon = .file
-			case .page: summaryKind = .attachment; icon = .document
-			case .web: summaryKind = .web; icon = .globe
-			case .tool: summaryKind = .tool; icon = name == "Terminal" ? .terminal : name ==
-				"Space" ? .stack :
-				name == "ChatGPT App Tools" ? .openaiLogoRegular : .tools
+			case .folder: summaryKind = .folder
+			case .web: summaryKind = .web
+			case .tool: summaryKind = .tool
+			case .image, .audio, .pdf, .file, .page: summaryKind = .attachment
 			}
 			return SummarySourceReference(
 				id: id,
@@ -77,7 +91,7 @@ struct ConversationLocalSources
 				thumbnailPath: kind == .image ? (isInlineImage ? path : url?.path) : nil,
 				detailRecordID: id,
 				categoryLabel: kind == .tool || kind == .web ? name : nil,
-				icon: icon
+				icon: iconIdentifier
 			)
 		}
 	}

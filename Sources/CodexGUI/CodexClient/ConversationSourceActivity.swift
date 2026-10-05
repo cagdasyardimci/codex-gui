@@ -47,10 +47,10 @@ struct ConversationSourceActivity: Equatable, Sendable
 			let namespace = json["namespace"] as? String ?? "Dynamic tools"
 			let server = json["server"] as? String ?? namespace
 			let tool = json["tool"] as? String ?? "Tool call"
-			provider = server.hasPrefix("chatgpt_space") || tool
-				.hasPrefix("chatgpt_space.") ? "Space" :
-				(server == "codex_app" || tool
-					.hasPrefix("codex_app.") ? "ChatGPT App Tools" : server)
+			provider = Self.providerName(
+				server: server,
+				tool: tool
+			)
 			operation = tool.components(separatedBy: ".").last ?? tool
 			summary = operation
 			if operation == "read_page", status == "completed", !displayIsError,
@@ -92,6 +92,32 @@ struct ConversationSourceActivity: Equatable, Sendable
 		default: return nil
 		}
 		self.page = page
+		detail = Self.detailDescription(json)
+
+		let payload = Self.resultPayload(
+			json: json,
+			isError: displayIsError
+		)
+		displayPayload = payload.text
+		displayLanguage = payload.language
+	}
+
+	private static func providerName(
+		server: String,
+		tool: String
+	) -> String
+	{
+		let isSpaceTool = server.hasPrefix("chatgpt_space") || tool.hasPrefix("chatgpt_space.")
+		if isSpaceTool
+		{
+			return "Space"
+		}
+		let isAppTool = server == "codex_app" || tool.hasPrefix("codex_app.")
+		return isAppTool ? "ChatGPT App Tools" : server
+	}
+
+	private static func detailDescription(_ json: [String: Any]) -> String
+	{
 		let fields = ["id",
 						"type",
 						"server",
@@ -127,7 +153,7 @@ struct ConversationSourceActivity: Equatable, Sendable
 			withJSONObject: details,
 			options: [.sortedKeys, .prettyPrinted]
 		)
-		detail = Self.truncated(
+		return Self.truncated(
 			data.flatMap
 			{
 				String(
@@ -137,12 +163,6 @@ struct ConversationSourceActivity: Equatable, Sendable
 			} ?? "",
 			limit: 16_384
 		)
-		let payload = Self.resultPayload(
-			json: json,
-			isError: displayIsError
-		)
-		displayPayload = payload.text
-		displayLanguage = payload.language
 	}
 
 	private static func isFailure(_ json: [String: Any]) -> Bool
@@ -330,7 +350,8 @@ struct ConversationSourceActivity: Equatable, Sendable
 			}
 			else
 			{
-				allJSON = false; decoded.append(truncated(
+				allJSON = false
+				decoded.append(truncated(
 					text,
 					limit: 4_096
 				))
@@ -383,13 +404,13 @@ struct ConversationSourceActivity: Equatable, Sendable
 		{
 			var characters = characterLimit
 			var nodes = nodeLimit
-			let value = displayBounded(
+			let boundedValue = displayBounded(
 				decoded,
 				depth: 0,
 				characters: &characters,
 				nodes: &nodes
 			)
-			guard let text = prettyJSON(value)
+			guard let text = prettyJSON(boundedValue)
 			else
 			{
 				return (

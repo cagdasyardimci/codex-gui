@@ -45,11 +45,43 @@ final class SourcesTabHoverPreview
 		parentWindow = nil
 	}
 
+	private enum Layout
+	{
+		static let minimumPreviewWidth: CGFloat = 180
+		static let maximumPreviewWidth: CGFloat = 320
+		static let screenWidthAllowance: CGFloat = 20
+		static let screenMargin: CGFloat = 8
+		static let anchorSpacing: CGFloat = 3
+	}
+
 	private func present(
 		sources: ConversationLocalSources,
 		below anchor: NSView,
 		in window: NSWindow
 	)
+	{
+		let content = makePreviewContent(sources)
+		let frame = measurePreviewFrame(
+			content: content,
+			below: anchor,
+			in: window
+		)
+		let panel = makePreviewPanel(
+			content: content,
+			frame: frame,
+			in: window
+		)
+
+		parentWindow = window
+		previewWindow = panel
+		window.addChildWindow(
+			panel,
+			ordered: .above
+		)
+		panel.orderFront(nil)
+	}
+
+	private func makePreviewContent(_ sources: ConversationLocalSources) -> SourcesTabPreviewContent
 	{
 		let resources = sources.records.filter
 		{
@@ -63,10 +95,12 @@ final class SourcesTabHoverPreview
 			ofSize: 13,
 			weight: .medium
 		)
+
 		let count = NSTextField(labelWithString:
 			"\(sources.records.count) \(sources.records.count == 1 ? "source" : "sources")")
 		count.font = .systemFont(ofSize: 12)
 		count.textColor = .secondaryLabelColor
+
 		let stack = AppKitLayout.verticalStack(
 			[title, count],
 			spacing: 6
@@ -75,42 +109,10 @@ final class SourcesTabHoverPreview
 			16,
 			after: count
 		)
+
 		for record in records
 		{
-			let icon = NSImageView(image: DesktopIcons.image(
-				record.summary.icon ?? .file,
-				size: 14
-			))
-			icon.contentTintColor = .secondaryLabelColor
-			icon.setAccessibilityElement(false)
-			let name = NSTextField(labelWithString: record.name)
-			name.font = .systemFont(ofSize: 13)
-			name.lineBreakMode = .byTruncatingTail
-			name.setContentCompressionResistancePriority(
-				.defaultLow,
-				for: .horizontal
-			)
-			let badgeText: String
-			switch record.kind
-			{
-			case .page: badgeText = "Read"
-			case .tool, .web: badgeText = "Used"
-			default: badgeText = "Attached"
-			}
-			let badge = NSTextField(labelWithString: badgeText)
-			badge.font = .systemFont(ofSize: 12)
-			badge.textColor = .secondaryLabelColor
-			badge.setContentCompressionResistancePriority(
-				.required,
-				for: .horizontal
-			)
-			let row = AppKitLayout.horizontalStack(
-				[icon, name, badge],
-				spacing: 10
-			)
-			row.heightAnchor.constraint(equalToConstant: 26).isActive = true
-			icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-			icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+			let row = makePreviewRow(record)
 			stack.addArrangedSubview(row)
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
@@ -121,44 +123,105 @@ final class SourcesTabHoverPreview
 			empty.textColor = .secondaryLabelColor
 			stack.addArrangedSubview(empty)
 		}
+
 		AppKitLayout.pin(
 			stack,
 			to: content,
 			inset: 10
 		)
+		return content
+	}
+
+	private func makePreviewRow(_ record: ConversationLocalSources.Record) -> NSStackView
+	{
+		let icon = NSImageView(image: DesktopIcons.image(
+			record.summary.icon ?? .file,
+			size: 14
+		))
+		icon.contentTintColor = .secondaryLabelColor
+		icon.setAccessibilityElement(false)
+
+		let name = NSTextField(labelWithString: record.name)
+		name.font = .systemFont(ofSize: 13)
+		name.lineBreakMode = .byTruncatingTail
+		name.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+
+		let badgeText: String
+		switch record.kind
+		{
+		case .page: badgeText = "Read"
+		case .tool, .web: badgeText = "Used"
+		default: badgeText = "Attached"
+		}
+		let badge = NSTextField(labelWithString: badgeText)
+		badge.font = .systemFont(ofSize: 12)
+		badge.textColor = .secondaryLabelColor
+		badge.setContentCompressionResistancePriority(
+			.required,
+			for: .horizontal
+		)
+
+		let row = AppKitLayout.horizontalStack(
+			[icon, name, badge],
+			spacing: 10
+		)
+		row.heightAnchor.constraint(equalToConstant: 26).isActive = true
+		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+		return row
+	}
+
+	private func measurePreviewFrame(
+		content: NSView,
+		below anchor: NSView,
+		in window: NSWindow
+	) -> NSRect
+	{
 		let screen = window.screen?.visibleFrame ?? window.frame
-		let width = min(
-			320,
+		let previewWidth = min(
+			Layout.maximumPreviewWidth,
 			max(
-				180,
-				screen.width - 20
+				Layout.minimumPreviewWidth,
+				screen.width - Layout.screenWidthAllowance
 			)
 		)
-		content.widthAnchor.constraint(equalToConstant: width).isActive = true
+		content.widthAnchor.constraint(equalToConstant: previewWidth).isActive = true
 		content.layoutSubtreeIfNeeded()
-		let height = ceil(content.fittingSize.height)
+		let previewHeight = ceil(content.fittingSize.height)
 		let tabRect = window.convertToScreen(anchor.convert(
 			anchor.bounds,
 			to: nil
 		))
-		let x = min(
+		let previewOriginX = min(
 			max(
 				tabRect.minX,
-				screen.minX + 8
+				screen.minX + Layout.screenMargin
 			),
-			screen.maxX - width - 8
+			screen.maxX - previewWidth - Layout.screenMargin
 		)
-		let y = max(
-			screen.minY + 8,
-			tabRect.minY - height - 3
+		let previewOriginY = max(
+			screen.minY + Layout.screenMargin,
+			tabRect.minY - previewHeight - Layout.anchorSpacing
 		)
+		return NSRect(
+			x: previewOriginX,
+			y: previewOriginY,
+			width: previewWidth,
+			height: previewHeight
+		)
+	}
+
+	private func makePreviewPanel(
+		content: NSView,
+		frame: NSRect,
+		in window: NSWindow
+	) -> NSPanel
+	{
 		let panel = NSPanel(
-			contentRect: NSRect(
-				x: x,
-				y: y,
-				width: width,
-				height: height
-			),
+			contentRect: frame,
 			styleMask: [.borderless, .nonactivatingPanel],
 			backing: .buffered,
 			defer: false
@@ -172,21 +235,10 @@ final class SourcesTabHoverPreview
 		panel.appearance = window.effectiveAppearance
 		panel.contentView = content
 		panel.setFrame(
-			NSRect(
-				x: x,
-				y: y,
-				width: width,
-				height: height
-			),
+			frame,
 			display: false
 		)
-		parentWindow = window
-		previewWindow = panel
-		window.addChildWindow(
-			panel,
-			ordered: .above
-		)
-		panel.orderFront(nil)
+		return panel
 	}
 }
 

@@ -39,6 +39,12 @@ final class ConversationSourcesViewController: NSViewController
 		var widthConstraint: NSLayoutConstraint? = nil
 	}
 
+	private struct OperationGroup
+	{
+		let operation: String
+		var invocations: [ConversationLocalSources.Invocation]
+	}
+
 	private struct Disclosure
 	{
 		let id: String
@@ -516,49 +522,23 @@ final class ConversationSourcesViewController: NSViewController
 
 	private func resourceIcon(for record: ConversationLocalSources.Record) -> NSImage?
 	{
-		let icon: DesktopIcon
-		switch record.kind
-		{
-		case .image: icon = .fileImage
-		case .folder: icon = .folder
-		case .audio: icon = .fileAudio
-		case .pdf: icon = .fileDocument
-		case .file: icon = .file
-		case .page: icon = .document
-		case .tool: icon = .tools
-		case .web: icon = .globe
-		}
-		return DesktopIcons.image(
-			icon,
+		DesktopIcons.image(
+			record.kind == .tool ? .tools : record.iconIdentifier,
 			size: record.kind == .audio ? 18 : 24
 		)
 	}
 
 	private func activityIcon(for record: ConversationLocalSources.Record) -> NSImage?
 	{
-		if record.kind == .web
+		guard record.kind == .web || (record.kind == .tool && record.iconIdentifier != .tools)
+		else
 		{
-			return DesktopIcons.image(
-				.globe,
-				size: 16
-			)
+			return resourceIcon(for: record)
 		}
-		switch record.name
-		{
-		case "Space": return DesktopIcons.image(
-				.stack,
-				size: 16
-			)
-		case "ChatGPT App Tools": return DesktopIcons.image(
-				.openaiLogoRegular,
-				size: 16
-			)
-		case "Terminal": return DesktopIcons.image(
-				.terminal,
-				size: 16
-			)
-		default: return resourceIcon(for: record)
-		}
+		return DesktopIcons.image(
+			record.iconIdentifier,
+			size: 16
+		)
 	}
 
 	private func operationTitle(
@@ -606,42 +586,8 @@ final class ConversationSourcesViewController: NSViewController
 			18,
 			after: title
 		)
-		var groups: [(operation: String, invocations: [ConversationLocalSources.Invocation])] = []
-		for invocation in record.invocations
-		{
-			if let index = groups.firstIndex(where:
-				{
-					$0.operation == invocation.operation
-				})
-			{
-				groups[index].invocations.append(invocation)
-			}
-			else
-			{
-				groups.append((invocation.operation, [invocation]))
-			}
-		}
-		let canonicalOrder = record.kind == .web
-			? ["Search", "Open", "Find", "Other"]
-			: [
-				"read_thread",
-				"list_threads",
-				"list_pages",
-				"list_spaces",
-				"read_page",
-				"list_artifacts",
-				"list_attached_artifacts"
-			]
-		groups = groups.enumerated().sorted
-		{
-			lhs, rhs in
-			let left = canonicalOrder.firstIndex(of: lhs.element.operation) ?? canonicalOrder.count
-			let right = canonicalOrder.firstIndex(of: rhs.element.operation) ?? canonicalOrder.count
-			return left == right ? lhs.offset < rhs.offset : left < right
-		}.map
-		{
-			$0.element
-		}
+
+		let groups = orderedOperationGroups(for: record)
 		if groups.isEmpty, !record.association.isEmpty
 		{
 			let association = NSTextField(wrappingLabelWithString: record.association)
@@ -651,84 +597,11 @@ final class ConversationSourcesViewController: NSViewController
 		}
 		for group in groups
 		{
-			let id = "\(record.id):operation:\(group.operation)"
-			let label = operationTitle(
-				group.operation,
-				count: group.invocations.count
-			)
-			let disclosure = SourceOperationDisclosureButton(
-				title: label,
-				target: self,
-				action: #selector(toggleInvocation(_:))
-			)
-			disclosure.setButtonType(.pushOnPushOff)
-			disclosure.isBordered = false
-			disclosure.imagePosition = .noImage
-			if let cell = disclosure.cell as? NSButtonCell
-			{
-				cell.highlightsBy = []
-				cell.showsStateBy = []
-			}
-			disclosure.alignment = .left
-			disclosure.font = .systemFont(ofSize: 13)
-			disclosure.contentTintColor = SourceResultCodeCard.activityLabelColor
-			disclosure.state = expandedInvocations.contains(id) ? .on : .off
-			let plainTitle = NSAttributedString(
-				string: label,
-				attributes: [
-					.font: NSFont.systemFont(ofSize: 13),
-					.foregroundColor: SourceResultCodeCard.activityLabelColor,
-				]
-			)
-			disclosure.attributedTitle = plainTitle
-			disclosure.attributedAlternateTitle = plainTitle
-			disclosure.setAccessibilityValue(disclosure.state == .on ? "Expanded" : "Collapsed")
-			disclosure.identifier = NSUserInterfaceItemIdentifier("source-disclosure:\(id)")
-			disclosure.setAccessibilityLabel(label)
-			disclosure.cell?.lineBreakMode = .byTruncatingTail
-			disclosure.setContentCompressionResistancePriority(
-				.defaultLow,
-				for: .horizontal
-			)
-			let detail = AppKitLayout.verticalStack(
-				[],
-				// Each output already includes a 4pt gap and a 24pt raw-action row.
-				spacing: 6
-			)
-			detail.identifier = NSUserInterfaceItemIdentifier("source-detail:\(id)")
-			let orderedInvocations = group.invocations.enumerated().sorted
-			{
-				lhs, rhs in
-				if lhs.element.isError == rhs.element.isError
-				{
-					return lhs.offset < rhs.offset
-				}
-				return !lhs.element.isError
-			}.map
-			{
-				$0.element
-			}
-			let groupDisclosure = Disclosure(
-				id: id,
+			appendActivityOperation(
+				group,
 				recordID: record.id,
-				invocations: orderedInvocations,
-				detail: detail,
-				stack: content
+				to: content
 			)
-			if disclosure.state == .on
-			{
-				populateResults(for: groupDisclosure)
-			}
-			detail.isHidden = disclosure.state == .off
-			disclosure.updateDisclosureIndicator()
-
-			content.addArrangedSubview(disclosure)
-			content.addArrangedSubview(detail)
-			content.setCustomSpacing(
-				disclosure.state == .on ? 14 : 8,
-				after: disclosure
-			)
-			disclosures[disclosure] = groupDisclosure
 		}
 		for child in content.arrangedSubviews
 		{
@@ -780,6 +653,137 @@ final class ConversationSourcesViewController: NSViewController
 		])
 		rows[record.id] = row
 		return row
+	}
+
+	private func orderedOperationGroups(
+		for record: ConversationLocalSources.Record
+	) -> [OperationGroup]
+	{
+		var groups: [OperationGroup] = []
+		for invocation in record.invocations
+		{
+			if let index = groups.firstIndex(where:
+				{
+					$0.operation == invocation.operation
+				})
+			{
+				groups[index].invocations.append(invocation)
+			}
+			else
+			{
+				groups.append(OperationGroup(
+					operation: invocation.operation,
+					invocations: [invocation]
+				))
+			}
+		}
+		let canonicalOrder = record.kind == .web
+			? ["Search", "Open", "Find", "Other"]
+			: [
+				"read_thread",
+				"list_threads",
+				"list_pages",
+				"list_spaces",
+				"read_page",
+				"list_artifacts",
+				"list_attached_artifacts"
+			]
+		return groups.enumerated().sorted
+		{
+			lhs, rhs in
+			let left = canonicalOrder.firstIndex(of: lhs.element.operation) ?? canonicalOrder.count
+			let right = canonicalOrder.firstIndex(of: rhs.element.operation) ?? canonicalOrder.count
+			return left == right ? lhs.offset < rhs.offset : left < right
+		}.map
+		{
+			$0.element
+		}
+	}
+
+	private func appendActivityOperation(
+		_ group: OperationGroup,
+		recordID: String,
+		to content: NSStackView
+	)
+	{
+		let id = "\(recordID):operation:\(group.operation)"
+		let label = operationTitle(
+			group.operation,
+			count: group.invocations.count
+		)
+		let disclosure = SourceOperationDisclosureButton(
+			title: label,
+			target: self,
+			action: #selector(toggleInvocation(_:))
+		)
+		disclosure.setButtonType(.pushOnPushOff)
+		disclosure.isBordered = false
+		disclosure.imagePosition = .noImage
+		if let cell = disclosure.cell as? NSButtonCell
+		{
+			cell.highlightsBy = []
+			cell.showsStateBy = []
+		}
+		disclosure.alignment = .left
+		disclosure.font = .systemFont(ofSize: 13)
+		disclosure.contentTintColor = SourceResultCodeCard.activityLabelColor
+		disclosure.state = expandedInvocations.contains(id) ? .on : .off
+		let plainTitle = NSAttributedString(
+			string: label,
+			attributes: [
+				.font: NSFont.systemFont(ofSize: 13),
+				.foregroundColor: SourceResultCodeCard.activityLabelColor,
+			]
+		)
+		disclosure.attributedTitle = plainTitle
+		disclosure.attributedAlternateTitle = plainTitle
+		disclosure.setAccessibilityValue(disclosure.state == .on ? "Expanded" : "Collapsed")
+		disclosure.identifier = NSUserInterfaceItemIdentifier("source-disclosure:\(id)")
+		disclosure.setAccessibilityLabel(label)
+		disclosure.cell?.lineBreakMode = .byTruncatingTail
+		disclosure.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		let detail = AppKitLayout.verticalStack(
+			[],
+			// Each output already includes a 4pt gap and a 24pt raw-action row.
+			spacing: 6
+		)
+		detail.identifier = NSUserInterfaceItemIdentifier("source-detail:\(id)")
+		let orderedInvocations = group.invocations.enumerated().sorted
+		{
+			lhs, rhs in
+			if lhs.element.isError == rhs.element.isError
+			{
+				return lhs.offset < rhs.offset
+			}
+			return !lhs.element.isError
+		}.map
+		{
+			$0.element
+		}
+		let groupDisclosure = Disclosure(
+			id: id,
+			recordID: recordID,
+			invocations: orderedInvocations,
+			detail: detail,
+			stack: content
+		)
+		if disclosure.state == .on
+		{
+			populateResults(for: groupDisclosure)
+		}
+		detail.isHidden = disclosure.state == .off
+		disclosure.updateDisclosureIndicator()
+
+		content.addArrangedSubview(disclosure)
+		content.addArrangedSubview(detail)
+		content.setCustomSpacing(
+			disclosure.state == .on ? 14 : 8,
+			after: disclosure
+		)
+		disclosures[disclosure] = groupDisclosure
 	}
 
 	private func populateResults(for disclosure: Disclosure)
