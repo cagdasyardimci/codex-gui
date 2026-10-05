@@ -16,6 +16,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	}
 	private var pendingOutputReadingPosition: OutputReadingPosition?
 	private static let rowHeight: CGFloat = 30
+	private static let detailSpacing: CGFloat = 6
+	private static let minimumShellHeight: CGFloat = 100
+	private static let maximumShellSampleLength = 8000
 	private static let maximumShellHeight: CGFloat = 278
 	private var shellHeightConstraint: NSLayoutConstraint?
 	private static let imageHeight: CGFloat = 116
@@ -65,7 +68,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		view = NSView()
 		stack.orientation = .vertical
 		stack.alignment = .leading
-		stack.spacing = 6
+		stack.spacing = Self.detailSpacing
 		AppKitLayout.pin(
 			stack,
 			to: view,
@@ -128,7 +131,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func configureShellOutput()
 	{
-		shellHeightConstraint = shell.heightAnchor.constraint(equalToConstant: 100)
+		shellHeightConstraint = shell.heightAnchor
+			.constraint(equalToConstant: Self.minimumShellHeight)
 		shellHeightConstraint?.isActive = true
 		shellLabel.font = .systemFont(ofSize: 13)
 		shellLabel.textColor = .secondaryLabelColor
@@ -538,11 +542,11 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			detail = shellHeight(
 				command: command,
 				width: width
-			) + 6
+			) + detailSpacing
 		}
 		else if row.expanded, row.kind == .image
 		{
-			detail = imageHeight + 6
+			detail = imageHeight + detailSpacing
 		}
 		else
 		{
@@ -677,14 +681,14 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	) -> CGFloat
 	{
 		// Only a bounded prefix is needed to reach the scrolling panel's height cap.
-		let commandSample = String(command.command.prefix(8000))
+		let commandSample = String(command.command.prefix(maximumShellSampleLength))
 		let remaining = max(
 			0,
-			8000 - commandSample.count
+			maximumShellSampleLength - commandSample.count
 		)
 		let sample = "$ \(commandSample)" +
 			(command.output.isEmpty ? "" : "\n" + String(command.output.prefix(remaining)))
-		let size = NSAttributedString(
+		let measuredOutputHeight = NSAttributedString(
 			string: sample,
 			attributes: [
 				.font: NSFont.monospacedSystemFont(
@@ -705,8 +709,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		return min(
 			maximumShellHeight,
 			max(
-				100,
-				ceil(size) + 76
+				minimumShellHeight,
+				ceil(measuredOutputHeight) + 76
 			)
 		)
 	}

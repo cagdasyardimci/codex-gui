@@ -579,32 +579,32 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		{
 			return
 		}
-		let rect = window.convertToScreen(mark.convert(
+		let markScreenRect = window.convertToScreen(mark.convert(
 			mark.bounds,
 			to: nil
 		))
-		let screen = window.screen?.visibleFrame ?? window.frame
-		let size = NSSize(
+		let visibleScreenFrame = window.screen?.visibleFrame ?? window.frame
+		let previewSize = NSSize(
 			width: TurnSummaryPreview.cardWidth,
 			height: preview.cardHeight
 		)
-		let x = min(
-			rect.maxX + 4,
-			screen.maxX - size.width
+		let previewOriginX = min(
+			markScreenRect.maxX + 4,
+			visibleScreenFrame.maxX - previewSize.width
 		)
-		let y = max(
-			screen.minY,
+		let previewOriginY = max(
+			visibleScreenFrame.minY,
 			min(
-				rect.midY - size.height / 2,
-				screen.maxY - size.height
+				markScreenRect.midY - previewSize.height / 2,
+				visibleScreenFrame.maxY - previewSize.height
 			)
 		)
 		panel.setFrame(
 			NSRect(
-				x: x,
-				y: y,
-				width: size.width,
-				height: size.height
+				x: previewOriginX,
+				y: previewOriginY,
+				width: previewSize.width,
+				height: previewSize.height
 			),
 			display: true
 		)

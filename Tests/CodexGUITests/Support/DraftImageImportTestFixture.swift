@@ -12,6 +12,10 @@ enum DraftImageImportTestFixture
 		bitsPerComponent: Int = 8
 	) throws -> CGImage
 	{
+		let channelsPerPixel = 4
+		let bitsPerByte = 8
+		let sixteenBitToEightBitScale = UInt16.max / UInt16(UInt8.max)
+
 		let colors: [[UInt16]] = [
 			[65535, 0, 0, 65535],
 			[0, 65535, 0, 65535],
@@ -38,17 +42,21 @@ enum DraftImageImportTestFixture
 		{
 			bytes = Data(samples.map
 			{
-				UInt8($0 / 257)
+				UInt8($0 / sixteenBitToEightBitScale)
 			})
 		}
+
+		let bitsPerPixel = bitsPerComponent * channelsPerPixel
+		let bytesPerComponent = bitsPerComponent / bitsPerByte
+		let bytesPerRow = width * channelsPerPixel * bytesPerComponent
 		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.displayP3))
 		let provider = try #require(CGDataProvider(data: bytes as CFData))
 		return try #require(CGImage(
 			width: width,
 			height: height,
 			bitsPerComponent: bitsPerComponent,
-			bitsPerPixel: bitsPerComponent * 4,
-			bytesPerRow: width * 4 * (bitsPerComponent / 8),
+			bitsPerPixel: bitsPerPixel,
+			bytesPerRow: bytesPerRow,
 			space: colorSpace,
 			bitmapInfo: bitmapInfo,
 			provider: provider,

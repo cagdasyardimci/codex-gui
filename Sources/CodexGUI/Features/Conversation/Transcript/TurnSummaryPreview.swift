@@ -10,6 +10,7 @@ final class TurnSummaryPreview: NSView
 	private static let contentSpacing: CGFloat = 6
 	private static let minimumReplyHeight: CGFloat = 18
 	private static let maximumReplyHeight: CGFloat = 58
+	private static let loadingCardHeight: CGFloat = 100
 	var onEnter: (() -> Void)?
 	var onExit: (() -> Void)?
 	var onBookmark: (() -> Void)?
@@ -30,7 +31,7 @@ final class TurnSummaryPreview: NSView
 			x: 0,
 			y: 0,
 			width: Self.cardWidth,
-			height: 100
+			height: Self.loadingCardHeight
 		))
 		wantsLayer = true
 		layer?.addSublayer(skeleton)
@@ -103,37 +104,7 @@ final class TurnSummaryPreview: NSView
 		skeleton.isHidden = !isLoading
 		if isLoading
 		{
-			cardHeight = 100
-			setFrameSize(NSSize(
-				width: Self.cardWidth,
-				height: cardHeight
-			))
-			skeleton.frame = bounds
-			for (index, bar) in (skeleton.sublayers ?? []).enumerated()
-			{
-				bar.frame = NSRect(
-					x: Self.inset,
-					y: cardHeight - 24 - CGFloat(index) * 20,
-					width: (Self.cardWidth - 2 * Self.inset) *
-						[0.6, 1, 0.92, 0.8][index],
-					height: 10
-				)
-			}
-			if skeleton.animation(forKey: "loading") == nil,
-				!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-			{
-				let pulse = CABasicAnimation(keyPath: "opacity")
-				pulse.fromValue = 0.45
-				pulse.toValue = 1
-				pulse.duration = 0.7
-				pulse.autoreverses = true
-				pulse.repeatCount = .infinity
-				skeleton.add(
-					pulse,
-					forKey: "loading"
-				)
-			}
-			setAccessibilityLabel("Loading turn preview")
+			renderLoadingPreview()
 			return
 		}
 		skeleton.removeAllAnimations()
@@ -195,6 +166,41 @@ final class TurnSummaryPreview: NSView
 			width: Self.cardWidth,
 			height: cardHeight
 		))
+	}
+
+	private func renderLoadingPreview()
+	{
+		cardHeight = Self.loadingCardHeight
+		setFrameSize(NSSize(
+			width: Self.cardWidth,
+			height: cardHeight
+		))
+		skeleton.frame = bounds
+		for (index, bar) in (skeleton.sublayers ?? []).enumerated()
+		{
+			bar.frame = NSRect(
+				x: Self.inset,
+				y: cardHeight - 24 - CGFloat(index) * 20,
+				width: (Self.cardWidth - 2 * Self.inset) *
+					[0.6, 1, 0.92, 0.8][index],
+				height: 10
+			)
+		}
+		if skeleton.animation(forKey: "loading") == nil,
+			!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+		{
+			let pulse = CABasicAnimation(keyPath: "opacity")
+			pulse.fromValue = 0.45
+			pulse.toValue = 1
+			pulse.duration = 0.7
+			pulse.autoreverses = true
+			pulse.repeatCount = .infinity
+			skeleton.add(
+				pulse,
+				forKey: "loading"
+			)
+		}
+		setAccessibilityLabel("Loading turn preview")
 	}
 
 	private func truncatedReply(

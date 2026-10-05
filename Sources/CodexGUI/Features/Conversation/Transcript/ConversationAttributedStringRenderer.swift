@@ -165,43 +165,51 @@ enum ConversationAttributedStringRenderer
 			attributes[.underlineStyle] = 0
 			if run.style.fileLinkIcon
 			{
-				let attachment = NSTextAttachment()
-				let icon = DesktopIcons.image(
-					.code,
-					size: 14
-				)
-				icon.isTemplate = false
-				let color = linkColor
-				attachment.image = NSImage(
-					size: NSSize(
-						width: 18,
-						height: 14
-					),
-					flipped: false
-				)
-				{
-					bounds in
-					icon.draw(in: NSRect(
-						x: 0,
-						y: -2.5,
-						width: 16,
-						height: 19
-					))
-					color.setFill()
-					bounds.fill(using: .sourceAtop)
-					return true
-				}
-				attachment.bounds = NSRect(
-					x: 0,
-					y: -1.5,
-					width: 18,
-					height: 14
-				)
+				let attachment = makeFileLinkAttachment()
 				attributes[.attachment] = attachment
 				attributes[.conversationSourceText] = ""
 			}
 		}
 		return attributes
+	}
+
+	private static func makeFileLinkAttachment() -> NSTextAttachment
+	{
+		let attachment = NSTextAttachment()
+		let icon = DesktopIcons.image(
+			.code,
+			size: 14
+		)
+		icon.isTemplate = false
+
+		let color = linkColor
+		attachment.image = NSImage(
+			size: NSSize(
+				width: 18,
+				height: 14
+			),
+			flipped: false
+		)
+		{
+			bounds in
+			icon.draw(in: NSRect(
+				x: 0,
+				y: -2.5,
+				width: 16,
+				height: 19
+			))
+			color.setFill()
+			bounds.fill(using: .sourceAtop)
+			return true
+		}
+
+		attachment.bounds = NSRect(
+			x: 0,
+			y: -1.5,
+			width: 18,
+			height: 14
+		)
+		return attachment
 	}
 
 	private static func addRichBlockAttachment(

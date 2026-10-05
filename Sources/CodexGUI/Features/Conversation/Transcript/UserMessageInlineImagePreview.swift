@@ -4,6 +4,9 @@ import AppKit
 @MainActor
 final class UserMessageInlineImagePreview
 {
+	private static let imageInset: CGFloat = 20
+	private static let screenInset: CGFloat = 40
+
 	private var presentationTask: Task<Void, Never>?
 	private var panel: NSPanel?
 	private var generation = 0
@@ -73,15 +76,18 @@ final class UserMessageInlineImagePreview
 				height: thumbnail.image.height
 			)
 		)
+
 		let imageView = NSImageView(image: image)
 		imageView.imageScaling = .scaleProportionallyDown
 		imageView.setAccessibilityLabel("Attached image: \(name)")
+
 		let container = NSView()
 		AppKitLayout.pin(
 			imageView,
 			to: container,
-			inset: 20
+			inset: Self.imageInset
 		)
+
 		let screen = parent.screen?.visibleFrame ?? parent.frame
 		let size = NSSize(
 			width: min(
@@ -89,8 +95,8 @@ final class UserMessageInlineImagePreview
 				max(
 					240,
 					min(
-						image.size.width + 40,
-						screen.width - 80
+						image.size.width + Self.imageInset * 2,
+						screen.width - Self.screenInset * 2
 					)
 				)
 			),
@@ -99,12 +105,13 @@ final class UserMessageInlineImagePreview
 				max(
 					180,
 					min(
-						image.size.height + 40,
-						screen.height - 80
+						image.size.height + Self.imageInset * 2,
+						screen.height - Self.screenInset * 2
 					)
 				)
 			)
 		)
+
 		let panel = NSPanel(
 			contentRect: NSRect(
 				origin: .zero,
@@ -123,6 +130,7 @@ final class UserMessageInlineImagePreview
 			x: parent.frame.midX - panel.frame.width / 2,
 			y: parent.frame.midY - panel.frame.height / 2
 		))
+
 		self.panel = panel
 		parent.addChildWindow(
 			panel,

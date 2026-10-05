@@ -33,6 +33,8 @@ enum ConversationSubagentAvatars
 		"27-gaze-geometric",
 		"28-gaze-geometric",
 	]
+	private static let maximumVisibleAvatars = 4
+	private static let avatarSize: CGFloat = 18
 	private static var assignedAssets: [String: String] = [:]
 	private static let imageCache = NSCache<NSString, NSImage>()
 
@@ -44,22 +46,22 @@ enum ConversationSubagentAvatars
 		stack.spacing = 5
 		let count = min(
 			agents.count,
-			4
+			maximumVisibleAvatars
 		)
-		let width = CGFloat(count) * 18 + CGFloat(max(
+		let width = CGFloat(count) * avatarSize + CGFloat(max(
 			0,
 			count - 1
 		)) * stack.spacing
 		stack.widthAnchor.constraint(equalToConstant: width).isActive = true
-		for agent in agents.prefix(4)
+		for agent in agents.prefix(maximumVisibleAvatars)
 		{
 			let avatar = ConversationSubagentAvatarView(
 				assetName: assetName(for: agent.identity),
 				name: agent.name
 			)
 			avatar.translatesAutoresizingMaskIntoConstraints = false
-			avatar.widthAnchor.constraint(equalToConstant: 18).isActive = true
-			avatar.heightAnchor.constraint(equalToConstant: 18).isActive = true
+			avatar.widthAnchor.constraint(equalToConstant: avatarSize).isActive = true
+			avatar.heightAnchor.constraint(equalToConstant: avatarSize).isActive = true
 			stack.addArrangedSubview(avatar)
 		}
 		stack.setContentCompressionResistancePriority(

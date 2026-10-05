@@ -45,14 +45,19 @@ final class UserMessageImageAttachmentsView: NSView
 		}
 		let columns = columns(width: width)
 		let rows = (count + columns - 1) / columns
-		return CGFloat(rows) * min(
+		return CGFloat(rows) * thumbnailEdge(width: width)
+			+ CGFloat(rows - 1) * spacing
+	}
+
+	private static func thumbnailEdge(width: CGFloat) -> CGFloat
+	{
+		min(
 			thumbnailSize,
 			max(
 				1,
 				width
 			)
 		)
-			+ CGFloat(rows - 1) * spacing
 	}
 
 	private static func columns(width: CGFloat) -> Int
@@ -160,22 +165,16 @@ final class UserMessageImageAttachmentsView: NSView
 	{
 		super.layout()
 		let columns = Self.columns(width: bounds.width)
-		let edge = min(
-			Self.thumbnailSize,
-			max(
-				1,
-				bounds.width
-			)
-		)
+		let edge = Self.thumbnailEdge(width: bounds.width)
 		for (index, button) in buttons.enumerated()
 		{
 			let row = index / columns
 			let column = index % columns
-			let count = min(
+			let imagesInRow = min(
 				columns,
 				buttons.count - row * columns
 			)
-			let rowWidth = CGFloat(count) * edge + CGFloat(count - 1) * Self.spacing
+			let rowWidth = CGFloat(imagesInRow) * edge + CGFloat(imagesInRow - 1) * Self.spacing
 			button.frame = NSRect(
 				x: bounds.width - rowWidth + CGFloat(column) * (edge + Self.spacing),
 				y: CGFloat(row) * (edge + Self.spacing),
@@ -220,6 +219,7 @@ final class UserMessageImageAttachmentsView: NSView
 @MainActor
 private final class UserMessageImageButton: NSButton
 {
+	private static let progressSize: CGFloat = 16
 	private let progress = NSProgressIndicator()
 
 	func beginLoading()
@@ -236,10 +236,10 @@ private final class UserMessageImageButton: NSButton
 	{
 		super.layout()
 		progress.frame = NSRect(
-			x: bounds.midX - 8,
-			y: bounds.midY - 8,
-			width: 16,
-			height: 16
+			x: bounds.midX - Self.progressSize / 2,
+			y: bounds.midY - Self.progressSize / 2,
+			width: Self.progressSize,
+			height: Self.progressSize
 		)
 	}
 

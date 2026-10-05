@@ -215,57 +215,71 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		separator.isHidden = changes.isEmpty
 		for change in changes.prefix(expanded ? changes.count : 3)
 		{
-			var path = change.path
-			if let projectPath
-			{
-				let prefix = projectPath.hasSuffix("/") ? projectPath : projectPath + "/"
-				if path.hasPrefix(prefix)
-				{
-					path = String(path.dropFirst(prefix.count))
-				}
-			}
-			let name = FileChangeTextField(labelWithString: path)
-			name.font = .systemFont(ofSize: 13)
-			name.textColor = ConversationAttributedStringRenderer.proseColor
-			name.lineBreakMode = .byTruncatingMiddle
-			name.toolTip = change.path
-			name.setContentHuggingPriority(
-				.defaultLow,
-				for: .horizontal
+			appendFileRow(
+				change,
+				projectPath: projectPath
 			)
-			name.setContentCompressionResistancePriority(
-				.defaultLow,
-				for: .horizontal
-			)
-			let fileCounts = FileChangeTextField(labelWithString: "")
-			fileCounts.font = .systemFont(ofSize: 13)
-			fileCounts.attributedStringValue = Self.lineCounts(for: change.diff)
-			fileCounts.isHidden = change.diff.isEmpty
-			fileCounts.setContentCompressionResistancePriority(
-				.required,
-				for: .horizontal
-			)
-			let row = NSView()
-			row.translatesAutoresizingMaskIntoConstraints = false
-			name.translatesAutoresizingMaskIntoConstraints = false
-			fileCounts.translatesAutoresizingMaskIntoConstraints = false
-			row.addSubview(name)
-			row.addSubview(fileCounts)
-			fileList.addArrangedSubview(row)
-			NSLayoutConstraint.activate([
-				row.widthAnchor.constraint(equalTo: fileList.widthAnchor),
-				row.heightAnchor.constraint(equalToConstant: 36),
-				name.leadingAnchor.constraint(equalTo: row.leadingAnchor),
-				name.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-				name.trailingAnchor.constraint(
-					lessThanOrEqualTo: fileCounts.leadingAnchor,
-					constant: -12
-				),
-				fileCounts.trailingAnchor.constraint(equalTo: row.trailingAnchor),
-				fileCounts.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-			])
 		}
 		view.setAccessibilityLabel(titleLabel.stringValue)
+	}
+
+	private func appendFileRow(
+		_ change: FileChange,
+		projectPath: String?
+	)
+	{
+		var path = change.path
+		if let projectPath
+		{
+			let prefix = projectPath.hasSuffix("/") ? projectPath : projectPath + "/"
+			if path.hasPrefix(prefix)
+			{
+				path = String(path.dropFirst(prefix.count))
+			}
+		}
+
+		let name = FileChangeTextField(labelWithString: path)
+		name.font = .systemFont(ofSize: 13)
+		name.textColor = ConversationAttributedStringRenderer.proseColor
+		name.lineBreakMode = .byTruncatingMiddle
+		name.toolTip = change.path
+		name.setContentHuggingPriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		name.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+
+		let fileCounts = FileChangeTextField(labelWithString: "")
+		fileCounts.font = .systemFont(ofSize: 13)
+		fileCounts.attributedStringValue = Self.lineCounts(for: change.diff)
+		fileCounts.isHidden = change.diff.isEmpty
+		fileCounts.setContentCompressionResistancePriority(
+			.required,
+			for: .horizontal
+		)
+
+		let row = NSView()
+		row.translatesAutoresizingMaskIntoConstraints = false
+		name.translatesAutoresizingMaskIntoConstraints = false
+		fileCounts.translatesAutoresizingMaskIntoConstraints = false
+		row.addSubview(name)
+		row.addSubview(fileCounts)
+		fileList.addArrangedSubview(row)
+		NSLayoutConstraint.activate([
+			row.widthAnchor.constraint(equalTo: fileList.widthAnchor),
+			row.heightAnchor.constraint(equalToConstant: 36),
+			name.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+			name.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+			name.trailingAnchor.constraint(
+				lessThanOrEqualTo: fileCounts.leadingAnchor,
+				constant: -12
+			),
+			fileCounts.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+			fileCounts.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+		])
 	}
 
 	@objc private func toggleFiles()
