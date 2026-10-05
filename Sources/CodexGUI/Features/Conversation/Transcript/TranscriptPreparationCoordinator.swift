@@ -190,7 +190,7 @@ final class TranscriptPreparationCoordinator
 			{
 				continue
 			}
-			let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
+			let turnID = ConversationEntryIdentity.turnIDWithFallback(entry.id)
 			if changesByTurn[turnID] == nil
 			{
 				turnIDs.append(turnID)

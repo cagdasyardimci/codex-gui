@@ -363,12 +363,12 @@ extension ConversationViewController
 
 	private func isReplyBookmarked(_ entry: ConversationEntry) -> Bool
 	{
-		guard let separator = entry.id.firstIndex(of: ":")
+		guard let identity = ConversationEntryIdentity(entry.id)
 		else
 		{
 			return false
 		}
-		let turnID = String(entry.id[..<separator])
+		let turnID = identity.turnID
 		return bookmarks.contains
 		{
 			$0.threadID == selectedThreadID && $0.turnID == turnID
@@ -381,13 +381,13 @@ extension ConversationViewController
 	) -> (() -> Void)?
 	{
 		guard replyActionEntryID == entry.id, let threadID = selectedThreadID,
-				onToggleBookmark != nil, let separator = entry.id.firstIndex(of: ":")
+				onToggleBookmark != nil, let identity = ConversationEntryIdentity(entry.id)
 		else
 		{
 			return nil
 		}
-		let turnID = String(entry.id[..<separator])
-		let itemID = String(entry.id[entry.id.index(after: separator)...])
+		let turnID = identity.turnID
+		let itemID = identity.itemID
 		let action: () -> Void =
 		{
 			[weak self] in

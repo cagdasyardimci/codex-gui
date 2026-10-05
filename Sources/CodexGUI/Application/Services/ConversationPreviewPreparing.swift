@@ -49,18 +49,21 @@ enum ConversationTurnPreviewPreparation
 				reply: "No text preview is available."
 			)
 		}
-		let title = String(UserMessagePresenter.body(for: request).prefix(400))
-			.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+		let title = ConversationTurnPreviewText.title(
+			UserMessagePresenter.body(for: request),
+			maximumLength: 160
+		)
 		let renderedReply = reply.map
 		{
-			renderReply(String($0.prefix(400)))
+			let excerpt = ConversationTurnPreviewText.sourcePrefix($0)
+			return ConversationTurnPreviewText.reply(renderReply(excerpt))
 		} ?? ""
 		try Task.checkCancellation()
 		return ConversationTurnPreview(
 			turnID: turn.id,
 			entryID: turn.id + ":" + request.id,
-			title: String(title.prefix(160)),
-			reply: String(renderedReply.prefix(800))
+			title: title,
+			reply: renderedReply
 		)
 	}
 }

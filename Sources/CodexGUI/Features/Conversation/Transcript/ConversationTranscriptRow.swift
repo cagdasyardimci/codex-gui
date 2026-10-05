@@ -67,7 +67,7 @@ enum ConversationTranscriptRow: Equatable
 
 		func appendTiming(for entry: ConversationEntry)
 		{
-			let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
+			let turnID = ConversationEntryIdentity.turnIDWithFallback(entry.id)
 			guard emittedTimings.insert(turnID).inserted,
 					let timing = timingsByTurnID[turnID],
 					timing.startedAt != nil || timing.durationMs != nil
@@ -137,7 +137,7 @@ enum ConversationTranscriptRow: Equatable
 				}
 				return []
 			}
-			let turnID = first.id.components(separatedBy: ":").first ?? first.id
+			let turnID = ConversationEntryIdentity.turnIDWithFallback(first.id)
 			let merged: [FileChange]
 			if let prepared = preparedNetChanges[turnID], prepared.matches(completedChanges)
 			{
@@ -182,8 +182,8 @@ enum ConversationTranscriptRow: Equatable
 		for entry in entries
 		{
 			if let previous = pendingChanges.last,
-				previous.id.components(separatedBy: ":").first != entry.id
-				.components(separatedBy: ":").first
+				ConversationEntryIdentity.turnIDWithFallback(previous.id)
+				!= ConversationEntryIdentity.turnIDWithFallback(entry.id)
 			{
 				appendPendingActivityGroup()
 				appendPendingChanges()
@@ -196,8 +196,8 @@ enum ConversationTranscriptRow: Equatable
 				continue
 			}
 			if let previous = pending.last,
-				previous.id.components(separatedBy: ":").first
-				!= entry.id.components(separatedBy: ":").first
+				ConversationEntryIdentity.turnIDWithFallback(previous.id)
+				!= ConversationEntryIdentity.turnIDWithFallback(entry.id)
 			{
 				appendPendingActivityGroup()
 			}
@@ -280,7 +280,7 @@ enum ConversationTranscriptRow: Equatable
 		var replies: [String: String] = [:]
 		for entry in entries
 		{
-			let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
+			let turnID = ConversationEntryIdentity.turnIDWithFallback(entry.id)
 			guard terminalTurns.contains(turnID), entry.kind != .user, entry.kind != .notice
 			else
 			{

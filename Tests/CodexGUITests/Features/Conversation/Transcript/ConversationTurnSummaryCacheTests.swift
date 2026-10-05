@@ -65,6 +65,101 @@ struct ConversationTurnSummaryCacheTests
 		#expect(!cached.isContentLoaded && cached.isPreviewLoaded)
 	}
 
+	@Test func summariesRejectUnqualifiedIDsAndPreserveQualifiedRequestSuffixes()
+	{
+		let summaries = ConversationTurnSummary.make(from: [
+			entry(
+				"unqualified",
+				.user,
+				"Ignored request"
+			),
+			entry(
+				"turn:request:part",
+				.user,
+				"Qualified request"
+			),
+			entry(
+				"turn:reply:part",
+				.agent,
+				"Final reply"
+			),
+		])
+		#expect(summaries.count == 1)
+		#expect(summaries.first?.turnID == "turn")
+		#expect(summaries.first?.entryID == "turn:request:part")
+		#expect(summaries.first?.reply == "Final reply")
+	}
+
+	@Test func sharedPreviewPreparationPreservesLoadedAndRetainedTextLimits() throws
+	{
+		let request = String(
+			repeating: "  é\n",
+			count: 150
+		)
+		let reply = String(
+			repeating: "🌿",
+			count: 500
+		)
+		let turn = try #require(CodexTurn(json: [
+			"id": "turn",
+			"status": "completed",
+			"items": [
+				[
+					"id": "request",
+					"type": "userMessage",
+					"content": [["type": "text", "text": request]],
+				],
+				["id": "reply", "type": "agentMessage", "text": reply],
+			],
+		]))
+		var inputs: [String] = []
+		let renderReply =
+		{
+			(text: String) in
+			inputs.append(text)
+			return String(
+				repeating: text,
+				count: 3
+			)
+		}
+		let canonical = try ConversationTurnPreviewPreparation.prepare(
+			turn,
+			renderReply: renderReply
+		)
+		var cache = ConversationTurnSummary.PreviewCache()
+		let sources = ConversationTurnSummary.sources(from: [
+			entry(
+				"turn:request",
+				.user,
+				request
+			),
+			entry(
+				"turn:reply",
+				.agent,
+				reply
+			),
+		])
+		let loaded = try #require(cache.make(
+			from: sources,
+			renderReply: renderReply
+		).first)
+		#expect(loaded.title.count == 199)
+		#expect(canonical.title == String(loaded.title.prefix(160)))
+		#expect(loaded.reply.count == 1200)
+		#expect(canonical.reply == String(loaded.reply.prefix(800)))
+		#expect(inputs.count == 2)
+		#expect(inputs.allSatisfy
+		{
+			$0.count == 400
+		})
+		let reused = cache.make(
+			from: sources,
+			renderReply: renderReply
+		)
+		#expect(reused.first == loaded)
+		#expect(inputs.count == 2)
+	}
+
 	@Test func historicalPrefixesAreReusedUntilTheVisibleReplyPrefixChanges()
 	{
 		var entries = turns([

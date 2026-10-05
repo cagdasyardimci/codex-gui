@@ -35,8 +35,8 @@ enum ConversationSubagentRows
 			if case .activity(let next) = current, next.kind == .subagent,
 				case .activity(let previous) = result.last, previous.kind == .subagent,
 				previous.subagents.first?.kind == next.subagents.first?.kind,
-				previous.id.components(separatedBy: ":").first
-				== next.id.components(separatedBy: ":").first
+				ConversationEntryIdentity.turnIDWithFallback(previous.id)
+				== ConversationEntryIdentity.turnIDWithFallback(next.id)
 			{
 				result[result.count - 1] = .activity(row(
 					id: previous.id,

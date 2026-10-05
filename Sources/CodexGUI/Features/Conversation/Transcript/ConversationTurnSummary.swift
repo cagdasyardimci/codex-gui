@@ -97,19 +97,22 @@ struct ConversationTurnSummary: Equatable, Sendable
 		var indices: [String: Int] = [:]
 		for entry in entries
 		{
-			guard let separator = entry.id.firstIndex(of: ":")
+			guard let identity = ConversationEntryIdentity(entry.id)
 			else
 			{
 				continue
 			}
-			let turnID = String(entry.id[..<separator])
+			let turnID = identity.turnID
 			if entry.kind == .user, indices[turnID] == nil
 			{
 				indices[turnID] = sources.count
 				sources.append(Source(
 					turnID: turnID,
 					entryID: entry.id,
-					title: preview(entry.body),
+					title: ConversationTurnPreviewText.title(
+						entry.body,
+						maximumLength: 400
+					),
 					replyBody: nil
 				))
 			}
@@ -174,7 +177,7 @@ struct ConversationTurnSummary: Equatable, Sendable
 				{
 					continue
 				}
-				let excerpt = String(body.prefix(400))
+				let excerpt = ConversationTurnPreviewText.sourcePrefix(body)
 				let prefix = Data(excerpt.utf8)
 				let reply: Reply
 				if let cached = replies[source.turnID], cached.prefix == prefix
@@ -252,12 +255,4 @@ struct ConversationTurnSummary: Equatable, Sendable
 		return ConversationPlainTextRenderer.render(parsed)
 	}
 
-	private static func preview(_ text: String) -> String
-	{
-		let prefix = String(text.prefix(400))
-		return prefix.split(whereSeparator:
-			{
-				$0.isWhitespace
-			}).joined(separator: " ")
-	}
 }

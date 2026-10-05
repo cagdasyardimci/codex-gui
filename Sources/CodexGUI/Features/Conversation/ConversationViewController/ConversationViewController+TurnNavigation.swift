@@ -101,7 +101,7 @@ extension ConversationViewController
 					{
 						$0.entryID == summary.entryID
 					}),
-					let separator = summary.entryID.firstIndex(of: ":")
+					let identity = ConversationEntryIdentity(summary.entryID)
 			else
 			{
 				return
@@ -113,9 +113,7 @@ extension ConversationViewController
 			onToggleBookmark?(existing ?? ConversationBookmark(
 				threadID: selectedThreadID,
 				turnID: summary.turnID,
-				itemID: summary
-					.isContentLoaded ?
-					String(summary.entryID[summary.entryID.index(after: separator)...]) : nil,
+				itemID: summary.isContentLoaded ? identity.itemID : nil,
 				kind: .answer,
 				label: String(summary.title.prefix(100))
 			))
@@ -159,17 +157,16 @@ extension ConversationViewController
 			turnNavigationRail.updateActiveTurn(turnNavigationRail.summaries.last?.turnID)
 			return
 		}
-		let index = layout.layoutAttributesForElements(in: visible)
-			.filter
+		let visibleItems = layout.layoutAttributesForElements(in: visible).filter
+		{
+			$0.representedElementCategory == .item
+				&& $0.frame.intersects(visible)
+		}
+		let topmostItem = visibleItems.min(by:
 			{
-				$0.representedElementCategory == .item
-					&& $0.frame.intersects(visible)
-			}
-			.min(by:
-				{
-					$0.frame.minY < $1.frame.minY
-				})?
-			.indexPath?.item
+				$0.frame.minY < $1.frame.minY
+			})
+		let index = topmostItem?.indexPath?.item
 		if let index, displayedRows.indices.contains(index),
 			case .turnStatus(let timing) = displayedRows[index]
 		{
@@ -178,11 +175,11 @@ extension ConversationViewController
 		}
 		guard let index, displayedRows.indices.contains(index),
 				let sourceID = displayedRows[index].sourceEntryID,
-				let separator = sourceID.firstIndex(of: ":")
+				let identity = ConversationEntryIdentity(sourceID)
 		else
 		{
 			return
 		}
-		turnNavigationRail.updateActiveTurn(String(sourceID[..<separator]))
+		turnNavigationRail.updateActiveTurn(identity.turnID)
 	}
 }

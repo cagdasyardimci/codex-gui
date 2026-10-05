@@ -123,12 +123,12 @@ final class ConversationReplyActionsView: NSStackView
 			{
 				$0.kind != .notice
 			}),
-			let separator = latest.id.firstIndex(of: ":")
+			let identity = ConversationEntryIdentity(latest.id)
 		else
 		{
 			return nil
 		}
-		let turnID = String(latest.id[..<separator])
+		let turnID = identity.turnID
 		guard timings.contains(where:
 			{
 				$0.turnID == turnID
