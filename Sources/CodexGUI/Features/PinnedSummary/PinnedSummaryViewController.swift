@@ -4,9 +4,13 @@ import AppKit
 final class PinnedSummaryViewController: NSViewController
 {
 	var onNavigate: ((ContextPanelRequest) -> Void)?
+	var onContentHeightChange: (() -> Void)?
 	private var presentation: PinnedSummaryPresentation?
+	private var sourcesExpanded = true
+	private weak var sourcesDisclosureButton: NSButton?
 	private let stack = NSStackView()
 	private var thumbnailTasks: [Task<Void, Never>] = []
+	private var renderGeneration = 0
 	private var actions: [NSButton: ContextPanelRequest] = [:]
 
 	private enum Layout
@@ -39,7 +43,16 @@ final class PinnedSummaryViewController: NSViewController
 		{
 			return
 		}
+		if self.presentation?.owner != presentation.owner
+		{
+			sourcesExpanded = true
+		}
 		self.presentation = presentation
+		renderContent(presentation)
+	}
+
+	private func renderContent(_ presentation: PinnedSummaryPresentation)
+	{
 		_ = view
 		clearRenderedContent()
 
@@ -54,6 +67,7 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func clearRenderedContent()
 	{
+		renderGeneration += 1
 		thumbnailTasks.forEach
 		{
 			$0.cancel()
@@ -175,8 +189,13 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func addSources(_ presentation: PinnedSummaryPresentation)
 	{
-		addSectionHeading(makeSourcesHeading())
-		for source in presentation.sourcePreviews
+		addSectionHeading(makeSourcesHeading(presentation))
+		guard sourcesExpanded
+		else
+		{
+			return
+		}
+		for source in presentation.sourcePreviews.prefix(3)
 		{
 			let row = sourceRow(
 				source,
@@ -199,21 +218,52 @@ final class PinnedSummaryViewController: NSViewController
 		add(makeViewAllSourcesRow())
 	}
 
-	private func makeSourcesHeading() -> NSStackView
+	private func makeSourcesHeading(_ presentation: PinnedSummaryPresentation) -> NSStackView
 	{
-		let sources = button(
-			"Sources",
-			symbol: nil,
-			destination: .sources
+		let count = presentation.sections.sources.value.map
+		{
+			Set($0.map(\.id)).count
+		}
+		let title = !sourcesExpanded ? count.map
+		{
+			"Sources · \(formattedCount($0))"
+		} ?? "Sources" : "Sources"
+		let sources = NSButton(
+			title: title,
+			target: self,
+			action: #selector(toggleSources(_:))
 		)
+		sources.isBordered = false
+		sources.alignment = .left
+		sources.font = .systemFont(ofSize: 13)
 		sources.attributedTitle = attributedTitle(
-			"Sources",
+			title,
 			color: .secondaryLabelColor
 		)
-		let plus = unresolvedButton(
-			"+",
-			label: "Sources action unavailable"
+		sources.contentTintColor = .secondaryLabelColor
+		sources.image = sourcesExpanded ? nil : DesktopIcons.image(.chevronRight)
+		sources.imagePosition = .imageTrailing
+		sources.imageScaling = .scaleProportionallyDown
+		sources.setAccessibilityIdentifier("pinned-summary-sources-disclosure")
+		sources.setAccessibilityLabel(title)
+		sources.setAccessibilityValue(sourcesExpanded ? "Expanded" : "Collapsed")
+		sources.toolTip = sourcesExpanded ? "Collapse sources" : "Expand sources"
+		sourcesDisclosureButton = sources
+		let plus = NSButton(
+			title: "Add sources",
+			target: nil,
+			action: nil
 		)
+		plus.isBordered = false
+		plus.isEnabled = false
+		plus.image = DesktopIcons.image(.plus)
+		plus.imagePosition = .imageOnly
+		plus.contentTintColor = .tertiaryLabelColor
+		plus.widthAnchor.constraint(equalToConstant: 18).isActive = true
+		plus.heightAnchor.constraint(equalToConstant: 18).isActive = true
+		plus.setAccessibilityIdentifier("pinned-summary-add-sources")
+		plus.setAccessibilityLabel("Add sources")
+		plus.toolTip = "Add sources"
 		return AppKitLayout.horizontalStack(
 			[sources, NSView(), plus],
 			spacing: 8
@@ -298,11 +348,13 @@ final class PinnedSummaryViewController: NSViewController
 		if let path = source.thumbnailPath
 		{
 			let owner = presentation.owner
+			let generation = renderGeneration
 			thumbnailTasks.append(Task
 			{
 				[weak self, weak imageView] in
 				let data = await SourceThumbnailLoader.load(path: path)
 				guard !Task.isCancelled, self?.presentation?.owner == owner,
+						self?.renderGeneration == generation,
 						let imageView, let data, let image = NSImage(data: data)
 				else
 				{
@@ -316,10 +368,14 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func sourceImage(for source: PinnedSummaryPresentation.SourcePreview) -> NSImage?
 	{
-		switch source.kind
+		if let icon = source.icon
 		{
-		case .tool: PinnedSummaryIcons.image(.appTools)
-		case .web: PinnedSummaryIcons.image(.webSearch)
+			return DesktopIcons.image(icon)
+		}
+		return switch source.kind
+		{
+		case .tool: DesktopIcons.image(.openaiLogoRegular)
+		case .web: DesktopIcons.image(.globe)
 		case .attachment:
 			DesktopIcons.image(.fileDocument)
 		case .folder: DesktopIcons.image(.folder)
@@ -562,6 +618,19 @@ final class PinnedSummaryViewController: NSViewController
 		}
 		onNavigate?(request)
 	}
+
+	@objc private func toggleSources(_ sender: NSButton)
+	{
+		guard let presentation, sender === sourcesDisclosureButton
+		else
+		{
+			return
+		}
+		sourcesExpanded.toggle()
+		renderContent(presentation)
+		onContentHeightChange?()
+	}
+
 }
 
 private final class PinnedSummaryDocumentView: NSView
