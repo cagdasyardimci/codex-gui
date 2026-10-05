@@ -9,11 +9,36 @@ protocol DesktopControlCursorProviding: AnyObject
 	}
 }
 
+/// Receives wheel input before AppKit chooses an enclosing scroll view.
+@MainActor
+protocol DesktopWheelInputReceiving: AnyObject
+{
+	func scrollWheel(with event: NSEvent)
+}
+
 @MainActor
 final class DesktopWindow: NSWindow
 {
 	override func sendEvent(_ event: NSEvent)
 	{
+		if event.type == .scrollWheel, let contentView, let parent = contentView.superview
+		{
+			let point = parent.convert(
+				event.locationInWindow,
+				from: nil
+			)
+			var target = contentView.hitTest(point)
+			while let view = target
+			{
+				if let receiver = view as? DesktopWheelInputReceiving
+				{
+					receiver.scrollWheel(with: event)
+					updateControlCursor()
+					return
+				}
+				target = view.superview
+			}
+		}
 		super.sendEvent(event)
 		switch event.type
 		{

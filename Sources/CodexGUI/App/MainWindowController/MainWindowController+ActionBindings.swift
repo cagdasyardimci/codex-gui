@@ -296,6 +296,36 @@ extension MainWindowController
 		{
 			target.dispatch(.loadEarlierTurns)
 		}
+		conversation.onLoadEarlierTurnReferences =
+		{
+			target.dispatch(.loadEarlierTurnReferences)
+		}
+		conversation
+			.onConversationViewportChanged =
+			{
+				target.dispatch(.updateConversationViewport($0))
+			}
+		conversation.onLoadTurnPreview =
+		{
+			target.dispatch(.loadTurnPreview($0))
+		}
+		conversation.onJumpToTurnReference =
+		{
+			turnID in
+			guard let threadID = target.conversation.threadID
+			else
+			{
+				return
+			}
+			target.dispatch(.jumpTarget(ConversationJumpTarget(
+				threadID: threadID,
+				turnID: turnID,
+				itemID: nil,
+				filePath: nil,
+				kind: .userRequest,
+				title: "Turn"
+			)))
+		}
 		conversation.onToggleBookmark =
 		{
 			target.dispatch(.toggleBookmark($0))

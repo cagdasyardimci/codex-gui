@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 @MainActor
 final class TurnSummaryPreview: NSView
@@ -16,6 +17,8 @@ final class TurnSummaryPreview: NSView
 	private let title = NSTextField(labelWithString: "")
 	private let reply = NSTextField(wrappingLabelWithString: "")
 	private var replyHeight: NSLayoutConstraint!
+	private let skeleton = CALayer()
+	private(set) var isLoading = false
 	private(set) var cardHeight: CGFloat = 0
 
 	init(
@@ -29,6 +32,15 @@ final class TurnSummaryPreview: NSView
 			width: Self.cardWidth,
 			height: 100
 		))
+		wantsLayer = true
+		layer?.addSublayer(skeleton)
+		for _ in 0 ..< 4
+		{
+			let bar = CALayer()
+			bar.cornerRadius = 3
+			bar.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.2).cgColor
+			skeleton.addSublayer(bar)
+		}
 		title.font = .systemFont(
 			ofSize: 13,
 			weight: .regular
@@ -82,12 +94,67 @@ final class TurnSummaryPreview: NSView
 
 	func render(_ summary: ConversationTurnSummary)
 	{
+		let wasLoading = isLoading
+		isLoading = !summary.isContentLoaded && !summary.isPreviewLoaded && summary
+			.previewError == nil
+		title.isHidden = isLoading
+		reply.isHidden = isLoading
+		bookmark.isHidden = isLoading
+		skeleton.isHidden = !isLoading
+		if isLoading
+		{
+			cardHeight = 100
+			setFrameSize(NSSize(
+				width: Self.cardWidth,
+				height: cardHeight
+			))
+			skeleton.frame = bounds
+			for (index, bar) in (skeleton.sublayers ?? []).enumerated()
+			{
+				bar.frame = NSRect(
+					x: Self.inset,
+					y: cardHeight - 24 - CGFloat(index) * 20,
+					width: (Self.cardWidth - 2 * Self.inset) *
+						[0.6, 1, 0.92, 0.8][index],
+					height: 10
+				)
+			}
+			if skeleton.animation(forKey: "loading") == nil,
+				!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+			{
+				let pulse = CABasicAnimation(keyPath: "opacity")
+				pulse.fromValue = 0.45
+				pulse.toValue = 1
+				pulse.duration = 0.7
+				pulse.autoreverses = true
+				pulse.repeatCount = .infinity
+				skeleton.add(
+					pulse,
+					forKey: "loading"
+				)
+			}
+			setAccessibilityLabel("Loading turn preview")
+			return
+		}
+		skeleton.removeAllAnimations()
+		setAccessibilityLabel(summary.previewError ?? "Turn preview")
+		if wasLoading && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+		{
+			alphaValue = 0
+			NSAnimationContext.runAnimationGroup
+			{
+				context in
+				context.duration = 0.15
+				animator().alphaValue = 1
+			}
+		}
 		title.stringValue = summary.title
 		let compactReply = summary.reply.components(separatedBy: .newlines).filter
 		{
 			!$0.trimmingCharacters(in: .whitespaces).isEmpty
 		}.joined(separator: "\n")
-		let text = compactReply.isEmpty ? "Waiting for a reply…" : compactReply
+		let text = summary
+			.previewError ?? (compactReply.isEmpty ? "Waiting for a reply…" : compactReply)
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.lineSpacing = 4
 		paragraph.lineBreakMode = .byWordWrapping

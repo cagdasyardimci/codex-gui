@@ -1,8 +1,9 @@
 import AppKit
+import QuartzCore
 
 /// Compact turn marks beside the transcript, with an interactive hover preview.
 @MainActor
-final class TurnNavigationRail: NSView
+final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 {
 	private struct TurnLocation
 	{
@@ -10,21 +11,40 @@ final class TurnNavigationRail: NSView
 		var markIndex: Int
 	}
 
-	private static let markHeight: CGFloat = 14
+	private static let markHeight: CGFloat = 10
+	private static let maximumHeight: CGFloat = 62 * markHeight
+	private static let edgeFadeHeight: CGFloat = 40
+	var onLoadTurnPreview: ((String) -> Void)?
+	private var hoverLoadTask: Task<Void, Never>?
 	var onJump: ((ConversationTurnSummary) -> Void)?
+	var onLoadEarlierReferences: (() -> Void)?
+	var canLoadEarlierReferences = false
+	{
+		didSet
+		{
+			if oldValue != canLoadEarlierReferences
+			{
+				historyRequestPending = false
+			}
+			updateEdgeFade()
+		}
+	}
+	private var historyRequestPending = false
 	var onBookmark: ((ConversationTurnSummary) -> Void)?
 	var isBookmarked: ((ConversationTurnSummary) -> Bool)?
 	// Reports the rail's writes independently of AppKit's inherited dirty flags.
 	var onMarkAppearanceUpdate: ((Int) -> Void)?
 	private(set) var summaries: [ConversationTurnSummary] = []
 	private(set) var activeTurnID: String?
-	private let scrollView = NSScrollView()
+	private let scrollView = TurnNavigationScrollView()
 	private let document = NSView()
+	private let edgeFade = CAGradientLayer()
 	private var marks: [TurnNavigationMark] = []
 	private var entryIndices: [String: Int] = [:]
 	private var turnLocations: [String: TurnLocation] = [:]
 	private var hoveredEntryID: String?
 	private var highlightedIndex: Int?
+	private var needsActiveTurnReveal = false
 	private(set) var previewPanel: NSPanel?
 	private var previewTurnID: String?
 	private var dismissal: DispatchWorkItem?
@@ -35,6 +55,16 @@ final class TurnNavigationRail: NSView
 		scrollView.documentView = document
 		scrollView.drawsBackground = false
 		scrollView.hasVerticalScroller = false
+		scrollView.verticalScrollElasticity = .none
+		scrollView.horizontalScrollElasticity = .none
+		scrollView.wantsLayer = true
+		scrollView.contentView.postsBoundsChangedNotifications = true
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(railViewportChanged),
+			name: NSView.boundsDidChangeNotification,
+			object: scrollView.contentView
+		)
 		addSubview(scrollView)
 		setAccessibilityLabel("Conversation turns")
 	}
@@ -55,11 +85,16 @@ final class TurnNavigationRail: NSView
 		{
 			return
 		}
-		let identitiesChanged = summaries.map(\.entryID) != next.map(\.entryID)
+		let previousIDs = summaries.map(\.entryID)
+		let nextIDs = next.map(\.entryID)
+		let identitiesChanged = previousIDs != nextIDs
+		let prependedHistory = !previousIDs.isEmpty && nextIDs.count > previousIDs.count
+			&& Array(nextIDs.suffix(previousIDs.count)) == previousIDs
 		summaries = next
 		indexSummaries()
 		if identitiesChanged
 		{
+			needsActiveTurnReveal = !prependedHistory
 			hoveredEntryID = nil
 			dismissPreview()
 			marks.forEach
@@ -76,6 +111,10 @@ final class TurnNavigationRail: NSView
 				)
 				mark.entryID = summary.entryID
 				mark.isBordered = false
+				mark.onScrollWheel =
+				{
+					[weak self] event in self?.scrollWheel(with: event)
+				}
 				mark.setAccessibilityLabel("Jump to turn: \(summary.title)")
 				mark.onEnter =
 				{
@@ -88,6 +127,10 @@ final class TurnNavigationRail: NSView
 					self?.hoveredEntryID = mark.entryID
 					self?.updateMarkAppearance()
 					self?.showPreview(for: mark)
+					if let self, let index = entryIndices[mark.entryID]
+					{
+						requestTurnPreview(summaries[index])
+					}
 				}
 				mark.onExit =
 				{
@@ -97,6 +140,7 @@ final class TurnNavigationRail: NSView
 						self?.hoveredEntryID = nil
 						self?.updateMarkAppearance()
 					}
+					self?.hoverLoadTask?.cancel()
 					self?.scheduleDismissal()
 				}
 				document.addSubview(mark)
@@ -149,10 +193,26 @@ final class TurnNavigationRail: NSView
 	override func layout()
 	{
 		super.layout()
+		// Keep the same 62-turn range when the window is shorter than 620 points.
+		let markHeight = min(
+			Self.markHeight,
+			max(
+				0,
+				bounds.height
+			) / CGFloat(min(
+				62,
+				max(
+					1,
+					marks.count
+				)
+			))
+		)
 		let height = min(
 			bounds.height,
-			CGFloat(marks.count) * Self.markHeight
+			Self.maximumHeight,
+			CGFloat(marks.count) * markHeight
 		)
+		let viewportHeightChanged = scrollView.frame.height != height
 		scrollView.frame = NSRect(
 			x: 0,
 			y: (bounds.height - height) / 2,
@@ -163,23 +223,105 @@ final class TurnNavigationRail: NSView
 			x: 0,
 			y: 0,
 			width: bounds.width,
-			height: CGFloat(marks.count) * Self.markHeight
+			height: CGFloat(marks.count) * markHeight
 		)
 		for (index, mark) in marks.enumerated()
 		{
 			mark.frame = NSRect(
 				x: 0,
-				y: document.bounds.height - CGFloat(index + 1) * Self.markHeight,
+				y: document.bounds.height - CGFloat(index + 1) * markHeight,
 				width: bounds.width,
-				height: Self.markHeight
+				height: markHeight
 			)
 		}
+		if needsActiveTurnReveal || viewportHeightChanged
+		{
+			needsActiveTurnReveal = false
+			if let activeTurnID, let location = turnLocations[activeTurnID]
+			{
+				let mark = marks[location.summaryIndex]
+				document.scrollToVisible(mark.frame.insetBy(
+					dx: 0,
+					dy: -Self.edgeFadeHeight
+				).intersection(document.bounds))
+			}
+		}
+		updateEdgeFade()
 	}
 
 	func updateActiveTurn(_ turnID: String?)
 	{
+		if activeTurnID != turnID
+		{
+			needsActiveTurnReveal = true
+			needsLayout = true
+		}
 		activeTurnID = turnID
 		updateMarkAppearance()
+	}
+
+	override func scrollWheel(with event: NSEvent)
+	{
+		scrollView.scrollWheel(with: event)
+		let visible = scrollView.contentView.bounds
+		if event.scrollingDeltaY > 0,
+			visible.maxY >= document.bounds.maxY - Self.edgeFadeHeight,
+			canLoadEarlierReferences, !historyRequestPending, let onLoadEarlierReferences
+		{
+			historyRequestPending = true
+			onLoadEarlierReferences()
+		}
+	}
+
+	@objc private func railViewportChanged()
+	{
+		hoveredEntryID = nil
+		dismissPreview()
+		updateMarkAppearance()
+		updateEdgeFade()
+	}
+
+	private func updateEdgeFade()
+	{
+		let visible = scrollView.contentView.bounds
+		guard visible.height > 0,
+				document.bounds.height > visible.height || canLoadEarlierReferences
+		else
+		{
+			scrollView.layer?.mask = nil
+			return
+		}
+		let fadeFraction = min(
+			Self.edgeFadeHeight / visible.height,
+			0.5
+		)
+		let opaque = NSColor.black.cgColor
+		let transparent = NSColor.clear.cgColor
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		edgeFade.frame = scrollView.bounds
+		edgeFade.startPoint = CGPoint(
+			x: 0.5,
+			y: scrollView.isFlipped ? 1 : 0
+		)
+		edgeFade.endPoint = CGPoint(
+			x: 0.5,
+			y: scrollView.isFlipped ? 0 : 1
+		)
+		edgeFade.colors = [
+			visible.minY > document.bounds.minY ? transparent : opaque,
+			opaque,
+			opaque,
+			visible.maxY < document.bounds.maxY || canLoadEarlierReferences ? transparent : opaque,
+		]
+		edgeFade.locations = [
+			0,
+			NSNumber(value: fadeFraction),
+			NSNumber(value: 1 - fadeFraction),
+			1,
+		]
+		scrollView.layer?.mask = edgeFade
+		CATransaction.commit()
 	}
 
 	private func updateMarkAppearance(force: Bool = false)
@@ -214,34 +356,15 @@ final class TurnNavigationRail: NSView
 			}
 			return
 		}
-		let previousRange = previousHighlightedIndex.map(appearanceRange)
-		let nextRange = nextHighlightedIndex.map(appearanceRange)
-		if let previousRange
+		if let previousHighlightedIndex
 		{
-			for index in previousRange
-			{
-				updateMarkAppearance(at: index)
-			}
+			updateMarkAppearance(at: previousHighlightedIndex)
 		}
-		if let nextRange
+		if let nextHighlightedIndex,
+			nextHighlightedIndex != previousHighlightedIndex
 		{
-			for index in nextRange where previousRange?.contains(index) != true
-			{
-				updateMarkAppearance(at: index)
-			}
+			updateMarkAppearance(at: nextHighlightedIndex)
 		}
-	}
-
-	private func appearanceRange(_ index: Int) -> Range<Int>
-	{
-		// Four tapering marks on either side make a nine-mark triangle.
-		max(
-			0,
-			index - 4
-		) ..< min(
-			marks.count,
-			index + 5
-		)
 	}
 
 	private func updateMarkAppearance(
@@ -251,20 +374,12 @@ final class TurnNavigationRail: NSView
 	{
 		let mark = marks[index]
 		let isEmphasized = index == highlightedIndex
-		let lineWidth = highlightedIndex.map
-		{
-			max(
-				8,
-				26 - CGFloat(abs(index - $0)) * 4.5
-			)
-		} ?? 8
-		guard force || mark.isEmphasized != isEmphasized || mark.lineWidth != lineWidth
+		guard force || mark.isEmphasized != isEmphasized
 		else
 		{
 			return
 		}
 		mark.isEmphasized = isEmphasized
-		mark.lineWidth = lineWidth
 		mark.needsDisplay = true
 		onMarkAppearanceUpdate?(index)
 	}
@@ -282,6 +397,8 @@ final class TurnNavigationRail: NSView
 
 	func dismissPreview()
 	{
+		hoverLoadTask?.cancel()
+		hoverLoadTask = nil
 		dismissal?.cancel()
 		dismissal = nil
 		if let panel = previewPanel
@@ -313,6 +430,39 @@ final class TurnNavigationRail: NSView
 		onJump?(summaries[index])
 	}
 
+	func requestTurnPreview(_ summary: ConversationTurnSummary)
+	{
+		hoverLoadTask?.cancel()
+		if summary.isContentLoaded || summary.isPreviewLoaded
+		{
+			onLoadTurnPreview?(summary.turnID)
+			return
+		}
+		if !summary.isContentLoaded && !summary.isPreviewLoaded
+		{
+			hoverLoadTask = Task
+			{
+				[weak self] in
+				do
+				{
+					try await Task
+						.sleep(for: .milliseconds(ConversationCachePolicy.debounceMilliseconds))
+				}
+				catch
+				{
+					return
+				}
+				guard let self, !Task.isCancelled
+				else
+				{
+					return
+				}
+				hoverLoadTask = nil
+				onLoadTurnPreview?(summary.turnID)
+			}
+		}
+	}
+
 	private func showPreview(for mark: TurnNavigationMark)
 	{
 		guard window != nil,
@@ -341,7 +491,15 @@ final class TurnNavigationRail: NSView
 		)
 		preview.onEnter =
 		{
-			[weak self] in self?.dismissal?.cancel()
+			[weak self] in
+			self?.dismissal?.cancel()
+			if let self, let current = summaries.first(where:
+				{
+					$0.turnID == summary.turnID
+				})
+			{
+				requestTurnPreview(current)
+			}
 		}
 		preview.onExit =
 		{
@@ -434,21 +592,56 @@ final class TurnNavigationRail: NSView
 }
 
 @MainActor
+final class TurnNavigationScrollView: NSScrollView
+{
+	override func scrollWheel(with event: NSEvent)
+	{
+		guard let documentView, documentView.bounds.height > contentView.bounds.height
+		else
+		{
+			return
+		}
+		let scale = event.hasPreciseScrollingDeltas ? 1 : verticalLineScroll
+		let direction: CGFloat = documentView.isFlipped ? -1 : 1
+		let origin = contentView.bounds.origin
+		let maximumY = documentView.bounds.maxY - contentView.bounds.height
+		let nextY = min(
+			maximumY,
+			max(
+				documentView.bounds.minY,
+				origin.y + direction * event.scrollingDeltaY * scale
+			)
+		)
+		contentView.scroll(to: NSPoint(
+			x: origin.x,
+			y: nextY
+		))
+		reflectScrolledClipView(contentView)
+	}
+}
+
+@MainActor
 final class TurnNavigationMark: NSButton
 {
 	var entryID = ""
 	var isEmphasized = false
-	var lineWidth: CGFloat = 8
+	let lineWidth: CGFloat = 6
 	private static let highlightedColor = gray(
 		light: 0x80,
-		dark: 0xE6
+		dark: 0xA3
 	)
 	private static let ordinaryColor = gray(
 		light: 0xD5,
-		dark: 0x41
+		dark: 0x46
 	)
 	var onEnter: (() -> Void)?
 	var onExit: (() -> Void)?
+	var onScrollWheel: ((NSEvent) -> Void)?
+
+	override func scrollWheel(with event: NSEvent)
+	{
+		onScrollWheel?(event)
+	}
 
 	override func updateTrackingAreas()
 	{
@@ -504,7 +697,7 @@ final class TurnNavigationMark: NSButton
 		(isEmphasized ? Self.highlightedColor : Self.ordinaryColor).setFill()
 		NSBezierPath(
 			roundedRect: NSRect(
-				x: 3,
+				x: 4.5,
 				y: bounds.midY - 1,
 				width: lineWidth,
 				height: 2

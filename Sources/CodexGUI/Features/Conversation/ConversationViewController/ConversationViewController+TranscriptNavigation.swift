@@ -170,20 +170,50 @@ extension ConversationViewController
 		}
 
 		cancelWidthChangeReadingPosition()
-		collectionView.scrollToItems(
-			at: [IndexPath(
-				item: index,
-				section: 0
-			)],
-			scrollPosition: .top
+		let path = IndexPath(
+			item: index,
+			section: 0
 		)
 		collectionView.selectItems(
-			at: [IndexPath(
-				item: index,
-				section: 0
-			)],
-			scrollPosition: .top
+			at: [path],
+			scrollPosition: []
 		)
+		if let attributes = collectionView.collectionViewLayout?
+			.layoutAttributesForItem(at: path)
+		{
+			let clip = conversationScrollView.contentView
+			var destination = clip.bounds
+			destination.origin.y = attributes.frame.minY
+			destination = clip.constrainBoundsRect(destination)
+			jumpAnimationRevision += 1
+			let revision = jumpAnimationRevision
+			isAnimatingJump = true
+			NSAnimationContext.runAnimationGroup(
+				{
+					context in
+					context.duration = NSWorkspace.shared
+						.accessibilityDisplayShouldReduceMotion ? 0 : 0.22
+					context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+					clip.animator().setBoundsOrigin(destination.origin)
+				},
+				completionHandler:
+				{
+					[weak self] in
+					MainActor.assumeIsolated
+					{
+						guard let self, self.jumpAnimationRevision == revision
+						else
+						{
+							return
+						}
+						self.isAnimatingJump = false
+						self.conversationScrollView.reflectScrolledClipView(clip)
+						self.readingPositionChanged()
+					}
+				}
+			)
+		}
+
 		if liveResizeInProgress
 		{
 			resizeContext = renderedContext
@@ -191,6 +221,7 @@ extension ConversationViewController
 			resizeReadingAnchor = readingAnchor()
 		}
 		self.requestedJumpItemID = nil
+		pendingNavigationTurnID = nil
 		onJumpDisplayed?()
 	}
 
@@ -360,7 +391,22 @@ extension ConversationViewController
 
 	@objc func readingPositionChanged()
 	{
+		if let event = NSApp.currentEvent, event.type == .scrollWheel,
+			event.windowNumber == view.window?.windowNumber,
+			conversationScrollView.bounds.contains(conversationScrollView.convert(
+			event.locationInWindow,
+			from: nil
+			)),
+			(isAnimatingJump || requestedJumpItemID != nil || pendingNavigationTurnID != nil)
+		{
+			turnNavigationTask?.cancel()
+			requestedJumpItemID = nil
+			pendingNavigationTurnID = nil
+			cancelNavigationMotion()
+			onJumpDisplayed?()
+		}
 		updateTurnNavigationPosition()
+		queueViewportPublication()
 		latestButton.isHidden = entries.isEmpty || isNearBottom
 		updateTranscriptUtilityRowVisibility()
 		if liveResizeInProgress
@@ -369,8 +415,33 @@ extension ConversationViewController
 		}
 	}
 
+	func cancelNavigationMotion()
+	{
+		guard isAnimatingJump
+		else
+		{
+			return
+		}
+		jumpAnimationRevision += 1
+		isAnimatingJump = false
+		let clip = conversationScrollView.contentView
+		NSAnimationContext.runAnimationGroup
+		{
+			context in
+			context.duration = 0
+			clip.animator().setBoundsOrigin(clip.bounds.origin)
+		}
+	}
+
 	@objc func showLatestMessage()
 	{
+		turnNavigationTask?.cancel()
+		cancelNavigationMotion()
+		if let turnID = turnNavigationRail.summaries.last?.turnID, let onJumpToTurnReference
+		{
+			onJumpToTurnReference(turnID)
+			return
+		}
 		cancelWidthChangeReadingPosition()
 		if liveResizeInProgress
 		{

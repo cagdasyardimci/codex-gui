@@ -6,7 +6,7 @@ import Testing
 @Suite @MainActor
 struct TurnNavigationRailAppearanceTests
 {
-	@Test func highlightChangesOnlyInvalidateTheOldAndNewTaperNeighborhoods() throws
+	@Test func highlightChangesOnlyInvalidateTheOldAndNewMarks() throws
 	{
 		let summaries = summaries(count: 96)
 		let updates = AppearanceUpdates()
@@ -36,6 +36,221 @@ struct TurnNavigationRailAppearanceTests
 			)
 			previous = next
 		}
+	}
+
+	@Test func marksUseDesktopSpacingAndConstantWidth() throws
+	{
+		let rail = makeRail(
+			summaries(count: 24),
+			updates: AppearanceUpdates()
+		)
+		let marks = try marks(in: rail)
+		#expect(marks.allSatisfy
+		{
+			$0.frame.height == 10 && $0.lineWidth == 6
+		})
+		#expect(zip(
+			marks,
+			marks.dropFirst()
+		).allSatisfy
+		{
+			pair in pair.0.frame.midY - pair.1.frame.midY == 10
+		})
+		rail.updateActiveTurn(rail.summaries.last?.turnID)
+		#expect(marks.allSatisfy
+		{
+			$0.lineWidth == 6
+		})
+	}
+
+	@Test(
+		arguments: [24, 61, 62, 63, 66, 96],
+		[280, 900]
+	)
+	func railHeightStopsAtSixtyTwoMarksAndFitsSmallerWindows(
+		turnCount: Int,
+		availableHeight: Int
+	) throws
+	{
+		let rail = makeRail(
+			summaries(count: turnCount),
+			updates: AppearanceUpdates(),
+			height: CGFloat(availableHeight)
+		)
+		let scrollView = try #require(rail.subviews.first as? NSScrollView)
+		let expectedHeight = min(
+			CGFloat(availableHeight),
+			620,
+			CGFloat(turnCount) * 10
+		)
+		#expect(scrollView.frame.height == expectedHeight)
+		#expect(scrollView.frame.midY == rail.bounds.midY)
+		#expect(scrollView.documentView?.frame.height == CGFloat(turnCount) * min(
+			10,
+			CGFloat(availableHeight) / CGFloat(min(
+				62,
+				turnCount
+			))
+		))
+	}
+
+	@Test(arguments: [24, 61, 62, 63, 66, 96])
+	func wheelScrollsOverflowingMarksWithoutForwardingInput(turnCount: Int) async throws
+	{
+		_ = NSApplication.shared
+		let rail = makeRail(
+			summaries(count: turnCount),
+			updates: AppearanceUpdates(),
+			height: 900
+		)
+		let window = NSWindow(
+			contentRect: rail.frame,
+			styleMask: .borderless,
+			backing: .buffered,
+			defer: false
+		)
+		window.contentView = rail
+		defer
+		{
+			window.contentView = nil
+		}
+		let scrollView = try #require(rail.subviews.first as? NSScrollView)
+		let origin = scrollView.contentView.bounds.origin
+		let unhandled = WheelReceiver()
+		rail.nextResponder = unhandled
+		var moved = false
+		for delta: Int32 in [30, -30]
+		{
+			scrollView.scrollWheel(with: try wheelEvent(delta))
+			try await Task.sleep(for: .milliseconds(30))
+			moved = moved || scrollView.contentView.bounds.origin != origin
+		}
+		if turnCount > 62
+		{
+			#expect(unhandled.events == 0)
+			#expect(moved)
+			#expect(scrollView.verticalScrollElasticity == .none)
+			for _ in 0 ..< 4
+			{
+				scrollView.scrollWheel(with: try wheelEvent(-1200))
+			}
+			try await Task.sleep(for: .milliseconds(30))
+			#expect(unhandled.events == 0)
+			let document = try #require(scrollView.documentView)
+			#expect(scrollView.contentView.bounds.minY >= 0)
+			#expect(scrollView.contentView.bounds.maxY <= document.bounds.maxY)
+		}
+		else
+		{
+			#expect(unhandled.events == 0)
+			#expect(!moved)
+		}
+	}
+
+	@Test(arguments: [true, false])
+	func wheelScrollsPreciselyAndClampsWithoutNativeWindowDispatch(precise: Bool) throws
+	{
+		_ = NSApplication.shared
+		let rail = makeRail(
+			summaries(count: 96),
+			updates: AppearanceUpdates(),
+			height: 900
+		)
+		rail.updateActiveTurn("turn-95")
+		rail.layoutSubtreeIfNeeded()
+		let scroll = try #require(rail.subviews.first as? NSScrollView)
+		#expect(rail.window == nil)
+		let units: CGScrollEventUnit = precise ? .pixel : .line
+		rail.scrollWheel(with: try wheelEvent(
+			precise ? 30 : 3,
+			units: units
+		))
+		#expect(scroll.contentView.bounds.origin.y == 30)
+		rail.scrollWheel(with: try wheelEvent(
+			-1200,
+			units: units
+		))
+		#expect(scroll.contentView.bounds.origin.y == 0)
+		rail.scrollWheel(with: try wheelEvent(
+			1200,
+			units: units
+		))
+		#expect(scroll.contentView.bounds.maxY == scroll.documentView?.bounds.maxY)
+	}
+
+	@Test func hiddenTurnsFadeAtTheirViewportEdgeAndFittingTurnsStayOpaque() throws
+	{
+		let rail = makeRail(
+			summaries(count: 96),
+			updates: AppearanceUpdates(),
+			height: 900
+		)
+		rail.updateActiveTurn("turn-95")
+		rail.layoutSubtreeIfNeeded()
+		let scroll = try #require(rail.subviews.first as? NSScrollView)
+		let fade = try #require(scroll.layer?.mask as? CAGradientLayer)
+		#expect((fade.colors as? [CGColor])?.map(\.alpha) == [1, 1, 1, 0])
+		#expect(fade.startPoint.y == (scroll.isFlipped ? 1 : 0))
+		#expect(fade.endPoint.y == (scroll.isFlipped ? 0 : 1))
+		rail.scrollWheel(with: try wheelEvent(100))
+		#expect((fade.colors as? [CGColor])?.map(\.alpha) == [0, 1, 1, 0])
+		rail.scrollWheel(with: try wheelEvent(1200))
+		#expect((fade.colors as? [CGColor])?.map(\.alpha) == [0, 1, 1, 1])
+		#expect(fade.frame == scroll.bounds)
+		rail.render(summaries(count: 24))
+		rail.layoutSubtreeIfNeeded()
+		#expect(scroll.layer?.mask == nil)
+	}
+
+	@Test func loadingEarlierTurnsKeepsTheManuallyScrolledRailPosition() throws
+	{
+		let loaded = summaries(count: 96)
+		let rail = makeRail(
+			loaded,
+			updates: AppearanceUpdates(),
+			height: 900
+		)
+		rail.updateActiveTurn("turn-95")
+		rail.layoutSubtreeIfNeeded()
+		rail.scrollWheel(with: try wheelEvent(200))
+		let scroll = try #require(rail.subviews.first as? NSScrollView)
+		let origin = scroll.contentView.bounds.origin
+		rail.render(summaries(
+			count: 50,
+			start: -50
+		) + loaded)
+		rail.layoutSubtreeIfNeeded()
+		#expect(scroll.contentView.bounds.origin == origin)
+		#expect(rail.activeTurnID == "turn-95")
+	}
+
+	@Test func activeMarkStaysVisibleWithoutUndoingManualRailScrolling() throws
+	{
+		let rail = makeRail(
+			summaries(count: 96),
+			updates: AppearanceUpdates(),
+			height: 900
+		)
+		let scrollView = try #require(rail.subviews.first as? NSScrollView)
+		let marks = try marks(in: rail)
+		rail.updateActiveTurn("turn-95")
+		rail.layoutSubtreeIfNeeded()
+		#expect(scrollView.contentView.bounds.contains(marks[95].frame))
+		rail.updateActiveTurn("turn-34")
+		rail.layoutSubtreeIfNeeded()
+		#expect(scrollView.contentView.bounds.maxY - marks[34].frame.maxY >= 40)
+		rail.updateActiveTurn("turn-0")
+		rail.layoutSubtreeIfNeeded()
+		#expect(scrollView.contentView.bounds.contains(marks[0].frame))
+		scrollView.contentView.scroll(to: .zero)
+		scrollView.reflectScrolledClipView(scrollView.contentView)
+		rail.updateActiveTurn("turn-0")
+		rail.layoutSubtreeIfNeeded()
+		#expect(scrollView.contentView.bounds.origin == .zero)
+		#expect(rail.activeTurnID == "turn-0")
+		rail.updateActiveTurn("turn-1")
+		rail.layoutSubtreeIfNeeded()
+		#expect(scrollView.contentView.bounds.contains(marks[1].frame))
 	}
 
 	@Test func unchangedResolvedHighlightDoesNotRedrawForRepeatedOrUnknownTurnIDs() throws
@@ -393,14 +608,15 @@ struct TurnNavigationRailAppearanceTests
 
 	private func makeRail(
 		_ summaries: [ConversationTurnSummary],
-		updates: AppearanceUpdates
+		updates: AppearanceUpdates,
+		height: CGFloat = 600
 	) -> TurnNavigationRail
 	{
 		let rail = TurnNavigationRail(frame: NSRect(
 			x: 0,
 			y: 0,
 			width: 40,
-			height: 600
+			height: height
 		))
 		rail.onMarkAppearanceUpdate =
 		{
@@ -438,6 +654,33 @@ struct TurnNavigationRailAppearanceTests
 		))
 	}
 
+	private func wheelEvent(
+		_ delta: Int32,
+		units: CGScrollEventUnit = .pixel
+	) throws -> NSEvent
+	{
+		let wheel = try #require(CGEvent(
+			scrollWheelEvent2Source: nil,
+			units: units,
+			wheelCount: 1,
+			wheel1: delta,
+			wheel2: 0,
+			wheel3: 0
+		))
+		return try #require(NSEvent(cgEvent: wheel))
+	}
+
+	@MainActor
+	private final class WheelReceiver: NSResponder
+	{
+		var events = 0
+
+		override func scrollWheel(with _: NSEvent)
+		{
+			events += 1
+		}
+	}
+
 	@MainActor
 	private final class AppearanceUpdates
 	{
@@ -454,19 +697,10 @@ struct TurnNavigationRailAppearanceTests
 		highlighted: Int?
 	)
 	{
-		let taper: [CGFloat] = [26, 21.5, 17, 12.5]
-		let widths = marks.indices.map
+		#expect(marks.allSatisfy
 		{
-			index -> CGFloat in
-			guard let highlighted
-			else
-			{
-				return 8
-			}
-			let distance = abs(index - highlighted)
-			return distance < taper.count ? taper[distance] : 8
-		}
-		#expect(marks.map(\.lineWidth) == widths)
+			$0.lineWidth == 6
+		})
 		#expect(marks.map(\.isEmphasized) == marks.indices.map
 		{
 			$0 == highlighted
@@ -480,19 +714,14 @@ struct TurnNavigationRailAppearanceTests
 		next: Int?
 	)
 	{
-		let affected = Set((0 ..< markCount).filter
+		let affected = Set([previous, next].compactMap
 		{
-			index in
-			previous.map
-			{
-				abs(index - $0) <= 4
-			} == true || next.map
-			{
-				abs(index - $0) <= 4
-			} == true
+			$0
 		})
-		#expect(!updates.indices.isEmpty)
-		#expect(updates.indices.count <= 18)
-		#expect(Set(updates.indices).isSubset(of: affected))
+		#expect(affected.allSatisfy
+		{
+			(0 ..< markCount).contains($0)
+		})
+		#expect(Set(updates.indices) == affected)
 	}
 }

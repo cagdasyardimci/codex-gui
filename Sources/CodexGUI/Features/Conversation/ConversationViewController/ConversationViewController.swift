@@ -24,6 +24,12 @@ final class ConversationViewController: NSViewController,
 	var onSelectApprovalMode: ((ApprovalMode) -> Void)?
 	var onInsertPath: (() -> Void)?
 	var onLoadEarlierTurns: (() -> Void)?
+	var onLoadEarlierTurnReferences: (() -> Void)?
+	var onConversationViewportChanged: ((ConversationViewport) -> Void)?
+	var viewportPublicationTask: Task<Void, Never>?
+	var lastPublishedViewport: ConversationViewport?
+	var onLoadTurnPreview: ((String) -> Void)?
+	var onJumpToTurnReference: ((String) -> Void)?
 	var onViewChanges: (() -> Void)?
 	var onRespond: ((PendingInteraction, InteractionResponse) -> Void)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
@@ -187,9 +193,15 @@ final class ConversationViewController: NSViewController,
 	var composerSubmissionPresentation: ConversationPresentation.Composer?
 	var bookmarks: [ConversationBookmark] = []
 	var requestedJumpItemID: String?
+	var pendingNavigationTurnID: String?
+	var turnNavigationTask: Task<Void, Never>?
+	var jumpAnimationRevision = 0
+	var isAnimatingJump = false
 
 	deinit
 	{
+		turnNavigationTask?.cancel()
+		viewportPublicationTask?.cancel()
 		for task in imageImportTasks.values
 		{
 			task.cancel()
@@ -199,6 +211,8 @@ final class ConversationViewController: NSViewController,
 	override func viewDidDisappear()
 	{
 		super.viewDidDisappear()
+		turnNavigationTask?.cancel()
+		viewportPublicationTask?.cancel()
 		transcriptIsVisible = false
 		activityLabel.presentationIsVisible = false
 		turnStatusTimer?.invalidate()
@@ -232,11 +246,10 @@ final class ConversationViewController: NSViewController,
 			row.widthAnchor.constraint(equalTo: headerStack.widthAnchor).isActive = true
 		}
 		let utilityRow = AppKitLayout.horizontalStack(
-			[loadEarlierButton, flexibleSpace(), latestButton],
+			[loadEarlierButton, flexibleSpace()],
 			spacing: 6
 		)
-		// The horizontal spacer has no intrinsic height. Keep it from taking the
-		// transcript's vertical space when both navigation buttons are hidden.
+		// Reserve this row only while earlier-history navigation is available.
 		utilityRow.heightAnchor.constraint(equalToConstant: 24).isActive = true
 		// These rows only have content after a snapshot supplies it. Keep the
 		// first fitting pass from reserving their empty heights.
@@ -261,7 +274,9 @@ final class ConversationViewController: NSViewController,
 	{
 		let transcriptArea = NSView()
 		transcriptArea.addSubview(conversationScrollView)
+		transcriptArea.addSubview(latestButton)
 		conversationScrollView.translatesAutoresizingMaskIntoConstraints = false
+		latestButton.translatesAutoresizingMaskIntoConstraints = false
 		NSLayoutConstraint.activate([
 			conversationScrollView.leadingAnchor.constraint(
 				equalTo: transcriptArea.leadingAnchor,
@@ -271,6 +286,11 @@ final class ConversationViewController: NSViewController,
 				.constraint(equalTo: transcriptArea.trailingAnchor),
 			conversationScrollView.topAnchor.constraint(equalTo: transcriptArea.topAnchor),
 			conversationScrollView.bottomAnchor.constraint(equalTo: transcriptArea.bottomAnchor),
+			latestButton.centerXAnchor.constraint(equalTo: conversationScrollView.centerXAnchor),
+			latestButton.bottomAnchor.constraint(
+				equalTo: conversationScrollView.bottomAnchor,
+				constant: -12
+			),
 		])
 		transcriptArea.setContentHuggingPriority(
 			.defaultLow,
@@ -487,7 +507,7 @@ final class ConversationViewController: NSViewController,
 
 	func updateTranscriptUtilityRowVisibility()
 	{
-		transcriptUtilityRow?.isHidden = loadEarlierButton.isHidden && latestButton.isHidden
+		transcriptUtilityRow?.isHidden = loadEarlierButton.isHidden
 		updateReadingRowVisibility()
 	}
 
@@ -499,7 +519,7 @@ final class ConversationViewController: NSViewController,
 		}
 	}
 
-	private var renderedPresentation: ConversationPresentation?
+	var renderedPresentation: ConversationPresentation?
 
 	func render(_ snapshot: ConversationSnapshot)
 	{
@@ -532,6 +552,14 @@ final class ConversationViewController: NSViewController,
 		}
 		if previous?.owner != snapshot.owner
 		{
+			turnNavigationTask?.cancel()
+			viewportPublicationTask?.cancel()
+			lastPublishedViewport = nil
+			cancelNavigationMotion()
+			pendingNavigationTurnID = nil
+			requestedJumpItemID = nil
+			jumpAnimationRevision += 1
+			isAnimatingJump = false
 			turnNavigationRail.render([])
 		}
 		fileIndexRuntime.onChange =
@@ -549,6 +577,9 @@ final class ConversationViewController: NSViewController,
 		if previous?.navigation != snapshot.navigation
 		{
 			bookmarks = snapshot.navigation.bookmarks
+			turnNavigationRail.canLoadEarlierReferences = snapshot.navigation
+				.canLoadEarlierTurnReferences
+			updateTurnNavigationSummaries(includeLoaded: previous?.owner == snapshot.owner)
 			turnNavigationRail.refreshBookmark()
 		}
 		if previous?.status != snapshot.status

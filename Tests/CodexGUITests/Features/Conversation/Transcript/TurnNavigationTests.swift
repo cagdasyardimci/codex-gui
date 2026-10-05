@@ -120,6 +120,7 @@ struct TurnNavigationTests
 		let rail = controller.turnNavigationRail
 		#expect(rail.summaries.count == 2)
 		#expect(!rail.isHidden)
+		#expect(rail.activeTurnID == "second")
 		let summary = try #require(rail.summaries.first)
 		let railScroll = try #require(rail.subviews.first as? NSScrollView)
 		let mark = try #require(railScroll.documentView?.subviews.first as? NSButton)
@@ -189,6 +190,88 @@ struct TurnNavigationTests
 		#expect(toggled == nil)
 		await controller.waitForRendering()
 		window.contentViewController = nil
+	}
+
+	@Test(arguments: [12, 96])
+	func scrollingTranscriptChangesActiveTurnWithoutMovingRail(turnCount: Int) async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 800,
+				height: 700
+			),
+			styleMask: [.titled, .resizable],
+			backing: .buffered,
+			defer: false
+		)
+		window.contentViewController = controller
+		window.setContentSize(NSSize(
+			width: 800,
+			height: 700
+		))
+		defer
+		{
+			controller.collectionView.dataSource = nil
+			controller.collectionView.delegate = nil
+			window.contentViewController = nil
+		}
+		let entries = (0 ..< turnCount).flatMap
+		{
+			index in
+			[
+				entry(
+					"turn-\(index):request",
+					.user,
+					"Request \(index)"
+				),
+				entry(
+					"turn-\(index):reply",
+					.agent,
+					String(
+						repeating: "Response text. ",
+						count: 100
+					)
+				),
+			]
+		}
+		controller.render(snapshot(entries))
+		await controller.waitForRendering()
+		await settleTranscriptLayout(controller)
+		let rail = controller.turnNavigationRail
+		let latestTurnID = "turn-\(turnCount - 1)"
+		#expect(rail.activeTurnID == latestTurnID)
+		let railFrame = rail.frame
+		let railScroll = try #require(rail.subviews.first as? NSScrollView)
+		let railOrigin = railScroll.contentView.bounds.origin
+		let transcript = controller.conversationScrollView
+		#expect(controller.collectionView.bounds.height > transcript.contentView.bounds.height)
+		transcript.contentView.scroll(to: .zero)
+		transcript.reflectScrolledClipView(transcript.contentView)
+		controller.readingPositionChanged()
+		await settleTranscriptLayout(controller)
+		#expect(rail.activeTurnID == "turn-0")
+		#expect(!controller.latestButton.isHidden)
+		#expect(rail.frame == railFrame)
+		let firstMark = try #require(railScroll.documentView?.subviews.first)
+		#expect(railScroll.contentView.bounds.contains(firstMark.frame))
+		controller.showLatestMessage()
+		await settleTranscriptLayout(controller)
+		#expect(rail.activeTurnID == latestTurnID)
+		#expect(controller.latestButton.isHidden)
+		#expect(rail.frame == railFrame)
+		#expect(railScroll.contentView.bounds.origin == railOrigin)
+		for _ in 0 ..< 4
+		{
+			controller.readingPositionChanged()
+		}
+		await settleTranscriptLayout(controller)
+		#expect(rail.activeTurnID == latestTurnID)
+		#expect(rail.frame == railFrame)
+		#expect(railScroll.contentView.bounds.origin == railOrigin)
 	}
 
 	@Test func previewFitsAndBookmarkButtonDispatches() throws
@@ -341,6 +424,16 @@ struct TurnNavigationTests
 		#expect(reply.stringValue.contains("• Reduced task indentation."))
 		#expect(reply.stringValue.contains("• Added distinct"))
 		#expect(reply.stringValue.hasSuffix("…"))
+	}
+
+	private func settleTranscriptLayout(_ controller: ConversationViewController) async
+	{
+		for _ in 0 ..< 4
+		{
+			controller.view.layoutSubtreeIfNeeded()
+			controller.collectionView.layoutSubtreeIfNeeded()
+			try? await Task.sleep(for: .milliseconds(10))
+		}
 	}
 
 	private func entry(

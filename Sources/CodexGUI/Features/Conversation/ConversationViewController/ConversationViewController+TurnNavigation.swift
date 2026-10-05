@@ -13,10 +13,23 @@ extension ConversationViewController
 				constant: 12
 			),
 			turnNavigationRail.widthAnchor.constraint(equalToConstant: 32),
-			turnNavigationRail.topAnchor.constraint(equalTo: conversationScrollView.topAnchor),
-			turnNavigationRail.bottomAnchor
-				.constraint(equalTo: conversationScrollView.bottomAnchor),
+			turnNavigationRail.topAnchor.constraint(
+				equalTo: container.topAnchor,
+				constant: 12
+			),
+			turnNavigationRail.bottomAnchor.constraint(
+				equalTo: container.bottomAnchor,
+				constant: -12
+			),
 		])
+		turnNavigationRail.onLoadTurnPreview =
+		{
+			[weak self] in self?.onLoadTurnPreview?($0)
+		}
+		turnNavigationRail.onLoadEarlierReferences =
+		{
+			[weak self] in self?.onLoadEarlierTurnReferences?()
+		}
 		turnNavigationRail.onJump =
 		{
 			[weak self] summary in
@@ -29,8 +42,43 @@ extension ConversationViewController
 			{
 				return
 			}
-			jumpToEntry(id: summary.entryID)
-			readingPositionChanged()
+			turnNavigationTask?.cancel()
+			pendingNavigationTurnID = summary.turnID
+			turnNavigationRail.updateActiveTurn(summary.turnID)
+			if !summary.isContentLoaded
+			{
+				let owner = renderedPresentation?.owner
+				turnNavigationTask = Task
+				{
+					[weak self] in
+					do
+					{
+						try await Task
+							.sleep(for: .milliseconds(ConversationCachePolicy.debounceMilliseconds))
+					}
+					catch
+					{
+						return
+					}
+					guard let self, !Task.isCancelled,
+							renderedPresentation?.owner == owner
+					else
+					{
+						return
+					}
+					turnNavigationTask = nil
+					onJumpToTurnReference?(summary.turnID)
+				}
+				return
+			}
+			if let onJumpToTurnReference
+			{
+				onJumpToTurnReference(summary.turnID)
+			}
+			else
+			{
+				jumpToEntry(id: summary.entryID)
+			}
 		}
 		turnNavigationRail.isBookmarked =
 		{
@@ -53,10 +101,6 @@ extension ConversationViewController
 					{
 						$0.entryID == summary.entryID
 					}),
-					entries.contains(where:
-					{
-						$0.id == summary.entryID
-					}),
 					let separator = summary.entryID.firstIndex(of: ":")
 			else
 			{
@@ -69,31 +113,63 @@ extension ConversationViewController
 			onToggleBookmark?(existing ?? ConversationBookmark(
 				threadID: selectedThreadID,
 				turnID: summary.turnID,
-				itemID: String(summary.entryID[summary.entryID.index(after: separator)...]),
+				itemID: summary
+					.isContentLoaded ?
+					String(summary.entryID[summary.entryID.index(after: separator)...]) : nil,
 				kind: .answer,
 				label: String(summary.title.prefix(100))
 			))
 		}
 	}
 
+	func updateTurnNavigationSummaries(includeLoaded: Bool = true)
+	{
+		let loaded = includeLoaded && renderedContext == requestedContext ? transcriptPreparation
+			.turnSummaries : []
+		turnNavigationRail.render(ConversationTurnSummary.navigation(
+			references: renderedPresentation?.navigation.turnReferences ?? [],
+			loaded: loaded,
+			cached: renderedPresentation?.navigation.turnPreviews ?? [],
+			errors: renderedPresentation?.navigation.turnPreviewErrors ?? [:]
+		))
+	}
+
 	func updateTurnNavigationPosition()
 	{
-		let visibleTop = conversationScrollView.contentView.bounds.minY
-		let visibleIndices = collectionView.indexPathsForVisibleItems().map(\.item).sorted()
-		let index = visibleIndices.first
+		guard !isAnimatingJump
+		else
 		{
-			guard let frame = collectionView.layoutAttributesForItem(
-				at: IndexPath(
-					item: $0,
-					section: 0
-				)
-			)?.frame
-			else
-			{
-				return false
-			}
-			return frame.maxY > visibleTop
+			return
 		}
+		guard !turnNavigationRail.summaries.isEmpty
+		else
+		{
+			turnNavigationRail.updateActiveTurn(nil)
+			return
+		}
+		let visible = collectionView.visibleRect
+		guard let layout = collectionView.collectionViewLayout,
+				layout.collectionViewContentSize.height > visible.height + 1
+		else
+		{
+			return
+		}
+		if isNearBottom
+		{
+			turnNavigationRail.updateActiveTurn(turnNavigationRail.summaries.last?.turnID)
+			return
+		}
+		let index = layout.layoutAttributesForElements(in: visible)
+			.filter
+			{
+				$0.representedElementCategory == .item
+					&& $0.frame.intersects(visible)
+			}
+			.min(by:
+				{
+					$0.frame.minY < $1.frame.minY
+				})?
+			.indexPath?.item
 		if let index, displayedRows.indices.contains(index),
 			case .turnStatus(let timing) = displayedRows[index]
 		{
@@ -105,7 +181,6 @@ extension ConversationViewController
 				let separator = sourceID.firstIndex(of: ":")
 		else
 		{
-			turnNavigationRail.updateActiveTurn(nil)
 			return
 		}
 		turnNavigationRail.updateActiveTurn(String(sourceID[..<separator]))

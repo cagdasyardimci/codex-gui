@@ -56,6 +56,7 @@ extension ConversationViewController
 		)
 		latestButton.imagePosition = .imageOnly
 		latestButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
+		latestButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
 		latestButton.isHidden = true
 		loadEarlierButton.target = self
 		loadEarlierButton.action = #selector(loadEarlierTurns)
@@ -700,7 +701,11 @@ extension ConversationViewController
 			collectionView.reloadData()
 		}
 
-		turnNavigationRail.render(transcriptPreparation.turnSummaries)
+		updateTurnNavigationSummaries()
+		if shouldFollowOutput || transcriptPreparation.turnSummaries.isEmpty
+		{
+			turnNavigationRail.updateActiveTurn(transcriptPreparation.turnSummaries.last?.turnID)
+		}
 		view.layoutSubtreeIfNeeded()
 		collectionView.layoutSubtreeIfNeeded()
 		restoreReadingPosition(
