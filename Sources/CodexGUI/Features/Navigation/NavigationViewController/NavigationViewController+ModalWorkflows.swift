@@ -7,32 +7,48 @@ extension NavigationViewController
 		completion: ((String) -> Void)? = nil
 	)
 	{
-		guard canManageSidebarTasks, let window = view.window
+		guard canManageSidebarTasks, let window = view.window, window.attachedSheet == nil
 		else
 		{
 			return
 		}
-		let name = thread.name ?? thread.preview ?? thread.id
-		let alert = NSAlert()
-		alert.messageText = "Delete task permanently?"
-		alert.informativeText = "The conversation “\(name)” will be permanently deleted. "
-			+ "This cannot be undone."
-		alert.alertStyle = .warning
-		alert.addButton(withTitle: "Cancel")
-		alert.addButton(withTitle: "Delete Permanently")
-		alert.buttons.last?.hasDestructiveAction = true
-		let capturedScope = modalScope
-		let complete = completion ?? onDeleteTask
-		alert.beginSheetModal(for: window)
+		let confirmation = TaskDeletionConfirmationView()
+		let panel = TaskDeletionConfirmationPanel(
+			contentRect: .zero,
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		panel.isReleasedWhenClosed = false
+		panel.isOpaque = false
+		panel.backgroundColor = .clear
+		panel.hasShadow = true
+		panel.title = "Delete task?"
+		panel.contentViewController = confirmation
+		confirmation.view.layoutSubtreeIfNeeded()
+		panel.setContentSize(confirmation.view.fittingSize)
+		panel.initialFirstResponder = confirmation.cancelButton
+		panel.defaultButtonCell = confirmation.cancelButton.cell as? NSButtonCell
+		confirmation.onDecision =
 		{
-			[weak self] response in
-			guard response == .alertSecondButtonReturn, self?.modalScope == capturedScope,
+			[weak panel] confirmed in
+			panel?.finishDecision(confirmed)
+		}
+
+		let capturedScope = modalScope
+		let capturedThreadID = thread.id
+		let complete = completion ?? onDeleteTask
+		window.beginSheet(panel)
+		{
+			[weak self, panel] response in
+			panel.orderOut(nil)
+			guard response == .OK, self?.modalScope == capturedScope,
 					self?.canManageSidebarTasks == true
 			else
 			{
 				return
 			}
-			complete?(thread.id)
+			complete?(capturedThreadID)
 		}
 	}
 
