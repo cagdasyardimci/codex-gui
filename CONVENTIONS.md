@@ -46,7 +46,8 @@ navigation, `ReportedChanges/` for reported-turn review UI, and `Diff/` for shar
 and file presentation helpers. Usage views and presentation values belong to `Features/Usage/`.
 `Features/PinnedSummary/` owns the summary card and its compact section presentations;
 `Features/Sources/` owns source inventory, details, result cards, audio metadata and tab hover
-previews. Shared attachment thumbnail preparation belongs to `Features/Shared/`.
+previews. `Features/Subagents/` owns the delegated-work list and its lifecycle projection. Shared subagent
+avatars and attachment thumbnail preparation belong to `Features/Shared/`.
 `CodexClient/InlineImageData.swift` identifies inline image payloads;
 `Application/Services/LocalAttachmentURL.swift` resolves local attachment paths and file URLs.
 Keep these shared values independent of feature views. `App/WindowLayout/` groups pane and split

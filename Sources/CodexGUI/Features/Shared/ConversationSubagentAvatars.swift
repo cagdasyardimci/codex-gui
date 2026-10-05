@@ -38,7 +38,10 @@ enum ConversationSubagentAvatars
 	private static var assignedAssets: [String: String] = [:]
 	private static let imageCache = NSCache<NSString, NSImage>()
 
-	static func make(_ agents: [CodexSubagentActivity]) -> NSView
+	static func make(
+		_ agents: [CodexSubagentActivity],
+		onSelectThread: ((String) -> Void)? = nil
+	) -> NSView
 	{
 		let stack = NSStackView()
 		stack.orientation = .horizontal
@@ -52,23 +55,65 @@ enum ConversationSubagentAvatars
 			0,
 			count - 1
 		)) * stack.spacing
-		stack.widthAnchor.constraint(equalToConstant: width).isActive = true
+		let hasOverflow = onSelectThread != nil && agents.count > maximumVisibleAvatars
+		let interactiveWidth = width + (hasOverflow ? avatarSize + stack.spacing : 0)
+		stack.widthAnchor.constraint(equalToConstant: interactiveWidth).isActive = true
 		for agent in agents.prefix(maximumVisibleAvatars)
 		{
-			let avatar = ConversationSubagentAvatarView(
-				assetName: assetName(for: agent.identity),
-				name: agent.name
+			stack.addArrangedSubview(makeAvatar(
+				agent,
+				onSelectThread: onSelectThread
+			))
+		}
+		if hasOverflow, let onSelectThread
+		{
+			let button = SubagentAvatarNavigationButton(
+				agents: Array(agents.dropFirst(maximumVisibleAvatars)),
+				isOverflow: true,
+				onSelectThread: onSelectThread
 			)
-			avatar.translatesAutoresizingMaskIntoConstraints = false
-			avatar.widthAnchor.constraint(equalToConstant: avatarSize).isActive = true
-			avatar.heightAnchor.constraint(equalToConstant: avatarSize).isActive = true
-			stack.addArrangedSubview(avatar)
+			button.title = "…"
+			button.widthAnchor.constraint(equalToConstant: avatarSize).isActive = true
+			button.heightAnchor.constraint(equalToConstant: avatarSize).isActive = true
+			stack.addArrangedSubview(button)
 		}
 		stack.setContentCompressionResistancePriority(
 			.required,
 			for: .horizontal
 		)
 		return stack
+	}
+
+	private static func makeAvatar(
+		_ agent: CodexSubagentActivity,
+		onSelectThread: ((String) -> Void)?
+	) -> NSView
+	{
+		let avatar = ConversationSubagentAvatarView(
+			assetName: assetName(for: agent.identity),
+			name: agent.name
+		)
+		avatar.translatesAutoresizingMaskIntoConstraints = false
+		avatar.widthAnchor.constraint(equalToConstant: avatarSize).isActive = true
+		avatar.heightAnchor.constraint(equalToConstant: avatarSize).isActive = true
+		if let onSelectThread
+		{
+			let button = SubagentAvatarNavigationButton(
+				agents: [agent],
+				onSelectThread: onSelectThread
+			)
+			button.addSubview(avatar)
+			avatar.setAccessibilityElement(false)
+			avatar.centerXAnchor.constraint(equalTo: button.centerXAnchor).isActive = true
+			avatar.centerYAnchor.constraint(equalTo: button.centerYAnchor).isActive = true
+			button.widthAnchor.constraint(equalToConstant: avatarSize).isActive = true
+			button.heightAnchor.constraint(equalToConstant: avatarSize).isActive = true
+			return button
+		}
+		else
+		{
+			return avatar
+		}
 	}
 
 	static func assetName(for identity: String) -> String
