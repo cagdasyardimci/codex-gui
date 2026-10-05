@@ -224,6 +224,13 @@ enum ConversationReducer
 	{
 		switch action
 		{
+		case .turnReferencesRequested, .turnReferencesReceived, .turnContentsRequested,
+				.turnContentsReceived, .viewportChanged, .previewAccessed, .cacheExpired:
+			reduceTurnNavigation(
+				action,
+				model: &model,
+				result: &result
+			)
 		case .newChatRequested: break
 		case .newChatOpened(let context):
 			guard acceptsNewChat(
@@ -726,9 +733,23 @@ enum ConversationReducer
 		case .connectionBegan, .connectionDisconnected:
 			model.conversations.pendingReads.removeAll()
 			model.conversations.historyLoads.removeAll()
+			model.conversations.pendingTurnReads.removeAll()
+			for threadID in model.conversations.turnReferenceIndices.keys
+			{
+				model.conversations.turnReferenceIndices[threadID]?.pendingRead = nil
+				model.conversations.turnReferenceIndices[threadID]?.pendingPreviewRead = nil
+				model.conversations.turnReferenceIndices[threadID]?.pendingWindowRead = nil
+				model.conversations.turnReferenceIndices[threadID]?.windowQueue.removeAll()
+				model.conversations.turnReferenceIndices[threadID]?.hasLoadedPage = false
+			}
 			model.conversations.pendingList = nil
 			model.conversations.pendingSelection = nil
 			model.conversations.pendingManagement = nil
+		case .conversationSelectionChanged:
+			ensureTurnReferences(
+				model: &model,
+				result: &result
+			)
 		case .submissionAccepted(let submission):
 			if let threadID = submission.context.threadID
 			{
@@ -831,6 +852,15 @@ enum ConversationReducer
 				model.conversations.contentRevisions[threadID, default: 0] += 1
 			default: break
 			}
+			if let identity = event.turnContentIdentity
+			{
+				model.conversations.turnReferenceIndices[identity.threadID]?
+					.previews[identity.turnID] = nil
+				model.conversations.turnReferenceIndices[identity.threadID]?
+					.previewTurns[identity.turnID] = nil
+				model.conversations.turnReferenceIndices[identity.threadID]?
+					.previewCachedAt[identity.turnID] = nil
+			}
 			ConversationContentReducer.observe(
 				event,
 				model: &model,
@@ -845,8 +875,13 @@ enum ConversationReducer
 				detail,
 				model: &model
 			)
+			ensureTurnReferences(
+				model: &model,
+				result: &result
+			)
 		default: break
 		}
+		enforceCacheLimits(model: &model)
 		return result
 	}
 }

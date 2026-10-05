@@ -33,6 +33,17 @@ final class WorkspaceEffectRunner
 			String?,
 			String
 		)
+		case turnReferences(
+			String?,
+			String?
+		)
+		case previewExpiry
+		case turnContents(
+			String?,
+			String,
+			Bool,
+			Bool
+		)
 		case contextLoad(Int), contextSave(Int), skills(Int)
 		case messageSearch(
 			Int,
@@ -296,6 +307,23 @@ final class WorkspaceEffectRunner
 					operation.pageScope.cursor
 				)
 			)
+		case .readTurnReferences(let operation): return (
+				operation.context,
+				.turnReferences(
+					operation.context.threadID,
+					operation.cursor
+				)
+			)
+		case .expireTurnPreviews(let context): return (context, .previewExpiry)
+		case .readTurnContents(let operation): return (
+				operation.context,
+				.turnContents(
+					operation.context.threadID,
+					operation.reference.id,
+					operation.isPreview,
+					operation.isWindow
+				)
+			)
 		case .readConversationList(let operation): return (operation.context, .list)
 		case .forkConversation(let request): return (request.context, .composerCommand)
 		case .compactConversation(let operation), .startConversationReview(let operation):
@@ -397,6 +425,40 @@ final class WorkspaceEffectRunner
 		managedWorkspace: TaskWorkspace?
 	)
 	{
+		if case .expireTurnPreviews = effect
+		{
+			let oldTimers = tasks.keys.filter
+			{
+				$0.purpose == .previewExpiry
+			}
+			for key in oldTimers
+			{
+				if let old = tasks[key], case .expireTurnPreviews(let context) = old.effect
+				{
+					cancel(context)
+				}
+			}
+		}
+		if case .readTurnContents(let incoming) = effect
+		{
+			let stale = tasks.values.compactMap
+			{
+				pending -> ConversationTurnReadOperation? in
+				guard case .readTurnContents(let old) = pending.effect,
+						(old.isPreview == incoming.isPreview && old.isWindow == incoming.isWindow
+						|| !incoming.isPreview && !incoming.isWindow && old.isWindow),
+						old.context.requestID != incoming.context.requestID
+				else
+				{
+					return nil
+				}
+				return old
+			}
+			for old in stale
+			{
+				cancel(old.context)
+			}
+		}
 		let request = RequestKey(context)
 		let key = EffectKey(
 			request: request,

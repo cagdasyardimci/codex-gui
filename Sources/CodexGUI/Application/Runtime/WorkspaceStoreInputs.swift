@@ -817,8 +817,85 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	func updateConversationViewport(_ viewport: ConversationViewport)
+	{
+		guard let threadID = selectedThreadID
+		else
+		{
+			return
+		}
+		store.dispatch(.conversations(.viewportChanged(
+			store.operationContext(threadID: threadID),
+			viewport,
+			observedAt: Date()
+		)))
+	}
+
+	func loadTurnPreview(_ turnID: String)
+	{
+		guard let threadID = selectedThreadID
+		else
+		{
+			return
+		}
+		store.dispatch(.conversations(.previewAccessed(
+			store.operationContext(threadID: threadID),
+			turnID,
+			observedAt: Date()
+		)))
+		if viewedContent.loadedTurns.contains(where:
+			{
+				$0.id == turnID
+			})
+		{
+			return
+		}
+		guard let index = store.model.conversations.turnReferenceIndices[threadID],
+				index.previews[turnID] == nil,
+				let reference = index.references.first(where:
+				{
+					$0.id == turnID
+				})
+		else
+		{
+			return
+		}
+		store.dispatch(.conversations(.turnContentsRequested(ConversationTurnReadOperation(
+			context: store.operationContext(threadID: threadID),
+			reference: reference,
+			commandRevision: commandEventRevisions[threadID, default: 0],
+			isPreview: true
+		))))
+	}
+
+	func loadEarlierTurnReferences()
+	{
+		guard let threadID = selectedThreadID
+		else
+		{
+			return
+		}
+		let index = store.model.conversations.turnReferenceIndices[threadID]
+		guard index?.pendingRead == nil, index?.hasLoadedPage != true || index?.nextCursor != nil
+		else
+		{
+			return
+		}
+		store.dispatch(.conversations(.turnReferencesRequested(TurnReferenceReadOperation(
+			context: store.operationContext(threadID: threadID),
+			cursor: index?.nextCursor
+		))))
+	}
+
 	func loadEarlierTurns()
 	{
+		if let threadID = selectedThreadID,
+			let viewport = store.model.conversations.turnReferenceIndices[threadID]?.viewport,
+			viewport.anchorTurnID != nil
+		{
+			updateConversationViewport(viewport)
+			return
+		}
 		guard let threadID = selectedThreadID, let cursor = viewedContent.nextTurnsCursor,
 				let path = store.model.identity.canonicalCheckoutPath,
 				historyPageRequests[threadID] == nil

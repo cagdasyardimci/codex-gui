@@ -82,3 +82,54 @@ enum AppServerEvent
 		willRetry: Bool
 	)
 }
+
+extension AppServerEvent
+{
+	var turnContentIdentity: (threadID: String, turnID: String)?
+	{
+		switch self
+		{
+		case .turnStarted(
+			let threadID,
+			let turn
+		), .turnCompleted(
+			let threadID,
+			let turn
+		):
+			return (threadID, turn.id)
+		case .itemStarted(
+			let threadID,
+			let turnID,
+			_
+		), .itemCompleted(
+			let threadID,
+			let turnID,
+			_
+		),
+		.agentMessageDelta(
+			let threadID,
+			let turnID,
+			_,
+			_
+		),
+		.commandOutputDelta(
+			let threadID,
+			let turnID,
+			_,
+			_
+		),
+		.fileChangeUpdated(
+			let threadID,
+			let turnID,
+			_,
+			_
+		), .diffUpdated(
+			let threadID,
+			let turnID,
+			_
+		):
+			return (threadID, turnID)
+		default: return nil
+		}
+	}
+}

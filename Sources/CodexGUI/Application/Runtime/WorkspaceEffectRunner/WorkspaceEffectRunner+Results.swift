@@ -154,6 +154,19 @@ extension WorkspaceEffectRunner
 				operation,
 				.failed(failure)
 			))
+		case .readTurnReferences(let operation): return .conversations(.turnReferencesReceived(
+				operation,
+				.failed(failure)
+			))
+		case .expireTurnPreviews: return .conversations(.cacheExpired(
+				context,
+				observedAt: Date()
+			))
+		case .readTurnContents(let operation): return .conversations(.turnContentsReceived(
+				operation,
+				.failed(failure),
+				observedAt: Date()
+			))
 		case .readConversationList(let operation): return .conversations(.threadListReceived(
 				operation,
 				.failed(failure)

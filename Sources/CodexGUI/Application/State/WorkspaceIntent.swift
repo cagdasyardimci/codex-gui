@@ -63,6 +63,9 @@ enum WorkspaceIntent
 	case loadMoreSearch
 	case acknowledgeJump
 	case loadEarlierTurns
+	case loadEarlierTurnReferences
+	case loadTurnPreview(String)
+	case updateConversationViewport(ConversationViewport)
 
 	case selectReview(String)
 	case setReviewed(
@@ -89,7 +92,9 @@ enum WorkspaceIntent
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
-		case .renameThread, .archiveThread, .loadEarlierTurns, .selectReview,
+		case .renameThread, .archiveThread, .loadEarlierTurns, .loadEarlierTurnReferences,
+				.loadTurnPreview, .updateConversationViewport,
+				.selectReview,
 				.setReviewed, .toggleBookmark, .acknowledgeJump: return .conversation
 		default: return .owner
 		}
@@ -318,6 +323,9 @@ final class WorkspaceIntentTarget
 		case .loadMoreSearch: inputs.loadMoreSearchHistory()
 		case .acknowledgeJump: inputs.acknowledgeJump()
 		case .loadEarlierTurns: inputs.loadEarlierTurns()
+		case .loadEarlierTurnReferences: inputs.loadEarlierTurnReferences()
+		case .loadTurnPreview(let turnID): inputs.loadTurnPreview(turnID)
+		case .updateConversationViewport(let viewport): inputs.updateConversationViewport(viewport)
 		case .selectReview(let id): inputs.selectReviewTurn(id)
 		case .setReviewed(
 			let reviewed,

@@ -142,6 +142,7 @@ enum NavigationHistoryRead
 {
 	case history(ConversationReadOperation)
 	case page(HistoryLoadOperation)
+	case turn(ConversationTurnReadOperation)
 
 	var context: OperationContext
 	{
@@ -149,6 +150,7 @@ enum NavigationHistoryRead
 		{
 		case .history(let operation): return operation.context
 		case .page(let operation): return operation.context
+		case .turn(let operation): return operation.context
 		}
 	}
 }

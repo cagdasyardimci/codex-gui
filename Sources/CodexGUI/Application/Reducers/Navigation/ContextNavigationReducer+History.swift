@@ -187,6 +187,7 @@ extension ContextNavigationReducer
 			operation.turnID + ":" + $0
 		}
 		model.contextNavigation.pendingJump = operation
+		model.conversations.turnReferenceIndices[threadID]?.navigationProtection = operation.turnID
 		model.contextNavigation.jumpError = nil
 		if model.conversations.selectedConversation != .thread(threadID)
 		{
@@ -319,6 +320,13 @@ extension ContextNavigationReducer
 				return nil
 			}
 			return model.conversations.historyLoads[threadID].map(NavigationHistoryRead.page)
+		case .turn(let operation):
+			guard let threadID = operation.context.threadID
+			else
+			{
+				return nil
+			}
+			return model.conversations.pendingTurnReads[threadID].map(NavigationHistoryRead.turn)
 		}
 	}
 
@@ -363,6 +371,8 @@ extension ContextNavigationReducer
 			return first.context == second.context
 				&& first.pageScope == second.pageScope
 				&& first.commandRevision == second.commandRevision
+		case (.turn(let first), .turn(let second)):
+			return first == second
 		default: return false
 		}
 	}
@@ -445,7 +455,7 @@ extension ContextNavigationReducer
 		{
 			jump.resolvedItemID = content.entries.first(where:
 				{
-					$0.id.hasPrefix(jump.turnID + ":")
+					$0.id.hasPrefix(jump.turnID + ":") && !$0.id.hasSuffix(":cache-gap")
 				})?.id
 		}
 		model.contextNavigation.pendingJump = jump
@@ -461,6 +471,36 @@ extension ContextNavigationReducer
 				content.hasLoadedHistory, model.contextNavigation.jumpError == nil
 		else
 		{
+			return
+		}
+		if content.loadedTurns.contains(where:
+			{
+				$0.id == jump.turnID
+			})
+		{
+			model.contextNavigation.jumpError = "The referenced message is unavailable."
+			return
+		}
+		if let reference = model.conversations.turnReferenceIndices[threadID]?.references
+			.first(where:
+				{
+					$0.id == jump.turnID
+				})
+		{
+			let operation = ConversationTurnReadOperation(
+				context: jump.context,
+				reference: reference,
+				commandRevision: model.execution.commandEventRevisions[threadID, default: 0]
+			)
+			append(
+				ConversationReducer
+					.reduce(
+						&model,
+						.conversations(.turnContentsRequested(operation))
+					),
+				to: &result
+			)
+			model.contextNavigation.pendingJump?.pendingRead = .turn(operation)
 			return
 		}
 		guard content.nextTurnsCursor != nil

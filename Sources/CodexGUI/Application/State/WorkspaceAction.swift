@@ -242,6 +242,31 @@ enum ConversationsAction
 	)
 	case threadListRequested(ConversationListOperation)
 	case earlierTurnsRequested(HistoryLoadOperation)
+	case turnReferencesRequested(TurnReferenceReadOperation)
+	case turnContentsRequested(ConversationTurnReadOperation)
+	case cacheExpired(
+		OperationContext,
+		observedAt: Date = .distantPast
+	)
+	case previewAccessed(
+		OperationContext,
+		String,
+		observedAt: Date = .distantPast
+	)
+	case viewportChanged(
+		OperationContext,
+		ConversationViewport,
+		observedAt: Date = .distantPast
+	)
+	case turnReferencesReceived(
+		TurnReferenceReadOperation,
+		OperationResult<TurnReferencePage>
+	)
+	case turnContentsReceived(
+		ConversationTurnReadOperation,
+		OperationResult<CodexTurn>,
+		observedAt: Date = .distantPast
+	)
 	case managementRequested(ThreadManagementOperation)
 	case threadListReceived(
 		ConversationListOperation,

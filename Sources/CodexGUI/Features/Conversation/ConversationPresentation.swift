@@ -29,6 +29,10 @@ struct ConversationPresentation: Equatable
 
 	struct Navigation: Equatable
 	{
+		var turnReferences: [ConversationTurnReference] = []
+		var turnPreviews: [ConversationTurnSummary] = []
+		var turnPreviewErrors: [String: String] = [:]
+		var canLoadEarlierTurnReferences = false
 		let owner: FeaturePresentationOwner
 		let bookmarks: [ConversationBookmark]
 		let navigationTargets: [ConversationJumpTarget]
@@ -250,6 +254,10 @@ struct ConversationPresentation: Equatable
 			selectedCheckoutPath: workspace?.checkoutPath
 		)
 		navigation = Navigation(
+			turnReferences: snapshot.turnReferences,
+			turnPreviews: snapshot.turnPreviews,
+			turnPreviewErrors: snapshot.turnPreviewErrors,
+			canLoadEarlierTurnReferences: snapshot.canLoadEarlierTurnReferences,
 			owner: owner,
 			bookmarks: snapshot.projectContext.bookmarks,
 			navigationTargets: snapshot.navigationTargets.filter

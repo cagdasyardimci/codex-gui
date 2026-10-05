@@ -38,7 +38,12 @@ struct WorkspaceSelectors
 	{
 		model.composerCommands.error ?? model.lifecycle.statusMessage
 			?? model.lifecycle.managedOwnershipConflict ?? model
-			.conversations.error ?? model.preferences
+			.conversations.error ?? selectedThreadID
+			.flatMap
+			{
+				model.conversations.turnReferenceIndices[$0]?.error
+			} ?? model
+			.preferences
 			.statusMessage
 			?? model.preferences.persistenceError ?? model.execution.statusMessage
 			?? model.connection.statusMessage ?? model.composer.persistenceError
@@ -463,6 +468,18 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		if let threadID = selectedThreadID
+		{
+			let index = model.conversations.turnReferenceIndices[threadID]
+			snapshot.turnReferences = index?.references ?? []
+			snapshot.turnPreviews = index?.references.compactMap
+			{
+				index?.previews[$0.id]
+			} ?? []
+			snapshot.turnPreviewErrors = index?.previewErrors ?? [:]
+			snapshot.canLoadEarlierTurnReferences = isConnected && index?.pendingRead == nil
+				&& (index?.hasLoadedPage != true || index?.nextCursor != nil)
+		}
 		snapshot.slashCommandUnavailableReasons = Dictionary(uniqueKeysWithValues:
 			SlashCommandRegistry.commands.compactMap
 			{

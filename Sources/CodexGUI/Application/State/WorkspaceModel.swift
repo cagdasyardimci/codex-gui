@@ -316,6 +316,11 @@ struct ConversationsModel
 	var pendingManagement: ThreadManagementOperation?
 	/// Thread key preserves manual/search/jump page deduplication within one workspace store.
 	var historyLoads: [String: HistoryLoadOperation] = [:]
+	var cacheTime = Date.distantPast
+	var cacheAccessCounter = 0
+	var cacheOverBudget = false
+	var turnReferenceIndices: [String: TurnReferenceIndex] = [:]
+	var pendingTurnReads: [String: ConversationTurnReadOperation] = [:]
 	var error: String?
 }
 

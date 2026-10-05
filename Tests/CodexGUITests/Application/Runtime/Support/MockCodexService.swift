@@ -34,6 +34,14 @@ final class MockCodexService: CodexService
 	var readNextCursor: String?
 	var earlierPages: [String: (turns: [CodexTurn], nextCursor: String?)] = [:]
 	var earlierReadCursors: [String] = []
+	var turnReferencePages: [String: TurnReferencePage] = [:]
+	var turnReferenceReads: [(threadID: String, cursor: String?)] = []
+	var referencedTurnContents: [String: CodexTurn] = [:]
+	var suspendTurnContentRead = false
+	var pendingTurnContentRead: CheckedContinuation<CodexTurn, Error>?
+	var turnContentReads: [(threadID: String, turnID: String)] = []
+	var suspendTurnReferenceRead = false
+	var pendingTurnReferenceRead: CheckedContinuation<TurnReferencePage, Error>?
 	var earlierReadsToSuspend = 0
 	var suspendedEarlierReads:
 		[Int: CheckedContinuation<(turns: [CodexTurn], nextCursor: String?), Error>] = [:]
@@ -393,6 +401,46 @@ final class MockCodexService: CodexService
 			}
 		}
 		return earlierPages[cursor] ?? ([], nil)
+	}
+
+	func loadTurnReferences(
+		threadId: String,
+		cursor: String?
+	) async throws -> TurnReferencePage
+	{
+		turnReferenceReads.append((threadId, cursor))
+		if suspendTurnReferenceRead
+		{
+			return try await withCheckedThrowingContinuation
+			{
+				pendingTurnReferenceRead = $0
+			}
+		}
+		return turnReferencePages[cursor ?? ""] ?? TurnReferencePage(
+			references: [],
+			nextCursor: nil
+		)
+	}
+
+	func loadTurnContents(
+		threadId: String,
+		reference: ConversationTurnReference
+	) async throws -> CodexTurn
+	{
+		turnContentReads.append((threadId, reference.id))
+		if suspendTurnContentRead
+		{
+			return try await withCheckedThrowingContinuation
+			{
+				pendingTurnContentRead = $0
+			}
+		}
+		guard let turn = referencedTurnContents[reference.id]
+		else
+		{
+			throw AppServerError.requestRejected("The fixture has no content for this turn.")
+		}
+		return turn
 	}
 
 	func startTurn(

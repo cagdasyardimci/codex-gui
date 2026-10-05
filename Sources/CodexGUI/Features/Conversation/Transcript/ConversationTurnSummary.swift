@@ -4,9 +4,74 @@ import Foundation
 struct ConversationTurnSummary: Equatable, Sendable
 {
 	let turnID: String
-	let entryID: String
+	var entryID: String
 	let title: String
 	var reply: String
+	var isContentLoaded = true
+	var isPreviewLoaded = false
+	var previewError: String?
+
+	static func navigation(
+		references: [ConversationTurnReference],
+		loaded: [ConversationTurnSummary],
+		cached: [ConversationTurnSummary] = [],
+		errors: [String: String] = [:]
+	) -> [Self]
+	{
+		let previews = Dictionary(
+			loaded.map
+			{
+				($0.turnID, $0)
+			},
+			uniquingKeysWith:
+			{
+				first, _ in first
+			}
+		)
+		let cachedPreviews = Dictionary(
+			cached.map
+			{
+				($0.turnID, $0)
+			},
+			uniquingKeysWith:
+			{
+				first, _ in first
+			}
+		)
+		let referenced = Set(references.map(\.id))
+		return references.map
+		{
+			reference in
+			if let loaded = previews[reference.id]
+			{
+				return loaded
+			}
+			if var preview = cachedPreviews[reference.id]
+			{
+				preview.entryID = reference.id + ":reference"
+				preview.isContentLoaded = false
+				preview.isPreviewLoaded = true
+				return preview
+			}
+			return Self(
+				turnID: reference.id,
+				entryID: reference.id + ":reference",
+				title: reference.startedAt.map
+				{
+					"Turn from " + $0.formatted(
+						date: .abbreviated,
+						time: .shortened
+					)
+				} ?? "Earlier turn",
+				reply: "Select to view this turn.",
+				isContentLoaded: false,
+				previewError: errors[reference.id]
+			)
+		} + loaded.filter
+		{
+			!referenced.contains($0.turnID)
+		}
+	}
 
 	static func make(from entries: [ConversationEntry]) -> [Self]
 	{

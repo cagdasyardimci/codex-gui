@@ -200,6 +200,59 @@ extension WorkspaceEffectRunner
 					nextCursor: page.nextCursor
 				))
 			))
+		case .readTurnReferences(let operation):
+			_ = try conversationDirectory(context)
+			try await verifyWorkspace(managedWorkspace)
+			guard let threadID = context.threadID,
+					managedWorkspace?.threadID == nil || managedWorkspace?.threadID == threadID
+			else
+			{
+				throw AppServerError
+					.protocolError("Turn references require the owning conversation.")
+			}
+			let page = try await service.loadTurnReferences(
+				threadId: threadID,
+				cursor: operation.cursor
+			)
+			return .conversations(.turnReferencesReceived(
+				operation,
+				.succeeded(page)
+			))
+		case .expireTurnPreviews:
+			try await Task.sleep(for: .seconds(ConversationCachePolicy.hoverLifetime))
+			return .conversations(.cacheExpired(
+				context,
+				observedAt: Date()
+			))
+		case .readTurnContents(let operation):
+			_ = try conversationDirectory(context)
+			try await verifyWorkspace(managedWorkspace)
+			guard let threadID = context.threadID,
+					managedWorkspace?.threadID == nil || managedWorkspace?.threadID == threadID
+			else
+			{
+				throw AppServerError.protocolError("Turn contents require the owning conversation.")
+			}
+			let turn: CodexTurn
+			if operation.isPreview
+			{
+				turn = try await service.loadTurnPreviewContents(
+					threadId: threadID,
+					reference: operation.reference
+				)
+			}
+			else
+			{
+				turn = try await service.loadTurnContents(
+					threadId: threadID,
+					reference: operation.reference
+				)
+			}
+			return .conversations(.turnContentsReceived(
+				operation,
+				.succeeded(turn),
+				observedAt: Date()
+			))
 		case .readConversationList(let operation):
 			let project = try conversationDirectory(context)
 			try await verifyWorkspace(managedWorkspace)

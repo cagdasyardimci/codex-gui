@@ -41,6 +41,10 @@ struct TaskWorkspaceChoice: Equatable
 
 struct ConversationSnapshot
 {
+	var turnReferences: [ConversationTurnReference] = []
+	var turnPreviews: [ConversationTurnSummary] = []
+	var turnPreviewErrors: [String: String] = [:]
+	var canLoadEarlierTurnReferences = false
 	var turnTimings: [ConversationTurnTiming] = []
 	var workspaceOwner: WorkspaceLifecycleOwnerReference? = nil
 	var workspaceSelectionEpoch = 0
