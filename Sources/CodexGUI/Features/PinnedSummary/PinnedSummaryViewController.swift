@@ -18,7 +18,6 @@ final class PinnedSummaryViewController: NSViewController
 		static let contentRowHeight: CGFloat = 28
 		static let sourceIconSize: CGFloat = 18
 		static let sourceRowSpacing: CGFloat = 12
-		static let agentIconSize: CGFloat = 16
 		static let agentRowSpacing: CGFloat = 4
 	}
 
@@ -166,7 +165,16 @@ final class PinnedSummaryViewController: NSViewController
 		{
 			return
 		}
-		addSectionHeading(label("Subagents"))
+		let heading = button(
+			"Subagents",
+			symbol: nil,
+			destination: .subagents
+		)
+		heading.attributedTitle = attributedTitle(
+			"Subagents",
+			color: .secondaryLabelColor
+		)
+		addSectionHeading(heading)
 		if let agents = section.value
 		{
 			let completed = "\(agents.completedCount) done"
@@ -178,7 +186,10 @@ final class PinnedSummaryViewController: NSViewController
 				destination: .subagents
 			)
 			summary.setAccessibilityLabel(text + ". " + agents.aggregationDescription)
-			add(agentRow(summary))
+			add(agentRow(
+				summary,
+				agents: presentation.agentPreviews
+			))
 		}
 		if let message = section.message
 		{
@@ -382,31 +393,21 @@ final class PinnedSummaryViewController: NSViewController
 		}
 	}
 
-	private func agentRow(_ summary: NSButton) -> NSView
+	private func agentRow(
+		_ summary: NSButton,
+		agents: [CodexSubagentActivity]
+	) -> NSView
 	{
-		var views: [NSView] = PinnedSummaryIcons.agentImages().map
-		{
-			artwork in
-			let image = NSImageView()
-			image.image = artwork
-			image.setAccessibilityElement(false)
-			image.widthAnchor.constraint(equalToConstant: Layout.agentIconSize).isActive = true
-			image.heightAnchor.constraint(equalToConstant: Layout.agentIconSize).isActive = true
-			return image
-		}
-		views.append(summary)
+		let avatars = ConversationSubagentAvatars.make(agents)
 		let row = AppKitLayout.horizontalStack(
-			views,
+			[avatars, summary],
 			spacing: Layout.agentRowSpacing
 		)
 		row.heightAnchor.constraint(equalToConstant: Layout.contentRowHeight).isActive = true
-		// Reserve the four fixed glyph widths and four gaps; the status uses the remainder.
-		let artworkCount = views.count - 1
-		let artworkWidth = CGFloat(artworkCount) * (Layout.agentIconSize + Layout.agentRowSpacing)
-		summary.widthAnchor.constraint(
-			equalTo: row.widthAnchor,
-			constant: -artworkWidth
-		).isActive = true
+		summary.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
 		return row
 	}
 

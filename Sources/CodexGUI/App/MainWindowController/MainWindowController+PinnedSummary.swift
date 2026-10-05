@@ -13,6 +13,18 @@ extension MainWindowController
 		)
 		let firstPresentation = summaryReconciliation.owner == nil
 		let sources = ConversationLocalSources(entries: snapshot.entries)
+		let subagents = ConversationSubagents(entries: snapshot.entries)
+		if let existing = inspector.conversationSubagents, existing.owner == owner
+		{
+			existing.update(subagents)
+		}
+		else
+		{
+			inspector.conversationSubagents = SubagentsViewController(
+				owner: owner,
+				subagents: subagents
+			)
+		}
 		let sourcesController: ConversationSourcesViewController
 		if let existing = inspector.conversationSources, existing.owner == owner
 		{
@@ -82,6 +94,13 @@ extension MainWindowController
 				?? .unavailable("Open Changes to load a repository comparison")
 			sections.sources = .available(sources.records.map(\.summary))
 			sections.availableDestinations = [.changes, .sources]
+			if !subagents.agents.isEmpty
+			{
+				sections.agents = .available(subagents.summary(
+					parentThreadID: snapshot.selectedThreadID ?? ""
+				))
+				sections.availableDestinations.insert(.subagents)
+			}
 			summaryReconciliation.accept(ContextSummaryUpdate(
 				owner: owner,
 				revision: summaryReconciliation.revision + 1,
@@ -108,7 +127,8 @@ extension MainWindowController
 			PinnedSummaryPresentation(
 				snapshot,
 				ownerIdentity: target.presentationIdentity,
-				sections: sections
+				sections: sections,
+				agentPreviews: subagents.agents
 			),
 			visible: visible
 		)
@@ -123,6 +143,24 @@ extension MainWindowController
 		if firstPresentation, visible, snapshot.projectPath != nil
 		{
 			paneController.setReviewCollapsed(false)
+		}
+		configureSubagentConversationNavigation(
+			owner: owner,
+			target: target
+		)
+		conversation.onOpenSubagents =
+		{
+			[weak self] in
+			guard let self, target.accepts(.loadEarlierTurns), !target.store.isRetired,
+					self.summaryReconciliation.owner == owner
+			else
+			{
+				return
+			}
+			self.openSubagentsToolTab(ContextPanelRequest(
+				owner: owner,
+				destination: .subagents
+			))
 		}
 		inspector.summary.onNavigate =
 		{
@@ -140,6 +178,8 @@ extension MainWindowController
 					request,
 					inToolTab: true
 				)
+			case .subagents:
+				self.openSubagentsToolTab(request)
 			case .sources:
 				guard request.recordID == nil || sources.record(
 					for: request,
@@ -157,17 +197,33 @@ extension MainWindowController
 
 	private func openSourcesToolTab(_ request: ContextPanelRequest)
 	{
+		openContextToolTab
+		{
+			inspector.openSourcesInToolTab(request)
+		}
+	}
+
+	func openSubagentsToolTab(_ request: ContextPanelRequest)
+	{
+		openContextToolTab
+		{
+			inspector.openSubagentsInToolTab(request)
+		}
+	}
+
+	private func openContextToolTab(_ open: () -> Bool)
+	{
 		configureToolsPaneClosing()
 		if !inspector.isShowingTools || paneController.isReviewCollapsed
 		{
 			paneController.openToolsPane
 			{
-				inspector.openSourcesInToolTab(request)
+				_ = open()
 			}
 		}
 		else
 		{
-			inspector.openSourcesInToolTab(request)
+			_ = open()
 		}
 		updateToolsToolbarControls()
 	}

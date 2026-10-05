@@ -25,11 +25,13 @@ final class ToolsTabViewController: NSViewController
 	var onChangesSelectionChange: (() -> Void)?
 	var onChangesTabClosed: (() -> Void)?
 	var onSourcesTabClosed: (() -> Void)?
+	var onSubagentsTabClosed: (() -> Void)?
 	private(set) var tabCount = 0
 	private(set) var selectedTabID: UUID?
 	private(set) var isConversationSelected = false
 	private(set) var changesTabID: UUID?
 	private(set) var sourcesTabID: UUID?
+	private(set) var subagentsTabID: UUID?
 	var isChangesSelected: Bool
 	{
 		!isConversationSelected && selectedTabID == changesTabID && changesTabID != nil
@@ -38,7 +40,12 @@ final class ToolsTabViewController: NSViewController
 	{
 		!isConversationSelected && selectedTabID == sourcesTabID && sourcesTabID != nil
 	}
+	var isSubagentsSelected: Bool
+	{
+		!isConversationSelected && selectedTabID == subagentsTabID && subagentsTabID != nil
+	}
 	private var isExpanded = false
+	private var isContentVisible = true
 	private var conversationTitle = "New chat"
 	private var tabIDs: [UUID] = []
 	private let tabStack = NSStackView()
@@ -46,6 +53,7 @@ final class ToolsTabViewController: NSViewController
 	private var toolsContent: NSView?
 	private weak var changesController: NSViewController?
 	private weak var sourcesController: NSViewController?
+	private weak var subagentsController: NSViewController?
 	private let sourcesHoverPreview = SourcesTabHoverPreview()
 	private let tabScrollView = NSScrollView()
 	private lazy var tabBar = makeTabHeader()
@@ -128,43 +136,18 @@ final class ToolsTabViewController: NSViewController
 
 	func showChanges(_ controller: NSViewController)
 	{
-		guard let selectedTabID
+		guard selectedTabID != nil
 		else
 		{
 			return
 		}
-		let selectionChanged = isConversationSelected || isSourcesSelected ||
-			(changesTabID != nil &&
-				changesTabID != selectedTabID)
-		if let changesTabID, changesTabID != selectedTabID
-		{
-			self.selectedTabID = changesTabID
-		}
-		else if selectedTabID == sourcesTabID
-		{
-			let tabID = UUID()
-			tabIDs.append(tabID)
-			tabCount = tabIDs.count
-			self.selectedTabID = tabID
-			changesTabID = tabID
-		}
-		else
-		{
-			changesTabID = selectedTabID
-		}
-		isConversationSelected = false
+		let selectionChanged = !isChangesSelected
+		changesTabID = selectFeatureTab(changesTabID)
 		_ = view
-		if controller.parent !== self
-		{
-			controller.view.removeFromSuperview()
-			controller.removeFromParent()
-			addChild(controller)
-			AppKitLayout.pin(
-				controller.view,
-				to: contentHost,
-				inset: 0
-			)
-		}
+		installController(
+			controller,
+			replacing: changesController
+		)
 		changesController = controller
 		renderTabs()
 		if selectionChanged
@@ -187,39 +170,12 @@ final class ToolsTabViewController: NSViewController
 
 	func showSources(_ controller: NSViewController)
 	{
-		if let sourcesTabID
-		{
-			selectedTabID = sourcesTabID
-		}
-		else if !isConversationSelected, let selectedTabID, selectedTabID != changesTabID
-		{
-			sourcesTabID = selectedTabID
-		}
-		else
-		{
-			let tabID = UUID()
-			tabIDs.append(tabID)
-			tabCount = tabIDs.count
-			selectedTabID = tabID
-			sourcesTabID = tabID
-		}
-		isConversationSelected = false
+		sourcesTabID = selectFeatureTab(sourcesTabID)
 		_ = view
-		if let sourcesController, sourcesController !== controller
-		{
-			detachSources()
-		}
-		if controller.parent !== self
-		{
-			controller.view.removeFromSuperview()
-			controller.removeFromParent()
-			addChild(controller)
-			AppKitLayout.pin(
-				controller.view,
-				to: contentHost,
-				inset: 0
-			)
-		}
+		installController(
+			controller,
+			replacing: sourcesController
+		)
 		sourcesController = controller
 		renderTabs()
 		onTabSelectionChange?()
@@ -229,22 +185,108 @@ final class ToolsTabViewController: NSViewController
 	func detachSources()
 	{
 		sourcesHoverPreview.dismiss()
-		guard let sourcesController, sourcesController.parent === self
-		else
-		{
-			return
-		}
-		sourcesController.view.removeFromSuperview()
-		sourcesController.removeFromParent()
+		detachController(sourcesController)
 		showSelectedContent()
 	}
 
 	func removeSourcesTab()
 	{
-		guard let sourcesTabID, let index = tabIDs.firstIndex(of: sourcesTabID)
+		removeFeatureTab(sourcesTabID)
+	}
+
+	func showSubagents(_ controller: NSViewController)
+	{
+		subagentsTabID = selectFeatureTab(subagentsTabID)
+		_ = view
+		installController(
+			controller,
+			replacing: subagentsController
+		)
+		subagentsController = controller
+		renderTabs()
+		onTabSelectionChange?()
+		onChangesSelectionChange?()
+	}
+
+	func detachSubagents()
+	{
+		detachController(subagentsController)
+		showSelectedContent()
+	}
+
+	func removeSubagentsTab()
+	{
+		removeFeatureTab(subagentsTabID)
+	}
+
+	private func selectFeatureTab(_ existingTabID: UUID?) -> UUID
+	{
+		let occupiedTabIDs = [changesTabID, sourcesTabID, subagentsTabID].compactMap
+		{
+			$0
+		}
+		let tabID: UUID
+		if let existingTabID
+		{
+			tabID = existingTabID
+		}
+		else if !isConversationSelected, let selectedTabID,
+				!occupiedTabIDs.contains(selectedTabID)
+		{
+			tabID = selectedTabID
+		}
 		else
 		{
-			detachSources()
+			tabID = UUID()
+			tabIDs.append(tabID)
+			tabCount = tabIDs.count
+		}
+		selectedTabID = tabID
+		isConversationSelected = false
+		return tabID
+	}
+
+	private func installController(
+		_ controller: NSViewController,
+		replacing previousController: NSViewController?
+	)
+	{
+		if previousController !== controller
+		{
+			detachController(previousController)
+		}
+		guard controller.parent !== self
+		else
+		{
+			return
+		}
+		controller.view.removeFromSuperview()
+		controller.removeFromParent()
+		addChild(controller)
+		AppKitLayout.pin(
+			controller.view,
+			to: contentHost,
+			inset: 0
+		)
+	}
+
+	private func detachController(_ controller: NSViewController?)
+	{
+		guard let controller, controller.parent === self
+		else
+		{
+			return
+		}
+		(controller as? SubagentsViewController)?.setPresentationVisible(false)
+		controller.view.removeFromSuperview()
+		controller.removeFromParent()
+	}
+
+	private func removeFeatureTab(_ tabID: UUID?)
+	{
+		guard let tabID, let index = tabIDs.firstIndex(of: tabID)
+		else
+		{
 			return
 		}
 		removeTab(at: index)
@@ -253,7 +295,7 @@ final class ToolsTabViewController: NSViewController
 	func openNewTab()
 	{
 		let wasShowingConversation = isConversationSelected
-		let wasShowingSources = isSourcesSelected
+		let wasShowingFeature = isSourcesSelected || isSubagentsSelected
 		isConversationSelected = false
 		let tabID = UUID()
 		tabIDs.append(tabID)
@@ -263,7 +305,7 @@ final class ToolsTabViewController: NSViewController
 		_ = view
 		renderTabs()
 		onChangesSelectionChange?()
-		if wasShowingConversation || wasShowingSources
+		if wasShowingConversation || wasShowingFeature
 		{
 			onTabSelectionChange?()
 		}
@@ -310,6 +352,12 @@ final class ToolsTabViewController: NSViewController
 	{
 		summaryButton.state = visible ? .on : .off
 		summaryButton.setAccessibilityValue(visible ? "Visible" : "Hidden")
+	}
+
+	func setContentVisible(_ visible: Bool)
+	{
+		isContentVisible = visible
+		showSelectedContent()
 	}
 
 	private func configureSummaryButton()
@@ -537,11 +585,19 @@ final class ToolsTabViewController: NSViewController
 
 	private func showSelectedContent()
 	{
-		toolsContent?.isHidden = isChangesSelected || isSourcesSelected || isConversationSelected
+		toolsContent?.isHidden = isChangesSelected || isSourcesSelected ||
+			isSubagentsSelected || isConversationSelected
 		if let changesController, changesController.parent === self
 		{
 			changesController.view.isHidden = !isChangesSelected
 		}
+		if let subagentsController, subagentsController.parent === self
+		{
+			subagentsController.view.isHidden = !isSubagentsSelected
+			(subagentsController as? SubagentsViewController)?
+				.setPresentationVisible(isContentVisible && isSubagentsSelected)
+		}
+
 		if let sourcesController, sourcesController.parent === self
 		{
 			sourcesController.view.isHidden = !isSourcesSelected
@@ -599,7 +655,9 @@ final class ToolsTabViewController: NSViewController
 	{
 		let isChanges = id == changesTabID
 		let isSources = id == sourcesTabID
-		let title = isChanges ? "Changes" : isSources ? "Sources" : "New tab"
+		let isSubagents = id == subagentsTabID
+		let title = isChanges ? "Changes" :
+			isSources ? "Sources" : isSubagents ? "Subagents" : "New tab"
 		let selectButton = NSButton(
 			title: title,
 			target: self,
@@ -626,6 +684,15 @@ final class ToolsTabViewController: NSViewController
 			)
 			selectButton.imagePosition = .imageLeading
 		}
+		else if isSubagents
+		{
+			selectButton.image = NSImage(
+				systemSymbolName: "person.2",
+				accessibilityDescription: "Subagents"
+			)
+			selectButton.imagePosition = .imageLeading
+		}
+
 		selectButton.font = .systemFont(ofSize: 13)
 		selectButton.tag = index
 		selectButton.setAccessibilityLabel("\(title) \(index + 1)")
@@ -812,6 +879,13 @@ final class ToolsTabViewController: NSViewController
 			sourcesTabID = nil
 			detachSources()
 		}
+		let removedSubagents = removedTabID == subagentsTabID
+		if removedSubagents
+		{
+			subagentsTabID = nil
+			detachSubagents()
+		}
+
 		if removedTabID == changesTabID
 		{
 			changesTabID = nil
@@ -830,6 +904,11 @@ final class ToolsTabViewController: NSViewController
 		{
 			onSourcesTabClosed?()
 		}
+		if removedSubagents
+		{
+			onSubagentsTabClosed?()
+		}
+
 		onChangesSelectionChange?()
 		if tabIDs.isEmpty
 		{

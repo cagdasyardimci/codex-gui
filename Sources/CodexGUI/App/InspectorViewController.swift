@@ -25,6 +25,7 @@ final class InspectorViewController: NSViewController
 	let changes = ChangesViewController()
 	let summary = PinnedSummaryViewController()
 	var conversationSources: ConversationSourcesViewController?
+	var conversationSubagents: SubagentsViewController?
 	let toolsTabs = ToolsTabViewController()
 	private(set) var isShowingTools = false
 	private var isShowingExpandedConversation = false
@@ -94,6 +95,7 @@ final class InspectorViewController: NSViewController
 			inset: 0
 		)
 		toolsTabs.view.isHidden = true
+		toolsTabs.setContentVisible(false)
 	}
 
 	private func configureToolsPaneCallbacks()
@@ -210,6 +212,7 @@ final class InspectorViewController: NSViewController
 		if ownerChanged
 		{
 			toolsTabs.removeSourcesTab()
+			toolsTabs.removeSubagentsTab()
 		}
 		summaryVisible = visible
 		summary.render(presentation)
@@ -398,6 +401,31 @@ final class InspectorViewController: NSViewController
 		{
 			return false
 		}
+		prepareToolTabOpening()
+		toolsTabs.showSources(controller)
+		controller.select(request)
+		updateContentVisibility()
+		return true
+	}
+
+	@discardableResult
+	func openSubagentsInToolTab(_ request: ContextPanelRequest) -> Bool
+	{
+		guard request.destination == .subagents, request.owner == renderedOwner,
+				let controller = conversationSubagents, controller.owner == request.owner,
+				request.recordID == nil
+		else
+		{
+			return false
+		}
+		prepareToolTabOpening()
+		toolsTabs.showSubagents(controller)
+		updateContentVisibility()
+		return true
+	}
+
+	private func prepareToolTabOpening()
+	{
 		_ = view
 		cancelSummaryTransition()
 		if gitChanges.runtime.state.isOpen, toolsTabs.changesTabID == nil
@@ -407,10 +435,6 @@ final class InspectorViewController: NSViewController
 		isShowingTools = true
 		isShowingDetails = false
 		setGitReviewFocused(false)
-		toolsTabs.showSources(controller)
-		controller.select(request)
-		updateContentVisibility()
-		return true
 	}
 
 	private func attachGitChangesToSelectedToolTab()
@@ -513,6 +537,7 @@ final class InspectorViewController: NSViewController
 		let showSummary = !isShowingTools ? summaryVisible : isSummaryBesideExpandedConversation
 		inspectorBox?.isHidden = !showDetails && !showSummary
 		toolsTabs.view.isHidden = !isShowingTools || isShowingExpandedConversation
+		toolsTabs.setContentVisible(!toolsTabs.view.isHidden)
 
 		let fullBleedChanges = showDetails && [.changes, .sources].contains(panels.destination)
 		inspectorBox?.isSummaryCard = !showDetails

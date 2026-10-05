@@ -17,12 +17,14 @@ struct PinnedSummaryPresentation: Equatable
 	let contextName: String
 	let sections: ContextSummarySections
 	let sourcePreviewLimit: Int
+	let agentPreviews: [CodexSubagentActivity]
 
 	init(
 		_ snapshot: ConversationSnapshot,
 		ownerIdentity: String? = nil,
 		sections: ContextSummarySections = ContextSummarySections(),
-		sourcePreviewLimit: Int = 3
+		sourcePreviewLimit: Int = 3,
+		agentPreviews: [CodexSubagentActivity] = []
 	)
 	{
 		owner = FeaturePresentationOwner(
@@ -33,6 +35,7 @@ struct PinnedSummaryPresentation: Equatable
 		{
 			snapshot.projectDisplayNames[$0] ?? URL(fileURLWithPath: $0).lastPathComponent
 		} ?? "Workspace unavailable"
+		self.agentPreviews = snapshot.projectPath == nil ? [] : agentPreviews
 		var scopedSections = sections
 		if snapshot.projectPath == nil
 		{

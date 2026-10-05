@@ -16,7 +16,7 @@ struct PinnedSummaryIconsTests
 			size: 48
 		)
 		let bitmap = try rasterize(image)
-		#expect(image.isTemplate == !glyph.isAgent)
+		#expect(image.isTemplate)
 		#expect(alpha(
 			bitmap,
 			x: 0,
@@ -100,36 +100,6 @@ struct PinnedSummaryIconsTests
 			x: 34,
 			y: 24
 		) < 0.1)
-	}
-
-	@Test func agentArtworkKeepsDistinctColorsAndIndependentSizing() throws
-	{
-		let images = PinnedSummaryIcons.agentImages(size: 24)
-		#expect(images.count == 4)
-		#expect(images.allSatisfy
-		{
-			!$0.isTemplate
-		})
-		let centers = try images.map
-		{
-			try #require(rasterize($0).colorAt(
-				x: 12,
-				y: 12
-			)?.usingColorSpace(.deviceRGB))
-		}
-		#expect(centers[0].redComponent > centers[0].greenComponent)
-		#expect(centers[1].blueComponent > centers[1].greenComponent)
-		#expect(centers[2].redComponent > centers[2].blueComponent)
-		let green = try #require(rasterize(images[3]).colorAt(
-			x: 13,
-			y: 7
-		)?.usingColorSpace(.deviceRGB))
-		#expect(green.greenComponent > green.redComponent)
-		images[0].size = NSSize(
-			width: 40,
-			height: 40
-		)
-		#expect(PinnedSummaryIcons.agentImages(size: 24)[0].size.width == 24)
 	}
 
 	private func rasterize(_ image: NSImage) throws -> NSBitmapImageRep

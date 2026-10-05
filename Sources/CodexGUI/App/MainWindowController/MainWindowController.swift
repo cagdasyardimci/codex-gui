@@ -39,6 +39,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	var summaryChangesProvider: ((FeaturePresentationOwner) -> SummarySection<SummaryChangeTotals>)?
 	var summaryVisibility = PinnedSummaryVisibility()
 	var summaryReconciliation = ContextSummaryReconciliation()
+	var subagentConversationSession: SubagentConversationSession?
 	let summaryToggleButton = PinnedSummaryToggleButton(
 		title: "",
 		target: nil,
@@ -316,6 +317,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 
 	@objc private func windowDidClose()
 	{
+		subagentConversationSession?.invalidate()
+		subagentConversationSession = nil
 		inspector.setGitReviewFocused(false)
 		inspector.gitChanges.close()
 		summaryGitLoader.cancel()
