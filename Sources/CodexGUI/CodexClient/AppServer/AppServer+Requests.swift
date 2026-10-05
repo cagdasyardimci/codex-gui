@@ -170,6 +170,18 @@ extension AppServer
 		name: String
 	) async throws
 	{
+		cancelAutomaticTitle(for: id)
+		try await sendThreadName(
+			id: id,
+			name: name
+		)
+	}
+
+	func sendThreadName(
+		id: String,
+		name: String
+	) async throws
+	{
 		_ = try await request(
 			"thread/name/set",
 			params: ["threadId": id, "name": name]
@@ -178,6 +190,7 @@ extension AppServer
 
 	func deleteThread(id: String) async throws
 	{
+		cancelAutomaticTitle(for: id)
 		_ = try await request(
 			"thread/delete",
 			params: ["threadId": id]
@@ -222,6 +235,7 @@ extension AppServer
 		{
 			throw AppServerError.protocolError("Codex returned an invalid new conversation.")
 		}
+		untitledThreadIDs.insert(summary.id)
 		return ThreadDetail(
 			summary: summary,
 			turns: [],
@@ -476,6 +490,14 @@ extension AppServer
 		else
 		{
 			throw AppServerError.protocolError("Codex did not return a turn ID.")
+		}
+		if untitledThreadIDs.remove(threadId) != nil
+		{
+			startAutomaticTitle(
+				for: threadId,
+				inputs: inputs,
+				model: model
+			)
 		}
 		return parsed
 	}

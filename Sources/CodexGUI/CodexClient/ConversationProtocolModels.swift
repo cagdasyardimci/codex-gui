@@ -4,8 +4,8 @@ import Foundation
 struct ThreadSummary: Equatable
 {
 	let id: String
-	let name: String?
-	let preview: String?
+	var name: String?
+	var preview: String?
 	let cwd: String
 	let updatedAt: Date?
 	let status: String

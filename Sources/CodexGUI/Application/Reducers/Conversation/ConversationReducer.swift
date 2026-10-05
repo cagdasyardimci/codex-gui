@@ -329,6 +329,7 @@ enum ConversationReducer
 			{
 				return
 			}
+			model.conversations.observedThreadNames.removeAll()
 			model.conversations.pendingList = operation
 			result.effects.append(.readConversationList(operation))
 		case .threadListReceived(
@@ -350,7 +351,24 @@ enum ConversationReducer
 			model.conversations.pendingList = nil
 			switch observation
 			{
-			case .succeeded(let threads): model.conversations.threads = threads
+			case .succeeded(let threads):
+				model.conversations.threads = threads.map
+				{
+					var thread = $0
+					if thread.preview?.isEmpty != false
+					{
+						thread.preview = model.conversations.threads
+							.first(where:
+								{
+									$0.id == thread.id
+								})?.preview
+					}
+					if let name = model.conversations.observedThreadNames[thread.id]
+					{
+						thread.name = name
+					}
+					return thread
+				}
 				model.conversations.error = nil
 				result.domainEvents.append(.conversationContentChanged)
 				result.domainEvents.append(.conversationListAccepted(operation))
@@ -734,6 +752,7 @@ enum ConversationReducer
 		switch event
 		{
 		case .connectionBegan, .connectionDisconnected:
+			model.conversations.observedThreadNames.removeAll()
 			model.conversations.pendingReads.removeAll()
 			model.conversations.historyLoads.removeAll()
 			model.conversations.pendingTurnReads.removeAll()
@@ -793,8 +812,13 @@ enum ConversationReducer
 				{
 					$0.id == prepared.thread.summary.id
 				}
+				var summary = prepared.thread.summary
+				if summary.preview?.isEmpty != false
+				{
+					summary.preview = ThreadTitleText.placeholder(prepared.submission.draft.text)
+				}
 				model.conversations.threads.insert(
-					prepared.thread.summary,
+					summary,
 					at: 0
 				)
 				if model.conversations.selectedConversation == key
@@ -820,6 +844,21 @@ enum ConversationReducer
 		):
 			switch event
 			{
+			case .threadNameUpdated(
+				let threadID,
+				let name
+			):
+				model.conversations.observedThreadNames.updateValue(
+					name,
+					forKey: threadID
+				)
+				if let index = model.conversations.threads.firstIndex(where:
+					{
+						$0.id == threadID
+					})
+				{
+					model.conversations.threads[index].name = name
+				}
 			case .turnStarted(
 				let threadID,
 				_

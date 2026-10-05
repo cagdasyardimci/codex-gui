@@ -49,6 +49,10 @@ enum AppServerEvent
 		turnId: String,
 		usage: ThreadTokenUsage
 	)
+	case threadNameUpdated(
+		threadId: String,
+		name: String?
+	)
 	case threadSettingsUpdated(
 		threadId: String,
 		settings: ThreadSettings

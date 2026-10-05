@@ -344,6 +344,8 @@ enum ThreadManagementOperation
 struct ConversationsModel
 {
 	var threads: [ThreadSummary] = []
+	/// Notifications remain authoritative over an already pending list response.
+	var observedThreadNames: [String: String?] = [:]
 	var selectedConversation: ConversationKey = .newChat
 	var content: [ConversationKey: ConversationContentModel] = [:]
 	var contentRevisions: [String: Int] = [:]

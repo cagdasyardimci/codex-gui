@@ -420,6 +420,10 @@ struct AppServerWorkspaceIsolationTests
 		    if method == 'initialize':
 		        result = {}
 		    elif method == 'thread/start':
+		        if params.get('ephemeral'):
+		            send({'id': request_id, 'error': {'code': -32000,
+		                  'message': 'Title generation unavailable in isolation fixture'}})
+		            continue
 		        cwd = params['cwd']
 		        cwd_file.write_text(json.dumps(cwd))
 		        result = {'thread': {'id': 'shared-thread', 'cwd': cwd}, 'cwd': cwd}

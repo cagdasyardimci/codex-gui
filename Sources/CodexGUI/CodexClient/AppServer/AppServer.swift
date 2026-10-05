@@ -5,6 +5,10 @@ import Foundation
 @MainActor
 final class AppServer: CodexService
 {
+	var untitledThreadIDs = Set<String>()
+	var automaticTitleJobs: [String: Task<Void, Never>] = [:]
+	var revokedAutomaticTitles = Set<String>()
+	var automaticTitleSessions: [String: AutomaticTitleSession] = [:]
 	let executableOverride: URL?
 	private let requestTimeout: Duration
 	let versionCheckTimeout: DispatchTimeInterval
@@ -670,6 +674,14 @@ final class AppServer: CodexService
 	func disconnect()
 	{
 		connectionGeneration = UUID()
+		for job in automaticTitleJobs.values
+		{
+			job.cancel()
+		}
+		automaticTitleJobs.removeAll()
+		revokedAutomaticTitles.removeAll()
+		automaticTitleSessions.removeAll()
+		untitledThreadIDs.removeAll()
 		stopProcessTransport()
 
 		interactions.removeAll()

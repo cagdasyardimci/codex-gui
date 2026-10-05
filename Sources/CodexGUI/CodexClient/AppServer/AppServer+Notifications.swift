@@ -9,9 +9,26 @@ extension AppServer
 	)
 	{
 		let threadID = parameters["threadId"] as? String ?? ""
+		if receiveAutomaticTitleNotification(
+			method: method,
+			parameters: parameters
+		)
+		{
+			return
+		}
 		let turnID = parameters["turnId"] as? String ?? ""
 		switch method
 		{
+		case "thread/name/updated":
+			guard !threadID.isEmpty
+			else
+			{
+				return
+			}
+			onEvent?(.threadNameUpdated(
+				threadId: threadID,
+				name: parameters["threadName"] as? String
+			))
 		case "thread/tokenUsage/updated":
 			guard !threadID.isEmpty, !turnID.isEmpty,
 					let rawUsage = parameters["tokenUsage"] as? [String: Any],
