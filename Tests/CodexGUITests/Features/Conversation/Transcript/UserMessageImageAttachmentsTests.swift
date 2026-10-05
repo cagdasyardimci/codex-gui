@@ -265,6 +265,146 @@ struct UserMessageImageAttachmentsTests
 		})
 	}
 
+	@Test func protocolInlineImagesReachTheTranscriptAndFinishLoading() async throws
+	{
+		_ = NSApplication.shared
+		let path = "data:image/png;base64," + (try inlinePNG()).base64EncodedString()
+		let item = try #require(CodexItem(json: [
+			"id": "user",
+			"type": "userMessage",
+			"content": [
+				["type": "text", "text": "Read this image."],
+				["type": "image", "url": path],
+			],
+		]))
+		let entry = ConversationContentReducer.entry(
+			for: item,
+			id: "turn:user"
+		)
+		#expect(entry.body == "Read this image.")
+		#expect(entry.imageAttachments.map(\.path) == [path])
+		let strip = UserMessageImageAttachmentsView()
+		strip.configure(entry.imageAttachments)
+		let button = try #require(strip.subviews.first as? NSButton)
+		await strip.waitForImages()
+		#expect(button.isEnabled)
+		#expect(button.accessibilityLabel() == "Open attached image: Attached image")
+		#expect(button.accessibilityHelp() == "Inline image")
+		#expect(!button.subviews.contains
+		{
+			$0 is NSProgressIndicator
+		})
+	}
+
+	@Test func inlineImagesOpenInANativePanelAndReuseOrDetachDismissesIt() async throws
+	{
+		_ = NSApplication.shared
+		let reference = try #require(UserMessageReference(
+			json: [
+				"type": "image",
+				"url": "data:image/png;base64," + (try inlinePNG()).base64EncodedString(),
+			],
+			id: "inline"
+		))
+		let strip = UserMessageImageAttachmentsView()
+		let parent = NSWindow(
+			contentRect: NSRect(
+				x: 100,
+				y: 100,
+				width: 600,
+				height: 400
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		parent.isReleasedWhenClosed = false
+		parent.contentView = strip
+		defer
+		{
+			strip.configure([])
+			parent.orderOut(nil)
+		}
+		strip.configure([reference])
+		await strip.waitForImages()
+		let button = try #require(strip.subviews.first as? NSButton)
+		button.performClick(nil)
+		await strip.waitForInlinePreview()
+		let preview = try #require(parent.childWindows?.first)
+		#expect(preview.accessibilityIdentifier() == "inline-image-preview")
+		#expect(preview.title == "Attached image")
+		let previewContent = try #require(preview.contentView)
+		let imageView = try #require(descendants(previewContent).compactMap
+		{
+			$0 as? NSImageView
+		}.first)
+		#expect(imageView.image != nil)
+		strip.configure([])
+		#expect(parent.childWindows?.isEmpty != false)
+		#expect(!preview.isVisible)
+		#expect(button.target == nil && button.action == nil)
+
+		strip.configure([reference])
+		await strip.waitForImages()
+		let current = try #require(strip.subviews.first as? NSButton)
+		current.performClick(nil)
+		await strip.waitForInlinePreview()
+		let reopened = try #require(parent.childWindows?.first)
+		parent.contentView = NSView()
+		#expect(parent.childWindows?.isEmpty != false)
+		#expect(!reopened.isVisible)
+	}
+
+	@Test func unavailableInlineImagesClearProgressAndEarlierResultsCannotReplaceReuse(
+	) async throws
+	{
+		let first = try #require(UserMessageReference(
+			json: [
+				"type": "image",
+				"url": "data:image/png;base64," + (try inlinePNG()).base64EncodedString(),
+			],
+			id: "first"
+		))
+		let invalid = try #require(UserMessageReference(
+			json: ["type": "image", "url": "data:image/png;base64,%%%"],
+			id: "invalid"
+		))
+		let strip = UserMessageImageAttachmentsView()
+		strip.configure([first])
+		let detached = try #require(strip.subviews.first as? NSButton)
+		strip.configure([invalid])
+		await strip.waitForImages()
+		let button = try #require(strip.subviews.first as? NSButton)
+		#expect(button !== detached)
+		#expect(detached.target == nil && detached.action == nil)
+		#expect(button.accessibilityLabel() == "Image unavailable: Attached image")
+		#expect(!button.isEnabled)
+		#expect(!button.subviews.contains
+		{
+			$0 is NSProgressIndicator
+		})
+	}
+
+	private func inlinePNG() throws -> Data
+	{
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 8,
+			pixelsHigh: 6,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		return try #require(bitmap.representation(
+			using: .png,
+			properties: [:]
+		))
+	}
+
 	private func descendants(_ view: NSView) -> [NSView]
 	{
 		[view] + view.subviews.flatMap

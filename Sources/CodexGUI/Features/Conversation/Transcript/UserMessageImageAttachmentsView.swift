@@ -1,5 +1,4 @@
 import AppKit
-import ImageIO
 
 @MainActor
 final class UserMessageImageAttachmentsView: NSView
@@ -10,7 +9,24 @@ final class UserMessageImageAttachmentsView: NSView
 	private var references: [UserMessageReference] = []
 	private var imageTasks: [Task<Void, Never>] = []
 	private var generation = 0
-	private static let imageCache = NSCache<NSString, NSImage>()
+	private let inlinePreview = UserMessageInlineImagePreview()
+
+	deinit
+	{
+		for task in imageTasks
+		{
+			task.cancel()
+		}
+	}
+
+	override func viewWillMove(toWindow newWindow: NSWindow?)
+	{
+		if newWindow == nil
+		{
+			inlinePreview.dismiss()
+		}
+		super.viewWillMove(toWindow: newWindow)
+	}
 
 	override var isFlipped: Bool
 	{
@@ -59,6 +75,7 @@ final class UserMessageImageAttachmentsView: NSView
 		}
 		generation += 1
 		let generation = generation
+		inlinePreview.dismiss()
 		imageTasks.forEach
 		{
 			$0.cancel()
@@ -86,21 +103,17 @@ final class UserMessageImageAttachmentsView: NSView
 			button.setAccessibilityLabel("Loading attached image: \(reference.name)")
 			button.isEnabled = false
 			button.beginLoading()
-			button.setAccessibilityHelp(reference.path)
+			button.setAccessibilityHelp(InlineImageData.isDataURL(reference.path)
+				? "Inline image" : reference.path)
 			addSubview(button)
 			buttons.append(button)
-			if let cached = Self.imageCache.object(forKey: reference.path as NSString)
-			{
-				button.preview = cached
-				button.isEnabled = true
-				button.setAccessibilityLabel("Open attached image: \(reference.name)")
-				continue
-			}
 			let task = Task
 			{
 				[weak self, weak button] in
-				let thumbnail = await UserMessageImageThumbnailLoader.shared
-					.load(path: reference.path)
+				let thumbnail = await SourceThumbnailLoader.image(
+					path: reference.path,
+					maximumPixelSize: 320
+				)
 				guard !Task.isCancelled, let self, self.generation == generation, let button
 				else
 				{
@@ -121,13 +134,6 @@ final class UserMessageImageAttachmentsView: NSView
 						height: thumbnail.image.height
 					)
 				)
-				Self.imageCache.countLimit = 64
-				Self.imageCache.totalCostLimit = 16 * 1024 * 1024
-				Self.imageCache.setObject(
-					image,
-					forKey: reference.path as NSString,
-					cost: thumbnail.image.bytesPerRow * thumbnail.image.height
-				)
 				button.preview = image
 				button.isEnabled = true
 				button.setAccessibilityLabel("Open attached image: \(reference.name)")
@@ -143,6 +149,11 @@ final class UserMessageImageAttachmentsView: NSView
 		{
 			await task.value
 		}
+	}
+
+	func waitForInlinePreview() async
+	{
+		await inlinePreview.waitForPresentation()
 	}
 
 	override func layout()
@@ -182,7 +193,21 @@ final class UserMessageImageAttachmentsView: NSView
 		{
 			return
 		}
-		guard let url = LocalAttachmentURL.resolve(references[sender.tag].path),
+		let reference = references[sender.tag]
+		if InlineImageData.isDataURL(reference.path)
+		{
+			guard let window, sender.isEnabled
+			else
+			{
+				return
+			}
+			inlinePreview.present(
+				reference,
+				in: window
+			)
+			return
+		}
+		guard let url = LocalAttachmentURL.resolve(reference.path),
 				FileManager.default.isReadableFile(atPath: url.path)
 		else
 		{
@@ -306,78 +331,5 @@ private final class UserMessageImageButton: NSButton
 		outline.lineWidth = 1
 		outline.stroke()
 		NSGraphicsContext.restoreGraphicsState()
-	}
-}
-
-private final class UserMessageImageThumbnail: @unchecked Sendable
-{
-	let image: CGImage
-
-	init(image: CGImage)
-	{
-		self.image = image
-	}
-
-	static func load(path: String) -> Self?
-	{
-		guard !Task.isCancelled, let url = LocalAttachmentURL.resolve(path)
-		else
-		{
-			return nil
-		}
-		guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
-				values.isRegularFile == true, let size = values.fileSize, size <= 32 * 1024 * 1024,
-				let source = CGImageSourceCreateWithURL(
-				url as CFURL,
-				[kCGImageSourceShouldCache: false] as CFDictionary
-				),
-				let image = CGImageSourceCreateThumbnailAtIndex(
-				source,
-				0,
-				[
-					kCGImageSourceCreateThumbnailFromImageAlways: true,
-					kCGImageSourceThumbnailMaxPixelSize: 320,
-					kCGImageSourceCreateThumbnailWithTransform: true,
-					kCGImageSourceShouldCacheImmediately: false,
-				] as CFDictionary
-				)
-		else
-		{
-			return nil
-		}
-		return Self(image: image)
-	}
-}
-
-/// Serial image decoding keeps histories with many attachments off the main actor.
-private actor UserMessageImageThumbnailLoader
-{
-	static let shared = UserMessageImageThumbnailLoader()
-	private let cache = NSCache<NSString, UserMessageImageThumbnail>()
-
-	func load(path: String) -> UserMessageImageThumbnail?
-	{
-		guard !Task.isCancelled
-		else
-		{
-			return nil
-		}
-		if let cached = cache.object(forKey: path as NSString)
-		{
-			return cached
-		}
-		guard let thumbnail = UserMessageImageThumbnail.load(path: path)
-		else
-		{
-			return nil
-		}
-		cache.countLimit = 64
-		cache.totalCostLimit = 16 * 1024 * 1024
-		cache.setObject(
-			thumbnail,
-			forKey: path as NSString,
-			cost: thumbnail.image.bytesPerRow * thumbnail.image.height
-		)
-		return thumbnail
 	}
 }
