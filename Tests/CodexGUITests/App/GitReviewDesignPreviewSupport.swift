@@ -24,7 +24,7 @@ struct GitReviewDesignPreviewSupport
 		{
 			controller.close()
 		}
-		let snapshot = try await waitForComparison(
+		let snapshot = try await waitForGitReviewComparison(
 			controller,
 			owner: presentation.owner
 		)
@@ -127,7 +127,7 @@ struct GitReviewDesignPreviewSupport
 			"scope-uncommitted.png"
 		)
 		controller.runtime.selectScope(.branch)
-		_ = try await waitForComparison(
+		_ = try await waitForGitReviewComparison(
 			controller,
 			owner: presentation.owner
 		)
@@ -136,13 +136,13 @@ struct GitReviewDesignPreviewSupport
 			"scope-branch.png"
 		)
 		controller.runtime.selectScope(.uncommitted)
-		_ = try await waitForComparison(
+		_ = try await waitForGitReviewComparison(
 			controller,
 			owner: presentation.owner
 		)
 		controller.close()
 		controller.activate(owner: presentation.owner)
-		_ = try await waitForComparison(
+		_ = try await waitForGitReviewComparison(
 			controller,
 			owner: presentation.owner
 		)
@@ -207,7 +207,7 @@ struct GitReviewDesignPreviewSupport
 			controller.close()
 			window.close()
 		}
-		_ = try await waitForComparison(
+		_ = try await waitForGitReviewComparison(
 			controller,
 			owner: presentation.owner
 		)
@@ -314,25 +314,6 @@ struct GitReviewDesignPreviewSupport
 			"changes-full-width-host.png"
 		)
 		inspector.showSummary()
-	}
-
-	private func waitForComparison(
-		_ controller: GitChangesViewController,
-		owner: FeaturePresentationOwner
-	) async throws -> GitComparisonSnapshot
-	{
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.pendingRequest == nil,
-				controller.runtime.state.snapshot != nil,
-				controller.runtime.state.owner == owner
-			{
-				break
-			}
-			await Task.yield()
-		}
-		controller.view.layoutSubtreeIfNeeded()
-		return try #require(controller.runtime.state.snapshot)
 	}
 
 	private func button(

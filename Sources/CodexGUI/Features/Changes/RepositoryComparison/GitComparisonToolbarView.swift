@@ -95,7 +95,7 @@ final class GitComparisonToolbarView: NSStackView
 		scopeButton.image = NSImage(
 			systemSymbolName: "chevron.down",
 			accessibilityDescription: nil
-		)?.withSymbolConfiguration(.init(
+		)?.withSymbolConfiguration(NSImage.SymbolConfiguration(
 			pointSize: 11,
 			weight: .regular
 		))
@@ -107,7 +107,7 @@ final class GitComparisonToolbarView: NSStackView
 		{
 			count.font = .systemFont(ofSize: 14)
 		}
-		let scope = pill(AppKitLayout.horizontalStack(
+		let scope = GitReviewControls.pill(AppKitLayout.horizontalStack(
 			[scopeButton, additionsLabel, deletionsLabel],
 			spacing: 6
 		))
@@ -156,7 +156,7 @@ final class GitComparisonToolbarView: NSStackView
 			),
 			action: actions.revisionMenu
 		)
-		let refs = pill(
+		let refs = GitReviewControls.pill(
 			AppKitLayout.horizontalStack(
 				[baseField, arrow, targetField, revisionMenu],
 				spacing: 8
@@ -218,7 +218,7 @@ final class GitComparisonToolbarView: NSStackView
 			action: actions.navigator
 		)
 		navigatorToggle = toggle
-		let tools = pill(
+		let tools = GitReviewControls.pill(
 			AppKitLayout.horizontalStack(
 				[optionsButton,
 					search,
@@ -267,40 +267,6 @@ final class GitComparisonToolbarView: NSStackView
 		targetRevisionWidth?.constant = shouldUseCompactRevisions
 			? Layout.compactTargetRevisionWidth : Layout.targetRevisionWidth
 		return shouldUseCompactRevisions
-	}
-
-	private func pill(
-		_ content: NSView,
-		radius: CGFloat = 20,
-		horizontalInset: CGFloat = 10,
-		verticalInset: CGFloat = 10
-	) -> NSView
-	{
-		let surface = DesktopSurface(
-			DesktopTheme.elevated,
-			cornerRadius: radius
-		)
-		surface.addSubview(content)
-		content.translatesAutoresizingMaskIntoConstraints = false
-		NSLayoutConstraint.activate([
-			content.leadingAnchor.constraint(
-				equalTo: surface.leadingAnchor,
-				constant: horizontalInset
-			),
-			content.trailingAnchor.constraint(
-				equalTo: surface.trailingAnchor,
-				constant: -horizontalInset
-			),
-			content.topAnchor.constraint(
-				equalTo: surface.topAnchor,
-				constant: verticalInset
-			),
-			content.bottomAnchor.constraint(
-				equalTo: surface.bottomAnchor,
-				constant: -verticalInset
-			),
-		])
-		return surface
 	}
 
 	private func referenceButton(

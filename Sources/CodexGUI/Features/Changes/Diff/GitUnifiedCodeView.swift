@@ -238,22 +238,19 @@ final class GitUnifiedCodeView: NSView
 		if let container = source.textContainer, let manager = source.layoutManager
 		{
 			source.updateVisualRowRects()
-			let usedHeight = ceil(max(
-				manager.usedRect(for: container).maxY,
-				source.visualRowRects.last?.maxY ?? 0
-			)) + 2
+			let heights = measuredSourceHeights(
+				container: container,
+				manager: manager
+			)
 			source.setFrameSize(NSSize(
 				width: width,
 				height: max(
 					1,
-					usedHeight
+					heights.used
 				)
 			))
 			scroll.verticalRulerView?.needsDisplay = true
-			updateNaturalHeight(max(
-				16,
-				usedHeight + 14
-			))
+			updateNaturalHeight(heights.natural)
 		}
 	}
 
@@ -280,13 +277,13 @@ final class GitUnifiedCodeView: NSView
 		source.updateVisualRowRects()
 		if let container = source.textContainer, let manager = source.layoutManager
 		{
-			let usedHeight = ceil(max(
-				manager.usedRect(for: container).maxY,
-				source.visualRowRects.last?.maxY ?? 0
-			)) + 2
+			let heights = measuredSourceHeights(
+				container: container,
+				manager: manager
+			)
 			let documentHeight = max(
 				geometry.documentSize.height,
-				usedHeight
+				heights.used
 			)
 			if source.frame.height != documentHeight
 			{
@@ -295,12 +292,27 @@ final class GitUnifiedCodeView: NSView
 					height: documentHeight
 				))
 			}
-			updateNaturalHeight(max(
-				16,
-				usedHeight + 14
-			))
+			updateNaturalHeight(heights.natural)
 		}
 		scroll.verticalRulerView?.needsDisplay = true
+	}
+
+	private func measuredSourceHeights(
+		container: NSTextContainer,
+		manager: NSLayoutManager
+	) -> (used: CGFloat, natural: CGFloat)
+	{
+		let usedHeight = ceil(max(
+			manager.usedRect(for: container).maxY,
+			source.visualRowRects.last?.maxY ?? 0
+		)) + 2
+		return (
+			used: usedHeight,
+			natural: max(
+				16,
+				usedHeight + 14
+			)
+		)
 	}
 
 	private func render()

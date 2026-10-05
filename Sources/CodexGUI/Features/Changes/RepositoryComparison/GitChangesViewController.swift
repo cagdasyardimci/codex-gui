@@ -337,7 +337,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			image: DesktopIcons.image(.xXsCrossed),
 			action: #selector(closePanel)
 		)
-		let tab = pill(
+		let tab = GitReviewControls.pill(
 			AppKitLayout.horizontalStack(
 				[titleIcon, title, GitReviewControls.spacer(), close],
 				spacing: 8
@@ -472,7 +472,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			[icon, largeComparisonLabel, GitReviewControls.spacer(), previous, next],
 			spacing: 12
 		)
-		let banner = pill(
+		let banner = GitReviewControls.pill(
 			row,
 			radius: 20
 		)
@@ -482,40 +482,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		banner.setAccessibilityLabel("Large Git comparison")
 		banner.toolTip = "Proposed large comparison threshold: 20 files or 2,000 changed lines"
 		return banner
-	}
-
-	private func pill(
-		_ content: NSView,
-		radius: CGFloat = 20,
-		horizontalInset: CGFloat = 10,
-		verticalInset: CGFloat = 10
-	) -> NSView
-	{
-		let surface = DesktopSurface(
-			DesktopTheme.elevated,
-			cornerRadius: radius
-		)
-		surface.addSubview(content)
-		content.translatesAutoresizingMaskIntoConstraints = false
-		NSLayoutConstraint.activate([
-			content.leadingAnchor.constraint(
-				equalTo: surface.leadingAnchor,
-				constant: horizontalInset
-			),
-			content.trailingAnchor.constraint(
-				equalTo: surface.trailingAnchor,
-				constant: -horizontalInset
-			),
-			content.topAnchor.constraint(
-				equalTo: surface.topAnchor,
-				constant: verticalInset
-			),
-			content.bottomAnchor.constraint(
-				equalTo: surface.bottomAnchor,
-				constant: -verticalInset
-			),
-		])
-		return surface
 	}
 
 	private func referenceButton(

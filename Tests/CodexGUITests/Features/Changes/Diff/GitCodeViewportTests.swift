@@ -7,16 +7,16 @@ struct GitCodeViewportTests
 {
 	@Test func narrowViewportKeepsReadableFiniteSourceGeometry()
 	{
-		let value = GitCodeViewport(
+		let viewport = GitCodeViewport(
 			viewportWidth: 150,
 			measuredCodeWidth: 300,
 			documentHeight: 97
 		)
-		#expect(value.documentSize == CGSize(
+		#expect(viewport.documentSize == CGSize(
 			width: 300,
 			height: 97
 		))
-		#expect(value.containerSize == CGSize(
+		#expect(viewport.containerSize == CGSize(
 			width: 280,
 			height: 97
 		))
@@ -44,15 +44,15 @@ struct GitCodeViewportTests
 	{
 		for width in [CGFloat.zero, -10, .infinity, .nan]
 		{
-			let value = GitCodeViewport(
+			let viewport = GitCodeViewport(
 				viewportWidth: width,
 				measuredCodeWidth: width,
 				documentHeight: width
 			)
-			#expect(value.documentSize.width.isFinite)
-			#expect(value.documentSize.height.isFinite)
-			#expect(value.containerSize.width == 220)
-			#expect(value.containerSize.height >= 1)
+			#expect(viewport.documentSize.width.isFinite)
+			#expect(viewport.documentSize.height.isFinite)
+			#expect(viewport.containerSize.width == 220)
+			#expect(viewport.containerSize.height >= 1)
 		}
 	}
 }

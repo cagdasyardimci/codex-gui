@@ -3,6 +3,8 @@ import AppKit
 @MainActor
 final class GitDiffLineRuler: NSRulerView
 {
+	private static let lineNumberVerticalOffset: CGFloat = 2
+
 	private let rows: [GitDiffRow]
 	private let font: NSFont
 	private let gutterMode: GitUnifiedCodeView.GutterMode
@@ -89,7 +91,7 @@ final class GitDiffLineRuler: NSRulerView
 			from: self
 		).offsetBy(
 			dx: 0,
-			dy: -2
+			dy: -Self.lineNumberVerticalOffset
 		)
 		for index in source.visualRowIndices(
 			from: sourceDirtyRect.minY,
@@ -101,7 +103,7 @@ final class GitDiffLineRuler: NSRulerView
 			let position = convert(
 				NSPoint(
 					x: 0,
-					y: sourceRect.minY + 2
+					y: sourceRect.minY + Self.lineNumberVerticalOffset
 				),
 				from: source
 			)
@@ -117,13 +119,13 @@ final class GitDiffLineRuler: NSRulerView
 				color.withAlphaComponent(0.06).setFill()
 				NSRect(
 					x: 0,
-					y: position.y - 2,
+					y: position.y - Self.lineNumberVerticalOffset,
 					width: ruleThickness,
 					height: sourceRect.height
 				).fill()
 				let rail = NSRect(
 					x: 0,
-					y: position.y - 2,
+					y: position.y - Self.lineNumberVerticalOffset,
 					width: 3,
 					height: sourceRect.height
 				)

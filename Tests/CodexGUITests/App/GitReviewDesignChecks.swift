@@ -20,15 +20,10 @@ struct GitReviewDesignChecks
 		{
 			controller.close()
 		}
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.snapshot != nil
-			{
-				break
-			}
-			await Task.yield()
-		}
-		let snapshot = try #require(controller.runtime.state.snapshot)
+		let snapshot = try await waitForGitReviewComparison(
+			controller,
+			owner: presentation.owner
+		)
 		#expect(snapshot.files.count == DesignPreviewGitService.fileCount)
 		#expect(snapshot.additions == DesignPreviewGitService.fileCount * 3)
 		#expect(snapshot.deletions == DesignPreviewGitService.fileCount * 2)
@@ -211,7 +206,7 @@ struct GitReviewDesignChecks
 		controller.view.layoutSubtreeIfNeeded()
 		#expect(refs.isHiddenOrHasHiddenAncestor)
 		controller.runtime.selectScope(.branch)
-		try await waitForComparison(
+		try await waitForGitReviewComparison(
 			controller,
 			owner: owner
 		)
@@ -224,7 +219,7 @@ struct GitReviewDesignChecks
 		for scope in [GitComparisonScope.unstaged, .staged, .committed, .uncommitted]
 		{
 			controller.runtime.selectScope(scope)
-			try await waitForComparison(
+			try await waitForGitReviewComparison(
 				controller,
 				owner: owner
 			)
@@ -250,7 +245,7 @@ struct GitReviewDesignChecks
 			storeIdentity: "alternate-offline-preview"
 		)
 		controller.activate(owner: alternateOwner)
-		try await waitForComparison(
+		try await waitForGitReviewComparison(
 			controller,
 			owner: alternateOwner
 		)
@@ -259,7 +254,7 @@ struct GitReviewDesignChecks
 		#expect(try adaptiveDiff(controller).layoutPreference == .unified)
 		controller.close()
 		controller.activate(owner: owner)
-		try await waitForComparison(
+		try await waitForGitReviewComparison(
 			controller,
 			owner: owner
 		)
@@ -292,27 +287,6 @@ struct GitReviewDesignChecks
 		let diff = try adaptiveDiff(controller)
 		#expect(diff.layoutPreference == preference)
 		#expect(diff.layoutMode == mode)
-	}
-
-	private func waitForComparison(
-		_ controller: GitChangesViewController,
-		owner: FeaturePresentationOwner
-	) async throws
-	{
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.pendingRequest == nil,
-				controller.runtime.state.snapshot != nil,
-				controller.runtime.state.owner == owner
-			{
-				break
-			}
-			await Task.yield()
-		}
-		#expect(controller.runtime.state.owner == owner)
-		#expect(controller.runtime.state.pendingRequest == nil)
-		#expect(controller.runtime.state.snapshot != nil)
-		controller.view.layoutSubtreeIfNeeded()
 	}
 
 	private func verifyResponsiveDiff(
@@ -431,15 +405,10 @@ struct GitReviewDesignChecks
 			controller.close()
 			window.close()
 		}
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.snapshot != nil
-			{
-				break
-			}
-			await Task.yield()
-		}
-		#expect(controller.runtime.state.snapshot != nil)
+		try await waitForGitReviewComparison(
+			controller,
+			owner: presentation.owner
+		)
 		try verifyDarkUnifiedRows()
 	}
 

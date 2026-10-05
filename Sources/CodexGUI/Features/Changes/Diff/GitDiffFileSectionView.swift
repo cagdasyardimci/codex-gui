@@ -4,6 +4,14 @@ import AppKit
 @MainActor
 final class GitDiffFileSectionView: NSStackView
 {
+	private enum GapLayout
+	{
+		static let controlHeight: CGFloat = 16
+		static let controlWidth: CGFloat = 52
+		static let dividerThickness: CGFloat = 1
+		static let rowHeight = controlHeight * 2 + dividerThickness
+	}
+
 	private(set) var diffViews: [GitAdaptiveDiffView] = []
 	private let onToggleFileDiff: (NSButton) -> Void
 	private let onExpandGap: (NSButton) -> Void
@@ -232,7 +240,8 @@ final class GitDiffFileSectionView: NSStackView
 		let controls = makeGapExpansionControls(row)
 
 		let verticalDivider = DesktopSurface(DesktopTheme.border)
-		verticalDivider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+		verticalDivider.widthAnchor.constraint(equalToConstant: GapLayout.dividerThickness)
+			.isActive = true
 		let fold = AppKitLayout.horizontalStack(
 			[controls, verticalDivider, label, GitReviewControls.spacer()],
 			spacing: 0
@@ -250,7 +259,7 @@ final class GitDiffFileSectionView: NSStackView
 			to: surface,
 			inset: 0
 		)
-		surface.heightAnchor.constraint(equalToConstant: 33).isActive = true
+		surface.heightAnchor.constraint(equalToConstant: GapLayout.rowHeight).isActive = true
 		verticalDivider.heightAnchor.constraint(equalTo: surface.heightAnchor)
 			.isActive = true
 		if row.canExpand
@@ -287,16 +296,18 @@ final class GitDiffFileSectionView: NSStackView
 		}
 
 		let horizontalDivider = DesktopSurface(DesktopTheme.border)
-		horizontalDivider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+		horizontalDivider.heightAnchor.constraint(equalToConstant: GapLayout.dividerThickness)
+			.isActive = true
 		let controls = NSStackView(views: [above, horizontalDivider, below])
 		controls.orientation = .vertical
 		controls.alignment = .centerX
 		controls.spacing = 0
-		controls.widthAnchor.constraint(equalToConstant: 52).isActive = true
+		controls.widthAnchor.constraint(equalToConstant: GapLayout.controlWidth).isActive = true
 		for control in [above, below]
 		{
 			control.widthAnchor.constraint(equalTo: controls.widthAnchor).isActive = true
-			control.heightAnchor.constraint(equalToConstant: 16).isActive = true
+			control.heightAnchor.constraint(equalToConstant: GapLayout.controlHeight)
+				.isActive = true
 		}
 		horizontalDivider.widthAnchor.constraint(equalTo: controls.widthAnchor)
 			.isActive = true

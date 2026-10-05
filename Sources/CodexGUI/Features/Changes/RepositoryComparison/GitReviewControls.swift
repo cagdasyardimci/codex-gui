@@ -4,6 +4,40 @@ import AppKit
 @MainActor
 enum GitReviewControls
 {
+	static func pill(
+		_ content: NSView,
+		radius: CGFloat = 20,
+		horizontalInset: CGFloat = 10,
+		verticalInset: CGFloat = 10
+	) -> NSView
+	{
+		let surface = DesktopSurface(
+			DesktopTheme.elevated,
+			cornerRadius: radius
+		)
+		surface.addSubview(content)
+		content.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			content.leadingAnchor.constraint(
+				equalTo: surface.leadingAnchor,
+				constant: horizontalInset
+			),
+			content.trailingAnchor.constraint(
+				equalTo: surface.trailingAnchor,
+				constant: -horizontalInset
+			),
+			content.topAnchor.constraint(
+				equalTo: surface.topAnchor,
+				constant: verticalInset
+			),
+			content.bottomAnchor.constraint(
+				equalTo: surface.bottomAnchor,
+				constant: -verticalInset
+			),
+		])
+		return surface
+	}
+
 	static func referenceButton(
 		_ title: String,
 		image: NSImage,
