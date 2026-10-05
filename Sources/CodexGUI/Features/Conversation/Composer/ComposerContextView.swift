@@ -4,11 +4,8 @@ import AppKit
 final class ComposerContextView: NSView
 {
 	var onRemove: ((String) -> Void)?
-	var onReuse: ((String) -> Void)?
 
 	private let itemStack = NSStackView()
-	private let reuseButton = NSPopUpButton()
-	private var reusable: [ComposerContextItem] = []
 
 	override init(frame frameRect: NSRect)
 	{
@@ -17,30 +14,13 @@ final class ComposerContextView: NSView
 		itemStack.orientation = .vertical
 		itemStack.alignment = .leading
 		itemStack.spacing = 8
-		itemStack.isHidden = true
 
-		reuseButton.target = self
-		reuseButton.action = #selector(reuseSelected)
-		DesktopTheme.stylePopup(reuseButton)
-		reuseButton.setAccessibilityLabel("Reuse a reference from an earlier message")
-		reuseButton.isHidden = true
-
-		let stack = NSStackView(views: [itemStack, reuseButton])
-		stack.orientation = .vertical
-		stack.alignment = .leading
-		stack.spacing = 5
-		stack.translatesAutoresizingMaskIntoConstraints = false
-
-		addSubview(stack)
+		AppKitLayout.pin(
+			itemStack,
+			to: self,
+			inset: 0
+		)
 		isHidden = true
-
-		NSLayoutConstraint.activate([
-			stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-			stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-			stack.topAnchor.constraint(equalTo: topAnchor),
-			stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-			itemStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
-		])
 	}
 
 	required init?(coder: NSCoder)
@@ -48,13 +28,9 @@ final class ComposerContextView: NSView
 		nil
 	}
 
-	func render(
-		items: [ComposerContextItem],
-		reusable: [ComposerContextItem]
-	)
+	func render(items: [ComposerContextItem])
 	{
-		let contextChanged = currentItems != items || self.reusable != reusable
-		guard contextChanged
+		guard currentItems != items
 		else
 		{
 			return
@@ -62,16 +38,7 @@ final class ComposerContextView: NSView
 
 		currentItems = items
 		rebuildItemRows(items)
-		itemStack.isHidden = items.isEmpty
-
-		if self.reusable != reusable
-		{
-			self.reusable = reusable
-			rebuildReuseMenu(reusable)
-		}
-
-		reuseButton.isHidden = reusable.isEmpty
-		isHidden = items.isEmpty && reusable.isEmpty
+		isHidden = items.isEmpty
 	}
 
 	private func rebuildItemRows(_ items: [ComposerContextItem])
@@ -87,17 +54,6 @@ final class ComposerContextView: NSView
 			let itemRow = makeContextRow(for: item)
 			itemStack.addArrangedSubview(itemRow)
 			itemRow.widthAnchor.constraint(equalTo: itemStack.widthAnchor).isActive = true
-		}
-	}
-
-	private func rebuildReuseMenu(_ items: [ComposerContextItem])
-	{
-		reuseButton.removeAllItems()
-		reuseButton.addItem(withTitle: "Reuse Earlier Reference…")
-		for item in items.reversed()
-		{
-			reuseButton.addItem(withTitle: "\(item.kind.title) · \(item.detail)")
-			reuseButton.lastItem?.representedObject = item.id
 		}
 	}
 
@@ -282,15 +238,4 @@ final class ComposerContextView: NSView
 	}
 
 	private var currentItems: [ComposerContextItem] = []
-
-	@objc private func reuseSelected()
-	{
-		guard let id = reuseButton.selectedItem?.representedObject as? String
-		else
-		{
-			return
-		}
-		onReuse?(id)
-		reuseButton.selectItem(at: 0)
-	}
 }

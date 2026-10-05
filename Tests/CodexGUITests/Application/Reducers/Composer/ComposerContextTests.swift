@@ -582,10 +582,7 @@ struct ComposerContextTests
 		{
 			removedID = $0
 		}
-		view.render(
-			items: [item],
-			reusable: []
-		)
+		view.render(items: [item])
 		#expect(findImageView(in: view) != nil)
 		let remove = try #require(findButton(
 			in: view,

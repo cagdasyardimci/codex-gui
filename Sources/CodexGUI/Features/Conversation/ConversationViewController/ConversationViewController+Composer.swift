@@ -206,10 +206,6 @@ extension ConversationViewController
 		{
 			[weak self] id in self?.onRemoveContext?(id)
 		}
-		contextView.onReuse =
-		{
-			[weak self] id in self?.onReuseContext?(id)
-		}
 		attachmentDetailsScrollView.drawsBackground = false
 		attachmentDetailsScrollView.borderType = .noBorder
 		requestDetailsScrollView.drawsBackground = false
@@ -374,10 +370,7 @@ extension ConversationViewController
 			composer.string = snapshot.draft
 			updateComposerHeight()
 		}
-		contextView.render(
-			items: snapshot.draftContext,
-			reusable: snapshot.reusableReferences
-		)
+		contextView.render(items: snapshot.draftContext)
 		attachmentDetailsScrollView.updateContentHeight()
 
 		composer.acceptsImageAttachments = snapshot.projectPath != nil

@@ -233,10 +233,6 @@ extension MainWindowController
 		{
 			target.dispatch(.removeContext($0))
 		}
-		conversation.onReuseContext =
-		{
-			target.dispatch(.reuseReference($0))
-		}
 		conversation.onSend =
 		{
 			target.dispatch(.send)

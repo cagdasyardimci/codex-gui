@@ -17,7 +17,6 @@ final class ConversationViewController: NSViewController,
 	var onAddContext: ((ComposerContextItem) -> Void)?
 	var onImportImageContext: ((ComposerContextItem) -> Bool)?
 	var onRemoveContext: ((String) -> Void)?
-	var onReuseContext: ((String) -> Void)?
 	var onSelectModel: ((String?) -> Void)?
 	var onSelectEffort: ((String?) -> Void)?
 	var onSetFastMode: ((Bool) -> Void)?
