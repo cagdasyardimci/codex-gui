@@ -59,6 +59,7 @@ final class WorkspaceStateStore
 	private var preferenceObserver: UUID?
 	let factoryDependencies: WorkspaceStoreDependencies
 	private var publicationObservers: [UUID: (WorkspacePublication) -> Void] = [:]
+	private var backendEventObservers: [UUID: (AppServerEvent) -> Void] = [:]
 	var isRetired: Bool
 	{
 		isShutdown
@@ -219,6 +220,22 @@ final class WorkspaceStateStore
 	func removePublicationObserver(_ id: UUID)
 	{
 		publicationObservers.removeValue(forKey: id)
+	}
+
+	/// Auxiliary read-only surfaces share the subscription without taking execution ownership.
+	func observeBackendEvents(_ observer: @escaping (AppServerEvent) -> Void) -> UUID
+	{
+		let id = UUID()
+		if !isShutdown
+		{
+			backendEventObservers[id] = observer
+		}
+		return id
+	}
+
+	func removeBackendEventObserver(_ id: UUID)
+	{
+		backendEventObservers.removeValue(forKey: id)
 	}
 
 	init(
@@ -521,6 +538,7 @@ final class WorkspaceStateStore
 			return
 		}
 		publicationObservers.removeAll()
+		backendEventObservers.removeAll()
 		observers.removeAll()
 		observerOrder.removeAll()
 		dispatch(.workspaceLifecycle(.shutdownRequested))
@@ -530,6 +548,7 @@ final class WorkspaceStateStore
 			preferenceStorage?.removePreferenceObserver(preferenceObserver)
 		}
 		publicationObservers.removeAll()
+		backendEventObservers.removeAll()
 		observers.removeAll()
 		observerOrder.removeAll()
 		runner.shutdown()
@@ -542,6 +561,21 @@ final class WorkspaceStateStore
 	)
 	{
 		let snapshot = model
+		if case .execution(.backendObserved(
+			let context,
+			let event,
+			_
+		)) = action,
+			context.belongsTo(
+				workspace: model.identity,
+				generation: model.connection.generation
+			)
+		{
+			for observer in Array(backendEventObservers.values)
+			{
+				observer(event)
+			}
+		}
 		let publication = WorkspacePublication(
 			model: snapshot,
 			coalescible: shouldCoalescePublication(

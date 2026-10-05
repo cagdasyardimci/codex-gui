@@ -16,6 +16,7 @@ backend process and protocol code belong to `CodexClient/`.
 | [ProjectContext](ProjectContext/) | Project context presentation and editing controls. |
 | [Shared](Shared/) | Common presentation ownership, panel contracts and reusable view support. |
 | [Sources](Sources/) | Source inventory, detail presentation, result cards and tab hover previews. |
+| [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |
 | [Usage](Usage/) | Usage presentation and controls. |
 
 Feature tests mirror these groups under

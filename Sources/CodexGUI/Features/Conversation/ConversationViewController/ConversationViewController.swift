@@ -7,6 +7,9 @@ final class ConversationViewController: NSViewController,
 	NSCollectionViewDataSource, NSCollectionViewDelegateFlowLayout, NSTextViewDelegate,
 	NSSearchFieldDelegate
 {
+	let transcriptOnly: Bool
+	var renderedReadOnlyTranscript: ConversationPresentation.Transcript?
+
 	var onSelectSkill: ((AvailableSkill) -> Void)?
 	var onSlashCommand: ((SlashCommandInvocation) -> Void)?
 	var onSend: (() -> Void)?
@@ -30,6 +33,8 @@ final class ConversationViewController: NSViewController,
 	var onLoadTurnPreview: ((String) -> Void)?
 	var onJumpToTurnReference: ((String) -> Void)?
 	var onViewChanges: (() -> Void)?
+	var onOpenSubagents: (() -> Void)?
+	var onSelectSubagentThread: ((String) -> Void)?
 	var onRespond: ((PendingInteraction, InteractionResponse) -> Void)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
 	var onJumpDisplayed: (() -> Void)?
@@ -201,6 +206,20 @@ final class ConversationViewController: NSViewController,
 	var jumpAnimationRevision = 0
 	var isAnimatingJump = false
 
+	init(transcriptOnly: Bool = false)
+	{
+		self.transcriptOnly = transcriptOnly
+		super.init(
+			nibName: nil,
+			bundle: nil
+		)
+	}
+
+	required init?(coder: NSCoder)
+	{
+		return nil
+	}
+
 	deinit
 	{
 		turnNavigationTask?.cancel()
@@ -237,6 +256,11 @@ final class ConversationViewController: NSViewController,
 
 	override func loadView()
 	{
+		if transcriptOnly
+		{
+			loadReadOnlyTranscriptView()
+			return
+		}
 		let container = DesktopSurface(DesktopTheme.canvas)
 		let (activeTaskRow, progressRow) = configureTaskStatusControls()
 		configurePreferenceControls()
@@ -253,18 +277,11 @@ final class ConversationViewController: NSViewController,
 		{
 			row.widthAnchor.constraint(equalTo: headerStack.widthAnchor).isActive = true
 		}
-		let utilityRow = AppKitLayout.horizontalStack(
-			[loadEarlierButton, flexibleSpace()],
-			spacing: 6
-		)
-		// Reserve this row only while earlier-history navigation is available.
-		utilityRow.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		let utilityRow = makeTranscriptUtilityRow()
 		// These rows only have content after a snapshot supplies it. Keep the
 		// first fitting pass from reserving their empty heights.
 		activeTaskRow.isHidden = true
 		progressRow.isHidden = true
-		utilityRow.isHidden = true
-		transcriptUtilityRow = utilityRow
 		let transcriptArea = makeTranscriptArea()
 		installConversationStack(
 			in: container,
@@ -276,6 +293,44 @@ final class ConversationViewController: NSViewController,
 		configureEmptyState(in: container)
 		configureTurnNavigation(in: container)
 		view = container
+	}
+
+	private func loadReadOnlyTranscriptView()
+	{
+		configureTranscriptControls()
+		loadEarlierButton.isHidden = true
+		let utilityRow = makeTranscriptUtilityRow()
+
+		let stack = AppKitLayout.verticalStack(
+			[centeredReadingRow(utilityRow), makeTranscriptArea()],
+			spacing: 6
+		)
+		stack.alignment = .leading
+		for row in stack.arrangedSubviews
+		{
+			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+		}
+		let container = DesktopSurface(DesktopTheme.canvas)
+		AppKitLayout.pin(
+			stack,
+			to: container
+		)
+		conversationScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
+			.isActive = true
+		view = container
+	}
+
+	private func makeTranscriptUtilityRow() -> NSStackView
+	{
+		let utilityRow = AppKitLayout.horizontalStack(
+			[loadEarlierButton, flexibleSpace()],
+			spacing: 6
+		)
+		// Reserve this row only while earlier-history navigation is available.
+		utilityRow.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		utilityRow.isHidden = true
+		transcriptUtilityRow = utilityRow
+		return utilityRow
 	}
 
 	private func makeTranscriptArea() -> NSView
@@ -533,6 +588,11 @@ final class ConversationViewController: NSViewController,
 
 	func render(_ snapshot: ConversationPresentation)
 	{
+		if transcriptOnly
+		{
+			renderTranscript(snapshot.transcript)
+			return
+		}
 		_ = view
 		let previous = renderedPresentation
 		guard previous != snapshot
@@ -557,15 +617,7 @@ final class ConversationViewController: NSViewController,
 		}
 		if previous?.owner != snapshot.owner
 		{
-			turnNavigationTask?.cancel()
-			viewportPublicationTask?.cancel()
-			lastPublishedViewport = nil
-			cancelNavigationMotion()
-			pendingNavigationTurnID = nil
-			requestedJumpItemID = nil
-			jumpAnimationRevision += 1
-			isAnimatingJump = false
-			turnNavigationRail.render([])
+			resetTranscriptNavigation()
 		}
 		fileIndexRuntime.onChange =
 		{

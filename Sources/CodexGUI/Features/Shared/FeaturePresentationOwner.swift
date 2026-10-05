@@ -22,6 +22,26 @@ struct FeaturePresentationOwner: Equatable
 		selectedThreadID = snapshot.selectedThreadID
 	}
 
+	private init(
+		owner: FeaturePresentationOwner,
+		selectedThreadID: String
+	)
+	{
+		storeIdentity = owner.storeIdentity
+		runtimeOwner = owner.runtimeOwner
+		selectionEpoch = owner.selectionEpoch
+		projectPath = owner.projectPath
+		self.selectedThreadID = selectedThreadID
+	}
+
+	func replacingSelectedThreadID(_ threadID: String) -> FeaturePresentationOwner
+	{
+		FeaturePresentationOwner(
+			owner: self,
+			selectedThreadID: threadID
+		)
+	}
+
 	private var components: [String?]
 	{
 		let lifecycleIdentity: String? = runtimeOwner.map

@@ -1,0 +1,218 @@
+import AppKit
+
+@MainActor
+final class SubagentDetailViewController: NSViewController
+{
+	let owner: FeaturePresentationOwner
+	let conversation = ConversationViewController(transcriptOnly: true)
+	var onBack: (() -> Void)?
+	var onLoadEarlierTurns: (() -> Void)?
+	var onRetry: (() -> Void)?
+	private(set) var agent: CodexSubagentActivity?
+	private(set) var state: SubagentConversationState?
+	private let nameLabel = NSTextField(labelWithString: "")
+	private let metadataLabel = NSTextField(labelWithString: "")
+	private let statusLabel = NSTextField(wrappingLabelWithString: "")
+	private let avatarContainer = NSView()
+	private let loadingIndicator = NSProgressIndicator()
+	private let retryButton = NSButton(
+		title: "Retry",
+		target: nil,
+		action: nil
+	)
+	private let statusRow = NSStackView()
+	private static let contentInset: CGFloat = 16
+	private static let contentSpacing: CGFloat = 12
+	private static let headerSpacing: CGFloat = 10
+	private static let avatarDimension: CGFloat = 24
+	private static let backButtonWidth: CGFloat = 24
+
+	init(owner: FeaturePresentationOwner)
+	{
+		self.owner = owner
+		super.init(
+			nibName: nil,
+			bundle: nil
+		)
+	}
+
+	required init?(coder: NSCoder)
+	{
+		return nil
+	}
+
+	override func loadView()
+	{
+		view = NSView()
+		let content = AppKitLayout.verticalStack(
+			[],
+			spacing: Self.contentSpacing
+		)
+		AppKitLayout.pin(
+			content,
+			to: view,
+			inset: Self.contentInset
+		)
+		content.addArrangedSubview(makeHeader())
+		let divider = NSBox()
+		divider.boxType = .separator
+		content.addArrangedSubview(divider)
+		content.addArrangedSubview(makeStatusRow())
+		addChild(conversation)
+		content.addArrangedSubview(conversation.view)
+		for child in content.arrangedSubviews
+		{
+			child.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+		}
+		conversation.onLoadEarlierTurns =
+		{
+			[weak self] in
+			self?.onLoadEarlierTurns?()
+		}
+	}
+
+	func render(
+		agent: CodexSubagentActivity,
+		state: SubagentConversationState
+	)
+	{
+		_ = view
+		self.agent = agent
+		self.state = state
+		nameLabel.stringValue = agent.displayName
+		let settingsDescription = state.settings.map
+		{
+			settings in
+			[settings.model, settings.reasoningEffort].compactMap
+			{
+				$0
+			}.joined(separator: " · ")
+		}
+		metadataLabel.stringValue = settingsDescription ?? ""
+		metadataLabel.isHidden = metadataLabel.stringValue.isEmpty
+		renderAvatar(agent)
+		let showsInitialLoading = state.isLoading && state.entries.isEmpty
+		statusLabel.stringValue = state
+			.error ?? (showsInitialLoading ? "Loading conversation…" : "")
+		statusLabel.isHidden = statusLabel.stringValue.isEmpty
+		retryButton.isHidden = state.error == nil
+		retryButton.isEnabled = !state.isLoading
+		loadingIndicator.isHidden = !showsInitialLoading
+		statusRow.isHidden = !showsInitialLoading && state.error == nil
+		if showsInitialLoading
+		{
+			loadingIndicator.startAnimation(nil)
+		}
+		else
+		{
+			loadingIndicator.stopAnimation(nil)
+		}
+		conversation.renderTranscript(ConversationPresentation.Transcript(
+			owner: owner,
+			entries: state.entries,
+			turnTimings: state.turnTimings,
+			canLoadEarlierTurns: state.nextCursor != nil
+		))
+		conversation.loadEarlierButton.isEnabled = !state.isLoading
+	}
+
+	private func makeHeader() -> NSView
+	{
+		let backButton = NSButton(
+			title: "",
+			target: self,
+			action: #selector(goBack)
+		)
+		backButton.isBordered = false
+		backButton.image = NSImage(
+			systemSymbolName: "chevron.left",
+			accessibilityDescription: nil
+		)
+		backButton.setAccessibilityLabel("Back to Subagents")
+		backButton.toolTip = "Back to Subagents"
+		backButton.widthAnchor.constraint(equalToConstant: Self.backButtonWidth).isActive = true
+		avatarContainer.widthAnchor.constraint(equalToConstant: Self.avatarDimension)
+			.isActive = true
+		avatarContainer.heightAnchor.constraint(equalToConstant: Self.avatarDimension)
+			.isActive = true
+		nameLabel.font = .systemFont(
+			ofSize: 15,
+			weight: .semibold
+		)
+		nameLabel.lineBreakMode = .byTruncatingTail
+		nameLabel.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		metadataLabel.font = .systemFont(ofSize: 12)
+		metadataLabel.textColor = .secondaryLabelColor
+		metadataLabel.lineBreakMode = .byTruncatingTail
+		metadataLabel.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		let spacer = NSView()
+		spacer.setContentHuggingPriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		metadataLabel.alignment = .right
+		let header = NSStackView(views: [
+			backButton,
+			avatarContainer,
+			nameLabel,
+			spacer,
+			metadataLabel
+		])
+		header.orientation = .horizontal
+		header.alignment = .centerY
+		header.spacing = Self.headerSpacing
+		return header
+	}
+
+	private func makeStatusRow() -> NSView
+	{
+		loadingIndicator.style = .spinning
+		loadingIndicator.controlSize = .small
+		loadingIndicator.isDisplayedWhenStopped = false
+		statusLabel.font = .systemFont(ofSize: 13)
+		statusLabel.textColor = .secondaryLabelColor
+		retryButton.target = self
+		retryButton.action = #selector(retry)
+		statusRow.setViews(
+			[loadingIndicator, statusLabel, retryButton],
+			in: .leading
+		)
+		statusRow.orientation = .horizontal
+		statusRow.alignment = .centerY
+		statusRow.spacing = 8
+		return statusRow
+	}
+
+	private func renderAvatar(_ agent: CodexSubagentActivity)
+	{
+		for child in avatarContainer.subviews
+		{
+			child.removeFromSuperview()
+		}
+		let avatar = ConversationSubagentAvatarView(
+			assetName: ConversationSubagentAvatars.assetName(for: agent.identity),
+			name: agent.name
+		)
+		AppKitLayout.pin(
+			avatar,
+			to: avatarContainer,
+			inset: 0
+		)
+	}
+
+	@objc private func goBack()
+	{
+		onBack?()
+	}
+
+	@objc private func retry()
+	{
+		onRetry?()
+	}
+}
