@@ -105,7 +105,7 @@ extension ComposerCommandReducer
 				)
 				var selection = request.context
 				selection.threadID = detail.summary.id
-				result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
+				result.merge(WorkspaceFeatureComposition.reduceConversation(
 					&model,
 					.conversations(.selectionRequested(selection))
 				))
@@ -197,7 +197,7 @@ extension ComposerCommandReducer
 			)
 			if model.execution.agentOutcome == nil
 			{
-				result.mergeCommandReduction(ExecutionReducer.reduce(
+				result.merge(ExecutionReducer.reduce(
 					&model,
 					.execution(.backendObserved(
 						operation.request.context,
@@ -207,9 +207,9 @@ extension ComposerCommandReducer
 						)
 					))
 				))
-				if started.turn.status != "inProgress" && started.turn.status != "running"
+				if !ConversationTurnStatus.isRunning(started.turn.status)
 				{
-					result.mergeCommandReduction(ExecutionReducer.reduce(
+					result.merge(ExecutionReducer.reduce(
 						&model,
 						.execution(.backendObserved(
 							operation.request.context,
@@ -528,7 +528,7 @@ extension ComposerCommandReducer
 						$0.type == "contextCompaction" || $0.type == "enteredReviewMode"
 					}
 			}
-			if let turn, turn.status != "inProgress", turn.status != "running"
+			if let turn, !ConversationTurnStatus.isRunning(turn.status)
 			{
 				model.composerCommands.pendingTurn?.terminalObserved = true
 				if pending.transportFinished

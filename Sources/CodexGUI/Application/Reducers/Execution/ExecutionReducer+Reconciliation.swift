@@ -183,13 +183,14 @@ extension ExecutionReducer
 		model: inout WorkspaceModel
 	)
 	{
-		if turns.contains(where:
+		let containsCommandExecution = turns.contains
+		{
+			$0.items.contains
 			{
-				$0.items.contains
-				{
-					$0.type == "commandExecution"
-				}
-			})
+				$0.type == "commandExecution"
+			}
+		}
+		if containsCommandExecution
 		{
 			model.execution.commandEventRevisions[threadID, default: 0] += 1
 		}
@@ -209,8 +210,8 @@ extension ExecutionReducer
 			model: &model,
 			result: &result
 		)
-		let recoveringOwner = model.execution.needsReconciliation && model.execution
-			.activeThreadID == threadID
+		let isRecoveringExecutionOwner = model.execution.needsReconciliation
+			&& model.execution.activeThreadID == threadID
 		recoverRunningTurnOwner(
 			detail,
 			context: context,
@@ -237,11 +238,15 @@ extension ExecutionReducer
 					model.execution.commandLifetime.owns(
 						threadID: threadID,
 						turnID: $0.id
-					) && $0.status != "inProgress" && $0.status != "running"
+					) && !ConversationTurnStatus.isRunning($0.status)
 				})
 			{
-				model.execution.deferredTurnOutcome = turn.status == "interrupted" ? .stopped :
-					(turn.status == "failed" ? .failed : .completed)
+				switch turn.status
+				{
+				case "interrupted": model.execution.deferredTurnOutcome = .stopped
+				case "failed": model.execution.deferredTurnOutcome = .failed
+				default: model.execution.deferredTurnOutcome = .completed
+				}
 				model.execution.deferredTurnMessage =
 					"The agent turn finished; approved commands have now reported "
 						+ "their outcomes."
@@ -254,7 +259,7 @@ extension ExecutionReducer
 					+ "check its outcome; its checkout remains protected."
 		}
 		else if let turn = detail.turns.last,
-				turn.status == "inProgress" || turn.status == "running"
+				ConversationTurnStatus.isRunning(turn.status)
 		{
 			model.execution.activeThreadID = threadID
 			model.execution.needsReconciliation = true
@@ -283,7 +288,7 @@ extension ExecutionReducer
 				? "Conversation refreshed. Review the saved draft before sending; "
 				+ "the request was not resent." : nil
 			model.execution.hasUncertainRequest = false
-			if recoveringOwner
+			if isRecoveringExecutionOwner
 			{
 				model.execution.activeThreadID = nil
 				model.execution.outcomeMessage = nil
@@ -322,7 +327,7 @@ extension ExecutionReducer
 	{
 		let threadID = detail.summary.id
 		if let turn = detail.turns.last,
-			turn.status == "inProgress" || turn.status == "running"
+			ConversationTurnStatus.isRunning(turn.status)
 		{
 			let currentOwner = model.execution.owner
 			let ownsCurrentTurn = currentOwner != nil

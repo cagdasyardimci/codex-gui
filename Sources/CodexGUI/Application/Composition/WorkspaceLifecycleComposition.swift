@@ -240,9 +240,7 @@ enum WorkspaceLifecycleComposition
 					context,
 					model: &model
 				)
-				result.effects += refreshed.effects
-				result.domainEvents += refreshed.domainEvents
-				result.presentationCommands += refreshed.presentationCommands
+				result.merge(refreshed)
 			}
 		case .conversationSelectionChanged:
 			model.lifecycle.recoveryListRequestID = nil
@@ -361,9 +359,7 @@ enum WorkspaceLifecycleComposition
 				&model,
 				action
 			)
-			result.effects += reduction.effects
-			result.domainEvents += reduction.domainEvents
-			result.presentationCommands += reduction.presentationCommands
+			result.merge(reduction)
 		}
 		return result
 	}
@@ -421,9 +417,7 @@ enum WorkspaceLifecycleComposition
 					action
 				)
 			}
-			result.effects += reduction.effects
-			result.domainEvents += reduction.domainEvents
-			result.presentationCommands += reduction.presentationCommands
+			result.merge(reduction)
 		}
 	}
 
@@ -447,9 +441,7 @@ enum WorkspaceLifecycleComposition
 					)
 				))
 			)
-			result.effects += list.effects
-			result.domainEvents += list.domainEvents
-			result.presentationCommands += list.presentationCommands
+			result.merge(list)
 			let skills = ContextNavigationReducer.reduce(
 				&model,
 				.contextNavigation(
@@ -459,9 +451,7 @@ enum WorkspaceLifecycleComposition
 					))
 				)
 			)
-			result.effects += skills.effects
-			result.domainEvents += skills.domainEvents
-			result.presentationCommands += skills.presentationCommands
+			result.merge(skills)
 		}
 	}
 

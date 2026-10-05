@@ -164,7 +164,12 @@ extension ExecutionReducer
 				context,
 				Array(model.execution.commandLifetime.pending)
 			))
-			if item.type == "commandExecution" || item.type == "mcpToolCall"
+			if item.type == "commandExecution"
+			{
+				model.execution.activeActivity = CommandExecutionStatus.isTerminal(item.status)
+					? nil : (item.command ?? item.type)
+			}
+			else if item.type == "mcpToolCall"
 			{
 				model.execution.activeActivity = ["completed", "failed", "declined"]
 					.contains(item.status ?? "")
@@ -288,14 +293,18 @@ extension ExecutionReducer
 			let message,
 			let willRetry
 		):
-			if !threadID.isEmpty && threadID != model.execution
-				.activeThreadID && threadID != selectedThreadID
+			let belongsToAnotherThread = !threadID.isEmpty
+				&& threadID != model.execution.activeThreadID
+				&& threadID != selectedThreadID
+			if belongsToAnotherThread
 			{
 				return
 			}
 			model.execution.statusMessage = message
-			if !willRetry && threadID == model.execution.activeThreadID && turnID == model.execution
-				.activeTurnID
+			let endsActiveTurn = !willRetry
+				&& threadID == model.execution.activeThreadID
+				&& turnID == model.execution.activeTurnID
+			if endsActiveTurn
 			{
 				model.execution.state = .failed
 				model.execution.activeTurnID = nil
@@ -336,9 +345,15 @@ extension ExecutionReducer
 	{
 		model.execution.activeThreadID = threadID
 		model.execution.activeTurnID = nil
-		model.execution.agentOutcome = turn.status == "interrupted" ? .stopped :
-			(turn.status == "failed" ? .failed(turn.error ?? "Codex reported a failed task.") :
-				.completed)
+		switch turn.status
+		{
+		case "interrupted":
+			model.execution.agentOutcome = .stopped
+		case "failed":
+			model.execution.agentOutcome = .failed(turn.error ?? "Codex reported a failed task.")
+		default:
+			model.execution.agentOutcome = .completed
+		}
 		model.execution.pendingInteractions.removeAll()
 		model.execution.pendingResponses.removeAll()
 		model.execution.pendingSteering = nil

@@ -6,7 +6,8 @@ import Testing
 @MainActor
 struct ConversationTurnTimingTests
 {
-	@Test func liveObservationsKeepOwnerStartAndFreezeAcrossHistoryRefresh()
+	@Test(arguments: ["inProgress", "running"])
+	func liveObservationsKeepOwnerStartAndFreezeAcrossHistoryRefresh(status: String)
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(
 			sessionID: UUID(),
@@ -16,7 +17,7 @@ struct ConversationTurnTimingTests
 		let start = Date(timeIntervalSince1970: 1000)
 		let active = CodexTurn(
 			id: "turn",
-			status: "inProgress",
+			status: status,
 			items: [],
 			error: nil
 		)
@@ -33,7 +34,42 @@ struct ConversationTurnTimingTests
 		}
 		#expect(model.conversations.content[.thread("owner")]?
 			.turnTimings["turn"]?.startedAt == start)
+		#expect(model.conversations.content[.thread("owner")]?
+			.turnTimings["turn"]?.completedAt == nil)
 		#expect(model.conversations.content[.thread("other")] == nil)
+		let older = CodexTurn(
+			id: "older",
+			status: "completed",
+			items: [],
+			error: nil
+		)
+		ConversationContentReducer.observe(
+			.turnCompleted(
+				threadId: "owner",
+				turn: older
+			),
+			model: &model,
+			observedAt: start.addingTimeInterval(20)
+		)
+		let summary = ThreadSummary(json: ["id": "owner", "cwd": "/tmp/timing"])!
+		ConversationContentReducer.merge(
+			ThreadDetail(
+				summary: summary,
+				turns: [older],
+				nextTurnsCursor: nil
+			),
+			model: &model
+		)
+		#expect(model.conversations.content[.thread("owner")]?.latestObservedGitTurnID == "turn")
+		var displayedModel = model
+		displayedModel.conversations.selectedConversation = .thread("owner")
+		displayedModel.execution.activeThreadID = "owner"
+		displayedModel.execution.activeTurnID = "older"
+		displayedModel.execution.state = .running
+		#expect(WorkspaceSelectors(
+			model: displayedModel,
+			now: start.addingTimeInterval(30)
+		).lastGitTurnID == "turn")
 		let completed = CodexTurn(
 			id: "turn",
 			status: "completed",
@@ -48,7 +84,6 @@ struct ConversationTurnTimingTests
 			model: &model,
 			observedAt: start.addingTimeInterval(48)
 		)
-		let summary = ThreadSummary(json: ["id": "owner", "cwd": "/tmp/timing"])!
 		ConversationContentReducer.merge(
 			ThreadDetail(
 				summary: summary,
@@ -79,6 +114,15 @@ struct ConversationTurnTimingTests
 		let historicalTiming = ConversationTurnTiming(turn: history)
 		#expect(historicalTiming.startedAt == nil)
 		#expect(historicalTiming.completedAt == nil)
+		let runningHistory = CodexTurn(
+			id: "running-history",
+			status: "running",
+			items: [],
+			error: nil
+		)
+		let runningTiming = ConversationTurnTiming(turn: runningHistory)
+		#expect(runningTiming.startedAt == nil)
+		#expect(runningTiming.completedAt == nil)
 		let backend = CodexTurn(
 			id: "backend",
 			status: "completed",

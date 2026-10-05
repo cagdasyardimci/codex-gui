@@ -203,7 +203,8 @@ enum ConversationContentReducer
 
 			if content.loadedTurns.contains(where:
 				{
-					$0.id == content.liveChangeTurnID && $0.status != "inProgress"
+					$0.id == content.liveChangeTurnID
+						&& !ConversationTurnStatus.isRunning($0.status)
 				})
 			{
 				content.liveChangeTurnID = nil
@@ -225,11 +226,12 @@ enum ConversationContentReducer
 	)
 	{
 		let observedTurnID = content.content.latestObservedGitTurnID
-		let observedStillRunning = observedTurnID.flatMap
+		let observedStatus = observedTurnID.flatMap
 		{
 			content.content.turnTimings[$0]
 		}?
-		.status == "inProgress"
+		.status
+		let observedStillRunning = ConversationTurnStatus.isRunning(observedStatus)
 		let historyIncludesObserved = detail.turns.contains(where:
 			{
 				$0.id == observedTurnID
@@ -316,14 +318,18 @@ enum ConversationContentReducer
 				// A late completion for an older turn must not replace a newer observed start.
 				content.didReconcileReportedGitTurn = true
 				let latest = content.content.latestObservedGitTurnID
+				let completedTurnWasRunning = ConversationTurnStatus.isRunning(
+					content.content.turnTimings[turn.id]?.status
+				)
 				let mayAdvanceReportedTurn = (latest == turn.id
-					&& content.content.turnTimings[turn.id]?.status == "inProgress")
+					&& completedTurnWasRunning)
 					|| (latest == nil && content.content.latestReportedGitTurn == nil)
-				let latestIsRunning = latest.flatMap
+				let latestStatus = latest.flatMap
 				{
 					content.content.turnTimings[$0]
 				}?
-				.status == "inProgress"
+				.status
+				let latestIsRunning = ConversationTurnStatus.isRunning(latestStatus)
 				let completedIndex = content.loadedTurns.firstIndex(where:
 					{
 						$0.id == turn.id
@@ -387,7 +393,7 @@ enum ConversationContentReducer
 			{
 				content in
 				let mayAdvanceReportedTurn = content.content.latestObservedGitTurnID == turnID
-					&& content.content.turnTimings[turnID]?.status == "inProgress"
+					&& ConversationTurnStatus.isRunning(content.content.turnTimings[turnID]?.status)
 				upsert(
 					item,
 					turnID: turnID,

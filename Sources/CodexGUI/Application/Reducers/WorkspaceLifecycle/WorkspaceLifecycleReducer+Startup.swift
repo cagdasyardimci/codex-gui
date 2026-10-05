@@ -179,9 +179,7 @@ extension WorkspaceLifecycleReducer
 						canonicalPath: opening.identity.canonicalCheckoutPath!
 					))
 				)
-				result.effects += remembered.effects
-				result.domainEvents += remembered.domainEvents
-				result.presentationCommands += remembered.presentationCommands
+				result.merge(remembered)
 			}
 		case .archivedSelectionRequested(
 			let context,
@@ -232,9 +230,7 @@ extension WorkspaceLifecycleReducer
 				selected,
 				model: &model
 			)
-			result.effects += refreshed.effects
-			result.domainEvents += refreshed.domainEvents
-			result.presentationCommands += refreshed.presentationCommands
+			result.merge(refreshed)
 		case .initialHydrationRequested(let context):
 			guard valid(
 				context,

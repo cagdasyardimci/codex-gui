@@ -32,4 +32,12 @@ struct WorkspaceReduction
 	var effects: [WorkspaceEffect] = []
 	var domainEvents: [WorkspaceDomainEvent] = []
 	var presentationCommands: [WorkspacePresentationCommand] = []
+
+	/// Appends every output channel in the order produced by the other reduction.
+	mutating func merge(_ other: WorkspaceReduction)
+	{
+		effects.append(contentsOf: other.effects)
+		domainEvents.append(contentsOf: other.domainEvents)
+		presentationCommands.append(contentsOf: other.presentationCommands)
+	}
 }

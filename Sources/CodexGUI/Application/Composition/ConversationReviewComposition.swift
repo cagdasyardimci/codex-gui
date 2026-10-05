@@ -17,9 +17,7 @@ enum ConversationReviewComposition
 			&model,
 			event
 		)
-		result.effects.append(contentsOf: review.effects)
-		result.domainEvents.append(contentsOf: review.domainEvents)
-		result.presentationCommands.append(contentsOf: review.presentationCommands)
+		result.merge(review)
 		return result
 	}
 }

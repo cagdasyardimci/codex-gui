@@ -200,16 +200,6 @@ enum ContextNavigationReducer
 		}
 		return result
 	}
-
-	static func append(
-		_ reduction: WorkspaceReduction,
-		to result: inout WorkspaceReduction
-	)
-	{
-		result.effects.append(contentsOf: reduction.effects)
-		result.domainEvents.append(contentsOf: reduction.domainEvents)
-		result.presentationCommands.append(contentsOf: reduction.presentationCommands)
-	}
 }
 
 extension OperationResult

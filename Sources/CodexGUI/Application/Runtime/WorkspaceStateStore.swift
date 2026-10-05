@@ -458,9 +458,7 @@ final class WorkspaceStateStore
 				&model,
 				action
 			)
-			accumulated.effects.append(contentsOf: reduction.effects)
-			accumulated.domainEvents.append(contentsOf: reduction.domainEvents)
-			accumulated.presentationCommands.append(contentsOf: reduction.presentationCommands)
+			accumulated.merge(reduction)
 		}
 		return accumulated
 	}
@@ -477,9 +475,7 @@ final class WorkspaceStateStore
 				&model,
 				event
 			)
-			accumulated.effects.append(contentsOf: reduction.effects)
-			accumulated.domainEvents.append(contentsOf: reduction.domainEvents)
-			accumulated.presentationCommands.append(contentsOf: reduction.presentationCommands)
+			accumulated.merge(reduction)
 			let semanticContext = operationContext(threadID: WorkspaceSelectors(
 				model: model,
 				now: now()
@@ -489,9 +485,7 @@ final class WorkspaceStateStore
 				event,
 				context: semanticContext
 			)
-			accumulated.effects.append(contentsOf: lifecycle.effects)
-			accumulated.domainEvents.append(contentsOf: lifecycle.domainEvents)
-			accumulated.presentationCommands.append(contentsOf: lifecycle.presentationCommands)
+			accumulated.merge(lifecycle)
 		}
 	}
 

@@ -204,9 +204,7 @@ extension WorkspaceLifecycleReducer
 				&model,
 				action
 			)
-			result.effects += composer.effects
-			result.domainEvents += composer.domainEvents
-			result.presentationCommands += composer.presentationCommands
+			result.merge(composer)
 			if result.effects.isEmpty
 			{
 				result.effects = [.releaseUnsentSubmission(captured)]

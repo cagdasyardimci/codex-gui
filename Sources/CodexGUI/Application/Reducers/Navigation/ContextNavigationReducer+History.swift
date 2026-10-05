@@ -2,6 +2,8 @@ import Foundation
 
 extension ContextNavigationReducer
 {
+	private static let maximumJumpHistoryPages = 20
+
 	static func reduceHistoryIntent(
 		_ action: ContextNavigationAction,
 		model: inout WorkspaceModel,
@@ -130,13 +132,12 @@ extension ContextNavigationReducer
 					],
 				purpose: .search
 			)
-			append(
+			result.merge(
 				ConversationReducer
 					.reduce(
 						&model,
 						.conversations(.historyRequested(operation))
-					),
-				to: &result
+					)
 			)
 			if let pending = model.conversations.pendingReads[operation.key]
 			{
@@ -191,13 +192,12 @@ extension ContextNavigationReducer
 		model.contextNavigation.jumpError = nil
 		if model.conversations.selectedConversation != .thread(threadID)
 		{
-			append(
+			result.merge(
 				ConversationReducer
 					.reduce(
 						&model,
 						.conversations(.selectionRequested(operation.context))
-					),
-				to: &result
+					)
 			)
 			if let pending = model.conversations.pendingReads[ConversationReadKey(
 				purpose: .selection,
@@ -288,12 +288,11 @@ extension ContextNavigationReducer
 				default: 0
 			]
 		)
-		append(
+		result.merge(
 			ConversationReducer.reduce(
 				&model,
 				.conversations(.earlierTurnsRequested(operation))
-			),
-			to: &result
+			)
 		)
 		return model.conversations.historyLoads[threadID].map(NavigationHistoryRead.page)
 	}
@@ -492,13 +491,12 @@ extension ContextNavigationReducer
 				reference: reference,
 				commandRevision: model.execution.commandEventRevisions[threadID, default: 0]
 			)
-			append(
+			result.merge(
 				ConversationReducer
 					.reduce(
 						&model,
 						.conversations(.turnContentsRequested(operation))
-					),
-				to: &result
+					)
 			)
 			model.contextNavigation.pendingJump?.pendingRead = .turn(operation)
 			return
@@ -510,7 +508,7 @@ extension ContextNavigationReducer
 				.jumpError = "The referenced message is unavailable in this conversation."
 			return
 		}
-		guard jump.pagesLoaded < 20
+		guard jump.pagesLoaded < maximumJumpHistoryPages
 		else
 		{
 			model.contextNavigation.jumpError = "The referenced message is in older history. "

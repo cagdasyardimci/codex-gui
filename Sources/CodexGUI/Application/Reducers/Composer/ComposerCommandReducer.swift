@@ -273,7 +273,7 @@ enum ComposerCommandReducer
 				model: &model,
 				result: &result
 			)
-			result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
+			result.merge(WorkspaceFeatureComposition.reduceConversation(
 				&model,
 				.conversations(.newChatOpened(context))
 			))
@@ -305,7 +305,7 @@ enum ComposerCommandReducer
 			)
 			var selection = context
 			selection.threadID = argument
-			result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
+			result.merge(WorkspaceFeatureComposition.reduceConversation(
 				&model,
 				.conversations(.selectionRequested(selection))
 			))
@@ -492,22 +492,24 @@ enum ComposerCommandReducer
 					+ "turn before changing plan mode."
 				return result
 			}
-			guard let selected = resolvedModel(model)
+			guard let selectedModel = resolvedModel(model)
 			else
 			{
 				model.composerCommands.error = "Load the model catalog before changing plan mode."
 				return result
 			}
-			let next: CollaborationModeKind =
+			let nextMode: CollaborationModeKind =
 				model.composerCommands.planModes[request.conversation] == .plan ? .default : .plan
+			let reasoningEffort = model.preferences.selectedEffort
+				?? selectedModel.defaultReasoningEffort
 			let mode = CollaborationMode(
-				mode: next,
-				model: selected.id,
-				reasoningEffort: model.preferences.selectedEffort ?? selected.defaultReasoningEffort
+				mode: nextMode,
+				model: selectedModel.id,
+				reasoningEffort: reasoningEffort
 			)
 			if context.threadID == nil
 			{
-				model.composerCommands.planModes[request.conversation] = next
+				model.composerCommands.planModes[request.conversation] = nextMode
 				consumeDraft(
 					request,
 					model: &model,
@@ -596,15 +598,5 @@ enum ComposerCommandReducer
 			model: &model,
 			result: &result
 		)
-	}
-}
-
-extension WorkspaceReduction
-{
-	mutating func mergeCommandReduction(_ other: WorkspaceReduction)
-	{
-		effects += other.effects
-		domainEvents += other.domainEvents
-		presentationCommands += other.presentationCommands
 	}
 }

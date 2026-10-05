@@ -36,17 +36,19 @@ struct WorkspaceSelectors
 	}
 	var statusMessage: String?
 	{
-		model.composerCommands.error ?? model.lifecycle.statusMessage
-			?? model.lifecycle.managedOwnershipConflict ?? model
-			.conversations.error ?? selectedThreadID
-			.flatMap
+		model.composerCommands.error
+			?? model.lifecycle.statusMessage
+			?? model.lifecycle.managedOwnershipConflict
+			?? model.conversations.error
+			?? selectedThreadID.flatMap
 			{
 				model.conversations.turnReferenceIndices[$0]?.error
-			} ?? model
-			.preferences
-			.statusMessage
-			?? model.preferences.persistenceError ?? model.execution.statusMessage
-			?? model.connection.statusMessage ?? model.composer.persistenceError
+			}
+			?? model.preferences.statusMessage
+			?? model.preferences.persistenceError
+			?? model.execution.statusMessage
+			?? model.connection.statusMessage
+			?? model.composer.persistenceError
 	}
 	var threads: [ThreadSummary]
 	{
@@ -353,7 +355,7 @@ struct WorkspaceSelectors
 			return latest
 		}
 		if let observed = content.latestObservedGitTurnID, observed != activeTurnID,
-			content.turnTimings[observed]?.status == "inProgress"
+			ConversationTurnStatus.isRunning(content.turnTimings[observed]?.status)
 		{
 			return observed
 		}

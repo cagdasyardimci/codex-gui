@@ -51,10 +51,7 @@ struct TaskCommandLifetime
 			turnID: turnID,
 			itemID: item.id
 		)
-		let terminalStatuses = ["completed", "failed", "declined", "interrupted", "cancelled"]
-		let hasTerminalStatus = terminalStatuses.contains(item.status ?? "")
-
-		if hasTerminalStatus
+		if CommandExecutionStatus.isTerminal(item.status)
 		{
 			pending.remove(owner)
 		}

@@ -60,7 +60,7 @@ extension ComposerCommandReducer
 		)
 		if selection.threadID != request.context.threadID
 		{
-			result.mergeCommandReduction(WorkspaceFeatureComposition.reduceConversation(
+			result.merge(WorkspaceFeatureComposition.reduceConversation(
 				&model,
 				.conversations(.selectionRequested(selection))
 			))

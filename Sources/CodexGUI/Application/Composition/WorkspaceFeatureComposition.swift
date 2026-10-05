@@ -12,40 +12,35 @@ enum WorkspaceFeatureComposition
 	) -> WorkspaceReduction
 	{
 		var result = WorkspaceReduction()
-		append(
+		result.merge(
 			reduceExecution(
 				&model,
 				action
-			),
-			to: &result
+			)
 		)
-		append(
+		result.merge(
 			ComposerReducer.reduce(
 				&model,
 				action
-			),
-			to: &result
+			)
 		)
-		append(
+		result.merge(
 			reduceConversation(
 				&model,
 				action
-			),
-			to: &result
+			)
 		)
-		append(
+		result.merge(
 			ReviewReducer.reduce(
 				&model,
 				action
-			),
-			to: &result
+			)
 		)
-		append(
+		result.merge(
 			reduceNavigation(
 				&model,
 				action
-			),
-			to: &result
+			)
 		)
 		return result
 	}
@@ -190,12 +185,11 @@ enum WorkspaceFeatureComposition
 				model: model
 			)
 		{
-			append(
+			result.merge(
 				ComposerReducer.reduce(
 					&model,
 					draftAction
-				),
-				to: &result
+				)
 			)
 		}
 		return result
@@ -232,7 +226,7 @@ enum WorkspaceFeatureComposition
 			purpose = .completion
 		default: return
 		}
-		append(
+		result.merge(
 			ConversationReducer.reduce(
 				&model,
 				.conversations(.historyRequested(ConversationReadOperation(
@@ -240,18 +234,7 @@ enum WorkspaceFeatureComposition
 					commandRevision: operation.commandRevision,
 					purpose: purpose
 				)))
-			),
-			to: &result
+			)
 		)
-	}
-
-	private static func append(
-		_ reduction: WorkspaceReduction,
-		to result: inout WorkspaceReduction
-	)
-	{
-		result.effects.append(contentsOf: reduction.effects)
-		result.domainEvents.append(contentsOf: reduction.domainEvents)
-		result.presentationCommands.append(contentsOf: reduction.presentationCommands)
 	}
 }

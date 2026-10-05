@@ -71,7 +71,7 @@ struct ExecutionReconciliationTests
 	{
 		for state in [ExecutionState.running, .awaitingApproval, .awaitingAnswer, .stopping]
 		{
-			for status in [nil, "inProgress", "completed"] as [String?]
+			for status in [nil, "inProgress", "running", "completed"] as [String?]
 			{
 				var (model, context) = fixture(state: state)
 				let result = history(
@@ -127,7 +127,7 @@ struct ExecutionReconciliationTests
 	{
 		for state in [ExecutionState.failed, .disconnected]
 		{
-			for status in [nil, "completed", "inProgress"] as [String?]
+			for status in [nil, "completed", "inProgress", "running"] as [String?]
 			{
 				var (model, context) = fixture(state: state)
 				_ = history(
@@ -135,7 +135,7 @@ struct ExecutionReconciliationTests
 					context: context,
 					model: &model
 				)
-				if status == "inProgress"
+				if status == "inProgress" || status == "running"
 				{
 					#expect(model.execution.state == .failed)
 					#expect(model.execution.activeThreadID == "worker")

@@ -17,14 +17,12 @@ enum WorkspaceDomainComposition
 			&model,
 			event
 		)
-		result.effects.append(contentsOf: navigation.effects)
-		result.domainEvents.append(contentsOf: navigation.domainEvents)
-		result.presentationCommands.append(contentsOf: navigation.presentationCommands)
+		result.merge(navigation)
 		let commandReduction = ComposerCommandReducer.reduceDomainEvent(
 			&model,
 			event
 		)
-		result.mergeCommandReduction(commandReduction)
+		result.merge(commandReduction)
 
 		PreferenceReducer.synchronize(&model)
 		return result

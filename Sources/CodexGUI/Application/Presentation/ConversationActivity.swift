@@ -53,11 +53,12 @@ struct ConversationTurnTiming: Equatable
 	{
 		turnID = turn.id
 		status = turn.status
+		let isRunning = ConversationTurnStatus.isRunning(turn.status)
 		// Only live observations supply a local fallback; history must not invent elapsed time.
 		startedAt = turn.startedAt ?? previous?.startedAt
-			?? (turn.status == "inProgress" ? observedAt : nil)
+			?? (isRunning ? observedAt : nil)
 		completedAt = turn.completedAt ?? previous?.completedAt
-			?? (turn.status != "inProgress" && startedAt != nil ? observedAt : nil)
+			?? (!isRunning && startedAt != nil ? observedAt : nil)
 		durationMs = turn.durationMs ?? previous?.durationMs
 	}
 }
