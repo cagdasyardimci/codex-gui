@@ -79,8 +79,11 @@ final class SourceResultCodeCard: NSView
 			0x191C1F,
 			dark: .white
 		)
-		let headerViews: [NSView] = headerAccessory.map { [icon, label, NSView(), $0] }
-			?? [icon, label]
+		let headerViews: [NSView] = headerAccessory.map
+		{
+			[icon, label, NSView(), $0]
+		}
+		?? [icon, label]
 		let header = AppKitLayout.horizontalStack(
 			headerViews,
 			spacing: 6
@@ -129,7 +132,10 @@ final class SourceResultCodeCard: NSView
 		scroll.translatesAutoresizingMaskIntoConstraints = false
 		if headerAccessory != nil
 		{
-			header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -21).isActive = true
+			header.trailingAnchor.constraint(
+				equalTo: trailingAnchor,
+				constant: -21
+			).isActive = true
 		}
 		NSLayoutConstraint.activate([
 			header.leadingAnchor.constraint(

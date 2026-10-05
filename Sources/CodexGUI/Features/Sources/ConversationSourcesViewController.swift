@@ -8,13 +8,45 @@ final class ConversationSourcesViewController: NSViewController
 	private(set) var sources: ConversationLocalSources
 	var onOpen: ((ConversationLocalSources.Record) -> Bool)?
 	private var rows: [String: NSView] = [:]
+	private var renderedRecords: [String: ConversationLocalSources.Record] = [:]
+	private var dividers: [String: NSBox] = [:]
 	private var buttons: [NSButton: ConversationLocalSources.Record] = [:]
-	private var tasks: [Task<Void, Never>] = []
+	private var tasks: [String: Task<Void, Never>] = [:]
+	private var interruptedPreviews = Set<String>()
 	private var renderGeneration = 0
+	private var needsSourceRender = true
+	private var isInvalidated = false
 	private var expandedInvocations = Set<String>()
-	private var disclosures: [NSButton: (id: String, detail: NSView, stack: NSStackView)] = [:]
+	private var disclosures: [NSButton: Disclosure] = [:]
+	private var results: [InvocationKey: CachedResult] = [:]
+	private let sourceStack = AppKitLayout.verticalStack(
+		[],
+		spacing: 0
+	)
 	private let status = NSTextField(wrappingLabelWithString: "")
 	private let rawOutput = SourceRawOutputPresenter()
+
+	private struct InvocationKey: Hashable
+	{
+		let recordID: String
+		let invocationID: String
+	}
+
+	private struct CachedResult
+	{
+		let invocation: ConversationLocalSources.Invocation
+		let output: SourceRawOutputEntryView
+		var widthConstraint: NSLayoutConstraint? = nil
+	}
+
+	private struct Disclosure
+	{
+		let id: String
+		let recordID: String
+		let invocations: [ConversationLocalSources.Invocation]
+		let detail: NSStackView
+		let stack: NSStackView
+	}
 
 	init(
 		owner: FeaturePresentationOwner,
@@ -36,27 +68,53 @@ final class ConversationSourcesViewController: NSViewController
 
 	override func loadView()
 	{
-		let scroll = NSScrollView()
+		let scroll = ConversationSourcesScrollView()
 		scroll.hasVerticalScroller = true
 		scroll.autohidesScrollers = true
 		scroll.drawsBackground = false
 		view = scroll
-		renderSources(in: scroll)
+		let document = ConversationSourcesDocumentView()
+		AppKitLayout.pin(
+			sourceStack,
+			to: document,
+			inset: 20
+		)
+		document.translatesAutoresizingMaskIntoConstraints = false
+		scroll.documentView = document
+		document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
+		sourceStack.addArrangedSubview(status)
+		status.widthAnchor.constraint(equalTo: sourceStack.widthAnchor).isActive = true
+		scroll.onReveal =
+		{
+			[weak self] in
+			self?.renderPendingSources()
+		}
+		renderPendingSources()
 	}
 
 	func update(_ sources: ConversationLocalSources)
 	{
-		guard self.sources.records != sources.records
+		guard !isInvalidated, self.sources.records != sources.records
 		else
 		{
 			return
 		}
 		self.sources = sources
-		guard isViewLoaded, let scroll = view as? NSScrollView
+		needsSourceRender = true
+		cancelObsoletePreviewTasks()
+		renderPendingSources()
+	}
+
+	private func renderPendingSources(force: Bool = false)
+	{
+		guard !isInvalidated, needsSourceRender, isViewLoaded,
+				let scroll = view as? NSScrollView,
+				force || !scroll.isHiddenOrHasHiddenAncestor
 		else
 		{
 			return
 		}
+		needsSourceRender = false
 		let origin = scroll.contentView.bounds.origin
 		let focusID = focusedIdentifier(in: scroll)
 		renderSources(in: scroll)
@@ -78,13 +136,33 @@ final class ConversationSourcesViewController: NSViewController
 
 	func invalidate()
 	{
+		isInvalidated = true
 		rawOutput.dismiss()
 		renderGeneration += 1
-		for task in tasks
+		for task in tasks.values
 		{
 			task.cancel()
 		}
 		tasks.removeAll()
+	}
+
+	private func cancelObsoletePreviewTasks()
+	{
+		let current = Dictionary(
+			sources.records.map
+			{
+				($0.id, $0)
+			},
+			uniquingKeysWith:
+			{
+				_, latest in latest
+			}
+		)
+		for id in Array(tasks.keys) where renderedRecords[id] != current[id]
+		{
+			tasks.removeValue(forKey: id)?.cancel()
+			interruptedPreviews.insert(id)
+		}
 	}
 
 	private func focusedIdentifier(in root: NSView) -> NSUserInterfaceItemIdentifier?
@@ -132,46 +210,149 @@ final class ConversationSourcesViewController: NSViewController
 
 	private func renderSources(in scroll: NSScrollView)
 	{
-		invalidate()
-		rows.removeAll()
-		buttons.removeAll()
-		disclosures.removeAll()
-		let stack = AppKitLayout.verticalStack(
-			[],
-			spacing: 0
+		rawOutput.dismiss()
+		let current = Dictionary(
+			sources.records.map
+			{
+				($0.id, $0)
+			},
+			uniquingKeysWith:
+			{
+				_, latest in latest
+			}
 		)
+		let changed = Set(renderedRecords.keys.filter
+		{
+			renderedRecords[$0] != current[$0]
+		}).union(interruptedPreviews)
+		interruptedPreviews.removeAll()
+		retainCurrentResults(
+			current,
+			changedRecords: changed
+		)
+		for id in changed
+		{
+			rows.removeValue(forKey: id)
+			dividers.removeValue(forKey: id)
+			renderedRecords.removeValue(forKey: id)
+		}
+		buttons = buttons.filter
+		{
+			!changed.contains($0.value.id)
+		}
+		disclosures = disclosures.filter
+		{
+			!changed.contains($0.value.recordID)
+		}
+		let currentGroups = Set(sources.records.flatMap
+		{
+			record in
+			record.invocations.map
+			{
+				"\(record.id):operation:\($0.operation)"
+			}
+		})
+		expandedInvocations.formIntersection(currentGroups)
+		let retainedViews = Set(rows.values.map(ObjectIdentifier.init)
+			+ dividers.values.map(ObjectIdentifier.init) + [ObjectIdentifier(status)])
+		for child in sourceStack.arrangedSubviews
+			where !retainedViews.contains(ObjectIdentifier(child))
+		{
+			sourceStack.removeArrangedSubview(child)
+			child.removeFromSuperview()
+		}
+		var insertionIndex = 0
 		if sources.records.isEmpty
 		{
 			let empty =
 				NSTextField(wrappingLabelWithString: "No sources in loaded conversation history")
 			empty.textColor = .secondaryLabelColor
-			stack.addArrangedSubview(empty)
+			sourceStack.insertArrangedSubview(
+				empty,
+				at: insertionIndex
+			)
+			insertionIndex += 1
 		}
 		for record in sources.records
 		{
-			let row = record.kind == .tool || record.kind == .web
-				? makeActivityRow(for: record) : makeRow(for: record)
-			stack.addArrangedSubview(row)
-			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-			let divider = NSBox()
-			divider.boxType = .separator
-			stack.addArrangedSubview(divider)
-			divider.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+			let row: NSView
+			let divider: NSBox
+			let isNewRow: Bool
+			if let existing = rows[record.id], let existingDivider = dividers[record.id]
+			{
+				row = existing
+				divider = existingDivider
+				isNewRow = false
+			}
+			else
+			{
+				row = record.kind == .tool || record.kind == .web
+					? makeActivityRow(for: record) : makeRow(for: record)
+				divider = NSBox()
+				divider.boxType = .separator
+				dividers[record.id] = divider
+				renderedRecords[record.id] = record
+				isNewRow = true
+			}
+			// Moving arranged positions keeps retained views and their constraints installed.
+			sourceStack.insertArrangedSubview(
+				row,
+				at: insertionIndex
+			)
+			sourceStack.insertArrangedSubview(
+				divider,
+				at: insertionIndex + 1
+			)
+			insertionIndex += 2
+			if isNewRow
+			{
+				row.widthAnchor.constraint(equalTo: sourceStack.widthAnchor).isActive = true
+				divider.widthAnchor.constraint(equalTo: sourceStack.widthAnchor).isActive = true
+			}
 		}
 		status.textColor = .secondaryLabelColor
 		status.font = .systemFont(ofSize: 12)
 		status.isHidden = true
-		stack.addArrangedSubview(status)
-		status.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		let document = ConversationSourcesDocumentView()
-		AppKitLayout.pin(
-			stack,
-			to: document,
-			inset: 20
+		sourceStack.insertArrangedSubview(
+			status,
+			at: insertionIndex
 		)
-		document.translatesAutoresizingMaskIntoConstraints = false
-		scroll.documentView = document
-		document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
+	}
+
+	private func retainCurrentResults(
+		_ records: [String: ConversationLocalSources.Record],
+		changedRecords: Set<String>
+	)
+	{
+		var invocations: [InvocationKey: ConversationLocalSources.Invocation] = [:]
+		for record in records.values
+		{
+			for invocation in record.invocations
+			{
+				let key = InvocationKey(
+					recordID: record.id,
+					invocationID: invocation.id
+				)
+				invocations[key] = invocation
+			}
+		}
+		for key in Array(results.keys)
+		{
+			guard var cached = results[key]
+			else
+			{
+				continue
+			}
+			let current = invocations[key]
+			if current != cached.invocation || changedRecords.contains(key.recordID)
+			{
+				cached.widthConstraint?.isActive = false
+				cached.widthConstraint = nil
+				(cached.output.superview as? NSStackView)?.removeArrangedSubview(cached.output)
+				cached.output.removeFromSuperview()
+			}
+			results[key] = current == cached.invocation ? cached : nil
+		}
 	}
 
 	private func makeRow(for record: ConversationLocalSources.Record) -> NSView
@@ -280,11 +461,12 @@ final class ConversationSourcesViewController: NSViewController
 		if record.kind == .audio, let sourcePath = record.url?.path, button.isEnabled
 		{
 			let generation = renderGeneration
-			tasks.append(Task
+			tasks[record.id] = Task
 			{
 				[weak self, weak duration, weak labels, weak path] in
 				guard let value = await SourceAudioMetadataLoader.duration(path: sourcePath),
 						!Task.isCancelled, let self, self.renderGeneration == generation,
+						self.sources.records.contains(record),
 						let duration, let labels, let path
 				else
 				{
@@ -301,13 +483,13 @@ final class ConversationSourcesViewController: NSViewController
 					14,
 					after: duration
 				)
-			})
+			}
 		}
 		if record.kind == .image, record.isInlineImage || button.isEnabled
 		{
 			let sourcePath = record.isInlineImage ? record.path : (record.url?.path ?? record.path)
 			let generation = renderGeneration
-			tasks.append(Task
+			tasks[record.id] = Task
 			{
 				[weak self, weak image, weak state] in
 				let data = await SourceThumbnailLoader.load(path: sourcePath)
@@ -327,7 +509,7 @@ final class ConversationSourcesViewController: NSViewController
 					state.stringValue = "Preview unavailable"
 					state.isHidden = false
 				}
-			})
+			}
 		}
 		return row
 	}
@@ -526,27 +708,16 @@ final class ConversationSourcesViewController: NSViewController
 			{
 				$0.element
 			}
-			for invocation in orderedInvocations
+			let groupDisclosure = Disclosure(
+				id: id,
+				recordID: record.id,
+				invocations: orderedInvocations,
+				detail: detail,
+				stack: content
+			)
+			if disclosure.state == .on
 			{
-				let payload = invocation.resultText.isEmpty
-					? "No result recorded." +
-					(invocation.status.isEmpty ? "" : "\nStatus: \(invocation.status)")
-					: invocation.resultText
-				let card = SourceResultCodeCard(
-					text: payload,
-					language: invocation.resultLanguage,
-					identifier: "source-result:\(record.id):\(invocation.id)",
-					isError: invocation.isError
-				)
-				let output = SourceRawOutputEntryView(card: card, id: invocation.id)
-				{ [weak self] in
-					guard let self, self.sources.records.contains(record),
-						let window = self.view.window
-					else { return }
-					self.rawOutput.present(invocation, in: window)
-				}
-				detail.addArrangedSubview(output)
-				output.widthAnchor.constraint(equalTo: detail.widthAnchor).isActive = true
+				populateResults(for: groupDisclosure)
 			}
 			detail.isHidden = disclosure.state == .off
 			disclosure.updateDisclosureIndicator()
@@ -557,7 +728,7 @@ final class ConversationSourcesViewController: NSViewController
 				disclosure.state == .on ? 14 : 8,
 				after: disclosure
 			)
-			disclosures[disclosure] = (id, detail, content)
+			disclosures[disclosure] = groupDisclosure
 		}
 		for child in content.arrangedSubviews
 		{
@@ -611,9 +782,74 @@ final class ConversationSourcesViewController: NSViewController
 		return row
 	}
 
+	private func populateResults(for disclosure: Disclosure)
+	{
+		guard disclosure.detail.arrangedSubviews.isEmpty
+		else
+		{
+			return
+		}
+		for invocation in disclosure.invocations
+		{
+			let key = InvocationKey(
+				recordID: disclosure.recordID,
+				invocationID: invocation.id
+			)
+			var cached: CachedResult
+			if let existing = results[key], existing.invocation == invocation
+			{
+				cached = existing
+			}
+			else
+			{
+				let payload = invocation.resultText.isEmpty
+					? "No result recorded." +
+					(invocation.status.isEmpty ? "" : "\nStatus: \(invocation.status)")
+					: invocation.resultText
+				let card = SourceResultCodeCard(
+					text: payload,
+					language: invocation.resultLanguage,
+					identifier: "source-result:\(disclosure.recordID):\(invocation.id)",
+					isError: invocation.isError
+				)
+				let output = SourceRawOutputEntryView(
+					card: card,
+					id: invocation.id
+				)
+				{
+					[weak self] in
+					guard let self, !self.isInvalidated,
+							let record = self.sources.records.first(where:
+							{
+								$0.id == key.recordID
+							}),
+							record.invocations.contains(invocation), let window = self.view.window
+					else
+					{
+						return
+					}
+					self.rawOutput.present(
+						invocation,
+						in: window
+					)
+				}
+				cached = CachedResult(
+					invocation: invocation,
+					output: output
+				)
+			}
+			cached.widthConstraint?.isActive = false
+			disclosure.detail.addArrangedSubview(cached.output)
+			let width = cached.output.widthAnchor.constraint(equalTo: disclosure.detail.widthAnchor)
+			width.isActive = true
+			cached.widthConstraint = width
+			results[key] = cached
+		}
+	}
+
 	@objc private func toggleInvocation(_ sender: NSButton)
 	{
-		guard let disclosure = disclosures[sender]
+		guard !isInvalidated, let disclosure = disclosures[sender]
 		else
 		{
 			return
@@ -621,6 +857,7 @@ final class ConversationSourcesViewController: NSViewController
 		if sender.state == .on
 		{
 			expandedInvocations.insert(disclosure.id)
+			populateResults(for: disclosure)
 		}
 		else
 		{
@@ -637,6 +874,12 @@ final class ConversationSourcesViewController: NSViewController
 
 	func select(_ request: ContextPanelRequest)
 	{
+		guard !isInvalidated, request.owner == owner, request.destination == .sources
+		else
+		{
+			return
+		}
+		prepareForDisplay()
 		guard let record = sources.record(
 			for: request,
 			owner: owner
@@ -645,16 +888,27 @@ final class ConversationSourcesViewController: NSViewController
 		{
 			return
 		}
-		_ = view
 		if let row = rows[record.id]
 		{
 			row.scrollToVisible(row.bounds)
 		}
 	}
 
+	/// Window containers call this before revealing a retained Sources view.
+	func prepareForDisplay()
+	{
+		guard !isInvalidated
+		else
+		{
+			return
+		}
+		_ = view
+		renderPendingSources(force: true)
+	}
+
 	func waitForPreviews() async
 	{
-		for task in tasks
+		for task in tasks.values
 		{
 			await task.value
 		}
@@ -662,7 +916,7 @@ final class ConversationSourcesViewController: NSViewController
 
 	@objc private func openSource(_ sender: NSButton)
 	{
-		guard let record = buttons[sender]
+		guard !isInvalidated, let record = buttons[sender], sources.records.contains(record)
 		else
 		{
 			return
@@ -673,6 +927,31 @@ final class ConversationSourcesViewController: NSViewController
 			status.stringValue = "Unable to open \(record.name). "
 				+ "The source may no longer be available."
 		}
+	}
+}
+
+/// Reveal hooks reconcile deferred updates before a retained Sources tab is shown again.
+@MainActor
+private final class ConversationSourcesScrollView: NSScrollView
+{
+	var onReveal: (() -> Void)?
+
+	override func viewDidUnhide()
+	{
+		super.viewDidUnhide()
+		onReveal?()
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		onReveal?()
+	}
+
+	override func layout()
+	{
+		super.layout()
+		onReveal?()
 	}
 }
 

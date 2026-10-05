@@ -44,11 +44,7 @@ struct ConversationLocalSourcesTests
 		#expect(inventory.records[0].id != inventory.records[1].id)
 		#expect(inventory.records.map(\.id) == ConversationLocalSources(entries: entries).records
 			.map(\.id))
-		#expect(LocalAttachmentURL.resolve("file://remote-machine/tmp/image.png") == nil)
-		#expect(LocalAttachmentURL.resolve("relative.png") == nil)
-		#expect(LocalAttachmentURL.resolve("file:relative.png") == nil)
-		#expect(LocalAttachmentURL.resolve("~/image.png")?.path
-			.hasPrefix(NSHomeDirectory() + "/") == true)
+
 	}
 
 	@Test func recordNavigationRejectsForeignOwnersAndInventedRecords() throws

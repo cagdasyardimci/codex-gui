@@ -545,6 +545,10 @@ final class ToolsTabViewController: NSViewController
 		if let sourcesController, sourcesController.parent === self
 		{
 			sourcesController.view.isHidden = !isSourcesSelected
+			if isSourcesSelected
+			{
+				(sourcesController as? ConversationSourcesViewController)?.prepareForDisplay()
+			}
 		}
 	}
 
