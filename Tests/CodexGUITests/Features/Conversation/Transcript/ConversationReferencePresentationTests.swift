@@ -189,7 +189,7 @@ struct ConversationReferencePresentationTests
 			entries: entries,
 			projectPath: "/tmp"
 		)
-		#expect(rows.map(\.id) == ["one:reply", "one:edit", "two:user"])
+		#expect(rows.map(\.id) == ["one:reply", "one:file-change-summary", "two:user"])
 		let card = ConversationFileChangeCollectionItem()
 		card.configure(
 			[change],
