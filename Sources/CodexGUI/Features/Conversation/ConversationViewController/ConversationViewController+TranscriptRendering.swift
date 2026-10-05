@@ -225,6 +225,7 @@ extension ConversationViewController
 	)
 	{
 		let context = renderedContext
+		let navigationGeneration = selectionGeneration
 		if case .message(let entry) = row,
 			case .fileChanges(
 			let changes,
@@ -287,6 +288,30 @@ extension ConversationViewController
 						return
 					}
 					self.onOpenActivityFile(path)
+				},
+				onOpenSubagents:
+				{
+					[weak self] in
+					guard let self, self.renderedContext == context,
+							self.requestedContext == context,
+							self.selectionGeneration == navigationGeneration
+					else
+					{
+						return
+					}
+					self.onOpenSubagents?()
+				},
+				onSelectSubagentThread:
+				{
+					[weak self] threadID in
+					guard let self, self.renderedContext == context,
+							self.requestedContext == context,
+							self.selectionGeneration == navigationGeneration
+					else
+					{
+						return
+					}
+					self.onSelectSubagentThread?(threadID)
 				}
 			)
 			if let position = activityOutputPositions[activity.id]

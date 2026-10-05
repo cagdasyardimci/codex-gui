@@ -42,6 +42,11 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private var hoverSynchronizationTask: Task<Void, Never>?
 	private let icon = NSImageView()
 	private let titleLabel = NSTextField(labelWithString: "")
+	private let subagentsButton = NSButton(
+		title: "",
+		target: nil,
+		action: nil
+	)
 	private let fileButton = NSButton(
 		title: "",
 		target: nil,
@@ -75,6 +80,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private var row: ConversationActivityRow?
 	private var onToggle: (() -> Void)?
 	private var onOpenFile: ((String) -> Void)?
+	private var onOpenSubagents: (() -> Void)?
+	private var onSelectSubagentThread: ((String) -> Void)?
+	private var subagentNavigationGeneration = 0
 	private var imageTask: Task<Void, Never>?
 	private static let imageCache = NSCache<NSString, NSImage>()
 
@@ -121,13 +129,19 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func configureActivityButtons()
 	{
-		for button in [fileButton, disclosure, imageButton]
+		for button in [fileButton, disclosure, imageButton, subagentsButton]
 		{
 			button.isBordered = false
 			button.target = self
 			button.setButtonType(.momentaryPushIn)
 		}
 		fileButton.action = #selector(openFile)
+		subagentsButton.action = #selector(openSubagents)
+		subagentsButton.refusesFirstResponder = false
+		subagentsButton.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
 		fileButton.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
@@ -299,6 +313,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		))
 		onToggle = nil
 		onOpenFile = nil
+		onOpenSubagents = nil
+		onSelectSubagentThread = nil
+		subagentNavigationGeneration += 1
 		output.string = ""
 		commandLabel.stringValue = ""
 		imageButton.image = nil
@@ -314,7 +331,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	func configure(
 		_ row: ConversationActivityRow,
 		onToggle: @escaping () -> Void,
-		onOpenFile: @escaping (String) -> Void
+		onOpenFile: @escaping (String) -> Void,
+		onOpenSubagents: (() -> Void)? = nil,
+		onSelectSubagentThread: ((String) -> Void)? = nil
 	)
 	{
 		_ = view
@@ -333,6 +352,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		self.row = row
 		self.onToggle = onToggle
 		self.onOpenFile = onOpenFile
+		self.onOpenSubagents = onOpenSubagents
+		self.onSelectSubagentThread = onSelectSubagentThread
+		subagentNavigationGeneration += 1
 		renderHeader(row)
 		let arrangedViews = renderExpandedDetails(
 			row,
@@ -373,10 +395,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			.defaultLow,
 			for: .horizontal
 		)
-		var headerViews: [NSView] = [
-			row.kind == .subagent ? ConversationSubagentAvatars.make(row.subagents) : icon,
-			titleLabel
-		]
+		var headerViews = activityHeaderViews(row)
 		if hasLink
 		{
 			headerViews.append(fileButton)
@@ -402,6 +421,51 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			headerViews,
 			in: .leading
 		)
+	}
+
+	private func activityHeaderViews(_ row: ConversationActivityRow) -> [NSView]
+	{
+		guard row.kind == .subagent
+		else
+		{
+			return [icon, titleLabel]
+		}
+		subagentsButton.attributedTitle = NSAttributedString(
+			string: row.title,
+			attributes: [
+				.font: NSFont.systemFont(ofSize: 14),
+				.foregroundColor: NSColor.secondaryLabelColor
+			]
+		)
+		subagentsButton.toolTip = titleLabel.toolTip
+		subagentsButton.setAccessibilityLabel("Open Subagents: \(row.title)")
+		let generation = subagentNavigationGeneration
+		let avatars: NSView
+		if onSelectSubagentThread != nil
+		{
+			avatars = ConversationSubagentAvatars.make(
+				row.subagents,
+				onSelectThread:
+				{
+					[weak self] threadID in
+					guard let self, self.subagentNavigationGeneration == generation
+					else
+					{
+						return
+					}
+					self.onSelectSubagentThread?(threadID)
+				}
+			)
+		}
+		else
+		{
+			avatars = ConversationSubagentAvatars.make(row.subagents)
+			avatars.addGestureRecognizer(NSClickGestureRecognizer(
+				target: self,
+				action: #selector(openSubagents)
+			))
+		}
+		return [avatars, onOpenSubagents != nil ? subagentsButton : titleLabel]
 	}
 
 	private func renderExpandedDetails(
@@ -1053,6 +1117,15 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		{
 			onOpenFile?(path)
 		}
+	}
+	@objc private func openSubagents()
+	{
+		guard row?.kind == .subagent
+		else
+		{
+			return
+		}
+		onOpenSubagents?()
 	}
 	@objc private func openImage()
 	{
