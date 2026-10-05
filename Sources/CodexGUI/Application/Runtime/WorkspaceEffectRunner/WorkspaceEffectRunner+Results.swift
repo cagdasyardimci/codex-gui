@@ -36,6 +36,10 @@ extension WorkspaceEffectRunner
 		error: Error
 	) -> OperationFailure
 	{
+		if case .prepareSubmission = effect, let rejection = error as? SubmissionPreparationRejected
+		{
+			return rejection.failure
+		}
 		if case .respond = effect, let writeFailure = error as? ProtocolWriteFailure
 		{
 			return OperationFailure(

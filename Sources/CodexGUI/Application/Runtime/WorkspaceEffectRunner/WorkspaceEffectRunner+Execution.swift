@@ -10,6 +10,11 @@ struct SubmissionStartFailure: Error
 	let pendingCapture: PendingGitTurnBaselineCapture?
 }
 
+struct SubmissionPreparationRejected: Error
+{
+	let failure: OperationFailure
+}
+
 /// Finite backend and persistence effects with checkout ownership validation.
 extension WorkspaceEffectRunner
 {
@@ -572,7 +577,7 @@ extension WorkspaceEffectRunner
 		{
 			detail = try await service.resumeThread(
 				id: threadID,
-				expectedDirectory: managedWorkspace == nil ? nil : directory
+				expectedDirectory: directory
 			)
 		}
 		else
@@ -584,10 +589,29 @@ extension WorkspaceEffectRunner
 		}
 
 		try Task.checkCancellation()
-		try validateThread(
-			detail.summary,
-			workspace: managedWorkspace
-		)
+		do
+		{
+			try validateConversationOwnership(
+				detail.summary,
+				expectedThreadID: context.threadID,
+				expectedDirectory: directory,
+				workspace: managedWorkspace
+			)
+		}
+		catch
+		{
+			guard managedWorkspace == nil
+			else
+			{
+				// Managed preparation retains the existing binding and cleanup protections.
+				throw error
+			}
+			// Preparation returned, but no turn-start effect has been accepted or sent.
+			throw SubmissionPreparationRejected(failure: OperationFailure(
+				message: error.localizedDescription,
+				outcomeIsUncertain: false
+			))
+		}
 		preparedThreadIDs[submission.retainedContextRequestID] = detail.summary.id
 		var boundWorkspace = managedWorkspace
 		if context.threadID == nil, let current = managedWorkspace,
@@ -812,17 +836,10 @@ extension WorkspaceEffectRunner
 		}
 		try await verifyWorkspace(managedWorkspace)
 		let detail = try await service.readThread(id: threadID)
-		guard detail.summary.id == threadID
-		else
-		{
-			throw AppServerError.protocolError("History returned another conversation.")
-		}
-		try CheckoutIdentity.validate(
-			cwd: detail.summary.cwd,
-			expectedDirectory: project
-		)
-		try validateThread(
+		try validateConversationOwnership(
 			detail.summary,
+			expectedThreadID: threadID,
+			expectedDirectory: project,
 			workspace: managedWorkspace
 		)
 		return detail
@@ -848,26 +865,33 @@ extension WorkspaceEffectRunner
 		}
 	}
 
-	private func validateThread(
+	private func validateConversationOwnership(
 		_ summary: ThreadSummary,
+		expectedThreadID: String?,
+		expectedDirectory: URL?,
 		workspace: TaskWorkspace?
 	) throws
 	{
-		guard let workspace
-		else
+		if let workspace
 		{
-			return
-		}
-		let path = URL(fileURLWithPath: summary.cwd).standardizedFileURL.resolvingSymlinksInPath()
-			.path
-		guard path == workspace.checkoutPath,
-				workspace.threadID == nil || workspace.threadID == summary.id
-		else
-		{
-			throw TaskWorkspaceError
-				.ownershipConflict(
+			let path = URL(fileURLWithPath: summary.cwd).standardizedFileURL
+				.resolvingSymlinksInPath().path
+			guard path == workspace.checkoutPath,
+					workspace.threadID == nil || workspace.threadID == summary.id
+			else
+			{
+				throw TaskWorkspaceError.ownershipConflict(
 					"conversation \(summary.id) reports another checkout: \(summary.cwd)"
 				)
+			}
 		}
+		if let expectedThreadID, summary.id != expectedThreadID
+		{
+			throw AppServerError.protocolError("Backend returned another conversation.")
+		}
+		try CheckoutIdentity.validate(
+			cwd: summary.cwd,
+			expectedDirectory: expectedDirectory
+		)
 	}
 }
