@@ -338,9 +338,156 @@ struct AppServerTransportWriterTests
 		let params = try #require(request["params"] as? [String: Any])
 		#expect(params["threadId"] as? String == "thread")
 		#expect(params["cursor"] as? String == "older-cursor")
-		#expect(params["limit"] as? Int == 50)
+		#expect(params["limit"] as? Int == 25)
 		#expect(params["sortDirection"] as? String == "desc")
 		#expect(params["itemsView"] as? String == "full")
+	}
+
+	@Test func initialHistoryPageLoadsTwentyFiveFullTurns() async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		_ = try await fixture.server.loadTurns(threadId: "thread")
+		let request = try #require(fixture.messages().first
+		{
+			$0["method"] as? String == "thread/turns/list"
+		})
+		let params = try #require(request["params"] as? [String: Any])
+		#expect(params["limit"] as? Int == 25)
+		#expect(params["cursor"] == nil)
+		#expect(params["itemsView"] as? String == "full")
+	}
+
+	@Test func turnReferencePageOmitsContentAndCoversTheRailViewport() async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		let service: any CodexService = fixture.server
+		_ = try await service.loadTurnReferences(
+			threadId: "thread",
+			cursor: nil
+		)
+		let request = try #require(fixture.messages().first
+		{
+			$0["method"] as? String == "thread/turns/list"
+		})
+		let params = try #require(request["params"] as? [String: Any])
+		#expect(params["limit"] as? Int == 100)
+		#expect(params["cursor"] == nil)
+		#expect(params["sortDirection"] as? String == "desc")
+		#expect(params["itemsView"] as? String == "notLoaded")
+	}
+
+	@Test func hoverPreviewReadsOnlyBoundaryPagesAndMarksPartialContent() async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		let service: any CodexService = fixture.server
+		let turn = try await service.loadTurnPreviewContents(
+			threadId: "thread",
+			reference: ConversationTurnReference(
+				id: "picked",
+				status: "completed"
+			)
+		)
+		#expect(!turn.itemsAreComplete)
+		#expect(turn.items.map(\.id) == ["request", "reply"])
+		let requests = fixture.messages().filter
+		{
+			$0["method"] as? String == "thread/items/list"
+		}
+		#expect(requests.count == 2)
+		let parameters = try requests.map
+		{
+			try #require($0["params"] as? [String: Any])
+		}
+		#expect(parameters.compactMap
+		{
+			$0["sortDirection"] as? String
+		} == ["asc", "desc"])
+		#expect(parameters
+			.allSatisfy
+			{
+				$0["cursor"] == nil && $0["turnId"] as? String == "picked"
+			})
+	}
+
+	@Test func loadingAReferencedTurnFetchesOnlyItsItemsAndContinuesItsCursor() async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		let turn = try await fixture.server.loadTurnContents(
+			threadId: "thread",
+			reference: ConversationTurnReference(
+				id: "picked",
+				status: "completed"
+			)
+		)
+		#expect(turn.id == "picked")
+		#expect(turn.items.map(\.id) == ["request", "reply"])
+		let requests = fixture.messages().filter
+		{
+			$0["method"] as? String == "thread/items/list"
+		}
+		#expect(requests.count == 2)
+		let parameters = try requests.map
+		{
+			try #require($0["params"] as? [String: Any])
+		}
+		#expect(parameters
+			.allSatisfy
+			{
+				$0["threadId"] as? String == "thread" && $0["turnId"] as? String == "picked" &&
+					$0["sortDirection"] as? String == "asc"
+			})
+		#expect(parameters.first?["cursor"] == nil)
+		#expect(parameters.last?["cursor"] as? String == "next-items")
+		#expect(!fixture.methods().contains("thread/turns/list"))
+	}
+
+	@Test func loadingAReferenceRejectsItemsFromAnotherTurn() async throws
+	{
+		let fixture = try fixture()
+		defer
+		{
+			fixture.close()
+		}
+		try fixture.release()
+		try await fixture.server.connect()
+		do
+		{
+			_ = try await fixture.server.loadTurnContents(
+				threadId: "thread",
+				reference: ConversationTurnReference(
+					id: "foreign",
+					status: "completed"
+				)
+			)
+			Issue.record("An item from another turn was accepted")
+		}
+		catch AppServerError.protocolError
+		{
+		}
 	}
 
 	private func drainWritesBeforeMainActorCleanup(_ fixture: PausedProtocolWriterFixture) throws
@@ -422,6 +569,21 @@ struct AppServerTransportWriterTests
 		                ]}, {'type': 'agentMessage', 'text': 'missing ID'}
 		            ]}, {'id': 'earlier', 'items': []}
 		        ]}})
+		    elif method == 'thread/items/list':
+		        params = message['params']
+		        turn_id = 'other-turn' if params.get('turnId') == 'foreign' else params['turnId']
+		        if params.get('sortDirection') == 'desc':
+		            item = {'id': 'reply', 'type': 'agentMessage', 'text': 'Selected reply'}
+		            cursor = 'previous-items'
+		        elif params.get('cursor') == 'next-items':
+		            item = {'id': 'reply', 'type': 'agentMessage', 'text': 'Selected reply'}
+		            cursor = None
+		        else:
+		            content = [{'type': 'text', 'text': 'Selected request'}]
+		            item = {'id': 'request', 'type': 'userMessage', 'content': content}
+		            cursor = 'next-items'
+		        result = {'data': [{'turnId': turn_id, 'item': item}], 'nextCursor': cursor}
+		        send({'id': message['id'], 'result': result})
 		    elif method == 'fixture/queueDrained':
 		        (directory / 'drained').touch()
 		    elif method != 'fixture/blocker' and 'id' in message and method:

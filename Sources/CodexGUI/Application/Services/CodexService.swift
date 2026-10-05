@@ -73,6 +73,19 @@ protocol CodexService: AnyObject
 		turns: [CodexTurn],
 		nextCursor: String?
 	)
+	func loadTurnReferences(
+		threadId: String,
+		cursor: String?
+	) async throws -> TurnReferencePage
+	func loadTurnPreviewContents(
+		threadId: String,
+		reference: ConversationTurnReference
+	) async throws -> CodexTurn
+	func loadTurnContents(
+		threadId: String,
+		reference: ConversationTurnReference
+	) async throws
+		-> CodexTurn
 	func startTurn(
 		threadId: String,
 		text: String,
@@ -160,6 +173,36 @@ protocol CodexService: AnyObject
 
 extension CodexService
 {
+	func loadTurnReferences(
+		threadId: String,
+		cursor: String?
+	) async throws -> TurnReferencePage
+	{
+		TurnReferencePage(
+			references: [],
+			nextCursor: nil
+		)
+	}
+
+	func loadTurnPreviewContents(
+		threadId: String,
+		reference: ConversationTurnReference
+	) async throws -> CodexTurn
+	{
+		try await loadTurnContents(
+			threadId: threadId,
+			reference: reference
+		)
+	}
+
+	func loadTurnContents(
+		threadId: String,
+		reference: ConversationTurnReference
+	) async throws -> CodexTurn
+	{
+		throw AppServerError.requestRejected("This Codex service cannot load an individual turn.")
+	}
+
 	func responseMayHaveBeenSent(to requestID: String) -> Bool?
 	{
 		nil

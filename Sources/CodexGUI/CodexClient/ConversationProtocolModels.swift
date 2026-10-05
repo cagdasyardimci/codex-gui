@@ -46,6 +46,7 @@ struct CodexTurn: Sendable
 	let id: String
 	let status: String
 	let items: [CodexItem]
+	let itemsAreComplete: Bool
 	let error: String?
 	let startedAt: Date?
 	let completedAt: Date?
@@ -58,12 +59,14 @@ struct CodexTurn: Sendable
 		error: String?,
 		startedAt: Date? = nil,
 		completedAt: Date? = nil,
-		durationMs: Double? = nil
+		durationMs: Double? = nil,
+		itemsAreComplete: Bool = true
 	)
 	{
 		self.id = id
 		self.status = status
 		self.items = items
+		self.itemsAreComplete = itemsAreComplete
 		self.error = error
 		self.startedAt = startedAt
 		self.completedAt = completedAt
@@ -78,6 +81,7 @@ struct CodexTurn: Sendable
 			return nil
 		}
 		self.id = id
+		self.itemsAreComplete = true
 		self.status = json["status"] as? String ?? "inProgress"
 		self.items = (json["items"] as? [[String: Any]] ?? []).compactMap(CodexItem.init(json:))
 		self.error = (json["error"] as? [String: Any])?["message"] as? String

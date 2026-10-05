@@ -628,7 +628,7 @@ extension AppServer
 		let generation = connectionGeneration
 		var parameters: [String: Any] = [
 			"threadId": threadId,
-			"limit": 50,
+			"limit": ConversationCachePolicy.contentPageSize,
 			"sortDirection": "desc",
 			"itemsView": "full",
 		]
