@@ -20,7 +20,7 @@ enum ReviewAnalyzer
 		{
 			turn in
 			let changes = completedChanges(in: turn)
-			if let cached = parsedChanges[turn.id], sameChanges(
+			if let cached = parsedChanges[turn.id], FileChange.haveSameExactContent(
 				cached.changes,
 				changes
 			)
@@ -285,34 +285,12 @@ enum ReviewAnalyzer
 		{
 			$0.hasPrefix("Binary files ") || $0 == "GIT binary patch" || $0.hasPrefix("literal ")
 		}
-		let kind: ReviewFileKind
-		let normalized = change.kind.lowercased()
-		if isBinary
-		{
-			kind = .binary
-		}
-		else if previousPath != nil || reportedMovePath != nil || normalized == "move"
-			|| normalized == "rename"
-		{
-			kind = .renamed
-		}
-		else if ["delete", "deleted", "remove"].contains(normalized)
-		{
-			kind = .deleted
-		}
-		else if ["add", "added", "create"].contains(normalized)
-		{
-			kind = .added
-		}
-		else if ["update", "modify", "modified"].contains(normalized)
-		{
-			kind = .modified
-		}
-		else
-		{
-			kind = .unsupported
-		}
-
+		let kind = fileKind(
+			for: change,
+			isBinary: isBinary,
+			previousPath: previousPath,
+			reportedMovePath: reportedMovePath
+		)
 		let hunks = GitDiffParser.hunks(in: combinedDiff).enumerated().map
 		{
 			index, hunk in
@@ -325,19 +303,6 @@ enum ReviewAnalyzer
 			)
 		}
 
-		let explanation: String?
-		switch kind
-		{
-		case .binary: explanation = "Binary change; text sections are unavailable."
-		case .unsupported: explanation = "Unsupported change type: \(change.kind)."
-		case .renamed where hunks.isEmpty: explanation = "Renamed without a text section."
-		case .deleted where hunks.isEmpty: explanation = "Deleted file; no text section was "
-			+ "reported."
-		case .added,
-				.modified where hunks.isEmpty:
-			explanation = "No text sections were reported for this file."
-		default: explanation = nil
-		}
 		return ReviewFile(
 			path: renamedPath ?? reportedMovePath ?? change.path,
 			previousPath: previousPath,
@@ -346,8 +311,67 @@ enum ReviewAnalyzer
 			hunks: hunks,
 			diff: combinedDiff,
 			fingerprint: fingerprint(changes.map(changeIdentity)),
-			explanation: explanation
+			explanation: fileExplanation(
+				kind: kind,
+				hasHunks: !hunks.isEmpty,
+				reportedKind: change.kind
+			)
 		)
+	}
+
+	private static func fileKind(
+		for change: FileChange,
+		isBinary: Bool,
+		previousPath: String?,
+		reportedMovePath: String?
+	) -> ReviewFileKind
+	{
+		let normalized = change.kind.lowercased()
+		if isBinary
+		{
+			return .binary
+		}
+		else if previousPath != nil || reportedMovePath != nil || normalized == "move"
+			|| normalized == "rename"
+		{
+			return .renamed
+		}
+		else if ["delete", "deleted", "remove"].contains(normalized)
+		{
+			return .deleted
+		}
+		else if ["add", "added", "create"].contains(normalized)
+		{
+			return .added
+		}
+		else if ["update", "modify", "modified"].contains(normalized)
+		{
+			return .modified
+		}
+		else
+		{
+			return .unsupported
+		}
+	}
+
+	private static func fileExplanation(
+		kind: ReviewFileKind,
+		hasHunks: Bool,
+		reportedKind: String
+	) -> String?
+	{
+		switch kind
+		{
+		case .binary: return "Binary change; text sections are unavailable."
+		case .unsupported: return "Unsupported change type: \(reportedKind)."
+		case .renamed where !hasHunks: return "Renamed without a text section."
+		case .deleted where !hasHunks: return "Deleted file; no text section was "
+			+ "reported."
+		case .added,
+				.modified where !hasHunks:
+			return "No text sections were reported for this file."
+		default: return nil
+		}
 	}
 
 	private static func completedChanges(in turn: CodexTurn) -> [FileChange]
@@ -362,46 +386,6 @@ enum ReviewAnalyzer
 	private static func isCompletedEdit(_ item: CodexItem) -> Bool
 	{
 		item.type == "fileChange" && item.status == "completed" && !item.changes.isEmpty
-	}
-
-	private static func sameChanges(
-		_ lhs: [FileChange],
-		_ rhs: [FileChange]
-	) -> Bool
-	{
-		guard lhs.count == rhs.count
-		else
-		{
-			return false
-		}
-		return zip(
-			lhs,
-			rhs
-		).allSatisfy
-		{
-			left, right in
-			// String equality permits canonical Unicode equivalents; fingerprints use UTF-8.
-			left.path.utf8.elementsEqual(right.path.utf8)
-				&& left.kind.utf8.elementsEqual(right.kind.utf8)
-				&& samePath(
-					left.movePath,
-					right.movePath
-				)
-				&& left.diff.utf8.elementsEqual(right.diff.utf8)
-		}
-	}
-
-	private static func samePath(
-		_ lhs: String?,
-		_ rhs: String?
-	) -> Bool
-	{
-		switch (lhs, rhs)
-		{
-		case (nil, nil): return true
-		case (.some(let left), .some(let right)): return left.utf8.elementsEqual(right.utf8)
-		default: return false
-		}
 	}
 
 	private static func commandOutcome(for item: CodexItem) -> ReviewValidationOutcome
@@ -451,15 +435,19 @@ enum ReviewAnalyzer
 
 	private struct Fingerprint
 	{
-		private var value: UInt64 = 14_695_981_039_346_656_037
+		private static let offsetBasis: UInt64 = 14_695_981_039_346_656_037
+		private static let prime: UInt64 = 1_099_511_628_211
+		private static let partSeparator: UInt64 = 0xff
+
+		private var value = Self.offsetBasis
 
 		mutating func append(_ part: String)
 		{
 			for byte in part.utf8
 			{
-				value = (value ^ UInt64(byte)) &* 1_099_511_628_211
+				value = (value ^ UInt64(byte)) &* Self.prime
 			}
-			value = (value ^ 0xff) &* 1_099_511_628_211
+			value = (value ^ Self.partSeparator) &* Self.prime
 		}
 
 		var identity: String

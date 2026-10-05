@@ -49,7 +49,7 @@ enum ConversationNetFileChanges
 			return nil
 		}
 		var composition = Composition(created: first.kind == "add")
-		var composed = changes.reduce(0)
+		let cappedReportedDiffBytes = changes.reduce(0)
 		{
 			min(
 				maximumCompositionBytes + 1,
@@ -58,12 +58,13 @@ enum ConversationNetFileChanges
 					$1.diff.utf8.count
 				)
 			)
-		} <= maximumCompositionBytes
-		for change in changes where composed
+		}
+		var canComposeChanges = cappedReportedDiffBytes <= maximumCompositionBytes
+		for change in changes where canComposeChanges
 		{
 			if !composition.apply(change)
 			{
-				composed = false
+				canComposeChanges = false
 				break
 			}
 		}
@@ -71,7 +72,7 @@ enum ConversationNetFileChanges
 		let renamed = !destination.utf8.elementsEqual(first.path.utf8)
 		let kind = last.kind == "delete" ? "delete" : first.kind == "add" ? "add" : "update"
 		let diff: String
-		if composed, let composedDiff = composition.diff()
+		if canComposeChanges, let composedDiff = composition.diff()
 		{
 			diff = composedDiff
 			guard !diff.isEmpty || renamed || (first.kind == "add" && last.kind != "delete")

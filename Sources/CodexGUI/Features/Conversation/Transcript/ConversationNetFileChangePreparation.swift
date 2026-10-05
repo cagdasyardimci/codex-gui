@@ -11,7 +11,7 @@ actor ConversationNetFileChangePreparation
 		static func == (lhs: Self, rhs: Self) -> Bool
 		{
 			lhs.turnID.utf8.elementsEqual(rhs.turnID.utf8)
-				&& ConversationNetFileChangePreparation.sameChanges(
+				&& FileChange.haveSameExactContent(
 					lhs.changes,
 					rhs.changes
 				)
@@ -25,7 +25,7 @@ actor ConversationNetFileChangePreparation
 
 		func matches(_ changes: [FileChange]) -> Bool
 		{
-			ConversationNetFileChangePreparation.sameChanges(
+			FileChange.haveSameExactContent(
 				source.changes,
 				changes
 			)
@@ -34,7 +34,7 @@ actor ConversationNetFileChangePreparation
 		static func == (lhs: Self, rhs: Self) -> Bool
 		{
 			lhs.source == rhs.source
-				&& ConversationNetFileChangePreparation.sameChanges(
+				&& FileChange.haveSameExactContent(
 					lhs.changes,
 					rhs.changes
 				)
@@ -135,27 +135,6 @@ actor ConversationNetFileChangePreparation
 		retained = nextRetained
 		retainedByteCount = retainedBytes
 		return results
-	}
-
-	private static func sameChanges(
-		_ lhs: [FileChange],
-		_ rhs: [FileChange]
-	) -> Bool
-	{
-		lhs.count == rhs.count && zip(
-			lhs,
-			rhs
-		).allSatisfy
-		{
-			left, right in
-			left.path.utf8.elementsEqual(right.path.utf8)
-				&& left.kind.utf8.elementsEqual(right.kind.utf8)
-				&& sameContext(
-					left.movePath,
-					right.movePath
-				)
-				&& left.diff.utf8.elementsEqual(right.diff.utf8)
-		}
 	}
 
 	private static func sameContext(

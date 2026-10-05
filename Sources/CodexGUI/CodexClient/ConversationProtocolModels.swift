@@ -159,6 +159,39 @@ struct FileChange: Equatable, Sendable
 	let movePath: String?
 	let diff: String
 
+	/// Compares ordered inputs by UTF-8 bytes, preserving optional rename metadata.
+	/// Unlike Equatable, canonically equivalent Unicode strings remain distinct.
+	static func haveSameExactContent(
+		_ lhs: [FileChange],
+		_ rhs: [FileChange]
+	) -> Bool
+	{
+		guard lhs.count == rhs.count
+		else
+		{
+			return false
+		}
+		return zip(
+			lhs,
+			rhs
+		).allSatisfy
+		{
+			left, right in
+			let movePathsMatch: Bool
+			switch (left.movePath, right.movePath)
+			{
+			case (nil, nil): movePathsMatch = true
+			case (let left?, let right?):
+				movePathsMatch = left.utf8.elementsEqual(right.utf8)
+			default: movePathsMatch = false
+			}
+			return left.path.utf8.elementsEqual(right.path.utf8)
+				&& left.kind.utf8.elementsEqual(right.kind.utf8)
+				&& movePathsMatch
+				&& left.diff.utf8.elementsEqual(right.diff.utf8)
+		}
+	}
+
 	init?(json: [String: Any])
 	{
 		guard let path = json["path"] as? String
