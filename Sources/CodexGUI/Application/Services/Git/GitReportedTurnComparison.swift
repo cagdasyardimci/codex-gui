@@ -8,37 +8,15 @@ enum GitReportedTurnComparison
 		request: GitComparisonRequest
 	) -> GitComparisonResult
 	{
-		let merged = ConversationNetFileChanges.merge(changes)
-		let text = merged.map
+		let mergedChanges = ConversationNetFileChanges.merge(changes)
+		let filePatches = mergedChanges.map
 		{
-			change in
-			let oldPath = relativePath(
-				change.path,
-				root: request.repositoryRoot
+			patchText(
+				for: $0,
+				repositoryRoot: request.repositoryRoot
 			)
-			let newPath = relativePath(
-				change.movePath ?? change.path,
-				root: request.repositoryRoot
-			)
-			var lines = ["diff --git \(quoted("a/" + oldPath)) \(quoted("b/" + newPath))"]
-			if change.kind == "add"
-			{
-				lines.append("new file mode 100644")
-			}
-			if change.kind == "delete"
-			{
-				lines.append("deleted file mode 100644")
-			}
-			if oldPath != newPath
-			{
-				lines.append("rename from " + quoted(oldPath))
-				lines.append("rename to " + quoted(newPath))
-			}
-			lines.append("--- " + (change.kind == "add" ? "/dev/null" : quoted("a/" + oldPath)))
-			lines.append("+++ " + (change.kind == "delete" ? "/dev/null" : quoted("b/" + newPath)))
-			lines.append(change.diff)
-			return lines.joined(separator: "\n")
-		}.joined(separator: "\n")
+		}
+		let text = filePatches.joined(separator: "\n")
 		let patch = Data((text.isEmpty ? "" : text + "\n").utf8)
 		guard patch.count <= 8 * 1024 * 1024
 		else
@@ -53,6 +31,39 @@ enum GitReportedTurnComparison
 			patch: patch,
 			files: GitComparisonPatchParser.files(in: patch)
 		))
+	}
+
+	private static func patchText(
+		for change: FileChange,
+		repositoryRoot: String
+	) -> String
+	{
+		let oldPath = relativePath(
+			change.path,
+			root: repositoryRoot
+		)
+		let newPath = relativePath(
+			change.movePath ?? change.path,
+			root: repositoryRoot
+		)
+		var lines = ["diff --git \(quoted("a/" + oldPath)) \(quoted("b/" + newPath))"]
+		if change.kind == "add"
+		{
+			lines.append("new file mode 100644")
+		}
+		if change.kind == "delete"
+		{
+			lines.append("deleted file mode 100644")
+		}
+		if oldPath != newPath
+		{
+			lines.append("rename from " + quoted(oldPath))
+			lines.append("rename to " + quoted(newPath))
+		}
+		lines.append("--- " + (change.kind == "add" ? "/dev/null" : quoted("a/" + oldPath)))
+		lines.append("+++ " + (change.kind == "delete" ? "/dev/null" : quoted("b/" + newPath)))
+		lines.append(change.diff)
+		return lines.joined(separator: "\n")
 	}
 
 	private static func relativePath(

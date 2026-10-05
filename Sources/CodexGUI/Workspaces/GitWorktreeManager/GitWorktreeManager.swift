@@ -96,20 +96,16 @@ actor GitWorktreeManager
 
 	private func inspectSourceRepository(at project: URL) throws -> CheckoutSource
 	{
-		let source = canonicalURL(
-			for: URL(fileURLWithPath: try gitOutput(
-				["rev-parse", "--show-toplevel"],
-				at: project
-			))
+		let sourcePath = try gitOutput(
+			["rev-parse", "--show-toplevel"],
+			at: project
 		)
-		let gitDirectory = canonicalURL(
-			for: URL(
-				fileURLWithPath: try gitOutput(
-					["rev-parse", "--path-format=absolute", "--git-common-dir"],
-					at: source
-				)
-			)
+		let source = canonicalURL(for: URL(fileURLWithPath: sourcePath))
+		let gitDirectoryPath = try gitOutput(
+			["rev-parse", "--path-format=absolute", "--git-common-dir"],
+			at: source
 		)
+		let gitDirectory = canonicalURL(for: URL(fileURLWithPath: gitDirectoryPath))
 		let baseCommit = try gitOutput(
 			["rev-parse", "--verify", "HEAD^{commit}"],
 			at: source

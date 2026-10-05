@@ -474,25 +474,9 @@ struct GitTurnBaselineStorage: Sendable
 
 	private func freezeDirectories(_ directory: URL)
 	{
-		let enumerator = FileManager.default.enumerator(
-			at: directory,
-			includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-			options: []
-		)
-		while let item = enumerator?.nextObject() as? URL
-		{
-			let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-			if values?.isDirectory == true && values?.isSymbolicLink != true
-			{
-				try? FileManager.default.setAttributes(
-					[.posixPermissions: 0o500],
-					ofItemAtPath: item.path
-				)
-			}
-		}
-		try? FileManager.default.setAttributes(
-			[.posixPermissions: 0o500],
-			ofItemAtPath: directory.path
+		setDirectoryPermissions(
+			0o500,
+			in: directory
 		)
 	}
 
@@ -503,6 +487,18 @@ struct GitTurnBaselineStorage: Sendable
 		{
 			return
 		}
+		setDirectoryPermissions(
+			0o700,
+			in: directory
+		)
+		try? FileManager.default.removeItem(at: directory)
+	}
+
+	private func setDirectoryPermissions(
+		_ permissions: Int,
+		in directory: URL
+	)
+	{
 		let enumerator = FileManager.default.enumerator(
 			at: directory,
 			includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
@@ -514,16 +510,15 @@ struct GitTurnBaselineStorage: Sendable
 			if values?.isDirectory == true && values?.isSymbolicLink != true
 			{
 				try? FileManager.default.setAttributes(
-					[.posixPermissions: 0o700],
+					[.posixPermissions: permissions],
 					ofItemAtPath: item.path
 				)
 			}
 		}
 		try? FileManager.default.setAttributes(
-			[.posixPermissions: 0o700],
+			[.posixPermissions: permissions],
 			ofItemAtPath: directory.path
 		)
-		try? FileManager.default.removeItem(at: directory)
 	}
 
 	private func requireDirectory(_ directory: URL) throws

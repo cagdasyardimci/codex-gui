@@ -255,18 +255,7 @@ final class TaskWorkspaceCoordinator
 		{
 			return
 		}
-		let session = stores.keys.first
-		{
-			if case .managed(
-				let workspaceID,
-				_
-			) = $0
-			{
-				return workspaceID == id
-			}
-			return false
-		}?
-		.sessionID ?? UUID()
+		let session = managedOwner(for: id)?.sessionID ?? UUID()
 		let request = WorkspaceSelectionRequest(
 			requestID: UUID(),
 			ownerSessionID: session,
@@ -288,17 +277,7 @@ final class TaskWorkspaceCoordinator
 		{
 			return
 		}
-		let owner = stores.keys.first
-		{
-			if case .managed(
-				let workspaceID,
-				_
-			) = $0
-			{
-				return workspaceID == id
-			}
-			return false
-		}
+		let owner = managedOwner(for: id)
 		let reference = owner.flatMap
 		{
 			owner in stores[owner].map
@@ -316,6 +295,21 @@ final class TaskWorkspaceCoordinator
 		)
 		dispatch(.cleanupRequested(request))
 		await wait(request.requestID)
+	}
+
+	private func managedOwner(for workspaceID: UUID) -> WorkspaceLifecycleOwner?
+	{
+		stores.keys.first
+		{
+			if case .managed(
+				let candidateID,
+				_
+			) = $0
+			{
+				return candidateID == workspaceID
+			}
+			return false
+		}
 	}
 
 	func cancelIncompleteCreation(id: UUID) async

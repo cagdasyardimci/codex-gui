@@ -27,24 +27,25 @@ struct GitTurnBaselineTreeReader
 			throw GitTurnBaselineReadError.failure(.notGitRepository)
 		}
 		var manifests = GitTurnBaselineManifestReader(commands: commands)
-		let before = try manifests.read()
-		let paths = Set(before.paths + additionalPaths).sorted()
+		let initialManifest = try manifests.read()
+		let paths = Set(initialManifest.paths + additionalPaths).sorted()
 		guard paths.count <= limits.maximumPaths
 		else
 		{
 			throw unavailable("Tracked-file count exceeds the capture limit.")
 		}
-		let first = try readAll(paths)
-		let contentsAreUnchanged = try contentsMatch(first)
-		let after = try manifests.read()
-		guard before == after, contentsAreUnchanged
+
+		let capturedFiles = try readAll(paths)
+		let contentsAreUnchanged = try contentsMatch(capturedFiles)
+		let finalManifest = try manifests.read()
+		guard initialManifest == finalManifest, contentsAreUnchanged
 		else
 		{
 			throw GitTurnBaselineReadError.failure(.repositoryChanged)
 		}
 		return GitTurnBaselineTree(
-			files: first,
-			indexManifest: before.index
+			files: capturedFiles,
+			indexManifest: initialManifest.index
 		)
 	}
 
