@@ -427,7 +427,7 @@ extension MainWindowController
 		)
 	}
 
-	private func configureToolsPaneClosing()
+	func configureToolsPaneClosing()
 	{
 		paneController.onToolsExpansionLayoutChanged =
 		{

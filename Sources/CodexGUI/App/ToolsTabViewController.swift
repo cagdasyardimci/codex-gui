@@ -24,13 +24,19 @@ final class ToolsTabViewController: NSViewController
 	var onOpenChanges: (() -> Void)?
 	var onChangesSelectionChange: (() -> Void)?
 	var onChangesTabClosed: (() -> Void)?
+	var onSourcesTabClosed: (() -> Void)?
 	private(set) var tabCount = 0
 	private(set) var selectedTabID: UUID?
 	private(set) var isConversationSelected = false
 	private(set) var changesTabID: UUID?
+	private(set) var sourcesTabID: UUID?
 	var isChangesSelected: Bool
 	{
 		!isConversationSelected && selectedTabID == changesTabID && changesTabID != nil
+	}
+	var isSourcesSelected: Bool
+	{
+		!isConversationSelected && selectedTabID == sourcesTabID && sourcesTabID != nil
 	}
 	private var isExpanded = false
 	private var conversationTitle = "New chat"
@@ -39,6 +45,7 @@ final class ToolsTabViewController: NSViewController
 	private let contentHost = NSView()
 	private var toolsContent: NSView?
 	private weak var changesController: NSViewController?
+	private weak var sourcesController: NSViewController?
 	private let tabScrollView = NSScrollView()
 	private lazy var tabBar = makeTabHeader()
 	private var preferredTabAreaWidth: NSLayoutConstraint?
@@ -125,11 +132,20 @@ final class ToolsTabViewController: NSViewController
 		{
 			return
 		}
-		let selectionChanged = isConversationSelected || (changesTabID != nil &&
-			changesTabID != selectedTabID)
+		let selectionChanged = isConversationSelected || isSourcesSelected ||
+			(changesTabID != nil &&
+				changesTabID != selectedTabID)
 		if let changesTabID, changesTabID != selectedTabID
 		{
 			self.selectedTabID = changesTabID
+		}
+		else if selectedTabID == sourcesTabID
+		{
+			let tabID = UUID()
+			tabIDs.append(tabID)
+			tabCount = tabIDs.count
+			self.selectedTabID = tabID
+			changesTabID = tabID
 		}
 		else
 		{
@@ -168,9 +184,74 @@ final class ToolsTabViewController: NSViewController
 		showSelectedContent()
 	}
 
+	func showSources(_ controller: NSViewController)
+	{
+		if let sourcesTabID
+		{
+			selectedTabID = sourcesTabID
+		}
+		else if !isConversationSelected, let selectedTabID, selectedTabID != changesTabID
+		{
+			sourcesTabID = selectedTabID
+		}
+		else
+		{
+			let tabID = UUID()
+			tabIDs.append(tabID)
+			tabCount = tabIDs.count
+			selectedTabID = tabID
+			sourcesTabID = tabID
+		}
+		isConversationSelected = false
+		_ = view
+		if let sourcesController, sourcesController !== controller
+		{
+			detachSources()
+		}
+		if controller.parent !== self
+		{
+			controller.view.removeFromSuperview()
+			controller.removeFromParent()
+			addChild(controller)
+			AppKitLayout.pin(
+				controller.view,
+				to: contentHost,
+				inset: 0
+			)
+		}
+		sourcesController = controller
+		renderTabs()
+		onTabSelectionChange?()
+		onChangesSelectionChange?()
+	}
+
+	func detachSources()
+	{
+		guard let sourcesController, sourcesController.parent === self
+		else
+		{
+			return
+		}
+		sourcesController.view.removeFromSuperview()
+		sourcesController.removeFromParent()
+		showSelectedContent()
+	}
+
+	func removeSourcesTab()
+	{
+		guard let sourcesTabID, let index = tabIDs.firstIndex(of: sourcesTabID)
+		else
+		{
+			detachSources()
+			return
+		}
+		removeTab(at: index)
+	}
+
 	func openNewTab()
 	{
 		let wasShowingConversation = isConversationSelected
+		let wasShowingSources = isSourcesSelected
 		isConversationSelected = false
 		let tabID = UUID()
 		tabIDs.append(tabID)
@@ -180,7 +261,7 @@ final class ToolsTabViewController: NSViewController
 		_ = view
 		renderTabs()
 		onChangesSelectionChange?()
-		if wasShowingConversation
+		if wasShowingConversation || wasShowingSources
 		{
 			onTabSelectionChange?()
 		}
@@ -453,10 +534,14 @@ final class ToolsTabViewController: NSViewController
 
 	private func showSelectedContent()
 	{
-		toolsContent?.isHidden = isChangesSelected
+		toolsContent?.isHidden = isChangesSelected || isSourcesSelected || isConversationSelected
 		if let changesController, changesController.parent === self
 		{
 			changesController.view.isHidden = !isChangesSelected
+		}
+		if let sourcesController, sourcesController.parent === self
+		{
+			sourcesController.view.isHidden = !isSourcesSelected
 		}
 	}
 
@@ -506,8 +591,10 @@ final class ToolsTabViewController: NSViewController
 	) -> NSView
 	{
 		let isChanges = id == changesTabID
+		let isSources = id == sourcesTabID
+		let title = isChanges ? "Changes" : isSources ? "Sources" : "New tab"
 		let selectButton = NSButton(
-			title: isChanges ? "Changes" : "New tab",
+			title: title,
 			target: self,
 			action: #selector(selectTab(_:))
 		)
@@ -524,9 +611,17 @@ final class ToolsTabViewController: NSViewController
 			)
 			selectButton.imagePosition = .imageLeading
 		}
+		else if isSources
+		{
+			selectButton.image = DesktopIcons.image(
+				.addSources,
+				size: 16
+			)
+			selectButton.imagePosition = .imageLeading
+		}
 		selectButton.font = .systemFont(ofSize: 13)
 		selectButton.tag = index
-		selectButton.setAccessibilityLabel("\(isChanges ? "Changes" : "New tab") \(index + 1)")
+		selectButton.setAccessibilityLabel("\(title) \(index + 1)")
 		selectButton.setAccessibilityValue(selected ? "Selected" : "Not selected")
 		let closeButton = makeIconButton(
 			.x,
@@ -667,12 +762,23 @@ final class ToolsTabViewController: NSViewController
 
 	@objc private func closeTab(_ sender: NSButton)
 	{
-		guard tabIDs.indices.contains(sender.tag)
+		removeTab(at: sender.tag)
+	}
+
+	private func removeTab(at index: Int)
+	{
+		guard tabIDs.indices.contains(index)
 		else
 		{
 			return
 		}
-		let removedTabID = tabIDs.remove(at: sender.tag)
+		let removedTabID = tabIDs.remove(at: index)
+		let removedSources = removedTabID == sourcesTabID
+		if removedSources
+		{
+			sourcesTabID = nil
+			detachSources()
+		}
 		if removedTabID == changesTabID
 		{
 			changesTabID = nil
@@ -682,11 +788,15 @@ final class ToolsTabViewController: NSViewController
 		if removedTabID == selectedTabID
 		{
 			selectedTabID = tabIDs.isEmpty ? nil : tabIDs[min(
-				sender.tag,
+				index,
 				tabIDs.count - 1
 			)]
 		}
 		renderTabs()
+		if removedSources
+		{
+			onSourcesTabClosed?()
+		}
 		onChangesSelectionChange?()
 		if tabIDs.isEmpty
 		{

@@ -24,6 +24,7 @@ final class InspectorViewController: NSViewController
 	let panels = ContextPanelShell()
 	let changes = ChangesViewController()
 	let summary = PinnedSummaryViewController()
+	var conversationSources: ConversationSourcesViewController?
 	let toolsTabs = ToolsTabViewController()
 	private(set) var isShowingTools = false
 	private var isShowingExpandedConversation = false
@@ -161,6 +162,10 @@ final class InspectorViewController: NSViewController
 
 	private func installSummaryAndDetailContent()
 	{
+		summary.onContentHeightChange =
+		{
+			[weak self] in self?.updateBoxHeight()
+		}
 		addChild(summary)
 		AppKitLayout.pin(
 			summary.view,
@@ -202,6 +207,10 @@ final class InspectorViewController: NSViewController
 			expandedConversationSummaryRevealed = false
 		}
 		renderedOwner = presentation.owner
+		if ownerChanged
+		{
+			toolsTabs.removeSourcesTab()
+		}
 		summaryVisible = visible
 		summary.render(presentation)
 		updateContentVisibility()
@@ -376,6 +385,34 @@ final class InspectorViewController: NSViewController
 		)
 	}
 
+	@discardableResult
+	func openSourcesInToolTab(_ request: ContextPanelRequest) -> Bool
+	{
+		guard request.destination == .sources, request.owner == renderedOwner,
+				let controller = conversationSources, controller.owner == request.owner,
+				request.recordID == nil || controller.sources.record(
+				for: request,
+				owner: request.owner
+				) != nil
+		else
+		{
+			return false
+		}
+		_ = view
+		cancelSummaryTransition()
+		if gitChanges.runtime.state.isOpen, toolsTabs.changesTabID == nil
+		{
+			gitChanges.close()
+		}
+		isShowingTools = true
+		isShowingDetails = false
+		setGitReviewFocused(false)
+		toolsTabs.showSources(controller)
+		controller.select(request)
+		updateContentVisibility()
+		return true
+	}
+
 	private func attachGitChangesToSelectedToolTab()
 	{
 		guard toolsTabs.isChangesSelected
@@ -477,7 +514,7 @@ final class InspectorViewController: NSViewController
 		inspectorBox?.isHidden = !showDetails && !showSummary
 		toolsTabs.view.isHidden = !isShowingTools || isShowingExpandedConversation
 
-		let fullBleedChanges = showDetails && panels.destination == .changes
+		let fullBleedChanges = showDetails && [.changes, .sources].contains(panels.destination)
 		inspectorBox?.isSummaryCard = !showDetails
 		inspectorBox?.isFullBleed = fullBleedChanges
 		boxEdgeConstraints[0].isActive = showDetails
@@ -491,7 +528,7 @@ final class InspectorViewController: NSViewController
 			fullBleedChanges: fullBleedChanges
 		)
 
-		let wideDetail = showDetails && [.changes].contains(panels.destination)
+		let wideDetail = showDetails && [.changes, .sources].contains(panels.destination)
 		onDetailGeometryChange?(wideDetail)
 		onSummaryDisplayChange?(showSummary && !showDetails)
 		updateBoxHeight()
@@ -533,7 +570,7 @@ final class InspectorViewController: NSViewController
 			}
 			constraint.constant = isTrailingOrBottomEdge ? -inset : inset
 		}
-		let fullHeightDetail = showDetails && [.changes]
+		let fullHeightDetail = showDetails && [.changes, .sources]
 			.contains(panels.destination)
 		maximumHeightConstraint?.isActive = !fullHeightDetail
 		fullHeightConstraint?.isActive = fullHeightDetail

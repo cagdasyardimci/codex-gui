@@ -21,11 +21,19 @@ final class ContextPanelShell: NSViewController
 		didSet
 		{
 			closeButton.isHidden = featureHeaders
-				.contains(destination ?? .reportedChanges) || !closeControlVisible
+				.contains(destination ?? .reportedChanges) || destination == .sources ||
+				!closeControlVisible
+			sourcesCloseButton.isHidden = !closeControlVisible
 		}
 	}
 	private let content = NSView()
 	private let titleLabel = NSTextField(labelWithString: "")
+	private let sourcesHeader = NSStackView()
+	private let sourcesCloseButton = NSButton(
+		title: "",
+		target: nil,
+		action: nil
+	)
 	private let closeButton = NSButton(
 		title: "Close panel",
 		target: nil,
@@ -43,8 +51,9 @@ final class ContextPanelShell: NSViewController
 		)
 		titleLabel.setAccessibilityRole(.staticText)
 		titleLabel.setAccessibilityRoleDescription("heading")
+		configureSourcesHeader()
 		let stack = AppKitLayout.verticalStack(
-			[titleLabel, closeButton, content],
+			[sourcesHeader, titleLabel, closeButton, content],
 			spacing: 12
 		)
 		AppKitLayout.pin(
@@ -52,6 +61,7 @@ final class ContextPanelShell: NSViewController
 			to: view,
 			inset: 0
 		)
+		sourcesHeader.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		content.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		content.bottomAnchor.constraint(equalTo: stack.bottomAnchor).isActive = true
 		content.setContentHuggingPriority(
@@ -60,6 +70,52 @@ final class ContextPanelShell: NSViewController
 		)
 		content.wantsLayer = true
 		content.layer?.masksToBounds = true
+	}
+
+	private func configureSourcesHeader()
+	{
+		let icon = NSImageView(image: DesktopIcons.image(.addSources))
+		icon.imageScaling = .scaleProportionallyDown
+		icon.setAccessibilityElement(false)
+		let label = NSTextField(labelWithString: "Sources")
+		label.font = .systemFont(
+			ofSize: 15,
+			weight: .medium
+		)
+		label.setAccessibilityRole(.staticText)
+		label.setAccessibilityRoleDescription("heading")
+		sourcesCloseButton.target = self
+		sourcesCloseButton.action = #selector(closePanel)
+		sourcesCloseButton.image = DesktopIcons.image(
+			.x,
+			accessibilityDescription: "Close Sources"
+		)
+		sourcesCloseButton.isBordered = false
+		sourcesCloseButton.contentTintColor = .secondaryLabelColor
+		sourcesCloseButton.toolTip = "Close Sources"
+		sourcesCloseButton.setAccessibilityLabel("Close Sources")
+		sourcesCloseButton.setAccessibilityIdentifier("sources-panel-close")
+		sourcesCloseButton.isHidden = !closeControlVisible
+		sourcesHeader.orientation = .horizontal
+		sourcesHeader.alignment = .centerY
+		sourcesHeader.spacing = 8
+		sourcesHeader.edgeInsets = NSEdgeInsets(
+			top: 8,
+			left: 12,
+			bottom: 8,
+			right: 12
+		)
+		[icon, label, NSView(), sourcesCloseButton].forEach(sourcesHeader.addArrangedSubview)
+		sourcesHeader.wantsLayer = true
+		sourcesHeader.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+		sourcesHeader.layer?.cornerRadius = 10
+		sourcesHeader.isHidden = true
+		NSLayoutConstraint.activate([
+			icon.widthAnchor.constraint(equalToConstant: 18),
+			icon.heightAnchor.constraint(equalToConstant: 18),
+			sourcesCloseButton.widthAnchor.constraint(equalToConstant: 24),
+			sourcesCloseButton.heightAnchor.constraint(equalToConstant: 24),
+		])
 	}
 
 	func register(
@@ -130,8 +186,10 @@ final class ContextPanelShell: NSViewController
 			to: content,
 			inset: 0
 		)
-		titleLabel.isHidden = featureHeaders.contains(destination)
-		closeButton.isHidden = featureHeaders.contains(destination) || !closeControlVisible
+		let providesHeader = featureHeaders.contains(destination)
+		sourcesHeader.isHidden = destination != .sources || providesHeader
+		titleLabel.isHidden = providesHeader || destination == .sources
+		closeButton.isHidden = providesHeader || destination == .sources || !closeControlVisible
 		self.destination = destination
 		titleLabel.stringValue = destination.rawValue.capitalized
 		return true

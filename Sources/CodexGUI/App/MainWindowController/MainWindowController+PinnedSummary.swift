@@ -12,6 +12,58 @@ extension MainWindowController
 			storeIdentity: target.presentationIdentity
 		)
 		let firstPresentation = summaryReconciliation.owner == nil
+		let sources = ConversationLocalSources(entries: snapshot.entries)
+		let sourcesController: ConversationSourcesViewController
+		if let existing = inspector.conversationSources, existing.owner == owner
+		{
+			sourcesController = existing
+			existing.update(sources)
+		}
+		else
+		{
+			inspector.conversationSources?.invalidate()
+			sourcesController = ConversationSourcesViewController(
+				owner: owner,
+				sources: sources
+			)
+			inspector.conversationSources = sourcesController
+		}
+		sourcesController.onOpen =
+		{
+			[weak self] record in
+			guard let self, target.accepts(.loadEarlierTurns), !target.store.isRetired,
+					self.summaryReconciliation.owner == owner,
+					sources.records.contains(record), let url = record.url
+			else
+			{
+				return false
+			}
+			if url.isFileURL, !FileManager.default.isReadableFile(atPath: url.path)
+			{
+				return false
+			}
+			guard url.isFileURL || (record.kind == .page && url.scheme == "https")
+			else
+			{
+				return false
+			}
+			return NSWorkspace.shared.open(url)
+		}
+		inspector.panels.register(
+			sourcesController,
+			for: .sources,
+			onRequest:
+			{
+				request in
+				guard target.accepts(.loadEarlierTurns), !target.store.isRetired,
+						request.owner == owner
+				else
+				{
+					return
+				}
+				sourcesController.select(request)
+			}
+		)
 		summaryReconciliation.select(owner)
 		let visibilityOwner = FeaturePresentationOwner(
 			snapshot,
@@ -28,9 +80,8 @@ extension MainWindowController
 			var sections = ContextSummarySections()
 			sections.changes = summaryChangesProvider?(owner)
 				?? .unavailable("Open Changes to load a repository comparison")
-			sections.sources = .unavailable("Sources integration unavailable")
-			// Sources and Subagents remain unavailable until their integration is restored.
-			sections.availableDestinations = [.changes]
+			sections.sources = .available(sources.records.map(\.summary))
+			sections.availableDestinations = [.changes, .sources]
 			summaryReconciliation.accept(ContextSummaryUpdate(
 				owner: owner,
 				revision: summaryReconciliation.revision + 1,
@@ -61,6 +112,14 @@ extension MainWindowController
 			),
 			visible: visible
 		)
+		if inspector.isShowingDetails, inspector.panels.destination == .sources,
+			target.accepts(.loadEarlierTurns), !target.store.isRetired
+		{
+			inspector.open(ContextPanelRequest(
+				owner: owner,
+				destination: .sources
+			))
+		}
 		if firstPresentation, visible, snapshot.projectPath != nil
 		{
 			paneController.setReviewCollapsed(false)
@@ -68,17 +127,49 @@ extension MainWindowController
 		inspector.summary.onNavigate =
 		{
 			[weak self] request in
-			guard request.owner == owner, target.accepts(.loadEarlierTurns),
-					request.destination == .changes
+			guard let self, request.owner == owner, target.accepts(.loadEarlierTurns),
+					!target.store.isRetired, self.summaryReconciliation.owner == owner
 			else
 			{
 				return
 			}
-			self?.openGitChanges(
-				request,
-				inToolTab: true
-			)
+			switch request.destination
+			{
+			case .changes:
+				self.openGitChanges(
+					request,
+					inToolTab: true
+				)
+			case .sources:
+				guard request.recordID == nil || sources.record(
+					for: request,
+					owner: owner
+				) != nil
+				else
+				{
+					return
+				}
+				self.openSourcesToolTab(request)
+			default: break
+			}
 		}
+	}
+
+	private func openSourcesToolTab(_ request: ContextPanelRequest)
+	{
+		configureToolsPaneClosing()
+		if !inspector.isShowingTools || paneController.isReviewCollapsed
+		{
+			paneController.openToolsPane
+			{
+				inspector.openSourcesInToolTab(request)
+			}
+		}
+		else
+		{
+			inspector.openSourcesInToolTab(request)
+		}
+		updateToolsToolbarControls()
 	}
 
 	/// Future Git integration projects its canonical comparison for the captured owner.
