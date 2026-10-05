@@ -156,8 +156,7 @@ struct WindowLayoutTests
 				width: 800,
 				height: 500
 			))
-			#expect(split.view.fittingSize.width <= split.view.bounds.width + 1)
-			#expect(split.view.fittingSize.height <= split.view.bounds.height + 1)
+			SplitPaneLayoutChecks.verifyVisiblePanesFit(split)
 			let selection = try #require(findModelSelection(in: conversation.view))
 			#expect(selection.frame.width > 0)
 			#expect(

@@ -160,8 +160,7 @@ struct DesktopLayoutTests
 				} == false)
 				#expect(split.splitViewItems[2].isCollapsed == (size.width == 800))
 				#expect(split.splitViewItems[1].viewController.view.frame.width >= 360)
-				#expect(split.view.fittingSize.width <= split.view.bounds.width + 1)
-				#expect(split.view.fittingSize.height <= split.view.bounds.height + 1)
+				SplitPaneLayoutChecks.verifyVisiblePanesFit(split)
 				if let output
 				{
 					let content = try #require(window.contentView)
