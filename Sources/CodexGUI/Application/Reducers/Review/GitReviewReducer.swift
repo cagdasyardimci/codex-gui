@@ -59,7 +59,8 @@ enum GitReviewReducer
 			let changed = state.setReportedChanges(changes)
 			guard state.isOpen, state.scope == .lastTurn,
 					changed ||
-					((state.snapshot == nil || state.isStale) && state.pendingRequest == nil)
+					((state.snapshot == nil || state.isStale) && state.pendingRequest == nil
+					&& state.failure == nil)
 			else
 			{
 				return GitReviewTransition()

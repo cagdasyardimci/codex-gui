@@ -28,7 +28,7 @@ extension MainWindowController
 			baselineRevision: snapshot.gitTurnBaselineRevision,
 			baselineFailure: snapshot.gitTurnBaselineFailure
 		)
-		inspector.gitChanges.runtime.setReportedChanges(snapshot.lastReportedGitTurn?.changes ?? [])
+		inspector.gitChanges.runtime.setReportedChanges(snapshot.reportedGitChanges)
 		summaryChangesProvider =
 		{
 			[weak self] owner in
@@ -105,7 +105,7 @@ extension MainWindowController
 			baselineRevision: snapshot.gitTurnBaselineRevision,
 			baselineFailure: snapshot.gitTurnBaselineFailure
 		)
-		inspector.gitChanges.runtime.setReportedChanges(snapshot.lastReportedGitTurn?.changes ?? [])
+		inspector.gitChanges.runtime.setReportedChanges(snapshot.reportedGitChanges)
 		paneController.setReviewCollapsed(false)
 	}
 
@@ -136,7 +136,7 @@ extension MainWindowController
 			baselineRevision: snapshot.gitTurnBaselineRevision,
 			baselineFailure: snapshot.gitTurnBaselineFailure
 		)
-		inspector.gitChanges.runtime.setReportedChanges(snapshot.lastReportedGitTurn?.changes ?? [])
+		inspector.gitChanges.runtime.setReportedChanges(snapshot.reportedGitChanges)
 		if let scope
 		{
 			inspector.gitChanges.runtime.selectScope(scope)

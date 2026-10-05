@@ -128,6 +128,10 @@ struct GitReviewState
 		{
 			return false
 		}
+		if self.lastTurnID != lastTurnID
+		{
+			reportedChanges = nil
+		}
 		self.lastTurnID = lastTurnID
 		self.baselineRevision = baselineRevision
 		self.baselineFailure = baselineFailure

@@ -82,6 +82,10 @@ struct ConversationSnapshot
 	var activeTurnID: String? = nil
 	/// Exact latest source turn, including turns that reported no file changes.
 	var lastGitTurnID: String? = nil
+	/// The latest editing identity remains available after its transcript payload is evicted.
+	var reportedGitTurnID: String? = nil
+	/// Nil means unavailable or incomplete; an empty array is a completed authoritative result.
+	var reportedGitChanges: [FileChange]? = nil
 	var gitTurnBaselineRevision = 0
 	var gitTurnBaselineFailure: GitComparisonFailure? = nil
 	var activeExecutionState: ExecutionState? = nil

@@ -183,6 +183,9 @@ struct ConversationContentModel
 	private(set) var loadedHistoryRevision = 0
 	/// The latest actual source turn observed independently of local execution ownership.
 	var latestObservedGitTurnID: String?
+	/// Editing identity survives transcript payload eviction.
+	var latestReportedGitTurn: ConversationReportedGitTurn?
+	var hasResolvedReportedGitTurn = false
 	var turnTimings: [String: ConversationTurnTiming] = [:]
 	var hasLoadedHistory = false
 	{

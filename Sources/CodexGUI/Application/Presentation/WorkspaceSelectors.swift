@@ -370,10 +370,11 @@ struct WorkspaceSelectors
 
 	var gitTurnBaselineFailure: GitComparisonFailure?
 	{
+		let reportedTurnID = viewedContent.content.latestReportedGitTurn?.id ?? lastGitTurnID
 		guard let threadID = selectedThreadID,
 				let binding = model.execution.gitTurnBaselineBindings[threadID],
 				binding.context.workspace == model.identity,
-				binding.turnID == lastGitTurnID,
+				binding.turnID == reportedTurnID,
 				let result = binding.result,
 				case .unavailable(let failure) = result
 		else
@@ -399,6 +400,7 @@ struct WorkspaceSelectors
 				{
 					$0.id == pendingJumpItemID
 				})
+		let reportedTurn = ConversationReportedGitTurnProjection(content: viewedContent.content)
 
 		var snapshot = ConversationSnapshot(
 			turnTimings: ConversationContentReducer.timings(for: viewedContent.content),
@@ -432,6 +434,8 @@ struct WorkspaceSelectors
 			activeThreadID: activeThreadID,
 			activeTurnID: activeTurnID,
 			lastGitTurnID: lastGitTurnID,
+			reportedGitTurnID: reportedTurn.turnID,
+			reportedGitChanges: reportedTurn.changes,
 			gitTurnBaselineRevision: selectedThreadID
 				.map
 				{

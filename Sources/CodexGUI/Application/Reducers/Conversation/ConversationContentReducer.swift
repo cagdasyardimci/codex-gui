@@ -5,6 +5,9 @@ struct ConversationProjection
 {
 	var content: ConversationContentModel
 	let review: ConversationReviewModel
+	/// Shared navigation metadata is consulted lazily only when editing-turn identity changes.
+	let turnReferences: [ConversationTurnReference]
+	var didReconcileReportedGitTurn = false
 	var loadedTurns: [CodexTurn]
 	{
 		get
@@ -135,7 +138,11 @@ enum ConversationContentReducer
 	{
 		ConversationProjection(
 			content: model.conversations.content[key] ?? ConversationContentModel(),
-			review: model.review.conversations[key] ?? ConversationReviewModel()
+			review: model.review.conversations[key] ?? ConversationReviewModel(),
+			turnReferences: key.threadID.flatMap
+			{
+				model.conversations.turnReferenceIndices[$0]?.references
+			} ?? []
 		)
 	}
 	static func updateContent(
@@ -160,7 +167,18 @@ enum ConversationContentReducer
 			model,
 			key: key
 		)
+		if !value.content.hasResolvedReportedGitTurn
+		{
+			value.content.latestReportedGitTurn = value.content.latestReportedGitTurn
+				?? ConversationReportedGitTurn.latest(in: value.loadedTurns)
+			value.content.hasResolvedReportedGitTurn = true
+		}
+		let previousTurnCount = value.loadedTurns.count
 		update(&value)
+		if value.loadedTurns.count > previousTurnCount, !value.didReconcileReportedGitTurn
+		{
+			reconcileReportedGitTurn(content: &value)
+		}
 		model.conversations.content[key] = value.content
 	}
 	static func merge(
@@ -177,6 +195,10 @@ enum ConversationContentReducer
 			replaceLoadedHistory(
 				detail,
 				content: &content
+			)
+			reconcileReportedGitTurn(
+				content: &content,
+				trustLoadedOrder: true
 			)
 
 			if content.loadedTurns.contains(where:
@@ -292,7 +314,11 @@ enum ConversationContentReducer
 			{
 				content in
 				// A late completion for an older turn must not replace a newer observed start.
+				content.didReconcileReportedGitTurn = true
 				let latest = content.content.latestObservedGitTurnID
+				let mayAdvanceReportedTurn = (latest == turn.id
+					&& content.content.turnTimings[turn.id]?.status == "inProgress")
+					|| (latest == nil && content.content.latestReportedGitTurn == nil)
 				let latestIsRunning = latest.flatMap
 				{
 					content.content.turnTimings[$0]
@@ -320,7 +346,8 @@ enum ConversationContentReducer
 					upsert(
 						item,
 						turnID: turn.id,
-						content: &content
+						content: &content,
+						allowUnorderedReportedTurnAdvance: mayAdvanceReportedTurn
 					)
 				}
 				if let index = content.loadedTurns.firstIndex(where:
@@ -359,11 +386,14 @@ enum ConversationContentReducer
 			)
 			{
 				content in
+				let mayAdvanceReportedTurn = content.content.latestObservedGitTurnID == turnID
+					&& content.content.turnTimings[turnID]?.status == "inProgress"
 				upsert(
 					item,
 					turnID: turnID,
 					content: &content,
-					preserveProvisionalOutput: isItemStarted(event)
+					preserveProvisionalOutput: isItemStarted(event),
+					allowUnorderedReportedTurnAdvance: mayAdvanceReportedTurn
 				)
 				updateRecordedItem(
 					item,
@@ -506,7 +536,8 @@ enum ConversationContentReducer
 			error: turn.error,
 			startedAt: turn.startedAt,
 			completedAt: turn.completedAt,
-			durationMs: turn.durationMs
+			durationMs: turn.durationMs,
+			itemsAreComplete: turn.itemsAreComplete
 		)
 		reviewSourceChanged(
 			content: &content,
@@ -518,7 +549,8 @@ enum ConversationContentReducer
 		_ item: CodexItem,
 		turnID: String,
 		content: inout ConversationProjection,
-		preserveProvisionalOutput: Bool = false
+		preserveProvisionalOutput: Bool = false,
+		allowUnorderedReportedTurnAdvance: Bool = false
 	)
 	{
 		let id = "\(turnID):\(item.id)"
@@ -562,6 +594,14 @@ enum ConversationContentReducer
 		}
 		if item.type == "fileChange"
 		{
+			if item.status == "completed"
+			{
+				recordReportedGitTurn(
+					turnID,
+					content: &content,
+					allowUnorderedAdvance: allowUnorderedReportedTurnAdvance
+				)
+			}
 			// Started and declined items describe proposals, not applied changes.
 			content.changesByItemID[item.id] = item.status == "completed" ? item.changes : nil
 			updateProvisionalReview(content: &content)
