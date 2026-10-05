@@ -6,6 +6,7 @@ final class WindowChromeViewController: NSViewController
 {
 	private var accountColumn: NSView!
 	private var panel: RoundedContentPanel!
+	private var panelShadow: RoundedContentShadow!
 	private var accountWidth: NSLayoutConstraint!
 	private var trailingInset: NSLayoutConstraint!
 	private var bottomInset: NSLayoutConstraint!
@@ -21,6 +22,7 @@ final class WindowChromeViewController: NSViewController
 		topInset.constant = focused ? 0 : 2
 		splitInset.constant = focused ? 0 : 1
 		panel.isGitReviewFocused = focused
+		panelShadow.isHidden = focused
 		view.needsLayout = true
 	}
 
@@ -42,8 +44,10 @@ final class WindowChromeViewController: NSViewController
 			cornerRadius: 16
 		)
 		let panel = RoundedContentPanel()
+		let shadow = RoundedContentShadow()
 		self.accountColumn = column
 		self.panel = panel
+		self.panelShadow = shadow
 		accountWidth = column.widthAnchor.constraint(equalToConstant: 52)
 		trailingInset = panel.trailingAnchor.constraint(
 			equalTo: view.trailingAnchor,
@@ -61,7 +65,7 @@ final class WindowChromeViewController: NSViewController
 			equalTo: panel.leadingAnchor,
 			constant: 1
 		)
-		for child in [column, panel]
+		for child in [column, shadow, panel]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 			view.addSubview(child)
@@ -91,6 +95,10 @@ final class WindowChromeViewController: NSViewController
 			trailingInset,
 			topInset,
 			bottomInset,
+			shadow.leadingAnchor.constraint(equalTo: panel.leadingAnchor),
+			shadow.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
+			shadow.topAnchor.constraint(equalTo: panel.topAnchor),
+			shadow.bottomAnchor.constraint(equalTo: panel.bottomAnchor),
 			splitInset,
 			split.view.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
 			split.view.topAnchor.constraint(equalTo: panel.topAnchor),
@@ -101,6 +109,61 @@ final class WindowChromeViewController: NSViewController
 	required init?(coder: NSCoder)
 	{
 		nil
+	}
+}
+
+@MainActor
+private final class RoundedContentShadow: NSView
+{
+	private let cornerRadius: CGFloat = 16
+
+	override init(frame frameRect: NSRect)
+	{
+		super.init(frame: frameRect)
+		wantsLayer = true
+		layer?.cornerCurve = .continuous
+		layer?.shadowColor = NSColor.black.cgColor
+		layer?.shadowOffset = .zero
+		layer?.shadowRadius = 8
+		updateAppearance()
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
+	override func layout()
+	{
+		super.layout()
+		let radius = min(
+			cornerRadius,
+			bounds.height / 2,
+			bounds.width
+		)
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		layer?.cornerRadius = radius
+		layer?.shadowPath = CGPath(
+			roundedRect: bounds,
+			cornerWidth: radius,
+			cornerHeight: radius,
+			transform: nil
+		)
+		CATransaction.commit()
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		updateAppearance()
+	}
+
+	private func updateAppearance()
+	{
+		let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+		layer?.backgroundColor = DesktopTheme.chrome.cgColor
+		layer?.shadowOpacity = isDark ? 0 : 0.08
 	}
 }
 

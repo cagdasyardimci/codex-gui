@@ -16,7 +16,7 @@ enum DesktopTheme
 		dark: 0x3C3C3C
 	)
 	static let sidebar = color(
-		light: 0xF7F7F7,
+		light: 0xFBFBFB,
 		dark: 0x1E1E1E
 	)
 	static let elevated = color(
@@ -32,7 +32,7 @@ enum DesktopTheme
 		dark: 0x2D2D2D
 	)
 	static let chrome = color(
-		light: 0xF7F7F7,
+		light: 0xF3F3F4,
 		dark: 0x242424
 	)
 	static let input = color(
