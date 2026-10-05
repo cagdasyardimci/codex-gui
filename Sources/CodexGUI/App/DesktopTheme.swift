@@ -117,11 +117,12 @@ enum DesktopTheme
 		NSColor(name: nil)
 		{
 			appearance in
-			let value = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+			let rgbHexValue =
+				appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
 			return NSColor(
-				srgbRed: CGFloat((value >> 16) & 0xFF) / 255,
-				green: CGFloat((value >> 8) & 0xFF) / 255,
-				blue: CGFloat(value & 0xFF) / 255,
+				srgbRed: CGFloat((rgbHexValue >> 16) & 0xFF) / 255,
+				green: CGFloat((rgbHexValue >> 8) & 0xFF) / 255,
+				blue: CGFloat(rgbHexValue & 0xFF) / 255,
 				alpha: 1
 			)
 		}
@@ -147,16 +148,16 @@ final class DesktopSegmentedControl: NSSegmentedControl
 		{
 			return
 		}
-		let width = floor(max(
+		let segmentWidth = floor(max(
 			1,
 			bounds.width - 4
 		) / CGFloat(segmentCount))
 		for segment in 0 ..< segmentCount
 		{
-			if self.width(forSegment: segment) != width
+			if self.width(forSegment: segment) != segmentWidth
 			{
 				setWidth(
-					width,
+					segmentWidth,
 					forSegment: segment
 				)
 			}

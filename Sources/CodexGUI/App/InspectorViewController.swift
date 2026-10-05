@@ -721,6 +721,8 @@ final class InspectorViewController: NSViewController
 @MainActor
 private final class InspectorBoxSurface: NSView
 {
+	private static let cornerRadius: CGFloat = 16
+
 	var isSummaryCard = true
 	{
 		didSet
@@ -767,7 +769,7 @@ private final class InspectorBoxSurface: NSView
 	override func draw(_ dirtyRect: NSRect)
 	{
 		(isSummaryCard ? DesktopTheme.summaryCard : DesktopTheme.inspector).setFill()
-		let radius: CGFloat = isFullBleed ? 0 : 16
+		let radius: CGFloat = isFullBleed ? 0 : Self.cornerRadius
 		let borderWidth: CGFloat = isSummaryCard && !isFullBleed ? 0.5 : 0
 		let path = NSBezierPath(
 			roundedRect: bounds.insetBy(
@@ -806,8 +808,8 @@ private final class InspectorBoxSurface: NSView
 		layer.shadowOpacity = isSummaryCard && !isFullBleed ? (isDark ? 0.14 : 0.06) : 0
 		layer.shadowPath = CGPath(
 			roundedRect: bounds,
-			cornerWidth: 16,
-			cornerHeight: 16,
+			cornerWidth: Self.cornerRadius,
+			cornerHeight: Self.cornerRadius,
 			transform: nil
 		)
 		CATransaction.commit()

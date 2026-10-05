@@ -4,6 +4,8 @@ import AppKit
 @MainActor
 final class WindowPaneController
 {
+	private static let workspaceFilesMaximumWidth: CGFloat = 1000
+
 	private weak var window: NSWindow?
 	private let navigation: NavigationViewController
 	private let inspector: InspectorViewController
@@ -281,8 +283,8 @@ final class WindowPaneController
 			conversationPane.canCollapse = saved.conversationCanCollapse
 			reviewVisibility = saved.reviewVisibility
 			workspaceFilesExpanded = saved.workspaceFilesExpanded
-			reviewPane.maximumThickness = workspaceFilesExpanded ? 1000 : WindowPaneLayout
-				.reviewMaximumWidth
+			reviewPane.maximumThickness = workspaceFilesExpanded
+				? Self.workspaceFilesMaximumWidth : WindowPaneLayout.reviewMaximumWidth
 		}
 		applyResponsivePaneLayout(force: true)
 	}
@@ -292,7 +294,8 @@ final class WindowPaneController
 		workspaceFilesExpanded = expanded
 		if !isGitReviewFocused && !inspector.isShowingTools
 		{
-			reviewPane.maximumThickness = expanded ? 1000 : WindowPaneLayout.reviewMaximumWidth
+			reviewPane.maximumThickness = expanded
+				? Self.workspaceFilesMaximumWidth : WindowPaneLayout.reviewMaximumWidth
 		}
 		applyResponsivePaneLayout(force: true)
 	}
@@ -566,7 +569,8 @@ final class WindowPaneController
 		reviewPane.maximumThickness = usesToolsSizing
 			? NSSplitViewItem
 			.unspecifiedDimension :
-			(workspaceFilesExpanded ? 1000 : WindowPaneLayout.reviewMaximumWidth)
+			(workspaceFilesExpanded
+				? Self.workspaceFilesMaximumWidth : WindowPaneLayout.reviewMaximumWidth)
 		applyResponsivePaneLayout(force: true)
 	}
 
@@ -722,7 +726,7 @@ final class WindowPaneController
 				else if workspaceFilesExpanded
 				{
 					workspaceFilesWidth = min(
-						1000,
+						Self.workspaceFilesMaximumWidth,
 						max(
 							220,
 							reviewViewportWidth

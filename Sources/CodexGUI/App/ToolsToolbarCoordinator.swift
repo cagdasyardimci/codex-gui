@@ -227,12 +227,10 @@ final class ToolsToolbarCoordinator
 			position,
 			to: tabBar
 		)
-		let scale = window.backingScaleFactor
-		let frame = NSRect(
-			x: ((divider.x - 0.5) * scale).rounded() / scale,
-			y: tabBar.bounds.midY - 9,
-			width: 1,
-			height: 18
+		let frame = ToolbarSeparatorView.frame(
+			dividerPosition: divider,
+			hostBounds: tabBar.bounds,
+			backingScale: window.backingScaleFactor
 		)
 		if separator.frame != frame
 		{

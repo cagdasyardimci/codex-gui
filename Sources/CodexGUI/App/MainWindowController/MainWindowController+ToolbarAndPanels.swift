@@ -132,12 +132,10 @@ extension MainWindowController
 			dividerPosition,
 			to: toolbarView
 		)
-		let scale = window.backingScaleFactor
-		let separatorFrame = NSRect(
-			x: ((dividerInToolbar.x - 0.5) * scale).rounded() / scale,
-			y: toolbarView.bounds.midY - 9,
-			width: 1,
-			height: 18
+		let separatorFrame = ToolbarSeparatorView.frame(
+			dividerPosition: dividerInToolbar,
+			hostBounds: toolbarView.bounds,
+			backingScale: window.backingScaleFactor
 		)
 		// Keep the marker in our toolbar view and pass dragging through to the native separator.
 		if navigationToolbarSeparator.superview !== toolbarView

@@ -4,6 +4,16 @@ import AppKit
 @MainActor
 final class WindowChromeViewController: NSViewController
 {
+	private enum Layout
+	{
+		static let accountColumnWidth: CGFloat = 52
+		static let panelOuterInset: CGFloat = 4
+		static let panelTopInset: CGFloat = 2
+		static let splitLeadingInset: CGFloat = 1
+		static let avatarSize: CGFloat = 32
+		static let avatarBottomInset: CGFloat = 12
+	}
+
 	private var accountColumn: NSView!
 	private var panel: RoundedContentPanel!
 	private var panelShadow: RoundedContentShadow!
@@ -16,11 +26,11 @@ final class WindowChromeViewController: NSViewController
 	func setGitReviewFocused(_ focused: Bool)
 	{
 		accountColumn.isHidden = focused
-		accountWidth.constant = focused ? 0 : 52
-		trailingInset.constant = focused ? 0 : -4
-		bottomInset.constant = focused ? 0 : -4
-		topInset.constant = focused ? 0 : 2
-		splitInset.constant = focused ? 0 : 1
+		accountWidth.constant = focused ? 0 : Layout.accountColumnWidth
+		trailingInset.constant = focused ? 0 : -Layout.panelOuterInset
+		bottomInset.constant = focused ? 0 : -Layout.panelOuterInset
+		topInset.constant = focused ? 0 : Layout.panelTopInset
+		splitInset.constant = focused ? 0 : Layout.splitLeadingInset
 		panel.isGitReviewFocused = focused
 		panelShadow.isHidden = focused
 		view.needsLayout = true
@@ -41,29 +51,29 @@ final class WindowChromeViewController: NSViewController
 		let column = DesktopSurface(DesktopTheme.chrome)
 		let avatar = DesktopSurface(
 			DesktopTheme.selection,
-			cornerRadius: 16
+			cornerRadius: Layout.avatarSize / 2
 		)
 		let panel = RoundedContentPanel()
 		let shadow = RoundedContentShadow()
 		self.accountColumn = column
 		self.panel = panel
 		self.panelShadow = shadow
-		accountWidth = column.widthAnchor.constraint(equalToConstant: 52)
+		accountWidth = column.widthAnchor.constraint(equalToConstant: Layout.accountColumnWidth)
 		trailingInset = panel.trailingAnchor.constraint(
 			equalTo: view.trailingAnchor,
-			constant: -4
+			constant: -Layout.panelOuterInset
 		)
 		bottomInset = panel.bottomAnchor.constraint(
 			equalTo: view.bottomAnchor,
-			constant: -4
+			constant: -Layout.panelOuterInset
 		)
 		topInset = panel.topAnchor.constraint(
 			equalTo: view.topAnchor,
-			constant: 2
+			constant: Layout.panelTopInset
 		)
 		splitInset = split.view.leadingAnchor.constraint(
 			equalTo: panel.leadingAnchor,
-			constant: 1
+			constant: Layout.splitLeadingInset
 		)
 		for child in [column, shadow, panel]
 		{
@@ -85,10 +95,10 @@ final class WindowChromeViewController: NSViewController
 			avatar.centerXAnchor.constraint(equalTo: column.centerXAnchor),
 			avatar.bottomAnchor.constraint(
 				equalTo: column.bottomAnchor,
-				constant: -12
+				constant: -Layout.avatarBottomInset
 			),
-			avatar.widthAnchor.constraint(equalToConstant: 32),
-			avatar.heightAnchor.constraint(equalToConstant: 32),
+			avatar.widthAnchor.constraint(equalToConstant: Layout.avatarSize),
+			avatar.heightAnchor.constraint(equalToConstant: Layout.avatarSize),
 			accountButton.centerXAnchor.constraint(equalTo: avatar.centerXAnchor),
 			accountButton.centerYAnchor.constraint(equalTo: avatar.centerYAnchor),
 			panel.leadingAnchor.constraint(equalTo: column.trailingAnchor),
