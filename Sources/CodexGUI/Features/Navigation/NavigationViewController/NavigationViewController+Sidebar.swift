@@ -200,15 +200,17 @@ extension NavigationViewController
 			[weak self] in self?.confirmDeleteTask(thread)
 		}
 
-		let isActiveTask = thread.id == activeThreadID
-		let isTurnRunning = isActiveTask && activeExecutionState == .running
+		let execution = renderedPresentation?.threadExecutions[thread.id]
+		let isActiveTask = execution != nil
+		let isTurnRunning = execution?.state == .running && execution?.outcomeUncertain != true
 		cell.setTurnRunning(isTurnRunning)
 		let isUnread = unreadThreadIDs.contains(thread.id)
 		cell.setUnread(isUnread && !isTurnRunning)
 		let showsInlineStatus =
-			isActiveTask && !isTurnRunning && activeExecutionState != .completed
+			isActiveTask && !isTurnRunning
+				&& (execution?.state != .completed || execution?.outcomeUncertain == true)
 		let name = thread.name ?? thread.preview ?? thread.id
-		let state = activeExecutionState?.title ?? "Running"
+		let state = execution?.title ?? "Running"
 		cell.textField?.stringValue =
 			showsInlineStatus ? "●  \(name) · \(state)" : name
 		cell.textField?.textColor = showsInlineStatus ? activeTaskColor : .labelColor

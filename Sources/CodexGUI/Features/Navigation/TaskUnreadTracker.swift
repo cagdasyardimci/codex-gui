@@ -13,7 +13,7 @@ struct TaskUnreadTracker
 	private struct ReadState
 	{
 		var unread: Set<String> = []
-		var completedThreadID: String?
+		var completedThreadIDs: Set<String> = []
 	}
 
 	private var states: [Scope: ReadState] = [:]
@@ -26,20 +26,19 @@ struct TaskUnreadTracker
 			projectPath: snapshot.projectPath
 		)
 		var state = states[scope, default: ReadState()]
-		if let threadID = snapshot.activeThreadID
+		for (threadID, execution) in snapshot.threadExecutions
 		{
-			if snapshot.activeExecutionState == .completed && !snapshot.taskOutcomeUncertain
+			if execution.state == .completed && !execution.outcomeUncertain
 			{
-				if state.completedThreadID != threadID
+				if state.completedThreadIDs.insert(threadID).inserted
 				{
 					state.unread.insert(threadID)
-					state.completedThreadID = threadID
 				}
 			}
-			else if snapshot.activeExecutionState?.isBusy == true
+			else if execution.state.isBusy
 			{
 				state.unread.remove(threadID)
-				state.completedThreadID = nil
+				state.completedThreadIDs.remove(threadID)
 			}
 		}
 		if let selectedThreadID = snapshot.selectedThreadID

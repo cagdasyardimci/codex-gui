@@ -10,6 +10,8 @@ struct NavigationPresentation: Equatable
 	let activeThreadID: String?
 	let activeExecutionState: ExecutionState?
 	let taskOutcomeUncertain: Bool
+	let threadExecutions: [String: ThreadExecutionPresentation]
+	let activeExecutionCount: Int?
 	let showingArchived: Bool
 	let canManageThreads: Bool
 	let recentProjects: [URL]
@@ -37,6 +39,19 @@ struct NavigationPresentation: Equatable
 		activeThreadID = snapshot.activeThreadID
 		activeExecutionState = snapshot.activeExecutionState
 		taskOutcomeUncertain = snapshot.taskOutcomeUncertain
+		activeExecutionCount = snapshot.activeExecutionCount
+		if snapshot.threadExecutions.isEmpty, let threadID = snapshot.activeThreadID,
+			let state = snapshot.activeExecutionState
+		{
+			threadExecutions = [threadID: ThreadExecutionPresentation(
+				state: state,
+				outcomeUncertain: snapshot.taskOutcomeUncertain
+			)]
+		}
+		else
+		{
+			threadExecutions = snapshot.threadExecutions
+		}
 		showingArchived = snapshot.showingArchived
 		canManageThreads = snapshot.canManageThreads
 		recentProjects = snapshot.recentProjects

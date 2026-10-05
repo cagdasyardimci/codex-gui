@@ -866,6 +866,17 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 					+ "; includes later edits"
 			}
 		}
+		if let owner = state.owner?.runtimeOwner?.owner, case .source = owner
+		{
+			if state.scope == .lastTurn, state.reportedChanges == nil
+			{
+				statusLabel.stringValue += " · shared checkout; may include edits from other chats"
+			}
+			else if state.scope != .lastTurn
+			{
+				statusLabel.stringValue += " · shared checkout; changes include all chats"
+			}
+		}
 		if let selectionMessage = state.selectionMessage
 		{
 			statusLabel.stringValue += " " + selectionMessage

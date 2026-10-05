@@ -161,7 +161,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 
 	var unreadThreadIDs: Set<String> = []
 	private var unreadTracker = TaskUnreadTracker()
-	private var renderedPresentation: NavigationPresentation?
+	private(set) var renderedPresentation: NavigationPresentation?
 	private var renderedManagementAvailability = false
 
 	func render(_ snapshot: ConversationSnapshot)
@@ -235,15 +235,13 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		activeThreadID = snapshot.activeThreadID
 		activeExecutionState = snapshot.activeExecutionState
 
-		let activeState = renderTaskStatus(snapshot)
-		renderThreadAvailability(
-			snapshot,
-			activeState: activeState
-		)
+		_ = renderTaskStatus(snapshot)
+		renderThreadAvailability(snapshot)
 
 		let shouldReloadSidebar =
 			threads != snapshot.threads || selectedThreadID != snapshot.selectedThreadID
 				|| activeThreadChanged || activeStateChanged || projectsChanged || unreadChanged
+				|| previousPresentation?.threadExecutions != snapshot.threadExecutions
 				|| previousCanStartProjectChat != canStartProjectChat
 				|| renderedManagementAvailability != snapshot.canManageThreads
 
@@ -278,16 +276,17 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		}
 	}
 
-	private func renderThreadAvailability(
-		_ snapshot: NavigationPresentation,
-		activeState: ExecutionState?
-	)
+	private func renderThreadAvailability(_ snapshot: NavigationPresentation)
 	{
 		let waitingForThreadID = snapshot.executionState.isBusy && snapshot.activeThreadID == nil
-		newChatButton.isEnabled = !waitingForThreadID && snapshot.selectedTaskWorkspaceID == nil
-		currentProjectActiveTaskCount = activeState?.isBusy == true ? 1 : 0
-		canStartProjectChat = newChatButton.isEnabled && activeState?.isBusy != true
-		chatsTable.isEnabled = !waitingForThreadID
+		newChatButton.isEnabled = snapshot.selectedTaskWorkspaceID == nil
+		currentProjectActiveTaskCount = snapshot.activeExecutionCount
+			?? snapshot.threadExecutions.values.filter
+			{
+				$0.state.isBusy
+			}.count + (waitingForThreadID ? 1 : 0)
+		canStartProjectChat = newChatButton.isEnabled
+		chatsTable.isEnabled = true
 		canManageSelectedThread = snapshot.canManageThreads
 		canManageSidebarTasks = snapshot.canManageThreads
 		archiveButton.title = snapshot.showingArchived ? "Restore" : "Archive"

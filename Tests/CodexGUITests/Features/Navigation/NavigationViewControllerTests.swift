@@ -491,8 +491,8 @@ struct NavigationViewControllerTests
 			in: controller.view,
 			title: "New Chat"
 		))
-		#expect(!table.isEnabled)
-		#expect(!newChatButton.isEnabled)
+		#expect(table.isEnabled)
+		#expect(newChatButton.isEnabled)
 	}
 
 	private func findNavigationTable(in view: NSView) -> NSTableView?
