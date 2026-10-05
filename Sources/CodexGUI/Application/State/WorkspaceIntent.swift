@@ -244,14 +244,18 @@ final class WorkspaceIntentTarget
 		case .send: operation = inputs.send()
 		case .steer(let text): inputs.steer(text)
 		case .stop:
-			guard store.model.execution.agentOutcome == nil,
-					store.model.execution.owner == executionOwner,
-					store.model.execution.submissionRequest?.requestID == submissionRequestID
+			guard let execution = capturedExecution,
+					execution.agentOutcome == nil,
+					execution.owner == executionOwner,
+					execution.submissionRequest?.requestID == submissionRequestID
 			else
 			{
 				return false
 			}
-			operation = inputs.stop()
+			operation = inputs.stop(
+				conversation: conversation,
+				capturedOwner: executionOwner
+			)
 		case .respond(
 			let interaction,
 			let response
@@ -384,10 +388,10 @@ final class WorkspaceIntentTarget
 		inputs: WorkspaceStoreInputs
 	) -> Bool
 	{
-		guard store.model.execution.agentOutcome == nil,
+		guard let execution = capturedExecution, execution.agentOutcome == nil,
 				let capturedSubmissionID = executionOwner?.submission.requestID,
-				store.model.execution.owner?.submission.requestID == capturedSubmissionID,
-				store.model.execution.pendingInteractions.contains(where:
+				execution.owner?.submission.requestID == capturedSubmissionID,
+				execution.pendingInteractions.contains(where:
 				{
 					pendingInteraction in
 					pendingInteraction.id == interaction.id
@@ -405,6 +409,15 @@ final class WorkspaceIntentTarget
 			with: response
 		)
 		return true
+	}
+
+	private var capturedExecution: ExecutionModel?
+	{
+		if let executionOwner
+		{
+			return store.model.execution(for: executionOwner.submission)
+		}
+		return store.model.execution(for: conversation)
 	}
 
 	private func selectCapturedWorkspace(

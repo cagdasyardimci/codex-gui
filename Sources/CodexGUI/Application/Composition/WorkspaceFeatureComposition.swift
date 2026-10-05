@@ -11,6 +11,24 @@ enum WorkspaceFeatureComposition
 		_ action: WorkspaceAction
 	) -> WorkspaceReduction
 	{
+		WorkspaceExecutionScope.reduce(
+			action: action,
+			model: &model,
+			body:
+			{
+				model in reduceCanonical(
+					&model,
+					action
+				)
+			}
+		)
+	}
+
+	private static func reduceCanonical(
+		_ model: inout WorkspaceModel,
+		_ action: WorkspaceAction
+	) -> WorkspaceReduction
+	{
 		var result = WorkspaceReduction()
 		result.merge(
 			reduceExecution(
@@ -50,6 +68,24 @@ enum WorkspaceFeatureComposition
 		_ action: WorkspaceAction
 	) -> WorkspaceReduction
 	{
+		WorkspaceExecutionScope.reduce(
+			action: action,
+			model: &model,
+			body:
+			{
+				model in reduceExecutionCanonical(
+					&model,
+					action
+				)
+			}
+		)
+	}
+
+	private static func reduceExecutionCanonical(
+		_ model: inout WorkspaceModel,
+		_ action: WorkspaceAction
+	) -> WorkspaceReduction
+	{
 		var result = ExecutionReducer.reduce(
 			&model,
 			action
@@ -81,6 +117,29 @@ enum WorkspaceFeatureComposition
 					.execution(selection)
 				)
 			}
+	) -> WorkspaceReduction
+	{
+		WorkspaceExecutionScope.reduce(
+			action: action,
+			model: &model,
+			body:
+			{
+				model in reduceConversationCanonical(
+					&model,
+					action,
+					reduceSelectionExecution: reduceSelectionExecution
+				)
+			}
+		)
+	}
+
+	private static func reduceConversationCanonical(
+		_ model: inout WorkspaceModel,
+		_ action: WorkspaceAction,
+		reduceSelectionExecution: @MainActor (
+			inout WorkspaceModel,
+			ExecutionAction
+		) -> WorkspaceReduction
 	) -> WorkspaceReduction
 	{
 		var (conversation, acceptedHistory, acceptedSelection) =
@@ -149,9 +208,16 @@ enum WorkspaceFeatureComposition
 			&model,
 			executionAction
 		)
-		let composer = ComposerReducer.reduce(
-			&model,
-			executionAction
+		let composer = WorkspaceExecutionScope.reduce(
+			action: executionAction,
+			model: &model,
+			body:
+			{
+				model in ComposerReducer.reduce(
+					&model,
+					executionAction
+				)
+			}
 		)
 		result.effects.append(contentsOf: execution.effects)
 		result.effects.append(contentsOf: composer.effects)

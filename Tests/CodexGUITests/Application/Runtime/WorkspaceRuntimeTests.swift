@@ -245,22 +245,24 @@ struct WorkspaceRuntimeTests
 					model.execution.owner = ExecutionOwner(submission: submission.context)
 					return [.prepareSubmission(submission)]
 				case .execution(.submissionPrepared(
-					_,
+					let context,
 					.succeeded(let prepared)
 				)):
+					let adopted = model.adoptExecution(
+						for: context,
+						threadID: prepared.thread.summary.id
+					)
+					#expect(adopted)
 					model.conversations.selectedConversation = .thread(prepared.thread.summary.id)
 					return [.startSubmission(prepared)]
 				case .execution(.submissionAcknowledged(
-					_,
+					let context,
 					let acknowledgement
 				)):
-					model.execution.owner = ExecutionOwner(submission: OperationContext(
-						workspace: model.identity,
-						generation: model.connection.generation,
-						requestID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-						threadID: acknowledgement.thread.id,
-						turnID: acknowledgement.turn.id
-					))
+					var acknowledgedContext = context
+					acknowledgedContext.threadID = acknowledgement.thread.id
+					acknowledgedContext.turnID = acknowledgement.turn.id
+					model.execution.owner = ExecutionOwner(submission: acknowledgedContext)
 				default: break
 				}
 				return []
@@ -291,7 +293,10 @@ struct WorkspaceRuntimeTests
 		service.completeTurn()
 		#expect(await handle.wait() == .finished)
 		#expect(handle.completion == .finished)
-		#expect(store.model.execution.owner?.submission.turnID == "turn")
+		#expect(store.model.execution(for: .thread("created")).owner?.submission.turnID == "turn")
+		#expect(store.model.execution(for: context)?.owner?.submission.requestID == context
+			.requestID)
+		#expect(store.model.allExecutions.count == 1)
 		#expect(store.runningOperationCount == 0)
 		store.shutdown()
 	}
@@ -394,13 +399,16 @@ struct WorkspaceRuntimeTests
 		service.completeRead("selected")
 		await writeStarted.wait()
 		#expect(!barrierFinished)
-		#expect(store.model.execution.owner?.submission == context)
+		#expect(store.model.execution(for: .thread("selected")).owner?.submission == context)
+		#expect(store.model.conversations.selectedConversation == .newChat)
+		#expect(store.model.execution.owner == nil)
 		#expect(store.operation(for: context)?.completion == nil)
 		releaseWrite.signal()
 		try await barrier.value
 		#expect(barrierFinished)
 		#expect(debounceCalls == 0)
 		#expect(store.operation(for: context)?.completion == .finished)
+		#expect(store.model.execution(for: context)?.owner?.submission == context)
 		store.shutdown()
 	}
 
@@ -543,7 +551,10 @@ struct WorkspaceRuntimeTests
 					case .succeeded(let detail): model.conversations.threads = [detail.summary]
 					case .failed(let failure): model.conversations.error = failure.message
 					}
-				case .execution(.stopRequested(let context)): return [.cancel(context)]
+				case .execution(.stopRequested(
+					let context,
+					_
+				)): return [.cancel(context)]
 				default: break
 				}
 				return []

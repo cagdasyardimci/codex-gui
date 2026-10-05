@@ -73,13 +73,13 @@ struct WorkspaceEligibility
 			&& model.execution.state != .disconnected
 			&& !model.execution.needsReconciliation
 			&& !model.execution.hasUncertainRequest
-			&& model.composer.uncertainSubmissions.isEmpty
+			&& !hasUncertainSubmission(for: model.conversations.selectedConversation)
 			&& model.lifecycle.pendingInputPreparation == nil
 			&& !model.conversations.showingArchived
 			&& model.conversations.pendingSelection == nil
 			&& model.conversations.pendingManagement == nil
 			&& preferenceWarning == nil
-			&& !model.composerCommands.blocksNewWork
+			&& !model.composerCommands.blocksNewWork(for: model.conversations.selectedConversation)
 	}
 
 	var canSteer: Bool
@@ -88,13 +88,14 @@ struct WorkspaceEligibility
 			&& model.connection.isConnected
 			&& model.execution.state.isBusy
 			&& model.execution.state != .stopping
+			&& !model.execution.stopRequested
 			&& model.execution.pendingSteering == nil
 			&& !model.execution.needsReconciliation
 			&& !model.execution.hasUncertainRequest
 			&& model.lifecycle.pendingInputPreparation == nil
 			&& model.conversations.pendingManagement == nil
 			&& model.conversations.pendingSelection == nil
-			&& !model.composerCommands.blocksNewWork
+			&& !model.composerCommands.blocksNewWork(for: model.conversations.selectedConversation)
 			&& !model.conversations.showingArchived
 			&& model.execution.activeTurnID != nil
 			&& model.execution.activeThreadID != nil
@@ -160,6 +161,8 @@ struct WorkspaceEligibility
 	func acceptsManagement(_ operation: ThreadManagementOperation) -> Bool
 	{
 		guard let threadID = operation.context.threadID, canManageThreads,
+				!model.execution(for: .thread(threadID)).blocksCleanup,
+				!hasUncertainSubmission(for: .thread(threadID)),
 				operation.context.belongsTo(
 				workspace: model.identity,
 				generation: model.connection.generation
@@ -180,6 +183,31 @@ struct WorkspaceEligibility
 		case .delete: return true
 		case .archive: return !model.conversations.showingArchived
 		case .unarchive: return model.conversations.showingArchived
+		}
+	}
+
+	private func hasUncertainSubmission(for conversation: ConversationKey) -> Bool
+	{
+		model.composer.uncertainSubmissions.contains
+		{
+			requestID in
+			guard let submission = model.composer.pendingSubmissions[requestID]
+			else
+			{
+				return true
+			}
+			let owner = model.composer.submissionConversations[requestID] ?? submission.conversation
+			guard owner == conversation
+			else
+			{
+				return false
+			}
+			if conversation == .newChat
+			{
+				return model.executionIdentity(for: conversation)
+					== .newChat(lifetime: submission.draft.lifetime)
+			}
+			return true
 		}
 	}
 

@@ -1266,7 +1266,38 @@ struct ComposerCommandReducerTests
 			request,
 			model: &model
 		)
-		#expect(reduced.effects.count == 1)
+		let commandEffects = reduced.effects.filter
+		{
+			switch ($0, request.invocation.id)
+			{
+			case (.compactConversation(let operation), .compact),
+					(.startConversationReview(let operation), .review):
+				return operation.request.context == request.context
+			default: return false
+			}
+		}
+		#expect(commandEffects.count == 1)
+		let checkpoints = reduced.effects.compactMap
+		{
+			effect -> (OperationContext, [String])? in
+			if case .persistExecutionRecovery(
+				let context,
+				let threadIDs
+			) = effect
+			{
+				return (context, threadIDs)
+			}
+			return nil
+		}
+		#expect(checkpoints.count == 1)
+		let checkpoint = try #require(checkpoints.first)
+		let threadID = try #require(request.context.threadID)
+		#expect(checkpoint.0.workspace == model.identity)
+		#expect(checkpoint.0.generation == model.connection.generation)
+		#expect(checkpoint.0.requestID == model.identity.sessionID)
+		#expect(checkpoint.1 == [threadID])
+		#expect(checkpoint.1 == model.executionRecoveryThreadIDs)
+		#expect(reduced.effects.count == 2)
 		return try #require(model.composerCommands.pendingTurn)
 	}
 

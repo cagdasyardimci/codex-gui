@@ -68,10 +68,11 @@ enum GitTurnBaselineLifecycle
 		model: inout WorkspaceModel
 	)
 	{
+		var execution = model.execution(for: .thread(threadID))
 		guard context.belongsTo(
 			workspace: model.identity,
 			generation: model.connection.generation
-		), var status = model.execution.gitTurnBaselineBindings[threadID],
+		), var status = execution.gitTurnBaselineBindings[threadID],
 		status.context.isSameRequest(as: context), status.turnID == turnID,
 		status.result == nil
 		else
@@ -92,12 +93,35 @@ enum GitTurnBaselineLifecycle
 			}
 		}
 		status.result = observation
-		model.execution.gitTurnBaselineBindings[threadID] = status
-		model.execution.gitTurnBaselineRevisions[threadID, default: 0] += 1
+		execution.gitTurnBaselineBindings[threadID] = status
+		execution.gitTurnBaselineRevisions[threadID, default: 0] += 1
+		model.executions.entries[.thread(threadID)] = execution
 	}
 
 	/// A timed-out start can own a capture, but history must identify one new turn before binding.
 	static func resolvePendingCapture(
+		_ detail: ThreadDetail,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		result.merge(model.reduceExecutionScope(
+			.thread(detail.summary.id),
+			body:
+			{
+				model in
+				var capture = WorkspaceReduction()
+				resolvePendingCaptureCanonical(
+					detail,
+					model: &model,
+					result: &capture
+				)
+				return capture
+			}
+		))
+	}
+
+	private static func resolvePendingCaptureCanonical(
 		_ detail: ThreadDetail,
 		model: inout WorkspaceModel,
 		result: inout WorkspaceReduction

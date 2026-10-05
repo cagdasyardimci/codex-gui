@@ -214,7 +214,12 @@ extension ApplicationStateTests
 				}
 			}
 		)
-		#expect(state.currentSnapshot.activeThreadID == service.thread.id)
+		#expect(state.currentSnapshot.activeThreadID == nil)
+		#expect(state.currentSnapshot.activeExecutionState == nil)
+		#expect(state.store.model.execution(for: .thread(service.thread.id)).activeThreadID
+			== service.thread.id)
+		#expect(state.store.model.execution(for: .thread(service.thread.id)).activeTurnID
+			== service.nextTurn.id)
 		#expect(!state.currentSnapshot.entries.contains
 		{
 			$0.body.contains("A continues working")
@@ -270,16 +275,24 @@ extension ApplicationStateTests
 				state.currentSnapshot.statusMessage?.contains("outcome is uncertain") == true
 			}
 		)
+		let conversation = ConversationKey.thread(service.thread.id)
+		let owner = try #require(state.store.model.execution(for: conversation).owner)
 		state.inputs.selectThread("thread-2")
 		state.inputs.refreshThreads()
-		#expect(state.currentSnapshot.activeExecutionState == .running)
-		state.inputs.stop()
+		#expect(state.currentSnapshot.activeExecutionState == nil)
+		#expect(state.store.model.execution(for: conversation).state == .running)
+		state.inputs.stop(
+			conversation: conversation,
+			capturedOwner: owner
+		)
 		#expect(await waitUntil
 		{
 			service.interruptedTurnIDs == ["turn-1"]
 		})
-		#expect(state.currentSnapshot.activeExecutionState == .stopping)
+		#expect(state.currentSnapshot.activeExecutionState == nil)
+		#expect(state.store.model.execution(for: conversation).state == .stopping)
 		state.inputs.selectThread(service.thread.id)
+		#expect(state.currentSnapshot.activeExecutionState == .stopping)
 		#expect(state.currentSnapshot.draft == "Redirect")
 	}
 

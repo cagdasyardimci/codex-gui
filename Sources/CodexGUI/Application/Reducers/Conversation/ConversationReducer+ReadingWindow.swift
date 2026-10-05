@@ -103,7 +103,10 @@ extension ConversationReducer
 				threadID: threadID
 			),
 			reference: reference,
-			commandRevision: model.execution.commandEventRevisions[threadID, default: 0]
+			commandRevision: ConversationReducer.commandRevision(
+				threadID: threadID,
+				model: model
+			)
 		)))
 	}
 }

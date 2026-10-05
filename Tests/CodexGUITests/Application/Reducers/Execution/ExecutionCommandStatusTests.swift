@@ -15,17 +15,17 @@ struct ExecutionCommandStatusTests
 			context: context,
 			model: &model
 		)
-		#expect(model.execution.commandLifetime.hasPendingCommands)
-		#expect(model.execution.activeActivity == "printf fixture")
+		#expect(model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "printf fixture")
 		try observeCommand(
 			status: status,
 			context: context,
 			model: &model
 		)
-		#expect(!model.execution.commandLifetime.hasPendingCommands)
-		#expect(model.execution.activeActivity == nil)
-		#expect(model.execution.activeTurnID == "turn")
-		#expect(model.execution.state == .running)
+		#expect(!model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == nil)
+		#expect(model.executions.entries[.thread("worker")]!.activeTurnID == "turn")
+		#expect(model.executions.entries[.thread("worker")]!.state == .running)
 	}
 
 	@Test(arguments: [nil, "futureStatus", "running", "inProgress"] as [String?])
@@ -37,8 +37,8 @@ struct ExecutionCommandStatusTests
 			context: context,
 			model: &model
 		)
-		#expect(model.execution.commandLifetime.hasPendingCommands)
-		#expect(model.execution.activeActivity == "printf fixture")
+		#expect(model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "printf fixture")
 	}
 
 	@Test(arguments: ["interrupted", "cancelled"])
@@ -51,8 +51,8 @@ struct ExecutionCommandStatusTests
 			context: context,
 			model: &model
 		)
-		#expect(!model.execution.commandLifetime.hasPendingCommands)
-		#expect(model.execution.activeActivity == "printf fixture")
+		#expect(!model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "printf fixture")
 	}
 
 	private func fixture() -> (WorkspaceModel, OperationContext)
@@ -62,10 +62,11 @@ struct ExecutionCommandStatusTests
 			canonicalCheckoutPath: "/tmp/command-status"
 		))
 		model.connection.isConnected = true
+		model.executions.entries[.thread("worker")] = ExecutionModel()
 		model.connection.generation = 1
-		model.execution.state = .running
-		model.execution.activeThreadID = "worker"
-		model.execution.activeTurnID = "turn"
+		model.executions.entries[.thread("worker")]!.state = .running
+		model.executions.entries[.thread("worker")]!.activeThreadID = "worker"
+		model.executions.entries[.thread("worker")]!.activeTurnID = "turn"
 		let context = OperationContext(
 			workspace: model.identity,
 			generation: 1,
@@ -73,7 +74,7 @@ struct ExecutionCommandStatusTests
 			threadID: "worker",
 			turnID: "turn"
 		)
-		model.execution.owner = ExecutionOwner(submission: context)
+		model.executions.entries[.thread("worker")]!.owner = ExecutionOwner(submission: context)
 		return (model, context)
 	}
 

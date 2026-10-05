@@ -14,8 +14,8 @@ struct WorkspaceFeatureCompositionTests
 		))
 		model.connection.generation = 1
 		model.connection.isConnected = true
-		model.execution.state = .ready
 		model.conversations.selectedConversation = .thread("thread")
+		model.execution.state = .ready
 		return model
 	}
 
@@ -61,10 +61,13 @@ struct WorkspaceFeatureCompositionTests
 			.conversations(.newChatOpened(captured))
 		)
 		#expect(model.conversations.selectedConversation == .newChat)
-		#expect(model.execution.owner?.submission == owner)
-		#expect(model.execution.activeThreadID == "thread")
-		#expect(model.execution.activeTurnID == "turn")
-		#expect(model.execution.state == .running)
+		let execution = model.execution(for: .thread("thread"))
+		#expect(execution.owner?.submission == owner)
+		#expect(execution.activeThreadID == "thread")
+		#expect(execution.activeTurnID == "turn")
+		#expect(execution.state == .running)
+		#expect(model.execution.owner == nil)
+		#expect(model.execution.state == .ready)
 		#expect(result.domainEvents.contains
 		{
 			if case .conversationSelectionChanged(nil) = $0

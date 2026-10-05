@@ -11,6 +11,24 @@ enum ComposerReducer
 		_ action: WorkspaceAction
 	) -> WorkspaceReduction
 	{
+		WorkspaceExecutionScope.reduce(
+			action: action,
+			model: &model
+		)
+		{
+			model in
+			reduceScoped(
+				&model,
+				action
+			)
+		}
+	}
+
+	private static func reduceScoped(
+		_ model: inout WorkspaceModel,
+		_ action: WorkspaceAction
+	) -> WorkspaceReduction
+	{
 		var result = WorkspaceReduction()
 		switch action
 		{
@@ -23,6 +41,12 @@ enum ComposerReducer
 			{
 				return result
 			}
+			let lifetime = model.composer.drafts[.newChat]?.lifetime
+				?? model.composer.pendingNewChatLifetime ?? 0
+			ConversationReducer.detachNewChatContent(
+				lifetime: lifetime,
+				model: &model
+			)
 			if var draft = model.composer.drafts[.newChat]
 			{
 				draft.lifetime += 1
@@ -93,7 +117,7 @@ enum ComposerReducer
 			let identity,
 			_
 		)):
-			guard model.identity == identity, !model.execution.isTaskActive
+			guard model.identity == identity, !model.hasActiveExecution
 			else
 			{
 				return result

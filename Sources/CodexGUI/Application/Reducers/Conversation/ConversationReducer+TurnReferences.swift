@@ -265,7 +265,8 @@ extension ConversationReducer
 			)
 		})
 		let position = positions[turn.id] ?? 0
-		let livePrefix = model.execution.activeThreadID == threadID ? model.execution.activeTurnID
+		let execution = model.execution(for: .thread(threadID))
+		let livePrefix = execution.activeThreadID == threadID ? execution.activeTurnID
 			.map
 			{
 				$0 + ":"

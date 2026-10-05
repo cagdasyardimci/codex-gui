@@ -86,16 +86,27 @@ final class WorkspaceStateStore
 	}
 	var lifecycleObservation: WorkspaceLifecycleObservation
 	{
-		WorkspaceLifecycleObservation(
+		let executions = model.allExecutions
+		let activeExecution = executions.first
+		{
+			$0.state.isBusy
+		} ?? executions.first
+		{
+			$0.blocksCleanup
+		} ?? model.execution
+
+		return WorkspaceLifecycleObservation(
 			reference: WorkspaceLifecycleReducer.reference(model),
-			executionState: model.execution.state,
-			activeThreadID: model.execution.activeThreadID,
-			unresolvedCommands: model.execution.commandLifetime
-				.hasPendingCommands,
-			remoteOutcomeUncertain: model.execution.hasUncertainRequest
+			executionState: activeExecution.state,
+			activeThreadID: activeExecution.activeThreadID,
+			unresolvedCommands: executions.contains
+			{
+				$0.commandLifetime.hasPendingCommands
+			},
+			remoteOutcomeUncertain: model.hasUncertainExecutionRequest
 				|| model.composerCommands.uncertainFork != nil || model.lifecycle
 				.managedOwnershipConflict != nil,
-			needsReconciliation: model.execution.needsReconciliation,
+			needsReconciliation: model.hasExecutionReconciliation,
 			composerOutcomeUncertain: WorkspaceLifecycleReducer
 				.hasUnresolvedComposer(model),
 			pendingLocalWrites: runner
@@ -299,7 +310,8 @@ final class WorkspaceStateStore
 				return context.belongsTo(
 					workspace: self.model.identity,
 					generation: self.model.connection.generation
-				) && self.model.execution.owner?.submission.isSameRequest(as: context) == true
+				) && self.model.execution(for: context)?.owner?.submission
+					.isSameRequest(as: context) == true
 			},
 			isSubmissionStopped:
 			{
@@ -309,8 +321,13 @@ final class WorkspaceStateStore
 				{
 					return false
 				}
-				return self.model.execution.stopRequested
-					&& self.model.execution.owner?.submission.isSameRequest(as: context) == true
+				guard let execution = self.model.execution(for: context)
+				else
+				{
+					return false
+				}
+				return execution.stopRequested
+					&& execution.owner?.submission.isSameRequest(as: context) == true
 			},
 			isGitTurnBaselineBindingCurrent:
 			{
@@ -320,7 +337,9 @@ final class WorkspaceStateStore
 						workspace: self.model.identity,
 						generation: self.model.connection.generation
 						),
-						let binding = self.model.execution.gitTurnBaselineBindings[
+						let binding = self.model.execution(
+						for: ConversationKey.thread(operation.reference.identity.threadID)
+						).gitTurnBaselineBindings[
 						operation.reference.identity.threadID
 						]
 				else
@@ -439,8 +458,24 @@ final class WorkspaceStateStore
 				next.afterReduction()
 				continue
 			}
-			var reduction = reduceAction(next.action)
-			reduceDomainEvents(in: &reduction)
+			var reducedModel = model
+			let reduction = WorkspaceExecutionScope.reduce(
+				action: next.action,
+				model: &reducedModel
+			)
+			{
+				scopedModel in
+				var result = self.reduceAction(
+					next.action,
+					model: &scopedModel
+				)
+				self.reduceDomainEvents(
+					in: &result,
+					model: &scopedModel
+				)
+				return result
+			}
+			model = reducedModel
 			runner.reserve(
 				reduction.effects,
 				workspace: model.identity,
@@ -466,7 +501,10 @@ final class WorkspaceStateStore
 		queuedActions.removeAll(keepingCapacity: true)
 	}
 
-	private func reduceAction(_ action: WorkspaceAction) -> WorkspaceReduction
+	private func reduceAction(
+		_ action: WorkspaceAction,
+		model: inout WorkspaceModel
+	) -> WorkspaceReduction
 	{
 		var accumulated = WorkspaceReduction()
 		for reducer in reducers
@@ -480,7 +518,10 @@ final class WorkspaceStateStore
 		return accumulated
 	}
 
-	private func reduceDomainEvents(in accumulated: inout WorkspaceReduction)
+	private func reduceDomainEvents(
+		in accumulated: inout WorkspaceReduction,
+		model: inout WorkspaceModel
+	)
 	{
 		// Accepted domain observations finish value reduction before callbacks.
 		var domainEventIndex = 0
@@ -488,21 +529,30 @@ final class WorkspaceStateStore
 		{
 			let event = accumulated.domainEvents[domainEventIndex]
 			domainEventIndex += 1
-			let reduction = reduceDomainEvent(
-				&model,
-				event
+			let reduction = WorkspaceExecutionScope.reduce(
+				event: event,
+				model: &model
 			)
+			{
+				scopedModel in
+				var result = self.reduceDomainEvent(
+					&scopedModel,
+					event
+				)
+				let semanticContext = OperationContext(
+					workspace: scopedModel.identity,
+					generation: scopedModel.connection.generation,
+					requestID: self.makeRequestID(),
+					threadID: scopedModel.conversations.selectedConversation.threadID
+				)
+				result.merge(WorkspaceLifecycleComposition.reduceDomainEvent(
+					&scopedModel,
+					event,
+					context: semanticContext
+				))
+				return result
+			}
 			accumulated.merge(reduction)
-			let semanticContext = operationContext(threadID: WorkspaceSelectors(
-				model: model,
-				now: now()
-			).selectedThreadID)
-			let lifecycle = WorkspaceLifecycleComposition.reduceDomainEvent(
-				&model,
-				event,
-				context: semanticContext
-			)
-			accumulated.merge(lifecycle)
 		}
 	}
 

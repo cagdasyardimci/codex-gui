@@ -26,7 +26,6 @@ extension ExecutionReducer
 			let context,
 			let observation
 		):
-			model.execution.lastReconciledRequestID = nil
 			guard valid(
 				context,
 				model
@@ -48,18 +47,32 @@ extension ExecutionReducer
 			guard observedRevision == operation.commandRevision
 			else
 			{
+				invalidateReconciliationToken(
+					for: context,
+					model: &model
+				)
 				return result
 			}
 
 			switch observation
 			{
-			case .succeeded(let detail): reconcile(
+			case .succeeded(let detail):
+				guard detail.summary.id == threadID
+				else
+				{
+					return result
+				}
+				reconcile(
 					detail,
 					context: context,
 					model: &model,
 					result: &result
 				)
 			case .failed(let failure):
+				invalidateReconciliationToken(
+					for: context,
+					model: &model
+				)
 				model.execution.needsReconciliation = true
 				model.execution.state = .failed
 				model.execution.statusMessage =
@@ -70,17 +83,24 @@ extension ExecutionReducer
 			let operation,
 			let detail
 		):
-			model.execution.lastReconciledRequestID = nil
-			guard acceptsHistory(
-				operation,
+			guard valid(
+				operation.context,
 				model
-			), detail.summary.id == operation.context.threadID
+			), let threadID = operation.context.threadID, detail.summary.id == threadID
 			else
 			{
 				return result
 			}
-			// A scoped accepted read can also retry local reference finalization.
-			model.execution.lastReconciledRequestID = operation.context.requestID
+			guard model.execution.commandEventRevisions[threadID, default: 0]
+				== operation.commandRevision
+			else
+			{
+				invalidateReconciliationToken(
+					for: operation.context,
+					model: &model
+				)
+				return result
+			}
 			// An uncertain steering request does not revoke a live turn's execution ownership.
 			let preservesLiveTurn = model.execution.activeTurnID != nil
 				&& model.execution.agentOutcome == nil
@@ -112,6 +132,8 @@ extension ExecutionReducer
 					result: &result
 				)
 			}
+			// Mint only after this accepted history has incorporated its command evidence.
+			model.execution.lastReconciledRequestID = operation.context.requestID
 		case .completedHistoryRequested(let operation):
 			guard valid(
 				operation.context,
@@ -135,9 +157,13 @@ extension ExecutionReducer
 			{
 				return result
 			}
-			result.domainEvents.append(.completedHistoryRefreshed)
 			if case .succeeded(let detail) = observation
 			{
+				guard detail.summary.id == operation.context.threadID
+				else
+				{
+					return result
+				}
 				let commandPersistenceEffect = reconcileCommands(
 					threadID: detail.summary.id,
 					turns: detail.turns,
@@ -154,6 +180,7 @@ extension ExecutionReducer
 					result: &result
 				)
 			}
+			result.domainEvents.append(.completedHistoryRefreshed)
 		default: break
 		}
 		return result
@@ -192,7 +219,32 @@ extension ExecutionReducer
 		}
 		if containsCommandExecution
 		{
-			model.execution.commandEventRevisions[threadID, default: 0] += 1
+			recordCommandEvent(
+				threadID: threadID,
+				model: &model
+			)
+		}
+	}
+
+	static func recordCommandEvent(
+		threadID: String,
+		model: inout WorkspaceModel
+	)
+	{
+		var execution = model.execution(for: .thread(threadID))
+		execution.commandEventRevisions[threadID, default: 0] += 1
+		execution.lastReconciledRequestID = nil
+		model.executions.entries[.thread(threadID)] = execution
+	}
+
+	private static func invalidateReconciliationToken(
+		for context: OperationContext,
+		model: inout WorkspaceModel
+	)
+	{
+		if model.execution.lastReconciledRequestID == context.requestID
+		{
+			model.execution.lastReconciledRequestID = nil
 		}
 	}
 
@@ -204,7 +256,6 @@ extension ExecutionReducer
 	)
 	{
 		let threadID = detail.summary.id
-		model.execution.lastReconciledRequestID = context.requestID
 		GitTurnBaselineLifecycle.resolvePendingCapture(
 			detail,
 			model: &model,
@@ -230,7 +281,24 @@ extension ExecutionReducer
 			detail,
 			threadID: threadID
 		))
-		if model.execution.commandLifetime.hasPendingCommands
+		let hasLiveTurn = detail.summary.status == "active"
+			&& detail.turns.last.map
+			{
+				ConversationTurnStatus.isRunning($0.status)
+			} == true
+		if hasLiveTurn
+		{
+			model.execution.activeThreadID = threadID
+			model.execution.needsReconciliation = false
+			model.execution.hasUncertainRequest = false
+			model.execution.deferredTurnOutcome = nil
+			model.execution.deferredTurnMessage = nil
+			model.execution.reconcilingCommandOutcome = false
+			model.execution.state = .running
+			model.execution.statusMessage =
+				"Reconnected to the running task. The original request was not resent."
+		}
+		else if model.execution.commandLifetime.hasPendingCommands
 		{
 			model.execution.activeThreadID = threadID
 			if let turn = detail.turns.first(where:
@@ -294,6 +362,7 @@ extension ExecutionReducer
 				model.execution.outcomeMessage = nil
 			}
 		}
+		model.execution.lastReconciledRequestID = context.requestID
 	}
 
 	static func reconcileCommands(
@@ -314,7 +383,7 @@ extension ExecutionReducer
 		)
 		return .persistCommands(
 			context,
-			Array(model.execution.commandLifetime.pending)
+			model.pendingCommandOwnership
 		)
 	}
 
@@ -330,14 +399,18 @@ extension ExecutionReducer
 			ConversationTurnStatus.isRunning(turn.status)
 		{
 			let currentOwner = model.execution.owner
-			let ownsCurrentTurn = currentOwner != nil
+			let ownerHasCurrentTransport = currentOwner?.submission.belongsTo(
+				workspace: model.identity,
+				generation: model.connection.generation
+			) == true
+			let ownsCurrentTurn = ownerHasCurrentTransport
 				&& model.execution.agentOutcome == nil
 				&& model.execution.activeThreadID == threadID
 				&& model.execution.activeTurnID == turn.id
 			let ownsPendingSubmission = currentOwner.map
 			{
 				owner in
-				model.execution.agentOutcome == nil
+				ownerHasCurrentTransport && model.execution.agentOutcome == nil
 					&& model.execution.submissionRequest?
 					.isSameRequest(as: owner.submission) == true
 					&& (owner.submission.threadID == nil || owner.submission.threadID == threadID)

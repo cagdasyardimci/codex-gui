@@ -181,9 +181,11 @@ struct ConversationActivityReducerTests
 	@Test func snapshotPreservesExecutionTurnOwnershipAcrossConversationSelection()
 	{
 		var value = model()
-		value.execution.activeThreadID = "worker"
-		value.execution.activeTurnID = "live"
-		value.execution.state = .running
+		var execution = ExecutionModel()
+		execution.activeThreadID = "worker"
+		execution.activeTurnID = "live"
+		execution.state = .running
+		value.executions.entries[.thread("worker")] = execution
 		let oldTurn = CodexTurn(
 			id: "historical",
 			status: "inProgress",
@@ -202,8 +204,10 @@ struct ConversationActivityReducerTests
 			model: value,
 			now: Date(timeIntervalSince1970: 101)
 		).makeSnapshot()
-		#expect(viewed.activeThreadID == "worker")
-		#expect(viewed.activeTurnID == "live")
+		#expect(viewed.activeThreadID == nil)
+		#expect(viewed.activeTurnID == nil)
+		#expect(viewed.activeExecutionState == nil)
+		#expect(value.execution(for: .thread("worker")).state == .running)
 		#expect(viewed.turnTimings.map(\.turnID) == ["historical"])
 		value.conversations.selectedConversation = .thread("worker")
 		let worker = WorkspaceSelectors(

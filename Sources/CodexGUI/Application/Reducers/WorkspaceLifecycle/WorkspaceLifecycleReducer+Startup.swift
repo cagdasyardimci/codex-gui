@@ -75,7 +75,8 @@ extension WorkspaceLifecycleReducer
 					.connection(.projectRestored(
 						activated,
 						pendingCommands: startup.pendingCommands,
-						selectedThreadID: project.selectedThreadID
+						selectedThreadID: project.selectedThreadID,
+						pendingExecutions: startup.pendingExecutions
 					))
 				)
 				result.effects += [.subscribe(activated)] + restored.effects

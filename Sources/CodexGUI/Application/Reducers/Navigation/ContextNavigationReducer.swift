@@ -29,7 +29,7 @@ enum ContextNavigationReducer
 			let identity,
 			_
 		)):
-			guard identity == model.identity, !model.execution.isTaskActive
+			guard identity == model.identity, !model.hasActiveExecution
 			else
 			{
 				return result

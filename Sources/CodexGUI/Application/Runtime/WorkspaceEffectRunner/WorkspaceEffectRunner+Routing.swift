@@ -268,6 +268,10 @@ extension WorkspaceEffectRunner
 				{
 					storage?.pendingCommands(for: URL(fileURLWithPath: $0)) ?? []
 				} ?? []
+				let pendingExecutions = context.workspace.canonicalCheckoutPath.map
+				{
+					storage?.activeExecutionThreadIDs(for: URL(fileURLWithPath: $0)) ?? []
+				} ?? []
 				let restoredSelection = selectedThreadID ?? (managedWorkspace == nil
 					? context.workspace.canonicalCheckoutPath.flatMap
 					{
@@ -277,10 +281,25 @@ extension WorkspaceEffectRunner
 					.connection(.projectRestored(
 						context,
 						pendingCommands: commands,
-						selectedThreadID: restoredSelection
+						selectedThreadID: restoredSelection,
+						pendingExecutions: pendingExecutions
 					)),
 					{
 					}
+				)
+			case .persistExecutionRecovery(
+				let context,
+				let threadIDs
+			):
+				guard context.workspace == workspace,
+						let path = context.workspace.canonicalCheckoutPath
+				else
+				{
+					continue
+				}
+				storage?.saveActiveExecutionThreadIDs(
+					threadIDs,
+					for: URL(fileURLWithPath: path)
 				)
 			case .persistCommands(
 				let context,
@@ -454,6 +473,7 @@ extension WorkspaceEffectRunner
 		let preferences = storage.preferenceRestoration
 		var project: WorkspaceProjectOpening?
 		var commands: [TaskCommandOwnership] = []
+		var pendingExecutions: [String] = []
 		for candidate in preferences.recentProjects
 		{
 			let canonical = candidate.standardizedFileURL.resolvingSymlinksInPath()
@@ -477,6 +497,7 @@ extension WorkspaceEffectRunner
 				selectedThreadID: storage.selectedThreadID(for: canonical)
 			)
 			commands = storage.pendingCommands(for: canonical)
+			pendingExecutions = storage.activeExecutionThreadIDs(for: canonical)
 			break
 		}
 		return .workspaceLifecycle(.sourceStartupRestored(
@@ -484,6 +505,7 @@ extension WorkspaceEffectRunner
 			.succeeded(WorkspaceSourceStartup(
 				project: project,
 				pendingCommands: commands,
+				pendingExecutions: pendingExecutions,
 				preferences: preferences
 			))
 		))

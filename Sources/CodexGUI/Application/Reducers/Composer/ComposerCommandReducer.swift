@@ -11,6 +11,24 @@ enum ComposerCommandReducer
 		_ action: WorkspaceAction
 	) -> WorkspaceReduction
 	{
+		WorkspaceExecutionScope.reduce(
+			action: action,
+			model: &model
+		)
+		{
+			model in
+			reduceScoped(
+				&model,
+				action
+			)
+		}
+	}
+
+	private static func reduceScoped(
+		_ model: inout WorkspaceModel,
+		_ action: WorkspaceAction
+	) -> WorkspaceReduction
+	{
 		var result = WorkspaceReduction()
 		guard case .composerCommand(let command) = action
 		else
@@ -47,6 +65,7 @@ enum ComposerCommandReducer
 				return result
 			}
 			model.composerCommands.error = nil
+			model.composerCommands.conversationErrors[request.conversation] = nil
 			if let reason = unavailableReason(
 				request.invocation.id,
 				model: model
@@ -142,6 +161,7 @@ enum ComposerCommandReducer
 			retry.retryingUnknownMode = true
 			model.composerCommands.pendingSettings = retry
 			model.composerCommands.error = nil
+			model.composerCommands.conversationErrors[operation.request.conversation] = nil
 			result.effects = [.updateCommandSettings(retry)]
 		case .settingsFinished(
 			let operation,
@@ -290,8 +310,7 @@ enum ComposerCommandReducer
 				return result
 			}
 			guard model.connection.isConnected, model.identity.canonicalCheckoutPath != nil,
-					model.conversations.pendingManagement == nil,
-					!(model.execution.state.isBusy && model.execution.activeThreadID == nil)
+					model.conversations.pendingManagement == nil
 			else
 			{
 				model.composerCommands.error = "Connect and finish the pending "

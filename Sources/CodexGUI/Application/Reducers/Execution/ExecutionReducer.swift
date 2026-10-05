@@ -12,6 +12,32 @@ enum ExecutionReducer
 		_ workspaceAction: WorkspaceAction
 	) -> WorkspaceReduction
 	{
+		guard WorkspaceExecutionScope.canResolve(
+			action: workspaceAction,
+			model: model
+		)
+		else
+		{
+			return WorkspaceReduction()
+		}
+		return WorkspaceExecutionScope.reduce(
+			action: workspaceAction,
+			model: &model,
+			body:
+			{
+				model in reduceCanonical(
+					&model,
+					workspaceAction
+				)
+			}
+		)
+	}
+
+	private static func reduceCanonical(
+		_ model: inout WorkspaceModel,
+		_ workspaceAction: WorkspaceAction
+	) -> WorkspaceReduction
+	{
 		guard case .execution(let action) = workspaceAction
 		else
 		{
@@ -97,6 +123,20 @@ enum ExecutionReducer
 					result: &result
 				)
 			case .succeeded(let prepared):
+				guard model.adoptExecution(
+					for: context,
+					threadID: prepared.thread.summary.id
+				)
+				else
+				{
+					model.execution.needsReconciliation = true
+					model.execution.hasUncertainRequest = true
+					model.execution.state = .failed
+					model.execution.statusMessage =
+						"Codex assigned a conversation that already has a running request. "
+							+ "Refresh both conversations before sending again."
+					return result
+				}
 				model.execution.activeThreadID = prepared.thread.summary.id
 				model.execution.owner?.submission.threadID = prepared.thread.summary.id
 			}
@@ -249,7 +289,10 @@ enum ExecutionReducer
 				model: &model,
 				result: &result
 			)
-		case .stopRequested(let context):
+		case .stopRequested(
+			let context,
+			_
+		):
 			guard model.execution.agentOutcome == nil,
 					context.threadID == nil || context.threadID == model.execution.activeThreadID,
 					context.turnID == nil || context.turnID == model.execution.activeTurnID,
@@ -266,6 +309,11 @@ enum ExecutionReducer
 			model.execution.statusMessage =
 				"Stop requested. Waiting for Codex to confirm the outcome…"
 			model.execution.stopRequested = true
+			if model.execution.stopContext != context
+			{
+				model.execution.interruptRequestSent = false
+				model.execution.pendingInterruption = nil
+			}
 			model.execution.stopContext = context
 			requestInterruption(
 				model: &model,
@@ -479,6 +527,10 @@ enum ExecutionReducer
 			context,
 			model
 		) && model.execution.owner?.submission.isSameRequest(as: context) == true
+			&& (context.threadID == nil || context.threadID == model.execution.activeThreadID)
+			&& (context.turnID == nil
+				|| context.turnID == model.execution.activeTurnID
+				|| context.turnID == model.execution.owner?.submission.turnID)
 	}
 
 	static func requestInterruption(
@@ -489,7 +541,11 @@ enum ExecutionReducer
 		guard model.execution.stopRequested, !model.execution.interruptRequestSent,
 				let threadID = model.execution.activeThreadID,
 				let turnID = model.execution.activeTurnID,
-				var context = model.execution.stopContext
+				var context = model.execution.stopContext,
+				valid(
+				context,
+				model
+				)
 		else
 		{
 			return

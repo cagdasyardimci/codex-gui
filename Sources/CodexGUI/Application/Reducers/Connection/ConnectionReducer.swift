@@ -28,7 +28,10 @@ enum ConnectionReducer
 			{
 				return result
 			}
-			guard !model.execution.state.isBusy
+			guard !model.allExecutions.contains(where:
+				{
+					$0.state.isBusy
+				})
 			else
 			{
 				model.connection.statusMessage = "Stop the current task before reconnecting."
@@ -43,21 +46,32 @@ enum ConnectionReducer
 			model.connection.pendingConnection = context
 			model.connection.isConnected = false
 			model.connection.statusMessage = "Connecting to Codex…"
-			model.execution.pendingResponses.removeAll()
-			model.execution.state = .disconnected
-			// A viewed-history load does not make a terminal execution owner uncertain.
-			let ownerNeedsRecovery = model.execution.hasUncertainRequest
-				|| model.execution.commandLifetime.hasPendingCommands
-			model.execution.needsReconciliation = ownerNeedsRecovery
-				|| model.conversations.selectedConversation.threadID != nil
-			if !ownerNeedsRecovery
+			model.updateAllExecutions
 			{
-				model.execution.owner = nil
-				model.execution.activeThreadID = nil
-				model.execution.activeTurnID = nil
-				model.execution.activePlan = nil
-				model.execution.activeActivity = nil
-				model.execution.outcomeMessage = nil
+				execution in
+				execution.pendingResponses.removeAll()
+				execution.pendingReconciliation = nil
+				execution.state = .disconnected
+				// Recovery preserves each remote owner, independently of displayed history.
+				let ownerNeedsRecovery = execution.hasUncertainRequest
+					|| execution.commandLifetime.hasPendingCommands
+					|| (execution.needsReconciliation && execution.activeThreadID != nil)
+				execution.needsReconciliation = ownerNeedsRecovery
+				if !ownerNeedsRecovery
+				{
+					execution.owner = nil
+					execution.activeThreadID = nil
+					execution.activeTurnID = nil
+					execution.activePlan = nil
+					execution.activeActivity = nil
+					execution.outcomeMessage = nil
+				}
+			}
+			if let selectedThreadID = model.conversations.selectedConversation.threadID
+			{
+				var execution = model.execution(for: .thread(selectedThreadID))
+				execution.needsReconciliation = true
+				model.executions.entries[.thread(selectedThreadID)] = execution
 			}
 			result.effects = [.subscribe(context), .readExecutableVersion(context)]
 			result.domainEvents = [.connectionBegan]
@@ -95,12 +109,19 @@ enum ConnectionReducer
 			case .succeeded:
 				model.connection.isConnected = true
 				model.connection.statusMessage = nil
-				model.execution.state = model.execution.needsReconciliation ? .disconnected : .ready
-				model.execution.statusMessage = model.execution.needsReconciliation
-					? "Checking the previous request…" : nil
+				model.updateAllExecutions
+				{
+					execution in
+					execution.state = execution.needsReconciliation ? .disconnected : .ready
+					execution.statusMessage = execution.needsReconciliation
+						? "Checking the previous request…" : nil
+				}
 			case .failed(let failure):
 				model.connection.isConnected = false
-				model.execution.state = .disconnected
+				model.updateAllExecutions
+				{
+					$0.state = .disconnected
+				}
 				model.connection.statusMessage = failure.message
 			}
 		case .disconnected(
@@ -113,23 +134,28 @@ enum ConnectionReducer
 			{
 				return result
 			}
-			if model.execution.isTaskActive
+			model.updateAllExecutions
 			{
-				model.execution.needsReconciliation = true
-				model.execution.hasUncertainRequest = true
+				execution in
+				if execution.isTaskActive
+				{
+					execution.needsReconciliation = true
+					execution.hasUncertainRequest = true
+				}
+				execution.state = .disconnected
+				execution.activeTurnID = nil
+				execution.activePlan = nil
+				execution.activeActivity = nil
+				execution.pendingInteractions.removeAll()
+				execution.pendingResponses.removeAll()
+				execution.pendingReconciliation = nil
+				execution.statusMessage =
+					"\(message) Reopen the conversation to check what finished. "
+						+ "Nothing was resent."
 			}
 			model.connection.generation += 1
 			model.connection.pendingConnection = nil
 			model.connection.isConnected = false
-			model.execution.state = .disconnected
-			model.execution.activeTurnID = nil
-			model.execution.activePlan = nil
-			model.execution.activeActivity = nil
-			model.execution.pendingInteractions.removeAll()
-			model.execution.pendingResponses.removeAll()
-			model.execution.statusMessage =
-				"\(message) Reopen the conversation to check what finished. "
-					+ "Nothing was resent."
 			result.domainEvents = [.connectionDisconnected]
 			result.presentationCommands = [.taskFinished]
 			result.effects = [.subscribe(OperationContext(
@@ -142,25 +168,30 @@ enum ConnectionReducer
 			let selectedThreadID
 		):
 			guard identity.sessionID == model.identity.sessionID,
-					!model.execution.isTaskActive
+					!model.hasActiveExecution
 			else
 			{
 				return result
 			}
-			let pendingCapture = model.execution.pendingGitTurnBaselineCapture
+			let pendingCaptures = model.allExecutions.compactMap(\.pendingGitTurnBaselineCapture)
 			model.identity = identity
 			// Source transport initialization belongs to the same session even if its first
 			// checkout is selected before the finite connection request acknowledges.
-			model.execution = ExecutionModel()
-			model.execution.state = model.connection.isConnected ? .ready : .disconnected
-			model.execution.needsReconciliation = true
+			model.executions = ExecutionRegistry()
+			if let selectedThreadID
+			{
+				var execution = ExecutionModel()
+				execution.state = model.connection.isConnected ? .ready : .disconnected
+				execution.needsReconciliation = true
+				model.executions.entries[.thread(selectedThreadID)] = execution
+			}
 
 			let context = OperationContext(
 				workspace: identity,
 				generation: model.connection.generation,
 				requestID: identity.sessionID
 			)
-			if let pendingCapture
+			for pendingCapture in pendingCaptures
 			{
 				result.effects.append(.discardGitTurnBaseline(GitTurnBaselineDiscardOperation(
 					context: context,
@@ -177,7 +208,8 @@ enum ConnectionReducer
 		case .projectRestored(
 			let context,
 			let commands,
-			let selectedThreadID
+			let selectedThreadID,
+			let pendingExecutions
 		):
 			guard context.belongsTo(
 				workspace: model.identity,
@@ -187,10 +219,32 @@ enum ConnectionReducer
 			{
 				return result
 			}
-			model.execution.commandLifetime = TaskCommandLifetime(pending: commands)
-			model.execution.activeThreadID = commands.first?.threadID
-
-			model.execution.needsReconciliation = selectedThreadID != nil || !commands.isEmpty
+			for threadID in Set(pendingExecutions) where !threadID.isEmpty
+			{
+				var execution = model.execution(for: .thread(threadID))
+				execution.activeThreadID = threadID
+				execution.needsReconciliation = true
+				execution.hasUncertainRequest = true
+				model.executions.entries[.thread(threadID)] = execution
+			}
+			let commandsByThread = Dictionary(
+				grouping: commands,
+				by: \.threadID
+			)
+			for (threadID, pending) in commandsByThread
+			{
+				var execution = model.execution(for: .thread(threadID))
+				execution.commandLifetime = TaskCommandLifetime(pending: pending)
+				execution.activeThreadID = threadID
+				execution.needsReconciliation = true
+				model.executions.entries[.thread(threadID)] = execution
+			}
+			if let selectedThreadID
+			{
+				var execution = model.execution(for: .thread(selectedThreadID))
+				execution.needsReconciliation = true
+				model.executions.entries[.thread(selectedThreadID)] = execution
+			}
 			result.domainEvents = [.projectRestored]
 		case .shutdownRequested:
 			model.connection.generation += 1

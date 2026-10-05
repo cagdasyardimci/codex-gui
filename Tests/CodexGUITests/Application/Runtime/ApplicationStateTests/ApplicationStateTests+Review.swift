@@ -260,8 +260,8 @@ extension ApplicationStateTests
 			canonicalCheckoutPath: "/tmp"
 		))
 		model.connection.isConnected = true
+		model.conversations.selectedConversation = .thread(service.thread.id)
 		model.execution.state = .running
-		model.conversations.selectedConversation = .thread(viewed)
 		let owner = OperationContext(
 			workspace: model.identity,
 			generation: 0,

@@ -456,13 +456,21 @@ extension ApplicationStateTests
 			kind: .commandApproval
 		)
 		service.emit(.interaction(approval))
-		#expect(state.currentSnapshot.activeThreadID == service.thread.id)
-		#expect(state.currentSnapshot.activeExecutionState == .awaitingApproval)
+		let ownerConversation = ConversationKey.thread(service.thread.id)
+		let ownerExecution = state.store.model.execution(for: ownerConversation)
+		let capturedOwner = try #require(ownerExecution.owner)
+		#expect(ownerExecution.activeThreadID == service.thread.id)
+		#expect(ownerExecution.state == .awaitingApproval)
+		#expect(state.currentSnapshot.activeThreadID == nil)
+		#expect(state.currentSnapshot.activeExecutionState == nil)
 		#expect(state.currentSnapshot.executionState == .ready)
 		#expect(state.currentSnapshot.pendingInteractions.isEmpty)
 		#expect(state.currentSnapshot.entries.isEmpty)
 		#expect(state.currentSnapshot.diff.isEmpty)
-		state.inputs.send()
+		#expect(await waitUntil
+		{
+			state.currentSnapshot.canSend
+		})
 		#expect(service.turnStartCount == 1)
 
 		state.inputs.setArchivedFilter(true)
@@ -481,7 +489,12 @@ extension ApplicationStateTests
 		#expect(service.respondedRequestIDs == ["approval-a"])
 
 		state.inputs.selectThread("thread-2")
-		state.inputs.stop()
+		#expect(state.inputs.stop() == nil)
+		#expect(service.interruptedTurnIDs.isEmpty)
+		state.inputs.stop(
+			conversation: ownerConversation,
+			capturedOwner: capturedOwner
+		)
 		#expect(await waitUntil
 		{
 			service.interruptedTurnIDs == ["turn-1"]
@@ -496,7 +509,8 @@ extension ApplicationStateTests
 				)
 			)
 		)
-		#expect(state.currentSnapshot.activeExecutionState == .stopped)
+		#expect(state.currentSnapshot.activeExecutionState == nil)
+		#expect(state.store.model.execution(for: ownerConversation).state == .stopped)
 		state.inputs.selectThread(service.thread.id)
 		#expect(state.currentSnapshot.statusMessage == "Agent interrupted.")
 		state.inputs.selectThread("thread-2")
@@ -617,6 +631,13 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		service.otherThread = ThreadSummary(json: [
+			"id": "thread-2",
+			"name": "Other conversation",
+			"cwd": project.path,
+			"status": ["type": "idle"],
+		])!
+		service.turnsByThreadID["thread-2"] = []
 		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
 		defer
 		{
@@ -657,8 +678,16 @@ extension ApplicationStateTests
 		let readsBeforeReconnect = service.readThreadIDs.count
 		await state.inputs.connect()
 		#expect(service.readThreadIDs.dropFirst(readsBeforeReconnect).contains(service.thread.id))
+		#expect(await waitUntil
+		{
+			state.currentSnapshot.canSend
+				&& !state.store.model.execution(for: .thread(service.thread.id)).needsReconciliation
+		})
 		#expect(state.currentSnapshot.selectedThreadID == "thread-2")
 		#expect(state.currentSnapshot.activeThreadID == nil)
+		#expect(state.currentSnapshot.executionState == .ready)
+		#expect(!state.currentSnapshot.taskOutcomeUncertain)
+		#expect(!state.store.model.execution(for: .thread(service.thread.id)).hasUncertainRequest)
 		#expect(state.currentSnapshot.canSend)
 	}
 

@@ -40,6 +40,10 @@ enum WorkspaceEffect
 		OperationContext,
 		[TaskCommandOwnership]
 	)
+	case persistExecutionRecovery(
+		OperationContext,
+		[String]
+	)
 	case persistPreparedConversation(PreparedConversationWrite)
 	case acknowledgeSubmission(SubmissionAcknowledgementWrite)
 	case releaseSubmission(WorkspaceSubmissionReleaseOperation)

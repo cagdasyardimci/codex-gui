@@ -77,7 +77,7 @@ extension ComposerCommandReducer
 		func knownThread(_ id: String) -> Bool
 		{
 			model.conversations.selectedConversation.threadID == id
-				|| model.execution.activeThreadID == id
+				|| model.execution(for: .thread(id)).activeThreadID == id
 				|| model.conversations.threads.contains
 				{
 					$0.id == id && $0.cwd == model.identity.canonicalCheckoutPath

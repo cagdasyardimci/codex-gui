@@ -125,7 +125,7 @@ extension ContextNavigationReducer
 			captured.threadID = missing.id
 			let operation = ConversationReadOperation(
 				context: captured,
-				commandRevision: model.execution
+				commandRevision: model.execution(for: .thread(missing.id))
 					.commandEventRevisions[
 						missing.id,
 						default: 0
@@ -177,8 +177,7 @@ extension ContextNavigationReducer
 		model.identity.canonicalCheckoutPath != nil,
 		model.conversations.boundThreadID == nil || model.conversations
 		.boundThreadID == threadID,
-		model.conversations.pendingManagement == nil,
-		!(model.execution.state.isBusy && model.execution.activeThreadID == nil)
+		model.conversations.pendingManagement == nil
 		else
 		{
 			return
@@ -270,7 +269,10 @@ extension ContextNavigationReducer
 			existing.pageScope.projectPath == path,
 			existing.pageScope.generation == model.connection.generation,
 			existing.pageScope.cursor == cursor,
-			existing.commandRevision == model.execution.commandEventRevisions[threadID, default: 0]
+			existing.commandRevision == ConversationReducer.commandRevision(
+			threadID: threadID,
+			model: model
+			)
 		{
 			return .page(existing)
 		}
@@ -283,10 +285,10 @@ extension ContextNavigationReducer
 				generation: model.connection.generation,
 				cursor: cursor
 			),
-			commandRevision: model.execution.commandEventRevisions[
-				threadID,
-				default: 0
-			]
+			commandRevision: ConversationReducer.commandRevision(
+				threadID: threadID,
+				model: model
+			)
 		)
 		result.merge(
 			ConversationReducer.reduce(
@@ -489,7 +491,10 @@ extension ContextNavigationReducer
 			let operation = ConversationTurnReadOperation(
 				context: jump.context,
 				reference: reference,
-				commandRevision: model.execution.commandEventRevisions[threadID, default: 0]
+				commandRevision: ConversationReducer.commandRevision(
+					threadID: threadID,
+					model: model
+				)
 			)
 			result.merge(
 				ConversationReducer

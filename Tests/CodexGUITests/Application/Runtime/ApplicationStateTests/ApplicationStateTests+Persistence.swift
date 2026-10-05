@@ -553,6 +553,21 @@ extension ApplicationStateTests
 		model.composer.pendingSubmissions[context.requestID] = submission
 		model.execution.owner = ExecutionOwner(submission: context)
 		model.execution.submissionRequest = context
+		let prepared = PreparedSubmission(
+			submission: submission,
+			thread: ThreadDetail(
+				summary: service.thread,
+				turns: [],
+				nextTurnsCursor: nil
+			)
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.submissionPrepared(
+				context,
+				.succeeded(prepared)
+			))
+		)
 		let first = WorkspaceStateStore(
 			model: model,
 			service: service,
@@ -573,14 +588,6 @@ extension ApplicationStateTests
 			first.shutdown()
 			second.shutdown()
 		}
-		let prepared = PreparedSubmission(
-			submission: submission,
-			thread: ThreadDetail(
-				summary: service.thread,
-				turns: [],
-				nextTurnsCursor: nil
-			)
-		)
 		first.dispatch(.execution(.submissionPrepared(
 			context,
 			.succeeded(prepared)

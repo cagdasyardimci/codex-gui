@@ -196,8 +196,8 @@ struct WorkspaceDomainCompositionTests
 			canonicalCheckoutPath: "/tmp"
 		))
 		model.connection.isConnected = true
-		model.execution.state = .ready
 		model.conversations.selectedConversation = .thread("selected")
+		model.execution.state = .ready
 		let context = OperationContext(
 			workspace: model.identity,
 			generation: 0,
@@ -239,8 +239,11 @@ struct WorkspaceDomainCompositionTests
 				)
 			))
 		)
-		#expect(model.execution.activeThreadID == "selected")
-		#expect(model.execution.state == .completed)
+		let execution = model.execution(for: .thread("selected"))
+		#expect(execution.activeThreadID == "selected")
+		#expect(execution.state == .completed)
+		#expect(model.execution.activeThreadID == nil)
+		#expect(model.execution.state == .ready)
 		#expect(model.conversations.selectedConversation == .thread("browsed"))
 	}
 

@@ -13,12 +13,13 @@ struct ExecutionInteractionResponseTests
 			canonicalCheckoutPath: "/tmp/response-delivery"
 		))
 		model.connection.isConnected = true
+		model.executions.entries[.thread("worker")] = ExecutionModel()
 		model.connection.generation = 1
-		model.execution.activeThreadID = "worker"
-		model.execution.activeTurnID = "turn"
-		model.execution.state = .awaitingApproval
+		model.executions.entries[.thread("worker")]!.activeThreadID = "worker"
+		model.executions.entries[.thread("worker")]!.activeTurnID = "turn"
+		model.executions.entries[.thread("worker")]!.state = .awaitingApproval
 		model.conversations.selectedConversation = .thread("other")
-		model.execution.pendingInteractions = [interaction("approval")]
+		model.executions.entries[.thread("worker")]!.pendingInteractions = [interaction("approval")]
 		let response = operation(model)
 		_ = ExecutionReducer.reduce(
 			&model,
@@ -108,13 +109,16 @@ struct ExecutionInteractionResponseTests
 			outcomeIsUncertain: true,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses["approval"]?.context == response.context)
-		#expect(model.execution.pendingInteractions.map(\.id) == ["approval"])
-		#expect(model.execution.state == .awaitingApproval)
-		#expect(model.execution.statusMessage?.contains("delivery is uncertain") == true)
-		#expect(!model.execution.hasUncertainRequest)
-		#expect(!model.execution.needsReconciliation)
-		#expect(model.execution.blocksCleanup)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses["approval"]?
+			.context == response.context)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions
+			.map(\.id) == ["approval"])
+		#expect(model.executions.entries[.thread("worker")]!.state == .awaitingApproval)
+		#expect(model.executions.entries[.thread("worker")]!.statusMessage?
+			.contains("delivery is uncertain") == true)
+		#expect(!model.executions.entries[.thread("worker")]!.hasUncertainRequest)
+		#expect(!model.executions.entries[.thread("worker")]!.needsReconciliation)
+		#expect(model.executions.entries[.thread("worker")]!.blocksCleanup)
 
 		let retry = operation(model)
 		let rejected = ExecutionReducer.reduce(
@@ -122,7 +126,8 @@ struct ExecutionInteractionResponseTests
 			.execution(.interactionResponseRequested(retry))
 		)
 		#expect(rejected.effects.isEmpty)
-		#expect(model.execution.pendingResponses["approval"]?.context == response.context)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses["approval"]?
+			.context == response.context)
 	}
 
 	@Test func unsentResponseAllowsRetryAndRejectsTheEarlierCompletion()
@@ -133,27 +138,31 @@ struct ExecutionInteractionResponseTests
 			outcomeIsUncertain: false,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses.isEmpty)
-		#expect(model.execution.pendingInteractions.map(\.id) == ["approval"])
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions
+			.map(\.id) == ["approval"])
 		let retry = operation(model)
 		let accepted = ExecutionReducer.reduce(
 			&model,
 			.execution(.interactionResponseRequested(retry))
 		)
 		#expect(accepted.effects.count == 1)
-		#expect(model.execution.pendingResponses["approval"]?.context == retry.context)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses["approval"]?
+			.context == retry.context)
 		fail(
 			response,
 			outcomeIsUncertain: true,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses["approval"]?.context == retry.context)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses["approval"]?
+			.context == retry.context)
 	}
 
 	@Test func serverResolutionRetiresOnlyTheMatchingResponseReservation()
 	{
 		var (model, response) = fixture()
-		model.execution.pendingInteractions.append(interaction("other-approval"))
+		model.executions.entries[.thread("worker")]!.pendingInteractions
+			.append(interaction("other-approval"))
 		let otherResponse = operation(
 			model,
 			interactionID: "other-approval"
@@ -167,8 +176,8 @@ struct ExecutionInteractionResponseTests
 			outcomeIsUncertain: true,
 			model: &model
 		)
-		model.execution.hasUncertainRequest = true
-		model.execution.needsReconciliation = true
+		model.executions.entries[.thread("worker")]!.hasUncertainRequest = true
+		model.executions.entries[.thread("worker")]!.needsReconciliation = true
 
 		observe(
 			.interactionResolved(
@@ -178,7 +187,7 @@ struct ExecutionInteractionResponseTests
 			context: response.context,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses.count == 2)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.count == 2)
 		observe(
 			.interactionResolved(
 				threadId: "worker",
@@ -187,13 +196,15 @@ struct ExecutionInteractionResponseTests
 			context: response.context,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses["approval"] == nil)
-		#expect(model.execution.pendingResponses["other-approval"]?.context
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses["approval"] == nil)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses["other-approval"]?
+			.context
 			== otherResponse.context)
-		#expect(model.execution.pendingInteractions.map(\.id) == ["other-approval"])
-		#expect(model.execution.state == .awaitingApproval)
-		#expect(model.execution.hasUncertainRequest)
-		#expect(model.execution.needsReconciliation)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions
+			.map(\.id) == ["other-approval"])
+		#expect(model.executions.entries[.thread("worker")]!.state == .awaitingApproval)
+		#expect(model.executions.entries[.thread("worker")]!.hasUncertainRequest)
+		#expect(model.executions.entries[.thread("worker")]!.needsReconciliation)
 	}
 
 	@Test func resolvingTheUncertainResponseClearsItsWarning()
@@ -212,10 +223,10 @@ struct ExecutionInteractionResponseTests
 			context: response.context,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses.isEmpty)
-		#expect(model.execution.pendingInteractions.isEmpty)
-		#expect(model.execution.statusMessage == nil)
-		#expect(model.execution.state == .running)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.statusMessage == nil)
+		#expect(model.executions.entries[.thread("worker")]!.state == .running)
 	}
 
 	@Test func resolvingAResponsePreservesAnUnrelatedRetryableBackendError()
@@ -245,10 +256,10 @@ struct ExecutionInteractionResponseTests
 			context: response.context,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses.isEmpty)
-		#expect(model.execution.pendingInteractions.isEmpty)
-		#expect(model.execution.statusMessage == message)
-		#expect(model.execution.state == .running)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.statusMessage == message)
+		#expect(model.executions.entries[.thread("worker")]!.state == .running)
 	}
 
 	@Test func confirmedDeliveryCanSettleAnEarlierUncertainResponse()
@@ -266,10 +277,10 @@ struct ExecutionInteractionResponseTests
 				.succeeded(())
 			))
 		)
-		#expect(model.execution.pendingResponses.isEmpty)
-		#expect(model.execution.pendingInteractions.isEmpty)
-		#expect(model.execution.state == .running)
-		#expect(model.execution.statusMessage == nil)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.state == .running)
+		#expect(model.executions.entries[.thread("worker")]!.statusMessage == nil)
 	}
 
 	@Test func terminalTurnClearsResponseReservationsWithoutAddingAnUncertaintyBarrier()
@@ -293,10 +304,10 @@ struct ExecutionInteractionResponseTests
 			context: response.context,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses.isEmpty)
-		#expect(model.execution.pendingInteractions.isEmpty)
-		#expect(model.execution.state == .completed)
-		#expect(!model.execution.blocksCleanup)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.state == .completed)
+		#expect(!model.executions.entries[.thread("worker")]!.blocksCleanup)
 	}
 
 	@Test func terminalFailureClearsResponsesWithoutRemovingIndependentRecoveryBarriers()
@@ -307,8 +318,8 @@ struct ExecutionInteractionResponseTests
 			outcomeIsUncertain: true,
 			model: &model
 		)
-		model.execution.hasUncertainRequest = true
-		model.execution.needsReconciliation = true
+		model.executions.entries[.thread("worker")]!.hasUncertainRequest = true
+		model.executions.entries[.thread("worker")]!.needsReconciliation = true
 		observe(
 			.error(
 				threadId: "worker",
@@ -319,12 +330,12 @@ struct ExecutionInteractionResponseTests
 			context: response.context,
 			model: &model
 		)
-		#expect(model.execution.pendingResponses.isEmpty)
-		#expect(model.execution.pendingInteractions.isEmpty)
-		#expect(model.execution.state == .failed)
-		#expect(model.execution.hasUncertainRequest)
-		#expect(model.execution.needsReconciliation)
-		#expect(model.execution.blocksCleanup)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.state == .failed)
+		#expect(model.executions.entries[.thread("worker")]!.hasUncertainRequest)
+		#expect(model.executions.entries[.thread("worker")]!.needsReconciliation)
+		#expect(model.executions.entries[.thread("worker")]!.blocksCleanup)
 	}
 
 	@Test func disconnectRetiresResponsesAndPreservesItsExistingRecoveryBarrier()
@@ -343,7 +354,7 @@ struct ExecutionInteractionResponseTests
 				message: "Stale disconnect"
 			))
 		)
-		#expect(model.execution.pendingResponses.count == 1)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.count == 1)
 		_ = ConnectionReducer.reduce(
 			&model,
 			.connection(.disconnected(
@@ -352,11 +363,11 @@ struct ExecutionInteractionResponseTests
 				message: "Disconnected"
 			))
 		)
-		#expect(model.execution.pendingResponses.isEmpty)
-		#expect(model.execution.pendingInteractions.isEmpty)
-		#expect(model.execution.needsReconciliation)
-		#expect(model.execution.hasUncertainRequest)
-		#expect(model.execution.blocksCleanup)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingInteractions.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.needsReconciliation)
+		#expect(model.executions.entries[.thread("worker")]!.hasUncertainRequest)
+		#expect(model.executions.entries[.thread("worker")]!.blocksCleanup)
 	}
 
 	@Test func reconnectRetiresResponsesOnlyWhenItsTransitionIsAccepted()
@@ -372,16 +383,17 @@ struct ExecutionInteractionResponseTests
 			.connection(.connectRequested(reconnect))
 		)
 		#expect(rejected.effects.isEmpty)
-		#expect(model.execution.pendingResponses["approval"]?.context == response.context)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses["approval"]?
+			.context == response.context)
 		#expect(model.connection.generation == response.context.generation)
 
-		model.execution.state = .failed
+		model.executions.entries[.thread("worker")]!.state = .failed
 		let accepted = ConnectionReducer.reduce(
 			&model,
 			.connection(.connectRequested(reconnect))
 		)
 		#expect(!accepted.effects.isEmpty)
-		#expect(model.execution.pendingResponses.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.pendingResponses.isEmpty)
 		#expect(model.connection.generation == response.context.generation + 1)
 	}
 }

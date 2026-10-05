@@ -444,9 +444,22 @@ extension ConversationReducer
 				protected.insert(anchor)
 			}
 		}
-		if model.execution.activeThreadID == threadID, let live = model.execution.activeTurnID
+		let execution = model.execution(for: .thread(threadID))
+		if execution.activeThreadID == threadID, let live = execution.activeTurnID
 		{
 			protected.insert(live)
+		}
+		for interaction in execution.pendingInteractions where interaction.threadId == threadID
+		{
+			protected.insert(interaction.turnId)
+		}
+		for response in execution.pendingResponses.values
+			where response.context.threadID == threadID
+		{
+			if let turnID = response.context.turnID
+			{
+				protected.insert(turnID)
+			}
 		}
 		if let pending = model.contextNavigation.pendingJump, pending.context.threadID == threadID
 		{

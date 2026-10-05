@@ -22,6 +22,7 @@ enum ForkRecoveryChoice
 struct ComposerCommandModel
 {
 	var error: String?
+	var conversationErrors: [ConversationKey: String] = [:]
 	var pendingFork: SlashCommandPresentationRequest?
 	var uncertainFork: OperationContext?
 	var forkRecoveryPresentation: SlashCommandPresentationRequest?
@@ -33,6 +34,13 @@ struct ComposerCommandModel
 	var pendingTurn: ComposerCommandTurnOperation?
 	var pendingSettings: ComposerCommandSettingsOperation?
 	var planModes: [ConversationKey: CollaborationModeKind] = [:]
+
+	func blocksNewWork(for conversation: ConversationKey) -> Bool
+	{
+		pendingFork != nil || uncertainFork != nil
+			|| pendingTurn?.request.conversation == conversation
+			|| pendingSettings?.request.conversation == conversation
+	}
 
 	var blocksNewWork: Bool
 	{

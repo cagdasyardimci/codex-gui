@@ -267,7 +267,8 @@ extension ComposerCommandReducer
 			{
 				model.composerCommands.pendingSettings = nil
 			}
-			model.composerCommands.error = "Could not change plan mode: \(failure.message)"
+			model.composerCommands.conversationErrors[operation.request.conversation] =
+				"Could not change plan mode: \(failure.message)"
 			if remainsUnknown
 			{
 				if !model.execution.needsReconciliation
@@ -276,8 +277,9 @@ extension ComposerCommandReducer
 				}
 				model.execution.needsReconciliation = true
 				model.composerCommands.pendingSettings?.outcomeUncertain = true
-				model.composerCommands.error = "Plan mode outcome is uncertain. Reconnect and use "
-					+ "/plan to explicitly reapply Plan or reset Default. \(failure.message)"
+				model.composerCommands.conversationErrors[operation.request.conversation] =
+					"Plan mode outcome is uncertain. Reconnect and use "
+						+ "/plan to explicitly reapply Plan or reset Default. \(failure.message)"
 			}
 		}
 	}
@@ -300,7 +302,7 @@ extension ComposerCommandReducer
 			}
 			model.composerCommands.settingsIntroducedReconciliation = false
 		}
-		model.composerCommands.error = nil
+		model.composerCommands.conversationErrors[operation.request.conversation] = nil
 		consumeDraft(
 			operation.request,
 			model: &model,
@@ -327,6 +329,7 @@ extension ComposerCommandReducer
 		model: inout WorkspaceModel
 	)
 	{
+		let conversation = model.composerCommands.pendingTurn?.request.conversation
 		model.execution.submissionRequest = nil
 		model.composerCommands.pendingTurn?.transportFinished = true
 		let observedTurn = model.execution.owner?.submission.turnID != nil
@@ -335,8 +338,12 @@ extension ComposerCommandReducer
 			model.execution.hasUncertainRequest = true
 			model.execution.needsReconciliation = true
 			model.execution.state = model.connection.isConnected ? .failed : .disconnected
-			model.composerCommands.error = "Command outcome is uncertain. Reopen this chat to "
-				+ "check its history before retrying. \(failure.message)"
+			if let conversation
+			{
+				model.composerCommands.conversationErrors[conversation] =
+					"Command outcome is uncertain. Reopen this chat to "
+						+ "check its history before retrying. \(failure.message)"
+			}
 		}
 		else
 		{
@@ -345,7 +352,10 @@ extension ComposerCommandReducer
 			model.execution.activeThreadID = nil
 			model.execution.activeTurnID = nil
 			model.execution.state = model.connection.isConnected ? .ready : .disconnected
-			model.composerCommands.error = failure.message
+			if let conversation
+			{
+				model.composerCommands.conversationErrors[conversation] = failure.message
+			}
 		}
 	}
 
@@ -359,6 +369,7 @@ extension ComposerCommandReducer
 			return
 		}
 		model.composerCommands.pendingTurn = nil
+		model.composerCommands.conversationErrors[pending.request.conversation] = nil
 	}
 
 	static func observe(
@@ -432,15 +443,22 @@ extension ComposerCommandReducer
 			model.composerCommands.error = "Fork may have been saved. Reconnect and use /fork "
 				+ "to inspect chats or continue the original."
 		}
-		if model.composerCommands.pendingSettings != nil
+		if let settings = model.composerCommands.pendingSettings
 		{
-			if !model.execution.needsReconciliation
+			_ = model.reduceExecutionScope(
+				model.executionIdentity(for: settings.request.conversation)
+			)
 			{
-				model.composerCommands.settingsIntroducedReconciliation = true
+				model in
+				if !model.execution.needsReconciliation
+				{
+					model.composerCommands.settingsIntroducedReconciliation = true
+				}
+				model.execution.needsReconciliation = true
+				model.composerCommands.pendingSettings?.outcomeUncertain = true
+				model.composerCommands.pendingSettings?.transportFinished = true
+				return WorkspaceReduction()
 			}
-			model.execution.needsReconciliation = true
-			model.composerCommands.pendingSettings?.outcomeUncertain = true
-			model.composerCommands.pendingSettings?.transportFinished = true
 		}
 		model.composerCommands.pendingTurn?.transportFinished = true
 	}
@@ -534,6 +552,7 @@ extension ComposerCommandReducer
 				if pending.transportFinished
 				{
 					model.composerCommands.pendingTurn = nil
+					model.composerCommands.conversationErrors[pending.request.conversation] = nil
 				}
 			}
 			else if model.execution.hasUncertainRequest || model.execution.agentOutcome == nil
@@ -541,8 +560,9 @@ extension ComposerCommandReducer
 				model.execution.hasUncertainRequest = true
 				model.execution.needsReconciliation = true
 				model.execution.state = .failed
-				model.composerCommands.error = "This command has no confirmed terminal outcome. "
-					+ "Refresh its chat again before retrying or closing the checkout."
+				model.composerCommands.conversationErrors[pending.request.conversation] =
+					"This command has no confirmed terminal outcome. "
+						+ "Refresh its chat again before retrying or closing the checkout."
 			}
 		}
 		return result

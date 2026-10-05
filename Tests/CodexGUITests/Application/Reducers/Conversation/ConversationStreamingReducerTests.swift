@@ -18,8 +18,10 @@ struct ConversationStreamingReducerTests
 		model.connection.generation = 2
 		model.connection.isConnected = true
 		model.conversations.selectedConversation = .thread("viewed")
-		model.execution.activeThreadID = "worker"
-		model.execution.activeTurnID = "current"
+		var execution = ExecutionModel()
+		execution.activeThreadID = "worker"
+		execution.activeTurnID = "current"
+		model.executions.entries[.thread("worker")] = execution
 		return model
 	}
 
@@ -532,7 +534,7 @@ struct ConversationStreamingReducerTests
 			threadID: "worker",
 			turnID: "current"
 		)
-		model.execution.owner = ExecutionOwner(submission: current)
+		model.executions.entries[.thread("worker")]?.owner = ExecutionOwner(submission: current)
 		let event = AppServerEvent.agentMessageDelta(
 			threadId: "worker",
 			turnId: "current",
@@ -576,6 +578,9 @@ struct ConversationStreamingReducerTests
 		#expect(model.conversations.content[conversation]?.entries.map(\.body) == ["accepted"])
 		#expect(model.conversations.content[.thread("viewed")] == nil)
 		#expect(model.conversations.selectedConversation == .thread("viewed"))
-		#expect(model.execution.owner?.submission == current)
+		#expect(model.execution(for: conversation).owner?.submission == current)
+		#expect(model.execution.owner == nil)
+		#expect(model.execution.activeThreadID == nil)
+		#expect(model.execution.activeTurnID == nil)
 	}
 }

@@ -74,6 +74,11 @@ extension ComposerReducer
 		model: inout WorkspaceModel
 	)
 	{
+		if let submission = model.composer.pendingSubmissions[requestID],
+			submission.conversation == .newChat
+		{
+			model.conversations.pendingNewChatContent.removeValue(forKey: submission.draft.lifetime)
+		}
 		model.composer.pendingSubmissions.removeValue(forKey: requestID)
 		model.composer.preparedSubmissions.removeValue(forKey: requestID)
 		model.composer.submissionConversations.removeValue(forKey: requestID)
@@ -131,6 +136,11 @@ extension ComposerReducer
 			case .failed:
 				model.composer.uncertainSubmissions.insert(context.requestID)
 			case .succeeded(let prepared):
+				guard model.execution.activeThreadID == prepared.thread.summary.id
+				else
+				{
+					return
+				}
 				adoptPreparedConversation(
 					prepared,
 					submission: submission,
@@ -362,11 +372,18 @@ extension ComposerReducer
 		var selectThread = false
 		if submission.conversation == .newChat
 		{
-			let source = model.composer.drafts[.newChat] ?? ComposerDraft()
+			let source = model.composer.drafts[.newChat] ?? ComposerDraft(
+				lifetime: model.composer.pendingNewChatLifetime ?? 0
+			)
 			if source.lifetime == submission.draft.lifetime
 			{
 				transferred = source
 				clearSource = true
+				ConversationReducer.detachNewChatContent(
+					lifetime: source.lifetime,
+					model: &model
+				)
+				model.composer.pendingNewChatLifetime = nil
 				model.composer.drafts[.newChat] = ComposerDraft(
 					revision: source.revision + 1,
 					lifetime: source.lifetime + 1

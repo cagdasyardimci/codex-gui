@@ -243,50 +243,100 @@ enum WorkspaceLifecycleComposition
 				result.merge(refreshed)
 			}
 		case .conversationSelectionChanged:
-			model.lifecycle.recoveryListRequestID = nil
 			result.effects = [.restoreComposer(context)]
 		case .conversationListAccepted(let operation):
-			guard model.lifecycle.recoveryListRequestID == operation.context.requestID,
-					model.execution.needsReconciliation,
-					let threadID = model.execution.activeThreadID ?? model.conversations
-					.selectedConversation.threadID
-			else
+			let isRecoveryList = model.lifecycle.recoveryListRequestID
+				== operation.context.requestID
+			if isRecoveryList
 			{
-				return result
+				model.lifecycle.recoveryListRequestID = nil
 			}
-			model.lifecycle.recoveryListRequestID = nil
-			let selected = model.conversations.selectedConversation.threadID
-			guard !model.conversations.pendingReads.values.contains(where:
+			let discovered = model.conversations.threads.filter
+			{
+				// The accepted list already carries runtime-validated checkout ownership.
+				$0.status == "active"
+					&& (model.conversations.boundThreadID == nil
+						|| model.conversations.boundThreadID == $0.id)
+			}
+			var recoveringThreads: Set<String> = []
+			for thread in discovered
+			{
+				if prepareRecovery(
+					thread.id,
+					model: &model
+				)
 				{
-					$0.purpose == .selection && $0.context.threadID == selected
+					recoveringThreads.insert(thread.id)
+				}
+			}
+			if isRecoveryList
+			{
+				recoveringThreads.formUnion(model.executions.entries.compactMap
+				{
+					identity, execution -> String? in
+					guard execution.needsReconciliation || execution.hasUncertainRequest
+						|| execution.commandLifetime.hasPendingCommands
+					else
+					{
+						return nil
+					}
+					return identity.conversation.threadID ?? execution.activeThreadID
 				})
+			}
+			for threadID in recoveringThreads.sorted()
+			{
+				result.merge(recoverThread(
+					threadID,
+					context: operation.context,
+					model: &model
+				))
+			}
+		case .backendObserved(
+			.threadStatusChanged(
+				let threadID,
+				let status
+			),
+			_
+		):
+			guard status.type == "active", model.connection.isConnected
 			else
 			{
 				return result
 			}
-			let read = OperationContext(
-				workspace: model.identity,
-				generation: operation.context.generation,
-				requestID: operation.context.requestID,
-				threadID: threadID
-			)
-			result = ConversationReducer.reduce(
-				&model,
-				.conversations(.historyRequested(
-					ConversationReadOperation(
-						context: read,
-						commandRevision: model.execution.commandEventRevisions[
-							threadID,
-							default: 0
-						],
-						purpose: .recovery,
-						contentRevision: model.conversations.contentRevisions[
-							threadID,
-							default: 0
-						]
+			let knownThread = model.executions.entries[.thread(threadID)] != nil
+				|| model.conversations.selectedConversation == .thread(threadID)
+				|| model.conversations.boundThreadID == threadID
+				|| model.conversations.threads.contains
+				{
+					$0.id == threadID
+				}
+			guard knownThread
+			else
+			{
+				if model.conversations.pendingList == nil
+				{
+					result = ConversationReducer.reduce(
+						&model,
+						.conversations(.threadListRequested(ConversationListOperation(
+							context: context,
+							archived: model.conversations.showingArchived,
+							boundThreadID: model.conversations.boundThreadID
+						)))
 					)
-				))
+				}
+				return result
+			}
+			if prepareRecovery(
+				threadID,
+				model: &model
 			)
+			{
+				result = recoverThread(
+					threadID,
+					context: context,
+					model: &model
+				)
+			}
 		case .completedHistoryRefreshed:
 			let list = ConversationReducer.reduce(
 				&model,
@@ -307,6 +357,60 @@ enum WorkspaceLifecycleComposition
 		default: break
 		}
 		return result
+	}
+
+	private static func prepareRecovery(
+		_ threadID: String,
+		model: inout WorkspaceModel
+	) -> Bool
+	{
+		var execution = model.execution(for: .thread(threadID))
+		let hasLiveOwner = execution.state.isBusy
+			&& (execution.owner != nil || execution.activeTurnID != nil)
+		guard !hasLiveOwner
+		else
+		{
+			return false
+		}
+		execution.activeThreadID = threadID
+		execution.needsReconciliation = true
+		execution.hasUncertainRequest = true
+		model.executions.entries[.thread(threadID)] = execution
+		return true
+	}
+
+	private static func recoverThread(
+		_ threadID: String,
+		context: OperationContext,
+		model: inout WorkspaceModel
+	) -> WorkspaceReduction
+	{
+		guard model.connection.isConnected,
+				!model.conversations.pendingReads.values.contains(where:
+				{
+					$0.context.threadID == threadID
+						&& ($0.purpose == .selection || $0.purpose == .recovery)
+				})
+		else
+		{
+			return WorkspaceReduction()
+		}
+		let read = OperationContext(
+			workspace: model.identity,
+			generation: context.generation,
+			requestID: context.requestID,
+			threadID: threadID
+		)
+		return ConversationReducer.reduce(
+			&model,
+			.conversations(.historyRequested(ConversationReadOperation(
+				context: read,
+				commandRevision: model.execution(for: .thread(threadID))
+					.commandEventRevisions[threadID, default: 0],
+				purpose: .recovery,
+				contentRevision: model.conversations.contentRevisions[threadID, default: 0]
+			)))
+		)
 	}
 
 	static func referenceValidation(

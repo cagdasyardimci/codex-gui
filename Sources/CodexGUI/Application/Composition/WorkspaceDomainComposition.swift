@@ -9,6 +9,24 @@ enum WorkspaceDomainComposition
 		_ event: WorkspaceDomainEvent
 	) -> WorkspaceReduction
 	{
+		WorkspaceExecutionScope.reduce(
+			event: event,
+			model: &model,
+			body:
+			{
+				model in reduceCanonicalDomainEvent(
+					&model,
+					event
+				)
+			}
+		)
+	}
+
+	private static func reduceCanonicalDomainEvent(
+		_ model: inout WorkspaceModel,
+		_ event: WorkspaceDomainEvent
+	) -> WorkspaceReduction
+	{
 		var result = ConversationReviewComposition.reduceDomainEvent(
 			&model,
 			event

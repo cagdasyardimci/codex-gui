@@ -81,6 +81,22 @@ extension ExecutionReducer
 			{
 				return
 			}
+			let terminalTurnID = model.execution.owner?.submission.turnID
+			if model.execution.agentOutcome != nil && terminalTurnID == turn.id
+			{
+				return
+			}
+			let startsUnownedTurn = model.execution.owner == nil
+				|| model.execution.agentOutcome != nil
+			if startsUnownedTurn
+			{
+				var ownerContext = context
+				ownerContext.threadID = threadID
+				ownerContext.turnID = turn.id
+				model.execution.owner = ExecutionOwner(submission: ownerContext)
+				model.execution.agentOutcome = nil
+				model.execution.state = .running
+			}
 			model.execution.activeThreadID = threadID
 			model.execution.activeTurnID = turn.id
 			model.execution.owner?.submission.threadID = threadID
@@ -154,7 +170,10 @@ extension ExecutionReducer
 			{
 				return
 			}
-			model.execution.commandEventRevisions[threadID, default: 0] += 1
+			recordCommandEvent(
+				threadID: threadID,
+				model: &model
+			)
 			model.execution.commandLifetime.observe(
 				item,
 				threadID: threadID,
@@ -162,7 +181,7 @@ extension ExecutionReducer
 			)
 			result.effects.append(.persistCommands(
 				context,
-				Array(model.execution.commandLifetime.pending)
+				model.pendingCommandOwnership
 			))
 			if item.type == "commandExecution"
 			{
@@ -195,7 +214,10 @@ extension ExecutionReducer
 			{
 				return
 			}
-			model.execution.commandEventRevisions[threadID, default: 0] += 1
+			recordCommandEvent(
+				threadID: threadID,
+				model: &model
+			)
 		case .agentMessageDelta(
 			let threadID,
 			let turnID,
@@ -293,10 +315,10 @@ extension ExecutionReducer
 			let message,
 			let willRetry
 		):
-			let belongsToAnotherThread = !threadID.isEmpty
-				&& threadID != model.execution.activeThreadID
-				&& threadID != selectedThreadID
-			if belongsToAnotherThread
+			guard threadID == model.execution.activeThreadID,
+					!threadID.isEmpty,
+					turnID == model.execution.activeTurnID
+			else
 			{
 				return
 			}

@@ -658,9 +658,59 @@ struct WorkspaceStoreInputs
 	@discardableResult
 	func stop() -> WorkspaceOperationHandle?
 	{
-		var context = workspaceStore.operationContext(threadID: activeThreadID)
-		context.turnID = activeTurnID
-		workspaceStore.dispatch(.execution(.stopRequested(context)))
+		requestStop(for: store.model.execution)
+	}
+
+	@discardableResult
+	func stop(
+		conversation: ConversationKey,
+		capturedOwner: ExecutionOwner?
+	) -> WorkspaceOperationHandle?
+	{
+		let execution: ExecutionModel
+		if let capturedOwner
+		{
+			guard let capturedExecution = store.model.execution(for: capturedOwner.submission),
+					capturedExecution.owner == capturedOwner
+			else
+			{
+				return nil
+			}
+			execution = capturedExecution
+		}
+		else
+		{
+			execution = store.model.execution(for: conversation)
+			guard execution.owner == nil
+			else
+			{
+				return nil
+			}
+		}
+		return requestStop(for: execution)
+	}
+
+	func stopAll()
+	{
+		let executions = store.model.allExecutions.filter
+		{
+			$0.isTaskActive || $0.needsReconciliation
+		}
+		for execution in executions
+		{
+			requestStop(for: execution)
+		}
+	}
+
+	@discardableResult
+	private func requestStop(for execution: ExecutionModel) -> WorkspaceOperationHandle?
+	{
+		var context = workspaceStore.operationContext(threadID: execution.activeThreadID)
+		context.turnID = execution.activeTurnID
+		workspaceStore.dispatch(.execution(.stopRequested(
+			context,
+			ownerRequestID: execution.owner?.submission.requestID
+		)))
 		return store.operation(for: context)
 	}
 

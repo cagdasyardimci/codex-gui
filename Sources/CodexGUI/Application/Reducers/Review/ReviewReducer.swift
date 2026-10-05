@@ -169,7 +169,7 @@ enum ReviewReducer
 			let identity,
 			_
 		)):
-			if model.identity == identity && !model.execution.isTaskActive
+			if model.identity == identity && !model.hasActiveExecution
 			{
 				model.review = ReviewModel()
 			}

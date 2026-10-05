@@ -13,6 +13,7 @@ struct ExecutionReconciliationTests
 			canonicalCheckoutPath: "/tmp/reconciliation"
 		))
 		model.connection.isConnected = true
+		model.executions.entries[.thread("worker")] = ExecutionModel()
 		model.connection.generation = 1
 		let context = OperationContext(
 			workspace: model.identity,
@@ -21,13 +22,15 @@ struct ExecutionReconciliationTests
 			threadID: "worker",
 			turnID: "live"
 		)
-		model.execution.owner = ExecutionOwner(submission: context)
-		model.execution.activeThreadID = "worker"
-		model.execution.activeTurnID = "live"
-		model.execution.state = state
-		model.execution.needsReconciliation = true
-		model.execution.hasUncertainRequest = true
-		model.execution.statusMessage = "Instruction outcome is uncertain."
+		model.executions.entries[.thread("worker")]!.owner = ExecutionOwner(submission: context)
+		model.executions.entries[.thread("worker")]!.activeThreadID = "worker"
+		model.executions.entries[.thread("worker")]!.activeTurnID = "live"
+		model.executions.entries[.thread("worker")]!.state = state
+		model.executions.entries[.thread("worker")]!.needsReconciliation = true
+		model.executions.entries[.thread("worker")]!.hasUncertainRequest = true
+		model.executions.entries[.thread(
+			"worker"
+		)]!.statusMessage = "Instruction outcome is uncertain."
 		model.conversations.selectedConversation = .thread("other")
 		return (model, context)
 	}
@@ -79,12 +82,12 @@ struct ExecutionReconciliationTests
 					context: context,
 					model: &model
 				)
-				#expect(model.execution.owner?.submission == context)
-				#expect(model.execution.activeThreadID == "worker")
-				#expect(model.execution.activeTurnID == "live")
-				#expect(model.execution.state == state)
-				#expect(model.execution.needsReconciliation)
-				#expect(model.execution.hasUncertainRequest)
+				#expect(model.executions.entries[.thread("worker")]!.owner?.submission == context)
+				#expect(model.executions.entries[.thread("worker")]!.activeThreadID == "worker")
+				#expect(model.executions.entries[.thread("worker")]!.activeTurnID == "live")
+				#expect(model.executions.entries[.thread("worker")]!.state == state)
+				#expect(model.executions.entries[.thread("worker")]!.needsReconciliation)
+				#expect(model.executions.entries[.thread("worker")]!.hasUncertainRequest)
 				#expect(result.domainEvents.contains
 				{
 					if case .historyAccepted = $0
@@ -99,17 +102,20 @@ struct ExecutionReconciliationTests
 						&model,
 						.execution(.stopRequested(context))
 					)
-					#expect(model.execution.state == .stopping)
-					#expect(model.execution.pendingInterruption?.context.turnID == "live")
-					let pending = model.execution.pendingInterruption?.context
+					#expect(model.executions.entries[.thread("worker")]!.state == .stopping)
+					#expect(model.executions.entries[.thread("worker")]!.pendingInterruption?
+						.context.turnID == "live")
+					let pending = model.executions.entries[.thread("worker")]!.pendingInterruption?
+						.context
 					_ = history(
 						detail(status: status),
 						context: context,
 						model: &model
 					)
-					#expect(model.execution.state == .stopping)
-					#expect(model.execution.pendingInterruption?.context == pending)
-					#expect(model.execution.stopRequested)
+					#expect(model.executions.entries[.thread("worker")]!.state == .stopping)
+					#expect(model.executions.entries[.thread("worker")]!.pendingInterruption?
+						.context == pending)
+					#expect(model.executions.entries[.thread("worker")]!.stopRequested)
 					#expect(stop.effects.contains
 					{
 						if case .interrupt = $0
@@ -137,16 +143,16 @@ struct ExecutionReconciliationTests
 				)
 				if status == "inProgress" || status == "running"
 				{
-					#expect(model.execution.state == .failed)
-					#expect(model.execution.activeThreadID == "worker")
-					#expect(model.execution.needsReconciliation)
+					#expect(model.executions.entries[.thread("worker")]!.state == .failed)
+					#expect(model.executions.entries[.thread("worker")]!.activeThreadID == "worker")
+					#expect(model.executions.entries[.thread("worker")]!.needsReconciliation)
 				}
 				else
 				{
-					#expect(model.execution.state == .ready)
-					#expect(model.execution.activeThreadID == nil)
-					#expect(!model.execution.needsReconciliation)
-					#expect(!model.execution.hasUncertainRequest)
+					#expect(model.executions.entries[.thread("worker")]!.state == .ready)
+					#expect(model.executions.entries[.thread("worker")]!.activeThreadID == nil)
+					#expect(!model.executions.entries[.thread("worker")]!.needsReconciliation)
+					#expect(!model.executions.entries[.thread("worker")]!.hasUncertainRequest)
 				}
 			}
 		}
@@ -166,15 +172,15 @@ struct ExecutionReconciliationTests
 				)
 			))
 		)
-		#expect(model.execution.activeTurnID == nil)
-		#expect(model.execution.agentOutcome == .stopped)
+		#expect(model.executions.entries[.thread("worker")]!.activeTurnID == nil)
+		#expect(model.executions.entries[.thread("worker")]!.agentOutcome == .stopped)
 		_ = history(
 			detail(status: "interrupted"),
 			context: context,
 			model: &model
 		)
-		#expect(model.execution.state == .ready)
-		#expect(!model.execution.needsReconciliation)
-		#expect(model.execution.activeThreadID == nil)
+		#expect(model.executions.entries[.thread("worker")]!.state == .ready)
+		#expect(!model.executions.entries[.thread("worker")]!.needsReconciliation)
+		#expect(model.executions.entries[.thread("worker")]!.activeThreadID == nil)
 	}
 }

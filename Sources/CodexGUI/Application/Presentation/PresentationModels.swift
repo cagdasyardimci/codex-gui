@@ -91,6 +91,8 @@ struct ConversationSnapshot
 	var gitTurnBaselineFailure: GitComparisonFailure? = nil
 	var activeExecutionState: ExecutionState? = nil
 	var taskOutcomeUncertain = false
+	var threadExecutions: [String: ThreadExecutionPresentation] = [:]
+	var activeExecutionCount: Int? = nil
 	var canSteer = false
 	var activePlan: TurnPlanUpdate? = nil
 	var activeActivity: String? = nil

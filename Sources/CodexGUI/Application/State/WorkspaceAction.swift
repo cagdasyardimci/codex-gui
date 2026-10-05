@@ -25,7 +25,8 @@ enum ConnectionAction
 	case projectRestored(
 		OperationContext,
 		pendingCommands: [TaskCommandOwnership],
-		selectedThreadID: String?
+		selectedThreadID: String?,
+		pendingExecutions: [String] = []
 	)
 	case shutdownRequested
 	case executableVersionReceived(
@@ -75,7 +76,10 @@ enum ExecutionAction
 		ReconciliationOperation,
 		ThreadDetail
 	)
-	case stopRequested(OperationContext)
+	case stopRequested(
+		OperationContext,
+		ownerRequestID: UUID? = nil
+	)
 	case steeringRequested(SteeringOperation)
 	case steeringTransportFinished(
 		SteeringOperation,
@@ -600,5 +604,6 @@ struct WorkspaceSourceStartup
 {
 	let project: WorkspaceProjectOpening?
 	let pendingCommands: [TaskCommandOwnership]
+	var pendingExecutions: [String] = []
 	let preferences: PreferencesRestoration
 }

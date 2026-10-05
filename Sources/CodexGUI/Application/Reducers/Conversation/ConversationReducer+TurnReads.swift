@@ -16,7 +16,10 @@ extension ConversationReducer
 		model.conversations.boundThreadID == nil || model.conversations.boundThreadID == threadID,
 		let index = model.conversations.turnReferenceIndices[threadID],
 		index.references.contains(operation.reference),
-		operation.commandRevision == model.execution.commandEventRevisions[threadID, default: 0]
+		operation.commandRevision == ConversationReducer.commandRevision(
+			threadID: threadID,
+			model: model
+		)
 		else
 		{
 			return
@@ -194,10 +197,10 @@ extension ConversationReducer
 			}
 			result.effects.append(.cancel(promotion.producer.context))
 		}
-		guard operation.commandRevision == model.execution.commandEventRevisions[
-			threadID,
-			default: 0
-		]
+		guard operation.commandRevision == ConversationReducer.commandRevision(
+			threadID: threadID,
+			model: model
+		)
 		else
 		{
 			if operation.isWindow
@@ -329,7 +332,10 @@ extension ConversationReducer
 			return
 		}
 		if model.conversations.selectedConversation == .thread(threadID),
-			consumer.commandRevision == model.execution.commandEventRevisions[threadID, default: 0],
+			consumer.commandRevision == ConversationReducer.commandRevision(
+			threadID: threadID,
+			model: model
+			),
 			case .succeeded(let turn) = observation, turn.id == consumer.reference.id,
 			!turn.itemsAreComplete
 		{

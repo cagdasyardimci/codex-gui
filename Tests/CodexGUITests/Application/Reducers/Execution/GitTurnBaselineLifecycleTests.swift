@@ -23,8 +23,10 @@ struct GitTurnBaselineLifecycleTests
 			}
 			return false
 		})
-		#expect(model.execution.gitTurnBaselineBindings["worker"]?.turnID == "actual-turn")
-		#expect(model.execution.gitTurnBaselineRevisions["worker"] == 1)
+		#expect(model.executions.entries[.thread("worker")]!.gitTurnBaselineBindings["worker"]?
+			.turnID == "actual-turn")
+		#expect(model.executions.entries[.thread("worker")]!
+			.gitTurnBaselineRevisions["worker"] == 1)
 	}
 
 	@Test func capturedPhysicalRootBindsWhenWorkspaceUsesTmpAlias()
@@ -45,7 +47,7 @@ struct GitTurnBaselineLifecycleTests
 			requestID: originalContext.requestID,
 			threadID: "worker"
 		)
-		model.execution.owner = ExecutionOwner(submission: context)
+		model.executions.entries[.thread("worker")]!.owner = ExecutionOwner(submission: context)
 		let captured = reference(
 			context,
 			repositoryRoot: physicalRoot
@@ -71,7 +73,8 @@ struct GitTurnBaselineLifecycleTests
 			turnID: "actual-turn",
 			model: &model
 		)
-		#expect(model.execution.gitTurnBaselineBindings["worker"]?.result == .captured(bound))
+		#expect(model.executions.entries[.thread("worker")]!.gitTurnBaselineBindings["worker"]?
+			.result == .captured(bound))
 	}
 
 	@Test func staleWorkspaceGenerationRequestAndTurnMismatchNeverBind()
@@ -88,12 +91,13 @@ struct GitTurnBaselineLifecycleTests
 					canonicalCheckoutPath: context.workspace.canonicalCheckoutPath
 				)
 			case 1: model.connection.generation += 1
-			case 2: model.execution.owner?.submission = OperationContext(
+			case 2: model.executions.entries[.thread("worker")]!.owner?
+				.submission = OperationContext(
 					workspace: context.workspace,
 					generation: context.generation,
 					requestID: UUID()
 				)
-			default: model.execution.activeTurnID = "different-turn"
+			default: model.executions.entries[.thread("worker")]!.activeTurnID = "different-turn"
 			}
 			let result = acknowledge(
 				reference,
@@ -108,14 +112,14 @@ struct GitTurnBaselineLifecycleTests
 				}
 				return false
 			})
-			#expect(model.execution.gitTurnBaselineBindings.isEmpty)
+			#expect(model.executions.entries[.thread("worker")]!.gitTurnBaselineBindings.isEmpty)
 		}
 	}
 
 	@Test func externalTurnObservationWithoutAcknowledgementDoesNotBind()
 	{
 		var (model, context) = fixture()
-		model.execution.owner = nil
+		model.executions.entries[.thread("worker")]!.owner = nil
 		let turn = CodexTurn(
 			id: "external",
 			status: "inProgress",
@@ -141,7 +145,7 @@ struct GitTurnBaselineLifecycleTests
 			}
 			return false
 		})
-		#expect(model.execution.gitTurnBaselineBindings.isEmpty)
+		#expect(model.executions.entries[.thread("worker")]!.gitTurnBaselineBindings.isEmpty)
 	}
 
 	@Test func bindingCompletionPublishesOnceAndRejectsWrongTurnOrGeneration()
@@ -160,7 +164,8 @@ struct GitTurnBaselineLifecycleTests
 			turnID: "wrong-turn",
 			model: &model
 		)
-		#expect(model.execution.gitTurnBaselineRevisions["worker"] == 1)
+		#expect(model.executions.entries[.thread("worker")]!
+			.gitTurnBaselineRevisions["worker"] == 1)
 		GitTurnBaselineLifecycle.finishBinding(
 			.captured(reference.bound(to: "actual-turn")),
 			context: context,
@@ -168,8 +173,10 @@ struct GitTurnBaselineLifecycleTests
 			turnID: "actual-turn",
 			model: &model
 		)
-		#expect(model.execution.gitTurnBaselineRevisions["worker"] == 2)
-		#expect(model.execution.gitTurnBaselineBindings["worker"]?.result
+		#expect(model.executions.entries[.thread("worker")]!
+			.gitTurnBaselineRevisions["worker"] == 2)
+		#expect(model.executions.entries[.thread("worker")]!.gitTurnBaselineBindings["worker"]?
+			.result
 			== .captured(reference.bound(to: "actual-turn")))
 		GitTurnBaselineLifecycle.finishBinding(
 			.captured(reference.bound(to: "actual-turn")),
@@ -178,7 +185,8 @@ struct GitTurnBaselineLifecycleTests
 			turnID: "actual-turn",
 			model: &model
 		)
-		#expect(model.execution.gitTurnBaselineRevisions["worker"] == 2)
+		#expect(model.executions.entries[.thread("worker")]!
+			.gitTurnBaselineRevisions["worker"] == 2)
 		model.connection.generation += 1
 		GitTurnBaselineLifecycle.finishBinding(
 			.unavailable(.oversized),
@@ -187,7 +195,8 @@ struct GitTurnBaselineLifecycleTests
 			turnID: "actual-turn",
 			model: &model
 		)
-		#expect(model.execution.gitTurnBaselineRevisions["worker"] == 2)
+		#expect(model.executions.entries[.thread("worker")]!
+			.gitTurnBaselineRevisions["worker"] == 2)
 	}
 
 	@Test func unavailableCaptureReasonSurvivesAcknowledgementWithoutBinding()
@@ -211,16 +220,16 @@ struct GitTurnBaselineLifecycleTests
 			))
 		)
 		#expect(result.effects.isEmpty)
-		#expect(model.execution.gitTurnBaselineBindings["worker"]?
+		#expect(model.executions.entries[.thread("worker")]!.gitTurnBaselineBindings["worker"]?
 			.result == .unavailable(.oversized))
 	}
 
 	@Test func stopAfterRemoteSendStillBindsTheAcknowledgedTurn()
 	{
 		var (model, context) = fixture()
-		model.execution.state = .stopping
-		model.execution.stopRequested = true
-		model.execution.stopContext = context
+		model.executions.entries[.thread("worker")]!.state = .stopping
+		model.executions.entries[.thread("worker")]!.stopRequested = true
+		model.executions.entries[.thread("worker")]!.stopContext = context
 		let reference = reference(context)
 		let result = acknowledge(
 			reference,
@@ -243,13 +252,14 @@ struct GitTurnBaselineLifecycleTests
 		{
 			var (model, context) = fixture()
 			let captured = reference(context)
-			model.execution.pendingGitTurnBaselineCapture = PendingGitTurnBaselineCapture(
-				context: context,
-				reference: captured,
-				previousTurnIDs: ["old"]
-			)
-			model.execution.hasUncertainRequest = true
-			model.execution.needsReconciliation = true
+			model.executions.entries[.thread("worker")]!
+				.pendingGitTurnBaselineCapture = PendingGitTurnBaselineCapture(
+					context: context,
+					reference: captured,
+					previousTurnIDs: ["old"]
+				)
+			model.executions.entries[.thread("worker")]!.hasUncertainRequest = true
+			model.executions.entries[.thread("worker")]!.needsReconciliation = true
 			let turns = (["old"] + newTurnIDs).map
 			{
 				CodexTurn(
@@ -269,7 +279,8 @@ struct GitTurnBaselineLifecycleTests
 				model: &model,
 				result: &result
 			)
-			#expect(model.execution.pendingGitTurnBaselineCapture == nil)
+			#expect(model.executions.entries[.thread("worker")]!
+				.pendingGitTurnBaselineCapture == nil)
 			if newTurnIDs.count == 1
 			{
 				#expect(result.effects.contains
@@ -299,11 +310,12 @@ struct GitTurnBaselineLifecycleTests
 	{
 		var (model, context) = fixture()
 		let captured = reference(context)
-		model.execution.pendingGitTurnBaselineCapture = PendingGitTurnBaselineCapture(
-			context: context,
-			reference: captured,
-			previousTurnIDs: ["old"]
-		)
+		model.executions.entries[.thread("worker")]!
+			.pendingGitTurnBaselineCapture = PendingGitTurnBaselineCapture(
+				context: context,
+				reference: captured,
+				previousTurnIDs: ["old"]
+			)
 		var result = WorkspaceReduction()
 		GitTurnBaselineLifecycle.resolvePendingCapture(
 			ThreadDetail(
@@ -319,7 +331,8 @@ struct GitTurnBaselineLifecycleTests
 			model: &model,
 			result: &result
 		)
-		#expect(model.execution.pendingGitTurnBaselineCapture?.reference == captured)
+		#expect(model.executions.entries[.thread("worker")]!.pendingGitTurnBaselineCapture?
+			.reference == captured)
 		#expect(result.effects.isEmpty)
 	}
 
@@ -338,9 +351,9 @@ struct GitTurnBaselineLifecycleTests
 			preferences: .standard,
 			retainedContextRequestID: UUID()
 		)
-		model.execution.submissionRequest = context
-		model.execution.state = .stopping
-		model.execution.stopRequested = true
+		model.executions.entries[.thread("worker")]!.submissionRequest = context
+		model.executions.entries[.thread("worker")]!.state = .stopping
+		model.executions.entries[.thread("worker")]!.stopRequested = true
 		model.composer.pendingSubmissions[context.requestID] = submission
 		model.composer.submissionConversations[context.requestID] = .thread("worker")
 		model.composer.drafts[.thread("worker")] = draft
@@ -353,8 +366,8 @@ struct GitTurnBaselineLifecycleTests
 			&model,
 			action
 		)
-		#expect(model.execution.state == .completed)
-		#expect(!model.execution.hasUncertainRequest)
+		#expect(model.executions.entries[.thread("worker")]!.state == .completed)
+		#expect(!model.executions.entries[.thread("worker")]!.hasUncertainRequest)
 		#expect(model.composer.drafts[.thread("worker")]?.text == draft.text)
 		#expect(composerResult.effects.contains
 		{
@@ -373,6 +386,7 @@ struct GitTurnBaselineLifecycleTests
 			canonicalCheckoutPath: "/neutral/repository"
 		))
 		model.connection.isConnected = true
+		model.executions.entries[.thread("worker")] = ExecutionModel()
 		model.connection.generation = 1
 		let context = OperationContext(
 			workspace: model.identity,
@@ -380,9 +394,9 @@ struct GitTurnBaselineLifecycleTests
 			requestID: UUID(),
 			threadID: "worker"
 		)
-		model.execution.owner = ExecutionOwner(submission: context)
-		model.execution.activeThreadID = "worker"
-		model.execution.state = .running
+		model.executions.entries[.thread("worker")]!.owner = ExecutionOwner(submission: context)
+		model.executions.entries[.thread("worker")]!.activeThreadID = "worker"
+		model.executions.entries[.thread("worker")]!.state = .running
 		model.conversations.selectedConversation = .thread("other")
 		return (model, context)
 	}

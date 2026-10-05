@@ -15,6 +15,7 @@ final class LocalStorage
 		static let draftContext = "CodexGUI.draftContext"
 		static let sentReferences = "CodexGUI.sentReferences"
 		static let pendingCommands = "CodexGUI.pendingCommands"
+		static let activeExecutionThreads = "CodexGUI.activeExecutionThreads"
 		static let legacyRecentProject = "recentProject"
 		static let legacyDraft = "draft"
 	}
@@ -246,6 +247,25 @@ final class LocalStorage
 			forKey: Key.recentProjects
 		)
 		publishPreferences()
+	}
+
+	func activeExecutionThreadIDs(for project: URL) -> [String]
+	{
+		let records = defaults.dictionary(forKey: Key.activeExecutionThreads) ?? [:]
+		return records[canonicalPath(for: project)] as? [String] ?? []
+	}
+
+	func saveActiveExecutionThreadIDs(
+		_ threadIDs: [String],
+		for project: URL
+	)
+	{
+		var records = defaults.dictionary(forKey: Key.activeExecutionThreads) ?? [:]
+		records[canonicalPath(for: project)] = Array(Set(threadIDs)).sorted()
+		defaults.set(
+			records,
+			forKey: Key.activeExecutionThreads
+		)
 	}
 
 	func pendingCommands(for project: URL) -> [TaskCommandOwnership]

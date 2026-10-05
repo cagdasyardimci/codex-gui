@@ -37,6 +37,9 @@ struct ComposerReducerTests
 			preferences: .standard,
 			retainedContextRequestID: UUID()
 		)
+		model.executions = ExecutionRegistry()
+		model.composer.drafts[.newChat] = draft
+		model.conversations.selectedConversation = .newChat
 		model.execution.owner = ExecutionOwner(submission: context)
 		model.execution.activeThreadID = "previous-owner"
 		model.composer.pendingSubmissions = [context.requestID: submission]
@@ -72,6 +75,13 @@ struct ComposerReducerTests
 				turns: [],
 				nextTurnsCursor: nil
 			)
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.submissionPrepared(
+				context,
+				.succeeded(prepared)
+			))
 		)
 		let preparation = ComposerReducer.reduce(
 			&model,
@@ -256,11 +266,11 @@ struct ComposerReducerTests
 			preferences: .standard,
 			retainedContextRequestID: UUID()
 		)
+		model.conversations.selectedConversation = .thread("thread")
 		model.execution.owner = ExecutionOwner(submission: context)
 		model.execution.state = .running
 		model.execution.submissionRequest = context
 		model.composer.drafts[.thread("thread")] = draft
-		model.conversations.selectedConversation = .thread("thread")
 		_ = ComposerReducer.reduce(
 			&model,
 			.execution(.submissionRequested(submission))
@@ -447,8 +457,10 @@ struct ComposerReducerTests
 	@Test func preparedNewChatDoesNotAdoptOrClearAnIndependentDraftLifetime()
 	{
 		var (model, existing) = fixture()
+		var context = existing.context
+		context.threadID = nil
 		let submission = ComposerSubmission(
-			context: existing.context,
+			context: context,
 			conversation: .newChat,
 			draft: existing.draft,
 			inputs: existing.inputs,
@@ -458,7 +470,14 @@ struct ComposerReducerTests
 			preferences: existing.preferences,
 			retainedContextRequestID: existing.retainedContextRequestID
 		)
-		model.composer.pendingSubmissions[submission.context.requestID] = submission
+		var execution = ExecutionModel()
+		execution.owner = ExecutionOwner(submission: context)
+		execution.submissionRequest = context
+		execution.state = .running
+		model.executions = ExecutionRegistry()
+		model.executions.entries[.newChat(lifetime: submission.draft.lifetime)] = execution
+		model.composer.pendingSubmissions[context.requestID] = submission
+		model.composer.submissionConversations[context.requestID] = .newChat
 		model.conversations.selectedConversation = .newChat
 		let independent = ComposerDraft(
 			text: submission.draft.text,
@@ -473,6 +492,13 @@ struct ComposerReducerTests
 				turns: [],
 				nextTurnsCursor: nil
 			)
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.submissionPrepared(
+				submission.context,
+				.succeeded(prepared)
+			))
 		)
 		let reduction = ComposerReducer.reduce(
 			&model,
@@ -496,6 +522,10 @@ struct ComposerReducerTests
 		#expect(model.conversations.selectedConversation == .newChat)
 		#expect(model.composer.drafts[.newChat] == independent)
 		#expect(model.composer.drafts[.thread("thread")] == submission.draft)
+		#expect(model.execution(for: .thread("thread")).activeThreadID == "thread")
+		#expect(model.execution(for: .thread("thread")).owner?.submission.requestID
+			== context.requestID)
+		#expect(model.execution.owner == nil)
 	}
 
 	@Test func obsoleteAcknowledgementsAndOlderDraftRestorationCannotClearCurrentEdit()

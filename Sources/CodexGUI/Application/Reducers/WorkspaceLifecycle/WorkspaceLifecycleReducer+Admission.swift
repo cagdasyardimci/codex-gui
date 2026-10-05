@@ -22,7 +22,7 @@ extension WorkspaceLifecycleReducer
 
 	static func blocksCleanup(_ model: WorkspaceModel) -> Bool
 	{
-		model.lifecycle.managedOwnershipConflict != nil || model.execution.blocksCleanup
+		model.lifecycle.managedOwnershipConflict != nil || model.blocksExecutionCleanup
 			|| hasUnresolvedComposer(model)
 			|| model.conversations.pendingManagement != nil
 			|| model.composerCommands.blocksNewWork

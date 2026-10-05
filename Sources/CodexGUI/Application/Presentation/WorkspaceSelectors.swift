@@ -30,23 +30,43 @@ struct WorkspaceSelectors
 	}
 	var isTaskActive: Bool
 	{
-		model.execution.isTaskActive || !model.composer.uncertainSubmissions.isEmpty
+		model.hasActiveExecution || !model.composer.uncertainSubmissions.isEmpty
 			|| model.lifecycle.pendingInputPreparation != nil
 			|| model.lifecycle.managedOwnershipConflict != nil
 	}
+	private var composerCommandError: String?
+	{
+		model.composerCommands.conversationErrors[model.conversations.selectedConversation]
+			?? model.composerCommands.error
+	}
+
 	var statusMessage: String?
 	{
-		model.composerCommands.error
+		if let message = composerCommandError
 			?? model.lifecycle.statusMessage
 			?? model.lifecycle.managedOwnershipConflict
-			?? model.conversations.error
-			?? selectedThreadID.flatMap
-			{
-				model.conversations.turnReferenceIndices[$0]?.error
-			}
+		{
+			return message
+		}
+		let selectedHistoryError = selectedThreadID.flatMap
+		{
+			model.conversations.historyErrors[$0]
+		}
+		if let message = selectedHistoryError ?? model.conversations.error
+		{
+			return message
+		}
+		let selectedReferenceError = selectedThreadID.flatMap
+		{
+			model.conversations.turnReferenceIndices[$0]?.error
+		}
+		if let message = selectedReferenceError
 			?? model.preferences.statusMessage
 			?? model.preferences.persistenceError
-			?? model.execution.statusMessage
+		{
+			return message
+		}
+		return model.execution.statusMessage
 			?? model.connection.statusMessage
 			?? model.composer.persistenceError
 	}
@@ -325,7 +345,7 @@ struct WorkspaceSelectors
 	}
 	func visibleStatusMessage(viewingActiveThread: Bool) -> String?
 	{
-		if let commandError = model.composerCommands.error
+		if let commandError = composerCommandError
 		{
 			return commandError
 		}
@@ -516,10 +536,19 @@ struct WorkspaceSelectors
 		snapshot.planMode = model.composerCommands.planModes[
 			model.conversations.selectedConversation
 		] == .plan
-		if let pending = model.composerCommands.pendingSettings
+		if let pending = model.composerCommands.pendingSettings,
+			pending.request.conversation == model.conversations.selectedConversation
 		{
 			snapshot.planModeStatus = pending.outcomeUncertain
 				? "Plan mode unknown — run /plan to reapply or reset." : "Plan mode pending…"
+		}
+		snapshot.activeExecutionCount = model.allExecutions.filter(\.isTaskActive).count
+		for execution in model.allExecutions
+		{
+			if let threadID = execution.activeThreadID
+			{
+				snapshot.threadExecutions[threadID] = ThreadExecutionPresentation(execution)
+			}
 		}
 		snapshot.workspaceOwner = WorkspaceLifecycleReducer.reference(model)
 		snapshot.composerDraftLifetime = composerDraft.lifetime

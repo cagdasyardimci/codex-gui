@@ -135,7 +135,9 @@ struct WorkspaceIntentRoutingTests
 		)
 		a.inputs.newChat()
 		#expect(a.model.conversations.selectedConversation == .newChat)
-		try #require(a.model.execution.activeTurnID == serviceA.turn.id)
+		#expect(a.model.execution.activeTurnID == nil)
+		try #require(a.model.execution(for: .thread(serviceA.thread.id)).activeTurnID
+			== serviceA.turn.id)
 		#expect(target.dispatch(.respond(
 			approval,
 			.approval(.accept)
@@ -468,8 +470,10 @@ struct WorkspaceIntentRoutingTests
 		let first = try #require(seed.inputs.send())
 		#expect(await first.wait() == .finished)
 		var responses: [WorkspaceEffect] = []
+		var model = seed.model
+		model.conversations.selectedConversation = .thread(service.thread.id)
 		let store = WorkspaceStateStore(
-			model: seed.model,
+			model: model,
 			service: service,
 			persistence: seed.factoryDependencies.storage.workspacePersistenceScheduler,
 			reducers: [WorkspaceReducer
@@ -562,12 +566,41 @@ struct WorkspaceIntentRoutingTests
 		))))
 		#expect(responses.isEmpty)
 		#expect(store.model.execution.pendingResponses.isEmpty)
-		service.savedTurns = [service.turn]
+		let replacementTurn = try #require(CodexTurn(json: [
+			"id": "turn-two",
+			"status": "inProgress",
+			"items": [],
+		]))
+		let replacementApproval = PendingInteraction(
+			id: approval.id,
+			threadId: approval.threadId,
+			turnId: replacementTurn.id,
+			itemId: approval.itemId,
+			approvalId: approval.approvalId,
+			kind: approval.kind,
+			reason: approval.reason,
+			command: approval.command,
+			cwd: approval.cwd,
+			grantRoot: approval.grantRoot,
+			networkHost: approval.networkHost,
+			networkProtocol: approval.networkProtocol,
+			questions: approval.questions,
+			requestedPermissions: approval.requestedPermissions,
+			additionalPermissions: approval.additionalPermissions,
+			availableDecisions: approval.availableDecisions
+		)
+		observe(.turnStarted(
+			threadId: service.thread.id,
+			turn: replacementTurn
+		))
+		observe(.interaction(replacementApproval))
+		service.savedTurns = [replacementTurn]
+		let commandRevision = store.model.execution
+			.commandEventRevisions[service.thread.id, default: 0]
 		store.dispatch(.execution(.historyObserved(
 			ReconciliationOperation(
 				context: store.operationContext(threadID: service.thread.id),
-				commandRevision: store.model.execution.commandEventRevisions[service.thread.id,
-																				default: 0]
+				commandRevision: commandRevision
 			),
 			service.detail()
 		)))
@@ -576,11 +609,13 @@ struct WorkspaceIntentRoutingTests
 			snapshot: store.currentSnapshot
 		)
 		#expect(current.dispatch(.respond(
-			approval,
+			replacementApproval,
 			.approval(.accept)
 		)))
 		let currentContext = try #require(store.model.execution.pendingResponses[approval.id]?
 			.context)
+		#expect(currentContext.turnID == replacementTurn.id)
+		#expect(currentContext != oldContext)
 		runner.accept(
 			responses,
 			workspace: store.model.identity

@@ -219,7 +219,9 @@ struct SubagentConversationNavigationIntegrationTests
 		let afterSwitchReadCount = service.readThreadIDs.count
 		staleCallback("child-thread")
 		#expect(service.readThreadIDs.count == afterSwitchReadCount)
-		#expect(state.store.model.execution.owner == executionOwner)
+		#expect(state.store.model.execution.owner == nil)
+		#expect(state.store.model.execution(for: .thread(service.thread.id))
+			.owner == executionOwner)
 	}
 
 	private func captureDetailIfRequested(_ panel: SubagentsViewController) async throws
