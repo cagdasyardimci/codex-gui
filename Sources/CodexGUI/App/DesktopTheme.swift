@@ -52,8 +52,8 @@ enum DesktopTheme
 		dark: 0x4A4A4A
 	)
 	static let userBubble = color(
-		light: 0xECECEC,
-		dark: 0x343434
+		light: 0xDDE8F8,
+		dark: 0x223D72
 	)
 
 	static func styleButton(

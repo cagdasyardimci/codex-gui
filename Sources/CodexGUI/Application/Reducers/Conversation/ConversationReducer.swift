@@ -745,7 +745,8 @@ enum ConversationReducer
 					id: "local:\(submission.context.requestID)",
 					kind: .user,
 					title: "You",
-					body: UserMessagePresenter.body(for: submission.inputs)
+					body: UserMessagePresenter.body(for: submission.inputs),
+					imageAttachments: UserMessagePresenter.imageAttachments(for: submission.inputs)
 				))
 			}
 		case .completedHistoryReadRequested(let operation):

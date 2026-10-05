@@ -196,6 +196,9 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private let titleLabel = NSTextField(labelWithString: "")
 	private let bodyTextView = ConversationMarkdownTextView()
 	private let messageContainer = NSView()
+	private let imageAttachmentsView = UserMessageImageAttachmentsView()
+	private var imageAttachmentCount = 0
+	private var messageTopConstraint: NSLayoutConstraint?
 	private let contentStack = NSStackView()
 	private let userSurface = DesktopSurface(
 		DesktopTheme.userBubble,
@@ -238,6 +241,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		content = nil
 		codeBlocks.removeAll()
 		cachedLayoutMetrics = nil
+		imageAttachmentsView.configure([])
+		imageAttachmentCount = 0
 	}
 
 	override func loadView()
@@ -254,11 +259,14 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		let container = NSView()
 		messageContainer.translatesAutoresizingMaskIntoConstraints = false
 		container.addSubview(messageContainer)
+		container.addSubview(imageAttachmentsView)
+		imageAttachmentsView.isHidden = true
 		messageWidthConstraint = messageContainer.widthAnchor.constraint(equalToConstant: 1)
 		messageWidthConstraint?.isActive = true
+		messageTopConstraint = messageContainer.topAnchor.constraint(equalTo: container.topAnchor)
 		NSLayoutConstraint.activate([
 			messageContainer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-			messageContainer.topAnchor.constraint(equalTo: container.topAnchor),
+			messageTopConstraint!,
 			messageContainer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 		])
 		for surface in [userSurface, activitySurface]
@@ -349,6 +357,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			return
 		}
 		updateBodyHeight()
+		layoutImageAttachments()
 		updateCopyButtonFrames()
 	}
 
@@ -424,12 +433,16 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		self.content = content
 		self.onToggle = onToggle
 		kind = entry.kind
+		let attachments = kind == .user ? entry.imageAttachments : []
+		imageAttachmentCount = attachments.count
+		imageAttachmentsView.configure(attachments)
 		isExpandable = entry.isExpandable
 		cachedLayoutMetrics = nil
 		titleLabel.stringValue = entry.title
 		titleLabel.setAccessibilityLabel(entry.title)
 		titleLabel.isHidden = kind == .user || kind == .agent
-		userSurface.isHidden = kind != .user
+		messageContainer.isHidden = imageAttachmentCount > 0 && content.attributedString.length == 0
+		userSurface.isHidden = kind != .user || messageContainer.isHidden
 		activitySurface.isHidden = kind == .user || kind == .agent
 		bodyTextView.textStorage?.setAttributedString(Self.displayText(
 			content,
@@ -464,7 +477,23 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			in: .top
 		)
 		updateBodyHeight()
+		layoutImageAttachments()
 		updateCopyButtonFrames()
+	}
+
+	private func layoutImageAttachments()
+	{
+		let height = UserMessageImageAttachmentsView.height(
+			count: imageAttachmentCount,
+			width: view.bounds.width
+		)
+		imageAttachmentsView.frame = NSRect(
+			x: 0,
+			y: view.bounds.height - height,
+			width: view.bounds.width,
+			height: height
+		)
+		imageAttachmentsView.needsLayout = true
 	}
 
 	private func updateCodeCopyButtons(for content: PreparedConversationContent)
@@ -528,10 +557,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		content: PreparedConversationContent,
 		width: CGFloat,
 		expandable: Bool,
-		kind: ConversationEntryKind = .agent
+		kind: ConversationEntryKind = .agent,
+		imageAttachmentCount: Int = 0
 	) -> NSSize
 	{
-		content.cachedSize(
+		let size = content.cachedSize(
 			width: width,
 			expandable: expandable,
 			presentation: presentation(for: kind)
@@ -568,21 +598,45 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				height: ceil(2 * inset.height + titleAllowance + bodyHeight + expansionAllowance)
 			)
 		}
+		guard kind == .user, imageAttachmentCount > 0
+		else
+		{
+			return size
+		}
+		let height = UserMessageImageAttachmentsView.height(
+			count: imageAttachmentCount,
+			width: width
+		)
+		return NSSize(
+			width: size.width,
+			height: content.attributedString.length == 0 ? height
+				: size.height + height + UserMessageImageAttachmentsView.spacing
+		)
 	}
 
 	static func textReadingAnchor(
 		content: PreparedConversationContent,
 		width: CGFloat,
 		kind: ConversationEntryKind,
-		offset: CGFloat
+		offset: CGFloat,
+		imageAttachmentCount: Int = 0
 	) -> (character: Int, offset: CGFloat)?
 	{
-		bodyMeasurer.readingAnchor(
+		let attachmentHeight = attachmentAllowance(
+			count: imageAttachmentCount,
+			width: width
+		)
+		guard offset >= attachmentHeight
+		else
+		{
+			return nil
+		}
+		return bodyMeasurer.readingAnchor(
 			of: displayText(
 				content,
 				kind: kind
 			),
-			atY: offset - bodyOriginY(for: kind),
+			atY: offset - bodyOriginY(for: kind) - attachmentHeight,
 			width: readingTextWidth(
 				content: content,
 				width: width,
@@ -596,7 +650,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		width: CGFloat,
 		kind: ConversationEntryKind,
 		character: Int,
-		lineOffset: CGFloat
+		lineOffset: CGFloat,
+		imageAttachmentCount: Int = 0
 	) -> CGFloat?
 	{
 		guard let lineY = bodyMeasurer.lineOrigin(
@@ -615,7 +670,28 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		{
 			return nil
 		}
-		return bodyOriginY(for: kind) + lineY + lineOffset
+		return attachmentAllowance(
+			count: imageAttachmentCount,
+			width: width
+		)
+			+ bodyOriginY(for: kind) + lineY + lineOffset
+	}
+
+	private static func attachmentAllowance(
+		count: Int,
+		width: CGFloat
+	) -> CGFloat
+	{
+		guard count > 0
+		else
+		{
+			return 0
+		}
+		return UserMessageImageAttachmentsView.height(
+			count: count,
+			width: width
+		)
+			+ UserMessageImageAttachmentsView.spacing
 	}
 
 	private static func readingTextWidth(
@@ -690,7 +766,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		}
 		let maximumWidth = min(
 			520,
-			availableWidth * 0.88
+			max(
+				80,
+				availableWidth - 20
+			)
 		)
 		let naturalWidth = content.cachedNaturalWidth(presentation: presentation(for: kind))
 		{
@@ -754,6 +833,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			return
 		}
 		let inset = Self.contentInset(for: kind)
+		let attachmentAllowance = content.attributedString.length == 0 ? 0
+			: Self.attachmentAllowance(
+				count: imageAttachmentCount,
+				width: view.bounds.width
+			)
 		let metrics: (availableWidth: CGFloat, messageWidth: CGFloat, bodyHeight: CGFloat)
 		if let cachedLayoutMetrics, cachedLayoutMetrics.availableWidth == view.bounds.width
 		{
@@ -765,7 +849,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				content: content,
 				width: view.bounds.width,
 				expandable: isExpandable,
-				kind: kind
+				kind: kind,
+				imageAttachmentCount: imageAttachmentCount
 			)
 			let titleAllowance = Self.titleSpacingAllowance(for: kind)
 			let expandHeight = isExpandable ? Self.rowSpacing + Self.buttonHeight : 0
@@ -777,6 +862,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 					kind: kind
 				),
 				size.height - 2 * inset.height - titleAllowance - expandHeight
+					- attachmentAllowance
 			)
 			cachedLayoutMetrics = metrics
 		}
@@ -784,6 +870,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		{
 			messageWidthConstraint?.constant = metrics.messageWidth
 		}
+		messageTopConstraint?.constant = attachmentAllowance
 		if leadingInsetConstraint?.constant != inset.width
 		{
 			leadingInsetConstraint?.constant = inset.width

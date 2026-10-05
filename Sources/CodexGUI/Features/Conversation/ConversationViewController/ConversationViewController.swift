@@ -92,6 +92,7 @@ final class ConversationViewController: NSViewController,
 		let content: PreparedConversationContent
 		let kind: ConversationEntryKind
 		let expandable: Bool
+		let imageAttachmentCount: Int
 		let size: NSSize
 	}
 	var measuredItemSizes: [String: MeasuredItemSize] = [:]

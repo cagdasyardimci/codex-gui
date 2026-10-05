@@ -37,7 +37,8 @@ extension ConversationViewController
 				width: attributes.frame.width,
 				kind: entry.kind,
 				character: character,
-				lineOffset: anchor.textOffset
+				lineOffset: anchor.textOffset,
+				imageAttachmentCount: entry.imageAttachments.count
 				)
 			{
 				offset = textOffset

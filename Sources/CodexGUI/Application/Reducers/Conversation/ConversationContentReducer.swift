@@ -757,7 +757,11 @@ enum ConversationContentReducer
 				id: id,
 				kind: .user,
 				title: "You",
-				body: UserMessagePresenter.body(for: item)
+				body: UserMessagePresenter.body(for: item),
+				imageAttachments: item.references.filter
+				{
+					$0.kind == .image
+				}
 			)
 		case "agentMessage":
 			return ConversationEntry(

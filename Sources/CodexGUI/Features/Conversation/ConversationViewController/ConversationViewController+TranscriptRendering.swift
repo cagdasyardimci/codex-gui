@@ -336,7 +336,8 @@ extension ConversationViewController
 			)
 		}
 		if let measured = measuredItemSizes[entry.id], measured.content === content,
-			measured.kind == entry.kind, measured.expandable == entry.isExpandable
+			measured.kind == entry.kind, measured.expandable == entry.isExpandable,
+			measured.imageAttachmentCount == entry.imageAttachments.count
 		{
 			if measured.size.width == width
 			{
@@ -356,12 +357,14 @@ extension ConversationViewController
 			content: content,
 			width: width,
 			expandable: entry.isExpandable,
-			kind: entry.kind
+			kind: entry.kind,
+			imageAttachmentCount: entry.imageAttachments.count
 		)
 		measuredItemSizes[entry.id] = MeasuredItemSize(
 			content: content,
 			kind: entry.kind,
 			expandable: entry.isExpandable,
+			imageAttachmentCount: entry.imageAttachments.count,
 			size: size
 		)
 		return size
@@ -536,7 +539,8 @@ extension ConversationViewController
 			content: content,
 			width: first.frame.width,
 			kind: entry.kind,
-			offset: anchor.offset
+			offset: anchor.offset,
+			imageAttachmentCount: entry.imageAttachments.count
 			)
 		{
 			anchor.textLocation = text.character

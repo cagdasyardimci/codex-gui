@@ -23,7 +23,7 @@ struct BackendTests
 		#expect(item.references.map(\.path) == ["/tmp/Example.swift", "/tmp/image.png"])
 		#expect(
 			UserMessagePresenter.body(for: item)
-				== "Inspect this\n[File reference: Example.swift]\n[Image: image.png]"
+				== "Inspect this\n[File reference: Example.swift]"
 		)
 	}
 

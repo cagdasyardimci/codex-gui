@@ -78,7 +78,9 @@ struct ComposerContextBuilderTests
 		#expect(UserMessagePresenter.body(for: history) == optimisticBody)
 		#expect(optimisticBody.contains("2: two\n3: three"))
 		#expect(optimisticBody.components(separatedBy: "File reference:").count == 2)
-		#expect(optimisticBody.components(separatedBy: "Attached image:").count == 2)
+		#expect(!optimisticBody.contains("Attached image:"))
+		#expect(history.text?.contains("Attached image: Screenshot") == true)
+		#expect(UserMessagePresenter.imageAttachments(for: inputs).map(\.path) == [image.path])
 		#expect(!optimisticBody.contains("[Image:"))
 		#expect(!optimisticBody.contains("[File reference:"))
 	}
