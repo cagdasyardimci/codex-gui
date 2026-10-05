@@ -9,10 +9,12 @@ enum GitTestCommandRunner
 		let terminationStatus: Int32
 	}
 
+	/// Optionally merges stderr into output so fixture failures retain Git's diagnostics.
 	static func run(
 		in directory: URL,
 		arguments: [String],
 		input: Data? = nil,
+		captureStandardError: Bool = false,
 		environment inheritedEnvironment: [String: String] = ProcessInfo.processInfo.environment
 	) throws -> Result
 	{
@@ -30,7 +32,6 @@ enum GitTestCommandRunner
 			directory.path
 		] + arguments
 		process.environment = sanitizedEnvironment(inheritedEnvironment)
-		process.standardError = FileHandle.nullDevice
 
 		let output = Pipe()
 		defer
@@ -38,7 +39,16 @@ enum GitTestCommandRunner
 			try? output.fileHandleForReading.close()
 			try? output.fileHandleForWriting.close()
 		}
-		if input == nil
+		let capturesOutput = input == nil || captureStandardError
+		if captureStandardError
+		{
+			process.standardError = output
+		}
+		else
+		{
+			process.standardError = FileHandle.nullDevice
+		}
+		if capturesOutput
 		{
 			process.standardOutput = output
 		}
@@ -67,7 +77,7 @@ enum GitTestCommandRunner
 			inputPipe.fileHandleForWriting.write(input)
 			try inputPipe.fileHandleForWriting.close()
 		}
-		let bytes = input == nil ? output.fileHandleForReading.readDataToEndOfFile() : Data()
+		let bytes = capturesOutput ? output.fileHandleForReading.readDataToEndOfFile() : Data()
 		process.waitUntilExit()
 		return Result(
 			output: bytes,

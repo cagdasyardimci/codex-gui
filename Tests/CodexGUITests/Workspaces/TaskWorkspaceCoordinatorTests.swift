@@ -515,67 +515,70 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.store.inputs.connect()
 		let alpha = try await fixture.createTask("Alpha")
 		let beta = try await fixture.createTask("Beta")
-		let a = alpha.state.store
-		let b = beta.state.store
+		let alphaStore = alpha.state.store
+		let betaStore = beta.state.store
+
 		let alphaReference = WorkspaceLifecycleOwnerReference(
 			owner: .managed(
 				workspaceID: alpha.workspace.id,
-				sessionID: a.model.identity.sessionID
+				sessionID: alphaStore.model.identity.sessionID
 			),
-			workspace: a.model.identity
+			workspace: alphaStore.model.identity
 		)
 		let betaReference = WorkspaceLifecycleOwnerReference(
 			owner: .managed(
 				workspaceID: beta.workspace.id,
-				sessionID: b.model.identity.sessionID
+				sessionID: betaStore.model.identity.sessionID
 			),
-			workspace: b.model.identity
+			workspace: betaStore.model.identity
 		)
-		a.inputs.updateDraft("Run alpha")
-		b.inputs.updateDraft("Run beta")
-		let alphaSend = try #require(a.inputs.send())
-		let betaSend = try #require(b.inputs.send())
+
+		alphaStore.inputs.updateDraft("Run alpha")
+		betaStore.inputs.updateDraft("Run beta")
+		let alphaSend = try #require(alphaStore.inputs.send())
+		let betaSend = try #require(betaStore.inputs.send())
 		#expect(await alphaSend.wait() == .finished)
 		#expect(await betaSend.wait() == .finished)
+
 		let alphaApproval = alpha.service.approval(id: "same-request")
 		let betaApproval = beta.service.approval(id: "same-request")
 		alpha.service.emit(.interaction(alphaApproval))
 		beta.service.emit(.interaction(betaApproval))
-		let betaGeneration = b.model.connection.generation
-		#expect(a.inputs.respond(
+		let betaGeneration = betaStore.model.connection.generation
+		#expect(alphaStore.inputs.respond(
 			to: betaApproval,
 			with: .approval(.accept)
 		) == nil)
 		#expect(alpha.service.respondedRequestIDs.isEmpty)
-		#expect(a.model.connection.isConnected)
-		#expect(a.model.execution.activeThreadID == alphaApproval.threadId)
-		#expect(a.model.execution.activeTurnID == alphaApproval.turnId)
-		#expect(a.model.execution.pendingInteractions.contains
+		#expect(alphaStore.model.connection.isConnected)
+		#expect(alphaStore.model.execution.activeThreadID == alphaApproval.threadId)
+		#expect(alphaStore.model.execution.activeTurnID == alphaApproval.turnId)
+		#expect(alphaStore.model.execution.pendingInteractions.contains
 		{
 			$0.id == alphaApproval.id && $0.threadId == alphaApproval.threadId
 				&& $0.turnId == alphaApproval.turnId
 		})
-		let response = try #require(a.inputs.respond(
+		let response = try #require(alphaStore.inputs.respond(
 			to: alphaApproval,
 			with: .approval(.accept)
 		))
 		#expect(await response.wait() == .finished)
-		let stop = try #require(a.inputs.stop())
+		let stop = try #require(alphaStore.inputs.stop())
 		#expect(await stop.wait() == .finished)
 		#expect(alpha.service.interruptionRequests.count == 1)
 		#expect(beta.service.interruptionRequests.isEmpty)
 		alpha.service.complete(status: "interrupted")
 		alpha.service.onDisconnect?("Reconnect only alpha")
-		await a.inputs.connect()
-		#expect(a.model.connection.generation > betaGeneration)
-		#expect(b.model.connection.generation == betaGeneration)
-		#expect(b.model.execution.pendingInteractions.map(\.id) == [betaApproval.id])
-		#expect(b.model.execution.state == .awaitingApproval)
+		await alphaStore.inputs.connect()
+		#expect(alphaStore.model.connection.generation > betaGeneration)
+		#expect(betaStore.model.connection.generation == betaGeneration)
+		#expect(betaStore.model.execution.pendingInteractions.map(\.id) == [betaApproval.id])
+		#expect(betaStore.model.execution.state == .awaitingApproval)
 		#expect(beta.service.respondedRequestIDs.isEmpty)
 		#expect(beta.service.disconnectCount == 0)
-		#expect(fixture.coordinator.store(for: alphaReference) === a)
-		#expect(fixture.coordinator.store(for: betaReference) === b)
-		#expect(fixture.coordinator.store(owningThread: alpha.service.thread.id) === a)
+		#expect(fixture.coordinator.store(for: alphaReference) === alphaStore)
+		#expect(fixture.coordinator.store(for: betaReference) === betaStore)
+		#expect(fixture.coordinator.store(owningThread: alpha.service.thread.id) === alphaStore)
 	}
 
 	@Test func duplicateBackendThreadIDsRequireTheCapturedRegistryOwner() async throws
@@ -1039,13 +1042,13 @@ struct TaskWorkspaceCoordinatorTests
 			await fixture.sourceState.store.inputs.connect()
 			let alpha = try await fixture.createTask("Cleanup alpha")
 			let beta = try await fixture.createTask("Keep beta")
-			let a = alpha.state.store
-			let b = beta.state.store
+			let alphaStore = alpha.state.store
+			let betaStore = beta.state.store
 			gate.blockedPaths = [alpha.workspace.checkoutPath, beta.workspace.checkoutPath]
-			a.inputs.updateDraft("Accepted alpha write")
-			b.inputs.updateDraft("Accepted beta write")
-			let alphaWrite = try #require(draftHandle(a))
-			let betaWrite = try #require(draftHandle(b))
+			alphaStore.inputs.updateDraft("Accepted alpha write")
+			betaStore.inputs.updateDraft("Accepted beta write")
+			let alphaWrite = try #require(draftHandle(alphaStore))
+			let betaWrite = try #require(draftHandle(betaStore))
 			await gate.waitForWrite(at: alpha.workspace.checkoutPath)
 			await gate.waitForWrite(at: beta.workspace.checkoutPath)
 			let removal = Task
@@ -1056,12 +1059,12 @@ struct TaskWorkspaceCoordinatorTests
 			{
 				fixture.coordinator.model.pendingCleanup[alpha.workspace.id]?.stage == .draining
 			}
-			#expect(a.model.lifecycle.cleanupReservation != nil)
-			#expect(!a.currentSnapshot.canSend)
-			#expect(a.inputs.send() == nil)
+			#expect(alphaStore.model.lifecycle.cleanupReservation != nil)
+			#expect(!alphaStore.currentSnapshot.canSend)
+			#expect(alphaStore.inputs.send() == nil)
 			#expect(FileManager.default.fileExists(atPath: alpha.workspace.checkoutPath))
-			#expect(b.model.lifecycle.cleanupReservation == nil)
-			#expect(b.currentSnapshot.draft == "Accepted beta write")
+			#expect(betaStore.model.lifecycle.cleanupReservation == nil)
+			#expect(betaStore.currentSnapshot.draft == "Accepted beta write")
 			if change == "dirty"
 			{
 				try "Changed during persistence drain".write(
@@ -1082,7 +1085,7 @@ struct TaskWorkspaceCoordinatorTests
 			#expect(await alphaWrite.wait() == .finished)
 			await removal.value
 			#expect(betaWrite.completion == nil)
-			#expect(b.model.lifecycle.cleanupReservation == nil)
+			#expect(betaStore.model.lifecycle.cleanupReservation == nil)
 			#expect(fixture.storage.draft(
 				for: URL(fileURLWithPath: alpha.workspace.checkoutPath),
 				threadID: nil
@@ -1091,10 +1094,10 @@ struct TaskWorkspaceCoordinatorTests
 				.fileExists(atPath: alpha.workspace.checkoutPath) == (change != "clean"))
 			if change != "clean"
 			{
-				#expect(a.model.lifecycle.cleanupReservation == nil)
-				a.inputs.updateDraft("Editable after rejected cleanup")
-				#expect(a.currentSnapshot.draft == "Editable after rejected cleanup")
-				_ = await draftHandle(a)?.wait()
+				#expect(alphaStore.model.lifecycle.cleanupReservation == nil)
+				alphaStore.inputs.updateDraft("Editable after rejected cleanup")
+				#expect(alphaStore.currentSnapshot.draft == "Editable after rejected cleanup")
+				_ = await draftHandle(alphaStore)?.wait()
 			}
 			gate.release(beta.workspace.checkoutPath)
 			#expect(await betaWrite.wait() == .finished)
@@ -1247,14 +1250,16 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.store.inputs.connect()
 		let alpha = try await fixture.createTask("Quit alpha")
 		let beta = try await fixture.createTask("Quit beta")
-		let a = alpha.state.store
-		let b = beta.state.store
-		a.inputs.updateDraft("Run alpha")
-		b.inputs.updateDraft("Run beta")
-		let sendA = try #require(a.inputs.send())
-		let sendB = try #require(b.inputs.send())
-		_ = await sendA.wait()
-		_ = await sendB.wait()
+		let alphaStore = alpha.state.store
+		let betaStore = beta.state.store
+
+		alphaStore.inputs.updateDraft("Run alpha")
+		betaStore.inputs.updateDraft("Run beta")
+		let alphaSend = try #require(alphaStore.inputs.send())
+		let betaSend = try #require(betaStore.inputs.send())
+		_ = await alphaSend.wait()
+		_ = await betaSend.wait()
+
 		let running = try command(
 			status: "inProgress",
 			cwd: alpha.workspace.checkoutPath
@@ -1265,10 +1270,10 @@ struct TaskWorkspaceCoordinatorTests
 			item: running
 		))
 		gate.blockedPaths = [alpha.workspace.checkoutPath, beta.workspace.checkoutPath]
-		a.inputs.updateDraft("Persist alpha before quit")
-		b.inputs.updateDraft("Persist beta before quit")
-		let writeA = try #require(draftHandle(a))
-		let writeB = try #require(draftHandle(b))
+		alphaStore.inputs.updateDraft("Persist alpha before quit")
+		betaStore.inputs.updateDraft("Persist beta before quit")
+		let alphaWrite = try #require(draftHandle(alphaStore))
+		let betaWrite = try #require(draftHandle(betaStore))
 		await gate.waitForWrite(at: alpha.workspace.checkoutPath)
 		await gate.waitForWrite(at: beta.workspace.checkoutPath)
 		var completed = 0
@@ -1291,11 +1296,11 @@ struct TaskWorkspaceCoordinatorTests
 		let quitRequest = fixture.coordinator.requestQuit()
 		await alpha.service.waitForCheckpoint("interrupt:1")
 		await beta.service.waitForCheckpoint("interrupt:1")
-		#expect(a.model.lifecycle.quitReservation != nil)
-		#expect(b.model.lifecycle.quitReservation != nil)
+		#expect(alphaStore.model.lifecycle.quitReservation != nil)
+		#expect(betaStore.model.lifecycle.quitReservation != nil)
 		#expect(fixture.sourceState.store.model.lifecycle.quitReservation != nil)
-		#expect(a.inputs.send() == nil)
-		#expect(b.inputs.send() == nil)
+		#expect(alphaStore.inputs.send() == nil)
+		#expect(betaStore.inputs.send() == nil)
 		let interrupted = CodexTurn(
 			id: alpha.service.turn.id,
 			status: "interrupted",
@@ -1310,7 +1315,7 @@ struct TaskWorkspaceCoordinatorTests
 		beta.service.complete(status: "interrupted")
 		#expect(completed == 0)
 		#expect(fixture.coordinator.isTaskActive)
-		#expect(a.model.execution.commandLifetime.hasPendingCommands)
+		#expect(alphaStore.model.execution.commandLifetime.hasPendingCommands)
 		alpha.service.emit(.itemCompleted(
 			threadId: alpha.service.thread.id,
 			turnId: alpha.service.turn.id,
@@ -1329,11 +1334,11 @@ struct TaskWorkspaceCoordinatorTests
 		}
 		#expect(completed == 0)
 		gate.release(alpha.workspace.checkoutPath)
-		#expect(await writeA.wait() == .finished)
+		#expect(await alphaWrite.wait() == .finished)
 		#expect(completed == 0)
-		#expect(writeB.completion == nil)
+		#expect(betaWrite.completion == nil)
 		gate.release(beta.workspace.checkoutPath)
-		#expect(await writeB.wait() == .finished)
+		#expect(await betaWrite.wait() == .finished)
 		await waitForCoordinator(fixture.coordinator)
 		{
 			if case .terminating(
@@ -1352,8 +1357,8 @@ struct TaskWorkspaceCoordinatorTests
 		}
 		#expect(completed == 1)
 		#expect(canceled == 0)
-		#expect(a.model.lifecycle.quitReservation?.requestID == quitRequest.requestID)
-		#expect(b.model.lifecycle.quitReservation?.requestID == quitRequest.requestID)
+		#expect(alphaStore.model.lifecycle.quitReservation?.requestID == quitRequest.requestID)
+		#expect(betaStore.model.lifecycle.quitReservation?.requestID == quitRequest.requestID)
 		#expect(fixture.sourceState.store.model.lifecycle.quitReservation?.requestID
 			== quitRequest.requestID)
 
@@ -2056,22 +2061,16 @@ private final class TaskExecutionFixture
 		at directory: URL
 	) throws -> String
 	{
-		let process = Process()
-		process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-		process.currentDirectoryURL = directory
-		process.arguments = arguments
-		let output = Pipe()
-		process.standardOutput = output
-		process.standardError = output
-		try process.run()
-		output.fileHandleForWriting.closeFile()
-		let data = output.fileHandleForReading.readDataToEndOfFile()
-		process.waitUntilExit()
+		let result = try GitTestCommandRunner.run(
+			in: directory,
+			arguments: arguments,
+			captureStandardError: true
+		)
 		let text = String(
-			decoding: data,
+			decoding: result.output,
 			as: UTF8.self
 		).trimmingCharacters(in: .newlines)
-		guard process.terminationStatus == 0
+		guard result.terminationStatus == 0
 		else
 		{
 			throw TaskWorkspaceError.gitFailure(text)

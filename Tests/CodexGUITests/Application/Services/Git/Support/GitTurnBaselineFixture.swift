@@ -40,8 +40,13 @@ struct GitTurnBaselineFixture
 		)
 		while let url = enumerator?.nextObject() as? URL
 		{
-			let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-			if values?.isDirectory == true && values?.isSymbolicLink != true
+			let resourceValues = try? url.resourceValues(forKeys: [
+				.isDirectoryKey,
+				.isSymbolicLinkKey
+			])
+			let isRegularDirectory =
+				resourceValues?.isDirectory == true && resourceValues?.isSymbolicLink != true
+			if isRegularDirectory
 			{
 				try? FileManager.default.setAttributes(
 					[.posixPermissions: 0o700],

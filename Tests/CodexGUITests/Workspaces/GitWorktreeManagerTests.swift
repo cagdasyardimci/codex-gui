@@ -893,22 +893,16 @@ private struct GitFixture
 		at directory: URL
 	) throws -> String
 	{
-		let process = Process()
-		process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-		process.currentDirectoryURL = directory
-		process.arguments = arguments
-		let output = Pipe()
-		process.standardOutput = output
-		process.standardError = output
-		try process.run()
-		output.fileHandleForWriting.closeFile()
-		let data = output.fileHandleForReading.readDataToEndOfFile()
-		process.waitUntilExit()
+		let result = try GitTestCommandRunner.run(
+			in: directory,
+			arguments: arguments,
+			captureStandardError: true
+		)
 		let text = String(
-			decoding: data,
+			decoding: result.output,
 			as: UTF8.self
 		).trimmingCharacters(in: .newlines)
-		guard process.terminationStatus == 0
+		guard result.terminationStatus == 0
 		else
 		{
 			throw TaskWorkspaceError.gitFailure("git \(arguments): \(text)")

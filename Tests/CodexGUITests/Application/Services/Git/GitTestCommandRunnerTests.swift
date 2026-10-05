@@ -4,6 +4,32 @@ import Testing
 
 struct GitTestCommandRunnerTests
 {
+	@Test func fixtureFailuresCanRetainStandardErrorDiagnostics() throws
+	{
+		let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(
+			at: root,
+			withIntermediateDirectories: true
+		)
+		defer
+		{
+			try? FileManager.default.removeItem(at: root)
+		}
+		let captured = try GitTestCommandRunner.run(
+			in: root,
+			arguments: ["rev-parse", "--show-toplevel"],
+			captureStandardError: true
+		)
+		#expect(captured.terminationStatus != 0)
+		#expect(!captured.output.isEmpty)
+		let discarded = try GitTestCommandRunner.run(
+			in: root,
+			arguments: ["rev-parse", "--show-toplevel"]
+		)
+		#expect(discarded.terminationStatus == captured.terminationStatus)
+		#expect(discarded.output.isEmpty)
+	}
+
 	@Test func inheritedGitSettingsCannotRedirectFixtureCommands() throws
 	{
 		let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
