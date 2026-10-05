@@ -44,6 +44,7 @@ extension NavigationViewController
 
 	func configureNewChatButton()
 	{
+		newChatButton.cell = NewChatButtonCell(textCell: newChatButton.title)
 		newChatButton.target = self
 		newChatButton.action = #selector(newChat)
 		newChatButton.setAccessibilityLabel("Start a new conversation")

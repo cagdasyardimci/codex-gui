@@ -235,6 +235,7 @@ final class ProjectSidebarCellView: NSTableCellView
 	private var projectTrackingArea: NSTrackingArea?
 	private var isPointerInside = false
 	private var isCurrentProject = false
+	private var titleTrailingConstraint: NSLayoutConstraint?
 
 	override init(frame frameRect: NSRect)
 	{
@@ -308,10 +309,6 @@ final class ProjectSidebarCellView: NSTableCellView
 				equalTo: folder.trailingAnchor,
 				constant: 8
 			),
-			label.trailingAnchor.constraint(
-				equalTo: actionStack.leadingAnchor,
-				constant: -4
-			),
 			label.centerYAnchor.constraint(equalTo: centerYAnchor),
 			actionStack.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
@@ -326,6 +323,7 @@ final class ProjectSidebarCellView: NSTableCellView
 		])
 		imageView = folder
 		textField = label
+		updateActions()
 	}
 
 	private func configureActions()
@@ -418,6 +416,18 @@ final class ProjectSidebarCellView: NSTableCellView
 	private func updateActions()
 	{
 		actionStack.isHidden = !isCurrentProject && !isPointerInside
+		guard let textField
+		else
+		{
+			return
+		}
+		titleTrailingConstraint?.isActive = false
+		let constraint = textField.trailingAnchor.constraint(
+			equalTo: actionStack.isHidden ? trailingAnchor : actionStack.leadingAnchor,
+			constant: -4
+		)
+		constraint.isActive = true
+		titleTrailingConstraint = constraint
 	}
 	@objc private func showInfo()
 	{

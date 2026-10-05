@@ -198,6 +198,8 @@ struct NavigationViewControllerTests
 		cell.setTurnRunning(false)
 		cell.setUnread(true)
 		cell.mouseEntered(with: event)
+		let hoveredFrame = label.frame
+		#expect(hoveredFrame.width < restingFrame.width)
 		#expect(cell.unreadDot.alphaValue == 0)
 		#expect(cell.progressRing.alphaValue == 0)
 		#expect(cell.archiveButton.superview?.alphaValue == 1)
@@ -224,7 +226,7 @@ struct NavigationViewControllerTests
 		#expect(cell.hoverCard?.title == label.stringValue)
 		#expect(cell.hoverCard?.projectName == "codex-gui")
 		cell.layoutSubtreeIfNeeded()
-		#expect(label.frame == restingFrame)
+		#expect(label.frame == hoveredFrame)
 		var archived: String?
 		controller.onArchiveTask =
 		{
@@ -241,11 +243,12 @@ struct NavigationViewControllerTests
 		#expect(cell.hoverCard?.panel == nil)
 		#expect(!panel.isVisible)
 		cell.layoutSubtreeIfNeeded()
+		#expect(label.frame == restingFrame)
 		label.stringValue = "Short"
 		cell.mouseEntered(with: event)
 		label.advanceScrolling(elapsed: 1.6)
 		#expect(label.scrollOffset == 0)
-		#expect(label.frame == restingFrame)
+		#expect(label.frame == hoveredFrame)
 		#expect(cell.hoverCard?.panel != nil)
 		NotificationCenter.default.post(
 			name: NSWindow.didResignKeyNotification,

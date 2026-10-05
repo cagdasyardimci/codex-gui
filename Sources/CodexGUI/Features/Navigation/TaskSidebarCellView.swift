@@ -25,6 +25,8 @@ final class TaskSidebarCellView: NSTableCellView
 	let unreadDot = NSView(frame: .zero)
 	private let actions = NSStackView()
 	private var hoverTrackingArea: NSTrackingArea?
+	private var isHovered = false
+	private var titleTrailingConstraint: NSLayoutConstraint?
 
 	private enum Layout
 	{
@@ -82,7 +84,7 @@ final class TaskSidebarCellView: NSTableCellView
 		}
 		actions.orientation = .horizontal
 		actions.spacing = Layout.actionSpacing
-		// Keep the title's available width fixed when hover actions appear.
+		actions.isHidden = true
 		actions.alphaValue = 0
 	}
 
@@ -118,10 +120,6 @@ final class TaskSidebarCellView: NSTableCellView
 				equalTo: leadingAnchor,
 				constant: 26
 			),
-			titleField.trailingAnchor.constraint(
-				equalTo: actions.leadingAnchor,
-				constant: -4
-			),
 			titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
 			actions.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
@@ -132,6 +130,7 @@ final class TaskSidebarCellView: NSTableCellView
 				equalToConstant: Layout.actionButtonWidth * 2 + Layout.actionSpacing
 			),
 		])
+		updateTitleLayout()
 	}
 
 	required init?(coder: NSCoder)
@@ -142,11 +141,13 @@ final class TaskSidebarCellView: NSTableCellView
 	func setTurnRunning(_ running: Bool)
 	{
 		progressRing.setRunning(running)
+		updateTitleLayout()
 	}
 
 	func setUnread(_ unread: Bool)
 	{
 		unreadDot.isHidden = !unread
+		updateTitleLayout()
 	}
 
 	func setActionsEnabled(_ enabled: Bool)
@@ -178,10 +179,14 @@ final class TaskSidebarCellView: NSTableCellView
 
 	override func mouseEntered(with event: NSEvent)
 	{
+		isHovered = true
+		actions.isHidden = false
 		actions.alphaValue = 1
-		(textField as? HoverScrollingTextField)?.setHovered(true)
 		progressRing.alphaValue = 0
 		unreadDot.alphaValue = 0
+		updateTitleLayout()
+		layoutSubtreeIfNeeded()
+		(textField as? HoverScrollingTextField)?.setHovered(true)
 		hoverCard?.show(beside: self)
 	}
 	override func mouseExited(with event: NSEvent)
@@ -220,11 +225,47 @@ final class TaskSidebarCellView: NSTableCellView
 
 	@objc private func dismissHoverCard()
 	{
+		isHovered = false
 		hoverCard?.dismiss()
 		(textField as? HoverScrollingTextField)?.setHovered(false)
+		actions.isHidden = true
 		actions.alphaValue = 0
 		progressRing.alphaValue = 1
 		unreadDot.alphaValue = 1
+		updateTitleLayout()
+	}
+
+	private func updateTitleLayout()
+	{
+		guard let textField
+		else
+		{
+			return
+		}
+		let visibleTrailingContent: NSLayoutXAxisAnchor
+		if isHovered
+		{
+			visibleTrailingContent = actions.leadingAnchor
+		}
+		else if progressRing.isRunning
+		{
+			visibleTrailingContent = progressRing.leadingAnchor
+		}
+		else if !unreadDot.isHidden
+		{
+			visibleTrailingContent = unreadDot.leadingAnchor
+		}
+		else
+		{
+			visibleTrailingContent = trailingAnchor
+		}
+		titleTrailingConstraint?.isActive = false
+		let constraint = textField.trailingAnchor.constraint(
+			equalTo: visibleTrailingContent,
+			constant: -4
+		)
+		constraint.isActive = true
+		titleTrailingConstraint = constraint
 	}
 
 	override func mouseDown(with event: NSEvent)

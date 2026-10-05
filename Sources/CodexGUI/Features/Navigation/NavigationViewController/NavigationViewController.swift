@@ -122,6 +122,10 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			spacing: 6
 		)
 		stack.setCustomSpacing(
+			14.5,
+			after: brandRow
+		)
+		stack.setCustomSpacing(
 			12,
 			after: newChatButton
 		)
