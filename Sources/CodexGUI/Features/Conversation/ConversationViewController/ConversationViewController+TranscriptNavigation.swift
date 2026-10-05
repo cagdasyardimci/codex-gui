@@ -240,13 +240,21 @@ extension ConversationViewController
 		{
 			return
 		}
-		collectionView.scrollToItems(
-			at: [IndexPath(
-				item: displayedRows.count - 1,
-				section: 0
-			)],
-			scrollPosition: .bottom
-		)
+		collectionView.layoutSubtreeIfNeeded()
+		let clip = conversationScrollView.contentView
+		let contentHeight = collectionView.collectionViewLayout?.collectionViewContentSize.height
+			?? collectionView.bounds.height
+		// Follow the full transcript extent in the collection's flipped coordinates,
+		// including the space after the reply.
+		// Aligning the last item alone leaves the section's bottom inset offscreen.
+		clip.scroll(to: NSPoint(
+			x: 0,
+			y: collectionView.isFlipped ? max(
+				0,
+				contentHeight - clip.bounds.height
+			) : 0
+		))
+		conversationScrollView.reflectScrolledClipView(clip)
 	}
 
 	@objc func transcriptWillStartLiveResize(_ notification: Notification)

@@ -318,7 +318,13 @@ extension ConversationViewController
 		item.configure(
 			entry,
 			content: content,
-			expanded: expandedEntryIDs.contains(entry.id)
+			expanded: expandedEntryIDs.contains(entry.id),
+			showsReplyActions: replyActionEntryID == entry.id,
+			bookmarked: isReplyBookmarked(entry),
+			onToggleBookmark: replyBookmarkAction(
+				for: entry,
+				context: context
+			)
 		)
 		{
 			[weak self] in
@@ -341,6 +347,78 @@ extension ConversationViewController
 				force: true
 			)
 		}
+	}
+
+	private func isReplyBookmarked(_ entry: ConversationEntry) -> Bool
+	{
+		guard let separator = entry.id.firstIndex(of: ":")
+		else
+		{
+			return false
+		}
+		let turnID = String(entry.id[..<separator])
+		return bookmarks.contains
+		{
+			$0.threadID == selectedThreadID && $0.turnID == turnID
+		}
+	}
+
+	private func replyBookmarkAction(
+		for entry: ConversationEntry,
+		context: String?
+	) -> (() -> Void)?
+	{
+		guard replyActionEntryID == entry.id, let threadID = selectedThreadID,
+				onToggleBookmark != nil, let separator = entry.id.firstIndex(of: ":")
+		else
+		{
+			return nil
+		}
+		let turnID = String(entry.id[..<separator])
+		let itemID = String(entry.id[entry.id.index(after: separator)...])
+		let action: () -> Void =
+		{
+			[weak self] in
+			guard let self, self.renderedContext == context, self.requestedContext == context,
+					self.selectedThreadID == threadID, self.replyActionEntryID == entry.id
+			else
+			{
+				return
+			}
+			let existing = self.bookmarks.first
+			{
+				$0.threadID == threadID && $0.turnID == turnID
+			}
+			let label = self.turnNavigationRail.summaries.first
+			{
+				$0.turnID == turnID
+			}?.title ?? entry.body
+			self.onToggleBookmark?(existing ?? ConversationBookmark(
+				threadID: threadID,
+				turnID: turnID,
+				itemID: itemID,
+				kind: .answer,
+				label: String(label.prefix(100))
+			))
+		}
+		return action
+	}
+
+	func refreshVisibleReplyActionBookmark()
+	{
+		guard let index = displayedRows.firstIndex(where:
+			{
+				$0.id == replyActionEntryID
+			}), case .message(let entry) = displayedRows[index]
+		else
+		{
+			return
+		}
+		let item = collectionView.item(at: IndexPath(
+			item: index,
+			section: 0
+		)) as? ConversationCollectionItem
+		item?.setReplyBookmarked(isReplyBookmarked(entry))
 	}
 
 	func collectionView(
@@ -386,9 +464,11 @@ extension ConversationViewController
 				height: 72
 			)
 		}
+		let showsReplyActions = replyActionEntryID == entry.id
 		if let measured = measuredItemSizes[entry.id], measured.content === content,
 			measured.kind == entry.kind, measured.expandable == entry.isExpandable,
-			measured.imageAttachmentCount == entry.imageAttachments.count
+			measured.imageAttachmentCount == entry.imageAttachments.count,
+			measured.showsReplyActions == showsReplyActions
 		{
 			if measured.size.width == width
 			{
@@ -409,13 +489,15 @@ extension ConversationViewController
 			width: width,
 			expandable: entry.isExpandable,
 			kind: entry.kind,
-			imageAttachmentCount: entry.imageAttachments.count
+			imageAttachmentCount: entry.imageAttachments.count,
+			showsReplyActions: showsReplyActions
 		)
 		measuredItemSizes[entry.id] = MeasuredItemSize(
 			content: content,
 			kind: entry.kind,
 			expandable: entry.isExpandable,
 			imageAttachmentCount: entry.imageAttachments.count,
+			showsReplyActions: showsReplyActions,
 			size: size
 		)
 		return size
@@ -627,6 +709,10 @@ extension ConversationViewController
 		)
 		let previousRows = displayedRows
 		let previousContents = preparedContents
+		let nextReplyActionEntryID = ConversationReplyActionsView.replyEntryID(
+			in: nextEntries,
+			timings: requestedTurnTimings
+		)
 		let sharedCount = min(
 			previousRows.count,
 			nextRows.count
@@ -639,9 +725,11 @@ extension ConversationViewController
 			!contextChanged && sharedIDsMatch && nextRows.count >= previousRows.count
 		let changed = canUpdateRowsInPlace ? (0 ..< sharedCount).filter
 		{
-			previousRows[$0] != nextRows[$0]
+			return previousRows[$0] != nextRows[$0]
 				|| previousContents[previousRows[$0].id]?.attributedString
 				!= contents[nextRows[$0].id]?.attributedString
+				|| (previousRows[$0].id == replyActionEntryID)
+				!= (nextRows[$0].id == nextReplyActionEntryID)
 		}.map
 		{
 			IndexPath(
@@ -652,6 +740,7 @@ extension ConversationViewController
 		let previousSizes = transcriptItemSizes(at: changed)
 
 		preparedContents = contents
+		replyActionEntryID = nextReplyActionEntryID
 		if contextChanged
 		{
 			measuredItemSizes.removeAll()

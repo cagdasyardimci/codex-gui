@@ -188,6 +188,7 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDelegate
 {
 	private static let rowSpacing: CGFloat = 6
+	private static let replyActionSpacing: CGFloat = 8.5
 	private static let titleHeight: CGFloat = 16
 	private static let buttonHeight: CGFloat = 24
 	private static let codeCopyButtonSize: CGFloat = 32
@@ -200,6 +201,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private var imageAttachmentCount = 0
 	private var messageTopConstraint: NSLayoutConstraint?
 	private let contentStack = NSStackView()
+	private let replyActions = ConversationReplyActionsView()
+	private var showsReplyActions = false
 	private let userSurface = DesktopSurface(
 		DesktopTheme.userBubble,
 		cornerRadius: 20
@@ -243,6 +246,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		cachedLayoutMetrics = nil
 		imageAttachmentsView.configure([])
 		imageAttachmentCount = 0
+		showsReplyActions = false
+		replyActions.reset()
 	}
 
 	override func loadView()
@@ -420,6 +425,9 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		_ entry: ConversationEntry,
 		content: PreparedConversationContent,
 		expanded: Bool,
+		showsReplyActions: Bool = false,
+		bookmarked: Bool = false,
+		onToggleBookmark: (() -> Void)? = nil,
 		onToggle: @escaping () -> Void
 	)
 	{
@@ -433,6 +441,19 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		self.content = content
 		self.onToggle = onToggle
 		kind = entry.kind
+		self.showsReplyActions = showsReplyActions && kind == .agent
+		if self.showsReplyActions
+		{
+			replyActions.configure(
+				source: entry.body,
+				bookmarked: bookmarked,
+				onToggleBookmark: onToggleBookmark
+			)
+		}
+		else
+		{
+			replyActions.reset()
+		}
 		let attachments = kind == .user ? entry.imageAttachments : []
 		imageAttachmentCount = attachments.count
 		imageAttachmentsView.configure(attachments)
@@ -472,13 +493,36 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		{
 			arrangedViews.append(expandButton)
 		}
+		if self.showsReplyActions
+		{
+			arrangedViews.append(replyActions)
+		}
 		contentStack.setViews(
 			arrangedViews,
 			in: .top
 		)
+		for arrangedView in arrangedViews
+		{
+			contentStack.setCustomSpacing(
+				Self.rowSpacing,
+				after: arrangedView
+			)
+		}
+		if self.showsReplyActions, arrangedViews.count > 1
+		{
+			contentStack.setCustomSpacing(
+				Self.replyActionSpacing,
+				after: arrangedViews[arrangedViews.count - 2]
+			)
+		}
 		updateBodyHeight()
 		layoutImageAttachments()
 		updateCopyButtonFrames()
+	}
+
+	func setReplyBookmarked(_ bookmarked: Bool)
+	{
+		replyActions.setBookmarked(bookmarked)
 	}
 
 	private func layoutImageAttachments()
@@ -558,10 +602,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		width: CGFloat,
 		expandable: Bool,
 		kind: ConversationEntryKind = .agent,
-		imageAttachmentCount: Int = 0
+		imageAttachmentCount: Int = 0,
+		showsReplyActions: Bool = false
 	) -> NSSize
 	{
-		let size = content.cachedSize(
+		let bodySize = content.cachedSize(
 			width: width,
 			expandable: expandable,
 			presentation: presentation(for: kind)
@@ -598,6 +643,13 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				height: ceil(2 * inset.height + titleAllowance + bodyHeight + expansionAllowance)
 			)
 		}
+		let size = NSSize(
+			width: bodySize.width,
+			height: bodySize.height + replyActionAllowance(
+				kind: kind,
+				showsReplyActions: showsReplyActions
+			)
+		)
 		guard kind == .user, imageAttachmentCount > 0
 		else
 		{
@@ -612,6 +664,15 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			height: content.attributedString.length == 0 ? height
 				: size.height + height + UserMessageImageAttachmentsView.spacing
 		)
+	}
+
+	private static func replyActionAllowance(
+		kind: ConversationEntryKind,
+		showsReplyActions: Bool
+	) -> CGFloat
+	{
+		kind == .agent && showsReplyActions ? replyActionSpacing + ConversationReplyActionsView
+			.height : 0
 	}
 
 	static func textReadingAnchor(
@@ -850,10 +911,15 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				width: view.bounds.width,
 				expandable: isExpandable,
 				kind: kind,
-				imageAttachmentCount: imageAttachmentCount
+				imageAttachmentCount: imageAttachmentCount,
+				showsReplyActions: showsReplyActions
 			)
 			let titleAllowance = Self.titleSpacingAllowance(for: kind)
 			let expandHeight = isExpandable ? Self.rowSpacing + Self.buttonHeight : 0
+			let replyAllowance = Self.replyActionAllowance(
+				kind: kind,
+				showsReplyActions: showsReplyActions
+			)
 			metrics = (
 				view.bounds.width,
 				Self.messageWidth(
@@ -862,7 +928,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 					kind: kind
 				),
 				size.height - 2 * inset.height - titleAllowance - expandHeight
-					- attachmentAllowance
+					- attachmentAllowance - replyAllowance
 			)
 			cachedLayoutMetrics = metrics
 		}

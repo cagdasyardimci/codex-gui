@@ -60,7 +60,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 				1,
 				width
 			),
-			height: 32
+			height: 25
 		)
 	}
 

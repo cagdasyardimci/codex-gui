@@ -100,6 +100,7 @@ final class ConversationViewController: NSViewController,
 		let kind: ConversationEntryKind
 		let expandable: Bool
 		let imageAttachmentCount: Int
+		let showsReplyActions: Bool
 		let size: NSSize
 	}
 	var measuredItemSizes: [String: MeasuredItemSize] = [:]
@@ -164,6 +165,7 @@ final class ConversationViewController: NSViewController,
 	let interactionStack = NSStackView()
 	var entries: [ConversationEntry] = []
 	var displayedRows: [ConversationTranscriptRow] = []
+	var replyActionEntryID: String?
 	var collapsedGroupIDs = Set<String>()
 	var expandedFileChangeIDs = Set<String>()
 	var expandedActivityIDs = Set<String>()
@@ -571,6 +573,7 @@ final class ConversationViewController: NSViewController,
 				.canLoadEarlierTurnReferences
 			updateTurnNavigationSummaries(includeLoaded: previous?.owner == snapshot.owner)
 			turnNavigationRail.refreshBookmark()
+			refreshVisibleReplyActionBookmark()
 		}
 		if previous?.status != snapshot.status
 		{
