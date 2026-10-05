@@ -166,8 +166,11 @@ final class ConversationViewController: NSViewController,
 	var entries: [ConversationEntry] = []
 	var displayedRows: [ConversationTranscriptRow] = []
 	var replyActionEntryID: String?
-	var collapsedGroupIDs = Set<String>()
+	var expandedTurnIDs = Set<String>()
 	var expandedFileChangeIDs = Set<String>()
+	var workEntryIDsByTurn: [String: Set<String>] = [:]
+	var expandedGroupIDs = Set<String>()
+	var collapsedImageIDs = Set<String>()
 	var expandedActivityIDs = Set<String>()
 	var activityOutputPositions: [
 		String: ConversationActivityCollectionItem.OutputReadingPosition

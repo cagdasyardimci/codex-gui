@@ -48,7 +48,8 @@ enum ConversationTranscriptRow: Equatable
 		entries: [ConversationEntry],
 		timings: [ConversationTurnTiming] = [],
 		projectPath: String?,
-		collapsedGroupIDs: Set<String> = [],
+		expandedGroupIDs: Set<String> = [],
+		collapsedImageIDs: Set<String> = [],
 		expandedActivityIDs: Set<String> = []
 	) -> [Self]
 	{
@@ -100,7 +101,7 @@ enum ConversationTranscriptRow: Equatable
 				actions: actions,
 				entries: pending
 			)
-			let expanded = !collapsedGroupIDs.contains(groupID)
+			let expanded = expandedGroupIDs.contains(groupID)
 			rows.append(.activity(ConversationActivityRow(
 				id: groupID,
 				sourceEntryID: first.id,
@@ -219,7 +220,7 @@ enum ConversationTranscriptRow: Equatable
 						cwd: nil,
 						projectPath: projectPath
 					),
-					expanded: !collapsedGroupIDs.contains(entry.id)
+					expanded: !collapsedImageIDs.contains(entry.id)
 				)))
 			}
 			else if case .subagent(let agent) = entry.activity
@@ -248,6 +249,66 @@ enum ConversationTranscriptRow: Equatable
 			rows.append(.turnStatus(timing))
 		}
 		return ConversationSubagentRows.group(rows)
+	}
+
+	static func workEntryIDs(
+		entries: [ConversationEntry],
+		timings: [ConversationTurnTiming]
+	) -> [String: Set<String>]
+	{
+		let terminalTurns = Set(timings.filter
+		{
+			["completed", "failed", "interrupted", "stopped", "cancelled"].contains($0.status)
+				&& ($0.startedAt != nil || $0.durationMs != nil)
+		}.map(\.turnID))
+		var work: [String: Set<String>] = [:]
+		var replies: [String: String] = [:]
+		for entry in entries
+		{
+			let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
+			guard terminalTurns.contains(turnID), entry.kind != .user, entry.kind != .notice
+			else
+			{
+				continue
+			}
+			work[turnID, default: []].insert(entry.id)
+			if entry.kind == .agent
+			{
+				// The presentation model has no message phase; retain the last reply,
+				// as the turn summary does, while folding earlier commentary and tools.
+				replies[turnID] = entry.id
+			}
+		}
+		for (turnID, replyID) in replies
+		{
+			work[turnID]?.remove(replyID)
+		}
+		return work.filter
+		{
+			!$0.value.isEmpty
+		}
+	}
+
+	static func collapsingWork(
+		in rows: [Self],
+		workEntryIDs: [String: Set<String>],
+		expandedTurnIDs: Set<String>
+	) -> [Self]
+	{
+		let hiddenIDs = workEntryIDs.reduce(into: Set<String>())
+		{
+			if !expandedTurnIDs.contains($1.key)
+			{
+				$0.formUnion($1.value)
+			}
+		}
+		return rows.filter
+		{
+			$0.sourceEntryID.map
+			{
+				!hiddenIDs.contains($0)
+			} ?? true
+		}
 	}
 
 	private static func activityRows(

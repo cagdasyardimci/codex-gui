@@ -75,7 +75,8 @@ struct ConversationTranscriptRowTests
 				"turn:e",
 				actions: []
 			)],
-			projectPath: "/project"
+			projectPath: "/project",
+			expandedGroupIDs: ["activity-group:turn:a"]
 		)
 		let activities = rows.compactMap
 		{
@@ -140,8 +141,7 @@ struct ConversationTranscriptRowTests
 		)]
 		let rows = ConversationTranscriptRow.make(
 			entries: entries,
-			projectPath: nil,
-			collapsedGroupIDs: ["activity-group:one:a"]
+			projectPath: nil
 		)
 		#expect(rows.count == 2)
 		#expect(rows[0].sourceEntryID == "one:a")
@@ -176,8 +176,7 @@ struct ConversationTranscriptRowTests
 		)
 		let collapsed = ConversationTranscriptRow.make(
 			entries: [entry],
-			projectPath: nil,
-			collapsedGroupIDs: ["activity-group:turn:item"]
+			projectPath: nil
 		)
 		guard case .activity(let group) = collapsed[0]
 		else
@@ -186,9 +185,11 @@ struct ConversationTranscriptRowTests
 		}
 		#expect(group.title == "Read files, ran commands · 1 failed")
 		#expect(collapsed.count == 1)
+		#expect(!group.expanded)
 		let expanded = ConversationTranscriptRow.make(
 			entries: [entry],
-			projectPath: nil
+			projectPath: nil,
+			expandedGroupIDs: ["activity-group:turn:item"]
 		)
 		guard case .activity(let action) = expanded.last
 		else
@@ -234,7 +235,8 @@ struct ConversationTranscriptRowTests
 		let entries = ConversationContentReducer.entries(for: history.turns)
 		let rows = ConversationTranscriptRow.make(
 			entries: entries,
-			projectPath: nil
+			projectPath: nil,
+			expandedGroupIDs: ["activity-group:turn:publish"]
 		)
 		#expect(rows.map(\.id) == [
 			"turn:before",
@@ -261,8 +263,7 @@ struct ConversationTranscriptRowTests
 		])
 		let collapsed = ConversationTranscriptRow.make(
 			entries: entries,
-			projectPath: nil,
-			collapsedGroupIDs: ["activity-group:turn:publish"]
+			projectPath: nil
 		)
 		#expect(collapsed.map(\.id) == [
 			"turn:before",
@@ -392,8 +393,6 @@ struct ConversationTranscriptRowTests
 			"timing:user",
 			"timing:command",
 			"activity-group:command:first",
-			"command:first",
-			"command:second",
 			"timing:image",
 			"image:item",
 			"missing:notice",

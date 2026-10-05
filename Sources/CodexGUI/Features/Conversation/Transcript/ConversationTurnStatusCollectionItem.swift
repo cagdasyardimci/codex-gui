@@ -5,6 +5,9 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 {
 	private let label = NSTextField(labelWithString: "")
 	private let divider = NSBox()
+	private let disclosure = NSButton()
+	private var expanded = false
+	private var onToggle: (() -> Void)?
 	private var timing: ConversationTurnTiming?
 
 	override func loadView()
@@ -16,9 +19,20 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		label.translatesAutoresizingMaskIntoConstraints = false
 		divider.boxType = .separator
 		divider.translatesAutoresizingMaskIntoConstraints = false
+		disclosure.isBordered = false
+		disclosure.font = label.font
+		disclosure.imagePosition = .imageRight
+		disclosure.contentTintColor = .secondaryLabelColor
+		disclosure.translatesAutoresizingMaskIntoConstraints = false
+		disclosure.target = self
+		disclosure.action = #selector(toggleWork)
+		view.addSubview(disclosure)
 		view.addSubview(label)
 		view.addSubview(divider)
 		NSLayoutConstraint.activate([
+			disclosure.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+			disclosure.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor),
+			disclosure.topAnchor.constraint(equalTo: view.topAnchor),
 			label.leadingAnchor.constraint(equalTo: view.leadingAnchor),
 			label.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 			label.topAnchor.constraint(equalTo: view.topAnchor),
@@ -31,11 +45,17 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 
 	func configure(
 		_ timing: ConversationTurnTiming,
-		now: Date
+		now: Date,
+		expanded: Bool = false,
+		onToggle: (() -> Void)? = nil
 	)
 	{
 		_ = view
 		self.timing = timing
+		self.expanded = expanded
+		self.onToggle = onToggle
+		label.isHidden = onToggle != nil
+		disclosure.isHidden = onToggle == nil
 		refresh(now: now)
 	}
 
@@ -51,6 +71,27 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 			now: now
 		)
 		label.setAccessibilityLabel(label.stringValue)
+		disclosure.attributedTitle = NSAttributedString(
+			string: label.stringValue,
+			attributes: [
+				.font: NSFont.systemFont(ofSize: 14),
+				.foregroundColor: NSColor.secondaryLabelColor
+			]
+		)
+		disclosure.image = DesktopIcons.image(expanded ? .chevronDown : .chevronRight)
+		disclosure.setAccessibilityLabel("\(expanded ? "Collapse" : "Expand") \(label.stringValue)")
+	}
+
+	@objc private func toggleWork()
+	{
+		onToggle?()
+	}
+
+	override func prepareForReuse()
+	{
+		super.prepareForReuse()
+		timing = nil
+		onToggle = nil
 	}
 
 	static func itemSize(width: CGFloat) -> NSSize

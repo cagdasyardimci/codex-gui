@@ -94,6 +94,77 @@ struct ConversationActivityCollectionItemTests
 		#expect(toggles == 1)
 	}
 
+	@Test func disclosureFollowsActivityTextAtWideWidths() throws
+	{
+		let command = commandRow(expanded: false)
+		let read = ConversationActivityRow(
+			id: "read",
+			sourceEntryID: "read",
+			groupID: "group",
+			kind: .read,
+			title: "Read example.swift",
+			filePath: "/tmp/example.swift",
+			linkTitle: "example.swift",
+			command: command.command
+		)
+		for row in [command, read]
+		{
+			let item = ConversationActivityCollectionItem()
+			item.configure(
+				row,
+				onToggle:
+				{
+				},
+				onOpenFile:
+				{
+					_ in
+				}
+			)
+			item.view.frame = NSRect(
+				origin: .zero,
+				size: ConversationActivityCollectionItem.itemSize(
+					row: row,
+					width: 1000
+				)
+			)
+			item.view.layoutSubtreeIfNeeded()
+			let header = try #require(descendants(item.view).first
+			{
+				!$0.trackingAreas.isEmpty
+			})
+			let disclosure = try #require(header.subviews.compactMap
+			{
+				$0 as? NSButton
+			}.first
+			{
+				$0.accessibilityLabel()?.hasPrefix("Expand ") == true
+			})
+			let precedingView: NSView
+			if row.kind == .read
+			{
+				precedingView = try #require(header.subviews.compactMap
+				{
+					$0 as? NSButton
+				}.first
+				{
+					$0.attributedTitle.string == "example.swift"
+				})
+			}
+			else
+			{
+				precedingView = try #require(header.subviews.compactMap
+				{
+					$0 as? NSTextField
+				}.first
+				{
+					$0.stringValue == row.title
+				})
+			}
+			#expect(disclosure.frame.minX - precedingView.frame.maxX < 20)
+			#expect(disclosure.frame.maxX < header.frame.width / 2)
+		}
+	}
+
 	@Test func shellHeightIsBoundedAndMatchesLayoutAtDifferentWidths()
 	{
 		for width: CGFloat in [220, 1000]

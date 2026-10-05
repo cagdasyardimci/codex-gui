@@ -298,7 +298,19 @@ extension ConversationViewController
 		case .turnStatus(let timing):
 			(item as? ConversationTurnStatusCollectionItem)?.configure(
 				timing,
-				now: Date()
+				now: Date(),
+				expanded: expandedTurnIDs.contains(timing.turnID),
+				onToggle: workEntryIDsByTurn[timing.turnID] == nil ? nil :
+				{
+					[weak self] in
+					guard let self, self.renderedContext == context,
+							self.requestedContext == context
+					else
+					{
+						return
+					}
+					self.toggleTurnWork(timing.turnID)
+				}
 			)
 			return
 		case .message: break
@@ -596,8 +608,10 @@ extension ConversationViewController
 		{
 			cancelWidthChangeReadingPosition()
 			expandedEntryIDs.removeAll()
+			expandedTurnIDs.removeAll()
 			expandedFileChangeIDs.removeAll()
-			collapsedGroupIDs.removeAll()
+			expandedGroupIDs.removeAll()
+			collapsedImageIDs.removeAll()
 			expandedActivityIDs.removeAll()
 			activityOutputPositions.removeAll()
 			turnStatusTimer?.invalidate()
@@ -700,12 +714,22 @@ extension ConversationViewController
 		}
 		let shouldFollowOutput = contextChanged || isNearBottom
 		let anchor = shouldFollowOutput ? nil : readingAnchor()
-		let nextRows = ConversationTranscriptRow.make(
+		workEntryIDsByTurn = ConversationTranscriptRow.workEntryIDs(
+			entries: nextEntries,
+			timings: requestedTurnTimings
+		)
+		let allRows = ConversationTranscriptRow.make(
 			entries: nextEntries,
 			timings: requestedTurnTimings,
 			projectPath: projectPath,
-			collapsedGroupIDs: collapsedGroupIDs,
+			expandedGroupIDs: expandedGroupIDs,
+			collapsedImageIDs: collapsedImageIDs,
 			expandedActivityIDs: expandedActivityIDs
+		)
+		let nextRows = ConversationTranscriptRow.collapsingWork(
+			in: allRows,
+			workEntryIDs: workEntryIDsByTurn,
+			expandedTurnIDs: expandedTurnIDs
 		)
 		let previousRows = displayedRows
 		let previousContents = preparedContents
@@ -725,6 +749,10 @@ extension ConversationViewController
 			!contextChanged && sharedIDsMatch && nextRows.count >= previousRows.count
 		let changed = canUpdateRowsInPlace ? (0 ..< sharedCount).filter
 		{
+			if case .turnStatus = nextRows[$0]
+			{
+				return true
+			}
 			return previousRows[$0] != nextRows[$0]
 				|| previousContents[previousRows[$0].id]?.attributedString
 				!= contents[nextRows[$0].id]?.attributedString
@@ -954,6 +982,13 @@ extension ConversationViewController
 			case .message(let preceding) = previous, preceding.kind == .agent
 		{
 			return 8
+		}
+		for row in [previous, current]
+		{
+			if case .activity(let activity) = row, !activity.expanded
+			{
+				return 8
+			}
 		}
 		if case .turnStatus = previous, case .message(let entry) = current,
 			entry.kind == .agent

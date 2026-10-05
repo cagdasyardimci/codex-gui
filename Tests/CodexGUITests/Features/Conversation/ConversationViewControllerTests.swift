@@ -967,8 +967,28 @@ struct ConversationViewControllerTests
 				actions: []
 			))
 		)
-		controller.render(snapshot([entry]))
+		let second = ConversationEntry(
+			id: "turn:second",
+			kind: entry.kind,
+			title: entry.title,
+			body: entry.body,
+			activity: entry.activity
+		)
+		controller.render(snapshot([entry, second]))
 		await controller.waitForRendering()
+		#expect(controller.displayedRows.count == 1)
+		let initialGroup = try #require(controller.displayedRows.first)
+		guard case .activity(let collapsedGroup) = initialGroup
+		else
+		{
+			Issue.record("Expected collapsed group")
+			return
+		}
+		#expect(collapsedGroup.kind == .group)
+		#expect(!collapsedGroup.expanded)
+		controller.toggleActivity(collapsedGroup)
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.count == 3)
 		guard case .activity(let command) = controller.displayedRows[1]
 		else
 		{
@@ -986,7 +1006,7 @@ struct ConversationViewControllerTests
 			durationMs: 20,
 			actions: []
 		))
-		controller.render(snapshot([entry]))
+		controller.render(snapshot([entry, second]))
 		await controller.waitForRendering()
 		guard case .activity(let streamed) = controller.displayedRows[1],
 				case .activity(let group) = controller.displayedRows[0]
@@ -1000,11 +1020,174 @@ struct ConversationViewControllerTests
 		controller.toggleActivity(group)
 		await controller.waitForRendering()
 		#expect(controller.displayedRows.count == 1)
-		controller.jumpToEntry(id: entry.id)
+		controller.jumpToEntry(id: second.id)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.count == 2)
+		#expect(controller.displayedRows.count == 3)
 		#expect(controller.requestedJumpItemID == nil)
-		#expect(controller.entries == [entry])
+		#expect(controller.entries == [entry, second])
+		let otherConversation = snapshot(
+			[entry, second],
+			selectedThreadID: "other"
+		)
+		controller.render(otherConversation)
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.count == 1)
+		#expect(controller.expandedGroupIDs.isEmpty)
+		controller.render(snapshot([entry, second]))
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.count == 1)
+	}
+
+	@Test func completedWorkCollapsesKeepsReplyAndJumpRevealsCommentary() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let commentary = ConversationEntry(
+			id: "turn:comment",
+			kind: .agent,
+			title: "Codex",
+			body: "Checking files"
+		)
+		let command = ConversationEntry(
+			id: "turn:command",
+			kind: .command,
+			title: "Command",
+			body: "",
+			activity: .command(ConversationCommand(
+				command: "git status",
+				cwd: nil,
+				output: "",
+				status: "completed",
+				exitCode: 0,
+				durationMs: 1,
+				actions: []
+			))
+		)
+		let reply = ConversationEntry(
+			id: "turn:reply",
+			kind: .agent,
+			title: "Codex",
+			body: "Done"
+		)
+		var completed = snapshot([commentary, command, reply])
+		completed.turnTimings = [ConversationTurnTiming(
+			turnID: "turn",
+			status: "completed",
+			durationMs: 184000
+		)]
+		controller.render(completed)
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.map(\.id) == ["timing:turn", reply.id])
+		let item = try #require(controller.collectionView(
+			controller.collectionView,
+			itemForRepresentedObjectAt: IndexPath(
+				item: 0,
+				section: 0
+			)
+		)
+			as? ConversationTurnStatusCollectionItem)
+		let disclosure = try #require(item.view.subviews.compactMap
+		{
+			$0 as? NSButton
+		}.first)
+		#expect(disclosure.accessibilityLabel() == "Expand Worked for 3m 4s")
+		disclosure.performClick(nil)
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.map(\.id) == ["timing:turn",
+														commentary.id,
+														command.id,
+														reply.id])
+		controller.toggleTurnWork("turn")
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.map(\.id) == ["timing:turn", reply.id])
+		controller.jumpToEntry(id: command.id)
+		await controller.waitForRendering()
+		#expect(controller.expandedTurnIDs.contains("turn"))
+		#expect(controller.requestedJumpItemID == nil)
+		var switched = snapshot(
+			[commentary, command, reply],
+			selectedThreadID: "other"
+		)
+		switched.turnTimings = completed.turnTimings
+		controller.render(switched)
+		await controller.waitForRendering()
+		#expect(controller.expandedTurnIDs.isEmpty)
+		#expect(controller.displayedRows.map(\.id) == ["timing:turn", reply.id])
+		completed.turnTimings = [ConversationTurnTiming(
+			turnID: "turn",
+			status: "inProgress",
+			startedAt: Date()
+		)]
+		controller.render(completed)
+		await controller.waitForRendering()
+		#expect(controller.displayedRows.contains
+		{
+			$0.id == commentary.id
+		})
+		controller.turnStatusTimer?.invalidate()
+	}
+
+	@Test func collapsedActivitySpacingMatchesReferenceOnBothSides()
+	{
+		let message = ConversationEntry(
+			id: "turn:message",
+			kind: .agent,
+			title: "Codex",
+			body: "Update"
+		)
+		var activity = ConversationActivityRow(
+			id: "group",
+			sourceEntryID: "turn:tool",
+			groupID: "group",
+			kind: .group,
+			title: "Ran commands"
+		)
+		let collapsed: [ConversationTranscriptRow] = [.message(message),
+														.activity(activity),
+														.message(message)]
+		#expect(ConversationViewController.verticalGap(
+			at: 1,
+			in: collapsed
+		) == 8)
+		#expect(ConversationViewController.verticalGap(
+			at: 2,
+			in: collapsed
+		) == 8)
+		activity.expanded = true
+		let expanded: [ConversationTranscriptRow] = [.message(message),
+														.activity(activity),
+														.message(message)]
+		#expect(ConversationViewController.verticalGap(
+			at: 1,
+			in: expanded
+		) == 18)
+		#expect(ConversationViewController.verticalGap(
+			at: 2,
+			in: expanded
+		) == 18)
+		let timing = ConversationTurnTiming(
+			turnID: "turn",
+			status: "completed",
+			durationMs: 310000
+		)
+		#expect(ConversationViewController.verticalGap(
+			at: 1,
+			in: [.turnStatus(timing), .message(message)]
+		) == 12)
+		let user = ConversationEntry(
+			id: "next:user",
+			kind: .user,
+			title: "You",
+			body: "Next request"
+		)
+		#expect(ConversationViewController.verticalGap(
+			at: 1,
+			in: [.message(message), .message(user)]
+		) == 40)
+		#expect(ConversationViewController.verticalGap(
+			at: 1,
+			in: [.message(user), .turnStatus(timing)]
+		) == 50)
 	}
 
 	@Test func retainedActivityCallbacksCannotChangeOrOpenAnotherOwner() async throws
@@ -1058,7 +1241,7 @@ struct ConversationViewControllerTests
 		_ = retained.perform(NSSelectorFromString("openFile"))
 		#expect(opened.isEmpty)
 		#expect(controller.expandedActivityIDs.isEmpty)
-		#expect(controller.collapsedGroupIDs.isEmpty)
+		#expect(controller.collapsedImageIDs.isEmpty)
 	}
 
 	@Test func terminalExecutionStopsTiming() async
@@ -1317,13 +1500,14 @@ struct ConversationViewControllerTests
 	private func snapshot(
 		_ entries: [ConversationEntry],
 		executionState: ExecutionState = .running,
-		threads: [ThreadSummary] = []
+		threads: [ThreadSummary] = [],
+		selectedThreadID: String = "replay"
 	) -> ConversationSnapshot
 	{
 		ConversationSnapshot(
 			projectPath: "/tmp/replay",
 			threads: threads,
-			selectedThreadID: "replay",
+			selectedThreadID: selectedThreadID,
 			entries: entries,
 			canLoadEarlierTurns: false,
 			changedFiles: [],

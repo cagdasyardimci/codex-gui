@@ -20,16 +20,36 @@ extension ConversationViewController
 
 	func toggleActivity(_ row: ConversationActivityRow)
 	{
-		if row.kind == .group || row.kind == .image
+		if row.kind == .group
 		{
-			if !collapsedGroupIDs.insert(row.groupID).inserted
+			if !expandedGroupIDs.insert(row.groupID).inserted
 			{
-				collapsedGroupIDs.remove(row.groupID)
+				expandedGroupIDs.remove(row.groupID)
+			}
+		}
+		else if row.kind == .image
+		{
+			if !collapsedImageIDs.insert(row.groupID).inserted
+			{
+				collapsedImageIDs.remove(row.groupID)
 			}
 		}
 		else if !expandedActivityIDs.insert(row.id).inserted
 		{
 			expandedActivityIDs.remove(row.id)
+		}
+		prepareEntries(
+			requestedEntries,
+			context: requestedContext,
+			force: true
+		)
+	}
+
+	func toggleTurnWork(_ turnID: String)
+	{
+		if !expandedTurnIDs.insert(turnID).inserted
+		{
+			expandedTurnIDs.remove(turnID)
 		}
 		prepareEntries(
 			requestedEntries,

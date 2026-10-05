@@ -292,13 +292,13 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		}
 		else
 		{
-			if hasLink
-			{
-				headerViews.append(spacer)
-			}
 			if canExpand
 			{
 				headerViews.append(disclosure)
+			}
+			if hasLink || canExpand
+			{
+				headerViews.append(spacer)
 			}
 		}
 		failure.stringValue = Self.failureText(row.command)

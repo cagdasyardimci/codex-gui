@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 
 @testable import CodexGUI
@@ -95,6 +95,51 @@ struct ConversationTurnStatusCollectionItemTests
 			now: Date()
 		)
 			== "Failed after 9s")
+	}
+
+	@Test func workDisclosureUpdatesAndClearsCallbackOnReuse() throws
+	{
+		let item = ConversationTurnStatusCollectionItem()
+		let finished = timing(
+			status: "completed",
+			start: nil,
+			duration: 184000
+		)
+		var toggles = 0
+		item.configure(
+			finished,
+			now: Date(),
+			onToggle:
+			{
+				toggles += 1
+			}
+		)
+		let button = try #require(item.view.subviews.compactMap
+		{
+			$0 as? NSButton
+		}.first)
+		#expect(!button.isHidden)
+		#expect(button.accessibilityLabel() == "Expand Worked for 3m 4s")
+		button.performClick(nil)
+		#expect(toggles == 1)
+		item.configure(
+			finished,
+			now: Date(),
+			expanded: true,
+			onToggle:
+			{
+				toggles += 1
+			}
+		)
+		#expect(button.accessibilityLabel() == "Collapse Worked for 3m 4s")
+		item.prepareForReuse()
+		button.performClick(nil)
+		#expect(toggles == 1)
+		item.configure(
+			finished,
+			now: Date()
+		)
+		#expect(button.isHidden)
 	}
 
 	private func text(

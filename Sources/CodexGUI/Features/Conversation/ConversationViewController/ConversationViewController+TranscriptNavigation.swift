@@ -133,10 +133,25 @@ extension ConversationViewController
 		{
 			return
 		}
-		if let group = ConversationTranscriptRow.make(
+		var revealedWork = false
+		if let turnID = workEntryIDsByTurn.first(where:
+			{
+				$0.value.contains(requestedJumpItemID)
+			})?
+			.key,
+			expandedTurnIDs.insert(turnID).inserted
+		{
+			revealedWork = true
+		}
+		let allRows = ConversationTranscriptRow.make(
 			entries: entries,
-			projectPath: projectPath
-		).compactMap(
+			projectPath: projectPath,
+			expandedGroupIDs: Set(entries.map
+			{
+				"activity-group:\($0.id)"
+			})
+		)
+		if let group = allRows.compactMap(
 			{
 				row -> ConversationActivityRow? in
 				guard case .activity(let activity) = row,
@@ -148,7 +163,26 @@ extension ConversationViewController
 				}
 				return activity
 			}
-		).first, collapsedGroupIDs.remove(group.groupID) != nil
+		).first,
+			(group.kind == .image
+				? collapsedImageIDs.remove(group.groupID) != nil
+				: allRows.contains
+				{
+					if case .activity(let row) = $0
+					{
+						return row.kind == .group && row.groupID == group.groupID
+					}
+					return false
+				} && expandedGroupIDs.insert(group.groupID).inserted)
+		{
+			prepareEntries(
+				requestedEntries,
+				context: requestedContext,
+				force: true
+			)
+			return
+		}
+		if revealedWork
 		{
 			prepareEntries(
 				requestedEntries,
