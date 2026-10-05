@@ -191,6 +191,7 @@ struct CodexItem: Sendable
 	let changes: [FileChange]
 	let references: [UserMessageReference]
 	let subagentActivity: CodexSubagentActivity?
+	let sourceActivity: ConversationSourceActivity?
 
 	init?(json: [String: Any])
 	{
@@ -201,6 +202,7 @@ struct CodexItem: Sendable
 		}
 		self.id = id
 		self.type = type
+		self.sourceActivity = ConversationSourceActivity(json: json)
 		self.subagentActivity = type == "subAgentActivity"
 			? CodexSubagentActivity(json: json) : nil
 
@@ -272,6 +274,7 @@ struct UserMessageReference: Equatable, Sendable
 	{
 		case fileReference
 		case image
+		case audio
 	}
 
 	let id: String
@@ -282,7 +285,7 @@ struct UserMessageReference: Equatable, Sendable
 	init?(json: [String: Any], id: String)
 	{
 		guard let type = json["type"] as? String,
-				let path = json["path"] as? String
+				let path = json["path"] as? String ?? json["url"] as? String
 		else
 		{
 			return nil
@@ -291,13 +294,22 @@ struct UserMessageReference: Equatable, Sendable
 		{
 		case "mention":
 			kind = .fileReference
-		case "localImage":
+		case "localImage", "image":
 			kind = .image
+		case "localAudio", "audio":
+			kind = .audio
 		default:
 			return nil
 		}
 		self.id = id
 		self.path = path
-		self.name = json["name"] as? String ?? URL(fileURLWithPath: path).lastPathComponent
+		if kind == .image, InlineImageData.isDataURL(path)
+		{
+			self.name = "Attached image"
+		}
+		else
+		{
+			self.name = json["name"] as? String ?? URL(fileURLWithPath: path).lastPathComponent
+		}
 	}
 }

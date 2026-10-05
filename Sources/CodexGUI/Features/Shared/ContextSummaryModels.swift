@@ -51,6 +51,8 @@ struct SummarySourceReference: Equatable, Identifiable
 	var thumbnailPath: String? = nil
 	/// Nil means preview only; the provider has not established a resource destination.
 	var detailRecordID: String? = nil
+	var categoryLabel: String? = nil
+	var icon: DesktopIcon? = nil
 }
 
 /// Stable backend identity shared by delegated-work projections and historical activity.

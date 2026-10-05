@@ -2,6 +2,41 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
+/// Inline image payloads are data, never filesystem paths or remote resources.
+enum InlineImageData
+{
+	static func isDataURL(_ value: String) -> Bool
+	{
+		value.prefix(11).lowercased() == "data:image/"
+	}
+}
+
+/// Accepts explicit local paths and local file URLs; remote URLs are never fetched.
+enum LocalAttachmentURL
+{
+	static func resolve(_ path: String) -> URL?
+	{
+		if path.hasPrefix("file:")
+		{
+			guard let url = URL(string: path), url.isFileURL,
+					url.host == nil || url.host == "" || url.host == "localhost",
+					NSString(string: url.path).isAbsolutePath
+			else
+			{
+				return nil
+			}
+			return URL(fileURLWithPath: url.path).standardizedFileURL
+		}
+		let expanded = NSString(string: path).expandingTildeInPath
+		guard NSString(string: expanded).isAbsolutePath
+		else
+		{
+			return nil
+		}
+		return URL(fileURLWithPath: expanded).standardizedFileURL
+	}
+}
+
 /// An actor keeps decoding off the main actor and propagates caller cancellation.
 /// Bounded file reads precede decoding; generated thumbnails never exceed 80 pixels.
 actor SourceThumbnailLoader
@@ -23,12 +58,24 @@ actor SourceThumbnailLoader
 
 	private func thumbnail(path: String) -> Data?
 	{
-		guard path.hasPrefix("/"), !Task.isCancelled
+		if InlineImageData.isDataURL(path)
+		{
+			guard !Task.isCancelled, path.utf8.count <= Self.maximumBytes * 4 / 3 + 1_024,
+					let comma = path.firstIndex(of: ","),
+					path[..<comma].lowercased().hasSuffix(";base64"),
+					let data = Data(base64Encoded: String(path[path.index(after: comma)...])),
+					data.count <= Self.maximumBytes
+			else
+			{
+				return nil
+			}
+			return thumbnail(data: data)
+		}
+		guard let url = LocalAttachmentURL.resolve(path), !Task.isCancelled
 		else
 		{
 			return nil
 		}
-		let url = URL(fileURLWithPath: path)
 		guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
 				values.isRegularFile == true, let size = values.fileSize, size <= Self.maximumBytes,
 				let file = try? FileHandle(forReadingFrom: url)

@@ -18,6 +18,8 @@ struct ConversationEntry: Equatable
 	var isExpandable: Bool = false
 	var activity: ConversationActivity? = nil
 	var imageAttachments: [UserMessageReference] = []
+	var sourceReferences: [UserMessageReference] = []
+	var sourceActivity: ConversationSourceActivity? = nil
 }
 
 struct ChangeFile: Equatable

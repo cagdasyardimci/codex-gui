@@ -287,6 +287,8 @@ struct WorkspaceSelectors
 		{
 			switch reference.kind
 			{
+			case .audio:
+				continue
 			case .fileReference:
 				guard reference.path.hasPrefix(projectPath + "/")
 				else

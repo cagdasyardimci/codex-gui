@@ -761,7 +761,8 @@ enum ConversationContentReducer
 				imageAttachments: item.references.filter
 				{
 					$0.kind == .image
-				}
+				},
+				sourceReferences: UserMessagePresenter.sourceReferences(for: item)
 			)
 		case "agentMessage":
 			return ConversationEntry(
@@ -788,7 +789,8 @@ enum ConversationContentReducer
 					exitCode: item.exitCode,
 					durationMs: item.durationMs,
 					actions: item.commandActions
-				))
+				)),
+				sourceActivity: item.sourceActivity
 			)
 		case "subAgentActivity":
 			return ConversationEntry(
@@ -833,7 +835,8 @@ enum ConversationContentReducer
 				id: id,
 				kind: .tool,
 				title: item.type,
-				body: item.text ?? item.output ?? ""
+				body: item.text ?? item.output ?? "",
+				sourceActivity: item.sourceActivity
 			)
 		}
 	}
