@@ -174,6 +174,7 @@ struct ConversationContentModel
 		{
 			loadedUserReferences = ConversationHistoryReferences.collect(from: loadedTurns)
 			loadedHistoryRevision += 1
+			turnPayloadCosts = nil
 		}
 	}
 	/// Canonical references are stable while provisional entries stream.
@@ -181,6 +182,7 @@ struct ConversationContentModel
 	private(set) var loadedUserReferences: [UserMessageReference]?
 	/// Searchable history changes independently of provisional streaming entries.
 	private(set) var loadedHistoryRevision = 0
+	private(set) var turnPayloadCosts: ConversationTurnPayloadCosts?
 	/// The latest actual source turn observed independently of local execution ownership.
 	var latestObservedGitTurnID: String?
 	/// Editing identity survives transcript payload eviction.
@@ -213,10 +215,14 @@ struct ConversationContentModel
 		{
 			entryIndices = nil
 			formattedCommandEntries = []
+			entryPayloadRevision += 1
+			entryPayloadCosts = nil
 		}
 	}
 	/// Direct replacement and memberwise initialization rebuild the first-match lookup lazily.
 	private(set) var entryIndices: [String: Int]?
+	private(set) var entryPayloadRevision = 0
+	private(set) var entryPayloadCosts: ConversationEntryPayloadCosts?
 	/// Indexed mutations retain formatting knowledge; other writes must canonicalize it again.
 	private(set) var formattedCommandEntries: Set<Int> = []
 	var changedFiles: [ChangeFile] = []
@@ -225,6 +231,24 @@ struct ConversationContentModel
 	var hasAggregateDiff = false
 	var liveChangeTurnID: String?
 	var reviewSourceRevision = 0
+
+	mutating func cachedTurnPayloadCosts() -> ConversationTurnPayloadCosts
+	{
+		if turnPayloadCosts == nil
+		{
+			turnPayloadCosts = ConversationTurnPayloadCosts(turns: loadedTurns)
+		}
+		return turnPayloadCosts!
+	}
+
+	mutating func cachedEntryPayloadCosts() -> ConversationEntryPayloadCosts
+	{
+		if entryPayloadCosts == nil
+		{
+			entryPayloadCosts = ConversationEntryPayloadCosts(entries: entries)
+		}
+		return entryPayloadCosts!
+	}
 
 	mutating func entryIndex(for id: String) -> Int?
 	{
@@ -248,8 +272,21 @@ struct ConversationContentModel
 	{
 		let id = entries[index].id
 		let indices = entryIndices
+		var payloadCosts = entryPayloadCosts
+		let previousCost = payloadCosts.map
+		{
+			_ in ConversationEntryPayloadCosts.cost(entries[index])
+		}
 		var formattedEntries = formattedCommandEntries
 		update(&entries[index])
+		if let previousCost
+		{
+			payloadCosts?.replace(
+				previousCost,
+				with: entries[index]
+			)
+			entryPayloadCosts = payloadCosts
+		}
 		if entries[index].id == id
 		{
 			entryIndices = indices
@@ -275,8 +312,11 @@ struct ConversationContentModel
 	{
 		let index = entries.count
 		var indices = entryIndices
+		var payloadCosts = entryPayloadCosts
 		var formattedEntries = formattedCommandEntries
 		entries.append(entry)
+		payloadCosts?.append(entry)
+		entryPayloadCosts = payloadCosts
 		if indices?[entry.id] == nil
 		{
 			indices?[entry.id] = index
@@ -322,6 +362,7 @@ struct ConversationsModel
 	var cacheTime = Date.distantPast
 	var cacheAccessCounter = 0
 	var cacheOverBudget = false
+	var cacheAccounting = ConversationCacheAccounting()
 	var turnReferenceIndices: [String: TurnReferenceIndex] = [:]
 	var pendingTurnReads: [String: ConversationTurnReadOperation] = [:]
 	var error: String?

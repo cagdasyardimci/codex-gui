@@ -201,7 +201,19 @@ extension WorkspaceEffectRunner
 				))
 			))
 		case .readTurnReferences(let operation):
-			_ = try conversationDirectory(context)
+			let project = try conversationDirectory(context)
+			if let ownership = operation.summaryOwnership
+			{
+				guard ownership.canonicalCheckoutPath == project.path
+				else
+				{
+					throw AppServerError.protocolError("Turn references target another checkout.")
+				}
+				try CheckoutIdentity.validate(
+					cwd: ownership.summaryCWD,
+					expectedDirectory: project
+				)
+			}
 			try await verifyWorkspace(managedWorkspace)
 			guard let threadID = context.threadID,
 					managedWorkspace?.threadID == nil || managedWorkspace?.threadID == threadID
@@ -222,7 +234,7 @@ extension WorkspaceEffectRunner
 			try await Task.sleep(for: .seconds(ConversationCachePolicy.hoverLifetime))
 			return .conversations(.cacheExpired(
 				context,
-				observedAt: Date()
+				observedAt: usageRuntime.now()
 			))
 		case .readTurnContents(let operation):
 			_ = try conversationDirectory(context)
@@ -248,10 +260,12 @@ extension WorkspaceEffectRunner
 					reference: operation.reference
 				)
 			}
+			let preview = operation.isPreview ? try await preparedTurnPreview(turn) : nil
 			return .conversations(.turnContentsReceived(
 				operation,
 				.succeeded(turn),
-				observedAt: Date()
+				observedAt: usageRuntime.now(),
+				preview: preview
 			))
 		case .readConversationList(let operation):
 			let project = try conversationDirectory(context)

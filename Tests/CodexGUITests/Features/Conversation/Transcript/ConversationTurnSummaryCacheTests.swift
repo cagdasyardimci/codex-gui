@@ -6,6 +6,65 @@ import Testing
 @Suite
 struct ConversationTurnSummaryCacheTests
 {
+	@Test func canonicalMarkdownPreviewMatchesLoadedNavigationText() async throws
+	{
+		let request = "First\n request"
+		let reply = "# Result\n\n**Done** with [docs](https://example.com)."
+			+ "\n\n```swift\nlet x = 1\n```"
+		let turn = try #require(CodexTurn(json: [
+			"id": "turn",
+			"status": "completed",
+			"items": [
+				[
+					"id": "request",
+					"type": "userMessage",
+					"content": [["type": "text", "text": request]],
+				],
+				["id": "comment", "type": "agentMessage", "text": "Earlier commentary"],
+				["id": "reply", "type": "agentMessage", "text": reply],
+			],
+		]))
+		let preview = try await Task.detached
+		{
+			try ConversationMarkdownPreviewPreparer().prepare(turn)
+		}.value
+		let loaded = try #require(ConversationTurnSummary.make(from: [
+			entry(
+				"turn:request",
+				.user,
+				request
+			),
+			entry(
+				"turn:comment",
+				.agent,
+				"Earlier commentary"
+			),
+			entry(
+				"turn:reply",
+				.agent,
+				reply
+			),
+		]).first)
+		#expect(preview.turnID == loaded.turnID)
+		#expect(preview.entryID == loaded.entryID)
+		#expect(preview.title == loaded.title)
+		#expect(preview.reply == loaded.reply)
+		#expect(!preview.reply.contains("**"))
+		#expect(!preview.reply.contains("Earlier commentary"))
+		let cached = try #require(ConversationTurnSummary.navigation(
+			references: [ConversationTurnReference(
+				id: "turn",
+				status: "completed"
+			)],
+			loaded: [],
+			cached: [preview]
+		).first)
+		#expect(cached.entryID == "turn:reference")
+		#expect(cached.title == loaded.title)
+		#expect(cached.reply == loaded.reply)
+		#expect(!cached.isContentLoaded && cached.isPreviewLoaded)
+	}
+
 	@Test func historicalPrefixesAreReusedUntilTheVisibleReplyPrefixChanges()
 	{
 		var entries = turns([

@@ -244,6 +244,7 @@ enum ConversationsAction
 	case earlierTurnsRequested(HistoryLoadOperation)
 	case turnReferencesRequested(TurnReferenceReadOperation)
 	case turnContentsRequested(ConversationTurnReadOperation)
+	case previewExpiryRequested(OperationContext)
 	case cacheExpired(
 		OperationContext,
 		observedAt: Date = .distantPast
@@ -265,7 +266,8 @@ enum ConversationsAction
 	case turnContentsReceived(
 		ConversationTurnReadOperation,
 		OperationResult<CodexTurn>,
-		observedAt: Date = .distantPast
+		observedAt: Date = .distantPast,
+		preview: ConversationTurnPreview? = nil
 	)
 	case managementRequested(ThreadManagementOperation)
 	case threadListReceived(

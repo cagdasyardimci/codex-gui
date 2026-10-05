@@ -15,218 +15,124 @@ extension ConversationReducer
 
 	static func cachePreview(
 		_ turn: CodexTurn,
+		preview: ConversationTurnPreview,
 		threadID: String,
 		model: inout WorkspaceModel
 	)
 	{
-		let source = ConversationTurnSummary.make(from:
-			ConversationContentReducer.entries(for: [turn])).first
-			?? ConversationTurnSummary(
-				turnID: turn.id,
-				entryID: turn.id + ":reference",
-				title: "Turn",
-				reply: "No text preview is available."
-			)
-		let summary = ConversationTurnSummary(
-			turnID: source.turnID,
-			entryID: source.entryID,
-			title: String(source.title.prefix(160)),
-			reply: String(source.reply.prefix(800))
-		)
+		guard preview.turnID == turn.id
+		else
+		{
+			return
+		}
 		model.conversations.cacheAccessCounter += 1
-		model.conversations.turnReferenceIndices[threadID]?.previews[turn.id] = summary
+		model.conversations.turnReferenceIndices[threadID]?.previews[turn.id] = preview
 		model.conversations.turnReferenceIndices[threadID]?.previewAccess[turn.id] =
 			model.conversations.cacheAccessCounter
-		if ConversationCachePolicy.cost(turn) <= ConversationCachePolicy.hoverBytes,
-			turn.status == "completed", turn.itemsAreComplete
+		let turnBytes = ConversationCachePolicy.cost(turn)
+		if turnBytes <= ConversationCachePolicy.hoverBytes,
+			turn.status == "completed", turn.itemsAreComplete,
+			model.conversations.content[.thread(threadID)]?.loadedTurns.contains(where:
+			{
+				$0.id == turn.id
+			}) != true
 		{
 			model.conversations.turnReferenceIndices[threadID]?.previewTurns[turn.id] = turn
 			model.conversations.turnReferenceIndices[threadID]?.previewCachedAt[turn.id] = model
 				.conversations.cacheTime
+			model.conversations.cacheAccounting.recordHover(
+				threadID: threadID,
+				turnID: turn.id,
+				bytes: turnBytes
+			)
+		}
+		else
+		{
+			removeHover(
+				threadID,
+				turnID: turn.id,
+				model: &model
+			)
 		}
 	}
 
+	/// Streaming calls synchronize only the changed conversation and skip unchanged previews.
 	static func enforceCacheLimits(
 		model: inout WorkspaceModel,
-		now: Date? = nil
+		now: Date? = nil,
+		updating threadIDs: Set<String>? = nil,
+		includePreviews: Bool = true
 	)
 	{
-		let now = now ?? model.conversations.cacheTime
-		let threads = Array(model.conversations.turnReferenceIndices.keys)
-		for threadID in threads
+		let initializeWorkspace = !model.conversations.cacheAccounting.hasSynchronizedWorkspace
+		let synchronizeWorkspace = threadIDs == nil || initializeWorkspace
+		let synchronized = synchronizeWorkspace
+			? Set(model.conversations.content.keys.compactMap(\.threadID)) : threadIDs ?? []
+		if synchronizeWorkspace
 		{
-			guard var index = model.conversations.turnReferenceIndices[threadID]
-			else
+			for threadID in model.conversations.cacheAccounting.content.keys
+				where model.conversations.content[.thread(threadID)] == nil
 			{
-				continue
-			}
-			for turnID in Array(index.previewTurns.keys)
-			{
-				if now.timeIntervalSince(index.previewCachedAt[turnID] ?? .distantPast)
-					>= ConversationCachePolicy.hoverLifetime
-				{
-					index.previewTurns.removeValue(forKey: turnID)
-					index.previewCachedAt.removeValue(forKey: turnID)
-				}
-			}
-			model.conversations.turnReferenceIndices[threadID] = index
-		}
-		// Preview-only full bodies are evicted before transcript content.
-		var hot = threads.flatMap
-		{
-			threadID in
-			(model.conversations.turnReferenceIndices[threadID]?.previewTurns ?? [:]).map
-			{
-				(
-					threadID,
-					$0.key,
-					ConversationCachePolicy.cost($0.value),
-					model.conversations.turnReferenceIndices[threadID]?.previewCachedAt[$0.key]
-						?? .distantPast
-				)
-			}
-		}.sorted
-		{
-			$0.3 < $1.3
-		}
-		while hot.count > ConversationCachePolicy.maximumHoverTurns
-			|| hot.reduce(
-				0,
-				{
-					$0 + $1.2
-				}
-			) > ConversationCachePolicy.hoverBytes
-		{
-			let removed = hot.removeFirst()
-			model.conversations.turnReferenceIndices[removed.0]?.previewTurns[removed.1] = nil
-			model.conversations.turnReferenceIndices[removed.0]?.previewCachedAt[removed.1] = nil
-		}
-		var previews = threads.flatMap
-		{
-			threadID in
-			(model.conversations.turnReferenceIndices[threadID]?.previews ?? [:]).map
-			{
-				(
-					threadID,
-					$0.key,
-					ConversationCachePolicy.cost($0.value),
-					model.conversations.turnReferenceIndices[threadID]?.previewAccess[$0.key] ?? 0
-				)
-			}
-		}.sorted
-		{
-			$0.3 < $1.3
-		}
-		while previews.count > ConversationCachePolicy.maximumPreviews
-			|| previews.reduce(
-				0,
-				{
-					$0 + $1.2
-				}
-			) > ConversationCachePolicy.previewBytes
-		{
-			let removed = previews.removeFirst()
-			model.conversations.turnReferenceIndices[removed.0]?.previews[removed.1] = nil
-			model.conversations.turnReferenceIndices[removed.0]?.previewAccess[removed.1] = nil
-		}
-		for threadID in threads
-		{
-			let errors = model.conversations.turnReferenceIndices[threadID]?.previewErrors ?? [:]
-			if errors.count > ConversationCachePolicy.maximumPreviews
-			{
-				for turnID in errors.keys.sorted().prefix(errors.count
-					- ConversationCachePolicy.maximumPreviews)
-				{
-					model.conversations.turnReferenceIndices[threadID]?.previewErrors[turnID] = nil
-				}
+				model.conversations.cacheAccounting.remove(threadID: threadID)
 			}
 		}
-		var candidates: [(String, String, Int, Int)] = []
-		var costs: [String: Int] = [:]
-		var counts: [String: Int] = [:]
-		for (key, content) in model.conversations.content
+		for threadID in synchronized
 		{
-			guard let threadID = key.threadID
-			else
-			{
-				continue
-			}
-			let index = model.conversations.turnReferenceIndices[threadID]
-			var protected = model.conversations.selectedConversation == key
-				? index?.viewport.turnIDs ?? [] : []
-			if model.conversations.selectedConversation == key && protected.isEmpty
-			{
-				protected
-					.formUnion(content.loadedTurns.suffix(ConversationCachePolicy.contentPageSize)
-						.map(\.id))
-			}
-			if let destination = index?.navigationProtection,
-				model.conversations.selectedConversation == key
-			{
-				protected.insert(destination)
-			}
-			if let anchor = index?.viewport.anchorTurnID,
-				model.conversations.selectedConversation == key
-			{
-				protected.insert(anchor)
-			}
-			if model.execution.activeThreadID == threadID, let live = model.execution.activeTurnID
-			{
-				protected.insert(live)
-			}
-			if let pending = model.contextNavigation.pendingJump,
-				pending.context.threadID == threadID
-			{
-				protected.insert(pending.turnID)
-			}
-			counts[threadID] = content.loadedTurns.count
-			for turn in content.loadedTurns
-			{
-				let cost = ConversationCachePolicy.cost(turn)
-					+ content.entries.filter
-					{
-						$0.id.hasPrefix(turn.id + ":")
-					}
-					.reduce(0)
-					{
-						$0 + $1.body.utf8.count + $1.title.utf8.count
-					}
-				costs[threadID, default: 0] += cost
-				if !protected.contains(turn.id)
-				{
-					candidates.append((threadID, turn.id, cost, index?.access[turn.id] ?? 0))
-				}
-			}
+			synchronizeCacheCosts(
+				threadID: threadID,
+				model: &model
+			)
+			refreshCacheGaps(
+				threadID: threadID,
+				model: &model
+			)
 		}
-		var total = costs.values.reduce(
-			0,
-			+
-		) + hot.reduce(0)
+		if includePreviews || initializeWorkspace
 		{
-			$0 + $1.2
+			enforcePreviewLimits(
+				model: &model,
+				now: now ?? model.conversations.cacheTime
+			)
 		}
-		while total > ConversationCachePolicy.contentBytes && !hot.isEmpty
+		model.conversations.cacheAccounting.hasSynchronizedWorkspace = true
+		var total = ConversationCachePolicy.sum(
+			model.conversations.cacheAccounting.totalContentBytes,
+			model.conversations.cacheAccounting.totalHoverBytes
+		)
+		let exceedsTurnLimit = !model.conversations.cacheAccounting.chatsOverTurnLimit.isEmpty
+		guard total > ConversationCachePolicy.contentBytes || exceedsTurnLimit
+		else
 		{
-			let removed = hot.removeFirst()
-			model.conversations.turnReferenceIndices[removed.0]?.previewTurns[removed.1] = nil
-			model.conversations.turnReferenceIndices[removed.0]?.previewCachedAt[removed.1] = nil
-			total -= removed.2
+			model.conversations.cacheOverBudget = false
+			return
+		}
+		// Hover bodies lose residency before loaded transcript content.
+		for candidate in hoverCandidates(model: model)
+			where total > ConversationCachePolicy.contentBytes
+		{
+			removeHover(
+				candidate.threadID,
+				turnID: candidate.turnID,
+				model: &model
+			)
+			total -= candidate.bytes
+		}
+		var counts = model.conversations.cacheAccounting.content.mapValues
+		{
+			$0.turns.turnIDs.count
 		}
 		var evictions: [String: Set<String>] = [:]
-		for candidate in candidates.sorted(by:
-			{
-				$0.3 < $1.3
-			})
+		for candidate in contentCandidates(model: model)
 		{
 			if total > ConversationCachePolicy.contentBytes
-				|| counts[candidate.0, default: 0] > ConversationCachePolicy.maximumTurnsPerChat
+				|| counts[candidate.threadID, default: 0] > ConversationCachePolicy
+				.maximumTurnsPerChat
 			{
-				evictions[candidate.0, default: []].insert(candidate.1)
-				counts[candidate.0, default: 0] -= 1
-				total -= candidate.2
+				evictions[candidate.threadID, default: []].insert(candidate.turnID)
+				counts[candidate.threadID, default: 0] -= 1
+				total -= candidate.bytes
 			}
 		}
-		model.conversations.cacheOverBudget = total > ConversationCachePolicy.contentBytes
 		for (threadID, removed) in evictions
 		{
 			ConversationContentReducer.updateContent(
@@ -241,12 +147,7 @@ extension ConversationReducer
 				}
 				content.entries.removeAll
 				{
-					entry in
-					removed
-						.contains(String(entry.id.split(
-							separator: ":",
-							maxSplits: 1
-						).first ?? ""))
+					removed.contains(ConversationEntryPayloadCosts.turnID(for: $0.id))
 				}
 				for turnID in removed
 				{
@@ -258,83 +159,396 @@ extension ConversationReducer
 				)
 			}
 			model.conversations.contentRevisions[threadID, default: 0] += 1
+			synchronizeCacheCosts(
+				threadID: threadID,
+				model: &model
+			)
+			refreshCacheGaps(
+				threadID: threadID,
+				model: &model
+			)
 		}
-		refreshCacheGaps(model: &model)
+		model.conversations.cacheOverBudget = ConversationCachePolicy.sum(
+			model.conversations.cacheAccounting.totalContentBytes,
+			model.conversations.cacheAccounting.totalHoverBytes
+		) > ConversationCachePolicy.contentBytes
+	}
+
+	private struct CacheCandidate
+	{
+		let threadID: String
+		let turnID: String
+		let bytes: Int
+		let access: Int
+		var cachedAt: Date = .distantPast
+	}
+
+	private static func synchronizeCacheCosts(
+		threadID: String,
+		model: inout WorkspaceModel
+	)
+	{
+		guard var content = model.conversations.content[.thread(threadID)]
+		else
+		{
+			model.conversations.cacheAccounting.remove(threadID: threadID)
+			return
+		}
+		model.conversations.cacheAccounting.synchronize(
+			threadID: threadID,
+			content: &content
+		)
+		model.conversations.content[.thread(threadID)] = content
+	}
+
+	private static func hoverCandidates(model: WorkspaceModel) -> [CacheCandidate]
+	{
+		model.conversations.turnReferenceIndices.flatMap
+		{
+			threadID, index in
+			index.previewTurns.map
+			{
+				turnID, turn in
+				CacheCandidate(
+					threadID: threadID,
+					turnID: turnID,
+					bytes: ConversationCachePolicy.cost(turn),
+					access: 0,
+					cachedAt: index.previewCachedAt[turnID] ?? .distantPast
+				)
+			}
+		}.sorted
+		{
+			($0.cachedAt, $0.threadID, $0.turnID) < ($1.cachedAt, $1.threadID, $1.turnID)
+		}
+	}
+
+	private static func removeHover(
+		_ threadID: String,
+		turnID: String,
+		model: inout WorkspaceModel
+	)
+	{
+		model.conversations.turnReferenceIndices[threadID]?.previewTurns[turnID] = nil
+		model.conversations.turnReferenceIndices[threadID]?.previewCachedAt[turnID] = nil
+		model.conversations.cacheAccounting.recordHover(
+			threadID: threadID,
+			turnID: turnID,
+			bytes: nil
+		)
+	}
+
+	static func discardHoverContent(
+		_ turnID: String,
+		threadID: String,
+		model: inout WorkspaceModel
+	)
+	{
+		removeHover(
+			threadID,
+			turnID: turnID,
+			model: &model
+		)
+	}
+
+	static func invalidateCachedTurn(
+		_ turnID: String,
+		threadID: String,
+		model: inout WorkspaceModel
+	)
+	{
+		model.conversations.turnReferenceIndices[threadID]?.previews[turnID] = nil
+		model.conversations.turnReferenceIndices[threadID]?.previewAccess[turnID] = nil
+		removeHover(
+			threadID,
+			turnID: turnID,
+			model: &model
+		)
+	}
+
+	private static func enforcePreviewLimits(
+		model: inout WorkspaceModel,
+		now: Date
+	)
+	{
+		for (threadID, index) in model.conversations.turnReferenceIndices
+		{
+			for turnID in index.previewTurns.keys
+				where now.timeIntervalSince(index.previewCachedAt[turnID] ?? .distantPast)
+				>= ConversationCachePolicy.hoverLifetime
+			{
+				removeHover(
+					threadID,
+					turnID: turnID,
+					model: &model
+				)
+			}
+		}
+		let hot = hoverCandidates(model: model)
+		var hoverBodies: [String: [String: Int]] = [:]
+		for candidate in hot
+		{
+			hoverBodies[candidate.threadID, default: [:]][candidate.turnID] = candidate.bytes
+		}
+		model.conversations.cacheAccounting.replaceHoverBodies(hoverBodies)
+		var hotBytes = hot.reduce(0)
+		{
+			ConversationCachePolicy.sum(
+				$0,
+				$1.bytes
+			)
+		}
+		var hotCount = hot.count
+		for candidate in hot
+		{
+			guard hotCount > ConversationCachePolicy.maximumHoverTurns
+				|| hotBytes > ConversationCachePolicy.hoverBytes
+			else
+			{
+				break
+			}
+			removeHover(
+				candidate.threadID,
+				turnID: candidate.turnID,
+				model: &model
+			)
+			hotCount -= 1
+			hotBytes -= candidate.bytes
+		}
+		let previews = model.conversations.turnReferenceIndices.flatMap
+		{
+			threadID, index in
+			index.previews.map
+			{
+				turnID, preview in
+				CacheCandidate(
+					threadID: threadID,
+					turnID: turnID,
+					bytes: ConversationCachePolicy.cost(preview),
+					access: index.previewAccess[turnID] ?? 0
+				)
+			}
+		}.sorted
+		{
+			($0.access, $0.threadID, $0.turnID) < ($1.access, $1.threadID, $1.turnID)
+		}
+		var previewBytes = previews.reduce(0)
+		{
+			ConversationCachePolicy.sum(
+				$0,
+				$1.bytes
+			)
+		}
+		var previewCount = previews.count
+		for candidate in previews
+		{
+			guard previewCount > ConversationCachePolicy.maximumPreviews
+				|| previewBytes > ConversationCachePolicy.previewBytes
+			else
+			{
+				break
+			}
+			model.conversations.turnReferenceIndices[candidate.threadID]?
+				.previews[candidate.turnID] = nil
+			model.conversations.turnReferenceIndices[candidate.threadID]?
+				.previewAccess[candidate.turnID] = nil
+			previewCount -= 1
+			previewBytes -= candidate.bytes
+		}
+		for (threadID, index) in model.conversations.turnReferenceIndices
+		{
+			for turnID in index.previewErrors.keys.sorted().prefix(max(
+				0,
+				index.previewErrors
+					.count -
+					ConversationCachePolicy
+					.maximumPreviews
+			))
+			{
+				model.conversations.turnReferenceIndices[threadID]?.previewErrors[turnID] = nil
+			}
+		}
+	}
+
+	private static func contentCandidates(model: WorkspaceModel) -> [CacheCandidate]
+	{
+		var candidates: [CacheCandidate] = []
+		for (threadID, costs) in model.conversations.cacheAccounting.content
+		{
+			guard let content = model.conversations.content[.thread(threadID)],
+					let entries = content.entryPayloadCosts
+			else
+			{
+				continue
+			}
+			let protected = protectedTurns(
+				threadID: threadID,
+				content: content,
+				model: model
+			)
+			let index = model.conversations.turnReferenceIndices[threadID]
+			for turnID in costs.turns.turnIDs where !protected.contains(turnID)
+			{
+				candidates.append(CacheCandidate(
+					threadID: threadID,
+					turnID: turnID,
+					bytes: ConversationCachePolicy.sum(
+						costs.turns.byTurn[turnID, default: 0],
+						entries.textByTurn[turnID, default: 0],
+						costs.additionalByTurn[turnID, default: 0]
+					),
+					access: index?.access[turnID] ?? 0
+				))
+			}
+		}
+		return candidates.sorted
+		{
+			($0.access, $0.threadID, $0.turnID) < ($1.access, $1.threadID, $1.turnID)
+		}
+	}
+
+	private static func protectedTurns(
+		threadID: String,
+		content: ConversationContentModel,
+		model: WorkspaceModel
+	) -> Set<String>
+	{
+		let index = model.conversations.turnReferenceIndices[threadID]
+		var protected: Set<String> = []
+		if model.conversations.selectedConversation == .thread(threadID)
+		{
+			protected = index?.viewport.turnIDs ?? []
+			if protected.isEmpty
+			{
+				protected
+					.formUnion(content.loadedTurns.suffix(ConversationCachePolicy.contentPageSize)
+						.map(\.id))
+			}
+			if let destination = index?.navigationProtection
+			{
+				protected.insert(destination)
+			}
+			if let anchor = index?.viewport.anchorTurnID
+			{
+				protected.insert(anchor)
+			}
+		}
+		if model.execution.activeThreadID == threadID, let live = model.execution.activeTurnID
+		{
+			protected.insert(live)
+		}
+		if let pending = model.contextNavigation.pendingJump, pending.context.threadID == threadID
+		{
+			protected.insert(pending.turnID)
+		}
+		return protected
 	}
 
 	static func refreshCacheGaps(model: inout WorkspaceModel)
 	{
 		for threadID in model.conversations.turnReferenceIndices.keys
 		{
-			let references = model.conversations.turnReferenceIndices[threadID]?.references ?? []
-			guard !references.isEmpty,
-					var content = model.conversations.content[.thread(threadID)]
-			else
-			{
-				continue
-			}
-			let positions = Dictionary(uniqueKeysWithValues: references.enumerated().map
-			{
-				(
-					$0.element.id,
-					$0.offset
-				)
-			})
-			let turns = content.loadedTurns
-				.sorted
-				{
-					(positions[$0.id] ?? Int.max) < (positions[$1.id] ?? Int.max)
-				}
-			if turns.map(\.id) != content.loadedTurns.map(\.id)
-			{
-				let known = Set(content.loadedTurns.map(\.id))
-				let provisional = content.entries.filter
-				{
-					!known.contains(String($0.id.split(
-						separator: ":",
-						maxSplits: 1
-					).first ?? ""))
-				}
-				content.loadedTurns = turns
-				content.entries = ConversationContentReducer.entries(for: turns) + provisional
-			}
-			var gaps: [String: Int] = [:]
-			for pair in zip(
-				turns,
-				turns.dropFirst()
+			refreshCacheGaps(
+				threadID: threadID,
+				model: &model
 			)
-			{
-				if let first = positions[pair.0.id], let next = positions[pair.1.id],
-					next > first + 1
-				{
-					gaps[pair.1.id] = next - first - 1
-				}
-			}
-			var inserted: Set<String> = []
-			var entries: [ConversationEntry] = []
-			for entry in content.entries where !entry.id.hasSuffix(":cache-gap")
-			{
-				let turnID = String(entry.id.split(
-					separator: ":",
-					maxSplits: 1
-				).first ?? "")
-				if let count = gaps[turnID], inserted.insert(turnID).inserted
-				{
-					entries.append(ConversationEntry(
-						id: turnID + ":cache-gap",
-						kind: .notice,
-						title: "More messages",
-						body: "\(count) turns between these messages. Scroll here to load them."
-					))
-				}
-				entries.append(entry)
-			}
-			if content.entries != entries
-			{
-				content.entries = entries
-				model.conversations.contentRevisions[threadID, default: 0] += 1
-			}
-			model.conversations.content[.thread(threadID)] = content
 		}
+	}
+
+	static func refreshCacheGaps(
+		threadID: String,
+		model: inout WorkspaceModel
+	)
+	{
+		guard var index = model.conversations.turnReferenceIndices[threadID],
+				!index.references.isEmpty,
+				var content = model.conversations.content[.thread(threadID)]
+		else
+		{
+			return
+		}
+		let cached = model.conversations.cacheAccounting.content[threadID]
+		let entryStructureIsCached = content.entryPayloadCosts != nil && content
+			.turnPayloadCosts != nil
+		if entryStructureIsCached, index.referencePositions != nil,
+			cached?.gapLoadedRevision == content.loadedHistoryRevision,
+			cached?.gapReferenceRevision == index.referenceRevision
+		{
+			return
+		}
+		let turnIDs = content.loadedTurns.map(\.id)
+		if entryStructureIsCached, index.referencePositions != nil, cached?.gapTurnIDs == turnIDs,
+			cached?.gapReferenceRevision == index.referenceRevision
+		{
+			model.conversations.cacheAccounting.recordGaps(
+				threadID: threadID,
+				loadedRevision: content
+					.loadedHistoryRevision,
+				referenceRevision: index
+					.referenceRevision,
+				turnIDs: turnIDs
+			)
+			return
+		}
+		let positions = index.cachedReferencePositions()
+		model.conversations.turnReferenceIndices[threadID] = index
+		let turns = content.loadedTurns.enumerated().sorted
+		{
+			(positions[$0.element.id] ?? Int.max, $0.offset)
+				< (positions[$1.element.id] ?? Int.max, $1.offset)
+		}.map(\.element)
+		if turns.map(\.id) != turnIDs
+		{
+			let known = Set(turnIDs)
+			let provisional = content.entries.filter
+			{
+				!known.contains(ConversationEntryPayloadCosts.turnID(for: $0.id))
+			}
+			content.loadedTurns = turns
+			content.entries = ConversationContentReducer.entries(for: turns) + provisional
+		}
+		var gaps: [String: Int] = [:]
+		for pair in zip(
+			turns,
+			turns.dropFirst()
+		)
+		{
+			if let first = positions[pair.0.id], let next = positions[pair.1.id], next > first + 1
+			{
+				gaps[pair.1.id] = next - first - 1
+			}
+		}
+		var inserted: Set<String> = []
+		var entries: [ConversationEntry] = []
+		for entry in content.entries where !entry.id.hasSuffix(":cache-gap")
+		{
+			let turnID = ConversationEntryPayloadCosts.turnID(for: entry.id)
+			if let count = gaps[turnID], inserted.insert(turnID).inserted
+			{
+				entries.append(ConversationEntry(
+					id: turnID + ":cache-gap",
+					kind: .notice,
+					title: "More messages",
+					body: "\(count) turns between these messages. Scroll here to load them."
+				))
+			}
+			entries.append(entry)
+		}
+		if content.entries != entries
+		{
+			content.entries = entries
+			model.conversations.contentRevisions[threadID, default: 0] += 1
+		}
+		model.conversations.content[.thread(threadID)] = content
+		synchronizeCacheCosts(
+			threadID: threadID,
+			model: &model
+		)
+		model.conversations.cacheAccounting.recordGaps(
+			threadID: threadID,
+			loadedRevision: content.loadedHistoryRevision,
+			referenceRevision: index.referenceRevision,
+			turnIDs: turns.map(\.id)
+		)
 	}
 }

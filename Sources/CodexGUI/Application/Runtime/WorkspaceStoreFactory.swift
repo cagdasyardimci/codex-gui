@@ -15,6 +15,7 @@ struct WorkspaceStoreDependencies
 	let projectContextStore: ProjectContextStore
 	let manager: GitWorktreeManager?
 	let usageRuntime: UsageRuntime
+	let previewPreparer: any ConversationPreviewPreparing
 	let publicationWait: @MainActor () async -> Void
 
 	init(
@@ -25,6 +26,7 @@ struct WorkspaceStoreDependencies
 		manager: GitWorktreeManager? = nil,
 		usageRuntime: UsageRuntime? = nil,
 		usageFreshnessDuration: TimeInterval = 900,
+		previewPreparer: any ConversationPreviewPreparing = ConversationTextPreviewPreparer(),
 		publicationWait: @escaping @MainActor () async
 			-> Void =
 			{
@@ -38,6 +40,7 @@ struct WorkspaceStoreDependencies
 		self.projectContextStore = projectContextStore
 		self.manager = manager
 		self.usageRuntime = usageRuntime ?? UsageRuntime(freshnessDuration: usageFreshnessDuration)
+		self.previewPreparer = previewPreparer
 		self.publicationWait = publicationWait
 	}
 
@@ -53,6 +56,7 @@ struct WorkspaceStoreDependencies
 			projectContextStore: projectContextStore,
 			manager: manager,
 			usageRuntime: usageRuntime,
+			previewPreparer: previewPreparer,
 			publicationWait: publicationWait
 		)
 	}
@@ -110,6 +114,7 @@ enum WorkspaceStoreFactory
 						WorkspaceLifecycleReducer.reducer],
 			reduceDomainEvent: WorkspaceDomainComposition.reduceDomainEvent,
 			usageRuntime: dependencies.usageRuntime,
+			previewPreparer: dependencies.previewPreparer,
 			factoryDependencies: dependencies,
 			mapEvent:
 			{

@@ -50,6 +50,8 @@ enum WorkspaceEffect
 	case readConversationPage(HistoryLoadOperation)
 	case readTurnReferences(TurnReferenceReadOperation)
 	case readTurnContents(ConversationTurnReadOperation)
+	case promoteTurnContents(ConversationTurnReadPromotion)
+	case captureConversationRead(ConversationReadFollowUp)
 	case expireTurnPreviews(OperationContext)
 	case readConversationList(ConversationListOperation)
 	case manageConversation(ThreadManagementOperation)

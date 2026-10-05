@@ -89,6 +89,7 @@ final class WorkspaceEffectRunner
 		let effect: WorkspaceEffect
 		let handle: WorkspaceOperationHandle
 		var hasStartedResponse = false
+		var promotedTurnRead: ConversationTurnReadOperation? = nil
 	}
 
 	struct ReservedComposerCommand
@@ -102,6 +103,8 @@ final class WorkspaceEffectRunner
 	var usageDeadlineTask: Task<Void, Never>?
 	var usageDeadline: UsageDeadlineOperation?
 	let service: any CodexService
+	let previewPreparer: any ConversationPreviewPreparing
+	let captureConversationRead: (ConversationReadFollowUp) -> Void
 	let gitTurnBaselineService: any GitTurnBaselineService
 	let isSubmissionCurrent: (OperationContext) -> Bool
 	let isSubmissionStopped: (OperationContext) -> Bool
@@ -154,6 +157,11 @@ final class WorkspaceEffectRunner
 		projectContextStore: ProjectContextStore = ProjectContextStore(),
 		completedRequestLimit: Int = 128,
 		usageRuntime: UsageRuntime = UsageRuntime(),
+		previewPreparer: any ConversationPreviewPreparing = ConversationTextPreviewPreparer(),
+		captureConversationRead: @escaping (ConversationReadFollowUp) -> Void =
+		{
+			_ in
+		},
 		mapEvent: @escaping (
 			OperationContext,
 			AppServerEvent
@@ -165,6 +173,8 @@ final class WorkspaceEffectRunner
 	)
 	{
 		self.service = service
+		self.previewPreparer = previewPreparer
+		self.captureConversationRead = captureConversationRead
 		self.gitTurnBaselineService = gitTurnBaselineService
 		self.isSubmissionCurrent = isSubmissionCurrent
 		self.isSubmissionStopped = isSubmissionStopped
@@ -441,23 +451,7 @@ final class WorkspaceEffectRunner
 		}
 		if case .readTurnContents(let incoming) = effect
 		{
-			let stale = tasks.values.compactMap
-			{
-				pending -> ConversationTurnReadOperation? in
-				guard case .readTurnContents(let old) = pending.effect,
-						(old.isPreview == incoming.isPreview && old.isWindow == incoming.isWindow
-						|| !incoming.isPreview && !incoming.isWindow && old.isWindow),
-						old.context.requestID != incoming.context.requestID
-				else
-				{
-					return nil
-				}
-				return old
-			}
-			for old in stale
-			{
-				cancel(old.context)
-			}
+			cancelSupersededTurnReads(incoming)
 		}
 		let request = RequestKey(context)
 		let key = EffectKey(
@@ -706,7 +700,10 @@ final class WorkspaceEffectRunner
 		}
 		let keys = tasks.keys.filter
 		{
-			$0.request == request && (purpose == nil || $0.purpose == purpose)
+			let ownsPromotion = tasks[$0]?.promotedTurnRead?.context
+				.isSameRequest(as: context) == true
+			return ($0.request == request || ownsPromotion) &&
+				(purpose == nil || $0.purpose == purpose)
 		}
 		for key in keys
 		{
@@ -727,7 +724,7 @@ final class WorkspaceEffectRunner
 			))
 			{
 				pending.handle.finishedEffect(.cancelled)
-				self.retireCompletedRequest(request)
+				self.retireCompletedRequest(key.request)
 			}
 		}
 	}

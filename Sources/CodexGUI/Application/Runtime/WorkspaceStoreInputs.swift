@@ -827,7 +827,7 @@ struct WorkspaceStoreInputs
 		store.dispatch(.conversations(.viewportChanged(
 			store.operationContext(threadID: threadID),
 			viewport,
-			observedAt: Date()
+			observedAt: store.now()
 		)))
 	}
 
@@ -841,7 +841,7 @@ struct WorkspaceStoreInputs
 		store.dispatch(.conversations(.previewAccessed(
 			store.operationContext(threadID: threadID),
 			turnID,
-			observedAt: Date()
+			observedAt: store.now()
 		)))
 		if viewedContent.loadedTurns.contains(where:
 			{
@@ -852,6 +852,8 @@ struct WorkspaceStoreInputs
 		}
 		guard let index = store.model.conversations.turnReferenceIndices[threadID],
 				index.previews[turnID] == nil,
+				index.pendingPreviewRead?.reference.id != turnID,
+				index.pendingPreviewPromotion?.producer.reference.id != turnID,
 				let reference = index.references.first(where:
 				{
 					$0.id == turnID
@@ -881,10 +883,10 @@ struct WorkspaceStoreInputs
 		{
 			return
 		}
-		store.dispatch(.conversations(.turnReferencesRequested(TurnReferenceReadOperation(
+		requestTurnReferences(
 			context: store.operationContext(threadID: threadID),
 			cursor: index?.nextCursor
-		))))
+		)
 	}
 
 	func loadEarlierTurns()

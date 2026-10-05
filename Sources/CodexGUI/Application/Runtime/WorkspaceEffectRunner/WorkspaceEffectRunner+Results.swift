@@ -160,12 +160,12 @@ extension WorkspaceEffectRunner
 			))
 		case .expireTurnPreviews: return .conversations(.cacheExpired(
 				context,
-				observedAt: Date()
+				observedAt: usageRuntime.now()
 			))
 		case .readTurnContents(let operation): return .conversations(.turnContentsReceived(
 				operation,
 				.failed(failure),
-				observedAt: Date()
+				observedAt: usageRuntime.now()
 			))
 		case .readConversationList(let operation): return .conversations(.threadListReceived(
 				operation,

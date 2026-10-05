@@ -402,7 +402,7 @@ struct TurnNavigationRailInputTests
 		)
 		#expect(preview.isLoading)
 		#expect(preview.cardHeight == 100)
-		let cached = ConversationTurnSummary(
+		let cached = ConversationTurnPreview(
 			turnID: "turn",
 			entryID: "turn:request",
 			title: "The request",

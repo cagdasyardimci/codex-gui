@@ -3,7 +3,11 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate
 {
-	private let sourceStore = WorkspaceStoreFactory.makeSource()
+	private let sourceStore = WorkspaceStoreFactory.makeSource(
+		dependencies: WorkspaceStoreDependencies(
+			previewPreparer: ConversationMarkdownPreviewPreparer()
+		)
+	)
 	private lazy var coordinator = TaskWorkspaceCoordinator(sourceStore: sourceStore)
 	private let notifications = TaskNotificationCoordinator()
 	private var mainWindowController: MainWindowController?

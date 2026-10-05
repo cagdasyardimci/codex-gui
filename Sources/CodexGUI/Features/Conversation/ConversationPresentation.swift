@@ -19,7 +19,7 @@ struct ConversationPresentation: Equatable
 	struct Navigation: Equatable
 	{
 		var turnReferences: [ConversationTurnReference] = []
-		var turnPreviews: [ConversationTurnSummary] = []
+		var turnPreviews: [ConversationTurnPreview] = []
 		var turnPreviewErrors: [String: String] = [:]
 		var canLoadEarlierTurnReferences = false
 		let owner: FeaturePresentationOwner

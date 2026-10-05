@@ -14,7 +14,7 @@ struct ConversationTurnSummary: Equatable, Sendable
 	static func navigation(
 		references: [ConversationTurnReference],
 		loaded: [ConversationTurnSummary],
-		cached: [ConversationTurnSummary] = [],
+		cached: [ConversationTurnPreview] = [],
 		errors: [String: String] = [:]
 	) -> [Self]
 	{
@@ -46,12 +46,16 @@ struct ConversationTurnSummary: Equatable, Sendable
 			{
 				return loaded
 			}
-			if var preview = cachedPreviews[reference.id]
+			if let preview = cachedPreviews[reference.id]
 			{
-				preview.entryID = reference.id + ":reference"
-				preview.isContentLoaded = false
-				preview.isPreviewLoaded = true
-				return preview
+				return Self(
+					turnID: preview.turnID,
+					entryID: reference.id + ":reference",
+					title: preview.title,
+					reply: preview.reply,
+					isContentLoaded: false,
+					isPreviewLoaded: true
+				)
 			}
 			return Self(
 				turnID: reference.id,

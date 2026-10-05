@@ -50,19 +50,14 @@ extension ConversationReducer
 		if center < ConversationCachePolicy.contentPageSize / 2,
 			let cursor = index.nextCursor, index.pendingRead == nil
 		{
-			requestTurnReferences(
-				TurnReferenceReadOperation(
-					context: OperationContext(
-						workspace: model.identity,
-						generation: model.connection.generation,
-						requestID: UUID(),
-						threadID: threadID
-					),
-					cursor: cursor
+			result.effects.append(.captureConversationRead(.references(
+				ConversationReadScope(
+					workspace: model.identity,
+					generation: model.connection.generation,
+					threadID: threadID
 				),
-				model: &model,
-				result: &result
-			)
+				cursor: cursor
+			)))
 		}
 		readNextWindowTurn(
 			threadID: threadID,
@@ -97,22 +92,16 @@ extension ConversationReducer
 		{
 			return
 		}
-		let reference = index.windowQueue.removeFirst()
+		let reference = index.windowQueue[0]
 		model.conversations.turnReferenceIndices[threadID] = index
-		reduceTurnNavigation(
-			.turnContentsRequested(ConversationTurnReadOperation(
-				context: OperationContext(
-					workspace: model.identity,
-					generation: model.connection.generation,
-					requestID: UUID(),
-					threadID: threadID
-				),
-				reference: reference,
-				commandRevision: model.execution.commandEventRevisions[threadID, default: 0],
-				isWindow: true
-			)),
-			model: &model,
-			result: &result
-		)
+		result.effects.append(.captureConversationRead(.window(
+			ConversationReadScope(
+				workspace: model.identity,
+				generation: model.connection.generation,
+				threadID: threadID
+			),
+			reference: reference,
+			commandRevision: model.execution.commandEventRevisions[threadID, default: 0]
+		)))
 	}
 }

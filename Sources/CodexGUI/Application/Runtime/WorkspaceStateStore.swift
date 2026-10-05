@@ -241,6 +241,7 @@ final class WorkspaceStateStore
 		},
 		completedRequestLimit: Int = 128,
 		usageRuntime: UsageRuntime = UsageRuntime(),
+		previewPreparer: any ConversationPreviewPreparing = ConversationTextPreviewPreparer(),
 		factoryDependencies: WorkspaceStoreDependencies? = nil,
 		makeRequestID: @escaping () -> UUID = UUID.init,
 		mapEvent: @escaping (
@@ -261,7 +262,8 @@ final class WorkspaceStateStore
 			reviewMarkerStore: reviewMarkerStore ?? ReviewMarkerStore(),
 			projectContextStore: projectContextStore,
 			manager: taskWorkspaceManager,
-			usageRuntime: usageRuntime
+			usageRuntime: usageRuntime,
+			previewPreparer: previewPreparer
 		)
 		self.reducers = reducers
 		self.reduceDomainEvent = reduceDomainEvent
@@ -319,6 +321,12 @@ final class WorkspaceStateStore
 			projectContextStore: projectContextStore,
 			completedRequestLimit: completedRequestLimit,
 			usageRuntime: usageRuntime,
+			previewPreparer: self.factoryDependencies.previewPreparer,
+			captureConversationRead:
+			{
+				[weak self] followUp in
+				self?.inputs.captureConversationRead(followUp)
+			},
 			mapEvent: mapEvent,
 			deliver:
 			{
@@ -571,9 +579,13 @@ final class WorkspaceStateStore
 	) -> Bool
 	{
 		var coalescible = false
-		if case .workspaceLifecycle(.reusableReferencesReceived) = action
+		switch action
 		{
+		case .workspaceLifecycle(.reusableReferencesReceived),
+				.conversations(.turnReferencesRequested), .conversations(.turnReferencesReceived):
+			// Internal metadata follows the pending batch instead of flushing text deltas.
 			coalescible = true
+		default: break
 		}
 		for event in events
 		{

@@ -7,26 +7,26 @@ extension ConversationReducer
 		result: inout WorkspaceReduction
 	)
 	{
+		retireInactiveTurnPromotions(
+			model: &model,
+			result: &result
+		)
 		guard let threadID = model.conversations.selectedConversation.threadID,
 				model.connection.isConnected,
-				model.conversations.turnReferenceIndices[threadID]?.hasLoadedPage != true
+				model.conversations.turnReferenceIndices[threadID]?.hasLoadedPage != true,
+				model.conversations.turnReferenceIndices[threadID]?.pendingRead == nil
 		else
 		{
 			return
 		}
-		requestTurnReferences(
-			TurnReferenceReadOperation(
-				context: OperationContext(
-					workspace: model.identity,
-					generation: model.connection.generation,
-					requestID: UUID(),
-					threadID: threadID
-				),
-				cursor: nil
+		result.effects.append(.captureConversationRead(.references(
+			ConversationReadScope(
+				workspace: model.identity,
+				generation: model.connection.generation,
+				threadID: threadID
 			),
-			model: &model,
-			result: &result
-		)
+			cursor: nil
+		)))
 	}
 
 	static func reduceTurnNavigation(
@@ -37,6 +37,16 @@ extension ConversationReducer
 	{
 		switch action
 		{
+		case .previewExpiryRequested(let context):
+			guard valid(
+				context,
+				model
+			)
+			else
+			{
+				return
+			}
+			result.effects.append(.expireTurnPreviews(context))
 		case .cacheExpired(
 			let context,
 			let observedAt
@@ -159,237 +169,35 @@ extension ConversationReducer
 				index.nextCursor = page.nextCursor == operation.cursor ? nil : page.nextCursor
 			}
 			model.conversations.turnReferenceIndices[threadID] = index
+			refreshCacheGaps(
+				threadID: threadID,
+				model: &model
+			)
 			queueReadingWindow(
 				threadID: threadID,
 				model: &model,
 				result: &result
 			)
 		case .turnContentsRequested(let operation):
-			guard valid(
-				operation.context,
-				model
-			), let threadID = operation.context.threadID,
-			model.conversations.selectedConversation == .thread(threadID),
-			model.conversations.boundThreadID == nil || model.conversations
-			.boundThreadID == threadID,
-			model.conversations.turnReferenceIndices[threadID]?.references
-			.contains(operation.reference) == true,
-			operation.commandRevision == model.execution.commandEventRevisions[
-				threadID,
-				default: 0
-			]
-			else
-			{
-				return
-			}
-			enforceCacheLimits(model: &model)
-			touchTurn(
-				operation.reference.id,
-				threadID: threadID,
-				model: &model
+			requestTurnContents(
+				operation,
+				model: &model,
+				result: &result
 			)
-			if operation.isPreview
-			{
-				model.conversations.turnReferenceIndices[threadID]?.pendingPreviewRead = operation
-				model.conversations.turnReferenceIndices[threadID]?
-					.previewErrors[operation.reference.id] = nil
-			}
-			else if operation.isWindow
-			{
-				model.conversations.turnReferenceIndices[threadID]?.pendingWindowRead = operation
-			}
-			else
-			{
-				model.conversations.turnReferenceIndices[threadID]?.windowQueue.removeAll()
-				model.conversations.turnReferenceIndices[threadID]?.pendingWindowRead = nil
-				model.conversations.pendingTurnReads[threadID] = operation
-			}
-			if !operation.isPreview,
-				let cached = model.conversations.turnReferenceIndices[threadID]?
-				.previewTurns[operation.reference.id]
-			{
-				reduceTurnNavigation(
-					.turnContentsReceived(
-						operation,
-						.succeeded(cached)
-					),
-					model: &model,
-					result: &result
-				)
-			}
-			else if !operation.isPreview,
-					model.conversations.turnReferenceIndices[threadID]?.pendingPreviewRead?
-					.reference.id == operation.reference.id
-			{
-				// The preview's existing fetch now also serves the pending jump.
-			}
-			else
-			{
-				result.effects.append(.readTurnContents(operation))
-			}
 		case .turnContentsReceived(
 			let operation,
 			let observation,
-			let observedAt
+			let observedAt,
+			let preview
 		):
-			guard valid(
-				operation.context,
-				model
-			), let threadID = operation.context.threadID,
-			(operation.isPreview
-				? model.conversations.turnReferenceIndices[threadID]?.pendingPreviewRead
-				: operation.isWindow
-				? model.conversations.turnReferenceIndices[threadID]?.pendingWindowRead
-				: model.conversations.pendingTurnReads[threadID]) == operation
-			else
-			{
-				return
-			}
-			model.conversations.cacheTime = max(
-				model.conversations.cacheTime,
-				observedAt
+			receiveTurnContents(
+				operation,
+				observation: observation,
+				observedAt: observedAt,
+				preview: preview,
+				model: &model,
+				result: &result
 			)
-			if operation.isPreview
-			{
-				model.conversations.turnReferenceIndices[threadID]?.pendingPreviewRead = nil
-			}
-			else if operation.isWindow
-			{
-				model.conversations.turnReferenceIndices[threadID]?.pendingWindowRead = nil
-			}
-			else
-			{
-				model.conversations.pendingTurnReads.removeValue(forKey: threadID)
-			}
-			guard operation.commandRevision == model.execution.commandEventRevisions[
-				threadID,
-				default: 0
-			]
-			else
-			{
-				result.domainEvents.append(.conversationHistoryFinished(
-					.turn(operation),
-					.succeeded(false)
-				))
-				return
-			}
-			if operation.isWindow
-			{
-				guard model.conversations.selectedConversation == .thread(threadID)
-				else
-				{
-					return
-				}
-				switch observation
-				{
-				case .succeeded(let turn) where turn.id == operation.reference.id:
-					insertReferencedTurn(
-						turn,
-						threadID: threadID,
-						model: &model
-					)
-					model.conversations.contentRevisions[threadID, default: 0] += 1
-					result.domainEvents.append(.conversationContentChanged)
-					enforceCacheLimits(model: &model)
-					readNextWindowTurn(
-						threadID: threadID,
-						model: &model,
-						result: &result
-					)
-				case .failed(let failure):
-					model.conversations.turnReferenceIndices[threadID]?.windowError = failure
-						.message
-					model.conversations.turnReferenceIndices[threadID]?.windowQueue.removeAll()
-				default: break
-				}
-				return
-			}
-			if operation.isPreview
-			{
-				guard model.conversations.selectedConversation == .thread(threadID)
-				else
-				{
-					return
-				}
-				switch observation
-				{
-				case .succeeded(let turn) where turn.id == operation.reference.id:
-					cachePreview(
-						turn,
-						threadID: threadID,
-						model: &model
-					)
-					model.conversations.turnReferenceIndices[threadID]?.previewErrors[turn.id] = nil
-					result.effects.append(.expireTurnPreviews(OperationContext(
-						workspace: model.identity,
-						generation: model.connection.generation,
-						requestID: UUID(),
-						threadID: threadID
-					)))
-				case .failed:
-					model.conversations.turnReferenceIndices[threadID]?
-						.previewErrors[operation.reference.id] =
-						"Could not load this turn. Hover to retry."
-				default:
-					model.conversations.turnReferenceIndices[threadID]?
-						.previewErrors[operation.reference.id] = "Could not load this turn."
-				}
-				if let navigation = model.conversations.pendingTurnReads[threadID],
-					navigation.reference.id == operation.reference.id
-				{
-					if case .succeeded(let turn) = observation, !turn.itemsAreComplete
-					{
-						result.effects.append(.readTurnContents(navigation))
-					}
-					else
-					{
-						reduceTurnNavigation(
-							.turnContentsReceived(
-								navigation,
-								observation
-							),
-							model: &model,
-							result: &result
-						)
-					}
-				}
-				enforceCacheLimits(model: &model)
-				return
-			}
-			switch observation
-			{
-			case .failed(let failure):
-				result.domainEvents.append(.conversationHistoryFinished(
-					.turn(operation),
-					.failed(failure)
-				))
-			case .succeeded(let turn):
-				guard turn.id == operation.reference.id
-				else
-				{
-					result.domainEvents.append(.conversationHistoryFinished(
-						.turn(operation),
-						.failed(OperationFailure(
-							message: "Codex returned a different turn.",
-							outcomeIsUncertain: false
-						))
-					))
-					return
-				}
-				insertReferencedTurn(
-					turn,
-					threadID: threadID,
-					model: &model
-				)
-				model.conversations.turnReferenceIndices[threadID]?.previewTurns[turn.id] = nil
-				model.conversations.turnReferenceIndices[threadID]?.previewCachedAt[turn.id] = nil
-				model.conversations.contentRevisions[threadID, default: 0] += 1
-				result.domainEvents.append(.conversationContentChanged)
-				result.domainEvents.append(.conversationHistoryFinished(
-					.turn(operation),
-					.succeeded(true)
-				))
-			}
 		default: break
 		}
 	}
@@ -418,12 +226,9 @@ extension ConversationReducer
 		{
 			$0.id == threadID
 		}
-		let ownsSummary = summary.map
+		let ownsSummary = operation.summaryOwnership.map
 		{
-			(try? CheckoutIdentity.validate(
-				cwd: $0.cwd,
-				expectedDirectory: URL(fileURLWithPath: path)
-			)) != nil
+			$0.canonicalCheckoutPath == path && $0.summaryCWD == summary?.cwd
 		} == true
 		guard ownsSummary || model.conversations.content[.thread(threadID)]?
 			.hasLoadedHistory == true
@@ -521,5 +326,9 @@ extension ConversationReducer
 				threadID: threadID
 			)
 		}
+		refreshCacheGaps(
+			threadID: threadID,
+			model: &model
+		)
 	}
 }

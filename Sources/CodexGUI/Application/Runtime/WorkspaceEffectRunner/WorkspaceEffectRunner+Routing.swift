@@ -18,6 +18,21 @@ extension WorkspaceEffectRunner
 		{
 			switch effect
 			{
+			case .captureConversationRead(let followUp):
+				guard followUp.scope.workspace == workspace
+				else
+				{
+					continue
+				}
+				captureConversationRead(followUp)
+			case .promoteTurnContents(let promotion):
+				guard promotion.producer.context.workspace == workspace,
+						promotion.consumer.context.workspace == workspace
+				else
+				{
+					continue
+				}
+				promoteTurnContents(promotion)
 			case .restoreSourceStartup(let context):
 				guard managedWorkspace == nil, context.workspace == workspace,
 						workspace.canonicalCheckoutPath == nil,

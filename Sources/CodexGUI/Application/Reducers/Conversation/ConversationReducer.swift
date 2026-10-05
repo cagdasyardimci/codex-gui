@@ -225,7 +225,8 @@ enum ConversationReducer
 		switch action
 		{
 		case .turnReferencesRequested, .turnReferencesReceived, .turnContentsRequested,
-				.turnContentsReceived, .viewportChanged, .previewAccessed, .cacheExpired:
+				.turnContentsReceived, .viewportChanged, .previewAccessed, .cacheExpired,
+				.previewExpiryRequested:
 			reduceTurnNavigation(
 				action,
 				model: &model,
@@ -613,6 +614,8 @@ enum ConversationReducer
 					if case .delete = pending, let id = context.threadID
 					{
 						model.conversations.content.removeValue(forKey: .thread(id))
+						model.conversations.cacheAccounting.removeThread(threadID: id)
+						model.conversations.turnReferenceIndices.removeValue(forKey: id)
 						model.conversations.threads.removeAll
 						{
 							$0.id == id
@@ -738,6 +741,7 @@ enum ConversationReducer
 			{
 				model.conversations.turnReferenceIndices[threadID]?.pendingRead = nil
 				model.conversations.turnReferenceIndices[threadID]?.pendingPreviewRead = nil
+				model.conversations.turnReferenceIndices[threadID]?.pendingPreviewPromotion = nil
 				model.conversations.turnReferenceIndices[threadID]?.pendingWindowRead = nil
 				model.conversations.turnReferenceIndices[threadID]?.windowQueue.removeAll()
 				model.conversations.turnReferenceIndices[threadID]?.hasLoadedPage = false
@@ -855,12 +859,11 @@ enum ConversationReducer
 			}
 			if let identity = event.turnContentIdentity
 			{
-				model.conversations.turnReferenceIndices[identity.threadID]?
-					.previews[identity.turnID] = nil
-				model.conversations.turnReferenceIndices[identity.threadID]?
-					.previewTurns[identity.turnID] = nil
-				model.conversations.turnReferenceIndices[identity.threadID]?
-					.previewCachedAt[identity.turnID] = nil
+				invalidateCachedTurn(
+					identity.turnID,
+					threadID: identity.threadID,
+					model: &model
+				)
 			}
 			ConversationContentReducer.observe(
 				event,
@@ -882,7 +885,47 @@ enum ConversationReducer
 			)
 		default: break
 		}
-		enforceCacheLimits(model: &model)
+		switch event
+		{
+		case .backendObserved(
+			let backendEvent,
+			_
+		):
+			if let identity = backendEvent.turnContentIdentity
+			{
+				enforceCacheLimits(
+					model: &model,
+					updating: [identity.threadID],
+					includePreviews: false
+				)
+			}
+		case .submissionAccepted(let submission):
+			if let threadID = submission.context.threadID
+			{
+				enforceCacheLimits(
+					model: &model,
+					updating: [threadID],
+					includePreviews: false
+				)
+			}
+		case .submissionPrepared(let prepared):
+			enforceCacheLimits(
+				model: &model,
+				updating: [prepared.thread.summary.id]
+			)
+		case .historyAccepted(
+			let detail,
+			_
+		):
+			enforceCacheLimits(
+				model: &model,
+				updating: [detail.summary.id]
+			)
+		case .conversationContentChanged, .conversationSelectionChanged,
+				.connectionBegan, .connectionDisconnected:
+			enforceCacheLimits(model: &model)
+		default: break
+		}
 		return result
 	}
 }
