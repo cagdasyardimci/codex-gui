@@ -67,17 +67,17 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			inspector: inspector,
 			layoutStore: layoutStore
 		)
-		window.contentViewController = WindowChromeViewController(
-			split: paneController.split,
-			accountButton: statusButton
-		)
-
 		super.init(window: window)
 		shouldCascadeWindows = false
 		configureInspectorCallbacks()
 		configureToolbarControls()
 
 		installConversationToolbar(in: window)
+		// Installing the toolbar reshapes the window. Attach panes after that layout pass.
+		window.contentViewController = WindowChromeViewController(
+			split: paneController.split,
+			accountButton: statusButton
+		)
 		updateMinimumWindowSize()
 		observeWindowChrome(in: window)
 		paneController.restoreLayout(in: window)

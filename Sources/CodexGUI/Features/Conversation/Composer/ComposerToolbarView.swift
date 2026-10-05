@@ -6,7 +6,7 @@ final class ComposerToolbarView: NSView
 {
 	private var wideConstraints: [NSLayoutConstraint] = []
 	private var compactConstraints: [NSLayoutConstraint] = []
-	private var isCompact = false
+	private var isCompact = true
 
 	init(
 		leadingControls: NSView,
@@ -65,7 +65,8 @@ final class ComposerToolbarView: NSView
 			actionControls.bottomAnchor.constraint(equalTo: bottomAnchor),
 		]
 
-		NSLayoutConstraint.activate(wideConstraints)
+		// Before a pane supplies its width, reserve both rows in its initial fitting height.
+		NSLayoutConstraint.activate(compactConstraints)
 	}
 
 	required init?(coder: NSCoder)
