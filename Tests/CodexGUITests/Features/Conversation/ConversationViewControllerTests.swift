@@ -131,8 +131,8 @@ struct ConversationViewControllerTests
 		#expect(text.string.contains("Inline math: $E = mc^2$"))
 		#expect(text.string.contains("<span>HTML_PROBE</span>"))
 		#expect(!text.string.contains("│"))
-		#expect(text.string.contains("◦ Nested bullet"))
-		#expect(text.string.contains("▪ Third-level bullet"))
+		#expect(text.string.contains("◦\tNested bullet"))
+		#expect(text.string.contains("▪\tThird-level bullet"))
 		try #require(content.codeBlocks.count == 4)
 		try #require(content.codeBlockRanges.count == 4)
 		for index in 0 ..< 3
@@ -147,7 +147,7 @@ struct ConversationViewControllerTests
 		let diagramSource = "```mermaid\n" + content.codeBlocks[3] + "```"
 		var richSources: [String] = []
 		text.enumerateAttribute(
-			.conversationSourceText,
+			.attachment,
 			in: NSRange(
 				location: 0,
 				length: text.length
@@ -155,16 +155,15 @@ struct ConversationViewControllerTests
 		)
 		{
 			value, range, _ in
-			if let source = value as? String
+			if let attachment = value as? ConversationRichAttachment
 			{
-				richSources.append(source)
+				richSources.append(attachment.source)
 				#expect((text.string as NSString).substring(with: range) == "\u{FFFC}")
 				#expect(text.attribute(
-					.attachment,
+					.conversationSourceText,
 					at: range.location,
 					effectiveRange: nil
-				)
-					is NSTextAttachment)
+				) as? String == attachment.source)
 			}
 		}
 		#expect(richSources == [mathSource, diagramSource])
@@ -1173,7 +1172,7 @@ struct ConversationViewControllerTests
 		#expect(ConversationViewController.verticalGap(
 			at: 1,
 			in: [.turnStatus(timing), .message(message)]
-		) == 12)
+		) == 14)
 		let user = ConversationEntry(
 			id: "next:user",
 			kind: .user,
@@ -1218,10 +1217,14 @@ struct ConversationViewControllerTests
 			.presentationOwner(sessionID: UUID())
 		controller.render(initial)
 		await controller.waitForRendering()
+		let activityIndex = try #require(controller.displayedRows.firstIndex
+		{
+			$0.sourceEntryID == entry.id
+		})
 		let retained = controller.collectionView(
 			controller.collectionView,
 			itemForRepresentedObjectAt: IndexPath(
-				item: 1,
+				item: activityIndex,
 				section: 0
 			)
 		)
@@ -1289,6 +1292,26 @@ struct ConversationViewControllerTests
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 700,
+				height: 760
+			),
+			styleMask: [.titled, .resizable],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = controller
+		defer
+		{
+			controller.collectionView.dataSource = nil
+			controller.collectionView.delegate = nil
+			window.contentViewController = nil
+			window.close()
+		}
 		let command = ConversationCommand(
 			command: "echo output",
 			cwd: "/tmp",
@@ -1310,29 +1333,28 @@ struct ConversationViewControllerTests
 		)
 		controller.render(snapshot([entry]))
 		await controller.waitForRendering()
-		guard case .activity(let row) = controller.displayedRows[1]
+		let activityIndex = try #require(controller.displayedRows.firstIndex
+		{
+			$0.sourceEntryID == entry.id
+		})
+		guard case .activity(let row) = controller.displayedRows[activityIndex]
 		else
 		{
+			Issue.record("Expected command activity row")
 			return
 		}
 		controller.toggleActivity(row)
 		await controller.waitForRendering()
-		let item = try #require(controller.collectionView(
-			controller.collectionView,
-			itemForRepresentedObjectAt: IndexPath(
-				item: 1,
+		let item = try #require(controller.collectionView.item(
+			at: IndexPath(
+				item: activityIndex,
 				section: 0
 			)
 		)
 			as? ConversationActivityCollectionItem)
 		func layout(_ item: ConversationActivityCollectionItem)
 		{
-			item.view.frame = NSRect(
-				x: 0,
-				y: 0,
-				width: 500,
-				height: 314
-			)
+			controller.view.layoutSubtreeIfNeeded()
 			item.view.layoutSubtreeIfNeeded()
 			item.viewDidLayout()
 		}
@@ -1352,7 +1374,7 @@ struct ConversationViewControllerTests
 			controller.collectionView,
 			didEndDisplaying: item,
 			forRepresentedObjectAt: IndexPath(
-				item: 1,
+				item: activityIndex,
 				section: 0
 			)
 		)
@@ -1361,10 +1383,9 @@ struct ConversationViewControllerTests
 		await controller.waitForRendering()
 		controller.toggleActivity(row)
 		await controller.waitForRendering()
-		let reopened = try #require(controller.collectionView(
-			controller.collectionView,
-			itemForRepresentedObjectAt: IndexPath(
-				item: 1,
+		let reopened = try #require(controller.collectionView.item(
+			at: IndexPath(
+				item: activityIndex,
 				section: 0
 			)
 		)
@@ -1469,6 +1490,15 @@ struct ConversationViewControllerTests
 		}
 		controller.render(snapshot(commands + messages))
 		await controller.waitForRendering()
+		guard case .activity(let group) = try #require(controller.displayedRows.first)
+		else
+		{
+			Issue.record("Expected a collapsed command group")
+			return
+		}
+		#expect(!group.expanded)
+		controller.toggleActivity(group)
+		await controller.waitForRendering()
 		controller.view.layoutSubtreeIfNeeded()
 		let collection = controller.collectionView
 		collection.layoutSubtreeIfNeeded()
@@ -1482,7 +1512,7 @@ struct ConversationViewControllerTests
 		}
 		#expect(abs(frames[1].minY - frames[0].minY - 30) < 1)
 		#expect(abs(frames[2].minY - frames[1].minY - 30) < 1)
-		#expect(abs(frames[3].minY - frames[2].maxY - 18) < 1)
+		#expect(abs(frames[3].minY - frames[2].maxY - 8) < 1)
 		#expect(abs(frames[4].minY - frames[3].maxY - 18) < 1)
 		let layout = try #require(collection.collectionViewLayout)
 		#expect(frames.allSatisfy

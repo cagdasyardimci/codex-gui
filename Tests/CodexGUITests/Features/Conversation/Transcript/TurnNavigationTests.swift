@@ -148,7 +148,17 @@ struct TurnNavigationTests
 			section: 0
 		)])
 		#expect(rail.activeTurnID == "first")
-		#expect(rail.frame.maxX <= controller.conversationScrollView.frame.minX + 12)
+		let firstRow = try #require(controller.collectionView.layoutAttributesForItem(
+			at: IndexPath(
+				item: 0,
+				section: 0
+			)
+		))
+		let readingColumn = controller.view.convert(
+			firstRow.frame,
+			from: controller.collectionView
+		)
+		#expect(rail.frame.maxX <= readingColumn.minX)
 		var toggled: ConversationBookmark?
 		controller.onToggleBookmark =
 		{

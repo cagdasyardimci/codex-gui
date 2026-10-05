@@ -102,7 +102,11 @@ struct ConversationTranscriptUpdateLayoutTests
 			{
 				let path = try #require(attributes.indexPath)
 				let item = try #require(collection.item(at: path))
-				#expect(item.view.frame == attributes.frame)
+				// Fractional clip origins let AppKit align item origins to the nearest pixel.
+				let originTolerance = 0.5 / window.backingScaleFactor
+				#expect(abs(item.view.frame.minX - attributes.frame.minX) <= originTolerance)
+				#expect(abs(item.view.frame.minY - attributes.frame.minY) <= originTolerance)
+				#expect(item.view.frame.size == attributes.frame.size)
 			}
 			#expect(abs(collection.frame.height - layout.collectionViewContentSize.height) < 1)
 		}
