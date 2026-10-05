@@ -11,8 +11,11 @@ import sys
 ISOLATED_HOSTS = (
     ("WindowLayoutTests", "^CodexGUITests.WindowLayoutTests"),
     ("WindowLayoutTests", "TaskWorkspaceWindowLayoutTests"),
+    ("DesktopLayoutTests",) * 2,
     ("closedWindowDetachesItsStorePublicationObserver",) * 2,
     ("shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning",) * 2,
+    ("taskTitleScrollsOnceAndHoverCardUsesMetadataForItsOwnRow",) * 2,
+    ("railJumpsBookmarksAndClearsOnChatSwitch",) * 2,
     ("searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding",) * 2,
     ("MessageSearchSheetLifecycleTests",) * 2,
     ("inlineImagesOpenInANativePanelAndReuseOrDetachDismissesIt",) * 2,
