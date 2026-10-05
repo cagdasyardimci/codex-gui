@@ -619,11 +619,25 @@ extension ConversationViewController
 		}
 		requestedEntries = nextEntries
 		requestedContext = context
+		let workEntryIDs = ConversationTranscriptRow.workEntryIDs(
+			entries: nextEntries,
+			timings: requestedTurnTimings
+		)
+		let hiddenIDs = ConversationTranscriptRow.hiddenWorkEntryIDs(
+			workEntryIDs: workEntryIDs,
+			expandedTurnIDs: expandedTurnIDs
+		)
 		let keys = nextEntries.map
 		{
-			TranscriptPreparationCoordinator.ContentKey.make(
-				for: $0,
-				expanded: expandedEntryIDs.contains($0.id)
+			entry -> TranscriptPreparationCoordinator.ContentKey? in
+			guard !hiddenIDs.contains(entry.id)
+			else
+			{
+				return nil
+			}
+			return TranscriptPreparationCoordinator.ContentKey.make(
+				for: entry,
+				expanded: expandedEntryIDs.contains(entry.id)
 			)
 		}
 		transcriptPreparation.prepare(
@@ -636,6 +650,7 @@ extension ConversationViewController
 			self?.applyEntries(
 				nextEntries,
 				contents: contents,
+				workEntryIDs: workEntryIDs,
 				context: context
 			)
 		}
@@ -700,6 +715,7 @@ extension ConversationViewController
 	private func applyEntries(
 		_ nextEntries: [ConversationEntry],
 		contents: [String: PreparedConversationContent],
+		workEntryIDs: [String: Set<String>],
 		context: String?
 	)
 	{
@@ -714,17 +730,15 @@ extension ConversationViewController
 		}
 		let shouldFollowOutput = contextChanged || isNearBottom
 		let anchor = shouldFollowOutput ? nil : readingAnchor()
-		workEntryIDsByTurn = ConversationTranscriptRow.workEntryIDs(
-			entries: nextEntries,
-			timings: requestedTurnTimings
-		)
+		workEntryIDsByTurn = workEntryIDs
 		let allRows = ConversationTranscriptRow.make(
 			entries: nextEntries,
 			timings: requestedTurnTimings,
 			projectPath: projectPath,
 			expandedGroupIDs: expandedGroupIDs,
 			collapsedImageIDs: collapsedImageIDs,
-			expandedActivityIDs: expandedActivityIDs
+			expandedActivityIDs: expandedActivityIDs,
+			preparedNetChanges: transcriptPreparation.preparedNetChanges
 		)
 		let nextRows = ConversationTranscriptRow.collapsingWork(
 			in: allRows,

@@ -149,7 +149,8 @@ extension ConversationViewController
 			expandedGroupIDs: Set(entries.map
 			{
 				"activity-group:\($0.id)"
-			})
+			}),
+			preparedNetChanges: transcriptPreparation.preparedNetChanges
 		)
 		if let group = allRows.compactMap(
 			{

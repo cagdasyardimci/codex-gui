@@ -50,7 +50,8 @@ enum ConversationTranscriptRow: Equatable
 		projectPath: String?,
 		expandedGroupIDs: Set<String> = [],
 		collapsedImageIDs: Set<String> = [],
-		expandedActivityIDs: Set<String> = []
+		expandedActivityIDs: Set<String> = [],
+		preparedNetChanges: [String: ConversationNetFileChangePreparation.Prepared] = [:]
 	) -> [Self]
 	{
 		var rows: [Self] = []
@@ -118,6 +119,11 @@ enum ConversationTranscriptRow: Equatable
 		}
 		func appendPendingChanges()
 		{
+			guard let first = pendingChanges.first
+			else
+			{
+				return
+			}
 			let completedChanges = pendingChanges.flatMap
 			{
 				entry -> [FileChange] in
@@ -131,7 +137,17 @@ enum ConversationTranscriptRow: Equatable
 				}
 				return []
 			}
-			let merged = ConversationNetFileChanges.merge(completedChanges)
+			let turnID = first.id.components(separatedBy: ":").first ?? first.id
+			let merged: [FileChange]
+			if let prepared = preparedNetChanges[turnID], prepared.matches(completedChanges)
+			{
+				merged = prepared.changes
+			}
+			else
+			{
+				// Keep reported edits visible if preparation is missing or no longer matches.
+				merged = completedChanges
+			}
 			var emittedCompletedChanges = false
 			for entry in pendingChanges
 			{
@@ -147,7 +163,6 @@ enum ConversationTranscriptRow: Equatable
 					}
 					emittedCompletedChanges = true
 					// Keep the summary distinct from tool entries hidden by work folding.
-					let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
 					rows.append(.message(ConversationEntry(
 						id: "\(turnID):file-change-summary",
 						kind: entry.kind,
@@ -295,19 +310,30 @@ enum ConversationTranscriptRow: Equatable
 		expandedTurnIDs: Set<String>
 	) -> [Self]
 	{
-		let hiddenIDs = workEntryIDs.reduce(into: Set<String>())
-		{
-			if !expandedTurnIDs.contains($1.key)
-			{
-				$0.formUnion($1.value)
-			}
-		}
+		let hiddenIDs = hiddenWorkEntryIDs(
+			workEntryIDs: workEntryIDs,
+			expandedTurnIDs: expandedTurnIDs
+		)
 		return rows.filter
 		{
 			$0.sourceEntryID.map
 			{
 				!hiddenIDs.contains($0)
 			} ?? true
+		}
+	}
+
+	static func hiddenWorkEntryIDs(
+		workEntryIDs: [String: Set<String>],
+		expandedTurnIDs: Set<String>
+	) -> Set<String>
+	{
+		workEntryIDs.reduce(into: Set<String>())
+		{
+			if !expandedTurnIDs.contains($1.key)
+			{
+				$0.formUnion($1.value)
+			}
 		}
 	}
 

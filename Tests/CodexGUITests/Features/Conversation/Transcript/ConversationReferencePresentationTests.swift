@@ -154,7 +154,7 @@ struct ConversationReferencePresentationTests
 		}
 	}
 
-	@Test func reportedEditsFollowReplyAndStayInsideTheirTurn() throws
+	@Test func reportedEditsFollowReplyAndStayInsideTheirTurn() async throws
 	{
 		let change = try #require(FileChange(json: [
 			"path": "/tmp/a.py",
@@ -185,9 +185,14 @@ struct ConversationReferencePresentationTests
 				body: "Next"
 			),
 		]
+		let prepared = try #require(await ConversationNetFileChangePreparation().prepare(
+			TranscriptPreparationCoordinator.fileChangeSources(from: entries),
+			context: "reported-edits"
+		))
 		let rows = ConversationTranscriptRow.make(
 			entries: entries,
-			projectPath: "/tmp"
+			projectPath: "/tmp",
+			preparedNetChanges: prepared
 		)
 		#expect(rows.map(\.id) == ["one:reply", "one:file-change-summary", "two:user"])
 		let card = ConversationFileChangeCollectionItem()

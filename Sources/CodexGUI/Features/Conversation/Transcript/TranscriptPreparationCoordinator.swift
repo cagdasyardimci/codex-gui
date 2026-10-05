@@ -67,11 +67,23 @@ final class TranscriptPreparationCoordinator
 
 	private let contentCache = ConversationContentCache()
 	private let navigationCache = ConversationTurnSummary.Cache()
+	private let netChangePreparation: ConversationNetFileChangePreparation
 	private(set) var turnSummaries: [ConversationTurnSummary] = []
+	private(set) var preparedNetChanges: [String: ConversationNetFileChangePreparation.Prepared] =
+		[:]
+	private(set) var contentPreparationRequestCount = 0
 	private var preparedContents: [String: PreparedConversationContent] = [:]
 	private var preparedKeys: [String: ContentKey] = [:]
 	private var preparationTask: Task<Void, Never>?
 	private var renderGeneration = 0
+
+	init(
+		netChangePreparation: ConversationNetFileChangePreparation =
+			ConversationNetFileChangePreparation()
+	)
+	{
+		self.netChangePreparation = netChangePreparation
+	}
 
 	func waitForRendering() async
 	{
@@ -90,9 +102,14 @@ final class TranscriptPreparationCoordinator
 		let generation = renderGeneration
 		let existingContents = preparedContents
 		let existingKeys = preparedKeys
+		let changeSources = Self.fileChangeSources(from: nextEntries)
 		preparationTask = Task
 		{
-			[weak self, contentCache, navigationCache] in
+			[weak self, contentCache, navigationCache, netChangePreparation] in
+			async let netChanges = netChangePreparation.prepare(
+				changeSources,
+				context: context
+			)
 			var contents: [String: PreparedConversationContent] = [:]
 			for (entry, key) in zip(
 				nextEntries,
@@ -115,6 +132,7 @@ final class TranscriptPreparationCoordinator
 				}
 				else
 				{
+					self?.contentPreparationRequestCount += 1
 					contents[entry.id] = await contentCache.content(
 						body: key.body,
 						markdown: key.markdown,
@@ -131,7 +149,9 @@ final class TranscriptPreparationCoordinator
 				from: ConversationTurnSummary.sources(from: nextEntries),
 				context: context
 			)
-			guard let summaries, !Task.isCancelled, generation == self.renderGeneration
+			let changes = await netChanges
+			guard let summaries, let changes, !Task.isCancelled,
+					generation == self.renderGeneration
 			else
 			{
 				return
@@ -149,7 +169,40 @@ final class TranscriptPreparationCoordinator
 			})
 			self.preparedContents = contents
 			self.turnSummaries = summaries
+			self.preparedNetChanges = changes
 			onPrepared(contents)
+		}
+	}
+
+	static func fileChangeSources(from entries: [ConversationEntry])
+		-> [ConversationNetFileChangePreparation.Source]
+	{
+		var turnIDs: [String] = []
+		var changesByTurn: [String: [FileChange]] = [:]
+		for entry in entries
+		{
+			guard case .fileChanges(
+				let changes,
+				let status
+			) = entry.activity,
+				status == "completed"
+			else
+			{
+				continue
+			}
+			let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
+			if changesByTurn[turnID] == nil
+			{
+				turnIDs.append(turnID)
+			}
+			changesByTurn[turnID, default: []].append(contentsOf: changes)
+		}
+		return turnIDs.map
+		{
+			ConversationNetFileChangePreparation.Source(
+				turnID: $0,
+				changes: changesByTurn[$0] ?? []
+			)
 		}
 	}
 }

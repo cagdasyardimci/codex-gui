@@ -232,6 +232,100 @@ struct TranscriptPreparationCoordinatorTests
 		#expect(publishedIDs == [[entry.id], [], [entry.id]])
 	}
 
+	@Test func unchangedReportedChangesArePreparedOnceAcrossStreamingText() async throws
+	{
+		let requests = NetChangeRequests()
+		let coordinator = TranscriptPreparationCoordinator(
+			netChangePreparation: ConversationNetFileChangePreparation(merge:
+				{
+					await requests.merge($0)
+				})
+		)
+		let change = try #require(FileChange(json: [
+			"path": "/tmp/streamed.swift",
+			"kind": "update",
+			"diff": "@@ -1 +1 @@\n-old\n+new",
+		]))
+		var entries = [
+			ConversationEntry(
+				id: "turn:request",
+				kind: .user,
+				title: "You",
+				body: "Request"
+			),
+			ConversationEntry(
+				id: "turn:edit",
+				kind: .tool,
+				title: "Changes",
+				body: "streamed.swift",
+				activity: .fileChanges(
+					[change],
+					status: "completed"
+				)
+			),
+			ConversationEntry(
+				id: "turn:reply",
+				kind: .agent,
+				title: "Codex",
+				body: ""
+			),
+		]
+		for body in ["First", "Streamed", "Latest"]
+		{
+			entries[2].body = body
+			coordinator.prepare(
+				entries,
+				keys: entries.map
+				{
+					TranscriptPreparationCoordinator.ContentKey.make(
+						for: $0,
+						expanded: false
+					)
+				},
+				context: "owner"
+			)
+			{
+				_ in
+			}
+			await coordinator.waitForRendering()
+			#expect(coordinator.preparedNetChanges["turn"]?.matches([change]) == true)
+		}
+		#expect(await requests.count == 1)
+		#expect(coordinator.turnSummaries.first?.reply == "Latest")
+		entries[1].activity = .fileChanges(
+			[change],
+			status: "inProgress"
+		)
+		coordinator.prepare(
+			entries,
+			keys: entries.map
+			{
+				TranscriptPreparationCoordinator.ContentKey.make(
+					for: $0,
+					expanded: false
+				)
+			},
+			context: "owner"
+		)
+		{
+			_ in
+		}
+		await coordinator.waitForRendering()
+		#expect(coordinator.preparedNetChanges.isEmpty)
+		#expect(await requests.count == 1)
+	}
+
+	private actor NetChangeRequests
+	{
+		private(set) var count = 0
+
+		func merge(_ changes: [FileChange]) -> [FileChange]
+		{
+			count += 1
+			return changes
+		}
+	}
+
 	@Test func acceptedGenerationPublishesMatchingMessageContentAndTurnPreview() async throws
 	{
 		let coordinator = TranscriptPreparationCoordinator()
