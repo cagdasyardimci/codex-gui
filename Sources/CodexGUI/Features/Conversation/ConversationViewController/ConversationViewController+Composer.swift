@@ -176,12 +176,12 @@ extension ConversationViewController
 		composer.isAutomaticQuoteSubstitutionEnabled = false
 		composer.isAutomaticDashSubstitutionEnabled = false
 		composer.isAutomaticTextReplacementEnabled = false
-		composer.font = .systemFont(ofSize: 15)
+		composer.font = .systemFont(ofSize: 14)
 		composer.textColor = .labelColor
 		composer.insertionPointColor = .labelColor
 		composer.drawsBackground = false
 		composer.textContainerInset = NSSize(
-			width: 4,
+			width: 0,
 			height: 8
 		)
 		composer.isHorizontallyResizable = false
@@ -196,10 +196,10 @@ extension ConversationViewController
 		composerScrollView.autohidesScrollers = true
 		composerScrollView.drawsBackground = false
 		composerScrollView.borderType = .noBorder
-		composerHeightConstraint = composerScrollView.heightAnchor.constraint(equalToConstant: 46)
+		composerHeightConstraint = composerScrollView.heightAnchor.constraint(equalToConstant: 49)
 		composerHeightConstraint?.priority = .defaultHigh
 		composerHeightConstraint?.isActive = true
-		composerScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 46).isActive = true
+		composerScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 49).isActive = true
 		composer.onImage =
 		{
 			[weak self] image, title in self?.attachImage(
@@ -496,7 +496,7 @@ extension ConversationViewController
 			layoutManager.usedRect(for: textContainer).height
 				+ composer.textContainerInset.height * 2 + 12
 		let availableHeight = max(
-			46,
+			49,
 			view.bounds.height * 0.25
 		)
 		let height = min(
@@ -504,7 +504,7 @@ extension ConversationViewController
 			min(
 				availableHeight,
 				max(
-					46,
+					49,
 					contentHeight
 				)
 			)

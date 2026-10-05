@@ -125,7 +125,7 @@ final class ConversationViewController: NSViewController,
 	let composerScrollView = NSScrollView()
 	let composerSurface = DesktopSurface(
 		DesktopTheme.canvas,
-		cornerRadius: 16,
+		cornerRadius: 24,
 		bordered: true
 	)
 	var composerHeightConstraint: NSLayoutConstraint?
