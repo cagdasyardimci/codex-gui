@@ -29,6 +29,7 @@ extension MainWindowController
 	private enum ToolbarLayout
 	{
 		static let controlSize: CGFloat = 28
+		static let rowHeight: CGFloat = 34
 		static let controlSpacing: CGFloat = 6
 		static let horizontalInset: CGFloat = 8
 		static let titleSpacing: CGFloat = 8
@@ -85,7 +86,7 @@ extension MainWindowController
 				lessThanOrEqualToConstant: ToolbarLayout.controlSize + ToolbarLayout.titleSpacing
 					+ ToolbarLayout.maximumTitleWidth
 			),
-			titleContainer.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize),
+			titleContainer.heightAnchor.constraint(equalToConstant: ToolbarLayout.rowHeight),
 		])
 	}
 
@@ -503,7 +504,7 @@ extension MainWindowController
 			.required,
 			for: .horizontal
 		)
-		stack.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
+		stack.heightAnchor.constraint(equalToConstant: ToolbarLayout.rowHeight).isActive = true
 		return stack
 	}
 
