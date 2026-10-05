@@ -61,6 +61,11 @@ final class GitReviewRuntime
 		dispatch(.close)
 	}
 
+	func setReportedChanges(_ changes: [FileChange]?)
+	{
+		dispatch(.setReportedChanges(changes))
+	}
+
 	func reload()
 	{
 		dispatch(.reload)

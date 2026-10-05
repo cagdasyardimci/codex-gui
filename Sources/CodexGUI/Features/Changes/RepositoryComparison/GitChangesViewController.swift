@@ -92,6 +92,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	}
 	private var diffLayoutPreference = GitDiffLayoutPreference.automatic
 	private var diffLayoutOwner: FeaturePresentationOwner?
+	private var renderedComparisonScope: GitComparisonScope?
 	private var diffViews: [GitAdaptiveDiffView] = []
 	private var largeComparisonBanner: NSView?
 	private let largeComparisonLabel = NSTextField(wrappingLabelWithString: "")
@@ -240,13 +241,13 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		navigatorHost.layer?.masksToBounds = true
 		navigatorHost.addSubview(navigator)
 		navigator.translatesAutoresizingMaskIntoConstraints = false
-		let navigatorWidth = navigatorHost.widthAnchor.constraint(equalToConstant: 280)
+		let navigatorWidth = navigatorHost.widthAnchor.constraint(equalToConstant: 220)
 		NSLayoutConstraint.activate([
 			navigatorWidth,
 			navigator.leadingAnchor.constraint(equalTo: navigatorHost.leadingAnchor),
 			navigator.topAnchor.constraint(equalTo: navigatorHost.topAnchor),
 			navigator.bottomAnchor.constraint(equalTo: navigatorHost.bottomAnchor),
-			navigator.widthAnchor.constraint(equalToConstant: 280),
+			navigator.widthAnchor.constraint(equalToConstant: 220),
 		])
 		let body = AppKitLayout.horizontalStack(
 			[contentScroll, rule, navigatorHost],
@@ -254,16 +255,17 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		)
 		body.alignment = .top
 		contentScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
-		let layout = NSStackView(views: [tab, toolbarScroll, banner, body])
+		statusLabel.isHidden = true
+		let layout = NSStackView(views: [tab, toolbarScroll, statusLabel, banner, body])
 		layout.orientation = .vertical
 		layout.alignment = .leading
-		layout.spacing = 8
+		layout.spacing = 0
 		AppKitLayout.pin(
 			layout,
 			to: surface,
-			inset: 8
+			inset: 0
 		)
-		for row in [tab, toolbarScroll, banner, body]
+		for row in [tab, toolbarScroll, statusLabel, banner, body]
 		{
 			row.widthAnchor.constraint(equalTo: layout.widthAnchor).isActive = true
 		}
@@ -276,7 +278,8 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		])
 		navigatorTransition = GitNavigatorTransition(
 			widthConstraint: navigatorWidth,
-			layoutView: surface
+			layoutView: surface,
+			expandedWidth: 220
 		)
 		render(runtime.state)
 	}
@@ -531,7 +534,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	private func configureNavigator()
 	{
-		filterField.placeholderString = "Filter files..."
+		filterField.placeholderString = "Filter files…"
 		filterField.delegate = self
 		filterField.font = .systemFont(ofSize: 14)
 		filterField.isBezeled = false
@@ -602,6 +605,12 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			diffLayoutPreference = .automatic
 			applyDiffLayoutPreference()
 		}
+		if state.scope == .lastTurn, renderedComparisonScope != .lastTurn
+		{
+			diffLayoutPreference = .unified
+			applyDiffLayoutPreference()
+		}
+		renderedComparisonScope = state.isOpen ? state.scope : nil
 		let previousStatus = statusLabel.stringValue
 		rendering = true
 		defer
@@ -618,6 +627,8 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		}
 		let current = updateComparisonControls(state)
 		updateStatusLabel(state)
+		statusLabel.isHidden = state.failure == nil && state.pendingRequest == nil
+			&& !(state.snapshot?.files.isEmpty ?? true)
 
 		guard let snapshot = state.snapshot
 		else
@@ -673,6 +684,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		if treeRows.isEmpty && !state.filter.isEmpty
 		{
 			statusLabel.stringValue += " · No matching filtered files."
+			statusLabel.isHidden = false
 		}
 		updateDiffSections(
 			presentation: presentation,
@@ -877,8 +889,16 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		}
 		if state.scope == .lastTurn
 		{
-			statusLabel.stringValue += " · pre-turn tracked files → current tracked working tree"
-				+ "; includes later edits"
+			if state.reportedChanges != nil
+			{
+				statusLabel.stringValue += " · recorded edits from the latest editing turn"
+			}
+			else
+			{
+				statusLabel.stringValue += " · pre-turn tracked files → "
+					+ "current tracked working tree"
+					+ "; includes later edits"
+			}
 		}
 		if let selectionMessage = state.selectionMessage
 		{

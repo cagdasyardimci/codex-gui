@@ -476,19 +476,19 @@ extension MainWindowController
 		updateToolsToolbarControls()
 	}
 
-	func openChangesToolTab()
+	func openChangesToolTab(scope: GitComparisonScope? = nil)
 	{
 		configureToolsPaneClosing()
 		if !inspector.isShowingTools || paneController.isReviewCollapsed
 		{
 			paneController.openToolsPane
 			{
-				openCurrentChangesInToolTab()
+				openCurrentChangesInToolTab(scope: scope)
 			}
 		}
 		else
 		{
-			openCurrentChangesInToolTab()
+			openCurrentChangesInToolTab(scope: scope)
 		}
 		updateToolsToolbarControls()
 	}

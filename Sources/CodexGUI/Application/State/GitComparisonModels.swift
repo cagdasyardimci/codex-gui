@@ -26,6 +26,7 @@ struct GitComparisonRequest: Equatable, Sendable
 	var targetRevision: String? = nil
 	var lastTurnBaseline: GitTurnBaselineReference? = nil
 	var lastTurnID: String? = nil
+	var reportedChanges: [FileChange]? = nil
 }
 
 enum GitComparisonFailure: Error, Equatable, Sendable
@@ -103,7 +104,7 @@ struct GitComparisonFile: Identifiable, Equatable, Sendable
 	let hunks: [GitComparisonHunk]
 }
 
-/// Immutable full-context bytes. Presentation filters must never modify this payload.
+/// Immutable comparison bytes. Presentation filters must never modify this payload.
 struct GitComparisonSnapshot: Equatable, Sendable
 {
 	let request: GitComparisonRequest
@@ -145,5 +146,6 @@ struct GitComparisonSnapshot: Equatable, Sendable
 		)
 		return "printf '%s' '" + patch.base64EncodedString()
 			+ "' | base64 -D | git -C '" + root + "' apply"
+			+ (request.reportedChanges == nil ? "" : " --unidiff-zero")
 	}
 }

@@ -55,6 +55,16 @@ enum GitReviewReducer
 				baselineFailure: baselineFailure,
 				automaticRefreshEnabled: automaticRefreshEnabled
 			)
+		case .setReportedChanges(let changes):
+			let changed = state.setReportedChanges(changes)
+			guard state.isOpen, state.scope == .lastTurn,
+					changed ||
+					((state.snapshot == nil || state.isStale) && state.pendingRequest == nil)
+			else
+			{
+				return GitReviewTransition()
+			}
+			return beginRead(state: &state)
 		case .close:
 			state.close()
 			return GitReviewTransition(
@@ -148,7 +158,8 @@ enum GitReviewReducer
 				publishes: true
 			)
 		}
-		if request.scope == .lastTurn, let failure = state.baselineFailure
+		if request.scope == .lastTurn, request.reportedChanges == nil,
+			let failure = state.baselineFailure
 		{
 			_ = state.accept(
 				.unavailable(failure),

@@ -14,6 +14,7 @@ enum GitReviewAction
 		baselineFailure: GitComparisonFailure?
 	)
 	case close
+	case setReportedChanges([FileChange]?)
 	case reload
 	case repositoryChanged
 	case selectScope(GitComparisonScope)

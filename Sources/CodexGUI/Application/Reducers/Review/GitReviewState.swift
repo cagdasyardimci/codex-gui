@@ -6,6 +6,7 @@ struct GitReviewState
 	private(set) var owner: FeaturePresentationOwner?
 	private(set) var isOpen = false
 	private(set) var lastTurnID: String?
+	private(set) var reportedChanges: [FileChange]?
 	private(set) var baselineRevision = 0
 	private(set) var baselineFailure: GitComparisonFailure?
 	var scope: GitComparisonScope = .uncommitted
@@ -26,6 +27,18 @@ struct GitReviewState
 	mutating func selectScope(_ value: GitComparisonScope)
 	{
 		scope = value
+	}
+
+	@discardableResult
+	mutating func setReportedChanges(_ changes: [FileChange]?) -> Bool
+	{
+		guard reportedChanges != changes
+		else
+		{
+			return false
+		}
+		reportedChanges = changes
+		return true
 	}
 
 	mutating func setRevisions(
@@ -153,7 +166,8 @@ struct GitReviewState
 			generation: generation,
 			baseRevision: baseRevision,
 			targetRevision: targetRevision,
-			lastTurnID: scope == .lastTurn ? lastTurnID : nil
+			lastTurnID: scope == .lastTurn ? lastTurnID : nil,
+			reportedChanges: scope == .lastTurn ? reportedChanges : nil
 		)
 		pendingRequest = request
 		failure = nil

@@ -183,6 +183,16 @@ extension MainWindowController
 
 	func configureConversationActions(target: WorkspaceIntentTarget)
 	{
+		conversation.onViewChanges =
+		{
+			[weak self] in
+			guard target.accepts(.loadEarlierTurns)
+			else
+			{
+				return
+			}
+			self?.openChangesToolTab(scope: .lastTurn)
+		}
 		let skillStore = currentStore
 		conversation.onSelectSkill =
 		{

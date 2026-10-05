@@ -21,6 +21,13 @@ struct LocalGitComparisonService: GitComparisonService
 	{
 		if request.scope == .lastTurn
 		{
+			if let changes = request.reportedChanges
+			{
+				return GitReportedTurnComparison.compare(
+					changes,
+					request: request
+				)
+			}
 			return await baselineService.compare(request)
 		}
 		return await GitSubprocessCancellation.detached
