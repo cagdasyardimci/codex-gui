@@ -23,6 +23,14 @@ enum DesktopTheme
 		light: 0xF5F5F5,
 		dark: 0x272727
 	)
+	static let terminalText = color(
+		light: 0x606365,
+		dark: 0xB9B9B9
+	)
+	static let terminalMutedText = color(
+		light: 0x8C8F90,
+		dark: 0x999999
+	)
 	static let inspector = color(
 		light: 0xF4F4F4,
 		dark: 0x2D2D2D

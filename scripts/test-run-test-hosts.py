@@ -24,6 +24,7 @@ class TestHostPlanTests(unittest.TestCase):
             "DesktopLayoutTests",
             "closedWindowDetachesItsStorePublicationObserver",
             "shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning",
+            "terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus",
             "taskTitleScrollsOnceAndHoverCardUsesMetadataForItsOwnRow",
             "railJumpsBookmarksAndClearsOnChatSwitch",
             "searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding",
@@ -37,7 +38,7 @@ class TestHostPlanTests(unittest.TestCase):
     def test_all_hosts_use_completion_checker(self):
         with patch.object(RUNNER.subprocess, "call", return_value=0) as call:
             self.assertEqual(RUNNER.main(["--", "swift", "test", "--no-parallel"]), 0)
-        self.assertEqual(call.call_count, 11)
+        self.assertEqual(call.call_count, 12)
         for invocation in call.call_args_list:
             self.assertEqual(Path(invocation.args[0][1]).name, "run-swift-tests.py")
             self.assertEqual(invocation.args[0][2:5], ["--", "swift", "test"])

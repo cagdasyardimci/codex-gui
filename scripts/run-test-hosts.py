@@ -14,6 +14,7 @@ ISOLATED_HOSTS = (
     ("DesktopLayoutTests",) * 2,
     ("closedWindowDetachesItsStorePublicationObserver",) * 2,
     ("shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning",) * 2,
+    ("terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus",) * 2,
     ("taskTitleScrollsOnceAndHoverCardUsesMetadataForItsOwnRow",) * 2,
     ("railJumpsBookmarksAndClearsOnChatSwitch",) * 2,
     ("searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding",) * 2,
