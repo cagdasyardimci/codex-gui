@@ -9,6 +9,7 @@ final class WindowChromeViewController: NSViewController
 	private var accountWidth: NSLayoutConstraint!
 	private var trailingInset: NSLayoutConstraint!
 	private var bottomInset: NSLayoutConstraint!
+	private var topInset: NSLayoutConstraint!
 	private var splitInset: NSLayoutConstraint!
 
 	func setGitReviewFocused(_ focused: Bool)
@@ -17,6 +18,7 @@ final class WindowChromeViewController: NSViewController
 		accountWidth.constant = focused ? 0 : 52
 		trailingInset.constant = focused ? 0 : -4
 		bottomInset.constant = focused ? 0 : -4
+		topInset.constant = focused ? 0 : 2
 		splitInset.constant = focused ? 0 : 1
 		panel.isGitReviewFocused = focused
 		view.needsLayout = true
@@ -51,6 +53,10 @@ final class WindowChromeViewController: NSViewController
 			equalTo: view.bottomAnchor,
 			constant: -4
 		)
+		topInset = panel.topAnchor.constraint(
+			equalTo: view.topAnchor,
+			constant: 2
+		)
 		splitInset = split.view.leadingAnchor.constraint(
 			equalTo: panel.leadingAnchor,
 			constant: 1
@@ -83,7 +89,7 @@ final class WindowChromeViewController: NSViewController
 			accountButton.centerYAnchor.constraint(equalTo: avatar.centerYAnchor),
 			panel.leadingAnchor.constraint(equalTo: column.trailingAnchor),
 			trailingInset,
-			panel.topAnchor.constraint(equalTo: view.topAnchor),
+			topInset,
 			bottomInset,
 			splitInset,
 			split.view.trailingAnchor.constraint(equalTo: panel.trailingAnchor),

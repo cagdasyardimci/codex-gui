@@ -18,8 +18,10 @@ final class WindowPaneController
 	private let layoutStore: WindowLayoutStore?
 	private var expandedNavigationWidth = WindowPaneLayout.navigationWidth
 	private var expandedReviewWidth = WindowPaneLayout.reviewWidth
+	private var expandedSummaryWidth = InspectorViewController.summaryPaneWidth
 	private var expandedToolsWidth = WindowPaneLayout.reviewWidth
 	private var usesToolsSizing = false
+	private var usesSummarySizing = true
 	private var reviewVisibility: WindowReviewVisibility = .automatic
 	private var reviewAutomaticallyCollapsed = false
 	private var hasPresentedWindow = false
@@ -388,7 +390,7 @@ final class WindowPaneController
 			return
 		}
 		let width = min(
-			expandedReviewWidth,
+			expandedSummaryWidth,
 			max(
 				WindowPaneLayout.reviewMinimumWidth,
 				reviewViewportWidth - WindowPaneLayout
@@ -545,12 +547,14 @@ final class WindowPaneController
 		{
 			updateExpandedSummaryLayout()
 		}
-		guard usesToolsSizing != inspector.isShowingTools
+		let summarySizing = !inspector.isShowingTools && !inspector.isShowingDetails
+		guard usesToolsSizing != inspector.isShowingTools || usesSummarySizing != summarySizing
 		else
 		{
 			return
 		}
 		usesToolsSizing = inspector.isShowingTools
+		usesSummarySizing = summarySizing
 		if !usesToolsSizing
 		{
 			setToolsExpanded(false)
@@ -683,7 +687,9 @@ final class WindowPaneController
 			workspaceFilesExpanded: workspaceFilesExpanded,
 			expandedToolsWidth: expandedToolsWidth,
 			workspaceFilesWidth: workspaceFilesWidth,
-			expandedReviewWidth: expandedReviewWidth,
+			// A trailing-aligned summary reserves its card and trailing gutter, rather than
+			// leaving the saved detail-pane width as blank space beside the reading column.
+			expandedReviewWidth: usesSummarySizing ? expandedSummaryWidth : expandedReviewWidth,
 			reviewVisibility: reviewVisibility
 		)
 	}
@@ -722,6 +728,11 @@ final class WindowPaneController
 							reviewViewportWidth
 						)
 					)
+				}
+				else if usesSummarySizing
+				{
+					expandedSummaryWidth = WindowPaneLayout
+						.restoredReviewWidth(reviewViewportWidth)
 				}
 				else
 				{

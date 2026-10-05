@@ -15,6 +15,11 @@ final class InspectorViewController: NSViewController
 		static let detailHeight: CGFloat = 440
 	}
 
+	static var summaryPaneWidth: CGFloat
+	{
+		Layout.summaryWidth + Layout.summaryTrailingInset
+	}
+
 	let gitChanges = GitChangesViewController()
 	let panels = ContextPanelShell()
 	let changes = ChangesViewController()
@@ -473,6 +478,7 @@ final class InspectorViewController: NSViewController
 		toolsTabs.view.isHidden = !isShowingTools || isShowingExpandedConversation
 
 		let fullBleedChanges = showDetails && panels.destination == .changes
+		inspectorBox?.isSummaryCard = !showDetails
 		inspectorBox?.isFullBleed = fullBleedChanges
 		boxEdgeConstraints[0].isActive = showDetails
 		summaryLeadingConstraint?.isActive = !showDetails
@@ -569,7 +575,7 @@ final class InspectorViewController: NSViewController
 		]
 		summaryLeadingConstraint = box.leadingAnchor.constraint(
 			greaterThanOrEqualTo: container.leadingAnchor,
-			constant: Layout.boxInset
+			constant: 0
 		)
 		summaryWidthLimitConstraint = box.widthAnchor
 			.constraint(lessThanOrEqualToConstant: Layout.summaryWidth)
@@ -678,28 +684,95 @@ final class InspectorViewController: NSViewController
 @MainActor
 private final class InspectorBoxSurface: NSView
 {
+	var isSummaryCard = true
+	{
+		didSet
+		{
+			updateShadow()
+			needsDisplay = true
+		}
+	}
+
 	var isFullBleed = false
 	{
 		didSet
 		{
+			updateShadow()
 			needsDisplay = true
 		}
+	}
+
+	override init(frame frameRect: NSRect)
+	{
+		super.init(frame: frameRect)
+		wantsLayer = true
+		updateShadow()
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
+	override func layout()
+	{
+		super.layout()
+		updateShadow()
 	}
 
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
+		updateShadow()
 		needsDisplay = true
 	}
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		DesktopTheme.inspector.setFill()
+		(isSummaryCard ? DesktopTheme.summaryCard : DesktopTheme.inspector).setFill()
 		let radius: CGFloat = isFullBleed ? 0 : 16
-		NSBezierPath(
-			roundedRect: bounds,
+		let borderWidth: CGFloat = isSummaryCard && !isFullBleed ? 0.5 : 0
+		let path = NSBezierPath(
+			roundedRect: bounds.insetBy(
+				dx: borderWidth / 2,
+				dy: borderWidth / 2
+			),
 			xRadius: radius,
 			yRadius: radius
-		).fill()
+		)
+		path.fill()
+		if borderWidth > 0
+		{
+			DesktopTheme.border.setStroke()
+			path.lineWidth = borderWidth
+			path.stroke()
+		}
+	}
+
+	private func updateShadow()
+	{
+		guard let layer
+		else
+		{
+			return
+		}
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		layer.masksToBounds = false
+		layer.shadowColor = NSColor.black.cgColor
+		layer.shadowOffset = CGSize(
+			width: 0,
+			height: -2
+		)
+		layer.shadowRadius = 6
+		let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+		layer.shadowOpacity = isSummaryCard && !isFullBleed ? (isDark ? 0.14 : 0.06) : 0
+		layer.shadowPath = CGPath(
+			roundedRect: bounds,
+			cornerWidth: 16,
+			cornerHeight: 16,
+			transform: nil
+		)
+		CATransaction.commit()
 	}
 }

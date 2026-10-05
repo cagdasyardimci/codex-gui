@@ -27,6 +27,10 @@ enum DesktopTheme
 		light: 0xF4F4F4,
 		dark: 0x2D2D2D
 	)
+	static let summaryCard = color(
+		light: 0xFFFFFF,
+		dark: 0x2D2D2D
+	)
 	static let chrome = color(
 		light: 0xF7F7F7,
 		dark: 0x242424
@@ -52,7 +56,7 @@ enum DesktopTheme
 		dark: 0x4A4A4A
 	)
 	static let userBubble = color(
-		light: 0xDDE8F8,
+		light: 0xE8F3FE,
 		dark: 0x223D72
 	)
 
