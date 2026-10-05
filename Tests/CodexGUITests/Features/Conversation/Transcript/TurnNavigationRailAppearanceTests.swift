@@ -507,6 +507,126 @@ struct TurnNavigationRailAppearanceTests
 		#expect(jumped == updated[10])
 	}
 
+	@Test func contentResidencyRetainsDuplicateTurnMarksFocusAndReadingPosition() throws
+	{
+		_ = NSApplication.shared
+		var initialSummaries = summaries(count: 96)
+		initialSummaries[11] = ConversationTurnSummary(
+			turnID: initialSummaries[10].turnID,
+			entryID: "duplicate:reference",
+			title: "Duplicate turn",
+			reply: "Select to view this turn.",
+			isContentLoaded: false
+		)
+		let updates = AppearanceUpdates()
+		let rail = makeRail(
+			initialSummaries,
+			updates: updates
+		)
+		let window = NSWindow(
+			contentRect: rail.frame,
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentView = rail
+		defer
+		{
+			window.close()
+		}
+		let initial = try marks(in: rail)
+		let focused = initial[11]
+		#expect(window.makeFirstResponder(focused))
+		rail.updateActiveTurn("turn-95")
+		rail.layoutSubtreeIfNeeded()
+		rail.scrollWheel(with: try wheelEvent(100))
+		let scroll = try #require(rail.subviews.first as? NSScrollView)
+		let origin = scroll.contentView.bounds.origin
+		let frames = initial.map(\.frame)
+		updates.reset()
+		let resident = initialSummaries.enumerated().map
+		{
+			index, summary in
+			ConversationTurnSummary(
+				turnID: summary.turnID,
+				entryID: "\(summary.turnID):loaded-\(index)",
+				title: "Loaded \(index)",
+				reply: "Current reply \(index)"
+			)
+		}
+		rail.render(resident)
+		#expect(!rail.needsLayout)
+		let retained = try marks(in: rail)
+		#expect(zip(
+			initial,
+			retained
+		).allSatisfy
+		{
+			pair in pair.0 === pair.1
+		})
+		#expect(retained.map(\.frame) == frames)
+		#expect(scroll.contentView.bounds.origin == origin)
+		#expect(window.firstResponder === focused)
+		#expect(updates.indices.isEmpty)
+		#expect(focused.entryID == resident[11].entryID)
+		#expect(focused.accessibilityLabel() == "Jump to turn: Loaded 11")
+		var jumped: ConversationTurnSummary?
+		rail.onJump =
+		{
+			jumped = $0
+		}
+		focused.performClick(nil)
+		#expect(jumped == resident[11])
+		rail.render(initialSummaries)
+		#expect(try marks(in: rail)[11] === focused)
+		#expect(focused.entryID == initialSummaries[11].entryID)
+		focused.performClick(nil)
+		#expect(jumped == initialSummaries[11])
+	}
+
+	@Test func scrollDismissalDoesNotRestoreOldHoverAfterResidencyChanges() throws
+	{
+		let initialSummaries = summaries(count: 96)
+		let rail = makeRail(
+			initialSummaries,
+			updates: AppearanceUpdates()
+		)
+		let initial = try marks(in: rail)
+		rail.updateActiveTurn("turn-95")
+		rail.layoutSubtreeIfNeeded()
+		initial[20].mouseEntered(with: try hoverEvent(.mouseEntered))
+		#expect(initial[20].isEmphasized)
+		rail.scrollWheel(with: try wheelEvent(30))
+		expectAppearance(
+			initial,
+			highlighted: 95
+		)
+		let resident = initialSummaries.map
+		{
+			ConversationTurnSummary(
+				turnID: $0.turnID,
+				entryID: $0.turnID + ":reference",
+				title: $0.title,
+				reply: $0.reply,
+				isContentLoaded: false,
+				isPreviewLoaded: true
+			)
+		}
+		rail.render(resident)
+		expectAppearance(
+			try marks(in: rail),
+			highlighted: 95
+		)
+		#expect(zip(
+			initial,
+			try marks(in: rail)
+		).allSatisfy
+		{
+			pair in pair.0 === pair.1
+		})
+	}
+
 	@Test func identityIndicesKeepFirstMatchesAndRefreshWhenTurnIDsChange() throws
 	{
 		let first = ConversationTurnSummary(

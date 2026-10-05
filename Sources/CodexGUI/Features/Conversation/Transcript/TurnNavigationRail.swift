@@ -42,6 +42,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 	private var marks: [TurnNavigationMark] = []
 	private var entryIndices: [String: Int] = [:]
 	private var turnLocations: [String: TurnLocation] = [:]
+	private weak var hoveredMark: TurnNavigationMark?
 	private var hoveredEntryID: String?
 	private var highlightedIndex: Int?
 	private var needsActiveTurnReveal = false
@@ -87,14 +88,19 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		}
 		let previousIDs = summaries.map(\.entryID)
 		let nextIDs = next.map(\.entryID)
-		let identitiesChanged = previousIDs != nextIDs
-		let prependedHistory = !previousIDs.isEmpty && nextIDs.count > previousIDs.count
-			&& Array(nextIDs.suffix(previousIDs.count)) == previousIDs
+		let previousTurns = summaries.map(\.turnID)
+		let nextTurns = next.map(\.turnID)
+		// Loading or evicting content changes its entry target, not the ordered rail turns.
+		// Equal entry targets also retain the legacy first-match behavior for duplicate IDs.
+		let identitiesChanged = previousIDs != nextIDs && previousTurns != nextTurns
+		let prependedHistory = !previousTurns.isEmpty && nextTurns.count > previousTurns.count
+			&& Array(nextTurns.suffix(previousTurns.count)) == previousTurns
 		summaries = next
 		indexSummaries()
 		if identitiesChanged
 		{
 			needsActiveTurnReveal = !prependedHistory
+			hoveredMark = nil
 			hoveredEntryID = nil
 			dismissPreview()
 			marks.forEach
@@ -103,19 +109,17 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 			}
 			marks = next.map
 			{
-				summary in
+				_ in
 				let mark = TurnNavigationMark(
 					title: "",
 					target: self,
 					action: #selector(jump(_:))
 				)
-				mark.entryID = summary.entryID
 				mark.isBordered = false
 				mark.onScrollWheel =
 				{
 					[weak self] event in self?.scrollWheel(with: event)
 				}
-				mark.setAccessibilityLabel("Jump to turn: \(summary.title)")
 				mark.onEnter =
 				{
 					[weak self, weak mark] in
@@ -124,6 +128,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 					{
 						return
 					}
+					self?.hoveredMark = mark
 					self?.hoveredEntryID = mark.entryID
 					self?.updateMarkAppearance()
 					self?.showPreview(for: mark)
@@ -135,8 +140,9 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 				mark.onExit =
 				{
 					[weak self, weak mark] in
-					if self?.hoveredEntryID == mark?.entryID
+					if self?.hoveredMark === mark
 					{
+						self?.hoveredMark = nil
 						self?.hoveredEntryID = nil
 						self?.updateMarkAppearance()
 					}
@@ -146,14 +152,24 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 				document.addSubview(mark)
 				return mark
 			}
+			needsLayout = true
 		}
-		else if let previewTurnID, let location = turnLocations[previewTurnID]
+		for (index, mark) in marks.enumerated()
+		{
+			let summary = next[index]
+			mark.entryID = summary.entryID
+			mark.setAccessibilityLabel("Jump to turn: \(summary.title)")
+		}
+		if let hoveredMark
+		{
+			hoveredEntryID = hoveredMark.entryID
+		}
+		if let previewTurnID, let location = turnLocations[previewTurnID]
 		{
 			showPreview(for: marks[location.markIndex])
 		}
 		isHidden = next.isEmpty
 		updateMarkAppearance(force: identitiesChanged)
-		needsLayout = true
 	}
 
 	private func indexSummaries()
@@ -237,14 +253,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		if needsActiveTurnReveal || viewportHeightChanged
 		{
 			needsActiveTurnReveal = false
-			if let activeTurnID, let location = turnLocations[activeTurnID]
-			{
-				let mark = marks[location.summaryIndex]
-				document.scrollToVisible(mark.frame.insetBy(
-					dx: 0,
-					dy: -Self.edgeFadeHeight
-				).intersection(document.bounds))
-			}
+			revealActiveTurn()
 		}
 		updateEdgeFade()
 	}
@@ -258,6 +267,21 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		}
 		activeTurnID = turnID
 		updateMarkAppearance()
+	}
+
+	private func revealActiveTurn()
+	{
+		guard let activeTurnID, let location = turnLocations[activeTurnID],
+				marks.indices.contains(location.summaryIndex)
+		else
+		{
+			return
+		}
+		let mark = marks[location.summaryIndex]
+		document.scrollToVisible(mark.frame.insetBy(
+			dx: 0,
+			dy: -Self.edgeFadeHeight
+		).intersection(document.bounds))
 	}
 
 	override func scrollWheel(with event: NSEvent)
@@ -275,6 +299,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 
 	@objc private func railViewportChanged()
 	{
+		hoveredMark = nil
 		hoveredEntryID = nil
 		dismissPreview()
 		updateMarkAppearance()
@@ -415,7 +440,10 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		super.viewDidMoveToWindow()
 		if window == nil
 		{
+			hoveredMark = nil
+			hoveredEntryID = nil
 			dismissPreview()
+			updateMarkAppearance()
 		}
 	}
 
@@ -508,8 +536,14 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		preview.onBookmark =
 		{
 			[weak self, weak preview] in
-			self?.onBookmark?(summary)
-			preview?.setBookmarked(self?.isBookmarked?(summary) == true)
+			guard let self, let location = turnLocations[summary.turnID]
+			else
+			{
+				return
+			}
+			let current = summaries[location.summaryIndex]
+			onBookmark?(current)
+			preview?.setBookmarked(isBookmarked?(current) == true)
 		}
 		let panel = NSPanel(
 			contentRect: preview.bounds,
