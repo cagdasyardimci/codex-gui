@@ -196,6 +196,35 @@ extension ConversationViewController
 		return item
 	}
 
+	private func toggleFileChanges(_ id: String)
+	{
+		guard let index = displayedRows.firstIndex(where:
+			{
+				$0.id == id
+			})
+		else
+		{
+			return
+		}
+		let anchor = readingAnchor()
+		if !expandedFileChangeIDs.insert(id).inserted
+		{
+			expandedFileChangeIDs.remove(id)
+		}
+		collectionView.reloadItems(at: [IndexPath(
+			item: index,
+			section: 0
+		)])
+		(collectionView.collectionViewLayout as? ConversationFlowLayout)?.invalidateContentMetrics()
+		view.layoutSubtreeIfNeeded()
+		collectionView.layoutSubtreeIfNeeded()
+		restoreReadingPosition(
+			followOutput: false,
+			anchor: anchor
+		)
+		readingPositionChanged()
+	}
+
 	private func configureTranscriptItem(
 		_ item: NSCollectionViewItem,
 		for row: ConversationTranscriptRow
@@ -210,7 +239,31 @@ extension ConversationViewController
 		{
 			(item as? ConversationFileChangeCollectionItem)?.configure(
 				changes,
-				status: status
+				status: status,
+				projectPath: projectPath,
+				expanded: expandedFileChangeIDs.contains(entry.id),
+				onViewChanges:
+				{
+					[weak self] in
+					guard let self, self.renderedContext == context,
+							self.requestedContext == context
+					else
+					{
+						return
+					}
+					self.onViewChanges?()
+				},
+				onToggle:
+				{
+					[weak self] in
+					guard let self, self.renderedContext == context,
+							self.requestedContext == context
+					else
+					{
+						return
+					}
+					self.toggleFileChanges(entry.id)
+				}
 			)
 			return
 		}
@@ -314,11 +367,15 @@ extension ConversationViewController
 		case .turnStatus:
 			return ConversationTurnStatusCollectionItem.itemSize(width: width)
 		case .message(let entry):
-			if case .fileChanges = entry.activity
+			if case .fileChanges(
+				let changes,
+				_
+			) = entry.activity
 			{
-				return NSSize(
+				return ConversationFileChangeCollectionItem.itemSize(
+					changes: changes,
 					width: width,
-					height: 66
+					expanded: expandedFileChangeIDs.contains(entry.id)
 				)
 			}
 		}
@@ -463,6 +520,7 @@ extension ConversationViewController
 		{
 			cancelWidthChangeReadingPosition()
 			expandedEntryIDs.removeAll()
+			expandedFileChangeIDs.removeAll()
 			collapsedGroupIDs.removeAll()
 			expandedActivityIDs.removeAll()
 			activityOutputPositions.removeAll()

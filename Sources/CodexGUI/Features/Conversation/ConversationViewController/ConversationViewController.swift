@@ -24,6 +24,7 @@ final class ConversationViewController: NSViewController,
 	var onSelectApprovalMode: ((ApprovalMode) -> Void)?
 	var onInsertPath: (() -> Void)?
 	var onLoadEarlierTurns: (() -> Void)?
+	var onViewChanges: (() -> Void)?
 	var onRespond: ((PendingInteraction, InteractionResponse) -> Void)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
 	var onJumpDisplayed: (() -> Void)?
@@ -161,6 +162,7 @@ final class ConversationViewController: NSViewController,
 	var entries: [ConversationEntry] = []
 	var displayedRows: [ConversationTranscriptRow] = []
 	var collapsedGroupIDs = Set<String>()
+	var expandedFileChangeIDs = Set<String>()
 	var expandedActivityIDs = Set<String>()
 	var activityOutputPositions: [
 		String: ConversationActivityCollectionItem.OutputReadingPosition

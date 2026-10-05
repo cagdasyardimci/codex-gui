@@ -114,6 +114,54 @@ enum ConversationTranscriptRow: Equatable
 			}
 			pending.removeAll()
 		}
+		func appendPendingChanges()
+		{
+			let completedChanges = pendingChanges.flatMap
+			{
+				entry -> [FileChange] in
+				if case .fileChanges(
+					let changes,
+					let status
+				) = entry.activity,
+					status == "completed"
+				{
+					return changes
+				}
+				return []
+			}
+			let merged = ConversationNetFileChanges.merge(completedChanges)
+			var emittedCompletedChanges = false
+			for entry in pendingChanges
+			{
+				if case .fileChanges(
+					_,
+					let status
+				) = entry.activity, status == "completed"
+				{
+					guard !emittedCompletedChanges, !merged.isEmpty
+					else
+					{
+						continue
+					}
+					emittedCompletedChanges = true
+					// Keep the summary distinct from tool entries hidden by work folding.
+					let turnID = entry.id.components(separatedBy: ":").first ?? entry.id
+					rows.append(.message(ConversationEntry(
+						id: "\(turnID):file-change-summary",
+						kind: entry.kind,
+						title: entry.title,
+						body: merged.map(\.path).joined(separator: "\n"),
+						activity: .fileChanges(
+							merged,
+							status: "completed"
+						)
+					)))
+					continue
+				}
+				rows.append(.message(entry))
+			}
+			pendingChanges.removeAll()
+		}
 		for entry in entries
 		{
 			if let previous = pendingChanges.last,
@@ -121,8 +169,7 @@ enum ConversationTranscriptRow: Equatable
 				.components(separatedBy: ":").first
 			{
 				appendPendingActivityGroup()
-				rows.append(contentsOf: pendingChanges.map(Self.message))
-				pendingChanges.removeAll()
+				appendPendingChanges()
 			}
 			if entry.activity.isFileChange
 			{
@@ -185,7 +232,7 @@ enum ConversationTranscriptRow: Equatable
 			}
 		}
 		appendPendingActivityGroup()
-		rows.append(contentsOf: pendingChanges.map(Self.message))
+		appendPendingChanges()
 		// Show the clock while waiting for the first canonical item of a live turn.
 		for timing in timings where timing.status == "inProgress"
 			&& timing.startedAt != nil && !emittedTimings.contains(timing.turnID)

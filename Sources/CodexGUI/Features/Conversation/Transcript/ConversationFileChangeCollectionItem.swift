@@ -1,18 +1,25 @@
 import AppKit
 
-/// Shows only backend-reported edits; the review button retains this item's exact diff.
+/// Shows backend-reported edits and opens the shared Changes tool through its host.
 @MainActor
 final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 {
 	private let titleLabel = FileChangeTextField(labelWithString: "")
 	private let counts = FileChangeTextField(labelWithString: "")
+	private let fileList = NSStackView()
+	private let separator = NSBox()
+	private let disclosure = FileChangeReviewButton(
+		title: "",
+		target: nil,
+		action: nil
+	)
+	private var onToggle: (() -> Void)?
 	private let review = FileChangeReviewButton(
 		title: "View changes",
 		target: nil,
 		action: nil
 	)
-	private var changes: [FileChange] = []
-	private var popover: NSPopover?
+	private var onViewChanges: (() -> Void)?
 
 	override func loadView()
 	{
@@ -91,19 +98,97 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 				equalTo: view.trailingAnchor,
 				constant: -12
 			),
-			row.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+			row.centerYAnchor.constraint(
+				equalTo: view.topAnchor,
+				constant: 33
+			),
 		])
+		separator.boxType = .separator
+		separator.translatesAutoresizingMaskIntoConstraints = false
+		view.addSubview(separator)
+		fileList.orientation = .vertical
+		fileList.alignment = .leading
+		fileList.spacing = 0
+		fileList.translatesAutoresizingMaskIntoConstraints = false
+		view.addSubview(fileList)
+		NSLayoutConstraint.activate([
+			separator.topAnchor.constraint(
+				equalTo: view.topAnchor,
+				constant: 66
+			),
+			separator.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+			separator.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+			separator.heightAnchor.constraint(equalToConstant: 1),
+			fileList.topAnchor.constraint(equalTo: separator.bottomAnchor),
+			fileList.leadingAnchor.constraint(
+				equalTo: view.leadingAnchor,
+				constant: 12
+			),
+			fileList.trailingAnchor.constraint(
+				equalTo: view.trailingAnchor,
+				constant: -12
+			),
+		])
+		disclosure.target = self
+		disclosure.action = #selector(toggleFiles)
+		disclosure.isBordered = false
+		disclosure.alignment = .left
+		disclosure.font = .systemFont(ofSize: 13)
+		disclosure.contentTintColor = ConversationAttributedStringRenderer.proseColor
+		disclosure.imagePosition = .imageRight
+		disclosure.translatesAutoresizingMaskIntoConstraints = false
+		view.addSubview(disclosure)
+		NSLayoutConstraint.activate([
+			disclosure.topAnchor.constraint(equalTo: fileList.bottomAnchor),
+			disclosure.leadingAnchor.constraint(
+				equalTo: view.leadingAnchor,
+				constant: 12
+			),
+			disclosure.heightAnchor.constraint(equalToConstant: 36),
+		])
+	}
+
+	static func itemSize(
+		changes: [FileChange],
+		width: CGFloat,
+		expanded: Bool = false
+	) -> NSSize
+	{
+		NSSize(
+			width: width,
+			height: changes.isEmpty ? 66 : 75
+				+ CGFloat(expanded ? changes.count : min(
+					3,
+					changes.count
+				)) * 36
+				+ (changes.count > 3 ? 36 : 0)
+		)
 	}
 
 	func configure(
 		_ changes: [FileChange],
-		status: String
+		status: String,
+		projectPath: String? = nil,
+		expanded: Bool = false,
+		onViewChanges: (() -> Void)? = nil,
+		onToggle: (() -> Void)? = nil
 	)
 	{
 		_ = view
-		popover?.close()
-		popover = nil
-		self.changes = changes
+		self.onViewChanges = onViewChanges
+		self.onToggle = onToggle
+		disclosure.isHidden = changes.count <= 3
+		let remaining = max(
+			0,
+			changes.count - 3
+		)
+		disclosure.title = expanded ? "Collapse files" :
+			"Show \(remaining) more \(remaining == 1 ? "file" : "files")"
+		disclosure.image = NSImage(
+			systemSymbolName: expanded ? "chevron.up" : "chevron.down",
+			accessibilityDescription: nil
+		)
+		disclosure.setAccessibilityLabel(disclosure.title)
 		let names = changes.map
 		{
 			URL(fileURLWithPath: $0.path).lastPathComponent
@@ -119,15 +204,80 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		}
 		titleLabel.toolTip = changes.map(\.path).joined(separator: "\n")
 		let diff = changes.map(\.diff).joined(separator: "\n")
-		let lines = diff.split(separator: "\n")
-		let additions = lines.filter
+		counts.attributedStringValue = Self.lineCounts(for: diff)
+		counts.isHidden = diff.isEmpty
+		review.isEnabled = onViewChanges != nil
+		for row in fileList.arrangedSubviews
 		{
-			$0.hasPrefix("+") && !$0.hasPrefix("+++")
-		}.count
-		let deletions = lines.filter
+			fileList.removeArrangedSubview(row)
+			row.removeFromSuperview()
+		}
+		separator.isHidden = changes.isEmpty
+		for change in changes.prefix(expanded ? changes.count : 3)
 		{
-			$0.hasPrefix("-") && !$0.hasPrefix("---")
-		}.count
+			var path = change.path
+			if let projectPath
+			{
+				let prefix = projectPath.hasSuffix("/") ? projectPath : projectPath + "/"
+				if path.hasPrefix(prefix)
+				{
+					path = String(path.dropFirst(prefix.count))
+				}
+			}
+			let name = FileChangeTextField(labelWithString: path)
+			name.font = .systemFont(ofSize: 13)
+			name.textColor = ConversationAttributedStringRenderer.proseColor
+			name.lineBreakMode = .byTruncatingMiddle
+			name.toolTip = change.path
+			name.setContentHuggingPriority(
+				.defaultLow,
+				for: .horizontal
+			)
+			name.setContentCompressionResistancePriority(
+				.defaultLow,
+				for: .horizontal
+			)
+			let fileCounts = FileChangeTextField(labelWithString: "")
+			fileCounts.font = .systemFont(ofSize: 13)
+			fileCounts.attributedStringValue = Self.lineCounts(for: change.diff)
+			fileCounts.isHidden = change.diff.isEmpty
+			fileCounts.setContentCompressionResistancePriority(
+				.required,
+				for: .horizontal
+			)
+			let row = NSView()
+			row.translatesAutoresizingMaskIntoConstraints = false
+			name.translatesAutoresizingMaskIntoConstraints = false
+			fileCounts.translatesAutoresizingMaskIntoConstraints = false
+			row.addSubview(name)
+			row.addSubview(fileCounts)
+			fileList.addArrangedSubview(row)
+			NSLayoutConstraint.activate([
+				row.widthAnchor.constraint(equalTo: fileList.widthAnchor),
+				row.heightAnchor.constraint(equalToConstant: 36),
+				name.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+				name.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+				name.trailingAnchor.constraint(
+					lessThanOrEqualTo: fileCounts.leadingAnchor,
+					constant: -12
+				),
+				fileCounts.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+				fileCounts.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+			])
+		}
+		view.setAccessibilityLabel(titleLabel.stringValue)
+	}
+
+	@objc private func toggleFiles()
+	{
+		onToggle?()
+	}
+
+	private static func lineCounts(for diff: String) -> NSAttributedString
+	{
+		let parsed = GitDiffParser.hunks(in: diff.components(separatedBy: "\n"))
+		let additions = parsed.additions
+		let deletions = parsed.deletions
 		let summary = NSMutableAttributedString(
 			string: "+\(additions)",
 			attributes: [.foregroundColor: NSColor.systemGreen]
@@ -136,46 +286,14 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 			string: " -\(deletions)",
 			attributes: [.foregroundColor: NSColor.systemRed]
 		))
-		counts.attributedStringValue = summary
-		counts.isHidden = diff.isEmpty
-		review.isEnabled = !diff.isEmpty
-		view.setAccessibilityLabel(titleLabel.stringValue)
+		return summary
 	}
 
 	@objc private func showChanges()
 	{
-		let text = changes.map
-		{
-			"\($0.path)\n\($0.diff)"
-		}.joined(separator: "\n\n")
-		let preview = ScrollableTextPreview.make(
-			text: text,
-			size: NSSize(
-				width: 640,
-				height: 420
-			),
-			font: .monospacedSystemFont(
-				ofSize: 12,
-				weight: .regular
-			),
-			accessibilityLabel: "Reported file changes"
-		)
-		let controller = NSViewController()
-		controller.view = preview.scrollView
-		let popover = NSPopover()
-		popover.behavior = .transient
-		popover.contentViewController = controller
-		popover.contentSize = NSSize(
-			width: 640,
-			height: 420
-		)
-		self.popover = popover
-		popover.show(
-			relativeTo: review.bounds,
-			of: review,
-			preferredEdge: .minY
-		)
+		onViewChanges?()
 	}
+
 }
 
 @MainActor
