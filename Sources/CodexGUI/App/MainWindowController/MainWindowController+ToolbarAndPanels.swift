@@ -29,7 +29,7 @@ extension MainWindowController
 	private enum ToolbarLayout
 	{
 		static let controlSize: CGFloat = 28
-		static let rowHeight: CGFloat = 34
+		static let rowHeight: CGFloat = 28
 		static let controlSpacing: CGFloat = 6
 		static let horizontalInset: CGFloat = 8
 		static let titleSpacing: CGFloat = 8
@@ -165,7 +165,7 @@ extension MainWindowController
 		summaryToggleButton.contentTintColor = .labelColor
 		summaryToggleButton.image = PinnedSummaryIcons.image(
 			.toggle,
-			size: 16,
+			size: 18,
 			accessibilityDescription: "Toggle pinned summary"
 		)
 		summaryToggleButton.imagePosition = .imageOnly
@@ -257,13 +257,13 @@ extension MainWindowController
 		case ToolbarItem.back:
 			return makeDisabledToolbarItem(
 				identifier: itemIdentifier,
-				image: DesktopIcons.image(.arrowLeft),
+				image: DesktopIcons.image(.arrowLeft, size: 14),
 				label: "Back"
 			)
 		case ToolbarItem.forward:
 			return makeDisabledToolbarItem(
 				identifier: itemIdentifier,
-				image: DesktopIcons.image(.arrowRight),
+				image: DesktopIcons.image(.arrowRight, size: 14),
 				label: "Forward"
 			)
 		case ToolbarItem.sidebarPlaceholder:
@@ -367,12 +367,12 @@ extension MainWindowController
 	{
 		makeToolbarControlStack([
 			makeToolbarButton(
-				image: DesktopIcons.image(.arrowLeft),
+				image: DesktopIcons.image(.arrowLeft, size: 14),
 				label: "Back",
 				isEnabled: false
 			),
 			makeToolbarButton(
-				image: DesktopIcons.image(.arrowRight),
+				image: DesktopIcons.image(.arrowRight, size: 14),
 				label: "Forward",
 				isEnabled: false
 			),

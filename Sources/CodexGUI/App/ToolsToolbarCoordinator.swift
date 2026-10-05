@@ -49,7 +49,7 @@ final class ToolsToolbarCoordinator
 		openButton.contentTintColor = .labelColor
 		openButton.target = target
 		openButton.action = action
-		openButton.image = DesktopIcons.image(.plusSquareAdd)
+		openButton.image = DesktopIcons.image(.plusSquareAdd, size: 18)
 		openButton.toolTip = "Open tab pane"
 		openButton.setAccessibilityLabel("Open tab pane")
 		openButton.widthAnchor.constraint(equalToConstant: controlSize)
