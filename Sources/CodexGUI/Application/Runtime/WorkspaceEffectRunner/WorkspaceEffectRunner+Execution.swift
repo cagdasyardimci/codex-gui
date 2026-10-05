@@ -120,15 +120,7 @@ extension WorkspaceEffectRunner
 				service.backendDiagnostics
 			))
 		case .validateReusableReferences(let operation):
-			let valid = operation.items.filter
-			{
-				$0
-					.kind != .image ||
-					($0.path.map
-					{
-						FileManager.default.fileExists(atPath: $0)
-					} ?? false)
-			}
+			let valid = validatedReusableReferences(operation.items)
 			return .workspaceLifecycle(.reusableReferencesReceived(
 				operation,
 				valid

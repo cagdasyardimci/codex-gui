@@ -328,17 +328,12 @@ struct WorkspaceEligibility
 				{
 					continue
 				}
-				let firstLine = item.firstLine ?? 1
-				let lastLine = item.lastLine ?? firstLine
-				let excerptLines = excerpt.components(separatedBy: "\n")
-				let numberedLines = excerptLines.enumerated().map
-				{
-					"\(firstLine + $0.offset): \($0.element)"
-				}
-				let numbered = numberedLines.joined(separator: "\n")
-				textParts.append(
-					"Selected code from \(path), lines \(firstLine)–\(lastLine):\n\(numbered)"
-				)
+				textParts.append(UserMessageContextDescription.excerpt(
+					path: path,
+					text: excerpt,
+					firstLine: item.firstLine,
+					lastLine: item.lastLine
+				))
 			case .image:
 				guard let path = item.path, remainingInputs.first == .localImage(path: path)
 				else

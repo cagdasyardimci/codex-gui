@@ -238,9 +238,9 @@ struct WorkspaceStoreInputs
 			return
 		}
 		let context = workspaceStore.operationContext(threadID: selectedThreadID)
-		workspaceStore
-			.dispatch(.conversations(.managementRequested(showingArchived ? .unarchive(context) :
-					.archive(context))))
+		let managementOperation: ThreadManagementOperation = showingArchived
+			? .unarchive(context) : .archive(context)
+		workspaceStore.dispatch(.conversations(.managementRequested(managementOperation)))
 	}
 
 	func manageSidebarTask(
@@ -326,12 +326,14 @@ struct WorkspaceStoreInputs
 		}
 		let hunk = reference.hunkID.flatMap
 		{
-			id in file.hunks.first
+			hunkID in
+			file.hunks.first
 			{
-				$0.id == id
+				$0.id == hunkID
 			}
 		}
-		if reference.hunkID != nil && hunk == nil
+		let requestedHunkIsMissing = reference.hunkID != nil && hunk == nil
+		if requestedHunkIsMissing
 		{
 			return
 		}
@@ -676,11 +678,8 @@ struct WorkspaceStoreInputs
 			_
 		): submittedPrompt = message
 		}
-		guard project != nil, let activeThreadID, let activeTurnID,
-				selectedThreadID == activeThreadID,
-				isConnected, executionState.isBusy, executionState != .stopping,
-				!steerRequestActive, !needsReconciliation, !hasUncertainRequest,
-				!workspaceCleanupInProgress
+		guard WorkspaceEligibility(model: store.model).canSteer,
+				let activeThreadID, let activeTurnID
 		else
 		{
 			return

@@ -116,34 +116,36 @@ enum WorkspaceStoreFactory
 			usageRuntime: dependencies.usageRuntime,
 			previewPreparer: dependencies.previewPreparer,
 			factoryDependencies: dependencies,
-			mapEvent:
-			{
-				context, event in
-				let observation = OperationContext(
-					workspace: context.workspace,
-					generation: context.generation,
-					requestID: UUID()
-				)
-				var actions: [WorkspaceAction] =
-					[.execution(.backendObserved(
-						observation,
-						event,
-						observedAt: Date()
-					))]
-				if case .accountUpdated = event
-				{
-					actions
-						.append(.preferences(.accountRefreshRequested(observation)))
-				}
-				if case .skillsChanged = event
-				{
-					actions
-						.append(.contextNavigation(.skillsInvalidated(observation)))
-				}
-				return actions
-			}
+			mapEvent: actionsForBackendEvent
 		)
 		WorkspaceHydration.initialize(store)
 		return store
+	}
+
+	private static func actionsForBackendEvent(
+		context: OperationContext,
+		event: AppServerEvent
+	) -> [WorkspaceAction]
+	{
+		let observation = OperationContext(
+			workspace: context.workspace,
+			generation: context.generation,
+			requestID: UUID()
+		)
+		var actions: [WorkspaceAction] = [.execution(.backendObserved(
+			observation,
+			event,
+			observedAt: Date()
+		))]
+
+		if case .accountUpdated = event
+		{
+			actions.append(.preferences(.accountRefreshRequested(observation)))
+		}
+		if case .skillsChanged = event
+		{
+			actions.append(.contextNavigation(.skillsInvalidated(observation)))
+		}
+		return actions
 	}
 }

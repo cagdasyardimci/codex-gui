@@ -358,6 +358,49 @@ struct WorkspaceEligibilityTests
 		}
 	}
 
+	@Test func preparedExcerptPreservesLineBoundsAndBlankLines() throws
+	{
+		let cases: [(first: Int?, last: Int?, expected: String)] = [
+			(nil, nil, "Selected code from Example.swift, lines 1–1:\n1: \n2: value\n3: "),
+			(4, nil, "Selected code from Example.swift, lines 4–4:\n4: \n5: value\n6: "),
+			(nil, 3, "Selected code from Example.swift, lines 1–3:\n1: \n2: value\n3: "),
+			(4, 6, "Selected code from Example.swift, lines 4–6:\n4: \n5: value\n6: ")
+		]
+		for value in cases
+		{
+			var model = fixture()
+			let item = ComposerContextItem(
+				kind: .textExcerpt,
+				title: "Example.swift",
+				path: "Example.swift",
+				firstLine: value.first,
+				lastLine: value.last,
+				excerpt: "\nvalue\n"
+			)
+			model.composer.drafts[.newChat]?.context = [item]
+			let captured = proposal(model)
+			let inputs = try ComposerContextBuilder.inputs(
+				text: captured.draft.text,
+				items: captured.draft.context,
+				project: URL(fileURLWithPath: "/project")
+			)
+			#expect(inputs == [.text("request\n\n" + value.expected)])
+			let prepared = ComposerSubmission(
+				context: captured.context,
+				conversation: captured.conversation,
+				draft: captured.draft,
+				inputs: inputs,
+				skills: captured.skills,
+				modelID: captured.modelID,
+				effort: captured.effort,
+				preferences: captured.preferences,
+				retainedContextRequestID: captured.retainedContextRequestID,
+				projectContextRevision: 0
+			)
+			#expect(WorkspaceEligibility(model: model).acceptsSubmission(prepared))
+		}
+	}
+
 	private func fixture() -> WorkspaceModel
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(

@@ -153,15 +153,7 @@ extension WorkspaceEffectRunner
 				{
 					continue
 				}
-				let valid = operation.items.filter
-				{
-					$0
-						.kind != .image ||
-						($0.path.map
-						{
-							FileManager.default.fileExists(atPath: $0)
-						} ?? false)
-				}
+				let valid = validatedReusableReferences(operation.items)
 				completeSynchronous(
 					.workspaceLifecycle(.reusableReferencesReceived(
 						operation,
@@ -405,6 +397,25 @@ extension WorkspaceEffectRunner
 					managedWorkspace: managedWorkspace
 				)
 			}
+		}
+	}
+
+	func validatedReusableReferences(_ items: [ComposerContextItem]) -> [ComposerContextItem]
+	{
+		items.filter
+		{
+			item in
+			guard item.kind == .image
+			else
+			{
+				return true
+			}
+			guard let path = item.path
+			else
+			{
+				return false
+			}
+			return FileManager.default.fileExists(atPath: path)
 		}
 	}
 

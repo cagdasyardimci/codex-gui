@@ -14,6 +14,23 @@ enum UserMessageContextDescription
 	{
 		imagePrefix + title
 	}
+
+	static func excerpt(
+		path: String,
+		text: String,
+		firstLine: Int?,
+		lastLine: Int?
+	) -> String
+	{
+		let firstLine = firstLine ?? 1
+		let lastLine = lastLine ?? firstLine
+		let numberedLines = text.components(separatedBy: "\n").enumerated().map
+		{
+			"\(firstLine + $0.offset): \($0.element)"
+		}
+		let numberedExcerpt = numberedLines.joined(separator: "\n")
+		return "Selected code from \(path), lines \(firstLine)–\(lastLine):\n\(numberedExcerpt)"
+	}
 }
 
 /// Uses the same text and attachment presentation before acknowledgment and after history loads.
@@ -287,9 +304,9 @@ enum UserMessagePresenter
 			{
 				return []
 			}
-			let image = index + 1 < end && lines[index + 1] == "Image attachment: true"
+			let isImageAttachment = index + 1 < end && lines[index + 1] == "Image attachment: true"
 			let referenceJSON = [
-				"type": image ? "localImage" : "mention",
+				"type": isImageAttachment ? "localImage" : "mention",
 				"name": name,
 				"path": path
 			]
@@ -300,7 +317,7 @@ enum UserMessagePresenter
 			{
 				references.append(reference)
 			}
-			index += image ? 2 : 1
+			index += isImageAttachment ? 2 : 1
 		}
 		return references
 	}

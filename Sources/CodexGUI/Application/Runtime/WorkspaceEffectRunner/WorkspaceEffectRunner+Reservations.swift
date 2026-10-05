@@ -5,14 +5,16 @@ extension WorkspaceEffectRunner
 {
 	var pendingAcceptedPersistenceCount: Int
 	{
-		tasks.values.filter
+		let runningPersistenceCount = tasks.values.filter
 		{
 			isPersistenceCapable($0.effect)
-		}.count + reservedPersistence.count + reservedContextLoads.count
-		+ reservedComposerCommands.values.filter
+		}.count
+		let reservedPersistenceCount = reservedPersistence.count + reservedContextLoads.count
+		let pendingComposerCommandCount = reservedComposerCommands.values.filter
 		{
 			!$0.isCancelled
 		}.count
+		return runningPersistenceCount + reservedPersistenceCount + pendingComposerCommandCount
 	}
 
 	/// Wait whole finite groups so accepted outcomes can reduce and accept their write chains.
@@ -266,21 +268,18 @@ extension WorkspaceEffectRunner
 					}
 				}
 			case .persistDraft(let write):
-				if reservedPersistence[key] ==
-					nil
+				if reservedPersistence[key] == nil
 				{
 					reservedPersistence[key] = persistence.enqueue(write)
 				}
 			case .persistPreparedConversation(let write):
-				if reservedPersistence[key] ==
-					nil
+				if reservedPersistence[key] == nil
 				{
 					reservedPersistence[key] = persistence.enqueue(write)
 				}
 			case .acknowledgeSubmission(let write):
 				preparedThreadIDs[write.submission.retainedContextRequestID] = write.threadID
-				if reservedPersistence[key] ==
-					nil
+				if reservedPersistence[key] == nil
 				{
 					reservedPersistence[key] = persistence.enqueue(write)
 				}

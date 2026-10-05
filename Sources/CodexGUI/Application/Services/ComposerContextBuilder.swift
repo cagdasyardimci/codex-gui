@@ -36,10 +36,11 @@ enum ComposerContextBuilder
 				{
 					continue
 				}
-				textParts.append(excerptDescription(
-					for: item,
+				textParts.append(UserMessageContextDescription.excerpt(
 					path: path,
-					excerpt: excerpt
+					text: excerpt,
+					firstLine: item.firstLine,
+					lastLine: item.lastLine
 				))
 			case .image:
 				guard let path = item.path, FileManager.default.fileExists(atPath: path)
@@ -84,22 +85,5 @@ enum ComposerContextBuilder
 			throw ComposerContextError.missingFile(path)
 		}
 		return (path, file)
-	}
-
-	private static func excerptDescription(
-		for item: ComposerContextItem,
-		path: String,
-		excerpt: String
-	) -> String
-	{
-		let firstLine = item.firstLine ?? 1
-		let lastLine = item.lastLine ?? firstLine
-		let excerptLines = excerpt.components(separatedBy: "\n")
-		let numberedLines = excerptLines.enumerated().map
-		{
-			"\(firstLine + $0.offset): \($0.element)"
-		}
-		let numberedExcerpt = numberedLines.joined(separator: "\n")
-		return "Selected code from \(path), lines \(firstLine)–\(lastLine):\n\(numberedExcerpt)"
 	}
 }

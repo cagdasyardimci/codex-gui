@@ -17,11 +17,11 @@ extension ComposerReducer
 		):
 			let context = operation.context
 			let submission = operation.submission
-			let id = submission.context.requestID
+			let submissionRequestID = submission.context.requestID
 			guard context.workspace == model.identity,
-					model.composer.pendingSubmissions[id]?.context
+					model.composer.pendingSubmissions[submissionRequestID]?.context
 					.isSameRequest(as: submission.context) == true,
-					model.composer.resolvingSubmissions[id] == context
+					model.composer.resolvingSubmissions[submissionRequestID] == context
 			else
 			{
 				return
@@ -31,7 +31,7 @@ extension ComposerReducer
 			{
 				return
 			}
-			model.composer.resolvingSubmissions.removeValue(forKey: id)
+			model.composer.resolvingSubmissions.removeValue(forKey: submissionRequestID)
 			switch observation
 			{
 			case .succeeded(let release):
@@ -41,19 +41,18 @@ extension ComposerReducer
 				}
 				if release.released
 				{
-					model.composer.pendingSubmissions.removeValue(forKey: id)
-					model.composer.preparedSubmissions.removeValue(forKey: id)
-					model.composer.submissionConversations.removeValue(forKey: id)
-					model.composer.uncertainSubmissions.remove(id)
-					model.composer.acknowledgedSubmissions.remove(id)
+					retireReleasedSubmission(
+						submissionRequestID,
+						model: &model
+					)
 					clearPersistenceFailure(
-						.submission(id),
+						.submission(submissionRequestID),
 						workspace: context.workspace,
 						model: &model
 					)
 				}
 			case .failed(let failure):
-				model.composer.uncertainSubmissions.insert(id)
+				model.composer.uncertainSubmissions.insert(submissionRequestID)
 				if valid(
 					context,
 					model
@@ -61,13 +60,25 @@ extension ComposerReducer
 				{
 					model.composer.persistenceFailure = ComposerPersistenceFailure(
 						context: context,
-						key: .submission(id),
+						key: .submission(submissionRequestID),
 						message: failure.message
 					)
 				}
 			}
 		default: break
 		}
+	}
+
+	private static func retireReleasedSubmission(
+		_ requestID: UUID,
+		model: inout WorkspaceModel
+	)
+	{
+		model.composer.pendingSubmissions.removeValue(forKey: requestID)
+		model.composer.preparedSubmissions.removeValue(forKey: requestID)
+		model.composer.submissionConversations.removeValue(forKey: requestID)
+		model.composer.uncertainSubmissions.remove(requestID)
+		model.composer.acknowledgedSubmissions.remove(requestID)
 	}
 
 	static func reduceExecution(
