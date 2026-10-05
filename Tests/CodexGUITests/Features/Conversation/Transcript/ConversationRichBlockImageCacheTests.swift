@@ -206,6 +206,38 @@ struct ConversationRichBlockImageCacheTests
 		) == nil)
 	}
 
+	@Test func fractionalSizesSharePixelEstimatesButRetainActualRowByteAccounting() throws
+	{
+		let original = try fixtureImages()
+		let size = NSSize(
+			width: 1.25,
+			height: 0.75
+		)
+		let images = ConversationRichBlockImageCache.Images(
+			light: original.light,
+			dark: original.dark,
+			lightSize: size,
+			darkSize: size
+		)
+		let cache = ConversationRichBlockImageCache()
+		let cacheKey = key("fractional")
+		cache.insert(
+			images,
+			for: cacheKey
+		)
+		let cached = try #require(cache.images(for: cacheKey))
+		// Each image rounds up to 3 by 2 pixels at scale 2.
+		#expect(cached.pixelCount == 12)
+		#expect(cached.attachment(source: "fractional").estimatedRichImageBytes == 48)
+		#expect(cached.byteCount == original.light.bytesPerRow * original.light.height
+			+ original.dark.bytesPerRow * original.dark.height)
+		var budget = ConversationRichBlockBudget(maximumPixels: 12)
+		let firstReservation = budget.reservePixels(cached.pixelCount)
+		let secondReservation = budget.reservePixels(cached.pixelCount)
+		#expect(firstReservation)
+		#expect(!secondReservation)
+	}
+
 	@Test func aRejectedBudgetDoesNotMemoizeRenderingFailure() throws
 	{
 		_ = NSApplication.shared

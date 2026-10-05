@@ -10,7 +10,7 @@ enum ConversationRichBlockRenderer
 	private static let maximumDiagramLength = 8_192
 	private static let maximumImageDimension: CGFloat = 4_096
 	private static let maximumPixelCount: CGFloat = 8_000_000
-	private static let imageScale: CGFloat = 2
+	private static let imageScale = ConversationRichBlockRasterSize.scale
 	private static let mathFontSize: CGFloat = 20
 	private static let imageCache = ConversationRichBlockImageCache()
 
@@ -246,15 +246,16 @@ enum ConversationRichBlockRenderer
 
 	private static func rasterizeMathImage(_ image: NSImage) -> CGImage?
 	{
-		guard let context = CGContext(
-			data: nil,
-			width: Int(ceil(image.size.width * imageScale)),
-			height: Int(ceil(image.size.height * imageScale)),
-			bitsPerComponent: 8,
-			bytesPerRow: 0,
-			space: CGColorSpaceCreateDeviceRGB(),
-			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-		)
+		guard let raster = ConversationRichBlockRasterSize(size: image.size),
+				let context = CGContext(
+				data: nil,
+				width: raster.width,
+				height: raster.height,
+				bitsPerComponent: 8,
+				bytesPerRow: 0,
+				space: CGColorSpaceCreateDeviceRGB(),
+				bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+				)
 		else
 		{
 			return nil

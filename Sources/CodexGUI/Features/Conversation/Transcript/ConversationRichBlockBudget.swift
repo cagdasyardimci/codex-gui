@@ -50,12 +50,6 @@ struct ConversationRichBlockBudget: Sendable
 
 	static func estimatedPixels(for size: CGSize) -> Int
 	{
-		let pixels = ceil(size.width * 2) * ceil(size.height * 2)
-		guard pixels.isFinite, pixels > 0, pixels < CGFloat(Int.max)
-		else
-		{
-			return 0
-		}
-		return Int(pixels)
+		ConversationRichBlockRasterSize(size: size)?.pixelCount ?? 0
 	}
 }
