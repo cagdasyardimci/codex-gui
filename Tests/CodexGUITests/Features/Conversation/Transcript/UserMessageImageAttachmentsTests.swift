@@ -167,6 +167,104 @@ struct UserMessageImageAttachmentsTests
 		) == nil)
 	}
 
+	@Test func localFileURLsFinishLoadingAndClearProgress() async throws
+	{
+		_ = NSApplication.shared
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent("attachment \(UUID().uuidString).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: url)
+		}
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 8,
+			pixelsHigh: 6,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		try #require(bitmap.representation(
+			using: .png,
+			properties: [:]
+		)).write(to: url)
+		let reference = try #require(UserMessageReference(
+			json: ["type": "localImage", "path": url.absoluteString],
+			id: "image"
+		))
+		let strip = UserMessageImageAttachmentsView()
+		strip.configure([reference])
+		let button = try #require(strip.subviews.first as? NSButton)
+		#expect(!button.isEnabled)
+		#expect(button.accessibilityLabel() == "Loading attached image: \(reference.name)")
+		#expect(button.subviews.contains
+		{
+			$0 is NSProgressIndicator
+		})
+		await strip.waitForImages()
+		#expect(button.isEnabled)
+		#expect(button.accessibilityLabel() == "Open attached image: \(reference.name)")
+		#expect(!button.subviews.contains
+		{
+			$0 is NSProgressIndicator
+		})
+		let preview = try #require(await SourceThumbnailLoader.load(path: url.absoluteString))
+		let image = try #require(NSImage(data: preview))
+		#expect(image.size.width > 0 && image.size.height > 0)
+	}
+
+	@Test func reuseRejectsEarlierImageCompletion() async throws
+	{
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent("old-image-\(UUID()).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: url)
+		}
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 8,
+			pixelsHigh: 6,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		try #require(bitmap.representation(
+			using: .png,
+			properties: [:]
+		)).write(to: url)
+		let old = try #require(UserMessageReference(
+			json: ["type": "localImage", "path": url.path],
+			id: "old"
+		))
+		let current = try #require(UserMessageReference(
+			json: ["type": "localImage", "path": "/tmp/missing-\(UUID()).png"],
+			id: "current"
+		))
+		let strip = UserMessageImageAttachmentsView()
+		strip.configure([old])
+		let detached = try #require(strip.subviews.first as? NSButton)
+		strip.configure([current])
+		await strip.waitForImages()
+		let button = try #require(strip.subviews.first as? NSButton)
+		#expect(button !== detached)
+		#expect(detached.target == nil && detached.action == nil)
+		#expect(button.accessibilityLabel() == "Image unavailable: \(current.name)")
+		#expect(!button.isEnabled)
+		#expect(!button.subviews.contains
+		{
+			$0 is NSProgressIndicator
+		})
+	}
+
 	private func descendants(_ view: NSView) -> [NSView]
 	{
 		[view] + view.subviews.flatMap

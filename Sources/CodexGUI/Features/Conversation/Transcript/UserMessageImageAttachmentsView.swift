@@ -83,13 +83,17 @@ final class UserMessageImageAttachmentsView: NSView
 			button.isBordered = false
 			button.tag = index
 			button.toolTip = reference.name
-			button.setAccessibilityLabel("Open attached image: \(reference.name)")
+			button.setAccessibilityLabel("Loading attached image: \(reference.name)")
+			button.isEnabled = false
+			button.beginLoading()
 			button.setAccessibilityHelp(reference.path)
 			addSubview(button)
 			buttons.append(button)
 			if let cached = Self.imageCache.object(forKey: reference.path as NSString)
 			{
 				button.preview = cached
+				button.isEnabled = true
+				button.setAccessibilityLabel("Open attached image: \(reference.name)")
 				continue
 			}
 			let task = Task
@@ -112,14 +116,21 @@ final class UserMessageImageAttachmentsView: NSView
 				}
 				let image = NSImage(
 					cgImage: thumbnail.image,
-					size: .zero
+					size: NSSize(
+						width: thumbnail.image.width,
+						height: thumbnail.image.height
+					)
 				)
 				Self.imageCache.countLimit = 64
+				Self.imageCache.totalCostLimit = 16 * 1024 * 1024
 				Self.imageCache.setObject(
 					image,
-					forKey: reference.path as NSString
+					forKey: reference.path as NSString,
+					cost: thumbnail.image.bytesPerRow * thumbnail.image.height
 				)
 				button.preview = image
+				button.isEnabled = true
+				button.setAccessibilityLabel("Open attached image: \(reference.name)")
 			}
 			imageTasks.append(task)
 		}
@@ -171,17 +182,53 @@ final class UserMessageImageAttachmentsView: NSView
 		{
 			return
 		}
-		NSWorkspace.shared.open(URL(fileURLWithPath: references[sender.tag].path))
+		guard let url = LocalAttachmentURL.resolve(references[sender.tag].path),
+				FileManager.default.isReadableFile(atPath: url.path)
+		else
+		{
+			return
+		}
+		NSWorkspace.shared.open(url)
 	}
 }
 
 @MainActor
 private final class UserMessageImageButton: NSButton
 {
+	private let progress = NSProgressIndicator()
+
+	func beginLoading()
+	{
+		progress.style = .spinning
+		progress.controlSize = .small
+		progress.isIndeterminate = true
+		progress.setAccessibilityElement(false)
+		addSubview(progress)
+		progress.startAnimation(nil)
+	}
+
+	override func layout()
+	{
+		super.layout()
+		progress.frame = NSRect(
+			x: bounds.midX - 8,
+			y: bounds.midY - 8,
+			width: 16,
+			height: 16
+		)
+	}
+
+	private func endLoading()
+	{
+		progress.stopAnimation(nil)
+		progress.removeFromSuperview()
+	}
+
 	var preview: NSImage?
 	{
 		didSet
 		{
+			endLoading()
 			needsDisplay = true
 		}
 	}
@@ -189,6 +236,7 @@ private final class UserMessageImageButton: NSButton
 	{
 		didSet
 		{
+			endLoading()
 			needsDisplay = true
 		}
 	}
@@ -237,9 +285,9 @@ private final class UserMessageImageButton: NSButton
 				hints: nil
 			)
 		}
-		else
+		else if unavailable
 		{
-			let label = unavailable ? "Image unavailable" : "Loading…"
+			let label = "Image unavailable"
 			let paragraph = NSMutableParagraphStyle()
 			paragraph.alignment = .center
 			(label as NSString).draw(
@@ -272,12 +320,11 @@ private final class UserMessageImageThumbnail: @unchecked Sendable
 
 	static func load(path: String) -> Self?
 	{
-		guard !Task.isCancelled, NSString(string: path).isAbsolutePath
+		guard !Task.isCancelled, let url = LocalAttachmentURL.resolve(path)
 		else
 		{
 			return nil
 		}
-		let url = URL(fileURLWithPath: path)
 		guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
 				values.isRegularFile == true, let size = values.fileSize, size <= 32 * 1024 * 1024,
 				let source = CGImageSourceCreateWithURL(
@@ -325,9 +372,11 @@ private actor UserMessageImageThumbnailLoader
 			return nil
 		}
 		cache.countLimit = 64
+		cache.totalCostLimit = 16 * 1024 * 1024
 		cache.setObject(
 			thumbnail,
-			forKey: path as NSString
+			forKey: path as NSString,
+			cost: thumbnail.image.bytesPerRow * thumbnail.image.height
 		)
 		return thumbnail
 	}
