@@ -461,6 +461,28 @@ struct ConversationMarkdownRenderingTests
 		.contains(.boldFontMask))
 	}
 
+	@Test func proseBeforeListUsesCompactParagraphSpacing() async throws
+	{
+		let content = await prepare("Implemented:\n\n- First\n- Second\n\nAfter list.")
+		let text = content.attributedString
+		#expect(try paragraph(
+			in: text,
+			at: "Implemented:"
+		).paragraphSpacing == 4.5)
+		#expect(try paragraph(
+			in: text,
+			at: "First"
+		).paragraphSpacing == 2)
+		#expect(try paragraph(
+			in: text,
+			at: "Second"
+		).paragraphSpacing == 10)
+		#expect(try paragraph(
+			in: text,
+			at: "After list."
+		).paragraphSpacing == 14.5)
+	}
+
 	@Test func nativeTableSpansSkipCoveredCellsAndPreserveColumnPositions() async throws
 	{
 		let content = await prepare("""

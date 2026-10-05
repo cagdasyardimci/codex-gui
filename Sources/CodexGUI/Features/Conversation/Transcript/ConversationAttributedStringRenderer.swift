@@ -379,6 +379,10 @@ enum ConversationAttributedStringRenderer
 		paragraph.lineBreakMode = wrapsCharacters ? .byCharWrapping : .byWordWrapping
 		paragraph.lineSpacing = wrapsCharacters ? 2 : (style.listDepth > 0 ? 3.5 : 5.5)
 		paragraph.paragraphSpacing = style.listDepth > 0 ? (style.listEnd ? 10 : 2) : 14.5
+		if style.followedByList
+		{
+			paragraph.paragraphSpacing = 4.5
+		}
 		if style.heading > 0
 		{
 			paragraph.paragraphSpacingBefore = style.heading <= 2 ? 16 : 12

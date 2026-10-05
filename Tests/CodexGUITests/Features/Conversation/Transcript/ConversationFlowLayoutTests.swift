@@ -6,6 +6,36 @@ import Testing
 @Suite @MainActor
 struct ConversationFlowLayoutTests
 {
+	@Test func readingColumnKeepsMinimumInsetAndExpandsOnWidePanes() throws
+	{
+		_ = NSApplication.shared
+		for (paneWidth, contentWidth, inset): (CGFloat, CGFloat, CGFloat) in [
+			(950, 736, 107),
+			(600, 520, 40),
+		]
+		{
+			let source = LayoutSource(heights: [40])
+			let fixture = makeLayout(
+				source: source,
+				width: paneWidth
+			)
+			defer
+			{
+				fixture.collection.dataSource = nil
+				fixture.collection.delegate = nil
+			}
+			let attributes = try #require(fixture.layout.layoutAttributesForItem(
+				at: IndexPath(
+					item: 0,
+					section: 0
+				)
+			))
+			#expect(attributes.frame.width == contentWidth)
+			#expect(attributes.frame.minX == inset)
+			#expect(paneWidth - attributes.frame.maxX == inset)
+		}
+	}
+
 	@Test func visibleAttributesMatchEveryIntersectingRowAcrossADeepTranscript() throws
 	{
 		_ = NSApplication.shared
@@ -155,12 +185,15 @@ struct ConversationFlowLayoutTests
 		let layout: ConversationFlowLayout
 	}
 
-	private func makeLayout(source: LayoutSource) -> LayoutFixture
+	private func makeLayout(
+		source: LayoutSource,
+		width: CGFloat = 450
+	) -> LayoutFixture
 	{
 		let collection = NSCollectionView(frame: NSRect(
 			x: 0,
 			y: 0,
-			width: 450,
+			width: width,
 			height: 600
 		))
 		let scroll = NSScrollView(frame: collection.frame)
@@ -219,7 +252,7 @@ struct ConversationFlowLayoutTests
 		) -> NSSize
 		{
 			NSSize(
-				width: 418,
+				width: ConversationFlowLayout.contentWidth(in: collectionView.bounds.width),
 				height: heights[indexPath.item]
 			)
 		}

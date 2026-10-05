@@ -227,6 +227,20 @@ enum ConversationContentParser
 			style: ConversationTextStyle
 		)
 		{
+			if let last = runs.last, last.style.listDepth == 0,
+				last.style.heading == 0, !last.style.codeBlock,
+				last.style.quoteDepth == style.quoteDepth
+			{
+				for index in paragraphStart ..< runs.count
+				{
+					var precedingStyle = runs[index].style
+					precedingStyle.followedByList = true
+					runs[index] = ConversationTextRun(
+						text: runs[index].text,
+						style: precedingStyle
+					)
+				}
+			}
 			let enclosingList = currentPlainTextList
 			currentPlainTextList = plainTextListCount
 			plainTextListCount += 1

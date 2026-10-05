@@ -4,7 +4,8 @@ import AppKit
 final class ConversationFlowLayout: NSCollectionViewFlowLayout
 {
 	static let maximumContentWidth: CGFloat = 736
-	static let minimumHorizontalInset: CGFloat = 16
+	// Keep the navigation rail clear without shifting the reading column's center.
+	static let minimumHorizontalInset: CGFloat = 40
 	private var preparedWidth: CGFloat?
 	private var updatingCenteringInsets = false
 	var verticalGap: ((Int) -> CGFloat)?

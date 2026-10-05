@@ -275,10 +275,7 @@ final class ConversationViewController: NSViewController,
 		conversationScrollView.translatesAutoresizingMaskIntoConstraints = false
 		latestButton.translatesAutoresizingMaskIntoConstraints = false
 		NSLayoutConstraint.activate([
-			conversationScrollView.leadingAnchor.constraint(
-				equalTo: transcriptArea.leadingAnchor,
-				constant: 40
-			),
+			conversationScrollView.leadingAnchor.constraint(equalTo: transcriptArea.leadingAnchor),
 			conversationScrollView.trailingAnchor
 				.constraint(equalTo: transcriptArea.trailingAnchor),
 			conversationScrollView.topAnchor.constraint(equalTo: transcriptArea.topAnchor),

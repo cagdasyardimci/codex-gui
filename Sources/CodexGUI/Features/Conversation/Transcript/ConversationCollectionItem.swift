@@ -768,7 +768,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			520,
 			max(
 				80,
-				availableWidth - 20
+				availableWidth * 0.7
 			)
 		)
 		let naturalWidth = content.cachedNaturalWidth(presentation: presentation(for: kind))

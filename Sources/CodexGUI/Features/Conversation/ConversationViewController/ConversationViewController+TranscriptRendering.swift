@@ -81,22 +81,15 @@ extension ConversationViewController
 		layout.verticalGap =
 		{
 			[weak self] index in
-			if let self, self.displayedRows.indices.contains(index), index > 0,
-				case .message(let entry) = self.displayedRows[index],
-				case .fileChanges = entry.activity,
-				case .message(let previous) = self.displayedRows[index - 1], previous.kind == .agent
-			{
-				return 8
-			}
-			guard let self, self.displayedRows.indices.contains(index), index > 0,
-					case .activity(let current) = self.displayedRows[index],
-					case .activity(let previous) = self.displayedRows[index - 1],
-					current.groupID == previous.groupID
+			guard let self
 			else
 			{
 				return 18
 			}
-			return 0
+			return Self.verticalGap(
+				at: index,
+				in: self.displayedRows
+			)
 		}
 		layout.sectionInset = NSEdgeInsets(
 			top: 20,
@@ -808,11 +801,11 @@ extension ConversationViewController
 			path in
 			[path.item, path.item + 1].contains
 			{
-				Self.hasCompactActivityGap(
+				Self.verticalGap(
 					at: $0,
 					in: previousRows
 				)
-					!= Self.hasCompactActivityGap(
+					!= Self.verticalGap(
 						at: $0,
 						in: displayedRows
 					)
@@ -842,19 +835,43 @@ extension ConversationViewController
 		}
 	}
 
-	private static func hasCompactActivityGap(
+	static func verticalGap(
 		at index: Int,
 		in rows: [ConversationTranscriptRow]
-	) -> Bool
+	) -> CGFloat
 	{
-		guard index > 0, rows.indices.contains(index),
-				case .activity(let current) = rows[index],
-				case .activity(let previous) = rows[index - 1]
+		guard index > 0, rows.indices.contains(index)
 		else
 		{
-			return false
+			return 18
 		}
-		return current.groupID == previous.groupID
+		let previous = rows[index - 1]
+		let current = rows[index]
+		if case .message(let entry) = previous, entry.kind == .user,
+			case .turnStatus = current
+		{
+			return 50
+		}
+		if case .message(let entry) = current, entry.kind == .user
+		{
+			return 40
+		}
+		if case .activity(let lhs) = previous, case .activity(let rhs) = current,
+			lhs.groupID == rhs.groupID
+		{
+			return 0
+		}
+		if case .message(let entry) = current, case .fileChanges = entry.activity,
+			case .message(let preceding) = previous, preceding.kind == .agent
+		{
+			return 8
+		}
+		if case .turnStatus = previous, case .message(let entry) = current,
+			entry.kind == .agent
+		{
+			return 14
+		}
+		return 18
 	}
 
 }

@@ -45,6 +45,7 @@ struct ConversationTextStyle: Sendable
 	var fileLinkIcon = false
 	var paragraphContinuation = false
 	var suppressParagraphSpacing = false
+	var followedByList = false
 	var quoteDepth = 0
 	var quoteRailOffsets: [Int] = []
 	var tableCell: ConversationTableCell?
