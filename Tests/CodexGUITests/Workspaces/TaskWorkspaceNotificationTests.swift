@@ -13,7 +13,7 @@ struct TaskWorkspaceNotificationTests
 			canonicalCheckoutPath: path
 		))
 		model.connection.isConnected = true
-		model.conversations.selectedConversation = .thread("history")
+		model.conversations.selectedConversation = .thread("worker")
 		model.conversations.threads = [ThreadSummary(json: [
 			"id": "worker",
 			"name": "Active work"
@@ -71,6 +71,12 @@ struct TaskWorkspaceNotificationTests
 		model.execution.state = .ready
 		#expect(tracker.observe(presentation(model)) == nil)
 		model.execution.activeThreadID = "worker"
+		model.execution.owner = ExecutionOwner(submission: OperationContext(
+			workspace: model.identity,
+			generation: model.connection.generation,
+			requestID: UUID(),
+			threadID: "worker"
+		))
 		model.execution.state = .running
 		#expect(tracker.observe(presentation(model)) == nil)
 		model.execution.state = .awaitingApproval
@@ -144,6 +150,7 @@ struct TaskWorkspaceNotificationTests
 			turnID: "turn"
 		)
 		model.execution.owner = ExecutionOwner(submission: context)
+		model.conversations.selectedConversation = .thread("history")
 		var clockReads = 0
 		let usageRuntime = UsageRuntime(now:
 			{

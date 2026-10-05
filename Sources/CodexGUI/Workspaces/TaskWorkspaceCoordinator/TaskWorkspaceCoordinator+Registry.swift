@@ -84,6 +84,18 @@ extension TaskWorkspaceCoordinator
 			{
 				return
 			}
+			let reference = WorkspaceLifecycleOwnerReference(
+				owner: owner,
+				workspace: publication.model.identity
+			)
+			for execution in publication.model.allExecutions
+			{
+				self.onTaskSnapshot?(TaskNotificationPresentation(
+					model: publication.model,
+					execution: execution,
+					owner: reference
+				))
+			}
 			for command in publication.commands
 			{
 				self.onPresentationCommand?(command)

@@ -91,10 +91,17 @@ struct TaskNotificationTracker
 	}
 }
 
-/// Each checkout keeps its transition history when several tasks publish interleaved snapshots.
+/// Each chat keeps its transition history when one checkout publishes interleaved tasks.
 struct TaskNotificationCollection
 {
-	private var trackers: [String: TaskNotificationTracker] = [:]
+	private struct Scope: Hashable
+	{
+		let owner: WorkspaceLifecycleOwnerReference?
+		let projectPath: String?
+		let threadID: String
+	}
+
+	private var trackers: [Scope: TaskNotificationTracker] = [:]
 
 	mutating func observe(_ snapshot: ConversationSnapshot) -> TaskNotificationEvent?
 	{
@@ -103,13 +110,17 @@ struct TaskNotificationCollection
 
 	mutating func observe(_ presentation: TaskNotificationPresentation) -> TaskNotificationEvent?
 	{
-		let owner = presentation.workspaceOwner
-			.map
-			{
-				"\($0.owner)|\($0.workspace.canonicalCheckoutPath ?? "")"
-			} ?? presentation
-			.projectPath ?? "source-without-project"
-		var event = trackers[owner, default: TaskNotificationTracker()].observe(presentation)
+		guard let threadID = presentation.activeThreadID
+		else
+		{
+			return nil
+		}
+		let scope = Scope(
+			owner: presentation.workspaceOwner,
+			projectPath: presentation.projectPath,
+			threadID: threadID
+		)
+		var event = trackers[scope, default: TaskNotificationTracker()].observe(presentation)
 		event?.owner = presentation.workspaceOwner
 		return event
 	}

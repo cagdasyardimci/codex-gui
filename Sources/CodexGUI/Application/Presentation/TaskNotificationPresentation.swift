@@ -15,10 +15,23 @@ struct TaskNotificationPresentation
 		owner: WorkspaceLifecycleOwnerReference
 	)
 	{
-		executionState = model.execution.state
-		activeThreadID = model.execution.activeThreadID
-		taskOutcomeUncertain = model.execution.needsReconciliation
-			|| model.execution.hasUncertainRequest
+		self.init(
+			model: model,
+			execution: model.execution,
+			owner: owner
+		)
+	}
+
+	init(
+		model: WorkspaceModel,
+		execution: ExecutionModel,
+		owner: WorkspaceLifecycleOwnerReference
+	)
+	{
+		executionState = execution.state
+		activeThreadID = execution.activeThreadID ?? execution.owner?.submission.threadID
+		taskOutcomeUncertain = execution.needsReconciliation
+			|| execution.hasUncertainRequest
 			|| model.lifecycle.managedOwnershipConflict != nil
 		threads = model.conversations.threads
 		projectPath = model.identity.canonicalCheckoutPath

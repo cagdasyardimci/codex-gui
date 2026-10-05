@@ -114,7 +114,7 @@ final class TaskWorkspaceCoordinator
 	{
 		let matches = stores.values.filter
 		{
-			$0.model.execution.activeThreadID == id || $0.currentSnapshot
+			$0.model.executions.entries[.thread(id)] != nil || $0.currentSnapshot
 				.selectedThreadID == id || $0.managedWorkspace?.threadID == id
 		}
 		return matches.count == 1 ? matches.first : nil
@@ -334,7 +334,8 @@ final class TaskWorkspaceCoordinator
 			$0.phase == .active && $0.threadID == id
 		}
 		let source = sourceStore.currentSnapshot
-		let belongsToSource = source.activeThreadID == id || source.selectedThreadID == id || source
+		let belongsToSource = sourceStore.model.executions.entries[.thread(id)] != nil
+			|| source.selectedThreadID == id || source
 			.threads.contains
 			{
 				$0.id == id
@@ -382,7 +383,8 @@ final class TaskWorkspaceCoordinator
 		{
 		case .source:
 			let snapshot = captured.currentSnapshot
-			guard snapshot.activeThreadID == id || snapshot.selectedThreadID == id || snapshot
+			guard captured.model.executions.entries[.thread(id)] != nil
+				|| snapshot.selectedThreadID == id || snapshot
 				.threads.contains(where:
 					{
 						$0.id == id

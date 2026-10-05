@@ -10,6 +10,435 @@ import Testing
 )
 struct TaskWorkspaceCoordinatorTests
 {
+	@Test func ordinaryChatsStopTogetherAndPublishEachCompletion() async throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		try await startOrdinaryChats(fixture)
+		var finishedThreads: Set<String> = []
+		fixture.coordinator.onTaskSnapshot =
+		{
+			presentation in
+			if presentation.executionState == .stopped, let threadID = presentation.activeThreadID
+			{
+				finishedThreads.insert(threadID)
+			}
+		}
+		var completionCount = 0
+		fixture.coordinator.onAllTasksFinished =
+		{
+			completionCount += 1
+		}
+		fixture.sourceState.inputs.newChat()
+		#expect(fixture.sourceState.currentSnapshot.selectedThreadID == nil)
+		#expect(fixture.coordinator.isTaskActive)
+		let originalIdentity = fixture.sourceState.store.model.identity
+		let otherSource = fixture.root.appendingPathComponent("other-source")
+		try FileManager.default.createDirectory(
+			at: otherSource.appendingPathComponent(".git"),
+			withIntermediateDirectories: true
+		)
+		fixture.coordinator.openProject(otherSource)
+		#expect(fixture.sourceState.store.model.identity == originalIdentity)
+		fixture.coordinator.stopAll()
+		try #require(await waitUntil
+		{
+			fixture.sourceService.interruptionRequests.count == 2
+		})
+		#expect(Set(fixture.sourceService.interruptionRequests.map(\.threadID))
+			== Set(["source", "second"]))
+		fixture.sourceService.complete(
+			threadID: "source",
+			status: "interrupted"
+		)
+		#expect(fixture.coordinator.isTaskActive)
+		#expect(finishedThreads == ["source"])
+		#expect(completionCount == 0)
+		fixture.sourceService.complete(
+			threadID: "second",
+			status: "interrupted"
+		)
+		try #require(await waitUntil
+		{
+			completionCount == 1
+		})
+		#expect(!fixture.coordinator.isTaskActive)
+		#expect(finishedThreads == ["source", "second"])
+		#expect(fixture.sourceState.store.model.lifecycle.quitReservation == nil)
+	}
+
+	@Test func ordinaryChatsQuitWaitsForBothRemoteOutcomes() async throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		try await startOrdinaryChats(fixture)
+		var quitApproved: Bool?
+		fixture.coordinator.onQuitCompleted =
+		{
+			_, approved in quitApproved = approved
+		}
+		let request = fixture.coordinator.requestQuit()
+		fixture.coordinator.confirmQuit(
+			request,
+			approved: true
+		)
+		try #require(await waitUntil
+		{
+			fixture.sourceService.interruptionRequests.count == 2
+		})
+		fixture.sourceService.complete(
+			threadID: "second",
+			status: "interrupted"
+		)
+		#expect(quitApproved == nil)
+		#expect(fixture.coordinator.isTaskActive)
+		fixture.sourceService.complete(
+			threadID: "source",
+			status: "interrupted"
+		)
+		try #require(await waitUntil
+		{
+			quitApproved != nil
+		})
+		#expect(quitApproved == true)
+		#expect(fixture.sourceState.store.model.lifecycle.quitReservation?.requestID
+			== request.requestID)
+	}
+
+	@Test func reconnectReconcilesEveryOrdinaryChatWithoutResending() async throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		try await startOrdinaryChats(fixture)
+		fixture.sourceService.onDisconnect?("Synthetic transport loss.")
+		#expect(fixture.sourceState.store.model.hasUncertainExecutionRequest)
+		fixture.sourceService.savedTurns = [fixture.sourceService.finishedTurn(status: "completed")]
+		let second = try #require(fixture.sourceService.additionalThreads["second"])
+		fixture.sourceService.additionalThreads["second"] = ThreadDetail(
+			summary: second.summary,
+			turns: [fixture.sourceService.finishedTurn(status: "interrupted")],
+			nextTurnsCursor: nil
+		)
+		fixture.sourceService.readThreadIDs.removeAll()
+		await fixture.sourceState.inputs.connect()
+		try #require(await waitUntil
+		{
+			!fixture.sourceState.store.model.hasUncertainExecutionRequest
+				&& !fixture.sourceState.store.model.hasExecutionReconciliation
+		})
+		#expect(Set(fixture.sourceService.readThreadIDs) == Set(["source", "second"]))
+		#expect(fixture.sourceService.turnRequests.count == 2)
+		#expect(fixture.sourceService.interruptionRequests.isEmpty)
+		#expect(!fixture.coordinator.isTaskActive)
+	}
+
+	@Test func agentOnlyRelaunchReadsEveryPersistedOwnerBeforeStopping() async throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		fixture.sourceService.observeTurnStart =
+		{
+			threadID in
+			#expect(
+				fixture.storage.activeExecutionThreadIDs(for: fixture.source).contains(threadID)
+			)
+		}
+		try await startOrdinaryChats(fixture)
+		#expect(
+			fixture.storage.activeExecutionThreadIDs(for: fixture.source) == ["second", "source"]
+		)
+		let service = WorkspaceCodexService(
+			directory: fixture.source,
+			threadID: "source"
+		)
+		service.savedTurns = [service.turn]
+		service.additionalThreads["second"] = ThreadDetail(
+			summary: try #require(ThreadSummary(json: [
+				"id": "second",
+				"cwd": fixture.source.path,
+				"status": ["type": "idle"],
+			])),
+			turns: [service.turn],
+			nextTurnsCursor: nil
+		)
+		for threadID in ["source", "second"]
+		{
+			service.readThreadDetails[threadID] = ThreadDetail(
+				summary: try #require(ThreadSummary(json: [
+					"id": threadID,
+					"cwd": fixture.source.path,
+					"status": ["type": "active", "activeFlags": []],
+				])),
+				turns: [service.turn],
+				nextTurnsCursor: nil
+			)
+		}
+		let recovered = WorkspaceTestFixture(
+			server: service,
+			storage: fixture.storage
+		)
+		let coordinator = TaskWorkspaceCoordinator(
+			sourceStore: recovered.store,
+			manager: fixture.manager
+		)
+		defer
+		{
+			coordinator.shutdown()
+		}
+		await recovered.inputs.connect()
+		try #require(await waitUntil
+		{
+			Set(service.readThreadIDs) == Set(["source", "second"])
+				&& recovered.store.model.execution(for: .thread("source")).activeTurnID != nil
+				&& recovered.store.model.execution(for: .thread("second")).activeTurnID != nil
+		})
+		#expect(service.turnRequests.isEmpty)
+		#expect(coordinator.isTaskActive)
+		coordinator.stopAll()
+		try #require(await waitUntil
+		{
+			service.interruptionRequests.count == 2
+		})
+		service.complete(
+			threadID: "source",
+			status: "interrupted"
+		)
+		#expect(coordinator.isTaskActive)
+		service.complete(
+			threadID: "second",
+			status: "interrupted"
+		)
+		try #require(await waitUntil
+		{
+			!coordinator.isTaskActive
+		})
+		#expect(fixture.storage.activeExecutionThreadIDs(for: fixture.source).isEmpty)
+	}
+
+	@Test func activeUnselectedThreadSummaryDiscoversRemoteAgentOwner() async throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		fixture.sourceService.additionalThreads["second"] = ThreadDetail(
+			summary: try #require(ThreadSummary(json: [
+				"id": "second",
+				"cwd": fixture.source.path,
+				"status": ["type": "active", "activeFlags": []],
+			])),
+			turns: [fixture.sourceService.turn],
+			nextTurnsCursor: nil
+		)
+		await fixture.sourceState.inputs.connect()
+		try #require(await waitUntil
+		{
+			fixture.sourceState.store.model.execution(for: .thread("second")).activeTurnID != nil
+		})
+		#expect(fixture.sourceService.readThreadIDs.contains("second"))
+		#expect(fixture.sourceService.turnRequests.isEmpty)
+		#expect(fixture.coordinator.isTaskActive)
+		#expect(fixture.sourceState.currentSnapshot.selectedThreadID == nil)
+		#expect(fixture.storage.activeExecutionThreadIDs(for: fixture.source) == ["second"])
+	}
+
+	@Test func relaunchReconcilesEveryPersistedOrdinaryCommandOwner() async throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let commands = ["source", "second"].map
+		{
+			TaskCommandOwnership(
+				threadID: $0,
+				turnID: "turn-one",
+				itemID: "approved-command"
+			)
+		}
+		fixture.storage.savePendingCommands(
+			Set(commands),
+			for: fixture.source
+		)
+		let service = WorkspaceCodexService(
+			directory: fixture.source,
+			threadID: "source"
+		)
+		service.additionalThreads["second"] = ThreadDetail(
+			summary: try #require(ThreadSummary(json: [
+				"id": "second",
+				"cwd": fixture.source.path,
+			])),
+			turns: [service.finishedTurn(status: "interrupted")],
+			nextTurnsCursor: nil
+		)
+		service.savedTurns = [service.finishedTurn(status: "interrupted")]
+		let recovered = WorkspaceTestFixture(
+			server: service,
+			storage: fixture.storage
+		)
+		let coordinator = TaskWorkspaceCoordinator(
+			sourceStore: recovered.store,
+			manager: fixture.manager
+		)
+		defer
+		{
+			coordinator.shutdown()
+		}
+		await recovered.inputs.connect()
+		try #require(await waitUntil
+		{
+			Set(service.readThreadIDs) == Set(["source", "second"])
+		})
+		#expect(recovered.store.model.pendingCommandOwnership.count == 2)
+		#expect(coordinator.isTaskActive)
+		#expect(recovered.store.model.blocksExecutionCleanup)
+		#expect(service.turnRequests.isEmpty)
+		let completed = try command(
+			status: "completed",
+			cwd: fixture.source.path
+		)
+		service.emit(.itemCompleted(
+			threadId: "source",
+			turnId: "turn-one",
+			item: completed
+		))
+		#expect(coordinator.isTaskActive)
+		#expect(recovered.store.model.pendingCommandOwnership.map(\.threadID) == ["second"])
+		service.emit(.itemCompleted(
+			threadId: "second",
+			turnId: "turn-one",
+			item: completed
+		))
+		try #require(await waitUntil
+		{
+			!coordinator.isTaskActive
+		})
+		try await recovered.store.awaitAcceptedPersistence()
+		#expect(fixture.storage.pendingCommands(for: fixture.source).isEmpty)
+	}
+
+	@Test func ordinaryChatsAndManagedCommandKeepCheckoutProtectedDuringStopAll() async throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		await fixture.sourceState.inputs.connect()
+		let managed = try await fixture.createTask("Managed")
+		managed.state.inputs.updateDraft("Run command")
+		managed.state.inputs.send()
+		try #require(await waitUntil
+		{
+			managed.service.turnRequests.count == 1
+		})
+		let running = try command(
+			status: "inProgress",
+			cwd: managed.workspace.checkoutPath
+		)
+		managed.service.emit(.itemStarted(
+			threadId: managed.service.thread.id,
+			turnId: managed.service.turn.id,
+			item: running
+		))
+		fixture.coordinator.selectSourceCheckout()
+		try await startOrdinaryChats(fixture)
+		fixture.coordinator.stopAll()
+		try #require(await waitUntil
+		{
+			fixture.sourceService.interruptionRequests.count == 2
+				&& managed.service.interruptionRequests.count == 1
+		})
+		fixture.sourceService.complete(
+			threadID: "source",
+			status: "interrupted"
+		)
+		fixture.sourceService.complete(
+			threadID: "second",
+			status: "interrupted"
+		)
+		managed.service.savedTurns = [CodexTurn(
+			id: managed.service.turn.id,
+			status: "interrupted",
+			items: [running],
+			error: nil
+		)]
+		managed.service.emit(.turnCompleted(
+			threadId: managed.service.thread.id,
+			turn: managed.service.savedTurns[0]
+		))
+		#expect(fixture.coordinator.isTaskActive)
+		await fixture.coordinator.removeCheckout(id: managed.workspace.id)
+		#expect(FileManager.default.fileExists(atPath: managed.workspace.checkoutPath))
+		let completed = try command(
+			status: "completed",
+			cwd: managed.workspace.checkoutPath
+		)
+		managed.service.emit(.itemCompleted(
+			threadId: managed.service.thread.id,
+			turnId: managed.service.turn.id,
+			item: completed
+		))
+		try #require(await waitUntil
+		{
+			!fixture.coordinator.isTaskActive
+				&& managed.state.store.model.lifecycle.quitReservation == nil
+		})
+		await fixture.coordinator.removeCheckout(id: managed.workspace.id)
+		#expect(!FileManager.default.fileExists(atPath: managed.workspace.checkoutPath))
+	}
+
+	private func startOrdinaryChats(_ fixture: TaskExecutionFixture) async throws
+	{
+		fixture.sourceService.additionalThreads["second"] = ThreadDetail(
+			summary: try #require(ThreadSummary(json: [
+				"id": "second",
+				"cwd": fixture.source.path,
+			])),
+			turns: [],
+			nextTurnsCursor: nil
+		)
+		if !fixture.sourceState.store.model.connection.isConnected
+		{
+			await fixture.sourceState.inputs.connect()
+		}
+		for threadID in ["source", "second"]
+		{
+			fixture.sourceState.inputs.selectThread(threadID)
+			try #require(await waitUntil
+			{
+				fixture.sourceState.currentSnapshot.selectedThreadID == threadID
+					&& fixture.sourceState.currentSnapshot.canSend
+			})
+			fixture.sourceState.inputs.updateDraft("Run \(threadID)")
+			fixture.sourceState.inputs.send()
+			try #require(await waitUntil
+			{
+				let execution = fixture.sourceState.store.model.execution(for: .thread(threadID))
+				return execution.state == .running && execution.activeTurnID != nil
+					&& fixture.sourceService.turnRequests.contains
+					{
+						$0.threadID == threadID
+					}
+			})
+		}
+	}
+
 	@Test func sourceOpeningPublishesMatchingCoordinatorAndSnapshotCheckout() throws
 	{
 		let fixture = try TaskExecutionFixture()
@@ -2116,12 +2545,17 @@ final class WorkspaceCodexService: CodexService
 	}
 	let turn = CodexTurn(json: ["id": "turn-one", "status": "inProgress", "items": []])!
 	var savedTurns: [CodexTurn] = []
+	var additionalThreads: [String: ThreadDetail] = [:]
+	/// List snapshots can lag the authoritative detail returned by read or resume.
+	var readThreadDetails: [String: ThreadDetail] = [:]
+	var readThreadIDs: [String] = []
 	var accountReadCount = 0
 	var modelReadCount = 0
 	var skillReadCount = 0
 	var rateLimitReadCount = 0
 	var readThreadCount = 0
 	var turnRequests: [TurnRequest] = []
+	var observeTurnStart: ((String) -> Void)?
 	var respondedRequestIDs: [String] = []
 	var interruptionRequests: [TurnIdentity] = []
 	var interruptError: Error?
@@ -2234,7 +2668,7 @@ final class WorkspaceCodexService: CodexService
 
 	func threads(for directory: URL) async throws -> [ThreadSummary]
 	{
-		[thread]
+		[thread] + additionalThreads.values.map(\.summary)
 	}
 
 	func startThread(
@@ -2255,12 +2689,13 @@ final class WorkspaceCodexService: CodexService
 
 	func resumeThread(id: String) async throws -> ThreadDetail
 	{
-		detail()
+		readThreadDetails[id] ?? additionalThreads[id] ?? detail()
 	}
 
 	func readThread(id: String) async throws -> ThreadDetail
 	{
 		readThreadCount += 1
+		readThreadIDs.append(id)
 		if suspendNextRead
 		{
 			suspendNextRead = false
@@ -2269,7 +2704,7 @@ final class WorkspaceCodexService: CodexService
 				pendingRead = $0
 			}
 		}
-		return detail()
+		return readThreadDetails[id] ?? additionalThreads[id] ?? detail()
 	}
 
 	func loadEarlierTurns(
@@ -2310,6 +2745,7 @@ final class WorkspaceCodexService: CodexService
 		cwd: URL?
 	) async throws -> CodexTurn
 	{
+		observeTurnStart?(threadId)
 		turnRequests.append(TurnRequest(
 			threadID: threadId,
 			inputs: inputs,
@@ -2387,6 +2823,42 @@ final class WorkspaceCodexService: CodexService
 	func finishedTurn(status: String) -> CodexTurn
 	{
 		CodexTurn(json: ["id": turn.id, "status": status, "items": []])!
+	}
+
+	func complete(
+		threadID: String,
+		status: String
+	)
+	{
+		let completed = finishedTurn(status: status)
+		if let detail = readThreadDetails[threadID]
+		{
+			readThreadDetails[threadID] = ThreadDetail(
+				summary: ThreadSummary(json: [
+					"id": threadID,
+					"cwd": detail.summary.cwd,
+					"status": ["type": "idle"],
+				])!,
+				turns: [completed],
+				nextTurnsCursor: nil
+			)
+		}
+		if let detail = additionalThreads[threadID]
+		{
+			additionalThreads[threadID] = ThreadDetail(
+				summary: detail.summary,
+				turns: [completed],
+				nextTurnsCursor: nil
+			)
+		}
+		else
+		{
+			savedTurns = [completed]
+		}
+		emit(.turnCompleted(
+			threadId: threadID,
+			turn: completed
+		))
 	}
 
 	func complete(status: String)

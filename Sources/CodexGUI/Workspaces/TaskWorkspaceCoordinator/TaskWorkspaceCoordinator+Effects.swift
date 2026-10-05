@@ -76,7 +76,7 @@ extension TaskWorkspaceCoordinator
 			}
 			for reference in references
 			{
-				store(for: reference)?.inputs.stop()
+				store(for: reference)?.inputs.stopAll()
 			}
 		case .freezeWritesAndDrainQuit(
 			let request,
@@ -121,13 +121,6 @@ extension TaskWorkspaceCoordinator
 			let previous,
 			let current
 		):
-			if let store = store(for: current.reference)
-			{
-				onTaskSnapshot?(TaskNotificationPresentation(
-					model: store.model,
-					owner: current.reference
-				))
-			}
 			if previous?.requiresRemoteStop == true, !current.requiresRemoteStop,
 				!model.hasRemoteOwners, !model.hasUncertainOwners,
 				case .idle = model.quit
