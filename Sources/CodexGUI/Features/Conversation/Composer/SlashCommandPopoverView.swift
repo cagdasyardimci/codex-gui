@@ -37,45 +37,13 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 	override func loadView()
 	{
-		if let localeObserver
-		{
-			NotificationCenter.default.removeObserver(localeObserver)
-		}
-		localeObserver = NotificationCenter.default.addObserver(
-			forName: NSLocale.currentLocaleDidChangeNotification,
-			object: nil,
-			queue: .main
-		)
-		{
-			[weak self] _ in
-			MainActor.assumeIsolated
-			{
-				self?.catalog.invalidateLocale()
-			}
-		}
+		observeLocaleChanges()
 		hasRenderedPresentation = false
-		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("slashCommand"))
-		table.addTableColumn(column)
-		table.headerView = nil
-		table.style = .plain
-		table.rowHeight = 28
-		table.intercellSpacing = .zero
-		table.backgroundColor = .clear
-		table.selectionHighlightStyle = .regular
-		table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-		table.dataSource = self
-		table.delegate = self
-		table.target = self
-		table.action = #selector(chooseSelected)
-		table.setAccessibilityLabel("Slash commands. Use arrow keys to select, Tab to insert, "
-			+ "Return to run, Escape to dismiss.")
-		scroll.documentView = table
-		scroll.hasVerticalScroller = true
-		scroll.autohidesScrollers = true
-		scroll.scrollerStyle = .overlay
-		scroll.drawsBackground = false
-		scroll.contentView.drawsBackground = false
+
+		configureCommandTable()
+		configureScrollView()
 		emptyLabel.textColor = .secondaryLabelColor
+
 		let stack = AppKitLayout.verticalStack(
 			[scroll, emptyLabel],
 			spacing: 4
@@ -96,6 +64,55 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 			width: 720,
 			height: 316
 		)
+	}
+
+	private func observeLocaleChanges()
+	{
+		if let localeObserver
+		{
+			NotificationCenter.default.removeObserver(localeObserver)
+		}
+		localeObserver = NotificationCenter.default.addObserver(
+			forName: NSLocale.currentLocaleDidChangeNotification,
+			object: nil,
+			queue: .main
+		)
+		{
+			[weak self] _ in
+			MainActor.assumeIsolated
+			{
+				self?.catalog.invalidateLocale()
+			}
+		}
+	}
+
+	private func configureCommandTable()
+	{
+		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("slashCommand"))
+		table.addTableColumn(column)
+		table.headerView = nil
+		table.style = .plain
+		table.rowHeight = 28
+		table.intercellSpacing = .zero
+		table.backgroundColor = .clear
+		table.selectionHighlightStyle = .regular
+		table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
+		table.dataSource = self
+		table.delegate = self
+		table.target = self
+		table.action = #selector(chooseSelected)
+		table.setAccessibilityLabel("Slash commands. Use arrow keys to select, Tab to insert, "
+			+ "Return to run, Escape to dismiss.")
+	}
+
+	private func configureScrollView()
+	{
+		scroll.documentView = table
+		scroll.hasVerticalScroller = true
+		scroll.autohidesScrollers = true
+		scroll.scrollerStyle = .overlay
+		scroll.drawsBackground = false
+		scroll.contentView.drawsBackground = false
 	}
 
 	func render(prefix: String)
@@ -148,6 +165,15 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		}
 		hasRenderedPresentation = true
 
+		refreshCommandRows()
+		restoreSelection(
+			commandID: previousCommandID,
+			skillPath: previousSkillPath
+		)
+	}
+
+	private func refreshCommandRows()
+	{
 		let height = CGFloat(min(
 			11,
 			max(
@@ -159,15 +185,25 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		preferredContentSize.height = height + 8
 		table.reloadData()
 		emptyLabel.isHidden = rowCount > 0
+		if rowCount == 0
+		{
+			table.deselectAll(nil)
+		}
+	}
+
+	private func restoreSelection(
+		commandID: SlashCommandID?,
+		skillPath: String?
+	)
+	{
 		guard rowCount > 0
 		else
 		{
-			table.deselectAll(nil)
 			return
 		}
 		if let index = matchingSkills.firstIndex(where:
 			{
-				$0.path == previousSkillPath
+				$0.path == skillPath
 			})
 		{
 			selectRow(commands.count + 1 + index)
@@ -176,7 +212,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		{
 			selectRow(commands.firstIndex(where:
 				{
-					$0.id == previousCommandID
+					$0.id == commandID
 				})
 				?? (commands.isEmpty ? 1 : 0))
 		}

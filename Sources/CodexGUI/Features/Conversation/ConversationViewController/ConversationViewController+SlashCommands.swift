@@ -30,40 +30,8 @@ extension ConversationViewController
 			slashCompletionGeneration = selectionGeneration
 			slashCompletionText = composer.string
 			slashCommandController.render(prefix: query.prefix)
-			if slashCommandPopover == nil
-			{
-				let popover = ComposerPopoverPanel(contentViewController: slashCommandController)
-				popover.preservesParentKeyboardFocus = true
-				popover.matchesAnchorWidth = true
-				popover
-					.shouldDismissForEscape =
-					{
-						[weak self] in
-						self?.composer.hasMarkedText() != true
-					}
-				popover.onPresentationChange =
-				{
-					[weak self] shown in
-					if !shown
-					{
-						self?.slashCompletionRange = nil
-						self?.slashCompletionText = nil
-					}
-				}
-				slashCommandController.onChoose =
-				{
-					[weak self] command in
-					self?.chooseSlashCommand(
-						command,
-						execute: true
-					)
-				}
-				slashCommandController.onChooseSkill =
-				{
-					[weak self] skill in self?.chooseSlashSkill(skill)
-				}
-				slashCommandPopover = popover
-			}
+			configureSlashCommandPopoverIfNeeded()
+
 			// A restored or asynchronously updated draft in a hidden window must not reveal
 			// a detached command panel. The list can still prepare its selection offscreen.
 			if slashCommandPopover?.isShown != true, composer.window?.isVisible == true
@@ -77,6 +45,45 @@ extension ConversationViewController
 		}
 		dismissSlashCommands()
 		showAtFileCompletionIfNeeded()
+	}
+
+	private func configureSlashCommandPopoverIfNeeded()
+	{
+		guard slashCommandPopover == nil
+		else
+		{
+			return
+		}
+		let popover = ComposerPopoverPanel(contentViewController: slashCommandController)
+		popover.preservesParentKeyboardFocus = true
+		popover.matchesAnchorWidth = true
+		popover.shouldDismissForEscape =
+		{
+			[weak self] in
+			self?.composer.hasMarkedText() != true
+		}
+		popover.onPresentationChange =
+		{
+			[weak self] shown in
+			if !shown
+			{
+				self?.slashCompletionRange = nil
+				self?.slashCompletionText = nil
+			}
+		}
+		slashCommandController.onChoose =
+		{
+			[weak self] command in
+			self?.chooseSlashCommand(
+				command,
+				execute: true
+			)
+		}
+		slashCommandController.onChooseSkill =
+		{
+			[weak self] skill in self?.chooseSlashSkill(skill)
+		}
+		slashCommandPopover = popover
 	}
 
 	func dismissSlashCommands()
@@ -153,8 +160,10 @@ extension ConversationViewController
 		let updateDraft = onDraftChange
 		let shouldExecute = execute
 		let text = composer.string as NSString
-		let hasSeparator = NSMaxRange(range) < text.length
-		let suffix = !shouldExecute && command.acceptsArguments && !hasSeparator ? " " : ""
+		let hasFollowingText = NSMaxRange(range) < text.length
+		let needsArgumentSeparator =
+			!shouldExecute && command.acceptsArguments && !hasFollowingText
+		let suffix = needsArgumentSeparator ? " " : ""
 		let replacement = "/" + command.name + suffix
 		dismissSlashCommands()
 		composer.insertText(

@@ -10,9 +10,20 @@ enum EffortSliderGeometry
 
 	static func knobRect(centeredIn rect: NSRect) -> NSRect
 	{
+		knobRect(
+			centerX: rect.midX,
+			centerY: rect.midY
+		)
+	}
+
+	static func knobRect(
+		centerX: CGFloat,
+		centerY: CGFloat
+	) -> NSRect
+	{
 		NSRect(
-			x: rect.midX - knobDiameter / 2,
-			y: rect.midY - knobDiameter / 2,
+			x: centerX - knobDiameter / 2,
+			y: centerY - knobDiameter / 2,
 			width: knobDiameter,
 			height: knobDiameter
 		)
@@ -73,11 +84,9 @@ final class EffortSliderCell: NSSliderCell
 			for: doubleValue,
 			in: track
 		)
-		return NSRect(
-			x: center - EffortSliderGeometry.knobDiameter / 2,
-			y: track.midY - EffortSliderGeometry.knobDiameter / 2,
-			width: EffortSliderGeometry.knobDiameter,
-			height: EffortSliderGeometry.knobDiameter
+		return EffortSliderGeometry.knobRect(
+			centerX: center,
+			centerY: track.midY
 		)
 	}
 
@@ -413,8 +422,9 @@ final class EffortSlider: NSSlider
 
 	private func desiredParticleMode() -> ParticleMode
 	{
-		guard isPresented, filledRect.width > 0, window?.isVisible == true,
-				!isHiddenOrHasHiddenAncestor
+		let canDisplayParticles = isPresented && filledRect.width > 0
+			&& window?.isVisible == true && !isHiddenOrHasHiddenAncestor
+		guard canDisplayParticles
 		else
 		{
 			return .hidden

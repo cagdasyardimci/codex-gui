@@ -3,6 +3,13 @@ import AppKit
 @MainActor
 final class FullAccessConfirmationButton: NSButton
 {
+	private enum LayoutMetrics
+	{
+		static let cornerRadius: CGFloat = 18
+		static let warningIconSize: CGFloat = 14
+		static let iconToTitleSpacing: CGFloat = 6
+	}
+
 	var confirmsFullAccess = false
 
 	override func viewDidChangeEffectiveAppearance()
@@ -23,8 +30,8 @@ final class FullAccessConfirmationButton: NSButton
 			? NSColor.systemRed.withAlphaComponent(0.1) : DesktopTheme.input
 		let backgroundPath = NSBezierPath(
 			roundedRect: bounds,
-			xRadius: 18,
-			yRadius: 18
+			xRadius: LayoutMetrics.cornerRadius,
+			yRadius: LayoutMetrics.cornerRadius
 		)
 		background.setFill()
 		backgroundPath.fill()
@@ -43,8 +50,8 @@ final class FullAccessConfirmationButton: NSButton
 			.foregroundColor: confirmsFullAccess ? NSColor.systemRed : NSColor.labelColor,
 		]
 		let titleSize = (title as NSString).size(withAttributes: attributes)
-		let iconWidth: CGFloat = confirmsFullAccess ? 14 : 0
-		let iconToTitleSpacing: CGFloat = confirmsFullAccess ? 6 : 0
+		let iconWidth: CGFloat = confirmsFullAccess ? LayoutMetrics.warningIconSize : 0
+		let iconToTitleSpacing: CGFloat = confirmsFullAccess ? LayoutMetrics.iconToTitleSpacing : 0
 		let contentWidth = titleSize.width + iconWidth + iconToTitleSpacing
 		let contentOriginX = bounds.midX - contentWidth / 2
 
@@ -54,9 +61,9 @@ final class FullAccessConfirmationButton: NSButton
 				.triangleExclamationErrorWarning,
 				in: NSRect(
 					x: contentOriginX,
-					y: bounds.midY - 7,
+					y: bounds.midY - LayoutMetrics.warningIconSize / 2,
 					width: iconWidth,
-					height: 14
+					height: LayoutMetrics.warningIconSize
 				),
 				tint: .systemRed
 			)

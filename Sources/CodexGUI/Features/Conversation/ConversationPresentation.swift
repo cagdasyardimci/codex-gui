@@ -64,14 +64,14 @@ struct ConversationPresentation: Equatable
 			skillAvailable = selectedSkill.map
 			{
 				selected in
-				let matching = snapshot.skillCatalog?.skills.filter
+				let matchingSkills = snapshot.skillCatalog?.skills.filter
 				{
 					$0.enabled && $0.name == selected.name
 				} ?? []
-				return matching.contains
+				return matchingSkills.contains
 				{
 					$0.path == selected.path
-				} || matching.count == 1
+				} || matchingSkills.count == 1
 			} ?? false
 			includedContextText = snapshot.projectContext.includedContextText
 			draftContextSummary = snapshot.draftContext.map

@@ -4,6 +4,15 @@ import AppKit
 @MainActor
 extension ConversationViewController
 {
+	private enum ComposerSizing
+	{
+		static let minimumHeight: CGFloat = 49
+		static let maximumHeight: CGFloat = 160
+		static let availableHeightFraction: CGFloat = 0.25
+		static let contentHeightAllowance: CGFloat = 12
+		static let heightUpdateTolerance: CGFloat = 2
+	}
+
 	func makeComposerArea() -> NSStackView
 	{
 		let composerToolbar = makeComposerToolbar()
@@ -162,10 +171,12 @@ extension ConversationViewController
 		composerScrollView.autohidesScrollers = true
 		composerScrollView.drawsBackground = false
 		composerScrollView.borderType = .noBorder
-		composerHeightConstraint = composerScrollView.heightAnchor.constraint(equalToConstant: 49)
+		composerHeightConstraint = composerScrollView.heightAnchor
+			.constraint(equalToConstant: ComposerSizing.minimumHeight)
 		composerHeightConstraint?.priority = .defaultHigh
 		composerHeightConstraint?.isActive = true
-		composerScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 49).isActive = true
+		composerScrollView.heightAnchor
+			.constraint(greaterThanOrEqualToConstant: ComposerSizing.minimumHeight).isActive = true
 		composer.onImage =
 		{
 			[weak self] image, title in self?.attachImage(
@@ -443,24 +454,25 @@ extension ConversationViewController
 		layoutManager.ensureLayout(for: textContainer)
 		let contentHeight =
 			layoutManager.usedRect(for: textContainer).height
-				+ composer.textContainerInset.height * 2 + 12
+				+ composer.textContainerInset.height * 2 + ComposerSizing.contentHeightAllowance
 		let availableHeight = max(
-			49,
-			view.bounds.height * 0.25
+			ComposerSizing.minimumHeight,
+			view.bounds.height * ComposerSizing.availableHeightFraction
 		)
-		let height = min(
-			160,
+		let desiredHeight = min(
+			ComposerSizing.maximumHeight,
 			min(
 				availableHeight,
 				max(
-					49,
+					ComposerSizing.minimumHeight,
 					contentHeight
 				)
 			)
 		)
-		if abs((composerHeightConstraint?.constant ?? 0) - height) > 2
+		if abs((composerHeightConstraint?.constant ?? 0) - desiredHeight)
+			> ComposerSizing.heightUpdateTolerance
 		{
-			composerHeightConstraint?.constant = height
+			composerHeightConstraint?.constant = desiredHeight
 		}
 	}
 
