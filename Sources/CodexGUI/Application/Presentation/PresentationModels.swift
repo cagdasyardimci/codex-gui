@@ -58,6 +58,7 @@ struct ConversationSnapshot
 	let canLoadEarlierTurns: Bool
 	let changedFiles: [ChangeFile]
 	let diff: String
+	var activeTurnDiff: String? = nil
 	let draft: String
 	var draftContext: [ComposerContextItem] = []
 	var reusableReferences: [ComposerContextItem] = []

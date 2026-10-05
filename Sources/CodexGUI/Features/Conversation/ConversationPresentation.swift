@@ -107,7 +107,9 @@ struct ConversationPresentation: Equatable
 		var availableSkills: [AvailableSkill] = []
 		let slashCommandUnavailableReasons: [SlashCommandID: String]
 		let activeThreadID: String?
+		let activeTurnID: String?
 		let activeExecutionState: ExecutionState?
+		let turnChangeSummary: ConversationTurnChangeSummary?
 		var projectPath: String?
 		{
 			owner.projectPath
@@ -283,7 +285,9 @@ struct ConversationPresentation: Equatable
 			availableSkills: snapshot.skillCatalog?.skills.filter(\.enabled) ?? [],
 			slashCommandUnavailableReasons: snapshot.slashCommandUnavailableReasons,
 			activeThreadID: snapshot.activeThreadID,
-			activeExecutionState: snapshot.activeExecutionState
+			activeTurnID: snapshot.activeTurnID,
+			activeExecutionState: snapshot.activeExecutionState,
+			turnChangeSummary: ConversationTurnChangeSummary(snapshot)
 		)
 		interactions = Interactions(
 			owner: owner,

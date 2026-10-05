@@ -27,6 +27,53 @@ struct GitTurnBaselineLifecycleTests
 		#expect(model.execution.gitTurnBaselineRevisions["worker"] == 1)
 	}
 
+	@Test func capturedPhysicalRootBindsWhenWorkspaceUsesTmpAlias()
+	{
+		var (model, originalContext) = fixture()
+		let checkoutPath = "/tmp/codex-gui-baseline-alias"
+		let physicalRoot = WorkspaceFileIdentity.canonicalRootPath(
+			URL(fileURLWithPath: checkoutPath)
+		)
+		#expect(physicalRoot != checkoutPath)
+		model.identity = WorkspaceIdentity(
+			sessionID: model.identity.sessionID,
+			canonicalCheckoutPath: checkoutPath
+		)
+		let context = OperationContext(
+			workspace: model.identity,
+			generation: originalContext.generation,
+			requestID: originalContext.requestID,
+			threadID: "worker"
+		)
+		model.execution.owner = ExecutionOwner(submission: context)
+		let captured = reference(
+			context,
+			repositoryRoot: physicalRoot
+		)
+		let result = acknowledge(
+			captured,
+			context: context,
+			model: &model
+		)
+		#expect(result.effects.contains
+		{
+			if case .bindGitTurnBaseline(let operation) = $0
+			{
+				return operation.reference == captured && operation.turnID == "actual-turn"
+			}
+			return false
+		})
+		let bound = captured.bound(to: "actual-turn")
+		GitTurnBaselineLifecycle.finishBinding(
+			.captured(bound),
+			context: context,
+			threadID: "worker",
+			turnID: "actual-turn",
+			model: &model
+		)
+		#expect(model.execution.gitTurnBaselineBindings["worker"]?.result == .captured(bound))
+	}
+
 	@Test func staleWorkspaceGenerationRequestAndTurnMismatchNeverBind()
 	{
 		for mismatch in 0 ... 3
@@ -340,13 +387,16 @@ struct GitTurnBaselineLifecycleTests
 		return (model, context)
 	}
 
-	private func reference(_ context: OperationContext) -> GitTurnBaselineReference
+	private func reference(
+		_ context: OperationContext,
+		repositoryRoot: String? = nil
+	) -> GitTurnBaselineReference
 	{
 		GitTurnBaselineReference(
 			identity: GitTurnBaselineIdentity(
 				id: UUID(),
 				workspaceSessionID: context.workspace.sessionID,
-				repositoryRoot: context.workspace.canonicalCheckoutPath!,
+				repositoryRoot: repositoryRoot ?? context.workspace.canonicalCheckoutPath!,
 				executionGeneration: context.generation,
 				submissionRequestID: context.requestID,
 				threadID: "worker"

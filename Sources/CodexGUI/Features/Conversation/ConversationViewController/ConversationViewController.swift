@@ -129,6 +129,8 @@ final class ConversationViewController: NSViewController,
 		cornerRadius: 24,
 		bordered: true
 	)
+	let turnChangeSummaryButton = TurnChangeSummaryButton()
+	let turnChangeSummaryLoader = ConversationTurnChangeSummaryLoader()
 	var composerHeightConstraint: NSLayoutConstraint?
 	let contextView = ComposerContextView()
 	lazy var attachmentDetailsScrollView = BoundedContentScrollView(views: [contextView])
@@ -216,6 +218,7 @@ final class ConversationViewController: NSViewController,
 		turnNavigationTask?.cancel()
 		viewportPublicationTask?.cancel()
 		transcriptIsVisible = false
+		turnChangeSummaryLoader.stop()
 		activityLabel.presentationIsVisible = false
 		turnStatusTimer?.invalidate()
 		turnStatusTimer = nil
@@ -225,6 +228,10 @@ final class ConversationViewController: NSViewController,
 	{
 		super.viewDidAppear()
 		transcriptIsVisible = true
+		if let composerSubmissionPresentation
+		{
+			turnChangeSummaryLoader.render(composerSubmissionPresentation)
+		}
 		activityLabel.presentationIsVisible = true
 		updateTurnStatusTimer()
 	}

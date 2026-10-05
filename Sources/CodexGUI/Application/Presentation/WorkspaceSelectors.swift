@@ -476,6 +476,12 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		if selectedThreadID == activeThreadID,
+			viewedContent.content.liveChangeTurnID == activeTurnID,
+			viewedContent.content.hasAggregateDiff
+		{
+			snapshot.activeTurnDiff = viewedContent.diff
+		}
 		if let threadID = selectedThreadID
 		{
 			let index = model.conversations.turnReferenceIndices[threadID]

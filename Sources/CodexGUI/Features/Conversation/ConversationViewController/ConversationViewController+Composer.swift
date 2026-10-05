@@ -18,10 +18,17 @@ extension ConversationViewController
 		let composerToolbar = makeComposerToolbar()
 		installComposerStack(toolbar: composerToolbar)
 		let composerArea = AppKitLayout.verticalStack(
-			[composerSurface],
-			spacing: 0
+			[turnChangeSummaryButton, composerSurface],
+			spacing: 8
 		)
 		composerArea.alignment = .centerX
+		turnChangeSummaryButton.isHidden = true
+		turnChangeSummaryButton.target = self
+		turnChangeSummaryButton.action = #selector(showTurnChanges)
+		turnChangeSummaryLoader.onChange =
+		{
+			[weak self] in self?.turnChangeSummaryButton.render($0)
+		}
 		composerSurface.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
 
 		return composerArea
@@ -332,6 +339,7 @@ extension ConversationViewController
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)
 	{
 		composerSubmissionPresentation = snapshot
+		turnChangeSummaryLoader.render(snapshot)
 		planModeLabel.stringValue = snapshot.planModeStatus ?? "Plan mode"
 		planModeLabel.isHidden = !snapshot.planMode && snapshot.planModeStatus == nil
 		planModeLabel.textColor = snapshot.planModeStatus == nil ? .systemBlue : .systemOrange
@@ -378,6 +386,11 @@ extension ConversationViewController
 			addContextButton.item(at: index)?.isEnabled = snapshot.projectPath != nil
 		}
 		updateSendState()
+	}
+
+	@objc private func showTurnChanges()
+	{
+		onViewChanges?()
 	}
 
 	func updateSendState()

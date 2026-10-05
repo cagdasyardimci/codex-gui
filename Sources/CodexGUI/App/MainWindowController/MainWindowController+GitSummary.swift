@@ -24,11 +24,11 @@ extension MainWindowController
 		}
 		inspector.gitChanges.updateOwner(
 			owner,
-			lastTurnID: snapshot.lastReportedGitTurn?.id ?? snapshot.lastGitTurnID,
+			lastTurnID: snapshot.visibleGitReviewTurn.id,
 			baselineRevision: snapshot.gitTurnBaselineRevision,
 			baselineFailure: snapshot.gitTurnBaselineFailure
 		)
-		inspector.gitChanges.runtime.setReportedChanges(snapshot.reportedGitChanges)
+		inspector.gitChanges.runtime.setReportedChanges(snapshot.visibleGitReviewTurn.changes)
 		summaryChangesProvider =
 		{
 			[weak self] owner in
@@ -101,11 +101,11 @@ extension MainWindowController
 		}
 		inspector.gitChanges.activate(
 			owner: request.owner,
-			lastTurnID: snapshot.lastReportedGitTurn?.id ?? snapshot.lastGitTurnID,
+			lastTurnID: snapshot.visibleGitReviewTurn.id,
 			baselineRevision: snapshot.gitTurnBaselineRevision,
 			baselineFailure: snapshot.gitTurnBaselineFailure
 		)
-		inspector.gitChanges.runtime.setReportedChanges(snapshot.reportedGitChanges)
+		inspector.gitChanges.runtime.setReportedChanges(snapshot.visibleGitReviewTurn.changes)
 		paneController.setReviewCollapsed(false)
 	}
 
@@ -132,11 +132,11 @@ extension MainWindowController
 				snapshot,
 				storeIdentity: target.presentationIdentity
 			),
-			lastTurnID: snapshot.lastReportedGitTurn?.id ?? snapshot.lastGitTurnID,
+			lastTurnID: snapshot.visibleGitReviewTurn.id,
 			baselineRevision: snapshot.gitTurnBaselineRevision,
 			baselineFailure: snapshot.gitTurnBaselineFailure
 		)
-		inspector.gitChanges.runtime.setReportedChanges(snapshot.reportedGitChanges)
+		inspector.gitChanges.runtime.setReportedChanges(snapshot.visibleGitReviewTurn.changes)
 		if let scope
 		{
 			inspector.gitChanges.runtime.selectScope(scope)

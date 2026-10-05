@@ -158,9 +158,16 @@ enum GitTurnBaselineLifecycle
 		threadID: String
 	) -> Bool
 	{
+		guard let checkoutPath = context.workspace.canonicalCheckoutPath
+		else
+		{
+			return false
+		}
 		let identity = reference.identity
 		return identity.workspaceSessionID == context.workspace.sessionID
-			&& identity.repositoryRoot == context.workspace.canonicalCheckoutPath
+			&& identity.repositoryRoot == WorkspaceFileIdentity.canonicalRootPath(
+				URL(fileURLWithPath: checkoutPath)
+			)
 			&& identity.executionGeneration == context.generation
 			&& identity.submissionRequestID == context.requestID
 			&& identity.threadID == threadID
