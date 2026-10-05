@@ -190,6 +190,7 @@ struct CodexItem: Sendable
 	let durationMs: Double?
 	let changes: [FileChange]
 	let references: [UserMessageReference]
+	let subagentActivity: CodexSubagentActivity?
 
 	init?(json: [String: Any])
 	{
@@ -200,6 +201,8 @@ struct CodexItem: Sendable
 		}
 		self.id = id
 		self.type = type
+		self.subagentActivity = type == "subAgentActivity"
+			? CodexSubagentActivity(json: json) : nil
 
 		let content = Self.decodeContent(
 			from: json,

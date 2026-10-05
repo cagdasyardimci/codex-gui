@@ -4,7 +4,7 @@ struct ConversationActivityRow: Equatable
 {
 	enum Kind: Hashable
 	{
-		case group, read, search, listFiles, command, image
+		case group, read, search, listFiles, command, image, subagent
 	}
 	let id: String
 	let sourceEntryID: String
@@ -15,6 +15,7 @@ struct ConversationActivityRow: Equatable
 	var linkTitle: String? = nil
 	var imagePath: String? = nil
 	var command: ConversationCommand? = nil
+	var subagents: [CodexSubagentActivity] = []
 	var expanded: Bool = false
 }
 
@@ -221,6 +222,13 @@ enum ConversationTranscriptRow: Equatable
 					expanded: !collapsedGroupIDs.contains(entry.id)
 				)))
 			}
+			else if case .subagent(let agent) = entry.activity
+			{
+				rows.append(.activity(ConversationSubagentRows.row(
+					id: entry.id,
+					agents: [agent]
+				)))
+			}
 			else if entry.kind != .tool || !entry.body
 				.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 			{
@@ -239,7 +247,7 @@ enum ConversationTranscriptRow: Equatable
 		{
 			rows.append(.turnStatus(timing))
 		}
-		return rows
+		return ConversationSubagentRows.group(rows)
 	}
 
 	private static func activityRows(

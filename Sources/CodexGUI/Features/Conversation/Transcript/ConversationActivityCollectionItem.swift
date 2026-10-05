@@ -242,7 +242,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			previousPosition: previousPosition
 		)
 		arrangeActivityViews(arrangedViews)
-		view.setAccessibilityLabel(row.title)
+		view.toolTip = row.subagents.isEmpty ? nil : titleLabel.toolTip
+		view.setAccessibilityLabel(row.subagents.isEmpty ? row.title : titleLabel.toolTip)
 		view.needsLayout = true
 	}
 
@@ -254,7 +255,11 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		{
 			titleLabel.stringValue = "Read \(linkTitle)"
 		}
-		titleLabel.toolTip = row.command?.command ?? row.title
+		titleLabel.toolTip = row.subagents.isEmpty ? row.command?.command ?? row.title
+			: row.subagents.map
+			{
+				"\($0.name) \($0.action)"
+			}.joined(separator: "\n")
 		fileButton.attributedTitle = NSAttributedString(
 			string: row.linkTitle ?? "",
 			attributes: [.font: NSFont.systemFont(ofSize: 14),
@@ -271,7 +276,10 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			.defaultLow,
 			for: .horizontal
 		)
-		var headerViews: [NSView] = [icon, titleLabel]
+		var headerViews: [NSView] = [
+			row.kind == .subagent ? ConversationSubagentAvatars.make(row.subagents) : icon,
+			titleLabel
+		]
 		if hasLink
 		{
 			headerViews.append(fileButton)
@@ -711,6 +719,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		case .search, .listFiles: return .search
 		case .image: return .images
 		case .command: return .terminal
+		case .subagent: return .agent
 		case .group:
 			return row.title.hasPrefix("Read") ? .bookOpen :
 				(row.title.hasPrefix("Searched") ? .search : .terminal)

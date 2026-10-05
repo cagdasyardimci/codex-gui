@@ -55,7 +55,10 @@ let package = Package(
 					package: "swift-mermaid"
 				),
 			],
-			resources: [.copy("Resources/AppIcon.icns")]
+			resources: [
+				.copy("Resources/AppIcon.icns"),
+				.copy("Resources/SubagentAvatars")
+			]
 		),
 		.testTarget(
 			name: "CodexGUITests",

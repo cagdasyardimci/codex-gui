@@ -30,6 +30,8 @@ In VS Code, use `./scripts/bundle.sh` as the pre-launch task and `${workspaceFol
 
 ## Interface dependencies
 
+Subagent avatars use DiceBear's [Gaze Geometric preset](https://www.dicebear.com/styles/gaze/presets/), dedicated to the public domain under CC0 1.0. Static SVGs are bundled for offline use; no DiceBear service or runtime library is required. The [avatar notice](Sources/CodexGUI/Resources/SubagentAvatars/NOTICE.txt) credits DiceBear and identifies the artwork license.
+
 Interface icons use the MIT-licensed, unofficial
 [Apps SDK UI Swift port](https://github.com/Pmen225/apps-sdk-ui-swift), pinned to commit
 `07cd708b3670948155d913f863ed4f0d8529ab2e`. The original artwork comes from OpenAI.

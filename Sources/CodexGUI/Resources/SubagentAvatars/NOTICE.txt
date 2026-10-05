@@ -1,0 +1,11 @@
+Subagent avatars: Gaze by DiceBear, Geometric preset
+
+Artwork: CC0 1.0 Universal Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+Style: https://www.dicebear.com/styles/gaze/
+Preset: https://www.dicebear.com/styles/gaze/presets/
+License declaration: https://github.com/dicebear/styles/blob/main/LICENSE.md
+
+The artwork's CC0 dedication is separate from the MIT license of
+CodexGUI's original source code. This credit does not imply endorsement
+by DiceBear.

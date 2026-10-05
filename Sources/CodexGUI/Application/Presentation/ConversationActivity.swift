@@ -15,6 +15,7 @@ enum ConversationActivity: Equatable
 {
 	case command(ConversationCommand)
 	case image(path: String)
+	case subagent(CodexSubagentActivity)
 	case fileChanges(
 		[FileChange],
 		status: String

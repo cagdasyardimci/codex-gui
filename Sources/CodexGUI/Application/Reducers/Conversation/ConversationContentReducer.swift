@@ -790,6 +790,17 @@ enum ConversationContentReducer
 					actions: item.commandActions
 				))
 			)
+		case "subAgentActivity":
+			return ConversationEntry(
+				id: id,
+				kind: .tool,
+				title: "Subagent",
+				body: "",
+				activity: item.subagentActivity.map
+				{
+					.subagent($0)
+				}
+			)
 		case "imageView":
 			return ConversationEntry(
 				id: id,
