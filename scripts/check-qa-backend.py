@@ -122,6 +122,25 @@ def check_available(directory):
         validation = [item for item in first_turn['items'] if item['type'] == 'commandExecution']
         assert [item.get('exitCode') for item in validation] == [0, 1, None]
 
+        references = backend.request('thread/turns/list', {
+            'threadId': 'qa-review', 'itemsView': 'notLoaded'})
+        assert [turn['id'] for turn in references['data']] == [turn['id'] for turn in turns]
+        assert all(turn['items'] == [] and turn['itemsView'] == 'notLoaded'
+                   for turn in references['data'])
+        selected_items = []
+        cursor = None
+        while True:
+            parameters = {'threadId': 'qa-review', 'turnId': first_turn['id'], 'limit': 2}
+            if cursor:
+                parameters['cursor'] = cursor
+            page = backend.request('thread/items/list', parameters)
+            assert all(row['turnId'] == first_turn['id'] for row in page['data'])
+            selected_items.extend(row['item'] for row in page['data'])
+            cursor = page['nextCursor']
+            if cursor is None:
+                break
+        assert selected_items == first_turn['items']
+
         context = backend.request('thread/turns/list', {'threadId': 'qa-context'})
         assert context['nextCursor'] == 'qa-context-older'
         assert any(item['id'] == 'qa-context-current-answer'

@@ -936,7 +936,30 @@ for line in sys.stdin:
         result = {}
     elif method == 'thread/turns/list':
         turns, next_cursor = history(params.get('threadId'), params.get('cursor'))
+        if params.get('itemsView') == 'notLoaded':
+            turns = [{**turn, 'items': [], 'itemsView': 'notLoaded'} for turn in turns]
         result = {'data': turns, 'nextCursor': next_cursor}
+    elif method == 'thread/items/list':
+        turns, history_cursor = history(params.get('threadId'))
+        visited = set()
+        while history_cursor and history_cursor not in visited:
+            visited.add(history_cursor)
+            older, history_cursor = history(params.get('threadId'), history_cursor)
+            turns = older + turns
+        turn = next((turn for turn in turns if turn['id'] == params.get('turnId')), None)
+        if turn is None:
+            send({'id': request['id'], 'error': {
+                'code': -32602, 'message': 'Synthetic item request needs an existing turn.'}})
+            continue
+        items = turn['items']
+        if params.get('sortDirection') == 'desc':
+            items = list(reversed(items))
+        cursor = params.get('cursor')
+        offset = int(cursor.removeprefix('qa-items:')) if cursor else 0
+        limit = max(1, int(params.get('limit', 100)))
+        data = [{'turnId': turn['id'], 'item': item} for item in items[offset:offset + limit]]
+        next_cursor = f'qa-items:{offset + limit}' if offset + limit < len(items) else None
+        result = {'data': data, 'nextCursor': next_cursor, 'backwardsCursor': None}
     elif method == 'thread/name/set':
         refresh_saved_threads()
         for t in threads:
