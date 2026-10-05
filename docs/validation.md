@@ -4,14 +4,26 @@
 
 Run `make check` to validate style-driver regressions, Swift formatting, the application
 build and Swift Testing. Native popover layout tests run in a separate test-host lifecycle.
-The complete suite contains 385 Swift tests across 50 suites and 12 Python style-driver
-tests. Tests cover protocol framing and request ownership, reducer transitions, stale
+The runner reports the executed test and suite counts. Tests cover protocol framing and
+request ownership, reducer transitions, stale
 results, ordered persistence, workspace recovery, late command outcomes, cleanup and
 quit barriers, transcript preparation, review and native layout.
 
 Run `python3 scripts/check-qa-backend.py` for the isolated backend fixture checker and
 `git diff --check` for whitespace errors. `scripts/bundle.sh` creates and ad hoc signs
 the development app bundle. These checks do not require a live model turn.
+
+Ordinary-chat concurrency regressions cover shared-connection starts, interleaved output
+and approvals, independent navigation and drafts, steering and Stop, background completion,
+stale callbacks, relaunch recovery and aggregate quit barriers. Existing managed-checkout
+tests remain part of the same gate.
+
+Run `python3 scripts/check-concurrent-app-server.py --help` for the installed-backend
+concurrency probe. It starts an isolated app-server and a localhost synthetic Responses
+provider, holds two turns in one temporary checkout, interrupts one, and releases the other
+to completion. It excludes account credentials and does not use remote model inference.
+Its evidence establishes the exercised backend protocol behavior with that synthetic
+provider; it does not establish live GUI behavior or real-model acceptance.
 
 ## Native and live acceptance
 

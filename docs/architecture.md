@@ -35,10 +35,29 @@ Execution ownership is independent of the displayed conversation. Results must m
 their pending operation, owner and connection generation. Selecting another chat does
 not transfer an active turn, approval, command result, draft or deferred callback.
 
+`ExecutionRegistry` retains one execution value per ordinary conversation. An anonymous
+submission uses its draft lifetime until preparation assigns a thread ID.
+`WorkspaceExecutionScope` routes captured requests and backend thread/turn events through
+the existing reducers. Its temporary reduction scope is restored before publication;
+`WorkspaceModel.execution` then projects the selected conversation. Aggregate lifecycle
+checks inspect every registry entry rather than that selected projection.
+
+Ordinary chats in one checkout share the existing app-server connection and can run
+independently. Managed task checkouts keep separate stores, connections and ownership
+validation. Both paths reuse the same execution transitions. Per-chat Git baselines and
+reported patches retain their owners, while working-tree comparisons describe the shared
+checkout and can include other chats' edits.
+
 An interrupted agent turn does not establish command cancellation. Known commands
 retain their thread/turn/item identity until explicit terminal evidence arrives.
 Uncertain outcomes block checkout cleanup and prevent deferred quitting. Reconnection,
 relaunch and incomplete history cannot silently clear these barriers or resend work.
+
+A synchronous local checkpoint records recoverable thread IDs before starting a turn.
+Startup restores those IDs alongside unresolved command ownership; reconnect reads every
+recoverable thread. A saved running history entry alone does not prove the remote turn is
+still active. Recovery adopts a current transport owner only with authoritative live
+activity, and never automatically resends the prompt.
 
 `TaskWorkspaceCoordinator` maintains the store registry and executes checkout lifecycle
 effects. `WorkspaceCoordinatorReducer` owns selection, creation, recovery, cleanup and
