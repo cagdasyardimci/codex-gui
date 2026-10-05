@@ -13,9 +13,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -49,7 +54,14 @@ extension ApplicationStateTests
 
 	@Test func responseFailureAfterSynchronousTerminalEventPreservesOutcome() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -85,7 +97,14 @@ extension ApplicationStateTests
 
 	@Test func olderCompletionReadCannotRestoreCommandAfterFreshRecoveryConfirmsExit() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -153,9 +172,14 @@ extension ApplicationStateTests
 		}
 		let service = MockCodexService()
 		service.suspendTurnStart = true
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -222,9 +246,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -266,9 +295,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -368,9 +402,14 @@ extension ApplicationStateTests
 			"cwd": "/tmp",
 			"status": ["type": "idle"],
 		])!
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -481,9 +520,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -573,9 +617,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -622,9 +671,14 @@ extension ApplicationStateTests
 		}
 		let service = MockCodexService()
 		service.suspendSteer = true
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -671,7 +725,14 @@ extension ApplicationStateTests
 
 	@Test func disconnectedTurnRemainsActiveUntilItsSavedOutcomeIsConfirmed() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -704,7 +765,14 @@ extension ApplicationStateTests
 
 	@Test func obsoleteStopFailureCannotFailTheNextTurn() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)

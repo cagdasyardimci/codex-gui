@@ -10,7 +10,12 @@ struct LocalStorageTests
 	@MainActor
 	func recentProjectsAreUniqueNewestFirstAndLimited() throws
 	{
-		let storage = LocalStorage(defaults: try makeDefaults())
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		let rootURL = temporaryRootURL()
 
 		for projectIndex in 0 ..< 12
@@ -34,7 +39,12 @@ struct LocalStorageTests
 	@MainActor
 	func draftsAreSeparatedByProjectAndConversation() throws
 	{
-		let storage = LocalStorage(defaults: try makeDefaults())
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		let firstProjectURL = temporaryRootURL().appendingPathComponent("first-project")
 		let secondProjectURL = temporaryRootURL().appendingPathComponent("second-project")
 
@@ -85,7 +95,12 @@ struct LocalStorageTests
 	@MainActor
 	func projectSymlinksShareRecentProjectAndDraftIdentity() throws
 	{
-		let storage = LocalStorage(defaults: try makeDefaults())
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		let rootURL = temporaryRootURL()
 		let projectURL = rootURL.appendingPathComponent(
 			"project",
@@ -122,7 +137,12 @@ struct LocalStorageTests
 	@MainActor
 	func legacyRecentProjectAndDraftAreMigrated() throws
 	{
-		let defaults = try makeDefaults()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let defaults = defaultsFixture.defaults
 		let legacyProjectURL = temporaryRootURL().appendingPathComponent("legacy-project")
 		defaults.set(
 			legacyProjectURL.path,
@@ -148,7 +168,12 @@ struct LocalStorageTests
 	@MainActor
 	func selectedConversationPersistsPerProject() throws
 	{
-		let defaults = try makeDefaults()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let defaults = defaultsFixture.defaults
 		let first = temporaryRootURL().appendingPathComponent("first")
 		let second = temporaryRootURL().appendingPathComponent("second")
 		let storage = LocalStorage(defaults: defaults)
@@ -185,7 +210,12 @@ struct LocalStorageTests
 	@MainActor
 	func modelPreferencePersists() throws
 	{
-		let defaults = try makeDefaults()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let defaults = defaultsFixture.defaults
 		let storage = LocalStorage(defaults: defaults)
 		#expect(storage.modelPreference == nil)
 		storage.saveModelPreference(
@@ -211,14 +241,6 @@ struct LocalStorageTests
 				)
 		)
 	}
-}
-
-private func makeDefaults() throws -> UserDefaults
-{
-	let suiteName = "LocalStorageTests.\(UUID().uuidString)"
-	let defaults = try #require(UserDefaults(suiteName: suiteName))
-	defaults.removePersistentDomain(forName: suiteName)
-	return defaults
 }
 
 private func temporaryRootURL() -> URL

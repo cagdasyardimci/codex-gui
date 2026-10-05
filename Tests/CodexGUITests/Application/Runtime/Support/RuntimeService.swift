@@ -17,48 +17,55 @@ final class RuntimeService: CodexService
 	var responseDeliveryEvidence: Bool?
 	var responseRequests: [String] = []
 	var responseEvidenceQueries: [String] = []
-	private var starts: [String: RuntimeSignal] = [:]
-	private var returned: [String: RuntimeSignal] = [:]
-	private var reads: [String: CheckedContinuation<ThreadDetail, Error>] = [:]
-	private var turn: CheckedContinuation<CodexTurn, Error>?
-	private var response: CheckedContinuation<Void, Never>?
+	private var readStartSignals: [String: RuntimeSignal] = [:]
+	private var readReturnSignals: [String: RuntimeSignal] = [:]
+	private var pendingReads: [String: CheckedContinuation<ThreadDetail, Error>] = [:]
+	private var pendingTurn: CheckedContinuation<CodexTurn, Error>?
+	private var pendingResponse: CheckedContinuation<Void, Never>?
 
 	func readStarted(_ id: String) async
 	{
 		await signal(
 			id,
-			in: &starts
+			in: &readStartSignals
 		).wait()
 	}
+
 	func readReturned(_ id: String) async
 	{
 		await signal(
 			id,
-			in: &returned
+			in: &readReturnSignals
 		).wait()
 	}
+
 	func completeRead(_ id: String)
 	{
-		reads.removeValue(forKey: id)?.resume(returning: detail(id))
+		pendingReads.removeValue(forKey: id)?.resume(returning: detail(id))
 	}
+
 	func failRead(_ id: String)
 	{
-		reads.removeValue(forKey: id)?.resume(throwing: AppServerError.protocolError("read failed"))
+		pendingReads.removeValue(forKey: id)?
+			.resume(throwing: AppServerError.protocolError("read failed"))
 	}
+
 	func completeTurn()
 	{
-		turn?.resume(returning: CodexTurn(json: [
+		pendingTurn?.resume(returning: CodexTurn(json: [
 			"id": "turn",
 			"status": "inProgress",
 			"items": []
 		])!)
-		turn = nil
+		pendingTurn = nil
 	}
+
 	func completeResponse()
 	{
-		response?.resume()
-		response = nil
+		pendingResponse?.resume()
+		pendingResponse = nil
 	}
+
 	private func signal(
 		_ id: String,
 		in signals: inout [String: RuntimeSignal]
@@ -68,10 +75,12 @@ final class RuntimeService: CodexService
 		{
 			return existing
 		}
-		let created = RuntimeSignal()
-		signals[id] = created
-		return created
+
+		let signal = RuntimeSignal()
+		signals[id] = signal
+		return signal
 	}
+
 	private func detail(_ id: String) -> ThreadDetail
 	{
 		ThreadDetail(
@@ -80,16 +89,20 @@ final class RuntimeService: CodexService
 			nextTurnsCursor: nil
 		)
 	}
+
 	func executableVersion() async throws -> String
 	{
 		"fixture"
 	}
+
 	func connect() async throws
 	{
 	}
+
 	func disconnect()
 	{
 	}
+
 	func accountStatus() async throws -> AccountStatus
 	{
 		AccountStatus(
@@ -98,18 +111,22 @@ final class RuntimeService: CodexService
 			requiresOpenAIAuth: true
 		)
 	}
+
 	func startBrowserLogin() async throws -> URL
 	{
 		URL(string: "https://example.com")!
 	}
+
 	func models() async throws -> [ModelOption]
 	{
 		[]
 	}
+
 	func threads(for directory: URL) async throws -> [ThreadSummary]
 	{
 		[]
 	}
+
 	func startThread(
 		in directory: URL,
 		model: String?
@@ -117,10 +134,12 @@ final class RuntimeService: CodexService
 	{
 		detail("created")
 	}
+
 	func resumeThread(id: String) async throws -> ThreadDetail
 	{
 		detail(id)
 	}
+
 	func readThread(id: String) async throws -> ThreadDetail
 	{
 		readIDs.append(id)
@@ -128,19 +147,20 @@ final class RuntimeService: CodexService
 		{
 			signal(
 				id,
-				in: &returned
+				in: &readReturnSignals
 			).signal()
 		}
 		return try await withCheckedThrowingContinuation
 		{
 			continuation in
-			reads[id] = continuation
+			pendingReads[id] = continuation
 			signal(
 				id,
-				in: &starts
+				in: &readStartSignals
 			).signal()
 		}
 	}
+
 	func loadEarlierTurns(
 		threadId: String,
 		cursor: String
@@ -149,6 +169,7 @@ final class RuntimeService: CodexService
 	{
 		([], nil)
 	}
+
 	func startTurn(
 		threadId: String,
 		text: String,
@@ -159,10 +180,11 @@ final class RuntimeService: CodexService
 		try await withCheckedThrowingContinuation
 		{
 			continuation in
-			turn = continuation
+			pendingTurn = continuation
 			turnStarted.signal()
 		}
 	}
+
 	func startTurn(
 		threadId: String,
 		inputs: [TurnInput],
@@ -180,6 +202,7 @@ final class RuntimeService: CodexService
 			effort: effort
 		)
 	}
+
 	func steerTurn(
 		threadId: String,
 		expectedTurnId: String,
@@ -188,12 +211,14 @@ final class RuntimeService: CodexService
 	{
 		expectedTurnId
 	}
+
 	func interrupt(
 		threadId: String,
 		turnId: String
 	) async throws
 	{
 	}
+
 	func respond(
 		to requestID: String,
 		with response: InteractionResponse
@@ -201,6 +226,7 @@ final class RuntimeService: CodexService
 	{
 		responseRequests.append(requestID)
 	}
+
 	func respondAndWait(
 		to requestID: String,
 		with response: InteractionResponse
@@ -214,10 +240,11 @@ final class RuntimeService: CodexService
 		await withCheckedContinuation
 		{
 			continuation in
-			self.response = continuation
+			self.pendingResponse = continuation
 			responseStarted.signal()
 		}
 	}
+
 	func responseMayHaveBeenSent(to requestID: String) -> Bool?
 	{
 		responseEvidenceQueries.append(requestID)

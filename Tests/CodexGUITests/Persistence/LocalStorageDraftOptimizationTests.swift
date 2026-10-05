@@ -79,18 +79,19 @@ struct LocalStorageDraftOptimizationTests
 		let first = LocalStorage(defaults: defaults)
 		let second = LocalStorage(defaults: defaults)
 		let project = URL(fileURLWithPath: "/tmp/draft-optimization")
-		let a = [ComposerContextItem(
+		let firstThreadContext = [ComposerContextItem(
 			kind: .fileReference,
 			title: "A",
 			path: "/tmp/a.swift"
 		)]
-		let b = [ComposerContextItem(
+		let secondThreadContext = [ComposerContextItem(
 			kind: .fileReference,
 			title: "B",
 			path: "/tmp/b.swift"
 		)]
+
 		first.saveDraftContext(
-			a,
+			firstThreadContext,
 			for: project,
 			threadID: "a"
 		)
@@ -98,15 +99,17 @@ struct LocalStorageDraftOptimizationTests
 			for: project,
 			threadID: "b"
 		).isEmpty)
+
 		second.saveDraftContext(
-			b,
+			secondThreadContext,
 			for: project,
 			threadID: "b"
 		)
 		#expect(first.draftContext(
 			for: project,
 			threadID: "b"
-		) == b)
+		) == secondThreadContext)
+
 		first.saveDraftContext(
 			[],
 			for: project,
@@ -119,7 +122,7 @@ struct LocalStorageDraftOptimizationTests
 		#expect(second.draftContext(
 			for: project,
 			threadID: "b"
-		) == b)
+		) == secondThreadContext)
 	}
 
 	@Test func canonicallyEquivalentEditsPreserveExactStoredUTF8() throws

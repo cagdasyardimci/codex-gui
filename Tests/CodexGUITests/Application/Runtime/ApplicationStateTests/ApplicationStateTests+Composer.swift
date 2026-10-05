@@ -7,7 +7,14 @@ extension ApplicationStateTests
 {
 	@Test func lateSteeringFailureCannotChangeNextSubmissionOwner() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -58,7 +65,12 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
-		let storage = makeStorage()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		let state = WorkspaceTestFixture(
 			server: service,
 			storage: storage
@@ -327,7 +339,12 @@ extension ApplicationStateTests
 		try Data([0x89, 0x50, 0x4e, 0x47]).write(to: image)
 		let service = MockCodexService()
 		service.suspendTurnStart = true
-		let storage = makeStorage()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		let state = WorkspaceTestFixture(
 			server: service,
 			storage: storage
@@ -404,9 +421,14 @@ extension ApplicationStateTests
 		let image = project.appendingPathComponent("screenshot.png")
 		try Data([0x89, 0x50, 0x4e, 0x47]).write(to: image)
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -462,9 +484,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -539,7 +566,12 @@ extension ApplicationStateTests
 		{
 			try? FileManager.default.removeItem(at: project)
 		}
-		let storage = makeStorage()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		storage.rememberProject(project)
 		storage.saveSelectedThreadID(
 			"thread-1",
@@ -588,7 +620,12 @@ extension ApplicationStateTests
 		{
 			try? FileManager.default.removeItem(at: project)
 		}
-		let storage = makeStorage()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		let service = MockCodexService()
 		let state = WorkspaceTestFixture(
 			server: service,
@@ -655,9 +692,14 @@ extension ApplicationStateTests
 		}
 		let service = MockCodexService()
 		service.suspendTurnStart = true
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -714,9 +756,14 @@ extension ApplicationStateTests
 				"enabled": true,
 			])!
 		]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage(),
+			storage: LocalStorage(defaults: defaultsFixture.defaults),
 			projectContextStore: ProjectContextStore(directory: contextDirectory)
 		)
 		await state.inputs.connect()

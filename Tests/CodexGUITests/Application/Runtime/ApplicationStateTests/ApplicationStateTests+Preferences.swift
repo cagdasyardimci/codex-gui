@@ -19,9 +19,14 @@ extension ApplicationStateTests
 			"supportedReasoningEfforts": [["reasoningEffort": "medium"]],
 			"serviceTiers": [["id": "express", "name": "Fast", "description": "Fixture fast tier"]],
 		])!]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -72,7 +77,12 @@ extension ApplicationStateTests
 		{
 			try? FileManager.default.removeItem(at: project)
 		}
-		let storage = makeStorage()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
 		storage.saveModelPreference(
 			modelID: "old-model",
 			effort: "high"
@@ -128,9 +138,14 @@ extension ApplicationStateTests
 		}
 		let service = MockCodexService()
 		service.modelsError = AppServerError.protocolError("temporary model failure")
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -178,9 +193,14 @@ extension ApplicationStateTests
 				],
 			])!
 		]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage(),
+			storage: LocalStorage(defaults: defaultsFixture.defaults),
 			projectContextStore: projectContextStore
 		)
 		await state.inputs.connect()

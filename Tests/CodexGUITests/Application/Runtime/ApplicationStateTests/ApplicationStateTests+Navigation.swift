@@ -16,9 +16,14 @@ extension ApplicationStateTests
 		let service = MockCodexService()
 		service.suspendVersion = !afterVersion
 		service.suspendConnection = afterVersion
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		#expect(state.currentSnapshot.projectPath == nil)
 		let connection = Task
@@ -438,9 +443,14 @@ extension ApplicationStateTests
 			"name": "Other",
 			"cwd": project.path,
 		])!
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -501,9 +511,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -591,9 +606,14 @@ extension ApplicationStateTests
 			items: [["id": "answer-b", "type": "agentMessage", "text": "Current history in B"]]
 		)
 		service.turnsByThreadID[other.id] = [currentHistory]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -694,9 +714,14 @@ extension ApplicationStateTests
 			],
 			nextCursor: nil
 		)
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -802,9 +827,14 @@ extension ApplicationStateTests
 				]
 			)
 		]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -838,7 +868,14 @@ extension ApplicationStateTests
 
 	@Test func completionReadCannotPopulateAnotherProjectsSearchIndex() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		let otherProject = try makeProject()
 		defer
 		{
@@ -890,9 +927,14 @@ extension ApplicationStateTests
 			id: "latest",
 			status: "completed"
 		)]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -947,9 +989,14 @@ extension ApplicationStateTests
 				items: [["id": "latest-answer", "type": "agentMessage", "text": "needle latest"]]
 			)
 			service.savedTurns = [latest]
+			let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+			defer
+			{
+				defaultsFixture.cleanup()
+			}
 			let state = WorkspaceTestFixture(
 				server: service,
-				storage: makeStorage()
+				storage: LocalStorage(defaults: defaultsFixture.defaults)
 			)
 			await state.inputs.connect()
 			service.configureCheckout(project)
@@ -1018,9 +1065,14 @@ extension ApplicationStateTests
 				id: "latest",
 				status: "completed"
 			)]
+			let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+			defer
+			{
+				defaultsFixture.cleanup()
+			}
 			let state = WorkspaceTestFixture(
 				server: service,
-				storage: makeStorage()
+				storage: LocalStorage(defaults: defaultsFixture.defaults)
 			)
 			await state.inputs.connect()
 			service.configureCheckout(project)
@@ -1094,9 +1146,14 @@ extension ApplicationStateTests
 				id: "latest",
 				status: "completed"
 			)]
+			let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+			defer
+			{
+				defaultsFixture.cleanup()
+			}
 			let state = WorkspaceTestFixture(
 				server: service,
-				storage: makeStorage()
+				storage: LocalStorage(defaults: defaultsFixture.defaults)
 			)
 			await state.inputs.connect()
 			service.configureCheckout(project)

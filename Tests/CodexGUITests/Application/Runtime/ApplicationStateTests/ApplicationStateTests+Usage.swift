@@ -8,9 +8,14 @@ extension ApplicationStateTests
 	@Test func sparseUsageUpdatesCoalesceDuringAnActiveRead() async throws
 	{
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		#expect(service.rateLimitReadCount == 1)
@@ -39,9 +44,14 @@ extension ApplicationStateTests
 	@Test func usageUpdateDuringSecondReadGetsOneMoreBoundedRead() async throws
 	{
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.suspendRateLimitReadNumbers = [2, 3]
@@ -75,9 +85,14 @@ extension ApplicationStateTests
 	@Test func repeatedUsageInvalidationsStopAtThreeReadsAndShowStaleWarning() async throws
 	{
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.suspendRateLimitReadNumbers = [2, 3, 4]
@@ -106,9 +121,14 @@ extension ApplicationStateTests
 	@Test func cancelledUsageFailureCannotInvalidateReconnectedLimits() async throws
 	{
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.suspendNextRateLimitRead = true
@@ -137,9 +157,14 @@ extension ApplicationStateTests
 	{
 		let service = MockCodexService()
 		let clock = ControlledUsageClock()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage(),
+			storage: LocalStorage(defaults: defaultsFixture.defaults),
 			usageRuntime: clock.runtime
 		)
 		var publishedFreshness: [Bool] = []

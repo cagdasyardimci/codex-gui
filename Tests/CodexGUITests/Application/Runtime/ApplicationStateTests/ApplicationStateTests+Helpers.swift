@@ -35,17 +35,20 @@ extension ApplicationStateTests
 		return model
 	}
 
-	func makeRunningState(publicationWait: @escaping @MainActor () async -> Void =
-	{
-		try? await Task.sleep(for: .milliseconds(50))
-	}) async throws
+	func makeRunningState(
+		defaults: UserDefaults,
+		publicationWait: @escaping @MainActor () async -> Void =
+		{
+			try? await Task.sleep(for: .milliseconds(50))
+		}
+	) async throws
 		-> (WorkspaceTestFixture, MockCodexService, URL)
 	{
 		let project = try makeProject()
 		let service = MockCodexService()
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage(),
+			storage: LocalStorage(defaults: defaults),
 			publicationWait: publicationWait
 		)
 		await state.inputs.connect()
@@ -105,14 +108,6 @@ extension ApplicationStateTests
 			withIntermediateDirectories: true
 		)
 		return project
-	}
-
-	func makeStorage() -> LocalStorage
-	{
-		let suite = "CodexGUIStateTests.\(UUID().uuidString)"
-		let defaults = UserDefaults(suiteName: suite)!
-		defaults.removePersistentDomain(forName: suite)
-		return LocalStorage(defaults: defaults)
 	}
 
 	func makeTurn(

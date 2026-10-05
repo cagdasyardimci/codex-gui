@@ -210,13 +210,7 @@ final class MockCodexService: CodexService
 	func threads(for directory: URL) async throws -> [ThreadSummary]
 	{
 		fixtureDirectory = directory
-		return [thread] + (otherThread.map
-		{
-			[scopedSummary(
-				$0,
-				directory: directory
-			)]
-		} ?? [])
+		return activeThreadSummaries(in: directory)
 	}
 
 	func threads(
@@ -226,15 +220,25 @@ final class MockCodexService: CodexService
 	{
 		fixtureDirectory = directory
 		threadListCount += 1
-		return archived
-			? (archivedThreadIDs.contains(thread.id) ? [thread] : [])
-			: [thread] + (otherThread.map
-			{
-				[scopedSummary(
-					$0,
-					directory: directory
-				)]
-			} ?? [])
+		if archived
+		{
+			return archivedThreadIDs.contains(thread.id) ? [thread] : []
+		}
+
+		return activeThreadSummaries(in: directory)
+	}
+
+	private func activeThreadSummaries(in directory: URL) -> [ThreadSummary]
+	{
+		var summaries = [thread]
+		if let otherThread
+		{
+			summaries.append(scopedSummary(
+				otherThread,
+				directory: directory
+			))
+		}
+		return summaries
 	}
 
 	func renameThread(
@@ -364,7 +368,15 @@ final class MockCodexService: CodexService
 				directory: directory
 			)
 		}
-		let summary = id == otherThread?.id ? otherThread! : thread
+		let summary: ThreadSummary
+		if let otherThread, id == otherThread.id
+		{
+			summary = otherThread
+		}
+		else
+		{
+			summary = thread
+		}
 		return ThreadDetail(
 			summary: scopedSummary(
 				summary,

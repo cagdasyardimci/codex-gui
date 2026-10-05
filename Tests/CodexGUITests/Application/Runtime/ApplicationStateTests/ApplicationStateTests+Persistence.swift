@@ -616,9 +616,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -657,9 +662,14 @@ extension ApplicationStateTests
 				id: "latest",
 				status: "completed"
 			)]
+			let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+			defer
+			{
+				defaultsFixture.cleanup()
+			}
 			let state = WorkspaceTestFixture(
 				server: service,
-				storage: makeStorage()
+				storage: LocalStorage(defaults: defaultsFixture.defaults)
 			)
 			await state.inputs.connect()
 			service.configureCheckout(project)

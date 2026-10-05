@@ -7,7 +7,14 @@ extension ApplicationStateTests
 {
 	@Test func eachSequentialTerminalTurnRefreshesItsOwnHistory() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -48,10 +55,18 @@ extension ApplicationStateTests
 	@Test func streamingReducesImmediatelyAndCoalescesVisiblePublication() async throws
 	{
 		let publicationGate = PublicationGate()
-		let (state, service, project) = try await makeRunningState(publicationWait:
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults,
+			publicationWait:
 			{
 				await publicationGate.wait()
-			})
+			}
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -118,9 +133,14 @@ extension ApplicationStateTests
 			])
 		)
 		service.otherThread = other
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -215,9 +235,14 @@ extension ApplicationStateTests
 		}
 		let service = MockCodexService()
 		service.steerError = AppServerError.requestTimedOut("turn/steer")
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -262,7 +287,14 @@ extension ApplicationStateTests
 	{
 		for useRefresh in [false, true]
 		{
-			let (state, service, project) = try await makeRunningState()
+			let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+			defer
+			{
+				defaultsFixture.cleanup()
+			}
+			let (state, service, project) = try await makeRunningState(
+				defaults: defaultsFixture.defaults
+			)
 			defer
 			{
 				try? FileManager.default.removeItem(at: project)

@@ -19,12 +19,12 @@ struct EditorHandoffTests
 		{
 			try? FileManager.default.removeItem(at: outsideDirectory)
 		}
-		let (defaults, suite) = try isolatedDefaults()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
 		defer
 		{
-			defaults.removePersistentDomain(forName: suite)
+			defaultsFixture.cleanup()
 		}
-		let handoff = EditorHandoff(defaults: defaults)
+		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
 
 		let outside = outsideDirectory.appendingPathComponent("outside.swift")
 		try Data("outside".utf8).write(to: outside)
@@ -84,12 +84,12 @@ struct EditorHandoffTests
 			at: root.appendingPathComponent("link.swift"),
 			withDestinationURL: externalFile
 		)
-		let (defaults, suite) = try isolatedDefaults()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
 		defer
 		{
-			defaults.removePersistentDomain(forName: suite)
+			defaultsFixture.cleanup()
 		}
-		let handoff = EditorHandoff(defaults: defaults)
+		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
 
 		await #expect
 		{
@@ -115,12 +115,12 @@ struct EditorHandoffTests
 	{
 		let root = try temporaryDirectory()
 		let app = try temporaryDirectory().appendingPathComponent("Fake Code.app")
-		let (defaults, defaultsSuite) = try isolatedDefaults()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
 		defer
 		{
 			try? FileManager.default.removeItem(at: root)
 			try? FileManager.default.removeItem(at: app.deletingLastPathComponent())
-			defaults.removePersistentDomain(forName: defaultsSuite)
+			defaultsFixture.cleanup()
 		}
 		let file = root.appendingPathComponent("folder with spaces/file.swift")
 		try FileManager.default.createDirectory(
@@ -172,10 +172,11 @@ struct EditorHandoffTests
 		)
 		try infoData.write(to: app.appendingPathComponent("Contents/Info.plist"))
 
-		let handoff = EditorHandoff(defaults: defaults)
+		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
 		handoff.preferredApplication = app
 		#expect(
-			EditorHandoff(defaults: defaults).preferredApplication?.standardizedFileURL.path
+			EditorHandoff(defaults: defaultsFixture.defaults)
+				.preferredApplication?.standardizedFileURL.path
 				== app.standardizedFileURL.path
 		)
 		let diff = """
@@ -207,16 +208,5 @@ struct EditorHandoffTests
 			withIntermediateDirectories: true
 		)
 		return url
-	}
-
-	private func isolatedDefaults() throws -> (defaults: UserDefaults, suite: String)
-	{
-		let suite = "EditorHandoffTests.\(UUID().uuidString)"
-		guard let defaults = UserDefaults(suiteName: suite)
-		else
-		{
-			throw CocoaError(.fileWriteUnknown)
-		}
-		return (defaults, suite)
 	}
 }

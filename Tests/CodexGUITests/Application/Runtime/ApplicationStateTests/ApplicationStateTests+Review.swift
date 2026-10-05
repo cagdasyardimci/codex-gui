@@ -197,10 +197,15 @@ extension ApplicationStateTests
 			reference: identity.reference,
 			fingerprint: identity.fingerprint
 		)
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let store = WorkspaceStateStore(
 			model: model,
 			service: service,
-			storage: makeStorage(),
+			storage: LocalStorage(defaults: defaultsFixture.defaults),
 			reviewMarkerStore: markers,
 			persistence: WorkspacePersistenceScheduler(writeDraft:
 				{
@@ -410,9 +415,14 @@ extension ApplicationStateTests
 			]
 		)
 		service.savedTurns = [firstTurn]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -463,9 +473,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		let service = MockCodexService()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -601,9 +616,14 @@ extension ApplicationStateTests
 			),
 		]
 		let defaults = UserDefaults(suiteName: "ReviewStateTests.\(UUID().uuidString)")!
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage(),
+			storage: LocalStorage(defaults: defaultsFixture.defaults),
 			reviewMarkerStore: ReviewMarkerStore(defaults: defaults)
 		)
 		await state.inputs.connect()
@@ -703,9 +723,14 @@ extension ApplicationStateTests
 				]
 			)
 		]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -884,9 +909,14 @@ extension ApplicationStateTests
 				]
 			)
 		]
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
 		let state = WorkspaceTestFixture(
 			server: service,
-			storage: makeStorage()
+			storage: LocalStorage(defaults: defaultsFixture.defaults)
 		)
 		await state.inputs.connect()
 		service.configureCheckout(project)
@@ -957,7 +987,14 @@ extension ApplicationStateTests
 
 	@Test func backgroundCompletionKeepsVisibleConversationAndReviewSelection() async throws
 	{
-		let (state, service, project) = try await makeRunningState()
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let (state, service, project) = try await makeRunningState(
+			defaults: defaultsFixture.defaults
+		)
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)

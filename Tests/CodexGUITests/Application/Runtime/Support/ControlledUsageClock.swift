@@ -7,7 +7,9 @@ import Testing
 final class ControlledUsageClock
 {
 	private var time = Date(timeIntervalSince1970: 100)
-	private var waiters: [(Date, CheckedContinuation<Void, Error>)] = []
+	private var waiters: [
+		(deadline: Date, continuation: CheckedContinuation<Void, Error>)
+	] = []
 	var waiterCount: Int
 	{
 		waiters.count
@@ -39,15 +41,17 @@ final class ControlledUsageClock
 	func advance(by interval: TimeInterval)
 	{
 		time = time.addingTimeInterval(interval)
-		let ready = waiters.filter
+		let readyWaiters = waiters.filter
 		{
-			$0.0 <= time
+			$0.deadline <= time
 		}
+
 		waiters.removeAll
 		{
-			$0.0 <= time
+			$0.deadline <= time
 		}
-		for (_, continuation) in ready
+
+		for (_, continuation) in readyWaiters
 		{
 			continuation.resume()
 		}
