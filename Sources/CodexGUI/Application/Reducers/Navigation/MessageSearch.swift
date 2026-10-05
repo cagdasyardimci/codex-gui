@@ -61,6 +61,11 @@ struct MessageSearchResults: Equatable, Sendable
 
 enum MessageSearch
 {
+	private static let leadingContextCharacters = 60
+	private static let trailingContextCharacters = 100
+	private static let fallbackSnippetCharacters =
+		leadingContextCharacters + trailingContextCharacters
+
 	static func pendingResults(
 		query: String,
 		threads: [SearchableThread],
@@ -176,28 +181,29 @@ enum MessageSearch
 		)
 		else
 		{
-			return String(text.prefix(160))
+			return String(text.prefix(fallbackSnippetCharacters))
 		}
 		let snippetStart =
 			text.index(
 				match.lowerBound,
-				offsetBy: -60,
+				offsetBy: -leadingContextCharacters,
 				limitedBy: text.startIndex
 			)
 			?? text.startIndex
 		let snippetEnd =
 			text.index(
 				match.upperBound,
-				offsetBy: 100,
+				offsetBy: trailingContextCharacters,
 				limitedBy: text.endIndex
 			)
 			?? text.endIndex
 		let prefix = snippetStart == text.startIndex ? "" : "…"
 		let suffix = snippetEnd == text.endIndex ? "" : "…"
-		return prefix + text[snippetStart ..< snippetEnd].replacingOccurrences(
+		let snippetText = text[snippetStart ..< snippetEnd].replacingOccurrences(
 			of: "\n",
 			with: " "
-		) + suffix
+		)
+		return prefix + snippetText + suffix
 	}
 }
 

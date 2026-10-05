@@ -45,8 +45,9 @@ struct ConversationCacheAccounting
 			costs.turns = turns
 			costs.loadedRevision = value.loadedHistoryRevision
 		}
-		if turnsChanged || entryCostsInvalidated
+		let shouldRecalculateAdditionalCosts = turnsChanged || entryCostsInvalidated
 			|| costs.additionalRevision != entries.additionalRevision
+		if shouldRecalculateAdditionalCosts
 		{
 			costs.additionalByTurn = [:]
 			costs.additionalBytes = 0

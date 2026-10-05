@@ -64,11 +64,12 @@ extension ConversationReducer
 		includePreviews: Bool = true
 	)
 	{
-		let initializeWorkspace = !model.conversations.cacheAccounting.hasSynchronizedWorkspace
-		let synchronizeWorkspace = threadIDs == nil || initializeWorkspace
-		let synchronized = synchronizeWorkspace
+		let shouldInitializeWorkspace =
+			!model.conversations.cacheAccounting.hasSynchronizedWorkspace
+		let shouldSynchronizeWorkspace = threadIDs == nil || shouldInitializeWorkspace
+		let synchronizedThreadIDs = shouldSynchronizeWorkspace
 			? Set(model.conversations.content.keys.compactMap(\.threadID)) : threadIDs ?? []
-		if synchronizeWorkspace
+		if shouldSynchronizeWorkspace
 		{
 			for threadID in model.conversations.cacheAccounting.content.keys
 				where model.conversations.content[.thread(threadID)] == nil
@@ -76,7 +77,7 @@ extension ConversationReducer
 				model.conversations.cacheAccounting.remove(threadID: threadID)
 			}
 		}
-		for threadID in synchronized
+		for threadID in synchronizedThreadIDs
 		{
 			synchronizeCacheCosts(
 				threadID: threadID,
@@ -87,7 +88,7 @@ extension ConversationReducer
 				model: &model
 			)
 		}
-		if includePreviews || initializeWorkspace
+		if includePreviews || shouldInitializeWorkspace
 		{
 			enforcePreviewLimits(
 				model: &model,
@@ -284,25 +285,32 @@ extension ConversationReducer
 				)
 			}
 		}
-		let hot = hoverCandidates(model: model)
+
+		enforceHoverLimits(model: &model)
+		enforceTextPreviewLimits(model: &model)
+	}
+
+	private static func enforceHoverLimits(model: inout WorkspaceModel)
+	{
+		let cachedHoverTurns = hoverCandidates(model: model)
 		var hoverBodies: [String: [String: Int]] = [:]
-		for candidate in hot
+		for candidate in cachedHoverTurns
 		{
 			hoverBodies[candidate.threadID, default: [:]][candidate.turnID] = candidate.bytes
 		}
 		model.conversations.cacheAccounting.replaceHoverBodies(hoverBodies)
-		var hotBytes = hot.reduce(0)
+		var hoverBytes = cachedHoverTurns.reduce(0)
 		{
 			ConversationCachePolicy.sum(
 				$0,
 				$1.bytes
 			)
 		}
-		var hotCount = hot.count
-		for candidate in hot
+		var hoverCount = cachedHoverTurns.count
+		for candidate in cachedHoverTurns
 		{
-			guard hotCount > ConversationCachePolicy.maximumHoverTurns
-				|| hotBytes > ConversationCachePolicy.hoverBytes
+			guard hoverCount > ConversationCachePolicy.maximumHoverTurns
+				|| hoverBytes > ConversationCachePolicy.hoverBytes
 			else
 			{
 				break
@@ -312,9 +320,13 @@ extension ConversationReducer
 				turnID: candidate.turnID,
 				model: &model
 			)
-			hotCount -= 1
-			hotBytes -= candidate.bytes
+			hoverCount -= 1
+			hoverBytes -= candidate.bytes
 		}
+	}
+
+	private static func enforceTextPreviewLimits(model: inout WorkspaceModel)
+	{
 		let previews = model.conversations.turnReferenceIndices.flatMap
 		{
 			threadID, index in
@@ -357,13 +369,12 @@ extension ConversationReducer
 		}
 		for (threadID, index) in model.conversations.turnReferenceIndices
 		{
-			for turnID in index.previewErrors.keys.sorted().prefix(max(
+			let excessErrorCount = max(
 				0,
-				index.previewErrors
-					.count -
-					ConversationCachePolicy
-					.maximumPreviews
-			))
+				index.previewErrors.count - ConversationCachePolicy.maximumPreviews
+			)
+			let errorsToRemove = index.previewErrors.keys.sorted().prefix(excessErrorCount)
+			for turnID in errorsToRemove
 			{
 				model.conversations.turnReferenceIndices[threadID]?.previewErrors[turnID] = nil
 			}

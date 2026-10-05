@@ -6,6 +6,8 @@ enum UsageReducer
 {
 	static let reducer = WorkspaceReducer(reduce: reduce)
 
+	private static let maximumRefreshAttempts = 3
+
 	static func reduce(
 		_ model: inout WorkspaceModel,
 		_ action: WorkspaceAction
@@ -170,7 +172,7 @@ enum UsageReducer
 		result: inout WorkspaceReduction
 	)
 	{
-		if model.usage.refreshPending, read.attempt < 3
+		if model.usage.refreshPending, read.attempt < maximumRefreshAttempts
 		{
 			model.usage.refreshPending = false
 			model.usage.needsRefresh = true

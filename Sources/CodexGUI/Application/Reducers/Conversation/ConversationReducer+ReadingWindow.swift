@@ -13,7 +13,7 @@ extension ConversationReducer
 				model.conversations.pendingTurnReads[threadID] == nil,
 				var index = model.conversations.turnReferenceIndices[threadID],
 				let anchor = index.viewport.anchorTurnID,
-				let center = index.references.firstIndex(where:
+				let anchorPosition = index.references.firstIndex(where:
 				{
 					$0.id == anchor
 				})
@@ -21,33 +21,35 @@ extension ConversationReducer
 		{
 			return
 		}
-		let lower = max(
+		let windowStart = max(
 			0,
 			min(
-				center - ConversationCachePolicy.contentPageSize / 2,
+				anchorPosition - ConversationCachePolicy.contentPageSize / 2,
 				index.references.count - ConversationCachePolicy.contentPageSize
 			)
 		)
-		let upper = min(
+		let windowEnd = min(
 			index.references.count,
-			lower + ConversationCachePolicy.contentPageSize
+			windowStart + ConversationCachePolicy.contentPageSize
 		)
-		let loaded = Set(model.conversations.content[.thread(threadID)]?.loadedTurns
+		let loadedTurnIDs = Set(model.conversations.content[.thread(threadID)]?.loadedTurns
 			.map(\.id) ?? [])
-		index.windowQueue = Array(index.references[lower ..< upper].enumerated())
-			.filter
-			{
-				!loaded.contains($0.element.id) && $0.element.id != index.pendingWindowRead?
-					.reference.id
-			}
-			.sorted
-			{
-				abs(lower + $0.offset - center) < abs(lower + $1.offset - center)
-			}
-			.map(\.element)
+		let windowReferences = Array(index.references[windowStart ..< windowEnd].enumerated())
+		let unloadedReferences = windowReferences.filter
+		{
+			!loadedTurnIDs.contains($0.element.id) && $0.element.id != index.pendingWindowRead?
+				.reference.id
+		}
+		let referencesNearestAnchor = unloadedReferences.sorted
+		{
+			let firstDistance = abs(windowStart + $0.offset - anchorPosition)
+			let secondDistance = abs(windowStart + $1.offset - anchorPosition)
+			return firstDistance < secondDistance
+		}
+		index.windowQueue = referencesNearestAnchor.map(\.element)
 		index.windowError = nil
 		model.conversations.turnReferenceIndices[threadID] = index
-		if center < ConversationCachePolicy.contentPageSize / 2,
+		if anchorPosition < ConversationCachePolicy.contentPageSize / 2,
 			let cursor = index.nextCursor, index.pendingRead == nil
 		{
 			result.effects.append(.captureConversationRead(.references(
@@ -81,11 +83,11 @@ extension ConversationReducer
 		{
 			return
 		}
-		let loaded = Set(model.conversations.content[.thread(threadID)]?.loadedTurns
+		let loadedTurnIDs = Set(model.conversations.content[.thread(threadID)]?.loadedTurns
 			.map(\.id) ?? [])
 		index.windowQueue.removeAll
 		{
-			loaded.contains($0.id)
+			loadedTurnIDs.contains($0.id)
 		}
 		guard !index.windowQueue.isEmpty
 		else
