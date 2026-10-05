@@ -46,13 +46,10 @@ final class ToolsToolbarCoordinator
 		openButton.bezelStyle = .texturedRounded
 		openButton.isBordered = false
 		openButton.imagePosition = .imageOnly
-		openButton.contentTintColor = .labelColor
+		openButton.contentTintColor = .secondaryLabelColor
 		openButton.target = target
 		openButton.action = action
-		openButton.image = DesktopIcons.image(
-			.plusSquareAdd,
-			size: 18
-		)
+		openButton.image = openTabPaneImage()
 		openButton.toolTip = "Open tab pane"
 		openButton.setAccessibilityLabel("Open tab pane")
 		openButton.widthAnchor.constraint(equalToConstant: controlSize)
@@ -126,12 +123,25 @@ final class ToolsToolbarCoordinator
 		{
 			openButton.tag = retainedTabCount
 			openButton.image = retainedTabCount > 0
-				? retainedTabsImage(retainedTabCount) : DesktopIcons.image(.plusSquareAdd)
+				? retainedTabsImage(retainedTabCount) : openTabPaneImage()
 		}
 		let openLabel = retainedTabCount > 0
 			? "Open tab pane (\(retainedTabCount) tabs)" : "Open tab pane"
 		openButton.toolTip = openLabel
 		openButton.setAccessibilityLabel(openLabel)
+	}
+
+	private func openTabPaneImage() -> NSImage?
+	{
+		NSImage(
+			systemSymbolName: "plus.square",
+			accessibilityDescription: "Open tab pane"
+		)?.withSymbolConfiguration(
+			NSImage.SymbolConfiguration(
+				pointSize: 17,
+				weight: .light
+			)
+		)
 	}
 
 	private func updateToolbarComposition(

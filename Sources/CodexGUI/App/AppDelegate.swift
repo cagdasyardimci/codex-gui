@@ -142,6 +142,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		mainMenu.addItem(makeApplicationMenuItem())
 		mainMenu.addItem(makeFileMenuItem())
 		mainMenu.addItem(makeEditMenuItem())
+		mainMenu.addItem(makeViewMenuItem())
+		mainMenu.addItem(makeWindowMenuItem())
+		mainMenu.addItem(makeHelpMenuItem())
 
 		NSApp.mainMenu = mainMenu
 	}
@@ -261,6 +264,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		commandPaletteItem.target = self
 		editItem.submenu = editMenu
 		return editItem
+	}
+
+	private func makeViewMenuItem() -> NSMenuItem
+	{
+		let viewItem = NSMenuItem()
+		let viewMenu = NSMenu(title: "View")
+		let toolbarItem = viewMenu.addItem(
+			withTitle: "Show Toolbar",
+			action: #selector(NSWindow.toggleToolbarShown(_:)),
+			keyEquivalent: "t"
+		)
+		toolbarItem.keyEquivalentModifierMask = [.command, .option]
+		viewItem.submenu = viewMenu
+		return viewItem
+	}
+
+	private func makeWindowMenuItem() -> NSMenuItem
+	{
+		let windowItem = NSMenuItem()
+		let windowMenu = NSMenu(title: "Window")
+		windowMenu.addItem(
+			withTitle: "Minimize",
+			action: #selector(NSWindow.performMiniaturize(_:)),
+			keyEquivalent: "m"
+		)
+		windowMenu.addItem(
+			withTitle: "Zoom",
+			action: #selector(NSWindow.performZoom(_:)),
+			keyEquivalent: ""
+		)
+		windowMenu.addItem(.separator())
+		windowMenu.addItem(
+			withTitle: "Bring All to Front",
+			action: #selector(NSApplication.arrangeInFront(_:)),
+			keyEquivalent: ""
+		)
+		NSApp.windowsMenu = windowMenu
+		windowItem.submenu = windowMenu
+		return windowItem
+	}
+
+	private func makeHelpMenuItem() -> NSMenuItem
+	{
+		let helpItem = NSMenuItem()
+		let helpMenu = NSMenu(title: "Help")
+		helpMenu.addItem(
+			withTitle: "Search Commands…",
+			action: #selector(showCommandPalette),
+			keyEquivalent: ""
+		).target = self
+		NSApp.helpMenu = helpMenu
+		helpItem.submenu = helpMenu
+		return helpItem
 	}
 
 	@objc private func openProject()
