@@ -258,7 +258,30 @@ enum ConversationContentReducer
 		content: inout ConversationProjection
 	)
 	{
-		content.entries = entries(for: turns)
+		let previousActivities = Dictionary(
+			uniqueKeysWithValues: content.entries.compactMap
+			{
+				entry -> (String, CodexSubagentActivity)? in
+				guard case .subagent(let activity) = entry.activity
+				else
+				{
+					return nil
+				}
+				return (entry.id, activity)
+			}
+		)
+		content.entries = entries(for: turns).map
+		{
+			var entry = $0
+			if case .subagent(let activity) = entry.activity
+			{
+				entry.activity = .subagent(activity.recordingLifecycle(
+					at: nil,
+					previous: previousActivities[entry.id]
+				))
+			}
+			return entry
+		}
 		if let latestTurn = turns.last
 		{
 			applyReview(
@@ -399,7 +422,8 @@ enum ConversationContentReducer
 					turnID: turnID,
 					content: &content,
 					preserveProvisionalOutput: isItemStarted(event),
-					allowUnorderedReportedTurnAdvance: mayAdvanceReportedTurn
+					allowUnorderedReportedTurnAdvance: mayAdvanceReportedTurn,
+					observedAt: observedAt
 				)
 				updateRecordedItem(
 					item,
@@ -556,7 +580,8 @@ enum ConversationContentReducer
 		turnID: String,
 		content: inout ConversationProjection,
 		preserveProvisionalOutput: Bool = false,
-		allowUnorderedReportedTurnAdvance: Bool = false
+		allowUnorderedReportedTurnAdvance: Bool = false,
+		observedAt: Date? = nil
 	)
 	{
 		let id = "\(turnID):\(item.id)"
@@ -564,6 +589,24 @@ enum ConversationContentReducer
 			for: item,
 			id: id
 		)
+		let existingIndex = content.content.entryIndex(for: id)
+		if case .subagent(let activity) = entry.activity
+		{
+			let previous = existingIndex.flatMap
+			{
+				index -> CodexSubagentActivity? in
+				guard case .subagent(let previous) = content.entries[index].activity
+				else
+				{
+					return nil
+				}
+				return previous
+			}
+			entry.activity = .subagent(activity.recordingLifecycle(
+				at: observedAt,
+				previous: previous
+			))
+		}
 		let hasFormattedCommandBody: Bool
 		if case .command = entry.activity
 		{
@@ -573,7 +616,7 @@ enum ConversationContentReducer
 		{
 			hasFormattedCommandBody = false
 		}
-		if let index = content.content.entryIndex(for: id)
+		if let index = existingIndex
 		{
 			if preserveProvisionalOutput, item.output == nil,
 				case .command(var command) = entry.activity,
