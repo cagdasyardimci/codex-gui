@@ -21,6 +21,10 @@ ISOLATED_HOSTS = (
     ("MessageSearchSheetLifecycleTests",) * 2,
     ("inlineImagesOpenInANativePanelAndReuseOrDetachDismissesIt",) * 2,
     ("TaskSidebarAppearanceTests",) * 2,
+    ("TranscriptLayerAppearanceTests",) * 2,
+    ("ComposerAppearanceTests",) * 2,
+    ("SourcesHoverAppearanceTests",) * 2,
+    ("TurnRailAppearanceTests",) * 2,
 )
 
 

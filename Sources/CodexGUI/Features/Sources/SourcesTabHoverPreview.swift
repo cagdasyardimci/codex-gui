@@ -7,6 +7,7 @@ final class SourcesTabHoverPreview
 	private var pendingShow: Task<Void, Never>?
 	private var previewWindow: NSPanel?
 	private weak var parentWindow: NSWindow?
+	private var appearanceBinding: DesktopPanelAppearanceBinding?
 
 	func show(
 		sources: ConversationLocalSources,
@@ -36,6 +37,8 @@ final class SourcesTabHoverPreview
 	{
 		pendingShow?.cancel()
 		pendingShow = nil
+		appearanceBinding?.invalidate()
+		appearanceBinding = nil
 		if let previewWindow
 		{
 			parentWindow?.removeChildWindow(previewWindow)
@@ -68,12 +71,15 @@ final class SourcesTabHoverPreview
 		)
 		let panel = makePreviewPanel(
 			content: content,
-			frame: frame,
-			in: window
+			frame: frame
 		)
 
 		parentWindow = window
 		previewWindow = panel
+		appearanceBinding = DesktopPanelAppearanceBinding(
+			panel: panel,
+			source: anchor
+		)
 		window.addChildWindow(
 			panel,
 			ordered: .above
@@ -216,8 +222,7 @@ final class SourcesTabHoverPreview
 
 	private func makePreviewPanel(
 		content: NSView,
-		frame: NSRect,
-		in window: NSWindow
+		frame: NSRect
 	) -> NSPanel
 	{
 		let panel = NSPanel(
@@ -232,7 +237,6 @@ final class SourcesTabHoverPreview
 		panel.hidesOnDeactivate = true
 		panel.ignoresMouseEvents = true
 		panel.isReleasedWhenClosed = false
-		panel.appearance = window.effectiveAppearance
 		panel.contentView = content
 		panel.setFrame(
 			frame,

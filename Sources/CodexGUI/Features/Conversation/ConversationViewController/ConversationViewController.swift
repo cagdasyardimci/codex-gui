@@ -153,7 +153,7 @@ final class ConversationViewController: NSViewController,
 	var slashCompletionText: String?
 	var fileSearchWasCompletion = false
 	let fileIndexRuntime = ProjectFileIndexRuntime()
-	let sendButton = NSButton(
+	let sendButton = DesktopLayerButton(
 		title: "Send",
 		target: nil,
 		action: nil

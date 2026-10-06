@@ -10,6 +10,7 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 	private var hoverTrackingArea: NSTrackingArea?
 	private var isHovered = false
 	private var tooltipPanel: NSPanel?
+	private var tooltipAppearance: DesktopPanelAppearanceBinding?
 
 	override func updateTrackingAreas()
 	{
@@ -99,15 +100,15 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 			width: label.frame.width + 24,
 			height: 28
 		)
-		let surface = NSView(frame: NSRect(
+		let surface = DesktopSurface(
+			DesktopTheme.inspector,
+			cornerRadius: 12,
+			bordered: true
+		)
+		surface.frame = NSRect(
 			origin: .zero,
 			size: size
-		))
-		surface.wantsLayer = true
-		surface.layer?.cornerRadius = 12
-		surface.layer?.backgroundColor = DesktopTheme.inspector.cgColor
-		surface.layer?.borderWidth = 1
-		surface.layer?.borderColor = DesktopTheme.border.cgColor
+		)
 		label.frame.origin = NSPoint(
 			x: 12,
 			y: (size.height - label.frame.height) / 2
@@ -127,7 +128,10 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 		panel.hasShadow = true
 		panel.ignoresMouseEvents = true
 		panel.contentView = surface
-		panel.appearance = effectiveAppearance
+		tooltipAppearance = DesktopPanelAppearanceBinding(
+			panel: panel,
+			source: self
+		)
 		let screenRect = window.convertToScreen(convert(
 			bounds,
 			to: nil
@@ -150,6 +154,8 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 			selector: #selector(showCopyTooltip),
 			object: nil
 		)
+		tooltipAppearance?.invalidate()
+		tooltipAppearance = nil
 		if let tooltipPanel
 		{
 			tooltipPanel.parent?.removeChildWindow(tooltipPanel)

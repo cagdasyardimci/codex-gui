@@ -47,6 +47,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 	private var highlightedIndex: Int?
 	private var needsActiveTurnReveal = false
 	private(set) var previewPanel: NSPanel?
+	private var previewAppearance: DesktopPanelAppearanceBinding?
 	private var previewTurnID: String?
 	private var dismissal: DispatchWorkItem?
 
@@ -426,6 +427,8 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		hoverLoadTask = nil
 		dismissal?.cancel()
 		dismissal = nil
+		previewAppearance?.invalidate()
+		previewAppearance = nil
 		if let panel = previewPanel
 		{
 			panel.parent?.removeChildWindow(panel)
@@ -557,6 +560,10 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		panel.isReleasedWhenClosed = false
 		panel.animationBehavior = .none
 		panel.contentView = preview
+		previewAppearance = DesktopPanelAppearanceBinding(
+			panel: panel,
+			source: self
+		)
 		previewPanel = panel
 		positionPreview(
 			beside: mark,

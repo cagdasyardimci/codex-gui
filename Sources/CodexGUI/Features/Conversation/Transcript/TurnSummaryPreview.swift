@@ -39,9 +39,9 @@ final class TurnSummaryPreview: NSView
 		{
 			let bar = CALayer()
 			bar.cornerRadius = 3
-			bar.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.2).cgColor
 			skeleton.addSublayer(bar)
 		}
+		refreshSkeletonColors()
 		title.font = .systemFont(
 			ofSize: 13,
 			weight: .regular
@@ -91,6 +91,29 @@ final class TurnSummaryPreview: NSView
 	required init?(coder: NSCoder)
 	{
 		fatalError("init(coder:) has not been implemented")
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		refreshSkeletonColors()
+		needsDisplay = true
+	}
+
+	private func refreshSkeletonColors()
+	{
+		let color = DesktopTheme.resolvedCGColor(
+			.secondaryLabelColor,
+			for: self,
+			alpha: 0.2
+		)
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		for bar in skeleton.sublayers ?? []
+		{
+			bar.backgroundColor = color
+		}
+		CATransaction.commit()
 	}
 
 	func render(_ summary: ConversationTurnSummary)

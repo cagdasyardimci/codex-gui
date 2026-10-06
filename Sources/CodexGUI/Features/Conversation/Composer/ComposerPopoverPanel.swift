@@ -23,6 +23,7 @@ final class ComposerPopoverPanel: NSObject
 	private var localMonitor: Any?
 	private var globalMonitor: Any?
 	private var attachmentObserver: ComposerAnchorObserver?
+	private var appearanceBinding: DesktopPanelAppearanceBinding?
 	private var menuTrackingDepth = 0
 
 	init(contentViewController: NSViewController)
@@ -57,7 +58,10 @@ final class ComposerPopoverPanel: NSObject
 		self.anchor = anchor
 		anchorSuperview = anchor.superview
 		parentWindow = window
-		panel.appearance = window.effectiveAppearance
+		appearanceBinding = DesktopPanelAppearanceBinding(
+			panel: panel,
+			source: anchor
+		)
 		anchorRect = rect
 		anchorsToBounds = rect == anchor.bounds
 		isShown = true
@@ -124,6 +128,8 @@ final class ComposerPopoverPanel: NSObject
 		attachmentObserver?.onWindowChange = nil
 		attachmentObserver?.removeFromSuperview()
 		attachmentObserver = nil
+		appearanceBinding?.invalidate()
+		appearanceBinding = nil
 		window?.removeChildWindow(panel)
 		panel.orderOut(nil)
 		anchor = nil
@@ -335,7 +341,6 @@ final class ComposerPopoverPanel: NSObject
 		{
 			return
 		}
-		panel.appearance = window.effectiveAppearance
 		let screenEdgeInset: CGFloat = 8
 		let anchorToPanelSpacing: CGFloat = 8
 		let requestedSize = controller.preferredContentSize

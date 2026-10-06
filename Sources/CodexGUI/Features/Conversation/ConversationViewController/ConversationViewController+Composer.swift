@@ -392,6 +392,7 @@ extension ConversationViewController
 		else
 		{
 			sendButton.isEnabled = false
+			sendButton.layerBackgroundColor = .tertiaryLabelColor
 			steerButton.isEnabled = false
 			return
 		}
@@ -420,13 +421,13 @@ extension ConversationViewController
 		steerButton.toolTip = imagesAreReady
 			? "Steer the active turn (⇧⌘Return)" : "Preparing image attachment…"
 		sendButton.contentTintColor = .white
-		sendButton.layer?.backgroundColor = sendButton.isEnabled
+		sendButton.layerBackgroundColor = sendButton.isEnabled
 			? NSColor(
 				srgbRed: 59 / 255,
 				green: 130 / 255,
 				blue: 246 / 255,
 				alpha: 1
-			).cgColor : NSColor.tertiaryLabelColor.cgColor
+			) : NSColor.tertiaryLabelColor
 		steerButton.contentTintColor = steerButton.isEnabled ? .systemBlue : .tertiaryLabelColor
 		let hasStoppableExecution =
 			snapshot.activeExecutionState == .running

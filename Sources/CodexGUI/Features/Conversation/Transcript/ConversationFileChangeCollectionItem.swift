@@ -79,7 +79,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		review.wantsLayer = true
 		review.layer?.cornerRadius = 10
 		review.layer?.borderWidth = 1
-		review.layer?.borderColor = DesktopTheme.border.cgColor
+		review.layerBorderColor = DesktopTheme.border
 		review.contentTintColor = ConversationAttributedStringRenderer.proseColor
 		review.widthAnchor.constraint(equalToConstant: 102).isActive = true
 		review.heightAnchor.constraint(equalToConstant: 28).isActive = true
@@ -323,7 +323,7 @@ private final class FileChangeTextField: NSTextField
 }
 
 @MainActor
-private final class FileChangeReviewButton: NSButton
+private final class FileChangeReviewButton: DesktopLayerButton
 {
 	override func draw(_ dirtyRect: NSRect)
 	{
