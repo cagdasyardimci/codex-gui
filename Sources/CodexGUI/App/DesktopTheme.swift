@@ -117,6 +117,28 @@ enum DesktopTheme
 		return label
 	}
 
+	/// Layer colors must be resolved again whenever their owning view's appearance changes.
+	static func resolvedCGColor(
+		_ color: NSColor,
+		for view: NSView,
+		alpha: CGFloat? = nil
+	) -> CGColor
+	{
+		var resolvedColor: CGColor!
+		view.effectiveAppearance.performAsCurrentDrawingAppearance
+		{
+			if let alpha
+			{
+				resolvedColor = color.withAlphaComponent(alpha).cgColor
+			}
+			else
+			{
+				resolvedColor = color.cgColor
+			}
+		}
+		return resolvedColor
+	}
+
 	private static func color(
 		light: UInt32,
 		dark: UInt32
@@ -180,18 +202,21 @@ final class DesktopSurface: NSView
 	private let cornerRadius: CGFloat
 	private let bordered: Bool
 	private let borderWidth: CGFloat
+	private let borderColor: NSColor
 
 	init(
 		_ color: NSColor,
 		cornerRadius: CGFloat = 0,
 		bordered: Bool = false,
-		borderWidth: CGFloat = 1
+		borderWidth: CGFloat = 1,
+		borderColor: NSColor? = nil
 	)
 	{
 		self.color = color
 		self.cornerRadius = cornerRadius
 		self.bordered = bordered
 		self.borderWidth = borderWidth
+		self.borderColor = borderColor ?? DesktopTheme.border
 		super.init(frame: .zero)
 	}
 
@@ -226,7 +251,7 @@ final class DesktopSurface: NSView
 		path.fill()
 		if bordered
 		{
-			DesktopTheme.border.setStroke()
+			borderColor.setStroke()
 			path.lineWidth = borderWidth
 			path.stroke()
 		}
