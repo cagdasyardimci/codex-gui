@@ -27,11 +27,50 @@ struct GitComparisonPatchParserTests
 		#expect(file.hunks.count == 2)
 		#expect(file.hunks[0].text.utf8.elementsEqual(first.dropLast().utf8))
 		#expect(file.hunks[1].text.utf8.elementsEqual(second.utf8))
-		// The frozen parser's unescaped "+" regex yields zero; preserve that existing fallback.
 		#expect(file.hunks[0].oldStart == 1)
-		#expect(file.hunks[0].newStart == 0)
+		#expect(file.hunks[0].newStart == 2)
 		#expect(file.hunks[1].oldStart == 10)
-		#expect(file.hunks[1].newStart == 0)
+		#expect(file.hunks[1].newStart == 11)
+	}
+
+	@Test func omittedCountsKeepDistinctSourceAndDestinationStarts() throws
+	{
+		let header = "@@ -7 +13 @@ function(-999, +999)"
+		let hunkText = header + "\n-old\n+new\n"
+		let patch = "diff --git a/sample.txt b/sample.txt\n--- a/sample.txt\n"
+			+ "+++ b/sample.txt\n" + hunkText
+		let file = try #require(GitComparisonPatchParser.files(in: Data(patch.utf8)).first)
+		let hunk = try #require(file.hunks.first)
+		#expect(file.hunks.count == 1)
+		#expect(hunk.oldStart == 7)
+		#expect(hunk.newStart == 13)
+		#expect(hunk.header == header)
+		#expect(hunk.text.utf8.elementsEqual(hunkText.utf8))
+		#expect(file.patch.utf8.elementsEqual(patch.utf8))
+	}
+
+	@Test func zeroLengthRangesKeepTheirHeaderPositions() throws
+	{
+		let ranges = [
+			("@@ -0,0 +1 @@", "+created", 0, 1),
+			("@@ -17,0 +18,2 @@", "+first\n+second", 17, 18),
+			("@@ -1 +0,0 @@", "-removed", 1, 0),
+			("@@ -17,2 +16,0 @@", "-first\n-second", 17, 16),
+		]
+		for (header, body, oldStart, newStart) in ranges
+		{
+			let hunkText = header + "\n" + body + "\n"
+			let patch = "diff --git a/sample.txt b/sample.txt\n--- a/sample.txt\n"
+				+ "+++ b/sample.txt\n" + hunkText
+			let file = try #require(GitComparisonPatchParser.files(in: Data(patch.utf8)).first)
+			let hunk = try #require(file.hunks.first)
+			#expect(file.hunks.count == 1)
+			#expect(hunk.oldStart == oldStart)
+			#expect(hunk.newStart == newStart)
+			#expect(hunk.header == header)
+			#expect(hunk.text.utf8.elementsEqual(hunkText.utf8))
+			#expect(file.patch.utf8.elementsEqual(patch.utf8))
+		}
 	}
 
 	@Test func unsupportedSectionsKeepSeparateFileAndHunkBoundaries() throws

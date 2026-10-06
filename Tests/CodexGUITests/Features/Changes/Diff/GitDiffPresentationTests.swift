@@ -5,6 +5,55 @@ import Testing
 
 struct GitDiffPresentationTests
 {
+	@Test func parsedHunksKeepSourceAndDestinationLineNumbers() throws
+	{
+		let patch = "diff --git a/Sources/Test.swift b/Sources/Test.swift\n"
+			+ "--- a/Sources/Test.swift\n+++ b/Sources/Test.swift\n"
+			+ "@@ -7,3 +13,3 @@ first\n context\n-old\n+new\n tail\n"
+			+ "@@ -21,0 +28,2 @@ insertion\n+first addition\n+second addition\n"
+			+ "@@ -34,2 +41,0 @@ deletion\n-first removal\n-second removal\n"
+		let snapshot = comparisonSnapshot(
+			patch: patch,
+			files: GitComparisonPatchParser.files(in: Data(patch.utf8))
+		)
+		let presentation = GitDiffPresentation(snapshot: snapshot)
+		let rows = try #require(presentation.file("Sources/Test.swift")).rows
+		#expect(rows.map(\.kind) == [
+			.context,
+			.deletion,
+			.addition,
+			.context,
+			.addition,
+			.addition,
+			.deletion,
+			.deletion,
+		])
+		#expect(rows.map(\.oldLine) == [7, 8, nil, 9, nil, nil, 34, 35])
+		#expect(rows.map(\.newLine) == [13, nil, 14, 15, 28, 29, nil, nil])
+		#expect(presentation.snapshot.patch == Data(patch.utf8))
+	}
+
+	@Test func parsedCreatedAndDeletedFilesNumberOnlyTheirExistingSide() throws
+	{
+		let patch = "diff --git a/created.txt b/created.txt\nnew file mode 100644\n"
+			+ "--- /dev/null\n+++ b/created.txt\n@@ -0,0 +1,2 @@\n+first\n+second\n"
+			+ "diff --git a/deleted.txt b/deleted.txt\ndeleted file mode 100644\n"
+			+ "--- a/deleted.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-first\n-second\n"
+		let snapshot = comparisonSnapshot(
+			patch: patch,
+			files: GitComparisonPatchParser.files(in: Data(patch.utf8))
+		)
+		let presentation = GitDiffPresentation(snapshot: snapshot)
+		let createdRows = try #require(presentation.file("created.txt")).rows
+		#expect(createdRows.map(\.kind) == [.addition, .addition])
+		#expect(createdRows.map(\.oldLine) == [nil, nil])
+		#expect(createdRows.map(\.newLine) == [1, 2])
+		let deletedRows = try #require(presentation.file("deleted.txt")).rows
+		#expect(deletedRows.map(\.kind) == [.deletion, .deletion])
+		#expect(deletedRows.map(\.oldLine) == [1, 2])
+		#expect(deletedRows.map(\.newLine) == [nil, nil])
+	}
+
 	@Test func gapExpansionUsesSnapshotAndPreservesLogicalLineNumbers() throws
 	{
 		let context = (1 ... 12).map
@@ -318,6 +367,19 @@ struct GitDiffPresentationTests
 				newStart: 1
 			)]
 		)
+		return comparisonSnapshot(
+			patch: patch,
+			files: [file],
+			id: id
+		)
+	}
+
+	private func comparisonSnapshot(
+		patch: String,
+		files: [GitComparisonFile],
+		id: String = "snapshot"
+	) -> GitComparisonSnapshot
+	{
 		return GitComparisonSnapshot(
 			request: GitComparisonRequest(
 				owner: FeaturePresentationOwner(ConversationSnapshot(
@@ -348,7 +410,7 @@ struct GitDiffPresentationTests
 			resolvedBase: "base",
 			resolvedTarget: "target",
 			patch: Data(patch.utf8),
-			files: [file]
+			files: files
 		)
 	}
 }

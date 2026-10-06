@@ -472,7 +472,7 @@ enum GitComparisonPatchParser
 	) -> Int
 	{
 		guard let range = header.range(
-			of: marker + "[0-9]+",
+			of: NSRegularExpression.escapedPattern(for: marker) + "[0-9]+",
 			options: .regularExpression
 		)
 		else
