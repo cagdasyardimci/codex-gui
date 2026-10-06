@@ -57,7 +57,7 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	private let search = NSSearchField()
 	private let results = NSStackView()
 	private var visibleEntries: [GitFileJumpIndex.Entry] = []
-	private var resultButtons: [NSButton] = []
+	private var resultButtons: [DesktopLayerButton] = []
 	private var selectedIndex = 0
 
 	init(index: GitFileJumpIndex)
@@ -207,9 +207,9 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 		}
 	}
 
-	private func makeResultButton(_ entry: GitFileJumpIndex.Entry) -> NSButton
+	private func makeResultButton(_ entry: GitFileJumpIndex.Entry) -> DesktopLayerButton
 	{
-		let button = NSButton(
+		let button = DesktopLayerButton(
 			title: "",
 			target: self,
 			action: #selector(choose(_:))
@@ -246,9 +246,9 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	{
 		for (index, button) in resultButtons.enumerated()
 		{
-			button.layer?.backgroundColor = index == selectedIndex
-				? NSColor.selectedContentBackgroundColor.withAlphaComponent(0.18).cgColor
-				: NSColor.clear.cgColor
+			button.layerBackgroundAlpha = index == selectedIndex ? 0.18 : nil
+			button.layerBackgroundColor = index == selectedIndex
+				? .selectedContentBackgroundColor : .clear
 		}
 		if resultButtons.indices.contains(selectedIndex)
 		{

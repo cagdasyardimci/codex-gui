@@ -336,7 +336,10 @@ final class GitUnifiedCodeView: NSView
 			to: attributed,
 			text: text
 		)
-		applyChangedRangeBackgrounds(to: attributed)
+		effectiveAppearance.performAsCurrentDrawingAppearance
+		{
+			applyChangedRangeBackgrounds(to: attributed)
+		}
 
 		let selection = source.selectedRange()
 		source.textStorage?.setAttributedString(attributed)

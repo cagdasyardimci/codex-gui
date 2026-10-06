@@ -8,6 +8,7 @@ final class TaskHoverCard
 	let projectName: String
 	let updatedAt: Date?
 	private(set) var panel: NSPanel?
+	private var appearanceBinding: DesktopPanelAppearanceBinding?
 
 	init(
 		title: String,
@@ -41,6 +42,10 @@ final class TaskHoverCard
 		parent.addChildWindow(
 			card,
 			ordered: .above
+		)
+		appearanceBinding = DesktopPanelAppearanceBinding(
+			panel: card,
+			source: view
 		)
 		card.orderFront(nil)
 		panel = card
@@ -77,12 +82,14 @@ final class TaskHoverCard
 			[header, project],
 			spacing: 8
 		)
-		let surface = NSView()
+		let surface = DesktopSurface(
+			.controlBackgroundColor,
+			cornerRadius: 12,
+			bordered: true,
+			borderColor: .separatorColor
+		)
 		surface.wantsLayer = true
 		surface.layer?.cornerRadius = 12
-		surface.layer?.borderWidth = 1
-		surface.layer?.borderColor = NSColor.separatorColor.cgColor
-		surface.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
 		AppKitLayout.pin(
 			stack,
 			to: surface,
@@ -177,6 +184,8 @@ final class TaskHoverCard
 		{
 			return
 		}
+		appearanceBinding?.invalidate()
+		appearanceBinding = nil
 		panel.parent?.removeChildWindow(panel)
 		panel.orderOut(nil)
 		self.panel = nil

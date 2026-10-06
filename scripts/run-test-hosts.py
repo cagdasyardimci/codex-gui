@@ -20,6 +20,7 @@ ISOLATED_HOSTS = (
     ("searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding",) * 2,
     ("MessageSearchSheetLifecycleTests",) * 2,
     ("inlineImagesOpenInANativePanelAndReuseOrDetachDismissesIt",) * 2,
+    ("TaskSidebarAppearanceTests",) * 2,
 )
 
 

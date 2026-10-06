@@ -91,10 +91,25 @@ final class TaskSidebarCellView: NSTableCellView
 	private func configureUnreadIndicator()
 	{
 		unreadDot.wantsLayer = true
-		unreadDot.layer?.backgroundColor = NSColor.systemBlue.cgColor
+		refreshUnreadColor()
 		unreadDot.layer?.cornerRadius = Layout.unreadIndicatorSize / 2
 		unreadDot.isHidden = true
 		unreadDot.setAccessibilityElement(false)
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		refreshUnreadColor()
+	}
+
+	private func refreshUnreadColor()
+	{
+		// Descendants receive the inherited change after their parent callback.
+		unreadDot.layer?.backgroundColor = DesktopTheme.resolvedCGColor(
+			.systemBlue,
+			for: self
+		)
 	}
 
 	private func installCellSubviews(titleField: NSTextField)

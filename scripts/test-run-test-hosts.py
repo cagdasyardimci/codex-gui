@@ -30,6 +30,7 @@ class TestHostPlanTests(unittest.TestCase):
             "searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding",
             "MessageSearchSheetLifecycleTests",
             "inlineImagesOpenInANativePanelAndReuseOrDetachDismissesIt",
+            "TaskSidebarAppearanceTests",
         ]
         self.assertEqual(commands[1:], [command + ["--filter", value] for value in filters])
         self.assertEqual(commands[0], command + ["--skip", "|".join(["WindowLayoutTests", *filters[2:]])])
@@ -38,7 +39,7 @@ class TestHostPlanTests(unittest.TestCase):
     def test_all_hosts_use_completion_checker(self):
         with patch.object(RUNNER.subprocess, "call", return_value=0) as call:
             self.assertEqual(RUNNER.main(["--", "swift", "test", "--no-parallel"]), 0)
-        self.assertEqual(call.call_count, 12)
+        self.assertEqual(call.call_count, 13)
         for invocation in call.call_args_list:
             self.assertEqual(Path(invocation.args[0][1]).name, "run-swift-tests.py")
             self.assertEqual(invocation.args[0][2:5], ["--", "swift", "test"])

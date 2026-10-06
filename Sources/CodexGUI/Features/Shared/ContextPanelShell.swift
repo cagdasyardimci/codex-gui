@@ -28,7 +28,7 @@ final class ContextPanelShell: NSViewController
 	}
 	private let content = NSView()
 	private let titleLabel = NSTextField(labelWithString: "")
-	private let sourcesHeader = NSStackView()
+	private let sourcesHeader = ContextPanelHeaderStackView()
 	private let sourcesCloseButton = NSButton(
 		title: "",
 		target: nil,
@@ -107,7 +107,6 @@ final class ContextPanelShell: NSViewController
 		)
 		[icon, label, NSView(), sourcesCloseButton].forEach(sourcesHeader.addArrangedSubview)
 		sourcesHeader.wantsLayer = true
-		sourcesHeader.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
 		sourcesHeader.layer?.cornerRadius = 10
 		sourcesHeader.isHidden = true
 		NSLayoutConstraint.activate([
@@ -198,5 +197,29 @@ final class ContextPanelShell: NSViewController
 	@objc private func closePanel()
 	{
 		onClose?()
+	}
+}
+
+@MainActor
+private final class ContextPanelHeaderStackView: NSStackView
+{
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		refreshBackground()
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		refreshBackground()
+	}
+
+	private func refreshBackground()
+	{
+		layer?.backgroundColor = DesktopTheme.resolvedCGColor(
+			.controlBackgroundColor,
+			for: self
+		)
 	}
 }
