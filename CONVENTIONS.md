@@ -109,4 +109,12 @@ suite rather than sharing a navigation suite. Scripts, documentation and resourc
 their existing locations; root resources supply bundle metadata and branding, while source
 resources are packaged by SwiftPM.
 
+When a test group becomes crowded, use shallow subfolders named for its tested responsibilities.
+`App/` groups full-window checks in `Windows/`, Git review checks in `GitReview/`, and inspector
+integration in `Tools/`. `CodexClient/` groups AppServer integration and protocol models in
+`AppServer/` and `Protocol/`. Runtime tests use `Workspace/`, `Conversation/`, `ProjectContext/`
+and `ProjectFiles/`, alongside existing owner and support folders. Transcript tests use
+`Markdown/`, `TurnNavigation/`, `Preparation/`, `Layout/` and `Rows/`. Keep one suite's main file
+and extensions together; these folder moves preserve suite names, traits and test-host filters.
+
 AppKit role references: [application lifecycle](https://developer.apple.com/documentation/appkit/nsapplication), [window controllers](https://developer.apple.com/documentation/appkit/nswindowcontroller), [view controllers](https://developer.apple.com/documentation/appkit/nsviewcontroller), [split view controllers](https://developer.apple.com/documentation/appkit/nssplitviewcontroller), and [macOS design guidance](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos/).

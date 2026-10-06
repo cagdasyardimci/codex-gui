@@ -231,4 +231,53 @@ struct PinnedSummaryLayoutTests
 			descendants($0)
 		}
 	}
+
+	private func textField(
+		_ value: String,
+		in view: NSView
+	) -> NSTextField?
+	{
+		descendants(view).compactMap
+		{
+			$0 as? NSTextField
+		}.first
+		{
+			$0.stringValue == value
+		}
+	}
+
+	@Test func pinnedSummaryUsesGroupedColoredGitCounts() throws
+	{
+		_ = NSApplication.shared
+		var model = WorkspaceModel(identity: WorkspaceIdentity(
+			sessionID: UUID(),
+			canonicalCheckoutPath: "/fixture"
+		))
+		model.conversations.selectedConversation = .thread("chat")
+		var sections = ContextSummarySections()
+		sections.changes = .available(SummaryChangeTotals(
+			additions: 1_943,
+			deletions: 14
+		))
+		let summary = PinnedSummaryViewController()
+		summary.render(PinnedSummaryPresentation(
+			WorkspaceSelectors.snapshot(
+				model: model,
+				now: .distantPast
+			),
+			ownerIdentity: "fixture",
+			sections: sections
+		))
+		let additions = try #require(textField(
+			"+1,943",
+			in: summary.view
+		))
+		let deletions = try #require(textField(
+			"-14",
+			in: summary.view
+		))
+		#expect(additions.textColor == .systemGreen)
+		#expect(deletions.textColor == .systemRed)
+	}
+
 }

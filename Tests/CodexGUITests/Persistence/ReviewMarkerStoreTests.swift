@@ -7,7 +7,7 @@ struct ReviewMarkerStoreTests
 {
 	@Test func reviewMarkerInvalidatesOnlyWhenReferencedContentChanges() throws
 	{
-		let suite = "ReviewModelsTests.\(UUID())"
+		let suite = "ReviewMarkerStoreTests.\(UUID())"
 		let defaults = try #require(UserDefaults(suiteName: suite))
 		defer
 		{
@@ -55,6 +55,77 @@ struct ReviewMarkerStoreTests
 				projectPath: "/project",
 				reference: reference,
 				fingerprint: first.fingerprint
+			)
+		)
+	}
+
+	@Test func sectionMarkerSurvivesAnUnrelatedSectionEdit() throws
+	{
+		let suite = "ReviewSectionMarkerTests.\(UUID())"
+		let defaults = try #require(UserDefaults(suiteName: suite))
+		defer
+		{
+			defaults.removePersistentDomain(forName: suite)
+		}
+		let store = ReviewMarkerStore(defaults: defaults)
+		let unchangedSection = "@@ -1 +1 @@\n-old\n+new"
+		let original = try ReviewModelTestFixture
+			.reviewFile(diff: "\(unchangedSection)\n@@ -4 +4 @@\n-a\n+b")
+		let revised = try ReviewModelTestFixture
+			.reviewFile(diff: "\(unchangedSection)\n@@ -4 +4 @@\n-a\n+c")
+		let firstHunk = try #require(original.hunks.first)
+		let originalReference = ReviewReference(
+			threadID: "thread",
+			turnID: "turn",
+			file: original,
+			hunk: firstHunk
+		)
+		let sameHunk = try #require(revised.hunks.first)
+		let revisedReference = ReviewReference(
+			threadID: "thread",
+			turnID: "turn",
+			file: revised,
+			hunk: sameHunk
+		)
+
+		store.setReviewed(
+			true,
+			projectPath: "/project",
+			reference: originalReference,
+			fingerprint: firstHunk.fingerprint
+		)
+		let changedOriginal = original.hunks[1]
+		let changedRevised = revised.hunks[1]
+		store.setReviewed(
+			true,
+			projectPath: "/project",
+			reference: ReviewReference(
+				threadID: "thread",
+				turnID: "turn",
+				file: original,
+				hunk: changedOriginal
+			),
+			fingerprint: changedOriginal.fingerprint
+		)
+		#expect(original.fingerprint != revised.fingerprint)
+		#expect(sameHunk.fingerprint == firstHunk.fingerprint)
+		#expect(
+			store.isReviewed(
+				projectPath: "/project",
+				reference: revisedReference,
+				fingerprint: sameHunk.fingerprint
+			)
+		)
+		#expect(
+			!store.isReviewed(
+				projectPath: "/project",
+				reference: ReviewReference(
+					threadID: "thread",
+					turnID: "turn",
+					file: revised,
+					hunk: changedRevised
+				),
+				fingerprint: changedRevised.fingerprint
 			)
 		)
 	}

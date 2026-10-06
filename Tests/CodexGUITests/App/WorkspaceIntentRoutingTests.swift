@@ -13,7 +13,7 @@ struct WorkspaceIntentRoutingTests
 {
 	@Test func newChatLifetimeRejectsRetainedComposerAndTaskDialogTargets() async throws
 	{
-		let (store, _) = makeStore()
+		let (store, _) = CapturedIntentStoreFixture.makeStore()
 		defer
 		{
 			store.shutdown()
@@ -42,7 +42,7 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func importedImagesRequireCapturedDraftAndReducerAcceptance() async throws
 	{
-		let (store, _) = makeStore()
+		let (store, _) = CapturedIntentStoreFixture.makeStore()
 		defer
 		{
 			store.shutdown()
@@ -79,7 +79,7 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func returningToTheSameStoreDoesNotReviveASelectedWindowCallback() async throws
 	{
-		let (store, _) = makeStore()
+		let (store, _) = CapturedIntentStoreFixture.makeStore()
 		defer
 		{
 			store.shutdown()
@@ -109,8 +109,8 @@ struct WorkspaceIntentRoutingTests
 	@Test func approvalsAndStopKeepTheirExecutionOwnerWhileBrowsingAnotherConversation(
 	) async throws
 	{
-		let (a, serviceA) = makeStore(threadID: "same-thread")
-		let (b, serviceB) = makeStore(threadID: "same-thread")
+		let (a, serviceA) = CapturedIntentStoreFixture.makeStore(threadID: "same-thread")
+		let (b, serviceB) = CapturedIntentStoreFixture.makeStore(threadID: "same-thread")
 		defer
 		{
 			a.shutdown()
@@ -159,7 +159,7 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func oldStopTicketCannotInterruptANewerSubmissionWithTheSameBackendIDs() async throws
 	{
-		let (store, service) = makeStore(threadID: "reused-thread")
+		let (store, service) = CapturedIntentStoreFixture.makeStore(threadID: "reused-thread")
 		defer
 		{
 			store.shutdown()
@@ -199,7 +199,7 @@ struct WorkspaceIntentRoutingTests
 	@Test func retainedApprovalTargetCannotRespondToANewerSubmissionReusingItsTicketIDs(
 	) async throws
 	{
-		let (store, service) = makeStore(threadID: "reused-thread")
+		let (store, service) = CapturedIntentStoreFixture.makeStore(threadID: "reused-thread")
 		defer
 		{
 			store.shutdown()
@@ -263,7 +263,7 @@ struct WorkspaceIntentRoutingTests
 	@Test func approvalTargetKeepsImmutableSubmissionAffinityAcrossTurnAcknowledgement(
 	) async throws
 	{
-		let (store, service) = makeStore()
+		let (store, service) = CapturedIntentStoreFixture.makeStore()
 		defer
 		{
 			store.shutdown()
@@ -314,7 +314,7 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func freshlyRenderedRecoveredTurnApprovalHasAnImmutableOwner() async throws
 	{
-		let (store, service) = makeStore(threadID: "recovered-thread")
+		let (store, service) = CapturedIntentStoreFixture.makeStore(threadID: "recovered-thread")
 		defer
 		{
 			store.shutdown()
@@ -355,7 +355,8 @@ struct WorkspaceIntentRoutingTests
 		eventBeforeRead: Bool
 	) async throws
 	{
-		let (store, service) = makeStore(threadID: "reused-recovered-thread")
+		let (store, service) = CapturedIntentStoreFixture
+			.makeStore(threadID: "reused-recovered-thread")
 		defer
 		{
 			store.shutdown()
@@ -460,7 +461,7 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func suspendedResponseCannotSettleAReplacementAfterTerminalRetirement() async throws
 	{
-		let (seed, service) = makeStore()
+		let (seed, service) = CapturedIntentStoreFixture.makeStore()
 		defer
 		{
 			seed.shutdown()
@@ -641,7 +642,7 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func reconnectRetiresGenerationTargetsAndRenewsCardPresentationIdentity() async throws
 	{
-		let (store, service) = makeStore()
+		let (store, service) = CapturedIntentStoreFixture.makeStore()
 		defer
 		{
 			store.shutdown()
@@ -671,201 +672,4 @@ struct WorkspaceIntentRoutingTests
 		#expect(store.currentSnapshot.draft == "Current generation")
 	}
 
-	@Test func closedWindowDetachesItsStorePublicationObserver() async throws
-	{
-		_ = NSApplication.shared
-		let (store, _) = makeStore()
-		defer
-		{
-			store.shutdown()
-		}
-		await store.inputs.connect()
-		let controller = MainWindowController(
-			store: store,
-			onOpenProject:
-			{
-			},
-			onInsertPath:
-			{
-			}
-		)
-		controller.showMessageSearch()
-		controller.messageSearch.onSearch?("needle")
-		#expect(store.model.contextNavigation.messageSearchContext != nil)
-		var drafts: [String] = []
-		controller.onSnapshot =
-		{
-			drafts.append($0.draft)
-		}
-		store.inputs.updateDraft("Visible")
-		#expect(drafts == ["Visible"])
-		controller.window?.close()
-		#expect(store.model.contextNavigation.messageSearch == nil)
-		#expect(store.model.contextNavigation.messageSearchContext == nil)
-		#expect(store.model.contextNavigation.pendingMessageSearch == nil)
-		store.inputs.updateDraft("Closed")
-		#expect(drafts == ["Visible"])
-	}
-
-	@Test func searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding(
-	) async throws
-	{
-		_ = NSApplication.shared
-		let (first, service) = makeStore(threadID: "first-thread")
-		let (next, _) = makeStore(threadID: "next-thread")
-		defer
-		{
-			first.shutdown()
-			next.shutdown()
-		}
-		await first.inputs.connect()
-		await next.inputs.connect()
-		let controller = MainWindowController(
-			store: first,
-			onOpenProject:
-			{
-			},
-			onInsertPath:
-			{
-			}
-		)
-		let window = try #require(controller.window)
-		controller.showMessageSearch()
-		let sheet = try #require(window.attachedSheet)
-		controller.messageSearch.onSearch?("first query")
-		_ = await first.inputs.selectThread(service.thread.id)?.wait()
-		#expect(window.attachedSheet === sheet)
-		#expect(first.model.contextNavigation.messageSearch?.query == "first query")
-		first.inputs.newChat()
-		#expect(window.attachedSheet === sheet)
-		#expect(first.model.contextNavigation.messageSearchContext != nil)
-		next.inputs.searchMessages("next query")
-		controller.configureMessageSearchActions(target: WorkspaceIntentTarget(
-			store: next,
-			snapshot: next.currentSnapshot
-		))
-		#expect(window.attachedSheet == nil)
-		#expect(first.model.contextNavigation.messageSearch == nil)
-		#expect(first.model.contextNavigation.messageSearchContext == nil)
-		#expect(first.model.contextNavigation.pendingMessageSearch == nil)
-		#expect(next.model.contextNavigation.messageSearch?.query == "next query")
-		#expect(next.model.contextNavigation.messageSearchContext != nil)
-	}
-
-	@Test func responseAdmissionKeepsTheFirstTicketAndAllowsRetryOnlyAfterSettlement() async throws
-	{
-		let (store, service) = makeStore()
-		defer
-		{
-			store.shutdown()
-		}
-		await store.inputs.connect()
-		store.inputs.updateDraft("Run")
-		let submission = try #require(store.inputs.send())
-		#expect(await submission.wait() == .finished)
-		let approval = service.approval(id: "one-ticket")
-		service.emit(.interaction(approval))
-		var model = store.model
-		func proposal() -> InteractionResponseOperation
-		{
-			var context = store.operationContext(threadID: approval.threadId)
-			context.turnID = approval.turnId
-			return InteractionResponseOperation(
-				context: context,
-				interactionID: approval.id,
-				response: .approval(.accept)
-			)
-		}
-		let first = proposal()
-		let accepted = ExecutionReducer.reduce(
-			&model,
-			.execution(.interactionResponseRequested(first))
-		)
-		#expect(accepted.effects.count == 1)
-		if case .respond(let effect) = accepted.effects.first
-		{
-			#expect(effect.context == first.context)
-		}
-		else
-		{
-			Issue.record("First response did not emit its captured effect")
-		}
-		let duplicate = proposal()
-		#expect(duplicate.context.requestID != first.context.requestID)
-		let rejected = ExecutionReducer.reduce(
-			&model,
-			.execution(.interactionResponseRequested(duplicate))
-		)
-		#expect(rejected.effects.isEmpty)
-		#expect(model.execution.pendingResponses[approval.id]?.context == first.context)
-		#expect(model.execution.pendingInteractions.map(\.id) == [approval.id])
-
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.interactionResponseFinished(
-				first.context,
-				.failed(OperationFailure(
-					message: "Synthetic response failure",
-					outcomeIsUncertain: false
-				))
-			))
-		)
-		#expect(model.execution.pendingResponses[approval.id] == nil)
-		#expect(model.execution.pendingInteractions.map(\.id) == [approval.id])
-		let retry = proposal()
-		let retried = ExecutionReducer.reduce(
-			&model,
-			.execution(.interactionResponseRequested(retry))
-		)
-		#expect(retried.effects.count == 1)
-		#expect(model.execution.pendingResponses[approval.id]?.context == retry.context)
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.interactionResponseFinished(
-				first.context,
-				.succeeded(())
-			))
-		)
-		#expect(model.execution.pendingResponses[approval.id]?.context == retry.context)
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.interactionResponseFinished(
-				retry.context,
-				.succeeded(())
-			))
-		)
-		#expect(model.execution.pendingInteractions.isEmpty)
-		#expect(ExecutionReducer.reduce(
-			&model,
-			.execution(.interactionResponseRequested(proposal()))
-		).effects.isEmpty)
-	}
-
-	private func makeStore(threadID: String = "thread")
-		-> (WorkspaceStateStore, WorkspaceCodexService)
-	{
-		let path = FileManager.default.temporaryDirectory.standardizedFileURL.path
-		let service = WorkspaceCodexService(
-			directory: URL(fileURLWithPath: path),
-			threadID: threadID
-		)
-		let session = UUID()
-		let identity = WorkspaceIdentity(
-			sessionID: session,
-			canonicalCheckoutPath: path
-		)
-		let reference = WorkspaceLifecycleOwnerReference(
-			owner: .source(sessionID: session),
-			workspace: identity
-		)
-		let storage = LocalStorage(defaults: UserDefaults(suiteName: "WorkspaceIntent.\(UUID())")!)
-		let store = WorkspaceStoreFactory.make(
-			configuration: WorkspaceStoreConfiguration(reference: reference),
-			dependencies: WorkspaceStoreDependencies(
-				service: service,
-				storage: storage
-			)
-		)
-		return (store, service)
-	}
 }

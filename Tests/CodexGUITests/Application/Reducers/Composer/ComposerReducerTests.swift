@@ -868,4 +868,138 @@ struct ComposerReducerTests
 		#expect(model.composer.drafts[.thread("thread")]?.context == submission.draft.context)
 		#expect(model.composer.drafts[.thread("thread")]?.revision != submission.draft.revision)
 	}
+
+	@Test func validRevisionPrependsExactSourceToDraftWithoutSteering() throws
+	{
+		var model = reviewFixture()
+		model.composer.drafts[.thread("thread")] = ComposerDraft(
+			text: "Keep existing draft",
+			revision: 4
+		)
+		let turn = try #require(ReviewReducer.selectedTurn(
+			model,
+			.thread("thread")
+		))
+		let file = try #require(turn.files.first)
+		let hunk = try #require(file.hunks.first)
+		let reference = ReviewReference(
+			threadID: "thread",
+			turnID: turn.turnID,
+			file: file,
+			hunk: hunk
+		)
+		let request = ChangeRequest(
+			reference: reference,
+			file: file,
+			hunk: hunk,
+			kind: .revision,
+			sourceRevision: 1
+		)
+		let result = ComposerReducer.reduce(
+			&model,
+			.review(.changeRequestPrepared(
+				reviewContext(model),
+				request
+			))
+		)
+		let draft = try #require(model.composer.drafts[.thread("thread")])
+		#expect(draft.text == reference.prompt(
+			for: .revision,
+			file: file,
+			hunk: hunk
+		)
+			+ "Keep existing draft")
+		#expect(draft.revision == 5)
+		#expect(result.effects.count == 1)
+		guard case .persistDraft = result.effects[0]
+		else
+		{
+			Issue.record("Revision preparation must only persist its composed draft.")
+			return
+		}
+		model.conversations.content[.thread("thread")]?.reviewSourceRevision += 1
+		_ = ReviewReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		let stale = ComposerReducer.reduce(
+			&model,
+			.review(.changeRequestPrepared(
+				reviewContext(model),
+				request
+			))
+		)
+		#expect(stale.effects.isEmpty)
+		#expect(model.composer.drafts[.thread("thread")]?.revision == 5)
+		_ = ReviewReducer.reduce(
+			&model,
+			.review(.turnSelected(
+				reviewContext(model),
+				conversation: .thread("thread"),
+				turnID: "first"
+			))
+		)
+		#expect(!ReviewReducer.accepts(
+			reviewContext(model),
+			request,
+			model: model
+		))
+	}
+
+	private func reviewTurn(
+		_ id: String,
+		addition: String = "new"
+	) -> CodexTurn
+	{
+		CodexTurn(
+			id: id,
+			status: "completed",
+			items: [CodexItem(json: [
+				"id": "change-\(id)",
+				"type": "fileChange",
+				"status": "completed",
+				"changes": [["path": "Sources/A.swift",
+								"kind": "update",
+								"diff": "@@ -1 +1 @@\n-old\n+\(addition)\n"]]
+			])!],
+			error: nil
+		)
+	}
+
+	private func reviewFixture() -> WorkspaceModel
+	{
+		var model = WorkspaceModel(identity: WorkspaceIdentity(
+			sessionID: UUID(),
+			canonicalCheckoutPath: "/tmp/review"
+		))
+		model.connection.generation = 1
+		model.conversations.selectedConversation = .thread("thread")
+		model.conversations.content[.thread("thread")] = ConversationContentModel(
+			loadedTurns: [reviewTurn("first"), reviewTurn("latest")],
+			reviewSourceRevision: 1
+		)
+		_ = ReviewReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		_ = ReviewReducer.reduce(
+			&model,
+			.review(.turnSelected(
+				reviewContext(model),
+				conversation: .thread("thread"),
+				turnID: "latest"
+			))
+		)
+		return model
+	}
+
+	private func reviewContext(_ model: WorkspaceModel) -> OperationContext
+	{
+		OperationContext(
+			workspace: model.identity,
+			generation: model.connection.generation,
+			requestID: UUID(),
+			threadID: "thread"
+		)
+	}
 }

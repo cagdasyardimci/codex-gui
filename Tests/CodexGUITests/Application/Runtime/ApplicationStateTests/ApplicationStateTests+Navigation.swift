@@ -1196,4 +1196,140 @@ extension ApplicationStateTests
 				.projectPath == (reconnect ? project.path : otherProject.path))
 		}
 	}
+
+	@Test func sharedRequestReadsDifferentThreadsAndChainsDistinctPageCursors() async throws
+	{
+		let service = MockCodexService()
+		service.otherThread = ThreadSummary(json: ["id": "thread-2", "cwd": "/tmp"])!
+		service.readNextCursor = "first"
+		service.earlierPages["first"] = ([], "second")
+		service.earlierPages["second"] = ([], nil)
+		let store = contextStore(
+			model: contextModel(),
+			service: service
+		)
+		let original = store.operationContext(threadID: "thread-1")
+		var other = original
+		other.threadID = "thread-2"
+		for context in [original, other]
+		{
+			store.dispatch(.conversations(.historyRequested(ConversationReadOperation(
+				context: context,
+				commandRevision: 0,
+				purpose: .search
+			))))
+		}
+		let readHandle = try #require(store.operation(for: original))
+		#expect(await readHandle.wait() == .finished)
+		#expect(Set(service.readThreadIDs) == ["thread-1", "thread-2"])
+		#expect(service.readThreadCount == 2)
+		let jump = ConversationJumpOperation(
+			context: store.operationContext(threadID: "thread-1"),
+			turnID: "missing",
+			itemID: "answer"
+		)
+		store.dispatch(.contextNavigation(.jumpRequested(jump)))
+		let jumpHandle = try #require(store.operation(for: jump.context))
+		#expect(await jumpHandle.wait() == .finished)
+		#expect(service.earlierReadCursors == ["first", "second"])
+		#expect(store.model.contextNavigation.pendingJump?.pagesLoaded == 2)
+		#expect(store.model.contextNavigation.pendingJump?.pendingRead == nil)
+		#expect(store.model.contextNavigation.jumpError ==
+			"The referenced message is unavailable in this conversation.")
+	}
+
+	@Test func obsoletePageCannotClearOrOverwriteNewConnectionRequest() async throws
+	{
+		for obsoleteFirst in [false, true]
+		{
+			let project = try makeProject()
+			defer
+			{
+				try? FileManager.default.removeItem(at: project)
+			}
+			let service = MockCodexService()
+			service.readNextCursor = "older"
+			service.savedTurns = [makeTurn(
+				id: "latest",
+				status: "completed"
+			)]
+			let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
+			defer
+			{
+				defaultsFixture.cleanup()
+			}
+			let state = WorkspaceTestFixture(
+				server: service,
+				storage: LocalStorage(defaults: defaultsFixture.defaults)
+			)
+			await state.inputs.connect()
+			service.configureCheckout(project)
+			state.inputs.openProject(project)
+			state.inputs.selectThread(service.thread.id)
+			try #require(await waitUntil
+			{
+				state.currentSnapshot.canSend
+			})
+			service.earlierReadsToSuspend = 2
+			state.inputs.loadEarlierTurns()
+			try #require(await waitUntil
+			{
+				service.suspendedEarlierReads[1] != nil
+			})
+			await state.inputs.connect()
+			state.inputs.loadEarlierTurns()
+			try #require(await waitUntil
+			{
+				service.suspendedEarlierReads[2] != nil
+			})
+			let stale = makeTurn(
+				id: "stale",
+				status: "completed",
+				items: [[
+					"id": "answer",
+					"type": "agentMessage",
+					"text": "Stale connection answer"
+				]]
+			)
+			let current = makeTurn(
+				id: "current",
+				status: "completed",
+				items: [[
+					"id": "answer",
+					"type": "agentMessage",
+					"text": "Current connection answer"
+				]]
+			)
+			if obsoleteFirst
+			{
+				service.suspendedEarlierReads.removeValue(forKey: 1)?.resume(returning: (
+					[stale],
+					nil
+				))
+				try await Task.sleep(for: .milliseconds(15))
+				#expect(!state.currentSnapshot.canLoadEarlierTurns)
+				#expect(state.currentSnapshot.entries.isEmpty)
+			}
+			service.suspendedEarlierReads.removeValue(forKey: 2)?.resume(returning: (
+				[current],
+				nil
+			))
+			try #require(
+				await waitUntil
+				{
+					state.currentSnapshot.entries.first?.body == "Current connection answer"
+				}
+			)
+			if !obsoleteFirst
+			{
+				service.suspendedEarlierReads.removeValue(forKey: 1)?.resume(returning: (
+					[stale],
+					nil
+				))
+				try await Task.sleep(for: .milliseconds(15))
+			}
+			#expect(state.currentSnapshot.entries.map(\.body) == ["Current connection answer"])
+			#expect(state.currentSnapshot.reviewTurns.map(\.turnID) == ["current", "latest"])
+		}
+	}
 }

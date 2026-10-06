@@ -5,123 +5,6 @@ import Testing
 
 struct GitComparisonServiceTests
 {
-	@Test func parsesFullContextWithoutTreatingSourceAsMetadata() throws
-	{
-		let patch = """
-		diff --git a/old.swift b/new.swift
-		similarity index 75%
-		rename from old.swift
-		rename to new.swift
-		--- a/old.swift
-		+++ b/new.swift
-		@@ -1,3 +1,3 @@
-		 context
-		-old
-		+new
-		 +++ source context
-		"""
-		let file = try #require(GitComparisonPatchParser.files(in: Data(patch.utf8)).first)
-		#expect(file.oldPath == "old.swift")
-		#expect(file.newPath == "new.swift")
-		#expect(file.kind == .renamed)
-		#expect(file.additions == 1)
-		#expect(file.deletions == 1)
-		#expect(file.hunks.first?.text.contains(" +++ source context") == true)
-	}
-
-	@Test func binaryAndQuotedPathMetadataRemainDistinct() throws
-	{
-		let patch = "diff --git \"a/tab\\tfile\" \"b/tab\\tfile\"\n"
-			+ "Binary files \"a/tab\\tfile\" and \"b/tab\\tfile\" differ\n"
-		let file = try #require(GitComparisonPatchParser.files(in: Data(patch.utf8)).first)
-		#expect(file.isBinary)
-		#expect(file.path == "tab\tfile")
-		#expect(file.hunks.isEmpty)
-	}
-
-	@Test func combinedConflictSectionCannotJoinEarlierFile() throws
-	{
-		let patch = "diff --git a/first b/first\n--- a/first\n+++ b/first\n"
-			+ "@@ -1 +1 @@\n-old\n+new\n"
-			+ "diff --cc conflict\nindex 1111111,2222222..3333333\n"
-			+ "@@@ -1,1 -1,1 +1,1 @@@\n++resolved\n"
-		let bytes = Data(patch.utf8)
-		#expect(GitComparisonPatchParser.hasUnsupportedSections(in: bytes))
-		let files = GitComparisonPatchParser.files(in: bytes)
-		#expect(files.count == 1)
-		#expect(files.first?.path == "first")
-		#expect(files.first?.patch.contains("diff --cc") == false)
-	}
-
-	@Test func cancellingComparisonStopsDetachedProcess() async throws
-	{
-		let started = DispatchSemaphore(value: 0)
-		let work = Task
-		{
-			await GitSubprocessCancellation.detached
-			{
-				let process = Process()
-				process.executableURL = URL(fileURLWithPath: "/bin/sleep")
-				process.arguments = ["5"]
-				guard let control = GitSubprocessCancellation.current
-				else
-				{
-					return false
-				}
-				do
-				{
-					try control.launch(process)
-					started.signal()
-					process.waitUntilExit()
-					control.finish(process)
-					return Task.isCancelled && process.terminationStatus != 0
-				}
-				catch
-				{
-					return false
-				}
-			}
-		}
-		let didStart = await Task.detached
-		{
-			Self.waitForSignal(started)
-		}.value
-		#expect(didStart)
-		let cancelledAt = Date()
-		work.cancel()
-		#expect(await work.value)
-		#expect(Date().timeIntervalSince(cancelledAt) < 2)
-	}
-
-	@Test func copyPayloadPreservesExactBytesAndRejectsBinary() throws
-	{
-		let patch = Data("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n".utf8)
-		let snapshot = GitComparisonSnapshot(
-			request: request(
-				root: "/tmp/fixture",
-				scope: .unstaged
-			),
-			id: "fixture",
-			resolvedBase: "Index",
-			resolvedTarget: "Working tree",
-			patch: patch,
-			files: GitComparisonPatchParser.files(in: patch)
-		)
-		let command = try #require(snapshot.copyCommand)
-		#expect(command == "printf '%s' '" + patch.base64EncodedString()
-			+ "' | base64 -D | git -C '/tmp/fixture' apply")
-		let binary = Data("diff --git a/x b/x\nBinary files a/x and b/x differ\n".utf8)
-		let unsupported = GitComparisonSnapshot(
-			request: snapshot.request,
-			id: "binary",
-			resolvedBase: "Index",
-			resolvedTarget: "Working tree",
-			patch: binary,
-			files: GitComparisonPatchParser.files(in: binary)
-		)
-		#expect(unsupported.copyCommand == nil)
-	}
-
 	@Test func comparisonsPreserveIndexWorkingTreeAndUntrackedPolicy() async throws
 	{
 		let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -368,18 +251,6 @@ struct GitComparisonServiceTests
 			== .unavailable(.unsupportedTextEncoding))
 	}
 
-	@Test func markerSeparatorsDoNotDamageTabsInNames() throws
-	{
-		let quoted = "diff --git \"a/end\\t\" \"b/end\\t\"\n"
-			+ "--- \"a/end\\t\"\n+++ \"b/end\\t\"\n@@ -1 +1 @@\n-a\n+b\n"
-		let file = try #require(GitComparisonPatchParser.files(in: Data(quoted.utf8)).first)
-		#expect(file.path == "end\t")
-		let binary = "diff --git a/folder b/name b/folder b/name\n"
-			+ "Binary files a/folder b/name and b/folder b/name differ\n"
-		let binaryFile = try #require(GitComparisonPatchParser.files(in: Data(binary.utf8)).first)
-		#expect(binaryFile.path == "folder b/name")
-	}
-
 	@Test func repositoryProgramsCannotRunDuringComparison() async throws
 	{
 		let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -501,8 +372,4 @@ struct GitComparisonServiceTests
 		#expect(result.terminationStatus == 0)
 	}
 
-	private static func waitForSignal(_ semaphore: DispatchSemaphore) -> Bool
-	{
-		semaphore.wait(timeout: .now() + 2) == .success
-	}
 }

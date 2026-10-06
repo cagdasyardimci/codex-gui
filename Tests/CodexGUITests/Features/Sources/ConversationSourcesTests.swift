@@ -20,33 +20,7 @@ struct ConversationSourcesTests
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let url = directory.appendingPathComponent("preview.png")
-		let bitmap = try #require(NSBitmapImageRep(
-			bitmapDataPlanes: nil,
-			pixelsWide: 4,
-			pixelsHigh: 4,
-			bitsPerSample: 8,
-			samplesPerPixel: 4,
-			hasAlpha: true,
-			isPlanar: false,
-			colorSpaceName: .deviceRGB,
-			bytesPerRow: 0,
-			bitsPerPixel: 0
-		))
-		for x in 0 ..< 4
-		{
-			for y in 0 ..< 4
-			{
-				bitmap.setColor(
-					.systemBlue,
-					atX: x,
-					y: y
-				)
-			}
-		}
-		try #require(bitmap.representation(
-			using: .png,
-			properties: [:]
-		)).write(to: url)
+		try DraftImageImportTestFixture.png().write(to: url)
 		let sources = ConversationLocalSources(entries: [entry(
 			"turn",
 			images: [try reference(url.path)]

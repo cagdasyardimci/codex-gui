@@ -277,8 +277,8 @@ struct GitWorktreeManagerTests
 		#expect(try TaskWorkspaceStore(directory: fixture.records).loadAll().count == 2)
 	}
 
-	@Test("Cleanup verifies ownership, refuses dirty files, and retains the branch")
-	func cleanupIsSafe() async throws
+	@Test("Changed branch blocks checkout use and removal")
+	func changedBranchBlocksCheckoutUseAndRemoval() async throws
 	{
 		let fixture = try GitFixture()
 		defer
@@ -320,6 +320,23 @@ struct GitWorktreeManagerTests
 			at: checkout
 		)
 		#expect(try await manager.activeCheckout(id: workspace.id).branch == workspace.branch)
+	}
+
+	@Test("Untracked user files block checkout removal")
+	func untrackedUserFileBlocksCheckoutRemoval() async throws
+	{
+		let fixture = try GitFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let manager = fixture.manager()
+		let workspace = try await manager.createCheckout(
+			taskID: "cleanup-task",
+			name: "Clean checkout",
+			from: fixture.source
+		)
+		let checkout = URL(fileURLWithPath: workspace.checkoutPath)
 
 		let userFile = checkout.appendingPathComponent("user-work.txt")
 		try "keep\n".write(
@@ -343,8 +360,24 @@ struct GitWorktreeManagerTests
 			try TaskWorkspaceStore(directory: fixture.records).load(id: workspace.id)?.phase
 				== .active
 		)
+	}
 
-		try FileManager.default.removeItem(at: userFile)
+	@Test("Ignored user files block checkout removal")
+	func ignoredUserFileBlocksCheckoutRemoval() async throws
+	{
+		let fixture = try GitFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let manager = fixture.manager()
+		let workspace = try await manager.createCheckout(
+			taskID: "cleanup-task",
+			name: "Clean checkout",
+			from: fixture.source
+		)
+		let checkout = URL(fileURLWithPath: workspace.checkoutPath)
+
 		try "generated/\n".write(
 			to: fixture.source.appendingPathComponent(".git/info/exclude"),
 			atomically: true,
@@ -379,7 +412,23 @@ struct GitWorktreeManagerTests
 				encoding: .utf8
 			) == "keep ignored\n")
 		}
-		try FileManager.default.removeItem(at: ignored.deletingLastPathComponent())
+	}
+
+	@Test("Clean cleanup retains the branch and durable removal phase")
+	func cleanupIsSafe() async throws
+	{
+		let fixture = try GitFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let manager = fixture.manager()
+		let workspace = try await manager.createCheckout(
+			taskID: "cleanup-task",
+			name: "Clean checkout",
+			from: fixture.source
+		)
+		let checkout = URL(fileURLWithPath: workspace.checkoutPath)
 
 		let closed = try await manager.removeCheckout(id: workspace.id)
 		#expect(closed.phase == .checkoutRemoved)

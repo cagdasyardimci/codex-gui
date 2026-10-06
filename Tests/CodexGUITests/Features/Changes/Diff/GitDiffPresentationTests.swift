@@ -289,50 +289,6 @@ struct GitDiffPresentationTests
 		#expect(rows[2].newLine == 2)
 	}
 
-	@Test func projectionCacheReusesRowsAcrossGapExpansionAndResetsForContentOptions() throws
-	{
-		let context = (1 ... 12).map
-		{
-			" line \($0)"
-		}.joined(separator: "\n")
-		let snapshot = fixture("\(context)\n-old\n+new")
-		var presentation = GitDiffPresentation(snapshot: snapshot)
-		var cache = GitDiffProjectionCache()
-		cache.prepare(for: presentation)
-		#expect(cache.cachedFileIDs.isEmpty)
-		let file = try #require(snapshot.files.first)
-		let folded = cache.file(
-			file,
-			presentation: presentation
-		)
-		let gap = try #require(folded.rows.first
-		{
-			$0.kind == .gap
-		})
-		#expect(cache.projectionCount == 1)
-		presentation.options.expandedGapIDs.insert(try #require(gap.gapID))
-		let expanded = cache.file(
-			file,
-			presentation: presentation
-		)
-		#expect(expanded.rows.count == 14)
-		#expect(cache.projectionCount == 1)
-		presentation.options.ignoreWhitespace = true
-		cache.prepare(for: presentation)
-		#expect(cache.cachedFileIDs.isEmpty)
-		_ = cache.file(
-			file,
-			presentation: presentation
-		)
-		#expect(cache.projectionCount == 2)
-		presentation = GitDiffPresentation(snapshot: fixture(
-			"-old\n+new",
-			id: "next"
-		))
-		cache.prepare(for: presentation)
-		#expect(cache.cachedFileIDs.isEmpty)
-	}
-
 	private func fixture(
 		_ content: String,
 		path: String = "Sources/Test.swift",

@@ -85,4 +85,64 @@ struct GitComparisonPatchParserTests
 		#expect(files[2].additions == 0)
 		#expect(files[2].deletions == 0)
 	}
+
+	@Test func parsesFullContextWithoutTreatingSourceAsMetadata() throws
+	{
+		let patch = """
+		diff --git a/old.swift b/new.swift
+		similarity index 75%
+		rename from old.swift
+		rename to new.swift
+		--- a/old.swift
+		+++ b/new.swift
+		@@ -1,3 +1,3 @@
+		 context
+		-old
+		+new
+		 +++ source context
+		"""
+		let file = try #require(GitComparisonPatchParser.files(in: Data(patch.utf8)).first)
+		#expect(file.oldPath == "old.swift")
+		#expect(file.newPath == "new.swift")
+		#expect(file.kind == .renamed)
+		#expect(file.additions == 1)
+		#expect(file.deletions == 1)
+		#expect(file.hunks.first?.text.contains(" +++ source context") == true)
+	}
+
+	@Test func binaryAndQuotedPathMetadataRemainDistinct() throws
+	{
+		let patch = "diff --git \"a/tab\\tfile\" \"b/tab\\tfile\"\n"
+			+ "Binary files \"a/tab\\tfile\" and \"b/tab\\tfile\" differ\n"
+		let file = try #require(GitComparisonPatchParser.files(in: Data(patch.utf8)).first)
+		#expect(file.isBinary)
+		#expect(file.path == "tab\tfile")
+		#expect(file.hunks.isEmpty)
+	}
+
+	@Test func combinedConflictSectionCannotJoinEarlierFile() throws
+	{
+		let patch = "diff --git a/first b/first\n--- a/first\n+++ b/first\n"
+			+ "@@ -1 +1 @@\n-old\n+new\n"
+			+ "diff --cc conflict\nindex 1111111,2222222..3333333\n"
+			+ "@@@ -1,1 -1,1 +1,1 @@@\n++resolved\n"
+		let bytes = Data(patch.utf8)
+		#expect(GitComparisonPatchParser.hasUnsupportedSections(in: bytes))
+		let files = GitComparisonPatchParser.files(in: bytes)
+		#expect(files.count == 1)
+		#expect(files.first?.path == "first")
+		#expect(files.first?.patch.contains("diff --cc") == false)
+	}
+
+	@Test func markerSeparatorsDoNotDamageTabsInNames() throws
+	{
+		let quoted = "diff --git \"a/end\\t\" \"b/end\\t\"\n"
+			+ "--- \"a/end\\t\"\n+++ \"b/end\\t\"\n@@ -1 +1 @@\n-a\n+b\n"
+		let file = try #require(GitComparisonPatchParser.files(in: Data(quoted.utf8)).first)
+		#expect(file.path == "end\t")
+		let binary = "diff --git a/folder b/name b/folder b/name\n"
+			+ "Binary files a/folder b/name and b/folder b/name differ\n"
+		let binaryFile = try #require(GitComparisonPatchParser.files(in: Data(binary.utf8)).first)
+		#expect(binaryFile.path == "folder b/name")
+	}
 }

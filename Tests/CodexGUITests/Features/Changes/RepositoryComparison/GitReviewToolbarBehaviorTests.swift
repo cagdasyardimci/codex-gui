@@ -8,50 +8,12 @@ struct GitReviewToolbarBehaviorTests
 {
 	@Test func collapsingDiffsKeepsHeadersAndSupportsIndividualReopenAndExpandAll() async throws
 	{
-		let model = WorkspaceModel(identity: WorkspaceIdentity(
-			sessionID: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!,
-			canonicalCheckoutPath: "/fixture/Review"
-		))
-		let owner = FeaturePresentationOwner(
-			WorkspaceSelectors.snapshot(
-				model: model,
-				now: .distantPast
-			),
-			storeIdentity: "toolbar-behavior"
-		)
-		let controller = GitChangesViewController(
-			runtime: GitReviewRuntime(service: ToolbarFixtureService())
-		)
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 900,
-				height: 640
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.contentViewController = controller
+		let (controller, window) = try await loadedController()
 		defer
 		{
 			controller.close()
 			window.close()
 		}
-		controller.activate(owner: owner)
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.snapshot != nil,
-				controller.runtime.state.pendingRequest == nil
-			{
-				break
-			}
-			await Task.yield()
-		}
-		_ = try #require(controller.runtime.state.snapshot)
-		window.layoutIfNeeded()
 		#expect(descendants(controller.view).compactMap
 		{
 			$0 as? GitAdaptiveDiffView
@@ -102,6 +64,16 @@ struct GitReviewToolbarBehaviorTests
 		#expect(controller.projectionCache.projectionCount == initialProjections)
 		#expect(controller.runtime.state.selectedFileID == selectedFileID)
 		#expect(controller.runtime.state.expandedDirectories == directories)
+	}
+
+	@Test func compactToolbarMovesActionsIntoMenuAndKeepsHeaderCompact() async throws
+	{
+		let (controller, window) = try await loadedController()
+		defer
+		{
+			controller.close()
+			window.close()
+		}
 		window.setContentSize(NSSize(
 			width: 632,
 			height: 640
@@ -172,6 +144,60 @@ struct GitReviewToolbarBehaviorTests
 		})
 		#expect(path.frame.height <= 20)
 		#expect((path.superview?.frame.height ?? .infinity) <= 48)
+	}
+
+	private func loadedController() async throws -> (GitChangesViewController, NSWindow)
+	{
+		let model = WorkspaceModel(identity: WorkspaceIdentity(
+			sessionID: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!,
+			canonicalCheckoutPath: "/fixture/Review"
+		))
+		let owner = FeaturePresentationOwner(
+			WorkspaceSelectors.snapshot(
+				model: model,
+				now: .distantPast
+			),
+			storeIdentity: "toolbar-behavior"
+		)
+		let controller = GitChangesViewController(
+			runtime: GitReviewRuntime(service: ToolbarFixtureService())
+		)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 900,
+				height: 640
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = controller
+		var handedOff = false
+		defer
+		{
+			if !handedOff
+			{
+				controller.close()
+				window.close()
+			}
+		}
+		controller.activate(owner: owner)
+		for _ in 0 ..< 100
+		{
+			if controller.runtime.state.snapshot != nil,
+				controller.runtime.state.pendingRequest == nil
+			{
+				break
+			}
+			await Task.yield()
+		}
+		_ = try #require(controller.runtime.state.snapshot)
+		window.layoutIfNeeded()
+		handedOff = true
+		return (controller, window)
 	}
 
 	private func button(

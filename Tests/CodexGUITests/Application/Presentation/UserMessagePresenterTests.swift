@@ -133,4 +133,27 @@ struct UserMessagePresenterTests
 		#expect(UserMessagePresenter.body(for: [.text("## My request:\nKeep this too.")])
 			== "## My request:\nKeep this too.")
 	}
+
+	@Test func userMessageDecodingPreservesRawTextAndSeparateReferences() throws
+	{
+		let item = try #require(
+			CodexItem(json: [
+				"id": "user",
+				"type": "userMessage",
+				"content": [
+					["type": "text", "text": "Inspect this"],
+					["type": "mention", "name": "Example.swift", "path": "/tmp/Example.swift"],
+					["type": "localImage", "path": "/tmp/image.png"],
+				],
+			])
+		)
+		#expect(item.text == "Inspect this")
+		#expect(item.references.map(\.kind) == [.fileReference, .image])
+		#expect(item.references.map(\.path) == ["/tmp/Example.swift", "/tmp/image.png"])
+		#expect(
+			UserMessagePresenter.body(for: item)
+				== "Inspect this\n[File reference: Example.swift]"
+		)
+	}
+
 }

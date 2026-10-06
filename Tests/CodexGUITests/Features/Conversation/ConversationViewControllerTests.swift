@@ -427,76 +427,6 @@ struct ConversationViewControllerTests
 		#expect(try #require(message.enclosingScrollView).frame.height >= 50)
 	}
 
-	@Test func changesPaneResizesExistingAndStreamedItems() async throws
-	{
-		_ = NSApplication.shared
-		let defaults = try #require(UserDefaults(suiteName: "ConversationLayoutTests.\(UUID())"))
-		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
-		let windowController = MainWindowController(
-			store: state.store,
-			onOpenProject:
-			{
-			},
-			onInsertPath:
-			{
-			}
-		)
-		let window = try #require(windowController.window)
-		let split = windowController.paneController.split
-		let controller = try #require(
-			split.splitViewItems[1].viewController.children.compactMap
-			{
-				$0 as? ConversationViewController
-			}.first
-		)
-		let collection = try #require(findCollection(in: controller.view))
-		var entries = (0 ..< 30).map
-		{
-			ConversationEntry(
-				id: "message-\($0)",
-				kind: .agent,
-				title: "Codex",
-				body: String(
-					repeating: "Streamed message content ",
-					count: 8
-				)
-			)
-		}
-		split.view.layoutSubtreeIfNeeded()
-		controller.render(snapshot(entries))
-		await controller.waitForRendering()
-		collection.layoutSubtreeIfNeeded()
-
-		for collapsed in [true, false, true, false]
-		{
-			split.splitViewItems[2].isCollapsed = collapsed
-			split.view.layoutSubtreeIfNeeded()
-			collection.layoutSubtreeIfNeeded()
-			for index in [0, entries.count - 1]
-			{
-				let attributes = try #require(
-					collection.layoutAttributesForItem(at: IndexPath(
-						item: index,
-						section: 0
-					))
-				)
-				#expect(attributes.frame.maxX <= collection.bounds.width - 8)
-			}
-			entries[0].body += "\nMore output"
-			entries.append(
-				ConversationEntry(
-					id: "message-\(entries.count)",
-					kind: .agent,
-					title: "Codex",
-					body: "More output"
-				)
-			)
-			controller.render(snapshot(entries))
-			await controller.waitForRendering()
-			collection.layoutSubtreeIfNeeded()
-		}
-	}
-
 	@Test func streamingCanReloadExistingItemsAndInsertNewItemsInTheSameSnapshot() async throws
 	{
 		_ = NSApplication.shared
@@ -809,54 +739,6 @@ struct ConversationViewControllerTests
 		#expect(activity.stringValue.isEmpty)
 	}
 
-	@Test func interruptedTaskShowsStoppedAcrossViews() throws
-	{
-		_ = NSApplication.shared
-		let thread = try #require(
-			ThreadSummary(json: [
-				"id": "replay",
-				"name": "Interrupted work",
-				"cwd": "/tmp/replay",
-			])
-		)
-		var stopped = snapshot(
-			[],
-			executionState: .stopped,
-			threads: [thread]
-		)
-		stopped.activeThreadID = "replay"
-		stopped.activeExecutionState = .stopped
-		let conversation = ConversationViewController()
-		_ = conversation.view
-		conversation.render(stopped)
-		let stateLabel = try #require(findLabel(
-			in: conversation.view,
-			label: "Execution state"
-		))
-		let stopButton = try #require(findButton(
-			in: conversation.view,
-			title: "Stop"
-		))
-		#expect(stateLabel.stringValue == "Stopped")
-		#expect(!stopButton.isEnabled)
-
-		let navigation = NavigationViewController()
-		_ = navigation.view
-		navigation.render(stopped)
-		let projectActions = try #require(findButton(
-			in: navigation.view,
-			title: "Project Actions"
-		))
-		let table = try #require(findTable(in: navigation.view))
-		let row = try #require(table.view(
-			atColumn: 0,
-			row: 1,
-			makeIfNecessary: true
-		))
-		#expect(projectActions.toolTip?.contains("Task: Stopped") == true)
-		#expect(row.accessibilityLabel()?.contains("Stopped task") == true)
-	}
-
 	private func findButton(
 		in view: NSView,
 		title: String
@@ -896,18 +778,6 @@ struct ConversationViewControllerTests
 		return view.subviews.lazy.compactMap
 		{
 			findCollection(in: $0)
-		}.first
-	}
-
-	private func findTable(in view: NSView) -> NSTableView?
-	{
-		if let table = view as? NSTableView
-		{
-			return table
-		}
-		return view.subviews.lazy.compactMap
-		{
-			findTable(in: $0)
 		}.first
 	}
 

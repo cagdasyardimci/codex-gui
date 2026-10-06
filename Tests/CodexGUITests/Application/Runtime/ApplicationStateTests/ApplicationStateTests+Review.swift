@@ -8,8 +8,12 @@ extension ApplicationStateTests
 	@Test func reviewMarkerReservationPreservesReentrantEditsAndReloadsCapturedCheckout(
 	) async throws
 	{
-		let defaults = UserDefaults(suiteName: "ReviewRuntimeTests.\(UUID().uuidString)")!
-		let markers = ReviewMarkerStore(defaults: defaults)
+		let markerDefaultsFixture = try IsolatedUserDefaultsFixture(prefix: "ReviewRuntimeTests")
+		defer
+		{
+			markerDefaultsFixture.cleanup()
+		}
+		let markers = ReviewMarkerStore(defaults: markerDefaultsFixture.defaults)
 		let service = MockCodexService()
 		var model = WorkspaceModel(identity: WorkspaceIdentity(
 			sessionID: UUID(),
@@ -188,9 +192,12 @@ extension ApplicationStateTests
 			key
 		))
 		let identity = try #require(ReviewReducer.identities(turn).first)
-		let markers = ReviewMarkerStore(defaults: UserDefaults(
-			suiteName: "OffscreenReviewTests.\(UUID().uuidString)"
-		)!)
+		let markerDefaultsFixture = try IsolatedUserDefaultsFixture(prefix: "OffscreenReviewTests")
+		defer
+		{
+			markerDefaultsFixture.cleanup()
+		}
+		let markers = ReviewMarkerStore(defaults: markerDefaultsFixture.defaults)
 		markers.setReviewed(
 			true,
 			projectPath: project.path,
@@ -615,7 +622,11 @@ extension ApplicationStateTests
 				items: [secondChange]
 			),
 		]
-		let defaults = UserDefaults(suiteName: "ReviewStateTests.\(UUID().uuidString)")!
+		let markerDefaultsFixture = try IsolatedUserDefaultsFixture(prefix: "ReviewStateTests")
+		defer
+		{
+			markerDefaultsFixture.cleanup()
+		}
 		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
 		defer
 		{
@@ -624,8 +635,12 @@ extension ApplicationStateTests
 		let state = WorkspaceTestFixture(
 			server: service,
 			storage: LocalStorage(defaults: defaultsFixture.defaults),
-			reviewMarkerStore: ReviewMarkerStore(defaults: defaults)
+			reviewMarkerStore: ReviewMarkerStore(defaults: markerDefaultsFixture.defaults)
 		)
+		defer
+		{
+			state.shutdown()
+		}
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
@@ -782,96 +797,6 @@ extension ApplicationStateTests
 		))
 		state.inputs.selectThread(service.thread.id)
 		#expect(state.currentSnapshot.reviewTurns[0].validations[0].currency == .outdated)
-	}
-
-	@Test func skillsInvalidationsShareOneFiniteTwoAttemptGroup() async throws
-	{
-		let service = MockCodexService()
-		service.suspendedSkillReadNumbers = [1, 2]
-		let store = contextStore(
-			model: contextModel(),
-			service: service
-		)
-		let context = store.operationContext()
-		store.dispatch(.contextNavigation(.skillsInvalidated(context)))
-		let handle = try #require(store.operation(for: context))
-		await service.waitForSkillRead(1)
-		for _ in 0 ..< 20
-		{
-			store.dispatch(.contextNavigation(.skillsInvalidated(store.operationContext())))
-		}
-		let first = try #require(store.model.contextNavigation.pendingSkillRefresh)
-		service.pendingSkillReads.removeValue(forKey: 1)?.resume(returning:
-			SkillCatalog(
-				skills: [],
-				errors: []
-			))
-		await service.waitForSkillRead(2)
-		#expect(store.model.contextNavigation.pendingSkillRefresh?.attempt == 1)
-		#expect(store.model.contextNavigation.pendingSkillRefresh?.context == context)
-		store.dispatch(.contextNavigation(.skillsReceived(
-			first,
-			.failed(OperationFailure(
-				message: "Late first failure",
-				outcomeIsUncertain: false
-			))
-		)))
-		#expect(store.model.contextNavigation.pendingSkillRefresh?.attempt == 1)
-		#expect(store.model.contextNavigation.skillError == nil)
-		for _ in 0 ..< 20
-		{
-			store.dispatch(.contextNavigation(.skillsInvalidated(store.operationContext())))
-		}
-		service.pendingSkillReads.removeValue(forKey: 2)?.resume(returning:
-			SkillCatalog(
-				skills: [],
-				errors: []
-			))
-		#expect(await handle.wait() == .finished)
-		#expect(service.skillReadCount == 2)
-		#expect(store.model.contextNavigation.pendingSkillRefresh == nil)
-		#expect(!store.model.contextNavigation.skillRefreshPending)
-	}
-
-	@Test func sharedRequestReadsDifferentThreadsAndChainsDistinctPageCursors() async throws
-	{
-		let service = MockCodexService()
-		service.otherThread = ThreadSummary(json: ["id": "thread-2", "cwd": "/tmp"])!
-		service.readNextCursor = "first"
-		service.earlierPages["first"] = ([], "second")
-		service.earlierPages["second"] = ([], nil)
-		let store = contextStore(
-			model: contextModel(),
-			service: service
-		)
-		let original = store.operationContext(threadID: "thread-1")
-		var other = original
-		other.threadID = "thread-2"
-		for context in [original, other]
-		{
-			store.dispatch(.conversations(.historyRequested(ConversationReadOperation(
-				context: context,
-				commandRevision: 0,
-				purpose: .search
-			))))
-		}
-		let readHandle = try #require(store.operation(for: original))
-		#expect(await readHandle.wait() == .finished)
-		#expect(Set(service.readThreadIDs) == ["thread-1", "thread-2"])
-		#expect(service.readThreadCount == 2)
-		let jump = ConversationJumpOperation(
-			context: store.operationContext(threadID: "thread-1"),
-			turnID: "missing",
-			itemID: "answer"
-		)
-		store.dispatch(.contextNavigation(.jumpRequested(jump)))
-		let jumpHandle = try #require(store.operation(for: jump.context))
-		#expect(await jumpHandle.wait() == .finished)
-		#expect(service.earlierReadCursors == ["first", "second"])
-		#expect(store.model.contextNavigation.pendingJump?.pagesLoaded == 2)
-		#expect(store.model.contextNavigation.pendingJump?.pendingRead == nil)
-		#expect(store.model.contextNavigation.jumpError ==
-			"The referenced message is unavailable in this conversation.")
 	}
 
 	@Test func reviewRequestSteersOnlyTheViewedOwnerWithSourceIdentity() async throws
