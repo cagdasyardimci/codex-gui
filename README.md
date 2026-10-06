@@ -30,7 +30,11 @@ and [native QA](docs/native-qa.md) for synthetic app preparation and interaction
 The installed Command Line Tools on this machine place Swift Testing outside SwiftPM's
 default search path, so the Makefile supplies the framework and macro paths.
 
-For development, `swift run CodexGUI` starts the executable directly with desktop notifications unavailable. macOS notification access requires an app bundle identity; `scripts/bundle.sh` creates and ad hoc signs that bundle. Settings shows the notification status for the current launch.
+For development, `swift run CodexGUI` starts the executable directly with desktop notifications unavailable. macOS notification access requires a stable app bundle identity. `scripts/bundle.sh` signs the bundle with the single valid Apple Development identity available to `codesign`.
+
+Xcode can create this identity at no cost for a Personal Team: sign in under **Xcode > Settings > Apple Accounts**, select the Personal Team, and use a macOS app target with **Automatically manage signing** enabled. After switching from ad hoc signing, macOS may ask you to approve the app again on its next launch. Keep the bundle identifier and signing identity the same on later builds so macOS continues to recognize the app and its permission grants. A Personal Team identity supports local development signing; it does not enable app distribution or notarization.
+
+The bundle script stops with setup guidance if the identity is missing or multiple Apple Development identities are available. Set `CODEX_GUI_SIGNING_IDENTITY` to an exact certificate name or SHA-1 hash to select an identity explicitly. Run `security find-identity -v -p codesigning` to list identities available to `codesign`. Settings shows the notification status for the current launch.
 
 In VS Code, use `./scripts/bundle.sh` as the pre-launch task and `${workspaceFolder}/.build/CodexGUI.app/Contents/MacOS/CodexGUI` as the launch program for both debugging and **Run Without Debugging**. A Run task can use `open .build/CodexGUI.app` after bundling. Swift extension launch configurations that run the bare executable remain usable with notifications unavailable. IDE configuration stays local and is ignored by Git.
 

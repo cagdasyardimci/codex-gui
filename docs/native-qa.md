@@ -6,7 +6,9 @@ prints the fixture path. Open that path with **Open Project** in the QA app.
 
 ## Preparation and isolation limits
 
-The QA copy has a unique bundle ID and separate preferences. `CODEX_GUI_WORKSPACE_ROOT`
+The QA copy retains the main app's bundle identifier, `local.codexgui.appkit`, and its
+Apple Development signature. macOS permissions and the standard preferences domain are
+shared with the main app. `CODEX_GUI_WORKSPACE_ROOT`
 directs task records and checkouts into its temporary `task-workspaces` directory.
 Project context files, draft images and Git turn baselines still use the normal application
 support directories. The QA copy is not isolated from those file stores.
@@ -17,7 +19,11 @@ no checkout, build-directory, prepare-only or relaunch options; use the manual r
 instructions in [context checks](#context-and-native-interaction-checks) for an existing QA copy.
 Follow [validation](validation.md) for automated checks and evidence requirements.
 
-The backend never calls a model or edits project files. Its model names are fixtures. Rename/archive choices are saved only in its temporary JSON file. Each run uses a unique bundle ID so Launch Services cannot reuse an older QA app. Before interacting, verify that the launched app's Codex executable is the copied `qa-backend.py`, especially if another QA session is open.
+The backend never calls a model or edits project files. Its model names are fixtures.
+Rename/archive choices are saved only in its temporary JSON file. The script launches the
+QA copy by its explicit path with `open -n` to start a new instance. Before interacting,
+verify that the launched app's Codex executable is the copied `qa-backend.py`, especially
+if the main app or another QA session is open.
 
 ## Reading checks
 
@@ -109,7 +115,13 @@ For an unavailable-model check, first select the Luna fixture and quit. In the t
 
 The navigation fixture reports a synthetic change at line 3 of `file with spaces.swift`. Choose the preferred editor in **Settings…** (Command-comma), then use Changes to verify file/line handoff; selecting an editor opens only this temporary file.
 
-The build and QA scripts apply an ad hoc signature to the complete bundle so macOS can associate notification requests with its bundle identity. This is a local development signature, not distribution signing. Settings shows the observed notification permission or request/delivery error. Banner delivery still requires native observation and any macOS permission remains under the user's control.
+The build script applies the Apple Development signature described in
+[the build guide](../README.md#build-check-and-run). The native QA script copies the signed
+bundle without changing its metadata and verifies the preserved signature. It uses the same
+signing identity and bundle identifier as the main app so permission approvals can carry across
+builds and QA copies. This is local development signing. Settings shows the observed
+notification permission or request/delivery error. Banner delivery still requires native
+observation and any macOS permission remains under the user's control.
 
 At the minimum supported window size, inspect the sidebar, composer, and optional inspector. Check that the task status remains visible beside its owning chat, the toolbar status popover exposes account/backend details and recovery, and code-copy buttons sit beside their corresponding blocks. After a synthetic Stop, browse another chat and return to the stopped task; its stopped result must remain visible. Notification permission and banner delivery require a separate native observation; source tests cover only transition selection and owner identity.
 

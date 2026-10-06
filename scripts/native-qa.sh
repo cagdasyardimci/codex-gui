@@ -14,10 +14,6 @@ import sys
 import zlib
 info_path = Path(sys.argv[1])
 info = plistlib.loads(info_path.read_bytes())
-suffix = Path(sys.argv[2]).name.rsplit('.', 1)[-1].lower()
-info['CFBundleIdentifier'] = f'local.codexgui.nativeqa.{suffix}'
-info['CFBundleName'] = f'CodexGUI QA {suffix}'
-info_path.write_bytes(plistlib.dumps(info))
 print(f"QA bundle ID: {info['CFBundleIdentifier']}")
 project = Path(sys.argv[2]) / 'project with spaces'
 project.mkdir()
@@ -30,14 +26,14 @@ preview = (b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64,
            + png_chunk(b'IDAT', zlib.compress(pixels)) + png_chunk(b'IEND', b''))
 (project / 'activity-preview.png').write_bytes(preview)
 PY
-codesign --force --sign - "$qa_bundle"
+codesign --verify --deep --strict "$qa_bundle"
 git -C "$qa_directory/project with spaces" init -q --initial-branch=main
 git -C "$qa_directory/project with spaces" add -- "file with spaces.swift" "activity-preview.png"
 git -C "$qa_directory/project with spaces" \
   -c user.name="Codex GUI QA" -c user.email="codex-gui-qa@example.invalid" \
   -c commit.gpgSign=false -c core.hooksPath=/dev/null \
   commit -qm "test: establish native QA baseline"
-open "$qa_bundle" --env "CODEX_EXECUTABLE=$qa_directory/qa-backend.py" \
+open -n "$qa_bundle" --env "CODEX_EXECUTABLE=$qa_directory/qa-backend.py" \
   --env "CODEX_GUI_QA_STATE=$qa_directory/backend-state.json" \
   --env "CODEX_GUI_WORKSPACE_ROOT=$qa_directory/task-workspaces" \
   --stderr "$qa_directory/native.log"
