@@ -1,6 +1,21 @@
 # Native QA without model calls
 
-Run `./scripts/native-qa.sh`. It builds an isolated QA bundle, copies the synthetic backend into a temporary directory, creates a Git fixture with a committed baseline, and prints the fixture path. Open that path with **Open Project** in the QA app. The QA bundle has separate preferences from the normal app. `CODEX_GUI_WORKSPACE_ROOT` directs task records and checkouts into the run's temporary `task-workspaces` directory, so task workspace checks preserve the normal app's saved workspaces.
+Run `./scripts/native-qa.sh`. It builds the development app, copies it and the synthetic
+backend into a temporary directory, creates a Git fixture with a committed baseline, and
+prints the fixture path. Open that path with **Open Project** in the QA app.
+
+## Preparation and isolation limits
+
+The QA copy has a unique bundle ID and separate preferences. `CODEX_GUI_WORKSPACE_ROOT`
+directs task records and checkouts into its temporary `task-workspaces` directory.
+Project context files, draft images and Git turn baselines still use the normal application
+support directories. The QA copy is not isolated from those file stores.
+
+Preparation builds in the checkout's `.build` directory and replaces its development app
+bundle before making the QA copy. Coordinate builds sharing that checkout. The script has
+no checkout, build-directory, prepare-only or relaunch options; use the manual relaunch
+instructions in [context checks](#context-and-native-interaction-checks) for an existing QA copy.
+Follow [validation](validation.md) for automated checks and evidence requirements.
 
 The backend never calls a model or edits project files. Its model names are fixtures. Rename/archive choices are saved only in its temporary JSON file. Each run uses a unique bundle ID so Launch Services cannot reuse an older QA app. Before interacting, verify that the launched app's Codex executable is the copied `qa-backend.py`, especially if another QA session is open.
 
@@ -44,20 +59,10 @@ Check `TABLE_END_MARKER`, `CODE_END_MARKER`, `FINAL_MARKER`, and `EMPTY_FENCE_EN
 roles. Native checks must use the final gated build; screenshots of an earlier build do not
 verify subsequent source fixes.
 
-The supplied reference screenshots show formatted Markdown in user bubbles: styled headings
-and inline text, hanging/nested list indents, task markers, quote rails, aligned table cells,
-separate monospaced code panels, decoded escapes/entities, and a horizontal rule. Their display
-math and Mermaid flowchart render visually; their inline `$E = mc^2$` and raw HTML remain
-literal. The GUI comparison screenshots show the same user-message source literally, including
-heading markers, formatting delimiters, table pipes, code fences, and link definitions. These
-images establish the rendering difference, but do not establish selection, copying, link
-activation, appearance handling, streaming, or native view implementation. Check those behaviors
-separately after the source and test gates pass.
-
 An additional identical user/assistant edge fixture checks a continuous quote rail across
 paragraphs, a nested quote, a long Unicode code line that wraps inside its card, and an empty
 code fence followed by `EMPTY_FENCE_END_MARKER`. Inspect these at narrow/wide widths without
-changing the canonical screenshot-comparison source.
+changing the canonical Markdown fixture source.
 
 Send any short message to start a roughly 32-second synthetic stream. Its 16 chunks deliberately
 pause with incomplete bold, link, strikethrough, table, and code-fence syntax. Inspect those

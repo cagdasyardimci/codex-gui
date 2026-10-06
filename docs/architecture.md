@@ -4,7 +4,15 @@ The application uses Model View Intent (MVI) with one canonical workspace store 
 checkout/session. AppKit owns windows, controls, focus, selection and layout. Backend
 conversation history remains owned by Codex; local stores retain drafts and preferences.
 
+File placement follows [conventions](../CONVENTIONS.md#file-organization-and-ownership).
+For the task procedure and documentation routes, see [agent workflow](agent-workflow.md).
+
 ## State transitions
+
+`WorkspaceStateStore` owns the model for each checkout/session, including the source session.
+Views receive presentations and send intents; they do not decode protocol messages or
+edit Codex conversation files. `CodexService` is the application-facing backend interface,
+implemented in `CodexClient/`. Cross-feature composition uses standalone composition types.
 
 `WorkspaceModel` contains feature values for connection, execution, the composer,
 conversations, review, navigation, preferences, usage and workspace lifecycle.
@@ -64,17 +72,20 @@ effects. `WorkspaceCoordinatorReducer` owns selection, creation, recovery, clean
 aggregate quit decisions. Git worktree operations revalidate repository, branch, path
 and clean-file ownership; removal retains the branch and durable task record.
 
+Shared persistence preserves existing project/thread keys and ordering.
+
 ## Presentation
 
-AppKit callbacks dispatch captured intents and render narrow read-only presentations.
-Capability rules are shared by selectors and reducers, with admission checked again
+AppKit callbacks dispatch captured `WorkspaceIntentTarget` intents and render narrow read-only presentations.
+`WorkspaceEligibility` shares capability rules between selectors and reducers, with admission checked again
 when an intent is reduced. Publication is coalesced while all accepted backend events
 are processed in order. Transcript preparation runs asynchronously and superseded
 renders are cancelled without changing AppKit's ownership of focus and scrolling.
 
-`Features/Sources/` owns source inventory, detail views, result cards and tab hover previews.
-`Features/PinnedSummary/` owns the compact summary card; `App/` owns inspector and tool-tab
-integration. Both Sources and transcript attachments use `Features/Shared/SourceThumbnailLoader`.
+Feature placement follows the [feature map](../Sources/CodexGUI/Features/README.md).
+Terminal invocations remain transcript activity and are excluded from the canonical Sources
+inventory. Source counts, summary and tab presentation must agree.
+Both Sources and transcript attachments use `Features/Shared/SourceThumbnailLoader`.
 The shared actor bounds input decoding, prepares pixels off the main actor and reuses decoded
 thumbnails. `CodexClient/InlineImageData` handles inline payload identification and bounded
 decoding; `Application/Services/LocalAttachmentURL` resolves local paths and file URLs.

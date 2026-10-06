@@ -4,9 +4,9 @@ A native AppKit client for local Codex coding conversations. It runs an installe
 
 ## Requirements
 
-- macOS 14 or later, Apple Command Line Tools, and Swift 6.2 or later (required by Swift Markdown 0.9.0). This repository was built and observed on macOS 26 with Swift 6.3.1.
-- App bundling requires the Swift Build backend (`swift build --build-system swiftbuild`). This packaging path is verified with Swift 6.3.1; Swift 6.2 alone does not establish backend availability.
-- Codex CLI 0.153.2 or later, available through `PATH`, a common Homebrew or nvm path, or `CODEX_EXECUTABLE`. Version 0.153.2 is the tested protocol baseline; later versions may change the experimental app-server interface.
+- macOS 14 or later, Apple Command Line Tools, and Swift 6.2 or later (required by Swift Markdown 0.9.0).
+- App bundling requires a Swift toolchain with the Swift Build backend (`swift build --build-system swiftbuild`); the language version alone does not establish backend availability.
+- An installed Codex CLI meeting the [compatibility policy](docs/cli-compatibility.md#current-policy). Executable selection and version verification are documented in that guide.
 - A Codex account signed in through the CLI or the app's **Sign In…** button.
 
 ## Build, check, and run
@@ -22,7 +22,13 @@ For an optimized release bundle, run `./scripts/bundle.sh release`, then
 use the same bundle path. Launching the bare `.build/release/CodexGUI` executable
 does not provide the bundle identity required by macOS window tabs and notifications.
 
-`make check` runs the style driver regression checks, strict formatting validation, `swift build`, and Swift Testing. Formatting requires SwiftFormat 0.63.0 or later (`brew install swiftformat`) and Python 3. `make format` applies the checked-in style rules. The installed Command Line Tools on this machine place Swift Testing outside SwiftPM's default search path, so the Makefile supplies the framework and macro paths. The application and testing framework both require macOS 14 or later. See [conventions](CONVENTIONS.md) for naming and component rules.
+See [validation](docs/validation.md#automated-checks) for the test gate, runner completion
+requirements and shared-build safeguards. See
+[conventions](CONVENTIONS.md#formatting-and-tooling) for formatter prerequisites and usage,
+and [native QA](docs/native-qa.md) for synthetic app preparation and interaction checks.
+
+The installed Command Line Tools on this machine place Swift Testing outside SwiftPM's
+default search path, so the Makefile supplies the framework and macro paths.
 
 For development, `swift run CodexGUI` starts the executable directly with desktop notifications unavailable. macOS notification access requires an app bundle identity; `scripts/bundle.sh` creates and ad hoc signs that bundle. Settings shows the notification status for the current launch.
 
@@ -50,48 +56,10 @@ bundle includes their license and notice files under `Contents/Resources/ThirdPa
 
 ## Project structure
 
-`Sources/CodexGUI/` groups code by responsibility: `App`, `Application`, `CodexClient`,
-`Persistence`, `Workspaces`, and `Features/<feature>`. Tests mirror those groups under
-`Tests/CodexGUITests/`. See [conventions](CONVENTIONS.md) for component ownership and
-[architecture](docs/architecture.md) for state and execution contracts.
-
-Within `Application/`, `State/` holds shared values and actions, `Runtime/` holds stores and
-effect execution, `Reducers/<feature>/` groups feature transitions and their supporting values,
-`Composition/` coordinates related feature transitions, `Presentation/` holds selectors and
-snapshot helpers, and `Services/` holds backend and filesystem service interfaces and implementations.
-`Services/Git/` groups Git comparison, baseline capture and their implementation support;
-`Runtime/Review/` groups Git review and summary execution. Tests follow these groups.
-Feature presentation types live beside their views; `Features/Shared/` holds presentation ownership
-shared across features. Durable task records belong to `Persistence/`; checkout lifecycle remains
-in `Workspaces/`. Files named `OwnerType+Concern.swift` extend that owner rather than declaring
-a separate controller or runtime component.
-
-`Features/Conversation/Composer/` groups input controls and command menus;
-`Transcript/` groups parsing, rendering, collection items and turn navigation.
-`Features/Changes/RepositoryComparison/` owns repository comparison controls and navigation;
-`ReportedChanges/` owns the reported-turn review UI; `Diff/` contains diff rendering and file
-presentation helpers shared within Changes. Review models and analysis belong to
-`Application/Reducers/Review/`. `Features/Usage/` owns usage presentation and controls, while
-`App/WindowLayout/` groups window panes, split views and layout transitions.
-
-Components split across several files use owner-named subfolders where this reduces directory
-clutter. Each such folder keeps the main file and its extensions together; independent components
-and shared support types remain in their responsibility groups. The broad `ApplicationStateTests`
-suite follows the same arrangement within its runtime test group.
-
-The application layer uses Model View Intent (MVI). Each checkout/session has a
-`WorkspaceStateStore` containing reducer-owned feature state. AppKit callbacks dispatch captured
-intents; feature reducers decide transitions and describe effects. `WorkspaceEffectRunner` runs
-backend and persistence work and returns scoped results. Narrow read-only presentations drive
-the panes while AppKit retains focus, scrolling and layout. Execution ownership remains
-independent of the conversation displayed in the window.
-
-`TaskWorkspaceCoordinator` retains the store registry and coordinates checkout lifecycle through
-typed actions and `WorkspaceCoordinatorReducer`. Cleanup and quit wait for accepted work and
-persisted writes, then revalidate the exact owners and unresolved command outcomes.
-
-See [architecture](docs/architecture.md) for state transitions, effect execution and ownership
-contracts.
+Start agent work at [AGENTS.md](AGENTS.md). The
+[documentation map](docs/agent-workflow.md#documentation-map) assigns each topic to its
+owning guide. [Conventions](CONVENTIONS.md#file-organization-and-ownership) define file
+placement; [architecture](docs/architecture.md) defines state and execution contracts.
 
 ## Using the app
 
@@ -124,11 +92,9 @@ If a request or connection fails after sending, the app keeps the draft and bloc
 
 ## Validation
 
-Run `make check` for strict formatting, build, and automated regression coverage. The suite covers protocol and recovery behavior, diagnostics, conversation rendering, persisted context, conversation management, and editor handoff. Follow the [native QA guide](docs/native-qa.md) for repeatable interaction and layout checks using a synthetic backend without model calls.
-
-The automated suite covers implemented protocol, runtime and presentation behavior. Native
-and live acceptance requirements are listed in the [validation guide](docs/validation.md).
-Execution on the minimum macOS 14 target remains unverified. See the [CLI compatibility policy](docs/cli-compatibility.md) for protocol assumptions and limits.
+Follow the [validation guide](docs/validation.md) for automated checks and acceptance
+requirements, [native QA](docs/native-qa.md) for isolated interaction checks, and
+[CLI compatibility](docs/cli-compatibility.md) for backend version assessment.
 
 ## License
 

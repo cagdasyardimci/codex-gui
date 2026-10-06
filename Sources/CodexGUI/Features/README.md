@@ -1,8 +1,8 @@
 # Feature ownership
 
-Feature directories own AppKit views, controllers and the presentation helpers used by
-those views. Shared workspace values, reducers and effects belong to `Application/`;
-backend process and protocol code belong to `CodexClient/`.
+This map owns feature-directory routing. Follow
+[conventions](../../../CONVENTIONS.md#file-organization-and-ownership) for placement and
+naming rules, and [architecture](../../../docs/architecture.md) for behavioral contracts.
 
 | Directory | Responsibility |
 | --- | --- |
@@ -14,17 +14,10 @@ backend process and protocol code belong to `CodexClient/`.
 | [Navigation](Navigation/) | Project and task navigation, sidebar controls and message search. |
 | [PinnedSummary](PinnedSummary/) | Summary card and compact section presentations. |
 | [ProjectContext](ProjectContext/) | Project context presentation and editing controls. |
-| [Shared](Shared/) | Common presentation ownership, panel contracts and reusable view support. |
+| [Shared](Shared/) | Common presentations, panel contracts and reusable view support. |
 | [Sources](Sources/) | Source inventory, detail presentation, result cards and tab hover previews. |
 | [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |
 | [Usage](Usage/) | Usage presentation and controls. |
 
-Feature tests mirror these groups under
-[Tests/CodexGUITests/Features](../../../Tests/CodexGUITests/Features/).
-Full-window and cross-view integration tests belong in
-[Tests/CodexGUITests/App](../../../Tests/CodexGUITests/App/).
-
-See the [project overview](../../../README.md),
-[conventions](../../../CONVENTIONS.md) and
-[application architecture](../../../docs/architecture.md) for build instructions,
-component rules and state/execution contracts.
+For test placement, see [test organization](../../../CONVENTIONS.md#test-organization).
+For task routing, return to [agent workflow](../../../docs/agent-workflow.md#documentation-map).

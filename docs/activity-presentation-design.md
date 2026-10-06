@@ -1,6 +1,6 @@
 # Conversation activity presentation
 
-## Intended behavior
+## Current behavior
 
 The conversation presents assistant commentary and answers as ordinary messages. Between
 messages, consecutive command activities in the same turn form a compact activity group.
@@ -8,11 +8,11 @@ A group never absorbs another turn, a user message, assistant commentary, or an 
 Repeated operations remain separate observations, including repeated reads of the same file.
 
 The group header has an icon, a summary such as “Read files, ran commands”, and a disclosure
-chevron immediately after the summary. Its list starts expanded. Each command-backed row
+chevron immediately after the summary. Its list starts collapsed. A single action uses its
+own expandable header instead of a separate group header. Each command-backed row
 can independently reveal its command details; those details start collapsed. Closing a group
 does not forget which of its commands were expanded. Closed headers retain counts of failed,
-declined, and interrupted commands, counted once per source item. These defaults are implementation
-choices because static screenshots do not establish automatic disclosure rules.
+declined, and interrupted commands, counted once per source item.
 
 Activity disclosure chevrons appear only while the pointer is over their header row. Group,
 command, read, search, file-list and image rows share this behavior. Pointer movement into an
@@ -52,8 +52,8 @@ it a completion outcome. A local UI timer refreshes only visible status labels w
 
 ## Data and ownership
 
-The tested Codex CLI 0.153.2 schema provides `commandActions` variants `read`, `search`,
-`listFiles`, and `unknown`, with command, file, and query fields. The client decodes these values,
+The client decodes `commandActions` variants `read`, `search`, `listFiles`, and `unknown`,
+with command, file, and query fields. It also decodes
 image-view paths, and turn timing fields. It does not classify activity by inspecting shell
 program names. Missing or unrecognized action metadata falls back to “Ran” with the original
 command, including compound commands and wrappers.
@@ -85,31 +85,5 @@ unknown fallback, hidden empty placeholders, and terminal status display.
 
 Native view checks exercise independent group and command disclosure, file callbacks, image
 availability, reused cells, narrow widths, long output, owner changes, source-item jumps,
-bookmarks, and scroll continuity during streaming. Full `make check` validates style, build,
-and existing regression coverage. A synthetic launched-app check can establish native behavior
-without model calls; it does not prove live-account inference or exact ChatGPT animations.
-
-Reference: the user-provided ChatGPT activity screenshots in this conversation. Their visible
-rows, inline Shell panels, repeated reads, and image previews are the presentation target.
-The user explicitly requested hover-only chevrons. Fading and automatic disclosure transitions
-are not established by still images.
-
-## Final validation evidence
-
-Automated validation passed: application build through `make check`, style checks across 248 Swift
-files, 434 Swift tests (425 in the broad run plus isolated AppKit runs of 3, 4, 1, and 1 tests),
-12 Python formatter tests, the synthetic backend checker, and `git diff --check`.
-
-Launched-app inspection used a synthetic backend with no live account or model inference calls.
-It verified full-width Shell panels, group closure retaining child expansion, independent inner
-output scrolling, “Working” advancing from 0 to 1 second and ending at “Worked for 9s”, and Stop
-interrupting the owning task after switching chats. Inner output scrolling was inspected before
-the final hover fix. The final rebuilt isolated app showed all activity chevrons hidden on fresh
-fixture selection with the pointer in the sidebar; expansion and outer-scroll snapshots also
-showed other headers hidden.
-
-Header-hover appearance is covered by shown-window native regression tests. Computer Use did
-not establish the final rebuilt app's visible-on-header-hover then hidden-on-exit transition,
-so that remains a manual verification limitation. Streaming text-selection preservation is
-covered by automated tests and was not separately verified in this native inspection. These checks establish synthetic protocol and native UI behavior; they
-exclude live inference and exact ChatGPT animation parity.
+bookmarks, and scroll continuity during streaming. Follow [validation](validation.md) for
+execution and evidence requirements and [native QA](native-qa.md) for the synthetic workflow.

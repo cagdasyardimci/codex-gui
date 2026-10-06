@@ -5,6 +5,8 @@ newline-delimited JSON protocol. The app-server protocol is experimental, so
 compatibility is based on tested CLI versions rather than a promise that every
 newer release will keep the same methods and fields.
 
+For agent task routing, see [agent workflow](agent-workflow.md).
+
 ## Current policy
 
 - **Tested baseline:** Codex CLI 0.153.2.
@@ -28,18 +30,22 @@ unnamed secrets, unquoted multi-word values, and truncated or unusual encodings
 may remain visible. Review the report before copying or sharing it.
 
 Conversation management uses `thread/list` with its `archived` filter,
-`thread/name/set`, `thread/archive`, and `thread/unarchive`. Their request shapes
-were checked against the locally generated 0.153.2 schema; integration fixtures
-check the wire requests and opaque-cursor pagination. Search filters titles and
-previews in the loaded project list. It does not use the experimental full-text
-`thread/search` method. Unsupported management requests surface their backend
-error in the app.
+`thread/name/set`, `thread/archive`, and `thread/unarchive`. Integration fixtures exercise
+the wire requests and opaque-cursor pagination. Chat-list filtering searches loaded
+titles and previews. Message search separately searches loaded conversation content and
+can fetch more history. Neither uses the experimental server-side `thread/search` method.
+Unsupported management requests surface their backend error in the app.
 
 CLI version probing has a 10-second deadline and runs away from the main actor.
 A stalled or continuously writing `--version` child cannot leave the interface
 waiting indefinitely.
 
 ## Verifying a CLI upgrade
+
+Identify the executable selected by
+[AppServer executable selection](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Executable.swift).
+The shell's `codex` may resolve differently. Use that selected executable for the version
+and schema commands below.
 
 For each CLI version proposed as supported:
 
@@ -59,3 +65,22 @@ For each CLI version proposed as supported:
 
 Update the tested-version record only after these checks pass. A successful
 handshake or generated schema alone does not establish full compatibility.
+
+## Capability assessment
+
+Distinguish app-server APIs, configured agent tools, host facilities and GUI controls.
+Trace support through `CodexService`, wire requests/responses, notifications and server
+requests, scoped state transitions and presentation. Schema entries and enabled flags
+alone do not establish GUI support. Host-dependent facilities such as computer use also
+require a functioning tool provider and permission path.
+
+## Protocol lifecycle safeguards
+
+JSONL framing uses byte LF (`0x0A`); Unicode line separators may occur inside JSON strings.
+Resolve unsupported interactive requests with the appropriate error, decline or cancellation
+response and visible feedback. Preserve method-specific acknowledgement/completion handling,
+events arriving before responses and uncertain-write recovery. Do not automatically replay
+possibly accepted mutations or approvals. See
+[interaction handling](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Interactions.swift),
+[notifications](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Notifications.swift), and
+[slash-command lifecycle contracts](slash-commands.md).
