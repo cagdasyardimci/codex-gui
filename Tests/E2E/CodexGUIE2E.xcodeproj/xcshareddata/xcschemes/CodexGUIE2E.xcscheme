@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="2700" version="1.3">
+ <BuildAction parallelizeBuildables="NO" buildImplicitDependencies="YES">
+  <BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A00000000000000000000005" BuildableName="CodexGUIE2E.xctest" BlueprintName="CodexGUIE2E" ReferencedContainer="container:CodexGUIE2E.xcodeproj"/></BuildActionEntry></BuildActionEntries>
+ </BuildAction>
+ <TestAction buildConfiguration="Debug" shouldUseLaunchSchemeArgsEnv="NO">
+  <Testables><TestableReference skipped="NO" parallelizable="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A00000000000000000000005" BuildableName="CodexGUIE2E.xctest" BlueprintName="CodexGUIE2E" ReferencedContainer="container:CodexGUIE2E.xcodeproj"/></TestableReference></Testables>
+
+ </TestAction>
+</Scheme>

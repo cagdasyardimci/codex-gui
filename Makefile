@@ -79,3 +79,5 @@ test-suites:
 	done
 
 check: lint build test
+
+include Tests/E2E/Workflow.mk
