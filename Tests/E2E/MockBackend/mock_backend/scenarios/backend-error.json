@@ -1,0 +1,8 @@
+{
+  "extends": "streaming",
+  "mode": "error",
+  "error": {
+    "code": -32010,
+    "message": "Injected fixture backend error"
+  }
+}

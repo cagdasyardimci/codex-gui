@@ -1,0 +1,15 @@
+{
+  "extends": "streaming",
+  "threads": [
+    {
+      "id": "qa-reading",
+      "name": "Markdown and streaming",
+      "preview": "Controlled Markdown stream"
+    },
+    {
+      "id": "qa-second",
+      "name": "Second streaming conversation",
+      "preview": "Independent turn owner"
+    }
+  ]
+}

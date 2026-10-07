@@ -1,0 +1,29 @@
+{
+  "mode": "stream",
+  "intervalSeconds": 2,
+  "threads": [
+    {
+      "id": "qa-reading",
+      "name": "Markdown and streaming",
+      "preview": "Controlled Markdown stream"
+    }
+  ],
+  "chunks": [
+    "STREAM_START_MARKER\n\n",
+    "## Streaming example\n\n",
+    "**Bo",
+    "ld** and ",
+    "*italic* text.\n\n",
+    "[Documentation",
+    "](https://example.invalid).\n\n",
+    "- First item\n",
+    "- Second item\n\n",
+    "| Name | Value |\n",
+    "| --- | --- |\n",
+    "| Fixture | 42 |\n\n",
+    "```swi",
+    "ft\nlet message = \"café 日本語 👩🏽‍💻\"\n",
+    "print(message)\n```\n\n",
+    "STREAM_END_MARKER\n"
+  ]
+}

@@ -1,31 +1,25 @@
 #!/bin/zsh
 set -euo pipefail
 cd "${0:A:h:h}"
+backend_path="${1:-$PWD/Tests/E2E/MockBackend/qa-backend}"
+scenario="${2:-streaming}"
+if [[ "$backend_path" != /* || ! -f "$backend_path" || ! -x "$backend_path" ]]; then
+  print -u2 "Usage: $0 /absolute/path/to/compatible-qa-backend"
+  exit 2
+fi
 ./scripts/bundle.sh
 qa_directory=$(mktemp -d /tmp/codex-gui-native-qa.XXXXXX)
 qa_bundle="$qa_directory/CodexGUI QA.app"
 cp -R .build/CodexGUI.app "$qa_bundle"
-cp scripts/qa-backend.py "$qa_directory/qa-backend.py"
-python3 - "$qa_bundle/Contents/Info.plist" "$qa_directory" <<'PY'
-import plistlib
-from pathlib import Path
-import struct
-import sys
-import zlib
-info_path = Path(sys.argv[1])
-info = plistlib.loads(info_path.read_bytes())
-print(f"QA bundle ID: {info['CFBundleIdentifier']}")
-project = Path(sys.argv[2]) / 'project with spaces'
-project.mkdir()
-(project / 'file with spaces.swift').write_text('// Native editor handoff fixture\nlet greeting = "Hello"\nprint(greeting)\n')
-def png_chunk(kind, payload):
-    return struct.pack('>I', len(payload)) + kind + payload + struct.pack('>I', zlib.crc32(kind + payload))
-pixels = b''.join(b'\0' + bytes(channel for x in range(64) for channel in (45 + x * 2, 70 + y * 2, 180))
-                  for y in range(64))
-preview = (b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 64, 8, 2, 0, 0, 0))
-           + png_chunk(b'IDAT', zlib.compress(pixels)) + png_chunk(b'IEND', b''))
-(project / 'activity-preview.png').write_bytes(preview)
-PY
+if [[ "$backend_path" == "$PWD/Tests/E2E/MockBackend/qa-backend" ]]; then
+  cp -R Tests/E2E/MockBackend/. "$qa_directory/"
+else
+  cp "$backend_path" "$qa_directory/qa-backend"
+fi
+bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$qa_bundle/Contents/Info.plist")
+print "QA bundle ID: $bundle_identifier"
+cp -R "Tests/E2E/Fixtures/project with spaces" "$qa_directory/project with spaces"
+
 codesign --verify --deep --strict "$qa_bundle"
 git -C "$qa_directory/project with spaces" init -q --initial-branch=main
 git -C "$qa_directory/project with spaces" add -- "file with spaces.swift" "activity-preview.png"
@@ -33,7 +27,9 @@ git -C "$qa_directory/project with spaces" \
   -c user.name="Codex GUI QA" -c user.email="codex-gui-qa@example.invalid" \
   -c commit.gpgSign=false -c core.hooksPath=/dev/null \
   commit -qm "test: establish native QA baseline"
-open -n "$qa_bundle" --env "CODEX_EXECUTABLE=$qa_directory/qa-backend.py" \
+open -n "$qa_bundle" --env "CODEX_EXECUTABLE=$qa_directory/qa-backend" \
+  --env "CODEX_GUI_QA_SCENARIO=$scenario" \
+  --env "CODEX_GUI_QA_TRACE=$qa_directory/backend-trace.jsonl" \
   --env "CODEX_GUI_QA_STATE=$qa_directory/backend-state.json" \
   --env "CODEX_GUI_WORKSPACE_ROOT=$qa_directory/task-workspaces" \
   --stderr "$qa_directory/native.log"

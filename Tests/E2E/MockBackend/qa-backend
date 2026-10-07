@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+import sys
+
+sys.dont_write_bytecode = True
+
+from mock_backend.main import main
+
+raise SystemExit(main())
