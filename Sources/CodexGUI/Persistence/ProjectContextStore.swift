@@ -34,13 +34,7 @@ final class ProjectContextStore
 	private let fileStorage: ProjectContextFileStorage
 
 	init(
-		directory: URL = FileManager.default.urls(
-			for: .applicationSupportDirectory,
-			in: .userDomainMask
-		)[0].appendingPathComponent(
-			"CodexGUI/project-context",
-			isDirectory: true
-		),
+		directory: URL = ApplicationSupportLocations.directory("project-context"),
 		fileManager: FileManager = .default
 	)
 	{

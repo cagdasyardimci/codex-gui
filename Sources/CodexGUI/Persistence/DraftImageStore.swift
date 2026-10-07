@@ -31,17 +31,7 @@ struct DraftImageStore: Sendable
 		}
 	)
 	{
-		self.directory =
-			directory
-				?? FileManager.default
-				.urls(
-					for: .applicationSupportDirectory,
-					in: .userDomainMask
-				)[0]
-				.appendingPathComponent(
-					"CodexGUI/DraftImages",
-					isDirectory: true
-				)
+		self.directory = directory ?? ApplicationSupportLocations.directory("DraftImages")
 		self.preparePNG = preparePNG
 	}
 

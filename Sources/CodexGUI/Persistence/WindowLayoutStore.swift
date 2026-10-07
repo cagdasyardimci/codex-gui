@@ -156,7 +156,7 @@ final class WindowLayoutStore
 	private let defaults: UserDefaults
 	private let key = "CodexGUI.windowLayout"
 
-	init(defaults: UserDefaults = .standard)
+	init(defaults: UserDefaults = ApplicationPreferences.defaultStore)
 	{
 		self.defaults = defaults
 	}

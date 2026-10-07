@@ -6,7 +6,7 @@ final class ReviewMarkerStore
 	private let defaults: UserDefaults
 	private let storageKey = "reviewedChangeFingerprints.v1"
 
-	init(defaults: UserDefaults = .standard)
+	init(defaults: UserDefaults = ApplicationPreferences.defaultStore)
 	{
 		self.defaults = defaults
 	}

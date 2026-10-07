@@ -36,13 +36,8 @@ actor LocalGitTurnBaselineService: GitTurnBaselineService
 		removeStoredRecord: (@Sendable (UUID) async -> Void)? = nil
 	)
 	{
-		self.storageRoot = storageRoot ?? FileManager.default.urls(
-			for: .applicationSupportDirectory,
-			in: .userDomainMask
-		)[0].appendingPathComponent(
-			"CodexGUI/git-turn-baselines",
-			isDirectory: true
-		)
+		self.storageRoot = storageRoot
+			?? ApplicationSupportLocations.directory("git-turn-baselines")
 		self.limits = limits
 		removeStoredRecordOperation = removeStoredRecord
 	}

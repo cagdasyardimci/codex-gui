@@ -131,7 +131,7 @@ final class LocalStorage
 	}
 
 	init(
-		defaults: UserDefaults = .standard,
+		defaults: UserDefaults = ApplicationPreferences.defaultStore,
 		imageStore: DraftImageStore = DraftImageStore(),
 		sentReferenceDecoder: JSONDecoder = JSONDecoder(),
 		resolveProjectPath: @escaping (URL) -> String =
