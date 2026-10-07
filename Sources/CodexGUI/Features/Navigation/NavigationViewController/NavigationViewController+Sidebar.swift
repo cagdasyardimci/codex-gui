@@ -224,6 +224,7 @@ extension NavigationViewController
 			} ?? "",
 			updatedAt: thread.updatedAt
 		)
+		cell.textField?.setAccessibilityIdentifier("conversation-" + thread.id)
 		cell.setAccessibilityLabel(
 			isUnread ? "Unread result, open chat \(name)"
 				: isActiveTask ? "\(state) task, open chat \(name)" : "Open chat \(name)"

@@ -611,6 +611,10 @@ final class WorkspaceStateStore
 	)
 	{
 		let snapshot = model
+		UITestEvidenceRecorder.shared.record(
+			snapshot,
+			action: action
+		)
 		if case .execution(.backendObserved(
 			let context,
 			let event,

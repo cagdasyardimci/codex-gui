@@ -172,6 +172,7 @@ extension ConversationViewController
 		composer.textContainer?.widthTracksTextView = true
 		composer.delegate = self
 		composer.setAccessibilityLabel("Message to Codex")
+		composer.setAccessibilityIdentifier("conversation-composer")
 		composer.registerForDraggedTypes([.fileURL, .tiff, .png])
 		composerScrollView.documentView = composer
 		composerScrollView.hasVerticalScroller = true
@@ -246,6 +247,7 @@ extension ConversationViewController
 		sendButton.keyEquivalent = "\r"
 		sendButton.keyEquivalentModifierMask = [.command]
 		sendButton.setAccessibilityLabel("Send message")
+		sendButton.setAccessibilityIdentifier("conversation-send")
 		steerButton.target = self
 		steerButton.action = #selector(steer)
 		steerButton.keyEquivalent = "\r"
@@ -254,6 +256,7 @@ extension ConversationViewController
 		stopButton.target = self
 		stopButton.action = #selector(stop)
 		stopButton.setAccessibilityLabel("Stop current task")
+		stopButton.setAccessibilityIdentifier("conversation-stop")
 		for button in [sendButton, steerButton, stopButton]
 		{
 			let symbol: DesktopIcon = button === stopButton
