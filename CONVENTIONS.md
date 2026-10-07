@@ -14,8 +14,7 @@ The driver rejects any remaining line over 100 display columns. Wrap long text m
 
 - Use [SwiftFormat](https://github.com/nicklockwood/SwiftFormat) through the checked-in driver for consistent layout. Its [rule reference](https://github.com/nicklockwood/SwiftFormat/blob/main/Rules.md) describes the configured layout rules. Choose descriptive names even when a shorter name would fit the formatter.
 
-In a checkout with unrelated edits, apply formatting only to your Swift paths using
-`python3 scripts/swift-style.py <file-or-directory>` and review the resulting diff.
+In a checkout with unrelated edits, apply formatting only to your Swift paths using `python3 scripts/swift-style.py <file-or-directory>` and review the resulting diff.
 
 ## Naming and readability
 
@@ -47,18 +46,13 @@ Within `Application/`, use `State/` for shared models, actions, intents, identit
 
 ### Feature groups
 
-Use the [feature directory map](Sources/CodexGUI/Features/README.md) for feature views
-and presentation helpers. Shared subagent avatars and attachment preparation belong to
-`Features/Shared/`. `CodexClient/InlineImageData.swift` identifies inline image payloads;
-`Application/Services/LocalAttachmentURL.swift` resolves local attachment paths and file URLs.
-Keep these shared values independent of feature views. `App/WindowLayout/` groups pane
-controls, layout policies and transitions.
+Use the [feature directory map](Sources/CodexGUI/Features/README.md) for feature views and presentation helpers. Shared subagent avatars and attachment preparation belong to `Features/Shared/`. `CodexClient/InlineImageData.swift` identifies inline image payloads; `Application/Services/LocalAttachmentURL.swift` resolves local attachment paths and file URLs. Keep these shared values independent of feature views. `App/WindowLayout/` groups pane controls, layout policies and transitions.
 
 ### Component files and extensions
 
 Name extension-only source and test files `OwnerType+Concern.swift`, using the exact extended type as the owner. Put extensions of different owners in separate files. A file defining a primary type keeps that type's filename and may include related supporting extensions. An extension split organizes one component; it does not establish a separate controller or responsibility boundary. Keep independent types in files named for those types. Separate effect descriptions from runtime schedulers and operation handles so each is discoverable by its name.
 
-Use an owner-named subfolder when a component's main file and several extensions clutter a directory shared with other components. Keep the main file and its extensions together, retaining their explicit filenames. Apply this to `MainWindowController`, `NavigationViewController`, `ConversationViewController`, `WorkspaceEffectRunner`, `AppServer`, `WorkspaceCoordinatorReducer`, `TaskWorkspaceCoordinator`, `GitWorktreeManager`, and the `ApplicationStateTests` suite. Keep shared support types outside owner folders. Do not add another owner folder where an existing feature directory already groups the component clearly, or for a single small extension.
+Use an owner-named subfolder when a component's main file and several extensions clutter a directory shared with other components. Keep the main file and its extensions together, retaining their explicit filenames. Keep shared support types outside owner folders. Do not add another owner folder where an existing feature directory already groups the component clearly, or for a single small extension.
 
 ### Resources and supporting files
 
@@ -66,61 +60,33 @@ Scripts, documentation and resources retain their existing locations; root resou
 
 ## MVI and reducer architecture
 
-Follow [state transitions](docs/architecture.md#state-transitions),
-[ownership and recovery](docs/architecture.md#ownership-and-recovery), and
-[presentation](docs/architecture.md#presentation) in the architecture guide.
-File placement is defined above; runtime behavior is defined there.
+Follow [state transitions](docs/architecture.md#state-transitions), [ownership and recovery](docs/architecture.md#ownership-and-recovery), and [presentation](docs/architecture.md#presentation) in the architecture guide. File placement is defined above; runtime behavior is defined there.
 
 ## AppKit behavior and accessibility
 
 - Keep AppKit mutations on the main actor. Parse process output and prepare long message content away from the main actor. Use Auto Layout and standard macOS controls. Give interactive controls accessible labels and keyboard access; use system colors and appearance so light and dark modes both work.
 
-For requested redesigns, change the specified presentation while preserving unaffected
-interaction and ownership contracts. For behavior-preserving refactors, apply the naming,
-geometry and DRY preservation rules above.
+For requested redesigns, change the specified presentation while preserving unaffected interaction and ownership contracts. For behavior-preserving refactors, apply the naming, geometry and DRY preservation rules above.
 
-For deferred dialogs, capture the target identity and callback when presenting, then
-revalidate scope and eligibility before accepting confirmation. Selection or callback
-replacement must not redirect the operation. Use one guarded completion path; see
-[modal workflows](Sources/CodexGUI/Features/Navigation/NavigationViewController/NavigationViewController+ModalWorkflows.swift) and
-[dialog completion](Sources/CodexGUI/Features/Navigation/TaskDeletion/TaskDeletionConfirmationPanel.swift).
-Verify accessible control names, focus traversal, default actions, Escape, Return and
-keypad Enter through AppKit event routing. A key-equivalent string alone does not establish
-keyboard behavior; choose default actions according to the feature's contract.
+For deferred dialogs, capture the target identity and callback when presenting, then revalidate scope and eligibility before accepting confirmation. Selection or callback replacement must not redirect the operation. Use one guarded completion path; see [modal workflows](Sources/CodexGUI/Features/Navigation/NavigationViewController/NavigationViewController+ModalWorkflows.swift) and [dialog completion](Sources/CodexGUI/Features/Navigation/TaskDeletion/TaskDeletionConfirmationPanel.swift). Verify accessible control names, focus traversal, default actions, Escape, Return and keypad Enter through AppKit event routing. A key-equivalent string alone does not establish keyboard behavior; choose default actions according to the feature's contract.
 
-For reference-based UI work, distinguish observed text/geometry from inferred behavior.
-Screenshot content does not establish backend semantics or authorize unrelated changes.
-Verify interaction, accessibility and appearance separately from visual similarity.
-Use alignment rectangles for alignment assertions and bounds for clipping checks.
+For reference-based UI work, distinguish observed text/geometry from inferred behavior. Screenshot content does not establish backend semantics or authorize unrelated changes. Verify interaction, accessibility and appearance separately from visual similarity. Use alignment rectangles for alignment assertions and bounds for clipping checks.
 
-Retain semantic colors until drawing or resolve them under the owning view's
-`effectiveAppearance`. Alpha-adjusted colors, attributed-string colors and layer `CGColor`
-values can retain an earlier appearance; refresh them and invalidate drawing as needed.
-Use the owning view's appearance during its callback; children may still have their previous
-appearance. Reuse [DesktopTheme](Sources/CodexGUI/App/DesktopTheme.swift) and existing refresh paths. Anchor-following
-panels use [DesktopPanelAppearanceBinding](Sources/CodexGUI/Features/Shared/DesktopPanelAppearanceBinding.swift); invalidate the binding
-on dismissal and replace it when rebinding.
-Appearance regressions switch an existing attached view repeatedly in both directions
-through its window or ancestor, preserving relevant focus, selection, hover, text and geometry.
-Do not recreate the view or manually invoke its appearance callback to simulate the change.
-Keep automated assertions separate from live macOS appearance observations.
+Retain semantic colors until drawing or resolve them under the owning view's `effectiveAppearance`. Alpha-adjusted colors, attributed-string colors and layer `CGColor` values can retain an earlier appearance; refresh them and invalidate drawing as needed. Use the owning view's appearance during its callback; children may still have their previous appearance. Reuse [DesktopTheme](Sources/CodexGUI/App/DesktopTheme.swift) and existing refresh paths. Anchor-following panels use [DesktopPanelAppearanceBinding](Sources/CodexGUI/Features/Shared/DesktopPanelAppearanceBinding.swift); invalidate the binding on dismissal and replace it when rebinding. Appearance regressions switch an existing attached view repeatedly in both directions through its window or ancestor, preserving relevant focus, selection, hover, text and geometry. Do not recreate the view or manually invoke its appearance callback to simulate the change. Keep automated assertions separate from live macOS appearance observations.
 
 ## Test organization
 
-SwiftPM tests stay in the single `CodexGUITests` target and mirror source responsibilities: `App`, `Application`, `CodexClient`, `Persistence`, `Workspaces`, and `Features/<feature>`. Put full-window and cross-view ownership checks in `App`, backend protocol integration checks in `CodexClient`, and feature-specific view tests beside their feature group. SwiftPM discovers these subfolders automatically. Preserve suite names during file-only moves. When extracting an independent suite, update affected test filters and preserve test methods, assertions, actor isolation and serialization requirements.
+Keep test code, fixtures and test tools under `Tests/`. Keep build, bundling and formatting utilities in `scripts/`. Generated evidence belongs in ignored build or temporary directories. Do not add regression suites for test runners, evidence validators or formatting utilities.
 
-Tests for a distinct responsibility use their own suite in that responsibility's test group. Reserve suite extensions for parts of the same suite grouped together in its owner folder; do not retain an unrelated suite owner solely for an old test filter.
+Keep SwiftPM tests in the single `CodexGUITests` target and mirror source responsibilities. Put cross-view checks with their application owner and feature-specific tests with their feature. Preserve suite names during file-only moves. When extracting an independent suite, preserve test methods, assertions, actor isolation and serialization requirements.
 
-Keep service-specific fixtures in that service group's `Support/` folder. Global test support is reserved for fixtures used across responsibility groups. Usage view tests have their own suite rather than sharing a navigation suite.
+Tests for a distinct responsibility use their own suite in that responsibility's test group. Reserve suite extensions for parts of the same suite grouped together in its owner folder.
 
-When a test group becomes crowded, use shallow subfolders named for its tested responsibilities. `App/` groups full-window checks in `Windows/`, Git review checks in `GitReview/`, and inspector integration in `Tools/`. `CodexClient/` groups AppServer integration and protocol models in `AppServer/` and `Protocol/`. Runtime tests use `Workspace/`, `Conversation/`, `ProjectContext/` and `ProjectFiles/`, alongside existing owner and support folders. Transcript tests use `Markdown/`, `TurnNavigation/`, `Preparation/`, `Layout/` and `Rows/`. Keep one suite's main file and extensions together; these folder moves preserve suite names, traits and test-host filters.
+Keep service-specific fixtures in that service group's `Support/` folder. Global test support is reserved for fixtures used across responsibility groups.
 
-Split tests by independent contracts rather than size alone. When extracting fixtures,
-preserve construction inputs and teardown order, register cleanup when resources are
-acquired, and explicitly mark AppKit fixture types, including nested types, `@MainActor`.
-Scenario splits must retain parameterized inputs and required event ordering; separate
-`.serialized` suites do not establish mutual serialization.
-For host-filter maintenance and execution, see [validation](docs/validation.md#test-host-maintenance).
+When a test group becomes crowded, use shallow subfolders named for its tested responsibilities. Keep one suite's main file and extensions together.
+
+Split tests by independent contracts rather than size alone. When extracting fixtures, preserve construction inputs and teardown order, register cleanup when resources are acquired, and explicitly mark AppKit fixture types, including nested types, `@MainActor`. Scenario splits must retain parameterized inputs and required event ordering; separate `.serialized` suites do not establish mutual serialization. For test execution, see [validation](docs/validation.md#test-host-maintenance).
 
 ## References
 

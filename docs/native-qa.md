@@ -1,130 +1,41 @@
-# Native QA without model calls
+# Native QA with controlled fixtures
 
-Run `./scripts/native-qa.sh`. It builds the development app, copies it and the synthetic
-backend into a temporary directory, creates a Git fixture with a committed baseline, and
-prints the fixture path. Open that path with **Open Project** in the QA app.
+Run `./scripts/native-qa.sh` for manual inspection with the bundled, model-free [mock backend](mock-backend.md). Open the printed temporary project with **Open Project…**. You may pass an absolute backend executable as the first argument and a scenario name as the second. Verify which backend the QA app uses when another app instance is open.
 
-## Preparation and isolation limits
+## Manual preparation and isolation
 
-The QA copy retains the main app's bundle identifier, `local.codexgui.appkit`, and its
-Apple Development signature. macOS permissions and the standard preferences domain are
-shared with the main app. `CODEX_GUI_WORKSPACE_ROOT`
-directs task records and checkouts into its temporary `task-workspaces` directory.
-Project context files, draft images and Git turn baselines still use the normal application
-support directories. The QA copy is not isolated from those file stores.
+The QA copy keeps the main app's stable signing and bundle identity so compatible builds can retain macOS permission grants. Those grants remain under the user's control; notification banner delivery requires native observation.
 
-Preparation builds in the checkout's `.build` directory and replaces its development app
-bundle before making the QA copy. Coordinate builds sharing that checkout. The script has
-no checkout, build-directory, prepare-only or relaunch options; use the manual relaunch
-instructions in [context checks](#context-and-native-interaction-checks) for an existing QA copy.
-Follow [validation](validation.md) for automated checks and evidence requirements.
+Manual QA uses temporary task workspaces and backend state, but standard preferences and default application-support stores remain shared with normal app launches. The launcher builds in this checkout's `.build` directory; coordinate other builds using it.
 
-The backend never calls a model or edits project files. Its model names are fixtures.
-Rename/archive choices are saved only in its temporary JSON file. The script launches the
-QA copy by its explicit path with `open -n` to start a new instance. Before interacting,
-verify that the launched app's Codex executable is the copied `qa-backend.py`, especially
-if the main app or another QA session is open.
+## Xcode launched-app workflow
 
-## Reading checks
+`make ui-test` runs the Xcode UI workflow. Make exposes `UI_REPEAT` and `UI_RUN` for repeats and report reassessment:
 
-The static reading fixture contains the canonical **Markdown Rendering Test** prompt, including
-its instruction prefix, once as a user message and once as an assistant message. Inspect both
-roles; a formatted assistant message alone does
-not establish that user messages use the renderer. Both must retain every heading, list item,
-table cell, code line, link label, escape, and trailing marker. User-message background and
-alignment may differ, but Markdown syntax must receive the same supported formatting.
+```sh
+make ui-help
+make ui-test UI_REPEAT=2
+make ui-report UI_RUN=/absolute/path/to/run-directory
+```
 
-Select **Markdown and streaming**. Inspect three heading levels; bold, italic, combined bold/italic,
-and strikethrough; the documentation link; nested, numbered, and checked/unchecked task lists;
-the quote with its nested list; the thematic rule; and both code blocks. The table has left,
-center, and right alignment, styled cells, a link, and Unicode. At wide and minimum window sizes,
-with Changes open and closed, its long cell must wrap and every row must remain readable.
-Check `TABLE_END_MARKER`, `CODE_END_MARKER`, and `FINAL_MARKER` below their corresponding blocks. Expand the
-1,000-line command output and inspect its literal punctuation.
+For advanced options, use the Swift command from the repository root:
 
-Repeat in light and dark appearance. Select and copy ordinary text, a heading, and table text
-into the composer. Unicode before `UNICODE_BOLD_MARKER` and `UNICODE_CODE_MARKER` must not shift
-their styling or selection ranges. Copy each code block into the composer and compare its
-indentation, literal punctuation, Unicode, and trailing newline with `scripts/qa-backend.py`.
-Check that each copy button belongs to its corresponding block and remains reachable after resize.
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run --package-path Tests/E2E E2EWorkflow --help
+```
 
-The fixture also checks reference links, an ordered list starting at three, nested quotations,
-an escaped table pipe, indented code, decoded entities, and an explicit hard break. The display
-math uses `$$` delimiters; the Mermaid fence describes a three-node flowchart. Record whether
-each rich probe is rendered or shown as literal source, and confirm `FINAL_MARKER` remains
-readable. Their presence in a fixture or a passing protocol check does not establish rich
-rendering support.
+The `--help` output lists available options.
 
-For supported display math, inspect that the complete equation is centered in the available
-message content width. For the supported Mermaid flowchart, all three nodes, their full labels,
-and both arrows must fit inside the card at wide/narrow widths. The rightmost **Rendered content**
-node must not be cropped at the card edge. Check this after toggling Changes as well as resizing.
-Adjacent Python and Swift cards need a visible gap; the indented-code card must end before
-`CODE_END_MARKER`. Card backgrounds must not cover the following heading, paragraph, or marker.
-Check `TABLE_END_MARKER`, `CODE_END_MARKER`, `FINAL_MARKER`, and `EMPTY_FENCE_END_MARKER` in both
-roles. Native checks must use the final gated build; screenshots of an earlier build do not
-verify subsequent source fixes.
+Use full Xcode with its license and first-run setup complete. Run on an unlocked interactive desktop without competing input. The UI runner needs development signing and may require macOS UI-testing or Automation permission. The workflow does not change global `xcode-select`.
 
-An additional identical user/assistant edge fixture checks a continuous quote rail across
-paragraphs, a nested quote, a long Unicode code line that wraps inside its card, and an empty
-code fence followed by `EMPTY_FENCE_END_MARKER`. Inspect these at narrow/wide widths without
-changing the canonical Markdown fixture source.
+Coordinate other builds using this checkout and keep the source stable throughout a batch. Repetitions use separate runtime and preference state; retain every failure for review.
 
-Send any short message to start a roughly 32-second synthetic stream. Its 16 chunks deliberately
-pause with incomplete bold, link, strikethrough, table, and code-fence syntax. Inspect those
-intermediate states, then check that the completed result has a native table and code block with
-one `STREAM_START_MARKER` and one `STREAM_END_MARKER`. The code includes U+2028 and U+2029 Unicode
-separators; copying must preserve them without losing the following text. Scroll to an earlier
-message while a second stream runs. The reading position should stay stable; **Latest Message**
-should return to the end. Stop a third stream mid-syntax and confirm its accumulated text remains
-readable. Switching away and back must preserve the completed and interrupted message text.
+Unlike manual QA, each automated run isolates default task workspaces, application-support files and preferences.
 
-`python3 scripts/check-qa-backend.py` checks identical user/assistant source, fixture and rich-probe
-completeness, chunk delivery, exact final content, interruption, and history restoration with a
-shortened synthetic interval. It does not
-verify the renderer, visual appearance, selection, copy buttons, or reading position. Source
-inspection and AppKit view tests should separately verify the view hierarchy contains no web
-view or SwiftUI host; a screenshot alone cannot establish the rendering implementation.
+## Evidence
 
-## Activity presentation checks
+Each run retains a report, Xcode result and diagnostic attachments under ignored `.build/e2e/`. Captures can show surrounding applications; review artifacts before sharing them.
 
-Select **Activity groups and details**. Confirm two separate reads of `file with spaces.swift`,
-a search row, compact command rows, and a separate image thumbnail. The historical turn reports
-2 minutes 4 seconds. Expand a command's Shell details, close its group, then reopen the group:
-the command should retain its disclosure state. File links open only the temporary fixture.
-The synthetic command with exit code 2 must show failure even though its item status is completed.
-Move the pointer onto each activity header: its disclosure chevron should appear. Move away:
-the chevron should disappear while the row keeps the same spacing and remains operable by keyboard.
+Other desktop input or clipboard writers can disrupt the workflow.
 
-Inspect the long command output by scrolling inside its bounded Shell panel. Resize the window
-and check that previews truncate while expanded commands wrap. Send any short message for a
-roughly 9-second synthetic command stream. Inspect the live duration, open its details, and
-confirm streamed output updates the existing row. Scroll away during streaming, then return
-with **Latest Message**. Stop another stream and inspect the interrupted duration. Switch chats
-while a command is expanded and check that another chat does not inherit its controls or output.
-
-## Context and native interaction checks
-
-Choose a model and effort, select a conversation, type an unsent multiline draft, resize the window/panes, and quit. Relaunch the same QA bundle with the same `CODEX_EXECUTABLE`, `CODEX_GUI_QA_STATE`, and `CODEX_GUI_WORKSPACE_ROOT` environment paths. Check conversation, draft, model/effort, and layout restoration.
-
-Use search, rename, and archive on **Find rename and archive**. Check keyboard focus and Edit-menu shortcuts, including undo, select-all, copy, and paste. Insert `file with spaces.swift` through the native picker and check the quoted relative path. Repeat reading and control checks in light and dark appearance.
-
-Search is scoped to titles and previews in the current project's active or archived list. After archiving a fixture, enable **Archived**, select it, and use **Restore** to move it back. **Command-F** focuses search.
-
-For an unavailable-model check, first select the Luna fixture and quit. In the temporary `backend-state.json`, set `"models": ["gpt-6-astra"]`, preserving the other fields. Relaunch and confirm that the saved Luna choice remains visible with a warning and Send stays disabled. Restore the model list afterward. This changes only synthetic model availability.
-
-The navigation fixture reports a synthetic change at line 3 of `file with spaces.swift`. Choose the preferred editor in **Settings…** (Command-comma), then use Changes to verify file/line handoff; selecting an editor opens only this temporary file.
-
-The build script applies the Apple Development signature described in
-[the build guide](../README.md#build-check-and-run). The native QA script copies the signed
-bundle without changing its metadata and verifies the preserved signature. It uses the same
-signing identity and bundle identifier as the main app so permission approvals can carry across
-builds and QA copies. This is local development signing. Settings shows the observed
-notification permission or request/delivery error. Banner delivery still requires native
-observation and any macOS permission remains under the user's control.
-
-At the minimum supported window size, inspect the sidebar, composer, and optional inspector. Check that the task status remains visible beside its owning chat, the toolbar status popover exposes account/backend details and recovery, and code-copy buttons sit beside their corresponding blocks. After a synthetic Stop, browse another chat and return to the stopped task; its stopped result must remain visible. Notification permission and banner delivery require a separate native observation; source tests cover only transition selection and owner identity.
-
-VS Code handoff uses its documented [`--goto file:line` interface](https://code.visualstudio.com/docs/configure/command-line). Other chosen applications use macOS file opening; unsupported line navigation and missing-editor fallback are shown in the Changes pane.
-
-Automated checks and synthetic native checks do not establish behavior against a live app-server. Report live-backend evidence separately when reviewing or releasing changes.
+Read reports from expected versus observed outcome, then screen/target location, then state and backend history. Captures are sequential, and state history describes published values rather than the exact pixels drawn. A passing workflow establishes only the exercised behavior with this synthetic backend. Review screenshots separately, preserve failing runs, and report live-backend, notification-delivery and minimum-macOS evidence under [validation](validation.md#native-and-live-acceptance).

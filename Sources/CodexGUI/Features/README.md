@@ -1,8 +1,6 @@
 # Feature ownership
 
-This map owns feature-directory routing. Follow
-[conventions](../../../CONVENTIONS.md#file-organization-and-ownership) for placement and
-naming rules, and [architecture](../../../docs/architecture.md) for behavioral contracts.
+This map owns feature-directory routing. Follow [conventions](../../../CONVENTIONS.md#file-organization-and-ownership) for placement and naming rules, and [architecture](../../../docs/architecture.md) for behavioral contracts.
 
 | Directory | Responsibility |
 | --- | --- |
@@ -19,5 +17,4 @@ naming rules, and [architecture](../../../docs/architecture.md) for behavioral c
 | [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |
 | [Usage](Usage/) | Usage presentation and controls. |
 
-For test placement, see [test organization](../../../CONVENTIONS.md#test-organization).
-For task routing, return to [agent workflow](../../../docs/agent-workflow.md#documentation-map).
+For test placement, see [test organization](../../../CONVENTIONS.md#test-organization). For task routing, return to [agent workflow](../../../docs/agent-workflow.md#documentation-map).

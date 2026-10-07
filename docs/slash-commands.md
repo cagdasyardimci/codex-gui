@@ -1,28 +1,12 @@
 # Composer slash commands
 
-Type `/` at the beginning of the composer to open command completion. Up/Down selects
-a row, Tab inserts its name, Return executes an available command, and Escape closes
-completion without changing the draft. IME marked text and Shift-Return keep their
-normal text-entry behavior. Command availability includes the current checkout, chat,
-active operation and supported backend settings.
+Type `/` at the beginning of the composer to open command completion. Up/Down selects a row, Tab inserts its name, Return executes an available command, and Escape closes completion without changing the draft. IME marked text and Shift-Return keep their normal text-entry behavior. Command availability includes the current checkout, chat, active operation and supported backend settings.
 
-The completion panel follows the composer width and uses compact icon/title/description
-rows in light and dark appearances. Unavailable commands keep their descriptions;
-the reason is provided in the row tooltip and accessibility label.
+The completion panel follows the composer width and uses compact icon/title/description rows in light and dark appearances. Unavailable commands keep their descriptions; the reason is provided in the row tooltip and accessibility label.
 
-Enabled skills from the current checkout's catalog appear directly under a **Skills**
-heading, sorted by display name, with descriptions and scope labels. Typing after `/`
-filters command names and skill names/display names. Arrow keys skip the section heading.
-Clicking a skill or pressing Tab/Return selects it for the next message and removes only
-the slash token, preserving the rest of the draft without sending it. `/skills` remains
-available to open the full picker, including its **No skill** option.
+Enabled skills from the current checkout's catalog appear directly under a **Skills** heading, sorted by display name, with descriptions and scope labels. Typing after `/` filters command names and skill names/display names. Arrow keys skip the section heading. Clicking a skill or pressing Tab/Return selects it for the next message and removes only the slash token, preserving the rest of the draft without sending it. `/skills` remains available to open the full picker, including its **No skill** option.
 
-Only an initial `/name` token is a command; leading spaces and tabs are allowed.
-URLs, paths such as `/Users/example/source.swift`, fenced text and a slash later in a
-sentence remain ordinary text. Unknown command names and invalid arguments display
-an error and retain the draft. Use `//status` to send literal `/status` text. Arguments
-have no shell quoting or escape syntax. `/plan` removes one separating character and
-preserves the remaining prompt text.
+Only an initial `/name` token is a command; leading spaces and tabs are allowed. URLs, paths such as `/Users/example/source.swift`, fenced text and a slash later in a sentence remain ordinary text. Unknown command names and invalid arguments display an error and retain the draft. Use `//status` to send literal `/status` text. Arguments have no shell quoting or escape syntax. `/plan` removes one separating character and preserves the remaining prompt text.
 
 | Syntax | Behavior |
 | --- | --- |
@@ -45,33 +29,12 @@ preserves the remaining prompt text.
 | `/diff` | Open the selected chat's Changes panel, which displays reported changes and the chosen review turn. |
 | `/copy` | Copy the latest nonempty assistant response in the viewed chat. |
 
-`/fork` copies conversation history; it creates no Git branch or worktree and does not
-start a model turn. Managed task checkouts remain bound to their chat, so fork and
-new-chat actions require selecting the source checkout. Archived chats and pending
-or uncertain operations restrict chat-changing commands. Local dialogs capture their
-original checkout, chat, generation, draft and attachments; a stale result cannot
-apply to a replacement selection or edited draft.
+`/fork` copies conversation history; it creates no Git branch or worktree and does not start a model turn. Managed task checkouts remain bound to their chat, so fork and new-chat actions require selecting the source checkout. Archived chats and pending or uncertain operations restrict chat-changing commands. Local dialogs capture their original checkout, chat, generation, draft and attachments; a stale result cannot apply to a replacement selection or edited draft.
 
-Fast mode requires a service tier advertised by the selected model's catalog. The app
-recognizes the advertised priority tier or a tier identified/named Fast, captures that
-tier's actual ID, and sends that ID. It does not invent a priority tier. Switching to
-an unsupported model while fast mode is enabled blocks Send until fast mode is disabled.
+Fast mode requires a service tier advertised by the selected model's catalog. The app recognizes the advertised priority tier or a tier identified/named Fast, captures that tier's actual ID, and sends that ID. It does not invent a priority tier. Switching to an unsupported model while fast mode is enabled blocks Send until fast mode is disabled.
 
-Compaction's `{}` reply acknowledges the request, rather than proving completion.
-Review and compaction may publish lifecycle events before their replies. Pending
-commands and independently running shell commands continue to protect execution,
-cleanup and quit until their own outcomes are known. An uncertain plan update needs
-a matching settings event or an acknowledged explicit reapply; conversation read/resume
-responses do not report collaboration mode. After reconnecting, `/plan` presents
-**Reapply Plan**, **Reset Default** and **Cancel**. Last-request input and cumulative
-conversation usage are token counts, not current context occupancy. Occupancy is
-labeled **not reported**, and absent server values remain unavailable.
+Compaction's `{}` reply acknowledges the request, rather than proving completion. Review and compaction may publish lifecycle events before their replies. Pending commands and independently running shell commands continue to protect execution, cleanup and quit until their own outcomes are known. An uncertain plan update needs a matching settings event or an acknowledged explicit reapply; conversation read/resume responses do not report collaboration mode. After reconnecting, `/plan` presents **Reapply Plan**, **Reset Default** and **Cancel**. Last-request input and cumulative conversation usage are token counts, not current context occupancy. Occupancy is labeled **not reported**, and absent server values remain unavailable.
 
 ## Validation routing
 
-Follow [validation](validation.md) for test-host execution and evidence requirements,
-and [native QA](native-qa.md) for synthetic interaction checks and isolation limits.
-Command regressions live in
-the composer, runtime and client test groups; use `rg` to locate the current suites.
-The synthetic backend checker includes compact/review/fork ordering, plan/settings
-persistence, model metadata and token usage scenarios.
+Follow [validation](validation.md) for test-host execution and evidence requirements, and [native QA](native-qa.md) for synthetic interaction checks and isolation limits.
