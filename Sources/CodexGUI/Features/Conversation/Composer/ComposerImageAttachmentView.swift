@@ -17,9 +17,8 @@ final class ComposerImageAttachmentView: NSView
 		self.removeButton = removeButton
 		super.init(frame: .zero)
 
-		let imageView = NSImageView()
+		let imageView = AttachmentThumbnailImageView()
 		imageView.image = image ?? DesktopIcons.image(.infoCircle)
-		imageView.imageScaling = .scaleProportionallyUpOrDown
 		imageView.setAccessibilityElement(false)
 		imageView.wantsLayer = true
 		imageView.layer?.cornerRadius = 6

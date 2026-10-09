@@ -202,6 +202,82 @@ struct ComposerContextViewTests
 		})
 	}
 
+	@Test(arguments: [400, 600, 900])
+	func imageTilesFillTheSquareAndCenterTheCrop(width: Int) throws
+	{
+		_ = NSApplication.shared
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: width,
+			pixelsHigh: 400,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		for x in 0 ..< width
+		{
+			var pixel = x < width / 4 ? [255, 0, 0, 255]
+				: (x >= width * 3 / 4 ? [0, 0, 255, 255] : [0, 255, 0, 255])
+			for y in 0 ..< 400
+			{
+				bitmap.setPixel(
+					&pixel,
+					atX: x,
+					y: y
+				)
+			}
+		}
+		let image = NSImage(size: NSSize(
+			width: width,
+			height: 400
+		))
+		image.addRepresentation(bitmap)
+		let tile = ComposerImageAttachmentView(
+			image: image,
+			previewButton: NSButton(),
+			removeButton: NSButton()
+		)
+		tile.frame.size = NSSize(
+			width: 120,
+			height: 120
+		)
+		tile.layoutSubtreeIfNeeded()
+		let imageView = try #require(findImageView(in: tile))
+		let rendered = try #require(imageView.bitmapImageRepForCachingDisplay(in: imageView.bounds))
+		imageView.cacheDisplay(
+			in: imageView.bounds,
+			to: rendered
+		)
+		for y in [10, rendered.pixelsHigh / 2, rendered.pixelsHigh - 10]
+		{
+			let center = try #require(rendered.colorAt(
+				x: rendered.pixelsWide / 2,
+				y: y
+			))
+			#expect(center.greenComponent > 0.9 && center.alphaComponent > 0.9)
+			let left = try #require(rendered.colorAt(
+				x: 10,
+				y: y
+			))
+			let right = try #require(rendered.colorAt(
+				x: rendered.pixelsWide - 10,
+				y: y
+			))
+			if width == 900
+			{
+				#expect(left.greenComponent > 0.9 && right.greenComponent > 0.9)
+			}
+			else
+			{
+				#expect(left.redComponent > 0.9 && right.blueComponent > 0.9)
+			}
+		}
+	}
+
 	private func imageTiles(in view: NSView) -> [ComposerImageAttachmentView]
 	{
 		if let tile = view as? ComposerImageAttachmentView

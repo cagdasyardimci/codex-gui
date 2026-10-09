@@ -288,26 +288,10 @@ private final class UserMessageImageButton: NSButton
 		outline.fill()
 		if let preview
 		{
-			let scale = max(
-				bounds.width / preview.size.width,
-				bounds.height / preview.size.height
-			)
-			let size = NSSize(
-				width: preview.size.width * scale,
-				height: preview.size.height * scale
-			)
-			preview.draw(
-				in: NSRect(
-					x: bounds.midX - size.width / 2,
-					y: bounds.midY - size.height / 2,
-					width: size.width,
-					height: size.height
-				),
-				from: .zero,
-				operation: .sourceOver,
-				fraction: 1,
-				respectFlipped: true,
-				hints: nil
+			AttachmentThumbnailDrawing.draw(
+				preview,
+				in: bounds,
+				respectFlipped: true
 			)
 		}
 		else if unavailable
