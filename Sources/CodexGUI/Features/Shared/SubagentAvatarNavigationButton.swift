@@ -15,6 +15,7 @@ final class SubagentAvatarNavigationButton: NSButton
 		self.agents = agents
 		self.onSelectThread = onSelectThread
 		super.init(frame: .zero)
+		title = ""
 		isBordered = false
 		refusesFirstResponder = false
 		target = self
