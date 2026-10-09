@@ -18,6 +18,8 @@ An image view has its own “Viewed an image” disclosure row and an aspect-pre
 
 A per-turn status row appears after its user request and before the assistant work. Backend timestamps drive “Working for …” and the completed duration. Failure and interruption use their reported turn outcomes. Historical turns with no timing metadata do not acquire an invented duration. Only the matching active thread and turn can show a ticking working duration. An unfinished turn without active ownership shows “Status unavailable”; a later turn cannot assign it a completion outcome. A local UI timer refreshes only visible status labels while work is active.
 
+File-edit cards remain hidden until their owning turn has a confirmed terminal status (completed, failed, interrupted, stopped or cancelled). A completed file-change item does not end the turn. At turn end, reported edits form one merged card after the turn’s messages and before the next turn. The card remains visible when earlier work is folded. Missing or unknown turn status does not imply completion.
+
 ## Data and ownership
 
 The client decodes `commandActions` variants `read`, `search`, `listFiles`, and `unknown`, with command, file, and query fields. It also decodes image-view paths, and turn timing fields. It does not classify activity by inspecting shell program names. Missing or unrecognized action metadata falls back to “Ran” with the original command, including compound commands and wrappers.

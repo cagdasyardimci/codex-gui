@@ -124,6 +124,16 @@ enum ConversationTranscriptRow: Equatable
 			{
 				return
 			}
+			defer
+			{
+				pendingChanges.removeAll()
+			}
+			let turnID = ConversationEntryIdentity.turnIDWithFallback(first.id)
+			guard ConversationTurnStatus.isTerminal(timingsByTurnID[turnID]?.status)
+			else
+			{
+				return
+			}
 			let completedChanges = pendingChanges.flatMap
 			{
 				entry -> [FileChange] in
@@ -137,7 +147,6 @@ enum ConversationTranscriptRow: Equatable
 				}
 				return []
 			}
-			let turnID = ConversationEntryIdentity.turnIDWithFallback(first.id)
 			let merged: [FileChange]
 			if let prepared = preparedNetChanges[turnID], prepared.matches(completedChanges)
 			{
@@ -177,7 +186,6 @@ enum ConversationTranscriptRow: Equatable
 				}
 				rows.append(.message(entry))
 			}
-			pendingChanges.removeAll()
 		}
 		for entry in entries
 		{
@@ -273,7 +281,7 @@ enum ConversationTranscriptRow: Equatable
 	{
 		let terminalTurns = Set(timings.filter
 		{
-			["completed", "failed", "interrupted", "stopped", "cancelled"].contains($0.status)
+			ConversationTurnStatus.isTerminal($0.status)
 				&& ($0.startedAt != nil || $0.durationMs != nil)
 		}.map(\.turnID))
 		var work: [String: Set<String>] = [:]

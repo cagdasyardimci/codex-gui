@@ -191,6 +191,10 @@ struct ConversationReferencePresentationTests
 		))
 		let rows = ConversationTranscriptRow.make(
 			entries: entries,
+			timings: [ConversationTurnTiming(
+				turnID: "one",
+				status: "completed"
+			)],
 			projectPath: "/tmp",
 			preparedNetChanges: prepared
 		)

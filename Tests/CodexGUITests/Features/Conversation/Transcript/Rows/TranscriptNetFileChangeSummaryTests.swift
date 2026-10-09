@@ -58,16 +58,17 @@ struct TranscriptNetFileChangeSummaryTests
 			sources,
 			context: "thread"
 		)
-		let rows = ConversationTranscriptRow.make(
-			entries: entries,
-			projectPath: nil,
-			preparedNetChanges: prepared ?? [:]
-		)
 		let timings = [ConversationTurnTiming(
 			turnID: "turn",
 			status: "completed",
 			startedAt: Date(timeIntervalSince1970: 1_000)
 		)]
+		let rows = ConversationTranscriptRow.make(
+			entries: entries,
+			timings: timings,
+			projectPath: nil,
+			preparedNetChanges: prepared ?? [:]
+		)
 		let collapsed = ConversationTranscriptRow.collapsingWork(
 			in: rows,
 			workEntryIDs: ConversationTranscriptRow.workEntryIDs(
@@ -86,6 +87,8 @@ struct TranscriptNetFileChangeSummaryTests
 			}
 			return entry
 		}
+		#expect(rows.suffix(3).map(\.id)
+			== ["turn:reply", "turn:file-change-summary", "next:request"])
 		#expect(summaries.map(\.id) == ["turn:file-change-summary"])
 		if case .fileChanges(
 			let changes,
@@ -99,6 +102,70 @@ struct TranscriptNetFileChangeSummaryTests
 			Issue.record("Prepared summary was lost during work folding")
 		}
 	}
+	@Test(arguments: [
+		"inProgress",
+		"running",
+		"unknown",
+		"completed",
+		"failed",
+		"interrupted",
+		"stopped",
+		"cancelled",
+		"missing",
+	])
+	func editCardWaitsForItsOwnTurnToEnd(status: String)
+	{
+		let entries = [
+			ConversationEntry(
+				id: "previous:edit",
+				kind: .tool,
+				title: "Changed file",
+				body: "",
+				activity: .fileChanges(
+					[change(diff: "@@ -1 +1 @@\n-old\n+previous")],
+					status: "completed"
+				)
+			),
+			ConversationEntry(
+				id: "turn:edit",
+				kind: .tool,
+				title: "Changed file",
+				body: "",
+				activity: .fileChanges(
+					[change(diff: "@@ -1 +1 @@\n-previous\n+new")],
+					status: "completed"
+				)
+			),
+			ConversationEntry(
+				id: "turn:comment",
+				kind: .agent,
+				title: "Codex",
+				body: "Checking the edit"
+			),
+		]
+		var timings = [ConversationTurnTiming(
+			turnID: "previous",
+			status: "completed"
+		)]
+		if status != "missing"
+		{
+			timings.append(ConversationTurnTiming(
+				turnID: "turn",
+				status: status
+			))
+		}
+		let rows = ConversationTranscriptRow.make(
+			entries: entries,
+			timings: timings,
+			projectPath: nil
+		)
+		let terminal = ["completed", "failed", "interrupted", "stopped", "cancelled"]
+			.contains(status)
+		let expected = ["previous:file-change-summary", "turn:comment"]
+			+ (terminal ? ["turn:file-change-summary"] : [])
+		#expect(rows.map(\.id) == expected)
+	}
+
 	private func change(
 		path: String = "file.swift",
 		kind: String = "update",
