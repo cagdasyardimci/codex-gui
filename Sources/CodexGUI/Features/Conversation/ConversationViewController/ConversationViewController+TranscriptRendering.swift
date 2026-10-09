@@ -668,7 +668,8 @@ extension ConversationViewController
 		transcriptPreparation.prepare(
 			nextEntries,
 			keys: keys,
-			context: context
+			context: context,
+			projectPath: projectPath
 		)
 		{
 			[weak self] contents in

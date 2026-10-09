@@ -35,6 +35,44 @@ struct LocalGitReportedTurnRoutingTests
 		#expect(await baseline.requestCount == 1)
 	}
 
+	@Test func temporaryCopyEditsAreExcludedFromLastTurnFilesAndTotals() async throws
+	{
+		let changes = ["/tmp/codex-gui-send.copy/File.swift", "File.swift"].map
+		{
+			FileChange(json: [
+				"path": $0,
+				"kind": "update",
+				"diff": "@@ -1 +1 @@\n-old\n+new",
+			])!
+		}
+		var request = GitComparisonRequest(
+			owner: owner(),
+			repositoryRoot: "/workspace/repo",
+			scope: .lastTurn,
+			generation: 1,
+			lastTurnID: "turn",
+			reportedChanges: changes
+		)
+		guard case .snapshot(let snapshot) = await LocalGitComparisonService().compare(request)
+		else
+		{
+			Issue.record("Expected repository edits")
+			return
+		}
+		#expect(snapshot.files.map(\.path) == ["File.swift"])
+		#expect(snapshot.additions == 1)
+		#expect(snapshot.deletions == 1)
+		request.reportedChanges = [changes[0]]
+		guard case .snapshot(let empty) = await LocalGitComparisonService().compare(request)
+		else
+		{
+			Issue.record("Expected empty comparison for temporary-only edits")
+			return
+		}
+		#expect(empty.files.isEmpty)
+		#expect(empty.patch.isEmpty)
+	}
+
 	private func owner() -> FeaturePresentationOwner
 	{
 		FeaturePresentationOwner(

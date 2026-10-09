@@ -60,6 +60,13 @@ including when code wrapping is enabled. Shift-wheel input retains native horizo
 
 All conversation View changes actions open the shared latest-edit Last Turn comparison. The recorded identity does not retain a separate unbounded patch cache. When its reported payload is unavailable, the comparison retains its captured-baseline fallback and explicit unavailability behavior.
 
+Transcript change cards, their file and line totals, and Last Turn comparisons include only reported
+paths within the selected checkout when its absolute path is known. Relative paths are resolved
+against that checkout; paths outside it, including edits to temporary source copies, are excluded.
+Rename reports must keep both paths within the checkout. This filter uses normalized paths without
+reading files or treating matching filenames in another checkout as the same file. Raw backend
+reports remain unchanged. A checkout located under `/tmp` still includes its own reported edits.
+
 ## Conversation content residency
 
 `ConversationCachePolicy` defines the defaults used by the backend and conversation UI:

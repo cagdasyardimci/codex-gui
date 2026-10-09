@@ -143,20 +143,27 @@ enum ConversationTranscriptRow: Equatable
 				) = entry.activity,
 					status == "completed"
 				{
-					return changes
+					return ReportedRepositoryFileChanges.filter(
+						changes,
+						repositoryRoot: projectPath
+					)
 				}
 				return []
 			}
-			let merged: [FileChange]
+			let reportedMerged: [FileChange]
 			if let prepared = preparedNetChanges[turnID], prepared.matches(completedChanges)
 			{
-				merged = prepared.changes
+				reportedMerged = prepared.changes
 			}
 			else
 			{
 				// Keep reported edits visible if preparation is missing or no longer matches.
-				merged = completedChanges
+				reportedMerged = completedChanges
 			}
+			let merged = ReportedRepositoryFileChanges.filter(
+				reportedMerged,
+				repositoryRoot: projectPath
+			)
 			var emittedCompletedChanges = false
 			for entry in pendingChanges
 			{
@@ -184,7 +191,31 @@ enum ConversationTranscriptRow: Equatable
 					)))
 					continue
 				}
-				rows.append(.message(entry))
+				if case .fileChanges(
+					let changes,
+					let status
+				) = entry.activity
+				{
+					let visibleChanges = ReportedRepositoryFileChanges.filter(
+						changes,
+						repositoryRoot: projectPath
+					)
+					guard !visibleChanges.isEmpty
+					else
+					{
+						continue
+					}
+					rows.append(.message(ConversationEntry(
+						id: entry.id,
+						kind: entry.kind,
+						title: entry.title,
+						body: visibleChanges.map(\.path).joined(separator: "\n"),
+						activity: .fileChanges(
+							visibleChanges,
+							status: status
+						)
+					)))
+				}
 			}
 		}
 		for entry in entries

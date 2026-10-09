@@ -8,7 +8,10 @@ enum GitReportedTurnComparison
 		request: GitComparisonRequest
 	) -> GitComparisonResult
 	{
-		let mergedChanges = ConversationNetFileChanges.merge(changes)
+		let mergedChanges = ConversationNetFileChanges.merge(ReportedRepositoryFileChanges.filter(
+			changes,
+			repositoryRoot: request.repositoryRoot
+		))
 		let filePatches = mergedChanges.map
 		{
 			patchText(

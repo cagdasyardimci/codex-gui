@@ -94,6 +94,7 @@ final class TranscriptPreparationCoordinator
 		_ nextEntries: [ConversationEntry],
 		keys: [ContentKey?],
 		context: String? = nil,
+		projectPath: String? = nil,
 		onPrepared: @escaping ([String: PreparedConversationContent]) -> Void
 	)
 	{
@@ -102,7 +103,10 @@ final class TranscriptPreparationCoordinator
 		let generation = renderGeneration
 		let existingContents = preparedContents
 		let existingKeys = preparedKeys
-		let changeSources = Self.fileChangeSources(from: nextEntries)
+		let changeSources = Self.fileChangeSources(
+			from: nextEntries,
+			repositoryRoot: projectPath
+		)
 		preparationTask = Task
 		{
 			[weak self, contentCache, navigationCache, netChangePreparation] in
@@ -174,8 +178,10 @@ final class TranscriptPreparationCoordinator
 		}
 	}
 
-	static func fileChangeSources(from entries: [ConversationEntry])
-		-> [ConversationNetFileChangePreparation.Source]
+	static func fileChangeSources(
+		from entries: [ConversationEntry],
+		repositoryRoot: String? = nil
+	) -> [ConversationNetFileChangePreparation.Source]
 	{
 		var turnIDs: [String] = []
 		var changesByTurn: [String: [FileChange]] = [:]
@@ -195,7 +201,11 @@ final class TranscriptPreparationCoordinator
 			{
 				turnIDs.append(turnID)
 			}
-			changesByTurn[turnID, default: []].append(contentsOf: changes)
+			changesByTurn[turnID, default: []]
+				.append(contentsOf: ReportedRepositoryFileChanges.filter(
+					changes,
+					repositoryRoot: repositoryRoot
+				))
 		}
 		return turnIDs.map
 		{
