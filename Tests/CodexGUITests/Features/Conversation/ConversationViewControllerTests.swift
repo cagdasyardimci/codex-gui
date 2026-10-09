@@ -6,6 +6,71 @@ import Testing
 @Suite @MainActor
 struct ConversationViewControllerTests
 {
+	@Test func pendingUserRowAndEmptyComposerRenderBeforeRichPreparation() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let draft = snapshot(
+			[],
+			draft: "First line\n**Submitted**"
+		)
+		controller.render(draft)
+		let entry = ConversationEntry(
+			id: "local:request",
+			kind: .user,
+			title: "You",
+			body: draft.draft
+		)
+		controller.render(snapshot([entry]))
+		#expect(controller.composer.string.isEmpty)
+		#expect(controller.entries == [entry])
+		#expect(controller.displayedRows.map(\.id) == [entry.id])
+		#expect(controller.preparedContents[entry.id]?.attributedString.string == entry.body)
+		await controller.waitForRendering()
+		#expect(controller.preparedContents[entry.id]?.attributedString.string
+			== "First line\nSubmitted")
+		#expect(controller.entries == [entry])
+	}
+
+	@Test func immediatePendingRowPreservesHistoryAndSupersededChatCannotReturn() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let history = ConversationEntry(
+			id: "turn:reply",
+			kind: .agent,
+			title: "Codex",
+			body: "**Previous reply**"
+		)
+		controller.render(snapshot([history]))
+		await controller.waitForRendering()
+		let prepared = try #require(controller.preparedContents[history.id])
+		let first = ConversationEntry(
+			id: "local:first",
+			kind: .user,
+			title: "You",
+			body: "First request"
+		)
+		controller.render(snapshot([history, first]))
+		#expect(controller.entries == [history, first])
+		#expect(controller.preparedContents[history.id] === prepared)
+		let second = ConversationEntry(
+			id: "local:second",
+			kind: .user,
+			title: "You",
+			body: "Second request"
+		)
+		controller.render(snapshot(
+			[second],
+			selectedThreadID: "other"
+		))
+		#expect(controller.entries == [second])
+		#expect(controller.preparedContents[history.id] == nil)
+		await controller.waitForRendering()
+		#expect(controller.entries == [second])
+		#expect(controller.displayedRows.map(\.id) == [second.id])
+	}
+
 	@Test func userAndAgentMarkdownRenderWhileOtherRolesKeepLiteralSource() async throws
 	{
 		_ = NSApplication.shared
@@ -1401,7 +1466,8 @@ struct ConversationViewControllerTests
 		_ entries: [ConversationEntry],
 		executionState: ExecutionState = .running,
 		threads: [ThreadSummary] = [],
-		selectedThreadID: String = "replay"
+		selectedThreadID: String = "replay",
+		draft: String = ""
 	) -> ConversationSnapshot
 	{
 		ConversationSnapshot(
@@ -1412,7 +1478,7 @@ struct ConversationViewControllerTests
 			canLoadEarlierTurns: false,
 			changedFiles: [],
 			diff: "",
-			draft: "",
+			draft: draft,
 			canSend: false,
 			accountDescription: "Mock",
 			backendDescription: "Mock",

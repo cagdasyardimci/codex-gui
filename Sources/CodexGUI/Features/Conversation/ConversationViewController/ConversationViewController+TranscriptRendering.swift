@@ -665,6 +665,10 @@ extension ConversationViewController
 				expanded: expandedEntryIDs.contains(entry.id)
 			)
 		}
+		showPendingUserEntries(
+			nextEntries,
+			context: context
+		)
 		transcriptPreparation.prepare(
 			nextEntries,
 			keys: keys,
@@ -680,6 +684,52 @@ extension ConversationViewController
 				context: context
 			)
 		}
+	}
+
+	private func showPendingUserEntries(
+		_ nextEntries: [ConversationEntry],
+		context: String?
+	)
+	{
+		let currentEntries = renderedContext == context ? entries : []
+		let renderedIDs = Set(currentEntries.map(\.id))
+		let pending = nextEntries.filter
+		{
+			$0.kind == .user && $0.id.hasPrefix("local:") && !renderedIDs.contains($0.id)
+		}
+		guard !pending.isEmpty
+		else
+		{
+			return
+		}
+		let nextIDs = Set(nextEntries.map(\.id))
+		let provisionalEntries = currentEntries.filter
+		{
+			nextIDs.contains($0.id)
+		} + pending
+		var contents = renderedContext == context ? preparedContents : [:]
+		for entry in pending
+		{
+			// Rich parsing stays asynchronous; accepted input is visible in this render turn.
+			contents[entry.id] = PreparedConversationContent(ParsedConversationContent(
+				runs: [ConversationTextRun(
+					text: entry.body,
+					style: ConversationTextStyle()
+				)],
+				codeBlocks: [],
+				codeBlockRanges: [],
+				plainTextBoundaries: []
+			))
+		}
+		applyEntries(
+			provisionalEntries,
+			contents: contents,
+			workEntryIDs: ConversationTranscriptRow.workEntryIDs(
+				entries: provisionalEntries,
+				timings: requestedTurnTimings
+			),
+			context: context
+		)
 	}
 
 	struct ReadingAnchor

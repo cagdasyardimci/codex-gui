@@ -45,6 +45,11 @@ Feature placement follows the [feature map](../Sources/CodexGUI/Features/README.
 
 Pure reported-patch composition belongs to `Application/Reducers/Review/ConversationNetFileChanges`. `ConversationNetFileChangePreparation` prepares those results off the main actor and retains exact inputs and outputs for reuse within the same transcript context. Its reusable cache defaults to 256 entries and 8 MiB. `TranscriptPreparationCoordinator` publishes prepared text, navigation summaries and net file changes together only for the accepted render generation. Current resident content can produce results larger than the reusable cache budget; those results are available to the current render without entering that cache. Folded completed work defers hidden message preparation until disclosure or navigation reveals it.
 
+New local user rows appear synchronously with literal text while rich preparation runs. This
+provisional render retains already displayed entries from the same transcript context and never
+carries entries across chats. The accepted prepared generation replaces the provisional content
+through the existing row, selection and scrolling update path.
+
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and [validation](validation.md) for verification commands and acceptance limits.
 
 Git comparison file headers offer rich preview for Markdown, images and PDFs supported by the
