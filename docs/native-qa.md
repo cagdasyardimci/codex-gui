@@ -4,7 +4,7 @@ Run `./scripts/native-qa.sh` for manual inspection with the bundled, model-free 
 
 ## Manual preparation and isolation
 
-The QA copy keeps the main app's stable signing and bundle identity so compatible builds can retain macOS permission grants. Those grants remain under the user's control; notification banner delivery requires native observation.
+The QA copy keeps the main app's signature and bundle identifier. With a consistent Apple Development certificate, compatible builds can retain macOS permission grants; ad hoc signing may require approval again after rebuilds. See [signing setup](../README.md#signing-setup) for certificate selection and the certificate-free fallback. Those grants remain under the user's control; notification banner delivery requires native observation.
 
 Manual QA uses temporary task workspaces and backend state, but standard preferences and default application-support stores remain shared with normal app launches. The launcher builds in this checkout's `.build` directory; coordinate other builds using it.
 

@@ -7,37 +7,42 @@ case "$configuration" in
   *) print -u2 "Usage: $0 [debug|release]"; exit 2 ;;
 esac
 
-identity_output=$(security find-identity -v -p codesigning)
-available_identities=$(print -r -- "$identity_output" | sed -nE \
-  's/^[[:space:]]*[0-9]+\) ([[:xdigit:]]{40}) "([^"]+)".*/\1\t\2/p')
 configured_identity="${CODEX_GUI_SIGNING_IDENTITY:-}"
-if [[ -n "$configured_identity" ]]; then
-  matching_identities=$(print -r -- "$available_identities" | awk -F '\t' \
-    -v identity="$configured_identity" '$1 == identity || $2 == identity')
-else
-  matching_identities=$(print -r -- "$available_identities" | awk -F '\t' \
-    '$2 ~ /^Apple Development:/')
-fi
-identity_count=$(print -r -- "$matching_identities" | awk 'NF { count++ } END { print count + 0 }')
-if (( identity_count == 0 )); then
+signing_identity="-"
+if [[ "$configured_identity" != "-" ]]; then
+  identity_output=$(security find-identity -v -p codesigning)
+  available_identities=$(print -r -- "$identity_output" | sed -nE \
+    's/^[[:space:]]*[0-9]+\) ([[:xdigit:]]{40}) "([^"]+)".*/\1\t\2/p')
   if [[ -n "$configured_identity" ]]; then
-    print -u2 "No valid code-signing identity matches CODEX_GUI_SIGNING_IDENTITY."
+    matching_identities=$(print -r -- "$available_identities" | awk -F '\t' \
+      -v identity="$configured_identity" '$1 == identity || $2 == identity')
   else
-    print -u2 "No valid Apple Development identity is available in the configured keychains."
+    matching_identities=$(print -r -- "$available_identities" | awk -F '\t' \
+      '$2 ~ /^Apple Development:/')
   fi
-  print -u2 "Sign in to Xcode > Settings > Apple Accounts and create an Apple Development identity"
-  print -u2 "with a macOS app target using Automatically manage signing. Verify with:"
-  print -u2 "  security find-identity -v -p codesigning"
-  print -u2 "Set CODEX_GUI_SIGNING_IDENTITY to an exact identity name or SHA-1 hash to select one."
-  exit 1
+  identity_count=$(print -r -- "$matching_identities" | awk 'NF { count++ } END { print count + 0 }')
+  if (( identity_count == 0 )) && [[ -n "$configured_identity" ]]; then
+    print -u2 "No valid code-signing identity matches CODEX_GUI_SIGNING_IDENTITY."
+    print -u2 "Available identities are listed by: security find-identity -v -p codesigning"
+    print -u2 "Set CODEX_GUI_SIGNING_IDENTITY=- to use ad hoc signing without a certificate."
+    exit 1
+  fi
+  if (( identity_count > 1 )); then
+    print -u2 "Multiple code-signing identities match the requested selection."
+    print -u2 "Set CODEX_GUI_SIGNING_IDENTITY to an exact identity name or SHA-1 hash."
+    print -u2 "Available identities are listed by: security find-identity -v -p codesigning"
+    print -u2 "Set CODEX_GUI_SIGNING_IDENTITY=- to use ad hoc signing without a certificate."
+    exit 1
+  fi
+  if (( identity_count == 1 )); then
+    signing_identity=$(print -r -- "$matching_identities" | awk -F '\t' 'NF { print $1 }')
+  fi
 fi
-if (( identity_count > 1 )); then
-  print -u2 "Multiple code-signing identities match the requested selection."
-  print -u2 "Set CODEX_GUI_SIGNING_IDENTITY to an exact identity name or SHA-1 hash."
-  print -u2 "Available identities are listed by: security find-identity -v -p codesigning"
-  exit 1
+if [[ "$signing_identity" == "-" ]]; then
+  print "Using ad hoc signing (no Apple Development certificate required)."
+else
+  print "Using the selected code-signing certificate."
 fi
-signing_identity=$(print -r -- "$matching_identities" | awk -F '\t' 'NF { print $1 }')
 
 # Swift Build resolves package resources from Contents/Resources in a signed macOS app.
 swift build --build-system swiftbuild -c "$configuration"
