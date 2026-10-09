@@ -18,3 +18,8 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | [Usage](Usage/) | Usage presentation and controls. |
 
 For test placement, see [test organization](../../../CONVENTIONS.md#test-organization). For task routing, return to [agent workflow](../../../docs/agent-workflow.md#documentation-map).
+
+Navigation task hover cards use a fixed 320-point width. Titles and project names wrap, and card
+height follows the content. Computer and time metadata remain beside the first title line.
+The passive child panel does not take focus and dismisses when the row or window loses its
+hover context.

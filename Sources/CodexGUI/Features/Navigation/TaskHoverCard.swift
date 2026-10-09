@@ -55,6 +55,10 @@ final class TaskHoverCard
 	{
 		let titleLabel = NSTextField(wrappingLabelWithString: title)
 		titleLabel.font = .systemFont(ofSize: 14)
+		titleLabel.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
 		let timeLabel = NSTextField(labelWithString: relativeTime())
 		timeLabel.font = .systemFont(ofSize: 12)
 		timeLabel.textColor = .secondaryLabelColor
@@ -63,10 +67,15 @@ final class TaskHoverCard
 			accessibilityDescription: "This computer"
 		) ?? NSImage())
 		computer.contentTintColor = .secondaryLabelColor
-		let header = AppKitLayout.horizontalStack(
-			[titleLabel, computer, NSView(), timeLabel],
+		let metadata = AppKitLayout.horizontalStack(
+			[computer, timeLabel],
 			spacing: 8
 		)
+		let header = AppKitLayout.horizontalStack(
+			[titleLabel, NSView(), metadata],
+			spacing: 8
+		)
+		header.alignment = .top
 		let folder = NSImageView(image: NSImage(
 			systemSymbolName: "folder",
 			accessibilityDescription: "Project"
@@ -95,15 +104,10 @@ final class TaskHoverCard
 			to: surface,
 			inset: 10
 		)
-		let cardWidth = min(
-			480,
-			max(
-				300,
-				titleLabel.intrinsicContentSize.width + 100
-			)
-		)
+		let cardWidth: CGFloat = 320
 		surface.widthAnchor.constraint(equalToConstant: cardWidth).isActive = true
 		header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+		project.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		for icon in [computer, folder]
 		{
 			icon.widthAnchor.constraint(equalToConstant: 16).isActive = true

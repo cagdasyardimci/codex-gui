@@ -163,6 +163,49 @@ struct NavigationViewControllerTests
 		}
 		let cell = fixture.cell
 		let label = fixture.label
+		var previousHeight: CGFloat = 0
+		for title in [
+			"Short",
+			"Clarify project-wide change summary scope",
+			"Explain why the change summary appears during an ongoing agent turn",
+		]
+		{
+			let card = TaskHoverCard(
+				title: title,
+				projectName: "codex-gui",
+				updatedAt: Date().addingTimeInterval(-660)
+			)
+			card.show(beside: cell)
+			defer
+			{
+				card.dismiss()
+			}
+			let hoverPanel = try #require(card.panel)
+			let surface = try #require(hoverPanel.contentView)
+			surface.layoutSubtreeIfNeeded()
+			let stack = try #require(surface.subviews.first as? NSStackView)
+			let header = try #require(stack.arrangedSubviews.first as? NSStackView)
+			let titleLabel = try #require(header.arrangedSubviews.first as? NSTextField)
+			let metadata = try #require(header.arrangedSubviews.last as? NSStackView)
+			let timeLabel = try #require(metadata.arrangedSubviews.last as? NSTextField)
+			#expect(hoverPanel.frame.width == 320)
+			#expect(surface.frame.width == 320)
+			#expect(hoverPanel.frame.height > previousHeight)
+			#expect(!surface.hasAmbiguousLayout)
+			#expect(titleLabel.frame.maxX <= metadata.frame.minX)
+			#expect(abs(titleLabel.frame.maxY - metadata.frame.maxY) < 1)
+			#expect(timeLabel.frame.width >= timeLabel.intrinsicContentSize.width)
+			let textHeight = (title as NSString).boundingRect(
+				with: NSSize(
+					width: titleLabel.bounds.width,
+					height: .greatestFiniteMagnitude
+				),
+				options: [.usesLineFragmentOrigin, .usesFontLeading],
+				attributes: [.font: try #require(titleLabel.font)]
+			).height
+			#expect(titleLabel.bounds.height >= ceil(textHeight))
+			previousHeight = hoverPanel.frame.height
+		}
 		cell.mouseEntered(with: fixture.event)
 		let panel = try #require(cell.hoverCard?.panel)
 		#expect(panel.isVisible)
