@@ -289,6 +289,16 @@ extension ConversationViewController
 					}
 					self.onOpenActivityFile(path)
 				},
+				canOpenImage:
+				{
+					[weak self] in
+					guard let self
+					else
+					{
+						return false
+					}
+					return self.renderedContext == context && self.requestedContext == context
+				},
 				onOpenSubagents:
 				{
 					[weak self] in

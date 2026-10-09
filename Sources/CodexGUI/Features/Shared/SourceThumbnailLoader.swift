@@ -11,10 +11,16 @@ actor SourceThumbnailLoader
 	final class Thumbnail: @unchecked Sendable
 	{
 		let image: CGImage
+		/// Full image dimensions after applying the same orientation as the decoded pixels.
+		let originalPixelSize: CGSize
 
-		init(image: CGImage)
+		init(
+			image: CGImage,
+			originalPixelSize: CGSize
+		)
 		{
 			self.image = image
+			self.originalPixelSize = originalPixelSize
 		}
 	}
 
@@ -245,6 +251,11 @@ actor SourceThumbnailLoader
 		{
 			return nil
 		}
+		guard let originalPixelSize = originalPixelSize(of: source)
+		else
+		{
+			return nil
+		}
 		let options: [CFString: Any] = [
 			kCGImageSourceCreateThumbnailFromImageAlways: true,
 			kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize,
@@ -265,7 +276,34 @@ actor SourceThumbnailLoader
 		{
 			return nil
 		}
-		return Thumbnail(image: image)
+		return Thumbnail(
+			image: image,
+			originalPixelSize: originalPixelSize
+		)
+	}
+
+	private func originalPixelSize(of source: CGImageSource) -> CGSize?
+	{
+		guard let properties = CGImageSourceCopyPropertiesAtIndex(
+			source,
+			0,
+			nil
+		)
+			as? [CFString: Any],
+			let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+			let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
+			width.doubleValue.isFinite, height.doubleValue.isFinite,
+			width.doubleValue > 0, height.doubleValue > 0
+		else
+		{
+			return nil
+		}
+		let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+		let swapsDimensions = (5 ... 8).contains(orientation)
+		return CGSize(
+			width: swapsDimensions ? height.doubleValue : width.doubleValue,
+			height: swapsDimensions ? width.doubleValue : height.doubleValue
+		)
 	}
 
 	private func pngData(for image: CGImage) -> Data?

@@ -81,15 +81,23 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private var row: ConversationActivityRow?
 	private var onToggle: (() -> Void)?
 	private var onOpenFile: ((String) -> Void)?
+	private var canOpenImage: (() -> Bool)?
 	private var onOpenSubagents: (() -> Void)?
 	private var onSelectSubagentThread: ((String) -> Void)?
 	private var subagentNavigationGeneration = 0
 	private var imageTask: Task<Void, Never>?
+	private let expandedImagePreview = ExpandedImagePreview()
 	private static let imageCache = NSCache<NSString, NSImage>()
 
 	override func loadView()
 	{
-		view = NSView()
+		let host = ActivityImagePreviewHostView()
+		host.onDetach =
+		{
+			[weak self] in
+			self?.expandedImagePreview.dismiss()
+		}
+		view = host
 		stack.orientation = .vertical
 		stack.alignment = .leading
 		stack.spacing = Self.detailSpacing
@@ -302,6 +310,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	override func prepareForReuse()
 	{
 		super.prepareForReuse()
+		expandedImagePreview.dismiss()
 		imageTask?.cancel()
 		imageTask = nil
 		row = nil
@@ -319,6 +328,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		))
 		onToggle = nil
 		onOpenFile = nil
+		canOpenImage = nil
 		onOpenSubagents = nil
 		onSelectSubagentThread = nil
 		subagentNavigationGeneration += 1
@@ -338,12 +348,17 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		_ row: ConversationActivityRow,
 		onToggle: @escaping () -> Void,
 		onOpenFile: @escaping (String) -> Void,
+		canOpenImage: (() -> Bool)? = nil,
 		onOpenSubagents: (() -> Void)? = nil,
 		onSelectSubagentThread: ((String) -> Void)? = nil
 	)
 	{
 		_ = view
 		imageTask?.cancel()
+		if self.row?.id != row.id || self.row?.imagePath != row.imagePath || !row.expanded
+		{
+			expandedImagePreview.dismiss()
+		}
 		let previousPosition = self.row?.id == row.id ? outputReadingPosition() : nil
 		if self.row?.id != row.id || self.row?.expanded != row.expanded
 		{
@@ -358,6 +373,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		self.row = row
 		self.onToggle = onToggle
 		self.onOpenFile = onOpenFile
+		self.canOpenImage = canOpenImage
 		self.onOpenSubagents = onOpenSubagents
 		self.onSelectSubagentThread = onSelectSubagentThread
 		subagentNavigationGeneration += 1
@@ -1136,9 +1152,39 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	}
 	@objc private func openImage()
 	{
-		if let path = row?.imagePath
+		guard let row, row.kind == .image, row.expanded,
+				!imageButton.isHidden, imageButton.image != nil,
+				let path = row.imagePath, !path.isEmpty, let window = view.window,
+				canOpenImage?() != false
+		else
 		{
-			onOpenFile?(path)
+			return
+		}
+		expandedImagePreview.present(
+			path: path,
+			name: URL(fileURLWithPath: path).lastPathComponent,
+			in: window
+		)
+	}
+
+	func waitForImagePreview() async
+	{
+		await imageTask?.value
+		await expandedImagePreview.waitForPresentation()
+	}
+}
+
+@MainActor
+private final class ActivityImagePreviewHostView: NSView
+{
+	var onDetach: (() -> Void)?
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		if window == nil
+		{
+			onDetach?()
 		}
 	}
 }

@@ -266,15 +266,26 @@ struct UserMessageImageAttachmentsTests
 		})
 	}
 
-	@Test func inlineImagesOpenInANativePanelAndReuseOrDetachDismissesIt() async throws
+	@Test(arguments: [false, true])
+	func localAndInlineImagesExpandInTheWindowAndReuseOrDetachDismissesThem(
+		inline: Bool
+	) async throws
 	{
 		_ = NSApplication.shared
+		let imageData = try inlinePNG()
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent("expanded-attachment-\(UUID()).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: url)
+		}
+		try imageData.write(to: url)
+		let path = inline
+			? "data:image/png;base64," + imageData.base64EncodedString()
+			: url.absoluteString
 		let reference = try #require(UserMessageReference(
-			json: [
-				"type": "image",
-				"url": "data:image/png;base64," + (try inlinePNG()).base64EncodedString(),
-			],
-			id: "inline"
+			json: ["type": inline ? "image" : "localImage", "url": path, "path": path],
+			id: "attachment"
 		))
 		let strip = UserMessageImageAttachmentsView()
 		let parent = NSWindow(
@@ -299,30 +310,35 @@ struct UserMessageImageAttachmentsTests
 		await strip.waitForImages()
 		let button = try #require(strip.subviews.first as? NSButton)
 		button.performClick(nil)
-		await strip.waitForInlinePreview()
-		let preview = try #require(parent.childWindows?.first)
-		#expect(preview.accessibilityIdentifier() == "inline-image-preview")
-		#expect(preview.title == "Attached image")
-		let previewContent = try #require(preview.contentView)
-		let imageView = try #require(descendants(previewContent).compactMap
+		await strip.waitForExpandedPreview()
+		let preview = try #require(descendants(strip).first
+		{
+			$0.accessibilityIdentifier() == "expanded-image-preview"
+		})
+		#expect(parent.attachedSheet == nil)
+		#expect(parent.childWindows?.isEmpty != false)
+		let imageView = try #require(descendants(preview).compactMap
 		{
 			$0 as? NSImageView
 		}.first)
 		#expect(imageView.image != nil)
 		strip.configure([])
 		#expect(parent.childWindows?.isEmpty != false)
-		#expect(!preview.isVisible)
+		#expect(preview.superview == nil)
 		#expect(button.target == nil && button.action == nil)
 
 		strip.configure([reference])
 		await strip.waitForImages()
 		let current = try #require(strip.subviews.first as? NSButton)
 		current.performClick(nil)
-		await strip.waitForInlinePreview()
-		let reopened = try #require(parent.childWindows?.first)
+		await strip.waitForExpandedPreview()
+		let reopened = try #require(descendants(strip).first
+		{
+			$0.accessibilityIdentifier() == "expanded-image-preview"
+		})
 		parent.contentView = NSView()
 		#expect(parent.childWindows?.isEmpty != false)
-		#expect(!reopened.isVisible)
+		#expect(reopened.superview == nil)
 	}
 
 	@Test func unavailableInlineImagesClearProgressAndEarlierResultsCannotReplaceReuse(

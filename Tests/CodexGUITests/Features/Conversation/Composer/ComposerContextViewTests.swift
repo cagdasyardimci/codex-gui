@@ -8,7 +8,7 @@ import Testing
 @MainActor
 struct ComposerContextViewTests
 {
-	@Test func imageImportCreatesPreviewAndRemovalControl() throws
+	@Test func imageImportCreatesPreviewAndRemovalControl() async throws
 	{
 		_ = NSApplication.shared
 		let directory = try temporaryProject()
@@ -115,13 +115,30 @@ struct ComposerContextViewTests
 			title: ""
 		))
 		expand.performClick(nil)
-		let sheet = try #require(window.attachedSheet)
-		#expect(findImageView(in: try #require(sheet.contentView)) != nil)
-		window.endSheet(sheet)
-		sheet.orderOut(nil)
-		tile.mouseEntered(with: event)
+		await view.waitForExpandedPreview()
+		let expanded = try #require(findExpandedPreview(in: view))
+		#expect(findImageView(in: expanded)?.image != nil)
+		#expect(window.attachedSheet == nil)
+		view.render(items: [])
+		#expect(expanded.superview == nil)
 		remove.performClick(nil)
+		#expect(removedID == nil)
+		view.render(items: [item])
+		let currentRemove = try #require(findButton(
+			in: view,
+			title: "Remove"
+		))
+		currentRemove.performClick(nil)
 		#expect(removedID == item.id)
+		let currentExpand = try #require(findButton(
+			in: view,
+			title: ""
+		))
+		currentExpand.performClick(nil)
+		await view.waitForExpandedPreview()
+		let reopened = try #require(findExpandedPreview(in: view))
+		window.contentView = NSView()
+		#expect(reopened.superview == nil)
 	}
 
 	@Test func multipleImagesShareVisibleRowsAndWrapAfterResizing() throws
@@ -276,6 +293,18 @@ struct ComposerContextViewTests
 				#expect(left.redComponent > 0.9 && right.blueComponent > 0.9)
 			}
 		}
+	}
+
+	private func findExpandedPreview(in view: NSView) -> NSView?
+	{
+		if view.accessibilityIdentifier() == "expanded-image-preview"
+		{
+			return view
+		}
+		return view.subviews.lazy.compactMap
+		{
+			findExpandedPreview(in: $0)
+		}.first
 	}
 
 	private func imageTiles(in view: NSView) -> [ComposerImageAttachmentView]

@@ -11,7 +11,7 @@ struct SourceThumbnailLoaderTests
 {
 	@Test func inlinePNGUsesFeatureBoundsAndReusesDecodedThumbnails() async throws
 	{
-		let data = try png(
+		let data = try imageData(
 			width: 640,
 			height: 320
 		)
@@ -32,11 +32,38 @@ struct SourceThumbnailLoaderTests
 			maximumPixelSize: 320
 		))
 		#expect(transcript.image.width == 320 && transcript.image.height == 160)
+		#expect(transcript.originalPixelSize == CGSize(
+			width: 640,
+			height: 320
+		))
 		let repeated = try #require(await SourceThumbnailLoader.image(
 			path: path,
 			maximumPixelSize: 320
 		))
 		#expect(repeated === transcript)
+	}
+
+	@Test(arguments: 1 ... 8)
+	func originalDimensionsMatchTransformedThumbnailOrientation(_ orientation: Int) async throws
+	{
+		let data = try imageData(
+			width: 640,
+			height: 320,
+			type: .jpeg,
+			orientation: orientation
+		)
+		let path = "data:image/jpeg;base64," + data.base64EncodedString()
+		let thumbnail = try #require(await SourceThumbnailLoader.image(
+			path: path,
+			maximumPixelSize: 80
+		))
+		let swapsDimensions = (5 ... 8).contains(orientation)
+		#expect(thumbnail.originalPixelSize == CGSize(
+			width: swapsDimensions ? 320 : 640,
+			height: swapsDimensions ? 640 : 320
+		))
+		#expect(thumbnail.image.width == (swapsDimensions ? 40 : 80))
+		#expect(thumbnail.image.height == (swapsDimensions ? 80 : 40))
 	}
 
 	@Test func localPathsAndFileURLsReuseImagesButFileReplacementRefreshesThem() async throws
@@ -47,7 +74,7 @@ struct SourceThumbnailLoaderTests
 		{
 			try? FileManager.default.removeItem(at: url)
 		}
-		try png(
+		try imageData(
 			width: 8,
 			height: 6
 		).write(to: url)
@@ -64,7 +91,11 @@ struct SourceThumbnailLoaderTests
 			maximumPixelSize: 320
 		))
 		#expect(first === same)
-		try png(
+		#expect(first.originalPixelSize == CGSize(
+			width: 8,
+			height: 6
+		))
+		try imageData(
 			width: 6,
 			height: 8
 		).write(to: url)
@@ -78,11 +109,15 @@ struct SourceThumbnailLoaderTests
 		))
 		#expect(replaced !== first)
 		#expect(replaced.image.width == 6 && replaced.image.height == 8)
+		#expect(replaced.originalPixelSize == CGSize(
+			width: 6,
+			height: 8
+		))
 	}
 
 	@Test func cancelledRequestsRejectCachedAndUncachedInlineImages() async throws
 	{
-		let data = try png(
+		let data = try imageData(
 			width: 7,
 			height: 5
 		)
@@ -132,9 +167,11 @@ struct SourceThumbnailLoaderTests
 		#expect(await SourceThumbnailLoader.load(data: oversized) == nil)
 	}
 
-	private func png(
+	private func imageData(
 		width: Int,
-		height: Int
+		height: Int,
+		type: UTType = .png,
+		orientation: Int = 1
 	) throws -> Data
 	{
 		let context = try #require(CGContext(
@@ -162,14 +199,14 @@ struct SourceThumbnailLoaderTests
 		let data = NSMutableData()
 		let destination = try #require(CGImageDestinationCreateWithData(
 			data,
-			UTType.png.identifier as CFString,
+			type.identifier as CFString,
 			1,
 			nil
 		))
 		CGImageDestinationAddImage(
 			destination,
 			image,
-			nil
+			[kCGImagePropertyOrientation: orientation] as CFDictionary
 		)
 		#expect(CGImageDestinationFinalize(destination))
 		return data as Data

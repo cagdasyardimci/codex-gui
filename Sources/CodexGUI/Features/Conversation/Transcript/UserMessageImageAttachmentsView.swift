@@ -9,7 +9,7 @@ final class UserMessageImageAttachmentsView: NSView
 	private var references: [UserMessageReference] = []
 	private var imageTasks: [Task<Void, Never>] = []
 	private var generation = 0
-	private let inlinePreview = UserMessageInlineImagePreview()
+	private let expandedPreview = ExpandedImagePreview()
 
 	deinit
 	{
@@ -21,9 +21,9 @@ final class UserMessageImageAttachmentsView: NSView
 
 	override func viewWillMove(toWindow newWindow: NSWindow?)
 	{
-		if newWindow == nil
+		if newWindow !== window
 		{
-			inlinePreview.dismiss()
+			expandedPreview.dismiss()
 		}
 		super.viewWillMove(toWindow: newWindow)
 	}
@@ -80,7 +80,7 @@ final class UserMessageImageAttachmentsView: NSView
 		}
 		generation += 1
 		let generation = generation
-		inlinePreview.dismiss()
+		expandedPreview.dismiss()
 		imageTasks.forEach
 		{
 			$0.cancel()
@@ -156,9 +156,9 @@ final class UserMessageImageAttachmentsView: NSView
 		}
 	}
 
-	func waitForInlinePreview() async
+	func waitForExpandedPreview() async
 	{
-		await inlinePreview.waitForPresentation()
+		await expandedPreview.waitForPresentation()
 	}
 
 	override func layout()
@@ -192,27 +192,17 @@ final class UserMessageImageAttachmentsView: NSView
 		{
 			return
 		}
-		let reference = references[sender.tag]
-		if InlineImageData.isDataURL(reference.path)
-		{
-			guard let window, sender.isEnabled
-			else
-			{
-				return
-			}
-			inlinePreview.present(
-				reference,
-				in: window
-			)
-			return
-		}
-		guard let url = LocalAttachmentURL.resolve(reference.path),
-				FileManager.default.isReadableFile(atPath: url.path)
+		guard let window, sender.isEnabled
 		else
 		{
 			return
 		}
-		NSWorkspace.shared.open(url)
+		let reference = references[sender.tag]
+		expandedPreview.present(
+			path: reference.path,
+			name: reference.name,
+			in: window
+		)
 	}
 }
 

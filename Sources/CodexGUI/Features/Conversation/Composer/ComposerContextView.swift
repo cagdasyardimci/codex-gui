@@ -6,6 +6,7 @@ final class ComposerContextView: NSView
 	var onRemove: ((String) -> Void)?
 
 	private let itemStack = NSStackView()
+	private let expandedPreview = ExpandedImagePreview()
 	private var renderedImageColumnCount = 1
 	private var itemRowsByID: [String: NSView] = [:]
 	private static let imageRowSpacing: CGFloat = 8
@@ -39,10 +40,25 @@ final class ComposerContextView: NSView
 			return
 		}
 
+		expandedPreview.dismiss()
 		currentItems = items
 		itemRowsByID.removeAll()
 		rebuildItemRows(items)
 		isHidden = items.isEmpty
+	}
+
+	override func viewWillMove(toWindow newWindow: NSWindow?)
+	{
+		if newWindow !== window
+		{
+			expandedPreview.dismiss()
+		}
+		super.viewWillMove(toWindow: newWindow)
+	}
+
+	func waitForExpandedPreview() async
+	{
+		await expandedPreview.waitForPresentation()
 	}
 
 	private func rebuildItemRows(_ items: [ComposerContextItem])
@@ -249,7 +265,8 @@ final class ComposerContextView: NSView
 
 	@objc private func removeItem(_ sender: NSButton)
 	{
-		guard let id = sender.identifier?.rawValue
+		guard let id = sender.identifier?.rawValue,
+				let row = itemRowsByID[id], sender.isDescendant(of: row)
 		else
 		{
 			return
@@ -260,6 +277,7 @@ final class ComposerContextView: NSView
 	@objc private func inspectItem(_ sender: NSButton)
 	{
 		guard let id = sender.identifier?.rawValue,
+				let row = itemRowsByID[id], sender.isDescendant(of: row),
 				let item = currentItems.first(where:
 				{
 					$0.id == id
@@ -270,10 +288,23 @@ final class ComposerContextView: NSView
 			return
 		}
 
+		if item.kind == .image
+		{
+			guard let path = item.path
+			else
+			{
+				return
+			}
+			expandedPreview.present(
+				path: path,
+				name: item.title,
+				in: window
+			)
+			return
+		}
+
 		let alert = NSAlert()
-		alert.messageText = item.kind == .image
-			? "Attached image"
-			: "\(item.kind.title): \(item.detail)"
+		alert.messageText = "\(item.kind.title): \(item.detail)"
 		alert.addButton(withTitle: "Close")
 
 		alert.accessoryView = makeInspectionAccessory(for: item)
@@ -283,20 +314,7 @@ final class ComposerContextView: NSView
 
 	private func makeInspectionAccessory(for item: ComposerContextItem) -> NSView?
 	{
-		if item.kind == .image, let path = item.path,
-			let image = NSImage(contentsOfFile: path)
-		{
-			let preview = NSImageView(image: image)
-			preview.imageScaling = .scaleProportionallyUpOrDown
-			preview.frame = NSRect(
-				x: 0,
-				y: 0,
-				width: 400,
-				height: 280
-			)
-			return preview
-		}
-		else if let excerpt = item.excerpt
+		if let excerpt = item.excerpt
 		{
 			return ScrollableTextPreview.make(
 				text: excerpt,

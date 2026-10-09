@@ -1728,6 +1728,138 @@ struct ConversationActivityCollectionItemTests
 		})
 	}
 
+	@Test(arguments: ["reuse", "replacement", "path", "collapse", "detach", "stale-context"])
+	func imageThumbnailUsesSharedViewerAndDismissesWithItsOwner(_ transition: String) async throws
+	{
+		let imageURL = FileManager.default.temporaryDirectory
+			.appendingPathComponent("activity-image-\(UUID().uuidString).png")
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 8,
+			pixelsHigh: 8,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		try #require(bitmap.representation(
+			using: .png,
+			properties: [:]
+		)).write(to: imageURL)
+		defer
+		{
+			try? FileManager.default.removeItem(at: imageURL)
+		}
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 800,
+				height: 600
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.close()
+		}
+		let content = try #require(window.contentView)
+		let item = ConversationActivityCollectionItem()
+		var row = ConversationActivityRow(
+			id: "image",
+			sourceEntryID: "image",
+			groupID: "image",
+			kind: .image,
+			title: "Viewed an image",
+			imagePath: imageURL.path,
+			expanded: true
+		)
+		var externalOpens: [String] = []
+		var contextIsCurrent = true
+		item.configure(
+			row,
+			onToggle:
+			{
+			},
+			onOpenFile:
+			{
+				externalOpens.append($0)
+			},
+			canOpenImage:
+			{
+				contextIsCurrent
+			}
+		)
+		content.addSubview(item.view)
+		await item.waitForImagePreview()
+		let button = try #require(descendants(item.view).compactMap
+		{
+			$0 as? NSButton
+		}.first
+		{
+			$0.accessibilityLabel() == "Open viewed image"
+		})
+		if transition == "stale-context"
+		{
+			contextIsCurrent = false
+			button.performClick(nil)
+			await item.waitForImagePreview()
+			#expect(externalOpens.isEmpty)
+			#expect(!descendants(content).contains
+			{
+				$0.accessibilityIdentifier() == "expanded-image-preview"
+			})
+			contextIsCurrent = true
+		}
+		button.performClick(nil)
+		await item.waitForImagePreview()
+		#expect(externalOpens.isEmpty)
+		#expect(descendants(content).contains
+		{
+			$0.accessibilityIdentifier() == "expanded-image-preview"
+		})
+		switch transition
+		{
+		case "reuse": item.prepareForReuse()
+		case "detach": item.view.removeFromSuperview()
+		default:
+			if transition == "replacement"
+			{
+				row = commandRow(expanded: false)
+			}
+			else if transition == "path"
+			{
+				row.imagePath = imageURL.path + ".missing"
+			}
+			else
+			{
+				row.expanded = false
+			}
+			item.configure(
+				row,
+				onToggle:
+				{
+				},
+				onOpenFile:
+				{
+					externalOpens.append($0)
+				}
+			)
+		}
+		#expect(!descendants(content).contains
+		{
+			$0.accessibilityIdentifier() == "expanded-image-preview"
+		})
+		button.performClick(nil)
+		#expect(externalOpens.isEmpty)
+	}
+
 	private func commandRow(
 		expanded: Bool,
 		output: String = ""
