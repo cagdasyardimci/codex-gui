@@ -6,6 +6,81 @@ import Testing
 @MainActor
 struct ComposerReducerTests
 {
+	@Test func acceptedSubmissionClearsEditableDraftAndRetainsExactInput()
+	{
+		let (model, submission) = fixture()
+		#expect(model.composer.drafts[submission.conversation]?.text == "")
+		#expect(model.composer.drafts[submission.conversation]?.context.isEmpty == true)
+		#expect(model.composer.drafts[submission.conversation]?.revision
+			== submission.draft.revision + 1)
+		#expect(model.composer.pendingSubmissions[submission.context.requestID]?.draft
+			== submission.draft)
+	}
+
+	@Test(arguments: [false, true])
+	func failedSubmissionRestoresOnlyUntouchedComposer(newerEdit: Bool)
+	{
+		var (model, submission) = fixture()
+		if newerEdit
+		{
+			model.composer.drafts[submission.conversation] = ComposerDraft(
+				text: "Newer input",
+				revision: submission.draft.revision + 2,
+				lifetime: submission.draft.lifetime
+			)
+		}
+		let reduction = ComposerReducer.reduce(
+			&model,
+			.execution(.submissionFailed(
+				submission.context,
+				OperationFailure(
+					message: "Failed",
+					outcomeIsUncertain: true
+				)
+			))
+		)
+		let draft = model.composer.drafts[submission.conversation]
+		#expect(draft?.text == (newerEdit ? "Newer input" : submission.draft.text))
+		#expect(draft?.revision == submission.draft.revision + 2)
+		#expect(reduction.effects.isEmpty == newerEdit)
+		#expect(model.composer.pendingSubmissions[submission.context.requestID] != nil)
+	}
+
+	@Test func acknowledgementPersistsAcceptedClearWithoutRestoringSubmittedText() throws
+	{
+		var (model, submission) = fixture()
+		let cleared = try #require(model.composer.drafts[submission.conversation])
+		let reduction = ComposerReducer.reduce(
+			&model,
+			.execution(.submissionAcknowledged(
+				submission.context,
+				acknowledgement()
+			))
+		)
+		let write = try #require(reduction.effects.compactMap
+		{
+			effect -> SubmissionAcknowledgementWrite? in
+			if case .acknowledgeSubmission(let write) = effect
+			{
+				return write
+			}
+			return nil
+		}.first)
+		#expect(write.draft == cleared)
+		#expect(model.composer.drafts[submission.conversation] == cleared)
+		_ = ComposerReducer.reduce(
+			&model,
+			.execution(.submissionFailed(
+				submission.context,
+				OperationFailure(
+					message: "Late failure",
+					outcomeIsUncertain: true
+				)
+			))
+		)
+		#expect(model.composer.drafts[submission.conversation] == cleared)
+	}
+
 	@Test func repeatedNewChatPreservesCapturedSubmissionAndRejectsItsLateDraftClear()
 	{
 		var (model, original) = fixture()
@@ -400,7 +475,7 @@ struct ComposerReducerTests
 				submission.context,
 				conversation: .thread("thread"),
 				text: "edited",
-				revision: 2
+				revision: submission.draft.revision + 2
 			))
 		)
 		_ = ComposerReducer.reduce(
@@ -409,7 +484,7 @@ struct ComposerReducerTests
 				submission.context,
 				conversation: .thread("thread"),
 				text: "submitted",
-				revision: 3
+				revision: submission.draft.revision + 3
 			))
 		)
 		let reduction = ComposerReducer.reduce(
@@ -419,7 +494,7 @@ struct ComposerReducerTests
 				acknowledgement()
 			))
 		)
-		#expect(model.composer.drafts[.thread("thread")]?.revision == 3)
+		#expect(model.composer.drafts[.thread("thread")]?.revision == submission.draft.revision + 3)
 		#expect(model.composer.drafts[.thread("thread")]?.text == "submitted")
 		let write = reduction.effects.compactMap
 		{
@@ -521,7 +596,8 @@ struct ComposerReducerTests
 		#expect(write?.selectThread == false)
 		#expect(model.conversations.selectedConversation == .newChat)
 		#expect(model.composer.drafts[.newChat] == independent)
-		#expect(model.composer.drafts[.thread("thread")] == submission.draft)
+		#expect(model.composer.drafts[.thread("thread")]
+			== model.composer.clearedSubmissionDrafts[submission.context.requestID])
 		#expect(model.execution(for: .thread("thread")).activeThreadID == "thread")
 		#expect(model.execution(for: .thread("thread")).owner?.submission.requestID
 			== context.requestID)
@@ -537,7 +613,7 @@ struct ComposerReducerTests
 				submission.context,
 				conversation: .thread("thread"),
 				text: "current edit",
-				revision: 2
+				revision: submission.draft.revision + 2
 			))
 		)
 		_ = ComposerReducer.reduce(
@@ -572,7 +648,7 @@ struct ComposerReducerTests
 			#expect(reduction.effects.isEmpty)
 		}
 		#expect(model.composer.drafts[.thread("thread")]?.text == "current edit")
-		#expect(model.composer.drafts[.thread("thread")]?.revision == 2)
+		#expect(model.composer.drafts[.thread("thread")]?.revision == submission.draft.revision + 2)
 	}
 
 	@Test func obsoleteDisconnectCannotMarkCurrentSubmissionUncertain()
@@ -604,7 +680,8 @@ struct ComposerReducerTests
 			))
 		)
 		#expect(model.composer.pendingSubmissions[submission.context.requestID] != nil)
-		#expect(model.composer.drafts[.thread("thread")] == submission.draft)
+		#expect(model.composer.drafts[.thread("thread")]
+			== model.composer.clearedSubmissionDrafts[submission.context.requestID])
 	}
 
 	@Test func staleDraftWriteFailureCannotReplaceNewerWriteStatus()
@@ -622,7 +699,7 @@ struct ComposerReducerTests
 				submission.context,
 				conversation: .thread("thread"),
 				text: "first edit",
-				revision: 2
+				revision: submission.draft.revision + 2
 			))
 		)
 		_ = ComposerReducer.reduce(
@@ -631,7 +708,7 @@ struct ComposerReducerTests
 				newer,
 				conversation: .thread("thread"),
 				text: "newer edit",
-				revision: 3
+				revision: submission.draft.revision + 3
 			))
 		)
 		_ = ComposerReducer.reduce(
@@ -784,7 +861,7 @@ struct ComposerReducerTests
 				matching,
 				conversation: .thread("thread"),
 				text: "later",
-				revision: 2
+				revision: submission.draft.revision + 2
 			))
 		)
 		_ = ComposerReducer.reduce(
@@ -812,7 +889,7 @@ struct ComposerReducerTests
 				subsequent,
 				conversation: .thread("thread"),
 				text: "newest",
-				revision: 3
+				revision: submission.draft.revision + 3
 			))
 		)
 		_ = ComposerReducer.reduce(

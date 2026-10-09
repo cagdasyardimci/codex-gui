@@ -532,11 +532,9 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.inputs.connect()
 		let alpha = try await fixture.createTask("Alpha")
 		alpha.state.inputs.updateDraft("Run approved command")
-		alpha.state.inputs.send()
-		try #require(await waitUntil
-		{
-			alpha.state.currentSnapshot.draft.isEmpty
-		})
+		let submission = try #require(alpha.state.inputs.send())
+		#expect(await submission.wait() == .finished)
+		#expect(alpha.state.currentSnapshot.draft.isEmpty)
 		let running = try command(
 			status: "inProgress",
 			cwd: alpha.workspace.checkoutPath
@@ -632,11 +630,9 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.inputs.connect()
 		let alpha = try await fixture.createTask("Alpha")
 		alpha.state.inputs.updateDraft("Run command")
-		alpha.state.inputs.send()
-		try #require(await waitUntil
-		{
-			alpha.state.currentSnapshot.draft.isEmpty
-		})
+		let submission = try #require(alpha.state.inputs.send())
+		#expect(await submission.wait() == .finished)
+		#expect(alpha.state.currentSnapshot.draft.isEmpty)
 		let running = try command(
 			status: "inProgress",
 			cwd: alpha.workspace.checkoutPath
@@ -900,11 +896,9 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.inputs.connect()
 		let alpha = try await fixture.createTask("Alpha")
 		alpha.state.inputs.updateDraft("Run command")
-		alpha.state.inputs.send()
-		try #require(await waitUntil
-		{
-			alpha.state.currentSnapshot.draft.isEmpty
-		})
+		let submission = try #require(alpha.state.inputs.send())
+		#expect(await submission.wait() == .finished)
+		#expect(alpha.state.currentSnapshot.draft.isEmpty)
 		alpha.service.emit(
 			.itemStarted(
 				threadId: alpha.service.thread.id,

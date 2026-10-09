@@ -66,7 +66,8 @@ struct ComposerCommandRuntimeTests
 		let submitted = try #require(fixture.store.model.composer.pendingSubmissions.values.first)
 		#expect(submitted.draft == original)
 		#expect(submitted.draft.context == [attachment])
-		#expect(fixture.draft == original)
+		#expect(fixture.draft.text.isEmpty)
+		#expect(fixture.draft.context.isEmpty)
 		let mode = try #require(fixture.service.turnModes.first ?? nil)
 		#expect(mode.mode == .plan)
 		#expect(mode.model == "fixture-model")
@@ -88,7 +89,7 @@ struct ComposerCommandRuntimeTests
 		fixture.service.base.finishTurnStart(with: fixture.service.base.nextTurn)
 		#expect(await operation.wait() == .finished)
 		#expect(fixture.draft.text == "A newer draft")
-		#expect(fixture.draft.context == [attachment])
+		#expect(fixture.draft.context.isEmpty)
 		#expect(fixture.store.model.composerCommands.planModes[fixture.conversation] == .plan)
 	}
 

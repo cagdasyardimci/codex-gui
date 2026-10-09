@@ -113,6 +113,14 @@ enum ComposerReducer
 				return result
 			}
 			model.composer.uncertainSubmissions.formUnion(model.composer.pendingSubmissions.keys)
+			for submission in model.composer.pendingSubmissions.values
+			{
+				restoreSubmittedDraft(
+					submission,
+					model: &model,
+					result: &result
+				)
+			}
 		case .connection(.projectOpened(
 			let identity,
 			_

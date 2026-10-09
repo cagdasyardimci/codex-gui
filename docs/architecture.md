@@ -16,6 +16,13 @@ Follow-up conversation reads return through `WorkspaceStoreInputs`, which captur
 
 ## Ownership and recovery
 
+Accepted message submissions clear the matching editable draft before backend preparation or
+acknowledgement. The composer retains the submitted snapshot and the exact resulting empty draft.
+Failures, cancellation before sending and disconnect restore the submitted text and attachments
+only while that empty draft is untouched and the submission remains unacknowledged. Newer edits
+and independent New Chat lifetimes survive late results. Untouched submitted drafts remain stored
+until acknowledgement; accepted references become durable before their stored drafts are cleared.
+
 Execution ownership is independent of the displayed conversation. Results must match their pending operation, owner and connection generation. Selecting another chat does not transfer an active turn, approval, command result, draft or deferred callback.
 
 `ExecutionRegistry` retains one execution value per ordinary conversation. An anonymous submission uses its draft lifetime until preparation assigns a thread ID. `WorkspaceExecutionScope` routes captured requests and backend thread/turn events through the existing reducers. Its temporary reduction scope is restored before publication; `WorkspaceModel.execution` then projects the selected conversation. Aggregate lifecycle checks inspect every registry entry rather than that selected projection.

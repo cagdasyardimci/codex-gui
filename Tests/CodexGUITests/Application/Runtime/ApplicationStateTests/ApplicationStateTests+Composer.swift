@@ -5,6 +5,92 @@ import Testing
 
 extension ApplicationStateTests
 {
+	@Test(
+		arguments: [false, true],
+		[false, true]
+	)
+	func sendClearsComposerBeforeThreadOrTurnAcknowledgement(
+		newChat: Bool,
+		newerEdit: Bool
+	) async throws
+	{
+		let project = try makeProject()
+		defer
+		{
+			try? FileManager.default.removeItem(at: project)
+		}
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "ImmediateSend")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
+		let service = MockCodexService()
+		let state = WorkspaceTestFixture(
+			server: service,
+			storage: storage
+		)
+		await state.inputs.connect()
+		service.configureCheckout(project)
+		state.inputs.openProject(project)
+		if !newChat
+		{
+			_ = await state.inputs.selectThread(service.thread.id)?.wait()
+		}
+		try #require(await waitUntil
+		{
+			state.currentSnapshot.canSend
+		})
+		service.suspendThreadStart = newChat
+		service.suspendTurnStart = !newChat
+		state.inputs.updateDraft("First line\n**Submitted**")
+		let attachment = ComposerContextItem(
+			kind: .textExcerpt,
+			title: "Selected context",
+			path: "example.swift",
+			excerpt: "let value = 1"
+		)
+		state.inputs.addDraftContext(attachment)
+		let submission = try #require(state.inputs.send())
+		// No suspension or backend response has occurred after Send returns.
+		#expect(state.currentSnapshot.draft.isEmpty)
+		#expect(state.currentSnapshot.draftContext.isEmpty)
+		#expect(state.currentSnapshot.entries.last?.id.hasPrefix("local:") == true)
+		#expect(state.currentSnapshot.entries.last?.body.contains("**Submitted**") == true)
+		#expect(state.store.model.composer.pendingSubmissions.values.first?.draft.context
+			== [attachment])
+		try #require(await waitUntil
+		{
+			newChat ? service.pendingThreadStart != nil : service.pendingTurnStart != nil
+		})
+		if newerEdit
+		{
+			state.inputs.updateDraft("Next input")
+		}
+		if newChat
+		{
+			service.pendingThreadStart?.resume(returning: ThreadDetail(
+				summary: service.thread,
+				turns: [],
+				nextTurnsCursor: nil
+			))
+			service.pendingThreadStart = nil
+		}
+		else
+		{
+			service.finishTurnStart(with: service.nextTurn)
+		}
+		_ = await submission.wait()
+		try await state.store.awaitAcceptedPersistence()
+		#expect(state.currentSnapshot.draft == (newerEdit ? "Next input" : ""))
+		#expect(state.currentSnapshot.draftContext.isEmpty)
+		#expect(state.store.model.composer.clearedSubmissionDrafts.isEmpty)
+		#expect(storage.draft(
+			for: project,
+			threadID: service.thread.id
+		) == (newerEdit ? "Next input" : ""))
+	}
+
 	@Test func lateSteeringFailureCannotChangeNextSubmissionOwner() async throws
 	{
 		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
@@ -463,11 +549,9 @@ extension ApplicationStateTests
 		{
 			state.currentSnapshot.canSend
 		})
-		state.inputs.send()
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.draftContext.isEmpty
-		})
+		let retry = try #require(state.inputs.send())
+		#expect(await retry.wait() == .finished)
+		#expect(state.currentSnapshot.draftContext.isEmpty)
 		#expect(service.sentInputRequests.count == 2)
 		#expect(service.sentInputRequests[1].last == .localImage(path: image.path))
 		#expect(state.currentSnapshot.reusableReferences == [imageItem])

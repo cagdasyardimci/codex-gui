@@ -133,7 +133,7 @@ extension ApplicationStateTests
 			edit,
 			conversation: .thread(service.thread.id),
 			text: "edited draft",
-			revision: 2
+			revision: store.model.composer.drafts[submission.conversation]!.revision + 1
 		)))
 		_ = await store.operation(for: edit)?.wait()
 		let remove = store.operationContext(threadID: service.thread.id)
@@ -141,7 +141,7 @@ extension ApplicationStateTests
 			remove,
 			conversation: .thread(service.thread.id),
 			itemID: attachment.id,
-			revision: 3
+			revision: store.model.composer.drafts[submission.conversation]!.revision + 1
 		)))
 		_ = await store.operation(for: remove)?.wait()
 		#expect(FileManager.default.fileExists(atPath: image.path))

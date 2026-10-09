@@ -356,6 +356,8 @@ struct ComposerModel
 	var drafts: [ConversationKey: ComposerDraft] = [:]
 	var sentReferences: [ConversationKey: [ComposerContextItem]] = [:]
 	var pendingSubmissions: [UUID: ComposerSubmission] = [:]
+	/// Exact empty draft produced at acceptance; later edits must survive completion or failure.
+	var clearedSubmissionDrafts: [UUID: ComposerDraft] = [:]
 }
 
 /// Value content replaces the legacy reference container when conversation ownership moves.

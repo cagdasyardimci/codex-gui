@@ -80,6 +80,7 @@ extension ComposerReducer
 			model.conversations.pendingNewChatContent.removeValue(forKey: submission.draft.lifetime)
 		}
 		model.composer.pendingSubmissions.removeValue(forKey: requestID)
+		model.composer.clearedSubmissionDrafts.removeValue(forKey: requestID)
 		model.composer.preparedSubmissions.removeValue(forKey: requestID)
 		model.composer.submissionConversations.removeValue(forKey: requestID)
 		model.composer.uncertainSubmissions.remove(requestID)
@@ -106,6 +107,15 @@ extension ComposerReducer
 				submission,
 				model: &model
 			)
+			if model.composer.drafts[submission.conversation] == submission.draft
+			{
+				let cleared = ComposerDraft(
+					revision: submission.draft.revision + 1,
+					lifetime: submission.draft.lifetime
+				)
+				model.composer.drafts[submission.conversation] = cleared
+				model.composer.clearedSubmissionDrafts[submission.context.requestID] = cleared
+			}
 		case .steeringRequested(let operation):
 			guard model.execution.pendingSteering == operation.context,
 					model.composer.pendingSubmissions[operation.context.requestID] == nil
@@ -135,10 +145,20 @@ extension ComposerReducer
 			{
 			case .failed:
 				model.composer.uncertainSubmissions.insert(context.requestID)
+				restoreSubmittedDraft(
+					submission,
+					model: &model,
+					result: &result
+				)
 			case .succeeded(let prepared):
 				guard model.execution.activeThreadID == prepared.thread.summary.id
 				else
 				{
+					restoreSubmittedDraft(
+						submission,
+						model: &model,
+						result: &result
+					)
 					return
 				}
 				adoptPreparedConversation(
@@ -165,9 +185,19 @@ extension ComposerReducer
 			if case .failed = observation
 			{
 				model.composer.uncertainSubmissions.insert(context.requestID)
+				restoreSubmittedDraft(
+					submission,
+					model: &model,
+					result: &result
+				)
 			}
 			else if model.execution.state == .completed
 			{
+				restoreSubmittedDraft(
+					submission,
+					model: &model,
+					result: &result
+				)
 				finish(
 					submission,
 					attempt: context,
@@ -194,6 +224,11 @@ extension ComposerReducer
 				!= .thread(acknowledgement.thread.id)
 			{
 				model.composer.uncertainSubmissions.insert(context.requestID)
+				restoreSubmittedDraft(
+					submission,
+					model: &model,
+					result: &result
+				)
 				return
 			}
 			acknowledge(
@@ -215,6 +250,14 @@ extension ComposerReducer
 				return
 			}
 			model.composer.uncertainSubmissions.insert(context.requestID)
+			if let submission = model.composer.pendingSubmissions[context.requestID]
+			{
+				restoreSubmittedDraft(
+					submission,
+					model: &model,
+					result: &result
+				)
+			}
 		case .submissionCancelledBeforeSend(let context):
 			guard valid(
 				context,
@@ -226,6 +269,11 @@ extension ComposerReducer
 			{
 				return
 			}
+			restoreSubmittedDraft(
+				submission,
+				model: &model,
+				result: &result
+			)
 			finish(
 				submission,
 				attempt: context,
@@ -246,6 +294,11 @@ extension ComposerReducer
 			{
 				return
 			}
+			restoreSubmittedDraft(
+				submission,
+				model: &model,
+				result: &result
+			)
 			if failure.outcomeIsUncertain
 			{
 				model.composer.uncertainSubmissions.insert(context.requestID)
@@ -367,7 +420,8 @@ extension ComposerReducer
 	{
 		model.composer.preparedSubmissions[context.requestID] = prepared
 		let destination = ConversationKey.thread(prepared.thread.summary.id)
-		var transferred = submission.draft
+		var transferred = model.composer.clearedSubmissionDrafts[context.requestID]
+			?? submission.draft
 		var clearSource = false
 		var selectThread = false
 		if submission.conversation == .newChat
@@ -403,7 +457,8 @@ extension ComposerReducer
 		result.domainEvents.append(.submissionPrepared(prepared))
 		result.effects.append(.persistPreparedConversation(PreparedConversationWrite(
 			prepared: prepared,
-			draft: transferred,
+			draft: transferred == model.composer.clearedSubmissionDrafts[context.requestID]
+				? submission.draft : transferred,
 			selectThread: selectThread,
 			clearSource: clearSource
 		)))
@@ -470,7 +525,13 @@ extension ComposerReducer
 			model: &model
 		)
 		var clearedDraft: ComposerDraft?
-		if let draft = model.composer.drafts[conversation], draft == submission.draft
+		if let draft = model.composer.drafts[conversation],
+			draft == model.composer.clearedSubmissionDrafts[submission.context.requestID]
+		{
+			// Persist the accepted clear only after acknowledgement makes references durable.
+			clearedDraft = draft
+		}
+		else if let draft = model.composer.drafts[conversation], draft == submission.draft
 		{
 			let cleared = ComposerDraft(
 				revision: draft.revision + 1,
@@ -518,6 +579,38 @@ extension ComposerReducer
 				result: &result
 			)
 		}
+	}
+
+	static func restoreSubmittedDraft(
+		_ submission: ComposerSubmission,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		let requestID = submission.context.requestID
+		guard !model.composer.acknowledgedSubmissions.contains(requestID),
+				let cleared = model.composer.clearedSubmissionDrafts[requestID],
+				let conversation = model.composer.submissionConversations[requestID],
+				model.composer.drafts[conversation] == cleared
+		else
+		{
+			return
+		}
+		var restored = submission.draft
+		restored.revision = cleared.revision + 1
+		let context = OperationContext(
+			workspace: submission.context.workspace,
+			generation: model.connection.generation,
+			requestID: requestID,
+			threadID: conversation.threadID
+		)
+		persist(
+			restored,
+			conversation: conversation,
+			context: context,
+			model: &model,
+			result: &result
+		)
 	}
 
 	private static func finish(
