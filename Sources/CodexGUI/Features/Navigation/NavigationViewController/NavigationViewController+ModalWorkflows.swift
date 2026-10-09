@@ -52,32 +52,62 @@ extension NavigationViewController
 		}
 	}
 
-	func editProject(_ project: URL)
+	func editProject(
+		_ project: URL,
+		completion: ((URL, String) -> Void)? = nil
+	)
 	{
-		guard let window = view.window
+		guard let window = view.window, window.attachedSheet == nil
 		else
 		{
 			return
 		}
 		projectInfoPopover.performClose(nil)
-		let complete = onRenameProject
-		presentTextEntrySheet(
-			in: window,
-			title: "Edit Project",
-			informativeText:
-			"Set a local display name. The repository folder remains at \(project.path).",
-			value: projectDisplayNames[projectKey(for: project)] ?? "",
-			placeholder: project.lastPathComponent,
-			accessibilityLabel: "Local project display name",
-			actionTitle: "Save"
+		let dialog = ProjectRenameViewController()
+		_ = dialog.view
+		dialog.input.field.stringValue = displayName(for: project)
+		let panel = ProjectRenamePanel(
+			contentRect: .zero,
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
 		)
+		panel.isReleasedWhenClosed = false
+		panel.isOpaque = false
+		panel.backgroundColor = .clear
+		panel.hasShadow = true
+		panel.title = "Rename project"
+		panel.contentViewController = dialog
+		dialog.view.layoutSubtreeIfNeeded()
+		panel.setContentSize(dialog.view.fittingSize)
+		panel.initialFirstResponder = dialog.input.field
+		panel.defaultButtonCell = dialog.saveButton.cell as? NSButtonCell
+		panel.onSave =
 		{
-			value in
+			[weak dialog] in dialog?.saveButton.performClick(nil)
+		}
+		dialog.onDecision =
+		{
+			[weak panel] in panel?.finish($0)
+		}
+		let capturedScope = modalScope
+		let complete = completion ?? onRenameProject
+		window.beginSheet(panel)
+		{
+			[weak self, panel, dialog] response in
+			panel.orderOut(nil)
+			guard response == .OK, self?.modalScope == capturedScope
+			else
+			{
+				return
+			}
 			complete?(
 				project,
-				value.trimmingCharacters(in: .whitespacesAndNewlines)
+				dialog.input.field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 			)
 		}
+		panel.makeFirstResponder(dialog.input.field)
+		dialog.input.field.selectText(nil)
 	}
 
 	func presentNewTask()
