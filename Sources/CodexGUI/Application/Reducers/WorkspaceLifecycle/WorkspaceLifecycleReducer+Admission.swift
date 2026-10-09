@@ -25,6 +25,7 @@ extension WorkspaceLifecycleReducer
 		model.lifecycle.managedOwnershipConflict != nil || model.blocksExecutionCleanup
 			|| hasUnresolvedComposer(model)
 			|| model.conversations.pendingManagement != nil
+			|| model.conversations.pendingProjectArchive != nil
 			|| model.composerCommands.blocksNewWork
 	}
 

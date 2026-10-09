@@ -11,6 +11,7 @@ final class LocalStorage
 		static let modelPreference = "CodexGUI.modelPreference"
 		static let runPreferences = "CodexGUI.runPreferences"
 		static let pinnedTasks = "CodexGUI.pinnedTasks"
+		static let removedProjects = "CodexGUI.removedProjects"
 		static let pinnedProjects = "CodexGUI.pinnedProjects"
 		static let projectDisplayNames = "CodexGUI.projectDisplayNames"
 		static let draftContext = "CodexGUI.draftContext"
@@ -57,7 +58,8 @@ final class LocalStorage
 			recentProjects: recentProjects,
 			pinnedProjectPaths: pinnedProjectPaths,
 			projectDisplayNames: projectDisplayNames,
-			pinnedTasks: pinnedTasks
+			pinnedTasks: pinnedTasks,
+			removedProjectPaths: removedProjectPaths
 		)
 	}
 
@@ -117,6 +119,7 @@ final class LocalStorage
 				name: name
 			)
 		case .recent(let path): rememberProject(URL(fileURLWithPath: path))
+		case .removeProject(let path): removeProject(URL(fileURLWithPath: path))
 		}
 	}
 
@@ -288,8 +291,38 @@ final class LocalStorage
 		publishPreferences()
 	}
 
+	var removedProjectPaths: Set<String>
+	{
+		Set(defaults.stringArray(forKey: Key.removedProjects) ?? [])
+	}
+
+	func removeProject(_ url: URL)
+	{
+		let path = canonicalPath(for: url)
+		defaults.set(
+			Array(removedProjectPaths.union([path])).sorted(),
+			forKey: Key.removedProjects
+		)
+		defaults.set(
+			storedRecentProjectPaths().filter
+			{
+				$0 != path
+			},
+			forKey: Key.recentProjects
+		)
+		defaults.set(
+			Array(pinnedProjectPaths.subtracting([path])).sorted(),
+			forKey: Key.pinnedProjects
+		)
+		publishPreferences()
+	}
+
 	func rememberProject(_ url: URL)
 	{
+		defaults.set(
+			Array(removedProjectPaths.subtracting([canonicalPath(for: url)])).sorted(),
+			forKey: Key.removedProjects
+		)
 		let projectPath = canonicalPath(for: url)
 		var paths = storedRecentProjectPaths()
 		paths.removeAll

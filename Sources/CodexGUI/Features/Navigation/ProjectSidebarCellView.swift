@@ -159,8 +159,8 @@ final class ProjectSidebarCellView: NSTableCellView
 		refreshTitleColor()
 		toolTip = (isPinned ? "Pinned project\n" : "") + project.path
 		setAccessibilityLabel(isCurrent ? "Selected project \(name)" : "Open project \(name)")
-		infoButton.setAccessibilityLabel("Show information for project \(name)")
-		infoButton.toolTip = "Project information"
+		infoButton.setAccessibilityLabel("Project actions for \(name)")
+		infoButton.toolTip = "Project actions"
 		newChatButton.setAccessibilityLabel("Start a new conversation in project \(name)")
 		newChatButton.toolTip = "New Chat in \(name)"
 		newChatButton.isEnabled = canStartChat

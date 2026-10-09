@@ -284,6 +284,11 @@ extension WorkspaceEffectRunner
 				operation,
 				.succeeded(scoped)
 			))
+		case .archiveProjectChats(let operation):
+			return .conversations(.projectArchiveFinished(
+				operation,
+				await archiveProjectChats(operation)
+			))
 		case .manageConversation(let operation):
 			_ = try await readConversation(
 				context,

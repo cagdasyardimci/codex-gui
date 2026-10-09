@@ -16,6 +16,7 @@ struct NavigationPresentation: Equatable
 	let canManageThreads: Bool
 	let recentProjects: [URL]
 	let pinnedProjectPaths: Set<String>
+	let removedProjectPaths: Set<String>
 	let pinnedTasks: [ThreadSummary]
 	let projectDisplayNames: [String: String]
 	let taskWorkspaces: [TaskWorkspaceChoice]
@@ -57,6 +58,7 @@ struct NavigationPresentation: Equatable
 		canManageThreads = snapshot.canManageThreads
 		recentProjects = snapshot.recentProjects
 		pinnedProjectPaths = snapshot.pinnedProjectPaths
+		removedProjectPaths = snapshot.removedProjectPaths
 		pinnedTasks = snapshot.pinnedTasks
 		projectDisplayNames = snapshot.projectDisplayNames
 		taskWorkspaces = snapshot.taskWorkspaces

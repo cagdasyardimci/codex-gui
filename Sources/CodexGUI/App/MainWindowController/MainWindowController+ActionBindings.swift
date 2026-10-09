@@ -20,6 +20,14 @@ extension MainWindowController
 		{
 			target.dispatch(.openProject($0))
 		}
+		navigation.onRemoveProject =
+		{
+			target.dispatch(.removeProject($0))
+		}
+		navigation.onArchiveProjectChats =
+		{
+			target.dispatch(.archiveProjectChats($0))
+		}
 		navigation.onToggleProjectPin =
 		{
 			target.dispatch(.toggleProjectPin($0))

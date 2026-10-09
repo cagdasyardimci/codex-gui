@@ -33,7 +33,8 @@ struct WorkspaceEligibility
 	{
 		guard model.identity.canonicalCheckoutPath != nil,
 				model.lifecycle.managedOwnershipConflict == nil,
-				model.lifecycle.cleanupReservation == nil, model.lifecycle.quitReservation == nil
+				model.lifecycle.cleanupReservation == nil, model.lifecycle.quitReservation == nil,
+				model.conversations.pendingProjectArchive == nil
 		else
 		{
 			return false

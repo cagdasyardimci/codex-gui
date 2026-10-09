@@ -175,6 +175,13 @@ extension WorkspaceEffectRunner
 				operation,
 				.failed(failure)
 			))
+		case .archiveProjectChats(let operation): return .conversations(.projectArchiveFinished(
+				operation,
+				ProjectArchiveResult(
+					archivedThreadIDs: [],
+					failure: failure
+				)
+			))
 		case .manageConversation: return .conversations(.managementFinished(
 				context,
 				.failed(failure)

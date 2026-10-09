@@ -32,7 +32,7 @@ enum PreferenceReducer
 		{
 		case .restored, .modelSelected, .effortSelected, .approvalModeSelected,
 				.fastModeSelected, .taskPinToggled, .projectPinToggled, .projectRenamed,
-				.projectRemembered:
+				.projectRemembered, .projectRemoved:
 			result = reducePreferenceChanges(
 				action,
 				model: &model
@@ -74,6 +74,7 @@ enum PreferenceReducer
 			model.preferences.runPreferences = value.runPreferences
 			model.preferences.recentProjects = value.recentProjects
 			model.preferences.pinnedProjectPaths = value.pinnedProjectPaths
+			model.preferences.removedProjectPaths = value.removedProjectPaths
 			model.preferences.pinnedTasks = value.pinnedTasks
 			model.preferences.projectDisplayNames = value.projectDisplayNames
 			model.preferences.resolveSelection()
@@ -248,6 +249,28 @@ enum PreferenceReducer
 					path: path,
 					name: trimmed
 				)
+			))]
+		case .projectRemoved(
+			let context,
+			let path
+		):
+			guard PreferenceScope.accepts(
+				context,
+				model: model
+			)
+			else
+			{
+				return result
+			}
+			model.preferences.removedProjectPaths.insert(path)
+			model.preferences.pinnedProjectPaths.remove(path)
+			model.preferences.recentProjects.removeAll
+			{
+				$0.path == path
+			}
+			result.effects = [.persistPreference(PreferenceWrite(
+				context: context,
+				value: .removeProject(path: path)
 			))]
 		case .projectRemembered(
 			let context,

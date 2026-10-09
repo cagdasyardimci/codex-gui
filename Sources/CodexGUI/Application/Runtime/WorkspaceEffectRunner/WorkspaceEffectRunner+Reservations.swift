@@ -85,6 +85,7 @@ extension WorkspaceEffectRunner
 		case .restoreSourceStartup, .connect, .readExecutableVersion, .readModels, .readAccount,
 				.restorePreferences,
 				.restoreComposer, .loadProjectContext, .readConversationList, .manageConversation,
+				.archiveProjectChats,
 				.readSelection, .readRecovery, .readCompletedHistory: return true
 		case .forkConversation, .compactConversation, .startConversationReview,
 				.updateCommandSettings: return true

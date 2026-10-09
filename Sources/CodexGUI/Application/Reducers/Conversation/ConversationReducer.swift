@@ -27,6 +27,7 @@ enum ConversationReducer
 			model
 		) && model.conversations.boundThreadID == nil
 			&& model.conversations.pendingManagement == nil
+			&& model.conversations.pendingProjectArchive == nil
 			&& WorkspaceLifecycleReducer.accepts(
 				.conversations(.newChatOpened(context)),
 				model: model
@@ -275,6 +276,83 @@ enum ConversationReducer
 				model: &model,
 				result: &result
 			)
+		case .projectArchiveRequested(let operation):
+			guard valid(
+				operation.context,
+				model
+			),
+				WorkspaceEligibility(model: model).canManageThreads,
+				!model.hasActiveExecution, model.conversations.boundThreadID == nil
+			else
+			{
+				return
+			}
+			model.conversations.pendingProjectArchive = operation
+			model.conversations.error = nil
+			result.effects.append(.archiveProjectChats(operation))
+		case .projectArchiveFinished(
+			let operation,
+			let outcome
+		):
+			guard valid(
+				operation.context,
+				model
+			),
+				model.conversations.pendingProjectArchive == operation
+			else
+			{
+				return
+			}
+			model.conversations.pendingProjectArchive = nil
+			let archivedIDs = Set(outcome.archivedThreadIDs)
+			let removedPins = model.preferences.pinnedTasks.filter
+			{
+				archivedIDs.contains($0.id)
+			}
+			model.preferences.pinnedTasks.removeAll
+			{
+				archivedIDs.contains($0.id)
+			}
+			for task in removedPins
+			{
+				persistTaskPin(
+					task,
+					pinned: false,
+					context: operation.context,
+					model: &model,
+					result: &result
+				)
+			}
+			model.conversations.threads.removeAll
+			{
+				archivedIDs.contains($0.id)
+			}
+			if let selected = model.conversations.selectedConversation.threadID,
+				archivedIDs.contains(selected)
+			{
+				select(
+					.newChat,
+					context: operation.context,
+					model: &model,
+					result: &result,
+					acceptedSelection: &acceptedSelection
+				)
+			}
+			model.conversations.error = outcome.failure.map
+			{
+				"Could not archive all project chats: \($0.message)"
+			}
+			if outcome.failure == nil,
+				operation.project.path == model.identity.canonicalCheckoutPath
+			{
+				let list = ConversationListOperation(
+					context: operation.context,
+					archived: model.conversations.showingArchived,
+					boundThreadID: nil
+				)
+				model.conversations.pendingList = list
+				result.effects.append(.readConversationList(list))
+			}
 		case .newChatRequested: break
 		case .newChatOpened(let context):
 			guard acceptsNewChat(
@@ -299,6 +377,7 @@ enum ConversationReducer
 				model
 			), let threadID = context.threadID,
 			model.conversations.pendingManagement == nil,
+			model.conversations.pendingProjectArchive == nil,
 			model.conversations.boundThreadID == nil || model.conversations
 			.boundThreadID == threadID
 			else
@@ -347,7 +426,8 @@ enum ConversationReducer
 				context,
 				model
 			),
-				model.conversations.pendingManagement == nil
+				model.conversations.pendingManagement == nil,
+				model.conversations.pendingProjectArchive == nil
 			else
 			{
 				return
@@ -894,6 +974,7 @@ enum ConversationReducer
 			model.conversations.pendingList = nil
 			model.conversations.pendingSelection = nil
 			model.conversations.pendingManagement = nil
+			model.conversations.pendingProjectArchive = nil
 		case .conversationSelectionChanged:
 			ensureTurnReferences(
 				model: &model,

@@ -51,6 +51,8 @@ enum WorkspaceIntent
 	case selectApprovalMode(ApprovalMode)
 	case setFastMode(Bool)
 	case toggleProjectPin(URL)
+	case removeProject(URL)
+	case archiveProjectChats(URL)
 	case renameProject(
 		URL,
 		String
@@ -322,6 +324,8 @@ final class WorkspaceIntentTarget
 		case .selectApprovalMode(let mode): inputs.selectApprovalMode(mode)
 		case .setFastMode(let enabled): inputs.setFastMode(enabled)
 		case .toggleProjectPin(let url): inputs.toggleProjectPin(url)
+		case .removeProject(let url): inputs.removeProject(url)
+		case .archiveProjectChats(let url): inputs.archiveProjectChats(url)
 		case .renameProject(
 			let url,
 			let name

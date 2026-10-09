@@ -19,7 +19,7 @@ struct PreferenceWrite
 		{
 		case .model: .model
 		case .run: .run
-		case .recent: .recent
+		case .recent, .removeProject: .recent
 		case .taskPin(
 			let task,
 			_
@@ -52,6 +52,7 @@ struct PreferenceWrite
 			name: String
 		)
 		case recent(path: String)
+		case removeProject(path: String)
 	}
 }
 

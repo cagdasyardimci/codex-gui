@@ -228,6 +228,11 @@ enum ComposerAction
 
 enum ConversationsAction
 {
+	case projectArchiveRequested(ProjectArchiveOperation)
+	case projectArchiveFinished(
+		ProjectArchiveOperation,
+		ProjectArchiveResult
+	)
 	case newChatRequested
 	case newChatOpened(OperationContext)
 	case historyRequested(ConversationReadOperation)
@@ -400,6 +405,10 @@ enum ContextNavigationAction
 
 enum PreferencesAction
 {
+	case projectRemoved(
+		OperationContext,
+		canonicalPath: String
+	)
 	case modelSelected(
 		OperationContext,
 		String?
@@ -463,6 +472,7 @@ struct PreferencesRestoration
 	let pinnedProjectPaths: Set<String>
 	let projectDisplayNames: [String: String]
 	var pinnedTasks: [ThreadSummary] = []
+	var removedProjectPaths: Set<String> = []
 }
 
 enum UsageAction

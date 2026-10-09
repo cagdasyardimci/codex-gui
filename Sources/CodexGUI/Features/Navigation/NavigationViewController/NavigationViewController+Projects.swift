@@ -2,6 +2,50 @@ import AppKit
 
 extension NavigationViewController
 {
+	func projectContextMenu(_ project: URL) -> NSMenu
+	{
+		let pin = onToggleProjectPin
+		let rename = onRenameProject
+		let archive = onArchiveProjectChats
+		let remove = onRemoveProject
+		return ProjectSidebarContextMenu(
+			isPinned: pinnedProjectPaths.contains(projectKey(for: project)),
+			onTogglePin: pin.map
+			{
+				callback in
+				{
+					callback(project)
+				}
+			},
+			onRename: rename == nil ? nil :
+			{
+				[weak self] in self?.editProject(
+					project,
+					completion: rename
+				)
+			},
+			onReveal:
+			{
+				NSWorkspace.shared.activateFileViewerSelecting([project])
+			},
+			onArchive: canManageSidebarTasks ? archive
+				.map
+				{
+					callback in
+					{
+						callback(project)
+					}
+				} : nil,
+			onRemove: remove.map
+			{
+				callback in
+				{
+					callback(project)
+				}
+			}
+		)
+	}
+
 	func renderRecentProjects(_ projects: [URL])
 	{
 		recentProjectsButton.removeAllItems()

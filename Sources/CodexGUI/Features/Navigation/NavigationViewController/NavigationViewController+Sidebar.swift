@@ -85,7 +85,8 @@ extension NavigationViewController
 				taskMatchesSearch($0)
 			},
 			isCurrentProjectCollapsed: isCurrentProjectCollapsed,
-			projectTaskLimit: projectTaskLimit
+			projectTaskLimit: projectTaskLimit,
+			removedProjectPaths: removedProjectPaths
 		)
 		projectsHeader?.isHidden = sidebarItems.contains
 		{
@@ -154,7 +155,8 @@ extension NavigationViewController
 			)
 				as? TaskSidebarCellView
 			return cell?.makeContextMenu()
-		case .project, .sectionHeader, .showMore: return nil
+		case .project(let project): return projectContextMenu(project)
+		case .sectionHeader, .showMore: return nil
 		}
 	}
 
@@ -332,7 +334,20 @@ extension NavigationViewController
 		)
 		cell.onShowInfo =
 		{
-			[weak self] _ in self?.showProjectInfo(project)
+			[weak self] cell in
+			guard let menu = self?.projectContextMenu(project)
+			else
+			{
+				return
+			}
+			menu.popUp(
+				positioning: nil,
+				at: NSPoint(
+					x: cell.bounds.maxX,
+					y: cell.bounds.maxY
+				),
+				in: cell
+			)
 		}
 		cell.onNewChat =
 		{

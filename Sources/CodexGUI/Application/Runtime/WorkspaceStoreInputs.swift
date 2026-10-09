@@ -581,6 +581,26 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	func removeProject(_ project: URL)
+	{
+		let path = project.standardizedFileURL.resolvingSymlinksInPath().path
+		store.dispatch(.preferences(.projectRemoved(
+			store.operationContext(),
+			canonicalPath: path
+		)))
+	}
+
+	func archiveProjectChats(_ project: URL)
+	{
+		let project = project.standardizedFileURL.resolvingSymlinksInPath()
+		store.dispatch(.conversations(.projectArchiveRequested(
+			ProjectArchiveOperation(
+				context: store.operationContext(),
+				project: project
+			)
+		)))
+	}
+
 	func toggleProjectPin(_ project: URL)
 	{
 		store.dispatch(.workspaceLifecycle(.projectPinRequested(

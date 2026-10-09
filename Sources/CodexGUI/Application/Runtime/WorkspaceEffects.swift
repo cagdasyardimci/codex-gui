@@ -60,6 +60,7 @@ enum WorkspaceEffect
 	case expireTurnPreviews(OperationContext)
 	case readConversationList(ConversationListOperation)
 	case manageConversation(ThreadManagementOperation)
+	case archiveProjectChats(ProjectArchiveOperation)
 	case forkConversation(SlashCommandPresentationRequest)
 	case compactConversation(ComposerCommandTurnOperation)
 	case startConversationReview(ComposerCommandTurnOperation)

@@ -559,6 +559,7 @@ struct ConversationsModel
 	var lastAppliedHistoryRequestID: UUID?
 	var lastAppliedPageRequestID: UUID?
 	var pendingManagement: ThreadManagementOperation?
+	var pendingProjectArchive: ProjectArchiveOperation?
 	/// Thread key preserves manual/search/jump page deduplication within one workspace store.
 	var historyLoads: [String: HistoryLoadOperation] = [:]
 	var cacheTime = Date.distantPast
@@ -630,6 +631,7 @@ struct PreferencesModel
 	var accountDescription = "Checking sign-in…"
 	var recentProjects: [URL] = []
 	var pinnedProjectPaths: Set<String> = []
+	var removedProjectPaths: Set<String> = []
 	var pinnedTasks: [ThreadSummary] = []
 	var projectDisplayNames: [String: String] = [:]
 	var pendingModels: OperationContext?

@@ -23,6 +23,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var onArchiveTask: ((String) -> Void)?
 	var onDeleteTask: ((String) -> Void)?
 	var onToggleProjectPin: ((URL) -> Void)?
+	var onArchiveProjectChats: ((URL) -> Void)?
+	var onRemoveProject: ((URL) -> Void)?
 	var onRenameProject: ((URL, String) -> Void)?
 	var onNewChatInProject: ((URL) -> Void)?
 
@@ -83,6 +85,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var isCurrentProjectCollapsed = false
 	var projectTaskLimit = 5
 	var pinnedProjectPaths: Set<String> = []
+	var removedProjectPaths: Set<String> = []
 	var pinnedTasks: [ThreadSummary] = []
 	var projectsHeader: NSStackView?
 	var manuallyUnreadThreadIDs: Set<String> = []
@@ -208,6 +211,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		let projectsChanged =
 			currentProject != nextProject || recentProjects != snapshot.recentProjects
 				|| pinnedProjectPaths != snapshot.pinnedProjectPaths
+				|| removedProjectPaths != snapshot.removedProjectPaths
 				|| pinnedTasks != snapshot.pinnedTasks
 				|| projectDisplayNames != snapshot.projectDisplayNames
 		if currentProject != nextProject
@@ -218,6 +222,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		currentProject = nextProject
 		recentProjects = snapshot.recentProjects
 		pinnedProjectPaths = snapshot.pinnedProjectPaths
+		removedProjectPaths = snapshot.removedProjectPaths
 		pinnedTasks = snapshot.pinnedTasks
 		projectDisplayNames = snapshot.projectDisplayNames
 		let previousCanStartProjectChat = canStartProjectChat

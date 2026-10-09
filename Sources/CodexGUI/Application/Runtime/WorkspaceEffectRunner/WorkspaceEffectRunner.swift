@@ -340,6 +340,7 @@ final class WorkspaceEffectRunner
 			return (operation.request.context, .composerCommand)
 		case .updateCommandSettings(let operation):
 			return (operation.request.context, .composerCommand)
+		case .archiveProjectChats(let operation): return (operation.context, .management)
 		case .manageConversation(let operation): return (managementContext(operation), .management)
 		case .persistConversationSelection(
 			let context,
