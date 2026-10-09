@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct GitReportedTurnRoutingTests
 {
-	@Test func terminalBaselineFailureIsNotRetriedByRepeatedUnavailablePayloads()
+	@Test func missingReportsStayUnavailableRegardlessOfBaselineCaptureFailure()
 	{
 		var state = GitReviewState()
 		let failure = GitComparisonFailure
@@ -22,7 +22,7 @@ struct GitReportedTurnRoutingTests
 			action: .setReportedChanges(nil),
 			automaticRefreshEnabled: false
 		)
-		#expect(state.failure == failure)
+		#expect(state.failure == .lastTurnUnavailable)
 		let generation = state.generation
 		for _ in 0 ..< 3
 		{
@@ -35,7 +35,7 @@ struct GitReportedTurnRoutingTests
 			#expect(!transition.publishes)
 		}
 		#expect(state.generation == generation)
-		#expect(state.failure == failure)
+		#expect(state.failure == .lastTurnUnavailable)
 	}
 
 	@Test func contextChangesDiscardOldRecordedPatchesAndRejectTheirLateResults() throws
@@ -65,6 +65,39 @@ struct GitReportedTurnRoutingTests
 		)
 		#expect(!acceptedOldRequest)
 		#expect(state.pendingRequest == current)
+	}
+
+	@Test func withdrawingReportsClearsThePreviousTurnsTotals() throws
+	{
+		var state = GitReviewState()
+		state.activate(
+			owner: owner(),
+			lastTurnID: "editing"
+		)
+		state.scope = .lastTurn
+		let changes = [FileChange(json: [
+			"path": "file.swift",
+			"kind": "update",
+			"diff": "@@ -1 +1 @@\n-old\n+new",
+		])!]
+		state.setReportedChanges(changes)
+		let pendingRequest = state.beginRequest()
+		let request = try #require(pendingRequest)
+		let accepted = state.accept(
+			GitReportedTurnComparison.compare(request),
+			request: request
+		)
+		#expect(accepted)
+		#expect(state.snapshot != nil)
+		let transition = GitReviewReducer.reduce(
+			state: &state,
+			action: .setReportedChanges(nil),
+			automaticRefreshEnabled: false
+		)
+		#expect(transition.publishes)
+		#expect(state.snapshot == nil)
+		#expect(state.failure == .lastTurnUnavailable)
+		#expect(state.copyCommand == nil)
 	}
 
 	private func owner() -> FeaturePresentationOwner

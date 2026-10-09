@@ -3,16 +3,36 @@ import Foundation
 /// Historical turn edits remain available after commits and independent working-tree edits.
 enum GitReportedTurnComparison
 {
+	static let coverageMessage = "Reported edits only; shell edits and unreported subagent edits "
+		+ "are excluded."
+
+	static let fallbackMessage = "Reported edit counts; repeated edits may be counted "
+		+ "more than once. These are not net changes."
+
+	static func compare(_ request: GitComparisonRequest) -> GitComparisonResult
+	{
+		guard request.owner.selectedThreadID != nil, request.lastTurnID != nil,
+				let changes = request.reportedChanges
+		else
+		{
+			return .unavailable(.lastTurnUnavailable)
+		}
+		return compare(
+			changes,
+			request: request
+		)
+	}
+
 	static func compare(
 		_ changes: [FileChange],
 		request: GitComparisonRequest
 	) -> GitComparisonResult
 	{
-		let mergedChanges = ConversationNetFileChanges.merge(ReportedRepositoryFileChanges.filter(
+		let composition = ConversationNetFileChanges.compose(ReportedRepositoryFileChanges.filter(
 			changes,
 			repositoryRoot: request.repositoryRoot
 		))
-		let filePatches = mergedChanges.map
+		let filePatches = composition.changes.map
 		{
 			patchText(
 				for: $0,
@@ -29,10 +49,11 @@ enum GitReportedTurnComparison
 		return .snapshot(GitComparisonSnapshot(
 			request: request,
 			id: UUID().uuidString,
-			resolvedBase: "Before last editing turn",
-			resolvedTarget: "Recorded turn edits",
+			resolvedBase: composition.isExact ? "Before last editing turn" : "Reported edits",
+			resolvedTarget: composition.isExact ? "Recorded turn edits" : "Reported edit counts",
 			patch: patch,
-			files: GitComparisonPatchParser.files(in: patch)
+			files: GitComparisonPatchParser.files(in: patch),
+			usesReportedEditFallback: !composition.isExact
 		))
 	}
 

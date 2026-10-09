@@ -38,6 +38,10 @@ struct GitReviewState
 			return false
 		}
 		reportedChanges = changes
+		if changes == nil, scope == .lastTurn
+		{
+			discardLastTurnSnapshot()
+		}
 		return true
 	}
 
@@ -131,6 +135,10 @@ struct GitReviewState
 		if self.lastTurnID != lastTurnID
 		{
 			reportedChanges = nil
+			if scope == .lastTurn
+			{
+				discardLastTurnSnapshot()
+			}
 		}
 		self.lastTurnID = lastTurnID
 		self.baselineRevision = baselineRevision
@@ -250,10 +258,25 @@ struct GitReviewState
 		case .unavailable(let reason):
 			pendingRequest = nil
 			failure = reason
+			if scope == .lastTurn
+			{
+				discardLastTurnSnapshot()
+			}
 			isStale = snapshot != nil
 		}
 		summaryRevision += 1
 		return true
+	}
+
+	/// Another turn's totals, or totals from withdrawn reports, cannot stand in for this turn.
+	private mutating func discardLastTurnSnapshot()
+	{
+		snapshot = nil
+		isStale = false
+		selectedFileID = nil
+		selectionMessage = nil
+		expandedDirectories.removeAll()
+		options.expandedGapIDs.removeAll()
 	}
 
 	mutating func markRepositoryChanged()

@@ -1,147 +1,78 @@
 import Foundation
 
-/// Reads the captured turn baseline while work is running, including edits made by commands.
+/// Rebuilds totals only when this task's attributed turn reports change.
 @MainActor
 final class ConversationTurnChangeSummaryLoader
 {
-	private struct Key: Equatable
-	{
-		let owner: FeaturePresentationOwner
-		let root: String
-		let turnID: String
-	}
-
-	private let service: any GitTurnBaselineService
-	private var key: Key?
-	private var pollTask: Task<Void, Never>?
+	private let service: any GitComparisonService
+	private var request: GitComparisonRequest?
 	private var readTask: Task<Void, Never>?
-	private var fallback: ConversationTurnChangeSummary?
-	private var comparison: ConversationTurnChangeSummary?
 	private var published: ConversationTurnChangeSummary?
 	var onChange: ((ConversationTurnChangeSummary?) -> Void)?
 
-	init(service: any GitTurnBaselineService = LocalGitTurnBaselineService.shared)
+	init(service: any GitComparisonService = LocalGitComparisonService())
 	{
 		self.service = service
 	}
 
 	deinit
 	{
-		pollTask?.cancel()
 		readTask?.cancel()
 	}
 
 	func render(_ composer: ConversationPresentation.Composer)
 	{
-		fallback = composer.turnChangeSummary
-		let nextKey: Key?
-		if composer.activeExecutionState?.isBusy == true,
-			let activeThreadID = composer.activeThreadID,
-			activeThreadID == composer.selectedThreadID,
-			let turnID = composer.activeTurnID,
-			let root = composer.owner.runtimeOwner?.workspace.canonicalCheckoutPath
-		{
-			nextKey = Key(
-				owner: composer.owner,
-				root: root,
-				turnID: turnID
-			)
-		}
+		let nextRequest = composer.turnChangeRequest
+		guard request != nextRequest
 		else
 		{
-			nextKey = nil
+			return
 		}
-		if key != nextKey
+		stop()
+		request = nextRequest
+		guard let nextRequest
+		else
 		{
-			stop()
-			key = nextKey
-			comparison = nil
-			if nextKey != nil
-			{
-				refresh()
-				pollTask = Task
-				{
-					[weak self] in
-					while !Task.isCancelled
-					{
-						try? await Task.sleep(for: .seconds(3))
-						guard !Task.isCancelled
-						else
-						{
-							return
-						}
-						self?.refresh()
-					}
-				}
-			}
+			publish(nil)
+			return
 		}
-		publish()
+		// Never leave another task's totals visible while awaiting this task's result.
+		publish(nextRequest.reportedChanges == nil
+			? ConversationTurnChangeSummary(unavailable: .lastTurnUnavailable) : .loading)
+		let usesPreviousTurn = nextRequest.lastTurnID != composer.activeTurnID
+		let service = self.service
+		readTask = Task
+		{
+			[weak self] in
+			let result = await service.compare(nextRequest)
+			let summary = await Task.detached(priority: .userInitiated)
+			{
+				ConversationTurnChangeSummary(
+					result: result,
+					usesPreviousTurn: usesPreviousTurn,
+					request: nextRequest
+				)
+			}.value
+			guard !Task.isCancelled, self?.request == nextRequest
+			else
+			{
+				return
+			}
+			self?.readTask = nil
+			self?.publish(summary)
+		}
 	}
 
 	func stop()
 	{
 		readTask?.cancel()
 		readTask = nil
-		pollTask?.cancel()
-		pollTask = nil
-		key = nil
+		request = nil
+		publish(nil)
 	}
 
-	private func refresh()
+	private func publish(_ value: ConversationTurnChangeSummary?)
 	{
-		guard let key, readTask == nil
-		else
-		{
-			return
-		}
-		let request = GitComparisonRequest(
-			owner: key.owner,
-			repositoryRoot: key.root,
-			scope: .lastTurn,
-			generation: 0,
-			lastTurnID: key.turnID
-		)
-		let service = self.service
-		readTask = Task
-		{
-			[weak self] in
-			let result = await service.compare(request)
-			guard !Task.isCancelled
-			else
-			{
-				return
-			}
-			self?.receive(
-				result,
-				for: key
-			)
-		}
-	}
-
-	private func receive(
-		_ result: GitComparisonResult,
-		for requestKey: Key
-	)
-	{
-		guard key == requestKey
-		else
-		{
-			return
-		}
-		readTask = nil
-		switch result
-		{
-		case .snapshot(let snapshot):
-			comparison = ConversationTurnChangeSummary(comparison: snapshot)
-		case .unavailable:
-			comparison = nil
-		}
-		publish()
-	}
-
-	private func publish()
-	{
-		let value = comparison ?? fallback
 		guard published != value
 		else
 		{

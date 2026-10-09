@@ -174,6 +174,19 @@ struct ConversationNetFileChangesTests
 		#expect(merged.last?.path.utf8.elementsEqual(second.path.utf8) == true)
 	}
 
+	@Test func exactCompositionRejectsInterleavedAndOverBudgetHistories()
+	{
+		let first = change("@@ -1 +1 @@\n-before\n+intermediate")
+		let second = change("@@ -1 +1 @@\n-intermediate\n+after")
+		#expect(ConversationNetFileChanges.mergeExactly([first, second])?.first?.diff
+			== "@@ -1,1 +1,1 @@\n-before\n+after")
+		let external = change("@@ -1 +1 @@\n-another task\n+after")
+		#expect(ConversationNetFileChanges.mergeExactly([first, external]) == nil)
+		let high = change("@@ -1000000 +1000000 @@\n-before\n+after")
+		#expect(ConversationNetFileChanges.mergeExactly([high]) != nil)
+		#expect(ConversationNetFileChanges.mergeExactly([high, high]) == nil)
+	}
+
 	private func change(
 		_ diff: String,
 		kind: String = "update",

@@ -894,27 +894,15 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		}
 		if state.scope == .lastTurn
 		{
-			if state.reportedChanges != nil
+			if state.snapshot?.usesReportedEditFallback == true
 			{
-				statusLabel.stringValue += " · recorded edits from the latest editing turn"
+				statusLabel.stringValue += " · " + GitReportedTurnComparison.fallbackMessage
 			}
-			else
-			{
-				statusLabel.stringValue += " · pre-turn tracked files → "
-					+ "current tracked working tree"
-					+ "; includes later edits"
-			}
+			statusLabel.stringValue += " · " + GitReportedTurnComparison.coverageMessage
 		}
-		if let owner = state.owner?.runtimeOwner?.owner, case .source = owner
+		else if let owner = state.owner?.runtimeOwner?.owner, case .source = owner
 		{
-			if state.scope == .lastTurn, state.reportedChanges == nil
-			{
-				statusLabel.stringValue += " · shared checkout; may include edits from other chats"
-			}
-			else if state.scope != .lastTurn
-			{
-				statusLabel.stringValue += " · shared checkout; changes include all chats"
-			}
+			statusLabel.stringValue += " · shared checkout; changes include all chats"
 		}
 		if let selectionMessage = state.selectionMessage
 		{
@@ -930,7 +918,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		case .unstaged: ("Index", "Tracked working tree")
 		case .staged: ("HEAD", "Index")
 		case .branch, .committed: (state.baseRevision, state.targetRevision)
-		case .lastTurn: ("Pre-turn tracked files", "Current tracked working tree")
+		case .lastTurn: ("Before selected turn edits", "Recorded task edits")
 		}
 	}
 

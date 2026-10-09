@@ -6,102 +6,192 @@ import Testing
 @Suite @MainActor
 struct ConversationTurnChangeSummaryLoaderTests
 {
-	@Test func runningTurnReadsBaselineChangesMadeOutsideFileChangeReports() async throws
+	@Test func unchangedReportsDoNotRereadTheCheckoutAndLateTaskResultsAreIgnored() async throws
 	{
 		let service = TurnChangeSummaryServiceStub()
 		let loader = ConversationTurnChangeSummaryLoader(service: service)
-		var snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot(reports: false)
-		snapshot.workspaceOwner = ConversationPresentationTestFixture.presentationOwner(
-			sessionID: UUID()
-		)
-		snapshot.activeExecutionState = .running
 		var observed: ConversationTurnChangeSummary?
 		loader.onChange =
 		{
 			observed = $0
 		}
-		loader.render(ConversationPresentation(snapshot).composer)
-		for _ in 0 ..< 100 where observed?.additions != 10
+		let first = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+		let firstComposer = ConversationPresentation(first).composer
+		loader.render(firstComposer)
+		await service.waitForRequestCount(1)
+		loader.render(firstComposer)
+		#expect(await service.requestCount == 1)
+
+		var second = ConversationTurnChangeSummaryTestFixture.makeSnapshot(
+			selectedThreadID: "second-task"
+		)
+		second.activeThreadID = "second-task"
+		second.reportedGitChanges = []
+		loader.render(ConversationPresentation(second).composer)
+		await service.waitForRequestCount(2)
+		await service.complete(1)
+		for _ in 0 ..< 100 where observed != nil
+		{
+			try await Task.sleep(for: .milliseconds(10))
+		}
+		#expect(observed == nil)
+		await service.complete(0)
+		await Task.yield()
+		#expect(observed == nil)
+		loader.stop()
+	}
+
+	@Test func previousTurnCountsAreReplacedWhenActiveReportsArrive() async throws
+	{
+		let service = TurnChangeSummaryServiceStub()
+		let loader = ConversationTurnChangeSummaryLoader(service: service)
+		var observed: ConversationTurnChangeSummary?
+		loader.onChange =
+		{
+			observed = $0
+		}
+		var previous = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+		previous.reportedGitTurnID = "previous"
+		loader.render(ConversationPresentation(previous).composer)
+		await service.waitForRequestCount(1)
+		await service.complete(0)
+		for _ in 0 ..< 100 where observed?.usesPreviousTurn != true
+		{
+			try await Task.sleep(for: .milliseconds(10))
+		}
+		#expect(observed?.usesPreviousTurn == true)
+		#expect(observed?.additions == 3)
+		var active = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+		loader.render(ConversationPresentation(active).composer)
+		await service.waitForRequestCount(2)
+		await service.complete(1)
+		for _ in 0 ..< 100 where observed?.usesPreviousTurn != false || observed?.isLoading == true
+		{
+			try await Task.sleep(for: .milliseconds(10))
+		}
+		#expect(observed?.usesPreviousTurn == false)
+		#expect(observed?.additions == 3)
+		active.reportedGitChanges = []
+		loader.render(ConversationPresentation(active).composer)
+		await service.waitForRequestCount(3)
+		await service.complete(2)
+		for _ in 0 ..< 100 where observed != nil
+		{
+			try await Task.sleep(for: .milliseconds(10))
+		}
+		#expect(observed == nil)
+		loader.stop()
+	}
+
+	@Test func previewFailureUsesReportedCounts() async throws
+	{
+		let service = TurnChangeSummaryServiceStub()
+		let loader = ConversationTurnChangeSummaryLoader(service: service)
+		var observed: ConversationTurnChangeSummary?
+		loader.onChange =
+		{
+			observed = $0
+		}
+		loader.render(ConversationPresentation(
+			ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+		).composer)
+		await service.waitForRequestCount(1)
+		await service.complete(
+			0,
+			result: .unavailable(.oversized)
+		)
+		for _ in 0 ..< 100 where observed?.isLoading != false
+		{
+			try await Task.sleep(for: .milliseconds(10))
+		}
+		let button = TurnChangeSummaryButton()
+		button.render(observed)
+		#expect(button.attributedTitle.string == "2 files changed +3 -1")
+		loader.stop()
+	}
+
+	@Test func reportsArrivingAfterZeroCountsRefreshTheBadge() async throws
+	{
+		let loader = ConversationTurnChangeSummaryLoader()
+		var observed: ConversationTurnChangeSummary?
+		loader.onChange =
+		{
+			observed = $0
+		}
+		loader.render(ConversationPresentation(
+			ConversationTurnChangeSummaryTestFixture.makeSnapshot(reports: false)
+		).composer)
+		#expect(observed?.failure == .lastTurnUnavailable)
+		let button = TurnChangeSummaryButton()
+		button.render(observed)
+		#expect(button.attributedTitle.string == "0 files changed +0 -0")
+		loader.render(ConversationPresentation(
+			ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+		).composer)
+		for _ in 0 ..< 100 where observed?.additions != 3
 		{
 			try await Task.sleep(for: .milliseconds(10))
 		}
 		#expect(observed?.fileCount == 2)
-		#expect(observed?.additions == 10)
-		#expect(observed?.deletions == 8)
-		let request = try #require(await service.lastRequest())
-		#expect(request.scope == .lastTurn)
-		#expect(request.lastTurnID == "turn")
-		#expect(request.repositoryRoot == "/tmp/replay")
+		#expect(observed?.additions == 3)
+		#expect(observed?.failure == nil)
 		loader.stop()
+		#expect(observed == nil)
 	}
 }
-private actor TurnChangeSummaryServiceStub: GitTurnBaselineService
+
+private actor TurnChangeSummaryServiceStub: GitComparisonService
 {
-	private var request: GitComparisonRequest?
-
-	func capture(_ request: GitTurnBaselineCaptureRequest) async -> GitTurnBaselineResult
+	private var requests: [GitComparisonRequest] = []
+	private var completions: [Int: CheckedContinuation<GitComparisonResult, Never>] = [:]
+	private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+	var requestCount: Int
 	{
-		.unavailable(.lastTurnUnavailable)
-	}
-
-	func bind(
-		_ reference: GitTurnBaselineReference,
-		turnID: String
-	) async -> GitTurnBaselineResult
-	{
-		.unavailable(.lastTurnUnavailable)
-	}
-
-	func lookup(
-		repositoryRoot: String,
-		threadID: String,
-		turnID: String
-	) async -> GitTurnBaselineReference?
-	{
-		nil
+		requests.count
 	}
 
 	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
 	{
-		self.request = request
-		let files = [
-			GitComparisonFile(
-				oldPath: "First.swift",
-				newPath: "First.swift",
-				kind: .modified,
-				additions: 6,
-				deletions: 5,
-				isBinary: false,
-				patch: "",
-				hunks: []
-			),
-			GitComparisonFile(
-				oldPath: nil,
-				newPath: "Second.swift",
-				kind: .added,
-				additions: 4,
-				deletions: 3,
-				isBinary: false,
-				patch: "",
-				hunks: []
-			),
-		]
-		return .snapshot(GitComparisonSnapshot(
-			request: request,
-			id: "comparison",
-			resolvedBase: "before",
-			resolvedTarget: "after",
-			patch: Data(),
-			files: files
-		))
+		let index = requests.count
+		requests.append(request)
+		return await withCheckedContinuation
+		{
+			completions[index] = $0
+			let ready = waiters.filter
+			{
+				$0.0 <= requests.count
+			}
+			waiters.removeAll
+			{
+				$0.0 <= requests.count
+			}
+			for waiter in ready
+			{
+				waiter.1.resume()
+			}
+		}
 	}
 
-	func discard(_ reference: GitTurnBaselineReference) async
+	func waitForRequestCount(_ count: Int) async
 	{
+		guard requests.count < count
+		else
+		{
+			return
+		}
+		await withCheckedContinuation
+		{
+			waiters.append((count, $0))
+		}
 	}
 
-	func lastRequest() -> GitComparisonRequest?
+	func complete(
+		_ index: Int,
+		result: GitComparisonResult? = nil
+	)
 	{
-		request
+		completions.removeValue(forKey: index)?.resume(
+			returning: result ?? GitReportedTurnComparison.compare(requests[index])
+		)
 	}
 }

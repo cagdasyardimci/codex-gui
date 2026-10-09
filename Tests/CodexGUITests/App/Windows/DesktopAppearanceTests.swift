@@ -279,7 +279,7 @@ struct DesktopAppearanceTests
 			#expect(button.attributedTitle.string == title)
 			#expect(button.intrinsicContentSize == size)
 			#expect(button.accessibilityLabel() == accessibilityLabel)
-			#expect(button.toolTip == "View changes")
+			#expect(button.toolTip == GitReportedTurnComparison.coverageMessage)
 			#expect(!button.isHidden)
 			#expect(window.firstResponder === button)
 		}

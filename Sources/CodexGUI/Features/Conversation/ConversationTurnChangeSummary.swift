@@ -1,11 +1,26 @@
 import AppKit
 
-/// A running turn's completed file-change reports, scoped to the selected conversation.
-struct ConversationTurnChangeSummary: Equatable
+/// Selected-task edit totals; previous-turn counts can bridge missing active-turn reports.
+struct ConversationTurnChangeSummary: Equatable, Sendable
 {
 	let fileCount: Int
 	let additions: Int
 	let deletions: Int
+	let failure: GitComparisonFailure?
+	let usesReportedEditFallback: Bool
+	var usesPreviousTurn: Bool = false
+	let isLoading: Bool
+	static let loading = ConversationTurnChangeSummary()
+
+	private init()
+	{
+		fileCount = 0
+		additions = 0
+		deletions = 0
+		failure = nil
+		usesReportedEditFallback = false
+		isLoading = true
+	}
 
 	init?(comparison: GitComparisonSnapshot)
 	{
@@ -17,85 +32,72 @@ struct ConversationTurnChangeSummary: Equatable
 		fileCount = comparison.files.count
 		additions = comparison.additions
 		deletions = comparison.deletions
+		failure = nil
+		usesReportedEditFallback = comparison.usesReportedEditFallback
+		isLoading = false
+	}
+
+	init(
+		unavailable failure: GitComparisonFailure,
+		request: GitComparisonRequest? = nil
+	)
+	{
+		let changes = ReportedRepositoryFileChanges.filter(
+			request?.reportedChanges ?? [],
+			repositoryRoot: request?.repositoryRoot
+		)
+		fileCount = Set(changes.map
+		{
+			Data(($0.movePath ?? $0.path).utf8)
+		}).count
+		let counts = changes.map
+		{
+			GitDiffParser.hunks(in: ConversationNetFileChanges.normalizedDiff($0)
+				.components(separatedBy: "\n"))
+		}
+		additions = counts.reduce(0)
+		{
+			$0 + $1.additions
+		}
+		deletions = counts.reduce(0)
+		{
+			$0 + $1.deletions
+		}
+		self.failure = failure
+		usesReportedEditFallback = !changes.isEmpty
+		isLoading = false
+	}
+
+	init?(
+		result: GitComparisonResult,
+		usesPreviousTurn: Bool = false,
+		request: GitComparisonRequest? = nil
+	)
+	{
+		switch result
+		{
+		case .snapshot(let comparison): self.init(comparison: comparison)
+		case .unavailable(let failure): self.init(
+				unavailable: failure,
+				request: request
+			)
+		}
+		self.usesPreviousTurn = usesPreviousTurn
 	}
 
 	init?(_ snapshot: ConversationSnapshot)
 	{
-		guard snapshot.executionState.isBusy,
-				let activeThreadID = snapshot.activeThreadID,
-				let turnID = snapshot.activeTurnID,
-				activeThreadID == snapshot.selectedThreadID
+		guard let request = snapshot
+			.runningGitReviewRequest(owner: FeaturePresentationOwner(snapshot))
 		else
 		{
 			return nil
 		}
-		if let diff = snapshot.activeTurnDiff
-		{
-			let paths = GitDiffParser.filePaths(in: diff)
-			if diff.isEmpty
-			{
-				return nil
-			}
-			if !paths.isEmpty
-			{
-				let counts = GitDiffParser.hunks(in: diff.components(separatedBy: "\n"))
-				fileCount = paths.count
-				additions = counts.additions
-				deletions = counts.deletions
-				return
-			}
-		}
-		var paths: Set<String> = []
-		var additions = 0
-		var deletions = 0
-		for entry in snapshot.entries
-		{
-			guard ConversationEntryIdentity.turnIDWithFallback(entry.id) == turnID,
-					case .fileChanges(
-					let changes,
-					let status
-					) = entry.activity,
-					status == "completed"
-			else
-			{
-				continue
-			}
-			for change in changes
-			{
-				paths.insert(change.movePath ?? change.path)
-				let counts = Self.lineCounts(change)
-				additions += counts.additions
-				deletions += counts.deletions
-			}
-		}
-		guard !paths.isEmpty
-		else
-		{
-			return nil
-		}
-		fileCount = paths.count
-		self.additions = additions
-		self.deletions = deletions
-	}
-
-	private static func lineCounts(_ change: FileChange) -> (
-		additions: Int,
-		deletions: Int
-	)
-	{
-		if (change.kind == "add" || change.kind == "delete"),
-			!change.diff.hasPrefix("@@ "), !change.diff.contains("\n@@ ")
-		{
-			let lines = change.diff.isEmpty ? 0 : change.diff
-				.split(
-					separator: "\n",
-					omittingEmptySubsequences: false
-				).count
-				- (change.diff.hasSuffix("\n") ? 1 : 0)
-			return change.kind == "add" ? (lines, 0) : (0, lines)
-		}
-		let parsed = GitDiffParser.hunks(in: change.diff.components(separatedBy: "\n"))
-		return (parsed.additions, parsed.deletions)
+		self.init(
+			result: GitReportedTurnComparison.compare(request),
+			usesPreviousTurn: request.lastTurnID != snapshot.activeTurnID,
+			request: request
+		)
 	}
 }
 
@@ -147,11 +149,22 @@ final class TurnChangeSummaryButton: NSButton
 		}
 		let fileText = "\(summary.fileCount) \(summary.fileCount == 1 ? "file" : "files") changed"
 		updateColors()
-		setAccessibilityLabel(
-			"\(fileText), \(summary.additions) additions, "
-				+ "\(summary.deletions) deletions. View changes"
-		)
-		toolTip = "View changes"
+		let description: String
+		if summary.isLoading
+		{
+			description = "Loading turn changes"
+		}
+		else
+		{
+			description = "\(fileText), \(summary.additions) additions, "
+				+ "\(summary.deletions) deletions."
+		}
+		let previousNote = summary.usesPreviousTurn
+			? "Previous editing turn; this active turn has no available edit reports yet. " : ""
+		let fallbackNote = previousNote + (summary.usesReportedEditFallback
+			? GitReportedTurnComparison.fallbackMessage + " " : "")
+		setAccessibilityLabel(description + " " + fallbackNote + "View changes")
+		toolTip = fallbackNote + GitReportedTurnComparison.coverageMessage
 		invalidateIntrinsicContentSize()
 		isHidden = false
 	}
@@ -173,8 +186,16 @@ final class TurnChangeSummaryButton: NSButton
 		}
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
-			let fileText = "\(summary.fileCount) "
-				+ "\(summary.fileCount == 1 ? "file" : "files") changed"
+			let fileText: String
+			if summary.isLoading
+			{
+				fileText = "Loading turn changes"
+			}
+			else
+			{
+				fileText = "\(summary.fileCount) "
+					+ "\(summary.fileCount == 1 ? "file" : "files") changed"
+			}
 			let title = NSMutableAttributedString(
 				string: fileText,
 				attributes: [
@@ -183,10 +204,10 @@ final class TurnChangeSummaryButton: NSButton
 						?? NSColor.secondaryLabelColor,
 				]
 			)
-			for (text, color) in [
-				(" +\(summary.additions)", NSColor.systemGreen),
-				(" -\(summary.deletions)", NSColor.systemRed),
-			]
+			let counts = !summary.isLoading
+				? [(" +\(summary.additions)", NSColor.systemGreen),
+					(" -\(summary.deletions)", NSColor.systemRed)] : []
+			for (text, color) in counts
 			{
 				title.append(NSAttributedString(
 					string: text,

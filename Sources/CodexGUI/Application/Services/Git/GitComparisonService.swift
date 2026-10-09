@@ -10,25 +10,14 @@ protocol GitComparisonService: Sendable
 /// of an independently edited working tree, so this cannot prove an atomic capture.
 struct LocalGitComparisonService: GitComparisonService
 {
-	let baselineService: any GitTurnBaselineService
-
-	init(baselineService: any GitTurnBaselineService = LocalGitTurnBaselineService.shared)
-	{
-		self.baselineService = baselineService
-	}
-
 	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
 	{
 		if request.scope == .lastTurn
 		{
-			if let changes = request.reportedChanges
+			return await GitSubprocessCancellation.detached
 			{
-				return GitReportedTurnComparison.compare(
-					changes,
-					request: request
-				)
+				GitReportedTurnComparison.compare(request)
 			}
-			return await baselineService.compare(request)
 		}
 		return await GitSubprocessCancellation.detached
 		{

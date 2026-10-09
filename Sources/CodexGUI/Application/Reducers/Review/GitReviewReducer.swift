@@ -105,7 +105,8 @@ enum GitReviewReducer
 			return GitReviewTransition(publishes: true)
 		case .poll(let owner):
 			guard automaticRefreshEnabled, state.isOpen, state.owner == owner,
-					state.snapshot != nil, state.pendingRequest == nil, state.failure == nil
+					state.scope != .lastTurn, state.snapshot != nil, state.pendingRequest == nil,
+					state.failure == nil
 			else
 			{
 				return GitReviewTransition()
@@ -159,11 +160,10 @@ enum GitReviewReducer
 				publishes: true
 			)
 		}
-		if request.scope == .lastTurn, request.reportedChanges == nil,
-			let failure = state.baselineFailure
+		if request.scope == .lastTurn, request.reportedChanges == nil
 		{
 			_ = state.accept(
-				.unavailable(failure),
+				.unavailable(.lastTurnUnavailable),
 				request: request
 			)
 			return GitReviewTransition(

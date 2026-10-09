@@ -123,7 +123,7 @@ struct GitReviewRuntimeTests
 	}
 
 	@Test @MainActor
-	func matchingCaptureFailureRetainsItsPreciseUnavailableReason() async
+	func lastTurnReportsMissingPayloadInsteadOfAnUnrelatedCaptureFailure() async
 	{
 		let runtime = GitReviewRuntime(service: MissingRevisionComparisonService())
 		let captureFailure = GitComparisonFailure
@@ -141,7 +141,7 @@ struct GitReviewRuntimeTests
 		{
 			runtime.selectScope(.lastTurn)
 		}
-		#expect(runtime.state.failure == captureFailure)
+		#expect(runtime.state.failure == .lastTurnUnavailable)
 		#expect(runtime.state.pendingRequest == nil)
 		runtime.close()
 	}

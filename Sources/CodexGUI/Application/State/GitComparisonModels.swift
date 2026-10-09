@@ -35,6 +35,7 @@ enum GitComparisonFailure: Error, Equatable, Sendable
 	case notGitRepository
 	case invalidRevision(String)
 	case lastTurnUnavailable
+	case reportedChangesIncomplete
 	case lastTurnBaselineUnavailable(String)
 	case baselineOwnershipMismatch
 	case oversized
@@ -53,7 +54,12 @@ enum GitComparisonFailure: Error, Equatable, Sendable
 		case .invalidRevision(let revision): return "Revision unavailable: \(revision)"
 		case .lastTurnBaselineUnavailable(let reason): return "Last Turn unavailable: " + reason
 		case .baselineOwnershipMismatch: return "This baseline belongs to another chat or turn."
-		case .lastTurnUnavailable: return "Last Turn requires a captured conversation baseline."
+		case .lastTurnUnavailable:
+			return "Last Turn unavailable: this task has no available file-change reports "
+				+ "for the selected turn."
+		case .reportedChangesIncomplete:
+			return "Last Turn unavailable: reported edits cannot be combined into reliable net "
+				+ "changes. Individual edits remain in the conversation."
 		case .oversized: return "The comparison exceeds the 8 MiB preview limit."
 		case .unsupportedTextEncoding: return "This comparison contains non-UTF-8 text."
 		case .repositoryChanged:
@@ -113,6 +119,7 @@ struct GitComparisonSnapshot: Equatable, Sendable
 	let resolvedTarget: String
 	let patch: Data
 	let files: [GitComparisonFile]
+	var usesReportedEditFallback: Bool = false
 	var additions: Int
 	{
 		files.reduce(0)
@@ -131,7 +138,7 @@ struct GitComparisonSnapshot: Equatable, Sendable
 	/// macOS base64 -D decodes the exact unfiltered bytes. This is only clipboard text.
 	var copyCommand: String?
 	{
-		guard !patch.isEmpty, patch.count <= 8 * 1024 * 1024,
+		guard !usesReportedEditFallback, !patch.isEmpty, patch.count <= 8 * 1024 * 1024,
 				!files.contains(where:
 				{
 					$0.isBinary

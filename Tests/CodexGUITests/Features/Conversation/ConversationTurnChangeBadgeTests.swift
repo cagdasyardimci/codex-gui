@@ -6,7 +6,7 @@ import Testing
 @Suite @MainActor
 struct ConversationTurnChangeBadgeTests
 {
-	@Test func badgeTracksOnlySelectedRunningTurnAndOpensChanges() throws
+	@Test func badgeTracksOnlySelectedRunningTurnAndOpensChanges() async throws
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
@@ -17,6 +17,11 @@ struct ConversationTurnChangeBadgeTests
 		}
 		let snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
 		controller.render(snapshot)
+		for _ in 0 ..< 100 where controller.turnChangeSummaryButton.attributedTitle.string
+			!= "2 files changed +3 -1"
+		{
+			try await Task.sleep(for: .milliseconds(10))
+		}
 		#expect(controller.turnChangeSummaryButton.isHidden == false)
 		#expect(controller.turnChangeSummaryButton.attributedTitle.string
 			== "2 files changed +3 -1")

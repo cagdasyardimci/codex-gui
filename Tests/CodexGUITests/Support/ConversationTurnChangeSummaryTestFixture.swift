@@ -20,7 +20,7 @@ enum ConversationTurnChangeSummaryTestFixture
 		let secondEdit = FileChange(json: [
 			"path": "Sources/First.swift",
 			"kind": "update",
-			"diff": "@@ -3 +3 @@\n line\n+again",
+			"diff": "@@ -3 +3,2 @@\n line\n+again",
 		])!
 		let addition = FileChange(json: [
 			"path": "Sources/Second.swift",
@@ -70,6 +70,8 @@ enum ConversationTurnChangeSummaryTestFixture
 		snapshot.activeThreadID = "thread"
 		snapshot.activeTurnID = "turn"
 		snapshot.activeTurnDiff = activeTurnDiff
+		snapshot.reportedGitTurnID = reports ? "turn" : nil
+		snapshot.reportedGitChanges = reports ? [edit, secondEdit, addition] : nil
 		return snapshot
 	}
 }

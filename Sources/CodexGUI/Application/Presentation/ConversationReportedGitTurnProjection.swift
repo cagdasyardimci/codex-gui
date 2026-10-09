@@ -1,6 +1,6 @@
 import Foundation
 
-/// Availability and editing-turn identity are independent: nil payloads retain baseline fallback.
+/// Editing-turn identity survives eviction; missing payloads stay unavailable.
 struct ConversationReportedGitTurnProjection
 {
 	let turnID: String?
@@ -26,7 +26,12 @@ struct ConversationReportedGitTurnProjection
 				changes = nil
 				return
 			}
-			let reportedItems = turn.items.filter
+			var seen: Set<String> = []
+			let reportedItems = turn.items.reversed().filter
+			{
+				seen.insert($0.id).inserted
+			}
+			.reversed().filter
 			{
 				$0.type == "fileChange" && $0.status == "completed"
 			}
@@ -56,7 +61,12 @@ struct ConversationReportedGitTurnProjection
 			changes = nil
 			return
 		}
-		changes = reportedEntries.flatMap
+		var seen: Set<String> = []
+		changes = reportedEntries.reversed().filter
+		{
+			seen.insert($0.id).inserted
+		}
+		.reversed().flatMap
 		{
 			entry -> [FileChange] in
 			if case .fileChanges(

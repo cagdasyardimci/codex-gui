@@ -109,7 +109,7 @@ struct ConversationPresentation: Equatable
 		let activeThreadID: String?
 		let activeTurnID: String?
 		let activeExecutionState: ExecutionState?
-		let turnChangeSummary: ConversationTurnChangeSummary?
+		let turnChangeRequest: GitComparisonRequest?
 		var projectPath: String?
 		{
 			owner.projectPath
@@ -287,7 +287,7 @@ struct ConversationPresentation: Equatable
 			activeThreadID: snapshot.activeThreadID,
 			activeTurnID: snapshot.activeTurnID,
 			activeExecutionState: snapshot.activeExecutionState,
-			turnChangeSummary: ConversationTurnChangeSummary(snapshot)
+			turnChangeRequest: snapshot.runningGitReviewRequest(owner: owner)
 		)
 		interactions = Interactions(
 			owner: owner,

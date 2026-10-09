@@ -8,7 +8,25 @@ enum ConversationNetFileChanges
 	private static let maximumCompositionBytes = 2 * 1_024 * 1_024
 	private static let maximumHunkApplications = 256
 
+	struct Result
+	{
+		let changes: [FileChange]
+		let isExact: Bool
+	}
+
 	static func merge(_ changes: [FileChange]) -> [FileChange]
+	{
+		compose(changes).changes
+	}
+
+	/// Exact totals cannot use concatenated fallback patches from incompatible histories.
+	static func mergeExactly(_ changes: [FileChange]) -> [FileChange]?
+	{
+		let result = compose(changes)
+		return result.isExact ? result.changes : nil
+	}
+
+	static func compose(_ changes: [FileChange]) -> Result
 	{
 		var groups: [[FileChange]] = []
 		var indices: [Data: Int] = [:]
@@ -38,15 +56,22 @@ enum ConversationNetFileChanges
 				indices[destinationPath] = index
 			}
 		}
-		return groups.compactMap(netChange)
+		let results = groups.map(netChange)
+		return Result(
+			changes: results.flatMap(\.changes),
+			isExact: results.allSatisfy(\.isExact)
+		)
 	}
 
-	private static func netChange(_ changes: [FileChange]) -> FileChange?
+	private static func netChange(_ changes: [FileChange]) -> Result
 	{
 		guard let first = changes.first, let last = changes.last
 		else
 		{
-			return nil
+			return Result(
+				changes: [],
+				isExact: true
+			)
 		}
 		var composition = Composition(created: first.kind == "add")
 		let cappedReportedDiffBytes = changes.reduce(0)
@@ -72,27 +97,41 @@ enum ConversationNetFileChanges
 		let renamed = !destination.utf8.elementsEqual(first.path.utf8)
 		let kind = last.kind == "delete" ? "delete" : first.kind == "add" ? "add" : "update"
 		let diff: String
+		let isExact: Bool
 		if canComposeChanges, let composedDiff = composition.diff()
 		{
 			diff = composedDiff
+			isExact = true
 			guard !diff.isEmpty || renamed || (first.kind == "add" && last.kind != "delete")
 				|| (first.kind != "add" && last.kind == "delete")
 			else
 			{
-				return nil
+				return Result(
+					changes: [],
+					isExact: true
+				)
 			}
 		}
 		else
 		{
 			// Incomplete, incompatible or expensive history retains every reported edit.
 			diff = changes.map(normalizedDiff).joined(separator: "\n")
+			// A single reported patch needs no composition with earlier edits.
+			isExact = changes.count == 1
 		}
 		var metadata: [String: Any] = ["type": kind]
 		if renamed
 		{
 			metadata["move_path"] = destination
 		}
-		return FileChange(json: ["path": first.path, "kind": metadata, "diff": diff])
+		let change = FileChange(json: ["path": first.path, "kind": metadata, "diff": diff])
+		return Result(
+			changes: change.map
+			{
+				[$0]
+			} ?? [],
+			isExact: isExact
+		)
 	}
 
 	private static func contentLines(_ text: String) -> [String]
@@ -110,7 +149,7 @@ enum ConversationNetFileChanges
 		return lines
 	}
 
-	private static func normalizedDiff(_ change: FileChange) -> String
+	static func normalizedDiff(_ change: FileChange) -> String
 	{
 		guard (change.kind == "add" || change.kind == "delete"),
 				!change.diff.hasPrefix("@@ "), !change.diff.contains("\n@@ ")

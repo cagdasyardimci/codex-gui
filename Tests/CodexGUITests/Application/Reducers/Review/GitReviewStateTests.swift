@@ -251,7 +251,8 @@ struct GitReviewStateTests
 			baselineRevision: 1
 		)
 		#expect(turnContextResult2)
-		#expect(state.isStale)
+		#expect(state.snapshot == nil)
+		#expect(!state.isStale)
 		#expect(state.copyCommand == nil)
 		let currentOptional = state.beginRequest()
 		let current = try #require(currentOptional)
@@ -266,6 +267,11 @@ struct GitReviewStateTests
 			request: current
 		)
 		#expect(turnContextResult4)
+		#expect(state.snapshot == nil)
+		#expect(state.summary == .failed(
+			GitComparisonFailure.lastTurnUnavailable.message,
+			previous: nil
+		))
 		let failedGeneration = state.generation
 		let turnContextResult5 = state.updateTurnContext(
 			lastTurnID: "new",

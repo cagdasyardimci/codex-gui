@@ -471,6 +471,66 @@ struct ReportedGitTurnProjectionTests
 		#expect(snapshot(value).gitTurnBaselineFailure == nil)
 	}
 
+	@Test func duplicateItemReportsUseTheirLatestPayloadOnly()
+	{
+		var value = model()
+		merge(
+			[turn(
+				"editing",
+				items: [
+					fileItem(
+						"same-item",
+						path: "outdated.swift"
+					),
+					fileItem(
+						"same-item",
+						path: "current.swift"
+					),
+				]
+			)],
+			into: &value
+		)
+		#expect(snapshot(value).reportedGitChanges?.map(\.path) == ["current.swift"])
+	}
+
+	@Test func anotherTaskOrSubagentThreadCannotContributeToTheSelectedTasksReports()
+	{
+		var value = model()
+		merge(
+			[turn(
+				"editing",
+				items: [fileItem(
+					"parent",
+					path: "parent.swift"
+				)]
+			)],
+			into: &value
+		)
+		ConversationContentReducer.observe(
+			.itemCompleted(
+				threadId: "child-thread",
+				turnId: "child-turn",
+				item: fileItem(
+					"child",
+					path: "child.swift"
+				)
+			),
+			model: &value
+		)
+		ConversationContentReducer.observe(
+			.itemCompleted(
+				threadId: "unrelated-task",
+				turnId: "editing",
+				item: fileItem(
+					"unrelated",
+					path: "unrelated.swift"
+				)
+			),
+			model: &value
+		)
+		#expect(snapshot(value).reportedGitChanges?.map(\.path) == ["parent.swift"])
+	}
+
 	private func model() -> WorkspaceModel
 	{
 		var value = WorkspaceModel(identity: WorkspaceIdentity(
