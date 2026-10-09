@@ -75,6 +75,7 @@ struct ConversationSnapshot
 	var approvalMode: ApprovalMode = .askForApproval
 	var fastMode = false
 	var pinnedProjectPaths: Set<String> = []
+	var pinnedTasks: [ThreadSummary] = []
 	var projectDisplayNames: [String: String] = [:]
 	var preferenceWarning: String? = nil
 	var showingArchived = false

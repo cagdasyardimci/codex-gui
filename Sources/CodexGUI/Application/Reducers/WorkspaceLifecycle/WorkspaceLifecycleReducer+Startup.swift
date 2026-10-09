@@ -120,7 +120,8 @@ extension WorkspaceLifecycleReducer
 			)]
 		case .projectOpeningRequested(
 			let context,
-			let url
+			let url,
+			let selectedThreadID
 		):
 			guard valid(
 				context,
@@ -133,7 +134,8 @@ extension WorkspaceLifecycleReducer
 			model.lifecycle.pendingProjectOpening = context
 			result.effects = [.prepareProjectOpening(
 				context,
-				url
+				url,
+				selectedThreadID: selectedThreadID
 			)]
 		case .projectOpeningFinished(
 			let context,

@@ -10,6 +10,7 @@ final class LocalStorage
 		static let selectedThreads = "CodexGUI.selectedThreads"
 		static let modelPreference = "CodexGUI.modelPreference"
 		static let runPreferences = "CodexGUI.runPreferences"
+		static let pinnedTasks = "CodexGUI.pinnedTasks"
 		static let pinnedProjects = "CodexGUI.pinnedProjects"
 		static let projectDisplayNames = "CodexGUI.projectDisplayNames"
 		static let draftContext = "CodexGUI.draftContext"
@@ -55,7 +56,8 @@ final class LocalStorage
 			runPreferences: runPreferences,
 			recentProjects: recentProjects,
 			pinnedProjectPaths: pinnedProjectPaths,
-			projectDisplayNames: projectDisplayNames
+			projectDisplayNames: projectDisplayNames,
+			pinnedTasks: pinnedTasks
 		)
 	}
 
@@ -100,6 +102,13 @@ final class LocalStorage
 			{
 				toggleProjectPin(url)
 			}
+		case .taskPin(
+			let task,
+			let pinned
+		): setTaskPinned(
+				task,
+				pinned: pinned
+			)
 		case .name(
 			let path,
 			let name
@@ -162,6 +171,56 @@ final class LocalStorage
 				canonicalPath(for: URL(fileURLWithPath: $0))
 			}
 		)
+	}
+
+	/// Compact summaries allow one global pinned section before each project's history loads.
+	var pinnedTasks: [ThreadSummary]
+	{
+		guard let data = defaults.data(forKey: Key.pinnedTasks)
+		else
+		{
+			return []
+		}
+		return (try? JSONDecoder().decode(
+			[ThreadSummary].self,
+			from: data
+		)) ?? []
+	}
+
+	func setTaskPinned(
+		_ task: ThreadSummary,
+		pinned: Bool
+	)
+	{
+		var tasks = pinnedTasks
+		let previousIndex = tasks.firstIndex
+		{
+			$0.id == task.id
+		}
+		tasks.removeAll
+		{
+			$0.id == task.id
+		}
+		if pinned
+		{
+			tasks.insert(
+				task,
+				at: min(
+					previousIndex ?? tasks.count,
+					tasks.count
+				)
+			)
+		}
+		guard let data = try? JSONEncoder().encode(tasks)
+		else
+		{
+			return
+		}
+		defaults.set(
+			data,
+			forKey: Key.pinnedTasks
+		)
+		publishPreferences()
 	}
 
 	var projectDisplayNames: [String: String]

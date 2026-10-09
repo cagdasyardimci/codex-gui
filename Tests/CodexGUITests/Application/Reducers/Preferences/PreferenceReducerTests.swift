@@ -6,6 +6,56 @@ import Testing
 @Suite("Preference scope and precedence")
 struct PreferenceReducerTests
 {
+	@Test func taskPinTogglesRetainTasksFromOtherProjects() throws
+	{
+		var model = fixture()
+		let first = try #require(ThreadSummary(json: [
+			"id": "one",
+			"cwd": "/first",
+			"name": "First"
+		]))
+		let second = try #require(ThreadSummary(json: [
+			"id": "two",
+			"cwd": "/second",
+			"name": "Second"
+		]))
+		let reduction = PreferenceReducer.reduce(
+			&model,
+			.preferences(.taskPinToggled(
+				context(model),
+				first
+			))
+		)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.taskPinToggled(
+				context(model),
+				second
+			))
+		)
+		#expect(model.preferences.pinnedTasks == [first, second])
+		guard case .persistPreference(let write) = reduction.effects.first,
+				case .taskPin(
+				let captured,
+				let pinned
+				) = write.value
+		else
+		{
+			Issue.record("Expected a captured task pin write")
+			return
+		}
+		#expect(captured == first)
+		#expect(pinned)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.taskPinToggled(
+				context(model),
+				first
+			))
+		)
+		#expect(model.preferences.pinnedTasks == [second])
+	}
+
 	@Test func absentPreferenceUsesCatalogDefaultButExplicitNilPreservesBackendDefault()
 	{
 		var model = fixture()

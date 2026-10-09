@@ -412,6 +412,25 @@ enum ConversationReducer
 					}
 					return thread
 				}
+				for thread in model.conversations.threads
+				{
+					if let index = model.preferences.pinnedTasks
+						.firstIndex(where:
+							{
+								$0.id == thread.id
+							}),
+						model.preferences.pinnedTasks[index] != thread
+					{
+						model.preferences.pinnedTasks[index] = thread
+						persistTaskPin(
+							thread,
+							pinned: true,
+							context: operation.context,
+							model: &model,
+							result: &result
+						)
+					}
+				}
 				model.conversations.error = nil
 				result.domainEvents.append(.conversationContentChanged)
 				result.domainEvents.append(.conversationListAccepted(operation))
@@ -667,8 +686,44 @@ enum ConversationReducer
 				model.conversations.error = nil
 				switch pending
 				{
-				case .rename: break
+				case .rename(
+					_,
+					let name
+				):
+					if let index = model.preferences.pinnedTasks
+						.firstIndex(where:
+							{
+								$0.id == context.threadID
+							})
+					{
+						model.preferences.pinnedTasks[index].name = name
+						persistTaskPin(
+							model.preferences.pinnedTasks[index],
+							pinned: true,
+							context: context,
+							model: &model,
+							result: &result
+						)
+					}
 				case .archive, .delete:
+					if let task = model.preferences.pinnedTasks
+						.first(where:
+							{
+								$0.id == context.threadID
+							})
+					{
+						model.preferences.pinnedTasks.removeAll
+						{
+							$0.id == task.id
+						}
+						persistTaskPin(
+							task,
+							pinned: false,
+							context: context,
+							model: &model,
+							result: &result
+						)
+					}
 					if context.threadID == model.conversations.selectedConversation.threadID
 					{
 						select(
@@ -791,6 +846,26 @@ enum ConversationReducer
 			content: &content,
 			threadID: threadID
 		)
+	}
+
+	private static func persistTaskPin(
+		_ task: ThreadSummary,
+		pinned: Bool,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		let write = PreferenceWrite(
+			context: context,
+			value: .taskPin(
+				task,
+				pinned: pinned
+			)
+		)
+		model.preferences.pendingPreferenceWrites[write.key] = context
+		model.preferences.preferenceWriteErrors.removeValue(forKey: write.key)
+		result.effects.append(.persistPreference(write))
 	}
 
 	/// Composes accepted feature transitions into canonical conversation content.

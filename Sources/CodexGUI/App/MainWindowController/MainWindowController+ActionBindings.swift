@@ -47,6 +47,21 @@ extension MainWindowController
 		{
 			target.dispatch(.selectThread($0))
 		}
+		navigation.onSelectPinnedTask =
+		{
+			target.dispatch(.selectPinnedTask($0))
+		}
+		navigation.onToggleTaskPin =
+		{
+			target.dispatch(.toggleTaskPin($0))
+		}
+		navigation.onRenameTask =
+		{
+			target.dispatch(.renameTask(
+				$0,
+				$1
+			))
+		}
 		navigation.onSelectWorkspace =
 		{
 			target.dispatch(.selectWorkspace($0))

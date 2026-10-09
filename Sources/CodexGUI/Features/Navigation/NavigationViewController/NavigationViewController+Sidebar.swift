@@ -65,7 +65,11 @@ extension NavigationViewController
 		searchButton.contentTintColor = query.isEmpty ? .secondaryLabelColor : .controlAccentColor
 		searchButton.toolTip = query.isEmpty ? "Search conversation titles and previews" : query
 		emptyLabel.stringValue = query.isEmpty ? "No projects." : "No matching conversations."
-		emptyLabel.isHidden = query.isEmpty ? !sidebarItems.isEmpty : !visibleThreads.isEmpty
+		emptyLabel.isHidden = query.isEmpty ? !sidebarItems.isEmpty
+			: !visibleThreads.isEmpty || pinnedTasks.contains
+			{
+				taskMatchesSearch($0)
+			}
 		updateManagementButtons()
 	}
 
@@ -76,9 +80,21 @@ extension NavigationViewController
 			currentProject: currentProject,
 			pinnedProjectPaths: pinnedProjectPaths,
 			visibleThreads: visibleThreads,
+			pinnedTasks: pinnedTasks.filter
+			{
+				taskMatchesSearch($0)
+			},
 			isCurrentProjectCollapsed: isCurrentProjectCollapsed,
 			projectTaskLimit: projectTaskLimit
 		)
+		projectsHeader?.isHidden = sidebarItems.contains
+		{
+			if case .sectionHeader = $0
+			{
+				return true
+			}
+			return false
+		}
 		updatingSidebarSelection = true
 		defer
 		{
@@ -89,6 +105,10 @@ extension NavigationViewController
 			sidebarItems.firstIndex
 				{
 					item in
+					if case .pinnedThread(let thread) = item
+					{
+						return thread.id == selectedThreadID
+					}
 					if case .thread(let thread) = item
 					{
 						return thread.id == selectedThreadID
@@ -117,6 +137,27 @@ extension NavigationViewController
 		}
 	}
 
+	func taskContextMenu(for row: Int) -> NSMenu?
+	{
+		guard sidebarItems.indices.contains(row)
+		else
+		{
+			return nil
+		}
+		switch sidebarItems[row]
+		{
+		case .thread, .pinnedThread:
+			let cell = chatsTable.view(
+				atColumn: 0,
+				row: row,
+				makeIfNecessary: true
+			)
+				as? TaskSidebarCellView
+			return cell?.makeContextMenu()
+		case .project, .sectionHeader, .showMore: return nil
+		}
+	}
+
 	func numberOfRows(in tableView: NSTableView) -> Int
 	{
 		sidebarItems.count
@@ -132,6 +173,24 @@ extension NavigationViewController
 		else
 		{
 			return nil
+		}
+		if case .sectionHeader(let title) = sidebarItems[row]
+		{
+			if title == "Projects"
+			{
+				return makeProjectsHeader(actionsButton: NSButton())
+			}
+			let caption = DesktopTheme.sectionLabel(title)
+			caption.font = .systemFont(ofSize: 13)
+			return caption
+		}
+		if case .pinnedThread(let thread) = sidebarItems[row]
+		{
+			return taskCell(
+				in: tableView,
+				thread: thread,
+				isPinnedRow: true
+			)
 		}
 		if case .showMore = sidebarItems[row]
 		{
@@ -180,7 +239,8 @@ extension NavigationViewController
 
 	private func taskCell(
 		in tableView: NSTableView,
-		thread: ThreadSummary
+		thread: ThreadSummary,
+		isPinnedRow: Bool = false
 	) -> TaskSidebarCellView
 	{
 		let identifier = NSUserInterfaceItemIdentifier("conversationTitle")
@@ -191,6 +251,23 @@ extension NavigationViewController
 			as? TaskSidebarCellView ?? TaskSidebarCellView(frame: .zero)
 		cell.identifier = identifier
 		cell.setActionsEnabled(canManageSidebarTasks)
+		cell.isPinned = pinnedTasks.contains
+		{
+			$0.id == thread.id
+		}
+		cell.setPinnedRow(isPinnedRow)
+		cell.onRename =
+		{
+			[weak self] in self?.presentRenameTask(thread)
+		}
+		cell.onTogglePin =
+		{
+			[weak self] in self?.onToggleTaskPin?(thread)
+		}
+		cell.onMarkUnread =
+		{
+			[weak self] in self?.markTaskUnread(thread.id)
+		}
 		cell.onArchive =
 		{
 			[weak self] in self?.onArchiveTask?(thread.id)
@@ -285,7 +362,14 @@ extension NavigationViewController
 		}
 		else
 		{
-			rowView.isTaskRow = true
+			rowView.isTaskRow = sidebarItems.indices.contains(row) &&
+			{
+				if case .sectionHeader = sidebarItems[row]
+				{
+					return false
+				}
+				return true
+			}()
 		}
 		return rowView
 	}
@@ -310,9 +394,16 @@ extension NavigationViewController
 			{
 				activateProject(project)
 			}
-		case .showMore:
+		case .showMore, .sectionHeader:
 			break
+		case .pinnedThread(let thread):
+			markTaskRead(thread.id)
+			if thread.id != selectedThreadID
+			{
+				onSelectPinnedTask?(thread)
+			}
 		case .thread(let thread):
+			markTaskRead(thread.id)
 			if thread.id != selectedThreadID
 			{
 				onSelectThread?(thread.id)
@@ -323,12 +414,19 @@ extension NavigationViewController
 	@objc func sidebarClicked()
 	{
 		let row = chatsTable.clickedRow
-		guard sidebarItems.indices.contains(row), case .project(let project) = sidebarItems[row]
+		guard sidebarItems.indices.contains(row)
 		else
 		{
 			return
 		}
-		activateProject(project)
+		switch sidebarItems[row]
+		{
+		case .project(let project): activateProject(project)
+		case .thread(let thread), .pinnedThread(let thread):
+			markTaskRead(thread.id)
+			filterThreads()
+		case .sectionHeader, .showMore: break
+		}
 	}
 
 	func activateProject(_ project: URL)
@@ -374,11 +472,38 @@ extension NavigationViewController
 		{
 			return false
 		}
-		if case .showMore = sidebarItems[row]
+		switch sidebarItems[row]
 		{
-			return false
+		case .showMore, .sectionHeader: return false
+		default: break
 		}
 		return true
+	}
+
+	private func taskMatchesSearch(_ thread: ThreadSummary) -> Bool
+	{
+		let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+		return query.isEmpty || [thread.name, thread.preview, thread.id].compactMap
+		{
+			$0
+		}
+		.contains
+		{
+			$0.localizedCaseInsensitiveContains(query)
+		}
+	}
+
+	func markTaskUnread(_ threadID: String)
+	{
+		manuallyUnreadThreadIDs.insert(threadID)
+		unreadThreadIDs.insert(threadID)
+		filterThreads()
+	}
+
+	private func markTaskRead(_ threadID: String)
+	{
+		manuallyUnreadThreadIDs.remove(threadID)
+		unreadThreadIDs.remove(threadID)
 	}
 
 	private var activeTaskColor: NSColor

@@ -5,6 +5,80 @@ import Testing
 @MainActor
 struct WorkspaceSourceStartupTests
 {
+	@Test("Explicit project selection overrides the remembered chat in one accepted transition")
+	func projectOpeningUsesCapturedThread() throws
+	{
+		let fixture = try SourceStartupFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let project = try fixture.project("pinned-project")
+		fixture.storage.saveSelectedThreadID(
+			"remembered-thread",
+			for: project
+		)
+		fixture.storage.saveDraft(
+			"Pinned draft",
+			for: project,
+			threadID: "pinned-thread"
+		)
+		let store = fixture.makeStore()
+		defer
+		{
+			store.shutdown()
+		}
+		var projectSelections: [String?] = []
+		store.observePublications
+		{
+			publication in
+			guard publication.model.identity.canonicalCheckoutPath == project.path
+			else
+			{
+				return
+			}
+			projectSelections.append(WorkspaceSelectors(
+				model: publication.model,
+				now: .distantPast
+			).makeSnapshot().selectedThreadID)
+		}
+		store.inputs.openProject(
+			project,
+			selectedThreadID: "pinned-thread"
+		)
+		#expect(store.model.identity.canonicalCheckoutPath == project.path)
+		#expect(store.currentSnapshot.selectedThreadID == "pinned-thread")
+		#expect(store.currentSnapshot.draft == "Pinned draft")
+		#expect(!projectSelections.isEmpty)
+		#expect(projectSelections.allSatisfy
+		{
+			$0 == "pinned-thread"
+		})
+	}
+
+	@Test("Ordinary project opening retains the remembered chat")
+	func projectOpeningUsesRememberedThread() throws
+	{
+		let fixture = try SourceStartupFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let project = try fixture.project("remembered-project")
+		fixture.storage.saveSelectedThreadID(
+			"remembered-thread",
+			for: project
+		)
+		let store = fixture.makeStore()
+		defer
+		{
+			store.shutdown()
+		}
+		store.inputs.openProject(project)
+		#expect(store.model.identity.canonicalCheckoutPath == project.path)
+		#expect(store.currentSnapshot.selectedThreadID == "remembered-thread")
+	}
+
 	@Test("Source startup restores its checkout and draft while context loads before submission")
 	func latestProjectIsHydratedBeforeSubmission() async throws
 	{

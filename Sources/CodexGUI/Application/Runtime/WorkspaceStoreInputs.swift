@@ -230,6 +230,50 @@ struct WorkspaceStoreInputs
 		))))
 	}
 
+	func renameSidebarTask(
+		_ id: String,
+		name: String
+	)
+	{
+		workspaceStore.dispatch(.conversations(.managementRequested(.rename(
+			context: workspaceStore.operationContext(threadID: id),
+			name: name.trimmingCharacters(in: .whitespacesAndNewlines)
+		))))
+	}
+
+	func toggleTaskPin(_ thread: ThreadSummary)
+	{
+		store.dispatch(.preferences(.taskPinToggled(
+			store.operationContext(threadID: thread.id),
+			thread
+		)))
+	}
+
+	func selectPinnedTask(_ thread: ThreadSummary)
+	{
+		guard store.model.preferences.pinnedTasks.contains(where:
+			{
+				$0.id == thread.id
+			})
+		else
+		{
+			return
+		}
+		let projectURL = URL(fileURLWithPath: thread.cwd)
+			.standardizedFileURL.resolvingSymlinksInPath()
+		if projectURL.path == store.model.identity.canonicalCheckoutPath
+		{
+			selectThread(thread.id)
+		}
+		else
+		{
+			openProject(
+				projectURL,
+				selectedThreadID: thread.id
+			)
+		}
+	}
+
 	func archiveSelectedThread()
 	{
 		guard canManageSelectedThread, let selectedThreadID
@@ -814,7 +858,10 @@ struct WorkspaceStoreInputs
 		_ = await store.operation(for: accepted)?.wait()
 	}
 
-	func openProject(_ url: URL)
+	func openProject(
+		_ url: URL,
+		selectedThreadID: String? = nil
+	)
 	{
 		guard taskWorkspace == nil
 		else
@@ -831,7 +878,8 @@ struct WorkspaceStoreInputs
 		let canonical = url.standardizedFileURL
 		store.dispatch(.workspaceLifecycle(.projectOpeningRequested(
 			store.operationContext(),
-			canonical
+			canonical,
+			selectedThreadID: selectedThreadID
 		)))
 	}
 

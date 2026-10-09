@@ -628,6 +628,7 @@ struct PreferencesModel
 	var accountDescription = "Checking sign-in…"
 	var recentProjects: [URL] = []
 	var pinnedProjectPaths: Set<String> = []
+	var pinnedTasks: [ThreadSummary] = []
 	var projectDisplayNames: [String: String] = [:]
 	var pendingModels: OperationContext?
 	var pendingAccount: OperationContext?

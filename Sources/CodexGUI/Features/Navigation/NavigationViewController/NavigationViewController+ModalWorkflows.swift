@@ -134,6 +134,33 @@ extension NavigationViewController
 		}
 	}
 
+	func presentRenameTask(_ thread: ThreadSummary)
+	{
+		guard canManageSidebarTasks, let window = view.window, window.attachedSheet == nil
+		else
+		{
+			return
+		}
+		let capturedThreadID = thread.id
+		let complete = onRenameTask
+		presentTextEntrySheet(
+			in: window,
+			title: "Rename Conversation",
+			value: thread.name ?? thread.preview ?? "",
+			accessibilityLabel: "Conversation name",
+			actionTitle: "Rename"
+		)
+		{
+			[weak self] value in
+			guard self?.canManageSidebarTasks == true
+			else
+			{
+				return
+			}
+			complete?(capturedThreadID, value)
+		}
+	}
+
 	private func presentTextEntrySheet(
 		in window: NSWindow,
 		title: String,

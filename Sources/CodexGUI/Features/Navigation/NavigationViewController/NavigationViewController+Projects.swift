@@ -16,7 +16,7 @@ extension NavigationViewController
 		recentProjectsButton.selectItem(at: 0)
 	}
 
-	@objc func toggleProjectActions()
+	@objc func toggleProjectActions(_ sender: NSButton? = nil)
 	{
 		if projectActionsPopover.isShown
 		{
@@ -26,9 +26,10 @@ extension NavigationViewController
 		{
 			searchPopover.performClose(nil)
 			resizeProjectActionsPopover()
+			let anchor = sender ?? projectActionsButton
 			projectActionsPopover.show(
-				relativeTo: projectActionsButton.bounds,
-				of: projectActionsButton,
+				relativeTo: anchor.bounds,
+				of: anchor,
 				preferredEdge: .maxX
 			)
 			projectActionsPopover.contentViewController?.view.window?.makeFirstResponder(taskPicker)

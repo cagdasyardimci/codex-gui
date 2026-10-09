@@ -439,6 +439,49 @@ struct TaskWorkspaceCoordinatorTests
 		}
 	}
 
+	@Test func pinnedTaskOpeningAdoptsItsProjectAndThreadTogether() throws
+	{
+		let fixture = try TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let next = fixture.root.appendingPathComponent("pinned-source")
+		try FileManager.default.createDirectory(
+			at: next.appendingPathComponent(".git"),
+			withIntermediateDirectories: true
+		)
+		fixture.storage.saveSelectedThreadID(
+			"remembered-thread",
+			for: next
+		)
+		let thread = try #require(ThreadSummary(json: [
+			"id": "pinned-thread",
+			"cwd": next.path,
+		]))
+		fixture.sourceState.inputs.toggleTaskPin(thread)
+		var observedSelections: [String?] = []
+		fixture.coordinator.onChange =
+		{
+			snapshot in
+			guard snapshot.projectPath == next.path
+			else
+			{
+				return
+			}
+			#expect(fixture.coordinator.sourceProjectURL?.path == snapshot.projectPath)
+			observedSelections.append(snapshot.selectedThreadID)
+		}
+		fixture.coordinator.selectPinnedTask(thread)
+		#expect(fixture.coordinator.sourceProjectURL?.path == next.path)
+		#expect(fixture.coordinator.currentSnapshot.selectedThreadID == thread.id)
+		#expect(!observedSelections.isEmpty)
+		#expect(observedSelections.allSatisfy
+		{
+			$0 == thread.id
+		})
+	}
+
 	@Test func sourceOpeningPublishesMatchingCoordinatorAndSnapshotCheckout() throws
 	{
 		let fixture = try TaskExecutionFixture()

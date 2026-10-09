@@ -416,6 +416,10 @@ enum PreferencesAction
 		OperationContext,
 		Bool
 	)
+	case taskPinToggled(
+		OperationContext,
+		ThreadSummary
+	)
 	case projectPinToggled(
 		OperationContext,
 		canonicalPath: String
@@ -458,6 +462,7 @@ struct PreferencesRestoration
 	let recentProjects: [URL]
 	let pinnedProjectPaths: Set<String>
 	let projectDisplayNames: [String: String]
+	var pinnedTasks: [ThreadSummary] = []
 }
 
 enum UsageAction
@@ -529,7 +534,8 @@ enum WorkspaceLifecycleAction
 	)
 	case projectOpeningRequested(
 		OperationContext,
-		URL
+		URL,
+		selectedThreadID: String? = nil
 	)
 	case projectOpeningFinished(
 		OperationContext,

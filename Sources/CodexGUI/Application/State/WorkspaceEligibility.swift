@@ -172,14 +172,17 @@ struct WorkspaceEligibility
 				{
 					$0.id == threadID
 				})
+				|| model.preferences.pinnedTasks.contains(where:
+				{
+					$0.id == threadID
+				})
 		else
 		{
 			return false
 		}
 		switch operation
 		{
-		case .rename:
-			return operation.context.threadID == model.conversations.selectedConversation.threadID
+		case .rename: return true
 		case .delete: return true
 		case .archive: return !model.conversations.showingArchived
 		case .unarchive: return model.conversations.showingArchived

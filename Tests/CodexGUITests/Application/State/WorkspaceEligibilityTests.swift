@@ -358,6 +358,32 @@ struct WorkspaceEligibilityTests
 		}
 	}
 
+	@Test func sidebarRenameAcceptsKnownUnselectedAndPinnedTasksButRejectsUnknownIDs()
+	{
+		var model = fixture()
+		let thread = ThreadSummary(json: ["id": "row", "cwd": "/project"])!
+		model.conversations.threads = [thread]
+		let context = OperationContext(
+			workspace: model.identity,
+			generation: model.connection.generation,
+			requestID: UUID(),
+			threadID: thread.id
+		)
+		let rename = ThreadManagementOperation.rename(
+			context: context,
+			name: "Renamed"
+		)
+		#expect(WorkspaceEligibility(model: model).acceptsManagement(rename))
+		model.conversations.threads = []
+		#expect(!WorkspaceEligibility(model: model).acceptsManagement(rename))
+		model.preferences.pinnedTasks = [thread]
+		#expect(WorkspaceEligibility(model: model).acceptsManagement(rename))
+		#expect(WorkspaceEligibility(model: model).acceptsManagement(.archive(context)))
+		#expect(WorkspaceEligibility(model: model).acceptsManagement(.delete(context)))
+		model.connection.generation += 1
+		#expect(!WorkspaceEligibility(model: model).acceptsManagement(rename))
+	}
+
 	private func fixture() -> WorkspaceModel
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(

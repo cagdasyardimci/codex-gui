@@ -197,7 +197,8 @@ extension WorkspaceEffectRunner
 				)
 			case .prepareProjectOpening(
 				let context,
-				let url
+				let url,
+				let selectedThreadID
 			):
 				guard context.workspace == workspace
 				else
@@ -214,7 +215,8 @@ extension WorkspaceEffectRunner
 							sessionID: context.workspace.sessionID,
 							canonicalCheckoutPath: canonical.path
 						),
-						selectedThreadID: storage?.selectedThreadID(for: canonical)
+						selectedThreadID: selectedThreadID ?? storage?
+							.selectedThreadID(for: canonical)
 					))
 				}
 				else

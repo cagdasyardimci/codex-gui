@@ -8,6 +8,7 @@ enum NavigationSidebarItemsBuilder
 		currentProject: URL?,
 		pinnedProjectPaths: Set<String>,
 		visibleThreads: [ThreadSummary],
+		pinnedTasks: [ThreadSummary] = [],
 		isCurrentProjectCollapsed: Bool = false,
 		projectTaskLimit: Int = 5
 	) -> [NavigationSidebarItem]
@@ -17,14 +18,28 @@ enum NavigationSidebarItemsBuilder
 			currentProject: currentProject,
 			pinnedProjectPaths: pinnedProjectPaths
 		)
+		let pinnedIDs = Set(pinnedTasks.map(\.id))
+		let projectThreads = visibleThreads.filter
+		{
+			!pinnedIDs.contains($0.id)
+		}
 		var items: [NavigationSidebarItem] = []
+		if !pinnedTasks.isEmpty
+		{
+			items.append(.sectionHeader("Pinned"))
+			items.append(contentsOf: pinnedTasks.map
+			{
+				.pinnedThread($0)
+			})
+			items.append(.sectionHeader("Projects"))
+		}
 		for project in projects
 		{
 			items.append(.project(project))
 			let shouldShowProjectTasks = project == currentProject && !isCurrentProjectCollapsed
 			if shouldShowProjectTasks
 			{
-				let recentThreads = threadsInRecentOrder(visibleThreads)
+				let recentThreads = threadsInRecentOrder(projectThreads)
 				items.append(contentsOf: recentThreads.prefix(projectTaskLimit).map
 				{
 					.thread($0)
@@ -37,7 +52,7 @@ enum NavigationSidebarItemsBuilder
 		}
 		if currentProject == nil
 		{
-			items.append(contentsOf: visibleThreads.map
+			items.append(contentsOf: projectThreads.map
 			{
 				.thread($0)
 			})

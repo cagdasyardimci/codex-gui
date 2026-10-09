@@ -33,6 +33,12 @@ enum WorkspaceIntent
 	case newChatInProject(URL)
 	case openProject(URL)
 	case selectThread(String)
+	case selectPinnedTask(ThreadSummary)
+	case toggleTaskPin(ThreadSummary)
+	case renameTask(
+		String,
+		String
+	)
 	case refreshThreads
 	case setArchived(Bool)
 	case renameThread(String)
@@ -282,6 +288,23 @@ final class WorkspaceIntentTarget
 			}
 		case .openProject(let url): openProject(url)
 		case .selectThread(let id): operation = inputs.selectThread(id)
+		case .selectPinnedTask(let thread):
+			if let coordinator
+			{
+				coordinator.selectPinnedTask(thread)
+			}
+			else
+			{
+				inputs.selectPinnedTask(thread)
+			}
+		case .toggleTaskPin(let thread): inputs.toggleTaskPin(thread)
+		case .renameTask(
+			let id,
+			let name
+		): inputs.renameSidebarTask(
+				id,
+				name: name
+			)
 		case .refreshThreads: inputs.refreshThreads()
 		case .setArchived(let enabled): inputs.setArchivedFilter(enabled)
 		case .renameThread(let name): inputs.renameSelectedThread(name)

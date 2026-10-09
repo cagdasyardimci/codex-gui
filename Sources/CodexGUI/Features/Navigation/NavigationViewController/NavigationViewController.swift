@@ -9,6 +9,9 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var onNewChat: (() -> Void)?
 	var onRefresh: (() -> Void)?
 	var onSelectThread: ((String) -> Void)?
+	var onSelectPinnedTask: ((ThreadSummary) -> Void)?
+	var onRenameTask: ((String, String) -> Void)?
+	var onToggleTaskPin: ((ThreadSummary) -> Void)?
 	var onSelectWorkspace: ((UUID?) -> Void)?
 	var onCreateTask: ((String) -> Void)?
 	var onRemoveWorkspace: ((UUID) -> Void)?
@@ -37,7 +40,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		target: nil,
 		action: nil
 	)
-	let chatsTable = NSTableView()
+	let chatsTable = NavigationTasksTableView()
 	let searchField = NSSearchField()
 	let searchButton = NSButton(
 		title: "Search",
@@ -80,6 +83,9 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var isCurrentProjectCollapsed = false
 	var projectTaskLimit = 5
 	var pinnedProjectPaths: Set<String> = []
+	var pinnedTasks: [ThreadSummary] = []
+	var projectsHeader: NSStackView?
+	var manuallyUnreadThreadIDs: Set<String> = []
 	var projectDisplayNames: [String: String] = [:]
 	var projectInfoProject: URL?
 	var currentProjectActiveTaskCount = 0
@@ -100,6 +106,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		let brandRow = makeBrandRow()
 		configureNewChatButton()
 		let projectsHeader = makeProjectsHeader()
+		self.projectsHeader = projectsHeader
 
 		let chatScrollView = makeConversationScrollView()
 
@@ -186,7 +193,11 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		{
 			return
 		}
-		let nextUnreadThreadIDs = unreadTracker.observe(snapshot)
+		if selectedThreadID != snapshot.selectedThreadID, let selected = snapshot.selectedThreadID
+		{
+			manuallyUnreadThreadIDs.remove(selected)
+		}
+		let nextUnreadThreadIDs = unreadTracker.observe(snapshot).union(manuallyUnreadThreadIDs)
 		let unreadChanged = unreadThreadIDs != nextUnreadThreadIDs
 		unreadThreadIDs = nextUnreadThreadIDs
 		renderedPresentation = snapshot
@@ -197,6 +208,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		let projectsChanged =
 			currentProject != nextProject || recentProjects != snapshot.recentProjects
 				|| pinnedProjectPaths != snapshot.pinnedProjectPaths
+				|| pinnedTasks != snapshot.pinnedTasks
 				|| projectDisplayNames != snapshot.projectDisplayNames
 		if currentProject != nextProject
 		{
@@ -206,6 +218,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		currentProject = nextProject
 		recentProjects = snapshot.recentProjects
 		pinnedProjectPaths = snapshot.pinnedProjectPaths
+		pinnedTasks = snapshot.pinnedTasks
 		projectDisplayNames = snapshot.projectDisplayNames
 		let previousCanStartProjectChat = canStartProjectChat
 

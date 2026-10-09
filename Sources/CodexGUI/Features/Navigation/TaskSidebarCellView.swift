@@ -2,6 +2,10 @@ import AppKit
 
 final class TaskSidebarCellView: NSTableCellView
 {
+	var onRename: (() -> Void)?
+	var onTogglePin: (() -> Void)?
+	var onMarkUnread: (() -> Void)?
+	var isPinned = false
 	var onArchive: (() -> Void)?
 	var onDelete: (() -> Void)?
 	let archiveButton = NSButton(
@@ -27,6 +31,7 @@ final class TaskSidebarCellView: NSTableCellView
 	private var hoverTrackingArea: NSTrackingArea?
 	private var isHovered = false
 	private var titleTrailingConstraint: NSLayoutConstraint?
+	private var titleLeadingConstraint: NSLayoutConstraint?
 
 	private enum Layout
 	{
@@ -131,10 +136,6 @@ final class TaskSidebarCellView: NSTableCellView
 			),
 			progressRing.heightAnchor.constraint(equalToConstant: Layout.progressRingSize),
 			progressRing.centerYAnchor.constraint(equalTo: centerYAnchor),
-			titleField.leadingAnchor.constraint(
-				equalTo: leadingAnchor,
-				constant: 26
-			),
 			titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
 			actions.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
@@ -145,12 +146,23 @@ final class TaskSidebarCellView: NSTableCellView
 				equalToConstant: Layout.actionButtonWidth * 2 + Layout.actionSpacing
 			),
 		])
+		let leading = titleField.leadingAnchor.constraint(
+			equalTo: leadingAnchor,
+			constant: 26
+		)
+		leading.isActive = true
+		titleLeadingConstraint = leading
 		updateTitleLayout()
 	}
 
 	required init?(coder: NSCoder)
 	{
 		nil
+	}
+
+	func setPinnedRow(_ pinned: Bool)
+	{
+		titleLeadingConstraint?.constant = pinned ? 4 : 26
 	}
 
 	func setTurnRunning(_ running: Bool)
@@ -281,6 +293,24 @@ final class TaskSidebarCellView: NSTableCellView
 		)
 		constraint.isActive = true
 		titleTrailingConstraint = constraint
+	}
+
+	override func menu(for event: NSEvent) -> NSMenu?
+	{
+		makeContextMenu()
+	}
+
+	func makeContextMenu() -> NSMenu
+	{
+		dismissHoverCard()
+		return TaskSidebarContextMenu(
+			isPinned: isPinned,
+			onRename: onRename,
+			onTogglePin: onTogglePin,
+			onMarkUnread: onMarkUnread,
+			onArchive: archiveButton.isEnabled ? onArchive : nil,
+			onDelete: deleteButton.isEnabled ? onDelete : nil
+		)
 	}
 
 	override func mouseDown(with event: NSEvent)

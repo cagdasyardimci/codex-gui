@@ -449,6 +449,7 @@ struct WorkspaceSelectors
 			approvalMode: runPreferences.approvalMode,
 			fastMode: runPreferences.fastMode,
 			pinnedProjectPaths: model.preferences.pinnedProjectPaths,
+			pinnedTasks: model.preferences.pinnedTasks,
 			projectDisplayNames: model.preferences.projectDisplayNames,
 			preferenceWarning: preferenceWarning,
 			showingArchived: showingArchived,

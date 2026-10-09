@@ -31,7 +31,8 @@ enum PreferenceReducer
 		switch action
 		{
 		case .restored, .modelSelected, .effortSelected, .approvalModeSelected,
-				.fastModeSelected, .projectPinToggled, .projectRenamed, .projectRemembered:
+				.fastModeSelected, .taskPinToggled, .projectPinToggled, .projectRenamed,
+				.projectRemembered:
 			result = reducePreferenceChanges(
 				action,
 				model: &model
@@ -73,6 +74,7 @@ enum PreferenceReducer
 			model.preferences.runPreferences = value.runPreferences
 			model.preferences.recentProjects = value.recentProjects
 			model.preferences.pinnedProjectPaths = value.pinnedProjectPaths
+			model.preferences.pinnedTasks = value.pinnedTasks
 			model.preferences.projectDisplayNames = value.projectDisplayNames
 			model.preferences.resolveSelection()
 		case .modelSelected(
@@ -165,6 +167,37 @@ enum PreferenceReducer
 				context: context,
 				value: .run(model.preferences
 					.runPreferences)
+			))]
+		case .taskPinToggled(
+			let context,
+			let task
+		):
+			guard PreferenceScope.accepts(
+				context,
+				model: model
+			)
+			else
+			{
+				return result
+			}
+			let pinned = !model.preferences.pinnedTasks.contains
+			{
+				$0.id == task.id
+			}
+			model.preferences.pinnedTasks.removeAll
+			{
+				$0.id == task.id
+			}
+			if pinned
+			{
+				model.preferences.pinnedTasks.append(task)
+			}
+			result.effects = [.persistPreference(PreferenceWrite(
+				context: context,
+				value: .taskPin(
+					task,
+					pinned: pinned
+				)
 			))]
 		case .projectPinToggled(
 			let context,

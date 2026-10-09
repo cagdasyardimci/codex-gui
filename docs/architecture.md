@@ -28,7 +28,7 @@ A synchronous local checkpoint records recoverable thread IDs before starting a 
 
 `TaskWorkspaceCoordinator` maintains the store registry and executes checkout lifecycle effects. `WorkspaceCoordinatorReducer` owns selection, creation, recovery, cleanup and aggregate quit decisions. Git worktree operations revalidate repository, branch, path and clean-file ownership; removal retains the branch and durable task record.
 
-Shared persistence preserves existing project/thread keys and ordering.
+Shared persistence preserves existing project/thread keys and ordering. Task pins retain compact conversation summaries in shared local preferences, independent of the selected project. The sidebar shows these tasks in a global Pinned section; opening a task from another project carries its thread ID through project adoption. Successful archive or permanent deletion removes its pin, and successful renames refresh its pinned title. Task context-menu mutations capture the row identity and revalidate workspace ownership and management eligibility before execution. Manual unread markers remain local to the navigation session and clear when the task is opened.
 
 ## Presentation
 

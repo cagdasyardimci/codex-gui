@@ -9,6 +9,7 @@ struct PreferenceWrite
 	{
 		case model, run, recent
 		case pin(String)
+		case taskPin(String)
 		case name(String)
 	}
 
@@ -19,6 +20,10 @@ struct PreferenceWrite
 		case .model: .model
 		case .run: .run
 		case .recent: .recent
+		case .taskPin(
+			let task,
+			_
+		): .taskPin(task.id)
 		case .pin(
 			let path,
 			_
@@ -36,6 +41,10 @@ struct PreferenceWrite
 		case run(RunPreferences)
 		case pin(
 			path: String,
+			pinned: Bool
+		)
+		case taskPin(
+			ThreadSummary,
 			pinned: Bool
 		)
 		case name(

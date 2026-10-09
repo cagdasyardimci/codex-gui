@@ -58,12 +58,13 @@ extension NavigationViewController
 		newChatButton.alignment = .left
 	}
 
-	func makeProjectsHeader() -> NSStackView
+	func makeProjectsHeader(actionsButton: NSButton? = nil) -> NSStackView
 	{
+		let projectActionsButton = actionsButton ?? self.projectActionsButton
 		let projectsCaption = DesktopTheme.sectionLabel("Projects")
 		projectsCaption.font = .systemFont(ofSize: 13)
 		projectActionsButton.target = self
-		projectActionsButton.action = #selector(toggleProjectActions)
+		projectActionsButton.action = #selector(toggleProjectActions(_:))
 		projectActionsButton.setAccessibilityLabel("Project and conversation actions")
 		DesktopTheme.styleButton(
 			projectActionsButton,
@@ -179,6 +180,10 @@ extension NavigationViewController
 		chatsTable.action = #selector(sidebarClicked)
 		chatsTable.delegate = self
 		chatsTable.dataSource = self
+		chatsTable.onContextMenuForRow =
+		{
+			[weak self] row in self?.taskContextMenu(for: row)
+		}
 		chatsTable.setAccessibilityLabel("Projects and saved conversations")
 
 		let chatScrollView = NSScrollView()

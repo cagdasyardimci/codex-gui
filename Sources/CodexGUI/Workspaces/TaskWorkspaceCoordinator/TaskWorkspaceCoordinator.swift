@@ -187,7 +187,10 @@ final class TaskWorkspaceCoordinator
 		}
 	}
 
-	func openProject(_ url: URL)
+	func openProject(
+		_ url: URL,
+		selectedThreadID: String? = nil
+	)
 	{
 		var proposed = model
 		_ = WorkspaceCoordinatorReducer.reduce(
@@ -211,7 +214,53 @@ final class TaskWorkspaceCoordinator
 				onChange?(currentSnapshot)
 			}
 		}
-		sourceStore.inputs.openProject(url)
+		sourceStore.inputs.openProject(
+			url,
+			selectedThreadID: selectedThreadID
+		)
+	}
+
+	func selectPinnedTask(_ thread: ThreadSummary)
+	{
+		let isPinned = sourceStore.model.preferences.pinnedTasks.contains
+		{
+			$0.id == thread.id
+		}
+		|| selectedStore.model.preferences.pinnedTasks.contains
+		{
+			$0.id == thread.id
+		}
+		guard isPinned
+		else
+		{
+			return
+		}
+		if model.workspaces.values.contains(where:
+			{
+				$0.phase == .active && $0.threadID == thread.id
+			})
+		{
+			selectThread(thread.id)
+			return
+		}
+		guard !thread.cwd.isEmpty
+		else
+		{
+			return
+		}
+		let project = URL(fileURLWithPath: thread.cwd).standardizedFileURL.resolvingSymlinksInPath()
+		if sourceStore.model.identity.canonicalCheckoutPath == project.path
+		{
+			selectSourceCheckout()
+			sourceStore.inputs.selectThread(thread.id)
+		}
+		else
+		{
+			openProject(
+				project,
+				selectedThreadID: thread.id
+			)
+		}
 	}
 
 	func selectSourceCheckout()

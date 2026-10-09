@@ -1,7 +1,7 @@
 import Foundation
 
 /// Values displayed by the app. The app-server remains the source of conversation history.
-struct ThreadSummary: Equatable
+struct ThreadSummary: Equatable, Codable
 {
 	let id: String
 	var name: String?

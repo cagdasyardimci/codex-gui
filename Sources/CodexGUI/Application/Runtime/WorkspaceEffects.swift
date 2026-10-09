@@ -13,7 +13,8 @@ enum WorkspaceEffect
 	)
 	case prepareProjectOpening(
 		OperationContext,
-		URL
+		URL,
+		selectedThreadID: String? = nil
 	)
 	case restoreArchivedSelection(
 		OperationContext,
