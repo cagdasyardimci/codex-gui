@@ -1,6 +1,6 @@
 # Application architecture
 
-The application uses Model View Intent (MVI) with one canonical workspace store per checkout/session. AppKit owns windows, controls, focus, selection and layout. Backend conversation history remains owned by Codex; local stores retain drafts and preferences.
+The application uses Model View Intent (MVI) with one canonical workspace store per checkout/session. AppKit owns windows, controls, focus, selection and layout. Backend conversation history remains owned by Codex; local stores retain drafts and preferences. Local user rows remain visible until a matching server user item replaces them in place. Matching uses the accepted turn, displayed text and attachment paths; identical messages in other turns or with different server item IDs remain separate.
 
 File placement follows [conventions](../CONVENTIONS.md#file-organization-and-ownership). For the task procedure and documentation routes, see [agent workflow](agent-workflow.md).
 

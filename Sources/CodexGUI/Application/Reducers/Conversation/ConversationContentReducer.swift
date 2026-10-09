@@ -270,6 +270,7 @@ enum ConversationContentReducer
 				return (entry.id, activity)
 			}
 		)
+		content.content.localUserMessageTurnIDs.removeAll()
 		content.entries = entries(for: turns).map
 		{
 			var entry = $0
@@ -320,6 +321,12 @@ enum ConversationContentReducer
 			)
 			{
 				content in
+				for entry in content.entries where entry.kind == .user
+					&& entry.id.hasPrefix("local:")
+					&& content.content.localUserMessageTurnIDs[entry.id] == nil
+				{
+					content.content.localUserMessageTurnIDs[entry.id] = turn.id
+				}
 				content.content.latestObservedGitTurnID = turn.id
 				content.content.turnTimings[turn.id] = ConversationTurnTiming(
 					turn: turn,
@@ -575,6 +582,35 @@ enum ConversationContentReducer
 		)
 	}
 
+	private static func matchingLocalUserMessage(
+		_ entry: ConversationEntry,
+		turnID: String,
+		content: ConversationProjection
+	) -> Int?
+	{
+		guard entry.kind == .user
+		else
+		{
+			return nil
+		}
+		return content.entries.firstIndex
+		{
+			local in
+			local.kind == .user
+				&& content.content.localUserMessageTurnIDs[local.id] == turnID
+				&& local.body == entry.body
+				&& local.imageAttachments.map(\.path) == entry.imageAttachments.map(\.path)
+				&& local.sourceReferences.count == entry.sourceReferences.count
+				&& zip(
+					local.sourceReferences,
+					entry.sourceReferences
+				).allSatisfy
+				{
+					$0.kind == $1.kind && $0.path == $1.path
+				}
+		}
+	}
+
 	static func upsert(
 		_ item: CodexItem,
 		turnID: String,
@@ -590,6 +626,15 @@ enum ConversationContentReducer
 			id: id
 		)
 		let existingIndex = content.content.entryIndex(for: id)
+			?? matchingLocalUserMessage(
+				entry,
+				turnID: turnID,
+				content: content
+			)
+		if let index = existingIndex
+		{
+			content.content.localUserMessageTurnIDs.removeValue(forKey: content.entries[index].id)
+		}
 		if case .subagent(let activity) = entry.activity
 		{
 			let previous = existingIndex.flatMap

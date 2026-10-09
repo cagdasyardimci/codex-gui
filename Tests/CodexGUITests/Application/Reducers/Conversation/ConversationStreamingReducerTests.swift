@@ -129,6 +129,127 @@ struct ConversationStreamingReducerTests
 		}
 	}
 
+	@Test(arguments: [false, true])
+	func serverUserMessageReplacesLocalRowBeforeAnyHistoryRefresh(_ newChat: Bool) throws
+	{
+		var model = fixture()
+		let inputs: [TurnInput] = [.text("Same request"), .localImage(path: "/tmp/image.png")]
+		let submission = ComposerSubmission(
+			context: OperationContext(
+				workspace: model.identity,
+				generation: model.connection.generation,
+				requestID: UUID(),
+				threadID: newChat ? nil : "worker"
+			),
+			conversation: newChat ? .newChat : conversation,
+			draft: ComposerDraft(text: "Same request"),
+			inputs: inputs,
+			skills: [],
+			modelID: nil,
+			effort: nil,
+			preferences: .standard,
+			retainedContextRequestID: UUID()
+		)
+		let user = try #require(CodexItem(json: [
+			"id": "user",
+			"type": "userMessage",
+			"content": [
+				["type": "text", "text": "Same request"],
+				["type": "localImage", "path": "/tmp/image.png"]
+			]
+		]))
+		let earlier = ConversationContentReducer.entry(
+			for: user,
+			id: "earlier:user"
+		)
+		if !newChat
+		{
+			model.conversations.content[conversation] = ConversationContentModel(entries: [earlier])
+		}
+		_ = ConversationReducer.reduceDomainEvent(
+			&model,
+			.submissionAccepted(submission)
+		)
+		if newChat
+		{
+			_ = ConversationReducer.reduceDomainEvent(
+				&model,
+				.submissionPrepared(PreparedSubmission(
+					submission: submission,
+					thread: ThreadDetail(
+						summary: ThreadSummary(json: ["id": "worker", "cwd": projectPath])!,
+						turns: [],
+						nextTurnsCursor: nil
+					)
+				))
+			)
+		}
+		ConversationContentReducer.observe(
+			.turnStarted(
+				threadId: "worker",
+				turn: turn(
+					"current",
+					items: [],
+					status: "inProgress"
+				)
+			),
+			model: &model
+		)
+		// A delayed event from an older turn must not consume the current local row.
+		if !newChat
+		{
+			ConversationContentReducer.observe(
+				.itemCompleted(
+					threadId: "worker",
+					turnId: "earlier",
+					item: user
+				),
+				model: &model
+			)
+			#expect(model.conversations.content[conversation]?.entries.count == 2)
+		}
+		for event in [
+			AppServerEvent.itemStarted(
+				threadId: "worker",
+				turnId: "current",
+				item: user
+			),
+			.itemCompleted(
+				threadId: "worker",
+				turnId: "current",
+				item: user
+			)
+		]
+		{
+			ConversationContentReducer.observe(
+				event,
+				model: &model
+			)
+			let entries = try #require(model.conversations.content[conversation]?.entries)
+			#expect(entries.map(\.id) == (newChat ? [] : [earlier.id]) + ["current:user"])
+			#expect(entries.last?.imageAttachments.map(\.path) == ["/tmp/image.png"])
+			#expect(entries.last?.body == "Same request")
+			#expect(model.conversations.content[conversation]?.localUserMessageTurnIDs
+				.isEmpty == true)
+		}
+		// A second identical server item is a separate message, even within the same turn.
+		let second = try #require(CodexItem(json: [
+			"id": "second-user",
+			"type": "userMessage",
+			"content": [["type": "text", "text": "Same request"],
+						["type": "localImage", "path": "/tmp/image.png"]]
+		]))
+		ConversationContentReducer.observe(
+			.itemStarted(
+				threadId: "worker",
+				turnId: "current",
+				item: second
+			),
+			model: &model
+		)
+		#expect(model.conversations.content[conversation]?.entries.count == (newChat ? 2 : 3))
+	}
+
 	@Test(arguments: ["a", "e\u{301}", "👩🏽‍💻"])
 	func expansionThresholdCountsGraphemesAcrossFragmentBoundaries(_ grapheme: String)
 	{

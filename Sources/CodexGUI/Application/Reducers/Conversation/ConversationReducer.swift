@@ -836,8 +836,13 @@ enum ConversationReducer
 			{
 				content in
 				ConversationContentReducer.resetChanges(&content)
+				let localID = "local:\(submission.context.requestID)"
+				if let turnID = submission.context.turnID
+				{
+					content.content.localUserMessageTurnIDs[localID] = turnID
+				}
 				content.entries.append(ConversationEntry(
-					id: "local:\(submission.context.requestID)",
+					id: localID,
 					kind: .user,
 					title: "You",
 					body: UserMessagePresenter.body(for: submission.inputs),
