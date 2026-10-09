@@ -186,7 +186,7 @@ extension ExecutionReducer
 			if item.type == "commandExecution"
 			{
 				model.execution.activeActivity = CommandExecutionStatus.isTerminal(item.status)
-					? nil : (item.command ?? item.type)
+					? nil : "Running a command…"
 			}
 			else if item.type == "mcpToolCall"
 			{

@@ -464,6 +464,7 @@ final class ConversationViewController: NSViewController,
 		activityLabel.font = .systemFont(ofSize: 12)
 		activityLabel.textColor = .secondaryLabelColor
 		activityLabel.lineBreakMode = .byTruncatingTail
+		activityLabel.maximumNumberOfLines = 1
 		activityLabel.setAccessibilityLabel("Reported task activity")
 		let activeTaskRow = AppKitLayout.horizontalStack([activeTaskLabel, returnToTaskButton])
 		activeTaskLabel.setContentCompressionResistancePriority(

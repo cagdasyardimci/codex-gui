@@ -62,11 +62,12 @@ struct CurrentActionLabelIntegrationTests
 		#expect(label.highlightLayer != nil)
 		#expect(label.stringValue == "Thinking")
 
-		snapshot.activeActivity = "Running a command"
+		snapshot.activeActivity = "Running a command…"
 		let previous = label.highlightLayer
 		controller.render(snapshot)
 		controller.view.layoutSubtreeIfNeeded()
-		#expect(label.stringValue == "Running a command")
+		#expect(label.stringValue == "Running a command…")
+		#expect(label.maximumNumberOfLines == 1)
 		#expect(label.highlightLayer != nil && label.highlightLayer !== previous)
 
 		snapshot.activeExecutionState = .completed

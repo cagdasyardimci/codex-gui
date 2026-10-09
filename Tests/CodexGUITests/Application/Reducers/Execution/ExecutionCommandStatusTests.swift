@@ -16,7 +16,7 @@ struct ExecutionCommandStatusTests
 			model: &model
 		)
 		#expect(model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
-		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "printf fixture")
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "Running a command…")
 		try observeCommand(
 			status: status,
 			context: context,
@@ -38,7 +38,20 @@ struct ExecutionCommandStatusTests
 			model: &model
 		)
 		#expect(model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
-		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "printf fixture")
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "Running a command…")
+	}
+
+	@Test(arguments: ["printf fixture", "python3 - <<'PY'\nfrom pathlib import Path\nPY"])
+	func commandActivityUsesAShortDescription(command: String) throws
+	{
+		var (model, context) = fixture()
+		try observeCommand(
+			status: "running",
+			command: command,
+			context: context,
+			model: &model
+		)
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "Running a command…")
 	}
 
 	@Test(arguments: ["interrupted", "cancelled"])
@@ -81,6 +94,7 @@ struct ExecutionCommandStatusTests
 	private func observeCommand(
 		status: String?,
 		itemType: String = "commandExecution",
+		command: String = "printf fixture",
 		context: OperationContext,
 		model: inout WorkspaceModel
 	) throws
@@ -88,7 +102,7 @@ struct ExecutionCommandStatusTests
 		var json: [String: Any] = [
 			"id": "command",
 			"type": itemType,
-			"command": "printf fixture"
+			"command": command
 		]
 		if let status
 		{
