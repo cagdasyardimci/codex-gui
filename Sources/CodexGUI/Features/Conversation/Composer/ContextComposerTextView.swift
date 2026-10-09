@@ -30,6 +30,27 @@ final class ContextComposerTextView: NSTextView
 		needsDisplay = true
 	}
 
+	override func keyDown(with event: NSEvent)
+	{
+		let editingModifiers = event.modifierFlags.intersection([
+			.shift,
+			.command,
+			.control,
+			.option
+		])
+		if isEditable, !hasMarkedText(), editingModifiers == [.shift],
+			event.keyCode == 36 || event.keyCode == 76
+		{
+			// AppKit can map Shift-Return to the same command as Return, which sends a draft.
+			insertText(
+				"\n",
+				replacementRange: selectedRange()
+			)
+			return
+		}
+		super.keyDown(with: event)
+	}
+
 	override func draw(_ dirtyRect: NSRect)
 	{
 		super.draw(dirtyRect)
