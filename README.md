@@ -10,7 +10,9 @@ The app uses AppKit and connects to your installed Codex CLI through `codex app-
 2. Sign in through the Codex CLI or the app's **Sign In…** button.
 3. Choose **Open Project…** to open a Git repository, or select a recent project.
 4. Choose **New Chat** or open a saved chat.
-5. Enter a prompt and press **Send** or **Command-Return**.
+5. Enter a prompt and press **Send** or **Command-Return**. **Return** sends a single-line
+   draft and inserts a newline when the draft already contains a line break. Use
+   **Shift-Return** to start a multiline draft and **Command-Return** to send it.
 
 ## Requirements
 

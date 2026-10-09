@@ -24,6 +24,17 @@ extension ConversationViewController
 		{
 			return true
 		}
+		if textView === composer, !composer.hasMarkedText(),
+			fileSearchPopover?.isShown != true,
+			commandSelector == #selector(NSResponder.insertNewline(_:)),
+			composer.string.rangeOfCharacter(from: .newlines) == nil
+		{
+			if imageImportTasks.isEmpty
+			{
+				onSend?()
+			}
+			return true
+		}
 		guard textView === composer, !composer.hasMarkedText(), fileSearchPopover?.isShown == true
 		else
 		{
