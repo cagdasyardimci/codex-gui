@@ -53,6 +53,12 @@ final class GitReviewTreeCell: NSStackView
 @MainActor
 final class GitReviewFileRowView: NSTableRowView
 {
+	// Selection uses the canvas with an outline, so labels keep their normal colors.
+	override var interiorBackgroundStyle: NSView.BackgroundStyle
+	{
+		.normal
+	}
+
 	override func drawSelection(in dirtyRect: NSRect)
 	{
 		guard isSelected
