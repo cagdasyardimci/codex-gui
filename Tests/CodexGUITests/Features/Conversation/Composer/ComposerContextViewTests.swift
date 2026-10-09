@@ -4,7 +4,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite
+@Suite(.serialized)
 @MainActor
 struct ComposerContextViewTests
 {
@@ -61,8 +61,75 @@ struct ComposerContextViewTests
 			in: view,
 			title: "Remove"
 		))
+		#expect(findButton(
+			in: view,
+			title: "Inspect"
+		) == nil)
+		#expect(remove.alphaValue == 0)
+		let tile = try #require(remove.superview as? ComposerImageAttachmentView)
+		let event = try #require(NSEvent.otherEvent(
+			with: .applicationDefined,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: 0,
+			context: nil,
+			subtype: 0,
+			data1: 0,
+			data2: 0
+		))
+		tile.mouseEntered(with: event)
+		#expect(remove.alphaValue == 1)
+		tile.mouseExited(with: event)
+		#expect(remove.alphaValue == 0)
+
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 500,
+				height: 240
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentView = view
+		defer
+		{
+			window.close()
+		}
+		view.layoutSubtreeIfNeeded()
+		#expect(abs(tile.frame.width - 120) < 0.5)
+		#expect(abs(tile.frame.height - 120) < 0.5)
+		let closeFrame = tile.convert(
+			remove.bounds,
+			from: remove
+		)
+		#expect(abs(tile.bounds.maxX - closeFrame.maxX - 4) < 0.5)
+		#expect(abs(tile.bounds.maxY - closeFrame.maxY - 4) < 0.5)
+		#expect(!containsTextField(in: view))
+		let expand = try #require(findButton(
+			in: tile,
+			title: ""
+		))
+		expand.performClick(nil)
+		let sheet = try #require(window.attachedSheet)
+		#expect(findImageView(in: try #require(sheet.contentView)) != nil)
+		window.endSheet(sheet)
+		sheet.orderOut(nil)
+		tile.mouseEntered(with: event)
 		remove.performClick(nil)
 		#expect(removedID == item.id)
+	}
+
+	private func containsTextField(in view: NSView) -> Bool
+	{
+		view is NSTextField || view.subviews.contains
+		{
+			containsTextField(in: $0)
+		}
 	}
 
 	private func findImageView(in view: NSView) -> NSImageView?

@@ -61,9 +61,34 @@ final class ComposerContextView: NSView
 	{
 		var rowContents: [NSView] = []
 
-		if let imagePreview = makeImagePreview(for: item)
+		if item.kind == .image
 		{
-			rowContents.append(imagePreview)
+			let previewButton = NSButton(
+				title: "Expand image",
+				target: self,
+				action: #selector(inspectItem(_:))
+			)
+			previewButton.identifier = NSUserInterfaceItemIdentifier(item.id)
+			previewButton.setAccessibilityLabel("Expand attached image \(item.title)")
+
+			let attachment = ComposerImageAttachmentView(
+				image: item.path.flatMap
+				{
+					NSImage(contentsOfFile: $0)
+				},
+				previewButton: previewButton,
+				removeButton: makeRemoveButton(for: item)
+			)
+
+			let row = NSView()
+			attachment.translatesAutoresizingMaskIntoConstraints = false
+			row.addSubview(attachment)
+			NSLayoutConstraint.activate([
+				attachment.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+				attachment.topAnchor.constraint(equalTo: row.topAnchor),
+				attachment.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+			])
+			return row
 		}
 
 		rowContents.append(makeDescriptionLabel(for: item))
@@ -78,30 +103,6 @@ final class ComposerContextView: NSView
 		contextRow.setAccessibilityLabel("\(item.kind.title): \(item.detail)")
 
 		return contextRow
-	}
-
-	private func makeImagePreview(for item: ComposerContextItem) -> NSImageView?
-	{
-		guard item.kind == .image,
-				let path = item.path,
-				let image = NSImage(contentsOfFile: path)
-		else
-		{
-			return nil
-		}
-
-		let imagePreview = NSImageView(image: image)
-
-		imagePreview.imageScaling = .scaleProportionallyUpOrDown
-		imagePreview.widthAnchor.constraint(equalToConstant: 120).isActive = true
-		imagePreview.heightAnchor.constraint(equalToConstant: 120).isActive = true
-
-		imagePreview.wantsLayer = true
-		imagePreview.layer?.cornerRadius = 6
-		imagePreview.layer?.masksToBounds = true
-		imagePreview.setAccessibilityLabel("Preview of attached image \(item.title)")
-
-		return imagePreview
 	}
 
 	private func makeDescriptionLabel(for item: ComposerContextItem) -> NSTextField
@@ -196,7 +197,9 @@ final class ComposerContextView: NSView
 		}
 
 		let alert = NSAlert()
-		alert.messageText = "\(item.kind.title): \(item.detail)"
+		alert.messageText = item.kind == .image
+			? "Attached image"
+			: "\(item.kind.title): \(item.detail)"
 		alert.addButton(withTitle: "Close")
 
 		alert.accessoryView = makeInspectionAccessory(for: item)

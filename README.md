@@ -43,7 +43,7 @@ Start agent work at [AGENTS.md](AGENTS.md). The [documentation map](docs/agent-w
 
 ## Using the app
 
-Open a Git repository with **Open Project…** or choose a recent project. Select a saved chat or choose **New Chat**. Enter a prompt and press **Send** or Command-Return. The composer supports project-file search and `@file` completion, image paste and attachments, selected code ranges, and reusable references. Inspect or remove supplied context before sending. Model and reasoning options come from the connected backend.
+Open a Git repository with **Open Project…** or choose a recent project. Select a saved chat or choose **New Chat**. Enter a prompt and press **Send** or Command-Return. The composer supports project-file search and `@file` completion, image paste and attachments, selected code ranges, and reusable references. Click an attached image thumbnail to expand it. Its close button appears at the top right on hover or keyboard focus. Other supplied context can be inspected or removed before sending. Model and reasoning options come from the connected backend.
 
 The conversation shows streamed messages, reported plans, command and tool activity, and approval or question requests. **Steer** sends a follow-up to the active turn. **Stop** waits for a reported agent outcome and any known commands to report their outcomes; an interrupted agent turn does not guarantee command cancellation. The Changes pane selects historical turns, opens changed files, prepares targeted revision requests, and shows observed command results with their source and freshness. Drafts and unresolved command identities are stored per project and chat in `UserDefaults`; conversation records stay with Codex.
 
