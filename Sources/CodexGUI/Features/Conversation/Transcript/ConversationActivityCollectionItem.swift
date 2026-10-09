@@ -42,6 +42,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private var hoverSynchronizationTask: Task<Void, Never>?
 	private let icon = NSImageView()
 	private let titleLabel = NSTextField(labelWithString: "")
+	private let titleClick = NSClickGestureRecognizer()
 	private let subagentsButton = NSButton(
 		title: "",
 		target: nil,
@@ -121,6 +122,10 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		titleLabel.font = .systemFont(ofSize: 14)
 		titleLabel.textColor = .secondaryLabelColor
 		titleLabel.lineBreakMode = .byTruncatingTail
+		titleClick.target = self
+		titleClick.action = #selector(toggle)
+		titleClick.isEnabled = false
+		titleLabel.addGestureRecognizer(titleClick)
 		titleLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
@@ -300,6 +305,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		imageTask?.cancel()
 		imageTask = nil
 		row = nil
+		titleClick.isEnabled = false
 		copyCommandButton.resetHover()
 		copyOutputButton.resetHover()
 		hoverSynchronizationTask?.cancel()
@@ -368,6 +374,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func renderHeader(_ row: ConversationActivityRow)
 	{
+		titleClick.isEnabled = row.kind == .command && row.command != nil
 		let hasLink = row.filePath != nil && row.linkTitle != nil
 		titleLabel.stringValue = hasLink ? "Read" : row.title
 		if row.kind == .read, !hasLink, let linkTitle = row.linkTitle, row.title == "Read"
