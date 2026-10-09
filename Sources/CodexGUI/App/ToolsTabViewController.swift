@@ -12,6 +12,9 @@ final class ToolsTabViewController: NSViewController
 		static let controlSize: CGFloat = 24
 		static let controlSpacing: CGFloat = 4
 		static let addButtonSpacing: CGFloat = 8
+		static let tabLeadingInset: CGFloat = 12
+		static let tabTrailingInset: CGFloat = 4
+		static let minimumTabSelectionWidth: CGFloat = 24
 		static let contentInset: CGFloat = 20
 		static let toolTileWidth: CGFloat = 240
 	}
@@ -75,9 +78,11 @@ final class ToolsTabViewController: NSViewController
 	var minimumTabBarWidth: CGFloat
 	{
 		let trailingControlCount = summaryButton.isHidden ? 2 : 3
-		return Layout.controlSize * CGFloat(trailingControlCount + 1)
+		let minimumTabWidth = Layout.tabLeadingInset + Layout.minimumTabSelectionWidth
+			+ Layout.controlSize + Layout.tabTrailingInset
+		return minimumTabWidth + Layout.controlSize * CGFloat(trailingControlCount)
 			+ Layout.controlSpacing * CGFloat(trailingControlCount - 1)
-			+ Layout.tabSpacing + Layout.addButtonSpacing
+			+ Layout.addButtonSpacing
 	}
 
 	static func paneIcon() -> NSImage
@@ -757,7 +762,7 @@ final class ToolsTabViewController: NSViewController
 			tab.heightAnchor.constraint(equalToConstant: Layout.tabHeight),
 			selectButton.leadingAnchor.constraint(
 				equalTo: tab.leadingAnchor,
-				constant: 12
+				constant: Layout.tabLeadingInset
 			),
 			selectButton.topAnchor.constraint(equalTo: tab.topAnchor),
 			selectButton.bottomAnchor.constraint(equalTo: tab.bottomAnchor),
@@ -765,7 +770,7 @@ final class ToolsTabViewController: NSViewController
 			trailingButton.centerYAnchor.constraint(equalTo: tab.centerYAnchor),
 			trailingButton.trailingAnchor.constraint(
 				equalTo: tab.trailingAnchor,
-				constant: -4
+				constant: -Layout.tabTrailingInset
 			),
 		])
 		return tab
