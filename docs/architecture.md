@@ -50,6 +50,10 @@ outer vertical scroll view; images fit the section and PDFs use an embedded nati
 Preview loading is cancelled when dismissed or when its section is discarded. Retained Markdown
 refreshes under its owning view's appearance when the theme changes.
 
+Code panes in the Git comparison own horizontal scrolling. Vertical wheel gestures over their
+text or gutters route to the enclosing comparison viewer in both unified and split layouts,
+including when code wrapping is enabled. Shift-wheel input retains native horizontal handling.
+
 ## Recorded latest Git turn
 
 `ConversationReportedGitTurn` in `Application/Reducers/Conversation/` retains the known latest editing turn's identity and available timestamps independently of loaded transcript bodies. `ConversationReportedGitTurnProjection` in `Application/Presentation/` resolves that identity against currently resident reported changes. Missing or evicted payload is unavailable; an authoritative completed file-change report containing no changes produces an empty result. Older loaded edits cannot replace a known later editing turn without trusted ordering evidence.

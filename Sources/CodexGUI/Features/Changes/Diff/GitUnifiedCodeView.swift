@@ -10,7 +10,7 @@ final class GitUnifiedCodeView: NSView
 	}
 
 	private let source: GitDiffTextView
-	private let scroll = NSScrollView()
+	private let scroll = GitCodeScrollView()
 	private let rows: [GitDiffRow]
 	private let path: String
 	private let gutterMode: GutterMode
