@@ -40,6 +40,16 @@ Pure reported-patch composition belongs to `Application/Reducers/Review/Conversa
 
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and [validation](validation.md) for verification commands and acceptance limits.
 
+Git comparison file headers offer rich preview for Markdown, images and PDFs supported by the
+native renderer; source and configuration files omit that control. Preview reads the target Git
+blob, or the base blob for a deleted file. Unstored working-tree bytes must match the comparison's
+blob identity, with an 8 MiB read limit. Comparisons without a complete blob identity leave the
+control disabled. The eye button toggles between inline rich content and the retained diff in
+that file's section. Markdown measures its height at the current width and uses the comparison's
+outer vertical scroll view; images fit the section and PDFs use an embedded native viewer.
+Preview loading is cancelled when dismissed or when its section is discarded. Retained Markdown
+refreshes under its owning view's appearance when the theme changes.
+
 ## Recorded latest Git turn
 
 `ConversationReportedGitTurn` in `Application/Reducers/Conversation/` retains the known latest editing turn's identity and available timestamps independently of loaded transcript bodies. `ConversationReportedGitTurnProjection` in `Application/Presentation/` resolves that identity against currently resident reported changes. Missing or evicted payload is unavailable; an authoritative completed file-change report containing no changes produces an empty result. Older loaded edits cannot replace a known later editing turn without trusted ordering evidence.

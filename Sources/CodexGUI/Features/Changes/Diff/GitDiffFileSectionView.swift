@@ -15,6 +15,10 @@ final class GitDiffFileSectionView: NSStackView
 	private(set) var diffViews: [GitAdaptiveDiffView] = []
 	private let onToggleFileDiff: (NSButton) -> Void
 	private let onExpandGap: (NSButton) -> Void
+	private let onRichPreview: (NSButton) -> Void
+	private var previewButton: NSButton?
+	private var richPreviewView: GitRichPreviewView?
+	private let filePath: String
 
 	init(
 		file: GitComparisonFile,
@@ -23,11 +27,14 @@ final class GitDiffFileSectionView: NSStackView
 		layoutPreference: GitDiffLayoutPreference,
 		wrapsCode: Bool,
 		onToggleFileDiff: @escaping (NSButton) -> Void,
-		onExpandGap: @escaping (NSButton) -> Void
+		onExpandGap: @escaping (NSButton) -> Void,
+		onRichPreview: @escaping (NSButton) -> Void
 	)
 	{
 		self.onToggleFileDiff = onToggleFileDiff
 		self.onExpandGap = onExpandGap
+		self.onRichPreview = onRichPreview
+		filePath = file.path
 		super.init(frame: .zero)
 		render(
 			file: file,
@@ -51,6 +58,46 @@ final class GitDiffFileSectionView: NSStackView
 	@objc private func expandGap(_ sender: NSButton)
 	{
 		onExpandGap(sender)
+	}
+
+	@objc private func richPreview(_ sender: NSButton)
+	{
+		onRichPreview(sender)
+	}
+
+	func toggleRichPreview(makePreview: () -> GitRichPreviewView)
+	{
+		if let preview = richPreviewView
+		{
+			preview.cancelLoading()
+			removeArrangedSubview(preview)
+			preview.removeFromSuperview()
+			richPreviewView = nil
+			for body in arrangedSubviews.dropFirst(2)
+			{
+				body.isHidden = false
+			}
+			previewButton?.state = .off
+			previewButton?.contentTintColor = .secondaryLabelColor
+			previewButton?.toolTip = "Rich preview of the compared file version"
+			previewButton?.setAccessibilityLabel("Rich preview of \(filePath)")
+		}
+		else
+		{
+			for body in arrangedSubviews.dropFirst(2)
+			{
+				body.isHidden = true
+			}
+			let preview = makePreview()
+			richPreviewView = preview
+			addArrangedSubview(preview)
+			preview.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
+			previewButton?.state = .on
+			previewButton?.contentTintColor = .systemBlue
+			previewButton?.toolTip = "Show diff for \(filePath)"
+			previewButton?.setAccessibilityLabel("Show diff for \(filePath)")
+		}
+		needsLayout = true
 	}
 
 	private func render(
@@ -153,9 +200,26 @@ final class GitDiffFileSectionView: NSStackView
 			action: #selector(toggleFileDiff(_:))
 		)
 		toggleDiff.identifier = NSUserInterfaceItemIdentifier(file.id)
-		let actions: [NSButton] = [
-			("Preview file unavailable", GitReviewReferenceIcons.Kind.eye),
-			("Open file unavailable", .openFile),
+		var actions: [NSButton] = []
+		if GitRichPreviewKind(path: file.path) != nil
+		{
+			let preview = referenceButton(
+				"Rich preview of \(file.path)",
+				image: GitReviewReferenceIcons.image(.eye),
+				action: #selector(richPreview(_:))
+			)
+			preview.isEnabled = GitRichPreviewContent.blobID(for: file) != nil
+			preview.setButtonType(.pushOnPushOff)
+			preview.identifier = NSUserInterfaceItemIdentifier(file.id)
+			previewButton = preview
+			preview.toolTip = preview.isEnabled
+				? "Rich preview of the compared file version"
+				: "Rich preview unavailable: this comparison does not contain "
+				+ "a complete file version"
+			actions.append(preview)
+		}
+		actions += [
+			("Open file unavailable", GitReviewReferenceIcons.Kind.openFile),
 			("Code action unavailable", .code),
 			("Additional file actions unavailable", .ellipsis)
 		].map

@@ -776,8 +776,47 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			onExpandGap:
 			{
 				[weak self] button in self?.expandGap(button)
+			},
+			onRichPreview:
+			{
+				[weak self] button in
+				self?.showRichPreview(
+					file: file,
+					snapshot: presentation.snapshot,
+					button: button
+				)
 			}
 		)
+	}
+
+	private func showRichPreview(
+		file: GitComparisonFile,
+		snapshot: GitComparisonSnapshot,
+		button: NSButton
+	)
+	{
+		guard runtime.state.isOpen, runtime.state.snapshot?.id == snapshot.id,
+				runtime.state.owner == snapshot.request.owner,
+				let kind = GitRichPreviewKind(path: file.path),
+				GitRichPreviewContent.blobID(for: file) != nil
+		else
+		{
+			return
+		}
+		if collapsedFileIDs.contains(file.id)
+		{
+			toggleFileDiff(button)
+		}
+		fileSections[Data(file.id.utf8)]?.toggleRichPreview
+		{
+			GitRichPreviewView(kind: kind)
+			{
+				try await GitRichPreviewContent.read(
+					file: file,
+					snapshot: snapshot
+				)
+			}
+		}
 	}
 
 	private func updateComparisonControls(_ state: GitReviewState) -> Bool
