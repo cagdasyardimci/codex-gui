@@ -8,7 +8,7 @@ struct AppServerListHistoryFixture
 	let server: AppServer
 	let directory: URL
 
-	static func make() throws -> Self
+	static func make(overlappingThreadPages: Bool = false) throws -> Self
 	{
 		let directory = FileManager.default.temporaryDirectory
 			.appendingPathComponent("AppServerTransportWriterTests-\(UUID().uuidString)")
@@ -29,6 +29,7 @@ struct AppServerListHistoryFixture
 
 		directory = pathlib.Path(__file__).parent
 		list_counts = {}
+		overlapping_thread_pages = \(overlappingThreadPages ? "True" : "False")
 		def send(value):
 		    print(json.dumps(value, ensure_ascii=False), flush=True)
 
@@ -41,6 +42,14 @@ struct AppServerListHistoryFixture
 		        send({'id': message['id'], 'result': {}})
 		    elif method in ('model/list', 'thread/list'):
 		        list_counts[method] = list_counts.get(method, 0) + 1
+		        if method == 'thread/list' and overlapping_thread_pages:
+		            page = list_counts[method]
+		            ids = ['first', 'first', 'shared'] if page == 1 else ['shared', 'last']
+		            rows = [{'id': id, 'cwd': message['params']['cwd'],
+		                     'name': 'Same title', 'preview': 'page-' + str(page)} for id in ids]
+		            cursor = 'second-page' if page == 1 else None
+		            send({'id': message['id'], 'result': {'data': rows, 'nextCursor': cursor}})
+		            continue
 		        if method == 'model/list':
 		            rows = [{'model': 'fixture-model', 'displayName': 'Fixture model'}]
 		        else:

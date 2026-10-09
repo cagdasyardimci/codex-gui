@@ -16,6 +16,8 @@ Backend details stay in memory for the current process connection and are limite
 
 Conversation management uses `thread/list` with its `archived` filter, `thread/name/set`, `thread/archive`, and `thread/unarchive`. Chat-list filtering searches loaded titles and previews. Message search separately searches loaded conversation content and can fetch more history. Neither uses the experimental server-side `thread/search` method. Unsupported management requests surface their backend error in the app.
 
+Conversation listing keeps the first occurrence of each thread ID in backend page order, including when pages overlap. Different thread IDs remain separate tasks even when their titles match. Every returned row is validated before duplicate IDs are removed.
+
 CLI version probing has a 10-second deadline and runs away from the main actor. A stalled or continuously writing `--version` child cannot leave the interface waiting indefinitely.
 
 ## Verifying a CLI upgrade

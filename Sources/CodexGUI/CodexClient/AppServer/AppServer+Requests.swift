@@ -122,6 +122,7 @@ extension AppServer
 	{
 		let cwd = directory.standardizedFileURL.path
 		var threadSummaries: [ThreadSummary] = []
+		var seenThreadIDs: Set<String> = []
 		var cursorTracker = PaginationCursorTracker(
 			repeatedCursorMessage: "Codex repeated the conversation list cursor."
 		)
@@ -158,7 +159,11 @@ extension AppServer
 				throw AppServerError
 					.protocolError("Codex returned a conversation from another checkout.")
 			}
-			threadSummaries += page
+			// The backend can repeat task IDs within a page or across pages.
+			threadSummaries += page.filter
+			{
+				seenThreadIDs.insert($0.id).inserted
+			}
 			cursor = try cursorTracker.advance(to: result["nextCursor"] as? String)
 		}
 		while cursor != nil
