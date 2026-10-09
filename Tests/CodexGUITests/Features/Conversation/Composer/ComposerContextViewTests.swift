@@ -124,6 +124,96 @@ struct ComposerContextViewTests
 		#expect(removedID == item.id)
 	}
 
+	@Test func multipleImagesShareVisibleRowsAndWrapAfterResizing() throws
+	{
+		_ = NSApplication.shared
+		let view = ComposerContextView()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 260,
+				height: 400
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentView = view
+		defer
+		{
+			window.close()
+		}
+		let items = (1 ... 3).map
+		{
+			ComposerContextItem(
+				kind: .image,
+				title: "Image \($0)"
+			)
+		}
+		var removed: [String] = []
+		view.onRemove =
+		{
+			removed.append($0)
+		}
+		view.render(items: items)
+		view.layoutSubtreeIfNeeded()
+		let tiles = imageTiles(in: view)
+		try #require(tiles.count == 3)
+		let frames = tiles.map
+		{
+			view.convert(
+				$0.bounds,
+				from: $0
+			)
+		}
+		#expect(abs(frames[0].minY - frames[1].minY) < 0.5)
+		#expect(frames[0].maxX <= frames[1].minX)
+		#expect(abs(frames[0].minY - frames[2].minY) >= 120)
+		#expect(frames.allSatisfy
+		{
+			view.bounds.contains($0)
+		})
+		let secondRemove = try #require(findButton(
+			in: tiles[1],
+			title: "Remove"
+		))
+		secondRemove.performClick(nil)
+		#expect(removed == [items[1].id])
+		window.setContentSize(NSSize(
+			width: 140,
+			height: 400
+		))
+		view.layoutSubtreeIfNeeded()
+		let narrowFrames = imageTiles(in: view).map
+		{
+			view.convert(
+				$0.bounds,
+				from: $0
+			)
+		}
+		#expect(view.bounds.width == 140)
+		#expect(narrowFrames.count == 3)
+		#expect(Set(narrowFrames.map(\.minY)).count == 3)
+		#expect(narrowFrames.allSatisfy
+		{
+			view.bounds.contains($0)
+		})
+	}
+
+	private func imageTiles(in view: NSView) -> [ComposerImageAttachmentView]
+	{
+		if let tile = view as? ComposerImageAttachmentView
+		{
+			return [tile]
+		}
+		return view.subviews.flatMap
+		{
+			imageTiles(in: $0)
+		}
+	}
+
 	private func containsTextField(in view: NSView) -> Bool
 	{
 		view is NSTextField || view.subviews.contains

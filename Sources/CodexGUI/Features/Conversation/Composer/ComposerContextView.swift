@@ -6,6 +6,9 @@ final class ComposerContextView: NSView
 	var onRemove: ((String) -> Void)?
 
 	private let itemStack = NSStackView()
+	private var renderedImageColumnCount = 1
+	private var itemRowsByID: [String: NSView] = [:]
+	private static let imageRowSpacing: CGFloat = 8
 
 	override init(frame frameRect: NSRect)
 	{
@@ -37,6 +40,7 @@ final class ComposerContextView: NSView
 		}
 
 		currentItems = items
+		itemRowsByID.removeAll()
 		rebuildItemRows(items)
 		isHidden = items.isEmpty
 	}
@@ -49,11 +53,81 @@ final class ComposerContextView: NSView
 			itemRow.removeFromSuperview()
 		}
 
+		renderedImageColumnCount = imageColumnCount
+		var imageRow: NSView?
+		var imagesInRow = 0
 		for item in items
 		{
-			let itemRow = makeContextRow(for: item)
-			itemStack.addArrangedSubview(itemRow)
-			itemRow.widthAnchor.constraint(equalTo: itemStack.widthAnchor).isActive = true
+			let itemRow: NSView
+			if let existingRow = itemRowsByID[item.id]
+			{
+				itemRow = existingRow
+				itemRow.removeFromSuperview()
+			}
+			else
+			{
+				itemRow = makeContextRow(for: item)
+				itemRowsByID[item.id] = itemRow
+				if item.kind == .image
+				{
+					itemRow.widthAnchor.constraint(
+						equalToConstant: ComposerImageAttachmentView.sideLength
+					).isActive = true
+				}
+			}
+			if item.kind == .image
+			{
+				if imageRow == nil || imagesInRow == renderedImageColumnCount
+				{
+					let row = NSView()
+					itemStack.addArrangedSubview(row)
+					row.widthAnchor.constraint(equalTo: itemStack.widthAnchor).isActive = true
+					imageRow = row
+					imagesInRow = 0
+				}
+				if let imageRow
+				{
+					itemRow.translatesAutoresizingMaskIntoConstraints = false
+					imageRow.addSubview(itemRow)
+					let offset = CGFloat(imagesInRow)
+						* (ComposerImageAttachmentView.sideLength + Self.imageRowSpacing)
+					NSLayoutConstraint.activate([
+						itemRow.leadingAnchor.constraint(
+							equalTo: imageRow.leadingAnchor,
+							constant: offset
+						),
+						itemRow.topAnchor.constraint(equalTo: imageRow.topAnchor),
+						itemRow.bottomAnchor.constraint(equalTo: imageRow.bottomAnchor),
+					])
+				}
+				imagesInRow += 1
+			}
+			else
+			{
+				imageRow = nil
+				imagesInRow = 0
+				itemStack.addArrangedSubview(itemRow)
+				itemRow.widthAnchor.constraint(equalTo: itemStack.widthAnchor).isActive = true
+			}
+		}
+	}
+
+	private var imageColumnCount: Int
+	{
+		max(
+			1,
+			Int((bounds.width + Self.imageRowSpacing)
+				/ (ComposerImageAttachmentView.sideLength + Self.imageRowSpacing))
+		)
+	}
+
+	override func layout()
+	{
+		super.layout()
+		if renderedImageColumnCount != imageColumnCount
+		{
+			rebuildItemRows(currentItems)
+			super.layout()
 		}
 	}
 

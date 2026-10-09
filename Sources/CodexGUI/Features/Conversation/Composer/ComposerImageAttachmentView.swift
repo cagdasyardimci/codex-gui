@@ -3,6 +3,8 @@ import AppKit
 @MainActor
 final class ComposerImageAttachmentView: NSView
 {
+	static let sideLength: CGFloat = 120
+
 	private let removeButton: NSButton
 	private var pointerTrackingArea: NSTrackingArea?
 
@@ -40,8 +42,8 @@ final class ComposerImageAttachmentView: NSView
 		removeButton.translatesAutoresizingMaskIntoConstraints = false
 		addSubview(removeButton)
 		NSLayoutConstraint.activate([
-			widthAnchor.constraint(equalToConstant: 120),
-			heightAnchor.constraint(equalToConstant: 120),
+			widthAnchor.constraint(equalToConstant: Self.sideLength),
+			heightAnchor.constraint(equalToConstant: Self.sideLength),
 			removeButton.topAnchor.constraint(
 				equalTo: topAnchor,
 				constant: 4

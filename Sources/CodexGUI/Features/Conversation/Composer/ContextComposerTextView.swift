@@ -98,14 +98,20 @@ final class ContextComposerTextView: NSTextView
 
 	override func paste(_ sender: Any?)
 	{
-		if isEditable, acceptsImageAttachments, let onImageSource,
-			let source = pastedImageSource(from: imagePasteboard)
+		if isEditable, acceptsImageAttachments, let onImageSource
 		{
-			onImageSource(
-				source,
-				"Pasted image"
-			)
-			return
+			let sources = pastedImageSources(from: imagePasteboard)
+			if !sources.isEmpty
+			{
+				for source in sources
+				{
+					onImageSource(
+						source,
+						"Pasted image"
+					)
+				}
+				return
+			}
 		}
 		if isEditable, acceptsImageAttachments, let onImage,
 			let image = NSImage(pasteboard: imagePasteboard)
@@ -153,11 +159,18 @@ final class ContextComposerTextView: NSTextView
 
 	private func encodedImageType(in pasteboard: NSPasteboard) -> NSPasteboard.PasteboardType?
 	{
-		if let preferred = pasteboard.availableType(from: [.png, .tiff])
+		encodedImageType(in: pasteboard.types ?? [])
+	}
+
+	private func encodedImageType(
+		in types: [NSPasteboard.PasteboardType]
+	) -> NSPasteboard.PasteboardType?
+	{
+		if let preferred = [.png, .tiff].first(where: types.contains)
 		{
 			return preferred
 		}
-		return pasteboard.types?.first
+		return types.first
 		{
 			UTType($0.rawValue)?.conforms(to: .image) == true
 		}
@@ -169,8 +182,10 @@ final class ContextComposerTextView: NSTextView
 			(pasteboard.readObjects(
 				forClasses: [NSURL.self],
 				options: [.urlReadingFileURLsOnly: true]
-			) as? [URL])?.first,
-			UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
+			) as? [URL])?.first(where:
+				{
+					UTType(filenameExtension: $0.pathExtension)?.conforms(to: .image) == true
+				})
 		else
 		{
 			return nil
@@ -178,22 +193,37 @@ final class ContextComposerTextView: NSTextView
 		return url
 	}
 
-	private func pastedImageSource(from pasteboard: NSPasteboard) -> DraftImageSource?
+	private func pastedImageSources(from pasteboard: NSPasteboard) -> [DraftImageSource]
 	{
-		if let type = encodedImageType(in: pasteboard), let data = pasteboard.data(forType: type)
+		// Each item is one attachment; PNG/TIFF representations of it are alternatives.
+		let sources = (pasteboard.pasteboardItems ?? []).compactMap
 		{
-			return .data(data)
-		}
-		if let url = imageFileURL(in: pasteboard)
-		{
-			return .file(url)
-		}
-		guard let image = NSImage(pasteboard: pasteboard)
-		else
-		{
+			item -> DraftImageSource? in
+			if let type = encodedImageType(in: item.types), let data = item.data(forType: type)
+			{
+				return .data(data)
+			}
+			if let path = item.string(forType: .fileURL), let url = URL(string: path),
+				url.isFileURL,
+				UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
+			{
+				return .file(url)
+			}
 			return nil
 		}
-		return DraftImageSource(image: image)
+		if !sources.isEmpty
+		{
+			return sources
+		}
+		// Retain AppKit conversion for clipboard formats without an encoded image source.
+		return (pasteboard.readObjects(
+			forClasses: [NSImage.self],
+			options: nil
+		) as? [NSImage])?
+			.compactMap
+			{
+				DraftImageSource(image: $0)
+			} ?? []
 	}
 
 	private func draggedImageSource(from pasteboard: NSPasteboard) -> (DraftImageSource, String)?
