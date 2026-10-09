@@ -969,7 +969,7 @@ private final class ConversationSourcesDocumentView: NSView
 
 /// Reserves the trailing icon slot so hover changes do not move the operation label.
 @MainActor
-private final class SourceOperationDisclosureButton: NSButton
+private final class SourceOperationDisclosureButton: DesktopAttributedTitleButton
 {
 	private enum Indicator: Equatable
 	{

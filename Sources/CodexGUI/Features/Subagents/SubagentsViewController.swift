@@ -362,7 +362,7 @@ final class SubagentsViewController: NSViewController
 		avatar.widthAnchor.constraint(equalToConstant: Self.avatarDimension).isActive = true
 		avatar.heightAnchor.constraint(equalToConstant: Self.avatarDimension).isActive = true
 
-		let name = NSButton()
+		let name = DesktopAttributedTitleButton()
 		name.cell = SubagentNameButtonCell(textCell: agent.displayName)
 		name.target = self
 		name.action = #selector(selectThread(_:))

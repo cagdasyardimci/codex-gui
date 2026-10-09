@@ -142,6 +142,12 @@ final class ModelEffortSelectionButton: NSButton
 		)
 	}
 
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
 	override func draw(_ dirtyRect: NSRect)
 	{
 		let shouldDrawSelectionBackground =

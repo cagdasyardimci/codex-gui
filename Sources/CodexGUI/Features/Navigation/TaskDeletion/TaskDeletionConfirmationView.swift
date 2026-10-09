@@ -29,7 +29,7 @@ final class TaskDeletionConfirmationView: NSViewController
 
 	var onDecision: ((Bool) -> Void)?
 	let headingLabel = NSTextField(labelWithString: "Delete task?")
-	let warningLabel = NSTextField(
+	let warningLabel = TaskDeletionWarningLabel(
 		wrappingLabelWithString:
 		"This permanently deletes the task and its subagent tasks.\nThis cannot be undone."
 	)
@@ -83,6 +83,7 @@ final class TaskDeletionConfirmationView: NSViewController
 				.paragraphStyle: paragraph,
 			]
 		)
+		warningLabel.setForegroundColor(Self.warningColor)
 		warningLabel.preferredMaxLayoutWidth =
 			LayoutMetrics.width - LayoutMetrics.contentInset * 2
 	}

@@ -239,7 +239,7 @@ final class PinnedSummaryViewController: NSViewController
 		{
 			"Sources · \(formattedCount($0))"
 		} ?? "Sources" : "Sources"
-		let sources = NSButton(
+		let sources = DesktopAttributedTitleButton(
 			title: title,
 			target: self,
 			action: #selector(toggleSources(_:))
@@ -459,7 +459,7 @@ final class PinnedSummaryViewController: NSViewController
 		recordID: String? = nil
 	) -> NSButton
 	{
-		let button = NSButton(
+		let button = DesktopAttributedTitleButton(
 			title: title,
 			target: self,
 			action: #selector(navigate(_:))

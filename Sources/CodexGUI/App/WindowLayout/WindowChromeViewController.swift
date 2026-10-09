@@ -169,10 +169,19 @@ private final class RoundedContentShadow: NSView
 		updateAppearance()
 	}
 
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		updateAppearance()
+	}
+
 	private func updateAppearance()
 	{
 		let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		layer?.backgroundColor = DesktopTheme.chrome.cgColor
+		layer?.backgroundColor = DesktopTheme.resolvedCGColor(
+			DesktopTheme.chrome,
+			for: self
+		)
 		layer?.shadowOpacity = isDark ? 0 : 0.08
 	}
 }
@@ -218,7 +227,10 @@ private final class RoundedContentPanel: NSView
 		CATransaction.setDisableActions(true)
 		layer?.cornerRadius = isGitReviewFocused ? 0 : radius
 		layer?.borderWidth = isGitReviewFocused ? 0 : 1
-		layer?.borderColor = DesktopTheme.border.cgColor
+		layer?.borderColor = DesktopTheme.resolvedCGColor(
+			DesktopTheme.border,
+			for: self
+		)
 		CATransaction.commit()
 	}
 

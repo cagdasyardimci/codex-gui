@@ -6,8 +6,14 @@ import Testing
 @Suite(.serialized) @MainActor
 struct GitCodeAppearanceTests
 {
-	@Test(arguments: [GitDiffRowKind.addition, .deletion])
-	func storedWordHighlightFollowsAppearanceWithoutChangingSelection(kind: GitDiffRowKind) throws
+	@Test(
+		arguments: [GitDiffRowKind.addition, .deletion],
+		[false, true]
+	)
+	func storedWordHighlightFollowsAppearanceWithoutChangingSelection(
+		kind: GitDiffRowKind,
+		rerenderWithWordWrap: Bool
+	) throws
 	{
 		let application = NSApplication.shared
 		let originalAppearance = application.appearance
@@ -60,8 +66,10 @@ struct GitCodeAppearanceTests
 		for name: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua, .aqua]
 		{
 			window.appearance = NSAppearance(named: name)
-			// The word-wrap action rerenders outside AppKit's appearance callback.
-			code.wrapsCode.toggle()
+			if rerenderWithWordWrap
+			{
+				code.wrapsCode.toggle()
+			}
 			let stored = try #require(text.textStorage?.attribute(
 				.backgroundColor,
 				at: 0,

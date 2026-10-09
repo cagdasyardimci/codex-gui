@@ -19,6 +19,12 @@ final class SlashCommandMenuRowView: NSTableRowView
 		}
 	}
 
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
 	override func drawBackground(in dirtyRect: NSRect)
 	{
 		if isHovered && !isSelected

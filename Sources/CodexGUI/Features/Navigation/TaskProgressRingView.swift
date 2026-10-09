@@ -45,7 +45,10 @@ final class TaskProgressRingView: NSView
 		)
 		ring.strokeStart = 0.08
 		ring.strokeEnd = 0.88
-		ring.strokeColor = NSColor.secondaryLabelColor.cgColor
+		ring.strokeColor = DesktopTheme.resolvedCGColor(
+			.secondaryLabelColor,
+			for: self
+		)
 		CATransaction.commit()
 	}
 
@@ -58,6 +61,7 @@ final class TaskProgressRingView: NSView
 	override func viewDidMoveToWindow()
 	{
 		super.viewDidMoveToWindow()
+		needsLayout = true
 		updateRotation()
 	}
 

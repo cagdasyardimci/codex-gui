@@ -147,6 +147,147 @@ struct DesktopAppearanceTests
 		}
 	}
 
+	@Test func chromeAndRunningRingUseOwnerAppearanceDespiteOppositeDrawingAppearance() throws
+	{
+		_ = NSApplication.shared
+		let window = makeWindow()
+		window.appearance = NSAppearance(named: .aqua)
+		defer
+		{
+			window.close()
+		}
+		let dark = try #require(NSAppearance(named: .darkAqua))
+		var controller: WindowChromeViewController!
+		var ring: TaskProgressRingView!
+		dark.performAsCurrentDrawingAppearance
+		{
+			controller = WindowChromeViewController(
+				split: NSSplitViewController(),
+				accountButton: NSButton()
+			)
+			window.contentViewController = controller
+			ring = TaskProgressRingView(frame: NSRect(
+				x: 0,
+				y: 0,
+				width: 16,
+				height: 16
+			))
+			controller.view.addSubview(ring)
+			ring.setRunning(true)
+			controller.view.layoutSubtreeIfNeeded()
+		}
+		let shadow = try #require(controller.view.subviews.dropFirst().first)
+		let panel = try #require(controller.view.subviews.dropFirst(2).first)
+		let shape = try #require(ring.layer?.sublayers?.first as? CAShapeLayer)
+		let ringFrame = ring.frame
+		for name: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua, .aqua]
+		{
+			let ambient = try #require(NSAppearance(named: name == .aqua ? .darkAqua : .aqua))
+			ambient.performAsCurrentDrawingAppearance
+			{
+				window.appearance = NSAppearance(named: name)
+				controller.view.layoutSubtreeIfNeeded()
+			}
+			try expectColor(
+				shadow.layer?.backgroundColor,
+				DesktopTheme.chrome,
+				in: shadow
+			)
+			try expectColor(
+				panel.layer?.borderColor,
+				DesktopTheme.border,
+				in: panel
+			)
+			try expectColor(
+				shape.strokeColor,
+				.secondaryLabelColor,
+				in: ring
+			)
+			#expect(shadow.layer?.shadowOpacity == (name == .darkAqua ? 0 : 0.08))
+			#expect(panel.layer?.borderWidth == 1)
+			#expect(ring.frame == ringFrame)
+			#expect(ring.isRunning)
+			#expect(!ring.isHidden)
+			#expect(shape.animation(forKey: "taskRotation") != nil)
+		}
+		controller.setGitReviewFocused(true)
+		controller.view.layoutSubtreeIfNeeded()
+		window.appearance = NSAppearance(named: .darkAqua)
+		controller.view.layoutSubtreeIfNeeded()
+		#expect(shadow.isHidden)
+		#expect(panel.layer?.borderWidth == 0)
+		#expect(panel.layer?.cornerRadius == 0)
+		ring.setRunning(false)
+		window.appearance = NSAppearance(named: .aqua)
+		controller.view.layoutSubtreeIfNeeded()
+		#expect(ring.isHidden)
+		#expect(shape.animation(forKey: "taskRotation") == nil)
+	}
+
+	@Test func turnChangeSummaryRefreshesColorsWithoutRerendering() throws
+	{
+		_ = NSApplication.shared
+		let window = makeWindow()
+		defer
+		{
+			window.close()
+		}
+		let button = TurnChangeSummaryButton()
+		window.contentView?.addSubview(button)
+		button.render(ConversationTurnChangeSummary(
+			ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+		))
+		let title = button.attributedTitle.string
+		let size = button.intrinsicContentSize
+		let accessibilityLabel = button.accessibilityLabel()
+		#expect(window.makeFirstResponder(button))
+		for name: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua, .aqua]
+		{
+			let ambient = try #require(NSAppearance(named: name == .aqua ? .darkAqua : .aqua))
+			ambient.performAsCurrentDrawingAppearance
+			{
+				window.appearance = NSAppearance(named: name)
+			}
+			try expectColor(
+				button.layer?.backgroundColor,
+				DesktopTheme.canvas,
+				in: button
+			)
+			try expectColor(
+				button.layer?.borderColor,
+				DesktopTheme.border,
+				in: button
+			)
+			for (text, semantic) in [
+				("2 files changed", NSColor.secondaryLabelColor),
+				("+3", NSColor.systemGreen),
+				("-1", NSColor.systemRed),
+			]
+			{
+				let index = (title as NSString).range(of: text).location
+				let color = try #require(button.attributedTitle.attribute(
+					.foregroundColor,
+					at: index,
+					effectiveRange: nil
+				) as? NSColor)
+				try expectColor(
+					color.cgColor,
+					semantic,
+					in: button
+				)
+			}
+			#expect(button.attributedTitle.string == title)
+			#expect(button.intrinsicContentSize == size)
+			#expect(button.accessibilityLabel() == accessibilityLabel)
+			#expect(button.toolTip == "View changes")
+			#expect(!button.isHidden)
+			#expect(window.firstResponder === button)
+		}
+		button.render(nil)
+		window.appearance = NSAppearance(named: .darkAqua)
+		#expect(button.isHidden)
+	}
+
 	private func makeWindow() -> NSWindow
 	{
 		let window = NSWindow(

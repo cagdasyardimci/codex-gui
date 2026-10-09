@@ -63,6 +63,73 @@ struct TaskDeletionConfirmationViewTests
 		try writeEvidence(dialog)
 	}
 
+	@Test func retainedWarningRefreshesItsForegroundWithoutChangingTextOrStyle() throws
+	{
+		_ = NSApplication.shared
+		let dialog = TaskDeletionConfirmationView()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 420,
+				height: 158
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = dialog
+		defer
+		{
+			window.close()
+		}
+		dialog.view.layoutSubtreeIfNeeded()
+		let originalText = dialog.warningLabel.stringValue
+		let originalFont = try #require(dialog.warningLabel.attributedStringValue.attribute(
+			.font,
+			at: 0,
+			effectiveRange: nil
+		) as? NSFont)
+		let originalParagraph = try #require(dialog.warningLabel.attributedStringValue.attribute(
+			.paragraphStyle,
+			at: 0,
+			effectiveRange: nil
+		) as? NSParagraphStyle)
+		let originalFrame = dialog.warningLabel.frame
+		for name in [NSAppearance.Name.aqua, .darkAqua, .aqua, .darkAqua]
+		{
+			window.appearance = try #require(NSAppearance(named: name))
+			dialog.view.layoutSubtreeIfNeeded()
+			let text = dialog.warningLabel.attributedStringValue
+			let color = try #require(text.attribute(
+				.foregroundColor,
+				at: 0,
+				effectiveRange: nil
+			) as? NSColor)
+			let rgb = try #require(color.usingColorSpace(.deviceRGB))
+			let expected: CGFloat = name == .darkAqua ? 153 / 255 : 147 / 255
+			#expect(abs(rgb.redComponent - expected) < 0.001)
+			#expect(abs(rgb.greenComponent - expected) < 0.001)
+			#expect(abs(rgb.blueComponent - expected) < 0.001)
+			#expect(dialog.warningLabel.stringValue == originalText)
+			#expect(text.attribute(
+				.font,
+				at: 0,
+				effectiveRange: nil
+			) as? NSFont == originalFont)
+			#expect(text.attribute(
+				.paragraphStyle,
+				at: 0,
+				effectiveRange: nil
+			)
+				as? NSParagraphStyle == originalParagraph)
+			#expect(dialog.warningLabel.frame == originalFrame)
+			#expect(dialog.cancelButton.keyEquivalent == "\r")
+			#expect(dialog.deleteButton.accessibilityLabel() == "Confirm task deletion")
+		}
+	}
+
 	private func frame(
 		of control: NSView,
 		in root: NSView

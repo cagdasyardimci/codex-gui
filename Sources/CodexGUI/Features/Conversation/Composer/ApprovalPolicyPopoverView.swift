@@ -333,6 +333,12 @@ private final class ApprovalPolicyRow: NSButton
 		needsDisplay = true
 	}
 
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
 	override func draw(_ dirtyRect: NSRect)
 	{
 		if hovered

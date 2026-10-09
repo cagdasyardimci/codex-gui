@@ -402,6 +402,12 @@ final class EffortSlider: NSSlider
 		CATransaction.commit()
 	}
 
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
 	override func viewDidMoveToWindow()
 	{
 		super.viewDidMoveToWindow()

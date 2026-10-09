@@ -102,6 +102,8 @@ struct ConversationTurnChangeSummary: Equatable
 @MainActor
 final class TurnChangeSummaryButton: NSButton
 {
+	private var summary: ConversationTurnChangeSummary?
+
 	init()
 	{
 		super.init(frame: .zero)
@@ -136,6 +138,7 @@ final class TurnChangeSummaryButton: NSButton
 
 	func render(_ summary: ConversationTurnChangeSummary?)
 	{
+		self.summary = summary
 		guard let summary
 		else
 		{
@@ -143,27 +146,7 @@ final class TurnChangeSummaryButton: NSButton
 			return
 		}
 		let fileText = "\(summary.fileCount) \(summary.fileCount == 1 ? "file" : "files") changed"
-		let title = NSMutableAttributedString(
-			string: fileText,
-			attributes: [
-				.font: NSFont.systemFont(ofSize: 13),
-				.foregroundColor: NSColor.secondaryLabelColor,
-			]
-		)
-		for (text, color) in [
-			(" +\(summary.additions)", NSColor.systemGreen),
-			(" -\(summary.deletions)", NSColor.systemRed),
-		]
-		{
-			title.append(NSAttributedString(
-				string: text,
-				attributes: [
-					.font: NSFont.systemFont(ofSize: 13),
-					.foregroundColor: color,
-				]
-			))
-		}
-		attributedTitle = title
+		updateColors()
 		setAccessibilityLabel(
 			"\(fileText), \(summary.additions) additions, "
 				+ "\(summary.deletions) deletions. View changes"
@@ -175,7 +158,46 @@ final class TurnChangeSummaryButton: NSButton
 
 	private func updateColors()
 	{
-		layer?.backgroundColor = DesktopTheme.canvas.cgColor
-		layer?.borderColor = DesktopTheme.border.cgColor
+		layer?.backgroundColor = DesktopTheme.resolvedCGColor(
+			DesktopTheme.canvas,
+			for: self
+		)
+		layer?.borderColor = DesktopTheme.resolvedCGColor(
+			DesktopTheme.border,
+			for: self
+		)
+		guard let summary
+		else
+		{
+			return
+		}
+		effectiveAppearance.performAsCurrentDrawingAppearance
+		{
+			let fileText = "\(summary.fileCount) "
+				+ "\(summary.fileCount == 1 ? "file" : "files") changed"
+			let title = NSMutableAttributedString(
+				string: fileText,
+				attributes: [
+					.font: NSFont.systemFont(ofSize: 13),
+					.foregroundColor: NSColor.secondaryLabelColor.usingColorSpace(.deviceRGB)
+						?? NSColor.secondaryLabelColor,
+				]
+			)
+			for (text, color) in [
+				(" +\(summary.additions)", NSColor.systemGreen),
+				(" -\(summary.deletions)", NSColor.systemRed),
+			]
+			{
+				title.append(NSAttributedString(
+					string: text,
+					attributes: [
+						.font: NSFont.systemFont(ofSize: 13),
+						.foregroundColor: color.usingColorSpace(.deviceRGB) ?? color,
+					]
+				))
+			}
+			attributedTitle = title
+		}
+		needsDisplay = true
 	}
 }

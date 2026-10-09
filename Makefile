@@ -31,7 +31,7 @@ FILTER_full-access := FullAccessConfirmationTests
 FILTER_desktop-layout := DesktopLayoutTests
 FILTER_window-lifecycle := closedWindowDetachesItsStorePublicationObserver
 FILTER_settled-hover := shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning
-FILTER_terminal-hover := terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus
+FILTER_terminal-hover := terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus|ConversationTerminalCopyButtonTests
 FILTER_task-title := taskTitleScrollsOnceAndResetsAfterHover
 FILTER_task-hover := taskHoverCardUsesOwnRowMetadataAndDismissesOnExitOrWindowResign
 FILTER_task-archive := taskArchiveButtonRoutesToItsOwnRowWithoutChangingSelection
@@ -41,7 +41,7 @@ FILTER_search-sheet := MessageSearchSheetLifecycleTests
 FILTER_image-panel := ExpandedImagePreviewTests|localAndInlineImagesExpandInTheWindowAndReuseOrDetachDismissesThem|imageImportCreatesPreviewAndRemovalControl|imageThumbnailUsesSharedViewerAndDismissesWithItsOwner
 FILTER_sidebar-appearance := TaskSidebarAppearanceTests
 FILTER_transcript-appearance := TranscriptLayerAppearanceTests
-FILTER_composer-appearance := ComposerAppearanceTests
+FILTER_composer-appearance := Composer(CustomDrawing)?AppearanceTests
 FILTER_sources-appearance := SourcesHoverAppearanceTests
 FILTER_rail-appearance := TurnRailAppearanceTests
 

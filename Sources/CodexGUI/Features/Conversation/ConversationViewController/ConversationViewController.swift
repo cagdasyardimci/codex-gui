@@ -64,7 +64,7 @@ final class ConversationViewController: NSViewController,
 	var latestModelEffortTitle: String?
 	var latestFastMode = false
 	let modelEffortController = ModelEffortPopoverView()
-	let approvalPolicyButton = NSButton(
+	let approvalPolicyButton = DesktopAttributedTitleButton(
 		title: "Ask for approval",
 		target: nil,
 		action: nil

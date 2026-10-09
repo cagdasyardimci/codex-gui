@@ -109,6 +109,12 @@ final class ConversationTerminalCopyButton: NSButton
 		return accepted
 	}
 
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
 	override func draw(_ dirtyRect: NSRect)
 	{
 		if isHovered
