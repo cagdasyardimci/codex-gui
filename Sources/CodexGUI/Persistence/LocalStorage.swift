@@ -825,12 +825,16 @@ final class LocalStorage
 			return
 		}
 
-		let pendingItems = contextByPendingRequestID.values.flatMap
+		var pendingImagePaths: Set<String> = []
+		for items in contextByPendingRequestID.values
 		{
-			$0
+			addOwnedImagePaths(
+				in: items,
+				to: &pendingImagePaths
+			)
 		}
 		// Live requests protect their images before persisted ownership needs to be read.
-		let unleasedCandidates = ownedCandidates.subtracting(ownedImagePaths(in: pendingItems))
+		let unleasedCandidates = ownedCandidates.subtracting(pendingImagePaths)
 		guard !unleasedCandidates.isEmpty
 		else
 		{
@@ -846,26 +850,46 @@ final class LocalStorage
 
 	private func persistedOwnedImagePaths() -> Set<String>
 	{
-		let draftItems = contextRecords(forKey: Key.draftContext).values.flatMap
+		var paths: Set<String> = []
+		for projectDrafts in contextRecords(forKey: Key.draftContext).values
 		{
-			$0.values.flatMap
+			for items in projectDrafts.values
 			{
-				$0
+				addOwnedImagePaths(
+					in: items,
+					to: &paths
+				)
 			}
 		}
-		let sentItems = sentReferenceRecords().map(\.item)
-		return ownedImagePaths(in: draftItems + sentItems)
+		addOwnedImagePaths(
+			in: sentReferenceRecords().lazy.map(\.item),
+			to: &paths
+		)
+		return paths
 	}
 
 	private func ownedImagePaths(in items: [ComposerContextItem]) -> Set<String>
 	{
-		Set(
-			items.compactMap
-			{
-				item in
-				item.kind == .image ? item.path.flatMap(imageStore.ownedPath) : nil
-			}
+		var paths: Set<String> = []
+		addOwnedImagePaths(
+			in: items,
+			to: &paths
 		)
+		return paths
+	}
+
+	private func addOwnedImagePaths<Items: Sequence>(
+		in items: Items,
+		to paths: inout Set<String>
+	) where Items.Element == ComposerContextItem
+	{
+		for item in items
+		{
+			if item.kind == .image, let path = item.path.flatMap(imageStore.ownedPath)
+			{
+				paths.insert(path)
+			}
+		}
 	}
 
 	@discardableResult
