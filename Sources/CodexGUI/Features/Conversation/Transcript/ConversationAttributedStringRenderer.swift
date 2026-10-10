@@ -332,7 +332,7 @@ enum ConversationAttributedStringRenderer
 		}
 	}
 
-	private static func applyAdaptiveTokenColors(
+	static func applyAdaptiveTokenColors(
 		light: NSAttributedString,
 		dark: NSAttributedString,
 		to text: NSMutableAttributedString,
@@ -343,39 +343,44 @@ enum ConversationAttributedStringRenderer
 			location: 0,
 			length: light.length
 		)
-		var boundaries: Set<Int> = [0, light.length]
-		for variant in [light, dark]
-		{
-			variant.enumerateAttribute(
-				.foregroundColor,
-				in: fullRange,
-				options: []
-			)
-			{
-				_, range, _ in
-				boundaries.insert(range.location)
-				boundaries.insert(NSMaxRange(range))
-			}
-		}
-		let positions = boundaries.sorted()
-		for (start, end) in zip(
-			positions,
-			positions.dropFirst()
+		var start = 0
+		var lightRange = NSRange(
+			location: 0,
+			length: 0
 		)
+		var darkRange = NSRange(
+			location: 0,
+			length: 0
+		)
+		var lightColor = NSColor.labelColor
+		var darkColor = NSColor.labelColor
+		while start < light.length
 		{
-			let lightColor = light.attribute(
-				.foregroundColor,
-				at: start,
-				effectiveRange: nil
-			) as? NSColor ?? .labelColor
-			let darkColor = dark.attribute(
-				.foregroundColor,
-				at: start,
-				effectiveRange: nil
-			) as? NSColor ?? .labelColor
+			if start >= NSMaxRange(lightRange)
+			{
+				lightColor = light.attribute(
+					.foregroundColor,
+					at: start,
+					longestEffectiveRange: &lightRange,
+					in: fullRange
+				) as? NSColor ?? .labelColor
+			}
+			if start >= NSMaxRange(darkRange)
+			{
+				darkColor = dark.attribute(
+					.foregroundColor,
+					at: start,
+					longestEffectiveRange: &darkRange,
+					in: fullRange
+				) as? NSColor ?? .labelColor
+			}
+			let end = min(
+				NSMaxRange(lightRange),
+				NSMaxRange(darkRange)
+			)
 			let color = NSColor(name: nil)
 			{
-				appearance in
+				[lightColor, darkColor] appearance in
 				appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 					? darkColor : lightColor
 			}
@@ -387,6 +392,7 @@ enum ConversationAttributedStringRenderer
 					length: end - start
 				)
 			)
+			start = end
 		}
 	}
 
