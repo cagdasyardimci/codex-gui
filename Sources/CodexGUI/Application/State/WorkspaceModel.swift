@@ -145,22 +145,22 @@ struct WorkspaceModel
 
 	var hasActiveExecution: Bool
 	{
-		allExecutions.contains(where: \.isTaskActive)
+		executions.entries.values.contains(where: \.isTaskActive)
 	}
 
 	var blocksExecutionCleanup: Bool
 	{
-		allExecutions.contains(where: \.blocksCleanup)
+		executions.entries.values.contains(where: \.blocksCleanup)
 	}
 
 	var hasExecutionReconciliation: Bool
 	{
-		allExecutions.contains(where: \.needsReconciliation)
+		executions.entries.values.contains(where: \.needsReconciliation)
 	}
 
 	var hasUncertainExecutionRequest: Bool
 	{
-		allExecutions.contains(where: \.hasUncertainRequest)
+		executions.entries.values.contains(where: \.hasUncertainRequest)
 	}
 
 	var pendingCommandOwnership: [TaskCommandOwnership]

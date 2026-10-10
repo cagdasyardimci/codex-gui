@@ -112,12 +112,25 @@ final class TaskWorkspaceCoordinator
 
 	func store(owningThread id: String) -> WorkspaceStateStore?
 	{
-		let matches = stores.values.filter
+		var match: WorkspaceStateStore?
+		for store in stores.values
 		{
-			$0.model.executions.entries[.thread(id)] != nil || $0.currentSnapshot
-				.selectedThreadID == id || $0.managedWorkspace?.threadID == id
+			let ownsThread = store.model.executions.entries[.thread(id)] != nil
+				|| store.model.conversations.selectedConversation.threadID == id
+				|| store.managedWorkspace?.threadID == id
+			guard ownsThread
+			else
+			{
+				continue
+			}
+			guard match == nil
+			else
+			{
+				return nil
+			}
+			match = store
 		}
-		return matches.count == 1 ? matches.first : nil
+		return match
 	}
 
 	func captureSelectedOwner() -> WorkspaceModalCapture

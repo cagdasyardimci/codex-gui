@@ -531,6 +531,95 @@ struct ReportedGitTurnProjectionTests
 		#expect(snapshot(value).reportedGitChanges?.map(\.path) == ["parent.swift"])
 	}
 
+	@Test func reportedChangesPreserveItemAndWithinItemOrderAfterDeduplication()
+	{
+		let content = ConversationContentModel(
+			loadedTurns: [turn(
+				"editing",
+				items: [
+					fileItem(
+						"same",
+						path: "obsolete.swift"
+					),
+					fileItem(
+						"first",
+						changes: [
+							["path": "first-a.swift", "kind": "update"],
+							["path": "first-b.swift", "kind": "update"],
+						]
+					),
+					fileItem(
+						"same",
+						path: "current.swift"
+					),
+					fileItem(
+						"last",
+						path: "last.swift"
+					),
+				]
+			)],
+			latestReportedGitTurn: ConversationReportedGitTurn(id: "editing")
+		)
+		#expect(ConversationReportedGitTurnProjection(content: content).changes?.map(\.path)
+			== ["first-a.swift", "first-b.swift", "current.swift", "last.swift"])
+	}
+
+	@Test func laterNonReportDuplicateSuppressesAnEarlierCanonicalReport()
+	{
+		let replacement = CodexItem(json: [
+			"id": "same",
+			"type": "agentMessage",
+			"text": "Replaced",
+		])!
+		let content = ConversationContentModel(
+			loadedTurns: [turn(
+				"editing",
+				items: [fileItem("same"), replacement]
+			)],
+			latestReportedGitTurn: ConversationReportedGitTurn(id: "editing")
+		)
+		#expect(ConversationReportedGitTurnProjection(content: content).changes == nil)
+	}
+
+	@Test func provisionalReportsDeduplicateOnlyCompletedReportsAndPreserveOrder()
+	{
+		let first = fileItem(
+			"first",
+			changes: [
+				["path": "first-a.swift", "kind": "update"],
+				["path": "first-b.swift", "kind": "update"],
+			]
+		)
+		let items = [
+			fileItem(
+				"same",
+				path: "obsolete.swift"
+			),
+			first,
+			fileItem(
+				"same",
+				path: "current.swift"
+			),
+			fileItem(
+				"same",
+				path: "proposed.swift",
+				status: "inProgress"
+			),
+		]
+		let content = ConversationContentModel(
+			latestReportedGitTurn: ConversationReportedGitTurn(id: "editing"),
+			entries: items.map
+			{
+				ConversationContentReducer.entry(
+					for: $0,
+					id: "editing:" + $0.id
+				)
+			}
+		)
+		#expect(ConversationReportedGitTurnProjection(content: content).changes?.map(\.path)
+			== ["first-a.swift", "first-b.swift", "current.swift"])
+	}
+
 	private func model() -> WorkspaceModel
 	{
 		var value = WorkspaceModel(identity: WorkspaceIdentity(

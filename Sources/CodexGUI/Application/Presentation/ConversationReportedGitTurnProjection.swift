@@ -27,56 +27,52 @@ struct ConversationReportedGitTurnProjection
 				return
 			}
 			var seen: Set<String> = []
-			let reportedItems = turn.items.reversed().filter
+			var reportedChanges: [FileChange] = []
+			var hasReportedItems = false
+			for item in turn.items.reversed()
 			{
-				seen.insert($0.id).inserted
+				guard seen.insert(item.id).inserted,
+						item.type == "fileChange", item.status == "completed"
+				else
+				{
+					continue
+				}
+				hasReportedItems = true
+				reportedChanges.append(contentsOf: item.changes.reversed())
 			}
-			.reversed().filter
+			if hasReportedItems
 			{
-				$0.type == "fileChange" && $0.status == "completed"
-			}
-			if !reportedItems.isEmpty
-			{
-				changes = reportedItems.flatMap(\.changes)
+				reportedChanges.reverse()
+				changes = reportedChanges
 				return
 			}
 		}
 		// Live item completions can precede publication of the canonical turn body.
 		let prefix = turnID + ":"
-		let reportedEntries = content.entries.filter
+		var seen: Set<String> = []
+		var reportedChanges: [FileChange] = []
+		var hasReportedEntries = false
+		for entry in content.entries.reversed()
 		{
-			guard $0.id.hasPrefix(prefix), case .fileChanges(
-				_,
+			guard entry.id.hasPrefix(prefix), case .fileChanges(
+				let entryChanges,
 				let status
-			) = $0.activity
+			) = entry.activity, status == "completed", seen.insert(entry.id).inserted
 			else
 			{
-				return false
+				continue
 			}
-			return status == "completed"
+			hasReportedEntries = true
+			reportedChanges.append(contentsOf: entryChanges.reversed())
 		}
-		guard !reportedEntries.isEmpty
+		if hasReportedEntries
+		{
+			reportedChanges.reverse()
+			changes = reportedChanges
+		}
 		else
 		{
 			changes = nil
-			return
-		}
-		var seen: Set<String> = []
-		changes = reportedEntries.reversed().filter
-		{
-			seen.insert($0.id).inserted
-		}
-		.reversed().flatMap
-		{
-			entry -> [FileChange] in
-			if case .fileChanges(
-				let changes,
-				_
-			) = entry.activity
-			{
-				return changes
-			}
-			return []
 		}
 	}
 }

@@ -544,9 +544,13 @@ struct WorkspaceSelectors
 			snapshot.planModeStatus = pending.outcomeUncertain
 				? "Plan mode unknown — run /plan to reapply or reset." : "Plan mode pending…"
 		}
-		snapshot.activeExecutionCount = model.allExecutions.filter(\.isTaskActive).count
+		snapshot.activeExecutionCount = 0
 		for execution in model.allExecutions
 		{
+			if execution.isTaskActive
+			{
+				snapshot.activeExecutionCount += 1
+			}
 			if let threadID = execution.activeThreadID
 			{
 				snapshot.threadExecutions[threadID] = ThreadExecutionPresentation(execution)

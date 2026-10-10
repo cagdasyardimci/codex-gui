@@ -6,6 +6,34 @@ import Testing
 @MainActor
 struct ConversationExecutionRegistryTests
 {
+	@Test func aggregatePredicatesIncludeInactiveOwnersAndEmptyRegistry()
+	{
+		var model = fixture()
+		model.executions.entries = [:]
+		#expect(!model.hasActiveExecution)
+		#expect(!model.blocksExecutionCleanup)
+		#expect(!model.hasExecutionReconciliation)
+		#expect(!model.hasUncertainExecutionRequest)
+
+		var background = ExecutionModel()
+		background.state = .running
+		background.activeThreadID = "background"
+		background.needsReconciliation = true
+		background.hasUncertainRequest = true
+		model.executions.entries[.thread("background")] = background
+		model.executions.entries[.thread("idle")] = ExecutionModel()
+		#expect(model.hasActiveExecution)
+		#expect(model.blocksExecutionCleanup)
+		#expect(model.hasExecutionReconciliation)
+		#expect(model.hasUncertainExecutionRequest)
+		let snapshot = WorkspaceSelectors.snapshot(
+			model: model,
+			now: Date()
+		)
+		#expect(snapshot.activeExecutionCount == 1)
+		#expect(snapshot.threadExecutions["background"]?.state == .running)
+	}
+
 	@Test func selectedProjectionDoesNotTransferBackgroundExecution()
 	{
 		var model = fixture()
