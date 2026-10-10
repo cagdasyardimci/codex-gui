@@ -288,7 +288,7 @@ extension NavigationViewController
 		let showsInlineStatus =
 			isActiveTask && !isTurnRunning
 				&& (execution?.state != .completed || execution?.outcomeUncertain == true)
-		let name = thread.name ?? thread.preview ?? thread.id
+		let name = thread.displayTitle
 		let state = execution?.title ?? "Running"
 		cell.textField?.stringValue =
 			showsInlineStatus ? "●  \(name) · \(state)" : name

@@ -154,7 +154,7 @@ extension NavigationViewController
 		presentTextEntrySheet(
 			in: window,
 			title: "Rename Conversation",
-			value: thread.name ?? thread.preview ?? "",
+			value: thread.displayTitle,
 			accessibilityLabel: "Conversation name",
 			actionTitle: "Rename",
 			requiredThreadID: thread.id
@@ -176,7 +176,7 @@ extension NavigationViewController
 		presentTextEntrySheet(
 			in: window,
 			title: "Rename Conversation",
-			value: thread.name ?? thread.preview ?? "",
+			value: thread.displayTitle,
 			accessibilityLabel: "Conversation name",
 			actionTitle: "Rename"
 		)

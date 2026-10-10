@@ -67,7 +67,7 @@ extension NavigationViewController
 					$0.id == id
 				}).flatMap
 			{
-				$0.name ?? $0.preview
+				$0.displayTitle
 			}
 		}
 		activeTaskLabel.superview?.isHidden = activeState == nil

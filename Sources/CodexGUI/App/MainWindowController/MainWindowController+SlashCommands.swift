@@ -230,7 +230,7 @@ extension MainWindowController
 		{
 			thread in
 			PaletteCommand(
-				title: thread.name ?? thread.preview ?? thread.id,
+				title: thread.displayTitle,
 				detail: "Saved conversation · \(thread.id) · \(thread.preview ?? "")",
 				destination: .conversation(thread.id)
 			)
@@ -310,7 +310,7 @@ extension MainWindowController
 		let commands = snapshot.threads.map
 		{
 			PaletteCommand(
-				title: $0.name ?? $0.preview ?? $0.id,
+				title: $0.displayTitle,
 				detail: "Conversation · \($0.id)",
 				destination: .conversation($0.id)
 			)

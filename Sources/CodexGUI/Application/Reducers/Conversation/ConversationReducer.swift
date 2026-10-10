@@ -1046,7 +1046,7 @@ enum ConversationReducer
 				var summary = prepared.thread.summary
 				if summary.preview?.isEmpty != false
 				{
-					summary.preview = ThreadTitleText.placeholder(prepared.submission.draft.text)
+					summary.preview = ThreadTitleText.normalized(prepared.submission.draft.text)
 				}
 				model.conversations.threads.insert(
 					summary,

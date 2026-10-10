@@ -326,7 +326,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 				$0.id == selectedThreadID
 			})
 		{
-			let title = thread.name ?? thread.preview ?? thread.id
+			let title = thread.displayTitle
 			renameButton.setAccessibilityLabel("Rename conversation \(title)")
 			archiveButton.setAccessibilityLabel("\(archiveButton.title) conversation \(title)")
 			renameButton.toolTip = "Rename \(title)"

@@ -47,7 +47,7 @@ struct TaskNotificationTracker
 					$0.id == threadID
 				}).flatMap
 			{
-				$0.name ?? $0.preview
+				$0.displayTitle
 			} ?? "Codex task"
 		switch state
 		{

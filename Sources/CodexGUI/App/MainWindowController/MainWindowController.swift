@@ -265,7 +265,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		{
 			$0.id == snapshot.selectedThreadID
 		}
-		let title = selectedThread?.name ?? selectedThread?.preview ?? "New chat"
+		let title = selectedThread?.displayTitle ?? "New chat"
 		self.titleLabel.stringValue = title
 		self.titleLabel.toolTip = title
 		self.inspector.toolsTabs.setConversationTitle(title)

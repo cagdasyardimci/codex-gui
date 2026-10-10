@@ -322,6 +322,26 @@ enum UserMessagePresenter
 		return references
 	}
 
+	/// Thread summaries contain text only, so validate the complete envelope before hiding it.
+	static func previewRequest(in text: String) -> String
+	{
+		let references = envelopeReferences(
+			in: text,
+			id: "preview"
+		).map
+		{
+			Reference(
+				kind: $0.kind,
+				name: $0.name,
+				path: $0.path
+			)
+		}
+		return requestText(
+			in: text,
+			references: references
+		)
+	}
+
 	private static func requestText(
 		in text: String,
 		references: [Reference]

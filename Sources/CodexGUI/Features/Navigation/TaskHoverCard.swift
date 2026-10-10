@@ -28,7 +28,8 @@ final class TaskHoverCard
 		{
 			return
 		}
-		let content = makeCardContent()
+		let visibleFrame = parent.screen?.visibleFrame ?? parent.frame
+		let content = makeCardContent(availableSize: visibleFrame.size)
 		let card = makePanel(
 			content: content.surface,
 			size: content.size
@@ -51,10 +52,14 @@ final class TaskHoverCard
 		panel = card
 	}
 
-	private func makeCardContent() -> (surface: NSView, size: NSSize)
+	private func makeCardContent(availableSize: NSSize) -> (surface: NSView, size: NSSize)
 	{
 		let titleLabel = NSTextField(wrappingLabelWithString: title)
 		titleLabel.font = .systemFont(ofSize: 14)
+		constrainLabel(
+			titleLabel,
+			toLines: 3
+		)
 		titleLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
@@ -83,6 +88,10 @@ final class TaskHoverCard
 		folder.contentTintColor = .secondaryLabelColor
 		let projectLabel = NSTextField(wrappingLabelWithString: projectName)
 		projectLabel.font = .systemFont(ofSize: 13)
+		constrainLabel(
+			projectLabel,
+			toLines: 2
+		)
 		let project = AppKitLayout.horizontalStack(
 			[folder, projectLabel],
 			spacing: 7
@@ -104,7 +113,10 @@ final class TaskHoverCard
 			to: surface,
 			inset: 10
 		)
-		let cardWidth: CGFloat = 320
+		let cardWidth = min(
+			CGFloat(320),
+			availableSize.width
+		)
 		surface.widthAnchor.constraint(equalToConstant: cardWidth).isActive = true
 		header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		project.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -120,12 +132,30 @@ final class TaskHoverCard
 		surface.layoutSubtreeIfNeeded()
 		let size = NSSize(
 			width: cardWidth,
-			height: max(
-				60,
-				surface.fittingSize.height
+			height: min(
+				availableSize.height,
+				max(
+					60,
+					surface.fittingSize.height
+				)
 			)
 		)
 		return (surface, size)
+	}
+
+	private func constrainLabel(
+		_ label: NSTextField,
+		toLines lines: Int
+	)
+	{
+		label.maximumNumberOfLines = lines
+		label.lineBreakMode = .byWordWrapping
+		label.cell?.truncatesLastVisibleLine = true
+		let font = label.font ?? .systemFont(ofSize: 14)
+		let lineHeight = ceil(font.ascender - font.descender + font.leading)
+		// AppKit fittingSize can otherwise measure every explicit newline despite the line limit.
+		label.heightAnchor.constraint(lessThanOrEqualToConstant: lineHeight * CGFloat(lines) + 2)
+			.isActive = true
 	}
 
 	private func makePanel(
@@ -164,9 +194,12 @@ final class TaskHoverCard
 			to: nil
 		))
 		let visibleScreenFrame = parent.screen?.visibleFrame ?? rowScreenRect
-		let cardOriginX = min(
-			rowScreenRect.maxX + 8,
-			visibleScreenFrame.maxX - size.width
+		let cardOriginX = max(
+			visibleScreenFrame.minX,
+			min(
+				rowScreenRect.maxX + 8,
+				visibleScreenFrame.maxX - size.width
+			)
 		)
 		let cardOriginY = max(
 			visibleScreenFrame.minY,

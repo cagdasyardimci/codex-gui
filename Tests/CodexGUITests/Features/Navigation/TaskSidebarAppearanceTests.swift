@@ -187,6 +187,57 @@ struct TaskSidebarAppearanceTests
 		}
 	}
 
+	@Test func longHoverCardRemainsCompactAndInsideVisibleScreen() throws
+	{
+		_ = NSApplication.shared
+		let screen = try #require(NSScreen.main)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: screen.visibleFrame.maxX - 320,
+				y: screen.visibleFrame.maxY - 180,
+				width: 320,
+				height: 180
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.close()
+		}
+		let anchor = NSView(frame: NSRect(
+			x: 0,
+			y: 140,
+			width: 280,
+			height: 32
+		))
+		window.contentView?.addSubview(anchor)
+		let card = TaskHoverCard(
+			title: String(
+				repeating: "Long title\n",
+				count: 300
+			),
+			projectName: String(
+				repeating: "Long project ",
+				count: 100
+			),
+			updatedAt: nil
+		)
+		card.show(beside: anchor)
+		defer
+		{
+			card.dismiss()
+		}
+		let panel = try #require(card.panel)
+		#expect(panel.frame.height <= 160)
+		#expect(panel.frame.width <= 320)
+		#expect(screen.visibleFrame.contains(panel.frame))
+		#expect(panel.ignoresMouseEvents)
+		#expect(!panel.isKeyWindow)
+	}
+
 	private func expectColor(
 		_ actualCGColor: CGColor?,
 		_ semantic: NSColor,
