@@ -101,6 +101,26 @@ enum GitDiffParser
 		in lines: [String]
 	) -> (hunks: [(header: String, text: String)], additions: Int, deletions: Int)
 	{
+		parseHunks(
+			in: lines,
+			collectingText: true
+		)
+	}
+
+	static func lineCounts(in diff: String) -> (additions: Int, deletions: Int)
+	{
+		let parsed = parseHunks(
+			in: diff.components(separatedBy: "\n"),
+			collectingText: false
+		)
+		return (parsed.additions, parsed.deletions)
+	}
+
+	private static func parseHunks(
+		in lines: [String],
+		collectingText: Bool
+	) -> (hunks: [(header: String, text: String)], additions: Int, deletions: Int)
+	{
 		var hunks: [(header: String, text: String)] = []
 		var currentHeader: String?
 		var hunkLines: [String] = []
@@ -114,7 +134,10 @@ enum GitDiffParser
 			{
 				return
 			}
-			hunks.append((header, hunkLines.joined(separator: "\n")))
+			if collectingText
+			{
+				hunks.append((header, hunkLines.joined(separator: "\n")))
+			}
 			currentHeader = nil
 			hunkLines = []
 		}
@@ -132,7 +155,10 @@ enum GitDiffParser
 			}
 			if currentHeader != nil
 			{
-				hunkLines.append(line)
+				if collectingText
+				{
+					hunkLines.append(line)
+				}
 				if line.hasPrefix("+")
 				{
 					additions += 1

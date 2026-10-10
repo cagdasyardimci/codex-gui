@@ -289,7 +289,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 
 	private static func lineCounts(for diff: String) -> NSAttributedString
 	{
-		let parsed = GitDiffParser.hunks(in: diff.components(separatedBy: "\n"))
+		let parsed = GitDiffParser.lineCounts(in: diff)
 		let additions = parsed.additions
 		let deletions = parsed.deletions
 		let summary = NSMutableAttributedString(

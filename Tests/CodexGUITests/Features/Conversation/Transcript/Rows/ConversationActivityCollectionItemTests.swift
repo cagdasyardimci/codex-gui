@@ -6,6 +6,102 @@ import Testing
 @Suite(.serialized) @MainActor
 struct ConversationActivityCollectionItemTests
 {
+	@Test func shellSampleRetainsCharacterLimitAndNewlineSemantics()
+	{
+		let samples: [(String, Int)] = [
+			("", 1),
+			("first\nlast\n", 3),
+			("first\r\nlast\r\n", 1),
+			(String(
+				repeating: "line\n",
+				count: 18
+			), 19),
+			(String(
+				repeating: "line\n",
+				count: 19
+			), 20),
+			(String(
+				repeating: "line\n",
+				count: 21
+			), 20),
+			(String(
+				repeating: "x",
+				count: 7999
+			) + "\n", 2),
+			(String(
+				repeating: "x",
+				count: 8000
+			) + "\n", 1),
+			(String(
+				repeating: "👩‍💻",
+				count: 7999
+			) + "\n", 2),
+			(String(
+				repeating: "e\u{301}",
+				count: 8000
+			) + "\n", 1),
+		]
+		for (output, expected) in samples
+		{
+			#expect(ConversationActivityCollectionItem.sampledShellLineCount(output) == expected)
+			let sampled = String(output.prefix(8000))
+			let previousCount = sampled.reduce(1)
+			{
+				$1 == "\n" ? $0 + 1 : $0
+			}
+			#expect(ConversationActivityCollectionItem.sampledShellLineCount(output)
+				== min(
+					previousCount,
+					20
+				))
+		}
+	}
+
+	@Test func shellHeightUsesTheSameCappedSampleAtDifferentWidths()
+	{
+		let equivalentOutputs = [
+			(
+				String(
+					repeating: "line\n",
+					count: 19
+				),
+				String(
+					repeating: "line\n",
+					count: 2000
+				)
+			),
+			("short", String(
+				repeating: "x",
+				count: 8000
+			) + "\nignored"),
+			("short", String(
+				repeating: "line\r\n",
+				count: 2000
+			)),
+		]
+		for width in [CGFloat(160), 400, 736]
+		{
+			for (first, second) in equivalentOutputs
+			{
+				let firstSize = ConversationActivityCollectionItem.itemSize(
+					row: commandRow(
+						expanded: true,
+						output: first
+					),
+					width: width
+				)
+				let secondSize = ConversationActivityCollectionItem.itemSize(
+					row: commandRow(
+						expanded: true,
+						output: second
+					),
+					width: width
+				)
+				#expect(firstSize == secondSize)
+			}
+		}
+	}
+
 	@Test func commandDetailPreservesFullOutputAndClearsOnReuse() throws
 	{
 		let item = ConversationActivityCollectionItem()

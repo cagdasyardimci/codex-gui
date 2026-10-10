@@ -862,13 +862,14 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private func updateShellGeometry(_ command: ConversationCommand)
 	{
 		let width = view.bounds.width
-		commandHeightConstraint?.constant = Self.commandHeight(
+		let previewHeight = Self.commandHeight(
 			command.command,
 			width: width
 		)
+		commandHeightConstraint?.constant = previewHeight
 		shellHeightConstraint?.constant = Self.shellHeight(
 			command: command,
-			width: width
+			previewHeight: previewHeight
 		)
 	}
 
@@ -919,15 +920,42 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	) -> CGFloat
 	{
 		// Unwrapped lines determine height independently of the transcript width.
-		let sample = String(command.output.prefix(maximumShellSampleLength))
-		let lineCount = sample.reduce(1)
-		{
-			$1 == "\n" ? $0 + 1 : $0
-		}
-		let previewHeight = commandHeight(
-			command.command,
-			width: width
+		return shellHeight(
+			command: command,
+			previewHeight: commandHeight(
+				command.command,
+				width: width
+			)
 		)
+	}
+
+	// Preserve Character-based sampling, including CRLF as one non-LF character.
+	static func sampledShellLineCount(_ output: String) -> Int
+	{
+		var lineCount = 1
+		var sampledCharacters = 0
+		for character in output
+		{
+			guard sampledCharacters < maximumShellSampleLength, lineCount < 20
+			else
+			{
+				break
+			}
+			sampledCharacters += 1
+			if character == "\n"
+			{
+				lineCount += 1
+			}
+		}
+		return lineCount
+	}
+
+	private static func shellHeight(
+		command: ConversationCommand,
+		previewHeight: CGFloat
+	) -> CGFloat
+	{
+		let lineCount = sampledShellLineCount(command.output)
 		let outputHeight = max(
 			24,
 			ceil(CGFloat(min(

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import CodexGUI
@@ -5,6 +6,42 @@ import Testing
 @Suite @MainActor
 struct GitDiffParserTests
 {
+	@Test func countOnlyParsingMatchesHunksAcrossBoundariesAndMalformedReports()
+	{
+		let reports: [(String, Int, Int)] = [
+			("", 0, 0),
+			("--- old\n+++ new\n+outside\n-outside", 0, 0),
+			("@@ -1 +1 @@\n-old\n+new\n\\ No newline at end of file", 1, 1),
+			("@@ malformed\n+counted\n-counted\n@@\n+still counted", 2, 1),
+			("@@ -1 +1 @@\n+first\ndiff --git a/b b/b\n+outside\n-outside", 1, 0),
+			("@@ -1 +1 @@\n+first\n\n+++ second\n--- second", 2, 1),
+			("@@ -1 +1 @@\r\n-old\r\n+new\r\n", 1, 1),
+			("@@ -1 +1 @@\n+😀\n-e\u{301}\n@@ -3 +3 @@\n+next\n", 2, 1),
+		]
+		for (diff, additions, deletions) in reports
+		{
+			let counts = GitDiffParser.lineCounts(in: diff)
+			let parsed = GitDiffParser.hunks(in: diff.components(separatedBy: "\n"))
+			#expect(counts.additions == additions)
+			#expect(counts.deletions == deletions)
+			#expect(counts.additions == parsed.additions)
+			#expect(counts.deletions == parsed.deletions)
+		}
+	}
+
+	@Test func countOnlyParsingHandlesLargeJoinedFileReports()
+	{
+		let body = String(
+			repeating: "-old\n+new\n context\n",
+			count: 2000
+		)
+		let first = "diff --git a/first b/first\n@@ -1,4000 +1,4000 @@\n" + body
+		let second = "diff --git a/second b/second\n@@ -1,4000 +1,4000 @@\n" + body
+		let counts = GitDiffParser.lineCounts(in: [first, second].joined(separator: "\n"))
+		#expect(counts.additions == 4000)
+		#expect(counts.deletions == 4000)
+	}
+
 	@Test func relevantLineUsesNewSideAndDeletionFallback()
 	{
 		let added = """
