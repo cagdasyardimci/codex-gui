@@ -11,12 +11,20 @@ enum ConversationTurnPreviewText
 		String(text.prefix(maximumSourceCharacters))
 	}
 
+	static func linkSource(_ excerpt: String) -> String?
+	{
+		excerpt.contains("://") || excerpt.contains("www.") ? excerpt : nil
+	}
+
 	static func title(
 		_ text: String,
-		maximumLength: Int
+		maximumLength: Int,
+		attachmentTitle: String? = nil
 	) -> String
 	{
-		let normalized = sourcePrefix(text)
+		let source = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			? attachmentTitle ?? text : text
+		let normalized = sourcePrefix(source)
 			.split(whereSeparator: \.isWhitespace).joined(separator: " ")
 		return String(normalized.prefix(maximumLength))
 	}

@@ -5,6 +5,72 @@ import Testing
 
 struct UserMessagePresenterTests
 {
+	@Test @MainActor func attachmentTitlesAgreeAcrossInputLoadedAndCompactPreviews() throws
+	{
+		let cases: [(String, [String], String)] = [
+			(
+				"Attached image: Pasted image",
+				["/tmp/paste.png"],
+				"Attached image: Pasted image"
+			),
+			(
+				"",
+				["/tmp/first.png", "/tmp/second.png"],
+				"Attached image: first.png; Attached image: second.png"
+			),
+			(
+				"Attached image: First\n\nAttached image: Second",
+				["/tmp/first.png", "/tmp/second.png"],
+				"Attached image: First; Attached image: Second"
+			),
+			("  \n", ["data:image/png;base64,AAAA"], "Attached image"),
+			("Inspect this\n\nAttached image: Pasted image", ["/tmp/paste.png"], "Inspect this"),
+			(
+				"Discuss the sentence:\nAttached image: example\nKeep this sentence.",
+				["/tmp/paste.png"],
+				"Discuss the sentence: Attached image: example Keep this sentence."
+			),
+		]
+		for (text, paths, expected) in cases
+		{
+			let inputs: [TurnInput] = [.text(text)] + paths.map
+			{
+				.localImage(path: $0)
+			}
+			let content: [[String: Any]] = [["type": "text", "text": text]]
+				+ paths.map
+				{
+					["type": "localImage", "path": $0]
+				}
+			let item = try #require(CodexItem(json: [
+				"id": "request",
+				"type": "userMessage",
+				"content": content
+			]))
+			let entry = ConversationContentReducer.entry(
+				for: item,
+				id: "turn:request"
+			)
+			let loaded = try #require(ConversationTurnSummary.make(from: [entry]).first)
+			let compact = try ConversationTextPreviewPreparer().prepare(CodexTurn(
+				id: "turn",
+				status: "completed",
+				items: [item],
+				error: nil
+			))
+			#expect(loaded.title == expected)
+			#expect(compact.title == expected)
+			#expect(entry.attachmentPreviewTitle
+				== UserMessagePresenter.attachmentPreviewTitle(for: inputs))
+			#expect(entry.body == UserMessagePresenter.body(for: inputs))
+			if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				|| text.hasPrefix("Attached image:")
+			{
+				#expect(entry.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+			}
+		}
+	}
+
 	@Test func presenterRetainsReferencesWithoutMatchingDescriptions()
 	{
 		let inputs: [TurnInput] = [

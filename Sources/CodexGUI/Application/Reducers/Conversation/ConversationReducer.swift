@@ -1002,6 +1002,9 @@ enum ConversationReducer
 					kind: .user,
 					title: "You",
 					body: UserMessagePresenter.body(for: submission.inputs),
+					attachmentPreviewTitle: UserMessagePresenter.attachmentPreviewTitle(
+						for: submission.inputs
+					),
 					imageAttachments: UserMessagePresenter.imageAttachments(for: submission.inputs),
 					sourceReferences: UserMessagePresenter.sourceReferences(for: submission.inputs)
 				))

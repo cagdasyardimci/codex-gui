@@ -175,7 +175,8 @@ enum ConversationCachePolicy
 				preview.turnID,
 				preview.entryID,
 				preview.title,
-				preview.reply
+				preview.reply,
+				preview.replySource
 			)
 		)
 	}

@@ -91,7 +91,8 @@ struct ConversationEntryPayloadCosts
 				ConversationCachePolicy.textCost(
 					entry.id,
 					entry.title,
-					entry.body
+					entry.body,
+					entry.attachmentPreviewTitle ?? ""
 				)
 			),
 			additionalBytes: ConversationCachePolicy.sum(

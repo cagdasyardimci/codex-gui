@@ -4,7 +4,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 /// An actor keeps decoding off the main actor and propagates caller cancellation.
-/// Sources request 80 pixels; transcript attachments request 320 pixels.
+/// Sources request 80 pixels; transcript callers choose a bounded preview size.
 actor SourceThumbnailLoader
 {
 	/// CGImage is immutable; the wrapper carries its retained pixels between actors.

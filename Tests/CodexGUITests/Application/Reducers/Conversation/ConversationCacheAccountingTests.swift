@@ -76,6 +76,7 @@ struct ConversationCacheAccountingTests
 		let textBytes = projected.reduce(0)
 		{
 			$0 + 64 + $1.id.utf8.count + $1.title.utf8.count + $1.body.utf8.count
+				+ ($1.attachmentPreviewTitle?.utf8.count ?? 0)
 		}
 		#expect(model.conversations.cacheAccounting.totalContentBytes == canonicalBytes + textBytes)
 		#expect(model.conversations.cacheAccounting.content[threadID]?.additionalBytes == 0)

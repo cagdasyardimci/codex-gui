@@ -276,6 +276,8 @@ struct ConversationReplyActionsTests
 				{
 				}
 			)
+			// The collection view lays out this configuration before its row frame grows.
+			item.view.layoutSubtreeIfNeeded()
 			let actionSize = ConversationCollectionItem.itemSize(
 				content: content,
 				width: width,

@@ -317,6 +317,9 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		bodyTextView.textContainer?.lineFragmentPadding = 0
 		bodyTextView.textContainer?.widthTracksTextView = true
 		bodyHeightConstraint = bodyTextView.heightAnchor.constraint(equalToConstant: 1)
+		// The collection view can retain the old row height while reply actions are added.
+		// Keep the measured text height unless that temporary frame cannot fit it.
+		bodyHeightConstraint?.priority = NSLayoutConstraint.Priority(999)
 		bodyHeightConstraint?.isActive = true
 	}
 
@@ -444,6 +447,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			removeCodeCopyButtons(startingAt: 0)
 			configuredEntryID = entryID
 		}
+		if self.content !== content
+		{
+			bodyTextView.dismissExpandedImage()
+		}
 		self.content = content
 		self.onToggle = onToggle
 		kind = entry.kind
@@ -475,6 +482,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			content,
 			kind: kind
 		))
+		bodyTextView.loadWebLinkFavicons()
 		bodyTextView.updateSourceAccessibilityHelp()
 		bodyTextView.setAccessibilityLabel("\(entry.title) content")
 		view.setAccessibilityLabel(entry.title)

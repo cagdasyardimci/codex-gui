@@ -85,13 +85,91 @@ enum ConversationContentParser
 			style: ConversationTextStyle
 		)
 		{
+			var imagePaths: [String] = []
+			var imageSources: [String] = []
+			func flushImages()
+			{
+				guard !imagePaths.isEmpty
+				else
+				{
+					return
+				}
+				var imageStyle = style
+				imageStyle.richBlock = ConversationRichBlock(
+					kind: .imageGallery,
+					source: imageSources.joined(separator: "\n\n"),
+					payload: "",
+					imagePaths: imagePaths
+				)
+				beginParagraph(
+					style: imageStyle,
+					marker: ""
+				)
+				append(
+					"\u{FFFC}",
+					style: imageStyle
+				)
+				imagePaths.removeAll()
+				imageSources.removeAll()
+			}
 			for child in children
 			{
+				if let paragraph = child as? Paragraph,
+					let images = imagesOnly(paragraph)
+				{
+					imagePaths.append(contentsOf: images.paths)
+					imageSources.append(images.source)
+					continue
+				}
+				flushImages()
 				appendBlock(
 					child,
 					style: style
 				)
 			}
+			flushImages()
+		}
+
+		func imagesOnly(_ paragraph: Paragraph) -> (paths: [String], source: String)?
+		{
+			var paths: [String] = []
+			for inline in paragraph.children
+			{
+				switch inline
+				{
+				case let image as Image:
+					guard let path = localImagePath(image)
+					else
+					{
+						return nil
+					}
+					paths.append(path)
+				case is SoftBreak, is LineBreak:
+					break
+				case let text as Markdown.Text
+					where text.string.trimmingCharacters(in: .whitespaces).isEmpty:
+					break
+				default:
+					return nil
+				}
+			}
+			guard !paths.isEmpty, let source = sourceText(of: paragraph)
+			else
+			{
+				return nil
+			}
+			return (paths, source)
+		}
+
+		func localImagePath(_ image: Image) -> String?
+		{
+			guard let path = image.source,
+					LocalAttachmentURL.resolve(path) != nil || InlineImageData.isDataURL(path)
+			else
+			{
+				return nil
+			}
+			return path
 		}
 
 		mutating func appendBlock(
@@ -563,7 +641,7 @@ enum ConversationContentParser
 				switch inline
 				{
 				case let text as Markdown.Text:
-					append(
+					appendTextWithWebLinks(
 						text.string,
 						style: style
 					)
@@ -626,11 +704,34 @@ enum ConversationContentParser
 							style: iconStyle
 						)
 					}
+					else if WebLinkDetector.webURL(link.destination) != nil
+					{
+						var iconStyle = inlineStyle
+						iconStyle.webLinkIcon = true
+						append(
+							"\u{FFFC}",
+							style: iconStyle
+						)
+					}
 					appendInlines(
 						link.children,
 						style: inlineStyle
 					)
 				case let image as Image:
+					if let path = localImagePath(image), let source = sourceText(of: image)
+					{
+						inlineStyle.richBlock = ConversationRichBlock(
+							kind: .imageGallery,
+							source: source,
+							payload: "",
+							imagePaths: [path]
+						)
+						append(
+							"\u{FFFC}",
+							style: inlineStyle
+						)
+						continue
+					}
 					append(
 						"[Image: ",
 						style: style
@@ -661,6 +762,63 @@ enum ConversationContentParser
 						style: style
 					)
 				}
+			}
+		}
+
+		mutating func appendTextWithWebLinks(
+			_ text: String,
+			style: ConversationTextStyle
+		)
+		{
+			guard style.link == nil, !style.code
+			else
+			{
+				append(
+					text,
+					style: style
+				)
+				return
+			}
+			let source = text as NSString
+			let links = WebLinkDetector.links(in: text)
+			var position = 0
+			for link in links
+			{
+				guard let url = WebLinkDetector.webURL(link.destination)
+				else
+				{
+					continue
+				}
+				if link.range.location > position
+				{
+					append(
+						source.substring(with: NSRange(
+							location: position,
+							length: link.range.location - position
+						)),
+						style: style
+					)
+				}
+				var linkStyle = style
+				linkStyle.link = url.absoluteString
+				var iconStyle = linkStyle
+				iconStyle.webLinkIcon = true
+				append(
+					"\u{FFFC}",
+					style: iconStyle
+				)
+				append(
+					source.substring(with: link.range),
+					style: linkStyle
+				)
+				position = NSMaxRange(link.range)
+			}
+			if position < source.length
+			{
+				append(
+					source.substring(from: position),
+					style: style
+				)
 			}
 		}
 

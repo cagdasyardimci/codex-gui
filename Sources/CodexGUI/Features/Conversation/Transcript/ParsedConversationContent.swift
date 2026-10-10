@@ -43,6 +43,7 @@ struct ConversationTextStyle: Sendable
 	var listContinuation = false
 	var listEnd = false
 	var fileLinkIcon = false
+	var webLinkIcon = false
 	var paragraphContinuation = false
 	var suppressParagraphSpacing = false
 	var followedByList = false
@@ -73,12 +74,13 @@ struct ConversationRichBlock: Sendable
 {
 	enum Kind: Sendable
 	{
-		case math, diagram
+		case math, diagram, imageGallery
 	}
 
 	let kind: Kind
 	let source: String
 	let payload: String
+	var imagePaths: [String] = []
 }
 
 /// Shared paragraph and decoration geometry for native measurement and drawing.

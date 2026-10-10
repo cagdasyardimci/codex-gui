@@ -6,7 +6,7 @@ final class TurnSummaryPreview: NSView
 {
 	static let cardWidth: CGFloat = 320
 	private static let inset: CGFloat = 10
-	private static let headerHeight: CGFloat = 18
+	private static let minimumHeaderHeight: CGFloat = 18
 	private static let contentSpacing: CGFloat = 6
 	private static let minimumReplyHeight: CGFloat = 18
 	private static let maximumReplyHeight: CGFloat = 58
@@ -17,6 +17,8 @@ final class TurnSummaryPreview: NSView
 	private let bookmark = NSButton()
 	private let title = NSTextField(labelWithString: "")
 	private let reply = NSTextField(wrappingLabelWithString: "")
+	private var currentSummary: ConversationTurnSummary?
+	private var headerHeight: NSLayoutConstraint!
 	private var replyHeight: NSLayoutConstraint!
 	private let skeleton = CALayer()
 	private(set) var isLoading = false
@@ -46,7 +48,12 @@ final class TurnSummaryPreview: NSView
 			ofSize: 13,
 			weight: .regular
 		)
-		title.lineBreakMode = .byTruncatingTail
+		title.maximumNumberOfLines = 2
+		title.lineBreakMode = .byCharWrapping
+		title.cell?.wraps = true
+		title.cell?.isScrollable = false
+		title.isSelectable = true
+		title.allowsEditingTextAttributes = true
 		title.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
@@ -61,8 +68,11 @@ final class TurnSummaryPreview: NSView
 			[title, bookmark],
 			spacing: Self.contentSpacing
 		)
+		header.alignment = .top
 		reply.font = .systemFont(ofSize: 13)
 		reply.textColor = .secondaryLabelColor
+		reply.isSelectable = true
+		reply.allowsEditingTextAttributes = true
 		reply.maximumNumberOfLines = 3
 		reply.lineBreakMode = .byWordWrapping
 		reply.cell?.wraps = true
@@ -78,7 +88,8 @@ final class TurnSummaryPreview: NSView
 			to: self,
 			inset: Self.inset
 		)
-		header.heightAnchor.constraint(equalToConstant: Self.headerHeight).isActive = true
+		headerHeight = header.heightAnchor.constraint(equalToConstant: Self.minimumHeaderHeight)
+		headerHeight.isActive = true
 		header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		reply.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		render(summary)
@@ -97,7 +108,29 @@ final class TurnSummaryPreview: NSView
 	{
 		super.viewDidChangeEffectiveAppearance()
 		refreshSkeletonColors()
+		if let currentSummary
+		{
+			render(currentSummary)
+		}
 		needsDisplay = true
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		loadWebLinkFavicons()
+	}
+
+	private func loadWebLinkFavicons()
+	{
+		WebLinkFaviconAttachment.load(
+			in: title.attributedStringValue,
+			invalidate: title
+		)
+		WebLinkFaviconAttachment.load(
+			in: reply.attributedStringValue,
+			invalidate: reply
+		)
 	}
 
 	private func refreshSkeletonColors()
@@ -118,6 +151,7 @@ final class TurnSummaryPreview: NSView
 
 	func render(_ summary: ConversationTurnSummary)
 	{
+		currentSummary = summary
 		let wasLoading = isLoading
 		isLoading = !summary.isContentLoaded && !summary.isPreviewLoaded && summary
 			.previewError == nil
@@ -142,13 +176,18 @@ final class TurnSummaryPreview: NSView
 				animator().alphaValue = 1
 			}
 		}
-		title.stringValue = summary.title
-		let compactReply = summary.reply.components(separatedBy: .newlines).filter
-		{
-			!$0.trimmingCharacters(in: .whitespaces).isEmpty
-		}.joined(separator: "\n")
-		let text = summary
-			.previewError ?? (compactReply.isEmpty ? "Waiting for a reply…" : compactReply)
+		let titleFont = title.font ?? NSFont.systemFont(ofSize: 13)
+		let titleParagraph = NSMutableParagraphStyle()
+		titleParagraph.lineBreakMode = .byCharWrapping
+		let titleAttributes: [NSAttributedString.Key: Any] = [
+			.font: titleFont,
+			.foregroundColor: NSColor.labelColor,
+			.paragraphStyle: titleParagraph,
+		]
+		title.attributedStringValue = TurnSummaryLinkPresentation.styledTitle(
+			summary.title,
+			attributes: titleAttributes
+		)
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.lineSpacing = 4
 		paragraph.lineBreakMode = .byWordWrapping
@@ -158,12 +197,43 @@ final class TurnSummaryPreview: NSView
 			.paragraphStyle: paragraph,
 		]
 		let width = Self.cardWidth - 2 * Self.inset
-		func measuredHeight(_ value: String) -> CGFloat
+		let titleWidth = width - 18 - Self.contentSpacing
+		let titleLineHeight = ceil(NSLayoutManager().defaultLineHeight(for: titleFont))
+		let measuredTitleHeight = ceil(title.attributedStringValue.boundingRect(
+			with: NSSize(
+				width: titleWidth,
+				height: 10000
+			),
+			options: [.usesLineFragmentOrigin, .usesFontLeading]
+		).height)
+		headerHeight.constant = max(
+			Self.minimumHeaderHeight,
+			min(
+				measuredTitleHeight,
+				2 * titleLineHeight
+			)
+		)
+		let styledReply = TurnSummaryLinkPresentation.styled(
+			summary.reply,
+			source: summary.replySource,
+			attributes: attributes
+		)
+		let compactReply = TurnSummaryLinkPresentation.compactLines(styledReply)
+		let text: NSAttributedString = summary.previewError.map
 		{
 			NSAttributedString(
-				string: value,
+				string: $0,
 				attributes: attributes
-			).boundingRect(
+			)
+		} ?? (compactReply.length == 0
+			? NSAttributedString(
+				string: "Waiting for a reply…",
+				attributes: attributes
+			)
+			: compactReply)
+		func measuredHeight(_ value: NSAttributedString) -> CGFloat
+		{
+			value.boundingRect(
 				with: NSSize(
 					width: width,
 					height: 10000
@@ -173,18 +243,17 @@ final class TurnSummaryPreview: NSView
 		}
 		let display = truncatedReply(
 			text,
+			attributes: attributes,
 			measuredHeight: measuredHeight
 		)
 		let height = max(
 			Self.minimumReplyHeight,
 			ceil(measuredHeight(display))
 		)
-		reply.attributedStringValue = NSAttributedString(
-			string: display,
-			attributes: attributes
-		)
+		reply.attributedStringValue = display
+		loadWebLinkFavicons()
 		replyHeight.constant = height
-		cardHeight = 2 * Self.inset + Self.headerHeight + Self.contentSpacing + height
+		cardHeight = 2 * Self.inset + headerHeight.constant + Self.contentSpacing + height
 		setFrameSize(NSSize(
 			width: Self.cardWidth,
 			height: cardHeight
@@ -227,22 +296,37 @@ final class TurnSummaryPreview: NSView
 	}
 
 	private func truncatedReply(
-		_ text: String,
-		measuredHeight: (String) -> CGFloat
-	) -> String
+		_ text: NSAttributedString,
+		attributes: [NSAttributedString.Key: Any],
+		measuredHeight: (NSAttributedString) -> CGFloat
+	) -> NSAttributedString
 	{
 		var display = text
 		if measuredHeight(display) > Self.maximumReplyHeight
 		{
-			let characters = Array(text)
+			let characters = Array(text.string)
 			var lower = 0
 			var upper = characters.count
+			func candidate(_ count: Int) -> NSAttributedString
+			{
+				let prefix = String(characters.prefix(count))
+					.trimmingCharacters(in: .whitespacesAndNewlines)
+				let result = NSMutableAttributedString(attributedString: text.attributedSubstring(
+					from: NSRange(
+						location: 0,
+						length: prefix.utf16.count
+					)
+				))
+				result.append(NSAttributedString(
+					string: "…",
+					attributes: attributes
+				))
+				return result
+			}
 			while lower < upper
 			{
 				let middle = (lower + upper + 1) / 2
-				let candidate = String(characters.prefix(middle))
-					.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
-				if measuredHeight(candidate) <= Self.maximumReplyHeight
+				if measuredHeight(candidate(middle)) <= Self.maximumReplyHeight
 				{
 					lower = middle
 				}
@@ -251,8 +335,7 @@ final class TurnSummaryPreview: NSView
 					upper = middle - 1
 				}
 			}
-			display = String(characters.prefix(lower))
-				.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+			display = candidate(lower)
 		}
 		return display
 	}

@@ -6,6 +6,197 @@ import Testing
 @Suite @MainActor
 struct ConversationMarkdownRenderingTests
 {
+	@Test func localResponseImagesRenderAsOneResponsiveGallery() async throws
+	{
+		_ = NSApplication.shared
+		let path = FileManager.default.temporaryDirectory
+			.appendingPathComponent("conversation-image-\(UUID().uuidString).png")
+		let otherPath = FileManager.default.temporaryDirectory
+			.appendingPathComponent("conversation-image-\(UUID().uuidString).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: path)
+			try? FileManager.default.removeItem(at: otherPath)
+		}
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 200,
+			pixelsHigh: 100,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		let data = try #require(bitmap.representation(
+			using: .png,
+			properties: [:]
+		))
+		try data.write(to: path)
+		try data.write(to: otherPath)
+		let image = "![Rename project](\(path.path))"
+		let otherImage = "![Other](\(otherPath.path))"
+		let body = [image, otherImage, image].joined(separator: "\n\n")
+		let content = await prepare(body)
+		let text = content.attributedString
+		let gallery = try #require(text.attribute(
+			.attachment,
+			at: 0,
+			effectiveRange: nil
+		) as? ConversationImageGalleryAttachment)
+		#expect(gallery.paths == [path.path, otherPath.path, path.path])
+		let galleryFrame = NSRect(
+			x: 0,
+			y: 0,
+			width: 1500,
+			height: 250
+		)
+		#expect(gallery.path(
+			at: NSPoint(
+				x: 10,
+				y: 20
+			),
+			in: galleryFrame
+		) == path.path)
+		#expect(gallery.path(
+			at: NSPoint(
+				x: 215,
+				y: 20
+			),
+			in: galleryFrame
+		) == otherPath.path)
+		#expect(gallery.path(
+			at: NSPoint(
+				x: 425,
+				y: 20
+			),
+			in: galleryFrame
+		) == path.path)
+		#expect(gallery.path(
+			at: NSPoint(
+				x: 750,
+				y: 20
+			),
+			in: galleryFrame
+		) == nil)
+		#expect(text.string.filter
+		{
+			$0 == "\u{FFFC}"
+		}.count == 1)
+		#expect(text.attribute(
+			.conversationSourceText,
+			at: 0,
+			effectiveRange: nil
+		) as? String == body)
+		let wide = ConversationCollectionItem.itemSize(
+			content: content,
+			width: 736,
+			expandable: false
+		)
+		let narrow = ConversationCollectionItem.itemSize(
+			content: content,
+			width: 600,
+			expandable: false
+		)
+		#expect(narrow.height > wide.height)
+	}
+
+	@Test func responseImageCardsWrapAtTheirOriginalAspectRatios() throws
+	{
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 1,
+			pixelsHigh: 1,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		let pixel = try #require(bitmap.cgImage)
+		let sizes = [
+			CGSize(
+				width: 1768,
+				height: 748
+			),
+			CGSize(
+				width: 1768,
+				height: 1040
+			),
+			CGSize(
+				width: 1768,
+				height: 668
+			),
+		]
+		let thumbnails = Dictionary(uniqueKeysWithValues: zip(
+			["first", "second", "third"],
+			sizes
+		).map
+		{
+			path, size in
+			(
+				path,
+				SourceThumbnailLoader.Thumbnail(
+					image: pixel,
+					originalPixelSize: size
+				)
+			)
+		})
+		let wideFrame = NSRect(
+			x: 0,
+			y: 0,
+			width: 736,
+			height: 700
+		)
+		var budget = ConversationRichBlockBudget()
+		let identical = try #require(ConversationImageGalleryAttachment.make(
+			paths: ["first", "first"],
+			source: "two images",
+			thumbnails: thumbnails,
+			budget: &budget
+		) as? ConversationImageGalleryAttachment)
+		#expect(identical.path(
+			at: NSPoint(
+				x: 400,
+				y: 20
+			),
+			in: wideFrame
+		) == nil)
+		#expect(identical.path(
+			at: NSPoint(
+				x: 10,
+				y: 190
+			),
+			in: wideFrame
+		) == "first")
+
+		budget = ConversationRichBlockBudget()
+		let mixed = try #require(ConversationImageGalleryAttachment.make(
+			paths: ["first", "second", "third"],
+			source: "three images",
+			thumbnails: thumbnails,
+			budget: &budget
+		) as? ConversationImageGalleryAttachment)
+		#expect(mixed.path(
+			at: NSPoint(
+				x: 400,
+				y: 20
+			),
+			in: wideFrame
+		) == "second")
+		#expect(mixed.path(
+			at: NSPoint(
+				x: 10,
+				y: 190
+			),
+			in: wideFrame
+		) == "third")
+	}
+
 	@Test func combinedEmphasisAndStrikethroughHaveNativeAttributes() async throws
 	{
 		let content = await prepare("***both*** ~~deleted~~ [link](https://example.com)")
@@ -27,6 +218,75 @@ struct ConversationMarkdownRenderingTests
 			in: text,
 			at: "link"
 		) as? URL)?.absoluteString == "https://example.com")
+	}
+
+	@Test func webLinksRenderWithClickableFaviconAttachments() async throws
+	{
+		let content = await prepare(
+			"Use https://example.com/path and [documentation](https://example.org/guide). "
+				+ "`https://example.net/code`"
+		)
+		let text = content.attributedString
+		var icons: [WebLinkFaviconAttachment] = []
+		text.enumerateAttribute(
+			.attachment,
+			in: NSRange(
+				location: 0,
+				length: text.length
+			),
+			options: []
+		)
+		{
+			value, _, _ in
+			if let icon = value as? WebLinkFaviconAttachment
+			{
+				icons.append(icon)
+			}
+		}
+		#expect(icons.map(\.url.absoluteString) == [
+			"https://example.com/path",
+			"https://example.org/guide",
+		])
+		#expect((attribute(
+			.link,
+			in: text,
+			at: "documentation"
+		) as? URL)?.absoluteString
+			== "https://example.org/guide")
+		#expect(attribute(
+			.link,
+			in: text,
+			at: "https://example.net/code"
+		) == nil)
+		#expect(icons.allSatisfy
+		{
+			$0.bounds.size == NSSize(
+				width: 18,
+				height: 14
+			)
+		})
+		#expect(icons.allSatisfy
+		{
+			$0.image?.size == $0.bounds.size
+		})
+		let item = makeItem(
+			body: "Use https://example.com/path and [documentation](https://example.org/guide). "
+				+ "`https://example.net/code`",
+			content: content
+		)
+		let textView = try #require(findTextView(in: item.view))
+		let firstLink = (textView.string as NSString).range(of: "\u{FFFC}https://example.com/path")
+		let pasteboard = NSPasteboard.withUniqueName()
+		defer
+		{
+			pasteboard.releaseGlobally()
+		}
+		textView.setSelectedRange(firstLink)
+		#expect(textView.writeSelection(
+			to: pasteboard,
+			types: textView.writablePasteboardTypes
+		))
+		#expect(pasteboard.string(forType: .string) == "https://example.com/path")
 	}
 
 	@Test func inlineCodeDoesNotIndentItsParagraphOrCreateCopyControls() async throws

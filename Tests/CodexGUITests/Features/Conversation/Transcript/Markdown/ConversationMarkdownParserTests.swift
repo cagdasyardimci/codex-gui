@@ -126,7 +126,11 @@ struct ConversationMarkdownParserTests
 			"[reference][docs] <https://example.com/auto> <reader@example.com>\n\n"
 				+ "[docs]: https://example.com/reference \"Documentation\""
 		)
-		#expect(text(parsed).contains("reference https://example.com/auto reader@example.com"))
+		let visible = text(parsed).replacingOccurrences(
+			of: "\u{FFFC}",
+			with: ""
+		)
+		#expect(visible.contains("reference https://example.com/auto reader@example.com"))
 		#expect(!text(parsed).contains("[docs]"))
 		for (label, destination) in [
 			("reference", "https://example.com/reference"),
@@ -139,6 +143,24 @@ struct ConversationMarkdownParserTests
 				$0.text == label && $0.style.link == destination
 			})
 		}
+	}
+
+	@Test func bareWebLinksGainAnIconWithoutLinkingInlineCode()
+	{
+		let parsed = parse("Visit https://example.com/path. `https://example.com/code`")
+		#expect(parsed.runs.filter(\.style.webLinkIcon).count == 1)
+		#expect(parsed.runs.contains
+		{
+			$0.text == "https://example.com/path" &&
+				$0.style.link == "https://example.com/path"
+		})
+		#expect(parsed.runs.contains
+		{
+			$0.text == "https://example.com/code" && $0.style.link == nil
+		})
+		let plain = ConversationPlainTextRenderer.renderWithLinks(parsed)
+		#expect(plain.text.contains("https://example.com/path."))
+		#expect(plain.links.count == 1)
 	}
 
 	@Test func escapesAndEntitiesAreDecodedAndThematicBreakIsVisible()
@@ -172,6 +194,36 @@ struct ConversationMarkdownParserTests
 		#expect(display.contains("<span>inline</span>"))
 		#expect(display.contains("[Image: diagram description] (https://example.com/a.png)"))
 		#expect(parsed.codeBlocks.isEmpty)
+	}
+
+	@Test func consecutiveLocalImagesBecomeOneSourceBackedGallery()
+	{
+		let first = "![dialog](/tmp/rename-dialog.png)"
+		let body = "Before\n\n\(first)\n\n\(first)\n\n\(first)\n\nAfter"
+		let parsed = parse(body)
+		let galleries = parsed.runs.filter
+		{
+			$0.text == "\u{FFFC}"
+		}.compactMap(\.style.richBlock).filter
+		{
+			$0.kind == .imageGallery
+		}
+		#expect(galleries.count == 1)
+		#expect(galleries.first?.imagePaths == Array(
+			repeating: "/tmp/rename-dialog.png",
+			count: 3
+		))
+		#expect(galleries.first?.source == [first, first, first].joined(separator: "\n\n"))
+		#expect(text(parsed).contains("Before"))
+		#expect(text(parsed).contains("After"))
+		#expect(ConversationPlainTextRenderer.render(parsed).contains(first))
+		let adjacent = parse("\(first)\n\(first)")
+		let adjacentGalleries = adjacent.runs.filter
+		{
+			$0.text == "\u{FFFC}" && $0.style.richBlock != nil
+		}
+		#expect(adjacentGalleries.count == 1)
+		#expect(adjacentGalleries.first?.style.richBlock?.imagePaths.count == 2)
 	}
 
 	@Test func fencedIndentedAndUnfinishedCodePreserveExactCopyText()

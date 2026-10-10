@@ -97,6 +97,70 @@ enum UserMessagePresenter
 		)
 	}
 
+	static func attachmentPreviewTitle(for item: CodexItem) -> String?
+	{
+		attachmentPreviewTitle(
+			body: body(for: item),
+			text: item.text ?? "",
+			images: item.references.filter
+			{
+				$0.kind == .image
+			}
+		)
+	}
+
+	static func attachmentPreviewTitle(for inputs: [TurnInput]) -> String?
+	{
+		let text = inputs.compactMap
+		{
+			if case .text(let value) = $0
+			{
+				return value
+			}
+			return nil
+		}.joined(separator: "\n")
+		return attachmentPreviewTitle(
+			body: body(for: inputs),
+			text: text,
+			images: imageAttachments(for: inputs)
+		)
+	}
+
+	private static func attachmentPreviewTitle(
+		body: String,
+		text: String,
+		images: [UserMessageReference]
+	) -> String?
+	{
+		guard body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !images.isEmpty
+		else
+		{
+			return nil
+		}
+		// An empty presented body confirms there is no literal request to replace.
+		let descriptions = text.components(separatedBy: "\n").filter
+		{
+			$0.hasPrefix(UserMessageContextDescription.imagePrefix)
+		}
+		let labels: [String]
+		if descriptions.count == images.count
+		{
+			labels = descriptions
+		}
+		else
+		{
+			labels = images.map
+			{
+				$0.name == "Attached image" || $0.name.isEmpty
+					? "Attached image" : UserMessageContextDescription.image(title: $0.name)
+			}
+		}
+		return ConversationTurnPreviewText.title(
+			labels.joined(separator: "; "),
+			maximumLength: 400
+		)
+	}
+
 	private static func render(
 		text: String,
 		references: [Reference]

@@ -7,4 +7,5 @@ struct ConversationTurnPreview: Equatable, Sendable
 	let entryID: String
 	let title: String
 	let reply: String
+	var replySource: String? = nil
 }

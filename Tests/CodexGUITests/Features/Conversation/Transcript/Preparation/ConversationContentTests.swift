@@ -49,7 +49,7 @@ struct ConversationContentTests
 		)
 		let text = content.attributedString.string
 
-		#expect(text.contains("Heading\n•\tfirst\n2. second site"))
+		#expect(text.contains("Heading\n•\tfirst\n2. second \u{FFFC}site"))
 		#expect(!text.contains("```"))
 		#expect(content.codeBlocks == ["let value = \"  exact  \"\n"])
 		let heading = (text as NSString).range(of: "Heading")
@@ -61,6 +61,12 @@ struct ConversationContentTests
 			) as? NSFont
 		#expect(headingFont?.pointSize == 24)
 		let link = (text as NSString).range(of: "site")
+		let icon = content.attributedString.attribute(
+			.attachment,
+			at: link.location - 1,
+			effectiveRange: nil
+		) as? WebLinkFaviconAttachment
+		#expect(icon?.url.absoluteString == "https://example.com/path")
 		let url =
 			content.attributedString.attribute(
 				.link,

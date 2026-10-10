@@ -51,6 +51,33 @@ struct ConversationTurnPreviewPreparationTests
 		#expect(rendered == ["**Final** reply"])
 	}
 
+	@Test func compactPreviewRetainsBoundedSourceForLabeledWebLinks() throws
+	{
+		let source = "See [documentation](https://example.org/guide)."
+		let turn = makeTurn(items: [
+			request(
+				"request",
+				text: "Find docs"
+			),
+			message(
+				"reply",
+				type: "agentMessage",
+				text: source
+			),
+		])
+		let preview = try ConversationMarkdownPreviewPreparer().prepare(turn)
+		#expect(preview.reply == "See documentation.")
+		#expect(preview.replySource == source)
+		#expect(ConversationCachePolicy.cost(preview) > ConversationCachePolicy.cost(
+			ConversationTurnPreview(
+				turnID: preview.turnID,
+				entryID: preview.entryID,
+				title: preview.title,
+				reply: preview.reply
+			)
+		))
+	}
+
 	@Test func preparationBoundsTheInputPassedToReplyRenderingAndRetainedText() throws
 	{
 		let turn = makeTurn(items: [
@@ -90,7 +117,7 @@ struct ConversationTurnPreviewPreparationTests
 		#expect(preview.reply.count == 800)
 	}
 
-	@Test func imageOnlyRequestPreservesEmptyTextAndOrdinaryReply() throws
+	@Test func imageOnlyRequestUsesAttachmentTitleAndOrdinaryReply() throws
 	{
 		let imageOnly = CodexItem(json: [
 			"id": "request",
@@ -106,7 +133,7 @@ struct ConversationTurnPreviewPreparationTests
 			)
 		]))
 		#expect(preview.entryID == "turn:request")
-		#expect(preview.title.isEmpty)
+		#expect(preview.title == "Attached image: image.png")
 		#expect(preview.reply == "An image description")
 	}
 

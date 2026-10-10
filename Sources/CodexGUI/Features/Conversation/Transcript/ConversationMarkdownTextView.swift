@@ -27,6 +27,114 @@ enum ConversationTextDrawing
 final class ConversationMarkdownTextView: NSTextView
 {
 	private var updatingFrameSize = false
+	private let expandedImagePreview = ExpandedImagePreview()
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		loadWebLinkFavicons()
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		needsDisplay = true
+	}
+
+	func loadWebLinkFavicons()
+	{
+		guard let textStorage
+		else
+		{
+			return
+		}
+		WebLinkFaviconAttachment.load(
+			in: textStorage,
+			invalidate: self
+		)
+	}
+
+	override func viewWillMove(toWindow newWindow: NSWindow?)
+	{
+		if newWindow !== window
+		{
+			expandedImagePreview.dismiss()
+		}
+		super.viewWillMove(toWindow: newWindow)
+	}
+
+	func dismissExpandedImage()
+	{
+		expandedImagePreview.dismiss()
+	}
+
+	override func mouseDown(with event: NSEvent)
+	{
+		if let window, let path = imagePath(at: convert(
+			event.locationInWindow,
+			from: nil
+		))
+		{
+			expandedImagePreview.present(
+				path: path,
+				name: LocalAttachmentURL.resolve(path)?.lastPathComponent ?? "Image",
+				in: window
+			)
+			return
+		}
+		super.mouseDown(with: event)
+	}
+
+	private func imagePath(at point: NSPoint) -> String?
+	{
+		guard let container = textContainer, let manager = layoutManager,
+				let storage = textStorage, storage.length > 0
+		else
+		{
+			return nil
+		}
+		let origin = textContainerOrigin
+		let location = NSPoint(
+			x: point.x - origin.x,
+			y: point.y - origin.y
+		)
+		let glyph = manager.glyphIndex(
+			for: location,
+			in: container
+		)
+		guard glyph < manager.numberOfGlyphs
+		else
+		{
+			return nil
+		}
+		let frame = manager.boundingRect(
+			forGlyphRange: NSRange(
+				location: glyph,
+				length: 1
+			),
+			in: container
+		)
+		guard frame.contains(location)
+		else
+		{
+			return nil
+		}
+		let character = manager.characterIndexForGlyph(at: glyph)
+		guard character < storage.length,
+				let gallery = storage.attribute(
+				.attachment,
+				at: character,
+				effectiveRange: nil
+				) as? ConversationImageGalleryAttachment
+		else
+		{
+			return nil
+		}
+		return gallery.path(
+			at: location,
+			in: frame
+		)
+	}
 
 	override func draw(_ dirtyRect: NSRect)
 	{

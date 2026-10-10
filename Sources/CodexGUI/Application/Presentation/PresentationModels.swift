@@ -15,6 +15,7 @@ struct ConversationEntry: Equatable
 	let kind: ConversationEntryKind
 	var title: String
 	var body: String
+	var attachmentPreviewTitle: String? = nil
 	var isExpandable: Bool = false
 	var activity: ConversationActivity? = nil
 	var imageAttachments: [UserMessageReference] = []

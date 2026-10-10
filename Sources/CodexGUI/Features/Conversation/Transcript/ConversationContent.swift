@@ -21,9 +21,15 @@ final class PreparedConversationContent: @unchecked Sendable
 	@MainActor private var bodyHeightOrder: [SizeKey] = []
 
 	@MainActor
-	init(_ parsed: ParsedConversationContent)
+	init(
+		_ parsed: ParsedConversationContent,
+		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
+	)
 	{
-		attributedString = ConversationAttributedStringRenderer.render(parsed.runs)
+		attributedString = ConversationAttributedStringRenderer.render(
+			parsed.runs,
+			imageThumbnails: imageThumbnails
+		)
 		codeBlocks = parsed.codeBlocks
 		codeBlockRanges = parsed.codeBlockRanges
 		estimatedRichImageBytes = Self.richImageBytes(in: attributedString)
@@ -44,13 +50,14 @@ final class PreparedConversationContent: @unchecked Sendable
 		)
 		{
 			value, _, _ in
-			guard let attachment = value as? ConversationRichAttachment,
+			guard let attachment = value as? NSTextAttachment,
 					attachments.insert(ObjectIdentifier(attachment)).inserted
 			else
 			{
 				return
 			}
-			bytes += attachment.estimatedRichImageBytes
+			bytes += (attachment as? ConversationRichAttachment)?.estimatedRichImageBytes
+				?? (attachment as? ConversationImageGalleryAttachment)?.estimatedRichImageBytes ?? 0
 		}
 		return bytes
 	}
@@ -184,7 +191,37 @@ actor ConversationContentCache
 			markdown: markdown,
 			preserveSoftBreaks: preserveSoftBreaks
 		)
-		let prepared = await PreparedConversationContent(parsed)
+		let imagePaths = parsed.runs.flatMap
+		{
+			$0.text == "\u{FFFC}" ? ($0.style.richBlock?.imagePaths ?? []) : []
+		}
+		let maximumPixelSize = min(
+			800,
+			max(
+				160,
+				Int((1_900_000.0 / Double(max(
+					1,
+					imagePaths.count
+				))).squareRoot())
+			)
+		)
+		var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
+		for path in Set(imagePaths)
+		{
+			guard !Task.isCancelled
+			else
+			{
+				break
+			}
+			imageThumbnails[path] = await SourceThumbnailLoader.image(
+				path: path,
+				maximumPixelSize: maximumPixelSize
+			)
+		}
+		let prepared = await PreparedConversationContent(
+			parsed,
+			imageThumbnails: imageThumbnails
+		)
 		let byteCount = body.utf8.count + prepared.estimatedRichImageBytes
 		if values[key] == nil && byteCount <= byteCapacity
 		{

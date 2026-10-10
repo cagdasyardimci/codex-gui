@@ -51,11 +51,14 @@ enum ConversationTurnPreviewPreparation
 		}
 		let title = ConversationTurnPreviewText.title(
 			UserMessagePresenter.body(for: request),
-			maximumLength: 160
+			maximumLength: 160,
+			attachmentTitle: UserMessagePresenter.attachmentPreviewTitle(for: request)
 		)
+		var replySource: String?
 		let renderedReply = reply.map
 		{
 			let excerpt = ConversationTurnPreviewText.sourcePrefix($0)
+			replySource = ConversationTurnPreviewText.linkSource(excerpt)
 			return ConversationTurnPreviewText.reply(renderReply(excerpt))
 		} ?? ""
 		try Task.checkCancellation()
@@ -63,7 +66,8 @@ enum ConversationTurnPreviewPreparation
 			turnID: turn.id,
 			entryID: turn.id + ":" + request.id,
 			title: title,
-			reply: renderedReply
+			reply: renderedReply,
+			replySource: replySource
 		)
 	}
 }

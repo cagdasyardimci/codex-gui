@@ -7,6 +7,7 @@ struct ConversationTurnSummary: Equatable, Sendable
 	var entryID: String
 	let title: String
 	var reply: String
+	var replySource: String? = nil
 	var isContentLoaded = true
 	var isPreviewLoaded = false
 	var previewError: String?
@@ -53,6 +54,7 @@ struct ConversationTurnSummary: Equatable, Sendable
 					entryID: reference.id + ":reference",
 					title: preview.title,
 					reply: preview.reply,
+					replySource: preview.replySource,
 					isContentLoaded: false,
 					isPreviewLoaded: true
 				)
@@ -111,7 +113,8 @@ struct ConversationTurnSummary: Equatable, Sendable
 					entryID: entry.id,
 					title: ConversationTurnPreviewText.title(
 						entry.body,
-						maximumLength: 400
+						maximumLength: 400,
+						attachmentTitle: entry.attachmentPreviewTitle
 					),
 					replyBody: nil
 				))
@@ -192,6 +195,7 @@ struct ConversationTurnSummary: Equatable, Sendable
 					)
 				}
 				summaries[index].reply = reply.text
+				summaries[index].replySource = ConversationTurnPreviewText.linkSource(excerpt)
 				let byteCount = prefix.count + reply.text.utf8.count + source.turnID.utf8.count + 96
 				if nextReplies.count < capacity, byteCount <= byteCapacity - retainedBytes
 				{

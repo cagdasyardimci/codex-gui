@@ -23,7 +23,10 @@ enum ConversationAttributedStringRenderer
 			? .white : .labelColor
 	}
 
-	static func render(_ runs: [ConversationTextRun]) -> NSAttributedString
+	static func render(
+		_ runs: [ConversationTextRun],
+		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
+	) -> NSAttributedString
 	{
 		let result = NSMutableAttributedString(string: "")
 		var richBudget = ConversationRichBlockBudget()
@@ -58,7 +61,8 @@ enum ConversationAttributedStringRenderer
 			addRichBlockAttachment(
 				for: run,
 				to: &attributes,
-				budget: &richBudget
+				budget: &richBudget,
+				imageThumbnails: imageThumbnails
 			)
 			result.append(NSAttributedString(
 				string: displayText(for: run),
@@ -163,7 +167,12 @@ enum ConversationAttributedStringRenderer
 		{
 			attributes[.link] = url
 			attributes[.underlineStyle] = 0
-			if run.style.fileLinkIcon
+			if run.style.webLinkIcon
+			{
+				attributes[.attachment] = WebLinkFaviconAttachment(url: url)
+				attributes[.conversationSourceText] = ""
+			}
+			else if run.style.fileLinkIcon
 			{
 				let attachment = makeFileLinkAttachment()
 				attributes[.attachment] = attachment
@@ -215,7 +224,8 @@ enum ConversationAttributedStringRenderer
 	private static func addRichBlockAttachment(
 		for run: ConversationTextRun,
 		to attributes: inout [NSAttributedString.Key: Any],
-		budget: inout ConversationRichBlockBudget
+		budget: inout ConversationRichBlockBudget,
+		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail]
 	)
 	{
 		if let rich = run.style.richBlock, run.text == "\u{FFFC}"
@@ -233,6 +243,13 @@ enum ConversationAttributedStringRenderer
 				attachment = ConversationRichBlockRenderer.diagramAttachment(
 					code: rich.payload,
 					source: rich.source,
+					budget: &budget
+				)
+			case .imageGallery:
+				attachment = ConversationImageGalleryAttachment.make(
+					paths: rich.imagePaths,
+					source: rich.source,
+					thumbnails: imageThumbnails,
 					budget: &budget
 				)
 			}

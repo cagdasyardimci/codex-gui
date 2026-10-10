@@ -28,3 +28,12 @@ Navigation task hover cards use a fixed 320-point width. Titles and project name
 height follows the content. Computer and time metadata remain beside the first title line.
 The passive child panel does not take focus and dismisses when the row or window loses its
 hover context.
+
+Conversation transcript Markdown and turn navigation previews highlight HTTP(S) links and show an
+inline site icon. Bare URLs in prose are links; inline and fenced code remain literal. A visible
+link first requests an icon with `sz=256` from Google's favicon service for the site's host, accepting
+the service's redirect to its gstatic image host. If the response is unavailable or unusable, the
+system LinkPresentation metadata API is asked for the site's icon. Icons are limited to 128 KB.
+Results and failures are cached per origin for up to 128 sites during the app session; a globe is
+shown when no icon is available. Dark monochrome icons are tinted white
+in dark appearance. Local and file links keep their existing file presentation.
