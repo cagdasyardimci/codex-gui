@@ -73,27 +73,64 @@ struct CodexTurn: Sendable
 		self.durationMs = durationMs
 	}
 
+	struct Metadata
+	{
+		let id: String
+		let status: String
+		let error: String?
+		let startedAt: Date?
+		let completedAt: Date?
+		let durationMs: Double?
+
+		init?(json: [String: Any])
+		{
+			guard let id = json["id"] as? String
+			else
+			{
+				return nil
+			}
+			self.id = id
+			self.status = json["status"] as? String ?? "inProgress"
+			self.error = (json["error"] as? [String: Any])?["message"] as? String
+			self.startedAt = (json["startedAt"] as? NSNumber).map
+			{
+				Date(timeIntervalSince1970: $0.doubleValue)
+			}
+			self.completedAt = (json["completedAt"] as? NSNumber).map
+			{
+				Date(timeIntervalSince1970: $0.doubleValue)
+			}
+			self.durationMs = (json["durationMs"] as? NSNumber)?.doubleValue
+		}
+	}
+
+	init(
+		metadata: Metadata,
+		items: [CodexItem]
+	)
+	{
+		self.init(
+			id: metadata.id,
+			status: metadata.status,
+			items: items,
+			error: metadata.error,
+			startedAt: metadata.startedAt,
+			completedAt: metadata.completedAt,
+			durationMs: metadata.durationMs
+		)
+	}
+
 	init?(json: [String: Any])
 	{
-		guard let id = json["id"] as? String
+		guard let metadata = Metadata(json: json)
 		else
 		{
 			return nil
 		}
-		self.id = id
-		self.itemsAreComplete = true
-		self.status = json["status"] as? String ?? "inProgress"
-		self.items = (json["items"] as? [[String: Any]] ?? []).compactMap(CodexItem.init(json:))
-		self.error = (json["error"] as? [String: Any])?["message"] as? String
-		self.startedAt = (json["startedAt"] as? NSNumber).map
-		{
-			Date(timeIntervalSince1970: $0.doubleValue)
-		}
-		self.completedAt = (json["completedAt"] as? NSNumber).map
-		{
-			Date(timeIntervalSince1970: $0.doubleValue)
-		}
-		self.durationMs = (json["durationMs"] as? NSNumber)?.doubleValue
+		self.init(
+			metadata: metadata,
+			items: (json["items"] as? [[String: Any]] ?? []).compactMap(CodexItem.init(json:))
+		)
 	}
 }
 

@@ -23,9 +23,7 @@ enum ConversationHistoryDecoder
 			try checkCancellation(isCancelled)
 			// Reuse metadata defaults and check cancellation throughout large item arrays.
 			// Invalid turns and items retain the existing compactMap behavior.
-			var metadataJSON = rawTurn
-			metadataJSON.removeValue(forKey: "items")
-			guard let metadata = CodexTurn(json: metadataJSON)
+			guard let metadata = CodexTurn.Metadata(json: rawTurn)
 			else
 			{
 				continue
@@ -40,13 +38,8 @@ enum ConversationHistoryDecoder
 				}
 			}
 			turns.append(CodexTurn(
-				id: metadata.id,
-				status: metadata.status,
-				items: items,
-				error: metadata.error,
-				startedAt: metadata.startedAt,
-				completedAt: metadata.completedAt,
-				durationMs: metadata.durationMs
+				metadata: metadata,
+				items: items
 			))
 		}
 		try checkCancellation(isCancelled)

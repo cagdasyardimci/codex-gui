@@ -41,6 +41,21 @@ struct ConversationHistoryDecoderTests
 		let legacy = Array(legacyDecodedTurns.reversed())
 		#expect(page.turns.map(\.id) == ["earlier", "latest"])
 		#expect(page.nextCursor == "older\u{2028}cursor")
+		let earlier = try #require(page.turns.first)
+		#expect(earlier.status == "inProgress")
+		#expect(earlier.error == nil)
+		#expect(earlier.startedAt == nil)
+		#expect(earlier.completedAt == nil)
+		#expect(earlier.durationMs == nil)
+		#expect(earlier.items.isEmpty)
+		#expect(earlier.itemsAreComplete)
+		let latest = try #require(page.turns.last)
+		#expect(latest.status == "completed")
+		#expect(latest.error == "fixture")
+		#expect(latest.startedAt == Date(timeIntervalSince1970: 10.25))
+		#expect(latest.completedAt == Date(timeIntervalSince1970: 15.5))
+		#expect(latest.durationMs == 5250.0)
+		#expect(latest.itemsAreComplete)
 		for (actual, expected) in zip(
 			page.turns,
 			legacy
@@ -94,6 +109,32 @@ struct ConversationHistoryDecoderTests
 			#expect(page.turns.isEmpty)
 			#expect(page.nextCursor == nil)
 		}
+	}
+
+	@Test func malformedMetadataUsesDefaultsAndInvalidIDsAreSkipped() throws
+	{
+		let turns: [[String: Any]] = [
+			["id": "malformed",
+				"status": 42,
+				"error": ["message": 42],
+				"startedAt": "10",
+				"completedAt": NSNull(),
+				"durationMs": "5"],
+			["id": 42, "status": "completed"],
+			["status": "completed"],
+		]
+		let page = try ConversationHistoryDecoder.decode(ProtocolJSONPayload(value: [
+			"data": turns,
+		]))
+		#expect(page.turns.map(\.id) == ["malformed"])
+		let turn = try #require(page.turns.first)
+		#expect(turn.status == "inProgress")
+		#expect(turn.error == nil)
+		#expect(turn.startedAt == nil)
+		#expect(turn.completedAt == nil)
+		#expect(turn.durationMs == nil)
+		#expect(turn.items.isEmpty)
+		#expect(turn.itemsAreComplete)
 	}
 
 	@Test func cancellationIsCheckedBetweenItemsOfOneLargeTurn() throws
