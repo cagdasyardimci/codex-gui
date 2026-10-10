@@ -15,7 +15,6 @@ struct GitDiffParserTests
 			("@@ malformed\n+counted\n-counted\n@@\n+still counted", 2, 1),
 			("@@ -1 +1 @@\n+first\ndiff --git a/b b/b\n+outside\n-outside", 1, 0),
 			("@@ -1 +1 @@\n+first\n\n+++ second\n--- second", 2, 1),
-			("@@ -1 +1 @@\r\n-old\r\n+new\r\n", 1, 1),
 			("@@ -1 +1 @@\n+😀\n-e\u{301}\n@@ -3 +3 @@\n+next\n", 2, 1),
 		]
 		for (diff, additions, deletions) in reports
@@ -27,6 +26,25 @@ struct GitDiffParserTests
 			#expect(counts.additions == parsed.additions)
 			#expect(counts.deletions == parsed.deletions)
 		}
+	}
+
+	@Test func countOnlyParsingPreservesFoundationCRLFSegmentation()
+	{
+		let diff = "@@ -1 +1 @@\r\n-old\r\n+new\r\n"
+		// Foundation's LF splitting of CRLF differs across platforms. Preserve its result.
+		let lines = diff.components(separatedBy: "\n")
+		let counts = GitDiffParser.lineCounts(in: diff)
+		let parsed = GitDiffParser.hunks(in: lines)
+		#expect(counts.additions == lines.filter
+		{
+			$0.hasPrefix("+")
+		}.count)
+		#expect(counts.deletions == lines.filter
+		{
+			$0.hasPrefix("-")
+		}.count)
+		#expect(counts.additions == parsed.additions)
+		#expect(counts.deletions == parsed.deletions)
 	}
 
 	@Test func countOnlyParsingHandlesLargeJoinedFileReports()
