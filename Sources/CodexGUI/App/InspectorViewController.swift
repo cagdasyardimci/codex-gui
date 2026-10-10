@@ -35,6 +35,11 @@ final class InspectorViewController: NSViewController
 	var onToolChangesSelected: (() -> Void)?
 	private var summaryVisible = true
 	private(set) var isShowingDetails = false
+	var hasPaneContent: Bool
+	{
+		summaryVisible || isShowingDetails || isShowingTools
+	}
+
 	private var renderedOwner: FeaturePresentationOwner?
 	private weak var inspectorBox: InspectorBoxSurface?
 	private let headerDivider = DesktopSurface(DesktopTheme.border)

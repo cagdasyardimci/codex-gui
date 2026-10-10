@@ -17,6 +17,11 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |
 | [Usage](Usage/) | Usage presentation and controls. |
 
+Hiding the pinned summary releases the inspector pane when it has no detail or tool content.
+The transcript and composer center within the resulting conversation pane at their existing
+reading width. Content visibility does not overwrite saved inspector visibility or detail width;
+an expanded conversation keeps its containing pane and releases only its summary aside.
+
 For test placement, see [test organization](../../../CONVENTIONS.md#test-organization). For task routing, return to [agent workflow](../../../docs/agent-workflow.md#documentation-map).
 
 Navigation task hover cards use a fixed 320-point width. Titles and project names wrap, and card

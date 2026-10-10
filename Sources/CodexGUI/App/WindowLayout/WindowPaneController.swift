@@ -24,6 +24,7 @@ final class WindowPaneController
 	private var expandedToolsWidth = WindowPaneLayout.reviewWidth
 	private var usesToolsSizing = false
 	private var usesSummarySizing = true
+	private var hasInspectorContent = true
 	private var reviewVisibility: WindowReviewVisibility = .automatic
 	private var reviewAutomaticallyCollapsed = false
 	private var hasPresentedWindow = false
@@ -552,12 +553,14 @@ final class WindowPaneController
 		}
 		let summarySizing = !inspector.isShowingTools && !inspector.isShowingDetails
 		guard usesToolsSizing != inspector.isShowingTools || usesSummarySizing != summarySizing
+			|| hasInspectorContent != inspector.hasPaneContent
 		else
 		{
 			return
 		}
 		usesToolsSizing = inspector.isShowingTools
 		usesSummarySizing = summarySizing
+		hasInspectorContent = inspector.hasPaneContent
 		if !usesToolsSizing
 		{
 			setToolsExpanded(false)
@@ -681,7 +684,16 @@ final class WindowPaneController
 
 	private func reviewLayout(width: CGFloat) -> WindowPaneLayoutPolicy.ReviewLayout
 	{
-		WindowPaneLayoutPolicy.reviewLayout(
+		// An empty inspector releases its space without changing the saved pane preference.
+		guard inspector.hasPaneContent
+		else
+		{
+			return WindowPaneLayoutPolicy.ReviewLayout(
+				collapsed: true,
+				width: 0
+			)
+		}
+		return WindowPaneLayoutPolicy.reviewLayout(
 			width: width,
 			navigationCollapsed: split.splitViewItems[0].isCollapsed,
 			navigationWidth: expandedNavigationWidth,

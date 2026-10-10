@@ -6,6 +6,110 @@ import Testing
 @Suite @MainActor
 struct ConversationWindowIntegrationTests
 {
+	@Test(arguments: [false, true])
+	func summaryToggleReleasesPaneAndRecentersPopulatedConversation(
+		readingEarlierMessages: Bool
+	) async throws
+	{
+		_ = NSApplication.shared
+		let suite = "SummaryToggleLayout.\(UUID())"
+		let defaults = try #require(UserDefaults(suiteName: suite))
+		defer
+		{
+			defaults.removePersistentDomain(forName: suite)
+		}
+		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		let controller = MainWindowController(
+			store: state.store,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			}
+		)
+		let window = try #require(controller.window)
+		defer
+		{
+			window.close()
+		}
+		window.setContentSize(NSSize(
+			width: 1512,
+			height: 876
+		))
+		controller.paneController.setSidebarCollapsed(true)
+		let presentation = snapshot(draft: "Preserve this draft")
+		controller.renderSnapshot(presentation)
+		await controller.conversation.waitForRendering()
+		controller.paneController.didPresentWindow()
+		window.layoutIfNeeded()
+		let conversation = controller.conversation
+		await conversation.widthChangeRestoreTask?.value
+		if readingEarlierMessages
+		{
+			let clip = conversation.conversationScrollView.contentView
+			clip.scroll(to: NSPoint(
+				x: 0,
+				y: 120
+			))
+			conversation.conversationScrollView.reflectScrolledClipView(clip)
+			conversation.readingPositionChanged()
+			#expect(!conversation.isNearBottom)
+		}
+		let initialComposer = conversation.view.convert(
+			conversation.composerSurface.bounds,
+			from: conversation.composerSurface
+		)
+		let initialPaneWidth = conversation.view.bounds.width
+		let summaryWidth = controller.paneController.reviewViewportWidth
+		#expect(abs(summaryWidth - InspectorViewController.summaryPaneWidth) < 1)
+		let scrollOrigin = conversation.conversationScrollView.contentView.bounds.origin
+
+		for hidden in [true, false, true, false]
+		{
+			controller.togglePinnedSummary()
+			window.layoutIfNeeded()
+			conversation.collectionView.layoutSubtreeIfNeeded()
+			await conversation.widthChangeRestoreTask?.value
+			#expect(controller.paneController.isReviewCollapsed == hidden)
+			#expect(controller.summaryToggleButton.state == (hidden ? .off : .on))
+			let composer = conversation.view.convert(
+				conversation.composerSurface.bounds,
+				from: conversation.composerSurface
+			)
+			#expect(abs(composer.width - initialComposer.width) < 1)
+			#expect(abs(composer.midX - conversation.view.bounds.midX) < 1)
+			if hidden
+			{
+				#expect(conversation.view.bounds.width > initialPaneWidth + summaryWidth - 1)
+				#expect(abs(composer.minX - initialComposer.minX - summaryWidth / 2) < 1)
+			}
+			else
+			{
+				#expect(abs(composer.minX - initialComposer.minX) < 1)
+				#expect(abs(controller.paneController.reviewViewportWidth - summaryWidth) < 1)
+			}
+			for index in conversation.displayedRows.indices
+			{
+				let attributes = try #require(conversation.collectionView.layoutAttributesForItem(
+					at: IndexPath(
+						item: index,
+						section: 0
+					)
+				))
+				let row = conversation.view.convert(
+					attributes.frame,
+					from: conversation.collectionView
+				)
+				#expect(abs(row.minX - composer.minX) < 1)
+				#expect(abs(row.maxX - composer.maxX) < 1)
+			}
+			#expect(conversation.composer.string == presentation.draft)
+			#expect(abs(conversation.conversationScrollView.contentView.bounds.minY
+					- scrollOrigin.y) < 1)
+		}
+	}
+
 	@Test func fullWindowSummaryUsesCardWidthWithoutOverwritingDetailGeometry() async throws
 	{
 		_ = NSApplication.shared
@@ -132,6 +236,15 @@ struct ConversationWindowIntegrationTests
 		#expect(abs(chrome.view.bounds.maxY - splitFrame.maxY - 2) < 0.5)
 		panes.saveLayout()
 		#expect(store.layout?.reviewWidth == 342)
+		inspector.renderSummary(
+			presentation,
+			visible: false
+		)
+		window.layoutIfNeeded()
+		#expect(panes.isReviewCollapsed)
+		panes.saveLayout()
+		#expect(store.layout?.reviewVisibility == .expanded)
+		#expect(store.layout?.reviewWidth == 342)
 		#expect(inspector.open(ContextPanelRequest(
 			owner: presentation.owner,
 			destination: .changes
@@ -140,11 +253,36 @@ struct ConversationWindowIntegrationTests
 		#expect(abs(panes.reviewViewportWidth - 342) < 0.5)
 		inspector.showSummary()
 		window.layoutIfNeeded()
+		#expect(panes.isReviewCollapsed)
+		inspector.renderSummary(
+			presentation,
+			visible: true
+		)
+		window.layoutIfNeeded()
 		#expect(abs(panes.reviewViewportWidth - 308) < 0.5)
 		inspector.showToolsPane()
 		window.layoutIfNeeded()
 		#expect(panes.reviewViewportWidth >= WindowPaneLayout.toolsMinimumWidth - 1)
+		let selectedTab = inspector.toolsTabs.selectedTabID
+		inspector.renderSummary(
+			presentation,
+			visible: false
+		)
+		window.layoutIfNeeded()
+		#expect(!panes.isReviewCollapsed)
+		#expect(inspector.toolsTabs.selectedTabID == selectedTab)
 		inspector.closeToolsPane()
+		window.layoutIfNeeded()
+		#expect(panes.isReviewCollapsed)
+		var otherModel = model
+		otherModel.conversations.selectedConversation = .thread("other-chat")
+		inspector.renderSummary(
+			PinnedSummaryPresentation(WorkspaceSelectors.snapshot(
+				model: otherModel,
+				now: .distantPast
+			)),
+			visible: true
+		)
 		window.layoutIfNeeded()
 		#expect(abs(panes.reviewViewportWidth - 308) < 0.5)
 		panes.setGitReviewFocused(true)
@@ -176,6 +314,39 @@ struct ConversationWindowIntegrationTests
 			)
 			#expect(abs(composerFrame.midX - paneFrame.midX) < 0.5)
 			#expect(composerFrame.width <= 736.5)
+		}
+		inspector.showToolsPane()
+		panes.toggleToolsExpanded()
+		for _ in 0 ..< 100 where panes.isAnimatingToolsExpansion
+		{
+			try await Task.sleep(for: .milliseconds(10))
+		}
+		try #require(!panes.isAnimatingToolsExpansion)
+		try #require(findButton(
+			in: inspector.toolsTabs.tabBarView,
+			title: "Chat: New chat"
+		)).performClick(nil)
+		try #require(panes.isShowingExpandedConversation)
+		inspector.renderSummary(
+			presentation,
+			visible: true
+		)
+		inspector.showSummaryBesideExpandedConversation()
+		window.layoutIfNeeded()
+		let expandedWidthWithSummary = conversation.view.bounds.width
+		for visible in [false, true]
+		{
+			inspector.renderSummary(
+				presentation,
+				visible: visible
+			)
+			window.layoutIfNeeded()
+			#expect(!panes.isReviewCollapsed)
+			#expect(panes.isShowingExpandedConversation)
+			#expect(inspector.isSummaryBesideExpandedConversation == visible)
+			let expectedWidth = expandedWidthWithSummary
+				+ (visible ? 0 : InspectorViewController.summaryPaneWidth)
+			#expect(abs(conversation.view.bounds.width - expectedWidth) < 1)
 		}
 	}
 
@@ -297,7 +468,7 @@ struct ConversationWindowIntegrationTests
 		#expect(row.accessibilityLabel()?.contains("Stopped task") == true)
 	}
 
-	private func snapshot() -> ConversationSnapshot
+	private func snapshot(draft: String = "") -> ConversationSnapshot
 	{
 		ConversationSnapshot(
 			projectPath: "/tmp/column-layout",
@@ -324,7 +495,7 @@ struct ConversationWindowIntegrationTests
 			canLoadEarlierTurns: false,
 			changedFiles: [],
 			diff: "",
-			draft: "",
+			draft: draft,
 			canSend: false,
 			accountDescription: "Synthetic layout fixture",
 			backendDescription: "Synthetic layout fixture",
@@ -343,7 +514,8 @@ struct ConversationWindowIntegrationTests
 		title: String
 	) -> NSButton?
 	{
-		if let button = view as? NSButton, button.title == title
+		if let button = view as? NSButton,
+			button.title == title || button.accessibilityLabel() == title
 		{
 			return button
 		}
