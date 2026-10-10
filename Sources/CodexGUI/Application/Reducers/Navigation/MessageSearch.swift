@@ -63,8 +63,11 @@ enum MessageSearch
 {
 	private static let leadingContextCharacters = 60
 	private static let trailingContextCharacters = 100
-	private static let fallbackSnippetCharacters =
-		leadingContextCharacters + trailingContextCharacters
+	private struct Match
+	{
+		let text: String
+		let range: Range<String.Index>
+	}
 
 	static func pendingResults(
 		query: String,
@@ -120,7 +123,7 @@ enum MessageSearch
 					{
 						break searchThreads
 					}
-					guard let matchedText = firstMatchingText(
+					guard let match = firstMatch(
 						in: item,
 						query: searchText
 					)
@@ -135,10 +138,7 @@ enum MessageSearch
 							turnID: turn.id,
 							itemID: item.id,
 							itemType: item.type,
-							snippet: snippet(
-								around: searchText,
-								in: matchedText
-							)
+							snippet: snippet(for: match)
 						)
 					)
 				}
@@ -151,48 +151,71 @@ enum MessageSearch
 		)
 	}
 
-	private static func firstMatchingText(
+	private static func firstMatch(
 		in item: CodexItem,
 		query: String
-	) -> String?
+	) -> Match?
 	{
-		let messageAndCommandText = [item.text, item.command, item.output].compactMap
+		if let match = match(
+			in: item.text,
+			query: query
+		)
+			?? match(
+				in: item.command,
+				query: query
+			)
+			?? match(
+				in: item.output,
+				query: query
+			)
 		{
-			$0
+			return match
 		}
-		let changedPaths = item.changes.map(\.path)
-		return (messageAndCommandText + changedPaths).first
+		for change in item.changes
 		{
-			$0.range(
-				of: query,
-				options: [.caseInsensitive, .diacriticInsensitive]
-			) != nil
+			if let match = match(
+				in: change.path,
+				query: query
+			)
+			{
+				return match
+			}
 		}
+		return nil
 	}
 
-	private static func snippet(
-		around searchText: String,
-		in text: String
-	) -> String
+	private static func match(
+		in text: String?,
+		query: String
+	) -> Match?
 	{
-		guard let match = text.range(
-			of: searchText,
+		guard let text, let range = text.range(
+			of: query,
 			options: [.caseInsensitive, .diacriticInsensitive]
 		)
 		else
 		{
-			return String(text.prefix(fallbackSnippetCharacters))
+			return nil
 		}
+		return Match(
+			text: text,
+			range: range
+		)
+	}
+
+	private static func snippet(for match: Match) -> String
+	{
+		let text = match.text
 		let snippetStart =
 			text.index(
-				match.lowerBound,
+				match.range.lowerBound,
 				offsetBy: -leadingContextCharacters,
 				limitedBy: text.startIndex
 			)
 			?? text.startIndex
 		let snippetEnd =
 			text.index(
-				match.upperBound,
+				match.range.upperBound,
 				offsetBy: trailingContextCharacters,
 				limitedBy: text.endIndex
 			)
