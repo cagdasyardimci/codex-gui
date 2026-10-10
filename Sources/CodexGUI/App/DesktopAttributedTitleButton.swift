@@ -102,6 +102,7 @@ class DesktopAttributedTitleButton: NSButton
 		{
 			installingTitle = false
 		}
+		let originalImagePosition = imagePosition
 		if let semanticTitle
 		{
 			super.attributedTitle = resolvedTitle(semanticTitle)
@@ -109,6 +110,10 @@ class DesktopAttributedTitleButton: NSButton
 		if let semanticAlternateTitle
 		{
 			super.attributedAlternateTitle = resolvedTitle(semanticAlternateTitle)
+		}
+		if imagePosition != originalImagePosition
+		{
+			imagePosition = originalImagePosition
 		}
 		needsDisplay = true
 	}

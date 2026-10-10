@@ -147,6 +147,40 @@ struct DesktopAttributedTitleButtonTests
 		}
 	}
 
+	@Test func iconOnlyButtonKeepsImagePositionAfterTitleAppearanceRefresh()
+	{
+		_ = NSApplication.shared
+		let window = makeWindow()
+		defer
+		{
+			window.close()
+		}
+		let button = DesktopAttributedTitleButton(frame: NSRect(
+			x: 10,
+			y: 10,
+			width: 18,
+			height: 18
+		))
+		button.isBordered = false
+		button.attributedTitle = NSAttributedString(
+			string: "View all",
+			attributes: [.foregroundColor: NSColor.tertiaryLabelColor]
+		)
+		button.image = NSImage(size: NSSize(
+			width: 16,
+			height: 16
+		))
+		button.imagePosition = .imageOnly
+		window.contentView?.addSubview(button)
+		#expect(button.imagePosition == .imageOnly)
+		for name: NSAppearance.Name in [.aqua, .darkAqua, .aqua]
+		{
+			window.appearance = NSAppearance(named: name)
+			#expect(button.imagePosition == .imageOnly)
+			#expect(button.attributedTitle.string == "View all")
+		}
+	}
+
 	private func expectColor(
 		_ color: NSColor,
 		at index: Int,
