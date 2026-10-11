@@ -6,6 +6,8 @@ Use [conventions](../CONVENTIONS.md#formatting-and-tooling) for formatting and [
 
 Run `make check` without `-j` for Swift formatting, the application build and tests. Do not change source or build settings during a run, or run competing builds in the same checkout. Use separate checkouts for independent builds. Inspect the output to confirm the intended tests executed and completed; a command exit alone can miss an empty selection or incomplete host. See [native QA](native-qa.md#manual-preparation-and-isolation) for manual fixture isolation.
 
+The default `make test` and `make check` run the common group and each isolated selection serially in separate processes, using the same selections as `make test-suites`. Every process must report a successful, nonempty Swift Testing completion summary; [the test runner](../Tests/run-swift-tests.py) rejects a zero-exit process without that summary.
+
 Run `git diff --check` for whitespace errors. Follow [README](../README.md#build-check-and-run) for bundling, then verify the signature with `codesign --verify --deep --strict --verbose=2 .build/CodexGUI.app`. These checks do not require a live model turn.
 
 ## Test-host maintenance

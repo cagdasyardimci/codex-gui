@@ -19,7 +19,8 @@ TEST_SUITE ?= all
 ISOLATED_TEST_SUITES := window-layout task-window-layout full-access desktop-layout \
 	window-lifecycle settled-hover terminal-hover task-title task-hover task-archive \
 	turn-rail search-rebinding search-sheet image-panel sidebar-appearance \
-	transcript-appearance composer-appearance sources-appearance rail-appearance
+	transcript-appearance composer-appearance sources-appearance rail-appearance \
+	task-execution
 TEST_SUITES := all common summary navigation navigation-common $(ISOLATED_TEST_SUITES)
 
 FILTER_summary := PinnedSummary.*Tests
@@ -44,6 +45,7 @@ FILTER_transcript-appearance := TranscriptLayerAppearanceTests
 FILTER_composer-appearance := Composer(CustomDrawing)?AppearanceTests
 FILTER_sources-appearance := SourcesHoverAppearanceTests
 FILTER_rail-appearance := TurnRailAppearanceTests
+FILTER_task-execution := ^CodexGUITests[.]TaskWorkspaceCoordinatorTests/
 
 # The common group is the complement of the isolated selections.
 empty :=
@@ -62,12 +64,14 @@ build:
 
 test:
 	$(if $(and $(filter 1,$(words $(TEST_SUITE))),$(filter $(TEST_SUITES),$(TEST_SUITE))),,$(error Unknown TEST_SUITE '$(TEST_SUITE)'; use make test-groups))
-ifeq ($(TEST_SUITE),navigation)
+ifeq ($(TEST_SUITE),all)
+	$(MAKE) --no-print-directory test-suites
+else ifeq ($(TEST_SUITE),navigation)
 	@set -e; for suite in navigation-common $(NAVIGATION_NATIVE_SUITES); do \
 		$(MAKE) --no-print-directory test TEST_SUITE=$$suite; \
 	done
 else
-	swift test $(TEST_FLAGS) --no-parallel $(if $(filter common,$(TEST_SUITE)),--skip '$(ISOLATED_FILTER)',$(if $(FILTER_$(TEST_SUITE)),--filter '$(FILTER_$(TEST_SUITE))')) $(if $(filter navigation-common,$(TEST_SUITE)),--skip '$(NAVIGATION_NATIVE_FILTER)')
+	python3 Tests/run-swift-tests.py -- swift test $(TEST_FLAGS) --no-parallel $(if $(filter common,$(TEST_SUITE)),--skip '$(ISOLATED_FILTER)',$(if $(FILTER_$(TEST_SUITE)),--filter '$(FILTER_$(TEST_SUITE))')) $(if $(filter navigation-common,$(TEST_SUITE)),--skip '$(NAVIGATION_NATIVE_FILTER)')
 endif
 
 test-groups:
