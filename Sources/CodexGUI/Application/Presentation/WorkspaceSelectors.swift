@@ -544,18 +544,19 @@ struct WorkspaceSelectors
 			snapshot.planModeStatus = pending.outcomeUncertain
 				? "Plan mode unknown — run /plan to reapply or reset." : "Plan mode pending…"
 		}
-		snapshot.activeExecutionCount = 0
+		var activeExecutionCount = 0
 		for execution in model.allExecutions
 		{
 			if execution.isTaskActive
 			{
-				snapshot.activeExecutionCount += 1
+				activeExecutionCount += 1
 			}
 			if let threadID = execution.activeThreadID
 			{
 				snapshot.threadExecutions[threadID] = ThreadExecutionPresentation(execution)
 			}
 		}
+		snapshot.activeExecutionCount = activeExecutionCount
 		snapshot.workspaceOwner = WorkspaceLifecycleReducer.reference(model)
 		snapshot.composerDraftLifetime = composerDraft.lifetime
 		return snapshot
