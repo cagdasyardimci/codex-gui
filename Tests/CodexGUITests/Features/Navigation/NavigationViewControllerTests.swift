@@ -444,7 +444,7 @@ struct NavigationViewControllerTests
 		#expect(!unreadCell.unreadDot.isHidden)
 		#expect(unreadCell.progressRing.isHidden)
 		#expect(unreadCell.textField?.stringValue == "Active work")
-		#expect(unreadCell.textField?.textColor == .labelColor)
+		#expect(unreadCell.textField?.textColor == AppKitColorTokens.sidebarText)
 		#expect(unreadCell.accessibilityLabel()?.contains("Unread result") == true)
 		unreadCell.frame = NSRect(
 			x: 0,

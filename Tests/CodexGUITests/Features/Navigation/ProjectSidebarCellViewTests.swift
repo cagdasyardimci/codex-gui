@@ -180,14 +180,16 @@ struct ProjectSidebarCellViewTests
 		label.effectiveAppearance.performAsCurrentDrawingAppearance
 		{
 			actual = label.textColor?.usingColorSpace(.deviceRGB)
-			expected = NSColor.labelColor.usingColorSpace(.deviceRGB)
+			expected = (NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+				? AppKitColorTokens.primaryText : AppKitColorTokens.sidebarText)
+				.usingColorSpace(.deviceRGB)
 		}
 		let resolved = try #require(actual)
 		let semantic = try #require(expected)
 		#expect(abs(resolved.redComponent - semantic.redComponent) < 0.01)
 		#expect(abs(resolved.greenComponent - semantic.greenComponent) < 0.01)
 		#expect(abs(resolved.blueComponent - semantic.blueComponent) < 0.01)
-		let opacity = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? 1.0 : 0.9
+		let opacity = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? 1.0 : 0.85
 		#expect(abs(resolved.alphaComponent - opacity) < 0.01)
 	}
 

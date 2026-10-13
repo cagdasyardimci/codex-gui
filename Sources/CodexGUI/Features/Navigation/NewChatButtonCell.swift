@@ -2,6 +2,22 @@ import AppKit
 
 final class NewChatButtonCell: NSButtonCell
 {
+	override func drawTitle(
+		_ title: NSAttributedString,
+		withFrame frame: NSRect,
+		in controlView: NSView
+	) -> NSRect
+	{
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			super.drawTitle(
+				title,
+				withFrame: frame,
+				in: controlView
+			)
+		}
+	}
+
 	override func titleRect(forBounds rect: NSRect) -> NSRect
 	{
 		var titleRect = super.titleRect(forBounds: rect)

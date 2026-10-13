@@ -292,7 +292,8 @@ extension NavigationViewController
 		let state = execution?.title ?? "Running"
 		cell.textField?.stringValue =
 			showsInlineStatus ? "●  \(name) · \(state)" : name
-		cell.textField?.textColor = showsInlineStatus ? activeTaskColor : .labelColor
+		cell.textField?.textColor = showsInlineStatus ? activeTaskColor : AppKitColorTokens
+			.sidebarText
 		cell.textField?.toolTip = nil
 		let project = thread.cwd.isEmpty ? currentProject : URL(fileURLWithPath: thread.cwd)
 		cell.hoverCard = TaskHoverCard(

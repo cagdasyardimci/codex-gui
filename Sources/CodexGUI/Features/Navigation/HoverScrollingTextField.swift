@@ -1,7 +1,7 @@
 import AppKit
 
 /// Scrolls overflowing text within its fixed frame while the row is hovered.
-final class HoverScrollingTextField: NSTextField
+final class HoverScrollingTextField: SidebarTextField
 {
 	private var scrollTimer: Timer?
 	private var hoverStartedAt: TimeInterval = 0
@@ -144,13 +144,14 @@ final class HoverScrollingTextField: NSTextField
 		}
 		let text = title
 		let rect = textBounds
-		NSGraphicsContext.saveGraphicsState()
-		NSBezierPath(rect: rect).addClip()
-		text.draw(at: NSPoint(
-			x: rect.minX - scrollOffset,
-			y: rect.midY - text.size().height / 2
-		))
-		NSGraphicsContext.restoreGraphicsState()
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			NSBezierPath(rect: rect).addClip()
+			text.draw(at: NSPoint(
+				x: rect.minX - scrollOffset,
+				y: rect.midY - text.size().height / 2
+			))
+		}
 	}
 
 	isolated deinit

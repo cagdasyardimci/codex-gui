@@ -54,11 +54,8 @@ final class ProjectSidebarCellView: NSTableCellView
 
 	private func makeProjectTitle() -> NSTextField
 	{
-		let label = NSTextField(labelWithString: "")
-		label.font = .systemFont(
-			ofSize: 14,
-			weight: .regular
-		)
+		let label = SidebarTextField(labelWithString: "")
+		label.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
 		label.lineBreakMode = .byTruncatingTail
 		label.setContentCompressionResistancePriority(
 			.defaultLow,
@@ -152,10 +149,7 @@ final class ProjectSidebarCellView: NSTableCellView
 				"Collapsed project"
 		)
 		textField?.stringValue = name
-		textField?.font = .systemFont(
-			ofSize: 14,
-			weight: .regular
-		)
+		textField?.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
 		refreshTitleColor()
 		toolTip = (isPinned ? "Pinned project\n" : "") + project.path
 		setAccessibilityLabel(isCurrent ? "Selected project \(name)" : "Open project \(name)")
@@ -178,9 +172,8 @@ final class ProjectSidebarCellView: NSTableCellView
 		// The label can still have its previous appearance during the cell's appearance callback.
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
-			textField?.textColor = .labelColor.withAlphaComponent(
-				NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? 1 : 0.9
-			)
+			textField?.textColor = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+				? AppKitColorTokens.primaryText : AppKitColorTokens.sidebarText
 		}
 	}
 

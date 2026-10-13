@@ -75,15 +75,11 @@ enum TypographyTokens
 
 	enum Sidebar
 	{
-		static let row = Role(
-			size: 14,
-			selection: .system(weight: .regular)
-		)
+		static let row = Role(size: 14)
 		static let section = Role(
-			size: 13,
-			selection: .system(weight: .regular)
+			size: 14,
+			selection: .interface(weight: 500)
 		)
-
 	}
 
 	enum Composer

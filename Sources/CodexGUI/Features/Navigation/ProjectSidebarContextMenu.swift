@@ -13,6 +13,7 @@ final class ProjectSidebarContextMenu: NavigationContextMenu
 	)
 	{
 		super.init(title: "Project")
+		font = AppKitFontResolver.interfaceFont(ofSize: 13)
 		autoenablesItems = false
 		addAction(
 			title: isPinned ? "Unpin" : "Pin",

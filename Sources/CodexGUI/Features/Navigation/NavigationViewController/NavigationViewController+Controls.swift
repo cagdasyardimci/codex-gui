@@ -52,8 +52,8 @@ extension NavigationViewController
 			newChatButton,
 			icon: .chatCompose
 		)
-		newChatButton.font = .systemFont(ofSize: 14)
-		newChatButton.contentTintColor = .labelColor
+		newChatButton.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
+		newChatButton.contentTintColor = AppKitColorTokens.sidebarText
 		newChatButton.image = DesktopIcons.image(.chatCompose)
 		newChatButton.alignment = .left
 	}
@@ -61,8 +61,9 @@ extension NavigationViewController
 	func makeProjectsHeader(actionsButton: NSButton? = nil) -> NSStackView
 	{
 		let projectActionsButton = actionsButton ?? self.projectActionsButton
-		let projectsCaption = AppKitControlStyling.sectionLabel("Projects")
-		projectsCaption.font = .systemFont(ofSize: 13)
+		let projectsCaption = SidebarTextField(labelWithString: "Projects")
+		projectsCaption.font = AppKitFontResolver.font(TypographyTokens.Sidebar.section)
+		projectsCaption.textColor = AppKitColorTokens.secondaryText
 		projectActionsButton.target = self
 		projectActionsButton.action = #selector(toggleProjectActions(_:))
 		projectActionsButton.setAccessibilityLabel("Project and conversation actions")

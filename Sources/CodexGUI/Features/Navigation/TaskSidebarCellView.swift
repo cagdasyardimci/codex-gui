@@ -39,7 +39,8 @@ final class TaskSidebarCellView: NSTableCellView
 	{
 		super.init(frame: frameRect)
 		let label = HoverScrollingTextField(labelWithString: "")
-		label.font = .systemFont(ofSize: 14)
+		label.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
+		label.textColor = AppKitColorTokens.sidebarText
 		label.lineBreakMode = .byTruncatingTail
 		label.maximumNumberOfLines = 1
 		label.cell?.usesSingleLineMode = true
