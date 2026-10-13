@@ -6,9 +6,15 @@ final class ComposerPopoverPanel: NSObject
 	var onPresentationChange: ((Bool) -> Void)?
 	var preservesParentKeyboardFocus = false
 	var matchesAnchorWidth = false
+	var alignsToAnchorLeadingEdge = false
+	var limitsHeightToSpaceAboveAnchor = false
+	var horizontalOffset: CGFloat = 0
+	var anchorSpacing: CGFloat = 8
 	var shouldDismissForEscape: (() -> Bool)?
+	weak var focusAfterDismissal: NSView?
 	private(set) var isShown = false
 	private let controller: NSViewController
+	private let shadowOutset: CGFloat
 	private let panel = ComposerOverlayPanel(
 		contentRect: .zero,
 		styleMask: [.borderless, .nonactivatingPanel],
@@ -26,14 +32,39 @@ final class ComposerPopoverPanel: NSObject
 	private var appearanceBinding: DesktopPanelAppearanceBinding?
 	private var menuTrackingDepth = 0
 
-	init(contentViewController: NSViewController)
+	init(
+		contentViewController: NSViewController,
+		hasShadow: Bool = false,
+		shadowOutset: CGFloat = 0
+	)
 	{
 		controller = contentViewController
+		self.shadowOutset = shadowOutset
 		super.init()
-		panel.contentViewController = controller
+		if shadowOutset > 0
+		{
+			// Keep the content's shadow inside the transparent window backing.
+			let host = NSViewController()
+			host.view = NSView()
+			host.addChild(controller)
+			AppKitLayout.pin(
+				controller.view,
+				to: host.view,
+				inset: shadowOutset
+			)
+			host.preferredContentSize = NSSize(
+				width: controller.preferredContentSize.width + 2 * shadowOutset,
+				height: controller.preferredContentSize.height + 2 * shadowOutset
+			)
+			panel.contentViewController = host
+		}
+		else
+		{
+			panel.contentViewController = controller
+		}
 		panel.backgroundColor = .clear
 		panel.isOpaque = false
-		panel.hasShadow = false
+		panel.hasShadow = hasShadow
 		panel.hidesOnDeactivate = true
 		panel.isReleasedWhenClosed = false
 		panel.becomesKeyOnlyIfNeeded = false
@@ -94,6 +125,10 @@ final class ComposerPopoverPanel: NSObject
 		}
 		installEventMonitors()
 		onPresentationChange?(true)
+		if alignsToAnchorLeadingEdge
+		{
+			reposition()
+		}
 	}
 
 	func close()
@@ -112,7 +147,7 @@ final class ComposerPopoverPanel: NSObject
 			returnFocus && panel.isKeyWindow && NSApp.isActive
 				&& anchor?.window === parentWindow
 		let window = parentWindow
-		let focusTarget = anchor
+		let focusTarget = focusAfterDismissal ?? anchor
 		isShown = false
 		if let localMonitor
 		{
@@ -269,7 +304,10 @@ final class ComposerPopoverPanel: NSObject
 		{
 			return true
 		}
-		if panel.frame.contains(NSEvent.mouseLocation)
+		if panel.frame.insetBy(
+			dx: shadowOutset,
+			dy: shadowOutset
+		).contains(NSEvent.mouseLocation)
 		{
 			return true
 		}
@@ -342,17 +380,31 @@ final class ComposerPopoverPanel: NSObject
 			return
 		}
 		let screenEdgeInset: CGFloat = 8
-		let anchorToPanelSpacing: CGFloat = 8
 		let requestedSize = controller.preferredContentSize
 		let requestedWidth = matchesAnchorWidth ? screenRect.width : requestedSize.width
 		let availableWidth = max(
 			1,
 			visibleFrame.width - 2 * screenEdgeInset
 		)
-		let availableHeight = max(
+		let screenHeight = max(
 			1,
-			visibleFrame.height - 2 * screenEdgeInset
+			visibleFrame.height - 2 * max(
+				screenEdgeInset,
+				shadowOutset
+			)
 		)
+		let availableHeight = limitsHeightToSpaceAboveAnchor
+			? min(
+				screenHeight,
+				max(
+					1,
+					visibleFrame.maxY - screenRect.maxY - anchorSpacing
+						- max(
+							screenEdgeInset,
+							shadowOutset
+						)
+				)
+			) : screenHeight
 		let width = min(
 			max(
 				1,
@@ -373,32 +425,47 @@ final class ComposerPopoverPanel: NSObject
 			),
 			availableHeight
 		)
+		let requestedX = alignsToAnchorLeadingEdge
+			? screenRect.minX + horizontalOffset : screenRect.midX - width / 2 + horizontalOffset
 		let x = min(
 			max(
-				screenRect.midX - width / 2,
+				requestedX,
 				visibleFrame.minX + screenEdgeInset
 			),
 			visibleFrame.maxX - width - screenEdgeInset
 		)
 		let y = min(
 			max(
-				screenRect.maxY + anchorToPanelSpacing,
+				screenRect.maxY + anchorSpacing,
 				visibleFrame.minY + screenEdgeInset
 			),
 			visibleFrame.maxY - height - screenEdgeInset
 		)
 		let frame = NSRect(
-			x: x,
-			y: y,
-			width: width,
-			height: height
+			x: x - shadowOutset,
+			y: y - shadowOutset,
+			width: width + 2 * shadowOutset,
+			height: height + 2 * shadowOutset
 		)
+		if shadowOutset > 0
+		{
+			panel.contentViewController?.preferredContentSize = frame.size
+		}
 		if panel.frame != frame
 		{
 			panel.setFrame(
 				frame,
 				display: true
 			)
+			if alignsToAnchorLeadingEdge
+			{
+				// Borderless windows quantize origins to whole points.
+				// Choose the nearest placement after the content-size adjustment.
+				panel.setFrameOrigin(NSPoint(
+					x: frame.minX.rounded(),
+					y: frame.minY.rounded()
+				))
+			}
 		}
 	}
 }

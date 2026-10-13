@@ -162,11 +162,9 @@ enum AppKitColorTokens
 		lightAlpha: 0.08,
 		darkAlpha: 0.082
 	)
-	static let fullAccess = NSColor(
-		srgbRed: 1,
-		green: 0.29,
-		blue: 0,
-		alpha: 1
+	static let fullAccess = AppKitColorResolution.color(
+		light: 0xE25507,
+		dark: 0xFF8549
 	)
 	static let inlineCode = AppKitColorResolution.color(
 		light: 0x1A1C1F,
@@ -205,15 +203,20 @@ enum AppKitColorTokens
 	)
 	static let approvalPrimary = AppKitColorResolution.grayscaleColor(
 		light: 0.13,
-		dark: 0.9
+		dark: 1
 	)
-	static let approvalSecondary = AppKitColorResolution.grayscaleColor(
-		light: 0.57,
-		dark: 0.6
-	)
+	static let approvalSecondary = AppKitColorResolution.adaptiveColor
+	{
+		appearance in
+		appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+			? NSColor.white.withAlphaComponent(0.498) : NSColor(
+				white: 0.57,
+				alpha: 1
+			)
+	}
 	static let approvalIcon = AppKitColorResolution.grayscaleColor(
 		light: 0.33,
-		dark: 0.75
+		dark: 1
 	)
 
 	static let transcriptLink = AppKitColorResolution.adaptiveColor

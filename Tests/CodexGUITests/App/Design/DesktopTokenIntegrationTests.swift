@@ -6,54 +6,39 @@ import Testing
 @Suite(.serialized) @MainActor
 struct DesktopTokenIntegrationTests
 {
-	@Test func sharedControlStylesKeepTheExistingNativeFonts()
+	@Test func permissionCellAndIntrinsicWidthUseTheSameChangedIconSize() throws
 	{
-		let button = NSButton(
-			title: "Action",
-			target: nil,
-			action: nil
+		_ = NSApplication.shared
+		let button = ComposerPermissionButton(frame: .zero)
+		button.title = "Ask for approval"
+		button.font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
+		let originalWidth = button.intrinsicContentSize.width
+		let metrics = LayoutTokens.Permission(iconSize: 24)
+		let cell = ComposerPermissionButtonCell(
+			textCell: button.title,
+			metrics: metrics
 		)
-		AppKitControlStyling.styleButton(button)
-		#expect(button.font == NSFont.systemFont(ofSize: 12))
-		AppKitControlStyling.styleButton(
-			button,
-			prominent: true
+		button.cell = cell
+		button.font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
+		let width = button.intrinsicContentSize.width
+		#expect(abs(width - originalWidth - 8) < 0.01)
+		let bounds = NSRect(
+			x: 0,
+			y: 0,
+			width: width,
+			height: 28
 		)
-		#expect(button.font == NSFont.systemFont(
-			ofSize: 12,
-			weight: .medium
+		let icon = cell.imageRect(forBounds: bounds)
+		let title = cell.titleRect(forBounds: bounds)
+		#expect(icon.size == NSSize(
+			width: 24,
+			height: 24
 		))
-		#expect(AppKitControlStyling.sectionLabel("Section").font
-			== NSFont.systemFont(
-				ofSize: 11,
-				weight: .medium
-			))
+		#expect(icon.midY == bounds.midY)
+		#expect(title.minX - icon.maxX == 4)
+		#expect(abs(title.maxX - (bounds.maxX - 7)) < 0.01)
 	}
 
-	@Test func extractedSurfaceKeepsNativeOpacityBehavior()
-	{
-		let flat = DesktopSurface(.white)
-		let rounded = DesktopSurface(
-			.white,
-			cornerRadius: 16
-		)
-		#expect(!flat.isOpaque)
-		#expect(!rounded.isOpaque)
-	}
-
-	@Test func existingDynamicPaletteResolvesUnderTheOwningAppearance() throws
-	{
-		let owner = NSView()
-		owner.appearance = NSAppearance(named: .darkAqua)
-		let resolved = AppKitColorResolution.resolvedCGColor(
-			AppKitColorTokens.userBubble,
-			for: owner
-		)
-		let color = try #require(NSColor(cgColor: resolved)?.usingColorSpace(.sRGB))
-		#expect(abs(color.redComponent - 34 / 255.0) < 0.001)
-		#expect(abs(color.greenComponent - 61 / 255.0) < 0.001)
-		#expect(abs(color.blueComponent - 114 / 255.0) < 0.001)
-	}
 	@Test func footerSwitchesModesRepeatedlyUsingItsActualInnerWidth() throws
 	{
 		_ = NSApplication.shared
@@ -164,4 +149,52 @@ struct DesktopTokenIntegrationTests
 		}
 	}
 
+	@Test func sharedControlStylesKeepTheExistingNativeFonts()
+	{
+		let button = NSButton(
+			title: "Action",
+			target: nil,
+			action: nil
+		)
+		AppKitControlStyling.styleButton(button)
+		#expect(button.font == NSFont.systemFont(ofSize: 12))
+		AppKitControlStyling.styleButton(
+			button,
+			prominent: true
+		)
+		#expect(button.font == NSFont.systemFont(
+			ofSize: 12,
+			weight: .medium
+		))
+		#expect(AppKitControlStyling.sectionLabel("Section").font
+			== NSFont.systemFont(
+				ofSize: 11,
+				weight: .medium
+			))
+	}
+
+	@Test func extractedSurfaceKeepsNativeOpacityBehavior()
+	{
+		let flat = DesktopSurface(.white)
+		let rounded = DesktopSurface(
+			.white,
+			cornerRadius: 16
+		)
+		#expect(!flat.isOpaque)
+		#expect(!rounded.isOpaque)
+	}
+
+	@Test func existingDynamicPaletteResolvesUnderTheOwningAppearance() throws
+	{
+		let owner = NSView()
+		owner.appearance = NSAppearance(named: .darkAqua)
+		let resolved = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.userBubble,
+			for: owner
+		)
+		let color = try #require(NSColor(cgColor: resolved)?.usingColorSpace(.sRGB))
+		#expect(abs(color.redComponent - 34 / 255.0) < 0.001)
+		#expect(abs(color.greenComponent - 61 / 255.0) < 0.001)
+		#expect(abs(color.blueComponent - 114 / 255.0) < 0.001)
+	}
 }

@@ -64,13 +64,13 @@ final class ConversationViewController: NSViewController,
 	var latestModelEffortTitle: String?
 	var latestFastMode = false
 	let modelEffortController = ModelEffortPopoverView()
-	let approvalPolicyButton = DesktopAttributedTitleButton(
+	let approvalPolicyButton = ComposerPermissionButton(
 		title: "Ask for approval",
 		target: nil,
 		action: nil
 	)
 	let approvalPolicyController = ApprovalPolicyPopoverView()
-	var approvalPolicyPopover: NSPopover?
+	var approvalPolicyPopover: ComposerPopoverPanel?
 	var fullAccessConfirmationPanel: NSPanel?
 	var approvalMode: ApprovalMode = .askForApproval
 	let preferenceWarningLabel = NSTextField(wrappingLabelWithString: "")

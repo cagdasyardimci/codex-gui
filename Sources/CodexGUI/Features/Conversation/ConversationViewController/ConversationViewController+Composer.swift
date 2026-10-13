@@ -91,12 +91,13 @@ extension ConversationViewController
 		)
 		approvalPolicyButton.font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
 		approvalPolicyButton.lineBreakMode = .byTruncatingTail
+		approvalPolicyButton.cornerRadius = ShapeTokens.Composer
+			.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
 		approvalPolicyButton.heightAnchor
-			.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
-			.isActive = true
+			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
 		AppKitControlStyling.stylePopup(addContextButton)
 		AppKitLayout.compressHorizontally(addContextButton)
-		preferenceWarningLabel.font = .systemFont(ofSize: 12)
+		preferenceWarningLabel.font = AppKitFontResolver.font(TypographyTokens.Composer.warning)
 		preferenceWarningLabel.textColor = .systemOrange
 		preferenceWarningLabel.setAccessibilityLabel("Model preference warning")
 		preferenceWarningLabel.isHidden = true
@@ -323,7 +324,7 @@ extension ConversationViewController
 		approvalPolicyButton.toolTip = "\(approvalMode.title): \(approvalMode.description)"
 		approvalPolicyButton.setAccessibilityLabel("Approval policy: \(approvalMode.title)")
 		let approvalTint: NSColor = approvalMode == .fullAccess
-			? ApprovalPopoverStyle.fullAccess : .secondaryLabelColor
+			? ApprovalPopoverStyle.fullAccess : AppKitColorTokens.secondaryText
 		approvalPolicyButton.contentTintColor = approvalTint
 		approvalPolicyButton.attributedTitle = NSAttributedString(
 			string: approvalMode.title,
@@ -339,10 +340,17 @@ extension ConversationViewController
 		case .approveForMe: approvalSymbol = .shieldCheck
 		case .fullAccess: approvalSymbol = .warning
 		}
-		approvalPolicyButton.image = DesktopIcons.image(
-			approvalSymbol,
-			size: 13
-		)
+		if approvalMode == .fullAccess
+		{
+			approvalPolicyButton.image = ComposerFooterIcons.fullAccess
+		}
+		else
+		{
+			approvalPolicyButton.image = DesktopIcons.image(
+				approvalSymbol,
+				size: LayoutTokens.permission.iconSize
+			)
+		}
 	}
 
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)
@@ -565,18 +573,34 @@ extension ConversationViewController
 	{
 		configurePreferenceCallbacks()
 		modelEffortPopover?.close()
+		if approvalPolicyPopover?.isShown == true
+		{
+			approvalPolicyPopover?.close()
+			return
+		}
 		if approvalPolicyPopover == nil
 		{
-			let popover = NSPopover()
-			popover.contentViewController = approvalPolicyController
-			popover.contentSize = approvalPolicyController.preferredContentSize
-			popover.behavior = .transient
+			let popover = ComposerPopoverPanel(
+				contentViewController: approvalPolicyController,
+				hasShadow: true
+			)
+			popover.alignsToAnchorLeadingEdge = true
+			popover.horizontalOffset = LayoutTokens.ApprovalPopover.anchorHorizontalOffset
+			popover.anchorSpacing = LayoutTokens.ApprovalPopover.anchorSpacing
+			popover.onPresentationChange =
+			{
+				[weak self] shown in
+				if shown
+				{
+					self?.approvalPolicyController.focusSelectedRow()
+				}
+			}
 			approvalPolicyPopover = popover
 		}
+		approvalPolicyController.clearHover()
 		approvalPolicyPopover?.show(
 			relativeTo: approvalPolicyButton.bounds,
-			of: approvalPolicyButton,
-			preferredEdge: .maxY
+			of: approvalPolicyButton
 		)
 	}
 

@@ -96,4 +96,78 @@ struct ComposerDarkReferenceTests
 		window.contentView = content
 		return window
 	}
+	@Test func approvalHoverOpacityAndPaletteFollowRetainedAppearance() throws
+	{
+		_ = NSApplication.shared
+		let controller = ApprovalPolicyPopoverView()
+		let window = makeWindow(content: controller.view)
+		window.setContentSize(controller.preferredContentSize)
+		defer
+		{
+			window.close()
+		}
+		controller.render(mode: .askForApproval)
+		window.layoutIfNeeded()
+		let stack = try #require(controller.view.subviews.first?.subviews.first as? NSStackView)
+		let row = try #require(stack.arrangedSubviews.compactMap
+		{
+			$0 as? NSButton
+		}.first)
+		let images = row.subviews.compactMap
+		{
+			$0 as? NSImageView
+		}
+		let event = try #require(NSEvent.mouseEvent(
+			with: .mouseMoved,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: window.windowNumber,
+			context: nil,
+			eventNumber: 0,
+			clickCount: 0,
+			pressure: 0
+		))
+		row.mouseEntered(with: event)
+		for appearance: NSAppearance.Name in [.darkAqua, .aqua, .darkAqua, .aqua]
+		{
+			window.appearance = NSAppearance(named: appearance)
+			#expect(images.allSatisfy
+			{
+				$0.alphaValue == (appearance == .darkAqua ? 1 : 0.75)
+			})
+			let secondary = try resolved(
+				AppKitColorTokens.approvalSecondary,
+				in: row
+			)
+			let primary = try resolved(
+				AppKitColorTokens.approvalPrimary,
+				in: row
+			)
+			let icon = try resolved(
+				AppKitColorTokens.approvalIcon,
+				in: row
+			)
+			if appearance == .darkAqua
+			{
+				#expect(secondary.alphaComponent == 0.498)
+				#expect(primary.redComponent == 1)
+				#expect(icon.redComponent == 1)
+			}
+			else
+			{
+				#expect(abs(secondary.redComponent - 0.57) < 0.0001)
+				#expect(secondary.alphaComponent == 1)
+				#expect(abs(primary.redComponent - 0.13) < 0.0001)
+				#expect(abs(icon.redComponent - 0.33) < 0.0001)
+			}
+			#expect(row.accessibilityValue() as? String == "Selected")
+		}
+		row.mouseExited(with: event)
+		#expect(images.allSatisfy
+		{
+			$0.alphaValue == 0.75
+		})
+	}
+
 }

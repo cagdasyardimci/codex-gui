@@ -579,6 +579,10 @@ enum LayoutTokens
 
 	enum ApprovalPopover
 	{
+		static let anchorHorizontalOffset: CGFloat = 1
+		static let anchorSpacing: CGFloat = 1.7890625
+		static let idleIconOpacity: CGFloat = 0.75
+		static let hoveredIconOpacity: CGFloat = 1
 		static let headerSpacing: CGFloat = 8
 		static let width: CGFloat = 439.09375
 		static let contentInset: CGFloat = 4

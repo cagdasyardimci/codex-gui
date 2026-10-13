@@ -91,7 +91,7 @@ struct ComposerCustomDrawingAppearanceTests
 			height: 159
 		)
 		controller.render(mode: .approveForMe)
-		let stack = try #require(content.subviews.first as? NSStackView)
+		let stack = try #require(content.subviews.first?.subviews.first as? NSStackView)
 		let row = try #require(stack.arrangedSubviews.compactMap
 		{
 			$0 as? NSButton
