@@ -421,6 +421,12 @@ enum LayoutTokens
 		}
 		static let contentInset: CGFloat = 20
 		static let toolTileWidth: CGFloat = 240
+		static let iconSize: CGFloat = 16
+		static let paneIconSize = CGSize(
+			width: 17.3333,
+			height: 16
+		)
+		static let closeIconSize: CGFloat = 14
 
 	}
 

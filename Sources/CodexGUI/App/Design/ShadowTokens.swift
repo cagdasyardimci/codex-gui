@@ -29,6 +29,12 @@ enum ShadowTokens
 		}
 	}
 
+	static let selectedTab = Style(
+		color: .black.withAlphaComponent(0.08),
+		offsetY: 1,
+		blur: 2,
+		spread: -1
+	)
 	static let popover = [Style(
 		color: .black.withAlphaComponent(0.12),
 		offsetY: 8,

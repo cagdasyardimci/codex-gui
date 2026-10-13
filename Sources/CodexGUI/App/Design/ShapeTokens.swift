@@ -85,8 +85,10 @@ enum ShapeTokens
 		static let closeRadius: CGFloat = 10
 		static let standardRadius: CGFloat = 12.5
 
-		static let selectedRadius: CGFloat = 8
-		static let selectedEdgeWidth: CGFloat = 1
+		static let cornerCurve = CornerCurve.superellipse(1.5)
+		static let selectedRadius: CGFloat = 10
+		static let selectedEdgeWidth: CGFloat = 0.5
+
 		static func radius(for role: Role) -> CGFloat
 		{
 			role == .close ? closeRadius : standardRadius

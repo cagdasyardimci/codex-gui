@@ -188,7 +188,7 @@ enum TypographyTokens
 		)
 		static let tab = Role(
 			size: 13,
-			selection: .system(weight: .regular)
+			selection: .interface(weight: 430)
 		)
 	}
 

@@ -4,7 +4,7 @@ import AppKit
 @MainActor
 final class ToolsToolbarCoordinator
 {
-	let openButton = NSButton(
+	let openButton = DesktopHoverButton(
 		title: "",
 		target: nil,
 		action: nil
@@ -50,7 +50,7 @@ final class ToolsToolbarCoordinator
 		openButton.bezelStyle = .texturedRounded
 		openButton.isBordered = false
 		openButton.imagePosition = .imageOnly
-		openButton.contentTintColor = .secondaryLabelColor
+		openButton.contentTintColor = AppKitColorTokens.secondaryText
 		openButton.target = target
 		openButton.action = action
 		openButton.image = openTabPaneImage()
@@ -139,14 +139,9 @@ final class ToolsToolbarCoordinator
 
 	private func openTabPaneImage() -> NSImage?
 	{
-		NSImage(
-			systemSymbolName: "plus.square",
-			accessibilityDescription: "Open tab pane"
-		)?.withSymbolConfiguration(
-			NSImage.SymbolConfiguration(
-				pointSize: 17,
-				weight: .light
-			)
+		DesktopIcons.image(
+			.plusSquareAdd,
+			size: 16
 		)
 	}
 

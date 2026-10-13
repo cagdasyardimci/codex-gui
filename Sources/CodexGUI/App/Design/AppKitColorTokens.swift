@@ -41,8 +41,20 @@ enum AppKitColorTokens
 		dark: 0x2D2D2D
 	)
 	static let chrome = AppKitColorResolution.color(
-		light: 0xF3F3F4,
-		dark: 0x242424
+		light: 0xF6F6F6,
+		dark: 0x282828
+	)
+	static let selectedTab = AppKitColorResolution.color(
+		light: 0xFFFFFF,
+		dark: 0xFFFFFF,
+		lightAlpha: 1,
+		darkAlpha: 0.08
+	)
+	static let selectedTabEdge = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.08,
+		darkAlpha: 0.082
 	)
 	static let input = AppKitColorResolution.color(
 		light: 0xF0F0F0,

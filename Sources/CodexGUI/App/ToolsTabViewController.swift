@@ -148,19 +148,52 @@ final class ToolsTabViewController: NSViewController
 			.separatorVisibilityWidth ? 1 : 0
 	}
 
+	private static func addTabImage() -> NSImage
+	{
+		let canvasSize = Layout.iconSize
+		let image = NSImage(
+			size: NSSize(
+				width: canvasSize,
+				height: canvasSize
+			),
+			flipped: false
+		)
+		{
+			_ in
+			let path = NSBezierPath()
+			path.lineWidth = 1.0508
+			path.lineCapStyle = .round
+			path.move(to: NSPoint(
+				x: 8,
+				y: 2.6665
+			))
+			path.line(to: NSPoint(
+				x: 8,
+				y: 13.3335
+			))
+			path.move(to: NSPoint(
+				x: 2.6665,
+				y: 8
+			))
+			path.line(to: NSPoint(
+				x: 13.3335,
+				y: 8
+			))
+			NSColor.black.setStroke()
+			path.stroke()
+			return true
+		}
+		image.isTemplate = true
+		return image
+	}
+
 	static func paneIcon() -> NSImage
 	{
-		let configuration = NSImage.SymbolConfiguration(
-			pointSize: 11,
-			weight: .regular
-		)
-		let image = NSImage(
-			systemSymbolName: "rectangle.split.2x1",
-			accessibilityDescription: nil
-		)?.withSymbolConfiguration(configuration) ?? DesktopIcons.image(
+		let image = DesktopIcons.image(
 			.sidebarRight,
-			size: 12
+			size: Layout.paneIconSize.width
 		)
+		image.size = Layout.paneIconSize
 		image.isTemplate = true
 		return image
 	}
@@ -407,7 +440,7 @@ final class ToolsTabViewController: NSViewController
 		let label = expanded ? "Restore split view" : "Expand tab pane"
 		expandButton?.image = DesktopIcons.image(
 			expanded ? .collapseSmall : .expand,
-			size: 16
+			size: Layout.iconSize
 		)
 		expandButton?.toolTip = label
 		expandButton?.setAccessibilityLabel(label)
@@ -451,7 +484,7 @@ final class ToolsTabViewController: NSViewController
 		configureTabScrollView()
 		configureSummaryButton()
 		let addButton = makeIconButton(
-			.plus,
+			image: Self.addTabImage(),
 			label: "Add tab",
 			action: #selector(addTab)
 		)
@@ -727,6 +760,9 @@ final class ToolsTabViewController: NSViewController
 			target: self,
 			action: #selector(selectConversation)
 		)
+		selectButton.cell = ToolsTabSelectionButtonCell(textCell: conversationTitle)
+		selectButton.target = self
+		selectButton.action = #selector(selectConversation)
 		AppKitControlStyling.styleButton(
 			selectButton,
 			prominent: isConversationSelected
@@ -734,7 +770,7 @@ final class ToolsTabViewController: NSViewController
 		selectButton.image = DesktopIcons.image(.chat)
 		selectButton.imagePosition = .imageLeading
 		selectButton.alignment = .left
-		selectButton.font = .systemFont(ofSize: 13)
+		selectButton.font = AppKitFontResolver.font(TypographyTokens.Controls.tab)
 		selectButton.cell?.lineBreakMode = .byTruncatingTail
 		selectButton.toolTip = conversationTitle
 		selectButton.setAccessibilityLabel("Chat: " + conversationTitle)
@@ -769,6 +805,9 @@ final class ToolsTabViewController: NSViewController
 			target: self,
 			action: #selector(selectTab(_:))
 		)
+		selectButton.cell = ToolsTabSelectionButtonCell(textCell: title)
+		selectButton.target = self
+		selectButton.action = #selector(selectTab(_:))
 		AppKitControlStyling.styleButton(
 			selectButton,
 			prominent: selected
@@ -776,17 +815,14 @@ final class ToolsTabViewController: NSViewController
 		selectButton.alignment = .left
 		if isChanges
 		{
-			selectButton.image = PinnedSummaryIcons.image(
-				.changes,
-				size: 16
-			)
+			selectButton.image = ToolsPaneIcons.changes(size: Layout.iconSize)
 			selectButton.imagePosition = .imageLeading
 		}
 		else if isSources
 		{
 			selectButton.image = DesktopIcons.image(
 				.addSources,
-				size: 16
+				size: Layout.iconSize
 			)
 			selectButton.imagePosition = .imageLeading
 		}
@@ -799,7 +835,7 @@ final class ToolsTabViewController: NSViewController
 			selectButton.imagePosition = .imageLeading
 		}
 
-		selectButton.font = .systemFont(ofSize: 13)
+		selectButton.font = AppKitFontResolver.font(TypographyTokens.Controls.tab)
 		selectButton.tag = index
 		selectButton.setAccessibilityLabel("\(title) \(index + 1)")
 		selectButton.setAccessibilityValue(selected ? "Selected" : "Not selected")
@@ -807,7 +843,7 @@ final class ToolsTabViewController: NSViewController
 			.x,
 			size: metrics.closeControlSize,
 			role: .close,
-			imageSize: 16,
+			imageSize: Layout.closeIconSize,
 			label: "Close tab \(index + 1)",
 			action: #selector(closeTab(_:))
 		)
@@ -851,6 +887,8 @@ final class ToolsTabViewController: NSViewController
 		selected: Bool
 	) -> NSView
 	{
+		selectButton.contentTintColor = selected ? AppKitColorTokens.primaryText : AppKitColorTokens
+			.secondaryText
 		let tab = ToolsTabSurface(isSelected: selected)
 		for child in [selectButton, trailingButton]
 		{
@@ -880,7 +918,7 @@ final class ToolsTabViewController: NSViewController
 		_ icon: DesktopIcon,
 		size: CGFloat = Layout.controlSize,
 		role: ShapeTokens.TabControls.Role = .standard,
-		imageSize: CGFloat = 16,
+		imageSize: CGFloat = Layout.iconSize,
 		label: String,
 		action: Selector?
 	) -> NSButton
@@ -916,6 +954,7 @@ final class ToolsTabViewController: NSViewController
 		button.toolTip = label
 		button.setAccessibilityLabel(label)
 		button.cornerRadius = ShapeTokens.TabControls.radius(for: role)
+		button.cornerCurve = ShapeTokens.TabControls.cornerCurve
 		button.contentTintColor = AppKitColorTokens.secondaryText
 		button.widthAnchor.constraint(equalToConstant: size).isActive = true
 		button.heightAnchor.constraint(equalToConstant: size).isActive = true
@@ -1031,6 +1070,26 @@ final class ToolsTabViewController: NSViewController
 		else
 		{
 			onTabSelectionChange?()
+		}
+	}
+}
+
+@MainActor
+private final class ToolsTabSelectionButtonCell: NSButtonCell
+{
+	override func drawTitle(
+		_ title: NSAttributedString,
+		withFrame frame: NSRect,
+		in controlView: NSView
+	) -> NSRect
+	{
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			super.drawTitle(
+				title,
+				withFrame: frame,
+				in: controlView
+			)
 		}
 	}
 }

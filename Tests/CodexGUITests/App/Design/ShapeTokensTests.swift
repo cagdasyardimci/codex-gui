@@ -19,8 +19,11 @@ import Testing
 		#expect(ShapeTokens.Composer.cornerRadius == 22)
 	}
 
-	@Test func controlRolesRemainIndependentOfEqualDimensions()
+	@Test func equalControlSizesRetainIndependentShapeRoles()
 	{
+		let tabs = LayoutTokens.TabContent(closeControlSize: 28)
+		#expect(tabs.isValid)
+		#expect(tabs.closeControlSize == tabs.moreControlSize)
 		#expect(ShapeTokens.TabControls.radius(for: .close) == 10)
 		#expect(ShapeTokens.TabControls.radius(for: .standard) == 12.5)
 	}

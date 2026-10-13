@@ -4,6 +4,7 @@ import AppKit
 final class ToolsTabSurface: NSView
 {
 	private let isSelected: Bool
+	private let shadowLayer = CALayer()
 	private var isHovered = false
 	private var hoverTrackingArea: NSTrackingArea?
 	var onHoverChange: ((Bool) -> Void)?
@@ -12,6 +13,14 @@ final class ToolsTabSurface: NSView
 	{
 		self.isSelected = isSelected
 		super.init(frame: .zero)
+		if isSelected
+		{
+			wantsLayer = true
+			layer?.insertSublayer(
+				shadowLayer,
+				at: 0
+			)
+		}
 		setAccessibilityElement(false)
 	}
 
@@ -77,7 +86,30 @@ final class ToolsTabSurface: NSView
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
+		updateShadow()
 		needsDisplay = true
+	}
+
+	override func layout()
+	{
+		super.layout()
+		updateShadow()
+	}
+
+	private func updateShadow()
+	{
+		guard isSelected
+		else
+		{
+			return
+		}
+		AppKitShadowRenderer.apply(
+			ShadowTokens.selectedTab,
+			to: shadowLayer,
+			in: self,
+			cornerRadius: ShapeTokens.TabControls.selectedRadius,
+			cornerCurve: ShapeTokens.TabControls.cornerCurve
+		)
 	}
 
 	override func draw(_ dirtyRect: NSRect)
@@ -87,22 +119,23 @@ final class ToolsTabSurface: NSView
 		{
 			return
 		}
-		let inset: CGFloat = isSelected ? 0.5 : 0
-		let path = NSBezierPath(
-			roundedRect: bounds.insetBy(
-				dx: inset,
-				dy: inset
-			),
-			xRadius: 8,
-			yRadius: 8
+		let path = AppKitShapePath.roundedRect(
+			bounds,
+			radius: ShapeTokens.TabControls.selectedRadius,
+			curve: ShapeTokens.TabControls.cornerCurve
 		)
-		AppKitColorTokens.input.setFill()
+		(isSelected ? AppKitColorTokens.selectedTab : AppKitColorTokens.rowHighlight).setFill()
 		path.fill()
 		if isSelected
 		{
-			AppKitColorTokens.highlightedPaneDivider.setStroke()
-			path.lineWidth = 1
+			// CSS backgrounds extend underneath their border. Clip a double-width outer
+			// stroke to retain the configured inside edge without losing that backing fill.
+			NSGraphicsContext.saveGraphicsState()
+			path.addClip()
+			AppKitColorTokens.selectedTabEdge.setStroke()
+			path.lineWidth = ShapeTokens.TabControls.selectedEdgeWidth * 2
 			path.stroke()
+			NSGraphicsContext.restoreGraphicsState()
 		}
 	}
 }

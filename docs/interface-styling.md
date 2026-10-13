@@ -71,3 +71,7 @@ Escape dismisses the panel and returns focus to the composer.
 
 The effort thumb enlarges visually on hover without changing logical slider geometry.
 Its immutable animation configuration controls entry, exit and reduced-motion behavior.
+
+## Tools tab pane
+
+Source owners: [ToolsTabViewController](../Sources/CodexGUI/App/ToolsTabViewController.swift), [ToolsToolbarCoordinator](../Sources/CodexGUI/App/ToolsToolbarCoordinator.swift), [ToolsPaneIcons](../Sources/CodexGUI/App/ToolsPaneIcons.swift).
