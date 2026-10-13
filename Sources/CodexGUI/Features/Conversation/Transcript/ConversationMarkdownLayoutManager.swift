@@ -234,9 +234,9 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 				xRadius: 16,
 				yRadius: 16
 			)
-			DesktopTheme.elevated.setFill()
+			AppKitColorTokens.elevated.setFill()
 			path.fill()
-			DesktopTheme.border.setStroke()
+			AppKitColorTokens.border.setStroke()
 			path.lineWidth = 1
 			path.stroke()
 			if let language = storage.attribute(

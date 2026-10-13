@@ -79,7 +79,7 @@ final class GitDiffLineRuler: NSRulerView
 			NSGraphicsContext.restoreGraphicsState()
 		}
 		NSBezierPath(rect: bounds).addClip()
-		DesktopTheme.canvas.setFill()
+		AppKitColorTokens.canvas.setFill()
 		gutterRect.fill()
 		guard let source
 		else

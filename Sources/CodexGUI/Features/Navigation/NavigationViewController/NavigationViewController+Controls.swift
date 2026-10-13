@@ -10,7 +10,7 @@ extension NavigationViewController
 			action: #selector(refresh)
 		)
 		refreshButton.setAccessibilityLabel("Refresh conversations")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			refreshButton,
 			icon: .arrowRotateCw
 		)
@@ -26,7 +26,7 @@ extension NavigationViewController
 		searchButton.target = self
 		searchButton.action = #selector(toggleSearch)
 		searchButton.setAccessibilityLabel("Search conversation titles and previews")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			searchButton,
 			icon: .search
 		)
@@ -48,7 +48,7 @@ extension NavigationViewController
 		newChatButton.target = self
 		newChatButton.action = #selector(newChat)
 		newChatButton.setAccessibilityLabel("Start a new conversation")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			newChatButton,
 			icon: .chatCompose
 		)
@@ -61,12 +61,12 @@ extension NavigationViewController
 	func makeProjectsHeader(actionsButton: NSButton? = nil) -> NSStackView
 	{
 		let projectActionsButton = actionsButton ?? self.projectActionsButton
-		let projectsCaption = DesktopTheme.sectionLabel("Projects")
+		let projectsCaption = AppKitControlStyling.sectionLabel("Projects")
 		projectsCaption.font = .systemFont(ofSize: 13)
 		projectActionsButton.target = self
 		projectActionsButton.action = #selector(toggleProjectActions(_:))
 		projectActionsButton.setAccessibilityLabel("Project and conversation actions")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			projectActionsButton,
 			icon: .dotsHorizontal
 		)
@@ -88,7 +88,7 @@ extension NavigationViewController
 			action: #selector(openProject)
 		)
 		openButton.setAccessibilityLabel("Open repository")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			openButton,
 			icon: .folderPlus
 		)
@@ -102,7 +102,7 @@ extension NavigationViewController
 			for: .horizontal
 		)
 		recentProjectsButton.cell?.lineBreakMode = .byTruncatingTail
-		DesktopTheme.stylePopup(recentProjectsButton)
+		AppKitControlStyling.stylePopup(recentProjectsButton)
 		recentProjectsButton.font = .systemFont(ofSize: 11)
 
 		return AppKitLayout.horizontalStack(
@@ -142,7 +142,7 @@ extension NavigationViewController
 		renameButton.target = self
 		renameButton.action = #selector(renameThread)
 		renameButton.setAccessibilityLabel("Rename selected conversation")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			renameButton,
 			icon: .pencil
 		)
@@ -151,7 +151,7 @@ extension NavigationViewController
 		archiveButton.target = self
 		archiveButton.action = #selector(archiveThread)
 		archiveButton.setAccessibilityLabel("Archive or restore selected conversation")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			archiveButton,
 			icon: .archive
 		)

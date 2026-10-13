@@ -129,8 +129,8 @@ final class ConversationViewController: NSViewController,
 	let composer = ContextComposerTextView()
 	let composerScrollView = NSScrollView()
 	let composerSurface = DesktopSurface(
-		DesktopTheme.canvas,
-		cornerRadius: 24,
+		AppKitColorTokens.canvas,
+		cornerRadius: ShapeTokens.Composer.cornerRadius,
 		bordered: true
 	)
 	let turnChangeSummaryButton = TurnChangeSummaryButton()
@@ -261,7 +261,7 @@ final class ConversationViewController: NSViewController,
 			loadReadOnlyTranscriptView()
 			return
 		}
-		let container = DesktopSurface(DesktopTheme.canvas)
+		let container = DesktopSurface(AppKitColorTokens.canvas)
 		let (activeTaskRow, progressRow) = configureTaskStatusControls()
 		configurePreferenceControls()
 		configureTranscriptControls()
@@ -310,7 +310,7 @@ final class ConversationViewController: NSViewController,
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
-		let container = DesktopSurface(DesktopTheme.canvas)
+		let container = DesktopSurface(AppKitColorTokens.canvas)
 		AppKitLayout.pin(
 			stack,
 			to: container
@@ -450,14 +450,14 @@ final class ConversationViewController: NSViewController,
 		returnToTaskButton.target = self
 		returnToTaskButton.action = #selector(returnToActiveTask)
 		returnToTaskButton.setAccessibilityLabel("Return to active task conversation")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			returnToTaskButton,
 			icon: .undo
 		)
 		planButton.target = self
 		planButton.action = #selector(showPlan)
 		planButton.setAccessibilityLabel("Show reported task plan")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			planButton,
 			icon: .notebookCheck
 		)

@@ -44,7 +44,7 @@ final class ProjectTextEditor: NSViewController
 
 	override func loadView()
 	{
-		let container = DesktopSurface(DesktopTheme.canvas)
+		let container = DesktopSurface(AppKitColorTokens.canvas)
 		let heading = populateFields()
 		titleField.placeholderString = "Title"
 		titleField.setAccessibilityLabel("Title")
@@ -55,7 +55,7 @@ final class ProjectTextEditor: NSViewController
 
 		let buttons = makeEditorActionsRow()
 
-		var controls: [NSView] = [DesktopTheme.sectionLabel(heading), titleField]
+		var controls: [NSView] = [AppKitControlStyling.sectionLabel(heading), titleField]
 		if case .context = kind
 		{
 			controls += [kindButton, pathRow, includeButton]
@@ -104,7 +104,7 @@ final class ProjectTextEditor: NSViewController
 			action: #selector(chooseFile)
 		)
 		chooseFileButton.setAccessibilityLabel("Choose a reference file")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			chooseFileButton,
 			icon: .folder
 		)
@@ -129,7 +129,7 @@ final class ProjectTextEditor: NSViewController
 			)
 		}
 		kindButton.setAccessibilityLabel("Context item type")
-		DesktopTheme.stylePopup(kindButton)
+		AppKitControlStyling.stylePopup(kindButton)
 		includeButton.setAccessibilityLabel("Include this context item in requests")
 	}
 
@@ -159,7 +159,7 @@ final class ProjectTextEditor: NSViewController
 			action: #selector(save)
 		)
 		saveButton.setAccessibilityLabel("Save project context")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			saveButton,
 			prominent: true
 		)
@@ -169,14 +169,14 @@ final class ProjectTextEditor: NSViewController
 			action: #selector(cancel)
 		)
 		cancelButton.setAccessibilityLabel("Cancel editing")
-		DesktopTheme.styleButton(cancelButton)
+		AppKitControlStyling.styleButton(cancelButton)
 		let deleteButton = NSButton(
 			title: "Delete",
 			target: self,
 			action: #selector(deleteEntry)
 		)
 		deleteButton.setAccessibilityLabel("Delete project context entry")
-		DesktopTheme.styleButton(deleteButton)
+		AppKitControlStyling.styleButton(deleteButton)
 		switch kind
 		{
 		case .context(let item): deleteButton.isHidden = item == nil

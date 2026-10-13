@@ -74,7 +74,7 @@ final class ReviewValidationView: NSView
 		commandButton.target = self
 		commandButton.action = #selector(commandChanged)
 		commandButton.setAccessibilityLabel("Observed commands for reviewed code state")
-		DesktopTheme.stylePopup(commandButton)
+		AppKitControlStyling.stylePopup(commandButton)
 		AppKitLayout.compressHorizontally(commandButton)
 
 		statusLabel.textColor = .secondaryLabelColor

@@ -217,7 +217,7 @@ private final class ContextPanelHeaderStackView: NSStackView
 
 	private func refreshBackground()
 	{
-		layer?.backgroundColor = DesktopTheme.resolvedCGColor(
+		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
 			.controlBackgroundColor,
 			for: self
 		)

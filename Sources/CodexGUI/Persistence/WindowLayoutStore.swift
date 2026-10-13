@@ -3,15 +3,42 @@ import AppKit
 enum WindowPaneLayout
 {
 	static let version = 2
-	static let navigationWidth: CGFloat = 255
-	static let navigationMinimumWidth: CGFloat = 200
-	static let navigationMaximumWidth: CGFloat = 280
-	static let reviewWidth: CGFloat = 326
-	static let reviewMinimumWidth: CGFloat = 220
-	static let toolsMinimumWidth: CGFloat = 340
-	static let reviewMaximumWidth: CGFloat = 360
-	static let conversationMinimumWidth: CGFloat = 360
-	static let conversationComfortableWidth: CGFloat = 560
+	static var navigationWidth: CGFloat
+	{
+		LayoutTokens.window.navigationWidth
+	}
+	static var navigationMinimumWidth: CGFloat
+	{
+		LayoutTokens.window.navigationMinimumWidth
+	}
+	static var navigationMaximumWidth: CGFloat
+	{
+		LayoutTokens.window.navigationMaximumWidth
+	}
+	static var reviewWidth: CGFloat
+	{
+		LayoutTokens.window.reviewWidth
+	}
+	static var reviewMinimumWidth: CGFloat
+	{
+		LayoutTokens.window.reviewMinimumWidth
+	}
+	static var toolsMinimumWidth: CGFloat
+	{
+		LayoutTokens.window.toolsMinimumWidth
+	}
+	static var reviewMaximumWidth: CGFloat
+	{
+		LayoutTokens.window.reviewMaximumWidth
+	}
+	static var conversationMinimumWidth: CGFloat
+	{
+		LayoutTokens.window.conversationMinimumWidth
+	}
+	static var conversationComfortableWidth: CGFloat
+	{
+		LayoutTokens.window.conversationComfortableWidth
+	}
 	// Divider dragging has priority 490; side panes must yield to that interaction.
 	static let sideHoldingPriority = NSLayoutConstraint.Priority(400)
 

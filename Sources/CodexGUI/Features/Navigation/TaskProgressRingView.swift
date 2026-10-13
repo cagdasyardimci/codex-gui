@@ -45,7 +45,7 @@ final class TaskProgressRingView: NSView
 		)
 		ring.strokeStart = 0.08
 		ring.strokeEnd = 0.88
-		ring.strokeColor = DesktopTheme.resolvedCGColor(
+		ring.strokeColor = AppKitColorResolution.resolvedCGColor(
 			.secondaryLabelColor,
 			for: self
 		)

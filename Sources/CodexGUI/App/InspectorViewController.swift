@@ -3,17 +3,7 @@ import AppKit
 @MainActor
 final class InspectorViewController: NSViewController
 {
-	private enum Layout
-	{
-		static let boxInset: CGFloat = 12
-		static let summaryTrailingInset: CGFloat = 8
-		static let contentInset: CGFloat = 16
-		static let summaryHorizontalInset: CGFloat = 20
-		static let summaryVerticalInset: CGFloat = 10
-		static let summaryWidth: CGFloat = 300
-		static let initialBoxHeight: CGFloat = 300
-		static let detailHeight: CGFloat = 440
-	}
+	private typealias Layout = LayoutTokens.Inspector
 
 	static var summaryPaneWidth: CGFloat
 	{
@@ -42,7 +32,7 @@ final class InspectorViewController: NSViewController
 
 	private var renderedOwner: FeaturePresentationOwner?
 	private weak var inspectorBox: InspectorBoxSurface?
-	private let headerDivider = DesktopSurface(DesktopTheme.border)
+	private let headerDivider = DesktopSurface(AppKitColorTokens.border)
 	var onSummaryDisplayChange: ((Bool) -> Void)?
 	private let content = NSView()
 	private let projectLabel = NSTextField(labelWithString: "Project")
@@ -78,7 +68,7 @@ final class InspectorViewController: NSViewController
 
 	override func loadView()
 	{
-		let container = DesktopSurface(DesktopTheme.canvas)
+		let container = DesktopSurface(AppKitColorTokens.canvas)
 		let box = makeInspectorBox(in: container)
 
 		configureHeaderControls()
@@ -751,7 +741,7 @@ final class InspectorViewController: NSViewController
 @MainActor
 private final class InspectorBoxSurface: NSView
 {
-	private static let cornerRadius: CGFloat = 16
+	private static let cornerRadius = ShapeTokens.Inspector.summaryRadius
 
 	var isSummaryCard = true
 	{
@@ -798,7 +788,7 @@ private final class InspectorBoxSurface: NSView
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		(isSummaryCard ? DesktopTheme.summaryCard : DesktopTheme.inspector).setFill()
+		(isSummaryCard ? AppKitColorTokens.summaryCard : AppKitColorTokens.inspector).setFill()
 		let radius: CGFloat = isFullBleed ? 0 : Self.cornerRadius
 		let borderWidth: CGFloat = isSummaryCard && !isFullBleed ? 0.5 : 0
 		let path = NSBezierPath(
@@ -812,7 +802,7 @@ private final class InspectorBoxSurface: NSView
 		path.fill()
 		if borderWidth > 0
 		{
-			DesktopTheme.border.setStroke()
+			AppKitColorTokens.border.setStroke()
 			path.lineWidth = borderWidth
 			path.stroke()
 		}

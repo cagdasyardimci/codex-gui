@@ -159,12 +159,12 @@ final class ConversationSplitView: NSSplitView
 		{
 			let shouldHighlightDivider = dividerHovered || dividerDragging
 			let color = shouldHighlightDivider
-				? DesktopTheme.highlightedPaneDivider : DesktopTheme.paneDivider
+				? AppKitColorTokens.highlightedPaneDivider : AppKitColorTokens.paneDivider
 			color.setFill()
 			rect.fill()
 			return
 		}
-		(showsReviewDivider ? DesktopTheme.paneDivider : DesktopTheme.canvas).setFill()
+		(showsReviewDivider ? AppKitColorTokens.paneDivider : AppKitColorTokens.canvas).setFill()
 		rect.fill()
 	}
 }

@@ -40,7 +40,7 @@ final class SlashCommandMenuRowView: NSTableRowView
 
 	private func drawHighlight()
 	{
-		DesktopTheme.slashMenuSelection.setFill()
+		AppKitColorTokens.slashMenuSelection.setFill()
 		NSBezierPath(
 			roundedRect: bounds,
 			xRadius: 14,

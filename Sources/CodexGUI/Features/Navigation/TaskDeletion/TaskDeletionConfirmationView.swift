@@ -52,7 +52,7 @@ final class TaskDeletionConfirmationView: NSViewController
 	override func loadView()
 	{
 		let surface = DesktopSurface(
-			DesktopTheme.sidebar,
+			AppKitColorTokens.sidebar,
 			cornerRadius: LayoutMetrics.cornerRadius,
 			bordered: true,
 			borderWidth: 0.5
@@ -102,7 +102,7 @@ final class TaskDeletionConfirmationView: NSViewController
 		cancelButton.setAccessibilityLabel("Cancel task deletion")
 		deleteButton.setAccessibilityLabel("Confirm task deletion")
 
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			closeButton,
 			icon: .xCrossed
 		)

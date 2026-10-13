@@ -31,7 +31,7 @@ final class GitReviewTreeCell: NSStackView
 	override func draw(_ dirtyRect: NSRect)
 	{
 		super.draw(dirtyRect)
-		DesktopTheme.border.setStroke()
+		AppKitColorTokens.border.setStroke()
 		for depth in 0 ..< guideDepth
 		{
 			let x = CGFloat(16 + depth * 16)
@@ -74,7 +74,7 @@ final class GitReviewFileRowView: NSTableRowView
 			xRadius: 6,
 			yRadius: 6
 		)
-		DesktopTheme.canvas.setFill()
+		AppKitColorTokens.canvas.setFill()
 		outline.fill()
 		NSColor.systemBlue.setStroke()
 		outline.lineWidth = 1

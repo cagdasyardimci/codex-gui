@@ -135,7 +135,7 @@ final class TurnSummaryPreview: NSView
 
 	private func refreshSkeletonColors()
 	{
-		let color = DesktopTheme.resolvedCGColor(
+		let color = AppKitColorResolution.resolvedCGColor(
 			.secondaryLabelColor,
 			for: self,
 			alpha: 0.2

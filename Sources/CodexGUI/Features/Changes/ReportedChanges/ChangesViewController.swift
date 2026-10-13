@@ -367,7 +367,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		turnButton.target = self
 		turnButton.action = #selector(selectTurn)
 		turnButton.setAccessibilityLabel("Review turn")
-		DesktopTheme.stylePopup(turnButton)
+		AppKitControlStyling.stylePopup(turnButton)
 		originLabel.textColor = .secondaryLabelColor
 		originLabel.font = .systemFont(ofSize: 11)
 		originLabel.setAccessibilityLabel("Source thread and turn of reported changes")
@@ -393,7 +393,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		sectionButton.target = self
 		sectionButton.action = #selector(selectSection)
 		sectionButton.setAccessibilityLabel("Change section in selected file")
-		DesktopTheme.stylePopup(sectionButton)
+		AppKitControlStyling.stylePopup(sectionButton)
 	}
 
 	private func configureReviewActions()
@@ -409,7 +409,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		actionsButton.action = #selector(prepareChangeRequest)
 		actionsButton.setAccessibilityLabel("Ask about or request revision of selected change")
 		actionsButton.isEnabled = false
-		DesktopTheme.stylePopup(actionsButton)
+		AppKitControlStyling.stylePopup(actionsButton)
 
 	}
 
@@ -454,7 +454,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		openButton.isEnabled = false
 		openButton.setAccessibilityLabel("Open selected changed file in editor")
 		openButton.toolTip = "Open selected file in preferred editor"
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			openButton,
 			icon: .externalLink
 		)

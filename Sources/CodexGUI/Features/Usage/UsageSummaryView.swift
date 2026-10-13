@@ -15,7 +15,7 @@ final class UsageSummaryView: NSView
 	{
 		super.init(frame: frameRect)
 
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			button,
 			icon: .barChart
 		)
@@ -252,7 +252,7 @@ final class UsageSummaryView: NSView
 		label.setAccessibilityLabel("Backend reported usage details")
 
 		let controller = NSViewController()
-		let container = DesktopSurface(DesktopTheme.elevated)
+		let container = DesktopSurface(AppKitColorTokens.elevated)
 		AppKitLayout.pin(
 			label,
 			to: container

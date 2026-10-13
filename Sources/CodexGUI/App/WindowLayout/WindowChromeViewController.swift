@@ -4,15 +4,7 @@ import AppKit
 @MainActor
 final class WindowChromeViewController: NSViewController
 {
-	private enum Layout
-	{
-		static let accountColumnWidth: CGFloat = 52
-		static let panelOuterInset: CGFloat = 4
-		static let panelTopInset: CGFloat = 2
-		static let splitLeadingInset: CGFloat = 1
-		static let avatarSize: CGFloat = 32
-		static let avatarBottomInset: CGFloat = 12
-	}
+	private typealias Layout = LayoutTokens.Chrome
 
 	private var accountColumn: NSView!
 	private var panel: RoundedContentPanel!
@@ -45,12 +37,12 @@ final class WindowChromeViewController: NSViewController
 			nibName: nil,
 			bundle: nil
 		)
-		view = DesktopSurface(DesktopTheme.chrome)
+		view = DesktopSurface(AppKitColorTokens.chrome)
 		addChild(split)
 
-		let column = DesktopSurface(DesktopTheme.chrome)
+		let column = DesktopSurface(AppKitColorTokens.chrome)
 		let avatar = DesktopSurface(
-			DesktopTheme.selection,
+			AppKitColorTokens.selection,
 			cornerRadius: Layout.avatarSize / 2
 		)
 		let panel = RoundedContentPanel()
@@ -178,8 +170,8 @@ private final class RoundedContentShadow: NSView
 	private func updateAppearance()
 	{
 		let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		layer?.backgroundColor = DesktopTheme.resolvedCGColor(
-			DesktopTheme.chrome,
+		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.chrome,
 			for: self
 		)
 		layer?.shadowOpacity = isDark ? 0 : 0.08
@@ -227,8 +219,8 @@ private final class RoundedContentPanel: NSView
 		CATransaction.setDisableActions(true)
 		layer?.cornerRadius = isGitReviewFocused ? 0 : radius
 		layer?.borderWidth = isGitReviewFocused ? 0 : 1
-		layer?.borderColor = DesktopTheme.resolvedCGColor(
-			DesktopTheme.border,
+		layer?.borderColor = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.border,
 			for: self
 		)
 		CATransaction.commit()

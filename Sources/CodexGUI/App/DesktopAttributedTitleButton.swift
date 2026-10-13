@@ -135,7 +135,7 @@ class DesktopAttributedTitleButton: NSButton
 			{
 				return
 			}
-			let cgColor = DesktopTheme.resolvedCGColor(
+			let cgColor = AppKitColorResolution.resolvedCGColor(
 				color,
 				for: self
 			)

@@ -6,10 +6,10 @@ extension ConversationViewController
 {
 	private enum ComposerSizing
 	{
-		static let minimumHeight: CGFloat = 49
-		static let maximumHeight: CGFloat = 160
-		static let availableHeightFraction: CGFloat = 0.25
-		static let contentHeightAllowance: CGFloat = 12
+		static let minimumHeight = LayoutTokens.composer.minimumHeight
+		static let maximumHeight = LayoutTokens.Composer.maximumEditorHeight
+		static let availableHeightFraction = LayoutTokens.composer.availableHeightFraction
+		static let contentHeightAllowance = LayoutTokens.Composer.editorContentHeightAllowance
 		static let heightUpdateTolerance: CGFloat = 2
 	}
 
@@ -38,7 +38,7 @@ extension ConversationViewController
 	{
 		let attachmentRow = AppKitLayout.horizontalStack(
 			[addContextButton, approvalPolicyButton, planModeLabel],
-			spacing: 16
+			spacing: LayoutTokens.Composer.leadingControlSpacing
 		)
 		let actionRow = AppKitLayout.horizontalStack(
 			[sendButton, steerButton, stopButton],
@@ -57,20 +57,12 @@ extension ConversationViewController
 
 	private func installComposerStack(toolbar composerToolbar: ComposerToolbarView)
 	{
-		let composerStack = AppKitLayout.verticalStack(
-			[attachmentDetailsScrollView, composerScrollView, composerToolbar],
-			spacing: 6
+		ComposerSurfaceLayout.install(
+			in: composerSurface,
+			attachments: attachmentDetailsScrollView,
+			editor: composerScrollView,
+			footer: composerToolbar
 		)
-		composerStack.alignment = .leading
-		AppKitLayout.pin(
-			composerStack,
-			to: composerSurface,
-			inset: 8
-		)
-		for row in [attachmentDetailsScrollView, composerScrollView, composerToolbar]
-		{
-			row.widthAnchor.constraint(equalTo: composerStack.widthAnchor).isActive = true
-		}
 	}
 
 	func configurePreferenceControls()
@@ -83,7 +75,8 @@ extension ConversationViewController
 			for: .horizontal
 		)
 		refreshModelEffortButton()
-		modelEffortButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+		modelEffortButton.heightAnchor
+			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
 
 		configurePreferenceCallbacks()
 		modelEffortController.onPreferredContentSizeChange =
@@ -94,14 +87,16 @@ extension ConversationViewController
 
 		approvalPolicyButton.target = self
 		approvalPolicyButton.action = #selector(showApprovalPolicy)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			approvalPolicyButton,
 			icon: .handRaised
 		)
-		approvalPolicyButton.font = .systemFont(ofSize: 13)
+		approvalPolicyButton.font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
 		approvalPolicyButton.lineBreakMode = .byTruncatingTail
-		approvalPolicyButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
-		DesktopTheme.stylePopup(addContextButton)
+		approvalPolicyButton.heightAnchor
+			.constraint(equalToConstant: LayoutTokens.Composer.auxiliaryControlHeight)
+			.isActive = true
+		AppKitControlStyling.stylePopup(addContextButton)
 		AppKitLayout.compressHorizontally(addContextButton)
 		preferenceWarningLabel.font = .systemFont(ofSize: 12)
 		preferenceWarningLabel.textColor = .systemOrange
@@ -158,7 +153,7 @@ extension ConversationViewController
 		composer.isAutomaticQuoteSubstitutionEnabled = false
 		composer.isAutomaticDashSubstitutionEnabled = false
 		composer.isAutomaticTextReplacementEnabled = false
-		composer.font = .systemFont(ofSize: 14)
+		composer.font = AppKitFontResolver.font(TypographyTokens.Composer.editor)
 		composer.textColor = .labelColor
 		composer.insertionPointColor = .labelColor
 		composer.drawsBackground = false
@@ -235,8 +230,12 @@ extension ConversationViewController
 		(addContextButton.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
 		addContextButton.contentTintColor = .labelColor
 		addContextButton.imagePosition = .imageOnly
-		addContextButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		addContextButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		addContextButton.widthAnchor
+			.constraint(equalToConstant: LayoutTokens.Composer.auxiliaryControlHeight)
+			.isActive = true
+		addContextButton.heightAnchor
+			.constraint(equalToConstant: LayoutTokens.Composer.auxiliaryControlHeight)
+			.isActive = true
 		addContextButton.toolTip = "Add Context…"
 	}
 
@@ -261,7 +260,7 @@ extension ConversationViewController
 		{
 			let symbol: DesktopIcon = button === stopButton
 				? .stopCircleFilled : (button === sendButton ? .arrowUpLg : .arrowUp)
-			DesktopTheme.styleButton(
+			AppKitControlStyling.styleButton(
 				button,
 				icon: symbol,
 				prominent: true
@@ -271,11 +270,14 @@ extension ConversationViewController
 				size: button === sendButton ? 16 : 28
 			)
 			button.imagePosition = .imageOnly
-			button.widthAnchor.constraint(equalToConstant: 28).isActive = true
-			button.heightAnchor.constraint(equalToConstant: 28).isActive = true
+			button.widthAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
+				.isActive = true
+			button.heightAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
+				.isActive = true
 		}
 		sendButton.wantsLayer = true
-		sendButton.layer?.cornerRadius = 14
+		sendButton.layer?.cornerRadius = ShapeTokens.Composer
+			.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
 		sendButton.contentTintColor = .white
 		sendButton.toolTip = "Send message (⌘Return)"
 		steerButton.toolTip = "Steer the active turn (⇧⌘Return)"
@@ -318,7 +320,7 @@ extension ConversationViewController
 		approvalPolicyButton.attributedTitle = NSAttributedString(
 			string: approvalMode.title,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 13),
+				.font: AppKitFontResolver.font(TypographyTokens.Composer.preference),
 				.foregroundColor: approvalTint,
 			]
 		)

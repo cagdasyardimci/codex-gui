@@ -221,7 +221,7 @@ struct GitReviewDesignPreviewSupport
 	private func renderDarkUnifiedRows() throws
 	{
 		let controller = NSViewController()
-		let surface = DesktopSurface(DesktopTheme.canvas)
+		let surface = DesktopSurface(AppKitColorTokens.canvas)
 		controller.view = surface
 		let code = GitUnifiedCodeView(
 			rows: fixture.darkUnifiedRows(),

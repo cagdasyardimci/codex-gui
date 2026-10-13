@@ -29,11 +29,11 @@ final class ComposerToolbarView: NSView
 			leadingControls.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
 			preferenceControl.leadingAnchor.constraint(
 				greaterThanOrEqualTo: leadingControls.trailingAnchor,
-				constant: 12
+				constant: LayoutTokens.Composer.leadingPreferenceSpacing
 			),
 			preferenceControl.trailingAnchor.constraint(
 				equalTo: actionControls.leadingAnchor,
-				constant: -16
+				constant: -LayoutTokens.composer.preferenceToActionSpacing
 			),
 			preferenceControl.centerYAnchor.constraint(equalTo: centerYAnchor),
 			preferenceControl.topAnchor.constraint(greaterThanOrEqualTo: topAnchor),
@@ -49,17 +49,17 @@ final class ComposerToolbarView: NSView
 			preferenceControl.leadingAnchor.constraint(equalTo: leadingAnchor),
 			preferenceControl.trailingAnchor.constraint(
 				lessThanOrEqualTo: actionControls.leadingAnchor,
-				constant: -16
+				constant: -LayoutTokens.composer.preferenceToActionSpacing
 			),
 			preferenceControl.centerYAnchor.constraint(equalTo: actionControls.centerYAnchor),
 			preferenceControl.topAnchor.constraint(
 				greaterThanOrEqualTo: leadingControls.bottomAnchor,
-				constant: 4
+				constant: LayoutTokens.composer.compactRowSpacing
 			),
 			preferenceControl.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
 			actionControls.topAnchor.constraint(
 				equalTo: leadingControls.bottomAnchor,
-				constant: 4
+				constant: LayoutTokens.composer.compactRowSpacing
 			),
 			actionControls.trailingAnchor.constraint(equalTo: trailingAnchor),
 			actionControls.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -76,8 +76,7 @@ final class ComposerToolbarView: NSView
 
 	override func layout()
 	{
-		let compactLayoutWidthThreshold: CGFloat = 440
-		let shouldUseCompactLayout = bounds.width < compactLayoutWidthThreshold
+		let shouldUseCompactLayout = ComposerLayout().usesCompactFooter(innerWidth: bounds.width)
 		if shouldUseCompactLayout != isCompact
 		{
 			NSLayoutConstraint.deactivate(isCompact ? compactConstraints : wideConstraints)

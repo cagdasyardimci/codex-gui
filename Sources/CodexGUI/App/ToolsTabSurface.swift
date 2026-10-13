@@ -96,11 +96,11 @@ final class ToolsTabSurface: NSView
 			xRadius: 8,
 			yRadius: 8
 		)
-		DesktopTheme.input.setFill()
+		AppKitColorTokens.input.setFill()
 		path.fill()
 		if isSelected
 		{
-			DesktopTheme.highlightedPaneDivider.setStroke()
+			AppKitColorTokens.highlightedPaneDivider.setStroke()
 			path.lineWidth = 1
 			path.stroke()
 		}

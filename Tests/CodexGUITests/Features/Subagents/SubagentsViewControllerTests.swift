@@ -408,7 +408,7 @@ struct SubagentsViewControllerTests
 			}
 		)
 		let host = NSViewController()
-		host.view = DesktopSurface(DesktopTheme.canvas)
+		host.view = DesktopSurface(AppKitColorTokens.canvas)
 		host.addChild(fixture)
 		AppKitLayout.pin(
 			fixture.view,

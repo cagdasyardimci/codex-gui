@@ -182,7 +182,7 @@ extension NavigationViewController
 			{
 				return makeProjectsHeader(actionsButton: NSButton())
 			}
-			let caption = DesktopTheme.sectionLabel(title)
+			let caption = AppKitControlStyling.sectionLabel(title)
 			caption.font = .systemFont(ofSize: 13)
 			return caption
 		}

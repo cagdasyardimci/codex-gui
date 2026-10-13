@@ -49,7 +49,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 			spacing: 4
 		)
 		let container = DesktopSurface(
-			DesktopTheme.slashMenu,
+			AppKitColorTokens.slashMenu,
 			cornerRadius: 22,
 			bordered: true
 		)

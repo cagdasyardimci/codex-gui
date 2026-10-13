@@ -229,7 +229,7 @@ final class ComposerContextView: NSView
 			action: #selector(inspectItem(_:))
 		)
 
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			inspectButton,
 			icon: .infoCircle
 		)
@@ -250,7 +250,7 @@ final class ComposerContextView: NSView
 			action: #selector(removeItem(_:))
 		)
 
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			removeButton,
 			icon: .xCircle
 		)

@@ -5,16 +5,34 @@ final class ModelEffortSelectionButton: NSButton
 {
 	private enum LayoutMetrics
 	{
-		static let totalHorizontalAllowance: CGFloat = 16
-		static let buttonHeight: CGFloat = 28
-		static let maximumWidth: CGFloat = 300
-		static let pickerMinimumWidth: CGFloat = 164
-		static let boltSize = NSSize(
-			width: 12,
-			height: 14
-		)
-		static let boltToTitleSpacing: CGFloat = 6
-		static let titleToChevronSpacing: CGFloat = 6
+		static var totalHorizontalAllowance: CGFloat
+		{
+			LayoutTokens.modelSelector.totalHorizontalAllowance
+		}
+		static var buttonHeight: CGFloat
+		{
+			LayoutTokens.composer.controlHeight
+		}
+		static var maximumWidth: CGFloat
+		{
+			LayoutTokens.modelSelector.maximumWidth
+		}
+		static var pickerMinimumWidth: CGFloat
+		{
+			LayoutTokens.modelSelector.pickerMinimumWidth
+		}
+		static var boltSize: NSSize
+		{
+			LayoutTokens.modelSelector.boltSize
+		}
+		static var boltToTitleSpacing: CGFloat
+		{
+			LayoutTokens.modelSelector.boltToTitleSpacing
+		}
+		static var titleToChevronSpacing: CGFloat
+		{
+			LayoutTokens.modelSelector.titleToChevronSpacing
+		}
 		static let chevronArmWidth: CGFloat = 3
 		// Preserve the existing extra point beyond the chevron's 8-point span.
 		static let chevronExtraWidthAllowance: CGFloat = 1
@@ -31,7 +49,7 @@ final class ModelEffortSelectionButton: NSButton
 
 		static var trailingReservedWidth: CGFloat
 		{
-			titleToChevronSpacing + chevronSpanWidth + chevronExtraWidthAllowance
+			LayoutTokens.modelSelector.trailingReservedWidth
 		}
 	}
 
@@ -55,7 +73,7 @@ final class ModelEffortSelectionButton: NSButton
 		isBordered = false
 		bezelStyle = .inline
 		focusRingType = .none
-		font = .systemFont(ofSize: 13)
+		font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
 		image = nil
 
 		update(
@@ -108,7 +126,7 @@ final class ModelEffortSelectionButton: NSButton
 
 	private var textFont: NSFont
 	{
-		font ?? .systemFont(ofSize: 13)
+		font ?? AppKitFontResolver.font(TypographyTokens.Composer.preference)
 	}
 
 	private var naturalTextSize: NSSize
@@ -155,7 +173,7 @@ final class ModelEffortSelectionButton: NSButton
 
 		if shouldDrawSelectionBackground
 		{
-			DesktopTheme.selection.setFill()
+			AppKitColorTokens.selection.setFill()
 			selectionOutline().fill()
 		}
 

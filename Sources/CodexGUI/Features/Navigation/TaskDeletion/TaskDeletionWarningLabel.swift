@@ -32,7 +32,7 @@ final class TaskDeletionWarningLabel: NSTextField
 			return
 		}
 		let text = NSMutableAttributedString(attributedString: attributedStringValue)
-		let resolvedColor = NSColor(cgColor: DesktopTheme.resolvedCGColor(
+		let resolvedColor = NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
 			foregroundColor,
 			for: self
 		))

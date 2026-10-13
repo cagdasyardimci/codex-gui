@@ -498,7 +498,7 @@ struct GitReviewDesignChecks
 	{
 		let rows = fixture.darkUnifiedRows()
 		let controller = NSViewController()
-		let surface = DesktopSurface(DesktopTheme.canvas)
+		let surface = DesktopSurface(AppKitColorTokens.canvas)
 		controller.view = surface
 		let code = GitUnifiedCodeView(
 			rows: rows,

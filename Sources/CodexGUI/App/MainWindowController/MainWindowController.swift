@@ -110,7 +110,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		window.titlebarAppearsTransparent = true
 		window.titlebarSeparatorStyle = .none
 		window.toolbarStyle = .unifiedCompact
-		window.backgroundColor = DesktopTheme.chrome
+		window.backgroundColor = AppKitColorTokens.chrome
 		window.center()
 
 		return window

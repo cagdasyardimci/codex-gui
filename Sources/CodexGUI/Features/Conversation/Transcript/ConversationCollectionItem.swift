@@ -101,7 +101,7 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 			height: 28
 		)
 		let surface = DesktopSurface(
-			DesktopTheme.inspector,
+			AppKitColorTokens.inspector,
 			cornerRadius: 12,
 			bordered: true
 		)
@@ -210,11 +210,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private let replyActions = ConversationReplyActionsView()
 	private var showsReplyActions = false
 	private let userSurface = DesktopSurface(
-		DesktopTheme.userBubble,
+		AppKitColorTokens.userBubble,
 		cornerRadius: 20
 	)
 	private let activitySurface = DesktopSurface(
-		DesktopTheme.elevated,
+		AppKitColorTokens.elevated,
 		cornerRadius: 12,
 		bordered: true
 	)
@@ -327,7 +327,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	{
 		expandButton.target = self
 		expandButton.action = #selector(toggleExpanded)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			expandButton,
 			icon: .chevronDown
 		)
@@ -565,7 +565,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				target: self,
 				action: #selector(copyCode(_:))
 			)
-			DesktopTheme.styleButton(
+			AppKitControlStyling.styleButton(
 				button,
 				icon: .copy
 			)

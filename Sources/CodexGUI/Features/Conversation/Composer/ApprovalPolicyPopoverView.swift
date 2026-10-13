@@ -343,7 +343,7 @@ private final class ApprovalPolicyRow: NSButton
 	{
 		if hovered
 		{
-			DesktopTheme.selection.setFill()
+			AppKitColorTokens.selection.setFill()
 			NSBezierPath(
 				roundedRect: bounds,
 				xRadius: 8,

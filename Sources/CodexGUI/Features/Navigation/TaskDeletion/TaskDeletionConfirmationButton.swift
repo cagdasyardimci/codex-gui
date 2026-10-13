@@ -16,13 +16,13 @@ final class TaskDeletionConfirmationButton: NSButton
 	{
 		let outline = roundedOutline()
 		let background = isDestructive
-			? NSColor.systemRed.withAlphaComponent(0.1) : DesktopTheme.canvas
+			? NSColor.systemRed.withAlphaComponent(0.1) : AppKitColorTokens.canvas
 		background.setFill()
 		outline.fill()
 
 		if !isDestructive
 		{
-			DesktopTheme.border.setStroke()
+			AppKitColorTokens.border.setStroke()
 			outline.lineWidth = 1
 			outline.stroke()
 		}

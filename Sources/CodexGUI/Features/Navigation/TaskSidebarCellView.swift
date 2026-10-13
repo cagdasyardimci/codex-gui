@@ -33,14 +33,7 @@ final class TaskSidebarCellView: NSTableCellView
 	private var titleTrailingConstraint: NSLayoutConstraint?
 	private var titleLeadingConstraint: NSLayoutConstraint?
 
-	private enum Layout
-	{
-		static let actionButtonWidth: CGFloat = 20
-		static let actionButtonHeight: CGFloat = 22
-		static let actionSpacing: CGFloat = 4
-		static let unreadIndicatorSize: CGFloat = 8
-		static let progressRingSize: CGFloat = 16
-	}
+	private typealias Layout = LayoutTokens.TaskActions
 
 	override init(frame frameRect: NSRect)
 	{
@@ -67,13 +60,13 @@ final class TaskSidebarCellView: NSTableCellView
 	{
 		archiveButton.target = self
 		archiveButton.action = #selector(archiveTask)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			archiveButton,
 			icon: .archive
 		)
 		deleteButton.target = self
 		deleteButton.action = #selector(deleteTask)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			deleteButton,
 			icon: .trash
 		)
@@ -111,7 +104,7 @@ final class TaskSidebarCellView: NSTableCellView
 	private func refreshUnreadColor()
 	{
 		// Descendants receive the inherited change after their parent callback.
-		unreadDot.layer?.backgroundColor = DesktopTheme.resolvedCGColor(
+		unreadDot.layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
 			.systemBlue,
 			for: self
 		)

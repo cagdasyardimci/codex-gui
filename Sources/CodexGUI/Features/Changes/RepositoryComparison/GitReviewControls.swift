@@ -12,7 +12,7 @@ enum GitReviewControls
 	) -> NSView
 	{
 		let surface = DesktopSurface(
-			DesktopTheme.elevated,
+			AppKitColorTokens.elevated,
 			cornerRadius: radius
 		)
 		surface.addSubview(content)

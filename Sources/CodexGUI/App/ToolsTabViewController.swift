@@ -3,21 +3,7 @@ import AppKit
 @MainActor
 final class ToolsTabViewController: NSViewController
 {
-	private enum Layout
-	{
-		static let headerHeight: CGFloat = 28
-		static let tabHeight: CGFloat = 28
-		static let tabWidth: CGFloat = 180
-		static let tabSpacing: CGFloat = 4
-		static let controlSize: CGFloat = 24
-		static let controlSpacing: CGFloat = 4
-		static let addButtonSpacing: CGFloat = 8
-		static let tabLeadingInset: CGFloat = 12
-		static let tabTrailingInset: CGFloat = 4
-		static let minimumTabSelectionWidth: CGFloat = 24
-		static let contentInset: CGFloat = 20
-		static let toolTileWidth: CGFloat = 240
-	}
+	private typealias Layout = LayoutTokens.Tabs
 
 	var onCloseLastTab: (() -> Void)?
 	var onClosePane: (() -> Void)?
@@ -104,7 +90,7 @@ final class ToolsTabViewController: NSViewController
 
 	override func loadView()
 	{
-		let container = DesktopSurface(DesktopTheme.canvas)
+		let container = DesktopSurface(AppKitColorTokens.canvas)
 		view = container
 
 		_ = tabBar
@@ -367,7 +353,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func configureSummaryButton()
 	{
-		DesktopTheme.styleButton(summaryButton)
+		AppKitControlStyling.styleButton(summaryButton)
 		summaryButton.image = PinnedSummaryIcons.image(.toggle)
 		summaryButton.imagePosition = .imageOnly
 		summaryButton.setButtonType(.toggle)
@@ -481,7 +467,7 @@ final class ToolsTabViewController: NSViewController
 	private func makeChangesTile() -> NSView
 	{
 		let tile = DesktopSurface(
-			DesktopTheme.sidebar,
+			AppKitColorTokens.sidebar,
 			cornerRadius: 8
 		)
 		let button = NSButton(
@@ -489,7 +475,7 @@ final class ToolsTabViewController: NSViewController
 			target: nil,
 			action: nil
 		)
-		DesktopTheme.styleButton(button)
+		AppKitControlStyling.styleButton(button)
 		button.font = .systemFont(ofSize: 14)
 		button.alignment = .left
 		button.image = PinnedSummaryIcons.image(
@@ -627,7 +613,7 @@ final class ToolsTabViewController: NSViewController
 			target: self,
 			action: #selector(selectConversation)
 		)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			selectButton,
 			prominent: isConversationSelected
 		)
@@ -668,7 +654,7 @@ final class ToolsTabViewController: NSViewController
 			target: self,
 			action: #selector(selectTab(_:))
 		)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			selectButton,
 			prominent: selected
 		)
@@ -803,7 +789,7 @@ final class ToolsTabViewController: NSViewController
 			target: self,
 			action: action
 		)
-		DesktopTheme.styleButton(button)
+		AppKitControlStyling.styleButton(button)
 		button.image = image
 		button.imagePosition = .imageOnly
 		button.toolTip = label

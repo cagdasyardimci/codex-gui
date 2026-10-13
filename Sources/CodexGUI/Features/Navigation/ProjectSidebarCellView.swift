@@ -115,7 +115,7 @@ final class ProjectSidebarCellView: NSTableCellView
 	{
 		infoButton.target = self
 		infoButton.action = #selector(showInfo)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			infoButton,
 			icon: .dotsHorizontal
 		)
@@ -123,7 +123,7 @@ final class ProjectSidebarCellView: NSTableCellView
 
 		newChatButton.target = self
 		newChatButton.action = #selector(startChat)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			newChatButton,
 			icon: .chatCompose
 		)

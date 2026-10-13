@@ -366,7 +366,7 @@ final class ProjectContextViewController: NSViewController
 		contentStack.addArrangedSubview(surface)
 		surface.widthAnchor.constraint(equalTo: contentStack.widthAnchor).isActive = true
 		sectionStack = stack
-		add(DesktopTheme.sectionLabel(title))
+		add(AppKitControlStyling.sectionLabel(title))
 		addDetail(detail)
 	}
 
@@ -382,7 +382,7 @@ final class ProjectContextViewController: NSViewController
 	{
 		if let popup = control as? NSPopUpButton
 		{
-			DesktopTheme.stylePopup(popup)
+			AppKitControlStyling.stylePopup(popup)
 		}
 		else if let button = control as? NSButton
 		{
@@ -407,7 +407,7 @@ final class ProjectContextViewController: NSViewController
 			action: action
 		)
 		button.setAccessibilityLabel(title)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			button,
 			icon: .plus
 		)
@@ -436,7 +436,7 @@ final class ProjectContextViewController: NSViewController
 		)
 		editButton.identifier = NSUserInterfaceItemIdentifier(item.id)
 		editButton.setAccessibilityLabel("Edit \(item.title)")
-		DesktopTheme.styleButton(editButton)
+		AppKitControlStyling.styleButton(editButton)
 		editButton.controlSize = .small
 		editButton.font = .systemFont(ofSize: 11)
 
@@ -457,7 +457,7 @@ final class ProjectContextViewController: NSViewController
 		button.identifier = NSUserInterfaceItemIdentifier(prompt.id)
 		button.toolTip = prompt.instructions
 		button.setAccessibilityLabel("Inspect saved prompt \(prompt.title)")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			button,
 			icon: .quote
 		)
@@ -476,7 +476,7 @@ final class ProjectContextViewController: NSViewController
 			.setAccessibilityLabel(
 				"Open bookmarked \(bookmark.kind.displayTitle): \(bookmark.label)"
 			)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			button,
 			icon: .savedXs
 		)

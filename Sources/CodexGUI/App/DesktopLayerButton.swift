@@ -36,7 +36,7 @@ class DesktopLayerButton: NSButton
 	{
 		layer?.backgroundColor = layerBackgroundColor.map
 		{
-			DesktopTheme.resolvedCGColor(
+			AppKitColorResolution.resolvedCGColor(
 				$0,
 				for: self,
 				alpha: layerBackgroundAlpha
@@ -44,7 +44,7 @@ class DesktopLayerButton: NSButton
 		}
 		layer?.borderColor = layerBorderColor.map
 		{
-			DesktopTheme.resolvedCGColor(
+			AppKitColorResolution.resolvedCGColor(
 				$0,
 				for: self
 			)

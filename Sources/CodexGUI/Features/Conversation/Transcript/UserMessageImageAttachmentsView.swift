@@ -274,7 +274,7 @@ private final class UserMessageImageButton: NSButton
 			yRadius: 10
 		)
 		outline.addClip()
-		DesktopTheme.canvas.setFill()
+		AppKitColorTokens.canvas.setFill()
 		outline.fill()
 		if let preview
 		{
@@ -301,7 +301,7 @@ private final class UserMessageImageButton: NSButton
 				]
 			)
 		}
-		DesktopTheme.border.setStroke()
+		AppKitColorTokens.border.setStroke()
 		outline.lineWidth = 1
 		outline.stroke()
 		NSGraphicsContext.restoreGraphicsState()

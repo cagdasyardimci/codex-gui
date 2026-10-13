@@ -81,7 +81,7 @@ final class ModelEffortPopoverView: NSViewController
 	{
 		fastButton.target = self
 		fastButton.action = #selector(toggleFastMode)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			fastButton,
 			icon: .bolt
 		)
@@ -89,7 +89,7 @@ final class ModelEffortPopoverView: NSViewController
 
 		resetButton.target = self
 		resetButton.action = #selector(resetPreferences)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			resetButton,
 			icon: .arrowRotateCcw
 		)
@@ -101,7 +101,7 @@ final class ModelEffortPopoverView: NSViewController
 
 	private func configureModelMenuButton()
 	{
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			modelMenuButton,
 			icon: .chevronRight
 		)

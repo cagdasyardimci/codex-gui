@@ -990,7 +990,7 @@ struct ConversationActivityCollectionItemTests
 			#expect(shellLabels.contains
 			{
 				$0.stringValue == expected && $0.alignment == .right &&
-					$0.textColor == DesktopTheme.terminalMutedText
+					$0.textColor == AppKitColorTokens.terminalMutedText
 			})
 			#expect(!shellLabels.contains
 			{
@@ -1721,7 +1721,7 @@ struct ConversationActivityCollectionItemTests
 		{
 			$0.stringValue == "Exit 3" || $0.textColor == .systemRed
 		})
-		#expect(output.textColor == DesktopTheme.terminalText)
+		#expect(output.textColor == AppKitColorTokens.terminalText)
 		#expect(output.string == originalText)
 		link.performClick(nil)
 		#expect(openedPath == "/tmp/example.swift")

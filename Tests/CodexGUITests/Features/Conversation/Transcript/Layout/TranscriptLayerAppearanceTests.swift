@@ -113,7 +113,7 @@ struct TranscriptLayerAppearanceTests
 			try expectColor(
 				button.layer?.borderColor,
 				resolved(
-					DesktopTheme.border,
+					AppKitColorTokens.border,
 					for: button
 				)
 			)
@@ -326,7 +326,7 @@ struct TranscriptLayerAppearanceTests
 			count: components.count
 		).usingColorSpace(.deviceRGB))
 		let expected = resolved(
-			DesktopTheme.inspector,
+			AppKitColorTokens.inspector,
 			for: owner
 		)
 		#expect(abs(color.redComponent - expected.redComponent) < 2 / 255)

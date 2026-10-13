@@ -4,7 +4,7 @@ import AppKit
 @MainActor
 final class WindowPaneController
 {
-	private static let workspaceFilesMaximumWidth: CGFloat = 1000
+	private static let workspaceFilesMaximumWidth = LayoutTokens.window.filesMaximumWidth
 
 	private weak var window: NSWindow?
 	private let navigation: NavigationViewController
@@ -63,7 +63,7 @@ final class WindowPaneController
 	}
 
 	private var workspaceFilesExpanded = false
-	private var workspaceFilesWidth: CGFloat = 760
+	private var workspaceFilesWidth = LayoutTokens.window.filesPreferredWidth
 	private var savedGitReviewLayout: GitReviewLayout?
 	private(set) var isGitReviewFocused = false
 

@@ -59,7 +59,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		action: nil
 	)
 	private let shell = DesktopSurface(
-		DesktopTheme.elevated,
+		AppKitColorTokens.elevated,
 		cornerRadius: 12,
 		bordered: true
 	)
@@ -175,16 +175,16 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			.constraint(equalToConstant: Self.minimumShellHeight)
 		shellHeightConstraint?.isActive = true
 		shellLabel.font = .systemFont(ofSize: 13)
-		shellLabel.textColor = DesktopTheme.terminalText
+		shellLabel.textColor = AppKitColorTokens.terminalText
 		shellStatusLabel.font = .systemFont(ofSize: 13)
-		shellStatusLabel.textColor = DesktopTheme.terminalMutedText
+		shellStatusLabel.textColor = AppKitColorTokens.terminalMutedText
 		shellStatusLabel.alignment = .right
 		shellStatusLabel.lineBreakMode = .byTruncatingTail
 		output.isEditable = false
 		output.isSelectable = true
 		output.drawsBackground = false
 		output.font = Self.terminalFont
-		output.textColor = DesktopTheme.terminalText
+		output.textColor = AppKitColorTokens.terminalText
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.lineSpacing = Self.terminalLineSpacing
 		output.defaultParagraphStyle = paragraph
@@ -209,7 +209,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		scroll.scrollerStyle = .overlay
 		scroll.documentView = output
 		commandLabel.font = output.font
-		commandLabel.textColor = DesktopTheme.terminalText
+		commandLabel.textColor = AppKitColorTokens.terminalText
 		commandLabel.isSelectable = true
 		commandLabel.lineBreakMode = .byWordWrapping
 		commandLabel.maximumNumberOfLines = 2
@@ -270,7 +270,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		anchor: NSView
 	)
 	{
-		DesktopTheme.styleButton(button)
+		AppKitControlStyling.styleButton(button)
 		button.setCopyImage(DesktopIcons.image(
 			.copy,
 			size: 14,
@@ -531,7 +531,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			output.setAccessibilityLabel("Shell output")
 			shellStatusLabel.stringValue = Self.shellStatus(command)
 			shellStatusLabel.toolTip = Self.metadata(command)
-			shellStatusLabel.textColor = DesktopTheme.terminalMutedText
+			shellStatusLabel.textColor = AppKitColorTokens.terminalMutedText
 			copyCommandButton.isEnabled = !command.command.isEmpty
 			copyOutputButton.isEnabled = !command.output.isEmpty
 			updateShellGeometry(command)
@@ -882,7 +882,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			string: "$ \(command)",
 			attributes: [
 				.font: terminalFont,
-				.foregroundColor: DesktopTheme.terminalText,
+				.foregroundColor: AppKitColorTokens.terminalText,
 				.paragraphStyle: paragraph
 			]
 		)

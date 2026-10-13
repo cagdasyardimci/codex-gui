@@ -20,7 +20,7 @@ final class ConversationReplyActionsView: NSStackView
 		heightAnchor.constraint(equalToConstant: Self.height).isActive = true
 		for button in [copyButton, bookmarkButton]
 		{
-			DesktopTheme.styleButton(button)
+			AppKitControlStyling.styleButton(button)
 			button.imagePosition = .imageOnly
 			button.translatesAutoresizingMaskIntoConstraints = false
 			button.widthAnchor.constraint(equalToConstant: Self.height).isActive = true

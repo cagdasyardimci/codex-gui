@@ -19,11 +19,11 @@ final class ProjectRenameButton: NSButton
 			xRadius: 10,
 			yRadius: 10
 		)
-		(isPrimary ? NSColor.textColor : DesktopTheme.elevated).setFill()
+		(isPrimary ? NSColor.textColor : AppKitColorTokens.elevated).setFill()
 		outline.fill()
 		if !isPrimary
 		{
-			DesktopTheme.border.setStroke()
+			AppKitColorTokens.border.setStroke()
 			outline.lineWidth = 1
 			outline.stroke()
 		}

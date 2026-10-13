@@ -112,7 +112,7 @@ final class GitDiffFileSectionView: NSStackView
 			file: file,
 			isCollapsed: isCollapsed
 		)
-		let divider = DesktopSurface(DesktopTheme.border)
+		let divider = DesktopSurface(AppKitColorTokens.border)
 		divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
 		let stack = self
 		stack.addArrangedSubview(header)
@@ -303,7 +303,7 @@ final class GitDiffFileSectionView: NSStackView
 
 		let controls = makeGapExpansionControls(row)
 
-		let verticalDivider = DesktopSurface(DesktopTheme.border)
+		let verticalDivider = DesktopSurface(AppKitColorTokens.border)
 		verticalDivider.widthAnchor.constraint(equalToConstant: GapLayout.dividerThickness)
 			.isActive = true
 		let fold = AppKitLayout.horizontalStack(
@@ -315,7 +315,7 @@ final class GitDiffFileSectionView: NSStackView
 			after: verticalDivider
 		)
 		let surface = DesktopSurface(
-			DesktopTheme.elevated,
+			AppKitColorTokens.elevated,
 			cornerRadius: 7
 		)
 		AppKitLayout.pin(
@@ -359,7 +359,7 @@ final class GitDiffFileSectionView: NSStackView
 			control.isEnabled = row.canExpand
 		}
 
-		let horizontalDivider = DesktopSurface(DesktopTheme.border)
+		let horizontalDivider = DesktopSurface(AppKitColorTokens.border)
 		horizontalDivider.heightAnchor.constraint(equalToConstant: GapLayout.dividerThickness)
 			.isActive = true
 		let controls = NSStackView(views: [above, horizontalDivider, below])

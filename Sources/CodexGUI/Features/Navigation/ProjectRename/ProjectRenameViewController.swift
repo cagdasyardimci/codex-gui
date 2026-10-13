@@ -26,7 +26,7 @@ final class ProjectRenameViewController: NSViewController
 	override func loadView()
 	{
 		let surface = DesktopSurface(
-			DesktopTheme.elevated,
+			AppKitColorTokens.elevated,
 			cornerRadius: 20
 		)
 		surface.setAccessibilityLabel("Rename project")
@@ -36,9 +36,9 @@ final class ProjectRenameViewController: NSViewController
 		)
 		headingLabel.textColor = .labelColor
 		subtitleLabel.font = .systemFont(ofSize: 14)
-		subtitleLabel.textColor = DesktopTheme.terminalMutedText
+		subtitleLabel.textColor = AppKitColorTokens.terminalMutedText
 		input.field.setAccessibilityLabel("Project name")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			closeButton,
 			icon: .xCrossed
 		)

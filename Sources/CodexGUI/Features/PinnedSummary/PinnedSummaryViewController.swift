@@ -13,13 +13,7 @@ final class PinnedSummaryViewController: NSViewController
 	private var renderGeneration = 0
 	private var actions: [NSButton: ContextPanelRequest] = [:]
 
-	private enum Layout
-	{
-		static let contentRowHeight: CGFloat = 28
-		static let sourceIconSize: CGFloat = 18
-		static let sourceRowSpacing: CGFloat = 12
-		static let agentRowSpacing: CGFloat = 4
-	}
+	private typealias Layout = LayoutTokens.Summary
 
 	var preferredContentHeight: CGFloat
 	{
@@ -578,7 +572,7 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func addDivider()
 	{
-		let divider = DesktopSurface(DesktopTheme.border)
+		let divider = DesktopSurface(AppKitColorTokens.border)
 		add(divider)
 		divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
 		stack.setCustomSpacing(

@@ -50,7 +50,7 @@ final class ProjectInfoPopoverView: NSView
 			spacing: 7
 		)
 		let surface = DesktopSurface(
-			DesktopTheme.selection,
+			AppKitColorTokens.selection,
 			cornerRadius: 10
 		)
 		AppKitLayout.pin(
@@ -99,7 +99,7 @@ final class ProjectInfoPopoverView: NSView
 		pinButton.target = self
 		pinButton.action = #selector(togglePin)
 		pinButton.setButtonType(.toggle)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			pinButton,
 			icon: .pin
 		)
@@ -107,7 +107,7 @@ final class ProjectInfoPopoverView: NSView
 
 		editButton.target = self
 		editButton.action = #selector(editProject)
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			editButton,
 			icon: .settings
 		)

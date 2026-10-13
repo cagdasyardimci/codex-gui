@@ -193,7 +193,7 @@ struct DesktopAttributedTitleButtonTests
 			at: index,
 			effectiveRange: nil
 		) as? NSColor)
-		#expect(actual.cgColor == DesktopTheme.resolvedCGColor(
+		#expect(actual.cgColor == AppKitColorResolution.resolvedCGColor(
 			color,
 			for: button
 		))

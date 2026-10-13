@@ -432,7 +432,7 @@ final class GitDiffTextView: NSTextView
 			NSGraphicsContext.restoreGraphicsState()
 		}
 		NSBezierPath(rect: stripe).addClip()
-		DesktopTheme.elevated.setFill()
+		AppKitColorTokens.elevated.setFill()
 		stripe.fill()
 		NSColor.separatorColor.withAlphaComponent(0.35).setStroke()
 		let hatch = NSBezierPath()

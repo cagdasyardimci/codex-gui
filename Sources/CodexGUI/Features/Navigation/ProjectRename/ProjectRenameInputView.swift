@@ -55,13 +55,14 @@ final class ProjectRenameInputView: NSView, NSTextFieldDelegate
 			xRadius: 8,
 			yRadius: 8
 		)
-		DesktopTheme.elevated.setFill()
+		AppKitColorTokens.elevated.setFill()
 		outline.fill()
 		let editorHasFocus = field.currentEditor().map
 		{
 			window?.firstResponder === $0
 		} ?? false
-		(isEditing || editorHasFocus ? NSColor.controlAccentColor : DesktopTheme.border).setStroke()
+		(isEditing || editorHasFocus ? NSColor.controlAccentColor : AppKitColorTokens.border)
+			.setStroke()
 		outline.lineWidth = 1
 		outline.stroke()
 	}

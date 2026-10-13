@@ -26,15 +26,7 @@ extension MainWindowController
 		static let searchMessages = NSToolbarItem.Identifier("searchMessages")
 	}
 
-	private enum ToolbarLayout
-	{
-		static let controlSize: CGFloat = 28
-		static let rowHeight: CGFloat = 30
-		static let controlSpacing: CGFloat = 6
-		static let horizontalInset: CGFloat = 8
-		static let titleSpacing: CGFloat = 8
-		static let maximumTitleWidth: CGFloat = 280
-	}
+	private typealias ToolbarLayout = LayoutTokens.Toolbar
 
 	func configureToolbarControls()
 	{

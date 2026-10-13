@@ -495,7 +495,7 @@ enum ConversationAttributedStringRenderer
 		}
 		else if style.code || style.codeBlock || style.monospaced
 		{
-			size = 13
+			size = TypographyTokens.Transcript.code.size
 		}
 		else
 		{
@@ -505,10 +505,10 @@ enum ConversationAttributedStringRenderer
 			case 2: size = 20
 			case 3: size = 18
 			case 4: size = 16
-			default: size = 14
+			default: size = TypographyTokens.Transcript.prose.size
 			}
 		}
-		let weight: NSFont.Weight
+		let weight: TypographyTokens.Weight
 		if style.heading > 0
 		{
 			weight = .bold
@@ -525,15 +525,12 @@ enum ConversationAttributedStringRenderer
 		{
 			weight = .regular
 		}
-		let base = style.code || style.codeBlock || style.monospaced
-			? NSFont.monospacedSystemFont(
-				ofSize: size,
-				weight: weight
-			)
-			: NSFont.systemFont(
-				ofSize: size,
-				weight: weight
-			)
+		let role = TypographyTokens.Role(
+			size: size,
+			selection: style.code || style.codeBlock || style.monospaced
+				? .monospaced(weight: weight) : .system(weight: weight)
+		)
+		let base = AppKitFontResolver.font(role)
 		return style.italic
 			? NSFontManager.shared.convert(
 				base,

@@ -50,7 +50,7 @@ extension ConversationViewController
 		latestButton.target = self
 		latestButton.action = #selector(showLatestMessage)
 		latestButton.setAccessibilityLabel("Return to latest message")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			latestButton,
 			icon: .arrowDown
 		)
@@ -61,7 +61,7 @@ extension ConversationViewController
 		loadEarlierButton.target = self
 		loadEarlierButton.action = #selector(loadEarlierTurns)
 		loadEarlierButton.setAccessibilityLabel("Load earlier messages in this conversation")
-		DesktopTheme.styleButton(
+		AppKitControlStyling.styleButton(
 			loadEarlierButton,
 			icon: .history
 		)

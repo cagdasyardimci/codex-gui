@@ -27,7 +27,7 @@ final class FullAccessConfirmationButton: NSButton
 	private func drawBackground()
 	{
 		let background = confirmsFullAccess
-			? NSColor.systemRed.withAlphaComponent(0.1) : DesktopTheme.input
+			? NSColor.systemRed.withAlphaComponent(0.1) : AppKitColorTokens.input
 		let backgroundPath = NSBezierPath(
 			roundedRect: bounds,
 			xRadius: LayoutMetrics.cornerRadius,

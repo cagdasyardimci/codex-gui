@@ -31,14 +31,14 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 					? NSColor(
 						white: 34.0 / 255,
 						alpha: 1
-					) : DesktopTheme.elevated
+					) : AppKitColorTokens.elevated
 			},
 			cornerRadius: 10,
 			bordered: true,
 			borderWidth: 0.5
 		)
 		let iconSurface = DesktopSurface(
-			DesktopTheme.canvas,
+			AppKitColorTokens.canvas,
 			cornerRadius: 10
 		)
 		let icon = FileChangeIconView()
@@ -79,7 +79,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		review.wantsLayer = true
 		review.layer?.cornerRadius = 10
 		review.layer?.borderWidth = 1
-		review.layerBorderColor = DesktopTheme.border
+		review.layerBorderColor = AppKitColorTokens.border
 		review.contentTintColor = ConversationAttributedStringRenderer.proseColor
 		review.widthAnchor.constraint(equalToConstant: 102).isActive = true
 		review.heightAnchor.constraint(equalToConstant: 28).isActive = true

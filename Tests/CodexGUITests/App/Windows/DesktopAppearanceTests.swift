@@ -28,7 +28,7 @@ struct DesktopAppearanceTests
 		button.wantsLayer = true
 		button.layerBackgroundColor = .labelColor
 		button.layerBackgroundAlpha = 0.18
-		button.layerBorderColor = DesktopTheme.border
+		button.layerBorderColor = AppKitColorTokens.border
 		button.state = .on
 		window.contentView?.addSubview(button)
 		#expect(window.makeFirstResponder(button))
@@ -43,7 +43,7 @@ struct DesktopAppearanceTests
 			)
 			try expectColor(
 				button.layer?.borderColor,
-				DesktopTheme.border,
+				AppKitColorTokens.border,
 				in: button
 			)
 			#expect(button.state == .on)
@@ -118,12 +118,12 @@ struct DesktopAppearanceTests
 			controller.view.layoutSubtreeIfNeeded()
 			try expectColor(
 				summary.layer?.backgroundColor,
-				DesktopTheme.canvas,
+				AppKitColorTokens.canvas,
 				in: summary
 			)
 			try expectColor(
 				summary.layer?.borderColor,
-				DesktopTheme.border,
+				AppKitColorTokens.border,
 				in: summary
 			)
 			let shape = try #require(ring.layer?.sublayers?.first as? CAShapeLayer)
@@ -136,12 +136,12 @@ struct DesktopAppearanceTests
 			try #require(chrome.count == 3)
 			try expectColor(
 				chrome[1].layer?.backgroundColor,
-				DesktopTheme.chrome,
+				AppKitColorTokens.chrome,
 				in: chrome[1]
 			)
 			try expectColor(
 				chrome[2].layer?.borderColor,
-				DesktopTheme.border,
+				AppKitColorTokens.border,
 				in: chrome[2]
 			)
 		}
@@ -190,12 +190,12 @@ struct DesktopAppearanceTests
 			}
 			try expectColor(
 				shadow.layer?.backgroundColor,
-				DesktopTheme.chrome,
+				AppKitColorTokens.chrome,
 				in: shadow
 			)
 			try expectColor(
 				panel.layer?.borderColor,
-				DesktopTheme.border,
+				AppKitColorTokens.border,
 				in: panel
 			)
 			try expectColor(
@@ -250,12 +250,12 @@ struct DesktopAppearanceTests
 			}
 			try expectColor(
 				button.layer?.backgroundColor,
-				DesktopTheme.canvas,
+				AppKitColorTokens.canvas,
 				in: button
 			)
 			try expectColor(
 				button.layer?.borderColor,
-				DesktopTheme.border,
+				AppKitColorTokens.border,
 				in: button
 			)
 			for (text, semantic) in [

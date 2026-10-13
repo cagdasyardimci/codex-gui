@@ -108,7 +108,7 @@ private final class ConversationTerminalEdgeFade: NSView
 			NSGraphicsContext.restoreGraphicsState()
 		}
 		NSBezierPath(rect: bounds).addClip()
-		let color = DesktopTheme.elevated
+		let color = AppKitColorTokens.elevated
 		let gradient = NSGradient(
 			starting: color.withAlphaComponent(reversed ? 0 : 0.95),
 			ending: color.withAlphaComponent(reversed ? 0.95 : 0)

@@ -64,7 +64,7 @@ struct SourcesHoverAppearanceTests
 			#expect(panel.frame == frame)
 			#expect(parent.firstResponder === anchor)
 			let background = try #require(content.layer?.backgroundColor)
-			#expect(background == DesktopTheme.resolvedCGColor(
+			#expect(background == AppKitColorResolution.resolvedCGColor(
 				.controlBackgroundColor,
 				for: content
 			))

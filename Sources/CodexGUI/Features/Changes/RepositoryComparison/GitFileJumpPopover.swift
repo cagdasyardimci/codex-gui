@@ -76,7 +76,7 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 
 	override func loadView()
 	{
-		let root = DesktopSurface(DesktopTheme.elevated)
+		let root = DesktopSurface(AppKitColorTokens.elevated)
 		view = root
 		search.placeholderString = "Jump to file…"
 		search.setAccessibilityLabel("Search changed files")

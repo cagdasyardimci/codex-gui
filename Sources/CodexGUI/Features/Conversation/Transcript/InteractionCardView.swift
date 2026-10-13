@@ -83,8 +83,8 @@ final class InteractionCardView: NSView
 	{
 		let box = NSBox()
 		box.boxType = .custom
-		box.borderColor = DesktopTheme.border
-		box.fillColor = DesktopTheme.elevated
+		box.borderColor = AppKitColorTokens.border
+		box.fillColor = AppKitColorTokens.elevated
 		box.cornerRadius = 12
 		box.contentView = content
 		addSubview(box)
@@ -117,11 +117,11 @@ final class InteractionCardView: NSView
 	{
 		if let popup = view as? NSPopUpButton
 		{
-			DesktopTheme.stylePopup(popup)
+			AppKitControlStyling.stylePopup(popup)
 		}
 		else if let button = view as? NSButton
 		{
-			DesktopTheme.styleButton(button)
+			AppKitControlStyling.styleButton(button)
 		}
 		for child in view.subviews
 		{

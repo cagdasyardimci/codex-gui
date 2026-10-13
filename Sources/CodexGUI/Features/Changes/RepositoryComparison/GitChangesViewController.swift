@@ -219,7 +219,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	override func loadView()
 	{
-		let surface = DesktopSurface(DesktopTheme.canvas)
+		let surface = DesktopSurface(AppKitColorTokens.canvas)
 		view = surface
 		let tab = makeInternalChangesTab()
 		internalChangesTab = tab
@@ -234,7 +234,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		banner.isHidden = true
 		configureNavigator()
 		configureDiffSectionsScrolling()
-		let rule = DesktopSurface(DesktopTheme.paneDivider)
+		let rule = DesktopSurface(AppKitColorTokens.paneDivider)
 		navigatorDivider = rule
 		rule.widthAnchor.constraint(equalToConstant: 1).isActive = true
 		navigatorHost.wantsLayer = true
@@ -534,7 +534,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		scroll.autohidesScrollers = true
 		scroll.drawsBackground = false
 		let filterSurface = DesktopSurface(
-			DesktopTheme.canvas,
+			AppKitColorTokens.canvas,
 			cornerRadius: 10,
 			bordered: true
 		)

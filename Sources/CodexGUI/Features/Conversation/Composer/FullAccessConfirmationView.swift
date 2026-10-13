@@ -19,7 +19,7 @@ final class FullAccessConfirmationView: NSViewController
 	override func loadView()
 	{
 		let surface = DesktopSurface(
-			DesktopTheme.canvas,
+			AppKitColorTokens.canvas,
 			cornerRadius: 18,
 			bordered: true
 		)
@@ -98,7 +98,7 @@ final class FullAccessConfirmationView: NSViewController
 	private func makeCapabilitiesSection() -> NSView
 	{
 		let capabilities = DesktopSurface(
-			DesktopTheme.input,
+			AppKitColorTokens.input,
 			cornerRadius: 16
 		)
 		let rows = AppKitLayout.verticalStack(

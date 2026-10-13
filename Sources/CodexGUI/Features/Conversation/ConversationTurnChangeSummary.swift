@@ -171,12 +171,12 @@ final class TurnChangeSummaryButton: NSButton
 
 	private func updateColors()
 	{
-		layer?.backgroundColor = DesktopTheme.resolvedCGColor(
-			DesktopTheme.canvas,
+		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.canvas,
 			for: self
 		)
-		layer?.borderColor = DesktopTheme.resolvedCGColor(
-			DesktopTheme.border,
+		layer?.borderColor = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.border,
 			for: self
 		)
 		guard let summary

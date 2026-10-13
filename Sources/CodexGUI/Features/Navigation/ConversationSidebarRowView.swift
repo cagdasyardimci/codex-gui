@@ -23,7 +23,7 @@ final class ConversationSidebarRowView: NSTableRowView
 		}
 		else if shouldDrawTaskHoverBackground
 		{
-			DesktopTheme.selection.withAlphaComponent(0.55).setFill()
+			AppKitColorTokens.selection.withAlphaComponent(0.55).setFill()
 			selectionPath.fill()
 		}
 	}
@@ -31,7 +31,7 @@ final class ConversationSidebarRowView: NSTableRowView
 	override func drawSelection(in dirtyRect: NSRect)
 	{
 		let path = selectionPath
-		DesktopTheme.selection.setFill()
+		AppKitColorTokens.selection.setFill()
 		path.fill()
 		if NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
 		{
