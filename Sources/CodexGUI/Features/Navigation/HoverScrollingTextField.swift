@@ -135,22 +135,35 @@ final class HoverScrollingTextField: SidebarTextField
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		let shouldDrawScrolledText = isHovered && (scrollTimer != nil || scrollOffset > 0)
+		let shouldDrawScrolledText = isHovered && scrollOffset > 0
 		guard shouldDrawScrolledText
 		else
 		{
 			super.draw(dirtyRect)
 			return
 		}
-		let text = title
 		let rect = textBounds
+		guard let scrollingCell = cell?.copy() as? NSTextFieldCell
+		else
+		{
+			super.draw(dirtyRect)
+			return
+		}
+		// Retain native text insets and baseline while revealing the untruncated title.
+		scrollingCell.lineBreakMode = .byClipping
+		var drawingBounds = bounds
+		drawingBounds.origin.x -= scrollOffset
+		drawingBounds.size.width += max(
+			0,
+			title.size().width - rect.width
+		)
 		DesktopTextRendering.withFontSmoothingDisabled
 		{
 			NSBezierPath(rect: rect).addClip()
-			text.draw(at: NSPoint(
-				x: rect.minX - scrollOffset,
-				y: rect.midY - text.size().height / 2
-			))
+			scrollingCell.drawInterior(
+				withFrame: drawingBounds,
+				in: self
+			)
 		}
 	}
 
