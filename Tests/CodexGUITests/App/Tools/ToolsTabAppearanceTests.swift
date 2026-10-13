@@ -6,6 +6,46 @@ import Testing
 @Suite(.serialized) @MainActor
 struct ToolsTabAppearanceTests
 {
+	@Test func mutualComponentsKeepMeasuredFontsAndActionWithoutGlobe() throws
+	{
+		_ = NSApplication.shared
+		let controller = ToolsTabViewController()
+		controller.openNewTab()
+		let header = controller.tabBarView
+		let selected = try #require(button(
+			"New tab 1",
+			in: header
+		))
+		#expect(selected.image == nil)
+		#expect(selected.font?.fontName
+			== ".SFNS-Regular_wdth_opsz110000_GRAD_wght1AE0000")
+		let changes = try #require(button(
+			"Changes",
+			in: controller.view
+		))
+		#expect(changes.font?.fontName == ".SFNS-Regular_wdth_opsz110000_GRAD_wght")
+		#expect(changes.keyEquivalent == "g")
+		#expect(changes.keyEquivalentModifierMask == [.control, .shift])
+		var activations = 0
+		controller.onOpenChanges =
+		{
+			activations += 1
+		}
+		let event = try #require(NSEvent.keyEvent(
+			with: .keyDown,
+			location: .zero,
+			modifierFlags: [.control, .shift],
+			timestamp: 0,
+			windowNumber: 0,
+			context: nil,
+			characters: "G",
+			charactersIgnoringModifiers: "g",
+			isARepeat: false,
+			keyCode: 5
+		))
+		#expect(changes.performKeyEquivalent(with: event))
+		#expect(activations == 1)
+	}
 
 	@Test func retainedTabSurfacesPaintSelectionAndHoverInBothAppearances() throws
 	{
@@ -91,6 +131,140 @@ struct ToolsTabAppearanceTests
 			#expect(shadow.shadowRadius == 1)
 			#expect(shadow.shadowPath?.boundingBox.width == 236)
 		}
+	}
+
+	@Test func retainedToolsTileReplacesRestingFillOnHover() throws
+	{
+		_ = NSApplication.shared
+		let controller = ToolsTabViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 320,
+				height: 200
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		let host = try #require(window.contentView)
+		controller.view.frame = host.bounds
+		host.addSubview(controller.view)
+		defer
+		{
+			window.close()
+		}
+		func findButton(_ view: NSView) -> NSButton?
+		{
+			if let button = view as? NSButton, button.title == "Changes"
+			{
+				return button
+			}
+			return view.subviews.compactMap
+			{
+				findButton($0)
+			}.first
+		}
+		let button = try #require(findButton(controller.view))
+		let event = try #require(NSEvent.otherEvent(
+			with: .applicationDefined,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: window.windowNumber,
+			context: nil,
+			subtype: 0,
+			data1: 0,
+			data2: 0
+		))
+		for name: NSAppearance.Name in [.aqua, .darkAqua, .aqua]
+		{
+			window.appearance = NSAppearance(named: name)
+			window.layoutIfNeeded()
+			#expect(button.bounds.height == 40)
+			#expect(button.image?.size == NSSize(
+				width: 16,
+				height: 16
+			))
+			#expect(button.action != nil)
+			let dark = name == .darkAqua
+			for (hover, expected) in [(false, dark ? 31 : 255), (true, dark ? 42 : 238)]
+			{
+				if hover
+				{
+					button.mouseEntered(with: event)
+				}
+				else
+				{
+					button.mouseExited(with: event)
+				}
+				let bitmap = try paint(
+					button,
+					dark: dark,
+					tools: true
+				)
+				let pixel = try #require(bitmap.colorAt(
+					x: Int(button.bounds.width / 2),
+					y: 20
+				)?.usingColorSpace(.sRGB))
+				#expect(abs(pixel.redComponent * 255 - CGFloat(expected)) <= 1)
+			}
+			button.mouseExited(with: event)
+			let resting = try paint(
+				button,
+				dark: dark,
+				tools: true,
+				scale: 2
+			)
+			let cell = try #require(button.cell)
+			let iconRange = paintedRedRange(
+				resting,
+				in: cell.imageRect(forBounds: button.bounds)
+			)
+			let titleRange = paintedRedRange(
+				resting,
+				in: cell.titleRect(forBounds: button.bounds)
+			)
+			#expect(dark ? abs(iconRange.upperBound - 177) <= 1
+				: abs(iconRange.lowerBound - 106) <= 1)
+			#expect(dark ? titleRange.upperBound == 255 : titleRange.lowerBound == 26)
+			#expect(button.imagePosition == .imageLeading)
+			#expect(button.font?.pointSize == 13)
+			button.highlight(true)
+			let keyboardPress = try paint(
+				button,
+				dark: dark,
+				tools: true
+			)
+			let restingPixel = try #require(keyboardPress.colorAt(
+				x: 200,
+				y: 20
+			))
+			#expect(abs(restingPixel.redComponent * 255 - CGFloat(dark ? 31 : 255)) <= 1)
+			button.highlight(false)
+			button.isEnabled = false
+			let disabled = try paint(
+				button,
+				dark: dark,
+				tools: true,
+				scale: 2
+			)
+			let disabledTitle = paintedRedRange(
+				disabled,
+				in: cell.titleRect(forBounds: button.bounds)
+			)
+			#expect(dark ? disabledTitle.upperBound == 143 : disabledTitle.lowerBound == 140)
+			button.isEnabled = true
+		}
+		var actionCount = 0
+		controller.onOpenChanges =
+		{
+			actionCount += 1
+		}
+		button.performClick(nil)
+		#expect(actionCount == 1)
 	}
 
 	@Test func selectedTabPaintsSuperellipseCornersAndBorderOverItsBacking() throws

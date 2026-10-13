@@ -421,13 +421,20 @@ enum LayoutTokens
 		}
 		static let contentInset: CGFloat = 20
 		static let toolTileWidth: CGFloat = 240
+		static let toolsTopInset: CGFloat = 32
+		static let toolsSectionGap: CGFloat = 16
+		static let toolTileHeight: CGFloat = 40
+		static let toolTileInset: CGFloat = 10
+		static let toolTileIconSize: CGFloat = 16
+		static let toolTileIconGap: CGFloat = 8
+		static let toolShortcutHeight: CGFloat = 16
+		static let toolShortcutHorizontalInset: CGFloat = 6
 		static let iconSize: CGFloat = 16
 		static let paneIconSize = CGSize(
 			width: 17.3333,
 			height: 16
 		)
 		static let closeIconSize: CGFloat = 14
-
 	}
 
 	enum Inspector

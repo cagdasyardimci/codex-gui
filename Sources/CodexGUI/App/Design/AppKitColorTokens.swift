@@ -44,6 +44,12 @@ enum AppKitColorTokens
 		light: 0xF6F6F6,
 		dark: 0x282828
 	)
+	static let toolsShortcut = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.065,
+		darkAlpha: 0.065
+	)
 	static let selectedTab = AppKitColorResolution.color(
 		light: 0xFFFFFF,
 		dark: 0xFFFFFF,
@@ -55,6 +61,22 @@ enum AppKitColorTokens
 		dark: 0xFFFFFF,
 		lightAlpha: 0.08,
 		darkAlpha: 0.082
+	)
+	static let toolsCanvas = AppKitColorResolution.color(
+		light: 0xFAFAFA,
+		dark: 0x181818
+	)
+	static let toolsTile = AppKitColorResolution.color(
+		light: 0xFFFFFF,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.96,
+		darkAlpha: 0.03
+	)
+	static let toolsTileIcon = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.65,
+		darkAlpha: 0.65
 	)
 	static let input = AppKitColorResolution.color(
 		light: 0xF0F0F0,

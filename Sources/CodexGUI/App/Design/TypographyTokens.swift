@@ -190,6 +190,15 @@ enum TypographyTokens
 			size: 13,
 			selection: .interface(weight: 430)
 		)
+		static let toolsHeading = Role(
+			size: 13,
+			selection: .interface(weight: 500)
+		)
+		static let toolsTile = Role(
+			size: 13,
+			selection: .interface(weight: 400)
+		)
+		static let toolsShortcut = Role(size: 12)
 	}
 
 	enum Popover

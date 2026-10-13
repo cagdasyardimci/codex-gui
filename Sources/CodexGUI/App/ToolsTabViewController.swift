@@ -200,7 +200,7 @@ final class ToolsTabViewController: NSViewController
 
 	override func loadView()
 	{
-		let container = DesktopSurface(AppKitColorTokens.canvas)
+		let container = DesktopSurface(AppKitColorTokens.toolsCanvas)
 		view = container
 
 		_ = tabBar
@@ -230,7 +230,7 @@ final class ToolsTabViewController: NSViewController
 			),
 			toolsContent.topAnchor.constraint(
 				equalTo: contentHost.topAnchor,
-				constant: 32
+				constant: Layout.toolsTopInset
 			),
 		])
 	}
@@ -588,55 +588,46 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeToolsContent() -> NSStackView
 	{
-		let heading = NSTextField(labelWithString: "Tools")
-		heading.font = .systemFont(
-			ofSize: 13,
-			weight: .medium
-		)
-		heading.textColor = .labelColor
+		let heading = ToolsHeadingTextField(labelWithString: "Tools")
+		heading.font = AppKitFontResolver.font(TypographyTokens.Controls.toolsHeading)
+		heading.textColor = AppKitColorTokens.primaryText
 		let tile = makeChangesTile()
 		let content = AppKitLayout.verticalStack(
 			[heading, tile],
-			spacing: 16
+			spacing: Layout.toolsSectionGap
 		)
-		let preferredWidth = tile.widthAnchor.constraint(equalToConstant: Layout.toolTileWidth)
-		preferredWidth.priority = .defaultHigh
-		NSLayoutConstraint.activate([
-			tile.widthAnchor.constraint(lessThanOrEqualToConstant: Layout.toolTileWidth),
-			tile.widthAnchor.constraint(lessThanOrEqualTo: content.widthAnchor),
-			preferredWidth,
-		])
+		tile.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
 		return content
 	}
 
 	private func makeChangesTile() -> NSView
 	{
-		let tile = DesktopSurface(
-			AppKitColorTokens.sidebar,
-			cornerRadius: 8
-		)
-		let button = NSButton(
+		let tile = NSView()
+		let button = ToolsTileButton(
 			title: "Changes",
 			target: nil,
 			action: nil
 		)
+		button.cell = ToolsTileButtonCell(textCell: "Changes")
 		AppKitControlStyling.styleButton(button)
-		button.font = .systemFont(ofSize: 14)
+		button.cornerRadius = ShapeTokens.TabControls.toolTileRadius
+		button.font = AppKitFontResolver.font(TypographyTokens.Controls.toolsTile)
+		button.contentTintColor = AppKitColorTokens.primaryText
+
 		button.alignment = .left
-		button.image = PinnedSummaryIcons.image(
-			.changes,
-			size: 18
-		)
+		button.image = ToolsPaneIcons.changes(size: Layout.toolTileIconSize)
 		button.imagePosition = .imageLeading
 		button.target = self
 		button.action = #selector(openChanges)
+		button.keyEquivalent = ToolsChangesShortcut.key
+		button.keyEquivalentModifierMask = ToolsChangesShortcut.modifiers
 		button.setAccessibilityLabel("Changes")
 		AppKitLayout.pin(
 			button,
 			to: tile,
-			inset: 12
+			inset: 0
 		)
-		tile.heightAnchor.constraint(equalToConstant: 42).isActive = true
+		tile.heightAnchor.constraint(equalToConstant: Layout.toolTileHeight).isActive = true
 		return tile
 	}
 
@@ -1091,5 +1082,183 @@ private final class ToolsTabSelectionButtonCell: NSButtonCell
 				in: controlView
 			)
 		}
+	}
+}
+
+@MainActor
+private final class ToolsHeadingTextField: NSTextField
+{
+	override func draw(_ dirtyRect: NSRect)
+	{
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			super.draw(dirtyRect)
+		}
+	}
+}
+
+private enum ToolsChangesShortcut
+{
+	static let key = "g"
+	static let modifiers: NSEvent.ModifierFlags = [.control, .shift]
+	static let label = "⌃⇧G"
+}
+
+@MainActor
+private final class ToolsTileButtonCell: NSButtonCell
+{
+	private func shortcutTitle(in view: NSView) -> NSAttributedString
+	{
+		let color = NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.toolsTileIcon,
+			for: view
+		)) ?? AppKitColorTokens.toolsTileIcon
+		return NSAttributedString(
+			string: ToolsChangesShortcut.label,
+			attributes: [
+				.font: AppKitFontResolver.font(TypographyTokens.Controls.toolsShortcut),
+				.foregroundColor: color,
+			]
+		)
+	}
+
+	private func shortcutRect(forBounds rect: NSRect) -> NSRect
+	{
+		let title = NSAttributedString(
+			string: ToolsChangesShortcut.label,
+			attributes: [.font: AppKitFontResolver.font(TypographyTokens.Controls.toolsShortcut)]
+		)
+		let width = title.size().width + 2 * LayoutTokens.Tabs.toolShortcutHorizontalInset
+		return NSRect(
+			x: rect.maxX - LayoutTokens.Tabs.toolTileInset - width,
+			y: rect.midY - LayoutTokens.Tabs.toolShortcutHeight / 2,
+			width: width,
+			height: LayoutTokens.Tabs.toolShortcutHeight
+		)
+	}
+
+	override func drawInterior(
+		withFrame frame: NSRect,
+		in controlView: NSView
+	)
+	{
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			super.drawInterior(
+				withFrame: frame,
+				in: controlView
+			)
+			let badge = shortcutRect(forBounds: frame)
+			AppKitColorTokens.toolsShortcut.setFill()
+			NSBezierPath(
+				roundedRect: badge,
+				xRadius: ShapeTokens.TabControls.toolShortcutRadius,
+				yRadius: ShapeTokens.TabControls.toolShortcutRadius
+			).fill()
+			let text = shortcutTitle(in: controlView)
+			text.draw(in: NSRect(
+				x: badge.minX + LayoutTokens.Tabs.toolShortcutHorizontalInset,
+				y: badge.midY - text.size().height / 2,
+				width: text.size().width,
+				height: text.size().height
+			))
+		}
+	}
+
+	override func drawImage(
+		_ image: NSImage,
+		withFrame frame: NSRect,
+		in controlView: NSView
+	)
+	{
+		guard (controlView as? NSControl)?.isEnabled != false
+		else
+		{
+			// Keep AppKit's existing disabled artwork and title treatment.
+			super.drawImage(
+				image,
+				withFrame: frame,
+				in: controlView
+			)
+			return
+		}
+		DesktopIcons.draw(
+			image,
+			in: frame,
+			tint: AppKitColorTokens.toolsTileIcon
+		)
+	}
+
+	override func imageRect(forBounds rect: NSRect) -> NSRect
+	{
+		NSRect(
+			x: rect.minX + LayoutTokens.Tabs.toolTileInset,
+			y: rect.midY - LayoutTokens.Tabs.toolTileIconSize / 2,
+			width: LayoutTokens.Tabs.toolTileIconSize,
+			height: LayoutTokens.Tabs.toolTileIconSize
+		)
+	}
+	override func titleRect(forBounds rect: NSRect) -> NSRect
+	{
+		let leading = LayoutTokens.Tabs.toolTileInset + LayoutTokens.Tabs
+			.toolTileIconSize + LayoutTokens.Tabs.toolTileIconGap
+		var title = super.titleRect(forBounds: rect)
+		title.origin.x = rect.minX + leading
+		title.size.width = max(
+			0,
+			shortcutRect(forBounds: rect).minX - LayoutTokens.Tabs.toolTileIconGap
+				- title.minX
+		)
+		return title
+	}
+}
+
+@MainActor
+private final class ToolsTileButton: DesktopAttributedTitleButton
+{
+	var cornerRadius = ShapeTokens.TabControls.toolTileRadius
+	private var isHovered = false
+	private var tracking: NSTrackingArea?
+
+	override func updateTrackingAreas()
+	{
+		super.updateTrackingAreas()
+		if let tracking
+		{
+			removeTrackingArea(tracking)
+		}
+		let area = NSTrackingArea(
+			rect: .zero,
+			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+			owner: self,
+			userInfo: nil
+		)
+		addTrackingArea(area)
+		tracking = area
+	}
+
+	override func mouseEntered(with event: NSEvent)
+	{
+		isHovered = true
+		needsDisplay = true
+	}
+
+	override func mouseExited(with event: NSEvent)
+	{
+		isHovered = false
+		needsDisplay = true
+	}
+
+	override func draw(_ dirtyRect: NSRect)
+	{
+		let fill = isEnabled && isHovered
+			? AppKitColorTokens.rowHighlight : AppKitColorTokens.toolsTile
+		fill.setFill()
+		AppKitShapePath.roundedRect(
+			bounds,
+			radius: cornerRadius,
+			curve: ShapeTokens.TabControls.cornerCurve
+		).fill()
+		super.draw(dirtyRect)
 	}
 }

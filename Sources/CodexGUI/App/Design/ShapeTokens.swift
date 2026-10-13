@@ -87,6 +87,8 @@ enum ShapeTokens
 
 		static let cornerCurve = CornerCurve.superellipse(1.5)
 		static let selectedRadius: CGFloat = 10
+		static let toolTileRadius: CGFloat = 10
+		static let toolShortcutRadius: CGFloat = 10
 		static let selectedEdgeWidth: CGFloat = 0.5
 
 		static func radius(for role: Role) -> CGFloat
