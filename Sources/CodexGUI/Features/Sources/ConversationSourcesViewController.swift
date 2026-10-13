@@ -725,13 +725,13 @@ final class ConversationSourcesViewController: NSViewController
 			cell.showsStateBy = []
 		}
 		disclosure.alignment = .left
-		disclosure.font = .systemFont(ofSize: 13)
+		disclosure.font = .systemFont(ofSize: 14)
 		disclosure.contentTintColor = SourceResultCodeCard.activityLabelColor
 		disclosure.state = expandedInvocations.contains(id) ? .on : .off
 		let plainTitle = NSAttributedString(
 			string: label,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 13),
+				.font: NSFont.systemFont(ofSize: 14),
 				.foregroundColor: SourceResultCodeCard.activityLabelColor,
 			]
 		)
