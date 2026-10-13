@@ -6,7 +6,7 @@ import Testing
 @Suite(.serialized) @MainActor
 struct ComposerCaretTests
 {
-	@Test func lineStartCaretRetainsItsFullRetinaWidth() throws
+	@Test func lineStartCaretMatchesAppKitAndKeepsEditableState() throws
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
@@ -34,6 +34,27 @@ struct ComposerCaretTests
 		}
 		let editor = controller.composer
 		#expect(window.makeFirstResponder(editor))
+		#expect(editor.drawsBackground)
+		#expect(editor.backgroundColor == AppKitColorTokens.composer)
+		for (appearance, expectedRed) in [
+			(NSAppearance.Name.darkAqua, 54.0 / 255),
+			(.aqua, 1.0),
+		]
+		{
+			window.appearance = NSAppearance(named: appearance)
+			var background: NSColor?
+			editor.effectiveAppearance.performAsCurrentDrawingAppearance
+			{
+				background = editor.backgroundColor.usingColorSpace(.sRGB)
+			}
+			let resolved = try #require(background)
+			#expect(abs(resolved.redComponent - expectedRed) < 0.005)
+			#expect(resolved.alphaComponent == 1)
+			#expect(window.firstResponder === editor)
+		}
+		let standard = NSTextView()
+		standard.appearance = editor.effectiveAppearance
+		standard.insertionPointColor = editor.insertionPointColor
 		for draft in ["", "\n"]
 		{
 			editor.string = draft
@@ -61,28 +82,14 @@ struct ComposerCaretTests
 				turnedOn: true
 			)
 
-			var columns: [Int] = []
-			for x in 0 ..< 4
-			{
-				var count = 0
-				for y in 0 ..< bitmap.pixelsHigh
-				{
-					let color = try #require(bitmap.colorAt(
-						x: x,
-						y: y
-					)?.usingColorSpace(.sRGB))
-					if color.alphaComponent > 0.8, color.redComponent < 0.2,
-						color.greenComponent < 0.2, color.blueComponent < 0.2
-					{
-						count += 1
-					}
-				}
-				columns.append(count)
-			}
-			#expect(columns[0] == Int(line.height * 2))
-			#expect(columns[1] == columns[0])
-			#expect(columns[2] == 0)
-			#expect(columns[3] == 0)
+			let native = try renderCaret(
+				standard,
+				rect: caret,
+				turnedOn: true
+			)
+			let actualPixels = try bitmapPixels(bitmap)
+			let nativePixels = try bitmapPixels(native)
+			#expect(actualPixels == nativePixels)
 			let off = try renderCaret(
 				editor,
 				rect: caret,
@@ -118,9 +125,6 @@ struct ComposerCaretTests
 			rect: interior,
 			turnedOn: true
 		)
-		let standard = NSTextView()
-		standard.appearance = editor.effectiveAppearance
-		standard.insertionPointColor = editor.insertionPointColor
 		let expected = try renderCaret(
 			standard,
 			rect: interior,
@@ -145,6 +149,15 @@ struct ComposerCaretTests
 		#expect(abs(ink.greenComponent - 28 / 255) < 0.005)
 		#expect(abs(ink.blueComponent - 31 / 255) < 0.005)
 
+		editor.string = "d"
+		editor.setSelectedRange(NSRange(
+			location: 1,
+			length: 0
+		))
+		#expect(editor.selectedRange() == NSRange(
+			location: 1,
+			length: 0
+		))
 		editor.string = "Text"
 		editor.setSelectedRange(NSRange(
 			location: 0,
@@ -209,6 +222,15 @@ struct ComposerCaretTests
 			)
 		}
 		return bitmap
+	}
+
+	private func bitmapPixels(_ bitmap: NSBitmapImageRep) throws -> [UInt8]
+	{
+		let data = try #require(bitmap.bitmapData)
+		return Array(UnsafeBufferPointer(
+			start: data,
+			count: bitmap.bytesPerRow * bitmap.pixelsHigh
+		))
 	}
 
 }

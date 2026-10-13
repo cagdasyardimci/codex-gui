@@ -43,6 +43,9 @@ Resolve layer colors under the owning view's effective appearance and refresh th
 that appearance changes. Rebuild and relaunch after source-level token changes so prepared
 content uses the new configuration. Follow [validation](validation.md) for checks.
 
+The composer text view fills its editor bounds with the same `AppKitColorTokens.composer`
+color as its enclosing surface so AppKit can repaint the previous insertion point.
+
 ## Pane sizing
 
 The tools pane opens at 320 points and resizes down to 320 points. Its upper drag limit follows the available

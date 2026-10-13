@@ -156,7 +156,9 @@ extension ConversationViewController
 		composer.font = AppKitFontResolver.font(TypographyTokens.Composer.editor)
 		composer.textColor = AppKitColorTokens.primaryText
 		composer.insertionPointColor = AppKitColorTokens.primaryText
-		composer.drawsBackground = false
+		// Match the surface so AppKit can repaint the old insertion point after editing.
+		composer.backgroundColor = AppKitColorTokens.composer
+		composer.drawsBackground = true
 		composer.textContainerInset = .zero
 		composer.isHorizontallyResizable = false
 		composer.isVerticallyResizable = true

@@ -68,25 +68,6 @@ final class ContextComposerTextView: NSTextView, NSLayoutManagerDelegate
 		super.keyDown(with: event)
 	}
 
-	override func drawInsertionPoint(
-		in rect: NSRect,
-		color: NSColor,
-		turnedOn flag: Bool
-	)
-	{
-		var caret = rect
-		if caret.minX < bounds.minX, caret.maxX > bounds.minX
-		{
-			// AppKit centers a one-point caret on x=0, clipping half at an empty line's edge.
-			caret.origin.x = bounds.minX
-		}
-		super.drawInsertionPoint(
-			in: caret,
-			color: color,
-			turnedOn: flag
-		)
-	}
-
 	override func draw(_ dirtyRect: NSRect)
 	{
 		super.draw(dirtyRect)
