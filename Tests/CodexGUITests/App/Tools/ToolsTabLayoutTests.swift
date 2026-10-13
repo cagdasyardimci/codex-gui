@@ -102,6 +102,39 @@ struct ToolsTabLayoutTests
 		controller.updateToolsToolbarControls()
 		window.layoutIfNeeded()
 
+		let toolbarViews = try #require(window.toolbar).items.compactMap(\.view)
+		let back = try #require(toolbarViews.compactMap
+		{
+			button(
+				"Back",
+				in: $0
+			)
+		}.first)
+		let sidebar = try #require(toolbarViews.compactMap
+		{
+			button(
+				"Toggle sidebar",
+				in: $0
+			)
+		}.first)
+		#expect(sidebar.isEnabled)
+		#expect(sidebar.target === controller)
+		#expect(sidebar.action != nil)
+		#expect(sidebar.bounds.size == NSSize(
+			width: 28,
+			height: 28
+		))
+		let backFrame = back.convert(
+			back.bounds,
+			to: nil
+		)
+		#expect(backFrame.height == 28)
+		#expect(abs(window.frame.height - backFrame.midY - 22) < 0.5)
+		let titleFrame = controller.titleLabel.convert(
+			controller.titleLabel.bounds,
+			to: nil
+		)
+		#expect(abs(window.frame.height - titleFrame.midY - 21.5) < 0.5)
 		let nativeHeader = controller.inspector.toolsTabs.tabBarView
 		let tabSelection = try #require(button(
 			"New tab 1",

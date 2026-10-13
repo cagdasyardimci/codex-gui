@@ -247,11 +247,7 @@ enum TypographyTokens
 
 	enum Toolbar
 	{
-		static let title = Role(
-			size: 14,
-			selection: .system(weight: .regular)
-		)
-
+		static let title = Role(size: 14)
 	}
 
 	enum TaskHover

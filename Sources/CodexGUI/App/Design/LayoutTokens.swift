@@ -511,7 +511,7 @@ enum LayoutTokens
 		static let rowHeight: CGFloat = 30
 		static let controlSpacing: CGFloat = 6
 		static let horizontalInset: CGFloat = 8
-		static let titleSpacing: CGFloat = 8
+		static let titleSpacing: CGFloat = 9
 		static let maximumTitleWidth: CGFloat = 280
 
 	}

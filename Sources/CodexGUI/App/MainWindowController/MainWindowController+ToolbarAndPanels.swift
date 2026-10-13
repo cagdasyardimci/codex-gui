@@ -67,14 +67,23 @@ extension MainWindowController
 		titleContainer.setAccessibilityElement(false)
 		titleContainer.clipsToBounds = false
 		NSLayoutConstraint.activate([
-			projectIcon.leadingAnchor.constraint(equalTo: titleContainer.leadingAnchor),
-			projectIcon.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+			projectIcon.leadingAnchor.constraint(
+				equalTo: titleContainer.leadingAnchor,
+				constant: -2
+			),
+			projectIcon.centerYAnchor.constraint(
+				equalTo: titleContainer.centerYAnchor,
+				constant: 2
+			),
 			titleLabel.leadingAnchor.constraint(
 				equalTo: projectIcon.trailingAnchor,
 				constant: ToolbarLayout.titleSpacing
 			),
 			titleLabel.trailingAnchor.constraint(equalTo: titleContainer.trailingAnchor),
-			titleLabel.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+			titleLabel.centerYAnchor.constraint(
+				equalTo: titleContainer.centerYAnchor,
+				constant: 1.5
+			),
 			titleContainer.widthAnchor.constraint(
 				lessThanOrEqualToConstant: ToolbarLayout.controlSize + ToolbarLayout.titleSpacing
 					+ ToolbarLayout.maximumTitleWidth
@@ -85,10 +94,7 @@ extension MainWindowController
 
 	private func configureTitleLabel()
 	{
-		titleLabel.font = .systemFont(
-			ofSize: 14,
-			weight: .regular
-		)
+		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Toolbar.title)
 		titleLabel.isBordered = false
 		titleLabel.isBezeled = false
 		titleLabel.drawsBackground = false
@@ -153,10 +159,10 @@ extension MainWindowController
 		summaryToggleButton.setButtonType(.toggle)
 		summaryToggleButton.bezelStyle = .texturedRounded
 		summaryToggleButton.isBordered = false
-		summaryToggleButton.contentTintColor = .labelColor
+		summaryToggleButton.contentTintColor = AppKitColorTokens.secondaryText
 		summaryToggleButton.image = PinnedSummaryIcons.image(
 			.toggle,
-			size: 18,
+			size: 15,
 			accessibilityDescription: "Toggle pinned summary"
 		)
 		summaryToggleButton.imagePosition = .imageOnly
@@ -250,7 +256,7 @@ extension MainWindowController
 				identifier: itemIdentifier,
 				image: DesktopIcons.image(
 					.arrowLeft,
-					size: 14
+					size: 16
 				),
 				label: "Back"
 			)
@@ -259,7 +265,7 @@ extension MainWindowController
 				identifier: itemIdentifier,
 				image: DesktopIcons.image(
 					.arrowRight,
-					size: 14
+					size: 16
 				),
 				label: "Forward"
 			)
@@ -351,7 +357,14 @@ extension MainWindowController
 	private func makeProjectContextIcon() -> NSImageView
 	{
 		let imageView = NSImageView()
-		imageView.image = DesktopIcons.image(.folder)
+		imageView.image = DesktopIcons.image(
+			.folder,
+			size: 15
+		)
+		imageView.image?.size = NSSize(
+			width: 15,
+			height: 16
+		)
 		imageView.contentTintColor = .labelColor
 		imageView.setAccessibilityLabel("Project context")
 		imageView.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
@@ -360,45 +373,63 @@ extension MainWindowController
 		return imageView
 	}
 
-	private func makeNavigationControls() -> NSStackView
+	private func makeNavigationControls() -> NSView
 	{
-		makeToolbarControlStack([
-			makeToolbarButton(
-				image: DesktopIcons.image(
-					.arrowLeft,
-					size: 14
+		// Preserve the removed New chat control's space so other toolbar items stay fixed.
+		let trailingSpace = NSView()
+		trailingSpace.setAccessibilityElement(false)
+		trailingSpace.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)
+			.isActive = true
+		trailingSpace.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)
+			.isActive = true
+		let sidebarButton = makeToolbarButton(
+			image: DesktopIcons.image(.sidebar),
+			label: "Toggle sidebar"
+		)
+		sidebarButton.target = self
+		sidebarButton.action = #selector(toggleSidebar)
+		return makeToolbarControlStack(
+			[
+				makeToolbarButton(
+					image: DesktopIcons.image(
+						.arrowLeftLg,
+						size: 16
+					),
+					label: "Back",
+					isEnabled: false
 				),
-				label: "Back",
-				isEnabled: false
-			),
-			makeToolbarButton(
-				image: DesktopIcons.image(
-					.arrowRight,
-					size: 14
+				makeToolbarButton(
+					image: DesktopIcons.image(
+						.arrowRightLg,
+						size: 16
+					),
+					label: "Forward",
+					isEnabled: false
 				),
-				label: "Forward",
-				isEnabled: false
-			),
-			makeToolbarButton(
-				image: DesktopIcons.image(.sidebar),
-				label: "Toggle sidebar",
-				isEnabled: false
-			),
-		])
+				sidebarButton,
+				trailingSpace,
+			],
+			leadingInset: -1,
+			trailingInset: -2
+		)
 	}
 
-	private func makeTrailingControls() -> NSStackView
+	private func makeTrailingControls() -> NSView
 	{
-		makeToolbarControlStack([
-			makeToolbarButton(
-				image: PinnedSummaryIcons.image(.ellipsis),
-				label: "More options",
-				isEnabled: false
-			),
-			summaryToggleButton,
-			toolsToolbar.closedSeparator,
-			toolsToolbar.openButton,
-		])
+		makeToolbarControlStack(
+			[
+				makeToolbarButton(
+					image: PinnedSummaryIcons.image(.ellipsis),
+					label: "More options",
+					isEnabled: false
+				),
+				summaryToggleButton,
+				toolsToolbar.closedSeparator,
+				toolsToolbar.openButton,
+			],
+			leadingInset: 3,
+			trailingInset: -3
+		)
 	}
 
 	func updateToolsToolbarControls(allowDuringExpansion: Bool = false)
@@ -496,7 +527,11 @@ extension MainWindowController
 		updateToolsToolbarControls()
 	}
 
-	private func makeToolbarControlStack(_ controls: [NSView]) -> NSStackView
+	private func makeToolbarControlStack(
+		_ controls: [NSView],
+		leadingInset: CGFloat,
+		trailingInset: CGFloat
+	) -> NSView
 	{
 		let stack = NSStackView(views: controls)
 		stack.orientation = .horizontal
@@ -507,8 +542,27 @@ extension MainWindowController
 			.required,
 			for: .horizontal
 		)
-		stack.heightAnchor.constraint(equalToConstant: ToolbarLayout.rowHeight).isActive = true
-		return stack
+		let host = NSView()
+		host.setAccessibilityElement(false)
+		stack.translatesAutoresizingMaskIntoConstraints = false
+		host.addSubview(stack)
+		NSLayoutConstraint.activate([
+			host.heightAnchor.constraint(equalToConstant: ToolbarLayout.rowHeight),
+			stack.heightAnchor.constraint(equalToConstant: ToolbarLayout.rowHeight),
+			stack.leadingAnchor.constraint(
+				equalTo: host.leadingAnchor,
+				constant: leadingInset
+			),
+			stack.trailingAnchor.constraint(
+				equalTo: host.trailingAnchor,
+				constant: -trailingInset
+			),
+			stack.centerYAnchor.constraint(
+				equalTo: host.centerYAnchor,
+				constant: 2
+			),
+		])
+		return host
 	}
 
 	private func makeDisabledToolbarItem(
@@ -537,7 +591,7 @@ extension MainWindowController
 		isEnabled: Bool = true
 	) -> NSButton
 	{
-		let button = NSButton(
+		let button = DesktopHoverButton(
 			title: "",
 			target: nil,
 			action: nil
@@ -546,7 +600,8 @@ extension MainWindowController
 		button.isBordered = false
 		button.image = image
 		button.imagePosition = .imageOnly
-		button.contentTintColor = .labelColor
+		button.contentTintColor = AppKitColorTokens.secondaryText
+		button.cornerRadius = ShapeTokens.Toolbar.controlRadius
 		button.isEnabled = isEnabled
 		button.toolTip = label
 		button.setAccessibilityLabel(label)

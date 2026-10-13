@@ -105,7 +105,8 @@ struct DesktopLayoutTests
 			selectedModelID: model.id,
 			selectedEffort: "high",
 			pendingInteractions: [],
-			recentProjects: []
+			recentProjects: [],
+			pinnedTasks: [thread]
 		)
 		controller.renderSnapshot(snapshot)
 		controller.showWindow(nil)
@@ -184,13 +185,58 @@ struct DesktopLayoutTests
 				}
 			}
 		}
-		controller.paneController.setSidebarCollapsed(true)
+		let navigationItem = try #require(window.toolbar?.items.first
+		{
+			$0.itemIdentifier == MainWindowController.ToolbarItem.navigationControls
+		})
+		let navigationHost = try #require(navigationItem.view)
+		let sidebarButton = try #require(navigationHost.subviews
+			.flatMap
+			{
+				$0.subviews
+			}.compactMap
+			{
+				$0 as? NSButton
+			}.first
+			{
+				$0.toolTip == "Toggle sidebar"
+			})
+		let navigationButtons = navigationHost.subviews.flatMap
+		{
+			$0.subviews
+		}
+		.compactMap
+		{
+			$0 as? NSButton
+		}
+		#expect(navigationButtons.count == 3)
+		#expect(!navigationButtons.contains
+		{
+			$0.toolTip == "New chat"
+		})
+		#expect(abs(navigationHost.bounds.width - 127) < 0.5)
+		for (index, button) in navigationButtons.enumerated()
+		{
+			let frame = button.convert(
+				button.bounds,
+				to: navigationHost
+			)
+			#expect(abs(frame.minX - (CGFloat(index) * 34 - 1)) < 0.5)
+			#expect(frame.size == NSSize(
+				width: 28,
+				height: 28
+			))
+		}
+		#expect(sidebarButton.isEnabled)
+		let navigationWidth = split.splitViewItems[0].viewController.view.frame.width
+		sidebarButton.performClick(nil)
 		window.layoutIfNeeded()
 		#expect(split.splitViewItems[0].isCollapsed)
 		#expect(controller.statusButton.window === window)
 		#expect(!controller.statusButton.isHiddenOrHasHiddenAncestor)
-		controller.paneController.setSidebarCollapsed(false)
+		sidebarButton.performClick(nil)
 		window.layoutIfNeeded()
 		#expect(!split.splitViewItems[0].isCollapsed)
+		#expect(abs(split.splitViewItems[0].viewController.view.frame.width - navigationWidth) < 1)
 	}
 }

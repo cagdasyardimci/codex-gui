@@ -37,16 +37,13 @@ final class PinnedSummaryToggleButton: NSButton
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		if isHovered || isHighlighted
+		if state == .on || isHovered || isHighlighted
 		{
-			NSColor.labelColor.withAlphaComponent(0.1).setFill()
+			AppKitColorTokens.toggleHighlight.setFill()
 			NSBezierPath(
-				roundedRect: bounds.insetBy(
-					dx: 1,
-					dy: 1
-				),
-				xRadius: 10,
-				yRadius: 10
+				roundedRect: bounds,
+				xRadius: ShapeTokens.Toolbar.summaryToggleRadius,
+				yRadius: ShapeTokens.Toolbar.summaryToggleRadius
 			).fill()
 		}
 		super.draw(dirtyRect)
