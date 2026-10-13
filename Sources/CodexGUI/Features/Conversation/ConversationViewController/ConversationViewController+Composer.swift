@@ -82,6 +82,10 @@ extension ConversationViewController
 			[weak self] in
 			self?.modelEffortPopover?.reposition()
 		}
+		modelEffortController.onModelListPresentationChange =
+		{
+			[weak self] in self?.refreshModelEffortButton()
+		}
 
 		approvalPolicyButton.target = self
 		approvalPolicyButton.action = #selector(showApprovalPolicy)
@@ -535,7 +539,8 @@ extension ConversationViewController
 			summary: latestModelEffortSummary,
 			effortTitle: latestModelEffortTitle,
 			fastMode: latestFastMode,
-			isPickerPresented: modelEffortPopover?.isShown == true
+			isPickerPresented: modelEffortPopover?.isShown == true,
+			isModelListPresented: modelEffortController.isShowingModelList
 		)
 	}
 
@@ -555,6 +560,8 @@ extension ConversationViewController
 				shadowOutset: LayoutTokens.ModelPopover.shadowOutset
 			)
 			popover.anchorSpacing = LayoutTokens.ModelPopover.anchorSpacing
+			popover.limitsHeightToSpaceAboveAnchor = true
+			popover.focusAfterDismissal = composer
 			popover.onPresentationChange =
 			{
 				[weak self] presented in

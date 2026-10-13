@@ -61,3 +61,6 @@ width while the effort picker is open.
 
 The effort popover owns its visual-effect backdrop and surface shadow. Its transparent
 panel padding accommodates that shadow without adding a second native window shadow.
+
+Model selection replaces the effort content in the same panel. Long model lists scroll;
+Escape dismisses the panel and returns focus to the composer.

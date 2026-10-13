@@ -10,6 +10,7 @@ final class ModelEffortSelectionButton: NSButton
 	private var effortTitle: String?
 	private var fastMode = false
 	private var isPickerPresented = false
+	private var isModelListPresented = false
 	private weak var observedWindow: NSWindow?
 
 	override init(frame frameRect: NSRect)
@@ -58,7 +59,8 @@ final class ModelEffortSelectionButton: NSButton
 		summary: String?,
 		effortTitle: String? = nil,
 		fastMode: Bool,
-		isPickerPresented: Bool
+		isPickerPresented: Bool,
+		isModelListPresented: Bool = false
 	)
 	{
 		self.summary = summary.flatMap
@@ -68,6 +70,7 @@ final class ModelEffortSelectionButton: NSButton
 		self.effortTitle = effortTitle
 		self.fastMode = fastMode
 		self.isPickerPresented = isPickerPresented
+		self.isModelListPresented = isModelListPresented
 		title = displayedTitle
 
 		let selectionDescription = self.summary ?? "Select effort"
@@ -82,12 +85,12 @@ final class ModelEffortSelectionButton: NSButton
 
 	private var displayedTitle: String
 	{
-		isPickerPresented ? "Select effort" : summary ?? "Select effort"
+		isPickerPresented && !isModelListPresented ? "Select effort" : summary ?? "Select effort"
 	}
 
 	private var displaysBolt: Bool
 	{
-		fastMode && !isPickerPresented && summary != nil
+		fastMode && (!isPickerPresented || isModelListPresented) && summary != nil
 	}
 
 	private var textFont: NSFont
@@ -193,12 +196,12 @@ final class ModelEffortSelectionButton: NSButton
 			string: displayedTitle,
 			attributes: [
 				.font: textFont,
-				.foregroundColor: isEnabled && !isPickerPresented
+				.foregroundColor: isEnabled && (!isPickerPresented || isModelListPresented)
 					? AppKitColorTokens.primaryText : tint,
 				.paragraphStyle: paragraphStyle,
 			]
 		)
-		if !isPickerPresented,
+		if !isPickerPresented || isModelListPresented,
 			let effortTitle, displayedTitle.hasSuffix(" " + effortTitle)
 		{
 			let effortRange = NSRange(

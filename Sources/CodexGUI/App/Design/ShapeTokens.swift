@@ -112,4 +112,9 @@ enum ShapeTokens
 		}
 	}
 
+	enum ModelList
+	{
+		static let rowRadius: CGFloat = 15
+	}
+
 }

@@ -8,6 +8,8 @@ final class ModelEffortPopoverView: NSViewController
 	var onSelectEffort: ((String?) -> Void)?
 	var onSetFastMode: ((Bool) -> Void)?
 	var onPreferredContentSizeChange: (() -> Void)?
+	var onModelListPresentationChange: (() -> Void)?
+	private(set) var isShowingModelList = false
 
 	private var models: [ModelOption] = []
 	private var selectedModelID: String?
@@ -35,6 +37,7 @@ final class ModelEffortPopoverView: NSViewController
 	private var effectiveEffort: String?
 	private var presented = false
 	private var showsAvailabilityWarning = false
+	let modelList = ModelPickerListView()
 
 	init()
 	{
@@ -62,6 +65,18 @@ final class ModelEffortPopoverView: NSViewController
 		configureSlider()
 		configureAvailabilityLabel()
 		installControls(in: surface)
+		AppKitLayout.pin(
+			modelList,
+			to: surface,
+			inset: 0
+		)
+		modelList.isHidden = true
+		modelList.onSelect =
+		{
+			[weak self] modelID in
+			self?.onSelectModel?(modelID)
+			self?.setModelListVisible(false)
+		}
 		view = surface
 		observeVisibilityChanges()
 	}
@@ -254,10 +269,21 @@ final class ModelEffortPopoverView: NSViewController
 	func setPresented(_ presented: Bool)
 	{
 		self.presented = presented
+		if !presented, isShowingModelList
+		{
+			setModelListVisible(false)
+		}
 		updateAnimationVisibility()
 		if presented
 		{
-			view.window?.makeFirstResponder(slider.isEnabled ? slider : modelMenuButton)
+			if isShowingModelList
+			{
+				modelList.focusSelectedRow()
+			}
+			else
+			{
+				view.window?.makeFirstResponder(slider.isEnabled ? slider : modelMenuButton)
+			}
 		}
 	}
 
@@ -287,6 +313,11 @@ final class ModelEffortPopoverView: NSViewController
 		slider.ultraSelected = effectiveEffort == "ultra"
 		updateFastModeControls()
 		updateAnimationVisibility()
+		if isShowingModelList
+		{
+			renderModelList()
+			updatePreferredContentSize()
+		}
 		slider.needsDisplay = true
 	}
 
@@ -372,7 +403,7 @@ final class ModelEffortPopoverView: NSViewController
 
 		let showsWarning = !availabilityLabel.stringValue.isEmpty
 		showsAvailabilityWarning = showsWarning
-		availabilityLabel.isHidden = !showsWarning
+		availabilityLabel.isHidden = isShowingModelList || !showsWarning
 		availabilityHeight?.constant = showsWarning ? LayoutTokens.ModelPopover.warningHeight : 0
 		updatePreferredContentSize()
 	}
@@ -381,7 +412,8 @@ final class ModelEffortPopoverView: NSViewController
 	{
 		let size = NSSize(
 			width: LayoutTokens.ModelPopover.width,
-			height: Self.preferredHeight(showsWarning: showsAvailabilityWarning)
+			height: isShowingModelList ? modelList.preferredHeight
+				: Self.preferredHeight(showsWarning: showsAvailabilityWarning)
 		)
 		if preferredContentSize != size
 		{
@@ -443,33 +475,75 @@ final class ModelEffortPopoverView: NSViewController
 			.firstIndex(of: effort) ?? 100
 	}
 
-	private func modelMenuChoices() -> [(id: String?, title: String)]
+	private func modelMenuChoices() -> [ModelPickerChoice]
 	{
-		var choices: [(id: String?, title: String)] = [(nil, "Default model")]
+		var choices = [ModelPickerChoice(
+			id: nil,
+			title: "Default"
+		)]
 		choices.append(contentsOf: models.map
 		{
-			($0.id, $0.displayName)
+			ModelPickerChoice(
+				id: $0.id,
+				title: $0.displayName
+			)
 		})
 		if let selectedModelID, !models.contains(where:
 			{
 				$0.id == selectedModelID
 			})
 		{
-			choices.append((selectedModelID, "Unavailable: \(selectedModelID)"))
+			choices.append(ModelPickerChoice(
+				id: selectedModelID,
+				title: "Unavailable: \(selectedModelID)"
+			))
 		}
 		return choices
 	}
 
 	@objc private func showModelMenu()
 	{
-		makeModelMenu().popUp(
-			positioning: nil,
-			at: NSPoint(
-				x: 0,
-				y: modelMenuButton.bounds.minY
-			),
-			in: modelMenuButton
+		showModelList()
+	}
+
+	func showModelList()
+	{
+		_ = view
+		renderModelList()
+		setModelListVisible(true)
+	}
+
+	private func renderModelList()
+	{
+		modelList.render(
+			choices: modelMenuChoices(),
+			selectedID: selectedModelID
 		)
+	}
+
+	private func setModelListVisible(_ visible: Bool)
+	{
+		isShowingModelList = visible
+		modelList.isHidden = !visible
+		for control in [fastButton, resetButton, effortLabel, modelMenuButton, slider]
+		{
+			control.isHidden = visible
+		}
+		availabilityLabel.isHidden = visible || !showsAvailabilityWarning
+		updatePreferredContentSize()
+		updateAnimationVisibility()
+		onModelListPresentationChange?()
+		if presented
+		{
+			if visible
+			{
+				modelList.focusSelectedRow()
+			}
+			else
+			{
+				view.window?.makeFirstResponder(slider.isEnabled ? slider : modelMenuButton)
+			}
+		}
 	}
 
 	@objc private func selectSliderEffort()
@@ -516,40 +590,7 @@ final class ModelEffortPopoverView: NSViewController
 	private func updateAnimationVisibility()
 	{
 		slider.isPresented =
-			presented && view.window?.isVisible == true
+			presented && !isShowingModelList && view.window?.isVisible == true
 				&& view.window?.occlusionState.contains(.visible) == true
 	}
-	func makeModelMenu() -> NSMenu
-	{
-		let menu = NSMenu()
-		menu.autoenablesItems = false
-		let choices = modelMenuChoices()
-		for (index, choice) in choices.enumerated()
-		{
-			let item = NSMenuItem(
-				title: choice.title,
-				action: #selector(selectModelItem(_:)),
-				keyEquivalent: ""
-			)
-			item.target = self
-			item.tag = index
-			item.representedObject = choice.id
-			item.state = choice.id == selectedModelID ? .on : .off
-			menu.addItem(item)
-		}
-		return menu
-	}
-
-	@objc private func selectModelItem(_ sender: NSMenuItem)
-	{
-		if sender.tag == 0
-		{
-			onSelectModel?(nil)
-		}
-		else if let identifier = sender.representedObject as? String
-		{
-			onSelectModel?(identifier)
-		}
-	}
-
 }

@@ -154,6 +154,136 @@ struct ModelEffortPopoverViewTests
 		#expect(slider.doubleValue == slider.tickMarkValue(at: 0))
 	}
 
+	@Test func presentedListActionsEmitModelIDsAndBackendDefaultDirectly() throws
+	{
+		_ = NSApplication.shared
+		let picker = ModelEffortPopoverView()
+		let models = try modelOptions()
+		var selections: [String?] = []
+		picker.onSelectModel =
+		{
+			selections.append($0)
+		}
+		picker.render(
+			models: models,
+			selectedModelID: "second",
+			selectedEffort: nil,
+			fastMode: false
+		)
+
+		picker.showModelList()
+		let menu = picker.modelList
+		#expect(menu.rows.map(\.title) == ["Default", "First model", "Second model"])
+		#expect(menu.rows.map(\.state) == [.off, .off, .on])
+		let first = menu.rows[1]
+		#expect(NSApp.sendAction(
+			try #require(first.action),
+			to: first.target,
+			from: first
+		))
+		picker.showModelList()
+		let backendDefault = picker.modelList.rows[0]
+		#expect(
+			NSApp.sendAction(
+				try #require(backendDefault.action),
+				to: backendDefault.target,
+				from: backendDefault
+			)
+		)
+		#expect(selections.count == 2)
+		#expect(selections[0] == "first")
+		#expect(selections[1] == nil)
+
+		picker.render(
+			models: models,
+			selectedModelID: nil,
+			selectedEffort: nil,
+			fastMode: false
+		)
+		picker.showModelList()
+		#expect(picker.modelList.rows.map(\.state) == [.on, .off, .off])
+		#expect(label(
+			in: picker.view,
+			accessibilityLabel: "Selected reasoning effort"
+		) == "High")
+		#expect(
+			button(
+				in: picker.view,
+				accessibilityLabel: "Choose Codex model"
+			)?
+				.title == "Default model"
+		)
+	}
+
+	@Test func unavailableSavedModelRemainsVisibleAndCanBeReplaced() throws
+	{
+		_ = NSApplication.shared
+		let picker = ModelEffortPopoverView()
+		var selections: [String?] = []
+		#expect(picker.preferredContentSize.height == 96)
+		picker.onSelectModel =
+		{
+			selections.append($0)
+		}
+		let models = try modelOptions()
+		picker.render(
+			models: models,
+			selectedModelID: "missing",
+			selectedEffort: "ultra",
+			fastMode: true
+		)
+		#expect(picker.preferredContentSize.height == 132)
+		picker.showModelList()
+		let menu = picker.modelList
+		#expect(
+			menu.rows.map(\.title) == [
+				"Default",
+				"First model",
+				"Second model",
+				"Unavailable: missing",
+			]
+		)
+		#expect(menu.rows.map(\.state) == [.off, .off, .off, .on])
+		#expect(
+			button(
+				in: picker.view,
+				accessibilityLabel: "Choose Codex model"
+			)?.title
+				== "Unavailable: missing"
+		)
+		#expect(label(
+			in: picker.view,
+			accessibilityLabel: "Selected reasoning effort"
+		) == "Ultra")
+		#expect(button(
+			in: picker.view,
+			accessibilityLabel: "Disable fast mode"
+		)?.state == .on)
+		let replacement = menu.rows[2]
+		#expect(
+			NSApp.sendAction(
+				try #require(replacement.action),
+				to: replacement.target,
+				from: replacement
+			)
+		)
+		#expect(selections == ["second"])
+		picker.render(
+			models: models,
+			selectedModelID: "second",
+			selectedEffort: nil,
+			fastMode: true
+		)
+		picker.showModelList()
+		#expect(picker.modelList.rows.count == 3)
+		picker.setPresented(false)
+		#expect(picker.preferredContentSize.height == 96)
+		#expect(label(
+			in: picker.view,
+			accessibilityLabel: "Selected reasoning effort"
+		) == "Light")
+	}
+
 	private func modelOptions() throws -> [ModelOption]
 	{
 		let jsonModels: [[String: Any]] = [
@@ -216,125 +346,4 @@ struct ModelEffortPopoverViewTests
 			)
 		}.first
 	}
-	@Test func presentedMenuActionsEmitModelIDsAndBackendDefaultDirectly() throws
-	{
-		_ = NSApplication.shared
-		let picker = ModelEffortPopoverView()
-		let models = try modelOptions()
-		var selections: [String?] = []
-		picker.onSelectModel =
-		{
-			selections.append($0)
-		}
-		picker.render(
-			models: models,
-			selectedModelID: "second",
-			selectedEffort: nil,
-			fastMode: false
-		)
-
-		let menu = picker.makeModelMenu()
-		#expect(menu.items.map(\.title) == ["Default model", "First model", "Second model"])
-		#expect(menu.items.map(\.state) == [.off, .off, .on])
-		let first = menu.items[1]
-		#expect(NSApp.sendAction(
-			try #require(first.action),
-			to: first.target,
-			from: first
-		))
-		let backendDefault = menu.items[0]
-		#expect(
-			NSApp.sendAction(
-				try #require(backendDefault.action),
-				to: backendDefault.target,
-				from: backendDefault
-			)
-		)
-		#expect(selections.count == 2)
-		#expect(selections[0] == "first")
-		#expect(selections[1] == nil)
-
-		picker.render(
-			models: models,
-			selectedModelID: nil,
-			selectedEffort: nil,
-			fastMode: false
-		)
-		#expect(picker.makeModelMenu().items.map(\.state) == [.on, .off, .off])
-		#expect(label(
-			in: picker.view,
-			accessibilityLabel: "Selected reasoning effort"
-		) == "High")
-		#expect(
-			button(
-				in: picker.view,
-				accessibilityLabel: "Choose Codex model"
-			)?
-				.title == "Default model"
-		)
-	}
-
-	@Test func unavailableSavedModelRemainsVisibleAndCanBeReplaced() throws
-	{
-		_ = NSApplication.shared
-		let picker = ModelEffortPopoverView()
-		var selections: [String?] = []
-		picker.onSelectModel =
-		{
-			selections.append($0)
-		}
-		let models = try modelOptions()
-		picker.render(
-			models: models,
-			selectedModelID: "missing",
-			selectedEffort: "ultra",
-			fastMode: true
-		)
-		let menu = picker.makeModelMenu()
-		#expect(
-			menu.items.map(\.title) == [
-				"Default model",
-				"First model",
-				"Second model",
-				"Unavailable: missing",
-			]
-		)
-		#expect(menu.items.map(\.state) == [.off, .off, .off, .on])
-		#expect(
-			button(
-				in: picker.view,
-				accessibilityLabel: "Choose Codex model"
-			)?.title
-				== "Unavailable: missing"
-		)
-		#expect(label(
-			in: picker.view,
-			accessibilityLabel: "Selected reasoning effort"
-		) == "Ultra")
-		#expect(button(
-			in: picker.view,
-			accessibilityLabel: "Disable fast mode"
-		)?.state == .on)
-		let replacement = menu.items[2]
-		#expect(
-			NSApp.sendAction(
-				try #require(replacement.action),
-				to: replacement.target,
-				from: replacement
-			)
-		)
-		#expect(selections == ["second"])
-		picker.render(
-			models: models,
-			selectedModelID: "second",
-			selectedEffort: nil,
-			fastMode: true
-		)
-		#expect(picker.makeModelMenu().items.count == 3)
-		#expect(label(
-			in: picker.view,
-			accessibilityLabel: "Selected reasoning effort"
-		) == "Light")
-	}
-
 }
