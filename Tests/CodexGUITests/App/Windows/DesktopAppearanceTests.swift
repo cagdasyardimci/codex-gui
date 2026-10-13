@@ -6,6 +6,78 @@ import Testing
 @Suite(.serialized) @MainActor
 struct DesktopAppearanceTests
 {
+	@Test func retainedSurfaceShadowsFollowAppearanceAndResizeWithoutReplacingLayers() throws
+	{
+		_ = NSApplication.shared
+		let window = makeWindow()
+		defer
+		{
+			window.close()
+		}
+		let surface = DesktopSurface(
+			AppKitColorTokens.composer,
+			cornerRadius: 22,
+			shadows: ShadowTokens.composer
+		)
+		surface.frame = NSRect(
+			x: 0,
+			y: 0,
+			width: 220,
+			height: 100
+		)
+		window.contentView?.addSubview(surface)
+		let editor = NSTextView(frame: NSRect(
+			x: 12,
+			y: 12,
+			width: 180,
+			height: 60
+		))
+		editor.string = "Retained draft"
+		surface.addSubview(editor)
+		#expect(window.makeFirstResponder(editor))
+		editor.setSelectedRange(NSRange(
+			location: 2,
+			length: 4
+		))
+		let layers = try #require(surface.layer?.sublayers)
+		try #require(layers.count >= 2)
+		let shadows = Array(layers.prefix(2))
+		for name: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
+		{
+			window.appearance = NSAppearance(named: name)
+			surface.setFrameSize(NSSize(
+				width: name == .aqua ? 240 : 280,
+				height: 100
+			))
+			surface.layoutSubtreeIfNeeded()
+			let broadShadow = try #require(shadows.first
+			{
+				$0.shadowRadius == 40
+			})
+			let color = try #require(broadShadow.shadowColor.flatMap
+			{
+				NSColor(cgColor: $0)
+			})
+			#expect(abs(color.alphaComponent - (name == .aqua ? 0.024 : 0)) < 0.001)
+			#expect(broadShadow.frame == surface.bounds)
+			#expect(broadShadow.shadowPath?.boundingBox.width == surface.bounds.width + 16)
+			#expect(window.firstResponder === editor)
+			#expect(editor.string == "Retained draft")
+			#expect(editor.selectedRange() == NSRange(
+				location: 2,
+				length: 4
+			))
+			#expect(shadows.allSatisfy
+			{
+				shadow in
+				surface.layer?.sublayers?.contains
+				{
+					$0 === shadow
+				} == true
+			})
+		}
+	}
+
 	@Test func layerButtonFollowsItsWindowAndRetainsInteractionState() throws
 	{
 		_ = NSApplication.shared

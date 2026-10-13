@@ -37,7 +37,7 @@ struct DesktopTokenIntegrationTests
 			.white,
 			cornerRadius: 16
 		)
-		#expect(flat.isOpaque)
+		#expect(!flat.isOpaque)
 		#expect(!rounded.isOpaque)
 	}
 

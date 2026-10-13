@@ -41,6 +41,16 @@ enum AppKitShadowRenderer
 			),
 			transform: nil
 		)
+		if style.inset
+		{
+			applyInsetPath(
+				style,
+				to: layer,
+				cornerRadius: cornerRadius
+			)
+			CATransaction.commit()
+			return
+		}
 		// Sublayer shadows otherwise cover their owner's fill. Keep only the outside portion.
 		let mask = layer.mask as? CAShapeLayer ?? CAShapeLayer()
 		let outset = style.blur + abs(style.spread) + abs(style.offsetY) + 4
@@ -63,5 +73,55 @@ enum AppKitShadowRenderer
 		mask.fillColor = NSColor.black.cgColor
 		layer.mask = mask
 		CATransaction.commit()
+	}
+	/// A reversed rounded hole casts into the surface; its mask keeps the shadow inside.
+	private static func applyInsetPath(
+		_ style: ShadowTokens.Style,
+		to layer: CALayer,
+		cornerRadius: CGFloat
+	)
+	{
+		let outset = style.blur + abs(style.spread) + abs(style.offsetY) + 4
+		let shadowPath = CGMutablePath()
+		shadowPath.addRect(layer.bounds.insetBy(
+			dx: -outset,
+			dy: -outset
+		))
+		var reversed = CGAffineTransform(
+			a: -1,
+			b: 0,
+			c: 0,
+			d: 1,
+			tx: 2 * layer.bounds.midX,
+			ty: 0
+		)
+		let hole = CGPath(
+			roundedRect: layer.bounds.insetBy(
+				dx: style.spread,
+				dy: style.spread
+			),
+			cornerWidth: max(
+				0,
+				cornerRadius - style.spread
+			),
+			cornerHeight: max(
+				0,
+				cornerRadius - style.spread
+			),
+			transform: &reversed
+		)
+		shadowPath.addPath(hole)
+		layer.shadowPath = shadowPath
+		let mask = layer.mask as? CAShapeLayer ?? CAShapeLayer()
+		mask.frame = layer.bounds
+		mask.path = CGPath(
+			roundedRect: mask.bounds,
+			cornerWidth: cornerRadius,
+			cornerHeight: cornerRadius,
+			transform: nil
+		)
+		mask.fillRule = .nonZero
+		mask.fillColor = NSColor.black.cgColor
+		layer.mask = mask
 	}
 }

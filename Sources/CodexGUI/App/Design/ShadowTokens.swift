@@ -11,18 +11,21 @@ enum ShadowTokens
 		let offsetY: CGFloat
 		let blur: CGFloat
 		let spread: CGFloat
+		let inset: Bool
 
 		init(
 			color: NSColor,
 			offsetY: CGFloat,
 			blur: CGFloat,
-			spread: CGFloat = 0
+			spread: CGFloat = 0,
+			inset: Bool = false
 		)
 		{
 			self.color = color
 			self.offsetY = offsetY
 			self.blur = blur
 			self.spread = spread
+			self.inset = inset
 		}
 	}
 

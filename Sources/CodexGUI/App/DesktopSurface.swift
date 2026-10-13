@@ -1,20 +1,23 @@
 import AppKit
 
 @MainActor
-final class DesktopSurface: NSView
+class DesktopSurface: NSView
 {
 	private let color: NSColor
 	private let cornerRadius: CGFloat
 	private let bordered: Bool
 	private let borderWidth: CGFloat
 	private let borderColor: NSColor
+	private let shadows: [ShadowTokens.Style]
+	private var shadowLayers: [CALayer] = []
 
 	init(
 		_ color: NSColor,
 		cornerRadius: CGFloat = 0,
 		bordered: Bool = false,
 		borderWidth: CGFloat = 1,
-		borderColor: NSColor? = nil
+		borderColor: NSColor? = nil,
+		shadows: [ShadowTokens.Style] = []
 	)
 	{
 		self.color = color
@@ -22,7 +25,21 @@ final class DesktopSurface: NSView
 		self.bordered = bordered
 		self.borderWidth = borderWidth
 		self.borderColor = borderColor ?? AppKitColorTokens.border
+		self.shadows = shadows
 		super.init(frame: .zero)
+		if !shadows.isEmpty
+		{
+			wantsLayer = true
+			for _ in shadows
+			{
+				let shadow = CALayer()
+				layer?.insertSublayer(
+					shadow,
+					at: 0
+				)
+				shadowLayers.append(shadow)
+			}
+		}
 	}
 
 	required init?(coder: NSCoder)
@@ -32,13 +49,36 @@ final class DesktopSurface: NSView
 
 	override var isOpaque: Bool
 	{
-		cornerRadius == 0
+		false
 	}
 
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
+		updateShadows()
 		needsDisplay = true
+	}
+
+	override func layout()
+	{
+		super.layout()
+		updateShadows()
+	}
+
+	private func updateShadows()
+	{
+		for (shadow, layer) in zip(
+			shadows,
+			shadowLayers
+		)
+		{
+			AppKitShadowRenderer.apply(
+				shadow,
+				to: layer,
+				in: self,
+				cornerRadius: cornerRadius
+			)
+		}
 	}
 
 	override func draw(_ dirtyRect: NSRect)

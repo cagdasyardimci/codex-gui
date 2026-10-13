@@ -123,7 +123,7 @@ enum DesktopIcons
 		)
 	}
 
-	private static func draw(
+	static func draw(
 		_ source: NSImage,
 		in rect: NSRect,
 		tint: NSColor
