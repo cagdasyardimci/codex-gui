@@ -55,9 +55,9 @@ struct ConversationStartupLayoutTests
 		view.layoutSubtreeIfNeeded()
 		#expect(controller.requestDetailsScrollView.isHidden)
 		#expect(controller.conversationScrollView.frame.height >= 64)
-		#expect(controller.composerScrollView.frame.height >= 46)
-		#expect(controller.addContextButton.frame.height == 24)
-		#expect(controller.approvalPolicyButton.frame.height == 24)
+		#expect(controller.composerScrollView.frame.height >= 44)
+		#expect(controller.addContextButton.frame.height == 28)
+		#expect(controller.approvalPolicyButton.frame.height == 28)
 		#expect(controller.modelEffortButton.frame.height == 28)
 		#expect(controller.sendButton.frame.height == 28)
 	}

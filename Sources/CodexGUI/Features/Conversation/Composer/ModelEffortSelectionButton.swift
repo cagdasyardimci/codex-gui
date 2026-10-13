@@ -3,62 +3,8 @@ import AppKit
 @MainActor
 final class ModelEffortSelectionButton: NSButton
 {
-	private enum LayoutMetrics
-	{
-		static var totalHorizontalAllowance: CGFloat
-		{
-			LayoutTokens.modelSelector.totalHorizontalAllowance
-		}
-		static var buttonHeight: CGFloat
-		{
-			LayoutTokens.composer.controlHeight
-		}
-		static var maximumWidth: CGFloat
-		{
-			LayoutTokens.modelSelector.maximumWidth
-		}
-		static var pickerMinimumWidth: CGFloat
-		{
-			LayoutTokens.modelSelector.pickerMinimumWidth
-		}
-		static var boltSize: NSSize
-		{
-			LayoutTokens.modelSelector.boltSize
-		}
-		static var boltToTitleSpacing: CGFloat
-		{
-			LayoutTokens.modelSelector.boltToTitleSpacing
-		}
-		static var titleToChevronSpacing: CGFloat
-		{
-			LayoutTokens.modelSelector.titleToChevronSpacing
-		}
-		static let chevronArmWidth: CGFloat = 3
-		// Preserve the existing extra point beyond the chevron's 8-point span.
-		static let chevronExtraWidthAllowance: CGFloat = 1
-
-		static var boltReservedWidth: CGFloat
-		{
-			boltSize.width + boltToTitleSpacing
-		}
-
-		static var chevronSpanWidth: CGFloat
-		{
-			chevronArmWidth * 2
-		}
-
-		static var trailingReservedWidth: CGFloat
-		{
-			LayoutTokens.modelSelector.trailingReservedWidth
-		}
-	}
-
-	private struct ContentLayout
-	{
-		let boltRect: NSRect
-		let textRect: NSRect
-		let chevronOriginX: CGFloat
-	}
+	private let contentLayout: ModelSelectorLayout
+	private typealias ContentLayout = ModelSelectorLayout.Content
 
 	private var summary: String?
 	private var effortTitle: String?
@@ -68,8 +14,28 @@ final class ModelEffortSelectionButton: NSButton
 
 	override init(frame frameRect: NSRect)
 	{
+		contentLayout = ModelSelectorLayout()
 		super.init(frame: frameRect)
+		configure()
+	}
 
+	init(metrics: LayoutTokens.ModelSelector)
+	{
+		contentLayout = ModelSelectorLayout(metrics: metrics)
+		super.init(frame: .zero)
+		configure()
+	}
+
+	private func configure()
+	{
+		precondition(
+			contentLayout.metrics.isValid,
+			"Invalid model selector metrics"
+		)
+		precondition(
+			contentLayout.fits(controlHeight: LayoutTokens.composer.controlHeight),
+			"Model artwork must fit its control height"
+		)
 		isBordered = false
 		bezelStyle = .inline
 		focusRingType = .none
@@ -134,29 +100,24 @@ final class ModelEffortSelectionButton: NSButton
 		(displayedTitle as NSString).size(withAttributes: [.font: textFont])
 	}
 
-	private var leadingReservedWidth: CGFloat
-	{
-		displaysBolt ? LayoutMetrics.boltReservedWidth : 0
-	}
-
 	override var intrinsicContentSize: NSSize
 	{
-		let contentWidth = ceil(naturalTextSize.width)
-			+ LayoutMetrics.totalHorizontalAllowance
-			+ LayoutMetrics.trailingReservedWidth
-			+ leadingReservedWidth
-		let minimumWidth: CGFloat = isPickerPresented ? LayoutMetrics.pickerMinimumWidth : 1
-		let buttonWidth = min(
-			LayoutMetrics.maximumWidth,
-			max(
-				minimumWidth,
-				contentWidth
-			)
+		let summaryWidth = ((summary ?? "Select effort") as NSString)
+			.size(withAttributes: [.font: textFont]).width
+		let closedWidth = contentLayout.requestedWidth(
+			titleWidth: summaryWidth,
+			displaysBolt: fastMode && summary != nil
 		)
-
+		let displayedWidth = contentLayout.requestedWidth(
+			titleWidth: naturalTextSize.width,
+			displaysBolt: displaysBolt
+		)
 		return NSSize(
-			width: buttonWidth,
-			height: LayoutMetrics.buttonHeight
+			width: isPickerPresented ? max(
+				closedWidth,
+				displayedWidth
+			) : closedWidth,
+			height: LayoutTokens.composer.controlHeight
 		)
 	}
 
@@ -173,18 +134,19 @@ final class ModelEffortSelectionButton: NSButton
 
 		if shouldDrawSelectionBackground
 		{
-			AppKitColorTokens.selection.setFill()
+			AppKitColorTokens.rowHighlight.setFill()
 			selectionOutline().fill()
 		}
 
-		let tint: NSColor = isEnabled ? .secondaryLabelColor : .tertiaryLabelColor
+		let tint: NSColor = isEnabled ? AppKitColorTokens.secondaryText : AppKitColorTokens
+			.mutedText
 		let layout = makeContentLayout()
 
 		if displaysBolt
 		{
 			drawBolt(
 				in: layout.boltRect,
-				tint: tint
+				tint: isEnabled ? AppKitColorTokens.primaryText : tint
 			)
 		}
 
@@ -200,43 +162,10 @@ final class ModelEffortSelectionButton: NSButton
 
 	private func makeContentLayout() -> ContentLayout
 	{
-		let textSize = naturalTextSize
-		let leadingWidth = leadingReservedWidth
-		let availableWidth = max(
-			0,
-			bounds.width - LayoutMetrics.totalHorizontalAllowance
-		)
-		let naturalContentWidth =
-			textSize.width + leadingWidth + LayoutMetrics.trailingReservedWidth
-		let contentWidth = min(
-			availableWidth,
-			naturalContentWidth
-		)
-		let textWidth = max(
-			0,
-			contentWidth - leadingWidth - LayoutMetrics.trailingReservedWidth
-		)
-		let contentOriginX = bounds.midX - contentWidth / 2
-
-		let boltRect = NSRect(
-			x: contentOriginX,
-			y: bounds.midY - LayoutMetrics.boltSize.height / 2,
-			width: LayoutMetrics.boltSize.width,
-			height: LayoutMetrics.boltSize.height
-		)
-		let textRect = NSRect(
-			x: contentOriginX + leadingWidth,
-			y: bounds.midY - textSize.height / 2,
-			width: textWidth,
-			height: textSize.height
-		)
-
-		let chevronOriginX = textRect.maxX + LayoutMetrics.titleToChevronSpacing
-
-		return ContentLayout(
-			boltRect: boltRect,
-			textRect: textRect,
-			chevronOriginX: chevronOriginX
+		contentLayout.content(
+			in: bounds,
+			titleSize: naturalTextSize,
+			displaysBolt: displaysBolt
 		)
 	}
 
@@ -245,7 +174,8 @@ final class ModelEffortSelectionButton: NSButton
 		tint: NSColor
 	)
 	{
-		DesktopIcons.drawFilledBolt(
+		DesktopIcons.draw(
+			ComposerFooterIcons.bolt,
 			in: rect,
 			tint: tint
 		)
@@ -263,11 +193,13 @@ final class ModelEffortSelectionButton: NSButton
 			string: displayedTitle,
 			attributes: [
 				.font: textFont,
-				.foregroundColor: isEnabled ? NSColor.labelColor : tint,
+				.foregroundColor: isEnabled && !isPickerPresented
+					? AppKitColorTokens.primaryText : tint,
 				.paragraphStyle: paragraphStyle,
 			]
 		)
-		if !isPickerPresented, let effortTitle, displayedTitle.hasSuffix(" " + effortTitle)
+		if !isPickerPresented,
+			let effortTitle, displayedTitle.hasSuffix(" " + effortTitle)
 		{
 			let effortRange = NSRange(
 				location: title.length - (effortTitle as NSString).length,
@@ -279,7 +211,10 @@ final class ModelEffortSelectionButton: NSButton
 				range: effortRange
 			)
 		}
-		title.draw(in: rect)
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			title.draw(in: rect)
+		}
 	}
 
 	private func drawChevron(
@@ -288,13 +223,8 @@ final class ModelEffortSelectionButton: NSButton
 	)
 	{
 		DesktopIcons.draw(
-			.chevronDown,
-			in: NSRect(
-				x: layout.chevronOriginX - 2,
-				y: bounds.midY - 5,
-				width: 10,
-				height: 10
-			),
+			ComposerFooterIcons.chevron,
+			in: layout.chevronRect,
 			tint: tint
 		)
 	}

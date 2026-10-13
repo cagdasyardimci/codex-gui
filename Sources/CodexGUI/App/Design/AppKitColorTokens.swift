@@ -116,17 +116,15 @@ enum AppKitColorTokens
 		light: 0xFFFFFF,
 		dark: 0x363636
 	)
-	static let composerSend = NSColor(
-		srgbRed: 59 / 255.0,
-		green: 130 / 255.0,
-		blue: 246 / 255.0,
-		alpha: 1
+	static let composerSend = AppKitColorResolution.color(
+		light: 0x3A83F7,
+		dark: 0x3A83F7
 	)
 	static let composerEdge = AppKitColorResolution.color(
 		light: 0x000000,
 		dark: 0xFFFFFF,
 		lightAlpha: 0.04,
-		darkAlpha: 0.2
+		darkAlpha: 0
 	)
 	static let rowHighlight = AppKitColorResolution.color(
 		light: 0x1A1C1F,
@@ -229,5 +227,12 @@ enum AppKitColorTokens
 				alpha: 1
 			) : .linkColor
 	}
+
+	static let composerInsetEdge = AppKitColorResolution.color(
+		light: 0xFFFFFF,
+		dark: 0xFFFFFF,
+		lightAlpha: 0,
+		darkAlpha: 0.2
+	)
 
 }

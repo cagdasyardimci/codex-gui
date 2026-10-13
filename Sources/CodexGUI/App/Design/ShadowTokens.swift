@@ -75,6 +75,12 @@ enum ShadowTokens
 			blur: 0,
 			spread: 1
 		),
+		Style(
+			color: AppKitColorTokens.composerInsetEdge,
+			offsetY: 0,
+			blur: 1,
+			inset: true
+		),
 	]
 
 }

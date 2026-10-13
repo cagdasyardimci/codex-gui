@@ -20,8 +20,7 @@ struct ModelSelectorLayout: Sendable
 
 	func requestedWidth(
 		titleWidth: CGFloat,
-		displaysBolt: Bool,
-		picker: Bool
+		displaysBolt: Bool
 	) -> CGFloat
 	{
 		let natural = ceil(titleWidth) + metrics.totalHorizontalAllowance
@@ -29,7 +28,7 @@ struct ModelSelectorLayout: Sendable
 		return min(
 			metrics.maximumWidth,
 			max(
-				picker ? metrics.pickerMinimumWidth : 1,
+				1,
 				natural
 			)
 		)

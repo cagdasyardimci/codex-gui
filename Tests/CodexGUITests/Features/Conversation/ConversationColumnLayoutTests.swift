@@ -74,7 +74,7 @@ struct ConversationColumnLayoutTests
 				)
 				let leadingGutter = row.minX - pane.minX
 				let trailingGutter = pane.maxX - row.maxX
-				#expect(abs(leadingGutter - trailingGutter) < 1)
+				#expect(abs(trailingGutter - leadingGutter) < 1)
 				#expect(abs(row.midX - composer.midX) < 0.5)
 				if width >= 888
 				{

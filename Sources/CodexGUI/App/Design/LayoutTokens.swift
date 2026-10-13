@@ -74,14 +74,14 @@ enum LayoutTokens
 		let actionSpacing: CGFloat
 
 		init(
-			editorHorizontalInset: CGFloat = 8,
+			editorHorizontalInset: CGFloat = 12,
 			footerHorizontalInset: CGFloat = 8,
 			controlHeight: CGFloat = 28,
-			minimumHeight: CGFloat = 49,
+			minimumHeight: CGFloat = 44,
 			availableHeightFraction: CGFloat = 0.25,
 			compactWidthThreshold: CGFloat = 440,
 			compactRowSpacing: CGFloat = 4,
-			reservedActionSlot: CGFloat = 8,
+			reservedActionSlot: CGFloat = 0,
 			actionSpacing: CGFloat = 8
 		)
 		{
@@ -96,14 +96,15 @@ enum LayoutTokens
 			self.actionSpacing = actionSpacing
 		}
 
-		static let topInset: CGFloat = 8
+		static let topInset: CGFloat = 14
 		static let bottomInset: CGFloat = 8
-		static let editorFooterSpacing: CGFloat = 6
-		static let leadingControlSpacing: CGFloat = 16
+		static let editorFooterSpacing: CGFloat = 4
+		static let leadingControlSpacing: CGFloat = 5
 		static let leadingPreferenceSpacing: CGFloat = 12
 		static let summarySpacing: CGFloat = 8
 		static let interactionSpacing: CGFloat = 8
 		static let sendIconSize: CGFloat = 16
+		static let paneBottomInset: CGFloat = 16
 
 		var stackHorizontalInset: CGFloat
 		{
@@ -141,12 +142,6 @@ enum LayoutTokens
 				&& availableHeightFraction.isFinite
 				&& (0 ... 1).contains(availableHeightFraction)
 		}
-
-		static let maximumEditorHeight: CGFloat = 160
-
-		static let editorContentHeightAllowance: CGFloat = 12
-
-		static let auxiliaryControlHeight: CGFloat = 24
 
 	}
 
@@ -192,7 +187,6 @@ enum LayoutTokens
 	{
 		let totalHorizontalAllowance: CGFloat
 		let maximumWidth: CGFloat
-		let pickerMinimumWidth: CGFloat
 		let boltSize: CGSize
 		let boltToTitleSpacing: CGFloat
 		let titleToChevronSpacing: CGFloat
@@ -201,22 +195,20 @@ enum LayoutTokens
 		init(
 			totalHorizontalAllowance: CGFloat = 16,
 			maximumWidth: CGFloat = 300,
-			pickerMinimumWidth: CGFloat = 164,
 			boltSize: CGSize = CGSize(
-				width: 12,
+				width: 14,
 				height: 14
 			),
-			boltToTitleSpacing: CGFloat = 6,
-			titleToChevronSpacing: CGFloat = 6,
+			boltToTitleSpacing: CGFloat = 4,
+			titleToChevronSpacing: CGFloat = 4,
 			chevronSize: CGSize = CGSize(
-				width: 7,
-				height: 10
+				width: 16,
+				height: 16
 			)
 		)
 		{
 			self.totalHorizontalAllowance = totalHorizontalAllowance
 			self.maximumWidth = maximumWidth
-			self.pickerMinimumWidth = pickerMinimumWidth
 			self.boltSize = boltSize
 			self.boltToTitleSpacing = boltToTitleSpacing
 			self.titleToChevronSpacing = titleToChevronSpacing
@@ -239,7 +231,6 @@ enum LayoutTokens
 					$0.isFinite && $0 >= 0
 				}
 				&& [maximumWidth,
-					pickerMinimumWidth,
 					boltSize.width,
 					boltSize.height,
 					chevronSize.width,
@@ -247,10 +238,6 @@ enum LayoutTokens
 				{
 					$0.isFinite && $0 > 0
 				}
-				&& maximumWidth >= max(
-					1,
-					pickerMinimumWidth
-				)
 		}
 	}
 

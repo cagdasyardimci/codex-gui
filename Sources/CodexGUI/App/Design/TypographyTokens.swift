@@ -90,11 +90,13 @@ enum TypographyTokens
 	{
 		static let editor = Role(
 			size: 14,
-			selection: .system(weight: .regular)
+			lineHeight: 20,
+			baselineCorrection: 2,
+			ligatures: 0
 		)
 		static let preference = Role(
 			size: 13,
-			selection: .system(weight: .regular)
+			selection: .interface(weight: 400)
 		)
 		static let contextMenu = Role(size: 13)
 		static let warning = Role(

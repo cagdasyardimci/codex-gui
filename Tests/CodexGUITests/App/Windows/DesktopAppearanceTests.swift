@@ -40,8 +40,8 @@ struct DesktopAppearanceTests
 			length: 4
 		))
 		let layers = try #require(surface.layer?.sublayers)
-		try #require(layers.count >= 2)
-		let shadows = Array(layers.prefix(2))
+		try #require(layers.count >= ShadowTokens.composer.count)
+		let shadows = Array(layers.prefix(ShadowTokens.composer.count))
 		for name: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
 		{
 			window.appearance = NSAppearance(named: name)

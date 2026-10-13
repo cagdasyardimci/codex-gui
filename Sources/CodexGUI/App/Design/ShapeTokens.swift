@@ -5,7 +5,9 @@ enum ShapeTokens
 {
 	enum Composer
 	{
-		static let cornerRadius: CGFloat = 24
+		static let cornerRadius: CGFloat = 22
+
+		/// Uses the owning component's configured height.
 		static func controlRadius(forControlHeight controlHeight: CGFloat) -> CGFloat
 		{
 			controlHeight / 2

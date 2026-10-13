@@ -2,13 +2,30 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// Intercepts image paste/drop while retaining ordinary text editing and file drops.
-final class ContextComposerTextView: NSTextView
+final class ContextComposerTextView: NSTextView, NSLayoutManagerDelegate
 {
+	// TextKit's fixed-height line baseline is two points below the measured web baseline.
+	nonisolated private static let baselineCorrection = TypographyTokens.Composer.editor
+		.baselineCorrection
+
+	nonisolated func layoutManager(
+		_ layoutManager: NSLayoutManager,
+		shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+		lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+		baselineOffset: UnsafeMutablePointer<CGFloat>,
+		in textContainer: NSTextContainer,
+		forGlyphRange glyphRange: NSRange
+	) -> Bool
+	{
+		baselineOffset.pointee -= Self.baselineCorrection
+		return true
+	}
+
 	var onImage: ((NSImage, String) -> Void)?
 	var onImageSource: ((DraftImageSource, String) -> Void)?
 	var acceptsImageAttachments = true
 	var imagePasteboard: NSPasteboard = .general
-	var placeholder = "Message Codex…"
+	var placeholder = "Do anything"
 	{
 		didSet
 		{
@@ -51,6 +68,25 @@ final class ContextComposerTextView: NSTextView
 		super.keyDown(with: event)
 	}
 
+	override func drawInsertionPoint(
+		in rect: NSRect,
+		color: NSColor,
+		turnedOn flag: Bool
+	)
+	{
+		var caret = rect
+		if caret.minX < bounds.minX, caret.maxX > bounds.minX
+		{
+			// AppKit centers a one-point caret on x=0, clipping half at an empty line's edge.
+			caret.origin.x = bounds.minX
+		}
+		super.drawInsertionPoint(
+			in: caret,
+			color: color,
+			turnedOn: flag
+		)
+	}
+
 	override func draw(_ dirtyRect: NSRect)
 	{
 		super.draw(dirtyRect)
@@ -63,10 +99,19 @@ final class ContextComposerTextView: NSTextView
 		origin.x += textContainer?.lineFragmentPadding ?? 0
 		(placeholder as NSString).draw(
 			at: origin,
-			withAttributes: [
-				.font: font ?? NSFont.systemFont(ofSize: 15),
-				.foregroundColor: NSColor.placeholderTextColor,
-			]
+			withAttributes: AppKitFontResolver.textAttributes(TypographyTokens.Composer.editor)
+				.merging(
+					[
+						.font: font ?? AppKitFontResolver.font(TypographyTokens.Composer.editor),
+						.foregroundColor: AppKitColorTokens.composerPlaceholderText,
+						.paragraphStyle: defaultParagraphStyle ?? NSParagraphStyle.default,
+						.baselineOffset: Self.baselineCorrection,
+					],
+					uniquingKeysWith:
+					{
+						_, replacement in replacement
+					}
+				)
 		)
 	}
 

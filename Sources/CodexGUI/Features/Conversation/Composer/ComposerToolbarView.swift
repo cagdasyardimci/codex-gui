@@ -7,13 +7,31 @@ final class ComposerToolbarView: NSView
 	private var wideConstraints: [NSLayoutConstraint] = []
 	private var compactConstraints: [NSLayoutConstraint] = []
 	private var isCompact = true
+	private let composerLayout: ComposerLayout
 
 	init(
 		leadingControls: NSView,
 		preferenceControl: NSView,
-		actionControls: NSView
+		actionControls: NSView,
+		metrics: LayoutTokens.Composer = LayoutTokens.composer
 	)
 	{
+		precondition(
+			metrics.isValid,
+			"Invalid composer metrics"
+		)
+		let composerLayout = ComposerLayout(metrics: metrics)
+		let supportedHeight = composerLayout.footerHeight(
+			compact: false,
+			leadingHeight: leadingControls.fittingSize.height,
+			preferenceHeight: preferenceControl.fittingSize.height,
+			actionHeight: actionControls.fittingSize.height
+		)
+		precondition(
+			supportedHeight != nil,
+			"Composer controls must fit the action row"
+		)
+		self.composerLayout = composerLayout
 		super.init(frame: .zero)
 
 		for controls in [leadingControls, preferenceControl, actionControls]
@@ -33,7 +51,7 @@ final class ComposerToolbarView: NSView
 			),
 			preferenceControl.trailingAnchor.constraint(
 				equalTo: actionControls.leadingAnchor,
-				constant: -LayoutTokens.composer.preferenceToActionSpacing
+				constant: -metrics.preferenceToActionSpacing
 			),
 			preferenceControl.centerYAnchor.constraint(equalTo: centerYAnchor),
 			preferenceControl.topAnchor.constraint(greaterThanOrEqualTo: topAnchor),
@@ -49,17 +67,17 @@ final class ComposerToolbarView: NSView
 			preferenceControl.leadingAnchor.constraint(equalTo: leadingAnchor),
 			preferenceControl.trailingAnchor.constraint(
 				lessThanOrEqualTo: actionControls.leadingAnchor,
-				constant: -LayoutTokens.composer.preferenceToActionSpacing
+				constant: -metrics.preferenceToActionSpacing
 			),
 			preferenceControl.centerYAnchor.constraint(equalTo: actionControls.centerYAnchor),
 			preferenceControl.topAnchor.constraint(
 				greaterThanOrEqualTo: leadingControls.bottomAnchor,
-				constant: LayoutTokens.composer.compactRowSpacing
+				constant: metrics.compactRowSpacing
 			),
 			preferenceControl.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
 			actionControls.topAnchor.constraint(
 				equalTo: leadingControls.bottomAnchor,
-				constant: LayoutTokens.composer.compactRowSpacing
+				constant: metrics.compactRowSpacing
 			),
 			actionControls.trailingAnchor.constraint(equalTo: trailingAnchor),
 			actionControls.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -76,7 +94,7 @@ final class ComposerToolbarView: NSView
 
 	override func layout()
 	{
-		let shouldUseCompactLayout = ComposerLayout().usesCompactFooter(innerWidth: bounds.width)
+		let shouldUseCompactLayout = composerLayout.usesCompactFooter(innerWidth: bounds.width)
 		if shouldUseCompactLayout != isCompact
 		{
 			NSLayoutConstraint.deactivate(isCompact ? compactConstraints : wideConstraints)

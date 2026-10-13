@@ -54,3 +54,7 @@ minimum to the native split item. `WindowPaneLayout` validates the immutable win
 configuration before forwarding it. Navigation, review, summary and files preferences
 must fit their configured bounds, and comfortable conversation width must cover both
 minimum reservations. Invalid persisted widths retain their existing fallback policy.
+
+The composer footer reserves its microphone width through `LayoutTokens.ModelSelector`;
+the current native footer omits the voice control. Its model trigger keeps the same
+width while the effort picker is open.

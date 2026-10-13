@@ -129,9 +129,10 @@ final class ConversationViewController: NSViewController,
 	let composer = ContextComposerTextView()
 	let composerScrollView = NSScrollView()
 	let composerSurface = DesktopSurface(
-		AppKitColorTokens.canvas,
+		AppKitColorTokens.composer,
 		cornerRadius: ShapeTokens.Composer.cornerRadius,
-		bordered: true
+
+		shadows: ShadowTokens.composer
 	)
 	let turnChangeSummaryButton = TurnChangeSummaryButton()
 	let turnChangeSummaryLoader = ConversationTurnChangeSummaryLoader()
@@ -395,7 +396,7 @@ final class ConversationViewController: NSViewController,
 			),
 			stack.bottomAnchor.constraint(
 				equalTo: container.bottomAnchor,
-				constant: -20
+				constant: -LayoutTokens.Composer.paneBottomInset
 			),
 		])
 		for row in stack.arrangedSubviews

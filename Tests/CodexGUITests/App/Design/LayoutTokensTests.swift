@@ -11,9 +11,8 @@ import Testing
 		#expect(LayoutTokens.Tabs.tabWidth == 180)
 		#expect(LayoutTokens.Tabs.controlSize == 24)
 		#expect(LayoutTokens.window.toolsMinimumWidth == 320)
-		#expect(LayoutTokens.composer.minimumHeight == 49)
-		#expect(LayoutTokens.Composer.maximumEditorHeight == 160)
-		#expect(LayoutTokens.composer.preferenceToActionSpacing == 16)
+		#expect(LayoutTokens.composer.minimumHeight == 44)
+		#expect(LayoutTokens.composer.preferenceToActionSpacing == 8)
 	}
 
 	@Test func independentInsetsResolveWithoutDuplicatedAllowances()

@@ -5,13 +5,18 @@ import Testing
 
 @Suite struct ShapeTokensTests
 {
-	@Test func radiusUsesItsSuppliedControlHeight()
+	@Test func composerRadiusUsesTheSuppliedHeight()
 	{
-		#expect(ShapeTokens.Composer.controlRadius(forControlHeight: 32) == 16)
+		let tallerComposer = LayoutTokens.Composer(controlHeight: 32)
+		#expect(tallerComposer.isValid)
+		#expect(ShapeTokens.Composer.controlRadius(
+			forControlHeight: tallerComposer.controlHeight
+		) == 16)
+		#expect(LayoutTokens.composer.controlHeight == 28)
 		#expect(ShapeTokens.Composer.controlRadius(
 			forControlHeight: LayoutTokens.composer.controlHeight
 		) == 14)
-		#expect(ShapeTokens.Composer.cornerRadius == 24)
+		#expect(ShapeTokens.Composer.cornerRadius == 22)
 	}
 
 	@Test func controlRolesRemainIndependentOfEqualDimensions()

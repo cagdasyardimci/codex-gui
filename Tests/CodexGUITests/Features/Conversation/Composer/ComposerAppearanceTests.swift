@@ -124,9 +124,9 @@ struct ComposerAppearanceTests
 				window.appearance = appearance
 				let color = enabled
 					? NSColor(
-						srgbRed: 59 / 255,
-						green: 130 / 255,
-						blue: 246 / 255,
+						srgbRed: 58 / 255,
+						green: 131 / 255,
+						blue: 247 / 255,
 						alpha: 1
 					)
 					: .tertiaryLabelColor
@@ -155,7 +155,7 @@ struct ComposerAppearanceTests
 		#expect(controller.sendButton.layer?.backgroundColor == disabledBackground)
 	}
 
-	@Test func shownNativeApprovalPopoverRetainsRowsAndFocusAcrossWindowAppearanceChanges() throws
+	@Test func shownApprovalPanelRetainsRowsAndFocusAcrossWindowAppearanceChanges() throws
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
@@ -174,7 +174,10 @@ struct ComposerAppearanceTests
 		#expect(popover.isShown)
 		let content = controller.approvalPolicyController.view
 		let panel = try #require(content.window)
-		let stack = try #require(content.subviews.first as? NSStackView)
+		let stack = try #require(descendants(content).compactMap
+		{
+			$0 as? NSStackView
+		}.first)
 		let rows = stack.arrangedSubviews.compactMap
 		{
 			$0 as? NSButton

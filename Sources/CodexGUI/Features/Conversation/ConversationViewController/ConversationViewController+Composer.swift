@@ -7,9 +7,7 @@ extension ConversationViewController
 	private enum ComposerSizing
 	{
 		static let minimumHeight = LayoutTokens.composer.minimumHeight
-		static let maximumHeight = LayoutTokens.Composer.maximumEditorHeight
-		static let availableHeightFraction = LayoutTokens.composer.availableHeightFraction
-		static let contentHeightAllowance = LayoutTokens.Composer.editorContentHeightAllowance
+		static let contentHeightAllowance: CGFloat = 0
 		static let heightUpdateTolerance: CGFloat = 2
 	}
 
@@ -19,7 +17,7 @@ extension ConversationViewController
 		installComposerStack(toolbar: composerToolbar)
 		let composerArea = AppKitLayout.verticalStack(
 			[turnChangeSummaryButton, composerSurface],
-			spacing: 8
+			spacing: LayoutTokens.Composer.summarySpacing
 		)
 		composerArea.alignment = .centerX
 		turnChangeSummaryButton.isHidden = true
@@ -42,7 +40,7 @@ extension ConversationViewController
 		)
 		let actionRow = AppKitLayout.horizontalStack(
 			[sendButton, steerButton, stopButton],
-			spacing: 8
+			spacing: LayoutTokens.composer.actionSpacing
 		)
 		let composerToolbar = ComposerToolbarView(
 			leadingControls: attachmentRow,
@@ -94,7 +92,7 @@ extension ConversationViewController
 		approvalPolicyButton.font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
 		approvalPolicyButton.lineBreakMode = .byTruncatingTail
 		approvalPolicyButton.heightAnchor
-			.constraint(equalToConstant: LayoutTokens.Composer.auxiliaryControlHeight)
+			.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
 			.isActive = true
 		AppKitControlStyling.stylePopup(addContextButton)
 		AppKitLayout.compressHorizontally(addContextButton)
@@ -126,16 +124,13 @@ extension ConversationViewController
 
 	func configureComposerControls()
 	{
-		planModeLabel.font = .systemFont(
-			ofSize: 12,
-			weight: .medium
-		)
+		planModeLabel.font = AppKitFontResolver.font(TypographyTokens.Composer.plan)
 		planModeLabel.textColor = .systemBlue
 		planModeLabel.setAccessibilityLabel("Plan mode enabled")
 		planModeLabel.isHidden = true
 		interactionStack.orientation = .vertical
 		interactionStack.alignment = .leading
-		interactionStack.spacing = 8
+		interactionStack.spacing = LayoutTokens.Composer.interactionSpacing
 		interactionStack.isHidden = true
 
 		configureDraftEditor()
@@ -154,17 +149,33 @@ extension ConversationViewController
 		composer.isAutomaticDashSubstitutionEnabled = false
 		composer.isAutomaticTextReplacementEnabled = false
 		composer.font = AppKitFontResolver.font(TypographyTokens.Composer.editor)
-		composer.textColor = .labelColor
-		composer.insertionPointColor = .labelColor
+		composer.textColor = AppKitColorTokens.primaryText
+		composer.insertionPointColor = AppKitColorTokens.primaryText
 		composer.drawsBackground = false
-		composer.textContainerInset = NSSize(
-			width: 0,
-			height: 8
-		)
+		composer.textContainerInset = .zero
 		composer.isHorizontallyResizable = false
 		composer.isVerticallyResizable = true
 		composer.autoresizingMask = [.width]
 		composer.textContainer?.widthTracksTextView = true
+		composer.textContainer?.lineFragmentPadding = 0
+		composer.layoutManager?.delegate = composer
+		let paragraph = NSMutableParagraphStyle()
+		paragraph.minimumLineHeight = TypographyTokens.Composer.editor.lineHeight ?? 0
+		paragraph.maximumLineHeight = TypographyTokens.Composer.editor.lineHeight ?? 0
+		composer.defaultParagraphStyle = paragraph
+		composer.typingAttributes = AppKitFontResolver
+			.textAttributes(TypographyTokens.Composer.editor)
+			.merging(
+				[
+					.font: AppKitFontResolver.font(TypographyTokens.Composer.editor),
+					.foregroundColor: AppKitColorTokens.primaryText,
+					.paragraphStyle: paragraph,
+				],
+				uniquingKeysWith:
+				{
+					_, replacement in replacement
+				}
+			)
 		composer.delegate = self
 		composer.setAccessibilityLabel("Message to Codex")
 		composer.setAccessibilityIdentifier("conversation-composer")
@@ -220,22 +231,18 @@ extension ConversationViewController
 			"Inspect Request Context…",
 		])
 		addContextButton.menu?.autoenablesItems = false
+		addContextButton.menu?.font = AppKitFontResolver.font(TypographyTokens.Composer.contextMenu)
 		addContextButton.target = self
 		addContextButton.action = #selector(chooseContextAction)
 		addContextButton.setAccessibilityLabel("Add attachments or inspect request context")
-		addContextButton.item(at: 0)?.image = DesktopIcons.image(
-			.plus,
-			size: 15
-		)
+		addContextButton.item(at: 0)?.image = ComposerFooterIcons.add
 		(addContextButton.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
-		addContextButton.contentTintColor = .labelColor
+		addContextButton.contentTintColor = AppKitColorTokens.primaryText
 		addContextButton.imagePosition = .imageOnly
 		addContextButton.widthAnchor
-			.constraint(equalToConstant: LayoutTokens.Composer.auxiliaryControlHeight)
-			.isActive = true
+			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
 		addContextButton.heightAnchor
-			.constraint(equalToConstant: LayoutTokens.Composer.auxiliaryControlHeight)
-			.isActive = true
+			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
 		addContextButton.toolTip = "Add Context…"
 	}
 
@@ -267,7 +274,8 @@ extension ConversationViewController
 			)
 			button.image = DesktopIcons.image(
 				symbol,
-				size: button === sendButton ? 16 : 28
+				size: button === sendButton ? LayoutTokens.Composer.sendIconSize : LayoutTokens
+					.composer.controlHeight
 			)
 			button.imagePosition = .imageOnly
 			button.widthAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
@@ -427,12 +435,7 @@ extension ConversationViewController
 			? "Steer the active turn (⇧⌘Return)" : "Preparing image attachment…"
 		sendButton.contentTintColor = .white
 		sendButton.layerBackgroundColor = sendButton.isEnabled
-			? NSColor(
-				srgbRed: 59 / 255,
-				green: 130 / 255,
-				blue: 246 / 255,
-				alpha: 1
-			) : NSColor.tertiaryLabelColor
+			? AppKitColorTokens.composerSend : NSColor.tertiaryLabelColor
 		steerButton.contentTintColor = steerButton.isEnabled ? .systemBlue : .tertiaryLabelColor
 		let hasStoppableExecution =
 			snapshot.activeExecutionState == .running
@@ -467,20 +470,11 @@ extension ConversationViewController
 		let contentHeight =
 			layoutManager.usedRect(for: textContainer).height
 				+ composer.textContainerInset.height * 2 + ComposerSizing.contentHeightAllowance
-		let availableHeight = max(
-			ComposerSizing.minimumHeight,
-			view.bounds.height * ComposerSizing.availableHeightFraction
+		let desiredHeight = ComposerLayout().desiredEditorHeight(
+			contentHeight: contentHeight,
+			viewportHeight: view.window?.contentView?.bounds.height ?? view.bounds.height
 		)
-		let desiredHeight = min(
-			ComposerSizing.maximumHeight,
-			min(
-				availableHeight,
-				max(
-					ComposerSizing.minimumHeight,
-					contentHeight
-				)
-			)
-		)
+
 		if abs((composerHeightConstraint?.constant ?? 0) - desiredHeight)
 			> ComposerSizing.heightUpdateTolerance
 		{
