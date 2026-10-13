@@ -488,7 +488,7 @@ struct NavigationViewControllerTests
 		controller.render(snapshot)
 		let newChatButton = try #require(findNavigationButton(
 			in: controller.view,
-			title: "New Chat"
+			title: "New chat"
 		))
 		#expect(table.isEnabled)
 		#expect(newChatButton.isEnabled)

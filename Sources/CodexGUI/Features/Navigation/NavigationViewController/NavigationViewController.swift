@@ -37,8 +37,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		target: nil,
 		action: nil
 	)
-	let newChatButton = NSButton(
-		title: "New Chat",
+	let newChatButton = DesktopHoverButton(
+		title: "New chat",
 		target: nil,
 		action: nil
 	)
@@ -132,25 +132,37 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			spacing: 6
 		)
 		stack.setCustomSpacing(
-			14.5,
+			0,
 			after: brandRow
 		)
 		stack.setCustomSpacing(
 			12,
 			after: newChatButton
 		)
-		AppKitLayout.pin(
-			stack,
-			to: container,
-			inset: 14
-		)
+		container.addSubview(stack)
+		stack.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			stack.leadingAnchor.constraint(
+				equalTo: container.leadingAnchor,
+				constant: 8
+			),
+			stack.trailingAnchor.constraint(
+				equalTo: container.trailingAnchor,
+				constant: -8
+			),
+			stack.topAnchor.constraint(equalTo: container.topAnchor),
+			stack.bottomAnchor.constraint(
+				equalTo: container.bottomAnchor,
+				constant: -8
+			),
+		])
 		for row in [brandRow, projectsHeader]
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
 		newChatButton.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		brandRow.heightAnchor.constraint(equalToConstant: 24).isActive = true
-		newChatButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
+		brandRow.heightAnchor.constraint(equalToConstant: 52).isActive = true
+		newChatButton.heightAnchor.constraint(equalToConstant: 30).isActive = true
 		chatScrollView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		emptyLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		chatScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true

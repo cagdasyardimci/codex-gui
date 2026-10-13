@@ -18,15 +18,28 @@ final class NewChatButtonCell: NSButtonCell
 		}
 	}
 
+	override func imageRect(forBounds rect: NSRect) -> NSRect
+	{
+		NSRect(
+			x: rect.minX + NavigationSidebarLayout.cellInset,
+			y: rect.midY - NavigationSidebarLayout.iconSize / 2,
+			width: NavigationSidebarLayout.iconSize,
+			height: NavigationSidebarLayout.iconSize
+		)
+	}
+
 	override func titleRect(forBounds rect: NSRect) -> NSRect
 	{
-		var titleRect = super.titleRect(forBounds: rect)
-		let titleLeading = imageRect(forBounds: rect).maxX + 8
-		titleRect.origin.x = titleLeading
-		titleRect.size.width = max(
-			0,
-			rect.maxX - titleLeading
+		let titleLeading = imageRect(forBounds: rect).maxX
+			+ NavigationSidebarLayout.iconTextSpacing
+		return NSRect(
+			x: titleLeading,
+			y: rect.midY - LayoutTokens.SidebarSelection.newChatTitleHeight / 2,
+			width: max(
+				0,
+				rect.maxX - titleLeading - NavigationSidebarLayout.cellInset
+			),
+			height: LayoutTokens.SidebarSelection.newChatTitleHeight
 		)
-		return titleRect
 	}
 }

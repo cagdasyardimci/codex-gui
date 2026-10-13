@@ -17,11 +17,13 @@ extension NavigationViewController
 		refreshButton.imagePosition = .imageOnly
 		refreshButton.toolTip = "Refresh conversations"
 
-		let brandLabel = NSTextField(labelWithString: "Codex")
-		brandLabel.font = .systemFont(
-			ofSize: 18,
-			weight: .semibold
-		)
+		let wordmark = NSImageView(image: DesktopBrandWordmark.image)
+		wordmark.contentTintColor = AppKitColorTokens.primaryText
+		wordmark.setAccessibilityLabel("Codex")
+		wordmark.widthAnchor.constraint(equalToConstant: DesktopBrandWordmark.size.width)
+			.isActive = true
+		wordmark.heightAnchor.constraint(equalToConstant: DesktopBrandWordmark.size.height)
+			.isActive = true
 
 		searchButton.target = self
 		searchButton.action = #selector(toggleSearch)
@@ -34,11 +36,23 @@ extension NavigationViewController
 		searchButton.toolTip = "Search conversation titles and previews"
 
 		let brandRow = AppKitLayout.horizontalStack(
-			[brandLabel, NSView(), refreshButton, searchButton],
+			[wordmark, NSView(), refreshButton, searchButton],
 			spacing: 6
 		)
+		brandRow.edgeInsets = NSEdgeInsets(
+			top: 0,
+			left: 8,
+			bottom: 0,
+			right: 0
+		)
 		refreshButton.widthAnchor.constraint(equalToConstant: 26).isActive = true
-		searchButton.widthAnchor.constraint(equalToConstant: 26).isActive = true
+		searchButton.image = DesktopIcons.image(
+			.search,
+			size: 16
+		)
+		searchButton.contentTintColor = AppKitColorTokens.secondaryText
+		searchButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
+		searchButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
 		return brandRow
 	}
 
@@ -116,7 +130,8 @@ extension NavigationViewController
 	{
 		searchField.placeholderString = "Search titles and previews"
 		searchField.controlSize = .small
-		searchField.font = .systemFont(ofSize: 12)
+		searchField.font = .systemFont(ofSize: 14)
+		searchField.textColor = AppKitColorTokens.primaryText
 		searchField.setAccessibilityLabel("Search conversation titles and previews")
 		searchField.delegate = self
 		searchField.sendsSearchStringImmediately = true
@@ -132,10 +147,10 @@ extension NavigationViewController
 		searchPopover.contentViewController = searchController
 		searchPopover.contentSize = NSSize(
 			width: 280,
-			height: 50
+			height: 57
 		)
 		searchPopover.behavior = .transient
-		searchField.heightAnchor.constraint(equalToConstant: 26).isActive = true
+		searchField.heightAnchor.constraint(equalToConstant: 33).isActive = true
 	}
 
 	func configureThreadManagementControls()
