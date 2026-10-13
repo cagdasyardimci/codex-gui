@@ -25,7 +25,7 @@ final class PinnedSummaryViewController: NSViewController
 	{
 		stack.orientation = .vertical
 		stack.alignment = .leading
-		stack.spacing = 8
+		stack.spacing = Layout.sectionSpacing
 		view = makeScrollView()
 	}
 
@@ -50,7 +50,7 @@ final class PinnedSummaryViewController: NSViewController
 		clearRenderedContent()
 
 		let heading = header(presentation.contextName)
-		heading.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		heading.heightAnchor.constraint(equalToConstant: Layout.headerHeight).isActive = true
 		add(heading)
 		addChanges(presentation)
 		addDivider()
@@ -166,7 +166,7 @@ final class PinnedSummaryViewController: NSViewController
 		)
 		heading.attributedTitle = attributedTitle(
 			"Subagents",
-			color: .secondaryLabelColor
+			color: AppKitColorTokens.captionText
 		)
 		addSectionHeading(heading)
 		if let agents = section.value
@@ -240,12 +240,12 @@ final class PinnedSummaryViewController: NSViewController
 		)
 		sources.isBordered = false
 		sources.alignment = .left
-		sources.font = .systemFont(ofSize: 13)
+		sources.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
 		sources.attributedTitle = attributedTitle(
 			title,
-			color: .secondaryLabelColor
+			color: AppKitColorTokens.captionText
 		)
-		sources.contentTintColor = .secondaryLabelColor
+		sources.contentTintColor = AppKitColorTokens.captionText
 		sources.image = sourcesExpanded ? nil : DesktopIcons.image(.chevronRight)
 		sources.imagePosition = .imageTrailing
 		sources.imageScaling = .scaleProportionallyDown
@@ -264,8 +264,8 @@ final class PinnedSummaryViewController: NSViewController
 		plus.image = DesktopIcons.image(.plus)
 		plus.imagePosition = .imageOnly
 		plus.contentTintColor = .tertiaryLabelColor
-		plus.widthAnchor.constraint(equalToConstant: 18).isActive = true
-		plus.heightAnchor.constraint(equalToConstant: 18).isActive = true
+		plus.widthAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
+		plus.heightAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
 		plus.setAccessibilityIdentifier("pinned-summary-add-sources")
 		plus.setAccessibilityLabel("Add sources")
 		plus.toolTip = "Add sources"
@@ -284,10 +284,13 @@ final class PinnedSummaryViewController: NSViewController
 		)
 		all.attributedTitle = attributedTitle(
 			"View all",
-			color: .tertiaryLabelColor
+			color: AppKitColorTokens.mutedText
 		)
 		let icon = iconButton(
-			DesktopIcons.image(.addSources),
+			DesktopIcons.image(
+				.addSources,
+				size: 18
+			),
 			title: "View all",
 			destination: .sources
 		)
@@ -325,7 +328,7 @@ final class PinnedSummaryViewController: NSViewController
 			actions[control] = request
 			control.attributedTitle = attributedTitle(
 				source.label,
-				color: .secondaryLabelColor
+				color: AppKitColorTokens.captionText
 			)
 			text = control
 		}
@@ -407,7 +410,10 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func header(_ name: String) -> NSView
 	{
-		let title = label(name)
+		let title = label(
+			name,
+			color: AppKitColorTokens.captionText
+		)
 		title.lineBreakMode = .byTruncatingTail
 		title.maximumNumberOfLines = 1
 		title.setContentCompressionResistancePriority(
@@ -439,8 +445,8 @@ final class PinnedSummaryViewController: NSViewController
 		button.isEnabled = false
 		button.image = PinnedSummaryIcons.image(title == "+" ? .plus : .ellipsis)
 		button.imagePosition = .imageOnly
-		button.widthAnchor.constraint(equalToConstant: 18).isActive = true
-		button.heightAnchor.constraint(equalToConstant: 18).isActive = true
+		button.widthAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
+		button.heightAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
 		button.setAccessibilityLabel(label)
 		button.toolTip = "Action unavailable: behavior has not been defined"
 		return button
@@ -460,7 +466,7 @@ final class PinnedSummaryViewController: NSViewController
 		)
 		button.isBordered = false
 		button.alignment = .left
-		button.font = .systemFont(ofSize: 13)
+		button.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
 		button.contentTintColor = .labelColor
 		button.attributedTitle = attributedTitle(
 			title,
@@ -508,7 +514,7 @@ final class PinnedSummaryViewController: NSViewController
 			.defaultLow,
 			for: .horizontal
 		)
-		label.font = .systemFont(ofSize: 13)
+		label.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
 		label.textColor = color
 		return label
 	}
@@ -521,7 +527,7 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func addSectionHeading(_ heading: NSView)
 	{
-		heading.heightAnchor.constraint(equalToConstant: 20).isActive = true
+		heading.heightAnchor.constraint(equalToConstant: Layout.headerHeight).isActive = true
 		add(heading)
 	}
 
@@ -589,7 +595,7 @@ final class PinnedSummaryViewController: NSViewController
 		NSAttributedString(
 			string: text,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 13),
+				.font: AppKitFontResolver.font(TypographyTokens.Summary.body),
 				.foregroundColor: color,
 			]
 		)
@@ -598,7 +604,7 @@ final class PinnedSummaryViewController: NSViewController
 	private func statusLabel(_ text: String) -> NSTextField
 	{
 		let status = label(text)
-		status.font = .systemFont(ofSize: 11)
+		status.font = AppKitFontResolver.font(TypographyTokens.Summary.status)
 		status.toolTip = text
 		status.setAccessibilityLabel(text)
 		return status

@@ -7,7 +7,7 @@ final class InspectorViewController: NSViewController
 
 	static var summaryPaneWidth: CGFloat
 	{
-		Layout.summaryWidth + Layout.summaryTrailingInset
+		Layout.summaryPaneWidth
 	}
 
 	let gitChanges = GitChangesViewController()
@@ -648,10 +648,7 @@ final class InspectorViewController: NSViewController
 
 	private func configureHeaderControls()
 	{
-		projectLabel.font = .systemFont(
-			ofSize: 13,
-			weight: .regular
-		)
+		projectLabel.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
 		projectLabel.textColor = .secondaryLabelColor
 		projectLabel.lineBreakMode = .byTruncatingMiddle
 		projectLabel.setContentCompressionResistancePriority(
@@ -742,6 +739,10 @@ final class InspectorViewController: NSViewController
 private final class InspectorBoxSurface: NSView
 {
 	private static let cornerRadius = ShapeTokens.Inspector.summaryRadius
+	private let depthLayers = ShadowTokens.summary.map
+	{
+		_ in CALayer()
+	}
 
 	var isSummaryCard = true
 	{
@@ -765,6 +766,13 @@ private final class InspectorBoxSurface: NSView
 	{
 		super.init(frame: frameRect)
 		wantsLayer = true
+		for depth in depthLayers
+		{
+			layer?.insertSublayer(
+				depth,
+				at: 0
+			)
+		}
 		updateShadow()
 	}
 
@@ -789,8 +797,10 @@ private final class InspectorBoxSurface: NSView
 	override func draw(_ dirtyRect: NSRect)
 	{
 		(isSummaryCard ? AppKitColorTokens.summaryCard : AppKitColorTokens.inspector).setFill()
-		let radius: CGFloat = isFullBleed ? 0 : Self.cornerRadius
-		let borderWidth: CGFloat = isSummaryCard && !isFullBleed ? 0.5 : 0
+		let radius: CGFloat = isFullBleed ? 0 :
+			(isSummaryCard ? Self.cornerRadius : ShapeTokens.Inspector.detailRadius)
+		let borderWidth: CGFloat = isSummaryCard && !isFullBleed ? ShapeTokens.Inspector
+			.summaryEdgeWidth : 0
 		let path = NSBezierPath(
 			roundedRect: bounds.insetBy(
 				dx: borderWidth / 2,
@@ -802,7 +812,7 @@ private final class InspectorBoxSurface: NSView
 		path.fill()
 		if borderWidth > 0
 		{
-			AppKitColorTokens.border.setStroke()
+			AppKitColorTokens.summaryEdge.setStroke()
 			path.lineWidth = borderWidth
 			path.stroke()
 		}
@@ -818,20 +828,19 @@ private final class InspectorBoxSurface: NSView
 		CATransaction.begin()
 		CATransaction.setDisableActions(true)
 		layer.masksToBounds = false
-		layer.shadowColor = NSColor.black.cgColor
-		layer.shadowOffset = CGSize(
-			width: 0,
-			height: -2
+		for (shadow, depth) in zip(
+			ShadowTokens.summary,
+			depthLayers
 		)
-		layer.shadowRadius = 6
-		let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		layer.shadowOpacity = isSummaryCard && !isFullBleed ? (isDark ? 0.14 : 0.06) : 0
-		layer.shadowPath = CGPath(
-			roundedRect: bounds,
-			cornerWidth: Self.cornerRadius,
-			cornerHeight: Self.cornerRadius,
-			transform: nil
-		)
+		{
+			depth.isHidden = !isSummaryCard || isFullBleed
+			AppKitShadowRenderer.apply(
+				shadow,
+				to: depth,
+				in: self,
+				cornerRadius: Self.cornerRadius
+			)
+		}
 		CATransaction.commit()
 	}
 }

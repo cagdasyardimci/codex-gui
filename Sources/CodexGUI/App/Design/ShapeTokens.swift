@@ -22,7 +22,7 @@ enum ShapeTokens
 
 	enum Inspector
 	{
-		static let summaryRadius: CGFloat = 16
+		static let summaryRadius: CGFloat = 20
 		static let detailRadius: CGFloat = 16
 		static let summaryEdgeWidth: CGFloat = 0.5
 	}
