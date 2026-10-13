@@ -420,7 +420,9 @@ enum LayoutTokens
 			tabContent.minimumSelectionWidth
 		}
 		static let contentInset: CGFloat = 20
-		static let toolTileWidth: CGFloat = 240
+		static let toolsMaximumContentWidth: CGFloat = 768
+		static let toolsTwoColumnMinimumWidth: CGFloat = 448
+		static let toolColumnSpacing: CGFloat = 16
 		static let toolsTopInset: CGFloat = 32
 		static let toolsSectionGap: CGFloat = 16
 		static let toolTileHeight: CGFloat = 40

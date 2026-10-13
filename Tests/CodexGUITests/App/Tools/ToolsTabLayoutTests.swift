@@ -6,6 +6,66 @@ import Testing
 @Suite @MainActor
 struct ToolsTabLayoutTests
 {
+	@Test func toolsTileResizesAcrossColumnsAndFullView() throws
+	{
+		_ = NSApplication.shared
+		let controller = ToolsTabViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 320,
+				height: 300
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		let host = try #require(window.contentView)
+		controller.view.frame = host.bounds
+		host.addSubview(controller.view)
+		defer
+		{
+			window.close()
+		}
+		let changes = try #require(button(
+			"Changes",
+			in: controller.view
+		))
+		let samples: [(pane: CGFloat, tile: CGFloat, leading: CGFloat)] = [
+			(320, 280, 20),
+			(654.8125, 299.40625, 20),
+			(1214.796875, 376, 223.3984375),
+			(484, 444, 20),
+			(488, 216, 20),
+			(320, 280, 20),
+		]
+		for appearance: NSAppearance.Name in [.aqua, .darkAqua]
+		{
+			window.appearance = NSAppearance(named: appearance)
+			for sample in samples
+			{
+				controller.view.setFrameSize(NSSize(
+					width: sample.pane,
+					height: 300
+				))
+				window.layoutIfNeeded()
+				controller.view.layoutSubtreeIfNeeded()
+				let frame = changes.convert(
+					changes.bounds,
+					to: controller.view
+				)
+				#expect(abs(frame.width - sample.tile) < 0.5)
+				#expect(
+					abs(frame.minX - sample.leading) < 0.5,
+					"Pane \(sample.pane), painted frame \(frame)"
+				)
+				#expect(frame.height == 40)
+				#expect(changes.isEnabled)
+			}
+		}
+	}
 
 	@Test func addingTabsKeepsTheRightPaneAtItsChosenWidth() throws
 	{

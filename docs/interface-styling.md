@@ -75,3 +75,7 @@ Its immutable animation configuration controls entry, exit and reduced-motion be
 ## Tools tab pane
 
 Source owners: [ToolsTabViewController](../Sources/CodexGUI/App/ToolsTabViewController.swift), [ToolsToolbarCoordinator](../Sources/CodexGUI/App/ToolsToolbarCoordinator.swift), [ToolsPaneIcons](../Sources/CodexGUI/App/ToolsPaneIcons.swift).
+
+Tools tiles reflow with the pane's available content width. The centered content column
+is bounded; narrow panes use one column and wider panes reserve equal grid columns,
+including space for tool actions not yet implemented in the native app.

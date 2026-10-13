@@ -81,6 +81,8 @@ final class ToolsTabViewController: NSViewController
 	private let tabStack = NSStackView()
 	private let contentHost = NSView()
 	private var toolsContent: NSView?
+	private var toolsTileSingleColumnWidth: NSLayoutConstraint?
+	private var toolsTileTwoColumnWidth: NSLayoutConstraint?
 	private weak var changesController: NSViewController?
 	private weak var sourcesController: NSViewController?
 	private weak var subagentsController: NSViewController?
@@ -219,20 +221,56 @@ final class ToolsTabViewController: NSViewController
 		self.toolsContent = toolsContent
 		toolsContent.translatesAutoresizingMaskIntoConstraints = false
 		contentHost.addSubview(toolsContent)
+		let preferredWidth = toolsContent.widthAnchor.constraint(
+			equalTo: contentHost.widthAnchor,
+			constant: -2 * Layout.contentInset
+		)
+		preferredWidth.priority = NSLayoutConstraint.Priority(999)
 		NSLayoutConstraint.activate([
 			toolsContent.leadingAnchor.constraint(
-				equalTo: contentHost.leadingAnchor,
+				greaterThanOrEqualTo: contentHost.leadingAnchor,
 				constant: Layout.contentInset
 			),
 			toolsContent.trailingAnchor.constraint(
-				equalTo: contentHost.trailingAnchor,
+				lessThanOrEqualTo: contentHost.trailingAnchor,
 				constant: -Layout.contentInset
 			),
+			toolsContent.centerXAnchor.constraint(equalTo: contentHost.centerXAnchor),
+			toolsContent.widthAnchor.constraint(
+				lessThanOrEqualToConstant: Layout.toolsMaximumContentWidth
+			),
+			preferredWidth,
 			toolsContent.topAnchor.constraint(
 				equalTo: contentHost.topAnchor,
 				constant: Layout.toolsTopInset
 			),
 		])
+	}
+
+	override func viewWillLayout()
+	{
+		super.viewWillLayout()
+		guard let single = toolsTileSingleColumnWidth, let double = toolsTileTwoColumnWidth
+		else
+		{
+			return
+		}
+		let availableWidth = min(
+			Layout.toolsMaximumContentWidth,
+			max(
+				0,
+				view.bounds.width - 2 * Layout.contentInset
+			)
+		)
+		let twoColumns = availableWidth >= Layout.toolsTwoColumnMinimumWidth
+		guard double.isActive != twoColumns
+		else
+		{
+			return
+		}
+		single.isActive = false
+		double.isActive = false
+		(twoColumns ? double : single).isActive = true
 	}
 
 	func showChanges(_ controller: NSViewController)
@@ -596,7 +634,15 @@ final class ToolsTabViewController: NSViewController
 			[heading, tile],
 			spacing: Layout.toolsSectionGap
 		)
-		tile.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+		let singleColumn = tile.widthAnchor.constraint(equalTo: content.widthAnchor)
+		let twoColumns = tile.widthAnchor.constraint(
+			equalTo: content.widthAnchor,
+			multiplier: 0.5,
+			constant: -Layout.toolColumnSpacing / 2
+		)
+		toolsTileSingleColumnWidth = singleColumn
+		toolsTileTwoColumnWidth = twoColumns
+		singleColumn.isActive = true
 		return content
 	}
 
