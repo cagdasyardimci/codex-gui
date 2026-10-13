@@ -99,6 +99,11 @@ enum ShapeTokens
 
 	}
 
+	enum ModelList
+	{
+		static let rowRadius: CGFloat = 15
+	}
+
 	enum EffortSlider
 	{
 		static let trackEdgeWidth: CGFloat = 0.5
@@ -111,10 +116,4 @@ enum ShapeTokens
 			diameter / 2
 		}
 	}
-
-	enum ModelList
-	{
-		static let rowRadius: CGFloat = 15
-	}
-
 }

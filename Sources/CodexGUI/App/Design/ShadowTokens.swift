@@ -35,6 +35,11 @@ enum ShadowTokens
 		blur: 16,
 		spread: -4
 	)]
+	static let effortThumb = Style(
+		color: .black.withAlphaComponent(0.1),
+		offsetY: 0,
+		blur: 2
+	)
 	static let summary = [
 		Style(
 			color: .black.withAlphaComponent(0.04),
@@ -82,11 +87,5 @@ enum ShadowTokens
 			inset: true
 		),
 	]
-
-	static let effortThumb = Style(
-		color: .black.withAlphaComponent(0.1),
-		offsetY: 0,
-		blur: 2
-	)
 
 }

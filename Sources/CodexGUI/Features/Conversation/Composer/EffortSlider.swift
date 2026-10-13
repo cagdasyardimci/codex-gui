@@ -4,6 +4,7 @@ import QuartzCore
 enum EffortSliderGeometry
 {
 	static let knobDiameter = LayoutTokens.EffortSlider.knobDiameter
+	static let hoveredKnobDiameter = LayoutTokens.EffortSlider.hoveredKnobDiameter
 	static let trackHeight = LayoutTokens.EffortSlider.trackHeight
 	static let trackCornerRadius = ShapeTokens.EffortSlider.trackCornerRadius
 	static let filledTickDiameter = LayoutTokens.EffortSlider.filledTickDiameter
@@ -263,6 +264,12 @@ final class EffortSliderCell: NSSliderCell
 
 	override func drawKnob(_ knobRect: NSRect)
 	{
+		// The owning slider paints its visual thumb outside the logical cell bounds.
+		guard !(controlView is EffortSlider)
+		else
+		{
+			return
+		}
 		NSGraphicsContext.saveGraphicsState()
 		let shadow = NSShadow()
 		shadow.shadowColor = ShadowTokens.effortThumb.color
@@ -311,7 +318,34 @@ final class EffortSlider: NSSlider
 		didSet
 		{
 			updateParticles()
+			if !isPresented
+			{
+				resetThumbHover()
+			}
 		}
+	}
+	var shouldReduceMotion: () -> Bool =
+	{
+		NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+	}
+	private(set) var visualKnobDiameter = EffortSliderGeometry.knobDiameter
+	private var thumbHovered = false
+	private var pointerLocationInWindow: NSPoint?
+	private var isTrackingMouse = false
+	private var thumbTracking: NSTrackingArea?
+	private var hoverAnimation: EffortThumbHoverAnimation?
+	private let thumbLayer = CALayer()
+	var isAnimatingThumbHover: Bool
+	{
+		hoverAnimation?.isAnimating == true
+	}
+
+	var visualKnobRect: NSRect
+	{
+		whiteKnobRect.insetBy(
+			dx: (EffortSliderGeometry.knobDiameter - visualKnobDiameter) / 2,
+			dy: (EffortSliderGeometry.knobDiameter - visualKnobDiameter) / 2
+		)
 	}
 
 	private enum ParticleMode
@@ -343,7 +377,15 @@ final class EffortSlider: NSSlider
 		knobCutoutMask.fillRule = .evenOdd
 		particleRoot.addSublayer(filledClip)
 		layer?.addSublayer(particleRoot)
+		layer?.masksToBounds = false
+		layer?.addSublayer(thumbLayer)
 		makeParticles()
+		NSWorkspace.shared.notificationCenter.addObserver(
+			self,
+			selector: #selector(thumbMotionPreferenceChanged),
+			name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+			object: nil
+		)
 	}
 
 	private func makeParticles()
@@ -395,13 +437,203 @@ final class EffortSlider: NSSlider
 		trackRect = track
 		filledRect = filled
 		whiteKnobRect = whiteKnob
+		updateVisualThumb()
+		updateThumbHoverForPointer()
 
-		updateParticleMasks(
-			track: track,
-			filledTrack: filled,
-			whiteKnob: whiteKnob
-		)
 		updateParticles(restart: true)
+	}
+
+	override func layout()
+	{
+		super.layout()
+		refreshTrackGeometry()
+	}
+
+	override var doubleValue: Double
+	{
+		didSet
+		{
+			refreshTrackGeometry()
+		}
+	}
+
+	private func refreshTrackGeometry()
+	{
+		guard let cell = cell as? EffortSliderCell
+		else
+		{
+			return
+		}
+		updateTrackGeometry(
+			track: cell.barRect(flipped: isFlipped),
+			knob: cell.knobRect(flipped: isFlipped)
+		)
+	}
+
+	override var isEnabled: Bool
+	{
+		didSet
+		{
+			if !isEnabled
+			{
+				resetThumbHover()
+			}
+		}
+	}
+
+	override func updateTrackingAreas()
+	{
+		super.updateTrackingAreas()
+		if let thumbTracking
+		{
+			removeTrackingArea(thumbTracking)
+		}
+		let area = NSTrackingArea(
+			rect: .zero,
+			options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
+			owner: self,
+			userInfo: nil
+		)
+		addTrackingArea(area)
+		thumbTracking = area
+	}
+
+	override func mouseEntered(with event: NSEvent)
+	{
+		pointerLocationInWindow = event.locationInWindow
+		updateThumbHoverForPointer()
+	}
+
+	override func mouseMoved(with event: NSEvent)
+	{
+		pointerLocationInWindow = event.locationInWindow
+		updateThumbHoverForPointer()
+	}
+
+	override func mouseDown(with event: NSEvent)
+	{
+		pointerLocationInWindow = event.locationInWindow
+		updateThumbHoverForPointer()
+		isTrackingMouse = true
+		super.mouseDown(with: event)
+		isTrackingMouse = false
+		pointerLocationInWindow = window?.mouseLocationOutsideOfEventStream
+		updateThumbHoverForPointer()
+	}
+
+	override func mouseExited(with event: NSEvent)
+	{
+		pointerLocationInWindow = nil
+		setThumbHovered(false)
+	}
+
+	private func updateThumbHoverForPointer()
+	{
+		let location = isTrackingMouse
+			? window?.mouseLocationOutsideOfEventStream : pointerLocationInWindow
+		let hovered = isEnabled && isPresented && !isHiddenOrHasHiddenAncestor
+			&& location.map
+			{
+				whiteKnobRect.contains(convert(
+					$0,
+					from: nil
+				))
+			} == true
+		if hovered != thumbHovered
+		{
+			setThumbHovered(hovered)
+		}
+	}
+
+	private func setThumbHovered(_ hovered: Bool)
+	{
+		thumbHovered = hovered
+		hoverAnimation?.stop()
+		hoverAnimation = nil
+		let target = hovered ? EffortSliderGeometry.hoveredKnobDiameter
+			: EffortSliderGeometry.knobDiameter
+		guard !shouldReduceMotion(), visualKnobDiameter != target
+		else
+		{
+			visualKnobDiameter = target
+			updateVisualThumb()
+			return
+		}
+		let start = visualKnobDiameter
+		let animation = EffortThumbHoverAnimation(expanding: hovered)
+		animation.onProgress =
+		{
+			[weak self] progress in
+			guard let self
+			else
+			{
+				return
+			}
+			self.visualKnobDiameter = start + (target - start) * progress
+			self.updateVisualThumb()
+		}
+		hoverAnimation = animation
+		animation.start()
+	}
+
+	private func resetThumbHover()
+	{
+		hoverAnimation?.stop()
+		hoverAnimation = nil
+		thumbHovered = false
+		pointerLocationInWindow = nil
+		visualKnobDiameter = EffortSliderGeometry.knobDiameter
+		updateVisualThumb()
+	}
+
+	@objc private func thumbMotionPreferenceChanged()
+	{
+		if shouldReduceMotion()
+		{
+			setThumbHovered(thumbHovered)
+		}
+	}
+
+	private func updateVisualThumb()
+	{
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		thumbLayer.isHidden = whiteKnobRect == .zero
+		thumbLayer.bounds = NSRect(
+			x: 0,
+			y: 0,
+			width: visualKnobDiameter,
+			height: visualKnobDiameter
+		)
+		thumbLayer.position = CGPoint(
+			x: whiteKnobRect.midX,
+			y: whiteKnobRect.midY
+		)
+		thumbLayer.cornerRadius = ShapeTokens.EffortSlider.knobRadius(diameter: visualKnobDiameter)
+		thumbLayer.backgroundColor = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.effortThumb,
+			for: self
+		)
+		thumbLayer.shadowColor = AppKitColorResolution.resolvedCGColor(
+			ShadowTokens.effortThumb.color,
+			for: self
+		)
+		thumbLayer.shadowOpacity = 1
+		thumbLayer.shadowRadius = ShadowTokens.effortThumb.blur / 2
+		thumbLayer.shadowOffset = CGSize(
+			width: 0,
+			height: -ShadowTokens.effortThumb.offsetY
+		)
+		thumbLayer.shadowPath = CGPath(
+			ellipseIn: thumbLayer.bounds,
+			transform: nil
+		)
+		CATransaction.commit()
+		updateParticleMasks(
+			track: trackRect,
+			filledTrack: filledRect,
+			whiteKnob: visualKnobRect
+		)
 	}
 
 	private func updateParticleMasks(
@@ -439,18 +671,24 @@ final class EffortSlider: NSSlider
 	{
 		super.viewDidChangeEffectiveAppearance()
 		needsDisplay = true
+		updateVisualThumb()
 	}
 
 	override func viewDidMoveToWindow()
 	{
 		super.viewDidMoveToWindow()
 		updateParticles()
+		if window == nil
+		{
+			resetThumbHover()
+		}
 	}
 
 	override func viewDidHide()
 	{
 		super.viewDidHide()
 		updateParticles()
+		resetThumbHover()
 	}
 
 	override func viewDidUnhide()

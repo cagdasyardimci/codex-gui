@@ -64,3 +64,6 @@ panel padding accommodates that shadow without adding a second native window sha
 
 Model selection replaces the effort content in the same panel. Long model lists scroll;
 Escape dismisses the panel and returns focus to the composer.
+
+The effort thumb enlarges visually on hover without changing logical slider geometry.
+Its immutable animation configuration controls entry, exit and reduced-motion behavior.

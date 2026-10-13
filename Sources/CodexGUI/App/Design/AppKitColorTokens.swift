@@ -126,6 +126,12 @@ enum AppKitColorTokens
 		lightAlpha: 0.04,
 		darkAlpha: 0
 	)
+	static let composerInsetEdge = AppKitColorResolution.color(
+		light: 0xFFFFFF,
+		dark: 0xFFFFFF,
+		lightAlpha: 0,
+		darkAlpha: 0.2
+	)
 	static let rowHighlight = AppKitColorResolution.color(
 		light: 0x1A1C1F,
 		dark: 0xFFFFFF,
@@ -191,6 +197,14 @@ enum AppKitColorTokens
 		lightAlpha: 0.247059,
 		darkAlpha: 0.24902
 	)
+	static let effortFilledTick = NSColor.white.withAlphaComponent(0.3)
+	static let effortThumb = NSColor.white
+	static let effortTrackEdge = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.08,
+		darkAlpha: 0.082
+	)
 	static let effortModel = AppKitColorResolution.color(
 		light: 0x1A1C1F,
 		dark: 0xFFFFFF,
@@ -236,23 +250,5 @@ enum AppKitColorTokens
 				alpha: 1
 			) : .linkColor
 	}
-
-	static let composerInsetEdge = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0xFFFFFF,
-		lightAlpha: 0,
-		darkAlpha: 0.2
-	)
-
-	static let effortFilledTick = NSColor.white.withAlphaComponent(0.3)
-
-	static let effortThumb = NSColor.white
-
-	static let effortTrackEdge = AppKitColorResolution.color(
-		light: 0x1A1C1F,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.08,
-		darkAlpha: 0.082
-	)
 
 }

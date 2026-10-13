@@ -672,14 +672,6 @@ enum LayoutTokens
 		static let projectSpacing: CGFloat = 7
 	}
 
-	enum EffortSlider
-	{
-		static let knobDiameter: CGFloat = 28
-		static let trackHeight: CGFloat = 24
-		static let filledTickDiameter: CGFloat = 3
-		static let unfilledTickDiameter: CGFloat = 4
-	}
-
 	enum ModelList
 	{
 		static let outerInset: CGFloat = 4
@@ -700,4 +692,12 @@ enum LayoutTokens
 		}
 	}
 
+	enum EffortSlider
+	{
+		static let knobDiameter: CGFloat = 28
+		static let hoveredKnobDiameter: CGFloat = 32
+		static let trackHeight: CGFloat = 24
+		static let filledTickDiameter: CGFloat = 3
+		static let unfilledTickDiameter: CGFloat = 4
+	}
 }
