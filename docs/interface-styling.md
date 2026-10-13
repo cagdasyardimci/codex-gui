@@ -13,7 +13,7 @@ The catalogues are immutable; there is no mutable global theme or runtime token 
 | Catalogue | Owns |
 | --- | --- |
 | [LayoutTokens](../Sources/CodexGUI/App/Design/LayoutTokens.swift) | Dimensions, spacing, insets, icon sizes and layout-policy inputs; simple derived allowances and scalar/range validation, in AppKit points. |
-| [ShapeTokens](../Sources/CodexGUI/App/Design/ShapeTokens.swift) | Radii, stroke widths and related shape formulas, grouped by component role. |
+| [ShapeTokens](../Sources/CodexGUI/App/Design/ShapeTokens.swift) | Radii, corner curves, stroke widths and related shape formulas, grouped by component role. |
 | [TypographyTokens](../Sources/CodexGUI/App/Design/TypographyTokens.swift) | Value-only text roles, exact interface weights versus native font selections, line-height policy, tracking and text features. |
 | [AppKitColorTokens](../Sources/CodexGUI/App/Design/AppKitColorTokens.swift) | Named native dynamic color roles and their light/dark values. |
 | [ShadowTokens](../Sources/CodexGUI/App/Design/ShadowTokens.swift) | Immutable native shadow styles and named composite presets. |
@@ -26,6 +26,7 @@ catalogues use AppKit on the main actor.
 | --- | --- |
 | [AppKitColorResolution](../Sources/CodexGUI/App/Design/AppKitColorResolution.swift) | Dynamic sRGB/grayscale color construction and resolution under a view's effective appearance; it does not depend on named palette roles. |
 | [AppKitFontResolver](../Sources/CodexGUI/App/Design/AppKitFontResolver.swift) | Native font construction and font-related attributed-string attributes. |
+| [AppKitShapePath](../Sources/CodexGUI/App/Design/AppKitShapePath.swift) | Shared corner contours for native fills, borders and shadow paths; the corner curve is independent of its radius. |
 | [AppKitShadowRenderer](../Sources/CodexGUI/App/Design/AppKitShadowRenderer.swift) | Applying exterior and inset shadow styles to layers, including paths, masks and blur conversion. |
 | [AppKitControlStyling](../Sources/CodexGUI/App/Design/AppKitControlStyling.swift) | Shared native button, popup and section-label presentation defaults. |
 

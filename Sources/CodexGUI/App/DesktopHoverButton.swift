@@ -5,6 +5,7 @@ import AppKit
 class DesktopHoverButton: DesktopAttributedTitleButton
 {
 	var cornerRadius: CGFloat = 12.5
+	var cornerCurve: ShapeTokens.CornerCurve = .circular
 	private var hovered = false
 	private var tracking: NSTrackingArea?
 
@@ -48,10 +49,10 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 		if isEnabled && (hovered || isHighlighted)
 		{
 			AppKitColorTokens.rowHighlight.setFill()
-			NSBezierPath(
-				roundedRect: bounds,
-				xRadius: cornerRadius,
-				yRadius: cornerRadius
+			AppKitShapePath.roundedRect(
+				bounds,
+				radius: cornerRadius,
+				curve: cornerCurve
 			).fill()
 		}
 		super.draw(dirtyRect)

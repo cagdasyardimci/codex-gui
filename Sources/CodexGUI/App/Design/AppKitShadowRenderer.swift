@@ -9,7 +9,8 @@ enum AppKitShadowRenderer
 		_ style: ShadowTokens.Style,
 		to layer: CALayer,
 		in view: NSView,
-		cornerRadius: CGFloat
+		cornerRadius: CGFloat,
+		cornerCurve: ShapeTokens.CornerCurve = .circular
 	)
 	{
 		CATransaction.begin()
@@ -26,27 +27,24 @@ enum AppKitShadowRenderer
 		)
 		// Approximate the CSS blur with a native Gaussian radius; the kernels differ.
 		layer.shadowRadius = style.blur / 2
-		layer.shadowPath = CGPath(
-			roundedRect: layer.bounds.insetBy(
+		layer.shadowPath = AppKitShapePath.roundedCGPath(
+			layer.bounds.insetBy(
 				dx: -style.spread,
 				dy: -style.spread
 			),
-			cornerWidth: max(
+			radius: max(
 				0,
 				cornerRadius + style.spread
 			),
-			cornerHeight: max(
-				0,
-				cornerRadius + style.spread
-			),
-			transform: nil
+			curve: cornerCurve
 		)
 		if style.inset
 		{
 			applyInsetPath(
 				style,
 				to: layer,
-				cornerRadius: cornerRadius
+				cornerRadius: cornerRadius,
+				cornerCurve: cornerCurve
 			)
 			CATransaction.commit()
 			return
@@ -60,14 +58,14 @@ enum AppKitShadowRenderer
 		)
 		let maskPath = CGMutablePath()
 		maskPath.addRect(mask.bounds)
-		maskPath.addRoundedRect(
-			in: layer.bounds.offsetBy(
+		maskPath.addPath(AppKitShapePath.roundedCGPath(
+			layer.bounds.offsetBy(
 				dx: outset,
 				dy: outset
 			),
-			cornerWidth: cornerRadius,
-			cornerHeight: cornerRadius
-		)
+			radius: cornerRadius,
+			curve: cornerCurve
+		))
 		mask.path = maskPath
 		mask.fillRule = .evenOdd
 		mask.fillColor = NSColor.black.cgColor
@@ -78,7 +76,8 @@ enum AppKitShadowRenderer
 	private static func applyInsetPath(
 		_ style: ShadowTokens.Style,
 		to layer: CALayer,
-		cornerRadius: CGFloat
+		cornerRadius: CGFloat,
+		cornerCurve: ShapeTokens.CornerCurve
 	)
 	{
 		let outset = style.blur + abs(style.spread) + abs(style.offsetY) + 4
@@ -95,30 +94,25 @@ enum AppKitShadowRenderer
 			tx: 2 * layer.bounds.midX,
 			ty: 0
 		)
-		let hole = CGPath(
-			roundedRect: layer.bounds.insetBy(
+		let hole = AppKitShapePath.roundedCGPath(
+			layer.bounds.insetBy(
 				dx: style.spread,
 				dy: style.spread
 			),
-			cornerWidth: max(
+			radius: max(
 				0,
 				cornerRadius - style.spread
 			),
-			cornerHeight: max(
-				0,
-				cornerRadius - style.spread
-			),
-			transform: &reversed
-		)
+			curve: cornerCurve
+		).copy(using: &reversed)!
 		shadowPath.addPath(hole)
 		layer.shadowPath = shadowPath
 		let mask = layer.mask as? CAShapeLayer ?? CAShapeLayer()
 		mask.frame = layer.bounds
-		mask.path = CGPath(
-			roundedRect: mask.bounds,
-			cornerWidth: cornerRadius,
-			cornerHeight: cornerRadius,
-			transform: nil
+		mask.path = AppKitShapePath.roundedCGPath(
+			mask.bounds,
+			radius: cornerRadius,
+			curve: cornerCurve
 		)
 		mask.fillRule = .nonZero
 		mask.fillColor = NSColor.black.cgColor

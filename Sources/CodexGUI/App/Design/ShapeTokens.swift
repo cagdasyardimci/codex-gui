@@ -3,6 +3,12 @@ import Foundation
 /// Shared radii, strokes and shape relationships, grouped by component role.
 enum ShapeTokens
 {
+	enum CornerCurve: Sendable
+	{
+		case circular
+		case superellipse(CGFloat)
+	}
+
 	enum Composer
 	{
 		static let cornerRadius: CGFloat = 22
