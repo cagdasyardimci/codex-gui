@@ -42,8 +42,8 @@ extension MainWindowController
 		statusButton.contentTintColor = .labelColor
 		statusButton.setAccessibilityLabel("Open account and backend status")
 		statusButton.setAccessibilityIdentifier("workspace-status")
-		statusButton.widthAnchor.constraint(equalToConstant: 32).isActive = true
-		statusButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
+		statusButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
+		statusButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
 
 		configureToolbarTitle()
 		configureSummaryToggle()

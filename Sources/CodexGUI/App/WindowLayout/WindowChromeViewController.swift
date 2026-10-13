@@ -77,7 +77,7 @@ final class WindowChromeViewController: NSViewController
 		avatar.translatesAutoresizingMaskIntoConstraints = false
 		accountButton.translatesAutoresizingMaskIntoConstraints = false
 		column.addSubview(avatar)
-		avatar.addSubview(accountButton)
+		column.addSubview(accountButton)
 
 		NSLayoutConstraint.activate([
 			column.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -85,9 +85,9 @@ final class WindowChromeViewController: NSViewController
 			column.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 			accountWidth,
 			avatar.centerXAnchor.constraint(equalTo: column.centerXAnchor),
-			avatar.bottomAnchor.constraint(
+			accountButton.bottomAnchor.constraint(
 				equalTo: column.bottomAnchor,
-				constant: -Layout.avatarBottomInset
+				constant: -Layout.accountBottomInset
 			),
 			avatar.widthAnchor.constraint(equalToConstant: Layout.avatarSize),
 			avatar.heightAnchor.constraint(equalToConstant: Layout.avatarSize),

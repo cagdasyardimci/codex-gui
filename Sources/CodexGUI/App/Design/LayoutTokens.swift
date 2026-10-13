@@ -462,14 +462,8 @@ enum LayoutTokens
 		static let panelOuterInset: CGFloat = 4
 		static let panelTopInset: CGFloat = 2
 		static let splitLeadingInset: CGFloat = 1
-		static let avatarSize: CGFloat = 32
-		static let accountBottomInset: CGFloat = 12
-
-		static var avatarBottomInset: CGFloat
-		{
-			accountBottomInset
-		}
-
+		static let avatarSize: CGFloat = 24
+		static let accountBottomInset: CGFloat = 9.5
 	}
 
 	enum Summary

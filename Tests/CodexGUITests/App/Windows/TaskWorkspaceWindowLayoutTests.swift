@@ -127,7 +127,7 @@ struct TaskWorkspaceWindowLayoutTests
 			height: 500
 		))
 		#expect(split.view.fittingSize.height <= window.contentLayoutRect.height)
-		#expect(controller.statusButton.fittingSize.width <= 32)
+		#expect(controller.statusButton.fittingSize.width <= 36)
 		#expect(controller.statusButton.toolTip
 			== "\(snapshot.accountDescription) · Awaiting approval")
 		let details = try #require(findRequestDetails(in: conversation.view))

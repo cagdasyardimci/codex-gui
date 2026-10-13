@@ -143,10 +143,10 @@ struct DesktopLayoutTests
 					to: content
 				)
 				#expect(abs(accountFrame.midX - 26) < 1)
-				#expect(abs(accountFrame.minY - 12) < 1)
+				#expect(abs(accountFrame.minY - 9.5) < 1)
 				#expect(accountFrame.size == NSSize(
-					width: 32,
-					height: 32
+					width: 36,
+					height: 36
 				))
 				let workspaceFrame = split.view.convert(
 					split.view.bounds,
