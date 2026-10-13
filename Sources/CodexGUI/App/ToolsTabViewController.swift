@@ -4,6 +4,47 @@ import AppKit
 final class ToolsTabViewController: NSViewController
 {
 	private typealias Layout = LayoutTokens.Tabs
+	private let metrics: LayoutTokens.TabContent
+
+	init(metrics: LayoutTokens.TabContent = LayoutTokens.tabContent)
+	{
+		precondition(
+			metrics.isValid,
+			"Invalid tab metrics"
+		)
+		precondition(
+			max(
+				metrics.closeControlSize,
+				metrics.moreControlSize
+			) <= Layout.tabHeight,
+			"Tab controls must fit within the tab height"
+		)
+		self.metrics = metrics
+		super.init(
+			nibName: nil,
+			bundle: nil
+		)
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
+	private var minimumVisibleTabWidth: CGFloat
+	{
+		let ordinary = metrics.effectiveMinimum(for: .ordinary)
+		guard isExpanded
+		else
+		{
+			return ordinary
+		}
+		let conversation = metrics.effectiveMinimum(for: .conversation)
+		return tabCount > 0 ? max(
+			ordinary,
+			conversation
+		) : conversation
+	}
 
 	var onCloseLastTab: (() -> Void)?
 	var onClosePane: (() -> Void)?
@@ -46,9 +87,15 @@ final class ToolsTabViewController: NSViewController
 	private let sourcesHoverPreview = SourcesTabHoverPreview()
 	private let tabScrollView = NSScrollView()
 	private lazy var tabBar = makeTabHeader()
+	private var tabLeadingConstraint: NSLayoutConstraint?
+	private var headerTrailingConstraint: NSLayoutConstraint?
+	private var headerControlsWidthConstraint: NSLayoutConstraint?
 	private var preferredTabAreaWidth: NSLayoutConstraint?
+	private var headerCenterConstraints: [NSLayoutConstraint] = []
+	private var toolbarTabOffset: CGFloat = 0
+	private var toolbarControlsOffset: CGFloat = 0
+	private let controlsSeparator = ToolbarSeparatorView(constrained: false)
 	private var expandButton: NSButton?
-	private var addTabButton: NSButton?
 	private let summaryButton = PinnedSummaryToggleButton(
 		title: "",
 		target: nil,
@@ -63,12 +110,42 @@ final class ToolsTabViewController: NSViewController
 
 	var minimumTabBarWidth: CGFloat
 	{
-		let trailingControlCount = summaryButton.isHidden ? 2 : 3
-		let minimumTabWidth = Layout.tabLeadingInset + Layout.minimumTabSelectionWidth
-			+ Layout.controlSize + Layout.tabTrailingInset
-		return minimumTabWidth + Layout.controlSize * CGFloat(trailingControlCount)
-			+ Layout.controlSpacing * CGFloat(trailingControlCount - 1)
-			+ Layout.addButtonSpacing
+
+		return minimumVisibleTabWidth + controlsWidth(expanded: !summaryButton.isHidden)
+			+ Layout.addButtonSpacing + Layout.controlSize + Layout.controlSpacing
+			+ Layout.headerLeadingInset + Layout.headerTrailingInset
+	}
+
+	func alignTabsWithPaneDivider(
+		at x: CGFloat,
+		expanded: Bool
+	)
+	{
+		let inset = (expanded ? 0 : x) + Layout.headerLeadingInset
+		if tabLeadingConstraint?.constant != inset
+		{
+			tabLeadingConstraint?.constant = inset
+		}
+	}
+
+	func setToolbarVerticalOffsets(
+		tabs: CGFloat,
+		controls: CGFloat
+	)
+	{
+		toolbarTabOffset = tabs
+		toolbarControlsOffset = controls
+		for (index, constraint) in headerCenterConstraints.enumerated()
+		{
+			constraint.constant = index < 2 ? tabs + LayoutTokens.TabControls
+				.tabCenterBias : controls
+		}
+	}
+
+	func setPaneWidth(_ width: CGFloat)
+	{
+		controlsSeparator.alphaValue = width <= LayoutTokens.TabControls
+			.separatorVisibilityWidth ? 1 : 0
 	}
 
 	static func paneIcon() -> NSImage
@@ -325,6 +402,8 @@ final class ToolsTabViewController: NSViewController
 			isConversationSelected = false
 		}
 		summaryButton.isHidden = !expanded
+		headerTrailingConstraint?.constant = -Layout.headerTrailingInset
+		headerControlsWidthConstraint?.constant = controlsWidth(expanded: expanded)
 		let label = expanded ? "Restore split view" : "Expand tab pane"
 		expandButton?.image = DesktopIcons.image(
 			expanded ? .collapseSmall : .expand,
@@ -376,7 +455,6 @@ final class ToolsTabViewController: NSViewController
 			label: "Add tab",
 			action: #selector(addTab)
 		)
-		addTabButton = addButton
 		let expandButton = makeIconButton(
 			.expand,
 			label: "Expand tab pane",
@@ -390,38 +468,72 @@ final class ToolsTabViewController: NSViewController
 		)
 
 		let controls = AppKitLayout.horizontalStack(
-			[summaryButton, expandButton, closePaneButton],
+			[controlsSeparator, summaryButton, expandButton, closePaneButton],
 			spacing: Layout.controlSpacing
 		)
-		for child in [tabScrollView, controls]
+		let controlsWidth = controls.widthAnchor.constraint(
+			equalToConstant: controlsWidth(expanded: false)
+		)
+		headerControlsWidthConstraint = controlsWidth
+		let preferredWidth = tabScrollView.widthAnchor.constraint(equalToConstant: 0)
+		preferredWidth.priority = NSLayoutConstraint.Priority(999)
+		preferredTabAreaWidth = preferredWidth
+		for child in [tabScrollView, addButton, controls]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 			header.addSubview(child)
 		}
-		let preferredWidth = tabScrollView.widthAnchor.constraint(equalToConstant: 0)
-		preferredWidth.priority = .defaultHigh
-		preferredTabAreaWidth = preferredWidth
+		let trailingConstraint = controls.trailingAnchor.constraint(
+			equalTo: header.trailingAnchor,
+			constant: -Layout.headerTrailingInset
+		)
+		headerTrailingConstraint = trailingConstraint
+		let leadingConstraint = tabScrollView.leadingAnchor.constraint(
+			equalTo: header.leadingAnchor,
+			constant: Layout.headerLeadingInset
+		)
+		tabLeadingConstraint = leadingConstraint
+		headerCenterConstraints = [
+			tabScrollView.centerYAnchor.constraint(
+				equalTo: header.centerYAnchor,
+				constant: toolbarTabOffset + LayoutTokens.TabControls.tabCenterBias
+			),
+			addButton.centerYAnchor.constraint(
+				equalTo: header.centerYAnchor,
+				constant: toolbarTabOffset + LayoutTokens.TabControls.tabCenterBias
+			),
+			controls.centerYAnchor.constraint(
+				equalTo: header.centerYAnchor,
+				constant: toolbarControlsOffset
+			),
+		]
+		NSLayoutConstraint.activate(headerCenterConstraints)
 		NSLayoutConstraint.activate([
 			header.heightAnchor.constraint(equalToConstant: Layout.headerHeight),
+			controlsWidth,
 			preferredWidth,
+			controlsSeparator.widthAnchor.constraint(equalToConstant: Layout.separatorWidth),
+			controlsSeparator.heightAnchor.constraint(equalToConstant: Layout.separatorHeight),
 			tabScrollView.widthAnchor.constraint(greaterThanOrEqualToConstant: Layout.controlSize),
-			tabScrollView.leadingAnchor.constraint(
-				equalTo: header.leadingAnchor,
-				constant: 0
-			),
-			tabScrollView.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+			leadingConstraint,
 			tabScrollView.heightAnchor.constraint(equalToConstant: Layout.tabHeight),
 			tabScrollView.trailingAnchor.constraint(
-				lessThanOrEqualTo: controls.leadingAnchor,
+				equalTo: addButton.leadingAnchor,
 				constant: -Layout.addButtonSpacing
 			),
-			controls.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-			controls.trailingAnchor.constraint(
-				equalTo: header.trailingAnchor,
-				constant: 0
+			addButton.trailingAnchor.constraint(
+				lessThanOrEqualTo: controls.leadingAnchor,
+				constant: -Layout.controlSpacing
 			),
+			trailingConstraint,
 		])
 		return header
+	}
+
+	private func controlsWidth(expanded: Bool) -> CGFloat
+	{
+		let count: CGFloat = expanded ? 3 : 2
+		return Layout.separatorWidth + count * (Layout.controlSize + Layout.controlSpacing)
 	}
 
 	private func configureTabScrollView()
@@ -498,24 +610,15 @@ final class ToolsTabViewController: NSViewController
 	private func renderTabs()
 	{
 		showSelectedContent()
-		updatePreferredTabAreaWidth()
+		let visibleTabCount = tabCount + (isExpanded ? 1 : 0)
+		preferredTabAreaWidth?.constant = CGFloat(visibleTabCount) * metrics.maximumWidth
+			+ CGFloat(max(
+				0,
+				visibleTabCount - 1
+			)) * Layout.tabSpacing
 
 		let selectedTab = rebuildTabViews()
 		revealSelectedTab(selectedTab)
-	}
-
-	private func updatePreferredTabAreaWidth()
-	{
-		let visibleTabCount = tabCount + (isExpanded ? 1 : 0)
-		let tabsWidth = CGFloat(visibleTabCount) * Layout.tabWidth
-		let tabGapCount = max(
-			0,
-			visibleTabCount - 1
-		)
-		let tabGapsWidth = CGFloat(tabGapCount) * Layout.tabSpacing
-		let tabsAndGapsWidth = tabsWidth + tabGapsWidth
-		preferredTabAreaWidth?.constant =
-			tabsAndGapsWidth + Layout.tabSpacing + Layout.controlSize
 	}
 
 	private func rebuildTabViews() -> NSView?
@@ -526,11 +629,15 @@ final class ToolsTabViewController: NSViewController
 			tabStack.removeArrangedSubview(tab)
 			tab.removeFromSuperview()
 		}
+		let visibleTabCount = tabCount + (isExpanded ? 1 : 0)
 		var selectedTab: NSView?
 		if isExpanded
 		{
 			let tab = makeConversationTab()
-			addTabView(tab)
+			addTabView(
+				tab,
+				visibleTabCount: visibleTabCount
+			)
 			if isConversationSelected
 			{
 				selectedTab = tab
@@ -544,15 +651,14 @@ final class ToolsTabViewController: NSViewController
 				id: tabID,
 				selected: selected
 			)
-			addTabView(tab)
+			addTabView(
+				tab,
+				visibleTabCount: visibleTabCount
+			)
 			if selected
 			{
 				selectedTab = tab
 			}
-		}
-		if let addTabButton
-		{
-			tabStack.addArrangedSubview(addTabButton)
 		}
 		return selectedTab
 	}
@@ -564,12 +670,7 @@ final class ToolsTabViewController: NSViewController
 			tabBar.layoutSubtreeIfNeeded()
 			if let selectedTab
 			{
-				var visibleRect = selectedTab.frame
-				if !isConversationSelected, selectedTabID == tabIDs.last, let addTabButton
-				{
-					visibleRect = visibleRect.union(addTabButton.frame)
-				}
-				tabStack.scrollToVisible(visibleRect)
+				tabStack.scrollToVisible(selectedTab.frame)
 			}
 		}
 	}
@@ -599,11 +700,24 @@ final class ToolsTabViewController: NSViewController
 		}
 	}
 
-	private func addTabView(_ tab: NSView)
+	private func addTabView(
+		_ tab: NSView,
+		visibleTabCount: Int
+	)
 	{
 		tabStack.addArrangedSubview(tab)
-		tab.widthAnchor.constraint(lessThanOrEqualTo: tabScrollView.contentView.widthAnchor)
-			.isActive = true
+		let availableWidth = tab.widthAnchor.constraint(
+			equalTo: tabScrollView.contentView.widthAnchor,
+			multiplier: 1 / CGFloat(visibleTabCount),
+			constant: -Layout.tabSpacing * CGFloat(visibleTabCount - 1)
+				/ CGFloat(visibleTabCount)
+		)
+		availableWidth.priority = .defaultHigh
+		NSLayoutConstraint.activate([
+			availableWidth,
+			tab.widthAnchor.constraint(greaterThanOrEqualToConstant: minimumVisibleTabWidth),
+			tab.widthAnchor.constraint(lessThanOrEqualToConstant: metrics.maximumWidth),
+		])
 	}
 
 	private func makeConversationTab() -> NSView
@@ -627,6 +741,7 @@ final class ToolsTabViewController: NSViewController
 		selectButton.setAccessibilityValue(isConversationSelected ? "Selected" : "Not selected")
 		let moreButton = makeIconButton(
 			.dotsHorizontal,
+			size: metrics.moreControlSize,
 			label: "Chat options",
 			action: nil
 		)
@@ -690,6 +805,9 @@ final class ToolsTabViewController: NSViewController
 		selectButton.setAccessibilityValue(selected ? "Selected" : "Not selected")
 		let closeButton = makeIconButton(
 			.x,
+			size: metrics.closeControlSize,
+			role: .close,
+			imageSize: 16,
 			label: "Close tab \(index + 1)",
 			action: #selector(closeTab(_:))
 		)
@@ -740,15 +858,11 @@ final class ToolsTabViewController: NSViewController
 			tab.addSubview(child)
 		}
 
-		let preferredWidth = tab.widthAnchor.constraint(equalToConstant: Layout.tabWidth)
-		// Keep titles from changing tab widths; the viewport cap can still shrink narrow tabs.
-		preferredWidth.priority = NSLayoutConstraint.Priority(999)
 		NSLayoutConstraint.activate([
-			preferredWidth,
 			tab.heightAnchor.constraint(equalToConstant: Layout.tabHeight),
 			selectButton.leadingAnchor.constraint(
 				equalTo: tab.leadingAnchor,
-				constant: Layout.tabLeadingInset
+				constant: metrics.leadingInset
 			),
 			selectButton.topAnchor.constraint(equalTo: tab.topAnchor),
 			selectButton.bottomAnchor.constraint(equalTo: tab.bottomAnchor),
@@ -756,7 +870,7 @@ final class ToolsTabViewController: NSViewController
 			trailingButton.centerYAnchor.constraint(equalTo: tab.centerYAnchor),
 			trailingButton.trailingAnchor.constraint(
 				equalTo: tab.trailingAnchor,
-				constant: -Layout.tabTrailingInset
+				constant: -metrics.trailingInset
 			),
 		])
 		return tab
@@ -764,6 +878,9 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeIconButton(
 		_ icon: DesktopIcon,
+		size: CGFloat = Layout.controlSize,
+		role: ShapeTokens.TabControls.Role = .standard,
+		imageSize: CGFloat = 16,
 		label: String,
 		action: Selector?
 	) -> NSButton
@@ -771,8 +888,10 @@ final class ToolsTabViewController: NSViewController
 		makeIconButton(
 			image: DesktopIcons.image(
 				icon,
-				size: 16
+				size: imageSize
 			),
+			size: size,
+			role: role,
 			label: label,
 			action: action
 		)
@@ -780,11 +899,13 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeIconButton(
 		image: NSImage,
+		size: CGFloat = Layout.controlSize,
+		role: ShapeTokens.TabControls.Role = .standard,
 		label: String,
 		action: Selector?
 	) -> NSButton
 	{
-		let button = NSButton(
+		let button = DesktopHoverButton(
 			title: "",
 			target: self,
 			action: action
@@ -794,8 +915,10 @@ final class ToolsTabViewController: NSViewController
 		button.imagePosition = .imageOnly
 		button.toolTip = label
 		button.setAccessibilityLabel(label)
-		button.widthAnchor.constraint(equalToConstant: Layout.controlSize).isActive = true
-		button.heightAnchor.constraint(equalToConstant: Layout.controlSize).isActive = true
+		button.cornerRadius = ShapeTokens.TabControls.radius(for: role)
+		button.contentTintColor = AppKitColorTokens.secondaryText
+		button.widthAnchor.constraint(equalToConstant: size).isActive = true
+		button.heightAnchor.constraint(equalToConstant: size).isActive = true
 		return button
 	}
 

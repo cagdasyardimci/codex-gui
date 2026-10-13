@@ -23,6 +23,10 @@ final class ToolsToolbarCoordinator
 	{
 		item.label = "Tabs"
 		let tabBar = inspector.toolsTabs.tabBarView
+		inspector.toolsTabs.setToolbarVerticalOffsets(
+			tabs: LayoutTokens.NativeChrome.toolbarTabOffset,
+			controls: LayoutTokens.NativeChrome.toolbarControlOffset
+		)
 		tabBar.clipsToBounds = false
 		if tabBarWidthConstraint == nil
 		{
@@ -63,9 +67,10 @@ final class ToolsToolbarCoordinator
 		inspector: InspectorViewController
 	) -> CGFloat
 	{
+		// Compensate for the native item inset and the pane's 4-point outer border.
 		max(
 			inspector.toolsTabs.minimumTabBarWidth,
-			paneController.tabViewportWidth - 16
+			paneController.tabViewportWidth - LayoutTokens.NativeChrome.tabBarWidthCompensation
 		)
 	}
 
@@ -96,6 +101,7 @@ final class ToolsToolbarCoordinator
 		)
 		if isOpen
 		{
+			inspector.toolsTabs.setPaneWidth(paneController.tabViewportWidth)
 			inspector.toolsTabs.tabBarView.alphaValue = min(
 				1,
 				paneController.tabViewportWidth / inspector.toolsTabs.minimumTabBarWidth
@@ -236,6 +242,10 @@ final class ToolsToolbarCoordinator
 		let divider = splitView.convert(
 			position,
 			to: tabBar
+		)
+		inspector.toolsTabs.alignTabsWithPaneDivider(
+			at: divider.x,
+			expanded: isExpanded
 		)
 		let frame = ToolbarSeparatorView.frame(
 			dividerPosition: divider,

@@ -6,6 +6,291 @@ import Testing
 @Suite @MainActor
 struct ToolsTabLayoutTests
 {
+
+	@Test func addingTabsKeepsTheRightPaneAtItsChosenWidth() throws
+	{
+		_ = NSApplication.shared
+		let suite = "ToolsTabPaneWidth.\(UUID())"
+		let defaults = try #require(UserDefaults(suiteName: suite))
+		defer
+		{
+			defaults.removePersistentDomain(forName: suite)
+		}
+		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		let controller = MainWindowController(
+			store: state.store,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			}
+		)
+		let window = try #require(controller.window)
+		defer
+		{
+			window.close()
+		}
+		window.setContentSize(NSSize(
+			width: 1512,
+			height: 876
+		))
+		let panes = controller.paneController
+		panes.didPresentWindow()
+		controller.inspector.showToolsPane()
+		panes.setReviewCollapsed(false)
+		controller.updateToolsToolbarControls()
+		window.layoutIfNeeded()
+
+		let nativeHeader = controller.inspector.toolsTabs.tabBarView
+		let tabSelection = try #require(button(
+			"New tab 1",
+			in: nativeHeader
+		))
+		#expect(tabSelection.image == nil)
+		#expect(tabSelection.target === controller.inspector.toolsTabs)
+		#expect(tabSelection.action != nil)
+		let initialWidth = panes.reviewViewportWidth
+		#expect(abs(initialWidth - WindowPaneLayout.toolsMinimumWidth) < 1)
+		let header = controller.inspector.toolsTabs.tabBarView
+		#expect(header.window === window)
+		let add = try #require(button(
+			"Add tab",
+			in: header
+		))
+		for count in 2 ... 4
+		{
+			add.performClick(nil)
+			window.layoutIfNeeded()
+			#expect(controller.inspector.toolsTabs.tabCount == count)
+			#expect(abs(panes.reviewViewportWidth - initialWidth) < 1)
+		}
+	}
+
+	@Test func toolbarUsesTheToolsPaneWidthForItsTabStrip() throws
+	{
+		_ = NSApplication.shared
+		let inspector = InspectorViewController()
+		let panes = WindowPaneController(
+			navigation: NavigationViewController(),
+			conversation: ConversationViewController(),
+			inspector: inspector,
+			layoutStore: nil
+		)
+		let chrome = WindowChromeViewController(
+			split: panes.split,
+			accountButton: NSButton()
+		)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 1200,
+				height: 760
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = chrome
+		defer
+		{
+			window.close()
+		}
+		panes.restoreLayout(in: window)
+		panes.didPresentWindow()
+		inspector.showToolsPane()
+		panes.setReviewCollapsed(false)
+		window.layoutIfNeeded()
+
+		let coordinator = ToolsToolbarCoordinator()
+		let item = NSToolbarItem(itemIdentifier: NSToolbarItem.Identifier("toolsTabBar"))
+		coordinator.configureTabBarItem(
+			item,
+			paneController: panes,
+			inspector: inspector
+		)
+		let header = try #require(item.view)
+		let content = try #require(window.contentView)
+		header.translatesAutoresizingMaskIntoConstraints = false
+		content.addSubview(header)
+		NSLayoutConstraint.activate([
+			header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+			header.topAnchor.constraint(equalTo: content.topAnchor),
+		])
+		window.layoutIfNeeded()
+		header.layoutSubtreeIfNeeded()
+
+		let paneWidth = panes.reviewViewportWidth
+		let scrollView = try #require(descendant(
+			NSScrollView.self,
+			in: header
+		))
+		#expect(abs(header.bounds.width - (paneWidth - 12)) < 1)
+		#expect(abs(scrollView.contentView.bounds.width - min(
+			238,
+			paneWidth - 131
+		)) <= 2)
+	}
+
+	@Test(arguments: [(320.0, 1, 197.0),
+						(320.0, 2, 97.5),
+						(362.0, 1, 238.0),
+						(363.0, 1, 238.0),
+						(506.0, 1, 238.0),
+						(320.0, 3, 88.0),
+						(440.0, 4, 88.0),
+						(861.5, 3, 238.0),
+						(861.5, 4, 183.125),
+						(861.5, 5, 146.1)])
+	func tabsShareAvailableWidthThenScroll(
+		paneWidth: Double,
+		count: Int,
+		expectedTabWidth: Double
+	) throws
+	{
+		_ = NSApplication.shared
+		let tabs = ToolsTabViewController()
+		let header = tabs.tabBarView
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: paneWidth,
+				height: 60
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.close()
+		}
+		let content = try #require(window.contentView)
+		header.translatesAutoresizingMaskIntoConstraints = false
+		content.addSubview(header)
+		NSLayoutConstraint.activate([
+			header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+			header.topAnchor.constraint(equalTo: content.topAnchor),
+			header.widthAnchor.constraint(equalToConstant: paneWidth - 12),
+			header.heightAnchor.constraint(equalToConstant: 44),
+		])
+		tabs.setPaneWidth(paneWidth)
+		tabs.alignTabsWithPaneDivider(
+			at: -8,
+			expanded: false
+		)
+		window.layoutIfNeeded()
+		for _ in 0 ..< count
+		{
+			tabs.openNewTab()
+		}
+		header.layoutSubtreeIfNeeded()
+
+		let scrollView = try #require(descendant(
+			NSScrollView.self,
+			in: header
+		))
+		let viewportWidth = scrollView.contentView.bounds.width
+		let add = try #require(button(
+			"Add tab",
+			in: header
+		))
+		let expand = try #require(button(
+			"Expand tab pane",
+			in: header
+		))
+		let hide = try #require(button(
+			"Close tab pane",
+			in: header
+		))
+		let separator = try #require(descendant(
+			ToolbarSeparatorView.self,
+			in: header
+		))
+		let addFrame = add.convert(
+			add.bounds,
+			to: header
+		)
+		let expandFrame = expand.convert(
+			expand.bounds,
+			to: header
+		)
+		let hideFrame = hide.convert(
+			hide.bounds,
+			to: header
+		)
+		let separatorFrame = separator.convert(
+			separator.bounds,
+			to: header
+		)
+		#expect(addFrame.size == NSSize(
+			width: 28,
+			height: 28
+		))
+		#expect(add.image?.size == NSSize(
+			width: 16,
+			height: 16
+		))
+		#expect(abs(addFrame.maxX - scrollView.frame.maxX - 36) < 0.5)
+		#expect(abs(header.bounds.maxY - addFrame.maxY - 7.5) < 0.5)
+		#expect(abs(header.bounds.maxY - expandFrame.maxY - 8) < 0.5)
+		#expect(abs(hideFrame.minX - expandFrame.maxX - 6) < 0.5)
+		#expect(separatorFrame.size == NSSize(
+			width: 1,
+			height: 16
+		))
+		#expect(abs(expandFrame.minX - separatorFrame.maxX - 6) < 0.5)
+		#expect(separator.alphaValue == (paneWidth <= 362 ? 1 : 0))
+		if count == 1
+		{
+			let expectedGap = max(
+				6,
+				paneWidth - 355
+			)
+			#expect(abs(separatorFrame.minX - addFrame.maxX - expectedGap) < 0.5)
+		}
+
+		#expect(abs(header.bounds.width - (paneWidth - 12)) < 1)
+		#expect(abs(viewportWidth - min(
+			CGFloat(count) * 238 + CGFloat(count - 1) * 2,
+			CGFloat(paneWidth) - 123
+		)) <= 2)
+		for index in 1 ... count
+		{
+			let close = try #require(button(
+				"Close tab \(index)",
+				in: header
+			))
+			let tab = try #require(close.superview)
+			#expect(abs(tab.frame.width - expectedTabWidth) <= 2)
+			if paneWidth == 320 && count <= 2
+			{
+				#expect(scrollView.documentVisibleRect.contains(tab.frame))
+			}
+		}
+		if paneWidth == 320 && count <= 2
+		{
+			let document = try #require(scrollView.documentView)
+			#expect(document.frame.width <= viewportWidth + 1)
+			#expect(abs(scrollView.documentVisibleRect.minX) < 1)
+		}
+		if count >= 3 && paneWidth <= 440
+		{
+			let document = try #require(scrollView.documentView)
+			#expect(document.frame.width > viewportWidth)
+			let newestClose = try #require(button(
+				"Close tab \(count)",
+				in: header
+			))
+			let newestTab = try #require(newestClose.superview)
+			#expect(scrollView.documentVisibleRect.contains(newestTab.frame))
+		}
+	}
+
 	@Test(arguments: [false, true])
 	func minimumToolbarWidthKeepsTabButtonsAtFullWidth(expanded: Bool) throws
 	{
@@ -38,7 +323,7 @@ struct ToolsTabLayoutTests
 			header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
 			header.topAnchor.constraint(equalTo: content.topAnchor),
 			header.widthAnchor.constraint(equalToConstant: width),
-			header.heightAnchor.constraint(equalToConstant: 28),
+			header.heightAnchor.constraint(equalToConstant: 44),
 		])
 		window.layoutIfNeeded()
 		header.layoutSubtreeIfNeeded()
@@ -56,9 +341,9 @@ struct ToolsTabLayoutTests
 			in: header
 		))
 		let tab = try #require(close.superview)
-		#expect(scrollView.contentView.bounds.width >= 64)
+		#expect(scrollView.contentView.bounds.width >= 61)
 		#expect(selection.frame.width >= 24)
-		#expect(close.frame.width == 24)
+		#expect(close.frame.width == 20)
 		#expect(selection.frame.minX >= tab.bounds.minX)
 		#expect(close.frame.maxX <= tab.bounds.maxX)
 	}

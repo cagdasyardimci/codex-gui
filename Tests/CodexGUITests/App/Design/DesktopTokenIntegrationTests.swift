@@ -197,4 +197,61 @@ struct DesktopTokenIntegrationTests
 		#expect(abs(color.greenComponent - 61 / 255.0) < 0.001)
 		#expect(abs(color.blueComponent - 114 / 255.0) < 0.001)
 	}
+
+	@Test func changingCloseSizeDoesNotChangeStandardControlRadii() throws
+	{
+		_ = NSApplication.shared
+		let controller = ToolsTabViewController(metrics: LayoutTokens.TabContent(
+			leadingInset: 40,
+			closeControlSize: 28
+		))
+		controller.openNewTab()
+		controller.setExpanded(true)
+		let header = controller.tabBarView
+		let close = try #require(button(
+			"Close tab 1",
+			in: header
+		) as? DesktopHoverButton)
+		let add = try #require(button(
+			"Add tab",
+			in: header
+		) as? DesktopHoverButton)
+		#expect(close.cornerRadius == 10)
+		#expect(add.cornerRadius == 12.5)
+		let tabWidths = descendants(in: header).compactMap
+		{
+			$0 as? ToolsTabSurface
+		}.flatMap(\.constraints).filter
+		{
+			$0.firstAttribute == .width && $0.relation == .greaterThanOrEqual
+		}
+		#expect(tabWidths.count == 2)
+		#expect(tabWidths.allSatisfy
+		{
+			$0.constant == 99
+		})
+	}
+
+	private func descendants(in view: NSView) -> [NSView]
+	{
+		view.subviews.flatMap
+		{
+			[$0] + descendants(in: $0)
+		}
+	}
+
+	private func button(
+		_ label: String,
+		in view: NSView
+	) -> NSButton?
+	{
+		descendants(in: view).compactMap
+		{
+			$0 as? NSButton
+		}.first
+		{
+			$0.accessibilityLabel() == label
+		}
+	}
+
 }

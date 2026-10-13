@@ -256,13 +256,13 @@ enum LayoutTokens
 		let moreControlSize: CGFloat
 
 		init(
-			leadingInset: CGFloat = 12,
-			trailingInset: CGFloat = 4,
+			leadingInset: CGFloat = 10,
+			trailingInset: CGFloat = 7,
 			minimumSelectionWidth: CGFloat = 24,
-			minimumWidth: CGFloat = 64,
-			maximumWidth: CGFloat = 180,
-			closeControlSize: CGFloat = 24,
-			moreControlSize: CGFloat = 24
+			minimumWidth: CGFloat = 88,
+			maximumWidth: CGFloat = 238,
+			closeControlSize: CGFloat = 20,
+			moreControlSize: CGFloat = 28
 		)
 		{
 			self.leadingInset = leadingInset
@@ -385,8 +385,8 @@ enum LayoutTokens
 
 	enum Tabs
 	{
-		static let headerHeight: CGFloat = 28
-		static let tabHeight: CGFloat = 28
+		static let headerHeight: CGFloat = 44
+		static let tabHeight: CGFloat = 32
 		static var tabWidth: CGFloat
 		{
 			tabContent.maximumWidth
@@ -395,15 +395,15 @@ enum LayoutTokens
 		{
 			tabContent.minimumWidth
 		}
-		static let tabSpacing: CGFloat = 4
+		static let tabSpacing: CGFloat = 2
 		static let headerLeadingInset: CGFloat = 8
 		static let headerTrailingInset: CGFloat = 0
-		static let controlSize: CGFloat = 24
+		static let controlSize: CGFloat = 28
 		static var closeControlSize: CGFloat
 		{
 			tabContent.closeControlSize
 		}
-		static let controlSpacing: CGFloat = 4
+		static let controlSpacing: CGFloat = 6
 		static let separatorWidth: CGFloat = 1
 		static let separatorHeight: CGFloat = 16
 		static let addButtonSpacing: CGFloat = 8

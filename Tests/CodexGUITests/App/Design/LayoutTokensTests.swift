@@ -7,9 +7,9 @@ import Testing
 {
 	@Test func existingDefaultsRetainNativeLayoutContracts()
 	{
-		#expect(LayoutTokens.Tabs.headerHeight == 28)
-		#expect(LayoutTokens.Tabs.tabWidth == 180)
-		#expect(LayoutTokens.Tabs.controlSize == 24)
+		#expect(LayoutTokens.Tabs.headerHeight == 44)
+		#expect(LayoutTokens.Tabs.tabWidth == 238)
+		#expect(LayoutTokens.Tabs.controlSize == 28)
 		#expect(LayoutTokens.window.toolsMinimumWidth == 320)
 		#expect(LayoutTokens.composer.minimumHeight == 44)
 		#expect(LayoutTokens.composer.preferenceToActionSpacing == 8)
