@@ -117,13 +117,13 @@ final class WindowChromeViewController: NSViewController
 @MainActor
 private final class RoundedContentShadow: NSView
 {
-	private let cornerRadius: CGFloat = 16
+	private let cornerRadius = ShapeTokens.NativeChrome.panelRadius
 
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
 		wantsLayer = true
-		layer?.cornerCurve = .continuous
+		layer?.cornerCurve = .circular
 		layer?.shadowColor = NSColor.black.cgColor
 		layer?.shadowOffset = .zero
 		layer?.shadowRadius = 8
@@ -182,8 +182,8 @@ private final class RoundedContentShadow: NSView
 @MainActor
 private final class RoundedContentPanel: NSView
 {
-	// The inner curve accounts for the 4-point inset from the window corner.
-	private let cornerRadius: CGFloat = 16
+	// Match the reference content panel independently of the native window corner.
+	private let cornerRadius = ShapeTokens.NativeChrome.panelRadius
 	var isGitReviewFocused = false
 	{
 		didSet
@@ -197,8 +197,8 @@ private final class RoundedContentPanel: NSView
 		super.init(frame: frameRect)
 		wantsLayer = true
 		layer?.cornerRadius = cornerRadius
-		layer?.cornerCurve = .continuous
-		layer?.borderWidth = 1
+		layer?.cornerCurve = .circular
+		layer?.borderWidth = 0.5
 		layer?.masksToBounds = true
 	}
 
@@ -218,7 +218,7 @@ private final class RoundedContentPanel: NSView
 		CATransaction.begin()
 		CATransaction.setDisableActions(true)
 		layer?.cornerRadius = isGitReviewFocused ? 0 : radius
-		layer?.borderWidth = isGitReviewFocused ? 0 : 1
+		layer?.borderWidth = isGitReviewFocused ? 0 : 0.5
 		layer?.borderColor = AppKitColorResolution.resolvedCGColor(
 			AppKitColorTokens.border,
 			for: self

@@ -233,7 +233,7 @@ struct ConversationWindowIntegrationTests
 			panes.split.view.bounds,
 			from: panes.split.view
 		)
-		#expect(abs(chrome.view.bounds.maxY - splitFrame.maxY - 2) < 0.5)
+		#expect(abs(chrome.view.bounds.maxY - splitFrame.maxY - 3.5) < 0.5)
 		panes.saveLayout()
 		#expect(store.layout?.reviewWidth == 342)
 		inspector.renderSummary(

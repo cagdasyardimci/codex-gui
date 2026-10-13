@@ -136,6 +136,10 @@ struct ToolsTabLayoutTests
 		)
 		#expect(abs(window.frame.height - titleFrame.midY - 21.5) < 0.5)
 		let nativeHeader = controller.inspector.toolsTabs.tabBarView
+		let nativeAdd = try #require(button(
+			"Add tab",
+			in: nativeHeader
+		))
 		let tabSelection = try #require(button(
 			"New tab 1",
 			in: nativeHeader
@@ -143,6 +147,48 @@ struct ToolsTabLayoutTests
 		#expect(tabSelection.image == nil)
 		#expect(tabSelection.target === controller.inspector.toolsTabs)
 		#expect(tabSelection.action != nil)
+		let nativeExpand = try #require(button(
+			"Expand tab pane",
+			in: nativeHeader
+		))
+		let addFrame = nativeAdd.convert(
+			nativeAdd.bounds,
+			to: nil
+		)
+		let expandFrame = nativeExpand.convert(
+			nativeExpand.bounds,
+			to: nil
+		)
+		#expect(abs(window.frame.height - addFrame.maxY - 7.5) < 0.5)
+		#expect(abs(window.frame.height - expandFrame.maxY - 8) < 0.5)
+		let nativeClose = try #require(button(
+			"Close tab 1",
+			in: nativeHeader
+		))
+		let closeFrame = nativeClose.convert(
+			nativeClose.bounds,
+			to: nil
+		)
+		let nativeTab = try #require(nativeClose.superview)
+		let tabFrame = nativeTab.convert(
+			nativeTab.bounds,
+			to: nil
+		)
+		#expect(abs(window.frame.height - closeFrame.maxY - 11.5) < 0.5)
+		#expect(abs(window.frame.height - tabFrame.maxY - 5.5) < 0.5)
+		#expect(abs(tabFrame.height - 32) < 0.5)
+		window.setContentSize(NSSize(
+			width: 1400,
+			height: 800
+		))
+		window.layoutIfNeeded()
+
+		let splitFrame = panes.split.view.convert(
+			panes.split.view.bounds,
+			to: nil
+		)
+		#expect(abs(window.frame.height - splitFrame.maxY - 43.5) < 0.5)
+		#expect(window.titlebarAccessoryViewControllers.isEmpty)
 		let initialWidth = panes.reviewViewportWidth
 		#expect(abs(initialWidth - WindowPaneLayout.toolsMinimumWidth) < 1)
 		let header = controller.inspector.toolsTabs.tabBarView

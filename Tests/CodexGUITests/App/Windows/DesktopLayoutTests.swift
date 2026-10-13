@@ -152,7 +152,7 @@ struct DesktopLayoutTests
 					split.view.bounds,
 					to: content
 				)
-				#expect(workspaceFrame.minX == 53)
+				#expect(workspaceFrame.minX == 52)
 				#expect(abs(workspaceFrame.maxX - (content.bounds.maxX - 4)) < 0.5)
 				#expect(abs(workspaceFrame.minY - (content.bounds.minY + 4)) < 0.5)
 				#expect(window.toolbar?.items.contains

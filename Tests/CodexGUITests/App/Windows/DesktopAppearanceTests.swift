@@ -276,7 +276,7 @@ struct DesktopAppearanceTests
 				in: ring
 			)
 			#expect(shadow.layer?.shadowOpacity == (name == .darkAqua ? 0 : 0.08))
-			#expect(panel.layer?.borderWidth == 1)
+			#expect(panel.layer?.borderWidth == 0.5)
 			#expect(ring.frame == ringFrame)
 			#expect(ring.isRunning)
 			#expect(!ring.isHidden)

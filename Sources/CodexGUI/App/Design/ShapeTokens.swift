@@ -99,7 +99,7 @@ enum ShapeTokens
 
 	enum NativeChrome
 	{
-		static let panelRadius: CGFloat = 16
+		static let panelRadius: CGFloat = 12
 
 	}
 
