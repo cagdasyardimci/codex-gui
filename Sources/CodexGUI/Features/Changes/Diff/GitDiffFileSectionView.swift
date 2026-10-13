@@ -260,13 +260,13 @@ final class GitDiffFileSectionView: NSStackView
 		}
 
 		let path = NSTextField(labelWithString: displayPath)
-		path.font = .systemFont(ofSize: 13)
+		path.font = .systemFont(ofSize: 14)
 		let pathStyle = NSMutableParagraphStyle()
 		pathStyle.lineBreakMode = .byTruncatingHead
 		let pathText = NSMutableAttributedString(
 			string: path.stringValue,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 13),
+				.font: NSFont.systemFont(ofSize: 14),
 				.foregroundColor: NSColor.secondaryLabelColor,
 				.paragraphStyle: pathStyle
 			]

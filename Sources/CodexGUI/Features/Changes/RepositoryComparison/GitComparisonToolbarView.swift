@@ -91,7 +91,7 @@ final class GitComparisonToolbarView: NSStackView
 		scopeButton.action = action
 		scopeButton.isBordered = false
 		scopeButton.focusRingType = .none
-		scopeButton.font = .systemFont(ofSize: 14)
+		scopeButton.font = .systemFont(ofSize: 13)
 		scopeButton.image = NSImage(
 			systemSymbolName: "chevron.down",
 			accessibilityDescription: nil
@@ -105,7 +105,7 @@ final class GitComparisonToolbarView: NSStackView
 		deletionsLabel.textColor = .systemRed
 		for count in [additionsLabel, deletionsLabel]
 		{
-			count.font = .systemFont(ofSize: 14)
+			count.font = .systemFont(ofSize: 13)
 		}
 		let scope = GitReviewControls.pill(AppKitLayout.horizontalStack(
 			[scopeButton, additionsLabel, deletionsLabel],
@@ -125,7 +125,7 @@ final class GitComparisonToolbarView: NSStackView
 			field.action = actions.revisions
 			field.isBezeled = false
 			field.drawsBackground = false
-			field.font = .systemFont(ofSize: 14)
+			field.font = .systemFont(ofSize: 13)
 			let width = field === baseField
 				? Layout.baseRevisionWidth : Layout.targetRevisionWidth
 			let constraint = field.widthAnchor.constraint(equalToConstant: width)
