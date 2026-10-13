@@ -547,7 +547,7 @@ final class ToolsTabViewController: NSViewController
 		)
 		headerControlsWidthConstraint = controlsWidth
 		let preferredWidth = tabScrollView.widthAnchor.constraint(equalToConstant: 0)
-		preferredWidth.priority = NSLayoutConstraint.Priority(999)
+		preferredWidth.priority = NSLayoutConstraint.Priority(998)
 		preferredTabAreaWidth = preferredWidth
 		for child in [tabScrollView, addButton, controls]
 		{
@@ -563,6 +563,8 @@ final class ToolsTabViewController: NSViewController
 			equalTo: header.leadingAnchor,
 			constant: Layout.headerLeadingInset
 		)
+		// Divider alignment can lag behind the header width during pane transitions.
+		leadingConstraint.priority = NSLayoutConstraint.Priority(999)
 		tabLeadingConstraint = leadingConstraint
 		headerCenterConstraints = [
 			tabScrollView.centerYAnchor.constraint(
@@ -586,6 +588,7 @@ final class ToolsTabViewController: NSViewController
 			controlsSeparator.widthAnchor.constraint(equalToConstant: Layout.separatorWidth),
 			controlsSeparator.heightAnchor.constraint(equalToConstant: Layout.separatorHeight),
 			tabScrollView.widthAnchor.constraint(greaterThanOrEqualToConstant: Layout.controlSize),
+			tabScrollView.leadingAnchor.constraint(greaterThanOrEqualTo: header.leadingAnchor),
 			leadingConstraint,
 			tabScrollView.heightAnchor.constraint(equalToConstant: Layout.tabHeight),
 			tabScrollView.trailingAnchor.constraint(

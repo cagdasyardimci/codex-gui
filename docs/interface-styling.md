@@ -79,3 +79,6 @@ Source owners: [ToolsTabViewController](../Sources/CodexGUI/App/ToolsTabViewCont
 Tools tiles reflow with the pane's available content width. The centered content column
 is bounded; narrow panes use one column and wider panes reserve equal grid columns,
 including space for tool actions not yet implemented in the native app.
+The tools toolbar keeps its tab viewport and fixed-size controls within the header.
+Tab alignment follows the pane divider when space permits, yielding before control sizes
+when the header narrows or divider coordinates lag during a pane transition.

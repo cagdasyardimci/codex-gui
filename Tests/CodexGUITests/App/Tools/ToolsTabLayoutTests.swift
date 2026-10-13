@@ -408,6 +408,112 @@ struct ToolsTabLayoutTests
 		#expect(close.frame.maxX <= tab.bounds.maxX)
 	}
 
+	@Test(arguments: [false, true])
+	func dividerAlignmentYieldsToHeaderControlsDuringResize(expanded: Bool) throws
+	{
+		_ = NSApplication.shared
+		let tabs = ToolsTabViewController()
+		tabs.openNewTab()
+		let header = tabs.tabBarView
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 560,
+				height: 60
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.close()
+		}
+		let content = try #require(window.contentView)
+		header.translatesAutoresizingMaskIntoConstraints = false
+		content.addSubview(header)
+		let headerWidth = header.widthAnchor.constraint(equalToConstant: 560)
+		NSLayoutConstraint.activate([
+			header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+			header.topAnchor.constraint(equalTo: content.topAnchor),
+			headerWidth,
+		])
+		tabs.alignTabsWithPaneDivider(
+			at: 210.5,
+			expanded: false
+		)
+		// Expansion may update the controls before the toolbar realigns with the pane.
+		tabs.setExpanded(expanded)
+		let scrollView = try #require(descendant(
+			NSScrollView.self,
+			in: header
+		))
+		var controlLabels = ["Add tab",
+								"Close tab pane",
+								expanded ? "Restore split view" : "Expand tab pane"]
+		if expanded
+		{
+			controlLabels.append("Toggle pinned summary")
+		}
+		let controls = try controlLabels.map
+		{
+			try #require(button(
+				$0,
+				in: header
+			))
+		}
+		for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua]
+		{
+			window.appearance = NSAppearance(named: appearance)
+			tabs.alignTabsWithPaneDivider(
+				at: 210.5,
+				expanded: false
+			)
+			for width: CGFloat in [560, 207, 560, 207]
+			{
+				headerWidth.constant = width
+				window.layoutIfNeeded()
+				header.layoutSubtreeIfNeeded()
+				#expect(scrollView.frame.minX >= 0)
+				#expect(scrollView.frame.width >= 28)
+				#expect(scrollView.frame.maxX <= header.bounds.maxX)
+				for control in controls
+				{
+					let frame = control.convert(
+						control.bounds,
+						to: header
+					)
+					#expect(frame.width == 28)
+					#expect(frame.minX >= scrollView.frame.maxX + 8)
+					#expect(frame.maxX <= header.bounds.maxX)
+				}
+				if width == 560
+				{
+					#expect(abs(scrollView.frame.minX - 218.5) < 0.5)
+				}
+			}
+			tabs.alignTabsWithPaneDivider(
+				at: -40,
+				expanded: false
+			)
+			window.layoutIfNeeded()
+			header.layoutSubtreeIfNeeded()
+			#expect(scrollView.frame.minX >= 0)
+		}
+		tabs.alignTabsWithPaneDivider(
+			at: 210.5,
+			expanded: expanded
+		)
+		window.layoutIfNeeded()
+		header.layoutSubtreeIfNeeded()
+		if expanded
+		{
+			#expect(abs(scrollView.frame.minX - LayoutTokens.Tabs.headerLeadingInset) < 0.5)
+		}
+	}
+
 	private func descendant<View: NSView>(
 		_ type: View.Type,
 		in view: NSView
