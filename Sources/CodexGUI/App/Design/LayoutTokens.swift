@@ -23,7 +23,7 @@ enum LayoutTokens
 
 		init(
 			rowHeight: CGFloat = 30,
-			rowSpacing: CGFloat = 2,
+			rowSpacing: CGFloat = 1,
 			cellInset: CGFloat = 8,
 			iconSize: CGFloat = 16,
 			iconTextSpacing: CGFloat = 8,

@@ -23,7 +23,7 @@ final class ConversationSidebarRowView: NSTableRowView
 		}
 		else if shouldDrawTaskHoverBackground
 		{
-			AppKitColorTokens.selection.withAlphaComponent(0.55).setFill()
+			AppKitColorTokens.rowHighlight.setFill()
 			selectionPath.fill()
 		}
 	}
@@ -31,24 +31,41 @@ final class ConversationSidebarRowView: NSTableRowView
 	override func drawSelection(in dirtyRect: NSRect)
 	{
 		let path = selectionPath
-		AppKitColorTokens.selection.setFill()
+		AppKitColorTokens.rowHighlight.setFill()
 		path.fill()
 		if NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
 		{
 			NSColor.secondaryLabelColor.setStroke()
-			path.lineWidth = 1
-			path.stroke()
+			let outline = NSBezierPath(
+				roundedRect: selectionRect.insetBy(
+					dx: ShapeTokens.SidebarSelection.outlineInset,
+					dy: ShapeTokens.SidebarSelection.outlineInset
+				),
+				xRadius: ShapeTokens.SidebarSelection.outlineRadius,
+				yRadius: ShapeTokens.SidebarSelection.outlineRadius
+			)
+			outline.lineWidth = ShapeTokens.SidebarSelection.outlineWidth
+			outline.stroke()
 		}
+	}
+	private var selectionRect: NSRect
+	{
+		NSRect(
+			x: bounds.minX,
+			y: bounds.minY,
+			width: bounds.width,
+			height: min(
+				bounds.height,
+				NavigationSidebarLayout.rowHeight
+			)
+		)
 	}
 	private var selectionPath: NSBezierPath
 	{
 		NSBezierPath(
-			roundedRect: bounds.insetBy(
-				dx: 1,
-				dy: 1
-			),
-			xRadius: 7,
-			yRadius: 7
+			roundedRect: selectionRect,
+			xRadius: ShapeTokens.SidebarSelection.cornerRadius,
+			yRadius: ShapeTokens.SidebarSelection.cornerRadius
 		)
 	}
 

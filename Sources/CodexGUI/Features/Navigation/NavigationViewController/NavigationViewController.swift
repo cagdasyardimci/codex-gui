@@ -139,6 +139,10 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			12,
 			after: newChatButton
 		)
+		stack.setCustomSpacing(
+			NavigationSidebarLayout.sectionContentSpacing,
+			after: projectsHeader
+		)
 		container.addSubview(stack)
 		stack.translatesAutoresizingMaskIntoConstraints = false
 		NSLayoutConstraint.activate([

@@ -142,7 +142,7 @@ final class TaskSidebarCellView: NSTableCellView
 		])
 		let leading = titleField.leadingAnchor.constraint(
 			equalTo: leadingAnchor,
-			constant: 26
+			constant: NavigationSidebarLayout.projectTitleInset
 		)
 		leading.isActive = true
 		titleLeadingConstraint = leading
@@ -156,7 +156,8 @@ final class TaskSidebarCellView: NSTableCellView
 
 	func setPinnedRow(_ pinned: Bool)
 	{
-		titleLeadingConstraint?.constant = pinned ? 4 : 26
+		titleLeadingConstraint?.constant = pinned
+			? NavigationSidebarLayout.cellInset : NavigationSidebarLayout.projectTitleInset
 	}
 
 	func setTurnRunning(_ running: Bool)

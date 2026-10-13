@@ -87,12 +87,26 @@ extension NavigationViewController
 		)
 		projectActionsButton.imagePosition = .imageOnly
 		projectActionsButton.toolTip = "Project and conversation actions"
-		let projectsHeader = AppKitLayout.horizontalStack(
-			[projectsCaption, NSView(), projectActionsButton]
-		)
-		projectActionsButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		projectActionsButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		let projectsHeader = makeSidebarHeading([projectsCaption, NSView(), projectActionsButton])
+		projectActionsButton.widthAnchor
+			.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize).isActive = true
+		projectActionsButton.heightAnchor
+			.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize).isActive = true
 		return projectsHeader
+	}
+
+	func makeSidebarHeading(_ views: [NSView]) -> NSStackView
+	{
+		let header = AppKitLayout.horizontalStack(views)
+		header.edgeInsets = NSEdgeInsets(
+			top: 0,
+			left: NavigationSidebarLayout.cellInset,
+			bottom: 0,
+			right: 0
+		)
+		header.heightAnchor.constraint(equalToConstant: NavigationSidebarLayout.rowHeight)
+			.isActive = true
+		return header
 	}
 
 	func makeProjectSelectionRow() -> NSStackView
@@ -184,10 +198,10 @@ extension NavigationViewController
 		chatsTable.addTableColumn(column)
 		chatsTable.style = .plain
 		chatsTable.headerView = nil
-		chatsTable.rowHeight = 30
+		chatsTable.rowHeight = NavigationSidebarLayout.rowHeight
 		chatsTable.intercellSpacing = NSSize(
 			width: 0,
-			height: 2
+			height: NavigationSidebarLayout.rowSpacing
 		)
 		chatsTable.backgroundColor = .clear
 		chatsTable.usesAlternatingRowBackgroundColors = false

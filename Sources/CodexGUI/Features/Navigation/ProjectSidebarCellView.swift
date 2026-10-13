@@ -22,12 +22,14 @@ final class ProjectSidebarCellView: NSTableCellView
 	private var isCurrentProject = false
 	private var titleTrailingConstraint: NSLayoutConstraint?
 
+	private typealias Layout = LayoutTokens.ProjectActions
+
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
 		actionStack.orientation = .horizontal
 		actionStack.alignment = .centerY
-		actionStack.spacing = 4
+		actionStack.spacing = Layout.actionSpacing
 		actionStack.addArrangedSubview(infoButton)
 		actionStack.addArrangedSubview(newChatButton)
 
@@ -82,26 +84,26 @@ final class ProjectSidebarCellView: NSTableCellView
 		NSLayoutConstraint.activate([
 			folder.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
-				constant: 2
+				constant: NavigationSidebarLayout.cellInset
 			),
-			folder.widthAnchor.constraint(equalToConstant: 16),
-			folder.heightAnchor.constraint(equalToConstant: 16),
+			folder.widthAnchor.constraint(equalToConstant: NavigationSidebarLayout.iconSize),
+			folder.heightAnchor.constraint(equalToConstant: NavigationSidebarLayout.iconSize),
 			folder.centerYAnchor.constraint(equalTo: centerYAnchor),
 			label.leadingAnchor.constraint(
 				equalTo: folder.trailingAnchor,
-				constant: 8
+				constant: NavigationSidebarLayout.iconTextSpacing
 			),
 			label.centerYAnchor.constraint(equalTo: centerYAnchor),
 			actionStack.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
-				constant: -2
+				constant: -NavigationSidebarLayout.cellInset
 			),
 			actionStack.centerYAnchor.constraint(equalTo: centerYAnchor),
-			actionStack.widthAnchor.constraint(equalToConstant: 44),
-			infoButton.widthAnchor.constraint(equalToConstant: 20),
-			infoButton.heightAnchor.constraint(equalToConstant: 22),
-			newChatButton.widthAnchor.constraint(equalToConstant: 20),
-			newChatButton.heightAnchor.constraint(equalToConstant: 22),
+			actionStack.widthAnchor.constraint(equalToConstant: Layout.actionWidth),
+			infoButton.widthAnchor.constraint(equalToConstant: Layout.actionSize),
+			infoButton.heightAnchor.constraint(equalToConstant: Layout.actionSize),
+			newChatButton.widthAnchor.constraint(equalToConstant: Layout.actionSize),
+			newChatButton.heightAnchor.constraint(equalToConstant: Layout.actionSize),
 		])
 		imageView = folder
 		textField = label
@@ -125,6 +127,14 @@ final class ProjectSidebarCellView: NSTableCellView
 			icon: .chatCompose
 		)
 		newChatButton.imagePosition = .imageOnly
+		infoButton.image = DesktopIcons.image(
+			.dotsHorizontal,
+			size: Layout.actionIconSize
+		)
+		newChatButton.image = DesktopIcons.image(
+			.chatCompose,
+			size: Layout.actionIconSize
+		)
 	}
 
 	required init?(coder: NSCoder)

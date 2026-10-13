@@ -39,9 +39,13 @@ struct NavigationViewControllerTests
 			controller.chatsTable,
 			viewFor: nil,
 			row: 6
-		))
-		let button = try #require(cell.subviews.first as? NSButton)
-		#expect(button.title == "Show more")
+		) as? NSTableCellView)
+		let button = try #require(cell.subviews.first(where:
+			{
+				$0 is NSButton
+			}) as? NSButton)
+		#expect(cell.textField?.stringValue == "Show more")
+		#expect(button.accessibilityLabel() == "Show more")
 		button.performClick(nil)
 		#expect(taskIDs().count == 15)
 		controller.filterThreads()
@@ -108,7 +112,7 @@ struct NavigationViewControllerTests
 		let restingFrame = label.frame
 		#expect(cell.progressRing.frame.maxX == cell.bounds.maxX - 4)
 		#expect(cell.progressRing.alphaValue == 1)
-		#expect(label.alignmentRect(forFrame: restingFrame).minX == 26)
+		#expect(label.alignmentRect(forFrame: restingFrame).minX == 32)
 		#expect(label.lineBreakMode == .byTruncatingTail)
 		#expect(label.cell?.isScrollable == false)
 		#expect(!label.allowsExpansionToolTips)

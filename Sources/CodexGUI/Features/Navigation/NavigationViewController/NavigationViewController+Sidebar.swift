@@ -167,6 +167,18 @@ extension NavigationViewController
 
 	func tableView(
 		_ tableView: NSTableView,
+		heightOfRow row: Int
+	) -> CGFloat
+	{
+		if sidebarItems.indices.contains(row), case .sectionHeader = sidebarItems[row]
+		{
+			return NavigationSidebarLayout.sectionRowHeight(at: row)
+		}
+		return NavigationSidebarLayout.rowHeight
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
 		viewFor tableColumn: NSTableColumn?,
 		row: Int
 	) -> NSView?
@@ -178,13 +190,10 @@ extension NavigationViewController
 		}
 		if case .sectionHeader(let title) = sidebarItems[row]
 		{
-			if title == "Projects"
-			{
-				return makeProjectsHeader(actionsButton: NSButton())
-			}
-			let caption = AppKitControlStyling.sectionLabel(title)
-			caption.font = .systemFont(ofSize: 13)
-			return caption
+			return makeSectionHeader(
+				title: title,
+				row: row
+			)
 		}
 		if case .pinnedThread(let thread) = sidebarItems[row]
 		{
@@ -216,25 +225,72 @@ extension NavigationViewController
 		)
 	}
 
+	private func makeSectionHeader(
+		title: String,
+		row: Int
+	) -> NSTableCellView
+	{
+		let cell = NSTableCellView(frame: .zero)
+		let header: NSView
+		if title == "Projects"
+		{
+			header = makeProjectsHeader(actionsButton: NSButton())
+		}
+		else
+		{
+			let caption = SidebarTextField(labelWithString: title)
+			caption.font = AppKitFontResolver.font(TypographyTokens.Sidebar.section)
+			caption.textColor = AppKitColorTokens.secondaryText
+			cell.textField = caption
+			header = makeSidebarHeading([caption, NSView()])
+		}
+		cell.addSubview(header)
+		header.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			header.leadingAnchor.constraint(equalTo: cell.leadingAnchor),
+			header.trailingAnchor.constraint(equalTo: cell.trailingAnchor),
+			header.topAnchor.constraint(
+				equalTo: cell.topAnchor,
+				constant: NavigationSidebarLayout.sectionTopInset(at: row)
+			),
+		])
+		return cell
+	}
+
 	private func makeShowMoreCell() -> NSTableCellView
 	{
 		let cell = NSTableCellView(frame: .zero)
+		let label = SidebarTextField(labelWithString: "Show more")
+		label.font = AppKitFontResolver.interfaceFont(
+			ofSize: 14,
+			weight: 400
+		)
+		label.textColor = AppKitColorTokens.secondaryText
+		label.setAccessibilityElement(false)
+		label.translatesAutoresizingMaskIntoConstraints = false
+		cell.textField = label
+		cell.addSubview(label)
+
 		let button = NSButton(
-			title: "Show more",
+			title: "",
 			target: self,
 			action: #selector(showMoreTasks)
 		)
 		button.isBordered = false
-		button.contentTintColor = .secondaryLabelColor
+		button.setAccessibilityLabel("Show more")
 		button.translatesAutoresizingMaskIntoConstraints = false
 		cell.addSubview(button)
 		NSLayoutConstraint.activate([
-			button.leadingAnchor.constraint(
+			label.leadingAnchor.constraint(
 				equalTo: cell.leadingAnchor,
-				constant: 26
+				constant: NavigationSidebarLayout.projectTitleInset
 			),
-			button.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-			button.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor),
+			label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+			label.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor),
+			button.leadingAnchor.constraint(equalTo: label.leadingAnchor),
+			button.trailingAnchor.constraint(equalTo: label.trailingAnchor),
+			button.topAnchor.constraint(equalTo: cell.topAnchor),
+			button.bottomAnchor.constraint(equalTo: cell.bottomAnchor),
 		])
 		return cell
 	}
