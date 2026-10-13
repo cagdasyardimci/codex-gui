@@ -164,7 +164,7 @@ struct TaskSidebarAppearanceTests
 			)
 			try expectColor(
 				taggedPixel.cgColor,
-				.controlBackgroundColor,
+				AppKitColorTokens.summaryCard,
 				in: surface
 			)
 			#expect(card.panel === panel)

@@ -55,18 +55,24 @@ final class TaskHoverCard
 	private func makeCardContent(availableSize: NSSize) -> (surface: NSView, size: NSSize)
 	{
 		let titleLabel = NSTextField(wrappingLabelWithString: title)
-		titleLabel.font = .systemFont(ofSize: 14)
+		titleLabel.font = AppKitFontResolver.font(TypographyTokens.TaskHover.title)
+		titleLabel.textColor = AppKitColorTokens.primaryText
 		constrainLabel(
 			titleLabel,
-			toLines: 3
+			toLines: 3,
+			role: TypographyTokens.TaskHover.title
 		)
 		titleLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
 		let timeLabel = NSTextField(labelWithString: relativeTime())
-		timeLabel.font = .systemFont(ofSize: 12)
-		timeLabel.textColor = .secondaryLabelColor
+		timeLabel.font = AppKitFontResolver.font(TypographyTokens.TaskHover.metadata)
+		timeLabel.textColor = AppKitColorTokens.secondaryText
+		applyLineHeight(
+			to: timeLabel,
+			role: TypographyTokens.TaskHover.metadata
+		)
 		let computer = NSImageView(image: NSImage(
 			systemSymbolName: "laptopcomputer",
 			accessibilityDescription: "This computer"
@@ -74,11 +80,11 @@ final class TaskHoverCard
 		computer.contentTintColor = .secondaryLabelColor
 		let metadata = AppKitLayout.horizontalStack(
 			[computer, timeLabel],
-			spacing: 8
+			spacing: LayoutTokens.TaskHover.rowSpacing
 		)
 		let header = AppKitLayout.horizontalStack(
 			[titleLabel, NSView(), metadata],
-			spacing: 8
+			spacing: LayoutTokens.TaskHover.rowSpacing
 		)
 		header.alignment = .top
 		let folder = NSImageView(image: NSImage(
@@ -87,34 +93,37 @@ final class TaskHoverCard
 		) ?? NSImage())
 		folder.contentTintColor = .secondaryLabelColor
 		let projectLabel = NSTextField(wrappingLabelWithString: projectName)
-		projectLabel.font = .systemFont(ofSize: 13)
+		projectLabel.font = AppKitFontResolver.font(TypographyTokens.TaskHover.project)
+		projectLabel.textColor = AppKitColorTokens.primaryText
 		constrainLabel(
 			projectLabel,
-			toLines: 2
+			toLines: 2,
+			role: TypographyTokens.TaskHover.project
 		)
 		let project = AppKitLayout.horizontalStack(
 			[folder, projectLabel],
-			spacing: 7
+			spacing: LayoutTokens.TaskHover.projectSpacing
 		)
 		let stack = AppKitLayout.verticalStack(
 			[header, project],
-			spacing: 8
+			spacing: LayoutTokens.TaskHover.rowSpacing
 		)
 		let surface = DesktopSurface(
-			.controlBackgroundColor,
-			cornerRadius: 12,
+			AppKitColorTokens.summaryCard,
+			cornerRadius: ShapeTokens.TaskHover.cornerRadius,
 			bordered: true,
-			borderColor: .separatorColor
+			borderWidth: 0.5,
+			borderColor: AppKitColorTokens.popoverEdge
 		)
 		surface.wantsLayer = true
-		surface.layer?.cornerRadius = 12
+		surface.layer?.cornerRadius = ShapeTokens.TaskHover.cornerRadius
 		AppKitLayout.pin(
 			stack,
 			to: surface,
-			inset: 10
+			inset: LayoutTokens.TaskHover.contentInset
 		)
 		let cardWidth = min(
-			CGFloat(320),
+			LayoutTokens.TaskHover.width,
 			availableSize.width
 		)
 		surface.widthAnchor.constraint(equalToConstant: cardWidth).isActive = true
@@ -122,8 +131,10 @@ final class TaskHoverCard
 		project.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		for icon in [computer, folder]
 		{
-			icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-			icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+			icon.widthAnchor.constraint(equalToConstant: LayoutTokens.TaskHover.iconSize)
+				.isActive = true
+			icon.heightAnchor.constraint(equalToConstant: LayoutTokens.TaskHover.iconSize)
+				.isActive = true
 		}
 		timeLabel.setContentCompressionResistancePriority(
 			.required,
@@ -135,7 +146,7 @@ final class TaskHoverCard
 			height: min(
 				availableSize.height,
 				max(
-					60,
+					LayoutTokens.TaskHover.minimumHeight,
 					surface.fittingSize.height
 				)
 			)
@@ -145,17 +156,52 @@ final class TaskHoverCard
 
 	private func constrainLabel(
 		_ label: NSTextField,
-		toLines lines: Int
+		toLines lines: Int,
+		role: TypographyTokens.Role
 	)
 	{
 		label.maximumNumberOfLines = lines
 		label.lineBreakMode = .byWordWrapping
 		label.cell?.truncatesLastVisibleLine = true
-		let font = label.font ?? .systemFont(ofSize: 14)
-		let lineHeight = ceil(font.ascender - font.descender + font.leading)
-		// AppKit fittingSize can otherwise measure every explicit newline despite the line limit.
-		label.heightAnchor.constraint(lessThanOrEqualToConstant: lineHeight * CGFloat(lines) + 2)
-			.isActive = true
+		applyLineHeight(
+			to: label,
+			role: role
+		)
+		// A natural line-height policy must not turn the multiline cap into two points.
+		if let lineHeight = role.lineHeight
+		{
+			// fittingSize can measure every explicit newline despite the line limit.
+			label.heightAnchor
+				.constraint(lessThanOrEqualToConstant: lineHeight * CGFloat(lines) + 2)
+				.isActive = true
+		}
+	}
+
+	private func applyLineHeight(
+		to label: NSTextField,
+		role: TypographyTokens.Role
+	)
+	{
+		let paragraph = NSMutableParagraphStyle()
+		paragraph.minimumLineHeight = role.lineHeight ?? 0
+		paragraph.maximumLineHeight = role.lineHeight ?? 0
+		paragraph.lineBreakMode = label.lineBreakMode
+		label.attributedStringValue = NSAttributedString(
+			string: label.stringValue,
+			attributes: AppKitFontResolver.textAttributes(
+				role,
+				font: label.font
+			).merging(
+				[
+					.foregroundColor: label.textColor ?? AppKitColorTokens.primaryText,
+					.paragraphStyle: paragraph,
+				],
+				uniquingKeysWith:
+				{
+					_, replacement in replacement
+				}
+			)
+		)
 	}
 
 	private func makePanel(

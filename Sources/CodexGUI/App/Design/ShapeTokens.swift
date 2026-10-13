@@ -95,7 +95,7 @@ enum ShapeTokens
 
 	enum TaskHover
 	{
-		static let cornerRadius: CGFloat = 12
+		static let cornerRadius: CGFloat = 15
 
 	}
 
