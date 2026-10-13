@@ -448,10 +448,11 @@ common rendering behavior. Conversion from CSS-style blur to a Gaussian radius r
 an approximation; bounds, spread and corner geometry remain part of shadow resolution.
 Renderer implementation margins do not automatically become design tokens.
 
-Native chrome alignment retains its native baseline and callbacks. Extracting its
-measurements must preserve the existing control sizes, coordinate conversion and
-update behavior. A later visual change to window-button offsets is separate from
-centralization.
+Native chrome alignment retains its native baseline and callbacks. In particular,
+[NativeWindowButtonAlignment](../Sources/CodexGUI/App/NativeWindowButtonAlignment.swift)
+must continue applying its 4-point right and 2-point downward offsets under the existing
+compact-toolbar conditions, converting coordinates correctly and avoiding accumulated
+translations on repeated updates.
 
 ## 11. Configuration lifetime includes prepared content
 

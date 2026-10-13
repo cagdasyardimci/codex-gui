@@ -19,6 +19,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	var gitSummary = GitSummaryReconciliation()
 	let summaryGitLoader = GitSummaryBackgroundLoader()
 	private var toolbarVisibilityBeforeGitReview: Bool?
+	private let windowButtonAlignment = NativeWindowButtonAlignment()
 	let commandPalette = CommandPaletteController()
 	let messageSearch = MessageSearchController()
 	var messageSearchStoreIdentity: ObjectIdentifier?
@@ -74,6 +75,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		configureToolbarControls()
 
 		installConversationToolbar(in: window)
+		windowButtonAlignment.update(in: window)
 		// Installing the toolbar reshapes the window. Attach panes after that layout pass.
 		window.contentViewController = WindowChromeViewController(
 			split: paneController.split,
@@ -346,6 +348,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 
 	@objc private func windowChromeDidUpdate()
 	{
+		if let window
+		{
+			windowButtonAlignment.update(in: window)
+		}
 		updateMinimumWindowSize()
 		updateNavigationToolbarSeparator()
 		updateToolsToolbarControls()
