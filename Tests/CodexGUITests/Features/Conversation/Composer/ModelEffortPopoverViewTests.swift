@@ -6,6 +6,216 @@ import Testing
 @Suite @MainActor
 struct ModelEffortPopoverViewTests
 {
+	@Test func shadowPaddingKeepsPopoverContentAnchoredWithoutNativeShadow() throws
+	{
+		_ = NSApplication.shared
+		let visible = try #require(NSScreen.main).visibleFrame
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: visible.minX + 100,
+				y: visible.minY + 100,
+				width: 600,
+				height: 420
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		let anchor = NSButton(frame: NSRect(
+			x: 200,
+			y: 100,
+			width: 220,
+			height: 28
+		))
+		try #require(window.contentView).addSubview(anchor)
+		let picker = ModelEffortPopoverView()
+		let popover = ComposerPopoverPanel(
+			contentViewController: picker,
+			shadowOutset: LayoutTokens.ModelPopover.shadowOutset
+		)
+		popover.anchorSpacing = LayoutTokens.ModelPopover.anchorSpacing
+		defer
+		{
+			popover.close()
+			window.close()
+		}
+		popover.show(
+			relativeTo: anchor.bounds,
+			of: anchor
+		)
+		let panel = try #require(picker.view.window)
+		panel.layoutIfNeeded()
+		picker.view.layoutSubtreeIfNeeded()
+		let contentFrame = panel.convertToScreen(picker.view.convert(
+			picker.view.bounds,
+			to: nil
+		))
+		let anchorFrame = window.convertToScreen(anchor.convert(
+			anchor.bounds,
+			to: nil
+		))
+		#expect(contentFrame.size == NSSize(
+			width: 254,
+			height: 96
+		))
+		#expect(abs(contentFrame.midX - anchorFrame.midX) < 1)
+		#expect(contentFrame.minY - anchorFrame.maxY == 9)
+		#expect(!panel.hasShadow)
+		#expect(panel.frame.width - contentFrame.width == 48)
+		#expect(panel.frame.height - contentFrame.height == 48)
+		let backdrop = try #require(picker.view.subviews.compactMap
+		{
+			$0 as? NSVisualEffectView
+		}.first)
+		#expect(backdrop.blendingMode == .behindWindow)
+		#expect(backdrop.layer?.masksToBounds == true)
+		#expect(backdrop.layer?.cornerRadius == 20)
+	}
+
+	@Test func referenceGeometryKeepsBackendTicksAndEffortActions() throws
+	{
+		_ = NSApplication.shared
+		let picker = ModelEffortPopoverView()
+		picker.render(
+			models: try modelOptions(),
+			selectedModelID: "first",
+			selectedEffort: "high",
+			fastMode: false
+		)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 254,
+				height: 96
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = picker
+		defer
+		{
+			window.close()
+		}
+		window.layoutIfNeeded()
+		picker.view.layoutSubtreeIfNeeded()
+		let effort = try #require(picker.view.subviews.compactMap
+		{
+			$0 as? NSTextField
+		}
+		.first
+		{
+			$0.accessibilityLabel() == "Selected reasoning effort"
+		})
+		let model = try #require(button(
+			in: picker.view,
+			accessibilityLabel: "Choose Codex model"
+		))
+		let slider = try #require(picker.view.subviews.compactMap
+		{
+			$0 as? EffortSlider
+		}.first)
+		let cell = try #require(slider.cell as? EffortSliderCell)
+		#expect(picker.view.bounds.maxY - effort.frame.maxY == 10)
+		#expect(effort.frame.height == 20)
+		#expect(picker.view.bounds.maxY - model.frame.maxY == 30)
+		#expect(model.frame.height == 16)
+		#expect(picker.view.bounds.maxY - slider.frame.maxY == 58)
+		#expect(slider.frame.width == 230)
+		#expect(slider.frame.minX == 12)
+		#expect(cell.barRect(flipped: slider.isFlipped).height == 24)
+		#expect(cell.barRect(flipped: slider.isFlipped).width == 230)
+		#expect(slider.numberOfTickMarks == 2)
+		#expect(cell.knobRect(flipped: slider.isFlipped).maxX == slider.bounds.maxX)
+		var selected: String?
+		picker.onSelectEffort =
+		{
+			selected = $0
+		}
+		slider.doubleValue = 0
+		#expect(cell.rectOfTickMark(at: 0).width == 3)
+		#expect(cell.rectOfTickMark(at: 1).width == 4)
+		#expect(NSApp.sendAction(
+			try #require(slider.action),
+			to: slider.target,
+			from: slider
+		))
+		#expect(selected == "low")
+		picker.render(
+			models: try modelOptions(),
+			selectedModelID: "second",
+			selectedEffort: nil,
+			fastMode: false
+		)
+		#expect(slider.numberOfTickMarks == 1)
+		#expect(slider.doubleValue == slider.tickMarkValue(at: 0))
+	}
+
+	private func modelOptions() throws -> [ModelOption]
+	{
+		let jsonModels: [[String: Any]] = [
+			[
+				"model": "first",
+				"displayName": "First model",
+				"isDefault": true,
+				"defaultReasoningEffort": "high",
+				"supportedReasoningEfforts": [
+					["reasoningEffort": "low"],
+					["reasoningEffort": "high"]
+				],
+			],
+			[
+				"model": "second",
+				"displayName": "Second model",
+				"isDefault": false,
+				"defaultReasoningEffort": "low",
+				"supportedReasoningEfforts": [["reasoningEffort": "low"]],
+			],
+		]
+		return try jsonModels.map
+		{
+			try #require(ModelOption(json: $0))
+		}
+	}
+
+	private func button(
+		in view: NSView,
+		accessibilityLabel: String
+	) -> NSButton?
+	{
+		if let button = view as? NSButton, button.accessibilityLabel() == accessibilityLabel
+		{
+			return button
+		}
+		return view.subviews.lazy.compactMap
+		{
+			button(
+				in: $0,
+				accessibilityLabel: accessibilityLabel
+			)
+		}.first
+	}
+
+	private func label(
+		in view: NSView,
+		accessibilityLabel: String
+	) -> String?
+	{
+		if let label = view as? NSTextField, label.accessibilityLabel() == accessibilityLabel
+		{
+			return label.stringValue
+		}
+		return view.subviews.lazy.compactMap
+		{
+			label(
+				in: $0,
+				accessibilityLabel: accessibilityLabel
+			)
+		}.first
+	}
 	@Test func presentedMenuActionsEmitModelIDsAndBackendDefaultDirectly() throws
 	{
 		_ = NSApplication.shared
@@ -127,66 +337,4 @@ struct ModelEffortPopoverViewTests
 		) == "Light")
 	}
 
-	private func modelOptions() throws -> [ModelOption]
-	{
-		let jsonModels: [[String: Any]] = [
-			[
-				"model": "first",
-				"displayName": "First model",
-				"isDefault": true,
-				"defaultReasoningEffort": "high",
-				"supportedReasoningEfforts": [
-					["reasoningEffort": "low"],
-					["reasoningEffort": "high"]
-				],
-			],
-			[
-				"model": "second",
-				"displayName": "Second model",
-				"isDefault": false,
-				"defaultReasoningEffort": "low",
-				"supportedReasoningEfforts": [["reasoningEffort": "low"]],
-			],
-		]
-		return try jsonModels.map
-		{
-			try #require(ModelOption(json: $0))
-		}
-	}
-
-	private func button(
-		in view: NSView,
-		accessibilityLabel: String
-	) -> NSButton?
-	{
-		if let button = view as? NSButton, button.accessibilityLabel() == accessibilityLabel
-		{
-			return button
-		}
-		return view.subviews.lazy.compactMap
-		{
-			button(
-				in: $0,
-				accessibilityLabel: accessibilityLabel
-			)
-		}.first
-	}
-
-	private func label(
-		in view: NSView,
-		accessibilityLabel: String
-	) -> String?
-	{
-		if let label = view as? NSTextField, label.accessibilityLabel() == accessibilityLabel
-		{
-			return label.stringValue
-		}
-		return view.subviews.lazy.compactMap
-		{
-			label(
-				in: $0,
-				accessibilityLabel: accessibilityLabel
-			)
-		}.first
-	}
 }

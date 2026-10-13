@@ -550,7 +550,11 @@ extension ConversationViewController
 		}
 		if modelEffortPopover == nil
 		{
-			let popover = ComposerPopoverPanel(contentViewController: modelEffortController)
+			let popover = ComposerPopoverPanel(
+				contentViewController: modelEffortController,
+				shadowOutset: LayoutTokens.ModelPopover.shadowOutset
+			)
+			popover.anchorSpacing = LayoutTokens.ModelPopover.anchorSpacing
 			popover.onPresentationChange =
 			{
 				[weak self] presented in

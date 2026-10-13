@@ -3,10 +3,12 @@ import QuartzCore
 
 enum EffortSliderGeometry
 {
-	static let knobDiameter: CGFloat = 28
-	static let trackHeight: CGFloat = 24
-	static let trackCornerRadius = trackHeight / 2
-	static let tickDiameter: CGFloat = 3.6
+	static let knobDiameter = LayoutTokens.EffortSlider.knobDiameter
+	static let trackHeight = LayoutTokens.EffortSlider.trackHeight
+	static let trackCornerRadius = ShapeTokens.EffortSlider.trackCornerRadius
+	static let filledTickDiameter = LayoutTokens.EffortSlider.filledTickDiameter
+	static let unfilledTickDiameter = LayoutTokens.EffortSlider.unfilledTickDiameter
+	static let trackEdgeWidth = ShapeTokens.EffortSlider.trackEdgeWidth
 
 	static func knobRect(centeredIn rect: NSRect) -> NSRect
 	{
@@ -31,10 +33,12 @@ enum EffortSliderGeometry
 
 	static func tickRect(
 		centerX: CGFloat,
-		centerY: CGFloat
+		centerY: CGFloat,
+		filled: Bool
 	) -> NSRect
 	{
-		NSRect(
+		let tickDiameter = filled ? filledTickDiameter : unfilledTickDiameter
+		return NSRect(
 			x: centerX - tickDiameter / 2,
 			y: centerY - tickDiameter / 2,
 			width: tickDiameter,
@@ -77,6 +81,11 @@ final class EffortSliderCell: NSSliderCell
 		EffortSliderGeometry.knobDiameter
 	}
 
+	override func barRect(flipped: Bool) -> NSRect
+	{
+		canonicalTrack(flipped: flipped)
+	}
+
 	override func knobRect(flipped: Bool) -> NSRect
 	{
 		let track = canonicalTrack(flipped: flipped)
@@ -99,7 +108,8 @@ final class EffortSliderCell: NSSliderCell
 		)
 		return EffortSliderGeometry.tickRect(
 			centerX: x,
-			centerY: track.midY
+			centerY: track.midY,
+			filled: tickMarkValue(at: index) <= doubleValue
 		)
 	}
 
@@ -128,7 +138,7 @@ final class EffortSliderCell: NSSliderCell
 
 	private func canonicalTrack(flipped: Bool) -> NSRect
 	{
-		let bar = super.barRect(flipped: flipped)
+		let bar = controlView?.bounds ?? .zero
 		return NSRect(
 			x: bar.minX,
 			y: bar.midY - EffortSliderGeometry.trackHeight / 2,
@@ -187,6 +197,17 @@ final class EffortSliderCell: NSSliderCell
 			filledTrack,
 			clippedTo: trackPath
 		)
+		let edge = NSBezierPath(
+			roundedRect: track.insetBy(
+				dx: EffortSliderGeometry.trackEdgeWidth / 2,
+				dy: EffortSliderGeometry.trackEdgeWidth / 2
+			),
+			xRadius: EffortSliderGeometry.trackCornerRadius,
+			yRadius: EffortSliderGeometry.trackCornerRadius
+		)
+		AppKitColorTokens.effortTrackEdge.setStroke()
+		edge.lineWidth = EffortSliderGeometry.trackEdgeWidth
+		edge.stroke()
 		drawEffortTicks(in: track)
 		(controlView as? EffortSlider)?.updateTrackGeometry(
 			track: track,
@@ -228,11 +249,13 @@ final class EffortSliderCell: NSSliderCell
 	{
 		for index in 0 ..< numberOfTickMarks
 		{
-			EffortPopoverStyle.tick.setFill()
+			let filled = tickMarkValue(at: index) <= doubleValue
+			(filled ? AppKitColorTokens.effortFilledTick : EffortPopoverStyle.tick).setFill()
 			let centerX = rectOfTickMark(at: index).midX
 			let tick = EffortSliderGeometry.tickRect(
 				centerX: centerX,
-				centerY: track.midY
+				centerY: track.midY,
+				filled: filled
 			)
 			NSBezierPath(ovalIn: tick).fill()
 		}
@@ -240,9 +263,19 @@ final class EffortSliderCell: NSSliderCell
 
 	override func drawKnob(_ knobRect: NSRect)
 	{
-		NSColor.white.setFill()
+		NSGraphicsContext.saveGraphicsState()
+		let shadow = NSShadow()
+		shadow.shadowColor = ShadowTokens.effortThumb.color
+		shadow.shadowBlurRadius = ShadowTokens.effortThumb.blur
+		shadow.shadowOffset = NSSize(
+			width: 0,
+			height: -ShadowTokens.effortThumb.offsetY
+		)
+		shadow.set()
+		AppKitColorTokens.effortThumb.setFill()
 		let whiteKnob = EffortSliderGeometry.knobRect(centeredIn: knobRect)
 		NSBezierPath(ovalIn: whiteKnob).fill()
+		NSGraphicsContext.restoreGraphicsState()
 	}
 
 	override func drawTickMarks()

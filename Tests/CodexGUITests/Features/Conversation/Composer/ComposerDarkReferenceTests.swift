@@ -67,35 +67,6 @@ struct ComposerDarkReferenceTests
 		}
 	}
 
-	private func resolved(
-		_ color: NSColor,
-		in view: NSView
-	) throws -> NSColor
-	{
-		try #require(NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
-			color,
-			for: view
-		))?
-			.usingColorSpace(.sRGB))
-	}
-
-	private func makeWindow(content: NSView) -> NSWindow
-	{
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 254,
-				height: 98
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.contentView = content
-		return window
-	}
 	@Test func approvalHoverOpacityAndPaletteFollowRetainedAppearance() throws
 	{
 		_ = NSApplication.shared
@@ -170,4 +141,95 @@ struct ComposerDarkReferenceTests
 		})
 	}
 
+	@Test func effortActionCanvasesAndControlsUseMeasuredGeometry() throws
+	{
+		_ = NSApplication.shared
+		let picker = ModelEffortPopoverView()
+		let window = makeWindow(content: picker.view)
+		window.setContentSize(picker.preferredContentSize)
+		defer
+		{
+			window.close()
+		}
+		window.layoutIfNeeded()
+		picker.view.layoutSubtreeIfNeeded()
+		let actions = picker.view.subviews.compactMap
+		{
+			$0 as? NSButton
+		}
+		.filter
+		{
+			$0.imagePosition == .imageOnly
+		}
+		#expect(actions.count == 2)
+		for action in actions
+		{
+			#expect(action.bounds.size == NSSize(
+				width: 32,
+				height: 32
+			))
+			#expect(action.image?.size == NSSize(
+				width: 16,
+				height: 16
+			))
+		}
+		#expect(actions.map(\.frame.minX).sorted() == [4, 218])
+		let model = try #require(picker.view.subviews.compactMap
+		{
+			$0 as? NSButton
+		}
+		.first
+		{
+			$0.accessibilityLabel() == "Choose Codex model"
+		})
+		#expect(model.image?.size == NSSize(
+			width: 12,
+			height: 12
+		))
+		#expect(picker.preferredContentSize == NSSize(
+			width: 254,
+			height: 96
+		))
+		window.appearance = NSAppearance(named: .darkAqua)
+		let tick = try resolved(
+			AppKitColorTokens.effortTick,
+			in: picker.view
+		)
+		let edge = try resolved(
+			AppKitColorTokens.effortTrackEdge,
+			in: picker.view
+		)
+		#expect(tick.alphaComponent == 0.24902)
+		#expect(edge.alphaComponent == 0.082)
+	}
+
+	private func resolved(
+		_ color: NSColor,
+		in view: NSView
+	) throws -> NSColor
+	{
+		try #require(NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
+			color,
+			for: view
+		))?
+			.usingColorSpace(.sRGB))
+	}
+
+	private func makeWindow(content: NSView) -> NSWindow
+	{
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 254,
+				height: 98
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentView = content
+		return window
+	}
 }

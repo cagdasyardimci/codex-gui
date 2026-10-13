@@ -216,7 +216,16 @@ enum TypographyTokens
 			size: 11,
 			selection: .system(weight: .regular)
 		)
-		static let menu = Role(size: 13)
+		static let menuLineHeight: CGFloat = 18.5703125
+		static let modelExplanationLineHeight: CGFloat = 16
+		static let menu = Role(
+			size: 13,
+			lineHeight: menuLineHeight
+		)
+		static let modelExplanation = Role(
+			size: 12,
+			lineHeight: modelExplanationLineHeight
+		)
 	}
 
 	enum Summary

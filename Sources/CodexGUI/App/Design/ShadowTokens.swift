@@ -83,4 +83,10 @@ enum ShadowTokens
 		),
 	]
 
+	static let effortThumb = Style(
+		color: .black.withAlphaComponent(0.1),
+		offsetY: 0,
+		blur: 2
+	)
+
 }

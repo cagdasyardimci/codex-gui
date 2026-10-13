@@ -174,22 +174,28 @@ enum AppKitColorTokens
 	)
 
 	static let effortBlue = NSColor(
-		srgbRed: 0x39 / 255.0,
-		green: 0x7E / 255.0,
-		blue: 0xF5 / 255.0,
+		srgbRed: 0x3A / 255.0,
+		green: 0x83 / 255.0,
+		blue: 0xF7 / 255.0,
 		alpha: 1
 	)
 	static let effortTrack = AppKitColorResolution.color(
-		light: 0xD8D8D8,
-		dark: 0x414141
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.1,
+		darkAlpha: 0.1
 	)
 	static let effortTick = AppKitColorResolution.color(
-		light: 0x7D7D7D,
-		dark: 0xA0A0A0
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.247059,
+		darkAlpha: 0.24902
 	)
 	static let effortModel = AppKitColorResolution.color(
-		light: 0x5C5C5C,
-		dark: 0xB0B0B0
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.65,
+		darkAlpha: 0.65
 	)
 	static let effortIcon = AppKitColorResolution.color(
 		light: 0x6B6B6B,
@@ -236,6 +242,17 @@ enum AppKitColorTokens
 		dark: 0xFFFFFF,
 		lightAlpha: 0,
 		darkAlpha: 0.2
+	)
+
+	static let effortFilledTick = NSColor.white.withAlphaComponent(0.3)
+
+	static let effortThumb = NSColor.white
+
+	static let effortTrackEdge = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.08,
+		darkAlpha: 0.082
 	)
 
 }

@@ -58,3 +58,6 @@ minimum reservations. Invalid persisted widths retain their existing fallback po
 The composer footer reserves its microphone width through `LayoutTokens.ModelSelector`;
 the current native footer omits the voice control. Its model trigger keeps the same
 width while the effort picker is open.
+
+The effort popover owns its visual-effect backdrop and surface shadow. Its transparent
+panel padding accommodates that shadow without adding a second native window shadow.

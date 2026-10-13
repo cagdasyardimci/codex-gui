@@ -98,4 +98,18 @@ enum ShapeTokens
 		static let cornerRadius: CGFloat = 12
 
 	}
+
+	enum EffortSlider
+	{
+		static let trackEdgeWidth: CGFloat = 0.5
+		static var trackCornerRadius: CGFloat
+		{
+			LayoutTokens.EffortSlider.trackHeight / 2
+		}
+		static func knobRadius(diameter: CGFloat) -> CGFloat
+		{
+			diameter / 2
+		}
+	}
+
 }

@@ -11,7 +11,7 @@ final class ModelEffortPopoverView: NSViewController
 
 	private var models: [ModelOption] = []
 	private var selectedModelID: String?
-	private let modelMenuButton = NSButton(
+	private let modelMenuButton = DesktopAttributedTitleButton(
 		title: "Default model",
 		target: nil,
 		action: nil
@@ -34,6 +34,7 @@ final class ModelEffortPopoverView: NSViewController
 	private var fastMode = false
 	private var effectiveEffort: String?
 	private var presented = false
+	private var showsAvailabilityWarning = false
 
 	init()
 	{
@@ -42,8 +43,8 @@ final class ModelEffortPopoverView: NSViewController
 			bundle: nil
 		)
 		preferredContentSize = NSSize(
-			width: 250,
-			height: 96
+			width: LayoutTokens.ModelPopover.width,
+			height: Self.preferredHeight(showsWarning: false)
 		)
 	}
 
@@ -67,10 +68,7 @@ final class ModelEffortPopoverView: NSViewController
 
 	private func configureEffortLabel()
 	{
-		effortLabel.font = .systemFont(
-			ofSize: 14,
-			weight: .medium
-		)
+		effortLabel.font = AppKitFontResolver.font(TypographyTokens.ModelPopover.effort)
 		effortLabel.textColor = EffortPopoverStyle.blue
 		effortLabel.alignment = .center
 		effortLabel.lineBreakMode = .byTruncatingTail
@@ -85,6 +83,10 @@ final class ModelEffortPopoverView: NSViewController
 			fastButton,
 			icon: .bolt
 		)
+		fastButton.image = DesktopIcons.image(
+			.bolt,
+			size: LayoutTokens.ModelPopover.actionIconSize
+		)
 		fastButton.imagePosition = .imageOnly
 
 		resetButton.target = self
@@ -93,8 +95,12 @@ final class ModelEffortPopoverView: NSViewController
 			resetButton,
 			icon: .arrowRotateCcw
 		)
+		resetButton.image = DesktopIcons.image(
+			.arrowRotateCcw,
+			size: LayoutTokens.ModelPopover.actionIconSize
+		)
 		resetButton.imagePosition = .imageOnly
-		resetButton.contentTintColor = EffortPopoverStyle.icon
+		resetButton.contentTintColor = AppKitColorTokens.secondaryText
 		resetButton.toolTip = "Reset effort and fast mode to defaults"
 		resetButton.setAccessibilityLabel("Reset effort and fast mode to defaults")
 	}
@@ -107,11 +113,11 @@ final class ModelEffortPopoverView: NSViewController
 		)
 		modelMenuButton.target = self
 		modelMenuButton.action = #selector(showModelMenu)
-		modelMenuButton.font = .systemFont(ofSize: 12)
+		modelMenuButton.font = AppKitFontResolver.font(TypographyTokens.ModelPopover.model)
 		modelMenuButton.contentTintColor = EffortPopoverStyle.model
 		modelMenuButton.image = DesktopIcons.image(
 			.chevronRight,
-			size: 9
+			size: LayoutTokens.ModelPopover.modelChevronSize
 		)
 		modelMenuButton.imagePosition = .imageTrailing
 		modelMenuButton.lineBreakMode = .byTruncatingMiddle
@@ -132,7 +138,7 @@ final class ModelEffortPopoverView: NSViewController
 
 	private func configureAvailabilityLabel()
 	{
-		availabilityLabel.font = .systemFont(ofSize: 11)
+		availabilityLabel.font = AppKitFontResolver.font(TypographyTokens.ModelPopover.availability)
 		availabilityLabel.textColor = .secondaryLabelColor
 		availabilityLabel.maximumNumberOfLines = 2
 		availabilityLabel.isHidden = true
@@ -157,54 +163,61 @@ final class ModelEffortPopoverView: NSViewController
 		NSLayoutConstraint.activate([
 			fastButton.leadingAnchor.constraint(
 				equalTo: surface.leadingAnchor,
-				constant: 10
+				constant: LayoutTokens.ModelPopover.fastLeadingInset
 			),
 			fastButton.topAnchor.constraint(
 				equalTo: surface.topAnchor,
-				constant: 8
+				constant: LayoutTokens.ModelPopover.fastTopInset
 			),
-			fastButton.widthAnchor.constraint(equalToConstant: 24),
-			fastButton.heightAnchor.constraint(equalToConstant: 24),
+			fastButton.widthAnchor
+				.constraint(equalToConstant: LayoutTokens.ModelPopover.fastSize),
+			fastButton.heightAnchor
+				.constraint(equalToConstant: LayoutTokens.ModelPopover.fastSize),
 			resetButton.trailingAnchor.constraint(
 				equalTo: surface.trailingAnchor,
-				constant: -10
+				constant: -LayoutTokens.ModelPopover.resetTrailingInset
 			),
 			resetButton.topAnchor.constraint(equalTo: fastButton.topAnchor),
-			resetButton.widthAnchor.constraint(equalToConstant: 24),
-			resetButton.heightAnchor.constraint(equalToConstant: 24),
+			resetButton.widthAnchor
+				.constraint(equalToConstant: LayoutTokens.ModelPopover.resetSize),
+			resetButton.heightAnchor
+				.constraint(equalToConstant: LayoutTokens.ModelPopover.resetSize),
 			effortLabel.centerXAnchor.constraint(equalTo: surface.centerXAnchor),
 			effortLabel.topAnchor.constraint(
 				equalTo: surface.topAnchor,
-				constant: 9
+				constant: LayoutTokens.ModelPopover.effortTopInset
 			),
-			effortLabel.heightAnchor.constraint(equalToConstant: 18),
+			effortLabel.heightAnchor
+				.constraint(equalToConstant: LayoutTokens.ModelPopover.effortHeight),
 			effortLabel.leadingAnchor.constraint(greaterThanOrEqualTo: fastButton.trailingAnchor),
 			effortLabel.trailingAnchor.constraint(lessThanOrEqualTo: resetButton.leadingAnchor),
 			modelMenuButton.centerXAnchor.constraint(equalTo: surface.centerXAnchor),
 			modelMenuButton.topAnchor.constraint(equalTo: effortLabel.bottomAnchor),
-			modelMenuButton.heightAnchor.constraint(equalToConstant: 18),
+			modelMenuButton.heightAnchor
+				.constraint(equalToConstant: LayoutTokens.ModelPopover.modelHeight),
 			modelMenuButton.widthAnchor.constraint(
 				lessThanOrEqualTo: surface.widthAnchor,
-				constant: -32
+				constant: -2 * LayoutTokens.ModelPopover.modelHorizontalInset
 			),
 			slider.leadingAnchor.constraint(
 				equalTo: surface.leadingAnchor,
-				constant: 13
+				constant: LayoutTokens.ModelPopover.sliderHorizontalInset
 			),
 			slider.trailingAnchor.constraint(
 				equalTo: surface.trailingAnchor,
-				constant: -13
+				constant: -LayoutTokens.ModelPopover.sliderHorizontalInset
 			),
 			slider.topAnchor.constraint(
 				equalTo: modelMenuButton.bottomAnchor,
-				constant: 14
+				constant: LayoutTokens.ModelPopover.sliderTopSpacing
 			),
-			slider.heightAnchor.constraint(equalToConstant: 32),
+			slider.heightAnchor
+				.constraint(equalToConstant: LayoutTokens.ModelPopover.sliderHeight),
 			availabilityLabel.leadingAnchor.constraint(equalTo: slider.leadingAnchor),
 			availabilityLabel.trailingAnchor.constraint(equalTo: slider.trailingAnchor),
 			availabilityLabel.topAnchor.constraint(
 				equalTo: slider.bottomAnchor,
-				constant: 6
+				constant: LayoutTokens.ModelPopover.warningTopSpacing
 			),
 			warningHeight,
 		])
@@ -309,6 +322,13 @@ final class ModelEffortPopoverView: NSViewController
 			modelMenuButton.title = "Default model"
 		}
 
+		modelMenuButton.attributedTitle = NSAttributedString(
+			string: modelMenuButton.title,
+			attributes: [
+				.font: AppKitFontResolver.font(TypographyTokens.ModelPopover.model),
+				.foregroundColor: EffortPopoverStyle.model,
+			]
+		)
 		modelMenuButton.toolTip = modelMenuButton.title
 		modelMenuButton.setAccessibilityValue(modelMenuButton.title)
 	}
@@ -328,10 +348,6 @@ final class ModelEffortPopoverView: NSViewController
 		slider.doubleValue = Double(efforts.firstIndex(of: effectiveEffort ?? "") ?? 0)
 		slider.isEnabled = !efforts.isEmpty
 		slider.setAccessibilityValue(effortLabel.stringValue)
-		slider.toolTip = efforts.map
-		{
-			Self.effortTitle($0)
-		}.joined(separator: " · ")
 	}
 
 	private func updateAvailabilityWarning()
@@ -355,17 +371,35 @@ final class ModelEffortPopoverView: NSViewController
 		}
 
 		let showsWarning = !availabilityLabel.stringValue.isEmpty
+		showsAvailabilityWarning = showsWarning
 		availabilityLabel.isHidden = !showsWarning
-		availabilityHeight?.constant = showsWarning ? 26 : 0
+		availabilityHeight?.constant = showsWarning ? LayoutTokens.ModelPopover.warningHeight : 0
+		updatePreferredContentSize()
+	}
+
+	private func updatePreferredContentSize()
+	{
 		let size = NSSize(
-			width: 250,
-			height: showsWarning ? 132 : 96
+			width: LayoutTokens.ModelPopover.width,
+			height: Self.preferredHeight(showsWarning: showsAvailabilityWarning)
 		)
 		if preferredContentSize != size
 		{
 			preferredContentSize = size
 			onPreferredContentSizeChange?()
 		}
+	}
+
+	private nonisolated static func preferredHeight(showsWarning: Bool) -> CGFloat
+	{
+		let sliderBottom = LayoutTokens.ModelPopover.sliderBottom
+		if showsWarning
+		{
+			return sliderBottom + LayoutTokens.ModelPopover.warningTopSpacing
+				+ LayoutTokens.ModelPopover.warningHeight
+				+ LayoutTokens.ModelPopover.warningBottomInset
+		}
+		return sliderBottom + LayoutTokens.ModelPopover.bottomInset
 	}
 
 	private func updateFastModeControls()
@@ -409,28 +443,6 @@ final class ModelEffortPopoverView: NSViewController
 			.firstIndex(of: effort) ?? 100
 	}
 
-	/// The menu used for presentation; selection is emitted directly as a model ID.
-	func makeModelMenu() -> NSMenu
-	{
-		let menu = NSMenu()
-		menu.autoenablesItems = false
-		let choices = modelMenuChoices()
-		for (index, choice) in choices.enumerated()
-		{
-			let item = NSMenuItem(
-				title: choice.title,
-				action: #selector(selectModelItem(_:)),
-				keyEquivalent: ""
-			)
-			item.target = self
-			item.tag = index
-			item.representedObject = choice.id
-			item.state = choice.id == selectedModelID ? .on : .off
-			menu.addItem(item)
-		}
-		return menu
-	}
-
 	private func modelMenuChoices() -> [(id: String?, title: String)]
 	{
 		var choices: [(id: String?, title: String)] = [(nil, "Default model")]
@@ -458,18 +470,6 @@ final class ModelEffortPopoverView: NSViewController
 			),
 			in: modelMenuButton
 		)
-	}
-
-	@objc private func selectModelItem(_ sender: NSMenuItem)
-	{
-		if sender.tag == 0
-		{
-			onSelectModel?(nil)
-		}
-		else if let identifier = sender.representedObject as? String
-		{
-			onSelectModel?(identifier)
-		}
 	}
 
 	@objc private func selectSliderEffort()
@@ -519,4 +519,37 @@ final class ModelEffortPopoverView: NSViewController
 			presented && view.window?.isVisible == true
 				&& view.window?.occlusionState.contains(.visible) == true
 	}
+	func makeModelMenu() -> NSMenu
+	{
+		let menu = NSMenu()
+		menu.autoenablesItems = false
+		let choices = modelMenuChoices()
+		for (index, choice) in choices.enumerated()
+		{
+			let item = NSMenuItem(
+				title: choice.title,
+				action: #selector(selectModelItem(_:)),
+				keyEquivalent: ""
+			)
+			item.target = self
+			item.tag = index
+			item.representedObject = choice.id
+			item.state = choice.id == selectedModelID ? .on : .off
+			menu.addItem(item)
+		}
+		return menu
+	}
+
+	@objc private func selectModelItem(_ sender: NSMenuItem)
+	{
+		if sender.tag == 0
+		{
+			onSelectModel?(nil)
+		}
+		else if let identifier = sender.representedObject as? String
+		{
+			onSelectModel?(identifier)
+		}
+	}
+
 }

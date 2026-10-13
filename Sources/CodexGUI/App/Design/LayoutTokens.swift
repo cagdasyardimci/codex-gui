@@ -635,26 +635,30 @@ enum LayoutTokens
 
 	enum ModelPopover
 	{
-		static let width: CGFloat = 250
-		static let fastLeadingInset: CGFloat = 10
-		static let fastTopInset: CGFloat = 8
-		static let fastSize: CGFloat = 24
-		static let resetTrailingInset: CGFloat = 6
+		static let width: CGFloat = 254
+		static let fastLeadingInset: CGFloat = 4
+		static let fastTopInset: CGFloat = 4
+		static let fastSize: CGFloat = 32
+		static let resetTrailingInset: CGFloat = 4
 		static let resetSize: CGFloat = 32
-		static let effortTopInset: CGFloat = 9
-		static let labelHeight: CGFloat = 18
+		static let effortTopInset: CGFloat = 10
+		static let effortHeight: CGFloat = 20
+		static let modelHeight: CGFloat = 16
 		static let modelHorizontalInset: CGFloat = 16
-		static let modelChevronSize: CGFloat = 9
-		static let sliderHorizontalInset: CGFloat = 13
-		static let sliderTopSpacing: CGFloat = 14
-		static let sliderHeight: CGFloat = 32
+		static let modelChevronSize: CGFloat = 12
+		static let actionIconSize: CGFloat = 16
+		static let sliderHorizontalInset: CGFloat = 12
+		static let sliderTopSpacing: CGFloat = 12
+		static let sliderHeight: CGFloat = 28
 		static let warningTopSpacing: CGFloat = 6
 		static let warningHeight: CGFloat = 26
-		static let bottomInset: CGFloat = 5
-		static let warningBottomInset: CGFloat = 9
+		static let bottomInset: CGFloat = 10
+		static let warningBottomInset: CGFloat = 14
+		static let anchorSpacing: CGFloat = 9
+		static let shadowOutset: CGFloat = 24
 		static var sliderBottom: CGFloat
 		{
-			effortTopInset + labelHeight * 2 + sliderTopSpacing + sliderHeight
+			effortTopInset + effortHeight + modelHeight + sliderTopSpacing + sliderHeight
 		}
 	}
 
@@ -667,4 +671,13 @@ enum LayoutTokens
 		static let rowSpacing: CGFloat = 8
 		static let projectSpacing: CGFloat = 7
 	}
+
+	enum EffortSlider
+	{
+		static let knobDiameter: CGFloat = 28
+		static let trackHeight: CGFloat = 24
+		static let filledTickDiameter: CGFloat = 3
+		static let unfilledTickDiameter: CGFloat = 4
+	}
+
 }
