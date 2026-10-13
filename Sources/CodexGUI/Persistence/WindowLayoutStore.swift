@@ -2,42 +2,56 @@ import AppKit
 
 enum WindowPaneLayout
 {
+	private static let metrics: LayoutTokens.Window =
+	{
+		let metrics = LayoutTokens.window
+		let summaryWidth = LayoutTokens.Inspector.summaryPaneWidth
+		precondition(
+			metrics.isValid(summaryPreferredWidth: summaryWidth),
+			"Invalid window metrics for the active pane modes"
+		)
+		return metrics
+	}()
 	static let version = 2
 	static var navigationWidth: CGFloat
 	{
-		LayoutTokens.window.navigationWidth
+		metrics.navigationWidth
 	}
 	static var navigationMinimumWidth: CGFloat
 	{
-		LayoutTokens.window.navigationMinimumWidth
+		metrics.navigationMinimumWidth
 	}
 	static var navigationMaximumWidth: CGFloat
 	{
-		LayoutTokens.window.navigationMaximumWidth
+		metrics.navigationMaximumWidth
 	}
 	static var reviewWidth: CGFloat
 	{
-		LayoutTokens.window.reviewWidth
+		metrics.reviewWidth
 	}
 	static var reviewMinimumWidth: CGFloat
 	{
-		LayoutTokens.window.reviewMinimumWidth
+		metrics.reviewMinimumWidth
 	}
 	static var toolsMinimumWidth: CGFloat
 	{
-		LayoutTokens.window.toolsMinimumWidth
+		metrics.toolsMinimumWidth
 	}
 	static var reviewMaximumWidth: CGFloat
 	{
-		LayoutTokens.window.reviewMaximumWidth
+		metrics.reviewMaximumWidth
 	}
 	static var conversationMinimumWidth: CGFloat
 	{
-		LayoutTokens.window.conversationMinimumWidth
+		metrics.conversationMinimumWidth
+	}
+	static var toolsConversationMinimumWidth: CGFloat
+	{
+		metrics.toolsConversationMinimumWidth
 	}
 	static var conversationComfortableWidth: CGFloat
 	{
-		LayoutTokens.window.conversationComfortableWidth
+		metrics.conversationComfortableWidth
 	}
 	// Divider dragging has priority 490; side panes must yield to that interaction.
 	static let sideHoldingPriority = NSLayoutConstraint.Priority(400)

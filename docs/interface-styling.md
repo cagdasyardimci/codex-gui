@@ -42,3 +42,15 @@ configuration ranges; preserve each component's truncation, scrolling and reflow
 Resolve layer colors under the owning view's effective appearance and refresh them when
 that appearance changes. Rebuild and relaunch after source-level token changes so prepared
 content uses the new configuration. Follow [validation](validation.md) for checks.
+
+## Pane sizing
+
+The tools pane opens at 320 points and resizes down to 320 points. Its upper drag limit follows the available
+split width after the navigation pane, dividers and a 320-point conversation viewport.
+
+Ordinary conversation mode retains a 360-point minimum. `WindowPaneLayoutPolicy`
+selects the reservation for the active mode; `WindowPaneController` applies the same
+minimum to the native split item. `WindowPaneLayout` validates the immutable window
+configuration before forwarding it. Navigation, review, summary and files preferences
+must fit their configured bounds, and comfortable conversation width must cover both
+minimum reservations. Invalid persisted widths retain their existing fallback policy.

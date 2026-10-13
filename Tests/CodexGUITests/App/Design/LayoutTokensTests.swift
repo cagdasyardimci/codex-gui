@@ -10,7 +10,7 @@ import Testing
 		#expect(LayoutTokens.Tabs.headerHeight == 28)
 		#expect(LayoutTokens.Tabs.tabWidth == 180)
 		#expect(LayoutTokens.Tabs.controlSize == 24)
-		#expect(LayoutTokens.window.toolsMinimumWidth == 340)
+		#expect(LayoutTokens.window.toolsMinimumWidth == 320)
 		#expect(LayoutTokens.composer.minimumHeight == 49)
 		#expect(LayoutTokens.Composer.maximumEditorHeight == 160)
 		#expect(LayoutTokens.composer.preferenceToActionSpacing == 16)
@@ -43,14 +43,20 @@ import Testing
 		#expect(metrics.effectiveMinimum(for: .conversation) == 99)
 	}
 
-	@Test func windowModesValidateTheirOwnPreferences()
+	@Test func windowValidationIncludesSummaryFilesAndConversationReservations()
 	{
 		#expect(LayoutTokens.window.isValid(summaryPreferredWidth: 308))
-		let incompatible = LayoutTokens.Window(
+		let incompatibleSummary = LayoutTokens.Window(
 			reviewWidth: 350,
 			reviewMinimumWidth: 340,
 			reviewMaximumWidth: 360
 		)
-		#expect(!incompatible.isValid(summaryPreferredWidth: 308))
+		#expect(!incompatibleSummary.isValid(summaryPreferredWidth: 308))
+		#expect(!LayoutTokens.Window(filesMaximumWidth: 700)
+			.isValid(summaryPreferredWidth: 308))
+		#expect(!LayoutTokens.Window(conversationComfortableWidth: 200)
+			.isValid(summaryPreferredWidth: 308))
+		#expect(!LayoutTokens.Window(navigationMinimumWidth: .nan)
+			.isValid(summaryPreferredWidth: 308))
 	}
 }

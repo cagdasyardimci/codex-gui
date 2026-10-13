@@ -39,9 +39,19 @@ struct ToolsPaneDragCloseTests
 		{
 			window.close()
 		}
-		inspector.showToolsPane()
-		panes.setReviewCollapsed(false)
+		#expect(panes.split.splitViewItems[1].minimumThickness == 360)
+		panes.openToolsPane()
+		if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+		{
+			#expect(panes.isAnimatingToolsExpansion)
+			#expect(panes.split.splitViewItems[1].minimumThickness == 0)
+		}
+		try await waitUntil
+		{
+			!panes.isAnimatingToolsExpansion && !panes.isReviewCollapsed
+		}
 		window.layoutIfNeeded()
+		#expect(panes.split.splitViewItems[1].minimumThickness == 320)
 		let tab = try #require(inspector.toolsTabs.selectedTabID)
 		let count = inspector.toolsTabs.tabCount
 		#expect(panes.reviewViewportWidth >= WindowPaneLayout.toolsMinimumWidth)
@@ -124,6 +134,42 @@ struct ToolsPaneDragCloseTests
 		window.layoutIfNeeded()
 		#expect(!panes.isReviewCollapsed)
 		#expect(panes.reviewViewportWidth >= WindowPaneLayout.toolsMinimumWidth)
+		#expect(inspector.toolsTabs.selectedTabID == tab)
+
+		inspector.showSummary()
+		#expect(panes.split.splitViewItems[1].minimumThickness == 360)
+		panes.openToolsPane()
+		panes.beginDividerInteraction(at: 1)
+		#expect(!panes.isAnimatingToolsExpansion)
+		#expect(panes.split.splitViewItems[1].minimumThickness == 320)
+		#expect(panes.split.splitViewItems[2].minimumThickness == 320)
+		panes.endDividerInteraction(
+			at: 1,
+			requestedWidth: 340
+		)
+
+		inspector.showSummary()
+		#expect(panes.split.splitViewItems[1].minimumThickness == 360)
+		inspector.showToolsPane()
+		panes.setReviewCollapsed(false)
+		window.layoutIfNeeded()
+		#expect(panes.split.splitViewItems[1].minimumThickness == 320)
+		panes.toggleToolsExpanded()
+		if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+		{
+			#expect(panes.isAnimatingToolsExpansion)
+			#expect(panes.split.splitViewItems[1].minimumThickness == 0)
+		}
+		inspector.closeToolsPane()
+		#expect(!inspector.isShowingTools)
+		#expect(!panes.isToolsExpanded)
+		#expect(!panes.isAnimatingToolsExpansion)
+		#expect(panes.split.splitViewItems[1].minimumThickness == 360)
+		#expect(panes.split.splitViewItems[2].minimumThickness == 220)
+		try await Task.sleep(for: .milliseconds(300))
+		#expect(!panes.isAnimatingToolsExpansion)
+		#expect(panes.split.splitViewItems[1].minimumThickness == 360)
+		#expect(panes.split.splitViewItems[2].minimumThickness == 220)
 		#expect(inspector.toolsTabs.selectedTabID == tab)
 	}
 

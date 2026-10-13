@@ -21,7 +21,7 @@ final class WindowPaneController
 	private var expandedNavigationWidth = WindowPaneLayout.navigationWidth
 	private var expandedReviewWidth = WindowPaneLayout.reviewWidth
 	private var expandedSummaryWidth = InspectorViewController.summaryPaneWidth
-	private var expandedToolsWidth = WindowPaneLayout.reviewWidth
+	private var expandedToolsWidth = WindowPaneLayout.toolsMinimumWidth
 	private var usesToolsSizing = false
 	private var usesSummarySizing = true
 	private var hasInspectorContent = true
@@ -514,7 +514,7 @@ final class WindowPaneController
 				self.toolsPaneTransition = nil
 				self.isAnimatingToolsExpansion = false
 				self.restoreReviewDragSettings()
-				self.applyReviewMinimumWidth()
+				self.applyPaneMinimumWidths()
 				self.applyResponsivePaneLayout(force: true)
 				self.conversation.endPaneResize()
 				self.onToolsExpansionLayoutChanged?()
@@ -537,7 +537,7 @@ final class WindowPaneController
 		isApplyingPaneLayout = true
 		transition.cancel()
 		restoreReviewDragSettings()
-		applyReviewMinimumWidth()
+		applyPaneMinimumWidths()
 		isApplyingPaneLayout = wasApplyingPaneLayout
 		applyResponsivePaneLayout(force: true)
 		conversation.endPaneResize()
@@ -567,7 +567,7 @@ final class WindowPaneController
 		}
 		if !isAnimatingToolsExpansion
 		{
-			applyReviewMinimumWidth()
+			applyPaneMinimumWidths()
 		}
 		reviewPane.maximumThickness = usesToolsSizing
 			? NSSplitViewItem
@@ -740,7 +740,7 @@ final class WindowPaneController
 					workspaceFilesWidth = min(
 						Self.workspaceFilesMaximumWidth,
 						max(
-							220,
+							WindowPaneLayout.reviewMinimumWidth,
 							reviewViewportWidth
 						)
 					)
@@ -834,8 +834,11 @@ final class WindowPaneController
 		reviewPane.canCollapseFromWindowResize = reviewDragSettings.canCollapseFromWindowResize
 	}
 
-	private func applyReviewMinimumWidth()
+	private func applyPaneMinimumWidths()
 	{
+		conversationPane.minimumThickness = usesToolsSizing
+			? WindowPaneLayout.toolsConversationMinimumWidth :
+			WindowPaneLayout.conversationMinimumWidth
 		reviewPane.minimumThickness = usesToolsSizing
 			? WindowPaneLayout.toolsMinimumWidth : WindowPaneLayout.reviewMinimumWidth
 	}

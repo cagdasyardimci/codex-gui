@@ -336,9 +336,9 @@ enum LayoutTokens
 			reviewWidth: CGFloat = 326,
 			reviewMinimumWidth: CGFloat = 220,
 			reviewMaximumWidth: CGFloat = 360,
-			toolsMinimumWidth: CGFloat = 340,
+			toolsMinimumWidth: CGFloat = 320,
 			conversationMinimumWidth: CGFloat = 360,
-			toolsConversationMinimumWidth: CGFloat = 360,
+			toolsConversationMinimumWidth: CGFloat = 320,
 			conversationComfortableWidth: CGFloat = 560,
 			filesPreferredWidth: CGFloat = 760,
 			filesMaximumWidth: CGFloat = 1000

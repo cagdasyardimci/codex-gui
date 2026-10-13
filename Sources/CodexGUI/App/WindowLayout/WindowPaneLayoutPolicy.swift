@@ -24,7 +24,9 @@ enum WindowPaneLayoutPolicy
 	) -> ReviewLayout
 	{
 		let visibleNavigationWidth = navigationCollapsed ? 0 : navigationWidth
-		let conversationWidth = isToolsExpanded ? 0 : WindowPaneLayout.conversationMinimumWidth
+		let conversationWidth = isToolsExpanded ? 0 :
+			(usesToolsSizing ? WindowPaneLayout.toolsConversationMinimumWidth :
+				WindowPaneLayout.conversationMinimumWidth)
 		let dividerCount = (visibleNavigationWidth > 0 ? 1 : 0) + (isToolsExpanded ? 0 : 1)
 		let dividerSpace = dividerThickness * CGFloat(dividerCount)
 		let availableReviewWidth = width - visibleNavigationWidth - dividerSpace - conversationWidth

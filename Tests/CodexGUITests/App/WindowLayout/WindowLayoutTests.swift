@@ -6,6 +6,25 @@ import Testing
 @Suite @MainActor
 struct WindowLayoutTests
 {
+	@Test func toolsPaneReservesA320PointConversationViewport()
+	{
+		let layout = WindowPaneLayoutPolicy.reviewLayout(
+			width: 1512,
+			navigationCollapsed: false,
+			navigationWidth: 326,
+			dividerThickness: 2.25,
+			isToolsExpanded: false,
+			usesToolsSizing: true,
+			workspaceFilesExpanded: false,
+			expandedToolsWidth: 1200,
+			workspaceFilesWidth: 760,
+			expandedReviewWidth: 326,
+			reviewVisibility: .expanded
+		)
+		#expect(!layout.collapsed)
+		#expect(layout.width == 861.5)
+	}
+
 	@Test func fullMinimumWindowFrameFitsConversationAndChanges() async throws
 	{
 		_ = NSApplication.shared
