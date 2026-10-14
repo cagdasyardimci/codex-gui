@@ -9,6 +9,7 @@ Start at [AGENTS.md](../AGENTS.md) for working rules and completion reporting. T
 | Product overview, requirements, dependencies, bundling and launch | [README](../README.md) |
 | Swift formatting, naming, DRY, file placement and test organization | [Conventions](../CONVENTIONS.md) |
 | Native controls, dialogs, accessibility, appearance and UI references | [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility) |
+| Shared palette, reference styling and component geometry | [Interface styling](interface-styling.md) |
 | Feature directories and view ownership | [Feature map](../Sources/CodexGUI/Features/README.md) |
 | State transitions, effects, async ownership, execution and recovery | [Architecture](architecture.md) |
 | Transcript residency and Git editing-turn identity | [Residency](architecture.md#conversation-content-residency), [latest Git turn](architecture.md#recorded-latest-git-turn) |
@@ -33,16 +34,16 @@ git diff --cached --stat
 rg --files Sources Tests docs scripts
 ```
 
-Read affected working-tree files and both staged and unstaged diffs. Use `rg` to locate current owners and trace their callers, state transitions and tests. Resolve a stable source version or isolated checkout if concurrent work prevents consistent verification. Preserve unrelated changes according to the entry point's working rules.
+Use these results and the documentation map to trace the affected owners, callers and tests. Follow the entry point's [working rules](../AGENTS.md#working-rules) for source inspection, checkout isolation and preserving unrelated work.
 
 ## Implement and verify
 
-Locate the owning source and corresponding tests using the conventions and feature map. Trace the changed action through the relevant architecture or protocol contract before editing. Apply formatting through the conventions' tooling procedure, including its scoped command when the checkout contains unrelated edits.
+Read the owning feature or protocol contract before implementing the change. Apply [formatting and tooling](../CONVENTIONS.md#formatting-and-tooling) through the conventions.
 
-Choose checks through validation. For native work, use its acceptance routes into the QA guide. Keep the source version stable and record the evidence required by those guides.
+Choose checks and evidence requirements through [validation](validation.md), including its routes to native acceptance.
 
 ## Deliver and maintain
 
-Review the scoped diff. Check new files explicitly because ordinary `git diff` omits untracked additions. If committing is part of the task, stage explicit paths or reviewed hunks and inspect the staged diff. Group commits by responsibility and dependency while preserving unrelated index entries. History rewriting requires explicit task authorization. Use the entry point's [completion report](../AGENTS.md#completion-report).
+Review the scoped diff, including new files that ordinary `git diff` does not show. When commits are requested, stage explicit paths or reviewed hunks, inspect the staged diff, and group commits by responsibility and dependency. History rewriting requires explicit task authorization. Deliver using the entry point's [completion report](../AGENTS.md#completion-report).
 
-Change the owning guide when a rule changes and update this map if ownership changes. Document current contracts and working rules. Do not add change-history narratives, past test results, test-case descriptions, coverage inventories, temporary artifacts or session-specific preferences. Tests document their own behavior; keep documentation focused on execution requirements and evidence interpretation.
+Update this map when topic ownership changes. Keep guides focused on current contracts, rationale and procedures. Do not add change-history narratives, past test results, test-case descriptions, coverage inventories, temporary artifacts or session-specific preferences. Tests document their own behavior; guides describe execution requirements and evidence interpretation.
