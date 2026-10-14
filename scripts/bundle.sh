@@ -44,9 +44,9 @@ else
   print "Using the selected code-signing certificate."
 fi
 
-# Swift Build resolves package resources from Contents/Resources in a signed macOS app.
-swift build --build-system swiftbuild -c "$configuration"
-product_directory=$(swift build --build-system swiftbuild -c "$configuration" --show-bin-path)
+# Use the toolchain's default build system for both building and locating the executable.
+swift build -c "$configuration"
+product_directory=$(swift build -c "$configuration" --show-bin-path)
 app=".build/CodexGUI.app"
 mkdir -p "$app/Contents/MacOS"
 mkdir -p "$app/Contents/Resources"

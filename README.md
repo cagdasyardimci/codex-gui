@@ -18,7 +18,7 @@ The app uses AppKit and connects to your installed Codex CLI through `codex app-
 
 - **macOS 14 or later.**
 - **Apple Command Line Tools and Swift 6.2 or later.** Swift Markdown 0.9.0 requires this Swift version.
-- **A Swift toolchain with the Swift Build backend** for app bundling. It must support `swift build --build-system swiftbuild`; the Swift language version alone does not establish backend availability.
+- **A Swift toolchain with SwiftPM** for app bundling. The bundle script uses the toolchain's default build system for both building and locating the executable. Apple Swift 6.3.1 defaults to the native SwiftPM backend; the package retains macOS 14 as its minimum deployment target.
 - **An installed Codex CLI** that meets the [compatibility policy](docs/cli-compatibility.md#current-policy). That guide also covers executable selection and version verification.
 - **A Codex account** signed in through the CLI or the app.
 
