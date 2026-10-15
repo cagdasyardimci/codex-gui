@@ -45,6 +45,12 @@ final class ToolsPaneTransition
 	private var isPrepared = false
 	private var animationTask: Task<Void, Never>?
 
+	/// Capturing the task also permits awaiting its unwind after cancellation clears ownership.
+	var completionTask: Task<Void, Never>?
+	{
+		animationTask
+	}
+
 	var splitWidthChanged: Bool
 	{
 		abs(splitView.bounds.width - initialWidth) >= 0.5

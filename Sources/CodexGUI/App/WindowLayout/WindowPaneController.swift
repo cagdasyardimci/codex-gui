@@ -38,6 +38,17 @@ final class WindowPaneController
 	var onToolsExpansionLayoutChanged: (() -> Void)?
 	private var lastAppliedSplitWidth: CGFloat?
 
+	var toolsTransitionTask: Task<Void, Never>?
+	{
+		toolsPaneTransition?.completionTask
+	}
+
+	/// Await the transition captured at entry, rather than a wall-clock settling interval.
+	func waitForToolsTransition() async
+	{
+		await toolsTransitionTask?.value
+	}
+
 	var reviewViewportWidth: CGFloat
 	{
 		reviewPane.isCollapsed ? 0 : reviewPane.viewController.view.frame.width

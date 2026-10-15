@@ -56,6 +56,12 @@ Use the [feature map](../Sources/CodexGUI/Features/README.md) for other presenta
 
 ## Native adaptation rationale
 
+Each main window has its own toolbar identifier because its tools-pane composition
+can differ from other windows. AppKit synchronizes items between toolbars with the
+same identifier, including when configuration autosaving is disabled. Toolbar
+composition belongs to the window's controller; configuration autosaving stays
+disabled because the application supplies that composition.
+
 The composer editor paints the same surface color as its enclosing view so AppKit can repaint the previous insertion point. Its setup belongs to [composer configuration](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+Composer.swift).
 
 Project/location strips and voice controls are outside the existing composer components. Matching the reference does not require reserving footer space for omitted controls. The Tools layout reserves column space for actions not yet implemented, so its existing tile need not fill the available row. Use the source owners above for sizing calculations.

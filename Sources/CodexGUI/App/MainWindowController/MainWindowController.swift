@@ -152,7 +152,9 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 
 	private func installConversationToolbar(in window: NSWindow)
 	{
-		let toolbar = NSToolbar(identifier: "CodexGUIConversationToolbar")
+		// Tools composition belongs to this window; a shared identifier synchronizes other windows.
+		let identifier = NSToolbar.Identifier("CodexGUIConversationToolbar.\(UUID().uuidString)")
+		let toolbar = NSToolbar(identifier: identifier)
 		toolbar.delegate = self
 		toolbar.displayMode = .iconOnly
 		toolbar.sizeMode = .small
