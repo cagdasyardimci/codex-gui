@@ -9,12 +9,12 @@ struct EditorHandoffTests
 {
 	@Test func rejectsAbsolutePathsOutsideProjectAndMissingFiles() async throws
 	{
-		let root = try temporaryDirectory()
+		let root = try await temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: root)
 		}
-		let outsideDirectory = try temporaryDirectory()
+		let outsideDirectory = try await temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: outsideDirectory)
@@ -27,7 +27,10 @@ struct EditorHandoffTests
 		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
 
 		let outside = outsideDirectory.appendingPathComponent("outside.swift")
-		try Data("outside".utf8).write(to: outside)
+		try await BackgroundTestWork.perform
+		{
+			try Data("outside".utf8).write(to: outside)
+		}
 		await #expect
 		{
 			try await handoff.open(
@@ -68,22 +71,25 @@ struct EditorHandoffTests
 
 	@Test func symlinkEscapeIsRejected() async throws
 	{
-		let root = try temporaryDirectory()
+		let root = try await temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: root)
 		}
-		let outside = try temporaryDirectory()
+		let outside = try await temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: outside)
 		}
 		let externalFile = outside.appendingPathComponent("outside.swift")
-		try Data("outside".utf8).write(to: externalFile)
-		try FileManager.default.createSymbolicLink(
-			at: root.appendingPathComponent("link.swift"),
-			withDestinationURL: externalFile
-		)
+		try await BackgroundTestWork.perform
+		{
+			try Data("outside".utf8).write(to: externalFile)
+			try FileManager.default.createSymbolicLink(
+				at: root.appendingPathComponent("link.swift"),
+				withDestinationURL: externalFile
+			)
+		}
 		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
 		defer
 		{
@@ -113,8 +119,8 @@ struct EditorHandoffTests
 
 	@Test func vscodeUsesBundledCLIWithGotoArgumentsAndPersistsPreference() async throws
 	{
-		let root = try temporaryDirectory()
-		let app = try temporaryDirectory().appendingPathComponent("Fake Code.app")
+		let root = try await temporaryDirectory()
+		let app = try await temporaryDirectory().appendingPathComponent("Fake Code.app")
 		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
 		defer
 		{
@@ -122,56 +128,60 @@ struct EditorHandoffTests
 			try? FileManager.default.removeItem(at: app.deletingLastPathComponent())
 			defaultsFixture.cleanup()
 		}
-		let file = root.appendingPathComponent("folder with spaces/file.swift")
-		try FileManager.default.createDirectory(
-			at: file.deletingLastPathComponent(),
-			withIntermediateDirectories: true
-		)
-		try Data("content".utf8).write(to: file)
+		// Fake editor installation and checkout files do not access AppKit state.
+		let (file, captured) = try await BackgroundTestWork.perform
+		{
+			let file = root.appendingPathComponent("folder with spaces/file.swift")
+			try FileManager.default.createDirectory(
+				at: file.deletingLastPathComponent(),
+				withIntermediateDirectories: true
+			)
+			try Data("content".utf8).write(to: file)
 
-		let cli = app.appendingPathComponent("Contents/Resources/app/bin/code")
-		try FileManager.default.createDirectory(
-			at: cli.deletingLastPathComponent(),
-			withIntermediateDirectories: true
-		)
-		let captured = root.appendingPathComponent("arguments.json")
-		let capturedPathLiteral = String(
-			decoding: try JSONSerialization.data(
-				withJSONObject: captured.path,
-				options: [
-					.fragmentsAllowed,
-					.withoutEscapingSlashes
-				]
-			),
-			as: UTF8.self
-		)
-		let script = """
-		#!/usr/bin/env python3
-		import json, sys
-		with open(\(capturedPathLiteral), "w") as output:
-		    json.dump(sys.argv[1:], output)
-		"""
-		try Data(script.utf8).write(to: cli)
-		try FileManager.default.setAttributes(
-			[.posixPermissions: 0o755],
-			ofItemAtPath: cli.path
-		)
-		let info: [String: Any] = [
-			"CFBundleIdentifier": "com.microsoft.VSCode",
-			"CFBundleName": "Fake Code",
-			"CFBundlePackageType": "APPL",
-		]
-		let infoData = try PropertyListSerialization.data(
-			fromPropertyList: info,
-			format: .xml,
-			options: 0
-		)
-		try FileManager.default.createDirectory(
-			at: app.appendingPathComponent("Contents"),
-			withIntermediateDirectories: true
-		)
-		try infoData.write(to: app.appendingPathComponent("Contents/Info.plist"))
-
+			let cli = app.appendingPathComponent("Contents/Resources/app/bin/code")
+			try FileManager.default.createDirectory(
+				at: cli.deletingLastPathComponent(),
+				withIntermediateDirectories: true
+			)
+			let captured = root.appendingPathComponent("arguments.json")
+			let capturedPathLiteral = String(
+				decoding: try JSONSerialization.data(
+					withJSONObject: captured.path,
+					options: [
+						.fragmentsAllowed,
+						.withoutEscapingSlashes
+					]
+				),
+				as: UTF8.self
+			)
+			let script = """
+			#!/usr/bin/env python3
+			import json, sys
+			with open(\(capturedPathLiteral), "w") as output:
+			    json.dump(sys.argv[1:], output)
+			"""
+			try Data(script.utf8).write(to: cli)
+			try FileManager.default.setAttributes(
+				[.posixPermissions: 0o755],
+				ofItemAtPath: cli.path
+			)
+			let info: [String: Any] = [
+				"CFBundleIdentifier": "com.microsoft.VSCode",
+				"CFBundleName": "Fake Code",
+				"CFBundlePackageType": "APPL",
+			]
+			let infoData = try PropertyListSerialization.data(
+				fromPropertyList: info,
+				format: .xml,
+				options: 0
+			)
+			try FileManager.default.createDirectory(
+				at: app.appendingPathComponent("Contents"),
+				withIntermediateDirectories: true
+			)
+			try infoData.write(to: app.appendingPathComponent("Contents/Info.plist"))
+			return (file, captured)
+		}
 		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
 		handoff.preferredApplication = app
 		#expect(
@@ -191,22 +201,28 @@ struct EditorHandoffTests
 			diff: diff
 		)
 		#expect(note == nil)
-		let arguments = try JSONSerialization
-			.jsonObject(with: Data(contentsOf: captured)) as? [String]
+		let capturedData = try await BackgroundTestWork.perform
+		{
+			try Data(contentsOf: captured)
+		}
+		let arguments = try JSONSerialization.jsonObject(with: capturedData) as? [String]
 		#expect(arguments == ["--goto", "\(file.path):4"])
 	}
 
-	private func temporaryDirectory() throws -> URL
+	nonisolated private func temporaryDirectory() async throws -> URL
 	{
-		let url = FileManager.default.temporaryDirectory
-			.appendingPathComponent(
-				"EditorHandoffTests-\(UUID().uuidString)",
-				isDirectory: true
+		try await BackgroundTestWork.perform
+		{
+			let url = FileManager.default.temporaryDirectory
+				.appendingPathComponent(
+					"EditorHandoffTests-\(UUID().uuidString)",
+					isDirectory: true
+				)
+			try FileManager.default.createDirectory(
+				at: url,
+				withIntermediateDirectories: true
 			)
-		try FileManager.default.createDirectory(
-			at: url,
-			withIntermediateDirectories: true
-		)
-		return url
+			return url
+		}
 	}
 }
