@@ -4,7 +4,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite(.serialized)
+@Suite(
+	.serialized
+)
 struct SlashCommandMenuReuseTests
 {
 	init()
@@ -227,15 +229,18 @@ struct SlashCommandMenuReuseTests
 		#expect(table.selectedRow == -1)
 	}
 
-	@Test func localeNotificationPostedOffMainInvalidatesTheNextRender() async throws
+	// A fixture-owned notification center avoids invalidating unrelated parallel menus.
+	@Test func localeNotificationPostedOffMainInvalidatesTheNextRender(
+	) async throws
 	{
-		let menu = SlashCommandPopoverView()
+		let notifications = NotificationCenter()
+		let menu = SlashCommandPopoverView(notificationCenter: notifications)
 		menu.availableSkills = try [skill(text: "Tool 10"), skill(text: "Tool 2")]
 		menu.render(prefix: "")
 		let preparations = menu.catalogPreparationCount
 		let postedOnMain = await Task.detached
 		{
-			Self.postLocaleNotificationFromWorker()
+			Self.postLocaleNotificationFromWorker(notifications)
 		}.value
 		#expect(!postedOnMain)
 		menu.render(prefix: "")
@@ -243,9 +248,11 @@ struct SlashCommandMenuReuseTests
 		#expect(menu.matchingSkills.map(\.name) == ["Tool 2", "Tool 10"])
 	}
 
-	nonisolated private static func postLocaleNotificationFromWorker() -> Bool
+	nonisolated private static func postLocaleNotificationFromWorker(
+		_ notifications: NotificationCenter
+	) -> Bool
 	{
-		NotificationCenter.default.post(
+		notifications.post(
 			name: NSLocale.currentLocaleDidChangeNotification,
 			object: nil
 		)

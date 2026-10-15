@@ -26,6 +26,21 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	private var commandUnavailableReasons: [String?] = []
 	private var hasRenderedPresentation = false
 	private var localeObserver: (any NSObjectProtocol)?
+	private let notificationCenter: NotificationCenter
+
+	init(notificationCenter: NotificationCenter = .default)
+	{
+		self.notificationCenter = notificationCenter
+		super.init(
+			nibName: nil,
+			bundle: nil
+		)
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
 	var catalogPreparationCount: Int
 	{
 		catalog.preparationCount
@@ -70,9 +85,9 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	{
 		if let localeObserver
 		{
-			NotificationCenter.default.removeObserver(localeObserver)
+			notificationCenter.removeObserver(localeObserver)
 		}
-		localeObserver = NotificationCenter.default.addObserver(
+		localeObserver = notificationCenter.addObserver(
 			forName: NSLocale.currentLocaleDidChangeNotification,
 			object: nil,
 			queue: .main
@@ -222,7 +237,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	{
 		if let localeObserver
 		{
-			NotificationCenter.default.removeObserver(localeObserver)
+			notificationCenter.removeObserver(localeObserver)
 		}
 	}
 

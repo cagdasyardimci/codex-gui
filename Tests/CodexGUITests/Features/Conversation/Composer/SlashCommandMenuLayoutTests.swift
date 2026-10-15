@@ -92,54 +92,65 @@ struct SlashCommandMenuLayoutTests
 		#expect(!second.isHovered)
 	}
 
-	@Test func panelTracksAnchorWidthInsteadOfKeepingItsInitialPreferredWidth() throws
+	// Shows a composer panel with application event monitors while repositioning its anchor.
+	@Test func panelTracksAnchorWidthInsteadOfKeepingItsInitialPreferredWidth(
+	) async throws
 	{
-		_ = NSApplication.shared
-		let parent = NSWindow(
-			contentRect: NSRect(
-				x: 100,
-				y: 100,
-				width: 600,
-				height: 400
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		parent.isReleasedWhenClosed = false
-		let anchor = NSView(frame: NSRect(
-			x: 30,
-			y: 30,
-			width: 430,
-			height: 80
-		))
-		try #require(parent.contentView).addSubview(anchor)
-		let menu = SlashCommandPopoverView()
-		menu.render(prefix: "")
-		let panel = ComposerPopoverPanel(contentViewController: menu)
-		panel.matchesAnchorWidth = true
-		panel.preservesParentKeyboardFocus = true
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			panel.close()
-			parent.orderOut(nil)
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			_ = NSApplication.shared
+			let parent = NSWindow(
+				contentRect: NSRect(
+					x: 100,
+					y: 100,
+					width: 600,
+					height: 400
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			parent.isReleasedWhenClosed = false
+			let anchor = NSView(frame: NSRect(
+				x: 30,
+				y: 30,
+				width: 430,
+				height: 80
+			))
+			try #require(parent.contentView).addSubview(anchor)
+			let menu = SlashCommandPopoverView()
+			menu.render(prefix: "")
+			let panel = ComposerPopoverPanel(contentViewController: menu)
+			panel.matchesAnchorWidth = true
+			panel.preservesParentKeyboardFocus = true
+			defer
+			{
+				panel.close()
+				parent.orderOut(nil)
+			}
+			panel.show(
+				relativeTo: anchor.bounds,
+				of: anchor
+			)
+			let child = try #require(parent.childWindows?.first)
+			child.layoutIfNeeded()
+			#expect(abs(child.frame.width - 430) < 1)
+			#expect(abs(menu.view.bounds.width - 430) < 1)
+			anchor.setFrameSize(NSSize(
+				width: 540,
+				height: 80
+			))
+			panel.reposition()
+			child.layoutIfNeeded()
+			#expect(abs(child.frame.width - 540) < 1)
+			#expect(abs(menu.view.bounds.width - 540) < 1)
 		}
-		panel.show(
-			relativeTo: anchor.bounds,
-			of: anchor
-		)
-		let child = try #require(parent.childWindows?.first)
-		child.layoutIfNeeded()
-		#expect(abs(child.frame.width - 430) < 1)
-		#expect(abs(menu.view.bounds.width - 430) < 1)
-		anchor.setFrameSize(NSSize(
-			width: 540,
-			height: 80
-		))
-		panel.reposition()
-		child.layoutIfNeeded()
-		#expect(abs(child.frame.width - 540) < 1)
-		#expect(abs(menu.view.bounds.width - 540) < 1)
 	}
 
 	@Test func inlineRowsStayWithinPanelInBothThemesAndSkillsUseTheSameLayout() throws
