@@ -9,13 +9,14 @@ final class SourcesTabHoverPreview
 	private weak var parentWindow: NSWindow?
 	private var appearanceBinding: DesktopPanelAppearanceBinding?
 
+	@discardableResult
 	func show(
 		sources: ConversationLocalSources,
 		below anchor: NSView
-	)
+	) -> Task<Void, Never>
 	{
 		dismiss()
-		pendingShow = Task
+		let operation = Task
 		{
 			[weak self, weak anchor] in
 			try? await Task.sleep(for: .milliseconds(250))
@@ -31,6 +32,10 @@ final class SourcesTabHoverPreview
 				in: window
 			)
 		}
+		// Callers that need a settled presentation can await this exact operation,
+		// including after dismissal cancels and retires the stored handle.
+		pendingShow = operation
+		return operation
 	}
 
 	func dismiss()

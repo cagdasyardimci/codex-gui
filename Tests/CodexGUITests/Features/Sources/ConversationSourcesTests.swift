@@ -11,16 +11,23 @@ struct ConversationSourcesTests
 		_ = NSApplication.shared
 		let directory = FileManager.default.temporaryDirectory
 			.appendingPathComponent("sources-image-\(UUID())")
-		try FileManager.default.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
-		)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let url = directory.appendingPathComponent("preview.png")
-		try DraftImageImportTestFixture.png().write(to: url)
+		let png = try DraftImageImportTestFixture.png()
+		try await BackgroundTestWork.perform
+		{
+			try png.write(to: url)
+		}
 		let sources = ConversationLocalSources(entries: [entry(
 			"turn",
 			images: [try reference(url.path)]

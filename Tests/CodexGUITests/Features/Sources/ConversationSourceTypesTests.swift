@@ -3,12 +3,12 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite
 struct ConversationSourceTypesTests
 {
-	@Test func protocolMentionsBecomeTypedSourcesInUserOrder() throws
+	@Test func protocolMentionsBecomeTypedSourcesInUserOrder() async throws
 	{
-		let entry = try entry(
+		let entry = try await entry(
 			[
 				"id": "user",
 				"type": "userMessage",
@@ -55,9 +55,9 @@ struct ConversationSourceTypesTests
 		#expect(entry.imageAttachments.count == 1)
 	}
 
-	@Test func canonicalDirectoryPathsDeduplicateAcrossUserTurns() throws
+	@Test func canonicalDirectoryPathsDeduplicateAcrossUserTurns() async throws
 	{
-		let first = try entry(
+		let first = try await entry(
 			[
 				"id": "user",
 				"type": "userMessage",
@@ -71,7 +71,7 @@ struct ConversationSourceTypesTests
 			],
 			scope: "turn-one:user"
 		)
-		let second = try entry(
+		let second = try await entry(
 			[
 				"id": "user",
 				"type": "userMessage",
@@ -97,7 +97,7 @@ struct ConversationSourceTypesTests
 		#expect(sources.records.last?.kind == .file)
 	}
 
-	@Test func generatedEnvelopeReferencesBecomeSourcesWithoutScrapingRequestMarkdown() throws
+	@Test func generatedEnvelopeReferencesBecomeSourcesWithoutScrapingRequestMarkdown() async throws
 	{
 		let text = """
 		# Files mentioned by the user:
@@ -112,7 +112,7 @@ struct ConversationSourceTypesTests
 		## My request:
 		""" + "\nRead [other file](/tmp/source-types/not-attached.swift) "
 			+ "and keep this literal path /tmp/unlisted.png."
-		let entry = try entry(
+		let entry = try await entry(
 			[
 				"id": "user",
 				"type": "userMessage",
@@ -126,7 +126,7 @@ struct ConversationSourceTypesTests
 			"/tmp/source-types/diagram.png"
 		])
 		#expect(sources.records.map(\.kind) == [.pdf, .image])
-		let ordinary = try self.entry(
+		let ordinary = try await self.entry(
 			[
 				"id": "ordinary",
 				"type": "userMessage",
@@ -139,7 +139,7 @@ struct ConversationSourceTypesTests
 			scope: "turn:ordinary"
 		)
 		#expect(ConversationLocalSources(entries: [ordinary]).records.isEmpty)
-		let malformed = try self.entry(
+		let malformed = try await self.entry(
 			[
 				"id": "malformed",
 				"type": "userMessage",
@@ -155,24 +155,24 @@ struct ConversationSourceTypesTests
 		#expect(ConversationLocalSources(entries: [malformed]).records.isEmpty)
 	}
 
-	@Test func webAndMCPCallsGroupWithoutMergingReusedItemIDsAcrossTurns() throws
+	@Test func webAndMCPCallsGroupWithoutMergingReusedItemIDsAcrossTurns() async throws
 	{
 		let entries = [
-			try entry(
+			try await entry(
 				["id": "web", "type": "webSearch", "action": [
 					"type": "search",
 					"query": "AppKit sources"
 				]],
 				scope: "turn-one:web"
 			),
-			try entry(
+			try await entry(
 				["id": "open", "type": "webSearch", "action": [
 					"type": "openPage",
 					"url": "https://example.com/docs"
 				]],
 				scope: "turn-one:open"
 			),
-			try entry(
+			try await entry(
 				["id": "find", "type": "webSearch", "action": [
 					"type": "findInPage",
 					"url": "https://example.com/docs",
@@ -180,29 +180,29 @@ struct ConversationSourceTypesTests
 				]],
 				scope: "turn-one:find"
 			),
-			try entry(
+			try await entry(
 				["id": "web", "type": "webSearch", "action": [
 					"type": "search",
 					"query": "AppKit references"
 				]],
 				scope: "turn-two:web"
 			),
-			try tool(
+			try await tool(
 				"list_pages",
 				server: "chatgpt_space",
 				scope: "turn-one:space"
 			),
-			try tool(
+			try await tool(
 				"search_pages",
 				server: "chatgpt_space",
 				scope: "turn-two:space"
 			),
-			try tool(
+			try await tool(
 				"list_threads",
 				server: "codex_app",
 				scope: "turn-one:app"
 			),
-			try tool(
+			try await tool(
 				"list_artifacts",
 				server: "codex_app",
 				scope: "turn-two:app"
@@ -246,9 +246,9 @@ struct ConversationSourceTypesTests
 		]).records)
 	}
 
-	@Test func completedOutputReplacesAnInvocationWithoutChangingItsIdentityOrCount() throws
+	@Test func completedOutputReplacesAnInvocationWithoutChangingItsIdentityOrCount() async throws
 	{
-		let started = try entry(
+		let started = try await entry(
 			[
 				"id": "tool",
 				"type": "mcpToolCall",
@@ -259,7 +259,7 @@ struct ConversationSourceTypesTests
 			],
 			scope: "turn:tool"
 		)
-		let completed = try entry(
+		let completed = try await entry(
 			[
 				"id": "tool",
 				"type": "mcpToolCall",
@@ -289,21 +289,26 @@ struct ConversationSourceTypesTests
 	private func entry(
 		_ json: [String: Any],
 		scope: String
-	) throws -> ConversationEntry
+	) async throws -> ConversationEntry
 	{
-		ConversationContentReducer.entry(
-			for: try #require(CodexItem(json: json)),
-			id: scope
-		)
+		let item = try #require(CodexItem(json: json))
+		// The production entry builder is actor-isolated; parsing and projection stay independent.
+		return await MainActor.run
+		{
+			ConversationContentReducer.entry(
+				for: item,
+				id: scope
+			)
+		}
 	}
 
 	private func tool(
 		_ operation: String,
 		server: String,
 		scope: String
-	) throws -> ConversationEntry
+	) async throws -> ConversationEntry
 	{
-		try entry(
+		try await entry(
 			[
 				"id": "reused-tool",
 				"type": "mcpToolCall",

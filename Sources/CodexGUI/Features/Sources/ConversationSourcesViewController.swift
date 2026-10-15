@@ -12,6 +12,7 @@ final class ConversationSourcesViewController: NSViewController
 	private var dividers: [String: NSBox] = [:]
 	private var buttons: [NSButton: ConversationLocalSources.Record] = [:]
 	private var tasks: [String: Task<Void, Never>] = [:]
+	private let loadThumbnail: @Sendable (String) async -> Data?
 	private var interruptedPreviews = Set<String>()
 	private var renderGeneration = 0
 	private var needsSourceRender = true
@@ -56,11 +57,14 @@ final class ConversationSourcesViewController: NSViewController
 
 	init(
 		owner: FeaturePresentationOwner,
-		sources: ConversationLocalSources
+		sources: ConversationLocalSources,
+		loadThumbnail: @escaping @Sendable (String) async -> Data? = SourceThumbnailLoader
+			.load(path:)
 	)
 	{
 		self.owner = owner
 		self.sources = sources
+		self.loadThumbnail = loadThumbnail
 		super.init(
 			nibName: nil,
 			bundle: nil
@@ -495,10 +499,11 @@ final class ConversationSourcesViewController: NSViewController
 		{
 			let sourcePath = record.isInlineImage ? record.path : (record.url?.path ?? record.path)
 			let generation = renderGeneration
+			let loadThumbnail = loadThumbnail
 			tasks[record.id] = Task
 			{
 				[weak self, weak image, weak state] in
-				let data = await SourceThumbnailLoader.load(path: sourcePath)
+				let data = await loadThumbnail(sourcePath)
 				guard !Task.isCancelled, let self, self.renderGeneration == generation,
 						self.sources.records.contains(record),
 						let image, let state
@@ -910,9 +915,15 @@ final class ConversationSourcesViewController: NSViewController
 		renderPendingSources(force: true)
 	}
 
+	/// Captures registered previews so callers can join them after cancellation retires them.
+	func previewTasks() -> [Task<Void, Never>]
+	{
+		Array(tasks.values)
+	}
+
 	func waitForPreviews() async
 	{
-		for task in tasks.values
+		for task in previewTasks()
 		{
 			await task.value
 		}

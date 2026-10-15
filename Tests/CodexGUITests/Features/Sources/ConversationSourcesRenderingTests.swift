@@ -118,7 +118,7 @@ struct ConversationSourcesRenderingTests
 	@Test func toolUpdatesRetainLoadedMediaRowsWithoutReloadingUnavailableFiles() async throws
 	{
 		_ = NSApplication.shared
-		let imageURL = try imageFile()
+		let imageURL = try await imageFile()
 		defer
 		{
 			try? FileManager.default.removeItem(at: imageURL)
@@ -286,7 +286,7 @@ struct ConversationSourcesRenderingTests
 	@Test func hiddenMediaRevisionThatReturnsToItsOriginalPathRestartsCanceledLoading() async throws
 	{
 		_ = NSApplication.shared
-		let imageURL = try imageFile()
+		let imageURL = try await imageFile()
 		defer
 		{
 			try? FileManager.default.removeItem(at: imageURL)
@@ -311,51 +311,92 @@ struct ConversationSourcesRenderingTests
 		controller.view.isHidden = false
 	}
 
-	@Test func invalidationCancelsMediaAndRejectsRetainedCallbacks() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func invalidationCancelsMediaAndRejectsRetainedCallbacks() async throws
 	{
 		_ = NSApplication.shared
-		let imageURL = try imageFile()
+		let imageURL = try await imageFile()
 		defer
 		{
 			try? FileManager.default.removeItem(at: imageURL)
 		}
-		let controller = try controller(entries: [
-			imageEntry(imageURL),
-			tool(
-				"first",
-				result: "Recorded result"
-			),
-		])
-		let views = descendants(controller.view)
-		let image = try #require(views.compactMap
+		let loader = SourcePreviewLoadGate(data: try DraftImageImportTestFixture.png())
+		let controller = try controller(
+			entries: [
+				imageEntry(imageURL),
+				tool(
+					"first",
+					result: "Recorded result"
+				),
+			],
+			loadThumbnail:
+			{
+				await loader.load(path: $0)
+			}
+		)
+		_ = controller.view
+		let previews = controller.previewTasks()
+		do
 		{
-			$0 as? NSImageView
-		}.first)
-		let placeholder = image.image
-		let source = try #require(views.compactMap
-		{
-			$0 as? NSButton
-		}.first
-		{
-			$0.identifier?.rawValue.hasPrefix("source-open:") == true
-		})
-		let operation = try disclosure(controller)
-		var openCount = 0
-		controller.onOpen =
-		{
-			_ in openCount += 1; return true
+			try #require(previews.count == 1)
+			var requests = loader.requests.makeAsyncIterator()
+			try #require(await requests.next() == imageURL.path)
+			let views = descendants(controller.view)
+			let image = try #require(views.compactMap
+			{
+				$0 as? NSImageView
+			}.first)
+			let placeholder = image.image
+			let source = try #require(views.compactMap
+			{
+				$0 as? NSButton
+			}.first
+			{
+				$0.identifier?.rawValue.hasPrefix("source-open:") == true
+			})
+			let operation = try disclosure(controller)
+			var openCount = 0
+			controller.onOpen =
+			{
+				_ in openCount += 1; return true
+			}
+			controller.invalidate()
+			#expect(previews.allSatisfy
+			{
+				$0.isCancelled
+			})
+			#expect(controller.previewTasks().isEmpty)
+			await loader.release()
+			for preview in previews
+			{
+				await preview.value
+			}
+			#expect(await loader.cancelledAtReturn == [true])
+			try #require(source.dispatchConfiguredAction())
+			operation.state = .on
+			try #require(operation.dispatchConfiguredAction())
+			controller.prepareForDisplay()
+			#expect(openCount == 0)
+			#expect(image.image === placeholder)
+			#expect(cards(controller).isEmpty)
 		}
-		controller.invalidate()
-		await controller.waitForPreviews()
-		source.performClick(nil)
-		operation.performClick(nil)
-		controller.prepareForDisplay()
-		#expect(openCount == 0)
-		#expect(image.image === placeholder)
-		#expect(cards(controller).isEmpty)
+		catch
+		{
+			controller.invalidate()
+			await loader.release()
+			for preview in previews
+			{
+				await preview.value
+			}
+			throw error
+		}
 	}
 
-	private func controller(entries: [ConversationEntry]) throws
+	private func controller(
+		entries: [ConversationEntry],
+		loadThumbnail: @escaping @Sendable (String) async -> Data? = SourceThumbnailLoader
+			.load(path:)
+	) throws
 		-> ConversationSourcesViewController
 	{
 		let snapshot = WorkspaceSelectors.snapshot(
@@ -367,7 +408,8 @@ struct ConversationSourcesRenderingTests
 		)
 		return ConversationSourcesViewController(
 			owner: FeaturePresentationOwner(snapshot),
-			sources: ConversationLocalSources(entries: entries)
+			sources: ConversationLocalSources(entries: entries),
+			loadThumbnail: loadThumbnail
 		)
 	}
 
@@ -407,11 +449,15 @@ struct ConversationSourcesRenderingTests
 		)
 	}
 
-	private func imageFile() throws -> URL
+	private func imageFile() async throws -> URL
 	{
 		let url = FileManager.default.temporaryDirectory
 			.appendingPathComponent("sources-rendering-\(UUID()).png")
-		try DraftImageImportTestFixture.png().write(to: url)
+		let png = try DraftImageImportTestFixture.png()
+		try await BackgroundTestWork.perform
+		{
+			try png.write(to: url)
+		}
 		return url
 	}
 
@@ -459,5 +505,55 @@ struct ConversationSourcesRenderingTests
 		{
 			descendants($0)
 		}
+	}
+}
+
+private actor SourcePreviewLoadGate
+{
+	nonisolated let requests: AsyncStream<String>
+	private let requestContinuation: AsyncStream<String>.Continuation
+	private let data: Data
+	private var released = false
+	private var waiters: [CheckedContinuation<Void, Never>] = []
+	private(set) var cancelledAtReturn: [Bool] = []
+
+	init(data: Data)
+	{
+		let (requests, continuation) = AsyncStream<String>.makeStream()
+		self.requests = requests
+		requestContinuation = continuation
+		self.data = data
+	}
+
+	func load(path: String) async -> Data?
+	{
+		// Return real image data even after cancellation to exercise the view's late-result guard.
+		await withCheckedContinuation
+		{
+			continuation in
+			if released
+			{
+				continuation.resume()
+			}
+			else
+			{
+				waiters.append(continuation)
+			}
+			requestContinuation.yield(path)
+		}
+		cancelledAtReturn.append(Task.isCancelled)
+		return data
+	}
+
+	func release()
+	{
+		released = true
+		let pending = waiters
+		waiters.removeAll()
+		for waiter in pending
+		{
+			waiter.resume()
+		}
+		requestContinuation.finish()
 	}
 }

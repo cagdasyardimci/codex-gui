@@ -44,8 +44,22 @@ struct ConversationSourceTypesRenderingTests
 			sources: sources
 		)
 		let views = descendants(controller.view)
-		for record in sources.records
+		let expectedIcons: [(ConversationLocalSources.Kind, DesktopIcon, CGFloat)] = [
+			(.file, .file, 24),
+			(.audio, .fileAudio, 18),
+			(.pdf, .fileDocument, 24),
+			(.folder, .folder, 24),
+			(.image, .fileImage, 24),
+		]
+		try #require(sources.records.count == expectedIcons.count)
+		var renderedIcons = Set<Data>()
+		for (record, expected) in zip(
+			sources.records,
+			expectedIcons
+		)
 		{
+			#expect(record.kind == expected.0)
+			#expect(record.iconIdentifier == expected.1)
 			let icon = try #require(views.compactMap
 			{
 				$0 as? NSImageView
@@ -53,7 +67,18 @@ struct ConversationSourceTypesRenderingTests
 			{
 				$0.identifier?.rawValue == "source-icon:\(record.id)"
 			})
-			#expect(icon.image != nil)
+			let image = try #require(icon.image)
+			#expect(image.size == NSSize(
+				width: expected.2,
+				height: expected.2
+			))
+			let pixels = try iconPixels(image)
+			let expectedPixels = try iconPixels(DesktopIcons.image(
+				expected.1,
+				size: expected.2
+			))
+			#expect(pixels == expectedPixels)
+			renderedIcons.insert(pixels)
 			#expect(icon.toolTip == record.kind.rawValue)
 			let button = try #require(views.compactMap
 			{
@@ -65,6 +90,7 @@ struct ConversationSourceTypesRenderingTests
 			#expect(button.title == record.name)
 			#expect(button.accessibilityLabel() == "Open source: \(record.name)")
 		}
+		#expect(renderedIcons.count == expectedIcons.count)
 		let labels = views.compactMap
 		{
 			$0 as? NSTextField
@@ -319,6 +345,47 @@ struct ConversationSourceTypesRenderingTests
 		{
 			descendants($0)
 		}
+	}
+
+	private func iconPixels(_ image: NSImage) throws -> Data
+	{
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 48,
+			pixelsHigh: 48,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 192,
+			bitsPerPixel: 32
+		))
+		let context = try #require(NSGraphicsContext(bitmapImageRep: bitmap))
+		NSGraphicsContext.saveGraphicsState()
+		defer
+		{
+			NSGraphicsContext.restoreGraphicsState()
+		}
+		NSGraphicsContext.current = context
+		let bounds = NSRect(
+			x: 0,
+			y: 0,
+			width: 48,
+			height: 48
+		)
+		context.cgContext.clear(bounds)
+		image.draw(in: bounds)
+		let bytes = try #require(bitmap.bitmapData)
+		let pixels = Data(
+			bytes: bytes,
+			count: bitmap.bytesPerRow * bitmap.pixelsHigh
+		)
+		#expect(pixels.contains
+		{
+			$0 != 0
+		})
+		return pixels
 	}
 
 	private func captureIfRequested(
