@@ -672,12 +672,13 @@ extension ConversationViewController
 		fullAccessConfirmationPanel = panel
 		window.beginSheet(panel)
 		{
-			[weak self] response in
+			[weak self, weak panel] response in
 			self?.fullAccessConfirmationPanel = nil
 			if response == .OK
 			{
 				applyMode?(.fullAccess)
 			}
+			panel?.finishDismissal()
 		}
 	}
 

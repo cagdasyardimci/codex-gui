@@ -3,72 +3,202 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized,
+	.testTiming
+) @MainActor
 struct FullAccessConfirmationTests
 {
-	@Test func fullAccessWaitsForConfirmationAndKeepsTheRequestingWorkspace() async throws
+	// Real AppKit sheet presentation and asynchronous dismissal share application focus.
+	@Test func fullAccessWaitsForConfirmationAndKeepsTheRequestingWorkspace(
+	) async throws
 	{
-		_ = NSApplication.shared
-		let conversation = ConversationViewController()
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 900,
-				height: 700
-			),
-			styleMask: [.titled],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.contentViewController = conversation
-		window.orderFront(nil)
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			window.close()
+			timing.end()
 		}
-		var firstWorkspace: [ApprovalMode] = []
-		var secondWorkspace: [ApprovalMode] = []
-		conversation.onSelectApprovalMode =
+		try await AppKitTestIsolation.perform
 		{
-			firstWorkspace.append($0)
+			@MainActor in
+			// Reserve shared focus only after the test body has reached MainActor.
+			_ = NSApplication.shared
+			let conversation = ConversationViewController()
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 900,
+					height: 700
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentViewController = conversation
+			window.orderFront(nil)
+			defer
+			{
+				if let sheet = window.attachedSheet
+				{
+					window.endSheet(
+						sheet,
+						returnCode: .cancel
+					)
+				}
+				window.close()
+			}
+			var firstWorkspace: [ApprovalMode] = []
+			var secondWorkspace: [ApprovalMode] = []
+			conversation.onSelectApprovalMode =
+			{
+				firstWorkspace.append($0)
+			}
+			conversation.requestApprovalMode(.fullAccess)
+			let panel = try #require(conversation
+				.fullAccessConfirmationPanel as? FullAccessConfirmationPanel)
+			let dialog = try #require(panel.contentViewController as? FullAccessConfirmationView)
+			#expect(firstWorkspace.isEmpty)
+			#expect(conversation.approvalMode == .askForApproval)
+			#expect(panel.canBecomeKey)
+			let cancelAction = TestTiming.begin(
+				"sheet.action",
+				detail: "cancel"
+			)
+			// Verify configured action routing without the native press-tracking event loop.
+			try #require(dialog.cancelButton.dispatchConfiguredAction())
+			cancelAction.end()
+			let cancelDismissal = TestTiming.begin(
+				"sheet.dismissal",
+				detail: "cancel"
+			)
+			try await panel.waitForDismissal()
+			cancelDismissal.end()
+			#expect(conversation.fullAccessConfirmationPanel == nil)
+			#expect(firstWorkspace.isEmpty)
+
+			conversation.requestApprovalMode(.fullAccess)
+			let escapedPanel = try #require(
+				conversation.fullAccessConfirmationPanel as? FullAccessConfirmationPanel
+			)
+			let escapeAction = TestTiming.begin(
+				"sheet.action",
+				detail: "escape"
+			)
+			escapedPanel.cancelOperation(nil)
+			escapeAction.end()
+			let escapeDismissal = TestTiming.begin(
+				"sheet.dismissal",
+				detail: "escape"
+			)
+			try await escapedPanel.waitForDismissal()
+			escapeDismissal.end()
+			#expect(conversation.fullAccessConfirmationPanel == nil)
+			#expect(firstWorkspace.isEmpty)
+
+			conversation.requestApprovalMode(.fullAccess)
+			let confirmedPanel = try #require(
+				conversation.fullAccessConfirmationPanel as? FullAccessConfirmationPanel
+			)
+			let confirmedDialog = try #require(
+				confirmedPanel.contentViewController as? FullAccessConfirmationView
+			)
+			conversation.onSelectApprovalMode =
+			{
+				secondWorkspace.append($0)
+			}
+			let confirmAction = TestTiming.begin(
+				"sheet.action",
+				detail: "confirm"
+			)
+			try #require(confirmedDialog.confirmButton.dispatchConfiguredAction())
+			confirmAction.end()
+			let confirmDismissal = TestTiming.begin(
+				"sheet.dismissal",
+				detail: "confirm"
+			)
+			try await confirmedPanel.waitForDismissal()
+			confirmDismissal.end()
+			#expect(conversation.fullAccessConfirmationPanel == nil)
+			#expect(firstWorkspace == [.fullAccess])
+			#expect(secondWorkspace.isEmpty)
+			conversation.requestApprovalMode(.approveForMe)
+			#expect(secondWorkspace == [.approveForMe])
+			#expect(conversation.fullAccessConfirmationPanel == nil)
 		}
-		conversation.requestApprovalMode(.fullAccess)
-		let panel = try #require(conversation.fullAccessConfirmationPanel)
-		let dialog = try #require(panel.contentViewController as? FullAccessConfirmationView)
-		#expect(firstWorkspace.isEmpty)
-		#expect(conversation.approvalMode == .askForApproval)
-		#expect(panel.canBecomeKey)
-		dialog.cancelButton.performClick(nil)
-		await waitForConfirmationDismissal(conversation)
-		#expect(conversation.fullAccessConfirmationPanel == nil)
-		#expect(firstWorkspace.isEmpty)
+	}
 
-		conversation.requestApprovalMode(.fullAccess)
-		let escapedPanel = try #require(conversation.fullAccessConfirmationPanel)
-		escapedPanel.cancelOperation(nil)
-		await waitForConfirmationDismissal(conversation)
-		#expect(conversation.fullAccessConfirmationPanel == nil)
-		#expect(firstWorkspace.isEmpty)
-
-		conversation.requestApprovalMode(.fullAccess)
-		let confirmedPanel = try #require(conversation.fullAccessConfirmationPanel)
-		let confirmedDialog = try #require(
-			confirmedPanel.contentViewController as? FullAccessConfirmationView
-		)
-		conversation.onSelectApprovalMode =
+	@Test(
+		.timeLimit(.minutes(1)),
+		arguments: [UInt16(36), 76, 53]
+	)
+	func dialogKeysDismissThroughNativeEventRouting(keyCode: UInt16) async throws
+	{
+		try await AppKitTestIsolation.perform
 		{
-			secondWorkspace.append($0)
+			@MainActor in
+			_ = NSApplication.shared
+			let conversation = ConversationViewController()
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 900,
+					height: 700
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentViewController = conversation
+			window.orderFront(nil)
+			defer
+			{
+				if let sheet = window.attachedSheet
+				{
+					window.endSheet(
+						sheet,
+						returnCode: .cancel
+					)
+				}
+				window.close()
+			}
+			var requestingWorkspace: [ApprovalMode] = []
+			var replacementWorkspace: [ApprovalMode] = []
+			conversation.onSelectApprovalMode =
+			{
+				requestingWorkspace.append($0)
+			}
+			conversation.requestApprovalMode(.fullAccess)
+			let panel = try #require(
+				conversation.fullAccessConfirmationPanel as? FullAccessConfirmationPanel
+			)
+			conversation.onSelectApprovalMode =
+			{
+				replacementWorkspace.append($0)
+			}
+			let characters = keyCode == 53 ? "\u{1b}" : keyCode == 76 ? "\u{3}" : "\r"
+			let event = try #require(NSEvent.keyEvent(
+				with: .keyDown,
+				location: .zero,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: panel.windowNumber,
+				context: nil,
+				characters: characters,
+				charactersIgnoringModifiers: characters,
+				isARepeat: false,
+				keyCode: keyCode
+			))
+			panel.sendEvent(event)
+			try await panel.waitForDismissal()
+			#expect(window.attachedSheet == nil)
+			#expect(conversation.fullAccessConfirmationPanel == nil)
+			#expect(requestingWorkspace == (keyCode == 53 ? [] : [.fullAccess]))
+			#expect(replacementWorkspace.isEmpty)
 		}
-		confirmedDialog.confirmButton.performClick(nil)
-		await waitForConfirmationDismissal(conversation)
-		#expect(conversation.fullAccessConfirmationPanel == nil)
-		#expect(firstWorkspace == [.fullAccess])
-		#expect(secondWorkspace.isEmpty)
-		conversation.requestApprovalMode(.approveForMe)
-		#expect(secondWorkspace == [.approveForMe])
-		#expect(conversation.fullAccessConfirmationPanel == nil)
 	}
 
 	@Test func fullAccessDialogHasWorkingLinkKeyboardActionsAndUnclippedContent() throws
@@ -118,18 +248,6 @@ struct FullAccessConfirmationTests
 				))
 				try png.write(to: output.appendingPathComponent("full-access-\(name).png"))
 			}
-		}
-	}
-
-	private func waitForConfirmationDismissal(_ conversation: ConversationViewController) async
-	{
-		for _ in 0 ..< 100
-		{
-			if conversation.fullAccessConfirmationPanel == nil
-			{
-				return
-			}
-			try? await Task.sleep(for: .milliseconds(10))
 		}
 	}
 
