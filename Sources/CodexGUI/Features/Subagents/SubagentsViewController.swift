@@ -3,6 +3,11 @@ import AppKit
 @MainActor
 final class SubagentsViewController: NSViewController
 {
+	typealias TimeRefreshTimerFactory = (
+		TimeInterval,
+		@escaping @Sendable (Timer) -> Void
+	) -> Timer
+
 	let owner: FeaturePresentationOwner
 	private(set) var subagents: ConversationSubagents
 	var onSelectThread: ((String) -> Void)?
@@ -21,6 +26,7 @@ final class SubagentsViewController: NSViewController
 	private var agentActions: [NSButton: CodexSubagentActivity] = [:]
 	private var showsAllDoneAgents = false
 	private let now: () -> Date
+	private let makeTimeRefreshTimer: TimeRefreshTimerFactory
 	private var completionLabels: [NSTextField: Date] = [:]
 	private var elapsedLabels: [NSTextField: Date] = [:]
 	private var refreshInterval: TimeInterval?
@@ -55,12 +61,22 @@ final class SubagentsViewController: NSViewController
 	init(
 		owner: FeaturePresentationOwner,
 		subagents: ConversationSubagents,
-		now: @escaping () -> Date = Date.init
+		now: @escaping () -> Date = Date.init,
+		makeTimeRefreshTimer: @escaping TimeRefreshTimerFactory =
+		{
+			interval, callback in
+			Timer(
+				timeInterval: interval,
+				repeats: true,
+				block: callback
+			)
+		}
 	)
 	{
 		self.owner = owner
 		self.subagents = subagents
 		self.now = now
+		self.makeTimeRefreshTimer = makeTimeRefreshTimer
 		super.init(
 			nibName: nil,
 			bundle: nil
@@ -159,10 +175,7 @@ final class SubagentsViewController: NSViewController
 		{
 			return
 		}
-		let timer = Timer(
-			timeInterval: interval,
-			repeats: true
-		)
+		let timer = makeTimeRefreshTimer(interval)
 		{
 			[weak self] timer in
 			guard let self
@@ -171,8 +184,16 @@ final class SubagentsViewController: NSViewController
 				timer.invalidate()
 				return
 			}
+			let timerIdentity = ObjectIdentifier(timer)
 			MainActor.assumeIsolated
 			{
+				guard self.timeRefreshTimer.map(ObjectIdentifier.init) == timerIdentity,
+						self.isPresented,
+						self.selectedAgent == nil
+				else
+				{
+					return
+				}
 				if self.view.isHiddenOrHasHiddenAncestor
 				{
 					self.stopTimeRefreshTimer()

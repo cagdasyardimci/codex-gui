@@ -6,7 +6,7 @@ import Testing
 @Suite @MainActor
 struct ToolsTabSubagentsIntegrationTests
 {
-	@Test func workingTimersStopWhenHiddenAndResumeWhenTheirTabReturns()
+	@Test func workingTimersStopWhenHiddenAndResumeWhenTheirTabReturns() throws
 	{
 		_ = NSApplication.shared
 		let tabs = ToolsTabViewController()
@@ -15,6 +15,16 @@ struct ToolsTabSubagentsIntegrationTests
 			ownerIdentity: "timer-fixture"
 		)
 		let startedAt = Date(timeIntervalSince1970: 1000)
+		var currentTime = startedAt
+		var ticks: [(timer: Timer, callback: @Sendable (Timer) -> Void)] = []
+		defer
+		{
+			tabs.removeSubagentsTab()
+			for tick in ticks
+			{
+				tick.timer.invalidate()
+			}
+		}
 		let entry = ConversationEntry(
 			id: "working-agent",
 			kind: .tool,
@@ -31,23 +41,82 @@ struct ToolsTabSubagentsIntegrationTests
 			subagents: ConversationSubagents(entries: [entry]),
 			now:
 			{
-				startedAt
+				currentTime
+			},
+			makeTimeRefreshTimer:
+			{
+				interval, callback in
+				let timer = Timer(
+					timeInterval: interval,
+					repeats: true,
+					block: callback
+				)
+				ticks.append((timer, callback))
+				return timer
 			}
 		)
 
 		tabs.showSubagents(agents)
 		#expect(agents.isRefreshingTimeLabels)
+		let elapsed = try #require(elapsedLabel(in: agents.view))
+		let row = try #require(elapsed.superview)
+		#expect(elapsed.stringValue == "0s")
+		try #require(ticks.count == 1)
+		let first = ticks[0]
+		#expect(first.timer.timeInterval == 1)
+		currentTime = startedAt.addingTimeInterval(1)
+		first.timer.fire()
+		#expect(elapsed.stringValue == "1s")
+
 		tabs.setContentVisible(false)
 		#expect(!agents.isRefreshingTimeLabels)
+		#expect(!first.timer.isValid)
+		currentTime = startedAt.addingTimeInterval(2)
+		// Deliver a captured callback even though its timer has already been invalidated.
+		first.callback(first.timer)
+		#expect(elapsed.stringValue == "1s")
+		#expect(!agents.isRefreshingTimeLabels)
+
 		tabs.setContentVisible(true)
 		#expect(agents.isRefreshingTimeLabels)
+		#expect(elapsed.stringValue == "2s")
+		try #require(ticks.count == 2)
+		let second = ticks[1]
+		currentTime = startedAt.addingTimeInterval(3)
+		second.timer.fire()
+		#expect(elapsed.stringValue == "3s")
+		currentTime = startedAt.addingTimeInterval(4)
+		first.callback(first.timer)
+		#expect(elapsed.stringValue == "3s")
+		#expect(second.timer.isValid)
+		#expect(elapsed.superview === row)
+
 		tabs.showSources(controller())
 		#expect(!agents.isRefreshingTimeLabels)
+		#expect(!second.timer.isValid)
+		currentTime = startedAt.addingTimeInterval(5)
+		second.callback(second.timer)
+		#expect(elapsed.stringValue == "3s")
+
 		tabs.showSubagents(agents)
 		#expect(agents.isRefreshingTimeLabels)
+		#expect(elapsed.stringValue == "5s")
+		try #require(ticks.count == 3)
+		let third = ticks[2]
+		currentTime = startedAt.addingTimeInterval(6)
+		third.timer.fire()
+		#expect(elapsed.stringValue == "6s")
+		#expect(elapsedLabel(in: agents.view) === elapsed)
+		#expect(elapsed.superview === row)
+
 		tabs.removeSubagentsTab()
 		#expect(!agents.isRefreshingTimeLabels)
 		#expect(agents.parent == nil)
+		#expect(!third.timer.isValid)
+		currentTime = startedAt.addingTimeInterval(7)
+		third.callback(third.timer)
+		#expect(elapsed.stringValue == "6s")
+		#expect(!agents.isRefreshingTimeLabels)
 	}
 
 	@Test func featureTabsRemainDistinctAndReuseTheirOwnContent() throws
@@ -251,10 +320,30 @@ struct ToolsTabSubagentsIntegrationTests
 		#expect(!controller.inspector.isShowingDetails)
 		#expect(controller.inspector.conversationSubagents?.parent === controller.inspector
 			.toolsTabs)
-		let tabID = controller.inspector.toolsTabs.subagentsTabID
-		controller.conversation.onOpenSubagents?()
-		#expect(controller.inspector.toolsTabs.subagentsTabID == tabID)
+		let tabID = try #require(controller.inspector.toolsTabs.subagentsTabID)
 		#expect(controller.inspector.toolsTabs.tabCount == 1)
+		controller.inspector.toolsTabs.openNewTab()
+		#expect(!controller.inspector.toolsTabs.isSubagentsSelected)
+		#expect(controller.inspector.toolsTabs.selectedTabID != tabID)
+		let openFromTranscript = try #require(controller.conversation.onOpenSubagents)
+		openFromTranscript()
+		#expect(controller.inspector.toolsTabs.isSubagentsSelected)
+		#expect(controller.inspector.toolsTabs.selectedTabID == tabID)
+		#expect(controller.inspector.toolsTabs.subagentsTabID == tabID)
+		#expect(controller.inspector.toolsTabs.tabCount == 2)
+	}
+
+	private func elapsedLabel(in view: NSView) -> NSTextField?
+	{
+		if let label = view as? NSTextField,
+			label.identifier?.rawValue.hasPrefix("subagent-elapsed:") == true
+		{
+			return label
+		}
+		return view.subviews.lazy.compactMap
+		{
+			elapsedLabel(in: $0)
+		}.first
 	}
 
 	private func fixtureEntries() -> [ConversationEntry]

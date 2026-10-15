@@ -14,13 +14,17 @@ struct SubagentConversationNavigationIntegrationTests
 		_ = NSApplication.shared
 		let project = FileManager.default.temporaryDirectory
 			.appendingPathComponent("SubagentNavigation-\(UUID())")
-		try FileManager.default.createDirectory(
-			at: project.appendingPathComponent(
-				".git",
-				isDirectory: true
-			),
-			withIntermediateDirectories: true
-		)
+		// Directory preparation is independent of the controller and its main-actor service.
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: project.appendingPathComponent(
+					".git",
+					isDirectory: true
+				),
+				withIntermediateDirectories: true
+			)
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -76,17 +80,22 @@ struct SubagentConversationNavigationIntegrationTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		#expect(await waitUntil
+		// Context IO and backend effects publish independently of connection acknowledgement.
+		await awaitWorkspaceSnapshot(state.store)
 		{
+			_ in
 			state.selectedProjectURL?.standardizedFileURL == project.standardizedFileURL &&
 				state.pendingBackendOperationCount == 0
-		})
+		}
+		#expect(state.selectedProjectURL?.standardizedFileURL == project.standardizedFileURL &&
+			state.pendingBackendOperationCount == 0)
 		let parentRead = try #require(state.inputs.selectThread(service.thread.id))
 		#expect(await parentRead.wait() == .finished)
-		#expect(await waitUntil
+		await awaitWorkspaceSnapshot(state.store)
 		{
-			state.currentSnapshot.canSend
-		})
+			$0.canSend
+		}
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Parent task")
 		let submission = try #require(state.inputs.send())
 		#expect(await submission.wait() == .finished)
