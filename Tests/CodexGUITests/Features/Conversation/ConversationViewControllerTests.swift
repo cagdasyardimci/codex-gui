@@ -6,6 +6,26 @@ import Testing
 @MainActor
 struct ConversationViewControllerTests
 {
+	@Test func embeddedTranscriptForwardsEarlierHistoryRequestToConversation() throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		var requests = 0
+		controller.onLoadEarlierTurns =
+		{
+			requests += 1
+		}
+		controller.render(snapshot(
+			[],
+			canLoadEarlierTurns: true
+		))
+		#expect(controller.transcript.parent === controller)
+		let button = controller.transcript.loadEarlierButton
+		#expect(!button.isHidden && button.isEnabled)
+		try #require(button.dispatchConfiguredAction())
+		#expect(requests == 1)
+	}
+
 	@Test func pendingUserRowAndEmptyComposerRenderBeforeRichPreparation() async throws
 	{
 		_ = NSApplication.shared
@@ -23,13 +43,14 @@ struct ConversationViewControllerTests
 		)
 		controller.render(snapshot([entry]))
 		#expect(controller.composer.string.isEmpty)
-		#expect(controller.entries == [entry])
-		#expect(controller.displayedRows.map(\.id) == [entry.id])
-		#expect(controller.preparedContents[entry.id]?.attributedString.string == entry.body)
+		#expect(controller.transcript.entries == [entry])
+		#expect(controller.transcript.displayedRows.map(\.id) == [entry.id])
+		#expect(controller.transcript.preparedContents[entry.id]?.attributedString.string == entry
+			.body)
 		await controller.waitForRendering()
-		#expect(controller.preparedContents[entry.id]?.attributedString.string
+		#expect(controller.transcript.preparedContents[entry.id]?.attributedString.string
 			== "First line\nSubmitted")
-		#expect(controller.entries == [entry])
+		#expect(controller.transcript.entries == [entry])
 	}
 
 	@Test(.timeLimit(.minutes(1)))
@@ -51,7 +72,7 @@ struct ConversationViewControllerTests
 		)
 		controller.render(snapshot([history]))
 		await controller.waitForRendering()
-		let prepared = try #require(controller.preparedContents[history.id])
+		let prepared = try #require(controller.transcript.preparedContents[history.id])
 		let first = ConversationEntry(
 			id: "local:first",
 			kind: .user,
@@ -59,8 +80,8 @@ struct ConversationViewControllerTests
 			body: "First request"
 		)
 		controller.render(snapshot([history, first]))
-		#expect(controller.entries == [history, first])
-		#expect(controller.preparedContents[history.id] === prepared)
+		#expect(controller.transcript.entries == [history, first])
+		#expect(controller.transcript.preparedContents[history.id] === prepared)
 		let obsoleteTask = preparation.preparationTask
 		#expect(obsoleteTask != nil)
 		let started = await gate.waitUntilStarted()
@@ -111,24 +132,29 @@ struct ConversationViewControllerTests
 			durationMs: nil
 		)]
 		controller.render(current)
-		#expect(controller.entries == [second])
-		#expect(controller.preparedContents[history.id] == nil)
+		#expect(controller.transcript.entries == [second])
+		#expect(controller.transcript.preparedContents[history.id] == nil)
 		await controller.waitForRendering()
-		#expect(controller.entries == currentEntries)
-		#expect(controller.preparedContents[reply.id]?.attributedString.string == "Current answer")
-		#expect(controller.turnNavigationRail.summaries.map(\.reply) == ["Current answer"])
+		#expect(controller.transcript.entries == currentEntries)
+		#expect(controller.transcript.preparedContents[reply.id]?.attributedString
+			.string == "Current answer")
+		#expect(controller.transcript.turnNavigationRail.summaries
+			.map(\.reply) == ["Current answer"])
 		gate.release()
 		await obsoleteTask?.value
-		#expect(controller.selectedThreadID == "other")
-		#expect(controller.entries == currentEntries)
-		#expect(controller.displayedRows.map(\.id)
+		#expect(controller.transcript.selectedThreadID == "other")
+		#expect(controller.transcript.entries == currentEntries)
+		#expect(controller.transcript.displayedRows.map(\.id)
 			== [second.id, reply.id, "local:file-change-summary"])
-		#expect(controller.preparedContents[history.id] == nil)
-		#expect(controller.preparedContents[first.id] == nil)
-		#expect(controller.preparedContents[reply.id]?.attributedString.string == "Current answer")
-		#expect(controller.turnNavigationRail.summaries.map(\.entryID) == [second.id])
-		#expect(controller.turnNavigationRail.summaries.map(\.title) == ["Second request"])
-		#expect(controller.turnNavigationRail.summaries.map(\.reply) == ["Current answer"])
+		#expect(controller.transcript.preparedContents[history.id] == nil)
+		#expect(controller.transcript.preparedContents[first.id] == nil)
+		#expect(controller.transcript.preparedContents[reply.id]?.attributedString
+			.string == "Current answer")
+		#expect(controller.transcript.turnNavigationRail.summaries.map(\.entryID) == [second.id])
+		#expect(controller.transcript.turnNavigationRail.summaries
+			.map(\.title) == ["Second request"])
+		#expect(controller.transcript.turnNavigationRail.summaries
+			.map(\.reply) == ["Current answer"])
 		#expect(preparation.preparedNetChanges["local"]?.changes.map(\.path) == ["Current.swift"])
 		#expect(preparation.preparedNetChanges["local"]?.changes.map(\.diff)
 			== ["@@ -1,1 +1,1 @@\n-before\n+current"])
@@ -154,10 +180,10 @@ struct ConversationViewControllerTests
 		let controller = ConversationViewController()
 		controller.render(snapshot(entries))
 		await controller.waitForRendering()
-		#expect(controller.entries == entries)
+		#expect(controller.transcript.entries == entries)
 		for entry in entries
 		{
-			let content = try #require(controller.preparedContents[entry.id])
+			let content = try #require(controller.transcript.preparedContents[entry.id])
 			let display = content.attributedString
 			if entry.kind == .user || entry.kind == .agent
 			{
@@ -222,14 +248,14 @@ struct ConversationViewControllerTests
 		let controller = ConversationViewController()
 		controller.render(snapshot(entries))
 		await controller.waitForRendering()
-		let user = try #require(controller.preparedContents["user"])
-		let agent = try #require(controller.preparedContents["agent"])
-		let tool = try #require(controller.preparedContents["tool"])
+		let user = try #require(controller.transcript.preparedContents["user"])
+		let agent = try #require(controller.transcript.preparedContents["agent"])
+		let tool = try #require(controller.transcript.preparedContents["tool"])
 		#expect(user.attributedString.string == "First line\nSecond line\nformatted")
 		#expect(agent.attributedString.string == "First line Second line\nformatted")
 		#expect(tool.attributedString.string == body)
 		#expect(user !== agent)
-		#expect(controller.entries == entries)
+		#expect(controller.transcript.entries == entries)
 	}
 
 	@Test func canonicalScreenshotPromptUsesRichUserPreparationWithoutChangingItsSource(
@@ -246,10 +272,10 @@ struct ConversationViewControllerTests
 		let controller = ConversationViewController()
 		controller.render(snapshot([entry]))
 		await controller.waitForRendering()
-		let content = try #require(controller.preparedContents[entry.id])
+		let content = try #require(controller.transcript.preparedContents[entry.id])
 		let text = content.attributedString
-		#expect(controller.entries == [entry])
-		#expect(controller.entries.first?.body == body)
+		#expect(controller.transcript.entries == [entry])
+		#expect(controller.transcript.entries.first?.body == body)
 		#expect(text.string.contains("Markdown Rendering Test"))
 		#expect(!text.string.contains("# Markdown Rendering Test"))
 		#expect(text.string.contains("This is a soft line break.\n"
@@ -380,15 +406,15 @@ struct ConversationViewControllerTests
 			let collection = try #require(findCollection(in: controller.view))
 			#expect(collection !== previousCollection)
 			#expect(collection.numberOfItems(inSection: 0) == 1)
-			#expect(controller.entries == [entry])
-			#expect(controller.displayedRows.map(\.id) == [entry.id])
-			#expect(controller.preparedContents[entry.id]?.attributedString.string
+			#expect(controller.transcript.entries == [entry])
+			#expect(controller.transcript.displayedRows.map(\.id) == [entry.id])
+			#expect(controller.transcript.preparedContents[entry.id]?.attributedString.string
 				== "The same reported answer")
 			gate.release()
 			await obsoleteTask.value
-			#expect(controller.entries == [entry])
-			#expect(controller.displayedRows.map(\.id) == [entry.id])
-			#expect(controller.preparedContents[entry.id]?.attributedString.string
+			#expect(controller.transcript.entries == [entry])
+			#expect(controller.transcript.displayedRows.map(\.id) == [entry.id])
+			#expect(controller.transcript.preparedContents[entry.id]?.attributedString.string
 				== "The same reported answer")
 			#expect(findCollection(in: controller.view) === collection)
 			let composer = try #require(findTextView(
@@ -723,7 +749,7 @@ struct ConversationViewControllerTests
 		await controller.waitForRendering()
 		collection.layoutSubtreeIfNeeded()
 		#expect(collection.numberOfItems(inSection: 0) == 1)
-		#expect(controller.collectionView(
+		#expect(controller.transcript.collectionView(
 			collection,
 			numberOfItemsInSection: 0
 		) == 1)
@@ -1018,8 +1044,8 @@ struct ConversationViewControllerTests
 		)
 		controller.render(snapshot([entry, second]))
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.count == 1)
-		let initialGroup = try #require(controller.displayedRows.first)
+		#expect(controller.transcript.displayedRows.count == 1)
+		let initialGroup = try #require(controller.transcript.displayedRows.first)
 		guard case .activity(let collapsedGroup) = initialGroup
 		else
 		{
@@ -1028,16 +1054,16 @@ struct ConversationViewControllerTests
 		}
 		#expect(collapsedGroup.kind == .group)
 		#expect(!collapsedGroup.expanded)
-		controller.toggleActivity(collapsedGroup)
+		controller.transcript.toggleActivity(collapsedGroup)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.count == 3)
-		guard case .activity(let command) = controller.displayedRows[1]
+		#expect(controller.transcript.displayedRows.count == 3)
+		guard case .activity(let command) = controller.transcript.displayedRows[1]
 		else
 		{
 			Issue.record("Expected command activity")
 			return
 		}
-		controller.toggleActivity(command)
+		controller.transcript.toggleActivity(command)
 		await controller.waitForRendering()
 		entry.activity = .command(ConversationCommand(
 			command: "echo hello",
@@ -1050,8 +1076,8 @@ struct ConversationViewControllerTests
 		))
 		controller.render(snapshot([entry, second]))
 		await controller.waitForRendering()
-		guard case .activity(let streamed) = controller.displayedRows[1],
-				case .activity(let group) = controller.displayedRows[0]
+		guard case .activity(let streamed) = controller.transcript.displayedRows[1],
+				case .activity(let group) = controller.transcript.displayedRows[0]
 		else
 		{
 			Issue.record("Expected retained activities")
@@ -1059,25 +1085,25 @@ struct ConversationViewControllerTests
 		}
 		#expect(streamed.expanded)
 		#expect(streamed.command?.output == "hello")
-		controller.toggleActivity(group)
+		controller.transcript.toggleActivity(group)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.count == 1)
+		#expect(controller.transcript.displayedRows.count == 1)
 		controller.jumpToEntry(id: second.id)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.count == 3)
-		#expect(controller.requestedJumpItemID == nil)
-		#expect(controller.entries == [entry, second])
+		#expect(controller.transcript.displayedRows.count == 3)
+		#expect(controller.transcript.requestedJumpItemID == nil)
+		#expect(controller.transcript.entries == [entry, second])
 		let otherConversation = snapshot(
 			[entry, second],
 			selectedThreadID: "other"
 		)
 		controller.render(otherConversation)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.count == 1)
-		#expect(controller.expandedGroupIDs.isEmpty)
+		#expect(controller.transcript.displayedRows.count == 1)
+		#expect(controller.transcript.expandedGroupIDs.isEmpty)
 		controller.render(snapshot([entry, second]))
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.count == 1)
+		#expect(controller.transcript.displayedRows.count == 1)
 	}
 
 	@Test func completedWorkCollapsesKeepsReplyAndJumpRevealsCommentary() async throws
@@ -1119,9 +1145,9 @@ struct ConversationViewControllerTests
 		)]
 		controller.render(completed)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.map(\.id) == ["timing:turn", reply.id])
-		let item = try #require(controller.collectionView(
-			controller.collectionView,
+		#expect(controller.transcript.displayedRows.map(\.id) == ["timing:turn", reply.id])
+		let item = try #require(controller.transcript.collectionView(
+			controller.transcript.collectionView,
 			itemForRepresentedObjectAt: IndexPath(
 				item: 0,
 				section: 0
@@ -1135,17 +1161,17 @@ struct ConversationViewControllerTests
 		#expect(disclosure.accessibilityLabel() == "Expand Worked for 3m 4s")
 		disclosure.performClick(nil)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.map(\.id) == ["timing:turn",
-														commentary.id,
-														command.id,
-														reply.id])
-		controller.toggleTurnWork("turn")
+		#expect(controller.transcript.displayedRows.map(\.id) == ["timing:turn",
+																	commentary.id,
+																	command.id,
+																	reply.id])
+		controller.transcript.toggleTurnWork("turn")
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.map(\.id) == ["timing:turn", reply.id])
+		#expect(controller.transcript.displayedRows.map(\.id) == ["timing:turn", reply.id])
 		controller.jumpToEntry(id: command.id)
 		await controller.waitForRendering()
-		#expect(controller.expandedTurnIDs.contains("turn"))
-		#expect(controller.requestedJumpItemID == nil)
+		#expect(controller.transcript.expandedTurnIDs.contains("turn"))
+		#expect(controller.transcript.requestedJumpItemID == nil)
 		var switched = snapshot(
 			[commentary, command, reply],
 			selectedThreadID: "other"
@@ -1153,8 +1179,8 @@ struct ConversationViewControllerTests
 		switched.turnTimings = completed.turnTimings
 		controller.render(switched)
 		await controller.waitForRendering()
-		#expect(controller.expandedTurnIDs.isEmpty)
-		#expect(controller.displayedRows.map(\.id) == ["timing:turn", reply.id])
+		#expect(controller.transcript.expandedTurnIDs.isEmpty)
+		#expect(controller.transcript.displayedRows.map(\.id) == ["timing:turn", reply.id])
 		completed.turnTimings = [ConversationTurnTiming(
 			turnID: "turn",
 			status: "inProgress",
@@ -1162,11 +1188,11 @@ struct ConversationViewControllerTests
 		)]
 		controller.render(completed)
 		await controller.waitForRendering()
-		#expect(controller.displayedRows.contains
+		#expect(controller.transcript.displayedRows.contains
 		{
 			$0.id == commentary.id
 		})
-		controller.turnStatusTimer?.invalidate()
+		controller.transcript.turnStatusTimer?.invalidate()
 	}
 
 	@Test func collapsedActivitySpacingMatchesReferenceOnBothSides()
@@ -1187,11 +1213,11 @@ struct ConversationViewControllerTests
 		let collapsed: [ConversationTranscriptRow] = [.message(message),
 														.activity(activity),
 														.message(message)]
-		#expect(ConversationViewController.verticalGap(
+		#expect(TranscriptViewController.verticalGap(
 			at: 1,
 			in: collapsed
 		) == 8)
-		#expect(ConversationViewController.verticalGap(
+		#expect(TranscriptViewController.verticalGap(
 			at: 2,
 			in: collapsed
 		) == 8)
@@ -1199,11 +1225,11 @@ struct ConversationViewControllerTests
 		let expanded: [ConversationTranscriptRow] = [.message(message),
 														.activity(activity),
 														.message(message)]
-		#expect(ConversationViewController.verticalGap(
+		#expect(TranscriptViewController.verticalGap(
 			at: 1,
 			in: expanded
 		) == 18)
-		#expect(ConversationViewController.verticalGap(
+		#expect(TranscriptViewController.verticalGap(
 			at: 2,
 			in: expanded
 		) == 18)
@@ -1212,7 +1238,7 @@ struct ConversationViewControllerTests
 			status: "completed",
 			durationMs: 310000
 		)
-		#expect(ConversationViewController.verticalGap(
+		#expect(TranscriptViewController.verticalGap(
 			at: 1,
 			in: [.turnStatus(timing), .message(message)]
 		) == 14)
@@ -1222,11 +1248,11 @@ struct ConversationViewControllerTests
 			title: "You",
 			body: "Next request"
 		)
-		#expect(ConversationViewController.verticalGap(
+		#expect(TranscriptViewController.verticalGap(
 			at: 1,
 			in: [.message(message), .message(user)]
 		) == 40)
-		#expect(ConversationViewController.verticalGap(
+		#expect(TranscriptViewController.verticalGap(
 			at: 1,
 			in: [.message(user), .turnStatus(timing)]
 		) == 50)
@@ -1260,19 +1286,19 @@ struct ConversationViewControllerTests
 			.presentationOwner(sessionID: UUID())
 		controller.render(initial)
 		await controller.waitForRendering()
-		let activityIndex = try #require(controller.displayedRows.firstIndex
+		let activityIndex = try #require(controller.transcript.displayedRows.firstIndex
 		{
 			$0.sourceEntryID == entry.id
 		})
-		let retained = controller.collectionView(
-			controller.collectionView,
+		let retained = controller.transcript.collectionView(
+			controller.transcript.collectionView,
 			itemForRepresentedObjectAt: IndexPath(
 				item: activityIndex,
 				section: 0
 			)
 		)
 		var opened: [String] = []
-		controller.onOpenActivityFile =
+		controller.transcript.onOpenActivityFile =
 		{
 			opened.append($0)
 		}
@@ -1286,8 +1312,8 @@ struct ConversationViewControllerTests
 		_ = retained.perform(NSSelectorFromString("toggle"))
 		_ = retained.perform(NSSelectorFromString("openFile"))
 		#expect(opened.isEmpty)
-		#expect(controller.expandedActivityIDs.isEmpty)
-		#expect(controller.collapsedImageIDs.isEmpty)
+		#expect(controller.transcript.expandedActivityIDs.isEmpty)
+		#expect(controller.transcript.collapsedImageIDs.isEmpty)
 	}
 
 	@Test func terminalExecutionStopsTiming() async
@@ -1310,7 +1336,7 @@ struct ConversationViewControllerTests
 		)]
 		controller.render(active)
 		await controller.waitForRendering()
-		#expect(controller.turnStatusTimer != nil)
+		#expect(controller.transcript.turnStatusTimer != nil)
 		var terminal = snapshot(
 			[entry],
 			executionState: .disconnected
@@ -1318,8 +1344,8 @@ struct ConversationViewControllerTests
 		terminal.turnTimings = active.turnTimings
 		controller.render(terminal)
 		await controller.waitForRendering()
-		#expect(controller.turnStatusTimer == nil)
-		guard case .turnStatus(let timing) = controller.displayedRows[1]
+		#expect(controller.transcript.turnStatusTimer == nil)
+		guard case .turnStatus(let timing) = controller.transcript.displayedRows[1]
 		else
 		{
 			Issue.record("Expected timing row")
@@ -1350,8 +1376,8 @@ struct ConversationViewControllerTests
 		window.contentViewController = controller
 		defer
 		{
-			controller.collectionView.dataSource = nil
-			controller.collectionView.delegate = nil
+			controller.transcript.collectionView.dataSource = nil
+			controller.transcript.collectionView.delegate = nil
 			window.contentViewController = nil
 			window.close()
 		}
@@ -1376,19 +1402,19 @@ struct ConversationViewControllerTests
 		)
 		controller.render(snapshot([entry]))
 		await controller.waitForRendering()
-		let activityIndex = try #require(controller.displayedRows.firstIndex
+		let activityIndex = try #require(controller.transcript.displayedRows.firstIndex
 		{
 			$0.sourceEntryID == entry.id
 		})
-		guard case .activity(let row) = controller.displayedRows[activityIndex]
+		guard case .activity(let row) = controller.transcript.displayedRows[activityIndex]
 		else
 		{
 			Issue.record("Expected command activity row")
 			return
 		}
-		controller.toggleActivity(row)
+		controller.transcript.toggleActivity(row)
 		await controller.waitForRendering()
-		let item = try #require(controller.collectionView.item(
+		let item = try #require(controller.transcript.collectionView.item(
 			at: IndexPath(
 				item: activityIndex,
 				section: 0
@@ -1413,20 +1439,20 @@ struct ConversationViewControllerTests
 			)
 		))
 		layout(item)
-		controller.collectionView(
-			controller.collectionView,
+		controller.transcript.collectionView(
+			controller.transcript.collectionView,
 			didEndDisplaying: item,
 			forRepresentedObjectAt: IndexPath(
 				item: activityIndex,
 				section: 0
 			)
 		)
-		#expect(try #require(controller.activityOutputPositions[row.id]).origin.y == 80)
-		controller.toggleActivity(row)
+		#expect(try #require(controller.transcript.activityOutputPositions[row.id]).origin.y == 80)
+		controller.transcript.toggleActivity(row)
 		await controller.waitForRendering()
-		controller.toggleActivity(row)
+		controller.transcript.toggleActivity(row)
 		await controller.waitForRendering()
-		let reopened = try #require(controller.collectionView.item(
+		let reopened = try #require(controller.transcript.collectionView.item(
 			at: IndexPath(
 				item: activityIndex,
 				section: 0
@@ -1441,7 +1467,7 @@ struct ConversationViewControllerTests
 			.presentationOwner(sessionID: UUID())
 		controller.render(other)
 		await controller.waitForRendering()
-		#expect(controller.activityOutputPositions.isEmpty)
+		#expect(controller.transcript.activityOutputPositions.isEmpty)
 	}
 
 	@Test func onlyMatchingActiveTurnCanTickAndHistoricalOutcomeStaysUnknown() async
@@ -1470,16 +1496,19 @@ struct ConversationViewControllerTests
 		}
 		controller.render(active)
 		await controller.waitForRendering()
-		#expect(controller.requestedTurnTimings.map(\.status) == ["statusUnknown", "inProgress"])
-		#expect(controller.turnStatusTimer != nil)
+		#expect(controller.transcript.requestedTurnTimings.map(\.status) == [
+			"statusUnknown",
+			"inProgress"
+		])
+		#expect(controller.transcript.turnStatusTimer != nil)
 		active.activeThreadID = "other"
 		controller.render(active)
 		await controller.waitForRendering()
-		#expect(controller.requestedTurnTimings.allSatisfy
+		#expect(controller.transcript.requestedTurnTimings.allSatisfy
 		{
 			$0.status == "statusUnknown"
 		})
-		#expect(controller.turnStatusTimer == nil)
+		#expect(controller.transcript.turnStatusTimer == nil)
 		#expect(active.turnTimings.allSatisfy
 		{
 			$0.status == "inProgress"
@@ -1533,19 +1562,19 @@ struct ConversationViewControllerTests
 		}
 		controller.render(snapshot(commands + messages))
 		await controller.waitForRendering()
-		guard case .activity(let group) = try #require(controller.displayedRows.first)
+		guard case .activity(let group) = try #require(controller.transcript.displayedRows.first)
 		else
 		{
 			Issue.record("Expected a collapsed command group")
 			return
 		}
 		#expect(!group.expanded)
-		controller.toggleActivity(group)
+		controller.transcript.toggleActivity(group)
 		await controller.waitForRendering()
 		controller.view.layoutSubtreeIfNeeded()
-		let collection = controller.collectionView
+		let collection = controller.transcript.collectionView
 		collection.layoutSubtreeIfNeeded()
-		let frames = try controller.displayedRows.indices.map
+		let frames = try controller.transcript.displayedRows.indices.map
 		{
 			try #require(collection.layoutAttributesForItem(at: IndexPath(
 				item: $0,
@@ -1563,8 +1592,9 @@ struct ConversationViewControllerTests
 			$0.maxY <= layout.collectionViewContentSize.height
 		})
 		controller.jumpToEntry(id: try #require(messages.last).id)
-		#expect(controller.requestedJumpItemID == nil)
-		#expect(collection.selectionIndexPaths.first?.item == controller.displayedRows.count - 1)
+		#expect(controller.transcript.requestedJumpItemID == nil)
+		#expect(collection.selectionIndexPaths.first?.item == controller.transcript.displayedRows
+			.count - 1)
 		let rectFrames = layout.layoutAttributesForElements(in: frames[2]).map(\.frame)
 		#expect(rectFrames.contains(frames[2]))
 		window.orderOut(nil)
@@ -1575,7 +1605,8 @@ struct ConversationViewControllerTests
 		executionState: ExecutionState = .running,
 		threads: [ThreadSummary] = [],
 		selectedThreadID: String = "replay",
-		draft: String = ""
+		draft: String = "",
+		canLoadEarlierTurns: Bool = false
 	) -> ConversationSnapshot
 	{
 		ConversationSnapshot(
@@ -1583,7 +1614,7 @@ struct ConversationViewControllerTests
 			threads: threads,
 			selectedThreadID: selectedThreadID,
 			entries: entries,
-			canLoadEarlierTurns: false,
+			canLoadEarlierTurns: canLoadEarlierTurns,
 			changedFiles: [],
 			diff: "",
 			draft: draft,

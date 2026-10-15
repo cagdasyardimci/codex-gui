@@ -41,34 +41,34 @@ struct TranscriptLazyWorkPreparationTests
 		controller.render(presentation)
 		await controller.waitForRendering()
 		let visibleIDs: Set<String> = [entries[0].id, entries[4].id]
-		#expect(Set(controller.preparedContents.keys) == visibleIDs)
-		#expect(controller.transcriptPreparation.contentPreparationRequestCount == 2)
-		let reply = try #require(controller.preparedContents[entries[4].id])
+		#expect(Set(controller.transcript.preparedContents.keys) == visibleIDs)
+		#expect(controller.transcript.transcriptPreparation.contentPreparationRequestCount == 2)
+		let reply = try #require(controller.transcript.preparedContents[entries[4].id])
 		#expect(reply.codeBlocks == ["let final = true\n"])
-		#expect(controller.replyActionEntryID == entries[4].id)
+		#expect(controller.transcript.replyActionEntryID == entries[4].id)
 
 		entries[1].body = "Latest **commentary**"
 		controller.render(snapshot(entries))
 		await controller.waitForRendering()
-		#expect(Set(controller.preparedContents.keys) == visibleIDs)
-		#expect(controller.transcriptPreparation.contentPreparationRequestCount == 2)
-		#expect(controller.preparedContents[entries[4].id] === reply)
+		#expect(Set(controller.transcript.preparedContents.keys) == visibleIDs)
+		#expect(controller.transcript.transcriptPreparation.contentPreparationRequestCount == 2)
+		#expect(controller.transcript.preparedContents[entries[4].id] === reply)
 
 		controller.jumpToEntry(id: entries[1].id)
 		await controller.waitForRendering()
-		#expect(controller.expandedTurnIDs == ["turn"])
-		#expect(controller.requestedJumpItemID == nil)
-		#expect(Set(controller.preparedContents.keys) == Set(entries.map(\.id)))
-		#expect(controller.transcriptPreparation.contentPreparationRequestCount == 5)
-		#expect(controller.preparedContents[entries[1].id]?.attributedString.string
+		#expect(controller.transcript.expandedTurnIDs == ["turn"])
+		#expect(controller.transcript.requestedJumpItemID == nil)
+		#expect(Set(controller.transcript.preparedContents.keys) == Set(entries.map(\.id)))
+		#expect(controller.transcript.transcriptPreparation.contentPreparationRequestCount == 5)
+		#expect(controller.transcript.preparedContents[entries[1].id]?.attributedString.string
 			== "Latest commentary")
-		#expect(controller.preparedContents[entries[4].id] === reply)
+		#expect(controller.transcript.preparedContents[entries[4].id] === reply)
 
-		controller.toggleTurnWork("turn")
+		controller.transcript.toggleTurnWork("turn")
 		await controller.waitForRendering()
-		#expect(Set(controller.preparedContents.keys) == visibleIDs)
-		#expect(controller.transcriptPreparation.contentPreparationRequestCount == 5)
-		#expect(controller.replyActionEntryID == entries[4].id)
+		#expect(Set(controller.transcript.preparedContents.keys) == visibleIDs)
+		#expect(controller.transcript.transcriptPreparation.contentPreparationRequestCount == 5)
+		#expect(controller.transcript.replyActionEntryID == entries[4].id)
 	}
 
 	@Test func supersededOwnerCannotPublishRevealedWorkIntoACollapsedTranscript() async throws
@@ -94,17 +94,17 @@ struct TranscriptLazyWorkPreparationTests
 		]
 		controller.render(snapshot(entries))
 		await controller.waitForRendering()
-		controller.toggleTurnWork("turn")
+		controller.transcript.toggleTurnWork("turn")
 		controller.render(snapshot(
 			entries,
 			threadID: "other"
 		))
 		await controller.waitForRendering()
-		#expect(controller.expandedTurnIDs.isEmpty)
-		#expect(controller.preparedContents[entries[1].id] == nil)
-		#expect(controller.displayedRows.map(\.id)
+		#expect(controller.transcript.expandedTurnIDs.isEmpty)
+		#expect(controller.transcript.preparedContents[entries[1].id] == nil)
+		#expect(controller.transcript.displayedRows.map(\.id)
 			== [entries[0].id, "timing:turn", entries[2].id])
-		#expect(controller.replyActionEntryID == entries[2].id)
+		#expect(controller.transcript.replyActionEntryID == entries[2].id)
 
 		var active = snapshot(
 			entries,
@@ -117,8 +117,9 @@ struct TranscriptLazyWorkPreparationTests
 		)]
 		controller.render(active)
 		await controller.waitForRendering()
-		#expect(controller.preparedContents[entries[1].id]?.attributedString.string == "Work")
-		#expect(controller.displayedRows.contains
+		#expect(controller.transcript.preparedContents[entries[1].id]?.attributedString
+			.string == "Work")
+		#expect(controller.transcript.displayedRows.contains
 		{
 			$0.id == entries[1].id
 		})

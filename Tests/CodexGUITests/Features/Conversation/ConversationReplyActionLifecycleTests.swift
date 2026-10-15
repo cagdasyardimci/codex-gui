@@ -43,20 +43,20 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		controller.restoreReadingPosition(
+		controller.transcript.restoreReadingPosition(
 			followOutput: true,
 			anchor: nil
 		)
 		try assertFollowingBottom(controller)
 
 		// The explicit latest action uses the same extent after the reader scrolls away.
-		let clip = controller.conversationScrollView.contentView
+		let clip = controller.transcript.conversationScrollView.contentView
 		clip.scroll(to: .zero)
-		controller.readingPositionChanged()
-		#expect(!controller.latestButton.isHidden)
-		controller.showLatestMessage()
+		controller.transcript.readingPositionChanged()
+		#expect(!controller.transcript.latestButton.isHidden)
+		controller.transcript.showLatestMessage()
 		try assertFollowingBottom(controller)
-		#expect(controller.latestButton.isHidden)
+		#expect(controller.transcript.latestButton.isHidden)
 
 		// A new terminal reply changes both the row height and action ownership.
 		snapshot = self.snapshot(entries: entries + [entry(
@@ -71,37 +71,37 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		#expect(controller.replyActionEntryID == "turn-40:reply")
+		#expect(controller.transcript.replyActionEntryID == "turn-40:reply")
 		try assertFollowingBottom(controller)
 
-		controller.beginTranscriptResize(reason: .window)
+		controller.transcript.beginTranscriptResize(reason: .window)
 		window.setContentSize(NSSize(
 			width: 720,
 			height: 760
 		))
 		controller.view.layoutSubtreeIfNeeded()
-		controller.collectionView.layoutSubtreeIfNeeded()
-		controller.endTranscriptResize(reason: .window)
+		controller.transcript.collectionView.layoutSubtreeIfNeeded()
+		controller.transcript.endTranscriptResize(reason: .window)
 		try assertFollowingBottom(controller)
 	}
 
 	private func assertFollowingBottom(_ controller: ConversationViewController) throws
 	{
-		let layout = try #require(controller.collectionView
+		let layout = try #require(controller.transcript.collectionView
 			.collectionViewLayout as? ConversationFlowLayout)
-		let last = try #require(controller.displayedRows.last)
+		let last = try #require(controller.transcript.displayedRows.last)
 		let lastFrame = try frame(
 			for: last.id,
 			in: controller
 		)
-		let clip = controller.conversationScrollView.contentView
+		let clip = controller.transcript.conversationScrollView.contentView
 		let contentHeight = layout.collectionViewContentSize.height
 		try #require(contentHeight > clip.bounds.height)
-		#expect(controller.collectionView.isFlipped)
+		#expect(controller.transcript.collectionView.isFlipped)
 		#expect(abs(contentHeight - lastFrame.maxY - layout.sectionInset.bottom) < 0.5)
 		#expect(abs(clip.bounds.maxY - contentHeight) < 0.5)
 		#expect(abs(clip.bounds.maxY - lastFrame.maxY - layout.sectionInset.bottom) < 0.5)
-		#expect(controller.isNearBottom)
+		#expect(controller.transcript.isNearBottom)
 	}
 
 	@Test func replyActionsFollowTerminalTurnsAndRejectPreviousConversationCallbacks() async throws
@@ -150,14 +150,14 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		#expect(controller.replyActionEntryID == "first:reply")
+		#expect(controller.transcript.replyActionEntryID == "first:reply")
 		let firstHeight = try frame(
 			for: "first:reply",
 			in: controller
 		).height
 		let firstBookmark = try #require(button(
 			"Bookmark turn",
-			in: controller.collectionView
+			in: controller.transcript.collectionView
 		))
 		firstBookmark.performClick(nil)
 		let bookmark = try #require(toggled.first)
@@ -185,7 +185,7 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		#expect(controller.replyActionEntryID == nil)
+		#expect(controller.transcript.replyActionEntryID == nil)
 		let bodyHeight = try frame(
 			for: "first:reply",
 			in: controller
@@ -193,7 +193,7 @@ struct ConversationReplyActionLifecycleTests
 		#expect(abs(firstHeight - bodyHeight - 34.5) < 0.5)
 		#expect(button(
 			"Copy response",
-			in: controller.collectionView
+			in: controller.transcript.collectionView
 		) == nil)
 
 		let secondEntries = snapshot.entries + [entry(
@@ -210,14 +210,14 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		#expect(controller.replyActionEntryID == "second:reply")
+		#expect(controller.transcript.replyActionEntryID == "second:reply")
 		#expect(try frame(
 			for: "first:reply",
 			in: controller
 		).height == bodyHeight)
 		let previousConversationButton = try #require(button(
 			"Bookmark turn",
-			in: controller.collectionView
+			in: controller.transcript.collectionView
 		))
 
 		snapshot = self.snapshot(
@@ -233,7 +233,7 @@ struct ConversationReplyActionLifecycleTests
 		#expect(toggled.count == 1)
 		let currentBookmark = try #require(button(
 			"Bookmark turn",
-			in: controller.collectionView
+			in: controller.transcript.collectionView
 		))
 		currentBookmark.performClick(nil)
 		#expect(toggled.count == 2)
@@ -248,7 +248,7 @@ struct ConversationReplyActionLifecycleTests
 		controller.render(snapshot)
 		await controller.waitForRendering()
 		controller.view.layoutSubtreeIfNeeded()
-		controller.collectionView.layoutSubtreeIfNeeded()
+		controller.transcript.collectionView.layoutSubtreeIfNeeded()
 	}
 
 	private func frame(
@@ -256,14 +256,15 @@ struct ConversationReplyActionLifecycleTests
 		in controller: ConversationViewController
 	) throws -> NSRect
 	{
-		let index = try #require(controller.displayedRows.firstIndex
+		let index = try #require(controller.transcript.displayedRows.firstIndex
 		{
 			$0.id == id
 		})
-		return try #require(controller.collectionView.layoutAttributesForItem(at: IndexPath(
-			item: index,
-			section: 0
-		))).frame
+		return try #require(controller.transcript.collectionView
+			.layoutAttributesForItem(at: IndexPath(
+				item: index,
+				section: 0
+			))).frame
 	}
 
 	private func button(

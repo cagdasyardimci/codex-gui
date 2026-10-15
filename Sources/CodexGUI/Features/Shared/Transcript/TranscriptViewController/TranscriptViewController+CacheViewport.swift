@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-extension ConversationViewController
+extension TranscriptViewController
 {
 	func queueViewportPublication()
 	{

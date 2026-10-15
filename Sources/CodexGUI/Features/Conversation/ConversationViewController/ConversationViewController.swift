@@ -1,14 +1,12 @@
 import AppKit
 
-// Stored AppKit state stays on the controller so its responsibility extensions share
-// one selection, draft, and transcript lifecycle. Cross-file helpers use module access.
+// The conversation owns its composer and execution controls; the child transcript
+// owns message preparation, scrolling, selection, and navigation.
 @MainActor
 final class ConversationViewController: NSViewController,
-	NSCollectionViewDataSource, NSCollectionViewDelegateFlowLayout, NSTextViewDelegate,
-	NSSearchFieldDelegate
+	NSTextViewDelegate, NSSearchFieldDelegate
 {
-	let transcriptOnly: Bool
-	var renderedReadOnlyTranscript: ConversationPresentation.Transcript?
+	let transcript: TranscriptViewController
 
 	var onSelectSkill: ((AvailableSkill) -> Void)?
 	var onSlashCommand: ((SlashCommandInvocation) -> Void)?
@@ -26,18 +24,76 @@ final class ConversationViewController: NSViewController,
 	var onSelectApprovalMode: ((ApprovalMode) -> Void)?
 	var onInsertPath: (() -> Void)?
 	var onLoadEarlierTurns: (() -> Void)?
+	{
+		didSet
+		{
+			transcript.onLoadEarlierTurns = onLoadEarlierTurns
+		}
+	}
 	var onLoadEarlierTurnReferences: (() -> Void)?
+	{
+		didSet
+		{
+			transcript.onLoadEarlierTurnReferences = onLoadEarlierTurnReferences
+		}
+	}
 	var onConversationViewportChanged: ((ConversationViewport) -> Void)?
-	var viewportPublicationTask: Task<Void, Never>?
-	var lastPublishedViewport: ConversationViewport?
+	{
+		didSet
+		{
+			transcript.onConversationViewportChanged = onConversationViewportChanged
+		}
+	}
 	var onLoadTurnPreview: ((String) -> Void)?
+	{
+		didSet
+		{
+			transcript.onLoadTurnPreview = onLoadTurnPreview
+		}
+	}
 	var onJumpToTurnReference: ((String) -> Void)?
+	{
+		didSet
+		{
+			transcript.onJumpToTurnReference = onJumpToTurnReference
+		}
+	}
 	var onViewChanges: (() -> Void)?
+	{
+		didSet
+		{
+			transcript.onViewChanges = onViewChanges
+		}
+	}
 	var onOpenSubagents: (() -> Void)?
+	{
+		didSet
+		{
+			transcript.onOpenSubagents = onOpenSubagents
+		}
+	}
 	var onSelectSubagentThread: ((String) -> Void)?
+	{
+		didSet
+		{
+			transcript.onSelectSubagentThread = onSelectSubagentThread
+		}
+	}
 	var onRespond: ((PendingInteraction, InteractionResponse) -> Void)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
+	{
+		didSet
+		{
+			transcript.onToggleBookmark = onToggleBookmark
+		}
+	}
 	var onJumpDisplayed: (() -> Void)?
+	{
+		didSet
+		{
+			transcript.onJumpDisplayed = onJumpDisplayed
+		}
+	}
 
 	private let stateLabel = NSTextField(labelWithString: "Disconnected")
 	private let activeTaskLabel = NSTextField(wrappingLabelWithString: "")
@@ -75,15 +131,6 @@ final class ConversationViewController: NSViewController,
 	var approvalMode: ApprovalMode = .askForApproval
 	let preferenceWarningLabel = NSTextField(wrappingLabelWithString: "")
 	private var requestContextText = ""
-	var collectionView = NSCollectionView()
-	let loadEarlierButton = NSButton(
-		title: "Load Earlier Messages",
-		target: nil,
-		action: nil
-	)
-	let conversationScrollView = NSScrollView()
-	let turnNavigationRail = TurnNavigationRail()
-	private var transcriptUtilityRow: NSStackView?
 	private var centeredReadingRows: [(
 		content: NSView,
 		row: NSView,
@@ -91,41 +138,6 @@ final class ConversationViewController: NSViewController,
 	)] = []
 	private var paneResizeControlConstraints: [NSLayoutConstraint] = []
 	private let emptyStateLabel = NSTextField(wrappingLabelWithString: "What can I help with?")
-	let latestButton = NSButton(
-		title: "Latest Message",
-		target: nil,
-		action: nil
-	)
-	let transcriptPreparation: TranscriptPreparationCoordinator
-	var preparedContents: [String: PreparedConversationContent] = [:]
-	struct MeasuredItemSize
-	{
-		let content: PreparedConversationContent
-		let kind: ConversationEntryKind
-		let expandable: Bool
-		let imageAttachmentCount: Int
-		let showsReplyActions: Bool
-		let size: NSSize
-	}
-	var measuredItemSizes: [String: MeasuredItemSize] = [:]
-	var liveResizeInProgress = false
-	enum TranscriptResizeReason
-	{
-		case window, pane
-	}
-	var transcriptResizeReasons = Set<TranscriptResizeReason>()
-	var liveResizeVisibleIDs = Set<String>()
-	var needsFinalResizeMetrics = false
-	var resizeFollowingOutput = false
-	var resizeReadingAnchor: ReadingAnchor?
-	var resizeContext: String?
-	var visibleResizeRefreshTimer: Timer?
-	var widthChangeReadingPosition: WidthChangeReadingPosition?
-	var widthChangeRestoreTask: Task<Void, Never>?
-	var restoringWidthChangeReadingPosition = false
-	var requestedEntries: [ConversationEntry] = []
-	var renderedContext: String?
-	var requestedContext: String?
 	let composer = ContextComposerTextView()
 	let composerScrollView = NSScrollView()
 	let composerSurface = DesktopSurface(
@@ -170,52 +182,18 @@ final class ConversationViewController: NSViewController,
 		action: nil
 	)
 	let interactionStack = NSStackView()
-	var entries: [ConversationEntry] = []
-	var displayedRows: [ConversationTranscriptRow] = []
-	var replyActionEntryID: String?
-	var expandedTurnIDs = Set<String>()
-	var expandedFileChangeIDs = Set<String>()
-	var workEntryIDsByTurn: [String: Set<String>] = [:]
-	var expandedGroupIDs = Set<String>()
-	var collapsedImageIDs = Set<String>()
-	var expandedActivityIDs = Set<String>()
-	var activityOutputPositions: [
-		String: ConversationActivityCollectionItem.OutputReadingPosition
-	] =
-		[:]
-	var requestedTurnTimings: [ConversationTurnTiming] = []
-	var turnStatusTimer: Timer?
-	var transcriptIsVisible = true
-	var timingExecutionState: ExecutionState = .disconnected
-	var onOpenActivityFile: (String) -> Void =
-	{
-		NSWorkspace.shared.open(URL(fileURLWithPath: $0))
-	}
 	private var renderedInteractions: ConversationPresentation.Interactions?
-	var expandedEntryIDs = Set<String>()
 	var projectPath: String?
-	var selectedThreadID: String?
 	var selectionGeneration = 0
 	var draftImageStore = DraftImageStore()
 	var imageImportTasks: [UUID: Task<Void, Never>] = [:]
 	var lastImageImportID: UUID?
 	var composerSubmissionPresentation: ConversationPresentation.Composer?
-	var bookmarks: [ConversationBookmark] = []
-	var requestedJumpItemID: String?
-	var pendingNavigationTurnID: String?
-	var turnNavigationTask: Task<Void, Never>?
-	// Tracks the native completion callback separately from elapsed animation duration.
-	var jumpAnimationCompletion: Task<Void, Never>?
-	var jumpAnimationRevision = 0
-	var isAnimatingJump = false
 
-	init(
-		transcriptOnly: Bool = false,
-		transcriptPreparation: TranscriptPreparationCoordinator = TranscriptPreparationCoordinator()
-	)
+	init(transcriptPreparation: TranscriptPreparationCoordinator =
+		TranscriptPreparationCoordinator())
 	{
-		self.transcriptOnly = transcriptOnly
-		self.transcriptPreparation = transcriptPreparation
+		transcript = TranscriptViewController(transcriptPreparation: transcriptPreparation)
 		super.init(
 			nibName: nil,
 			bundle: nil
@@ -229,8 +207,6 @@ final class ConversationViewController: NSViewController,
 
 	deinit
 	{
-		turnNavigationTask?.cancel()
-		viewportPublicationTask?.cancel()
 		for task in imageImportTasks.values
 		{
 			task.cancel()
@@ -240,39 +216,28 @@ final class ConversationViewController: NSViewController,
 	override func viewDidDisappear()
 	{
 		super.viewDidDisappear()
-		turnNavigationTask?.cancel()
-		viewportPublicationTask?.cancel()
-		transcriptIsVisible = false
 		turnChangeSummaryLoader.stop()
 		activityLabel.presentationIsVisible = false
-		turnStatusTimer?.invalidate()
-		turnStatusTimer = nil
 	}
 
 	override func viewDidAppear()
 	{
 		super.viewDidAppear()
-		transcriptIsVisible = true
 		if let composerSubmissionPresentation
 		{
 			turnChangeSummaryLoader.render(composerSubmissionPresentation)
 		}
 		activityLabel.presentationIsVisible = true
-		updateTurnStatusTimer()
 	}
 
 	override func loadView()
 	{
-		if transcriptOnly
-		{
-			loadReadOnlyTranscriptView()
-			return
-		}
 		let container = DesktopSurface(AppKitColorTokens.canvas)
 		let (activeTaskRow, progressRow) = configureTaskStatusControls()
 		configurePreferenceControls()
-		configureTranscriptControls()
 		configureComposerControls()
+		addChild(transcript)
+		configureTranscriptCallbacks()
 
 		let composerArea = makeComposerArea()
 
@@ -284,12 +249,12 @@ final class ConversationViewController: NSViewController,
 		{
 			row.widthAnchor.constraint(equalTo: headerStack.widthAnchor).isActive = true
 		}
-		let utilityRow = makeTranscriptUtilityRow()
+		let utilityRow = transcript.utilityRow
 		// These rows only have content after a snapshot supplies it. Keep the
 		// first fitting pass from reserving their empty heights.
 		activeTaskRow.isHidden = true
 		progressRow.isHidden = true
-		let transcriptArea = makeTranscriptArea()
+		let transcriptArea = transcript.view
 		installConversationStack(
 			in: container,
 			headerStack: headerStack,
@@ -298,72 +263,16 @@ final class ConversationViewController: NSViewController,
 			composerArea: composerArea
 		)
 		configureEmptyState(in: container)
-		configureTurnNavigation(in: container)
+		transcript.configureTurnNavigation(in: container)
 		view = container
 	}
 
-	private func loadReadOnlyTranscriptView()
+	private func configureTranscriptCallbacks()
 	{
-		configureTranscriptControls()
-		loadEarlierButton.isHidden = true
-		let utilityRow = makeTranscriptUtilityRow()
-
-		let stack = AppKitLayout.verticalStack(
-			[centeredReadingRow(utilityRow), makeTranscriptArea()],
-			spacing: 6
-		)
-		stack.alignment = .leading
-		for row in stack.arrangedSubviews
+		transcript.onUtilityRowVisibilityChanged =
 		{
-			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+			[weak self] in self?.updateReadingRowVisibility()
 		}
-		let container = DesktopSurface(AppKitColorTokens.canvas)
-		AppKitLayout.pin(
-			stack,
-			to: container
-		)
-		conversationScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
-			.isActive = true
-		view = container
-	}
-
-	private func makeTranscriptUtilityRow() -> NSStackView
-	{
-		let utilityRow = AppKitLayout.horizontalStack(
-			[loadEarlierButton, flexibleSpace()],
-			spacing: 6
-		)
-		// Reserve this row only while earlier-history navigation is available.
-		utilityRow.heightAnchor.constraint(equalToConstant: 24).isActive = true
-		utilityRow.isHidden = true
-		transcriptUtilityRow = utilityRow
-		return utilityRow
-	}
-
-	private func makeTranscriptArea() -> NSView
-	{
-		let transcriptArea = NSView()
-		transcriptArea.addSubview(conversationScrollView)
-		transcriptArea.addSubview(latestButton)
-		conversationScrollView.translatesAutoresizingMaskIntoConstraints = false
-		latestButton.translatesAutoresizingMaskIntoConstraints = false
-		NSLayoutConstraint.activate([
-			conversationScrollView.leadingAnchor.constraint(equalTo: transcriptArea.leadingAnchor),
-			conversationScrollView.trailingAnchor
-				.constraint(equalTo: transcriptArea.trailingAnchor),
-			conversationScrollView.topAnchor.constraint(equalTo: transcriptArea.topAnchor),
-			conversationScrollView.bottomAnchor.constraint(equalTo: transcriptArea.bottomAnchor),
-			latestButton.centerXAnchor.constraint(equalTo: conversationScrollView.centerXAnchor),
-			latestButton.bottomAnchor.constraint(
-				equalTo: conversationScrollView.bottomAnchor,
-				constant: -12
-			),
-		])
-		transcriptArea.setContentHuggingPriority(
-			.defaultLow,
-			for: .vertical
-		)
-		return transcriptArea
 	}
 
 	private func installConversationStack(
@@ -409,9 +318,7 @@ final class ConversationViewController: NSViewController,
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
-		conversationScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
-			.isActive = true
-		conversationScrollView.setContentHuggingPriority(
+		transcript.conversationScrollView.setContentHuggingPriority(
 			.defaultLow,
 			for: .vertical
 		)
@@ -430,10 +337,14 @@ final class ConversationViewController: NSViewController,
 		emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
 		container.addSubview(emptyStateLabel)
 		NSLayoutConstraint.activate([
-			emptyStateLabel.centerXAnchor.constraint(equalTo: conversationScrollView.centerXAnchor),
-			emptyStateLabel.centerYAnchor.constraint(equalTo: conversationScrollView.centerYAnchor),
+			emptyStateLabel.centerXAnchor.constraint(
+				equalTo: transcript.conversationScrollView.centerXAnchor
+			),
+			emptyStateLabel.centerYAnchor.constraint(
+				equalTo: transcript.conversationScrollView.centerYAnchor
+			),
 			emptyStateLabel.widthAnchor.constraint(
-				equalTo: conversationScrollView.widthAnchor,
+				equalTo: transcript.conversationScrollView.widthAnchor,
 				constant: -32
 			),
 		])
@@ -534,13 +445,13 @@ final class ConversationViewController: NSViewController,
 
 	func beginPaneResize()
 	{
-		guard !transcriptResizeReasons.contains(.pane)
+		guard !transcript.transcriptResizeReasons.contains(.pane)
 		else
 		{
 			return
 		}
 		view.layoutSubtreeIfNeeded()
-		beginTranscriptResize(reason: .pane)
+		transcript.beginPaneResize()
 		for entry in centeredReadingRows where !entry.row.isHidden
 		{
 			let frame = entry.content.frame
@@ -558,7 +469,7 @@ final class ConversationViewController: NSViewController,
 
 	func endPaneResize()
 	{
-		guard transcriptResizeReasons.contains(.pane)
+		guard transcript.transcriptResizeReasons.contains(.pane)
 		else
 		{
 			return
@@ -570,13 +481,7 @@ final class ConversationViewController: NSViewController,
 			NSLayoutConstraint.activate(entry.horizontalConstraints)
 		}
 		view.layoutSubtreeIfNeeded()
-		endTranscriptResize(reason: .pane)
-	}
-
-	func updateTranscriptUtilityRowVisibility()
-	{
-		transcriptUtilityRow?.isHidden = loadEarlierButton.isHidden
-		updateReadingRowVisibility()
+		transcript.endPaneResize()
 	}
 
 	private func updateReadingRowVisibility()
@@ -596,11 +501,6 @@ final class ConversationViewController: NSViewController,
 
 	func render(_ snapshot: ConversationPresentation)
 	{
-		if transcriptOnly
-		{
-			renderTranscript(snapshot.transcript)
-			return
-		}
 		_ = view
 		let previous = renderedPresentation
 		guard previous != snapshot
@@ -612,7 +512,7 @@ final class ConversationViewController: NSViewController,
 		if previous?.owner != snapshot.owner
 			|| previous?.composer.draftLifetime != snapshot.composer.draftLifetime
 		{
-			turnNavigationRail.dismissPreview()
+			transcript.turnNavigationRail.dismissPreview()
 			dismissSlashCommands()
 			fileSearchPopover?.close()
 			fileSelectionReceiver = nil
@@ -623,10 +523,6 @@ final class ConversationViewController: NSViewController,
 			selectionGeneration += 1
 			cancelImageImports()
 		}
-		if previous?.owner != snapshot.owner
-		{
-			resetTranscriptNavigation()
-		}
 		fileIndexRuntime.onChange =
 		{
 			[weak self] in
@@ -634,21 +530,9 @@ final class ConversationViewController: NSViewController,
 		}
 		fileIndexRuntime.select(snapshot.owner)
 		projectPath = snapshot.owner.projectPath
-		selectedThreadID = snapshot.owner.selectedThreadID
-		if previous?.navigation != snapshot.navigation
-		{
-			bookmarks = snapshot.navigation.bookmarks
-			turnNavigationRail.canLoadEarlierReferences = snapshot.navigation
-				.canLoadEarlierTurnReferences
-			updateTurnNavigationSummaries(includeLoaded: previous?.owner == snapshot.owner)
-			turnNavigationRail.refreshBookmark()
-			refreshVisibleReplyActionBookmark()
-		}
 		if previous?.status != snapshot.status
 		{
-			timingExecutionState = snapshot.status.executionState
 			renderTaskStatus(snapshot.status)
-			updateTurnStatusTimer()
 		}
 		if previous?.requestContext != snapshot.requestContext
 		{
@@ -660,15 +544,25 @@ final class ConversationViewController: NSViewController,
 			preferenceWarningLabel.isHidden = snapshot.preferences.preferenceWarning == nil
 			renderModelAndApprovalPreferences(snapshot.preferences)
 		}
-		if previous?.transcript != snapshot.transcript
-			|| previous?.status.executionState != snapshot.status.executionState
-		{
-			loadEarlierButton.isHidden = !snapshot.transcript.canLoadEarlierTurns
-			updateTranscriptUtilityRowVisibility()
-			emptyStateLabel.isHidden = !snapshot.transcript.entries.isEmpty
-				|| snapshot.transcript.selectedThreadID != nil
-			prepareTranscript(snapshot.transcript)
-		}
+		emptyStateLabel.isHidden = !snapshot.transcript.entries.isEmpty
+			|| snapshot.transcript.selectedThreadID != nil
+		transcript.render(TranscriptPresentation(
+			owner: snapshot.owner,
+			entries: snapshot.transcript.entries,
+			turnTimings: snapshot.transcript.turnTimings,
+			canLoadEarlierTurns: snapshot.transcript.canLoadEarlierTurns,
+			navigation: TranscriptPresentation.Navigation(
+				turnReferences: snapshot.navigation.turnReferences,
+				turnPreviews: snapshot.navigation.turnPreviews,
+				turnPreviewErrors: snapshot.navigation.turnPreviewErrors,
+				canLoadEarlierTurnReferences: snapshot.navigation.canLoadEarlierTurnReferences,
+				bookmarks: snapshot.navigation.bookmarks
+			),
+			executionState: snapshot.status.executionState,
+			activeThreadID: snapshot.transcript.activeThreadID,
+			activeTurnID: snapshot.transcript.activeTurnID,
+			interactionRevision: selectionGeneration
+		))
 		if previous?.composer != snapshot.composer
 		{
 			renderComposer(snapshot.composer)
@@ -685,6 +579,16 @@ final class ConversationViewController: NSViewController,
 			requestDetailsScrollView.updateContentHeight()
 		}
 		updateReadingRowVisibility()
+	}
+
+	func jumpToEntry(id: String)
+	{
+		transcript.jumpToEntry(id: id)
+	}
+
+	func waitForRendering() async
+	{
+		await transcript.waitForRendering()
 	}
 
 	private func renderTaskStatus(_ snapshot: ConversationPresentation.Status)

@@ -161,7 +161,7 @@ struct SubagentConversationNavigationIntegrationTests
 		#expect(state.currentSnapshot.selectedThreadID == service.thread.id)
 		#expect(controller.inspector.toolsTabs.isSubagentsSelected)
 		#expect(panel.parent === controller.inspector.toolsTabs)
-		#expect(panel.detailController?.conversation.selectedThreadID == "child-thread")
+		#expect(panel.detailController?.transcript.selectedThreadID == "child-thread")
 		#expect(state.currentSnapshot.draft == "Parent follow-up")
 		service.turnsByThreadID["child-thread"] = [try #require(CodexTurn(json: [
 			"id": "child-turn",
@@ -282,11 +282,11 @@ struct SubagentConversationNavigationIntegrationTests
 		}
 		window.layoutIfNeeded()
 		let detail = try #require(fixture.detailController)
-		await detail.conversation.waitForRendering()
+		await detail.transcript.waitForRendering()
 		host.view.layoutSubtreeIfNeeded()
-		detail.conversation.collectionView.layoutSubtreeIfNeeded()
+		detail.transcript.collectionView.layoutSubtreeIfNeeded()
 		host.view.displayIfNeeded()
-		#expect(!detail.conversation.displayedRows.isEmpty)
+		#expect(!detail.transcript.displayedRows.isEmpty)
 		try AppTestPNGWriter.write(
 			host.view,
 			to: URL(fileURLWithPath: path)

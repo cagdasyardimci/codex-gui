@@ -151,7 +151,7 @@ struct DesktopLayoutTests
 					)
 					window.layoutIfNeeded()
 					// Await the width-dependent transcript restore rather than a settling delay.
-					await conversation.widthChangeRestoreTask?.value
+					await conversation.transcript.widthChangeRestoreTask?.value
 					await conversation.waitForRendering()
 					window.layoutIfNeeded()
 					#expect(window.frame.size == size)

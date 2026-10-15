@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-extension ConversationViewController
+extension TranscriptViewController
 {
 	func configureTurnNavigation(in container: NSView)
 	{
@@ -125,10 +125,10 @@ extension ConversationViewController
 		let loaded = includeLoaded && renderedContext == requestedContext ? transcriptPreparation
 			.turnSummaries : []
 		turnNavigationRail.render(ConversationTurnSummary.navigation(
-			references: renderedPresentation?.navigation.turnReferences ?? [],
+			references: renderedPresentation?.navigation?.turnReferences ?? [],
 			loaded: loaded,
-			cached: renderedPresentation?.navigation.turnPreviews ?? [],
-			errors: renderedPresentation?.navigation.turnPreviewErrors ?? [:]
+			cached: renderedPresentation?.navigation?.turnPreviews ?? [],
+			errors: renderedPresentation?.navigation?.turnPreviewErrors ?? [:]
 		))
 	}
 

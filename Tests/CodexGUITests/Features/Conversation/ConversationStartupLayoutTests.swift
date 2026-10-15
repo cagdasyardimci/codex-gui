@@ -21,8 +21,8 @@ struct ConversationStartupLayoutTests
 			)
 			view.layoutSubtreeIfNeeded()
 			let transcript = view.convert(
-				controller.conversationScrollView.bounds,
-				from: controller.conversationScrollView
+				controller.transcript.conversationScrollView.bounds,
+				from: controller.transcript.conversationScrollView
 			)
 			let composer = view.convert(
 				controller.composerScrollView.bounds,
@@ -30,8 +30,8 @@ struct ConversationStartupLayoutTests
 			)
 			#expect(abs(transcript.midX - composer.midX) < 1)
 			let rail = view.convert(
-				controller.turnNavigationRail.bounds,
-				from: controller.turnNavigationRail
+				controller.transcript.turnNavigationRail.bounds,
+				from: controller.transcript.turnNavigationRail
 			)
 			#expect(transcript.minX + ConversationFlowLayout.minimumHorizontalInset >= rail.maxX)
 		}
@@ -54,7 +54,7 @@ struct ConversationStartupLayoutTests
 		)
 		view.layoutSubtreeIfNeeded()
 		#expect(controller.requestDetailsScrollView.isHidden)
-		#expect(controller.conversationScrollView.frame.height >= 64)
+		#expect(controller.transcript.conversationScrollView.frame.height >= 64)
 		#expect(controller.composerScrollView.frame.height >= 44)
 		#expect(controller.addContextButton.frame.height == 28)
 		#expect(controller.approvalPolicyButton.frame.height == 28)

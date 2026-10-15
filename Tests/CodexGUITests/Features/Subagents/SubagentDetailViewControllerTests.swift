@@ -6,6 +6,36 @@ import Testing
 @Suite @MainActor
 struct SubagentDetailViewControllerTests
 {
+	@Test func detailEmbedsOnlyTheSharedTranscriptAndKeepsComposerOut() async throws
+	{
+		_ = NSApplication.shared
+		let controller = makeController()
+		let agent = try #require(controller.subagents.agents.first)
+		let reply = ConversationEntry(
+			id: "child:reply",
+			kind: .agent,
+			title: "Codex",
+			body: "Child reply"
+		)
+		controller.showConversation(
+			agent: agent,
+			state: SubagentConversationState(
+				agent: agent,
+				entries: [reply]
+			)
+		)
+		let detail = try #require(controller.detailController)
+		_ = detail.view
+		await detail.transcript.waitForRendering()
+		#expect(detail.children.count == 1)
+		#expect(detail.children.first === detail.transcript)
+		#expect(detail.transcript.entries == [reply])
+		#expect(!descendants(detail.view).contains
+		{
+			$0 is ContextComposerTextView
+		})
+	}
+
 	@Test func backPreservesExpandedListAndItsScrollDocument() throws
 	{
 		_ = NSApplication.shared

@@ -44,17 +44,17 @@ struct ConversationWindowIntegrationTests
 		controller.paneController.didPresentWindow()
 		window.layoutIfNeeded()
 		let conversation = controller.conversation
-		await conversation.widthChangeRestoreTask?.value
+		await conversation.transcript.widthChangeRestoreTask?.value
 		if readingEarlierMessages
 		{
-			let clip = conversation.conversationScrollView.contentView
+			let clip = conversation.transcript.conversationScrollView.contentView
 			clip.scroll(to: NSPoint(
 				x: 0,
 				y: 120
 			))
-			conversation.conversationScrollView.reflectScrolledClipView(clip)
-			conversation.readingPositionChanged()
-			#expect(!conversation.isNearBottom)
+			conversation.transcript.conversationScrollView.reflectScrolledClipView(clip)
+			conversation.transcript.readingPositionChanged()
+			#expect(!conversation.transcript.isNearBottom)
 		}
 		let initialComposer = conversation.view.convert(
 			conversation.composerSurface.bounds,
@@ -63,14 +63,14 @@ struct ConversationWindowIntegrationTests
 		let initialPaneWidth = conversation.view.bounds.width
 		let summaryWidth = controller.paneController.reviewViewportWidth
 		#expect(abs(summaryWidth - InspectorViewController.summaryPaneWidth) < 1)
-		let scrollOrigin = conversation.conversationScrollView.contentView.bounds.origin
+		let scrollOrigin = conversation.transcript.conversationScrollView.contentView.bounds.origin
 
 		for hidden in [true, false, true, false]
 		{
 			controller.togglePinnedSummary()
 			window.layoutIfNeeded()
-			conversation.collectionView.layoutSubtreeIfNeeded()
-			await conversation.widthChangeRestoreTask?.value
+			conversation.transcript.collectionView.layoutSubtreeIfNeeded()
+			await conversation.transcript.widthChangeRestoreTask?.value
 			#expect(controller.paneController.isReviewCollapsed == hidden)
 			#expect(controller.summaryToggleButton.state == (hidden ? .off : .on))
 			let composer = conversation.view.convert(
@@ -89,23 +89,24 @@ struct ConversationWindowIntegrationTests
 				#expect(abs(composer.minX - initialComposer.minX) < 1)
 				#expect(abs(controller.paneController.reviewViewportWidth - summaryWidth) < 1)
 			}
-			for index in conversation.displayedRows.indices
+			for index in conversation.transcript.displayedRows.indices
 			{
-				let attributes = try #require(conversation.collectionView.layoutAttributesForItem(
-					at: IndexPath(
-						item: index,
-						section: 0
-					)
-				))
+				let attributes = try #require(conversation.transcript.collectionView
+					.layoutAttributesForItem(
+						at: IndexPath(
+							item: index,
+							section: 0
+						)
+					))
 				let row = conversation.view.convert(
 					attributes.frame,
-					from: conversation.collectionView
+					from: conversation.transcript.collectionView
 				)
 				#expect(abs(row.minX - composer.minX) < 1)
 				#expect(abs(row.maxX - composer.maxX) < 1)
 			}
 			#expect(conversation.composer.string == presentation.draft)
-			#expect(abs(conversation.conversationScrollView.contentView.bounds.minY
+			#expect(abs(conversation.transcript.conversationScrollView.contentView.bounds.minY
 					- scrollOrigin.y) < 1)
 		}
 	}
@@ -202,17 +203,18 @@ struct ConversationWindowIntegrationTests
 		)
 		#expect(abs(composer.width - ConversationFlowLayout.maximumContentWidth) < 1)
 		#expect(abs(composer.midX - conversationFrame.midX) < 0.5)
-		for index in conversation.displayedRows.indices
+		for index in conversation.transcript.displayedRows.indices
 		{
-			let attributes = try #require(conversation.collectionView.layoutAttributesForItem(
-				at: IndexPath(
-					item: index,
-					section: 0
-				)
-			))
+			let attributes = try #require(conversation.transcript.collectionView
+				.layoutAttributesForItem(
+					at: IndexPath(
+						item: index,
+						section: 0
+					)
+				))
 			let row = chrome.view.convert(
 				attributes.frame,
-				from: conversation.collectionView
+				from: conversation.transcript.collectionView
 			)
 			#expect(abs(row.minX - composer.minX) < 0.5)
 			#expect(abs(row.maxX - composer.maxX) < 0.5)

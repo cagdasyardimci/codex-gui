@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-extension ConversationViewController
+extension TranscriptViewController
 {
 	func captureActivityOutputPositions()
 	{
@@ -86,10 +86,16 @@ extension ConversationViewController
 			repeats: true
 		)
 		{
-			[weak self] _ in
+			[weak self] timer in
+			guard let self
+			else
+			{
+				timer.invalidate()
+				return
+			}
 			MainActor.assumeIsolated
 			{
-				guard let self, self.requestedContext == context,
+				guard self.requestedContext == context,
 						self.timingExecutionState.isBusy
 				else
 				{

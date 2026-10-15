@@ -4,7 +4,7 @@ import AppKit
 final class SubagentDetailViewController: NSViewController
 {
 	let owner: FeaturePresentationOwner
-	let conversation = ConversationViewController(transcriptOnly: true)
+	let transcript = TranscriptViewController()
 	var onBack: (() -> Void)?
 	var onLoadEarlierTurns: (() -> Void)?
 	var onRetry: (() -> Void)?
@@ -58,13 +58,13 @@ final class SubagentDetailViewController: NSViewController
 		divider.boxType = .separator
 		content.addArrangedSubview(divider)
 		content.addArrangedSubview(makeStatusRow())
-		addChild(conversation)
-		content.addArrangedSubview(conversation.view)
+		addChild(transcript)
+		content.addArrangedSubview(makeTranscriptContent())
 		for child in content.arrangedSubviews
 		{
 			child.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
 		}
-		conversation.onLoadEarlierTurns =
+		transcript.onLoadEarlierTurns =
 		{
 			[weak self] in
 			self?.onLoadEarlierTurns?()
@@ -107,13 +107,63 @@ final class SubagentDetailViewController: NSViewController
 		{
 			loadingIndicator.stopAnimation(nil)
 		}
-		conversation.renderTranscript(ConversationPresentation.Transcript(
+		transcript.render(TranscriptPresentation(
 			owner: owner,
 			entries: state.entries,
 			turnTimings: state.turnTimings,
-			canLoadEarlierTurns: state.nextCursor != nil
+			canLoadEarlierTurns: state.nextCursor != nil,
+			navigation: nil,
+			executionState: .ready,
+			activeThreadID: nil,
+			activeTurnID: nil
 		))
-		conversation.loadEarlierButton.isEnabled = !state.isLoading
+		transcript.setLoadEarlierEnabled(!state.isLoading)
+	}
+
+	private func makeTranscriptContent() -> NSView
+	{
+		let stack = AppKitLayout.verticalStack(
+			[makeTranscriptUtilityRow(), transcript.view],
+			spacing: 6
+		)
+		stack.alignment = .leading
+		for row in stack.arrangedSubviews
+		{
+			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+		}
+		let container = DesktopSurface(AppKitColorTokens.canvas)
+		AppKitLayout.pin(
+			stack,
+			to: container
+		)
+		return container
+	}
+
+	private func makeTranscriptUtilityRow() -> NSView
+	{
+		let utilityRow = transcript.utilityRow
+		let centeredRow = NSView()
+		centeredRow.addSubview(utilityRow)
+		utilityRow.translatesAutoresizingMaskIntoConstraints = false
+		let preferredWidth = utilityRow.widthAnchor.constraint(equalTo: centeredRow.widthAnchor)
+		preferredWidth.priority = .defaultLow
+		NSLayoutConstraint.activate([
+			utilityRow.centerXAnchor.constraint(equalTo: centeredRow.centerXAnchor),
+			utilityRow.widthAnchor.constraint(
+				lessThanOrEqualToConstant: ConversationFlowLayout.maximumContentWidth
+			),
+			utilityRow.widthAnchor.constraint(lessThanOrEqualTo: centeredRow.widthAnchor),
+			preferredWidth,
+			utilityRow.topAnchor.constraint(equalTo: centeredRow.topAnchor),
+			utilityRow.bottomAnchor.constraint(equalTo: centeredRow.bottomAnchor),
+		])
+		centeredRow.isHidden = utilityRow.isHidden
+		transcript.onUtilityRowVisibilityChanged =
+		{
+			[weak centeredRow, weak utilityRow] in
+			centeredRow?.isHidden = utilityRow?.isHidden ?? true
+		}
+		return centeredRow
 	}
 
 	private func makeHeader() -> NSView

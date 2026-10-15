@@ -2,7 +2,7 @@ import AppKit
 
 // Reading anchors, bookmarks, scrolling, and live-resize continuity.
 @MainActor
-extension ConversationViewController
+extension TranscriptViewController
 {
 	func restoreReadingPosition(
 		followOutput: Bool,

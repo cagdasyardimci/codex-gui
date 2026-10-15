@@ -10,7 +10,7 @@ struct ConversationTurnTimerTests
 	@Test func streamingUpdatesPreserveScheduledTickAndHiddenTranscriptStopsTimer() throws
 	{
 		_ = NSApplication.shared
-		let controller = ConversationViewController()
+		let controller = TranscriptViewController()
 		controller.requestedTurnTimings = [ConversationTurnTiming(
 			turnID: "turn",
 			status: "inProgress",
@@ -74,7 +74,7 @@ struct ConversationTurnTimerTests
 		{
 			@MainActor in
 			_ = NSApplication.shared
-			let controller = ConversationViewController(transcriptOnly: true)
+			let controller = TranscriptViewController()
 			let window = NSWindow(
 				contentRect: NSRect(
 					x: 0,

@@ -68,9 +68,9 @@ struct ConversationSubagentNavigationTests
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
 		_ = controller.view
-		controller.renderedContext = "project:owner"
-		controller.requestedContext = "project:owner"
-		controller.displayedRows = [.activity(subagentRow())]
+		controller.transcript.renderedContext = "project:owner"
+		controller.transcript.requestedContext = "project:owner"
+		controller.transcript.displayedRows = [.activity(subagentRow())]
 		var openCount = 0
 		var selected: [String] = []
 		controller.onSelectSubagentThread =
@@ -81,8 +81,8 @@ struct ConversationSubagentNavigationTests
 		{
 			openCount += 1
 		}
-		let item = controller.collectionView(
-			controller.collectionView,
+		let item = controller.transcript.collectionView(
+			controller.transcript.collectionView,
 			itemForRepresentedObjectAt: IndexPath(
 				item: 0,
 				section: 0
@@ -98,17 +98,94 @@ struct ConversationSubagentNavigationTests
 		button.dispatchConfiguredAction()
 		#expect(openCount == 1)
 
-		controller.requestedContext = "project:another-owner"
+		controller.transcript.requestedContext = "project:another-owner"
 		button.dispatchConfiguredAction()
 		#expect(openCount == 1)
 
 		// Returning to the same owner must not revive a callback from its earlier selection.
-		controller.requestedContext = "project:owner"
-		controller.selectionGeneration += 1
+		controller.transcript.requestedContext = "project:owner"
+		controller.transcript.selectionGeneration += 1
 		child.dispatchConfiguredAction()
 		#expect(selected == ["child-thread"])
 		button.dispatchConfiguredAction()
 		#expect(openCount == 1)
+	}
+
+	@Test func draftLifetimeChangeRejectsRetainedSubagentButtons() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let agent = CodexSubagentActivity(json: [
+			"kind": "started",
+			"agentThreadId": "child-thread",
+			"agentPath": "/root/app_client"
+		])
+		let entry = ConversationEntry(
+			id: "turn:subagent",
+			kind: .tool,
+			title: "Subagent",
+			body: "",
+			activity: .subagent(agent)
+		)
+		var snapshot = ConversationSnapshot(
+			projectPath: "/tmp/subagent-navigation",
+			threads: [],
+			selectedThreadID: "parent-thread",
+			entries: [entry],
+			canLoadEarlierTurns: false,
+			changedFiles: [],
+			diff: "",
+			draft: "",
+			canSend: false,
+			accountDescription: "Mock",
+			backendDescription: "Mock",
+			executionState: .ready,
+			statusMessage: nil,
+			models: [],
+			selectedModelID: nil,
+			selectedEffort: nil,
+			pendingInteractions: [],
+			recentProjects: []
+		)
+		snapshot.composerDraftLifetime = 1
+		var selected: [String] = []
+		var opens = 0
+		controller.onSelectSubagentThread =
+		{
+			selected.append($0)
+		}
+		controller.onOpenSubagents =
+		{
+			opens += 1
+		}
+		controller.render(snapshot)
+		await controller.waitForRendering()
+		let rowIndex = try #require(controller.transcript.displayedRows.firstIndex
+		{
+			$0.id == entry.id
+		})
+		let item = controller.transcript.collectionView(
+			controller.transcript.collectionView,
+			itemForRepresentedObjectAt: IndexPath(
+				item: rowIndex,
+				section: 0
+			)
+		)
+		let open = try subagentsButton(in: item.view)
+		let select = try #require(buttons(in: item.view).first
+		{
+			$0.accessibilityLabel()?.hasPrefix("Open conversation:") == true
+		})
+		try #require(select.dispatchConfiguredAction())
+		try #require(open.dispatchConfiguredAction())
+		#expect(selected == ["child-thread"] && opens == 1)
+
+		snapshot.composerDraftLifetime = 2
+		controller.render(snapshot)
+		#expect(controller.transcript.selectedThreadID == "parent-thread")
+		try #require(select.dispatchConfiguredAction())
+		try #require(open.dispatchConfiguredAction())
+		#expect(selected == ["child-thread"] && opens == 1)
 	}
 
 	@Test func groupedAvatarsSelectTheirOwnConversationAndRejectReuse() throws

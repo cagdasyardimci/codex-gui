@@ -64,8 +64,8 @@ struct ConversationTranscriptUpdateLayoutTests
 			))
 			await controller.waitForRendering()
 		}
-		let collection = controller.collectionView
-		let scroll = controller.conversationScrollView
+		let collection = controller.transcript.collectionView
+		let scroll = controller.transcript.conversationScrollView
 		let layout = try #require(collection.collectionViewLayout)
 		for fraction in [CGFloat(0), 0.5, 1, 0.25, 1]
 		{
@@ -79,7 +79,7 @@ struct ConversationTranscriptUpdateLayoutTests
 			collection.layoutSubtreeIfNeeded()
 			controller.view.layoutSubtreeIfNeeded()
 			#expect(scroll.frame.height > window.contentLayoutRect.height / 2)
-			#expect(controller.latestButton.isHidden == (fraction == 1))
+			#expect(controller.transcript.latestButton.isHidden == (fraction == 1))
 			let visible = layout.layoutAttributesForElements(in: collection.visibleRect)
 			#expect(!visible.isEmpty)
 			for attributes in visible
@@ -105,8 +105,8 @@ struct ConversationTranscriptUpdateLayoutTests
 			height: 760
 		)
 		let controller = fixture.controller
-		let collection = controller.collectionView
-		let scroll = controller.conversationScrollView
+		let collection = controller.transcript.collectionView
+		let scroll = controller.transcript.conversationScrollView
 		defer
 		{
 			fixture.tearDown()
@@ -139,7 +139,7 @@ struct ConversationTranscriptUpdateLayoutTests
 			y: previous.minY + 4
 		))
 		scroll.reflectScrolledClipView(scroll.contentView)
-		controller.readingPositionChanged()
+		controller.transcript.readingPositionChanged()
 		collection.layoutSubtreeIfNeeded()
 		let item = try #require(collection.item(at: path))
 		let initialReaderOffset = previous.minY - scroll.contentView.bounds.minY
@@ -153,7 +153,7 @@ struct ConversationTranscriptUpdateLayoutTests
 		#expect(layout.layoutAttributesForItem(at: path)?.frame == previous)
 		let text = try #require(textViews(in: item.view).first)
 		#expect(text.string == "omega")
-		#expect(controller.readingAnchor()?.sourceEntryID == "entry-20")
+		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "entry-20")
 		let earlierPath = IndexPath(
 			item: 0,
 			section: 0
@@ -175,7 +175,7 @@ struct ConversationTranscriptUpdateLayoutTests
 		#expect(following.minY >= grown.maxY)
 		let current = try #require(layout.layoutAttributesForItem(at: path)).frame
 		#expect(abs(current.minY - scroll.contentView.bounds.minY - initialReaderOffset) < 1)
-		#expect(controller.readingAnchor()?.sourceEntryID == "entry-20")
+		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "entry-20")
 	}
 
 	@MainActor
@@ -210,9 +210,9 @@ struct ConversationTranscriptUpdateLayoutTests
 
 		func tearDown()
 		{
-			controller.cancelWidthChangeReadingPosition()
-			controller.collectionView.dataSource = nil
-			controller.collectionView.delegate = nil
+			controller.transcript.cancelWidthChangeReadingPosition()
+			controller.transcript.collectionView.dataSource = nil
+			controller.transcript.collectionView.delegate = nil
 			window.contentViewController = nil
 			window.isReleasedWhenClosed = false
 			window.close()
@@ -235,7 +235,7 @@ struct ConversationTranscriptUpdateLayoutTests
 		) -> NSSize
 		{
 			paths.append(indexPath)
-			return controller.collectionView(
+			return controller.transcript.collectionView(
 				collectionView,
 				layout: collectionViewLayout,
 				sizeForItemAt: indexPath

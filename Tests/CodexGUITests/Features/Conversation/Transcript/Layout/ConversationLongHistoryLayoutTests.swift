@@ -13,7 +13,7 @@ struct ConversationLongHistoryLayoutTests
 		{
 			tearDown(fixture)
 		}
-		let content = try #require(fixture.controller.preparedContents["canonical-user"])
+		let content = try #require(fixture.controller.transcript.preparedContents["canonical-user"])
 		try #require(content.codeBlockRanges.count == 4)
 		let scroll = try #require(fixture.collection.enclosingScrollView)
 		let pasteboard = NSPasteboard.withUniqueName()
@@ -67,7 +67,7 @@ struct ConversationLongHistoryLayoutTests
 				y: visibleCard.minY - 20
 			))
 			scroll.reflectScrolledClipView(scroll.contentView)
-			fixture.controller.readingPositionChanged()
+			fixture.controller.transcript.readingPositionChanged()
 			await settleLayout(
 				panes: fixture.panes,
 				controller: fixture.controller,
@@ -111,7 +111,7 @@ struct ConversationLongHistoryLayoutTests
 			in: fixture.collection,
 			content: content
 		)
-		#expect(fixture.controller.entries == fixture.entries)
+		#expect(fixture.controller.transcript.entries == fixture.entries)
 	}
 
 	@Test func inspectorAndWindowWidthChangesKeepTheRichUserReadingPosition() async throws
@@ -132,8 +132,8 @@ struct ConversationLongHistoryLayoutTests
 			at: path,
 			in: collection
 		).minY - scroll.contentView.bounds.minY
-		#expect(controller.readingAnchor()?.sourceEntryID == "canonical-user")
-		#expect(!controller.isNearBottom)
+		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "canonical-user")
+		#expect(!controller.transcript.isNearBottom)
 		var previousWidth = collection.bounds.width
 		for (width, inspectorVisible) in [
 			(980.0, true),
@@ -155,14 +155,14 @@ struct ConversationLongHistoryLayoutTests
 			#expect(panes.split.splitViewItems[2].isCollapsed == !inspectorVisible)
 			#expect(abs(collection.bounds.width - previousWidth) > 1)
 			previousWidth = collection.bounds.width
-			#expect(controller.readingAnchor()?.sourceEntryID == "canonical-user")
+			#expect(controller.transcript.readingAnchor()?.sourceEntryID == "canonical-user")
 			let marker = try markerRect(
 				at: path,
 				in: collection
 			)
 			#expect(abs(marker.minY - scroll.contentView.bounds.minY - markerOffset) < 2)
 			#expect(marker.intersects(scroll.contentView.bounds))
-			#expect(controller.entries == entries)
+			#expect(controller.transcript.entries == entries)
 		}
 	}
 
@@ -176,17 +176,17 @@ struct ConversationLongHistoryLayoutTests
 		let controller = fixture.controller
 		let collection = fixture.collection
 		let scroll = try #require(collection.enclosingScrollView)
-		#expect(controller.readingAnchor()?.sourceEntryID == "canonical-user")
+		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "canonical-user")
 		fixture.panes.setReviewCollapsed(false)
-		try #require(controller.widthChangeReadingPosition != nil)
-		controller.showLatestMessage()
+		try #require(controller.transcript.widthChangeReadingPosition != nil)
+		controller.transcript.showLatestMessage()
 		await settleLayout(
 			panes: fixture.panes,
 			controller: fixture.controller,
 			collection: collection
 		)
 		#expect(collection.bounds.maxY - scroll.contentView.bounds.maxY < 48)
-		#expect(controller.readingAnchor()?.sourceEntryID == "later-output")
+		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "later-output")
 		collection.scrollToItems(
 			at: [fixture.path],
 			scrollPosition: .top
@@ -205,10 +205,10 @@ struct ConversationLongHistoryLayoutTests
 			y: marker.minY + 1
 		))
 		scroll.reflectScrolledClipView(scroll.contentView)
-		controller.readingPositionChanged()
-		#expect(controller.readingAnchor()?.sourceEntryID == "canonical-user")
+		controller.transcript.readingPositionChanged()
+		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "canonical-user")
 		fixture.panes.setReviewCollapsed(true)
-		try #require(controller.widthChangeReadingPosition != nil)
+		try #require(controller.transcript.widthChangeReadingPosition != nil)
 		let replacement = ConversationEntry(
 			id: "replacement",
 			kind: .agent,
@@ -226,7 +226,7 @@ struct ConversationLongHistoryLayoutTests
 			controller: fixture.controller,
 			collection: current
 		)
-		#expect(controller.entries == [replacement])
+		#expect(controller.transcript.entries == [replacement])
 		#expect(current !== collection)
 		#expect(collection.superview == nil && collection.dataSource == nil)
 		#expect(current.numberOfItems(inSection: 0) == 1)
@@ -235,7 +235,7 @@ struct ConversationLongHistoryLayoutTests
 			!$0.isHiddenOrHasHiddenAncestor
 		}.map(\.string)
 		#expect(visible == [replacement.body])
-		#expect(controller.readingAnchor()?.sourceEntryID == replacement.id)
+		#expect(controller.transcript.readingAnchor()?.sourceEntryID == replacement.id)
 		#expect(current.enclosingScrollView?.contentView.bounds.minY == 0)
 	}
 
@@ -315,9 +315,9 @@ struct ConversationLongHistoryLayoutTests
 
 	private func tearDown(_ fixture: ReadingFixture)
 	{
-		fixture.controller.cancelWidthChangeReadingPosition()
-		fixture.controller.turnNavigationRail.dismissPreview()
-		for collection in [fixture.collection, fixture.controller.collectionView]
+		fixture.controller.transcript.cancelWidthChangeReadingPosition()
+		fixture.controller.transcript.turnNavigationRail.dismissPreview()
+		for collection in [fixture.collection, fixture.controller.transcript.collectionView]
 		{
 			collection.delegate = nil
 			collection.dataSource = nil
@@ -357,7 +357,7 @@ struct ConversationLongHistoryLayoutTests
 		panes.didPresentWindow()
 		let collection = try #require(findCollection(in: controller.view))
 		let scroll = try #require(collection.enclosingScrollView)
-		#expect(scroll === controller.conversationScrollView)
+		#expect(scroll === controller.transcript.conversationScrollView)
 		var entries = (0 ..< 120).map
 		{
 			ConversationEntry(
@@ -417,7 +417,7 @@ struct ConversationLongHistoryLayoutTests
 			y: initialMarker.minY + 1
 		))
 		scroll.reflectScrolledClipView(scroll.contentView)
-		controller.readingPositionChanged()
+		controller.transcript.readingPositionChanged()
 		await settleLayout(
 			panes: panes,
 			controller: controller,
@@ -444,7 +444,7 @@ struct ConversationLongHistoryLayoutTests
 			panes.split.view.layoutSubtreeIfNeeded()
 			collection.layoutSubtreeIfNeeded()
 			// Await width restoration before checking the reading anchor.
-			await controller.widthChangeRestoreTask?.value
+			await controller.transcript.widthChangeRestoreTask?.value
 		}
 	}
 

@@ -115,9 +115,9 @@ struct ConversationReferenceLayoutTests
 		controller.render(snapshot)
 		await controller.waitForRendering()
 		controller.view.layoutSubtreeIfNeeded()
-		let collection = controller.collectionView
+		let collection = controller.transcript.collectionView
 		collection.layoutSubtreeIfNeeded()
-		let frames = try controller.displayedRows.indices.map
+		let frames = try controller.transcript.displayedRows.indices.map
 		{
 			try #require(collection.layoutAttributesForItem(at: IndexPath(
 				item: $0,
@@ -125,7 +125,7 @@ struct ConversationReferenceLayoutTests
 			)))
 			.frame
 		}
-		#expect(controller.displayedRows.map(\.id) == [
+		#expect(controller.transcript.displayedRows.map(\.id) == [
 			"first:user",
 			"timing:first",
 			"first:reply",

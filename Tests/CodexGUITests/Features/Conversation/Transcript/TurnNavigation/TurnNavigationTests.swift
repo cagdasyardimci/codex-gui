@@ -44,9 +44,9 @@ struct TurnNavigationTests
 			defer
 			{
 				let cleanup = TestTiming.begin("native.window.cleanup")
-				controller.turnNavigationRail.dismissPreview()
-				controller.collectionView.dataSource = nil
-				controller.collectionView.delegate = nil
+				controller.transcript.turnNavigationRail.dismissPreview()
+				controller.transcript.collectionView.dataSource = nil
+				controller.transcript.collectionView.delegate = nil
 				window.contentViewController = nil
 				window.close()
 				cleanup.end()
@@ -91,7 +91,7 @@ struct TurnNavigationTests
 			await controller.waitForRendering()
 			initialRendering.end()
 			controller.view.layoutSubtreeIfNeeded()
-			let rail = controller.turnNavigationRail
+			let rail = controller.transcript.turnNavigationRail
 			#expect(rail.summaries.count == 2)
 			#expect(!rail.isHidden)
 			#expect(rail.activeTurnID == "second")
@@ -125,20 +125,21 @@ struct TurnNavigationTests
 				to: mark.target
 			))
 			#expect(rail.previewPanel == nil)
-			#expect(controller.collectionView.selectionIndexPaths == [IndexPath(
+			#expect(controller.transcript.collectionView.selectionIndexPaths == [IndexPath(
 				item: 0,
 				section: 0
 			)])
 			#expect(rail.activeTurnID == "first")
-			let firstRow = try #require(controller.collectionView.layoutAttributesForItem(
-				at: IndexPath(
-					item: 0,
-					section: 0
-				)
-			))
+			let firstRow = try #require(controller.transcript.collectionView
+				.layoutAttributesForItem(
+					at: IndexPath(
+						item: 0,
+						section: 0
+					)
+				))
 			let readingColumn = controller.view.convert(
 				firstRow.frame,
-				from: controller.collectionView
+				from: controller.transcript.collectionView
 			)
 			#expect(rail.frame.maxX <= readingColumn.minX)
 			var toggled: ConversationBookmark?
@@ -151,7 +152,7 @@ struct TurnNavigationTests
 			#expect(bookmark.threadID == "thread")
 			#expect(bookmark.turnID == "first")
 			#expect(bookmark.itemID == "request")
-			controller.bookmarks = [bookmark]
+			controller.transcript.bookmarks = [bookmark]
 			#expect(rail.isBookmarked?(summary) == true)
 			var other = snapshot([])
 			other = ConversationSnapshot(
@@ -212,9 +213,9 @@ struct TurnNavigationTests
 		))
 		defer
 		{
-			controller.turnNavigationRail.dismissPreview()
-			controller.collectionView.dataSource = nil
-			controller.collectionView.delegate = nil
+			controller.transcript.turnNavigationRail.dismissPreview()
+			controller.transcript.collectionView.dataSource = nil
+			controller.transcript.collectionView.delegate = nil
 			window.contentViewController = nil
 			window.close()
 		}
@@ -240,32 +241,33 @@ struct TurnNavigationTests
 		controller.render(snapshot(entries))
 		await controller.waitForRendering()
 		await settleTranscriptLayout(controller)
-		let rail = controller.turnNavigationRail
+		let rail = controller.transcript.turnNavigationRail
 		let latestTurnID = "turn-\(turnCount - 1)"
 		#expect(rail.activeTurnID == latestTurnID)
 		let railFrame = rail.frame
 		let railScroll = try #require(rail.subviews.first as? NSScrollView)
 		let railOrigin = railScroll.contentView.bounds.origin
-		let transcript = controller.conversationScrollView
-		#expect(controller.collectionView.bounds.height > transcript.contentView.bounds.height)
+		let transcript = controller.transcript.conversationScrollView
+		#expect(controller.transcript.collectionView.bounds.height > transcript.contentView.bounds
+			.height)
 		transcript.contentView.scroll(to: .zero)
 		transcript.reflectScrolledClipView(transcript.contentView)
-		controller.readingPositionChanged()
+		controller.transcript.readingPositionChanged()
 		await settleTranscriptLayout(controller)
 		#expect(rail.activeTurnID == "turn-0")
-		#expect(!controller.latestButton.isHidden)
+		#expect(!controller.transcript.latestButton.isHidden)
 		#expect(rail.frame == railFrame)
 		let firstMark = try #require(railScroll.documentView?.subviews.first)
 		#expect(railScroll.contentView.bounds.contains(firstMark.frame))
-		controller.showLatestMessage()
+		controller.transcript.showLatestMessage()
 		await settleTranscriptLayout(controller)
 		#expect(rail.activeTurnID == latestTurnID)
-		#expect(controller.latestButton.isHidden)
+		#expect(controller.transcript.latestButton.isHidden)
 		#expect(rail.frame == railFrame)
 		#expect(railScroll.contentView.bounds.origin == railOrigin)
 		for _ in 0 ..< 4
 		{
-			controller.readingPositionChanged()
+			controller.transcript.readingPositionChanged()
 		}
 		await settleTranscriptLayout(controller)
 		#expect(rail.activeTurnID == latestTurnID)
@@ -278,9 +280,9 @@ struct TurnNavigationTests
 		for _ in 0 ..< 4
 		{
 			controller.view.layoutSubtreeIfNeeded()
-			controller.collectionView.layoutSubtreeIfNeeded()
+			controller.transcript.collectionView.layoutSubtreeIfNeeded()
 			// Width-change restoration is owned by this controller, not a fixed delay.
-			await controller.widthChangeRestoreTask?.value
+			await controller.transcript.widthChangeRestoreTask?.value
 		}
 	}
 

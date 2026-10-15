@@ -2,7 +2,7 @@ import AppKit
 
 // Transcript preparation, collection items, and measured row content.
 @MainActor
-extension ConversationViewController
+extension TranscriptViewController
 {
 	func configureTranscriptControls()
 	{
@@ -595,7 +595,7 @@ extension ConversationViewController
 		await transcriptPreparation.waitForRendering()
 	}
 
-	func prepareTranscript(_ snapshot: ConversationPresentation.Transcript)
+	func prepareTranscript(_ snapshot: TranscriptPresentation)
 	{
 		let context = snapshot.owner.transcriptIdentity
 		let displayTimings = snapshot.turnTimings.map

@@ -12,7 +12,7 @@ File placement follows [conventions](../CONVENTIONS.md#file-organization-and-own
 
 `WorkspaceEffectRunner` performs backend, filesystem and persistence operations and returns scoped results. Accepted work is reserved before observers are notified. Runtime jobs, subscriptions, task handles and waiters remain outside model state. Persistence scheduling preserves accepted-write order and supports draining writes before checkout removal or application termination.
 
-Follow-up conversation reads return through `WorkspaceStoreInputs`, which captures fresh request identity and clock values. Filesystem-backed checkout validation occurs before the read is proposed; reducers revalidate that captured ownership against current state. `ConversationTurnPreview` in `Application/State/` holds canonical compact preview values. Runtime receives the application service `ConversationPreviewPreparing`; `AppDelegate` injects the transcript's `ConversationMarkdownPreviewPreparer`. The runner prepares Markdown-to-plain-text previews off the main actor with cancellation propagation before returning typed results. Reducers consume these prepared values. Loaded and compact turn previews use the visible user request as their title. The turn card parses title Markdown before styling links, keeps one favicon per visible link, and allows URL characters to wrap within two title lines. Image-only requests use attachment labels, preserving generated composer descriptions when available and falling back to image names. A compact preview retains its bounded reply source only when it contains a web address, so the turn card can recover labeled Markdown links; the source counts toward preview residency costs. These bounded labels remain separate from the thumbnail-only message body and count toward transcript residency costs.
+Follow-up conversation reads return through `WorkspaceStoreInputs`, which captures fresh request identity and clock values. Filesystem-backed checkout validation occurs before the read is proposed; reducers revalidate that captured ownership against current state. `ConversationTurnPreview` in `Application/State/` holds canonical compact preview values. Runtime receives the application service `ConversationPreviewPreparing`; `AppDelegate` injects Conversation's `ConversationMarkdownPreviewPreparer`. The runner prepares Markdown-to-plain-text previews off the main actor with cancellation propagation before returning typed results. Reducers consume these prepared values. Loaded and compact turn previews use the visible user request as their title. The turn card parses title Markdown before styling links, keeps one favicon per visible link, and allows URL characters to wrap within two title lines. Image-only requests use attachment labels, preserving generated composer descriptions when available and falling back to image names. A compact preview retains its bounded reply source only when it contains a web address, so the turn card can recover labeled Markdown links; the source counts toward preview residency costs. These bounded labels remain separate from the thumbnail-only message body and count toward transcript residency costs.
 
 ## Ownership and recovery
 
@@ -54,10 +54,19 @@ rich previews. It owns parsing, native text and decoration rendering, source-pre
 copy and accessibility, rich attachments, and plain-text output. Parsed values remain `Sendable`,
 so consumers can prepare Markdown off the main actor. AppKit rendering and layout stay on the
 main actor.
-Conversation owns transcript preparation, content residency, message containers and turn-preview
-adapters. Changes owns Git content loading, cancellation and preview containers. Each consumer
+Shared transcript presentation owns message preparation and containers; Conversation retains
+turn-preview adapters and application state retains content residency. Changes owns Git content
+loading, cancellation and preview containers. Each consumer
 retains its own sizing, scrolling and appearance-refresh lifecycle. Rendering caches and resource
 limits stay with the shared renderer; feature content caches stay with their feature.
+
+The main conversation and subagent history compose `TranscriptViewController` from
+`Features/Shared/Transcript`. Its presentation carries the captured owner, history and explicit
+execution evidence. The child owns row preparation, selection, reading anchors, scrolling,
+navigation and their asynchronous cancellation. Conversation retains the composer, submission
+and live task controls; Subagents retains history loading, agent metadata and retry controls.
+Both consumers route transcript actions through their own callbacks. History marked in progress
+does not supply live execution evidence for elapsed timers.
 
 Markdown images in message bodies resolve only local paths, local file URLs and bounded inline image data. Preparation decodes thumbnails off the main actor through `SourceThumbnailLoader`; remote and unavailable images retain readable source text. Consecutive image-only paragraphs form a source-backed native gallery of rounded, bordered cards. Cards retain each image's original aspect ratio, fit within 160 points of height and 425 points of width, and wrap to the next row when they cannot fit beside the preceding card. Clicking a gallery image opens that image in the shared expanded preview, which closes when its text view changes owner or detaches. The gallery's Markdown remains available to selection copy and accessibility help. The thumbnail cache and per-message rich-image budget bound decoded image retention.
 

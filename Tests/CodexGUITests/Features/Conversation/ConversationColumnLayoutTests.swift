@@ -30,7 +30,7 @@ struct ConversationColumnLayoutTests
 		}
 		controller.render(snapshot())
 		await controller.waitForRendering()
-		try #require(controller.displayedRows.count == 2)
+		try #require(controller.transcript.displayedRows.count == 2)
 
 		// The screenshot's reading pane is 888 points wide. The larger pane covers
 		// an inspector closing; the compact pane and return cover width-dependent reflow.
@@ -50,7 +50,7 @@ struct ConversationColumnLayoutTests
 				controller.endPaneResize()
 			}
 			controller.view.layoutSubtreeIfNeeded()
-			controller.collectionView.layoutSubtreeIfNeeded()
+			controller.transcript.collectionView.layoutSubtreeIfNeeded()
 
 			let pane = controller.view.bounds
 			let composer = controller.view.convert(
@@ -60,17 +60,18 @@ struct ConversationColumnLayoutTests
 			#expect(abs(composer.midX - pane.midX) < 0.5)
 			#expect(composer.minX >= pane.minX)
 			#expect(composer.maxX <= pane.maxX)
-			for index in controller.displayedRows.indices
+			for index in controller.transcript.displayedRows.indices
 			{
-				let attributes = try #require(controller.collectionView.layoutAttributesForItem(
-					at: IndexPath(
-						item: index,
-						section: 0
-					)
-				))
+				let attributes = try #require(controller.transcript.collectionView
+					.layoutAttributesForItem(
+						at: IndexPath(
+							item: index,
+							section: 0
+						)
+					))
 				let row = controller.view.convert(
 					attributes.frame,
-					from: controller.collectionView
+					from: controller.transcript.collectionView
 				)
 				let leadingGutter = row.minX - pane.minX
 				let trailingGutter = pane.maxX - row.maxX
