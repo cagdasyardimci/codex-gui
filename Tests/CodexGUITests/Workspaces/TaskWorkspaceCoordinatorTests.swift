@@ -822,6 +822,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func terminalSavedTurnWithRunningCommandReconstructsCleanupBarrier() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -851,6 +856,7 @@ struct TaskWorkspaceCoordinatorTests
 		let state = WorkspaceTestFixture(
 			server: service,
 			storage: fixture.storage,
+			projectContextStore: fixture.projectContextStore,
 			taskWorkspace: workspace,
 			taskWorkspaceManager: fixture.manager
 		)
@@ -879,6 +885,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func olderRefreshAndSelectionReadsCannotUndoConfirmedCommandExit() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		for selectConversation in [false, true]
 		{
 			let fixture = try await TaskExecutionFixture()
@@ -911,6 +922,7 @@ struct TaskWorkspaceCoordinatorTests
 			let state = WorkspaceTestFixture(
 				server: service,
 				storage: fixture.storage,
+				projectContextStore: fixture.projectContextStore,
 				taskWorkspace: workspace,
 				taskWorkspaceManager: fixture.manager
 			)
@@ -930,6 +942,7 @@ struct TaskWorkspaceCoordinatorTests
 					)
 				]
 			}
+			let readCount = service.readThreadCount + 1
 			service.suspendNextRead = true
 			if selectConversation
 			{
@@ -939,10 +952,14 @@ struct TaskWorkspaceCoordinatorTests
 			{
 				state.inputs.refreshThreads()
 			}
-			try #require(await waitUntil
-			{
-				service.pendingRead != nil
-			})
+			await service.waitForCheckpoint("read:\(readCount)")
+			try #require(service.pendingRead != nil)
+			let capturedRead = try #require(state.store.model.conversations.pendingReads.values
+				.first
+				{
+					$0.context.threadID == service.thread.id
+				})
+			let readHandle = try #require(state.store.operation(for: capturedRead.context))
 			service.emit(
 				.itemCompleted(
 					threadId: service.thread.id,
@@ -956,7 +973,8 @@ struct TaskWorkspaceCoordinatorTests
 			#expect(!state.isTaskActive)
 			service.pendingRead?.resume(returning: service.detail())
 			service.pendingRead = nil
-			try await Task.sleep(for: .milliseconds(15))
+			// Await the captured stale read before checking its final publication.
+			_ = await readHandle.wait()
 			#expect(!state.isTaskActive)
 			#expect(!state.currentSnapshot.taskOutcomeUncertain)
 			#expect(state.currentSnapshot.selectedReview?.validations.first?.exitCode == 0)
@@ -991,6 +1009,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func fatalAgentErrorCancelsQuitAndWaitsForItsCommandsOwnOutcome() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1076,14 +1099,25 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func directRegistryOwnersKeepRepeatedApprovalsStopAndReconnectSeparate() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
 		}
+		timing.mark("phase.1.begin")
 		await fixture.sourceState.store.inputs.connect()
+		timing.mark("phase.1.end")
+		timing.mark("phase.2.begin")
 		let alpha = try await fixture.createTask("Alpha")
+		timing.mark("phase.2.end")
+		timing.mark("phase.3.begin")
 		let beta = try await fixture.createTask("Beta")
+		timing.mark("phase.3.end")
 		let alphaStore = alpha.state.store
 		let betaStore = beta.state.store
 
@@ -1138,7 +1172,9 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(beta.service.interruptionRequests.isEmpty)
 		alpha.service.complete(status: "interrupted")
 		alpha.service.onDisconnect?("Reconnect only alpha")
+		timing.mark("phase.4.begin")
 		await alphaStore.inputs.connect()
+		timing.mark("phase.4.end")
 		#expect(alphaStore.model.connection.generation > betaGeneration)
 		#expect(betaStore.model.connection.generation == betaGeneration)
 		#expect(betaStore.model.execution.pendingInteractions.map(\.id) == [betaApproval.id])
@@ -1152,6 +1188,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func duplicateBackendThreadIDsRequireTheCapturedRegistryOwner() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture(sharedThreadID: "same-thread")
 		defer
 		{
@@ -1189,6 +1230,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func retiredOwnerCallbacksCannotRecreateStoreOrPublishTaskEvents() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1235,6 +1281,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func interleavedApprovalsProgressAndChangesStayWithTheirCheckout() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1252,14 +1303,7 @@ struct TaskWorkspaceCoordinatorTests
 			)
 		)
 		beta.state.inputs.updateDraft("Change beta")
-		alpha.state.inputs.send()
-		beta.state.inputs.send()
-		try #require(
-			await waitUntil
-			{
-				alpha.service.turnRequests.count == 1 && beta.service.turnRequests.count == 1
-			}
-		)
+		try await submitFreshTasks([alpha, beta])
 		#expect(alpha.service.turnRequests[0].cwd?.path == alpha.workspace.checkoutPath)
 		#expect(beta.service.turnRequests[0].cwd?.path == beta.workspace.checkoutPath)
 		#expect(
@@ -1328,6 +1372,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func steeringAndStopRemainIndependentAndQuitWaitsForEveryOwner() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1338,29 +1387,21 @@ struct TaskWorkspaceCoordinatorTests
 		let beta = try await fixture.createTask("Beta")
 		alpha.state.inputs.updateDraft("Start alpha")
 		beta.state.inputs.updateDraft("Start beta")
-		alpha.state.inputs.send()
-		beta.state.inputs.send()
-		try #require(
-			await waitUntil
-			{
-				alpha.service.turnRequests.count == 1 && beta.service.turnRequests.count == 1
-			}
-		)
+		try await submitFreshTasks([alpha, beta])
 		alpha.service.suspendSteer = true
 		alpha.state.inputs.updateDraft("Guide alpha")
+		let steerCount = alpha.service.steeringRequests.count + 1
 		alpha.state.inputs.steer("Guide alpha")
-		try #require(await waitUntil
-		{
-			alpha.service.pendingSteer != nil
-		})
+		await alpha.service.waitForCheckpoint("steer:\(steerCount)")
+		try #require(alpha.service.pendingSteer != nil)
+		let steerContext = try #require(alpha.state.store.model.execution.pendingSteering)
+		let steer = try #require(alpha.state.store.operation(for: steerContext))
 		await fixture.coordinator.selectWorkspace(beta.workspace.id)
 		beta.state.inputs.updateDraft("Keep beta draft")
 		alpha.service.pendingSteer?.resume(returning: alpha.service.turn.id)
 		alpha.service.pendingSteer = nil
-		try #require(await waitUntil
-		{
-			alpha.state.currentSnapshot.draft.isEmpty
-		})
+		try #require(await steer.wait() == .finished)
+		try #require(alpha.state.currentSnapshot.draft.isEmpty)
 		#expect(beta.state.currentSnapshot.draft == "Keep beta draft")
 		#expect(
 			alpha.service.steeringRequests == [
@@ -1372,10 +1413,8 @@ struct TaskWorkspaceCoordinatorTests
 		)
 		#expect(beta.service.steeringRequests.isEmpty)
 		alpha.state.inputs.stop()
-		try #require(await waitUntil
-		{
-			alpha.service.interruptionRequests.count == 1
-		})
+		await alpha.service.waitForCheckpoint("interrupt:1")
+		try #require(alpha.service.interruptionRequests.count == 1)
 		#expect(beta.service.interruptionRequests.isEmpty)
 		#expect(beta.state.currentSnapshot.executionState == .running)
 
@@ -1385,10 +1424,8 @@ struct TaskWorkspaceCoordinatorTests
 			allFinishedCount += 1
 		}
 		fixture.coordinator.stopAll()
-		try #require(await waitUntil
-		{
-			beta.service.interruptionRequests.count == 1
-		})
+		await beta.service.waitForCheckpoint("interrupt:1")
+		try #require(beta.service.interruptionRequests.count == 1)
 		alpha.service.complete(status: "interrupted")
 		#expect(fixture.coordinator.isTaskActive)
 		#expect(allFinishedCount == 0)
@@ -1420,6 +1457,11 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func reconnectingOneOwnerPreservesItsDraftWithoutResendingOrChangingAnotherTask()
 		async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1431,14 +1473,15 @@ struct TaskWorkspaceCoordinatorTests
 		alpha.service.suspendTurnStart = true
 		alpha.state.inputs.updateDraft("Uncertain alpha")
 		beta.state.inputs.updateDraft("Run beta")
-		alpha.state.inputs.send()
-		beta.state.inputs.send()
-		try #require(
-			await waitUntil
-			{
-				alpha.service.pendingTurnStart != nil && beta.service.turnRequests.count == 1
-			}
-		)
+		_ = try #require(alpha.state.inputs.send())
+		let betaSubmission = try #require(beta.state.inputs.send())
+		// Alpha is deliberately suspended; its mock checkpoint avoids a polling deadline.
+		// Await only Beta's acknowledgement so disconnect still precedes Alpha's acknowledgement.
+		await alpha.service.waitForCheckpoint("turnStart:1")
+		try #require(alpha.service.pendingTurnStart != nil)
+		try #require(await betaSubmission.wait() == .finished)
+		try #require(alpha.service.turnRequests.count == 1)
+		try #require(beta.service.turnRequests.count == 1)
 		beta.service.emit(.interaction(beta.service.approval(id: "beta-approval")))
 		alpha.service.onDisconnect?("Synthetic disconnect")
 		alpha.service.pendingTurnStart?.resume(throwing: AppServerError.disconnected)
@@ -1458,6 +1501,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func aConversationInAnotherCheckoutCannotReceiveTheTaskOrBindItsRecord() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1468,7 +1516,7 @@ struct TaskWorkspaceCoordinatorTests
 		task.service.reportedDirectory = fixture.source
 		task.state.inputs.updateDraft("Keep this input")
 		task.state.inputs.send()
-		try #require(await waitUntil
+		try #require(await waitForStorePredicate(task.state.store)
 		{
 			task.state.currentSnapshot.taskOutcomeUncertain
 		})
@@ -1481,24 +1529,30 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func relaunchRestoresEachBoundConversationAndUnsentContextWithoutStartingATurn()
 		async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
 		}
+		timing.mark("phase.1.begin")
 		await fixture.sourceState.inputs.connect()
+		timing.mark("phase.1.end")
+		timing.mark("phase.2.begin")
 		let alpha = try await fixture.createTask("Alpha")
+		timing.mark("phase.2.end")
+		timing.mark("phase.3.begin")
 		let beta = try await fixture.createTask("Beta")
+		timing.mark("phase.3.end")
 		alpha.state.inputs.updateDraft("Run alpha")
 		beta.state.inputs.updateDraft("Run beta")
-		alpha.state.inputs.send()
-		beta.state.inputs.send()
-		try #require(
-			await waitUntil
-			{
-				alpha.service.turnRequests.count == 1 && beta.service.turnRequests.count == 1
-			}
-		)
+		timing.mark("phase.4.begin")
+		try await submitFreshTasks([alpha, beta])
+		timing.mark("phase.4.end")
 		alpha.service.complete(status: "completed")
 		beta.service.complete(status: "completed")
 		alpha.state.inputs.updateDraft("Saved alpha")
@@ -1510,8 +1564,12 @@ struct TaskWorkspaceCoordinatorTests
 			)
 		)
 		beta.state.inputs.updateDraft("Saved beta")
+		timing.mark("phase.5.begin")
 		try await alpha.state.store.awaitAcceptedPersistence()
+		timing.mark("phase.5.end")
+		timing.mark("phase.6.begin")
 		try await beta.state.store.awaitAcceptedPersistence()
+		timing.mark("phase.6.end")
 		fixture.coordinator.shutdown()
 
 		let restored = fixture.restoredCoordinator()
@@ -1519,18 +1577,26 @@ struct TaskWorkspaceCoordinatorTests
 		{
 			restored.shutdown()
 		}
+		timing.mark("phase.7.begin")
 		await restored.sourceStore.inputs.connect()
+		timing.mark("phase.7.end")
+		timing.mark("phase.8.begin")
 		await restored.reloadWorkspaces()
+		timing.mark("phase.8.end")
+		timing.mark("phase.9.begin")
 		await restored.selectWorkspace(alpha.workspace.id)
-		try #require(await waitUntil
+		timing.mark("phase.9.end")
+		try #require(await waitForCoordinatorPredicate(restored)
 		{
 			restored.currentSnapshot.canSend
 		})
 		#expect(restored.currentSnapshot.selectedThreadID == alpha.service.thread.id)
 		#expect(restored.currentSnapshot.draft == "Saved alpha")
 		#expect(restored.currentSnapshot.draftContext.map(\.title) == ["Alpha"])
+		timing.mark("phase.10.begin")
 		await restored.selectWorkspace(beta.workspace.id)
-		try #require(await waitUntil
+		timing.mark("phase.10.end")
+		try #require(await waitForCoordinatorPredicate(restored)
 		{
 			restored.currentSnapshot.canSend
 		})
@@ -1546,6 +1612,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func notificationTransitionsRemainIndependentDuringInterleavedSnapshots() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1566,14 +1637,7 @@ struct TaskWorkspaceCoordinatorTests
 		let beta = try await fixture.createTask("Beta")
 		alpha.state.inputs.updateDraft("Run alpha")
 		beta.state.inputs.updateDraft("Run beta")
-		alpha.state.inputs.send()
-		beta.state.inputs.send()
-		try #require(
-			await waitUntil
-			{
-				alpha.service.turnRequests.count == 1 && beta.service.turnRequests.count == 1
-			}
-		)
+		try await submitFreshTasks([alpha, beta])
 		alpha.service.emit(.interaction(alpha.service.approval(id: "same-id")))
 		beta.service.emit(.interaction(beta.service.approval(id: "same-id")))
 		alpha.state.inputs.updateDraft("Publish alpha snapshot")
