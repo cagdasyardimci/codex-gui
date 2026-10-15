@@ -180,10 +180,7 @@ struct ConversationWindowIntegrationTests
 				now: .distantPast
 			),
 			ownerIdentity: "fixture",
-			sections: ContextSummarySelector.sections(
-				model: model,
-				chatID: "chat"
-			)
+			sections: ContextSummarySections()
 		)
 		inspector.renderSummary(
 			presentation,

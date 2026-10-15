@@ -118,10 +118,7 @@ struct GitReviewHostLayoutTests
 				now: .distantPast
 			),
 			ownerIdentity: "fixture",
-			sections: ContextSummarySelector.sections(
-				model: model,
-				chatID: "chat"
-			)
+			sections: ContextSummarySections()
 		)
 		controller.inspector.renderSummary(
 			presentation,
@@ -189,10 +186,7 @@ struct GitReviewHostLayoutTests
 					now: .distantPast
 				),
 				ownerIdentity: "fixture",
-				sections: ContextSummarySelector.sections(
-					model: model,
-					chatID: "chat"
-				)
+				sections: ContextSummarySections()
 			)
 		}
 		let first = presentation()
