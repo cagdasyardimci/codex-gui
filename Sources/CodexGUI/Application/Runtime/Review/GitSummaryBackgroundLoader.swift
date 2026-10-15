@@ -11,6 +11,11 @@ final class GitSummaryBackgroundLoader
 		state.projection
 	}
 	var onChange: ((GitReviewSummaryProjection?) -> Void)?
+	// Capture before cancellation or replacement to await this read's complete result handling.
+	var readTask: Task<Void, Never>?
+	{
+		effects.readTask
+	}
 
 	init(service: any GitComparisonService = LocalGitComparisonService())
 	{

@@ -5,6 +5,10 @@ final class GitSummaryEffectRunner
 {
 	private let service: any GitComparisonService
 	private var job: Task<Void, Never>?
+	var readTask: Task<Void, Never>?
+	{
+		job
+	}
 
 	init(service: any GitComparisonService)
 	{
