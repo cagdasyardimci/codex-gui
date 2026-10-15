@@ -10,17 +10,43 @@ struct SubagentDetailViewControllerTests
 	{
 		_ = NSApplication.shared
 		let controller = makeController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 420,
+				height: 240
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = controller
+		defer
+		{
+			window.close()
+		}
 		let more = try button(
 			in: controller.view,
 			title: "Show 2 more"
 		)
-		more.performClick(nil)
+		try #require(more.dispatchConfiguredAction())
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
 		let scroll = try #require(descendants(controller.view).compactMap
 		{
 			$0 as? NSScrollView
 		}.first)
 		let document = try #require(scroll.documentView)
+		try #require(document.frame.height > scroll.contentView.bounds.height + 120)
+		scroll.contentView.scroll(to: NSPoint(
+			x: 0,
+			y: 120
+		))
+		scroll.reflectScrolledClipView(scroll.contentView)
 		let origin = scroll.contentView.bounds.origin
+		try #require(origin.y > 0)
 		let agent = try #require(controller.subagents.agents.first)
 		var backCount = 0
 		controller.onBack =
@@ -40,7 +66,8 @@ struct SubagentDetailViewControllerTests
 		{
 			$0.accessibilityLabel() == "Back to Subagents"
 		})
-		back.performClick(nil)
+		try #require(back.dispatchConfiguredAction())
+		controller.view.layoutSubtreeIfNeeded()
 		#expect(backCount == 1)
 		#expect(controller.selectedAgent == nil)
 		#expect(!scroll.isHidden)

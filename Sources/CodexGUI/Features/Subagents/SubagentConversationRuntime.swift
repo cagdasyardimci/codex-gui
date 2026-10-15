@@ -67,6 +67,15 @@ final class SubagentConversationRuntime
 		back()
 	}
 
+	/// Captures registered work so callers can join cancellation after its handles retire.
+	func operationTasks() -> [Task<Void, Never>]
+	{
+		[requestTask, refreshTask].compactMap
+		{
+			$0
+		}
+	}
+
 	func receive(_ event: AppServerEvent)
 	{
 		guard !isInvalidated, let threadID = state.selectedThreadID,

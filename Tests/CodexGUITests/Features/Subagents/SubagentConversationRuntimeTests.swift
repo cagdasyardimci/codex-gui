@@ -6,33 +6,56 @@ import Testing
 @Suite @MainActor
 struct SubagentConversationRuntimeTests
 {
-	@Test func backCancelsLoadingAndIgnoresLateBackendReply() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func backCancelsLoadingAndIgnoresLateBackendReply() async throws
 	{
 		let service = MockCodexService()
-		service.suspendNextRead = true
+		let lateReply = try detail(
+			service,
+			text: "stale"
+		)
+		let read = SuspendedSubagentReadFixture(
+			service: service,
+			reply: lateReply
+		)
 		let runtime = SubagentConversationRuntime(
 			service: service,
 			projectPath: nil
 		)
-		runtime.select(agent(service.thread.id))
-		#expect(await waitUntil
+		var publishedBodies: [String] = []
+		runtime.onChange =
 		{
-			service.pendingRead != nil
-		})
-		runtime.back()
-		service.pendingRead?.resume(returning: try detail(
-			service,
-			text: "stale"
-		))
-		service.pendingRead = nil
-		await Task.yield()
-		#expect(runtime.state.agent == nil)
-		#expect(runtime.state.entries.isEmpty)
-		#expect(!runtime.state.isLoading)
-		runtime.invalidate()
+			publishedBodies.append(contentsOf: $0.entries.map(\.body))
+		}
 		runtime.select(agent(service.thread.id))
-		#expect(runtime.state.agent == nil)
-		#expect(service.readThreadCount == 1)
+		let pending = runtime.operationTasks()
+		do
+		{
+			try #require(pending.count == 1)
+			try #require(await service.awaitReadiness
+			{
+				service.pendingRead != nil
+			})
+			runtime.back()
+			let allCancelled = pending.allSatisfy(\.isCancelled)
+			#expect(allCancelled)
+			#expect(runtime.operationTasks().isEmpty)
+			await read.releaseAndJoin(pending)
+			#expect(runtime.state.agent == nil)
+			#expect(runtime.state.entries.isEmpty)
+			#expect(!runtime.state.isLoading)
+			#expect(publishedBodies.isEmpty)
+			runtime.invalidate()
+			runtime.select(agent(service.thread.id))
+			#expect(runtime.state.agent == nil)
+			#expect(service.readThreadCount == 1)
+		}
+		catch
+		{
+			runtime.invalidate()
+			await read.releaseAndJoin(pending)
+			throw error
+		}
 	}
 
 	@Test func liveEventsCoalesceAndEventuallyPublishTheLatestSerialRead() async throws
@@ -235,5 +258,55 @@ struct SubagentConversationRuntimeTests
 			try? await Task.sleep(for: .milliseconds(5))
 		}
 		return condition()
+	}
+}
+
+@MainActor
+private final class SuspendedSubagentReadFixture
+{
+	private let service: MockCodexService
+	private let reply: ThreadDetail
+	private var releaseRequested = false
+	private var observation: UUID?
+
+	init(
+		service: MockCodexService,
+		reply: ThreadDetail
+	)
+	{
+		self.service = service
+		self.reply = reply
+		service.suspendNextRead = true
+		observation = service.observeReadiness
+		{
+			[weak self] in self?.releasePendingRead()
+		}
+	}
+
+	func releaseAndJoin(_ tasks: [Task<Void, Never>]) async
+	{
+		releaseRequested = true
+		releasePendingRead()
+		for task in tasks
+		{
+			await task.value
+		}
+		if let observation
+		{
+			service.removeReadinessObserver(observation)
+			self.observation = nil
+		}
+	}
+
+	private func releasePendingRead()
+	{
+		guard releaseRequested, let pending = service.pendingRead
+		else
+		{
+			return
+		}
+		// Cancellation can precede the service call; keep the observation until it returns.
+		service.pendingRead = nil
+		pending.resume(returning: reply)
 	}
 }
