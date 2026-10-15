@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ComposerImageSourceTests
 {
 	@Test func screenshotPasteCapturesEncodedBytesAndRetainsExistingText() throws
@@ -57,16 +57,23 @@ struct ComposerImageSourceTests
 		#expect(!composer.validateMenuItem(paste))
 	}
 
-	@Test func fileURLAndTextPasteRetainImagePrecedenceWithoutLoadingFile() throws
+	@Test func fileURLAndTextPasteRetainImagePrecedenceWithoutLoadingFile() async throws
 	{
 		_ = NSApplication.shared
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let file = directory.appendingPathComponent("Screenshot 🐈.png")
-		try DraftImageImportTestFixture.png().write(to: file)
+		let png = try DraftImageImportTestFixture.png()
+		try await BackgroundTestWork.perform
+		{
+			try png.write(to: file)
+		}
 		let pasteboard = NSPasteboard.withUniqueName()
 		defer
 		{

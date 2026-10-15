@@ -3,99 +3,118 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized,
+	.testTiming
+) @MainActor
 struct ModelPickerListTests
 {
-	@Test func modelListReplacesEffortPanelAndRestoresTriggerSummary() throws
+	// Shows a key composer panel and tests focus across its content replacement.
+	@Test func modelListReplacesEffortPanelAndRestoresTriggerSummary() async throws
 	{
-		_ = NSApplication.shared
-		let controller = ConversationViewController()
-		let window = try makeWindow(controller)
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			controller.modelEffortPopover?.close()
-			window.close()
+			timing.end()
 		}
-		controller.latestModelEffortSummary = "Fixture model 2 High"
-		controller.modelEffortController.render(
-			models: try models(count: 7),
-			selectedModelID: "model-2",
-			selectedEffort: "high",
-			fastMode: false
-		)
-		controller.showModelAndEffort()
-		controller.view.layoutSubtreeIfNeeded()
-		controller.modelEffortPopover?.reposition()
-		let picker = controller.modelEffortController
-		let panel = try #require(picker.view.window)
-		panel.layoutIfNeeded()
-		let initialBottom = panel.convertToScreen(picker.view.convert(
-			picker.view.bounds,
-			to: nil
-		))
-		.minY
-		let anchorTop = window.convertToScreen(controller.modelEffortButton.convert(
-			controller.modelEffortButton.bounds,
-			to: nil
-		)).maxY
-		#expect(initialBottom - anchorTop == 9)
-		#expect(controller.modelEffortButton.title == "Select effort")
-		picker.showModelList()
-		panel.layoutIfNeeded()
-		picker.view.layoutSubtreeIfNeeded()
-		#expect(picker.view.window === panel)
-		#expect(picker.view.bounds.size == NSSize(
-			width: 254,
-			height: 279
-		))
-		#expect(panel.convertToScreen(picker.view.convert(
-			picker.view.bounds,
-			to: nil
-		)).minY
-			== initialBottom)
-		#expect(controller.modelEffortButton.title == "Fixture model 2 High")
-		#expect(picker.modelList.accessibilityRole() == .menu)
-		let rows = picker.modelList.rows
-		#expect(rows.count == 8)
-		#expect(rows.map(\.state) == [.off, .off, .off, .on, .off, .off, .off, .off])
-		#expect(rows[0].preferredHeight == 44.5703125)
-		#expect(rows[1].preferredHeight == 28.5703125)
-		#expect(abs(rows[0].frame.height - rows[0].preferredHeight) < 1 / panel.backingScaleFactor)
-		#expect(abs(rows[1].frame.height - rows[1].preferredHeight) < 1 / panel.backingScaleFactor)
-		#expect(rows.allSatisfy
+		try await AppKitTestIsolation.perform
 		{
-			abs($0.frame.width - 246) < 0.01
-		})
-		#expect(rows[0].accessibilityHelp() == "Recommended set of models")
-		#expect(rows[3].accessibilityRole() == .menuItem)
-		#expect(panel.firstResponder === rows[3])
-		rows[3].keyDown(with: try key(
-			125,
-			window: panel
-		))
-		#expect(panel.firstResponder === rows[4])
-		window.appearance = NSAppearance(named: .darkAqua)
-		#expect(rows[4].effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
-		#expect(panel.firstResponder === rows[4])
-		picker.render(
-			models: try models(count: 100),
-			selectedModelID: "model-2",
-			selectedEffort: "high",
-			fastMode: false
-		)
-		panel.layoutIfNeeded()
-		picker.view.layoutSubtreeIfNeeded()
-		let limitedFrame = panel.convertToScreen(picker.view.convert(
-			picker.view.bounds,
-			to: nil
-		))
-		#expect(limitedFrame.minY == initialBottom)
-		#expect(limitedFrame.height < picker.preferredContentSize.height)
-		let screenTop = try #require(NSScreen.main).visibleFrame.maxY
-		#expect(limitedFrame.maxY <= screenTop - 7)
-		picker.setPresented(false)
-		#expect(!picker.isShowingModelList)
-		#expect(picker.preferredContentSize.height == 96)
+			@MainActor in
+			let setup = TestTiming.begin("native.setup")
+			_ = NSApplication.shared
+			let controller = ConversationViewController()
+			let window = try makeWindow(controller)
+			setup.end()
+			defer
+			{
+				controller.modelEffortPopover?.close()
+				window.close()
+			}
+			controller.latestModelEffortSummary = "Fixture model 2 High"
+			controller.modelEffortController.render(
+				models: try models(count: 7),
+				selectedModelID: "model-2",
+				selectedEffort: "high",
+				fastMode: false
+			)
+			let presentation = TestTiming.begin("native.presentation")
+			controller.showModelAndEffort()
+			controller.view.layoutSubtreeIfNeeded()
+			controller.modelEffortPopover?.reposition()
+			let picker = controller.modelEffortController
+			let panel = try #require(picker.view.window)
+			panel.layoutIfNeeded()
+			presentation.end()
+			let initialBottom = panel.convertToScreen(picker.view.convert(
+				picker.view.bounds,
+				to: nil
+			))
+			.minY
+			let anchorTop = window.convertToScreen(controller.modelEffortButton.convert(
+				controller.modelEffortButton.bounds,
+				to: nil
+			)).maxY
+			#expect(initialBottom - anchorTop == 9)
+			#expect(controller.modelEffortButton.title == "Select effort")
+			picker.showModelList()
+			panel.layoutIfNeeded()
+			picker.view.layoutSubtreeIfNeeded()
+			#expect(picker.view.window === panel)
+			#expect(picker.view.bounds.size == NSSize(
+				width: 254,
+				height: 279
+			))
+			#expect(panel.convertToScreen(picker.view.convert(
+				picker.view.bounds,
+				to: nil
+			)).minY
+				== initialBottom)
+			#expect(controller.modelEffortButton.title == "Fixture model 2 High")
+			#expect(picker.modelList.accessibilityRole() == .menu)
+			let rows = picker.modelList.rows
+			#expect(rows.count == 8)
+			#expect(rows.map(\.state) == [.off, .off, .off, .on, .off, .off, .off, .off])
+			#expect(rows[0].preferredHeight == 44.5703125)
+			#expect(rows[1].preferredHeight == 28.5703125)
+			#expect(abs(rows[0].frame.height - rows[0].preferredHeight) < 1 / panel
+				.backingScaleFactor)
+			#expect(abs(rows[1].frame.height - rows[1].preferredHeight) < 1 / panel
+				.backingScaleFactor)
+			#expect(rows.allSatisfy
+			{
+				abs($0.frame.width - 246) < 0.01
+			})
+			#expect(rows[0].accessibilityHelp() == "Recommended set of models")
+			#expect(rows[3].accessibilityRole() == .menuItem)
+			#expect(panel.firstResponder === rows[3])
+			rows[3].keyDown(with: try key(
+				125,
+				window: panel
+			))
+			#expect(panel.firstResponder === rows[4])
+			window.appearance = NSAppearance(named: .darkAqua)
+			#expect(rows[4].effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
+			#expect(panel.firstResponder === rows[4])
+			picker.render(
+				models: try models(count: 100),
+				selectedModelID: "model-2",
+				selectedEffort: "high",
+				fastMode: false
+			)
+			panel.layoutIfNeeded()
+			picker.view.layoutSubtreeIfNeeded()
+			let limitedFrame = panel.convertToScreen(picker.view.convert(
+				picker.view.bounds,
+				to: nil
+			))
+			#expect(limitedFrame.minY == initialBottom)
+			#expect(limitedFrame.height < picker.preferredContentSize.height)
+			let screenTop = try #require(NSScreen.main).visibleFrame.maxY
+			#expect(limitedFrame.maxY <= screenTop - 7)
+			picker.setPresented(false)
+			#expect(!picker.isShowingModelList)
+			#expect(picker.preferredContentSize.height == 96)
+		}
 	}
 
 	@Test func limitedViewportScrollsToKeyboardDestinationAndPreservesBackendID() throws

@@ -3,74 +3,85 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ModelEffortPopoverViewTests
 {
-	@Test func shadowPaddingKeepsPopoverContentAnchoredWithoutNativeShadow() throws
+	// ComposerPopoverPanel.show makes its panel key and installs application event monitors.
+	@Test func shadowPaddingKeepsPopoverContentAnchoredWithoutNativeShadow(
+	) async throws
 	{
-		_ = NSApplication.shared
-		let visible = try #require(NSScreen.main).visibleFrame
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: visible.minX + 100,
-				y: visible.minY + 100,
-				width: 600,
-				height: 420
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		let anchor = NSButton(frame: NSRect(
-			x: 200,
-			y: 100,
-			width: 220,
-			height: 28
-		))
-		try #require(window.contentView).addSubview(anchor)
-		let picker = ModelEffortPopoverView()
-		let popover = ComposerPopoverPanel(
-			contentViewController: picker,
-			shadowOutset: LayoutTokens.ModelPopover.shadowOutset
-		)
-		popover.anchorSpacing = LayoutTokens.ModelPopover.anchorSpacing
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			popover.close()
-			window.close()
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			_ = NSApplication.shared
+			let visible = try #require(NSScreen.main).visibleFrame
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: visible.minX + 100,
+					y: visible.minY + 100,
+					width: 600,
+					height: 420
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			let anchor = NSButton(frame: NSRect(
+				x: 200,
+				y: 100,
+				width: 220,
+				height: 28
+			))
+			try #require(window.contentView).addSubview(anchor)
+			let picker = ModelEffortPopoverView()
+			let popover = ComposerPopoverPanel(
+				contentViewController: picker,
+				shadowOutset: LayoutTokens.ModelPopover.shadowOutset
+			)
+			popover.anchorSpacing = LayoutTokens.ModelPopover.anchorSpacing
+			defer
+			{
+				popover.close()
+				window.close()
+			}
+			popover.show(
+				relativeTo: anchor.bounds,
+				of: anchor
+			)
+			let panel = try #require(picker.view.window)
+			panel.layoutIfNeeded()
+			picker.view.layoutSubtreeIfNeeded()
+			let contentFrame = panel.convertToScreen(picker.view.convert(
+				picker.view.bounds,
+				to: nil
+			))
+			let anchorFrame = window.convertToScreen(anchor.convert(
+				anchor.bounds,
+				to: nil
+			))
+			#expect(contentFrame.size == NSSize(
+				width: 254,
+				height: 96
+			))
+			#expect(abs(contentFrame.midX - anchorFrame.midX) < 1)
+			#expect(contentFrame.minY - anchorFrame.maxY == 9)
+			#expect(!panel.hasShadow)
+			#expect(panel.frame.width - contentFrame.width == 48)
+			#expect(panel.frame.height - contentFrame.height == 48)
+			let backdrop = try #require(picker.view.subviews.compactMap
+			{
+				$0 as? NSVisualEffectView
+			}.first)
+			#expect(backdrop.blendingMode == .behindWindow)
+			#expect(backdrop.layer?.masksToBounds == true)
+			#expect(backdrop.layer?.cornerRadius == 20)
 		}
-		popover.show(
-			relativeTo: anchor.bounds,
-			of: anchor
-		)
-		let panel = try #require(picker.view.window)
-		panel.layoutIfNeeded()
-		picker.view.layoutSubtreeIfNeeded()
-		let contentFrame = panel.convertToScreen(picker.view.convert(
-			picker.view.bounds,
-			to: nil
-		))
-		let anchorFrame = window.convertToScreen(anchor.convert(
-			anchor.bounds,
-			to: nil
-		))
-		#expect(contentFrame.size == NSSize(
-			width: 254,
-			height: 96
-		))
-		#expect(abs(contentFrame.midX - anchorFrame.midX) < 1)
-		#expect(contentFrame.minY - anchorFrame.maxY == 9)
-		#expect(!panel.hasShadow)
-		#expect(panel.frame.width - contentFrame.width == 48)
-		#expect(panel.frame.height - contentFrame.height == 48)
-		let backdrop = try #require(picker.view.subviews.compactMap
-		{
-			$0 as? NSVisualEffectView
-		}.first)
-		#expect(backdrop.blendingMode == .behindWindow)
-		#expect(backdrop.layer?.masksToBounds == true)
-		#expect(backdrop.layer?.cornerRadius == 20)
 	}
 
 	@Test func referenceGeometryKeepsBackendTicksAndEffortActions() throws
