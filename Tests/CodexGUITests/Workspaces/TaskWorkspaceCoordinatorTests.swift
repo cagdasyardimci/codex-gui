@@ -1185,7 +1185,6 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(fixture.coordinator.store(for: betaReference) === betaStore)
 		#expect(fixture.coordinator.store(owningThread: alpha.service.thread.id) === alphaStore)
 	}
-
 	@Test func duplicateBackendThreadIDsRequireTheCapturedRegistryOwner() async throws
 	{
 		let timing = TestTiming.begin("test.body")
@@ -1609,7 +1608,6 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(restoredAlpha.turnRequests.isEmpty)
 		#expect(restoredBeta.turnRequests.isEmpty)
 	}
-
 	@Test func notificationTransitionsRemainIndependentDuringInterleavedSnapshots() async throws
 	{
 		let timing = TestTiming.begin("test.body")
@@ -1662,87 +1660,115 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(beta.state.currentSnapshot.pendingInteractions.count == 1)
 	}
 
-	@Test func cleanupDrainsOnlyItsOwnerThenRevalidatesFreshFilesAndDurableBinding() async throws
+	// Each variant owns its repository, persistence gate and stores, so cases can overlap.
+	@Test(arguments: ["dirty", "binding", "clean"])
+	func cleanupDrainsOnlyItsOwnerThenRevalidatesFreshFilesAndDurableBinding(
+		change: String
+	) async throws
 	{
-		for change in ["dirty", "binding", "clean"]
+		let timing = TestTiming.begin("test.body")
+		defer
 		{
-			let gate = LifecyclePersistenceGate()
-			let fixture = try await TaskExecutionFixture(persistenceGate: gate)
-			defer
-			{
-				fixture.remove()
-			}
-			await fixture.sourceState.store.inputs.connect()
-			let alpha = try await fixture.createTask("Cleanup alpha")
-			let beta = try await fixture.createTask("Keep beta")
-			let alphaStore = alpha.state.store
-			let betaStore = beta.state.store
-			gate.blockedPaths = [alpha.workspace.checkoutPath, beta.workspace.checkoutPath]
-			alphaStore.inputs.updateDraft("Accepted alpha write")
-			betaStore.inputs.updateDraft("Accepted beta write")
-			let alphaWrite = try #require(draftHandle(alphaStore))
-			let betaWrite = try #require(draftHandle(betaStore))
-			await gate.waitForWrite(at: alpha.workspace.checkoutPath)
-			await gate.waitForWrite(at: beta.workspace.checkoutPath)
-			let removal = Task
-			{
-				await fixture.coordinator.removeCheckout(id: alpha.workspace.id)
-			}
-			await waitForCoordinator(fixture.coordinator)
-			{
-				fixture.coordinator.model.pendingCleanup[alpha.workspace.id]?.stage == .draining
-			}
-			#expect(alphaStore.model.lifecycle.cleanupReservation != nil)
-			#expect(!alphaStore.currentSnapshot.canSend)
-			#expect(alphaStore.inputs.send() == nil)
-			#expect(FileManager.default.fileExists(atPath: alpha.workspace.checkoutPath))
-			#expect(betaStore.model.lifecycle.cleanupReservation == nil)
-			#expect(betaStore.currentSnapshot.draft == "Accepted beta write")
-			if change == "dirty"
+			timing.end()
+		}
+		let gate = LifecyclePersistenceGate()
+		let fixture = try await TaskExecutionFixture(persistenceGate: gate)
+		defer
+		{
+			fixture.remove()
+		}
+		timing.mark("phase.1.begin")
+		await fixture.sourceState.store.inputs.connect()
+		timing.mark("phase.1.end")
+		timing.mark("phase.2.begin")
+		let alpha = try await fixture.createTask("Cleanup alpha")
+		timing.mark("phase.2.end")
+		timing.mark("phase.3.begin")
+		let beta = try await fixture.createTask("Keep beta")
+		timing.mark("phase.3.end")
+		let alphaStore = alpha.state.store
+		let betaStore = beta.state.store
+		gate.blockedPaths = [alpha.workspace.checkoutPath, beta.workspace.checkoutPath]
+		alphaStore.inputs.updateDraft("Accepted alpha write")
+		betaStore.inputs.updateDraft("Accepted beta write")
+		let alphaWrite = try #require(draftHandle(alphaStore))
+		let betaWrite = try #require(draftHandle(betaStore))
+		timing.mark("phase.4.begin")
+		await gate.waitForWrite(at: alpha.workspace.checkoutPath)
+		timing.mark("phase.4.end")
+		timing.mark("phase.5.begin")
+		await gate.waitForWrite(at: beta.workspace.checkoutPath)
+		timing.mark("phase.5.end")
+		let removal = Task
+		{
+			timing.mark("phase.6.begin")
+			await fixture.coordinator.removeCheckout(id: alpha.workspace.id)
+			timing.mark("phase.6.end")
+		}
+		await waitForCoordinator(fixture.coordinator)
+		{
+			fixture.coordinator.model.pendingCleanup[alpha.workspace.id]?.stage == .draining
+		}
+		#expect(alphaStore.model.lifecycle.cleanupReservation != nil)
+		#expect(!alphaStore.currentSnapshot.canSend)
+		#expect(alphaStore.inputs.send() == nil)
+		#expect(FileManager.default.fileExists(atPath: alpha.workspace.checkoutPath))
+		#expect(betaStore.model.lifecycle.cleanupReservation == nil)
+		#expect(betaStore.currentSnapshot.draft == "Accepted beta write")
+		if change == "dirty"
+		{
+			let trackedFile = URL(fileURLWithPath: alpha.workspace.checkoutPath)
+				.appendingPathComponent("tracked.txt")
+			try await BackgroundTestWork.perform
 			{
 				try "Changed during persistence drain".write(
-					to: URL(fileURLWithPath: alpha.workspace.checkoutPath)
-						.appendingPathComponent("tracked.txt"),
+					to: trackedFile,
 					atomically: true,
 					encoding: .utf8
 				)
 			}
-			else if change == "binding"
-			{
-				_ = try await fixture.manager.bindThread(
-					id: alpha.workspace.id,
-					threadID: "New durable binding"
-				)
-			}
-			gate.release(alpha.workspace.checkoutPath)
-			#expect(await alphaWrite.wait() == .finished)
-			await removal.value
-			#expect(betaWrite.completion == nil)
-			#expect(betaStore.model.lifecycle.cleanupReservation == nil)
-			#expect(fixture.storage.draft(
-				for: URL(fileURLWithPath: alpha.workspace.checkoutPath),
-				threadID: nil
-			) == "Accepted alpha write")
-			#expect(FileManager.default
-				.fileExists(atPath: alpha.workspace.checkoutPath) == (change != "clean"))
-			if change != "clean"
-			{
-				#expect(alphaStore.model.lifecycle.cleanupReservation == nil)
-				alphaStore.inputs.updateDraft("Editable after rejected cleanup")
-				#expect(alphaStore.currentSnapshot.draft == "Editable after rejected cleanup")
-				_ = await draftHandle(alphaStore)?.wait()
-			}
-			gate.release(beta.workspace.checkoutPath)
-			#expect(await betaWrite.wait() == .finished)
-			#expect(fixture.storage.draft(
-				for: URL(fileURLWithPath: beta.workspace.checkoutPath),
-				threadID: nil
-			) == "Accepted beta write")
 		}
+		else if change == "binding"
+		{
+			_ = try await fixture.manager.bindThread(
+				id: alpha.workspace.id,
+				threadID: "New durable binding"
+			)
+		}
+		gate.release(alpha.workspace.checkoutPath)
+		#expect(await alphaWrite.wait() == .finished)
+		await removal.value
+		#expect(betaWrite.completion == nil)
+		#expect(betaStore.model.lifecycle.cleanupReservation == nil)
+		#expect(fixture.storage.draft(
+			for: URL(fileURLWithPath: alpha.workspace.checkoutPath),
+			threadID: nil
+		) == "Accepted alpha write")
+		#expect(FileManager.default
+			.fileExists(atPath: alpha.workspace.checkoutPath) == (change != "clean"))
+		if change != "clean"
+		{
+			#expect(alphaStore.model.lifecycle.cleanupReservation == nil)
+			alphaStore.inputs.updateDraft("Editable after rejected cleanup")
+			#expect(alphaStore.currentSnapshot.draft == "Editable after rejected cleanup")
+			timing.mark("phase.8.begin")
+			_ = await draftHandle(alphaStore)?.wait()
+			timing.mark("phase.8.end")
+		}
+		gate.release(beta.workspace.checkoutPath)
+		#expect(await betaWrite.wait() == .finished)
+		#expect(fixture.storage.draft(
+			for: URL(fileURLWithPath: beta.workspace.checkoutPath),
+			threadID: nil
+		) == "Accepted beta write")
 	}
-
 	@Test func cleanupRefusesAnActiveOrDirtyOwnerAndRetainsTheRemovedBranch() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1751,28 +1777,30 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.inputs.connect()
 		let task = try await fixture.createTask("Cleanup")
 		task.state.inputs.updateDraft("Run cleanup task")
-		task.state.inputs.send()
-		try #require(await waitUntil
-		{
-			task.service.turnRequests.count == 1
-		})
+		try await submitFreshTasks([task])
 		await fixture.coordinator.removeCheckout(id: task.workspace.id)
 		#expect(FileManager.default.fileExists(atPath: task.workspace.checkoutPath))
 		task.service.complete(status: "completed")
 		let dirtyFile = URL(fileURLWithPath: task.workspace.checkoutPath).appendingPathComponent(
 			"keep.txt"
 		)
-		try "keep".write(
-			to: dirtyFile,
-			atomically: true,
-			encoding: .utf8
-		)
+		try await BackgroundTestWork.perform
+		{
+			try "keep".write(
+				to: dirtyFile,
+				atomically: true,
+				encoding: .utf8
+			)
+		}
 		await fixture.coordinator.removeCheckout(id: task.workspace.id)
 		#expect(try String(
 			contentsOf: dirtyFile,
 			encoding: .utf8
 		) == "keep")
-		try FileManager.default.removeItem(at: dirtyFile)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.removeItem(at: dirtyFile)
+		}
 		await fixture.coordinator.removeCheckout(id: task.workspace.id)
 		#expect(!FileManager.default.fileExists(atPath: task.workspace.checkoutPath))
 		#expect(fixture.coordinator.currentSnapshot.selectedTaskWorkspaceID == nil)
@@ -1791,6 +1819,11 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func restoredBoundTaskMustBeReconciledBeforeCleanupAndRunningHistoryBlocksRemoval()
 		async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1799,11 +1832,7 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.inputs.connect()
 		let task = try await fixture.createTask("Still running")
 		task.state.inputs.updateDraft("Run task")
-		task.state.inputs.send()
-		try #require(await waitUntil
-		{
-			task.service.turnRequests.count == 1
-		})
+		try await submitFreshTasks([task])
 		task.service.savedTurns = [task.service.turn]
 		fixture.coordinator.shutdown()
 		let restored = fixture.restoredCoordinator()
@@ -1817,7 +1846,7 @@ struct TaskWorkspaceCoordinatorTests
 		await restored.removeCheckout(id: task.workspace.id)
 		#expect(FileManager.default.fileExists(atPath: task.workspace.checkoutPath))
 		await restored.selectWorkspace(task.workspace.id)
-		try #require(await waitUntil
+		try #require(await waitForCoordinatorPredicate(restored)
 		{
 			restored.currentSnapshot.taskOutcomeUncertain
 		})
@@ -1829,6 +1858,11 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func failedStopCancelsTheQuitWaitWhilePreservingUnknownOutcomeAndOtherOwners(
 	) async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -1839,14 +1873,7 @@ struct TaskWorkspaceCoordinatorTests
 		let beta = try await fixture.createTask("Beta")
 		alpha.state.inputs.updateDraft("Run alpha")
 		beta.state.inputs.updateDraft("Run beta")
-		alpha.state.inputs.send()
-		beta.state.inputs.send()
-		try #require(
-			await waitUntil
-			{
-				alpha.service.turnRequests.count == 1 && beta.service.turnRequests.count == 1
-			}
-		)
+		try await submitFreshTasks([alpha, beta])
 		alpha.state.inputs.updateDraft("Recover alpha draft")
 		alpha.service.interruptError = AppServerError.protocolError("Synthetic stop timeout")
 		var canceledQuitCount = 0
@@ -1860,7 +1887,7 @@ struct TaskWorkspaceCoordinatorTests
 			completedQuitCount += 1
 		}
 		fixture.coordinator.stopAll()
-		try #require(await waitUntil
+		try #require(await waitForQuitPredicate(fixture.coordinator)
 		{
 			canceledQuitCount == 1
 		})
@@ -1874,6 +1901,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func quitWaitsForActualCommandExitAndEveryOwnersAcceptedDraftWrites() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let gate = LifecyclePersistenceGate()
 		let fixture = try await TaskExecutionFixture(persistenceGate: gate)
 		defer
@@ -2009,6 +2041,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func completedPersistenceFailureCancelsQuitUntilSuccessfulSupersedingWrite() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let gate = LifecyclePersistenceGate()
 		let fixture = try await TaskExecutionFixture(persistenceGate: gate)
 		defer
@@ -2087,6 +2124,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func unknownPreparationAfterNewChatStillRefusesNormalQuit() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -2094,6 +2136,11 @@ struct TaskWorkspaceCoordinatorTests
 		}
 		let store = fixture.sourceState.store
 		await store.inputs.connect()
+		// Connection acknowledgement does not include independent project-context IO.
+		await awaitWorkspaceSnapshot(store)
+		{
+			$0.canSend
+		}
 		fixture.sourceService.suspendThreadStart = true
 		store.inputs.updateDraft("Captured original request")
 		let submission = try #require(store.inputs.send())
@@ -2139,6 +2186,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func reentrantQuitReservationFailureNeverStopsOrQueuesALaterFreeze() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -2189,6 +2241,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func completingDuringQuitConfirmationDoesNotLeaveADeferredQuitWaiting() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -2197,11 +2254,7 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.inputs.connect()
 		let task = try await fixture.createTask("Fast completion")
 		task.state.inputs.updateDraft("Run task")
-		task.state.inputs.send()
-		try #require(await waitUntil
-		{
-			task.service.turnRequests.count == 1
-		})
+		try await submitFreshTasks([task])
 		let (quitRequest, approved) = await observedQuitOutcome(fixture.coordinator)
 		{
 			_ in
@@ -2226,6 +2279,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func interruptedRemovalOfALockedCheckoutCanBeReopenedAndRetriedSafely() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -2282,6 +2340,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func changingACheckoutBranchBlocksSteeringWithoutAffectingAnotherOwner() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -2292,21 +2355,14 @@ struct TaskWorkspaceCoordinatorTests
 		let beta = try await fixture.createTask("Beta")
 		alpha.state.inputs.updateDraft("Run alpha")
 		beta.state.inputs.updateDraft("Run beta")
-		alpha.state.inputs.send()
-		beta.state.inputs.send()
-		try #require(
-			await waitUntil
-			{
-				alpha.service.turnRequests.count == 1 && beta.service.turnRequests.count == 1
-			}
-		)
+		try await submitFreshTasks([alpha, beta])
 		_ = try await fixture.git(
 			["switch", "-c", "changed-owner"],
 			at: URL(fileURLWithPath: alpha.workspace.checkoutPath)
 		)
 		alpha.state.inputs.updateDraft("Do not redirect me")
 		alpha.state.inputs.steer("Do not redirect me")
-		try #require(await waitUntil
+		try #require(await waitForStorePredicate(alpha.state.store)
 		{
 			alpha.state.currentSnapshot.taskOutcomeUncertain
 		})
@@ -2316,6 +2372,7 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(beta.service.turnRequests.count == 1)
 	}
 
+	/// Waits for fresh tasks' submission acknowledgements, while their remote turns remain running.
 	private func submitFreshTasks(_ tasks: [TaskExecutionFixture.TaskOwner]) async throws
 	{
 		let timing = TestTiming.begin("scenario.submitFreshTasks")
@@ -2340,60 +2397,6 @@ struct TaskWorkspaceCoordinatorTests
 		{
 			try #require(task.service.turnRequests.count == 1)
 		}
-	}
-
-	private func waitForStorePredicate(
-		_ store: WorkspaceStateStore,
-		function: String = #function,
-		line: Int = #line,
-		until condition: @escaping @MainActor () -> Bool
-	) async -> Bool
-	{
-		let timing = TestTiming.begin(
-			"wait.snapshot",
-			detail: "\(function):\(line)"
-		)
-		defer
-		{
-			timing.end()
-		}
-		await awaitWorkspaceSnapshot(store)
-		{
-			_ in condition()
-		}
-		return condition()
-	}
-
-	private func waitForCoordinatorPredicate(
-		_ coordinator: TaskWorkspaceCoordinator,
-		function: String = #function,
-		line: Int = #line,
-		until condition: @escaping @MainActor () -> Bool
-	) async -> Bool
-	{
-		await waitForCoordinator(
-			coordinator,
-			function: function,
-			line: line,
-			until: condition
-		)
-		return condition()
-	}
-
-	private func waitForQuitPredicate(
-		_ coordinator: TaskWorkspaceCoordinator,
-		function: String = #function,
-		line: Int = #line,
-		until condition: @escaping @MainActor () -> Bool
-	) async -> Bool
-	{
-		await waitForQuitCallback(
-			coordinator,
-			function: function,
-			line: line,
-			until: condition
-		)
-		return condition()
 	}
 
 	private func draftHandle(_ store: WorkspaceStateStore) -> WorkspaceOperationHandle?
@@ -2527,16 +2530,57 @@ struct TaskWorkspaceCoordinatorTests
 		timing.mark("actor.resumed")
 	}
 
-	private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async -> Bool
+	private func waitForStorePredicate(
+		_ store: WorkspaceStateStore,
+		function: String = #function,
+		line: Int = #line,
+		until condition: @escaping @MainActor () -> Bool
+	) async -> Bool
 	{
-		for _ in 0 ..< 300
+		let timing = TestTiming.begin(
+			"wait.snapshot",
+			detail: "\(function):\(line)"
+		)
+		defer
 		{
-			if condition()
-			{
-				return true
-			}
-			try? await Task.sleep(for: .milliseconds(5))
+			timing.end()
 		}
+		await awaitWorkspaceSnapshot(store)
+		{
+			_ in condition()
+		}
+		return condition()
+	}
+
+	private func waitForCoordinatorPredicate(
+		_ coordinator: TaskWorkspaceCoordinator,
+		function: String = #function,
+		line: Int = #line,
+		until condition: @escaping @MainActor () -> Bool
+	) async -> Bool
+	{
+		await waitForCoordinator(
+			coordinator,
+			function: function,
+			line: line,
+			until: condition
+		)
+		return condition()
+	}
+
+	private func waitForQuitPredicate(
+		_ coordinator: TaskWorkspaceCoordinator,
+		function: String = #function,
+		line: Int = #line,
+		until condition: @escaping @MainActor () -> Bool
+	) async -> Bool
+	{
+		await waitForQuitCallback(
+			coordinator,
+			function: function,
+			line: line,
+			until: condition
+		)
 		return condition()
 	}
 }

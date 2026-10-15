@@ -593,6 +593,60 @@ struct GitWorktreeManagerTests
 		)
 	}
 
+	@Test("Cancelling incomplete creation preserves a branch advanced after its record was saved")
+	func incompleteCreationWithAdvancedBranchCannotBeCancelled() async throws
+	{
+		let fixture = try GitFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let workspace = try fixture.preparationRecord(taskID: "advanced-branch")
+		let recordFile = fixture.records.appendingPathComponent(
+			"\(workspace.id.uuidString.lowercased()).json"
+		)
+		let originalRecord = try Data(contentsOf: recordFile)
+		_ = try fixture.git(
+			["branch", workspace.branch, workspace.baseCommit],
+			at: fixture.source
+		)
+		// Advance the branch without a checkout so only the changed commit blocks cancellation.
+		let advancedCommit = try fixture.git(
+			[
+				"commit-tree",
+				"\(workspace.baseCommit)^{tree}",
+				"-p",
+				workspace.baseCommit,
+				"-m",
+				"Keep work after interrupted creation"
+			],
+			at: fixture.source
+		)
+		try #require(advancedCommit != workspace.baseCommit)
+		_ = try fixture.git(
+			["update-ref", "refs/heads/\(workspace.branch)", advancedCommit, workspace.baseCommit],
+			at: fixture.source
+		)
+		let manager = fixture.manager()
+		#expect(try await manager.recover().first?.kind == .creationInterrupted)
+		do
+		{
+			_ = try await manager.cancelIncompleteCreation(id: workspace.id)
+			Issue.record("Cancellation deleted a branch containing a later commit")
+		}
+		catch TaskWorkspaceError.unsafeBranchRemoval(let branch)
+		{
+			#expect(branch == workspace.branch)
+		}
+		#expect(try fixture.git(
+			["rev-parse", "refs/heads/\(workspace.branch)"],
+			at: fixture.source
+		) == advancedCommit)
+		#expect(try TaskWorkspaceStore(directory: fixture.records)
+			.load(id: workspace.id) == workspace)
+		#expect(try Data(contentsOf: recordFile) == originalRecord)
+	}
+
 	@Test("Two managers cannot assign two checkouts to one task")
 	func taskOwnershipIsUniqueAcrossManagers() async throws
 	{
