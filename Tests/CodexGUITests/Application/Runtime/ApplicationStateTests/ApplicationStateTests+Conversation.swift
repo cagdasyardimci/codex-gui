@@ -119,7 +119,7 @@ extension ApplicationStateTests
 
 	@Test func readingAnotherThreadsHistoryWhileOwnerCommandStreamsKeepsBothContents() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -233,7 +233,7 @@ extension ApplicationStateTests
 
 	@Test func uncertainSteerKeepsRunningTaskStoppableAcrossHistoryRefresh() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)

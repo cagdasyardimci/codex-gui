@@ -14,7 +14,7 @@ extension ApplicationStateTests
 		newerEdit: Bool
 	) async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -37,10 +37,8 @@ extension ApplicationStateTests
 		{
 			_ = await state.inputs.selectThread(service.thread.id)?.wait()
 		}
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		try #require(state.currentSnapshot.canSend)
 		service.suspendThreadStart = newChat
 		service.suspendTurnStart = !newChat
 		state.inputs.updateDraft("First line\n**Submitted**")
@@ -59,7 +57,7 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.entries.last?.body.contains("**Submitted**") == true)
 		#expect(state.store.model.composer.pendingSubmissions.values.first?.draft.context
 			== [attachment])
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			newChat ? service.pendingThreadStart != nil : service.pendingTurnStart != nil
 		})
@@ -107,10 +105,15 @@ extension ApplicationStateTests
 		}
 		service.suspendSteer = true
 		state.inputs.steer("Old instruction")
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingSteer != nil
 		})
+		let steeringContext = try #require(state.store.model.execution.pendingSteering)
+		// Capture before the terminal event retires the request.
+		// Its canceled handle can finish before the service returns.
+		let steeringTasks = state.store.executionTasks(for: steeringContext)
+		try #require(!steeringTasks.isEmpty)
 		let completed = makeTurn(
 			id: "turn-1",
 			status: "completed"
@@ -120,10 +123,8 @@ extension ApplicationStateTests
 			threadId: service.thread.id,
 			turn: completed
 		))
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		try #require(state.currentSnapshot.canSend)
 		service.nextTurn = makeTurn(
 			id: "turn-2",
 			status: "inProgress"
@@ -133,10 +134,12 @@ extension ApplicationStateTests
 		_ = await nextSubmission.wait()
 		service.pendingSteer?.resume(throwing: AppServerError.requestTimedOut("turn/steer"))
 		service.pendingSteer = nil
-		try #require(await waitUntil
+		for task in steeringTasks
 		{
-			state.pendingBackendOperationCount == 0
-		})
+			await task.value
+		}
+		_ = await awaitApplicationStateOperations(state)
+		try #require(state.pendingBackendOperationCount == 0)
 		#expect(state.currentSnapshot.activeExecutionState == .running)
 		#expect(state.currentSnapshot.canSteer)
 		#expect(!state.currentSnapshot.taskOutcomeUncertain)
@@ -145,7 +148,7 @@ extension ApplicationStateTests
 
 	@Test func acknowledgementPreservesDraftEditedAwayAndBackToSubmittedText() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -164,12 +167,13 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
+		try await awaitProjectContextLoad(state)
 		_ = await state.inputs.selectThread(service.thread.id)?.wait()
 		try #require(state.currentSnapshot.canSend)
 		service.suspendTurnStart = true
 		state.inputs.updateDraft("Submitted text")
 		let submission = try #require(state.inputs.send())
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingTurnStart != nil
 		})
@@ -188,7 +192,7 @@ extension ApplicationStateTests
 
 	@Test func unboundUncertainNewChatKeepsImageLeaseWithoutReattachingToLaterDraft() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -218,10 +222,8 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		try #require(state.currentSnapshot.canSend)
 		let attachment = ComposerContextItem(
 			kind: .image,
 			title: "Unbound",
@@ -231,7 +233,7 @@ extension ApplicationStateTests
 		state.inputs.addDraftContext(attachment)
 		service.suspendThreadStart = true
 		let submission = try #require(state.inputs.send())
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingThreadStart != nil
 		})
@@ -241,10 +243,8 @@ extension ApplicationStateTests
 		try #require(state.currentSnapshot.taskOutcomeUncertain)
 		state.inputs.removeDraftContext(id: attachment.id)
 		state.inputs.updateDraft("Later independent draft")
-		try #require(await waitUntil
-		{
-			state.pendingBackendOperationCount == 0
-		})
+		_ = await awaitApplicationStateOperations(state)
+		try #require(state.pendingBackendOperationCount == 0)
 		#expect(state.currentSnapshot.selectedThreadID == nil)
 		#expect(state.currentSnapshot.draft == "Later independent draft")
 		#expect(state.currentSnapshot.draftContext.isEmpty)
@@ -260,7 +260,7 @@ extension ApplicationStateTests
 
 	@Test func uncertainSubmissionRetainsRemovedOwnedImageUntilReconciliation() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -290,6 +290,7 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
+		try await awaitProjectContextLoad(state)
 		_ = await state.inputs.selectThread(service.thread.id)?.wait()
 		try #require(state.currentSnapshot.canSend)
 		let attachment = ComposerContextItem(
@@ -303,10 +304,8 @@ extension ApplicationStateTests
 		_ = await state.inputs.send()?.wait()
 		try #require(state.currentSnapshot.taskOutcomeUncertain)
 		state.inputs.removeDraftContext(id: attachment.id)
-		try #require(await waitUntil
-		{
-			state.pendingBackendOperationCount == 0
-		})
+		_ = await awaitApplicationStateOperations(state)
+		try #require(state.pendingBackendOperationCount == 0)
 		#expect(FileManager.default.fileExists(atPath: image.path))
 		#expect(storage.draftContext(
 			for: project,
@@ -314,10 +313,8 @@ extension ApplicationStateTests
 		).isEmpty)
 		service.startTurnError = nil
 		_ = await state.inputs.selectThread(service.thread.id)?.wait()
-		try #require(await waitUntil
-		{
-			state.pendingBackendOperationCount == 0
-		})
+		_ = await awaitApplicationStateOperations(state)
+		try #require(state.pendingBackendOperationCount == 0)
 		#expect(!state.currentSnapshot.taskOutcomeUncertain)
 		#expect(FileManager.default.fileExists(atPath: image.path))
 		#expect(state.currentSnapshot.reusableReferences == [attachment])
@@ -326,7 +323,7 @@ extension ApplicationStateTests
 
 	@Test func removingSubmittedImageWaitsForTurnAndSteeringAcknowledgement() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -356,10 +353,8 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 
 		func imageItem(_ title: String) throws -> ComposerContextItem
 		{
@@ -375,17 +370,20 @@ extension ApplicationStateTests
 		state.inputs.updateDraft("Inspect the screenshot")
 		state.inputs.addDraftContext(firstImage)
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingTurnStart != nil
 		})
 		state.inputs.removeDraftContext(id: firstImage.id)
 		#expect(FileManager.default.fileExists(atPath: try #require(firstImage.path)))
 		service.finishTurnStart(with: service.nextTurn)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.reusableReferences == [firstImage]
-		})
+		#expect(await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				state.currentSnapshot.reusableReferences == [firstImage]
+			}
+		))
 		#expect(FileManager.default.fileExists(atPath: try #require(firstImage.path)))
 		service.emit(.turnStarted(
 			threadId: service.thread.id,
@@ -398,7 +396,7 @@ extension ApplicationStateTests
 		state.inputs.updateDraft("Also inspect this")
 		state.inputs.addDraftContext(steeringImage)
 		state.inputs.steer("Also inspect this")
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingSteer != nil
 		})
@@ -406,17 +404,20 @@ extension ApplicationStateTests
 		#expect(FileManager.default.fileExists(atPath: try #require(steeringImage.path)))
 		service.finishPendingSteer(acknowledgedTurnID: service.nextTurn.id)
 		#expect(
-			await waitUntil
-			{
-				state.currentSnapshot.reusableReferences == [firstImage, steeringImage]
-			}
+			await awaitApplicationStateCondition(
+				state,
+				matching:
+				{
+					state.currentSnapshot.reusableReferences == [firstImage, steeringImage]
+				}
+			)
 		)
 		#expect(FileManager.default.fileExists(atPath: try #require(steeringImage.path)))
 	}
 
 	@Test func firstTurnAcknowledgementDoesNotClearAnotherNewChatDraft() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -438,10 +439,8 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		let firstItem = ComposerContextItem(
 			kind: .image,
 			title: "Initial",
@@ -450,7 +449,7 @@ extension ApplicationStateTests
 		state.inputs.updateDraft("Initial request")
 		state.inputs.addDraftContext(firstItem)
 		let submission = try #require(state.inputs.send())
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingTurnStart != nil
 		})
@@ -472,13 +471,12 @@ extension ApplicationStateTests
 		state.inputs.addDraftContext(laterItem)
 		service.finishTurnStart(with: service.nextTurn)
 		_ = await submission.wait()
-		#expect(await waitUntil
-		{
-			storage.draft(
-				for: project,
-				threadID: service.thread.id
-			).isEmpty
-		})
+		// Await the accepted write itself; a scheduler turn does not establish persistence.
+		try await state.store.awaitAcceptedPersistence()
+		#expect(storage.draft(
+			for: project,
+			threadID: service.thread.id
+		).isEmpty)
 		#expect(state.currentSnapshot.selectedThreadID == nil)
 		#expect(state.currentSnapshot.draft == "Later request")
 		#expect(state.currentSnapshot.draftContext == [laterItem])
@@ -499,7 +497,7 @@ extension ApplicationStateTests
 
 	@Test func contextDraftSurvivesUncertainSendAndCanBeReusedAfterAcknowledgement() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -520,10 +518,8 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		let imageItem = ComposerContextItem(
 			kind: .image,
 			title: "Screenshot",
@@ -533,10 +529,13 @@ extension ApplicationStateTests
 		state.inputs.addDraftContext(imageItem)
 		service.startTurnError = AppServerError.requestTimedOut("turn/start")
 		state.inputs.send()
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.executionState == .failed
-		})
+		#expect(await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				state.currentSnapshot.executionState == .failed
+			}
+		))
 		#expect(state.currentSnapshot.draft == "Inspect this")
 		#expect(state.currentSnapshot.draftContext == [imageItem])
 		#expect(service.sentInputRequests.count == 1)
@@ -545,10 +544,8 @@ extension ApplicationStateTests
 
 		service.startTurnError = nil
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		let retry = try #require(state.inputs.send())
 		#expect(await retry.wait() == .finished)
 		#expect(state.currentSnapshot.draftContext.isEmpty)
@@ -562,7 +559,7 @@ extension ApplicationStateTests
 
 	@Test func uncertainSendKeepsDraftAndBlocksResendUntilConversationIsRead() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -580,8 +577,9 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
+		try await awaitProjectContextLoad(state)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.readThreadCount == 1
 		})
@@ -589,10 +587,13 @@ extension ApplicationStateTests
 		state.inputs.updateDraft("Change README")
 		service.startTurnError = AppServerError.requestTimedOut("turn/start")
 		state.inputs.send()
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.executionState == .failed
-		})
+		#expect(await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				state.currentSnapshot.executionState == .failed
+			}
+		))
 		#expect(service.turnStartCount == 1)
 		#expect(state.currentSnapshot.draft == "Change README")
 		#expect(state.currentSnapshot.taskOutcomeUncertain)
@@ -633,10 +634,8 @@ extension ApplicationStateTests
 
 		service.readThreadError = nil
 		state.inputs.refreshThreads()
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		#expect(service.turnStartCount == 1)
 		#expect(state.currentSnapshot.draft == "Change README")
 		#expect(state.currentSnapshot.statusMessage?.contains("Review the saved draft") == true)
@@ -645,7 +644,7 @@ extension ApplicationStateTests
 
 	@Test func startupRestoresSelectedThreadAndItsDraftBeforeReconciliation() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -681,10 +680,8 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.draft == "unsent thread draft")
 		#expect(!state.currentSnapshot.canSend)
 		await state.inputs.connect()
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		#expect(service.readThreadCount == 1)
 		#expect(state.currentSnapshot.draft == "unsent thread draft")
 
@@ -699,7 +696,7 @@ extension ApplicationStateTests
 
 	@Test func lateTurnStartAfterDisconnectDoesNotClearDraftOrResumeTask() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -719,17 +716,18 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Write a change")
 		let submission = try #require(state.inputs.send())
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingTurnStart != nil
 		})
 
+		// The disconnect retires the handle before a cancellation-ignoring mock returns.
+		let submissionTasks = state.store.executionTasks(for: submission.context)
+		try #require(!submissionTasks.isEmpty)
 		service.emitDisconnect("Backend exited.")
 		#expect(state.currentSnapshot.executionState == .disconnected)
 		#expect(state.currentSnapshot.draft == "Write a change")
@@ -739,6 +737,10 @@ extension ApplicationStateTests
 			status: "inProgress"
 		))
 		_ = await submission.wait()
+		for task in submissionTasks
+		{
+			await task.value
+		}
 		#expect(state.currentSnapshot.executionState == .disconnected)
 		#expect(state.currentSnapshot.draft == "Write a change")
 		state.inputs.send()
@@ -747,7 +749,7 @@ extension ApplicationStateTests
 
 	@Test func sendIncludesOnlySelectedContextAndInvokesCurrentSkill() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -785,10 +787,13 @@ extension ApplicationStateTests
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
 		#expect(
-			await waitUntil
-			{
-				state.currentSnapshot.canSend && state.currentSnapshot.skillCatalog != nil
-			}
+			await awaitApplicationStateCondition(
+				state,
+				matching:
+				{
+					state.currentSnapshot.canSend && state.currentSnapshot.skillCatalog != nil
+				}
+			)
 		)
 		var context = ProjectContext()
 		context.items = [
@@ -817,7 +822,7 @@ extension ApplicationStateTests
 		state.inputs.updateProjectContext(context)
 		state.inputs.updateDraft("Check this")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.sentTurnRequests.count == 1
 		})

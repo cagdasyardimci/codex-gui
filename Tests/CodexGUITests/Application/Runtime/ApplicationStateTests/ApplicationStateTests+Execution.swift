@@ -7,7 +7,7 @@ extension ApplicationStateTests
 {
 	@Test func stopBeforeThreadPreparationCancelsWithoutStartingTurn() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -25,14 +25,12 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		try #require(state.currentSnapshot.canSend)
 		service.suspendThreadStart = true
 		state.inputs.updateDraft("Do not run this")
 		let submission = try #require(state.inputs.send())
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingThreadStart != nil
 		})
@@ -124,10 +122,14 @@ extension ApplicationStateTests
 			threadId: service.thread.id,
 			turn: unresolved
 		))
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingRead != nil
 		})
+		let olderRead = try #require(state.store.model.conversations.pendingReads.values.first)
+		// Fresh recovery can cancel this read locally before the mock's old response returns.
+		let olderReadTasks = state.store.executionTasks(for: olderRead.context)
+		try #require(!olderReadTasks.isEmpty)
 		#expect(state.isTaskActive)
 		let confirmed = makeTurn(
 			id: "turn-1",
@@ -142,19 +144,24 @@ extension ApplicationStateTests
 		)
 		service.savedTurns = [confirmed]
 		state.inputs.refreshThreads()
-		try #require(await waitUntil
-		{
-			!state.isTaskActive && state.currentSnapshot.canSend
-		})
+		try #require(await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				!state.isTaskActive && state.currentSnapshot.canSend
+			}
+		))
 		service.finishPendingRead(with: ThreadDetail(
 			summary: service.thread,
 			turns: [unresolved],
 			nextTurnsCursor: nil
 		))
-		try #require(await waitUntil
+		for task in olderReadTasks
 		{
-			state.pendingBackendOperationCount == 0
-		})
+			await task.value
+		}
+		_ = await awaitApplicationStateOperations(state)
+		try #require(state.pendingBackendOperationCount == 0)
 		#expect(!state.isTaskActive)
 		#expect(!state.currentSnapshot.taskOutcomeUncertain)
 		try await state.store.awaitAcceptedPersistence()
@@ -165,7 +172,7 @@ extension ApplicationStateTests
 
 	@Test func stopWaitsForTurnIDAndCompletionBeforeReportingStopped() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -184,17 +191,21 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		#expect(await waitUntil
+		try await awaitProjectContextLoad(state)
+		#expect(await service.awaitReadiness
 		{
 			service.threadListCount > 0
 		})
 		state.inputs.updateDraft("Change a file")
 
-		state.inputs.send()
-		#expect(await waitUntil
+		let submission = try #require(state.inputs.send())
+		#expect(await service.awaitReadiness
 		{
 			service.pendingTurnStart != nil
 		})
+		// Stop can retire the submission handle while the suspended start still has to return.
+		let submissionTasks = state.store.executionTasks(for: submission.context)
+		try #require(!submissionTasks.isEmpty)
 		state.inputs.stop()
 
 		#expect(state.currentSnapshot.executionState == .stopping)
@@ -208,7 +219,7 @@ extension ApplicationStateTests
 			threadId: service.thread.id,
 			turn: turn
 		))
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.interruptedTurnIDs == ["turn-1"]
 		})
@@ -228,11 +239,21 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.executionState == .stopped)
 		#expect(state.currentSnapshot.statusMessage == "Agent interrupted.")
 		#expect(service.interruptedTurnIDs == ["turn-1"])
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.threadListCount > listsBeforeCompletion
 		})
-		try await Task.sleep(for: .milliseconds(20))
+		for task in submissionTasks
+		{
+			await task.value
+		}
+		_ = await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				state.currentSnapshot.canSend
+			}
+		)
 		#expect(state.currentSnapshot.statusMessage == "Agent interrupted.")
 		#expect(state.currentSnapshot.executionState == .stopped)
 		#expect(state.currentSnapshot.canSend)
@@ -240,7 +261,7 @@ extension ApplicationStateTests
 
 	@Test func completedTurnAfterStopRequestKeepsCompletedOutcome() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -259,13 +280,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Finish quickly")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -289,7 +308,7 @@ extension ApplicationStateTests
 
 	@Test func multipleInteractionsRemainVisibleUntilEachIsResolved() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -308,13 +327,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Run a task that asks for access")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -389,7 +406,7 @@ extension ApplicationStateTests
 
 	@Test func browsingAnotherThreadPreservesOwnerEventsApprovalAndStopTarget() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -415,13 +432,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Make a change")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -431,10 +446,13 @@ extension ApplicationStateTests
 		))
 
 		state.inputs.selectThread("thread-2")
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.selectedThreadID == "thread-2"
-		})
+		#expect(await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				state.currentSnapshot.selectedThreadID == "thread-2"
+			}
+		))
 		state.inputs.updateDraft("Draft for B")
 		service.emit(
 			.agentMessageDelta(
@@ -467,10 +485,8 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.pendingInteractions.isEmpty)
 		#expect(state.currentSnapshot.entries.isEmpty)
 		#expect(state.currentSnapshot.diff.isEmpty)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		#expect(service.turnStartCount == 1)
 
 		state.inputs.setArchivedFilter(true)
@@ -495,7 +511,7 @@ extension ApplicationStateTests
 			conversation: ownerConversation,
 			capturedOwner: capturedOwner
 		)
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.interruptedTurnIDs == ["turn-1"]
 		})
@@ -515,12 +531,15 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.statusMessage == "Agent interrupted.")
 		state.inputs.selectThread("thread-2")
 		#expect(
-			await waitUntil
-			{
-				state.currentSnapshot.selectedThreadID == "thread-2"
-					&& state.currentSnapshot.statusMessage == nil
-					&& state.currentSnapshot.canSend
-			}
+			await awaitApplicationStateCondition(
+				state,
+				matching:
+				{
+					state.currentSnapshot.selectedThreadID == "thread-2"
+						&& state.currentSnapshot.statusMessage == nil
+						&& state.currentSnapshot.canSend
+				}
+			)
 		)
 		state.inputs.selectThread(service.thread.id)
 		#expect(state.currentSnapshot.statusMessage == "Agent interrupted.")
@@ -528,7 +547,7 @@ extension ApplicationStateTests
 
 	@Test func staleEventsAndInteractionsCannotChangeNewTurn() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -547,13 +566,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("First")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -577,7 +594,7 @@ extension ApplicationStateTests
 		)
 		state.inputs.updateDraft("Second")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 2
 		})
@@ -625,7 +642,7 @@ extension ApplicationStateTests
 
 	@Test func reconnectReconcilesOwnerWhileAnotherThreadIsVisible() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -651,13 +668,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Do work")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -666,10 +681,13 @@ extension ApplicationStateTests
 			turn: service.nextTurn
 		))
 		state.inputs.selectThread("thread-2")
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.selectedThreadID == "thread-2"
-		})
+		#expect(await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				state.currentSnapshot.selectedThreadID == "thread-2"
+			}
+		))
 		service.emitDisconnect("Backend exited.")
 		service.savedTurns = [makeTurn(
 			id: "turn-1",
@@ -678,11 +696,16 @@ extension ApplicationStateTests
 		let readsBeforeReconnect = service.readThreadIDs.count
 		await state.inputs.connect()
 		#expect(service.readThreadIDs.dropFirst(readsBeforeReconnect).contains(service.thread.id))
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-				&& !state.store.model.execution(for: .thread(service.thread.id)).needsReconciliation
-		})
+		#expect(await awaitApplicationStateCondition(
+			state,
+			service: service,
+			matching:
+			{
+				state.currentSnapshot.canSend
+					&& !state.store.model.execution(for: .thread(service.thread.id))
+					.needsReconciliation
+			}
+		))
 		#expect(state.currentSnapshot.selectedThreadID == "thread-2")
 		#expect(state.currentSnapshot.activeThreadID == nil)
 		#expect(state.currentSnapshot.executionState == .ready)
@@ -693,7 +716,7 @@ extension ApplicationStateTests
 
 	@Test func acceptedSteerAfterCompletionKeepsTerminalStatus() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -713,13 +736,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Initial request")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -729,7 +750,7 @@ extension ApplicationStateTests
 		))
 		state.inputs.updateDraft("Change direction")
 		state.inputs.steer("Change direction")
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingSteer != nil
 		})
@@ -743,10 +764,13 @@ extension ApplicationStateTests
 			)
 		)
 		service.finishPendingSteer(acknowledgedTurnID: "turn-1")
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.draft.isEmpty
-		})
+		try #require(await awaitApplicationStateCondition(
+			state,
+			matching:
+			{
+				state.currentSnapshot.draft.isEmpty
+			}
+		))
 		#expect(state.currentSnapshot.executionState == .completed)
 		#expect(state.currentSnapshot.statusMessage == "Task completed.")
 		#expect(service.steeredTurns.map(\.turnID) == ["turn-1"])
@@ -807,11 +831,14 @@ extension ApplicationStateTests
 			try? FileManager.default.removeItem(at: project)
 		}
 		service.suspendInterrupt = true
-		state.inputs.stop()
-		try #require(await waitUntil
+		let stop = try #require(state.inputs.stop())
+		try #require(await service.awaitReadiness
 		{
 			service.pendingInterrupt != nil
 		})
+		// Capture while the obsolete stop still exists, before the terminal event retires it.
+		let stopTasks = state.store.executionTasks(for: stop.context)
+		try #require(!stopTasks.isEmpty)
 		let finished = makeTurn(
 			id: "turn-1",
 			status: "interrupted"
@@ -821,23 +848,28 @@ extension ApplicationStateTests
 			threadId: service.thread.id,
 			turn: finished
 		))
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		try #require(state.currentSnapshot.canSend)
 		service.nextTurn = makeTurn(
 			id: "turn-2",
 			status: "inProgress"
 		)
 		state.inputs.updateDraft("Another request")
 		state.inputs.send()
-		try #require(await waitUntil
-		{
-			service.turnStartCount == 2 && state.currentSnapshot.canSteer
-		})
+		try #require(await awaitApplicationStateCondition(
+			state,
+			service: service,
+			matching:
+			{
+				service.turnStartCount == 2 && state.currentSnapshot.canSteer
+			}
+		))
 		service.pendingInterrupt?.resume(throwing: AppServerError.requestTimedOut("turn/interrupt"))
 		service.pendingInterrupt = nil
-		try await Task.sleep(for: .milliseconds(15))
+		for task in stopTasks
+		{
+			await task.value
+		}
 		#expect(state.currentSnapshot.executionState == .running)
 		#expect(state.currentSnapshot.canSteer)
 		#expect(!state.currentSnapshot.taskOutcomeUncertain)

@@ -5,6 +5,26 @@ import Testing
 
 extension ApplicationStateTests
 {
+	/// Opening a checkout starts context IO independently of connection and thread selection.
+	func awaitProjectContextLoad(_ state: WorkspaceTestFixture) async throws
+	{
+		// Reconnection can replace a load, so await current readiness rather than a retired handle.
+		await awaitWorkspaceSnapshot(state.store)
+		{
+			_ in state.store.model.contextNavigation.pendingContextLoad == nil
+		}
+		try #require(state.store.model.contextNavigation.pendingContextLoad == nil)
+	}
+
+	/// Usability is published after independent context and conversation initialization.
+	func awaitSubmissionReadiness(_ state: WorkspaceTestFixture) async
+	{
+		await awaitWorkspaceSnapshot(state.store)
+		{
+			$0.canSend
+		}
+	}
+
 	func contextStore(
 		model: WorkspaceModel,
 		service: MockCodexService
@@ -44,7 +64,7 @@ extension ApplicationStateTests
 	) async throws
 		-> (WorkspaceTestFixture, MockCodexService, URL)
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		let service = MockCodexService()
 		let state = WorkspaceTestFixture(
 			server: service,
@@ -54,18 +74,21 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
+		try await awaitProjectContextLoad(state)
 		state.inputs.selectThread(service.thread.id)
-		try #require(await waitUntil
+		await awaitWorkspaceSnapshot(state.store)
 		{
-			state.currentSnapshot.canSend
-		})
+			$0.canSend
+		}
+		try #require(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Run request")
 		let submission = try #require(state.inputs.send())
 		_ = await submission.wait()
-		try #require(await waitUntil
+		await awaitWorkspaceSnapshot(state.store)
 		{
-			state.currentSnapshot.canSteer
-		})
+			$0.canSteer
+		}
+		try #require(state.currentSnapshot.canSteer)
 		return (state, service, project)
 	}
 
@@ -94,20 +117,24 @@ extension ApplicationStateTests
 		)
 	}
 
-	func makeProject() throws -> URL
+	nonisolated func makeProject() async throws -> URL
 	{
-		let project = FileManager.default.temporaryDirectory.appendingPathComponent(
-			"CodexGUIStateTests-\(UUID().uuidString)",
-			isDirectory: true
-		)
-		try FileManager.default.createDirectory(
-			at: project.appendingPathComponent(
-				".git",
+		// Checkout preparation performs independent file IO; it does not need the store's actor.
+		try await BackgroundTestWork.perform
+		{
+			let project = FileManager.default.temporaryDirectory.appendingPathComponent(
+				"CodexGUIStateTests-\(UUID().uuidString)",
 				isDirectory: true
-			),
-			withIntermediateDirectories: true
-		)
-		return project
+			)
+			try FileManager.default.createDirectory(
+				at: project.appendingPathComponent(
+					".git",
+					isDirectory: true
+				),
+				withIntermediateDirectories: true
+			)
+			return project
+		}
 	}
 
 	func makeTurn(
@@ -119,6 +146,112 @@ extension ApplicationStateTests
 		CodexTurn(json: ["id": id, "status": status, "items": items])!
 	}
 
+	/// Wait only on the fixture that can satisfy this condition; no scheduling budget is involved.
+	func awaitApplicationStateCondition(
+		_ state: WorkspaceTestFixture,
+		service: MockCodexService? = nil,
+		matching condition: @escaping @MainActor () -> Bool
+	) async -> Bool
+	{
+		guard let service
+		else
+		{
+			await awaitWorkspaceSnapshot(state.store)
+			{
+				_ in condition()
+			}
+			return condition()
+		}
+		var storeObservation: UUID?
+		var serviceObservation: UUID?
+		let stream = AsyncStream<Void>
+		{
+			continuation in
+			let check: @MainActor () -> Void =
+			{
+				guard condition()
+				else
+				{
+					return
+				}
+				continuation.yield(())
+				continuation.finish()
+			}
+			storeObservation = state.store.observe
+			{
+				_ in check()
+			}
+			// A mock continuation can be installed after the store's last publication.
+			serviceObservation = service.observeReadiness(check)
+		}
+		for await _ in stream
+		{
+			break
+		}
+		if let storeObservation
+		{
+			state.store.removeObserver(storeObservation)
+		}
+		if let serviceObservation
+		{
+			service.removeReadinessObserver(serviceObservation)
+		}
+		return condition()
+	}
+
+	/// Each completed effect can accept follow-up work before returning to its caller.
+	func awaitApplicationStateOperations(_ state: WorkspaceTestFixture) async -> Bool
+	{
+		while state.pendingBackendOperationCount > 0
+		{
+			let tasks = state.store.executionTasks()
+			guard !tasks.isEmpty, !Task.isCancelled
+			else
+			{
+				return false
+			}
+			for task in tasks
+			{
+				await task.value
+			}
+		}
+		return state.pendingBackendOperationCount == 0
+	}
+
+	func awaitPublicationGateCondition(
+		_ gate: PublicationGate,
+		matching condition: @escaping @MainActor () -> Bool
+	) async -> Bool
+	{
+		let previous = gate.onWaitersChanged
+		let stream = AsyncStream<Void>
+		{
+			continuation in
+			let check: @MainActor () -> Void =
+			{
+				guard condition()
+				else
+				{
+					return
+				}
+				continuation.yield(())
+				continuation.finish()
+			}
+			gate.onWaitersChanged =
+			{
+				previous?()
+				check()
+			}
+			check()
+		}
+		for await _ in stream
+		{
+			break
+		}
+		// AsyncStream iteration terminates on cancellation as well as successful readiness.
+		gate.onWaitersChanged = previous
+		return condition()
+	}
 	func waitUntil(_ condition: @escaping @MainActor () -> Bool) async -> Bool
 	{
 		for _ in 0 ..< 200
@@ -131,4 +264,5 @@ extension ApplicationStateTests
 		}
 		return condition()
 	}
+
 }

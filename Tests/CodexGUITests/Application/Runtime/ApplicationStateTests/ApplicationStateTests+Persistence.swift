@@ -162,7 +162,7 @@ extension ApplicationStateTests
 			commandRevision: 0,
 			purpose: .search
 		))))
-		try #require(await waitUntil
+		try #require(await awaitPublicationGateCondition(gate)
 		{
 			gate.isWaiting
 		})
@@ -199,7 +199,7 @@ extension ApplicationStateTests
 	@Test func pendingAttachmentWriteRetainsImageWhileAnotherStoreRemovesItsLastSavedReference(
 	) async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -299,7 +299,7 @@ extension ApplicationStateTests
 			item: attachment,
 			revision: 1
 		)))
-		try #require(await waitUntil
+		try #require(await awaitPublicationGateCondition(gate)
 		{
 			gate.isWaiting
 		})
@@ -368,7 +368,7 @@ extension ApplicationStateTests
 			text: "first",
 			revision: 1
 		)))
-		try #require(await waitUntil
+		try #require(await awaitPublicationGateCondition(gate)
 		{
 			gate.isWaiting
 		})
@@ -472,7 +472,7 @@ extension ApplicationStateTests
 			context,
 			.succeeded(prepared)
 		)))
-		try #require(await waitUntil
+		try #require(await awaitPublicationGateCondition(gate)
 		{
 			gate.isWaiting
 		})

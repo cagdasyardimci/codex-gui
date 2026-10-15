@@ -7,7 +7,7 @@ extension ApplicationStateTests
 {
 	@Test func submissionCapturesPreferencesBeforeSuspendedThreadPreparation() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -31,10 +31,8 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		try #require(state.currentSnapshot.canSend)
 		state.inputs.selectModel("captured-model")
 		state.inputs.selectEffort("medium")
 		state.inputs.selectApprovalMode(.approveForMe)
@@ -43,7 +41,7 @@ extension ApplicationStateTests
 		state.inputs.updateDraft("Captured request")
 		service.suspendThreadStart = true
 		let submission = try #require(state.inputs.send())
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingThreadStart != nil
 		})
@@ -72,7 +70,7 @@ extension ApplicationStateTests
 
 	@Test func unavailableSavedModelAndEffortBlockSendUntilExplicitChoice() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -103,10 +101,9 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.preferenceWarning != "Project context is loading."
-		})
+		// Context IO must finish before asserting the saved model warning.
+		// Its completion has no scheduling deadline.
+		try await awaitProjectContextLoad(state)
 
 		#expect(state.currentSnapshot.selectedModelID == "old-model")
 		#expect(state.currentSnapshot.selectedEffort == "high")
@@ -131,7 +128,7 @@ extension ApplicationStateTests
 
 	@Test func failedModelListRemainsVisibleAndBlocksSendUntilReconnect() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -150,6 +147,7 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
+		try await awaitProjectContextLoad(state)
 
 		#expect(state.currentSnapshot.preferenceWarning?
 			.contains("temporary model failure") == true)
@@ -159,14 +157,15 @@ extension ApplicationStateTests
 
 		service.modelsError = nil
 		await state.inputs.connect()
+		try await awaitProjectContextLoad(state)
 		#expect(state.currentSnapshot.preferenceWarning == nil)
 		#expect(state.currentSnapshot.canSend)
 	}
 
 	@Test func projectModelPreferenceRestoresAfterProjectSwitch() async throws
 	{
-		let first = try makeProject()
-		let second = try makeProject()
+		let first = try await makeProject()
+		let second = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: first)
@@ -225,7 +224,7 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.selectedEffort == "low")
 		service.configureCheckout(first)
 		state.inputs.openProject(first)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.projectContext.modelPreference?.effort == "high"
 		})

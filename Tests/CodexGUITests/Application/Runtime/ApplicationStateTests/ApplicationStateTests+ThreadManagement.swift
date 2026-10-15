@@ -7,7 +7,7 @@ extension ApplicationStateTests
 {
 	@Test func renamingSelectedThreadCallsServiceAndReleasesManagementLock() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -46,7 +46,7 @@ extension ApplicationStateTests
 
 	@Test func archiveClearsSelectionButKeepsDraftAndUnarchiveReturnsToActiveList() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)

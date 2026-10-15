@@ -8,7 +8,7 @@ extension ApplicationStateTests
 	@Test(arguments: [false, true])
 	func selectingFirstProjectPreservesPendingSourceTransport(afterVersion: Bool) async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -432,7 +432,7 @@ extension ApplicationStateTests
 
 	@Test func staleReadFromEarlierSelectionCannotReplaceReturnedConversation() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -505,7 +505,7 @@ extension ApplicationStateTests
 
 	@Test func selectionLoadBlocksSendAfterAnotherTaskCompletes() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -586,7 +586,7 @@ extension ApplicationStateTests
 
 	@Test func cleanReconnectRetriesSelectedHistoryAndClearsFinishedOwner() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -686,7 +686,7 @@ extension ApplicationStateTests
 
 	@Test func bookmarkJumpLoadsOlderPageAndReportsMissingTarget() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -792,7 +792,7 @@ extension ApplicationStateTests
 
 	@Test func messageSearchLoadsAnotherListedConversationAndUpdatesScope() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -876,7 +876,7 @@ extension ApplicationStateTests
 		let (state, service, project) = try await makeRunningState(
 			defaults: defaultsFixture.defaults
 		)
-		let otherProject = try makeProject()
+		let otherProject = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -916,7 +916,7 @@ extension ApplicationStateTests
 
 	@Test func repeatedEarlierPageClicksApplyOnlyOneCopy() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -976,7 +976,7 @@ extension ApplicationStateTests
 	{
 		for searchFirst in [false, true]
 		{
-			let project = try makeProject()
+			let project = try await makeProject()
 			defer
 			{
 				try? FileManager.default.removeItem(at: project)
@@ -1054,7 +1054,7 @@ extension ApplicationStateTests
 	{
 		for jumpFirst in [false, true]
 		{
-			let project = try makeProject()
+			let project = try await makeProject()
 			defer
 			{
 				try? FileManager.default.removeItem(at: project)
@@ -1133,8 +1133,8 @@ extension ApplicationStateTests
 	{
 		for reconnect in [false, true]
 		{
-			let project = try makeProject()
-			let otherProject = try makeProject()
+			let project = try await makeProject()
+			let otherProject = try await makeProject()
 			defer
 			{
 				try? FileManager.default.removeItem(at: project)
@@ -1242,7 +1242,7 @@ extension ApplicationStateTests
 	{
 		for obsoleteFirst in [false, true]
 		{
-			let project = try makeProject()
+			let project = try await makeProject()
 			defer
 			{
 				try? FileManager.default.removeItem(at: project)

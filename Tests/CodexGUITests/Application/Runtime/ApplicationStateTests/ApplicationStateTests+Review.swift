@@ -151,7 +151,7 @@ extension ApplicationStateTests
 
 	@Test func offscreenReviewReadRetiresAndCachedMarkerSurvivesReturning() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -397,7 +397,7 @@ extension ApplicationStateTests
 
 	@Test func aTurnWithoutChangesClearsThePreviousTurnDiff() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -474,7 +474,7 @@ extension ApplicationStateTests
 
 	@Test func proposedAndDeniedChangesStayOutOfReviewIncludingSavedHistory() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -580,7 +580,7 @@ extension ApplicationStateTests
 
 	@Test func historicalReviewKeepsTurnOriginAndInvalidatesChangedMarkers() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -709,7 +709,7 @@ extension ApplicationStateTests
 	@Test func reportedLiveEditMakesEarlierValidationOutdatedWhileViewingAnotherThread()
 		async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
@@ -801,7 +801,7 @@ extension ApplicationStateTests
 
 	@Test func reviewRequestSteersOnlyTheViewedOwnerWithSourceIdentity() async throws
 	{
-		let project = try makeProject()
+		let project = try await makeProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: project)
