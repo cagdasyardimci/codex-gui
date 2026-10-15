@@ -196,9 +196,12 @@ struct ConversationWindowIntegrationTests
 			conversation.composerSurface.bounds,
 			from: conversation.composerSurface
 		)
-		// At 2x these edges are the reference screenshot's 777 and 2249 pixels.
-		#expect(abs(composer.minX - 388.5) < 1)
-		#expect(abs(composer.maxX - 1124.5) < 1)
+		let conversationFrame = chrome.view.convert(
+			conversation.view.bounds,
+			from: conversation.view
+		)
+		#expect(abs(composer.width - ConversationFlowLayout.maximumContentWidth) < 1)
+		#expect(abs(composer.midX - conversationFrame.midX) < 0.5)
 		for index in conversation.displayedRows.indices
 		{
 			let attributes = try #require(conversation.collectionView.layoutAttributesForItem(
@@ -317,10 +320,8 @@ struct ConversationWindowIntegrationTests
 		}
 		inspector.showToolsPane()
 		panes.toggleToolsExpanded()
-		for _ in 0 ..< 100 where panes.isAnimatingToolsExpansion
-		{
-			try await Task.sleep(for: .milliseconds(10))
-		}
+		// Completion belongs to the transition, not a fixed polling budget.
+		await panes.waitForToolsTransition()
 		try #require(!panes.isAnimatingToolsExpansion)
 		try #require(findButton(
 			in: inspector.toolsTabs.tabBarView,
