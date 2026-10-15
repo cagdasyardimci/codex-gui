@@ -55,6 +55,10 @@ Use the shared color catalogue for semantic color roles. Follow [AppKit conventi
 
 Use the [feature map](../Sources/CodexGUI/Features/README.md) for other presentation owners. Shared text painting is owned by [DesktopTextRendering](../Sources/CodexGUI/App/DesktopTextRendering.swift); composer reference artwork is owned by [ComposerFooterIcons](../Sources/CodexGUI/Features/Conversation/Composer/ComposerFooterIcons.swift).
 
+Composer and project preference controls share effort labels through
+[ModelPreferencePresentation](../Sources/CodexGUI/Features/Shared/ModelPreferencePresentation.swift).
+Their native controls and selection lifecycles remain with their features.
+
 ## Native adaptation rationale
 
 Each main window has its own toolbar identifier because its tools-pane composition

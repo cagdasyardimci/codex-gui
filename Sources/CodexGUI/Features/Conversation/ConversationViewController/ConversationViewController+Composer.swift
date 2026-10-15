@@ -307,7 +307,7 @@ extension ConversationViewController
 		let defaultModel = snapshot.selectedModelID == nil
 			? snapshot.models.first(where: \.isDefault) : nil
 		let selectedModel = requestedModel ?? defaultModel
-		let effortTitle = ModelEffortPopoverView.effortTitle(
+		let effortTitle = ModelPreferencePresentation.effortTitle(
 			snapshot.selectedEffort ?? selectedModel?.defaultReasoningEffort
 		)
 		latestModelEffortSummary = selectedModel.map

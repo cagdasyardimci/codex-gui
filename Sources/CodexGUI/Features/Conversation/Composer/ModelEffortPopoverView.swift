@@ -366,7 +366,7 @@ final class ModelEffortPopoverView: NSViewController
 
 	private func updateEffortControls()
 	{
-		effortLabel.stringValue = Self.effortTitle(effectiveEffort)
+		effortLabel.stringValue = ModelPreferencePresentation.effortTitle(effectiveEffort)
 		effortLabel.textColor = effectiveEffort == "ultra" ? .systemPurple : EffortPopoverStyle.blue
 		effortLabel.setAccessibilityValue(effortLabel.stringValue)
 
@@ -448,25 +448,6 @@ final class ModelEffortPopoverView: NSViewController
 		fastButton.toolTip = fastMode ? "Disable fast mode" : "Enable fast mode"
 		fastButton.setAccessibilityLabel(fastButton.toolTip)
 		fastButton.setAccessibilityValue(fastMode ? "On" : "Off")
-	}
-
-	static func effortTitle(_ effort: String?) -> String
-	{
-		guard let effort
-		else
-		{
-			return "Default effort"
-		}
-		switch effort.lowercased()
-		{
-		case "low": return "Light"
-		case "medium": return "Medium"
-		case "high": return "High"
-		case "xhigh": return "Extra High"
-		case "max": return "Max"
-		case "ultra": return "Ultra"
-		default: return effort.capitalized
-		}
 	}
 
 	private static func effortOrder(_ effort: String) -> Int
