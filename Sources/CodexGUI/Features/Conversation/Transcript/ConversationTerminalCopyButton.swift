@@ -8,7 +8,8 @@ final class ConversationTerminalCopyButton: NSButton
 	private var copyImage: NSImage?
 	private var isKeyboardFocused = false
 	private var tooltipText: String?
-	private var tooltipTask: Task<Void, Never>?
+	// Expose this operation for lifecycle waits, including completion after cancellation.
+	private(set) var tooltipTask: Task<Void, Never>?
 	private var tooltipPanel: NSPanel?
 	private(set) var isHovered = false
 

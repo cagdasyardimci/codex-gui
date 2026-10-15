@@ -126,102 +126,138 @@ struct TranscriptLayerAppearanceTests
 			#expect(item.view.accessibilityLabel() == "Edited a.swift")
 			#expect(button.layer?.cornerRadius == 10 && button.layer?.borderWidth == 1)
 		}
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(actions == 1)
 	}
 
-	@Test func openCodeTooltipTracksOwnerAppearanceAndKeepsHoverFocusAndGeometry() async throws
+	// Native event polling and transient panels share the application event/window state.
+	@Test func openCodeTooltipTracksOwnerAppearanceAndKeepsHoverFocusAndGeometry(
+	) async throws
 	{
-		_ = NSApplication.shared
-		let body = "```text\nlet value = 1\n```"
-		let item = ConversationCollectionItem()
-		item.configure(
-			ConversationEntry(
-				id: "turn:reply",
-				kind: .agent,
-				title: "Codex",
-				body: body
-			),
-			content: PreparedConversationContent(ConversationContentParser.parse(
-				body,
-				markdown: true
-			)),
-			expanded: true,
-			onToggle:
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
 			{
+				native.end()
 			}
-		)
-		item.view.setFrameSize(NSSize(
-			width: 480,
-			height: 240
-		))
-		let window = makeWindow(item.view)
-		defer
-		{
-			detach(window)
-		}
-		window.appearance = try #require(NSAppearance(named: .aqua))
-		item.view.layoutSubtreeIfNeeded()
-		let button = try #require(descendants(item.view).compactMap
-		{
-			$0 as? NSButton
-		}.first
-		{
-			$0.accessibilityLabel() == "Copy code block 1"
-		})
-		#expect(window.makeFirstResponder(button))
-		button.mouseEntered(with: try hoverEvent(.mouseEntered))
-		defer
-		{
-			if let event = try? hoverEvent(.mouseExited)
+			native.mark("application.shared.begin")
+			_ = NSApplication.shared
+			native.mark("application.shared.end")
+			let body = "```text\nlet value = 1\n```"
+			native.mark("item.init.begin")
+			let item = ConversationCollectionItem()
+			native.mark("item.init.end")
+			native.mark("item.configure.begin")
+			item.configure(
+				ConversationEntry(
+					id: "turn:reply",
+					kind: .agent,
+					title: "Codex",
+					body: body
+				),
+				content: PreparedConversationContent(ConversationContentParser.parse(
+					body,
+					markdown: true
+				)),
+				expanded: true,
+				onToggle:
+				{
+				}
+			)
+			native.mark("item.configure.end")
+			item.view.setFrameSize(NSSize(
+				width: 480,
+				height: 240
+			))
+			native.mark("window.init.begin")
+			let window = makeWindow(item.view)
+			native.mark("window.init.end")
+			defer
 			{
-				button.mouseExited(with: event)
+				native.mark("cleanup.window.begin")
+				detach(window)
+				native.mark("cleanup.window.end")
 			}
-		}
-		try await Task.sleep(for: .milliseconds(500))
-		let panel = try #require(window.childWindows?.first)
-		let surface = try #require(panel.contentView)
-		let label = try #require(descendants(surface).compactMap
-		{
-			$0 as? NSTextField
-		}.first)
-		let frame = panel.frame
-		let buttonFrame = button.frame
-		for name in [NSAppearance.Name.darkAqua, .aqua, .darkAqua]
-		{
-			window.appearance = try #require(NSAppearance(named: name))
-			window.displayIfNeeded()
+			native.mark("layout.begin")
+			window.appearance = try #require(NSAppearance(named: .aqua))
+			item.view.layoutSubtreeIfNeeded()
+			native.mark("layout.end")
+			let button = try #require(descendants(item.view).compactMap
+			{
+				$0 as? NSButton
+			}.first
+			{
+				$0.accessibilityLabel() == "Copy code block 1"
+			})
+			#expect(window.makeFirstResponder(button))
+			native.mark("hover.begin")
+			button.mouseEntered(with: try hoverEvent(.mouseEntered))
+			native.mark("hover.end")
+			defer
+			{
+				native.mark("cleanup.hover.begin")
+				if let event = try? hoverEvent(.mouseExited)
+				{
+					button.mouseExited(with: event)
+				}
+				native.mark("cleanup.hover.end")
+			}
+			// Await the owned tooltip operation;
+			// concurrent main-actor work can exceed a fixed margin.
+			let copyButton = try #require(button as? CodeCopyButton)
+			native.mark("tooltip.await.begin")
+			await (try #require(copyButton.tooltipTask)).value
+			native.mark("tooltip.await.end")
+			let panel = try #require(window.childWindows?.first)
+			let surface = try #require(panel.contentView)
+			let label = try #require(descendants(surface).compactMap
+			{
+				$0 as? NSTextField
+			}.first)
+			let frame = panel.frame
+			let buttonFrame = button.frame
+			native.mark("appearance.assertions.begin")
+			for name in [NSAppearance.Name.darkAqua, .aqua, .darkAqua]
+			{
+				window.appearance = try #require(NSAppearance(named: name))
+				window.displayIfNeeded()
+				panel.displayIfNeeded()
+				#expect(button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == name)
+				#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == name)
+				#expect(surface.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == name)
+				#expect(window.childWindows?.first === panel)
+				#expect(panel.contentView === surface)
+				#expect(panel.frame == frame && button.frame == buttonFrame)
+				#expect(window.firstResponder === button)
+				#expect(button.contentTintColor == NSColor.labelColor)
+				#expect(label.stringValue == "Copy code")
+				#expect(button.accessibilityLabel() == "Copy code block 1")
+				try expectTooltipFill(
+					surface,
+					owner: button
+				)
+			}
+			button.appearance = try #require(NSAppearance(named: .aqua))
 			panel.displayIfNeeded()
-			#expect(button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == name)
-			#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == name)
-			#expect(surface.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == name)
-			#expect(window.childWindows?.first === panel)
-			#expect(panel.contentView === surface)
-			#expect(panel.frame == frame && button.frame == buttonFrame)
-			#expect(window.firstResponder === button)
-			#expect(button.contentTintColor == NSColor.labelColor)
-			#expect(label.stringValue == "Copy code")
-			#expect(button.accessibilityLabel() == "Copy code block 1")
+			#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua)
 			try expectTooltipFill(
 				surface,
 				owner: button
 			)
+			button.appearance = nil
+			panel.displayIfNeeded()
+			#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
+			#expect(window.childWindows?.first === panel)
+			#expect(window.firstResponder === button)
+			native.mark("appearance.assertions.end")
+			native.mark("dismiss.begin")
+			button.mouseExited(with: try hoverEvent(.mouseExited))
+			native.mark("dismiss.end")
+			#expect(window.childWindows?.isEmpty != false)
+			#expect(button.contentTintColor == NSColor.secondaryLabelColor)
 		}
-		button.appearance = try #require(NSAppearance(named: .aqua))
-		panel.displayIfNeeded()
-		#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua)
-		try expectTooltipFill(
-			surface,
-			owner: button
-		)
-		button.appearance = nil
-		panel.displayIfNeeded()
-		#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
-		#expect(window.childWindows?.first === panel)
-		#expect(window.firstResponder === button)
-		button.mouseExited(with: try hoverEvent(.mouseExited))
-		#expect(window.childWindows?.isEmpty != false)
-		#expect(button.contentTintColor == NSColor.secondaryLabelColor)
 	}
 
 	private func makeWindow(_ view: NSView) -> NSWindow

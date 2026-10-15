@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
+final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 {
 	var controlCursor: NSCursor
 	{
@@ -9,6 +9,8 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 	}
 	private var hoverTrackingArea: NSTrackingArea?
 	private var isHovered = false
+	// Capture the delayed operation to await completion or cancellation without timing margins.
+	private(set) var tooltipTask: Task<Void, Never>?
 	private var tooltipPanel: NSPanel?
 	private var tooltipAppearance: DesktopPanelAppearanceBinding?
 
@@ -50,11 +52,24 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 		isHovered = true
 		contentTintColor = .labelColor
 		needsDisplay = true
-		perform(
-			#selector(showCopyTooltip),
-			with: nil,
-			afterDelay: 0.4
-		)
+		tooltipTask = Task
+		{
+			[weak self] in
+			do
+			{
+				try await Task.sleep(for: .milliseconds(400))
+			}
+			catch
+			{
+				return
+			}
+			guard !Task.isCancelled, let self
+			else
+			{
+				return
+			}
+			self.showCopyTooltip()
+		}
 	}
 
 	override func mouseExited(with event: NSEvent)
@@ -102,7 +117,7 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 		)
 		let surface = DesktopSurface(
 			AppKitColorTokens.inspector,
-			cornerRadius: ShapeTokens.Transcript.resultRadius,
+			cornerRadius: 12,
 			bordered: true
 		)
 		surface.frame = NSRect(
@@ -149,11 +164,8 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 
 	private func hideCopyTooltip()
 	{
-		NSObject.cancelPreviousPerformRequests(
-			withTarget: self,
-			selector: #selector(showCopyTooltip),
-			object: nil
-		)
+		tooltipTask?.cancel()
+		tooltipTask = nil
 		tooltipAppearance?.invalidate()
 		tooltipAppearance = nil
 		if let tooltipPanel
