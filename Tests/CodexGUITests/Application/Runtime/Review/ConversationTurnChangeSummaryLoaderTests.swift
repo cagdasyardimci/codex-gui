@@ -36,11 +36,10 @@ struct ConversationTurnChangeSummaryLoaderTests
 		)
 		{
 			let first = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-			let firstComposer = ConversationPresentation(first).composer
-			loader.render(firstComposer)
+			loader.render(first)
 			try await service.waitForRequestCount(1)
 			let firstRead = try #require(loader.readTask)
-			loader.render(firstComposer)
+			loader.render(first)
 			#expect(await service.requestCount == 1)
 
 			var second = ConversationTurnChangeSummaryTestFixture.makeSnapshot(
@@ -48,7 +47,7 @@ struct ConversationTurnChangeSummaryLoaderTests
 			)
 			second.activeThreadID = "second-task"
 			second.reportedGitChanges = []
-			loader.render(ConversationPresentation(second).composer)
+			loader.render(second)
 			try await service.waitForRequestCount(2)
 			await service.complete(1)
 			await loader.waitForLoading()
@@ -90,7 +89,7 @@ struct ConversationTurnChangeSummaryLoaderTests
 		{
 			var previous = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
 			previous.reportedGitTurnID = "previous"
-			loader.render(ConversationPresentation(previous).composer)
+			loader.render(previous)
 			try await service.waitForRequestCount(1)
 			await service.complete(0)
 			await loader.waitForLoading()
@@ -104,7 +103,7 @@ struct ConversationTurnChangeSummaryLoaderTests
 				"kind": "add",
 				"diff": "@@ -0,0 +1,5 @@\n+one\n+two\n+three\n+four\n+five",
 			]))]
-			loader.render(ConversationPresentation(active).composer)
+			loader.render(active)
 			try await service.waitForRequestCount(2)
 			await service.complete(1)
 			await loader.waitForLoading()
@@ -113,11 +112,62 @@ struct ConversationTurnChangeSummaryLoaderTests
 			#expect(observed?.additions == 5)
 			#expect(observed?.deletions == 0)
 			active.reportedGitChanges = []
-			loader.render(ConversationPresentation(active).composer)
+			loader.render(active)
 			try await service.waitForRequestCount(3)
 			await service.complete(2)
 			await loader.waitForLoading()
 			#expect(observed == nil)
+		}
+	}
+
+	@Test func activeTurnIdentityRefreshesAnOtherwiseUnchangedRequest() async throws
+	{
+		let service = TurnChangeSummaryServiceStub()
+		let loader = ConversationTurnChangeSummaryLoader(service: service)
+		var observed: ConversationTurnChangeSummary?
+		loader.onChange =
+		{
+			observed = $0
+		}
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				loader.readTask
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				loader.stop()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
+		)
+		{
+			let snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+			let request = try #require(snapshot.runningGitReviewRequest(
+				owner: FeaturePresentationOwner(snapshot)
+			))
+			loader.render(
+				request: request,
+				activeTurnID: "other"
+			)
+			try await service.waitForRequestCount(1)
+			await service.complete(0)
+			await loader.waitForLoading()
+			#expect(observed?.usesPreviousTurn == true)
+			loader.render(
+				request: request,
+				activeTurnID: request.lastTurnID
+			)
+			try await service.waitForRequestCount(2)
+			await service.complete(1)
+			await loader.waitForLoading()
+			#expect(observed?.usesPreviousTurn == false)
 		}
 	}
 
@@ -149,9 +199,7 @@ struct ConversationTurnChangeSummaryLoaderTests
 			}
 		)
 		{
-			loader.render(ConversationPresentation(
-				ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-			).composer)
+			loader.render(ConversationTurnChangeSummaryTestFixture.makeSnapshot())
 			try await service.waitForRequestCount(1)
 			await service.complete(
 				0,
@@ -172,22 +220,29 @@ struct ConversationTurnChangeSummaryLoaderTests
 		{
 			observed = $0
 		}
-		loader.render(ConversationPresentation(
-			ConversationTurnChangeSummaryTestFixture.makeSnapshot(reports: false)
-		).composer)
+		loader.render(ConversationTurnChangeSummaryTestFixture.makeSnapshot(reports: false))
 		#expect(observed?.failure == .lastTurnUnavailable)
 		let button = TurnChangeSummaryButton()
 		button.render(observed)
 		#expect(button.attributedTitle.string == "0 files changed +0 -0")
-		loader.render(ConversationPresentation(
-			ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-		).composer)
+		loader.render(ConversationTurnChangeSummaryTestFixture.makeSnapshot())
 		await loader.waitForLoading()
 		#expect(observed?.fileCount == 2)
 		#expect(observed?.additions == 3)
 		#expect(observed?.failure == nil)
 		loader.stop()
 		#expect(observed == nil)
+	}
+}
+
+private extension ConversationTurnChangeSummaryLoader
+{
+	func render(_ snapshot: ConversationSnapshot)
+	{
+		render(
+			request: snapshot.runningGitReviewRequest(owner: FeaturePresentationOwner(snapshot)),
+			activeTurnID: snapshot.activeTurnID
+		)
 	}
 }
 

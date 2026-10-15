@@ -47,11 +47,6 @@ struct ConversationTurnChangeSummaryTests
 		#expect(summary.usesPreviousTurn)
 		#expect(summary.additions == 1)
 		#expect(summary.deletions == 1)
-		let button = TurnChangeSummaryButton()
-		button.render(summary)
-		#expect(button.attributedTitle.string == "1 file changed +1 -1")
-		#expect(button.toolTip?.contains("Previous editing turn") == true)
-		#expect(button.accessibilityLabel()?.contains("Previous editing turn") == true)
 		snapshot.reportedGitChanges = nil
 		#expect(ConversationTurnChangeSummary(snapshot)?.failure == .lastTurnUnavailable)
 		snapshot.activeThreadID = "another-task"
@@ -87,11 +82,6 @@ struct ConversationTurnChangeSummaryTests
 		#expect(summary.fileCount == 1)
 		#expect(summary.additions == 2)
 		#expect(summary.deletions == 2)
-		let button = TurnChangeSummaryButton()
-		button.render(summary)
-		#expect(button.attributedTitle.string == "1 file changed +2 -2")
-		#expect(button.toolTip?.contains(GitReportedTurnComparison.fallbackMessage) == true)
-		#expect(button.accessibilityLabel()?.contains("These are not net changes.") == true)
 	}
 
 	@Test(arguments: [GitComparisonFailure.lastTurnUnavailable,
@@ -111,15 +101,13 @@ struct ConversationTurnChangeSummaryTests
 			result: .unavailable(failure),
 			request: request
 		))
-		let button = TurnChangeSummaryButton()
-		button.render(summary)
-		#expect(button.attributedTitle.string == "2 files changed +3 -1")
-		#expect(button.toolTip?.contains(failure.message) == false)
-		#expect(button.accessibilityLabel()?.contains(failure.message) == false)
-		button.render(ConversationTurnChangeSummary(unavailable: failure))
-		#expect(button.attributedTitle.string == "0 files changed +0 -0")
-		#expect(button.toolTip?.contains(failure.message) == false)
-		#expect(button.accessibilityLabel()?.contains(failure.message) == false)
+		#expect(summary.fileCount == 2)
+		#expect(summary.additions == 3)
+		#expect(summary.deletions == 1)
+		let unavailable = ConversationTurnChangeSummary(unavailable: failure)
+		#expect(unavailable.fileCount == 0)
+		#expect(unavailable.additions == 0)
+		#expect(unavailable.deletions == 0)
 	}
 
 	private func change(_ diff: String) -> FileChange

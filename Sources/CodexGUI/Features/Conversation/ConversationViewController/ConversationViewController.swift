@@ -225,7 +225,10 @@ final class ConversationViewController: NSViewController,
 		super.viewDidAppear()
 		if let composerSubmissionPresentation
 		{
-			turnChangeSummaryLoader.render(composerSubmissionPresentation)
+			turnChangeSummaryLoader.render(
+				request: composerSubmissionPresentation.turnChangeRequest,
+				activeTurnID: composerSubmissionPresentation.activeTurnID
+			)
 		}
 		activityLabel.presentationIsVisible = true
 	}

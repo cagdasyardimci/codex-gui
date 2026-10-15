@@ -362,7 +362,10 @@ extension ConversationViewController
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)
 	{
 		composerSubmissionPresentation = snapshot
-		turnChangeSummaryLoader.render(snapshot)
+		turnChangeSummaryLoader.render(
+			request: snapshot.turnChangeRequest,
+			activeTurnID: snapshot.activeTurnID
+		)
 		planModeLabel.stringValue = snapshot.planModeStatus ?? "Plan mode"
 		planModeLabel.isHidden = !snapshot.planMode && snapshot.planModeStatus == nil
 		planModeLabel.textColor = snapshot.planModeStatus == nil ? .systemBlue : .systemOrange
