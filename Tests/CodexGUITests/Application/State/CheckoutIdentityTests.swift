@@ -3,16 +3,22 @@ import Testing
 
 @testable import CodexGUI
 
-@MainActor
+@Suite
 struct CheckoutIdentityTests
 {
-	@Test func defaultServiceResumeAcceptsAliasesAndRejectsAnotherDirectory() async throws
+	@Test @MainActor func defaultServiceResumeAcceptsAliasesAndRejectsAnotherDirectory(
+	) async throws
 	{
-		let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-		try FileManager.default.createDirectory(
-			at: root,
-			withIntermediateDirectories: true
-		)
+		let root = try await BackgroundTestWork.perform
+		{
+			let root = FileManager.default.temporaryDirectory
+				.appendingPathComponent(UUID().uuidString)
+			try FileManager.default.createDirectory(
+				at: root,
+				withIntermediateDirectories: true
+			)
+			return root
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: root)
@@ -29,18 +35,21 @@ struct CheckoutIdentityTests
 			"alias",
 			isDirectory: true
 		)
-		try FileManager.default.createDirectory(
-			at: checkout,
-			withIntermediateDirectories: true
-		)
-		try FileManager.default.createDirectory(
-			at: other,
-			withIntermediateDirectories: true
-		)
-		try FileManager.default.createSymbolicLink(
-			at: alias,
-			withDestinationURL: checkout
-		)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: checkout,
+				withIntermediateDirectories: true
+			)
+			try FileManager.default.createDirectory(
+				at: other,
+				withIntermediateDirectories: true
+			)
+			try FileManager.default.createSymbolicLink(
+				at: alias,
+				withDestinationURL: checkout
+			)
+		}
 		let service = ResumeService(cwd: alias.path)
 
 		let detail = try await service.resumeThread(

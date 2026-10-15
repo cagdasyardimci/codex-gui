@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite("Project context storage")
+@Suite(
+	"Project context storage"
+)
 struct ProjectContextStoreTests
 {
 	@Test("Project context survives reopening and stays in its project")
@@ -66,18 +68,21 @@ struct ProjectContextStoreTests
 	}
 	@Test("Unreadable context is preserved rather than overwritten")
 	@MainActor
-	func corruptDataIsPreserved() throws
+	func corruptDataIsPreserved() async throws
 	{
 		let directory = temporaryDirectory()
 		let project = directory.appendingPathComponent("project")
 		let store = ProjectContextStore(directory: directory)
 		let file = store.fileURL(for: project)
 		let original = Data("{broken".utf8)
-		try FileManager.default.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
-		)
-		try original.write(to: file)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+			try original.write(to: file)
+		}
 
 		#expect(throws: ProjectContextStoreError.self)
 		{
@@ -94,19 +99,22 @@ struct ProjectContextStoreTests
 	}
 	@Test("Project alias shares context identity")
 	@MainActor
-	func symlinkIdentity() throws
+	func symlinkIdentity() async throws
 	{
 		let directory = temporaryDirectory()
 		let project = directory.appendingPathComponent("project")
 		let alias = directory.appendingPathComponent("alias")
-		try FileManager.default.createDirectory(
-			at: project,
-			withIntermediateDirectories: true
-		)
-		try FileManager.default.createSymbolicLink(
-			at: alias,
-			withDestinationURL: project
-		)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: project,
+				withIntermediateDirectories: true
+			)
+			try FileManager.default.createSymbolicLink(
+				at: alias,
+				withDestinationURL: project
+			)
+		}
 		let store = ProjectContextStore(directory: directory.appendingPathComponent("data"))
 		var context = ProjectContext()
 		context.modelPreference = ProjectModelPreference(

@@ -4,16 +4,17 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct LocalStorageImageLeaseOptimizationTests
 {
-	@Test func overlappingLeasesSkipPersistedReadsUntilTheLastRelease() throws
+	@Test func overlappingLeasesSkipPersistedReadsUntilTheLastRelease() async throws
 	{
-		let fixture = try ImageLeaseStorageFixture()
+		let fixture = try await ImageLeaseStorageFixture()
 		defer
 		{
 			fixture.cleanup()
 		}
-		let item = try fixture.image()
+		let item = try await fixture.image()
 		let first = fixture.storage.retainContextForRequest([item])
 		let last = fixture.storage.retainContextForRequest([item.reused()])
 		fixture.defaults.reads.removeAll()
@@ -34,19 +35,19 @@ struct LocalStorageImageLeaseOptimizationTests
 		#expect(fixture.defaults.reads["CodexGUI.sentReferences"] == 1)
 	}
 
-	@Test func mixedCandidatesRespectLeasesFreshDraftsSentRecordsAndOwnedBoundaries() throws
+	@Test func mixedCandidatesRespectLeasesFreshDraftsSentRecordsAndOwnedBoundaries() async throws
 	{
-		let fixture = try ImageLeaseStorageFixture()
+		let fixture = try await ImageLeaseStorageFixture()
 		defer
 		{
 			fixture.cleanup()
 		}
-		let pending = try fixture.image()
-		let draft = try fixture.image()
-		let sent = try fixture.image()
-		let discarded = try fixture.image()
-		let foreign = try fixture.image(in: fixture.root)
-		let userFile = try fixture.image(filename: "user.png")
+		let pending = try await fixture.image()
+		let draft = try await fixture.image()
+		let sent = try await fixture.image()
+		let discarded = try await fixture.image()
+		let foreign = try await fixture.image(in: fixture.root)
+		let userFile = try await fixture.image(filename: "user.png")
 		let items = [pending, draft, sent, discarded, foreign, userFile]
 		let batch = fixture.storage.retainContextForRequest(items)
 		let remaining = fixture.storage.retainContextForRequest([pending.reused()])
@@ -93,14 +94,14 @@ struct LocalStorageImageLeaseOptimizationTests
 	}
 
 	@Test(arguments: ["CodexGUI.draftContext", "CodexGUI.sentReferences"])
-	func lastLeaseRefreshesExternalPersistedProtectionsAndTheirDeletion(key: String) throws
+	func lastLeaseRefreshesExternalPersistedProtectionsAndTheirDeletion(key: String) async throws
 	{
-		let fixture = try ImageLeaseStorageFixture()
+		let fixture = try await ImageLeaseStorageFixture()
 		defer
 		{
 			fixture.cleanup()
 		}
-		let item = try fixture.image()
+		let item = try await fixture.image()
 		let request = fixture.storage.retainContextForRequest([item])
 		#expect(fixture.storage.draftContext(
 			for: fixture.root,
@@ -146,15 +147,15 @@ struct LocalStorageImageLeaseOptimizationTests
 		#expect(!fixture.exists(item))
 	}
 
-	@Test func remainingLeaseOwnershipIsResolvedAfterSymlinkRetargeting() throws
+	@Test func remainingLeaseOwnershipIsResolvedAfterSymlinkRetargeting() async throws
 	{
-		let fixture = try ImageLeaseStorageFixture()
+		let fixture = try await ImageLeaseStorageFixture()
 		defer
 		{
 			fixture.cleanup()
 		}
-		let first = try fixture.image()
-		let second = try fixture.image()
+		let first = try await fixture.image()
+		let second = try await fixture.image()
 		let alias = fixture.root.appendingPathComponent("lease.png")
 		try FileManager.default.createSymbolicLink(
 			at: alias,
@@ -180,15 +181,15 @@ struct LocalStorageImageLeaseOptimizationTests
 		#expect(!fixture.exists(second))
 	}
 
-	@Test func foreignAndUserNamedImagesDoNotReadPersistedOwnershipOrGetDeleted() throws
+	@Test func foreignAndUserNamedImagesDoNotReadPersistedOwnershipOrGetDeleted() async throws
 	{
-		let fixture = try ImageLeaseStorageFixture()
+		let fixture = try await ImageLeaseStorageFixture()
 		defer
 		{
 			fixture.cleanup()
 		}
-		let foreign = try fixture.image(in: fixture.root)
-		let userFile = try fixture.image(filename: "user.png")
+		let foreign = try await fixture.image(in: fixture.root)
+		let userFile = try await fixture.image(filename: "user.png")
 		let request = fixture.storage.retainContextForRequest([foreign, userFile])
 		fixture.defaults.reads.removeAll()
 		fixture.storage.releaseContextForRequest(request)
@@ -208,13 +209,17 @@ private final class ImageLeaseStorageFixture
 	let defaults: ImageLeaseReadCountingDefaults
 	let storage: LocalStorage
 
-	init() throws
+	init() async throws
 	{
-		imageDirectory = root.appendingPathComponent("DraftImages")
-		try FileManager.default.createDirectory(
-			at: imageDirectory,
-			withIntermediateDirectories: true
-		)
+		let directory = root.appendingPathComponent("DraftImages")
+		imageDirectory = directory
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+		}
 		defaults = try #require(ImageLeaseReadCountingDefaults(suiteName: suite))
 		storage = LocalStorage(
 			defaults: defaults,
@@ -225,10 +230,13 @@ private final class ImageLeaseStorageFixture
 	func image(
 		in directory: URL? = nil,
 		filename: String = "\(UUID().uuidString).png"
-	) throws -> ComposerContextItem
+	) async throws -> ComposerContextItem
 	{
 		let file = (directory ?? imageDirectory).appendingPathComponent(filename)
-		try Data([0x89, 0x50, 0x4E, 0x47]).write(to: file)
+		try await BackgroundTestWork.perform
+		{
+			try Data([0x89, 0x50, 0x4E, 0x47]).write(to: file)
+		}
 		return ComposerContextItem(
 			kind: .image,
 			title: "Image",

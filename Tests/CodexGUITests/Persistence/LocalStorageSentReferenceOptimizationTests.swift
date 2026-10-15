@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct LocalStorageSentReferenceOptimizationTests
 {
 	@Test func missingEmptyAndCorruptRecordsSkipProjectResolution() throws
@@ -252,15 +253,22 @@ struct LocalStorageSentReferenceOptimizationTests
 		}
 		let items = references(4)
 		let otherPath = fixture.otherProject.standardizedFileURL.resolvingSymlinksInPath().path
+		// Keep the stored schema independent of ComposerContextItem's current encoder.
+		let legacyItems: [[String: Any]] = [
+			["id": "item-0", "kind": "fileReference", "title": "item 0", "path": "File0.swift"],
+			["id": "item-1", "kind": "fileReference", "title": "item 1", "path": "File1.swift"],
+			["id": "item-2", "kind": "fileReference", "title": "item 2", "path": "File2.swift"],
+			["id": "item-3", "kind": "fileReference", "title": "item 3", "path": "File3.swift"]
+		]
 		let legacy = [
 			fixture.canonicalProjectPath: [
-				"thread:second": [items[1]],
-				"thread:first": [items[0]],
-				"new-chat": [items[3]],
+				"thread:second": [legacyItems[1]],
+				"thread:first": [legacyItems[0]],
+				"new-chat": [legacyItems[3]],
 			],
-			otherPath: ["thread:other": [items[2]]],
+			otherPath: ["thread:other": [legacyItems[2]]],
 		]
-		let originalData = try JSONEncoder().encode(legacy)
+		let originalData = try JSONSerialization.data(withJSONObject: legacy)
 		fixture.defaults.set(
 			originalData,
 			forKey: "CodexGUI.sentReferences"
@@ -291,6 +299,26 @@ struct LocalStorageSentReferenceOptimizationTests
 			$0 == fixture.canonicalProjectPath ? [items[0], items[1]] : [items[2]]
 		} + [items[3]]
 		#expect(records.map(\.item) == expectedItems)
+		let migratedRecords = try #require(
+			JSONSerialization.jsonObject(with: migratedData) as? [[String: Any]]
+		)
+		let expectedMigratedRecords: [[String: Any]] = orderedProjects.flatMap
+		{
+			projectPath -> [[String: Any]] in
+			if projectPath == fixture.canonicalProjectPath
+			{
+				return [
+					["projectPath": projectPath, "threadID": "first", "item": legacyItems[0]],
+					["projectPath": projectPath, "threadID": "second", "item": legacyItems[1]]
+				]
+			}
+			return [["projectPath": projectPath, "threadID": "other", "item": legacyItems[2]]]
+		} + [[
+			"projectPath": fixture.canonicalProjectPath,
+			"threadID": "first",
+			"item": legacyItems[3]
+		]]
+		#expect(NSArray(array: migratedRecords) == NSArray(array: expectedMigratedRecords))
 		#expect(fixture.storage.sentReferences(
 			for: fixture.project,
 			threadID: "first"
