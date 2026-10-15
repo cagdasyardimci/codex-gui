@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite @MainActor
 struct ConversationActivityCollectionItemTests
 {
 	@Test func shellSampleRetainsCharacterLimitAndNewlineSemantics()
@@ -11,7 +11,7 @@ struct ConversationActivityCollectionItemTests
 		let samples: [(String, Int)] = [
 			("", 1),
 			("first\nlast\n", 3),
-			("first\r\nlast\r\n", 1),
+			("first\r\nlast\r\n", 3),
 			(String(
 				repeating: "line\n",
 				count: 18
@@ -25,6 +25,18 @@ struct ConversationActivityCollectionItemTests
 				count: 21
 			), 20),
 			(String(
+				repeating: "line\r\n",
+				count: 18
+			), 19),
+			(String(
+				repeating: "line\r\n",
+				count: 19
+			), 20),
+			(String(
+				repeating: "line\r\n",
+				count: 21
+			), 20),
+			(String(
 				repeating: "x",
 				count: 7999
 			) + "\n", 2),
@@ -32,6 +44,14 @@ struct ConversationActivityCollectionItemTests
 				repeating: "x",
 				count: 8000
 			) + "\n", 1),
+			(String(
+				repeating: "x",
+				count: 7999
+			) + "\r\n", 2),
+			(String(
+				repeating: "x",
+				count: 8000
+			) + "\r\n", 1),
 			(String(
 				repeating: "👩‍💻",
 				count: 7999
@@ -44,16 +64,57 @@ struct ConversationActivityCollectionItemTests
 		for (output, expected) in samples
 		{
 			#expect(ConversationActivityCollectionItem.sampledShellLineCount(output) == expected)
-			let sampled = String(output.prefix(8000))
-			let previousCount = sampled.reduce(1)
+		}
+	}
+
+	@Test func shellLogicalLineCountsMatchNativeLFAndCRLFLayout()
+	{
+		_ = NSApplication.shared
+		for lineCount in [2, 19, 20, 21, 22]
+		{
+			var sizes: [NSSize] = []
+			for separator in ["\n", "\r\n"]
 			{
-				$1 == "\n" ? $0 + 1 : $0
-			}
-			#expect(ConversationActivityCollectionItem.sampledShellLineCount(output)
-				== min(
-					previousCount,
-					20
+				let output = Array(
+					repeating: "line",
+					count: lineCount
+				).joined(separator: separator)
+				let storage = NSTextStorage(
+					string: output,
+					attributes: [.font: NSFont.monospacedSystemFont(
+						ofSize: 13,
+						weight: .regular
+					)]
+				)
+				let manager = NSLayoutManager()
+				let container = NSTextContainer(size: NSSize(
+					width: 400,
+					height: 10000
 				))
+				container.lineFragmentPadding = 0
+				manager.addTextContainer(container)
+				storage.addLayoutManager(manager)
+				manager.ensureLayout(for: container)
+				var nativeLineCount = 0
+				manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container))
+				{
+					_, _, _, _, _ in nativeLineCount += 1
+				}
+				#expect(nativeLineCount == lineCount)
+				#expect(ConversationActivityCollectionItem.sampledShellLineCount(output)
+					== min(
+						nativeLineCount,
+						20
+					))
+				sizes.append(ConversationActivityCollectionItem.itemSize(
+					row: commandRow(
+						expanded: true,
+						output: output
+					),
+					width: 400
+				))
+			}
+			#expect(sizes[0] == sizes[1])
 		}
 	}
 
@@ -74,7 +135,10 @@ struct ConversationActivityCollectionItemTests
 				repeating: "x",
 				count: 8000
 			) + "\nignored"),
-			("short", String(
+			(String(
+				repeating: "line\n",
+				count: 19
+			), String(
 				repeating: "line\r\n",
 				count: 2000
 			)),
@@ -188,14 +252,14 @@ struct ConversationActivityCollectionItemTests
 		{
 			$0.attributedTitle.string == "example.swift"
 		})
-		.performClick(nil)
+		.dispatchConfiguredAction()
 		#expect(opened == "/tmp/example.swift")
 		#expect(toggles == 0)
 		try #require(buttons.first
 		{
 			$0.attributedTitle.string != "example.swift"
 		})
-		.performClick(nil)
+		.dispatchConfiguredAction()
 		#expect(toggles == 1)
 	}
 
@@ -804,89 +868,103 @@ struct ConversationActivityCollectionItemTests
 		item.prepareForReuse()
 	}
 
-	@Test func terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus() async throws
+	// Native event polling and transient panels share the application event/window state.
+	@Test func terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus(
+	) async throws
 	{
-		_ = NSApplication.shared
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: NSEvent.mouseLocation.x - 92,
-				y: NSEvent.mouseLocation.y - 52,
-				width: 200,
-				height: 100
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		let button = ConversationTerminalCopyButton()
-		button.setCopyImage(DesktopIcons.image(.copy))
-		#expect(button.clipsToBounds)
-		button.frame = NSRect(
-			x: 80,
-			y: 40,
-			width: 24,
-			height: 24
-		)
-		button.toolTip = "Copy output"
-		try #require(window.contentView).addSubview(button)
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			button.resetHover()
-			window.orderOut(nil)
-		}
-		window.orderFront(nil)
-		let originalResponder = window.firstResponder
-		// The cursor is inside the parent, but initially outside the copy button.
-		button.frame.origin = NSPoint(
-			x: 10,
-			y: 10
-		)
-		button.updateTrackingAreas()
-		#expect(!button.isHovered)
-		#expect(button.image == nil)
-		button.mouseEntered(with: try hoverEvent(type: .mouseEntered))
-		#expect(!button.isHovered)
-		#expect(!button.isTooltipVisible)
-		button.frame.origin = NSPoint(
-			x: 80,
-			y: 40
-		)
-		button.updateTrackingAreas()
-		button.mouseEntered(with: try hoverEvent(type: .mouseEntered))
-		#expect(button.isHovered)
-		#expect(button.isGlyphVisible)
-		#expect(!button.isTooltipVisible)
-		try await Task.sleep(for: .milliseconds(500))
-		#expect(button.isTooltipVisible)
-		#expect(window.firstResponder === originalResponder)
-		if ProcessInfo.processInfo.environment["CODEX_TERMINAL_CAPTURE"] == "1"
-		{
-			let tooltip = try #require(window.childWindows?.first?.contentView)
-			tooltip.layoutSubtreeIfNeeded()
-			let bitmap = try #require(tooltip.bitmapImageRepForCachingDisplay(in: tooltip.bounds))
-			tooltip.cacheDisplay(
-				in: tooltip.bounds,
-				to: bitmap
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			_ = NSApplication.shared
+			let window = TranscriptPointerTestWindow(
+				contentRect: NSRect(
+					x: NSEvent.mouseLocation.x - 92,
+					y: NSEvent.mouseLocation.y - 52,
+					width: 200,
+					height: 100
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
 			)
-			let png = try #require(bitmap.representation(
-				using: .png,
-				properties: [:]
-			))
-			try png.write(to: URL(fileURLWithPath: "/tmp/codex-terminal-copy-tooltip.png"))
+			window.isReleasedWhenClosed = false
+			let button = ConversationTerminalCopyButton()
+			button.setCopyImage(DesktopIcons.image(.copy))
+			#expect(button.clipsToBounds)
+			button.frame = NSRect(
+				x: 80,
+				y: 40,
+				width: 24,
+				height: 24
+			)
+			button.toolTip = "Copy output"
+			try #require(window.contentView).addSubview(button)
+			defer
+			{
+				button.resetHover()
+				window.orderOut(nil)
+			}
+			window.orderFront(nil)
+			let originalResponder = window.firstResponder
+			// The cursor is inside the parent, but initially outside the copy button.
+			button.frame.origin = NSPoint(
+				x: 10,
+				y: 10
+			)
+			button.updateTrackingAreas()
+			#expect(!button.isHovered)
+			#expect(button.image == nil)
+			button.mouseEntered(with: try hoverEvent(type: .mouseEntered))
+			#expect(!button.isHovered)
+			#expect(!button.isTooltipVisible)
+			button.frame.origin = NSPoint(
+				x: 80,
+				y: 40
+			)
+			button.updateTrackingAreas()
+			button.mouseEntered(with: try hoverEvent(type: .mouseEntered))
+			#expect(button.isHovered)
+			#expect(button.isGlyphVisible)
+			#expect(!button.isTooltipVisible)
+			// Wait for the actual delayed tooltip operation, not a scheduling margin.
+			await (try #require(button.tooltipTask)).value
+			#expect(button.isTooltipVisible)
+			#expect(window.firstResponder === originalResponder)
+			if ProcessInfo.processInfo.environment["CODEX_TERMINAL_CAPTURE"] == "1"
+			{
+				let tooltip = try #require(window.childWindows?.first?.contentView)
+				tooltip.layoutSubtreeIfNeeded()
+				let bitmap = try #require(tooltip
+					.bitmapImageRepForCachingDisplay(in: tooltip.bounds))
+				tooltip.cacheDisplay(
+					in: tooltip.bounds,
+					to: bitmap
+				)
+				let png = try #require(bitmap.representation(
+					using: .png,
+					properties: [:]
+				))
+				try png.write(to: URL(fileURLWithPath: "/tmp/codex-terminal-copy-tooltip.png"))
+			}
+			button.mouseExited(with: try hoverEvent(type: .mouseExited))
+			#expect(!button.isHovered)
+			#expect(!button.isGlyphVisible)
+			#expect(!button.isTooltipVisible)
+			button.mouseEntered(with: try hoverEvent(type: .mouseEntered))
+			let canceledTooltip = try #require(button.tooltipTask)
+			button.resetHover()
+			await canceledTooltip.value
+			#expect(!button.isHovered)
+			#expect(!button.isTooltipVisible)
+			window.makeFirstResponder(button)
+			#expect(button.isGlyphVisible)
+			#expect(!button.isHovered)
 		}
-		button.mouseExited(with: try hoverEvent(type: .mouseExited))
-		#expect(!button.isHovered)
-		#expect(!button.isGlyphVisible)
-		#expect(!button.isTooltipVisible)
-		button.mouseEntered(with: try hoverEvent(type: .mouseEntered))
-		button.resetHover()
-		try await Task.sleep(for: .milliseconds(500))
-		#expect(!button.isHovered)
-		#expect(!button.isTooltipVisible)
-		window.makeFirstResponder(button)
-		#expect(button.isGlyphVisible)
-		#expect(!button.isHovered)
 	}
 
 	@Test func shellSuccessFooterDoesNotExposeRawMetadata() throws
@@ -1352,111 +1430,122 @@ struct ConversationActivityCollectionItemTests
 		item.view.layoutSubtreeIfNeeded()
 	}
 
-	@Test func disclosureGlyphAppearsOnlyOverHeaderWithoutLosingInteraction() throws
+	// Native event polling and transient panels share the application event/window state.
+	@Test func disclosureGlyphAppearsOnlyOverHeaderWithoutLosingInteraction(
+	) async throws
 	{
-		for kind: ConversationActivityRow.Kind in [
-			.group,
-			.command,
-			.read,
-			.search,
-			.listFiles,
-			.image
-		]
+		try await AppKitTestIsolation.perform
 		{
-			let item = ConversationActivityCollectionItem()
-			let row = ConversationActivityRow(
-				id: "hover",
-				sourceEntryID: "hover",
-				groupID: "group",
-				kind: kind,
-				title: "Activity",
-				command: kind == .group || kind == .image ? nil :
-					commandRow(expanded: false).command
-			)
-			var toggles = 0
-			item.configure(
-				row,
-				onToggle:
-				{
-					toggles += 1
-				},
-				onOpenFile:
-				{
-					_ in
-				}
-			)
-			layout(
-				item,
-				row: row
-			)
-			let button = try #require(descendants(item.view).compactMap
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
 			{
-				$0 as? NSButton
+				native.end()
 			}
-			.first
+			for kind: ConversationActivityRow.Kind in [
+				.group,
+				.command,
+				.read,
+				.search,
+				.listFiles,
+				.image
+			]
 			{
-				$0.accessibilityLabel() == "Expand Activity"
-			})
-			let header = try #require(descendants(item.view).first
-			{
-				!$0.trackingAreas.isEmpty
-			})
-			#expect(header.frame.height == 21)
-			#expect(header.trackingAreas.count == 1)
-			#expect(header.trackingAreas[0].options.contains(.inVisibleRect))
-			let title = try #require(header.subviews.compactMap
-			{
-				$0 as? NSTextField
-			}
-			.first
-			{
-				$0.stringValue == "Activity"
-			})
-			let restingFrame = button.frame
-			#expect(title.textColor == AppKitColorTokens.activityText)
-			#expect(button.image == nil)
-			#expect(!button.isHidden && button.alphaValue == 1)
-			#expect(button.acceptsFirstResponder)
-			#expect(button.isAccessibilityElement())
-			#expect(button.frame.size == NSSize(
-				width: 24,
-				height: 21
-			))
-			#expect(button.hitTest(NSPoint(
-				x: button.frame.midX,
-				y: button.frame.midY
-			)) === button)
-			button.performClick(nil)
-			#expect(toggles == 1)
-			let entered = try hoverEvent(type: .mouseEntered)
-			item.mouseEntered(with: entered)
-			let hoveredImage = try #require(button.image)
-			#expect(title.textColor == AppKitColorTokens.primaryText)
-			item.mouseEntered(with: entered)
-			#expect(button.image === hoveredImage)
-			#expect(button.frame == restingFrame)
-			item.mouseExited(with: try hoverEvent(type: .mouseExited))
-			#expect(title.textColor == AppKitColorTokens.activityText)
-			#expect(button.image == nil)
-			#expect(button.frame == restingFrame)
-			item.mouseEntered(with: entered)
-			item.prepareForReuse()
-			#expect(title.textColor == AppKitColorTokens.activityText)
-			#expect(button.image == nil)
-			item.configure(
-				row,
-				onToggle:
+				let item = ConversationActivityCollectionItem()
+				let row = ConversationActivityRow(
+					id: "hover",
+					sourceEntryID: "hover",
+					groupID: "group",
+					kind: kind,
+					title: "Activity",
+					command: kind == .group || kind == .image ? nil :
+						commandRow(expanded: false).command
+				)
+				var toggles = 0
+				item.configure(
+					row,
+					onToggle:
+					{
+						toggles += 1
+					},
+					onOpenFile:
+					{
+						_ in
+					}
+				)
+				layout(
+					item,
+					row: row
+				)
+				let button = try #require(descendants(item.view).compactMap
 				{
-					toggles += 1
-				},
-				onOpenFile:
-				{
-					_ in
+					$0 as? NSButton
 				}
-			)
-			#expect(button.image == nil)
-			button.performClick(nil)
-			#expect(toggles == 2)
+				.first
+				{
+					$0.accessibilityLabel() == "Expand Activity"
+				})
+				let header = try #require(descendants(item.view).first
+				{
+					!$0.trackingAreas.isEmpty
+				})
+				#expect(header.frame.height == 21)
+				#expect(header.trackingAreas.count == 1)
+				#expect(header.trackingAreas[0].options.contains(.inVisibleRect))
+				let title = try #require(header.subviews.compactMap
+				{
+					$0 as? NSTextField
+				}
+				.first
+				{
+					$0.stringValue == "Activity"
+				})
+				let restingFrame = button.frame
+				#expect(title.textColor == AppKitColorTokens.activityText)
+				#expect(button.image == nil)
+				#expect(!button.isHidden && button.alphaValue == 1)
+				#expect(button.acceptsFirstResponder)
+				#expect(button.isAccessibilityElement())
+				#expect(button.frame.size == NSSize(
+					width: 24,
+					height: 21
+				))
+				#expect(button.hitTest(NSPoint(
+					x: button.frame.midX,
+					y: button.frame.midY
+				)) === button)
+				button.dispatchConfiguredAction()
+				#expect(toggles == 1)
+				let entered = try hoverEvent(type: .mouseEntered)
+				item.mouseEntered(with: entered)
+				let hoveredImage = try #require(button.image)
+				#expect(title.textColor == AppKitColorTokens.primaryText)
+				item.mouseEntered(with: entered)
+				#expect(button.image === hoveredImage)
+				#expect(button.frame == restingFrame)
+				item.mouseExited(with: try hoverEvent(type: .mouseExited))
+				#expect(title.textColor == AppKitColorTokens.activityText)
+				#expect(button.image == nil)
+				#expect(button.frame == restingFrame)
+				item.mouseEntered(with: entered)
+				item.prepareForReuse()
+				#expect(title.textColor == AppKitColorTokens.activityText)
+				#expect(button.image == nil)
+				item.configure(
+					row,
+					onToggle:
+					{
+						toggles += 1
+					},
+					onOpenFile:
+					{
+						_ in
+					}
+				)
+				#expect(button.image == nil)
+				button.dispatchConfiguredAction()
+				#expect(toggles == 2)
+			}
 		}
 	}
 
@@ -1546,90 +1635,105 @@ struct ConversationActivityCollectionItemTests
 		}
 	}
 
-	@Test func shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning() async throws
+	// Native event polling and transient panels share the application event/window state.
+	@Test func shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning(
+	) async throws
 	{
-		_ = NSApplication.shared
-		let cursor = NSEvent.mouseLocation
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: cursor.x - 250,
-				y: cursor.y - 250,
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			_ = NSApplication.shared
+			let cursor = NSEvent.mouseLocation
+			let window = TranscriptPointerTestWindow(
+				contentRect: NSRect(
+					x: cursor.x - 250,
+					y: cursor.y - 250,
+					width: 500,
+					height: 500
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.pointerLocation = NSPoint(
+				x: 250,
+				y: 250
+			)
+			defer
+			{
+				window.orderOut(nil)
+			}
+			let content = NSView(frame: NSRect(
+				x: 0,
+				y: 0,
 				width: 500,
 				height: 500
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		defer
-		{
-			window.orderOut(nil)
-		}
-		let content = NSView(frame: NSRect(
-			x: 0,
-			y: 0,
-			width: 500,
-			height: 500
-		))
-		window.contentView = content
-		let item = ConversationActivityCollectionItem()
-		let row = commandRow(expanded: false)
-		item.configure(
-			row,
-			onToggle:
-			{
-			},
-			onOpenFile:
-			{
-				_ in
-			}
-		)
-		content.addSubview(item.view)
-		let button = try #require(descendants(item.view).compactMap
-		{
-			$0 as? NSButton
-		}
-		.first
-		{
-			$0.accessibilityLabel()?.hasPrefix("Expand") == true
-		})
-		window.orderFront(nil)
-		for overHeader in [false, true, false]
-		{
-			let point = window.convertPoint(fromScreen: NSEvent.mouseLocation)
-			item.view.frame = NSRect(
-				x: point.x - 150,
-				y: point.y - (overHeader ? 15 : 100),
-				width: 400,
-				height: 30
+			))
+			window.contentView = content
+			let item = ConversationActivityCollectionItem()
+			let row = commandRow(expanded: false)
+			item.configure(
+				row,
+				onToggle:
+				{
+				},
+				onOpenFile:
+				{
+					_ in
+				}
 			)
-			item.view.layoutSubtreeIfNeeded()
-			item.viewDidLayout()
-			item.view.layoutSubtreeIfNeeded()
-			for _ in 0 ..< 10
+			content.addSubview(item.view)
+			let button = try #require(descendants(item.view).compactMap
 			{
-				await Task.yield()
+				$0 as? NSButton
 			}
-			let header = try #require(descendants(item.view).first
+			.first
 			{
-				!$0.trackingAreas.isEmpty
+				$0.accessibilityLabel()?.hasPrefix("Expand") == true
 			})
-			let headerBounds = header.convert(
-				header.bounds,
-				to: nil
-			)
-			let settledPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
-			#expect(headerBounds.contains(settledPoint) == overHeader)
-			#expect((button.image != nil) == overHeader)
-			let title = try #require(header.subviews.compactMap
+			window.orderFront(nil)
+			for overHeader in [false, true, false]
 			{
-				$0 as? NSTextField
-			}.first)
-			#expect(title.textColor == (overHeader ? AppKitColorTokens.primaryText : AppKitColorTokens.activityText))
-			#expect(button.isAccessibilityElement())
-			#expect(button.acceptsFirstResponder)
-			#expect(!button.isHidden && button.alphaValue == 1)
+				let point = window.mouseLocationOutsideOfEventStream
+				item.view.frame = NSRect(
+					x: point.x - 150,
+					y: point.y - (overHeader ? 15 : 100),
+					width: 400,
+					height: 30
+				)
+				item.view.layoutSubtreeIfNeeded()
+				item.viewDidLayout()
+				item.view.layoutSubtreeIfNeeded()
+				// Await the actual layout-triggered task rather than extra scheduling turns.
+				await item.waitForHeaderHoverSynchronization()
+				let header = try #require(descendants(item.view).first
+				{
+					!$0.trackingAreas.isEmpty
+				})
+				let headerBounds = header.convert(
+					header.bounds,
+					to: nil
+				)
+				let settledPoint = window.mouseLocationOutsideOfEventStream
+				#expect(headerBounds.contains(settledPoint) == overHeader)
+				#expect((button.image != nil) == overHeader)
+				let title = try #require(header.subviews.compactMap
+				{
+					$0 as? NSTextField
+				}.first)
+				#expect(title
+					.textColor ==
+					(overHeader ? AppKitColorTokens.primaryText : AppKitColorTokens.activityText))
+				#expect(button.isAccessibilityElement())
+				#expect(button.acceptsFirstResponder)
+				#expect(!button.isHidden && button.alphaValue == 1)
+			}
 		}
 	}
 
@@ -1723,7 +1827,7 @@ struct ConversationActivityCollectionItemTests
 		})
 		#expect(output.textColor == AppKitColorTokens.terminalText)
 		#expect(output.string == originalText)
-		link.performClick(nil)
+		link.dispatchConfiguredAction()
 		#expect(openedPath == "/tmp/example.swift")
 		item.configure(
 			row,
@@ -1824,7 +1928,11 @@ struct ConversationActivityCollectionItemTests
 		})
 	}
 
-	@Test(arguments: ["reuse", "replacement", "path", "collapse", "detach", "stale-context"])
+	// Native event polling and transient panels share the application event/window state.
+	@Test(
+		.serialized,
+		arguments: ["reuse", "replacement", "path", "collapse", "detach", "stale-context"]
+	)
 	func imageThumbnailUsesSharedViewerAndDismissesWithItsOwner(_ transition: String) async throws
 	{
 		let imageURL = FileManager.default.temporaryDirectory
@@ -1841,102 +1949,56 @@ struct ConversationActivityCollectionItemTests
 			bytesPerRow: 0,
 			bitsPerPixel: 0
 		))
-		try #require(bitmap.representation(
+		let imageData = try #require(bitmap.representation(
 			using: .png,
 			properties: [:]
-		)).write(to: imageURL)
+		))
+		try await BackgroundTestWork.perform
+		{
+			try imageData.write(to: imageURL)
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: imageURL)
 		}
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 800,
-				height: 600
-			),
-			styleMask: [.titled],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		defer
+
+		try await AppKitTestIsolation.perform
 		{
-			window.close()
-		}
-		let content = try #require(window.contentView)
-		let item = ConversationActivityCollectionItem()
-		var row = ConversationActivityRow(
-			id: "image",
-			sourceEntryID: "image",
-			groupID: "image",
-			kind: .image,
-			title: "Viewed an image",
-			imagePath: imageURL.path,
-			expanded: true
-		)
-		var externalOpens: [String] = []
-		var contextIsCurrent = true
-		item.configure(
-			row,
-			onToggle:
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
 			{
-			},
-			onOpenFile:
-			{
-				externalOpens.append($0)
-			},
-			canOpenImage:
-			{
-				contextIsCurrent
+				native.end()
 			}
-		)
-		content.addSubview(item.view)
-		await item.waitForImagePreview()
-		let button = try #require(descendants(item.view).compactMap
-		{
-			$0 as? NSButton
-		}.first
-		{
-			$0.accessibilityLabel() == "Open viewed image"
-		})
-		if transition == "stale-context"
-		{
-			contextIsCurrent = false
-			button.performClick(nil)
-			await item.waitForImagePreview()
-			#expect(externalOpens.isEmpty)
-			#expect(!descendants(content).contains
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 800,
+					height: 600
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			defer
 			{
-				$0.accessibilityIdentifier() == "expanded-image-preview"
-			})
-			contextIsCurrent = true
-		}
-		button.performClick(nil)
-		await item.waitForImagePreview()
-		#expect(externalOpens.isEmpty)
-		#expect(descendants(content).contains
-		{
-			$0.accessibilityIdentifier() == "expanded-image-preview"
-		})
-		switch transition
-		{
-		case "reuse": item.prepareForReuse()
-		case "detach": item.view.removeFromSuperview()
-		default:
-			if transition == "replacement"
-			{
-				row = commandRow(expanded: false)
+				window.close()
 			}
-			else if transition == "path"
-			{
-				row.imagePath = imageURL.path + ".missing"
-			}
-			else
-			{
-				row.expanded = false
-			}
+			let content = try #require(window.contentView)
+			let item = ConversationActivityCollectionItem()
+			var row = ConversationActivityRow(
+				id: "image",
+				sourceEntryID: "image",
+				groupID: "image",
+				kind: .image,
+				title: "Viewed an image",
+				imagePath: imageURL.path,
+				expanded: true
+			)
+			var externalOpens: [String] = []
+			var contextIsCurrent = true
 			item.configure(
 				row,
 				onToggle:
@@ -1945,15 +2007,75 @@ struct ConversationActivityCollectionItemTests
 				onOpenFile:
 				{
 					externalOpens.append($0)
+				},
+				canOpenImage:
+				{
+					contextIsCurrent
 				}
 			)
+			content.addSubview(item.view)
+			await item.waitForImagePreview()
+			let button = try #require(descendants(item.view).compactMap
+			{
+				$0 as? NSButton
+			}.first
+			{
+				$0.accessibilityLabel() == "Open viewed image"
+			})
+			if transition == "stale-context"
+			{
+				contextIsCurrent = false
+				button.dispatchConfiguredAction()
+				await item.waitForImagePreview()
+				#expect(externalOpens.isEmpty)
+				#expect(!descendants(content).contains
+				{
+					$0.accessibilityIdentifier() == "expanded-image-preview"
+				})
+				contextIsCurrent = true
+			}
+			button.dispatchConfiguredAction()
+			await item.waitForImagePreview()
+			#expect(externalOpens.isEmpty)
+			#expect(descendants(content).contains
+			{
+				$0.accessibilityIdentifier() == "expanded-image-preview"
+			})
+			switch transition
+			{
+			case "reuse": item.prepareForReuse()
+			case "detach": item.view.removeFromSuperview()
+			default:
+				if transition == "replacement"
+				{
+					row = commandRow(expanded: false)
+				}
+				else if transition == "path"
+				{
+					row.imagePath = imageURL.path + ".missing"
+				}
+				else
+				{
+					row.expanded = false
+				}
+				item.configure(
+					row,
+					onToggle:
+					{
+					},
+					onOpenFile:
+					{
+						externalOpens.append($0)
+					}
+				)
+			}
+			#expect(!descendants(content).contains
+			{
+				$0.accessibilityIdentifier() == "expanded-image-preview"
+			})
+			button.dispatchConfiguredAction()
+			#expect(externalOpens.isEmpty)
 		}
-		#expect(!descendants(content).contains
-		{
-			$0.accessibilityIdentifier() == "expanded-image-preview"
-		})
-		button.performClick(nil)
-		#expect(externalOpens.isEmpty)
 	}
 
 	private func commandRow(

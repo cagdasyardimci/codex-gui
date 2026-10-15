@@ -645,7 +645,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		{
 			return
 		}
-		let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+		// Query the owning window's pointer coordinates after asynchronous layout settles.
+		let windowPoint = window.mouseLocationOutsideOfEventStream
 		let headerBounds = header.convert(
 			header.bounds,
 			to: nil
@@ -930,7 +931,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		)
 	}
 
-	// Preserve Character-based sampling, including CRLF as one non-LF character.
+	// Keep character-based sampling and count CRLF as one native line break.
 	static func sampledShellLineCount(_ output: String) -> Int
 	{
 		var lineCount = 1
@@ -943,7 +944,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 				break
 			}
 			sampledCharacters += 1
-			if character == "\n"
+			if character == "\n" || character == "\r\n"
 			{
 				lineCount += 1
 			}
@@ -1194,6 +1195,12 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			name: URL(fileURLWithPath: path).lastPathComponent,
 			in: window
 		)
+	}
+
+	/// Await the automatic layout-triggered update already scheduled for this item.
+	func waitForHeaderHoverSynchronization() async
+	{
+		await hoverSynchronizationTask?.value
 	}
 
 	func waitForImagePreview() async
