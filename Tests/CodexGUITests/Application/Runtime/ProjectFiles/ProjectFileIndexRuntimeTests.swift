@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite(.timeLimit(.minutes(1))) @MainActor
 struct ProjectFileIndexRuntimeTests
 {
 	@Test(arguments: [false, true])
@@ -680,44 +680,64 @@ struct ProjectFileIndexRuntimeTests
 			{
 			}
 		)
-		defer
-		{
-			runtime.shutdown()
-		}
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "first"
-		))
-		_ = try await service.path(at: 0)
-		await service.finish(
-			at: 0,
-			files: ["before.swift"]
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				runtime.job
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				runtime.shutdown()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
 		)
-		try await waitUntil
 		{
-			runtime.index?.files == ["before.swift"]
-		}
+			defer
+			{
+				runtime.shutdown()
+			}
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "first"
+			))
+			_ = try await service.path(at: 0)
+			await service.finish(
+				at: 0,
+				files: ["before.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["before.swift"]
+			}
 
-		monitor.observations[0].invalidate()
-		monitor.emit(at: 0)
-		#expect(monitor.observations.count == 2)
-		#expect(monitor.observations[0].isCancelled)
-		#expect(runtime.index == nil)
-		_ = try await service.path(at: 1)
-		monitor.emit(
-			at: 0,
-			includingCancelled: true
-		)
-		await service.finish(
-			at: 1,
-			files: ["after.swift"]
-		)
-		try await waitUntil
-		{
-			runtime.index?.files == ["after.swift"]
+			monitor.observations[0].invalidate()
+			monitor.emit(at: 0)
+			#expect(monitor.observations.count == 2)
+			#expect(monitor.observations[0].isCancelled)
+			#expect(runtime.index == nil)
+			_ = try await service.path(at: 1)
+			monitor.emit(
+				at: 0,
+				includingCancelled: true
+			)
+			await service.finish(
+				at: 1,
+				files: ["after.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["after.swift"]
+			}
+			#expect(await service.count == 2)
+			#expect(!monitor.observations[1].isCancelled)
 		}
-		#expect(await service.count == 2)
-		#expect(!monitor.observations[1].isCancelled)
 	}
 
 	@Test func unavailableWatcherIsRetriedForTheNextOwner() async throws
@@ -728,45 +748,65 @@ struct ProjectFileIndexRuntimeTests
 			service: service,
 			monitor: monitor
 		)
-		defer
-		{
-			runtime.shutdown()
-		}
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "first"
-		))
-		_ = try await service.path(at: 0)
-		await service.finish(
-			at: 0,
-			files: ["old.swift"]
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				runtime.job
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				runtime.shutdown()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
 		)
-		try await waitUntil
 		{
-			runtime.index?.files == ["old.swift"]
-		}
+			defer
+			{
+				runtime.shutdown()
+			}
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "first"
+			))
+			_ = try await service.path(at: 0)
+			await service.finish(
+				at: 0,
+				files: ["old.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["old.swift"]
+			}
 
-		monitor.isAvailable = true
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "second"
-		))
-		#expect(monitor.observations.count == 1)
-		_ = try await service.path(at: 1)
-		await service.finish(
-			at: 1,
-			files: ["fresh.swift"]
-		)
-		try await waitUntil
-		{
-			runtime.index?.files == ["fresh.swift"]
+			monitor.isAvailable = true
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "second"
+			))
+			#expect(monitor.observations.count == 1)
+			_ = try await service.path(at: 1)
+			await service.finish(
+				at: 1,
+				files: ["fresh.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["fresh.swift"]
+			}
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "third"
+			))
+			#expect(runtime.index?.files == ["fresh.swift"])
+			#expect(await service.count == 2)
 		}
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "third"
-		))
-		#expect(runtime.index?.files == ["fresh.swift"])
-		#expect(await service.count == 2)
 	}
 
 	@Test func changedRootDuringEnumerationRejectsTheOldPhysicalRoot() async throws
@@ -780,33 +820,53 @@ struct ProjectFileIndexRuntimeTests
 			{
 			}
 		)
-		defer
-		{
-			runtime.shutdown()
-		}
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "first"
-		))
-		_ = try await service.path(at: 0)
-		monitor.observations[0].invalidate()
-		await service.finish(
-			at: 0,
-			files: ["stale.swift"]
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				runtime.job
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				runtime.shutdown()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
 		)
-		_ = try await service.path(at: 1)
-		#expect(runtime.index == nil)
-		#expect(monitor.observations.count == 2)
-		#expect(monitor.observations[0].isCancelled)
-		await service.finish(
-			at: 1,
-			files: ["fresh.swift"]
-		)
-		try await waitUntil
 		{
-			runtime.index?.files == ["fresh.swift"]
+			defer
+			{
+				runtime.shutdown()
+			}
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "first"
+			))
+			_ = try await service.path(at: 0)
+			monitor.observations[0].invalidate()
+			await service.finish(
+				at: 0,
+				files: ["stale.swift"]
+			)
+			_ = try await service.path(at: 1)
+			#expect(runtime.index == nil)
+			#expect(monitor.observations.count == 2)
+			#expect(monitor.observations[0].isCancelled)
+			await service.finish(
+				at: 1,
+				files: ["fresh.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["fresh.swift"]
+			}
+			#expect(await service.count == 2)
 		}
-		#expect(await service.count == 2)
 	}
 
 	@Test func synchronousRebindingCallbackStartsOnlyItsLatestRequest() async throws
@@ -820,36 +880,56 @@ struct ProjectFileIndexRuntimeTests
 			{
 			}
 		)
-		defer
-		{
-			runtime.shutdown()
-		}
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "first"
-		))
-		_ = try await service.path(at: 0)
-		await service.finish(
-			at: 0,
-			files: ["old.swift"]
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				runtime.job
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				runtime.shutdown()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
 		)
-		try await waitUntil
 		{
-			runtime.index?.files == ["old.swift"]
+			defer
+			{
+				runtime.shutdown()
+			}
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "first"
+			))
+			_ = try await service.path(at: 0)
+			await service.finish(
+				at: 0,
+				files: ["old.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["old.swift"]
+			}
+			monitor.observations[0].invalidate()
+			monitor.emit(at: 0)
+			_ = try await service.path(at: 1)
+			await service.finish(
+				at: 1,
+				files: ["fresh.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["fresh.swift"]
+			}
+			#expect(await service.count == 2)
+			#expect(monitor.observations.count == 2)
 		}
-		monitor.observations[0].invalidate()
-		monitor.emit(at: 0)
-		_ = try await service.path(at: 1)
-		await service.finish(
-			at: 1,
-			files: ["fresh.swift"]
-		)
-		try await waitUntil
-		{
-			runtime.index?.files == ["fresh.swift"]
-		}
-		#expect(await service.count == 2)
-		#expect(monitor.observations.count == 2)
 	}
 
 	@Test func changedRootIsRevalidatedBeforeReusingAThreadSwitchCache() async throws
@@ -860,39 +940,59 @@ struct ProjectFileIndexRuntimeTests
 			service: service,
 			monitor: monitor
 		)
-		defer
-		{
-			runtime.shutdown()
-		}
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "first"
-		))
-		_ = try await service.path(at: 0)
-		await service.finish(
-			at: 0,
-			files: ["old.swift"]
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				runtime.job
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				runtime.shutdown()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
 		)
-		try await waitUntil
 		{
-			runtime.index?.files == ["old.swift"]
-		}
-		monitor.observations[0].invalidate()
-		runtime.select(makeOwner(
-			path: "/fixture",
-			thread: "second"
-		))
-		#expect(runtime.index == nil)
-		#expect(monitor.observations.count == 2)
-		#expect(monitor.observations[0].isCancelled)
-		_ = try await service.path(at: 1)
-		await service.finish(
-			at: 1,
-			files: ["fresh.swift"]
-		)
-		try await waitUntil
-		{
-			runtime.index?.files == ["fresh.swift"]
+			defer
+			{
+				runtime.shutdown()
+			}
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "first"
+			))
+			_ = try await service.path(at: 0)
+			await service.finish(
+				at: 0,
+				files: ["old.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["old.swift"]
+			}
+			monitor.observations[0].invalidate()
+			runtime.select(makeOwner(
+				path: "/fixture",
+				thread: "second"
+			))
+			#expect(runtime.index == nil)
+			#expect(monitor.observations.count == 2)
+			#expect(monitor.observations[0].isCancelled)
+			_ = try await service.path(at: 1)
+			await service.finish(
+				at: 1,
+				files: ["fresh.swift"]
+			)
+			try await waitForIndexChange(in: runtime)
+			{
+				runtime.index?.files == ["fresh.swift"]
+			}
 		}
 	}
 
@@ -904,32 +1004,52 @@ struct ProjectFileIndexRuntimeTests
 			service: service,
 			monitor: monitor
 		)
-		defer
-		{
-			runtime.shutdown()
-		}
-		for (request, thread) in ["first", "second", "first"].enumerated()
-		{
-			runtime.select(makeOwner(
-				path: "/fixture",
-				thread: thread
-			))
-			#expect(runtime.index == nil)
-			_ = try await service.path(at: request)
-			let files = request == 1 ? [] : ["linked.swift"]
-			await service.finish(
-				at: request,
-				files: files,
-				isReusableWithProjectObservation: false
-			)
-			try await waitUntil
+		try await withRuntimeReadCleanup(
+			currentTask:
 			{
-				runtime.index?.files == files
+				runtime.job
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				runtime.shutdown()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
 			}
+		)
+		{
+			defer
+			{
+				runtime.shutdown()
+			}
+			for (request, thread) in ["first", "second", "first"].enumerated()
+			{
+				runtime.select(makeOwner(
+					path: "/fixture",
+					thread: thread
+				))
+				#expect(runtime.index == nil)
+				_ = try await service.path(at: request)
+				let files = request == 1 ? [] : ["linked.swift"]
+				await service.finish(
+					at: request,
+					files: files,
+					isReusableWithProjectObservation: false
+				)
+				try await waitForIndexChange(in: runtime)
+				{
+					runtime.index?.files == files
+				}
+			}
+			#expect(await service.count == 3)
+			#expect(monitor.observations.count == 1)
+			#expect(!monitor.observations[0].isCancelled)
 		}
-		#expect(await service.count == 3)
-		#expect(monitor.observations.count == 1)
-		#expect(!monitor.observations[0].isCancelled)
 	}
 
 	private func makeOwner(
@@ -997,22 +1117,6 @@ struct ProjectFileIndexRuntimeTests
 		}
 		try Task.checkCancellation()
 	}
-	private func waitUntil(
-		attempts: Int = 100,
-		_ condition: () async -> Bool
-	) async throws
-	{
-		for _ in 0 ..< attempts
-		{
-			if await condition()
-			{
-				return
-			}
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		Issue.record("Timed out waiting for file index")
-	}
-
 }
 
 @MainActor
@@ -1253,11 +1357,6 @@ private actor ControlledProjectFileIndexService: ProjectFileIndexService
 			waiter.yield(())
 			waiter.finish()
 		}
-	}
-
-	func wasCancelled(at index: Int) -> Bool
-	{
-		cancelled.contains(index)
 	}
 
 }
