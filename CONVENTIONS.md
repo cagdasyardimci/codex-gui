@@ -46,7 +46,7 @@ Within `Application/`, use `State/` for shared models, actions, intents, identit
 
 ### Feature groups
 
-Use the [feature directory map](Sources/CodexGUI/Features/README.md) for feature views and presentation helpers. Shared subagent avatars and attachment preparation belong to `Features/Shared/`; follow [attachment contracts](docs/architecture.md#presentation) for loading and URL resolution. Keep shared attachment values independent of feature views. `App/WindowLayout/` groups pane controls, layout policies and transitions. `App/Design/` groups shared design catalogues and their AppKit resolvers, renderers and styling helpers; native view classes retain their own files and lifecycle responsibilities. See [interface styling](docs/interface-styling.md#token-ownership-and-changes) for the ownership map.
+Use the [feature directory map](Sources/CodexGUI/Features/README.md) for feature views and presentation helpers. Shared subagent avatars and attachment preparation belong to `Features/Shared/`; follow [attachment contracts](docs/architecture.md#presentation) for loading and URL resolution. Keep shared attachment values independent of feature views. Canonical ownership keys and summary availability/totals used by actions and reducers belong to `Application/State/`; view-facing summary models, routes and artwork remain with presentation owners. `App/WindowLayout/` groups pane controls, layout policies and transitions. `App/Design/` groups shared design catalogues and their AppKit resolvers, renderers and styling helpers; native view classes retain their own files and lifecycle responsibilities. See [interface styling](docs/interface-styling.md#token-ownership-and-changes) for the ownership map.
 
 ### Component files and extensions
 
