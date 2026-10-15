@@ -30,7 +30,7 @@ extension ApplicationStateTests
 		{
 			await state.inputs.connect()
 		}
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			afterVersion ? service.pendingConnection != nil : service.pendingVersion != nil
 		})
@@ -48,6 +48,7 @@ extension ApplicationStateTests
 			service.pendingVersion = nil
 		}
 		await connection.value
+		try await awaitProjectContextLoad(state)
 		#expect(service.connectionCount == 1)
 		#expect(state.currentSnapshot.canSend)
 		#expect(state.currentSnapshot.backendDescription == "codex-cli 0.153.2 · Tested baseline")
@@ -100,7 +101,7 @@ extension ApplicationStateTests
 				commandRevision: 0
 			)
 			store.dispatch(.conversations(.earlierTurnsRequested(first)))
-			try #require(await waitUntil
+			try #require(await service.awaitReadiness
 			{
 				service.pendingEarlierRead != nil
 			})
@@ -209,7 +210,7 @@ extension ApplicationStateTests
 					commandRevision: 0,
 					purpose: purpose
 				))))
-				try #require(await waitUntil
+				try #require(await service.awaitReadiness
 				{
 					service.pendingRead != nil
 				})
@@ -225,7 +226,7 @@ extension ApplicationStateTests
 					),
 					commandRevision: 0
 				))))
-				try #require(await waitUntil
+				try #require(await service.awaitReadiness
 				{
 					service.pendingEarlierRead != nil
 				})
@@ -316,7 +317,7 @@ extension ApplicationStateTests
 				purpose: purpose
 			)
 			store.dispatch(.conversations(.historyRequested(operation)))
-			try #require(await waitUntil
+			try #require(await service.awaitReadiness
 			{
 				service.pendingRead != nil
 			})
@@ -402,7 +403,7 @@ extension ApplicationStateTests
 			commandRevision: 0
 		)
 		store.dispatch(.conversations(.earlierTurnsRequested(page)))
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingEarlierRead != nil
 		})
@@ -457,10 +458,13 @@ extension ApplicationStateTests
 		state.inputs.openProject(project)
 		service.suspendNextRead = true
 		let obsoleteRead = try #require(state.inputs.selectThread(service.thread.id))
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingRead != nil
 		})
+		// Cancellation finishes the handle before a suspended service returns.
+		let obsoleteTasks = state.store.executionTasks(for: obsoleteRead.context)
+		try #require(!obsoleteTasks.isEmpty)
 		state.inputs.selectThread("thread-2")
 		service.savedTurns = [
 			makeTurn(
@@ -476,7 +480,7 @@ extension ApplicationStateTests
 			)
 		]
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.entries.last?.body == "new history"
 		})
@@ -500,6 +504,10 @@ extension ApplicationStateTests
 			)
 		)
 		_ = await obsoleteRead.wait()
+		for task in obsoleteTasks
+		{
+			await task.value
+		}
 		#expect(state.currentSnapshot.entries.last?.body == "new history")
 	}
 
@@ -524,13 +532,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Work on A")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -547,14 +553,14 @@ extension ApplicationStateTests
 				)
 			)
 		)
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.readThreadCount >= 2
 		})
 
 		service.suspendNextRead = true
 		state.inputs.selectThread("thread-2")
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingRead != nil
 		})
@@ -577,10 +583,8 @@ extension ApplicationStateTests
 				nextTurnsCursor: nil
 			)
 		)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		#expect(state.currentSnapshot.draft == "Work on B")
 	}
 
@@ -619,13 +623,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Work on A")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -642,17 +644,20 @@ extension ApplicationStateTests
 				)
 			)
 		)
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.readThreadCount >= 2
 		})
 
 		service.suspendNextRead = true
 		let obsoleteRead = try #require(state.inputs.selectThread(other.id))
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.pendingRead != nil
 		})
+		// Cancellation finishes the handle before a suspended service returns.
+		let obsoleteTasks = state.store.executionTasks(for: obsoleteRead.context)
+		try #require(!obsoleteTasks.isEmpty)
 		state.inputs.updateDraft("Draft for B")
 		#expect(!state.currentSnapshot.canSend)
 		await state.inputs.connect()
@@ -677,6 +682,10 @@ extension ApplicationStateTests
 		)
 		service.finishPendingRead(with: detail)
 		_ = await obsoleteRead.wait()
+		for task in obsoleteTasks
+		{
+			await task.value
+		}
 		#expect(state.currentSnapshot.canSend)
 		#expect(state.currentSnapshot.selectedThreadID == other.id)
 		#expect(state.currentSnapshot.entries.map(\.body) == ["Current history in B"])
@@ -727,7 +736,7 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.entries.count == 1
 		})
@@ -740,7 +749,7 @@ extension ApplicationStateTests
 		)
 		state.inputs.jumpToBookmark(bookmark)
 		#expect(state.currentSnapshot.pendingJumpItemID == nil)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.pendingJumpItemID == "old:old-message"
 		})
@@ -760,10 +769,19 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.jumpError?.contains("unavailable") == true)
 	}
 
-	@Test func unselectedSearchHistoryCannotAdoptAnInProgressExecutionOwner() async throws
+	@Test(arguments: [nil, "idle", "active"] as [String?])
+	func unselectedSearchHistoryCannotAdoptAnInProgressExecutionOwner(status: String?) async throws
 	{
 		let service = MockCodexService()
-		service.otherThread = ThreadSummary(json: ["id": "thread-2", "cwd": "/tmp"])!
+		var summaryJSON: [String: Any] = [
+			"id": "thread-2",
+			"cwd": "/tmp",
+		]
+		if let status
+		{
+			summaryJSON["status"] = ["type": status]
+		}
+		service.otherThread = ThreadSummary(json: summaryJSON)!
 		service.turnsByThreadID["thread-2"] = [makeTurn(
 			id: "remote-running",
 			status: "inProgress",
@@ -773,6 +791,10 @@ extension ApplicationStateTests
 			model: contextModel(),
 			service: service
 		)
+		defer
+		{
+			store.shutdown()
+		}
 		let operation = ConversationReadOperation(
 			context: store.operationContext(threadID: "thread-2"),
 			commandRevision: 0,
@@ -788,6 +810,15 @@ extension ApplicationStateTests
 		#expect(store.model.execution.owner == nil)
 		#expect(store.model.execution.activeThreadID == nil)
 		#expect(store.model.execution.state == .ready)
+		let searchedExecution = store.model.execution(for: .thread("thread-2"))
+		#expect(searchedExecution.owner == nil)
+		#expect(searchedExecution.activeThreadID == nil)
+		#expect(searchedExecution.activeTurnID == nil)
+		#expect(searchedExecution.state == .ready)
+		#expect(!searchedExecution.needsReconciliation)
+		#expect(!searchedExecution.hasUncertainRequest)
+		#expect(!store.model.hasActiveExecution)
+		#expect(!WorkspaceLifecycleReducer.blocksCleanup(store.model))
 	}
 
 	@Test func messageSearchLoadsAnotherListedConversationAndUpdatesScope() async throws
@@ -841,7 +872,7 @@ extension ApplicationStateTests
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.entries.count == 1 && state.currentSnapshot.threads.count == 2
 			}
@@ -849,20 +880,43 @@ extension ApplicationStateTests
 		state.inputs.searchMessages("needle")
 		#expect(state.currentSnapshot.messageSearch?.scope.loadedThreadCount == 1)
 		#expect(state.currentSnapshot.messageSearch?.scope.totalThreadCount == 2)
-		try #require(await waitUntil
+		let firstHit = MessageSearchHit(
+			threadID: "thread-1",
+			threadTitle: "Fixture conversation",
+			turnID: "turn-a",
+			itemID: "message-a",
+			itemType: "userMessage",
+			snippet: "needle one"
+		)
+		let secondHit = MessageSearchHit(
+			threadID: "thread-2",
+			threadTitle: "Other",
+			turnID: "turn-b",
+			itemID: "message-b",
+			itemType: "agentMessage",
+			snippet: "needle two"
+		)
+		try #require(await awaitApplicationStateCondition(state)
 		{
 			!state.currentSnapshot.searchLoading
 		})
 		#expect(state.currentSnapshot.messageSearch?.hits.count == 1)
+		#expect(state.currentSnapshot.messageSearch?.hits == [firstHit])
 		state.inputs.loadMoreSearchHistory()
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.messageSearch?.scope.loadedThreadCount == 2
 					&& !state.currentSnapshot.searchLoading
 			}
 		)
 		#expect(state.currentSnapshot.messageSearch?.hits.count == 2)
+		#expect(state.currentSnapshot.messageSearch?.hits.sorted
+		{
+			$0.threadID < $1.threadID
+		} == [firstHit, secondHit])
+		#expect(service.readThreadIDs.contains("thread-2"))
+		#expect(state.currentSnapshot.selectedThreadID == "thread-1")
 		#expect(state.currentSnapshot.messageSearch?.scope.canLoadMore == false)
 	}
 
@@ -894,10 +948,18 @@ extension ApplicationStateTests
 			threadId: service.thread.id,
 			turn: finished
 		))
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingRead != nil
 		})
+		let obsoleteRead = try #require(state.store.model.conversations.pendingReads[
+			ConversationReadKey(
+				purpose: .completion,
+				threadID: service.thread.id
+			)
+		])
+		let obsoleteTasks = state.store.executionTasks(for: obsoleteRead.context)
+		try #require(!obsoleteTasks.isEmpty)
 		service.configureCheckout(otherProject)
 		state.inputs.openProject(otherProject)
 		service.finishPendingRead(
@@ -907,7 +969,11 @@ extension ApplicationStateTests
 				nextTurnsCursor: nil
 			)
 		)
-		try await Task.sleep(for: .milliseconds(15))
+		// Inspect the new project only after the old service response was actually handled.
+		for task in obsoleteTasks
+		{
+			await task.value
+		}
 		state.inputs.searchMessages("private old repository")
 		#expect(state.currentSnapshot.projectPath == otherProject.path)
 		#expect(state.currentSnapshot.messageSearch?.hits.isEmpty == true)
@@ -940,14 +1006,14 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		try #require(await waitUntil
+		try #require(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.canLoadEarlierTurns
 		})
 		service.suspendEarlierRead = true
 		state.inputs.loadEarlierTurns()
 		state.inputs.loadEarlierTurns()
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingEarlierRead != nil
 		})
@@ -962,7 +1028,7 @@ extension ApplicationStateTests
 		)
 		service.pendingEarlierRead?.resume(returning: ([older], nil))
 		service.pendingEarlierRead = nil
-		try #require(await waitUntil
+		try #require(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.entries.count == 1
 		})
@@ -1002,10 +1068,8 @@ extension ApplicationStateTests
 			service.configureCheckout(project)
 			state.inputs.openProject(project)
 			state.inputs.selectThread(service.thread.id)
-			try #require(await waitUntil
-			{
-				state.currentSnapshot.canSend
-			})
+			await awaitSubmissionReadiness(state)
+			try #require(state.currentSnapshot.canSend)
 			state.inputs.searchMessages("needle")
 			service.suspendEarlierRead = true
 			if searchFirst
@@ -1016,7 +1080,7 @@ extension ApplicationStateTests
 			{
 				state.inputs.loadEarlierTurns()
 			}
-			try #require(await waitUntil
+			try #require(await service.awaitReadiness
 			{
 				service.pendingEarlierRead != nil
 			})
@@ -1038,7 +1102,7 @@ extension ApplicationStateTests
 			// Stable IDs own each turn once.
 			service.pendingEarlierRead?.resume(returning: ([older, older, latest], nil))
 			service.pendingEarlierRead = nil
-			try #require(await waitUntil
+			try #require(await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.reviewTurns.count == 2 && !state.currentSnapshot.searchLoading
 			})
@@ -1078,10 +1142,8 @@ extension ApplicationStateTests
 			service.configureCheckout(project)
 			state.inputs.openProject(project)
 			state.inputs.selectThread(service.thread.id)
-			try #require(await waitUntil
-			{
-				state.currentSnapshot.canSend
-			})
+			await awaitSubmissionReadiness(state)
+			try #require(state.currentSnapshot.canSend)
 			let bookmark = ConversationBookmark(
 				threadID: service.thread.id,
 				turnID: "older-turn",
@@ -1098,7 +1160,7 @@ extension ApplicationStateTests
 			{
 				state.inputs.loadEarlierTurns()
 			}
-			try #require(await waitUntil
+			try #require(await service.awaitReadiness
 			{
 				service.pendingEarlierRead != nil
 			})
@@ -1118,7 +1180,7 @@ extension ApplicationStateTests
 			)
 			service.pendingEarlierRead?.resume(returning: ([older], nil))
 			service.pendingEarlierRead = nil
-			try #require(await waitUntil
+			try #require(await awaitApplicationStateCondition(state)
 			{
 				!state.currentSnapshot.jumpLoading
 			})
@@ -1159,16 +1221,19 @@ extension ApplicationStateTests
 			service.configureCheckout(project)
 			state.inputs.openProject(project)
 			state.inputs.selectThread(service.thread.id)
-			try #require(await waitUntil
-			{
-				state.currentSnapshot.canSend
-			})
+			await awaitSubmissionReadiness(state)
+			try #require(state.currentSnapshot.canSend)
 			service.suspendEarlierRead = true
 			state.inputs.loadEarlierTurns()
-			try #require(await waitUntil
+			try #require(await service.awaitReadiness
 			{
 				service.pendingEarlierRead != nil
 			})
+			let obsoletePage = try #require(
+				state.store.model.conversations.historyLoads[service.thread.id]
+			)
+			let obsoleteTasks = state.store.executionTasks(for: obsoletePage.context)
+			try #require(!obsoleteTasks.isEmpty)
 			if reconnect
 			{
 				await state.inputs.connect()
@@ -1185,7 +1250,11 @@ extension ApplicationStateTests
 			)
 			service.pendingEarlierRead?.resume(returning: ([obsolete], nil))
 			service.pendingEarlierRead = nil
-			try await Task.sleep(for: .milliseconds(15))
+			// A retired handle alone cannot prove that its late response has returned.
+			for task in obsoleteTasks
+			{
+				await task.value
+			}
 			#expect(!state.currentSnapshot.entries.contains
 			{
 				$0.body == "private stale page"
@@ -1266,19 +1335,22 @@ extension ApplicationStateTests
 			service.configureCheckout(project)
 			state.inputs.openProject(project)
 			state.inputs.selectThread(service.thread.id)
-			try #require(await waitUntil
-			{
-				state.currentSnapshot.canSend
-			})
+			await awaitSubmissionReadiness(state)
+			try #require(state.currentSnapshot.canSend)
 			service.earlierReadsToSuspend = 2
 			state.inputs.loadEarlierTurns()
-			try #require(await waitUntil
+			try #require(await service.awaitReadiness
 			{
 				service.suspendedEarlierReads[1] != nil
 			})
+			let obsoletePage = try #require(
+				state.store.model.conversations.historyLoads[service.thread.id]
+			)
+			let obsoleteTasks = state.store.executionTasks(for: obsoletePage.context)
+			try #require(!obsoleteTasks.isEmpty)
 			await state.inputs.connect()
 			state.inputs.loadEarlierTurns()
-			try #require(await waitUntil
+			try #require(await service.awaitReadiness
 			{
 				service.suspendedEarlierReads[2] != nil
 			})
@@ -1306,7 +1378,11 @@ extension ApplicationStateTests
 					[stale],
 					nil
 				))
-				try await Task.sleep(for: .milliseconds(15))
+				// Preserve this response order by awaiting the retired execution, not elapsed time.
+				for task in obsoleteTasks
+				{
+					await task.value
+				}
 				#expect(!state.currentSnapshot.canLoadEarlierTurns)
 				#expect(state.currentSnapshot.entries.isEmpty)
 			}
@@ -1315,7 +1391,7 @@ extension ApplicationStateTests
 				nil
 			))
 			try #require(
-				await waitUntil
+				await awaitApplicationStateCondition(state)
 				{
 					state.currentSnapshot.entries.first?.body == "Current connection answer"
 				}
@@ -1326,7 +1402,11 @@ extension ApplicationStateTests
 					[stale],
 					nil
 				))
-				try await Task.sleep(for: .milliseconds(15))
+				// Preserve this response order by awaiting the retired execution, not elapsed time.
+				for task in obsoleteTasks
+				{
+					await task.value
+				}
 			}
 			#expect(state.currentSnapshot.entries.map(\.body) == ["Current connection answer"])
 			#expect(state.currentSnapshot.reviewTurns.map(\.turnID) == ["current", "latest"])

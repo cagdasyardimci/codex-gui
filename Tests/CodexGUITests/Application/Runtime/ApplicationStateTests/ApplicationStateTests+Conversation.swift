@@ -17,6 +17,7 @@ extension ApplicationStateTests
 		)
 		defer
 		{
+			state.shutdown()
 			try? FileManager.default.removeItem(at: project)
 		}
 		for number in 1 ... 2
@@ -36,18 +37,45 @@ extension ApplicationStateTests
 				id: "turn-\(number)",
 				status: "completed"
 			)
-			service.savedTurns.append(completed)
+			// The terminal notification omits content supplied only by the authoritative read.
+			service.savedTurns.append(makeTurn(
+				id: "turn-\(number)",
+				status: "completed",
+				items: [[
+					"id": "history-only-\(number)",
+					"type": "agentMessage",
+					"text": "Saved reply \(number)"
+				]]
+			))
 			service.emit(.turnCompleted(
 				threadId: service.thread.id,
 				turn: completed
 			))
-			try #require(await waitUntil
+			let read = try #require(state.store.model.conversations.pendingReads[
+				ConversationReadKey(
+					purpose: .completion,
+					threadID: service.thread.id
+				)
+			])
+			let refresh = try #require(state.store.operation(for: read.context))
+			try #require(await service.awaitReadiness
 			{
 				service.readThreadCount == readsBefore + 1
 			})
-			try #require(await waitUntil
+			try #require(await refresh.wait() == .finished)
+			await awaitSubmissionReadiness(state)
+			try #require(state.currentSnapshot.canSend)
+			let replies = state.currentSnapshot.entries.filter
 			{
-				state.currentSnapshot.canSend
+				$0.kind == .agent
+			}
+			#expect(replies.map(\.body) == (1 ... number).map
+			{
+				"Saved reply \($0)"
+			})
+			#expect(replies.map(\.id) == (1 ... number).map
+			{
+				"turn-\($0):history-only-\($0)"
 			})
 		}
 	}
@@ -71,15 +99,21 @@ extension ApplicationStateTests
 		{
 			try? FileManager.default.removeItem(at: project)
 		}
-		try #require(await waitUntil
+		try #require(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.draft.isEmpty
 		})
 		var publications = 0
+		let visiblePublications = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+		defer
+		{
+			visiblePublications.continuation.finish()
+		}
 		state.onChange =
 		{
 			_ in
 			publications += 1
+			visiblePublications.continuation.yield(())
 		}
 		#expect(publications == 1)
 		publications = 0
@@ -97,16 +131,21 @@ extension ApplicationStateTests
 			$0.body == "onetwothree"
 		})
 		#expect(publications == 0)
-		try #require(await waitUntil
+		try #require(await awaitPublicationGateCondition(publicationGate)
 		{
 			publicationGate.isWaiting
 		})
 		#expect(publications == 0)
 		publicationGate.release()
-		try #require(await waitUntil
+		// Coalesced rendering happens after store publication; observe this render callback itself.
+		for await _ in visiblePublications.stream
 		{
-			publications == 1
-		})
+			if publications == 1
+			{
+				break
+			}
+		}
+		try #require(publications == 1)
 		service.emit(.turnCompleted(
 			threadId: service.thread.id,
 			turn: makeTurn(
@@ -146,13 +185,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		try #require(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		try #require(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Work on A")
 		state.inputs.send()
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -178,7 +215,7 @@ extension ApplicationStateTests
 		)
 		service.suspendNextRead = true
 		state.inputs.selectThread(other.id)
-		try #require(await waitUntil
+		try #require(await service.awaitReadiness
 		{
 			service.pendingRead != nil
 		})
@@ -206,7 +243,7 @@ extension ApplicationStateTests
 		)
 		service.pendingRead = nil
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.entries.contains
 				{
@@ -253,13 +290,11 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 		state.inputs.updateDraft("Initial request")
 		state.inputs.send()
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.turnStartCount == 1
 		})
@@ -270,7 +305,7 @@ extension ApplicationStateTests
 		state.inputs.updateDraft("Redirect")
 		state.inputs.steer("Redirect")
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.statusMessage?.contains("outcome is uncertain") == true
 			}
@@ -285,7 +320,7 @@ extension ApplicationStateTests
 			conversation: conversation,
 			capturedOwner: owner
 		)
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.interruptedTurnIDs == ["turn-1"]
 		})
@@ -296,8 +331,13 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.draft == "Redirect")
 	}
 
-	@Test func terminalCommandHistoryClearsLiveCleanupBarrier() async throws
+	@Test(.testTiming) func terminalCommandHistoryClearsLiveCleanupBarrier() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		for useRefresh in [false, true]
 		{
 			let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
@@ -346,14 +386,14 @@ extension ApplicationStateTests
 			#expect(!state.beginWorkspaceCleanup())
 			if useRefresh
 			{
-				try #require(await waitUntil
+				try #require(await service.awaitReadiness
 				{
 					service.readThreadCount >= 2
 				})
 				service.savedTurns = [finished]
 				state.inputs.refreshThreads()
 			}
-			try #require(await waitUntil
+			try #require(await awaitApplicationStateCondition(state)
 			{
 				!state.isTaskActive
 			})

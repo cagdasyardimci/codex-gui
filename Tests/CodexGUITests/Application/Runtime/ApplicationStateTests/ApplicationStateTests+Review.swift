@@ -69,27 +69,48 @@ extension ApplicationStateTests
 		}
 		let selection = store.operationContext(threadID: "thread")
 		let edit = store.operationContext(threadID: "thread")
+		var armed = false
 		var edited = false
-		store.observe
+		var reservedRead: ReviewMarkerReadOperation?
+		let observation = store.observe
 		{
-			_ in
-			if !edited
+			published in
+			guard armed, !edited,
+					let pending = published.review.conversations[.thread("thread")]?
+					.pendingMarkerLoad,
+					pending.context.requestID == selection.requestID
+			else
 			{
-				edited = true
-				store.dispatch(.review(.markerRequested(
-					edit,
-					identity: identity,
-					reviewed: true
-				)))
+				return
 			}
+			reservedRead = pending
+			edited = true
+			store.dispatch(.review(.markerRequested(
+				edit,
+				identity: identity,
+				reviewed: true
+			)))
 		}
+		defer
+		{
+			store.removeObserver(observation)
+		}
+		#expect(!edited)
+		// Observe registers synchronously; only the selection publication may trigger the edit.
+		armed = true
 		store.dispatch(.review(.turnSelected(
 			selection,
 			conversation: .thread("thread"),
 			turnID: "turn"
 		)))
-		#expect(await store.operation(for: selection)?.wait() == .finished)
-		#expect(await store.operation(for: edit)?.wait() == .finished)
+		try #require(edited)
+		let capturedRead = try #require(reservedRead)
+		#expect(capturedRead.markerRevision == 0)
+		#expect(store.model.review.conversations[.thread("thread")]?.markerRevision == 1)
+		let selectionHandle = try #require(store.operation(for: selection))
+		let editHandle = try #require(store.operation(for: edit))
+		#expect(await selectionHandle.wait() == .finished)
+		#expect(await editHandle.wait() == .finished)
 		#expect(ReviewReducer.reviewedReferences(
 			store.model,
 			.thread("thread")
@@ -434,8 +455,10 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		try await awaitProjectContextLoad(state)
+		let selection = try #require(state.inputs.selectThread(service.thread.id))
+		try #require(await selection.wait() == .finished)
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			!state.currentSnapshot.diff.isEmpty
 		})
@@ -446,13 +469,11 @@ extension ApplicationStateTests
 			status: "inProgress"
 		)
 		state.inputs.updateDraft("Explain the result without editing files")
-		state.inputs.send()
+		let submission = try #require(state.inputs.send())
 		#expect(state.currentSnapshot.diff.isEmpty)
 		#expect(state.currentSnapshot.changedFiles.isEmpty)
-		#expect(await waitUntil
-		{
-			service.turnStartCount == 1
-		})
+		try #require(await submission.wait() == .finished)
+		#expect(service.turnStartCount == 1)
 
 		service.emit(.turnStarted(
 			threadId: service.thread.id,
@@ -493,10 +514,8 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
-		{
-			state.currentSnapshot.canSend
-		})
+		await awaitSubmissionReadiness(state)
+		#expect(state.currentSnapshot.canSend)
 
 		func fileItem(
 			_ id: String,
@@ -568,7 +587,10 @@ extension ApplicationStateTests
 			)
 		]
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(
+			state,
+			service: service
+		)
 		{
 			service.readThreadCount == 2 && state.currentSnapshot.canSend
 		})
@@ -645,7 +667,7 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.reviewTurns.count == 2
 		})
@@ -697,7 +719,7 @@ extension ApplicationStateTests
 		)
 		state.inputs.selectThread(service.thread.id)
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.selectedReview?.files.first?.diff
 					.contains("different") == true
@@ -750,8 +772,10 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		try await awaitProjectContextLoad(state)
+		let selection = try #require(state.inputs.selectThread(service.thread.id))
+		try #require(await selection.wait() == .finished)
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.reviewTurns.count == 1
 		})
@@ -762,17 +786,15 @@ extension ApplicationStateTests
 			status: "inProgress"
 		)
 		state.inputs.updateDraft("Update a file")
-		state.inputs.send()
-		#expect(await waitUntil
-		{
-			service.turnStartCount == 1
-		})
+		let submission = try #require(state.inputs.send())
+		try #require(await submission.wait() == .finished)
+		#expect(service.turnStartCount == 1)
 		service.emit(.turnStarted(
 			threadId: service.thread.id,
 			turn: service.nextTurn
 		))
 		state.inputs.selectThread("thread-2")
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.selectedThreadID == "thread-2"
 		})
@@ -846,24 +868,24 @@ extension ApplicationStateTests
 		await state.inputs.connect()
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
-		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		try await awaitProjectContextLoad(state)
+		let selection = try #require(state.inputs.selectThread(service.thread.id))
+		try #require(await selection.wait() == .finished)
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.selectedReview != nil
 		})
 		state.inputs.updateDraft("Start task")
-		state.inputs.send()
-		#expect(await waitUntil
-		{
-			service.turnStartCount == 1
-		})
+		let submission = try #require(state.inputs.send())
+		try #require(await submission.wait() == .finished)
+		#expect(service.turnStartCount == 1)
 		service.emit(.turnStarted(
 			threadId: service.thread.id,
 			turn: service.nextTurn
 		))
 		state.inputs.selectThread("thread-2")
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.selectedThreadID == "thread-2"
 					&& state.currentSnapshot.selectedReview != nil
@@ -901,7 +923,7 @@ extension ApplicationStateTests
 		#expect(sourceBoundDraft.contains("Origin thread: \(service.thread.id)"))
 		#expect(sourceBoundDraft.contains("Origin turn: source-turn"))
 		state.inputs.steer(sourceBoundDraft)
-		#expect(await waitUntil
+		#expect(await service.awaitReadiness
 		{
 			service.steeredTurns.count == 1
 		})
@@ -945,7 +967,7 @@ extension ApplicationStateTests
 		]
 		state.inputs.selectThread(other.id)
 		try #require(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.entries.first?.body == "Visible other answer"
 			}
@@ -966,18 +988,24 @@ extension ApplicationStateTests
 			threadId: service.thread.id,
 			turn: ownerTurn
 		))
-		try #require(await waitUntil
+		let completedRead = try #require(state.store.model.conversations.pendingReads.values.first
+		{
+			$0.purpose == .completion && $0.context.threadID == service.thread.id
+		})
+		let refresh = try #require(state.store.operation(for: completedRead.context))
+		try #require(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.navigationTargets.isEmpty
 		})
-		try await Task.sleep(for: .milliseconds(15))
+		// Verify the background refresh has returned before checking the visible conversation.
+		_ = await refresh.wait()
 		#expect(state.currentSnapshot.selectedThreadID == other.id)
 		#expect(state.currentSnapshot.selectedReviewTurnID == "other-turn")
 		#expect(state.currentSnapshot.entries.first?.body == "Visible other answer")
 		#expect(state.currentSnapshot.draft == "Other draft")
 		state.inputs.selectThread(service.thread.id)
 		try #require(
-			await waitUntil
+			await awaitApplicationStateCondition(state)
 			{
 				state.currentSnapshot.entries.first?.body == "Background owner answer"
 			}

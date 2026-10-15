@@ -26,7 +26,7 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.canManageThreads
 		})
@@ -34,7 +34,10 @@ extension ApplicationStateTests
 		state.inputs.renameSelectedThread("  Clear name  ")
 		#expect(!state.currentSnapshot.canManageThreads)
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(
+				state,
+				service: service
+			)
 			{
 				service.renamedThreads.count == 1
 					&& state.currentSnapshot.canManageThreads
@@ -66,7 +69,7 @@ extension ApplicationStateTests
 		service.configureCheckout(project)
 		state.inputs.openProject(project)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.canManageThreads
 		})
@@ -74,7 +77,10 @@ extension ApplicationStateTests
 
 		state.inputs.archiveSelectedThread()
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(
+				state,
+				service: service
+			)
 			{
 				service.archivedThreadIDs == [service.thread.id]
 					&& state.currentSnapshot.selectedThreadID == nil
@@ -89,21 +95,27 @@ extension ApplicationStateTests
 
 		state.inputs.setArchivedFilter(true)
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(
+				state,
+				service: service
+			)
 			{
 				state.currentSnapshot.showingArchived
 					&& state.currentSnapshot.threads.map(\.id) == [service.thread.id]
 			}
 		)
 		state.inputs.selectThread(service.thread.id)
-		#expect(await waitUntil
+		#expect(await awaitApplicationStateCondition(state)
 		{
 			state.currentSnapshot.canManageThreads
 		})
 		#expect(!state.currentSnapshot.canSend)
 		state.inputs.archiveSelectedThread()
 		#expect(
-			await waitUntil
+			await awaitApplicationStateCondition(
+				state,
+				service: service
+			)
 			{
 				service.unarchivedThreadIDs == [service.thread.id]
 					&& !state.currentSnapshot.showingArchived && state.currentSnapshot
