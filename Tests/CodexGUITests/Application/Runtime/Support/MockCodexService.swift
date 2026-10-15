@@ -8,6 +8,58 @@ final class MockCodexService: CodexService
 {
 	var onEvent: ((AppServerEvent) -> Void)?
 	var onDisconnect: ((String) -> Void)?
+	private var readinessObservers: [UUID: @MainActor () -> Void] = [:]
+
+	/// Mock counters and installed continuations do not necessarily publish store state.
+	@discardableResult
+	func observeReadiness(_ observer: @escaping @MainActor () -> Void) -> UUID
+	{
+		let id = UUID()
+		readinessObservers[id] = observer
+		observer()
+		return id
+	}
+
+	func removeReadinessObserver(_ id: UUID)
+	{
+		readinessObservers.removeValue(forKey: id)
+	}
+
+	private func publishReadiness()
+	{
+		for observer in Array(readinessObservers.values)
+		{
+			observer()
+		}
+	}
+
+	func awaitReadiness(matching predicate: @escaping @MainActor () -> Bool) async -> Bool
+	{
+		var observation: UUID?
+		let stream = AsyncStream<Void>
+		{
+			continuation in
+			observation = observeReadiness
+			{
+				guard predicate()
+				else
+				{
+					return
+				}
+				continuation.yield(())
+				continuation.finish()
+			}
+		}
+		for await _ in stream
+		{
+			break
+		}
+		if let observation
+		{
+			removeReadinessObserver(observation)
+		}
+		return predicate()
+	}
 	var backendDiagnostics = BackendDiagnosticsSnapshot(
 		cliVersion: "codex-cli 0.153.2",
 		exitCode: nil,
@@ -34,23 +86,77 @@ final class MockCodexService: CodexService
 	var readNextCursor: String?
 	var earlierPages: [String: (turns: [CodexTurn], nextCursor: String?)] = [:]
 	var earlierReadCursors: [String] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var turnReferencePages: [String: TurnReferencePage] = [:]
 	var turnReferenceReads: [(threadID: String, cursor: String?)] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var referencedTurnContents: [String: CodexTurn] = [:]
 	var suspendTurnContentRead = false
 	var pendingTurnContentRead: CheckedContinuation<CodexTurn, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var turnContentReads: [(threadID: String, turnID: String)] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var suspendTurnReferenceRead = false
 	var pendingTurnReferenceRead: CheckedContinuation<TurnReferencePage, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var earlierReadsToSuspend = 0
 	var suspendedEarlierReads:
 		[Int: CheckedContinuation<(turns: [CodexTurn], nextCursor: String?), Error>] = [:]
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var nextTurn = CodexTurn(json: ["id": "turn-1", "status": "inProgress", "items": []])!
 	var suspendThreadStart = false
 	var pendingThreadStart: CheckedContinuation<ThreadDetail, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var suspendTurnStart = false
 	var pendingTurnStart: CheckedContinuation<CodexTurn, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var turnStartCount = 0
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var capturedTurnPreferences: [
 		(modelID: String?, effort: String?, preferences: RunPreferences)
 	] =
@@ -59,20 +165,74 @@ final class MockCodexService: CodexService
 	var startTurnError: Error?
 	var readThreadError: Error?
 	var readThreadCount = 0
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var readThreadIDs: [String] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var threadListCount = 0
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var suspendNextRead = false
 	var pendingRead: CheckedContinuation<ThreadDetail, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var suspendInterrupt = false
 	var pendingInterrupt: CheckedContinuation<Void, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var suspendEarlierRead = false
 	var pendingEarlierRead: CheckedContinuation<(turns: [CodexTurn], nextCursor: String?), Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var interruptedTurnIDs: [String] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var steeredTurns: [(threadID: String, turnID: String, text: String)] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var steerError: Error?
 	var steerAcknowledgedTurnID: String?
 	var suspendSteer = false
 	var pendingSteer: CheckedContinuation<String, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var respondedRequestIDs: [String] = []
 	var beforeResponseReturns: (() -> Void)?
 	var responseError: Error?
@@ -96,12 +256,31 @@ final class MockCodexService: CodexService
 		}
 	}
 	var sentTurnRequests: [(text: String, skills: [SkillReference])] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var sentInputRequests: [[TurnInput]] = []
 	var steeredInputRequests: [[TurnInput]] = []
 	var rateLimitReadCount = 0
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var suspendNextRateLimitRead = false
 	var suspendRateLimitReadNumbers: Set<Int> = []
+	var rateLimitSnapshotsByReadNumber: [Int: AccountRateLimitsSnapshot] = [:]
 	var pendingRateLimitRead: CheckedContinuation<AccountRateLimitsSnapshot, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var fixtureRateLimits: AccountRateLimitsSnapshot
 	{
 		AccountRateLimitsSnapshot(json: [
@@ -111,12 +290,42 @@ final class MockCodexService: CodexService
 	var modelsError: Error?
 	var suspendVersion = false
 	var pendingVersion: CheckedContinuation<String, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var suspendConnection = false
 	var pendingConnection: CheckedContinuation<Void, Error>?
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var connectionCount = 0
 	var archivedThreadIDs: [String] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var unarchivedThreadIDs: [String] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 	var renamedThreads: [(String, String)] = []
+	{
+		didSet
+		{
+			publishReadiness()
+		}
+	}
 
 	func executableVersion() async throws -> String
 	{
@@ -204,7 +413,7 @@ final class MockCodexService: CodexService
 				pendingRateLimitRead = continuation
 			}
 		}
-		return fixtureRateLimits
+		return rateLimitSnapshotsByReadNumber[rateLimitReadCount] ?? fixtureRateLimits
 	}
 
 	func threads(for directory: URL) async throws -> [ThreadSummary]
