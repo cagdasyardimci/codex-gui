@@ -15,7 +15,12 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 	private static let maximumHeight: CGFloat = 62 * markHeight
 	private static let edgeFadeHeight: CGFloat = 40
 	var onLoadTurnPreview: ((String) -> Void)?
-	private var hoverLoadTask: Task<Void, Never>?
+	// Expose this operation for lifecycle waits, including completion after cancellation.
+	private(set) var hoverLoadTask: Task<Void, Never>?
+	private var previewDebounceSleep: @MainActor (Duration) async throws -> Void =
+	{
+		try await Task.sleep(for: $0)
+	}
 	var onJump: ((ConversationTurnSummary) -> Void)?
 	var onLoadEarlierReferences: (() -> Void)?
 	var canLoadEarlierReferences = false
@@ -50,6 +55,14 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 	private var previewAppearance: DesktopPanelAppearanceBinding?
 	private var previewTurnID: String?
 	private var dismissal: DispatchWorkItem?
+
+	convenience init(
+		previewDebounceSleep: @escaping @MainActor (Duration) async throws -> Void
+	)
+	{
+		self.init(frame: .zero)
+		self.previewDebounceSleep = previewDebounceSleep
+	}
 
 	override init(frame: NSRect)
 	{
@@ -473,11 +486,12 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		{
 			hoverLoadTask = Task
 			{
-				[weak self] in
+				[weak self, previewDebounceSleep] in
 				do
 				{
-					try await Task
-						.sleep(for: .milliseconds(ConversationCachePolicy.debounceMilliseconds))
+					try await previewDebounceSleep(
+						.milliseconds(ConversationCachePolicy.debounceMilliseconds)
+					)
 				}
 				catch
 				{

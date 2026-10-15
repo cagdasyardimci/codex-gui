@@ -223,6 +223,13 @@ extension ConversationViewController
 			jumpAnimationRevision += 1
 			let revision = jumpAnimationRevision
 			isAnimatingJump = true
+			let animationCompletion = AsyncStream<Void>.makeStream()
+			jumpAnimationCompletion = Task
+			{
+				for await _ in animationCompletion.stream
+				{
+				}
+			}
 			NSAnimationContext.runAnimationGroup(
 				{
 					context in
@@ -234,6 +241,11 @@ extension ConversationViewController
 				completionHandler:
 				{
 					[weak self] in
+					// Signal native completion even when a later jump superseded this animation.
+					defer
+					{
+						animationCompletion.continuation.finish()
+					}
 					MainActor.assumeIsolated
 					{
 						guard let self, self.jumpAnimationRevision == revision

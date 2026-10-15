@@ -87,7 +87,7 @@ struct TurnNavigationRailInputTests
 				to: nil
 			)
 		))
-		try await Task.sleep(for: .milliseconds(40))
+		// DesktopWindow routes this wheel event synchronously to the rail scroll view.
 		#expect(controller.conversationScrollView.contentView.bounds.origin == transcriptOrigin)
 		if turnCount > 62
 		{
@@ -109,29 +109,34 @@ struct TurnNavigationRailInputTests
 		let controller = fixture.controller
 		let rail = controller.turnNavigationRail
 		let scroll = try #require(rail.subviews.first as? NSScrollView)
+		let gutterPoint = NSPoint(
+			x: 8,
+			y: 4
+		)
 		let point = rail.convert(
-			NSPoint(
-				x: 8,
-				y: 4
-			),
+			gutterPoint,
 			to: controller.view.superview
 		)
 		let target = try #require(controller.view.hitTest(point))
 		#expect(target === rail)
 		let transcriptOrigin = controller.conversationScrollView.contentView.bounds.origin
 		let railOrigin = scroll.contentView.bounds.origin
-		fixture.window.sendEvent(try wheelEvent(
+		let event = try wheelEvent(
 			30,
 			window: fixture.window,
-			point: target.convert(
-				NSPoint(
-					x: 8,
-					y: target.bounds.midY
-				),
+			point: rail.convert(
+				gutterPoint,
 				to: nil
 			)
-		))
-		try await Task.sleep(for: .milliseconds(40))
+		)
+		let content = try #require(fixture.window.contentView)
+		let eventPoint = try #require(content.superview).convert(
+			event.locationInWindow,
+			from: nil
+		)
+		try #require(content.hitTest(eventPoint) === rail)
+		fixture.window.sendEvent(event)
+		// DesktopWindow routes this wheel event synchronously to the rail scroll view.
 		#expect(scroll.contentView.bounds.origin != railOrigin)
 		#expect(controller.conversationScrollView.contentView.bounds.origin == transcriptOrigin)
 	}
@@ -219,9 +224,10 @@ struct TurnNavigationRailInputTests
 			selected = $0
 		}
 		let entries = controller.entries
-		mark.performClick(nil)
+		mark.dispatchConfiguredAction()
+		let navigationTask = try #require(controller.turnNavigationTask)
 		#expect(selected == nil)
-		try await Task.sleep(for: .milliseconds(320))
+		await navigationTask.value
 		#expect(selected == "turn-4")
 		#expect(controller.entries == entries)
 		#expect(rail.activeTurnID == "turn-4")
@@ -255,11 +261,13 @@ struct TurnNavigationRailInputTests
 		})
 		let entries = controller.entries
 		rail.onJump?(first)
-		try await Task.sleep(for: .milliseconds(30))
+		let supersededTask = try #require(controller.turnNavigationTask)
+		// Replace the pending request before yielding; await actual debounce completion.
 		rail.onJump?(last)
-		try await Task.sleep(for: .milliseconds(50))
+		let navigationTask = try #require(controller.turnNavigationTask)
 		#expect(selected.isEmpty)
-		try await Task.sleep(for: .milliseconds(70))
+		await supersededTask.value
+		await navigationTask.value
 		#expect(selected == ["turn-5"])
 		#expect(controller.entries == entries)
 	}
@@ -286,12 +294,13 @@ struct TurnNavigationRailInputTests
 			{
 				$0.turnID == "turn-4"
 			}))
+		let navigationTask = try #require(controller.turnNavigationTask)
 		rail.onJump?(try #require(rail.summaries.first
 			{
 				$0.turnID == "turn-50"
 			}))
 		#expect(selected == ["turn-50"])
-		try await Task.sleep(for: .milliseconds(320))
+		await navigationTask.value
 		#expect(selected == ["turn-50"])
 	}
 
@@ -317,8 +326,9 @@ struct TurnNavigationRailInputTests
 			{
 				$0.turnID == "turn-4"
 			}))
+		let navigationTask = try #require(controller.turnNavigationTask)
 		controller.viewDidDisappear()
-		try await Task.sleep(for: .milliseconds(320))
+		await navigationTask.value
 		#expect(selected.isEmpty)
 	}
 
@@ -336,7 +346,8 @@ struct TurnNavigationRailInputTests
 		})
 		controller.turnNavigationRail.onJump?(summary)
 		#expect(controller.isAnimatingJump)
-		try await Task.sleep(for: .milliseconds(350))
+		// Native animation completion depends on scheduling, not just its configured duration.
+		await (try #require(controller.jumpAnimationCompletion)).value
 		#expect(!controller.isAnimatingJump)
 		#expect(controller.turnNavigationRail.activeTurnID == "turn-10")
 		let index = try #require(controller.displayedRows.firstIndex
@@ -446,7 +457,7 @@ struct TurnNavigationRailInputTests
 			panes.split.view.layoutSubtreeIfNeeded()
 			controller.view.layoutSubtreeIfNeeded()
 			controller.collectionView.layoutSubtreeIfNeeded()
-			try await Task.sleep(for: .milliseconds(10))
+			await controller.widthChangeRestoreTask?.value
 		}
 		return Fixture(
 			window: window,
