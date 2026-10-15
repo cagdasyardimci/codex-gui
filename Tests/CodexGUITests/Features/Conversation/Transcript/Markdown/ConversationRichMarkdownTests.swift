@@ -92,6 +92,108 @@ struct ConversationRichMarkdownTests
 		#expect(heights[0] > heights[1])
 	}
 
+	@Test func attachmentCellPaintsItsAppearancePatternWithinCenteredFittedMargins() throws
+	{
+		_ = NSApplication.shared
+		let attachment = ConversationRichAttachment(
+			source: "Independent painted fixture",
+			lightImage: try patternedImage(
+				leftRGBA: [255, 0, 0, 255],
+				rightRGBA: [0, 255, 0, 255]
+			),
+			darkImage: try patternedImage(
+				leftRGBA: [0, 0, 255, 255],
+				rightRGBA: [255, 255, 0, 255]
+			)
+		)
+		let cell = try #require(attachment.attachmentCell)
+		let control = NSView()
+		// A 120 by 60 source stays natural at width 160 and halves both axes at width 60.
+		let cases: [(CGFloat, NSRect)] = [
+			(160, NSRect(
+				x: 32,
+				y: 30,
+				width: 120,
+				height: 60
+			)),
+			(60, NSRect(
+				x: 12,
+				y: 45,
+				width: 60,
+				height: 30
+			))
+		]
+		for (width, paintedFrame) in cases
+		{
+			let cellFrame = NSRect(
+				x: 12,
+				y: 10,
+				width: width,
+				height: 100
+			)
+			for name in [NSAppearance.Name.aqua, .darkAqua, .aqua]
+			{
+				control.appearance = try #require(NSAppearance(named: name))
+				let bitmap = try paintCell(
+					cell,
+					frame: cellFrame,
+					control: control
+				)
+				let left = try pixel(
+					bitmap,
+					x: paintedFrame.minX + paintedFrame.width / 4,
+					y: paintedFrame.midY
+				)
+				let right = try pixel(
+					bitmap,
+					x: paintedFrame.minX + paintedFrame.width * 3 / 4,
+					y: paintedFrame.midY
+				)
+				if name == .aqua
+				{
+					#expect(left.redComponent > 0.9 && left.greenComponent < 0.1
+						&& left.blueComponent < 0.1)
+					#expect(right.redComponent < 0.1 && right.greenComponent > 0.9
+						&& right.blueComponent < 0.1)
+				}
+				else
+				{
+					#expect(left.redComponent < 0.1 && left.greenComponent < 0.1
+						&& left.blueComponent > 0.9)
+					#expect(right.redComponent > 0.9 && right.greenComponent > 0.9
+						&& right.blueComponent < 0.1)
+				}
+				for point in [
+					NSPoint(
+						x: paintedFrame.minX - 3,
+						y: paintedFrame.midY
+					),
+					NSPoint(
+						x: paintedFrame.maxX + 3,
+						y: paintedFrame.midY
+					),
+					NSPoint(
+						x: paintedFrame.midX,
+						y: paintedFrame.minY - 3
+					),
+					NSPoint(
+						x: paintedFrame.midX,
+						y: paintedFrame.maxY + 3
+					)
+				]
+				{
+					let margin = try pixel(
+						bitmap,
+						x: point.x,
+						y: point.y
+					)
+					#expect(margin.redComponent > 0.99 && margin.greenComponent > 0.99
+						&& margin.blueComponent > 0.99 && margin.alphaComponent > 0.99)
+				}
+			}
+		}
+	}
+
 	@Test func unsupportedDiagramLineSeparatorsKeepEveryStatementInSourceFallback()
 		async throws
 	{
@@ -379,5 +481,103 @@ struct ConversationRichMarkdownTests
 		}
 		#expect(diagramWidths[1] > diagramWidths[0])
 		#expect(abs(diagramWidths[0] - diagramWidths[2]) < 0.5)
+	}
+
+	private func patternedImage(
+		leftRGBA: [UInt8],
+		rightRGBA: [UInt8]
+	) throws -> NSImage
+	{
+		let bytes = Data((0 ..< 120 * 60).flatMap
+		{
+			$0 % 120 < 60 ? leftRGBA : rightRGBA
+		})
+		let provider = try #require(CGDataProvider(data: bytes as CFData))
+		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+		let image = try #require(CGImage(
+			width: 120,
+			height: 60,
+			bitsPerComponent: 8,
+			bitsPerPixel: 32,
+			bytesPerRow: 120 * 4,
+			space: colorSpace,
+			bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+			provider: provider,
+			decode: nil,
+			shouldInterpolate: false,
+			intent: .defaultIntent
+		))
+		return NSImage(
+			cgImage: image,
+			size: NSSize(
+				width: 120,
+				height: 60
+			)
+		)
+	}
+
+	private func paintCell(
+		_ cell: NSTextAttachmentCellProtocol,
+		frame: NSRect,
+		control: NSView
+	) throws -> CGContext
+	{
+		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+		let context = try #require(CGContext(
+			data: nil,
+			width: Int(frame.maxX + 12),
+			height: 120,
+			bitsPerComponent: 8,
+			bytesPerRow: 0,
+			space: colorSpace,
+			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+				| CGBitmapInfo.byteOrder32Big.rawValue
+		))
+		NSGraphicsContext.saveGraphicsState()
+		defer
+		{
+			NSGraphicsContext.restoreGraphicsState()
+		}
+		NSGraphicsContext.current = NSGraphicsContext(
+			cgContext: context,
+			flipped: false
+		)
+		context.setFillColor(
+			red: 1,
+			green: 1,
+			blue: 1,
+			alpha: 1
+		)
+		context.fill(CGRect(
+			x: 0,
+			y: 0,
+			width: CGFloat(context.width),
+			height: CGFloat(context.height)
+		))
+		control.effectiveAppearance.performAsCurrentDrawingAppearance
+		{
+			cell.draw(
+				withFrame: frame,
+				in: control
+			)
+		}
+		return context
+	}
+
+	private func pixel(
+		_ bitmap: CGContext,
+		x: CGFloat,
+		y: CGFloat
+	) throws -> NSColor
+	{
+		let bytes = try #require(bitmap.data?.assumingMemoryBound(to: UInt8.self))
+		let offset = Int(y) * bitmap.bytesPerRow + Int(x) * 4
+		// The fixture and destination are opaque sRGB; inspect ordered bytes directly.
+		return NSColor(
+			srgbRed: CGFloat(bytes[offset]) / 255,
+			green: CGFloat(bytes[offset + 1]) / 255,
+			blue: CGFloat(bytes[offset + 2]) / 255,
+			alpha: CGFloat(bytes[offset + 3]) / 255
+		)
 	}
 }

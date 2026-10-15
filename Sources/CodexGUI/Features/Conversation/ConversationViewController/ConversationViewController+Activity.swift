@@ -58,7 +58,10 @@ extension ConversationViewController
 		)
 	}
 
-	func updateTurnStatusTimer()
+	func updateTurnStatusTimer(now: @escaping @MainActor () -> Date =
+	{
+		Date()
+	})
 	{
 		guard transcriptIsVisible, timingExecutionState.isBusy,
 				requestedTurnTimings.contains(where:
@@ -94,7 +97,7 @@ extension ConversationViewController
 				}
 				for item in self.collectionView.visibleItems()
 				{
-					(item as? ConversationTurnStatusCollectionItem)?.refresh(now: Date())
+					(item as? ConversationTurnStatusCollectionItem)?.refresh(now: now())
 				}
 			}
 		}

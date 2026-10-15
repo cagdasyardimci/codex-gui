@@ -228,6 +228,7 @@ struct ConversationMarkdownRenderingTests
 		)
 		let text = content.attributedString
 		var icons: [WebLinkFaviconAttachment] = []
+		var iconRanges: [NSRange] = []
 		text.enumerateAttribute(
 			.attachment,
 			in: NSRange(
@@ -237,16 +238,31 @@ struct ConversationMarkdownRenderingTests
 			options: []
 		)
 		{
-			value, _, _ in
+			value, range, _ in
 			if let icon = value as? WebLinkFaviconAttachment
 			{
 				icons.append(icon)
+				iconRanges.append(range)
 			}
 		}
-		#expect(icons.map(\.url.absoluteString) == [
+		let expectedURLs = [
 			"https://example.com/path",
 			"https://example.org/guide",
-		])
+		]
+		#expect(icons.map(\.url.absoluteString) == expectedURLs)
+		for (range, expectedURL) in zip(
+			iconRanges,
+			expectedURLs
+		)
+		{
+			#expect(range.length == 1)
+			#expect((text.string as NSString).substring(with: range) == "\u{FFFC}")
+			#expect((text.attribute(
+				.link,
+				at: range.location,
+				effectiveRange: nil
+			) as? URL)?.absoluteString == expectedURL)
+		}
 		#expect((attribute(
 			.link,
 			in: text,
@@ -898,11 +914,28 @@ struct ConversationMarkdownRenderingTests
 				for: try #require(referenceView.textContainer)
 			)
 			// TextKit retains this private substitution hint only on the first layout.
-			// Compare the rendered font and all public attributes after stripping the hint.
+			// The bubble has its own foreground tint; all other public attributes must survive.
 			let actual = NSMutableAttributedString(attributedString: storage)
 			let expected = NSMutableAttributedString(attributedString: nativeReference)
+			#expect(attribute(
+				.foregroundColor,
+				in: storage,
+				at: "User heading"
+			) as? NSColor == AppKitColorTokens.userBubbleText)
+			#expect(attribute(
+				.foregroundColor,
+				in: storage,
+				at: "site"
+			) as? NSColor == ConversationAttributedStringRenderer.linkColor)
 			for text in [actual, expected]
 			{
+				text.removeAttribute(
+					.foregroundColor,
+					range: NSRange(
+						location: 0,
+						length: text.length
+					)
+				)
 				text.removeAttribute(
 					NSAttributedString.Key("NSOriginalFont"),
 					range: NSRange(
@@ -912,6 +945,16 @@ struct ConversationMarkdownRenderingTests
 				)
 			}
 			#expect(actual == expected)
+			#expect(attribute(
+				.foregroundColor,
+				in: storage,
+				at: "let value"
+			) as? NSColor
+				== attribute(
+					.foregroundColor,
+					in: content.attributedString,
+					at: "let value"
+				) as? NSColor)
 			#expect(!textView.string.contains("# User heading"))
 			#expect(textView.isSelectable && !textView.isEditable)
 			#expect(try font(

@@ -176,7 +176,11 @@ struct UserMessageImageAttachmentsTests
 		{
 			try? FileManager.default.removeItem(at: url)
 		}
-		try inlinePNG().write(to: url)
+		let png = try inlinePNG()
+		try await BackgroundTestWork.perform
+		{
+			try png.write(to: url)
+		}
 		let reference = try #require(UserMessageReference(
 			json: ["type": "localImage", "path": url.absoluteString],
 			id: "image"
@@ -210,7 +214,11 @@ struct UserMessageImageAttachmentsTests
 		{
 			try? FileManager.default.removeItem(at: url)
 		}
-		try inlinePNG().write(to: url)
+		let png = try inlinePNG()
+		try await BackgroundTestWork.perform
+		{
+			try png.write(to: url)
+		}
 		let old = try #require(UserMessageReference(
 			json: ["type": "localImage", "path": url.path],
 			id: "old"
@@ -233,6 +241,87 @@ struct UserMessageImageAttachmentsTests
 		{
 			$0 is NSProgressIndicator
 		})
+	}
+
+	@Test func loadedLocalAndInlineButtonsPaintTheirOwnOpaqueThumbnailPatterns() async throws
+	{
+		_ = NSApplication.shared
+		let firstPNG = try inlinePNG()
+		let secondPNG = try inlinePNG(reverseColors: true)
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent("painted-attachment-\(UUID()).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: url)
+		}
+		try await BackgroundTestWork.perform
+		{
+			try firstPNG.write(to: url)
+		}
+		let references = [
+			try #require(UserMessageReference(
+				json: ["type": "localImage", "path": url.absoluteString],
+				id: "local"
+			)),
+			try #require(UserMessageReference(
+				json: ["type": "image",
+						"url": "data:image/png;base64,"
+						+ secondPNG.base64EncodedString()],
+				id: "inline"
+			))
+		]
+		let strip = UserMessageImageAttachmentsView(frame: NSRect(
+			x: 0,
+			y: 0,
+			width: 168,
+			height: 80
+		))
+		strip.configure(references)
+		await strip.waitForImages()
+		strip.layoutSubtreeIfNeeded()
+		let buttons = strip.subviews.compactMap
+		{
+			$0 as? NSButton
+		}.sorted
+		{
+			$0.tag < $1.tag
+		}
+		try #require(buttons.count == 2)
+		for name in [NSAppearance.Name.aqua, .darkAqua, .aqua]
+		{
+			strip.appearance = try #require(NSAppearance(named: name))
+			for (index, button) in buttons.enumerated()
+			{
+				try #require(button.isEnabled && button.bounds.width == 80)
+				let bitmap = try #require(button.bitmapImageRepForCachingDisplay(in: button.bounds))
+				button.effectiveAppearance.performAsCurrentDrawingAppearance
+				{
+					button.cacheDisplay(
+						in: button.bounds,
+						to: bitmap
+					)
+				}
+				let left = try #require(bitmap.colorAt(
+					x: bitmap.pixelsWide / 4,
+					y: bitmap.pixelsHigh / 2
+				)?.usingColorSpace(.deviceRGB))
+				let right = try #require(bitmap.colorAt(
+					x: bitmap.pixelsWide * 3 / 4,
+					y: bitmap.pixelsHigh / 2
+				)?.usingColorSpace(.deviceRGB))
+				#expect(left.alphaComponent > 0.99 && right.alphaComponent > 0.99)
+				if index == 0
+				{
+					#expect(left.redComponent > 0.9 && left.blueComponent < 0.1)
+					#expect(right.redComponent < 0.1 && right.blueComponent > 0.9)
+				}
+				else
+				{
+					#expect(left.redComponent < 0.1 && left.blueComponent > 0.9)
+					#expect(right.redComponent > 0.9 && right.blueComponent < 0.1)
+				}
+			}
+		}
 	}
 
 	@Test func protocolInlineImagesReachTheTranscriptAndFinishLoading() async throws
@@ -266,7 +355,11 @@ struct UserMessageImageAttachmentsTests
 		})
 	}
 
-	@Test(arguments: [false, true])
+	// Native event polling and transient panels share the application event/window state.
+	@Test(
+		.serialized,
+		arguments: [false, true]
+	)
 	func localAndInlineImagesExpandInTheWindowAndReuseOrDetachDismissesThem(
 		inline: Bool
 	) async throws
@@ -279,7 +372,10 @@ struct UserMessageImageAttachmentsTests
 		{
 			try? FileManager.default.removeItem(at: url)
 		}
-		try imageData.write(to: url)
+		try await BackgroundTestWork.perform
+		{
+			try imageData.write(to: url)
+		}
 		let path = inline
 			? "data:image/png;base64," + imageData.base64EncodedString()
 			: url.absoluteString
@@ -287,58 +383,68 @@ struct UserMessageImageAttachmentsTests
 			json: ["type": inline ? "image" : "localImage", "url": path, "path": path],
 			id: "attachment"
 		))
-		let strip = UserMessageImageAttachmentsView()
-		let parent = NSWindow(
-			contentRect: NSRect(
-				x: 100,
-				y: 100,
-				width: 600,
-				height: 400
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		parent.isReleasedWhenClosed = false
-		parent.contentView = strip
-		defer
-		{
-			strip.configure([])
-			parent.orderOut(nil)
-		}
-		strip.configure([reference])
-		await strip.waitForImages()
-		let button = try #require(strip.subviews.first as? NSButton)
-		button.performClick(nil)
-		await strip.waitForExpandedPreview()
-		let preview = try #require(descendants(strip).first
-		{
-			$0.accessibilityIdentifier() == "expanded-image-preview"
-		})
-		#expect(parent.attachedSheet == nil)
-		#expect(parent.childWindows?.isEmpty != false)
-		let imageView = try #require(descendants(preview).compactMap
-		{
-			$0 as? NSImageView
-		}.first)
-		#expect(imageView.image != nil)
-		strip.configure([])
-		#expect(parent.childWindows?.isEmpty != false)
-		#expect(preview.superview == nil)
-		#expect(button.target == nil && button.action == nil)
 
-		strip.configure([reference])
-		await strip.waitForImages()
-		let current = try #require(strip.subviews.first as? NSButton)
-		current.performClick(nil)
-		await strip.waitForExpandedPreview()
-		let reopened = try #require(descendants(strip).first
+		try await AppKitTestIsolation.perform
 		{
-			$0.accessibilityIdentifier() == "expanded-image-preview"
-		})
-		parent.contentView = NSView()
-		#expect(parent.childWindows?.isEmpty != false)
-		#expect(reopened.superview == nil)
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			let strip = UserMessageImageAttachmentsView()
+			let parent = NSWindow(
+				contentRect: NSRect(
+					x: 100,
+					y: 100,
+					width: 600,
+					height: 400
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			parent.isReleasedWhenClosed = false
+			parent.contentView = strip
+			defer
+			{
+				strip.configure([])
+				parent.orderOut(nil)
+			}
+			strip.configure([reference])
+			await strip.waitForImages()
+			let button = try #require(strip.subviews.first as? NSButton)
+			button.dispatchConfiguredAction()
+			await strip.waitForExpandedPreview()
+			let preview = try #require(descendants(strip).first
+			{
+				$0.accessibilityIdentifier() == "expanded-image-preview"
+			})
+			#expect(parent.attachedSheet == nil)
+			#expect(parent.childWindows?.isEmpty != false)
+			let imageView = try #require(descendants(preview).compactMap
+			{
+				$0 as? NSImageView
+			}.first)
+			#expect(imageView.image != nil)
+			strip.configure([])
+			#expect(parent.childWindows?.isEmpty != false)
+			#expect(preview.superview == nil)
+			#expect(button.target == nil && button.action == nil)
+
+			strip.configure([reference])
+			await strip.waitForImages()
+			let current = try #require(strip.subviews.first as? NSButton)
+			current.dispatchConfiguredAction()
+			await strip.waitForExpandedPreview()
+			let reopened = try #require(descendants(strip).first
+			{
+				$0.accessibilityIdentifier() == "expanded-image-preview"
+			})
+			parent.contentView = NSView()
+			#expect(parent.childWindows?.isEmpty != false)
+			#expect(reopened.superview == nil)
+		}
 	}
 
 	@Test func unavailableInlineImagesClearProgressAndEarlierResultsCannotReplaceReuse(
@@ -371,21 +477,30 @@ struct UserMessageImageAttachmentsTests
 		})
 	}
 
-	private func inlinePNG() throws -> Data
+	private func inlinePNG(reverseColors: Bool = false) throws -> Data
 	{
-		let bitmap = try #require(NSBitmapImageRep(
-			bitmapDataPlanes: nil,
-			pixelsWide: 8,
-			pixelsHigh: 6,
-			bitsPerSample: 8,
-			samplesPerPixel: 4,
-			hasAlpha: true,
-			isPlanar: false,
-			colorSpaceName: .deviceRGB,
-			bytesPerRow: 0,
-			bitsPerPixel: 0
+		let bytes = Data((0 ..< 8 * 6).flatMap
+		{
+			pixel -> [UInt8] in
+			let red = (pixel % 8 < 4) != reverseColors
+			return red ? [255, 0, 0, 255] : [0, 0, 255, 255]
+		})
+		let provider = try #require(CGDataProvider(data: bytes as CFData))
+		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+		let image = try #require(CGImage(
+			width: 8,
+			height: 6,
+			bitsPerComponent: 8,
+			bitsPerPixel: 32,
+			bytesPerRow: 8 * 4,
+			space: colorSpace,
+			bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+			provider: provider,
+			decode: nil,
+			shouldInterpolate: false,
+			intent: .defaultIntent
 		))
-		return try #require(bitmap.representation(
+		return try #require(NSBitmapImageRep(cgImage: image).representation(
 			using: .png,
 			properties: [:]
 		))
