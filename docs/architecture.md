@@ -112,6 +112,11 @@ Its child document controller owns retained diff sections, projection caching, l
 collapse state, scrolling and inline rich-preview presentation. Document callbacks request runtime
 actions through the parent; section identity and owner changes govern reuse and invalidation.
 
+Saved-prompt presentation remains within ProjectContext. Its section controller owns prompt rows
+and review/edit dialogs, while the parent retains canonical project context and scoped mutation
+receivers. Project changes invalidate deferred edits; draft-owner changes independently invalidate
+insertion into a conversation. Extracted presentation must preserve both lifetimes.
+
 ## Recorded latest Git turn
 
 `ConversationReportedGitTurn` in `Application/Reducers/Conversation/` retains the known latest editing turn's identity and available timestamps independently of loaded transcript bodies. `ConversationReportedGitTurnProjection` in `Application/Presentation/` resolves that identity against currently resident reported changes. Missing or evicted payload is unavailable; an authoritative completed file-change report containing no changes produces an empty result. Older loaded edits cannot replace a known later editing turn without trusted ordering evidence.

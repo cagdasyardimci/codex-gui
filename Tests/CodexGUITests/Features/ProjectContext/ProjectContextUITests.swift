@@ -115,6 +115,67 @@ struct ProjectContextUITests
 		#expect(updated?.includedContextText.contains("API contract") == true)
 	}
 
+	@Test func savedPromptSectionTracksTheRenderedProjectContext() throws
+	{
+		_ = NSApplication.shared
+		let controller = ProjectContextViewController()
+		let first = SavedPrompt(
+			id: "first",
+			title: "Review API",
+			instructions: "Check compatibility"
+		)
+		let second = SavedPrompt(
+			id: "second",
+			title: "Explain change",
+			instructions: "Describe behavior"
+		)
+		controller.render(
+			context: ProjectContext(
+				savedPrompts: [first],
+				selectedPromptID: first.id
+			),
+			models: [],
+			skills: [],
+			statusMessage: nil
+		)
+		let firstButton = try #require(
+			allSubviews(of: controller.view).compactMap
+			{
+				$0 as? NSButton
+			}
+			.first
+			{
+				$0.accessibilityLabel() == "Inspect saved prompt Review API"
+			}
+		)
+		#expect(firstButton.title == "✓ Review API…")
+		#expect(firstButton.toolTip == "Check compatibility")
+
+		controller.render(
+			context: ProjectContext(savedPrompts: [second]),
+			models: [],
+			skills: [],
+			statusMessage: nil
+		)
+		let buttons = allSubviews(of: controller.view).compactMap
+		{
+			$0 as? NSButton
+		}
+		#expect(buttons
+			.contains
+			{
+				$0.accessibilityLabel() == "Inspect saved prompt Explain change"
+			})
+		#expect(!buttons.contains
+		{
+			$0.accessibilityLabel() == "Inspect saved prompt Review API"
+		})
+		#expect(buttons.contains
+		{
+			$0.accessibilityLabel() == "Add Prompt…"
+		})
+	}
+
 	@Test func selectedSkillShowsInvocationAndUnavailableChoice() throws
 	{
 		_ = NSApplication.shared

@@ -16,6 +16,7 @@ final class ProjectContextViewController: NSViewController
 	private var selectionGeneration = 0
 	private var draftOwnerIdentity: String?
 	private var draftSelectionGeneration = 0
+	private let savedPromptsSection = SavedPromptsSectionViewController()
 
 	override func loadView()
 	{
@@ -37,7 +38,83 @@ final class ProjectContextViewController: NSViewController
 		document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor).isActive = true
 		scrollView.setAccessibilityLabel("Project context, reusable prompts, skills, and bookmarks")
 		view = scrollView
+		configureSavedPromptsSection()
+		addChild(savedPromptsSection)
 		rebuild()
+	}
+
+	private func configureSavedPromptsSection()
+	{
+		savedPromptsSection.onSelectPrompt =
+		{
+			[weak self] id in
+			self?.selectSavedPrompt(id: id)
+		}
+		savedPromptsSection.makeSaveReceiver =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+				{
+					_ in
+				}
+			}
+			return self.makeContextMutationReceiver
+			{
+				(context: inout ProjectContext, prompt: SavedPrompt) in
+				if let index = context.savedPrompts.firstIndex(where:
+					{
+						$0.id == prompt.id
+					})
+				{
+					context.savedPrompts[index] = prompt
+				}
+				else
+				{
+					context.savedPrompts.append(prompt)
+				}
+			}
+		}
+		savedPromptsSection.makeDeleteReceiver =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+				{
+					_ in
+				}
+			}
+			return self.makeContextMutationReceiver
+			{
+				(context: inout ProjectContext, id: String) in
+				context.savedPrompts.removeAll
+				{
+					$0.id == id
+				}
+				if context.selectedPromptID == id
+				{
+					context.selectedPromptID = nil
+				}
+			}
+		}
+		savedPromptsSection.makeProjectSelectionReceiver =
+		{
+			[weak self] action in
+			self?.makeProjectSelectionReceiver(action) ??
+			{
+			}
+		}
+		savedPromptsSection.makeInsertionReceiver =
+		{
+			[weak self] id in
+			self?.makePromptInsertionReceiver(id: id) ??
+			{
+			}
+		}
 	}
 
 	func render(_ presentation: ProjectContextPresentation)
@@ -106,6 +183,29 @@ final class ProjectContextViewController: NSViewController
 		return receiver
 	}
 
+	func makeProjectSelectionReceiver(_ action: @escaping () -> Void) -> () -> Void
+	{
+		let generation = selectionGeneration
+		let receiver: () -> Void =
+		{
+			[weak self] in
+			guard let self, self.selectionGeneration == generation
+			else
+			{
+				return
+			}
+			action()
+		}
+		return receiver
+	}
+
+	private func selectSavedPrompt(id: String)
+	{
+		context.selectedPromptID = id
+		onUpdate?(context)
+		rebuild()
+	}
+
 	/// A modal editor can deliver its result only while its original project is visible.
 	func makeContextMutationReceiver<Value>(
 		_ mutation: @escaping (
@@ -144,7 +244,14 @@ final class ProjectContextViewController: NSViewController
 		}
 
 		addContextSection()
-		addSavedPromptsSection()
+		savedPromptsSection.render(
+			prompts: context.savedPrompts,
+			selectedPromptID: context.selectedPromptID
+		)
+		contentStack.addArrangedSubview(savedPromptsSection.view)
+		savedPromptsSection.view.widthAnchor.constraint(
+			equalTo: contentStack.widthAnchor
+		).isActive = true
 		addSkillSection()
 		addModelPreferencesSection()
 		addBookmarksSection()
@@ -167,22 +274,6 @@ final class ProjectContextViewController: NSViewController
 		addButton(
 			"Add Context Item…",
 			action: #selector(addContextItem)
-		)
-	}
-
-	private func addSavedPromptsSection()
-	{
-		addHeader(
-			"Saved Prompts",
-			detail: "Inspect instructions, then insert them into the editable draft."
-		)
-		for prompt in context.savedPrompts
-		{
-			addPromptRow(prompt)
-		}
-		addButton(
-			"Add Prompt…",
-			action: #selector(addPrompt)
 		)
 	}
 
@@ -446,24 +537,6 @@ final class ProjectContextViewController: NSViewController
 		))
 	}
 
-	private func addPromptRow(_ prompt: SavedPrompt)
-	{
-		let isSelectedPrompt = prompt.id == context.selectedPromptID
-		let button = NSButton(
-			title: "\(isSelectedPrompt ? "✓ " : "")\(prompt.title)…",
-			target: self,
-			action: #selector(inspectPrompt(_:))
-		)
-		button.identifier = NSUserInterfaceItemIdentifier(prompt.id)
-		button.toolTip = prompt.instructions
-		button.setAccessibilityLabel("Inspect saved prompt \(prompt.title)")
-		AppKitControlStyling.styleButton(
-			button,
-			icon: .quote
-		)
-		add(button)
-	}
-
 	private func addBookmarkRow(_ bookmark: ConversationBookmark)
 	{
 		let button = NSButton(
@@ -555,150 +628,6 @@ final class ProjectContextViewController: NSViewController
 		}
 		context.items[index].isIncluded = sender.state == .on
 		onUpdate?(context)
-	}
-
-	@objc private func addPrompt()
-	{
-		editPrompt(nil)
-	}
-
-	private func editPrompt(_ existing: SavedPrompt?)
-	{
-		guard let window = view.window
-		else
-		{
-			return
-		}
-		let editor = ProjectTextEditor(kind: .prompt(existing))
-		let savePrompt = makeContextMutationReceiver
-		{
-			(context: inout ProjectContext, prompt: SavedPrompt) in
-			if let index = context.savedPrompts.firstIndex(where:
-				{
-					$0.id == prompt.id
-				})
-			{
-				context.savedPrompts[index] = prompt
-			}
-			else
-			{
-				context.savedPrompts.append(prompt)
-			}
-		}
-		let deletePrompt = makeContextMutationReceiver
-		{
-			(context: inout ProjectContext, id: String) in
-			context.savedPrompts.removeAll
-			{
-				$0.id == id
-			}
-			if context.selectedPromptID == id
-			{
-				context.selectedPromptID = nil
-			}
-		}
-		editor.present(in: window)
-		{
-			result in
-			guard case .prompt(let prompt) = result
-			else
-			{
-				return
-			}
-			savePrompt(prompt)
-		} onDelete:
-		{
-			if let existing
-			{
-				deletePrompt(existing.id)
-			}
-		}
-	}
-
-	@objc private func inspectPrompt(_ sender: NSButton)
-	{
-		guard let id = sender.identifier?.rawValue,
-				let prompt = context.savedPrompts.first(where:
-				{
-					$0.id == id
-				}),
-				let window = view.window
-		else
-		{
-			return
-		}
-		let alert = makePromptReviewAlert(
-			prompt,
-			in: window
-		)
-		context.selectedPromptID = id
-		onUpdate?(context)
-		rebuild()
-		let generation = selectionGeneration
-		let insertPrompt = makePromptInsertionReceiver(id: id)
-		alert.beginSheetModal(for: window)
-		{
-			[weak self] response in
-			guard let self, self.selectionGeneration == generation
-			else
-			{
-				return
-			}
-			if response == .alertFirstButtonReturn
-			{
-				insertPrompt()
-			}
-			else if response == .alertSecondButtonReturn
-			{
-				self.editPrompt(prompt)
-			}
-		}
-	}
-
-	private func makePromptReviewAlert(
-		_ prompt: SavedPrompt,
-		in window: NSWindow
-	) -> NSAlert
-	{
-		let alert = NSAlert()
-		alert.messageText = prompt.title
-		alert.informativeText =
-			"Review these saved instructions before inserting them into the draft."
-		let scrollView = makePromptInstructionsView(
-			prompt,
-			in: window
-		)
-		alert.accessoryView = scrollView
-		alert.addButton(withTitle: "Insert into Draft")
-		alert.addButton(withTitle: "Edit…")
-		alert.addButton(withTitle: "Close")
-		return alert
-	}
-
-	private func makePromptInstructionsView(
-		_ prompt: SavedPrompt,
-		in window: NSWindow
-	) -> NSScrollView
-	{
-		let instructions = NSTextView()
-		instructions.string = prompt.instructions
-		instructions.isEditable = false
-		instructions.isSelectable = true
-		instructions.font = .systemFont(ofSize: 13)
-		instructions.setAccessibilityLabel("Saved prompt instructions")
-		let scrollView = NSScrollView()
-		scrollView.documentView = instructions
-		scrollView.hasVerticalScroller = true
-		scrollView.frame = NSRect(
-			x: 0,
-			y: 0,
-			width: min(
-				440,
-				window.frame.width - 80
-			),
-			height: 220
-		)
-		return scrollView
 	}
 
 	@objc private func selectSkill(_ sender: NSPopUpButton)
