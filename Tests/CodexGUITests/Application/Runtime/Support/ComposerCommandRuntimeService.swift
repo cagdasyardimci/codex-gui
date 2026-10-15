@@ -7,6 +7,43 @@ import Foundation
 final class ComposerCommandRuntimeService: CodexService
 {
 	let base = MockCodexService()
+	private var pendingCallObservers: [UUID: @MainActor () -> Void] = [:]
+
+	/// A checkpoint is reached after the service has installed the suspended acknowledgement.
+	func awaitPendingCall(matching predicate: @escaping @MainActor () -> Bool) async -> Bool
+	{
+		let id = UUID()
+		let stream = AsyncStream<Void>
+		{
+			continuation in
+			let check: @MainActor () -> Void =
+			{
+				guard predicate()
+				else
+				{
+					return
+				}
+				continuation.yield(())
+				continuation.finish()
+			}
+			pendingCallObservers[id] = check
+			check()
+		}
+		for await _ in stream
+		{
+			break
+		}
+		pendingCallObservers.removeValue(forKey: id)
+		return predicate()
+	}
+
+	private func pendingCallChanged()
+	{
+		for observer in Array(pendingCallObservers.values)
+		{
+			observer()
+		}
+	}
 	var onEvent: ((AppServerEvent) -> Void)?
 	{
 		get
@@ -34,9 +71,33 @@ final class ComposerCommandRuntimeService: CodexService
 		base.backendDiagnostics
 	}
 	var pendingFork: CheckedContinuation<ThreadDetail, Error>?
+	{
+		didSet
+		{
+			pendingCallChanged()
+		}
+	}
 	var pendingCompact: CheckedContinuation<Void, Error>?
+	{
+		didSet
+		{
+			pendingCallChanged()
+		}
+	}
 	var pendingReview: CheckedContinuation<ReviewStartResult, Error>?
+	{
+		didSet
+		{
+			pendingCallChanged()
+		}
+	}
 	var pendingSettings: CheckedContinuation<Void, Error>?
+	{
+		didSet
+		{
+			pendingCallChanged()
+		}
+	}
 	var forkRequests: [(id: String, directory: URL?)] = []
 	var compactRequests: [String] = []
 	var reviewRequests: [(id: String, target: ReviewTarget, delivery: ReviewDelivery)] = []

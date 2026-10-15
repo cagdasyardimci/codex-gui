@@ -45,24 +45,43 @@ final class ComposerCommandRuntimeHarness
 		])!]
 		state = WorkspaceTestFixture(
 			server: service,
-			storage: LocalStorage(defaults: defaults)
+			storage: LocalStorage(defaults: defaults),
+			// drainPersistence must drain this fixture's real context worker, not
+			// unrelated tests sharing the application's default storage directory.
+			projectContextStore: ProjectContextStore(directory: project
+				.appendingPathComponent("app-support/project-context"))
 		)
 	}
 
 	func start() async throws
 	{
+		let timing = TestTiming.begin("composer.start-phases")
+		defer
+		{
+			timing.end()
+		}
+		timing.mark("connect.begin")
 		await state.inputs.connect()
+		timing.mark("connect.end")
 		service.base.configureCheckout(project)
+		timing.mark("open-project.begin")
 		state.inputs.openProject(project)
-		try #require(await eventually
+		// Context IO is independent of connection acknowledgement and actor scheduling.
+		await awaitWorkspaceSnapshot(state.store)
 		{
-			self.state.currentSnapshot.canSend
-		})
+			$0.canSend
+		}
+		try #require(state.currentSnapshot.canSend)
+		timing.mark("open-project.ready")
+		timing.mark("select-thread.begin")
 		_ = await state.inputs.selectThread(service.base.thread.id)?.wait()
-		try #require(await eventually
+		timing.mark("select-thread.acknowledged")
+		await awaitWorkspaceSnapshot(state.store)
 		{
-			self.state.currentSnapshot.canSend
-		})
+			$0.canSend
+		}
+		try #require(state.currentSnapshot.canSend)
+		timing.mark("select-thread.ready")
 	}
 
 	func close()
@@ -112,15 +131,11 @@ final class ComposerCommandRuntimeHarness
 		CodexTurn(json: ["id": id, "status": status, "items": items])!
 	}
 
-	func eventually(_ condition: @escaping @MainActor () -> Bool) async -> Bool
+	func awaitSnapshot(matching condition: @escaping @MainActor () -> Bool) async -> Bool
 	{
-		for _ in 0 ..< 200
+		await awaitWorkspaceSnapshot(store)
 		{
-			if condition()
-			{
-				return true
-			}
-			try? await Task.sleep(for: .milliseconds(5))
+			_ in condition()
 		}
 		return condition()
 	}

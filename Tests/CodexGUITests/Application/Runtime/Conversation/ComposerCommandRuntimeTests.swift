@@ -3,6 +3,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct ComposerCommandRuntimeTests
 {
 	@Test
@@ -18,10 +19,10 @@ struct ComposerCommandRuntimeTests
 		let attachment = try fixture.attachFile()
 		let original = fixture.draft
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingFork != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingFork != nil
+			}))
 		#expect(fixture.store.model.conversations.selectedConversation == fixture.conversation)
 		#expect(fixture.draft == original)
 		#expect(fixture.store.model.composerCommands.pendingFork?.draft.context == [attachment])
@@ -32,11 +33,12 @@ struct ComposerCommandRuntimeTests
 		let returned = fixture.detail(id: "forked-thread")
 		fixture.service.finishFork(returned)
 		#expect(await operation.wait() == .finished)
-		try #require(await fixture.eventually
-		{
-			fixture.store.model.conversations.selectedConversation == .thread(returned.summary.id)
-				&& fixture.store.model.conversations.pendingSelection == nil
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.store.model.conversations
+					.selectedConversation == .thread(returned.summary.id)
+					&& fixture.store.model.conversations.pendingSelection == nil
+			}))
 		#expect(fixture.store.model.identity.canonicalCheckoutPath == returned.summary.cwd)
 		#expect(fixture.store.model.conversations.boundThreadID == nil)
 		#expect(fixture.store.model.composerCommands.pendingFork == nil)
@@ -59,10 +61,10 @@ struct ComposerCommandRuntimeTests
 		let attachment = try fixture.attachFile()
 		let original = fixture.draft
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.base.pendingTurnStart != nil
-		})
+		try #require(await fixture.service.base.awaitReadiness(matching:
+			{
+				fixture.service.base.pendingTurnStart != nil
+			}))
 		let submitted = try #require(fixture.store.model.composer.pendingSubmissions.values.first)
 		#expect(submitted.draft == original)
 		#expect(submitted.draft.context == [attachment])
@@ -106,10 +108,10 @@ struct ComposerCommandRuntimeTests
 		let attachment = try fixture.attachFile()
 		let original = fixture.draft
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingSettings != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingSettings != nil
+			}))
 		#expect(fixture.draft == original)
 		#expect(fixture.service.settingsRequests.first?.id == fixture.service.base.thread.id)
 		#expect(fixture.service.settingsRequests.first?.settings.collaborationMode?.mode == .plan)
@@ -153,10 +155,10 @@ struct ComposerCommandRuntimeTests
 		}
 		let operation = try #require(fixture.state.inputs.send())
 		#expect(reservationObserved)
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingCompact != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingCompact != nil
+			}))
 		#expect(fixture.draft.text == "/compact")
 		fixture.service.finishCompact()
 		#expect(await operation.wait() == .finished)
@@ -169,10 +171,10 @@ struct ComposerCommandRuntimeTests
 			threadId: fixture.service.base.thread.id,
 			turnId: "compact-turn"
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.state.currentSnapshot.canSend
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.state.currentSnapshot.canSend
+			}))
 		#expect(fixture.store.model.composerCommands.pendingTurn == nil)
 		#expect(fixture.store.model.execution.submissionRequest == nil)
 		#expect(fixture.service.base.turnStartCount == 0)
@@ -189,10 +191,10 @@ struct ComposerCommandRuntimeTests
 		try await fixture.start()
 		fixture.state.inputs.updateDraft("/review uncommitted")
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingReview != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingReview != nil
+			}))
 		let thread = fixture.service.base.thread.id
 		let running = fixture.turn(
 			id: "review-turn",
@@ -211,10 +213,10 @@ struct ComposerCommandRuntimeTests
 			turnId: running.id,
 			item: CodexItem(json: command)!
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.store.model.execution.commandLifetime.hasPendingCommands
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.store.model.execution.commandLifetime.hasPendingCommands
+			}))
 		#expect(fixture.store.model.execution.owner?.submission.turnID == running.id)
 		#expect(fixture.store.model.composerCommands.pendingTurn?.transportFinished == false)
 		#expect(fixture.service.reviewRequests.first?.target == .uncommittedChanges)
@@ -229,11 +231,10 @@ struct ComposerCommandRuntimeTests
 			threadId: thread,
 			turn: completed
 		))
-		try #require(await fixture
-			.eventually
+		try #require(await fixture.awaitSnapshot(matching:
 			{
 				fixture.store.model.execution.agentOutcome == .completed
-			})
+			}))
 		#expect(!fixture.state.currentSnapshot.canSend)
 		#expect(fixture.store.model.execution.commandLifetime.hasPendingCommands)
 		fixture.service.finishReview(running)
@@ -254,10 +255,10 @@ struct ComposerCommandRuntimeTests
 			turnId: running.id,
 			item: CodexItem(json: exited)!
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.state.currentSnapshot.canSend
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.state.currentSnapshot.canSend
+			}))
 		#expect(!fixture.store.model.execution.commandLifetime.hasPendingCommands)
 		#expect(fixture.store.model.execution.submissionRequest == nil)
 		#expect(fixture.service.base.turnStartCount == 0)
@@ -279,10 +280,10 @@ struct ComposerCommandRuntimeTests
 		try await fixture.start()
 		fixture.state.inputs.updateDraft("/compact")
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingCompact != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingCompact != nil
+			}))
 		let request = try #require(fixture.store.model.composerCommands.pendingTurn?.request
 			.context)
 		let thread = fixture.service.base.thread.id
@@ -297,7 +298,7 @@ struct ComposerCommandRuntimeTests
 			threadId: thread,
 			turn: old
 		))
-		await Task.yield()
+		// Backend emission and reserved cancellation reduce synchronously on this actor.
 		#expect(fixture.store.model.execution.owner?.submission.isSameRequest(as: request) == true)
 		#expect(fixture.store.model.execution.owner?.submission.turnID == nil)
 		#expect(fixture.store.model.execution.activeTurnID == nil)
@@ -311,10 +312,10 @@ struct ComposerCommandRuntimeTests
 			threadId: thread,
 			turnId: "new-compact-turn"
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.state.currentSnapshot.canSend
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.state.currentSnapshot.canSend
+			}))
 		#expect(fixture.store.model.composerCommands.pendingTurn == nil)
 	}
 
@@ -329,10 +330,10 @@ struct ComposerCommandRuntimeTests
 		try await fixture.start()
 		fixture.state.inputs.updateDraft(command)
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingCompact != nil || fixture.service.pendingReview != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingCompact != nil || fixture.service.pendingReview != nil
+			}))
 		let request = try #require(fixture.store.model.composerCommands.pendingTurn?.request)
 		let thread = fixture.service.base.thread.id
 		let running = fixture.turn(
@@ -357,11 +358,11 @@ struct ComposerCommandRuntimeTests
 			threadId: thread,
 			turn: completed
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.service.base.readThreadCount > reads
-				&& fixture.store.model.conversations.pendingReads.isEmpty
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.service.base.readThreadCount > reads
+					&& fixture.store.model.conversations.pendingReads.isEmpty
+			}))
 		#expect(fixture.store.model.composerCommands.pendingTurn?.request.context == request
 			.context)
 		#expect(fixture.store.model.composerCommands.pendingTurn?.terminalObserved == true)
@@ -559,10 +560,10 @@ struct ComposerCommandRuntimeTests
 		#expect(await operation.wait() == .finished)
 		fixture.state.inputs.updateDraft(source)
 		fixture.state.inputs.steer(source)
-		try #require(await fixture.eventually
-		{
-			fixture.service.base.steeredTurns.count == 1
-		})
+		try #require(await fixture.service.base.awaitReadiness(matching:
+			{
+				fixture.service.base.steeredTurns.count == 1
+			}))
 		#expect(fixture.service.base.steeredTurns.first?
 			.text == (source == "//status" ? "/status" : source))
 		#expect(fixture.service.base.steeredTurns.first?.threadID == fixture.service.base.thread.id)
@@ -621,10 +622,10 @@ struct ComposerCommandRuntimeTests
 		let attachment = try fixture.attachFile()
 		let original = fixture.draft
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingFork != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingFork != nil
+			}))
 		let previousGeneration = fixture.store.model.connection.generation
 		fixture.service.base.emitDisconnect("Fixture connection lost")
 		#expect(fixture.store.model.connection.generation > previousGeneration)
@@ -653,10 +654,10 @@ struct ComposerCommandRuntimeTests
 			}
 		}
 		_ = fixture.state.inputs.send()
-		try #require(await fixture.eventually
-		{
-			presentation != nil
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				presentation != nil
+			}))
 		let request = try #require(presentation)
 		#expect(request.context.generation == fixture.store.model.connection.generation)
 		#expect(request.draft == original)
@@ -664,18 +665,18 @@ struct ComposerCommandRuntimeTests
 			request,
 			choice: .resume(threadID: recovered.summary.id)
 		)
-		try #require(await fixture.eventually
-		{
-			fixture.store.model.conversations
-				.selectedConversation == .thread(recovered.summary.id)
-				&& fixture.store.model.conversations.pendingSelection == nil
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.store.model.conversations
+					.selectedConversation == .thread(recovered.summary.id)
+					&& fixture.store.model.conversations.pendingSelection == nil
+			}))
 		#expect(fixture.store.model.composerCommands.uncertainFork == nil)
 		#expect(fixture.service.forkRequests.count == 1)
-		try #require(await fixture.eventually
-		{
-			fixture.state.currentSnapshot.canSend
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.state.currentSnapshot.canSend
+			}))
 		#expect(!fixture.store.model.composerCommands.blocksNewWork)
 		#expect(fixture.draft.text.isEmpty)
 		#expect(fixture.draft.context == [attachment])
@@ -695,10 +696,10 @@ struct ComposerCommandRuntimeTests
 		let attachment = try fixture.attachFile()
 		let original = fixture.draft
 		let operation = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingSettings != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingSettings != nil
+			}))
 		let previousGeneration = fixture.store.model.connection.generation
 		fixture.service.base.emitDisconnect("Fixture connection lost")
 		#expect(fixture.store.model.connection.generation > previousGeneration)
@@ -724,10 +725,10 @@ struct ComposerCommandRuntimeTests
 			}
 		}
 		_ = fixture.state.inputs.send()
-		try #require(await fixture.eventually
-		{
-			presentation != nil
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				presentation != nil
+			}))
 		let request = try #require(presentation)
 		#expect(request.context.generation == fixture.store.model.connection.generation)
 		#expect(request.draft == original)
@@ -735,41 +736,87 @@ struct ComposerCommandRuntimeTests
 			request,
 			mode: .plan
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingSettings != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingSettings != nil
+			}))
 		fixture.service.finishSettings()
 		#expect(await recovery.wait() == .finished)
 		#expect(fixture.store.model.composerCommands.pendingSettings == nil)
 		#expect(fixture.store.model.composerCommands.planModes[fixture.conversation] == .plan)
 		#expect(fixture.service.settingsRequests.count == 2)
-		try #require(await fixture.eventually
-		{
-			fixture.state.currentSnapshot.canSend
-		})
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.state.currentSnapshot.canSend
+			}))
 		#expect(!fixture.store.model.composerCommands.blocksNewWork)
 		#expect(fixture.draft.text.isEmpty)
 		#expect(fixture.draft.context == [attachment])
 		#expect(fixture.service.base.turnStartCount == 0)
 	}
 
-	@Test(arguments: ["/fork", "/compact", "/review uncommitted", "/plan"])
+	@Test(
+		.testTiming,
+		arguments: ["/fork", "/compact", "/review uncommitted", "/plan"]
+	)
 	func observerShutdownCancelsReservedCommandBeforeAnyBackendCall(command: String) async throws
 	{
+		let timing = TestTiming.begin(
+			"test.body",
+			detail: command
+		)
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try ComposerCommandRuntimeHarness()
 		defer
 		{
 			fixture.close()
 		}
-		try await fixture.start()
-		fixture.state.inputs.updateDraft(command)
-		try await fixture.store.awaitAcceptedPersistence()
-		try await fixture.store.drainPersistence()
-		try #require(await fixture.eventually
+		do
 		{
-			fixture.store.runningOperationCount == 0
-		})
+			let startup = TestTiming.begin(
+				"composer.fixture-start",
+				detail: command
+			)
+			defer
+			{
+				startup.end()
+			}
+			try await fixture.start()
+		}
+		fixture.state.inputs.updateDraft(command)
+		do
+		{
+			let persistence = TestTiming.begin(
+				"composer.persistence-drain",
+				detail: command
+			)
+			defer
+			{
+				persistence.end()
+			}
+			try await fixture.store.awaitAcceptedPersistence()
+			persistence.mark("accepted")
+			try await fixture.store.drainPersistence()
+			persistence.mark("drained")
+		}
+		do
+		{
+			let retirement = TestTiming.begin(
+				"composer.operation-retirement",
+				detail: command
+			)
+			defer
+			{
+				retirement.end()
+			}
+			try #require(await fixture.awaitSnapshot(matching:
+				{
+					fixture.store.runningOperationCount == 0
+				}))
+		}
 		let reads = fixture.service.base.readThreadCount
 		var captured: WorkspaceOperationHandle?
 		fixture.store.observe
@@ -790,8 +837,19 @@ struct ComposerCommandRuntimeTests
 		}
 		_ = fixture.state.inputs.send()
 		let handle = try #require(captured)
-		#expect(await handle.wait() == .cancelled)
-		await Task.yield()
+		do
+		{
+			let completion = TestTiming.begin(
+				"composer.reserved-handle-completion",
+				detail: command
+			)
+			defer
+			{
+				completion.end()
+			}
+			#expect(await handle.wait() == .cancelled)
+		}
+		// Backend emission and reserved cancellation reduce synchronously on this actor.
 		#expect(fixture.store.isRetired)
 		#expect(fixture.store.runningOperationCount == 0)
 		#expect(fixture.service.base.readThreadCount == reads)
@@ -815,10 +873,10 @@ struct ComposerCommandRuntimeTests
 		fixture.state.inputs.updateDraft("/plan")
 		let original = fixture.draft
 		let initial = try #require(fixture.state.inputs.send())
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingSettings != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingSettings != nil
+			}))
 		fixture.service.failSettingsAfterDisconnect()
 		_ = await initial.wait()
 		#expect(fixture.store.model.composerCommands.pendingSettings?.outcomeUncertain == true)
@@ -840,10 +898,10 @@ struct ComposerCommandRuntimeTests
 			request,
 			mode: .plan
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingSettings != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingSettings != nil
+			}))
 		fixture.service.rejectSettingsRetry()
 		_ = await rejected.wait()
 		#expect(fixture.store.model.composerCommands.pendingSettings?.outcomeUncertain == true)
@@ -858,10 +916,10 @@ struct ComposerCommandRuntimeTests
 			current,
 			mode: .plan
 		))
-		try #require(await fixture.eventually
-		{
-			fixture.service.pendingSettings != nil
-		})
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingSettings != nil
+			}))
 		fixture.service.finishSettings()
 		#expect(await confirmed.wait() == .finished)
 		#expect(fixture.store.model.composerCommands.pendingSettings == nil)
