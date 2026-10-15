@@ -231,15 +231,22 @@ struct DesktopTokenIntegrationTests
 	@Test func existingDynamicPaletteResolvesUnderTheOwningAppearance() throws
 	{
 		let owner = NSView()
-		owner.appearance = NSAppearance(named: .darkAqua)
-		let resolved = AppKitColorResolution.resolvedCGColor(
-			AppKitColorTokens.userBubble,
-			for: owner
-		)
-		let color = try #require(NSColor(cgColor: resolved)?.usingColorSpace(.sRGB))
-		#expect(abs(color.redComponent - 34 / 255.0) < 0.001)
-		#expect(abs(color.greenComponent - 61 / 255.0) < 0.001)
-		#expect(abs(color.blueComponent - 114 / 255.0) < 0.001)
+		for (name, red, green, blue) in [
+			(NSAppearance.Name.aqua, 232.0, 243.0, 254.0),
+			(.darkAqua, 23.0, 62.0, 118.0),
+			(.aqua, 232.0, 243.0, 254.0),
+		]
+		{
+			owner.appearance = NSAppearance(named: name)
+			let resolved = AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.userBubble,
+				for: owner
+			)
+			let color = try #require(NSColor(cgColor: resolved)?.usingColorSpace(.sRGB))
+			#expect(abs(color.redComponent - red / 255) < 0.001)
+			#expect(abs(color.greenComponent - green / 255) < 0.001)
+			#expect(abs(color.blueComponent - blue / 255) < 0.001)
+		}
 	}
 
 	private func button(

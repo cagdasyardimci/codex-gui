@@ -100,7 +100,7 @@ enum AppKitColorTokens
 	)
 	static let userBubble = AppKitColorResolution.color(
 		light: 0xE8F3FE,
-		dark: 0x223D72
+		dark: 0x173E76
 	)
 	static let primaryText = AppKitColorResolution.color(
 		light: 0x1A1C1F,

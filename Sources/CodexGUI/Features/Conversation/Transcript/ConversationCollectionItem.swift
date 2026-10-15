@@ -858,7 +858,34 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		kind: ConversationEntryKind
 	) -> NSAttributedString
 	{
-		guard kind != .agent && kind != .user
+		if kind == .user
+		{
+			return content.cachedDisplayText(presentation: presentation(for: kind))
+			{
+				let text = NSMutableAttributedString(attributedString: content.attributedString)
+				content.attributedString.enumerateAttribute(
+					.foregroundColor,
+					in: NSRange(
+						location: 0,
+						length: text.length
+					)
+				)
+				{
+					color, range, _ in
+					// Preserve link and syntax colors while tinting ordinary bubble text.
+					if color as? NSColor == ConversationAttributedStringRenderer.proseColor
+					{
+						text.addAttribute(
+							.foregroundColor,
+							value: AppKitColorTokens.userBubbleText,
+							range: range
+						)
+					}
+				}
+				return text
+			}
+		}
+		guard kind != .agent
 		else
 		{
 			return content.attributedString

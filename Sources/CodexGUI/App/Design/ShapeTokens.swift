@@ -53,7 +53,7 @@ enum ShapeTokens
 	enum Transcript
 	{
 		static let codeCopyTooltipRadius: CGFloat = 12
-		static let userRadius: CGFloat = 20
+		static let userRadius: CGFloat = 22
 
 		static let resultRadius: CGFloat = 12
 		static let replyControlRadius: CGFloat = 10
