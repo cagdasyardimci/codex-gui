@@ -4,148 +4,220 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite(.serialized)
+// Native sheet focus and keyboard routing are application-wide while dismissal awaits.
+@Suite(
+	.serialized,
+	.testTiming
+)
 struct TaskDeletionConfirmationTests
 {
-	@Test func unavailableTaskManagementDoesNotPresentAConfirmation() throws
+	@Test func unavailableTaskManagementDoesNotPresentAConfirmation() async throws
 	{
-		let controller = NavigationViewController()
-		let parent = makeParentWindow(controller)
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			parent.close()
+			timing.end()
 		}
-		var deletedTaskIDs: [String] = []
-		controller.onDeleteTask =
+		try await AppKitTestIsolation.perform
 		{
-			deletedTaskIDs.append($0)
-		}
-		controller.confirmDeleteTask(try makeThread())
-		#expect(parent.attachedSheet == nil)
-		#expect(deletedTaskIDs.isEmpty)
-	}
-
-	@Test func cancellationActionsDismissWithoutDeletingAndAllowAnotherPresentation() async throws
-	{
-		let controller = NavigationViewController()
-		let parent = makeParentWindow(controller)
-		defer
-		{
-			parent.close()
-		}
-		controller.canManageSidebarTasks = true
-		let thread = try makeThread()
-		var deletedTaskIDs: [String] = []
-		controller.onDeleteTask =
-		{
-			deletedTaskIDs.append($0)
-		}
-
-		for action in CancellationAction.allCases
-		{
-			controller.confirmDeleteTask(thread)
-			let panel = try #require(parent.attachedSheet as? TaskDeletionConfirmationPanel)
-			let dialog = try #require(panel.contentViewController as? TaskDeletionConfirmationView)
-			#expect(deletedTaskIDs.isEmpty)
-			#expect(panel.defaultButtonCell === dialog.cancelButton.cell)
-			#expect(dialog.deleteButton.keyEquivalent.isEmpty)
-
-			switch action
+			@MainActor in
+			let controller = NavigationViewController()
+			let parent = makeParentWindow(controller)
+			defer
 			{
-			case .cancel:
-				dialog.cancelButton.performClick(nil)
-			case .close:
-				dialog.closeButton.performClick(nil)
-			case .escape:
-				panel.cancelOperation(nil)
-			case .returnKey:
-				try sendKeyEvent(
-					to: panel,
-					characters: "\r",
-					keyCode: 36
-				)
-			case .keypadEnter:
-				try sendKeyEvent(
-					to: panel,
-					characters: "\u{3}",
-					keyCode: 76
-				)
+				parent.close()
 			}
-			await waitForDismissal(parent)
+			var deletedTaskIDs: [String] = []
+			controller.onDeleteTask =
+			{
+				deletedTaskIDs.append($0)
+			}
+			controller.confirmDeleteTask(try makeThread())
 			#expect(parent.attachedSheet == nil)
 			#expect(deletedTaskIDs.isEmpty)
 		}
 	}
 
-	@Test func deleteUsesTheCapturedTaskAndCallbackOnce() async throws
+	@Test func cancellationActionsDismissWithoutDeletingAndAllowAnotherPresentation() async throws
 	{
-		let controller = NavigationViewController()
-		let parent = makeParentWindow(controller)
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			parent.close()
+			timing.end()
 		}
-		controller.canManageSidebarTasks = true
-		let thread = try makeThread()
-		controller.selectedThreadID = "another-task"
-		var requestingOwnerTaskIDs: [String] = []
-		var replacementOwnerTaskIDs: [String] = []
-		controller.onDeleteTask =
+		try await AppKitTestIsolation.perform
 		{
-			requestingOwnerTaskIDs.append($0)
-		}
-		controller.confirmDeleteTask(thread)
-		let panel = try #require(parent.attachedSheet as? TaskDeletionConfirmationPanel)
-		let dialog = try #require(panel.contentViewController as? TaskDeletionConfirmationView)
+			@MainActor in
+			let controller = NavigationViewController()
+			let parent = makeParentWindow(controller)
+			defer
+			{
+				parent.close()
+			}
+			controller.canManageSidebarTasks = true
+			let thread = try makeThread()
+			var deletedTaskIDs: [String] = []
+			controller.onDeleteTask =
+			{
+				deletedTaskIDs.append($0)
+			}
 
-		controller.onDeleteTask =
+			for action in CancellationAction.allCases
+			{
+				controller.confirmDeleteTask(thread)
+				let panel = try #require(parent.attachedSheet as? TaskDeletionConfirmationPanel)
+				let dialog = try #require(panel
+					.contentViewController as? TaskDeletionConfirmationView)
+				#expect(deletedTaskIDs.isEmpty)
+				#expect(panel.defaultButtonCell === dialog.cancelButton.cell)
+				#expect(dialog.deleteButton.keyEquivalent.isEmpty)
+
+				let actionTiming = TestTiming.begin(
+					"sheet.action",
+					detail: "\(action)"
+				)
+				// Button cases verify target-action wiring; key cases retain native event routing.
+				switch action
+				{
+				case .cancel:
+					try #require(dialog.cancelButton.dispatchConfiguredAction())
+				case .close:
+					try #require(dialog.closeButton.dispatchConfiguredAction())
+				case .escape:
+					panel.cancelOperation(nil)
+				case .returnKey:
+					try sendKeyEvent(
+						to: panel,
+						characters: "\r",
+						keyCode: 36
+					)
+				case .keypadEnter:
+					try sendKeyEvent(
+						to: panel,
+						characters: "\u{3}",
+						keyCode: 76
+					)
+				}
+				actionTiming.end()
+				let dismissalTiming = TestTiming.begin(
+					"sheet.dismissal",
+					detail: "\(action)"
+				)
+				await waitForDismissal(parent)
+				dismissalTiming.end()
+				#expect(parent.attachedSheet == nil)
+				#expect(deletedTaskIDs.isEmpty)
+			}
+		}
+	}
+
+	@Test func deleteUsesTheCapturedTaskAndCallbackOnce() async throws
+	{
+		let timing = TestTiming.begin("test.body")
+		defer
 		{
-			replacementOwnerTaskIDs.append($0)
+			timing.end()
 		}
-		dialog.deleteButton.performClick(nil)
-		await waitForDismissal(parent)
-		#expect(parent.attachedSheet == nil)
-		#expect(requestingOwnerTaskIDs == [thread.id])
-		#expect(replacementOwnerTaskIDs.isEmpty)
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let controller = NavigationViewController()
+			let parent = makeParentWindow(controller)
+			defer
+			{
+				parent.close()
+			}
+			controller.canManageSidebarTasks = true
+			let thread = try makeThread()
+			controller.selectedThreadID = "another-task"
+			var requestingOwnerTaskIDs: [String] = []
+			var replacementOwnerTaskIDs: [String] = []
+			controller.onDeleteTask =
+			{
+				requestingOwnerTaskIDs.append($0)
+			}
+			controller.confirmDeleteTask(thread)
+			let panel = try #require(parent.attachedSheet as? TaskDeletionConfirmationPanel)
+			let dialog = try #require(panel.contentViewController as? TaskDeletionConfirmationView)
 
-		dialog.deleteButton.performClick(nil)
-		#expect(requestingOwnerTaskIDs == [thread.id])
+			controller.onDeleteTask =
+			{
+				replacementOwnerTaskIDs.append($0)
+			}
+			let actionTiming = TestTiming.begin(
+				"sheet.action",
+				detail: "delete"
+			)
+			try #require(dialog.deleteButton.dispatchConfiguredAction())
+			actionTiming.end()
+			let dismissalTiming = TestTiming.begin(
+				"sheet.dismissal",
+				detail: "delete"
+			)
+			await waitForDismissal(parent)
+			dismissalTiming.end()
+			#expect(parent.attachedSheet == nil)
+			#expect(requestingOwnerTaskIDs == [thread.id])
+			#expect(replacementOwnerTaskIDs.isEmpty)
+
+			try #require(dialog.deleteButton.dispatchConfiguredAction())
+			#expect(requestingOwnerTaskIDs == [thread.id])
+		}
 	}
 
 	@Test(arguments: [false, true])
 	func deleteRejectsChangedOwnershipOrRevokedManagement(changeOwnership: Bool) async throws
 	{
-		let controller = NavigationViewController()
-		let parent = makeParentWindow(controller)
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			parent.close()
+			timing.end()
 		}
-		controller.canManageSidebarTasks = true
-		controller.modalScope = makeScope(selectionEpoch: 1)
-		var deletedTaskIDs: [String] = []
-		controller.confirmDeleteTask(
-			try makeThread(),
-			completion:
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let controller = NavigationViewController()
+			let parent = makeParentWindow(controller)
+			defer
 			{
-				deletedTaskIDs.append($0)
+				parent.close()
 			}
-		)
-		let panel = try #require(parent.attachedSheet as? TaskDeletionConfirmationPanel)
-		let dialog = try #require(panel.contentViewController as? TaskDeletionConfirmationView)
+			controller.canManageSidebarTasks = true
+			controller.modalScope = makeScope(selectionEpoch: 1)
+			var deletedTaskIDs: [String] = []
+			controller.confirmDeleteTask(
+				try makeThread(),
+				completion:
+				{
+					deletedTaskIDs.append($0)
+				}
+			)
+			let panel = try #require(parent.attachedSheet as? TaskDeletionConfirmationPanel)
+			let dialog = try #require(panel.contentViewController as? TaskDeletionConfirmationView)
 
-		if changeOwnership
-		{
-			controller.modalScope = makeScope(selectionEpoch: 2)
+			if changeOwnership
+			{
+				controller.modalScope = makeScope(selectionEpoch: 2)
+			}
+			else
+			{
+				controller.canManageSidebarTasks = false
+			}
+			let actionTiming = TestTiming.begin(
+				"sheet.action",
+				detail: "reject-delete"
+			)
+			try #require(dialog.deleteButton.dispatchConfiguredAction())
+			actionTiming.end()
+			let dismissalTiming = TestTiming.begin(
+				"sheet.dismissal",
+				detail: "reject-delete"
+			)
+			await waitForDismissal(parent)
+			dismissalTiming.end()
+			#expect(parent.attachedSheet == nil)
+			#expect(deletedTaskIDs.isEmpty)
 		}
-		else
-		{
-			controller.canManageSidebarTasks = false
-		}
-		dialog.deleteButton.performClick(nil)
-		await waitForDismissal(parent)
-		#expect(parent.attachedSheet == nil)
-		#expect(deletedTaskIDs.isEmpty)
 	}
 
 	private enum CancellationAction: CaseIterable
