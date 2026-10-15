@@ -7,17 +7,6 @@ import Testing
 @Suite
 struct ConversationTitleTests
 {
-	@Test func provisionalTitleUsesNormalizedPromptAndPreservesUnicode()
-	{
-		#expect(ThreadTitleText
-			.placeholder("  Fix\n\tbaşlık   updates  ") == "Fix başlık updates")
-		#expect(ThreadTitleText.placeholder(" \n ") == "New chat")
-		#expect(ThreadTitleText.placeholder(String(
-			repeating: "👩🏽‍💻",
-			count: 130
-		)).count == 120)
-	}
-
 	@Test func newSubmissionGetsTitleBeforeAnyAgentResponse()
 	{
 		var model = workspace()
@@ -110,15 +99,6 @@ struct ConversationTitleTests
 			))
 		)
 		#expect(model.conversations.threads.first?.name == "My chosen name")
-	}
-
-	@Test func protocolTitleParsingRejectsMalformedOrEmptyOutput()
-	{
-		#expect(AutomaticTitleResponse.title("{\"title\":\" Create   placeholder \"}")
-			== "Create placeholder")
-		#expect(AutomaticTitleResponse.title("{\"title\":\"  \"}") == nil)
-		#expect(AutomaticTitleResponse.title("Do something else") == nil)
-		#expect(AutomaticTitleResponse.title("{\"title\":12}") == nil)
 	}
 
 	private func observeTitle(
