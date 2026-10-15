@@ -3,8 +3,67 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ProjectArchiveRuntimeTests
 {
+	@Test(arguments: ["active", "foreignCheckout"])
+	func validatesTheEntireListedProjectBeforeArchivingAnyChat(invalidSummary: String) async throws
+	{
+		let service = MockCodexService()
+		let project = URL(fileURLWithPath: "/tmp/archive-preflight").standardizedFileURL
+			.resolvingSymlinksInPath()
+		service.otherThread = try #require(ThreadSummary(json: [
+			"id": "second",
+			"cwd": invalidSummary == "foreignCheckout" ? "/another-checkout" : project.path,
+			"status": ["type": invalidSummary == "active" ? "active" : "idle"],
+		]))
+		let runner = WorkspaceEffectRunner(
+			service: service,
+			persistence: WorkspacePersistenceScheduler
+			{
+				_ in
+			},
+			mapEvent:
+			{
+				_, _ in []
+			},
+			deliver:
+			{
+				_, completion in completion()
+			}
+		)
+		defer
+		{
+			runner.shutdown()
+		}
+		let identity = WorkspaceIdentity(
+			sessionID: UUID(),
+			canonicalCheckoutPath: "/tmp/selected-project"
+		)
+		let operation = ProjectArchiveOperation(
+			context: OperationContext(
+				workspace: identity,
+				generation: 1,
+				requestID: UUID()
+			),
+			project: project
+		)
+		let result = await runner.archiveProjectChats(operation)
+		#expect(service.threadListCount == 1)
+		#expect(result.archivedThreadIDs.isEmpty)
+		#expect(service.archivedThreadIDs.isEmpty)
+		#expect(service.readThreadIDs.isEmpty)
+		let failure = try #require(result.failure)
+		if invalidSummary == "active"
+		{
+			#expect(failure.message.contains("A project chat is still active"))
+		}
+		else
+		{
+			#expect(failure.message.contains("belongs to another checkout"))
+		}
+	}
+
 	@Test func archivesTargetProjectAndReportsPartialCompletionOnActiveDetail() async throws
 	{
 		let service = MockCodexService()

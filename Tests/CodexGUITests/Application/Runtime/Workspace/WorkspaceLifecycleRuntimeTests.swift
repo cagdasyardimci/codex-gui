@@ -3,30 +3,56 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct WorkspaceLifecycleRuntimeTests
 {
 
-	@Test("Quit freeze rejects new draft writes while accepted persistence reduces and drains")
+	@Test(
+		"Quit freeze rejects new draft writes while accepted persistence reduces and drains",
+		.testTiming
+	)
 	func freezePreservesAcceptedWrite() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
+		timing.mark("startup.begin")
 		let started = LifecycleRuntimeGate()
 		let release = LifecycleRuntimeGate()
 		var written: [String] = []
-		let scheduler = WorkspacePersistenceScheduler(writeDraft:
+		// These gates control write acceptance and release; this test exercises
+		// quit ownership/draining rather than elapsed-time draft debouncing.
+		let scheduler = WorkspacePersistenceScheduler(
+			writeDraft:
 			{
 				write in
 				started.signal()
 				await release.wait()
 				written.append(write.draft.text)
-			})
+			},
+			waitForDraftEdits:
+			{
+			}
+		)
 		let identity = WorkspaceIdentity(
 			sessionID: UUID(),
 			canonicalCheckoutPath: "/alpha"
 		)
+		// Even this in-memory scheduler test drains the context worker. Give it
+		// a private real directory so unrelated fixtures cannot extend its barrier.
+		let contextDirectory = FileManager.default.temporaryDirectory
+			.appendingPathComponent("WorkspaceLifecycleRuntime-\(UUID())")
+		defer
+		{
+			try? FileManager.default.removeItem(at: contextDirectory)
+		}
 		let store = WorkspaceStateStore(
 			model: WorkspaceModel(identity: identity),
 			service: AppServer(),
 			persistence: scheduler,
+			projectContextStore: ProjectContextStore(directory: contextDirectory),
 			reducers: [ComposerReducer.reducer, WorkspaceLifecycleReducer.reducer]
 		)
 		let context = store.operationContext()
@@ -37,7 +63,10 @@ struct WorkspaceLifecycleRuntimeTests
 			revision: 1
 		)))
 		let handle = try #require(store.operation(for: context))
+		timing.mark("startup.end")
+		let initialWrite = TestTiming.begin("lifecycle.initial-write-start")
 		await started.wait()
+		initialWrite.end()
 		let quit = WorkspaceQuitRequest(requestID: UUID())
 		#expect(store.freezeInputsForQuit(quit))
 		store.dispatch(.composer(.draftEdited(
@@ -50,11 +79,26 @@ struct WorkspaceLifecycleRuntimeTests
 		#expect(handle.completion == nil)
 		let barrier = Task
 		{
+			let acceptance = TestTiming.begin("lifecycle.accepted-persistence")
+			defer
+			{
+				acceptance.end()
+			}
 			try await store.awaitAcceptedPersistence()
+			acceptance.mark("accepted")
 			try await store.drainPersistence()
+			acceptance.mark("drained")
 		}
 		release.signal()
-		try await barrier.value
+		do
+		{
+			let completion = TestTiming.begin("lifecycle.persistence-barrier-completion")
+			defer
+			{
+				completion.end()
+			}
+			try await barrier.value
+		}
 		#expect(written == ["accepted"])
 		#expect(handle.completion == .finished)
 		#expect(store.model.composer.pendingDraftWrites.isEmpty)

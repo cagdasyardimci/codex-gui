@@ -10,19 +10,24 @@ struct ProjectContextPersistenceFixture
 	let storageDirectory: URL
 	let contexts: ProjectContextStore
 
-	init(fileManager: FileManager = .default) throws
+	init(fileManager: FileManager = .default) async throws
 	{
-		directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-			.resolvingSymlinksInPath()
+		// Directory preparation is independent of the actor-bound context store and runtimes.
+		directory = try await BackgroundTestWork.perform
+		{
+			let directory = FileManager.default.temporaryDirectory
+				.appendingPathComponent(UUID().uuidString).resolvingSymlinksInPath()
+			try FileManager.default.createDirectory(
+				at: directory.appendingPathComponent("project"),
+				withIntermediateDirectories: true
+			)
+			return directory
+		}
 		project = directory.appendingPathComponent("project")
 		storageDirectory = directory.appendingPathComponent("data")
 		contexts = ProjectContextStore(
 			directory: storageDirectory,
 			fileManager: fileManager
-		)
-		try FileManager.default.createDirectory(
-			at: project,
-			withIntermediateDirectories: true
 		)
 	}
 

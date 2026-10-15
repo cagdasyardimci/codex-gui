@@ -3,12 +3,13 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ProjectContextStorePersistenceTests
 {
 	@Test("Shared storage reservations preserve save/load order across facade instances")
 	func sharedDirectoryOrdersSaveAndLoad() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -53,7 +54,7 @@ struct ProjectContextStorePersistenceTests
 	@Test("Queued context IO retains its accepted checkout after a symlink is retargeted")
 	func queuedCheckoutAliasRetainsItsCapturedProject() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -103,7 +104,7 @@ struct ProjectContextStorePersistenceTests
 	@Test("Accepted IO and its drain retain a bucket when its physical checkout becomes a symlink")
 	func queuedPhysicalCheckoutReplacementPreservesItsAcceptedBucketAndDrain() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -182,7 +183,7 @@ struct ProjectContextStorePersistenceTests
 	@Test("An alias and canonical checkout share the same failed-write and recovery barrier")
 	func checkoutAliasesShareFailureAndRecoveryBarriers() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -233,7 +234,7 @@ struct ProjectContextStorePersistenceTests
 	{
 		for field in ["corrupt", "version", "projectPath"]
 		{
-			let fixture = try ProjectContextPersistenceFixture()
+			let fixture = try await ProjectContextPersistenceFixture()
 			defer
 			{
 				fixture.remove()

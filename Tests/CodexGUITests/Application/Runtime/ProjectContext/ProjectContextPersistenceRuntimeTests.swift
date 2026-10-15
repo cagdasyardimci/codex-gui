@@ -3,13 +3,14 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ProjectContextPersistenceRuntimeTests
 {
 	@Test("Pending loads block submission; a newer edit rejects the late load result")
 	func pendingLoadProtectsSubmissionAndLaterEdits() async throws
 	{
 		let manager = ContextIORecordingFileManager()
-		let fixture = try ProjectContextPersistenceFixture(fileManager: manager)
+		let fixture = try await ProjectContextPersistenceFixture(fileManager: manager)
 		defer
 		{
 			fixture.remove()
@@ -59,7 +60,7 @@ struct ProjectContextPersistenceRuntimeTests
 	@Test("Quit waits for accepted context writes while rejecting later edits")
 	func quitBarrierPreservesAcceptedWrite() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -107,7 +108,7 @@ struct ProjectContextPersistenceRuntimeTests
 	@Test("A shutdown before effect start retains reserved writes for the drain barrier")
 	func shutdownRetainsReservedPersistence() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -151,7 +152,7 @@ struct ProjectContextPersistenceRuntimeTests
 	@Test("Shutdown waits for a reserved context write after its checkout alias is retargeted")
 	func shutdownBarrierRetainsTheReservedCheckoutAfterAliasRetargeting() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -235,7 +236,7 @@ struct ProjectContextPersistenceRuntimeTests
 	@Test("Cancellation retires result delivery while the captured write remains ordered")
 	func cancellationPreservesCapturedWriteAndOwner() async throws
 	{
-		let fixture = try ProjectContextPersistenceFixture()
+		let fixture = try await ProjectContextPersistenceFixture()
 		defer
 		{
 			fixture.remove()
@@ -253,31 +254,77 @@ struct ProjectContextPersistenceRuntimeTests
 		{
 			runner.shutdown()
 		}
-		let identity = fixture.identity()
-		let edit = ContextSaveOperation(
-			context: OperationContext(
-				workspace: identity,
-				generation: 0,
-				requestID: UUID()
-			),
-			revision: 1,
-			value: fixture.context("Original owner")
-		)
-		runner.accept(
-			[.saveProjectContext(edit)],
-			workspace: identity
-		)
-		let handle = try #require(runner.operation(for: edit.context))
-		runner.cancel(edit.context)
-		#expect(handle.completion == .cancelled)
-		#expect(actions.count == 1)
-		await blocker.release.signal()
-		try await runner.drainPersistence()
-		await Task.yield()
-		#expect(actions.count == 1)
-		#expect(try fixture.contexts.load(for: fixture.project) == edit.value)
-		#expect(try fixture.contexts.load(for: fixture.directory
-				.appendingPathComponent("another-owner")) == ProjectContext())
+		var deliveryTasks: [Task<Void, Never>] = []
+		func settleDelivery() async
+		{
+			runner.shutdown()
+			await blocker.release.signal()
+			for task in deliveryTasks
+			{
+				await task.value
+			}
+			do
+			{
+				try await runner.drainPersistence()
+			}
+			catch
+			{
+				Issue.record(error)
+			}
+		}
+		do
+		{
+			let identity = fixture.identity()
+			let edit = ContextSaveOperation(
+				context: OperationContext(
+					workspace: identity,
+					generation: 0,
+					requestID: UUID()
+				),
+				revision: 1,
+				value: fixture.context("Original owner")
+			)
+			runner.accept(
+				[.saveProjectContext(edit)],
+				workspace: identity
+			)
+			deliveryTasks = runner.executionTasks(for: edit.context)
+			let handle = try #require(runner.operation(for: edit.context))
+			try #require(!deliveryTasks.isEmpty)
+			runner.cancel(edit.context)
+			#expect(handle.completion == .cancelled)
+			try #require(actions.count == 1)
+			if case .contextNavigation(.contextPersistenceFinished(
+				let canceledEdit,
+				.failed(let failure)
+			)) = actions[0]
+			{
+				#expect(canceledEdit.context == edit.context)
+				#expect(canceledEdit.revision == edit.revision)
+				#expect(canceledEdit.value == edit.value)
+				#expect(failure.message.contains("cancelled"))
+			}
+			else
+			{
+				Issue.record("Canceling the write must publish its captured cancellation outcome.")
+			}
+			await blocker.release.signal()
+			try await runner.drainPersistence()
+			for task in deliveryTasks
+			{
+				await task.value
+			}
+			#expect(actions.count == 1)
+			#expect(try fixture.contexts.load(for: fixture.project) == edit.value)
+			#expect(try fixture.contexts.load(for: fixture.directory
+					.appendingPathComponent("another-owner")) == ProjectContext())
+			await settleDelivery()
+		}
+		catch
+		{
+			await settleDelivery()
+			throw error
+		}
 	}
 }
 
