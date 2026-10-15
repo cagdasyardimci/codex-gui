@@ -3,7 +3,8 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite(.timeLimit(.minutes(1)))
+@MainActor
 struct ConversationTurnChangeSummaryLoaderTests
 {
 	@Test func unchangedReportsDoNotRereadTheCheckoutAndLateTaskResultsAreIgnored() async throws
@@ -15,30 +16,48 @@ struct ConversationTurnChangeSummaryLoaderTests
 		{
 			observed = $0
 		}
-		let first = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-		let firstComposer = ConversationPresentation(first).composer
-		loader.render(firstComposer)
-		await service.waitForRequestCount(1)
-		loader.render(firstComposer)
-		#expect(await service.requestCount == 1)
-
-		var second = ConversationTurnChangeSummaryTestFixture.makeSnapshot(
-			selectedThreadID: "second-task"
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				loader.readTask
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				loader.stop()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
 		)
-		second.activeThreadID = "second-task"
-		second.reportedGitChanges = []
-		loader.render(ConversationPresentation(second).composer)
-		await service.waitForRequestCount(2)
-		await service.complete(1)
-		for _ in 0 ..< 100 where observed != nil
 		{
-			try await Task.sleep(for: .milliseconds(10))
+			let first = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+			let firstComposer = ConversationPresentation(first).composer
+			loader.render(firstComposer)
+			try await service.waitForRequestCount(1)
+			let firstRead = try #require(loader.readTask)
+			loader.render(firstComposer)
+			#expect(await service.requestCount == 1)
+
+			var second = ConversationTurnChangeSummaryTestFixture.makeSnapshot(
+				selectedThreadID: "second-task"
+			)
+			second.activeThreadID = "second-task"
+			second.reportedGitChanges = []
+			loader.render(ConversationPresentation(second).composer)
+			try await service.waitForRequestCount(2)
+			await service.complete(1)
+			await loader.waitForLoading()
+			#expect(observed == nil)
+			await service.complete(0)
+			// Await the cancelled request itself so the ignored-result assertion is not premature.
+			await firstRead.value
+			#expect(observed == nil)
 		}
-		#expect(observed == nil)
-		await service.complete(0)
-		await Task.yield()
-		#expect(observed == nil)
-		loader.stop()
 	}
 
 	@Test func previousTurnCountsAreReplacedWhenActiveReportsArrive() async throws
@@ -50,37 +69,56 @@ struct ConversationTurnChangeSummaryLoaderTests
 		{
 			observed = $0
 		}
-		var previous = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-		previous.reportedGitTurnID = "previous"
-		loader.render(ConversationPresentation(previous).composer)
-		await service.waitForRequestCount(1)
-		await service.complete(0)
-		for _ in 0 ..< 100 where observed?.usesPreviousTurn != true
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				loader.readTask
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				loader.stop()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
+		)
 		{
-			try await Task.sleep(for: .milliseconds(10))
+			var previous = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+			previous.reportedGitTurnID = "previous"
+			loader.render(ConversationPresentation(previous).composer)
+			try await service.waitForRequestCount(1)
+			await service.complete(0)
+			await loader.waitForLoading()
+			#expect(observed?.usesPreviousTurn == true)
+			#expect(observed?.fileCount == 2)
+			#expect(observed?.additions == 3)
+			#expect(observed?.deletions == 1)
+			var active = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+			active.reportedGitChanges = [try #require(FileChange(json: [
+				"path": "Sources/Active.swift",
+				"kind": "add",
+				"diff": "@@ -0,0 +1,5 @@\n+one\n+two\n+three\n+four\n+five",
+			]))]
+			loader.render(ConversationPresentation(active).composer)
+			try await service.waitForRequestCount(2)
+			await service.complete(1)
+			await loader.waitForLoading()
+			#expect(observed?.usesPreviousTurn == false)
+			#expect(observed?.fileCount == 1)
+			#expect(observed?.additions == 5)
+			#expect(observed?.deletions == 0)
+			active.reportedGitChanges = []
+			loader.render(ConversationPresentation(active).composer)
+			try await service.waitForRequestCount(3)
+			await service.complete(2)
+			await loader.waitForLoading()
+			#expect(observed == nil)
 		}
-		#expect(observed?.usesPreviousTurn == true)
-		#expect(observed?.additions == 3)
-		var active = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-		loader.render(ConversationPresentation(active).composer)
-		await service.waitForRequestCount(2)
-		await service.complete(1)
-		for _ in 0 ..< 100 where observed?.usesPreviousTurn != false || observed?.isLoading == true
-		{
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		#expect(observed?.usesPreviousTurn == false)
-		#expect(observed?.additions == 3)
-		active.reportedGitChanges = []
-		loader.render(ConversationPresentation(active).composer)
-		await service.waitForRequestCount(3)
-		await service.complete(2)
-		for _ in 0 ..< 100 where observed != nil
-		{
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		#expect(observed == nil)
-		loader.stop()
 	}
 
 	@Test func previewFailureUsesReportedCounts() async throws
@@ -92,22 +130,38 @@ struct ConversationTurnChangeSummaryLoaderTests
 		{
 			observed = $0
 		}
-		loader.render(ConversationPresentation(
-			ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-		).composer)
-		await service.waitForRequestCount(1)
-		await service.complete(
-			0,
-			result: .unavailable(.oversized)
+		try await withRuntimeReadCleanup(
+			currentTask:
+			{
+				loader.readTask
+			},
+			observeStarts:
+			{
+				await service.observeReadStarts($0)
+			},
+			stop:
+			{
+				loader.stop()
+			},
+			releasePending:
+			{
+				await service.releasePendingReads()
+			}
 		)
-		for _ in 0 ..< 100 where observed?.isLoading != false
 		{
-			try await Task.sleep(for: .milliseconds(10))
+			loader.render(ConversationPresentation(
+				ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+			).composer)
+			try await service.waitForRequestCount(1)
+			await service.complete(
+				0,
+				result: .unavailable(.oversized)
+			)
+			await loader.waitForLoading()
+			let button = TurnChangeSummaryButton()
+			button.render(observed)
+			#expect(button.attributedTitle.string == "2 files changed +3 -1")
 		}
-		let button = TurnChangeSummaryButton()
-		button.render(observed)
-		#expect(button.attributedTitle.string == "2 files changed +3 -1")
-		loader.stop()
 	}
 
 	@Test func reportsArrivingAfterZeroCountsRefreshTheBadge() async throws
@@ -128,10 +182,7 @@ struct ConversationTurnChangeSummaryLoaderTests
 		loader.render(ConversationPresentation(
 			ConversationTurnChangeSummaryTestFixture.makeSnapshot()
 		).composer)
-		for _ in 0 ..< 100 where observed?.additions != 3
-		{
-			try await Task.sleep(for: .milliseconds(10))
-		}
+		await loader.waitForLoading()
 		#expect(observed?.fileCount == 2)
 		#expect(observed?.additions == 3)
 		#expect(observed?.failure == nil)
@@ -143,8 +194,11 @@ struct ConversationTurnChangeSummaryLoaderTests
 private actor TurnChangeSummaryServiceStub: GitComparisonService
 {
 	private var requests: [GitComparisonRequest] = []
+	private var readyRequests: Set<Int> = []
+	private var onReadStarted: (@MainActor @Sendable () -> Void)?
+	private var isTearingDown = false
 	private var completions: [Int: CheckedContinuation<GitComparisonResult, Never>] = [:]
-	private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+	private var waiters: [Int: [UUID: AsyncStream<Void>.Continuation]] = [:]
 	var requestCount: Int
 	{
 		requests.count
@@ -152,36 +206,71 @@ private actor TurnChangeSummaryServiceStub: GitComparisonService
 
 	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
 	{
-		let index = requests.count
-		requests.append(request)
+		guard !isTearingDown
+		else
+		{
+			return .unavailable(.repositoryChanged)
+		}
+		// Scenario reads deliberately resist cancellation until their response is released.
 		return await withCheckedContinuation
 		{
-			completions[index] = $0
-			let ready = waiters.filter
+			continuation in
+			let index = requests.count
+			requests.append(request)
+			completions[index] = continuation
+			Task
 			{
-				$0.0 <= requests.count
-			}
-			waiters.removeAll
-			{
-				$0.0 <= requests.count
-			}
-			for waiter in ready
-			{
-				waiter.1.resume()
+				await onReadStarted?()
+				readyRequests.insert(index)
+				let readyCounts = waiters.keys.filter
+				{
+					isReady($0)
+				}
+				for count in readyCounts
+				{
+					for waiter in (waiters.removeValue(forKey: count) ?? [:]).values
+					{
+						waiter.yield(())
+						waiter.finish()
+					}
+				}
 			}
 		}
 	}
 
-	func waitForRequestCount(_ count: Int) async
+	func waitForRequestCount(_ count: Int) async throws
 	{
-		guard requests.count < count
+		try Task.checkCancellation()
+		guard !isReady(count)
 		else
 		{
 			return
 		}
-		await withCheckedContinuation
+		let id = UUID()
+		let checkpoint = AsyncStream<Void>.makeStream()
+		waiters[count, default: [:]][id] = checkpoint.continuation
+		defer
 		{
-			waiters.append((count, $0))
+			waiters[count]?.removeValue(forKey: id)
+			if waiters[count]?.isEmpty == true
+			{
+				waiters.removeValue(forKey: count)
+			}
+			checkpoint.continuation.finish()
+		}
+		for await _ in checkpoint.stream
+		{
+			try Task.checkCancellation()
+			return
+		}
+		throw CancellationError()
+	}
+
+	private func isReady(_ count: Int) -> Bool
+	{
+		(0 ..< count).allSatisfy
+		{
+			readyRequests.contains($0)
 		}
 	}
 
@@ -193,5 +282,32 @@ private actor TurnChangeSummaryServiceStub: GitComparisonService
 		completions.removeValue(forKey: index)?.resume(
 			returning: result ?? GitReportedTurnComparison.compare(requests[index])
 		)
+	}
+
+	func observeReadStarts(_ callback: @escaping @MainActor @Sendable () -> Void)
+	{
+		onReadStarted = callback
+	}
+
+	// Teardown releases every pending read; normal cancellation keeps late responses testable.
+	func releasePendingReads()
+	{
+		isTearingDown = true
+		onReadStarted = nil
+		let pending = Array(completions.values)
+		completions.removeAll()
+		for continuation in pending
+		{
+			continuation.resume(returning: .unavailable(.repositoryChanged))
+		}
+		for waiter in waiters.values.flatMap(
+			{
+				$0.values
+			}
+		)
+		{
+			waiter.finish()
+		}
+		waiters.removeAll()
 	}
 }

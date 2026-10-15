@@ -3,7 +3,6 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
 struct ConversationTurnChangeSummaryTests
 {
 	@Test func reportedItemsExcludeAggregateDiffAndEarlierTurns() throws
@@ -35,7 +34,7 @@ struct ConversationTurnChangeSummaryTests
 		}
 	}
 
-	@Test func missingActiveReportsUsePreviousTurnOnlyForTheBadge() throws
+	@Test @MainActor func missingActiveReportsUsePreviousTurnOnlyForTheBadge() throws
 	{
 		var snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot(reports: false)
 		snapshot.reportedGitTurnID = "previous"
@@ -75,7 +74,7 @@ struct ConversationTurnChangeSummaryTests
 		#expect(ConversationTurnChangeSummary(snapshot) == nil)
 	}
 
-	@Test func interleavedSameFileEditsFallBackToReportedCounts() throws
+	@Test @MainActor func interleavedSameFileEditsFallBackToReportedCounts() throws
 	{
 		var snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
 		snapshot.reportedGitChanges = [
@@ -100,7 +99,9 @@ struct ConversationTurnChangeSummaryTests
 						.repositoryUnavailable,
 						.cancelled,
 						.failed("Preview failed")])
-	func failuresDisplayCountsWithoutUnavailableText(_ failure: GitComparisonFailure) throws
+	@MainActor func failuresDisplayCountsWithoutUnavailableText(
+		_ failure: GitComparisonFailure
+	) throws
 	{
 		let snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
 		let request = try #require(snapshot.runningGitReviewRequest(

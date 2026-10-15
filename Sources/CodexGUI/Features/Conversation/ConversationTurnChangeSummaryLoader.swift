@@ -6,7 +6,7 @@ final class ConversationTurnChangeSummaryLoader
 {
 	private let service: any GitComparisonService
 	private var request: GitComparisonRequest?
-	private var readTask: Task<Void, Never>?
+	private(set) var readTask: Task<Void, Never>?
 	private var published: ConversationTurnChangeSummary?
 	var onChange: ((ConversationTurnChangeSummary?) -> Void)?
 
@@ -61,6 +61,12 @@ final class ConversationTurnChangeSummaryLoader
 			self?.readTask = nil
 			self?.publish(summary)
 		}
+	}
+
+	/// Waits for this request's publication, without guessing its worker scheduling delay.
+	func waitForLoading() async
+	{
+		await readTask?.value
 	}
 
 	func stop()

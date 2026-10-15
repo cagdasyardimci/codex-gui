@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ConversationTurnChangeBadgeTests
 {
 	@Test func badgeTracksOnlySelectedRunningTurnAndOpensChanges() async throws
@@ -17,11 +17,7 @@ struct ConversationTurnChangeBadgeTests
 		}
 		let snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
 		controller.render(snapshot)
-		for _ in 0 ..< 100 where controller.turnChangeSummaryButton.attributedTitle.string
-			!= "2 files changed +3 -1"
-		{
-			try await Task.sleep(for: .milliseconds(10))
-		}
+		await controller.turnChangeSummaryLoader.waitForLoading()
 		#expect(controller.turnChangeSummaryButton.isHidden == false)
 		#expect(controller.turnChangeSummaryButton.attributedTitle.string
 			== "2 files changed +3 -1")
