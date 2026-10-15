@@ -4,12 +4,17 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct AppServerDecodingTests
 {
 	@Test func connectionChangeDuringDecodingRejectsTheCompletedValue() async throws
 	{
 		let server = AppServer()
 		let gate = DecodingGate()
+		defer
+		{
+			gate.release()
+		}
 		let generation = server.connectionGeneration
 		let decoding = Task
 		{
@@ -22,12 +27,24 @@ struct AppServerDecodingTests
 				_ in try gate.decode()
 			}
 		}
-		await gate.awaitStart()
+		defer
+		{
+			decoding.cancel()
+		}
+		try await gate.awaitStart()
 		server.disconnect()
 		gate.release()
 		do
 		{
-			_ = try await decoding.value
+			_ = try await withTaskCancellationHandler
+			{
+				try await decoding.value
+			}
+			onCancel:
+			{
+				decoding.cancel()
+				gate.release()
+			}
 			Issue.record("A decoded value from the retired connection was accepted.")
 		}
 		catch AppServerError.disconnected
@@ -39,6 +56,10 @@ struct AppServerDecodingTests
 	{
 		let server = AppServer()
 		let gate = DecodingGate()
+		defer
+		{
+			gate.release()
+		}
 		let generation = server.connectionGeneration
 		let decoding = Task
 		{
@@ -51,12 +72,24 @@ struct AppServerDecodingTests
 				_ in try gate.decode()
 			}
 		}
-		await gate.awaitStart()
+		defer
+		{
+			decoding.cancel()
+		}
+		try await gate.awaitStart()
 		decoding.cancel()
 		gate.release()
 		do
 		{
-			_ = try await decoding.value
+			_ = try await withTaskCancellationHandler
+			{
+				try await decoding.value
+			}
+			onCancel:
+			{
+				decoding.cancel()
+				gate.release()
+			}
 			Issue.record("A cancelled decode returned its completed value.")
 		}
 		catch is CancellationError
@@ -75,7 +108,14 @@ private final class DecodingGate: @unchecked Sendable
 	{
 		started.continuation.yield(())
 		started.continuation.finish()
-		guard completion.wait(timeout: .now() + .seconds(5)) == .success
+		guard !Thread.isMainThread
+		else
+		{
+			throw AppServerError.protocolError("Test decoding blocked the main thread")
+		}
+		// The explicit release controls the scenario. This fallback also frees an uncooperative
+		// worker if the owner cannot progress or cancellation cannot reach the semaphore.
+		guard completion.wait(timeout: .now() + .seconds(10)) == .success
 		else
 		{
 			throw AppServerError.requestTimedOut("test decode gate")
@@ -83,16 +123,20 @@ private final class DecodingGate: @unchecked Sendable
 		return 42
 	}
 
-	func awaitStart() async
+	func awaitStart() async throws
 	{
-		for await _ in started.stream
-		{
-			return
-		}
+		var arrivals = started.stream.makeAsyncIterator()
+		let arrival: Void? = await arrivals.next()
+		try Task.checkCancellation()
+		try #require(
+			arrival != nil,
+			"The decoder did not reach its start checkpoint"
+		)
 	}
 
 	func release()
 	{
+		started.continuation.finish()
 		completion.signal()
 	}
 }

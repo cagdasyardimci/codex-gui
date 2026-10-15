@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct AppServerConnectionDiagnosticsTests
 {
 	@Test func backendFailureCapturesBoundedDetailsAndReconnectResetsThem() async throws
@@ -96,6 +97,12 @@ struct AppServerConnectionDiagnosticsTests
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
+		let releaseChild = directory.appendingPathComponent("release-child")
+		defer
+		{
+			try? Data().write(to: releaseChild)
+		}
+		let childHoldingStderr = directory.appendingPathComponent("child-holding-stderr")
 		let runCount = directory.appendingPathComponent("app-server-runs")
 		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
@@ -128,8 +135,14 @@ struct AppServerConnectionDiagnosticsTests
 			        if child == 0:
 			            os.close(0)
 			            os.close(1)
-			            time.sleep(2)
+			            open('\(childHoldingStderr.path)', 'w').close()
+			            while os.path.isdir('\(directory.path)') and not os.path.exists(
+			                '\(releaseChild.path)'
+			            ):
+			                time.sleep(0.005)
 			            os._exit(0)
+			        while not os.path.exists('\(childHoldingStderr.path)'):
+			            time.sleep(0.005)
 			        sys.stderr.write('final failure detail from parent\\n')
 			        sys.stderr.flush()
 			        os._exit(7)
@@ -140,9 +153,14 @@ struct AppServerConnectionDiagnosticsTests
 			"""
 		)
 
+		let deadlineClock = ControlledRequestTimeoutClock()
 		let server = AppServer(
 			executableOverride: executable,
-			requestTimeout: .seconds(3)
+			requestTimeout: .seconds(3),
+			requestTimeoutSleep:
+			{
+				try await deadlineClock.sleep(for: $0)
+			}
 		)
 		defer
 		{
@@ -155,17 +173,19 @@ struct AppServerConnectionDiagnosticsTests
 		}
 		try await server.connect()
 
-		let clock = ContinuousClock()
-		let startedAt = clock.now
 		_ = try? await server.accountStatus()
-		let failureDuration = startedAt.duration(to: clock.now)
-		#expect(failureDuration < .seconds(1))
+		// Failure and reconnect must complete while the descendant still holds stderr open.
+		// Its explicit release gate proves this without a machine-speed deadline.
+		#expect(FileManager.default.fileExists(atPath: childHoldingStderr.path))
+		#expect(!FileManager.default.fileExists(atPath: releaseChild.path))
 		#expect(disconnectMessage?.contains("app-server") == true)
 		#expect(server.backendDiagnostics.stderrTail.contains("final failure detail from parent"))
 
 		try await server.connect()
 		#expect(server.backendDiagnostics.stderrTail.isEmpty)
 		_ = try await server.accountStatus()
+		#expect(!FileManager.default.fileExists(atPath: releaseChild.path))
+		try Data().write(to: releaseChild)
 	}
 
 	@Test func failedVersionReconnectPreservesPreviousDiagnostics() async throws
@@ -213,11 +233,24 @@ struct AppServerConnectionDiagnosticsTests
 		{
 			server.disconnect()
 		}
-		try await server.connect()
-		for _ in 0 ..< 100 where server.backendDiagnostics.exitCode == nil
+		let disconnections = AsyncStream<String>.makeStream()
+		defer
 		{
-			try await Task.sleep(for: .milliseconds(20))
+			server.onDisconnect = nil
+			disconnections.continuation.finish()
 		}
+		server.onDisconnect =
+		{
+			disconnections.continuation.yield($0)
+		}
+		try await server.connect()
+		// Termination publishes diagnostics before disconnect; wait for that acknowledgement.
+		// Elapsed polling budgets can expire while the actor is busy running unrelated suites.
+		var disconnects = disconnections.stream.makeAsyncIterator()
+		try #require(
+			await disconnects.next() != nil,
+			"Disconnect observation was canceled"
+		)
 		let previousDiagnostics = server.backendDiagnostics
 		#expect(previousDiagnostics.exitCode == 7)
 		#expect(previousDiagnostics.stderrTail.contains("useful failure detail"))
