@@ -13,14 +13,6 @@ struct TurnReferenceTestFixture
 	let onCleanupStarted: @MainActor () -> Void
 	let onBeforeRemovingResources: @MainActor () -> Void
 
-	func close()
-	{
-		state.shutdown()
-		service.pendingTurnContentRead?.resume(throwing: CancellationError())
-		service.pendingTurnContentRead = nil
-		try? FileManager.default.removeItem(at: project)
-	}
-
 	fileprivate func close() async
 	{
 		// Keep cleanup independent of scenario cancellation while retaining its test context.
@@ -246,34 +238,4 @@ extension TurnReferenceTestFixture
 		}
 		return predicate()
 	}
-}
-
-@MainActor
-func makeTurnReferenceTestFixture(
-	pagedReferences: Bool = false,
-	totalTurns: Int = 66,
-	previewPreparer: any ConversationPreviewPreparing = ConversationMarkdownPreviewPreparer()
-) async throws -> TurnReferenceTestFixture
-{
-	try await makeTurnReferenceTestFixture(
-		pagedReferences: pagedReferences,
-		totalTurns: totalTurns,
-		previewPreparer: previewPreparer,
-		onCleanupStarted: {},
-		onBeforeRemovingResources: {}
-	)
-}
-
-@MainActor
-func waitForTurnReferenceCondition(_ predicate: @escaping @MainActor () -> Bool) async -> Bool
-{
-	for _ in 0 ..< 200
-	{
-		if predicate()
-		{
-			return true
-		}
-		try? await Task.sleep(for: .milliseconds(5))
-	}
-	return predicate()
 }
