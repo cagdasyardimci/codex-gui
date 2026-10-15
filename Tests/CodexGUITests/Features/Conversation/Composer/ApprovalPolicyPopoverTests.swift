@@ -3,7 +3,10 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized,
+	.testTiming
+) @MainActor
 struct ApprovalPolicyPopoverTests
 {
 	@Test func referenceGeometryKeyboardSelectionAndDocumentationLink() throws
@@ -86,7 +89,13 @@ struct ApprovalPolicyPopoverTests
 		{
 			opened = $0
 		}
-		link.performClick(nil)
+		let actionTiming = TestTiming.begin(
+			"popover.action",
+			detail: "documentation"
+		)
+		// This assertion concerns the configured link action rather than native press tracking.
+		try #require(link.dispatchConfiguredAction())
+		actionTiming.end()
 		#expect(opened == DocumentationLinks.sandboxing)
 		if let path = ProcessInfo.processInfo.environment["CODEX_GUI_APPROVAL_CAPTURE"]
 		{
@@ -97,54 +106,64 @@ struct ApprovalPolicyPopoverTests
 		}
 	}
 
-	@Test func panelAlignsAboveTriggerAndTogglesWithoutNativeArrow() throws
+	// Presents a key approval panel with application event monitors, then miniaturizes its host.
+	@Test func panelAlignsAboveTriggerAndTogglesWithoutNativeArrow() async throws
 	{
-		_ = NSApplication.shared
-		let controller = ConversationViewController()
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 100,
-				y: 100,
-				width: 1000,
-				height: 700
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.contentViewController = controller
-		window.setContentSize(NSSize(
-			width: 1000,
-			height: 700
-		))
-		window.layoutIfNeeded()
-		controller.showApprovalPolicy()
-		let popover = try #require(controller.approvalPolicyPopover)
-		let panel = try #require(controller.approvalPolicyController.view.window)
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			popover.close(); window.close()
+			timing.end()
 		}
-		#expect(popover.isShown)
-		let anchor = window.convertToScreen(controller.approvalPolicyButton.convert(
-			controller.approvalPolicyButton.bounds,
-			to: nil
-		))
-		#expect(abs(panel.frame.minX - anchor.minX - 1) < 0.51)
-		#expect(abs(panel.frame.minY - anchor.maxY - 1.7890625) < 0.51)
-		#expect(abs(panel.frame.width - 439.09375) < 0.51)
-		#expect(abs(panel.frame.height - 161.7109375) < 0.51)
-		controller.showApprovalPolicy()
-		#expect(!popover.isShown)
-		controller.showApprovalPolicy()
-		#expect(popover.isShown)
-		window.performMiniaturize(nil)
-		NotificationCenter.default.post(
-			name: NSWindow.didMiniaturizeNotification,
-			object: window
-		)
-		#expect(!popover.isShown)
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = ConversationViewController()
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 100,
+					y: 100,
+					width: 1000,
+					height: 700
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentViewController = controller
+			window.setContentSize(NSSize(
+				width: 1000,
+				height: 700
+			))
+			window.layoutIfNeeded()
+			controller.showApprovalPolicy()
+			let popover = try #require(controller.approvalPolicyPopover)
+			let panel = try #require(controller.approvalPolicyController.view.window)
+			defer
+			{
+				popover.close(); window.close()
+			}
+			#expect(popover.isShown)
+			let anchor = window.convertToScreen(controller.approvalPolicyButton.convert(
+				controller.approvalPolicyButton.bounds,
+				to: nil
+			))
+			#expect(abs(panel.frame.minX - anchor.minX - 1) < 0.51)
+			#expect(abs(panel.frame.minY - anchor.maxY - 1.7890625) < 0.51)
+			#expect(abs(panel.frame.width - 439.09375) < 0.51)
+			#expect(abs(panel.frame.height - 161.7109375) < 0.51)
+			controller.showApprovalPolicy()
+			#expect(!popover.isShown)
+			controller.showApprovalPolicy()
+			#expect(popover.isShown)
+			window.performMiniaturize(nil)
+			NotificationCenter.default.post(
+				name: NSWindow.didMiniaturizeNotification,
+				object: window
+			)
+			#expect(!popover.isShown)
+		}
 	}
 
 	private func key(

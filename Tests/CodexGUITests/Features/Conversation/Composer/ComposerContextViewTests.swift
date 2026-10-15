@@ -4,14 +4,16 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized)
+@Suite(
+	.serialized
+)
 @MainActor
 struct ComposerContextViewTests
 {
 	@Test func imageImportCreatesPreviewAndRemovalControl() async throws
 	{
 		_ = NSApplication.shared
-		let directory = try temporaryProject()
+		let directory = try await temporaryProject()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -235,17 +237,36 @@ struct ComposerContextViewTests
 			bytesPerRow: 0,
 			bitsPerPixel: 0
 		))
+		try #require(!bitmap.isPlanar && bitmap.samplesPerPixel == 4
+			&& bitmap.bitsPerSample == 8 && bitmap.bitsPerPixel == 32
+			&& bitmap.bitmapFormat.rawValue == 0)
+		let rowBytes = width * 4
+		try #require(bitmap.bytesPerRow >= rowBytes)
+		let pixels = try #require(bitmap.bitmapData)
+		var row = [UInt8](
+			repeating: 0,
+			count: rowBytes
+		)
 		for x in 0 ..< width
 		{
-			var pixel = x < width / 4 ? [255, 0, 0, 255]
-				: (x >= width * 3 / 4 ? [0, 0, 255, 255] : [0, 255, 0, 255])
-			for y in 0 ..< 400
+			let offset = x * 4
+			row[offset] = x < width / 4 ? 255 : 0
+			row[offset + 1] = x >= width / 4 && x < width * 3 / 4 ? 255 : 0
+			row[offset + 2] = x >= width * 3 / 4 ? 255 : 0
+			row[offset + 3] = 255
+		}
+		// Each row has identical stripes; respect the native stride while copying pixel bytes.
+		try row.withUnsafeBytes
+		{
+			bytes in
+			let source = try #require(bytes.baseAddress)
+			for y in 0 ..< bitmap.pixelsHigh
 			{
-				bitmap.setPixel(
-					&pixel,
-					atX: x,
-					y: y
-				)
+				UnsafeMutableRawPointer(pixels).advanced(by: y * bitmap.bytesPerRow)
+					.copyMemory(
+						from: source,
+						byteCount: rowBytes
+					)
 			}
 		}
 		let image = NSImage(size: NSSize(
@@ -357,13 +378,17 @@ struct ComposerContextViewTests
 		}.first
 	}
 
-	private func temporaryProject() throws -> URL
+	nonisolated private func temporaryProject() async throws -> URL
 	{
-		let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-		try FileManager.default.createDirectory(
-			at: url,
-			withIntermediateDirectories: true
-		)
-		return url
+		try await BackgroundTestWork.perform
+		{
+			let url = FileManager.default.temporaryDirectory
+				.appendingPathComponent(UUID().uuidString)
+			try FileManager.default.createDirectory(
+				at: url,
+				withIntermediateDirectories: true
+			)
+			return url
+		}
 	}
 }
