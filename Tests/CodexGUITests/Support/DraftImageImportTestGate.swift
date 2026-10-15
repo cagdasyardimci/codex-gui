@@ -8,6 +8,7 @@ final class DraftImageImportTestGate: @unchecked Sendable
 	private let condition = NSCondition()
 	private var startedCount = 0
 	private var released = false
+	private var startWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
 
 	var preparationCount: Int
 	{
@@ -23,48 +24,75 @@ final class DraftImageImportTestGate: @unchecked Sendable
 	{
 		condition.lock()
 		startedCount += 1
-		condition.broadcast()
-		let deadline = Date().addingTimeInterval(10)
-		while !released, condition.wait(until: deadline)
-		{
-		}
-		let wasReleased = released
+		let started = Array(startWaiters.values)
+		startWaiters.removeAll()
 		condition.unlock()
-		guard wasReleased
-		else
+		for waiter in started
 		{
-			throw CancellationError()
+			waiter.resume(returning: true)
 		}
+		condition.lock()
+		// The scenario releases the held worker after changing its owner, not after a deadline.
+		while !released
+		{
+			condition.wait()
+		}
+		condition.unlock()
 		return try source.pngData()
 	}
 
 	func waitUntilStarted() async -> Bool
 	{
-		await Task.detached
+		let id = UUID()
+		// A blocking observer would consume the same worker pool needed to start preparation.
+		return await withTaskCancellationHandler
 		{
-			self.waitForPreparation()
-		}.value
+			await withCheckedContinuation
+			{
+				continuation in
+				condition.lock()
+				if startedCount > 0
+				{
+					condition.unlock()
+					continuation.resume(returning: true)
+				}
+				else if released || Task.isCancelled
+				{
+					condition.unlock()
+					continuation.resume(returning: false)
+				}
+				else
+				{
+					startWaiters[id] = continuation
+					condition.unlock()
+				}
+			}
+		}
+		onCancel:
+		{
+			self.cancelStartWaiter(id)
+		}
 	}
 
-	private func waitForPreparation() -> Bool
+	private func cancelStartWaiter(_ id: UUID)
 	{
 		condition.lock()
-		defer
-		{
-			condition.unlock()
-		}
-		let deadline = Date().addingTimeInterval(10)
-		while startedCount == 0, condition.wait(until: deadline)
-		{
-		}
-		return startedCount > 0
+		let waiter = startWaiters.removeValue(forKey: id)
+		condition.unlock()
+		waiter?.resume(returning: false)
 	}
 
 	func release()
 	{
 		condition.lock()
 		released = true
+		let waiters = Array(startWaiters.values)
+		startWaiters.removeAll()
 		condition.broadcast()
 		condition.unlock()
+		for waiter in waiters
+		{
+			waiter.resume(returning: false)
+		}
 	}
 }

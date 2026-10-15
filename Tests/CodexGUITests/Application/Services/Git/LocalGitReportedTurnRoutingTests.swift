@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@MainActor
+@Suite
 struct LocalGitReportedTurnRoutingTests
 {
 	@Test func unavailableRecordedPayloadNeverUsesCheckoutAndCompletedEmptyPayloadIsAuthoritative(
@@ -35,7 +35,10 @@ struct LocalGitReportedTurnRoutingTests
 
 	@Test func sharedCheckoutChangesCannotEnterEitherTasksLastTurn() async throws
 	{
-		let fixture = try GitTurnBaselineFixture()
+		let fixture = try await BackgroundTestWork.perform
+		{
+			try GitTurnBaselineFixture()
+		}
 		defer
 		{
 			fixture.remove()

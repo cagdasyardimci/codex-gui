@@ -3,7 +3,6 @@ import Testing
 
 @testable import CodexGUI
 
-@MainActor
 enum ConversationPresentationTestFixture
 {
 	static func presentationOwner(sessionID: UUID) -> WorkspaceLifecycleOwnerReference

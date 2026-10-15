@@ -3,7 +3,7 @@ import Foundation
 /// Runs fixture Git commands without sharing the production command runner's implementation.
 enum GitTestCommandRunner
 {
-	struct Result
+	struct Result: Sendable
 	{
 		let output: Data
 		let terminationStatus: Int32
@@ -16,6 +16,65 @@ enum GitTestCommandRunner
 		input: Data? = nil,
 		captureStandardError: Bool = false,
 		environment inheritedEnvironment: [String: String] = ProcessInfo.processInfo.environment
+	) throws -> Result
+	{
+		let timing = TestTiming.begin(
+			"git.command",
+			detail: arguments.joined(separator: " ")
+		)
+		defer
+		{
+			timing.end()
+		}
+		return try execute(
+			in: directory,
+			arguments: arguments,
+			input: input,
+			captureStandardError: captureStandardError,
+			environment: inheritedEnvironment
+		)
+	}
+
+	/// Await fixture Git commands from actor-isolated tests without blocking their actor.
+	static func runAsync(
+		in directory: URL,
+		arguments: [String],
+		input: Data? = nil,
+		captureStandardError: Bool = false,
+		environment inheritedEnvironment: [String: String] = ProcessInfo.processInfo.environment
+	) async throws -> Result
+	{
+		let timing = TestTiming.begin(
+			"git.command",
+			detail: arguments.joined(separator: " ")
+		)
+		defer
+		{
+			timing.end()
+		}
+		return try await BackgroundTestWork.perform
+		{
+			timing.mark("execution.begin")
+			defer
+			{
+				timing.mark("execution.end")
+			}
+			return try execute(
+				in: directory,
+				arguments: arguments,
+				input: input,
+				captureStandardError: captureStandardError,
+				environment: inheritedEnvironment
+			)
+		}
+	}
+
+	private static func execute(
+		in directory: URL,
+		arguments: [String],
+		input: Data?,
+		captureStandardError: Bool,
+		environment inheritedEnvironment: [String: String]
 	) throws -> Result
 	{
 		let process = Process()

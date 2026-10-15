@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-struct GitTurnBaselineFixture
+struct GitTurnBaselineFixture: Sendable
 {
 	let container: URL
 	let root: URL

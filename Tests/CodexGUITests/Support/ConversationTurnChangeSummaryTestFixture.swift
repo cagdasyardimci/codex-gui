@@ -2,7 +2,6 @@ import Foundation
 
 @testable import CodexGUI
 
-@MainActor
 enum ConversationTurnChangeSummaryTestFixture
 {
 	static func makeSnapshot(
