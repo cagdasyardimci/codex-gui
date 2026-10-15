@@ -453,7 +453,6 @@ enum LayoutTokens
 		static let summaryWidth: CGFloat = 300
 		static let initialBoxHeight: CGFloat = 300
 		static let detailHeight: CGFloat = 440
-
 	}
 
 	enum Chrome
@@ -475,7 +474,6 @@ enum LayoutTokens
 		static let sourceIconSize: CGFloat = 18
 		static let sourceRowSpacing: CGFloat = 12
 		static let agentRowSpacing: CGFloat = 4
-
 	}
 
 	enum ProjectActions
@@ -496,7 +494,6 @@ enum LayoutTokens
 		static let actionSpacing: CGFloat = 4
 		static let unreadIndicatorSize: CGFloat = 8
 		static let progressRingSize: CGFloat = 16
-
 	}
 
 	enum Toolbar
@@ -507,7 +504,6 @@ enum LayoutTokens
 		static let horizontalInset: CGFloat = 8
 		static let titleSpacing: CGFloat = 9
 		static let maximumTitleWidth: CGFloat = 280
-
 	}
 
 	enum LayoutDefaults
@@ -529,8 +525,6 @@ enum LayoutTokens
 		static let horizontalInset: CGFloat = 40
 		static let topInset: CGFloat = 20
 		static let bottomInset: CGFloat = 28
-		static let centerOffset: CGFloat = 0
-
 	}
 
 	enum Transcript
@@ -558,8 +552,6 @@ enum LayoutTokens
 		static let replyControlSize: CGFloat = 26
 		static let replyControlSpacing: CGFloat = 2
 		static let replyIconSize: CGFloat = 16
-		static let codeCopyControlSize: CGFloat = 32
-
 	}
 
 	enum Markdown
@@ -671,16 +663,6 @@ enum LayoutTokens
 		}
 	}
 
-	enum TaskHover
-	{
-		static let width: CGFloat = 320
-		static let minimumHeight: CGFloat = 60
-		static let contentInset: CGFloat = 10
-		static let iconSize: CGFloat = 16
-		static let rowSpacing: CGFloat = 8
-		static let projectSpacing: CGFloat = 7
-	}
-
 	enum ModelList
 	{
 		static let outerInset: CGFloat = 4
@@ -708,5 +690,15 @@ enum LayoutTokens
 		static let trackHeight: CGFloat = 24
 		static let filledTickDiameter: CGFloat = 3
 		static let unfilledTickDiameter: CGFloat = 4
+	}
+
+	enum TaskHover
+	{
+		static let width: CGFloat = 320
+		static let minimumHeight: CGFloat = 60
+		static let contentInset: CGFloat = 10
+		static let iconSize: CGFloat = 16
+		static let rowSpacing: CGFloat = 8
+		static let projectSpacing: CGFloat = 7
 	}
 }

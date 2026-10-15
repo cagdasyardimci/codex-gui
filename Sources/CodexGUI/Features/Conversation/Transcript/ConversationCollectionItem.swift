@@ -102,7 +102,7 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 		)
 		let surface = DesktopSurface(
 			AppKitColorTokens.inspector,
-			cornerRadius: 12,
+			cornerRadius: ShapeTokens.Transcript.resultRadius,
 			bordered: true
 		)
 		surface.frame = NSRect(
@@ -193,10 +193,10 @@ private final class CodeCopyButton: NSButton, DesktopControlCursorProviding
 @MainActor
 final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDelegate
 {
-	private static let rowSpacing: CGFloat = 6
-	private static let replyActionSpacing: CGFloat = 8.5
-	private static let titleHeight: CGFloat = 16
-	private static let buttonHeight: CGFloat = 24
+	private static let rowSpacing = LayoutTokens.Transcript.rowSpacing
+	private static let replyActionSpacing = LayoutTokens.Transcript.replyActionSpacing
+	private static let titleHeight = LayoutTokens.Transcript.titleHeight
+	private static let buttonHeight = LayoutTokens.Transcript.buttonHeight
 	private static let codeCopyButtonSize: CGFloat = 32
 	private static let bodyMeasurer = ConversationBodyMeasurer()
 
@@ -211,11 +211,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private var showsReplyActions = false
 	private let userSurface = DesktopSurface(
 		AppKitColorTokens.userBubble,
-		cornerRadius: 20
+		cornerRadius: ShapeTokens.Transcript.userRadius
 	)
 	private let activitySurface = DesktopSurface(
 		AppKitColorTokens.elevated,
-		cornerRadius: 12,
+		cornerRadius: ShapeTokens.Transcript.resultRadius,
 		bordered: true
 	)
 	private var copyButtons: [CodeCopyButton] = []
@@ -294,10 +294,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 
 	private func configureMessageText()
 	{
-		titleLabel.font = .systemFont(
-			ofSize: 12,
-			weight: .medium
-		)
+		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Transcript.title)
 		titleLabel.textColor = .secondaryLabelColor
 		titleLabel.lineBreakMode = .byTruncatingTail
 		titleLabel.heightAnchor.constraint(equalToConstant: Self.titleHeight).isActive = true
@@ -813,18 +810,9 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	{
 		switch kind
 		{
-		case .agent: NSSize(
-				width: 0,
-				height: 4
-			)
-		case .user: NSSize(
-				width: 16,
-				height: 12
-			)
-		case .command, .tool, .notice: NSSize(
-				width: 12,
-				height: 10
-			)
+		case .agent: LayoutTokens.Transcript.agentInset
+		case .user: LayoutTokens.Transcript.userInset
+		case .command, .tool, .notice: LayoutTokens.Transcript.resultInset
 		}
 	}
 
@@ -840,10 +828,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			return availableWidth
 		}
 		let maximumWidth = min(
-			520,
+			LayoutTokens.Transcript.userMaximumWidth,
 			max(
-				80,
-				availableWidth * 0.7
+				LayoutTokens.Transcript.userMinimumWidth,
+				availableWidth * LayoutTokens.Transcript.userWidthFraction
 			)
 		)
 		let naturalWidth = content.cachedNaturalWidth(presentation: presentation(for: kind))
@@ -851,14 +839,14 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			ceil(displayText(
 				content,
 				kind: kind
-			).size().width) + 32
+			).size().width) + 2 * LayoutTokens.Transcript.userInset.width
 		}
 		return min(
 			availableWidth,
 			min(
 				maximumWidth,
 				max(
-					80,
+					LayoutTokens.Transcript.userMinimumWidth,
 					naturalWidth
 				)
 			)

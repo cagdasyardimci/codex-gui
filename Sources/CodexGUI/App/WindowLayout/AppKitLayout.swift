@@ -5,7 +5,7 @@ enum AppKitLayout
 {
 	static func verticalStack(
 		_ views: [NSView],
-		spacing: CGFloat = 10
+		spacing: CGFloat = LayoutTokens.LayoutDefaults.verticalSpacing
 	) -> NSStackView
 	{
 		let stack = NSStackView(views: views)
@@ -17,7 +17,7 @@ enum AppKitLayout
 
 	static func horizontalStack(
 		_ views: [NSView],
-		spacing: CGFloat = 8
+		spacing: CGFloat = LayoutTokens.LayoutDefaults.horizontalSpacing
 	) -> NSStackView
 	{
 		let stack = NSStackView(views: views)
@@ -30,7 +30,7 @@ enum AppKitLayout
 	static func pin(
 		_ view: NSView,
 		to container: NSView,
-		inset: CGFloat = 16
+		inset: CGFloat = LayoutTokens.LayoutDefaults.contentInset
 	)
 	{
 		container.addSubview(view)
@@ -59,7 +59,7 @@ enum AppKitLayout
 	static func title(_ text: String) -> NSTextField
 	{
 		let label = NSTextField(labelWithString: text)
-		label.font = .boldSystemFont(ofSize: 17)
+		label.font = AppKitFontResolver.font(TypographyTokens.Controls.title)
 		return label
 	}
 
@@ -74,7 +74,7 @@ enum AppKitLayout
 
 	static func scrollableContent(
 		_ content: NSView,
-		inset: CGFloat = 16
+		inset: CGFloat = LayoutTokens.LayoutDefaults.contentInset
 	) -> NSScrollView
 	{
 		let scrollView = NSScrollView()

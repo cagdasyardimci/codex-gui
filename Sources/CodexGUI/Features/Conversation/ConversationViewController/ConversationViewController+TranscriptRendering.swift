@@ -92,9 +92,9 @@ extension ConversationViewController
 			)
 		}
 		layout.sectionInset = NSEdgeInsets(
-			top: 20,
+			top: LayoutTokens.ReadingColumn.topInset,
 			left: 16,
-			bottom: 28,
+			bottom: LayoutTokens.ReadingColumn.bottomInset,
 			right: 16
 		)
 		collectionView.collectionViewLayout = layout

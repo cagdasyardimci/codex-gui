@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct DesktopTokenIntegrationTests
 {
 	@Test func permissionCellAndIntrinsicWidthUseTheSameChangedIconSize() throws
@@ -37,6 +39,40 @@ struct DesktopTokenIntegrationTests
 		#expect(icon.midY == bounds.midY)
 		#expect(title.minX - icon.maxX == 4)
 		#expect(abs(title.maxX - (bounds.maxX - 7)) < 0.01)
+	}
+
+	@Test func changingCloseSizeDoesNotChangeStandardControlRadii() throws
+	{
+		_ = NSApplication.shared
+		let controller = ToolsTabViewController(metrics: LayoutTokens.TabContent(
+			leadingInset: 40,
+			closeControlSize: 28
+		))
+		controller.openNewTab()
+		controller.setExpanded(true)
+		let header = controller.tabBarView
+		let close = try #require(button(
+			"Close tab 1",
+			in: header
+		) as? DesktopHoverButton)
+		let add = try #require(button(
+			"Add tab",
+			in: header
+		) as? DesktopHoverButton)
+		#expect(close.cornerRadius == 10)
+		#expect(add.cornerRadius == 12.5)
+		let tabWidths = descendants(in: header).compactMap
+		{
+			$0 as? ToolsTabSurface
+		}.flatMap(\.constraints).filter
+		{
+			$0.firstAttribute == .width && $0.relation == .greaterThanOrEqual
+		}
+		#expect(tabWidths.count == 2)
+		#expect(tabWidths.allSatisfy
+		{
+			$0.constant == 99
+		})
 	}
 
 	@Test func footerSwitchesModesRepeatedlyUsingItsActualInnerWidth() throws
@@ -91,6 +127,14 @@ struct DesktopTokenIntegrationTests
 			)
 			#expect(abs(preferenceFrame.midY - actionFrame.midY) < 0.01)
 			#expect(footer.fittingSize.height == (width < 440 ? 60 : 28))
+		}
+	}
+
+	private func descendants(in view: NSView) -> [NSView]
+	{
+		view.subviews.flatMap
+		{
+			[$0] + descendants(in: $0)
 		}
 	}
 
@@ -198,48 +242,6 @@ struct DesktopTokenIntegrationTests
 		#expect(abs(color.blueComponent - 114 / 255.0) < 0.001)
 	}
 
-	@Test func changingCloseSizeDoesNotChangeStandardControlRadii() throws
-	{
-		_ = NSApplication.shared
-		let controller = ToolsTabViewController(metrics: LayoutTokens.TabContent(
-			leadingInset: 40,
-			closeControlSize: 28
-		))
-		controller.openNewTab()
-		controller.setExpanded(true)
-		let header = controller.tabBarView
-		let close = try #require(button(
-			"Close tab 1",
-			in: header
-		) as? DesktopHoverButton)
-		let add = try #require(button(
-			"Add tab",
-			in: header
-		) as? DesktopHoverButton)
-		#expect(close.cornerRadius == 10)
-		#expect(add.cornerRadius == 12.5)
-		let tabWidths = descendants(in: header).compactMap
-		{
-			$0 as? ToolsTabSurface
-		}.flatMap(\.constraints).filter
-		{
-			$0.firstAttribute == .width && $0.relation == .greaterThanOrEqual
-		}
-		#expect(tabWidths.count == 2)
-		#expect(tabWidths.allSatisfy
-		{
-			$0.constant == 99
-		})
-	}
-
-	private func descendants(in view: NSView) -> [NSView]
-	{
-		view.subviews.flatMap
-		{
-			[$0] + descendants(in: $0)
-		}
-	}
-
 	private func button(
 		_ label: String,
 		in view: NSView
@@ -253,5 +255,4 @@ struct DesktopTokenIntegrationTests
 			$0.accessibilityLabel() == label
 		}
 	}
-
 }

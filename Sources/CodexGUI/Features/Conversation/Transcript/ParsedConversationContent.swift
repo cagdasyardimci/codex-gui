@@ -86,6 +86,6 @@ struct ConversationRichBlock: Sendable
 /// Shared paragraph and decoration geometry for native measurement and drawing.
 enum ConversationMarkdownMetrics
 {
-	static let quoteIndent = 16
-	static let listIndent = 22
+	static let quoteIndent = LayoutTokens.Markdown.quoteIndent
+	static let listIndent = LayoutTokens.Markdown.listIndent
 }

@@ -24,6 +24,7 @@ enum ShapeTokens
 	{
 		static let summaryRadius: CGFloat = 20
 		static let detailRadius: CGFloat = 16
+
 		static let summaryEdgeWidth: CGFloat = 0.5
 	}
 
@@ -53,6 +54,7 @@ enum ShapeTokens
 	{
 		static let codeCopyTooltipRadius: CGFloat = 12
 		static let userRadius: CGFloat = 20
+
 		static let resultRadius: CGFloat = 12
 		static let replyControlRadius: CGFloat = 10
 	}
@@ -73,6 +75,24 @@ enum ShapeTokens
 	{
 		static let rowRadius: CGFloat = 12.5
 		static let darkRowRadius: CGFloat = 15
+	}
+
+	enum ModelList
+	{
+		static let rowRadius: CGFloat = 15
+	}
+
+	enum EffortSlider
+	{
+		static let trackEdgeWidth: CGFloat = 0.5
+		static var trackCornerRadius: CGFloat
+		{
+			LayoutTokens.EffortSlider.trackHeight / 2
+		}
+		static func knobRadius(diameter: CGFloat) -> CGFloat
+		{
+			diameter / 2
+		}
 	}
 
 	enum TabControls
@@ -100,30 +120,10 @@ enum ShapeTokens
 	enum NativeChrome
 	{
 		static let panelRadius: CGFloat = 12
-
 	}
 
 	enum TaskHover
 	{
 		static let cornerRadius: CGFloat = 15
-
-	}
-
-	enum ModelList
-	{
-		static let rowRadius: CGFloat = 15
-	}
-
-	enum EffortSlider
-	{
-		static let trackEdgeWidth: CGFloat = 0.5
-		static var trackCornerRadius: CGFloat
-		{
-			LayoutTokens.EffortSlider.trackHeight / 2
-		}
-		static func knobRadius(diameter: CGFloat) -> CGFloat
-		{
-			diameter / 2
-		}
 	}
 }
