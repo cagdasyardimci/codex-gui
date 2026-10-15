@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@MainActor
+@Suite
 struct SlashCommandProtocolTests
 {
 	@Test func reviewItemsReadReviewPayloadAndCompactionItemsKeepTheirLifecycleIdentity()
@@ -46,6 +46,13 @@ struct SlashCommandProtocolTests
 	{
 		#expect(ReviewTarget.baseBranch(branch: "main")
 			.protocolValue["branch"] as? String == "main")
+		#expect(ReviewTarget.baseBranch(branch: "main")
+			.protocolValue["type"] as? String == "baseBranch")
+		#expect(ReviewTarget.custom(instructions: "Inspect cancellation")
+			.protocolValue as? [String: String] == [
+				"type": "custom",
+				"instructions": "Inspect cancellation"
+			])
 		let commit = ReviewTarget.commit(
 			sha: "abc",
 			title: nil
@@ -68,6 +75,7 @@ struct SlashCommandProtocolTests
 			.protocolValue["serviceTier"] as? String == "express")
 	}
 
+	@MainActor
 	@Test func tokenSettingsStatusAndLegacyCompactionNotificationsKeepOwnerIDs()
 	{
 		let server = AppServer()

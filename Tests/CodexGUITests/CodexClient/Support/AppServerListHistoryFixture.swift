@@ -8,16 +8,22 @@ struct AppServerListHistoryFixture
 	let server: AppServer
 	let directory: URL
 
-	static func make(overlappingThreadPages: Bool = false) throws -> Self
+	static func make(
+		overlappingThreadPages: Bool = false,
+		invalidDuplicatePage: Int? = nil,
+		invalidReferenceID: Bool = false
+	) async throws -> Self
 	{
-		let directory = FileManager.default.temporaryDirectory
-			.appendingPathComponent("AppServerTransportWriterTests-\(UUID().uuidString)")
-		try FileManager.default.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
-		)
-		let executable = directory.appendingPathComponent("mock-codex")
-		try """
+		let (directory, executable) = try await BackgroundTestWork.perform
+		{
+			let directory = FileManager.default.temporaryDirectory
+				.appendingPathComponent("AppServerTransportWriterTests-\(UUID().uuidString)")
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+			let executable = directory.appendingPathComponent("mock-codex")
+			try """
 		#!/usr/bin/env python3
 		import json
 		import pathlib
@@ -30,6 +36,8 @@ struct AppServerListHistoryFixture
 		directory = pathlib.Path(__file__).parent
 		list_counts = {}
 		overlapping_thread_pages = \(overlappingThreadPages ? "True" : "False")
+		invalid_duplicate_page = \(invalidDuplicatePage.map(String.init) ?? "None")
+		invalid_reference_id = \(invalidReferenceID ? "True" : "False")
 		def send(value):
 		    print(json.dumps(value, ensure_ascii=False), flush=True)
 
@@ -47,6 +55,8 @@ struct AppServerListHistoryFixture
 		            ids = ['first', 'first', 'shared'] if page == 1 else ['shared', 'last']
 		            rows = [{'id': id, 'cwd': message['params']['cwd'],
 		                     'name': 'Same title', 'preview': 'page-' + str(page)} for id in ids]
+		            if page == invalid_duplicate_page:
+		                rows[1 if page == 1 else 0]['cwd'] = '/foreign-checkout'
 		            cursor = 'second-page' if page == 1 else None
 		            send({'id': message['id'], 'result': {'data': rows, 'nextCursor': cursor}})
 		            continue
@@ -58,6 +68,19 @@ struct AppServerListHistoryFixture
 		        cursor = 'repeated-list-cursor' if list_counts[method] < 3 else None
 		        send({'id': message['id'], 'result': {'data': rows, 'nextCursor': cursor}})
 		    elif method == 'thread/turns/list':
+		        if message['params'].get('itemsView') == 'notLoaded':
+		            rows = [
+		                {'id': 'latest', 'status': 'failed', 'startedAt': 100.25,
+		                 'completedAt': 101.5, 'durationMs': 1250,
+		                 'error': {'message': 'Recorded reference failure'}},
+		                {'id': 'earlier', 'status': 'completed'}
+		            ]
+		            if invalid_reference_id:
+		                del rows[0]['id']
+		            send({'id': message['id'], 'result': {
+		                'data': rows, 'nextCursor': 'older-reference-cursor'
+		            }})
+		            continue
 		        text = chr(0xE9) + ' e' + chr(0x301) + '🧪' + chr(0x2028) + '終'
 		        send({'id': message['id'], 'result': {'nextCursor': 'next-cursor', 'data': [
 		            {'id': 'latest', 'status': 'completed', 'items': [
@@ -82,14 +105,16 @@ struct AppServerListHistoryFixture
 		        result = {'data': [{'turnId': turn_id, 'item': item}], 'nextCursor': cursor}
 		        send({'id': message['id'], 'result': result})
 		""".write(
-			to: executable,
-			atomically: true,
-			encoding: .utf8
-		)
-		try FileManager.default.setAttributes(
-			[.posixPermissions: 0o755],
-			ofItemAtPath: executable.path
-		)
+				to: executable,
+				atomically: true,
+				encoding: .utf8
+			)
+			try FileManager.default.setAttributes(
+				[.posixPermissions: 0o755],
+				ofItemAtPath: executable.path
+			)
+			return (directory, executable)
+		}
 		return Self(
 			server: AppServer(
 				executableOverride: executable,

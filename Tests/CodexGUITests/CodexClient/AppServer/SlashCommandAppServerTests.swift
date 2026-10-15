@@ -4,17 +4,18 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct SlashCommandAppServerTests
 {
 	@Test func capturedFastTierUsesAdvertisedIDAndMissingTierDoesNotSendRPC() async throws
 	{
-		let directory = try makeDirectory()
+		let directory = try await makeDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let server = AppServer(
-			executableOverride: try makeExecutable(in: directory),
+			executableOverride: try await makeExecutable(in: directory),
 			requestTimeout: .seconds(3)
 		)
 		defer
@@ -70,12 +71,12 @@ struct SlashCommandAppServerTests
 
 	@Test func forkRequestKeepsHistoryAndInstalledWireShape() async throws
 	{
-		let directory = try makeDirectory()
+		let directory = try await makeDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let executable = try makeExecutable(in: directory)
+		let executable = try await makeExecutable(in: directory)
 		let server = AppServer(
 			executableOverride: executable,
 			requestTimeout: .seconds(3)
@@ -118,12 +119,12 @@ struct SlashCommandAppServerTests
 
 	@Test func compactionAcknowledgementKeepsLifecycleOpen() async throws
 	{
-		let directory = try makeDirectory()
+		let directory = try await makeDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let executable = try makeExecutable(in: directory)
+		let executable = try await makeExecutable(in: directory)
 		let server = AppServer(
 			executableOverride: executable,
 			requestTimeout: .seconds(3)
@@ -170,12 +171,12 @@ struct SlashCommandAppServerTests
 
 	@Test func reviewRequestsPreserveInlineAndDetachedDelivery() async throws
 	{
-		let directory = try makeDirectory()
+		let directory = try await makeDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let executable = try makeExecutable(in: directory)
+		let executable = try await makeExecutable(in: directory)
 		let server = AppServer(
 			executableOverride: executable,
 			requestTimeout: .seconds(3)
@@ -200,22 +201,35 @@ struct SlashCommandAppServerTests
 		#expect(detached.reviewThreadId == "detached-review")
 
 		let requests = try readRequests(in: directory)
+		let reviewRequests = requests.filter
+		{
+			$0["method"] as? String == "review/start"
+		}
+		#expect(reviewRequests.count == 2)
 		let inline = try parameters(
 			for: "review/start",
 			in: requests
 		)
 		#expect(inline["delivery"] as? String == "inline")
-		#expect((inline["target"] as? [String: Any])?["type"] as? String == "uncommittedChanges")
+		#expect(inline["threadId"] as? String == "source")
+		#expect(inline["target"] as? [String: String] == ["type": "uncommittedChanges"])
+		let detachedParameters = try #require(reviewRequests.last?["params"] as? [String: Any])
+		#expect(detachedParameters["delivery"] as? String == "detached")
+		#expect(detachedParameters["threadId"] as? String == "source")
+		#expect(detachedParameters["target"] as? [String: String] == [
+			"type": "baseBranch",
+			"branch": "main"
+		])
 	}
 
 	@Test func collaborationSettingsAndTurnInputUseInstalledShapes() async throws
 	{
-		let directory = try makeDirectory()
+		let directory = try await makeDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let executable = try makeExecutable(in: directory)
+		let executable = try await makeExecutable(in: directory)
 		let server = AppServer(
 			executableOverride: executable,
 			requestTimeout: .seconds(3)
@@ -279,13 +293,13 @@ struct SlashCommandAppServerTests
 
 	@Test func invalidForkAndInlineReviewAcksAreRejectedLocally() async throws
 	{
-		let directory = try makeDirectory()
+		let directory = try await makeDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let server = AppServer(
-			executableOverride: try makeExecutable(in: directory),
+			executableOverride: try await makeExecutable(in: directory),
 			requestTimeout: .seconds(3)
 		)
 		defer
@@ -326,13 +340,13 @@ struct SlashCommandAppServerTests
 
 	@Test func definiteServerRejectionRemainsDistinctFromMalformedAcknowledgement() async throws
 	{
-		let directory = try makeDirectory()
+		let directory = try await makeDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let server = AppServer(
-			executableOverride: try makeExecutable(in: directory),
+			executableOverride: try await makeExecutable(in: directory),
 			requestTimeout: .seconds(3)
 		)
 		defer
@@ -362,15 +376,18 @@ struct SlashCommandAppServerTests
 		}
 	}
 
-	private func makeDirectory() throws -> URL
+	private func makeDirectory() async throws -> URL
 	{
-		let directory = FileManager.default.temporaryDirectory
-			.appendingPathComponent("SlashCommandAppServerTests-\(UUID().uuidString)")
-		try FileManager.default.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
-		)
-		return directory.standardizedFileURL
+		try await BackgroundTestWork.perform
+		{
+			let directory = FileManager.default.temporaryDirectory
+				.appendingPathComponent("SlashCommandAppServerTests-\(UUID().uuidString)")
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+			return directory.standardizedFileURL
+		}
 	}
 
 	private func parameters(
@@ -398,10 +415,12 @@ struct SlashCommandAppServerTests
 		}
 	}
 
-	private func makeExecutable(in directory: URL) throws -> URL
+	private func makeExecutable(in directory: URL) async throws -> URL
 	{
-		let executable = directory.appendingPathComponent("mock-codex")
-		let script = """
+		try await BackgroundTestWork.perform
+		{
+			let executable = directory.appendingPathComponent("mock-codex")
+			let script = """
 		#!/usr/bin/env python3
 		import json
 		import sys
@@ -453,15 +472,16 @@ struct SlashCommandAppServerTests
 		        continue
 		    send({'id': message['id'], 'result': result})
 		"""
-		try script.write(
-			to: executable,
-			atomically: true,
-			encoding: .utf8
-		)
-		try FileManager.default.setAttributes(
-			[.posixPermissions: 0o755],
-			ofItemAtPath: executable.path
-		)
-		return executable
+			try script.write(
+				to: executable,
+				atomically: true,
+				encoding: .utf8
+			)
+			try FileManager.default.setAttributes(
+				[.posixPermissions: 0o755],
+				ofItemAtPath: executable.path
+			)
+			return executable
+		}
 	}
 }

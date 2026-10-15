@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import CodexGUI
 
+@Suite
 struct ConversationHistoryDecoderTests
 {
 	@Test func fullPageMatchesLegacyConversionIncludingMalformedItemsAndExactText() throws
@@ -56,6 +57,20 @@ struct ConversationHistoryDecoderTests
 		#expect(latest.completedAt == Date(timeIntervalSince1970: 15.5))
 		#expect(latest.durationMs == 5250.0)
 		#expect(latest.itemsAreComplete)
+		#expect(latest.items.map(\.id) == ["user", "command", "answer"])
+		#expect(latest.items.map(\.type) == ["userMessage", "commandExecution", "agentMessage"])
+		let command = try #require(latest.items.first
+		{
+			$0.id == "command"
+		})
+		#expect(command.command == "cat a.swift")
+		#expect(command.output?.utf8.elementsEqual(text.utf8) == true)
+		#expect(command.exitCode == 0)
+		#expect(command.durationMs == 1.5)
+		#expect(latest.items.last?.text?.utf8.elementsEqual(text.utf8) == true)
+		let references = try #require(latest.items.first?.references)
+		#expect(references.map(\.kind) == [.fileReference, .image])
+		#expect(references.map(\.path) == ["/tmp/a.swift", "/tmp/image.png"])
 		for (actual, expected) in zip(
 			page.turns,
 			legacy
@@ -172,14 +187,20 @@ struct ConversationHistoryDecoderTests
 			}])
 		let decoding = Task.detached
 		{
-			try ConversationHistoryDecoder.decode(
+			var checkpointWasOffMainThread: [Bool] = []
+			let page = try ConversationHistoryDecoder.decode(
 				payload,
 				isCancelled:
 				{
-					#expect(!Thread.isMainThread)
+					checkpointWasOffMainThread.append(!Thread.isMainThread)
 					return Task.isCancelled
 				}
 			)
+			return (page, checkpointWasOffMainThread)
+		}
+		defer
+		{
+			decoding.cancel()
 		}
 		var mainActorAdvanced = false
 		await Task
@@ -187,6 +208,25 @@ struct ConversationHistoryDecoderTests
 			mainActorAdvanced = true
 		}.value
 		#expect(mainActorAdvanced)
-		#expect(try await decoding.value.turns.count == 50)
+		let (page, checkpointWasOffMainThread) = try await withTaskCancellationHandler
+		{
+			try await decoding.value
+		} onCancel:
+		{
+			decoding.cancel()
+		}
+		// Detached tasks do not inherit the test's assertion context. Record every decoder
+		// checkpoint in the worker and assert in the awaiting test for correct attribution.
+		let expectedCheckpointCount = 50 * (100 + 1) + 1
+		#expect(checkpointWasOffMainThread.count == expectedCheckpointCount)
+		for wasOffMainThread in checkpointWasOffMainThread
+		{
+			#expect(wasOffMainThread)
+		}
+		#expect(page.turns.count == 50)
+		for turn in page.turns
+		{
+			#expect(turn.items.count == 100)
+		}
 	}
 }
