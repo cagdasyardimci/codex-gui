@@ -13,8 +13,7 @@ struct TaskNotificationsTests
 		"empty-id.app",
 		"library.app",
 	])
-	@MainActor
-	func unsupportedLaunchKeepsNotificationsUnavailableAcrossTaskEvents(name: String) throws
+	func unsupportedLaunchKeepsNotificationsUnavailableAcrossTaskEvents(name: String) async throws
 	{
 		let directory = FileManager.default.temporaryDirectory
 			.appendingPathComponent(UUID().uuidString)
@@ -24,69 +23,79 @@ struct TaskNotificationsTests
 		}
 		let bundleURL = directory.appendingPathComponent(name)
 		let contents = bundleURL.appendingPathComponent("Contents")
-		try FileManager.default.createDirectory(
-			at: contents,
-			withIntermediateDirectories: true
-		)
-		var info = ["CFBundlePackageType": name == "library.app" ? "BNDL" : "APPL"]
-		if name == "identified.bundle" || name == "library.app"
+		// Preparing a bundle fixture performs independent disk IO, not notification state work.
+		try await BackgroundTestWork.perform
 		{
-			info["CFBundleIdentifier"] = "local.codexgui.notification-tests"
+			try FileManager.default.createDirectory(
+				at: contents,
+				withIntermediateDirectories: true
+			)
+			var info = ["CFBundlePackageType": name == "library.app" ? "BNDL" : "APPL"]
+			if name == "identified.bundle" || name == "library.app"
+			{
+				info["CFBundleIdentifier"] = "local.codexgui.notification-tests"
+			}
+			else if name == "empty-id.app"
+			{
+				info["CFBundleIdentifier"] = ""
+			}
+			try PropertyListSerialization.data(
+				fromPropertyList: info,
+				format: .xml,
+				options: 0
+			)
+			.write(to: contents.appendingPathComponent("Info.plist"))
 		}
-		else if name == "empty-id.app"
+		try await MainActor.run
 		{
-			info["CFBundleIdentifier"] = ""
-		}
-		try PropertyListSerialization.data(
-			fromPropertyList: info,
-			format: .xml,
-			options: 0
-		)
-		.write(to: contents.appendingPathComponent("Info.plist"))
-		let bundle = try #require(Bundle(url: bundleURL))
-		let coordinator = TaskNotificationCoordinator(bundle: bundle)
-		var reportedStatus: String?
-		coordinator.onStatusChange =
-		{
-			reportedStatus = $0
-		}
-		#expect(coordinator.statusMessage.contains("Notifications are unavailable"))
-		#expect(reportedStatus == coordinator.statusMessage)
+			let bundle = try #require(Bundle(url: bundleURL))
+			let coordinator = TaskNotificationCoordinator(bundle: bundle)
+			let unavailableStatus = "Notifications are unavailable for this executable. "
+				+ "Run the bundled CodexGUI.app."
+			var reportedStatuses: [String] = []
+			coordinator.onStatusChange =
+			{
+				reportedStatuses.append($0)
+			}
+			#expect(coordinator.statusMessage == unavailableStatus)
+			#expect(reportedStatuses == [unavailableStatus])
 
-		let thread = try #require(ThreadSummary(json: ["id": "owner", "name": "Active work"]))
-		var snapshot = ConversationSnapshot(
-			projectPath: "/tmp/project",
-			threads: [thread],
-			selectedThreadID: "owner",
-			entries: [],
-			canLoadEarlierTurns: false,
-			changedFiles: [],
-			diff: "",
-			draft: "",
-			canSend: false,
-			accountDescription: "Mock",
-			backendDescription: "Mock",
-			executionState: .ready,
-			statusMessage: nil,
-			models: [],
-			selectedModelID: nil,
-			selectedEffort: nil,
-			pendingInteractions: [],
-			recentProjects: []
-		)
-		snapshot.activeThreadID = "owner"
-		for state: ExecutionState in [
-			.running,
-			.awaitingApproval,
-			.awaitingAnswer,
-			.completed,
-			.failed,
-		]
-		{
-			snapshot.activeExecutionState = state
-			coordinator.observe(snapshot)
+			let thread = try #require(ThreadSummary(json: ["id": "owner", "name": "Active work"]))
+			var snapshot = ConversationSnapshot(
+				projectPath: "/tmp/project",
+				threads: [thread],
+				selectedThreadID: "owner",
+				entries: [],
+				canLoadEarlierTurns: false,
+				changedFiles: [],
+				diff: "",
+				draft: "",
+				canSend: false,
+				accountDescription: "Mock",
+				backendDescription: "Mock",
+				executionState: .ready,
+				statusMessage: nil,
+				models: [],
+				selectedModelID: nil,
+				selectedEffort: nil,
+				pendingInteractions: [],
+				recentProjects: []
+			)
+			snapshot.activeThreadID = "owner"
+			for state: ExecutionState in [
+				.running,
+				.awaitingApproval,
+				.awaitingAnswer,
+				.completed,
+				.failed,
+			]
+			{
+				snapshot.activeExecutionState = state
+				coordinator.observe(snapshot)
+				#expect(coordinator.statusMessage == unavailableStatus)
+				#expect(reportedStatuses == [unavailableStatus])
+			}
 		}
-		#expect(coordinator.statusMessage == reportedStatus)
 	}
 
 	@Test func approvalAndCompletionNotifyOnceForTheOwningConversation() throws

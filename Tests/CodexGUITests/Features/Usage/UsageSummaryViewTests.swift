@@ -85,11 +85,13 @@ struct UsageSummaryViewTests
 		{
 			$0 as? NSButton
 		}.first)
-		let refreshedAt = Date(timeIntervalSince1970: 1_800_000_000)
+		let refreshedAt = Date(timeIntervalSince1970: 1_799_827_200)
 		let formatter = DateFormatter()
 		formatter.dateStyle = .medium
 		formatter.timeStyle = .short
-		let displayedDate = formatter.string(from: refreshedAt)
+		let displayedFetchDate = formatter.string(from: refreshedAt)
+		let displayedResetDate = formatter.string(from: Date(timeIntervalSince1970: 1_800_000_000))
+		#expect(displayedFetchDate != displayedResetDate)
 
 		view.render(
 			limits: snapshot,
@@ -102,7 +104,7 @@ struct UsageSummaryViewTests
 		#expect(button.toolTip == [
 			"Account limits",
 			"Plan: plus",
-			"Primary: 25% used over 300 min · resets \(displayedDate)",
+			"Primary: 25% used over 300 min · resets \(displayedResetDate)",
 			"Secondary: 43% used",
 			"Named limit:",
 			"Primary: unavailable",
@@ -112,7 +114,7 @@ struct UsageSummaryViewTests
 			"Secondary: unavailable",
 			"Credits: Unlimited",
 			"Reset credits available: 2",
-			"Fetched: \(displayedDate)",
+			"Fetched: \(displayedFetchDate)",
 			"Stale: backend has not confirmed a recent value",
 			"Refresh failed",
 		].joined(separator: "\n"))
