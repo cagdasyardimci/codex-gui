@@ -3,6 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
+@Suite
 struct ConversationTranscriptRowTests
 {
 	@Test func liveClockAppearsBeforeFirstItemAndIsNotDuplicatedWhenReplyArrives()
@@ -200,8 +201,8 @@ struct ConversationTranscriptRowTests
 		#expect(action.command?.command == "python3  -\n  script")
 	}
 
-	@MainActor
-	@Test func historyGroupsCommandsAcrossInvisibleItemsWithoutRepeatingSingletonHeaders() throws
+	@Test func historyGroupsCommandsAcrossInvisibleItemsWithoutRepeatingSingletonHeaders(
+	) async throws
 	{
 		// Mirrors the tail of Find codebase optimizations: commentary, commands,
 		// hidden sleep/reasoning items, commentary, then another command group.
@@ -232,7 +233,12 @@ struct ConversationTranscriptRowTests
 		let history = try ConversationHistoryDecoder.decode(ProtocolJSONPayload(value: [
 			"data": [["id": "turn", "status": "completed", "items": rawItems]],
 		]))
-		let entries = ConversationContentReducer.entries(for: history.turns)
+		// The entry builder requires MainActor; protocol parsing and row assertions can run here.
+		let turns = history.turns
+		let entries = await MainActor.run
+		{
+			ConversationContentReducer.entries(for: turns)
+		}
 		let rows = ConversationTranscriptRow.make(
 			entries: entries,
 			projectPath: nil,

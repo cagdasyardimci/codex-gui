@@ -3,10 +3,10 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite
 struct ConversationSubagentRowsTests
 {
-	@Test func referenceAuditEventsSurviveDecodingAndKeepTheirConversationOrder() throws
+	@Test func referenceAuditEventsSurviveDecodingAndKeepTheirConversationOrder() async throws
 	{
 		let paths = ["client",
 						"runtime",
@@ -18,14 +18,14 @@ struct ConversationSubagentRowsTests
 						"transcript",
 						"composer_navigation",
 						"changes_ui"]
-		let starts = try paths.enumerated().map
+		var starts: [ConversationEntry] = []
+		for (index, path) in paths.enumerated()
 		{
-			index, path in
-			try entry(
+			starts.append(try await entry(
 				id: "start-\(index)",
 				kind: "started",
 				path: path
-			)
+			))
 		}
 		let comment = ConversationEntry(
 			id: "turn:comment",
@@ -33,7 +33,7 @@ struct ConversationSubagentRowsTests
 			title: "Codex",
 			body: "Ten subagents now have areas."
 		)
-		let finish = try entry(
+		let finish = try await entry(
 			id: "finish",
 			kind: "completed",
 			path: "services"
@@ -62,24 +62,24 @@ struct ConversationSubagentRowsTests
 		#expect(activity(rows[2])?.subagents.first?.threadID == "agent-services")
 	}
 
-	@Test func lifecycleChangesAndTurnBoundariesSplitGroups() throws
+	@Test func lifecycleChangesAndTurnBoundariesSplitGroups() async throws
 	{
-		let start = try entry(
+		let start = try await entry(
 			id: "start",
 			kind: "started",
 			path: "client"
 		)
-		let input = try entry(
+		let input = try await entry(
 			id: "input",
 			kind: "interacted",
 			path: "client"
 		)
-		let finish = try entry(
+		let finish = try await entry(
 			id: "finish",
 			kind: "completed",
 			path: "client"
 		)
-		let otherTurn = try entry(
+		let otherTurn = try await entry(
 			id: "finish",
 			kind: "completed",
 			path: "runtime",
@@ -103,7 +103,7 @@ struct ConversationSubagentRowsTests
 		])
 	}
 
-	@Test func nativeRowShowsBadgesAndLabelAndClearsBadgesOnReuse() throws
+	@Test @MainActor func nativeRowShowsBadgesAndLabelAndClearsBadgesOnReuse() throws
 	{
 		let agents = ["client", "runtime", "services", "transcript", "reducers"].map
 		{
@@ -191,17 +191,20 @@ struct ConversationSubagentRowsTests
 		}.count == 1)
 	}
 
-	@Test func missingAgentIdentityStillProducesAVisibleRow() throws
+	@Test func missingAgentIdentityStillProducesAVisibleRow() async throws
 	{
 		let item = try #require(CodexItem(json: [
 			"id": "unknown",
 			"type": "subAgentActivity",
 			"kind": "completed"
 		]))
-		let entry = ConversationContentReducer.entry(
-			for: item,
-			id: "turn:unknown"
-		)
+		let entry = await MainActor.run
+		{
+			ConversationContentReducer.entry(
+				for: item,
+				id: "turn:unknown"
+			)
+		}
 		let rows = ConversationTranscriptRow.make(
 			entries: [entry],
 			projectPath: nil
@@ -214,7 +217,7 @@ struct ConversationSubagentRowsTests
 		kind: String,
 		path: String,
 		turn: String = "turn"
-	) throws -> ConversationEntry
+	) async throws -> ConversationEntry
 	{
 		let item = try #require(CodexItem(json: [
 			"id": id,
@@ -223,10 +226,14 @@ struct ConversationSubagentRowsTests
 			"agentThreadId": "agent-\(path)",
 			"agentPath": "/root/\(path)"
 		]))
-		return ConversationContentReducer.entry(
-			for: item,
-			id: "\(turn):\(id)"
-		)
+		// Only the production entry builder needs MainActor; the fixture payload is Sendable.
+		return await MainActor.run
+		{
+			ConversationContentReducer.entry(
+				for: item,
+				id: "\(turn):\(id)"
+			)
+		}
 	}
 
 	private func activity(_ row: ConversationTranscriptRow) -> ConversationActivityRow?
@@ -239,6 +246,7 @@ struct ConversationSubagentRowsTests
 		return activity
 	}
 
+	@MainActor
 	private func descendants(_ view: NSView) -> [NSView]
 	{
 		[view] + view.subviews.flatMap(descendants)

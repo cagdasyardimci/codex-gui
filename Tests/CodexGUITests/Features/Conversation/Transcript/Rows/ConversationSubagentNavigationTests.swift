@@ -29,7 +29,7 @@ struct ConversationSubagentNavigationTests
 		)
 		let button = try subagentsButton(in: item.view)
 		#expect(!button.refusesFirstResponder)
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(openCount == 1)
 		#expect(toggleCount == 0)
 		#expect(!buttons(in: item.view).contains
@@ -59,7 +59,7 @@ struct ConversationSubagentNavigationTests
 		)
 		let previousButton = try subagentsButton(in: item.view)
 		item.prepareForReuse()
-		previousButton.performClick(nil)
+		previousButton.dispatchConfiguredAction()
 		#expect(openCount == 0)
 	}
 
@@ -93,21 +93,21 @@ struct ConversationSubagentNavigationTests
 		{
 			$0.accessibilityLabel()?.hasPrefix("Open conversation:") == true
 		})
-		child.performClick(nil)
+		child.dispatchConfiguredAction()
 		#expect(selected == ["child-thread"])
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(openCount == 1)
 
 		controller.requestedContext = "project:another-owner"
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(openCount == 1)
 
 		// Returning to the same owner must not revive a callback from its earlier selection.
 		controller.requestedContext = "project:owner"
 		controller.selectionGeneration += 1
-		child.performClick(nil)
+		child.dispatchConfiguredAction()
 		#expect(selected == ["child-thread"])
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(openCount == 1)
 	}
 
@@ -153,7 +153,7 @@ struct ConversationSubagentNavigationTests
 		#expect(childButtons.count == 4)
 		for button in childButtons
 		{
-			button.performClick(nil)
+			button.dispatchConfiguredAction()
 		}
 		#expect(selected == ["first", "second"])
 		#expect(childButtons.allSatisfy
@@ -163,7 +163,7 @@ struct ConversationSubagentNavigationTests
 		#expect(!childButtons[2].isEnabled)
 		#expect(!childButtons[3].isEnabled)
 		item.prepareForReuse()
-		childButtons[0].performClick(nil)
+		childButtons[0].dispatchConfiguredAction()
 		#expect(selected == ["first", "second"])
 	}
 
@@ -243,10 +243,10 @@ struct ConversationSubagentNavigationTests
 		{
 			$0.accessibilityLabel()?.hasPrefix("Open conversation:") == true
 		})
-		previous.performClick(nil)
+		previous.dispatchConfiguredAction()
 		#expect(selected == ["child-thread"])
 		configure()
-		previous.performClick(nil)
+		previous.dispatchConfiguredAction()
 		#expect(selected == ["child-thread"])
 		#expect(!buttons(in: item.view).contains
 		{

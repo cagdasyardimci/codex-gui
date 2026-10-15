@@ -32,21 +32,30 @@ struct InteractionCardViewTests
 		#expect(labels.contains("\"enabled\" : true"))
 		#expect(buttons(in: card).map(\.title) == ["Allow for Turn", "Allow for Session", "Deny"])
 
-		try #require(buttons(in: card).first(where:
-			{
-				$0.title == "Deny"
-			})).performClick(nil)
-		guard case .permissions(
-			let granted,
-			let scope
-		) = submitted
-		else
+		let decisions: [(String, PermissionScope, [String: Any])] = [
+			("Allow for Turn", .turn, requested),
+			("Allow for Session", .session, requested),
+			("Deny", .turn, [:]),
+		]
+		for (title, expectedScope, expectedGrant) in decisions
 		{
-			Issue.record("Permission denial sent the wrong response type")
-			return
+			submitted = nil
+			try #require(buttons(in: card).first(where:
+				{
+					$0.title == title
+				})).dispatchConfiguredAction()
+			guard case .permissions(
+				let granted,
+				let scope
+			) = submitted
+			else
+			{
+				Issue.record("Permission button \(title) sent the wrong response type")
+				return
+			}
+			#expect((granted as NSDictionary).isEqual(to: expectedGrant))
+			#expect(scope == expectedScope)
 		}
-		#expect(granted.isEmpty)
-		#expect(scope == .turn)
 	}
 
 	@Test func commandCardUsesOnlyOfferedDecisionsAndShowsRule() throws
@@ -69,7 +78,7 @@ struct InteractionCardViewTests
 		#expect(labels.contains("git status"))
 		#expect(labels.contains("/private/project/build"))
 
-		try #require(buttons(in: card).last).performClick(nil)
+		try #require(buttons(in: card).last).dispatchConfiguredAction()
 		guard case .approval(let decision) = submitted
 		else
 		{

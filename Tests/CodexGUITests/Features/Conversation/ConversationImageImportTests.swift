@@ -3,12 +3,15 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ConversationImageImportTests
 {
 	@Test func pendingImportBlocksSubmissionAndRestoresControlsAfterDelivery() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -63,7 +66,10 @@ struct ConversationImageImportTests
 
 	@Test func slashReturnWaitsForPendingImageWhileTabStillInsertsTheCommand() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -123,7 +129,10 @@ struct ConversationImageImportTests
 
 	@Test func repeatedImportsRetainFIFOAndCapturedReceivers() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -179,14 +188,21 @@ struct ConversationImageImportTests
 
 	@Test func rejectedImportDeletesGeneratedCopyAndPreservesOriginalFile() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let copies = directory.appendingPathComponent("copies")
 		let original = directory.appendingPathComponent("Original 🐈.png")
-		try DraftImageImportTestFixture.png().write(to: original)
+		let png = try DraftImageImportTestFixture.png()
+		try await BackgroundTestWork.perform
+		{
+			try png.write(to: original)
+		}
 		let controller = makeController(directory: copies)
 		var rejected: ComposerContextItem?
 		controller.onImportImageContext =
@@ -209,7 +225,10 @@ struct ConversationImageImportTests
 
 	@Test func samePathConversationABARetiresPreparingAndQueuedImports() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -261,7 +280,10 @@ struct ConversationImageImportTests
 
 	@Test func sameOwnerNewDraftLifetimeCancelsPendingImport() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -298,7 +320,10 @@ struct ConversationImageImportTests
 
 	@Test func acceptanceMayChangeOwnerWithoutDeletingRetainedCopy() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -325,7 +350,10 @@ struct ConversationImageImportTests
 
 	@Test func controllerRetirementCancelsWorkerWithoutRetainingView() async throws
 	{
-		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		let directory = try await BackgroundTestWork.perform
+		{
+			try DraftImageImportTestFixture.temporaryDirectory()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)

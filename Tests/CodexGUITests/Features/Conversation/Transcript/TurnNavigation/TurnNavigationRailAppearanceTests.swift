@@ -122,7 +122,7 @@ struct TurnNavigationRailAppearanceTests
 		for delta: Int32 in [30, -30]
 		{
 			scrollView.scrollWheel(with: try wheelEvent(delta))
-			try await Task.sleep(for: .milliseconds(30))
+			// The rail applies wheel deltas synchronously; no run-loop delay is required.
 			moved = moved || scrollView.contentView.bounds.origin != origin
 		}
 		if turnCount > 62
@@ -134,7 +134,7 @@ struct TurnNavigationRailAppearanceTests
 			{
 				scrollView.scrollWheel(with: try wheelEvent(-1200))
 			}
-			try await Task.sleep(for: .milliseconds(30))
+			// The rail applies wheel deltas synchronously; no run-loop delay is required.
 			#expect(unhandled.events == 0)
 			let document = try #require(scrollView.documentView)
 			#expect(scrollView.contentView.bounds.minY >= 0)
@@ -503,7 +503,7 @@ struct TurnNavigationRailAppearanceTests
 		{
 			jumped = $0
 		}
-		focused.performClick(nil)
+		focused.dispatchConfiguredAction()
 		#expect(jumped == updated[10])
 	}
 
@@ -576,12 +576,12 @@ struct TurnNavigationRailAppearanceTests
 		{
 			jumped = $0
 		}
-		focused.performClick(nil)
+		focused.dispatchConfiguredAction()
 		#expect(jumped == resident[11])
 		rail.render(initialSummaries)
 		#expect(try marks(in: rail)[11] === focused)
 		#expect(focused.entryID == initialSummaries[11].entryID)
-		focused.performClick(nil)
+		focused.dispatchConfiguredAction()
 		#expect(jumped == initialSummaries[11])
 	}
 
@@ -683,7 +683,7 @@ struct TurnNavigationRailAppearanceTests
 		{
 			jumped = $0
 		}
-		initial[3].performClick(nil)
+		initial[3].dispatchConfiguredAction()
 		#expect(jumped == first)
 		initial[3].mouseExited(with: try hoverEvent(.mouseExited))
 		rail.updateActiveTurn("first")
@@ -706,7 +706,7 @@ struct TurnNavigationRailAppearanceTests
 			updated,
 			highlighted: 2
 		)
-		initial[3].performClick(nil)
+		initial[3].dispatchConfiguredAction()
 		#expect(jumped == renamed)
 	}
 
