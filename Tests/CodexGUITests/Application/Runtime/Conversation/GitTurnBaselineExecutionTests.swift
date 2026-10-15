@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct GitTurnBaselineExecutionTests
 {
 	@Test func capturedBytesRemainOwnedByThePreparedThreadAndAcknowledgedTurn() async throws
@@ -27,27 +28,34 @@ struct GitTurnBaselineExecutionTests
 				managedWorkspace: nil
 			)
 		}
-		await baseline.waitForCapture()
-		let request = await baseline.capturedRequest
-		#expect(request?.context == prepared.submission.context)
-		#expect(request?.threadID == prepared.thread.summary.id)
-		#expect(request?.repositoryRoot == prepared.submission.context.workspace
-			.canonicalCheckoutPath)
-		#expect(service.turnStartCount == 0)
-		await baseline.finishCapture(.captured(reference))
-		try await task.value
-		guard let action, case .execution(.submissionAcknowledged(
-			_,
-			let acknowledgement
-		)) = action
-		else
+		try await withBaselineExecution(
+			task,
+			baseline: baseline,
+			runner: runner
+		)
 		{
-			Issue.record("Expected the captured submission acknowledgement.")
-			return
+			try await baseline.waitForCapture()
+			let request = await baseline.capturedRequest
+			#expect(request?.context == prepared.submission.context)
+			#expect(request?.threadID == prepared.thread.summary.id)
+			#expect(request?.repositoryRoot == prepared.submission.context.workspace
+				.canonicalCheckoutPath)
+			#expect(service.turnStartCount == 0)
+			await baseline.finishCapture(.captured(reference))
+			try await task.value
+			guard let action, case .execution(.submissionAcknowledged(
+				_,
+				let acknowledgement
+			)) = action
+			else
+			{
+				Issue.record("Expected the captured submission acknowledgement.")
+				return
+			}
+			#expect(acknowledgement.gitTurnBaseline == reference)
+			#expect(acknowledgement.turn.id == service.nextTurn.id)
+			#expect(acknowledgement.thread.id == prepared.thread.summary.id)
 		}
-		#expect(acknowledgement.gitTurnBaseline == reference)
-		#expect(acknowledgement.turn.id == service.nextTurn.id)
-		#expect(acknowledgement.thread.id == prepared.thread.summary.id)
 	}
 
 	@Test func captureCompletesBeforeBackendSendAndUnavailableCaptureDoesNotBlock() async throws
@@ -70,24 +78,31 @@ struct GitTurnBaselineExecutionTests
 				managedWorkspace: nil
 			)
 		}
-		await baseline.waitForCapture()
-		#expect(service.turnStartCount == 0)
-		await baseline.finishCapture(.unavailable(.oversized))
-		try await task.value
-		#expect(service.turnStartCount == 1)
-		guard let action, case .execution(.submissionAcknowledged(
-			let context,
-			let acknowledgement
-		)) = action
-		else
+		try await withBaselineExecution(
+			task,
+			baseline: baseline,
+			runner: runner
+		)
 		{
-			Issue.record("Expected the actual backend acknowledgement.")
-			return
+			try await baseline.waitForCapture()
+			#expect(service.turnStartCount == 0)
+			await baseline.finishCapture(.unavailable(.oversized))
+			try await task.value
+			#expect(service.turnStartCount == 1)
+			guard let action, case .execution(.submissionAcknowledged(
+				let context,
+				let acknowledgement
+			)) = action
+			else
+			{
+				Issue.record("Expected the actual backend acknowledgement.")
+				return
+			}
+			#expect(context.isSameRequest(as: prepared.submission.context))
+			#expect(acknowledgement.turn.id == service.nextTurn.id)
+			#expect(acknowledgement.gitTurnBaseline == nil)
+			#expect(acknowledgement.gitTurnBaselineResult == .unavailable(.oversized))
 		}
-		#expect(context.isSameRequest(as: prepared.submission.context))
-		#expect(acknowledgement.turn.id == service.nextTurn.id)
-		#expect(acknowledgement.gitTurnBaseline == nil)
-		#expect(acknowledgement.gitTurnBaselineResult == .unavailable(.oversized))
 	}
 
 	@Test func ownershipChangeDuringCapturePreventsBackendSend() async throws
@@ -114,20 +129,27 @@ struct GitTurnBaselineExecutionTests
 				managedWorkspace: nil
 			)
 		}
-		await baseline.waitForCapture()
-		current = false
-		let reference = reference(prepared)
-		await baseline.finishCapture(.captured(reference))
-		do
+		try await withBaselineExecution(
+			task,
+			baseline: baseline,
+			runner: runner
+		)
 		{
-			_ = try await task.value
-			Issue.record("A superseded capture must not submit a turn.")
+			try await baseline.waitForCapture()
+			current = false
+			let reference = reference(prepared)
+			await baseline.finishCapture(.captured(reference))
+			do
+			{
+				_ = try await task.value
+				Issue.record("A superseded capture must not submit a turn.")
+			}
+			catch is CancellationError
+			{
+			}
+			#expect(service.turnStartCount == 0)
+			#expect(await baseline.discardedIDs == [reference.identity.id])
 		}
-		catch is CancellationError
-		{
-		}
-		#expect(service.turnStartCount == 0)
-		#expect(await baseline.discardedIDs == [reference.identity.id])
 	}
 
 	@Test func cancellationDuringCapturePreventsBackendSend() async throws
@@ -149,18 +171,25 @@ struct GitTurnBaselineExecutionTests
 				managedWorkspace: nil
 			)
 		}
-		await baseline.waitForCapture()
-		task.cancel()
-		await baseline.finishCapture(.unavailable(.oversized))
-		do
+		try await withBaselineExecution(
+			task,
+			baseline: baseline,
+			runner: runner
+		)
 		{
-			_ = try await task.value
-			Issue.record("A canceled capture must not submit a turn.")
+			try await baseline.waitForCapture()
+			task.cancel()
+			await baseline.finishCapture(.unavailable(.oversized))
+			do
+			{
+				_ = try await task.value
+				Issue.record("A canceled capture must not submit a turn.")
+			}
+			catch is CancellationError
+			{
+			}
+			#expect(service.turnStartCount == 0)
 		}
-		catch is CancellationError
-		{
-		}
-		#expect(service.turnStartCount == 0)
 	}
 
 	@Test func stopDuringCaptureCancelsBeforeSendAndDiscardsCapture() async throws
@@ -189,19 +218,26 @@ struct GitTurnBaselineExecutionTests
 				managedWorkspace: nil
 			)
 		}
-		await baseline.waitForCapture()
-		stopped = true
-		await baseline.finishCapture(.captured(reference))
-		try await task.value
-		guard let action, case .execution(.submissionCancelledBeforeSend(let context)) = action
-		else
+		try await withBaselineExecution(
+			task,
+			baseline: baseline,
+			runner: runner
+		)
 		{
-			Issue.record("Stop must settle the unsent submission locally.")
-			return
+			try await baseline.waitForCapture()
+			stopped = true
+			await baseline.finishCapture(.captured(reference))
+			try await task.value
+			guard let action, case .execution(.submissionCancelledBeforeSend(let context)) = action
+			else
+			{
+				Issue.record("Stop must settle the unsent submission locally.")
+				return
+			}
+			#expect(context.isSameRequest(as: prepared.submission.context))
+			#expect(service.turnStartCount == 0)
+			#expect(await baseline.discardedIDs == [reference.identity.id])
 		}
-		#expect(context.isSameRequest(as: prepared.submission.context))
-		#expect(service.turnStartCount == 0)
-		#expect(await baseline.discardedIDs == [reference.identity.id])
 	}
 
 	@Test func rejectedStartDiscardsCaptureButTimedOutStartRetainsOwnedCapture() async throws
@@ -230,22 +266,61 @@ struct GitTurnBaselineExecutionTests
 					managedWorkspace: nil
 				)
 			}
-			await baseline.waitForCapture()
-			await baseline.finishCapture(.captured(reference))
-			do
+			try await withBaselineExecution(
+				task,
+				baseline: baseline,
+				runner: runner
+			)
 			{
-				_ = try await task.value
-				Issue.record("The failed start must retain its failure result.")
+				try await baseline.waitForCapture()
+				await baseline.finishCapture(.captured(reference))
+				do
+				{
+					_ = try await task.value
+					Issue.record("The failed start must retain its failure result.")
+				}
+				catch let failure as SubmissionStartFailure
+				{
+					#expect(failure.failure.outcomeIsUncertain == uncertain)
+					#expect(failure.pendingCapture?.reference == (uncertain ? reference : nil))
+					#expect(failure.pendingCapture?.context == (uncertain
+							? prepared.submission.context : nil))
+				}
+				#expect(service.turnStartCount == 1)
+				#expect(await baseline.discardedIDs == (uncertain ? [] : [reference.identity.id]))
 			}
-			catch let failure as SubmissionStartFailure
-			{
-				#expect(failure.failure.outcomeIsUncertain == uncertain)
-				#expect(failure.pendingCapture?.reference == (uncertain ? reference : nil))
-				#expect(failure.pendingCapture?.context == (uncertain
-						? prepared.submission.context : nil))
-			}
-			#expect(service.turnStartCount == 1)
-			#expect(await baseline.discardedIDs == (uncertain ? [] : [reference.identity.id]))
+		}
+	}
+
+	private func withBaselineExecution(
+		_ task: Task<Void, Error>,
+		baseline: SuspendedGitTurnBaselineService,
+		runner: WorkspaceEffectRunner,
+		operation: () async throws -> Void
+	) async throws
+	{
+		let completion = Task
+		{
+			_ = await task.result
+			await baseline.executionFinished()
+		}
+		func cleanup() async
+		{
+			task.cancel()
+			await baseline.releasePendingCapture()
+			_ = await task.result
+			await completion.value
+			runner.shutdown()
+		}
+		do
+		{
+			try await operation()
+			await cleanup()
+		}
+		catch
+		{
+			await cleanup()
+			throw error
 		}
 	}
 
@@ -339,33 +414,80 @@ private actor SuspendedGitTurnBaselineService: GitTurnBaselineService
 	private(set) var capturedRequest: GitTurnBaselineCaptureRequest?
 	private(set) var discardedIDs: [UUID] = []
 	private var captureContinuation: CheckedContinuation<GitTurnBaselineResult, Never>?
-	private var captureWaiters: [CheckedContinuation<Void, Never>] = []
+	private var captureWaiters: [UUID: AsyncStream<Void>.Continuation] = [:]
+	private var didFinishExecution = false
+	private var isTearingDown = false
 
 	func capture(_ request: GitTurnBaselineCaptureRequest) async -> GitTurnBaselineResult
 	{
+		guard !isTearingDown
+		else
+		{
+			return .unavailable(.cancelled)
+		}
 		capturedRequest = request
 		return await withCheckedContinuation
 		{
 			continuation in
 			captureContinuation = continuation
-			for waiter in captureWaiters
-			{
-				waiter.resume()
-			}
-			captureWaiters.removeAll()
+			notifyCaptureWaiters()
 		}
 	}
 
-	func waitForCapture() async
+	func waitForCapture() async throws
 	{
-		guard captureContinuation == nil
+		try Task.checkCancellation()
+		guard capturedRequest == nil
 		else
 		{
 			return
 		}
-		await withCheckedContinuation
+		guard !didFinishExecution
+		else
 		{
-			captureWaiters.append($0)
+			throw CaptureCheckpointFailure.executionFinishedBeforeCapture
+		}
+		let id = UUID()
+		let checkpoint = AsyncStream<Void>.makeStream()
+		captureWaiters[id] = checkpoint.continuation
+		defer
+		{
+			captureWaiters.removeValue(forKey: id)
+			checkpoint.continuation.finish()
+		}
+		for await _ in checkpoint.stream
+		{
+			break
+		}
+		try Task.checkCancellation()
+		guard capturedRequest != nil
+		else
+		{
+			throw CaptureCheckpointFailure.executionFinishedBeforeCapture
+		}
+	}
+
+	func executionFinished()
+	{
+		didFinishExecution = true
+		notifyCaptureWaiters()
+	}
+
+	func releasePendingCapture()
+	{
+		isTearingDown = true
+		finishCapture(.unavailable(.cancelled))
+		notifyCaptureWaiters()
+	}
+
+	private func notifyCaptureWaiters()
+	{
+		let waiters = Array(captureWaiters.values)
+		captureWaiters.removeAll()
+		for waiter in waiters
+		{
+			waiter.yield(())
+			waiter.finish()
 		}
 	}
 
@@ -400,5 +522,10 @@ private actor SuspendedGitTurnBaselineService: GitTurnBaselineService
 	func discard(_ reference: GitTurnBaselineReference) async
 	{
 		discardedIDs.append(reference.identity.id)
+	}
+
+	private enum CaptureCheckpointFailure: Error
+	{
+		case executionFinishedBeforeCapture
 	}
 }
