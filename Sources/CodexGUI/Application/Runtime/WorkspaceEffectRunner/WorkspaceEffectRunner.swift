@@ -206,6 +206,31 @@ final class WorkspaceEffectRunner
 		handles.count
 	}
 
+	/// Captures registered effects, including preview expiry, but not the independent usage timer.
+	/// Callers must select a request when unrelated effects should not delay readiness.
+	func executionTasks() -> [Task<Void, Never>]
+	{
+		tasks.values.map(\.task)
+	}
+
+	/// Operation cancellation retires its handle before a suspended service necessarily returns.
+	/// A task snapshot can also await that execution's return without changing its cancellation.
+	func executionTasks(for context: OperationContext) -> [Task<Void, Never>]
+	{
+		let request = RequestKey(context)
+		var captured = tasks.compactMap
+		{
+			key, pending in
+			key.request == request ? pending.task : nil
+		}
+		if let deadline = usageDeadline, RequestKey(deadline.read.context) == request,
+			let task = usageDeadlineTask
+		{
+			captured.append(task)
+		}
+		return captured
+	}
+
 	func operation(for context: OperationContext) -> WorkspaceOperationHandle?
 	{
 		handles[RequestKey(context)]

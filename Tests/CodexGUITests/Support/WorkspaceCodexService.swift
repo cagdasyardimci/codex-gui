@@ -55,7 +55,7 @@ final class WorkspaceCodexService: CodexService
 	var suspendThreadStart = false
 	var pendingThreadStart: CheckedContinuation<ThreadDetail, Error>?
 	private var checkpoints: Set<String> = []
-	private var checkpointWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+	private var checkpointWaiters: [String: [UUID: AsyncStream<Void>.Continuation]] = [:]
 
 	func waitForCheckpoint(_ checkpoint: String) async
 	{
@@ -64,18 +64,33 @@ final class WorkspaceCodexService: CodexService
 		{
 			return
 		}
-		await withCheckedContinuation
+		let id = UUID()
+		let stream = AsyncStream<Void>
 		{
-			checkpointWaiters[checkpoint, default: []].append($0)
+			checkpointWaiters[checkpoint, default: [:]][id] = $0
+		}
+		defer
+		{
+			checkpointWaiters[checkpoint]?.removeValue(forKey: id)
+			if checkpointWaiters[checkpoint]?.isEmpty == true
+			{
+				checkpointWaiters.removeValue(forKey: checkpoint)
+			}
+		}
+		// A test time limit cancels stream iteration rather than leaving a parked continuation.
+		for await _ in stream
+		{
+			break
 		}
 	}
 
 	private func reached(_ checkpoint: String)
 	{
 		checkpoints.insert(checkpoint)
-		for waiter in checkpointWaiters.removeValue(forKey: checkpoint) ?? []
+		for waiter in checkpointWaiters.removeValue(forKey: checkpoint)?.values ?? [:].values
 		{
-			waiter.resume()
+			waiter.yield(())
+			waiter.finish()
 		}
 	}
 
@@ -190,8 +205,10 @@ final class WorkspaceCodexService: CodexService
 			return try await withCheckedThrowingContinuation
 			{
 				pendingRead = $0
+				reached("read:\(readThreadCount)")
 			}
 		}
+		reached("read:\(readThreadCount)")
 		return readThreadDetails[id] ?? additionalThreads[id] ?? detail()
 	}
 
@@ -265,8 +282,10 @@ final class WorkspaceCodexService: CodexService
 			return try await withCheckedThrowingContinuation
 			{
 				pendingSteer = $0
+				reached("steer:\(steeringRequests.count)")
 			}
 		}
+		reached("steer:\(steeringRequests.count)")
 		return expectedTurnId
 	}
 

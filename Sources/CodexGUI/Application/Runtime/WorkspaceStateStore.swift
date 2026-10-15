@@ -404,6 +404,19 @@ final class WorkspaceStateStore
 		)
 	}
 
+	/// Captures currently accepted finite execution without waiting for long-lived subscriptions.
+	func executionTasks() -> [Task<Void, Never>]
+	{
+		runner.executionTasks()
+	}
+
+	/// Captures current execution tasks, including a usage deadline, before they are retired.
+	/// Awaiting these tasks includes a canceled service's return after its handle completed.
+	func executionTasks(for context: OperationContext) -> [Task<Void, Never>]
+	{
+		runner.executionTasks(for: context)
+	}
+
 	func operation(for context: OperationContext) -> WorkspaceOperationHandle?
 	{
 		runner.operation(for: context)
