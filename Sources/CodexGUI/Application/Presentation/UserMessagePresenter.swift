@@ -22,9 +22,10 @@ enum UserMessageContextDescription
 		lastLine: Int?
 	) -> String
 	{
+		let lines = SourceLineIndex(text).lines
 		let firstLine = firstLine ?? 1
-		let lastLine = lastLine ?? firstLine
-		let numberedLines = text.components(separatedBy: "\n").enumerated().map
+		let lastLine = lastLine ?? firstLine + lines.count - 1
+		let numberedLines = lines.enumerated().map
 		{
 			"\(firstLine + $0.offset): \($0.element)"
 		}

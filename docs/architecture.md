@@ -23,6 +23,8 @@ only while that empty draft is untouched and the submission remains unacknowledg
 and independent New Chat lifetimes survive late results. Untouched submitted drafts remain stored
 until acknowledgement; accepted references become durable before their stored drafts are cleared.
 
+Source selections and code previews share logical lines in UTF-16 coordinates. LF, CRLF, CR, U+2028 and U+2029 each end one line; CRLF counts once, and a terminal separator retains an empty final document line. Selected code excerpts preserve their original separators and blank source lines within inclusive line bounds. Omitting the final selected line's terminator does not remove selected leading or trailing blank lines. Outgoing descriptions use LF between numbered lines. A missing first line defaults to 1, and a missing last line is derived from the first line and excerpt line count; explicitly supplied bounds are preserved.
+
 Execution ownership is independent of the displayed conversation. Results must match their pending operation, owner and connection generation. Selecting another chat does not transfer an active turn, approval, command result, draft or deferred callback.
 
 `ExecutionRegistry` retains one execution value per ordinary conversation. An anonymous submission uses its draft lifetime until preparation assigns a thread ID. `WorkspaceExecutionScope` routes captured requests and backend thread/turn events through the existing reducers. Its temporary reduction scope is restored before publication; `WorkspaceModel.execution` then projects the selected conversation. Aggregate lifecycle checks inspect every registry entry rather than that selected projection.

@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite
 struct ComposerContextBuilderTests
 {
 	@Test func contextInputsKeepTypesAndLineNumbers() throws
@@ -173,11 +173,12 @@ struct ComposerContextBuilderTests
 		}
 	}
 
-	@Test func preparedExcerptPreservesLineBoundsAndBlankLines() throws
+	@Test(arguments: ["\n", "\r\n", "\r", "\u{2028}", "\u{2029}"])
+	func preparedExcerptPreservesLineBoundsAndBlankLines(separator: String) throws
 	{
 		let cases: [(first: Int?, last: Int?, expected: String)] = [
-			(nil, nil, "Selected code from Example.swift, lines 1–1:\n1: \n2: value\n3: "),
-			(4, nil, "Selected code from Example.swift, lines 4–4:\n4: \n5: value\n6: "),
+			(nil, nil, "Selected code from Example.swift, lines 1–3:\n1: \n2: value\n3: "),
+			(4, nil, "Selected code from Example.swift, lines 4–6:\n4: \n5: value\n6: "),
 			(nil, 3, "Selected code from Example.swift, lines 1–3:\n1: \n2: value\n3: "),
 			(4, 6, "Selected code from Example.swift, lines 4–6:\n4: \n5: value\n6: ")
 		]
@@ -200,7 +201,7 @@ struct ComposerContextBuilderTests
 				path: "Example.swift",
 				firstLine: value.first,
 				lastLine: value.last,
-				excerpt: "\nvalue\n"
+				excerpt: separator + "value" + separator
 			)
 			model.composer.drafts[.newChat]?.context = [item]
 			let draft = model.composer.drafts[.newChat] ?? ComposerDraft()

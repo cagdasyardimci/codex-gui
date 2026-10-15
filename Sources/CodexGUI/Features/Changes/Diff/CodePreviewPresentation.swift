@@ -6,8 +6,15 @@ struct CodePreviewPresentation: Equatable, Sendable
 	let text: String
 	let relativePath: String
 	let language: String?
-	let lineStarts: [Int]
-	let utf16Length: Int
+	private let sourceLines: SourceLineIndex
+	var lineStarts: [Int]
+	{
+		sourceLines.lineStarts
+	}
+	var utf16Length: Int
+	{
+		sourceLines.utf16Length
+	}
 
 	init(
 		text: String,
@@ -17,31 +24,7 @@ struct CodePreviewPresentation: Equatable, Sendable
 		self.text = text
 		self.relativePath = relativePath
 		language = Self.language(for: relativePath)
-		let utf16Units = Array(text.utf16)
-		utf16Length = utf16Units.count
-		lineStarts = Self.logicalLineStarts(in: utf16Units)
-	}
-
-	private static func logicalLineStarts(in utf16Units: [UInt16]) -> [Int]
-	{
-		var logicalLineStarts = [0]
-		var offset = 0
-		while offset < utf16Units.count
-		{
-			let codeUnit = utf16Units[offset]
-			offset += 1
-			if codeUnit == 13, offset < utf16Units.count, utf16Units[offset] == 10
-			{
-				offset += 1
-			}
-			let isLineEnding =
-				codeUnit == 10 || codeUnit == 13 || codeUnit == 0x2028 || codeUnit == 0x2029
-			if isLineEnding
-			{
-				logicalLineStarts.append(offset)
-			}
-		}
-		return logicalLineStarts
+		sourceLines = SourceLineIndex(text)
 	}
 
 	var lineCount: Int
@@ -52,28 +35,7 @@ struct CodePreviewPresentation: Equatable, Sendable
 	/// Wrapped visual fragments retain the logical source line's number.
 	func lineNumber(atUTF16Offset offset: Int) -> Int
 	{
-		let boundedOffset = min(
-			max(
-				0,
-				offset
-			),
-			utf16Length
-		)
-		var lower = 0
-		var upper = lineStarts.count
-		while lower < upper
-		{
-			let middle = (lower + upper) / 2
-			if lineStarts[middle] <= boundedOffset
-			{
-				lower = middle + 1
-			}
-			else
-			{
-				upper = middle
-			}
-		}
-		return lower
+		sourceLines.lineNumber(atUTF16Offset: offset)
 	}
 
 	private static func language(for path: String) -> String?

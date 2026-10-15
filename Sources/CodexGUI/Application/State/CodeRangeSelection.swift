@@ -19,13 +19,12 @@ enum CodeRangeSelection
 		}
 
 		let sourceLines = selectedSourceLines(
-			in: text,
-			contents: contents,
+			in: SourceLineIndex(contents),
 			selectedRange: selectedRange
 		)
-		let selectedLines = text.substring(with: sourceLines.range)
-		let excerpt = selectedLines.trimmingCharacters(in: .newlines)
-		guard !excerpt.isEmpty, excerpt.utf8.count <= maximumExcerptBytes
+		let excerpt = text.substring(with: sourceLines.range)
+		guard !excerpt.trimmingCharacters(in: .newlines).isEmpty,
+				excerpt.utf8.count <= maximumExcerptBytes
 		else
 		{
 			return nil
@@ -52,41 +51,18 @@ enum CodeRangeSelection
 	}
 
 	private static func selectedSourceLines(
-		in text: NSString,
-		contents: String,
+		in index: SourceLineIndex,
 		selectedRange: NSRange
 	) -> SelectedSourceLines
 	{
-		let firstSelectedLineRange = text.lineRange(for: NSRange(
-			location: selectedRange.location,
-			length: 0
-		))
-		let excerptStart = firstSelectedLineRange.location
+		let firstLine = index.lineNumber(atUTF16Offset: selectedRange.location)
 		let lastSelectedLocation = max(
 			selectedRange.location,
 			NSMaxRange(selectedRange) - 1
 		)
-		let lastSelectedLineRange = text.lineRange(for: NSRange(
-			location: lastSelectedLocation,
-			length: 0
-		))
-		let excerptEnd = NSMaxRange(lastSelectedLineRange)
-
-		let textBeforeExcerpt = text.substring(to: excerptStart)
-		let firstLine = textBeforeExcerpt.filter
-		{
-			$0 == "\n"
-		}.count + 1
-		let textThroughExcerpt = text.substring(to: excerptEnd)
-		let precedingNewlineCount = textThroughExcerpt.filter
-		{
-			$0 == "\n"
-		}.count
-		// A final line without a newline still counts as a line in the selection.
-		let includesUnterminatedFinalLine =
-			excerptEnd == text.length && !contents.hasSuffix("\n")
-		let lastLine = precedingNewlineCount + (includesUnterminatedFinalLine ? 1 : 0)
-
+		let lastLine = index.lineNumber(atUTF16Offset: lastSelectedLocation)
+		let excerptStart = index.contentRange(atLineIndex: firstLine - 1).location
+		let excerptEnd = NSMaxRange(index.contentRange(atLineIndex: lastLine - 1))
 		let excerptRange = NSRange(
 			location: excerptStart,
 			length: excerptEnd - excerptStart
