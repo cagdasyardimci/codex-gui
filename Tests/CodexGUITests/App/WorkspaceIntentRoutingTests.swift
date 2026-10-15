@@ -4,20 +4,20 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(
-	"Captured workspace intents",
-	.serialized
-)
+// Each case owns a tiny checkout, context store, backends and defaults. Paired stores
+// explicitly share that checkout; backend IDs never establish shared execution ownership.
+@Suite("Captured workspace intents")
 @MainActor
 struct WorkspaceIntentRoutingTests
 {
 	@Test func newChatLifetimeRejectsRetainedComposerAndTaskDialogTargets() async throws
 	{
-		let (store, _) = CapturedIntentStoreFixture.makeStore()
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore()
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
 		await store.inputs.connect()
 		let target = WorkspaceIntentTarget(
 			store: store,
@@ -42,11 +42,12 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func importedImagesRequireCapturedDraftAndReducerAcceptance() async throws
 	{
-		let (store, _) = CapturedIntentStoreFixture.makeStore()
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore()
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
 		await store.inputs.connect()
 		let target = WorkspaceIntentTarget(
 			store: store,
@@ -79,11 +80,12 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func returningToTheSameStoreDoesNotReviveASelectedWindowCallback() async throws
 	{
-		let (store, _) = CapturedIntentStoreFixture.makeStore()
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore()
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
 		await store.inputs.connect()
 		let coordinator = TaskWorkspaceCoordinator(sourceStore: store)
 		defer
@@ -109,17 +111,29 @@ struct WorkspaceIntentRoutingTests
 	@Test func approvalsAndStopKeepTheirExecutionOwnerWhileBrowsingAnotherConversation(
 	) async throws
 	{
-		let (a, serviceA) = CapturedIntentStoreFixture.makeStore(threadID: "same-thread")
-		let (b, serviceB) = CapturedIntentStoreFixture.makeStore(threadID: "same-thread")
+		let aFixture = try await CapturedIntentStoreFixture.makeStore(threadID: "same-thread")
 		defer
 		{
-			a.shutdown()
-			b.shutdown()
+			aFixture.cleanup()
 		}
+		let a = aFixture.store
+		let serviceA = aFixture.service
+		let bFixture = try await CapturedIntentStoreFixture.makeStore(
+			threadID: "same-thread",
+			sharing: aFixture
+		)
+		defer
+		{
+			bFixture.cleanup()
+		}
+		let b = bFixture.store
+		let serviceB = bFixture.service
 		await a.inputs.connect()
 		await b.inputs.connect()
 		for store in [a, b]
 		{
+			// Backend connection can finish before the independent project-context load.
+			await waitForSubmissionReadiness(store)
 			store.inputs.updateDraft("Run")
 			let submission = try #require(store.inputs.send())
 			#expect(await submission.wait() == .finished)
@@ -159,12 +173,16 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func oldStopTicketCannotInterruptANewerSubmissionWithTheSameBackendIDs() async throws
 	{
-		let (store, service) = CapturedIntentStoreFixture.makeStore(threadID: "reused-thread")
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore(threadID: "reused-thread")
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
+		let service = storeFixture.service
 		await store.inputs.connect()
+		// Backend connection can finish before the independent project-context load.
+		await waitForSubmissionReadiness(store)
 		store.inputs.updateDraft("First")
 		let first = try #require(store.inputs.send())
 		#expect(await first.wait() == .finished)
@@ -173,14 +191,7 @@ struct WorkspaceIntentRoutingTests
 			snapshot: store.currentSnapshot
 		)
 		service.complete(status: "completed")
-		for _ in 0 ..< 100
-		{
-			if store.currentSnapshot.canSend
-			{
-				break
-			}
-			await Task.yield()
-		}
+		await waitForSubmissionReadiness(store)
 		store.inputs.updateDraft("Second")
 		let second = try #require(store.inputs.send())
 		#expect(await second.wait() == .finished)
@@ -199,12 +210,16 @@ struct WorkspaceIntentRoutingTests
 	@Test func retainedApprovalTargetCannotRespondToANewerSubmissionReusingItsTicketIDs(
 	) async throws
 	{
-		let (store, service) = CapturedIntentStoreFixture.makeStore(threadID: "reused-thread")
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore(threadID: "reused-thread")
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
+		let service = storeFixture.service
 		await store.inputs.connect()
+		// Backend connection can finish before the independent project-context load.
+		await waitForSubmissionReadiness(store)
 		store.inputs.updateDraft("First")
 		let first = try #require(store.inputs.send())
 		#expect(await first.wait() == .finished)
@@ -222,14 +237,7 @@ struct WorkspaceIntentRoutingTests
 		#expect(await firstReply.wait() == .finished)
 		let firstOwnerID = try #require(store.model.execution.owner?.submission.requestID)
 		service.complete(status: "completed")
-		for _ in 0 ..< 100
-		{
-			if store.currentSnapshot.canSend
-			{
-				break
-			}
-			await Task.yield()
-		}
+		await waitForSubmissionReadiness(store)
 		store.inputs.updateDraft("Second")
 		let second = try #require(store.inputs.send())
 		#expect(await second.wait() == .finished)
@@ -263,13 +271,17 @@ struct WorkspaceIntentRoutingTests
 	@Test func approvalTargetKeepsImmutableSubmissionAffinityAcrossTurnAcknowledgement(
 	) async throws
 	{
-		let (store, service) = CapturedIntentStoreFixture.makeStore()
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore()
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
+		let service = storeFixture.service
 		await store.inputs.connect()
 		service.suspendTurnStart = true
+		// Backend connection can finish before the independent project-context load.
+		await waitForSubmissionReadiness(store)
 		store.inputs.updateDraft("Run")
 		let submission = try #require(store.inputs.send())
 		await service.waitForCheckpoint("turnStart:1")
@@ -314,11 +326,14 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func freshlyRenderedRecoveredTurnApprovalHasAnImmutableOwner() async throws
 	{
-		let (store, service) = CapturedIntentStoreFixture.makeStore(threadID: "recovered-thread")
+		let storeFixture = try await CapturedIntentStoreFixture
+			.makeStore(threadID: "recovered-thread")
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
+		let service = storeFixture.service
 		service.savedTurns = [service.turn]
 		await store.inputs.connect()
 		let history = try #require(store.inputs.selectThread(service.thread.id))
@@ -355,16 +370,20 @@ struct WorkspaceIntentRoutingTests
 		eventBeforeRead: Bool
 	) async throws
 	{
-		let (store, service) = CapturedIntentStoreFixture
+		let storeFixture = try await CapturedIntentStoreFixture
 			.makeStore(threadID: "reused-recovered-thread")
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
+		let service = storeFixture.service
 		service.savedTurns = [service.turn]
 		await store.inputs.connect()
 		if localSubmission
 		{
+			// Backend connection can finish before the independent project-context load.
+			await waitForSubmissionReadiness(store)
 			store.inputs.updateDraft("First local turn")
 			let submission = try #require(store.inputs.send())
 			#expect(await submission.wait() == .finished)
@@ -461,12 +480,16 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func suspendedResponseCannotSettleAReplacementAfterTerminalRetirement() async throws
 	{
-		let (seed, service) = CapturedIntentStoreFixture.makeStore()
+		let seedFixture = try await CapturedIntentStoreFixture.makeStore()
 		defer
 		{
-			seed.shutdown()
+			seedFixture.cleanup()
 		}
+		let seed = seedFixture.store
+		let service = seedFixture.service
 		await seed.inputs.connect()
+		// Backend connection can finish before the independent project-context load.
+		await waitForSubmissionReadiness(seed)
 		seed.inputs.updateDraft("First")
 		let first = try #require(seed.inputs.send())
 		#expect(await first.wait() == .finished)
@@ -642,11 +665,13 @@ struct WorkspaceIntentRoutingTests
 
 	@Test func reconnectRetiresGenerationTargetsAndRenewsCardPresentationIdentity() async throws
 	{
-		let (store, service) = CapturedIntentStoreFixture.makeStore()
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore()
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
+		let service = storeFixture.service
 		await store.inputs.connect()
 		let target = WorkspaceIntentTarget(
 			store: store,
@@ -670,6 +695,20 @@ struct WorkspaceIntentRoutingTests
 		#expect(before.interactions != after.interactions)
 		#expect(renewed.dispatch(.editDraft("Current generation")))
 		#expect(store.currentSnapshot.draft == "Current generation")
+	}
+
+	/// Context initialization and turn completion can outlast connection acknowledgement.
+	/// Wait for the resulting published eligibility before creating the next submission.
+	/// Yield counts measure scheduler activity, not acknowledgement of that read.
+	private func waitForSubmissionReadiness(_ store: WorkspaceStateStore) async
+	{
+		await awaitWorkspaceSnapshot(
+			store,
+			matching:
+			{
+				$0.canSend
+			}
+		)
 	}
 
 }

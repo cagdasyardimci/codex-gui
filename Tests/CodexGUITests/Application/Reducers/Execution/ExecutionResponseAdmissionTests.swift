@@ -3,18 +3,28 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct ExecutionResponseAdmissionTests
 {
 
 	@Test func responseAdmissionKeepsTheFirstTicketAndAllowsRetryOnlyAfterSettlement() async throws
 	{
-		let (store, service) = CapturedIntentStoreFixture.makeStore()
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore()
 		defer
 		{
-			store.shutdown()
+			storeFixture.cleanup()
 		}
+		let store = storeFixture.store
+		let service = storeFixture.service
 		await store.inputs.connect()
+		// Context IO can outlast connection bootstrap; await this fixture's eligibility.
+		await awaitWorkspaceSnapshot(store)
+		{
+			$0.canSend
+		}
+		try #require(store.currentSnapshot.canSend)
 		store.inputs.updateDraft("Run")
 		let submission = try #require(store.inputs.send())
 		#expect(await submission.wait() == .finished)

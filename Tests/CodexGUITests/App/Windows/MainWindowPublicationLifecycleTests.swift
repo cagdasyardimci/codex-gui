@@ -3,44 +3,74 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+// The search sheet changes application focus during the window publication lifecycle.
+@Suite @MainActor
 struct MainWindowPublicationLifecycleTests
 {
 
-	@Test func closedWindowDetachesItsStorePublicationObserver() async throws
+	@Test(.testTiming)
+	func closedWindowDetachesItsStorePublicationObserver() async throws
 	{
-		_ = NSApplication.shared
-		let (store, _) = CapturedIntentStoreFixture.makeStore()
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			store.shutdown()
+			timing.end()
 		}
-		await store.inputs.connect()
-		let controller = MainWindowController(
-			store: store,
-			onOpenProject:
-			{
-			},
-			onInsertPath:
-			{
-			}
-		)
-		controller.showMessageSearch()
-		controller.messageSearch.onSearch?("needle")
-		#expect(store.model.contextNavigation.messageSearchContext != nil)
-		var drafts: [String] = []
-		controller.onSnapshot =
+		let storeFixture = try await CapturedIntentStoreFixture.makeStore()
+		timing.mark("fixture.store.ready")
+		defer
 		{
-			drafts.append($0.draft)
+			storeFixture.cleanup()
 		}
-		store.inputs.updateDraft("Visible")
-		#expect(drafts == ["Visible"])
-		controller.window?.close()
-		#expect(store.model.contextNavigation.messageSearch == nil)
-		#expect(store.model.contextNavigation.messageSearchContext == nil)
-		#expect(store.model.contextNavigation.pendingMessageSearch == nil)
-		store.inputs.updateDraft("Closed")
-		#expect(drafts == ["Visible"])
+		let store = storeFixture.store
+		timing.mark("store.connect.begin")
+		await store.inputs.connect()
+		timing.mark("store.connect.end")
+		// Store preparation and connection do not use application-wide UI state.
+		// Keep the sheet, publication assertions and window dismissal under one permit.
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			timing.mark("native.begin")
+			_ = NSApplication.shared
+			let controller = MainWindowController(
+				store: store,
+				onOpenProject:
+				{
+				},
+				onInsertPath:
+				{
+				}
+			)
+			defer
+			{
+				controller.window?.close()
+			}
+			controller.showMessageSearch()
+			timing.mark("native.sheet.shown")
+			controller.messageSearch.onSearch?("needle")
+			#expect(store.model.contextNavigation.messageSearchContext != nil)
+			var drafts: [String] = []
+			controller.onSnapshot =
+			{
+				drafts.append($0.draft)
+			}
+			store.inputs.updateDraft("Visible")
+			#expect(drafts == ["Visible"])
+			controller.window?.close()
+			timing.mark("native.window.closed")
+			#expect(store.model.contextNavigation.messageSearch == nil)
+			#expect(store.model.contextNavigation.messageSearchContext == nil)
+			#expect(store.model.contextNavigation.pendingMessageSearch == nil)
+			store.inputs.updateDraft("Closed")
+			#expect(drafts == ["Visible"])
+		}
+
 	}
 
 }
