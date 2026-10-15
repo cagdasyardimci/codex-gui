@@ -7,6 +7,10 @@ final class GitReviewEffectRunner
 	private let service: any GitComparisonService
 	private var readJob: Task<Void, Never>?
 	private var pollJob: Task<Void, Never>?
+	var readTask: Task<Void, Never>?
+	{
+		readJob
+	}
 
 	init(service: any GitComparisonService)
 	{

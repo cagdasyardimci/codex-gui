@@ -8,6 +8,11 @@ final class GitReviewRuntime
 	var onChange: ((GitReviewState) -> Void)?
 	let automaticRefreshEnabled: Bool
 	private let effects: GitReviewEffectRunner
+	// Capture before cancellation or replacement to await this read's complete result handling.
+	var readTask: Task<Void, Never>?
+	{
+		effects.readTask
+	}
 
 	init(
 		service: any GitComparisonService = LocalGitComparisonService(),
