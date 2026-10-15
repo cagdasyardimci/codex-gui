@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite struct ModelSelectorLayoutTests
+struct ModelSelectorLayoutTests
 {
 	@Test @MainActor func openingPickerRetainsSelectionWidthAndTracksUpdatedSummary()
 	{

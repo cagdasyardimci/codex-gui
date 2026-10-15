@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ExecutionCommandStatusTests
 {
 	@Test(arguments: ["completed", "failed", "declined", "interrupted", "cancelled"])

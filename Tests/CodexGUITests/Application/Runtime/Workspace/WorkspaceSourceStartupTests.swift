@@ -3,6 +3,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct WorkspaceSourceStartupTests
 {
 	@Test("Explicit project selection overrides the remembered chat in one accepted transition")

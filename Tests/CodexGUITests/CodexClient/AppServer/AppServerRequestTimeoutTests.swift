@@ -3,6 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
+@Suite
 struct AppServerRequestTimeoutTests
 {
 	@Test @MainActor func timedOutRequestDoesNotPoisonLaterResponses() async throws

@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct WorkspaceStoreFactoryTests
 {
 	@Test func factoryCapturesLiveTurnTimesWhenBackendOmitsThem() async throws

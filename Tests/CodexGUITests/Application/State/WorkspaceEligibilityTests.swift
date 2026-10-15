@@ -3,6 +3,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct WorkspaceEligibilityTests
 {
 	@Test func structuralEmptyDraftCapabilityDoesNotAuthorizeAnEmptyOrForgedProposal()

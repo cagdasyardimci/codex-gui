@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ExecutionReconciliationTests
 {
 	private func fixture(state: ExecutionState) -> (WorkspaceModel, OperationContext)

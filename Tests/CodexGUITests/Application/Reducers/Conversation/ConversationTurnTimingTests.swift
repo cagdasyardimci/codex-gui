@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ConversationTurnTimingTests
 {
 	@Test(arguments: ["inProgress", "running"])

@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite("Pinned task storage")
+@Suite(
+	"Pinned task storage"
+)
 struct PinnedTaskStorageTests
 {
 	@Test("Pinned summaries persist across projects and storage instances")

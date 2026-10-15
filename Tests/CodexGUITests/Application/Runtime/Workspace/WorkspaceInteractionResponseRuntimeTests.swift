@@ -3,6 +3,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct WorkspaceInteractionResponseRuntimeTests
 {
 	@Test(arguments: [false, true])

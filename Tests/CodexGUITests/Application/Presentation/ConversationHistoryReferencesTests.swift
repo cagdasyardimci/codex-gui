@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ConversationHistoryReferencesTests
 {
 	private let projectPath = "/Users/Shared/codex-reference-fixture"

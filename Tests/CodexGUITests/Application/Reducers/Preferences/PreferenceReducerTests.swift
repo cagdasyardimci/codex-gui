@@ -3,7 +3,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite("Preference scope and precedence")
+@Suite(
+	"Preference scope and precedence"
+)
 struct PreferenceReducerTests
 {
 	@Test func taskPinTogglesRetainTasksFromOtherProjects() throws

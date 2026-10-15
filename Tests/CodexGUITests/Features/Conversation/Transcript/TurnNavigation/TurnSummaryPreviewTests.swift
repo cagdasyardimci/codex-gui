@@ -62,7 +62,7 @@ struct TurnSummaryPreviewTests
 		{
 			clicked = true
 		}
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(clicked)
 		preview.setBookmarked(true)
 		#expect(button.accessibilityLabel() == "Remove turn bookmark")

@@ -120,7 +120,7 @@ struct ConversationTurnStatusCollectionItemTests
 		}.first)
 		#expect(!button.isHidden)
 		#expect(button.accessibilityLabel() == "Expand Worked for 3m 4s")
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(toggles == 1)
 		item.configure(
 			finished,
@@ -133,7 +133,7 @@ struct ConversationTurnStatusCollectionItemTests
 		)
 		#expect(button.accessibilityLabel() == "Collapse Worked for 3m 4s")
 		item.prepareForReuse()
-		button.performClick(nil)
+		button.dispatchConfiguredAction()
 		#expect(toggles == 1)
 		item.configure(
 			finished,

@@ -4,7 +4,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite(.serialized)
+@Suite(
+	.serialized
+)
 struct TaskDeletionConfirmationViewTests
 {
 	@Test func dialogMatchesTheWarningAndKeepsHorizontalActionsUnclipped() throws

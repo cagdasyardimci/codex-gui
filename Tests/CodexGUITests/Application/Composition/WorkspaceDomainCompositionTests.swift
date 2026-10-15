@@ -3,6 +3,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct WorkspaceDomainCompositionTests
 {
 	@Test("Accepted domain events finish in FIFO order before reentrant publication")

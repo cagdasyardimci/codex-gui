@@ -4,7 +4,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite("Multi-chat connection lifecycle")
+@Suite(
+	"Multi-chat connection lifecycle"
+)
 struct MultiChatConnectionTests
 {
 	@Test func disconnectionPreservesEveryRemoteOwnerAndCommandBarrier()

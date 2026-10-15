@@ -3,6 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
+@Suite
 struct UserMessagePresenterTests
 {
 	@Test @MainActor func attachmentTitlesAgreeAcrossInputLoadedAndCompactPreviews() throws

@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite
 struct GitDiffParserTests
 {
 	@Test func countOnlyParsingMatchesHunksAcrossBoundariesAndMalformedReports()

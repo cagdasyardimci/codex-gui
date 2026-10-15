@@ -4,10 +4,10 @@ import Testing
 @testable import CodexGUI
 
 /// Builds deterministic, offscreen design state for behavior checks and optional previews.
-@MainActor
 struct GitReviewDesignFixture
 {
 
+	@MainActor
 	func summaryPresentation(attachments: Bool) -> PinnedSummaryPresentation
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(
@@ -67,6 +67,7 @@ struct GitReviewDesignFixture
 		)
 	}
 
+	@MainActor
 	func host(
 		_ controller: NSViewController,
 		size: NSSize,
@@ -92,6 +93,7 @@ struct GitReviewDesignFixture
 		return window
 	}
 
+	@MainActor
 	func descendants(_ view: NSView) -> [NSView]
 	{
 		[view] + view.subviews.flatMap

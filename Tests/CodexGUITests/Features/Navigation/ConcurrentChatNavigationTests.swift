@@ -4,7 +4,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized)
+@Suite(
+	.serialized
+)
 @MainActor
 struct ConcurrentChatNavigationTests
 {

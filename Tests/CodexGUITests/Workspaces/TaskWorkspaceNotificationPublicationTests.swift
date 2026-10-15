@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct TaskWorkspaceNotificationPublicationTests
 {
 	@Test func streamingNotificationsPreserveEveryPublicationWithoutPreparingFullSnapshots()

@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ComposerPermissionButtonTests
 {
 	@Test func permissionLabelsKeepNaturalWidthAndReferenceContentInsets() throws

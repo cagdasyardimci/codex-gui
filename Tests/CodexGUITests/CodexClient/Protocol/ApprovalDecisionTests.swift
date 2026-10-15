@@ -2,7 +2,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite
 struct ApprovalDecisionTests
 {
 	@Test func networkPolicyWireValuePreservesHostActionAndLiteralKeys() throws

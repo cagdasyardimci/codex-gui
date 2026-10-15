@@ -4,7 +4,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite("Usage refresh ownership")
+@Suite(
+	"Usage refresh ownership"
+)
 struct UsageRefreshCoordinatorTests
 {
 	@Test func invalidationsCoalesceAndThreeDistinctAttemptsFinishOneGroup()

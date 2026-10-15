@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ConversationReferenceLayoutTests
 {
 	@Test func completedTurnsKeepTheReferenceColumnAndTurnSpacing() async throws

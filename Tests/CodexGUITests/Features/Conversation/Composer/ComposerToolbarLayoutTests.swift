@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ComposerToolbarLayoutTests
 {
 	@Test(arguments: [CGFloat(360), 440, 720])

@@ -3,7 +3,10 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized,
+	.timeLimit(.minutes(1))
+) @MainActor
 struct GitReviewDesignBehaviorTests
 {
 	@Test func canonicalFileNavigationAndLayout() async throws

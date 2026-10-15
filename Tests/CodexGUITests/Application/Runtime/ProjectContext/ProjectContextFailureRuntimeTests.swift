@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite("Project context failure runtime")
+@Suite(
+	"Project context failure runtime"
+)
 struct ProjectContextFailureRuntimeTests
 {
 	@Test("Unsupported and wrong-project context bytes remain unchanged")

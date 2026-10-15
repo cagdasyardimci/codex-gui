@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct ContextPanelAppearanceTests
 {
 	@Test func sourcesHeaderUpdatesWithoutReplacingContentOrFocus() throws

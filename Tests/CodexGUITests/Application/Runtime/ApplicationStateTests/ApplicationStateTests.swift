@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@Suite(.timeLimit(.minutes(1))) @MainActor
 struct ApplicationStateTests
 {
 }

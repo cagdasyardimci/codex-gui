@@ -4,7 +4,6 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite
 @MainActor
 struct ContextComposerTextViewTests
 {

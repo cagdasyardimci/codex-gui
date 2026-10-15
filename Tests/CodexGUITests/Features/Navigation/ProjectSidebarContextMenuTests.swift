@@ -2,7 +2,9 @@ import AppKit
 import Testing
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct ProjectSidebarContextMenuTests
 {
 	@Test func projectMenuOrderAndCapturedActions() throws

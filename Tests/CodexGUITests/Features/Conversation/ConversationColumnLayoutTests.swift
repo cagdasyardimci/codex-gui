@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ConversationColumnLayoutTests
 {
 	@Test(arguments: [false, true])

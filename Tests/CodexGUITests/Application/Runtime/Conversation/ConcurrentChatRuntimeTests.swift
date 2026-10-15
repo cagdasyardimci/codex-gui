@@ -4,7 +4,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite(.timeLimit(.minutes(1)))
+@Suite(
+	.timeLimit(.minutes(1))
+)
 struct ConcurrentChatRuntimeTests
 {
 	@Test

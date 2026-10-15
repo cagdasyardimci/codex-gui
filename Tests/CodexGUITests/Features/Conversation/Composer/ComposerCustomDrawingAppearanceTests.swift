@@ -5,7 +5,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite(.serialized)
+@Suite(
+	.serialized
+)
 struct ComposerCustomDrawingAppearanceTests
 {
 	@Test func retainedModelButtonRedrawsWithoutChangingHighlightedSelection() throws

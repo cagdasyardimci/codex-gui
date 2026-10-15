@@ -4,7 +4,9 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
-@Suite("Deferred task UI ownership")
+@Suite(
+	"Deferred task UI ownership"
+)
 struct TaskWorkspaceModalOwnershipTests
 {
 	@Test func deferredAttachmentCannotMoveToAnotherCheckoutOrALaterReturnToItsOwner()
