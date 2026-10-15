@@ -1401,7 +1401,7 @@ struct ConversationActivityCollectionItemTests
 			{
 				!$0.trackingAreas.isEmpty
 			})
-			#expect(header.frame.height == 30)
+			#expect(header.frame.height == 21)
 			#expect(header.trackingAreas.count == 1)
 			#expect(header.trackingAreas[0].options.contains(.inVisibleRect))
 			let title = try #require(header.subviews.compactMap
@@ -1413,14 +1413,14 @@ struct ConversationActivityCollectionItemTests
 				$0.stringValue == "Activity"
 			})
 			let restingFrame = button.frame
-			#expect(title.textColor == .secondaryLabelColor)
+			#expect(title.textColor == AppKitColorTokens.activityText)
 			#expect(button.image == nil)
 			#expect(!button.isHidden && button.alphaValue == 1)
 			#expect(button.acceptsFirstResponder)
 			#expect(button.isAccessibilityElement())
 			#expect(button.frame.size == NSSize(
 				width: 24,
-				height: 24
+				height: 21
 			))
 			#expect(button.hitTest(NSPoint(
 				x: button.frame.midX,
@@ -1431,17 +1431,17 @@ struct ConversationActivityCollectionItemTests
 			let entered = try hoverEvent(type: .mouseEntered)
 			item.mouseEntered(with: entered)
 			let hoveredImage = try #require(button.image)
-			#expect(title.textColor == .labelColor)
+			#expect(title.textColor == AppKitColorTokens.primaryText)
 			item.mouseEntered(with: entered)
 			#expect(button.image === hoveredImage)
 			#expect(button.frame == restingFrame)
 			item.mouseExited(with: try hoverEvent(type: .mouseExited))
-			#expect(title.textColor == .secondaryLabelColor)
+			#expect(title.textColor == AppKitColorTokens.activityText)
 			#expect(button.image == nil)
 			#expect(button.frame == restingFrame)
 			item.mouseEntered(with: entered)
 			item.prepareForReuse()
-			#expect(title.textColor == .secondaryLabelColor)
+			#expect(title.textColor == AppKitColorTokens.activityText)
 			#expect(button.image == nil)
 			item.configure(
 				row,
@@ -1626,7 +1626,7 @@ struct ConversationActivityCollectionItemTests
 			{
 				$0 as? NSTextField
 			}.first)
-			#expect(title.textColor == (overHeader ? NSColor.labelColor : .secondaryLabelColor))
+			#expect(title.textColor == (overHeader ? AppKitColorTokens.primaryText : AppKitColorTokens.activityText))
 			#expect(button.isAccessibilityElement())
 			#expect(button.acceptsFirstResponder)
 			#expect(!button.isHidden && button.alphaValue == 1)
@@ -1701,15 +1701,15 @@ struct ConversationActivityCollectionItemTests
 			at: 0,
 			effectiveRange: nil
 		)
-			as? NSColor == .secondaryLabelColor)
+			as? NSColor == AppKitColorTokens.activityText)
 		item.mouseEntered(with: try hoverEvent(type: .mouseEntered))
-		#expect(title.textColor == .labelColor)
+		#expect(title.textColor == AppKitColorTokens.primaryText)
 		#expect(link.attributedTitle.attribute(
 			.foregroundColor,
 			at: 0,
 			effectiveRange: nil
 		)
-			as? NSColor == .labelColor)
+			as? NSColor == AppKitColorTokens.primaryText)
 		#expect(link.attributedTitle.attribute(
 			.underlineStyle,
 			at: 0,
@@ -1740,24 +1740,24 @@ struct ConversationActivityCollectionItemTests
 			at: 0,
 			effectiveRange: nil
 		)
-			as? NSColor == .labelColor)
+			as? NSColor == AppKitColorTokens.primaryText)
 		item.mouseExited(with: try hoverEvent(type: .mouseExited))
-		#expect(title.textColor == .secondaryLabelColor)
+		#expect(title.textColor == AppKitColorTokens.activityText)
 		#expect(link.attributedTitle.attribute(
 			.foregroundColor,
 			at: 0,
 			effectiveRange: nil
 		)
-			as? NSColor == .secondaryLabelColor)
+			as? NSColor == AppKitColorTokens.activityText)
 		item.mouseEntered(with: try hoverEvent(type: .mouseEntered))
 		item.prepareForReuse()
-		#expect(title.textColor == .secondaryLabelColor)
+		#expect(title.textColor == AppKitColorTokens.activityText)
 		#expect(link.attributedTitle.attribute(
 			.foregroundColor,
 			at: 0,
 			effectiveRange: nil
 		)
-			as? NSColor == .secondaryLabelColor)
+			as? NSColor == AppKitColorTokens.activityText)
 	}
 
 	@Test func collapsedHeaderOmitsFailureBadgeWhileFooterRetainsExitCode()

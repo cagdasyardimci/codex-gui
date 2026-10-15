@@ -15,7 +15,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		row?.id
 	}
 	private var pendingOutputReadingPosition: OutputReadingPosition?
-	private static let rowHeight: CGFloat = 30
+	private static let rowHeight: CGFloat = 21
 	private static let detailSpacing: CGFloat = 6
 	private static let minimumShellHeight: CGFloat = 100
 	private static let maximumShellSampleLength = 8000
@@ -128,7 +128,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
 		icon.contentTintColor = .secondaryLabelColor
 		titleLabel.font = .systemFont(ofSize: 14)
-		titleLabel.textColor = .secondaryLabelColor
+		titleLabel.textColor = AppKitColorTokens.activityText
 		titleLabel.lineBreakMode = .byTruncatingTail
 		titleClick.target = self
 		titleClick.action = #selector(toggle)
@@ -161,7 +161,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		)
 		disclosure.action = #selector(toggle)
 		disclosure.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		disclosure.heightAnchor.constraint(equalToConstant: 24).isActive = true
+		disclosure.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
 		disclosure.refusesFirstResponder = false
 		disclosure.setAccessibilityElement(true)
 		disclosure.setAccessibilityRole(.button)
@@ -661,7 +661,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func updateHeaderHoverAppearance()
 	{
-		let textColor: NSColor = isHeaderHovered && row != nil ? .labelColor : .secondaryLabelColor
+		let textColor: NSColor = isHeaderHovered && row != nil
+			? AppKitColorTokens.primaryText : AppKitColorTokens.activityText
 		if titleLabel.textColor != textColor
 		{
 			titleLabel.textColor = textColor
