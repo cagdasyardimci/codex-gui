@@ -16,6 +16,11 @@ struct TaskWorkspaceCoordinatorTests
 {
 	@Test func ordinaryChatsStopTogetherAndPublishEachCompletion() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -41,17 +46,18 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(fixture.coordinator.isTaskActive)
 		let originalIdentity = fixture.sourceState.store.model.identity
 		let otherSource = fixture.root.appendingPathComponent("other-source")
-		try FileManager.default.createDirectory(
-			at: otherSource.appendingPathComponent(".git"),
-			withIntermediateDirectories: true
-		)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: otherSource.appendingPathComponent(".git"),
+				withIntermediateDirectories: true
+			)
+		}
 		fixture.coordinator.openProject(otherSource)
 		#expect(fixture.sourceState.store.model.identity == originalIdentity)
 		fixture.coordinator.stopAll()
-		try #require(await waitUntil
-		{
-			fixture.sourceService.interruptionRequests.count == 2
-		})
+		await fixture.sourceService.waitForCheckpoint("interrupt:2")
+		try #require(fixture.sourceService.interruptionRequests.count == 2)
 		#expect(Set(fixture.sourceService.interruptionRequests.map(\.threadID))
 			== Set(["source", "second"]))
 		fixture.sourceService.complete(
@@ -65,7 +71,7 @@ struct TaskWorkspaceCoordinatorTests
 			threadID: "second",
 			status: "interrupted"
 		)
-		try #require(await waitUntil
+		try #require(await waitForQuitPredicate(fixture.coordinator)
 		{
 			completionCount == 1
 		})
@@ -76,6 +82,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func ordinaryChatsQuitWaitsForBothRemoteOutcomes() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -83,19 +94,20 @@ struct TaskWorkspaceCoordinatorTests
 		}
 		try await startOrdinaryChats(fixture)
 		var quitApproved: Bool?
+		let quitOutcomes = AsyncStream<Bool>.makeStream()
 		fixture.coordinator.onQuitCompleted =
 		{
-			_, approved in quitApproved = approved
+			_, approved in
+			quitApproved = approved
+			quitOutcomes.continuation.yield(approved)
 		}
 		let request = fixture.coordinator.requestQuit()
 		fixture.coordinator.confirmQuit(
 			request,
 			approved: true
 		)
-		try #require(await waitUntil
-		{
-			fixture.sourceService.interruptionRequests.count == 2
-		})
+		await fixture.sourceService.waitForCheckpoint("interrupt:2")
+		try #require(fixture.sourceService.interruptionRequests.count == 2)
 		fixture.sourceService.complete(
 			threadID: "second",
 			status: "interrupted"
@@ -106,10 +118,9 @@ struct TaskWorkspaceCoordinatorTests
 			threadID: "source",
 			status: "interrupted"
 		)
-		try #require(await waitUntil
-		{
-			quitApproved != nil
-		})
+		var outcomes = quitOutcomes.stream.makeAsyncIterator()
+		_ = await outcomes.next()
+		try #require(quitApproved != nil)
 		#expect(quitApproved == true)
 		#expect(fixture.sourceState.store.model.lifecycle.quitReservation?.requestID
 			== request.requestID)
@@ -117,6 +128,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func reconnectReconcilesEveryOrdinaryChatWithoutResending() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -134,7 +150,7 @@ struct TaskWorkspaceCoordinatorTests
 		)
 		fixture.sourceService.readThreadIDs.removeAll()
 		await fixture.sourceState.inputs.connect()
-		try #require(await waitUntil
+		try #require(await waitForStorePredicate(fixture.sourceState.store)
 		{
 			!fixture.sourceState.store.model.hasUncertainExecutionRequest
 				&& !fixture.sourceState.store.model.hasExecutionReconciliation
@@ -147,6 +163,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func agentOnlyRelaunchReadsEveryPersistedOwnerBeforeStopping() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -191,7 +212,8 @@ struct TaskWorkspaceCoordinatorTests
 		}
 		let recovered = WorkspaceTestFixture(
 			server: service,
-			storage: fixture.storage
+			storage: fixture.storage,
+			projectContextStore: fixture.projectContextStore
 		)
 		let coordinator = TaskWorkspaceCoordinator(
 			sourceStore: recovered.store,
@@ -202,7 +224,7 @@ struct TaskWorkspaceCoordinatorTests
 			coordinator.shutdown()
 		}
 		await recovered.inputs.connect()
-		try #require(await waitUntil
+		try #require(await waitForStorePredicate(recovered.store)
 		{
 			Set(service.readThreadIDs) == Set(["source", "second"])
 				&& recovered.store.model.execution(for: .thread("source")).activeTurnID != nil
@@ -211,10 +233,8 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(service.turnRequests.isEmpty)
 		#expect(coordinator.isTaskActive)
 		coordinator.stopAll()
-		try #require(await waitUntil
-		{
-			service.interruptionRequests.count == 2
-		})
+		await service.waitForCheckpoint("interrupt:2")
+		try #require(service.interruptionRequests.count == 2)
 		service.complete(
 			threadID: "source",
 			status: "interrupted"
@@ -224,7 +244,7 @@ struct TaskWorkspaceCoordinatorTests
 			threadID: "second",
 			status: "interrupted"
 		)
-		try #require(await waitUntil
+		try #require(await waitForCoordinatorPredicate(coordinator)
 		{
 			!coordinator.isTaskActive
 		})
@@ -233,6 +253,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func activeUnselectedThreadSummaryDiscoversRemoteAgentOwner() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -248,7 +273,7 @@ struct TaskWorkspaceCoordinatorTests
 			nextTurnsCursor: nil
 		)
 		await fixture.sourceState.inputs.connect()
-		try #require(await waitUntil
+		try #require(await waitForStorePredicate(fixture.sourceState.store)
 		{
 			fixture.sourceState.store.model.execution(for: .thread("second")).activeTurnID != nil
 		})
@@ -259,8 +284,16 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(fixture.storage.activeExecutionThreadIDs(for: fixture.source) == ["second"])
 	}
 
-	@Test func relaunchReconcilesEveryPersistedOrdinaryCommandOwner() async throws
+	@Test(arguments: [false, true])
+	func relaunchReconcilesEveryPersistedOrdinaryCommandOwner(
+		historicalCheckpoint: Bool
+	) async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -274,10 +307,36 @@ struct TaskWorkspaceCoordinatorTests
 				itemID: "approved-command"
 			)
 		}
-		fixture.storage.savePendingCommands(
-			Set(commands),
-			for: fixture.source
-		)
+		let checkpointDefaults = try IsolatedUserDefaultsFixture(prefix: "CommandRecoveryTests")
+		defer
+		{
+			checkpointDefaults.cleanup()
+		}
+		let recoveryStorage: LocalStorage
+		if historicalCheckpoint
+		{
+			// Historical field names must remain independent of the current Codable encoder.
+			let checkpoint = Data("""
+			[
+			  {"threadID":"source","turnID":"turn-one","itemID":"approved-command"},
+			  {"threadID":"second","turnID":"turn-one","itemID":"approved-command"}
+			]
+			""".utf8)
+			checkpointDefaults.defaults.set(
+				[fixture.source.path: checkpoint],
+				forKey: "CodexGUI.pendingCommands"
+			)
+			recoveryStorage = LocalStorage(defaults: checkpointDefaults.defaults)
+			recoveryStorage.rememberProject(fixture.source)
+		}
+		else
+		{
+			recoveryStorage = fixture.storage
+			recoveryStorage.savePendingCommands(
+				Set(commands),
+				for: fixture.source
+			)
+		}
 		let service = WorkspaceCodexService(
 			directory: fixture.source,
 			threadID: "source"
@@ -293,7 +352,8 @@ struct TaskWorkspaceCoordinatorTests
 		service.savedTurns = [service.finishedTurn(status: "interrupted")]
 		let recovered = WorkspaceTestFixture(
 			server: service,
-			storage: fixture.storage
+			storage: recoveryStorage,
+			projectContextStore: fixture.projectContextStore
 		)
 		let coordinator = TaskWorkspaceCoordinator(
 			sourceStore: recovered.store,
@@ -304,11 +364,11 @@ struct TaskWorkspaceCoordinatorTests
 			coordinator.shutdown()
 		}
 		await recovered.inputs.connect()
-		try #require(await waitUntil
+		try #require(await waitForStorePredicate(recovered.store)
 		{
 			Set(service.readThreadIDs) == Set(["source", "second"])
 		})
-		#expect(recovered.store.model.pendingCommandOwnership.count == 2)
+		#expect(Set(recovered.store.model.pendingCommandOwnership) == Set(commands))
 		#expect(coordinator.isTaskActive)
 		#expect(recovered.store.model.blocksExecutionCleanup)
 		#expect(service.turnRequests.isEmpty)
@@ -328,16 +388,21 @@ struct TaskWorkspaceCoordinatorTests
 			turnId: "turn-one",
 			item: completed
 		))
-		try #require(await waitUntil
+		try #require(await waitForCoordinatorPredicate(coordinator)
 		{
 			!coordinator.isTaskActive
 		})
 		try await recovered.store.awaitAcceptedPersistence()
-		#expect(fixture.storage.pendingCommands(for: fixture.source).isEmpty)
+		#expect(recoveryStorage.pendingCommands(for: fixture.source).isEmpty)
 	}
 
 	@Test func ordinaryChatsAndManagedCommandKeepCheckoutProtectedDuringStopAll() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -346,11 +411,7 @@ struct TaskWorkspaceCoordinatorTests
 		await fixture.sourceState.inputs.connect()
 		let managed = try await fixture.createTask("Managed")
 		managed.state.inputs.updateDraft("Run command")
-		managed.state.inputs.send()
-		try #require(await waitUntil
-		{
-			managed.service.turnRequests.count == 1
-		})
+		try await submitFreshTasks([managed])
 		let running = try command(
 			status: "inProgress",
 			cwd: managed.workspace.checkoutPath
@@ -363,11 +424,10 @@ struct TaskWorkspaceCoordinatorTests
 		fixture.coordinator.selectSourceCheckout()
 		try await startOrdinaryChats(fixture)
 		fixture.coordinator.stopAll()
-		try #require(await waitUntil
-		{
-			fixture.sourceService.interruptionRequests.count == 2
-				&& managed.service.interruptionRequests.count == 1
-		})
+		await fixture.sourceService.waitForCheckpoint("interrupt:2")
+		await managed.service.waitForCheckpoint("interrupt:1")
+		try #require(fixture.sourceService.interruptionRequests.count == 2
+			&& managed.service.interruptionRequests.count == 1)
 		fixture.sourceService.complete(
 			threadID: "source",
 			status: "interrupted"
@@ -398,7 +458,7 @@ struct TaskWorkspaceCoordinatorTests
 			turnId: managed.service.turn.id,
 			item: completed
 		))
-		try #require(await waitUntil
+		try #require(await waitForCoordinatorPredicate(fixture.coordinator)
 		{
 			!fixture.coordinator.isTaskActive
 				&& managed.state.store.model.lifecycle.quitReservation == nil
@@ -458,16 +518,24 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func pinnedTaskOpeningAdoptsItsProjectAndThreadTogether() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
 		}
 		let next = fixture.root.appendingPathComponent("pinned-source")
-		try FileManager.default.createDirectory(
-			at: next.appendingPathComponent(".git"),
-			withIntermediateDirectories: true
-		)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: next.appendingPathComponent(".git"),
+				withIntermediateDirectories: true
+			)
+		}
 		fixture.storage.saveSelectedThreadID(
 			"remembered-thread",
 			for: next
@@ -501,6 +569,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func sourceOpeningPublishesMatchingCoordinatorAndSnapshotCheckout() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -510,10 +583,13 @@ struct TaskWorkspaceCoordinatorTests
 			"next-source",
 			isDirectory: true
 		)
-		try FileManager.default.createDirectory(
-			at: next.appendingPathComponent(".git"),
-			withIntermediateDirectories: true
-		)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: next.appendingPathComponent(".git"),
+				withIntermediateDirectories: true
+			)
+		}
 		let coordinator = fixture.coordinator
 		var observedPaths: [String?] = []
 		coordinator.onChange =
@@ -541,6 +617,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func interruptedAgentWaitsForApprovedCommandBeforeCleanupAndQuit() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -609,7 +690,7 @@ struct TaskWorkspaceCoordinatorTests
 			)
 		)
 		try #require(
-			await waitUntil
+			await waitForStorePredicate(alpha.state.store)
 			{
 				alpha.state.currentSnapshot.entries.contains
 				{
@@ -639,6 +720,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func unresolvedCommandSurvivesDisconnectAndRelaunchWithMissingHistoryItem() async throws
 	{
+		let timing = TestTiming.begin("test.body")
+		defer
+		{
+			timing.end()
+		}
 		let fixture = try await TaskExecutionFixture()
 		defer
 		{
@@ -725,7 +811,7 @@ struct TaskWorkspaceCoordinatorTests
 			)
 		]
 		recovered.inputs.refreshThreads()
-		try #require(await waitUntil
+		try #require(await waitForStorePredicate(recovered.store)
 		{
 			!recovered.currentSnapshot.taskOutcomeUncertain
 		})
