@@ -1,32 +1,32 @@
 import Foundation
 
-struct ConversationPlainTextLink: Equatable, Sendable
+struct MarkdownPlainTextLink: Equatable, Sendable
 {
 	let range: NSRange
 	let destination: String
 }
 
-struct ConversationPlainTextPresentation: Sendable
+struct MarkdownPlainTextPresentation: Sendable
 {
 	let text: String
-	let links: [ConversationPlainTextLink]
+	let links: [MarkdownPlainTextLink]
 }
 
 /// Keeps semantic Markdown block separation readable in native plain-text turn previews.
-enum ConversationPlainTextRenderer
+enum MarkdownPlainTextRenderer
 {
-	static func render(_ content: ParsedConversationContent) -> String
+	static func render(_ content: ParsedMarkdownContent) -> String
 	{
 		renderWithLinks(content).text
 	}
 
-	static func renderWithLinks(_ content: ParsedConversationContent)
-		-> ConversationPlainTextPresentation
+	static func renderWithLinks(_ content: ParsedMarkdownContent)
+		-> MarkdownPlainTextPresentation
 	{
 		var boundaries = content.plainTextBoundaries.makeIterator()
 		var nextBoundary = boundaries.next()
 		var result = ""
-		var links: [ConversationPlainTextLink] = []
+		var links: [MarkdownPlainTextLink] = []
 		var textLength = 0
 		for (index, run) in content.runs.enumerated()
 		{
@@ -75,7 +75,7 @@ enum ConversationPlainTextRenderer
 				if let last = links.last, last.destination == destination,
 					NSMaxRange(last.range) == range.location
 				{
-					links[links.count - 1] = ConversationPlainTextLink(
+					links[links.count - 1] = MarkdownPlainTextLink(
 						range: NSRange(
 							location: last.range.location,
 							length: last.range.length + range.length
@@ -85,7 +85,7 @@ enum ConversationPlainTextRenderer
 				}
 				else
 				{
-					links.append(ConversationPlainTextLink(
+					links.append(MarkdownPlainTextLink(
 						range: range,
 						destination: destination
 					))
@@ -94,7 +94,7 @@ enum ConversationPlainTextRenderer
 			result += display
 			textLength += display.utf16.count
 		}
-		return ConversationPlainTextPresentation(
+		return MarkdownPlainTextPresentation(
 			text: result,
 			links: links
 		)

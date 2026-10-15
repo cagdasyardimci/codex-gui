@@ -505,13 +505,13 @@ struct GitInlineRichPreviewTests
 		#expect(Double(bytes[offset + 3]) / 255 > 0.99)
 	}
 
-	private func waitForText(_ view: NSView) async throws -> ConversationMarkdownTextView
+	private func waitForText(_ view: NSView) async throws -> MarkdownTextView
 	{
 		for _ in 0 ..< 100
 		{
 			if let text = descendants(view).compactMap(
 				{
-					$0 as? ConversationMarkdownTextView
+					$0 as? MarkdownTextView
 				}
 			)
 			.first

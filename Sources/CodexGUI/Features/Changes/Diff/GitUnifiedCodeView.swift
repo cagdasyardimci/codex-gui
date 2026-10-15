@@ -402,7 +402,7 @@ final class GitUnifiedCodeView: NSView
 			text: text,
 			relativePath: path
 		).language
-		if let highlighted = ConversationCodeHighlighter.highlightedCode(
+		if let highlighted = CodeSyntaxHighlighter.highlightedCode(
 			text,
 			language: language,
 			dark: dark

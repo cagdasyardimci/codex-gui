@@ -48,7 +48,7 @@ struct ConversationLongHistoryLayoutTests
 				in: fixture.collection,
 				content: content
 			)
-			let manager = try #require(text.layoutManager as? ConversationMarkdownLayoutManager)
+			let manager = try #require(text.layoutManager as? MarkdownLayoutManager)
 			let diagramRange = try #require(content.codeBlockRanges.last)
 			let container = try #require(text.textContainer)
 			let card = try #require(manager.codeBlockRect(
@@ -247,7 +247,7 @@ struct ConversationLongHistoryLayoutTests
 	{
 		let item = try #require(collection.item(at: path) as? ConversationCollectionItem)
 		let text = try #require(textViews(in: item.view).first)
-		let manager = try #require(text.layoutManager as? ConversationMarkdownLayoutManager)
+		let manager = try #require(text.layoutManager as? MarkdownLayoutManager)
 		let container = try #require(text.textContainer)
 		// Text layout and the item's overlay layout are separate AppKit lifecycle stages.
 		// Drive both for this fixture before inspecting copy buttons after a width change.

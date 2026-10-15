@@ -109,7 +109,7 @@ struct ConversationCodeHighlighterCacheTests
 		let source = "let message = \"café 😀\"\n// Unicode comment 日本語\nprint(message)\n"
 		for dark in [false, true]
 		{
-			let highlighted = try #require(ConversationCodeHighlighter.highlightedCode(
+			let highlighted = try #require(CodeSyntaxHighlighter.highlightedCode(
 				source,
 				language: "swift",
 				dark: dark
@@ -175,7 +175,7 @@ struct ConversationCodeHighlighterCacheTests
 		dark: Bool = false
 	) throws -> NSAttributedString
 	{
-		try #require(ConversationCodeHighlighter.highlightedCode(
+		try #require(CodeSyntaxHighlighter.highlightedCode(
 			source,
 			language: language,
 			dark: dark

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Bounds retained native images across every rich block in one prepared message.
-struct ConversationRichBlockBudget: Sendable
+struct MarkdownRichBlockBudget: Sendable
 {
 	private var remainingPixels: Int
 	private var remainingBlocks: Int
@@ -50,6 +50,6 @@ struct ConversationRichBlockBudget: Sendable
 
 	static func estimatedPixels(for size: CGSize) -> Int
 	{
-		ConversationRichBlockRasterSize(size: size)?.pixelCount ?? 0
+		MarkdownRichBlockRasterSize(size: size)?.pixelCount ?? 0
 	}
 }

@@ -9,11 +9,11 @@ enum TurnSummaryLinkPresentation
 		attributes: [NSAttributedString.Key: Any]
 	) -> NSAttributedString
 	{
-		let parsed = ConversationContentParser.parse(
+		let parsed = MarkdownContentParser.parse(
 			source,
 			markdown: true
 		)
-		let presentation = ConversationPlainTextRenderer.renderWithLinks(parsed)
+		let presentation = MarkdownPlainTextRenderer.renderWithLinks(parsed)
 		return styled(
 			presentation.text,
 			explicitLinks: presentation.links,
@@ -27,13 +27,13 @@ enum TurnSummaryLinkPresentation
 		attributes: [NSAttributedString.Key: Any]
 	) -> NSAttributedString
 	{
-		let explicitLinks: [ConversationPlainTextLink] = source.flatMap
+		let explicitLinks: [MarkdownPlainTextLink] = source.flatMap
 		{
-			let parsed = ConversationContentParser.parse(
+			let parsed = MarkdownContentParser.parse(
 				$0,
 				markdown: true
 			)
-			let presentation = ConversationPlainTextRenderer.renderWithLinks(parsed)
+			let presentation = MarkdownPlainTextRenderer.renderWithLinks(parsed)
 			return presentation.text == text ? presentation.links : nil
 		} ?? []
 		return styled(
@@ -45,7 +45,7 @@ enum TurnSummaryLinkPresentation
 
 	private static func styled(
 		_ text: String,
-		explicitLinks: [ConversationPlainTextLink],
+		explicitLinks: [MarkdownPlainTextLink],
 		attributes: [NSAttributedString.Key: Any]
 	) -> NSAttributedString
 	{
@@ -79,7 +79,7 @@ enum TurnSummaryLinkPresentation
 			result.addAttributes(
 				[
 					.link: url,
-					.foregroundColor: ConversationAttributedStringRenderer.linkColor,
+					.foregroundColor: MarkdownAttributedStringRenderer.linkColor,
 					.underlineStyle: 0,
 				],
 				range: link.range
@@ -97,7 +97,7 @@ enum TurnSummaryLinkPresentation
 			icon.addAttributes(
 				[
 					.link: url,
-					.foregroundColor: ConversationAttributedStringRenderer.linkColor,
+					.foregroundColor: MarkdownAttributedStringRenderer.linkColor,
 				],
 				range: NSRange(
 					location: 0,

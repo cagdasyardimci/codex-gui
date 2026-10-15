@@ -11,12 +11,12 @@ struct ConversationRichMarkdownTests
 		_ = NSApplication.shared
 		for dark in [false, true]
 		{
-			let image = try #require(ConversationRichBlockRenderer.mathImage(
+			let image = try #require(MarkdownRichBlockRenderer.mathImage(
 				#"\int_0^1 x^2\,dx = \frac{1}{3}"#,
 				dark: dark
 			))
 			#expect(image.size.width > 0 && image.size.height > 0)
-			#expect(ConversationRichBlockRenderer.mathImage(
+			#expect(MarkdownRichBlockRenderer.mathImage(
 				#"\definitelyUnknownCommand{x}"#,
 				dark: dark
 			) == nil)
@@ -30,20 +30,20 @@ struct ConversationRichMarkdownTests
 			+ "    B --> C[Rendered content]\n"
 		for dark in [false, true]
 		{
-			let image = try #require(ConversationRichBlockRenderer.diagramImage(
+			let image = try #require(MarkdownRichBlockRenderer.diagramImage(
 				source,
 				dark: dark
 			))
 			#expect(image.size.width > 0 && image.size.height > 0)
-			#expect(ConversationRichBlockRenderer.diagramImage(
+			#expect(MarkdownRichBlockRenderer.diagramImage(
 				"sequenceDiagram\nAlice->>Bob: Hello",
 				dark: dark
 			) == nil)
-			#expect(ConversationRichBlockRenderer.diagramImage(
+			#expect(MarkdownRichBlockRenderer.diagramImage(
 				"flowchart LR\nA[Missing bracket --> B[Result]",
 				dark: dark
 			) == nil)
-			#expect(ConversationRichBlockRenderer.diagramImage(
+			#expect(MarkdownRichBlockRenderer.diagramImage(
 				"flowchart LR\nA[\"unfinished] --> B",
 				dark: dark
 			) == nil)
@@ -58,11 +58,11 @@ struct ConversationRichMarkdownTests
 			count: 120
 		) + "}"
 		let source = "$$\n" + payload + "\n$$"
-		let attachment = ConversationRichBlockRenderer.mathAttachment(
+		let attachment = MarkdownRichBlockRenderer.mathAttachment(
 			latex: payload,
 			source: source
 		)
-		let rich = try #require(attachment as? ConversationRichAttachment)
+		let rich = try #require(attachment as? MarkdownRichAttachment)
 		#expect(!rich.rendersNativeImage)
 		#expect(rich.estimatedRichImageBytes == 0)
 		#expect(rich.source == source)
@@ -95,7 +95,7 @@ struct ConversationRichMarkdownTests
 	@Test func attachmentCellPaintsItsAppearancePatternWithinCenteredFittedMargins() throws
 	{
 		_ = NSApplication.shared
-		let attachment = ConversationRichAttachment(
+		let attachment = MarkdownRichAttachment(
 			source: "Independent painted fixture",
 			lightImage: try patternedImage(
 				leftRGBA: [255, 0, 0, 255],
@@ -201,7 +201,7 @@ struct ConversationRichMarkdownTests
 		for separator in ["\u{2028}", "\u{2029}"]
 		{
 			let code = "flowchart LR\nA --> B" + separator + "C --> D\n"
-			#expect(ConversationRichBlockRenderer.diagramImage(
+			#expect(MarkdownRichBlockRenderer.diagramImage(
 				code,
 				dark: false
 			) == nil)
@@ -215,11 +215,11 @@ struct ConversationRichMarkdownTests
 				.attachment,
 				at: range.location,
 				effectiveRange: nil
-			) as? ConversationRichAttachment)
+			) as? MarkdownRichAttachment)
 			#expect(!attachment.rendersNativeImage)
 			#expect(attachment.source == source)
 			#expect(content.codeBlocks == [code])
-			let textView = ConversationMarkdownTextView(frame: .zero)
+			let textView = MarkdownTextView(frame: .zero)
 			try #require(textView.textStorage).setAttributedString(content.attributedString)
 			textView.setSelectedRange(range)
 			let pasteboard = NSPasteboard.withUniqueName()
@@ -247,7 +247,7 @@ struct ConversationRichMarkdownTests
 			markdown: true,
 			preserveSoftBreaks: true
 		)
-		let textView = ConversationMarkdownTextView(frame: NSRect(
+		let textView = MarkdownTextView(frame: NSRect(
 			x: 0,
 			y: 0,
 			width: 640,
@@ -272,7 +272,7 @@ struct ConversationRichMarkdownTests
 		}
 		var selections: [(NSRange, String)] = []
 		content.attributedString.enumerateAttribute(
-			.conversationSourceText,
+			.markdownSourceText,
 			in: NSRange(
 				location: 0,
 				length: content.attributedString.length
@@ -337,7 +337,7 @@ struct ConversationRichMarkdownTests
 			markdown: true
 		)
 		let text = content.attributedString
-		var attachments: [(NSRange, ConversationRichAttachment)] = []
+		var attachments: [(NSRange, MarkdownRichAttachment)] = []
 		text.enumerateAttribute(
 			.attachment,
 			in: NSRange(
@@ -347,7 +347,7 @@ struct ConversationRichMarkdownTests
 		)
 		{
 			value, range, _ in
-			if let attachment = value as? ConversationRichAttachment
+			if let attachment = value as? MarkdownRichAttachment
 			{
 				attachments.append((range, attachment))
 			}
@@ -368,7 +368,7 @@ struct ConversationRichMarkdownTests
 		#expect(last.1.estimatedRichImageBytes == 0)
 		#expect(last.1.source == sources.last)
 		#expect(text.string.hasSuffix("FINAL_MARKER 😀"))
-		let textView = ConversationMarkdownTextView(frame: .zero)
+		let textView = MarkdownTextView(frame: .zero)
 		try #require(textView.textStorage).setAttributedString(text)
 		textView.setSelectedRange(last.0)
 		let pasteboard = NSPasteboard.withUniqueName()
@@ -381,8 +381,8 @@ struct ConversationRichMarkdownTests
 			type: .string
 		))
 		#expect(pasteboard.string(forType: .string) == sources.last)
-		#expect(ConversationPlainTextRenderer.render(
-			ConversationContentParser.parse(
+		#expect(MarkdownPlainTextRenderer.render(
+			MarkdownContentParser.parse(
 				body,
 				markdown: true
 			)
@@ -400,7 +400,7 @@ struct ConversationRichMarkdownTests
 			markdown: true
 		)
 		let storage = NSTextStorage(attributedString: content.attributedString)
-		let manager = ConversationMarkdownLayoutManager()
+		let manager = MarkdownLayoutManager()
 		let container = NSTextContainer(size: NSSize(
 			width: 320,
 			height: 10_000
@@ -410,7 +410,7 @@ struct ConversationRichMarkdownTests
 		container.heightTracksTextView = false
 		manager.addTextContainer(container)
 		storage.addLayoutManager(manager)
-		let textView = ConversationMarkdownTextView(
+		let textView = MarkdownTextView(
 			frame: NSRect(
 				x: 0,
 				y: 0,
@@ -430,7 +430,7 @@ struct ConversationRichMarkdownTests
 		)
 		{
 			value, range, _ in
-			if let attachment = value as? ConversationRichAttachment
+			if let attachment = value as? MarkdownRichAttachment
 			{
 				#expect(attachment.rendersNativeImage)
 				ranges.append(range)

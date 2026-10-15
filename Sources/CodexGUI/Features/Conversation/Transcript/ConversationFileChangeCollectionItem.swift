@@ -56,7 +56,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 			ofSize: 14,
 			weight: .medium
 		)
-		titleLabel.textColor = ConversationAttributedStringRenderer.proseColor
+		titleLabel.textColor = MarkdownAttributedStringRenderer.proseColor
 		titleLabel.lineBreakMode = .byTruncatingMiddle
 		titleLabel.setContentCompressionResistancePriority(
 			.defaultLow,
@@ -80,7 +80,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		review.layer?.cornerRadius = 10
 		review.layer?.borderWidth = 1
 		review.layerBorderColor = AppKitColorTokens.border
-		review.contentTintColor = ConversationAttributedStringRenderer.proseColor
+		review.contentTintColor = MarkdownAttributedStringRenderer.proseColor
 		review.widthAnchor.constraint(equalToConstant: 102).isActive = true
 		review.heightAnchor.constraint(equalToConstant: 28).isActive = true
 		review.font = .systemFont(ofSize: 13)
@@ -134,7 +134,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		disclosure.isBordered = false
 		disclosure.alignment = .left
 		disclosure.font = .systemFont(ofSize: 13)
-		disclosure.contentTintColor = ConversationAttributedStringRenderer.proseColor
+		disclosure.contentTintColor = MarkdownAttributedStringRenderer.proseColor
 		disclosure.imagePosition = .imageRight
 		disclosure.translatesAutoresizingMaskIntoConstraints = false
 		view.addSubview(disclosure)
@@ -240,7 +240,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 
 		let name = FileChangeTextField(labelWithString: path)
 		name.font = .systemFont(ofSize: 13)
-		name.textColor = ConversationAttributedStringRenderer.proseColor
+		name.textColor = MarkdownAttributedStringRenderer.proseColor
 		name.lineBreakMode = .byTruncatingMiddle
 		name.toolTip = change.path
 		name.setContentHuggingPriority(
@@ -315,7 +315,7 @@ private final class FileChangeTextField: NSTextField
 {
 	override func draw(_ dirtyRect: NSRect)
 	{
-		ConversationTextDrawing.withAntialiasing
+		MarkdownTextDrawing.withAntialiasing
 		{
 			super.draw(dirtyRect)
 		}
@@ -327,7 +327,7 @@ private final class FileChangeReviewButton: DesktopLayerButton
 {
 	override func draw(_ dirtyRect: NSRect)
 	{
-		ConversationTextDrawing.withAntialiasing
+		MarkdownTextDrawing.withAntialiasing
 		{
 			super.draw(dirtyRect)
 		}

@@ -2,7 +2,7 @@ import AppKit
 
 /// One Markdown image paragraph, or consecutive image-only paragraphs, in the answer body.
 @MainActor
-final class ConversationImageGalleryAttachment: NSTextAttachment
+final class MarkdownImageGalleryAttachment: NSTextAttachment
 {
 	let paths: [String]
 	let estimatedRichImageBytes: Int
@@ -11,7 +11,7 @@ final class ConversationImageGalleryAttachment: NSTextAttachment
 		paths: [String],
 		source: String,
 		thumbnails: [String: SourceThumbnailLoader.Thumbnail],
-		budget: inout ConversationRichBlockBudget
+		budget: inout MarkdownRichBlockBudget
 	) -> NSTextAttachment
 	{
 		let pixels = paths.reduce(0)
@@ -28,7 +28,7 @@ final class ConversationImageGalleryAttachment: NSTextAttachment
 		), budget.beginBlock(), budget.reservePixels(pixels)
 		else
 		{
-			return ConversationRichAttachment(
+			return MarkdownRichAttachment(
 				source: source,
 				lightImage: nil,
 				darkImage: nil
@@ -48,7 +48,7 @@ final class ConversationImageGalleryAttachment: NSTextAttachment
 				)
 			}
 		}
-		return ConversationImageGalleryAttachment(
+		return MarkdownImageGalleryAttachment(
 			paths: paths,
 			images: images,
 			originalSizes: paths.compactMap
@@ -73,7 +73,7 @@ final class ConversationImageGalleryAttachment: NSTextAttachment
 			ofType: nil
 		)
 		allowsTextAttachmentView = false
-		attachmentCell = ConversationImageGalleryCell(
+		attachmentCell = MarkdownImageGalleryCell(
 			images: images,
 			originalSizes: originalSizes
 		)
@@ -84,7 +84,7 @@ final class ConversationImageGalleryAttachment: NSTextAttachment
 		in cellFrame: NSRect
 	) -> String?
 	{
-		(attachmentCell as? ConversationImageGalleryCell)?.imageIndex(
+		(attachmentCell as? MarkdownImageGalleryCell)?.imageIndex(
 			at: point,
 			in: cellFrame
 		).flatMap
@@ -100,7 +100,7 @@ final class ConversationImageGalleryAttachment: NSTextAttachment
 }
 
 @MainActor
-private final class ConversationImageGalleryCell: NSTextAttachmentCell
+private final class MarkdownImageGalleryCell: NSTextAttachmentCell
 {
 	private static let maximumImageWidth: CGFloat = 425
 	private static let maximumImageHeight: CGFloat = 160
@@ -121,7 +121,7 @@ private final class ConversationImageGalleryCell: NSTextAttachmentCell
 
 	required init(coder: NSCoder)
 	{
-		fatalError("Conversation image galleries are prepared from Markdown source")
+		fatalError("Image galleries are prepared from Markdown source")
 	}
 
 	nonisolated override func cellSize() -> NSSize

@@ -84,7 +84,7 @@ final class WebLinkFaviconAttachment: NSTextAttachment
 			.globe,
 			size: iconSide
 		)
-		let color = ConversationAttributedStringRenderer.linkColor
+		let color = MarkdownAttributedStringRenderer.linkColor
 		return NSImage(
 			size: NSSize(
 				width: attachmentWidth,

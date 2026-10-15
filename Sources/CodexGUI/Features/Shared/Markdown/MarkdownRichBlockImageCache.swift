@@ -2,7 +2,7 @@ import AppKit
 
 /// Retains immutable raster pairs independently of each message's source and attachment cells.
 @MainActor
-final class ConversationRichBlockImageCache
+final class MarkdownRichBlockImageCache
 {
 	struct Key: Hashable
 	{
@@ -25,8 +25,8 @@ final class ConversationRichBlockImageCache
 
 		var pixelCount: Int
 		{
-			ConversationRichBlockBudget.estimatedPixels(for: lightSize)
-				+ ConversationRichBlockBudget.estimatedPixels(for: darkSize)
+			MarkdownRichBlockBudget.estimatedPixels(for: lightSize)
+				+ MarkdownRichBlockBudget.estimatedPixels(for: darkSize)
 		}
 
 		var byteCount: Int
@@ -35,10 +35,10 @@ final class ConversationRichBlockImageCache
 		}
 
 		@MainActor
-		func attachment(source: String) -> ConversationRichAttachment
+		func attachment(source: String) -> MarkdownRichAttachment
 		{
 			// NSImage accessibility metadata and cell geometry belong to one displayed occurrence.
-			ConversationRichAttachment(
+			MarkdownRichAttachment(
 				source: source,
 				lightImage: NSImage(
 					cgImage: light,

@@ -4,22 +4,22 @@ import SwiftMath
 
 /// Native math and diagram adapters, with source-preserving text fallback on any failure.
 @MainActor
-enum ConversationRichBlockRenderer
+enum MarkdownRichBlockRenderer
 {
 	private static let maximumMathLength = 4_096
 	private static let maximumDiagramLength = 8_192
 	private static let maximumImageDimension: CGFloat = 4_096
 	private static let maximumPixelCount: CGFloat = 8_000_000
-	private static let imageScale = ConversationRichBlockRasterSize.scale
+	private static let imageScale = MarkdownRichBlockRasterSize.scale
 	private static let mathFontSize: CGFloat = 20
-	private static let imageCache = ConversationRichBlockImageCache()
+	private static let imageCache = MarkdownRichBlockImageCache()
 
 	static func mathAttachment(
 		latex: String,
 		source: String
 	) -> NSTextAttachment
 	{
-		var budget = ConversationRichBlockBudget()
+		var budget = MarkdownRichBlockBudget()
 		return mathAttachment(
 			latex: latex,
 			source: source,
@@ -30,7 +30,7 @@ enum ConversationRichBlockRenderer
 	static func mathAttachment(
 		latex: String,
 		source: String,
-		budget: inout ConversationRichBlockBudget
+		budget: inout MarkdownRichBlockBudget
 	) -> NSTextAttachment
 	{
 		guard let images = mathImages(
@@ -49,7 +49,7 @@ enum ConversationRichBlockRenderer
 		source: String
 	) -> NSTextAttachment
 	{
-		var budget = ConversationRichBlockBudget()
+		var budget = MarkdownRichBlockBudget()
 		return diagramAttachment(
 			code: code,
 			source: source,
@@ -60,7 +60,7 @@ enum ConversationRichBlockRenderer
 	static func diagramAttachment(
 		code: String,
 		source: String,
-		budget: inout ConversationRichBlockBudget
+		budget: inout MarkdownRichBlockBudget
 	) -> NSTextAttachment
 	{
 		guard let images = diagramImages(
@@ -76,8 +76,8 @@ enum ConversationRichBlockRenderer
 
 	static func mathImages(
 		latex: String,
-		budget: inout ConversationRichBlockBudget
-	) -> ConversationRichBlockImageCache.Images?
+		budget: inout MarkdownRichBlockBudget
+	) -> MarkdownRichBlockImageCache.Images?
 	{
 		guard budget.beginBlock(), !latex.isEmpty, latex.utf16.count <= maximumMathLength,
 				hasBoundedBraceNesting(latex)
@@ -87,7 +87,7 @@ enum ConversationRichBlockRenderer
 		}
 		let lightColor = labelColor(dark: false)
 		let darkColor = labelColor(dark: true)
-		let key = ConversationRichBlockImageCache.Key(
+		let key = MarkdownRichBlockImageCache.Key(
 			kind: .math,
 			payload: Data(latex.utf8),
 			parameters: [mathFontSize, imageScale] + colorComponents(lightColor)
@@ -109,8 +109,8 @@ enum ConversationRichBlockRenderer
 		{
 			return nil
 		}
-		let pixelCount = ConversationRichBlockBudget.estimatedPixels(for: lightImage.size)
-			+ ConversationRichBlockBudget.estimatedPixels(for: darkImage.size)
+		let pixelCount = MarkdownRichBlockBudget.estimatedPixels(for: lightImage.size)
+			+ MarkdownRichBlockBudget.estimatedPixels(for: darkImage.size)
 		guard budget.reservePixels(pixelCount)
 		else
 		{
@@ -122,7 +122,7 @@ enum ConversationRichBlockRenderer
 			budget.releasePixels(pixelCount)
 			return nil
 		}
-		let images = ConversationRichBlockImageCache.Images(
+		let images = MarkdownRichBlockImageCache.Images(
 			light: light,
 			dark: dark,
 			lightSize: lightImage.size,
@@ -137,8 +137,8 @@ enum ConversationRichBlockRenderer
 
 	static func diagramImages(
 		code: String,
-		budget: inout ConversationRichBlockBudget
-	) -> ConversationRichBlockImageCache.Images?
+		budget: inout MarkdownRichBlockBudget
+	) -> MarkdownRichBlockImageCache.Images?
 	{
 		guard budget.beginBlock(), code.utf16.count <= maximumDiagramLength
 		else
@@ -146,7 +146,7 @@ enum ConversationRichBlockRenderer
 			return nil
 		}
 		// Diagram rendering always uses the default/dark theme pair and Dagre layout.
-		let key = ConversationRichBlockImageCache.Key(
+		let key = MarkdownRichBlockImageCache.Key(
 			kind: .diagram,
 			payload: Data(code.utf8),
 			parameters: [imageScale]
@@ -167,8 +167,8 @@ enum ConversationRichBlockRenderer
 		{
 			return nil
 		}
-		let pixelCount = ConversationRichBlockBudget.estimatedPixels(for: lightScene.size)
-			+ ConversationRichBlockBudget.estimatedPixels(for: darkScene.size)
+		let pixelCount = MarkdownRichBlockBudget.estimatedPixels(for: lightScene.size)
+			+ MarkdownRichBlockBudget.estimatedPixels(for: darkScene.size)
 		guard budget.reservePixels(pixelCount)
 		else
 		{
@@ -181,7 +181,7 @@ enum ConversationRichBlockRenderer
 			budget.releasePixels(pixelCount)
 			return nil
 		}
-		let images = ConversationRichBlockImageCache.Images(
+		let images = MarkdownRichBlockImageCache.Images(
 			light: lightPixels,
 			dark: darkPixels,
 			lightSize: lightScene.size,
@@ -196,7 +196,7 @@ enum ConversationRichBlockRenderer
 
 	private static func sourceAttachment(_ source: String) -> NSTextAttachment
 	{
-		ConversationRichAttachment(
+		MarkdownRichAttachment(
 			source: source,
 			lightImage: nil,
 			darkImage: nil
@@ -246,7 +246,7 @@ enum ConversationRichBlockRenderer
 
 	private static func rasterizeMathImage(_ image: NSImage) -> CGImage?
 	{
-		guard let raster = ConversationRichBlockRasterSize(size: image.size),
+		guard let raster = MarkdownRichBlockRasterSize(size: image.size),
 				let context = CGContext(
 				data: nil,
 				width: raster.width,

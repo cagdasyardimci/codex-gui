@@ -10,7 +10,7 @@ struct ConversationMarkdownPreviewPreparer: ConversationPreviewPreparing
 			renderReply:
 			{
 				excerpt in
-				ConversationPlainTextRenderer.render(ConversationContentParser.parse(
+				MarkdownPlainTextRenderer.render(MarkdownContentParser.parse(
 					excerpt,
 					markdown: true
 				))

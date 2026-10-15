@@ -1,30 +1,8 @@
 import AppKit
 
-/// Matches the reference's grayscale antialiasing while retaining native font metrics.
-@MainActor
-enum ConversationTextDrawing
-{
-	static func withAntialiasing(_ draw: () -> Void)
-	{
-		guard let context = NSGraphicsContext.current?.cgContext
-		else
-		{
-			draw()
-			return
-		}
-		context.saveGState()
-		defer
-		{
-			context.restoreGState()
-		}
-		context.setShouldSmoothFonts(false)
-		draw()
-	}
-}
-
 /// Native rich content keeps its original source available to selection copy and accessible help.
 @MainActor
-final class ConversationMarkdownTextView: NSTextView
+final class MarkdownTextView: NSTextView
 {
 	private var updatingFrameSize = false
 	private let expandedImagePreview = ExpandedImagePreview()
@@ -125,7 +103,7 @@ final class ConversationMarkdownTextView: NSTextView
 				.attachment,
 				at: character,
 				effectiveRange: nil
-				) as? ConversationImageGalleryAttachment
+				) as? MarkdownImageGalleryAttachment
 		else
 		{
 			return nil
@@ -138,7 +116,7 @@ final class ConversationMarkdownTextView: NSTextView
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		ConversationTextDrawing.withAntialiasing
+		MarkdownTextDrawing.withAntialiasing
 		{
 			super.draw(dirtyRect)
 		}
@@ -157,8 +135,8 @@ final class ConversationMarkdownTextView: NSTextView
 
 	override func scrollToVisible(_ rect: NSRect) -> Bool
 	{
-		// NSTextView scrolls its caret during frame changes. The transcript controller
-		// preserves the reading anchor across those changes instead.
+		// NSTextView scrolls its caret during frame changes. Callers preserve their
+		// reading position across those changes.
 		guard !updatingFrameSize
 		else
 		{
@@ -242,7 +220,7 @@ final class ConversationMarkdownTextView: NSTextView
 	{
 		var sources: [String] = []
 		textStorage?.enumerateAttribute(
-			.conversationSourceText,
+			.markdownSourceText,
 			in: NSRange(
 				location: 0,
 				length: textStorage?.length ?? 0
@@ -279,16 +257,16 @@ final class ConversationMarkdownTextView: NSTextView
 		)
 		{
 			attributes, runRange, _ in
-			guard attributes[.conversationCodeHeader] as? Bool != true
+			guard attributes[.markdownCodeHeader] as? Bool != true
 			else
 			{
 				return
 			}
-			if let source = attributes[.conversationInlineCodeSource] as? String
+			if let source = attributes[.markdownInlineCodeSource] as? String
 			{
 				var sourceRange = NSRange()
 				_ = storage.attribute(
-					.conversationInlineCodeSource,
+					.markdownInlineCodeSource,
 					at: runRange.location,
 					longestEffectiveRange: &sourceRange,
 					in: NSRange(
@@ -306,14 +284,14 @@ final class ConversationMarkdownTextView: NSTextView
 					))
 				}
 			}
-			else if let source = attributes[.conversationSourceText] as? String
+			else if let source = attributes[.markdownSourceText] as? String
 			{
 				result += source
 			}
 			else
 			{
 				let text = displayedText.substring(with: runRange)
-				result += attributes[.conversationThematicBreak] as? Bool == true
+				result += attributes[.markdownThematicBreak] as? Bool == true
 					? text.replacingOccurrences(
 						of: "\u{FFFC}",
 						with: "---"

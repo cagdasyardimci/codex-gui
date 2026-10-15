@@ -721,10 +721,10 @@ extension ConversationViewController
 		for entry in pending
 		{
 			// Rich parsing stays asynchronous; accepted input is visible in this render turn.
-			contents[entry.id] = PreparedConversationContent(ParsedConversationContent(
-				runs: [ConversationTextRun(
+			contents[entry.id] = PreparedConversationContent(ParsedMarkdownContent(
+				runs: [MarkdownTextRun(
 					text: entry.body,
-					style: ConversationTextStyle()
+					style: MarkdownTextStyle()
 				)],
 				codeBlocks: [],
 				codeBlockRanges: [],

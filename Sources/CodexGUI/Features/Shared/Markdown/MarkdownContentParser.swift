@@ -2,21 +2,21 @@ import Foundation
 import Markdown
 
 /// Parses CommonMark/GFM off the main actor into native presentation values.
-enum ConversationContentParser
+enum MarkdownContentParser
 {
 	static func parse(
 		_ body: String,
 		markdown: Bool,
 		preserveSoftBreaks: Bool = false
-	) -> ParsedConversationContent
+	) -> ParsedMarkdownContent
 	{
 		guard markdown
 		else
 		{
-			return ParsedConversationContent(
-				runs: [ConversationTextRun(
+			return ParsedMarkdownContent(
+				runs: [MarkdownTextRun(
 					text: body,
-					style: ConversationTextStyle(monospaced: true)
+					style: MarkdownTextStyle(monospaced: true)
 				)],
 				codeBlocks: [],
 				codeBlockRanges: [],
@@ -34,7 +34,7 @@ enum ConversationContentParser
 		)
 		builder.appendBlocks(
 			document.children,
-			style: ConversationTextStyle()
+			style: MarkdownTextStyle()
 		)
 		return builder.content
 	}
@@ -44,14 +44,14 @@ enum ConversationContentParser
 		let sourceBytes: [UInt8]
 		let sourceLineOffsets: [Int]
 		let preserveSoftBreaks: Bool
-		var runs: [ConversationTextRun] = []
+		var runs: [MarkdownTextRun] = []
 		var codeBlocks: [String] = []
 		var codeBlockRanges: [NSRange] = []
 		var textLength = 0
 		var tableCount = 0
 		var paragraphStart = 0
 		var paragraphContinuation = false
-		var plainTextBoundaries: [ConversationPlainTextBoundary] = []
+		var plainTextBoundaries: [MarkdownPlainTextBoundary] = []
 		var plainTextListCount = 0
 		var currentPlainTextList: Int?
 		var previousPlainTextList: Int?
@@ -70,9 +70,9 @@ enum ConversationContentParser
 			self.preserveSoftBreaks = preserveSoftBreaks
 		}
 
-		var content: ParsedConversationContent
+		var content: ParsedMarkdownContent
 		{
-			ParsedConversationContent(
+			ParsedMarkdownContent(
 				runs: runs,
 				codeBlocks: codeBlocks,
 				codeBlockRanges: codeBlockRanges,
@@ -82,7 +82,7 @@ enum ConversationContentParser
 
 		mutating func appendBlocks(
 			_ children: MarkupChildren,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			var imagePaths: [String] = []
@@ -95,7 +95,7 @@ enum ConversationContentParser
 					return
 				}
 				var imageStyle = style
-				imageStyle.richBlock = ConversationRichBlock(
+				imageStyle.richBlock = MarkdownRichBlock(
 					kind: .imageGallery,
 					source: imageSources.joined(separator: "\n\n"),
 					payload: "",
@@ -174,7 +174,7 @@ enum ConversationContentParser
 
 		mutating func appendBlock(
 			_ block: any Markup,
-			style: ConversationTextStyle,
+			style: MarkdownTextStyle,
 			marker: String = ""
 		)
 		{
@@ -223,8 +223,8 @@ enum ConversationContentParser
 			case let quote as BlockQuote:
 				var quoteStyle = style
 				quoteStyle.quoteRailOffsets.append(
-					style.listDepth * ConversationMarkdownMetrics.listIndent
-						+ style.quoteDepth * ConversationMarkdownMetrics.quoteIndent
+					style.listDepth * MarkdownMetrics.listIndent
+						+ style.quoteDepth * MarkdownMetrics.quoteIndent
 				)
 				quoteStyle.quoteDepth += 1
 				if !marker.isEmpty
@@ -302,7 +302,7 @@ enum ConversationContentParser
 		mutating func appendList(
 			_ children: MarkupChildren,
 			startIndex: UInt?,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			if let last = runs.last, last.style.listDepth == 0,
@@ -313,7 +313,7 @@ enum ConversationContentParser
 				{
 					var precedingStyle = runs[index].style
 					precedingStyle.followedByList = true
-					runs[index] = ConversationTextRun(
+					runs[index] = MarkdownTextRun(
 						text: runs[index].text,
 						style: precedingStyle
 					)
@@ -370,7 +370,7 @@ enum ConversationContentParser
 			{
 				var finalStyle = runs[index].style
 				finalStyle.listEnd = true
-				runs[index] = ConversationTextRun(
+				runs[index] = MarkdownTextRun(
 					text: runs[index].text,
 					style: finalStyle
 				)
@@ -390,7 +390,7 @@ enum ConversationContentParser
 
 		mutating func appendCodeBlock(
 			_ block: CodeBlock,
-			style: ConversationTextStyle,
+			style: MarkdownTextStyle,
 			marker: String
 		)
 		{
@@ -450,7 +450,7 @@ enum ConversationContentParser
 			}
 		}
 
-		func displayMath(in paragraph: Paragraph) -> ConversationRichBlock?
+		func displayMath(in paragraph: Paragraph) -> MarkdownRichBlock?
 		{
 			guard let raw = sourceText(of: paragraph)
 			else
@@ -475,14 +475,14 @@ enum ConversationContentParser
 			{
 				return nil
 			}
-			return ConversationRichBlock(
+			return MarkdownRichBlock(
 				kind: .math,
 				source: raw,
 				payload: lines.dropFirst().dropLast().joined(separator: "\n")
 			)
 		}
 
-		func diagram(in block: CodeBlock) -> ConversationRichBlock?
+		func diagram(in block: CodeBlock) -> MarkdownRichBlock?
 		{
 			guard block.language?.lowercased() == "mermaid", let raw = sourceText(of: block)
 			else
@@ -512,7 +512,7 @@ enum ConversationContentParser
 			{
 				return nil
 			}
-			return ConversationRichBlock(
+			return MarkdownRichBlock(
 				kind: .diagram,
 				source: raw,
 				payload: block.code
@@ -550,7 +550,7 @@ enum ConversationContentParser
 
 		mutating func appendCodeText(
 			_ code: String,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			let text = code as NSString
@@ -577,7 +577,7 @@ enum ConversationContentParser
 
 		mutating func appendTable(
 			_ table: Table,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			ensureParagraphBoundary()
@@ -600,14 +600,14 @@ enum ConversationContentParser
 					}
 					startParagraphSegment()
 					var cellStyle = style
-					let alignment: ConversationTableCell.Alignment
+					let alignment: MarkdownTableCell.Alignment
 					switch table.columnAlignments[column]
 					{
 					case .center: alignment = .center
 					case .right: alignment = .right
 					default: alignment = .left
 					}
-					cellStyle.tableCell = ConversationTableCell(
+					cellStyle.tableCell = MarkdownTableCell(
 						tableID: tableID,
 						row: rowIndex,
 						column: column,
@@ -632,7 +632,7 @@ enum ConversationContentParser
 
 		mutating func appendInlines(
 			_ children: MarkupChildren,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			for inline in children
@@ -720,7 +720,7 @@ enum ConversationContentParser
 				case let image as Image:
 					if let path = localImagePath(image), let source = sourceText(of: image)
 					{
-						inlineStyle.richBlock = ConversationRichBlock(
+						inlineStyle.richBlock = MarkdownRichBlock(
 							kind: .imageGallery,
 							source: source,
 							payload: "",
@@ -767,7 +767,7 @@ enum ConversationContentParser
 
 		mutating func appendTextWithWebLinks(
 			_ text: String,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			guard style.link == nil, !style.code
@@ -824,7 +824,7 @@ enum ConversationContentParser
 
 		mutating func appendContainerMarker(
 			_ marker: String,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			guard !marker.isEmpty
@@ -839,7 +839,7 @@ enum ConversationContentParser
 		}
 
 		mutating func beginParagraph(
-			style: ConversationTextStyle,
+			style: MarkdownTextStyle,
 			marker: String
 		)
 		{
@@ -875,21 +875,21 @@ enum ConversationContentParser
 		mutating func beginPlainTextBlock(list: Int?)
 		{
 			let continuesList = list != nil && list == previousPlainTextList
-			plainTextBoundaries.append(ConversationPlainTextBoundary(
+			plainTextBoundaries.append(MarkdownPlainTextBoundary(
 				runIndex: runs.count,
 				newlineCount: continuesList ? 1 : 2
 			))
 			previousPlainTextList = list
 		}
 
-		mutating func appendHardBreak(style: ConversationTextStyle)
+		mutating func appendHardBreak(style: MarkdownTextStyle)
 		{
 			// LF preserves readable copied text; these segments share one visual paragraph.
 			for index in paragraphStart ..< runs.count
 			{
 				var segmentStyle = runs[index].style
 				segmentStyle.suppressParagraphSpacing = true
-				runs[index] = ConversationTextRun(
+				runs[index] = MarkdownTextRun(
 					text: runs[index].text,
 					style: segmentStyle
 				)
@@ -906,7 +906,7 @@ enum ConversationContentParser
 
 		mutating func append(
 			_ text: String,
-			style: ConversationTextStyle
+			style: MarkdownTextStyle
 		)
 		{
 			guard !text.isEmpty
@@ -916,7 +916,7 @@ enum ConversationContentParser
 			}
 			var runStyle = style
 			runStyle.paragraphContinuation = paragraphContinuation
-			runs.append(ConversationTextRun(
+			runs.append(MarkdownTextRun(
 				text: text,
 				style: runStyle
 			))

@@ -2,7 +2,7 @@ import AppKit
 
 /// One source-backed glyph whose native drawing adapts to width and current appearance.
 @MainActor
-final class ConversationRichAttachment: NSTextAttachment
+final class MarkdownRichAttachment: NSTextAttachment
 {
 	let source: String
 	let estimatedRichImageBytes: Int
@@ -28,7 +28,7 @@ final class ConversationRichAttachment: NSTextAttachment
 		.reduce(0)
 		{
 			total, image in
-			total + ConversationRichBlockBudget.estimatedPixels(for: image.size) * 4
+			total + MarkdownRichBlockBudget.estimatedPixels(for: image.size) * 4
 		}
 		super.init(
 			data: nil,
@@ -36,7 +36,7 @@ final class ConversationRichAttachment: NSTextAttachment
 		)
 		allowsTextAttachmentView = false
 		// A fixed attachment.image bypasses native cell sizing and clips narrow paragraphs.
-		attachmentCell = ConversationRichAttachmentCell(
+		attachmentCell = MarkdownRichAttachmentCell(
 			source: source,
 			lightImage: acceptedLightImage,
 			darkImage: acceptedDarkImage
@@ -52,7 +52,7 @@ final class ConversationRichAttachment: NSTextAttachment
 }
 
 @MainActor
-private final class ConversationRichAttachmentCell: NSTextAttachmentCell
+private final class MarkdownRichAttachmentCell: NSTextAttachmentCell
 {
 	private static let verticalPadding: CGFloat = 8
 	private let lightImage: NSImage?
@@ -109,7 +109,7 @@ private final class ConversationRichAttachmentCell: NSTextAttachmentCell
 
 	required init(coder: NSCoder)
 	{
-		fatalError("Conversation rich attachments are prepared from Markdown source")
+		fatalError("Rich attachments are prepared from Markdown source")
 	}
 
 	nonisolated override func cellSize() -> NSSize
@@ -124,7 +124,7 @@ private final class ConversationRichAttachmentCell: NSTextAttachmentCell
 		characterIndex: Int
 	) -> NSRect
 	{
-		// The transcript creates, measures and displays its TextKit layout on the main actor.
+		// The owning Markdown view uses TextKit on the main actor.
 		precondition(Thread.isMainThread)
 		let containerWidth = textContainer.size.width - textContainer.lineFragmentPadding * 2
 		let storage = textContainer.layoutManager?.textStorage

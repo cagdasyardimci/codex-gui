@@ -157,7 +157,7 @@ struct TranscriptLayerAppearanceTests
 					title: "Codex",
 					body: body
 				),
-				content: PreparedConversationContent(ConversationContentParser.parse(
+				content: PreparedConversationContent(MarkdownContentParser.parse(
 					body,
 					markdown: true
 				)),

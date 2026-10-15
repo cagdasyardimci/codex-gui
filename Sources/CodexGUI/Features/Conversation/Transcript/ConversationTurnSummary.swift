@@ -252,11 +252,11 @@ struct ConversationTurnSummary: Equatable, Sendable
 
 	private static func renderReply(_ excerpt: String) -> String
 	{
-		let parsed = ConversationContentParser.parse(
+		let parsed = MarkdownContentParser.parse(
 			excerpt,
 			markdown: true
 		)
-		return ConversationPlainTextRenderer.render(parsed)
+		return MarkdownPlainTextRenderer.render(parsed)
 	}
 
 }

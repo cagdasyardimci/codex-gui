@@ -1,6 +1,6 @@
 import Foundation
 
-/// One web-link rule for transcript prose and compact turn previews.
+/// One web-link rule for Markdown prose and compact turn previews.
 enum WebLinkDetector
 {
 	private static let detector = try? NSDataDetector(
@@ -20,7 +20,7 @@ enum WebLinkDetector
 		return url
 	}
 
-	static func links(in text: String) -> [ConversationPlainTextLink]
+	static func links(in text: String) -> [MarkdownPlainTextLink]
 	{
 		guard let detector
 		else
@@ -41,7 +41,7 @@ enum WebLinkDetector
 			{
 				return nil
 			}
-			return ConversationPlainTextLink(
+			return MarkdownPlainTextLink(
 				range: match.range,
 				destination: url.absoluteString
 			)

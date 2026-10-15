@@ -158,7 +158,7 @@ struct ConversationMarkdownParserTests
 		{
 			$0.text == "https://example.com/code" && $0.style.link == nil
 		})
-		let plain = ConversationPlainTextRenderer.renderWithLinks(parsed)
+		let plain = MarkdownPlainTextRenderer.renderWithLinks(parsed)
 		#expect(plain.text.contains("https://example.com/path."))
 		#expect(plain.links.count == 1)
 	}
@@ -216,7 +216,7 @@ struct ConversationMarkdownParserTests
 		#expect(galleries.first?.source == [first, first, first].joined(separator: "\n\n"))
 		#expect(text(parsed).contains("Before"))
 		#expect(text(parsed).contains("After"))
-		#expect(ConversationPlainTextRenderer.render(parsed).contains(first))
+		#expect(MarkdownPlainTextRenderer.render(parsed).contains(first))
 		let adjacent = parse("\(first)\n\(first)")
 		let adjacentGalleries = adjacent.runs.filter
 		{
@@ -378,7 +378,7 @@ struct ConversationMarkdownParserTests
 	@Test func literalModePreservesEveryMarkerAndWhitespaceWithoutBlockMetadata()
 	{
 		let body = "  # heading\n\n| a | b |\n| --- | --- |\n> quote\n```x```\n😀  "
-		let parsed = ConversationContentParser.parse(
+		let parsed = MarkdownContentParser.parse(
 			body,
 			markdown: false
 		)
@@ -391,15 +391,15 @@ struct ConversationMarkdownParserTests
 		})
 	}
 
-	private func parse(_ body: String) -> ParsedConversationContent
+	private func parse(_ body: String) -> ParsedMarkdownContent
 	{
-		ConversationContentParser.parse(
+		MarkdownContentParser.parse(
 			body,
 			markdown: true
 		)
 	}
 
-	private func text(_ parsed: ParsedConversationContent) -> String
+	private func text(_ parsed: ParsedMarkdownContent) -> String
 	{
 		parsed.runs.map(\.text).joined()
 	}

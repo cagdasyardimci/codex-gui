@@ -2,7 +2,7 @@ import AppKit
 
 /// Converts prepared Markdown presentation values into immutable native text on the main actor.
 @MainActor
-enum ConversationAttributedStringRenderer
+enum MarkdownAttributedStringRenderer
 {
 	static let linkColor = NSColor(name: nil)
 	{
@@ -24,12 +24,12 @@ enum ConversationAttributedStringRenderer
 	}
 
 	static func render(
-		_ runs: [ConversationTextRun],
+		_ runs: [MarkdownTextRun],
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
 	) -> NSAttributedString
 	{
 		let result = NSMutableAttributedString(string: "")
-		var richBudget = ConversationRichBlockBudget()
+		var richBudget = MarkdownRichBlockBudget()
 		let columnWidths = tableColumnWidths(in: runs)
 		var tables: [Int: NSTextTable] = [:]
 		var cells: [CellKey: NSTextTableBlock] = [:]
@@ -73,7 +73,7 @@ enum ConversationAttributedStringRenderer
 		return NSAttributedString(attributedString: result)
 	}
 
-	private static func displayText(for run: ConversationTextRun) -> String
+	private static func displayText(for run: MarkdownTextRun) -> String
 	{
 		if run.style.code
 		{
@@ -92,7 +92,7 @@ enum ConversationAttributedStringRenderer
 	}
 
 	private static func decoratedAttributes(
-		for run: ConversationTextRun,
+		for run: MarkdownTextRun,
 		paragraph: NSParagraphStyle
 	) -> [NSAttributedString.Key: Any]
 	{
@@ -115,49 +115,49 @@ enum ConversationAttributedStringRenderer
 		}
 		if !run.style.code, displayText(for: run) != run.text
 		{
-			attributes[.conversationSourceText] = run.text
+			attributes[.markdownSourceText] = run.text
 		}
 		if run.style.code
 		{
-			attributes[.conversationInlineCode] = true
+			attributes[.markdownInlineCode] = true
 			if run.style.codePadding
 			{
 				attributes[.kern] = -3
-				attributes[.conversationSourceText] = ""
+				attributes[.markdownSourceText] = ""
 			}
 			else
 			{
-				attributes[.conversationInlineCodeSource] = run.text
+				attributes[.markdownInlineCodeSource] = run.text
 			}
 		}
 		if let blockID = run.style.codeBlockID
 		{
-			attributes[.conversationCodeBlockID] = blockID
+			attributes[.markdownCodeBlockID] = blockID
 			if run.style.codeHeader
 			{
-				attributes[.conversationCodeHeader] = true
+				attributes[.markdownCodeHeader] = true
 			}
 			if let language = run.style.codeLanguage
 			{
-				attributes[.conversationCodeLanguage] = language
+				attributes[.markdownCodeLanguage] = language
 			}
 		}
 		if run.style.quoteDepth > 0
 		{
-			attributes[.conversationQuoteDepth] = run.style.quoteDepth
-			attributes[.conversationQuoteRailOffsets] = run.style.quoteRailOffsets.isEmpty
+			attributes[.markdownQuoteDepth] = run.style.quoteDepth
+			attributes[.markdownQuoteRailOffsets] = run.style.quoteRailOffsets.isEmpty
 				? (0 ..< min(
 					run.style.quoteDepth,
 					6
 				)).map
 				{
-					$0 * ConversationMarkdownMetrics.quoteIndent
+					$0 * MarkdownMetrics.quoteIndent
 				}
 				: Array(run.style.quoteRailOffsets.prefix(6))
 		}
 		if run.style.thematicBreak
 		{
-			attributes[.conversationThematicBreak] = true
+			attributes[.markdownThematicBreak] = true
 		}
 		if run.style.strikethrough
 		{
@@ -170,13 +170,13 @@ enum ConversationAttributedStringRenderer
 			if run.style.webLinkIcon
 			{
 				attributes[.attachment] = WebLinkFaviconAttachment(url: url)
-				attributes[.conversationSourceText] = ""
+				attributes[.markdownSourceText] = ""
 			}
 			else if run.style.fileLinkIcon
 			{
 				let attachment = makeFileLinkAttachment()
 				attributes[.attachment] = attachment
-				attributes[.conversationSourceText] = ""
+				attributes[.markdownSourceText] = ""
 			}
 		}
 		return attributes
@@ -222,9 +222,9 @@ enum ConversationAttributedStringRenderer
 	}
 
 	private static func addRichBlockAttachment(
-		for run: ConversationTextRun,
+		for run: MarkdownTextRun,
 		to attributes: inout [NSAttributedString.Key: Any],
-		budget: inout ConversationRichBlockBudget,
+		budget: inout MarkdownRichBlockBudget,
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail]
 	)
 	{
@@ -234,19 +234,19 @@ enum ConversationAttributedStringRenderer
 			switch rich.kind
 			{
 			case .math:
-				attachment = ConversationRichBlockRenderer.mathAttachment(
+				attachment = MarkdownRichBlockRenderer.mathAttachment(
 					latex: rich.payload,
 					source: rich.source,
 					budget: &budget
 				)
 			case .diagram:
-				attachment = ConversationRichBlockRenderer.diagramAttachment(
+				attachment = MarkdownRichBlockRenderer.diagramAttachment(
 					code: rich.payload,
 					source: rich.source,
 					budget: &budget
 				)
 			case .imageGallery:
-				attachment = ConversationImageGalleryAttachment.make(
+				attachment = MarkdownImageGalleryAttachment.make(
 					paths: rich.imagePaths,
 					source: rich.source,
 					thumbnails: imageThumbnails,
@@ -254,7 +254,7 @@ enum ConversationAttributedStringRenderer
 				)
 			}
 			attributes[.attachment] = attachment
-			attributes[.conversationSourceText] = rich.source
+			attributes[.markdownSourceText] = rich.source
 		}
 	}
 
@@ -266,7 +266,7 @@ enum ConversationAttributedStringRenderer
 		)
 		var blocks: [NSRange] = []
 		text.enumerateAttribute(
-			.conversationCodeBlockID,
+			.markdownCodeBlockID,
 			in: fullRange,
 			options: []
 		)
@@ -281,7 +281,7 @@ enum ConversationAttributedStringRenderer
 		{
 			var header = NSRange()
 			guard text.attribute(
-				.conversationCodeHeader,
+				.markdownCodeHeader,
 				at: block.location,
 				longestEffectiveRange: &header,
 				in: block
@@ -305,15 +305,15 @@ enum ConversationAttributedStringRenderer
 			}
 			let source = (text.string as NSString).substring(with: range)
 			let language = text.attribute(
-				.conversationCodeLanguage,
+				.markdownCodeLanguage,
 				at: block.location,
 				effectiveRange: nil
 			) as? String
-			guard let light = ConversationCodeHighlighter.highlightedCode(
+			guard let light = CodeSyntaxHighlighter.highlightedCode(
 				source,
 				language: language,
 				dark: false
-			), let dark = ConversationCodeHighlighter.highlightedCode(
+			), let dark = CodeSyntaxHighlighter.highlightedCode(
 				source,
 				language: language,
 				dark: true
@@ -403,7 +403,7 @@ enum ConversationAttributedStringRenderer
 		let column: Int
 	}
 
-	private static func paragraphStyle(for style: ConversationTextStyle) -> NSMutableParagraphStyle
+	private static func paragraphStyle(for style: MarkdownTextStyle) -> NSMutableParagraphStyle
 	{
 		let paragraph = NSMutableParagraphStyle()
 		let wrapsCharacters = style.codeBlock || style.monospaced
@@ -425,8 +425,8 @@ enum ConversationAttributedStringRenderer
 		}
 		if style.codeBlockEnd
 		{
-			paragraph.paragraphSpacing = ConversationMarkdownLayoutManager.codeBottomPadding
-				+ ConversationMarkdownLayoutManager.codeBlockSpacing
+			paragraph.paragraphSpacing = MarkdownLayoutManager.codeBottomPadding
+				+ MarkdownLayoutManager.codeBlockSpacing
 		}
 		if style.richBlock != nil
 		{
@@ -435,14 +435,14 @@ enum ConversationAttributedStringRenderer
 		let quoteIndent = CGFloat(min(
 			style.quoteDepth,
 			6
-		)) * ConversationMarkdownLayoutManager.quoteIndent
+		)) * MarkdownLayoutManager.quoteIndent
 		let listIndent = CGFloat(min(
 			max(
 				0,
 				style.listDepth - 1
 			),
 			6
-		)) * CGFloat(ConversationMarkdownMetrics.listIndent)
+		)) * CGFloat(MarkdownMetrics.listIndent)
 		paragraph.firstLineHeadIndent = quoteIndent + listIndent
 		paragraph.headIndent = paragraph.firstLineHeadIndent
 		if style.listDepth > 0
@@ -460,14 +460,14 @@ enum ConversationAttributedStringRenderer
 		}
 		if style.codeBlock
 		{
-			paragraph.firstLineHeadIndent += ConversationMarkdownLayoutManager.codeInset
+			paragraph.firstLineHeadIndent += MarkdownLayoutManager.codeInset
 			paragraph.headIndent = paragraph.firstLineHeadIndent
-			paragraph.tailIndent = -ConversationMarkdownLayoutManager.codeInset
+			paragraph.tailIndent = -MarkdownLayoutManager.codeInset
 		}
 		if style.codeHeader
 		{
-			paragraph.minimumLineHeight = ConversationMarkdownLayoutManager.codeHeaderHeight
-			paragraph.maximumLineHeight = ConversationMarkdownLayoutManager.codeHeaderHeight
+			paragraph.minimumLineHeight = MarkdownLayoutManager.codeHeaderHeight
+			paragraph.maximumLineHeight = MarkdownLayoutManager.codeHeaderHeight
 		}
 		if style.thematicBreak
 		{
@@ -486,7 +486,7 @@ enum ConversationAttributedStringRenderer
 		return paragraph
 	}
 
-	private static func font(for style: ConversationTextStyle) -> NSFont
+	private static func font(for style: MarkdownTextStyle) -> NSFont
 	{
 		let size: CGFloat
 		if style.codeHeader
@@ -538,7 +538,7 @@ enum ConversationAttributedStringRenderer
 			) : base
 	}
 
-	private static func foregroundColor(for style: ConversationTextStyle) -> NSColor
+	private static func foregroundColor(for style: MarkdownTextStyle) -> NSColor
 	{
 		if style.thematicBreak
 		{
@@ -551,7 +551,7 @@ enum ConversationAttributedStringRenderer
 		return style.quoteDepth > 0 ? .secondaryLabelColor : proseColor
 	}
 
-	private static func tableColumnWidths(in runs: [ConversationTextRun]) -> [Int: [CGFloat]]
+	private static func tableColumnWidths(in runs: [MarkdownTextRun]) -> [Int: [CGFloat]]
 	{
 		var cellLengths: [CellKey: Int] = [:]
 		var lengths: [Int: [CGFloat]] = [:]
@@ -575,7 +575,7 @@ enum ConversationAttributedStringRenderer
 					count: cell.columnCount
 				)
 			}
-			// Bound prose preference so short columns retain space at narrow transcript widths.
+			// Bound prose preference so short columns retain space at narrow Markdown widths.
 			var columns = lengths[cell.tableID] ?? []
 			columns[cell.column] = max(
 				columns[cell.column],
@@ -618,7 +618,7 @@ enum ConversationAttributedStringRenderer
 	}
 
 	private static func makeCell(
-		_ cell: ConversationTableCell,
+		_ cell: MarkdownTableCell,
 		table: NSTextTable,
 		columnWidths: [CGFloat]
 	) -> NSTextTableBlock
@@ -671,7 +671,7 @@ enum ConversationAttributedStringRenderer
 		return block
 	}
 
-	private static func alignment(for alignment: ConversationTableCell.Alignment) -> NSTextAlignment
+	private static func alignment(for alignment: MarkdownTableCell.Alignment) -> NSTextAlignment
 	{
 		switch alignment
 		{

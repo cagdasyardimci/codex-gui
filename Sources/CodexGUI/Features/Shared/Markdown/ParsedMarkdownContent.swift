@@ -1,28 +1,28 @@
 import Foundation
 
 /// Sendable presentation values; the Markdown tree never crosses into AppKit rendering.
-struct ParsedConversationContent: Sendable
+struct ParsedMarkdownContent: Sendable
 {
-	let runs: [ConversationTextRun]
+	let runs: [MarkdownTextRun]
 	let codeBlocks: [String]
 	let codeBlockRanges: [NSRange]
-	let plainTextBoundaries: [ConversationPlainTextBoundary]
+	let plainTextBoundaries: [MarkdownPlainTextBoundary]
 }
 
 /// Plain-text consumers express semantic block spacing with line feeds instead of AppKit spacing.
-struct ConversationPlainTextBoundary: Sendable
+struct MarkdownPlainTextBoundary: Sendable
 {
 	let runIndex: Int
 	let newlineCount: Int
 }
 
-struct ConversationTextRun: Sendable
+struct MarkdownTextRun: Sendable
 {
 	let text: String
-	let style: ConversationTextStyle
+	let style: MarkdownTextStyle
 }
 
-struct ConversationTextStyle: Sendable
+struct MarkdownTextStyle: Sendable
 {
 	var heading = 0
 	var bold = false
@@ -35,7 +35,7 @@ struct ConversationTextStyle: Sendable
 	var codeLanguage: String?
 	var codeHeader = false
 	var thematicBreak = false
-	var richBlock: ConversationRichBlock?
+	var richBlock: MarkdownRichBlock?
 	var monospaced = false
 	var strikethrough = false
 	var link: String?
@@ -49,10 +49,10 @@ struct ConversationTextStyle: Sendable
 	var followedByList = false
 	var quoteDepth = 0
 	var quoteRailOffsets: [Int] = []
-	var tableCell: ConversationTableCell?
+	var tableCell: MarkdownTableCell?
 }
 
-struct ConversationTableCell: Sendable
+struct MarkdownTableCell: Sendable
 {
 	enum Alignment: Sendable
 	{
@@ -70,7 +70,7 @@ struct ConversationTableCell: Sendable
 }
 
 /// A whole native attachment retains its exact source for copying and accessible text.
-struct ConversationRichBlock: Sendable
+struct MarkdownRichBlock: Sendable
 {
 	enum Kind: Sendable
 	{
@@ -84,7 +84,7 @@ struct ConversationRichBlock: Sendable
 }
 
 /// Shared paragraph and decoration geometry for native measurement and drawing.
-enum ConversationMarkdownMetrics
+enum MarkdownMetrics
 {
 	static let quoteIndent = LayoutTokens.Markdown.quoteIndent
 	static let listIndent = LayoutTokens.Markdown.listIndent

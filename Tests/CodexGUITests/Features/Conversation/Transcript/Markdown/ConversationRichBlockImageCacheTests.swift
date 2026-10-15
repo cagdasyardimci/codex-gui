@@ -11,7 +11,7 @@ struct ConversationRichBlockImageCacheTests
 		let composed = "Caf\u{E9}"
 		let decomposed = "Cafe\u{0301}"
 		#expect(composed == decomposed)
-		let cache = ConversationRichBlockImageCache()
+		let cache = MarkdownRichBlockImageCache()
 		let images = try fixtureImages()
 		let original = key(composed)
 		cache.insert(
@@ -33,7 +33,7 @@ struct ConversationRichBlockImageCacheTests
 	@Test func entryAndByteBoundsEvictUnusedPairsWithoutRetainingOversizedImages() throws
 	{
 		let images = try fixtureImages()
-		let cache = ConversationRichBlockImageCache(capacity: 2)
+		let cache = MarkdownRichBlockImageCache(capacity: 2)
 		cache.insert(
 			images,
 			for: key("first")
@@ -51,7 +51,7 @@ struct ConversationRichBlockImageCacheTests
 		#expect(cache.images(for: key("active")) == nil)
 
 		let bytes = images.byteCount + 1 + 8 + 128
-		let bounded = ConversationRichBlockImageCache(
+		let bounded = MarkdownRichBlockImageCache(
 			capacity: 32,
 			byteCapacity: bytes
 		)
@@ -71,7 +71,7 @@ struct ConversationRichBlockImageCacheTests
 		)
 		#expect(bounded.images(for: key("large")) == nil)
 		#expect(bounded.images(for: key("b")) != nil)
-		let disabled = ConversationRichBlockImageCache(capacity: 0)
+		let disabled = MarkdownRichBlockImageCache(capacity: 0)
 		disabled.insert(
 			images,
 			for: key("disabled")
@@ -84,21 +84,21 @@ struct ConversationRichBlockImageCacheTests
 		_ = NSApplication.shared
 		let latex = #"\int_0^1 x^2\,dx = \frac{1}{3}"#
 		let source = "$$\n" + latex + "\n$$"
-		let first = PreparedConversationContent(ConversationContentParser.parse(
+		let first = PreparedConversationContent(MarkdownContentParser.parse(
 			source + "\n\nFirst streamed tail",
 			markdown: true
 		))
-		var budget = ConversationRichBlockBudget()
-		let images = try #require(ConversationRichBlockRenderer.mathImages(
+		var budget = MarkdownRichBlockBudget()
+		let images = try #require(MarkdownRichBlockRenderer.mathImages(
 			latex: latex,
 			budget: &budget
 		))
-		let next = PreparedConversationContent(ConversationContentParser.parse(
+		let next = PreparedConversationContent(MarkdownContentParser.parse(
 			source + "\n\nUpdated streamed tail",
 			markdown: true
 		))
-		budget = ConversationRichBlockBudget()
-		let repeated = try #require(ConversationRichBlockRenderer.mathImages(
+		budget = MarkdownRichBlockBudget()
+		let repeated = try #require(MarkdownRichBlockRenderer.mathImages(
 			latex: latex,
 			budget: &budget
 		))
@@ -122,19 +122,19 @@ struct ConversationRichBlockImageCacheTests
 		_ = NSApplication.shared
 		let composed = "flowchart LR\nA[Caf\u{E9}] --> B[Done]"
 		let decomposed = "flowchart LR\nA[Cafe\u{0301}] --> B[Done]"
-		var budget = ConversationRichBlockBudget()
-		let first = try #require(ConversationRichBlockRenderer.diagramImages(
+		var budget = MarkdownRichBlockBudget()
+		let first = try #require(MarkdownRichBlockRenderer.diagramImages(
 			code: composed,
 			budget: &budget
 		))
-		budget = ConversationRichBlockBudget()
-		let second = try #require(ConversationRichBlockRenderer.diagramImages(
+		budget = MarkdownRichBlockBudget()
+		let second = try #require(MarkdownRichBlockRenderer.diagramImages(
 			code: decomposed,
 			budget: &budget
 		))
 		#expect(first.light !== second.light)
-		budget = ConversationRichBlockBudget()
-		let repeated = try #require(ConversationRichBlockRenderer.diagramImages(
+		budget = MarkdownRichBlockBudget()
+		let repeated = try #require(MarkdownRichBlockRenderer.diagramImages(
 			code: composed,
 			budget: &budget
 		))
@@ -150,12 +150,12 @@ struct ConversationRichBlockImageCacheTests
 	{
 		_ = NSApplication.shared
 		let latex = #"\frac{17}{19}"#
-		var initialBudget = ConversationRichBlockBudget()
-		let images = try #require(ConversationRichBlockRenderer.mathImages(
+		var initialBudget = MarkdownRichBlockBudget()
+		let images = try #require(MarkdownRichBlockRenderer.mathImages(
 			latex: latex,
 			budget: &initialBudget
 		))
-		var budget = ConversationRichBlockBudget(
+		var budget = MarkdownRichBlockBudget(
 			maximumPixels: images.pixelCount,
 			maximumBlocks: 2
 		)
@@ -170,37 +170,37 @@ struct ConversationRichBlockImageCacheTests
 		#expect(first.rendersNativeImage)
 		#expect(!rejected.rendersNativeImage)
 		#expect(rejected.source == "$$" + latex + "$$")
-		var exhaustedBlocks = ConversationRichBlockBudget(maximumBlocks: 0)
+		var exhaustedBlocks = MarkdownRichBlockBudget(maximumBlocks: 0)
 		#expect(try !richMath(
 			latex,
 			budget: &exhaustedBlocks
 		).rendersNativeImage)
-		var freshBudget = ConversationRichBlockBudget()
+		var freshBudget = MarkdownRichBlockBudget()
 		#expect(try richMath(
 			latex,
 			budget: &freshBudget
 		).rendersNativeImage)
 
 		let code = "flowchart LR\nA[Cached budget] --> B[Result]"
-		var warmBudget = ConversationRichBlockBudget()
-		let diagram = try #require(ConversationRichBlockRenderer.diagramImages(
+		var warmBudget = MarkdownRichBlockBudget()
+		let diagram = try #require(MarkdownRichBlockRenderer.diagramImages(
 			code: code,
 			budget: &warmBudget
 		))
-		var diagramBudget = ConversationRichBlockBudget(
+		var diagramBudget = MarkdownRichBlockBudget(
 			maximumPixels: diagram.pixelCount,
 			maximumBlocks: 2
 		)
-		#expect(ConversationRichBlockRenderer.diagramImages(
+		#expect(MarkdownRichBlockRenderer.diagramImages(
 			code: code,
 			budget: &diagramBudget
 		) != nil)
-		#expect(ConversationRichBlockRenderer.diagramImages(
+		#expect(MarkdownRichBlockRenderer.diagramImages(
 			code: code,
 			budget: &diagramBudget
 		) == nil)
-		var noDiagramBlocks = ConversationRichBlockBudget(maximumBlocks: 0)
-		#expect(ConversationRichBlockRenderer.diagramImages(
+		var noDiagramBlocks = MarkdownRichBlockBudget(maximumBlocks: 0)
+		#expect(MarkdownRichBlockRenderer.diagramImages(
 			code: code,
 			budget: &noDiagramBlocks
 		) == nil)
@@ -213,13 +213,13 @@ struct ConversationRichBlockImageCacheTests
 			width: 1.25,
 			height: 0.75
 		)
-		let images = ConversationRichBlockImageCache.Images(
+		let images = MarkdownRichBlockImageCache.Images(
 			light: original.light,
 			dark: original.dark,
 			lightSize: size,
 			darkSize: size
 		)
-		let cache = ConversationRichBlockImageCache()
+		let cache = MarkdownRichBlockImageCache()
 		let cacheKey = key("fractional")
 		cache.insert(
 			images,
@@ -231,7 +231,7 @@ struct ConversationRichBlockImageCacheTests
 		#expect(cached.attachment(source: "fractional").estimatedRichImageBytes == 48)
 		#expect(cached.byteCount == original.light.bytesPerRow * original.light.height
 			+ original.dark.bytesPerRow * original.dark.height)
-		var budget = ConversationRichBlockBudget(maximumPixels: 12)
+		var budget = MarkdownRichBlockBudget(maximumPixels: 12)
 		let firstReservation = budget.reservePixels(cached.pixelCount)
 		let secondReservation = budget.reservePixels(cached.pixelCount)
 		#expect(firstReservation)
@@ -242,14 +242,14 @@ struct ConversationRichBlockImageCacheTests
 	{
 		_ = NSApplication.shared
 		let code = "flowchart LR\nA[" + UUID().uuidString + "] --> B[Result]"
-		var rejectedBudget = ConversationRichBlockBudget(maximumPixels: 0)
-		#expect(ConversationRichBlockRenderer
+		var rejectedBudget = MarkdownRichBlockBudget(maximumPixels: 0)
+		#expect(MarkdownRichBlockRenderer
 			.diagramImages(
 				code: code,
 				budget: &rejectedBudget
 			) == nil)
-		var freshBudget = ConversationRichBlockBudget()
-		#expect(ConversationRichBlockRenderer
+		var freshBudget = MarkdownRichBlockBudget()
+		#expect(MarkdownRichBlockRenderer
 			.diagramImages(
 				code: code,
 				budget: &freshBudget
@@ -258,18 +258,18 @@ struct ConversationRichBlockImageCacheTests
 
 	private func key(
 		_ source: String,
-		kind: ConversationRichBlockImageCache.Key.Kind = .diagram,
+		kind: MarkdownRichBlockImageCache.Key.Kind = .diagram,
 		parameters: [CGFloat] = [2]
-	) -> ConversationRichBlockImageCache.Key
+	) -> MarkdownRichBlockImageCache.Key
 	{
-		ConversationRichBlockImageCache.Key(
+		MarkdownRichBlockImageCache.Key(
 			kind: kind,
 			payload: Data(source.utf8),
 			parameters: parameters
 		)
 	}
 
-	private func fixtureImages(pixelDimension: Int = 4) throws -> ConversationRichBlockImageCache
+	private func fixtureImages(pixelDimension: Int = 4) throws -> MarkdownRichBlockImageCache
 		.Images
 	{
 		let context = try #require(CGContext(
@@ -286,7 +286,7 @@ struct ConversationRichBlockImageCacheTests
 			width: CGFloat(pixelDimension) / 2,
 			height: CGFloat(pixelDimension) / 2
 		)
-		return ConversationRichBlockImageCache.Images(
+		return MarkdownRichBlockImageCache.Images(
 			light: image,
 			dark: image,
 			lightSize: size,
@@ -295,7 +295,7 @@ struct ConversationRichBlockImageCacheTests
 	}
 
 	private func attachment(in content: PreparedConversationContent) throws
-		-> ConversationRichAttachment
+		-> MarkdownRichAttachment
 	{
 		let text = content.attributedString
 		let range = (text.string as NSString).range(of: "\u{FFFC}")
@@ -304,18 +304,18 @@ struct ConversationRichBlockImageCacheTests
 			.attachment,
 			at: range.location,
 			effectiveRange: nil
-		) as? ConversationRichAttachment)
+		) as? MarkdownRichAttachment)
 	}
 
 	private func richMath(
 		_ latex: String,
-		budget: inout ConversationRichBlockBudget
-	) throws -> ConversationRichAttachment
+		budget: inout MarkdownRichBlockBudget
+	) throws -> MarkdownRichAttachment
 	{
-		try #require(ConversationRichBlockRenderer.mathAttachment(
+		try #require(MarkdownRichBlockRenderer.mathAttachment(
 			latex: latex,
 			source: "$$" + latex + "$$",
 			budget: &budget
-		) as? ConversationRichAttachment)
+		) as? MarkdownRichAttachment)
 	}
 }

@@ -24,7 +24,7 @@ final class GitRichPreviewView: NSView
 {
 	private var task: Task<Void, Never>?
 	private var content: NSView?
-	private var markdownRuns: [ConversationTextRun]?
+	private var markdownRuns: [MarkdownTextRun]?
 	private lazy var contentHeight = heightAnchor.constraint(equalToConstant: 80)
 
 	init(
@@ -47,7 +47,7 @@ final class GitRichPreviewView: NSView
 				{
 					return
 				}
-				let runs: [ConversationTextRun]?
+				let runs: [MarkdownTextRun]?
 				if case .markdown = kind
 				{
 					guard let source = String(
@@ -60,7 +60,7 @@ final class GitRichPreviewView: NSView
 					}
 					runs = await Task.detached
 					{
-						ConversationContentParser.parse(
+						MarkdownContentParser.parse(
 							source,
 							markdown: true
 						).runs
@@ -131,14 +131,14 @@ final class GitRichPreviewView: NSView
 	private func display(
 		_ data: Data,
 		kind: GitRichPreviewKind,
-		runs: [ConversationTextRun]?
+		runs: [MarkdownTextRun]?
 	)
 	{
 		switch kind
 		{
 		case .markdown:
 			let storage = NSTextStorage()
-			let layout = ConversationMarkdownLayoutManager()
+			let layout = MarkdownLayoutManager()
 			let container = NSTextContainer(containerSize: NSSize(
 				width: 1,
 				height: CGFloat.greatestFiniteMagnitude
@@ -146,7 +146,7 @@ final class GitRichPreviewView: NSView
 			container.widthTracksTextView = false
 			layout.addTextContainer(container)
 			storage.addLayoutManager(layout)
-			let text = ConversationMarkdownTextView(
+			let text = MarkdownTextView(
 				frame: .zero,
 				textContainer: container
 			)
@@ -191,7 +191,7 @@ final class GitRichPreviewView: NSView
 		{
 			return
 		}
-		if let text = content as? ConversationMarkdownTextView,
+		if let text = content as? MarkdownTextView,
 			let container = text.textContainer, let layout = text.layoutManager
 		{
 			container.containerSize = NSSize(
@@ -261,7 +261,7 @@ final class GitRichPreviewView: NSView
 
 	private func refreshMarkdownAppearance()
 	{
-		guard let text = content as? ConversationMarkdownTextView, let markdownRuns
+		guard let text = content as? MarkdownTextView, let markdownRuns
 		else
 		{
 			return
@@ -270,7 +270,7 @@ final class GitRichPreviewView: NSView
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
 			text.textStorage?.setAttributedString(
-				ConversationAttributedStringRenderer.render(markdownRuns)
+				MarkdownAttributedStringRenderer.render(markdownRuns)
 			)
 		}
 		text.setSelectedRange(selection)

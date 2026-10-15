@@ -206,7 +206,7 @@ struct ConversationCodeCopyControlReuseTests
 		id: String = "turn:reply"
 	)
 	{
-		let content = PreparedConversationContent(ConversationContentParser.parse(
+		let content = PreparedConversationContent(MarkdownContentParser.parse(
 			body,
 			markdown: true
 		))

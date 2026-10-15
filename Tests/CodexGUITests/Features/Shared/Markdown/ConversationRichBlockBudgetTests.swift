@@ -37,9 +37,9 @@ struct ConversationRichBlockBudgetTests
 	])
 	func invalidRasterSizesCannotConsumeBudget(_ size: CGSize)
 	{
-		let estimate = ConversationRichBlockBudget.estimatedPixels(for: size)
+		let estimate = MarkdownRichBlockBudget.estimatedPixels(for: size)
 		#expect(estimate == 0)
-		var budget = ConversationRichBlockBudget(maximumPixels: 1)
+		var budget = MarkdownRichBlockBudget(maximumPixels: 1)
 		let invalidReservation = budget.reservePixels(estimate)
 		let validReservation = budget.reservePixels(1)
 		#expect(!invalidReservation)

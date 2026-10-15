@@ -1,7 +1,7 @@
 import Foundation
 
 /// Shared raster dimensions for rendering and retained rich-image estimates.
-struct ConversationRichBlockRasterSize: Sendable
+struct MarkdownRichBlockRasterSize: Sendable
 {
 	static let scale: CGFloat = 2
 

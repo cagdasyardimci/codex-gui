@@ -45,7 +45,7 @@ struct ConversationMarkdownRenderingTests
 			.attachment,
 			at: 0,
 			effectiveRange: nil
-		) as? ConversationImageGalleryAttachment)
+		) as? MarkdownImageGalleryAttachment)
 		#expect(gallery.paths == [path.path, otherPath.path, path.path])
 		let galleryFrame = NSRect(
 			x: 0,
@@ -86,7 +86,7 @@ struct ConversationMarkdownRenderingTests
 			$0 == "\u{FFFC}"
 		}.count == 1)
 		#expect(text.attribute(
-			.conversationSourceText,
+			.markdownSourceText,
 			at: 0,
 			effectiveRange: nil
 		) as? String == body)
@@ -152,13 +152,13 @@ struct ConversationMarkdownRenderingTests
 			width: 736,
 			height: 700
 		)
-		var budget = ConversationRichBlockBudget()
-		let identical = try #require(ConversationImageGalleryAttachment.make(
+		var budget = MarkdownRichBlockBudget()
+		let identical = try #require(MarkdownImageGalleryAttachment.make(
 			paths: ["first", "first"],
 			source: "two images",
 			thumbnails: thumbnails,
 			budget: &budget
-		) as? ConversationImageGalleryAttachment)
+		) as? MarkdownImageGalleryAttachment)
 		#expect(identical.path(
 			at: NSPoint(
 				x: 400,
@@ -174,13 +174,13 @@ struct ConversationMarkdownRenderingTests
 			in: wideFrame
 		) == "first")
 
-		budget = ConversationRichBlockBudget()
-		let mixed = try #require(ConversationImageGalleryAttachment.make(
+		budget = MarkdownRichBlockBudget()
+		let mixed = try #require(MarkdownImageGalleryAttachment.make(
 			paths: ["first", "second", "third"],
 			source: "three images",
 			thumbnails: thumbnails,
 			budget: &budget
-		) as? ConversationImageGalleryAttachment)
+		) as? MarkdownImageGalleryAttachment)
 		#expect(mixed.path(
 			at: NSPoint(
 				x: 400,
@@ -418,22 +418,22 @@ struct ConversationMarkdownRenderingTests
 			+ "> outer paragraph\n>\n> - quoted list item\n>\n>   > nested quote")
 		let text = content.attributedString
 		#expect(attribute(
-			.conversationQuoteRailOffsets,
+			.markdownQuoteRailOffsets,
 			in: text,
 			at: "quote inside list"
 		) as? [Int] == [22])
 		#expect(attribute(
-			.conversationQuoteRailOffsets,
+			.markdownQuoteRailOffsets,
 			in: text,
 			at: "outer paragraph"
 		) as? [Int] == [0])
 		#expect(attribute(
-			.conversationQuoteRailOffsets,
+			.markdownQuoteRailOffsets,
 			in: text,
 			at: "quoted list item"
 		) as? [Int] == [0])
 		#expect(attribute(
-			.conversationQuoteRailOffsets,
+			.markdownQuoteRailOffsets,
 			in: text,
 			at: "nested quote"
 		) as? [Int] == [0, 38])
@@ -653,7 +653,7 @@ struct ConversationMarkdownRenderingTests
 
 	@Test func preparedSystemColorsResolveInLightAndDarkAppearances() throws
 	{
-		let parsed = ConversationContentParser.parse(
+		let parsed = MarkdownContentParser.parse(
 			"body [link](https://example.com)\n\n```text\ncode\n```",
 			markdown: true
 		)
@@ -677,18 +677,18 @@ struct ConversationMarkdownRenderingTests
 				at: "link"
 			) as? NSColor)
 			#expect(attribute(
-				.conversationCodeBlockID,
+				.markdownCodeBlockID,
 				in: text,
 				at: "code"
 			) as? Int == 0)
 			#expect(attribute(
-				.conversationCodeLanguage,
+				.markdownCodeLanguage,
 				in: text,
 				at: "code"
 			) as? String == "text")
 			let background = NSColor.controlBackgroundColor
-			#expect(foreground == ConversationAttributedStringRenderer.proseColor)
-			#expect(link == ConversationAttributedStringRenderer.linkColor)
+			#expect(foreground == MarkdownAttributedStringRenderer.proseColor)
+			#expect(link == MarkdownAttributedStringRenderer.linkColor)
 			appearance.performAsCurrentDrawingAppearance
 			{
 				let expected = name == .darkAqua ? NSColor.white : .labelColor
@@ -926,7 +926,7 @@ struct ConversationMarkdownRenderingTests
 				.foregroundColor,
 				in: storage,
 				at: "site"
-			) as? NSColor == ConversationAttributedStringRenderer.linkColor)
+			) as? NSColor == MarkdownAttributedStringRenderer.linkColor)
 			for text in [actual, expected]
 			{
 				text.removeAttribute(
@@ -1078,7 +1078,7 @@ struct ConversationMarkdownRenderingTests
 			forGlyphAt: glyphs.location,
 			effectiveRange: nil
 		)
-		let manager = try #require(layout as? ConversationMarkdownLayoutManager)
+		let manager = try #require(layout as? MarkdownLayoutManager)
 		let container = try #require(textView.textContainer)
 		let header = try #require(manager.codeBlockHeaderRect(
 			atCharacter: range.location,
@@ -1127,7 +1127,7 @@ struct ConversationMarkdownRenderingTests
 			window.setContentSize(size)
 			item.view.layoutSubtreeIfNeeded()
 			let textView = try #require(findTextView(in: item.view))
-			let manager = try #require(textView.layoutManager as? ConversationMarkdownLayoutManager)
+			let manager = try #require(textView.layoutManager as? MarkdownLayoutManager)
 			let container = try #require(textView.textContainer)
 			manager.ensureLayout(for: container)
 			let buttons = allButtons(in: item.view).filter
@@ -1246,7 +1246,7 @@ struct ConversationMarkdownRenderingTests
 				item.view.layoutSubtreeIfNeeded()
 				let text = try #require(findTextView(in: item.view))
 				let storage = try #require(text.textStorage)
-				let manager = try #require(text.layoutManager as? ConversationMarkdownLayoutManager)
+				let manager = try #require(text.layoutManager as? MarkdownLayoutManager)
 				let container = try #require(text.textContainer)
 				manager.ensureLayout(for: container)
 				let nativeReference = makeNativeLayout(
@@ -1254,14 +1254,14 @@ struct ConversationMarkdownRenderingTests
 					width: container.size.width
 				)
 				let referenceManager = try #require(
-					nativeReference.manager as? ConversationMarkdownLayoutManager
+					nativeReference.manager as? MarkdownLayoutManager
 				)
 				let first = (text.string as NSString).range(of: firstQuote)
 				let last = (text.string as NSString).range(of: lastQuote)
 				try #require(first.location != NSNotFound && last.location != NSNotFound)
 				var finalQuoteStyle = NSRange()
 				#expect(storage.attribute(
-					.conversationQuoteRailOffsets,
+					.markdownQuoteRailOffsets,
 					at: last.location,
 					effectiveRange: &finalQuoteStyle
 				) as? [Int] == [0, 16])
@@ -1270,7 +1270,7 @@ struct ConversationMarkdownRenderingTests
 					length: NSMaxRange(finalQuoteStyle) - first.location
 				)
 				storage.enumerateAttribute(
-					.conversationQuoteRailOffsets,
+					.markdownQuoteRailOffsets,
 					in: quoteRange
 				)
 				{
@@ -1322,7 +1322,7 @@ struct ConversationMarkdownRenderingTests
 					#expect(abs(header.height - referenceHeader.height) < 0.5)
 					var blockRange = NSRange()
 					_ = storage.attribute(
-						.conversationCodeBlockID,
+						.markdownCodeBlockID,
 						at: range.location,
 						longestEffectiveRange: &blockRange,
 						in: NSRange(
@@ -1393,7 +1393,7 @@ struct ConversationMarkdownRenderingTests
 	@Test func explicitNativeSelectionAndVisibilityScrollingStillReachRequestedText() throws
 	{
 		_ = NSApplication.shared
-		let textView = ConversationMarkdownTextView(frame: NSRect(
+		let textView = MarkdownTextView(frame: NSRect(
 			x: 0,
 			y: 0,
 			width: 320,
@@ -1463,10 +1463,10 @@ struct ConversationMarkdownRenderingTests
 					content.attributedString,
 					width: width
 				)
-				let manager = try #require(native.manager as? ConversationMarkdownLayoutManager)
+				let manager = try #require(native.manager as? MarkdownLayoutManager)
 				var quoteRange = NSRange()
 				#expect(native.storage.attribute(
-					.conversationQuoteRailOffsets,
+					.markdownQuoteRailOffsets,
 					at: codeRange.location,
 					longestEffectiveRange: &quoteRange,
 					in: NSRange(
@@ -1514,7 +1514,7 @@ struct ConversationMarkdownRenderingTests
 	) -> (storage: NSTextStorage, manager: NSLayoutManager, container: NSTextContainer)
 	{
 		let storage = NSTextStorage(attributedString: text)
-		let manager = ConversationMarkdownLayoutManager()
+		let manager = MarkdownLayoutManager()
 		let container = NSTextContainer(size: NSSize(
 			width: width,
 			height: .greatestFiniteMagnitude

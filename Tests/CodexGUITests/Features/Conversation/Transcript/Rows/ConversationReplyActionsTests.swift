@@ -218,7 +218,7 @@ struct ConversationReplyActionsTests
 			"turn:reply",
 			body: "First paragraph.\n\n- One\n- Two"
 		)
-		let content = PreparedConversationContent(ConversationContentParser.parse(
+		let content = PreparedConversationContent(MarkdownContentParser.parse(
 			reply.body,
 			markdown: true
 		))
@@ -351,7 +351,7 @@ struct ConversationReplyActionsTests
 	{
 		item.configure(
 			entry,
-			content: PreparedConversationContent(ConversationContentParser.parse(
+			content: PreparedConversationContent(MarkdownContentParser.parse(
 				entry.body,
 				markdown: true
 			)),

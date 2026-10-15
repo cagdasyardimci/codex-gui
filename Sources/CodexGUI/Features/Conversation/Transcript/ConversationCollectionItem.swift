@@ -213,7 +213,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private static let bodyMeasurer = ConversationBodyMeasurer()
 
 	private let titleLabel = NSTextField(labelWithString: "")
-	private let bodyTextView = ConversationMarkdownTextView()
+	private let bodyTextView = MarkdownTextView()
 	private let messageContainer = NSView()
 	private let imageAttachmentsView = UserMessageImageAttachmentsView()
 	private var imageAttachmentCount = 0
@@ -317,10 +317,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		bodyTextView.isVerticallyResizable = false
 		bodyTextView.drawsBackground = false
 		bodyTextView.linkTextAttributes = [
-			.foregroundColor: ConversationAttributedStringRenderer.linkColor,
+			.foregroundColor: MarkdownAttributedStringRenderer.linkColor,
 			.underlineStyle: 0,
 		]
-		bodyTextView.textContainer?.replaceLayoutManager(ConversationMarkdownLayoutManager())
+		bodyTextView.textContainer?.replaceLayoutManager(MarkdownLayoutManager())
 		bodyTextView.layoutManager?.delegate = self
 		bodyTextView.textContainerInset = .zero
 		bodyTextView.textContainer?.lineFragmentPadding = 0
@@ -885,7 +885,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				{
 					color, range, _ in
 					// Preserve link and syntax colors while tinting ordinary bubble text.
-					if color as? NSColor == ConversationAttributedStringRenderer.proseColor
+					if color as? NSColor == MarkdownAttributedStringRenderer.proseColor
 					{
 						text.addAttribute(
 							.foregroundColor,
@@ -1027,7 +1027,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				)
 			)
 			let location = layout.glyphIndexForCharacter(at: characterLocation)
-			let header = (layout as? ConversationMarkdownLayoutManager)?.codeBlockHeaderRect(
+			let header = (layout as? MarkdownLayoutManager)?.codeBlockHeaderRect(
 				atCharacter: characterLocation,
 				in: container
 			)
@@ -1036,7 +1036,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				effectiveRange: nil
 			)
 			let origin = bodyTextView.textContainerOrigin
-			let card = (layout as? ConversationMarkdownLayoutManager)?.codeBlockRect(
+			let card = (layout as? MarkdownLayoutManager)?.codeBlockRect(
 				atCharacter: characterLocation,
 				in: container
 			)
@@ -1145,7 +1145,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 private final class ConversationBodyMeasurer
 {
 	private let storage = NSTextStorage()
-	private let layout = ConversationMarkdownLayoutManager()
+	private let layout = MarkdownLayoutManager()
 	private let container = NSTextContainer(
 		size: NSSize(
 			width: 1,

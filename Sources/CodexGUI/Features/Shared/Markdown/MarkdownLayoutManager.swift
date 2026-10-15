@@ -1,25 +1,12 @@
 import AppKit
 
-extension NSAttributedString.Key
-{
-	static let conversationSourceText = NSAttributedString.Key("conversationSourceText")
-	static let conversationInlineCodeSource = NSAttributedString.Key("conversationInlineCodeSource")
-	static let conversationInlineCode = NSAttributedString.Key("conversationInlineCode")
-	static let conversationCodeBlockID = NSAttributedString.Key("conversationCodeBlockID")
-	static let conversationCodeHeader = NSAttributedString.Key("conversationCodeHeader")
-	static let conversationCodeLanguage = NSAttributedString.Key("conversationCodeLanguage")
-	static let conversationQuoteDepth = NSAttributedString.Key("conversationQuoteDepth")
-	static let conversationQuoteRailOffsets = NSAttributedString.Key("conversationQuoteRailOffsets")
-	static let conversationThematicBreak = NSAttributedString.Key("conversationThematicBreak")
-}
-
 /// Draws native Markdown surfaces without adding decorative characters to selectable prose.
-/// TextKit callbacks are nonisolated. Transcript creation, measurement and drawing
+/// TextKit callbacks are nonisolated. Markdown view creation, measurement and drawing
 /// stay on MainActor.
 @MainActor
-final class ConversationMarkdownLayoutManager: NSLayoutManager
+final class MarkdownLayoutManager: NSLayoutManager
 {
-	static let quoteIndent = CGFloat(ConversationMarkdownMetrics.quoteIndent)
+	static let quoteIndent = CGFloat(MarkdownMetrics.quoteIndent)
 	static let codeInset: CGFloat = 18
 	static let codeHeaderHeight: CGFloat = 44
 	static let codeBottomPadding: CGFloat = 16
@@ -30,9 +17,9 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 		at origin: NSPoint
 	)
 	{
-		// The transcript creates, measures and displays its TextKit layout on the main actor.
+		// The owning Markdown view uses TextKit on the main actor.
 		precondition(Thread.isMainThread)
-		let reference = ConversationMarkdownDrawingReference(manager: self)
+		let reference = MarkdownDrawingReference(manager: self)
 		MainActor.assumeIsolated
 		{
 			[reference] in
@@ -109,7 +96,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 		}
 		var range = NSRange()
 		guard storage.attribute(
-			.conversationCodeBlockID,
+			.markdownCodeBlockID,
 			at: location,
 			longestEffectiveRange: &range,
 			in: NSRange(
@@ -141,7 +128,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 		}
 		var range = NSRange()
 		guard storage.attribute(
-			.conversationCodeBlockID,
+			.markdownCodeBlockID,
 			at: location,
 			longestEffectiveRange: &range,
 			in: NSRange(
@@ -199,7 +186,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 	)
 	{
 		storage.enumerateAttribute(
-			.conversationCodeBlockID,
+			.markdownCodeBlockID,
 			in: NSRange(
 				location: 0,
 				length: storage.length
@@ -240,7 +227,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 			path.lineWidth = 1
 			path.stroke()
 			if let language = storage.attribute(
-				.conversationCodeLanguage,
+				.markdownCodeLanguage,
 				at: range.location,
 				effectiveRange: nil
 			) as? String, !language.isEmpty
@@ -330,7 +317,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 			effectiveRange: nil
 		) as? NSParagraphStyle
 		let endsWithCode = storage.attribute(
-			.conversationCodeBlockID,
+			.markdownCodeBlockID,
 			at: lastCharacter,
 			effectiveRange: nil
 		) != nil
@@ -360,7 +347,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 	{
 		var quoteRanges: [Int: [NSRange]] = [:]
 		storage.enumerateAttribute(
-			.conversationQuoteRailOffsets,
+			.markdownQuoteRailOffsets,
 			in: NSRange(
 				location: 0,
 				length: storage.length
@@ -430,7 +417,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 	)
 	{
 		storage.enumerateAttribute(
-			.conversationThematicBreak,
+			.markdownThematicBreak,
 			in: visibleCharacters,
 			options: []
 		)
@@ -464,7 +451,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 	)
 	{
 		storage.enumerateAttribute(
-			.conversationInlineCode,
+			.markdownInlineCode,
 			in: visibleCharacters,
 			options: []
 		)
@@ -516,7 +503,7 @@ final class ConversationMarkdownLayoutManager: NSLayoutManager
 }
 
 /// Bridges the SDK callback's task-isolated receiver to the verified main-thread drawing scope.
-private struct ConversationMarkdownDrawingReference: @unchecked Sendable
+private struct MarkdownDrawingReference: @unchecked Sendable
 {
-	let manager: ConversationMarkdownLayoutManager
+	let manager: MarkdownLayoutManager
 }

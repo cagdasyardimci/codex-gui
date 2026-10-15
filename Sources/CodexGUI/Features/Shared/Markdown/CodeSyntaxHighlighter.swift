@@ -3,7 +3,7 @@ import Highlighter
 
 /// Uses bundled Highlight.js through JavaScriptCore; native text remains the source of truth.
 @MainActor
-enum ConversationCodeHighlighter
+enum CodeSyntaxHighlighter
 {
 	private static let maximumSourceLength = 24_000
 	private static var lightHighlighter: Highlighter?

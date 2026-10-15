@@ -495,7 +495,7 @@ struct ConversationTurnSummaryCacheTests
 
 	private func render(_ body: String) -> String
 	{
-		ConversationPlainTextRenderer.render(ConversationContentParser.parse(
+		MarkdownPlainTextRenderer.render(MarkdownContentParser.parse(
 			body,
 			markdown: true
 		))
@@ -528,7 +528,7 @@ struct ConversationTurnSummaryCacheTests
 					$0?.cancel()
 				}
 			}
-			return ConversationPlainTextRenderer.render(ConversationContentParser.parse(
+			return MarkdownPlainTextRenderer.render(MarkdownContentParser.parse(
 				body,
 				markdown: true
 			))

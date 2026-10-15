@@ -56,7 +56,7 @@ struct ConversationAdaptiveTokenColorTests
 		let prefix = "😀:"
 		let offset = (prefix as NSString).length
 		let output = NSMutableAttributedString(string: prefix + source + "suffix")
-		ConversationAttributedStringRenderer.applyAdaptiveTokenColors(
+		MarkdownAttributedStringRenderer.applyAdaptiveTokenColors(
 			light: light,
 			dark: dark,
 			to: output,
@@ -133,7 +133,7 @@ struct ConversationAdaptiveTokenColorTests
 	{
 		let output = NSMutableAttributedString(string: "untouched")
 		let empty = NSAttributedString(string: "")
-		ConversationAttributedStringRenderer.applyAdaptiveTokenColors(
+		MarkdownAttributedStringRenderer.applyAdaptiveTokenColors(
 			light: empty,
 			dark: empty,
 			to: output,

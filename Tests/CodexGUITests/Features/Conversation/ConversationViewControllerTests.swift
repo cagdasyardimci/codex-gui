@@ -283,12 +283,12 @@ struct ConversationViewControllerTests
 		)
 		{
 			value, range, _ in
-			if let attachment = value as? ConversationRichAttachment
+			if let attachment = value as? MarkdownRichAttachment
 			{
 				richSources.append(attachment.source)
 				#expect((text.string as NSString).substring(with: range) == "\u{FFFC}")
 				#expect(text.attribute(
-					.conversationSourceText,
+					.markdownSourceText,
 					at: range.location,
 					effectiveRange: nil
 				) as? String == attachment.source)

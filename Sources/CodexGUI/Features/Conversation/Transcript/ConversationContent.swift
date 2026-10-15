@@ -22,11 +22,11 @@ final class PreparedConversationContent: @unchecked Sendable
 
 	@MainActor
 	init(
-		_ parsed: ParsedConversationContent,
+		_ parsed: ParsedMarkdownContent,
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
 	)
 	{
-		attributedString = ConversationAttributedStringRenderer.render(
+		attributedString = MarkdownAttributedStringRenderer.render(
 			parsed.runs,
 			imageThumbnails: imageThumbnails
 		)
@@ -56,8 +56,8 @@ final class PreparedConversationContent: @unchecked Sendable
 			{
 				return
 			}
-			bytes += (attachment as? ConversationRichAttachment)?.estimatedRichImageBytes
-				?? (attachment as? ConversationImageGalleryAttachment)?.estimatedRichImageBytes ?? 0
+			bytes += (attachment as? MarkdownRichAttachment)?.estimatedRichImageBytes
+				?? (attachment as? MarkdownImageGalleryAttachment)?.estimatedRichImageBytes ?? 0
 		}
 		return bytes
 	}
@@ -186,7 +186,7 @@ actor ConversationContentCache
 			return cached
 		}
 
-		let parsed = ConversationContentParser.parse(
+		let parsed = MarkdownContentParser.parse(
 			body,
 			markdown: markdown,
 			preserveSoftBreaks: preserveSoftBreaks
