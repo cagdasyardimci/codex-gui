@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 /// Loads small site icons on demand. A failed request is cached for this app session.
 actor WebLinkFaviconLoader
 {
+	typealias IconSource = @Sendable (URL) async -> Data?
+
 	static let shared = WebLinkFaviconLoader()
 	private enum Entry
 	{
@@ -17,40 +19,92 @@ actor WebLinkFaviconLoader
 	private var pending: [String: Task<Data?, Never>] = [:]
 	private let capacity = 128
 	private static let iconByteLimit = 131_072
+	private let googleIcon: IconSource
+	private let metadata: IconSource
+
+	init(
+		googleIcon: @escaping IconSource =
+		{
+			await WebLinkFaviconLoader.downloadGoogleIcon($0)
+		},
+		metadata: @escaping IconSource =
+		{
+			await WebLinkFaviconLoader.metadataIcon(for: $0)
+		}
+	)
+	{
+		self.googleIcon = googleIcon
+		self.metadata = metadata
+	}
 
 	func favicon(for url: URL) async -> Data?
+	{
+		await request(for: url).value
+	}
+
+	/// Register the shared operation before awaiting it, so callers retain its completion.
+	func request(for url: URL) -> Task<Data?, Never>
 	{
 		guard let origin = Self.originURL(for: url),
 				let host = origin.host, let scheme = origin.scheme
 		else
 		{
-			return nil
+			return Task
+			{
+				nil
+			}
 		}
 		let key = scheme + "://" + host.lowercased()
 		if let entry = entries[key]
 		{
 			switch entry
 			{
-			case let .image(data): return data
-			case .missing: return nil
+			case let .image(data): return Task
+			{
+				data
+			}
+			case .missing: return Task
+			{
+				nil
+			}
 			}
 		}
 		if let task = pending[key]
 		{
-			return await task.value
+			return task
 		}
 		let task = Task<Data?, Never>
 		{
 			if let googleURL = Self.googleIconURL(for: origin),
-				let data = await Self.downloadGoogleIcon(googleURL),
+				let data = await googleIcon(googleURL),
 				Self.isUsableImage(data)
 			{
+				cache(
+					data,
+					for: key
+				)
 				return data
 			}
-			return await Self.metadataIcon(for: origin)
+			let fallback = await metadata(origin)
+			let data = fallback.flatMap
+			{
+				Self.isUsableImage($0) ? $0 : nil
+			}
+			cache(
+				data,
+				for: key
+			)
+			return data
 		}
 		pending[key] = task
-		let data = await task.value
+		return task
+	}
+
+	private func cache(
+		_ data: Data?,
+		for key: String
+	)
+	{
 		pending[key] = nil
 		entries[key] = data.map(Entry.image) ?? .missing
 		order.append(key)
@@ -58,7 +112,6 @@ actor WebLinkFaviconLoader
 		{
 			entries.removeValue(forKey: order.removeFirst())
 		}
-		return data
 	}
 
 	static func originURL(for url: URL) -> URL?
