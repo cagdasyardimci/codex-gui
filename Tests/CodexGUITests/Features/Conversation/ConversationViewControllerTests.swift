@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ConversationViewControllerTests
 {
 	@Test func pendingUserRowAndEmptyComposerRenderBeforeRichPreparation() async throws
@@ -32,10 +32,17 @@ struct ConversationViewControllerTests
 		#expect(controller.entries == [entry])
 	}
 
-	@Test func immediatePendingRowPreservesHistoryAndSupersededChatCannotReturn() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func immediatePendingRowPreservesHistoryAndSupersededChatCannotReturn() async throws
 	{
 		_ = NSApplication.shared
-		let controller = ConversationViewController()
+		let gate = TranscriptPreparationTestGate(heldBody: "First request")
+		defer
+		{
+			gate.release()
+		}
+		let preparation = TranscriptPreparationCoordinator(prepareContent: gate.prepare)
+		let controller = ConversationViewController(transcriptPreparation: preparation)
 		let history = ConversationEntry(
 			id: "turn:reply",
 			kind: .agent,
@@ -54,21 +61,77 @@ struct ConversationViewControllerTests
 		controller.render(snapshot([history, first]))
 		#expect(controller.entries == [history, first])
 		#expect(controller.preparedContents[history.id] === prepared)
+		let obsoleteTask = preparation.preparationTask
+		#expect(obsoleteTask != nil)
+		let started = await gate.waitUntilStarted()
+		#expect(started)
+		guard started
+		else
+		{
+			gate.release()
+			await obsoleteTask?.value
+			return
+		}
 		let second = ConversationEntry(
 			id: "local:second",
 			kind: .user,
 			title: "You",
 			body: "Second request"
 		)
-		controller.render(snapshot(
-			[second],
+		let edit = ConversationEntry(
+			id: "local:edit",
+			kind: .tool,
+			title: "Changes",
+			body: "Current.swift",
+			activity: .fileChanges(
+				[FileChange(json: [
+					"path": "Current.swift",
+					"kind": "update",
+					"diff": "@@ -1 +1 @@\n-before\n+current",
+				])!],
+				status: "completed"
+			)
+		)
+		let reply = ConversationEntry(
+			id: "local:reply",
+			kind: .agent,
+			title: "Codex",
+			body: "**Current** answer"
+		)
+		let currentEntries = [second, edit, reply]
+		var current = snapshot(
+			currentEntries,
 			selectedThreadID: "other"
-		))
+		)
+		current.turnTimings = [ConversationTurnTiming(
+			turnID: "local",
+			status: "completed",
+			startedAt: nil,
+			completedAt: nil,
+			durationMs: nil
+		)]
+		controller.render(current)
 		#expect(controller.entries == [second])
 		#expect(controller.preparedContents[history.id] == nil)
 		await controller.waitForRendering()
-		#expect(controller.entries == [second])
-		#expect(controller.displayedRows.map(\.id) == [second.id])
+		#expect(controller.entries == currentEntries)
+		#expect(controller.preparedContents[reply.id]?.attributedString.string == "Current answer")
+		#expect(controller.turnNavigationRail.summaries.map(\.reply) == ["Current answer"])
+		gate.release()
+		await obsoleteTask?.value
+		#expect(controller.selectedThreadID == "other")
+		#expect(controller.entries == currentEntries)
+		#expect(controller.displayedRows.map(\.id)
+			== [second.id, reply.id, "local:file-change-summary"])
+		#expect(controller.preparedContents[history.id] == nil)
+		#expect(controller.preparedContents[first.id] == nil)
+		#expect(controller.preparedContents[reply.id]?.attributedString.string == "Current answer")
+		#expect(controller.turnNavigationRail.summaries.map(\.entryID) == [second.id])
+		#expect(controller.turnNavigationRail.summaries.map(\.title) == ["Second request"])
+		#expect(controller.turnNavigationRail.summaries.map(\.reply) == ["Current answer"])
+		#expect(preparation.preparedNetChanges["local"]?.changes.map(\.path) == ["Current.swift"])
+		#expect(preparation.preparedNetChanges["local"]?.changes.map(\.diff)
+			== ["@@ -1,1 +1,1 @@\n-before\n+current"])
 	}
 
 	@Test func userAndAgentMarkdownRenderWhileOtherRolesKeepLiteralSource() async throws
@@ -234,79 +297,124 @@ struct ConversationViewControllerTests
 		#expect(richSources == [mathSource, diagramSource])
 	}
 
-	@Test func sameTranscriptInAnotherStoreCancelsOldPreparationAndKeepsCurrentDraft() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func sameTranscriptInAnotherStoreCancelsOldPreparationAndKeepsCurrentDraft() async throws
 	{
 		_ = NSApplication.shared
-		let controller = ConversationViewController()
-		_ = controller.view
-		let entry = ConversationEntry(
-			id: "turn:answer",
-			kind: .agent,
-			title: "Codex",
-			body: "The same reported answer"
+		let obsoleteBody = String(
+			repeating: "Obsolete streamed markdown **text**.\n",
+			count: 100
 		)
-		let originalOwner = ConversationPresentationTestFixture.presentationOwner(sessionID: UUID())
-		var initial = snapshot([entry])
-		initial.workspaceOwner = originalOwner
-		controller.render(ConversationPresentation(initial))
-		await controller.waitForRendering()
-		let previousCollection = try #require(findCollection(in: controller.view))
-		let old = ConversationEntry(
-			id: entry.id,
-			kind: .agent,
-			title: "Codex",
-			body: String(
-				repeating: "Obsolete streamed markdown **text**.\n",
-				count: 100
+		let gate = TranscriptPreparationTestGate(heldBody: obsoleteBody)
+		let preparation = TranscriptPreparationCoordinator(prepareContent: gate.prepare)
+		let controller = ConversationViewController(transcriptPreparation: preparation)
+		var startedPreparations: [Task<Void, Never>] = []
+		func render(_ snapshot: ConversationSnapshot)
+		{
+			controller.render(ConversationPresentation(snapshot))
+			if let task = preparation.preparationTask
+			{
+				startedPreparations.append(task)
+			}
+		}
+		func finishPreparations() async
+		{
+			gate.release()
+			for task in startedPreparations
+			{
+				task.cancel()
+				await task.value
+			}
+		}
+		do
+		{
+			_ = controller.view
+			let entry = ConversationEntry(
+				id: "turn:answer",
+				kind: .agent,
+				title: "Codex",
+				body: "The same reported answer"
 			)
-		)
-		var obsolete = snapshot([old])
-		obsolete.workspaceOwner = originalOwner
-		controller.render(ConversationPresentation(obsolete))
-		var current = ConversationSnapshot(
-			projectPath: "/tmp/replay",
-			threads: [],
-			selectedThreadID: "replay",
-			entries: [entry],
-			canLoadEarlierTurns: false,
-			changedFiles: [],
-			diff: "",
-			draft: "Current store draft",
-			canSend: true,
-			accountDescription: "Mock",
-			backendDescription: "Mock",
-			executionState: .ready,
-			statusMessage: nil,
-			models: [],
-			selectedModelID: nil,
-			selectedEffort: nil,
-			pendingInteractions: [],
-			recentProjects: []
-		)
-		current.workspaceOwner = ConversationPresentationTestFixture
-			.presentationOwner(sessionID: UUID())
-		controller.render(ConversationPresentation(current))
-		await controller.waitForRendering()
-		let collection = try #require(findCollection(in: controller.view))
-		#expect(collection !== previousCollection)
-		#expect(collection.numberOfItems(inSection: 0) == 1)
-		let composer = try #require(findTextView(
-			in: controller.view,
-			label: "Message to Codex"
-		))
-		#expect(composer.string == "Current store draft")
-		composer.setSelectedRange(NSRange(
-			location: 3,
-			length: 5
-		))
-		current.usageError = "Unrelated usage update"
-		controller.render(ConversationPresentation(current))
-		await controller.waitForRendering()
-		#expect(findCollection(in: controller.view) === collection)
-		#expect(composer.selectedRange() == NSRange(
-			location: 3,
-			length: 5
-		))
+			let originalOwner = ConversationPresentationTestFixture
+				.presentationOwner(sessionID: UUID())
+			var initial = snapshot([entry])
+			initial.workspaceOwner = originalOwner
+			render(initial)
+			await controller.waitForRendering()
+			let previousCollection = try #require(findCollection(in: controller.view))
+			let old = ConversationEntry(
+				id: entry.id,
+				kind: .agent,
+				title: "Codex",
+				body: obsoleteBody
+			)
+			var obsolete = snapshot([old])
+			obsolete.workspaceOwner = originalOwner
+			render(obsolete)
+			let obsoleteTask = try #require(preparation.preparationTask)
+			try #require(await gate.waitUntilStarted())
+			var current = ConversationSnapshot(
+				projectPath: "/tmp/replay",
+				threads: [],
+				selectedThreadID: "replay",
+				entries: [entry],
+				canLoadEarlierTurns: false,
+				changedFiles: [],
+				diff: "",
+				draft: "Current store draft",
+				canSend: true,
+				accountDescription: "Mock",
+				backendDescription: "Mock",
+				executionState: .ready,
+				statusMessage: nil,
+				models: [],
+				selectedModelID: nil,
+				selectedEffort: nil,
+				pendingInteractions: [],
+				recentProjects: []
+			)
+			current.workspaceOwner = ConversationPresentationTestFixture
+				.presentationOwner(sessionID: UUID())
+			render(current)
+			await controller.waitForRendering()
+			let collection = try #require(findCollection(in: controller.view))
+			#expect(collection !== previousCollection)
+			#expect(collection.numberOfItems(inSection: 0) == 1)
+			#expect(controller.entries == [entry])
+			#expect(controller.displayedRows.map(\.id) == [entry.id])
+			#expect(controller.preparedContents[entry.id]?.attributedString.string
+				== "The same reported answer")
+			gate.release()
+			await obsoleteTask.value
+			#expect(controller.entries == [entry])
+			#expect(controller.displayedRows.map(\.id) == [entry.id])
+			#expect(controller.preparedContents[entry.id]?.attributedString.string
+				== "The same reported answer")
+			#expect(findCollection(in: controller.view) === collection)
+			let composer = try #require(findTextView(
+				in: controller.view,
+				label: "Message to Codex"
+			))
+			#expect(composer.string == "Current store draft")
+			composer.setSelectedRange(NSRange(
+				location: 3,
+				length: 5
+			))
+			current.usageError = "Unrelated usage update"
+			render(current)
+			await controller.waitForRendering()
+			#expect(findCollection(in: controller.view) === collection)
+			#expect(composer.selectedRange() == NSRange(
+				location: 3,
+				length: 5
+			))
+			await finishPreparations()
+		}
+		catch
+		{
+			await finishPreparations()
+			throw error
+		}
 	}
 
 	@Test(arguments: ["session", "selection"])
@@ -1445,8 +1553,8 @@ struct ConversationViewControllerTests
 			)))
 			.frame
 		}
-		#expect(abs(frames[1].minY - frames[0].minY - 30) < 1)
-		#expect(abs(frames[2].minY - frames[1].minY - 30) < 1)
+		#expect(abs(frames[1].minY - frames[0].minY - 21) < 1)
+		#expect(abs(frames[2].minY - frames[1].minY - 21) < 1)
 		#expect(abs(frames[3].minY - frames[2].maxY - 8) < 1)
 		#expect(abs(frames[4].minY - frames[3].maxY - 18) < 1)
 		let layout = try #require(collection.collectionViewLayout)

@@ -96,7 +96,7 @@ final class ConversationViewController: NSViewController,
 		target: nil,
 		action: nil
 	)
-	let transcriptPreparation = TranscriptPreparationCoordinator()
+	let transcriptPreparation: TranscriptPreparationCoordinator
 	var preparedContents: [String: PreparedConversationContent] = [:]
 	struct MeasuredItemSize
 	{
@@ -204,12 +204,18 @@ final class ConversationViewController: NSViewController,
 	var requestedJumpItemID: String?
 	var pendingNavigationTurnID: String?
 	var turnNavigationTask: Task<Void, Never>?
+	// Tracks the native completion callback separately from elapsed animation duration.
+	var jumpAnimationCompletion: Task<Void, Never>?
 	var jumpAnimationRevision = 0
 	var isAnimatingJump = false
 
-	init(transcriptOnly: Bool = false)
+	init(
+		transcriptOnly: Bool = false,
+		transcriptPreparation: TranscriptPreparationCoordinator = TranscriptPreparationCoordinator()
+	)
 	{
 		self.transcriptOnly = transcriptOnly
+		self.transcriptPreparation = transcriptPreparation
 		super.init(
 			nibName: nil,
 			bundle: nil

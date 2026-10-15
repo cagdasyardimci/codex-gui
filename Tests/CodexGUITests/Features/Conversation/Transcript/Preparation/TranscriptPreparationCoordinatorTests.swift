@@ -326,19 +326,45 @@ struct TranscriptPreparationCoordinatorTests
 		}
 	}
 
-	@Test func acceptedGenerationPublishesMatchingMessageContentAndTurnPreview() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func acceptedGenerationPublishesMatchingMessageContentAndTurnPreview() async
 	{
-		let coordinator = TranscriptPreparationCoordinator()
+		let gate = TranscriptPreparationTestGate(heldBody: "**Old** reply")
+		defer
+		{
+			gate.release()
+		}
+		let coordinator = TranscriptPreparationCoordinator(prepareContent: gate.prepare)
 		var publishedBodies: [String] = []
 		var publishedReplies: [String] = []
-		for body in ["**Old** reply", "**Latest** reply"]
+		var publishedPaths: [[String]] = []
+		var obsoleteTask: Task<Void, Never>?
+		for (body, path, after) in [
+			("**Old** reply", "Old.swift", "obsolete"),
+			("**Latest** reply", "Current.swift", "latest"),
+		]
 		{
+			let change = FileChange(json: [
+				"path": path,
+				"kind": "update",
+				"diff": "@@ -1 +1 @@\n-before\n+\(after)",
+			])!
 			let entries = [
 				ConversationEntry(
 					id: "turn:request",
 					kind: .user,
 					title: "You",
 					body: "Request"
+				),
+				ConversationEntry(
+					id: "turn:edit",
+					kind: .tool,
+					title: "Changes",
+					body: path,
+					activity: .fileChanges(
+						[change],
+						status: "completed"
+					)
 				),
 				ConversationEntry(
 					id: "turn:reply",
@@ -362,13 +388,38 @@ struct TranscriptPreparationCoordinatorTests
 				contents in
 				publishedBodies.append(contents["turn:reply"]?.attributedString.string ?? "")
 				publishedReplies.append(coordinator.turnSummaries.first?.reply ?? "")
+				publishedPaths.append(coordinator.preparedNetChanges["turn"]?.changes.map(\.path)
+					?? [])
+			}
+			if body == "**Old** reply"
+			{
+				obsoleteTask = coordinator.preparationTask
+				#expect(obsoleteTask != nil)
+				let started = await gate.waitUntilStarted()
+				#expect(started)
+				guard started
+				else
+				{
+					gate.release()
+					await obsoleteTask?.value
+					return
+				}
+				#expect(publishedBodies.isEmpty)
 			}
 		}
 		await coordinator.waitForRendering()
 		#expect(publishedBodies == ["Latest reply"])
-		#expect(publishedReplies == publishedBodies)
-		let summary = try #require(coordinator.turnSummaries.first)
-		#expect(summary.entryID == "turn:request")
-		#expect(summary.reply == "Latest reply")
+		#expect(publishedReplies == ["Latest reply"])
+		#expect(publishedPaths == [["Current.swift"]])
+		gate.release()
+		await obsoleteTask?.value
+		#expect(publishedBodies == ["Latest reply"])
+		#expect(publishedReplies == ["Latest reply"])
+		#expect(publishedPaths == [["Current.swift"]])
+		#expect(coordinator.turnSummaries.map(\.entryID) == ["turn:request"])
+		#expect(coordinator.turnSummaries.map(\.reply) == ["Latest reply"])
+		#expect(coordinator.preparedNetChanges["turn"]?.changes.map(\.path) == ["Current.swift"])
+		#expect(coordinator.preparedNetChanges["turn"]?.changes.map(\.diff)
+			== ["@@ -1,1 +1,1 @@\n-before\n+latest"])
 	}
 }

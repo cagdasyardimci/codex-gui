@@ -204,7 +204,7 @@ struct ConversationNetFileChangePreparationTests
 		#expect(await probe.calls == 2)
 	}
 
-	@Test func cancelledPreparationDoesNotPublishOrCommitItsCache() async
+	@Test(.timeLimit(.minutes(1))) func cancelledPreparationDoesNotPublishOrCommitItsCache() async
 	{
 		let probe = Probe(gateFirst: true)
 		let cache = preparation(probe: probe)
@@ -219,7 +219,16 @@ struct ConversationNetFileChangePreparationTests
 				context: "thread"
 			)
 		}
-		await probe.waitForGate()
+		let started = await probe.waitForGate()
+		#expect(started)
+		guard started
+		else
+		{
+			pending.cancel()
+			await probe.release()
+			_ = await pending.value
+			return
+		}
 		pending.cancel()
 		await probe.release()
 		#expect(await pending.value == nil)
@@ -231,7 +240,8 @@ struct ConversationNetFileChangePreparationTests
 		#expect(await probe.calls == 2)
 	}
 
-	@Test func supersededContextCannotReplaceAcceptedResultsOrRetainedCache() async
+	@Test(.timeLimit(.minutes(1)))
+	func supersededContextCannotReplaceAcceptedResultsOrRetainedCache() async
 	{
 		let probe = Probe(gateFirst: true)
 		let cache = preparation(probe: probe)
@@ -250,7 +260,16 @@ struct ConversationNetFileChangePreparationTests
 				context: "old-thread"
 			)
 		}
-		await probe.waitForGate()
+		let started = await probe.waitForGate()
+		#expect(started)
+		guard started
+		else
+		{
+			pending.cancel()
+			await probe.release()
+			_ = await pending.value
+			return
+		}
 		let accepted = await cache.prepare(
 			[current],
 			context: "current-thread"
@@ -309,7 +328,8 @@ struct ConversationNetFileChangePreparationTests
 		let gateFirst: Bool
 		private(set) var calls = 0
 		private var suspended: CheckedContinuation<Void, Never>?
-		private var gateWaiters: [CheckedContinuation<Void, Never>] = []
+		private var gateWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
+		private var released = false
 
 		init(gateFirst: Bool = false)
 		{
@@ -319,38 +339,69 @@ struct ConversationNetFileChangePreparationTests
 		func merge(_ changes: [FileChange]) async -> [FileChange]
 		{
 			calls += 1
-			if gateFirst, calls == 1
+			if gateFirst, calls == 1, !released
 			{
 				await withCheckedContinuation
 				{
 					suspended = $0
-					for waiter in gateWaiters
-					{
-						waiter.resume()
-					}
+					let waiters = Array(gateWaiters.values)
 					gateWaiters.removeAll()
+					for waiter in waiters
+					{
+						waiter.resume(returning: true)
+					}
 				}
 			}
 			return ConversationNetFileChanges.merge(changes)
 		}
 
-		func waitForGate() async
+		func waitForGate() async -> Bool
 		{
-			guard suspended == nil
-			else
+			let id = UUID()
+			return await withTaskCancellationHandler
 			{
-				return
+				await withCheckedContinuation
+				{
+					continuation in
+					if released || Task.isCancelled
+					{
+						continuation.resume(returning: false)
+					}
+					else if suspended != nil
+					{
+						continuation.resume(returning: true)
+					}
+					else
+					{
+						gateWaiters[id] = continuation
+					}
+				}
 			}
-			await withCheckedContinuation
+			onCancel:
 			{
-				gateWaiters.append($0)
+				Task
+				{
+					await self.cancelGateWaiter(id)
+				}
 			}
+		}
+
+		private func cancelGateWaiter(_ id: UUID)
+		{
+			gateWaiters.removeValue(forKey: id)?.resume(returning: false)
 		}
 
 		func release()
 		{
+			released = true
 			suspended?.resume()
 			suspended = nil
+			let waiters = Array(gateWaiters.values)
+			gateWaiters.removeAll()
+			for waiter in waiters
+			{
+				waiter.resume(returning: false)
+			}
 		}
 	}
 }

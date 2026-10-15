@@ -4,7 +4,7 @@ import Foundation
 @MainActor
 final class TranscriptPreparationCoordinator
 {
-	struct ContentKey: Equatable
+	struct ContentKey: Equatable, Sendable
 	{
 		let body: String
 		let markdown: Bool
@@ -65,7 +65,9 @@ final class TranscriptPreparationCoordinator
 		}
 	}
 
-	private let contentCache = ConversationContentCache()
+	typealias ContentPreparation = @MainActor (ContentKey) async -> PreparedConversationContent
+
+	private let prepareContent: ContentPreparation
 	private let navigationCache = ConversationTurnSummary.Cache()
 	private let netChangePreparation: ConversationNetFileChangePreparation
 	private(set) var turnSummaries: [ConversationTurnSummary] = []
@@ -74,15 +76,25 @@ final class TranscriptPreparationCoordinator
 	private(set) var contentPreparationRequestCount = 0
 	private var preparedContents: [String: PreparedConversationContent] = [:]
 	private var preparedKeys: [String: ContentKey] = [:]
-	private var preparationTask: Task<Void, Never>?
+	private(set) var preparationTask: Task<Void, Never>?
 	private var renderGeneration = 0
 
 	init(
 		netChangePreparation: ConversationNetFileChangePreparation =
-			ConversationNetFileChangePreparation()
+			ConversationNetFileChangePreparation(),
+		prepareContent: ContentPreparation? = nil
 	)
 	{
 		self.netChangePreparation = netChangePreparation
+		let contentCache = ConversationContentCache()
+		self.prepareContent = prepareContent ??
+		{
+			await contentCache.content(
+				body: $0.body,
+				markdown: $0.markdown,
+				preserveSoftBreaks: $0.preserveSoftBreaks
+			)
+		}
 	}
 
 	func waitForRendering() async
@@ -109,7 +121,7 @@ final class TranscriptPreparationCoordinator
 		)
 		preparationTask = Task
 		{
-			[weak self, contentCache, navigationCache, netChangePreparation] in
+			[weak self, prepareContent, navigationCache, netChangePreparation] in
 			async let netChanges = netChangePreparation.prepare(
 				changeSources,
 				context: context
@@ -137,11 +149,7 @@ final class TranscriptPreparationCoordinator
 				else
 				{
 					self?.contentPreparationRequestCount += 1
-					contents[entry.id] = await contentCache.content(
-						body: key.body,
-						markdown: key.markdown,
-						preserveSoftBreaks: key.preserveSoftBreaks
-					)
+					contents[entry.id] = await prepareContent(key)
 				}
 			}
 			guard let self, !Task.isCancelled, generation == self.renderGeneration
