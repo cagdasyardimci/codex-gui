@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct AppServerWorkspaceIsolationTests
 {
 	@Test func independentClientsKeepApprovalsStopSteeringAndReconnectSeparate() async throws
@@ -13,8 +14,8 @@ struct AppServerWorkspaceIsolationTests
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let alpha = try fixture(in: directory.appendingPathComponent("alpha"))
-		let beta = try fixture(in: directory.appendingPathComponent("beta"))
+		let alpha = try await fixture(in: directory.appendingPathComponent("alpha"))
+		let beta = try await fixture(in: directory.appendingPathComponent("beta"))
 		let first = AppServer(
 			executableOverride: alpha.executable,
 			requestTimeout: .seconds(3)
@@ -211,7 +212,7 @@ struct AppServerWorkspaceIsolationTests
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let backend = try fixture(
+		let backend = try await fixture(
 			in: directory,
 			injectMismatchedResolution: true
 		)
@@ -286,7 +287,7 @@ struct AppServerWorkspaceIsolationTests
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let backend = try fixture(
+		let backend = try await fixture(
 			in: directory,
 			injectMalformedResponseID: true
 		)
@@ -310,7 +311,7 @@ struct AppServerWorkspaceIsolationTests
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let backend = try fixture(in: directory)
+		let backend = try await fixture(in: directory)
 		let server = AppServer(
 			executableOverride: backend.executable,
 			requestTimeout: .seconds(3)
@@ -386,16 +387,18 @@ struct AppServerWorkspaceIsolationTests
 		in directory: URL,
 		injectMismatchedResolution: Bool = false,
 		injectMalformedResponseID: Bool = false
-	) throws -> (executable: URL, directory: URL, log: URL)
+	) async throws -> (executable: URL, directory: URL, log: URL)
 	{
-		try FileManager.default.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
-		)
-		let executable = directory.appendingPathComponent("mock-codex")
-		let log = directory.appendingPathComponent("requests.jsonl")
-		let cwdFile = directory.appendingPathComponent("cwd.json")
-		let script = """
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+			let executable = directory.appendingPathComponent("mock-codex")
+			let log = directory.appendingPathComponent("requests.jsonl")
+			let cwdFile = directory.appendingPathComponent("cwd.json")
+			let script = """
 		#!/usr/bin/env python3
 		import json
 		from pathlib import Path
@@ -468,15 +471,16 @@ struct AppServerWorkspaceIsolationTests
 		        continue
 		    send({'id': request_id, 'result': result})
 		"""
-		try script.write(
-			to: executable,
-			atomically: true,
-			encoding: .utf8
-		)
-		try FileManager.default.setAttributes(
-			[.posixPermissions: 0o755],
-			ofItemAtPath: executable.path
-		)
-		return (executable, directory.standardizedFileURL, log)
+			try script.write(
+				to: executable,
+				atomically: true,
+				encoding: .utf8
+			)
+			try FileManager.default.setAttributes(
+				[.posixPermissions: 0o755],
+				ofItemAtPath: executable.path
+			)
+			return (executable, directory.standardizedFileURL, log)
+		}
 	}
 }

@@ -4,11 +4,15 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct AppServerConcurrentThreadTests
 {
 	@Test func oneConnectionKeepsInterleavedTurnsAndControlOwnershipIndependent() async throws
 	{
-		let fixture = try InterleavedThreadTransportFixture()
+		let fixture = try await BackgroundTestWork.perform
+		{
+			try InterleavedThreadTransportFixture()
+		}
 		defer
 		{
 			try? FileManager.default.removeItem(at: fixture.directory)
