@@ -3,239 +3,267 @@ import Testing
 
 @testable import CodexGUI
 
+// Transient hover panels share AppKit window ordering and dismissal state.
 @Suite(.serialized) @MainActor
 struct TaskSidebarAppearanceTests
 {
-	@Test func unreadColorUpdatesWithoutResettingHoverOrFocus() throws
+	@Test func unreadColorUpdatesWithoutResettingHoverOrFocus() async throws
 	{
-		_ = NSApplication.shared
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 320,
-				height: 180
-			),
-			styleMask: [.titled],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.appearance = NSAppearance(named: .aqua)
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			window.close()
-		}
-		let content = try #require(window.contentView)
-		let cell = TaskSidebarCellView(frame: NSRect(
-			x: 0,
-			y: 0,
-			width: 280,
-			height: 32
-		))
-		content.addSubview(cell)
-		cell.textField?.stringValue = "Appearance chat"
-		cell.setUnread(true)
-		let focus = NSTextView(frame: NSRect(
-			x: 0,
-			y: 50,
-			width: 280,
-			height: 80
-		))
-		content.addSubview(focus)
-		#expect(window.makeFirstResponder(focus))
-		let event = try #require(NSEvent.enterExitEvent(
-			with: .mouseEntered,
-			location: .zero,
-			modifierFlags: [],
-			timestamp: 0,
-			windowNumber: window.windowNumber,
-			context: nil,
-			eventNumber: 0,
-			trackingNumber: 0,
-			userData: nil
-		))
-		cell.mouseEntered(with: event)
-		let actions = try #require(cell.subviews.compactMap
-		{
-			$0 as? NSStackView
-		}.first)
-		let titleField = try #require(cell.textField)
-		content.layoutSubtreeIfNeeded()
-		let titleFrame = titleField.frame
-		for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
-		{
-			window.appearance = NSAppearance(named: appearance)
-			content.layoutSubtreeIfNeeded()
-			#expect(cell.appearance == nil)
-			#expect(cell.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == appearance)
-			try expectColor(
-				cell.unreadDot.layer?.backgroundColor,
-				.systemBlue,
-				in: cell
-			)
-			#expect(!cell.unreadDot.isHidden)
-			#expect(cell.unreadDot.alphaValue == 0)
-			#expect(!actions.isHidden)
-			#expect(actions.alphaValue == 1)
-			#expect(cell.textField === titleField)
-			#expect(titleField.frame == titleFrame)
-			#expect(titleField.stringValue == "Appearance chat")
-			#expect(window.firstResponder === focus)
-		}
-		cell.mouseExited(with: event)
-		#expect(cell.unreadDot.alphaValue == 1)
-	}
-
-	@Test func existingHoverCardSurfaceDrawsInheritedColors() throws
-	{
-		let application = NSApplication.shared
-		let originalAppearance = application.appearance
-		defer
-		{
-			application.appearance = originalAppearance
-		}
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 320,
-				height: 180
-			),
-			styleMask: [.titled],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.appearance = NSAppearance(named: .aqua)
-		defer
-		{
-			window.close()
-		}
-		let anchor = NSView(frame: NSRect(
-			x: 0,
-			y: 0,
-			width: 280,
-			height: 32
-		))
-		window.contentView?.addSubview(anchor)
-		let card = TaskHoverCard(
-			title: "Chat",
-			projectName: "Project",
-			updatedAt: nil
-		)
-		card.show(beside: anchor)
-		defer
-		{
-			card.dismiss()
-		}
-		let panel = try #require(card.panel)
-		let surface = try #require(panel.contentView)
-		let frame = panel.frame
-		func verifyRetainedCard(_ appearance: NSAppearance.Name) throws
-		{
-			surface.layoutSubtreeIfNeeded()
-			#expect(surface.appearance == nil)
-			#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == appearance)
-			#expect(surface.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == appearance)
-			let bitmap = try #require(surface.bitmapImageRepForCachingDisplay(in: surface.bounds))
-			surface.effectiveAppearance.performAsCurrentDrawingAppearance
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
 			{
-				surface.cacheDisplay(
-					in: surface.bounds,
-					to: bitmap
-				)
+				native.end()
 			}
-			let pixel = try #require(bitmap.colorAt(
-				x: Int(5 * CGFloat(bitmap.pixelsWide) / surface.bounds.width),
-				y: bitmap.pixelsHigh / 2
+			_ = NSApplication.shared
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 320,
+					height: 180
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.appearance = NSAppearance(named: .aqua)
+			defer
+			{
+				window.close()
+			}
+			let content = try #require(window.contentView)
+			let cell = TaskSidebarCellView(frame: NSRect(
+				x: 0,
+				y: 0,
+				width: 280,
+				height: 32
 			))
-			// colorAt labels raw components Generic RGB even for a display-profile bitmap.
-			// Apply the bitmap profile before converting the sampled color.
-			let taggedPixel = NSColor(
-				colorSpace: bitmap.colorSpace,
-				components: [
-					pixel.redComponent,
-					pixel.greenComponent,
-					pixel.blueComponent,
-					pixel.alphaComponent
-				],
-				count: 4
-			)
-			try expectColor(
-				taggedPixel.cgColor,
-				AppKitColorTokens.summaryCard,
-				in: surface
-			)
-			#expect(card.panel === panel)
-			#expect(panel.frame == frame)
-			#expect(panel.parent === window)
-			#expect(panel.ignoresMouseEvents)
-		}
-
-		for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
-		{
-			window.appearance = NSAppearance(named: appearance)
-			try verifyRetainedCard(appearance)
-		}
-
-		window.appearance = nil
-		for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
-		{
-			application.appearance = NSAppearance(named: appearance)
-			try verifyRetainedCard(appearance)
+			content.addSubview(cell)
+			cell.textField?.stringValue = "Appearance chat"
+			cell.setUnread(true)
+			let focus = NSTextView(frame: NSRect(
+				x: 0,
+				y: 50,
+				width: 280,
+				height: 80
+			))
+			content.addSubview(focus)
+			#expect(window.makeFirstResponder(focus))
+			let event = try #require(NSEvent.enterExitEvent(
+				with: .mouseEntered,
+				location: .zero,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: window.windowNumber,
+				context: nil,
+				eventNumber: 0,
+				trackingNumber: 0,
+				userData: nil
+			))
+			cell.mouseEntered(with: event)
+			let actions = try #require(cell.subviews.compactMap
+			{
+				$0 as? NSStackView
+			}.first)
+			let titleField = try #require(cell.textField)
+			content.layoutSubtreeIfNeeded()
+			let titleFrame = titleField.frame
+			for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
+			{
+				window.appearance = NSAppearance(named: appearance)
+				content.layoutSubtreeIfNeeded()
+				#expect(cell.appearance == nil)
+				#expect(cell.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == appearance)
+				try expectColor(
+					cell.unreadDot.layer?.backgroundColor,
+					.systemBlue,
+					in: cell
+				)
+				#expect(!cell.unreadDot.isHidden)
+				#expect(cell.unreadDot.alphaValue == 0)
+				#expect(!actions.isHidden)
+				#expect(actions.alphaValue == 1)
+				#expect(cell.textField === titleField)
+				#expect(titleField.frame == titleFrame)
+				#expect(titleField.stringValue == "Appearance chat")
+				#expect(window.firstResponder === focus)
+			}
+			cell.mouseExited(with: event)
+			#expect(cell.unreadDot.alphaValue == 1)
 		}
 	}
 
-	@Test func longHoverCardRemainsCompactAndInsideVisibleScreen() throws
+	@Test func existingHoverCardSurfaceDrawsInheritedColors() async throws
 	{
-		_ = NSApplication.shared
-		let screen = try #require(NSScreen.main)
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: screen.visibleFrame.maxX - 320,
-				y: screen.visibleFrame.maxY - 180,
-				width: 320,
-				height: 180
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			window.close()
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			_ = NSApplication.shared
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 320,
+					height: 180
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.appearance = NSAppearance(named: .aqua)
+			defer
+			{
+				window.close()
+			}
+			let anchor = NSView(frame: NSRect(
+				x: 0,
+				y: 0,
+				width: 280,
+				height: 32
+			))
+			window.contentView?.addSubview(anchor)
+			let card = TaskHoverCard(
+				title: "Chat",
+				projectName: "Project",
+				updatedAt: nil
+			)
+			card.show(beside: anchor)
+			defer
+			{
+				card.dismiss()
+			}
+			let panel = try #require(card.panel)
+			let surface = try #require(panel.contentView)
+			let frame = panel.frame
+			@MainActor
+			func verifyRetainedCard(_ appearance: NSAppearance.Name) throws
+			{
+				surface.layoutSubtreeIfNeeded()
+				#expect(surface.appearance == nil)
+				#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == appearance)
+				#expect(surface.effectiveAppearance
+					.bestMatch(from: [.aqua, .darkAqua]) == appearance)
+				let bitmap = try #require(surface
+					.bitmapImageRepForCachingDisplay(in: surface.bounds))
+				surface.effectiveAppearance.performAsCurrentDrawingAppearance
+				{
+					surface.cacheDisplay(
+						in: surface.bounds,
+						to: bitmap
+					)
+				}
+				let pixel = try #require(bitmap.colorAt(
+					x: Int(5 * CGFloat(bitmap.pixelsWide) / surface.bounds.width),
+					y: bitmap.pixelsHigh / 2
+				))
+				// colorAt labels raw components Generic RGB even for a display-profile bitmap.
+				// Apply the bitmap profile before converting the sampled color.
+				let taggedPixel = NSColor(
+					colorSpace: bitmap.colorSpace,
+					components: [
+						pixel.redComponent,
+						pixel.greenComponent,
+						pixel.blueComponent,
+						pixel.alphaComponent
+					],
+					count: 4
+				)
+				try expectColor(
+					taggedPixel.cgColor,
+					AppKitColorTokens.summaryCard,
+					in: surface
+				)
+				#expect(card.panel === panel)
+				#expect(panel.frame == frame)
+				#expect(panel.parent === window)
+				#expect(panel.ignoresMouseEvents)
+			}
+
+			for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
+			{
+				window.appearance = NSAppearance(named: appearance)
+				try verifyRetainedCard(appearance)
+			}
+
+			// Exercise inherited anchor appearance
+			// without recoloring unrelated application windows.
+			window.appearance = nil
+			for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua, .darkAqua]
+			{
+				anchor.appearance = NSAppearance(named: appearance)
+				try verifyRetainedCard(appearance)
+			}
 		}
-		let anchor = NSView(frame: NSRect(
-			x: 0,
-			y: 140,
-			width: 280,
-			height: 32
-		))
-		window.contentView?.addSubview(anchor)
-		let card = TaskHoverCard(
-			title: String(
-				repeating: "Long title\n",
-				count: 300
-			),
-			projectName: String(
-				repeating: "Long project ",
-				count: 100
-			),
-			updatedAt: nil
-		)
-		card.show(beside: anchor)
-		defer
+	}
+
+	@Test func longHoverCardRemainsCompactAndInsideVisibleScreen() async throws
+	{
+		try await AppKitTestIsolation.perform
 		{
-			card.dismiss()
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			_ = NSApplication.shared
+			let screen = try #require(NSScreen.main)
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: screen.visibleFrame.maxX - 320,
+					y: screen.visibleFrame.maxY - 180,
+					width: 320,
+					height: 180
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			defer
+			{
+				window.close()
+			}
+			let anchor = NSView(frame: NSRect(
+				x: 0,
+				y: 140,
+				width: 280,
+				height: 32
+			))
+			window.contentView?.addSubview(anchor)
+			let card = TaskHoverCard(
+				title: String(
+					repeating: "Long title\n",
+					count: 300
+				),
+				projectName: String(
+					repeating: "Long project ",
+					count: 100
+				),
+				updatedAt: nil
+			)
+			card.show(beside: anchor)
+			defer
+			{
+				card.dismiss()
+			}
+			let panel = try #require(card.panel)
+			#expect(panel.frame.height <= 160)
+			#expect(panel.frame.width <= 320)
+			#expect(screen.visibleFrame.contains(panel.frame))
+			#expect(panel.ignoresMouseEvents)
+			#expect(!panel.isKeyWindow)
 		}
-		let panel = try #require(card.panel)
-		#expect(panel.frame.height <= 160)
-		#expect(panel.frame.width <= 320)
-		#expect(screen.visibleFrame.contains(panel.frame))
-		#expect(panel.ignoresMouseEvents)
-		#expect(!panel.isKeyWindow)
 	}
 
 	private func expectColor(

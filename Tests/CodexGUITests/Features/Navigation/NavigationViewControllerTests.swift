@@ -98,158 +98,196 @@ struct NavigationViewControllerTests
 		#expect(controller.chatsTable.selectedRow == 1)
 	}
 
-	@Test func taskTitleScrollsOnceAndResetsAfterHover() throws
+	// This fixture makes its window key and presents a transient hover card.
+	@Test func taskTitleScrollsOnceAndResetsAfterHover() async throws
 	{
-		let fixture = try attachedTaskCell()
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			fixture.cell.mouseExited(with: fixture.event)
-			fixture.cell.removeFromSuperview()
-			fixture.window.close()
-		}
-		let cell = fixture.cell
-		let label = fixture.label
-		let restingFrame = label.frame
-		#expect(cell.progressRing.frame.maxX == cell.bounds.maxX - 4)
-		#expect(cell.progressRing.alphaValue == 1)
-		#expect(label.alignmentRect(forFrame: restingFrame).minX == 32)
-		#expect(label.lineBreakMode == .byTruncatingTail)
-		#expect(label.cell?.isScrollable == false)
-		#expect(!label.allowsExpansionToolTips)
-
-		cell.setTurnRunning(false)
-		cell.setUnread(true)
-		cell.mouseEntered(with: fixture.event)
-		let hoveredFrame = label.frame
-		#expect(hoveredFrame.width < restingFrame.width)
-		#expect(cell.unreadDot.alphaValue == 0)
-		#expect(cell.progressRing.alphaValue == 0)
-		#expect(cell.archiveButton.superview?.alphaValue == 1)
-		cell.setTurnRunning(true)
-		#expect(cell.progressRing.alphaValue == 0)
-		label.advanceScrolling(elapsed: 1.6)
-		if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-		{
-			#expect(label.scrollOffset > 0)
-			label.advanceScrolling(elapsed: 60)
-			let finishedOffset = label.scrollOffset
-			#expect(finishedOffset > 0)
-			label.advanceScrolling(elapsed: 120)
-			#expect(label.scrollOffset == finishedOffset)
-			label.stringValue = label.stringValue
-			#expect(label.scrollOffset == finishedOffset)
-		}
-		cell.layoutSubtreeIfNeeded()
-		#expect(label.frame == hoveredFrame)
-		cell.mouseExited(with: fixture.event)
-		#expect(label.scrollOffset == 0)
-		#expect(cell.progressRing.alphaValue == 1)
-		#expect(cell.unreadDot.alphaValue == 1)
-		#expect(cell.archiveButton.superview?.alphaValue == 0)
-		cell.layoutSubtreeIfNeeded()
-		#expect(label.frame == restingFrame)
-		label.stringValue = "Short"
-		cell.mouseEntered(with: fixture.event)
-		label.advanceScrolling(elapsed: 1.6)
-		#expect(label.scrollOffset == 0)
-		#expect(label.frame == hoveredFrame)
-		#expect(cell.hoverCard?.panel != nil)
-	}
-
-	@Test func taskHoverCardUsesOwnRowMetadataAndDismissesOnExitOrWindowResign() throws
-	{
-		let fixture = try attachedTaskCell()
-		defer
-		{
-			fixture.cell.mouseExited(with: fixture.event)
-			fixture.cell.removeFromSuperview()
-			fixture.window.close()
-		}
-		let cell = fixture.cell
-		let label = fixture.label
-		var previousHeight: CGFloat = 0
-		for title in [
-			"Short",
-			"Clarify project-wide change summary scope",
-			"Explain why the change summary appears during an ongoing agent turn",
-		]
-		{
-			let card = TaskHoverCard(
-				title: title,
-				projectName: "codex-gui",
-				updatedAt: Date().addingTimeInterval(-660)
-			)
-			card.show(beside: cell)
+			@MainActor in
+			let native = TestTiming.begin("native.body")
 			defer
 			{
-				card.dismiss()
+				native.end()
 			}
-			let hoverPanel = try #require(card.panel)
-			let surface = try #require(hoverPanel.contentView)
-			surface.layoutSubtreeIfNeeded()
-			let stack = try #require(surface.subviews.first as? NSStackView)
-			let header = try #require(stack.arrangedSubviews.first as? NSStackView)
-			let titleLabel = try #require(header.arrangedSubviews.first as? NSTextField)
-			let metadata = try #require(header.arrangedSubviews.last as? NSStackView)
-			let timeLabel = try #require(metadata.arrangedSubviews.last as? NSTextField)
-			#expect(hoverPanel.frame.width == 320)
-			#expect(surface.frame.width == 320)
-			#expect(hoverPanel.frame.height > previousHeight)
-			#expect(!surface.hasAmbiguousLayout)
-			#expect(titleLabel.frame.maxX <= metadata.frame.minX)
-			#expect(abs(titleLabel.frame.maxY - metadata.frame.maxY) < 1)
-			#expect(timeLabel.frame.width >= timeLabel.intrinsicContentSize.width)
-			let textHeight = (title as NSString).boundingRect(
-				with: NSSize(
-					width: titleLabel.bounds.width,
-					height: .greatestFiniteMagnitude
-				),
-				options: [.usesLineFragmentOrigin, .usesFontLeading],
-				attributes: [.font: try #require(titleLabel.font)]
-			).height
-			#expect(titleLabel.bounds.height >= ceil(textHeight))
-			previousHeight = hoverPanel.frame.height
+			let fixture = try attachedTaskCell()
+			defer
+			{
+				fixture.cell.mouseExited(with: fixture.event)
+				fixture.cell.removeFromSuperview()
+				fixture.window.close()
+			}
+			let cell = fixture.cell
+			let label = fixture.label
+			let restingFrame = label.frame
+			#expect(cell.progressRing.frame.maxX == cell.bounds.maxX - 4)
+			#expect(cell.progressRing.alphaValue == 1)
+			#expect(label.alignmentRect(forFrame: restingFrame).minX == 32)
+			#expect(label.lineBreakMode == .byTruncatingTail)
+			#expect(label.cell?.isScrollable == false)
+			#expect(!label.allowsExpansionToolTips)
+
+			cell.setTurnRunning(false)
+			cell.setUnread(true)
+			cell.mouseEntered(with: fixture.event)
+			let hoveredFrame = label.frame
+			#expect(hoveredFrame.width < restingFrame.width)
+			#expect(cell.unreadDot.alphaValue == 0)
+			#expect(cell.progressRing.alphaValue == 0)
+			#expect(cell.archiveButton.superview?.alphaValue == 1)
+			cell.setTurnRunning(true)
+			#expect(cell.progressRing.alphaValue == 0)
+			label.advanceScrolling(elapsed: 1.6)
+			if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+			{
+				#expect(label.scrollOffset > 0)
+				label.advanceScrolling(elapsed: 60)
+				let finishedOffset = label.scrollOffset
+				#expect(finishedOffset > 0)
+				label.advanceScrolling(elapsed: 120)
+				#expect(label.scrollOffset == finishedOffset)
+				label.stringValue = label.stringValue
+				#expect(label.scrollOffset == finishedOffset)
+			}
+			cell.layoutSubtreeIfNeeded()
+			#expect(label.frame == hoveredFrame)
+			cell.mouseExited(with: fixture.event)
+			#expect(label.scrollOffset == 0)
+			#expect(cell.progressRing.alphaValue == 1)
+			#expect(cell.unreadDot.alphaValue == 1)
+			#expect(cell.archiveButton.superview?.alphaValue == 0)
+			cell.layoutSubtreeIfNeeded()
+			#expect(label.frame == restingFrame)
+			label.stringValue = "Short"
+			cell.mouseEntered(with: fixture.event)
+			label.advanceScrolling(elapsed: 1.6)
+			#expect(label.scrollOffset == 0)
+			#expect(label.frame == hoveredFrame)
+			#expect(cell.hoverCard?.panel != nil)
 		}
-		cell.mouseEntered(with: fixture.event)
-		let panel = try #require(cell.hoverCard?.panel)
-		#expect(panel.isVisible)
-		#expect(panel.parent === fixture.window)
-		#expect(panel.animationBehavior == .none)
-		#expect(panel.ignoresMouseEvents)
-		#expect(label.toolTip == nil)
-		#expect(cell.hoverCard?.title == label.stringValue)
-		#expect(cell.hoverCard?.projectName == "codex-gui")
-		cell.mouseExited(with: fixture.event)
-		#expect(cell.hoverCard?.panel == nil)
-		#expect(!panel.isVisible)
-		cell.mouseEntered(with: fixture.event)
-		#expect(cell.hoverCard?.panel != nil)
-		NotificationCenter.default.post(
-			name: NSWindow.didResignKeyNotification,
-			object: fixture.window
-		)
-		#expect(cell.hoverCard?.panel == nil)
-		#expect(cell.progressRing.alphaValue == 1)
 	}
 
-	@Test func taskArchiveButtonRoutesToItsOwnRowWithoutChangingSelection() throws
+	// This fixture makes its window key and presents a transient hover card.
+	@Test func taskHoverCardUsesOwnRowMetadataAndDismissesOnExitOrWindowResign(
+	) async throws
 	{
-		let fixture = try attachedTaskCell()
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			fixture.cell.mouseExited(with: fixture.event)
-			fixture.cell.removeFromSuperview()
-			fixture.window.close()
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			let fixture = try attachedTaskCell()
+			defer
+			{
+				fixture.cell.mouseExited(with: fixture.event)
+				fixture.cell.removeFromSuperview()
+				fixture.window.close()
+			}
+			let cell = fixture.cell
+			let label = fixture.label
+			var previousHeight: CGFloat = 0
+			for title in [
+				"Short",
+				"Clarify project-wide change summary scope",
+				"Explain why the change summary appears during an ongoing agent turn",
+			]
+			{
+				let card = TaskHoverCard(
+					title: title,
+					projectName: "codex-gui",
+					updatedAt: Date().addingTimeInterval(-660)
+				)
+				card.show(beside: cell)
+				defer
+				{
+					card.dismiss()
+				}
+				let hoverPanel = try #require(card.panel)
+				let surface = try #require(hoverPanel.contentView)
+				surface.layoutSubtreeIfNeeded()
+				let stack = try #require(surface.subviews.first as? NSStackView)
+				let header = try #require(stack.arrangedSubviews.first as? NSStackView)
+				let titleLabel = try #require(header.arrangedSubviews.first as? NSTextField)
+				let metadata = try #require(header.arrangedSubviews.last as? NSStackView)
+				let timeLabel = try #require(metadata.arrangedSubviews.last as? NSTextField)
+				#expect(hoverPanel.frame.width == 320)
+				#expect(surface.frame.width == 320)
+				#expect(hoverPanel.frame.height > previousHeight)
+				#expect(!surface.hasAmbiguousLayout)
+				#expect(titleLabel.frame.maxX <= metadata.frame.minX)
+				#expect(abs(titleLabel.frame.maxY - metadata.frame.maxY) < 1)
+				#expect(timeLabel.frame.width >= timeLabel.intrinsicContentSize.width)
+				let textHeight = (title as NSString).boundingRect(
+					with: NSSize(
+						width: titleLabel.bounds.width,
+						height: .greatestFiniteMagnitude
+					),
+					options: [.usesLineFragmentOrigin, .usesFontLeading],
+					attributes: [.font: try #require(titleLabel.font)]
+				).height
+				#expect(titleLabel.bounds.height >= ceil(textHeight))
+				previousHeight = hoverPanel.frame.height
+			}
+			cell.mouseEntered(with: fixture.event)
+			let panel = try #require(cell.hoverCard?.panel)
+			#expect(panel.isVisible)
+			#expect(panel.parent === fixture.window)
+			#expect(panel.animationBehavior == .none)
+			#expect(panel.ignoresMouseEvents)
+			#expect(label.toolTip == nil)
+			#expect(cell.hoverCard?.title == label.stringValue)
+			#expect(cell.hoverCard?.projectName == "codex-gui")
+			cell.mouseExited(with: fixture.event)
+			#expect(cell.hoverCard?.panel == nil)
+			#expect(!panel.isVisible)
+			cell.mouseEntered(with: fixture.event)
+			#expect(cell.hoverCard?.panel != nil)
+			NotificationCenter.default.post(
+				name: NSWindow.didResignKeyNotification,
+				object: fixture.window
+			)
+			#expect(cell.hoverCard?.panel == nil)
+			#expect(cell.progressRing.alphaValue == 1)
 		}
-		var archived: String?
-		fixture.controller.onArchiveTask =
+	}
+
+	// This fixture makes its window key and presents a transient hover card.
+	@Test func taskArchiveButtonRoutesToItsOwnRowWithoutChangingSelection() async throws
+	{
+		try await AppKitTestIsolation.perform
 		{
-			archived = $0
+			@MainActor in
+			let native = TestTiming.begin("native.body")
+			defer
+			{
+				native.end()
+			}
+			let fixture = try attachedTaskCell()
+			defer
+			{
+				fixture.cell.mouseExited(with: fixture.event)
+				fixture.cell.removeFromSuperview()
+				fixture.window.close()
+			}
+			var archived: String?
+			fixture.controller.onArchiveTask =
+			{
+				archived = $0
+			}
+			fixture.cell.mouseEntered(with: fixture.event)
+			let button = fixture.cell.archiveButton
+			try #require(button.isEnabled)
+			// Verify this row's target-action wiring without performClick's event-polling loop.
+			// That native loop can stop SwiftPM's async-main executor while tests are unfinished.
+			try #require(button.sendAction(
+				try #require(button.action),
+				to: button.target
+			))
+			#expect(archived == "hovered")
+			#expect(fixture.controller.selectedThreadID == "another")
 		}
-		fixture.cell.mouseEntered(with: fixture.event)
-		fixture.cell.archiveButton.performClick(nil)
-		#expect(archived == "hovered")
-		#expect(fixture.controller.selectedThreadID == "another")
 	}
 
 	private func attachedTaskCell() throws -> (

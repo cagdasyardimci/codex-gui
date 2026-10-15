@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct ProjectSidebarCellViewTests
 {
 	@Test(
@@ -15,13 +17,7 @@ struct ProjectSidebarCellViewTests
 		initialAppearance: NSAppearance.Name
 	) throws
 	{
-		let application = NSApplication.shared
-		let previousAppearance = application.appearance
-		application.appearance = NSAppearance(named: initialAppearance)
-		defer
-		{
-			application.appearance = previousAppearance
-		}
+		_ = NSApplication.shared
 
 		let window = NSWindow(
 			contentRect: NSRect(
