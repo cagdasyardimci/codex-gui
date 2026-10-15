@@ -4,11 +4,12 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct AppServerThreadManagementTests
 {
 	@Test func checkoutCwdIsCheckedOnStartResumeListAndTurnOverride() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
@@ -39,7 +40,7 @@ struct AppServerThreadManagementTests
 		)
 		let requestLog = directory.appendingPathComponent("cwd-requests.json")
 		let responseMode = directory.appendingPathComponent("cwd-response-mode")
-		let executable = try makeCheckoutValidationExecutable(
+		let executable = try await makeCheckoutValidationExecutable(
 			in: directory,
 			requestLog: requestLog,
 			responseMode: responseMode
@@ -152,13 +153,13 @@ struct AppServerThreadManagementTests
 
 	@Test func conversationListingAndManagementUsePaginatedAppServerMethods() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let requestLog = directory.appendingPathComponent("requests.json")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -302,9 +303,9 @@ struct AppServerThreadManagementTests
 		in directory: URL,
 		requestLog: URL,
 		responseMode: URL
-	) throws -> URL
+	) async throws -> URL
 	{
-		return try AppServerTestExecutable.mockExecutable(
+		return try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3

@@ -4,18 +4,19 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct AppServerTurnLifecycleTests
 {
 	@Test func imageAndFileContextUseInstalledUserInputShapes() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let startLog = directory.appendingPathComponent("start-context.json")
 		let steerLog = directory.appendingPathComponent("steer-context.json")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -94,13 +95,13 @@ struct AppServerTurnLifecycleTests
 	}
 	@Test func supportedTurnFlowEncodesInteractionResponsesAndStreamsReview() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let responseLog = directory.appendingPathComponent("interaction-responses.json")
-		let executable = try makeInteractionFlowExecutable(
+		let executable = try await makeInteractionFlowExecutable(
 			in: directory,
 			responseLog: responseLog
 		)
@@ -244,13 +245,13 @@ struct AppServerTurnLifecycleTests
 
 	@Test func interruptAcknowledgesOwningTurnBeforeDispatchingCompletion() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let interruptLog = directory.appendingPathComponent("interrupt-request.json")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -337,13 +338,13 @@ struct AppServerTurnLifecycleTests
 	}
 	@Test func steeringAndProgressUseOwningThreadAndActiveTurn() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let requestLog = directory.appendingPathComponent("steering-request.json")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -444,9 +445,9 @@ struct AppServerTurnLifecycleTests
 	private func makeInteractionFlowExecutable(
 		in directory: URL,
 		responseLog: URL
-	) throws -> URL
+	) async throws -> URL
 	{
-		return try AppServerTestExecutable.mockExecutable(
+		return try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3

@@ -4,17 +4,18 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct AppServerApprovalRoutingTests
 {
 	@Test func permissionAndStructuredApprovalResponsesKeepRequestIDsAndScopes() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let responseLog = directory.appendingPathComponent("responses.json")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -191,13 +192,13 @@ struct AppServerApprovalRoutingTests
 
 	@Test func serverRequestIDMayMatchOutstandingClientRequestID() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let responseLog = directory.appendingPathComponent("colliding-response.json")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -268,13 +269,13 @@ struct AppServerApprovalRoutingTests
 
 	@Test func interleavedApprovalsKeepRequestIDTypeCallbackAndThread() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let responseLog = directory.appendingPathComponent("interleaved-responses.json")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3

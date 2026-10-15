@@ -4,18 +4,19 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct AppServerAutomaticTitleTests
 {
 	@Test(arguments: ["generated", "manual", "invalid", "failed"])
 	func automaticTitlesStayOutsideTheUserTurnAndRespectManualNames(_ mode: String) async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let log = directory.appendingPathComponent("titles.jsonl")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 		#!/usr/bin/env python3

@@ -51,11 +51,12 @@ extension AppServer
 			throw AppServerError.executableMissing
 		}
 		let timeout = versionCheckTimeout
+		let readExecutableVersion = readExecutableVersion
 		return try await Task.detached(priority: .utility)
 		{
-			try ExecutableVersionProbe.readVersion(
-				from: executable,
-				timeout: timeout
+			try readExecutableVersion(
+				executable,
+				timeout
 			)
 		}.value
 	}

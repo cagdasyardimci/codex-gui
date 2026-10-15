@@ -12,6 +12,11 @@ final class AppServer: CodexService
 	let executableOverride: URL?
 	private let requestTimeout: Duration
 	let versionCheckTimeout: DispatchTimeInterval
+	let readExecutableVersion: @Sendable (
+		URL,
+		DispatchTimeInterval
+	) throws -> String
+	private let requestTimeoutSleep: @Sendable (Duration) async throws -> Void
 	private var process: Process?
 	private var input: FileHandle?
 	private var messageWriter: ProtocolMessageWriter?
@@ -47,12 +52,28 @@ final class AppServer: CodexService
 	init(
 		executableOverride: URL? = nil,
 		requestTimeout: Duration = .seconds(45),
-		versionCheckTimeout: DispatchTimeInterval = .seconds(10)
+		versionCheckTimeout: DispatchTimeInterval = .seconds(10),
+		readExecutableVersion: @escaping @Sendable (
+			URL,
+			DispatchTimeInterval
+		) throws -> String =
+		{
+			try ExecutableVersionProbe.readVersion(
+				from: $0,
+				timeout: $1
+			)
+		},
+		requestTimeoutSleep: @escaping @Sendable (Duration) async throws -> Void =
+		{
+			try await Task.sleep(for: $0)
+		}
 	)
 	{
 		self.executableOverride = executableOverride
 		self.requestTimeout = requestTimeout
 		self.versionCheckTimeout = versionCheckTimeout
+		self.readExecutableVersion = readExecutableVersion
+		self.requestTimeoutSleep = requestTimeoutSleep
 	}
 
 	func connect() async throws
@@ -340,10 +361,12 @@ final class AppServer: CodexService
 	)
 	{
 		let timeout = requestTimeout
+		let requestTimeoutSleep = requestTimeoutSleep
 		requestTimeouts[requestID] = Task
 		{
 			[weak self] in
-			try? await Task.sleep(for: timeout)
+			// Request completion cancels this sleep; controlled clocks preserve that ownership.
+			try? await requestTimeoutSleep(timeout)
 			guard !Task.isCancelled
 			else
 			{

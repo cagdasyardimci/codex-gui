@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 /// A synthetic server: exercises the real subprocess transport without model inference.
-struct InterleavedThreadTransportFixture
+struct InterleavedThreadTransportFixture: Sendable
 {
 	let directory: URL
 	let executable: URL

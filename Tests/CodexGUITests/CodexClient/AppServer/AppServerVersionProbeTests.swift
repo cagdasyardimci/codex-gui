@@ -8,12 +8,12 @@ struct AppServerVersionProbeTests
 {
 	@Test func stalledVersionCheckTimesOutWithoutBlockingMainActor() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -73,12 +73,12 @@ struct AppServerVersionProbeTests
 
 	@Test func continuousVersionOutputCannotStarveProbeDeadline() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3

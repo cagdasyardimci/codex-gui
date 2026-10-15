@@ -4,17 +4,18 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct AppServerSkillAndRateLimitTests
 {
 	@Test func skillInvocationAndRateLimitsUseInstalledProtocolShapes() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let requestLog = directory.appendingPathComponent("skill-turn-request.json")
-		let executable = try makeSkillCatalogExecutable(
+		let executable = try await makeSkillCatalogExecutable(
 			in: directory,
 			requestLog: requestLog
 		)
@@ -93,9 +94,9 @@ struct AppServerSkillAndRateLimitTests
 	private func makeSkillCatalogExecutable(
 		in directory: URL,
 		requestLog: URL
-	) throws -> URL
+	) async throws -> URL
 	{
-		return try AppServerTestExecutable.mockExecutable(
+		return try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3

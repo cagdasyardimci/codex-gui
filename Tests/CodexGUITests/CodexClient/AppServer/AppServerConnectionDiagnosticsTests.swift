@@ -8,13 +8,13 @@ struct AppServerConnectionDiagnosticsTests
 {
 	@Test func backendFailureCapturesBoundedDetailsAndReconnectResetsThem() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let runMarker = directory.appendingPathComponent("first-run-complete")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -91,13 +91,13 @@ struct AppServerConnectionDiagnosticsTests
 
 	@Test func inheritedStderrDoesNotBlockFailureAndReconnect() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let runCount = directory.appendingPathComponent("app-server-runs")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
@@ -170,13 +170,13 @@ struct AppServerConnectionDiagnosticsTests
 
 	@Test func failedVersionReconnectPreservesPreviousDiagnostics() async throws
 	{
-		let directory = try AppServerTestExecutable.temporaryDirectory()
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
 		defer
 		{
 			try? FileManager.default.removeItem(at: directory)
 		}
 		let versionCount = directory.appendingPathComponent("version-runs")
-		let executable = try AppServerTestExecutable.mockExecutable(
+		let executable = try await AppServerTestExecutable.mockExecutable(
 			in: directory,
 			script: """
 			#!/usr/bin/env python3
