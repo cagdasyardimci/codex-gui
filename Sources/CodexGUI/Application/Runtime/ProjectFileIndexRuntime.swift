@@ -11,7 +11,8 @@ final class ProjectFileIndexRuntime
 	private var requestGeneration = 0
 	private var observationGeneration = 0
 	private var observation: (any ProjectFileIndexObservation)?
-	private var job: Task<Void, Never>?
+	// Capture a request before cancellation clears ownership to await its final unwind.
+	private(set) var job: Task<Void, Never>?
 	private var isShutDown = false
 	private(set) var index: ProjectFileIndex?
 	var onChange: (() -> Void)?
