@@ -150,7 +150,11 @@ Last Turn covers reported edits only. Arbitrary shell writes and subagent edits 
 
 ## Conversation content residency
 
-`ConversationCachePolicy` defines the defaults used by the backend and conversation UI:
+`ConversationCachePolicy` in `Application/State/` owns the shared residency defaults and payload
+cost estimates used by protocol pagination, runtime and reducers. `ConversationViewport` is a
+separate state value published by transcript views and consumed by runtime and reducers; it does
+not own native scrolling. Cache transitions and eviction decisions remain with the conversation
+reducers. The defaults used by the backend and conversation UI are:
 
 | Resource | Limit |
 | --- | --- |
