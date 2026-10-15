@@ -112,6 +112,13 @@ Callers supply a project, path and line; the service preserves project containme
 preferred-application persistence and launch fallbacks. Changes retains the adapter that derives
 the relevant line from a Git diff. Settings accesses the same preference owner directly.
 
+`CodexClient/ConversationSourceActivity` selects protocol result fields, classifies failures and
+validates returned page identity. `Application/Presentation/SourceActivityResultPresentation` owns
+bounded raw-detail text, error-message extraction and deterministic JSON presentation. The decoder
+calls that formatter once during ingestion; retained strings continue to participate in canonical
+payload accounting. Sources consumes those prepared values without retaining another raw result
+inventory or repeating formatting during view updates.
+
 Sources owns its media preview coordinator within the feature. The coordinator owns request
 identity, cancellation and rejection of obsolete results, including interrupted requests that
 must restart after hidden inventory updates. The Sources controller owns retained rows, selection,
