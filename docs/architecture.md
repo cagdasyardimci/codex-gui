@@ -107,6 +107,11 @@ identity, cancellation and rejection of obsolete results, including interrupted 
 must restart after hidden inventory updates. The Sources controller owns retained rows, selection,
 disclosures and application of accepted preview results to native views.
 
+The Git comparison controller owns repository requests, comparison controls and file navigation.
+Its child document controller owns retained diff sections, projection caching, layout preferences,
+collapse state, scrolling and inline rich-preview presentation. Document callbacks request runtime
+actions through the parent; section identity and owner changes govern reuse and invalidation.
+
 ## Recorded latest Git turn
 
 `ConversationReportedGitTurn` in `Application/Reducers/Conversation/` retains the known latest editing turn's identity and available timestamps independently of loaded transcript bodies. `ConversationReportedGitTurnProjection` in `Application/Presentation/` resolves that identity against currently resident reported changes. Missing or evicted payload is unavailable; an authoritative completed file-change report containing no changes produces an empty result. Older loaded edits cannot replace a known later editing turn without trusted ordering evidence.

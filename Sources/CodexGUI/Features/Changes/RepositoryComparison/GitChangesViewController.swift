@@ -70,15 +70,12 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	private var navigatorDivider: NSView?
 	private var navigatorTransition: GitNavigatorTransition?
 	private var navigatorRequestedVisible: Bool?
-	private var contentScroll = NSScrollView()
-	private let sections = GitChangesSectionsView()
+	private let documentController = GitDiffDocumentController()
 	private var treeRows: [GitDiffTreeRow] = []
-	private var fileSections: [Data: GitDiffFileSectionView] = [:]
-	private var fileSectionKeys: [Data: GitDiffFileSectionKey] = [:]
-	private(set) var projectionCache = GitDiffProjectionCache()
-	private var renderedSnapshotID: String?
-	private var renderedOwner: FeaturePresentationOwner?
-	private var renderedOptions: GitDiffPresentationOptions?
+	var projectionCache: GitDiffProjectionCache
+	{
+		documentController.projectionCache
+	}
 	private var rendering = false
 	private var navigatorHidden = false
 	private var internalChangesTab: NSView?
@@ -90,15 +87,10 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	{
 		comparisonToolbarView.diffLayoutButton
 	}
-	private var diffLayoutPreference = GitDiffLayoutPreference.automatic
-	private var diffLayoutOwner: FeaturePresentationOwner?
-	private var renderedComparisonScope: GitComparisonScope?
-	private var diffViews: [GitAdaptiveDiffView] = []
 	private var largeComparisonBanner: NSView?
 	private let largeComparisonLabel = NSTextField(wrappingLabelWithString: "")
 	private var previousFileButton: NSButton?
 	private var nextFileButton: NSButton?
-	private var renderedSelectedFileID: String?
 	private var navigatorToggle: NSButton?
 	{
 		comparisonToolbarView.navigatorToggle
@@ -120,11 +112,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		comparisonToolbarView.collapseDiffsButton
 	}
 	private var fileJumpPopover: NSPopover?
-	private var wrapsCode = false
-	private var collapsedFileIDs: Set<String> = []
-	private var collapseAllMode = false
-	private var collapseSnapshotID: String?
-	private var collapseOwner: FeaturePresentationOwner?
 	private var expandHostButton: NSButton?
 	private var panelHostButton: NSButton?
 	private var usesCompactComparisonToolbar: Bool
@@ -146,6 +133,20 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			[weak self] state in
 			self?.render(state)
 			self?.onSummaryChange?(state.summaryProjection)
+		}
+		documentController.onExpandGap =
+		{
+			[weak self] id in self?.runtime.expandGap(id)
+		}
+		documentController.onNeedsRender =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.render(self.runtime.state)
 		}
 	}
 
@@ -208,7 +209,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			return false
 		}
 		runtime.selectFile(fileID)
-		scrollToFile(fileID)
+		documentController.scrollToFile(fileID)
 		return true
 	}
 
@@ -233,7 +234,8 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		largeComparisonBanner = banner
 		banner.isHidden = true
 		configureNavigator()
-		configureDiffSectionsScrolling()
+		addChild(documentController)
+		let contentScroll = documentController.view
 		let rule = DesktopSurface(AppKitColorTokens.paneDivider)
 		navigatorDivider = rule
 		rule.widthAnchor.constraint(equalToConstant: 1).isActive = true
@@ -274,7 +276,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			contentScroll.heightAnchor.constraint(equalTo: body.heightAnchor),
 			navigatorHost.heightAnchor.constraint(equalTo: body.heightAnchor),
 			rule.heightAnchor.constraint(equalTo: body.heightAnchor),
-			sections.widthAnchor.constraint(equalTo: contentScroll.contentView.widthAnchor),
 		])
 		navigatorTransition = GitNavigatorTransition(
 			widthConstraint: navigatorWidth,
@@ -307,22 +308,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			toolbar.heightAnchor.constraint(equalTo: toolbarScroll.contentView.heightAnchor),
 		])
 		return toolbarScroll
-	}
-
-	private func configureDiffSectionsScrolling()
-	{
-		sections.orientation = .vertical
-		sections.alignment = .leading
-		sections.spacing = 0
-		sections.translatesAutoresizingMaskIntoConstraints = false
-		contentScroll = AppKitLayout.scrollableContent(
-			sections,
-			inset: 0
-		)
-		contentScroll.hasVerticalScroller = true
-		contentScroll.hasHorizontalScroller = false
-		contentScroll.autohidesScrollers = true
-		contentScroll.drawsBackground = false
 	}
 
 	private func makeInternalChangesTab() -> NSView
@@ -409,16 +394,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	@objc private func switchDiffLayout()
 	{
-		diffLayoutPreference = diffLayoutPreference.next
-		applyDiffLayoutPreference()
-	}
-
-	private func applyDiffLayoutPreference()
-	{
-		for diff in diffViews
-		{
-			diff.layoutPreference = diffLayoutPreference
-		}
+		documentController.switchLayout()
 		updateDiffLayoutButton()
 		view.needsLayout = true
 	}
@@ -426,16 +402,16 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	private func updateDiffLayoutButton()
 	{
 		let tooltip: String
-		switch diffLayoutPreference
+		switch documentController.layoutPreference
 		{
 		case .automatic: tooltip = "Auto diff: switch to unified diff"
 		case .unified: tooltip = "Switch to split diff"
 		case .split: tooltip = "Switch to auto diff"
 		}
 		diffLayoutButton?.toolTip = tooltip
-		diffLayoutButton?.setAccessibilityValue(diffLayoutPreference.rawValue)
+		diffLayoutButton?.setAccessibilityValue(documentController.layoutPreference.rawValue)
 		diffLayoutButton?.image = GitReviewReferenceIcons.image(
-			diffLayoutPreference == .unified ? .unifiedDisplayMode : .displayMode
+			documentController.layoutPreference == .unified ? .unifiedDisplayMode : .displayMode
 		)
 	}
 
@@ -565,18 +541,8 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		{
 			return
 		}
-		if diffLayoutOwner != state.owner || !state.isOpen
-		{
-			diffLayoutOwner = state.owner
-			diffLayoutPreference = .automatic
-			applyDiffLayoutPreference()
-		}
-		if state.scope == .lastTurn, renderedComparisonScope != .lastTurn
-		{
-			diffLayoutPreference = .unified
-			applyDiffLayoutPreference()
-		}
-		renderedComparisonScope = state.isOpen ? state.scope : nil
+		documentController.updateLayout(for: state)
+		updateDiffLayoutButton()
 		let previousStatus = statusLabel.stringValue
 		rendering = true
 		defer
@@ -599,25 +565,17 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		guard let snapshot = state.snapshot
 		else
 		{
-			projectionCache.clear()
-			collapsedFileIDs.removeAll()
-			collapseAllMode = false
-			collapseSnapshotID = nil
-			collapseOwner = nil
-			removeSections()
+			documentController.render(
+				state: state,
+				presentation: nil,
+				selectedFileID: nil,
+				usesSingleFile: false
+			)
 			largeComparisonBanner?.isHidden = true
 			treeRows = []
 			tree.reloadData()
 			return
 		}
-		if collapseSnapshotID != snapshot.id || collapseOwner != state.owner
-		{
-			collapsedFileIDs.removeAll()
-			collapseAllMode = false
-			collapseSnapshotID = snapshot.id
-			collapseOwner = state.owner
-		}
-		updateCollapseDiffsButton(snapshot)
 		let usesSingleFile = GitReviewDesignLayout.isLarge(snapshot)
 		let displayedFileID = usesSingleFile
 			? state.selectedFileID ?? snapshot.files.first?.id : nil
@@ -630,7 +588,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			snapshot: snapshot,
 			options: state.options
 		)
-		projectionCache.prepare(for: presentation)
 		treeRows = presentation.treeRows(
 			filter: state.filter,
 			expandedDirectories: state.expandedDirectories
@@ -652,171 +609,13 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			statusLabel.stringValue += " · No matching filtered files."
 			statusLabel.isHidden = false
 		}
-		updateDiffSections(
+		documentController.render(
+			state: state,
 			presentation: presentation,
 			selectedFileID: displayedFileID,
 			usesSingleFile: usesSingleFile
 		)
-	}
-
-	private func updateDiffSections(
-		presentation: GitDiffPresentation,
-		selectedFileID displayedFileID: String?,
-		usesSingleFile: Bool
-	)
-	{
-		let snapshot = presentation.snapshot
-		let needsSectionUpdate = renderedSnapshotID != snapshot.id
-			|| renderedOptions != presentation.options
-			|| renderedSelectedFileID != displayedFileID || renderedOwner != snapshot.request.owner
-		guard needsSectionUpdate
-		else
-		{
-			return
-		}
-		let origin = contentScroll.contentView.bounds.origin
-		let changesDisplayedFile = renderedSnapshotID != snapshot.id
-			|| renderedOwner != snapshot.request.owner
-			|| renderedSelectedFileID != displayedFileID
-		let files = usesSingleFile
-			? snapshot.files.filter
-			{
-				$0.id == displayedFileID
-			} : snapshot.files
-		reconcileFileSections(
-			files,
-			presentation: presentation
-		)
-
-		renderedSnapshotID = snapshot.id
-		renderedOwner = snapshot.request.owner
-		renderedOptions = presentation.options
-		renderedSelectedFileID = displayedFileID
-		sections.layoutSubtreeIfNeeded()
-		contentScroll.contentView
-			.scroll(to: usesSingleFile && changesDisplayedFile ? .zero : origin)
-		contentScroll.reflectScrolledClipView(contentScroll.contentView)
-	}
-
-	private func reconcileFileSections(
-		_ files: [GitComparisonFile],
-		presentation: GitDiffPresentation
-	)
-	{
-		var nextKeys: [Data: GitDiffFileSectionKey] = [:]
-		for file in files
-		{
-			nextKeys[Data(file.id.utf8)] = GitDiffFileSectionKey(
-				file: file,
-				presentation: presentation,
-				isCollapsed: collapsedFileIDs.contains(file.id)
-			)
-		}
-		for (id, section) in fileSections where fileSectionKeys[id] != nextKeys[id]
-		{
-			sections.removeArrangedSubview(section)
-			section.removeFromSuperview()
-			fileSections.removeValue(forKey: id)
-		}
-
-		for (index, file) in files.enumerated()
-		{
-			let fileIdentity = Data(file.id.utf8)
-			if let section = fileSections[fileIdentity]
-			{
-				if !sections.arrangedSubviews.indices.contains(index)
-					|| sections.arrangedSubviews[index] !== section
-				{
-					sections.removeArrangedSubview(section)
-					sections.insertArrangedSubview(
-						section,
-						at: index
-					)
-				}
-				continue
-			}
-			let section = makeFileSection(
-				file,
-				presentation: presentation
-			)
-			sections.insertArrangedSubview(
-				section,
-				at: index
-			)
-			section.widthAnchor.constraint(equalTo: sections.widthAnchor).isActive = true
-			fileSections[fileIdentity] = section
-		}
-		fileSectionKeys = nextKeys
-		diffViews = files.flatMap
-		{
-			fileSections[Data($0.id.utf8)]?.diffViews ?? []
-		}
-	}
-
-	private func makeFileSection(
-		_ file: GitComparisonFile,
-		presentation: GitDiffPresentation
-	) -> GitDiffFileSectionView
-	{
-		let isCollapsed = collapsedFileIDs.contains(file.id)
-		let rows = isCollapsed ? nil : projectionCache.file(
-			file,
-			presentation: presentation
-		).rows
-		return GitDiffFileSectionView(
-			file: file,
-			rows: rows,
-			isCollapsed: isCollapsed,
-			layoutPreference: diffLayoutPreference,
-			wrapsCode: wrapsCode,
-			onToggleFileDiff:
-			{
-				[weak self] button in self?.toggleFileDiff(button)
-			},
-			onExpandGap:
-			{
-				[weak self] button in self?.expandGap(button)
-			},
-			onRichPreview:
-			{
-				[weak self] button in
-				self?.showRichPreview(
-					file: file,
-					snapshot: presentation.snapshot,
-					button: button
-				)
-			}
-		)
-	}
-
-	private func showRichPreview(
-		file: GitComparisonFile,
-		snapshot: GitComparisonSnapshot,
-		button: NSButton
-	)
-	{
-		guard runtime.state.isOpen, runtime.state.snapshot?.id == snapshot.id,
-				runtime.state.owner == snapshot.request.owner,
-				let kind = GitRichPreviewKind(path: file.path),
-				GitRichPreviewContent.blobID(for: file) != nil
-		else
-		{
-			return
-		}
-		if collapsedFileIDs.contains(file.id)
-		{
-			toggleFileDiff(button)
-		}
-		fileSections[Data(file.id.utf8)]?.toggleRichPreview
-		{
-			GitRichPreviewView(kind: kind)
-			{
-				try await GitRichPreviewContent.read(
-					file: file,
-					snapshot: snapshot
-				)
-			}
-		}
+		updateCollapseDiffsButton(snapshot)
 	}
 
 	private func updateComparisonControls(_ state: GitReviewState) -> Bool
@@ -922,22 +721,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		}
 	}
 
-	private func removeSections()
-	{
-		diffViews.removeAll()
-		for section in sections.arrangedSubviews
-		{
-			sections.removeArrangedSubview(section)
-			section.removeFromSuperview()
-		}
-		fileSections = [:]
-		fileSectionKeys = [:]
-		renderedSnapshotID = nil
-		renderedOwner = nil
-		renderedOptions = nil
-		renderedSelectedFileID = nil
-	}
-
 	func numberOfRows(in tableView: NSTableView) -> Int
 	{
 		treeRows.count
@@ -1017,7 +800,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			return
 		}
 		runtime.selectFile(file)
-		scrollToFile(file)
+		documentController.scrollToFile(file)
 	}
 
 	func controlTextDidChange(_ notification: Notification)
@@ -1065,45 +848,8 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		else if let id = row.fileID
 		{
 			runtime.selectFile(id)
-			scrollToFile(id)
+			documentController.scrollToFile(id)
 		}
-	}
-
-	private func scrollToFile(_ id: String)
-	{
-		guard let section = fileSections[Data(id.utf8)]
-		else
-		{
-			return
-		}
-		guard let document = contentScroll.documentView
-		else
-		{
-			return
-		}
-		contentScroll.layoutSubtreeIfNeeded()
-		document.layoutSubtreeIfNeeded()
-		let sectionRect = section.convert(
-			section.bounds,
-			to: document
-		)
-		let clip = contentScroll.contentView
-		let maximumY = max(
-			0,
-			document.bounds.height - clip.bounds.height
-		)
-		clip.scroll(to: NSPoint(
-			x: clip.bounds.minX,
-			y: min(
-				maximumY,
-				max(
-					0,
-					sectionRect.minY
-				)
-			)
-		))
-		contentScroll.reflectScrolledClipView(clip)
-		section.setAccessibilityLabel("Selected changed file: \(id)")
 	}
 
 	@objc private func selectTreeRow()
@@ -1121,7 +867,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		else if let file = row.fileID
 		{
 			runtime.selectFile(file)
-			scrollToFile(file)
+			documentController.scrollToFile(file)
 		}
 	}
 
@@ -1289,56 +1035,23 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	@objc private func toggleWordWrap()
 	{
-		wrapsCode.toggle()
-		wordWrapButton?
-			.setAccessibilityLabel(wrapsCode ? "Stop wrapping code lines" : "Wrap code lines")
-		wordWrapButton?.toolTip = wrapsCode ? "Stop wrapping code lines" : "Wrap code lines"
-		wordWrapButton?.setAccessibilityValue(wrapsCode ? "On" : "Off")
-		for diff in diffViews
-		{
-			diff.wrapsCode = wrapsCode
-		}
+		documentController.toggleWordWrap()
+		wordWrapButton?.setAccessibilityLabel(
+			documentController.wrapsCode ? "Stop wrapping code lines" : "Wrap code lines"
+		)
+		wordWrapButton?.toolTip = documentController.wrapsCode
+			? "Stop wrapping code lines" : "Wrap code lines"
+		wordWrapButton?.setAccessibilityValue(documentController.wrapsCode ? "On" : "Off")
 	}
 
 	@objc private func toggleAllDiffs()
 	{
-		guard let snapshot = runtime.state.snapshot
-		else
-		{
-			return
-		}
-		collapseAllMode.toggle()
-		collapsedFileIDs = collapseAllMode ? Set(snapshot.files.map(\.id)) : []
-		refreshSections()
-	}
-
-	@objc private func toggleFileDiff(_ sender: NSButton)
-	{
-		guard let id = sender.identifier?.rawValue,
-				runtime.state.snapshot?.files.contains(where:
-				{
-					$0.id == id
-				}) == true
-		else
-		{
-			return
-		}
-		if !collapsedFileIDs.insert(id).inserted
-		{
-			collapsedFileIDs.remove(id)
-		}
-		refreshSections()
-	}
-
-	private func refreshSections()
-	{
-		renderedOptions = nil
-		render(runtime.state)
+		documentController.toggleAllDiffs()
 	}
 
 	private func updateCollapseDiffsButton(_ snapshot: GitComparisonSnapshot)
 	{
-		let title = collapseAllMode ? "Expand all diffs" : "Collapse all diffs"
+		let title = documentController.collapseAllMode ? "Expand all diffs" : "Collapse all diffs"
 		collapseDiffsButton?.setAccessibilityLabel(title)
 		collapseDiffsButton?.toolTip = title
 		collapseDiffsButton?.isEnabled = !snapshot.files.isEmpty
@@ -1377,14 +1090,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			target: targetField.stringValue
 		)
 	}
-	@objc private func expandGap(_ sender: NSButton)
-	{
-		if let id = sender.identifier?.rawValue
-		{
-			runtime.expandGap(id)
-		}
-	}
-
 	@objc private func showRevisionMenu()
 	{
 		let menu = NSMenu()
@@ -1564,16 +1269,16 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 					NSControl.StateValue.off
 				),
 				(
-					wrapsCode ? "Stop wrapping code lines" : "Wrap code lines",
+					documentController.wrapsCode ? "Stop wrapping code lines" : "Wrap code lines",
 					#selector(toggleWordWrap),
 					true,
-					wrapsCode ? .on : .off
+					documentController.wrapsCode ? .on : .off
 				),
 				(
-					collapseAllMode ? "Expand all diffs" : "Collapse all diffs",
+					documentController.collapseAllMode ? "Expand all diffs" : "Collapse all diffs",
 					#selector(toggleAllDiffs),
 					!(runtime.state.snapshot?.files.isEmpty ?? true),
-					collapseAllMode ? .on : .off
+					documentController.collapseAllMode ? .on : .off
 				),
 				("Switch diff layout", #selector(switchDiffLayout), true, .off),
 			]
@@ -1640,15 +1345,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		runtime.setOptions(options)
 	}
 
-}
-
-@MainActor
-private final class GitChangesSectionsView: NSStackView
-{
-	override var isFlipped: Bool
-	{
-		true
-	}
 }
 
 @MainActor

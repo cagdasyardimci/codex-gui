@@ -241,6 +241,10 @@ struct GitDiffSectionReuseTests
 			controller,
 			owner: owner("initial")
 		)
+		#expect(controller.children.contains
+		{
+			$0 is GitDiffDocumentController
+		})
 		let initial = try section(
 			"Tests/Two.swift",
 			in: controller.view
@@ -258,15 +262,29 @@ struct GitDiffSectionReuseTests
 			in: controller.view
 		)
 		#expect(filtered !== initial)
+		#expect(try button(
+			"Collapse all diffs",
+			in: controller.view
+		).dispatchConfiguredAction())
+		_ = try button(
+			"Expand all diffs",
+			in: controller.view
+		)
 		try await load(
 			controller,
 			owner: owner("next-owner")
 		)
 		#expect(controller.runtime.state.snapshot?.id == "reuse-fixture")
-		#expect(try section(
+		_ = try button(
+			"Collapse all diffs",
+			in: controller.view
+		)
+		let nextOwner = try section(
 			"Tests/Two.swift",
 			in: controller.view
-		) !== filtered)
+		)
+		#expect(nextOwner !== filtered)
+		_ = try source(in: nextOwner)
 	}
 
 	private func owner(_ identity: String) -> FeaturePresentationOwner
