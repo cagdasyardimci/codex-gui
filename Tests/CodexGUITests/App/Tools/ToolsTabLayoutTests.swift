@@ -102,6 +102,7 @@ struct ToolsTabLayoutTests
 		controller.updateToolsToolbarControls()
 		window.layoutIfNeeded()
 
+		#expect(abs(window.frame.height - window.contentLayoutRect.height - 40) < 0.5)
 		let toolbarViews = try #require(window.toolbar).items.compactMap(\.view)
 		let back = try #require(toolbarViews.compactMap
 		{
@@ -182,6 +183,7 @@ struct ToolsTabLayoutTests
 			height: 800
 		))
 		window.layoutIfNeeded()
+		#expect(abs(window.frame.height - window.contentLayoutRect.height - 40) < 0.5)
 
 		let splitFrame = panes.split.view.convert(
 			panes.split.view.bounds,

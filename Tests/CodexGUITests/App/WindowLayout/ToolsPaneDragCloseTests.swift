@@ -46,10 +46,8 @@ struct ToolsPaneDragCloseTests
 			#expect(panes.isAnimatingToolsExpansion)
 			#expect(panes.split.splitViewItems[1].minimumThickness == 0)
 		}
-		try await waitUntil
-		{
-			!panes.isAnimatingToolsExpansion && !panes.isReviewCollapsed
-		}
+		await panes.waitForToolsTransition()
+		try #require(!panes.isAnimatingToolsExpansion && !panes.isReviewCollapsed)
 		window.layoutIfNeeded()
 		#expect(panes.split.splitViewItems[1].minimumThickness == 320)
 		let tab = try #require(inspector.toolsTabs.selectedTabID)
@@ -83,10 +81,8 @@ struct ToolsPaneDragCloseTests
 		{
 			#expect(panes.isAnimatingToolsExpansion)
 		}
-		try await waitUntil
-		{
-			!panes.isAnimatingToolsExpansion && panes.isReviewCollapsed
-		}
+		await panes.waitForToolsTransition()
+		try #require(!panes.isAnimatingToolsExpansion && panes.isReviewCollapsed)
 		#expect(inspector.isShowingTools)
 		#expect(inspector.toolsTabs.tabCount == count)
 		#expect(inspector.toolsTabs.selectedTabID == tab)
@@ -95,10 +91,8 @@ struct ToolsPaneDragCloseTests
 
 		panes.onToolsExpansionLayoutChanged = nil
 		panes.openToolsPane()
-		try await waitUntil
-		{
-			!panes.isAnimatingToolsExpansion && !panes.isReviewCollapsed
-		}
+		await panes.waitForToolsTransition()
+		try #require(!panes.isAnimatingToolsExpansion && !panes.isReviewCollapsed)
 		#expect(inspector.isShowingTools)
 		#expect(inspector.toolsTabs.tabCount == count)
 		#expect(inspector.toolsTabs.selectedTabID == tab)
@@ -160,29 +154,19 @@ struct ToolsPaneDragCloseTests
 			#expect(panes.isAnimatingToolsExpansion)
 			#expect(panes.split.splitViewItems[1].minimumThickness == 0)
 		}
+		// Retain the canceled operation so its unwind is verified without a delay.
+		let canceledTransition = panes.toolsTransitionTask
 		inspector.closeToolsPane()
 		#expect(!inspector.isShowingTools)
 		#expect(!panes.isToolsExpanded)
 		#expect(!panes.isAnimatingToolsExpansion)
 		#expect(panes.split.splitViewItems[1].minimumThickness == 360)
 		#expect(panes.split.splitViewItems[2].minimumThickness == 220)
-		try await Task.sleep(for: .milliseconds(300))
+		await canceledTransition?.value
 		#expect(!panes.isAnimatingToolsExpansion)
 		#expect(panes.split.splitViewItems[1].minimumThickness == 360)
 		#expect(panes.split.splitViewItems[2].minimumThickness == 220)
 		#expect(inspector.toolsTabs.selectedTabID == tab)
 	}
 
-	private func waitUntil(_ condition: () -> Bool) async throws
-	{
-		for _ in 0 ..< 100
-		{
-			if condition()
-			{
-				return
-			}
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		Issue.record("Timed out waiting for the tools pane transition")
-	}
 }
