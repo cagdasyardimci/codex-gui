@@ -3,16 +3,20 @@ import Testing
 
 @testable import CodexGUI
 
+// Each test owns its repository, record store, defaults and mock services.
+// MainActor protects coordinator access; fixture lifecycles may overlap across awaits.
+// Body timing defers are registered first so later deferred cleanup finishes before the end marker.
 @MainActor
 @Suite(
 	"Independent task execution",
-	.serialized
+	.testTiming,
+	.timeLimit(.minutes(1))
 )
 struct TaskWorkspaceCoordinatorTests
 {
 	@Test func ordinaryChatsStopTogetherAndPublishEachCompletion() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -72,7 +76,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func ordinaryChatsQuitWaitsForBothRemoteOutcomes() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -113,7 +117,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func reconnectReconcilesEveryOrdinaryChatWithoutResending() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -143,7 +147,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func agentOnlyRelaunchReadsEveryPersistedOwnerBeforeStopping() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -229,7 +233,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func activeUnselectedThreadSummaryDiscoversRemoteAgentOwner() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -257,7 +261,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func relaunchReconcilesEveryPersistedOrdinaryCommandOwner() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -334,7 +338,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func ordinaryChatsAndManagedCommandKeepCheckoutProtectedDuringStopAll() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -439,9 +443,9 @@ struct TaskWorkspaceCoordinatorTests
 		}
 	}
 
-	@Test func pinnedTaskOpeningAdoptsItsProjectAndThreadTogether() throws
+	@Test func pinnedTaskOpeningAdoptsItsProjectAndThreadTogether() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -482,9 +486,9 @@ struct TaskWorkspaceCoordinatorTests
 		})
 	}
 
-	@Test func sourceOpeningPublishesMatchingCoordinatorAndSnapshotCheckout() throws
+	@Test func sourceOpeningPublishesMatchingCoordinatorAndSnapshotCheckout() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -524,7 +528,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func interruptedAgentWaitsForApprovedCommandBeforeCleanupAndQuit() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -622,7 +626,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func unresolvedCommandSurvivesDisconnectAndRelaunchWithMissingHistoryItem() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -719,7 +723,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func terminalSavedTurnWithRunningCommandReconstructsCleanupBarrier() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -778,7 +782,7 @@ struct TaskWorkspaceCoordinatorTests
 	{
 		for selectConversation in [false, true]
 		{
-			let fixture = try TaskExecutionFixture()
+			let fixture = try await TaskExecutionFixture()
 			defer
 			{
 				fixture.remove()
@@ -888,7 +892,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func fatalAgentErrorCancelsQuitAndWaitsForItsCommandsOwnOutcome() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -973,7 +977,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func directRegistryOwnersKeepRepeatedApprovalsStopAndReconnectSeparate() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1049,7 +1053,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func duplicateBackendThreadIDsRequireTheCapturedRegistryOwner() async throws
 	{
-		let fixture = try TaskExecutionFixture(sharedThreadID: "same-thread")
+		let fixture = try await TaskExecutionFixture(sharedThreadID: "same-thread")
 		defer
 		{
 			fixture.remove()
@@ -1086,7 +1090,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func retiredOwnerCallbacksCannotRecreateStoreOrPublishTaskEvents() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1132,7 +1136,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func interleavedApprovalsProgressAndChangesStayWithTheirCheckout() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1225,7 +1229,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func steeringAndStopRemainIndependentAndQuitWaitsForEveryOwner() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1317,7 +1321,7 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func reconnectingOneOwnerPreservesItsDraftWithoutResendingOrChangingAnotherTask()
 		async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1355,7 +1359,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func aConversationInAnotherCheckoutCannotReceiveTheTaskOrBindItsRecord() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1378,7 +1382,7 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func relaunchRestoresEachBoundConversationAndUnsentContextWithoutStartingATurn()
 		async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1443,7 +1447,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func notificationTransitionsRemainIndependentDuringInterleavedSnapshots() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1500,7 +1504,7 @@ struct TaskWorkspaceCoordinatorTests
 		for change in ["dirty", "binding", "clean"]
 		{
 			let gate = LifecyclePersistenceGate()
-			let fixture = try TaskExecutionFixture(persistenceGate: gate)
+			let fixture = try await TaskExecutionFixture(persistenceGate: gate)
 			defer
 			{
 				fixture.remove()
@@ -1576,7 +1580,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func cleanupRefusesAnActiveOrDirtyOwnerAndRetainsTheRemovedBranch() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1613,7 +1617,7 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(fixture.coordinator.currentSnapshot.taskWorkspaces.first?
 			.canRemoveCheckout == false)
 		#expect(
-			try fixture.git(
+			try await fixture.git(
 				["rev-parse", task.workspace.branch],
 				at: fixture.source
 			)
@@ -1624,7 +1628,7 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func restoredBoundTaskMustBeReconciledBeforeCleanupAndRunningHistoryBlocksRemoval()
 		async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1662,7 +1666,7 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func failedStopCancelsTheQuitWaitWhilePreservingUnknownOutcomeAndOtherOwners(
 	) async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1708,7 +1712,7 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func quitWaitsForActualCommandExitAndEveryOwnersAcceptedDraftWrites() async throws
 	{
 		let gate = LifecyclePersistenceGate()
-		let fixture = try TaskExecutionFixture(persistenceGate: gate)
+		let fixture = try await TaskExecutionFixture(persistenceGate: gate)
 		defer
 		{
 			fixture.remove()
@@ -1843,7 +1847,7 @@ struct TaskWorkspaceCoordinatorTests
 	@Test func completedPersistenceFailureCancelsQuitUntilSuccessfulSupersedingWrite() async throws
 	{
 		let gate = LifecyclePersistenceGate()
-		let fixture = try TaskExecutionFixture(persistenceGate: gate)
+		let fixture = try await TaskExecutionFixture(persistenceGate: gate)
 		defer
 		{
 			fixture.remove()
@@ -1920,7 +1924,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func unknownPreparationAfterNewChatStillRefusesNormalQuit() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -1972,7 +1976,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func reentrantQuitReservationFailureNeverStopsOrQueuesALaterFreeze() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -2022,7 +2026,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func completingDuringQuitConfirmationDoesNotLeaveADeferredQuitWaiting() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -2059,14 +2063,14 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func interruptedRemovalOfALockedCheckoutCanBeReopenedAndRetriedSafely() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
 		}
 		await fixture.sourceState.inputs.connect()
 		let task = try await fixture.createTask("Locked cleanup")
-		_ = try fixture.git(
+		_ = try await fixture.git(
 			["worktree", "lock", task.workspace.checkoutPath],
 			at: fixture.source
 		)
@@ -2098,14 +2102,14 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(task.state.currentSnapshot.draft == "Keep local input while removal is incomplete")
 		#expect(!task.state.currentSnapshot.canSend)
 		#expect(task.state.store.inputs.send() == nil)
-		_ = try fixture.git(
+		_ = try await fixture.git(
 			["worktree", "unlock", task.workspace.checkoutPath],
 			at: fixture.source
 		)
 		await fixture.coordinator.removeCheckout(id: task.workspace.id)
 		#expect(!FileManager.default.fileExists(atPath: task.workspace.checkoutPath))
 		#expect(
-			try fixture.git(
+			try await fixture.git(
 				["rev-parse", task.workspace.branch],
 				at: fixture.source
 			)
@@ -2115,7 +2119,7 @@ struct TaskWorkspaceCoordinatorTests
 
 	@Test func changingACheckoutBranchBlocksSteeringWithoutAffectingAnotherOwner() async throws
 	{
-		let fixture = try TaskExecutionFixture()
+		let fixture = try await TaskExecutionFixture()
 		defer
 		{
 			fixture.remove()
@@ -2133,7 +2137,7 @@ struct TaskWorkspaceCoordinatorTests
 				alpha.service.turnRequests.count == 1 && beta.service.turnRequests.count == 1
 			}
 		)
-		_ = try fixture.git(
+		_ = try await fixture.git(
 			["switch", "-c", "changed-owner"],
 			at: URL(fileURLWithPath: alpha.workspace.checkoutPath)
 		)
@@ -2317,6 +2321,7 @@ private final class TaskExecutionFixture
 	let source: URL
 	let manager: GitWorktreeManager
 	let storage: LocalStorage
+	let projectContextStore: ProjectContextStore
 	let sourceService: WorkspaceCodexService
 	let sourceState: WorkspaceTestFixture
 	let coordinator: TaskWorkspaceCoordinator
@@ -2325,23 +2330,51 @@ private final class TaskExecutionFixture
 	init(
 		persistenceGate: LifecyclePersistenceGate? = nil,
 		sharedThreadID: String? = nil
-	) throws
+	) async throws
 	{
-		root = FileManager.default.temporaryDirectory.appendingPathComponent(
-			"CodexGUI-TaskExecution-\(UUID().uuidString)",
-			isDirectory: true
-		).standardizedFileURL.resolvingSymlinksInPath()
-		source = root.appendingPathComponent(
-			"source",
-			isDirectory: true
-		)
-		try Self.prepareSourceRepository(at: source)
+		let timing = TestTiming.begin("fixture.setup")
+		defer
+		{
+			timing.end()
+		}
+		// Prepare independent files and Git history before constructing actor-owned stores.
+		// Blocking subprocess work runs on the fixture worker queue, not Swift's task workers.
+		let prepared = try await BackgroundTestWork.perform
+		{
+			let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+				"CodexGUI-TaskExecution-\(UUID().uuidString)",
+				isDirectory: true
+			).standardizedFileURL.resolvingSymlinksInPath()
+			let source = root.appendingPathComponent(
+				"source",
+				isDirectory: true
+			)
+			do
+			{
+				try Self.prepareSourceRepository(at: source)
+			}
+			catch
+			{
+				try? FileManager.default.removeItem(at: root)
+				throw error
+			}
+			return (root, source)
+		}
+		timing.mark("actor.resumed")
+		root = prepared.0
+		source = prepared.1
 		manager = GitWorktreeManager(
 			recordDirectory: root.appendingPathComponent("records"),
 			checkoutRoot: root.appendingPathComponent("checkouts")
 		)
 		let defaults = UserDefaults(suiteName: "TaskExecution.\(UUID().uuidString)")!
 		storage = LocalStorage(defaults: defaults)
+		// One real context persistence worker belongs to this fixture's repository owners.
+		// The default directory would serialize reads and drains across unrelated fixtures.
+		projectContextStore = ProjectContextStore(
+			directory: root.appendingPathComponent("data/project-context")
+		)
+		timing.mark("storage.ready")
 		if let persistenceGate
 		{
 			let sharedStorage = storage
@@ -2378,9 +2411,12 @@ private final class TaskExecutionFixture
 		)
 		sourceState = WorkspaceTestFixture(
 			server: sourceService,
-			storage: storage
+			storage: storage,
+			projectContextStore: projectContextStore
 		)
+		timing.mark("source.store.ready")
 		let sharedStorage = storage
+		let sharedContextStore = projectContextStore
 		var capturedServices: [UUID: WorkspaceCodexService] = [:]
 		let sharedManager = manager
 		coordinator = TaskWorkspaceCoordinator(
@@ -2400,6 +2436,7 @@ private final class TaskExecutionFixture
 				dependencies: WorkspaceStoreDependencies(
 					service: service,
 					storage: sharedStorage,
+					projectContextStore: sharedContextStore,
 					manager: sharedManager
 				)
 			)
@@ -2408,9 +2445,10 @@ private final class TaskExecutionFixture
 		{
 			capturedServices
 		}
+		timing.mark("coordinator.ready")
 	}
 
-	private static func prepareSourceRepository(at source: URL) throws
+	nonisolated private static func prepareSourceRepository(at source: URL) throws
 	{
 		try FileManager.default.createDirectory(
 			at: source,
@@ -2447,17 +2485,34 @@ private final class TaskExecutionFixture
 
 	func createTask(_ name: String) async throws -> TaskOwner
 	{
-		let workspace = try #require(await coordinator.createTask(named: name))
-		let state = WorkspaceTestFixture(store: coordinator.selectedStore)
-		for _ in 0 ..< 300
+		let workspace: TaskWorkspace
+		do
 		{
-			if state.currentSnapshot.canSend
+			let timing = TestTiming.begin(
+				"coordinator.createTask",
+				detail: name
+			)
+			defer
 			{
-				break
+				timing.end()
 			}
-			try? await Task.sleep(for: .milliseconds(5))
+			workspace = try #require(await coordinator.createTask(named: name))
 		}
-		#expect(state.currentSnapshot.canSend)
+		let state = WorkspaceTestFixture(store: coordinator.selectedStore)
+		let pendingContext = state.store.model.contextNavigation.pendingContextLoad != nil
+		let warning = state.currentSnapshot.preferenceWarning ?? "none"
+		let readiness = TestTiming.begin(
+			"coordinator.canSend",
+			detail: "\(name); connected=\(state.store.model.connection.isConnected); "
+				+ "contextLoad=\(pendingContext); warning=\(warning)"
+		)
+		// Await backend readiness independently of scheduling other parallel fixtures.
+		await awaitWorkspaceSnapshot(state.store)
+		{
+			$0.canSend
+		}
+		readiness.end()
+		try #require(state.currentSnapshot.canSend)
 		let service = try #require(servicesProvider()[workspace.id])
 		return TaskOwner(
 			workspace: workspace,
@@ -2481,9 +2536,11 @@ private final class TaskExecutionFixture
 				directory: source,
 				threadID: "source"
 			),
-			storage: storage
+			storage: storage,
+			projectContextStore: projectContextStore
 		)
 		let sharedManager = manager
+		let sharedContextStore = projectContextStore
 		return TaskWorkspaceCoordinator(
 			sourceStore: sourceState.store,
 			manager: manager
@@ -2505,6 +2562,7 @@ private final class TaskExecutionFixture
 				dependencies: WorkspaceStoreDependencies(
 					service: service,
 					storage: sharedStorage,
+					projectContextStore: sharedContextStore,
 					manager: sharedManager
 				)
 			)
@@ -2514,15 +2572,17 @@ private final class TaskExecutionFixture
 	func git(
 		_ arguments: [String],
 		at directory: URL
-	) throws -> String
+	) async throws -> String
 	{
-		try Self.runGit(
-			arguments,
-			at: directory
+		let result = try await GitTestCommandRunner.runAsync(
+			in: directory,
+			arguments: arguments,
+			captureStandardError: true
 		)
+		return try Self.checkedGitOutput(result)
 	}
 
-	private static func runGit(
+	nonisolated private static func runGit(
 		_ arguments: [String],
 		at directory: URL
 	) throws -> String
@@ -2532,6 +2592,13 @@ private final class TaskExecutionFixture
 			arguments: arguments,
 			captureStandardError: true
 		)
+		return try checkedGitOutput(result)
+	}
+
+	nonisolated private static func checkedGitOutput(
+		_ result: GitTestCommandRunner.Result
+	) throws -> String
+	{
 		let text = String(
 			decoding: result.output,
 			as: UTF8.self
@@ -2546,6 +2613,11 @@ private final class TaskExecutionFixture
 
 	func remove()
 	{
+		let timing = TestTiming.begin("fixture.cleanup")
+		defer
+		{
+			timing.end()
+		}
 		coordinator.shutdown()
 		try? FileManager.default.removeItem(at: root)
 	}
