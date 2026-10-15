@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ConversationActivityReducerTests
 {
 	private func model() -> WorkspaceModel
@@ -54,7 +55,7 @@ struct ConversationActivityReducerTests
 		)
 	}
 
-	@Test func commandOutputBeforeStartSurvivesAndCompletionIsAuthoritative()
+	@Test func commandOutputBeforeStartSurvivesAndCompletionIsAuthoritative() throws
 	{
 		var value = model()
 		observe(
@@ -122,10 +123,26 @@ struct ConversationActivityReducerTests
 				id: "turn:command"
 			)
 		])
+		let completedEntry = try #require(value.conversations.content[.thread("worker")]?
+			.entries.first)
+		#expect(completedEntry.body == "$ cat src/file\ncanonical")
+		#expect(completedEntry.title == "Command · completed")
+		guard case .command(let completedActivity) = completedEntry.activity
+		else
+		{
+			Issue.record("Expected completed command activity")
+			return
+		}
+		#expect(completedActivity.command == "cat src/file")
+		#expect(completedActivity.cwd == "/tmp/activity")
+		#expect(completedActivity.output == "canonical")
+		#expect(completedActivity.status == "completed")
+		#expect(completedActivity.exitCode == 0)
+		#expect(completedActivity.durationMs == 25)
 		#expect(value.conversations.content[.thread("viewed")] == nil)
 	}
 
-	@Test func turnCompletionAndHistoryProduceTheSameCommandAndImageEntries()
+	@Test func turnCompletionAndHistoryProduceTheSameCommandAndImageEntries() throws
 	{
 		var live = model()
 		let image = CodexItem(json: [
@@ -173,6 +190,19 @@ struct ConversationActivityReducerTests
 		let liveContent = live.conversations.content[.thread("worker")]!
 		let historyContent = history.conversations.content[.thread("worker")]!
 		#expect(liveContent.entries == historyContent.entries)
+		let completedEntry = try #require(liveContent.entries.first)
+		#expect(completedEntry.body == "$ cat src/file\ndone")
+		#expect(completedEntry.title == "Command · completed")
+		guard case .command(let completedActivity) = completedEntry.activity
+		else
+		{
+			Issue.record("Expected completed command activity")
+			return
+		}
+		#expect(completedActivity.output == "done")
+		#expect(completedActivity.status == "completed")
+		#expect(completedActivity.exitCode == 0)
+		#expect(completedActivity.durationMs == 25)
 		#expect(liveContent.entries[1].activity == .image(path: "/tmp/image.png"))
 		#expect(ConversationContentReducer.timings(for: liveContent) ==
 			ConversationContentReducer.timings(for: historyContent))

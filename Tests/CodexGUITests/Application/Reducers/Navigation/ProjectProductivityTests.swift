@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite("Project productivity")
+@Suite(
+	"Project productivity"
+)
 struct ProjectProductivityTests
 {
 	@Test("Explicitly included items alone appear in request context")
@@ -75,5 +77,37 @@ struct ProjectProductivityTests
 			context: context,
 			in: nil
 		) != nil)
+	}
+
+	@Test(arguments: ["/old/review/SKILL.md", "/new/review/SKILL.md"])
+	@MainActor
+	func disabledSkillCannotResolveByExactPathOrRelocatedName(path: String) throws
+	{
+		var context = ProjectContext()
+		context.selectedSkill = ProjectSkillSelection(
+			name: "review",
+			description: "Review code",
+			path: "/old/review/SKILL.md"
+		)
+		let disabled = try #require(AvailableSkill(json: [
+			"name": "review",
+			"description": "Review code",
+			"path": path,
+			"scope": "repo",
+			"enabled": false,
+		]))
+		let catalog = SkillCatalog(
+			skills: [disabled],
+			errors: []
+		)
+
+		#expect(ProjectProductivity.resolvedSkill(
+			context: context,
+			in: catalog
+		) == nil)
+		#expect(ProjectProductivity.skillWarning(
+			context: context,
+			in: catalog
+		) == "Selected skill review is unavailable or disabled for this project.")
 	}
 }

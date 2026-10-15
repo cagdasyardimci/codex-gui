@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ConversationStreamingReducerTests
 {
 	private let projectPath = "/tmp/streaming"
@@ -538,7 +539,7 @@ struct ConversationStreamingReducerTests
 	}
 
 	@Test(arguments: ["running", "inProgress"])
-	func commandBodyKeepsEmptyFragmentNewlineAndCompletionSemantics(_ status: String)
+	func commandBodyKeepsEmptyFragmentNewlineAndCompletionSemantics(_ status: String) throws
 	{
 		var model = fixture()
 		ConversationContentReducer.observe(
@@ -605,6 +606,20 @@ struct ConversationStreamingReducerTests
 				id: "current:command"
 			)
 		])
+		let completedEntry = try #require(model.conversations.content[conversation]?.entries.first)
+		#expect(completedEntry.body == "$ printf\nauthoritative")
+		#expect(completedEntry.title == "Command · completed")
+		guard case .command(let completedActivity) = completedEntry.activity
+		else
+		{
+			Issue.record("Expected completed command activity")
+			return
+		}
+		#expect(completedActivity.command == "printf")
+		#expect(completedActivity.output == "authoritative")
+		#expect(completedActivity.status == "completed")
+		#expect(completedActivity.exitCode == nil)
+		#expect(completedActivity.durationMs == nil)
 	}
 
 	@Test func commandOutputBeforeStartCanonicalizesOnceAndRetainsEveryFragment()
