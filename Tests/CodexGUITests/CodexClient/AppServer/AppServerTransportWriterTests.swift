@@ -4,11 +4,20 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct AppServerTransportWriterTests
 {
 	@Test func requestDeadlineRunsWhileItsPhysicalWriteIsBlocked() async throws
 	{
-		let fixture = try fixture(timeout: .milliseconds(250))
+		let deadlineClock = ControlledRequestTimeoutClock()
+		let fixture = try await fixture(
+			timeout: .milliseconds(250),
+			observePartialWrite: true,
+			requestTimeoutSleep:
+			{
+				try await deadlineClock.sleep(for: $0)
+			}
+		)
 		defer
 		{
 			fixture.close()
@@ -23,8 +32,7 @@ struct AppServerTransportWriterTests
 		{
 			disconnectMessage = $0
 		}
-		let clock = ContinuousClock()
-		let started = clock.now
+		let previousSleeps = await deadlineClock.sleepCount
 		let request = Task
 		{
 			_ = try await fixture.server.request(
@@ -35,28 +43,48 @@ struct AppServerTransportWriterTests
 				)]
 			)
 		}
+		defer
+		{
+			request.cancel()
+		}
 		var mainActorAdvanced = false
 		await Task
 		{
 			mainActorAdvanced = true
 		}.value
 		#expect(mainActorAdvanced)
+		try await deadlineClock.waitForSleepCount(previousSleeps + 1)
+		// The child has consumed the first byte but holds the pipe without draining the frame.
+		// Expire the request only after this physical-write checkpoint, not after elapsed time.
+		try await waitUntil
+		{
+			FileManager.default.fileExists(atPath: fixture.directory
+				.appendingPathComponent("partial").path)
+		}
+		#expect(fixture.isPaused)
+		await deadlineClock.expirePending()
 		do
 		{
-			_ = try await request.value
+			try await withTaskCancellationHandler
+			{
+				try await request.value
+			}
+			onCancel:
+			{
+				request.cancel()
+			}
 			Issue.record("A request blocked in a full pipe unexpectedly completed.")
 		}
 		catch AppServerError.requestTimedOut(let method)
 		{
 			#expect(method == "fixture/largeMutation")
 		}
-		#expect(started.duration(to: clock.now) < .seconds(2))
 		#expect(disconnectMessage?.contains("input failed") == true)
 	}
 
 	@Test func cancellingAQueuedRequestSendsNoBytesAndKeepsConnectionUsable() async throws
 	{
-		let fixture = try fixture()
+		let fixture = try await fixture()
 		defer
 		{
 			fixture.close()
@@ -110,14 +138,15 @@ struct AppServerTransportWriterTests
 			params: [:]
 		)
 		#expect(result["method"] as? String == "fixture/afterCancel")
-		#expect(!fixture.methods().contains("fixture/mustNotSend"))
-		#expect(fixture.methods().prefix(3) == ["initialize", "initialized", "fixture/blocker"])
+		let methods = fixture.methods()
+		#expect(!methods.contains("fixture/mustNotSend"))
+		#expect(methods.prefix(3) == ["initialize", "initialized", "fixture/blocker"])
 	}
 
 	@Test func synchronousApprovalKeepsMetadataUntilAcknowledgmentAndCannotCrossReconnect(
 	) async throws
 	{
-		let fixture = try fixture()
+		let fixture = try await fixture()
 		defer
 		{
 			fixture.close()
@@ -194,7 +223,7 @@ struct AppServerTransportWriterTests
 
 	@Test func queuedRequestCancellationStopsWritingBeforeMainActorCleanup() async throws
 	{
-		let fixture = try fixture()
+		let fixture = try await fixture()
 		defer
 		{
 			fixture.close()
@@ -249,7 +278,7 @@ struct AppServerTransportWriterTests
 
 	@Test func resolvedInteractionStopsQueuedResponseBeforePublishingEvent() async throws
 	{
-		let fixture = try fixture()
+		let fixture = try await fixture()
 		defer
 		{
 			fixture.server.onEvent = nil
@@ -345,18 +374,28 @@ struct AppServerTransportWriterTests
 		try #require(predicate())
 	}
 
-	private func fixture(timeout: Duration = .seconds(3)) throws -> PausedProtocolWriterFixture
+	private func fixture(
+		timeout: Duration = .seconds(3),
+		observePartialWrite: Bool = false,
+		requestTimeoutSleep: @escaping @Sendable (Duration) async throws -> Void =
+		{
+			try await Task.sleep(for: $0)
+		}
+	) async throws -> PausedProtocolWriterFixture
 	{
-		let directory = FileManager.default.temporaryDirectory
-			.appendingPathComponent("AppServerTransportWriterTests-\(UUID().uuidString)")
-		try FileManager.default.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
-		)
-		let executable = directory.appendingPathComponent("mock-codex")
-		try """
+		let (directory, executable) = try await BackgroundTestWork.perform
+		{
+			let directory = FileManager.default.temporaryDirectory
+				.appendingPathComponent("AppServerTransportWriterTests-\(UUID().uuidString)")
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+			let executable = directory.appendingPathComponent("mock-codex")
+			try """
 		#!/usr/bin/env python3
 		import json
+		import os
 		import pathlib
 		import sys
 		import time
@@ -372,8 +411,10 @@ struct AppServerTransportWriterTests
 		for line in sys.stdin:
 		    message = json.loads(line)
 		    method = message.get('method')
+		    # Decode the full wire payload; routing assertions only need method and request ID.
+		    metadata = {key: message[key] for key in ('method', 'id') if key in message}
 		    with open(directory / 'messages.jsonl', 'a') as log:
-		        log.write(json.dumps(message) + '\\n')
+		        log.write(json.dumps(metadata) + '\\n')
 		    if method == 'initialize':
 		        send({'id': message['id'], 'result': {}})
 		    elif method == 'initialized':
@@ -382,6 +423,9 @@ struct AppServerTransportWriterTests
 		            'availableDecisions': ['accept', 'decline']
 		        }})
 		        (directory / 'paused').touch()
+		        if \(observePartialWrite ? "True" : "False"):
+		            os.read(sys.stdin.fileno(), 1)
+		            (directory / 'partial').touch()
 		        while not (directory / 'release').exists():
 		            time.sleep(0.005)
 		    elif method == 'fixture/queueDrained':
@@ -389,18 +433,21 @@ struct AppServerTransportWriterTests
 		    elif method != 'fixture/blocker' and 'id' in message and method:
 		        send({'id': message['id'], 'result': {'method': method}})
 		""".write(
-			to: executable,
-			atomically: true,
-			encoding: .utf8
-		)
-		try FileManager.default.setAttributes(
-			[.posixPermissions: 0o755],
-			ofItemAtPath: executable.path
-		)
+				to: executable,
+				atomically: true,
+				encoding: .utf8
+			)
+			try FileManager.default.setAttributes(
+				[.posixPermissions: 0o755],
+				ofItemAtPath: executable.path
+			)
+			return (directory, executable)
+		}
 		return PausedProtocolWriterFixture(
 			server: AppServer(
 				executableOverride: executable,
-				requestTimeout: timeout
+				requestTimeout: timeout,
+				requestTimeoutSleep: requestTimeoutSleep
 			),
 			directory: directory
 		)

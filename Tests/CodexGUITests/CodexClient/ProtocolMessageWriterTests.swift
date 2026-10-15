@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CodexGUI
 
-@MainActor
+@Suite
 struct ProtocolMessageWriterTests
 {
 	@Test func orderedFramesPreserveUnicodeNumbersAndMutableInputSnapshot() async throws
@@ -54,6 +54,7 @@ struct ProtocolMessageWriterTests
 		}
 	}
 
+	@MainActor
 	@Test func fullPipeKeepsMainActorResponsiveAndQueuedCancellationSendsNoBytes() async throws
 	{
 		let pipe = Pipe()
@@ -249,9 +250,12 @@ struct ProtocolMessageWriterTests
 
 	private func readToEnd(_ handle: FileHandle) -> Task<Data, Error>
 	{
-		Task.detached
+		Task
 		{
-			try handle.readToEnd() ?? Data()
+			try await BackgroundTestWork.perform
+			{
+				try handle.readToEnd() ?? Data()
+			}
 		}
 	}
 
@@ -283,7 +287,7 @@ struct ProtocolMessageWriterTests
 		}
 	}
 
-	private func waitUntil(_ predicate: () -> Bool) async throws
+	private func waitUntil(_ predicate: @Sendable () -> Bool) async throws
 	{
 		let clock = ContinuousClock()
 		let deadline = clock.now.advanced(by: .seconds(3))

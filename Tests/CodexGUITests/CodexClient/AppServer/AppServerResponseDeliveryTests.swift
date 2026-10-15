@@ -4,17 +4,24 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct AppServerResponseDeliveryTests
 {
 	@Test func largeNestedResponsePreservesValuesAndEveryAdjacentNotification() async throws
 	{
-		let (server, directory) = try fixture()
+		let (server, directory) = try await fixture()
 		defer
 		{
 			server.disconnect()
 			try? FileManager.default.removeItem(at: directory)
 		}
 		var deltas: [String] = []
+		let notifications = AsyncStream<String>.makeStream()
+		defer
+		{
+			server.onEvent = nil
+			notifications.continuation.finish()
+		}
 		server.onEvent =
 		{
 			if case .agentMessageDelta(
@@ -25,6 +32,7 @@ struct AppServerResponseDeliveryTests
 			) = $0
 			{
 				deltas.append(text)
+				notifications.continuation.yield(text)
 			}
 		}
 		try await server.connect()
@@ -51,18 +59,21 @@ struct AppServerResponseDeliveryTests
 		#expect((values[4] as? NSNumber)?.doubleValue == 4.25)
 		#expect(values[5] is NSNull)
 		#expect((values[6] as? NSNumber)?.doubleValue == 1.25e40)
-		let clock = ContinuousClock()
-		let deadline = clock.now.advanced(by: .seconds(3))
-		while deltas.count < 256, clock.now < deadline
+		// Await the actual notification count; delivery order is independent of actor throughput.
+		var delivered = notifications.stream.makeAsyncIterator()
+		for _ in 0 ..< 256
 		{
-			try await Task.sleep(for: .milliseconds(1))
+			try #require(
+				await delivered.next() != nil,
+				"Notification delivery was canceled"
+			)
 		}
 		#expect(deltas == (0 ..< 256).map(String.init))
 	}
 
 	@Test func invalidResponseShapesAndServerErrorsKeepTheirExistingFailureBehavior() async throws
 	{
-		let (server, directory) = try fixture()
+		let (server, directory) = try await fixture()
 		defer
 		{
 			server.disconnect()
@@ -105,7 +116,7 @@ struct AppServerResponseDeliveryTests
 
 	@Test func resultDomainDecodingMatchesTheLegacyJSONRoundTrip() async throws
 	{
-		let (server, directory) = try fixture()
+		let (server, directory) = try await fixture()
 		defer
 		{
 			server.disconnect()
@@ -120,6 +131,12 @@ struct AppServerResponseDeliveryTests
 			with: JSONSerialization.data(withJSONObject: response)
 		) as? [String: Any])
 		let turn = try #require((response["turn"] as? [String: Any]).flatMap(CodexTurn.init(json:)))
+		#expect(turn.id == "turn")
+		#expect(turn.status == "completed")
+		#expect(turn.startedAt == Date(timeIntervalSince1970: 100))
+		#expect(turn.completedAt == Date(timeIntervalSince1970: 101.25))
+		#expect(turn.durationMs == 1250)
+		#expect(turn.items.map(\.id) == ["command"])
 		let legacyTurn = try #require((legacy["turn"] as? [String: Any])
 			.flatMap(CodexTurn.init(json:)))
 		#expect(turn.id == legacyTurn.id)
@@ -128,19 +145,32 @@ struct AppServerResponseDeliveryTests
 		#expect(turn.completedAt == legacyTurn.completedAt)
 		#expect(turn.durationMs == legacyTurn.durationMs)
 		let command = try #require(turn.items.first)
+		#expect(command.type == "commandExecution")
+		#expect(command.command == "swift test")
+		#expect(command.exitCode == 0)
+		#expect(command.durationMs == 1250)
+		#expect(command.output?.utf8.elementsEqual("\u{00E9}e\u{0301}".utf8) == true)
+		#expect(command.changes.isEmpty)
 		let legacyCommand = try #require(legacyTurn.items.first)
 		#expect(command.command == legacyCommand.command)
 		#expect(command.exitCode == legacyCommand.exitCode)
 		#expect(command.durationMs == legacyCommand.durationMs)
 		#expect(command.output?.utf8.elementsEqual(try #require(legacyCommand.output).utf8) == true)
 		#expect(command.changes == legacyCommand.changes)
-		#expect(AccountRateLimitsSnapshot(json: response) ==
-			AccountRateLimitsSnapshot(json: legacy))
+		let snapshot = try #require(AccountRateLimitsSnapshot(json: response))
+		let window = try #require(snapshot.rateLimits.primary)
+		#expect(window.usedPercent == 10)
+		#expect(window.windowDurationMins == 300)
+		#expect(window.resetsAt == Date(timeIntervalSince1970: 1_730_947_200))
+		let resetCredits = try #require(snapshot.rateLimitResetCredits)
+		#expect(resetCredits.availableCount == 1)
+		#expect(resetCredits.credits == nil)
+		#expect(snapshot == (try #require(AccountRateLimitsSnapshot(json: legacy))))
 	}
 
 	@Test func responsesArrivingInReverseOrderResumeTheirMatchingRequests() async throws
 	{
-		let (server, directory) = try fixture()
+		let (server, directory) = try await fixture()
 		defer
 		{
 			server.disconnect()
@@ -163,20 +193,37 @@ struct AppServerResponseDeliveryTests
 			)
 			return response["name"] as? String
 		}
-		#expect(try await first.value == "first")
-		#expect(try await second.value == "second")
+		defer
+		{
+			first.cancel()
+			second.cancel()
+		}
+		try await withTaskCancellationHandler
+		{
+			let firstValue = try await first.value
+			let secondValue = try await second.value
+			#expect(firstValue == "first")
+			#expect(secondValue == "second")
+		}
+		onCancel:
+		{
+			first.cancel()
+			second.cancel()
+		}
 	}
 
-	private func fixture() throws -> (AppServer, URL)
+	private func fixture() async throws -> (AppServer, URL)
 	{
-		let directory = FileManager.default.temporaryDirectory
-			.appendingPathComponent("AppServerResponseDeliveryTests-\(UUID().uuidString)")
-		try FileManager.default.createDirectory(
-			at: directory,
-			withIntermediateDirectories: true
-		)
-		let executable = directory.appendingPathComponent("mock-codex")
-		try """
+		let (directory, executable) = try await BackgroundTestWork.perform
+		{
+			let directory = FileManager.default.temporaryDirectory
+				.appendingPathComponent("AppServerResponseDeliveryTests-\(UUID().uuidString)")
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+			let executable = directory.appendingPathComponent("mock-codex")
+			try """
 		#!/usr/bin/env python3
 		import json
 		import sys
@@ -246,17 +293,25 @@ struct AppServerResponseDeliveryTests
 		            'rateLimitResetCredits': {'availableCount': 1.0, 'credits': None}
 		        }})
 		""".write(
-			to: executable,
-			atomically: true,
-			encoding: .utf8
-		)
-		try FileManager.default.setAttributes(
-			[.posixPermissions: 0o755],
-			ofItemAtPath: executable.path
-		)
+				to: executable,
+				atomically: true,
+				encoding: .utf8
+			)
+			try FileManager.default.setAttributes(
+				[.posixPermissions: 0o755],
+				ofItemAtPath: executable.path
+			)
+			return (directory, executable)
+		}
+		// These tests exercise decoding and routing, not elapsed-time deadline behavior.
+		let deadlineClock = ControlledRequestTimeoutClock()
 		return (AppServer(
 			executableOverride: executable,
-			requestTimeout: .seconds(3)
+			requestTimeout: .seconds(3),
+			requestTimeoutSleep:
+			{
+				try await deadlineClock.sleep(for: $0)
+			}
 		), directory)
 	}
 }
