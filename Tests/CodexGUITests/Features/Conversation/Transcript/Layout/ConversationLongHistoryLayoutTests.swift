@@ -40,6 +40,7 @@ struct ConversationLongHistoryLayoutTests
 			fixture.panes.setReviewCollapsed(!inspectorVisible)
 			await settleLayout(
 				panes: fixture.panes,
+				controller: fixture.controller,
 				collection: fixture.collection
 			)
 			let text = try assertCopyControlCards(
@@ -69,6 +70,7 @@ struct ConversationLongHistoryLayoutTests
 			fixture.controller.readingPositionChanged()
 			await settleLayout(
 				panes: fixture.panes,
+				controller: fixture.controller,
 				collection: fixture.collection
 			)
 			_ = try assertCopyControlCards(
@@ -92,6 +94,7 @@ struct ConversationLongHistoryLayoutTests
 		)
 		await settleLayout(
 			panes: fixture.panes,
+			controller: fixture.controller,
 			collection: fixture.collection
 		)
 		fixture.collection.scrollToItems(
@@ -100,6 +103,7 @@ struct ConversationLongHistoryLayoutTests
 		)
 		await settleLayout(
 			panes: fixture.panes,
+			controller: fixture.controller,
 			collection: fixture.collection
 		)
 		_ = try assertCopyControlCards(
@@ -145,6 +149,7 @@ struct ConversationLongHistoryLayoutTests
 			panes.setReviewCollapsed(!inspectorVisible)
 			await settleLayout(
 				panes: panes,
+				controller: controller,
 				collection: collection
 			)
 			#expect(panes.split.splitViewItems[2].isCollapsed == !inspectorVisible)
@@ -177,6 +182,7 @@ struct ConversationLongHistoryLayoutTests
 		controller.showLatestMessage()
 		await settleLayout(
 			panes: fixture.panes,
+			controller: fixture.controller,
 			collection: collection
 		)
 		#expect(collection.bounds.maxY - scroll.contentView.bounds.maxY < 48)
@@ -187,6 +193,7 @@ struct ConversationLongHistoryLayoutTests
 		)
 		await settleLayout(
 			panes: fixture.panes,
+			controller: fixture.controller,
 			collection: collection
 		)
 		let marker = try markerRect(
@@ -216,6 +223,7 @@ struct ConversationLongHistoryLayoutTests
 		let current = try #require(findCollection(in: controller.view))
 		await settleLayout(
 			panes: fixture.panes,
+			controller: fixture.controller,
 			collection: current
 		)
 		#expect(controller.entries == [replacement])
@@ -241,7 +249,15 @@ struct ConversationLongHistoryLayoutTests
 		let text = try #require(textViews(in: item.view).first)
 		let manager = try #require(text.layoutManager as? ConversationMarkdownLayoutManager)
 		let container = try #require(text.textContainer)
-		manager.ensureLayout(for: container)
+		// Text layout and the item's overlay layout are separate AppKit lifecycle stages.
+		// Drive both for this fixture before inspecting copy buttons after a width change.
+		// The second pass applies any body-height constraints changed by viewDidLayout.
+		for _ in 0 ..< 2
+		{
+			item.view.layoutSubtreeIfNeeded()
+			manager.ensureLayout(for: container)
+			item.viewDidLayout()
+		}
 		let buttons = allButtons(in: item.view).filter
 		{
 			($0.accessibilityLabel() ?? "").hasPrefix("Copy code block ")
@@ -376,6 +392,7 @@ struct ConversationLongHistoryLayoutTests
 		await controller.waitForRendering()
 		await settleLayout(
 			panes: panes,
+			controller: controller,
 			collection: collection
 		)
 		let path = IndexPath(
@@ -388,6 +405,7 @@ struct ConversationLongHistoryLayoutTests
 		)
 		await settleLayout(
 			panes: panes,
+			controller: controller,
 			collection: collection
 		)
 		let initialMarker = try markerRect(
@@ -402,6 +420,7 @@ struct ConversationLongHistoryLayoutTests
 		controller.readingPositionChanged()
 		await settleLayout(
 			panes: panes,
+			controller: controller,
 			collection: collection
 		)
 		return ReadingFixture(
@@ -416,6 +435,7 @@ struct ConversationLongHistoryLayoutTests
 
 	private func settleLayout(
 		panes: WindowPaneController,
+		controller: ConversationViewController,
 		collection: NSCollectionView
 	) async
 	{
@@ -423,7 +443,8 @@ struct ConversationLongHistoryLayoutTests
 		{
 			panes.split.view.layoutSubtreeIfNeeded()
 			collection.layoutSubtreeIfNeeded()
-			try? await Task.sleep(for: .milliseconds(10))
+			// Await width restoration before checking the reading anchor.
+			await controller.widthChangeRestoreTask?.value
 		}
 	}
 
