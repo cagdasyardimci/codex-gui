@@ -4,6 +4,7 @@ import Testing
 @testable import CodexGUI
 
 @MainActor
+@Suite
 struct ConversationReducerTests
 {
 	private func fixture() -> WorkspaceModel
@@ -266,7 +267,8 @@ struct ConversationReducerTests
 		let current = ConversationReadOperation(
 			context: context(model),
 			commandRevision: 2,
-			purpose: .selection
+			purpose: .selection,
+			contentRevision: 3
 		)
 		let key = ConversationReadKey(
 			purpose: .selection,
@@ -275,8 +277,8 @@ struct ConversationReducerTests
 		model.conversations.pendingReads[key] = current
 		model.conversations.pendingSelection = current.context
 		model.execution.commandEventRevisions["thread"] = 2
+		model.conversations.contentRevisions["thread"] = 3
 		let scopes = [
-			current.context,
 			context(model),
 			OperationContext(
 				workspace: model.identity,
@@ -302,32 +304,206 @@ struct ConversationReducerTests
 				requestID: current.context.requestID,
 				threadID: "thread"
 			),
+			OperationContext(
+				workspace: model.identity,
+				generation: 1,
+				requestID: current.context.requestID,
+				threadID: "other"
+			),
 		]
-		for scope in scopes
-		{
-			let stale = ConversationReadOperation(
-				context: scope,
+		let staleOperations = [
+			ConversationReadOperation(
+				context: current.context,
 				commandRevision: 1,
-				purpose: .selection
+				purpose: .selection,
+				contentRevision: 3
+			),
+			ConversationReadOperation(
+				context: current.context,
+				commandRevision: 2,
+				purpose: .selection,
+				contentRevision: 2
+			),
+		] + scopes.map
+		{
+			scope in
+			ConversationReadOperation(
+				context: scope,
+				commandRevision: 2,
+				purpose: .selection,
+				contentRevision: 3
 			)
+		}
+		for stale in staleOperations
+		{
 			for result in [OperationResult<ThreadDetail>.succeeded(detail("obsolete")),
 							.failed(OperationFailure(
 							message: "obsolete",
 							outcomeIsUncertain: false
 							))]
 			{
-				_ = reduce(
-					&model,
+				var receivingModel = model
+				let rejected = reduce(
+					&receivingModel,
 					.conversations(.historyReceived(
 						stale,
 						result
 					))
 				)
-				#expect(model.conversations.pendingReads[key]?.context == current.context)
-				#expect(model.conversations.pendingSelection == current.context)
-				#expect(model.conversations.content[.thread("thread")] == nil)
-				#expect(model.conversations.error == nil)
+				#expect(receivingModel.conversations.pendingReads[key]?.context == current.context)
+				#expect(receivingModel.conversations.pendingReads[key]?.commandRevision == 2)
+				#expect(receivingModel.conversations.pendingReads[key]?.contentRevision == 3)
+				#expect(receivingModel.conversations.pendingSelection == current.context)
+				#expect(receivingModel.conversations.content[.thread("thread")] == nil)
+				#expect(receivingModel.conversations.historyErrors["thread"] == nil)
+				#expect(receivingModel.conversations.error == nil)
+				#expect(rejected.domainEvents.isEmpty)
 			}
+		}
+		_ = reduce(
+			&model,
+			.conversations(.historyReceived(
+				current,
+				.succeeded(detail())
+			))
+		)
+		#expect(model.conversations.pendingReads[key] == nil)
+		#expect(model.conversations.pendingSelection == nil)
+		#expect(model.conversations.content[.thread("thread")]?.loadedTurns
+			.map(\.id) == ["current"])
+		#expect(model.conversations.lastAppliedHistoryRequestID == current.context.requestID)
+	}
+
+	@Test(arguments: ["session", "checkout", "generation", "selection"])
+	func matchingPendingHistoryStillRequiresCurrentWorkspaceAndSelection(_ field: String)
+	{
+		var seed = fixture()
+		let operation = ConversationReadOperation(
+			context: context(seed),
+			commandRevision: 2,
+			purpose: .selection,
+			contentRevision: 3
+		)
+		seed.conversations.pendingReads[operation.key] = operation
+		seed.conversations.pendingSelection = operation.context
+		seed.execution.commandEventRevisions["thread"] = 2
+		seed.conversations.contentRevisions["thread"] = 3
+		seed.conversations.content[.thread("thread")] = ConversationContentModel(
+			loadedTurns: [turn("retained")],
+			hasLoadedHistory: true
+		)
+		seed.conversations.historyErrors["thread"] = "Retained history error"
+		switch field
+		{
+		case "session":
+			seed.identity = WorkspaceIdentity(
+				sessionID: UUID(),
+				canonicalCheckoutPath: seed.identity.canonicalCheckoutPath
+			)
+		case "checkout":
+			seed.identity = WorkspaceIdentity(
+				sessionID: seed.identity.sessionID,
+				canonicalCheckoutPath: "/tmp/current-checkout"
+			)
+		case "generation": seed.connection.generation += 1
+		case "selection": seed.conversations.selectedConversation = .thread("other")
+		default:
+			Issue.record("Unknown history ownership field")
+			return
+		}
+		let newer = ConversationReadOperation(
+			context: context(seed),
+			commandRevision: 2,
+			purpose: .search,
+			contentRevision: 3
+		)
+		seed.conversations.pendingReads[newer.key] = newer
+		for observation in [OperationResult<ThreadDetail>.succeeded(detail("obsolete")),
+							.failed(OperationFailure(
+								message: "obsolete",
+								outcomeIsUncertain: false
+							))]
+		{
+			var model = seed
+			let result = ConversationReducer.reduce(
+				&model,
+				.conversations(.historyReceived(
+					operation,
+					observation
+				))
+			)
+			#expect(model.identity == seed.identity)
+			#expect(model.connection.generation == seed.connection.generation)
+			#expect(model.conversations.selectedConversation == seed.conversations
+				.selectedConversation)
+			#expect(model.conversations.pendingReads.count == 2)
+			#expect(model.conversations.pendingReads[operation.key]?.context == operation.context)
+			#expect(model.conversations.pendingReads[operation.key]?.commandRevision == 2)
+			#expect(model.conversations.pendingReads[operation.key]?.contentRevision == 3)
+			#expect(model.conversations.pendingReads[newer.key]?.context == newer.context)
+			#expect(model.conversations.pendingSelection == operation.context)
+			#expect(model.conversations.content[.thread("thread")]?.loadedTurns.map(\.id) == [
+				"retained"
+			])
+			#expect(model.conversations.contentRevisions["thread"] == 3)
+			#expect(model.conversations.historyErrors["thread"] == "Retained history error")
+			#expect(model.conversations.lastAppliedHistoryRequestID == nil)
+			#expect(result.effects.isEmpty)
+			#expect(result.domainEvents.isEmpty)
+		}
+	}
+
+	@Test(arguments: ["command", "content"])
+	func historyCapturedBeforeANewerRevisionCannotReplaceCurrentContent(_ revision: String)
+	{
+		var seed = fixture()
+		let operation = ConversationReadOperation(
+			context: context(seed),
+			commandRevision: 2,
+			purpose: .selection,
+			contentRevision: 3
+		)
+		seed.conversations.pendingReads[operation.key] = operation
+		seed.conversations.pendingSelection = operation.context
+		seed.execution.commandEventRevisions["thread"] = revision == "command" ? 3 : 2
+		seed.conversations.contentRevisions["thread"] = revision == "content" ? 4 : 3
+		seed.conversations.content[.thread("thread")] = ConversationContentModel(
+			loadedTurns: [turn("retained")],
+			hasLoadedHistory: true
+		)
+		for observation in [OperationResult<ThreadDetail>.succeeded(detail("obsolete")),
+							.failed(OperationFailure(
+								message: "obsolete",
+								outcomeIsUncertain: false
+							))]
+		{
+			var model = seed
+			let result = reduce(
+				&model,
+				.conversations(.historyReceived(
+					operation,
+					observation
+				))
+			)
+			#expect(model.conversations.pendingReads[operation.key] == nil)
+			#expect(model.conversations.pendingSelection == nil)
+			#expect(model.conversations.content[.thread("thread")]?.loadedTurns.map(\.id) == [
+				"retained"
+			])
+			#expect(model.conversations.historyErrors["thread"] == nil)
+			#expect(model.conversations.lastAppliedHistoryRequestID == nil)
+			#expect(result.domainEvents.count == 1)
+			#expect(result.domainEvents.contains
+			{
+				if case .conversationHistoryFinished(
+					.history(let finished),
+					.succeeded(false)
+				) = $0
+				{
+					return finished.context == operation.context
+				}
+				return false
+			})
 		}
 	}
 

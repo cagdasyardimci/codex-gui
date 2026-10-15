@@ -3,10 +3,10 @@ import Testing
 
 @testable import CodexGUI
 
-@MainActor
+@Suite
 struct ConversationExecutionRegistryTests
 {
-	@Test func aggregatePredicatesIncludeInactiveOwnersAndEmptyRegistry()
+	@Test @MainActor func aggregatePredicatesIncludeInactiveOwnersAndEmptyRegistry()
 	{
 		var model = fixture()
 		model.executions.entries = [:]
@@ -56,7 +56,7 @@ struct ConversationExecutionRegistryTests
 		#expect(model.execution(for: .thread("a")).statusMessage == "Working in A")
 	}
 
-	@Test func requestScopeRestoresSelectedProjectionBeforeReturning()
+	@Test @MainActor func requestScopeRestoresSelectedProjectionBeforeReturning()
 	{
 		var model = fixture()
 		let context = context(
@@ -115,7 +115,7 @@ struct ConversationExecutionRegistryTests
 		#expect(model.executions.identity(for: explicit) == .thread("b"))
 	}
 
-	@Test func staleRequestReadRejectsWhileDurableScopeRetainsOriginalOwner()
+	@Test @MainActor func staleRequestReadRejectsWhileDurableScopeRetainsOriginalOwner()
 	{
 		var model = fixture()
 		let captured = context(
@@ -126,6 +126,8 @@ struct ConversationExecutionRegistryTests
 		model.connection.generation += 1
 		model.conversations.selectedConversation = .thread("b")
 		#expect(model.execution(for: captured) == nil)
+		var invocationCount = 0
+		var observedOwner: OperationContext?
 
 		_ = WorkspaceExecutionScope.reduce(
 			action: .execution(.draftAcknowledgementFinished(
@@ -139,11 +141,18 @@ struct ConversationExecutionRegistryTests
 			body:
 			{
 				model in
+				invocationCount += 1
+				observedOwner = model.execution.owner?.submission
 				#expect(model.execution.owner?.submission == captured)
+				model.execution.statusMessage = "Durable acknowledgement for A"
 				return WorkspaceReduction()
 			}
 		)
+		#expect(invocationCount == 1)
+		#expect(observedOwner == captured)
+		#expect(model.execution(for: .thread("a")).statusMessage == "Durable acknowledgement for A")
 		#expect(model.execution.owner == nil)
+		#expect(model.execution.statusMessage == nil)
 	}
 
 	@Test func commandBarrierProtectsOwningThreadAndAggregatesDeterministically()
