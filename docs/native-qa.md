@@ -10,15 +10,17 @@ Manual QA uses temporary task workspaces and backend state, but standard prefere
 
 ## Xcode launched-app workflow
 
-`make ui-test` runs the Xcode UI workflow. Make exposes `UI_REPEAT` and `UI_RUN` for repeats and report reassessment:
+`make test:ui` builds the workflow tools as needed and runs the Xcode UI workflow.
+Make exposes `UI_REPEAT` and `UI_RUN` for repeats and report reassessment:
 
 ```sh
-make ui-help
-make ui-test UI_REPEAT=2
-make ui-report UI_RUN=/absolute/path/to/run-directory
+make help:ui
+make test:ui UI_REPEAT=2
+make report:ui UI_RUN=/absolute/path/to/run-directory
 ```
 
-For advanced options, use the Swift command from the repository root:
+Use `make help` or `make help:ui` for commands. For advanced options, use the Swift command
+from the repository root:
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run --package-path Tests/E2E E2EWorkflow --help

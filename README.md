@@ -28,16 +28,19 @@ From the repository directory, run:
 
 ```sh
 make check
-./scripts/bundle.sh
+make build:bundle
 open .build/CodexGUI.app
 ```
 
 `make check` runs the automated checks. See [formatter prerequisites](CONVENTIONS.md#formatting-and-tooling) before running it, and the [validation guide](docs/validation.md#automated-checks) for test completion requirements and safeguards when sharing a build directory.
 
-The bundle script builds a debug app by default. For an optimized release build, use:
+Use `make help` to list the build, test, and UI workflow commands.
+
+`make build:bundle` runs `./scripts/bundle.sh debug`. For an optimized release build,
+use:
 
 ```sh
-./scripts/bundle.sh release
+make build:bundle:release
 open .build/CodexGUI.app
 ```
 
