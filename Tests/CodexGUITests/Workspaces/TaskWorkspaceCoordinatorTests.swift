@@ -409,6 +409,11 @@ struct TaskWorkspaceCoordinatorTests
 
 	private func startOrdinaryChats(_ fixture: TaskExecutionFixture) async throws
 	{
+		let timing = TestTiming.begin("scenario.ordinaryChats")
+		defer
+		{
+			timing.end()
+		}
 		fixture.sourceService.additionalThreads["second"] = ThreadDetail(
 			summary: try #require(ThreadSummary(json: [
 				"id": "second",
@@ -419,19 +424,26 @@ struct TaskWorkspaceCoordinatorTests
 		)
 		if !fixture.sourceState.store.model.connection.isConnected
 		{
+			timing.mark("connect.begin")
 			await fixture.sourceState.inputs.connect()
+			timing.mark("connect.end")
 		}
 		for threadID in ["source", "second"]
 		{
-			fixture.sourceState.inputs.selectThread(threadID)
-			try #require(await waitUntil
+			timing.mark("selection.begin:\(threadID)")
+			let selection = try #require(fixture.sourceState.inputs.selectThread(threadID))
+			_ = await selection.wait()
+			try #require(await waitForStorePredicate(fixture.sourceState.store)
 			{
 				fixture.sourceState.currentSnapshot.selectedThreadID == threadID
 					&& fixture.sourceState.currentSnapshot.canSend
 			})
+			timing.mark("selection.end:\(threadID)")
 			fixture.sourceState.inputs.updateDraft("Run \(threadID)")
-			fixture.sourceState.inputs.send()
-			try #require(await waitUntil
+			timing.mark("submission.begin:\(threadID)")
+			let submission = try #require(fixture.sourceState.inputs.send())
+			try #require(await submission.wait() == .finished)
+			try #require(await waitForStorePredicate(fixture.sourceState.store)
 			{
 				let execution = fixture.sourceState.store.model.execution(for: .thread(threadID))
 				return execution.state == .running && execution.activeTurnID != nil
@@ -440,6 +452,7 @@ struct TaskWorkspaceCoordinatorTests
 						$0.threadID == threadID
 					}
 			})
+			timing.mark("submission.end:\(threadID)")
 		}
 	}
 
@@ -2153,6 +2166,86 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(beta.service.turnRequests.count == 1)
 	}
 
+	private func submitFreshTasks(_ tasks: [TaskExecutionFixture.TaskOwner]) async throws
+	{
+		let timing = TestTiming.begin("scenario.submitFreshTasks")
+		defer
+		{
+			timing.end()
+		}
+		let submissions = try tasks.map
+		{
+			try #require($0.state.inputs.send())
+		}
+		for submission in submissions
+		{
+			let wait = TestTiming.begin("submission.wait")
+			defer
+			{
+				wait.end()
+			}
+			try #require(await submission.wait() == .finished)
+		}
+		for task in tasks
+		{
+			try #require(task.service.turnRequests.count == 1)
+		}
+	}
+
+	private func waitForStorePredicate(
+		_ store: WorkspaceStateStore,
+		function: String = #function,
+		line: Int = #line,
+		until condition: @escaping @MainActor () -> Bool
+	) async -> Bool
+	{
+		let timing = TestTiming.begin(
+			"wait.snapshot",
+			detail: "\(function):\(line)"
+		)
+		defer
+		{
+			timing.end()
+		}
+		await awaitWorkspaceSnapshot(store)
+		{
+			_ in condition()
+		}
+		return condition()
+	}
+
+	private func waitForCoordinatorPredicate(
+		_ coordinator: TaskWorkspaceCoordinator,
+		function: String = #function,
+		line: Int = #line,
+		until condition: @escaping @MainActor () -> Bool
+	) async -> Bool
+	{
+		await waitForCoordinator(
+			coordinator,
+			function: function,
+			line: line,
+			until: condition
+		)
+		return condition()
+	}
+
+	private func waitForQuitPredicate(
+		_ coordinator: TaskWorkspaceCoordinator,
+		function: String = #function,
+		line: Int = #line,
+		until condition: @escaping @MainActor () -> Bool
+	) async -> Bool
+	{
+		await waitForQuitCallback(
+			coordinator,
+			function: function,
+			line: line,
+			until: condition
+		)
+		return condition()
+	}
+
 	private func draftHandle(_ store: WorkspaceStateStore) -> WorkspaceOperationHandle?
 	{
 		guard let requestID = store.model.composer.pendingDraftWrites[
@@ -2171,9 +2264,19 @@ struct TaskWorkspaceCoordinatorTests
 
 	private func waitForQuitCallback(
 		_ coordinator: TaskWorkspaceCoordinator,
+		function: String = #function,
+		line: Int = #line,
 		until condition: @escaping @MainActor () -> Bool
 	) async
 	{
+		let timing = TestTiming.begin(
+			"wait.quitCallback",
+			detail: "\(function):\(line)"
+		)
+		defer
+		{
+			timing.end()
+		}
 		guard !condition()
 		else
 		{
@@ -2181,60 +2284,97 @@ struct TaskWorkspaceCoordinatorTests
 		}
 		let previousFinished = coordinator.onAllTasksFinished
 		let previousFailed = coordinator.onStopAllFailed
-		await withCheckedContinuation
+		let readiness = AsyncStream<Void>.makeStream()
+		var pending = true
+		defer
 		{
-			continuation in
-			let check: @MainActor () -> Void =
+			if pending
 			{
-				guard condition()
-				else
-				{
-					return
-				}
 				coordinator.onAllTasksFinished = previousFinished
 				coordinator.onStopAllFailed = previousFailed
-				continuation.resume()
 			}
-			coordinator.onAllTasksFinished =
-			{
-				previousFinished?()
-				check()
-			}
-			coordinator.onStopAllFailed =
-			{
-				previousFailed?()
-				check()
-			}
+			readiness.continuation.finish()
 		}
+		let check: @MainActor () -> Void =
+		{
+			guard pending, condition()
+			else
+			{
+				return
+			}
+			pending = false
+			timing.mark("condition.satisfied")
+			coordinator.onAllTasksFinished = previousFinished
+			coordinator.onStopAllFailed = previousFailed
+			readiness.continuation.yield()
+			readiness.continuation.finish()
+		}
+		coordinator.onAllTasksFinished =
+		{
+			previousFinished?()
+			check()
+		}
+		coordinator.onStopAllFailed =
+		{
+			previousFailed?()
+			check()
+		}
+		// Cancellation resumes the stream iterator and restores the original callbacks.
+		var publications = readiness.stream.makeAsyncIterator()
+		_ = await publications.next()
+		timing.mark("actor.resumed")
 	}
 
 	private func waitForCoordinator(
 		_ coordinator: TaskWorkspaceCoordinator,
+		function: String = #function,
+		line: Int = #line,
 		until condition: @escaping @MainActor () -> Bool
 	) async
 	{
+		let timing = TestTiming.begin(
+			"wait.coordinator",
+			detail: "\(function):\(line)"
+		)
+		defer
+		{
+			timing.end()
+		}
 		guard !condition()
 		else
 		{
 			return
 		}
 		let previous = coordinator.onChange
-		await withCheckedContinuation
+		let readiness = AsyncStream<Void>.makeStream()
+		var pending = true
+		defer
 		{
-			continuation in
-			coordinator.onChange =
+			if pending
 			{
-				snapshot in
-				previous?(snapshot)
-				guard condition()
-				else
-				{
-					return
-				}
 				coordinator.onChange = previous
-				continuation.resume()
 			}
+			readiness.continuation.finish()
 		}
+		coordinator.onChange =
+		{
+			snapshot in
+			previous?(snapshot)
+			guard pending, condition()
+			else
+			{
+				return
+			}
+			pending = false
+			timing.mark("condition.satisfied")
+			coordinator.onChange = previous
+			readiness.continuation.yield()
+			readiness.continuation.finish()
+		}
+		// Cancellation resumes the stream iterator and retires this callback adapter.
+		var publications = readiness.stream.makeAsyncIterator()
+		_ = await publications.next()
+		timing.mark("actor.resumed")
 	}
 
 	private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async -> Bool
