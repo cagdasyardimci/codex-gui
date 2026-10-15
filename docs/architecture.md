@@ -80,6 +80,10 @@ outer vertical scroll view; images fit the section and PDFs use an embedded nati
 Preview loading is cancelled when dismissed or when its section is discarded. Retained Markdown
 refreshes under its owning view's appearance when the theme changes.
 
+Git display options are application state shared by review actions, reducers and runtime. Diff
+projection and native rendering consume those options from `Application/State/` and remain owned
+by Changes.
+
 Code panes in the Git comparison own horizontal scrolling. Vertical wheel gestures over their
 text or gutters route to the enclosing comparison viewer in both unified and split layouts,
 including when code wrapping is enabled. Shift-wheel input retains native horizontal handling.
