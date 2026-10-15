@@ -463,13 +463,7 @@ struct GitReviewDesignChecks
 
 	private func verifyDarkComparison(_ presentation: PinnedSummaryPresentation) async throws
 	{
-		let application = NSApplication.shared
-		let previousAppearance = application.appearance
-		application.appearance = NSAppearance(named: .darkAqua)
-		defer
-		{
-			application.appearance = previousAppearance
-		}
+		// The fixture window supplies dark appearance; changing NSApp would affect other tests.
 		let controller = GitChangesViewController(
 			runtime: GitReviewRuntime(service: DesignPreviewGitService())
 		)
@@ -528,6 +522,67 @@ struct GitReviewDesignChecks
 			$0 as? NSTextView
 		}.first)
 		#expect(source.string == rows.map(\.text).joined(separator: "\n"))
+		// Literal examples from the bundled GitHub syntax palettes keep this oracle separate
+		// from the view's theme selection and the production highlighting helper.
+		let palettes: [(NSAppearance.Name, UInt32, UInt32)] = [
+			(.darkAqua, 0x8B949E, 0xFF7B72),
+			(.aqua, 0x6A737D, 0xD73A49),
+			(.darkAqua, 0x8B949E, 0xFF7B72),
+		]
+		for (appearance, commentRGB, keywordRGB) in palettes
+		{
+			window.appearance = NSAppearance(named: appearance)
+			window.layoutIfNeeded()
+			let storage = try #require(source.textStorage)
+			for (token, expectedRGB) in [
+				("Previous review note.", commentRGB),
+				("Updated review note.", commentRGB),
+				("let mode", keywordRGB),
+			]
+			{
+				let range = (source.string as NSString).range(of: token)
+				try #require(range.location != NSNotFound)
+				let foreground = try #require((storage.attribute(
+					.foregroundColor,
+					at: range.location,
+					effectiveRange: nil
+				) as? NSColor)?.usingColorSpace(.sRGB))
+				#expect(abs(foreground.redComponent - CGFloat((expectedRGB >> 16) & 255) / 255)
+					< 0.005)
+				#expect(abs(foreground.greenComponent - CGFloat((expectedRGB >> 8) & 255) / 255)
+					< 0.005)
+				#expect(abs(foreground.blueComponent - CGFloat(expectedRGB & 255) / 255) < 0.005)
+				#expect(foreground.alphaComponent == 1)
+				if appearance == .darkAqua
+				{
+					let canvas = NSColor(
+						srgbRed: 24 / 255,
+						green: 24 / 255,
+						blue: 24 / 255,
+						alpha: 1
+					)
+					let ratio = (relativeLuminance(foreground) + 0.05)
+						/ (relativeLuminance(canvas) + 0.05)
+					#expect(
+						ratio >= 4.5,
+						"Dark syntax token \(token) must remain readable"
+					)
+				}
+			}
+		}
+	}
+
+	private func relativeLuminance(_ color: NSColor) -> CGFloat
+	{
+		let channels = [color.redComponent, color.greenComponent, color.blueComponent].map
+		{
+			component in
+			component <= 0.04045 ? component / 12.92 : pow(
+				(component + 0.055) / 1.055,
+				2.4
+			)
+		}
+		return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
 	}
 
 	private func verifyFocusedHost(

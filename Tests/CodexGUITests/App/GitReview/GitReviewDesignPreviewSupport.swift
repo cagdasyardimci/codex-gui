@@ -183,13 +183,7 @@ struct GitReviewDesignPreviewSupport
 
 	private func renderDarkComparison(_ presentation: PinnedSummaryPresentation) async throws
 	{
-		let application = NSApplication.shared
-		let previousAppearance = application.appearance
-		application.appearance = NSAppearance(named: .darkAqua)
-		defer
-		{
-			application.appearance = previousAppearance
-		}
+		// The fixture window supplies dark appearance; changing NSApp would affect other tests.
 		let controller = GitChangesViewController(
 			runtime: GitReviewRuntime(service: DesignPreviewGitService())
 		)

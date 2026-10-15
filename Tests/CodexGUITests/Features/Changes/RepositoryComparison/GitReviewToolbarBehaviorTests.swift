@@ -110,6 +110,65 @@ struct GitReviewToolbarBehaviorTests
 		{
 			$0.action != nil && $0.isEnabled
 		})
+		let initialSnapshot = try #require(controller.runtime.state.snapshot)
+		try dispatchMenuItem(
+			"Refresh comparison",
+			in: controller
+		)
+		let refreshedRequest = try #require(controller.runtime.state.pendingRequest)
+		#expect(refreshedRequest.generation > initialSnapshot.request.generation)
+		#expect(refreshedRequest.owner == initialSnapshot.request.owner)
+		#expect(refreshedRequest.scope == initialSnapshot.request.scope)
+		await controller.runtime.readTask?.value
+		#expect(controller.runtime.state.snapshot?.request == refreshedRequest)
+		#expect(controller.runtime.state.pendingRequest == nil)
+
+		#expect(diffViews(in: controller).map(\.wrapsCode) == [false, false])
+		try dispatchMenuItem(
+			"Wrap code lines",
+			in: controller
+		)
+		#expect(diffViews(in: controller).map(\.wrapsCode) == [true, true])
+		#expect(controller.makeDiffDisplayMenu().items.first
+		{
+			$0.title == "Stop wrapping code lines"
+		}?.state == .on)
+		try dispatchMenuItem(
+			"Stop wrapping code lines",
+			in: controller
+		)
+		#expect(diffViews(in: controller).map(\.wrapsCode) == [false, false])
+
+		#expect(diffViews(in: controller).map(\.layoutPreference) == [.automatic, .automatic])
+		for expected: GitDiffLayoutPreference in [.unified, .split, .automatic]
+		{
+			try dispatchMenuItem(
+				"Switch diff layout",
+				in: controller
+			)
+			#expect(diffViews(in: controller).map(\.layoutPreference) == [expected, expected])
+		}
+
+		try dispatchMenuItem(
+			"Collapse all diffs",
+			in: controller
+		)
+		#expect(diffViews(in: controller).isEmpty)
+		#expect(try buttons(
+			prefix: "Expand diff for ",
+			in: controller.view
+		).count == 2)
+		#expect(controller.makeDiffDisplayMenu().items.first
+		{
+			$0.title == "Expand all diffs"
+		}?.state == .on)
+		try dispatchMenuItem(
+			"Expand all diffs",
+			in: controller
+		)
+		#expect(diffViews(in: controller).count == 2)
+		#expect(diffViews(in: controller).map(\.wrapsCode) == [false, false])
+		#expect(diffViews(in: controller).map(\.layoutPreference) == [.automatic, .automatic])
 		window.setContentSize(NSSize(
 			width: 761,
 			height: 640
@@ -185,19 +244,36 @@ struct GitReviewToolbarBehaviorTests
 			}
 		}
 		controller.activate(owner: owner)
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.snapshot != nil,
-				controller.runtime.state.pendingRequest == nil
-			{
-				break
-			}
-			await Task.yield()
-		}
+		await controller.runtime.readTask?.value
 		_ = try #require(controller.runtime.state.snapshot)
 		window.layoutIfNeeded()
 		handedOff = true
 		return (controller, window)
+	}
+
+	private func dispatchMenuItem(
+		_ title: String,
+		in controller: GitChangesViewController
+	) throws
+	{
+		let item = try #require(controller.makeDiffDisplayMenu().items.first
+		{
+			$0.title == title
+		})
+		try #require(item.isEnabled)
+		try #require(NSApplication.shared.sendAction(
+			try #require(item.action),
+			to: item.target,
+			from: item
+		))
+	}
+
+	private func diffViews(in controller: GitChangesViewController) -> [GitAdaptiveDiffView]
+	{
+		descendants(controller.view).compactMap
+		{
+			$0 as? GitAdaptiveDiffView
+		}
 	}
 
 	private func button(

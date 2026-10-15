@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct GitCodeAppearanceTests
 {
 	@Test(
@@ -15,13 +17,7 @@ struct GitCodeAppearanceTests
 		rerenderWithWordWrap: Bool
 	) throws
 	{
-		let application = NSApplication.shared
-		let originalAppearance = application.appearance
-		application.appearance = NSAppearance(named: .aqua)
-		defer
-		{
-			application.appearance = originalAppearance
-		}
+		_ = NSApplication.shared
 		let row = GitDiffRow(
 			id: "changed",
 			kind: kind,
@@ -50,6 +46,8 @@ struct GitCodeAppearanceTests
 			defer: false
 		)
 		window.isReleasedWhenClosed = false
+		// Appearance belongs to this fixture; changing NSApp would recolor concurrent windows.
+		window.appearance = NSAppearance(named: .aqua)
 		window.contentView = code
 		defer
 		{
