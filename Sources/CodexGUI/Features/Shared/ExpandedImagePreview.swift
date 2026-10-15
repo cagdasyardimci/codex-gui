@@ -4,15 +4,33 @@ import AppKit
 @MainActor
 final class ExpandedImagePreview
 {
+	typealias ImageLoader = @Sendable (
+		String,
+		Int
+	) async -> SourceThumbnailLoader.Thumbnail?
+
 	private static let activeOwners = NSMapTable<NSWindow, ExpandedImagePreview>.weakToWeakObjects()
 
 	private(set) var controller: ExpandedImageViewController?
+	private(set) var presentationTask: Task<Void, Never>?
+	private let loadImage: ImageLoader
 	private weak var parent: NSWindow?
-	private var presentationTask: Task<Void, Never>?
 	private var resolutionTask: Task<Void, Never>?
 	private var teardown: ExpandedImagePresentationTeardown?
 	private var generation = 0
 	private var requestedResolution = 2048
+
+	init(loadImage: @escaping ImageLoader =
+	{
+		path, maximumPixelSize in
+		await SourceThumbnailLoader.image(
+			path: path,
+			maximumPixelSize: maximumPixelSize
+		)
+	})
+	{
+		self.loadImage = loadImage
+	}
 
 	deinit
 	{
@@ -47,6 +65,7 @@ final class ExpandedImagePreview
 			sibling.hide()
 		}
 		let generation = generation
+		let loadImage = loadImage
 		let controller = ExpandedImageViewController(name: name)
 		self.controller = controller
 		self.parent = parent
@@ -121,9 +140,9 @@ final class ExpandedImagePreview
 		presentationTask = Task
 		{
 			[weak self, weak controller, weak parent] in
-			let thumbnail = await SourceThumbnailLoader.image(
-				path: path,
-				maximumPixelSize: 2048
+			let thumbnail = await loadImage(
+				path,
+				2048
 			)
 			guard !Task.isCancelled, let self, self.generation == generation,
 					let controller, let parent, controller.view.window === parent
@@ -177,12 +196,13 @@ final class ExpandedImagePreview
 		}
 		requestedResolution = pixels
 		resolutionTask?.cancel()
+		let loadImage = loadImage
 		resolutionTask = Task
 		{
 			[weak self, weak controller] in
-			let thumbnail = await SourceThumbnailLoader.image(
-				path: path,
-				maximumPixelSize: pixels
+			let thumbnail = await loadImage(
+				path,
+				pixels
 			)
 			guard !Task.isCancelled, let self, self.generation == generation,
 					let controller, let thumbnail,

@@ -3,7 +3,10 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized,
+	.testTiming
+) @MainActor
 struct ExpandedImagePreviewTests
 {
 	@Test func fitsWithoutCroppingAndKeepsZoomAcrossResizeAndAppearance() async throws
@@ -223,89 +226,240 @@ struct ExpandedImagePreviewTests
 		#expect(controller.displayedZoomPercentage == 61)
 	}
 
+	// Native key routing and focus restoration need exclusive application interaction.
 	@Test func closeAndEscapeRestoreFocusWithoutLeavingAnOverlay() async throws
 	{
-		let window = makeWindow()
-		let focus = NSTextView(frame: NSRect(
-			x: 20,
-			y: 20,
-			width: 200,
-			height: 80
-		))
-		try #require(window.contentView).addSubview(focus)
-		let preview = ExpandedImagePreview()
+		let timing = TestTiming.begin("test.body")
 		defer
 		{
-			preview.dismiss(); window.close()
+			timing.end()
 		}
-		#expect(window.makeFirstResponder(focus))
-		preview.present(
-			path: try imagePath(),
-			name: "Image",
-			in: window
-		)
-		await preview.waitForPresentation()
-		let first = try #require(preview.controller)
-		#expect(window.firstResponder === first.view)
-		first.closeButton.performClick(nil)
-		#expect(preview.controller == nil)
-		#expect(first.view.superview == nil)
-		#expect(window.firstResponder === focus)
-		preview.present(
-			path: try imagePath(),
-			name: "Image",
-			in: window
-		)
-		await preview.waitForPresentation()
-		let second = try #require(preview.controller)
-		#expect(window.makeFirstResponder(second.closeButton))
-		window.sendEvent(try #require(NSEvent.keyEvent(
-			with: .keyDown,
-			location: .zero,
-			modifierFlags: [],
-			timestamp: 0,
-			windowNumber: window.windowNumber,
-			context: nil,
-			characters: "\u{1b}",
-			charactersIgnoringModifiers: "\u{1b}",
-			isARepeat: false,
-			keyCode: 53
-		)))
-		#expect(preview.controller == nil)
-		#expect(second.view.superview == nil)
-		#expect(window.firstResponder === focus)
+		// Encode independent fixture data before reserving native focus and event state.
+		let firstPath = try imagePath()
+		let secondPath = try imagePath()
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let window = makeWindow()
+			let focus = NSTextView(frame: NSRect(
+				x: 20,
+				y: 20,
+				width: 200,
+				height: 80
+			))
+			try #require(window.contentView).addSubview(focus)
+			let preview = ExpandedImagePreview()
+			defer
+			{
+				preview.dismiss(); window.close()
+			}
+			#expect(window.makeFirstResponder(focus))
+			preview.present(
+				path: firstPath,
+				name: "Image",
+				in: window
+			)
+			await preview.waitForPresentation()
+			let first = try #require(preview.controller)
+			#expect(window.firstResponder === first.view)
+			let closeAction = TestTiming.begin(
+				"image.action",
+				detail: "close"
+			)
+			// Route this owned control's action; the next presentation retains native Escape input.
+			try #require(first.closeButton.dispatchConfiguredAction())
+			closeAction.end()
+			#expect(preview.controller == nil)
+			#expect(first.view.superview == nil)
+			#expect(window.firstResponder === focus)
+			preview.present(
+				path: secondPath,
+				name: "Image",
+				in: window
+			)
+			await preview.waitForPresentation()
+			let second = try #require(preview.controller)
+			#expect(window.makeFirstResponder(second.closeButton))
+			window.sendEvent(try #require(NSEvent.keyEvent(
+				with: .keyDown,
+				location: .zero,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: window.windowNumber,
+				context: nil,
+				characters: "\u{1b}",
+				charactersIgnoringModifiers: "\u{1b}",
+				isARepeat: false,
+				keyCode: 53
+			)))
+			#expect(preview.controller == nil)
+			#expect(second.view.superview == nil)
+			#expect(window.firstResponder === focus)
+		}
 	}
 
-	@Test func replacementCancellationAndWindowCloseRejectEarlierLoads() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func replacementCancellationAndWindowCloseRejectEarlierLoads() async throws
 	{
-		let window = makeWindow()
-		let first = ExpandedImagePreview()
-		let second = ExpandedImagePreview()
-		defer
+		try await withControlledImageLoader
 		{
-			first.dismiss(); second.dismiss(); window.close()
+			loader in
+			let firstImage = try thumbnail(
+				width: 40,
+				height: 20
+			)
+			let secondImage = try thumbnail(
+				width: 20,
+				height: 40
+			)
+			let window = makeWindow()
+			let first = loader.makePreview()
+			let second = loader.makePreview()
+			defer
+			{
+				first.dismiss(); second.dismiss(); window.close()
+			}
+			var requests = loader.started.makeAsyncIterator()
+			first.present(
+				path: "first.png",
+				name: "First",
+				in: window
+			)
+			let old = try #require(first.controller)
+			let firstTask = try loader.captureTask(from: first)
+			let firstRequest = try #require(await requests.next())
+			#expect(firstRequest.path == "first.png")
+			#expect(firstRequest.maximumPixelSize == 2048)
+
+			second.present(
+				path: "second.png",
+				name: "Second",
+				in: window
+			)
+			let secondTask = try loader.captureTask(from: second)
+			let secondRequest = try #require(await requests.next())
+			#expect(secondRequest.path == "second.png")
+			#expect(firstTask.isCancelled)
+			#expect(first.controller == nil)
+			#expect(old.view.superview == nil)
+			let current = try #require(second.controller)
+			try loader.complete(
+				secondRequest,
+				with: secondImage
+			)
+			await secondTask.value
+			let retainedImage = try #require(current.imageView.image)
+			#expect(current.originalPixelSize == NSSize(
+				width: 20,
+				height: 40
+			))
+
+			// Deliver the obsolete response after the new owner's successful presentation.
+			try loader.complete(
+				firstRequest,
+				with: firstImage
+			)
+			await firstTask.value
+			#expect(first.controller == nil)
+			#expect(old.imageView.image == nil)
+			#expect(old.view.superview == nil)
+			#expect(second.controller === current)
+			#expect(current.imageView.image === retainedImage)
+
+			second.present(
+				path: "closing.png",
+				name: "Closing",
+				in: window
+			)
+			let closing = try #require(second.controller)
+			let closingTask = try loader.captureTask(from: second)
+			let closingRequest = try #require(await requests.next())
+			#expect(closingRequest.path == "closing.png")
+			#expect(closing.imageView.image == nil)
+			window.close()
+			#expect(closingTask.isCancelled)
+			#expect(second.controller == nil)
+			#expect(closing.view.superview == nil)
+			try loader.complete(
+				closingRequest,
+				with: firstImage
+			)
+			await closingTask.value
+			#expect(second.controller == nil)
+			#expect(closing.imageView.image == nil)
+			#expect(closing.originalPixelSize == .zero)
+			#expect(closing.view.superview == nil)
 		}
-		let path = try imagePath()
-		first.present(
-			path: path,
-			name: "First",
-			in: window
-		)
-		let old = try #require(first.controller)
-		second.present(
-			path: path,
-			name: "Second",
-			in: window
-		)
-		await first.waitForPresentation()
-		await second.waitForPresentation()
-		#expect(first.controller == nil)
-		#expect(old.view.superview == nil)
-		let current = try #require(second.controller)
-		#expect(current.imageView.image != nil)
-		window.close()
-		#expect(second.controller == nil)
-		#expect(current.view.superview == nil)
+	}
+
+	@Test(.timeLimit(.minutes(1)))
+	func sameOwnerReplacementRejectsAnEarlierImageAfterTheNewImageLoads() async throws
+	{
+		try await withControlledImageLoader
+		{
+			loader in
+			let earlierImage = try thumbnail(
+				width: 40,
+				height: 20
+			)
+			let replacementImage = try thumbnail(
+				width: 20,
+				height: 40
+			)
+			let window = makeWindow()
+			let preview = loader.makePreview()
+			defer
+			{
+				preview.dismiss(); window.close()
+			}
+			var requests = loader.started.makeAsyncIterator()
+			preview.present(
+				path: "earlier.png",
+				name: "Earlier",
+				in: window
+			)
+			let earlier = try #require(preview.controller)
+			let earlierTask = try loader.captureTask(from: preview)
+			let earlierRequest = try #require(await requests.next())
+			#expect(earlierRequest.path == "earlier.png")
+
+			preview.present(
+				path: "replacement.png",
+				name: "Replacement",
+				in: window
+			)
+			let current = try #require(preview.controller)
+			let currentTask = try loader.captureTask(from: preview)
+			let currentRequest = try #require(await requests.next())
+			#expect(currentRequest.path == "replacement.png")
+			#expect(earlierTask.isCancelled)
+			#expect(earlier.view.superview == nil)
+			try loader.complete(
+				currentRequest,
+				with: replacementImage
+			)
+			await currentTask.value
+			let retainedImage = try #require(current.imageView.image)
+			#expect(current.originalPixelSize == NSSize(
+				width: 20,
+				height: 40
+			))
+
+			try loader.complete(
+				earlierRequest,
+				with: earlierImage
+			)
+			await earlierTask.value
+			#expect(preview.controller === current)
+			#expect(current.imageView.image === retainedImage)
+			#expect(current.originalPixelSize == NSSize(
+				width: 20,
+				height: 40
+			))
+			#expect(earlier.imageView.image == nil)
+			#expect(earlier.originalPixelSize == .zero)
+			#expect(earlier.view.superview == nil)
+		}
 	}
 
 	@Test func unreadableImagesKeepAnAccessibleClosePath() async throws
@@ -326,7 +480,7 @@ struct ExpandedImagePreviewTests
 		#expect(controller.imageView.image == nil)
 		#expect(!controller.zoomButton.isEnabled)
 		#expect(controller.closeButton.isEnabled)
-		controller.closeButton.performClick(nil)
+		try #require(controller.closeButton.dispatchConfiguredAction())
 		#expect(preview.controller == nil)
 	}
 
@@ -468,6 +622,153 @@ struct ExpandedImagePreviewTests
 		}
 	}
 
+	private func withControlledImageLoader(
+		_ body: @MainActor (ControlledImageLoader) async throws -> Void
+	) async throws
+	{
+		let loader = ControlledImageLoader()
+		do
+		{
+			try await body(loader)
+		}
+		catch
+		{
+			await loader.finish()
+			throw error
+		}
+		await loader.finish()
+	}
+
+	private func thumbnail(
+		width: Int,
+		height: Int
+	) throws -> SourceThumbnailLoader.Thumbnail
+	{
+		let context = try #require(CGContext(
+			data: nil,
+			width: width,
+			height: height,
+			bitsPerComponent: 8,
+			bytesPerRow: width * 4,
+			space: CGColorSpaceCreateDeviceRGB(),
+			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+		))
+		context.setFillColor(CGColor(
+			red: CGFloat(width) / 100,
+			green: CGFloat(height) / 100,
+			blue: 0.25,
+			alpha: 1
+		))
+		context.fill(CGRect(
+			x: 0,
+			y: 0,
+			width: width,
+			height: height
+		))
+		return SourceThumbnailLoader.Thumbnail(
+			image: try #require(context.makeImage()),
+			originalPixelSize: CGSize(
+				width: width,
+				height: height
+			)
+		)
+	}
+
+	@MainActor
+	private final class ControlledImageLoader
+	{
+		struct Request: Sendable
+		{
+			let id: Int
+			let path: String
+			let maximumPixelSize: Int
+		}
+
+		let started: AsyncStream<Request>
+		private let starts: AsyncStream<Request>.Continuation
+		private var pending: [Int: CheckedContinuation<SourceThumbnailLoader.Thumbnail?, Never>] =
+			[:]
+		private var tasks: [Task<Void, Never>] = []
+		private var nextRequestID = 0
+		private var finished = false
+
+		init()
+		{
+			(started, starts) = AsyncStream<Request>.makeStream()
+		}
+
+		func makePreview() -> ExpandedImagePreview
+		{
+			ExpandedImagePreview
+			{
+				path, maximumPixelSize in
+				await self.image(
+					path: path,
+					maximumPixelSize: maximumPixelSize
+				)
+			}
+		}
+
+		func captureTask(from preview: ExpandedImagePreview) throws -> Task<Void, Never>
+		{
+			let task = try #require(preview.presentationTask)
+			tasks.append(task)
+			return task
+		}
+
+		func complete(
+			_ request: Request,
+			with image: SourceThumbnailLoader.Thumbnail
+		) throws
+		{
+			let pendingResponse = pending.removeValue(forKey: request.id)
+			let continuation = try #require(pendingResponse)
+			continuation.resume(returning: image)
+		}
+
+		func finish() async
+		{
+			finished = true
+			let unfinished = Array(pending.values)
+			pending.removeAll()
+			starts.finish()
+			for continuation in unfinished
+			{
+				continuation.resume(returning: nil)
+			}
+			for task in tasks
+			{
+				await task.value
+			}
+			tasks.removeAll()
+		}
+
+		private func image(
+			path: String,
+			maximumPixelSize: Int
+		) async -> SourceThumbnailLoader
+			.Thumbnail?
+		{
+			guard !finished
+			else
+			{
+				return nil
+			}
+			let request = Request(
+				id: nextRequestID,
+				path: path,
+				maximumPixelSize: maximumPixelSize
+			)
+			nextRequestID += 1
+			// Intentionally return even after cancellation to exercise stale-response admission.
+			return await withCheckedContinuation
+			{
+				pending[request.id] = $0
+				starts.yield(request)
+			}
+		}
+	}
+
 	private func render(_ view: NSView) throws -> NSBitmapImageRep
 	{
 		view.layoutSubtreeIfNeeded()
@@ -500,6 +801,11 @@ struct ExpandedImagePreviewTests
 
 	private func imagePath() throws -> String
 	{
+		let timing = TestTiming.begin("image.encode")
+		defer
+		{
+			timing.end()
+		}
 		let bitmap = try #require(NSBitmapImageRep(
 			bitmapDataPlanes: nil,
 			pixelsWide: 1600,
