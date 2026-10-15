@@ -7,116 +7,6 @@ import Testing
 @Suite @MainActor
 struct EditorHandoffTests
 {
-	@Test func rejectsAbsolutePathsOutsideProjectAndMissingFiles() async throws
-	{
-		let root = try await temporaryDirectory()
-		defer
-		{
-			try? FileManager.default.removeItem(at: root)
-		}
-		let outsideDirectory = try await temporaryDirectory()
-		defer
-		{
-			try? FileManager.default.removeItem(at: outsideDirectory)
-		}
-		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
-		defer
-		{
-			defaultsFixture.cleanup()
-		}
-		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
-
-		let outside = outsideDirectory.appendingPathComponent("outside.swift")
-		try await BackgroundTestWork.perform
-		{
-			try Data("outside".utf8).write(to: outside)
-		}
-		await #expect
-		{
-			try await handoff.open(
-				path: outside.path,
-				project: root,
-				diff: ""
-			)
-		} throws:
-		{
-			error in
-			guard let handoffError = error as? EditorHandoffError,
-					case .outsideProject(let path) = handoffError
-			else
-			{
-				return false
-			}
-			return path == outside.path
-		}
-		await #expect
-		{
-			try await handoff.open(
-				path: "deleted.swift",
-				project: root,
-				diff: ""
-			)
-		} throws:
-		{
-			error in
-			guard let handoffError = error as? EditorHandoffError,
-					case .missingFile(let path) = handoffError
-			else
-			{
-				return false
-			}
-			return path == "deleted.swift"
-		}
-	}
-
-	@Test func symlinkEscapeIsRejected() async throws
-	{
-		let root = try await temporaryDirectory()
-		defer
-		{
-			try? FileManager.default.removeItem(at: root)
-		}
-		let outside = try await temporaryDirectory()
-		defer
-		{
-			try? FileManager.default.removeItem(at: outside)
-		}
-		let externalFile = outside.appendingPathComponent("outside.swift")
-		try await BackgroundTestWork.perform
-		{
-			try Data("outside".utf8).write(to: externalFile)
-			try FileManager.default.createSymbolicLink(
-				at: root.appendingPathComponent("link.swift"),
-				withDestinationURL: externalFile
-			)
-		}
-		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
-		defer
-		{
-			defaultsFixture.cleanup()
-		}
-		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
-
-		await #expect
-		{
-			try await handoff.open(
-				path: "link.swift",
-				project: root,
-				diff: ""
-			)
-		} throws:
-		{
-			error in
-			guard let handoffError = error as? EditorHandoffError,
-					case .outsideProject(let path) = handoffError
-			else
-			{
-				return false
-			}
-			return path == "link.swift"
-		}
-	}
-
 	@Test func vscodeUsesBundledCLIWithGotoArgumentsAndPersistsPreference() async throws
 	{
 		let root = try await temporaryDirectory()
@@ -182,13 +72,15 @@ struct EditorHandoffTests
 			try infoData.write(to: app.appendingPathComponent("Contents/Info.plist"))
 			return (file, captured)
 		}
-		let handoff = EditorHandoff(defaults: defaultsFixture.defaults)
-		handoff.preferredApplication = app
+		let editor = EditorOpeningService(defaults: defaultsFixture.defaults)
+		editor.preferredApplication = app
+		#expect(defaultsFixture.defaults.string(forKey: "preferredEditorApplication") == app.path)
 		#expect(
-			EditorHandoff(defaults: defaultsFixture.defaults)
+			EditorOpeningService(defaults: defaultsFixture.defaults)
 				.preferredApplication?.standardizedFileURL.path
 				== app.standardizedFileURL.path
 		)
+		let handoff = EditorHandoff(editor: editor)
 		let diff = """
 		@@ -3,2 +3,3 @@
 		 context

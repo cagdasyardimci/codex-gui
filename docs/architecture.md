@@ -97,6 +97,11 @@ Code panes in the Git comparison own horizontal scrolling. Vertical wheel gestur
 text or gutters route to the enclosing comparison viewer in both unified and split layouts,
 including when code wrapping is enabled. Shift-wheel input retains native horizontal handling.
 
+Editor preferences and macOS file launching belong to `Application/Services/EditorOpeningService`.
+Callers supply a project, path and line; the service preserves project containment checks,
+preferred-application persistence and launch fallbacks. Changes retains the adapter that derives
+the relevant line from a Git diff. Settings accesses the same preference owner directly.
+
 ## Recorded latest Git turn
 
 `ConversationReportedGitTurn` in `Application/Reducers/Conversation/` retains the known latest editing turn's identity and available timestamps independently of loaded transcript bodies. `ConversationReportedGitTurnProjection` in `Application/Presentation/` resolves that identity against currently resident reported changes. Missing or evicted payload is unavailable; an authoritative completed file-change report containing no changes produces an empty result. Older loaded edits cannot replace a known later editing turn without trusted ordering evidence.

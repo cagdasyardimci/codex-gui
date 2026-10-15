@@ -10,7 +10,7 @@ final class SettingsWindowController: NSWindowController
 	private let notificationLabel = NSTextField(
 		wrappingLabelWithString: "Checking notification access…"
 	)
-	private let editorHandoff = EditorHandoff()
+	private let editorOpeningService = EditorOpeningService()
 	var onLogin: (() -> Void)?
 	var onReconnect: (() -> Void)?
 	var onShowBackendDetails: (() -> Void)?
@@ -183,7 +183,7 @@ final class SettingsWindowController: NSWindowController
 	private func updateEditorLabel()
 	{
 		editorLabel.stringValue =
-			editorHandoff.preferredApplication.map
+			editorOpeningService.preferredApplication.map
 				{
 					$0.deletingPathExtension().lastPathComponent
 				} ?? "System Default"
@@ -204,7 +204,7 @@ final class SettingsWindowController: NSWindowController
 
 	@objc private func useDefaultEditor()
 	{
-		editorHandoff.preferredApplication = nil
+		editorOpeningService.preferredApplication = nil
 		updateEditorLabel()
 	}
 
@@ -230,7 +230,7 @@ final class SettingsWindowController: NSWindowController
 			{
 				return
 			}
-			self?.editorHandoff.preferredApplication = url
+			self?.editorOpeningService.preferredApplication = url
 			self?.updateEditorLabel()
 		}
 	}
