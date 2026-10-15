@@ -56,7 +56,7 @@ struct ConversationReplyActionsTests
 			in: actions,
 			label: "Bookmark turn"
 		))
-		bookmark.performClick(nil)
+		bookmark.dispatchConfiguredAction()
 		#expect(firstToggles == 1)
 		actions.configure(
 			source: "Next response",
@@ -67,14 +67,14 @@ struct ConversationReplyActionsTests
 			}
 		)
 		#expect(bookmark.accessibilityLabel() == "Remove turn bookmark")
-		bookmark.performClick(nil)
+		bookmark.dispatchConfiguredAction()
 		#expect(firstToggles == 1 && nextToggles == 1)
 		actions.setBookmarked(false)
 		#expect(bookmark.accessibilityLabel() == "Bookmark turn")
 		actions.reset()
 		#expect(actions.isHidden)
 		#expect(!bookmark.isEnabled && bookmark.target == nil && bookmark.action == nil)
-		bookmark.performClick(nil)
+		bookmark.dispatchConfiguredAction()
 		#expect(firstToggles == 1 && nextToggles == 1)
 		let pasteboard = NSPasteboard.withUniqueName()
 		defer
@@ -298,7 +298,7 @@ struct ConversationReplyActionsTests
 				actions.bounds,
 				from: actions
 			)
-			#expect(actionSize.height - bodySize.height == 28.5)
+			#expect(actionSize.height - bodySize.height == 34.5)
 			#expect(nextBodyFrame.size == bodyFrame.size)
 			#expect(item.view.bounds.maxY - nextBodyFrame.maxY == bodyTop)
 			#expect(abs(nextBodyFrame.minY - actionFrame.maxY - 8.5) < 0.5)

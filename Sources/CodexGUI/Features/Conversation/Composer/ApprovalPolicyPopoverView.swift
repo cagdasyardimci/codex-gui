@@ -433,10 +433,10 @@ private final class ApprovalPolicyRow: NSButton
 		self.selected = selected
 		let highlightsFullAccess = selected && mode == .fullAccess
 		let tint: NSColor = highlightsFullAccess
-			? ApprovalPopoverStyle.fullAccess : AppKitColorTokens.primaryText
+			? ApprovalPopoverStyle.fullAccess : ApprovalPopoverStyle.primary
 		titleLabel.textColor = tint
-		explanation.textColor = highlightsFullAccess ? tint : AppKitColorTokens.secondaryText
-		symbolView.contentTintColor = highlightsFullAccess ? tint : AppKitColorTokens.primaryText
+		explanation.textColor = highlightsFullAccess ? tint : ApprovalPopoverStyle.secondary
+		symbolView.contentTintColor = highlightsFullAccess ? tint : ApprovalPopoverStyle.icon
 		checkView.contentTintColor = tint
 		checkView.isHidden = !selected
 		setAccessibilityValue(selected ? "Selected" : "Not selected")

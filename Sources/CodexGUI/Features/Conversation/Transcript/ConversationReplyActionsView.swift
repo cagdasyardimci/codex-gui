@@ -4,9 +4,9 @@ import AppKit
 @MainActor
 final class ConversationReplyActionsView: NSStackView
 {
-	static let height: CGFloat = 20
-	private let copyButton = NSButton()
-	private let bookmarkButton = NSButton()
+	static let height = LayoutTokens.Transcript.replyControlSize
+	private let copyButton = DesktopHoverButton()
+	private let bookmarkButton = DesktopHoverButton()
 	private var source: String?
 	private var onToggleBookmark: (() -> Void)?
 
@@ -15,12 +15,14 @@ final class ConversationReplyActionsView: NSStackView
 		super.init(frame: .zero)
 		orientation = .horizontal
 		alignment = .centerY
-		spacing = 6
+		spacing = LayoutTokens.Transcript.replyControlSpacing
 		translatesAutoresizingMaskIntoConstraints = false
 		heightAnchor.constraint(equalToConstant: Self.height).isActive = true
 		for button in [copyButton, bookmarkButton]
 		{
 			AppKitControlStyling.styleButton(button)
+			button.cornerRadius = ShapeTokens.Transcript.replyControlRadius
+			button.contentTintColor = AppKitColorTokens.secondaryText
 			button.imagePosition = .imageOnly
 			button.translatesAutoresizingMaskIntoConstraints = false
 			button.widthAnchor.constraint(equalToConstant: Self.height).isActive = true
@@ -29,7 +31,7 @@ final class ConversationReplyActionsView: NSStackView
 		}
 		copyButton.image = DesktopIcons.image(
 			.copy,
-			size: 13,
+			size: LayoutTokens.Transcript.replyIconSize,
 			accessibilityDescription: "Copy response"
 		)
 		copyButton.toolTip = "Copy response"

@@ -13,7 +13,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 	override func loadView()
 	{
 		view = NSView()
-		label.font = .systemFont(ofSize: 14)
+		label.font = AppKitFontResolver.interfaceFont(ofSize: 14)
 		label.textColor = .secondaryLabelColor
 		label.lineBreakMode = .byTruncatingTail
 		label.translatesAutoresizingMaskIntoConstraints = false
@@ -74,7 +74,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		disclosure.attributedTitle = NSAttributedString(
 			string: label.stringValue,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 14),
+				.font: AppKitFontResolver.interfaceFont(ofSize: 14),
 				.foregroundColor: NSColor.secondaryLabelColor
 			]
 		)

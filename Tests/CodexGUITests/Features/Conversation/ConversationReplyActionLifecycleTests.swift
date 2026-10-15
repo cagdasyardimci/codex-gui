@@ -3,7 +3,7 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite @MainActor
+@MainActor
 struct ConversationReplyActionLifecycleTests
 {
 	@Test func followingOutputIncludesTrailingSpaceAfterReplyAndResize() async throws
@@ -190,7 +190,7 @@ struct ConversationReplyActionLifecycleTests
 			for: "first:reply",
 			in: controller
 		).height
-		#expect(abs(firstHeight - bodyHeight - 28.5) < 0.5)
+		#expect(abs(firstHeight - bodyHeight - 34.5) < 0.5)
 		#expect(button(
 			"Copy response",
 			in: controller.collectionView
