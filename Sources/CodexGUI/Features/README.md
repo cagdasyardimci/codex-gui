@@ -13,7 +13,7 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | [PinnedSummary](PinnedSummary/) | Summary card and compact section presentations. |
 | [ProjectContext](ProjectContext/) | Project context presentation and editing controls. |
 | [Shared](Shared/) | Common presentations, panel contracts and reusable view support. |
-| [Shared/Markdown](Shared/Markdown/) | Markdown parsing, native text rendering, rich attachments and plain-text presentation. |
+| [Shared/Markdown](Shared/Markdown/) | Markdown parsing, native text rendering, rich attachments, plain-text presentation and the runtime preview adapter. |
 | [Shared/Transcript](Shared/Transcript/) | Reusable transcript controller, preparation, message rows, selection, scrolling and turn navigation. |
 | [Sources](Sources/) | Source inventory, detail presentation, result cards and tab hover previews. |
 | [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |

@@ -5,7 +5,7 @@ protocol ConversationPreviewPreparing: Sendable
 	func prepare(_ turn: CodexTurn) throws -> ConversationTurnPreview
 }
 
-/// The runtime supplies the feature's Markdown renderer at application composition.
+/// Plain-text fallback; application composition injects the shared Markdown adapter.
 struct ConversationTextPreviewPreparer: ConversationPreviewPreparing
 {
 	func prepare(_ turn: CodexTurn) throws -> ConversationTurnPreview
