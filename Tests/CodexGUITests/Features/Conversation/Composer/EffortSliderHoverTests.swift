@@ -4,7 +4,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct EffortSliderHoverTests
 {
 	@Test func bareTrackDoesNotHoverAndPointerScopeFollowsValueChanges() throws
@@ -149,6 +151,13 @@ struct EffortSliderHoverTests
 			fixture.close()
 		}
 		let slider = fixture.slider
+		var animations: [ControlledHoverAnimation] = []
+		slider.makeHoverAnimation =
+		{
+			let animation = ControlledHoverAnimation(expanding: $0)
+			animations.append(animation)
+			return animation
+		}
 		slider.shouldReduceMotion =
 		{
 			false
@@ -158,17 +167,18 @@ struct EffortSliderHoverTests
 			slider: slider
 		))
 		#expect(slider.isAnimatingThumbHover)
-		pump(for: 0.1)
+		// Advance a known frame rather than requiring the main run loop to meet a deadline.
+		try #require(animations.last).advance(to: 0.1 / 0.35)
 		#expect(slider.visualKnobDiameter > 28)
 		#expect(slider.visualKnobDiameter < 32)
-		pump(for: 0.35)
+		try #require(animations.last).advance(to: 1)
 		#expect(abs(slider.visualKnobDiameter - 32) < 0.01)
 		#expect(!slider.isAnimatingThumbHover)
 		slider.mouseExited(with: try event(
 			.mouseExited,
 			slider: slider
 		))
-		pump(for: 0.1)
+		try #require(animations.last).advance(to: 0.1 / 0.45)
 		let shrinking = slider.visualKnobDiameter
 		#expect(shrinking > 28 && shrinking < 32)
 		slider.mouseEntered(with: try event(
@@ -179,9 +189,96 @@ struct EffortSliderHoverTests
 		slider.isHidden = true
 		#expect(slider.visualKnobDiameter == 28)
 		#expect(!slider.isAnimatingThumbHover)
-		pump(for: 0.5)
+		// Cancelled drivers cannot repaint after hiding, even if more frames are offered.
+		for animation in animations
+		{
+			animation.advance(to: 1)
+		}
 		#expect(slider.visualKnobDiameter == 28)
 		#expect(slider.doubleValue == 2)
+	}
+
+	@Test(.timeLimit(.minutes(1)))
+	func defaultHoverDriverDeliversNativeProgressAndCompletesBothTransitions() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let fixture = Fixture()
+			defer
+			{
+				fixture.close()
+			}
+			let slider = fixture.slider
+			slider.shouldReduceMotion =
+			{
+				false
+			}
+			let defaultFactory = slider.makeHoverAnimation
+			for expanding in [true, false]
+			{
+				let (events, continuation) = AsyncStream<NativeHoverAnimationEvent>.makeStream()
+				let observer = NativeHoverAnimationObserver(continuation: continuation)
+				var native: EffortThumbHoverAnimation?
+				// Observe the production factory's driver without replacing its native scheduling.
+				slider.makeHoverAnimation =
+				{
+					expanding in
+					let driver = defaultFactory(expanding)
+					if let animation = driver as? EffortThumbHoverAnimation
+					{
+						animation.addProgressMark(0.5)
+						animation.delegate = observer
+						native = animation
+					}
+					return driver
+				}
+				let timeout = Task
+				{
+					do
+					{
+						try await Task.sleep(for: .seconds(3))
+					}
+					catch
+					{
+						return
+					}
+					continuation.finish()
+				}
+				defer
+				{
+					timeout.cancel()
+					native?.delegate = nil
+					continuation.finish()
+				}
+				let type: NSEvent.EventType = expanding ? .mouseEntered : .mouseExited
+				let pointer = try event(
+					type,
+					slider: slider
+				)
+				if expanding
+				{
+					slider.mouseEntered(with: pointer)
+				}
+				else
+				{
+					slider.mouseExited(with: pointer)
+				}
+				let animation = try #require(native)
+				#expect(animation.duration == (expanding ? 0.35 : 0.45))
+				#expect(animation.animationBlockingMode == .nonblocking)
+				var observed: [NativeHoverAnimationEvent] = []
+				for await event in events
+				{
+					observed.append(event)
+				}
+				#expect(observed == [.progress(0.5), .completed])
+				#expect(!animation.isAnimating)
+				#expect(!slider.isAnimatingThumbHover)
+				#expect(abs(slider.visualKnobDiameter - (expanding ? 32 : 28)) < 0.01)
+				#expect(slider.doubleValue == 2)
+			}
+		}
 	}
 
 	@Test func closingPresentationAndDetachingCancelHover() throws
@@ -211,11 +308,6 @@ struct EffortSliderHoverTests
 		slider.removeFromSuperview()
 		#expect(!slider.isAnimatingThumbHover)
 		#expect(slider.visualKnobDiameter == 28)
-	}
-
-	private func pump(for duration: TimeInterval)
-	{
-		RunLoop.current.run(until: Date().addingTimeInterval(duration))
 	}
 
 	private func event(
@@ -302,6 +394,91 @@ struct EffortSliderHoverTests
 			slider.isPresented = false
 			window.orderOut(nil)
 			window.close()
+		}
+	}
+}
+
+private enum NativeHoverAnimationEvent: Equatable, Sendable
+{
+	case progress(NSAnimation.Progress)
+	case completed
+	case stopped
+}
+
+private final class NativeHoverAnimationObserver: NSObject, NSAnimationDelegate
+{
+	private let continuation: AsyncStream<NativeHoverAnimationEvent>.Continuation
+
+	init(continuation: AsyncStream<NativeHoverAnimationEvent>.Continuation)
+	{
+		self.continuation = continuation
+	}
+
+	func animation(
+		_ animation: NSAnimation,
+		didReachProgressMark progress: NSAnimation.Progress
+	)
+	{
+		continuation.yield(.progress(progress))
+	}
+
+	func animationDidEnd(_ animation: NSAnimation)
+	{
+		continuation.yield(.completed)
+		continuation.finish()
+	}
+
+	func animationDidStop(_ animation: NSAnimation)
+	{
+		continuation.yield(.stopped)
+		continuation.finish()
+	}
+}
+
+/// Delivers controlled frames through the actual native spring interpolator.
+@MainActor
+private final class ControlledHoverAnimation: EffortThumbHoverAnimating
+{
+	private let native: EffortThumbHoverAnimation
+	private(set) var isAnimating = false
+	var onProgress: (@MainActor @Sendable (CGFloat) -> Void)?
+	{
+		get
+		{
+			native.onProgress
+		}
+		set
+		{
+			native.onProgress = newValue
+		}
+	}
+
+	init(expanding: Bool)
+	{
+		native = EffortThumbHoverAnimation(expanding: expanding)
+	}
+
+	func start()
+	{
+		isAnimating = true
+	}
+
+	func stop()
+	{
+		isAnimating = false
+	}
+
+	func advance(to progress: NSAnimation.Progress)
+	{
+		guard isAnimating
+		else
+		{
+			return
+		}
+		native.currentProgress = progress
+		if progress >= 1
+		{
+			isAnimating = false
 		}
 	}
 }

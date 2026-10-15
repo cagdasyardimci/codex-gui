@@ -1,7 +1,24 @@
 import AppKit
 
+/// Frame scheduling can be controlled without replacing the native interpolation.
+@MainActor
+protocol EffortThumbHoverAnimating: AnyObject
+{
+	var onProgress: (@MainActor @Sendable (CGFloat) -> Void)?
+	{
+		get set
+	}
+	var isAnimating: Bool
+	{
+		get
+	}
+	func start()
+	func stop()
+}
+
 /// Native interpolation approximates the observed spring trajectory, not its unknown physics.
-final class EffortThumbHoverAnimation: NSAnimation
+// Preserve NSAnimation's nonisolated overrides; the driver protocol must not infer class isolation.
+nonisolated final class EffortThumbHoverAnimation: NSAnimation, EffortThumbHoverAnimating
 {
 	var onProgress: (@MainActor @Sendable (CGFloat) -> Void)?
 	private let expanding: Bool

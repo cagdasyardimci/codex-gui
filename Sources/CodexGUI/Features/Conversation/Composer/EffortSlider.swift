@@ -333,7 +333,12 @@ final class EffortSlider: NSSlider
 	private var pointerLocationInWindow: NSPoint?
 	private var isTrackingMouse = false
 	private var thumbTracking: NSTrackingArea?
-	private var hoverAnimation: EffortThumbHoverAnimation?
+	// Keep native scheduling by default; controlled drivers can deliver exact animation frames.
+	var makeHoverAnimation: (Bool) -> any EffortThumbHoverAnimating =
+	{
+		EffortThumbHoverAnimation(expanding: $0)
+	}
+	private var hoverAnimation: (any EffortThumbHoverAnimating)?
 	private let thumbLayer = CALayer()
 	var isAnimatingThumbHover: Bool
 	{
@@ -560,7 +565,7 @@ final class EffortSlider: NSSlider
 			return
 		}
 		let start = visualKnobDiameter
-		let animation = EffortThumbHoverAnimation(expanding: hovered)
+		let animation = makeHoverAnimation(hovered)
 		animation.onProgress =
 		{
 			[weak self] progress in

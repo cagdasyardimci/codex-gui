@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite(.serialized) @MainActor
+@Suite(
+	.serialized
+) @MainActor
 struct ComposerDarkReferenceTests
 {
 	@Test func retainedInsetEdgeStaysInsideComposerAcrossAppearanceAndResize() throws
@@ -88,6 +90,12 @@ struct ComposerDarkReferenceTests
 		{
 			$0 as? NSImageView
 		}
+		let labels = row.subviews.compactMap
+		{
+			$0 as? NSTextField
+		}
+		try #require(labels.count == 2)
+		try #require(images.count == 2)
 		let event = try #require(NSEvent.mouseEvent(
 			with: .mouseMoved,
 			location: .zero,
@@ -108,20 +116,25 @@ struct ComposerDarkReferenceTests
 				$0.alphaValue == (appearance == .darkAqua ? 1 : 0.75)
 			})
 			let secondary = try resolved(
-				AppKitColorTokens.approvalSecondary,
-				in: row
+				#require(labels[1].textColor),
+				in: labels[1]
 			)
 			let primary = try resolved(
-				AppKitColorTokens.approvalPrimary,
-				in: row
+				#require(labels[0].textColor),
+				in: labels[0]
 			)
 			let icon = try resolved(
-				AppKitColorTokens.approvalIcon,
-				in: row
+				#require(images[0].contentTintColor),
+				in: images[0]
+			)
+			let check = try resolved(
+				#require(images[1].contentTintColor),
+				in: images[1]
 			)
 			if appearance == .darkAqua
 			{
 				#expect(secondary.alphaComponent == 0.498)
+				#expect(secondary.redComponent == 1)
 				#expect(primary.redComponent == 1)
 				#expect(icon.redComponent == 1)
 			}
@@ -132,6 +145,14 @@ struct ComposerDarkReferenceTests
 				#expect(abs(primary.redComponent - 0.13) < 0.0001)
 				#expect(abs(icon.redComponent - 0.33) < 0.0001)
 			}
+			for color in [primary, secondary, icon, check]
+			{
+				#expect(abs(color.greenComponent - color.redComponent) < 0.0001)
+				#expect(abs(color.blueComponent - color.redComponent) < 0.0001)
+			}
+			#expect(primary.alphaComponent == 1)
+			#expect(icon.alphaComponent == 1)
+			#expect(check == primary)
 			#expect(row.accessibilityValue() as? String == "Selected")
 		}
 		row.mouseExited(with: event)
@@ -201,6 +222,125 @@ struct ComposerDarkReferenceTests
 		)
 		#expect(tick.alphaComponent == 0.24902)
 		#expect(edge.alphaComponent == 0.082)
+	}
+
+	@Test func renderedEffortTicksAndEdgeFollowRetainedAppearance() throws
+	{
+		_ = NSApplication.shared
+		let picker = ModelEffortPopoverView()
+		let window = makeWindow(content: picker.view)
+		defer
+		{
+			window.close()
+		}
+		let model = try #require(ModelOption(json: [
+			"model": "palette-model",
+			"displayName": "Palette model",
+			"supportedReasoningEfforts": [
+				["reasoningEffort": "low"],
+				["reasoningEffort": "medium"],
+				["reasoningEffort": "high"],
+			],
+		]))
+		picker.render(
+			models: [model],
+			selectedModelID: model.id,
+			selectedEffort: "low",
+			fastMode: false
+		)
+		window.setContentSize(picker.preferredContentSize)
+		window.layoutIfNeeded()
+		picker.view.layoutSubtreeIfNeeded()
+		let slider = try #require(picker.view.subviews.compactMap
+		{
+			$0 as? NSSlider
+		}.first)
+		#expect(slider.isEnabled)
+		#expect(slider.numberOfTickMarks == 3)
+		#expect(slider.doubleValue == 0)
+		for appearance: NSAppearance.Name in [.darkAqua, .aqua, .darkAqua, .aqua]
+		{
+			window.appearance = NSAppearance(named: appearance)
+			#expect(slider.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == appearance)
+			let bitmap = try renderedSlider(slider)
+			let pixels = try #require(bitmap.data?.assumingMemoryBound(to: UInt8.self))
+			let dark = appearance == .darkAqua
+			// Independent palette values composited over the 10% track on transparency:
+			// alpha = foreground + track * (1 - foreground).
+			let expectedRGB: [CGFloat] = dark ? [1, 1, 1] : [26 / 255, 28 / 255, 31 / 255]
+			let samples: [(NSPoint, CGFloat)] = [
+				// The 28-point thumb centers the final unfilled tick 14 points from the end.
+				(
+					NSPoint(
+						x: slider.bounds.maxX - 14,
+						y: slider.bounds.midY
+					),
+					dark ? 0.324118 : 0.3223531
+				),
+				// Middle of the 0.5-point edge, away from ticks and thumb.
+				(
+					NSPoint(
+						x: slider.bounds.midX + 20,
+						y: slider.bounds.midY - 11.75
+					),
+					dark ? 0.1738 : 0.172
+				),
+			]
+			for (point, alpha) in samples
+			{
+				let offset = Int(point.y * 8) * bitmap.bytesPerRow + Int(point.x * 8) * 4
+				let actualRGBA = (0 ..< 4).map
+				{
+					CGFloat(pixels[offset + $0]) / 255
+				}
+				let expectedRGBA = expectedRGB.map
+				{
+					$0 * alpha
+				} + [alpha]
+				// Compare the explicit premultiplied sRGB bytes without NSColor profile conversion.
+				for (actual, expected) in zip(
+					actualRGBA,
+					expectedRGBA
+				)
+				{
+					#expect(abs(actual - expected) < 1.5 / 255)
+				}
+			}
+		}
+	}
+
+	private func renderedSlider(_ slider: NSSlider) throws -> CGContext
+	{
+		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+		let context = try #require(CGContext(
+			data: nil,
+			width: Int(slider.bounds.width * 8),
+			height: Int(slider.bounds.height * 8),
+			bitsPerComponent: 8,
+			bytesPerRow: 0,
+			space: colorSpace,
+			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+				| CGBitmapInfo.byteOrder32Big.rawValue
+		))
+		NSGraphicsContext.saveGraphicsState()
+		defer
+		{
+			NSGraphicsContext.restoreGraphicsState()
+		}
+		NSGraphicsContext.current = NSGraphicsContext(
+			cgContext: context,
+			flipped: slider.isFlipped
+		)
+		context.scaleBy(
+			x: 8,
+			y: 8
+		)
+		// Exercise the configured control's real drawing, with an isolated transparent backdrop.
+		slider.effectiveAppearance.performAsCurrentDrawingAppearance
+		{
+			slider.draw(slider.bounds)
+		}
+		return context
 	}
 
 	private func resolved(
