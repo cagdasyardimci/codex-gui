@@ -252,17 +252,4 @@ extension ApplicationStateTests
 		gate.onWaitersChanged = previous
 		return condition()
 	}
-	func waitUntil(_ condition: @escaping @MainActor () -> Bool) async -> Bool
-	{
-		for _ in 0 ..< 200
-		{
-			if condition()
-			{
-				return true
-			}
-			try? await Task.sleep(for: .milliseconds(5))
-		}
-		return condition()
-	}
-
 }
