@@ -358,21 +358,53 @@ struct ComposerContextStorageTests
 			isolated.cleanup()
 		}
 		let original = ComposerContextItem(
+			id: "legacy-file-reference",
 			kind: .fileReference,
 			title: "Old",
 			path: "Old.swift"
 		)
-		let legacy = [project.path: ["thread:one": [original]]]
+		let excerpt = ComposerContextItem(
+			id: "legacy-text-excerpt",
+			kind: .textExcerpt,
+			title: "Earlier code",
+			path: "Old.swift",
+			firstLine: 4,
+			lastLine: 5,
+			excerpt: "let answer = 42"
+		)
+		// These historical keys and enum values must not follow the current Codable model.
+		let legacyItems: [[String: Any]] = [
+			[
+				"id": "legacy-file-reference",
+				"kind": "fileReference",
+				"title": "Old",
+				"path": "Old.swift"
+			],
+			[
+				"id": "legacy-text-excerpt",
+				"kind": "textExcerpt",
+				"title": "Earlier code",
+				"path": "Old.swift",
+				"firstLine": 4,
+				"lastLine": 5,
+				"excerpt": "let answer = 42"
+			]
+		]
+		let projectPath = project.standardizedFileURL.resolvingSymlinksInPath().path
+		let legacy = [projectPath: ["thread:one": legacyItems]]
+		let legacyData = try JSONSerialization.data(withJSONObject: legacy)
 		isolated.defaults.set(
-			try JSONEncoder().encode(legacy),
+			legacyData,
 			forKey: "CodexGUI.sentReferences"
 		)
 		let storage = LocalStorage(defaults: isolated.defaults)
 		#expect(storage.sentReferences(
 			for: project,
 			threadID: "one"
-		) == [original])
+		) == [original, excerpt])
+		#expect(isolated.defaults.data(forKey: "CodexGUI.sentReferences") == legacyData)
 		let next = ComposerContextItem(
+			id: "new-file-reference",
 			kind: .fileReference,
 			title: "New",
 			path: "New.swift"
@@ -385,7 +417,22 @@ struct ComposerContextStorageTests
 		#expect(storage.sentReferences(
 			for: project,
 			threadID: "one"
-		) == [original, next])
+		) == [original, excerpt, next])
+		let migratedData = try #require(isolated.defaults.data(forKey: "CodexGUI.sentReferences"))
+		let records = try #require(
+			JSONSerialization.jsonObject(with: migratedData) as? [[String: Any]]
+		)
+		let expectedItems = legacyItems + [[
+			"id": "new-file-reference",
+			"kind": "fileReference",
+			"title": "New",
+			"path": "New.swift"
+		]]
+		let expectedRecords: [[String: Any]] = expectedItems.map
+		{
+			["projectPath": projectPath, "threadID": "one", "item": $0]
+		}
+		#expect(NSArray(array: records) == NSArray(array: expectedRecords))
 	}
 
 	private func ownedImage(in directory: URL) throws -> URL

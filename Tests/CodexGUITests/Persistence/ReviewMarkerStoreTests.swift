@@ -59,6 +59,82 @@ struct ReviewMarkerStoreTests
 		)
 	}
 
+	@Test(arguments: [false, true])
+	func unmarkPersistsWithoutRemovingOtherFileHunkOrProjectMarkers(removeHunk: Bool) throws
+	{
+		let fixture = try IsolatedUserDefaultsFixture(prefix: "ReviewMarkerRemovalTests")
+		defer
+		{
+			fixture.cleanup()
+		}
+		let file = try ReviewModelTestFixture.reviewFile(diff: "@@ -1 +1 @@\n-old\n+new")
+		let hunk = try #require(file.hunks.first)
+		let fileIdentity = ReviewMarkerIdentity(
+			reference: ReviewReference(
+				threadID: "thread",
+				turnID: "turn",
+				file: file
+			),
+			fingerprint: file.fingerprint
+		)
+		let hunkIdentity = ReviewMarkerIdentity(
+			reference: ReviewReference(
+				threadID: "thread",
+				turnID: "turn",
+				file: file,
+				hunk: hunk
+			),
+			fingerprint: hunk.fingerprint
+		)
+		let identities = [fileIdentity, hunkIdentity]
+		let store = ReviewMarkerStore(defaults: fixture.defaults)
+		for identity in identities
+		{
+			store.setReviewed(
+				true,
+				projectPath: "/project",
+				reference: identity.reference,
+				fingerprint: identity.fingerprint
+			)
+		}
+		store.setReviewed(
+			true,
+			projectPath: "/another-project",
+			reference: fileIdentity.reference,
+			fingerprint: fileIdentity.fingerprint
+		)
+		try #require(store.reviewedIdentities(
+			projectPath: "/project",
+			identities: identities
+		) == identities)
+
+		let removed = removeHunk ? hunkIdentity : fileIdentity
+		let retained = removeHunk ? fileIdentity : hunkIdentity
+		store.setReviewed(
+			false,
+			projectPath: "/project",
+			reference: removed.reference,
+			fingerprint: removed.fingerprint
+		)
+
+		let reopenedDefaults = try #require(UserDefaults(suiteName: fixture.suiteName))
+		let reopened = ReviewMarkerStore(defaults: reopenedDefaults)
+		#expect(!reopened.isReviewed(
+			projectPath: "/project",
+			reference: removed.reference,
+			fingerprint: removed.fingerprint
+		))
+		#expect(reopened.reviewedIdentities(
+			projectPath: "/project",
+			identities: identities
+		) == [retained])
+		#expect(reopened.isReviewed(
+			projectPath: "/another-project",
+			reference: fileIdentity.reference,
+			fingerprint: fileIdentity.fingerprint
+		))
+	}
+
 	@Test func sectionMarkerSurvivesAnUnrelatedSectionEdit() throws
 	{
 		let suite = "ReviewSectionMarkerTests.\(UUID())"

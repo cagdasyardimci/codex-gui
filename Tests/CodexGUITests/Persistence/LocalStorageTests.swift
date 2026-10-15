@@ -3,7 +3,9 @@ import Testing
 
 @testable import CodexGUI
 
-@Suite("Local storage")
+@Suite(
+	"Local storage"
+)
 struct LocalStorageTests
 {
 	@Test("Recent projects are unique, newest first, and limited to ten")
@@ -93,7 +95,7 @@ struct LocalStorageTests
 
 	@Test("Project symlinks share recent project and draft identity")
 	@MainActor
-	func projectSymlinksShareRecentProjectAndDraftIdentity() throws
+	func projectSymlinksShareRecentProjectAndDraftIdentity() async throws
 	{
 		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
 		defer
@@ -110,14 +112,17 @@ struct LocalStorageTests
 			"project-alias",
 			isDirectory: true
 		)
-		try FileManager.default.createDirectory(
-			at: projectURL,
-			withIntermediateDirectories: true
-		)
-		try FileManager.default.createSymbolicLink(
-			at: aliasURL,
-			withDestinationURL: projectURL
-		)
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: projectURL,
+				withIntermediateDirectories: true
+			)
+			try FileManager.default.createSymbolicLink(
+				at: aliasURL,
+				withDestinationURL: projectURL
+			)
+		}
 
 		storage.rememberProject(projectURL)
 		storage.saveDraft(
@@ -162,6 +167,91 @@ struct LocalStorageTests
 		) == "legacy draft")
 		#expect(defaults.object(forKey: "recentProject") == nil)
 		#expect(defaults.object(forKey: "draft") == nil)
+	}
+
+	@Test(arguments: ["Newer unsent draft", ""])
+	@MainActor
+	func legacyMigrationPreservesExistingModernDrafts(modernDraft: String) throws
+	{
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let defaults = defaultsFixture.defaults
+		let project = temporaryRootURL().appendingPathComponent("legacy-project")
+		let otherProject = temporaryRootURL().appendingPathComponent("other-project")
+		let projectPath = project.standardizedFileURL.resolvingSymlinksInPath().path
+		let otherPath = otherProject.standardizedFileURL.resolvingSymlinksInPath().path
+		let existingDrafts = [
+			projectPath: ["new-chat": modernDraft, "thread:existing": "Keep the thread draft"],
+			otherPath: ["new-chat": "Keep the other project draft"]
+		]
+		defaults.set(
+			existingDrafts,
+			forKey: "CodexGUI.drafts"
+		)
+		defaults.set(
+			project.path,
+			forKey: "recentProject"
+		)
+		defaults.set(
+			"Older legacy draft",
+			forKey: "draft"
+		)
+
+		let storage = LocalStorage(defaults: defaults)
+		#expect(storage.draft(
+			for: project,
+			threadID: nil
+		) == modernDraft)
+		#expect(storage.draft(
+			for: project,
+			threadID: "existing"
+		) == "Keep the thread draft")
+		#expect(storage.draft(
+			for: otherProject,
+			threadID: nil
+		) == "Keep the other project draft")
+		#expect(defaults.dictionary(forKey: "CodexGUI.drafts") as? [String: [String: String]]
+			== existingDrafts)
+		#expect(defaults.object(forKey: "recentProject") == nil)
+		#expect(defaults.object(forKey: "draft") == nil)
+	}
+
+	@Test("Pending-command writes preserve the historical checkpoint field names")
+	@MainActor
+	func pendingCommandWritesPreserveHistoricalJSONShape() throws
+	{
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let storage = LocalStorage(defaults: defaultsFixture.defaults)
+		let project = temporaryRootURL().appendingPathComponent("command-owner")
+		let projectPath = project.standardizedFileURL.resolvingSymlinksInPath().path
+		storage.savePendingCommands(
+			[TaskCommandOwnership(
+				threadID: "thread-one",
+				turnID: "turn-two",
+				itemID: "command-three"
+			)],
+			for: project
+		)
+
+		let checkpoints = try #require(defaultsFixture.defaults
+			.dictionary(forKey: "CodexGUI.pendingCommands") as? [String: Data])
+		#expect(Set(checkpoints.keys) == [projectPath])
+		let data = try #require(checkpoints[projectPath])
+		let records = try #require(
+			JSONSerialization.jsonObject(with: data) as? [[String: String]]
+		)
+		#expect(records == [[
+			"threadID": "thread-one",
+			"turnID": "turn-two",
+			"itemID": "command-three"
+		]])
 	}
 
 	@Test("Last conversation is per project and explicit New Chat clears only its selection")
