@@ -10,6 +10,9 @@ final class GitNavigatorTransition
 	private let widthConstraint: NSLayoutConstraint
 	private let layoutView: NSView
 	private let expandedWidth: CGFloat
+	private let now: @MainActor () -> TimeInterval
+	private let sleep: @MainActor (UInt64) async -> Void
+	private let shouldReduceMotion: @MainActor () -> Bool
 	private var animationTask: Task<Void, Never>?
 	private var animationGeneration = 0
 
@@ -26,12 +29,27 @@ final class GitNavigatorTransition
 	init(
 		widthConstraint: NSLayoutConstraint,
 		layoutView: NSView,
-		expandedWidth: CGFloat = 280
+		expandedWidth: CGFloat = 280,
+		now: @escaping @MainActor () -> TimeInterval =
+		{
+			CACurrentMediaTime()
+		},
+		sleep: @escaping @MainActor (UInt64) async -> Void =
+		{
+			try? await Task.sleep(nanoseconds: $0)
+		},
+		shouldReduceMotion: @escaping @MainActor () -> Bool =
+		{
+			NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+		}
 	)
 	{
 		self.widthConstraint = widthConstraint
 		self.layoutView = layoutView
 		self.expandedWidth = expandedWidth
+		self.now = now
+		self.sleep = sleep
+		self.shouldReduceMotion = shouldReduceMotion
 	}
 
 	deinit
@@ -52,7 +70,7 @@ final class GitNavigatorTransition
 		let generation = animationGeneration
 		let startWidth = currentWidth
 		let finalWidth: CGFloat = visible ? expandedWidth : 0
-		guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+		guard animated, !shouldReduceMotion(),
 				abs(finalWidth - startWidth) >= 0.5
 		else
 		{
@@ -68,7 +86,11 @@ final class GitNavigatorTransition
 				layoutView.window?.screen?.maximumFramesPerSecond ?? 60
 			)
 		)
-		let started = CACurrentMediaTime()
+		// Inject timing so reversal tests can observe a frame without scheduling deadlines.
+		let now = now
+		let sleep = sleep
+		let shouldReduceMotion = shouldReduceMotion
+		let started = now()
 		animationTask = Task
 		{
 			@MainActor [weak self] in
@@ -76,7 +98,7 @@ final class GitNavigatorTransition
 			{
 				let elapsed = min(
 					1,
-					(CACurrentMediaTime() - started) / Self.duration
+					(now() - started) / Self.duration
 				)
 				let eased = TransitionEasing.easeInEaseOut(elapsed)
 				do
@@ -87,7 +109,7 @@ final class GitNavigatorTransition
 						return
 					}
 					self.applyWidth(startWidth + (finalWidth - startWidth) * CGFloat(eased))
-					if elapsed >= 1 || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+					if elapsed >= 1 || shouldReduceMotion()
 					{
 						self.applyWidth(finalWidth)
 						self.animationTask = nil
@@ -95,7 +117,7 @@ final class GitNavigatorTransition
 						return
 					}
 				}
-				try? await Task.sleep(nanoseconds: UInt64(1_000_000_000 / frameRate))
+				await sleep(UInt64(1_000_000_000 / frameRate))
 			}
 		}
 	}
