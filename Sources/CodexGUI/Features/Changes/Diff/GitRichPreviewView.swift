@@ -109,6 +109,11 @@ final class GitRichPreviewView: NSView
 		task = nil
 	}
 
+	func waitForLoading() async
+	{
+		await task?.value
+	}
+
 	private func install(_ view: NSView)
 	{
 		content?.removeFromSuperview()

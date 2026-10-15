@@ -9,22 +9,35 @@ struct GitInlineRichPreviewTests
 {
 	@Test func eyeButtonExpandsCollapsedFileAndLoadsPreviewInChangesViewer() async throws
 	{
-		_ = NSApplication.shared
-		let fixture = try GitTurnBaselineFixture()
+		// Repository preparation is independent of the native viewer and can block on Git.
+		let fixture = try await BackgroundTestWork.perform
+		{
+			let fixture = try GitTurnBaselineFixture()
+			do
+			{
+				try fixture.write(
+					"README.md",
+					"# Before\n"
+				)
+				try fixture.git(["add", "README.md"])
+				try fixture.commit()
+				try fixture.write(
+					"README.md",
+					"# Inline preview\n\n**Formatted** content.\n"
+				)
+				return fixture
+			}
+			catch
+			{
+				fixture.remove()
+				throw error
+			}
+		}
 		defer
 		{
 			fixture.remove()
 		}
-		try fixture.write(
-			"README.md",
-			"# Before\n"
-		)
-		try fixture.git(["add", "README.md"])
-		try fixture.commit()
-		try fixture.write(
-			"README.md",
-			"# Inline preview\n\n**Formatted** content.\n"
-		)
+		_ = NSApplication.shared
 		let controller = GitChangesViewController()
 		let window = NSWindow(
 			contentRect: NSRect(
@@ -66,7 +79,14 @@ struct GitInlineRichPreviewTests
 			"Expand diff for README.md",
 			in: controller.view
 		)
-		let windows = NSApplication.shared.windows.map(\.windowNumber)
+		// Other fixtures may create unrelated windows while this preview loads.
+		// Verify this component remains in its original owned hierarchy instead.
+		let originalContent = window.contentView
+		let section = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? GitDiffFileSectionView
+		}.first)
+		let originalDocument = section.superview
 		try button(
 			"Rich preview of README.md",
 			in: controller.view
@@ -79,7 +99,16 @@ struct GitInlineRichPreviewTests
 		settle(window)
 		#expect(text.string.hasPrefix("Inline preview"))
 		#expect(preview.window === window)
-		#expect(NSApplication.shared.windows.map(\.windowNumber) == windows)
+		#expect(window.contentView === originalContent)
+		// Expanding a collapsed file legitimately replaces its old section.
+		let expandedSection = try #require(preview.superview as? GitDiffFileSectionView)
+		#expect(expandedSection.superview === originalDocument)
+		#expect(descendants(expandedSection).contains
+		{
+			$0 === preview
+		})
+		#expect(text.window === window)
+		#expect(window.childWindows?.isEmpty != false)
 		_ = try button(
 			"Collapse diff for README.md",
 			in: controller.view
@@ -135,7 +164,9 @@ struct GitInlineRichPreviewTests
 			y: 0
 		))
 		let horizontal = inner.contentView.bounds.origin.x
-		let windows = NSApplication.shared.windows.map(\.windowNumber)
+		// Scope the no-new-preview-window invariant to this fixture's ownership.
+		let originalDocument = outer.documentView
+		let originalSectionParent = section.superview
 		let markdown = "# Preview\n\n" + String(
 			repeating: "Formatted **content** wraps. ",
 			count: 60
@@ -154,7 +185,12 @@ struct GitInlineRichPreviewTests
 		#expect(text.string.hasPrefix("Preview"))
 		#expect(!text.string.contains("**content**"))
 		#expect(text.enclosingScrollView === outer)
-		#expect(NSApplication.shared.windows.map(\.windowNumber) == windows)
+		#expect(outer.documentView === originalDocument)
+		#expect(section.superview === originalSectionParent)
+		#expect(preview.superview === section)
+		#expect(preview.window === window)
+		#expect(text.window === window)
+		#expect(window.childWindows?.isEmpty != false)
 		let wideHeight = preview.frame.height
 		window.setContentSize(NSSize(
 			width: 300,
@@ -203,19 +239,34 @@ struct GitInlineRichPreviewTests
 	@Test func imagesAndPDFsRenderInInlineViews() async throws
 	{
 		_ = NSApplication.shared
-		let image = NSImage(size: NSSize(
+		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+		let context = try #require(CGContext(
+			data: nil,
 			width: 100,
-			height: 60
+			height: 60,
+			bitsPerComponent: 8,
+			bytesPerRow: 400,
+			space: colorSpace,
+			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
 		))
-		image.lockFocus()
-		NSColor.systemBlue.setFill()
-		NSRect(
+		let fixtureColor = try #require(CGColor(
+			colorSpace: colorSpace,
+			components: [0.125, 0.25, 0.75, 1]
+		))
+		context.setFillColor(fixtureColor)
+		context.fill(CGRect(
 			x: 0,
 			y: 0,
 			width: 100,
 			height: 60
-		).fill()
-		image.unlockFocus()
+		))
+		let image = NSImage(
+			cgImage: try #require(context.makeImage()),
+			size: NSSize(
+				width: 100,
+				height: 60
+			)
+		)
 		let imageData = try #require(image.tiffRepresentation)
 		let document = PDFDocument()
 		document.insert(
@@ -229,6 +280,31 @@ struct GitInlineRichPreviewTests
 			{
 				bytes
 			}
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 400,
+					height: 600
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			defer
+			{
+				preview.cancelLoading()
+				window.close()
+			}
+			let host = try #require(window.contentView)
+			host.addSubview(preview)
+			preview.translatesAutoresizingMaskIntoConstraints = false
+			NSLayoutConstraint.activate([
+				preview.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+				preview.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+				preview.topAnchor.constraint(equalTo: host.topAnchor)
+			])
 			for _ in 0 ..< 100
 			{
 				if preview.subviews
@@ -241,11 +317,192 @@ struct GitInlineRichPreviewTests
 				}
 				try await Task.sleep(for: .milliseconds(10))
 			}
-			#expect(preview.subviews.contains
+			settle(window)
+			let content: NSView
+			switch kind
 			{
-				$0 is NSImageView || $0 is PDFView
-			})
+			case .image:
+				let view = try #require(preview.subviews.compactMap
+				{
+					$0 as? NSImageView
+				}.first)
+				let loaded = try #require(view.image)
+				#expect(loaded.size == NSSize(
+					width: 100,
+					height: 60
+				))
+				try expectFixturePixels(in: loaded)
+				content = view
+			case .pdf:
+				let view = try #require(preview.subviews.compactMap
+				{
+					$0 as? PDFView
+				}.first)
+				let loaded = try #require(view.document)
+				#expect(loaded.pageCount == 1)
+				let page = try #require(loaded.page(at: 0))
+				#expect(page.bounds(for: .mediaBox) == NSRect(
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 60
+				))
+				try expectFixturePixels(in: page.thumbnail(
+					of: NSSize(
+						width: 100,
+						height: 60
+					),
+					for: .mediaBox
+				))
+				content = view
+			case .markdown:
+				Issue.record("This fixture exercises image and PDF previews")
+				continue
+			}
+			#expect(content.window === window)
+			#expect(content.frame.width > 0 && content.frame.height > 0)
+			#expect(preview.bounds.contains(content.frame))
 		}
+	}
+
+	@Test(
+		.timeLimit(.minutes(1)),
+		arguments: ["throwing", "invalidUTF8", "image", "pdf"]
+	)
+	func failedPreviewsExplainTheProblemAndRestoreRetainedDiff(_ failure: String) async throws
+	{
+		_ = NSApplication.shared
+		let section = makeSection()
+		let outer = AppKitLayout.scrollableContent(
+			section,
+			inset: 0
+		)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 680,
+				height: 320
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentView = outer
+		defer
+		{
+			window.close()
+		}
+		settle(window)
+		let source = try #require(descendants(section).compactMap
+		{
+			$0 as? GitDiffTextView
+		}.first)
+		let originalText = source.string
+		let selection = NSRange(
+			location: 2,
+			length: 5
+		)
+		source.setSelectedRange(selection)
+		let originalBody = try #require(section.arrangedSubviews.last)
+		let kind: GitRichPreviewKind = switch failure
+		{
+		case "image": .image
+		case "pdf": .pdf
+		default: .markdown
+		}
+		let expectedMessage = switch failure
+		{
+		case "image": "This image cannot be rendered as a rich preview."
+		case "pdf": "This PDF cannot be rendered as a rich preview."
+		default: "Rich preview unavailable. Refresh the comparison and retry."
+		}
+		section.toggleRichPreview
+		{
+			GitRichPreviewView(kind: kind)
+			{
+				if failure == "throwing"
+				{
+					throw GitComparisonFailure.repositoryChanged
+				}
+				return Data([0xFF, 0xFE, 0xFF])
+			}
+		}
+		let preview = try #require(section.arrangedSubviews.last as? GitRichPreviewView)
+		defer
+		{
+			preview.cancelLoading()
+		}
+		#expect(originalBody.isHidden)
+		await preview.waitForLoading()
+		settle(window)
+		let messages = descendants(preview).compactMap
+		{
+			$0 as? NSTextField
+		}
+		#expect(messages.map(\.stringValue) == [expectedMessage])
+		#expect(messages.first?.isHiddenOrHasHiddenAncestor == false)
+		#expect(messages.first?.window === window)
+		#expect((messages.first?.frame.height ?? 0) > 0)
+		#expect(!descendants(preview).contains
+		{
+			$0 is NSImageView || $0 is PDFView || $0 is NSTextView
+		})
+		section.toggleRichPreview
+		{
+			Issue.record("Returning to the diff must not start another preview")
+			return GitRichPreviewView(kind: .markdown)
+			{
+				Data()
+			}
+		}
+		settle(window)
+		#expect(!originalBody.isHidden)
+		#expect(section.arrangedSubviews.last === originalBody)
+		#expect(preview.superview == nil)
+		#expect(descendants(section).contains
+		{
+			$0 === source
+		})
+		#expect(source.string == originalText)
+		#expect(source.selectedRange() == selection)
+	}
+
+	private func expectFixturePixels(in image: NSImage) throws
+	{
+		let pixels = try #require(image.cgImage(
+			forProposedRect: nil,
+			context: nil,
+			hints: nil
+		))
+		// Normalize pixel storage explicitly; colorAt can tag its result as calibrated RGB.
+		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+		let normalized = try #require(CGContext(
+			data: nil,
+			width: pixels.width,
+			height: pixels.height,
+			bitsPerComponent: 8,
+			bytesPerRow: pixels.width * 4,
+			space: colorSpace,
+			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+		))
+		normalized.draw(
+			pixels,
+			in: CGRect(
+				x: 0,
+				y: 0,
+				width: pixels.width,
+				height: pixels.height
+			)
+		)
+		let storage = try #require(normalized.data)
+		let bytes = storage.assumingMemoryBound(to: UInt8.self)
+		let offset = (pixels.height / 2 * pixels.width + pixels.width / 2) * 4
+		#expect(abs(Double(bytes[offset]) / 255 - 0.125) < 0.05)
+		#expect(abs(Double(bytes[offset + 1]) / 255 - 0.25) < 0.05)
+		#expect(abs(Double(bytes[offset + 2]) / 255 - 0.75) < 0.05)
+		#expect(Double(bytes[offset + 3]) / 255 > 0.99)
 	}
 
 	private func waitForText(_ view: NSView) async throws -> ConversationMarkdownTextView

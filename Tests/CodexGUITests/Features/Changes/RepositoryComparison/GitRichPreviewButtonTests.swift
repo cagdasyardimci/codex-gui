@@ -6,7 +6,7 @@ import Testing
 @Suite @MainActor
 struct GitRichPreviewButtonTests
 {
-	@Test func eyeButtonOnlyAppearsForRichFormatsAndRoutesItsOwnFile()
+	@Test func eyeButtonOnlyAppearsForRichFormatsAndRoutesItsOwnFile() throws
 	{
 		_ = NSApplication.shared
 		for path in ["README.MD",
@@ -18,7 +18,7 @@ struct GitRichPreviewButtonTests
 						"plain.txt",
 						"index.html"]
 		{
-			var previewed = false
+			var previewed: [NSButton] = []
 			let patch = "index " + String(
 				repeating: "a",
 				count: 40
@@ -52,7 +52,7 @@ struct GitRichPreviewButtonTests
 				},
 				onRichPreview:
 				{
-					_ in previewed = true
+					previewed.append($0)
 				}
 			)
 			let preview = buttons(section).first
@@ -63,7 +63,13 @@ struct GitRichPreviewButtonTests
 			let supported = ["README.MD", "image.png", "diagram.svg", "document.pdf"].contains(path)
 			#expect((preview != nil) == supported)
 			preview?.performClick(nil)
-			#expect(previewed == supported)
+			#expect(previewed.count == (supported ? 1 : 0))
+			if let preview
+			{
+				let sender = try #require(previewed.first)
+				#expect(sender === preview)
+				#expect(sender.identifier?.rawValue == path)
+			}
 		}
 	}
 
