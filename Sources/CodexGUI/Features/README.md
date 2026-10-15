@@ -16,7 +16,7 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | [Shared/Markdown](Shared/Markdown/) | Markdown parsing, native text rendering, rich attachments and plain-text presentation. |
 | [Sources](Sources/) | Source inventory, detail presentation, result cards and tab hover previews. |
 | [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |
-| [Usage](Usage/) | Usage presentation and controls. |
+| [Usage](Usage/) | Native usage controls and details; shared usage projection belongs to Application/Presentation. |
 
 Hiding the pinned summary releases the inspector pane when it has no detail or tool content.
 The transcript and composer center within the resulting conversation pane at their existing
