@@ -312,6 +312,62 @@ struct ConversationSourcesRenderingTests
 	}
 
 	@Test(.timeLimit(.minutes(1)))
+	func hiddenReplacementRejectsLateResultFromCanceledPreview() async throws
+	{
+		_ = NSApplication.shared
+		let imageURL = try await imageFile()
+		defer
+		{
+			try? FileManager.default.removeItem(at: imageURL)
+		}
+		let original = try imageEntry(imageURL)
+		let changed = try imageEntry(URL(fileURLWithPath: "/tmp/missing-replaced-source.png"))
+		let loader = SourcePreviewReplacementGate()
+		let controller = try controller(
+			entries: [original],
+			loadThumbnail:
+			{
+				await loader.load(path: $0)
+			}
+		)
+		_ = controller.view
+		let initial = try #require(controller.previewTasks().first)
+		do
+		{
+			var requests = loader.requests.makeAsyncIterator()
+			try #require(await requests.next() == imageURL.path)
+			controller.view.isHidden = true
+			controller.update(ConversationLocalSources(entries: [changed]))
+			#expect(initial.isCancelled)
+			#expect(controller.previewTasks().isEmpty)
+			controller.update(ConversationLocalSources(entries: [original]))
+			controller.prepareForDisplay()
+			try #require(await requests.next() == imageURL.path)
+			let image = try #require(descendants(controller.view).compactMap
+			{
+				$0 as? NSImageView
+			}.first)
+			let placeholder = image.image
+			await loader.releaseNext(data: nil)
+			await initial.value
+			#expect(image.image === placeholder)
+			#expect(!text(in: controller.view).contains("Preview unavailable"))
+			await loader.releaseNext(data: try DraftImageImportTestFixture.png())
+			await controller.waitForPreviews()
+			#expect(image.image !== placeholder)
+			controller.view.isHidden = false
+			await loader.releaseAll()
+		}
+		catch
+		{
+			controller.invalidate()
+			await loader.releaseAll()
+			await initial.value
+			throw error
+		}
+	}
+
+	@Test(.timeLimit(.minutes(1)))
 	func invalidationCancelsMediaAndRejectsRetainedCallbacks() async throws
 	{
 		_ = NSApplication.shared
@@ -553,6 +609,51 @@ private actor SourcePreviewLoadGate
 		for waiter in pending
 		{
 			waiter.resume()
+		}
+		requestContinuation.finish()
+	}
+}
+
+private actor SourcePreviewReplacementGate
+{
+	nonisolated let requests: AsyncStream<String>
+	private let requestContinuation: AsyncStream<String>.Continuation
+	private var waiters: [CheckedContinuation<Data?, Never>] = []
+
+	init()
+	{
+		let (requests, continuation) = AsyncStream<String>.makeStream()
+		self.requests = requests
+		requestContinuation = continuation
+	}
+
+	func load(path: String) async -> Data?
+	{
+		await withCheckedContinuation
+		{
+			continuation in
+			waiters.append(continuation)
+			requestContinuation.yield(path)
+		}
+	}
+
+	func releaseNext(data: Data?)
+	{
+		guard !waiters.isEmpty
+		else
+		{
+			return
+		}
+		waiters.removeFirst().resume(returning: data)
+	}
+
+	func releaseAll()
+	{
+		let pending = waiters
+		waiters.removeAll()
+		for waiter in pending
+		{
+			waiter.resume(returning: nil)
 		}
 		requestContinuation.finish()
 	}

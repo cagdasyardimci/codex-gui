@@ -102,6 +102,11 @@ Callers supply a project, path and line; the service preserves project containme
 preferred-application persistence and launch fallbacks. Changes retains the adapter that derives
 the relevant line from a Git diff. Settings accesses the same preference owner directly.
 
+Sources owns its media preview coordinator within the feature. The coordinator owns request
+identity, cancellation and rejection of obsolete results, including interrupted requests that
+must restart after hidden inventory updates. The Sources controller owns retained rows, selection,
+disclosures and application of accepted preview results to native views.
+
 ## Recorded latest Git turn
 
 `ConversationReportedGitTurn` in `Application/Reducers/Conversation/` retains the known latest editing turn's identity and available timestamps independently of loaded transcript bodies. `ConversationReportedGitTurnProjection` in `Application/Presentation/` resolves that identity against currently resident reported changes. Missing or evicted payload is unavailable; an authoritative completed file-change report containing no changes produces an empty result. Older loaded edits cannot replace a known later editing turn without trusted ordering evidence.

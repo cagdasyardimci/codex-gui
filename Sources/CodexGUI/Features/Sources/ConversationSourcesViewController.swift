@@ -11,10 +11,7 @@ final class ConversationSourcesViewController: NSViewController
 	private var renderedRecords: [String: ConversationLocalSources.Record] = [:]
 	private var dividers: [String: NSBox] = [:]
 	private var buttons: [NSButton: ConversationLocalSources.Record] = [:]
-	private var tasks: [String: Task<Void, Never>] = [:]
-	private let loadThumbnail: @Sendable (String) async -> Data?
-	private var interruptedPreviews = Set<String>()
-	private var renderGeneration = 0
+	private let previews: SourcePreviewCoordinator
 	private var needsSourceRender = true
 	private var isInvalidated = false
 	private var expandedInvocations = Set<String>()
@@ -64,7 +61,10 @@ final class ConversationSourcesViewController: NSViewController
 	{
 		self.owner = owner
 		self.sources = sources
-		self.loadThumbnail = loadThumbnail
+		previews = SourcePreviewCoordinator(
+			records: sources.records,
+			loadThumbnail: loadThumbnail
+		)
 		super.init(
 			nibName: nil,
 			bundle: nil
@@ -111,7 +111,10 @@ final class ConversationSourcesViewController: NSViewController
 		}
 		self.sources = sources
 		needsSourceRender = true
-		cancelObsoletePreviewTasks()
+		previews.update(
+			records: sources.records,
+			renderedRecords: renderedRecords
+		)
 		renderPendingSources()
 	}
 
@@ -148,31 +151,7 @@ final class ConversationSourcesViewController: NSViewController
 	{
 		isInvalidated = true
 		rawOutput.dismiss()
-		renderGeneration += 1
-		for task in tasks.values
-		{
-			task.cancel()
-		}
-		tasks.removeAll()
-	}
-
-	private func cancelObsoletePreviewTasks()
-	{
-		let current = Dictionary(
-			sources.records.map
-			{
-				($0.id, $0)
-			},
-			uniquingKeysWith:
-			{
-				_, latest in latest
-			}
-		)
-		for id in Array(tasks.keys) where renderedRecords[id] != current[id]
-		{
-			tasks.removeValue(forKey: id)?.cancel()
-			interruptedPreviews.insert(id)
-		}
+		previews.invalidate()
 	}
 
 	private func focusedIdentifier(in root: NSView) -> NSUserInterfaceItemIdentifier?
@@ -234,8 +213,7 @@ final class ConversationSourcesViewController: NSViewController
 		let changed = Set(renderedRecords.keys.filter
 		{
 			renderedRecords[$0] != current[$0]
-		}).union(interruptedPreviews)
-		interruptedPreviews.removeAll()
+		}).union(previews.takeInterruptedRecords())
 		retainCurrentResults(
 			current,
 			changedRecords: changed
@@ -470,14 +448,13 @@ final class ConversationSourcesViewController: NSViewController
 		buttons[button] = record
 		if record.kind == .audio, let sourcePath = record.url?.path, button.isEnabled
 		{
-			let generation = renderGeneration
-			tasks[record.id] = Task
+			previews.loadAudio(
+				for: record,
+				path: sourcePath
+			)
 			{
-				[weak self, weak duration, weak labels, weak path] in
-				guard let value = await SourceAudioMetadataLoader.duration(path: sourcePath),
-						!Task.isCancelled, let self, self.renderGeneration == generation,
-						self.sources.records.contains(record),
-						let duration, let labels, let path
+				[weak duration, weak labels, weak path] value in
+				guard let duration, let labels, let path
 				else
 				{
 					return
@@ -498,15 +475,13 @@ final class ConversationSourcesViewController: NSViewController
 		if record.kind == .image, record.isInlineImage || button.isEnabled
 		{
 			let sourcePath = record.isInlineImage ? record.path : (record.url?.path ?? record.path)
-			let generation = renderGeneration
-			let loadThumbnail = loadThumbnail
-			tasks[record.id] = Task
+			previews.loadImage(
+				for: record,
+				path: sourcePath
+			)
 			{
-				[weak self, weak image, weak state] in
-				let data = await loadThumbnail(sourcePath)
-				guard !Task.isCancelled, let self, self.renderGeneration == generation,
-						self.sources.records.contains(record),
-						let image, let state
+				[weak image, weak state] data in
+				guard let image, let state
 				else
 				{
 					return
@@ -918,7 +893,7 @@ final class ConversationSourcesViewController: NSViewController
 	/// Captures registered previews so callers can join them after cancellation retires them.
 	func previewTasks() -> [Task<Void, Never>]
 	{
-		Array(tasks.values)
+		previews.tasks()
 	}
 
 	func waitForPreviews() async
