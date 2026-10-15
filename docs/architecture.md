@@ -14,6 +14,11 @@ File placement follows [conventions](../CONVENTIONS.md#file-organization-and-own
 
 Follow-up conversation reads return through `WorkspaceStoreInputs`, which captures fresh request identity and clock values. Filesystem-backed checkout validation occurs before the read is proposed; reducers revalidate that captured ownership against current state. `ConversationTurnPreview` in `Application/State/` holds canonical compact preview values. Runtime receives the application service `ConversationPreviewPreparing`; `AppDelegate` injects Conversation's `ConversationMarkdownPreviewPreparer`. The runner prepares Markdown-to-plain-text previews off the main actor with cancellation propagation before returning typed results. Reducers consume these prepared values. Loaded and compact turn previews use the visible user request as their title. The turn card parses title Markdown before styling links, keeps one favicon per visible link, and allows URL characters to wrap within two title lines. Image-only requests use attachment labels, preserving generated composer descriptions when available and falling back to image names. A compact preview retains its bounded reply source only when it contains a web address, so the turn card can recover labeled Markdown links; the source counts toward preview residency costs. These bounded labels remain separate from the thumbnail-only message body and count toward transcript residency costs.
 
+Captured `RunPreferences` and the serialized `ApprovalMode` values belong to
+`Application/State/`, shared by persistence, submission capture, reducers and protocol requests.
+The approval labels and explanations belong to `Application/Presentation/ApprovalMode+Presentation`.
+Changing next-turn controls does not alter a running turn's captured preferences.
+
 ## Ownership and recovery
 
 Accepted message submissions clear the matching editable draft before backend preparation or
