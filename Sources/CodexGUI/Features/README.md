@@ -8,7 +8,8 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | [CommandPalette](CommandPalette/) | Native command palette presentation and input. |
 | [Conversation](Conversation/) | Conversation controller, composer and transcript integration. |
 | [Conversation/Composer](Conversation/Composer/) | Input controls, attachment inputs and command menus. |
-| [Navigation](Navigation/) | Project and task navigation, sidebar controls and message search. |
+| [MessageSearch](MessageSearch/) | Message-search sheet, results and history-loading controls. |
+| [Navigation](Navigation/) | Project and task navigation and sidebar controls. |
 | [PinnedSummary](PinnedSummary/) | Summary card and compact section presentations. |
 | [ProjectContext](ProjectContext/) | Project context presentation and editing controls. |
 | [Shared](Shared/) | Common presentations, panel contracts and reusable view support. |
