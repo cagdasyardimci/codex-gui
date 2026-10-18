@@ -91,6 +91,7 @@ final class FileDocumentViewController: NSViewController
 	private var showingSource = false
 	private var wrapsLines = true
 	private var previewBytes: Data?
+	private var previewSource: String?
 	private var previewDocumentID: UUID?
 	private var lastLineGeneration: [UUID: Int] = [:]
 
@@ -282,7 +283,9 @@ final class FileDocumentViewController: NSViewController
 		{
 			preview?.cancelLoading()
 			preview = nil
+			previewScroll.documentView = nil
 			previewBytes = nil
+			previewSource = nil
 			previewDocumentID = nil
 			showingSource = false
 		}
@@ -437,9 +440,9 @@ final class FileDocumentViewController: NSViewController
 			if RichFilePreviewKind(path: document.location.relativePath) == .markdown,
 				!showingSource
 			{
-				showPreview(
+				showMarkdownPreview(
 					document: document,
-					content: Data(text.utf8)
+					text: text
 				)
 			}
 			else
@@ -575,6 +578,7 @@ final class FileDocumentViewController: NSViewController
 			)
 		}
 		self.preview = preview
+		previewSource = nil
 		previewBytes = content
 		previewDocumentID = document.id
 		previewScroll.documentView = preview
@@ -582,6 +586,24 @@ final class FileDocumentViewController: NSViewController
 		preview.widthAnchor.constraint(equalTo: previewScroll.contentView.widthAnchor)
 			.isActive = true
 		show(previewScroll)
+	}
+
+	private func showMarkdownPreview(
+		document: FileViewerDocument,
+		text: String
+	)
+	{
+		if previewDocumentID == document.id, preview != nil, previewBytes != nil,
+			previewSource?.utf8.elementsEqual(text.utf8) == true
+		{
+			show(previewScroll)
+			return
+		}
+		showPreview(
+			document: document,
+			content: Data(text.utf8)
+		)
+		previewSource = text
 	}
 
 	private func showMessage(_ message: String)
@@ -713,22 +735,31 @@ final class FileDocumentViewController: NSViewController
 
 	private func sharedActions(for snapshot: ActionSnapshot) -> ViewerFileActions
 	{
-		let bytes: Data?
+		let bytesProvider: (@MainActor @Sendable () async throws -> Data)?
 		let text: String?
 		switch snapshot.content
 		{
 		case .text(let value):
 			text = value
-			bytes = Data(value.utf8)
+			bytesProvider =
+			{
+				Data(value.utf8)
+			}
 		case .empty:
 			text = ""
-			bytes = Data()
+			bytesProvider =
+			{
+				Data()
+			}
 		case .image(let value), .pdf(let value):
 			text = nil
-			bytes = value
+			bytesProvider =
+			{
+				value
+			}
 		default:
 			text = nil
-			bytes = nil
+			bytesProvider = nil
 		}
 		let textProvider: (@MainActor @Sendable () async throws -> String)?
 		if let text
@@ -741,18 +772,6 @@ final class FileDocumentViewController: NSViewController
 		else
 		{
 			textProvider = nil
-		}
-		let bytesProvider: (@MainActor @Sendable () async throws -> Data)?
-		if let bytes
-		{
-			bytesProvider =
-			{
-				bytes
-			}
-		}
-		else
-		{
-			bytesProvider = nil
 		}
 		let actions = ViewerFileActions(
 			location: snapshot.location,

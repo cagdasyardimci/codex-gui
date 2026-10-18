@@ -30,6 +30,7 @@ final class FileSourceView: NSView, NSTextViewDelegate
 	private var wrapsLines = true
 	private var needsTextSizing = true
 	private var sizedViewportWidth: CGFloat = 0
+	private var hasRenderedAppearance = false
 
 	init()
 	{
@@ -109,19 +110,25 @@ final class FileSourceView: NSView, NSTextViewDelegate
 		editable: Bool
 	)
 	{
+		let pathChanged = self.path != path
 		self.path = path
-		if Data(textView.string.utf8) != Data(text.utf8)
+		let textChanged = !textView.string.utf8.elementsEqual(text.utf8)
+		if textChanged
 		{
 			isUpdating = true
 			textView.string = text
 			textView.undoManager?.removeAllActions()
 			isUpdating = false
 			needsTextSizing = true
+			ruler.update(text: text)
 		}
 		textView.isEditable = editable
 		textView.isSelectable = true
-		refreshAppearance()
-		ruler.update(text: text)
+		if !hasRenderedAppearance || textChanged || pathChanged
+		{
+			hasRenderedAppearance = true
+			refreshAppearance()
+		}
 		needsLayout = true
 	}
 

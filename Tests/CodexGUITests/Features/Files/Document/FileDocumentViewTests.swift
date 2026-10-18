@@ -1371,6 +1371,8 @@ struct FileDocumentViewTests
 			controller.render(document)
 			let preview = try #require(findPreview(in: controller.view))
 			await preview.waitForLoading()
+			controller.render(document)
+			#expect(findPreview(in: controller.view) === preview)
 			controller.view.layoutSubtreeIfNeeded()
 			preview.layoutSubtreeIfNeeded()
 			let copy = try #require(findButton(
@@ -1425,6 +1427,19 @@ struct FileDocumentViewTests
 			))
 			scroll.reflectScrolledClipView(scroll.contentView)
 			#expect(scroll.contentView.bounds.origin.y > 0)
+			var sourceDocument = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "other.txt"
+				),
+				isRetained: true,
+				content: .text("Plain source")
+			)
+			sourceDocument.status = .ready
+			controller.render(sourceDocument)
+			#expect(scroll.documentView == nil)
+			#expect(longPreview.superview == nil)
 		}
 	}
 
