@@ -134,6 +134,61 @@ final class EditorOpeningService
 		}
 	}
 
+	/// Opens once with the chosen application without changing the saved preference.
+	func open(
+		path: String,
+		project: URL,
+		withApplicationAt application: URL
+	) async throws
+	{
+		let file = try Self.resolve(
+			path: path,
+			project: project
+		)
+		try await Self.openInApplication(
+			application,
+			file: file
+		)
+	}
+
+	func openWithDefault(
+		path: String,
+		project: URL
+	) throws
+	{
+		let file = try Self.resolve(
+			path: path,
+			project: project
+		)
+		guard NSWorkspace.shared.open(file)
+		else
+		{
+			throw NSError(
+				domain: "FileOpening",
+				code: 1,
+				userInfo: [
+					NSLocalizedDescriptionKey: "The default application could not open this file."
+				]
+			)
+		}
+	}
+
+	func openFolder(
+		path: String,
+		project: URL,
+		withApplicationAt application: URL
+	) async throws
+	{
+		let file = try Self.resolve(
+			path: path,
+			project: project
+		)
+		try await Self.openInApplication(
+			application,
+			file: file.deletingLastPathComponent()
+		)
+	}
+
 	private static func resolve(
 		path: String,
 		project: URL
