@@ -28,7 +28,7 @@ enum GitReviewReferenceIcons
 		}
 		if kind == .swiftFile
 		{
-			return swiftImage(
+			return WorkspaceFileIcon.swiftImage(
 				size: size,
 				accessibilityDescription: accessibilityDescription
 			)
@@ -57,78 +57,28 @@ enum GitReviewReferenceIcons
 	static func fileImage(
 		relativePath: String,
 		isDirectory: Bool = false,
+		isSymbolicLink: Bool = false,
 		size: CGFloat = 16
 	) -> NSImage
 	{
-		let type = WorkspaceFileTypePresentation(
+		WorkspaceFileIcon.image(
 			relativePath: relativePath,
-			isDirectory: isDirectory
-		)
-		guard !isDirectory, type.symbol != "swift"
-		else
-		{
-			return fileImage(
-				for: type,
-				size: size
-			)
-		}
-		let asset: DesktopIcon?
-		switch URL(fileURLWithPath: relativePath).pathExtension.lowercased()
-		{
-		case "png", "jpg", "jpeg", "gif", "heic", "webp", "svg", "tiff", "bmp":
-			asset = .fileImage
-		case "pdf", "doc", "docx", "rtf", "md", "markdown", "txt":
-			asset = .fileDocument
-		case "json", "yaml", "yml", "toml", "js", "ts", "tsx", "jsx", "py", "html", "css":
-			asset = .fileCode
-		case "xls", "xlsx", "csv", "tsv": asset = .fileSpreadsheet
-		case "ppt", "pptx", "key": asset = .filePresentation
-		case "mp3", "wav", "m4a", "aac", "flac": asset = .fileAudio
-		case "mp4", "mov", "webm", "mkv": asset = .fileVideo
-		case "zip", "gz", "tar", "7z": asset = .fileZip
-		default: asset = nil
-		}
-		guard let asset
-		else
-		{
-			return fileImage(
-				for: type,
-				size: size
-			)
-		}
-		return DesktopIcons.image(
-			asset,
-			size: size,
-			accessibilityDescription: type.description
+			isDirectory: isDirectory,
+			isSymbolicLink: isSymbolicLink,
+			size: size
 		)
 	}
 
 	static func fileImage(
 		for type: WorkspaceFileTypePresentation,
+		relativePath: String? = nil,
 		size: CGFloat = 16
 	) -> NSImage
 	{
-		if type.symbol == "swift"
-		{
-			return image(
-				.swiftFile,
-				size: size,
-				accessibilityDescription: type.description
-			)
-		}
-		let asset: DesktopIcon
-		switch type.symbol
-		{
-		case "folder": asset = .folder
-		case "link": asset = .link
-		case "doc.text": asset = .fileDocument
-		case "curlybraces": asset = .fileCode
-		default: asset = .fileBlank
-		}
-		return DesktopIcons.image(
-			asset,
-			size: size,
-			accessibilityDescription: type.description
+		WorkspaceFileIcon.image(
+			for: type,
+			relativePath: relativePath,
+			size: size
 		)
 	}
 
@@ -151,40 +101,6 @@ enum GitReviewReferenceIcons
 		case .info: .info
 		default: nil
 		}
-	}
-
-	private static func swiftImage(
-		size: CGFloat,
-		accessibilityDescription: String?
-	) -> NSImage
-	{
-		// The package has no Swift mark; Apple's native vector symbol supplies its exact shape.
-		let source = NSImage(
-			systemSymbolName: "swift",
-			accessibilityDescription: accessibilityDescription
-		)!
-		let image = NSImage(
-			size: NSSize(
-				width: size,
-				height: size
-			),
-			flipped: false
-		)
-		{
-			bounds in
-			source.draw(in: bounds)
-			NSColor(
-				calibratedRed: 1,
-				green: 0.58,
-				blue: 0.26,
-				alpha: 1
-			).setFill()
-			bounds.fill(using: .sourceIn)
-			return true
-		}
-		image.isTemplate = false
-		image.accessibilityDescription = accessibilityDescription
-		return image
 	}
 
 	private static func draw(_ kind: Kind)
