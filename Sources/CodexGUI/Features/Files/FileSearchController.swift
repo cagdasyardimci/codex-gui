@@ -49,7 +49,7 @@ final class FileSearchController
 }
 
 @MainActor
-final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
+final class FileSearchPanel: NSViewController,
 	NSTextFieldDelegate, NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate
 {
 	enum Mode
@@ -63,9 +63,16 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 	var onCancelSearch: (() -> Void)?
 
 	private let mode: Mode
-	private let queryField = ViewerSearchField()
+	private let queryField = NSTextField()
 	private let maskField = NSTextField()
+	private let maskLabel = NSTextField(labelWithString: "File mask:")
+	private let escapeButton = NSButton(
+		title: "Esc",
+		target: nil,
+		action: nil
+	)
 	private let statusLabel = NSTextField(labelWithString: "")
+	private let hintsLabel = NSTextField(labelWithString: "↑ ↓  navigate     ↵  open")
 	private let table = FileSearchResultsTableView()
 	private var sheet: NSWindow?
 	private var previousResponder: NSResponder?
@@ -74,6 +81,8 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 	private var contentRows: [FileViewerSearchResult] = []
 	private var activeRoot: String?
 	private var submittedQuery = ""
+	private var submittedMask: String?
+	private var awaitingCurrentResults = false
 
 	init(mode: Mode)
 	{
@@ -91,29 +100,49 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 
 	override func loadView()
 	{
-		let container = NSView()
-		if mode == .filename
-		{
-			queryField.placeholderString = "Open file by name"
-		}
-		else
-		{
-			queryField.placeholderString = "Search file contents"
-		}
+		let container = FileSearchPanelBackgroundView()
+		container.wantsLayer = true
+		container.layer?.cornerRadius = 16
+		container.layer?.masksToBounds = true
+		container.refreshBackground()
+		queryField.placeholderString = mode == .filename
+			? "Open file by name" : "Search file contents"
 		queryField.setAccessibilityLabel(queryField.placeholderString ?? "Search files")
 		queryField.delegate = self
-		queryField.sendsSearchStringImmediately = true
-		maskField.placeholderString = "File mask, e.g. *.swift,*.md"
+		queryField.isBordered = false
+		queryField.drawsBackground = false
+		queryField.focusRingType = .none
+		queryField.font = .systemFont(ofSize: 15)
+		maskField.placeholderString = "*.swift,*.md"
 		maskField.setAccessibilityLabel("File mask")
 		maskField.delegate = self
-		maskField.isHidden = mode == .filename
+		maskField.font = .systemFont(ofSize: 13)
+		maskField.bezelStyle = .roundedBezel
+		maskLabel.textColor = .secondaryLabelColor
+		maskLabel.font = .systemFont(ofSize: 13)
+		escapeButton.target = self
+		escapeButton.action = #selector(dismissFromButton)
+		escapeButton.bezelStyle = .rounded
+		escapeButton.setAccessibilityLabel("Close search")
 		statusLabel.textColor = .secondaryLabelColor
+		statusLabel.font = .systemFont(ofSize: 12)
+		statusLabel.lineBreakMode = .byTruncatingTail
 		statusLabel.setAccessibilityLabel("Search status")
+		hintsLabel.textColor = .secondaryLabelColor
+		hintsLabel.font = .systemFont(ofSize: 12)
 
 		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("result"))
+		column.resizingMask = .autoresizingMask
 		table.addTableColumn(column)
+		table.style = .plain
+		table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
 		table.headerView = nil
-		table.rowHeight = mode == .content ? 46 : 34
+		table.rowHeight = mode == .content ? 28 : 34
+		table.intercellSpacing = NSSize(
+			width: 0,
+			height: 0
+		)
+		table.selectionHighlightStyle = .regular
 		table.dataSource = self
 		table.delegate = self
 		table.target = self
@@ -135,43 +164,110 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 		scroll.documentView = table
 		scroll.hasVerticalScroller = true
 		scroll.drawsBackground = false
-		var fields: [NSView] = [queryField]
-		if mode == .content
+		let header = NSView()
+		let footer = NSView()
+		let divider = NSBox()
+		divider.boxType = .separator
+		for item in [header, scroll, footer]
 		{
-			fields.append(maskField)
+			item.translatesAutoresizingMaskIntoConstraints = false
+			container.addSubview(item)
 		}
-		fields.append(contentsOf: [statusLabel, scroll])
-		let stack = NSStackView(views: fields)
-		stack.orientation = .vertical
-		stack.alignment = .width
-		stack.spacing = 10
-		stack.translatesAutoresizingMaskIntoConstraints = false
-		container.addSubview(stack)
+		for item in [queryField, maskLabel, maskField, escapeButton]
+		{
+			item.translatesAutoresizingMaskIntoConstraints = false
+			header.addSubview(item)
+		}
+		for item in [divider, statusLabel, hintsLabel]
+		{
+			item.translatesAutoresizingMaskIntoConstraints = false
+			footer.addSubview(item)
+		}
+		maskLabel.isHidden = mode == .filename
+		maskField.isHidden = mode == .filename
 		NSLayoutConstraint.activate([
-			stack.topAnchor.constraint(
-				equalTo: container.topAnchor,
-				constant: 16
-			),
-			stack.leadingAnchor.constraint(
+			header.topAnchor.constraint(equalTo: container.topAnchor),
+			header.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+			header.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+			header.heightAnchor.constraint(equalToConstant: 54),
+			scroll.topAnchor.constraint(equalTo: header.bottomAnchor),
+			scroll.leadingAnchor.constraint(
 				equalTo: container.leadingAnchor,
+				constant: 10
+			),
+			scroll.trailingAnchor.constraint(
+				equalTo: container.trailingAnchor,
+				constant: -10
+			),
+			footer.topAnchor.constraint(equalTo: scroll.bottomAnchor),
+			footer.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+			footer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+			footer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+			footer.heightAnchor.constraint(equalToConstant: 38),
+			queryField.leadingAnchor.constraint(
+				equalTo: header.leadingAnchor,
+				constant: 22
+			),
+			queryField.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+			queryField.heightAnchor.constraint(equalToConstant: 26),
+			maskLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+			maskField.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+			maskField.widthAnchor.constraint(equalToConstant: 112),
+			maskField.heightAnchor.constraint(equalToConstant: 26),
+			escapeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+			escapeButton.trailingAnchor.constraint(
+				equalTo: header.trailingAnchor,
+				constant: -14
+			),
+			escapeButton.widthAnchor.constraint(equalToConstant: 42),
+			divider.topAnchor.constraint(equalTo: footer.topAnchor),
+			divider.leadingAnchor.constraint(
+				equalTo: footer.leadingAnchor,
+				constant: 10
+			),
+			divider.trailingAnchor.constraint(
+				equalTo: footer.trailingAnchor,
+				constant: -10
+			),
+			statusLabel.leadingAnchor.constraint(
+				equalTo: footer.leadingAnchor,
 				constant: 16
 			),
-			stack.trailingAnchor.constraint(
-				equalTo: container.trailingAnchor,
+			statusLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+			hintsLabel.trailingAnchor.constraint(
+				equalTo: footer.trailingAnchor,
 				constant: -16
 			),
-			stack.bottomAnchor.constraint(
-				equalTo: container.bottomAnchor,
-				constant: -16
+			hintsLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+			statusLabel.trailingAnchor.constraint(
+				lessThanOrEqualTo: hintsLabel.leadingAnchor,
+				constant: -8
 			),
-			queryField.widthAnchor.constraint(equalTo: stack.widthAnchor),
-			statusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-			scroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
-			scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 260),
 		])
 		if mode == .content
 		{
-			maskField.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+			NSLayoutConstraint.activate([
+				queryField.trailingAnchor.constraint(
+					equalTo: maskLabel.leadingAnchor,
+					constant: -12
+				),
+				maskLabel.trailingAnchor.constraint(
+					equalTo: maskField.leadingAnchor,
+					constant: -8
+				),
+				maskField.trailingAnchor.constraint(
+					equalTo: escapeButton.leadingAnchor,
+					constant: -8
+				),
+			])
+		}
+		else
+		{
+			queryField.trailingAnchor.constraint(
+				equalTo: escapeButton.leadingAnchor,
+				constant: -8
+			)
+			.isActive = true
 		}
 		view = container
 	}
@@ -185,25 +281,31 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 		}
 		_ = view
 		previousResponder = window.firstResponder
-		let presented = NSPanel(
+		let presented = FileSearchSheetPanel(
 			contentRect: .zero,
-			styleMask: [.titled, .closable],
+			styleMask: [.borderless],
 			backing: .buffered,
 			defer: false
 		)
 		presented.contentViewController = self
+		presented.onCancel =
+		{
+			[weak self] in self?.dismiss()
+		}
 		presented.title = mode == .filename ? "Quick Open" : "Search Files"
+		presented.hasShadow = true
+		presented.isFloatingPanel = true
 		presented.isReleasedWhenClosed = false
 		presented.delegate = self
 		presented.setContentSize(NSSize(
 			width: min(
-				640,
+				mode == .content ? 768 : 640,
 				max(
 					400,
 					window.frame.width - 80
 				)
 			),
-			height: mode == .content ? 410 : 380
+			height: mode == .content ? 500 : 410
 		))
 		appearanceBinding = DesktopPanelAppearanceBinding(
 			panel: presented,
@@ -248,6 +350,11 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 		)
 	}
 
+	@objc private func dismissFromButton()
+	{
+		dismiss()
+	}
+
 	func windowWillClose(_ notification: Notification)
 	{
 		guard let window = notification.object as? NSWindow
@@ -285,6 +392,9 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 		}
 		window.orderOut(nil)
 		previousResponder = nil
+		submittedQuery = ""
+		submittedMask = nil
+		awaitingCurrentResults = false
 		onCancelSearch?()
 		onDismiss?()
 	}
@@ -293,25 +403,36 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 	{
 		if activeRoot != state.activeRoot
 		{
+			let hadRows = !filenameRows.isEmpty || !contentRows.isEmpty
 			activeRoot = state.activeRoot
 			filenameRows = []
 			contentRows = []
 			queryField.stringValue = ""
 			submittedQuery = ""
+			submittedMask = nil
+			awaitingCurrentResults = false
+			if hadRows
+			{
+				table.reloadData()
+			}
 		}
 		guard sheet != nil, !submittedQuery.isEmpty
 		else
 		{
 			statusLabel.stringValue = "Enter a query"
-			table.reloadData()
 			return
 		}
 		let previousFilenames = filenameRows
 		let previousContent = contentRows
 		if state.searchRequest != nil
 		{
+			awaitingCurrentResults = false
 			filenameRows = []
 			contentRows = []
+			statusLabel.stringValue = "Searching…"
+		}
+		else if awaitingCurrentResults
+		{
 			statusLabel.stringValue = "Searching…"
 		}
 		else if let failure = state.searchFailure
@@ -326,10 +447,10 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 			statusLabel.stringValue = summary(
 				count: page.results.count,
 				empty: "No matching files",
-				unit: "files",
-				truncated: page.isTruncated,
-				excluded: page.excludedDirectoryCount
+				unit: page.results.count == 1 ? "file" : "files",
+				truncated: page.isTruncated
 			)
+			statusLabel.toolTip = excludedDirectoryTip(page.excludedDirectoryCount)
 		}
 		else if mode == .content, let page = state.contentResults
 		{
@@ -337,10 +458,10 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 			statusLabel.stringValue = summary(
 				count: page.results.count,
 				empty: "No matching content",
-				unit: "matches",
-				truncated: page.isTruncated,
-				excluded: page.excludedDirectoryCount
+				unit: page.results.count == 1 ? "matching line" : "matching lines",
+				truncated: page.isTruncated
 			)
+			statusLabel.toolTip = excludedDirectoryTip(page.excludedDirectoryCount)
 		}
 		else
 		{
@@ -365,18 +486,21 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 		count: Int,
 		empty: String,
 		unit: String,
-		truncated: Bool,
-		excluded: Int
+		truncated: Bool
 	) -> String
 	{
-		var text = count == 0 ? empty : (truncated
-			? "Showing first \(count) \(unit)"
-			: "\(count) \(unit)")
-		if excluded > 0
+		if count == 0
 		{
-			text += " · \(excluded) generated folders skipped"
+			return truncated ? "Search incomplete · no matches" : empty
 		}
-		return text
+		return truncated
+			? "Showing first \(count) \(unit)"
+			: "\(count) \(unit)"
+	}
+
+	private func excludedDirectoryTip(_ count: Int) -> String?
+	{
+		count > 0 ? "\(count) generated folders skipped" : nil
 	}
 
 	func controlTextDidChange(_ notification: Notification)
@@ -404,18 +528,31 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 	{
 		let query = queryField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 		let mask = maskField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+		let normalizedMask = mask.isEmpty ? nil : mask
+		guard query != submittedQuery || normalizedMask != submittedMask
+		else
+		{
+			return
+		}
+		let hadRows = !filenameRows.isEmpty || !contentRows.isEmpty
 		submittedQuery = query
+		submittedMask = normalizedMask
+		awaitingCurrentResults = !query.isEmpty
 		filenameRows = []
 		contentRows = []
-		table.reloadData()
+		if hadRows
+		{
+			table.reloadData()
+		}
 		statusLabel.stringValue = query.isEmpty ? "Enter a query" : "Searching…"
+		statusLabel.toolTip = nil
 		if query.isEmpty
 		{
 			onCancelSearch?()
 		}
 		else
 		{
-			onQuery?(query, mask.isEmpty ? nil : mask)
+			onQuery?(query, normalizedMask)
 		}
 	}
 
@@ -446,39 +583,56 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 			return cell
 		}
 		let content = contentRows[row]
-		let location = content.location
-		let name = URL(fileURLWithPath: location.relativePath).lastPathComponent
-		let detail = "\(location.relativePath):\(content.lineNumber)  \(content.lineText)"
 		let cell = NSTableCellView()
-		let title = NSTextField(labelWithString: name)
-		title.font = .systemFont(
-			ofSize: 12,
-			weight: .medium
+		let result = FileSearchContentResultView(
+			result: content,
+			query: submittedQuery
 		)
-		title.lineBreakMode = .byTruncatingMiddle
-		let subtitle = NSTextField(labelWithString: detail)
-		subtitle.textColor = .secondaryLabelColor
-		subtitle.font = .systemFont(ofSize: 11)
-		subtitle.lineBreakMode = .byTruncatingTail
-		let stack = NSStackView(views: [title, subtitle])
-		stack.orientation = .vertical
-		stack.alignment = .leading
-		stack.spacing = 1
-		stack.translatesAutoresizingMaskIntoConstraints = false
-		cell.addSubview(stack)
+		result.setSelected(row == table.selectedRow)
+		result.translatesAutoresizingMaskIntoConstraints = false
+		cell.addSubview(result)
 		NSLayoutConstraint.activate([
-			stack.leadingAnchor.constraint(
-				equalTo: cell.leadingAnchor,
-				constant: 8
-			),
-			stack.trailingAnchor.constraint(
-				lessThanOrEqualTo: cell.trailingAnchor,
-				constant: -8
-			),
-			stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+			result.leadingAnchor.constraint(equalTo: cell.leadingAnchor),
+			result.trailingAnchor.constraint(equalTo: cell.trailingAnchor),
+			result.topAnchor.constraint(equalTo: cell.topAnchor),
+			result.bottomAnchor.constraint(equalTo: cell.bottomAnchor),
 		])
-		cell.setAccessibilityLabel(detail)
+		cell
+			.setAccessibilityLabel(
+				"\(content.lineText), \(content.location.relativePath):\(content.lineNumber)"
+			)
 		return cell
+	}
+
+	func tableView(
+		_ tableView: NSTableView,
+		rowViewForRow row: Int
+	) -> NSTableRowView?
+	{
+		FileSearchResultSelectionRow()
+	}
+
+	func tableViewSelectionDidChange(_ notification: Notification)
+	{
+		guard mode == .content
+		else
+		{
+			return
+		}
+		for row in 0 ..< table.numberOfRows
+		{
+			guard let cell = table.view(
+				atColumn: 0,
+				row: row,
+				makeIfNecessary: false
+			) as? NSTableCellView,
+				let result = cell.subviews.first as? FileSearchContentResultView
+			else
+			{
+				continue
+			}
+			result.setSelected(row == table.selectedRow)
+		}
 	}
 
 	private func moveSelection(_ direction: FileSearchResultsTableView.Direction)
@@ -502,7 +656,7 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 	@objc private func chooseSelected()
 	{
 		let row = table.selectedRow
-		guard row >= 0
+		guard row >= 0, !awaitingCurrentResults
 		else
 		{
 			return
@@ -516,6 +670,40 @@ final class FileSearchPanel: NSViewController, NSSearchFieldDelegate,
 			onChooseContent?(contentRows[row])
 		}
 		dismiss()
+	}
+}
+
+@MainActor
+private final class FileSearchSheetPanel: NSPanel
+{
+	var onCancel: (() -> Void)?
+
+	override var canBecomeKey: Bool
+	{
+		true
+	}
+
+	override func cancelOperation(_ sender: Any?)
+	{
+		onCancel?()
+	}
+}
+
+@MainActor
+private final class FileSearchPanelBackgroundView: NSView
+{
+	func refreshBackground()
+	{
+		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
+			.textBackgroundColor,
+			for: self
+		)
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		refreshBackground()
 	}
 }
 

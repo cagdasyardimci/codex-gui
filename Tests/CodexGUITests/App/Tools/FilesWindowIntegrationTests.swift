@@ -326,14 +326,15 @@ struct FilesWindowIntegrationTests
 		}.first
 	}
 
-	private func findSearchField(in view: NSView?) -> NSSearchField?
+	private func findSearchField(in view: NSView?) -> NSTextField?
 	{
 		guard let view
 		else
 		{
 			return nil
 		}
-		if let field = view as? NSSearchField
+		if let field = view as? NSTextField,
+			field.accessibilityLabel() == "Open file by name"
 		{
 			return field
 		}

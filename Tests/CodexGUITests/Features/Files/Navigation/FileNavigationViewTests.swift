@@ -716,8 +716,11 @@ struct FileNavigationViewTests
 			let sheet = try #require(parent.attachedSheet)
 			let field = try #require(panel.view.allSubviews().compactMap
 			{
-				$0 as? NSSearchField
-			}.first)
+				$0 as? NSTextField
+			}.first
+			{
+				$0.accessibilityLabel() == "Search file contents"
+			})
 			field.stringValue = "needle"
 			panel.controlTextDidChange(Notification(
 				name: NSControl.textDidChangeNotification,
@@ -771,8 +774,8 @@ struct FileNavigationViewTests
 				$0 as? FileSearchResultsTableView
 			}.first)
 			#expect(table.selectedRow == 0)
-			#expect(status.stringValue.contains("Showing first 2 matches"))
-			#expect(status.stringValue.contains("2 generated folders skipped"))
+			#expect(status.stringValue.contains("Showing first 2 matching lines"))
+			#expect(status.toolTip == "2 generated folders skipped")
 			try sendKey(
 				119,
 				to: table,
