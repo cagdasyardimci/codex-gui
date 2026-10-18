@@ -169,58 +169,91 @@ struct ModelPickerListTests
 		#expect(!picker.isShowingModelList)
 	}
 
-	@Test func movingHoverInvalidatesOnlyThePreviouslyHoveredRowAndDestination() throws
+	@Test func movingHoverInvalidatesOnlyThePreviouslyHoveredRowAndDestination() async throws
 	{
-		_ = NSApplication.shared
-		let list = ModelPickerListView()
-		list.render(
-			choices: (0 ..< 20).map
+		try await AppKitTestIsolation.perform
+		{
+			_ = NSApplication.shared
+			let list = ModelPickerListView()
+			list.render(
+				choices: (0 ..< 20).map
+				{
+					ModelPickerChoice(
+						id: "model-\($0)",
+						title: "Model \($0)"
+					)
+				},
+				selectedID: nil
+			)
+
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 300,
+					height: list.preferredHeight
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			defer
 			{
-				ModelPickerChoice(
-					id: "model-\($0)",
-					title: "Model \($0)"
-				)
-			},
-			selectedID: nil
-		)
-		let event = try #require(NSEvent.enterExitEvent(
-			with: .mouseEntered,
-			location: .zero,
-			modifierFlags: [],
-			timestamp: 0,
-			windowNumber: 0,
-			context: nil,
-			eventNumber: 0,
-			trackingNumber: 0,
-			userData: nil
-		))
-		for row in list.rows
-		{
-			row.needsDisplay = false
+				window.close()
+			}
+			window.contentView = list
+			window.orderFront(nil)
+			window.layoutIfNeeded()
+			list.layoutSubtreeIfNeeded()
+			window.displayIfNeeded()
+			try #require(list.rows[3].bounds.width > 0)
+			try #require(list.rows[3].bounds.height > 0)
+			try #require(!list.rows[3].visibleRect.isEmpty)
+
+			let event = try #require(NSEvent.enterExitEvent(
+				with: .mouseEntered,
+				location: .zero,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: window.windowNumber,
+				context: nil,
+				eventNumber: 0,
+				trackingNumber: 0,
+				userData: nil
+			))
+			// Layer-backed buttons transfer display invalidation to their backing layers.
+			for row in list.rows
+			{
+				row.displayIfNeeded()
+				row.layer?.displayIfNeeded()
+			}
+			list.rows[3].mouseEntered(with: event)
+			#expect(list.rows.indices.filter
+			{
+				list.rows[$0].needsDisplay || list.rows[$0].layer?.needsDisplay() == true
+			} == [3])
+			for row in list.rows
+			{
+				row.displayIfNeeded()
+				row.layer?.displayIfNeeded()
+			}
+			list.rows[12].mouseEntered(with: event)
+			#expect(list.rows.indices.filter
+			{
+				list.rows[$0].needsDisplay || list.rows[$0].layer?.needsDisplay() == true
+			} == [3, 12])
+			for row in list.rows
+			{
+				row.displayIfNeeded()
+				row.layer?.displayIfNeeded()
+			}
+			list.rows[3].clearHover()
+			#expect(list.rows.allSatisfy
+			{
+				!$0.needsDisplay && $0.layer?.needsDisplay() != true
+			})
 		}
-		list.rows[3].mouseEntered(with: event)
-		#expect(list.rows.indices.filter
-		{
-			list.rows[$0].needsDisplay
-		} == [3])
-		for row in list.rows
-		{
-			row.needsDisplay = false
-		}
-		list.rows[12].mouseEntered(with: event)
-		#expect(list.rows.indices.filter
-		{
-			list.rows[$0].needsDisplay
-		} == [3, 12])
-		for row in list.rows
-		{
-			row.needsDisplay = false
-		}
-		list.rows[3].clearHover()
-		#expect(list.rows.allSatisfy
-		{
-			!$0.needsDisplay
-		})
 	}
 
 	private func makeWindow(_ controller: NSViewController) throws -> NSWindow
