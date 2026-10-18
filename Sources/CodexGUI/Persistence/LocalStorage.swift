@@ -31,7 +31,7 @@ final class LocalStorage
 	private let imageStore: DraftImageStore
 	private let sentReferenceDecoder: JSONDecoder
 	private let resolveProjectPath: (URL) -> String
-	private var contextByPendingRequestID: [UUID: [ComposerContextItem]] = [:]
+	private var imagePathsByPendingRequestID: [UUID: [String]] = [:]
 	private struct ContextSnapshot
 	{
 		let data: Data?
@@ -529,18 +529,18 @@ final class LocalStorage
 	func retainContextForRequest(_ items: [ComposerContextItem]) -> UUID
 	{
 		let requestID = UUID()
-		contextByPendingRequestID[requestID] = items
+		imagePathsByPendingRequestID[requestID] = items.compactMap(Self.imagePath)
 		return requestID
 	}
 
 	func releaseContextForRequest(_ requestID: UUID)
 	{
-		guard let items = contextByPendingRequestID.removeValue(forKey: requestID)
+		guard let paths = imagePathsByPendingRequestID.removeValue(forKey: requestID)
 		else
 		{
 			return
 		}
-		pruneOwnedImages(from: items)
+		pruneOwnedImages(from: paths)
 	}
 
 	func selectedThreadID(for project: URL) -> String?
@@ -818,7 +818,17 @@ final class LocalStorage
 
 	private func pruneOwnedImages(from candidates: [ComposerContextItem])
 	{
-		let ownedCandidates = ownedImagePaths(in: candidates)
+		pruneOwnedImages(from: candidates.lazy.compactMap(Self.imagePath))
+	}
+
+	private func pruneOwnedImages<Paths: Sequence>(from candidates: Paths)
+		where Paths.Element == String
+	{
+		var ownedCandidates: Set<String> = []
+		addOwnedImagePaths(
+			in: candidates,
+			to: &ownedCandidates
+		)
 		guard !ownedCandidates.isEmpty
 		else
 		{
@@ -826,10 +836,10 @@ final class LocalStorage
 		}
 
 		var pendingImagePaths: Set<String> = []
-		for items in contextByPendingRequestID.values
+		for paths in imagePathsByPendingRequestID.values
 		{
 			addOwnedImagePaths(
-				in: items,
+				in: paths,
 				to: &pendingImagePaths
 			)
 		}
@@ -856,36 +866,34 @@ final class LocalStorage
 			for items in projectDrafts.values
 			{
 				addOwnedImagePaths(
-					in: items,
+					in: items.lazy.compactMap(Self.imagePath),
 					to: &paths
 				)
 			}
 		}
 		addOwnedImagePaths(
-			in: sentReferenceRecords().lazy.map(\.item),
+			in: sentReferenceRecords().lazy.compactMap
+			{
+				Self.imagePath(in: $0.item)
+			},
 			to: &paths
 		)
 		return paths
 	}
 
-	private func ownedImagePaths(in items: [ComposerContextItem]) -> Set<String>
+	nonisolated private static func imagePath(in item: ComposerContextItem) -> String?
 	{
-		var paths: Set<String> = []
-		addOwnedImagePaths(
-			in: items,
-			to: &paths
-		)
-		return paths
+		item.kind == .image ? item.path : nil
 	}
 
-	private func addOwnedImagePaths<Items: Sequence>(
-		in items: Items,
+	private func addOwnedImagePaths<Paths: Sequence>(
+		in imagePaths: Paths,
 		to paths: inout Set<String>
-	) where Items.Element == ComposerContextItem
+	) where Paths.Element == String
 	{
-		for item in items
+		for path in imagePaths
 		{
-			if item.kind == .image, let path = item.path.flatMap(imageStore.ownedPath)
+			if let path = imageStore.ownedPath(path)
 			{
 				paths.insert(path)
 			}

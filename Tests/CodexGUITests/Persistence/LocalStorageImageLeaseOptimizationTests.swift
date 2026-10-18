@@ -7,6 +7,34 @@ import Testing
 @Suite
 struct LocalStorageImageLeaseOptimizationTests
 {
+	@Test func nonImageContextDoesNotLeaseItsPathOrReadPersistedOwnership() async throws
+	{
+		let fixture = try await ImageLeaseStorageFixture()
+		defer
+		{
+			fixture.cleanup()
+		}
+		let image = try await fixture.image()
+		let imageRequest = fixture.storage.retainContextForRequest([image])
+		let excerptRequest = fixture.storage.retainContextForRequest([
+			ComposerContextItem(
+				kind: .textExcerpt,
+				title: "Excerpt",
+				path: image.path,
+				excerpt: "The matching path is not an image attachment."
+			),
+			ComposerContextItem(
+				kind: .image,
+				title: "Missing path"
+			),
+		])
+		fixture.storage.releaseContextForRequest(imageRequest)
+		#expect(!fixture.exists(image))
+		fixture.defaults.reads.removeAll()
+		fixture.storage.releaseContextForRequest(excerptRequest)
+		#expect(fixture.defaults.reads.isEmpty)
+	}
+
 	@Test func overlappingLeasesSkipPersistedReadsUntilTheLastRelease() async throws
 	{
 		let fixture = try await ImageLeaseStorageFixture()
