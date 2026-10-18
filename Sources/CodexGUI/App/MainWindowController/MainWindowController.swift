@@ -309,10 +309,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		)
 		self.settings.render(status)
 		self.statusView.render(status)
-		let executionState = status.executionState
-		self.statusButton.toolTip = "\(status.accountDescription) · \(executionState.title)"
+		let executionTitle = status.execution.title
+		self.statusButton.toolTip = "\(status.accountDescription) · \(executionTitle)"
 		self.statusButton
-			.setAccessibilityLabel("\(executionState.title). Open account and backend status")
+			.setAccessibilityLabel("\(executionTitle). Open account and backend status")
 	}
 
 	private func setGitReviewFocused(_ focused: Bool)

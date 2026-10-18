@@ -102,7 +102,7 @@ final class StatusPopoverView: NSView
 	}
 	func render(_ presentation: WorkspaceStatusPresentation)
 	{
-		taskLabel.stringValue = presentation.executionState.title
+		taskLabel.stringValue = presentation.execution.title
 		accountLabel.stringValue = presentation.accountDescription
 		backendLabel.stringValue = presentation.backendDescription
 		accountLabel.toolTip = presentation.accountDescription

@@ -10,6 +10,100 @@ import Testing
 )
 struct TaskWorkspaceWindowLayoutTests
 {
+	@Test func recoveryCertaintyAgreesAcrossWorkspaceStatusAndNotificationEligibility() async throws
+	{
+		_ = NSApplication.shared
+		let suite = "RecoveryTaskStatus.\(UUID().uuidString)"
+		let defaults = try #require(UserDefaults(suiteName: suite))
+		defer
+		{
+			defaults.removePersistentDomain(forName: suite)
+		}
+		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		let controller = MainWindowController(
+			store: state.store,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			}
+		)
+		let thread = try #require(ThreadSummary(json: [
+			"id": "recovery",
+			"name": "Recovering task",
+			"cwd": "/tmp/recovery",
+		]))
+		var snapshot = ConversationSnapshot(
+			projectPath: "/tmp/recovery",
+			threads: [thread],
+			selectedThreadID: thread.id,
+			entries: [],
+			canLoadEarlierTurns: false,
+			changedFiles: [],
+			diff: "",
+			draft: "",
+			canSend: false,
+			accountDescription: "Synthetic",
+			backendDescription: "Synthetic",
+			executionState: .ready,
+			statusMessage: nil,
+			models: [],
+			selectedModelID: nil,
+			selectedEffort: nil,
+			pendingInteractions: [],
+			recentProjects: []
+		)
+		snapshot.activeThreadID = thread.id
+		for uncertain in [true, false]
+		{
+			var tracker = TaskNotificationTracker()
+			snapshot.activeExecutionState = .running
+			snapshot.taskOutcomeUncertain = false
+			#expect(tracker.observe(snapshot) == nil)
+			snapshot.activeExecutionState = .failed
+			snapshot.taskOutcomeUncertain = uncertain
+			controller.renderSnapshot(snapshot)
+
+			let title = uncertain ? "Outcome unknown" : "Failed"
+			let navigation = controller.navigation
+			let row = try #require(navigation.sidebarItems.firstIndex
+			{
+				if case .thread(let candidate) = $0
+				{
+					return candidate.id == thread.id
+				}
+				return false
+			})
+			let taskCell = try #require(navigation.tableView(
+				navigation.chatsTable,
+				viewFor: nil,
+				row: row
+			) as? TaskSidebarCellView)
+			#expect(taskCell.textField?.stringValue == "●  Recovering task · \(title)")
+			#expect(taskCell.accessibilityLabel() == "\(title) task, open chat Recovering task")
+			let popoverLabel = try #require(findControl(
+				in: controller.statusView,
+				label: "Current task status"
+			) as? NSTextField)
+			#expect(popoverLabel.stringValue == title)
+			#expect(controller.statusButton.toolTip == "Synthetic · \(title)")
+			#expect(controller.statusButton.accessibilityLabel()
+				== "\(title). Open account and backend status")
+			let notification = tracker.observe(snapshot)
+			if uncertain
+			{
+				#expect(notification == nil)
+			}
+			else
+			{
+				#expect(notification?.title == "Task failed")
+				#expect(notification?.threadID == thread.id)
+			}
+		}
+		await controller.conversation.waitForRendering()
+	}
+
 	@Test func hiddenBusyLayoutKeepsApprovalAndContextWithinMinimumContent() async throws
 	{
 		_ = NSApplication.shared

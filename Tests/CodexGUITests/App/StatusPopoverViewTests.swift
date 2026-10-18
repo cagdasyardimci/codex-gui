@@ -8,6 +8,23 @@ import Testing
 ) @MainActor
 struct StatusPopoverViewTests
 {
+	@Test func statusRetainsUncertaintyWithoutAnActiveThread() throws
+	{
+		_ = NSApplication.shared
+		var current = snapshot([])
+		current.taskOutcomeUncertain = true
+		let view = StatusPopoverView(frame: .zero)
+		view.render(current)
+		let label = try #require(statusLabel(
+			in: view,
+			accessibilityLabel: "Current task status"
+		))
+		#expect(label.stringValue == "Outcome unknown")
+
+		current.taskOutcomeUncertain = false
+		view.render(current)
+		#expect(label.stringValue == "Ready")
+	}
 
 	@Test func statusDisplaysLastInputAndCumulativeUsageSeparatelyWithoutInferringOccupancy() throws
 	{
@@ -49,15 +66,28 @@ struct StatusPopoverViewTests
 
 	private func statusContextLabel(in view: NSView) -> NSTextField?
 	{
+		statusLabel(
+			in: view,
+			accessibilityLabel: "Selected conversation status and token usage"
+		)
+	}
+
+	private func statusLabel(
+		in view: NSView,
+		accessibilityLabel: String
+	) -> NSTextField?
+	{
 		if let label = view as? NSTextField,
-			label
-			.accessibilityLabel() == "Selected conversation status and token usage"
+			label.accessibilityLabel() == accessibilityLabel
 		{
 			return label
 		}
 		return view.subviews.lazy.compactMap
 		{
-			statusContextLabel(in: $0)
+			statusLabel(
+				in: $0,
+				accessibilityLabel: accessibilityLabel
+			)
 		}.first
 	}
 
