@@ -158,7 +158,7 @@ actor ConversationContentCache
 {
 	private struct Key: Hashable
 	{
-		let body: String
+		let body: Data
 		let markdown: Bool
 		let preserveSoftBreaks: Bool
 	}
@@ -177,7 +177,7 @@ actor ConversationContentCache
 	) async -> PreparedConversationContent
 	{
 		let key = Key(
-			body: body,
+			body: Data(body.utf8),
 			markdown: markdown,
 			preserveSoftBreaks: preserveSoftBreaks
 		)

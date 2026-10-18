@@ -6,6 +6,20 @@ import Testing
 @Suite
 struct TranscriptContentKeyTests
 {
+	@Test func canonicallyEquivalentBodiesHaveDifferentPreparationIdentities()
+	{
+		let first = TranscriptPreparationCoordinator.ContentKey(
+			body: "```text\n\u{00E9}\n```",
+			markdown: true
+		)
+		let second = TranscriptPreparationCoordinator.ContentKey(
+			body: "```text\ne\u{0301}\n```",
+			markdown: true
+		)
+		#expect(first.body == second.body)
+		#expect(first != second)
+	}
+
 	@Test func collapsedPreviewsMatchFoundationForMixedNewlinesAndEmptyComponents()
 	{
 		let separators = [

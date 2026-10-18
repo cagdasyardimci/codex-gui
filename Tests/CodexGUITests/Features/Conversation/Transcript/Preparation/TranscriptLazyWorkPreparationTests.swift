@@ -6,6 +6,39 @@ import Testing
 @Suite @MainActor
 struct TranscriptLazyWorkPreparationTests
 {
+	@Test func sameEntryUnicodeCorrectionReachesBothTranscriptChangeDetectionGates() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		var previous: PreparedConversationContent?
+		for scalarText in ["\u{00E9}", "e\u{0301}"]
+		{
+			let code = "let value = \"\(scalarText)\"\n"
+			let body = "```swift\n\(code)```"
+			let entries = [
+				entry(
+					"turn:request",
+					kind: .user,
+					body: "Request"
+				),
+				entry(
+					"turn:reply",
+					kind: .agent,
+					body: body
+				),
+			]
+			controller.render(snapshot(entries))
+			await controller.waitForRendering()
+			let prepared = try #require(controller.transcript.preparedContents["turn:reply"])
+			#expect(prepared !== previous)
+			#expect(prepared.codeBlocks.first?.utf8.elementsEqual(code.utf8) == true)
+			#expect(prepared.codeBlockRanges.first?.length == code.utf16.count)
+			#expect(controller.transcript.entries.last?.body.utf8.elementsEqual(body.utf8) == true)
+			previous = prepared
+		}
+		#expect(controller.transcript.transcriptPreparation.contentPreparationRequestCount == 3)
+	}
+
 	@Test func foldedWorkSkipsPreparationAndJumpRevealsItsLatestContent() async throws
 	{
 		_ = NSApplication.shared

@@ -21,6 +21,13 @@ final class TranscriptPreparationCoordinator
 			self.preserveSoftBreaks = preserveSoftBreaks
 		}
 
+		static func == (lhs: Self, rhs: Self) -> Bool
+		{
+			lhs.body.utf8.elementsEqual(rhs.body.utf8)
+				&& lhs.markdown == rhs.markdown
+				&& lhs.preserveSoftBreaks == rhs.preserveSoftBreaks
+		}
+
 		static func make(
 			for entry: ConversationEntry,
 			expanded: Bool

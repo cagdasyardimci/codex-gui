@@ -149,6 +149,9 @@ provisional render retains already displayed entries from the same transcript co
 carries entries across chats. The accepted prepared generation replaces the provisional content
 through the existing row, selection and scrolling update path.
 
+Prepared transcript content and change detection preserve exact UTF-8 source identity, including
+canonically equivalent spellings with different source ranges.
+
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and [validation](validation.md) for verification commands and acceptance limits.
 
 Git comparison file headers offer rich preview for Markdown, images and PDFs supported by the
