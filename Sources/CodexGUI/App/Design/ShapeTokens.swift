@@ -117,6 +117,13 @@ enum ShapeTokens
 		}
 	}
 
+	enum FileSearch
+	{
+		static let panelRadius: CGFloat = 16
+		static let keycapRadius = LayoutTokens.FileSearch.keycapHeight / 2
+		static let selectionRadius = LayoutTokens.FileSearch.contentRowHeight / 2
+	}
+
 	enum NativeChrome
 	{
 		static let panelRadius: CGFloat = 12

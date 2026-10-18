@@ -3,8 +3,8 @@ import AppKit
 @MainActor
 final class FileSearchContentResultView: NSView
 {
-	let snippetLabel = NSTextField(labelWithString: "")
-	let locationLabel = NSTextField(labelWithString: "")
+	let snippetLabel = FileSearchTextField(labelWithString: "")
+	let locationLabel = FileSearchTextField(labelWithString: "")
 	private let sourceLine: String
 	private let query: String
 	private var displayedLine: String
@@ -28,12 +28,9 @@ final class FileSearchContentResultView: NSView
 		let filename = path.lastPathComponent
 		let location = "\(filename):\(result.lineNumber)"
 
-		snippetLabel.attributedStringValue = Self.highlightedSnippet(
-			displayedLine,
-			query: query
-		)
 		snippetLabel.lineBreakMode = .byTruncatingTail
 		snippetLabel.maximumNumberOfLines = 1
+		snippetLabel.cell?.usesSingleLineMode = true
 		snippetLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
@@ -43,8 +40,7 @@ final class FileSearchContentResultView: NSView
 			for: .horizontal
 		)
 		locationLabel.stringValue = location
-		locationLabel.font = .systemFont(ofSize: 12)
-		locationLabel.textColor = .secondaryLabelColor
+		locationLabel.font = AppKitFontResolver.font(TypographyTokens.FileSearch.location)
 		locationLabel.lineBreakMode = .byTruncatingMiddle
 		locationLabel.maximumNumberOfLines = 1
 		locationLabel.toolTip = "\(result.location.relativePath):\(result.lineNumber)"
@@ -64,7 +60,7 @@ final class FileSearchContentResultView: NSView
 		NSLayoutConstraint.activate([
 			snippetLabel.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
-				constant: 3
+				constant: 8
 			),
 			snippetLabel.trailingAnchor.constraint(
 				equalTo: locationLabel.leadingAnchor,
@@ -81,7 +77,11 @@ final class FileSearchContentResultView: NSView
 				lessThanOrEqualTo: widthAnchor,
 				multiplier: 0.42
 			),
+			locationLabel.widthAnchor.constraint(
+				lessThanOrEqualToConstant: LayoutTokens.FileSearch.locationMaximumWidth
+			),
 		])
+		refreshSnippet()
 		setAccessibilityLabel(
 			"\(result.lineText), \(result.location.relativePath):\(result.lineNumber)"
 		)
@@ -131,22 +131,9 @@ final class FileSearchContentResultView: NSView
 
 	private func refreshSnippet()
 	{
-		let value = NSMutableAttributedString(attributedString: Self.highlightedSnippet(
-			displayedLine,
-			query: query
-		))
-		if selected
-		{
-			value.addAttribute(
-				.foregroundColor,
-				value: NSColor.labelColor,
-				range: NSRange(
-					location: 0,
-					length: value.length
-				)
-			)
-		}
-		snippetLabel.attributedStringValue = value
+		snippetLabel.attributedStringValue = highlightedSnippet()
+		locationLabel.textColor = selected
+			? AppKitColorTokens.fileSearchSelectedLocation : AppKitColorTokens.fileSearchLocation
 	}
 
 	required init?(coder: NSCoder)
@@ -160,6 +147,13 @@ final class FileSearchContentResultView: NSView
 		availableWidth: CGFloat
 	) -> String
 	{
+		let font = AppKitFontResolver.font(TypographyTokens.FileSearch.source)
+		let prefix = text.prefix(256)
+		if prefix.endIndex == text.endIndex,
+			String(prefix).size(withAttributes: [.font: font]).width <= availableWidth
+		{
+			return text
+		}
 		guard !query.isEmpty
 		else
 		{
@@ -180,10 +174,6 @@ final class FileSearchContentResultView: NSView
 		}
 		let context = text[..<range.lowerBound].suffix(32)
 		var before = String(context)
-		let font = NSFont.monospacedSystemFont(
-			ofSize: 13,
-			weight: .regular
-		)
 		let budget = availableWidth / 3
 		var leading = context.startIndex == text.startIndex ? "" : "…"
 		while !before.isEmpty,
@@ -207,19 +197,22 @@ final class FileSearchContentResultView: NSView
 		return String(prefix) + (prefix.endIndex == text.endIndex ? "" : "…")
 	}
 
-	static func highlightedSnippet(
-		_ text: String,
-		query: String
-	) -> NSAttributedString
+	private func highlightedSnippet() -> NSAttributedString
 	{
+		let foreground = selected ? AppKitColorTokens.primaryText : AppKitColorTokens
+			.fileSearchSnippet
+		let text = displayedLine
+		let paragraph = NSMutableParagraphStyle()
+		paragraph.lineBreakMode = .byTruncatingTail
 		let value = NSMutableAttributedString(
 			string: text,
 			attributes: [
-				.font: NSFont.monospacedSystemFont(
-					ofSize: 13,
-					weight: .regular
-				),
-				.foregroundColor: NSColor.secondaryLabelColor,
+				.font: AppKitFontResolver.font(TypographyTokens.FileSearch.source),
+				.paragraphStyle: paragraph,
+				.foregroundColor: NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
+					foreground,
+					for: self
+				)) ?? foreground,
 			]
 		)
 		guard !query.isEmpty
@@ -227,6 +220,10 @@ final class FileSearchContentResultView: NSView
 		{
 			return value
 		}
+		let background = NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.fileSearchMatch,
+			for: self
+		)) ?? AppKitColorTokens.fileSearchMatch
 		let source = text as NSString
 		var start = 0
 		while start < source.length
@@ -246,7 +243,7 @@ final class FileSearchContentResultView: NSView
 			}
 			value.addAttribute(
 				.backgroundColor,
-				value: NSColor.systemBlue.withAlphaComponent(0.10),
+				value: background,
 				range: found
 			)
 			start = NSMaxRange(found)
@@ -270,14 +267,11 @@ final class FileSearchResultSelectionRow: NSTableRowView
 		{
 			return
 		}
-		NSColor.labelColor.withAlphaComponent(0.06).setFill()
+		AppKitColorTokens.fileSearchSelection.setFill()
 		NSBezierPath(
-			roundedRect: bounds.insetBy(
-				dx: 1,
-				dy: 1
-			),
-			xRadius: 8,
-			yRadius: 8
+			roundedRect: bounds,
+			xRadius: ShapeTokens.FileSearch.selectionRadius,
+			yRadius: ShapeTokens.FileSearch.selectionRadius
 		).fill()
 	}
 }

@@ -104,11 +104,15 @@ OpenAIStyle catalogue and uses SF Symbols for roles absent from that catalogue.
 Both navigators use `ViewerSearchField` for filter drawing and native editing geometry.
 Quick-open and changed-file jump results share filename/directory rows, command translation and
 bounded keyboard selection, while their matching, data identities and sheet/popover lifecycles remain local.
-Filename quick open and content search use a common sheet with a borderless query field, a fixed
-header and a status footer with keyboard hints. Content search adds a compact file-mask field
-beside the query. Its 28-point result rows show a single monospaced source line with literal,
-case-insensitive matches highlighted and a trailing filename and line number. Filename results
-retain the shared filename/directory rows. Escape closes either sheet and restores prior focus.
+Filename quick open and content search share a borderless query field, fixed header and status
+footer with capsule keyboard keycaps and a compact Escape control. Content search follows the
+ChatGPT desktop reference's dense, single-line rows: monospaced source text, pale highlighted
+literal matches, trailing filename and line number, and a full-width capsule selection.
+Its file-mask field sits beside the query. Filename quick open retains the shared two-line
+filename/directory rows and remains available through Command-P and the search context menu.
+Escape closes either sheet and restores prior focus. Reference geometry and light colors are
+measured from the supplied screenshot; point conversion and font identity are inferred. Dark
+appearance uses the native application's adaptive palette rather than an unobserved reference.
 `ViewerNavigatorSplitView` owns both viewers' pane layout, divider hit area and resize cursor,
 dragging, clamping, width restoration and visibility. Both start at 241 points, allow desired
 navigator widths of 120–360 points and reserve 160 points for the document. The actual width

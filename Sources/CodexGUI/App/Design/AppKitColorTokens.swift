@@ -50,6 +50,38 @@ enum AppKitColorTokens
 		lightAlpha: 0.065,
 		darkAlpha: 0.065
 	)
+	static let fileSearchSnippet = AppKitColorResolution.color(
+		light: 0x545557,
+		dark: 0xB9B9B9
+	)
+	static let fileSearchLocation = AppKitColorResolution.color(
+		light: 0x8F9091,
+		dark: 0x999999
+	)
+	static let fileSearchSelectedLocation = AppKitColorResolution.color(
+		light: 0x656769,
+		dark: 0xB9B9B9
+	)
+	static let fileSearchMatch = AppKitColorResolution.color(
+		light: 0xEFF6FE,
+		dark: 0x263A52
+	)
+	static let fileSearchSelection = AppKitColorResolution.color(
+		light: 0xF2F3F3,
+		dark: 0x303030
+	)
+	static let fileSearchKeycap = AppKitColorResolution.color(
+		light: 0xF0F0F0,
+		dark: 0x303030
+	)
+	static let fileSearchEscape = AppKitColorResolution.color(
+		light: 0xE8E8E9,
+		dark: 0x363636
+	)
+	static let fileSearchDivider = AppKitColorResolution.color(
+		light: 0xEDEDED,
+		dark: 0x363636
+	)
 	static let selectedTab = AppKitColorResolution.color(
 		light: 0xFFFFFF,
 		dark: 0xFFFFFF,

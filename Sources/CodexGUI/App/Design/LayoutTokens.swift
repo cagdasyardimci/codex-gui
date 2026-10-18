@@ -439,6 +439,27 @@ enum LayoutTokens
 		static let closeIconSize: CGFloat = 14
 	}
 
+	enum FileSearch
+	{
+		static let preferredWidth: CGFloat = 768
+		static let minimumWidth: CGFloat = 400
+		static let parentHorizontalInset: CGFloat = 40
+		static let height: CGFloat = 500
+		static let headerHeight: CGFloat = 57
+		static let footerHeight: CGFloat = 37
+		static let filenameRowHeight: CGFloat = 34
+		static let contentRowHeight: CGFloat = 28.5
+		static let locationMaximumWidth: CGFloat = 250
+		static let resultsHorizontalInset: CGFloat = 4
+		static let footerHorizontalInset: CGFloat = 12
+		static let escapeWidth: CGFloat = 33
+		static let escapeHeight: CGFloat = 16
+		static let keycapHeight: CGFloat = 16
+		static let keycapHorizontalInset: CGFloat = 6
+		static let hintSpacing: CGFloat = 4
+		static let hintGroupSpacing: CGFloat = 12
+	}
+
 	enum Inspector
 	{
 		static var summaryPaneWidth: CGFloat

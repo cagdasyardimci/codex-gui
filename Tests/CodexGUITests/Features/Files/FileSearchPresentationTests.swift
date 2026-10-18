@@ -137,10 +137,11 @@ struct FileSearchPresentationTests
 			#expect(visible.count < 260)
 			let range = (visible as NSString).range(of: "eR")
 			let throughMatch = (visible as NSString).substring(to: NSMaxRange(range))
-			let font = NSFont.monospacedSystemFont(
-				ofSize: 13,
-				weight: .regular
-			)
+			let font = try #require(row.snippetLabel.attributedStringValue.attribute(
+				.font,
+				at: 0,
+				effectiveRange: nil
+			) as? NSFont)
 			let measured = (throughMatch as NSString).size(withAttributes: [.font: font]).width
 			#expect(measured <= row.snippetLabel.bounds.width)
 			#expect(row.locationLabel.frame.maxX <= row.bounds.maxX)
@@ -181,9 +182,14 @@ struct FileSearchPresentationTests
 				"Close search",
 				in: view
 			))
+			let hints = try #require(findView(
+				FileSearchKeyboardHintsView.self,
+				in: view
+			))
 			#expect(!query.isBordered)
+			#expect(!escape.isBordered)
 			#expect(!escape.isHidden)
-			for width: CGFloat in [400, 640]
+			for width: CGFloat in [400, 768]
 			{
 				view.frame = NSRect(
 					x: 0,
@@ -204,10 +210,17 @@ struct FileSearchPresentationTests
 					escape.bounds,
 					to: view
 				)
+				let hintsFrame = hints.convert(
+					hints.bounds,
+					to: view
+				)
 				#expect(queryFrame.minX >= 20)
 				#expect(queryFrame.width >= 75)
 				#expect(scroll.frame.maxY <= queryFrame.minY)
 				#expect(statusFrame.maxY <= scroll.frame.minY)
+				#expect(statusFrame.maxX < hintsFrame.minX)
+				#expect(hintsFrame.maxX <= view.bounds.maxX)
+				#expect(hintsFrame.maxY <= scroll.frame.minY)
 				if mode == .content
 				{
 					let mask = try #require(findField(
@@ -231,6 +244,277 @@ struct FileSearchPresentationTests
 					)?.isHidden == true)
 				}
 			}
+		}
+	}
+
+	@Test(.timeLimit(.minutes(1)))
+	func searchModesShareShellWithDenserContentRows() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			for width: CGFloat in [480, 1100]
+			{
+				let parent = NSWindow(
+					contentRect: NSRect(
+						x: 0,
+						y: 0,
+						width: width,
+						height: 650
+					),
+					styleMask: [.titled],
+					backing: .buffered,
+					defer: false
+				)
+				parent.isReleasedWhenClosed = false
+				defer
+				{
+					parent.close()
+				}
+				var expectedSize: NSSize?
+				var expectedViewport: NSRect?
+				var expectedRowHeight: CGFloat?
+				for mode: FileSearchPanel.Mode in [.filename, .content]
+				{
+					let panel = FileSearchPanel(mode: mode)
+					panel.present(in: parent)
+					defer
+					{
+						panel.dismiss()
+					}
+					let sheet = try #require(parent.attachedSheet)
+					panel.view.layoutSubtreeIfNeeded()
+					let scroll = try #require(findView(
+						NSScrollView.self,
+						in: panel.view
+					))
+					let table = try #require(scroll.documentView as? FileSearchResultsTableView)
+					#expect(sheet.frame.width < parent.frame.width)
+					if let expectedSize, let expectedViewport, let expectedRowHeight
+					{
+						#expect(sheet.frame.size == expectedSize)
+						#expect(scroll.frame == expectedViewport)
+						#expect(table.rowHeight < expectedRowHeight)
+					}
+					expectedSize = sheet.frame.size
+					expectedViewport = scroll.frame
+					expectedRowHeight = table.rowHeight
+				}
+			}
+		}
+	}
+
+	@Test(.timeLimit(.minutes(1)))
+	func contentSearchReferenceLayoutPreservesDensityAndAppearance() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let parent = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 1100,
+					height: 650
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			parent.isReleasedWhenClosed = false
+			let panel = FileSearchPanel(mode: .content)
+			defer
+			{
+				panel.dismiss()
+				parent.close()
+			}
+			var state = FileViewerState()
+			state.activeRoot = "/tmp/reference-search"
+			panel.render(state)
+			panel.present(in: parent)
+			let query = try #require(findField(
+				"Search file contents",
+				in: panel.view
+			))
+			let editor = try #require(query.currentEditor() as? NSTextView)
+			editor.insertText(
+				"er",
+				replacementRange: editor.selectedRange()
+			)
+			query.validateEditing()
+			let mask = try #require(findField(
+				"File mask",
+				in: panel.view
+			))
+			mask.stringValue = "*.txt,*.swift"
+			panel.controlTextDidChange(Notification(
+				name: NSControl.textDidChangeNotification,
+				object: query
+			))
+			state.searchRequest = UUID()
+			panel.render(state)
+			state.searchRequest = nil
+			state.contentResults = FileViewerSearchPage(
+				results: referenceResults(root: state.activeRoot!),
+				isTruncated: true
+			)
+			panel.render(state)
+			let table = try #require(findView(
+				FileSearchResultsTableView.self,
+				in: panel.view
+			))
+			table.selectRowIndexes(
+				IndexSet(integer: 13),
+				byExtendingSelection: false
+			)
+			let escape = try #require(findButton(
+				"Close search",
+				in: panel.view
+			))
+			for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua]
+			{
+				parent.appearance = NSAppearance(named: appearance)
+				panel.view.layoutSubtreeIfNeeded()
+				let viewport = try #require(table.enclosingScrollView?.contentView)
+				#expect(table.rect(ofRow: 13).maxY <= viewport.bounds.maxY)
+				#expect(escape.bounds.height < mask.bounds.height)
+				#expect(query.currentEditor() === editor)
+				#expect(table.selectedRow == 13)
+				for row in [0, 13]
+				{
+					let cell = try #require(table.view(
+						atColumn: 0,
+						row: row,
+						makeIfNecessary: true
+					))
+					let result = try #require(findView(
+						FileSearchContentResultView.self,
+						in: cell
+					))
+					if row == 0
+					{
+						#expect(result.snippetLabel.stringValue
+							== "struct GitTurnBaselineRecord: Codable, Sendable")
+					}
+					#expect(result.snippetLabel.frame.maxX <= result.locationLabel.frame.minX)
+					let actual = try #require(result.snippetLabel.attributedStringValue.attribute(
+						.foregroundColor,
+						at: 0,
+						effectiveRange: nil
+					) as? NSColor)
+					let expected = row == 13
+						? AppKitColorTokens.primaryText : AppKitColorTokens.fileSearchSnippet
+					#expect(actual.cgColor == AppKitColorResolution.resolvedCGColor(
+						expected,
+						for: result
+					))
+				}
+				if let directory = ProcessInfo.processInfo.environment["FILE_SEARCH_RENDER_DIR"]
+				{
+					let destination = URL(fileURLWithPath: directory)
+					try FileManager.default.createDirectory(
+						at: destination,
+						withIntermediateDirectories: true
+					)
+					try AppTestPNGWriter.write(
+						panel.view,
+						to: destination.appendingPathComponent(
+							"reference-content-\(appearance.rawValue).png"
+						)
+					)
+				}
+			}
+		}
+	}
+
+	private func referenceResults(root: String) -> [FileViewerSearchResult]
+	{
+		let rows: [(String, Int, String)] = [
+			(
+				"GitTurnBaselineSnapshotModels.swift",
+				3,
+				"struct GitTurnBaselineRecord: Codable, Sendable"
+			),
+			(
+				"GitTurnBaselineSnapshotModels.swift",
+				5,
+				"var reference: GitTurnBaselineReference"
+			),
+			(
+				"GitTurnBaselineSnapshotModels.swift",
+				44,
+				"enum GitTurnBaselineReadError: Error"
+			),
+			(
+				"GitPatchSyntax.swift",
+				3,
+				"fields and the path markers shared by patch consumers."
+			),
+			(
+				"GitPatchSyntax.swift",
+				6,
+				"typealias HeaderCandidate = (old: String, new: String)"
+			),
+			(
+				"GitPatchSyntax.swift",
+				22,
+				"path from optional marker metadata."
+			),
+			(
+				"GitPatchSyntax.swift",
+				30,
+				"static func markerPath("
+			),
+			(
+				"GitPatchSyntax.swift",
+				45,
+				"Git path tokens; consumers decide how to treat ambiguous synthetic headers."
+			),
+			(
+				"GitPatchSyntax.swift",
+				46,
+				"static func headerFields(_ header: String) -> (old: String, new: String)?"
+			),
+			(
+				"GitPatchSyntax.swift",
+				48,
+				"guard header.hasPrefix(\"diff --git \")"
+			),
+			(
+				"GitPatchSyntax.swift",
+				53,
+				"let fields = String(header.dropFirst(\"diff --git \".count))"
+			),
+			(
+				"GitPatchSyntax.swift",
+				70,
+				"ible splits lazily; callers apply their own acceptance policy."
+			),
+			(
+				"GitPatchSyntax.swift",
+				71,
+				"static func unquotedHeaderCandidates(_ header: String) "
+					+ "-> AnySequence<HeaderCandidate>"
+			),
+			(
+				"GitPatchSyntax.swift",
+				73,
+				"guard header.hasPrefix(\"diff --git a/\")"
+			),
+		]
+		return (0 ..< 100).map
+		{
+			let row = rows[$0 % rows.count]
+			return FileViewerSearchResult(
+				location: FileLocation(
+					root: root,
+					relativePath: "Sources/\(row.0)"
+				),
+				lineNumber: row.1,
+				lineText: row.2
+			)
 		}
 	}
 

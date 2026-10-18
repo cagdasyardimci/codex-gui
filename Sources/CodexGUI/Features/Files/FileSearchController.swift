@@ -63,16 +63,16 @@ final class FileSearchPanel: NSViewController,
 	var onCancelSearch: (() -> Void)?
 
 	private let mode: Mode
-	private let queryField = NSTextField()
-	private let maskField = NSTextField()
-	private let maskLabel = NSTextField(labelWithString: "File mask:")
-	private let escapeButton = NSButton(
+	private let queryField = FileSearchTextField()
+	private let maskField = FileSearchTextField()
+	private let maskLabel = FileSearchTextField(labelWithString: "File mask:")
+	private let escapeButton = FileSearchEscapeButton(
 		title: "Esc",
 		target: nil,
 		action: nil
 	)
-	private let statusLabel = NSTextField(labelWithString: "")
-	private let hintsLabel = NSTextField(labelWithString: "↑ ↓  navigate     ↵  open")
+	private let statusLabel = FileSearchTextField(labelWithString: "")
+	private let keyboardHints = FileSearchKeyboardHintsView()
 	private let table = FileSearchResultsTableView()
 	private var sheet: NSWindow?
 	private var previousResponder: NSResponder?
@@ -102,7 +102,7 @@ final class FileSearchPanel: NSViewController,
 	{
 		let container = FileSearchPanelBackgroundView()
 		container.wantsLayer = true
-		container.layer?.cornerRadius = 16
+		container.layer?.cornerRadius = ShapeTokens.FileSearch.panelRadius
 		container.layer?.masksToBounds = true
 		container.refreshBackground()
 		queryField.placeholderString = mode == .filename
@@ -112,24 +112,34 @@ final class FileSearchPanel: NSViewController,
 		queryField.isBordered = false
 		queryField.drawsBackground = false
 		queryField.focusRingType = .none
-		queryField.font = .systemFont(ofSize: 15)
+		queryField.font = AppKitFontResolver.font(TypographyTokens.FileSearch.query)
 		maskField.placeholderString = "*.swift,*.md"
 		maskField.setAccessibilityLabel("File mask")
 		maskField.delegate = self
-		maskField.font = .systemFont(ofSize: 13)
+		maskField.font = AppKitFontResolver.font(TypographyTokens.FileSearch.accessory)
 		maskField.bezelStyle = .roundedBezel
-		maskLabel.textColor = .secondaryLabelColor
-		maskLabel.font = .systemFont(ofSize: 13)
+		maskLabel.textColor = AppKitColorTokens.captionText
+		maskLabel.font = AppKitFontResolver.font(TypographyTokens.FileSearch.maskLabel)
 		escapeButton.target = self
 		escapeButton.action = #selector(dismissFromButton)
-		escapeButton.bezelStyle = .rounded
+		escapeButton.isBordered = false
+		escapeButton.font = AppKitFontResolver.font(TypographyTokens.FileSearch.accessory)
+		escapeButton.attributedTitle = NSAttributedString(
+			string: "Esc",
+			attributes: [
+				.font: AppKitFontResolver.font(TypographyTokens.FileSearch.accessory),
+				.foregroundColor: AppKitColorTokens.primaryText,
+			]
+		)
 		escapeButton.setAccessibilityLabel("Close search")
-		statusLabel.textColor = .secondaryLabelColor
-		statusLabel.font = .systemFont(ofSize: 12)
+		statusLabel.textColor = AppKitColorTokens.captionText
+		statusLabel.font = AppKitFontResolver.font(TypographyTokens.FileSearch.footer)
 		statusLabel.lineBreakMode = .byTruncatingTail
 		statusLabel.setAccessibilityLabel("Search status")
-		hintsLabel.textColor = .secondaryLabelColor
-		hintsLabel.font = .systemFont(ofSize: 12)
+		statusLabel.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
 
 		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("result"))
 		column.resizingMask = .autoresizingMask
@@ -137,7 +147,9 @@ final class FileSearchPanel: NSViewController,
 		table.style = .plain
 		table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
 		table.headerView = nil
-		table.rowHeight = mode == .content ? 28 : 34
+		table.rowHeight = mode == .content
+			? LayoutTokens.FileSearch.contentRowHeight : LayoutTokens.FileSearch.filenameRowHeight
+		table.backgroundColor = .clear
 		table.intercellSpacing = NSSize(
 			width: 0,
 			height: 0
@@ -163,11 +175,14 @@ final class FileSearchPanel: NSViewController,
 		let scroll = NSScrollView()
 		scroll.documentView = table
 		scroll.hasVerticalScroller = true
+		scroll.autohidesScrollers = true
 		scroll.drawsBackground = false
 		let header = NSView()
 		let footer = NSView()
 		let divider = NSBox()
-		divider.boxType = .separator
+		divider.boxType = .custom
+		divider.borderType = .noBorder
+		divider.fillColor = AppKitColorTokens.fileSearchDivider
 		for item in [header, scroll, footer]
 		{
 			item.translatesAutoresizingMaskIntoConstraints = false
@@ -178,7 +193,7 @@ final class FileSearchPanel: NSViewController,
 			item.translatesAutoresizingMaskIntoConstraints = false
 			header.addSubview(item)
 		}
-		for item in [divider, statusLabel, hintsLabel]
+		for item in [divider, statusLabel, keyboardHints]
 		{
 			item.translatesAutoresizingMaskIntoConstraints = false
 			footer.addSubview(item)
@@ -189,21 +204,21 @@ final class FileSearchPanel: NSViewController,
 			header.topAnchor.constraint(equalTo: container.topAnchor),
 			header.leadingAnchor.constraint(equalTo: container.leadingAnchor),
 			header.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-			header.heightAnchor.constraint(equalToConstant: 54),
+			header.heightAnchor.constraint(equalToConstant: LayoutTokens.FileSearch.headerHeight),
 			scroll.topAnchor.constraint(equalTo: header.bottomAnchor),
 			scroll.leadingAnchor.constraint(
 				equalTo: container.leadingAnchor,
-				constant: 10
+				constant: LayoutTokens.FileSearch.resultsHorizontalInset
 			),
 			scroll.trailingAnchor.constraint(
 				equalTo: container.trailingAnchor,
-				constant: -10
+				constant: -LayoutTokens.FileSearch.resultsHorizontalInset
 			),
 			footer.topAnchor.constraint(equalTo: scroll.bottomAnchor),
 			footer.leadingAnchor.constraint(equalTo: container.leadingAnchor),
 			footer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
 			footer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-			footer.heightAnchor.constraint(equalToConstant: 38),
+			footer.heightAnchor.constraint(equalToConstant: LayoutTokens.FileSearch.footerHeight),
 			queryField.leadingAnchor.constraint(
 				equalTo: header.leadingAnchor,
 				constant: 22
@@ -217,30 +232,34 @@ final class FileSearchPanel: NSViewController,
 			escapeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
 			escapeButton.trailingAnchor.constraint(
 				equalTo: header.trailingAnchor,
-				constant: -14
+				constant: -LayoutTokens.FileSearch.footerHorizontalInset
 			),
-			escapeButton.widthAnchor.constraint(equalToConstant: 42),
+			escapeButton.widthAnchor
+				.constraint(equalToConstant: LayoutTokens.FileSearch.escapeWidth),
+			escapeButton.heightAnchor
+				.constraint(equalToConstant: LayoutTokens.FileSearch.escapeHeight),
 			divider.topAnchor.constraint(equalTo: footer.topAnchor),
+			divider.heightAnchor.constraint(equalToConstant: 1),
 			divider.leadingAnchor.constraint(
 				equalTo: footer.leadingAnchor,
-				constant: 10
+				constant: LayoutTokens.FileSearch.resultsHorizontalInset
 			),
 			divider.trailingAnchor.constraint(
 				equalTo: footer.trailingAnchor,
-				constant: -10
+				constant: -LayoutTokens.FileSearch.resultsHorizontalInset
 			),
 			statusLabel.leadingAnchor.constraint(
 				equalTo: footer.leadingAnchor,
-				constant: 16
+				constant: LayoutTokens.FileSearch.footerHorizontalInset
 			),
 			statusLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-			hintsLabel.trailingAnchor.constraint(
+			keyboardHints.trailingAnchor.constraint(
 				equalTo: footer.trailingAnchor,
-				constant: -16
+				constant: -LayoutTokens.FileSearch.footerHorizontalInset
 			),
-			hintsLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+			keyboardHints.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
 			statusLabel.trailingAnchor.constraint(
-				lessThanOrEqualTo: hintsLabel.leadingAnchor,
+				lessThanOrEqualTo: keyboardHints.leadingAnchor,
 				constant: -8
 			),
 		])
@@ -299,13 +318,13 @@ final class FileSearchPanel: NSViewController,
 		presented.delegate = self
 		presented.setContentSize(NSSize(
 			width: min(
-				mode == .content ? 768 : 640,
+				LayoutTokens.FileSearch.preferredWidth,
 				max(
-					400,
-					window.frame.width - 80
+					LayoutTokens.FileSearch.minimumWidth,
+					window.frame.width - 2 * LayoutTokens.FileSearch.parentHorizontalInset
 				)
 			),
-			height: mode == .content ? 500 : 410
+			height: LayoutTokens.FileSearch.height
 		))
 		appearanceBinding = DesktopPanelAppearanceBinding(
 			panel: presented,
@@ -670,6 +689,24 @@ final class FileSearchPanel: NSViewController,
 			onChooseContent?(contentRows[row])
 		}
 		dismiss()
+	}
+}
+
+@MainActor
+private final class FileSearchEscapeButton: DesktopAttributedTitleButton
+{
+	override func draw(_ dirtyRect: NSRect)
+	{
+		AppKitColorTokens.fileSearchEscape.setFill()
+		NSBezierPath(
+			roundedRect: bounds,
+			xRadius: ShapeTokens.FileSearch.keycapRadius,
+			yRadius: ShapeTokens.FileSearch.keycapRadius
+		).fill()
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			super.draw(dirtyRect)
+		}
 	}
 }
 

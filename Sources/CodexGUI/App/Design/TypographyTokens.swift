@@ -233,6 +233,19 @@ enum TypographyTokens
 		)
 	}
 
+	enum FileSearch
+	{
+		static let source = Role(
+			size: 13,
+			selection: .menlo(bold: false)
+		)
+		static let location = Role(size: 13)
+		static let query = Role(size: 15)
+		static let accessory = Role(size: 13)
+		static let maskLabel = Role(size: 12)
+		static let footer = Role(size: 12)
+	}
+
 	enum Summary
 	{
 		static let body = Role(
