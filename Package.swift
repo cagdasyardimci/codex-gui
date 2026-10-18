@@ -55,6 +55,7 @@ let package = Package(
 					package: "swift-mermaid"
 				),
 			],
+			exclude: ["Features/README.md"],
 			resources: [
 				.copy("Resources/AppIcon.icns"),
 				.copy("Resources/SubagentAvatars")
