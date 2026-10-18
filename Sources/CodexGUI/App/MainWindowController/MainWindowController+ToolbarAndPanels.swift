@@ -623,7 +623,7 @@ extension MainWindowController
 
 	@objc func showCommandPalette()
 	{
-		guard let window, let snapshot = latestSnapshot
+		guard let window, window.attachedSheet == nil, let snapshot = latestSnapshot
 		else
 		{
 			return
@@ -669,7 +669,7 @@ extension MainWindowController
 		commandPalette.onChoose =
 		{
 			[weak self] destination in
-			guard let self
+			guard let self, target.accepts(.search(""))
 			else
 			{
 				return
@@ -681,6 +681,11 @@ extension MainWindowController
 			case .action("new"): target.dispatch(.newChat)
 			case .action("search"): self.showMessageSearch()
 			case .action("changes"):
+				guard target.accepts(.loadEarlierTurns)
+				else
+				{
+					return
+				}
 				self.openCurrentChanges()
 			case .action: break
 			}

@@ -32,6 +32,7 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 	)
 	private var commands: [PaletteCommand] = []
 	private var visibleCommands: [PaletteCommand] = []
+	private var presentationRevision = 0
 
 	override func loadView()
 	{
@@ -101,6 +102,13 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		informativeText: String? = nil
 	)
 	{
+		guard window.attachedSheet == nil
+		else
+		{
+			return
+		}
+		presentationRevision += 1
+		let revision = presentationRevision
 		_ = view
 		self.commands = commands
 		explanationLabel.stringValue = informativeText ?? ""
@@ -124,7 +132,13 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		))
 		window.beginSheet(sheet)
 		{
-			[weak self] _ in self?.onChoose = nil
+			[weak self] _ in
+			guard let self, self.presentationRevision == revision
+			else
+			{
+				return
+			}
+			self.onChoose = nil
 		}
 		sheet.makeFirstResponder(searchField)
 	}
