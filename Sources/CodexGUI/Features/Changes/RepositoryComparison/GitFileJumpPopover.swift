@@ -54,7 +54,7 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	private static let maximumVisibleResultCount = 200
 
 	private let index: GitFileJumpIndex
-	private let search = NSSearchField()
+	private let search = ViewerSearchField()
 	private let results = NSStackView()
 	private var visibleEntries: [GitFileJumpIndex.Entry] = []
 	private var resultButtons: [DesktopLayerButton] = []
@@ -130,34 +130,14 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 		doCommandBy commandSelector: Selector
 	) -> Bool
 	{
-		switch commandSelector
+		switch ViewerFileSearchSelection.command(for: commandSelector)
 		{
-		case #selector(NSResponder.moveDown(_:)):
-			selectedIndex = min(
-				selectedIndex + 1,
-				max(
-					0,
-					visibleEntries.count - 1
-				)
-			)
-			updateSelection()
-			return true
-		case #selector(NSResponder.moveUp(_:)):
-			selectedIndex = max(
-				0,
-				selectedIndex - 1
-			)
-			updateSelection()
-			return true
-		case #selector(NSResponder.insertNewline(_:)):
-			chooseFirst()
-			return true
-		case #selector(NSResponder.cancelOperation(_:)):
-			onCancel?()
-			return true
-		default:
-			return false
+		case .navigate(let direction): moveSelection(direction)
+		case .accept: chooseFirst()
+		case .cancel: onCancel?()
+		case nil: return false
 		}
+		return true
 	}
 
 	@objc private func chooseFirst()
@@ -219,27 +199,32 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 		button.identifier = NSUserInterfaceItemIdentifier(entry.id)
 		button.setAccessibilityLabel(entry.path)
 		button.toolTip = entry.path
-		let title = NSMutableAttributedString(
-			string: entry.filename,
-			attributes: [
-				.font: NSFont.systemFont(
-					ofSize: 13,
-					weight: .medium
-				),
-				.foregroundColor: NSColor.labelColor,
-			]
-		)
-		title.append(NSAttributedString(
-			string: "    " + (entry.directory.isEmpty ? "Top level" : entry.directory),
-			attributes: [
-				.font: NSFont.systemFont(ofSize: 11),
-				.foregroundColor: NSColor.secondaryLabelColor,
-			]
-		))
-		button.attributedTitle = title
-		button.cell?.lineBreakMode = .byTruncatingMiddle
+		let result = ViewerFileSearchResultView(relativePath: entry.path)
+		result.translatesAutoresizingMaskIntoConstraints = false
+		button.addSubview(result)
+		NSLayoutConstraint.activate([
+			result.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+			result.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+			result.topAnchor.constraint(equalTo: button.topAnchor),
+			result.bottomAnchor.constraint(equalTo: button.bottomAnchor),
+		])
 		button.wantsLayer = true
 		return button
+	}
+
+	private func moveSelection(_ direction: ViewerFileSearchSelection.Direction)
+	{
+		guard let next = ViewerFileSearchSelection.next(
+			current: selectedIndex,
+			count: visibleEntries.count,
+			direction: direction
+		)
+		else
+		{
+			return
+		}
+		selectedIndex = next
+		updateSelection()
 	}
 
 	private func updateSelection()
