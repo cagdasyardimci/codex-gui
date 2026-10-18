@@ -38,7 +38,8 @@ struct CodePreviewPresentation: Equatable, Sendable
 		sourceLines.lineNumber(atUTF16Offset: offset)
 	}
 
-	private static func language(for path: String) -> String?
+	/// Syntax selection depends only on the path and does not need source-line indexing.
+	static func language(for path: String) -> String?
 	{
 		let languages = [
 			"swift": "swift",

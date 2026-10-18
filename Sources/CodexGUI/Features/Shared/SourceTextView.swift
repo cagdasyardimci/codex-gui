@@ -96,10 +96,7 @@ class SourceTextView: NSTextView
 			)
 			return
 		}
-		let language = CodePreviewPresentation(
-			text: text,
-			relativePath: path
-		).language
+		let language = CodePreviewPresentation.language(for: path)
 		guard let colors = CodeSyntaxHighlighter.highlightedCode(
 			text,
 			language: language,

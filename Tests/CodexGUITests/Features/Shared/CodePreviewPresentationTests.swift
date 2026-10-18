@@ -4,6 +4,25 @@ import Testing
 
 struct CodePreviewPresentationTests
 {
+	@Test func pathOnlySyntaxSelectionMatchesPreparedSourceSelection()
+	{
+		for (path, expected) in [
+			("Sources/A.SWIFT", "swift"),
+			("component.tsx", "typescript"),
+			("script.py", "python"),
+			("README", nil),
+			("file.unknown", nil),
+		]
+		{
+			let language = CodePreviewPresentation.language(for: path)
+			#expect(language == expected)
+			#expect(CodePreviewPresentation(
+				text: "",
+				relativePath: path
+			).language == language)
+		}
+	}
+
 	@Test func emptyAndTrailingNewlineRetainEditableDocumentLineSemantics()
 	{
 		let empty = CodePreviewPresentation(
