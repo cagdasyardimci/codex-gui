@@ -334,6 +334,7 @@ extension ConversationViewController
 	func makeContextAttachmentReceiver() -> (ComposerContextItem) -> Void
 	{
 		let generation = selectionGeneration
+		let receiver = onAddContext
 		let receiveAttachment: (ComposerContextItem) -> Void =
 		{
 			[weak self] item in
@@ -342,7 +343,7 @@ extension ConversationViewController
 			{
 				return
 			}
-			self.onAddContext?(item)
+			receiver?(item)
 		}
 
 		return receiveAttachment
@@ -518,6 +519,7 @@ extension ConversationViewController
 			return
 		}
 		let generation = selectionGeneration
+		let receiveAttachment = makeContextAttachmentReceiver()
 		let panel = NSOpenPanel()
 		panel.prompt = "Select Code"
 		panel.directoryURL = URL(fileURLWithPath: projectPath)
@@ -532,52 +534,86 @@ extension ConversationViewController
 			{
 				return
 			}
-			let project = URL(fileURLWithPath: projectPath).standardizedFileURL
-				.resolvingSymlinksInPath()
-			let file = url.standardizedFileURL.resolvingSymlinksInPath()
-			guard file.path.hasPrefix(project.path + "/")
+			Task
+			{
+				[weak self] in
+				await self?.loadCodeSelection(
+					file: url,
+					project: URL(fileURLWithPath: projectPath),
+					generation: generation,
+					window: window,
+					receiveAttachment: receiveAttachment
+				)
+			}
+		}
+	}
+
+	func loadCodeSelection(
+		file: URL,
+		project: URL,
+		generation: Int,
+		window: NSWindow,
+		receiveAttachment: @escaping (ComposerContextItem) -> Void,
+		readFile: @Sendable (
+			URL,
+			URL
+		) async throws -> ComposerCodeFile =
+			ComposerCodeFileReader.read
+	) async
+	{
+		do
+		{
+			let selected = try await readFile(
+				file,
+				project
+			)
+			guard selectionGeneration == generation, view.window === window, window.isVisible
 			else
 			{
-				self.showContextError("Choose a file inside the current project.")
 				return
 			}
-			do
+			presentCodeSelection(
+				path: selected.relativePath,
+				contents: selected.contents,
+				window: window,
+				generation: generation,
+				receiveAttachment: receiveAttachment
+			)
+		}
+		catch
+		{
+			guard selectionGeneration == generation, view.window === window, window.isVisible
+			else
 			{
-				let data = try Data(contentsOf: file)
-				guard data.count <= 500_000, let contents = String(
-					data: data,
-					encoding: .utf8
-				)
-				else
-				{
-					self.showContextError("Choose a UTF-8 text file under 500 KB.")
-					return
-				}
-				let relative = String(file.path.dropFirst(project.path.count + 1))
-				self.presentCodeSelection(
-					path: relative,
-					contents: contents
-				)
+				return
 			}
-			catch
+			if let failure = error as? FileViewerFailure
 			{
-				self.showContextError(error.localizedDescription)
+				switch failure
+				{
+				case .invalidPath:
+					showContextError("Choose a regular file inside the current project.")
+				case .tooLarge, .unsupportedEncoding, .binary:
+					showContextError("Choose a UTF-8 text file under 500 KB.")
+				default:
+					showContextError("This file could not be read. Choose another file.")
+				}
+			}
+			else if !(error is CancellationError)
+			{
+				showContextError(error.localizedDescription)
 			}
 		}
 	}
 
 	private func presentCodeSelection(
 		path: String,
-		contents: String
+		contents: String,
+		window: NSWindow,
+		generation: Int,
+		receiveAttachment: @escaping (ComposerContextItem) -> Void
 	)
 	{
-		guard let window = view.window
-		else
-		{
-			return
-		}
-		let generation = selectionGeneration
-		let receiveAttachment = makeContextAttachmentReceiver()
 		let selection = ScrollableTextPreview.make(
 			text: contents,
 			size: NSSize(
@@ -601,7 +637,8 @@ extension ConversationViewController
 		{
 			[weak self] response in
 			guard response == .alertFirstButtonReturn, let self,
-					self.selectionGeneration == generation
+					self.selectionGeneration == generation, self.view.window === window,
+					window.isVisible
 			else
 			{
 				return

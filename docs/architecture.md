@@ -83,6 +83,10 @@ Pending edits remain available after save failures or external-change conflicts.
 paths settle pending saves and require an explicit decision before discarding unresolved edits.
 Rendered Markdown is read-only; source editing uses the same current document text as copy and
 export actions.
+
+Code selection reads contained UTF-8 files off the main actor with a 500,000-byte limit and
+revalidates its captured selection before presentation.
+
 Find routes to Files only when keyboard focus belongs to the visible Files view; source text
 uses the native find bar. Closing a selected file chooses the next surviving tab to its right,
 or the nearest tab to its left, using the visible tab order after reordering.
@@ -101,7 +105,7 @@ The filesystem service retains one checkout's bounded filename index. Each searc
 identity and modification metadata of the indexed directories before reuse, so nested additions,
 removals and renames invalidate the inventory. Content searches read current file bytes rather
 than cached document content, omit document revision and preview preparation, and stop at the
-requested matching-line limit. Document, search and save-validation reads remain
+requested matching-line limit. Document, search, code-selection and save-validation reads remain
 contained, bounded and cancellable; nonregular files are rejected without waiting for a pipe writer.
 
 The main conversation and subagent history compose `TranscriptViewController` from
