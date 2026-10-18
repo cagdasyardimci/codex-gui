@@ -63,12 +63,17 @@ struct SlashCommandMenuCatalog
 		)
 		{
 			skillPrefix = normalizedPrefix
-			let matchingSkills = searchableSkills.filter
+			skills = searchableSkills.compactMap
 			{
-				normalizedPrefix.isEmpty || $0.normalizedName.hasPrefix(normalizedPrefix)
-					|| ($0.normalizedDisplayName?.hasPrefix(normalizedPrefix) ?? false)
+				entry in
+				guard normalizedPrefix.isEmpty || entry.normalizedName.hasPrefix(normalizedPrefix)
+					|| (entry.normalizedDisplayName?.hasPrefix(normalizedPrefix) ?? false)
+				else
+				{
+					return nil
+				}
+				return entry.skill
 			}
-			skills = matchingSkills.map(\.skill)
 			skillSearchCount += 1
 		}
 		return (commands, skills)
@@ -83,7 +88,7 @@ struct SlashCommandMenuCatalog
 		self.localeIdentifier = localeIdentifier
 		skillPrefix = nil
 
-		let enabledSkills = skills.enumerated().compactMap
+		searchableSkills = skills.enumerated().compactMap
 		{
 			index, skill -> SearchableSkill? in
 			guard skill.enabled
@@ -98,7 +103,7 @@ struct SlashCommandMenuCatalog
 				sourceIndex: index
 			)
 		}
-		searchableSkills = enabledSkills.sorted
+		searchableSkills.sort
 		{
 			left, right in
 			let leftDisplayName = left.skill.displayName ?? left.skill.name
