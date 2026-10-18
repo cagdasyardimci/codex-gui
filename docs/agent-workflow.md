@@ -9,8 +9,8 @@ Start at [AGENTS.md](../AGENTS.md) for working rules and completion reporting. T
 | Product overview, requirements, dependencies, bundling and launch | [README](../README.md) |
 | Swift formatting, naming, DRY, file placement and test organization | [Conventions](../CONVENTIONS.md) |
 | Native controls, dialogs, accessibility, appearance and UI references | [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility) |
-| Shared palette, reference styling and component geometry | [Interface styling](interface-styling.md) |
-| Feature directories and view ownership | [Feature map](../Sources/CodexGUI/Features/README.md) |
+| Shared presentation, styling, component ownership and UI references | [Interface styling](interface-styling.md) |
+| Feature-directory routing | [Feature map](../Sources/CodexGUI/Features/README.md) |
 | State transitions, effects, async ownership, execution and recovery | [Architecture](architecture.md) |
 | Transcript residency and Git editing-turn identity | [Residency](architecture.md#conversation-content-residency), [latest Git turn](architecture.md#recorded-latest-git-turn) |
 | CLI version assessment, capability claims, framing and protocol safeguards | [CLI compatibility](cli-compatibility.md) |

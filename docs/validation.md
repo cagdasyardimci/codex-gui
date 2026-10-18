@@ -4,9 +4,9 @@ Use [conventions](../CONVENTIONS.md#formatting-and-tooling) for formatting and [
 
 ## Automated checks
 
-Run `make check` without `-j` for Swift formatting, the application build and tests. Do not change source or build settings during a run, or run competing builds in the same checkout. Use separate checkouts for independent builds. Inspect the output to confirm the intended tests executed and completed; a command exit alone can miss an empty selection or incomplete host. See [native QA](native-qa.md#manual-preparation-and-isolation) for manual fixture isolation.
+Run `make check` without `-j` for Swift formatting, the application build and tests. Do not change source or build settings during a run, or run competing builds in the same checkout. Use separate checkouts for independent builds. Apply the [test-completion requirements](#test-completion) before reporting results. See [native QA](native-qa.md#manual-preparation-and-isolation) for manual fixture isolation.
 
-The default `make test` and the test step of `make check` run the full suite in one process with parallel execution enabled (`PARALLEL=1`). Tests require Swift and macOS Command Line Tools. The standard SwiftPM runner executes the tests; `Tests/run-swift-tests.py` preserves its exit status and additionally rejects missing or zero-test completion summaries.
+The default `make test` and the test step of `make check` run the full suite in one process with parallel execution enabled (`PARALLEL=1`). Tests require Swift and macOS Command Line Tools. The standard SwiftPM runner executes the tests through the [completion wrapper](../Tests/run-swift-tests.py).
 
 Use `make test PARALLEL=0` or `make check PARALLEL=0` to disable parallel execution. `PARALLEL` accepts only `0` or `1` and applies to named and custom selections too. Tests that intentionally change application-wide UI state use [AppKitTestIsolation](../Tests/CodexGUITests/Support/AppKitTestIsolation.swift) to coordinate native key-window and focus changes, sheets, popovers and transient panels across suites. Prefer scoped `AppKitTestIsolation.perform` inside the admitted MainActor test method, covering native construction, presentation, relevant asynchronous work, assertions and cleanup. Preserve `.serialized` on parameterized functions or their existing suites; each protected case must restore its owned native state before releasing the permit.
 
@@ -49,7 +49,9 @@ Use `native.body` spans inside scoped native closures to separate admission from
 
 `BackgroundTestWork` records `fixture.io` spans around queue waiting and worker execution, with `execution.begin` and `execution.end` marking actual utility-thread work. It carries diagnostic test and parent-span context through each synchronous worker operation, so nested fixture Git spans retain their attribution. This does not restore Swift Testing's assertion context. `GitTestCommandRunner.runAsync` also marks worker execution within its `git.command` span; use those markers, rather than the caller's span entry, to verify where the blocking command ran.
 
-Confirm a successful, nonempty Swift Testing completion summary and the intended test count in the output before reporting a pass. Use `swift test list` with the same toolchain flags from [Tests/Workflow.mk](../Tests/Workflow.mk) to inspect available tests when needed. The command-line runtime can exit early with status zero; the completion wrapper rejects that incomplete run and an empty selection. Test counts describe test functions, including parameterized functions, rather than individual argument cases.
+### Test completion
+
+Confirm a successful, nonempty Swift Testing completion summary and the intended test count in the output before reporting a pass. Use `swift test list` with the same toolchain flags from [Tests/Workflow.mk](../Tests/Workflow.mk) to inspect available tests when needed. The command-line runtime can exit early with status zero; the completion wrapper preserves the runner's exit status and rejects missing or zero-test completion summaries, including unmatched selections. Test counts describe test functions, including parameterized functions, rather than individual argument cases.
 
 Run `git diff --check` for whitespace errors. Follow [README](../README.md#build-check-and-run) for bundling, then verify the signature with `codesign --verify --deep --strict --verbose=2 .build/CodexGUI.app`. These checks do not require a live model turn.
 
@@ -79,11 +81,12 @@ make test FILTER='ApprovalPolicyPopoverTests|ComposerAppearanceTests'
 ```
 
 A custom selection runs through SwiftPM and the completion wrapper in one fresh process with the
-selected `PARALLEL` setting. Inspect its completion summary and count, and quote regular expressions to preserve shell characters.
+selected `PARALLEL` setting. Quote regular expressions to preserve shell characters and apply the
+[test-completion requirements](#test-completion).
 `FILTER` must be nonempty and is supported only by `make test`. Named group commands
 and `make check` reject it; `make check` requires full coverage.
 
-When renaming tests, check that the configured selections still match and cover the intended cases. Inspect executed counts; an unmatched filter is rejected by the completion wrapper. Focused runs add evidence but do not replace full verification. Do not relax assertions to make verification pass. Report failures and baseline comparisons separately.
+When renaming tests, check that the configured selections still match and cover the intended cases. Focused runs add evidence but do not replace full verification. Do not relax assertions to make verification pass. Report failures and baseline comparisons separately.
 
 For synthetic AppKit tests that verify a button's action routing or resulting layout, use [dispatchConfiguredAction](../Tests/CodexGUITests/Support/ControlActionTestSupport.swift) or the enabled control's `sendAction(_:to:)` with its configured action and target. Require that the action exists and dispatch succeeds, and preserve the resulting state and layout assertions. `performClick(_:)` can poll AppKit's native event queue; HIToolbox's wakeup can stop the standard SwiftPM async-main run loop before testing completes. Direct action dispatch does not establish native press animation, pointer tracking or keyboard behavior; keep those acceptance checks in [native QA](native-qa.md).
 

@@ -11,13 +11,11 @@ The executable entry point is `Tests/E2E/MockBackend/qa-backend`. It requires Py
 ./Tests/E2E/MockBackend/qa-backend app-server --stdio
 ```
 
-Run `make test:ui` for automated UI checks or `./scripts/native-qa.sh` for manual inspection. See [native QA](native-qa.md) for workflows and isolation limits.
-
-To select another manual scenario, pass its name as the launcher's second argument, for example `./scripts/native-qa.sh "$PWD/Tests/E2E/MockBackend/qa-backend" backend-error`. Available names are in `Tests/E2E/MockBackend/mock_backend/scenarios/`. The Swift workflow accepts a standalone executable with `--backend`.
+See [native QA](native-qa.md) to launch the app with this backend or run the UI workflow, including backend and scenario selection and isolation limits.
 
 ## Scenarios and isolation
 
-The default scenario is `streaming`.
+The default scenario is `streaming`. Available names are in `Tests/E2E/MockBackend/mock_backend/scenarios/`.
 
 Give each run its own backend process and state file. Use a fresh state file when changing scenarios; prior conversations can persist across reconnects.
 

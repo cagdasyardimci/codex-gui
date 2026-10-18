@@ -4,7 +4,7 @@ These conventions apply to the Swift source and tests.
 
 ## Formatting and tooling
 
-Run `make format` to apply the style. Follow [validation](docs/validation.md#automated-checks) for build and test commands. Install SwiftFormat 0.63.0 or later (`brew install swiftformat`); Python 3 runs the checked-in driver. `.swiftformat` enables only layout rules, avoiding automatic changes to declarations, expressions, or literals. Use the Makefile commands so the supplemental rules also run.
+Run `make format` to apply the style. Follow [validation](docs/validation.md#automated-checks) for build and test commands. Install SwiftFormat with `brew install swiftformat`; its minimum version is declared in [.swiftformat](.swiftformat). Python 3 runs the checked-in driver. The configuration enables only layout rules, avoiding automatic changes to declarations, expressions, or literals. Use the Makefile commands so the supplemental rules also run.
 
 Use tabs for indentation, displayed at four columns, and keep code within 100 columns. Put every opening brace on its own line, including closure braces; place closure parameters or capture lists after that line. Keep fitting single-argument calls compact. Put every argument of a multi-argument call on a separate line, with the closing parenthesis on its own line. Wrap long single-argument calls as needed. Separate creation, styling, configuration, insertion, and other meaningful phases with blank lines; keep related statements together.
 

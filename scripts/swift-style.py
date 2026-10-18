@@ -319,7 +319,7 @@ def main():
     parser.add_argument("paths", nargs="*", help="Swift files or directories")
     options = parser.parse_args()
     if not shutil.which("swiftformat"):
-        parser.error("swiftformat is required (repository version: 0.63.0)")
+        parser.error("swiftformat is required; see .swiftformat for the minimum supported version")
     try:
         files = swift_files(options.paths or [ROOT / "Package.swift", ROOT / "Sources", ROOT / "Tests"])
         # Workers only compute results. Writes and error reporting stay ordered here.

@@ -29,7 +29,7 @@ The application target owns its token catalogues. Change a named input in its ca
 | [ComposerLayout](../Sources/CodexGUI/Features/Conversation/Composer/ComposerLayout.swift) | Footer reflow, measured row-fit requirements and viewport-based editor growth. |
 | [NavigationSidebarLayout](../Sources/CodexGUI/Features/Navigation/NavigationSidebarLayout.swift) | Compensated section-row geometry, heading/icon fit and section-gap compatibility. |
 
-The catalogues and layout helpers describe design inputs and geometry. Native owners retain measurement, constraints, drawing, interaction and appearance callbacks. Pure layout helpers consume measured inputs rather than measuring native views or fonts. Use the source owners below for current values and implementation details; do not maintain a second inventory of dimensions, colors, font weights or control behavior in this guide.
+The catalogues and layout helpers describe design inputs and geometry. Native owners retain measurement, constraints, drawing, interaction and appearance callbacks. Pure layout helpers consume measured inputs rather than measuring native views or fonts. Use the source owners below for current values and implementation details. This guide records shared presentation contracts and rationale rather than duplicating dimensions, color values, font weights or control declarations.
 
 Choose token roles by purpose. Equal numeric values do not imply a shared design rule. Keep derived relationships computed rather than independently editable in consumers. Shape and layout remain separate responsibilities even when a shape depends on a component's configured size. Native metrics, artwork coordinates and operational update tolerances stay with their owners unless they represent shared design decisions. Keep parser quote/list offsets integer-valued until their representation is explicitly changed.
 
@@ -46,8 +46,10 @@ Use the shared color catalogue for semantic color roles. Follow [AppKit conventi
 | Composer placement and shared reading-column alignment | [ConversationViewController](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController.swift) |
 | Composer editor/footer constraints and control reflow | [ComposerSurfaceLayout](../Sources/CodexGUI/Features/Conversation/Composer/ComposerSurfaceLayout.swift), [ComposerToolbarView](../Sources/CodexGUI/Features/Conversation/Composer/ComposerToolbarView.swift) |
 | Permission and model menus | [ApprovalPolicyPopoverView](../Sources/CodexGUI/Features/Conversation/Composer/ApprovalPolicyPopoverView.swift), [ModelEffortPopoverView](../Sources/CodexGUI/Features/Conversation/Composer/ModelEffortPopoverView.swift), [ComposerPopoverPanel](../Sources/CodexGUI/Features/Conversation/Composer/ComposerPopoverPanel.swift) |
+| Task hover cards | [TaskHoverCard](../Sources/CodexGUI/Features/Navigation/TaskHoverCard.swift), [TaskSidebarCellView](../Sources/CodexGUI/Features/Navigation/TaskSidebarCellView.swift) |
 | Sidebar views and artwork | [NavigationViewController](../Sources/CodexGUI/Features/Navigation/NavigationViewController/NavigationViewController.swift), [DesktopBrandWordmark](../Sources/CodexGUI/App/DesktopBrandWordmark.swift) |
 | Shared Markdown text and decorations | [MarkdownAttributedStringRenderer](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownAttributedStringRenderer.swift), [MarkdownLayoutManager](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownLayoutManager.swift) |
+| Link icons and external lookup | [WebLinkFaviconAttachment](../Sources/CodexGUI/Features/Shared/Markdown/WebLinkFaviconAttachment.swift), [WebLinkFaviconLoader](../Sources/CodexGUI/Features/Shared/WebLinkFaviconLoader.swift) |
 | Transcript message containers and user messages | [ConversationCollectionItem](../Sources/CodexGUI/Features/Shared/Transcript/ConversationCollectionItem.swift) |
 | Transcript scrolling and turn navigation | [TranscriptViewController](../Sources/CodexGUI/Features/Shared/Transcript/TranscriptViewController/TranscriptViewController.swift) |
 | Window chrome and native toolbar placement | [WindowChromeViewController](../Sources/CodexGUI/App/WindowLayout/WindowChromeViewController.swift), [NativeWindowButtonAlignment](../Sources/CodexGUI/App/NativeWindowButtonAlignment.swift), [toolbar coordinator](../Sources/CodexGUI/App/MainWindowController/MainWindowController+ToolbarAndPanels.swift) |
@@ -66,6 +68,16 @@ Use the [feature map](../Sources/CodexGUI/Features/README.md) for other presenta
 Composer and project preference controls share effort labels through
 [ModelPreferencePresentation](../Sources/CodexGUI/Features/Shared/ModelPreferencePresentation.swift).
 Their native controls and selection lifecycles remain with their features.
+
+## Conversation and navigation presentation
+
+Hiding the pinned summary releases the inspector pane when it has no detail or tool content. The transcript and composer center within the resulting conversation pane at their existing reading width. Content visibility does not overwrite saved inspector visibility or detail width; an expanded conversation keeps its containing pane and releases only its summary aside.
+
+Task hover cards use a preferred width clamped to the available screen. Titles and project names wrap within bounded lines, and card height follows the content. Computer and time metadata remain beside the first title line. The passive child panel does not take focus and dismisses when the row or window loses its hover context. The hover card owners above retain sizing, positioning and dismissal details.
+
+Conversation transcript Markdown and turn navigation previews highlight HTTP(S) links and show an inline site icon. Bare URLs in prose are links; inline and fenced code remain literal. Loading a site icon sends the site's host to Google's favicon service, allowing restricted redirects to its image host. If the response is unavailable or unusable, the system LinkPresentation API requests metadata for the site's origin. These lookups use the host or origin rather than the link's full path. A globe appears when no icon is available, and dark monochrome icons are tinted white in dark appearance. Local and file links retain their file presentation. The link icon owners above retain request validation, resource limits and caching.
+
+## File viewers
 
 The file viewer places its breadcrumb and capsule actions in a row spanning both panes.
 The navigator's folder header and filename filter sit beneath that row; directory rows
@@ -114,9 +126,9 @@ Escape closes either sheet and restores prior focus. Reference geometry and ligh
 measured from the supplied screenshot; point conversion and font identity are inferred. Dark
 appearance uses the native application's adaptive palette rather than an unobserved reference.
 `ViewerNavigatorSplitView` owns both viewers' pane layout, divider hit area and resize cursor,
-dragging, clamping, width restoration and visibility. Both start at 241 points, allow desired
-navigator widths of 120–360 points and reserve 160 points for the document. The actual width
-shrinks further when space requires it; growing the pane restores the desired width. Hiding
+dragging, clamping, width restoration and visibility. Desired navigator widths stay within
+the shared navigator's supported bounds while reserving space for the document. The actual width shrinks further
+when space requires it; growing the pane restores the desired width. Hiding
 releases the navigator and divider width completely. `ViewerNavigatorTransition` owns animation,
 cancellation and reduced-motion behavior within that container.
 `ViewerFileNavigatorView` supplies the common filter/scroll layout and autohiding scroll bars;
@@ -124,7 +136,7 @@ Files adds its root chooser and filter status through its header slots.
 `ViewerFileTreeView` is the native outline control used by both viewers. It owns row construction,
 disclosure, single/double activation, parent/child keyboard traversal and context-menu targeting.
 Adapters supply stable rows and children, including Files' lazy loading and Git's captured hierarchy.
-`ViewerFileTreeRow` owns both navigators' 28-point rows, 16-point depth increments,
+`ViewerFileTreeRow` owns both navigators' row geometry, depth indentation,
 shared disclosure/icon column, indentation guides, trailing name truncation and full-path
 tooltips. `ViewerFileTreeSelectionRow` draws the same outlined selection while retaining
 normal label colors. File rows expose captured file actions through their context menus.

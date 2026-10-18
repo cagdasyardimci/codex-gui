@@ -17,7 +17,7 @@ The app uses AppKit and connects to your installed Codex CLI through `codex app-
 ## Requirements
 
 - **macOS 14 or later.**
-- **Apple Command Line Tools and Swift 6.2 or later.** Swift Markdown 0.9.0 requires this Swift version.
+- **Apple Command Line Tools and Swift 6.2 or later.** The selected Swift Markdown dependency requires this Swift version.
 - **A Swift toolchain with SwiftPM** for app bundling. The bundle script uses the toolchain's default build system for both building and locating the executable. Apple Swift 6.3.1 defaults to the native SwiftPM backend; the package retains macOS 14 as its minimum deployment target.
 - **An installed Codex CLI** that meets the [compatibility policy](docs/cli-compatibility.md#current-policy). That guide also covers executable selection and version verification.
 - **A Codex account** signed in through the CLI or the app.
@@ -148,26 +148,18 @@ Drafts and unresolved command identities are stored per project and chat in `Use
 
 Start agent work at [AGENTS.md](AGENTS.md). The [documentation map](docs/agent-workflow.md#documentation-map) identifies the owning guide for each topic.
 
-| Guide | What it covers |
-| --- | --- |
-| [Conventions](CONVENTIONS.md) | Formatting, file placement, and code ownership |
-| [Architecture](docs/architecture.md) | State and execution contracts |
-| [Validation](docs/validation.md) | Automated checks and acceptance requirements |
-| [Native QA](docs/native-qa.md) | Isolated synthetic app preparation and interaction checks |
-| [CLI compatibility](docs/cli-compatibility.md) | Backend version assessment |
-
 ## Interface dependencies
 
-Dependency versions are pinned. The app bundle includes license and notice files for the rendering libraries under `Contents/Resources/ThirdPartyLicenses`.
+Dependency versions and the icon-port revision are pinned in [Package.swift](Package.swift). The app bundle includes license and notice files for the rendering libraries under `Contents/Resources/ThirdPartyLicenses`.
 
-| Dependency | Purpose | Version and license |
+| Dependency | Purpose | License and notices |
 | --- | --- | --- |
 | [DiceBear Gaze Geometric](https://www.dicebear.com/styles/gaze/presets/) | Subagent avatars | CC0 1.0; static SVGs bundled for offline use |
-| [Apps SDK UI Swift port](https://github.com/Pmen225/apps-sdk-ui-swift) | Interface icons | Commit `07cd708b3670948155d913f863ed4f0d8529ab2e`; MIT |
-| [Swift Markdown](https://github.com/swiftlang/swift-markdown) | Markdown parsing, with its Swift cmark dependency | 0.9.0; Apache 2.0 with the Runtime Library Exception |
-| [HighlighterSwift](https://github.com/smittytone/HighlighterSwift) | Code coloring | 3.1.0; MIT, with BSD 3-Clause Highlight.js assets |
-| [SwiftMath](https://github.com/mgriebling/SwiftMath) | Display math | 1.7.3; MIT, with separate math-font notices |
-| [swift-mermaid](https://github.com/Australware/swift-mermaid) | Native flowchart layout | 0.3.0; MIT, including its vendored MermaidLayoutDagre notice |
+| [Apps SDK UI Swift port](https://github.com/Pmen225/apps-sdk-ui-swift) | Interface icons | MIT |
+| [Swift Markdown](https://github.com/swiftlang/swift-markdown) | Markdown parsing, with its Swift cmark dependency | Apache 2.0 with the Runtime Library Exception |
+| [HighlighterSwift](https://github.com/smittytone/HighlighterSwift) | Code coloring | MIT, with BSD 3-Clause Highlight.js assets |
+| [SwiftMath](https://github.com/mgriebling/SwiftMath) | Display math | MIT, with separate math-font notices |
+| [swift-mermaid](https://github.com/Australware/swift-mermaid) | Native flowchart layout | MIT, including its vendored MermaidLayoutDagre notice |
 
 The [avatar notice](Sources/CodexGUI/Resources/SubagentAvatars/NOTICE.txt) credits DiceBear and identifies the artwork license. No DiceBear service or runtime library is required.
 

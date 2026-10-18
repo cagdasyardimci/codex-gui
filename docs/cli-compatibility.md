@@ -14,9 +14,11 @@ The app sends `experimentalApi: true` in `initialize` because it uses methods an
 
 Backend details stay in memory for the current process connection and are limited to the latest 8 KiB of stderr. The display redacts common API-key and token forms, including named credential assignments, Bearer values, and `sk-`-prefixed keys. Redaction is pattern-based and cannot identify every possible secret format. Quoted assignment values can contain spaces, but unnamed secrets, unquoted multi-word values, and truncated or unusual encodings may remain visible. Review the report before copying or sharing it.
 
-Conversation management uses `thread/list` with its `archived` filter, `thread/name/set`, `thread/archive`, and `thread/unarchive`. Chat-list filtering searches loaded titles and previews. Message search separately searches loaded conversation content and can fetch more history. Neither uses the experimental server-side `thread/search` method. Unsupported management requests surface their backend error in the app.
+Conversation management requests, listing validation and pagination are implemented in [AppServer requests](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Requests.swift). Chat-list filtering searches loaded titles and previews. Message search separately searches loaded conversation content and can fetch more history. Neither uses the experimental server-side `thread/search` method. Unsupported management requests surface their backend error in the app.
 
-Conversation listing keeps the first occurrence of each thread ID in backend page order, including when pages overlap. Different thread IDs remain separate tasks even when their titles match. Every returned row is validated before duplicate IDs are removed.
+Overlapping list pages preserve backend order and retain the first occurrence of each thread ID.
+Every returned row is validated before duplicate IDs are removed, so a repeated ID cannot hide
+invalid data.
 
 CLI version probing has a 10-second deadline and runs away from the main actor. A stalled or continuously writing `--version` child cannot leave the interface waiting indefinitely.
 

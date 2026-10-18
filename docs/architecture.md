@@ -30,7 +30,7 @@ until acknowledgement; accepted references become durable before their stored dr
 
 Source selections and code previews share logical lines in UTF-16 coordinates. LF, CRLF, CR, U+2028 and U+2029 each end one line; CRLF counts once, and a terminal separator retains an empty final document line. Selected code excerpts preserve their original separators and blank source lines within inclusive line bounds. Omitting the final selected line's terminator does not remove selected leading or trailing blank lines. Outgoing descriptions use LF between numbered lines. A missing first line defaults to 1, and a missing last line is derived from the first line and excerpt line count; explicitly supplied bounds are preserved.
 
-Execution ownership is independent of the displayed conversation. Results must match their pending operation, owner and connection generation. Selecting another chat does not transfer an active turn, approval, command result, draft or deferred callback. Full Access confirmation retains its requesting workspace and callback: unmodified Return or keypad Enter confirms, and Escape cancels.
+Execution ownership is independent of the displayed conversation. Results must match their pending operation, owner and connection generation. Selecting another chat does not transfer an active turn, approval, command result, draft or deferred callback. Deferred composer command dialogs capture the draft and attachments and reject results after either changes. Full Access confirmation retains its requesting workspace and callback: unmodified Return or keypad Enter confirms, and Escape cancels.
 
 `ExecutionRegistry` retains one execution value per ordinary conversation. An anonymous submission uses its draft lifetime until preparation assigns a thread ID. `WorkspaceExecutionScope` routes captured requests and backend thread/turn events through the existing reducers. Its temporary reduction scope is restored before publication; `WorkspaceModel.execution` then projects the selected conversation. Aggregate lifecycle checks inspect every registry entry rather than that selected projection.
 
@@ -48,13 +48,9 @@ Shared persistence preserves existing project/thread keys and ordering. Task pin
 
 Task-management controls evaluate the captured target conversation's execution eligibility, and
 reducers revalidate that target when a deferred action is accepted. Workspace-wide submission and
-recovery barriers still apply.
-
-Execution chrome and navigation retain the same outcome uncertainty; an unresolved outcome is not
-presented as a confirmed failure.
-
-Accepted turn-status aliases share one lifecycle interpretation for live reduction, recovery, labels
-and elapsed-time refresh.
+recovery barriers still apply. Execution chrome and navigation retain the same outcome uncertainty;
+an unresolved outcome is not presented as a confirmed failure. Accepted turn-status aliases share
+one lifecycle interpretation for live reduction, recovery, labels and elapsed-time refresh.
 
 AppKit callbacks dispatch captured `WorkspaceIntentTarget` intents and render narrow read-only presentations. `WorkspaceEligibility` shares capability rules between selectors and reducers, with admission checked again when an intent is reduced. Publication is coalesced while all accepted backend events are processed in order. Transcript preparation runs asynchronously and superseded renders are cancelled without changing AppKit's ownership of focus and scrolling.
 
@@ -63,16 +59,42 @@ AppKit callbacks dispatch captured `WorkspaceIntentTarget` intents and render na
 submission transitions and display selectors consume that same policy; protocol JSON validation
 remains in `CodexClient/AutomaticTitleResponse`.
 
-Conversation display titles prefer a nonblank thread name, then normalized request text from the preview, then the checkout path, then "New chat". Complete generated attachment envelopes are validated with the shared user-message parser and excluded from display titles; ordinary or incomplete text stays literal. Presentation does not modify stored names, previews or history. Task hover cards limit title and project text to three and two lines respectively, truncate overflow and stay within the visible screen.
+Conversation display titles prefer a nonblank thread name, then normalized request text from the preview, then the checkout path, then "New chat". Complete generated attachment envelopes are validated with the shared user-message parser and excluded from display titles; ordinary or incomplete text stays literal. Presentation does not modify stored names, previews or history. Thread IDs identify tasks; matching titles never merge distinct conversations. Hover-card presentation follows [interface styling](interface-styling.md#conversation-and-navigation-presentation).
 
 Authoritative name updates refresh both live and retained pinned summaries, including persisted
 pins. Message search uses the same display-title policy. Its searchable histories, loaded coverage
 and load-more eligibility derive from the same listed thread IDs; cached off-list history cannot
 stand in for an unloaded listed conversation.
 
-Feature placement follows the [feature map](../Sources/CodexGUI/Features/README.md). Terminal invocations remain transcript activity and are excluded from the canonical Sources inventory. Source counts, summary and tab presentation must agree. Both Sources and transcript attachments use `Features/Shared/SourceThumbnailLoader`. The shared actor bounds input decoding, prepares pixels off the main actor and reuses decoded thumbnails. `CodexClient/InlineImageData` handles inline payload identification and bounded decoding; `Application/Services/LocalAttachmentURL` resolves local paths and file URLs. The thumbnail `NSCache` is configured for 64 entries and 16 MiB of estimated pixel/key cost, separate from workspace content residency. File reads and decoded inline payloads are bounded to 32 MiB; Sources request 80-pixel thumbnails and model-response images request up to 800 pixels within a per-message budget. Expanded previews initially decode up to 2048 pixels and request sharper pixels as zoom requires, capped at 8192 pixels on the longest edge. Original dimensions retain image orientation for zoom geometry. Composer and transcript attachment tiles use shared centered aspect-fill drawing: preserve the image proportions, fill the square and clip overflow equally on opposite edges. AppKit views retain generation checks and cancellation on reuse.
+Feature placement follows the [feature map](../Sources/CodexGUI/Features/README.md). Terminal
+invocations remain transcript activity and are excluded from the canonical Sources inventory.
+Source counts, summary and tab presentation must agree. Sources and transcript attachments use
+[SourceThumbnailLoader](../Sources/CodexGUI/Features/Shared/SourceThumbnailLoader.swift) for bounded
+decoding off the main actor and thumbnail reuse. Its cache is separate from workspace content
+residency. `CodexClient/InlineImageData` handles inline payload identification and bounded decoding;
+`Application/Services/LocalAttachmentURL` resolves local paths and file URLs. Reads of image files and
+decoded inline image payloads are bounded to 32 MiB. Thumbnail sizes and cache costs remain with their source
+owners. Expanded previews request sharper pixels as zoom requires within the loader's limits;
+original dimensions retain image orientation for zoom geometry. Composer and transcript attachment
+tiles use shared centered aspect-fill drawing: preserve image proportions, fill the square and clip
+overflow equally on opposite edges. AppKit views retain generation checks and cancellation on reuse.
 
-Composer attachments, transcript attachments and viewed-image activity use the shared `ExpandedImagePreview` coordinator and `ExpandedImageViewController` in `Features/Shared`. The viewer overlays the parent window content with a native within-window blur beneath a separate dimming layer. The image and header controls remain above these backdrop layers. It fits the full image and offers percentage zoom, Actual Size, pinch magnification and scrolling. Fit centers the complete image within a viewport inset 68 points on each side, below the header and above an 82-point bottom reserve. Fit uses the smaller of the available-width/original-width and available-height/original-height ratios, capped at 100%. Width-limited images share the available width; height-limited images share the available height. Image proportions and centering are preserved. Resizing recalculates Fit, while explicit percentage zoom remains unchanged. Actual Size (100%) maps an original image pixel to one layout point; sharper decoding accounts for the screen backing scale. Close and Escape dismiss the viewer and restore the prior responder when it still belongs to the parent window. Replacing its attachment or activity owner, detaching its originating view or closing the window cancels pending loading and dismisses the overlay. Underlying content siblings are temporarily hidden from assistive technology, with their original accessibility visibility restored on dismissal. Inline payloads remain in memory; previewing them does not create a file. The viewer has no external-open, download or image-editing controls.
+Composer attachments, transcript attachments and viewed-image activity use the shared
+`ExpandedImagePreview` coordinator and
+[ExpandedImageViewController](../Sources/CodexGUI/Features/Shared/ExpandedImageViewController.swift).
+The viewer overlays the parent window content with a native within-window blur beneath a separate
+dimming layer. The image and header controls remain above these backdrop layers. It offers Fit,
+percentage zoom, Actual Size, pinch magnification and scrolling. Fit centers the complete image
+within the available viewport, preserves its proportions and avoids enlarging it beyond Actual Size.
+The viewer owns fit geometry and control insets. Resizing recalculates Fit, while explicit percentage
+zoom remains unchanged. Actual Size (100%) maps an original image pixel to one layout point;
+sharper decoding accounts for screen backing scale. Close and Escape dismiss the viewer and restore
+the prior responder when it still belongs to the parent window. Replacing its attachment or activity
+owner, detaching its originating view or closing the window cancels pending loading and dismisses
+the overlay. Underlying content siblings are temporarily hidden from assistive technology, with
+their original accessibility visibility restored on dismissal. Inline payloads remain in memory;
+previewing them does not create a file. The viewer has no external-open, download or image-editing
+controls.
 
 Markdown presentation belongs to `Features/Shared/Markdown`, used by transcript messages, Git
 comparisons and workspace file previews. It owns parsing, native text and decoration rendering,
@@ -85,9 +107,10 @@ turn-preview adapters and application state retains content residency. Changes o
 loading, cancellation and preview containers. Each consumer
 retains its own sizing, scrolling and appearance-refresh lifecycle. Rendering caches and resource
 limits stay with the shared renderer; feature content caches stay with their feature.
-Markdown image preparation admits at most 32 unique paths in source order before decoding,
-with requested thumbnail dimensions bounded by a shared 1.9-million-pixel budget. Images beyond
-that preparation budget retain the renderer's source fallback.
+[MarkdownImagePreparation](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownImagePreparation.swift)
+admits a bounded set of unique paths in source order before decoding and shares a pixel budget
+across their requested thumbnail dimensions. Images beyond that budget retain the renderer's source
+fallback; the preparation owner defines the current limits.
 
 Files owns workspace directory browsing, document presentation and its navigator and search
 surfaces. Its controller-facing runtime keeps document state separate from native focus, reading
@@ -100,16 +123,11 @@ Rendered Markdown is read-only; source editing uses the same current document te
 export actions.
 
 Code selection reads contained UTF-8 files off the main actor with a 500,000-byte limit and
-revalidates its captured selection before presentation.
-
-Submission accepts captured absolute or project-relative file references, validates their resolved
-project containment, and emits relative context descriptions with absolute backend mentions.
-
-Shared file capabilities govern source and rich-preview controls; SVG retains editable, searchable
-source alongside its preview.
-
-GitHub opening uses the captured file's repository-relative path even when the Files browser starts
-in a subfolder.
+revalidates its captured selection before presentation. Submission accepts captured absolute or
+project-relative file references, validates their resolved project containment, and emits relative
+context descriptions with absolute backend mentions. Shared file capabilities govern source and
+rich-preview controls; SVG retains editable, searchable source alongside its preview. GitHub opening
+uses the captured file's repository-relative path even when the Files browser starts in a subfolder.
 
 Find routes to Files only when keyboard focus belongs to the visible Files view; source text
 uses the native find bar. Closing a selected file chooses the next surviving tab to its right,
@@ -140,9 +158,25 @@ and live task controls; Subagents retains history loading, agent metadata and re
 Both consumers route transcript actions through their own callbacks. History marked in progress
 does not supply live execution evidence for elapsed timers.
 
-Markdown images in message bodies resolve only local paths, local file URLs and bounded inline image data. Preparation decodes thumbnails off the main actor through `SourceThumbnailLoader`; remote and unavailable images retain readable source text. Consecutive image-only paragraphs form a source-backed native gallery of rounded, bordered cards. Cards retain each image's original aspect ratio, fit within 160 points of height and 425 points of width, and wrap to the next row when they cannot fit beside the preceding card. Clicking a gallery image opens that image in the shared expanded preview, which closes when its text view changes owner or detaches. The gallery's Markdown remains available to selection copy and accessibility help. The thumbnail cache and per-message rich-image budget bound decoded image retention.
+Markdown images in message bodies resolve only local paths, local file URLs and bounded inline
+image data. Preparation decodes thumbnails off the main actor through `SourceThumbnailLoader`;
+remote and unavailable images retain readable source text. Consecutive image-only paragraphs form
+a source-backed native gallery of rounded, bordered cards. Cards retain each image's original aspect
+ratio and wrap when they cannot fit beside the preceding card.
+[MarkdownImageGalleryAttachment](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownImageGalleryAttachment.swift)
+owns their size constraints and layout. Clicking a gallery image opens the shared expanded preview,
+which closes when its text view changes owner or detaches. The gallery's Markdown remains available
+to selection copy and accessibility help. The thumbnail cache and per-message rich-image budget
+bound decoded image retention.
 
-Pure reported-patch composition belongs to `Application/Reducers/Review/ConversationNetFileChanges`. `ConversationNetFileChangePreparation` prepares those results off the main actor and retains exact inputs and outputs for reuse within the same transcript context. Its reusable cache defaults to 256 entries and 8 MiB. `TranscriptPreparationCoordinator` publishes prepared text, navigation summaries and net file changes together only for the accepted render generation. Current resident content can produce results larger than the reusable cache budget; those results are available to the current render without entering that cache. Folded completed work defers hidden message preparation until disclosure or navigation reveals it.
+Pure reported-patch composition belongs to `Application/Reducers/Review/ConversationNetFileChanges`.
+[ConversationNetFileChangePreparation](../Sources/CodexGUI/Features/Shared/Transcript/ConversationNetFileChangePreparation.swift)
+prepares those results off the main actor and owns bounded reuse of exact inputs and outputs within
+the same transcript context. `TranscriptPreparationCoordinator` publishes prepared text, navigation
+summaries and net file changes together only for the accepted render generation. Current resident
+content can produce results larger than the reusable cache budget; those results remain available
+to the current render without entering that cache. Folded completed work defers hidden message
+preparation until disclosure or navigation reveals it.
 
 New local user rows appear synchronously with literal text while rich preparation runs. This
 provisional render retains already displayed entries from the same transcript context and never
@@ -150,17 +184,12 @@ carries entries across chats. The accepted prepared generation replaces the prov
 through the existing row, selection and scrolling update path.
 
 Prepared transcript content and change detection preserve exact UTF-8 source identity, including
-canonically equivalent spellings with different source ranges.
-
-Local image dependencies consult the shared thumbnail loader's freshness metadata on subsequent
-render generations; immutable inline image data and ordinary text retain reusable prepared-content
-caching.
-
-Parser-derived link ranges remain authoritative in Markdown previews, including literal URLs in
-code.
-
-Installing or replacing rendered Markdown refreshes accessibility text and favicon loading within
-its existing appearance and ownership lifecycle.
+canonically equivalent spellings with different source ranges. Local image dependencies consult
+the shared thumbnail loader's freshness metadata on subsequent render generations; immutable inline
+image data and ordinary text retain reusable prepared-content caching. Parser-derived link ranges
+remain authoritative in Markdown previews, including literal URLs in code. Installing or replacing
+rendered Markdown refreshes accessibility text and favicon loading within its existing appearance
+and ownership lifecycle.
 
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and [validation](validation.md) for verification commands and acceptance limits.
 
@@ -195,10 +224,9 @@ payload accounting. Sources consumes those prepared values without retaining ano
 inventory or repeating formatting during view updates.
 
 User-message bodies, images, Sources and previews share validated wire and generated-envelope
-references, deduplicated without hiding malformed ordinary text.
-
-Recorded tool results retain a bounded display of supported resource and media content and a bounded
-fallback for other payloads; empty candidates cannot hide a later recorded result or error message.
+references, deduplicated without hiding malformed ordinary text. Recorded tool results retain a
+bounded display of supported resource and media content and a bounded fallback for other payloads;
+empty candidates cannot hide a later recorded result or error message.
 
 Sources owns its media preview coordinator within the feature. The coordinator owns request
 identity, cancellation and rejection of obsolete results, including interrupted requests that
@@ -248,33 +276,22 @@ includes its own reported edits.
 
 Exact composition represents a creation at its final destination and a deletion at its original
 path, without rename metadata for a path absent on either side. A temporary creation that is later
-deleted contributes no net change.
-
-Snapshot acceptance retains the complete comparison metadata when reusing its display identity,
-including the fallback distinction that disables apply commands.
+deleted contributes no net change. Snapshot acceptance retains the complete comparison metadata
+when reusing its display identity, including the fallback distinction that disables apply commands.
 
 Last Turn covers reported edits only. Arbitrary shell writes and subagent edits not reported under the selected task's turn are excluded and disclosed in the UI. Child-thread identity alone does not prove which parent turn owns an edit; the client does not infer that relationship from a shared directory, filenames or activity timing. Complete coverage requires backend write attribution or isolated task checkouts. Repository comparison scopes such as Uncommitted retain checkout-wide semantics. The recorded turn identity does not retain a separate unbounded patch cache.
 
 ## Conversation content residency
 
-`ConversationCachePolicy` in `Application/State/` owns the shared residency defaults and payload
+[ConversationCachePolicy](../Sources/CodexGUI/Application/State/ConversationCachePolicy.swift)
+owns the shared residency defaults and payload
 cost estimates used by protocol pagination, runtime and reducers. `ConversationViewport` is a
 separate state value published by transcript views and consumed by runtime and reducers; it does
 not own native scrolling. Cache transitions and eviction decisions remain with the conversation
-reducers. The defaults used by the backend and conversation UI are:
+reducers. Pagination, reading-neighborhood, retained-content, compact-preview and hover-reuse limits
+stay in that policy so backend and UI consumers share the same configuration.
 
-| Resource | Limit |
-| --- | --- |
-| Initial and older full-content pages | 25 turns |
-| Hover and unloaded navigation debounce | 75 ms |
-| Reading neighborhood | 25 known references around the viewport anchor |
-| Retained full turns | 75 per chat |
-| Shared content payload budget | 32 MiB per workspace store, across its chats |
-| Compact previews | 200 entries and 1 MiB per workspace store |
-| Hover-only full bodies | 3 entries, 2 MiB shared, 15-second reuse lifetime |
-| Hover backend traversal | First and last item pages, at most 100 items each |
-
-These byte costs estimate decoded textual payload and retained entry bodies, not total process memory or AppKit attributed strings, images and layout overhead. Visible turns, the reading anchor, the pending jump target and a live execution turn are protected. Protected oversized content may exceed the budget; background neighborhood fetching then pauses. Hover-only bodies are discarded before transcript content. Unprotected full turns and compact previews use least-recently-used eviction.
+Payload costs estimate decoded textual payload and retained entry bodies, not total process memory or AppKit attributed strings, images and layout overhead. Visible turns, the reading anchor, the pending jump target and a live execution turn are protected. Protected oversized content may exceed the budget; background neighborhood fetching then pauses. Hover-only bodies are discarded before transcript content. Unprotected full turns and compact previews use least-recently-used eviction.
 
 Viewport publication is debounced and scoped to the presentation owner. Neighbor reads run serially and queued targets follow the current anchor. Foreground navigation supersedes background neighborhood reads; the runner retains at most one local read in each role (navigation, preview, neighborhood). Preview reads do not change transcript entries or reading position. A click promotes an existing preview fetch; incomplete boundary-page previews require a subsequent full-content read before navigation.
 

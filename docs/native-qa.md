@@ -2,11 +2,19 @@
 
 Run `./scripts/native-qa.sh` for manual inspection with the bundled, model-free [mock backend](mock-backend.md). Open the printed temporary project with **Open Project…**. You may pass an absolute backend executable as the first argument and a scenario name as the second. Verify which backend the QA app uses when another app instance is open.
 
+For example, launch the bundled backend's `backend-error` scenario from the repository root:
+
+```sh
+./scripts/native-qa.sh "$PWD/Tests/E2E/MockBackend/qa-backend" backend-error
+```
+
+See [mock-backend scenarios and isolation](mock-backend.md#scenarios-and-isolation) for available scenarios and backend state reuse.
+
 ## Manual preparation and isolation
 
 The QA copy keeps the main app's signature and bundle identifier. With a consistent Apple Development certificate, compatible builds can retain macOS permission grants; ad hoc signing may require approval again after rebuilds. See [signing setup](../README.md#signing-setup) for certificate selection and the certificate-free fallback. Those grants remain under the user's control; notification banner delivery requires native observation.
 
-Manual QA uses temporary task workspaces and backend state, but standard preferences and default application-support stores remain shared with normal app launches. The launcher builds in this checkout's `.build` directory; coordinate other builds using it.
+Manual QA uses temporary task workspaces and backend state, but standard preferences and default application-support stores remain shared with normal app launches. The launcher builds in this checkout's `.build` directory; follow the [build coordination safeguards](validation.md#automated-checks).
 
 ## Xcode launched-app workflow
 
@@ -26,11 +34,11 @@ from the repository root:
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run --package-path Tests/E2E E2EWorkflow --help
 ```
 
-The `--help` output lists available options.
+The `--help` output lists available options, including `--backend` for a standalone backend executable.
 
 Use full Xcode with its license and first-run setup complete. Run on an unlocked interactive desktop without competing input. The UI runner needs development signing and may require macOS UI-testing or Automation permission. The workflow does not change global `xcode-select`.
 
-Coordinate other builds using this checkout and keep the source stable throughout a batch. Repetitions use separate runtime and preference state; retain every failure for review.
+Follow [validation](validation.md#automated-checks) for build coordination and source stability throughout a batch. Repetitions use separate runtime and preference state; retain every failure for review.
 
 Unlike manual QA, each automated run isolates default task workspaces, application-support files and preferences.
 

@@ -29,11 +29,15 @@ Only an initial `/name` token is a command; leading spaces and tabs are allowed.
 | `/diff` | Open the selected chat's Changes panel, which displays reported changes and the chosen review turn. |
 | `/copy` | Copy the latest nonempty assistant response in the viewed chat. |
 
-`/fork` copies conversation history; it creates no Git branch or worktree and does not start a model turn. Managed task checkouts remain bound to their chat, so fork and new-chat actions require selecting the source checkout. Archived chats and pending or uncertain operations restrict chat-changing commands. Local dialogs capture their original checkout, chat, generation, draft and attachments; a stale result cannot apply to a replacement selection or edited draft.
+`/fork` copies conversation history; it creates no Git branch or worktree and does not start a model turn. Managed task checkouts remain bound to their chat, so fork and new-chat actions require selecting the source checkout. Archived chats and pending or uncertain operations restrict chat-changing commands. Shared ownership, recovery and command cleanup barriers follow [architecture](architecture.md#ownership-and-recovery); deferred dialogs follow the [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility).
 
-Fast mode requires a service tier advertised by the selected model's catalog. The app recognizes the advertised priority tier or a tier identified/named Fast, captures that tier's actual ID, and sends that ID. It does not invent a priority tier. Switching to an unsupported model while fast mode is enabled blocks Send until fast mode is disabled.
+Fast mode requires a service tier advertised by the selected model's catalog and sends that tier's actual ID. [FastModeAvailability](../Sources/CodexGUI/Application/Reducers/Preferences/FastModeAvailability.swift) owns tier selection. Switching to an unsupported model while fast mode is enabled blocks Send until fast mode is disabled.
 
-Compaction's `{}` reply acknowledges the request, rather than proving completion. Review and compaction may publish lifecycle events before their replies. Pending commands and independently running shell commands continue to protect execution, cleanup and quit until their own outcomes are known. An uncertain plan update needs a matching settings event or an acknowledged explicit reapply; conversation read/resume responses do not report collaboration mode. After reconnecting, `/plan` presents **Reapply Plan**, **Reset Default** and **Cancel**. Last-request input and cumulative conversation usage are token counts, not current context occupancy. Occupancy is labeled **not reported**, and absent server values remain unavailable.
+Compaction's `{}` reply acknowledges the request, rather than proving completion. Review and compaction may publish lifecycle events before their replies.
+
+An uncertain plan update needs a matching settings event or an acknowledged explicit reapply; conversation read/resume responses do not report collaboration mode. After reconnecting, `/plan` presents **Reapply Plan**, **Reset Default** and **Cancel**.
+
+Last-request input and cumulative conversation usage are token counts, not current context occupancy. Occupancy is labeled **not reported**, and absent server values remain unavailable.
 
 ## Validation routing
 
