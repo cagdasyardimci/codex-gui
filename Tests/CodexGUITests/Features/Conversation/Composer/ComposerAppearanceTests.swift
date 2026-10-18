@@ -278,6 +278,53 @@ struct ComposerAppearanceTests
 		}
 	}
 
+	@Test func releasingShownPopoverRetiresItsOwnedPanelAndPresentation() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let window = makeWindow()
+			defer
+			{
+				window.close()
+			}
+			let anchor = NSView(frame: NSRect(
+				x: 20,
+				y: 20,
+				width: 80,
+				height: 30
+			))
+			try #require(window.contentView).addSubview(anchor)
+			let content = NSViewController()
+			content.view = NSView()
+			content.preferredContentSize = NSSize(
+				width: 100,
+				height: 60
+			)
+			var presentations: [Bool] = []
+			var popover: ComposerPopoverPanel? =
+				ComposerPopoverPanel(contentViewController: content)
+			popover?.preservesParentKeyboardFocus = true
+			popover?.onPresentationChange =
+			{
+				presentations.append($0)
+			}
+			popover?.show(
+				relativeTo: anchor.bounds,
+				of: anchor
+			)
+			let panel = try #require(content.view.window)
+			try #require(popover?.isShown == true && panel.parent === window)
+			weak var releasedPopover = popover
+			popover = nil
+			#expect(releasedPopover == nil)
+			#expect(panel.parent == nil && !panel.isVisible)
+			#expect(window.childWindows?.contains(panel) != true)
+			#expect(presentations == [true, false])
+		}
+	}
+
 	private func descendants(_ view: NSView) -> [NSView]
 	{
 		view.subviews.flatMap

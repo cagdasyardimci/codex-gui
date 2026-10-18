@@ -106,12 +106,14 @@ final class ModelPickerListView: NSView
 			row.onHover =
 			{
 				[weak self, weak row] in
-				self?.rows.filter
+				guard let self
+				else
 				{
-					$0 !== row
-				}.forEach
+					return
+				}
+				for other in self.rows where other !== row
 				{
-					$0.clearHover()
+					other.clearHover()
 				}
 			}
 			stack.addArrangedSubview(row)
@@ -179,6 +181,11 @@ final class ModelPickerListView: NSView
 
 	@objc private func selectRow(_ row: ModelPickerRow)
 	{
+		guard row.superview === stack
+		else
+		{
+			return
+		}
 		onSelect?(row.choice.id)
 	}
 }
@@ -287,6 +294,11 @@ final class ModelPickerRow: NSButton
 	}
 	func clearHover()
 	{
+		guard hovered
+		else
+		{
+			return
+		}
 		hovered = false
 		needsDisplay = true
 	}

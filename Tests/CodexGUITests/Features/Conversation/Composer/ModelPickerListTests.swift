@@ -169,6 +169,60 @@ struct ModelPickerListTests
 		#expect(!picker.isShowingModelList)
 	}
 
+	@Test func movingHoverInvalidatesOnlyThePreviouslyHoveredRowAndDestination() throws
+	{
+		_ = NSApplication.shared
+		let list = ModelPickerListView()
+		list.render(
+			choices: (0 ..< 20).map
+			{
+				ModelPickerChoice(
+					id: "model-\($0)",
+					title: "Model \($0)"
+				)
+			},
+			selectedID: nil
+		)
+		let event = try #require(NSEvent.enterExitEvent(
+			with: .mouseEntered,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: 0,
+			context: nil,
+			eventNumber: 0,
+			trackingNumber: 0,
+			userData: nil
+		))
+		for row in list.rows
+		{
+			row.needsDisplay = false
+		}
+		list.rows[3].mouseEntered(with: event)
+		#expect(list.rows.indices.filter
+		{
+			list.rows[$0].needsDisplay
+		} == [3])
+		for row in list.rows
+		{
+			row.needsDisplay = false
+		}
+		list.rows[12].mouseEntered(with: event)
+		#expect(list.rows.indices.filter
+		{
+			list.rows[$0].needsDisplay
+		} == [3, 12])
+		for row in list.rows
+		{
+			row.needsDisplay = false
+		}
+		list.rows[3].clearHover()
+		#expect(list.rows.allSatisfy
+		{
+			!$0.needsDisplay
+		})
+	}
+
 	private func makeWindow(_ controller: NSViewController) throws -> NSWindow
 	{
 		let visible = try #require(NSScreen.main).visibleFrame

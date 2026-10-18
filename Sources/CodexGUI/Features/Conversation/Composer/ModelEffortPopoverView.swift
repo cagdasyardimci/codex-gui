@@ -74,8 +74,13 @@ final class ModelEffortPopoverView: NSViewController
 		modelList.onSelect =
 		{
 			[weak self] modelID in
-			self?.onSelectModel?(modelID)
-			self?.setModelListVisible(false)
+			guard let self, self.isShowingModelList
+			else
+			{
+				return
+			}
+			self.onSelectModel?(modelID)
+			self.setModelListVisible(false)
 		}
 		view = surface
 		observeVisibilityChanges()

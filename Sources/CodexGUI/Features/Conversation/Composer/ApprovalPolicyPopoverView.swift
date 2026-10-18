@@ -61,12 +61,14 @@ final class ApprovalPolicyPopoverView: NSViewController
 			row.onHover =
 			{
 				[weak self] hoveredRow in
-				self?.rows.filter
+				guard let self
+				else
 				{
-					$0 !== hoveredRow
-				}.forEach
+					return
+				}
+				for row in self.rows where row !== hoveredRow
 				{
-					$0.clearHover()
+					row.clearHover()
 				}
 			}
 		}

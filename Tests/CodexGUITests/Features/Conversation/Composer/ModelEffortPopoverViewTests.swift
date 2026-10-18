@@ -295,6 +295,41 @@ struct ModelEffortPopoverViewTests
 		) == "Light")
 	}
 
+	@Test func retainedRowsCannotSelectAgainstAReplacementModelPresentation() throws
+	{
+		_ = NSApplication.shared
+		let picker = ModelEffortPopoverView()
+		let models = try modelOptions()
+		picker.render(
+			models: models,
+			selectedModelID: "first",
+			selectedEffort: nil,
+			fastMode: false
+		)
+		picker.showModelList()
+		let retired = picker.modelList.rows[1]
+		picker.render(
+			models: Array(models.suffix(1)),
+			selectedModelID: "second",
+			selectedEffort: nil,
+			fastMode: false
+		)
+		var selected: [String?] = []
+		picker.onSelectModel =
+		{
+			selected.append($0)
+		}
+		try #require(retired.dispatchConfiguredAction())
+		#expect(selected.isEmpty)
+		#expect(picker.isShowingModelList)
+		let current = try #require(picker.modelList.rows.last)
+		try #require(current.dispatchConfiguredAction())
+		#expect(selected == ["second"])
+		#expect(!picker.isShowingModelList)
+		try #require(current.dispatchConfiguredAction())
+		#expect(selected == ["second"])
+	}
+
 	private func modelOptions() throws -> [ModelOption]
 	{
 		let jsonModels: [[String: Any]] = [

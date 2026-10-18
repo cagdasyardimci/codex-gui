@@ -21,9 +21,17 @@ struct ComposerFileCompletionTests
 				at: directory,
 				withIntermediateDirectories: true
 			)
-			try Data().write(to: directory.appendingPathComponent("first.txt"))
-			try Data().write(to: directory.appendingPathComponent("second.txt"))
-			return directory
+			do
+			{
+				try Data().write(to: directory.appendingPathComponent("first.txt"))
+				try Data().write(to: directory.appendingPathComponent("second.txt"))
+				return directory
+			}
+			catch
+			{
+				try? FileManager.default.removeItem(at: directory)
+				throw error
+			}
 		}
 		defer
 		{

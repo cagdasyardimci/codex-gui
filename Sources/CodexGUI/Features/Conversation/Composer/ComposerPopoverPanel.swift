@@ -72,6 +72,12 @@ final class ComposerPopoverPanel: NSObject
 		panel.acceptsMouseMovedEvents = true
 	}
 
+	isolated deinit
+	{
+		dismiss(returnFocus: false)
+		panel.close()
+	}
+
 	func show(
 		relativeTo rect: NSRect,
 		of anchor: NSView
