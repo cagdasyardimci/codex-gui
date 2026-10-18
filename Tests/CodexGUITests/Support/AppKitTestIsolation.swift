@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 /// MainActor serializes operations, but asynchronous tests can overlap across awaits.
@@ -74,7 +75,13 @@ private final class AppKitTestPermit
 {
 	static let shared = AppKitTestPermit()
 	private var available = true
-	private var waiters: [CheckedContinuation<Void, Never>] = []
+	private var waiters: [Waiter] = []
+
+	private struct Waiter
+	{
+		let id: UUID
+		let continuation: CheckedContinuation<Void, Error>
+	}
 
 	func run(
 		timing: TestTiming.Span,
@@ -89,14 +96,36 @@ private final class AppKitTestPermit
 		}
 		else
 		{
-			await withCheckedContinuation
+			let id = UUID()
+			try await withTaskCancellationHandler
 			{
-				waiters.append($0)
+				try await withCheckedThrowingContinuation
+				{
+					(continuation: CheckedContinuation<Void, Error>) in
+					if Task.isCancelled
+					{
+						continuation.resume(throwing: CancellationError())
+					}
+					else
+					{
+						waiters.append(Waiter(
+							id: id,
+							continuation: continuation
+						))
+					}
+				}
+			}
+			onCancel:
+			{
+				Task
+				{
+					@MainActor in
+					self.cancelWaiter(id)
+				}
 			}
 		}
 		timing.mark("acquired")
-		// Canceled waiters still take and return their permit, without executing the test body.
-		// Release only after the protected body's cleanup, including when it throws.
+		// Cancellation after admission still returns the permit after owned cleanup.
 		defer
 		{
 			timing.mark("released")
@@ -106,10 +135,23 @@ private final class AppKitTestPermit
 			}
 			else
 			{
-				waiters.removeFirst().resume()
+				waiters.removeFirst().continuation.resume()
 			}
 		}
 		try Task.checkCancellation()
 		try await function()
+	}
+
+	private func cancelWaiter(_ id: UUID)
+	{
+		guard let index = waiters.firstIndex(where:
+			{
+				$0.id == id
+			})
+		else
+		{
+			return
+		}
+		waiters.remove(at: index).continuation.resume(throwing: CancellationError())
 	}
 }
