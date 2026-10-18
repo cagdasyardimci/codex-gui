@@ -249,37 +249,13 @@ struct ToolsTabSubagentsIntegrationTests
 	@Test func summaryAndTranscriptOpenTheSameSubagentsTab() async throws
 	{
 		_ = NSApplication.shared
-		let suite = "SubagentsTabDispatch.\(UUID())"
-		let defaults = try #require(UserDefaults(suiteName: suite))
+		let fixture = try await CapturedIntentStoreFixture.makeStore(threadID: "subagents-dispatch")
 		defer
 		{
-			defaults.removePersistentDomain(forName: suite)
+			fixture.cleanup()
 		}
-		let directory = FileManager.default.temporaryDirectory.standardizedFileURL
-		let service = WorkspaceCodexService(
-			directory: directory,
-			threadID: "subagents-dispatch"
-		)
-		let session = UUID()
-		let store = WorkspaceStoreFactory.make(
-			configuration: WorkspaceStoreConfiguration(reference: WorkspaceLifecycleOwnerReference(
-				owner: .source(sessionID: session),
-				workspace: WorkspaceIdentity(
-					sessionID: session,
-					canonicalCheckoutPath: directory.path
-				)
-			)),
-			dependencies: WorkspaceStoreDependencies(
-				service: service,
-				storage: LocalStorage(defaults: defaults)
-			)
-		)
-		let state = WorkspaceTestFixture(store: store)
-		defer
-		{
-			state.shutdown()
-		}
-		await state.inputs.connect()
+		let store = fixture.store
+		await store.inputs.connect()
 		let controller = MainWindowController(
 			store: store,
 			onOpenProject:

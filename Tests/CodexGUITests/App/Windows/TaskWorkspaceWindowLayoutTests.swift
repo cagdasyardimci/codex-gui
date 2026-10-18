@@ -20,6 +20,10 @@ struct TaskWorkspaceWindowLayoutTests
 			defaults.removePersistentDomain(forName: suite)
 		}
 		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		defer
+		{
+			state.shutdown()
+		}
 		let controller = MainWindowController(
 			store: state.store,
 			onOpenProject:
@@ -30,6 +34,10 @@ struct TaskWorkspaceWindowLayoutTests
 			}
 		)
 		let window = try #require(controller.window)
+		defer
+		{
+			window.close()
+		}
 		let split = controller.paneController.split
 		let conversation = try #require(
 			split.splitViewItems[1].viewController.children.first as? ConversationViewController
@@ -171,6 +179,10 @@ struct TaskWorkspaceWindowLayoutTests
 			defaults.removePersistentDomain(forName: suite)
 		}
 		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		defer
+		{
+			state.shutdown()
+		}
 		// Claim exclusive AppKit state after the test body has reached MainActor.
 		try await AppKitTestIsolation.perform
 		{
@@ -194,7 +206,7 @@ struct TaskWorkspaceWindowLayoutTests
 			let window = try #require(controller.window)
 			defer
 			{
-				window.orderOut(nil)
+				window.close()
 				timing.mark("native.window.dismissed")
 			}
 			let split = controller.paneController.split

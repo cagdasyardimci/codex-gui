@@ -49,6 +49,10 @@ struct WindowLayoutTests
 				defaults.removePersistentDomain(forName: suite)
 			}
 			let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+			defer
+			{
+				state.shutdown()
+			}
 			let controller = MainWindowController(
 				store: state.store,
 				onOpenProject:
@@ -59,6 +63,11 @@ struct WindowLayoutTests
 				}
 			)
 			let window = try #require(controller.window)
+			defer
+			{
+				window.close()
+				timing.mark("window.dismissed")
+			}
 			timing.mark("fixture.ready")
 			let split = controller.paneController.split
 			#expect(split.splitViewItems[1].maximumThickness == NSSplitViewItem
@@ -147,11 +156,6 @@ struct WindowLayoutTests
 			timing.mark("snapshot.rendered")
 			controller.showWindow(nil)
 			timing.mark("window.shown")
-			defer
-			{
-				window.orderOut(nil)
-				timing.mark("window.dismissed")
-			}
 			window.layoutIfNeeded()
 			window.update()
 			#expect(window.minSize == NSSize(
@@ -326,6 +330,10 @@ struct WindowLayoutTests
 				reviewVisibility: .collapsed
 			)
 			let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+			defer
+			{
+				state.shutdown()
+			}
 			let first = MainWindowController(
 				store: state.store,
 				onOpenProject:
@@ -341,7 +349,7 @@ struct WindowLayoutTests
 			timing.mark("first.window.shown")
 			defer
 			{
-				window.orderOut(nil)
+				window.close()
 			}
 			let split = first.paneController.split
 			split.view.layoutSubtreeIfNeeded()
@@ -395,7 +403,7 @@ struct WindowLayoutTests
 			timing.mark("second.window.shown")
 			defer
 			{
-				restored.orderOut(nil)
+				restored.close()
 			}
 			restoredSplit.view.layoutSubtreeIfNeeded()
 			#expect(restoredSplit.splitViewItems[2].isCollapsed)

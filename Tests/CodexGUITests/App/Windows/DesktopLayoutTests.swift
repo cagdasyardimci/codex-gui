@@ -36,6 +36,10 @@ struct DesktopLayoutTests
 			defaults.removePersistentDomain(forName: suite)
 		}
 		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		defer
+		{
+			state.shutdown()
+		}
 		// Admit the test and prepare independent state before reserving AppKit. Keep
 		// populated rendering and width-dependent restoration protected with the window.
 		try await AppKitTestIsolation.perform
@@ -57,6 +61,10 @@ struct DesktopLayoutTests
 				}
 			)
 			let window = try #require(controller.window)
+			defer
+			{
+				window.close()
+			}
 			let split = controller.paneController.split
 			let conversation = try #require(
 				split.splitViewItems[1].viewController.children.first as? ConversationViewController
@@ -126,10 +134,6 @@ struct DesktopLayoutTests
 			)
 			controller.renderSnapshot(snapshot)
 			controller.showWindow(nil)
-			defer
-			{
-				window.orderOut(nil)
-			}
 			await conversation.waitForRendering()
 			for (name, appearance) in [("dark", NSAppearance.Name.darkAqua), ("light", .aqua)]
 			{

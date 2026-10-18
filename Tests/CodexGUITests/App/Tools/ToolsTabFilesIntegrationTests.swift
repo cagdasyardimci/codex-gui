@@ -177,6 +177,55 @@ struct ToolsTabFilesIntegrationTests
 		#expect(fileSelections.isEmpty)
 	}
 
+	@Test func unchangedFilePublicationRetainsTabsAndHonorsChangedSelectionAndController() throws
+	{
+		_ = NSApplication.shared
+		let tabs = ToolsTabViewController()
+		let first = document("first.swift")
+		let second = document("second.swift")
+		let files = controller()
+		tabs.updateFileTabs(
+			presentations: [first, second],
+			selectedID: first.id,
+			controller: files
+		)
+		let firstButton = try #require(button(
+			"first.swift 1",
+			in: tabs.tabBarView
+		))
+		let surface = try #require(firstButton.superview as? ToolsTabSurface)
+		var hoverChanges: [Bool] = []
+		surface.onHoverChange =
+		{
+			hoverChanges.append($0)
+		}
+		tabs.updateFileTabs(
+			presentations: [first, second],
+			selectedID: first.id,
+			controller: files
+		)
+		#expect(button(
+			"first.swift 1",
+			in: tabs.tabBarView
+		) === firstButton)
+		#expect(hoverChanges.isEmpty)
+		tabs.updateFileTabs(
+			presentations: [first, second],
+			selectedID: second.id,
+			controller: files
+		)
+		#expect(tabs.selectedFileDocumentID == second.id)
+		let replacement = controller()
+		tabs.updateFileTabs(
+			presentations: [first, second],
+			selectedID: second.id,
+			controller: replacement
+		)
+		#expect(replacement.parent === tabs)
+		#expect(files.parent == nil)
+		#expect(tabs.selectedFileDocumentID == second.id)
+	}
+
 	@Test func requestedCloseWaitsForPublishedDocumentRemoval() throws
 	{
 		_ = NSApplication.shared

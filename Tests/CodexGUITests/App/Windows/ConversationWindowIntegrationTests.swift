@@ -353,8 +353,16 @@ struct ConversationWindowIntegrationTests
 	@Test func changesPaneResizesExistingAndStreamedItems() async throws
 	{
 		_ = NSApplication.shared
-		let defaults = try #require(UserDefaults(suiteName: "ConversationLayoutTests.\(UUID())"))
-		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		let defaults = try IsolatedUserDefaultsFixture(prefix: "ConversationLayoutTests")
+		defer
+		{
+			defaults.cleanup()
+		}
+		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults.defaults))
+		defer
+		{
+			state.shutdown()
+		}
 		let windowController = MainWindowController(
 			store: state.store,
 			onOpenProject:
@@ -365,6 +373,10 @@ struct ConversationWindowIntegrationTests
 			}
 		)
 		let window = try #require(windowController.window)
+		defer
+		{
+			window.close()
+		}
 		let split = windowController.paneController.split
 		let controller = try #require(
 			split.splitViewItems[1].viewController.children.compactMap

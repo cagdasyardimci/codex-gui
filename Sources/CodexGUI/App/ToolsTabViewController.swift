@@ -122,6 +122,8 @@ final class ToolsTabViewController: NSViewController
 	private weak var filesLandingController: NSViewController?
 	private weak var fileDocumentController: NSViewController?
 	private var lastFileSelectedID: UUID?
+	private weak var lastFileTabsController: NSViewController?
+	private var lastRuntimeFileSelectionID: UUID?
 	private let dragOwner = UUID()
 	private let sourcesHoverPreview = SourcesTabHoverPreview()
 	private let tabScrollView = NSScrollView()
@@ -431,6 +433,22 @@ final class ToolsTabViewController: NSViewController
 		controller: NSViewController
 	)
 	{
+		let samePresentations = fileTabPresentations == presentations && zip(
+			fileTabPresentations,
+			presentations
+		).allSatisfy
+		{
+			$0.title.utf8.elementsEqual($1.title.utf8)
+				&& $0.path.utf8.elementsEqual($1.path.utf8)
+		}
+		guard !samePresentations || lastRuntimeFileSelectionID != selectedID
+			|| lastFileTabsController !== controller
+		else
+		{
+			return
+		}
+		lastFileTabsController = controller
+		lastRuntimeFileSelectionID = selectedID
 		let wasFilesSelected = isFilesSelected
 		let previousSelectedID = selectedTabID
 		let previousTabIDs = tabIDs

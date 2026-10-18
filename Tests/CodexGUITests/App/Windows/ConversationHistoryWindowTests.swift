@@ -9,8 +9,16 @@ struct ConversationHistoryWindowTests
 	@Test func loadingHistoryThenSwitchingThreadsRemovesRetiredViews() async throws
 	{
 		_ = NSApplication.shared
-		let defaults = try #require(UserDefaults(suiteName: "ConversationReuseTests.\(UUID())"))
-		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
+		let defaults = try IsolatedUserDefaultsFixture(prefix: "ConversationReuseTests")
+		defer
+		{
+			defaults.cleanup()
+		}
+		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults.defaults))
+		defer
+		{
+			state.shutdown()
+		}
 		let main = MainWindowController(
 			store: state.store,
 			onOpenProject:
@@ -21,6 +29,10 @@ struct ConversationHistoryWindowTests
 			}
 		)
 		let window = try #require(main.window)
+		defer
+		{
+			window.close()
+		}
 		let split = main.paneController.split
 		let controller = try #require(
 			split.splitViewItems[1].viewController.children.compactMap

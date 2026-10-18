@@ -260,15 +260,20 @@ struct FilesWindowIntegrationTests
 			{
 				controller.showWindow(nil)
 				#expect(!controller.inspector.isShowingTools)
-				await withCheckedContinuation
+				let presentations = AsyncStream<Void>
+					.makeStream(bufferingPolicy: .bufferingNewest(1))
+				defer
 				{
-					continuation in
-					controller.onFileSearchPresented =
-					{
-						_ in continuation.resume()
-					}
-					controller.showFileQuickOpen()
+					controller.onFileSearchPresented = nil
+					presentations.continuation.finish()
 				}
+				controller.onFileSearchPresented =
+				{
+					_ in presentations.continuation.yield(())
+				}
+				controller.showFileQuickOpen()
+				var arrivals = presentations.stream.makeAsyncIterator()
+				try #require(await arrivals.next() != nil)
 				let sheet = try #require(controller.window?.attachedSheet)
 				#expect(sheet.title == "Quick Open")
 				let search = try #require(findSearchField(in: sheet.contentView))

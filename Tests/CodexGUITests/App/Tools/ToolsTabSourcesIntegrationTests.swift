@@ -185,37 +185,13 @@ struct ToolsTabSourcesIntegrationTests
 	@Test func viewAllButtonOpensTheSourcesToolTab() async throws
 	{
 		_ = NSApplication.shared
-		let suite = "SourcesTabDispatch.\(UUID())"
-		let defaults = try #require(UserDefaults(suiteName: suite))
+		let fixture = try await CapturedIntentStoreFixture.makeStore(threadID: "sources-dispatch")
 		defer
 		{
-			defaults.removePersistentDomain(forName: suite)
+			fixture.cleanup()
 		}
-		let directory = FileManager.default.temporaryDirectory.standardizedFileURL
-		let service = WorkspaceCodexService(
-			directory: directory,
-			threadID: "sources-dispatch"
-		)
-		let session = UUID()
-		let store = WorkspaceStoreFactory.make(
-			configuration: WorkspaceStoreConfiguration(reference: WorkspaceLifecycleOwnerReference(
-				owner: .source(sessionID: session),
-				workspace: WorkspaceIdentity(
-					sessionID: session,
-					canonicalCheckoutPath: directory.path
-				)
-			)),
-			dependencies: WorkspaceStoreDependencies(
-				service: service,
-				storage: LocalStorage(defaults: defaults)
-			)
-		)
-		let state = WorkspaceTestFixture(store: store)
-		defer
-		{
-			state.shutdown()
-		}
-		await state.inputs.connect()
+		let store = fixture.store
+		await store.inputs.connect()
 		let controller = MainWindowController(
 			store: store,
 			onOpenProject:
@@ -229,7 +205,7 @@ struct ToolsTabSourcesIntegrationTests
 		{
 			controller.window?.close()
 		}
-		let snapshot = state.currentSnapshot
+		let snapshot = store.currentSnapshot
 		controller.renderPinnedSummary(
 			snapshot,
 			target: WorkspaceIntentTarget(
