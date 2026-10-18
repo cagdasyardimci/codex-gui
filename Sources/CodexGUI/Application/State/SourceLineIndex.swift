@@ -10,23 +10,23 @@ struct SourceLineIndex: Equatable, Sendable
 	init(_ text: String)
 	{
 		self.text = text
-		let units = Array(text.utf16)
-		utf16Length = units.count
 		var starts = [0]
 		var offset = 0
-		while offset < units.count
+		var previousWasCarriageReturn = false
+		for unit in text.utf16
 		{
-			let unit = units[offset]
 			offset += 1
-			if unit == 13, offset < units.count, units[offset] == 10
+			if unit == 10, previousWasCarriageReturn
 			{
-				offset += 1
+				starts[starts.count - 1] = offset
 			}
-			if Self.isLineEnding(unit)
+			else if Self.isLineEnding(unit)
 			{
 				starts.append(offset)
 			}
+			previousWasCarriageReturn = unit == 13
 		}
+		utf16Length = offset
 		lineStarts = starts
 	}
 
@@ -50,7 +50,8 @@ struct SourceLineIndex: Equatable, Sendable
 		)
 	}
 
-	private func contentRange(
+	/// Reuses a bridge of the same text retained by this index.
+	func contentRange(
 		atLineIndex index: Int,
 		in source: NSString
 	) -> NSRange
