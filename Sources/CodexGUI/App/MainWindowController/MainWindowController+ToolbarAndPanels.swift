@@ -459,7 +459,9 @@ extension MainWindowController
 		}
 		paneController.onToolsExpansionFinished =
 		{
-			[weak self] in self?.updateToolsToolbarControls()
+			[weak self] in
+			self?.updateToolsToolbarControls()
+			self?.presentPendingFileSearch()
 		}
 		inspector.toolsTabs.onToggleSummary =
 		{

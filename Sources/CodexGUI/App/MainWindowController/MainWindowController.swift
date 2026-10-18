@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class MainWindowController: NSWindowController, NSToolbarDelegate
+final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindowDelegate
 {
 	private let sourceStore: WorkspaceStateStore
 	let coordinator: TaskWorkspaceCoordinator?
@@ -16,6 +16,23 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 	let navigation = NavigationViewController()
 	let conversation = ConversationViewController()
 	let inspector = InspectorViewController()
+	let files: FilesViewController
+	var onFileDiscardDecision: (([UUID], FileViewerFailure?) -> Bool)?
+	var filesProjectPath: String?
+	var filesWereOpened = false
+	var filesCloseApproved = false
+	var filesCloseInProgress = false
+	var fileCloseRequests: Set<UUID> = []
+	var fileCloseQueue: [UUID] = []
+	var fileClosePumpRunning = false
+	var fileClosePumpTask: Task<Void, Never>?
+	var fileSettlementTask: Task<Bool, Never>?
+	var pendingFileSearch: PendingFileSearch?
+	var onFileSearchPresented: ((PendingFileSearch) -> Void)?
+	enum PendingFileSearch
+	{
+		case filename, content
+	}
 	var gitSummary = GitSummaryReconciliation()
 	let summaryGitLoader = GitSummaryBackgroundLoader()
 	private var toolbarVisibilityBeforeGitReview: Bool?
@@ -54,13 +71,15 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		onOpenProject: @escaping () -> Void,
 		onInsertPath: @escaping () -> Void,
 		layoutStore: WindowLayoutStore? = nil,
-		coordinator: TaskWorkspaceCoordinator? = nil
+		coordinator: TaskWorkspaceCoordinator? = nil,
+		filesRuntime: FileViewerRuntime = FileViewerRuntime()
 	)
 	{
 		self.sourceStore = store
 		self.onOpenProjectRequest = onOpenProject
 		self.onInsertPathRequest = onInsertPath
 		self.coordinator = coordinator
+		self.files = FilesViewController(runtime: filesRuntime)
 		let window = Self.makeWindow()
 
 		paneController = WindowPaneController(
@@ -70,8 +89,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 			layoutStore: layoutStore
 		)
 		super.init(window: window)
+		window.delegate = self
 		shouldCascadeWindows = false
 		configureInspectorCallbacks()
+		configureFilesIntegration()
 		configureToolbarControls()
 
 		installConversationToolbar(in: window)
@@ -218,6 +239,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		configureNavigationActions(target: target)
 		configureSettingsAndStatusActions(target: target)
 		configureInspectorActions(target: target)
+		updateFilesProject(target: target)
 		configureMessageSearchActions(target: target)
 		configureConversationActions(target: target)
 
@@ -321,6 +343,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 
 	@objc private func windowDidClose()
 	{
+		Task
+		{
+			_ = await files.runtime.shutdown()
+		}
 		subagentConversationSession?.invalidate()
 		subagentConversationSession = nil
 		inspector.setGitReviewFocused(false)
@@ -330,6 +356,46 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate
 		publicationObserver = nil
 		coordinator?.onChange = nil
 		messageSearch.dismiss()
+	}
+
+	func windowShouldClose(_ sender: NSWindow) -> Bool
+	{
+		if filesCloseApproved
+		{
+			filesCloseApproved = false
+			return true
+		}
+		if files.runtime.state.documents.allSatisfy(
+			{
+				!$0.isDirty && !$0.isSaving
+			}
+		)
+		{
+			return true
+		}
+		guard !filesCloseInProgress
+		else
+		{
+			return false
+		}
+		filesCloseInProgress = true
+		Task
+		{
+			[weak self, weak sender] in
+			guard let self
+			else
+			{
+				return
+			}
+			let canClose = await self.settleFileWritesForClosing()
+			self.filesCloseInProgress = false
+			if canClose, let sender
+			{
+				self.filesCloseApproved = true
+				sender.performClose(nil)
+			}
+		}
+		return false
 	}
 
 	required init?(coder: NSCoder)

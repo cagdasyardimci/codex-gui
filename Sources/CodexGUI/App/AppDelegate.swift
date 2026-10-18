@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 	private let notifications = TaskNotificationCoordinator()
 	private var mainWindowController: MainWindowController?
 	private var waitingToQuit = false
+	private var finalizingQuit = false
 	private var pendingQuit: WorkspaceQuitRequest?
 
 	func applicationDidFinishLaunching(_ notification: Notification)
@@ -89,9 +90,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 			{
 				return
 			}
-			self.waitingToQuit = false
-			self.pendingQuit = nil
-			NSApp.reply(toApplicationShouldTerminate: approved)
+			if approved
+			{
+				guard !self.finalizingQuit
+				else
+				{
+					return
+				}
+				self.finalizingQuit = true
+				Task
+				{
+					[weak self] in
+					guard let self, self.waitingToQuit, self.pendingQuit == request
+					else
+					{
+						return
+					}
+					let filesSettled = await self.mainWindowController?
+						.settleFileWritesForClosing() ?? true
+					self.waitingToQuit = false
+					self.finalizingQuit = false
+					self.pendingQuit = nil
+					NSApp.reply(toApplicationShouldTerminate: filesSettled)
+				}
+			}
+			else
+			{
+				self.waitingToQuit = false
+				self.finalizingQuit = false
+				self.pendingQuit = nil
+				NSApp.reply(toApplicationShouldTerminate: false)
+			}
 		}
 	}
 
@@ -126,7 +155,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 				approved: alert.runModal() == .alertSecondButtonReturn
 			)
 		}
-		pendingQuit = coordinator.requestQuit()
+		Task
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			let mayQuit = await self.mainWindowController?.settleFileWritesForClosing() ?? true
+			guard mayQuit
+			else
+			{
+				self.waitingToQuit = false
+				NSApp.reply(toApplicationShouldTerminate: false)
+				return
+			}
+			self.pendingQuit = self.coordinator.requestQuit()
+		}
 		return .terminateLater
 	}
 
@@ -244,7 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		)
 		editMenu.addItem(.separator())
 		editMenu.addItem(
-			withTitle: "Find Conversation",
+			withTitle: "Find",
 			action: #selector(findConversation),
 			keyEquivalent: "f"
 		).target = self
@@ -255,6 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		)
 		messageSearch.keyEquivalentModifierMask = [.command, .shift]
 		messageSearch.target = self
+		fileMenuShortcut(in: editMenu)
 		let commandPaletteItem = editMenu.addItem(
 			withTitle: "Command Palette",
 			action: #selector(showCommandPalette),
@@ -264,6 +311,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		commandPaletteItem.target = self
 		editItem.submenu = editMenu
 		return editItem
+	}
+
+	private func fileMenuShortcut(in menu: NSMenu)
+	{
+		let quickOpen = menu.addItem(
+			withTitle: "Open File Quickly",
+			action: #selector(showFileQuickOpen),
+			keyEquivalent: "p"
+		)
+		quickOpen.target = self
 	}
 
 	private func makeViewMenuItem() -> NSMenuItem
@@ -382,11 +439,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 	}
 	@objc private func findConversation()
 	{
-		mainWindowController?.focusSearch()
+		if mainWindowController?.shouldRouteFindToFiles == true
+		{
+			mainWindowController?.findInCurrentFile()
+		}
+		else
+		{
+			mainWindowController?.focusSearch()
+		}
 	}
 	@objc private func searchMessages()
 	{
-		mainWindowController?.showMessageSearch()
+		if mainWindowController?.shouldRouteFindToFiles == true
+		{
+			mainWindowController?.showFileContentSearch()
+		}
+		else
+		{
+			mainWindowController?.showMessageSearch()
+		}
+	}
+	@objc private func showFileQuickOpen()
+	{
+		mainWindowController?.showFileQuickOpen()
 	}
 	@objc private func showCommandPalette()
 	{
