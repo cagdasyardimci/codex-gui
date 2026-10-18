@@ -56,6 +56,22 @@ struct SlashCommandAppServerTests
 		catch AppServerError.requestRejected
 		{
 		}
+		do
+		{
+			_ = try await server.startTurn(
+				threadId: "source",
+				inputs: [.text("Inspect")],
+				model: "model",
+				effort: "high",
+				skills: [],
+				cwd: nil,
+				preferences: preferences
+			)
+			Issue.record("Expected legacy fast mode to require an advertised tier before sending")
+		}
+		catch AppServerError.requestRejected
+		{
+		}
 		let requests = try readRequests(in: directory)
 		let turn = try parameters(
 			for: "turn/start",

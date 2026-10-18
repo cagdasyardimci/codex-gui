@@ -27,9 +27,4 @@ struct RunPreferences: Codable, Equatable
 	{
 		approvalMode == .fullAccess ? .dangerFullAccess : .workspaceWrite
 	}
-
-	var serviceTierForTurn: String
-	{
-		fastMode ? "priority" : "default"
-	}
 }
