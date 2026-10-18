@@ -64,14 +64,29 @@ extension AppServer
 	func validateProtocolVersion(_ version: String) throws
 	{
 		let versionNumber = version.split(separator: " ").last.map(String.init) ?? ""
-		let versionComponents = versionNumber.split(separator: ".").compactMap
+		let rawComponents = versionNumber.split(
+			separator: ".",
+			omittingEmptySubsequences: false
+		)
+		let versionComponents = rawComponents.compactMap
 		{
-			Int($0)
+			component -> Int? in
+			guard !component.isEmpty, component.utf8.allSatisfy(
+				{
+					(48 ... 57).contains($0)
+				}
+			)
+			else
+			{
+				return nil
+			}
+			return Int(component)
 		}
 		let minimumSupportedVersion = [0, 153, 2]
-		let meetsMinimumVersion = !Array(versionComponents.prefix(3))
+		let meetsMinimumVersion = !versionComponents.prefix(3)
 			.lexicographicallyPrecedes(minimumSupportedVersion)
-		guard versionComponents.count >= 3, meetsMinimumVersion
+		guard versionComponents.count >= 3, rawComponents.count == versionComponents.count,
+				meetsMinimumVersion
 		else
 		{
 			throw AppServerError.incompatibleVersion(version)

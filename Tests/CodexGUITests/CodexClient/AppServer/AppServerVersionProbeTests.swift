@@ -7,6 +7,28 @@ import Testing
 @Suite(.timeLimit(.minutes(1)))
 struct AppServerVersionProbeTests
 {
+	@Test(arguments: [
+		"codex-cli 0.bad.154.0",
+		"codex-cli 0..154.0",
+		"codex-cli +0.154.0",
+		"codex-cli 0.154.0.invalid",
+		"codex-cli 0.153.1",
+		"codex-cli 0.154",
+	])
+	func malformedAndOlderVersionsAreRejected(_ version: String)
+	{
+		#expect(throws: AppServerError.self)
+		{
+			try AppServer().validateProtocolVersion(version)
+		}
+	}
+
+	@Test(arguments: ["codex-cli 0.153.2", "codex-cli 0.154.0", "codex-cli 1.0.0"])
+	func supportedVersionNumbersAreAccepted(_ version: String) throws
+	{
+		try AppServer().validateProtocolVersion(version)
+	}
+
 	@Test func stalledVersionCheckTimesOutWithoutBlockingMainActor() async throws
 	{
 		let directory = try await AppServerTestExecutable.temporaryDirectory()
