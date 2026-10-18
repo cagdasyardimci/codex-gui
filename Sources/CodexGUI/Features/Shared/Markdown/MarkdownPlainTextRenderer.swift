@@ -17,11 +17,25 @@ enum MarkdownPlainTextRenderer
 {
 	static func render(_ content: ParsedMarkdownContent) -> String
 	{
-		renderWithLinks(content).text
+		render(
+			content,
+			collectingLinks: false
+		).text
 	}
 
 	static func renderWithLinks(_ content: ParsedMarkdownContent)
 		-> MarkdownPlainTextPresentation
+	{
+		render(
+			content,
+			collectingLinks: true
+		)
+	}
+
+	private static func render(
+		_ content: ParsedMarkdownContent,
+		collectingLinks: Bool
+	) -> MarkdownPlainTextPresentation
 	{
 		var boundaries = content.plainTextBoundaries.makeIterator()
 		var nextBoundary = boundaries.next()
@@ -46,7 +60,10 @@ enum MarkdownPlainTextRenderer
 						)
 					)
 					result += spacer
-					textLength += spacer.utf16.count
+					if collectingLinks
+					{
+						textLength += spacer.utf16.count
+					}
 				}
 				nextBoundary = boundaries.next()
 			}
@@ -64,7 +81,7 @@ enum MarkdownPlainTextRenderer
 					with: $0
 				)
 			} ?? run.text
-			if let destination = run.style.link,
+			if collectingLinks, let destination = run.style.link,
 				WebLinkDetector.webURL(destination) != nil,
 				!display.isEmpty
 			{
@@ -92,7 +109,10 @@ enum MarkdownPlainTextRenderer
 				}
 			}
 			result += display
-			textLength += display.utf16.count
+			if collectingLinks
+			{
+				textLength += display.utf16.count
+			}
 		}
 		return MarkdownPlainTextPresentation(
 			text: result,

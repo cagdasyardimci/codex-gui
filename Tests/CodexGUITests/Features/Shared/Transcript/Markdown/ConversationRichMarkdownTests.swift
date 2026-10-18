@@ -263,7 +263,13 @@ struct ConversationRichMarkdownTests
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
 		window.contentView = textView
+		defer
+		{
+			window.contentView = nil
+			window.close()
+		}
 		window.setContentSize(textView.frame.size)
 		let pasteboard = NSPasteboard.withUniqueName()
 		defer

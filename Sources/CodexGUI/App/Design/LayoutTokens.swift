@@ -533,7 +533,7 @@ enum LayoutTokens
 		static let replyActionSpacing: CGFloat = 8.5
 		static let titleHeight: CGFloat = 16
 		static let buttonHeight: CGFloat = 24
-		static let codeCopyButtonSize: CGFloat = 36
+		static let codeCopyButtonSize: CGFloat = 32
 		static let agentInset = CGSize(
 			width: 0,
 			height: 4
@@ -558,10 +558,10 @@ enum LayoutTokens
 	{
 		static let quoteIndent = 16
 		static let listIndent = 22
-		static let codeInset: CGFloat = 21
+		static let codeInset: CGFloat = 18
 		static let codeHeaderHeight: CGFloat = 44
 		static let codeBottomPadding: CGFloat = 16
-		static let codeBlockSpacing: CGFloat = 17.5
+		static let codeBlockSpacing: CGFloat = 16
 		static let proseLineSpacing: CGFloat = 5.5
 		static let listLineSpacing: CGFloat = 3.5
 		static let codeLineSpacing: CGFloat = 2

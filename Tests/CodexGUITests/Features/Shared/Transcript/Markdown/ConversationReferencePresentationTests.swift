@@ -60,6 +60,12 @@ struct ConversationReferencePresentationTests
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.contentViewController = nil
+			window.close()
+		}
 		window.appearance = NSAppearance(named: .darkAqua)
 		window.contentViewController = item
 		for width: CGFloat in [320, 736]
@@ -84,6 +90,10 @@ struct ConversationReferencePresentationTests
 					.location(forGlyphAt: secondGlyph).x) < 0.5)
 			textView.selectAll(nil)
 			let pasteboard = NSPasteboard.withUniqueName()
+			defer
+			{
+				pasteboard.releaseGlobally()
+			}
 			#expect(textView.writeSelection(
 				to: pasteboard,
 				type: .string

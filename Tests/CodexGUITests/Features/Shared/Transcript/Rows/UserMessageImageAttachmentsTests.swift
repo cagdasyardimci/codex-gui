@@ -51,7 +51,13 @@ struct UserMessageImageAttachmentsTests
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
 		window.contentViewController = item
+		defer
+		{
+			window.contentViewController = nil
+			window.close()
+		}
 		for width: CGFloat in [736, 320, 120]
 		{
 			let size = ConversationCollectionItem.itemSize(

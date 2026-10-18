@@ -7,10 +7,10 @@ import AppKit
 final class MarkdownLayoutManager: NSLayoutManager
 {
 	static let quoteIndent = CGFloat(MarkdownMetrics.quoteIndent)
-	static let codeInset: CGFloat = 18
-	static let codeHeaderHeight: CGFloat = 44
-	static let codeBottomPadding: CGFloat = 16
-	static let codeBlockSpacing: CGFloat = 16
+	static let codeInset: CGFloat = LayoutTokens.Markdown.codeInset
+	static let codeHeaderHeight: CGFloat = LayoutTokens.Markdown.codeHeaderHeight
+	static let codeBottomPadding: CGFloat = LayoutTokens.Markdown.codeBottomPadding
+	static let codeBlockSpacing: CGFloat = LayoutTokens.Markdown.codeBlockSpacing
 
 	nonisolated override func drawBackground(
 		forGlyphRange glyphsToShow: NSRange,

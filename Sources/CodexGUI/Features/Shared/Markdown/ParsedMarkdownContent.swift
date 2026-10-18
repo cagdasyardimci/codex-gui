@@ -59,6 +59,22 @@ struct MarkdownTableCell: Sendable
 		case left, center, right
 	}
 
+	struct Identity: Hashable, Sendable
+	{
+		let tableID: Int
+		let row: Int
+		let column: Int
+	}
+
+	var identity: Identity
+	{
+		Identity(
+			tableID: tableID,
+			row: row,
+			column: column
+		)
+	}
+
 	let tableID: Int
 	let row: Int
 	let column: Int

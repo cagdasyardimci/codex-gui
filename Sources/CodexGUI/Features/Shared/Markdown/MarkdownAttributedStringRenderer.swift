@@ -30,19 +30,15 @@ enum MarkdownAttributedStringRenderer
 	{
 		let result = NSMutableAttributedString(string: "")
 		var richBudget = MarkdownRichBlockBudget()
-		let columnWidths = tableColumnWidths(in: runs)
+		let columnWidths = MarkdownTableColumnWidths.measure(runs)
 		var tables: [Int: NSTextTable] = [:]
-		var cells: [CellKey: NSTextTableBlock] = [:]
+		var cells: [MarkdownTableCell.Identity: NSTextTableBlock] = [:]
 		for run in runs
 		{
 			let paragraph = paragraphStyle(for: run.style)
 			if let cell = run.style.tableCell
 			{
-				let key = CellKey(
-					tableID: cell.tableID,
-					row: cell.row,
-					column: cell.column
-				)
+				let key = cell.identity
 				let table = tables[cell.tableID] ?? makeTable(columnCount: cell.columnCount)
 				tables[cell.tableID] = table
 				let block = cells[key] ?? makeCell(
@@ -396,28 +392,28 @@ enum MarkdownAttributedStringRenderer
 		}
 	}
 
-	private struct CellKey: Hashable
-	{
-		let tableID: Int
-		let row: Int
-		let column: Int
-	}
-
 	private static func paragraphStyle(for style: MarkdownTextStyle) -> NSMutableParagraphStyle
 	{
 		let paragraph = NSMutableParagraphStyle()
 		let wrapsCharacters = style.codeBlock || style.monospaced
 		paragraph.lineBreakMode = wrapsCharacters ? .byCharWrapping : .byWordWrapping
-		paragraph.lineSpacing = wrapsCharacters ? 2 : (style.listDepth > 0 ? 3.5 : 5.5)
-		paragraph.paragraphSpacing = style.listDepth > 0 ? (style.listEnd ? 10 : 2) : 14.5
+		paragraph.lineSpacing = wrapsCharacters ? LayoutTokens.Markdown.codeLineSpacing
+			: (style.listDepth > 0 ? LayoutTokens.Markdown.listLineSpacing
+				: LayoutTokens.Markdown.proseLineSpacing)
+		paragraph.paragraphSpacing = style.listDepth > 0
+			? (style.listEnd ? LayoutTokens.Markdown.listEndSpacing
+				: LayoutTokens.Markdown.listParagraphSpacing)
+			: LayoutTokens.Markdown.paragraphSpacing
 		if style.followedByList
 		{
-			paragraph.paragraphSpacing = 4.5
+			paragraph.paragraphSpacing = LayoutTokens.Markdown.followedByListSpacing
 		}
 		if style.heading > 0
 		{
-			paragraph.paragraphSpacingBefore = style.heading <= 2 ? 16 : 12
-			paragraph.paragraphSpacing = 8
+			paragraph.paragraphSpacingBefore = style.heading <= 2
+				? LayoutTokens.Markdown.majorHeadingTopSpacing : LayoutTokens.Markdown
+				.headingTopSpacing
+			paragraph.paragraphSpacing = LayoutTokens.Markdown.headingBottomSpacing
 		}
 		if wrapsCharacters || style.suppressParagraphSpacing
 		{
@@ -447,8 +443,8 @@ enum MarkdownAttributedStringRenderer
 		paragraph.headIndent = paragraph.firstLineHeadIndent
 		if style.listDepth > 0
 		{
-			paragraph.firstLineHeadIndent += 9
-			paragraph.headIndent += 28
+			paragraph.firstLineHeadIndent += LayoutTokens.Markdown.listFirstLineInset
+			paragraph.headIndent += LayoutTokens.Markdown.listTextInset
 			paragraph.tabStops = [NSTextTab(
 				textAlignment: .left,
 				location: paragraph.headIndent
@@ -473,8 +469,8 @@ enum MarkdownAttributedStringRenderer
 		{
 			paragraph.minimumLineHeight = 16
 			paragraph.maximumLineHeight = 16
-			paragraph.paragraphSpacingBefore = 8
-			paragraph.paragraphSpacing = 12
+			paragraph.paragraphSpacingBefore = LayoutTokens.Markdown.thematicTopSpacing
+			paragraph.paragraphSpacing = LayoutTokens.Markdown.thematicBottomSpacing
 		}
 		if style.tableCell != nil
 		{
@@ -549,58 +545,6 @@ enum MarkdownAttributedStringRenderer
 			return linkColor
 		}
 		return style.quoteDepth > 0 ? .secondaryLabelColor : proseColor
-	}
-
-	private static func tableColumnWidths(in runs: [MarkdownTextRun]) -> [Int: [CGFloat]]
-	{
-		var cellLengths: [CellKey: Int] = [:]
-		var lengths: [Int: [CGFloat]] = [:]
-		for run in runs
-		{
-			guard let cell = run.style.tableCell
-			else
-			{
-				continue
-			}
-			let key = CellKey(
-				tableID: cell.tableID,
-				row: cell.row,
-				column: cell.column
-			)
-			cellLengths[key, default: 0] += run.text.count
-			if lengths[cell.tableID] == nil
-			{
-				lengths[cell.tableID] = Array(
-					repeating: 32,
-					count: cell.columnCount
-				)
-			}
-			// Bound prose preference so short columns retain space at narrow Markdown widths.
-			var columns = lengths[cell.tableID] ?? []
-			columns[cell.column] = max(
-				columns[cell.column],
-				CGFloat(min(
-					64,
-					cellLengths[key, default: 0]
-				))
-			)
-			lengths[cell.tableID] = columns
-		}
-		return lengths.mapValues
-		{
-			columns in
-			let total = columns.reduce(
-				0,
-				+
-			)
-			return columns.map
-			{
-				100 * $0 / max(
-					1,
-					total
-				)
-			}
-		}
 	}
 
 	private static func makeTable(columnCount: Int) -> NSTextTable
