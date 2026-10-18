@@ -255,15 +255,9 @@ extension ConversationReducer
 		model: inout WorkspaceModel
 	)
 	{
-		let referenceIDs = model.conversations.turnReferenceIndices[threadID]?.references
-			.map(\.id) ?? []
-		let positions = Dictionary(uniqueKeysWithValues: referenceIDs.enumerated().map
-		{
-			(
-				$0.element,
-				$0.offset
-			)
-		})
+		var index = model.conversations.turnReferenceIndices[threadID]
+		let positions = index?.cachedReferencePositions() ?? [:]
+		model.conversations.turnReferenceIndices[threadID] = index
 		let position = positions[turn.id] ?? 0
 		let execution = model.execution(for: .thread(threadID))
 		let livePrefix = execution.activeThreadID == threadID ? execution.activeTurnID

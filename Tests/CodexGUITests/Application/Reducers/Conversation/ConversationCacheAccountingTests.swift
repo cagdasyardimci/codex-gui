@@ -543,6 +543,43 @@ struct ConversationCacheAccountingTests
 		}.count == 1)
 	}
 
+	@Test func referencedInsertionUsesFirstPositionForDuplicateReferenceIDs() throws
+	{
+		var model = fixture()
+		install(
+			[turn("c")],
+			references: ["a", "b", "a", "c"],
+			model: &model
+		)
+		ConversationReducer.insertReferencedTurn(
+			turn("a"),
+			threadID: threadID,
+			model: &model
+		)
+		let first = try #require(model.conversations.turnReferenceIndices[threadID])
+		#expect(first.referencePositions?["a"] == 0)
+		#expect(model.conversations.content[.thread(threadID)]?.loadedTurns.map(\.id) == ["a", "c"])
+		ConversationReducer.insertReferencedTurn(
+			turn("b"),
+			threadID: threadID,
+			model: &model
+		)
+		#expect(model.conversations.content[.thread(threadID)]?.loadedTurns.map(\.id)
+			== ["a", "b", "c"])
+		#expect(model.conversations.turnReferenceIndices[threadID]?.referencePositions
+			== first.referencePositions)
+		model.conversations.turnReferenceIndices[threadID]?.references = ["d", "a", "b", "c"]
+			.map(reference)
+		ConversationReducer.insertReferencedTurn(
+			turn("d"),
+			threadID: threadID,
+			model: &model
+		)
+		#expect(model.conversations.content[.thread(threadID)]?.loadedTurns.map(\.id)
+			== ["d", "a", "b", "c"])
+		#expect(model.conversations.turnReferenceIndices[threadID]?.referencePositions?["a"] == 1)
+	}
+
 	private func fixture() -> WorkspaceModel
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(

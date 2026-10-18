@@ -136,6 +136,32 @@ struct SubagentLifecycleTimingTests
 		#expect(projection(model).agents[0].startedAt == nil)
 	}
 
+	@Test func duplicateSubagentReportsPreserveFirstRowsLifecycleOnCanonicalReread() throws
+	{
+		var model = fixture()
+		let start = try item(
+			id: "start",
+			kind: "started"
+		)
+		try merge(
+			[start, start],
+			model: &model
+		)
+		let startedAt = Date(timeIntervalSince1970: 100)
+		observe(
+			start,
+			model: &model,
+			at: startedAt
+		)
+		try merge(
+			[start],
+			model: &model
+		)
+		let reread = projection(model)
+		#expect(reread.agents.count == 1)
+		#expect(reread.startedAt(for: reread.agents[0]) == startedAt)
+	}
+
 	private func fixture() -> WorkspaceModel
 	{
 		WorkspaceModel(identity: WorkspaceIdentity(

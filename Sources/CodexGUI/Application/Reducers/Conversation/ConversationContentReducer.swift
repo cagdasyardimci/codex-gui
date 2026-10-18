@@ -259,7 +259,7 @@ enum ConversationContentReducer
 	)
 	{
 		let previousActivities = Dictionary(
-			uniqueKeysWithValues: content.entries.compactMap
+			content.entries.compactMap
 			{
 				entry -> (String, CodexSubagentActivity)? in
 				guard case .subagent(let activity) = entry.activity
@@ -268,6 +268,10 @@ enum ConversationContentReducer
 					return nil
 				}
 				return (entry.id, activity)
+			},
+			uniquingKeysWith:
+			{
+				first, _ in first
 			}
 		)
 		content.content.localUserMessageTurnIDs.removeAll()
