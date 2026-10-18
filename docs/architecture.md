@@ -187,6 +187,9 @@ Rename reports must keep both paths within the checkout. This filter uses normal
 reading files or treating matching filenames in another checkout as the same file. Raw backend
 reports remain unchanged. A checkout located under `/tmp` still includes its own reported edits.
 
+Snapshot acceptance retains the complete comparison metadata when reusing its display identity,
+including the fallback distinction that disables apply commands.
+
 Last Turn covers reported edits only. Arbitrary shell writes and subagent edits not reported under the selected task's turn are excluded and disclosed in the UI. Child-thread identity alone does not prove which parent turn owns an edit; the client does not infer that relationship from a shared directory, filenames or activity timing. Complete coverage requires backend write attribution or isolated task checkouts. Repository comparison scopes such as Uncommitted retain checkout-wide semantics. The recorded turn identity does not retain a separate unbounded patch cache.
 
 ## Conversation content residency

@@ -114,7 +114,7 @@ struct GitComparisonFile: Identifiable, Equatable, Sendable
 struct GitComparisonSnapshot: Equatable, Sendable
 {
 	let request: GitComparisonRequest
-	let id: String
+	var id: String
 	let resolvedBase: String
 	let resolvedTarget: String
 	let patch: Data

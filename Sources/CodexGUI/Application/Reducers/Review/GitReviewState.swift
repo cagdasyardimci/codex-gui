@@ -217,14 +217,11 @@ struct GitReviewState
 					&& $0.resolvedTarget == value.resolvedTarget
 			} == true
 			let previousFile = selectedFileID
-			let acceptedValue = GitComparisonSnapshot(
-				request: value.request,
-				id: sameComparison ? snapshot!.id : value.id,
-				resolvedBase: value.resolvedBase,
-				resolvedTarget: value.resolvedTarget,
-				patch: value.patch,
-				files: value.files
-			)
+			var acceptedValue = value
+			if sameComparison, let previousSnapshot = snapshot
+			{
+				acceptedValue.id = previousSnapshot.id
+			}
 			snapshot = acceptedValue
 			isStale = false
 			failure = nil

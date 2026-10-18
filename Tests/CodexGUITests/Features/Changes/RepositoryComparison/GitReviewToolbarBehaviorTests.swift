@@ -205,7 +205,35 @@ struct GitReviewToolbarBehaviorTests
 		#expect((path.superview?.frame.height ?? .infinity) <= 48)
 	}
 
-	private func loadedController() async throws -> (GitChangesViewController, NSWindow)
+	@Test func fallbackExplanationAndDisabledCopySurviveViewerAcceptance() async throws
+	{
+		let (controller, window) = try await loadedController(usesReportedEditFallback: true)
+		defer
+		{
+			controller.close()
+			window.close()
+		}
+		controller.runtime.setReportedChanges([])
+		controller.runtime.selectScope(.lastTurn)
+		await controller.runtime.readTask?.value
+		#expect(controller.runtime.state.snapshot?.usesReportedEditFallback == true)
+		#expect(descendants(controller.view).compactMap
+		{
+			$0 as? NSTextField
+		}.contains
+		{
+			$0.stringValue.contains(GitReportedTurnComparison.fallbackMessage)
+		})
+		let copy = try #require(controller.makeDiffDisplayMenu().items.first
+		{
+			$0.title == "Copy git apply command"
+		})
+		#expect(!copy.isEnabled)
+	}
+
+	private func loadedController(
+		usesReportedEditFallback: Bool = false
+	) async throws -> (GitChangesViewController, NSWindow)
 	{
 		let model = WorkspaceModel(identity: WorkspaceIdentity(
 			sessionID: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!,
@@ -219,7 +247,9 @@ struct GitReviewToolbarBehaviorTests
 			storeIdentity: "toolbar-behavior"
 		)
 		let controller = GitChangesViewController(
-			runtime: GitReviewRuntime(service: ToolbarFixtureService())
+			runtime: GitReviewRuntime(service: ToolbarFixtureService(
+				usesReportedEditFallback: usesReportedEditFallback
+			))
 		)
 		let window = NSWindow(
 			contentRect: NSRect(
@@ -315,6 +345,8 @@ struct GitReviewToolbarBehaviorTests
 
 private struct ToolbarFixtureService: GitComparisonService
 {
+	var usesReportedEditFallback = false
+
 	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
 	{
 		let patch = "@@ -1 +1 @@\n-before\n+after\n"
@@ -343,7 +375,8 @@ private struct ToolbarFixtureService: GitComparisonService
 			resolvedBase: "HEAD",
 			resolvedTarget: "Working tree",
 			patch: Data(patch.utf8),
-			files: files
+			files: files,
+			usesReportedEditFallback: usesReportedEditFallback
 		))
 	}
 }

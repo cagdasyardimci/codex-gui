@@ -330,6 +330,44 @@ struct GitReviewStateTests
 		#expect(state.baselineRevision == 0)
 	}
 
+	@Test func incompatibleReportedPatchesRetainFallbackThroughAcceptanceAndRefresh() throws
+	{
+		var state = GitReviewState()
+		state.activate(
+			owner: owner(),
+			lastTurnID: "editing"
+		)
+		state.scope = .lastTurn
+		state.setReportedChanges([
+			FileChange(json: ["path": "file.swift",
+								"kind": "update",
+								"diff": "@@ -1 +1 @@\n-before\n+intermediate"])!,
+			FileChange(json: ["path": "file.swift",
+								"kind": "update",
+								"diff": "@@ -1 +1 @@\n-another task\n+after"])!,
+		])
+		var identity: String?
+		for _ in 0 ..< 2
+		{
+			let pending = state.beginRequest()
+			let request = try #require(pending)
+			let accepted = state.accept(
+				GitReportedTurnComparison.compare(request),
+				request: request
+			)
+			#expect(accepted)
+			let comparison = try #require(state.snapshot)
+			#expect(comparison.usesReportedEditFallback)
+			#expect(comparison.resolvedTarget == "Reported edit counts")
+			#expect(state.copyCommand == nil)
+			if let identity
+			{
+				#expect(comparison.id == identity)
+			}
+			identity = comparison.id
+		}
+	}
+
 	private func snapshot(
 		_ request: GitComparisonRequest,
 		id: String = "snapshot"
