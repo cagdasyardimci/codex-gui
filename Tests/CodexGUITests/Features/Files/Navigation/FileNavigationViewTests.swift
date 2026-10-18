@@ -668,6 +668,177 @@ struct FileNavigationViewTests
 		}
 	}
 
+	@Test func contentSearchKeepsKeyboardSelectionAndRestoresFocusOnEscape() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let parent = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 700,
+					height: 500
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			parent.isReleasedWhenClosed = false
+			let origin = NSTextView(frame: NSRect(
+				x: 8,
+				y: 8,
+				width: 100,
+				height: 30
+			))
+			parent.contentView?.addSubview(origin)
+			#expect(parent.makeFirstResponder(origin))
+			let panel = FileSearchPanel(mode: .content)
+			defer
+			{
+				panel.dismiss(); parent.close()
+			}
+			var chosen: FileViewerSearchResult?
+			panel.onChooseContent =
+			{
+				chosen = $0
+			}
+			var canceled = 0
+			panel.onCancelSearch =
+			{
+				canceled += 1
+			}
+			var state = FileViewerState()
+			state.activeRoot = "/tmp/search-fixture"
+			panel.render(state)
+			panel.present(in: parent)
+			let sheet = try #require(parent.attachedSheet)
+			let field = try #require(panel.view.allSubviews().compactMap
+			{
+				$0 as? NSSearchField
+			}.first)
+			field.stringValue = "needle"
+			panel.controlTextDidChange(Notification(
+				name: NSControl.textDidChangeNotification,
+				object: field
+			))
+			let status = try #require(panel.view.allSubviews().compactMap
+			{
+				$0 as? NSTextField
+			}.first
+			{
+				$0.accessibilityLabel() == "Search status"
+			})
+			state.searchRequest = UUID()
+			panel.render(state)
+			#expect(status.stringValue == "Searching…")
+			state.searchRequest = nil
+			state.searchFailure = .unavailable
+			panel.render(state)
+			#expect(status.stringValue.contains("Search failed"))
+			state.searchFailure = nil
+			state.contentResults = FileViewerSearchPage(
+				results: [],
+				isTruncated: false
+			)
+			panel.render(state)
+			#expect(status.stringValue == "No matching content")
+			let first = FileViewerSearchResult(
+				location: FileLocation(
+					root: state.activeRoot!,
+					relativePath: "a.txt"
+				),
+				lineNumber: 2,
+				lineText: "needle one"
+			)
+			let last = FileViewerSearchResult(
+				location: FileLocation(
+					root: state.activeRoot!,
+					relativePath: "deep/a.txt"
+				),
+				lineNumber: 42,
+				lineText: "needle two"
+			)
+			state.contentResults = FileViewerSearchPage(
+				results: [first, last],
+				isTruncated: true,
+				excludedDirectoryCount: 2
+			)
+			panel.render(state)
+			let table = try #require(panel.view.allSubviews().compactMap
+			{
+				$0 as? FileSearchResultsTableView
+			}.first)
+			#expect(table.selectedRow == 0)
+			#expect(status.stringValue.contains("Showing first 2 matches"))
+			#expect(status.stringValue.contains("2 generated folders skipped"))
+			try sendKey(
+				119,
+				to: table,
+				in: sheet
+			)
+			#expect(table.selectedRow == 1)
+			let focused = sheet.firstResponder
+			let geometry = sheet.frame.size
+			for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua]
+			{
+				parent.appearance = NSAppearance(named: appearance)
+				#expect(sheet.appearance?.name == appearance)
+				#expect(sheet.firstResponder === focused)
+				#expect(sheet.frame.size == geometry)
+				#expect(table.selectedRow == 1)
+			}
+			panel.render(state)
+			#expect(table.selectedRow == 1)
+			try sendKey(
+				36,
+				to: table,
+				in: sheet
+			)
+			#expect(chosen == last)
+			#expect(parent.attachedSheet == nil)
+			#expect(!sheet.isVisible)
+			#expect(canceled == 1)
+			#expect(parent.firstResponder === origin)
+
+			panel.present(in: parent)
+			let replacement = try #require(parent.attachedSheet)
+			try sendKey(
+				53,
+				to: try #require(panel.view.allSubviews().compactMap
+				{
+					$0 as? FileSearchResultsTableView
+				}.first),
+				in: replacement
+			)
+			#expect(parent.attachedSheet == nil)
+			#expect(!replacement.isVisible)
+			#expect(canceled == 2)
+		}
+	}
+
+	private func sendKey(
+		_ code: UInt16,
+		to table: NSTableView,
+		in window: NSWindow
+	) throws
+	{
+		let event = try #require(NSEvent.keyEvent(
+			with: .keyDown,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: window.windowNumber,
+			context: nil,
+			characters: "",
+			charactersIgnoringModifiers: "",
+			isARepeat: false,
+			keyCode: code
+		))
+		table.keyDown(with: event)
+	}
+
 	private func outlineLabel(
 		_ outline: NSOutlineView,
 		row: Int
