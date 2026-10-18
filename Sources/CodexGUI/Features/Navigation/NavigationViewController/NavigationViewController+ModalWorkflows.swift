@@ -7,7 +7,7 @@ extension NavigationViewController
 		completion: ((String) -> Void)? = nil
 	)
 	{
-		guard canManageSidebarTasks, let window = view.window, window.attachedSheet == nil
+		guard canManageTask(thread.id), let window = view.window, window.attachedSheet == nil
 		else
 		{
 			return
@@ -42,10 +42,19 @@ extension NavigationViewController
 		{
 			[weak self, panel] response in
 			panel.orderOut(nil)
-			guard response == .OK, self?.modalScope == capturedScope,
-					self?.canManageSidebarTasks == true
+			guard response == .OK, let self, modalScope == capturedScope,
+					view.window === window
 			else
 			{
+				return
+			}
+			guard canManageTask(capturedThreadID)
+			else
+			{
+				presentTaskManagementUnavailable(
+					threadID: capturedThreadID,
+					in: window
+				)
 				return
 			}
 			complete?(capturedThreadID)
@@ -160,13 +169,23 @@ extension NavigationViewController
 			requiredThreadID: thread.id
 		)
 		{
-			value in complete?(value)
+			[weak self] value in
+			guard let self, canManageTask(thread.id)
+			else
+			{
+				self?.presentTaskManagementUnavailable(
+					threadID: thread.id,
+					in: window
+				)
+				return
+			}
+			complete?(value)
 		}
 	}
 
 	func presentRenameTask(_ thread: ThreadSummary)
 	{
-		guard canManageSidebarTasks, let window = view.window, window.attachedSheet == nil
+		guard canManageTask(thread.id), let window = view.window, window.attachedSheet == nil
 		else
 		{
 			return
@@ -182,13 +201,46 @@ extension NavigationViewController
 		)
 		{
 			[weak self] value in
-			guard self?.canManageSidebarTasks == true
+			guard let self, canManageTask(capturedThreadID)
 			else
 			{
+				self?.presentTaskManagementUnavailable(
+					threadID: capturedThreadID,
+					in: window
+				)
 				return
 			}
 			complete?(capturedThreadID, value)
 		}
+	}
+
+	private func presentTaskManagementUnavailable(
+		threadID: String,
+		in window: NSWindow
+	)
+	{
+		guard view.window === window, window.attachedSheet == nil
+		else
+		{
+			return
+		}
+		let alert = NSAlert()
+		alert.messageText = "This task can no longer be changed."
+		let execution = renderedPresentation?.threadExecutions[threadID]
+		if execution?.outcomeUncertain == true
+		{
+			alert.informativeText = "Its outcome is unknown. Refresh this task before changing it."
+		}
+		else if execution?.state.isBusy == true
+		{
+			alert.informativeText = "This task is still running. Wait for it to finish."
+		}
+		else
+		{
+			alert.informativeText = "Refresh and try again."
+		}
+		alert.addButton(withTitle: "OK")
+		alert.beginSheetModal(for: window)
 	}
 
 	private func presentTextEntrySheet(

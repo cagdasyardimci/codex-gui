@@ -14,6 +14,7 @@ struct NavigationPresentation: Equatable
 	let activeExecutionCount: Int?
 	let showingArchived: Bool
 	let canManageThreads: Bool
+	let threadManagementAvailability: [String: Bool]?
 	let recentProjects: [URL]
 	let pinnedProjectPaths: Set<String>
 	let removedProjectPaths: Set<String>
@@ -56,6 +57,7 @@ struct NavigationPresentation: Equatable
 		}
 		showingArchived = snapshot.showingArchived
 		canManageThreads = snapshot.canManageThreads
+		threadManagementAvailability = snapshot.threadManagementAvailability
 		recentProjects = snapshot.recentProjects
 		pinnedProjectPaths = snapshot.pinnedProjectPaths
 		removedProjectPaths = snapshot.removedProjectPaths

@@ -213,10 +213,89 @@ struct TaskDeletionConfirmationTests
 				"sheet.dismissal",
 				detail: "reject-delete"
 			)
+			if !changeOwnership
+			{
+				await waitForSheetToEnd(
+					panel,
+					in: parent
+				)
+				let feedback = try #require(parent.attachedSheet)
+				#expect(labels(in: feedback.contentView).contains(
+					"This task can no longer be changed."
+				))
+				parent.endSheet(feedback)
+			}
 			await waitForDismissal(parent)
 			dismissalTiming.end()
 			#expect(parent.attachedSheet == nil)
 			#expect(deletedTaskIDs.isEmpty)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	func deleteRevalidatesCapturedTargetAndExplainsItsChangedEligibility(
+		uncertain: Bool
+	) async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			let controller = NavigationViewController()
+			let parent = makeParentWindow(controller)
+			defer
+			{
+				if let sheet = parent.attachedSheet
+				{
+					parent.endSheet(sheet)
+				}
+				parent.close()
+			}
+			var model = WorkspaceModel(identity: WorkspaceIdentity(
+				sessionID: UUID(),
+				canonicalCheckoutPath: "/tmp/task-deletion-confirmation"
+			))
+			model.connection.isConnected = true
+			model.conversations.threads = ["selected", "target"].map
+			{
+				ThreadSummary(json: ["id": $0, "cwd": "/tmp/task-deletion-confirmation"])!
+			}
+			model.conversations.selectedConversation = .thread("selected")
+			controller.render(WorkspaceSelectors(
+				model: model,
+				now: .distantPast
+			).makeSnapshot())
+			var deleted: [String] = []
+			controller.onDeleteTask =
+			{
+				deleted.append($0)
+			}
+			controller.confirmDeleteTask(model.conversations.threads[1])
+			let panel = try #require(parent.attachedSheet as? TaskDeletionConfirmationPanel)
+			let dialog = try #require(panel.contentViewController as? TaskDeletionConfirmationView)
+			var execution = ExecutionModel()
+			execution.activeThreadID = "target"
+			execution.state = uncertain ? .failed : .running
+			execution.needsReconciliation = uncertain
+			model.executions.entries[.thread("target")] = execution
+			controller.render(WorkspaceSelectors(
+				model: model,
+				now: .distantPast
+			).makeSnapshot())
+			#expect(controller.canManageTask("selected"))
+			#expect(!controller.canManageTask("target"))
+			try #require(dialog.deleteButton.dispatchConfiguredAction())
+			await waitForSheetToEnd(
+				panel,
+				in: parent
+			)
+			let feedback = try #require(parent.attachedSheet)
+			let reason = uncertain
+				? "Its outcome is unknown. Refresh this task before changing it."
+				: "This task is still running. Wait for it to finish."
+			#expect(labels(in: feedback.contentView).contains(reason))
+			#expect(deleted.isEmpty)
+			parent.endSheet(feedback)
+			await waitForDismissal(parent)
 		}
 	}
 
@@ -274,6 +353,38 @@ struct TaskDeletionConfirmationTests
 				return
 			}
 			try? await Task.sleep(for: .milliseconds(10))
+		}
+	}
+
+	private func waitForSheetToEnd(
+		_ sheet: NSWindow,
+		in parent: NSWindow
+	) async
+	{
+		for _ in 0 ..< 100
+		{
+			if parent.attachedSheet !== sheet
+			{
+				return
+			}
+			try? await Task.sleep(for: .milliseconds(10))
+		}
+	}
+
+	private func labels(in view: NSView?) -> [String]
+	{
+		guard let view
+		else
+		{
+			return []
+		}
+		let ownLabels = (view as? NSTextField).map
+		{
+			[$0.stringValue]
+		} ?? []
+		return ownLabels + view.subviews.flatMap
+		{
+			labels(in: $0)
 		}
 	}
 

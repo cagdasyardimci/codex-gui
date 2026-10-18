@@ -385,6 +385,55 @@ struct WorkspaceEligibilityTests
 		#expect(!WorkspaceEligibility(model: model).acceptsManagement(rename))
 	}
 
+	@Test(
+		arguments: ["a", "b"],
+		[false, true]
+	)
+	func managementAvailabilityAndReductionUseTheTargetExecution(
+		selectedThreadID: String,
+		uncertain: Bool
+	)
+	{
+		var model = fixture()
+		model.conversations.threads = ["a", "b"].map
+		{
+			ThreadSummary(json: ["id": $0, "cwd": "/project"])!
+		}
+		model.conversations.selectedConversation = .thread(selectedThreadID)
+		var execution = ExecutionModel()
+		execution.activeThreadID = "b"
+		execution.state = uncertain ? .failed : .running
+		execution.needsReconciliation = uncertain
+		execution.hasUncertainRequest = uncertain
+		model.executions.entries[.thread("b")] = execution
+		let eligibility = WorkspaceEligibility(model: model)
+		#expect(eligibility.canManageThread("a"))
+		#expect(!eligibility.canManageThread("b"))
+		#expect(!eligibility.canManageThread("unknown"))
+		let snapshot = WorkspaceSelectors(
+			model: model,
+			now: .distantPast
+		).makeSnapshot()
+		#expect(snapshot.threadManagementAvailability == ["a": true, "b": false])
+		for threadID in ["a", "b"]
+		{
+			var targetModel = model
+			let context = OperationContext(
+				workspace: model.identity,
+				generation: model.connection.generation,
+				requestID: UUID(),
+				threadID: threadID
+			)
+			let result = ConversationReducer.reduce(
+				&targetModel,
+				.conversations(.managementRequested(.delete(context)))
+			)
+			#expect(result.effects.isEmpty == (threadID == "b"))
+			#expect(targetModel.conversations.pendingManagement?.context ==
+				(threadID == "a" ? context : nil))
+		}
+	}
+
 	private func fixture() -> WorkspaceModel
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(

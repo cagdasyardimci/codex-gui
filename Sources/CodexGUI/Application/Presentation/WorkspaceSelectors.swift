@@ -557,6 +557,17 @@ struct WorkspaceSelectors
 			}
 		}
 		snapshot.activeExecutionCount = activeExecutionCount
+		let eligibility = WorkspaceEligibility(model: model)
+		var managementAvailability: [String: Bool] = [:]
+		for thread in model.conversations.threads + model.preferences.pinnedTasks
+		{
+			managementAvailability[thread.id] = eligibility.canManageThread(thread.id)
+		}
+		if let selectedThreadID
+		{
+			managementAvailability[selectedThreadID] = eligibility.canManageThread(selectedThreadID)
+		}
+		snapshot.threadManagementAvailability = managementAvailability
 		snapshot.workspaceOwner = WorkspaceLifecycleReducer.reference(model)
 		snapshot.composerDraftLifetime = composerDraft.lifetime
 		return snapshot

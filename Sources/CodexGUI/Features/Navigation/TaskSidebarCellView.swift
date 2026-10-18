@@ -300,7 +300,7 @@ final class TaskSidebarCellView: NSTableCellView
 		dismissHoverCard()
 		return TaskSidebarContextMenu(
 			isPinned: isPinned,
-			onRename: onRename,
+			onRename: archiveButton.isEnabled ? onRename : nil,
 			onTogglePin: onTogglePin,
 			onMarkUnread: onMarkUnread,
 			onArchive: archiveButton.isEnabled ? onArchive : nil,

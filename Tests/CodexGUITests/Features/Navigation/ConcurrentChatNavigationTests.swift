@@ -102,6 +102,51 @@ struct ConcurrentChatNavigationTests
 		#expect(controller.currentProjectActiveTaskCount == 2)
 	}
 
+	@Test(
+		arguments: ["a", "b"],
+		[false, true]
+	)
+	func sidebarManagementFollowsEachTargetRegardlessOfSelection(
+		selectedThreadID: String,
+		uncertain: Bool
+	) throws
+	{
+		_ = NSApplication.shared
+		let controller = NavigationViewController()
+		let threads = try ["a", "b"].map
+		{
+			try #require(ThreadSummary(json: ["id": $0, "cwd": "/tmp/concurrent"]))
+		}
+		var snapshot = makeSnapshot(
+			threads: threads,
+			selectedThreadID: selectedThreadID
+		)
+		snapshot.threadManagementAvailability = ["a": true, "b": false]
+		snapshot.threadExecutions = ["b": ThreadExecutionPresentation(
+			state: uncertain ? .failed : .running,
+			outcomeUncertain: uncertain
+		)]
+		controller.render(snapshot)
+		for (index, thread) in threads.enumerated()
+		{
+			let cell = try #require(controller.tableView(
+				controller.chatsTable,
+				viewFor: nil,
+				row: index + 1
+			) as? TaskSidebarCellView)
+			let eligible = thread.id == "a"
+			#expect(cell.archiveButton.isEnabled == eligible)
+			#expect(cell.deleteButton.isEnabled == eligible)
+			let menu = cell.makeContextMenu()
+			#expect(menu.items[0].isEnabled == eligible)
+			#expect(menu.items[4].isEnabled == eligible)
+			#expect(menu.items[5].isEnabled == eligible)
+		}
+		#expect(controller.renameButton.isEnabled == (selectedThreadID == "a"))
+		#expect(controller.archiveButton.isEnabled == (selectedThreadID == "a"))
+		#expect(!controller.canManageTask("unknown"))
+	}
+
 	private func makeSnapshot(
 		threads: [ThreadSummary] = [],
 		selectedThreadID: String? = nil

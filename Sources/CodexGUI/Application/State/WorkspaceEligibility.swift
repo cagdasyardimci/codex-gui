@@ -105,11 +105,32 @@ struct WorkspaceEligibility
 
 	var canManageThreads: Bool
 	{
+		canManage(execution: model.execution)
+	}
+
+	func canManageThread(_ threadID: String) -> Bool
+	{
+		let execution = model.execution(for: .thread(threadID))
+		return canManage(execution: execution) && !execution.blocksCleanup
+			&& !hasUncertainSubmission(for: .thread(threadID))
+			&& (threadID == model.conversations.selectedConversation.threadID
+				|| model.conversations.threads.contains(where:
+					{
+						$0.id == threadID
+					})
+				|| model.preferences.pinnedTasks.contains(where:
+					{
+						$0.id == threadID
+					}))
+	}
+
+	private func canManage(execution: ExecutionModel) -> Bool
+	{
 		ownerAvailable
 			&& model.connection.isConnected
-			&& !model.execution.isTaskActive
-			&& !model.execution.needsReconciliation
-			&& !model.execution.hasUncertainRequest
+			&& !execution.isTaskActive
+			&& !execution.needsReconciliation
+			&& !execution.hasUncertainRequest
 			&& model.composer.uncertainSubmissions.isEmpty
 			&& model.lifecycle.pendingInputPreparation == nil
 			&& model.conversations.pendingSelection == nil
@@ -161,22 +182,11 @@ struct WorkspaceEligibility
 
 	func acceptsManagement(_ operation: ThreadManagementOperation) -> Bool
 	{
-		guard let threadID = operation.context.threadID, canManageThreads,
-				!model.execution(for: .thread(threadID)).blocksCleanup,
-				!hasUncertainSubmission(for: .thread(threadID)),
+		guard let threadID = operation.context.threadID, canManageThread(threadID),
 				operation.context.belongsTo(
 				workspace: model.identity,
 				generation: model.connection.generation
-				),
-				threadID == model.conversations.selectedConversation.threadID
-				|| model.conversations.threads.contains(where:
-				{
-					$0.id == threadID
-				})
-				|| model.preferences.pinnedTasks.contains(where:
-				{
-					$0.id == threadID
-				})
+				)
 		else
 		{
 			return false

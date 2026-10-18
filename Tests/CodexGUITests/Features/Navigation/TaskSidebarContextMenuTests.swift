@@ -106,7 +106,8 @@ struct TaskSidebarContextMenuTests
 		}
 		cell.setActionsEnabled(false)
 		let menu = cell.makeContextMenu()
-		#expect(menu.items.prefix(3).allSatisfy
+		#expect(!menu.items[0].isEnabled)
+		#expect(menu.items[1 ... 2].allSatisfy
 		{
 			$0.isEnabled
 		})

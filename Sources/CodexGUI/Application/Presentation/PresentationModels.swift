@@ -82,6 +82,8 @@ struct ConversationSnapshot
 	var preferenceWarning: String? = nil
 	var showingArchived = false
 	var canManageThreads = false
+	/// Nil supports legacy snapshots; runtime publishes eligibility for every known target.
+	var threadManagementAvailability: [String: Bool]? = nil
 	var activeThreadID: String? = nil
 	var activeTurnID: String? = nil
 	/// Exact latest source turn, including turns that reported no file changes.

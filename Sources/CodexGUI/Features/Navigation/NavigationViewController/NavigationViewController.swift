@@ -276,6 +276,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			threads != snapshot.threads || selectedThreadID != snapshot.selectedThreadID
 				|| activeThreadChanged || activeStateChanged || projectsChanged || unreadChanged
 				|| previousPresentation?.threadExecutions != snapshot.threadExecutions
+				|| previousPresentation?.threadManagementAvailability
+				!= snapshot.threadManagementAvailability
 				|| previousCanStartProjectChat != canStartProjectChat
 				|| renderedManagementAvailability != snapshot.canManageThreads
 
@@ -321,10 +323,19 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			}.count + (waitingForThreadID ? 1 : 0)
 		canStartProjectChat = newChatButton.isEnabled
 		chatsTable.isEnabled = true
-		canManageSelectedThread = snapshot.canManageThreads
 		canManageSidebarTasks = snapshot.canManageThreads
+		canManageSelectedThread = snapshot.selectedThreadID.map(canManageTask) ?? false
 		archiveButton.title = snapshot.showingArchived ? "Restore" : "Archive"
 		archiveButton.toolTip = archiveButton.title
+	}
+
+	func canManageTask(_ threadID: String) -> Bool
+	{
+		if let availability = renderedPresentation?.threadManagementAvailability
+		{
+			return availability[threadID] ?? false
+		}
+		return canManageSidebarTasks
 	}
 
 	func updateManagementButtons()

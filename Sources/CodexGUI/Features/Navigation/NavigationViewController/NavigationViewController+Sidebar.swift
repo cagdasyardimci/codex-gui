@@ -308,7 +308,7 @@ extension NavigationViewController
 		)
 			as? TaskSidebarCellView ?? TaskSidebarCellView(frame: .zero)
 		cell.identifier = identifier
-		cell.setActionsEnabled(canManageSidebarTasks)
+		cell.setActionsEnabled(canManageTask(thread.id))
 		cell.isPinned = pinnedTasks.contains
 		{
 			$0.id == thread.id
@@ -328,7 +328,13 @@ extension NavigationViewController
 		}
 		cell.onArchive =
 		{
-			[weak self] in self?.onArchiveTask?(thread.id)
+			[weak self] in
+			guard let self, canManageTask(thread.id)
+			else
+			{
+				return
+			}
+			onArchiveTask?(thread.id)
 		}
 		cell.onDelete =
 		{

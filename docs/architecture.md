@@ -46,6 +46,10 @@ Shared persistence preserves existing project/thread keys and ordering. Task pin
 
 ## Presentation
 
+Task-management controls evaluate the captured target conversation's execution eligibility, and
+reducers revalidate that target when a deferred action is accepted. Workspace-wide submission and
+recovery barriers still apply.
+
 AppKit callbacks dispatch captured `WorkspaceIntentTarget` intents and render narrow read-only presentations. `WorkspaceEligibility` shares capability rules between selectors and reducers, with admission checked again when an intent is reduced. Publication is coalesced while all accepted backend events are processed in order. Transcript preparation runs asynchronously and superseded renders are cancelled without changing AppKit's ownership of focus and scrolling.
 
 `ThreadTitleText` in `Application/State/` owns shared whitespace normalization, the
