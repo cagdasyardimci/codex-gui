@@ -156,6 +156,9 @@ Local image dependencies consult the shared thumbnail loader's freshness metadat
 render generations; immutable inline image data and ordinary text retain reusable prepared-content
 caching.
 
+Parser-derived link ranges remain authoritative in Markdown previews, including literal URLs in
+code.
+
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and [validation](validation.md) for verification commands and acceptance limits.
 
 Git comparison file headers offer rich preview for Markdown, images and PDFs supported by the

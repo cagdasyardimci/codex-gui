@@ -27,18 +27,23 @@ enum TurnSummaryLinkPresentation
 		attributes: [NSAttributedString.Key: Any]
 	) -> NSAttributedString
 	{
-		let explicitLinks: [MarkdownPlainTextLink] = source.flatMap
+		let links: [MarkdownPlainTextLink]
+		if let source
 		{
 			let parsed = MarkdownContentParser.parse(
-				$0,
+				source,
 				markdown: true
 			)
 			let presentation = MarkdownPlainTextRenderer.renderWithLinks(parsed)
-			return presentation.text == text ? presentation.links : nil
-		} ?? []
+			links = presentation.text.utf8.elementsEqual(text.utf8) ? presentation.links : []
+		}
+		else
+		{
+			links = WebLinkDetector.links(in: text)
+		}
 		return styled(
 			text,
-			explicitLinks: explicitLinks,
+			explicitLinks: links,
 			attributes: attributes
 		)
 	}
@@ -53,18 +58,7 @@ enum TurnSummaryLinkPresentation
 			string: text,
 			attributes: attributes
 		)
-		let visibleLinks = WebLinkDetector.links(in: text).filter
-		{
-			visible in
-			!explicitLinks.contains
-			{
-				NSIntersectionRange(
-					$0.range,
-					visible.range
-				).length > 0
-			}
-		}
-		let links = (explicitLinks + visibleLinks).sorted
+		let links = explicitLinks.sorted
 		{
 			$0.range.location < $1.range.location
 		}

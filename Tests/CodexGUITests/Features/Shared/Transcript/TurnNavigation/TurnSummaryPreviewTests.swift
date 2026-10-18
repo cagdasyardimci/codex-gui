@@ -171,6 +171,89 @@ struct TurnSummaryPreviewTests
 		#expect(faviconCount == 1)
 	}
 
+	@Test func codeURLsRemainLiteralInTranscriptAndTurnPreview() async throws
+	{
+		_ = NSApplication.shared
+		let url = "https://a.co"
+		let source = """
+		\(url)
+
+		`\(url)`
+
+		```text
+		\(url)
+		```
+		"""
+		let content = await ConversationContentCache().content(
+			body: source,
+			markdown: true
+		)
+		let summary = ConversationTurnSummary.make(from: [
+			entry(
+				"turn:request",
+				.user,
+				source
+			),
+			entry(
+				"turn:reply",
+				.agent,
+				source
+			),
+		])[0]
+		let preview = TurnSummaryPreview(
+			summary: summary,
+			bookmarked: false
+		)
+		let stack = try #require(preview.subviews.first as? NSStackView)
+		let reply = try #require(stack.arrangedSubviews.last as? NSTextField)
+		let styledTitle = TurnSummaryLinkPresentation.styledTitle(
+			source,
+			attributes: [:]
+		)
+		for text in [content.attributedString, styledTitle, reply.attributedStringValue]
+		{
+			let string = text.string as NSString
+			var location = 0
+			for index in 0 ..< 3
+			{
+				let range = string.range(
+					of: url,
+					options: [],
+					range: NSRange(
+						location: location,
+						length: string.length - location
+					)
+				)
+				try #require(range.location != NSNotFound)
+				let link = text.attribute(
+					.link,
+					at: range.location,
+					effectiveRange: nil
+				) as? URL
+				#expect(link?.absoluteString == (index == 0 ? url : nil))
+				location = NSMaxRange(range)
+			}
+			var faviconCount = 0
+			text.enumerateAttribute(
+				.attachment,
+				in: NSRange(
+					location: 0,
+					length: text.length
+				),
+				options: []
+			)
+			{
+				value, _, _ in
+				if let favicon = value as? WebLinkFaviconAttachment
+				{
+					#expect(favicon.url.absoluteString == url)
+					faviconCount += 1
+				}
+			}
+			#expect(faviconCount == 1)
+		}
+	}
+
 	@Test func previewHighlightsMarkdownAndVisibleWebLinks() throws
 	{
 		_ = NSApplication.shared
@@ -231,6 +314,11 @@ struct TurnSummaryPreviewTests
 			at: 6,
 			effectiveRange: nil
 		) is WebLinkFaviconAttachment)
+		#expect((reply.attributedStringValue.attribute(
+			.link,
+			at: 7,
+			effectiveRange: nil
+		) as? URL)?.absoluteString == "https://example.net/page")
 		let fromCache = ConversationTurnSummary.navigation(
 			references: [ConversationTurnReference(
 				id: "cached",
