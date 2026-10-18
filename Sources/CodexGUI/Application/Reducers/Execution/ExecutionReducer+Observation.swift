@@ -188,11 +188,13 @@ extension ExecutionReducer
 				model.execution.activeActivity = CommandExecutionStatus.isTerminal(item.status)
 					? nil : "Running a command…"
 			}
-			else if item.type == "mcpToolCall"
+			else if item.type == "mcpToolCall" || item.type == "dynamicToolCall",
+					let source = item.sourceActivity
 			{
-				model.execution.activeActivity = ["completed", "failed", "declined"]
-					.contains(item.status ?? "")
-					? nil : (item.command ?? item.type)
+				let finished = ConversationTurnStatus.isTerminal(item.status)
+					|| item.status == "declined"
+				model.execution.activeActivity = finished
+					? nil : "\(source.provider) · \(source.operation)"
 			}
 			finishDeferred(
 				model: &model,

@@ -6,6 +6,9 @@ Clicking a generic command's title next to its terminal icon toggles the Shell p
 
 The current activity label above the transcript uses “Running a command…” for an active shell command and stays on one line. Full command text remains in the command’s transcript preview and expandable Shell panel.
 
+MCP and dynamic-tool activity use their structured provider and operation names. Their terminal
+outcomes clear the active label through the same completion policy used for recorded activity.
+
 The conversation presents assistant commentary and answers as ordinary messages. Between messages, consecutive command activities in the same turn form a compact activity group. A group never absorbs another turn, a user message, assistant commentary, or an image view. Repeated operations remain separate observations, including repeated reads of the same file.
 
 The group header has an icon, a summary such as “Read files, ran commands”, and a disclosure chevron immediately after the summary. Its list starts collapsed. A single action uses its own expandable header instead of a separate group header. Each command-backed row can independently reveal its command details; those details start collapsed. Closing a group does not forget which of its commands were expanded. Closed headers retain counts of failed, declined, and interrupted commands, counted once per source item.

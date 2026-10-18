@@ -55,18 +55,63 @@ struct ExecutionCommandStatusTests
 		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "Running a command…")
 	}
 
-	@Test(arguments: ["interrupted", "cancelled"])
-	func mcpEventsRetainTheirIndependentActivityPolicy(status: String) throws
+	@Test(
+		arguments: ["mcpToolCall", "dynamicToolCall"],
+		[
+			"completed",
+			"failed",
+			"declined",
+			"interrupted",
+			"cancelled",
+			"stopped"
+		]
+	)
+	func terminalToolEventsClearActivityWithoutCreatingACommandBarrier(
+		itemType: String,
+		status: String
+	) throws
 	{
 		var (model, context) = fixture()
 		try observeCommand(
+			status: "inProgress",
+			itemType: itemType,
+			context: context,
+			model: &model,
+			starting: true
+		)
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity ==
+			"github · search_issues")
+		try observeCommand(
 			status: status,
-			itemType: "mcpToolCall",
+			itemType: itemType,
 			context: context,
 			model: &model
 		)
 		#expect(!model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
-		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "printf fixture")
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity == nil)
+		#expect(model.executions.entries[.thread("worker")]!.state == .running)
+	}
+
+	@Test(
+		arguments: ["mcpToolCall", "dynamicToolCall"],
+		[nil, "running", "futureStatus"] as [String?]
+	)
+	func activeToolEventsReuseStructuredSourceLabels(
+		itemType: String,
+		status: String?
+	) throws
+	{
+		var (model, context) = fixture()
+		try observeCommand(
+			status: status,
+			itemType: itemType,
+			context: context,
+			model: &model,
+			starting: true
+		)
+		#expect(model.executions.entries[.thread("worker")]!.activeActivity ==
+			"github · search_issues")
+		#expect(!model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
 	}
 
 	private func fixture() -> (WorkspaceModel, OperationContext)
@@ -97,7 +142,8 @@ struct ExecutionCommandStatusTests
 		itemType: String = "commandExecution",
 		command: String = "printf fixture",
 		context: OperationContext,
-		model: inout WorkspaceModel
+		model: inout WorkspaceModel,
+		starting: Bool = false
 	) throws
 	{
 		var json: [String: Any] = [
@@ -105,20 +151,33 @@ struct ExecutionCommandStatusTests
 			"type": itemType,
 			"command": command
 		]
+		if itemType != "commandExecution"
+		{
+			json["server"] = "github"
+			json["namespace"] = "github"
+			json["tool"] = "github.search_issues"
+		}
 		if let status
 		{
 			json["status"] = status
 		}
 		let item = try #require(CodexItem(json: json))
+		let event: AppServerEvent = starting
+			? .itemStarted(
+				threadId: "worker",
+				turnId: "turn",
+				item: item
+			)
+			: .itemCompleted(
+				threadId: "worker",
+				turnId: "turn",
+				item: item
+			)
 		_ = ExecutionReducer.reduce(
 			&model,
 			.execution(.backendObserved(
 				context,
-				.itemCompleted(
-					threadId: "worker",
-					turnId: "turn",
-					item: item
-				)
+				event
 			))
 		)
 	}
