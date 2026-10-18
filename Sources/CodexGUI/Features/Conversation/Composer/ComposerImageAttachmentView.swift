@@ -5,6 +5,7 @@ final class ComposerImageAttachmentView: NSView
 {
 	static let sideLength: CGFloat = 120
 
+	private let imageView = AttachmentThumbnailImageView()
 	private let removeButton: NSButton
 	private var pointerTrackingArea: NSTrackingArea?
 
@@ -17,7 +18,6 @@ final class ComposerImageAttachmentView: NSView
 		self.removeButton = removeButton
 		super.init(frame: .zero)
 
-		let imageView = AttachmentThumbnailImageView()
 		imageView.image = image ?? DesktopIcons.image(.infoCircle)
 		imageView.setAccessibilityElement(false)
 		imageView.wantsLayer = true
@@ -56,6 +56,11 @@ final class ComposerImageAttachmentView: NSView
 
 		// Keep removal in keyboard navigation and accessibility while hiding its resting visual.
 		removeButton.alphaValue = 0
+	}
+
+	func displayThumbnail(_ image: NSImage)
+	{
+		imageView.image = image
 	}
 
 	required init?(coder: NSCoder)

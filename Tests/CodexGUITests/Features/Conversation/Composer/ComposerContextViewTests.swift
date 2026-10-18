@@ -116,27 +116,27 @@ struct ComposerContextViewTests
 			in: tile,
 			title: ""
 		))
-		expand.performClick(nil)
+		try #require(expand.dispatchConfiguredAction())
 		await view.waitForExpandedPreview()
 		let expanded = try #require(findExpandedPreview(in: view))
 		#expect(findImageView(in: expanded)?.image != nil)
 		#expect(window.attachedSheet == nil)
 		view.render(items: [])
 		#expect(expanded.superview == nil)
-		remove.performClick(nil)
+		try #require(remove.dispatchConfiguredAction())
 		#expect(removedID == nil)
 		view.render(items: [item])
 		let currentRemove = try #require(findButton(
 			in: view,
 			title: "Remove"
 		))
-		currentRemove.performClick(nil)
+		try #require(currentRemove.dispatchConfiguredAction())
 		#expect(removedID == item.id)
 		let currentExpand = try #require(findButton(
 			in: view,
 			title: ""
 		))
-		currentExpand.performClick(nil)
+		try #require(currentExpand.dispatchConfiguredAction())
 		await view.waitForExpandedPreview()
 		let reopened = try #require(findExpandedPreview(in: view))
 		window.contentView = NSView()
@@ -198,7 +198,7 @@ struct ComposerContextViewTests
 			in: tiles[1],
 			title: "Remove"
 		))
-		secondRemove.performClick(nil)
+		try #require(secondRemove.dispatchConfiguredAction())
 		#expect(removed == [items[1].id])
 		window.setContentSize(NSSize(
 			width: 140,
@@ -313,6 +313,85 @@ struct ComposerContextViewTests
 			{
 				#expect(left.redComponent > 0.9 && right.blueComponent > 0.9)
 			}
+		}
+	}
+
+	@Test func contextThumbnailsAreBoundedAndRetiredLoadsCannotReplaceNewRows() async throws
+	{
+		_ = NSApplication.shared
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent("context-thumbnail-\(UUID()).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: url)
+		}
+		let bitmap = try #require(NSBitmapImageRep(
+			bitmapDataPlanes: nil,
+			pixelsWide: 1_200,
+			pixelsHigh: 600,
+			bitsPerSample: 8,
+			samplesPerPixel: 4,
+			hasAlpha: true,
+			isPlanar: false,
+			colorSpaceName: .deviceRGB,
+			bytesPerRow: 0,
+			bitsPerPixel: 0
+		))
+		try #require(bitmap.bitmapData).initialize(
+			repeating: 0,
+			count: bitmap.bytesPerRow * bitmap.pixelsHigh
+		)
+		let bytes = try #require(bitmap.representation(
+			using: .png,
+			properties: [:]
+		))
+		try await BackgroundTestWork.perform
+		{
+			try bytes.write(to: url)
+		}
+		let item = ComposerContextItem(
+			id: "image",
+			kind: .image,
+			title: "Large image",
+			path: url.path
+		)
+		let view = ComposerContextView()
+		view.render(items: [item])
+		let retired = try #require(imageTiles(in: view).first)
+		let retiredImage = findImageView(in: retired)?.image
+		let pending = Array(view.imageTasks.values)
+		view.render(items: [ComposerContextItem(
+			id: "replacement",
+			kind: .image,
+			title: "Missing"
+		)])
+		for task in pending
+		{
+			await task.value
+		}
+		await view.waitForImages()
+		#expect(findImageView(in: retired)?.image === retiredImage)
+		#expect(imageTiles(in: view).first !== retired)
+		view.render(items: [item])
+		await view.waitForImages()
+		#expect(view.imageTasks.isEmpty)
+		let tile = try #require(imageTiles(in: view).first)
+		let image = try #require(findImageView(in: tile)?.image)
+		let pixels = try #require(image.cgImage(
+			forProposedRect: nil,
+			context: nil,
+			hints: nil
+		))
+		#expect(pixels.width == 240 && pixels.height == 120)
+		for width: CGFloat in [260, 140, 500]
+		{
+			view.frame.size = NSSize(
+				width: width,
+				height: 400
+			)
+			view.layoutSubtreeIfNeeded()
+			#expect(imageTiles(in: view).first === tile)
+			#expect(findImageView(in: tile)?.image === image)
 		}
 	}
 

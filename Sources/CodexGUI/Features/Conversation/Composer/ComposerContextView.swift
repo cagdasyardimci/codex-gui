@@ -9,6 +9,8 @@ final class ComposerContextView: NSView
 	private let expandedPreview = ExpandedImagePreview()
 	private var renderedImageColumnCount = 1
 	private var itemRowsByID: [String: NSView] = [:]
+	private(set) var imageTasks: [String: Task<Void, Never>] = [:]
+	private var imageGeneration = 0
 	private static let imageRowSpacing: CGFloat = 8
 
 	override init(frame frameRect: NSRect)
@@ -41,6 +43,12 @@ final class ComposerContextView: NSView
 		}
 
 		expandedPreview.dismiss()
+		imageGeneration += 1
+		for task in imageTasks.values
+		{
+			task.cancel()
+		}
+		imageTasks.removeAll()
 		currentItems = items
 		itemRowsByID.removeAll()
 		rebuildItemRows(items)
@@ -59,6 +67,22 @@ final class ComposerContextView: NSView
 	func waitForExpandedPreview() async
 	{
 		await expandedPreview.waitForPresentation()
+	}
+
+	func waitForImages() async
+	{
+		for task in Array(imageTasks.values)
+		{
+			await task.value
+		}
+	}
+
+	isolated deinit
+	{
+		for task in imageTasks.values
+		{
+			task.cancel()
+		}
 	}
 
 	private func rebuildItemRows(_ items: [ComposerContextItem])
@@ -162,13 +186,40 @@ final class ComposerContextView: NSView
 			previewButton.setAccessibilityLabel("Expand attached image \(item.title)")
 
 			let attachment = ComposerImageAttachmentView(
-				image: item.path.flatMap
-				{
-					NSImage(contentsOfFile: $0)
-				},
+				image: nil,
 				previewButton: previewButton,
 				removeButton: makeRemoveButton(for: item)
 			)
+
+			if let path = item.path
+			{
+				let generation = imageGeneration
+				let itemID = item.id
+				imageTasks[itemID] = Task
+				{
+					[weak self, weak attachment] in
+					defer
+					{
+						if self?.imageGeneration == generation
+						{
+							self?.imageTasks[itemID] = nil
+						}
+					}
+					let thumbnail = await SourceThumbnailLoader.image(
+						path: path,
+						maximumPixelSize: Int(ComposerImageAttachmentView.sideLength * 2)
+					)
+					guard !Task.isCancelled, let thumbnail
+					else
+					{
+						return
+					}
+					attachment?.displayThumbnail(NSImage(
+						cgImage: thumbnail.image,
+						size: .zero
+					))
+				}
+			}
 
 			let row = NSView()
 			attachment.translatesAutoresizingMaskIntoConstraints = false
