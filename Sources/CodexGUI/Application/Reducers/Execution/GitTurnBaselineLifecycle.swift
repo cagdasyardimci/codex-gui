@@ -189,9 +189,7 @@ enum GitTurnBaselineLifecycle
 		}
 		let identity = reference.identity
 		return identity.workspaceSessionID == context.workspace.sessionID
-			&& identity.repositoryRoot == WorkspaceFileIdentity.canonicalRootPath(
-				URL(fileURLWithPath: checkoutPath)
-			)
+			&& (identity.workspaceCheckoutPath ?? identity.repositoryRoot) == checkoutPath
 			&& identity.executionGeneration == context.generation
 			&& identity.submissionRequestID == context.requestID
 			&& identity.threadID == threadID

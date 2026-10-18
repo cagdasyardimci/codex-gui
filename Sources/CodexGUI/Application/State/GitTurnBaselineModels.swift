@@ -9,12 +9,14 @@ struct GitTurnBaselineIdentity: Equatable, Codable, Sendable
 	let executionGeneration: Int
 	let submissionRequestID: UUID
 	let threadID: String
+	/// Captured owner spelling after the effect validates its physical repository root.
+	var workspaceCheckoutPath: String? = nil
 
 	var workspace: WorkspaceIdentity
 	{
 		WorkspaceIdentity(
 			sessionID: workspaceSessionID,
-			canonicalCheckoutPath: repositoryRoot
+			canonicalCheckoutPath: workspaceCheckoutPath ?? repositoryRoot
 		)
 	}
 }

@@ -44,7 +44,8 @@ struct GitTurnBaselineStorage: Sendable
 				repositoryRoot: canonicalRoot,
 				executionGeneration: request.context.generation,
 				submissionRequestID: request.context.requestID,
-				threadID: request.threadID
+				threadID: request.threadID,
+				workspaceCheckoutPath: checkoutPath
 			)
 			capturedID = identity.id
 			let reference = GitTurnBaselineReference(

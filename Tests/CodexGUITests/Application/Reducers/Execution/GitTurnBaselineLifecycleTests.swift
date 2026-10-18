@@ -51,7 +51,8 @@ struct GitTurnBaselineLifecycleTests
 		model.executions.entries[.thread("worker")]!.owner = ExecutionOwner(submission: context)
 		let captured = reference(
 			context,
-			repositoryRoot: physicalRoot
+			repositoryRoot: physicalRoot,
+			workspaceCheckoutPath: checkoutPath
 		)
 		let result = acknowledge(
 			captured,
@@ -63,6 +64,89 @@ struct GitTurnBaselineLifecycleTests
 			if case .bindGitTurnBaseline(let operation) = $0
 			{
 				return operation.reference == captured && operation.turnID == "actual-turn"
+			}
+			return false
+		})
+		let bound = captured.bound(to: "actual-turn")
+		GitTurnBaselineLifecycle.finishBinding(
+			.captured(bound),
+			context: context,
+			threadID: "worker",
+			turnID: "actual-turn",
+			model: &model
+		)
+		#expect(model.executions.entries[.thread("worker")]!.gitTurnBaselineBindings["worker"]?
+			.result == .captured(bound))
+	}
+
+	@Test func capturedOwnerRemainsDeterministicAfterItsSymlinkChanges() async throws
+	{
+		let paths = try await BackgroundTestWork.perform
+		{
+			let directory = FileManager.default.temporaryDirectory
+				.appendingPathComponent("BaselineOwner-\(UUID())")
+			let first = directory.appendingPathComponent("first")
+			let second = directory.appendingPathComponent("second")
+			try FileManager.default.createDirectory(
+				at: first,
+				withIntermediateDirectories: true
+			)
+			do
+			{
+				try FileManager.default.createDirectory(
+					at: second,
+					withIntermediateDirectories: true
+				)
+				let alias = directory.appendingPathComponent("alias")
+				try FileManager.default.createSymbolicLink(
+					at: alias,
+					withDestinationURL: first
+				)
+				let physicalRoot = WorkspaceFileIdentity.canonicalRootPath(alias)
+				try FileManager.default.removeItem(at: alias)
+				try FileManager.default.createSymbolicLink(
+					at: alias,
+					withDestinationURL: second
+				)
+				return (directory, alias.path, physicalRoot)
+			}
+			catch
+			{
+				try? FileManager.default.removeItem(at: directory)
+				throw error
+			}
+		}
+		defer
+		{
+			try? FileManager.default.removeItem(at: paths.0)
+		}
+		var (model, previous) = fixture()
+		model.identity = WorkspaceIdentity(
+			sessionID: previous.workspace.sessionID,
+			canonicalCheckoutPath: paths.1
+		)
+		let context = OperationContext(
+			workspace: model.identity,
+			generation: previous.generation,
+			requestID: previous.requestID,
+			threadID: "worker"
+		)
+		model.executions.entries[.thread("worker")]!.owner = ExecutionOwner(submission: context)
+		let captured = reference(
+			context,
+			repositoryRoot: paths.2,
+			workspaceCheckoutPath: paths.1
+		)
+		let result = acknowledge(
+			captured,
+			context: context,
+			model: &model
+		)
+		#expect(result.effects.contains
+		{
+			if case .bindGitTurnBaseline = $0
+			{
+				return true
 			}
 			return false
 		})
@@ -361,7 +445,8 @@ struct GitTurnBaselineLifecycleTests
 
 	private func reference(
 		_ context: OperationContext,
-		repositoryRoot: String? = nil
+		repositoryRoot: String? = nil,
+		workspaceCheckoutPath: String? = nil
 	) -> GitTurnBaselineReference
 	{
 		GitTurnBaselineReference(
@@ -371,7 +456,8 @@ struct GitTurnBaselineLifecycleTests
 				repositoryRoot: repositoryRoot ?? context.workspace.canonicalCheckoutPath!,
 				executionGeneration: context.generation,
 				submissionRequestID: context.requestID,
-				threadID: "worker"
+				threadID: "worker",
+				workspaceCheckoutPath: workspaceCheckoutPath
 			),
 			capturedAt: Date(timeIntervalSince1970: 0),
 			trackedFileCount: 1,

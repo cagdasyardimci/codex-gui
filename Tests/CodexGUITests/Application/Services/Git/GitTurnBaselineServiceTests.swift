@@ -5,6 +5,59 @@ import Testing
 
 struct GitTurnBaselineServiceTests
 {
+	@Test func captureRetainsValidatedOwnerAliasAndLegacyMetadataStillDecodes() async throws
+	{
+		let fixture = try GitTurnBaselineFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		let alias = fixture.container.appendingPathComponent("checkout-alias")
+		try FileManager.default.createSymbolicLink(
+			at: alias,
+			withDestinationURL: fixture.root
+		)
+		let context = OperationContext(
+			workspace: WorkspaceIdentity(
+				sessionID: fixture.sessionID,
+				canonicalCheckoutPath: alias.path
+			),
+			generation: 1,
+			requestID: UUID(),
+			threadID: "fixture-chat"
+		)
+		let service = LocalGitTurnBaselineService(storageRoot: fixture.storageRoot)
+		let result = await service.capture(GitTurnBaselineCaptureRequest(
+			context: context,
+			threadID: "fixture-chat",
+			repositoryRoot: fixture.root.path
+		))
+		guard case .captured(let reference) = result
+		else
+		{
+			Issue.record("An alias to the validated physical root should be captured.")
+			return
+		}
+		#expect(reference.identity.workspace == context.workspace)
+		#expect(reference.identity.repositoryRoot == WorkspaceFileIdentity
+			.canonicalRootPath(fixture.root))
+		var legacyJSON = try #require(JSONSerialization.jsonObject(
+			with: JSONEncoder().encode(reference.identity)
+		) as? [String: Any])
+		legacyJSON.removeValue(forKey: "workspaceCheckoutPath")
+		let legacy = try JSONDecoder().decode(
+			GitTurnBaselineIdentity.self,
+			from: JSONSerialization.data(withJSONObject: legacyJSON)
+		)
+		#expect(legacy.workspaceCheckoutPath == nil)
+		#expect(legacy.workspace.canonicalCheckoutPath == reference.identity.repositoryRoot)
+		#expect(await service.capture(GitTurnBaselineCaptureRequest(
+			context: context,
+			threadID: "fixture-chat",
+			repositoryRoot: fixture.container.path
+		)) == .unavailable(.baselineOwnershipMismatch))
+	}
+
 	@Test func retentionLimitIncludesSavedProvenanceAndManifestBytes() async throws
 	{
 		let fixture = try GitTurnBaselineFixture()
