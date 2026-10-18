@@ -85,6 +85,75 @@ struct ComposerContextBuilderTests
 		#expect(!optimisticBody.contains("[File reference:"))
 	}
 
+	@Test func absoluteAndRelativeReferencesNormalizeToTheSameSubmission() throws
+	{
+		let project = try temporaryProject().resolvingSymlinksInPath()
+		defer
+		{
+			try? FileManager.default.removeItem(at: project)
+		}
+		let source = project.appendingPathComponent("README.md")
+		try Data("intended".utf8).write(to: source)
+		// The old absolute-path join could silently choose this different nested file.
+		let nested = project.appendingPathComponent(source.path)
+		try FileManager.default.createDirectory(
+			at: nested.deletingLastPathComponent(),
+			withIntermediateDirectories: true
+		)
+		try Data("different".utf8).write(to: nested)
+		for path in ["README.md", source.path, "./README.md"]
+		{
+			let inputs = try ComposerContextBuilder.inputs(
+				text: "Inspect",
+				items: [ComposerContextItem(
+					kind: .fileReference,
+					title: "README.md",
+					path: path
+				)],
+				project: project
+			)
+			#expect(inputs == [
+				.text("Inspect\n\nFile reference: README.md"),
+				.mention(
+					name: "README.md",
+					path: source.path
+				),
+			])
+		}
+	}
+
+	@Test func absoluteOutsideAndPrefixSiblingReferencesAreRejected() throws
+	{
+		let project = try temporaryProject()
+		let sibling = URL(fileURLWithPath: project.path + "-other")
+		try FileManager.default.createDirectory(
+			at: sibling,
+			withIntermediateDirectories: true
+		)
+		defer
+		{
+			try? FileManager.default.removeItem(at: project)
+			try? FileManager.default.removeItem(at: sibling)
+		}
+		let file = sibling.appendingPathComponent("outside.txt")
+		try Data("outside".utf8).write(to: file)
+		for path in [file.path, file.path + "\0suffix"]
+		{
+			#expect(throws: ComposerContextError.self)
+			{
+				try ComposerContextBuilder.inputs(
+					text: "Inspect",
+					items: [ComposerContextItem(
+						kind: .fileReference,
+						title: "outside",
+						path: path
+					)],
+					project: project
+				)
+			}
+		}
+	}
+
 	@Test func missingOrEscapingReferencesAreRejectedBeforeSend() throws
 	{
 		let project = try temporaryProject()

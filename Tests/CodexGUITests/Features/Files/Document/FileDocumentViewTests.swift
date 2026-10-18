@@ -305,13 +305,23 @@ struct FileDocumentViewTests
 
 	@Test func controllerActionsUseCurrentTextAndCapturedAttachmentReceiver() async throws
 	{
+		let root = try await BackgroundTestWork.perform
+		{
+			let fixture = try FileReadSafetyFixture()
+			try Data("# old".utf8).write(to: fixture.root.appendingPathComponent("notes.md"))
+			return fixture.root.resolvingSymlinksInPath()
+		}
+		defer
+		{
+			try? FileManager.default.removeItem(at: root)
+		}
 		try await AppKitTestIsolation.perform
 		{
 			@MainActor in
 			_ = NSApplication.shared
 			let controller = FileDocumentViewController()
 			let location = FileLocation(
-				root: "/tmp",
+				root: root.path,
 				relativePath: "notes.md"
 			)
 			var document = FileViewerDocument(
@@ -341,7 +351,7 @@ struct FileDocumentViewTests
 			var other = FileViewerDocument(
 				id: UUID(),
 				location: FileLocation(
-					root: "/tmp",
+					root: root.path,
 					relativePath: "other.txt"
 				),
 				isRetained: true,
@@ -360,8 +370,36 @@ struct FileDocumentViewTests
 				to: attachment.target,
 				from: attachment
 			))
-			#expect(firstAttachments.map(\.path) == ["/tmp/notes.md"])
+			#expect(firstAttachments.map(\.path) == [root.appendingPathComponent("notes.md").path])
 			#expect(laterAttachments.isEmpty)
+			let inputs = try ComposerContextBuilder.inputs(
+				text: "Inspect",
+				items: firstAttachments,
+				project: root
+			)
+			#expect(inputs == [
+				.text("Inspect\n\nFile reference: notes.md"),
+				.mention(
+					name: "notes.md",
+					path: root.appendingPathComponent("notes.md").path
+				),
+			])
+			let history = try #require(CodexItem(json: [
+				"id": "user",
+				"type": "userMessage",
+				"content": inputs.map(\.protocolValue),
+			]))
+			let historyReference = try #require(history.references.first)
+			let reused = ComposerContextItem(
+				kind: .fileReference,
+				title: historyReference.name,
+				path: historyReference.path
+			).reused()
+			#expect(try ComposerContextBuilder.inputs(
+				text: "Inspect",
+				items: [reused],
+				project: root
+			) == inputs)
 			let copy = try #require(menu.items.first
 			{
 				$0.title == "Copy Markdown"

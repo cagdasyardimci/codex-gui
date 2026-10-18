@@ -87,6 +87,9 @@ export actions.
 Code selection reads contained UTF-8 files off the main actor with a 500,000-byte limit and
 revalidates its captured selection before presentation.
 
+Submission accepts captured absolute or project-relative file references, validates their resolved
+project containment, and emits relative context descriptions with absolute backend mentions.
+
 Find routes to Files only when keyboard focus belongs to the visible Files view; source text
 uses the native find bar. Closing a selected file chooses the next surviving tab to its right,
 or the nearest tab to its left, using the visible tab order after reordering.

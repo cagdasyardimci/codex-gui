@@ -67,14 +67,16 @@ enum ComposerContextBuilder
 		projectPath: String
 	) throws -> (path: String, file: URL)
 	{
-		guard let path = item.path
+		guard let path = item.path, !path.contains("\0")
 		else
 		{
 			throw ComposerContextError.missingFile(item.title)
 		}
-		let file = project.appendingPathComponent(path).standardizedFileURL
-			.resolvingSymlinksInPath()
-		guard file.path.hasPrefix(projectPath + "/")
+		let candidate = NSString(string: path).isAbsolutePath
+			? URL(fileURLWithPath: path) : project.appendingPathComponent(path)
+		let file = candidate.standardizedFileURL.resolvingSymlinksInPath()
+		let prefix = projectPath == "/" ? "/" : projectPath + "/"
+		guard file.path.utf8.starts(with: prefix.utf8), file.path != projectPath
 		else
 		{
 			throw ComposerContextError.invalidPath(path)
@@ -84,6 +86,10 @@ enum ComposerContextBuilder
 		{
 			throw ComposerContextError.missingFile(path)
 		}
-		return (path, file)
+		let relative = String(
+			decoding: file.path.utf8.dropFirst(prefix.utf8.count),
+			as: UTF8.self
+		)
+		return (relative, file)
 	}
 }
