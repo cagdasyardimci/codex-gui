@@ -836,6 +836,65 @@ struct WorkspaceCoordinatorReducerTests
 		})
 	}
 
+	@Test func missingDurableOwnerRejectsRecoveryBeforeRetiringAnotherOwner()
+	{
+		var model = fixture()
+		let missing = register(&model)
+		let surviving = register(&model)
+		model.owners[missing.1.owner] = WorkspaceLifecycleObservation(reference: missing.1)
+		model.owners[surviving.1.owner] = WorkspaceLifecycleObservation(reference: surviving.1)
+		let recovery = WorkspaceRecoveryRequest(
+			requestID: UUID(),
+			recordsRevision: model.recordsRevision
+		)
+		_ = reduce(
+			&model,
+			.recoveryRequested(recovery)
+		)
+		var removed = surviving.0
+		removed.phase = .checkoutRemoved
+		let effects = reduce(
+			&model,
+			.recoveryFinished(
+				recovery,
+				.succeeded([TaskWorkspaceRecovery(
+					workspace: removed,
+					kind: .checkoutRemoved
+				)])
+			)
+		)
+		#expect(model.workspaces[missing.0.id] == missing.0)
+		#expect(model.workspaces[surviving.0.id] == surviving.0)
+		#expect(model.registeredOwners[missing.1.owner] == missing.1.workspace)
+		#expect(model.registeredOwners[surviving.1.owner] == surviving.1.workspace)
+		#expect(model.recoveryIssues[missing.0.id] == .ownershipConflict)
+		#expect(effects.contains
+		{
+			if case .managedRecordRecoveryConflicted(
+				let owner,
+				let expected,
+				_,
+				_
+			) = $0
+			{
+				return owner == missing.1 && expected == missing.0
+			}
+			return false
+		})
+		#expect(!effects.contains
+		{
+			if case .managedRecordRecovered = $0
+			{
+				return true
+			}
+			if case .removeOwner = $0
+			{
+				return true
+			}
+			return false
+		})
+	}
+
 	@Test func approvedTerminationRemainsFrozenUntilDeferredDeliveryRevalidatesOwners()
 	{
 		var model = fixture()

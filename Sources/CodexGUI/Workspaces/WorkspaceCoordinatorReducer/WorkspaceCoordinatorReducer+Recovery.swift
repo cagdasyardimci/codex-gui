@@ -57,24 +57,20 @@ extension WorkspaceCoordinatorReducer
 	) -> [WorkspaceCoordinatorEffect]
 	{
 		var effects: [WorkspaceCoordinatorEffect] = []
-		guard Set(records.map
+		var recoveredByID: [UUID: TaskWorkspaceRecovery] = [:]
+		for record in records
 		{
-			$0.workspace.id
-		}).count == records.count
-		else
-		{
-			return []
+			guard recoveredByID.updateValue(
+				record,
+				forKey: record.workspace.id
+			) == nil
+			else
+			{
+				return []
+			}
 		}
-		let recoveredByID = Dictionary(uniqueKeysWithValues: records.map
-		{
-			(
-				$0.workspace.id,
-				$0.workspace
-			)
-		})
 		// Validate all registered owners before changing records or leases.
 		let conflicts = recoveryConflicts(
-			records,
 			recoveredByID: recoveredByID,
 			model: model
 		)
@@ -91,6 +87,7 @@ extension WorkspaceCoordinatorReducer
 		)
 		recordRecoveredSnapshot(
 			records,
+			recoveredByID: recoveredByID,
 			model: &model
 		)
 		return effects
@@ -127,16 +124,11 @@ extension WorkspaceCoordinatorReducer
 
 	private static func recordRecoveredSnapshot(
 		_ records: [TaskWorkspaceRecovery],
+		recoveredByID: [UUID: TaskWorkspaceRecovery],
 		model: inout WorkspaceCoordinatorModel
 	)
 	{
-		model.workspaces = Dictionary(uniqueKeysWithValues: records.map
-		{
-			(
-				$0.workspace.id,
-				$0.workspace
-			)
-		})
+		model.workspaces = recoveredByID.mapValues(\.workspace)
 		model.recoveryIssues = Dictionary(uniqueKeysWithValues: records.compactMap
 		{
 			item in
@@ -148,8 +140,7 @@ extension WorkspaceCoordinatorReducer
 	}
 
 	private static func recoveryConflicts(
-		_ records: [TaskWorkspaceRecovery],
-		recoveredByID: [UUID: TaskWorkspace],
+		recoveredByID: [UUID: TaskWorkspaceRecovery],
 		model: WorkspaceCoordinatorModel
 	) -> [(WorkspaceLifecycleOwnerReference, TaskWorkspace)]
 	{
@@ -159,22 +150,18 @@ extension WorkspaceCoordinatorReducer
 			guard case .managed(
 				let id,
 				_
-			) = owner, let expected = model.workspaces[id],
-							let recovered = recoveredByID[id]
+			) = owner, let expected = model.workspaces[id]
 			else
 			{
 				continue
 			}
-			let kind = records.first
-			{
-				$0.workspace.id == id
-			}?.kind
-			if !recovered.hasSameOwnership(as: expected) || recovered.threadID != expected
-				.threadID
-				||
-				(recovered.phase != .active && recovered.phase != .removing && recovered
-					.phase != .checkoutRemoved)
-				|| kind == .ownershipConflict
+			let recovered = recoveredByID[id]
+			let workspace = recovered?.workspace
+			if workspace?.hasSameOwnership(as: expected) != true
+				|| workspace?.threadID != expected.threadID
+				|| (workspace?.phase != .active && workspace?.phase != .removing
+					&& workspace?.phase != .checkoutRemoved)
+				|| recovered?.kind == .ownershipConflict
 			{
 				conflicts.append((WorkspaceLifecycleOwnerReference(
 					owner: owner,
@@ -187,7 +174,7 @@ extension WorkspaceCoordinatorReducer
 	}
 
 	private static func reconcileRecoveredOwners(
-		_ recoveredByID: [UUID: TaskWorkspace],
+		_ recoveredByID: [UUID: TaskWorkspaceRecovery],
 		model: inout WorkspaceCoordinatorModel
 	) -> [WorkspaceCoordinatorEffect]
 	{
@@ -198,7 +185,7 @@ extension WorkspaceCoordinatorReducer
 				let id,
 				_
 			) = owner, let expected = model.workspaces[id],
-							let recovered = recoveredByID[id]
+							let recovered = recoveredByID[id]?.workspace
 			else
 			{
 				continue
@@ -233,7 +220,7 @@ extension WorkspaceCoordinatorReducer
 		for (id, transition) in model.pendingCleanup
 			where transition.stage == .recovering && transition.request.owner == nil
 		{
-			if let recovered = recoveredByID[id],
+			if let recovered = recoveredByID[id]?.workspace,
 				recovered.hasSameOwnership(as: transition.request.expected),
 				recovered.threadID == transition.request.expected.threadID
 			{
