@@ -9,6 +9,14 @@ struct ConversationCommand: Equatable
 	let exitCode: Int?
 	let durationMs: Double?
 	let actions: [CodexCommandAction]
+
+	static func == (left: Self, right: Self) -> Bool
+	{
+		left.command.utf8.elementsEqual(right.command.utf8) && left.cwd == right.cwd
+			&& left.output.utf8.elementsEqual(right.output.utf8) && left.status == right.status
+			&& left.exitCode == right.exitCode && left.durationMs == right.durationMs
+			&& left.actions == right.actions
+	}
 }
 
 enum ConversationActivity: Equatable
@@ -20,6 +28,28 @@ enum ConversationActivity: Equatable
 		[FileChange],
 		status: String
 	)
+
+	static func == (left: Self, right: Self) -> Bool
+	{
+		switch (left, right)
+		{
+		case (.command(let left), .command(let right)): return left == right
+		case (.image(let left), .image(let right)): return left == right
+		case (.subagent(let left), .subagent(let right)): return left == right
+		case (.fileChanges(
+			let left,
+			let leftStatus
+		), .fileChanges(
+			let right,
+			let rightStatus
+		)):
+			return leftStatus == rightStatus && FileChange.haveSameExactContent(
+				left,
+				right
+			)
+		default: return false
+		}
+	}
 }
 
 struct ConversationTurnTiming: Equatable

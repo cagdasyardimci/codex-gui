@@ -6,6 +6,38 @@ import Testing
 @Suite @MainActor
 struct TranscriptPreparationCoordinatorTests
 {
+	@Test func byteDifferentBodyDoesNotReuseEarlierPreparedContent() async throws
+	{
+		let coordinator = TranscriptPreparationCoordinator()
+		let entry = ConversationEntry(
+			id: "turn:reply",
+			kind: .agent,
+			title: "Codex",
+			body: ""
+		)
+		var published: [PreparedConversationContent] = []
+		for body in ["é", "e\u{301}"]
+		{
+			coordinator.prepare(
+				[entry],
+				keys: [ConversationContentKey(
+					body: body,
+					markdown: false
+				)]
+			)
+			{
+				if let content = $0[entry.id]
+				{
+					published.append(content)
+				}
+			}
+			await coordinator.waitForRendering()
+		}
+		try #require(published.count == 2)
+		#expect(published[0] !== published[1])
+		#expect(published[1].attributedString.string.utf8.elementsEqual("e\u{301}".utf8))
+	}
+
 	@Test func supersededPreparationCannotPublishAnOlderTranscript() async
 	{
 		let coordinator = TranscriptPreparationCoordinator()

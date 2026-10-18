@@ -6,6 +6,26 @@ import Testing
 @Suite @MainActor
 struct ConversationContentCacheTests
 {
+	@Test func byteDifferentCodeRetainsItsOwnPreparedCopyText() async
+	{
+		let cache = ConversationContentCache()
+		let composed = await cache.content(
+			body: "```text\né\n```",
+			markdown: true
+		)
+		let decomposed = await cache.content(
+			body: "```text\ne\u{301}\n```",
+			markdown: true
+		)
+		#expect(composed !== decomposed)
+		#expect(composed.codeBlocks.first?.utf8.elementsEqual("é\n".utf8) == true)
+		#expect(decomposed.codeBlocks.first?.utf8.elementsEqual("e\u{301}\n".utf8) == true)
+		#expect(await cache.content(
+			body: "```text\né\n```",
+			markdown: true
+		) === composed)
+	}
+
 	@Test func richImageCostsEvictCachedMessagesBeforeTheEntryLimit() async throws
 	{
 		_ = NSApplication.shared

@@ -147,7 +147,13 @@ struct ConversationContentTests
 				backing: .buffered,
 				defer: false
 			)
+			window.isReleasedWhenClosed = false
 			window.contentViewController = item
+			defer
+			{
+				window.contentViewController = nil
+				window.close()
+			}
 			window.setContentSize(size)
 			item.view.layoutSubtreeIfNeeded()
 			let textView = try #require(findTextView(in: item.view))
@@ -199,7 +205,13 @@ struct ConversationContentTests
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
 		window.contentViewController = item
+		defer
+		{
+			window.contentViewController = nil
+			window.close()
+		}
 		for (kind, expandable) in [
 			(ConversationEntryKind.command, true),
 			(.agent, false),
@@ -316,7 +328,13 @@ struct ConversationContentTests
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
 		window.contentViewController = item
+		defer
+		{
+			window.contentViewController = nil
+			window.close()
+		}
 		window.setContentSize(NSSize(
 			width: 320,
 			height: 300

@@ -6,6 +6,30 @@ import Testing
 @Suite
 struct TranscriptContentKeyTests
 {
+	@Test func canonicallyEquivalentSourcesRemainDistinctHashableKeys()
+	{
+		let composed = ConversationContentKey(
+			body: "é",
+			markdown: true
+		)
+		let decomposed = ConversationContentKey(
+			body: "e\u{301}",
+			markdown: true
+		)
+		#expect(composed.body == decomposed.body)
+		#expect(composed != decomposed)
+		#expect(Set([composed, decomposed, composed]).count == 2)
+		#expect(composed != ConversationContentKey(
+			body: "é",
+			markdown: false
+		))
+		#expect(composed != ConversationContentKey(
+			body: "é",
+			markdown: true,
+			preserveSoftBreaks: true
+		))
+	}
+
 	@Test func collapsedPreviewsMatchFoundationForMixedNewlinesAndEmptyComponents()
 	{
 		let separators = [

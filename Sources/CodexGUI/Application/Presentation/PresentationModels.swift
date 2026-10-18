@@ -21,6 +21,18 @@ struct ConversationEntry: Equatable
 	var imageAttachments: [UserMessageReference] = []
 	var sourceReferences: [UserMessageReference] = []
 	var sourceActivity: ConversationSourceActivity? = nil
+
+	static func == (left: Self, right: Self) -> Bool
+	{
+		left.id == right.id && left.kind == right.kind
+			&& left.title.utf8.elementsEqual(right.title.utf8)
+			&& left.body.utf8.elementsEqual(right.body.utf8)
+			&& left.attachmentPreviewTitle == right.attachmentPreviewTitle
+			&& left.isExpandable == right.isExpandable && left.activity == right.activity
+			&& left.imageAttachments == right.imageAttachments
+			&& left.sourceReferences == right.sourceReferences
+			&& left.sourceActivity == right.sourceActivity
+	}
 }
 
 struct ChangeFile: Equatable
