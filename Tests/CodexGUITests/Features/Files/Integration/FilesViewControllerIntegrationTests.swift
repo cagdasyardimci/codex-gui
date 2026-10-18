@@ -7,6 +7,181 @@ import Testing
 struct FilesViewControllerIntegrationTests
 {
 	@Test(.timeLimit(.minutes(1)))
+	func BMPAndSVGSharePreviewCapabilitiesWhileSVGKeepsEditableSource() async throws
+	{
+		let fixture = try await BackgroundTestWork.perform
+		{
+			let fixture = try FileReadSafetyFixture()
+			try FilePreviewTestData.bmp.write(to: fixture.root.appendingPathComponent("image.bmp"))
+			try Data().write(to: fixture.root.appendingPathComponent("empty.png"))
+			try Data().write(to: fixture.root.appendingPathComponent("empty.pdf"))
+			try Data(FilePreviewTestData.svg.utf8).write(
+				to: fixture.root.appendingPathComponent("image.svg")
+			)
+			return fixture
+		}
+		defer
+		{
+			try? FileManager.default.removeItem(at: fixture.root)
+		}
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let runtime = FileViewerRuntime(autosaveDelay: .seconds(60))
+			let files = FilesViewController(runtime: runtime)
+			runtime.switchRoot(fixture.root.path)
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 700,
+					height: 500
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentViewController = files
+			do
+			{
+				for path in ["empty.png", "empty.pdf"]
+				{
+					files.open(
+						FileLocation(
+							root: fixture.root.path,
+							relativePath: path
+						),
+						retained: true
+					)
+					let id = try #require(runtime.state.selectedDocumentID)
+					await runtime.readTask(for: id)?.value
+					let toggle = try #require(findButton(
+						"View source",
+						in: files.view
+					))
+					#expect(toggle.isHidden)
+				}
+
+				files.open(
+					FileLocation(
+						root: fixture.root.path,
+						relativePath: "image.bmp"
+					),
+					retained: true
+				)
+				let bmpID = try #require(runtime.state.selectedDocumentID)
+				await runtime.readTask(for: bmpID)?.value
+				let bmpPreview = try #require(findPreview(in: files.document.view))
+				await bmpPreview.waitForLoading()
+				let renderedImages = descendants(in: bmpPreview).compactMap
+				{
+					($0 as? NSImageView)?.image
+				}
+				let image = try #require(renderedImages.first)
+				#expect(image.size == NSSize(
+					width: 1,
+					height: 1
+				))
+				let bmpToggle = try #require(findButton(
+					"View source",
+					in: files.view
+				))
+				#expect(bmpToggle.isHidden)
+				let changesPreview = GitRichPreviewView(kind: try #require(
+					GitRichPreviewKind(path: "image.bmp")
+				))
+				{
+					FilePreviewTestData.bmp
+				}
+				await changesPreview.waitForLoading()
+				#expect(descendants(in: changesPreview).compactMap
+				{
+					($0 as? NSImageView)?.image
+				}.first?.size == image.size)
+				changesPreview.cancelLoading()
+
+				files.open(
+					FileLocation(
+						root: fixture.root.path,
+						relativePath: "image.svg"
+					),
+					retained: true
+				)
+				let svgID = try #require(runtime.state.selectedDocumentID)
+				await runtime.readTask(for: svgID)?.value
+				let svgPreview = try #require(findPreview(in: files.document.view))
+				await svgPreview.waitForLoading()
+				#expect(descendants(in: svgPreview).contains
+				{
+					$0 is NSImageView
+				})
+				#expect(!files.document.isShowingSource)
+				let sourceToggle = try #require(findButton(
+					"View source",
+					in: files.view
+				))
+				#expect(!sourceToggle.isHidden)
+				#expect(sourceToggle.dispatchConfiguredAction())
+				let source =
+					try #require(findTextView(in: files.document.view) as? FileSourceTextView)
+				#expect(source.isEditable)
+				#expect(source.string == FilePreviewTestData.svg)
+				let wrap = try #require(findButtonTitle(
+					"Wrap lines",
+					in: files.document.view
+				))
+				#expect(!wrap.isHidden)
+				source.setSelectedRange(NSRange(
+					location: 0,
+					length: 0
+				))
+				source.insertText(
+					"<!-- edited -->",
+					replacementRange: source.selectedRange()
+				)
+				let edited = "<!-- edited -->" + FilePreviewTestData.svg
+				#expect(runtime.state.selectedDocument?.currentText == edited)
+				let selection = NSRange(
+					location: 4,
+					length: 3
+				)
+				source.setSelectedRange(selection)
+				let copy = try #require(files.document.makeActionsMenu()
+					.item(withTitle: "Copy contents"))
+				#expect(NSApp.sendAction(
+					try #require(copy.action),
+					to: copy.target,
+					from: copy
+				))
+				#expect(NSPasteboard.general.string(forType: .string) == edited)
+				#expect(sourceToggle.dispatchConfiguredAction())
+				let editedPreview = try #require(findPreview(in: files.document.view))
+				await editedPreview.waitForLoading()
+				#expect(descendants(in: editedPreview).contains
+				{
+					$0 is NSImageView
+				})
+				#expect(sourceToggle.dispatchConfiguredAction())
+				let restored =
+					try #require(findTextView(in: files.document.view) as? FileSourceTextView)
+				#expect(restored === source)
+				#expect(restored.string == edited)
+				#expect(restored.selectedRange() == selection)
+			}
+			catch
+			{
+				_ = await runtime.shutdown()
+				window.close()
+				throw error
+			}
+			_ = await runtime.shutdown()
+			window.close()
+		}
+	}
+
+	@Test(.timeLimit(.minutes(1)))
 	func fileSelectionPreservesNavigatorAndReadableDocumentWidth() async throws
 	{
 		let fixture = FileManager.default.temporaryDirectory

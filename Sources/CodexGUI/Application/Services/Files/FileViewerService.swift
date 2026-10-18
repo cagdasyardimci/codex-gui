@@ -249,20 +249,19 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		)
 		let content: FileViewerContent
 		let ext = location.fileURL.pathExtension.lowercased()
-		let imageExtensions = ["png", "jpg", "jpeg", "gif", "tif", "tiff", "heic", "webp"]
-		let isMedia = imageExtensions.contains(ext) || ext == "pdf"
+		let capabilities = FileContentCapabilities(path: location.relativePath)
 		if data.isEmpty
 		{
 			content = .empty
 		}
-		else if imageExtensions.contains(ext)
+		else if capabilities == .rasterImage
 		{
 			content = validImageHeader(
 				data,
 				extension: ext
 			) ? .image(data) : .unsupported
 		}
-		else if ext == "pdf"
+		else if capabilities == .pdf
 		{
 			content = data.starts(with: Data("%PDF-".utf8)) ? .pdf(data) : .unsupported
 		}
@@ -285,16 +284,14 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 			content: content,
 			revision: revision(data),
 			isReadOnly: metadata.st_mode & 0o222 == 0 || data.count > maximumTextBytes
-				|| isMedia
+				|| !capabilities.hasSource
 		)
 	}
 
 	/// Search needs current text bytes, but no document revision or media preview preparation.
 	private static func searchText(_ location: FileLocation) throws -> String?
 	{
-		let ext = location.fileURL.pathExtension.lowercased()
-		if ["png", "jpg", "jpeg", "gif", "tif", "tiff", "heic", "webp", "pdf"]
-			.contains(ext)
+		if !FileContentCapabilities(path: location.relativePath).hasSource
 		{
 			return nil
 		}
@@ -331,6 +328,8 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		case "webp":
 			return data.count >= 12 && data.starts(with: Data("RIFF".utf8))
 				&& data.subdata(in: 8 ..< 12) == Data("WEBP".utf8)
+		case "bmp":
+			return data.starts(with: Data("BM".utf8))
 		case "heic":
 			return data.count >= 12 && data.subdata(in: 4 ..< 8) == Data("ftyp".utf8)
 		default:

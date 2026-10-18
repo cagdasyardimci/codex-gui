@@ -761,6 +761,44 @@ struct FileSystemFileViewerServiceTests
 		}
 	}
 
+	@Test
+	func BMPAndSVGUseSharedMediaAndSourceCapabilities() async throws
+	{
+		let root = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: root)
+		}
+		let service = FileSystemFileViewerService()
+		let bmp = FileLocation(
+			root: root,
+			relativePath: "image.BMP"
+		)
+		let bytes = FilePreviewTestData.bmp
+		try bytes.write(to: bmp.fileURL)
+		let image = try await service.read(at: bmp)
+		#expect(image.content == .image(bytes))
+		#expect(image.isReadOnly)
+		try Data("invalid".utf8).write(to: bmp.fileURL)
+		#expect(try await service.read(at: bmp).content == .unsupported)
+		let svg = FileLocation(
+			root: root,
+			relativePath: "image.svg"
+		)
+		let text = FilePreviewTestData.svg
+		try Data(text.utf8).write(to: svg.fileURL)
+		let vector = try await service.read(at: svg)
+		#expect(vector.content == .text(text))
+		#expect(!vector.isReadOnly)
+		let matches = try await service.contentSearch(
+			root: root,
+			query: "rect",
+			mask: nil,
+			limit: 10
+		)
+		#expect(matches.results.map(\.location.relativePath) == ["image.svg"])
+	}
+
 	private func fixture() throws -> String
 	{
 		let root = FileManager.default.temporaryDirectory

@@ -17,13 +17,12 @@ enum RichFilePreviewKind
 
 	init?(path: String)
 	{
-		switch URL(fileURLWithPath: path).pathExtension.lowercased()
+		switch FileContentCapabilities(path: path)
 		{
-		case "md", "markdown": self = .markdown
-		case "png", "jpg", "jpeg", "gif", "tif", "tiff", "bmp", "heic", "webp", "svg":
-			self = .image
-		case "pdf": self = .pdf
-		default: return nil
+		case .markdown: self = .markdown
+		case .rasterImage, .svg: self = .image
+		case .pdf: self = .pdf
+		case .source: return nil
 		}
 	}
 }

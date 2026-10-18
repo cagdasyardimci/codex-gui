@@ -6,6 +6,40 @@ import Testing
 @Suite(.serialized) @MainActor
 struct FileDocumentViewTests
 {
+	@Test(arguments: ["empty.png", "empty.pdf"])
+	func emptyMediaCannotExposeSourceOrWrapControls(path: String) async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: path
+				),
+				isRetained: true,
+				content: .empty
+			)
+			document.status = .ready
+			document.isReadOnly = true
+			controller.render(document)
+			controller.setSourceVisible(true)
+			let mode = try #require(findButton(
+				"Preview",
+				in: controller.view
+			))
+			let wrap = try #require(findButton(
+				"Wrap lines",
+				in: controller.view
+			))
+			#expect(mode.isHidden)
+			#expect(wrap.isHidden)
+		}
+	}
+
 	@Test func sourceCopyExcludesRulerAndRetainsExactSeparators() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -529,7 +563,8 @@ struct FileDocumentViewTests
 		}
 	}
 
-	@Test func markdownLineRequestOpensSourceOnceAndKeepsLaterSelection() async throws
+	@Test(arguments: ["notes.md", "image.svg"])
+	func markdownLineRequestOpensSourceOnceAndKeepsLaterSelection(path: String) async throws
 	{
 		try await AppKitTestIsolation.perform
 		{
@@ -541,7 +576,7 @@ struct FileDocumentViewTests
 				id: UUID(),
 				location: FileLocation(
 					root: "/tmp",
-					relativePath: "notes.md"
+					relativePath: path
 				),
 				isRetained: true,
 				content: .text(text)
@@ -578,7 +613,8 @@ struct FileDocumentViewTests
 		}
 	}
 
-	@Test func focusFindShowsNativeBarAndSelectsMatchingSource() async throws
+	@Test(arguments: ["find.txt", "image.svg"])
+	func focusFindShowsNativeBarAndSelectsMatchingSource(path: String) async throws
 	{
 		try await AppKitTestIsolation.perform
 		{
@@ -589,7 +625,7 @@ struct FileDocumentViewTests
 				id: UUID(),
 				location: FileLocation(
 					root: "/tmp",
-					relativePath: "find.txt"
+					relativePath: path
 				),
 				isRetained: true,
 				content: .text("alpha needle omega")
@@ -1520,7 +1556,7 @@ struct FileDocumentViewTests
 		in view: NSView
 	) -> NSButton?
 	{
-		if let button = view as? NSButton, button.toolTip == label
+		if let button = view as? NSButton, button.toolTip == label || button.title == label
 		{
 			return button
 		}

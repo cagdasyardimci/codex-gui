@@ -131,9 +131,10 @@ final class FileDocumentViewController: NSViewController
 
 	private var sourceIsVisible: Bool
 	{
-		showingSource || current.map
+		current.map
 		{
-			RichFilePreviewKind(path: $0.location.relativePath) != .markdown
+			let capabilities = FileContentCapabilities(path: $0.location.relativePath)
+			return capabilities.hasSource && (showingSource || !capabilities.hasRichPreview)
 		} ?? true
 	}
 
@@ -335,9 +336,11 @@ final class FileDocumentViewController: NSViewController
 		setStatusMessage(statusMessage)
 		let kind = RichFilePreviewKind(path: document.location.relativePath)
 		setCopyMarkdownVisible(kind == .markdown && !(document.currentText ?? "").isEmpty)
-		modeButton.isHidden = kind != .markdown || document.currentText == nil
+		let capabilities = FileContentCapabilities(path: document.location.relativePath)
+		modeButton.isHidden = !capabilities.supportsSourceAndPreview || document.currentText == nil
 		modeButton.title = showingSource ? "Preview" : "View source"
-		wrapButton.isHidden = kind == .image || kind == .pdf || !sourceIsVisible
+		wrapButton.isHidden = !capabilities.hasSource || document
+			.currentText == nil || !sourceIsVisible
 		wrapButton.state = wrapsLines ? .on : .off
 
 		switch document.status
@@ -434,7 +437,7 @@ final class FileDocumentViewController: NSViewController
 		switch document.content
 		{
 		case .text(let text):
-			if RichFilePreviewKind(path: document.location.relativePath) == .markdown,
+			if FileContentCapabilities(path: document.location.relativePath).hasRichPreview,
 				!showingSource
 			{
 				showPreview(

@@ -674,9 +674,9 @@ final class FilesViewController: NSViewController
 		let selected = runtime.state.selectedDocument
 		actionsButton.isHidden = selected == nil
 		let textReady = selected?.currentText != nil
-		let markdown = selected.map
+		let supportsSourceAndPreview = selected.map
 		{
-			RichFilePreviewKind(path: $0.location.relativePath) == .markdown
+			FileContentCapabilities(path: $0.location.relativePath).supportsSourceAndPreview
 		} ?? false
 		let modeTitle = document.isShowingSource ? "Preview" : "View source"
 		sourceButton.title = compact ? "" : modeTitle
@@ -685,6 +685,6 @@ final class FilesViewController: NSViewController
 		sourceButton.imagePosition = compact ? .imageOnly : .noImage
 		sourceButton.setAccessibilityLabel(modeTitle)
 		sourceButton.toolTip = modeTitle
-		sourceButton.isHidden = !markdown || !textReady
+		sourceButton.isHidden = !supportsSourceAndPreview || !textReady
 	}
 }
