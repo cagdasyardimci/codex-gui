@@ -303,6 +303,307 @@ struct FileDocumentViewTests
 		}
 	}
 
+	@Test func controllerActionsUseCurrentTextAndCapturedAttachmentReceiver() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			let location = FileLocation(
+				root: "/tmp",
+				relativePath: "notes.md"
+			)
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: location,
+				isRetained: true,
+				content: .text("# old")
+			)
+			document.status = .ready
+			controller.render(document)
+			controller.setSourceVisible(true)
+			var firstAttachments: [ComposerContextItem] = []
+			var laterAttachments: [ComposerContextItem] = []
+			controller.captureAttachmentReceiver =
+			{
+				{
+					firstAttachments.append($0)
+				}
+			}
+			let menu = controller.makeActionsMenu()
+			controller.captureAttachmentReceiver =
+			{
+				{
+					laterAttachments.append($0)
+				}
+			}
+			var other = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "other.txt"
+				),
+				isRetained: true,
+				content: .text("other")
+			)
+			other.status = .ready
+			controller.render(other)
+			let laterMenu = controller.makeActionsMenu()
+			#expect(laterMenu !== menu)
+			let attachment = try #require(menu.items.first
+			{
+				$0.title == "Add to chat"
+			})
+			#expect(NSApp.sendAction(
+				try #require(attachment.action),
+				to: attachment.target,
+				from: attachment
+			))
+			#expect(firstAttachments.map(\.path) == ["/tmp/notes.md"])
+			#expect(laterAttachments.isEmpty)
+			let copy = try #require(menu.items.first
+			{
+				$0.title == "Copy Markdown"
+			})
+			#expect(NSApp.sendAction(
+				try #require(copy.action),
+				to: copy.target,
+				from: copy
+			))
+			#expect(NSPasteboard.general.string(forType: .string) == "# old")
+		}
+	}
+
+	@Test func actionMenuCopiesVisibleSourceWithExactSeparators() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			let text = "first\r\nsecond\n"
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "line.txt"
+				),
+				isRetained: true,
+				content: .text(text)
+			)
+			document.status = .ready
+			controller.render(document)
+			controller.setSourceVisible(true)
+			let menu = controller.makeActionsMenu()
+			let copy = try #require(menu.item(withTitle: "Copy contents"))
+			#expect(NSApp.sendAction(
+				try #require(copy.action),
+				to: copy.target,
+				from: copy
+			))
+			#expect(NSPasteboard.general.string(forType: .string) == text)
+		}
+	}
+
+	@Test func switchingDocumentsRetainsIndependentSourceViews() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			var first = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "first.txt"
+				),
+				isRetained: true,
+				content: .text("alpha")
+			)
+			var second = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "second.txt"
+				),
+				isRetained: true,
+				content: .text("beta")
+			)
+			first.status = .ready
+			second.status = .ready
+			controller.onEdit =
+			{
+				id, text in
+				if id == first.id
+				{
+					first.content = .text(text)
+				}
+			}
+			controller.render(first)
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 500,
+					height: 350
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentView = controller.view
+			defer
+			{
+				window.close()
+			}
+			let firstText = try #require(findText(in: controller.view))
+			#expect(window.makeFirstResponder(firstText))
+			firstText.insertText(
+				"Z",
+				replacementRange: NSRange(
+					location: 0,
+					length: 0
+				)
+			)
+			#expect(firstText.string == "Zalpha")
+			firstText.setSelectedRange(NSRange(
+				location: 2,
+				length: 0
+			))
+			controller.render(second)
+			let secondText = try #require(findText(in: controller.view))
+			#expect(firstText !== secondText)
+			secondText.setSelectedRange(NSRange(
+				location: 1,
+				length: 0
+			))
+			controller.render(first)
+			#expect(findText(in: controller.view) === firstText)
+			#expect(firstText.string == "Zalpha")
+			#expect(firstText.selectedRange().location == 2)
+			#expect(secondText.selectedRange().location == 1)
+			#expect(firstText.undoManager?.canUndo == true)
+			firstText.undoManager?.undo()
+			#expect(firstText.string == "alpha")
+		}
+	}
+
+	@Test func markdownLineRequestOpensSourceOnceAndKeepsLaterSelection() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			let text = "# Heading\r\n😀 second\u{2028}third"
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "notes.md"
+				),
+				isRetained: true,
+				content: .text(text)
+			)
+			document.status = .ready
+			controller.render(document)
+			#expect(!controller.isShowingSource)
+			#expect(findText(in: controller.view) == nil)
+			var acknowledged: [(UUID, Int)] = []
+			controller.onAcknowledgeLineRequest =
+			{
+				id, generation in
+				acknowledged.append((id, generation))
+			}
+			document.requestedLine = 2
+			document.lineRequestGeneration = 1
+			controller.render(document)
+			#expect(controller.isShowingSource)
+			let source = try #require(findText(in: controller.view))
+			#expect(source.selectedRange() == NSRange(
+				location: 11,
+				length: 0
+			))
+			#expect(acknowledged.count == 1)
+			#expect(acknowledged.first?.0 == document.id)
+			#expect(acknowledged.first?.1 == 1)
+			source.setSelectedRange(NSRange(
+				location: 3,
+				length: 0
+			))
+			controller.render(document)
+			#expect(source.selectedRange().location == 3)
+			#expect(acknowledged.count == 1)
+		}
+	}
+
+	@Test func focusFindShowsNativeBarAndSelectsMatchingSource() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "find.txt"
+				),
+				isRetained: true,
+				content: .text("alpha needle omega")
+			)
+			document.status = .ready
+			controller.render(document)
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 520,
+					height: 360
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentView = controller.view
+			defer
+			{
+				window.close()
+			}
+			window.makeKeyAndOrderFront(nil)
+			controller.focusFind()
+			let source = try #require(findText(in: controller.view))
+			let scroll = try #require(findSourceScroll(in: controller.view))
+			let bar = try #require(scroll.findBarView)
+			#expect(scroll.isFindBarVisible)
+			#expect(bar.window === window)
+			#expect(!bar.isHidden)
+			let field = try #require(findSearchField(in: bar))
+			#expect(field.window === window)
+			#expect(window.makeFirstResponder(field))
+			let editor = try #require(field.currentEditor() as? NSTextView)
+			let existingLength = (editor.string as NSString).length
+			editor.insertText(
+				"needle",
+				replacementRange: NSRange(
+					location: 0,
+					length: existingLength
+				)
+			)
+			#expect(field.stringValue == "needle")
+			let next = NSMenuItem()
+			next.tag = NSTextFinder.Action.nextMatch.rawValue
+			source.performFindPanelAction(next)
+			let selected = source.selectedRange()
+			#expect((source.string as NSString).substring(with: selected) == "needle")
+		}
+	}
+
 	@Test func gutterLabelsTrackNativeRowsAcrossFindBarAndScroll() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -779,6 +1080,425 @@ struct FileDocumentViewTests
 		return bitmap
 	}
 
+	@Test func openMenuUsesInstalledDestinationsAndCapturedFile() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			controller.showsHeader = false
+			let icon = NSImage(size: NSSize(
+				width: 16,
+				height: 16
+			))
+			let names = ["VS Code", "Zed", "Terminal", "Kitty", "Xcode"]
+			let destinations = names.map
+			{
+				FileOpeningDestination(
+					title: $0,
+					application: URL(fileURLWithPath: "/Applications/\($0).app"),
+					opensFolder: $0 == "Terminal" || $0 == "Kitty",
+					icon: icon
+				)
+			}
+			controller.openingDestinations =
+			{
+				destinations
+			}
+			var opened: [FileLocation] = []
+			controller.openDefaultApplication =
+			{
+				opened.append($0)
+			}
+			var first = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "first.md"
+				),
+				isRetained: true,
+				content: .text("# First")
+			)
+			first.status = .ready
+			controller.render(first)
+			let menu = controller.makeOpenMenu()
+			#expect(menu.items.map(\.title) == [
+				"VS Code",
+				"Zed",
+				"Default app",
+				"Terminal",
+				"Kitty",
+				"Xcode",
+				"",
+				"Open in folder",
+				"Open in GitHub",
+				"Save as…"
+			])
+			#expect(menu.items.prefix(2).allSatisfy
+			{
+				$0.image != nil
+			})
+			#expect(menu.items[3].image != nil)
+			#expect(menu.items[4].image != nil)
+			#expect(menu.items[5].image != nil)
+			var second = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "second.txt"
+				),
+				isRetained: true,
+				content: .text("Second")
+			)
+			second.status = .ready
+			controller.render(second)
+			let defaultItem = try #require(menu.items.first
+			{
+				$0.title == "Default app"
+			})
+			#expect(NSApp.sendAction(
+				try #require(defaultItem.action),
+				to: defaultItem.target,
+				from: defaultItem
+			))
+			#expect(opened == [first.location])
+		}
+	}
+
+	@Test func githubURLUsesCommitAndEncodesPath() async throws
+	{
+		let commit = String(
+			repeating: "a",
+			count: 40
+		)
+		let expected = "https://github.com/owner/repo/blob/\(commit)/docs/a%20b%23c.md"
+		#expect(FileGitHubURL.make(
+			origin: "git@github.com:owner/repo.git",
+			commit: commit,
+			relativePath: "docs/a b#c.md"
+		)?.absoluteString == expected)
+		#expect(FileGitHubURL.make(
+			origin: "https://github.com/owner/repo.git",
+			commit: commit,
+			relativePath: "docs/a b#c.md"
+		)?.absoluteString == expected)
+		#expect(FileGitHubURL.make(
+			origin: "https://example.com/owner/repo.git",
+			commit: commit,
+			relativePath: "file.md"
+		) == nil)
+	}
+
+	@Test func copyMarkdownButtonUsesVisibleBufferAndDocumentChrome() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			controller.showsHeader = false
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "notes.md"
+				),
+				isRetained: true,
+				content: .text("# Initial")
+			)
+			document.status = .ready
+			controller.render(document)
+			let copy = try #require(findButton(
+				"Copy Markdown",
+				in: controller.view
+			))
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 500,
+					height: 350
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentView = controller.view
+			defer
+			{
+				window.close()
+			}
+			#expect(!copy.isHidden)
+			controller.setSourceVisible(true)
+			let source = try #require(findText(in: controller.view))
+			let scroll = try #require(findSourceScroll(in: controller.view))
+			controller.view.layoutSubtreeIfNeeded()
+			let buttonRect = copy.convert(
+				copy.bounds,
+				to: controller.view
+			)
+			let sourceRect = scroll.convert(
+				scroll.bounds,
+				to: controller.view
+			)
+			#expect(buttonRect.minX >= sourceRect.maxX + 4)
+			#expect(sourceRect.maxY >= controller.view.bounds.maxY - 1)
+			#expect(buttonRect.maxY >= sourceRect.maxY - 8)
+			window.setContentSize(NSSize(
+				width: 260,
+				height: 280
+			))
+			window.appearance = NSAppearance(named: .darkAqua)
+			controller.view.layoutSubtreeIfNeeded()
+			try requireCopyAccessoryBackgroundMatchesDocument(controller.view)
+			if let directory = ProcessInfo.processInfo.environment["CODEX_FILES_QA_DIR"]
+			{
+				try AppTestPNGWriter.write(
+					controller.view,
+					to: URL(fileURLWithPath: directory)
+						.appendingPathComponent("copy-source-dark.png")
+				)
+			}
+			let narrowButton = copy.convert(
+				copy.bounds,
+				to: controller.view
+			)
+			let narrowSource = scroll.convert(
+				scroll.bounds,
+				to: controller.view
+			)
+			#expect(narrowButton.minX >= narrowSource.maxX + 4)
+			#expect(narrowSource.maxY >= controller.view.bounds.maxY - 1)
+			window.appearance = NSAppearance(named: .aqua)
+			controller.view.layoutSubtreeIfNeeded()
+			try requireCopyAccessoryBackgroundMatchesDocument(controller.view)
+			if let directory = ProcessInfo.processInfo.environment["CODEX_FILES_QA_DIR"]
+			{
+				try AppTestPNGWriter.write(
+					controller.view,
+					to: URL(fileURLWithPath: directory)
+						.appendingPathComponent("copy-source-light.png")
+				)
+			}
+			#expect(!copy.isHidden)
+			source.string = "# Edited\r\n"
+			let selected = NSRange(
+				location: 2,
+				length: 3
+			)
+			source.setSelectedRange(selected)
+			#expect(NSApp.sendAction(
+				try #require(copy.action),
+				to: copy.target,
+				from: copy
+			))
+			#expect(NSPasteboard.general.string(forType: .string) == "# Edited\r\n")
+			#expect(source.selectedRange() == selected)
+			document.content = .text("# Edited\r\n")
+			controller.render(document)
+			controller.setSourceVisible(false)
+			#expect(!copy.isHidden)
+			#expect(NSApp.sendAction(
+				try #require(copy.action),
+				to: copy.target,
+				from: copy
+			))
+			#expect(NSPasteboard.general.string(forType: .string) == "# Edited\r\n")
+			var other = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "other.txt"
+				),
+				isRetained: true,
+				content: .text("Other")
+			)
+			other.status = .ready
+			controller.render(other)
+			#expect(copy.superview?.isHidden == true)
+			document.isReadOnly = true
+			controller.render(document)
+			#expect(!copy.isHidden)
+			#expect(NSApp.sendAction(
+				try #require(copy.action),
+				to: copy.target,
+				from: copy
+			))
+			#expect(NSPasteboard.general.string(forType: .string) == "# Edited\r\n")
+			document.content = .empty
+			controller.render(document)
+			#expect(copy.isHidden || copy.superview?.isHidden == true)
+		}
+	}
+
+	@Test func shortMarkdownHeadingAlignsWithCopyAndLongPreviewScrolls() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			controller.showsHeader = false
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 600,
+					height: 500
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentView = controller.view
+			defer
+			{
+				window.close()
+			}
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "short.md"
+				),
+				isRetained: true,
+				content: .text("# Document\none two")
+			)
+			document.status = .ready
+			controller.render(document)
+			let preview = try #require(findPreview(in: controller.view))
+			await preview.waitForLoading()
+			controller.view.layoutSubtreeIfNeeded()
+			preview.layoutSubtreeIfNeeded()
+			let copy = try #require(findButton(
+				"Copy Markdown",
+				in: controller.view
+			))
+			let text = try #require(findMarkdownText(in: preview))
+			let layout = try #require(text.layoutManager)
+			let container = try #require(text.textContainer)
+			layout.ensureLayout(for: container)
+			let firstGlyph = layout.glyphRange(
+				forCharacterRange: NSRange(
+					location: 0,
+					length: 1
+				),
+				actualCharacterRange: nil
+			)
+			let glyph = layout.boundingRect(
+				forGlyphRange: firstGlyph,
+				in: container
+			)
+			let localGlyph = glyph.offsetBy(
+				dx: text.textContainerOrigin.x,
+				dy: text.textContainerOrigin.y
+			)
+			let heading = text.convert(
+				localGlyph,
+				to: controller.view
+			)
+			let button = copy.convert(
+				copy.bounds,
+				to: controller.view
+			)
+			#expect(abs(heading.midY - button.midY) < 50)
+			#expect(heading.maxX < button.minX)
+			let longText = "# Long\n" + String(
+				repeating: "A paragraph with enough words to wrap.\n\n",
+				count: 100
+			)
+			document.content = .text(longText)
+			controller.render(document)
+			let longPreview = try #require(findPreview(in: controller.view))
+			await longPreview.waitForLoading()
+			controller.view.layoutSubtreeIfNeeded()
+			longPreview.layoutSubtreeIfNeeded()
+			let scroll = try #require(findPreviewScroll(in: controller.view))
+			#expect(longPreview.frame.height > scroll.contentView.bounds.height)
+			let destinationY = longPreview.frame.height - scroll.contentView.bounds.height
+			scroll.contentView.scroll(to: NSPoint(
+				x: 0,
+				y: destinationY
+			))
+			scroll.reflectScrolledClipView(scroll.contentView)
+			#expect(scroll.contentView.bounds.origin.y > 0)
+		}
+	}
+
+	private func findPreview(in view: NSView) -> RichFilePreviewView?
+	{
+		if let preview = view as? RichFilePreviewView
+		{
+			return preview
+		}
+		for child in view.subviews
+		{
+			if let found = findPreview(in: child)
+			{
+				return found
+			}
+		}
+		return nil
+	}
+
+	private func findMarkdownText(in view: NSView) -> MarkdownTextView?
+	{
+		if let text = view as? MarkdownTextView
+		{
+			return text
+		}
+		for child in view.subviews
+		{
+			if let found = findMarkdownText(in: child)
+			{
+				return found
+			}
+		}
+		return nil
+	}
+
+	private func findPreviewScroll(in view: NSView) -> NSScrollView?
+	{
+		if let scroll = view as? NSScrollView,
+			scroll.documentView is RichFilePreviewView
+		{
+			return scroll
+		}
+		for child in view.subviews
+		{
+			if let found = findPreviewScroll(in: child)
+			{
+				return found
+			}
+		}
+		return nil
+	}
+
+	private func findButton(
+		_ label: String,
+		in view: NSView
+	) -> NSButton?
+	{
+		if let button = view as? NSButton, button.toolTip == label
+		{
+			return button
+		}
+		for child in view.subviews
+		{
+			if let found = findButton(
+				label,
+				in: child
+			)
+			{
+				return found
+			}
+		}
+		return nil
+	}
+
 	private func color(
 		in storage: NSTextStorage,
 		matching token: String
@@ -795,6 +1515,36 @@ struct FileDocumentViewTests
 			at: range.location,
 			effectiveRange: nil
 		) as? NSColor
+	}
+
+	private func requireCopyAccessoryBackgroundMatchesDocument(_ view: NSView) throws
+	{
+		let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+		view.cacheDisplay(
+			in: view.bounds,
+			to: bitmap
+		)
+		let scaleX = CGFloat(bitmap.pixelsWide) / view.bounds.width
+		let scaleY = CGFloat(bitmap.pixelsHigh) / view.bounds.height
+		let blankX = min(
+			160,
+			view.bounds.width - 80
+		)
+		let accessoryX = view.bounds.width - 20
+		for y in [CGFloat(34), view.bounds.height - 34]
+		{
+			let blank = try #require(bitmap.colorAt(
+				x: Int(blankX * scaleX),
+				y: Int(y * scaleY)
+			)?.usingColorSpace(.sRGB))
+			let accessory = try #require(bitmap.colorAt(
+				x: Int(accessoryX * scaleX),
+				y: Int(y * scaleY)
+			)?.usingColorSpace(.sRGB))
+			#expect(abs(blank.redComponent - accessory.redComponent) < 0.02)
+			#expect(abs(blank.greenComponent - accessory.greenComponent) < 0.02)
+			#expect(abs(blank.blueComponent - accessory.blueComponent) < 0.02)
+		}
 	}
 
 	private func isRed(_ color: NSColor) -> Bool
@@ -829,4 +1579,52 @@ struct FileDocumentViewTests
 		) < 0.1
 	}
 
+	private func findText(in view: NSView) -> FileSourceTextView?
+	{
+		if let source = view as? FileSourceTextView
+		{
+			return source
+		}
+		for child in view.subviews
+		{
+			if let found = findText(in: child)
+			{
+				return found
+			}
+		}
+		return nil
+	}
+
+	private func findSourceScroll(in view: NSView) -> NSScrollView?
+	{
+		if let scroll = view as? NSScrollView,
+			scroll.documentView is FileSourceTextView
+		{
+			return scroll
+		}
+		for child in view.subviews
+		{
+			if let found = findSourceScroll(in: child)
+			{
+				return found
+			}
+		}
+		return nil
+	}
+
+	private func findSearchField(in view: NSView) -> NSSearchField?
+	{
+		if let field = view as? NSSearchField
+		{
+			return field
+		}
+		for child in view.subviews
+		{
+			if let found = findSearchField(in: child)
+			{
+				return found
+			}
+		}
+		return nil
+	}
 }
