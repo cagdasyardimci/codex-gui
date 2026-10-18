@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class GitDiffTextView: NSTextView
+final class GitDiffTextView: SourceTextView
 {
 	var rows: [GitDiffRow] = []
 	{

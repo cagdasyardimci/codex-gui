@@ -41,21 +41,17 @@ final class GitUnifiedCodeView: NSView
 			{
 				return
 			}
-			scroll.hasHorizontalScroller = !wrapsCode
-			if wrapsCode
-			{
-				scroll.contentView.scroll(to: .zero)
-				scroll.reflectScrolledClipView(scroll.contentView)
-			}
+			SourceTextViewport.setWrapping(
+				wrapsCode,
+				for: source,
+				in: scroll
+			)
 			render()
 			needsLayout = true
 		}
 	}
-	private let font = NSFont.monospacedSystemFont(
-		ofSize: 12,
-		weight: .regular
-	)
-	static let lineHeight: CGFloat = 19
+	private let font = SourceTextView.sourceFont
+	static let lineHeight = SourceTextView.sourceLineHeight
 
 	static func contentHeight(rowCount: Int) -> CGFloat
 	{
@@ -108,13 +104,11 @@ final class GitUnifiedCodeView: NSView
 		source.rows = rows
 		source.placeholderIndices = placeholderIndices
 		source.drawsRoundedChangeHighlights = gutterMode == .unified
+		SourceTextViewport.configure(
+			source,
+			wrapsLines: wrapsCode
+		)
 		source.isEditable = false
-		source.isSelectable = true
-		source.isRichText = false
-		source.isAutomaticLinkDetectionEnabled = false
-		source.isAutomaticQuoteSubstitutionEnabled = false
-		source.isAutomaticDashSubstitutionEnabled = false
-		source.isAutomaticSpellingCorrectionEnabled = false
 		source.isVerticallyResizable = false
 		source.isHorizontallyResizable = false
 		source.textContainerInset = NSSize(
@@ -122,15 +116,12 @@ final class GitUnifiedCodeView: NSView
 			height: 0
 		)
 		source.textContainer?.lineFragmentPadding = 0
-		source.autoresizingMask = []
-		source.textContainer?.widthTracksTextView = false
 		source.textContainer?.heightTracksTextView = false
 		source.textContainer?.containerSize = NSSize(
 			width: GitCodeViewport.minimumDocumentWidth,
 			height: 1
 		)
-		source.drawsBackground = false
-		source.font = font
+		source.drawsBackground = true
 		switch gutterMode
 		{
 		case .unified:
@@ -149,10 +140,8 @@ final class GitUnifiedCodeView: NSView
 
 	private func installSourceScrollView()
 	{
-		scroll.documentView = source
 		scroll.hasHorizontalScroller = true
 		scroll.hasVerticalScroller = false
-		scroll.autohidesScrollers = true
 		scroll.drawsBackground = false
 		let ruler = GitDiffLineRuler(
 			scrollView: scroll,
@@ -161,9 +150,11 @@ final class GitUnifiedCodeView: NSView
 			font: font,
 			gutterMode: gutterMode
 		)
-		scroll.verticalRulerView = ruler
-		scroll.hasVerticalRuler = true
-		scroll.rulersVisible = true
+		SourceTextViewport.install(
+			source,
+			in: scroll,
+			ruler: ruler
+		)
 		AppKitLayout.pin(
 			scroll,
 			to: self,
@@ -217,24 +208,10 @@ final class GitUnifiedCodeView: NSView
 			1,
 			clip.bounds.width - clip.contentInsets.left - clip.contentInsets.right
 		)
-		let containerSize = NSSize(
-			width: max(
-				1,
-				width - 2 * GitCodeViewport.textInset
-			),
-			height: .greatestFiniteMagnitude
+		SourceTextViewport.sizeWrappedText(
+			source,
+			to: width
 		)
-		if source.textContainer?.containerSize != containerSize
-		{
-			source.textContainer?.containerSize = containerSize
-		}
-		if source.frame.width != width
-		{
-			source.setFrameSize(NSSize(
-				width: width,
-				height: source.frame.height
-			))
-		}
 		if let container = source.textContainer, let manager = source.layoutManager
 		{
 			source.updateVisualRowRects()
@@ -317,24 +294,22 @@ final class GitUnifiedCodeView: NSView
 
 	private func render()
 	{
-		let style = NSMutableParagraphStyle()
-		style.minimumLineHeight = Self.lineHeight
-		style.maximumLineHeight = Self.lineHeight
-		style.lineBreakMode = wrapsCode ? .byCharWrapping : .byClipping
-		style.tabStops = []
-		style.defaultTabInterval = ("    " as NSString).size(withAttributes: [.font: font]).width
+		source.refreshSourceAppearance(
+			appearance: effectiveAppearance,
+			wrapsLines: wrapsCode
+		)
 		let text = rows.map(\.text).joined(separator: "\n")
-		let attributed = NSMutableAttributedString(
-			string: text,
-			attributes: [.font: font, .foregroundColor: NSColor.textColor, .paragraphStyle: style]
+		let attributed = NSMutableAttributedString(string: text)
+		SourceTextView.applySourceStyle(
+			to: attributed,
+			text: text,
+			path: path,
+			appearance: effectiveAppearance,
+			wrapsLines: wrapsCode
 		)
 		applySplitRowSpacing(
 			to: attributed,
-			paragraphStyle: style
-		)
-		applySyntaxColors(
-			to: attributed,
-			text: text
+			paragraphStyle: SourceTextView.paragraphStyle(wrapsLines: wrapsCode)
 		)
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
@@ -388,43 +363,6 @@ final class GitUnifiedCodeView: NSView
 					)
 				}
 				paragraphOffset += length + 1
-			}
-		}
-	}
-
-	private func applySyntaxColors(
-		to attributed: NSMutableAttributedString,
-		text: String
-	)
-	{
-		let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		let language = CodePreviewPresentation(
-			text: text,
-			relativePath: path
-		).language
-		if let highlighted = CodeSyntaxHighlighter.highlightedCode(
-			text,
-			language: language,
-			dark: dark
-		)
-		{
-			highlighted.enumerateAttribute(
-				.foregroundColor,
-				in: NSRange(
-					location: 0,
-					length: highlighted.length
-				)
-			)
-			{
-				color, range, _ in
-				if let color, NSMaxRange(range) <= attributed.length
-				{
-					attributed.addAttribute(
-						.foregroundColor,
-						value: color,
-						range: range
-					)
-				}
 			}
 		}
 	}
