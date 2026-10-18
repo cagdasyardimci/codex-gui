@@ -235,7 +235,7 @@ final class FileBreadcrumbView: DesktopSurface
 
 	@objc private func activateSegment(_ sender: NSButton)
 	{
-		guard let location
+		guard sender.superview === stack, let location
 		else
 		{
 			return
@@ -258,7 +258,7 @@ final class FileBreadcrumbView: DesktopSurface
 
 	@objc private func activateSiblingMenu(_ sender: NSButton)
 	{
-		guard let location
+		guard sender.superview === stack, let location
 		else
 		{
 			return

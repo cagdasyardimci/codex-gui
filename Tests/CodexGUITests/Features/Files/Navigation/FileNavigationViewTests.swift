@@ -196,6 +196,16 @@ struct FileNavigationViewTests
 					row: row
 				) == "main.swift")
 			}
+			let openedCount = opened.count
+			state.activeRoot = nil
+			controller.render(state)
+			#expect(outline.numberOfRows == 0)
+			_ = NSApp.sendAction(
+				try #require(outline.action),
+				to: outline.target,
+				from: outline
+			)
+			#expect(opened.count == openedCount)
 		}
 	}
 
@@ -259,6 +269,65 @@ struct FileNavigationViewTests
 		)
 		breadcrumb.layoutSubtreeIfNeeded()
 		#expect(stack.frame.width >= stack.fittingSize.width)
+	}
+
+	@Test func replacedBreadcrumbControlsCannotNavigateTheCurrentLocation() throws
+	{
+		let breadcrumb = FileBreadcrumbView()
+		var state = FileViewerState()
+		state.activeRoot = "/tmp/old-workspace"
+		breadcrumb.render(
+			location: FileLocation(
+				root: state.activeRoot!,
+				relativePath: "old/file.swift"
+			),
+			state: state
+		)
+		let previous = breadcrumb.allSubviews().compactMap
+		{
+			$0 as? NSButton
+		}
+		var opened: [FileLocation] = []
+		var navigated: [FileLocation] = []
+		var requested: [FileLocation] = []
+		breadcrumb.onOpenFile =
+		{
+			opened.append($0)
+		}
+		breadcrumb.onNavigate =
+		{
+			navigated.append($0)
+		}
+		breadcrumb.onRequestDirectory =
+		{
+			requested.append($0)
+		}
+		state.activeRoot = "/tmp/new-workspace"
+		let current = FileLocation(
+			root: state.activeRoot!,
+			relativePath: "new/other.swift"
+		)
+		breadcrumb.render(
+			location: current,
+			state: state
+		)
+		for button in previous
+		{
+			#expect(button.dispatchConfiguredAction())
+		}
+		#expect(opened.isEmpty)
+		#expect(navigated.isEmpty)
+		#expect(requested.isEmpty)
+		let currentFile = try #require(breadcrumb.allSubviews().compactMap
+		{
+			$0 as? NSButton
+		}
+		.first
+		{
+			$0.title == "other.swift"
+		})
+		#expect(currentFile.dispatchConfiguredAction())
+		#expect(opened == [current])
 	}
 
 	@Test func lazyFolderResultAndFilterPreserveTreeContext() async throws
@@ -342,6 +411,20 @@ struct FileNavigationViewTests
 			controller.render(state)
 			#expect(outline.numberOfRows == 2)
 			#expect(outline.isItemExpanded(folderItem))
+			#expect(outlineLabel(
+				outline,
+				row: 1
+			) == "Loading…")
+			state.directoryRequests[folder] = nil
+			state.directoryFailures[folder] = .unavailable
+			controller.render(state)
+			#expect(outlineLabel(
+				outline,
+				row: 1
+			) == "Couldn’t load folder. Click to retry.")
+			state.directoryFailures[folder] = nil
+			state.directoryRequests[folder] = UUID()
+			controller.render(state)
 			#expect(outlineLabel(
 				outline,
 				row: 1
@@ -804,6 +887,10 @@ struct FileNavigationViewTests
 			#expect(!sheet.isVisible)
 			#expect(canceled == 1)
 			#expect(parent.firstResponder === origin)
+			#expect(table.numberOfRows == 0)
+			chosen = nil
+			table.onAccept?()
+			#expect(chosen == nil)
 
 			panel.present(in: parent)
 			let replacement = try #require(parent.attachedSheet)

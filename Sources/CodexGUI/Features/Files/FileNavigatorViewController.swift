@@ -49,6 +49,19 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		let location: FileLocation
 	}
 
+	private struct RowSignature: Equatable
+	{
+		let key: Key
+		let isDirectory: Bool?
+		let isSymbolicLink: Bool?
+	}
+
+	private struct Structure: Equatable
+	{
+		let roots: [RowSignature]
+		let children: [FileLocation: [RowSignature]]
+	}
+
 	private enum Geometry
 	{
 		static let statusSize: CGFloat = 11
@@ -77,7 +90,7 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 	private var priorExpansion: [FileLocation] = []
 	private var priorSelection: FileLocation?
 	private var priorScroll = NSPoint.zero
-	private var lastStructureSignature = ""
+	private var lastStructure: Structure?
 	private var expansionRequests: [FileLocation: Task<Void, Never>] = [:]
 
 	override func loadView()
@@ -217,8 +230,11 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 			filter = ""
 			filterField.stringValue = ""
 			requestedRoot = nil
+			priorExpansion.removeAll()
+			priorSelection = nil
+			priorScroll = .zero
 			cache.removeAll()
-			lastStructureSignature = ""
+			lastStructure = nil
 			pendingReveal = pendingReveal?.root == state.activeRoot ? pendingReveal : nil
 		}
 		rootButton.title = state.activeRoot.map
@@ -343,6 +359,17 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		guard let root = rootLocation
 		else
 		{
+			visibleRows.removeAll()
+			cache.removeAll()
+			lastStructure = nil
+			filterStatus.stringValue = ""
+			filterStatus.isHidden = true
+			if !rootRows.isEmpty
+			{
+				rootRows.removeAll()
+				outline.rootItems = []
+				outline.reloadTree()
+			}
 			return
 		}
 		let selected = selectedLocation
@@ -404,24 +431,31 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 			rootRows = visibleRows[root] ?? []
 		}
 		filterStatus.isHidden = filterStatus.stringValue.isEmpty
-		let signature = rootRows.map
+		let structure = Structure(
+			roots: signatures(for: rootRows),
+			children: visibleRows.mapValues
+			{
+				signatures(for: $0)
+			}
+		)
+		var retainedKeys = Set(structure.roots.map(\.key))
+		for rows in structure.children.values
 		{
-			"\($0.kind):\($0.location.relativePath)"
+			retainedKeys.formUnion(rows.lazy.map(\.key))
 		}
-		.joined(separator: "|")
-		+ visibleRows.keys.sorted
+		if retainedKeys.count != cache.count
 		{
-			$0.relativePath < $1.relativePath
-		}.map
-		{
-			"\($0.relativePath):\(visibleRows[$0]?.map { $0.location.relativePath }.joined() ?? "")"
-		}.joined(separator: "|")
-		guard signature != lastStructureSignature
+			cache = cache.filter
+			{
+				retainedKeys.contains($0.key)
+			}
+		}
+		guard structure != lastStructure
 		else
 		{
 			return
 		}
-		lastStructureSignature = signature
+		lastStructure = structure
 		outline.rootItems = rootRows
 		outline.reloadTree()
 		if filter.isEmpty
@@ -431,6 +465,21 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		select(selected)
 		scroll.contentView.scroll(to: offset)
 		scroll.reflectScrolledClipView(scroll.contentView)
+	}
+
+	private func signatures(for rows: [Row]) -> [RowSignature]
+	{
+		rows.map
+		{
+			RowSignature(
+				key: Key(
+					kind: $0.kind,
+					location: $0.location
+				),
+				isDirectory: $0.entry?.isDirectory,
+				isSymbolicLink: $0.entry?.isSymbolicLink
+			)
+		}
 	}
 
 	private func buildDirectoryRows(_ location: FileLocation)
