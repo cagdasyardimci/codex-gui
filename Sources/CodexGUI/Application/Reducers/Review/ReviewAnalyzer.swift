@@ -92,7 +92,7 @@ enum ReviewAnalyzer
 		{
 			for change in completedChanges(in: earlierTurn)
 			{
-				state.append(changeIdentity(change))
+				state.append(change)
 			}
 		}
 		return analyze(
@@ -129,7 +129,6 @@ enum ReviewAnalyzer
 		}
 		return ReviewParsedChanges(
 			changes: changes,
-			identities: changes.map(changeIdentity),
 			files: files
 		)
 	}
@@ -154,16 +153,14 @@ enum ReviewAnalyzer
 			laterEdits[index] = encounteredEdit
 			encounteredEdit = encounteredEdit || isCompletedEdit(turn.items[index])
 		}
-		var changeIndex = 0
 		var validations: [ReviewValidation] = []
 		for (index, item) in turn.items.enumerated()
 		{
 			if item.type == "fileChange", item.status == "completed"
 			{
-				for _ in item.changes
+				for change in item.changes
 				{
-					state.append(parsed.identities[changeIndex])
-					changeIndex += 1
+					state.append(change)
 				}
 			}
 			guard item.type == "commandExecution", let command = item.command
@@ -291,10 +288,12 @@ enum ReviewAnalyzer
 			previousPath: previousPath,
 			reportedMovePath: reportedMovePath
 		)
-		let hunks = GitDiffParser.hunks(in: combinedDiff).enumerated().map
+		let hunks = GitDiffParser.hunks(in: lines).hunks.enumerated().map
 		{
 			index, hunk in
-			let digest = fingerprint([hunk.text])
+			var hunkFingerprint = Fingerprint()
+			hunkFingerprint.append(hunk.text)
+			let digest = hunkFingerprint.identity
 			return ReviewHunk(
 				id: "\(index + 1)-\(digest)",
 				header: hunk.header,
@@ -310,7 +309,7 @@ enum ReviewAnalyzer
 			kind: kind,
 			hunks: hunks,
 			diff: combinedDiff,
-			fingerprint: fingerprint(changes.map(changeIdentity)),
+			fingerprint: fingerprint(changes),
 			explanation: fileExplanation(
 				kind: kind,
 				hasHunks: !hunks.isEmpty,
@@ -417,18 +416,13 @@ enum ReviewAnalyzer
 		return state
 	}
 
-	private static func changeIdentity(_ change: FileChange) -> String
-	{
-		"\(change.path)\u{0}\(change.movePath ?? "")\u{0}\(change.kind)\u{0}\(change.diff)"
-	}
-
 	/// Deterministic FNV-1a over UTF-8; local identity only, not a security digest.
-	private static func fingerprint(_ parts: [String]) -> String
+	private static func fingerprint(_ changes: [FileChange]) -> String
 	{
 		var state = Fingerprint()
-		for part in parts
+		for change in changes
 		{
-			state.append(part)
+			state.append(change)
 		}
 		return state.identity
 	}
@@ -437,17 +431,39 @@ enum ReviewAnalyzer
 	{
 		private static let offsetBasis: UInt64 = 14_695_981_039_346_656_037
 		private static let prime: UInt64 = 1_099_511_628_211
-		private static let partSeparator: UInt64 = 0xff
+		private static let partSeparator: UInt8 = 0xff
 
 		private var value = Self.offsetBasis
 
 		mutating func append(_ part: String)
 		{
+			appendBytes(part)
+			appendByte(Self.partSeparator)
+		}
+
+		/// Preserve the serialized identity's NUL-delimited bytes without copying its diff.
+		mutating func append(_ change: FileChange)
+		{
+			appendBytes(change.path)
+			appendByte(0)
+			appendBytes(change.movePath ?? "")
+			appendByte(0)
+			appendBytes(change.kind)
+			appendByte(0)
+			append(change.diff)
+		}
+
+		private mutating func appendBytes(_ part: String)
+		{
 			for byte in part.utf8
 			{
-				value = (value ^ UInt64(byte)) &* Self.prime
+				appendByte(byte)
 			}
-			value = (value ^ Self.partSeparator) &* Self.prime
+		}
+
+		private mutating func appendByte(_ byte: UInt8)
+		{
+			value = (value ^ UInt64(byte)) &* Self.prime
 		}
 
 		var identity: String

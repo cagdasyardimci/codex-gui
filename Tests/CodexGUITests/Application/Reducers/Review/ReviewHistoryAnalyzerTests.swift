@@ -5,6 +5,39 @@ import Testing
 
 struct ReviewHistoryAnalyzerTests
 {
+	@Test func streamedFingerprintsPreserveUnicodeNULFieldsAndAbsentMoveIdentity() throws
+	{
+		let diff = "@@ -1,1024 +1,1024 @@\n" + String(
+			repeating: "-é\n+e\u{301}\n",
+			count: 1_024
+		)
+		for movePath in [nil, "", "B\u{0}e\u{301}.swift"] as [String?]
+		{
+			var kind: [String: Any] = ["type": "update\u{0}more"]
+			kind["move_path"] = movePath
+			let turn = try ReviewModelTestFixture.turn(
+				"turn",
+				items: [ReviewModelTestFixture.fileItem(
+					"edit",
+					changes: [["path": "A\u{0}é.swift", "kind": kind, "diff": diff]]
+				)]
+			)
+			var cache: [String: ReviewParsedChanges] = [:]
+			let reviews = ReviewAnalyzer.reviews(
+				threadID: "thread",
+				turns: [turn],
+				parsedChanges: &cache
+			)
+			let review = try #require(reviews.first)
+			let file = try #require(review.files.first)
+			// Frozen digests use the previous serialized field and part separators.
+			#expect(file.fingerprint == (movePath?.isEmpty == false
+					? "6c0d617472b36db5" : "28d683beedde2704"))
+			#expect(review.codeStateID == (movePath?.isEmpty == false
+					? "4df8485d4c9eb67b" : "81b6c401c3e5deaa"))
+		}
+	}
+
 	@Test func preservesKnownCodeStateFingerprintsAndCommandBoundaries() throws
 	{
 		let turns = try fixture()
