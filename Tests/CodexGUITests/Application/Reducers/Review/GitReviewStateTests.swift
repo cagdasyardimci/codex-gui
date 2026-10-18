@@ -234,35 +234,41 @@ struct GitReviewStateTests
 		var state = GitReviewState()
 		state.activate(owner: owner())
 		state.scope = .lastTurn
-		let first = try #require(state.beginRequest())
-		#expect(state.accept(
+		let firstRequest = state.beginRequest()
+		let first = try #require(firstRequest)
+		let acceptedFirst = state.accept(
 			.snapshot(snapshot(first)),
 			request: first
-		))
+		)
+		#expect(acceptedFirst)
 		#expect(state.copyCommand != nil)
 		state.options.expandedGapIDs = [Data("gap".utf8)]
-		let second = try #require(state.beginRequest())
+		let secondRequest = state.beginRequest()
+		let second = try #require(secondRequest)
 		var fallback = snapshot(
 			second,
 			id: "fallback"
 		)
 		fallback.usesReportedEditFallback = true
-		#expect(state.accept(
+		let acceptedFallback = state.accept(
 			.snapshot(fallback),
 			request: second
-		))
+		)
+		#expect(acceptedFallback)
 		#expect(state.snapshot?.usesReportedEditFallback == true)
 		#expect(state.snapshot?.id == "fallback")
 		#expect(state.options.expandedGapIDs.isEmpty)
 		#expect(state.copyCommand == nil)
-		let third = try #require(state.beginRequest())
-		#expect(state.accept(
+		let thirdRequest = state.beginRequest()
+		let third = try #require(thirdRequest)
+		let acceptedApplicable = state.accept(
 			.snapshot(snapshot(
 				third,
 				id: "applicable"
 			)),
 			request: third
-		))
+		)
+		#expect(acceptedApplicable)
 		#expect(state.snapshot?.usesReportedEditFallback == false)
 		#expect(state.snapshot?.id == "applicable")
 		#expect(state.copyCommand != nil)
@@ -375,41 +381,51 @@ struct GitReviewStateTests
 		state.activate(owner: owner())
 		let composed = "Café/A.swift"
 		let decomposed = "Cafe\u{301}/A.swift"
-		let first = try #require(state.beginRequest())
-		#expect(state.accept(
+		let firstRequest = state.beginRequest()
+		let first = try #require(firstRequest)
+		let acceptedFirst = state.accept(
 			.snapshot(snapshot(
 				first,
 				paths: [composed, decomposed]
 			)),
 			request: first
-		))
+		)
+		#expect(acceptedFirst)
 		#expect(state.expandedDirectories == [Data("Café".utf8), Data("Cafe\u{301}".utf8)])
 		state.toggleDirectory("Café")
 		#expect(state.expandedDirectories == [Data("Cafe\u{301}".utf8)])
 		state.expandGap("snapshot:Café/A.swift:gap")
 		state.expandGap("snapshot:Cafe\u{301}/A.swift:gap")
 		#expect(state.options.expandedGapIDs.count == 2)
-		#expect(state.selectFile(decomposed))
-		let second = try #require(state.beginRequest())
-		#expect(state.accept(
+		let selectedDecomposed = state.selectFile(decomposed)
+		#expect(selectedDecomposed)
+		let secondRequest = state.beginRequest()
+		let second = try #require(secondRequest)
+		let acceptedSecond = state.accept(
 			.snapshot(snapshot(
 				second,
 				paths: [composed]
 			)),
 			request: second
-		))
+		)
+		#expect(acceptedSecond)
 		#expect(state.selectedFileID?.utf8.elementsEqual(composed.utf8) == true)
 		#expect(state.selectionMessage == "The selected file is absent from the new comparison.")
-		#expect(!state.selectFile(decomposed))
+		let selectedMissing = state.selectFile(decomposed)
+		#expect(!selectedMissing)
 	}
 
 	@Test func reportedChangeInvalidationKeepsExactBytesAndOptionalAvailability() throws
 	{
 		var state = GitReviewState()
-		#expect(!state.setReportedChanges(nil))
-		#expect(state.setReportedChanges([]))
-		#expect(!state.setReportedChanges([]))
-		#expect(state.setReportedChanges(nil))
+		let changedMissing = state.setReportedChanges(nil)
+		#expect(!changedMissing)
+		let changedToEmpty = state.setReportedChanges([])
+		#expect(changedToEmpty)
+		let changedEmpty = state.setReportedChanges([])
+		#expect(!changedEmpty)
+		let changedToMissing = state.setReportedChanges(nil)
+		#expect(changedToMissing)
 		let composed = try #require(FileChange(json: [
 			"path": "A.swift",
 			"kind": "update",
@@ -421,9 +437,12 @@ struct GitReviewStateTests
 			"diff": "-before\n+e\u{301}\n",
 		]))
 		#expect(composed == decomposed)
-		#expect(state.setReportedChanges([composed]))
-		#expect(!state.setReportedChanges([composed]))
-		#expect(state.setReportedChanges([decomposed]))
+		let changedToComposed = state.setReportedChanges([composed])
+		#expect(changedToComposed)
+		let changedComposed = state.setReportedChanges([composed])
+		#expect(!changedComposed)
+		let changedToDecomposed = state.setReportedChanges([decomposed])
+		#expect(changedToDecomposed)
 		#expect(state.reportedChanges?.first?.diff.utf8.elementsEqual(decomposed.diff.utf8) == true)
 	}
 
