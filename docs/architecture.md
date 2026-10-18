@@ -152,6 +152,10 @@ through the existing row, selection and scrolling update path.
 Prepared transcript content and change detection preserve exact UTF-8 source identity, including
 canonically equivalent spellings with different source ranges.
 
+Local image dependencies consult the shared thumbnail loader's freshness metadata on subsequent
+render generations; immutable inline image data and ordinary text retain reusable prepared-content
+caching.
+
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and [validation](validation.md) for verification commands and acceptance limits.
 
 Git comparison file headers offer rich preview for Markdown, images and PDFs supported by the

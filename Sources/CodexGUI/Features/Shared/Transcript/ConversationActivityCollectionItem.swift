@@ -1,5 +1,4 @@
 import AppKit
-import ImageIO
 
 @MainActor
 final class ConversationActivityCollectionItem: NSCollectionViewItem
@@ -88,7 +87,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private var subagentNavigationGeneration = 0
 	private var imageTask: Task<Void, Never>?
 	private let expandedImagePreview = ExpandedImagePreview()
-	private static let imageCache = NSCache<NSString, NSImage>()
 
 	override func loadView()
 	{
@@ -1088,18 +1086,13 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			imageState.stringValue = "Image unavailable"
 			return
 		}
-		if let cached = Self.imageCache.object(forKey: path as NSString)
-		{
-			showImage(cached)
-			return
-		}
 		imageTask = Task
 		{
 			[weak self] in
-			let thumbnail = await Task.detached(priority: .utility)
-			{
-				ActivityImageThumbnail.load(path: path)
-			}.value
+			let thumbnail = await SourceThumbnailLoader.image(
+				path: path,
+				maximumPixelSize: 240
+			)
 			guard !Task.isCancelled, let self, self.row?.imagePath == path
 			else
 			{
@@ -1115,11 +1108,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			let image = NSImage(
 				cgImage: thumbnail.image,
 				size: .zero
-			)
-			Self.imageCache.countLimit = 32
-			Self.imageCache.setObject(
-				image,
-				forKey: path as NSString
 			)
 			self.showImage(image)
 		}
@@ -1196,31 +1184,5 @@ private final class ActivityImagePreviewHostView: NSView
 		{
 			onDetach?()
 		}
-	}
-}
-
-private struct ActivityImageThumbnail: @unchecked Sendable
-{
-	let image: CGImage
-	static func load(path: String) -> ActivityImageThumbnail?
-	{
-		guard let source = CGImageSourceCreateWithURL(
-			URL(fileURLWithPath: path) as CFURL,
-			nil
-		),
-			let image = CGImageSourceCreateThumbnailAtIndex(
-				source,
-				0,
-				[
-					kCGImageSourceCreateThumbnailFromImageAlways: true,
-					kCGImageSourceThumbnailMaxPixelSize: 240,
-					kCGImageSourceCreateThumbnailWithTransform: true,
-				] as CFDictionary
-			)
-		else
-		{
-			return nil
-		}
-		return ActivityImageThumbnail(image: image)
 	}
 }

@@ -7,6 +7,7 @@ final class PreparedConversationContent: @unchecked Sendable
 	let codeBlocks: [String]
 	let codeBlockRanges: [NSRange]
 	let estimatedRichImageBytes: Int
+	let hasLocalImageDependencies: Bool
 	private struct SizeKey: Hashable
 	{
 		let width: CGFloat
@@ -33,6 +34,11 @@ final class PreparedConversationContent: @unchecked Sendable
 		codeBlocks = parsed.codeBlocks
 		codeBlockRanges = parsed.codeBlockRanges
 		estimatedRichImageBytes = Self.richImageBytes(in: attributedString)
+		hasLocalImageDependencies = MarkdownImagePreparation.preloadPlan(in: parsed.runs).paths
+			.contains
+			{
+				!InlineImageData.isDataURL($0) && LocalAttachmentURL.resolve($0) != nil
+			}
 	}
 
 	@MainActor
@@ -210,7 +216,9 @@ actor ConversationContentCache
 			imageThumbnails: imageThumbnails
 		)
 		let byteCount = body.utf8.count + prepared.estimatedRichImageBytes
-		if values[key] == nil && byteCount <= byteCapacity
+		// A later entry with the same Markdown must consult the thumbnail loader again.
+		// Its metadata-aware cache owns freshness for mutable local image paths.
+		if !prepared.hasLocalImageDependencies && values[key] == nil && byteCount <= byteCapacity
 		{
 			values[key] = prepared
 			storedCosts[key] = byteCount

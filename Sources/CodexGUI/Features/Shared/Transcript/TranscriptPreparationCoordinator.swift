@@ -149,7 +149,8 @@ final class TranscriptPreparationCoordinator
 				{
 					continue
 				}
-				if existingKeys[entry.id] == key, let prepared = existingContents[entry.id]
+				if existingKeys[entry.id] == key, let prepared = existingContents[entry.id],
+					!prepared.hasLocalImageDependencies
 				{
 					contents[entry.id] = prepared
 				}
