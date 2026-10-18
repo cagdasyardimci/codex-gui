@@ -84,7 +84,9 @@ struct CommandPaletteWindowOwnershipTests
 			#expect((window.attachedSheet != nil) == !retireOwner)
 			controller.messageSearch.dismiss()
 			choose(.action("changes"))
-			#expect(controller.inspector.isShowingTools == !retireOwner)
+			#expect(controller.inspector.gitChanges.runtime.state.isOpen == !retireOwner)
+			#expect(controller.inspector.isShowingDetails == !retireOwner)
+			#expect(!controller.inspector.isShowingTools)
 		}
 	}
 }
