@@ -26,13 +26,29 @@ struct GitDiffFilePresentation: Equatable, Sendable
 
 struct GitDiffTreeRow: Identifiable, Equatable
 {
-	let id: WorkspaceFileIdentity
+	struct ID: Hashable
+	{
+		let checkoutRoot: Data
+		let path: Data
+		let isDirectory: Bool
+	}
+
+	let id: ID
 	let name: String
 	let path: String
 	let depth: Int
 	let isDirectory: Bool
 	let fileID: String?
 	let type: WorkspaceFileTypePresentation
+
+	var parentID: ID
+	{
+		ID(
+			checkoutRoot: id.checkoutRoot,
+			path: Data((path as NSString).deletingLastPathComponent.utf8),
+			isDirectory: true
+		)
+	}
 }
 
 /// A pure projection of immutable comparison bytes. Counts always belong to the raw snapshot.
@@ -47,7 +63,7 @@ struct GitDiffPresentation: Equatable, Sendable
 	{
 		guard let file = snapshot.files.first(where:
 			{
-				$0.id == id
+				$0.id.utf8.elementsEqual(id.utf8)
 			})
 		else
 		{
@@ -103,7 +119,7 @@ struct GitDiffPresentation: Equatable, Sendable
 	/// Filtering keeps ancestors and opens matching paths so a result is always reachable.
 	func treeRows(
 		filter: String = "",
-		expandedDirectories: Set<String> = []
+		expandedDirectories: Set<Data> = []
 	) -> [GitDiffTreeRow]
 	{
 		let query = filter.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -112,7 +128,9 @@ struct GitDiffPresentation: Equatable, Sendable
 			query.isEmpty || $0.path.localizedCaseInsensitiveContains(query)
 				|| ($0.oldPath?.localizedCaseInsensitiveContains(query) ?? false)
 		}
-		var entries: [String: String?] = [:]
+		// A path can be a changed file on one side and an ancestor directory on the other.
+		let root = Data(snapshot.request.repositoryRoot.utf8)
+		var entries: [GitDiffTreeRow.ID: GitDiffTreeRow] = [:]
 		for file in files
 		{
 			let components = file.path.split(separator: "/").map(String.init)
@@ -124,49 +142,43 @@ struct GitDiffPresentation: Equatable, Sendable
 			for count in 1 ... components.count
 			{
 				let path = components.prefix(count).joined(separator: "/")
-				if count == components.count
-				{
-					entries[path] = .some(file.id)
-				}
-				else if entries[path] == nil
-				{
-					entries[path] = .some(nil)
-				}
-			}
-		}
-		// The service captures the checkout root.
-		// Projection must not consult live filesystem state.
-		let root = snapshot.request.repositoryRoot
-		return entries.keys.sorted().compactMap
-		{
-			path in
-			let components = path.split(separator: "/")
-			let ancestors = (1 ..< components.count).map
-			{
-				components.prefix($0).joined(separator: "/")
-			}
-			guard !query.isEmpty || ancestors.allSatisfy(expandedDirectories.contains)
-			else
-			{
-				return nil
-			}
-			let fileID = entries[path] ?? nil
-			let isDirectory = fileID == nil
-			return GitDiffTreeRow(
-				id: WorkspaceFileIdentity(
-					checkoutRootPath: root,
-					normalizedRelativePath: path
-				),
-				name: String(components.last ?? ""),
-				path: path,
-				depth: components.count - 1,
-				isDirectory: isDirectory,
-				fileID: fileID,
-				type: WorkspaceFileTypePresentation(
-					relativePath: path,
+				let isDirectory = count < components.count
+				let id = GitDiffTreeRow.ID(
+					checkoutRoot: root,
+					path: Data(path.utf8),
 					isDirectory: isDirectory
 				)
-			)
+				entries[id] = GitDiffTreeRow(
+					id: id,
+					name: components[count - 1],
+					path: path,
+					depth: count - 1,
+					isDirectory: isDirectory,
+					fileID: isDirectory ? nil : file.id,
+					type: WorkspaceFileTypePresentation(
+						relativePath: path,
+						isDirectory: isDirectory
+					)
+				)
+			}
+		}
+		// Projection uses only the captured snapshot; path identities retain exact UTF-8 bytes.
+		return entries.values.sorted
+		{
+			if $0.id.path == $1.id.path
+			{
+				return $0.isDirectory && !$1.isDirectory
+			}
+			return $0.id.path.lexicographicallyPrecedes($1.id.path)
+		}.filter
+		{
+			row in
+			let components = row.path.split(separator: "/")
+			return !query.isEmpty || (1 ..< components.count).allSatisfy
+			{
+				expandedDirectories
+					.contains(Data(components.prefix($0).joined(separator: "/").utf8))
+			}
 		}
 	}
 
@@ -358,7 +370,7 @@ struct GitDiffPresentation: Equatable, Sendable
 			let count = index - start
 			let gapID = "\(prefix):gap:\(rows[start].id):\(rows[index - 1].id)"
 			guard count > 6,
-					!(options.loadFullFiles && options.expandedGapIDs.contains(gapID))
+					!(options.loadFullFiles && options.expandedGapIDs.contains(Data(gapID.utf8)))
 			else
 			{
 				result.append(contentsOf: rows[start ..< index])

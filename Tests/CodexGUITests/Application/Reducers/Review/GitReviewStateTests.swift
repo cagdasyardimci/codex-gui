@@ -6,6 +6,23 @@ import Testing
 struct GitReviewStateTests
 {
 
+	@Test func directoryAndGapExpansionKeepCanonicallyEquivalentBytesSeparate()
+	{
+		let paths = ["Caf\u{E9}", "Cafe\u{301}"]
+		var state = GitReviewState()
+		state.toggleDirectory(paths[0])
+		state.toggleDirectory(paths[1])
+		#expect(state.expandedDirectories == Set(paths.map
+			{
+				Data($0.utf8)
+			}))
+		state.toggleDirectory(paths[0])
+		#expect(state.expandedDirectories == [Data(paths[1].utf8)])
+		state.expandGap(paths[0] + ":gap")
+		state.expandGap(paths[1] + ":gap")
+		#expect(state.options.expandedGapIDs.count == 2)
+	}
+
 	@Test func reducerKeepsPresentationChoicesOutOfComparisonReads() throws
 	{
 		var state = GitReviewState()
@@ -196,7 +213,7 @@ struct GitReviewStateTests
 			request: first
 		)
 		#expect(acceptedFirstSnapshot)
-		state.options.expandedGapIDs = ["gap"]
+		state.options.expandedGapIDs = [Data("gap".utf8)]
 		state.expandedDirectories.removeAll()
 		let secondOptional = state.beginRequest()
 		let second = try #require(secondOptional)
@@ -209,7 +226,7 @@ struct GitReviewStateTests
 		)
 		#expect(acceptedUnchangedSnapshot)
 		#expect(state.snapshot?.id == "snapshot")
-		#expect(state.options.expandedGapIDs == ["gap"])
+		#expect(state.options.expandedGapIDs == [Data("gap".utf8)])
 		#expect(state.expandedDirectories.isEmpty)
 	}
 
@@ -366,6 +383,41 @@ struct GitReviewStateTests
 			}
 			identity = comparison.id
 		}
+	}
+
+	@Test func fileSelectionAndReportedChangesRetainExactPathBytes() throws
+	{
+		let composed = "\u{00E9}"
+		let decomposed = "e\u{0301}"
+		var state = GitReviewState()
+		state.activate(owner: owner())
+		let pending = state.beginRequest()
+		let request = try #require(pending)
+		let patch = Data(("diff --git a/\(composed)/file b/\(composed)/file\n"
+				+ "--- a/\(composed)/file\n+++ b/\(composed)/file\n@@ -1 +1 @@\n-a\n+b\n").utf8)
+		let value = GitComparisonSnapshot(
+			request: request,
+			id: "unicode",
+			resolvedBase: "base",
+			resolvedTarget: "target",
+			patch: patch,
+			files: GitComparisonPatchParser.files(in: patch)
+		)
+		let accepted = state.accept(
+			.snapshot(value),
+			request: request
+		)
+		#expect(accepted)
+		let selectedEquivalentSpelling = state.selectFile(decomposed + "/file")
+		#expect(!selectedEquivalentSpelling)
+		let selectedExactSpelling = state.selectFile(composed + "/file")
+		#expect(selectedExactSpelling)
+		let first = FileChange(json: ["path": composed, "diff": ""])!
+		let second = FileChange(json: ["path": decomposed, "diff": ""])!
+		let acceptedFirstReports = state.setReportedChanges([first])
+		#expect(acceptedFirstReports)
+		let acceptedByteDistinctReports = state.setReportedChanges([second])
+		#expect(acceptedByteDistinctReports)
 	}
 
 	private func snapshot(

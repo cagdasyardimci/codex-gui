@@ -5,6 +5,34 @@ import Testing
 
 struct GitComparisonPatchParserTests
 {
+	@Test func canonicallyEquivalentPathsDoNotCoalesceTheirHunksOrCounts() throws
+	{
+		let paths = ["Caf\u{E9}.swift", "Cafe\u{301}.swift"]
+		let patches = paths.enumerated().map
+		{
+			index, path in
+			"diff --git a/\(path) b/\(path)\n--- a/\(path)\n+++ b/\(path)\n"
+				+ "@@ -1 +1 @@\n-old \(index)\n+new \(index)\n"
+		}
+		let files = GitComparisonPatchParser.files(in: Data(patches.joined().utf8))
+		#expect(files.map
+		{
+			Data($0.path.utf8)
+		} == paths.map
+		{
+			Data($0.utf8)
+		})
+		try #require(files.count == 2)
+		for (index, file) in files.enumerated()
+		{
+			#expect(file.hunks.count == 1)
+			#expect(file.additions == 1)
+			#expect(file.deletions == 1)
+			#expect(file.patch.contains("+new \(index)"))
+			#expect(Data(file.patch.utf8).range(of: Data(("+++ b/" + paths[index]).utf8)) != nil)
+		}
+	}
+
 	@Test func comparisonPreservesExactHunksAndCountsOnlyLFSeparatedBodies() throws
 	{
 		let metadata = "diff --git a/old.swift b/new.swift\nrename from old.swift\n"

@@ -74,7 +74,7 @@ struct GitDiffPresentationTests
 			$0.kind == .context
 		}.count == 6)
 		#expect(folded.rows.last?.newLine == 13)
-		presentation.options.expandedGapIDs.insert(try #require(gap.gapID))
+		presentation.options.expandedGapIDs.insert(Data(try #require(gap.gapID).utf8))
 		let expanded = try #require(presentation.file("Sources/Test.swift"))
 		#expect(expanded.rows.count == 14)
 		#expect(expanded.rows[5].oldLine == 6)
@@ -310,6 +310,104 @@ struct GitDiffPresentationTests
 		#expect(multiline.file("Sources/Test.swift")?.rows.count == 4)
 	}
 
+	@Test func exactUnicodePathsKeepDistinctTreesSelectionsAndGapExpansion() throws
+	{
+		let directories = ["Caf\u{E9}", "Cafe\u{301}"]
+		let paths = directories.map
+		{
+			$0 + "/File.swift"
+		}
+		let context = (1 ... 12).map
+		{
+			" line \($0)"
+		}.joined(separator: "\n")
+		let patch = paths.enumerated().map
+		{
+			index, path in
+			"diff --git a/\(path) b/\(path)\n--- a/\(path)\n+++ b/\(path)\n"
+				+ "@@ -1,13 +1,13 @@\n\(context)\n-old \(index)\n+new \(index)\n"
+		}.joined()
+		let snapshot = comparisonSnapshot(
+			patch: patch,
+			files: GitComparisonPatchParser.files(in: Data(patch.utf8))
+		)
+		var presentation = GitDiffPresentation(snapshot: snapshot)
+		let roots = presentation.treeRows()
+		#expect(roots.count == 2)
+		#expect(Set(roots.map(\.id)).count == 2)
+		let expanded = presentation.treeRows(expandedDirectories: [Data(directories[0].utf8)])
+		#expect(expanded.count == 3)
+		#expect(expanded.compactMap(\.fileID).map
+		{
+			Data($0.utf8)
+		} == [Data(paths[0].utf8)])
+		let second = try #require(presentation.file(paths[1]))
+		#expect(Data(second.file.path.utf8) == Data(paths[1].utf8))
+		#expect(second.rows.last?.text == "new 1")
+		let firstGap = try #require(presentation.file(paths[0])?.rows.first
+		{
+			$0.kind == .gap
+		})
+		presentation.options.expandedGapIDs.insert(Data(try #require(firstGap.gapID).utf8))
+		#expect(presentation.file(paths[0])?.rows.contains
+		{
+			$0.kind == .gap
+		} == false)
+		#expect(presentation.file(paths[1])?.rows.contains
+		{
+			$0.kind == .gap
+		} == true)
+	}
+
+	@Test(arguments: [false, true])
+	func replacingAFileAndDirectoryKeepsBothKindsOfTreeNodes(reverse: Bool) throws
+	{
+		let paths = ["config", "config/settings.txt"]
+		let kinds: [GitComparisonChangeKind] = reverse ? [.added, .deleted] : [.deleted, .added]
+		let files = zip(
+			paths,
+			kinds
+		).map
+		{
+			path, kind in
+			GitComparisonFile(
+				oldPath: kind == .added ? nil : path,
+				newPath: kind == .deleted ? nil : path,
+				kind: kind,
+				additions: kind == .added ? 1 : 0,
+				deletions: kind == .deleted ? 1 : 0,
+				isBinary: false,
+				patch: "",
+				hunks: []
+			)
+		}
+		let presentation = GitDiffPresentation(snapshot: comparisonSnapshot(
+			patch: "",
+			files: files
+		))
+		let rows = presentation.treeRows(expandedDirectories: [Data("config".utf8)])
+		#expect(rows.count == 3)
+		#expect(Set(rows.map(\.id)).count == 3)
+		#expect(rows.filter
+		{
+			$0.path == "config"
+		}.map(\.isDirectory) == [true, false])
+		let child = try #require(rows.first
+		{
+			$0.path == paths[1]
+		})
+		let directory = try #require(rows.first
+		{
+			$0.isDirectory
+		})
+		#expect(child.parentID == directory.id)
+		#expect(rows.compactMap(\.fileID) == paths)
+		let filtered = presentation.treeRows(filter: "settings")
+		#expect(filtered.map(\.path) == paths)
+		#expect(filtered.first?.isDirectory == true)
+		#expect(filtered.last?.fileID == paths[1])
+	}
+
 	@Test func treeFilteringRetainsAncestryAndExpansionControlsVisibility()
 	{
 		let snapshot = fixture(
@@ -318,7 +416,11 @@ struct GitDiffPresentationTests
 		)
 		let presentation = GitDiffPresentation(snapshot: snapshot)
 		#expect(presentation.treeRows().map(\.path) == ["Sources"])
-		let expanded = presentation.treeRows(expandedDirectories: ["Sources", "Sources/Nested"])
+		let expanded = presentation
+			.treeRows(expandedDirectories: Set(["Sources", "Sources/Nested"].map
+				{
+					Data($0.utf8)
+				}))
 		#expect(expanded.map(\.depth) == [0, 1, 2])
 		#expect(expanded.last?.fileID == "Sources/Nested/Test.swift")
 		let filtered = presentation.treeRows(filter: "TEST")

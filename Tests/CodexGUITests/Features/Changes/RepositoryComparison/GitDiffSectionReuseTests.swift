@@ -51,6 +51,154 @@ struct GitDiffSectionReuseTests
 			#expect(sourceText.range(of: Data(path.utf8)) != nil)
 		}
 		#expect(controller.projectionCache.projectionCount == 2)
+		let snapshot = try #require(controller.runtime.state.snapshot)
+		let command = try #require(snapshot.copyCommand)
+		#expect(command.hasPrefix("printf '%s' '" + snapshot.patch.base64EncodedString() + "'"))
+		for path in paths
+		{
+			#expect(snapshot.patch.range(of: Data(("+++ b/" + path).utf8)) != nil)
+		}
+		let tree = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? ViewerFileTreeView
+		}.first)
+		#expect(tree.numberOfRows == 3)
+		let nodes = try (0 ..< tree.numberOfRows).compactMap
+		{
+			index -> NSObject? in
+			let item = try #require(tree.item(atRow: index) as? NSObject)
+			return tree.isExpandable?(item) == true ? nil : item
+		}
+		#expect(nodes.count == 2)
+		for path in paths
+		{
+			let node = try #require(nodes.first
+			{
+				tree.presentation?($0).path.utf8.elementsEqual(path.utf8) == true
+			})
+			tree.selectRowIndexes(
+				IndexSet(integer: tree.row(forItem: node)),
+				byExtendingSelection: false
+			)
+			#expect(controller.runtime.state.selectedFileID?.utf8.elementsEqual(path.utf8) == true)
+		}
+		let other = try section(
+			paths[1],
+			in: controller.view
+		)
+		let gap = try #require(GitDiffPresentation(snapshot: snapshot).file(paths[0])?.rows.first
+		{
+			$0.kind == .gap
+		})
+		let requests = controller.projectionCache.requestCount
+		controller.runtime.expandGap(try #require(gap.gapID))
+		#expect(try section(
+			paths[1],
+			in: controller.view
+		) === other)
+		#expect(controller.projectionCache.requestCount == requests + 1)
+		let collapse = try button(
+			"Collapse diff for \(paths[0])",
+			in: controller.view
+		)
+		#expect(collapse.dispatchConfiguredAction())
+		_ = try button(
+			"Expand diff for \(paths[0])",
+			in: controller.view
+		)
+		#expect(try section(
+			paths[1],
+			in: controller.view
+		) === other)
+	}
+
+	@Test func singleFileSelectionInvalidatesForExactUnicodeBytes() async throws
+	{
+		let paths = ["Caf\u{E9}.swift", "Cafe\u{301}.swift"]
+		let controller = GitChangesViewController(runtime: GitReviewRuntime(
+			service: ReuseFixtureService(paths: paths)
+		))
+		defer
+		{
+			controller.close()
+		}
+		try await load(
+			controller,
+			owner: owner("single-file")
+		)
+		let snapshot = try #require(controller.runtime.state.snapshot)
+		let document = GitDiffDocumentController()
+		let presentation = GitDiffPresentation(snapshot: snapshot)
+		var previousSection: GitDiffFileSectionView?
+		for path in paths
+		{
+			document.render(
+				state: controller.runtime.state,
+				presentation: presentation,
+				selectedFileID: path,
+				usesSingleFile: true
+			)
+			let sections = descendants(document.view).compactMap
+			{
+				$0 as? GitDiffFileSectionView
+			}
+			try #require(sections.count == 1)
+			let section = try #require(sections.first)
+			#expect(section !== previousSection)
+			let source = try source(in: section)
+			#expect(Data(source.string.utf8).range(of: Data(path.utf8)) != nil)
+			previousSection = section
+		}
+	}
+
+	@Test(arguments: [false, true])
+	func fileDirectoryReplacementKeepsEveryChangedFileNavigable(reverse: Bool) async throws
+	{
+		let paths = ["config", "config/settings.txt"]
+		let kinds: [GitComparisonChangeKind] = reverse ? [.added, .deleted] : [.deleted, .added]
+		let controller = GitChangesViewController(runtime: GitReviewRuntime(
+			service: ReuseFixtureService(
+				paths: paths,
+				kinds: kinds
+			)
+		))
+		let window = host(controller)
+		defer
+		{
+			controller.close()
+			window.close()
+		}
+		try await load(
+			controller,
+			owner: owner("file-directory")
+		)
+		settle(window)
+		let tree = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? ViewerFileTreeView
+		}.first)
+		#expect(tree.rootItems.count == 2)
+		#expect(tree.numberOfRows == 3)
+		let directory = try #require(tree.rootItems.first
+		{
+			tree.isExpandable?($0) == true
+		})
+		let file = try #require(tree.rootItems.first
+		{
+			tree.isExpandable?($0) == false
+		})
+		#expect(tree.children?(file).isEmpty == true)
+		let child = try #require(tree.children?(directory).first)
+		#expect(tree.presentation?(child).path == paths[1])
+		tree.selectRowIndexes(
+			IndexSet(integer: tree.row(forItem: child)),
+			byExtendingSelection: false
+		)
+		#expect(controller.runtime.state.selectedFileID == paths[1])
+		controller.runtime.setFilter("settings")
+		#expect(tree.rootItems.count == 1)
+		#expect(tree.numberOfRows == 2)
+		#expect(tree.presentation?(try #require(tree.selectedItem)).path == paths[1])
 	}
 
 	@Test func expandingAGapInAColonBearingPathPreservesTheOtherFilesSelection() async throws
@@ -331,7 +479,7 @@ struct GitDiffSectionReuseTests
 			$0 as? NSButton
 		}.first
 		{
-			$0.accessibilityLabel() == label
+			$0.accessibilityLabel()?.utf8.elementsEqual(label.utf8) == true
 		})
 	}
 
@@ -347,7 +495,8 @@ struct GitDiffSectionReuseTests
 		{
 			descendants($0).contains
 			{
-				$0.accessibilityLabel() == "Collapse diff for \(file)"
+				$0.accessibilityLabel()?.utf8
+					.elementsEqual("Collapse diff for \(file)".utf8) == true
 			}
 		})
 	}
@@ -400,6 +549,7 @@ struct GitDiffSectionReuseTests
 private struct ReuseFixtureService: GitComparisonService
 {
 	var paths = ["Sources/One.swift", "Tests/Two.swift"]
+	var kinds: [GitComparisonChangeKind] = []
 
 	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
 	{
@@ -407,25 +557,27 @@ private struct ReuseFixtureService: GitComparisonService
 			repeating: "wide source ",
 			count: 60
 		)
-		let files = paths.map
+		let files = paths.enumerated().map
 		{
-			path in
+			index, path in
+			let kind = kinds.indices.contains(index) ? kinds[index] : .modified
 			let context = (1 ... 12).map
 			{
 				" \(path) \(long)\($0)"
 			}.joined(separator: "\n")
-			let patch = "@@ -1,13 +1,13 @@\n\(context)\n-before\n+after\n"
+			let hunkText = "@@ -1,13 +1,13 @@\n\(context)\n-before\n+after\n"
+			let patch = "diff --git a/\(path) b/\(path)\n--- a/\(path)\n+++ b/\(path)\n" + hunkText
 			return GitComparisonFile(
-				oldPath: path,
-				newPath: path,
-				kind: .modified,
+				oldPath: kind == .added ? nil : path,
+				newPath: kind == .deleted ? nil : path,
+				kind: kind,
 				additions: 1,
 				deletions: 1,
 				isBinary: false,
 				patch: patch,
 				hunks: [GitComparisonHunk(
 					header: "@@ -1,13 +1,13 @@",
-					text: patch,
+					text: hunkText,
 					oldStart: 1,
 					newStart: 1
 				)]

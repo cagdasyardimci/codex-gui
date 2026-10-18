@@ -67,9 +67,9 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	private let navigator = NSView()
 	private var navigatorSplit: ViewerNavigatorSplitView?
 	private let documentController = GitDiffDocumentController()
-	private var treeNodes: [String: GitComparisonTreeNode] = [:]
-	private var treeExpansionTasks: [String: Task<Void, Never>] = [:]
-	private var lastTreeFileSelection: String?
+	private var treeNodes: [GitDiffTreeRow.ID: GitComparisonTreeNode] = [:]
+	private var treeExpansionTasks: [GitDiffTreeRow.ID: Task<Void, Never>] = [:]
+	private var lastTreeFileSelection: Data?
 	var projectionCache: GitDiffProjectionCache
 	{
 		documentController.projectionCache
@@ -199,7 +199,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				runtime.state.snapshot?.id == snapshotID, !runtime.state.isStale,
 				runtime.state.snapshot?.files.contains(where:
 				{
-					$0.id == fileID
+					$0.id.utf8.elementsEqual(fileID.utf8)
 				}) == true
 		else
 		{
@@ -527,7 +527,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 					let fileID = node.row.fileID, let snapshot = self.runtime.state.snapshot,
 					let file = snapshot.files.first(where:
 					{
-						$0.id == fileID
+						$0.id.utf8.elementsEqual(fileID.utf8)
 					})
 			else
 			{
@@ -735,13 +735,13 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	{
 		let priorSelection = tree.selectedItem as? GitComparisonTreeNode
 		let priorScroll = tree.enclosingScrollView?.contentView.bounds.origin
-		var directories: Set<String> = []
+		var directories: Set<Data> = []
 		for file in presentation.snapshot.files
 		{
 			var parent = (file.path as NSString).deletingLastPathComponent
 			while !parent.isEmpty
 			{
-				directories.insert(parent)
+				directories.insert(Data(parent.utf8))
 				parent = (parent as NSString).deletingLastPathComponent
 			}
 		}
@@ -749,24 +749,23 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			filter: state.filter,
 			expandedDirectories: directories
 		)
-		var next: [String: GitComparisonTreeNode] = [:]
+		var next: [GitDiffTreeRow.ID: GitComparisonTreeNode] = [:]
 		for row in rows
 		{
-			let node = treeNodes[row.path] ?? GitComparisonTreeNode(row)
+			let node = treeNodes[row.id] ?? GitComparisonTreeNode(row)
 			node.row = row
 			node.children = []
-			next[row.path] = node
+			next[row.id] = node
 		}
 		var roots: [NSObject] = []
 		for row in rows
 		{
-			guard let node = next[row.path]
+			guard let node = next[row.id]
 			else
 			{
 				continue
 			}
-			let parent = (row.path as NSString).deletingLastPathComponent
-			if let directory = next[parent]
+			if let directory = next[row.parentID]
 			{
 				directory.children.append(node)
 			}
@@ -780,13 +779,13 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		tree.reloadTree()
 		for row in rows where row.isDirectory
 		{
-			guard let node = next[row.path]
+			guard let node = next[row.id]
 			else
 			{
 				continue
 			}
 			if !state.filter.isEmpty || state.expandedDirectories
-				.contains(row.path)
+				.contains(Data(row.path.utf8))
 			{
 				tree.expandItem(node)
 			}
@@ -795,10 +794,13 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				tree.collapseItem(node)
 			}
 		}
-		let selectedID = state.selectedFileID ?? displayedFileID
+		let selectedID = (state.selectedFileID ?? displayedFileID).map
+		{
+			Data($0.utf8)
+		}
 		let selected: GitComparisonTreeNode?
 		if lastTreeFileSelection == selectedID, let priorSelection,
-			priorSelection.row.isDirectory, next[priorSelection.row.path] === priorSelection
+			priorSelection.row.isDirectory, next[priorSelection.row.id] === priorSelection
 		{
 			selected = priorSelection
 		}
@@ -806,7 +808,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		{
 			selected = next.values.first
 			{
-				$0.row.fileID == selectedID && selectedID != nil
+				$0.row.fileID.map
+				{
+					Data($0.utf8)
+				} == selectedID && selectedID != nil
 			}
 		}
 		lastTreeFileSelection = selectedID
@@ -837,7 +842,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		if let id = row.fileID,
 			let file = runtime.state.snapshot?.files.first(where:
 			{
-				$0.id == id
+				$0.id.utf8.elementsEqual(id.utf8)
 			})
 		{
 			if file.additions > 0
@@ -871,7 +876,11 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		{
 			return
 		}
-		if runtime.state.selectedFileID != id
+		if runtime.state.selectedFileID.map(
+			{
+				Data($0.utf8)
+			}
+		) != Data(id.utf8)
 		{
 			runtime.selectFile(id)
 		}
@@ -890,10 +899,11 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			return
 		}
 		let path = node.row.path
-		treeExpansionTasks[path]?.cancel()
+		let identity = node.row.id
+		treeExpansionTasks[identity]?.cancel()
 		let owner = runtime.state.owner
 		// Runtime publication reloads the outline; let native expansion finish first.
-		treeExpansionTasks[path] = Task
+		treeExpansionTasks[identity] = Task
 		{
 			@MainActor [weak self, weak node] in
 			guard let self, let node, !Task.isCancelled
@@ -901,15 +911,16 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			{
 				return
 			}
-			self.treeExpansionTasks[path] = nil
+			self.treeExpansionTasks[identity] = nil
+			let isCurrentSnapshot = self.runtime.state.snapshot?.id == snapshot.id
 			guard self.runtime.state.isOpen, self.runtime.state.owner == owner,
-					self.runtime.state.snapshot?.id == snapshot.id, self.treeNodes[path] === node,
+					isCurrentSnapshot, self.treeNodes[identity] === node,
 					self.tree.isItemExpanded(node) == expanded
 			else
 			{
 				return
 			}
-			if self.runtime.state.expandedDirectories.contains(path) != expanded
+			if self.runtime.state.expandedDirectories.contains(Data(path.utf8)) != expanded
 			{
 				self.runtime.toggleDirectory(path)
 			}
@@ -967,7 +978,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		largeComparisonLabel.stringValue = "This diff is large, showing one file at a time"
 		let index = snapshot.files.firstIndex
 		{
-			$0.id == selectedFileID
+			Data($0.id.utf8) == selectedFileID.map
+			{
+				Data($0.utf8)
+			}
 		} ?? 0
 		previousFileButton?.isEnabled = current && index > 0
 		nextFileButton?.isEnabled = current && index + 1 < snapshot.files.count
@@ -986,11 +1000,15 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	private func navigateFile(offset: Int)
 	{
 		let state = runtime.state
+		let selectedIdentity = (state.selectedFileID ?? state.snapshot?.files.first?.id).map
+		{
+			Data($0.utf8)
+		}
 		guard let snapshot = state.snapshot, let owner = state.owner,
 				state.pendingRequest == nil,
 				let index = snapshot.files.firstIndex(where:
 				{
-					$0.id == (state.selectedFileID ?? snapshot.files.first?.id)
+					Data($0.id.utf8) == selectedIdentity
 				})
 		else
 		{

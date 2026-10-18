@@ -26,7 +26,7 @@ struct GitDiffProjectionCacheTests
 			$0.kind == .gap
 		})
 		#expect(cache.projectionCount == 1)
-		presentation.options.expandedGapIDs.insert(try #require(gap.gapID))
+		presentation.options.expandedGapIDs.insert(Data(try #require(gap.gapID).utf8))
 		let expanded = cache.file(
 			file,
 			presentation: presentation

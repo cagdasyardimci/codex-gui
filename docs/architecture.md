@@ -163,6 +163,10 @@ Its child document controller owns retained diff sections, projection caching, l
 collapse state, scrolling and inline rich-preview presentation. Document callbacks request runtime
 actions through the parent; section identity and owner changes govern reuse and invalidation.
 
+Comparison parsing, navigation and disclosure preserve byte-distinct paths. Directory and
+changed-file nodes have distinct identities when the two comparison sides occupy the same path
+differently, keeping every changed descendant reachable.
+
 Saved-prompt presentation remains within ProjectContext. Its section controller owns prompt rows
 and review/edit dialogs, while the parent retains canonical project context and scoped mutation
 receivers. Project changes invalidate deferred edits; draft-owner changes independently invalidate

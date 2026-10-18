@@ -20,7 +20,7 @@ struct GitReviewState
 	private(set) var isStale = false
 	var filter = ""
 	var selectedFileID: String?
-	var expandedDirectories: Set<String> = []
+	var expandedDirectories: Set<Data> = []
 	var options = GitDiffPresentationOptions()
 	private(set) var selectionMessage: String?
 
@@ -32,7 +32,18 @@ struct GitReviewState
 	@discardableResult
 	mutating func setReportedChanges(_ changes: [FileChange]?) -> Bool
 	{
-		guard reportedChanges != changes
+		let sameReports: Bool
+		switch (reportedChanges, changes)
+		{
+		case (nil, nil): sameReports = true
+		case (let previous?, let next?):
+			sameReports = FileChange.haveSameExactContent(
+				previous,
+				next
+			)
+		default: sameReports = false
+		}
+		guard !sameReports
 		else
 		{
 			return false
@@ -64,7 +75,7 @@ struct GitReviewState
 	{
 		guard snapshot?.files.contains(where:
 			{
-				$0.id == id
+				$0.id.utf8.elementsEqual(id.utf8)
 			}) == true
 		else
 		{
@@ -76,15 +87,16 @@ struct GitReviewState
 
 	mutating func toggleDirectory(_ path: String)
 	{
-		if !expandedDirectories.insert(path).inserted
+		let identity = Data(path.utf8)
+		if !expandedDirectories.insert(identity).inserted
 		{
-			expandedDirectories.remove(path)
+			expandedDirectories.remove(identity)
 		}
 	}
 
 	mutating func expandGap(_ id: String)
 	{
-		options.expandedGapIDs.insert(id)
+		options.expandedGapIDs.insert(Data(id.utf8))
 	}
 
 	mutating func setOptions(_ value: GitDiffPresentationOptions)
@@ -231,7 +243,7 @@ struct GitReviewState
 			}
 			if let previousFile, !value.files.contains(where:
 				{
-					$0.id == previousFile
+					$0.id.utf8.elementsEqual(previousFile.utf8)
 				})
 			{
 				selectionMessage = "The selected file is absent from the new comparison."
@@ -249,7 +261,8 @@ struct GitReviewState
 					parts.count
 				)
 				{
-					expandedDirectories.insert(parts.prefix(count).joined(separator: "/"))
+					expandedDirectories
+						.insert(Data(parts.prefix(count).joined(separator: "/").utf8))
 				}
 			}
 		case .unavailable(let reason):

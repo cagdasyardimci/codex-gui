@@ -6,5 +6,5 @@ struct GitDiffPresentationOptions: Equatable, Sendable
 	var showWordDiffs = true
 	var ignoreWhitespace = false
 	var ignoreImports = false
-	var expandedGapIDs: Set<String> = []
+	var expandedGapIDs: Set<Data> = []
 }

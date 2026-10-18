@@ -330,11 +330,12 @@ enum GitComparisonPatchParser
 	/// Coalescing preserves the payload while keeping path-based navigation identities unique.
 	private static func coalesced(_ files: [GitComparisonFile]) -> [GitComparisonFile]
 	{
-		var positions: [String: Int] = [:]
+		var positions: [Data: Int] = [:]
 		var result: [GitComparisonFile] = []
 		for file in files
 		{
-			if let index = positions[file.path]
+			let identity = Data(file.path.utf8)
+			if let index = positions[identity]
 			{
 				let previous = result[index]
 				let rename = [previous, file].first
@@ -354,7 +355,7 @@ enum GitComparisonPatchParser
 			}
 			else
 			{
-				positions[file.path] = result.count
+				positions[identity] = result.count
 				result.append(file)
 			}
 		}
@@ -451,7 +452,7 @@ enum GitComparisonPatchParser
 	{
 		GitPatchSyntax.unquotedHeaderCandidates(header).first
 		{
-			$0.old == $0.new
+			$0.old.utf8.elementsEqual($0.new.utf8)
 		}?.old
 	}
 
