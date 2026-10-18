@@ -6,6 +6,15 @@ enum ToolsPaneIcons
 {
 	private static let changesStrokeWidth: CGFloat = 1.0508
 
+	static func files(size: CGFloat) -> NSImage
+	{
+		DesktopIcons.image(
+			.folder,
+			size: size,
+			accessibilityDescription: "Files"
+		)
+	}
+
 	static func changes(size: CGFloat) -> NSImage
 	{
 		let image = NSImage(

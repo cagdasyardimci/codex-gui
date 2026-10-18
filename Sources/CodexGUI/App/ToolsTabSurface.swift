@@ -3,11 +3,14 @@ import AppKit
 @MainActor
 final class ToolsTabSurface: NSView
 {
+	static let dragType = NSPasteboard.PasteboardType("com.codexgui.tools-tab-id")
 	private let isSelected: Bool
 	private let shadowLayer = CALayer()
 	private var isHovered = false
 	private var hoverTrackingArea: NSTrackingArea?
+	var dragOwner: UUID?
 	var onHoverChange: ((Bool) -> Void)?
+	var onDrop: ((UUID, Bool) -> Void)?
 
 	init(isSelected: Bool)
 	{
@@ -22,11 +25,62 @@ final class ToolsTabSurface: NSView
 			)
 		}
 		setAccessibilityElement(false)
+		registerForDraggedTypes([Self.dragType])
 	}
 
 	required init?(coder: NSCoder)
 	{
 		nil
+	}
+
+	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation
+	{
+		guard validDrag(from: sender) != nil
+		else
+		{
+			return []
+		}
+		return .move
+	}
+
+	override func performDragOperation(_ sender: NSDraggingInfo) -> Bool
+	{
+		guard let id = validDrag(from: sender), let onDrop
+		else
+		{
+			return false
+		}
+		let before = convert(
+			sender.draggingLocation,
+			from: nil
+		).x < bounds.midX
+		onDrop(
+			id,
+			before
+		)
+		return true
+	}
+
+	private func validDrag(from sender: NSDraggingInfo) -> UUID?
+	{
+		guard let source = sender.draggingSource as? ToolsTabSelectionButton,
+				let dragOwner, source.dragOwner == dragOwner,
+				source.window === window,
+				let value = sender.draggingPasteboard.string(forType: Self.dragType),
+				let payload = ToolsTabDragPayload(string: value),
+				let sourceID = source.draggedID,
+				payload.isOwned(
+				by: dragOwner,
+				source: ToolsTabDragPayload(
+					ownerID: dragOwner,
+					tabID: sourceID
+				)
+				), onDrop != nil
+		else
+		{
+			return nil
+		}
+		return payload.tabID
 	}
 
 	override func updateTrackingAreas()

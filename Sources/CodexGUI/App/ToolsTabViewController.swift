@@ -52,6 +52,17 @@ final class ToolsTabViewController: NSViewController
 	var onToggleSummary: (() -> Void)?
 	var onTabSelectionChange: (() -> Void)?
 	var onOpenChanges: (() -> Void)?
+	var onOpenFiles: (() -> Void)?
+	var onFileSelected: ((UUID) -> Void)?
+	var onFileCloseRequested: ((UUID) -> Void)?
+	var onFileRetainRequested: ((UUID) -> Void)?
+	var onFilesPresentationVisible: ((Bool) -> Void)?
+	{
+		didSet
+		{
+			onFilesPresentationVisible?(isContentVisible && isFilesSelected)
+		}
+	}
 	var onChangesSelectionChange: (() -> Void)?
 	var onChangesTabClosed: (() -> Void)?
 	var onSourcesTabClosed: (() -> Void)?
@@ -62,6 +73,27 @@ final class ToolsTabViewController: NSViewController
 	private(set) var changesTabID: UUID?
 	private(set) var sourcesTabID: UUID?
 	private(set) var subagentsTabID: UUID?
+	private(set) var filesLandingTabID: UUID?
+	private(set) var fileTabPresentations: [FileToolTabPresentation] = []
+	var selectedFileDocumentID: UUID?
+	{
+		guard !isConversationSelected, let selectedTabID,
+				fileTabPresentations.contains(where:
+				{
+					$0.id == selectedTabID
+				})
+		else
+		{
+			return nil
+		}
+		return selectedTabID
+	}
+	var isFilesSelected: Bool
+	{
+		!isConversationSelected && (filesLandingTabID != nil &&
+			selectedTabID == filesLandingTabID ||
+			selectedFileDocumentID != nil)
+	}
 	var isChangesSelected: Bool
 	{
 		!isConversationSelected && selectedTabID == changesTabID && changesTabID != nil
@@ -76,16 +108,21 @@ final class ToolsTabViewController: NSViewController
 	}
 	private var isExpanded = false
 	private var isContentVisible = true
+	private var wasFilesPresentationVisible = false
 	private var conversationTitle = "New chat"
 	private var tabIDs: [UUID] = []
 	private let tabStack = NSStackView()
 	private let contentHost = NSView()
 	private var toolsContent: NSView?
-	private var toolsTileSingleColumnWidth: NSLayoutConstraint?
-	private var toolsTileTwoColumnWidth: NSLayoutConstraint?
+	private var toolsTileSingleColumnConstraints: [NSLayoutConstraint] = []
+	private var toolsTileTwoColumnConstraints: [NSLayoutConstraint] = []
 	private weak var changesController: NSViewController?
 	private weak var sourcesController: NSViewController?
 	private weak var subagentsController: NSViewController?
+	private weak var filesLandingController: NSViewController?
+	private weak var fileDocumentController: NSViewController?
+	private var lastFileSelectedID: UUID?
+	private let dragOwner = UUID()
 	private let sourcesHoverPreview = SourcesTabHoverPreview()
 	private let tabScrollView = NSScrollView()
 	private lazy var tabBar = makeTabHeader()
@@ -250,11 +287,6 @@ final class ToolsTabViewController: NSViewController
 	override func viewWillLayout()
 	{
 		super.viewWillLayout()
-		guard let single = toolsTileSingleColumnWidth, let double = toolsTileTwoColumnWidth
-		else
-		{
-			return
-		}
 		let availableWidth = min(
 			Layout.toolsMaximumContentWidth,
 			max(
@@ -263,14 +295,16 @@ final class ToolsTabViewController: NSViewController
 			)
 		)
 		let twoColumns = availableWidth >= Layout.toolsTwoColumnMinimumWidth
-		guard double.isActive != twoColumns
+		guard toolsTileTwoColumnConstraints.first?.isActive != twoColumns
 		else
 		{
 			return
 		}
-		single.isActive = false
-		double.isActive = false
-		(twoColumns ? double : single).isActive = true
+		NSLayoutConstraint.deactivate(toolsTileSingleColumnConstraints)
+		NSLayoutConstraint.deactivate(toolsTileTwoColumnConstraints)
+		NSLayoutConstraint.activate(
+			twoColumns ? toolsTileTwoColumnConstraints : toolsTileSingleColumnConstraints
+		)
 	}
 
 	func showChanges(_ controller: NSViewController)
@@ -358,12 +392,202 @@ final class ToolsTabViewController: NSViewController
 		removeFeatureTab(subagentsTabID)
 	}
 
+	func showFilesLanding(_ controller: NSViewController)
+	{
+		_ = view
+		if !fileTabPresentations.isEmpty
+		{
+			let target = lastFileSelectedID.flatMap
+			{
+				id in fileTabPresentations.contains(where:
+					{
+						$0.id == id
+					}) ? id : nil
+			} ?? fileTabPresentations[0].id
+			selectedTabID = target
+			isConversationSelected = false
+			lastFileSelectedID = target
+			renderTabs()
+			onFileSelected?(target)
+			onTabSelectionChange?()
+			onChangesSelectionChange?()
+			return
+		}
+		filesLandingTabID = selectFeatureTab(filesLandingTabID)
+		installController(
+			controller,
+			replacing: filesLandingController
+		)
+		filesLandingController = controller
+		renderTabs()
+		onTabSelectionChange?()
+		onChangesSelectionChange?()
+	}
+
+	/// Applies a complete runtime snapshot without stealing another tool's focus.
+	func updateFileTabs(
+		presentations: [FileToolTabPresentation],
+		selectedID: UUID?,
+		controller: NSViewController
+	)
+	{
+		let wasFilesSelected = isFilesSelected
+		let previousSelectedID = selectedTabID
+		let previousTabIDs = tabIDs
+		let previousSelectedIndex = previousSelectedID.flatMap
+		{
+			tabIDs.firstIndex(of: $0)
+		}
+		let hadTabs = !tabIDs.isEmpty
+		let oldFileIDs = Set(fileTabPresentations.map(\.id))
+		let newFileIDs = Set(presentations.map(\.id))
+		let selectedDocumentWasRemoved = previousSelectedID.map
+		{
+			oldFileIDs.contains($0) && !newFileIDs.contains($0)
+		} ?? false
+		let selectedWasCleanPreview = fileTabPresentations.contains
+		{
+			$0.id == previousSelectedID && $0.isPreview && !$0.isDirty
+		}
+		let selectedIDIsNew = selectedID.map
+		{
+			newFileIDs.contains($0) && !oldFileIDs.contains($0)
+		} ?? false
+		let closedSelectedDocument = selectedDocumentWasRemoved &&
+			!(selectedWasCleanPreview && selectedIDIsNew)
+		let removedIndices = tabIDs.enumerated().compactMap
+		{
+			index, id in oldFileIDs.contains(id) && !newFileIDs.contains(id) ? index : nil
+		}
+		let replacementIndex = removedIndices.first
+		let landingIndex = filesLandingTabID.flatMap
+		{
+			tabIDs.firstIndex(of: $0)
+		}
+		tabIDs.removeAll
+		{
+			oldFileIDs.contains($0) && !newFileIDs.contains($0)
+		}
+		if let landing = filesLandingTabID, !presentations.isEmpty
+		{
+			if let index = tabIDs.firstIndex(of: landing)
+			{
+				tabIDs.remove(at: index)
+			}
+			filesLandingTabID = nil
+			detachController(filesLandingController)
+		}
+		var nextReplacementIndex = replacementIndex ?? landingIndex
+		for presentation in presentations where !tabIDs.contains(presentation.id)
+		{
+			let index: Int
+			if let nextReplacementIndex
+			{
+				index = min(
+					nextReplacementIndex,
+					tabIDs.count
+				)
+			}
+			else if let existingIndex = tabIDs.lastIndex(where:
+				{
+					newFileIDs.contains($0)
+				})
+			{
+				index = existingIndex + 1
+			}
+			else
+			{
+				index = tabIDs.count
+			}
+			tabIDs.insert(
+				presentation.id,
+				at: index
+			)
+			if nextReplacementIndex != nil
+			{
+				nextReplacementIndex = index + 1
+			}
+		}
+		fileTabPresentations = presentations
+		tabCount = tabIDs.count
+		if !presentations.isEmpty
+		{
+			_ = view
+			installController(
+				controller,
+				replacing: fileDocumentController
+			)
+			fileDocumentController = controller
+		}
+		else
+		{
+			detachController(fileDocumentController)
+			fileDocumentController = nil
+		}
+		if wasFilesSelected || !hadTabs
+		{
+			let adjacentID: UUID? = if let previousSelectedIndex
+			{
+				previousTabIDs.suffix(from: previousSelectedIndex + 1).first
+				{
+					tabIDs.contains($0)
+				} ?? previousTabIDs.prefix(previousSelectedIndex).reversed().first
+				{
+					tabIDs.contains($0)
+				}
+			}
+			else
+			{
+				nil
+			}
+			let runtimeSelectedID = selectedID.flatMap
+			{
+				newFileIDs.contains($0) ? $0 : nil
+			}
+			let survivingSelection = previousSelectedID.flatMap
+			{
+				tabIDs.contains($0) ? $0 : nil
+			}
+			selectedTabID = (closedSelectedDocument ? adjacentID : runtimeSelectedID)
+				?? survivingSelection ?? adjacentID ?? presentations.first?.id
+			if selectedTabID == nil, !tabIDs.isEmpty
+			{
+				selectedTabID = tabIDs[min(
+					replacementIndex ?? 0,
+					tabIDs.count - 1
+				)]
+			}
+			lastFileSelectedID = selectedFileDocumentID
+		}
+		else if let previousSelectedID, !tabIDs.contains(previousSelectedID)
+		{
+			selectedTabID = tabIDs.first
+		}
+		renderTabs()
+		if wasFilesSelected && closedSelectedDocument, let selectedFileDocumentID
+		{
+			onFileSelected?(selectedFileDocumentID)
+		}
+		if hadTabs && tabIDs.isEmpty
+		{
+			onCloseLastTab?()
+		}
+		else if wasFilesSelected && previousSelectedID != selectedTabID
+		{
+			onTabSelectionChange?()
+			onChangesSelectionChange?()
+		}
+	}
+
 	private func selectFeatureTab(_ existingTabID: UUID?) -> UUID
 	{
-		let occupiedTabIDs = [changesTabID, sourcesTabID, subagentsTabID].compactMap
+		let occupiedTabIDs = [changesTabID,
+								sourcesTabID,
+								subagentsTabID,
+								filesLandingTabID].compactMap
 		{
 			$0
-		}
+		} + fileTabPresentations.map(\.id)
 		let tabID: UUID
 		if let existingTabID
 		{
@@ -618,9 +842,11 @@ final class ToolsTabViewController: NSViewController
 		tabStack.translatesAutoresizingMaskIntoConstraints = false
 
 		tabScrollView.drawsBackground = false
-		tabScrollView.hasHorizontalScroller = true
-		tabScrollView.autohidesScrollers = true
-		tabScrollView.scrollerStyle = .overlay
+		// A legacy scroller would consume 17 points of this fixed-height tab strip.
+		// Wheel scrolling and revealing the selected tab still use the clip view.
+		tabScrollView.hasHorizontalScroller = false
+		tabScrollView.hasVerticalScroller = false
+		tabScrollView.horizontalScrollElasticity = .allowed
 		tabScrollView.documentView = tabStack
 		tabStack.heightAnchor.constraint(equalTo: tabScrollView.contentView.heightAnchor)
 			.isActive = true
@@ -632,45 +858,93 @@ final class ToolsTabViewController: NSViewController
 		let heading = ToolsHeadingTextField(labelWithString: "Tools")
 		heading.font = AppKitFontResolver.font(TypographyTokens.Controls.toolsHeading)
 		heading.textColor = AppKitColorTokens.primaryText
-		let tile = makeChangesTile()
+		let changesTile = makeToolTile(
+			title: "Changes",
+			image: ToolsPaneIcons.changes(size: Layout.toolTileIconSize),
+			shortcut: ToolsChangesShortcut.label,
+			key: ToolsChangesShortcut.key,
+			modifiers: ToolsChangesShortcut.modifiers,
+			action: #selector(openChanges)
+		)
+		let filesTile = makeToolTile(
+			title: "Files",
+			image: ToolsPaneIcons.files(size: Layout.toolTileIconSize),
+			shortcut: "⌘P",
+			key: "p",
+			modifiers: [.command],
+			action: #selector(openFiles)
+		)
+		let tiles = NSView()
+		changesTile.translatesAutoresizingMaskIntoConstraints = false
+		filesTile.translatesAutoresizingMaskIntoConstraints = false
+		tiles.addSubview(changesTile)
+		tiles.addSubview(filesTile)
+		NSLayoutConstraint.activate([
+			changesTile.leadingAnchor.constraint(equalTo: tiles.leadingAnchor),
+			changesTile.topAnchor.constraint(equalTo: tiles.topAnchor),
+		])
+		toolsTileSingleColumnConstraints = [
+			changesTile.trailingAnchor.constraint(equalTo: tiles.trailingAnchor),
+			filesTile.leadingAnchor.constraint(equalTo: tiles.leadingAnchor),
+			filesTile.trailingAnchor.constraint(equalTo: tiles.trailingAnchor),
+			filesTile.topAnchor.constraint(
+				equalTo: changesTile.bottomAnchor,
+				constant: 8
+			),
+			filesTile.bottomAnchor.constraint(equalTo: tiles.bottomAnchor),
+		]
+		toolsTileTwoColumnConstraints = [
+			changesTile.widthAnchor.constraint(equalTo: filesTile.widthAnchor),
+			filesTile.leadingAnchor.constraint(
+				equalTo: changesTile.trailingAnchor,
+				constant: Layout.toolColumnSpacing
+			),
+			filesTile.trailingAnchor.constraint(equalTo: tiles.trailingAnchor),
+			filesTile.topAnchor.constraint(equalTo: tiles.topAnchor),
+			filesTile.bottomAnchor.constraint(equalTo: tiles.bottomAnchor),
+			changesTile.bottomAnchor.constraint(equalTo: tiles.bottomAnchor),
+		]
+		NSLayoutConstraint.activate(toolsTileSingleColumnConstraints)
 		let content = AppKitLayout.verticalStack(
-			[heading, tile],
+			[heading, tiles],
 			spacing: Layout.toolsSectionGap
 		)
-		let singleColumn = tile.widthAnchor.constraint(equalTo: content.widthAnchor)
-		let twoColumns = tile.widthAnchor.constraint(
-			equalTo: content.widthAnchor,
-			multiplier: 0.5,
-			constant: -Layout.toolColumnSpacing / 2
-		)
-		toolsTileSingleColumnWidth = singleColumn
-		toolsTileTwoColumnWidth = twoColumns
-		singleColumn.isActive = true
+		tiles.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
 		return content
 	}
 
-	private func makeChangesTile() -> NSView
+	private func makeToolTile(
+		title: String,
+		image: NSImage,
+		shortcut: String,
+		key: String,
+		modifiers: NSEvent.ModifierFlags,
+		action: Selector
+	) -> NSView
 	{
 		let tile = NSView()
 		let button = ToolsTileButton(
-			title: "Changes",
+			title: title,
 			target: nil,
 			action: nil
 		)
-		button.cell = ToolsTileButtonCell(textCell: "Changes")
+		button.cell = ToolsTileButtonCell(
+			textCell: title,
+			shortcut: shortcut
+		)
 		AppKitControlStyling.styleButton(button)
 		button.cornerRadius = ShapeTokens.TabControls.toolTileRadius
 		button.font = AppKitFontResolver.font(TypographyTokens.Controls.toolsTile)
 		button.contentTintColor = AppKitColorTokens.primaryText
 
 		button.alignment = .left
-		button.image = ToolsPaneIcons.changes(size: Layout.toolTileIconSize)
+		button.image = image
 		button.imagePosition = .imageLeading
 		button.target = self
-		button.action = #selector(openChanges)
-		button.keyEquivalent = ToolsChangesShortcut.key
-		button.keyEquivalentModifierMask = ToolsChangesShortcut.modifiers
-		button.setAccessibilityLabel("Changes")
+		button.action = action
+		button.keyEquivalent = key
+		button.keyEquivalentModifierMask = modifiers
+		button.setAccessibilityLabel(title)
 		AppKitLayout.pin(
 			button,
 			to: tile,
@@ -682,6 +956,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func renderTabs()
 	{
+		let restoreTabFocus = tabBar.window?.firstResponder is ToolsTabSelectionButton
 		showSelectedContent()
 		let visibleTabCount = tabCount + (isExpanded ? 1 : 0)
 		preferredTabAreaWidth?.constant = CGFloat(visibleTabCount) * metrics.maximumWidth
@@ -692,6 +967,16 @@ final class ToolsTabViewController: NSViewController
 
 		let selectedTab = rebuildTabViews()
 		revealSelectedTab(selectedTab)
+		if restoreTabFocus,
+			let selectedButton = selectedTab?.subviews.compactMap(
+			{
+				$0 as? ToolsTabSelectionButton
+			}
+			)
+			.first
+		{
+			tabBar.window?.makeFirstResponder(selectedButton)
+		}
 	}
 
 	private func rebuildTabViews() -> NSView?
@@ -751,7 +1036,7 @@ final class ToolsTabViewController: NSViewController
 	private func showSelectedContent()
 	{
 		toolsContent?.isHidden = isChangesSelected || isSourcesSelected ||
-			isSubagentsSelected || isConversationSelected
+			isSubagentsSelected || isConversationSelected || isFilesSelected
 		if let changesController, changesController.parent === self
 		{
 			changesController.view.isHidden = !isChangesSelected
@@ -770,6 +1055,21 @@ final class ToolsTabViewController: NSViewController
 			{
 				(sourcesController as? ConversationSourcesViewController)?.prepareForDisplay()
 			}
+		}
+		if let filesLandingController, filesLandingController.parent === self
+		{
+			filesLandingController.view.isHidden = !isFilesSelected ||
+				selectedFileDocumentID != nil
+		}
+		if let fileDocumentController, fileDocumentController.parent === self
+		{
+			fileDocumentController.view.isHidden = selectedFileDocumentID == nil
+		}
+		let filesVisible = isContentVisible && isFilesSelected
+		if filesVisible != wasFilesPresentationVisible
+		{
+			wasFilesPresentationVisible = filesVisible
+			onFilesPresentationVisible?(filesVisible)
 		}
 	}
 
@@ -795,7 +1095,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeConversationTab() -> NSView
 	{
-		let selectButton = NSButton(
+		let selectButton = ToolsTabSelectionButton(
 			title: conversationTitle,
 			target: self,
 			action: #selector(selectConversation)
@@ -815,6 +1115,14 @@ final class ToolsTabViewController: NSViewController
 		selectButton.toolTip = conversationTitle
 		selectButton.setAccessibilityLabel("Chat: " + conversationTitle)
 		selectButton.setAccessibilityValue(isConversationSelected ? "Selected" : "Not selected")
+		selectButton.onNavigate =
+		{
+			[weak self] keyCode in
+			self?.navigateTabs(
+				from: nil,
+				keyCode: keyCode
+			) ?? false
+		}
 		let moreButton = makeIconButton(
 			.dotsHorizontal,
 			size: metrics.moreControlSize,
@@ -838,14 +1146,23 @@ final class ToolsTabViewController: NSViewController
 		let isChanges = id == changesTabID
 		let isSources = id == sourcesTabID
 		let isSubagents = id == subagentsTabID
+		let isFilesLanding = id == filesLandingTabID
+		let file = fileTabPresentations.first
+		{
+			$0.id == id
+		}
 		let title = isChanges ? "Changes" :
-			isSources ? "Sources" : isSubagents ? "Subagents" : "New tab"
-		let selectButton = NSButton(
-			title: title,
+			isSources ? "Sources" : isSubagents ? "Subagents" :
+			isFilesLanding ? "Files" : file?.title ?? "New tab"
+		let displayTitle = file?.isDirty == true ? title + " •" : title
+		let selectButton = ToolsTabSelectionButton(
+			title: displayTitle,
 			target: self,
 			action: #selector(selectTab(_:))
 		)
-		selectButton.cell = ToolsTabSelectionButtonCell(textCell: title)
+		let selectionCell = ToolsTabSelectionButtonCell(textCell: displayTitle)
+		selectionCell.documentTitleGap = file == nil ? 0 : 5
+		selectButton.cell = selectionCell
 		selectButton.target = self
 		selectButton.action = #selector(selectTab(_:))
 		AppKitControlStyling.styleButton(
@@ -874,11 +1191,47 @@ final class ToolsTabViewController: NSViewController
 			)
 			selectButton.imagePosition = .imageLeading
 		}
+		else if isFilesLanding
+		{
+			selectButton.image = ToolsPaneIcons.files(size: Layout.iconSize)
+			selectButton.imagePosition = .imageLeading
+		}
+		else if file != nil
+		{
+			selectButton.image = FileViewerIcons.image(
+				.file,
+				size: Layout.iconSize
+			)
+			selectButton.imagePosition = .imageLeading
+		}
 
 		selectButton.font = AppKitFontResolver.font(TypographyTokens.Controls.tab)
+
+		if let file
+		{
+			selectButton.toolTip = file.path
+		}
 		selectButton.tag = index
 		selectButton.setAccessibilityLabel("\(title) \(index + 1)")
 		selectButton.setAccessibilityValue(selected ? "Selected" : "Not selected")
+		selectButton.draggedID = id
+		selectButton.dragOwner = dragOwner
+		if file?.isPreview == true
+		{
+			selectButton.onDoubleClick =
+			{
+				[weak self] in
+				self?.onFileRetainRequested?(id)
+			}
+		}
+		selectButton.onNavigate =
+		{
+			[weak self] keyCode in
+			self?.navigateTabs(
+				from: id,
+				keyCode: keyCode
+			) ?? false
+		}
 		let closeButton = makeIconButton(
 			.x,
 			size: metrics.closeControlSize,
@@ -893,6 +1246,34 @@ final class ToolsTabViewController: NSViewController
 			trailingButton: closeButton,
 			selected: selected
 		)
+		if let surface = tab as? ToolsTabSurface
+		{
+			surface.dragOwner = dragOwner
+			surface.menu = makeTabMenu(
+				for: id,
+				at: index
+			)
+			selectButton.menu = surface.menu
+			closeButton.menu = surface.menu
+			surface.onDrop =
+			{
+				[weak self] draggedID, before in
+				self?.moveTab(
+					draggedID,
+					nextTo: id,
+					before: before
+				)
+			}
+			if file != nil && !selected
+			{
+				closeButton.alphaValue = 0
+				surface.onHoverChange =
+				{
+					hovered in
+					closeButton.alphaValue = hovered ? 1 : 0
+				}
+			}
+		}
 		if isSources, let surface = tab as? ToolsTabSurface
 		{
 			surface.onHoverChange =
@@ -954,6 +1335,135 @@ final class ToolsTabViewController: NSViewController
 		return tab
 	}
 
+	private func makeTabMenu(
+		for id: UUID,
+		at _: Int
+	) -> NSMenu
+	{
+		let menu = NSMenu()
+		for (title, action) in [
+			("Close", #selector(closeMenuTab(_:))),
+			("Close Others", #selector(closeOtherMenuTabs(_:))),
+			("Close to Right", #selector(closeRightMenuTabs(_:))),
+		]
+		{
+			let item = NSMenuItem(
+				title: title,
+				action: action,
+				keyEquivalent: ""
+			)
+			item.target = self
+			item.representedObject = id
+			menu.addItem(item)
+		}
+		if fileTabPresentations.contains(where:
+			{
+				$0.id == id && $0.isPreview
+			})
+		{
+			menu.addItem(.separator())
+			let item = NSMenuItem(
+				title: "Keep Open",
+				action: #selector(retainMenuFile(_:)),
+				keyEquivalent: ""
+			)
+			item.target = self
+			item.representedObject = id
+			menu.addItem(item)
+		}
+		return menu
+	}
+
+	@objc private func closeMenuTab(_ sender: NSMenuItem)
+	{
+		guard let id = sender.representedObject as? UUID
+		else
+		{
+			return
+		}
+		closeTabID(id)
+	}
+
+	@objc private func closeOtherMenuTabs(_ sender: NSMenuItem)
+	{
+		guard let id = sender.representedObject as? UUID
+		else
+		{
+			return
+		}
+		for other in tabIDs.filter(
+			{
+				$0 != id
+			}
+		)
+		{
+			closeTabID(other)
+		}
+	}
+
+	@objc private func closeRightMenuTabs(_ sender: NSMenuItem)
+	{
+		guard let id = sender.representedObject as? UUID,
+				let index = tabIDs.firstIndex(of: id)
+		else
+		{
+			return
+		}
+		for other in Array(tabIDs.suffix(from: index + 1))
+		{
+			closeTabID(other)
+		}
+	}
+
+	@objc private func retainMenuFile(_ sender: NSMenuItem)
+	{
+		guard let id = sender.representedObject as? UUID,
+				fileTabPresentations.contains(where:
+				{
+					$0.id == id && $0.isPreview
+				})
+		else
+		{
+			return
+		}
+		onFileRetainRequested?(id)
+	}
+
+	private func closeTabID(_ id: UUID)
+	{
+		guard let index = tabIDs.firstIndex(of: id)
+		else
+		{
+			return
+		}
+		removeTab(at: index)
+	}
+
+	private func moveTab(
+		_ id: UUID,
+		nextTo destination: UUID,
+		before: Bool
+	)
+	{
+		guard id != destination, let sourceIndex = tabIDs.firstIndex(of: id),
+				tabIDs.contains(destination)
+		else
+		{
+			return
+		}
+		tabIDs.remove(at: sourceIndex)
+		guard let targetIndex = tabIDs.firstIndex(of: destination)
+		else
+		{
+			return
+		}
+		tabIDs.insert(
+			id,
+			at: targetIndex + (before ? 0 : 1)
+		)
+		renderTabs()
+	}
+
 	private func makeIconButton(
 		_ icon: DesktopIcon,
 		size: CGFloat = Layout.controlSize,
@@ -1011,6 +1521,11 @@ final class ToolsTabViewController: NSViewController
 		onOpenChanges?()
 	}
 
+	@objc private func openFiles()
+	{
+		onOpenFiles?()
+	}
+
 	@objc private func closePane()
 	{
 		onClosePane?()
@@ -1033,11 +1548,69 @@ final class ToolsTabViewController: NSViewController
 		{
 			return
 		}
-		selectedTabID = tabIDs[sender.tag]
+		selectTabID(tabIDs[sender.tag])
+	}
+
+	private func selectTabID(_ id: UUID)
+	{
+		guard tabIDs.contains(id)
+		else
+		{
+			return
+		}
+		selectedTabID = id
 		isConversationSelected = false
+		if let selectedFileDocumentID
+		{
+			lastFileSelectedID = selectedFileDocumentID
+		}
 		renderTabs()
+		if let selectedFileDocumentID
+		{
+			onFileSelected?(selectedFileDocumentID)
+		}
 		onTabSelectionChange?()
 		onChangesSelectionChange?()
+	}
+
+	private func navigateTabs(
+		from id: UUID?,
+		keyCode: UInt16
+	) -> Bool
+	{
+		let ordered: [UUID?] = (isExpanded ? [nil] : []) + tabIDs.map(Optional.some)
+		guard !ordered.isEmpty, let current = ordered.firstIndex(where:
+			{
+				$0 == id
+			})
+		else
+		{
+			return false
+		}
+		let target: Int
+		switch keyCode
+		{
+		case 123: target = max(
+				0,
+				current - 1
+			)
+		case 124: target = min(
+				ordered.count - 1,
+				current + 1
+			)
+		case 115: target = 0
+		case 119: target = ordered.count - 1
+		default: return false
+		}
+		if let id = ordered[target]
+		{
+			selectTabID(id)
+		}
+		else
+		{
+			selectConversation()
+		}
+		return true
 	}
 
 	@objc private func selectConversation()
@@ -1065,7 +1638,21 @@ final class ToolsTabViewController: NSViewController
 		{
 			return
 		}
+		let targetID = tabIDs[index]
+		if fileTabPresentations.contains(where:
+			{
+				$0.id == targetID
+			})
+		{
+			onFileCloseRequested?(targetID)
+			return
+		}
 		let removedTabID = tabIDs.remove(at: index)
+		if removedTabID == filesLandingTabID
+		{
+			filesLandingTabID = nil
+			detachController(filesLandingController)
+		}
 		let removedSources = removedTabID == sourcesTabID
 		if removedSources
 		{
@@ -1117,6 +1704,22 @@ final class ToolsTabViewController: NSViewController
 @MainActor
 private final class ToolsTabSelectionButtonCell: NSButtonCell
 {
+	var documentTitleGap: CGFloat = 0
+
+	override func titleRect(forBounds rect: NSRect) -> NSRect
+	{
+		let title = super.titleRect(forBounds: rect)
+		return NSRect(
+			x: title.minX + documentTitleGap,
+			y: title.minY,
+			width: max(
+				0,
+				title.width - documentTitleGap
+			),
+			height: title.height
+		)
+	}
+
 	override func drawTitle(
 		_ title: NSAttributedString,
 		withFrame frame: NSRect,
@@ -1156,6 +1759,22 @@ private enum ToolsChangesShortcut
 @MainActor
 private final class ToolsTileButtonCell: NSButtonCell
 {
+	private let shortcut: String
+
+	init(
+		textCell: String,
+		shortcut: String
+	)
+	{
+		self.shortcut = shortcut
+		super.init(textCell: textCell)
+	}
+
+	required init(coder: NSCoder)
+	{
+		fatalError("ToolsTileButtonCell is created in code")
+	}
+
 	private func shortcutTitle(in view: NSView) -> NSAttributedString
 	{
 		let color = NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
@@ -1163,7 +1782,7 @@ private final class ToolsTileButtonCell: NSButtonCell
 			for: view
 		)) ?? AppKitColorTokens.toolsTileIcon
 		return NSAttributedString(
-			string: ToolsChangesShortcut.label,
+			string: shortcut,
 			attributes: [
 				.font: AppKitFontResolver.font(TypographyTokens.Controls.toolsShortcut),
 				.foregroundColor: color,
@@ -1174,7 +1793,7 @@ private final class ToolsTileButtonCell: NSButtonCell
 	private func shortcutRect(forBounds rect: NSRect) -> NSRect
 	{
 		let title = NSAttributedString(
-			string: ToolsChangesShortcut.label,
+			string: shortcut,
 			attributes: [.font: AppKitFontResolver.font(TypographyTokens.Controls.toolsShortcut)]
 		)
 		let width = title.size().width + 2 * LayoutTokens.Tabs.toolShortcutHorizontalInset

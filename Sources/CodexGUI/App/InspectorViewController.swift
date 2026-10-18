@@ -361,6 +361,13 @@ final class InspectorViewController: NSViewController
 		}
 	}
 
+	func showFilesInToolTab(_ controller: NSViewController)
+	{
+		prepareToolTabOpening()
+		toolsTabs.showFilesLanding(controller)
+		updateContentVisibility()
+	}
+
 	func showGitChangesInSelectedToolTab(
 		owner: FeaturePresentationOwner,
 		lastTurnID: String?,

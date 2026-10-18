@@ -33,13 +33,17 @@ struct ToolsTabLayoutTests
 			"Changes",
 			in: controller.view
 		))
-		let samples: [(pane: CGFloat, tile: CGFloat, leading: CGFloat)] = [
-			(320, 280, 20),
-			(654.8125, 299.40625, 20),
-			(1214.796875, 376, 223.3984375),
-			(484, 444, 20),
-			(488, 216, 20),
-			(320, 280, 20),
+		let files = try #require(button(
+			"Files",
+			in: controller.view
+		))
+		let samples: [(pane: CGFloat, tile: CGFloat, leading: CGFloat, columns: Int)] = [
+			(320, 280, 20, 1),
+			(654.8125, 299.40625, 20, 2),
+			(1214.796875, 376, 223.3984375, 2),
+			(484, 444, 20, 1),
+			(488, 216, 20, 2),
+			(320, 280, 20, 1),
 		]
 		for appearance: NSAppearance.Name in [.aqua, .darkAqua]
 		{
@@ -52,17 +56,47 @@ struct ToolsTabLayoutTests
 				))
 				window.layoutIfNeeded()
 				controller.view.layoutSubtreeIfNeeded()
-				let frame = changes.convert(
+				let changesFrame = changes.convert(
 					changes.bounds,
 					to: controller.view
 				)
-				#expect(abs(frame.width - sample.tile) < 0.5)
-				#expect(
-					abs(frame.minX - sample.leading) < 0.5,
-					"Pane \(sample.pane), painted frame \(frame)"
+				let filesFrame = files.convert(
+					files.bounds,
+					to: controller.view
 				)
-				#expect(frame.height == 40)
+				#expect(abs(changesFrame.width - sample.tile) < 0.5)
+				#expect(abs(filesFrame.width - sample.tile) < 0.5)
+				#expect(
+					abs(changesFrame.minX - sample.leading) < 0.5,
+					"Pane \(sample.pane), Changes frame \(changesFrame)"
+				)
+				#expect(abs(changesFrame.height - 40) < 0.5)
+				#expect(abs(filesFrame.height - 40) < 0.5)
+				if sample.columns == 2
+				{
+					#expect(abs(filesFrame.minX - changesFrame.maxX - 16) < 0.5)
+					#expect(abs(filesFrame.minY - changesFrame.minY) < 0.5)
+					#expect(!changesFrame.intersects(filesFrame))
+					#expect(abs(filesFrame.maxX - sample.leading - 2 * sample.tile - 16) < 0.5)
+				}
+				else
+				{
+					#expect(abs(filesFrame.minX - changesFrame.minX) < 0.5)
+					#expect(abs(filesFrame.maxX - changesFrame.maxX) < 0.5)
+					#expect(abs(changesFrame.minY - filesFrame.maxY - 8) < 0.5)
+					#expect(!changesFrame.intersects(filesFrame))
+				}
 				#expect(changes.isEnabled)
+				#expect(files.isEnabled)
+				if let directory = ProcessInfo.processInfo.environment["CODEX_FILES_QA_DIR"]
+				{
+					try AppTestPNGWriter.write(
+						controller.view,
+						to: URL(fileURLWithPath: directory).appendingPathComponent(
+							"tools-\(Int(sample.pane))-\(appearance.rawValue).png"
+						)
+					)
+				}
 			}
 		}
 	}
@@ -429,6 +463,83 @@ struct ToolsTabLayoutTests
 			))
 			let newestTab = try #require(newestClose.superview)
 			#expect(scrollView.documentVisibleRect.contains(newestTab.frame))
+		}
+	}
+
+	@Test(
+		.serialized,
+		.timeLimit(.minutes(1)),
+		arguments: [NSScroller.Style.legacy, .overlay]
+	)
+	func tabStripKeepsFullHeightAndRevealsSelectionWithoutAReservedScroller(style: NSScroller
+		.Style) async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let tabs = ToolsTabViewController()
+			let header = tabs.tabBarView
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 320,
+					height: 60
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			defer
+			{
+				window.close()
+			}
+			let content = try #require(window.contentView)
+			header.translatesAutoresizingMaskIntoConstraints = false
+			content.addSubview(header)
+			NSLayoutConstraint.activate([
+				header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+				header.topAnchor.constraint(equalTo: content.topAnchor),
+				header.widthAnchor.constraint(equalToConstant: 308),
+			])
+			tabs.alignTabsWithPaneDivider(
+				at: -8,
+				expanded: false
+			)
+			let scroll = try #require(descendant(
+				NSScrollView.self,
+				in: header
+			))
+			scroll.scrollerStyle = style
+			window.layoutIfNeeded()
+			for _ in 0 ..< 5
+			{
+				tabs.openNewTab()
+			}
+			window.layoutIfNeeded()
+			header.layoutSubtreeIfNeeded()
+			#expect(!scroll.hasHorizontalScroller)
+			#expect(scroll.horizontalScrollElasticity == .allowed)
+			#expect(abs(scroll.contentView.bounds.height - scroll.bounds.height) < 0.5)
+			let newest = try #require(button(
+				"New tab 5",
+				in: header
+			)?.superview)
+			#expect(abs(newest.frame.height - 32) < 0.5)
+			#expect(scroll.documentVisibleRect.contains(newest.frame))
+			let firstButton = try #require(button(
+				"New tab 1",
+				in: header
+			))
+			#expect(firstButton.dispatchConfiguredAction())
+			header.layoutSubtreeIfNeeded()
+			let first = try #require(button(
+				"New tab 1",
+				in: header
+			)?.superview)
+			#expect(scroll.documentVisibleRect.contains(first.frame))
 		}
 	}
 
