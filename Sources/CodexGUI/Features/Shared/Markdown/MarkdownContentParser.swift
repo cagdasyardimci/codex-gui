@@ -7,7 +7,8 @@ enum MarkdownContentParser
 	static func parse(
 		_ body: String,
 		markdown: Bool,
-		preserveSoftBreaks: Bool = false
+		preserveSoftBreaks: Bool = false,
+		imageBaseDirectory: URL? = nil
 	) -> ParsedMarkdownContent
 	{
 		guard markdown
@@ -30,7 +31,8 @@ enum MarkdownContentParser
 		)
 		var builder = PresentationBuilder(
 			source: body,
-			preserveSoftBreaks: preserveSoftBreaks
+			preserveSoftBreaks: preserveSoftBreaks,
+			imageBaseDirectory: imageBaseDirectory
 		)
 		builder.appendBlocks(
 			document.children,
@@ -44,6 +46,7 @@ enum MarkdownContentParser
 		let sourceBytes: [UInt8]
 		let sourceLineOffsets: [Int]
 		let preserveSoftBreaks: Bool
+		let imageBaseDirectory: URL?
 		var runs: [MarkdownTextRun] = []
 		var codeBlocks: [String] = []
 		var codeBlockRanges: [NSRange] = []
@@ -58,7 +61,8 @@ enum MarkdownContentParser
 
 		init(
 			source: String,
-			preserveSoftBreaks: Bool
+			preserveSoftBreaks: Bool,
+			imageBaseDirectory: URL?
 		)
 		{
 			let bytes = Array(source.utf8)
@@ -68,6 +72,7 @@ enum MarkdownContentParser
 				bytes[$0] == 10 ? $0 + 1 : nil
 			}
 			self.preserveSoftBreaks = preserveSoftBreaks
+			self.imageBaseDirectory = imageBaseDirectory
 		}
 
 		var content: ParsedMarkdownContent
@@ -163,13 +168,25 @@ enum MarkdownContentParser
 
 		func localImagePath(_ image: Image) -> String?
 		{
-			guard let path = image.source,
-					LocalAttachmentURL.resolve(path) != nil || InlineImageData.isDataURL(path)
+			guard let path = image.source
 			else
 			{
 				return nil
 			}
-			return path
+			if LocalAttachmentURL.resolve(path) != nil || InlineImageData.isDataURL(path)
+			{
+				return path
+			}
+			guard let imageBaseDirectory, !path.isEmpty, !path.hasPrefix("//"),
+					URL(string: path)?.scheme == nil
+			else
+			{
+				return nil
+			}
+			return URL(
+				fileURLWithPath: path,
+				relativeTo: imageBaseDirectory
+			).standardizedFileURL.path
 		}
 
 		mutating func appendBlock(

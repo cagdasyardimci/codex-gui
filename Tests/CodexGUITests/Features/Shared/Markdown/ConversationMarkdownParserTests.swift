@@ -391,6 +391,37 @@ struct ConversationMarkdownParserTests
 		})
 	}
 
+	@Test func relativeImagesUseOptionalBaseWithoutChangingSourceOrDefaultParsing() throws
+	{
+		let source = "![Diagram](assets/diagram.png)"
+		let ordinary = parse(source)
+		#expect(ordinary.runs.allSatisfy
+		{
+			$0.style.richBlock == nil
+		})
+		let base = URL(
+			fileURLWithPath: "/tmp/project/docs",
+			isDirectory: true
+		)
+		let parsed = MarkdownContentParser.parse(
+			source,
+			markdown: true,
+			imageBaseDirectory: base
+		)
+		let image = try #require(parsed.runs.compactMap(\.style.richBlock).first)
+		#expect(image.source == source)
+		#expect(image.imagePaths == ["/tmp/project/docs/assets/diagram.png"])
+		let remote = MarkdownContentParser.parse(
+			"![Remote](https://example.com/a.png)",
+			markdown: true,
+			imageBaseDirectory: base
+		)
+		#expect(remote.runs.allSatisfy
+		{
+			$0.style.richBlock == nil
+		})
+	}
+
 	private func parse(_ body: String) -> ParsedMarkdownContent
 	{
 		MarkdownContentParser.parse(

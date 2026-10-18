@@ -191,22 +191,9 @@ actor ConversationContentCache
 			markdown: markdown,
 			preserveSoftBreaks: preserveSoftBreaks
 		)
-		let imagePaths = parsed.runs.flatMap
-		{
-			$0.text == "\u{FFFC}" ? ($0.style.richBlock?.imagePaths ?? []) : []
-		}
-		let maximumPixelSize = min(
-			800,
-			max(
-				160,
-				Int((1_900_000.0 / Double(max(
-					1,
-					imagePaths.count
-				))).squareRoot())
-			)
-		)
+		let plan = MarkdownImagePreparation.preloadPlan(in: parsed.runs)
 		var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
-		for path in Set(imagePaths)
+		for path in plan.paths
 		{
 			guard !Task.isCancelled
 			else
@@ -215,7 +202,7 @@ actor ConversationContentCache
 			}
 			imageThumbnails[path] = await SourceThumbnailLoader.image(
 				path: path,
-				maximumPixelSize: maximumPixelSize
+				maximumPixelSize: plan.maximumPixelSize
 			)
 		}
 		let prepared = await PreparedConversationContent(

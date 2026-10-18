@@ -9,6 +9,43 @@ import UniformTypeIdentifiers
 @Suite
 struct SourceThumbnailLoaderTests
 {
+	@Test func capturedBytesDecodeWithinBoundsAndRejectCancellation() async throws
+	{
+		let bytes = try imageData(
+			width: 640,
+			height: 320
+		)
+		let thumbnail = try #require(await SourceThumbnailLoader.image(
+			data: bytes,
+			maximumPixelSize: 160
+		))
+		#expect(thumbnail.image.width == 160)
+		#expect(thumbnail.image.height == 80)
+		#expect(thumbnail.originalPixelSize == CGSize(
+			width: 640,
+			height: 320
+		))
+		try expectCorners(
+			in: thumbnail.image,
+			matching: Array(
+				repeating: [0.25, 0.5, 0.75],
+				count: 4
+			)
+		)
+		let cancelled = Task
+		{
+			withUnsafeCurrentTask
+			{
+				$0?.cancel()
+			}
+			return await SourceThumbnailLoader.image(
+				data: bytes,
+				maximumPixelSize: 160
+			)
+		}
+		#expect(await cancelled.value == nil)
+	}
+
 	@Test func inlinePNGUsesFeatureBoundsAndReusesDecodedThumbnails() async throws
 	{
 		let data = try imageData(

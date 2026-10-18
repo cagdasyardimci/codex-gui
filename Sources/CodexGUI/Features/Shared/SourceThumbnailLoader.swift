@@ -56,6 +56,18 @@ actor SourceThumbnailLoader
 		)
 	}
 
+	/// Decode captured bytes with the same limits and cache as path-based previews.
+	static func image(
+		data: Data,
+		maximumPixelSize: Int
+	) async -> Thumbnail?
+	{
+		await worker.thumbnailImage(
+			data: data,
+			maximumPixelSize: maximumPixelSize
+		)
+	}
+
 	private func thumbnailData(path: String) -> Data?
 	{
 		guard let thumbnail = thumbnailImage(
