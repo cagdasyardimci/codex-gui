@@ -365,6 +365,39 @@ struct GitInlineRichPreviewTests
 		}
 	}
 
+	@Test func SVGSnapshotBytesRenderInGitPreview() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let snapshot = Data("""
+			<svg xmlns="http://www.w3.org/2000/svg" width="17" height="11">
+			<rect width="17" height="11" fill="red"/>
+			</svg>
+			""".utf8)
+			let preview = GitRichPreviewView(kind: .image)
+			{
+				snapshot
+			}
+			defer
+			{
+				preview.cancelLoading()
+			}
+			await preview.waitForLoading()
+			let image = try #require((preview.subviews.first as? NSImageView)?.image)
+			#expect(image.size == NSSize(
+				width: 17,
+				height: 11
+			))
+			#expect(image.cgImage(
+				forProposedRect: nil,
+				context: nil,
+				hints: nil
+			) != nil)
+		}
+	}
+
 	@Test(
 		.timeLimit(.minutes(1)),
 		arguments: ["throwing", "invalidUTF8", "image", "pdf"]
