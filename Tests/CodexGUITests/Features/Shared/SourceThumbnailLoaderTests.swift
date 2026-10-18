@@ -1,4 +1,5 @@
 import CoreGraphics
+import Darwin
 import Foundation
 import ImageIO
 import Testing
@@ -9,6 +10,25 @@ import UniformTypeIdentifiers
 @Suite
 struct SourceThumbnailLoaderTests
 {
+	@Test(.timeLimit(.minutes(1)))
+	func namedPipesAreRejectedWithoutWaitingForAWriter() async throws
+	{
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent("thumbnail-pipe-\(UUID()).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: url)
+		}
+		try #require(mkfifo(
+			url.path,
+			0o600
+		) == 0)
+		#expect(await SourceThumbnailLoader.image(
+			path: url.path,
+			maximumPixelSize: 80
+		) == nil)
+	}
+
 	@Test func capturedBytesDecodeWithinBoundsAndRejectCancellation() async throws
 	{
 		let bytes = try imageData(

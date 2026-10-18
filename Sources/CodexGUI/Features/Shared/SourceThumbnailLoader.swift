@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -26,7 +27,6 @@ actor SourceThumbnailLoader
 
 	private static let worker = SourceThumbnailLoader()
 	private static let maximumBytes = 32 * 1024 * 1024
-	private static let readChunkSize = 64 * 1024
 	private let cache = NSCache<NSString, Thumbnail>()
 
 	init()
@@ -159,43 +159,29 @@ actor SourceThumbnailLoader
 
 	private func readFile(_ url: URL) -> Data?
 	{
-		guard !Task.isCancelled, let file = try? FileHandle(forReadingFrom: url)
+		guard !Task.isCancelled, !url.path.utf8.contains(0)
+		else
+		{
+			return nil
+		}
+		// Local previews accept symlinks; validate the opened target before reading.
+		let descriptor = Darwin.open(
+			url.path,
+			O_RDONLY | O_NONBLOCK | O_CLOEXEC
+		)
+		guard descriptor >= 0
 		else
 		{
 			return nil
 		}
 		defer
 		{
-			try? file.close()
+			Darwin.close(descriptor)
 		}
-		var data = Data()
-		while !Task.isCancelled
-		{
-			let chunk: Data
-			do
-			{
-				// FileHandle returns nil at EOF; only a thrown error means the read failed.
-				chunk = try file.read(upToCount: min(
-					Self.readChunkSize,
-					Self.maximumBytes + 1 - data.count
-				)) ?? Data()
-			}
-			catch
-			{
-				return nil
-			}
-			if chunk.isEmpty
-			{
-				return data
-			}
-			data.append(chunk)
-			guard data.count <= Self.maximumBytes
-			else
-			{
-				return nil
-			}
-		}
-		return nil
+		return try? ContainedFileAccess.read(
+			descriptor,
+			maximumBytes: Self.maximumBytes
+		).0
 	}
 
 	private func thumbnailImage(
