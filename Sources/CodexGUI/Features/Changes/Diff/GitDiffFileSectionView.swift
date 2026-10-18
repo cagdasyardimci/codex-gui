@@ -16,6 +16,9 @@ final class GitDiffFileSectionView: NSStackView
 	private let onToggleFileDiff: (NSButton) -> Void
 	private let onExpandGap: (NSButton) -> Void
 	private let onRichPreview: (NSButton) -> Void
+	private let onOpenWorkingFile: ((NSButton) -> Void)?
+	private let onFileActions: ((NSButton) -> Void)?
+	private let canOpenWorkingFile: Bool
 	private var previewButton: NSButton?
 	private var richPreviewView: GitRichPreviewView?
 	private let filePath: String
@@ -28,12 +31,18 @@ final class GitDiffFileSectionView: NSStackView
 		wrapsCode: Bool,
 		onToggleFileDiff: @escaping (NSButton) -> Void,
 		onExpandGap: @escaping (NSButton) -> Void,
-		onRichPreview: @escaping (NSButton) -> Void
+		onRichPreview: @escaping (NSButton) -> Void,
+		onOpenWorkingFile: ((NSButton) -> Void)? = nil,
+		onFileActions: ((NSButton) -> Void)? = nil,
+		canOpenWorkingFile: Bool = false
 	)
 	{
 		self.onToggleFileDiff = onToggleFileDiff
 		self.onExpandGap = onExpandGap
 		self.onRichPreview = onRichPreview
+		self.onOpenWorkingFile = onOpenWorkingFile
+		self.onFileActions = onFileActions
+		self.canOpenWorkingFile = canOpenWorkingFile
 		filePath = file.path
 		super.init(frame: .zero)
 		render(
@@ -63,6 +72,26 @@ final class GitDiffFileSectionView: NSStackView
 	@objc private func richPreview(_ sender: NSButton)
 	{
 		onRichPreview(sender)
+	}
+
+	@objc private func openWorkingFile(_ sender: NSButton)
+	{
+		guard sender.isEnabled
+		else
+		{
+			return
+		}
+		onOpenWorkingFile?(sender)
+	}
+
+	@objc private func showFileActions(_ sender: NSButton)
+	{
+		guard sender.isEnabled
+		else
+		{
+			return
+		}
+		onFileActions?(sender)
 	}
 
 	func toggleRichPreview(makePreview: () -> GitRichPreviewView)
@@ -218,22 +247,23 @@ final class GitDiffFileSectionView: NSStackView
 				+ "a complete file version"
 			actions.append(preview)
 		}
-		actions += [
-			("Open file unavailable", GitReviewReferenceIcons.Kind.openFile),
-			("Code action unavailable", .code),
-			("Additional file actions unavailable", .ellipsis)
-		].map
-		{
-			label, glyph in
-			let control = referenceButton(
-				label,
-				image: GitReviewReferenceIcons.image(glyph),
-				action: nil
-			)
-			control.isEnabled = false
-			control.toolTip = label + ": reference action has not been defined"
-			return control
-		}
+		let open = referenceButton(
+			"Open working file \(file.path)",
+			image: GitReviewReferenceIcons.image(.openFile),
+			action: #selector(openWorkingFile(_:))
+		)
+		open.isEnabled = canOpenWorkingFile && onOpenWorkingFile != nil
+		open.toolTip = open.isEnabled
+			? "Open the current workspace file in the preferred editor"
+			: "Current workspace file unavailable"
+		let more = referenceButton(
+			"Additional file actions for \(file.path)",
+			image: GitReviewReferenceIcons.image(.ellipsis),
+			action: #selector(showFileActions(_:))
+		)
+		more.isEnabled = onFileActions != nil
+		more.toolTip = "Actions for the compared file version"
+		actions += [open, more]
 		let header = AppKitLayout.horizontalStack(
 			[icon, path, GitReviewControls.spacer(), additions, deletions, toggleDiff] + actions,
 			spacing: 6

@@ -297,7 +297,167 @@ final class GitDiffDocumentController: NSViewController
 					snapshot: presentation.snapshot,
 					button: button
 				)
+			},
+			onOpenWorkingFile:
+			{
+				[weak self] _ in
+				self?.comparedFileActions(
+					file: file,
+					snapshot: presentation.snapshot
+				).openPreferred()
+			},
+			onFileActions:
+			{
+				[weak self] button in
+				self?.showFileActions(
+					file: file,
+					snapshot: presentation.snapshot,
+					button: button
+				)
+			},
+			canOpenWorkingFile: ViewerFileActions.hasWorkspaceFile(FileLocation(
+				root: presentation.snapshot.request.repositoryRoot,
+				relativePath: file.path
+			))
+		)
+	}
+
+	func comparedFileActions(
+		file: GitComparisonFile,
+		snapshot: GitComparisonSnapshot
+	) -> ViewerFileActions
+	{
+		let location = FileLocation(
+			root: snapshot.request.repositoryRoot,
+			relativePath: file.path
+		)
+		let hasBlob = GitRichPreviewContent.blobID(for: file) != nil
+		let textProvider: (@MainActor @Sendable () async throws -> String)?
+		if hasBlob && !file.isBinary
+		{
+			textProvider =
+			{
+				let bytes = try await GitRichPreviewContent.read(
+					file: file,
+					snapshot: snapshot
+				)
+				guard let text = String(
+					data: bytes,
+					encoding: .utf8
+				)
+				else
+				{
+					throw NSError(
+						domain: "ComparedFileActions",
+						code: 1,
+						userInfo: [NSLocalizedDescriptionKey: "Compared file is not UTF-8 text."]
+					)
+				}
+				return text
 			}
+		}
+		else
+		{
+			textProvider = nil
+		}
+		let bytesProvider: (@MainActor @Sendable () async throws -> Data)?
+		if hasBlob
+		{
+			bytesProvider =
+			{
+				try await GitRichPreviewContent.read(
+					file: file,
+					snapshot: snapshot
+				)
+			}
+		}
+		else
+		{
+			bytesProvider = nil
+		}
+		let content = ViewerFileActions.Content(
+			text: textProvider,
+			bytes: bytesProvider
+		)
+		return ViewerFileActions(
+			location: location,
+			content: content,
+			onError:
+			{
+				[weak self] message in self?.presentFileActionError(message)
+			}
+		)
+	}
+
+	func makeFileActionsMenu(
+		file: GitComparisonFile,
+		snapshot: GitComparisonSnapshot
+	) -> NSMenu
+	{
+		let actions = comparedFileActions(
+			file: file,
+			snapshot: snapshot
+		)
+		let menu = NSMenu(title: "File actions")
+		actions.addContentActions(
+			to: menu,
+			copyContentsTitle: file.isBinary ? nil : "Copy compared contents",
+			exportTitle: "Save compared version as…",
+			in: view.window
+		)
+		if ViewerFileActions.hasWorkspaceFile(actions.location)
+		{
+			actions.addExternalOpenActions(
+				to: menu,
+				preferredTitle: "Open current working file in preferred editor",
+				openWithTitle: "Open current working file with…",
+				revealTitle: "Reveal current working file in Finder",
+				in: view.window,
+				beforeReveal:
+				{
+					menu in
+					actions.addDefault(
+						"Open current working file in default app",
+						to: menu
+					)
+					for destination in FileOpeningDestinations.installed()
+					{
+						actions.addDestination(
+							destination,
+							to: menu
+						)
+					}
+				}
+			)
+		}
+		return menu
+	}
+
+	private func showFileActions(
+		file: GitComparisonFile,
+		snapshot: GitComparisonSnapshot,
+		button: NSButton
+	)
+	{
+		let menu = makeFileActionsMenu(
+			file: file,
+			snapshot: snapshot
+		)
+		menu.popUp(
+			positioning: nil,
+			at: NSPoint(
+				x: 0,
+				y: button.bounds.maxY
+			),
+			in: button
+		)
+	}
+
+	private func presentFileActionError(_ message: String)
+	{
+		ViewerFileActions.presentError(
+			message,
+			in: view.window
 		)
 	}
 
