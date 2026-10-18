@@ -21,6 +21,11 @@ struct ChangesViewControllerTests
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.close()
+		}
 		window.contentViewController = controller
 		let diff = "diff --git a/file.swift b/file.swift\n@@ -3 +3 @@\n-old\n+print(greeting)\n"
 		controller.render(

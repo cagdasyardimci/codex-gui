@@ -61,20 +61,13 @@ struct GitInlineRichPreviewTests
 			turnID: nil
 		).owner)
 		controller.runtime.selectScope(.unstaged)
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.snapshot?.request.scope == .unstaged
-			{
-				break
-			}
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		_ = try #require(controller.runtime.state.snapshot)
+		await controller.runtime.readTask?.value
+		#expect(try #require(controller.runtime.state.snapshot).request.scope == .unstaged)
 		settle(window)
-		try button(
+		#expect(try button(
 			"Collapse diff for README.md",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		_ = try button(
 			"Expand diff for README.md",
 			in: controller.view
@@ -87,10 +80,10 @@ struct GitInlineRichPreviewTests
 			$0 as? GitDiffFileSectionView
 		}.first)
 		let originalDocument = section.superview
-		try button(
+		#expect(try button(
 			"Rich preview of README.md",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		let preview = try #require(descendants(controller.view).compactMap
 		{
 			$0 as? GitRichPreviewView
@@ -113,10 +106,10 @@ struct GitInlineRichPreviewTests
 			"Collapse diff for README.md",
 			in: controller.view
 		)
-		try button(
+		#expect(try button(
 			"Show diff for README.md",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		#expect(!descendants(controller.view).contains
 		{
 			$0 is GitRichPreviewView
@@ -305,18 +298,7 @@ struct GitInlineRichPreviewTests
 				preview.trailingAnchor.constraint(equalTo: host.trailingAnchor),
 				preview.topAnchor.constraint(equalTo: host.topAnchor)
 			])
-			for _ in 0 ..< 100
-			{
-				if preview.subviews
-					.contains(where:
-						{
-							$0 is NSImageView || $0 is PDFView
-						})
-				{
-					break
-				}
-				try await Task.sleep(for: .milliseconds(10))
-			}
+			await preview.waitForLoading()
 			settle(window)
 			let content: NSView
 			switch kind
@@ -538,23 +520,13 @@ struct GitInlineRichPreviewTests
 		#expect(Double(bytes[offset + 3]) / 255 > 0.99)
 	}
 
-	private func waitForText(_ view: NSView) async throws -> MarkdownTextView
+	private func waitForText(_ view: GitRichPreviewView) async throws -> MarkdownTextView
 	{
-		for _ in 0 ..< 100
+		await view.waitForLoading()
+		return try #require(descendants(view).compactMap
 		{
-			if let text = descendants(view).compactMap(
-				{
-					$0 as? MarkdownTextView
-				}
-			)
-			.first
-			{
-				return text
-			}
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		Issue.record("Inline Markdown did not finish loading")
-		throw GitComparisonFailure.repositoryUnavailable
+			$0 as? MarkdownTextView
+		}.first)
 	}
 
 	private func button(

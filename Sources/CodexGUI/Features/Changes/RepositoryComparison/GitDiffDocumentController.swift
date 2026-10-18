@@ -14,10 +14,10 @@ final class GitDiffDocumentController: NSViewController
 	private var renderedSnapshotID: String?
 	private var renderedOwner: FeaturePresentationOwner?
 	private var renderedOptions: GitDiffPresentationOptions?
-	private var renderedSelectedFileID: String?
+	private var renderedSelectedFileIdentity: Data?
 	private var layoutOwner: FeaturePresentationOwner?
 	private var renderedScope: GitComparisonScope?
-	private var collapsedFileIDs: Set<String> = []
+	private var collapsedFileIDs: Set<Data> = []
 	private var collapseSnapshotID: String?
 	private var collapseOwner: FeaturePresentationOwner?
 	private var fileSections: [Data: GitDiffFileSectionView] = [:]
@@ -93,7 +93,10 @@ final class GitDiffDocumentController: NSViewController
 			return
 		}
 		collapseAllMode.toggle()
-		collapsedFileIDs = collapseAllMode ? Set(snapshot.files.map(\.id)) : []
+		collapsedFileIDs = collapseAllMode ? Set(snapshot.files.map
+		{
+			Data($0.id.utf8)
+		}) : []
 		invalidateSections()
 	}
 
@@ -178,9 +181,14 @@ final class GitDiffDocumentController: NSViewController
 	)
 	{
 		let snapshot = presentation.snapshot
+		let selectedFileIdentity = displayedFileID.map
+		{
+			Data($0.utf8)
+		}
 		let needsSectionUpdate = renderedSnapshotID != snapshot.id
 			|| renderedOptions != presentation.options
-			|| renderedSelectedFileID != displayedFileID || renderedOwner != snapshot.request.owner
+			|| renderedSelectedFileIdentity != selectedFileIdentity || renderedOwner != snapshot
+			.request.owner
 		guard needsSectionUpdate
 		else
 		{
@@ -189,11 +197,11 @@ final class GitDiffDocumentController: NSViewController
 		let origin = contentScroll.contentView.bounds.origin
 		let changesDisplayedFile = renderedSnapshotID != snapshot.id
 			|| renderedOwner != snapshot.request.owner
-			|| renderedSelectedFileID != displayedFileID
+			|| renderedSelectedFileIdentity != selectedFileIdentity
 		let files = usesSingleFile
 			? snapshot.files.filter
 			{
-				$0.id == displayedFileID
+				Data($0.id.utf8) == selectedFileIdentity
 			} : snapshot.files
 		reconcileFileSections(
 			files,
@@ -203,7 +211,7 @@ final class GitDiffDocumentController: NSViewController
 		renderedSnapshotID = snapshot.id
 		renderedOwner = snapshot.request.owner
 		renderedOptions = presentation.options
-		renderedSelectedFileID = displayedFileID
+		renderedSelectedFileIdentity = selectedFileIdentity
 		sections.layoutSubtreeIfNeeded()
 		contentScroll.contentView
 			.scroll(to: usesSingleFile && changesDisplayedFile ? .zero : origin)
@@ -221,7 +229,7 @@ final class GitDiffDocumentController: NSViewController
 			nextKeys[Data(file.id.utf8)] = GitDiffFileSectionKey(
 				file: file,
 				presentation: presentation,
-				isCollapsed: collapsedFileIDs.contains(file.id)
+				isCollapsed: collapsedFileIDs.contains(Data(file.id.utf8))
 			)
 		}
 		for (id, section) in fileSections where fileSectionKeys[id] != nextKeys[id]
@@ -270,7 +278,7 @@ final class GitDiffDocumentController: NSViewController
 		presentation: GitDiffPresentation
 	) -> GitDiffFileSectionView
 	{
-		let isCollapsed = collapsedFileIDs.contains(file.id)
+		let isCollapsed = collapsedFileIDs.contains(Data(file.id.utf8))
 		let rows = isCollapsed ? nil : projectionCache.file(
 			file,
 			presentation: presentation
@@ -475,7 +483,7 @@ final class GitDiffDocumentController: NSViewController
 		{
 			return
 		}
-		if collapsedFileIDs.contains(file.id)
+		if collapsedFileIDs.contains(Data(file.id.utf8))
 		{
 			toggleFileDiff(button)
 		}
@@ -504,7 +512,7 @@ final class GitDiffDocumentController: NSViewController
 		renderedSnapshotID = nil
 		renderedOwner = nil
 		renderedOptions = nil
-		renderedSelectedFileID = nil
+		renderedSelectedFileIdentity = nil
 	}
 
 	private func expandGap(_ sender: NSButton)
@@ -520,15 +528,15 @@ final class GitDiffDocumentController: NSViewController
 		guard let id = sender.identifier?.rawValue,
 				currentState?.snapshot?.files.contains(where:
 				{
-					$0.id == id
+					$0.id.utf8.elementsEqual(id.utf8)
 				}) == true
 		else
 		{
 			return
 		}
-		if !collapsedFileIDs.insert(id).inserted
+		if !collapsedFileIDs.insert(Data(id.utf8)).inserted
 		{
-			collapsedFileIDs.remove(id)
+			collapsedFileIDs.remove(Data(id.utf8))
 		}
 		invalidateSections()
 	}

@@ -259,18 +259,16 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			target: target,
 			snapshot: snapshot
 		)
-		self.inspector.render(ReviewPresentation(
+		let reviewPresentation = ReviewPresentation(
 			snapshot,
 			ownerIdentity: target.presentationIdentity
-		))
+		)
+		self.inspector.render(reviewPresentation)
 		renderPinnedSummary(
 			snapshot,
 			target: target
 		)
-		self.inspector.changes.render(ReviewPresentation(
-			snapshot,
-			ownerIdentity: target.presentationIdentity
-		))
+		self.inspector.changes.render(reviewPresentation)
 
 		self.messageSearch.render(
 			snapshot.messageSearch,

@@ -27,7 +27,7 @@ struct GitDiffFileSectionKey: Equatable
 		fileOptions.expandedGapIDs = Set(fileOptions.expandedGapIDs.filter
 		{
 			gapID in
-			let bytes = Data(gapID.utf8)
+			let bytes = gapID
 			return gapPatterns.contains
 			{
 				$0.matches(bytes)

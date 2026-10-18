@@ -47,7 +47,7 @@ struct GitDiffPresentation: Equatable, Sendable
 	{
 		guard let file = snapshot.files.first(where:
 			{
-				$0.id == id
+				$0.id.utf8.elementsEqual(id.utf8)
 			})
 		else
 		{
@@ -63,6 +63,7 @@ struct GitDiffPresentation: Equatable, Sendable
 	func projectedRows(for file: GitComparisonFile) -> [[GitDiffRow]]
 	{
 		var remainingWordDiffTokens = 16_384
+		let importMatcher = options.ignoreImports ? GitDiffImportMatcher(path: file.path) : nil
 		return file.hunks.enumerated().map
 		{
 			index, hunk in
@@ -73,7 +74,7 @@ struct GitDiffPresentation: Equatable, Sendable
 			)
 			let filtered = filterChanges(
 				parsed,
-				path: file.path,
+				importMatcher: importMatcher,
 				remainingWordDiffTokens: &remainingWordDiffTokens
 			)
 			return filtered
@@ -103,7 +104,7 @@ struct GitDiffPresentation: Equatable, Sendable
 	/// Filtering keeps ancestors and opens matching paths so a result is always reachable.
 	func treeRows(
 		filter: String = "",
-		expandedDirectories: Set<String> = []
+		expandedDirectories: Set<Data> = []
 	) -> [GitDiffTreeRow]
 	{
 		let query = filter.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -112,7 +113,7 @@ struct GitDiffPresentation: Equatable, Sendable
 			query.isEmpty || $0.path.localizedCaseInsensitiveContains(query)
 				|| ($0.oldPath?.localizedCaseInsensitiveContains(query) ?? false)
 		}
-		var entries: [String: String?] = [:]
+		var entries: [Data: (path: String, fileID: String?)] = [:]
 		for file in files
 		{
 			let components = file.path.split(separator: "/").map(String.init)
@@ -124,33 +125,45 @@ struct GitDiffPresentation: Equatable, Sendable
 			for count in 1 ... components.count
 			{
 				let path = components.prefix(count).joined(separator: "/")
+				let identity = Data(path.utf8)
 				if count == components.count
 				{
-					entries[path] = .some(file.id)
+					entries[identity] = (path, file.id)
 				}
-				else if entries[path] == nil
+				else if entries[identity] == nil
 				{
-					entries[path] = .some(nil)
+					entries[identity] = (path, nil)
 				}
 			}
 		}
 		// The service captures the checkout root.
 		// Projection must not consult live filesystem state.
 		let root = snapshot.request.repositoryRoot
-		return entries.keys.sorted().compactMap
+		return entries.values.sorted
 		{
-			path in
+			left, right in
+			left.path == right.path
+				? left.path.utf8.lexicographicallyPrecedes(right.path.utf8) : left.path < right.path
+		}.compactMap
+		{
+			entry in
+			let path = entry.path
 			let components = path.split(separator: "/")
 			let ancestors = (1 ..< components.count).map
 			{
 				components.prefix($0).joined(separator: "/")
 			}
-			guard !query.isEmpty || ancestors.allSatisfy(expandedDirectories.contains)
+			guard !query.isEmpty || ancestors
+				.allSatisfy(
+					{
+						expandedDirectories.contains(Data($0.utf8))
+					}
+				)
 			else
 			{
 				return nil
 			}
-			let fileID = entries[path] ?? nil
+			let fileID = entry.fileID
 			let isDirectory = fileID == nil
 			return GitDiffTreeRow(
 				id: WorkspaceFileIdentity(
@@ -214,12 +227,12 @@ struct GitDiffPresentation: Equatable, Sendable
 
 	private func filterChanges(
 		_ rows: [GitDiffRow],
-		path: String,
+		importMatcher: GitDiffImportMatcher?,
 		remainingWordDiffTokens: inout Int
 	) -> [GitDiffRow]
 	{
 		// Without a complete lexical parser, retain imports when multiline syntax is present.
-		let importFilteringAvailable = !rows.contains
+		let importFilteringAvailable = importMatcher != nil && !rows.contains
 		{
 			row in
 			["\"\"\"", "'''", "/*", "*/"].contains(where: row.text.contains)
@@ -283,11 +296,8 @@ struct GitDiffPresentation: Equatable, Sendable
 			for row in block where !hidden.contains(row.id)
 			{
 				let replacement = replacements[row.id] ?? row
-				if options.ignoreImports, importFilteringAvailable, replacement.kind != .context,
-					Self.isImport(
-					replacement.text,
-					path: path
-					)
+				if importFilteringAvailable, replacement.kind != .context,
+					importMatcher?.matches(replacement.text) == true
 				{
 					continue
 				}
@@ -303,35 +313,6 @@ struct GitDiffPresentation: Equatable, Sendable
 		{
 			!$0.isWhitespace
 		})
-	}
-
-	/// Limited syntax filtering, not an AST: only unindented, single-line Swift module imports
-	/// and Python import/from statements. Multiline imports and other languages remain visible.
-	/// A hunk with multiline string/comment delimiters disables this limited filter entirely.
-	private static func isImport(
-		_ text: String,
-		path: String
-	) -> Bool
-	{
-		let pattern: String
-		switch URL(fileURLWithPath: path).pathExtension.lowercased()
-		{
-		case "swift":
-			pattern = #"^(?:@testable |@_exported |@_implementationOnly )?import "#
-				+ #"[A-Za-z_][A-Za-z0-9_.]*\s*$"#
-		case "py", "pyw":
-			let alias = #"(?: as [A-Za-z_][A-Za-z0-9_]*)?"#
-			let module = #"[A-Za-z_][A-Za-z0-9_.]*"# + alias
-			let name = #"[A-Za-z_][A-Za-z0-9_]*"# + alias
-			pattern = "^(?:import " + module + "(?:, " + module + ")*"
-				+ #"|from [A-Za-z_.][A-Za-z0-9_.]* import (?:\*|"#
-				+ name + "(?:, " + name + #")*))\s*$"#
-		default: return false
-		}
-		return text.range(
-			of: pattern,
-			options: .regularExpression
-		) != nil
 	}
 
 	private func foldContext(
@@ -358,7 +339,7 @@ struct GitDiffPresentation: Equatable, Sendable
 			let count = index - start
 			let gapID = "\(prefix):gap:\(rows[start].id):\(rows[index - 1].id)"
 			guard count > 6,
-					!(options.loadFullFiles && options.expandedGapIDs.contains(gapID))
+					!(options.loadFullFiles && options.expandedGapIDs.contains(Data(gapID.utf8)))
 			else
 			{
 				result.append(contentsOf: rows[start ..< index])

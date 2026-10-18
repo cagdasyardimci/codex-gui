@@ -20,7 +20,8 @@ struct GitReviewState
 	private(set) var isStale = false
 	var filter = ""
 	var selectedFileID: String?
-	var expandedDirectories: Set<String> = []
+	/// Exact UTF-8 Git paths keep canonically equivalent directories independent.
+	var expandedDirectories: Set<Data> = []
 	var options = GitDiffPresentationOptions()
 	private(set) var selectionMessage: String?
 
@@ -32,10 +33,15 @@ struct GitReviewState
 	@discardableResult
 	mutating func setReportedChanges(_ changes: [FileChange]?) -> Bool
 	{
-		guard reportedChanges != changes
-		else
+		switch (reportedChanges, changes)
 		{
+		case (nil, nil): return false
+		case (let current?, let next?) where FileChange.haveSameExactContent(
+			current,
+			next
+		):
 			return false
+		default: break
 		}
 		reportedChanges = changes
 		if changes == nil, scope == .lastTurn
@@ -64,7 +70,7 @@ struct GitReviewState
 	{
 		guard snapshot?.files.contains(where:
 			{
-				$0.id == id
+				$0.id.utf8.elementsEqual(id.utf8)
 			}) == true
 		else
 		{
@@ -76,15 +82,16 @@ struct GitReviewState
 
 	mutating func toggleDirectory(_ path: String)
 	{
-		if !expandedDirectories.insert(path).inserted
+		let identity = Data(path.utf8)
+		if !expandedDirectories.insert(identity).inserted
 		{
-			expandedDirectories.remove(path)
+			expandedDirectories.remove(identity)
 		}
 	}
 
 	mutating func expandGap(_ id: String)
 	{
-		options.expandedGapIDs.insert(id)
+		options.expandedGapIDs.insert(Data(id.utf8))
 	}
 
 	mutating func setOptions(_ value: GitDiffPresentationOptions)
@@ -211,6 +218,7 @@ struct GitReviewState
 			let sameComparison = snapshot.map
 			{
 				$0.patch == value.patch
+					&& $0.usesReportedEditFallback == value.usesReportedEditFallback
 					&& $0.request.scope == value.request.scope
 					&& $0.request.lastTurnID == value.request.lastTurnID
 					&& $0.resolvedBase == value.resolvedBase
@@ -223,7 +231,8 @@ struct GitReviewState
 				resolvedBase: value.resolvedBase,
 				resolvedTarget: value.resolvedTarget,
 				patch: value.patch,
-				files: value.files
+				files: value.files,
+				usesReportedEditFallback: value.usesReportedEditFallback
 			)
 			snapshot = acceptedValue
 			isStale = false
@@ -234,7 +243,7 @@ struct GitReviewState
 			}
 			if let previousFile, !value.files.contains(where:
 				{
-					$0.id == previousFile
+					$0.id.utf8.elementsEqual(previousFile.utf8)
 				})
 			{
 				selectionMessage = "The selected file is absent from the new comparison."
@@ -252,7 +261,8 @@ struct GitReviewState
 					parts.count
 				)
 				{
-					expandedDirectories.insert(parts.prefix(count).joined(separator: "/"))
+					expandedDirectories
+						.insert(Data(parts.prefix(count).joined(separator: "/").utf8))
 				}
 			}
 		case .unavailable(let reason):

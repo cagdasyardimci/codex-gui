@@ -62,7 +62,10 @@ struct GitRichPreviewButtonTests
 			}
 			let supported = ["README.MD", "image.png", "diagram.svg", "document.pdf"].contains(path)
 			#expect((preview != nil) == supported)
-			preview?.performClick(nil)
+			if let preview
+			{
+				#expect(preview.dispatchConfiguredAction())
+			}
 			#expect(previewed.count == (supported ? 1 : 0))
 			if let preview
 			{

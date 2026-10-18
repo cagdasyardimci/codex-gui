@@ -67,9 +67,11 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	private let navigator = NSView()
 	private var navigatorSplit: ViewerNavigatorSplitView?
 	private let documentController = GitDiffDocumentController()
-	private var treeNodes: [String: GitComparisonTreeNode] = [:]
-	private var treeExpansionTasks: [String: Task<Void, Never>] = [:]
-	private var lastTreeFileSelection: String?
+	private var treeNodes: [Data: GitComparisonTreeNode] = [:]
+	private var treeExpansionTasks: [Data: Task<Void, Never>] = [:]
+	private var lastTreeFileSelection: Data?
+	private var lastTreeRenderInputs: GitDiffTreeRenderInputs?
+	private(set) var treeRenderCount = 0
 	var projectionCache: GitDiffProjectionCache
 	{
 		documentController.projectionCache
@@ -199,7 +201,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				runtime.state.snapshot?.id == snapshotID, !runtime.state.isStale,
 				runtime.state.snapshot?.files.contains(where:
 				{
-					$0.id == fileID
+					$0.id.utf8.elementsEqual(fileID.utf8)
 				}) == true
 		else
 		{
@@ -527,7 +529,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 					let fileID = node.row.fileID, let snapshot = self.runtime.state.snapshot,
 					let file = snapshot.files.first(where:
 					{
-						$0.id == fileID
+						$0.id.utf8.elementsEqual(fileID.utf8)
 					})
 			else
 			{
@@ -587,6 +589,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				usesSingleFile: false
 			)
 			largeComparisonBanner?.isHidden = true
+			lastTreeRenderInputs = nil
 			treeNodes.removeAll()
 			tree.rootItems = []
 			tree.reloadTree()
@@ -733,15 +736,29 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		displayedFileID: String?
 	)
 	{
+		if lastTreeRenderInputs?.matches(
+			state: state,
+			snapshot: presentation.snapshot,
+			displayedFileID: displayedFileID
+		) == true
+		{
+			return
+		}
+		lastTreeRenderInputs = GitDiffTreeRenderInputs(
+			state: state,
+			snapshot: presentation.snapshot,
+			displayedFileID: displayedFileID
+		)
+		treeRenderCount += 1
 		let priorSelection = tree.selectedItem as? GitComparisonTreeNode
 		let priorScroll = tree.enclosingScrollView?.contentView.bounds.origin
-		var directories: Set<String> = []
+		var directories: Set<Data> = []
 		for file in presentation.snapshot.files
 		{
 			var parent = (file.path as NSString).deletingLastPathComponent
 			while !parent.isEmpty
 			{
-				directories.insert(parent)
+				directories.insert(Data(parent.utf8))
 				parent = (parent as NSString).deletingLastPathComponent
 			}
 		}
@@ -749,24 +766,25 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			filter: state.filter,
 			expandedDirectories: directories
 		)
-		var next: [String: GitComparisonTreeNode] = [:]
+		var next: [Data: GitComparisonTreeNode] = [:]
 		for row in rows
 		{
-			let node = treeNodes[row.path] ?? GitComparisonTreeNode(row)
+			let identity = Data(row.path.utf8)
+			let node = treeNodes[identity] ?? GitComparisonTreeNode(row)
 			node.row = row
 			node.children = []
-			next[row.path] = node
+			next[identity] = node
 		}
 		var roots: [NSObject] = []
 		for row in rows
 		{
-			guard let node = next[row.path]
+			guard let node = next[Data(row.path.utf8)]
 			else
 			{
 				continue
 			}
 			let parent = (row.path as NSString).deletingLastPathComponent
-			if let directory = next[parent]
+			if let directory = next[Data(parent.utf8)]
 			{
 				directory.children.append(node)
 			}
@@ -780,13 +798,13 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		tree.reloadTree()
 		for row in rows where row.isDirectory
 		{
-			guard let node = next[row.path]
+			guard let node = next[Data(row.path.utf8)]
 			else
 			{
 				continue
 			}
 			if !state.filter.isEmpty || state.expandedDirectories
-				.contains(row.path)
+				.contains(Data(row.path.utf8))
 			{
 				tree.expandItem(node)
 			}
@@ -796,9 +814,14 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			}
 		}
 		let selectedID = state.selectedFileID ?? displayedFileID
+		let selectedIdentity = selectedID.map
+		{
+			Data($0.utf8)
+		}
 		let selected: GitComparisonTreeNode?
-		if lastTreeFileSelection == selectedID, let priorSelection,
-			priorSelection.row.isDirectory, next[priorSelection.row.path] === priorSelection
+		if lastTreeFileSelection == selectedIdentity,
+			let priorSelection, priorSelection.row.isDirectory,
+			next[Data(priorSelection.row.path.utf8)] === priorSelection
 		{
 			selected = priorSelection
 		}
@@ -806,10 +829,15 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		{
 			selected = next.values.first
 			{
-				$0.row.fileID == selectedID && selectedID != nil
+				$0.row.fileID.map(
+					{
+						Data($0.utf8)
+					}
+				) == selectedIdentity
+					&& selectedID != nil
 			}
 		}
-		lastTreeFileSelection = selectedID
+		lastTreeFileSelection = selectedIdentity
 		let selectedRow = selected.map
 		{
 			tree.row(forItem: $0)
@@ -837,7 +865,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		if let id = row.fileID,
 			let file = runtime.state.snapshot?.files.first(where:
 			{
-				$0.id == id
+				$0.id.utf8.elementsEqual(id.utf8)
 			})
 		{
 			if file.additions > 0
@@ -871,7 +899,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		{
 			return
 		}
-		if runtime.state.selectedFileID != id
+		if runtime.state.selectedFileID?.utf8.elementsEqual(id.utf8) != true
 		{
 			runtime.selectFile(id)
 		}
@@ -890,10 +918,11 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			return
 		}
 		let path = node.row.path
-		treeExpansionTasks[path]?.cancel()
+		let identity = Data(path.utf8)
+		treeExpansionTasks[identity]?.cancel()
 		let owner = runtime.state.owner
 		// Runtime publication reloads the outline; let native expansion finish first.
-		treeExpansionTasks[path] = Task
+		treeExpansionTasks[identity] = Task
 		{
 			@MainActor [weak self, weak node] in
 			guard let self, let node, !Task.isCancelled
@@ -901,15 +930,16 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			{
 				return
 			}
-			self.treeExpansionTasks[path] = nil
-			guard self.runtime.state.isOpen, self.runtime.state.owner == owner,
-					self.runtime.state.snapshot?.id == snapshot.id, self.treeNodes[path] === node,
+			self.treeExpansionTasks[identity] = nil
+			let state = self.runtime.state
+			guard state.isOpen, state.owner == owner,
+					state.snapshot?.id == snapshot.id, self.treeNodes[identity] === node,
 					self.tree.isItemExpanded(node) == expanded
 			else
 			{
 				return
 			}
-			if self.runtime.state.expandedDirectories.contains(path) != expanded
+			if state.expandedDirectories.contains(identity) != expanded
 			{
 				self.runtime.toggleDirectory(path)
 			}
@@ -963,11 +993,15 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	)
 	{
 		let large = GitReviewDesignLayout.isLarge(snapshot)
+		let selectedIdentity = selectedFileID.map
+		{
+			Data($0.utf8)
+		}
 		largeComparisonBanner?.isHidden = !large
 		largeComparisonLabel.stringValue = "This diff is large, showing one file at a time"
 		let index = snapshot.files.firstIndex
 		{
-			$0.id == selectedFileID
+			Data($0.id.utf8) == selectedIdentity
 		} ?? 0
 		previousFileButton?.isEnabled = current && index > 0
 		nextFileButton?.isEnabled = current && index + 1 < snapshot.files.count
@@ -986,11 +1020,16 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	private func navigateFile(offset: Int)
 	{
 		let state = runtime.state
+		let selectedIdentity = (state.selectedFileID ?? state.snapshot?.files.first?.id)
+			.map
+			{
+				Data($0.utf8)
+			}
 		guard let snapshot = state.snapshot, let owner = state.owner,
 				state.pendingRequest == nil,
 				let index = snapshot.files.firstIndex(where:
 				{
-					$0.id == (state.selectedFileID ?? snapshot.files.first?.id)
+					Data($0.id.utf8) == selectedIdentity
 				})
 		else
 		{

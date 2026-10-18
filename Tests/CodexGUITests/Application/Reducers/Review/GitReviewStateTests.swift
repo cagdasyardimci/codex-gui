@@ -196,7 +196,7 @@ struct GitReviewStateTests
 			request: first
 		)
 		#expect(acceptedFirstSnapshot)
-		state.options.expandedGapIDs = ["gap"]
+		state.options.expandedGapIDs = [Data("gap".utf8)]
 		state.expandedDirectories.removeAll()
 		let secondOptional = state.beginRequest()
 		let second = try #require(secondOptional)
@@ -209,7 +209,7 @@ struct GitReviewStateTests
 		)
 		#expect(acceptedUnchangedSnapshot)
 		#expect(state.snapshot?.id == "snapshot")
-		#expect(state.options.expandedGapIDs == ["gap"])
+		#expect(state.options.expandedGapIDs == [Data("gap".utf8)])
 		#expect(state.expandedDirectories.isEmpty)
 	}
 
@@ -227,6 +227,45 @@ struct GitReviewStateTests
 		)
 		#expect(!acceptedMismatchedSnapshot)
 		#expect(state.pendingRequest == second)
+	}
+
+	@Test func reportedFallbackSurvivesAcceptanceAndChangesComparisonIdentity() throws
+	{
+		var state = GitReviewState()
+		state.activate(owner: owner())
+		state.scope = .lastTurn
+		let first = try #require(state.beginRequest())
+		#expect(state.accept(
+			.snapshot(snapshot(first)),
+			request: first
+		))
+		#expect(state.copyCommand != nil)
+		state.options.expandedGapIDs = [Data("gap".utf8)]
+		let second = try #require(state.beginRequest())
+		var fallback = snapshot(
+			second,
+			id: "fallback"
+		)
+		fallback.usesReportedEditFallback = true
+		#expect(state.accept(
+			.snapshot(fallback),
+			request: second
+		))
+		#expect(state.snapshot?.usesReportedEditFallback == true)
+		#expect(state.snapshot?.id == "fallback")
+		#expect(state.options.expandedGapIDs.isEmpty)
+		#expect(state.copyCommand == nil)
+		let third = try #require(state.beginRequest())
+		#expect(state.accept(
+			.snapshot(snapshot(
+				third,
+				id: "applicable"
+			)),
+			request: third
+		))
+		#expect(state.snapshot?.usesReportedEditFallback == false)
+		#expect(state.snapshot?.id == "applicable")
+		#expect(state.copyCommand != nil)
 	}
 
 	@Test func latestTurnAndCapturePublicationInvalidateOnlyLastTurnRequests() throws
@@ -330,9 +369,68 @@ struct GitReviewStateTests
 		#expect(state.baselineRevision == 0)
 	}
 
+	@Test func literalFileAndDirectoryIdentitiesStayIndependentAcrossRefreshes() throws
+	{
+		var state = GitReviewState()
+		state.activate(owner: owner())
+		let composed = "Café/A.swift"
+		let decomposed = "Cafe\u{301}/A.swift"
+		let first = try #require(state.beginRequest())
+		#expect(state.accept(
+			.snapshot(snapshot(
+				first,
+				paths: [composed, decomposed]
+			)),
+			request: first
+		))
+		#expect(state.expandedDirectories == [Data("Café".utf8), Data("Cafe\u{301}".utf8)])
+		state.toggleDirectory("Café")
+		#expect(state.expandedDirectories == [Data("Cafe\u{301}".utf8)])
+		state.expandGap("snapshot:Café/A.swift:gap")
+		state.expandGap("snapshot:Cafe\u{301}/A.swift:gap")
+		#expect(state.options.expandedGapIDs.count == 2)
+		#expect(state.selectFile(decomposed))
+		let second = try #require(state.beginRequest())
+		#expect(state.accept(
+			.snapshot(snapshot(
+				second,
+				paths: [composed]
+			)),
+			request: second
+		))
+		#expect(state.selectedFileID?.utf8.elementsEqual(composed.utf8) == true)
+		#expect(state.selectionMessage == "The selected file is absent from the new comparison.")
+		#expect(!state.selectFile(decomposed))
+	}
+
+	@Test func reportedChangeInvalidationKeepsExactBytesAndOptionalAvailability() throws
+	{
+		var state = GitReviewState()
+		#expect(!state.setReportedChanges(nil))
+		#expect(state.setReportedChanges([]))
+		#expect(!state.setReportedChanges([]))
+		#expect(state.setReportedChanges(nil))
+		let composed = try #require(FileChange(json: [
+			"path": "A.swift",
+			"kind": "update",
+			"diff": "-before\n+é\n",
+		]))
+		let decomposed = try #require(FileChange(json: [
+			"path": "A.swift",
+			"kind": "update",
+			"diff": "-before\n+e\u{301}\n",
+		]))
+		#expect(composed == decomposed)
+		#expect(state.setReportedChanges([composed]))
+		#expect(!state.setReportedChanges([composed]))
+		#expect(state.setReportedChanges([decomposed]))
+		#expect(state.reportedChanges?.first?.diff.utf8.elementsEqual(decomposed.diff.utf8) == true)
+	}
+
 	private func snapshot(
 		_ request: GitComparisonRequest,
-		id: String = "snapshot"
+		id: String = "snapshot",
+		paths: [String] = ["src/Example.swift"]
 	)
 		-> GitComparisonSnapshot
 	{
@@ -343,16 +441,19 @@ struct GitReviewStateTests
 			resolvedBase: "base",
 			resolvedTarget: "target",
 			patch: bytes,
-			files: [GitComparisonFile(
-				oldPath: "src/Example.swift",
-				newPath: "src/Example.swift",
-				kind: .modified,
-				additions: 1,
-				deletions: 1,
-				isBinary: false,
-				patch: "",
-				hunks: []
-			)]
+			files: paths.map
+			{
+				GitComparisonFile(
+					oldPath: $0,
+					newPath: $0,
+					kind: .modified,
+					additions: 1,
+					deletions: 1,
+					isBinary: false,
+					patch: "",
+					hunks: []
+				)
+			}
 		)
 	}
 

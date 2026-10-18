@@ -12,7 +12,7 @@ struct GitDiffSectionReuseTests
 		#expect(paths[0] == paths[1])
 		#expect(Data(paths[0].utf8) != Data(paths[1].utf8))
 		let controller = GitChangesViewController(runtime: GitReviewRuntime(
-			service: ReuseFixtureService(paths: paths)
+			service: GitComparisonViewFixtureService(paths: paths)
 		))
 		let window = host(controller)
 		defer
@@ -51,13 +51,27 @@ struct GitDiffSectionReuseTests
 			#expect(sourceText.range(of: Data(path.utf8)) != nil)
 		}
 		#expect(controller.projectionCache.projectionCount == 2)
+		#expect(try button(
+			"Collapse diff for \(paths[0])",
+			in: controller.view
+		).dispatchConfiguredAction())
+		#expect(sections[1].superview != nil)
+		_ = try source(in: sections[1])
+		_ = try button(
+			"Expand diff for \(paths[0])",
+			in: controller.view
+		)
+		_ = try button(
+			"Collapse diff for \(paths[1])",
+			in: controller.view
+		)
 	}
 
 	@Test func expandingAGapInAColonBearingPathPreservesTheOtherFilesSelection() async throws
 	{
 		let paths = ["Sources/One.swift", "Sources/One.swift:0:gap:Other.swift"]
 		let controller = GitChangesViewController(runtime: GitReviewRuntime(
-			service: ReuseFixtureService(paths: paths)
+			service: GitComparisonViewFixtureService(paths: paths)
 		))
 		let window = host(controller)
 		defer
@@ -103,7 +117,9 @@ struct GitDiffSectionReuseTests
 	@Test func collapsingOneFileRetainsOtherSelectionsAndScrollOffsets() async throws
 	{
 		let controller =
-			GitChangesViewController(runtime: GitReviewRuntime(service: ReuseFixtureService()))
+			GitChangesViewController(
+				runtime: GitReviewRuntime(service: GitComparisonViewFixtureService())
+			)
 		let window = host(controller)
 		defer
 		{
@@ -141,10 +157,10 @@ struct GitDiffSectionReuseTests
 		outer.reflectScrolledClipView(outer.contentView)
 		let vertical = outer.contentView.bounds.origin.y
 		let requests = controller.projectionCache.requestCount
-		try button(
+		#expect(try button(
 			"Collapse diff for Sources/One.swift",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		settle(window)
 		#expect(try section(
 			"Tests/Two.swift",
@@ -155,10 +171,10 @@ struct GitDiffSectionReuseTests
 		#expect(inner.contentView.bounds.origin.x == horizontal)
 		#expect(outer.contentView.bounds.origin.y == vertical)
 		#expect(controller.projectionCache.requestCount == requests)
-		try button(
+		#expect(try button(
 			"Expand diff for Sources/One.swift",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		#expect(try section(
 			"Tests/Two.swift",
 			in: controller.view
@@ -169,7 +185,9 @@ struct GitDiffSectionReuseTests
 	@Test func expandingOneFilesGapRetainsOtherViewsAndOuterScroll() async throws
 	{
 		let controller =
-			GitChangesViewController(runtime: GitReviewRuntime(service: ReuseFixtureService()))
+			GitChangesViewController(
+				runtime: GitReviewRuntime(service: GitComparisonViewFixtureService())
+			)
 		let window = host(controller)
 		defer
 		{
@@ -230,7 +248,9 @@ struct GitDiffSectionReuseTests
 	@Test func contentOptionsAndOwnersInvalidateRetainedSections() async throws
 	{
 		let controller =
-			GitChangesViewController(runtime: GitReviewRuntime(service: ReuseFixtureService()))
+			GitChangesViewController(
+				runtime: GitReviewRuntime(service: GitComparisonViewFixtureService())
+			)
 		let window = host(controller)
 		defer
 		{
@@ -308,16 +328,9 @@ struct GitDiffSectionReuseTests
 	) async throws
 	{
 		controller.activate(owner: owner)
-		for _ in 0 ..< 100
-		{
-			if controller.runtime.state.snapshot != nil,
-				controller.runtime.state.pendingRequest == nil
-			{
-				break
-			}
-			await Task.yield()
-		}
+		await controller.runtime.readTask?.value
 		#expect(controller.runtime.state.owner == owner)
+		#expect(controller.runtime.state.pendingRequest == nil)
 		_ = try #require(controller.runtime.state.snapshot)
 	}
 
@@ -331,7 +344,7 @@ struct GitDiffSectionReuseTests
 			$0 as? NSButton
 		}.first
 		{
-			$0.accessibilityLabel() == label
+			$0.accessibilityLabel()?.utf8.elementsEqual(label.utf8) == true
 		})
 	}
 
@@ -347,7 +360,8 @@ struct GitDiffSectionReuseTests
 		{
 			descendants($0).contains
 			{
-				$0.accessibilityLabel() == "Collapse diff for \(file)"
+				$0.accessibilityLabel()?.utf8
+					.elementsEqual("Collapse diff for \(file)".utf8) == true
 			}
 		})
 	}
@@ -394,51 +408,5 @@ struct GitDiffSectionReuseTests
 		{
 			descendants($0)
 		}
-	}
-}
-
-private struct ReuseFixtureService: GitComparisonService
-{
-	var paths = ["Sources/One.swift", "Tests/Two.swift"]
-
-	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
-	{
-		let long = String(
-			repeating: "wide source ",
-			count: 60
-		)
-		let files = paths.map
-		{
-			path in
-			let context = (1 ... 12).map
-			{
-				" \(path) \(long)\($0)"
-			}.joined(separator: "\n")
-			let patch = "@@ -1,13 +1,13 @@\n\(context)\n-before\n+after\n"
-			return GitComparisonFile(
-				oldPath: path,
-				newPath: path,
-				kind: .modified,
-				additions: 1,
-				deletions: 1,
-				isBinary: false,
-				patch: patch,
-				hunks: [GitComparisonHunk(
-					header: "@@ -1,13 +1,13 @@",
-					text: patch,
-					oldStart: 1,
-					newStart: 1
-				)]
-			)
-		}
-		let patch = files.map(\.patch).joined(separator: "\n")
-		return .snapshot(GitComparisonSnapshot(
-			request: request,
-			id: "reuse-fixture",
-			resolvedBase: "HEAD",
-			resolvedTarget: "Working tree",
-			patch: Data(patch.utf8),
-			files: files
-		))
 	}
 }

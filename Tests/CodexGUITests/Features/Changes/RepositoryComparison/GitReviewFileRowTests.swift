@@ -21,6 +21,11 @@ struct GitReviewFileRowTests
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
+		defer
+		{
+			window.close()
+		}
 		window.contentView = row
 		for appearanceName in [NSAppearance.Name.aqua, .darkAqua, .aqua]
 		{

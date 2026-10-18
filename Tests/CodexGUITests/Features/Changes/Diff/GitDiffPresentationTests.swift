@@ -74,7 +74,7 @@ struct GitDiffPresentationTests
 			$0.kind == .context
 		}.count == 6)
 		#expect(folded.rows.last?.newLine == 13)
-		presentation.options.expandedGapIDs.insert(try #require(gap.gapID))
+		presentation.options.expandedGapIDs.insert(Data(try #require(gap.gapID).utf8))
 		let expanded = try #require(presentation.file("Sources/Test.swift"))
 		#expect(expanded.rows.count == 14)
 		#expect(expanded.rows[5].oldLine == 6)
@@ -310,6 +310,19 @@ struct GitDiffPresentationTests
 		#expect(multiline.file("Sources/Test.swift")?.rows.count == 4)
 	}
 
+	@Test(arguments: ["\"\"\"", "'''", "/*", "*/", "let text = \"/*\""])
+	func multilineDelimitersKeepTheConservativeImportFilterDisabled(delimiter: String) throws
+	{
+		var presentation =
+			GitDiffPresentation(snapshot: fixture(" \(delimiter)\n-import A\n+import B"))
+		presentation.options.ignoreImports = true
+		#expect(presentation.file("Sources/Test.swift")?.rows.map(\.text) == [
+			delimiter,
+			"import A",
+			"import B"
+		])
+	}
+
 	@Test func treeFilteringRetainsAncestryAndExpansionControlsVisibility()
 	{
 		let snapshot = fixture(
@@ -318,13 +331,83 @@ struct GitDiffPresentationTests
 		)
 		let presentation = GitDiffPresentation(snapshot: snapshot)
 		#expect(presentation.treeRows().map(\.path) == ["Sources"])
-		let expanded = presentation.treeRows(expandedDirectories: ["Sources", "Sources/Nested"])
+		let expanded = presentation
+			.treeRows(expandedDirectories: Set(["Sources", "Sources/Nested"].map
+				{
+					Data($0.utf8)
+				}))
 		#expect(expanded.map(\.depth) == [0, 1, 2])
 		#expect(expanded.last?.fileID == "Sources/Nested/Test.swift")
 		let filtered = presentation.treeRows(filter: "TEST")
 		#expect(filtered.map(\.path) == ["Sources", "Sources/Nested", "Sources/Nested/Test.swift"])
 		#expect(filtered.last?.id == expanded.last?.id)
 		#expect(presentation.treeRows(filter: "absent").isEmpty)
+	}
+
+	@Test func literalUnicodePathsAndDirectoryExpansionRemainIndependent() throws
+	{
+		let directories = ["Caf\u{E9}", "Cafe\u{301}"]
+		let paths = directories.map
+		{
+			"\($0)/Test.swift"
+		}
+		let patch = paths.map
+		{
+			"diff --git a/\($0) b/\($0)\n--- a/\($0)\n+++ b/\($0)\n"
+				+ "@@ -1 +1 @@\n-old\n+\($0)\n"
+		}.joined()
+		let presentation = GitDiffPresentation(snapshot: comparisonSnapshot(
+			patch: patch,
+			files: GitComparisonPatchParser.files(in: Data(patch.utf8))
+		))
+		#expect(presentation.treeRows().count == 2)
+		for (directory, path) in zip(
+			directories,
+			paths
+		)
+		{
+			let rows = presentation.treeRows(expandedDirectories: [Data(directory.utf8)])
+			#expect(rows.count == 3)
+			#expect(rows.compactMap(\.fileID).map
+			{
+				Data($0.utf8)
+			} == [Data(path.utf8)])
+			let file = try #require(presentation.file(path))
+			#expect(Data(file.file.path.utf8) == Data(path.utf8))
+			#expect(Data(try #require(file.rows.last).text.utf8) == Data(path.utf8))
+		}
+	}
+
+	@Test func literalUnicodeFileContextGapsExpandIndependently() throws
+	{
+		let paths = ["Caf\u{E9}.swift", "Cafe\u{301}.swift"]
+		let context = (1 ... 12).map
+		{
+			" context \($0)\n"
+		}.joined()
+		let patch = paths.map
+		{
+			"diff --git a/\($0) b/\($0)\n--- a/\($0)\n+++ b/\($0)\n"
+				+ "@@ -1,13 +1,13 @@\n" + context + "-old\n+new\n"
+		}.joined()
+		var presentation = GitDiffPresentation(snapshot: comparisonSnapshot(
+			patch: patch,
+			files: GitComparisonPatchParser.files(in: Data(patch.utf8))
+		))
+		let first = try #require(presentation.file(paths[0]))
+		let gapID = try #require(first.rows.first(where:
+			{
+				$0.kind == .gap
+			})?.gapID)
+		presentation.options.expandedGapIDs.insert(Data(gapID.utf8))
+		#expect(presentation.file(paths[0])?.rows.contains(where:
+			{
+				$0.kind == .gap
+			}) == false)
+		#expect(presentation.file(paths[1])?.rows.contains(where:
+			{
+				$0.kind == .gap
+			}) == true)
 	}
 
 	@Test func blankLinesAndUnicodeSeparatorsRemainLogicalSourceRows() throws

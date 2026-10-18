@@ -226,12 +226,19 @@ struct ChangesReviewViewControllerTests
 		#expect(!open.isEnabled)
 	}
 
-	@Test(arguments: ["file", "project", "turn", "thread", "return", "owner"])
+	@Test(
+		.timeLimit(.minutes(1)),
+		arguments: ["file", "project", "turn", "thread", "return", "owner"]
+	)
 	func editorCompletionCannotUpdateAnotherSelectionOrEnableItsPendingRequest(change: String)
 		async throws
 	{
 		_ = NSApplication.shared
 		let operation = DeferredEditorOperation()
+		defer
+		{
+			operation.cancelPending()
+		}
 		let controller = ChangesViewController(openFile:
 			{
 				path, project, diff in
@@ -265,7 +272,7 @@ struct ChangesReviewViewControllerTests
 				label: "Open selected changed file in editor"
 			)
 		)
-		open.performClick(nil)
+		#expect(open.dispatchConfiguredAction())
 		let firstTask = try #require(controller.editorHandoffTask)
 		try await operation.waitForRequestCount(1)
 
@@ -313,7 +320,7 @@ struct ChangesReviewViewControllerTests
 			controller.render(ReviewPresentation(nextSnapshot))
 		}
 		#expect(open.isEnabled)
-		open.performClick(nil)
+		#expect(open.dispatchConfiguredAction())
 		let secondTask = try #require(controller.editorHandoffTask)
 		try await operation.waitForRequestCount(2)
 		#expect(!open.isEnabled)
@@ -556,7 +563,16 @@ struct ChangesReviewViewControllerTests
 @MainActor
 private final class DeferredEditorOperation
 {
-	private var continuations: [CheckedContinuation<String?, Error>] = []
+	private let requests: AsyncStream<Int>
+	private let requestContinuation: AsyncStream<Int>.Continuation
+	private var requestCount = 0
+	private var isFinished = false
+	private var continuations: [Int: CheckedContinuation<String?, Error>] = [:]
+
+	init()
+	{
+		(requests, requestContinuation) = AsyncStream<Int>.makeStream()
+	}
 
 	func open(
 		path: String,
@@ -564,25 +580,30 @@ private final class DeferredEditorOperation
 		diff: String
 	) async throws -> String?
 	{
-		try await withCheckedThrowingContinuation
+		guard !isFinished
+		else
+		{
+			throw CancellationError()
+		}
+		return try await withCheckedThrowingContinuation
 		{
 			continuation in
-			continuations.append(continuation)
+			continuations[requestCount] = continuation
+			requestCount += 1
+			requestContinuation.yield(requestCount)
 		}
 	}
 
 	func waitForRequestCount(_ count: Int) async throws
 	{
-		for _ in 0 ..< 1000
+		var iterator = requests.makeAsyncIterator()
+		while requestCount < count, await iterator.next() != nil
 		{
-			if continuations.count == count
-			{
-				return
-			}
-			await Task.yield()
+			try Task.checkCancellation()
 		}
+		try Task.checkCancellation()
 		try #require(
-			continuations.count == count,
+			requestCount == count,
 			"The editor operation must start before completing it"
 		)
 	}
@@ -592,6 +613,18 @@ private final class DeferredEditorOperation
 		result: Result<String?, Error>
 	)
 	{
-		continuations[index].resume(with: result)
+		continuations.removeValue(forKey: index)?.resume(with: result)
+	}
+
+	func cancelPending()
+	{
+		isFinished = true
+		requestContinuation.finish()
+		let pending = continuations.values
+		continuations.removeAll()
+		for continuation in pending
+		{
+			continuation.resume(throwing: CancellationError())
+		}
 	}
 }

@@ -10,12 +10,18 @@ struct EditorHandoffTests
 	@Test func vscodeUsesBundledCLIWithGotoArgumentsAndPersistsPreference() async throws
 	{
 		let root = try await temporaryDirectory()
-		let app = try await temporaryDirectory().appendingPathComponent("Fake Code.app")
-		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
 		defer
 		{
 			try? FileManager.default.removeItem(at: root)
+		}
+		let app = try await temporaryDirectory().appendingPathComponent("Fake Code.app")
+		defer
+		{
 			try? FileManager.default.removeItem(at: app.deletingLastPathComponent())
+		}
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorHandoffTests")
+		defer
+		{
 			defaultsFixture.cleanup()
 		}
 		// Fake editor installation and checkout files do not access AppKit state.

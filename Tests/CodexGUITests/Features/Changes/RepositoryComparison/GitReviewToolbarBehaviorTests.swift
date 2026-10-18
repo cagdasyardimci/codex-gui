@@ -24,10 +24,10 @@ struct GitReviewToolbarBehaviorTests
 		let initialRequests = controller.projectionCache.requestCount
 		#expect(initialProjections == 2)
 		#expect(initialRequests == 2)
-		try button(
+		#expect(try button(
 			"Collapse all diffs",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		#expect(descendants(controller.view).compactMap
 		{
 			$0 as? GitAdaptiveDiffView
@@ -38,10 +38,10 @@ struct GitReviewToolbarBehaviorTests
 			prefix: "Expand diff for ",
 			in: controller.view
 		).count == 2)
-		try button(
+		#expect(try button(
 			"Expand diff for Sources/One.swift",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		#expect(descendants(controller.view).compactMap
 		{
 			$0 as? GitAdaptiveDiffView
@@ -52,10 +52,10 @@ struct GitReviewToolbarBehaviorTests
 		])
 		#expect(controller.projectionCache.requestCount == initialRequests + 1)
 		#expect(controller.projectionCache.projectionCount == initialProjections)
-		try button(
+		#expect(try button(
 			"Expand all diffs",
 			in: controller.view
-		).performClick(nil)
+		).dispatchConfiguredAction())
 		#expect(descendants(controller.view).compactMap
 		{
 			$0 as? GitAdaptiveDiffView

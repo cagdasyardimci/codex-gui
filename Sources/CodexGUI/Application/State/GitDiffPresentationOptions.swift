@@ -6,5 +6,6 @@ struct GitDiffPresentationOptions: Equatable, Sendable
 	var showWordDiffs = true
 	var ignoreWhitespace = false
 	var ignoreImports = false
-	var expandedGapIDs: Set<String> = []
+	/// Gap IDs include literal Git file paths and must retain their exact UTF-8 identity.
+	var expandedGapIDs: Set<Data> = []
 }

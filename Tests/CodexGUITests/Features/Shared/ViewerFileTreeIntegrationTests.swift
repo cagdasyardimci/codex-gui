@@ -89,7 +89,7 @@ struct ViewerFileTreeIntegrationTests
 			await git.runtime.readTask?.value
 			_ = try #require(git.runtime.state.snapshot)
 			let selectedFileID = git.runtime.state.selectedFileID
-			if git.runtime.state.expandedDirectories.contains("Sources")
+			if git.runtime.state.expandedDirectories.contains(Data("Sources".utf8))
 			{
 				git.runtime.toggleDirectory("Sources")
 			}
