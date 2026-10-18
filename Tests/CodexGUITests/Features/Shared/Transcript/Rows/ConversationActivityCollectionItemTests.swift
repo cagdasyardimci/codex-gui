@@ -1928,6 +1928,78 @@ struct ConversationActivityCollectionItemTests
 		})
 	}
 
+	@Test func imageThumbnailKeepsPixelBoundAndRefreshesAfterFileReplacement() async throws
+	{
+		let imageURL = FileManager.default.temporaryDirectory
+			.appendingPathComponent("activity-replacement-\(UUID().uuidString).png")
+		defer
+		{
+			try? FileManager.default.removeItem(at: imageURL)
+		}
+		let item = ConversationActivityCollectionItem()
+		let row = ConversationActivityRow(
+			id: "image",
+			sourceEntryID: "image",
+			groupID: "image",
+			kind: .image,
+			title: "Viewed an image",
+			imagePath: imageURL.path,
+			expanded: true
+		)
+		for (width, height, timestamp) in [(640, 320, 1_000), (320, 640, 2_000)]
+		{
+			let bitmap = try #require(NSBitmapImageRep(
+				bitmapDataPlanes: nil,
+				pixelsWide: width,
+				pixelsHigh: height,
+				bitsPerSample: 8,
+				samplesPerPixel: 4,
+				hasAlpha: true,
+				isPlanar: false,
+				colorSpaceName: .deviceRGB,
+				bytesPerRow: 0,
+				bitsPerPixel: 0
+			))
+			let data = try #require(bitmap.representation(
+				using: .png,
+				properties: [:]
+			))
+			try await BackgroundTestWork.perform
+			{
+				try data.write(to: imageURL)
+				try FileManager.default.setAttributes(
+					[.modificationDate: Date(timeIntervalSince1970: Double(timestamp))],
+					ofItemAtPath: imageURL.path
+				)
+			}
+			item.configure(
+				row,
+				onToggle:
+				{
+				},
+				onOpenFile:
+				{
+					_ in
+				}
+			)
+			await item.waitForImagePreview()
+			let button = try #require(descendants(item.view).compactMap
+			{
+				$0 as? NSButton
+			}.first
+			{
+				$0.accessibilityLabel() == "Open viewed image"
+			})
+			let image = try #require(button.image?.cgImage(
+				forProposedRect: nil,
+				context: nil,
+				hints: nil
+			))
+			#expect(image.width == (width > height ? 240 : 120))
+			#expect(image.height == (width > height ? 120 : 240))
+		}
+	}
+
 	// Native event polling and transient panels share the application event/window state.
 	@Test(
 		.serialized,
