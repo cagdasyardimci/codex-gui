@@ -29,6 +29,11 @@ enum ShadowTokens
 		}
 	}
 
+	static let fileViewerControl = Style(
+		color: .black.withAlphaComponent(0.045),
+		offsetY: 2,
+		blur: 8
+	)
 	static let selectedTab = Style(
 		color: .black.withAlphaComponent(0.08),
 		offsetY: 1,
