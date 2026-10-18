@@ -188,6 +188,22 @@ final class ConversationViewController: NSViewController,
 	var draftImageStore = DraftImageStore()
 	var imageImportTasks: [UUID: Task<Void, Never>] = [:]
 	var lastImageImportID: UUID?
+	var codeSelectionTask: Task<Void, Never>?
+	var codeSelectionRequestID: UUID?
+	var codeSourceLoader: @Sendable (
+		String,
+		URL
+	) async throws -> CodeSelectionSourceLoader.Source =
+	{
+		try await CodeSelectionSourceLoader.load(
+			projectPath: $0,
+			file: $1
+		)
+	}
+	var attachmentsAreReady: Bool
+	{
+		imageImportTasks.isEmpty && codeSelectionTask == nil
+	}
 	var composerSubmissionPresentation: ConversationPresentation.Composer?
 
 	init(transcriptPreparation: TranscriptPreparationCoordinator =
@@ -207,6 +223,7 @@ final class ConversationViewController: NSViewController,
 
 	deinit
 	{
+		codeSelectionTask?.cancel()
 		for task in imageImportTasks.values
 		{
 			task.cancel()
@@ -525,6 +542,7 @@ final class ConversationViewController: NSViewController,
 			completionRange = nil
 			selectionGeneration += 1
 			cancelImageImports()
+			cancelCodeSelection()
 		}
 		fileIndexRuntime.onChange =
 		{

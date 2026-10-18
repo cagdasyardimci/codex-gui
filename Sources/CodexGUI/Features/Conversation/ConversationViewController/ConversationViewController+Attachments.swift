@@ -29,7 +29,7 @@ extension ConversationViewController
 			commandSelector == #selector(NSResponder.insertNewline(_:)),
 			composer.string.rangeOfCharacter(from: .newlines) == nil
 		{
-			if imageImportTasks.isEmpty
+			if attachmentsAreReady
 			{
 				onSend?()
 			}
@@ -301,11 +301,15 @@ extension ConversationViewController
 
 	@objc private func chooseFileResult(_ sender: NSButton)
 	{
-		guard let path = sender.identifier?.rawValue
+		guard fileSearchPopover?.isShown == true,
+				sender.superview === fileResultsStack,
+				let path = sender.identifier?.rawValue
 		else
 		{
 			return
 		}
+		let generation = selectionGeneration
+		let receiver = fileSelectionReceiver ?? makeContextAttachmentReceiver()
 		if let completionRange, NSMaxRange(completionRange) <= (composer.string as NSString).length
 		{
 			composer.textStorage?.replaceCharacters(
@@ -313,13 +317,17 @@ extension ConversationViewController
 				with: ""
 			)
 			onDraftChange?(composer.string)
+			guard selectionGeneration == generation
+			else
+			{
+				return
+			}
 			updateComposerHeight()
 		}
 		self.completionRange = nil
 		fileSearchPopover?.close()
-		let receiver = fileSelectionReceiver ?? onAddContext
 		fileSelectionReceiver = nil
-		receiver?(
+		receiver(
 			ComposerContextItem(
 				kind: .fileReference,
 				title: URL(fileURLWithPath: path).lastPathComponent,
@@ -532,38 +540,72 @@ extension ConversationViewController
 			{
 				return
 			}
-			let project = URL(fileURLWithPath: projectPath).standardizedFileURL
-				.resolvingSymlinksInPath()
-			let file = url.standardizedFileURL.resolvingSymlinksInPath()
-			guard file.path.hasPrefix(project.path + "/")
-			else
+			self.loadCodeSelection(
+				projectPath: projectPath,
+				file: url
+			)
+		}
+	}
+
+	func cancelCodeSelection()
+	{
+		codeSelectionTask?.cancel()
+		codeSelectionTask = nil
+		codeSelectionRequestID = nil
+		updateSendState()
+	}
+
+	func loadCodeSelection(
+		projectPath: String,
+		file: URL
+	)
+	{
+		cancelCodeSelection()
+		let generation = selectionGeneration
+		let requestID = UUID()
+		let loadSource = codeSourceLoader
+		codeSelectionRequestID = requestID
+		codeSelectionTask = Task
+		{
+			[weak self] in
+			defer
 			{
-				self.showContextError("Choose a file inside the current project.")
-				return
+				if self?.codeSelectionRequestID == requestID
+				{
+					self?.codeSelectionTask = nil
+					self?.codeSelectionRequestID = nil
+					self?.updateSendState()
+				}
 			}
 			do
 			{
-				let data = try Data(contentsOf: file)
-				guard data.count <= 500_000, let contents = String(
-					data: data,
-					encoding: .utf8
+				let source = try await loadSource(
+					projectPath,
+					file
 				)
+				guard !Task.isCancelled, let self, self.selectionGeneration == generation,
+						self.codeSelectionRequestID == requestID
 				else
 				{
-					self.showContextError("Choose a UTF-8 text file under 500 KB.")
 					return
 				}
-				let relative = String(file.path.dropFirst(project.path.count + 1))
 				self.presentCodeSelection(
-					path: relative,
-					contents: contents
+					path: source.relativePath,
+					contents: source.contents
 				)
 			}
 			catch
 			{
+				guard !Task.isCancelled, let self, self.selectionGeneration == generation,
+						self.codeSelectionRequestID == requestID
+				else
+				{
+					return
+				}
 				self.showContextError(error.localizedDescription)
 			}
 		}
+		updateSendState()
 	}
 
 	private func presentCodeSelection(

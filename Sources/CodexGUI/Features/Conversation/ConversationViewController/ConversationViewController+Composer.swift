@@ -441,15 +441,17 @@ extension ConversationViewController
 		let canSubmitMessage = snapshot.canSend || isSlashInput
 		let canSteerMessage = snapshot.canSteer || isSlashInput
 
-		let imagesAreReady = imageImportTasks.isEmpty
-		sendButton.isEnabled = canSubmitMessage && hasMessageContent && imagesAreReady
+		let preparationComplete = attachmentsAreReady
+		sendButton.isEnabled = canSubmitMessage && hasMessageContent && preparationComplete
 		steerButton.isHidden = !isViewingActiveTask || snapshot.activeExecutionState != .running
 		sendButton.isHidden = !steerButton.isHidden
-		steerButton.isEnabled = canSteerMessage && hasMessageContent && imagesAreReady
-		sendButton.toolTip = imagesAreReady
-			? "Send message (⌘Return)" : "Preparing image attachment…"
-		steerButton.toolTip = imagesAreReady
-			? "Steer the active turn (⇧⌘Return)" : "Preparing image attachment…"
+		steerButton.isEnabled = canSteerMessage && hasMessageContent && preparationComplete
+		let preparationMessage = codeSelectionTask == nil
+			? "Preparing image attachment…" : "Loading code selection…"
+		sendButton.toolTip = preparationComplete
+			? "Send message (⌘Return)" : preparationMessage
+		steerButton.toolTip = preparationComplete
+			? "Steer the active turn (⇧⌘Return)" : preparationMessage
 		sendButton.contentTintColor = .white
 		sendButton.layerBackgroundColor = sendButton.isEnabled
 			? AppKitColorTokens.composerSend : NSColor.tertiaryLabelColor
@@ -512,7 +514,7 @@ extension ConversationViewController
 
 	@objc private func send()
 	{
-		guard imageImportTasks.isEmpty
+		guard attachmentsAreReady
 		else
 		{
 			return
@@ -521,7 +523,7 @@ extension ConversationViewController
 	}
 	@objc private func steer()
 	{
-		guard imageImportTasks.isEmpty
+		guard attachmentsAreReady
 		else
 		{
 			return
