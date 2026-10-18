@@ -113,6 +113,64 @@ struct FileSystemFileViewerServiceTests
 	}
 
 	@Test
+	func slashBeforeCombiningMarkCannotBypassTraversalOrSymlinkChecks() async throws
+	{
+		let fixture = try FileReadSafetyFixture()
+		defer
+		{
+			try? FileManager.default.removeItem(at: fixture.root)
+		}
+		let root = fixture.root.appendingPathComponent("checkout")
+		try FileManager.default.createDirectory(
+			at: root,
+			withIntermediateDirectories: true
+		)
+		let name = "\u{0301}outside.txt"
+		let external = fixture.root.appendingPathComponent(name)
+		let bytes = Data("outside".utf8)
+		try bytes.write(to: external)
+		let service = FileSystemFileViewerService()
+		let original = try await service.read(at: FileLocation(
+			root: fixture.root.path,
+			relativePath: name
+		))
+		let traversal = FileLocation(
+			root: root.path,
+			relativePath: "../" + name
+		)
+		await #expect(throws: FileViewerFailure.invalidPath)
+		{
+			_ = try await service.read(at: traversal)
+		}
+		await #expect(throws: FileViewerFailure.invalidPath)
+		{
+			_ = try await service.save(
+				at: traversal,
+				text: "must stay contained",
+				expectedRevision: original.revision
+			)
+		}
+		try FileManager.default.createSymbolicLink(
+			at: root.appendingPathComponent("link"),
+			withDestinationURL: fixture.root
+		)
+		await #expect(throws: FileViewerFailure.self)
+		{
+			_ = try await service.read(at: FileLocation(
+				root: root.path,
+				relativePath: "link/" + name
+			))
+		}
+		try bytes.write(to: root.appendingPathComponent(name))
+		let contained = try await service.read(at: FileLocation(
+			root: fixture.root.path,
+			relativePath: "checkout/" + name
+		))
+		#expect(contained.content == .text("outside"))
+		#expect(try Data(contentsOf: external) == bytes)
+	}
+
+	@Test
 	func malformedBinaryOversizedAndConflictKeepDiskBytes() async throws
 	{
 		let root = try fixture()
@@ -565,6 +623,142 @@ struct FileSystemFileViewerServiceTests
 			+ "\(Double(coldEnd - start) / 1_000_000) warm_filename_ms="
 			+ "\(Double(warmEnd - coldEnd) / 1_000_000) content_ms="
 			+ "\(Double(contentEnd - warmEnd) / 1_000_000)")
+	}
+
+	@Test(arguments: [false, true])
+	func fifoRescueReportsOnlyConnectionsAndRetainsLateReaderCoverage(
+		startsReader: Bool
+	) async throws
+	{
+		let fixture = try FileReadSafetyFixture()
+		defer
+		{
+			try? FileManager.default.removeItem(at: fixture.root)
+		}
+		let pipe = try fixture.makePipe(named: "late-reader.txt")
+		let attempts = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+		let rescue = FileReadSafetyFixture.rescueBlockedOpen(
+			at: pipe,
+			startDelay: .zero,
+			onWaitingForReader:
+			{
+				attempts.continuation.yield(())
+			}
+		)
+		defer
+		{
+			rescue.cancel()
+			attempts.continuation.finish()
+		}
+		var attemptIterator = attempts.stream.makeAsyncIterator()
+		let firstAttempt = await attemptIterator.next()
+		try #require(firstAttempt != nil)
+		if !startsReader
+		{
+			rescue.cancel()
+			#expect(await rescue.value == false)
+			return
+		}
+		let reader = Task.detached
+		{
+			try await BackgroundTestWork.perform
+			{
+				let descriptor = Darwin.open(
+					pipe.path,
+					O_RDONLY
+				)
+				guard descriptor >= 0
+				else
+				{
+					throw NSError(
+						domain: NSPOSIXErrorDomain,
+						code: Int(errno)
+					)
+				}
+				return descriptor
+			}
+		}
+		let rescued = await rescue.value
+		// Keep the reader descriptor open while an independent writer settles either outcome.
+		// This also releases the reader if the watchdog regresses to a single failed attempt.
+		let cleanup = Task.detached
+		{
+			try await BackgroundTestWork.perform
+			{
+				let descriptor = Darwin.open(
+					pipe.path,
+					O_WRONLY
+				)
+				guard descriptor >= 0
+				else
+				{
+					throw NSError(
+						domain: NSPOSIXErrorDomain,
+						code: Int(errno)
+					)
+				}
+				Darwin.close(descriptor)
+			}
+		}
+		try await cleanup.value
+		let descriptor = try await reader.value
+		Darwin.close(descriptor)
+		#expect(rescued)
+	}
+
+	@Test
+	func documentReadsAndSaveReplacementRejectNamedPipesWithoutWaiting() async throws
+	{
+		let fixture = try FileReadSafetyFixture()
+		defer
+		{
+			try? FileManager.default.removeItem(at: fixture.root)
+		}
+		let location = FileLocation(
+			root: fixture.root.path,
+			relativePath: "document.txt"
+		)
+		let service = FileSystemFileViewerService()
+		try Data("original".utf8).write(to: location.fileURL)
+		let loaded = try await service.read(at: location)
+		try FileManager.default.removeItem(at: location.fileURL)
+		let pipe = try fixture.makePipe(named: "document.txt")
+		for saving in [false, true]
+		{
+			let rescue = FileReadSafetyFixture.rescueBlockedOpen(at: pipe)
+			defer
+			{
+				rescue.cancel()
+			}
+			await #expect(throws: FileViewerFailure.invalidPath)
+			{
+				if saving
+				{
+					_ = try await service.save(
+						at: location,
+						text: "local edit",
+						expectedRevision: loaded.revision
+					)
+				}
+				else
+				{
+					_ = try await service.read(at: location)
+				}
+			}
+			rescue.cancel()
+			#expect(await rescue.value == false)
+		}
+		let sparse = try fixture.makeSparseFile(
+			named: "large.txt",
+			byteCount: 8 * 1024 * 1024 * 1024
+		)
+		await #expect(throws: FileViewerFailure.tooLarge)
+		{
+			_ = try await service.read(at: FileLocation(
+				root: fixture.root.path,
+				relativePath: sparse.lastPathComponent
+			))
+		}
 	}
 
 	private func fixture() throws -> String

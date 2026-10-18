@@ -101,8 +101,8 @@ The filesystem service retains one checkout's bounded filename index. Each searc
 identity and modification metadata of the indexed directories before reuse, so nested additions,
 removals and renames invalidate the inventory. Content searches read current file bytes rather
 than cached document content, omit document revision and preview preparation, and stop at the
-requested matching-line limit. Reads remain contained, bounded and cancellable; nonregular
-files are rejected without waiting for a pipe writer.
+requested matching-line limit. Document, search and save-validation reads remain
+contained, bounded and cancellable; nonregular files are rejected without waiting for a pipe writer.
 
 The main conversation and subagent history compose `TranscriptViewController` from
 `Features/Shared/Transcript`. Its presentation carries the captured owner, history and explicit

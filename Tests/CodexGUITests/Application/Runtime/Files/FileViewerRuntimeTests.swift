@@ -7,6 +7,63 @@ import Testing
 struct FileViewerRuntimeTests
 {
 	@Test @MainActor
+	func closingAfterFileBecomesPipeSettlesAndKeepsUnsavedText() async throws
+	{
+		let fixture = try await BackgroundTestWork.perform
+		{
+			let fixture = try FileReadSafetyFixture()
+			try Data("disk".utf8).write(to: fixture.root.appendingPathComponent("document.txt"))
+			return fixture
+		}
+		let runtime = FileViewerRuntime(autosaveDelay: .seconds(60))
+		do
+		{
+			let location = FileLocation(
+				root: fixture.root.path,
+				relativePath: "document.txt"
+			)
+			runtime.switchRoot(location.root)
+			runtime.open(location)
+			let id = try #require(runtime.state.selectedDocumentID)
+			await runtime.readTask(for: id)?.value
+			#expect(runtime.state.selectedDocument?.currentText == "disk")
+			runtime.edit(
+				id,
+				text: "local edit"
+			)
+			let pipe = try await BackgroundTestWork.perform
+			{
+				try FileManager.default.removeItem(at: location.fileURL)
+				return try fixture.makePipe(named: "document.txt")
+			}
+			let rescue = FileReadSafetyFixture.rescueBlockedOpen(at: pipe)
+			let result = await runtime.close(
+				id,
+				choice: .save
+			)
+			rescue.cancel()
+			#expect(await rescue.value == false)
+			#expect(result == .decisionRequired(.invalidPath))
+			#expect(runtime.state.selectedDocument?.currentText == "local edit")
+			#expect(runtime.state.selectedDocument?.isDirty == true)
+			let discarded = await runtime.close(
+				id,
+				choice: .discard
+			)
+			#expect(discarded == .closed)
+			#expect(runtime.state.documents.isEmpty)
+		}
+		catch
+		{
+			_ = await runtime.shutdown()
+			try? FileManager.default.removeItem(at: fixture.root)
+			throw error
+		}
+		_ = await runtime.shutdown()
+		try? FileManager.default.removeItem(at: fixture.root)
+	}
+
+	@Test @MainActor
 	func repeatedSearchDismissalDoesNotPublishUnchangedState() async throws
 	{
 		try await withRuntimeFixture
