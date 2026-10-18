@@ -93,17 +93,28 @@ enum ConversationNetFileChanges
 				break
 			}
 		}
-		let destination = changes.compactMap(\.movePath).last ?? last.path
-		let renamed = !destination.utf8.elementsEqual(first.path.utf8)
-		let kind = last.kind == "delete" ? "delete" : first.kind == "add" ? "add" : "update"
+		let existedBefore = first.kind != "add"
+		let existsAfter = last.kind != "delete"
+		let destination = last.movePath ?? last.path
+		let path = existedBefore ? first.path : destination
+		let renamed = existedBefore && existsAfter
+			&& !destination.utf8.elementsEqual(first.path.utf8)
+		let kind = !existsAfter ? "delete" : !existedBefore ? "add" : "update"
 		let diff: String
 		let isExact: Bool
 		if canComposeChanges, let composedDiff = composition.diff()
 		{
 			diff = composedDiff
 			isExact = true
-			guard !diff.isEmpty || renamed || (first.kind == "add" && last.kind != "delete")
-				|| (first.kind != "add" && last.kind == "delete")
+			guard existedBefore || existsAfter
+			else
+			{
+				return Result(
+					changes: [],
+					isExact: true
+				)
+			}
+			guard !diff.isEmpty || renamed || existedBefore != existsAfter
 			else
 			{
 				return Result(
@@ -124,7 +135,7 @@ enum ConversationNetFileChanges
 		{
 			metadata["move_path"] = destination
 		}
-		let change = FileChange(json: ["path": first.path, "kind": metadata, "diff": diff])
+		let change = FileChange(json: ["path": path, "kind": metadata, "diff": diff])
 		return Result(
 			changes: change.map
 			{

@@ -56,6 +56,39 @@ struct ConversationNetFileChangesTests
 		#expect(ConversationNetFileChanges.merge([first, reverse]).isEmpty)
 	}
 
+	@Test func existenceTransitionsUseFinalCreationAndOriginalDeletionPaths()
+	{
+		let created = change(
+			"content\n",
+			kind: "add",
+			path: "first"
+		)
+		let renamed = change(
+			"",
+			path: "first",
+			movePath: "second"
+		)
+		let deleted = change(
+			"content\n",
+			kind: "delete",
+			path: "second"
+		)
+		let creation = ConversationNetFileChanges.compose([created, renamed])
+		#expect(creation.isExact)
+		#expect(creation.changes.first?.kind == "add")
+		#expect(creation.changes.first?.path == "second")
+		#expect(creation.changes.first?.movePath == nil)
+		let canceled = ConversationNetFileChanges.compose([created, renamed, deleted])
+		#expect(canceled.isExact)
+		#expect(canceled.changes.isEmpty)
+		let deletion = ConversationNetFileChanges.compose([renamed, deleted])
+		#expect(deletion.isExact)
+		#expect(deletion.changes.first?.kind == "delete")
+		#expect(deletion.changes.first?.path == "first")
+		#expect(deletion.changes.first?.movePath == nil)
+		#expect(deletion.changes.first?.diff == "@@ -1,1 +0,0 @@\n-content")
+	}
+
 	@Test func highCoordinatesRetainReportedHistoryWithoutMaterializingThePrefix()
 	{
 		let first = change("@@ -1000000 +1000000 @@\n-before\n+intermediate")

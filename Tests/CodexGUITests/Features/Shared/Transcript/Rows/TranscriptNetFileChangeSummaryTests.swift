@@ -255,6 +255,63 @@ struct TranscriptNetFileChangeSummaryTests
 		#expect(rows.isEmpty)
 	}
 
+	@Test func equivalentReportPathsSharePreparedTranscriptIdentityAndNetTotals() async throws
+	{
+		let paths = ["File.swift",
+						"./File.swift",
+						"folder/../File.swift",
+						"/workspace/repo/File.swift"]
+		let values = ["original", "one", "two", "three", "final"]
+		let changes = paths.enumerated().map
+		{
+			index, path in
+			change(
+				path: path,
+				diff: "@@ -1 +1 @@\n-\(values[index])\n+\(values[index + 1])"
+			)
+		}
+		let entries = [ConversationEntry(
+			id: "turn:edit",
+			kind: .tool,
+			title: "Changed files",
+			body: "",
+			activity: .fileChanges(
+				changes,
+				status: "completed"
+			)
+		)]
+		let sources = TranscriptPreparationCoordinator.fileChangeSources(
+			from: entries,
+			repositoryRoot: "/workspace/repo"
+		)
+		let prepared = await ConversationNetFileChangePreparation().prepare(
+			sources,
+			context: "thread"
+		)
+		let rows = ConversationTranscriptRow.make(
+			entries: entries,
+			timings: [ConversationTurnTiming(
+				turnID: "turn",
+				status: "completed"
+			)],
+			projectPath: "/workspace/repo",
+			preparedNetChanges: prepared ?? [:]
+		)
+		let row = try #require(rows.first)
+		guard case .message(let entry) = row, case .fileChanges(
+			let projected,
+			_
+		) = entry.activity
+		else
+		{
+			Issue.record("Expected the prepared normalized change card")
+			return
+		}
+		#expect(projected.map(\.path) == ["File.swift"])
+		#expect(projected.map(\.diff) == ["@@ -1,1 +1,1 @@\n-original\n+final"])
+		#expect(changes.map(\.path) == paths)
+	}
+
 	private func change(
 		path: String = "file.swift",
 		kind: String = "update",

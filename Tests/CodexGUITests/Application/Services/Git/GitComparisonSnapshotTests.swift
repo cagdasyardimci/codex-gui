@@ -106,6 +106,179 @@ struct GitComparisonSnapshotTests
 		#expect(try Data(contentsOf: unrelated) == Data("unrelated\n".utf8))
 	}
 
+	@Test(arguments: ["createRename", "createRenameDelete", "renameDelete"])
+	func generatedReportedPatchesRespectNetFileExistence(_ sequence: String) async throws
+	{
+		let root = try await BackgroundTestWork.perform
+		{
+			let root = FileManager.default.temporaryDirectory
+				.appendingPathComponent(UUID().uuidString)
+			try FileManager.default.createDirectory(
+				at: root,
+				withIntermediateDirectories: true
+			)
+			if sequence == "renameDelete"
+			{
+				try Data("content\n".utf8).write(to: root.appendingPathComponent("A.swift"))
+			}
+			return root
+		}
+		defer
+		{
+			try? FileManager.default.removeItem(at: root)
+		}
+		let initialized = try await GitTestCommandRunner.runAsync(
+			in: root,
+			arguments: ["init", "-q"]
+		)
+		try #require(initialized.terminationStatus == 0)
+		let created = fileChange(
+			"content\n",
+			kind: "add",
+			path: "A.swift"
+		)
+		let renamed = fileChange(
+			"",
+			path: "A.swift",
+			movePath: "B.swift"
+		)
+		let deleted = fileChange(
+			"content\n",
+			kind: "delete",
+			path: "B.swift"
+		)
+		let changes = sequence == "createRename" ? [created, renamed]
+			: sequence == "createRenameDelete" ? [created, renamed, deleted] : [renamed, deleted]
+		var comparison = request(
+			root: root.path,
+			scope: .lastTurn
+		)
+		comparison.lastTurnID = "editing"
+		comparison.reportedChanges = changes
+		guard case .snapshot(let snapshot) = GitReportedTurnComparison.compare(comparison)
+		else
+		{
+			Issue.record("Expected an exact reported comparison")
+			return
+		}
+		#expect(!snapshot.usesReportedEditFallback)
+		if sequence == "createRenameDelete"
+		{
+			#expect(snapshot.files.isEmpty)
+			#expect(snapshot.patch.isEmpty)
+			#expect(snapshot.copyCommand == nil)
+			return
+		}
+		#expect(snapshot.files.map(\.path) == [sequence == "createRename" ? "B.swift" : "A.swift"])
+		#expect(snapshot.files.first?.kind == (sequence == "createRename" ? .added : .deleted))
+		#expect(snapshot.copyCommand != nil)
+		let checked = try await GitTestCommandRunner.runAsync(
+			in: root,
+			arguments: ["apply", "--check", "--unidiff-zero"],
+			input: snapshot.patch,
+			captureStandardError: true
+		)
+		#expect(
+			checked.terminationStatus == 0,
+			"\(String(decoding: checked.output, as: UTF8.self))"
+		)
+		let applied = try await GitTestCommandRunner.runAsync(
+			in: root,
+			arguments: ["apply", "--unidiff-zero"],
+			input: snapshot.patch,
+			captureStandardError: true
+		)
+		#expect(
+			applied.terminationStatus == 0,
+			"\(String(decoding: applied.output, as: UTF8.self))"
+		)
+		#expect(!FileManager.default
+			.fileExists(atPath: root.appendingPathComponent("A.swift").path))
+		if sequence == "createRename"
+		{
+			#expect(try Data(contentsOf: root.appendingPathComponent("B.swift")) ==
+				Data("content\n".utf8))
+		}
+		else
+		{
+			#expect(!FileManager.default
+				.fileExists(atPath: root.appendingPathComponent("B.swift").path))
+		}
+	}
+
+	@Test func equivalentReportedPathsComposeIntoOneApplicablePatch() async throws
+	{
+		let root = try await BackgroundTestWork.perform
+		{
+			let root = FileManager.default.temporaryDirectory
+				.appendingPathComponent(UUID().uuidString)
+			try FileManager.default.createDirectory(
+				at: root,
+				withIntermediateDirectories: true
+			)
+			try Data("original\n".utf8).write(to: root.appendingPathComponent("A.swift"))
+			return root
+		}
+		defer
+		{
+			try? FileManager.default.removeItem(at: root)
+		}
+		let initialized = try await GitTestCommandRunner.runAsync(
+			in: root,
+			arguments: ["init", "-q"]
+		)
+		try #require(initialized.terminationStatus == 0)
+		let paths = ["A.swift", "./A.swift", "folder/../A.swift", root.path + "/A.swift"]
+		let values = ["original", "one", "two", "three", "final"]
+		let changes = paths.enumerated().map
+		{
+			index, path in
+			fileChange(
+				"@@ -1 +1 @@\n-\(values[index])\n+\(values[index + 1])",
+				path: path
+			)
+		}
+		var comparison = request(
+			root: root.path + "/./",
+			scope: .lastTurn
+		)
+		comparison.lastTurnID = "editing"
+		comparison.reportedChanges = changes
+		guard case .snapshot(let snapshot) = GitReportedTurnComparison.compare(comparison)
+		else
+		{
+			Issue.record("Expected a normalized reported comparison")
+			return
+		}
+		#expect(!snapshot.usesReportedEditFallback)
+		#expect(snapshot.files.map(\.path) == ["A.swift"])
+		#expect(snapshot.additions == 1)
+		#expect(snapshot.deletions == 1)
+		#expect(snapshot.request.reportedChanges?.map(\.path) == paths)
+		let checked = try await GitTestCommandRunner.runAsync(
+			in: root,
+			arguments: ["apply", "--check", "--unidiff-zero"],
+			input: snapshot.patch,
+			captureStandardError: true
+		)
+		#expect(
+			checked.terminationStatus == 0,
+			"\(String(decoding: checked.output, as: UTF8.self))"
+		)
+	}
+
+	private func fileChange(
+		_ diff: String,
+		kind: String = "update",
+		path: String,
+		movePath: String? = nil
+	) -> FileChange
+	{
+		var metadata = ["type": kind]
+		metadata["move_path"] = movePath
+		return FileChange(json: ["path": path, "kind": metadata, "diff": diff])!
+	}
+
 	private func request(
 		root: String,
 		scope: GitComparisonScope

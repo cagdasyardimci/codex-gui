@@ -34,10 +34,7 @@ enum GitReportedTurnComparison
 		))
 		let filePatches = composition.changes.map
 		{
-			patchText(
-				for: $0,
-				repositoryRoot: request.repositoryRoot
-			)
+			patchText(for: $0)
 		}
 		let text = filePatches.joined(separator: "\n")
 		let patch = Data((text.isEmpty ? "" : text + "\n").utf8)
@@ -57,19 +54,10 @@ enum GitReportedTurnComparison
 		))
 	}
 
-	private static func patchText(
-		for change: FileChange,
-		repositoryRoot: String
-	) -> String
+	private static func patchText(for change: FileChange) -> String
 	{
-		let oldPath = relativePath(
-			change.path,
-			root: repositoryRoot
-		)
-		let newPath = relativePath(
-			change.movePath ?? change.path,
-			root: repositoryRoot
-		)
+		let oldPath = change.path
+		let newPath = change.movePath ?? change.path
 		var lines = ["diff --git \(quoted("a/" + oldPath)) \(quoted("b/" + newPath))"]
 		if change.kind == "add"
 		{
@@ -79,7 +67,7 @@ enum GitReportedTurnComparison
 		{
 			lines.append("deleted file mode 100644")
 		}
-		if oldPath != newPath
+		if !oldPath.utf8.elementsEqual(newPath.utf8)
 		{
 			lines.append("rename from " + quoted(oldPath))
 			lines.append("rename to " + quoted(newPath))
@@ -88,15 +76,6 @@ enum GitReportedTurnComparison
 		lines.append("+++ " + (change.kind == "delete" ? "/dev/null" : quoted("b/" + newPath)))
 		lines.append(change.diff)
 		return lines.joined(separator: "\n")
-	}
-
-	private static func relativePath(
-		_ path: String,
-		root: String
-	) -> String
-	{
-		let prefix = root.hasSuffix("/") ? root : root + "/"
-		return path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
 	}
 
 	private static func quoted(_ path: String) -> String

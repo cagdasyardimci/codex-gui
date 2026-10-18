@@ -184,8 +184,16 @@ Transcript change cards, their file and line totals, and Last Turn comparisons i
 paths within the selected checkout when its absolute path is known. Relative paths are resolved
 against that checkout; paths outside it, including edits to temporary source copies, are excluded.
 Rename reports must keep both paths within the checkout. This filter uses normalized paths without
-reading files or treating matching filenames in another checkout as the same file. Raw backend
-reports remain unchanged. A checkout located under `/tmp` still includes its own reported edits.
+reading files or treating matching filenames in another checkout as the same file. Accepted paths
+are projected to lexical checkout-relative spellings before grouping, so relative, absolute and
+dot-segment spellings of the same path share one comparison identity. Distinct UTF-8 filename bytes
+remain distinct. Raw backend reports and captured request records remain unchanged. Without a known
+absolute checkout root, paths retain their reported spelling. A checkout located under `/tmp` still
+includes its own reported edits.
+
+Exact composition represents a creation at its final destination and a deletion at its original
+path, without rename metadata for a path absent on either side. A temporary creation that is later
+deleted contributes no net change.
 
 Snapshot acceptance retains the complete comparison metadata when reusing its display identity,
 including the fallback distinction that disables apply commands.
