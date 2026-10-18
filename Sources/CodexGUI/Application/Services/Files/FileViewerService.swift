@@ -229,141 +229,6 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		}
 	}
 
-	private static func components(_ relative: String) throws -> [String]
-	{
-		if relative.isEmpty
-		{
-			return []
-		}
-		let parts = relative.split(
-			separator: "/",
-			omittingEmptySubsequences: false
-		)
-		.map(String.init)
-		guard !relative.hasPrefix("/"),
-				parts.allSatisfy(
-				{
-					!$0.isEmpty && $0 != "." && $0 != ".." && !$0.contains("\0")
-				}
-				)
-		else
-		{
-			throw FileViewerFailure.invalidPath
-		}
-		return parts
-	}
-
-	private static func openContained(
-		_ location: FileLocation,
-		flags: Int32
-	) throws -> Int32
-	{
-		let parts = try components(location.relativePath)
-		guard !location.root.isEmpty, location.root.hasPrefix("/")
-		else
-		{
-			throw FileViewerFailure.invalidPath
-		}
-		var descriptor = Darwin.open(
-			location.root,
-			O_RDONLY | O_DIRECTORY | O_NOFOLLOW
-		)
-		guard descriptor >= 0
-		else
-		{
-			throw failure(errno)
-		}
-		for (index, component) in parts.enumerated()
-		{
-			let next = component.withCString
-			{
-				openat(
-					descriptor,
-					$0,
-					index == parts
-						.count - 1 ? flags | O_NOFOLLOW : O_RDONLY | O_DIRECTORY | O_NOFOLLOW
-				)
-			}
-			let code = errno
-			Darwin.close(descriptor)
-			guard next >= 0
-			else
-			{
-				throw failure(code)
-			}
-			descriptor = next
-		}
-		return descriptor
-	}
-
-	private static func failure(_ code: Int32) -> FileViewerFailure
-	{
-		switch code
-		{
-		case ENOENT, ENOTDIR:
-			return .unavailable
-		case ELOOP:
-			return .invalidPath
-		case EACCES, EPERM:
-			return .readOnly
-		default:
-			return .io(String(cString: strerror(code)))
-		}
-	}
-
-	private static func readBytes(_ descriptor: Int32) throws -> (Data, stat)
-	{
-		var metadata = stat()
-		guard fstat(
-			descriptor,
-			&metadata
-		) == 0
-		else
-		{
-			throw failure(errno)
-		}
-		guard (metadata.st_mode & S_IFMT) == S_IFREG
-		else
-		{
-			throw FileViewerFailure.invalidPath
-		}
-		guard metadata.st_size <= maximumReadBytes
-		else
-		{
-			throw FileViewerFailure.tooLarge
-		}
-		var data = Data()
-		var buffer = [UInt8](
-			repeating: 0,
-			count: 64 * 1024
-		)
-		while true
-		{
-			try Task.checkCancellation()
-			let count = Darwin.read(
-				descriptor,
-				&buffer,
-				buffer.count
-			)
-			guard count >= 0
-			else
-			{
-				throw failure(errno)
-			}
-			if count == 0
-			{
-				break
-			}
-			guard data.count + count <= maximumReadBytes
-			else
-			{
-				throw FileViewerFailure.tooLarge
-			}
-			data.append(contentsOf: buffer.prefix(count))
-		}
-		return (data, metadata)
-	}
-
 	private static func revision(_ data: Data) -> FileDiskRevision
 	{
 		FileDiskRevision(
@@ -380,7 +245,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 
 	private static func readFile(_ location: FileLocation) throws -> FileViewerRead
 	{
-		let fd = try openContained(
+		let fd = try ContainedFileAccess.open(
 			location,
 			flags: O_RDONLY
 		)
@@ -388,7 +253,10 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		{
 			Darwin.close(fd)
 		}
-		let (data, metadata) = try readBytes(fd)
+		let (data, metadata) = try ContainedFileAccess.read(
+			fd,
+			maximumBytes: maximumReadBytes
+		)
 		let content: FileViewerContent
 		let ext = location.fileURL.pathExtension.lowercased()
 		let imageExtensions = ["png", "jpg", "jpeg", "gif", "tif", "tiff", "heic", "webp"]
@@ -440,7 +308,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		{
 			return nil
 		}
-		let fd = try openContained(
+		let fd = try ContainedFileAccess.open(
 			location,
 			flags: O_RDONLY | O_NONBLOCK
 		)
@@ -448,7 +316,10 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		{
 			Darwin.close(fd)
 		}
-		let (data, _) = try readBytes(fd)
+		let (data, _) = try ContainedFileAccess.read(
+			fd,
+			maximumBytes: maximumReadBytes
+		)
 		guard !data.contains(0)
 		else
 		{
@@ -497,7 +368,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		{
 			throw FileViewerFailure.tooLarge
 		}
-		let parts = try components(location.relativePath)
+		let parts = try ContainedFileAccess.components(location.relativePath)
 		guard let name = parts.last
 		else
 		{
@@ -507,7 +378,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 			root: location.root,
 			relativePath: parts.dropLast().joined(separator: "/")
 		)
-		let dirFD = try openContained(
+		let dirFD = try ContainedFileAccess.open(
 			directory,
 			flags: O_RDONLY | O_DIRECTORY
 		)
@@ -520,19 +391,22 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 			openat(
 				dirFD,
 				$0,
-				O_RDONLY | O_NOFOLLOW
+				O_RDONLY | O_NOFOLLOW | O_NONBLOCK
 			)
 		}
 		guard sourceFD >= 0
 		else
 		{
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		defer
 		{
 			Darwin.close(sourceFD)
 		}
-		let (previous, metadata) = try readBytes(sourceFD)
+		let (previous, metadata) = try ContainedFileAccess.read(
+			sourceFD,
+			maximumBytes: maximumReadBytes
+		)
 		guard revision(previous) == expected
 		else
 		{
@@ -557,7 +431,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		guard tempFD >= 0
 		else
 		{
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		defer
 		{
@@ -580,7 +454,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		) == 0
 		else
 		{
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		try bytes.withUnsafeBytes
 		{
@@ -596,7 +470,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 				guard written > 0
 				else
 				{
-					throw failure(errno)
+					throw ContainedFileAccess.failure(errno)
 				}
 				offset += written
 			}
@@ -604,26 +478,29 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		guard fsync(tempFD) == 0
 		else
 		{
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		let verifyFD = name.withCString
 		{
 			openat(
 				dirFD,
 				$0,
-				O_RDONLY | O_NOFOLLOW
+				O_RDONLY | O_NOFOLLOW | O_NONBLOCK
 			)
 		}
 		guard verifyFD >= 0
 		else
 		{
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		defer
 		{
 			Darwin.close(verifyFD)
 		}
-		let (current, currentMetadata) = try readBytes(verifyFD)
+		let (current, currentMetadata) = try ContainedFileAccess.read(
+			verifyFD,
+			maximumBytes: maximumReadBytes
+		)
 		guard revision(current) == expected,
 				currentMetadata.st_dev == metadata.st_dev,
 				currentMetadata.st_ino == metadata.st_ino
@@ -649,7 +526,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		guard renamed == 0
 		else
 		{
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		return revision(bytes)
 	}
@@ -680,7 +557,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 	/// Read names and entry types once for browsing and recursive search.
 	private static func directoryItems(at location: FileLocation) throws -> [DirectoryItem]
 	{
-		let fd = try openContained(
+		let fd = try ContainedFileAccess.open(
 			location,
 			flags: O_RDONLY | O_DIRECTORY
 		)
@@ -688,7 +565,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		else
 		{
 			Darwin.close(fd)
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		defer
 		{
@@ -772,7 +649,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 
 	private static func stamp(_ location: FileLocation) throws -> DirectoryStamp
 	{
-		let fd = try openContained(
+		let fd = try ContainedFileAccess.open(
 			location,
 			flags: O_RDONLY | O_DIRECTORY
 		)
@@ -787,7 +664,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		) == 0
 		else
 		{
-			throw failure(errno)
+			throw ContainedFileAccess.failure(errno)
 		}
 		return DirectoryStamp(
 			relativePath: location.relativePath,

@@ -86,22 +86,25 @@ enum GitRichPreviewContent
 				{
 					throw GitComparisonFailure.repositoryChanged
 				}
-				func readBounded() throws -> Data
+				let bytes: Data
+				do
 				{
-					let handle = try FileHandle(forReadingFrom: url)
-					defer
-					{
-						try? handle.close()
-					}
-					let data = try handle.read(upToCount: maximumBytes + 1) ?? Data()
-					guard data.count <= maximumBytes
-					else
-					{
-						throw GitComparisonFailure.oversized
-					}
-					return data
+					(bytes, _) = try ContainedFileAccess.read(
+						FileLocation(
+							root: directory.path,
+							relativePath: file.path
+						),
+						maximumBytes: maximumBytes
+					)
 				}
-				let bytes = try readBounded()
+				catch FileViewerFailure.tooLarge
+				{
+					throw GitComparisonFailure.oversized
+				}
+				catch is FileViewerFailure
+				{
+					throw GitComparisonFailure.repositoryChanged
+				}
 				let header = Data("blob \(bytes.count)\0".utf8)
 				let digest: [UInt8]
 				if blob.count == 40

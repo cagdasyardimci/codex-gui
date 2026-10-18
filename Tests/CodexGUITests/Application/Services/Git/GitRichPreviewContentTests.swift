@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -108,6 +109,44 @@ struct GitRichPreviewContentTests
 			scope: .staged
 		)
 		#expect(GitRichPreviewContent.blobID(for: try #require(snapshot.files.first)) == nil)
+	}
+
+	@Test(.timeLimit(.minutes(1)))
+	func unstoredTargetRejectsReplacementWithANamedPipe() async throws
+	{
+		let fixture = try GitTurnBaselineFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		try fixture.write(
+			"preview.md",
+			"# Before\n"
+		)
+		try fixture.git(["add", "preview.md"])
+		try fixture.commit()
+		try fixture.write(
+			"preview.md",
+			"# Unstored target\n"
+		)
+		let snapshot = try await compare(
+			fixture,
+			scope: .unstaged
+		)
+		let file = try #require(snapshot.files.first)
+		let path = fixture.root.appendingPathComponent("preview.md").path
+		try FileManager.default.removeItem(atPath: path)
+		try #require(mkfifo(
+			path,
+			0o600
+		) == 0)
+		await #expect(throws: GitComparisonFailure.repositoryChanged)
+		{
+			try await GitRichPreviewContent.read(
+				file: file,
+				snapshot: snapshot
+			)
+		}
 	}
 
 	private func compare(
