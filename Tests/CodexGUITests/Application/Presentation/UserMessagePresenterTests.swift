@@ -188,6 +188,36 @@ struct UserMessagePresenterTests
 												.localImage(path: "/tmp/first.png")]) == literal)
 	}
 
+	@Test func ordinaryTextAndEnvelopeLookalikesPreserveExactBytes()
+	{
+		let envelope = "# Files mentioned by the user:\n\n## example.swift: /tmp/example.swift\n"
+			+ "\n## My request:\n  let value = \"Cafe\u{301}\"\n\n"
+		for text in ["",
+						"\n\n",
+						"  literal\r\ntext\n",
+						"\u{2028}" + envelope,
+						" " + envelope,
+						"\r\n" + envelope,
+						envelope + " unmatched"]
+		{
+			#expect(UserMessagePresenter.body(for: [.text(text)]).utf8.elementsEqual(text.utf8))
+		}
+		for prefix in ["", "\n", "\n\n"]
+		{
+			#expect(UserMessagePresenter.previewRequest(in: prefix + envelope)
+				== "  let value = \"Cafe\u{301}\"\n\n")
+		}
+		for prefix in [" ", "\r\n", "\u{2028}"]
+		{
+			let text = prefix + envelope
+			#expect(UserMessagePresenter.previewRequest(in: text).utf8.elementsEqual(text.utf8))
+			#expect(UserMessagePresenter.envelopeReferences(
+				in: text,
+				id: "literal"
+			).isEmpty)
+		}
+	}
+
 	@Test func ordinaryHeadingsAndUnmatchedEnvelopesRemainVisible()
 	{
 		let ordinary = "# Files mentioned by the user:\n\n## Example\n\n## My request:\nKeep this."

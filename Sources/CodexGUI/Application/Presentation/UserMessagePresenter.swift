@@ -37,6 +37,8 @@ enum UserMessageContextDescription
 /// Uses the same text and attachment presentation before acknowledgment and after history loads.
 enum UserMessagePresenter
 {
+	private static let envelopeHeader = "# Files mentioned by the user:"
+
 	private struct Reference
 	{
 		let kind: UserMessageReference.Kind
@@ -167,6 +169,11 @@ enum UserMessagePresenter
 		references: [Reference]
 	) -> String
 	{
+		guard !references.isEmpty
+		else
+		{
+			return text
+		}
 		let request = requestText(
 			in: text,
 			references: references
@@ -319,12 +326,17 @@ enum UserMessagePresenter
 		id: String
 	) -> [UserMessageReference]
 	{
+		guard hasEnvelopeHeader(text)
+		else
+		{
+			return []
+		}
 		let lines = text.components(separatedBy: "\n")
 		guard let first = lines.firstIndex(where:
 			{
 				!$0.isEmpty
 			}),
-			lines[first] == "# Files mentioned by the user:",
+			lines[first] == envelopeHeader,
 			let end = lines.firstIndex(of: "## My request:"), end > first
 		else
 		{
@@ -412,6 +424,11 @@ enum UserMessagePresenter
 		references: [Reference]
 	) -> String
 	{
+		guard !references.isEmpty, hasEnvelopeHeader(text)
+		else
+		{
+			return text
+		}
 		// Only remove the generated envelope when every file heading matches a wire reference.
 		// Ordinary Markdown containing "My request" must remain literal user content.
 		let lines = text.components(separatedBy: "\n")
@@ -419,12 +436,12 @@ enum UserMessagePresenter
 		{
 			!lines[$0].isEmpty
 		}
-		guard let first = nonempty.first, lines[first] == "# Files mentioned by the user:",
+		guard let first = nonempty.first, lines[first] == envelopeHeader,
 				let request = lines.indices.first(where:
 				{
 					lines[$0] == "## My request:"
 				}),
-				request > first, !references.isEmpty
+				request > first
 		else
 		{
 			return text
@@ -466,6 +483,16 @@ enum UserMessagePresenter
 			start += 1
 		}
 		return lines[start...].joined(separator: "\n")
+	}
+
+	/// Reject ordinary text without allocating lines. The complete parser still validates
+	/// possible envelopes.
+	private static func hasEnvelopeHeader(_ text: String) -> Bool
+	{
+		text.utf8.drop(while:
+			{
+				$0 == 0x0A
+			}).starts(with: envelopeHeader.utf8)
 	}
 
 	private static func containsFileDescription(

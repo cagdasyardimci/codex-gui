@@ -155,6 +155,92 @@ struct ConversationHistoryReferencesTests
 		#expect(snapshot.reusableReferences.first == sent)
 	}
 
+	@Test func reusableHistoryDeduplicatesNormalizedFilesAndImagesInFirstSeenOrder()
+	{
+		var value = model(turns: [
+			turn(
+				"first",
+				contents: [
+					mention(
+						"Sent alias",
+						path: projectPath + "/Sources/Sent.swift"
+					),
+					mention(
+						"First name",
+						path: projectPath + "/Sources/New.swift"
+					),
+					image("/tmp/shared.png"),
+				]
+			),
+			turn(
+				"second",
+				contents: [
+					mention(
+						"Later name",
+						path: projectPath + "/Sources/New.swift"
+					),
+					image("/tmp/shared.png"),
+					mention(
+						"Last",
+						path: projectPath + "/Last.swift"
+					),
+				]
+			),
+		])
+		let sent = ComposerContextItem(
+			id: "sent-file",
+			kind: .fileReference,
+			title: "Chosen title",
+			path: "Sources/Sent.swift"
+		)
+		value.composer.sentReferences[.thread("first")] = [sent]
+		let items = candidates(value)
+		#expect(items.map(\.path) == [
+			"Sources/Sent.swift",
+			"Sources/New.swift",
+			"/tmp/shared.png",
+			"Last.swift",
+		])
+		#expect(items.first == sent)
+		#expect(items.map(\.id) == ["sent-file", "first-user:1", "first-user:2", "second-user:2"])
+		#expect(items[1].title == "First name")
+	}
+
+	@Test func reusableHistoryPreservesByteDistinctFilePathsBesideAnAuthoritativeSentRow()
+	{
+		let composed = "Café.swift"
+		let decomposed = "Cafe\u{301}.swift"
+		var value = model(turns: [turn(
+			"first",
+			contents: [
+				mention(
+					"Composed history",
+					path: projectPath + "/" + composed
+				),
+				mention(
+					"Decomposed history",
+					path: projectPath + "/" + decomposed
+				),
+				mention(
+					"Repeated history",
+					path: projectPath + "/" + decomposed
+				),
+			]
+		)])
+		let sent = ComposerContextItem(
+			id: "sent-file",
+			kind: .fileReference,
+			title: "Chosen title",
+			path: composed
+		)
+		value.composer.sentReferences[.thread("first")] = [sent]
+		let items = candidates(value)
+		#expect(items.map(\.id) == ["sent-file", "first-user:1"])
+		#expect(items.first == sent)
+		#expect(items.last?.path?.utf8.elementsEqual(decomposed.utf8) == true)
+		#expect(items.last?.title == "Decomposed history")
+	}
+
 	private func model(turns: [CodexTurn]) -> WorkspaceModel
 	{
 		var value = WorkspaceModel(identity: WorkspaceIdentity(

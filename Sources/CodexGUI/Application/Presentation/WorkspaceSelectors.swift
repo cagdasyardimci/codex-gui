@@ -298,14 +298,17 @@ struct WorkspaceSelectors
 		var references = model.composer
 			.sentReferences[.thread(selectedThreadID)] ?? []
 		let projectPath = project.path
-		let knownPaths = Set(references.compactMap
+		var knownPaths = Set(references.compactMap
 		{
-			$0.path
+			$0.path.map
+			{
+				Data($0.utf8)
+			}
 		})
 		let content = viewedContent.content
 		let historyReferences = content.loadedUserReferences
 			?? ConversationHistoryReferences.collect(from: content.loadedTurns)
-		for reference in historyReferences where !knownPaths.contains(reference.path)
+		for reference in historyReferences
 		{
 			switch reference.kind
 			{
@@ -317,15 +320,26 @@ struct WorkspaceSelectors
 				{
 					continue
 				}
+				let path = String(reference.path.dropFirst(projectPath.count + 1))
+				guard knownPaths.insert(Data(path.utf8)).inserted
+				else
+				{
+					continue
+				}
 				references.append(
 					ComposerContextItem(
 						id: reference.id,
 						kind: .fileReference,
 						title: reference.name,
-						path: String(reference.path.dropFirst(projectPath.count + 1))
+						path: path
 					)
 				)
 			case .image:
+				guard knownPaths.insert(Data(reference.path.utf8)).inserted
+				else
+				{
+					continue
+				}
 				references.append(
 					ComposerContextItem(
 						id: reference.id,
