@@ -72,6 +72,77 @@ struct UserMessagePresenterTests
 		}
 	}
 
+	@Test @MainActor func repeatedComposerImagesKeepOneAttachmentAndTheirFirstPreviewLabel()
+		async throws
+	{
+		let image = FileManager.default.temporaryDirectory
+			.appendingPathComponent("duplicate-image-\(UUID()).png")
+		try await BackgroundTestWork.perform
+		{
+			try Data([0x89, 0x50, 0x4E, 0x47]).write(to: image)
+		}
+		defer
+		{
+			try? FileManager.default.removeItem(at: image)
+		}
+		for request in ["", "Review the attached image."]
+		{
+			for secondLabel in ["Pasted image", "Repeated alias"]
+			{
+				let inputs = try ComposerContextBuilder.inputs(
+					text: request,
+					items: [
+						ComposerContextItem(
+							kind: .image,
+							title: "Pasted image",
+							path: image.path
+						),
+						ComposerContextItem(
+							kind: .image,
+							title: secondLabel,
+							path: image.path
+						),
+					],
+					project: image.deletingLastPathComponent()
+				)
+				let item = try #require(CodexItem(json: [
+					"id": "request",
+					"type": "userMessage",
+					"content": inputs.map(\.protocolValue)
+				]))
+				#expect(item.references.count == 2)
+				#expect(item.text?.components(separatedBy: "Attached image:").count == 3)
+				#expect(UserMessagePresenter.body(for: inputs) == request)
+				#expect(UserMessagePresenter.imageAttachments(for: inputs)
+					.map(\.path) == [image.path])
+				#expect(UserMessagePresenter.sourceReferences(for: inputs)
+					.map(\.path) == [image.path])
+				let entry = ConversationContentReducer.entry(
+					for: item,
+					id: "turn:request"
+				)
+				#expect(entry.body == request)
+				#expect(entry.imageAttachments.map(\.path) == [image.path])
+				#expect(entry.sourceReferences.map(\.path) == [image.path])
+				#expect(ConversationLocalSources(entries: [entry]).records
+					.map(\.path) == [image.path])
+				let attachmentTitle = request.isEmpty ? "Attached image: Pasted image" : nil
+				#expect(UserMessagePresenter.attachmentPreviewTitle(for: inputs) == attachmentTitle)
+				#expect(entry.attachmentPreviewTitle == attachmentTitle)
+				let compact = try ConversationTextPreviewPreparer().prepare(CodexTurn(
+					id: "turn",
+					status: "completed",
+					items: [item],
+					error: nil
+				))
+				let loaded = try #require(ConversationTurnSummary.make(from: [entry]).first)
+				let title = request.isEmpty ? "Attached image: Pasted image" : request
+				#expect(compact.title == title)
+				#expect(loaded.title == title)
+			}
+		}
+	}
+
 	@Test func presenterRetainsReferencesWithoutMatchingDescriptions()
 	{
 		let inputs: [TurnInput] = [
@@ -188,17 +259,157 @@ struct UserMessagePresenterTests
 												.localImage(path: "/tmp/first.png")]) == literal)
 	}
 
-	@Test func ordinaryHeadingsAndUnmatchedEnvelopesRemainVisible()
+	@Test @MainActor func attachmentProjectionAgreesForTextWireAndCombinedMessages() throws
 	{
-		let ordinary = "# Files mentioned by the user:\n\n## Example\n\n## My request:\nKeep this."
-		let inputs: [TurnInput] = [.text(ordinary), .localImage(path: "/tmp/first.png")]
-		#expect(UserMessagePresenter.body(for: inputs) == ordinary)
-		let unmatched = "# Files mentioned by the user:\n\n## other.png: /tmp/other.png\n"
-			+ "Image attachment: true\n\n## My request:\nKeep the unmatched metadata."
-		#expect(UserMessagePresenter.body(for: [.text(unmatched),
-												.localImage(path: "/tmp/first.png")]) == unmatched)
-		#expect(UserMessagePresenter.body(for: [.text("## My request:\nKeep this too.")])
-			== "## My request:\nKeep this too.")
+		for request in ["Review this image", ""]
+		{
+			let envelope = "# Files mentioned by the user:\n\n"
+				+ "## screenshot.png: /tmp/screenshot.png\nImage attachment: true\n\n"
+				+ "## My request:\n" + request
+			for representation in ["text", "wire", "both"]
+			{
+				let text = representation == "wire" ? request : envelope
+				var inputs: [TurnInput] = [.text(text)]
+				var content: [[String: Any]] = [["type": "text", "text": text]]
+				if representation != "text"
+				{
+					inputs.append(.localImage(path: "/tmp/screenshot.png"))
+					content.append(["type": "localImage", "path": "/tmp/screenshot.png"])
+				}
+				let item = try #require(CodexItem(json: [
+					"id": "request",
+					"type": "userMessage",
+					"content": content
+				]))
+				let entry = ConversationContentReducer.entry(
+					for: item,
+					id: "turn:request"
+				)
+				#expect(entry.body == request)
+				#expect(entry.body == UserMessagePresenter.body(for: inputs))
+				#expect(entry.imageAttachments.map(\.path) == ["/tmp/screenshot.png"])
+				#expect(entry.imageAttachments.map(\.path)
+					== UserMessagePresenter.imageAttachments(for: inputs).map(\.path))
+				#expect(entry.sourceReferences.map(\.path) == ["/tmp/screenshot.png"])
+				#expect(entry.sourceReferences.map(\.path)
+					== UserMessagePresenter.sourceReferences(for: inputs).map(\.path))
+				let sources = ConversationLocalSources(entries: [entry])
+				#expect(sources.records.map(\.path) == ["/tmp/screenshot.png"])
+				#expect(sources.records.first?.kind == .image)
+				#expect(UserMessagePresenter.previewRequest(in: text) == request)
+				let compact = try ConversationTextPreviewPreparer().prepare(CodexTurn(
+					id: "turn",
+					status: "completed",
+					items: [item],
+					error: nil
+				))
+				let loaded = try #require(ConversationTurnSummary.make(from: [entry]).first)
+				let expected = request.isEmpty ? "Attached image: screenshot.png" : request
+				#expect(compact.title == expected)
+				#expect(loaded.title == expected)
+			}
+		}
+	}
+
+	@Test func referenceProjectionPrefersWireLabelsAndPreservesByteDistinctPaths() throws
+	{
+		let text = "# Files mentioned by the user:\n\n"
+			+ "## Generated.png: /tmp/image.png\nImage attachment: true\n\n"
+			+ "## Guide.md: /tmp/Guide.md\n\n## My request:\nRead these."
+		let inputs: [TurnInput] = [
+			.text(text),
+			.localImage(path: "file:///tmp/image.png"),
+			.mention(
+				name: "Wire guide",
+				path: "/tmp/Guide.md"
+			),
+			.mention(
+				name: "Composed",
+				path: "/tmp/é.md"
+			),
+			.mention(
+				name: "Decomposed",
+				path: "/tmp/e\u{301}.md"
+			),
+		]
+		let references = UserMessagePresenter.sourceReferences(for: inputs)
+		#expect(references.map(\.name) == ["image.png", "Wire guide", "Composed", "Decomposed"])
+		#expect(references.count == 4)
+		#expect(Set(references.map
+			{
+				Data($0.path.utf8)
+			}).count == 4)
+		#expect(UserMessagePresenter.imageAttachments(for: inputs).count == 1)
+		let entry = ConversationEntry(
+			id: "turn:references",
+			kind: .user,
+			title: "You",
+			body: "Read these.",
+			sourceReferences: references
+		)
+		let sources = ConversationLocalSources(entries: [entry])
+		#expect(sources.records.count == 4)
+		#expect(sources.records.map(\.name) == references.map(\.name))
+		#expect(UserMessagePresenter.body(for: inputs)
+			== "Read these.\n[File reference: Wire guide]\n[File reference: Composed]"
+			+ "\n[File reference: Decomposed]")
+	}
+
+	@Test @MainActor func wireAndEnvelopeReferencesRetainBothUnicodePathSpellings() throws
+	{
+		let composed = "/tmp/é.png"
+		let decomposed = "/tmp/e\u{301}.png"
+		let text = "# Files mentioned by the user:\n\n"
+			+ "## Composed.png: \(composed)\nImage attachment: true\n\n"
+			+ "## Decomposed.png: \(decomposed)\nImage attachment: true\n\n"
+			+ "## My request:\nCompare both images."
+		let item = try #require(CodexItem(json: [
+			"id": "unicode",
+			"type": "userMessage",
+			"content": [
+				["type": "text", "text": text],
+				["type": "localImage", "name": "Wire composed", "path": "file:///tmp/%C3%A9.png"],
+				[
+					"type": "localImage",
+					"name": "Wire decomposed",
+					"path": "file:///tmp/e%CC%81.png"
+				],
+			]
+		]))
+		let entry = ConversationContentReducer.entry(
+			for: item,
+			id: "turn:unicode"
+		)
+		#expect(entry.body == "Compare both images.")
+		#expect(entry.sourceReferences.map(\.name) == ["Wire composed", "Wire decomposed"])
+		#expect(entry.imageAttachments.map(\.path) == [
+			"file:///tmp/%C3%A9.png",
+			"file:///tmp/e%CC%81.png"
+		])
+		let sources = ConversationLocalSources(entries: [entry])
+		#expect(sources.records.map(\.name) == ["Wire composed", "Wire decomposed"])
+		#expect(sources.records.count == 2)
+	}
+
+	@Test func ordinaryHeadingsAndMalformedEnvelopesRemainVisible()
+	{
+		let malformed = [
+			"## My request:\nKeep this too.",
+			"# Files mentioned by the user:\n\n## Example\n\n## My request:\nKeep this.",
+			"# Files mentioned by the user:\n## image.png: https://example.com/image.png\n"
+				+ "Image attachment: true\n## My request:\nKeep this.",
+			"# Files mentioned by the user:\n## image.png: /tmp/image.png\n"
+				+ "Ordinary prose before the request.\n## My request:\nKeep this.",
+			"# Files mentioned by the user:\n## image.png: /tmp/image.png\n"
+				+ "Image attachment: false\n## My request:\nKeep this.",
+			"# Files mentioned by the user:\n\n## My request:\nKeep this.",
+		]
+		for text in malformed
+		{
+			#expect(UserMessagePresenter.body(for: [.text(text)]) == text)
+			#expect(UserMessagePresenter.previewRequest(in: text) == text)
+			#expect(UserMessagePresenter.sourceReferences(for: [.text(text)]).isEmpty)
+		}
 	}
 
 	@Test func userMessageDecodingPreservesRawTextAndSeparateReferences() throws

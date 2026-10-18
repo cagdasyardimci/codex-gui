@@ -181,6 +181,9 @@ calls that formatter once during ingestion; retained strings continue to partici
 payload accounting. Sources consumes those prepared values without retaining another raw result
 inventory or repeating formatting during view updates.
 
+User-message bodies, images, Sources and previews share validated wire and generated-envelope
+references, deduplicated without hiding malformed ordinary text.
+
 Sources owns its media preview coordinator within the feature. The coordinator owns request
 identity, cancellation and rejection of obsolete results, including interrupted requests that
 must restart after hidden inventory updates. The Sources controller owns retained rows, selection,

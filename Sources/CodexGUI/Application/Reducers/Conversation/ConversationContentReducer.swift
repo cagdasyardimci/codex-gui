@@ -893,10 +893,7 @@ enum ConversationContentReducer
 				title: "You",
 				body: UserMessagePresenter.body(for: item),
 				attachmentPreviewTitle: UserMessagePresenter.attachmentPreviewTitle(for: item),
-				imageAttachments: item.references.filter
-				{
-					$0.kind == .image
-				},
+				imageAttachments: UserMessagePresenter.imageAttachments(for: item),
 				sourceReferences: UserMessagePresenter.sourceReferences(for: item)
 			)
 		case "agentMessage":

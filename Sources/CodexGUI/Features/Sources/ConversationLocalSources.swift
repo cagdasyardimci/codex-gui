@@ -100,7 +100,7 @@ struct ConversationLocalSources
 
 	init(entries: [ConversationEntry])
 	{
-		var seen = Set<String>()
+		var seen = Set<Data>()
 		var records: [Record] = []
 		var activityIndices: [String: Int] = [:]
 		var seenInvocations = Set<String>()
@@ -125,7 +125,7 @@ struct ConversationLocalSources
 				for reference in entry.sourceReferences + entry.imageAttachments
 				{
 					let local = LocalAttachmentURL.resolve(reference.path)
-					let key = local?.path ?? reference.path
+					let key = LocalAttachmentURL.referenceIdentity(reference.path)
 					guard seen.insert(key).inserted
 					else
 					{
@@ -183,7 +183,7 @@ struct ConversationLocalSources
 					invocations: [invocation]
 				))
 			}
-			if let page = activity.page, seen.insert("page:\(page.id)").inserted
+			if let page = activity.page, seen.insert(Data("page:\(page.id)".utf8)).inserted
 			{
 				records.append(Record(
 					id: "page:\(page.id)",
