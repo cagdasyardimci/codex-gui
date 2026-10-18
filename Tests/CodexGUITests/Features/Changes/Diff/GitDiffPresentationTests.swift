@@ -310,6 +310,38 @@ struct GitDiffPresentationTests
 		#expect(multiline.file("Sources/Test.swift")?.rows.count == 4)
 	}
 
+	@Test func patchLineClassificationDistinguishesHeadersFromRepeatedSourceMarkers() throws
+	{
+		let patch = "diff --git a/counter b/counter\n--- a/counter\n+++ b/counter\n"
+			+ "@@ -1 +1 @@\n---counter;\n+++counter;\n"
+			+ "diff --git a/next b/next\n--- a/next\n+++ b/next\n"
+		let lines = GitDiffPresentation.patchLines(in: patch)
+		#expect(lines.map(\.kind) == [
+			.metadata,
+			.metadata,
+			.metadata,
+			.hunkHeader,
+			.source(.deletion),
+			.source(.addition),
+			.metadata,
+			.metadata,
+			.metadata,
+			.metadata
+		])
+		let source = patch as NSString
+		for line in lines
+		{
+			#expect(source.substring(with: line.range).utf8.elementsEqual(line.text.utf8))
+		}
+		let snapshot = comparisonSnapshot(
+			patch: patch,
+			files: GitComparisonPatchParser.files(in: Data(patch.utf8))
+		)
+		let rows = try #require(GitDiffPresentation(snapshot: snapshot).file("counter")).rows
+		#expect(rows.map(\.kind) == [.deletion, .addition])
+		#expect(rows.map(\.text) == ["--counter;", "++counter;"])
+	}
+
 	@Test func exactUnicodePathsKeepDistinctTreesSelectionsAndGapExpansion() throws
 	{
 		let directories = ["Caf\u{E9}", "Cafe\u{301}"]

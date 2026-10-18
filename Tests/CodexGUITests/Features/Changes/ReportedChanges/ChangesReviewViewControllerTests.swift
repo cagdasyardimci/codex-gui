@@ -6,6 +6,94 @@ import Testing
 @Suite @MainActor
 struct ChangesReviewViewControllerTests
 {
+	@Test func diffColorsUseHunkRowsForRepeatedMarkersAndKeepFileHeadersPlain() throws
+	{
+		_ = NSApplication.shared
+		let hunkText = "@@ -1 +1 @@\n---counter;\n+++counter;\n"
+		let patch = "diff --git a/counter.swift b/counter.swift\n"
+			+ "--- a/counter.swift\n+++ b/counter.swift\n" + hunkText
+		let file = ReviewFile(
+			path: "counter.swift",
+			previousPath: nil,
+			reportedMovePath: nil,
+			kind: .modified,
+			hunks: [ReviewHunk(
+				id: "counter-hunk",
+				header: "@@ -1 +1 @@",
+				text: hunkText,
+				fingerprint: "counter-hunk"
+			)],
+			diff: patch,
+			fingerprint: "counter-file",
+			explanation: nil
+		)
+		let turn = ReviewTurn(
+			threadID: "thread-counter",
+			turnID: "turn-counter",
+			files: [file],
+			validations: [],
+			codeStateID: "counter",
+			hasUnknownEarlierHistory: false
+		)
+		let controller = ChangesViewController()
+		controller.render(snapshot(
+			turns: [turn],
+			selected: turn
+		))
+		let diff = try #require(textView(
+			in: controller.view,
+			label: "Reported diff for selected file or section"
+		))
+		func expectColor(
+			_ text: String,
+			_ expected: NSColor
+		) throws
+		{
+			let range = (diff.string as NSString).range(of: text)
+			try #require(range.location != NSNotFound)
+			let color = try #require(diff.textStorage?.attribute(
+				.foregroundColor,
+				at: range.location,
+				effectiveRange: nil
+			) as? NSColor)
+			#expect(color.isEqual(expected))
+		}
+		try expectColor(
+			"--- a/counter.swift",
+			.labelColor
+		)
+		try expectColor(
+			"+++ b/counter.swift",
+			.labelColor
+		)
+		try expectColor(
+			"@@ -1 +1 @@",
+			.systemBlue
+		)
+		try expectColor(
+			"---counter;",
+			.systemRed
+		)
+		try expectColor(
+			"+++counter;",
+			.systemGreen
+		)
+		let section = try #require(popUp(
+			in: controller.view,
+			label: "Change section in selected file"
+		))
+		section.selectItem(at: 1)
+		sendAction(from: section)
+		try expectColor(
+			"---counter;",
+			.systemRed
+		)
+		try expectColor(
+			"+++counter;",
+			.systemGreen
+		)
+	}
+
 	@Test func sectionActionsKeepSourceThreadTurnAndHunk() throws
 	{
 		_ = NSApplication.shared

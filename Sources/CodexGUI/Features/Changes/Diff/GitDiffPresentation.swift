@@ -51,6 +51,19 @@ struct GitDiffTreeRow: Identifiable, Equatable
 	}
 }
 
+enum GitDiffPatchLineKind: Equatable
+{
+	case metadata, hunkHeader
+	case source(GitDiffRowKind)
+}
+
+struct GitDiffPatchLine
+{
+	let text: String
+	let range: NSRange
+	let kind: GitDiffPatchLineKind
+}
+
 /// A pure projection of immutable comparison bytes. Counts always belong to the raw snapshot.
 struct GitDiffPresentation: Equatable, Sendable
 {
@@ -182,6 +195,55 @@ struct GitDiffPresentation: Equatable, Sendable
 		}
 	}
 
+	/// File markers are metadata outside hunks; repeated markers inside a hunk are source text.
+	static func patchLines(
+		in text: String,
+		startsInHunk: Bool = false
+	) -> [GitDiffPatchLine]
+	{
+		var inHunk = startsInHunk
+		var offset = 0
+		return text.components(separatedBy: "\n").map
+		{
+			line in
+			let kind: GitDiffPatchLineKind
+			if line.hasPrefix("diff --git ") || line.hasPrefix("diff --cc ")
+				|| line.hasPrefix("diff --combined ") || line.hasPrefix("* Unmerged path ")
+			{
+				inHunk = false
+				kind = .metadata
+			}
+			else if line.hasPrefix("@@ ")
+			{
+				inHunk = true
+				kind = .hunkHeader
+			}
+			else if inHunk, let marker = line.first, " +-".contains(marker)
+			{
+				switch marker
+				{
+				case "+": kind = .source(.addition)
+				case "-": kind = .source(.deletion)
+				default: kind = .source(.context)
+				}
+			}
+			else
+			{
+				kind = .metadata
+			}
+			let range = NSRange(
+				location: offset,
+				length: (line as NSString).length
+			)
+			offset += range.length + 1
+			return GitDiffPatchLine(
+				text: line,
+				range: range,
+				kind: kind
+			)
+		}
+	}
+
 	private static func parse(
 		_ hunk: GitComparisonHunk,
 		prefix: String
@@ -191,24 +253,20 @@ struct GitDiffPresentation: Equatable, Sendable
 		var newLine = hunk.newStart
 		var rows: [GitDiffRow] = []
 		// Split only on LF: Unicode line separators can be valid source text.
-		for (index, line) in hunk.text.components(separatedBy: "\n").enumerated()
+		for (index, line) in patchLines(
+			in: hunk.text,
+			startsInHunk: true
+		).enumerated()
 		{
-			guard let marker = line.first, " +-".contains(marker)
+			guard case .source(let kind) = line.kind
 			else
 			{
 				continue
 			}
-			let kind: GitDiffRowKind
-			switch marker
-			{
-			case "+": kind = .addition
-			case "-": kind = .deletion
-			default: kind = .context
-			}
 			rows.append(GitDiffRow(
 				id: "\(prefix):\(index)",
 				kind: kind,
-				text: String(line.dropFirst()),
+				text: String(line.text.dropFirst()),
 				oldLine: kind == .addition ? nil : oldLine,
 				newLine: kind == .deletion ? nil : newLine
 			))

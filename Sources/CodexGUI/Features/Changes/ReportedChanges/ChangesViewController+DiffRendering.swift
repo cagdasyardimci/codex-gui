@@ -143,39 +143,24 @@ extension ChangesViewController
 				.paragraphStyle: paragraphStyle,
 			]
 		)
-		var offset = 0
-		for line in text.components(separatedBy: "\n")
+		for line in GitDiffPresentation.patchLines(in: text)
 		{
-			let length = (line as NSString).length
 			let color: NSColor?
-			if line.hasPrefix("+") && !line.hasPrefix("+++")
+			switch line.kind
 			{
-				color = .systemGreen
+			case .source(.addition): color = .systemGreen
+			case .source(.deletion): color = .systemRed
+			case .hunkHeader: color = .systemBlue
+			default: color = nil
 			}
-			else if line.hasPrefix("-") && !line.hasPrefix("---")
-			{
-				color = .systemRed
-			}
-			else if line.hasPrefix("@@")
-			{
-				color = .systemBlue
-			}
-			else
-			{
-				color = nil
-			}
-			if let color, length > 0
+			if let color, line.range.length > 0
 			{
 				attributed.addAttribute(
 					.foregroundColor,
 					value: color,
-					range: NSRange(
-						location: offset,
-						length: length
-					)
+					range: line.range
 				)
 			}
-			offset += length + 1
 		}
 		return attributed
 	}
