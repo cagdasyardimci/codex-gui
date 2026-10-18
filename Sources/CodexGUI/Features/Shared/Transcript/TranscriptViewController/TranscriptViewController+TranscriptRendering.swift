@@ -606,7 +606,7 @@ extension TranscriptViewController
 					&& snapshot.selectedThreadID != nil
 					&& snapshot.activeThreadID == snapshot.selectedThreadID
 					&& snapshot.activeTurnID == timing.turnID
-			guard timing.status == "inProgress", !hasConfirmedActiveExecution
+			guard ConversationTurnStatus.isRunning(timing.status), !hasConfirmedActiveExecution
 			else
 			{
 				return timing

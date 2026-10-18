@@ -309,10 +309,10 @@ extension ExecutionReducer
 					) && !ConversationTurnStatus.isRunning($0.status)
 				})
 			{
-				switch turn.status
+				switch ConversationTurnStatus.lifecycle(turn.status)
 				{
-				case "interrupted": model.execution.deferredTurnOutcome = .stopped
-				case "failed": model.execution.deferredTurnOutcome = .failed
+				case .interrupted: model.execution.deferredTurnOutcome = .stopped
+				case .failed: model.execution.deferredTurnOutcome = .failed
 				default: model.execution.deferredTurnOutcome = .completed
 				}
 				model.execution.deferredTurnMessage =

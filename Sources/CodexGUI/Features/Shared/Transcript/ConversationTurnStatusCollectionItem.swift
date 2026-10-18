@@ -115,7 +115,8 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		{
 			return "Status unavailable"
 		}
-		let working = timing.status == "inProgress"
+		let lifecycle = ConversationTurnStatus.lifecycle(timing.status)
+		let working = lifecycle == .running
 		let seconds: Double?
 		if working, let started = timing.startedAt
 		{
@@ -143,14 +144,13 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 			seconds = nil
 		}
 		let verb: String
-		switch timing.status
+		switch lifecycle
 		{
-		case "inProgress": verb = "Working"
-		case "failed": verb = "Failed"
-		case "interrupted", "stopped", "cancelled": verb = "Interrupted"
-		case "completed": verb = "Worked"
-		case "statusUnknown": verb = "Status unavailable"
-		default: verb = "Work ended"
+		case .running: verb = "Working"
+		case .failed: verb = "Failed"
+		case .interrupted: verb = "Interrupted"
+		case .completed: verb = "Worked"
+		case .unknown: verb = "Work ended"
 		}
 		guard let seconds
 		else

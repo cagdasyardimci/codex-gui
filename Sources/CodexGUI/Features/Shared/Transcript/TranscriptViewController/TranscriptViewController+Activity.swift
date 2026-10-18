@@ -66,7 +66,7 @@ extension TranscriptViewController
 		guard transcriptIsVisible, timingExecutionState.isBusy,
 				requestedTurnTimings.contains(where:
 				{
-					$0.status == "inProgress" && $0.startedAt != nil
+					ConversationTurnStatus.isRunning($0.status) && $0.startedAt != nil
 				})
 		else
 		{

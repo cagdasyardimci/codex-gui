@@ -53,6 +53,9 @@ recovery barriers still apply.
 Execution chrome and navigation retain the same outcome uncertainty; an unresolved outcome is not
 presented as a confirmed failure.
 
+Accepted turn-status aliases share one lifecycle interpretation for live reduction, recovery, labels
+and elapsed-time refresh.
+
 AppKit callbacks dispatch captured `WorkspaceIntentTarget` intents and render narrow read-only presentations. `WorkspaceEligibility` shares capability rules between selectors and reducers, with admission checked again when an intent is reduced. Publication is coalesced while all accepted backend events are processed in order. Transcript preparation runs asynchronously and superseded renders are cancelled without changing AppKit's ownership of focus and scrolling.
 
 `ThreadTitleText` in `Application/State/` owns shared whitespace normalization, the

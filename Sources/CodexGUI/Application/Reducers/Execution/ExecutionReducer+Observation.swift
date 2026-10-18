@@ -367,11 +367,12 @@ extension ExecutionReducer
 	{
 		model.execution.activeThreadID = threadID
 		model.execution.activeTurnID = nil
-		switch turn.status
+		let lifecycle = ConversationTurnStatus.lifecycle(turn.status)
+		switch lifecycle
 		{
-		case "interrupted":
+		case .interrupted:
 			model.execution.agentOutcome = .stopped
-		case "failed":
+		case .failed:
 			model.execution.agentOutcome = .failed(turn.error ?? "Codex reported a failed task.")
 		default:
 			model.execution.agentOutcome = .completed
@@ -386,13 +387,13 @@ extension ExecutionReducer
 				"Codex reported a task outcome after the request timed out. "
 					+ "Refresh this conversation before sending again."
 		}
-		else if turn.status == "failed"
+		else if lifecycle == .failed
 		{
 			model.execution.state = .failed
 			model.execution.statusMessage = turn
 				.error ?? "Codex reported a failed task."
 		}
-		else if turn.status == "interrupted"
+		else if lifecycle == .interrupted
 		{
 			model.execution.state = .stopped
 			model.execution

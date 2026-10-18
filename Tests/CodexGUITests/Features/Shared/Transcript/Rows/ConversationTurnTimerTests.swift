@@ -7,13 +7,14 @@ import Testing
 @Suite
 struct ConversationTurnTimerTests
 {
-	@Test func streamingUpdatesPreserveScheduledTickAndHiddenTranscriptStopsTimer() throws
+	@Test(arguments: ["inProgress", "running"])
+	func streamingUpdatesPreserveScheduledTickAndHiddenTranscriptStopsTimer(status: String) throws
 	{
 		_ = NSApplication.shared
 		let controller = TranscriptViewController()
 		controller.requestedTurnTimings = [ConversationTurnTiming(
 			turnID: "turn",
-			status: "inProgress",
+			status: status,
 			startedAt: Date()
 		)]
 		controller.timingExecutionState = .running
@@ -34,6 +35,74 @@ struct ConversationTurnTimerTests
 		controller.updateTurnStatusTimer()
 		#expect(controller.turnStatusTimer == nil)
 		#expect(!timer.isValid)
+	}
+
+	@Test(arguments: ["inProgress", "running"])
+	func historyClockRequiresMatchingLiveExecution(status: String) async
+	{
+		_ = NSApplication.shared
+		var model = WorkspaceModel(identity: WorkspaceIdentity(
+			sessionID: UUID(),
+			canonicalCheckoutPath: "/tmp/turn-clock"
+		))
+		model.conversations.selectedConversation = .thread("worker")
+		let snapshot = WorkspaceSelectors(
+			model: model,
+			now: Date()
+		).makeSnapshot()
+		let timing = ConversationTurnTiming(
+			turnID: "turn",
+			status: status,
+			startedAt: Date()
+		)
+		let controller = TranscriptViewController()
+		defer
+		{
+			controller.turnStatusTimer?.invalidate()
+		}
+		for (state, threadID, turnID, expectsRunning) in [
+			(ExecutionState.running, "worker", "turn", true),
+			(.running, "other", "turn", false),
+			(.running, "worker", "other", false),
+			(.ready, "worker", "turn", false)
+		]
+		{
+			controller.timingExecutionState = state
+			controller.prepareTranscript(TranscriptPresentation(
+				owner: FeaturePresentationOwner(snapshot),
+				entries: [],
+				turnTimings: [timing],
+				canLoadEarlierTurns: false,
+				navigation: nil,
+				executionState: state,
+				activeThreadID: threadID,
+				activeTurnID: turnID
+			))
+			await controller.waitForRendering()
+			controller.updateTurnStatusTimer()
+			#expect(controller.requestedTurnTimings.first?.status
+				== (expectsRunning ? status : "statusUnknown"))
+			#expect((controller.turnStatusTimer != nil) == expectsRunning)
+		}
+	}
+
+	@Test(arguments: ["completed", "failed", "interrupted", "stopped", "cancelled"])
+	func terminalTurnNeverSchedulesClockWhileExecutionWaits(status: String)
+	{
+		_ = NSApplication.shared
+		let controller = TranscriptViewController()
+		controller.requestedTurnTimings = [ConversationTurnTiming(
+			turnID: "turn",
+			status: status,
+			startedAt: Date()
+		)]
+		controller.timingExecutionState = .stopping
+		controller.updateTurnStatusTimer()
+		defer
+		{
+			controller.turnStatusTimer?.invalidate()
+		}
+		#expect(controller.turnStatusTimer == nil)
 	}
 
 	@Test func clockHeaderPlacesAccessibleLabelAboveFullWidthDivider() throws
@@ -68,7 +137,10 @@ struct ConversationTurnTimerTests
 		#expect(label.stringValue == "Working for 49s")
 	}
 
-	@Test func scheduledTickRefreshesVisibleElapsedTextAndRejectsAnotherTranscript() async throws
+	@Test(arguments: ["inProgress", "running"])
+	func scheduledTickRefreshesVisibleElapsedTextAndRejectsAnotherTranscript(
+		status: String
+	) async throws
 	{
 		try await AppKitTestIsolation.perform
 		{
@@ -102,7 +174,7 @@ struct ConversationTurnTimerTests
 			let start = Date(timeIntervalSince1970: 1000)
 			let timing = ConversationTurnTiming(
 				turnID: "turn",
-				status: "inProgress",
+				status: status,
 				startedAt: start
 			)
 			controller.requestedTurnTimings = [timing]

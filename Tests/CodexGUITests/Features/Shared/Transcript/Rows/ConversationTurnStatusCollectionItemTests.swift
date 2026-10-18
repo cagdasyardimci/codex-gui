@@ -6,12 +6,13 @@ import Testing
 @Suite @MainActor
 struct ConversationTurnStatusCollectionItemTests
 {
-	@Test func activeClockUsesCurrentTimeEvenWithPartialDuration()
+	@Test(arguments: ["inProgress", "running"])
+	func activeClockUsesCurrentTimeEvenWithPartialDuration(status: String)
 	{
 		let start = Date(timeIntervalSince1970: 1000)
 		#expect(text(
 			timing(
-				status: "inProgress",
+				status: status,
 				start: start,
 				duration: 1000
 			),
@@ -19,11 +20,12 @@ struct ConversationTurnStatusCollectionItemTests
 		) == "Working for 48s")
 	}
 
-	@Test func activeClockAdvancesAndTerminalDurationFreezes()
+	@Test(arguments: ["inProgress", "running"])
+	func activeClockAdvancesAndTerminalDurationFreezes(status: String)
 	{
 		let start = Date(timeIntervalSince1970: 1000)
 		let active = timing(
-			status: "inProgress",
+			status: status,
 			start: start
 		)
 		#expect(text(
@@ -95,6 +97,31 @@ struct ConversationTurnStatusCollectionItemTests
 			now: Date()
 		)
 			== "Failed after 9s")
+	}
+
+	@Test(arguments: ["interrupted", "stopped", "cancelled"])
+	func interruptionAliasesShareWordingAndFreezeElapsedTime(status: String)
+	{
+		let start = Date(timeIntervalSince1970: 1000)
+		#expect(text(
+			timing(
+				status: status,
+				start: start
+			),
+			now: start.addingTimeInterval(999)
+		) == "Interrupted")
+		let ended = timing(
+			status: status,
+			start: start,
+			duration: 9000
+		)
+		for offset in [10.0, 999.0]
+		{
+			#expect(text(
+				ended,
+				now: start.addingTimeInterval(offset)
+			) == "Interrupted after 9s")
+		}
 	}
 
 	@Test func workDisclosureUpdatesAndClearsCallbackOnReuse() throws
