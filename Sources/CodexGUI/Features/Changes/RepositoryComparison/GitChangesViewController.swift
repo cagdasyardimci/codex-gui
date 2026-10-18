@@ -2,8 +2,7 @@ import AppKit
 
 /// Read-only Git comparison UI. Repository requests and snapshot ownership live in the runtime.
 @MainActor
-final class GitChangesViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate,
-	NSSearchFieldDelegate
+final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 {
 	var onSummaryChange: ((GitReviewSummaryProjection?) -> Void)?
 	var onClose: (() -> Void)?
@@ -63,21 +62,19 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		comparisonToolbarView.deletionsLabel
 	}
 	private let statusLabel = NSTextField(wrappingLabelWithString: "")
-	private let filterField = NSSearchField()
-	private let tree = GitChangesTreeView()
+	private let filterField = ViewerSearchField()
+	private let tree = ViewerFileTreeView()
 	private let navigator = NSView()
-	private let navigatorHost = NSView()
-	private var navigatorDivider: NSView?
-	private var navigatorTransition: GitNavigatorTransition?
-	private var navigatorRequestedVisible: Bool?
+	private var navigatorSplit: ViewerNavigatorSplitView?
 	private let documentController = GitDiffDocumentController()
-	private var treeRows: [GitDiffTreeRow] = []
+	private var treeNodes: [String: GitComparisonTreeNode] = [:]
+	private var treeExpansionTasks: [String: Task<Void, Never>] = [:]
+	private var lastTreeFileSelection: String?
 	var projectionCache: GitDiffProjectionCache
 	{
 		documentController.projectionCache
 	}
 	private var rendering = false
-	private var navigatorHidden = false
 	private var internalChangesTab: NSView?
 	private var revisionComparison: NSView?
 	{
@@ -215,6 +212,11 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	func close()
 	{
+		for task in treeExpansionTasks.values
+		{
+			task.cancel()
+		}
+		treeExpansionTasks.removeAll()
 		runtime.close()
 	}
 
@@ -236,27 +238,19 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		configureNavigator()
 		addChild(documentController)
 		let contentScroll = documentController.view
-		let rule = DesktopSurface(AppKitColorTokens.paneDivider)
-		navigatorDivider = rule
-		rule.widthAnchor.constraint(equalToConstant: 1).isActive = true
-		navigatorHost.wantsLayer = true
-		navigatorHost.layer?.masksToBounds = true
-		navigatorHost.addSubview(navigator)
-		navigator.translatesAutoresizingMaskIntoConstraints = false
-		let navigatorWidth = navigatorHost.widthAnchor.constraint(equalToConstant: 220)
-		NSLayoutConstraint.activate([
-			navigatorWidth,
-			navigator.leadingAnchor.constraint(equalTo: navigatorHost.leadingAnchor),
-			navigator.topAnchor.constraint(equalTo: navigatorHost.topAnchor),
-			navigator.bottomAnchor.constraint(equalTo: navigatorHost.bottomAnchor),
-			navigator.widthAnchor.constraint(equalToConstant: 220),
-		])
-		let body = AppKitLayout.horizontalStack(
-			[contentScroll, rule, navigatorHost],
-			spacing: 0
+		let body = ViewerNavigatorSplitView(
+			document: contentScroll,
+			navigator: navigator
 		)
-		body.alignment = .top
-		contentScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
+		navigatorSplit = body
+		body
+			.onNavigatorVisibilityChanged =
+			{
+				[weak self] _ in
+				self?.updateNavigatorToggleAppearance()
+			}
+		updateNavigatorToggleAppearance()
+
 		statusLabel.isHidden = true
 		let layout = NSStackView(views: [tab, toolbarScroll, statusLabel, banner, body])
 		layout.orientation = .vertical
@@ -271,17 +265,8 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		{
 			row.widthAnchor.constraint(equalTo: layout.widthAnchor).isActive = true
 		}
-		NSLayoutConstraint.activate([
-			body.bottomAnchor.constraint(equalTo: layout.bottomAnchor),
-			contentScroll.heightAnchor.constraint(equalTo: body.heightAnchor),
-			navigatorHost.heightAnchor.constraint(equalTo: body.heightAnchor),
-			rule.heightAnchor.constraint(equalTo: body.heightAnchor),
-		])
-		navigatorTransition = GitNavigatorTransition(
-			widthConstraint: navigatorWidth,
-			layoutView: surface,
-			expandedWidth: 220
-		)
+		body.bottomAnchor.constraint(equalTo: layout.bottomAnchor).isActive = true
+
 		render(runtime.state)
 	}
 
@@ -289,7 +274,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	{
 		super.viewDidLayout()
 		updateComparisonToolbarLayout()
-		updateNavigatorVisibility(animated: false)
 	}
 
 	private func makeComparisonToolbarScrollView() -> NSScrollView
@@ -322,7 +306,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			image: DesktopIcons.image(.xXsCrossed),
 			action: #selector(closePanel)
 		)
-		let tab = GitReviewControls.pill(
+		let tab = ViewerToolbarGroup(
 			AppKitLayout.horizontalStack(
 				[titleIcon, title, GitReviewControls.spacer(), close],
 				spacing: 8
@@ -378,6 +362,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			)
 		)
 		updateDiffLayoutButton()
+		updateWordWrapButton()
 		return comparisonToolbarView
 	}
 
@@ -448,7 +433,7 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			[icon, largeComparisonLabel, GitReviewControls.spacer(), previous, next],
 			spacing: 12
 		)
-		let banner = GitReviewControls.pill(
+		let banner = ViewerToolbarGroup(
 			row,
 			radius: 20
 		)
@@ -476,62 +461,92 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 
 	private func configureNavigator()
 	{
-		filterField.placeholderString = "Filter files…"
 		filterField.delegate = self
-		filterField.font = .systemFont(ofSize: 14)
-		filterField.isBezeled = false
-		filterField.drawsBackground = false
-		(filterField.cell as? NSSearchFieldCell)?.searchButtonCell?.image =
-			GitReviewReferenceIcons.image(.search)
 		filterField.setAccessibilityLabel("Filter changed files by path")
-		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("path"))
-		tree.addTableColumn(column)
-		tree.headerView = nil
-		tree.rowHeight = 30
-		tree.selectionHighlightStyle = .regular
-		tree.style = .plain
-		tree.backgroundColor = .clear
-		tree.delegate = self
-		tree.dataSource = self
-		tree.target = self
-		tree.action = #selector(selectTreeRow)
 		tree.setAccessibilityLabel("Changed-file tree")
-		tree.onNavigateDirectory =
+		tree.children =
 		{
-			[weak self] expand in self?.navigateDirectory(expand: expand)
+			($0 as? GitComparisonTreeNode)?.children ?? []
 		}
-		tree.onActivateRow =
+		tree.isExpandable =
 		{
-			[weak self] in self?.activateSelectedRow()
+			($0 as? GitComparisonTreeNode)?.row.isDirectory == true
 		}
-		let scroll = NSScrollView()
-		scroll.documentView = tree
-		scroll.hasVerticalScroller = true
-		scroll.autohidesScrollers = true
-		scroll.drawsBackground = false
-		let filterSurface = DesktopSurface(
-			AppKitColorTokens.canvas,
-			cornerRadius: 10,
-			bordered: true
+		tree.presentation =
+		{
+			[weak self] item in
+			guard let node = item as? GitComparisonTreeNode
+			else
+			{
+				return ViewerFileTreePresentation(
+					name: "",
+					path: "",
+					icon: nil
+				)
+			}
+			return self?.treePresentation(node.row) ?? ViewerFileTreePresentation(
+				name: node.row.name,
+				path: node.row.path,
+				icon: nil
+			)
+		}
+		tree.onActivate =
+		{
+			[weak self] item, _ in self?.selectTreeFile(item)
+		}
+		tree.onSelectionChanged =
+		{
+			[weak self] item in
+			guard let self, !self.rendering, let item
+			else
+			{
+				return
+			}
+			self.selectTreeFile(item)
+		}
+		tree.onDidExpand =
+		{
+			[weak self] item in self?.scheduleTreeExpansion(
+				item,
+				expanded: true
+			)
+		}
+		tree
+			.onDidCollapse =
+			{
+				[weak self] item in
+				self?.scheduleTreeExpansion(
+					item,
+					expanded: false
+				)
+			}
+		tree.onContextMenu =
+		{
+			[weak self] item in
+			guard let self, let node = item as? GitComparisonTreeNode,
+					let fileID = node.row.fileID, let snapshot = self.runtime.state.snapshot,
+					let file = snapshot.files.first(where:
+					{
+						$0.id == fileID
+					})
+			else
+			{
+				return nil
+			}
+			return self.documentController.makeFileActionsMenu(
+				file: file,
+				snapshot: snapshot
+			)
+		}
+		let surface = ViewerFileNavigatorView(
+			filterField: filterField,
+			tree: tree
 		)
 		AppKitLayout.pin(
-			filterField,
-			to: filterSurface,
-			inset: 6
-		)
-		filterSurface.heightAnchor.constraint(equalToConstant: 36).isActive = true
-		let stack = NSStackView(views: [filterSurface, scroll])
-		stack.orientation = .vertical
-		stack.alignment = .leading
-		stack.spacing = 8
-		AppKitLayout.pin(
-			stack,
+			surface,
 			to: navigator,
-			inset: 8
+			inset: 0
 		)
-		filterSurface.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		scroll.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		scroll.bottomAnchor.constraint(equalTo: stack.bottomAnchor).isActive = true
 	}
 
 	private func render(_ state: GitReviewState)
@@ -572,8 +587,9 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 				usesSingleFile: false
 			)
 			largeComparisonBanner?.isHidden = true
-			treeRows = []
-			tree.reloadData()
+			treeNodes.removeAll()
+			tree.rootItems = []
+			tree.reloadTree()
 			return
 		}
 		let usesSingleFile = GitReviewDesignLayout.isLarge(snapshot)
@@ -588,27 +604,17 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			snapshot: snapshot,
 			options: state.options
 		)
-		treeRows = presentation.treeRows(
-			filter: state.filter,
-			expandedDirectories: state.expandedDirectories
+		renderTree(
+			presentation: presentation,
+			state: state,
+			displayedFileID: displayedFileID
 		)
-		tree.reloadData()
-		if let selection = state.selectedFileID ?? displayedFileID,
-			let row = treeRows.firstIndex(where:
-			{
-				$0.fileID == selection
-			})
-		{
-			tree.selectRowIndexes(
-				IndexSet(integer: row),
-				byExtendingSelection: false
-			)
-		}
-		if treeRows.isEmpty && !state.filter.isEmpty
+		if tree.rootItems.isEmpty && !state.filter.isEmpty
 		{
 			statusLabel.stringValue += " · No matching filtered files."
 			statusLabel.isHidden = false
 		}
+
 		documentController.render(
 			state: state,
 			presentation: presentation,
@@ -721,86 +727,193 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		}
 	}
 
-	func numberOfRows(in tableView: NSTableView) -> Int
+	private func renderTree(
+		presentation: GitDiffPresentation,
+		state: GitReviewState,
+		displayedFileID: String?
+	)
 	{
-		treeRows.count
-	}
-
-	func tableView(
-		_ tableView: NSTableView,
-		viewFor tableColumn: NSTableColumn?,
-		row: Int
-	) -> NSView?
-	{
-		guard treeRows.indices.contains(row)
+		let priorSelection = tree.selectedItem as? GitComparisonTreeNode
+		let priorScroll = tree.enclosingScrollView?.contentView.bounds.origin
+		var directories: Set<String> = []
+		for file in presentation.snapshot.files
+		{
+			var parent = (file.path as NSString).deletingLastPathComponent
+			while !parent.isEmpty
+			{
+				directories.insert(parent)
+				parent = (parent as NSString).deletingLastPathComponent
+			}
+		}
+		let rows = presentation.treeRows(
+			filter: state.filter,
+			expandedDirectories: directories
+		)
+		var next: [String: GitComparisonTreeNode] = [:]
+		for row in rows
+		{
+			let node = treeNodes[row.path] ?? GitComparisonTreeNode(row)
+			node.row = row
+			node.children = []
+			next[row.path] = node
+		}
+		var roots: [NSObject] = []
+		for row in rows
+		{
+			guard let node = next[row.path]
+			else
+			{
+				continue
+			}
+			let parent = (row.path as NSString).deletingLastPathComponent
+			if let directory = next[parent]
+			{
+				directory.children.append(node)
+			}
+			else
+			{
+				roots.append(node)
+			}
+		}
+		treeNodes = next
+		tree.rootItems = roots
+		tree.reloadTree()
+		for row in rows where row.isDirectory
+		{
+			guard let node = next[row.path]
+			else
+			{
+				continue
+			}
+			if !state.filter.isEmpty || state.expandedDirectories
+				.contains(row.path)
+			{
+				tree.expandItem(node)
+			}
+			else
+			{
+				tree.collapseItem(node)
+			}
+		}
+		let selectedID = state.selectedFileID ?? displayedFileID
+		let selected: GitComparisonTreeNode?
+		if lastTreeFileSelection == selectedID, let priorSelection,
+			priorSelection.row.isDirectory, next[priorSelection.row.path] === priorSelection
+		{
+			selected = priorSelection
+		}
 		else
 		{
-			return nil
+			selected = next.values.first
+			{
+				$0.row.fileID == selectedID && selectedID != nil
+			}
 		}
-		let item = treeRows[row]
-		let expanded = runtime.state.expandedDirectories.contains(item.path)
-		let image = item.isDirectory
-			? GitReviewReferenceIcons.image(expanded ? .chevronDown : .chevronRight)
-			: GitReviewReferenceIcons.fileImage(
-				relativePath: item.path,
-				isDirectory: item.isDirectory
+		lastTreeFileSelection = selectedID
+		let selectedRow = selected.map
+		{
+			tree.row(forItem: $0)
+		} ?? -1
+		if selectedRow >= 0
+		{
+			tree.selectRowIndexes(
+				IndexSet(integer: selectedRow),
+				byExtendingSelection: false
 			)
-		let icon = NSImageView(image: image)
-		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-		icon.setAccessibilityElement(false)
-		let name = NSTextField(labelWithString: item.name)
-		name.lineBreakMode = .byTruncatingMiddle
-		name.font = .systemFont(ofSize: 13)
-		name.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		var views: [NSView] = [icon, name, GitReviewControls.spacer()]
-		if let fileID = item.fileID,
+		}
+		else
+		{
+			tree.deselectAll(nil)
+		}
+		if let priorScroll
+		{
+			tree.enclosingScrollView?.contentView.scroll(to: priorScroll)
+		}
+	}
+
+	private func treePresentation(_ row: GitDiffTreeRow) -> ViewerFileTreePresentation
+	{
+		var accessories: [NSView] = []
+		if let id = row.fileID,
 			let file = runtime.state.snapshot?.files.first(where:
 			{
-				$0.id == fileID
+				$0.id == id
 			})
 		{
-			let plus = NSTextField(labelWithString: "+\(file.additions)")
-			plus.textColor = .systemGreen
-			let minus = NSTextField(labelWithString: "-\(file.deletions)")
-			minus.textColor = .systemRed
 			if file.additions > 0
 			{
-				views.append(plus)
+				let plus = NSTextField(labelWithString: "+\(file.additions)")
+				plus.textColor = .systemGreen
+				accessories.append(plus)
 			}
 			if file.deletions > 0
 			{
-				views.append(minus)
+				let minus = NSTextField(labelWithString: "-\(file.deletions)")
+				minus.textColor = .systemRed
+				accessories.append(minus)
 			}
 		}
-		let cell = GitReviewTreeCell(views: views)
-		cell.orientation = .horizontal
-		cell.alignment = .centerY
-		cell.spacing = 6
-		cell.guideDepth = item.depth
-		cell.edgeInsets = NSEdgeInsets(
-			top: 0,
-			left: CGFloat(8 + 16 * item.depth),
-			bottom: 0,
-			right: 4
+		return ViewerFileTreePresentation(
+			name: row.name,
+			path: row.path,
+			icon: row.isDirectory ? nil : WorkspaceFileIcon
+				.image(relativePath: row.path),
+			accessories: accessories,
+			accessibilityLabel: (row
+				.isDirectory ? "Directory " : "Changed file ") + row.path
 		)
-		cell.toolTip = item.path
-		cell.setAccessibilityLabel((item.isDirectory ? "Directory " : "Changed file ") + item.path)
-		return cell
 	}
 
-	func tableViewSelectionDidChange(_ notification: Notification)
+	private func selectTreeFile(_ item: NSObject)
 	{
-		guard !rendering, treeRows.indices.contains(tree.selectedRow),
-				let file = treeRows[tree.selectedRow].fileID
+		guard !rendering, let id = (item as? GitComparisonTreeNode)?.row.fileID
 		else
 		{
 			return
 		}
-		runtime.selectFile(file)
-		documentController.scrollToFile(file)
+		if runtime.state.selectedFileID != id
+		{
+			runtime.selectFile(id)
+		}
+		documentController.scrollToFile(id)
+	}
+
+	private func scheduleTreeExpansion(
+		_ item: NSObject,
+		expanded: Bool
+	)
+	{
+		guard !rendering, let node = item as? GitComparisonTreeNode,
+				let snapshot = runtime.state.snapshot
+		else
+		{
+			return
+		}
+		let path = node.row.path
+		treeExpansionTasks[path]?.cancel()
+		let owner = runtime.state.owner
+		// Runtime publication reloads the outline; let native expansion finish first.
+		treeExpansionTasks[path] = Task
+		{
+			@MainActor [weak self, weak node] in
+			guard let self, let node, !Task.isCancelled
+			else
+			{
+				return
+			}
+			self.treeExpansionTasks[path] = nil
+			guard self.runtime.state.isOpen, self.runtime.state.owner == owner,
+					self.runtime.state.snapshot?.id == snapshot.id, self.treeNodes[path] === node,
+					self.tree.isItemExpanded(node) == expanded
+			else
+			{
+				return
+			}
+			if self.runtime.state.expandedDirectories.contains(path) != expanded
+			{
+				self.runtime.toggleDirectory(path)
+			}
+		}
 	}
 
 	func controlTextDidChange(_ notification: Notification)
@@ -811,64 +924,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 			return
 		}
 		runtime.setFilter(filterField.stringValue)
-	}
-
-	private func navigateDirectory(expand: Bool)
-	{
-		guard treeRows.indices.contains(tree.selectedRow)
-		else
-		{
-			return
-		}
-		let row = treeRows[tree.selectedRow]
-		guard row.isDirectory
-		else
-		{
-			return
-		}
-		if runtime.state.expandedDirectories
-			.contains(row.path) != expand
-		{
-			runtime.toggleDirectory(row.path)
-		}
-	}
-
-	private func activateSelectedRow()
-	{
-		guard treeRows.indices.contains(tree.selectedRow)
-		else
-		{
-			return
-		}
-		let row = treeRows[tree.selectedRow]
-		if row.isDirectory
-		{
-			runtime.toggleDirectory(row.path)
-		}
-		else if let id = row.fileID
-		{
-			runtime.selectFile(id)
-			documentController.scrollToFile(id)
-		}
-	}
-
-	@objc private func selectTreeRow()
-	{
-		guard treeRows.indices.contains(tree.clickedRow)
-		else
-		{
-			return
-		}
-		let row = treeRows[tree.clickedRow]
-		if row.isDirectory
-		{
-			runtime.toggleDirectory(row.path)
-		}
-		else if let file = row.fileID
-		{
-			runtime.selectFile(file)
-			documentController.scrollToFile(file)
-		}
 	}
 
 	@objc private func showReportedChanges()
@@ -886,48 +941,17 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	}
 	@objc private func toggleNavigator()
 	{
-		navigatorHidden.toggle()
-		updateNavigatorVisibility(animated: true)
-	}
-
-	private func updateNavigatorVisibility(animated: Bool)
-	{
-		let visible = !navigatorHidden && view.bounds.width >= 500
-		guard navigatorRequestedVisible != visible
+		guard let navigatorSplit
 		else
 		{
 			return
 		}
-		let wasInitialized = navigatorRequestedVisible != nil
-		navigatorRequestedVisible = visible
-		if visible
-		{
-			navigator.isHidden = false
-			navigatorDivider?.isHidden = false
-		}
-		navigatorTransition?.setVisible(
-			visible,
-			animated: animated && wasInitialized
-		)
-		{
-			[weak self] in
-			guard let self, self.navigatorRequestedVisible == visible
-			else
-			{
-				return
-			}
-			if !visible
-			{
-				self.navigator.isHidden = true
-				self.navigatorDivider?.isHidden = true
-			}
-		}
-		updateNavigatorToggleAppearance()
+		navigatorSplit.setNavigatorVisible(!navigatorSplit.isNavigatorVisible)
 	}
 
 	private func updateNavigatorToggleAppearance()
 	{
-		let visible = navigatorRequestedVisible == true
+		let visible = navigatorSplit?.isNavigatorVisible == true
 		navigatorToggle?.contentTintColor = visible ? .systemBlue : .secondaryLabelColor
 		navigatorToggle?.setAccessibilityValue(visible ? "Visible" : "Hidden")
 	}
@@ -1036,6 +1060,11 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 	@objc private func toggleWordWrap()
 	{
 		documentController.toggleWordWrap()
+		updateWordWrapButton()
+	}
+
+	private func updateWordWrapButton()
+	{
 		wordWrapButton?.setAccessibilityLabel(
 			documentController.wrapsCode ? "Stop wrapping code lines" : "Wrap code lines"
 		)
@@ -1073,14 +1102,6 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 		expandHostButton?.setAccessibilityLabel(label)
 		expandHostButton?.isEnabled = onToggleExpanded != nil
 		panelHostButton?.isEnabled = onTogglePanel != nil
-	}
-
-	func tableView(
-		_ tableView: NSTableView,
-		rowViewForRow row: Int
-	) -> NSTableRowView?
-	{
-		GitReviewFileRowView()
 	}
 
 	@objc private func changeRevisions()
@@ -1348,19 +1369,12 @@ final class GitChangesViewController: NSViewController, NSTableViewDataSource, N
 }
 
 @MainActor
-private final class GitChangesTreeView: NSTableView
+private final class GitComparisonTreeNode: NSObject
 {
-	var onNavigateDirectory: ((Bool) -> Void)?
-	var onActivateRow: (() -> Void)?
-
-	override func keyDown(with event: NSEvent)
+	var row: GitDiffTreeRow
+	var children: [NSObject] = []
+	init(_ row: GitDiffTreeRow)
 	{
-		switch event.keyCode
-		{
-		case 123: onNavigateDirectory?(false)
-		case 124: onNavigateDirectory?(true)
-		case 36, 76: onActivateRow?()
-		default: super.keyDown(with: event)
-		}
+		self.row = row
 	}
 }

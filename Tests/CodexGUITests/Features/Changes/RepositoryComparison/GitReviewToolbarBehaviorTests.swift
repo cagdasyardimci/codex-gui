@@ -82,7 +82,7 @@ struct GitReviewToolbarBehaviorTests
 		controller.view.layoutSubtreeIfNeeded()
 		for label in [
 			"Refresh comparison",
-			"Wrap code lines",
+			"Stop wrapping code lines",
 			"Collapse all diffs",
 			"Switch diff layout"
 		]
@@ -102,7 +102,7 @@ struct GitReviewToolbarBehaviorTests
 		let compactMenu = controller.makeDiffDisplayMenu()
 		#expect(compactMenu.items.suffix(4).map(\.title) == [
 			"Refresh comparison",
-			"Wrap code lines",
+			"Stop wrapping code lines",
 			"Collapse all diffs",
 			"Switch diff layout"
 		])
@@ -123,21 +123,21 @@ struct GitReviewToolbarBehaviorTests
 		#expect(controller.runtime.state.snapshot?.request == refreshedRequest)
 		#expect(controller.runtime.state.pendingRequest == nil)
 
-		#expect(diffViews(in: controller).map(\.wrapsCode) == [false, false])
-		try dispatchMenuItem(
-			"Wrap code lines",
-			in: controller
-		)
 		#expect(diffViews(in: controller).map(\.wrapsCode) == [true, true])
-		#expect(controller.makeDiffDisplayMenu().items.first
-		{
-			$0.title == "Stop wrapping code lines"
-		}?.state == .on)
 		try dispatchMenuItem(
 			"Stop wrapping code lines",
 			in: controller
 		)
 		#expect(diffViews(in: controller).map(\.wrapsCode) == [false, false])
+		#expect(controller.makeDiffDisplayMenu().items.first
+		{
+			$0.title == "Wrap code lines"
+		}?.state == .off)
+		try dispatchMenuItem(
+			"Wrap code lines",
+			in: controller
+		)
+		#expect(diffViews(in: controller).map(\.wrapsCode) == [true, true])
 
 		#expect(diffViews(in: controller).map(\.layoutPreference) == [.automatic, .automatic])
 		for expected: GitDiffLayoutPreference in [.unified, .split, .automatic]
@@ -167,7 +167,7 @@ struct GitReviewToolbarBehaviorTests
 			in: controller
 		)
 		#expect(diffViews(in: controller).count == 2)
-		#expect(diffViews(in: controller).map(\.wrapsCode) == [false, false])
+		#expect(diffViews(in: controller).map(\.wrapsCode) == [true, true])
 		#expect(diffViews(in: controller).map(\.layoutPreference) == [.automatic, .automatic])
 		window.setContentSize(NSSize(
 			width: 761,
@@ -177,7 +177,7 @@ struct GitReviewToolbarBehaviorTests
 		controller.view.layoutSubtreeIfNeeded()
 		for label in [
 			"Refresh comparison",
-			"Wrap code lines",
+			"Stop wrapping code lines",
 			"Collapse all diffs",
 			"Switch diff layout"
 		]

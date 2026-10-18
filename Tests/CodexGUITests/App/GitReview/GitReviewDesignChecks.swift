@@ -449,7 +449,7 @@ struct GitReviewDesignChecks
 			#expect(controller.runtime.state.selectedFileID == selectedFileID)
 			#expect(controller.runtime.state.options == options)
 			#expect(navigatorToggle.accessibilityValue() as? String ==
-				(width > 500 ? "Visible" : "Hidden"))
+				"Visible")
 		}
 		navigatorToggle.performClick(nil)
 		controller.view.layoutSubtreeIfNeeded()

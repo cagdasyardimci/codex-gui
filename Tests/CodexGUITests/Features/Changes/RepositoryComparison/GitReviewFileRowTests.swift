@@ -9,7 +9,7 @@ struct GitReviewFileRowTests
 	@Test func outlinedSelectionKeepsNormalTextBackgroundStyle()
 	{
 		_ = NSApplication.shared
-		let row = GitReviewFileRowView()
+		let row = ViewerFileTreeSelectionRow()
 		let window = NSWindow(
 			contentRect: NSRect(
 				x: 0,

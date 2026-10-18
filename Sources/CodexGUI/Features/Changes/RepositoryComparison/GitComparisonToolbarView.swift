@@ -23,8 +23,9 @@ final class GitComparisonToolbarView: NSStackView
 		target: nil,
 		action: nil
 	)
-	let optionsButton = NSButton(
-		title: "Display ▾",
+	let optionsButton = ViewerToolbarButton.icon(
+		"Diff display options",
+		image: GitReviewReferenceIcons.image(.ellipsis),
 		target: nil,
 		action: nil
 	)
@@ -107,7 +108,7 @@ final class GitComparisonToolbarView: NSStackView
 		{
 			count.font = .systemFont(ofSize: 13)
 		}
-		let scope = GitReviewControls.pill(AppKitLayout.horizontalStack(
+		let scope = ViewerToolbarGroup(AppKitLayout.horizontalStack(
 			[scopeButton, additionsLabel, deletionsLabel],
 			spacing: 6
 		))
@@ -156,7 +157,7 @@ final class GitComparisonToolbarView: NSStackView
 			),
 			action: actions.revisionMenu
 		)
-		let refs = GitReviewControls.pill(
+		let refs = ViewerToolbarGroup(
 			AppKitLayout.horizontalStack(
 				[baseField, arrow, targetField, revisionMenu],
 				spacing: 8
@@ -179,7 +180,6 @@ final class GitComparisonToolbarView: NSStackView
 		optionsButton.image = GitReviewReferenceIcons.image(.ellipsis)
 		optionsButton.target = target
 		optionsButton.action = actions.displayMenu
-		GitReviewControls.styleReferenceButton(optionsButton)
 		optionsButton.setAccessibilityLabel("Diff display options")
 		optionsButton.toolTip = "Diff display options and reported turn changes"
 		let search = referenceButton(
@@ -218,7 +218,7 @@ final class GitComparisonToolbarView: NSStackView
 			action: actions.navigator
 		)
 		navigatorToggle = toggle
-		let tools = GitReviewControls.pill(
+		let tools = ViewerToolbarGroup(
 			AppKitLayout.horizontalStack(
 				[optionsButton,
 					search,

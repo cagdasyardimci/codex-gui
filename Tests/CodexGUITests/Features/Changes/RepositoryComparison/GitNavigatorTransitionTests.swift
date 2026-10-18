@@ -6,6 +6,44 @@ import Testing
 @Suite @MainActor
 struct GitNavigatorTransitionTests
 {
+	@Test func reducedMotionUsesTheOwningViewersCurrentWidth()
+	{
+		let pane = NSView()
+		let width = pane.widthAnchor.constraint(equalToConstant: 0)
+		let transition = ViewerNavigatorTransition(
+			widthConstraint: width,
+			layoutView: pane,
+			shouldReduceMotion:
+			{
+				true
+			}
+		)
+		var completions = 0
+		transition.setVisible(
+			true,
+			expandedWidth: 148
+		)
+		{
+			completions += 1
+		}
+		#expect(width.constant == 148)
+		#expect(!transition.isAnimating)
+		transition.setVisible(false)
+		{
+			completions += 1
+		}
+		#expect(width.constant == 0)
+		transition.setVisible(
+			true,
+			expandedWidth: 241
+		)
+		{
+			completions += 1
+		}
+		#expect(width.constant == 241)
+		#expect(completions == 3)
+	}
+
 	@Test(.timeLimit(.minutes(1)))
 	func widthFollowsBothTargetsAndReversalDropsSupersededCompletion() async throws
 	{
@@ -31,7 +69,7 @@ struct GitNavigatorTransitionTests
 			clock.advance(to: 1)
 		}
 		var ticks = clock.ticks.makeAsyncIterator()
-		let transition = GitNavigatorTransition(
+		let transition = ViewerNavigatorTransition(
 			widthConstraint: width,
 			layoutView: root,
 			now:
@@ -105,7 +143,7 @@ struct GitNavigatorTransitionTests
 	{
 		let view = NSView()
 		let width = view.widthAnchor.constraint(equalToConstant: 280)
-		let transition = GitNavigatorTransition(
+		let transition = ViewerNavigatorTransition(
 			widthConstraint: width,
 			layoutView: view,
 			sleep:
@@ -144,7 +182,7 @@ struct GitNavigatorTransitionTests
 			clock.advance(to: 1)
 		}
 		var reduceMotion = false
-		let transition = GitNavigatorTransition(
+		let transition = ViewerNavigatorTransition(
 			widthConstraint: width,
 			layoutView: view,
 			now:

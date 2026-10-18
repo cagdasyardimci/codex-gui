@@ -8,7 +8,7 @@ final class GitDiffDocumentController: NSViewController
 	var onNeedsRender: (() -> Void)?
 	private(set) var projectionCache = GitDiffProjectionCache()
 	private(set) var layoutPreference = GitDiffLayoutPreference.automatic
-	private(set) var wrapsCode = false
+	private(set) var wrapsCode = true
 	private(set) var collapseAllMode = false
 	private var currentState: GitReviewState?
 	private var renderedSnapshotID: String?
