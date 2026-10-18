@@ -43,8 +43,7 @@ enum MarkdownContentParser
 
 	private struct PresentationBuilder
 	{
-		let sourceBytes: [UInt8]
-		let sourceLineOffsets: [Int]
+		let sourceIndex: MarkdownSourceIndex
 		let preserveSoftBreaks: Bool
 		let imageBaseDirectory: URL?
 		var runs: [MarkdownTextRun] = []
@@ -65,12 +64,7 @@ enum MarkdownContentParser
 			imageBaseDirectory: URL?
 		)
 		{
-			let bytes = Array(source.utf8)
-			sourceBytes = bytes
-			sourceLineOffsets = [0] + bytes.indices.compactMap
-			{
-				bytes[$0] == 10 ? $0 + 1 : nil
-			}
+			sourceIndex = MarkdownSourceIndex(source)
 			self.preserveSoftBreaks = preserveSoftBreaks
 			self.imageBaseDirectory = imageBaseDirectory
 		}
@@ -469,22 +463,18 @@ enum MarkdownContentParser
 
 		func displayMath(in paragraph: Paragraph) -> MarkdownRichBlock?
 		{
-			guard let raw = sourceText(of: paragraph)
+			guard let range = paragraph.range,
+					range.upperBound.line - range.lowerBound.line >= 2,
+					let raw = sourceText(of: paragraph),
+					let firstNewline = raw.firstIndex(of: "\n"),
+					let lastNewline = raw.lastIndex(of: "\n"), firstNewline != lastNewline
 			else
 			{
 				return nil
 			}
-			let lines = raw.split(
-				separator: "\n",
-				omittingEmptySubsequences: false
-			)
-			guard lines.count >= 3
-			else
-			{
-				return nil
-			}
-			let first = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines)
-			let last = lines.last?.trimmingCharacters(in: .whitespacesAndNewlines)
+			let first = raw[..<firstNewline].trimmingCharacters(in: .whitespacesAndNewlines)
+			let last = raw[raw.index(after: lastNewline)...]
+				.trimmingCharacters(in: .whitespacesAndNewlines)
 			let hasDollars = first == "$$" && last == "$$"
 			let hasBrackets = first == "\\[" && last == "\\]"
 			guard hasDollars || hasBrackets
@@ -495,7 +485,7 @@ enum MarkdownContentParser
 			return MarkdownRichBlock(
 				kind: .math,
 				source: raw,
-				payload: lines.dropFirst().dropLast().joined(separator: "\n")
+				payload: String(raw[raw.index(after: firstNewline) ..< lastNewline])
 			)
 		}
 
@@ -538,31 +528,7 @@ enum MarkdownContentParser
 
 		func sourceText(of markup: any Markup) -> String?
 		{
-			guard let range = markup.range
-			else
-			{
-				return nil
-			}
-			func offset(of location: SourceLocation) -> Int?
-			{
-				guard location.line > 0, location.line <= sourceLineOffsets.count,
-						location.column > 0
-				else
-				{
-					return nil
-				}
-				return sourceLineOffsets[location.line - 1] + location.column - 1
-			}
-			guard let start = offset(of: range.lowerBound), let end = offset(of: range.upperBound),
-					start <= end, end <= sourceBytes.count
-			else
-			{
-				return nil
-			}
-			return String(
-				decoding: sourceBytes[start ..< end],
-				as: UTF8.self
-			)
+			sourceIndex.text(in: markup.range)
 		}
 
 		mutating func appendCodeText(
