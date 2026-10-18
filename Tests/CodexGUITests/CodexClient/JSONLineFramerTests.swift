@@ -99,4 +99,33 @@ struct JSONLineFramerTests
 		#expect(framer.append(Data("}\n".utf8)) == [Data("{\"id\":3}".utf8)])
 	}
 
+	@Test func retainedFramesSurviveLaterPartialAndCompleteReads()
+	{
+		let framer = JSONLineFramer()
+		let first = Data(String(
+			repeating: "a",
+			count: 1024 * 1024
+		).utf8)
+		#expect(framer.append(first).isEmpty)
+		let retained = framer.append(Data("\nsecond\nthi".utf8))
+		#expect(retained == [first, Data("second".utf8)])
+		#expect(framer.append(Data("rd\nfourth\nfif".utf8)) == [
+			Data("third".utf8),
+			Data("fourth".utf8),
+		])
+		#expect(framer.append(Data("th\n".utf8)) == [Data("fifth".utf8)])
+		#expect(retained == [first, Data("second".utf8)])
+	}
+
+	@Test func slicedReadsPreserveNonzeroIndicesAndPartialRemainders()
+	{
+		let framer = JSONLineFramer()
+		let first = Data("discard\nfirst\nsec".utf8).dropFirst(8)
+		let second = Data("discardond\n\nthird\n".utf8).dropFirst(7)
+		#expect(first.startIndex > 0)
+		#expect(second.startIndex > 0)
+		#expect(framer.append(first) == [Data("first".utf8)])
+		#expect(framer.append(second) == [Data("second".utf8), Data("third".utf8)])
+	}
+
 }
