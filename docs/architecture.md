@@ -137,6 +137,10 @@ Git display options are application state shared by review actions, reducers and
 projection and native rendering consume those options from `Application/State/` and remain owned
 by Changes.
 
+Git comparison paths use exact UTF-8 identity from patch parsing through navigation and rendering.
+The parser coalesces repeated sections only when their file path bytes match, preserving
+distinct files whose names are canonically equivalent Unicode strings.
+
 Code panes in the Git comparison own horizontal scrolling. Vertical wheel gestures over their
 text or gutters route to the enclosing comparison viewer in both unified and split layouts,
 including when code wrapping is enabled. Shift-wheel input retains native horizontal handling.
