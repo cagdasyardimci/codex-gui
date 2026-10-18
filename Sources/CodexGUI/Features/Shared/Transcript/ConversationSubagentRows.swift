@@ -7,15 +7,14 @@ enum ConversationSubagentRows
 		agents: [CodexSubagentActivity]
 	) -> ConversationActivityRow
 	{
-		let names = agents.map(\.name)
 		let title: String
-		if names.count > 2
+		if agents.count > 2
 		{
-			title = "\(names[0]), \(names[1]) and \(names.count - 2) more"
+			title = "\(agents[0].name), \(agents[1].name) and \(agents.count - 2) more"
 		}
 		else
 		{
-			title = names.joined(separator: " and ")
+			title = agents.map(\.name).joined(separator: " and ")
 		}
 		return ConversationActivityRow(
 			id: id,
@@ -30,23 +29,45 @@ enum ConversationSubagentRows
 	static func group(_ rows: [ConversationTranscriptRow]) -> [ConversationTranscriptRow]
 	{
 		var result: [ConversationTranscriptRow] = []
-		for current in rows
+		var start = 0
+		while start < rows.count
 		{
-			if case .activity(let next) = current, next.kind == .subagent,
-				case .activity(let previous) = result.last, previous.kind == .subagent,
-				previous.subagents.first?.kind == next.subagents.first?.kind,
-				ConversationEntryIdentity.turnIDWithFallback(previous.id)
-				== ConversationEntryIdentity.turnIDWithFallback(next.id)
+			guard case .activity(let first) = rows[start], first.kind == .subagent
+			else
 			{
-				result[result.count - 1] = .activity(row(
-					id: previous.id,
-					agents: previous.subagents + next.subagents
-				))
+				result.append(rows[start])
+				start += 1
+				continue
+			}
+			let turnID = ConversationEntryIdentity.turnIDWithFallback(first.id)
+			var end = start + 1
+			while end < rows.count, case .activity(let next) = rows[end],
+					next.kind == .subagent,
+					next.subagents.first?.kind == first.subagents.first?.kind,
+					ConversationEntryIdentity.turnIDWithFallback(next.id) == turnID
+			{
+				end += 1
+			}
+			if end == start + 1
+			{
+				result.append(rows[start])
 			}
 			else
 			{
-				result.append(current)
+				var agents = first.subagents
+				for index in start + 1 ..< end
+				{
+					if case .activity(let next) = rows[index]
+					{
+						agents.append(contentsOf: next.subagents)
+					}
+				}
+				result.append(.activity(row(
+					id: first.id,
+					agents: agents
+				)))
 			}
+			start = end
 		}
 		return result
 	}

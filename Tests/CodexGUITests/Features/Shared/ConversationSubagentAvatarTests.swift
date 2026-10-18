@@ -55,26 +55,53 @@ struct ConversationSubagentAvatarTests
 			assetName: "02-gaze-geometric",
 			name: "Client"
 		)
-		view.appearance = NSAppearance(named: .aqua)
-		view.viewDidChangeEffectiveAppearance()
-		let light = try #require(view.image)
-		#expect(light === ConversationSubagentAvatars.image(
-			named: "02-gaze-geometric",
-			dark: false
-		))
-		view.appearance = NSAppearance(named: .darkAqua)
-		view.viewDidChangeEffectiveAppearance()
-		let dark = try #require(view.image)
-		#expect(dark === ConversationSubagentAvatars.image(
-			named: "02-gaze-geometric",
-			dark: true
-		))
-		#expect(dark !== light)
-		#expect(view.contentTintColor == nil)
-		#expect(view.accessibilityLabel() == "Client")
-		view.appearance = NSAppearance(named: .aqua)
-		view.viewDidChangeEffectiveAppearance()
-		#expect(view.image === light)
+		_ = NSApplication.shared
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 32,
+				height: 32
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentView = view
+		defer
+		{
+			window.contentView = nil
+			window.close()
+		}
+		let frame = view.frame
+		var light: NSImage?
+		for name in [NSAppearance.Name.aqua, .darkAqua, .aqua, .darkAqua]
+		{
+			window.appearance = try #require(NSAppearance(named: name))
+			window.displayIfNeeded()
+			let image = try #require(view.image)
+			#expect(image === ConversationSubagentAvatars.image(
+				named: "02-gaze-geometric",
+				dark: name == .darkAqua
+			))
+			if name == .aqua
+			{
+				if let light
+				{
+					#expect(image === light)
+				}
+				light = image
+			}
+			else
+			{
+				#expect(image !== light)
+			}
+			#expect(view.window === window && view.appearance == nil)
+			#expect(view.frame == frame)
+			#expect(view.contentTintColor == nil)
+			#expect(view.accessibilityLabel() == "Client")
+		}
 	}
 
 	@Test func packagedAppFindsTheResourceBundleUnderContentsResources() throws

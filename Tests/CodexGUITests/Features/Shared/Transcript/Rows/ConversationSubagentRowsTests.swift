@@ -6,6 +6,65 @@ import Testing
 @Suite
 struct ConversationSubagentRowsTests
 {
+	@Test func largeContiguousGroupKeepsAgentOrderAndFirstSourceIdentity() throws
+	{
+		let agents = (0 ..< 2_048).map
+		{
+			CodexSubagentActivity(json: ["kind": "started", "agentPath": "/root/agent-\($0)"])
+		}
+		let rows = agents.enumerated().map
+		{
+			ConversationTranscriptRow.activity(ConversationSubagentRows.row(
+				id: "turn:item-\($0.offset)",
+				agents: [$0.element]
+			))
+		}
+		let grouped = ConversationSubagentRows.group(rows)
+		try #require(grouped.count == 1)
+		let result = try #require(activity(grouped[0]))
+		#expect(result.id == "turn:item-0")
+		#expect(result.sourceEntryID == "turn:item-0")
+		#expect(result.subagents == agents)
+		#expect(result
+			.title == "\(agents[0].name), \(agents[1].name) and 2046 more started working")
+		#expect(rows.count == 2_048)
+		#expect(activity(rows[0])?.subagents.count == 1)
+	}
+
+	@Test func emptyGroupsAndSingleRowsKeepTheirExistingBoundariesAndMetadata()
+	{
+		let single = ConversationActivityRow(
+			id: "single:item",
+			sourceEntryID: "custom-source",
+			groupID: "custom-group",
+			kind: .subagent,
+			title: "Custom unchanged row"
+		)
+		let empty = ConversationSubagentRows.row(
+			id: "turn:first",
+			agents: []
+		)
+		let nextEmpty = ConversationSubagentRows.row(
+			id: "turn:second",
+			agents: []
+		)
+		let agent = CodexSubagentActivity(json: ["kind": "started", "agentPath": "/root/client"])
+		let populated = ConversationSubagentRows.row(
+			id: "turn:third",
+			agents: [agent]
+		)
+		let rows = [single, empty, nextEmpty, populated].map(ConversationTranscriptRow.activity)
+		let grouped = ConversationSubagentRows.group(rows)
+		#expect(grouped == [
+			.activity(single),
+			.activity(ConversationSubagentRows.row(
+				id: empty.id,
+				agents: []
+			)),
+			.activity(populated),
+		])
+	}
+
 	@Test func referenceAuditEventsSurviveDecodingAndKeepTheirConversationOrder() async throws
 	{
 		let paths = ["client",
