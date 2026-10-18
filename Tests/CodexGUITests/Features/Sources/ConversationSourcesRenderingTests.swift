@@ -134,6 +134,7 @@ struct ConversationSourcesRenderingTests
 		])
 		_ = controller.view
 		await controller.waitForPreviews()
+		#expect(controller.previewTasks().isEmpty)
 		let record = try #require(controller.sources.records.first
 		{
 			$0.kind == .image
@@ -350,10 +351,12 @@ struct ConversationSourcesRenderingTests
 			let placeholder = image.image
 			await loader.releaseNext(data: nil)
 			await initial.value
+			#expect(controller.previewTasks().count == 1)
 			#expect(image.image === placeholder)
 			#expect(!text(in: controller.view).contains("Preview unavailable"))
 			await loader.releaseNext(data: try DraftImageImportTestFixture.png())
 			await controller.waitForPreviews()
+			#expect(controller.previewTasks().isEmpty)
 			#expect(image.image !== placeholder)
 			controller.view.isHidden = false
 			await loader.releaseAll()
@@ -365,6 +368,27 @@ struct ConversationSourcesRenderingTests
 			await initial.value
 			throw error
 		}
+	}
+
+	@Test func unavailablePreviewRetiresItsCompletedRequest() async throws
+	{
+		_ = NSApplication.shared
+		let imageURL = try await imageFile()
+		defer
+		{
+			try? FileManager.default.removeItem(at: imageURL)
+		}
+		let controller = try controller(
+			entries: [imageEntry(imageURL)],
+			loadThumbnail:
+			{
+				_ in nil
+			}
+		)
+		_ = controller.view
+		await controller.waitForPreviews()
+		#expect(controller.previewTasks().isEmpty)
+		#expect(text(in: controller.view).contains("Preview unavailable"))
 	}
 
 	@Test(.timeLimit(.minutes(1)))

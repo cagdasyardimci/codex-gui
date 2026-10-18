@@ -69,7 +69,19 @@ final class SourcePreviewCoordinator
 		{
 			[weak self] in
 			let duration = await SourceAudioMetadataLoader.duration(path: path)
-			guard let self, self.accepts(
+			guard let self
+			else
+			{
+				return
+			}
+			defer
+			{
+				self.finish(
+					record.id,
+					token: token
+				)
+			}
+			guard self.accepts(
 				record,
 				token: token
 			), let duration
@@ -98,7 +110,19 @@ final class SourcePreviewCoordinator
 		{
 			[weak self] in
 			let data = await loadThumbnail(path)
-			guard let self, self.accepts(
+			guard let self
+			else
+			{
+				return
+			}
+			defer
+			{
+				self.finish(
+					record.id,
+					token: token
+				)
+			}
+			guard self.accepts(
 				record,
 				token: token
 			)
@@ -157,6 +181,19 @@ final class SourcePreviewCoordinator
 	{
 		!isInvalidated && !Task.isCancelled && currentRecords[record.id] == record
 			&& requests[record.id]?.token == token
+	}
+
+	private func finish(
+		_ id: String,
+		token: UUID
+	)
+	{
+		guard requests[id]?.token == token
+		else
+		{
+			return
+		}
+		requests.removeValue(forKey: id)
 	}
 
 	private static func index(

@@ -258,53 +258,24 @@ final class SourceResultCodeCard: NSView
 		dark: Bool
 	)
 	{
-		// Matches entire escaped strings before considering numbers and JSON literals.
-		let pattern = #""(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\b(?:true|false|null)\b"#
-		guard let regex = try? NSRegularExpression(pattern: pattern)
-		else
+		for token in SourceJSONToken.tokens(in: text.string)
 		{
-			return
-		}
-		let source = text.string as NSString
-		for match in regex.matches(
-			in: text.string,
-			range: NSRange(
-				location: 0,
-				length: text.length
-			)
-		)
-		{
-			let token = source.substring(with: match.range)
 			let color: NSColor
-			if token.hasPrefix("\"")
+			switch token.style
 			{
-				let tail = source.substring(from: NSMaxRange(match.range))
-					.trimmingCharacters(in: .whitespacesAndNewlines)
-				if tail.hasPrefix(":")
-				{
-					color = dark
-						? Self.sRGB(0xF9DC78)
-						: Self.sRGB(0xB8802A)
-				}
-				else
-				{
-					color = dark
-						? Self.sRGB(0x83D197)
-						: Self.sRGB(0x3B843F)
-				}
-			}
-			else if token == "true" || token == "false" || token == "null"
-			{
+			case .key:
+				color = dark ? Self.sRGB(0xF9DC78) : Self.sRGB(0xB8802A)
+			case .string:
+				color = dark ? Self.sRGB(0x83D197) : Self.sRGB(0x3B843F)
+			case .literal:
 				color = dark ? Self.sRGB(0xF8A6C8) : Self.sRGB(0xAB4F7A)
-			}
-			else
-			{
+			case .number:
 				color = dark ? Self.sRGB(0xF2A174) : Self.sRGB(0xAC4F24)
 			}
 			text.addAttribute(
 				.foregroundColor,
 				value: color,
-				range: match.range
+				range: token.range
 			)
 		}
 	}
