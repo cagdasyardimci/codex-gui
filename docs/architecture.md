@@ -184,6 +184,9 @@ inventory or repeating formatting during view updates.
 User-message bodies, images, Sources and previews share validated wire and generated-envelope
 references, deduplicated without hiding malformed ordinary text.
 
+Recorded tool results retain a bounded display of supported resource and media content and a bounded
+fallback for other payloads; empty candidates cannot hide a later recorded result or error message.
+
 Sources owns its media preview coordinator within the feature. The coordinator owns request
 identity, cancellation and rejection of obsolete results, including interrupted requests that
 must restart after hidden inventory updates. The Sources controller owns retained rows, selection,

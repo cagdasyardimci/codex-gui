@@ -57,4 +57,42 @@ struct ConversationSourceActivityTests
 		#expect(source.displayLanguage == "text")
 		#expect(source.displayPayload == "First failure\n\nSecond failure")
 	}
+	@Test func emptyErrorContentFallsBackToStructuredMessage() throws
+	{
+		let contents: [[[String: Any]]] = [[], [["type": "text", "text": "  "]]]
+		for content in contents
+		{
+			let source = try #require(ConversationSourceActivity(json: [
+				"id": "empty-content-error",
+				"type": "mcpToolCall",
+				"error": "",
+				"result": [
+					"isError": true,
+					"content": content,
+					"structuredContent": ["message": "Access denied"]
+				]
+			]))
+			#expect(source.displayIsError)
+			#expect(source.displayPayload == "Access denied")
+			#expect(source.displayLanguage == "text")
+		}
+	}
+
+	@Test func emptyStructuredResultFallsBackToRecordedContent() throws
+	{
+		let source = try #require(ConversationSourceActivity(json: [
+			"id": "empty-structured",
+			"type": "mcpToolCall",
+			"result": [
+				"structuredContent": [:],
+				"content": [["type": "resource", "resource": [
+					"uri": "file:///result.txt",
+					"text": "Recorded resource result"
+				]]]
+			]
+		]))
+		#expect(source.displayPayload.contains("Recorded resource result"))
+		#expect(source.displayPayload.contains("file:///result.txt"))
+	}
+
 }

@@ -448,6 +448,60 @@ struct ConversationSourcesRenderingTests
 		}
 	}
 
+	@Test func supportedAndUnknownRecordedContentReachesSourceCards() throws
+	{
+		_ = NSApplication.shared
+		let cases: [([String: Any], String)] = [
+			(["content": [["type": "resource", "resource": [
+				"uri": "file:///guide.md",
+				"text": "Embedded resource text"
+			]]]], "Embedded resource text"),
+			(["content": [["type": "resource_link",
+							"uri": "https://example.com/guide",
+							"name": "Linked resource"]]], "Linked resource"),
+			(
+				["content": [["type": "image", "mimeType": "image/png", "data": "AAAA"]]],
+				"Recorded image data"
+			),
+			(
+				["content": [["type": "future", "value": "Unknown recorded value"]]],
+				"Unknown recorded value"
+			),
+			(["isError": true,
+				"content": [],
+				"structuredContent": ["message": "Access denied"]], "Access denied"),
+		]
+		for (result, expected) in cases
+		{
+			let item = try #require(CodexItem(json: [
+				"id": "result",
+				"type": "mcpToolCall",
+				"status": "completed",
+				"server": "chatgpt_space",
+				"tool": "read_page",
+				"result": result,
+			]))
+			let entry = ConversationContentReducer.entry(
+				for: item,
+				id: "turn:result"
+			)
+			let controller = try controller(entries: [entry])
+			defer
+			{
+				controller.invalidate()
+			}
+			let button = try disclosure(controller)
+			button.state = .on
+			try #require(button.dispatchConfiguredAction())
+			let card = try card(
+				controller,
+				invocationID: "result"
+			)
+			#expect(text(in: card).contains(expected))
+			#expect(!text(in: card).contains("No result recorded"))
+		}
+	}
+
 	private func controller(
 		entries: [ConversationEntry],
 		loadThumbnail: @escaping @Sendable (String) async -> Data? = SourceThumbnailLoader

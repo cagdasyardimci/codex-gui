@@ -129,22 +129,28 @@ struct ConversationSourceActivity: Equatable, Sendable
 		isError: Bool
 	) -> (text: String, language: String)
 	{
-		if isError, let error = json["error"], !(error is NSNull)
+		if isError, let error = json["error"],
+			SourceActivityResultPresentation.hasDisplayValue(error)
 		{
 			return SourceActivityResultPresentation.errorPayload(error)
 		}
-		if let result = json["result"], !(result is NSNull)
+		if let result = json["result"], SourceActivityResultPresentation.hasDisplayValue(result)
 		{
 			if let object = result as? [String: Any]
 			{
 				if isError, let content = object["content"] as? [[String: Any]]
 				{
-					return SourceActivityResultPresentation.displayContent(
+					let payload = SourceActivityResultPresentation.displayContent(
 						content,
 						isError: true
 					)
+					if !payload.text.isEmpty
+					{
+						return payload
+					}
 				}
-				if let structured = object["structuredContent"], !(structured is NSNull)
+				if let structured = object["structuredContent"],
+					SourceActivityResultPresentation.hasDisplayValue(structured)
 				{
 					return isError
 						? SourceActivityResultPresentation.errorPayload(structured)
@@ -152,12 +158,17 @@ struct ConversationSourceActivity: Equatable, Sendable
 				}
 				if let content = object["content"] as? [[String: Any]]
 				{
-					return SourceActivityResultPresentation.displayContent(
+					let payload = SourceActivityResultPresentation.displayContent(
 						content,
 						isError: isError
 					)
+					if !payload.text.isEmpty
+					{
+						return payload
+					}
 				}
-				if let text = object["text"] as? String
+				if let text = object["text"] as? String,
+					SourceActivityResultPresentation.hasDisplayValue(text)
 				{
 					return isError
 						? SourceActivityResultPresentation.errorPayload(text)
@@ -170,10 +181,14 @@ struct ConversationSourceActivity: Equatable, Sendable
 		}
 		if let content = json["contentItems"] as? [[String: Any]]
 		{
-			return SourceActivityResultPresentation.displayContent(
+			let payload = SourceActivityResultPresentation.displayContent(
 				content,
 				isError: isError
 			)
+			if !payload.text.isEmpty
+			{
+				return payload
+			}
 		}
 		if json["type"] as? String == "commandExecution",
 			let output = json["aggregatedOutput"] as? String
@@ -182,11 +197,12 @@ struct ConversationSourceActivity: Equatable, Sendable
 		}
 		if json["type"] as? String == "webSearch"
 		{
-			if let results = json["results"], !(results is NSNull)
+			if let results = json["results"],
+				SourceActivityResultPresentation.hasDisplayValue(results)
 			{
 				return SourceActivityResultPresentation.displayValue(results)
 			}
-			if let action = json["action"], !(action is NSNull)
+			if let action = json["action"], SourceActivityResultPresentation.hasDisplayValue(action)
 			{
 				return SourceActivityResultPresentation.displayValue(action)
 			}

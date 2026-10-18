@@ -102,7 +102,7 @@ struct SourceActivityResultPresentation
 		{
 			for key in ["message", "error", "text", "detail"]
 			{
-				if let message = object[key], !(message is NSNull)
+				if let message = object[key], hasDisplayValue(message)
 				{
 					return errorPayload(
 						message,
@@ -114,67 +114,89 @@ struct SourceActivityResultPresentation
 		return (displayValue(value).text, "text")
 	}
 
+	/// Empty protocol candidates must not hide a later recorded result or error message.
+	static func hasDisplayValue(
+		_ value: Any,
+		depth: Int = 0
+	) -> Bool
+	{
+		guard depth < 8
+		else
+		{
+			return true
+		}
+		if value is NSNull
+		{
+			return false
+		}
+		if let text = value as? String
+		{
+			return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+		}
+		if let values = value as? [Any]
+		{
+			return values.count > 32 || values.prefix(32).contains
+			{
+				hasDisplayValue(
+					$0,
+					depth: depth + 1
+				)
+			}
+		}
+		if let fields = value as? [String: Any]
+		{
+			return fields.count > 64 || fields.values.prefix(64).contains
+			{
+				hasDisplayValue(
+					$0,
+					depth: depth + 1
+				)
+			}
+		}
+		return true
+	}
+
 	static func displayContent(
 		_ content: [[String: Any]],
 		isError: Bool = false
 	) -> (text: String, language: String)
 	{
-		let texts = content.prefix(24).compactMap
+		if isError
 		{
-			$0["text"] as? String
+			return displayErrorContent(content)
 		}
-		guard !texts.isEmpty
+		let values = content.prefix(24).compactMap(contentValue)
+		guard !values.isEmpty
 		else
 		{
 			return ("", "")
 		}
-		if isError
+		if values.count == 1, content.count <= 24
 		{
-			var parts: [String] = []
-			var remaining = 16_384
-			for text in texts
-			{
-				guard remaining > 0
-				else
-				{
-					break
-				}
-				let part = errorPayload(text).text
-				parts.append(truncated(
-					part,
-					limit: remaining
-				))
-				remaining -= min(
-					part.count,
-					remaining
-				)
-			}
-			if content
-				.count > 24 || remaining == 0
-			{
-				parts.append("[Remaining result content omitted]")
-			}
-			return (parts.joined(separator: "\n\n"), "text")
-		}
-		if texts.count == 1, content.count <= 24
-		{
-			return displayValue(texts[0])
+			return displayValue(values[0])
 		}
 		var decoded: [Any] = []
 		var allJSON = true
-		for text in texts
+		for value in values
 		{
-			if let value = decodedJSON(text)
+			if let text = value as? String
 			{
-				decoded.append(value)
+				if let parsed = decodedJSON(text)
+				{
+					decoded.append(parsed)
+				}
+				else
+				{
+					allJSON = false
+					decoded.append(truncated(
+						text,
+						limit: 4_096
+					))
+				}
 			}
 			else
 			{
-				allJSON = false
-				decoded.append(truncated(
-					text,
-					limit: 4_096
-				))
+				decoded.append(value)
 			}
 		}
 		if content.count > 24
@@ -194,6 +216,84 @@ struct SourceActivityResultPresentation
 			text,
 			limit: 16_384
 		), "text")
+	}
+
+	private static func displayErrorContent(
+		_ content: [[String: Any]]
+	) -> (text: String, language: String)
+	{
+		let limit = 16_384
+		var remaining = limit
+		var omitted = content.count > 24
+		var parts: [String] = []
+		for item in content.prefix(24)
+		{
+			let separatorLength = parts.isEmpty ? 0 : 2
+			guard remaining > separatorLength
+			else
+			{
+				omitted = true
+				break
+			}
+			guard let value = contentValue(item)
+			else
+			{
+				continue
+			}
+			let text = errorPayload(value).text
+			guard !text.isEmpty
+			else
+			{
+				continue
+			}
+			let available = remaining - separatorLength
+			let part = String(text.prefix(available))
+			parts.append(part)
+			remaining -= separatorLength + part.count
+			if text.count > available
+			{
+				omitted = true
+				break
+			}
+		}
+		let text = parts.joined(separator: "\n\n")
+		if omitted
+		{
+			let marker = "\n\n[Remaining result content omitted]"
+			return (String(text.prefix(limit - marker.count)) + marker, "text")
+		}
+		return (text, "text")
+	}
+
+	private static func contentValue(_ content: [String: Any]) -> Any?
+	{
+		let type = content["type"] as? String
+		if type == nil || type == "text", let text = content["text"] as? String
+		{
+			return hasDisplayValue(text) ? text : nil
+		}
+		if type == "resource", let resource = content["resource"] as? [String: Any]
+		{
+			var fields = resource
+			fields["type"] = "resource"
+			if let blob = fields["blob"] as? String
+			{
+				fields["blob"] = "[Recorded binary resource: \(blob.utf8.count) encoded bytes]"
+			}
+			return fields
+		}
+		if let type, type == "image" || type == "audio"
+		{
+			var fields = content
+			if let data = fields["data"] as? String
+			{
+				fields["data"] = "[Recorded \(type) data: \(data.utf8.count) encoded bytes]"
+			}
+			return fields
+		}
+		// Resource links retain URI, title and MIME metadata. Unknown kinds remain inspectable
+		// through the same bounded JSON presentation instead of appearing to have no result.
+		return hasDisplayValue(content) ? content : nil
 	}
 
 	static func displayValue(_ value: Any) -> (text: String, language: String)
