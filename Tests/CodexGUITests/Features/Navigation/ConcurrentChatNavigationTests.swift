@@ -86,6 +86,7 @@ struct ConcurrentChatNavigationTests
 		) as? TaskSidebarCellView)
 		#expect(running.progressRing.isRunning)
 		#expect(approval.textField?.stringValue == "●  Second · Awaiting approval")
+		#expect(approval.textField?.textColor == .systemOrange)
 		#expect(approval.accessibilityLabel()?.contains("Awaiting approval task") == true)
 		snapshot.threadExecutions["a"] = ThreadExecutionPresentation(
 			state: .completed,
@@ -98,6 +99,7 @@ struct ConcurrentChatNavigationTests
 			row: 1
 		) as? TaskSidebarCellView)
 		#expect(uncertain.textField?.stringValue == "●  First · Outcome unknown")
+		#expect(uncertain.textField?.textColor == .systemGreen)
 		#expect(uncertain.unreadDot.isHidden)
 		#expect(controller.currentProjectActiveTaskCount == 2)
 	}

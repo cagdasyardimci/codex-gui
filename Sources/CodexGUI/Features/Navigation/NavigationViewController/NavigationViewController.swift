@@ -207,7 +207,21 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			projectPath: snapshot.projectPath
 		)
 		let previousPresentation = renderedPresentation
-		guard previousPresentation != snapshot
+		let workspaceMenuMatches = previousPresentation.map
+		{
+			NavigationMenuContent.sameWorkspaces(
+				$0.taskWorkspaces,
+				snapshot.taskWorkspaces
+			)
+		} ?? false
+		let projectNamesMatch = previousPresentation.map
+		{
+			NavigationMenuContent.sameProjectNames(
+				$0.projectDisplayNames,
+				snapshot.projectDisplayNames
+			)
+		} ?? false
+		guard previousPresentation != snapshot || !workspaceMenuMatches || !projectNamesMatch
 		else
 		{
 			return
@@ -229,7 +243,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 				|| pinnedProjectPaths != snapshot.pinnedProjectPaths
 				|| removedProjectPaths != snapshot.removedProjectPaths
 				|| pinnedTasks != snapshot.pinnedTasks
-				|| projectDisplayNames != snapshot.projectDisplayNames
+				|| !projectNamesMatch
 		if currentProject != nextProject
 		{
 			isCurrentProjectCollapsed = false
@@ -250,13 +264,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		{
 			!$0.recentProjects.isEmpty || $0.projectPath != nil
 		}
-		let workspaceMenuMatches = previousPresentation.map
-		{
-			NavigationMenuContent.sameWorkspaces(
-				$0.taskWorkspaces,
-				snapshot.taskWorkspaces
-			)
-		} ?? false
 		let taskMenuChanged =
 			menuOwnerChanged || !workspaceMenuMatches || couldCreateTask != canCreateTask
 		renderTaskWorkspaces(
@@ -288,13 +295,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		}
 		updateManagementButtons()
 
-		let projectNamesMatch = previousPresentation.map
-		{
-			NavigationMenuContent.sameProjectNames(
-				$0.projectDisplayNames,
-				snapshot.projectDisplayNames
-			)
-		} ?? false
 		if menuOwnerChanged || previousPresentation?.recentProjects != snapshot.recentProjects
 			|| !projectNamesMatch
 		{

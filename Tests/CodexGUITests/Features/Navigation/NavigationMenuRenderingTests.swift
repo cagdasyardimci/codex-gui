@@ -122,7 +122,6 @@ struct NavigationMenuRenderingTests
 		)
 		#expect(workspace == changed)
 		snapshot.taskWorkspaces = [changed]
-		snapshot.taskStatusSummary = "Current task status"
 		controller.render(snapshot)
 		let taskItem = try #require(controller.taskPicker.item(at: 1))
 		#expect(taskItem !== oldTaskItem)
@@ -146,7 +145,6 @@ struct NavigationMenuRenderingTests
 		let taskItem = try #require(controller.taskPicker.item(at: 1))
 		let oldRecentItem = try #require(controller.recentProjectsButton.item(at: 1))
 		snapshot.projectDisplayNames = [project.path: "Cafe\u{0301}"]
-		snapshot.taskStatusSummary = "Current task status"
 		controller.render(snapshot)
 		let recentItem = try #require(controller.recentProjectsButton.item(at: 1))
 		#expect(recentItem !== oldRecentItem)

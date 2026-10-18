@@ -348,7 +348,8 @@ extension NavigationViewController
 		let state = execution?.title ?? "Running"
 		cell.textField?.stringValue =
 			showsInlineStatus ? "●  \(name) · \(state)" : name
-		cell.textField?.textColor = showsInlineStatus ? activeTaskColor : AppKitColorTokens
+		cell.textField?
+			.textColor = showsInlineStatus ? taskColor(for: execution?.state) : AppKitColorTokens
 			.sidebarText
 		cell.textField?.toolTip = nil
 		let project = thread.cwd.isEmpty ? currentProject : URL(fileURLWithPath: thread.cwd)
@@ -578,9 +579,9 @@ extension NavigationViewController
 		unreadThreadIDs.remove(threadID)
 	}
 
-	private var activeTaskColor: NSColor
+	private func taskColor(for state: ExecutionState?) -> NSColor
 	{
-		switch activeExecutionState
+		switch state
 		{
 		case .awaitingApproval, .awaitingAnswer: .systemOrange
 		case .failed, .disconnected: .systemRed
