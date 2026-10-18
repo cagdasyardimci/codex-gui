@@ -234,7 +234,10 @@ struct FilesViewControllerIntegrationTests
 				]
 				#expect(Set(titles).isDisjoint(with: extraControls))
 				let searchMenu = try #require(search.menu)
-				#expect(searchMenu.items.map(\.title).contains("Search file contents"))
+				#expect(searchMenu.items.map(\.title) == [
+					"Search file contents",
+					"Open file by name",
+				])
 				#expect(toggle.dispatchConfiguredAction())
 				window.setContentSize(NSSize(
 					width: 892,
@@ -269,6 +272,125 @@ struct FilesViewControllerIntegrationTests
 			}
 			_ = await runtime.shutdown()
 			window.close()
+		}
+	}
+
+	@Test(.timeLimit(.minutes(1)))
+	func toolbarSearchOpensContentAndContextMenuPreservesFilenameQuickOpen() async throws
+	{
+		let root = FileManager.default.temporaryDirectory
+			.appendingPathComponent(
+				UUID().uuidString,
+				isDirectory: true
+			)
+		try FileManager.default.createDirectory(
+			at: root,
+			withIntermediateDirectories: true
+		)
+		defer
+		{
+			try? FileManager.default.removeItem(at: root)
+		}
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let runtime = FileViewerRuntime()
+			let files = FilesViewController(runtime: runtime)
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 720,
+					height: 560
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			defer
+			{
+				files.contentSearch.dismiss()
+				files.quickOpen.dismiss()
+				window.close()
+			}
+			window.contentViewController = files
+			runtime.switchRoot(root.path)
+			do
+			{
+				window.contentView?.layoutSubtreeIfNeeded()
+				let search = try #require(findButton(
+					"Search files",
+					in: files.view
+				))
+				let searchMenu = try #require(search.menu)
+				do
+				{
+					defer
+					{
+						files.contentSearch.dismiss()
+					}
+					#expect(search.dispatchConfiguredAction())
+					let sheet = try #require(window.attachedSheet)
+					#expect(sheet.title == "Search Files")
+					let contentView = try #require(sheet.contentView)
+					let fields = descendants(in: contentView).compactMap
+					{
+						$0 as? NSTextField
+					}
+					let query = try #require(fields.first
+					{
+						$0.accessibilityLabel() == "Search file contents"
+					})
+					let mask = try #require(fields.first
+					{
+						$0.accessibilityLabel() == "File mask"
+					})
+					#expect(!mask.isHiddenOrHasHiddenAncestor)
+					let editor = try #require(query.currentEditor())
+					#expect(sheet.firstResponder === editor)
+				}
+				#expect(window.attachedSheet == nil)
+				do
+				{
+					defer
+					{
+						files.quickOpen.dismiss()
+					}
+					let openByName = try #require(searchMenu.items.first
+					{
+						$0.title == "Open file by name"
+					})
+					let action = try #require(openByName.action)
+					#expect(openByName.isEnabled)
+					#expect(NSApplication.shared.sendAction(
+						action,
+						to: openByName.target,
+						from: openByName
+					))
+					let sheet = try #require(window.attachedSheet)
+					#expect(sheet.title == "Quick Open")
+					let contentView = try #require(sheet.contentView)
+					let query = try #require(descendants(in: contentView)
+						.compactMap
+						{
+							$0 as? NSTextField
+						}.first
+						{
+							$0.accessibilityLabel() == "Open file by name"
+						})
+					let editor = try #require(query.currentEditor())
+					#expect(sheet.firstResponder === editor)
+				}
+				#expect(window.attachedSheet == nil)
+			}
+			catch
+			{
+				_ = await runtime.shutdown()
+				throw error
+			}
+			_ = await runtime.shutdown()
 		}
 	}
 

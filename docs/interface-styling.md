@@ -79,8 +79,8 @@ Icon-only toolbar controls have square bounds and circular backgrounds. Preview 
 their replacement and Keep Open behavior is unchanged. The fixed-height tools tab strip
 scrolls by wheel input and reveals the selected tab without a horizontal scrollbar, so
 legacy scrollbar preferences cannot reduce the tab viewport height. Source/Preview keeps
-its own toolbar control, using an icon in compact panes. Filename search is the document/search
-button's primary action; its context menu also exposes content search. The Open capsule
+its own toolbar control, using an icon in compact panes. Content search is the document/search
+button's primary action; its context menu also exposes opening a file by name. The Open capsule
 lists available applications, opening the file's folder or GitHub location, and Save as.
 Copy Markdown sits at the document's top-right edge rather than in the Open menu and
 copies the current source buffer. Its accessory area shares the document background,

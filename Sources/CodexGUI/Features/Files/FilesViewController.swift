@@ -21,7 +21,7 @@ final class FilesViewController: NSViewController
 		target: nil,
 		action: nil
 	)
-	private let quickOpenButton = ViewerToolbarButton(
+	private let searchButton = ViewerToolbarButton(
 		title: "",
 		target: nil,
 		action: nil
@@ -135,12 +135,12 @@ final class FilesViewController: NSViewController
 		navigatorButton.setAccessibilityLabel("Toggle file navigator")
 		navigatorButton.target = self
 		navigatorButton.action = #selector(toggleNavigator)
-		quickOpenButton.target = self
-		quickOpenButton.action = #selector(showQuickOpen)
-		quickOpenButton.image = FileViewerIcons.image(.fileSearch)
-		quickOpenButton.imagePosition = .imageOnly
-		quickOpenButton.setAccessibilityLabel("Search files")
-		for button in [quickOpenButton, navigatorButton]
+		searchButton.target = self
+		searchButton.action = #selector(showContentSearch)
+		searchButton.image = FileViewerIcons.image(.fileSearch)
+		searchButton.imagePosition = .imageOnly
+		searchButton.setAccessibilityLabel("Search files")
+		for button in [searchButton, navigatorButton]
 		{
 			NSLayoutConstraint.activate([
 				button.widthAnchor.constraint(equalToConstant: 34),
@@ -157,12 +157,12 @@ final class FilesViewController: NSViewController
 		actionsButton.target = self
 		actionsButton.action = #selector(showFileActions)
 		actionsButton.setAccessibilityLabel("Open file actions")
-		quickOpenButton.menu = makeSearchMenu()
+		searchButton.menu = makeSearchMenu()
 		toolbarActions.orientation = .horizontal
 		toolbarActions.distribution = .fill
 		toolbarActions.alignment = .centerY
 		toolbarActions.spacing = 6
-		for button in [quickOpenButton, sourceButton, navigatorButton, actionsButton]
+		for button in [searchButton, sourceButton, navigatorButton, actionsButton]
 		{
 			toolbarActions.addArrangedSubview(button)
 		}
@@ -632,8 +632,8 @@ final class FilesViewController: NSViewController
 	private func makeSearchMenu() -> NSMenu
 	{
 		let menu = NSMenu(title: "Search")
-		for (title, action) in [("Search files", #selector(showQuickOpen)),
-								("Search file contents", #selector(showContentSearch))]
+		for (title, action) in [("Search file contents", #selector(showContentSearch)),
+								("Open file by name", #selector(showQuickOpen))]
 		{
 			let item = NSMenuItem(
 				title: title,
