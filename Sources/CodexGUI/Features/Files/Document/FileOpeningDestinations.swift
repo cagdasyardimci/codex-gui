@@ -79,10 +79,29 @@ enum FileGitHubURL
 			["rev-parse", "HEAD"],
 			root: location.root
 		)
+		let repositoryRoot = try git(
+			["rev-parse", "--show-toplevel"],
+			root: location.root
+		)
+		let root = URL(fileURLWithPath: repositoryRoot).standardizedFileURL
+			.resolvingSymlinksInPath()
+		let browsingRoot = URL(fileURLWithPath: location.root).standardizedFileURL
+			.resolvingSymlinksInPath()
+		let file = browsingRoot.appendingPathComponent(location.relativePath).standardizedFileURL
+		let prefix = root.path == "/" ? "/" : root.path + "/"
+		guard file.path.utf8.starts(with: prefix.utf8)
+		else
+		{
+			throw error("This file is outside the Git repository.")
+		}
+		let relativePath = String(
+			decoding: file.path.utf8.dropFirst(prefix.utf8.count),
+			as: UTF8.self
+		)
 		guard let url = make(
 			origin: origin,
 			commit: commit,
-			relativePath: location.relativePath
+			relativePath: relativePath
 		)
 		else
 		{

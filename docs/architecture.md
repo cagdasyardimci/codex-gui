@@ -93,6 +93,9 @@ project containment, and emits relative context descriptions with absolute backe
 Shared file capabilities govern source and rich-preview controls; SVG retains editable, searchable
 source alongside its preview.
 
+GitHub opening uses the captured file's repository-relative path even when the Files browser starts
+in a subfolder.
+
 Find routes to Files only when keyboard focus belongs to the visible Files view; source text
 uses the native find bar. Closing a selected file chooses the next surviving tab to its right,
 or the nearest tab to its left, using the visible tab order after reordering.
