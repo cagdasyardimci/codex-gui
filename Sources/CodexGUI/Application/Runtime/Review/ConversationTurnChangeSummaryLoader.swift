@@ -49,6 +49,11 @@ final class ConversationTurnChangeSummaryLoader
 		{
 			[weak self] in
 			let result = await service.compare(nextRequest)
+			guard !Task.isCancelled
+			else
+			{
+				return
+			}
 			let summary = await Task.detached(priority: .userInitiated)
 			{
 				ConversationTurnChangeSummary(

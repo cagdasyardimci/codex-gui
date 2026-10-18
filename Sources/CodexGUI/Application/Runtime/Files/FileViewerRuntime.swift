@@ -27,6 +27,10 @@ final class FileViewerRuntime
 	private var directoryTasks: [FileLocation: Task<Void, Never>] = [:]
 	private var searchTask: Task<Void, Never>?
 	private var retiredTasks: [UUID: Task<Void, Never>] = [:]
+	var scheduledAutosaveCount: Int
+	{
+		autosaveTasks.count
+	}
 
 	func currentSearchTask() -> Task<Void, Never>?
 	{
@@ -130,15 +134,16 @@ final class FileViewerRuntime
 		{
 			return
 		}
-		autosaveTasks[id]?.cancel()
+		cancelAndRetire(autosaveTasks.removeValue(forKey: id))
 		let delay = autosaveDelay
 		autosaveTasks[id] = Task
 		{
 			[weak self] in
 			try? await Task.sleep(for: delay)
-			if !Task.isCancelled
+			if !Task.isCancelled, let self
 			{
-				_ = await self?.save(id)
+				self.retire(self.autosaveTasks.removeValue(forKey: id))
+				_ = await self.save(id)
 			}
 		}
 	}
@@ -146,7 +151,7 @@ final class FileViewerRuntime
 	@discardableResult
 	func save(_ id: UUID) async -> FileViewerFailure?
 	{
-		autosaveTasks[id]?.cancel()
+		cancelAndRetire(autosaveTasks.removeValue(forKey: id))
 		if let current = saveTasks[id]
 		{
 			await current.value
@@ -261,7 +266,7 @@ final class FileViewerRuntime
 		{
 			return .cancelled
 		}
-		autosaveTasks[id]?.cancel()
+		cancelAndRetire(autosaveTasks.removeValue(forKey: id))
 		if let task = saveTasks[id]
 		{
 			await task.value
@@ -573,6 +578,16 @@ final class FileViewerRuntime
 			return
 		}
 		task.cancel()
+		retire(task)
+	}
+
+	private func retire(_ task: Task<Void, Never>?)
+	{
+		guard let task
+		else
+		{
+			return
+		}
 		let id = UUID()
 		retiredTasks[id] = task
 		Task

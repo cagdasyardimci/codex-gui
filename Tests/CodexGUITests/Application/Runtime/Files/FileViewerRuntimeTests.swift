@@ -32,6 +32,111 @@ struct FileViewerRuntimeTests
 	}
 
 	@Test @MainActor
+	func closedDocumentsReleaseTheirScheduledAutosaves() async throws
+	{
+		try await withRuntimeFixture
+		{
+			runtime, service in
+			runtime.switchRoot("/tmp/workspace")
+			for index in 0 ..< 10
+			{
+				let location = FileLocation(
+					root: "/tmp/workspace",
+					relativePath: "document-\(index).txt"
+				)
+				runtime.open(
+					location,
+					retained: true
+				)
+				let id = try #require(runtime.state.selectedDocumentID)
+				await service.waitForRead(location)
+				await service.finishRead(
+					location,
+					text: "disk"
+				)
+				await runtime.readTask(for: id)?.value
+				runtime.edit(
+					id,
+					text: "first"
+				)
+				runtime.edit(
+					id,
+					text: "local"
+				)
+				#expect(runtime.scheduledAutosaveCount == 1)
+				if index.isMultiple(of: 2)
+				{
+					#expect(await runtime.save(id) == nil)
+					#expect(runtime.scheduledAutosaveCount == 0)
+				}
+				#expect(await runtime.close(
+					id,
+					choice: .discard
+				) == .closed)
+				#expect(runtime.scheduledAutosaveCount == 0)
+			}
+			// Shutdown awaits every replaced or closed timer's actual return.
+			#expect(await runtime.shutdown().isEmpty)
+			#expect(await service.savedTexts() == Array(
+				repeating: "local",
+				count: 5
+			))
+		}
+	}
+
+	@Test @MainActor
+	func firedAutosavesRetireBeforeAReentrantEditSchedulesTheNextTimer() async throws
+	{
+		try await withRuntimeFixture(autosaveDelay: .milliseconds(10))
+		{
+			runtime, service in
+			let location = FileLocation(
+				root: "/tmp/workspace",
+				relativePath: "file.txt"
+			)
+			runtime.switchRoot(location.root)
+			runtime.open(location)
+			let id = try #require(runtime.state.selectedDocumentID)
+			await service.waitForRead(location)
+			await service.finishRead(
+				location,
+				text: "disk"
+			)
+			await runtime.readTask(for: id)?.value
+			await service.blockNextSave()
+			var didEditDuringSave = false
+			defer
+			{
+				runtime.onChange = nil
+			}
+			runtime.onChange =
+			{
+				state in
+				if state.selectedDocument?.isSaving == true, !didEditDuringSave
+				{
+					didEditDuringSave = true
+					#expect(runtime.scheduledAutosaveCount == 0)
+					runtime.edit(
+						id,
+						text: "second"
+					)
+					#expect(runtime.scheduledAutosaveCount == 1)
+				}
+			}
+			runtime.edit(
+				id,
+				text: "first"
+			)
+			await service.waitForSaveCount(1)
+			#expect(didEditDuringSave)
+			await service.releaseSave()
+			#expect(await runtime.shutdown().isEmpty)
+			#expect(runtime.scheduledAutosaveCount == 0)
+			#expect(await service.savedTexts() == ["first", "second"])
+		}
+	}
+
+	@Test @MainActor
 	func previewReplacementProtectsEditedDocumentAndReusesLocation() async throws
 	{
 		try await withRuntimeFixture
@@ -533,13 +638,14 @@ struct FileViewerRuntimeTests
 
 @MainActor
 private func withRuntimeFixture(
+	autosaveDelay: Duration = .seconds(60),
 	_ body: (FileViewerRuntime, ControlledFileViewerService) async throws -> Void
 ) async throws
 {
 	let service = ControlledFileViewerService()
 	let runtime = FileViewerRuntime(
 		service: service,
-		autosaveDelay: .seconds(60)
+		autosaveDelay: autosaveDelay
 	)
 	do
 	{
