@@ -315,6 +315,8 @@ final class SubagentsViewController: NSViewController
 
 	private func render()
 	{
+		let activeAgents = subagents.activeAgents
+		let doneAgents = subagents.doneAgents
 		agentActions.removeAll()
 		completionLabels.removeAll()
 		elapsedLabels.removeAll()
@@ -323,12 +325,12 @@ final class SubagentsViewController: NSViewController
 			content.removeArrangedSubview(child)
 			child.removeFromSuperview()
 		}
-		appendHeading("Active · \(subagents.activeAgents.count)")
-		if subagents.activeAgents.isEmpty
+		appendHeading("Active · \(activeAgents.count)")
+		if activeAgents.isEmpty
 		{
 			appendHeading("No active subagents")
 		}
-		for agent in subagents.activeAgents
+		for agent in activeAgents
 		{
 			appendRow(agent)
 		}
@@ -339,14 +341,14 @@ final class SubagentsViewController: NSViewController
 				after: last
 			)
 		}
-		appendHeading("Done · \(subagents.doneAgents.count)")
+		appendHeading("Done · \(doneAgents.count)")
 		let visibleDone = showsAllDoneAgents
-			? subagents.doneAgents : Array(subagents.doneAgents.prefix(Self.donePreviewLimit))
+			? doneAgents[...] : doneAgents.prefix(Self.donePreviewLimit)
 		for agent in visibleDone
 		{
 			appendRow(agent)
 		}
-		let remainingCount = subagents.doneAgents.count - visibleDone.count
+		let remainingCount = doneAgents.count - visibleDone.count
 		if remainingCount > 0
 		{
 			let button = NSButton(

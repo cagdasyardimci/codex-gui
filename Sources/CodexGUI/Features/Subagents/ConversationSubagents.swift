@@ -111,18 +111,18 @@ struct ConversationSubagents: Equatable
 
 	var activeAgents: [CodexSubagentActivity]
 	{
-		records.filter
+		records.compactMap
 		{
-			$0.status == .active
-		}.map(\.activity)
+			$0.status == .active ? $0.activity : nil
+		}
 	}
 
 	var doneAgents: [CodexSubagentActivity]
 	{
-		records.filter
+		records.compactMap
 		{
-			$0.status != .active
-		}.map(\.activity)
+			$0.status != .active ? $0.activity : nil
+		}
 	}
 
 	func status(for agent: CodexSubagentActivity) -> Status?
@@ -135,16 +135,20 @@ struct ConversationSubagents: Equatable
 
 	func summary(parentThreadID: String) -> SummaryAgentProjection
 	{
-		SummaryAgentProjection(
-			identities: agents.map
+		let completedCount = records.lazy.filter
+		{
+			$0.status != .active
+		}.count
+		return SummaryAgentProjection(
+			identities: records.map
 			{
 				DelegatedAgentIdentity(
 					parentThreadID: parentThreadID,
-					agentThreadID: $0.identity
+					agentThreadID: $0.activity.identity
 				)
 			},
-			completedCount: doneAgents.count,
-			runningCount: activeAgents.count,
+			completedCount: completedCount,
+			runningCount: records.count - completedCount,
 			aggregationDescription: "Subagents in loaded conversation history"
 		)
 	}
