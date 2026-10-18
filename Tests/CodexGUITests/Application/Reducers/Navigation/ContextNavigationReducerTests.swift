@@ -17,11 +17,134 @@ struct ContextNavigationReducerTests
 		model.connection.generation = 1
 		model.execution.state = .ready
 		model.conversations.selectedConversation = .thread("thread")
+		model.conversations.threads = [ThreadSummary(json: [
+			"id": "thread",
+			"cwd": "/tmp/context"
+		])!]
 		model.conversations.content[.thread("thread")] = ConversationContentModel(
 			hasLoadedHistory: true,
 			nextTurnsCursor: "0"
 		)
 		return model
+	}
+
+	@Test func archiveSearchLoadsListedHistoryDespiteAnUnrelatedActiveCache() throws
+	{
+		var model = try searchableFixture()
+		reduce(
+			&model,
+			.conversations(.archivedFilterRequested(
+				context(model),
+				archived: true
+			))
+		)
+		let list = ConversationListOperation(
+			context: context(model),
+			archived: true
+		)
+		reduce(
+			&model,
+			.conversations(.threadListRequested(list))
+		)
+		reduce(
+			&model,
+			.conversations(.threadListReceived(
+				list,
+				.succeeded([try #require(ThreadSummary(json: [
+					"id": "archived",
+					"cwd": "/tmp/context"
+				]))])
+			))
+		)
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let search = try #require(model.contextNavigation.messageSearch)
+		#expect(search.scope.loadedThreadCount == 0)
+		#expect(search.scope.totalThreadCount == 1)
+		#expect(search.scope.threadsWithEarlierTurns == 0)
+		#expect(search.scope.canLoadMore)
+		#expect(search.hits.isEmpty)
+		#expect(model.contextNavigation.searchableThreads.isEmpty)
+		#expect(model.conversations.content[.thread("thread")]?.hasLoadedHistory == true)
+		let result = reduce(
+			&model,
+			.contextNavigation(.moreSearchHistoryRequested(context(model)))
+		)
+		let read = try #require(model.contextNavigation.pendingSearch?.read)
+		#expect(read.context.threadID == "archived")
+		#expect(result.effects.contains
+		{
+			if case .readConversationHistory(let operation) = $0
+			{
+				return operation.context.threadID == "archived" && operation.purpose == .search
+			}
+			return false
+		})
+	}
+
+	@Test func loadMoreUsesCurrentListedIDsWhenPublishedScopeIsStale() throws
+	{
+		var model = try searchableFixture()
+		model.conversations.content[.thread("thread")]?.nextTurnsCursor = nil
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: ""
+			))
+		)
+		#expect(model.contextNavigation.messageSearch?.scope.isComplete == true)
+		model.conversations.threads = [try #require(ThreadSummary(json: [
+			"id": "unloaded",
+			"cwd": "/tmp/context"
+		]))]
+		reduce(
+			&model,
+			.contextNavigation(.moreSearchHistoryRequested(context(model)))
+		)
+		#expect(model.contextNavigation.pendingSearch?.read?.context.threadID == "unloaded")
+	}
+
+	@Test func offListCachedHistoryDoesNotAffectCoverageOrInvalidateSearch() throws
+	{
+		var model = try searchableFixture()
+		model.conversations.content[.thread("thread")]?.nextTurnsCursor = nil
+		model.conversations.threads.append(model.conversations.threads[0])
+		model.conversations.content[.thread("off-list")] = ConversationContentModel(
+			hasLoadedHistory: true,
+			nextTurnsCursor: "earlier"
+		)
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		let search = try #require(model.contextNavigation.messageSearch)
+		#expect(search.scope.loadedThreadCount == 1)
+		#expect(search.scope.totalThreadCount == 1)
+		#expect(search.scope.isComplete)
+		model.conversations.content[.thread("off-list")]?.nextTurnsCursor = nil
+		model.conversations.content[.thread("off-list")]?.loadedTurns = [CodexTurn(
+			id: "unrelated",
+			status: "completed",
+			items: [],
+			error: nil
+		)]
+		let changed = ContextNavigationReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		#expect(changed.effects.isEmpty)
+		#expect(model.contextNavigation.pendingMessageSearch == old)
+		#expect(model.contextNavigation.searchIndexRevision == old.historyRevision)
 	}
 
 	private func context(
@@ -662,6 +785,97 @@ struct ContextNavigationReducerTests
 			totalThreadCount: 1
 		)
 		#expect(results.hits.map(\.itemID) == ["answer", "new-answer"])
+	}
+
+	@Test(arguments: [nil, " \n ", " Chosen title "] as [String?])
+	func searchTitlesUseSharedConversationFallbacks(name: String?) throws
+	{
+		var model = try searchableFixture()
+		let thread = try #require(ThreadSummary(json: [
+			"id": "thread",
+			"preview": "Fix\n  image sizing",
+			"cwd": "/tmp/context"
+		]))
+		model.conversations.threads = [thread]
+		model.conversations.threads[0].name = name
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let expected = model.conversations.threads[0].displayTitle
+		let results = MessageSearch.search(
+			query: "needle",
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		#expect(results.hits.first?.threadTitle == expected)
+		#expect(model.contextNavigation.searchIndexSource?.titles["thread"] == expected)
+	}
+
+	@Test func previewChangesInvalidateAnUnnamedSearchTitle() throws
+	{
+		var model = try searchableFixture()
+		model.conversations.threads[0].name = " \n "
+		model.conversations.threads[0].preview = "Original request"
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		model.conversations.threads[0].preview = "Fix\n  image sizing"
+		_ = ContextNavigationReducer.reduceDomainEvent(
+			&model,
+			.conversationContentChanged
+		)
+		let current = try #require(model.contextNavigation.pendingMessageSearch)
+		#expect(current.historyRevision > old.historyRevision)
+		let results = MessageSearch.search(
+			query: current.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		#expect(results.hits.first?.threadTitle == "Fix image sizing")
+	}
+
+	@Test func titleNotificationsRefreshPinnedAndSearchTitlesBeforeListRefresh() throws
+	{
+		var model = try searchableFixture()
+		model.preferences.pinnedTasks = model.conversations.threads
+		reduce(
+			&model,
+			.contextNavigation(.searchRequested(
+				context(model),
+				query: "needle"
+			))
+		)
+		let old = try #require(model.contextNavigation.pendingMessageSearch)
+		reduce(
+			&model,
+			.execution(.backendObserved(
+				context(model),
+				.threadNameUpdated(
+					threadId: "thread",
+					name: "Generated title"
+				)
+			))
+		)
+		let current = try #require(model.contextNavigation.pendingMessageSearch)
+		#expect(current.historyRevision > old.historyRevision)
+		let results = MessageSearch.search(
+			query: current.query,
+			threads: model.contextNavigation.searchableThreads,
+			totalThreadCount: 1
+		)
+		#expect(results.hits.first?.threadTitle == "Generated title")
+		#expect(model.preferences.pinnedTasks.first?.displayTitle
+			== model.conversations.threads.first?.displayTitle)
+		#expect(model.conversations.pendingList == nil)
 	}
 
 	@Test func equivalentUnicodeRenameRefreshesTheDisplayedSearchTitle() throws

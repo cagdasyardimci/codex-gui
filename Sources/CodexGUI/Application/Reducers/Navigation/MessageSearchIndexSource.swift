@@ -11,14 +11,28 @@ struct MessageSearchIndexSource: Equatable
 
 	let histories: [String: History]
 	let titles: [String: String]
-	let totalThreadCount: Int
+	var totalThreadCount: Int
+	{
+		titles.count
+	}
 
 	init(_ model: WorkspaceModel)
 	{
+		let titles = Dictionary(
+			model.conversations.threads.map
+			{
+				($0.id, $0.displayTitle)
+			},
+			uniquingKeysWith:
+			{
+				first, _ in first
+			}
+		)
+		self.titles = titles
 		var histories: [String: History] = [:]
 		for (key, content) in model.conversations.content
 		{
-			guard case .thread(let id) = key, content.hasLoadedHistory
+			guard case .thread(let id) = key, titles[id] != nil, content.hasLoadedHistory
 			else
 			{
 				continue
@@ -29,17 +43,6 @@ struct MessageSearchIndexSource: Equatable
 			)
 		}
 		self.histories = histories
-		titles = Dictionary(
-			model.conversations.threads.map
-			{
-				($0.id, $0.name ?? $0.id)
-			},
-			uniquingKeysWith:
-			{
-				first, _ in first
-			}
-		)
-		totalThreadCount = model.conversations.threads.count
 	}
 
 	static func == (
@@ -48,7 +51,6 @@ struct MessageSearchIndexSource: Equatable
 	) -> Bool
 	{
 		guard left.histories == right.histories,
-				left.totalThreadCount == right.totalThreadCount,
 				left.titles.count == right.titles.count
 		else
 		{

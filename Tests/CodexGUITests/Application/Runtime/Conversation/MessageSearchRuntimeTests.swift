@@ -12,6 +12,10 @@ struct MessageSearchRuntimeTests
 			sessionID: UUID(),
 			canonicalCheckoutPath: "/tmp/message-search"
 		))
+		model.conversations.threads = [try #require(ThreadSummary(json: [
+			"id": "thread",
+			"cwd": "/tmp/message-search"
+		]))]
 		let items = try [
 			["id": "text", "type": "agentMessage", "text": "Café decision"],
 			["id": "command", "type": "commandExecution", "command": "echo cafe"],

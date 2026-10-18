@@ -26,7 +26,6 @@ extension ContextNavigationReducer
 			}
 			model.contextNavigation.pendingSearch = nil
 			model.contextNavigation.searchError = nil
-			_ = updateSearchIndex(model: &model)
 			scheduleMessageSearch(
 				context,
 				query: query,
@@ -109,16 +108,19 @@ extension ContextNavigationReducer
 			model
 		), model.connection.isConnected,
 		model.contextNavigation.pendingSearch == nil,
-		model.contextNavigation.messageSearch?.scope.canLoadMore == true
+		model.contextNavigation.messageSearch != nil
 		else
 		{
 			return
 		}
-		let searchable = searchableThreads(model)
-		let cached = Set(searchable.map(\.threadID))
+		let source = MessageSearchIndexSource(model)
+		let searchable = searchableThreads(
+			model,
+			source: source
+		)
 		if let missing = model.conversations.threads.first(where:
 			{
-				!cached.contains($0.id)
+				source.histories[$0.id] == nil
 			})
 		{
 			var captured = context
@@ -220,29 +222,23 @@ extension ContextNavigationReducer
 		)
 	}
 
-	static func searchableThreads(_ model: WorkspaceModel) -> [SearchableThread]
+	private static func searchableThreads(
+		_ model: WorkspaceModel,
+		source: MessageSearchIndexSource
+	) -> [SearchableThread]
 	{
-		let titles = Dictionary(
-			model.conversations.threads.map
-			{
-				($0.id, $0.name ?? $0.id)
-			},
-			uniquingKeysWith:
-			{
-				first, _ in first
-			}
-		)
-		return model.conversations.content.compactMap
+		return source.histories.keys.compactMap
 		{
-			key, value -> SearchableThread? in
-			guard case .thread(let id) = key, value.hasLoadedHistory
+			id -> SearchableThread? in
+			guard let value = model.conversations.content[.thread(id)],
+					let title = source.titles[id]
 			else
 			{
 				return nil
 			}
 			return SearchableThread(
 				threadID: id,
-				title: titles[id] ?? id,
+				title: title,
 				turns: value.loadedTurns,
 				hasEarlierTurns: value.nextTurnsCursor != nil
 			)
@@ -537,7 +533,10 @@ extension ContextNavigationReducer
 		{
 			return false
 		}
-		let threads = searchableThreads(model)
+		let threads = searchableThreads(
+			model,
+			source: source
+		)
 		model.contextNavigation.searchIndexSource = source
 		model.contextNavigation.searchableThreads = threads
 		model.contextNavigation.searchIndexRevision += 1
@@ -562,7 +561,7 @@ extension ContextNavigationReducer
 			model.contextNavigation.messageSearch = MessageSearch.pendingResults(
 				query: query,
 				threads: model.contextNavigation.searchableThreads,
-				totalThreadCount: model.conversations.threads.count
+				totalThreadCount: model.contextNavigation.searchIndexSource?.totalThreadCount ?? 0
 			)
 			return
 		}
@@ -598,15 +597,17 @@ extension ContextNavigationReducer
 		result: inout WorkspaceReduction
 	)
 	{
+		_ = updateSearchIndex(model: &model)
 		cancelMessageSearch(
 			model: &model,
 			result: &result
 		)
 		let threads = model.contextNavigation.searchableThreads
+		let totalThreadCount = model.contextNavigation.searchIndexSource?.totalThreadCount ?? 0
 		let pending = MessageSearch.pendingResults(
 			query: query,
 			threads: threads,
-			totalThreadCount: model.conversations.threads.count
+			totalThreadCount: totalThreadCount
 		)
 		model.contextNavigation.messageSearch = pending
 		model.contextNavigation.messageSearchContext = pending.query.isEmpty ? nil : context
@@ -624,7 +625,7 @@ extension ContextNavigationReducer
 		result.effects.append(.searchMessages(
 			operation,
 			threads: threads,
-			totalThreadCount: model.conversations.threads.count
+			totalThreadCount: totalThreadCount
 		))
 	}
 }

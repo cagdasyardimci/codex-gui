@@ -101,20 +101,168 @@ struct ConversationTitleTests
 		#expect(model.conversations.threads.first?.name == "My chosen name")
 	}
 
+	@Test func notificationsRefreshAndPersistPinnedMetadataBeforeAListRefresh() throws
+	{
+		var model = workspace()
+		model.conversations.threads = [summary()]
+		model.preferences.pinnedTasks = [summary()]
+		for name in ["Generated title", "External rename"]
+		{
+			let result = observeTitle(
+				name,
+				model: &model
+			)
+			let live = try #require(model.conversations.threads.first)
+			let pin = try #require(model.preferences.pinnedTasks.first)
+			#expect(live.displayTitle == name)
+			#expect(pin.displayTitle == live.displayTitle)
+			#expect(model.conversations.pendingList == nil)
+			let write = try #require(result.effects.compactMap
+			{
+				if case .persistPreference(let write) = $0
+				{
+					return write
+				}
+				return nil
+			}.first)
+			#expect(write.context.workspace == model.identity)
+			#expect(write.context.generation == model.connection.generation)
+			#expect(model.preferences.pendingPreferenceWrites[.taskPin("thread")] == write.context)
+			guard case .taskPin(
+				let persisted,
+				pinned: true
+			) = write.value
+			else
+			{
+				Issue.record("Expected the renamed task pin to be persisted")
+				return
+			}
+			#expect(persisted.name == name)
+		}
+	}
+
+	@Test func notificationsRefreshPinsOutsideTheCurrentList() throws
+	{
+		var model = workspace()
+		model.preferences.pinnedTasks = [summary()]
+		let result = observeTitle(
+			"Renamed archived task",
+			model: &model
+		)
+		#expect(model.conversations.threads.isEmpty)
+		#expect(model.preferences.pinnedTasks.first?.displayTitle == "Renamed archived task")
+		#expect(result.effects.count == 1)
+	}
+
+	@Test(arguments: [nil, "Cafe\u{301}"] as [String?])
+	func notificationsPreserveClearedNamesAndExactUnicodeSpelling(name: String?) throws
+	{
+		var model = workspace()
+		var old = summary()
+		old.name = "Café"
+		model.conversations.threads = [old]
+		model.preferences.pinnedTasks = [old]
+		let result = observeTitle(
+			name,
+			model: &model
+		)
+		let pin = try #require(model.preferences.pinnedTasks.first)
+		let actualBytes = pin.name.map
+		{
+			Array($0.utf8)
+		}
+		let expectedBytes = name.map
+		{
+			Array($0.utf8)
+		}
+		#expect(actualBytes == expectedBytes)
+		#expect(pin.displayTitle == model.conversations.threads.first?.displayTitle)
+		#expect(result.effects.count == 1)
+	}
+
+	@Test func successfulManualRenameUpdatesLiveAndPinnedTitlesBeforeListRefresh() throws
+	{
+		var model = workspace()
+		model.conversations.threads = [summary()]
+		model.preferences.pinnedTasks = [summary()]
+		var captured = context(model)
+		captured.threadID = "thread"
+		_ = ConversationReducer.reduce(
+			&model,
+			.conversations(.managementRequested(.rename(
+				context: captured,
+				name: "Chosen title"
+			)))
+		)
+		let result = ConversationReducer.reduce(
+			&model,
+			.conversations(.managementFinished(
+				captured,
+				.succeeded(())
+			))
+		)
+		#expect(model.conversations.threads.first?.displayTitle == "Chosen title")
+		#expect(model.preferences.pinnedTasks.first?.displayTitle == "Chosen title")
+		#expect(result.effects.contains
+		{
+			if case .persistPreference(let write) = $0
+			{
+				return write.context == captured && write.key == .taskPin("thread")
+			}
+			return false
+		})
+		let list = try #require(model.conversations.pendingList)
+		_ = ConversationReducer.reduce(
+			&model,
+			.conversations(.threadListReceived(
+				list,
+				.succeeded([summary()])
+			))
+		)
+		#expect(model.conversations.threads.first?.displayTitle == "Chosen title")
+		#expect(model.preferences.pinnedTasks.first?.displayTitle == "Chosen title")
+	}
+
+	@Test func obsoleteNotificationsCannotRewritePinnedTitles()
+	{
+		var model = workspace()
+		model.conversations.threads = [summary()]
+		model.preferences.pinnedTasks = [summary()]
+		let obsolete = OperationContext(
+			workspace: model.identity,
+			generation: 0,
+			requestID: UUID()
+		)
+		let result = ConversationReducer.reduce(
+			&model,
+			.execution(.backendObserved(
+				obsolete,
+				.threadNameUpdated(
+					threadId: "thread",
+					name: "Obsolete title"
+				)
+			))
+		)
+		#expect(model.conversations.threads.first?.name == nil)
+		#expect(model.preferences.pinnedTasks.first?.name == nil)
+		#expect(result.effects.isEmpty)
+	}
+
+	@discardableResult
 	private func observeTitle(
 		_ name: String?,
 		model: inout WorkspaceModel
-	)
+	) -> WorkspaceReduction
 	{
-		_ = ConversationReducer.reduceDomainEvent(
+		ConversationReducer.reduce(
 			&model,
-			.backendObserved(
+			.execution(.backendObserved(
+				context(model),
 				.threadNameUpdated(
 					threadId: "thread",
 					name: name
-				),
-				observedAt: nil
-			)
+				)
+			))
 		)
 	}
 

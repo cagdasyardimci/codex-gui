@@ -148,6 +148,29 @@ enum ConversationReducer
 			}
 			model.conversations.selectedConversation = selectedThreadID
 				.map(ConversationKey.thread) ?? .newChat
+		case .execution(.backendObserved(
+			let context,
+			.threadNameUpdated(
+				let threadID,
+				let name
+			),
+			_
+		)):
+			guard valid(
+				context,
+				model
+			)
+			else
+			{
+				return (result, nil, nil)
+			}
+			updateThreadName(
+				name,
+				threadID: threadID,
+				context: context,
+				model: &model,
+				result: &result
+			)
 		case .conversations(let intent):
 			reduceConversations(
 				intent,
@@ -494,22 +517,12 @@ enum ConversationReducer
 				}
 				for thread in model.conversations.threads
 				{
-					if let index = model.preferences.pinnedTasks
-						.firstIndex(where:
-							{
-								$0.id == thread.id
-							}),
-						model.preferences.pinnedTasks[index] != thread
-					{
-						model.preferences.pinnedTasks[index] = thread
-						persistTaskPin(
-							thread,
-							pinned: true,
-							context: operation.context,
-							model: &model,
-							result: &result
-						)
-					}
+					refreshPinnedTask(
+						thread,
+						context: operation.context,
+						model: &model,
+						result: &result
+					)
 				}
 				model.conversations.error = nil
 				result.domainEvents.append(.conversationContentChanged)
@@ -770,16 +783,11 @@ enum ConversationReducer
 					_,
 					let name
 				):
-					if let index = model.preferences.pinnedTasks
-						.firstIndex(where:
-							{
-								$0.id == context.threadID
-							})
+					if let threadID = context.threadID
 					{
-						model.preferences.pinnedTasks[index].name = name
-						persistTaskPin(
-							model.preferences.pinnedTasks[index],
-							pinned: true,
+						updateThreadName(
+							name,
+							threadID: threadID,
 							context: context,
 							model: &model,
 							result: &result
@@ -925,6 +933,86 @@ enum ConversationReducer
 		ConversationContentReducer.reviewSourceChanged(
 			content: &content,
 			threadID: threadID
+		)
+	}
+
+	private static func updateThreadName(
+		_ name: String?,
+		threadID: String,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		model.conversations.observedThreadNames.updateValue(
+			name,
+			forKey: threadID
+		)
+		if let index = model.conversations.threads.firstIndex(where:
+			{
+				$0.id == threadID
+			})
+		{
+			model.conversations.threads[index].name = name
+		}
+		if var task = model.preferences.pinnedTasks.first(where:
+			{
+				$0.id == threadID
+			})
+		{
+			task.name = name
+			refreshPinnedTask(
+				task,
+				context: context,
+				model: &model,
+				result: &result
+			)
+		}
+		result.domainEvents.append(.conversationContentChanged)
+	}
+
+	private static func refreshPinnedTask(
+		_ task: ThreadSummary,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		guard let index = model.preferences.pinnedTasks.firstIndex(where:
+			{
+				$0.id == task.id
+			})
+		else
+		{
+			return
+		}
+		let current = model.preferences.pinnedTasks[index]
+		let sameName = current.name.map
+		{
+			Array($0.utf8)
+		} == task.name.map
+		{
+			Array($0.utf8)
+		}
+		let samePreview = current.preview.map
+		{
+			Array($0.utf8)
+		} == task.preview.map
+		{
+			Array($0.utf8)
+		}
+		guard current != task || !sameName || !samePreview
+		else
+		{
+			return
+		}
+		model.preferences.pinnedTasks[index] = task
+		persistTaskPin(
+			task,
+			pinned: true,
+			context: context,
+			model: &model,
+			result: &result
 		)
 	}
 
@@ -1078,21 +1166,6 @@ enum ConversationReducer
 		):
 			switch event
 			{
-			case .threadNameUpdated(
-				let threadID,
-				let name
-			):
-				model.conversations.observedThreadNames.updateValue(
-					name,
-					forKey: threadID
-				)
-				if let index = model.conversations.threads.firstIndex(where:
-					{
-						$0.id == threadID
-					})
-				{
-					model.conversations.threads[index].name = name
-				}
 			case .turnStarted(
 				let threadID,
 				_
