@@ -6,9 +6,37 @@ final class SourceRawOutputPresenter: NSObject
 {
 	private var panel: NSPanel?
 	private var copiedOutput = ""
+	private var inspection: Inspection?
+
+	private struct Inspection
+	{
+		let recordID: String
+		let invocation: ConversationLocalSources.Invocation
+	}
+
+	func update(records: [ConversationLocalSources.Record])
+	{
+		guard let inspection
+		else
+		{
+			return
+		}
+		let current = records.first
+		{
+			$0.id == inspection.recordID
+		}?.invocations.first
+		{
+			$0.id == inspection.invocation.id
+		}
+		if current != inspection.invocation
+		{
+			dismiss()
+		}
+	}
 
 	func present(
 		_ invocation: ConversationLocalSources.Invocation,
+		recordID: String,
 		in parent: NSWindow
 	)
 	{
@@ -119,6 +147,10 @@ final class SourceRawOutputPresenter: NSObject
 			sheet.standardWindowButton(kind)?.isHidden = true
 		}
 		panel = sheet
+		inspection = Inspection(
+			recordID: recordID,
+			invocation: invocation
+		)
 		parent.beginSheet(sheet)
 		{
 			[weak self] _ in
@@ -128,6 +160,7 @@ final class SourceRawOutputPresenter: NSObject
 				return
 			}
 			self?.panel = nil
+			self?.inspection = nil
 			self?.copiedOutput = ""
 		}
 		sheet.makeFirstResponder(closeButton)
@@ -143,6 +176,7 @@ final class SourceRawOutputPresenter: NSObject
 		panel.sheetParent?.endSheet(panel)
 		panel.orderOut(nil)
 		self.panel = nil
+		inspection = nil
 		copiedOutput = ""
 	}
 

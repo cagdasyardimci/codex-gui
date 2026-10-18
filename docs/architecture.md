@@ -192,6 +192,10 @@ identity, cancellation and rejection of obsolete results, including interrupted 
 must restart after hidden inventory updates. The Sources controller owns retained rows, selection,
 disclosures and application of accepted preview results to native views.
 
+Raw-output inspection retains its selected invocation snapshot through unrelated inventory changes.
+Removal or replacement of that invocation, or invalidation of its owner, dismisses the inspector even
+when the Sources view is hidden.
+
 The Git comparison controller owns repository requests, comparison controls and file navigation.
 Its child document controller owns retained diff sections, projection caching, layout preferences,
 collapse state, scrolling and inline rich-preview presentation. Document callbacks request runtime

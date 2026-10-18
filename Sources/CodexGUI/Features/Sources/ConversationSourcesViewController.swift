@@ -110,6 +110,7 @@ final class ConversationSourcesViewController: NSViewController
 			return
 		}
 		self.sources = sources
+		rawOutput.update(records: sources.records)
 		needsSourceRender = true
 		previews.update(
 			records: sources.records,
@@ -199,7 +200,6 @@ final class ConversationSourcesViewController: NSViewController
 
 	private func renderSources(in scroll: NSScrollView)
 	{
-		rawOutput.dismiss()
 		let current = Dictionary(
 			sources.records.map
 			{
@@ -814,6 +814,7 @@ final class ConversationSourcesViewController: NSViewController
 					}
 					self.rawOutput.present(
 						invocation,
+						recordID: key.recordID,
 						in: window
 					)
 				}

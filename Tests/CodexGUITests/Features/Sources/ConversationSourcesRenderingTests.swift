@@ -502,6 +502,277 @@ struct ConversationSourcesRenderingTests
 		}
 	}
 
+	@Test func rawOutputRetainsItsInvocationThroughUnrelatedVisibleAndHiddenUpdates() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let first = try tool(
+				"first",
+				result: "First recorded result"
+			)
+			let controller = try controller(entries: [first])
+			let window = sourceWindow(controller)
+			defer
+			{
+				controller.invalidate()
+				window.close()
+			}
+			let button = try disclosure(controller)
+			button.state = .on
+			try #require(button.dispatchConfiguredAction())
+			let raw = try rawButton(
+				controller,
+				invocationID: "first"
+			)
+			try #require(raw.dispatchConfiguredAction())
+			let sheet = try #require(window.attachedSheet)
+			try #require(sheet.isVisible)
+			let content = try #require(sheet.contentView)
+			let recorded = text(in: content)
+			#expect(recorded.contains("First recorded result"))
+			let textView = try #require(descendants(content).compactMap
+			{
+				$0 as? NSTextView
+			}.first)
+			let selection = NSRange(
+				location: 0,
+				length: 4
+			)
+			textView.setSelectedRange(selection)
+			controller.update(ConversationLocalSources(entries: [
+				first,
+				try tool(
+					"second",
+					status: "inProgress",
+					result: ""
+				)
+			]))
+			#expect(window.attachedSheet === sheet)
+			#expect(text(in: content) == recorded)
+			#expect(textView.selectedRange() == selection)
+			controller.view.isHidden = true
+			controller.update(ConversationLocalSources(entries: [
+				first,
+				try tool(
+					"second",
+					result: "Second recorded result"
+				)
+			]))
+			#expect(window.attachedSheet === sheet)
+			controller.view.isHidden = false
+			controller.prepareForDisplay()
+			#expect(window.attachedSheet === sheet)
+			#expect(text(in: content) == recorded)
+			#expect(textView.selectedRange() == selection)
+		}
+	}
+
+	@Test func rawOutputDismissesOnItsInvocationRemovalReplacementOrOwnerInvalidation() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			for change in ["remove", "replace", "invalidate"]
+			{
+				let controller = try controller(entries: [tool(
+					"first",
+					result: "Original"
+				)])
+				let window = sourceWindow(controller)
+				defer
+				{
+					controller.invalidate()
+					window.close()
+				}
+				let button = try disclosure(controller)
+				button.state = .on
+				try #require(button.dispatchConfiguredAction())
+				try #require(rawButton(
+					controller,
+					invocationID: "first"
+				)
+				.dispatchConfiguredAction())
+				let sheet = try #require(window.attachedSheet)
+				try #require(sheet.isVisible)
+				controller.view.isHidden = true
+				switch change
+				{
+				case "remove":
+					controller.update(ConversationLocalSources(entries: [
+						try tool(
+							"second",
+							result: "Other result"
+						)
+					]))
+				case "replace":
+					controller.update(ConversationLocalSources(entries: [
+						try tool(
+							"first",
+							result: "Replacement result"
+						)
+					]))
+				default:
+					controller.invalidate()
+				}
+				#expect(!sheet.isVisible)
+			}
+		}
+	}
+
+	@Test func rawOutputAndResultCardsInvalidateOnUnicodeByteReplacement() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			for includesUnrelatedUpdate in [false, true]
+			{
+				let original = try tool(
+					"first",
+					result: "é"
+				)
+				let replacement = try tool(
+					"first",
+					result: "e\u{301}"
+				)
+				var initial = [original]
+				var updated = [replacement]
+				if includesUnrelatedUpdate
+				{
+					initial.append(try tool(
+						"second",
+						status: "inProgress",
+						result: ""
+					))
+					updated.append(try tool(
+						"second",
+						result: "Unrelated completion"
+					))
+				}
+				let controller = try controller(entries: initial)
+				let window = sourceWindow(controller)
+				defer
+				{
+					controller.invalidate()
+					window.close()
+				}
+				let button = try disclosure(controller)
+				button.state = .on
+				try #require(button.dispatchConfiguredAction())
+				let oldCard = try card(
+					controller,
+					invocationID: "first"
+				)
+				try #require(rawButton(
+					controller,
+					invocationID: "first"
+				)
+				.dispatchConfiguredAction())
+				let sheet = try #require(window.attachedSheet)
+				try #require(sheet.isVisible)
+				let next = ConversationLocalSources(entries: updated)
+				let before = try #require(controller.sources.records.flatMap(\.invocations).first)
+				let after = try #require(next.records.flatMap(\.invocations).first)
+				#expect(before.detail == after.detail)
+				#expect(!before.detail.utf8.elementsEqual(after.detail.utf8))
+				#expect(before.resultText == after.resultText)
+				#expect(!before.resultText.utf8.elementsEqual(after.resultText.utf8))
+				#expect(before != after)
+				#expect(controller.sources.records != next.records)
+				controller.view.isHidden = includesUnrelatedUpdate
+				controller.update(next)
+				#expect(!sheet.isVisible)
+				#expect(controller.sources.records == next.records)
+				controller.view.isHidden = false
+				controller.prepareForDisplay()
+				let newCard = try card(
+					controller,
+					invocationID: "first"
+				)
+				#expect(newCard !== oldCard)
+				let textViews = descendants(newCard).compactMap
+				{
+					$0 as? NSTextView
+				}
+				let recorded = try #require(textViews.first)
+				#expect(recorded.string.utf8.elementsEqual("e\u{301}".utf8))
+			}
+		}
+	}
+
+	@Test func invocationSnapshotEqualityPreservesRawDetailAndResultBytesIndependently()
+	{
+		let original = ConversationLocalSources.Invocation(
+			id: "call",
+			summary: "é",
+			detail: "é",
+			status: "completed",
+			resultText: "é"
+		)
+		let detailReplacement = ConversationLocalSources.Invocation(
+			id: "call",
+			summary: "é",
+			detail: "e\u{301}",
+			status: "completed",
+			resultText: "é"
+		)
+		let resultReplacement = ConversationLocalSources.Invocation(
+			id: "call",
+			summary: "é",
+			detail: "é",
+			status: "completed",
+			resultText: "e\u{301}"
+		)
+		let equivalentMetadata = ConversationLocalSources.Invocation(
+			id: "call",
+			summary: "e\u{301}",
+			detail: "é",
+			status: "completed",
+			resultText: "é"
+		)
+		#expect(original != detailReplacement)
+		#expect(original != resultReplacement)
+		#expect(original == equivalentMetadata)
+	}
+
+	private func sourceWindow(_ controller: NSViewController) -> NSWindow
+	{
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: -2_000,
+				y: -2_000,
+				width: 700,
+				height: 650
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = controller
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
+		window.orderFront(nil)
+		return window
+	}
+
+	private func rawButton(
+		_ controller: NSViewController,
+		invocationID: String
+	) throws -> NSButton
+	{
+		try #require(descendants(controller.view).compactMap
+		{
+			$0 as? NSButton
+		}.first
+		{
+			$0.identifier?.rawValue == "source-show-raw:turn:\(invocationID)"
+		})
+	}
+
 	private func controller(
 		entries: [ConversationEntry],
 		loadThumbnail: @escaping @Sendable (String) async -> Data? = SourceThumbnailLoader

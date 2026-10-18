@@ -13,6 +13,16 @@ struct ConversationLocalSources
 		var resultText: String = ""
 		var resultLanguage: String = ""
 		var isError: Bool = false
+
+		static func == (lhs: Self, rhs: Self) -> Bool
+		{
+			// Result and raw-detail snapshots must invalidate when their recorded bytes change.
+			lhs.id == rhs.id && lhs.summary == rhs.summary
+				&& lhs.detail.utf8.elementsEqual(rhs.detail.utf8) && lhs.status == rhs.status
+				&& lhs.operation == rhs.operation
+				&& lhs.resultText.utf8.elementsEqual(rhs.resultText.utf8)
+				&& lhs.resultLanguage == rhs.resultLanguage && lhs.isError == rhs.isError
+		}
 	}
 
 	enum Kind: String, Equatable
