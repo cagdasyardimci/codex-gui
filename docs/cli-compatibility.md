@@ -16,9 +16,7 @@ Backend details stay in memory for the current process connection and are limite
 
 Conversation management requests, listing validation and pagination are implemented in [AppServer requests](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Requests.swift). Chat-list filtering searches loaded titles and previews. Message search separately searches loaded conversation content and can fetch more history. Neither uses the experimental server-side `thread/search` method. Unsupported management requests surface their backend error in the app.
 
-Overlapping list pages preserve backend order and retain the first occurrence of each thread ID.
-Every returned row is validated before duplicate IDs are removed, so a repeated ID cannot hide
-invalid data.
+Overlapping list pages preserve backend order and retain the first occurrence of each thread ID. Every returned row is validated before duplicate IDs are removed, so a repeated ID cannot hide invalid data.
 
 CLI version probing has a 10-second deadline and runs away from the main actor. A stalled or continuously writing `--version` child cannot leave the interface waiting indefinitely.
 

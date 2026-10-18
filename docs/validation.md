@@ -67,12 +67,7 @@ make test:composer-appearance
 make test
 ```
 
-Run named selections with `make test:<group>`. Each command runs only its matching
-tests in one process and then stops. `make test:navigation` runs its entire selection
-in one process. Named groups do not partition or exclude tests from the default
-full-suite run.
-`make help` lists commands and test selections. [Tests/Workflow.mk](../Tests/Workflow.mk)
-owns toolchain flags and explicit targets that call the shared `run-tests` function.
+Run named selections with `make test:<group>`. Each command runs only its matching tests in one process and then stops. `make test:navigation` runs its entire selection in one process. Named groups do not partition or exclude tests from the default full-suite run. `make help` lists commands and test selections. [Tests/Workflow.mk](../Tests/Workflow.mk) owns toolchain flags and explicit targets that call the shared `run-tests` function.
 
 For a custom regular expression, use:
 
@@ -80,11 +75,7 @@ For a custom regular expression, use:
 make test FILTER='ApprovalPolicyPopoverTests|ComposerAppearanceTests'
 ```
 
-A custom selection runs through SwiftPM and the completion wrapper in one fresh process with the
-selected `PARALLEL` setting. Quote regular expressions to preserve shell characters and apply the
-[test-completion requirements](#test-completion).
-`FILTER` must be nonempty and is supported only by `make test`. Named group commands
-and `make check` reject it; `make check` requires full coverage.
+A custom selection runs through SwiftPM and the completion wrapper in one fresh process with the selected `PARALLEL` setting. Quote regular expressions to preserve shell characters and apply the [test-completion requirements](#test-completion). `FILTER` must be nonempty and is supported only by `make test`. Named group commands and `make check` reject it; `make check` requires full coverage.
 
 When renaming tests, check that the configured selections still match and cover the intended cases. Focused runs add evidence but do not replace full verification. Do not relax assertions to make verification pass. Report failures and baseline comparisons separately.
 
