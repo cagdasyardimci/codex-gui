@@ -16,6 +16,7 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | [Shared](Shared/) | Common presentations, panel contracts and reusable view support. |
 | [Shared/Markdown](Shared/Markdown/) | Markdown parsing, native text rendering, rich attachments, plain-text presentation and the runtime preview adapter. |
 | [Shared/Transcript](Shared/Transcript/) | Reusable transcript controller, preparation, message rows, selection, scrolling and turn navigation. |
+| [Shared/Transcript/Content](Shared/Transcript/Content/) | Prepared transcript values, exact source keys and their bounded cache. |
 | [Sources](Sources/) | Source inventory, detail presentation, result cards and tab hover previews. |
 | [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |
 | [Usage](Usage/) | Native usage controls and details; shared usage projection belongs to Application/Presentation. |

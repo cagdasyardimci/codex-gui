@@ -121,7 +121,7 @@ Messages support selectable headings, nested and task lists, emphasis, strikethr
 | Mermaid diagrams | A limited native `flowchart`/`graph` subset supports simple nodes and `-->` edges. Other types and syntax appear as readable source. |
 | Incomplete or unsupported content | Malformed or unsupported math and diagrams, and open streaming fences, retain readable text. |
 | HTML and inline math | HTML and inline `$...$` math remain literal text. |
-| Markdown images | Images appear as labels with their source. |
+| Markdown images | Local and inline images appear in galleries; unavailable images retain readable source text. |
 | Command and tool output | Output retains its literal text. |
 
 ## Development
