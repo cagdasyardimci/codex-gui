@@ -486,7 +486,12 @@ struct FileNavigationViewTests
 				object: field
 			))
 			controller.render(state)
-			#expect(outline.isItemExpanded(folderItem))
+			let restoredFolderItem = try #require(outline.item(atRow: 0))
+			#expect(outlineLabel(
+				outline,
+				row: 0
+			) == "Sources")
+			#expect(outline.isItemExpanded(restoredFolderItem))
 			#expect(outline.selectedRow == 0)
 			#expect(outlineLabel(
 				outline,
