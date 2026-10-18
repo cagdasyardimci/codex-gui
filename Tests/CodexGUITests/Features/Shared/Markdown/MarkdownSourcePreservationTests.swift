@@ -33,7 +33,10 @@ struct MarkdownSourcePreservationTests
 			body,
 			markdown: true
 		)
-		let blocks = parsed.runs.compactMap(\.style.richBlock)
+		let blocks = parsed.runs.filter
+		{
+			$0.text == "\u{FFFC}"
+		}.compactMap(\.style.richBlock)
 		try #require(blocks.count == 3)
 		let gallery = try #require(blocks.first)
 		#expect(gallery.source.utf8.elementsEqual(image.utf8))
@@ -53,7 +56,10 @@ struct MarkdownSourcePreservationTests
 				+ "\n\n- request\n\n  $$\n  α + β\n  $$",
 			markdown: true
 		)
-		let blocks = parsed.runs.compactMap(\.style.richBlock)
+		let blocks = parsed.runs.filter
+		{
+			$0.text == "\u{FFFC}"
+		}.compactMap(\.style.richBlock)
 		try #require(blocks.count == 2)
 		let gallery = try #require(blocks.first)
 		#expect(gallery.source == first + "\n> " + second)
