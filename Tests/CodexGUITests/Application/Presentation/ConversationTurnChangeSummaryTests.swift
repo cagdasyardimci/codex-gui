@@ -110,6 +110,41 @@ struct ConversationTurnChangeSummaryTests
 		#expect(unavailable.deletions == 0)
 	}
 
+	@Test func unavailableComparisonCountsLargeReportsAndNormalizedWholeFileChanges() throws
+	{
+		let snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
+		var request = try #require(snapshot.runningGitReviewRequest(
+			owner: FeaturePresentationOwner(snapshot)
+		))
+		let repeatedEdits = String(
+			repeating: "-before\n+after\n context\n",
+			count: 2_000
+		)
+		request.reportedChanges = [
+			change("@@ -1,4000 +1,4000 @@\n" + repeatedEdits),
+			change("@@ malformed\n+counted\ndiff --git a/other b/other\n+outside hunk"),
+			try #require(FileChange(json: [
+				"path": "added.swift",
+				"kind": "add",
+				"diff": "first\nsecond\n",
+			])),
+			try #require(FileChange(json: [
+				"path": "deleted.swift",
+				"kind": "delete",
+				"diff": "removed\n",
+			])),
+		]
+		let summary = ConversationTurnChangeSummary(
+			unavailable: .oversized,
+			request: request
+		)
+		#expect(summary.fileCount == 3)
+		#expect(summary.additions == 2_003)
+		#expect(summary.deletions == 2_001)
+		#expect(summary.failure == .oversized)
+		#expect(summary.usesReportedEditFallback)
+	}
+
 	private func change(_ diff: String) -> FileChange
 	{
 		FileChange(json: ["path": "same.swift", "kind": "update", "diff": diff])!

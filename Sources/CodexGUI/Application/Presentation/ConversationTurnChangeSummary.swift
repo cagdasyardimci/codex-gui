@@ -50,19 +50,18 @@ struct ConversationTurnChangeSummary: Equatable, Sendable
 		{
 			Data(($0.movePath ?? $0.path).utf8)
 		}).count
-		let counts = changes.map
+		var additions = 0
+		var deletions = 0
+		for change in changes
 		{
-			GitDiffParser.hunks(in: ConversationNetFileChanges.normalizedDiff($0)
-				.components(separatedBy: "\n"))
+			let counts = GitDiffParser.lineCounts(
+				in: ConversationNetFileChanges.normalizedDiff(change)
+			)
+			additions += counts.additions
+			deletions += counts.deletions
 		}
-		additions = counts.reduce(0)
-		{
-			$0 + $1.additions
-		}
-		deletions = counts.reduce(0)
-		{
-			$0 + $1.deletions
-		}
+		self.additions = additions
+		self.deletions = deletions
 		self.failure = failure
 		usesReportedEditFallback = !changes.isEmpty
 		isLoading = false
