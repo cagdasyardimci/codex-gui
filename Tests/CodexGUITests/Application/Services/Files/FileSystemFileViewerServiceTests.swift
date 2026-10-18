@@ -431,6 +431,55 @@ struct FileSystemFileViewerServiceTests
 		#expect(absent.results.isEmpty)
 	}
 
+	@Test(arguments: ["strasse", "😀", "é", "i"])
+	func sparseContentSearchPreservesUnicodeAndEveryLogicalLineEnding(query: String) async throws
+	{
+		let root = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: root)
+		}
+		let lines = ["😀 STRASSE", "Straße", "E\u{301} I", "Straße 😀", "É İ", "strasse ß"]
+		let separators = ["\r\n", "\r", "\n", "\u{2028}", "\u{2029}", "\n"]
+		let prefix = String(
+			repeating: "x\n",
+			count: 1_000
+		)
+		let text = prefix + zip(
+			lines,
+			separators
+		).map
+		{
+			$0 + $1
+		}.joined()
+		try Data(text.utf8).write(
+			to: URL(fileURLWithPath: root).appendingPathComponent("unicode.txt")
+		)
+		let service = FileSystemFileViewerService()
+		let page = try await service.contentSearch(
+			root: root,
+			query: query,
+			mask: "*.txt",
+			limit: 20
+		)
+		let expectedIndices = lines.indices.filter
+		{
+			lines[$0].range(
+				of: query,
+				options: [.caseInsensitive, .literal]
+			) != nil
+		}
+		#expect(page.results.map(\.lineNumber) == expectedIndices.map
+		{
+			$0 + 1_001
+		})
+		#expect(page.results.map(\.lineText) == expectedIndices.map
+		{
+			lines[$0]
+		})
+		#expect(!page.isTruncated)
+	}
+
 	@Test
 	func canceledSearchStopsBeforePublishingResults() async throws
 	{

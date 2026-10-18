@@ -153,6 +153,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 				)
 			}
 			let inventory = try self.inventory(root: root)
+			let searchMask = FileSearchMask(mask)
 			var results: [FileViewerSearchResult] = []
 			for path in inventory.index.files
 			{
@@ -161,10 +162,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 					root: root,
 					relativePath: path
 				)
-				guard Self.matchesMask(
-					location.relativePath,
-					mask: mask
-				)
+				guard searchMask.matches(location.relativePath)
 				else
 				{
 					continue
@@ -187,11 +185,15 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 				for index in lineIndex.lineStarts.indices
 				{
 					try Task.checkCancellation()
-					let line = source.substring(with: lineIndex.contentRange(atLineIndex: index))
-					guard line.range(
+					let lineRange = lineIndex.contentRange(
+						atLineIndex: index,
+						in: source
+					)
+					guard source.range(
 						of: query,
-						options: [.caseInsensitive, .literal]
-					) != nil
+						options: [.caseInsensitive, .literal],
+						range: lineRange
+					).location != NSNotFound
 					else
 					{
 						continue
@@ -207,7 +209,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 					results.append(FileViewerSearchResult(
 						location: location,
 						lineNumber: index + 1,
-						lineText: line
+						lineText: source.substring(with: lineRange)
 					))
 				}
 			}
@@ -894,67 +896,5 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 			isTruncated: truncated,
 			excludedDirectoryCount: excluded
 		)
-	}
-
-	private static func matchesMask(
-		_ path: String,
-		mask: String?
-	) -> Bool
-	{
-		guard let mask, !mask.isEmpty
-		else
-		{
-			return true
-		}
-		let name = URL(fileURLWithPath: path).lastPathComponent
-		return maskAlternatives(mask).contains
-		{
-			pattern in
-			if pattern.hasPrefix("**/")
-			{
-				let suffix = String(pattern.dropFirst(3))
-				if fnmatch(
-					suffix,
-					name,
-					FNM_CASEFOLD
-				) == 0
-				{
-					return true
-				}
-				let components = path.split(separator: "/")
-				return components.indices.contains
-				{
-					fnmatch(
-						suffix,
-						components[$0...].joined(separator: "/"),
-						FNM_CASEFOLD
-					) == 0
-				}
-			}
-			return fnmatch(
-				pattern,
-				pattern.contains("/") ? path : name,
-				FNM_CASEFOLD
-			) == 0
-		}
-	}
-
-	private static func maskAlternatives(_ mask: String) -> [String]
-	{
-		guard let open = mask.firstIndex(of: "{"),
-				let close = mask[open...].firstIndex(of: "}")
-		else
-		{
-			return mask.split(separator: ",").map
-			{
-				$0.trimmingCharacters(in: .whitespaces)
-			}
-		}
-		let prefix = String(mask[..<open])
-		let suffix = String(mask[mask.index(after: close)...])
-		return mask[mask.index(after: open) ..< close].split(separator: ",").prefix(32).map
-		{
-			prefix + $0.trimmingCharacters(in: .whitespaces) + suffix
-		}
 	}
 }
