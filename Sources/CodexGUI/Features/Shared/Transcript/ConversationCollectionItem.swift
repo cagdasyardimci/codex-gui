@@ -487,12 +487,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		messageContainer.isHidden = imageAttachmentCount > 0 && content.attributedString.length == 0
 		userSurface.isHidden = kind != .user || messageContainer.isHidden
 		activitySurface.isHidden = kind == .user || kind == .agent
-		bodyTextView.textStorage?.setAttributedString(Self.displayText(
+		bodyTextView.installContent(Self.displayText(
 			content,
 			kind: kind
 		))
-		bodyTextView.loadWebLinkFavicons()
-		bodyTextView.updateSourceAccessibilityHelp()
 		bodyTextView.setAccessibilityLabel("\(entry.title) content")
 		view.setAccessibilityLabel(entry.title)
 

@@ -48,6 +48,70 @@ struct RichFilePreviewViewTests
 		}
 	}
 
+	@Test func attachedMarkdownStartsFaviconsAfterLoadingAndAppearanceRefresh() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let imageSource = "![Diagram](missing.png)"
+			let source = "A [site](https://localhost/guide)\n\n" + imageSource
+			let preview = RichFilePreviewView(
+				kind: .markdown,
+				imageBaseDirectory: URL(
+					fileURLWithPath: "/tmp/favicon-preview",
+					isDirectory: true
+				)
+			)
+			{
+				Data(source.utf8)
+			}
+			let window = attachedWindow(for: preview)
+			defer
+			{
+				preview.cancelLoading()
+				window.close()
+			}
+			window.appearance = NSAppearance(named: .aqua)
+			#expect(preview.window === window)
+			#expect(preview.subviews.first is ViewerStatusView)
+			await preview.waitForLoading()
+			let text = try #require(preview.subviews.first as? MarkdownTextView)
+			let storage = try #require(text.textStorage)
+			let site = (text.string as NSString).range(of: "site")
+			try #require(site.location != NSNotFound && site.location > 0)
+			var favicon = try #require(storage.attribute(
+				.attachment,
+				at: site.location - 1,
+				effectiveRange: nil
+			) as? WebLinkFaviconAttachment)
+			#expect(favicon.url.absoluteString == "https://localhost/guide")
+			#expect(favicon.requested)
+			#expect(text.accessibilityHelp() == imageSource)
+			let displayed = text.string
+			text.setSelectedRange(site)
+			for name in [NSAppearance.Name.darkAqua, .aqua]
+			{
+				window.appearance = NSAppearance(named: name)
+				window.contentView?.layoutSubtreeIfNeeded()
+				let refreshed = try #require(storage.attribute(
+					.attachment,
+					at: site.location - 1,
+					effectiveRange: nil
+				) as? WebLinkFaviconAttachment)
+				#expect(refreshed !== favicon)
+				#expect(refreshed.requested)
+				#expect(refreshed.url == favicon.url)
+				#expect(text.selectedRange() == site)
+				#expect(text.string == displayed)
+				#expect(text.accessibilityValue() == displayed)
+				#expect(text.accessibilityHelp() == imageSource)
+				#expect(text.window === window)
+				favicon = refreshed
+			}
+		}
+	}
+
 	@Test func invalidContentHasReadableMessageAndCancelledLoadCannotInstall() async throws
 	{
 		try await AppKitTestIsolation.perform

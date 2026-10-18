@@ -32,6 +32,13 @@ final class MarkdownTextView: NSTextView
 		)
 	}
 
+	func installContent(_ content: NSAttributedString)
+	{
+		textStorage?.setAttributedString(content)
+		updateSourceAccessibilityHelp()
+		loadWebLinkFavicons()
+	}
+
 	override func viewWillMove(toWindow newWindow: NSWindow?)
 	{
 		if newWindow !== window

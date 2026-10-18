@@ -7,7 +7,7 @@ final class WebLinkFaviconAttachment: NSTextAttachment
 	private static let iconSide: CGFloat = 14
 	private static let attachmentWidth: CGFloat = 18
 	let url: URL
-	private var requested = false
+	private(set) var requested = false
 
 	init(url: URL)
 	{

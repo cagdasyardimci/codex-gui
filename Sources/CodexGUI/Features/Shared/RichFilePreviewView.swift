@@ -460,7 +460,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		let selection = text.selectedRange()
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
-			text.textStorage?.setAttributedString(
+			text.installContent(
 				MarkdownAttributedStringRenderer.render(
 					markdownRuns,
 					imageThumbnails: imageThumbnails
@@ -468,7 +468,6 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			)
 		}
 		text.setSelectedRange(selection)
-		text.updateSourceAccessibilityHelp()
 		needsLayout = true
 	}
 }

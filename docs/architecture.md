@@ -159,6 +159,9 @@ caching.
 Parser-derived link ranges remain authoritative in Markdown previews, including literal URLs in
 code.
 
+Installing or replacing rendered Markdown refreshes accessibility text and favicon loading within
+its existing appearance and ownership lifecycle.
+
 See [conventions](../CONVENTIONS.md) for source ownership and test organization, and [validation](validation.md) for verification commands and acceptance limits.
 
 Git comparison file headers offer rich preview for Markdown, images and PDFs supported by the
