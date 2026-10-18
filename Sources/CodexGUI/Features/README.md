@@ -5,6 +5,7 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | Directory | Responsibility |
 | --- | --- |
 | [Changes](Changes/) | Repository comparisons, reported changes and shared diff rendering. |
+| [Files](Files/) | Workspace file browsing, document tabs, source editing, rich previews and file search. |
 | [CommandPalette](CommandPalette/) | Native command palette presentation and input. |
 | [Conversation](Conversation/) | Conversation controller, composer and transcript integration. |
 | [Conversation/Composer](Conversation/Composer/) | Input controls, attachment inputs and command menus. |
@@ -39,3 +40,20 @@ system LinkPresentation metadata API is asked for the site's icon. Icons are lim
 Results and failures are cached per origin for up to 128 sites during the app session; a globe is
 shown when no icon is available. Dark monochrome icons are tinted white
 in dark appearance. Local and file links keep their existing file presentation.
+
+Changes and Files share [SourceTextView](Shared/SourceTextView.swift) for native source
+text presentation. `SourceTextViewport` owns common scroll/text/ruler installation and wrapping geometry; feature
+containers own editing, diff row mapping and document height.
+
+Files and Changes use shared `ViewerToolbarButton` presentations and `ViewerToolbarGroup`
+surfaces. Responsive composition and domain-specific actions remain feature-owned.
+
+Workspace file icons, viewer search fields, filename result rows and navigator width
+transitions live in Shared. `ViewerNavigatorSplitView` owns the shared resizable pane and
+visibility policy; `ViewerFileNavigatorView` owns filter/scroll layout. Both navigator adapters
+use the same `ViewerFileTreeView` native outline for input, disclosure, traversal and row
+construction, with `ViewerFileTreeRow` and `ViewerFileTreeSelectionRow` for layout and painting.
+`ViewerFileActions` owns common menu sections, captured operations, clipboard writes, error presentation
+and installed app destinations;
+`ViewerStatusView` owns loading, failure and empty-state presentation. Git snapshot loading and Files directory/search/save services
+retain their feature-specific lifecycles and captured identities.

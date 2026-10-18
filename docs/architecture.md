@@ -59,8 +59,9 @@ Feature placement follows the [feature map](../Sources/CodexGUI/Features/README.
 
 Composer attachments, transcript attachments and viewed-image activity use the shared `ExpandedImagePreview` coordinator and `ExpandedImageViewController` in `Features/Shared`. The viewer overlays the parent window content with a native within-window blur beneath a separate dimming layer. The image and header controls remain above these backdrop layers. It fits the full image and offers percentage zoom, Actual Size, pinch magnification and scrolling. Fit centers the complete image within a viewport inset 68 points on each side, below the header and above an 82-point bottom reserve. Fit uses the smaller of the available-width/original-width and available-height/original-height ratios, capped at 100%. Width-limited images share the available width; height-limited images share the available height. Image proportions and centering are preserved. Resizing recalculates Fit, while explicit percentage zoom remains unchanged. Actual Size (100%) maps an original image pixel to one layout point; sharper decoding accounts for the screen backing scale. Close and Escape dismiss the viewer and restore the prior responder when it still belongs to the parent window. Replacing its attachment or activity owner, detaching its originating view or closing the window cancels pending loading and dismisses the overlay. Underlying content siblings are temporarily hidden from assistive technology, with their original accessibility visibility restored on dismissal. Inline payloads remain in memory; previewing them does not create a file. The viewer has no external-open, download or image-editing controls.
 
-Markdown presentation belongs to `Features/Shared/Markdown`, used by transcript messages and Git
-rich previews. It owns parsing, native text and decoration rendering, source-preserving selection
+Markdown presentation belongs to `Features/Shared/Markdown`, used by transcript messages, Git
+comparisons and workspace file previews. It owns parsing, native text and decoration rendering,
+source-preserving selection
 copy and accessibility, rich attachments, and plain-text output. Parsed values remain `Sendable`,
 so consumers can prepare Markdown off the main actor. AppKit rendering and layout stay on the
 main actor.
@@ -69,6 +70,39 @@ turn-preview adapters and application state retains content residency. Changes o
 loading, cancellation and preview containers. Each consumer
 retains its own sizing, scrolling and appearance-refresh lifecycle. Rendering caches and resource
 limits stay with the shared renderer; feature content caches stay with their feature.
+Markdown image preparation admits at most 32 unique paths in source order before decoding,
+with requested thumbnail dimensions bounded by a shared 1.9-million-pixel budget. Images beyond
+that preparation budget retain the renderer's source fallback.
+
+Files owns workspace directory browsing, document presentation and its navigator and search
+surfaces. Its controller-facing runtime keeps document state separate from native focus, reading
+positions and undo histories. Documents capture their workspace root and relative path; switching
+the browser root does not retarget an existing document. Reducers accept scoped read, search and
+save results, while the filesystem service performs bounded reads and revision-checked writes.
+Pending edits remain available after save failures or external-change conflicts. Close and quit
+paths settle pending saves and require an explicit decision before discarding unresolved edits.
+Rendered Markdown is read-only; source editing uses the same current document text as copy and
+export actions.
+Find routes to Files only when keyboard focus belongs to the visible Files view; source text
+uses the native find bar. Closing a selected file chooses the next surviving tab to its right,
+or the nearest tab to its left, using the visible tab order after reordering.
+
+Files and Changes share `RichFilePreviewView` for native Markdown, image and PDF presentation.
+Changes retains Git blob loading and comparison-specific failure messages; Files supplies captured
+filesystem bytes and a contained loader for relative Markdown images. A preview without an image
+loader does not read arbitrary image paths. Source line indexing, syntax highlighting, file type
+presentation, thumbnail decoding and preferred-editor launching retain their shared owners.
+Native folder expansion defers lazy directory requests until AppKit finishes its expansion
+callback, because request publication can synchronously reload the outline. Deferred requests
+revalidate the workspace generation, root and current directory state before starting.
+Directory browsing includes hidden entries. Recursive file search excludes generated directories
+and Git internals through the shared directory policy, without hiding ordinary configuration files.
+The filesystem service retains one checkout's bounded filename index. Each search validates the
+identity and modification metadata of the indexed directories before reuse, so nested additions,
+removals and renames invalidate the inventory. Content searches read current file bytes rather
+than cached document content, omit document revision and preview preparation, and stop at the
+requested matching-line limit. Reads remain contained, bounded and cancellable; nonregular
+files are rejected without waiting for a pipe writer.
 
 The main conversation and subagent history compose `TranscriptViewController` from
 `Features/Shared/Transcript`. Its presentation carries the captured owner, history and explicit

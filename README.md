@@ -91,6 +91,7 @@ Conversations show streamed messages, reported plans, command and tool activity,
 - **Steer** sends a follow-up to the active turn.
 - **Stop** waits for the agent to report an outcome and for known commands to report their outcomes. Interrupting an agent turn does not guarantee that its commands are cancelled.
 - **Changes** lets you select historical turns, open changed files, and prepare targeted revision requests. It also shows observed command results, including their source and freshness.
+- **Files** in the tab pane browses workspace files, previews Markdown, images and PDFs, and edits text source. **Command-P** opens a file by name; file search can open a matching line. Text edits save automatically, with explicit choices when a file changes externally or cannot be saved.
 
 Read, search, and command actions appear in compact activity groups. Expand a group to see its list, then expand an individual command to see selectable Shell details. The chevrons appear when you hover over a row; the controls also support keyboard access.
 
