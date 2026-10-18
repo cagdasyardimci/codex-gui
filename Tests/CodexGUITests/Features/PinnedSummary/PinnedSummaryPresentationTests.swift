@@ -101,6 +101,13 @@ struct PinnedSummaryPresentationTests
 		)
 		#expect(limited.sourcePreviews.map(\.id) == ["b"])
 		#expect(sections.sources.value?.count == 5)
+		let hidden = PinnedSummaryPresentation(
+			snapshot(),
+			sections: sections,
+			sourcePreviewLimit: 0
+		)
+		#expect(hidden.sourcePreviews.isEmpty)
+		#expect(hidden.sections.sources == sections.sources)
 	}
 
 	@Test func unavailableZeroEmptyAndFailureRetainingKnownDataRemainDistinct()

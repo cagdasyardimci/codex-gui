@@ -51,6 +51,11 @@ struct PinnedSummaryPresentation: Equatable
 
 	var sourcePreviews: [SourcePreview]
 	{
+		guard sourcePreviewLimit > 0
+		else
+		{
+			return []
+		}
 		var seenRecords = Set<String>()
 		var seenCategories = Set<String>()
 		var previews: [SourcePreview] = []
@@ -95,9 +100,12 @@ struct PinnedSummaryPresentation: Equatable
 					icon: source.icon
 				))
 			}
+			if previews.count == sourcePreviewLimit
+			{
+				break
+			}
 		}
-		// Apply the configurable limit after grouping, retaining first-occurrence ordering.
-		return Array(previews.prefix(sourcePreviewLimit))
+		return previews
 	}
 
 	func sourceRequest(for preview: SourcePreview) -> ContextPanelRequest?

@@ -18,7 +18,7 @@ struct PinnedSummarySourcesTests
 		))
 		#expect(try disclosure(controller).title == "Sources")
 		#expect(sourceNameLabels(controller).count == 3)
-		try disclosure(controller).performClick(nil)
+		#expect(try disclosure(controller).dispatchConfiguredAction())
 		#expect(try disclosure(controller).title == "Sources · 4")
 		#expect(sourceNameLabels(controller).isEmpty)
 		#expect(!descendants(controller.view).compactMap
@@ -36,10 +36,10 @@ struct PinnedSummarySourcesTests
 		))
 		#expect(try disclosure(controller).title == "Sources · 5")
 		#expect(sourceNameLabels(controller).isEmpty)
-		try disclosure(controller).performClick(nil)
+		#expect(try disclosure(controller).dispatchConfiguredAction())
 		#expect(try disclosure(controller).title == "Sources")
 		#expect(sourceNameLabels(controller).count == 3)
-		try disclosure(controller).performClick(nil)
+		#expect(try disclosure(controller).dispatchConfiguredAction())
 		snapshot.workspaceSelectionEpoch += 1
 		controller.render(PinnedSummaryPresentation(
 			snapshot,
@@ -60,7 +60,7 @@ struct PinnedSummarySourcesTests
 		let expandedAdd = try addSourceControl(controller)
 		#expect(!expandedAdd.isEnabled)
 		#expect(!expandedAdd.isHiddenOrHasHiddenAncestor)
-		try disclosure(controller).performClick(nil)
+		#expect(try disclosure(controller).dispatchConfiguredAction())
 		let collapsedAdd = try addSourceControl(controller)
 		#expect(!collapsedAdd.isEnabled)
 		#expect(!collapsedAdd.isHiddenOrHasHiddenAncestor)
