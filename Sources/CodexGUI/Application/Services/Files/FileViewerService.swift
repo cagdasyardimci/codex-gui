@@ -24,12 +24,14 @@ protocol FileViewerService: Sendable
 	) async throws -> FileViewerSearchPage<FileViewerSearchResult>
 }
 
-struct FileSystemFileViewerService: FileViewerService
+final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 {
 	static let maximumTextBytes = 8 * 1024 * 1024
 	static let maximumReadBytes = 32 * 1024 * 1024
 	static let maximumSearchFiles = 20_000
 	static let maximumSearchResults = 500
+	private let inventoryLock = NSLock()
+	private var cachedInventory: SearchInventory?
 
 	func listDirectory(at location: FileLocation) async throws -> [FileViewerDirectoryEntry]
 	{
@@ -99,12 +101,12 @@ struct FileSystemFileViewerService: FileViewerService
 				),
 				Self.maximumSearchResults
 			)
-			let (files, truncated, excluded) = try Self.inventory(root: root)
-			let index = ProjectFileIndex(files: files.map(\.relativePath))
-			let paths = index.search(
+			let inventory = try self.inventory(root: root)
+			let paths = inventory.index.search(
 				query,
 				limit: resultLimit + 1
 			)
+			try Task.checkCancellation()
 			return FileViewerSearchPage(
 				results: Array(paths.prefix(resultLimit)).map
 				{
@@ -113,8 +115,8 @@ struct FileSystemFileViewerService: FileViewerService
 						relativePath: $0
 					)
 				},
-				isTruncated: truncated || paths.count > resultLimit,
-				excludedDirectoryCount: excluded
+				isTruncated: inventory.isTruncated || paths.count > resultLimit,
+				excludedDirectoryCount: inventory.excludedDirectoryCount
 			)
 		}
 		return try await withTaskCancellationHandler
@@ -150,11 +152,15 @@ struct FileSystemFileViewerService: FileViewerService
 					isTruncated: false
 				)
 			}
-			let (files, inventoryTruncated, excluded) = try Self.inventory(root: root)
+			let inventory = try self.inventory(root: root)
 			var results: [FileViewerSearchResult] = []
-			for location in files
+			for path in inventory.index.files
 			{
 				try Task.checkCancellation()
+				let location = FileLocation(
+					root: root,
+					relativePath: path
+				)
 				guard Self.matchesMask(
 					location.relativePath,
 					mask: mask
@@ -163,25 +169,39 @@ struct FileSystemFileViewerService: FileViewerService
 				{
 					continue
 				}
-				guard let loaded = try? Self.readFile(location),
-						case .text(let text) = loaded.content
+				guard let text = try? Self.searchText(location)
 				else
 				{
 					continue
 				}
-				let lines = SourceLineIndex(text).lines
-				for (index, line) in lines.enumerated()
-					where line.range(
+				guard text.range(
+					of: query,
+					options: [.caseInsensitive, .literal]
+				) != nil
+				else
+				{
+					continue
+				}
+				let lineIndex = SourceLineIndex(text)
+				let source = text as NSString
+				for index in lineIndex.lineStarts.indices
+				{
+					try Task.checkCancellation()
+					let line = source.substring(with: lineIndex.contentRange(atLineIndex: index))
+					guard line.range(
 						of: query,
 						options: [.caseInsensitive, .literal]
 					) != nil
-				{
+					else
+					{
+						continue
+					}
 					if results.count == resultLimit
 					{
 						return FileViewerSearchPage(
 							results: results,
 							isTruncated: true,
-							excludedDirectoryCount: excluded
+							excludedDirectoryCount: inventory.excludedDirectoryCount
 						)
 					}
 					results.append(FileViewerSearchResult(
@@ -191,10 +211,11 @@ struct FileSystemFileViewerService: FileViewerService
 					))
 				}
 			}
+			try Task.checkCancellation()
 			return FileViewerSearchPage(
 				results: results,
-				isTruncated: inventoryTruncated,
-				excludedDirectoryCount: excluded
+				isTruncated: inventory.isTruncated,
+				excludedDirectoryCount: inventory.excludedDirectoryCount
 			)
 		}
 		return try await withTaskCancellationHandler
@@ -408,6 +429,35 @@ struct FileSystemFileViewerService: FileViewerService
 		)
 	}
 
+	/// Search needs current text bytes, but no document revision or media preview preparation.
+	private static func searchText(_ location: FileLocation) throws -> String?
+	{
+		let ext = location.fileURL.pathExtension.lowercased()
+		if ["png", "jpg", "jpeg", "gif", "tif", "tiff", "heic", "webp", "pdf"]
+			.contains(ext)
+		{
+			return nil
+		}
+		let fd = try openContained(
+			location,
+			flags: O_RDONLY | O_NONBLOCK
+		)
+		defer
+		{
+			Darwin.close(fd)
+		}
+		let (data, _) = try readBytes(fd)
+		guard !data.contains(0)
+		else
+		{
+			return nil
+		}
+		return String(
+			data: data,
+			encoding: .utf8
+		)
+	}
+
 	private static func validImageHeader(
 		_ data: Data,
 		extension ext: String
@@ -604,6 +654,30 @@ struct FileSystemFileViewerService: FileViewerService
 
 	private static func list(_ location: FileLocation) throws -> [FileViewerDirectoryEntry]
 	{
+		try directoryItems(at: location).map
+		{
+			item in FileViewerDirectoryEntry(
+				location: FileLocation(
+					root: location.root,
+					relativePath: location.relativePath.isEmpty ? item.name
+						: location.relativePath + "/" + item.name
+				),
+				isDirectory: item.isDirectory,
+				isSymbolicLink: item.isSymbolicLink
+			)
+		}
+	}
+
+	private struct DirectoryItem
+	{
+		let name: String
+		let isDirectory: Bool
+		let isSymbolicLink: Bool
+	}
+
+	/// Read names and entry types once for browsing and recursive search.
+	private static func directoryItems(at location: FileLocation) throws -> [DirectoryItem]
+	{
 		let fd = try openContained(
 			location,
 			flags: O_RDONLY | O_DIRECTORY
@@ -618,7 +692,7 @@ struct FileSystemFileViewerService: FileViewerService
 		{
 			closedir(directory)
 		}
-		var entries: [FileViewerDirectoryEntry] = []
+		var entries: [DirectoryItem] = []
 		while let item = readdir(directory)
 		{
 			try Task.checkCancellation()
@@ -636,31 +710,32 @@ struct FileSystemFileViewerService: FileViewerService
 			{
 				continue
 			}
-			var metadata = stat()
-			let result = name.withCString
+			let type = item.pointee.d_type
+			var isDirectory = type == UInt8(DT_DIR)
+			var isSymbolicLink = type == UInt8(DT_LNK)
+			if type == UInt8(DT_UNKNOWN)
 			{
-				fstatat(
-					fd,
-					$0,
-					&metadata,
-					AT_SYMLINK_NOFOLLOW
-				)
+				var metadata = stat()
+				let result = name.withCString
+				{
+					fstatat(
+						fd,
+						$0,
+						&metadata,
+						AT_SYMLINK_NOFOLLOW
+					)
+				}
+				if result != 0
+				{
+					continue
+				}
+				isDirectory = metadata.st_mode & S_IFMT == S_IFDIR
+				isSymbolicLink = metadata.st_mode & S_IFMT == S_IFLNK
 			}
-			if result != 0
-			{
-				continue
-			}
-			entries.append(FileViewerDirectoryEntry(
-				location: FileLocation(
-					root: location.root,
-					relativePath: ([location.relativePath, name].filter
-					{
-						!$0.isEmpty
-					})
-					.joined(separator: "/")
-				),
-				isDirectory: metadata.st_mode & S_IFMT == S_IFDIR,
-				isSymbolicLink: metadata.st_mode & S_IFMT == S_IFLNK
+			entries.append(DirectoryItem(
+				name: name,
+				isDirectory: isDirectory,
+				isSymbolicLink: isSymbolicLink
 			))
 		}
 		return entries.sorted
@@ -673,19 +748,109 @@ struct FileSystemFileViewerService: FileViewerService
 		}
 	}
 
-	private static func inventory(root: String) throws -> ([FileLocation], Bool, Int)
+	private struct DirectoryStamp: Equatable
+	{
+		let relativePath: String
+		let device: UInt64
+		let inode: UInt64
+		let modifiedSeconds: Int
+		let modifiedNanoseconds: Int
+		let changedSeconds: Int
+		let changedNanoseconds: Int
+	}
+
+	private struct SearchInventory
+	{
+		let root: String
+		let index: ProjectFileIndex
+		let directories: [DirectoryStamp]
+		let isTruncated: Bool
+		let excludedDirectoryCount: Int
+	}
+
+	private static func stamp(_ location: FileLocation) throws -> DirectoryStamp
+	{
+		let fd = try openContained(
+			location,
+			flags: O_RDONLY | O_DIRECTORY
+		)
+		defer
+		{
+			Darwin.close(fd)
+		}
+		var metadata = stat()
+		guard fstat(
+			fd,
+			&metadata
+		) == 0
+		else
+		{
+			throw failure(errno)
+		}
+		return DirectoryStamp(
+			relativePath: location.relativePath,
+			device: UInt64(metadata.st_dev),
+			inode: UInt64(metadata.st_ino),
+			modifiedSeconds: metadata.st_mtimespec.tv_sec,
+			modifiedNanoseconds: metadata.st_mtimespec.tv_nsec,
+			changedSeconds: metadata.st_ctimespec.tv_sec,
+			changedNanoseconds: metadata.st_ctimespec.tv_nsec
+		)
+	}
+
+	private func inventory(root: String) throws -> SearchInventory
+	{
+		let cached = inventoryLock.withLock
+		{
+			cachedInventory
+		}
+		if let cached, cached.root == root
+		{
+			var current = true
+			for directory in cached.directories
+			{
+				try Task.checkCancellation()
+				let location = FileLocation(
+					root: root,
+					relativePath: directory.relativePath
+				)
+				guard (try? Self.stamp(location)) == directory
+				else
+				{
+					current = false
+					break
+				}
+			}
+			if current
+			{
+				return cached
+			}
+		}
+		let rebuilt = try Self.buildInventory(root: root)
+		try Task.checkCancellation()
+		inventoryLock.withLock
+		{
+			cachedInventory = rebuilt
+		}
+		return rebuilt
+	}
+
+	private static func buildInventory(root: String) throws -> SearchInventory
 	{
 		var pending = [FileLocation(
 			root: root,
 			relativePath: ""
 		)]
-		var files: [FileLocation] = []
+		var files: [String] = []
+		var directories: [DirectoryStamp] = []
 		var visited = 0
 		var excluded = 0
+		var truncated = false
 		while let directory = pending.popLast()
 		{
 			try Task.checkCancellation()
-			for entry in try list(directory)
+			directories.append(try stamp(directory))
+			for entry in try directoryItems(at: directory)
 			{
 				if entry.isDirectory,
 					GeneratedProjectDirectoryPolicy.excludes(entry.name)
@@ -696,7 +861,8 @@ struct FileSystemFileViewerService: FileViewerService
 				visited += 1
 				if visited > maximumSearchFiles
 				{
-					return (files, true, excluded)
+					truncated = true
+					break
 				}
 				if entry.isSymbolicLink
 				{
@@ -704,21 +870,29 @@ struct FileSystemFileViewerService: FileViewerService
 				}
 				if entry.isDirectory
 				{
-					pending.append(entry.location)
+					pending.append(FileLocation(
+						root: root,
+						relativePath: directory.relativePath.isEmpty ? entry.name
+							: directory.relativePath + "/" + entry.name
+					))
 				}
 				else
 				{
-					files.append(entry.location)
+					files.append(directory.relativePath.isEmpty ? entry.name
+						: directory.relativePath + "/" + entry.name)
 				}
 			}
-		}
-		return (
-			files.sorted
+			if truncated
 			{
-				$0.relativePath < $1.relativePath
-			},
-			false,
-			excluded
+				break
+			}
+		}
+		return SearchInventory(
+			root: root,
+			index: ProjectFileIndex(files: files.sorted()),
+			directories: directories,
+			isTruncated: truncated,
+			excludedDirectoryCount: excluded
 		)
 	}
 

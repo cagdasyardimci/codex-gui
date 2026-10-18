@@ -418,6 +418,12 @@ enum FileViewerReducer
 			state.contentResults = nil
 			return FileViewerTransition(changed: true)
 		case .cancelSearch:
+			guard state.searchRequest != nil || state.searchFailure != nil
+				|| state.filenameResults != nil || state.contentResults != nil
+			else
+			{
+				return FileViewerTransition()
+			}
 			state.searchRequest = nil
 			state.searchFailure = nil
 			state.filenameResults = nil

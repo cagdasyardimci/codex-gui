@@ -7,6 +7,31 @@ import Testing
 struct FileViewerRuntimeTests
 {
 	@Test @MainActor
+	func repeatedSearchDismissalDoesNotPublishUnchangedState() async throws
+	{
+		try await withRuntimeFixture
+		{
+			runtime, _ in
+			runtime.switchRoot("/tmp/workspace")
+			var publications = 0
+			runtime.onChange =
+			{
+				_ in publications += 1
+			}
+			runtime.cancelSearch()
+			#expect(publications == 0)
+			runtime.filenameSearch(query: "pending")
+			let pending = runtime.currentSearchTask()
+			runtime.cancelSearch()
+			#expect(publications == 2)
+			#expect(runtime.state.searchRequest == nil)
+			runtime.cancelSearch()
+			#expect(publications == 2)
+			await pending?.value
+		}
+	}
+
+	@Test @MainActor
 	func previewReplacementProtectsEditedDocumentAndReusesLocation() async throws
 	{
 		try await withRuntimeFixture

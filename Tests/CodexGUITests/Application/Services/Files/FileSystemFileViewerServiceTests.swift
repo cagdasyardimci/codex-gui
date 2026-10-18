@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -88,6 +89,12 @@ struct FileSystemFileViewerServiceTests
 			withDestinationURL: URL(fileURLWithPath: outside)
 		)
 		let service = FileSystemFileViewerService()
+		let entries = try await service.listDirectory(at: FileLocation(
+			root: root,
+			relativePath: ""
+		))
+		#expect(entries.map(\.name) == ["link"])
+		#expect(entries.first?.isSymbolicLink == true)
 		await #expect(throws: FileViewerFailure.self)
 		{
 			_ = try await service.read(at: FileLocation(
@@ -309,6 +316,255 @@ struct FileSystemFileViewerServiceTests
 		)
 		#expect(Set(content.results.map(\.lineText)) == ["needle config", "needle source"])
 		#expect(content.excludedDirectoryCount == 1)
+	}
+
+	@Test
+	func warmSearchSeesNestedAddEditRemovalAndRootSwitch() async throws
+	{
+		let firstRoot = try fixture()
+		let secondRoot = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: firstRoot)
+			try? FileManager.default.removeItem(atPath: secondRoot)
+		}
+		let nested = URL(fileURLWithPath: firstRoot).appendingPathComponent("nested")
+		try FileManager.default.createDirectory(
+			at: nested,
+			withIntermediateDirectories: true
+		)
+		let first = nested.appendingPathComponent("first.md")
+		let added = nested.appendingPathComponent("added.md")
+		try Data("old".utf8).write(to: first)
+		try Data("other".utf8).write(
+			to: URL(fileURLWithPath: secondRoot).appendingPathComponent("other.md")
+		)
+		let service = FileSystemFileViewerService()
+		#expect(try await service.filenameSearch(
+			root: firstRoot,
+			query: "",
+			limit: 10
+		)
+		.results.map(\.relativePath) == ["nested/first.md"])
+		try Data("new".utf8).write(to: first)
+		try Data("new".utf8).write(to: added)
+		#expect(try await service.contentSearch(
+			root: firstRoot,
+			query: "new",
+			mask: nil,
+			limit: 10
+		)
+		.results.map(\.location.relativePath) == ["nested/added.md", "nested/first.md"])
+		try FileManager.default.removeItem(at: first)
+		#expect(try await service.filenameSearch(
+			root: firstRoot,
+			query: "",
+			limit: 10
+		)
+		.results.map(\.relativePath) == ["nested/added.md"])
+		#expect(try await service.filenameSearch(
+			root: secondRoot,
+			query: "",
+			limit: 10
+		)
+		.results.map(\.relativePath) == ["other.md"])
+	}
+
+	@Test
+	func searchPreservesLiteralUnicodeLinesRankingAndLimits() async throws
+	{
+		let root = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: root)
+		}
+		for (name, text) in [
+			("prefix.swift", "α😀\r\nN.EED\u{2028}needle\rN.EED"),
+			("sub/needle.swift", "needle"),
+			("needle.md", "needle"),
+		]
+		{
+			let url = URL(fileURLWithPath: root).appendingPathComponent(name)
+			try FileManager.default.createDirectory(
+				at: url.deletingLastPathComponent(),
+				withIntermediateDirectories: true
+			)
+			try Data(text.utf8).write(to: url)
+		}
+		let service = FileSystemFileViewerService()
+		let names = try await service.filenameSearch(
+			root: root,
+			query: "needle",
+			limit: 1
+		)
+		#expect(names.results.map(\.relativePath) == ["needle.md"])
+		#expect(names.isTruncated)
+		let content = try await service.contentSearch(
+			root: root,
+			query: "N.EED",
+			mask: "**/*.{SWIFT,txt}",
+			limit: 1
+		)
+		#expect(content.results.map(\.lineNumber) == [2])
+		#expect(content.results.map(\.lineText) == ["N.EED"])
+		#expect(content.isTruncated)
+		let literal = try await service.contentSearch(
+			root: root,
+			query: ".",
+			mask: "*.swift",
+			limit: 10
+		)
+		#expect(literal.results.map(\.lineNumber) == [2, 4])
+		let acrossLines = try await service.contentSearch(
+			root: root,
+			query: "N.EED\u{2028}needle",
+			mask: "*.swift",
+			limit: 10
+		)
+		#expect(acrossLines.results.isEmpty)
+		let absent = try await service.contentSearch(
+			root: root,
+			query: "missing phrase",
+			mask: "*.swift",
+			limit: 10
+		)
+		#expect(absent.results.isEmpty)
+	}
+
+	@Test
+	func canceledSearchStopsBeforePublishingResults() async throws
+	{
+		let root = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: root)
+		}
+		try Data("needle".utf8).write(
+			to: URL(fileURLWithPath: root).appendingPathComponent("file.txt")
+		)
+		let service = FileSystemFileViewerService()
+		let operation = Task
+		{
+			withUnsafeCurrentTask
+			{
+				$0?.cancel()
+			}
+			return try await service.filenameSearch(
+				root: root,
+				query: "file",
+				limit: 10
+			)
+		}
+		await #expect(throws: CancellationError.self)
+		{
+			_ = try await operation.value
+		}
+	}
+
+	@Test
+	func contentSearchSkipsNamedPipesAndMediaButIncludesSVGText() async throws
+	{
+		let root = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: root)
+		}
+		let rootURL = URL(fileURLWithPath: root)
+		let pipe = rootURL.appendingPathComponent("blocking.txt")
+		let pipeResult = pipe.path.withCString
+		{
+			Darwin.mkfifo(
+				$0,
+				0o600
+			)
+		}
+		guard pipeResult == 0
+		else
+		{
+			throw NSError(
+				domain: NSPOSIXErrorDomain,
+				code: Int(errno)
+			)
+		}
+		try Data("needle".utf8).write(to: rootURL.appendingPathComponent("malformed.png"))
+		try Data([0xFF, 0xFE]).write(to: rootURL.appendingPathComponent("invalid.svg"))
+		try Data("<svg>needle</svg>".utf8).write(to: rootURL.appendingPathComponent("vector.svg"))
+		let service = FileSystemFileViewerService()
+		let page = try await service.contentSearch(
+			root: root,
+			query: "needle",
+			mask: nil,
+			limit: 10
+		)
+		#expect(page.results.map(\.location.relativePath) == ["vector.svg"])
+		#expect(page.results.map(\.lineText) == ["<svg>needle</svg>"])
+	}
+
+	/// Set FILE_SEARCH_BENCHMARK=1 for comparable cold and warm service timings.
+	@Test
+	func searchTimingDiagnostic() async throws
+	{
+		guard ProcessInfo.processInfo.environment["FILE_SEARCH_BENCHMARK"] == "1"
+		else
+		{
+			return
+		}
+		let root = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: root)
+		}
+		for directoryIndex in 0 ..< 50
+		{
+			let directory = URL(fileURLWithPath: root)
+				.appendingPathComponent(String(
+					format: "dir-%02d",
+					directoryIndex
+				))
+			try FileManager.default.createDirectory(
+				at: directory,
+				withIntermediateDirectories: true
+			)
+			for fileIndex in 0 ..< 100
+			{
+				try Data("sample text\n".utf8).write(
+					to: directory.appendingPathComponent(
+						String(
+							format: "file-%03d.swift",
+							fileIndex
+						)
+					)
+				)
+			}
+		}
+		let service = FileSystemFileViewerService()
+		let start = DispatchTime.now().uptimeNanoseconds
+		let cold = try await service.filenameSearch(
+			root: root,
+			query: "file-050",
+			limit: 20
+		)
+		let coldEnd = DispatchTime.now().uptimeNanoseconds
+		let warm = try await service.filenameSearch(
+			root: root,
+			query: "file-051",
+			limit: 20
+		)
+		let warmEnd = DispatchTime.now().uptimeNanoseconds
+		let content = try await service.contentSearch(
+			root: root,
+			query: "sample",
+			mask: "*.swift",
+			limit: 20
+		)
+		let contentEnd = DispatchTime.now().uptimeNanoseconds
+		#expect(cold.results.count == 20)
+		#expect(warm.results.count == 20)
+		#expect(content.results.count == 20)
+		print("FILE_SEARCH_BENCHMARK files=5000 cold_filename_ms="
+			+ "\(Double(coldEnd - start) / 1_000_000) warm_filename_ms="
+			+ "\(Double(warmEnd - coldEnd) / 1_000_000) content_ms="
+			+ "\(Double(contentEnd - warmEnd) / 1_000_000)")
 	}
 
 	private func fixture() throws -> String
