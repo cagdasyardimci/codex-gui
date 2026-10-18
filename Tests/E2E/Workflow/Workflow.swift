@@ -5,10 +5,6 @@ func runWorkflow(_ configuration: Configuration) throws -> Int32
 {
 	let manager = FileManager.default
 	let directory = configuration.root.appendingPathComponent(".build/e2e")
-	try manager.createDirectory(
-		at: directory,
-		withIntermediateDirectories: true
-	)
 	let lock = try acquireWorkflowLock(directory.appendingPathComponent("workflow.lock"))
 	defer
 	{
@@ -185,6 +181,13 @@ func reassess(_ configuration: Configuration) throws -> Int32
 	else
 	{
 		throw ToolError.invalid("--run must name an existing run directory")
+	}
+	let lock = try acquireWorkflowLock(
+		configuration.root.appendingPathComponent(".build/e2e/workflow.lock")
+	)
+	defer
+	{
+		close(lock)
 	}
 	try exportResults(run)
 	return try assess(

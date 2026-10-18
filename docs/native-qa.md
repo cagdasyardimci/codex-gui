@@ -26,7 +26,7 @@ from the repository root:
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run --package-path Tests/E2E E2EWorkflow --help
 ```
 
-The `--help` output lists available options.
+The `--help` output lists available options. Test runs and report reassessment share the checkout's `.build/e2e/workflow.lock` while exporting evidence or building workflow tools. A competing workflow exits before replacing artifacts.
 
 Use full Xcode with its license and first-run setup complete. Run on an unlocked interactive desktop without competing input. The UI runner needs development signing and may require macOS UI-testing or Automation permission. The workflow does not change global `xcode-select`.
 

@@ -45,6 +45,10 @@ func handleSignal(_ value: Int32)
 
 func acquireWorkflowLock(_ url: URL) throws -> Int32
 {
+	try FileManager.default.createDirectory(
+		at: url.deletingLastPathComponent(),
+		withIntermediateDirectories: true
+	)
 	let descriptor = open(
 		url.path,
 		O_CREAT | O_RDWR | O_CLOEXEC,
