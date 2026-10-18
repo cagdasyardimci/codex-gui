@@ -493,18 +493,7 @@ enum ConversationTranscriptRow: Equatable
 			{
 				continue
 			}
-			let outcome: String?
-			switch command.status
-			{
-			case "declined": outcome = "declined"
-			case "interrupted", "cancelled", "stopped": outcome = "interrupted"
-			case "failed": outcome = "failed"
-			default: outcome = command.exitCode.map
-			{
-				$0 != 0 ? "failed" : nil
-			} ?? nil
-			}
-			if let outcome
+			if let outcome = ConversationCommandOutcome(command).groupTitle
 			{
 				outcomes[outcome, default: 0] += 1
 			}

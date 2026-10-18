@@ -13,6 +13,9 @@ The conversation presents assistant commentary and answers as ordinary messages.
 
 The group header has an icon, a summary such as “Read files, ran commands”, and a disclosure chevron immediately after the summary. Its list starts collapsed. A single action uses its own expandable header instead of a separate group header. Each command-backed row can independently reveal its command details; those details start collapsed. Closing a group does not forget which of its commands were expanded. Closed headers retain counts of failed, declined, and interrupted commands, counted once per source item.
 
+A standalone command keeps its exceptional outcome visible in the closed header. Header labels,
+group counts and Shell details share the same outcome projection, including nonzero exit codes.
+
 Activity disclosure chevrons appear only while the pointer is over their header row. Group, command, read, search, file-list and image rows share this behavior. Pointer movement into an expanded Shell panel hides its row's chevron. The disclosure button retains its layout, pointer hit region, keyboard focus and accessible label when the glyph is absent. Hover does not change expansion or move text. Activity titles and underlined file-link text use the primary label color while their header is hovered and the secondary label color at rest; file underlines and failure badges remain visible.
 
 Activity rows use secondary system text and small icons, without a card background. A read shows a book icon, “Read”, and an underlined filename. A search shows a search icon and the reported query and target. A generic command shows a terminal icon and “Ran” followed by a single-line preview. Previews normalize whitespace and truncate at the available width; tooltips and expanded details preserve the full original command.

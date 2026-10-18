@@ -42,6 +42,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private var hoverSynchronizationTask: Task<Void, Never>?
 	private let icon = NSImageView()
 	private let titleLabel = NSTextField(labelWithString: "")
+	private let outcomeLabel = NSTextField(labelWithString: "")
 	private let titleClick = NSClickGestureRecognizer()
 	private let subagentsButton = NSButton(
 		title: "",
@@ -136,6 +137,12 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		titleLabel.addGestureRecognizer(titleClick)
 		titleLabel.setContentCompressionResistancePriority(
 			.defaultLow,
+			for: .horizontal
+		)
+		outcomeLabel.font = .systemFont(ofSize: 12)
+		outcomeLabel.textColor = .systemRed
+		outcomeLabel.setContentCompressionResistancePriority(
+			.required,
 			for: .horizontal
 		)
 	}
@@ -422,6 +429,12 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		if hasLink
 		{
 			headerViews.append(fileButton)
+		}
+		if let command = row.command,
+			let outcome = ConversationCommandOutcome(command).exceptionalTitle
+		{
+			outcomeLabel.stringValue = outcome
+			headerViews.append(outcomeLabel)
 		}
 		let canExpand = row.kind == .group || row.kind == .image || row.command != nil
 		if row.kind == .group
@@ -976,46 +989,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private static func shellStatus(_ command: ConversationCommand) -> String
 	{
-		if let code = command.exitCode, code != 0
-		{
-			return "Exit code \(code)"
-		}
-		let failure = failureText(command)
-		if !failure.isEmpty
-		{
-			return failure
-		}
-		if command.status == "completed"
-		{
-			return command.exitCode == 0 ? "✓ Success" : "Completed"
-		}
-		return "Running…"
-	}
-
-	private static func failureText(_ command: ConversationCommand?) -> String
-	{
-		guard let command
-		else
-		{
-			return ""
-		}
-		if let code = command.exitCode, code != 0
-		{
-			return "Exit \(code)"
-		}
-		if command.status == "failed"
-		{
-			return "Failed"
-		}
-		if command.status == "declined"
-		{
-			return "Declined"
-		}
-		if ["interrupted", "cancelled", "canceled", "stopped"].contains(command.status)
-		{
-			return "Interrupted"
-		}
-		return ""
+		ConversationCommandOutcome(command).detailTitle
 	}
 
 	func writeCommand(to pasteboard: NSPasteboard)

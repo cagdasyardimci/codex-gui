@@ -1821,9 +1821,9 @@ struct ConversationActivityCollectionItemTests
 		)
 			as? Int == 1)
 		#expect(link.frame == originalFrame)
-		#expect(!labels.contains
+		#expect(labels.contains
 		{
-			$0.stringValue == "Exit 3" || $0.textColor == .systemRed
+			$0.stringValue == "Exit 3" && $0.textColor == .systemRed
 		})
 		#expect(output.textColor == AppKitColorTokens.terminalText)
 		#expect(output.string == originalText)
@@ -1864,37 +1864,90 @@ struct ConversationActivityCollectionItemTests
 			as? NSColor == AppKitColorTokens.activityText)
 	}
 
-	@Test func collapsedHeaderOmitsFailureBadgeWhileFooterRetainsExitCode()
+	@Test func collapsedCommandOutcomesRemainVisibleAloneAndInGroups() throws
 	{
 		let item = ConversationActivityCollectionItem()
-		var row = commandRow(expanded: false)
-		row.command = ConversationCommand(
-			command: "false",
-			cwd: nil,
-			output: "",
-			status: "completed",
-			exitCode: 3,
-			durationMs: nil,
-			actions: []
-		)
-		item.configure(
-			row,
-			onToggle:
+		let cases: [(String, Int?, String, String)] = [
+			("completed", 3, "Exit 3", "failed"),
+			("failed", nil, "Failed", "failed"),
+			("declined", nil, "Declined", "declined"),
+			("interrupted", nil, "Interrupted", "interrupted"),
+			("cancelled", nil, "Interrupted", "interrupted"),
+			("canceled", nil, "Interrupted", "interrupted"),
+			("stopped", nil, "Interrupted", "interrupted"),
+		]
+		for (status, code, title, groupOutcome) in cases
+		{
+			let command = ConversationCommand(
+				command: "false",
+				cwd: nil,
+				output: "",
+				status: status,
+				exitCode: code,
+				durationMs: nil,
+				actions: []
+			)
+			let entry = ConversationEntry(
+				id: "turn:first",
+				kind: .command,
+				title: "Command",
+				body: "",
+				activity: .command(command)
+			)
+			let rows = ConversationTranscriptRow.make(
+				entries: [entry],
+				projectPath: nil
+			)
+			guard case .activity(let row) = rows.first
+			else
 			{
-			},
-			onOpenFile:
-			{
-				_ in
+				Issue.record("Missing singleton command row")
+				continue
 			}
-		)
-		#expect(!descendants(item.view).compactMap
-		{
-			$0 as? NSTextField
+			item.configure(
+				row,
+				onToggle:
+				{
+				},
+				onOpenFile:
+				{
+					_ in
+				}
+			)
+			#expect(descendants(item.view).compactMap
+			{
+				$0 as? NSTextField
+			}.contains
+			{
+				$0.stringValue == title && $0.textColor == .systemRed
+			})
+			let neighbor = ConversationEntry(
+				id: "turn:second",
+				kind: .command,
+				title: "Command",
+				body: "",
+				activity: .command(ConversationCommand(
+					command: "true",
+					cwd: nil,
+					output: "",
+					status: "completed",
+					exitCode: 0,
+					durationMs: nil,
+					actions: []
+				))
+			)
+			let grouped = ConversationTranscriptRow.make(
+				entries: [entry, neighbor],
+				projectPath: nil
+			)
+			guard case .activity(let group) = grouped.first
+			else
+			{
+				Issue.record("Missing command group")
+				continue
+			}
+			#expect(group.title == "Ran commands · 1 \(groupOutcome)")
 		}
-		.contains
-		{
-			$0.stringValue == "Exit 3"
-		})
 	}
 
 	@Test func missingImagePathHasVisibleUnavailableState()
