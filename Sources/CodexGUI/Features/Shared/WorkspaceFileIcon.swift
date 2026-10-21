@@ -88,6 +88,122 @@ enum WorkspaceFileIcon
 		}
 	}
 
+	/// Document search artwork shared by the Files and Changes toolbars.
+	static func searchImage(
+		size: CGFloat = 16,
+		accessibilityDescription: String? = nil
+	) -> NSImage
+	{
+		let image = NSImage(
+			size: NSSize(
+				width: size,
+				height: size
+			),
+			flipped: true
+		)
+		{
+			bounds in
+			NSGraphicsContext.saveGraphicsState()
+			defer
+			{
+				NSGraphicsContext.restoreGraphicsState()
+			}
+			let transform = AffineTransform(scale: bounds.width / 24)
+			(transform as NSAffineTransform).concat()
+			NSColor.black.setStroke()
+			let page = NSBezierPath()
+			page.move(to: NSPoint(
+				x: 10,
+				y: 21
+			))
+			page.line(to: NSPoint(
+				x: 5,
+				y: 21
+			))
+			page.curve(
+				to: NSPoint(
+					x: 3,
+					y: 19
+				),
+				controlPoint1: NSPoint(
+					x: 3.5,
+					y: 21
+				),
+				controlPoint2: NSPoint(
+					x: 3,
+					y: 20.5
+				)
+			)
+			page.line(to: NSPoint(
+				x: 3,
+				y: 5
+			))
+			page.curve(
+				to: NSPoint(
+					x: 5,
+					y: 3
+				),
+				controlPoint1: NSPoint(
+					x: 3,
+					y: 3.5
+				),
+				controlPoint2: NSPoint(
+					x: 3.5,
+					y: 3
+				)
+			)
+			page.line(to: NSPoint(
+				x: 14,
+				y: 3
+			))
+			page.line(to: NSPoint(
+				x: 19,
+				y: 8
+			))
+			page.line(to: NSPoint(
+				x: 19,
+				y: 10
+			))
+			page.move(to: NSPoint(
+				x: 13,
+				y: 3
+			))
+			page.line(to: NSPoint(
+				x: 13,
+				y: 8
+			))
+			page.line(to: NSPoint(
+				x: 19,
+				y: 8
+			))
+			page.move(to: NSPoint(
+				x: 18,
+				y: 19
+			))
+			page.line(to: NSPoint(
+				x: 21,
+				y: 22
+			))
+			let lens = NSBezierPath(ovalIn: NSRect(
+				x: 12,
+				y: 13,
+				width: 7,
+				height: 7
+			))
+			for path in [page, lens]
+			{
+				path.lineWidth = 1.8
+				path.lineCapStyle = .round
+				path.lineJoinStyle = .round
+				path.stroke()
+			}
+			return true
+		}
+		image.isTemplate = true
+		image.accessibilityDescription = accessibilityDescription
+		return image
+	}
+
 	static func swiftImage(
 		size: CGFloat = 16,
 		accessibilityDescription: String? = nil

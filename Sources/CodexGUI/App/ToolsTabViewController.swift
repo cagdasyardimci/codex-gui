@@ -1196,16 +1196,35 @@ final class ToolsTabViewController: NSViewController
 			selectButton.image = ToolsPaneIcons.files(size: Layout.iconSize)
 			selectButton.imagePosition = .imageLeading
 		}
-		else if file != nil
+		else if let file
 		{
-			selectButton.image = FileViewerIcons.image(
-				.file,
-				size: Layout.iconSize
-			)
+			let type = WorkspaceFileTypePresentation(relativePath: file.path)
+			if type.symbol == "swift" || WorkspaceFileIcon.asset(
+				for: type,
+				relativePath: file.path
+			) == .fileCode
+			{
+				selectButton.image = DesktopIcons.image(
+					.code,
+					size: Layout.iconSize,
+					accessibilityDescription: type.description
+				)
+			}
+			else
+			{
+				selectButton.image = WorkspaceFileIcon.image(
+					for: type,
+					relativePath: file.path,
+					size: Layout.iconSize
+				)
+			}
 			selectButton.imagePosition = .imageLeading
 		}
 
-		selectButton.font = AppKitFontResolver.font(TypographyTokens.Controls.tab)
+		selectButton.font = AppKitFontResolver.font(
+			TypographyTokens.Controls.tab,
+			italic: file?.isPreview == true
+		)
 
 		if let file
 		{

@@ -143,7 +143,7 @@ final class FilesViewController: NSViewController
 		for button in [searchButton, navigatorButton]
 		{
 			NSLayoutConstraint.activate([
-				button.widthAnchor.constraint(equalToConstant: 34),
+				button.widthAnchor.constraint(equalToConstant: 28),
 				button.heightAnchor.constraint(equalTo: button.widthAnchor),
 			])
 		}
@@ -161,12 +161,20 @@ final class FilesViewController: NSViewController
 		toolbarActions.orientation = .horizontal
 		toolbarActions.distribution = .fill
 		toolbarActions.alignment = .centerY
-		toolbarActions.spacing = 6
+		toolbarActions.spacing = 4
 		for button in [searchButton, sourceButton, navigatorButton, actionsButton]
 		{
+			button.presentation = .grouped
 			toolbarActions.addArrangedSubview(button)
 		}
-		for child in [breadcrumb, toolbarActions]
+		let actionGroup = ViewerToolbarGroup(
+			toolbarActions,
+			presentation: .capsule,
+			radius: 17,
+			horizontalInset: 3,
+			verticalInset: 3
+		)
+		for child in [breadcrumb, actionGroup]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 			toolbar.addSubview(child)
@@ -174,14 +182,14 @@ final class FilesViewController: NSViewController
 		NSLayoutConstraint.activate([
 			breadcrumb.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor),
 			breadcrumb.trailingAnchor.constraint(
-				lessThanOrEqualTo: toolbarActions.leadingAnchor,
+				lessThanOrEqualTo: actionGroup.leadingAnchor,
 				constant: -8
 			),
 			breadcrumb.topAnchor.constraint(equalTo: toolbar.topAnchor),
 			breadcrumb.bottomAnchor.constraint(equalTo: toolbar.bottomAnchor),
 			breadcrumb.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
-			toolbarActions.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor),
-			toolbarActions.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+			actionGroup.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor),
+			actionGroup.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
 		])
 
 		root.addSubview(toolbar)

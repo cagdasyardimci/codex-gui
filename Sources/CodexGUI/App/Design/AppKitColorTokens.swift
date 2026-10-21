@@ -142,6 +142,10 @@ enum AppKitColorTokens
 		light: 0xE8F3FE,
 		dark: 0x173E76
 	)
+	static let viewerControlSelection = AppKitColorResolution.color(
+		light: 0xECF2FF,
+		dark: 0x213B63
+	)
 	static let primaryText = AppKitColorResolution.color(
 		light: 0x1A1C1F,
 		dark: 0xFFFFFF

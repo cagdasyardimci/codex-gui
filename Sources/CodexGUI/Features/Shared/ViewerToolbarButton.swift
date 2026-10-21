@@ -73,7 +73,8 @@ final class ViewerToolbarButton: NSButton
 		if presentation == .grouped
 		{
 			return NSSize(
-				width: 28,
+				width: title.isEmpty ? 28 : super.intrinsicContentSize.width + 16
+					+ (trailingImage == nil ? 0 : 16),
 				height: 28
 			)
 		}
@@ -139,12 +140,7 @@ final class ViewerToolbarButton: NSButton
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		guard presentation == .capsule
-		else
-		{
-			super.draw(dirtyRect)
-			return
-		}
+		let selected = showsSelection && state == .on
 		let rect = bounds.insetBy(
 			dx: 0.5,
 			dy: 0.5
@@ -155,15 +151,23 @@ final class ViewerToolbarButton: NSButton
 			xRadius: radius,
 			yRadius: radius
 		)
-		let selected = showsSelection && state == .on
-		let fill = selected ? AppKitColorTokens.userBubble : AppKitColorTokens.canvas
-		(isHighlighted ? AppKitColorTokens.rowHighlight : fill).setFill()
-		path.fill()
-		AppKitColorTokens.subtleEdge.setStroke()
-		path.lineWidth = 1
-		path.stroke()
+		if presentation == .capsule || selected || isHighlighted
+		{
+			let fill = selected ? AppKitColorTokens.viewerControlSelection : AppKitColorTokens
+				.canvas
+			(isHighlighted ? AppKitColorTokens.rowHighlight : fill).setFill()
+			path.fill()
+		}
+		if presentation == .capsule
+		{
+			AppKitColorTokens.subtleEdge.setStroke()
+			path.lineWidth = 1
+			path.stroke()
+		}
 		contentTintColor = isEnabled
-			? (selected ? .systemBlue : AppKitColorTokens.primaryText) : .disabledControlTextColor
+			? (selected ? .systemBlue : (presentation == .grouped && title.isEmpty
+					? AppKitColorTokens.secondaryText : AppKitColorTokens.primaryText)) :
+			.disabledControlTextColor
 		super.draw(dirtyRect)
 	}
 }
@@ -178,7 +182,7 @@ private final class ViewerToolbarButtonCell: NSButtonCell
 		in controlView: NSView
 	)
 	{
-		guard let button = controlView as? ViewerToolbarButton, button.presentation == .capsule
+		guard let button = controlView as? ViewerToolbarButton
 		else
 		{
 			super.draw(
@@ -188,7 +192,7 @@ private final class ViewerToolbarButtonCell: NSButtonCell
 			return
 		}
 		var content = title.isEmpty ? cellFrame : cellFrame.insetBy(
-			dx: 12,
+			dx: button.presentation == .capsule ? 12 : 8,
 			dy: 0
 		)
 		if trailingImage != nil
@@ -207,7 +211,7 @@ private final class ViewerToolbarButtonCell: NSButtonCell
 			DesktopIcons.draw(
 				trailingImage,
 				in: NSRect(
-					x: cellFrame.maxX - 24,
+					x: cellFrame.maxX - (button.presentation == .capsule ? 24 : 20),
 					y: cellFrame.midY - 6,
 					width: 12,
 					height: 12

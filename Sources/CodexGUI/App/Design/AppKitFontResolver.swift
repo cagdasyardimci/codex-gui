@@ -7,7 +7,8 @@ enum AppKitFontResolver
 {
 	static func interfaceFont(
 		ofSize size: CGFloat,
-		weight: CGFloat = TypographyTokens.interfaceWeight
+		weight: CGFloat = TypographyTokens.interfaceWeight,
+		italic: Bool = false
 	) -> NSFont
 	{
 		// Rendered Fonts reports SF NS with exact wght values and minimum opsz 17.
@@ -22,7 +23,14 @@ enum AppKitFontResolver
 		let descriptor = CTFontDescriptorCreateWithAttributes([
 			kCTFontVariationAttribute: variations,
 		] as CFDictionary)
-		let systemFont = NSFont.systemFont(ofSize: size)
+		let uprightSystemFont = NSFont.systemFont(ofSize: size)
+		// Select the native italic face before resolving graphics and exact variation axes.
+		// Converting the graphics-derived face requests a private name and triggers fallback.
+		let systemFont = italic
+			? NSFont(
+				descriptor: uprightSystemFont.fontDescriptor.withSymbolicTraits(.italic),
+				size: size
+			) ?? uprightSystemFont : uprightSystemFont
 		// Resolve its graphics font first; a system UI descriptor ignores explicit variations.
 		let graphicsFont = CTFontCopyGraphicsFont(
 			systemFont as CTFont,
@@ -36,8 +44,27 @@ enum AppKitFontResolver
 		) as NSFont
 	}
 
-	static func font(_ role: TypographyTokens.Role) -> NSFont
+	static func font(
+		_ role: TypographyTokens.Role,
+		italic: Bool = false
+	) -> NSFont
 	{
+		if italic
+		{
+			if case let .interface(weight) = role.selection
+			{
+				return interfaceFont(
+					ofSize: role.size,
+					weight: weight,
+					italic: true
+				)
+			}
+			return NSFontManager.shared.convert(
+				font(role),
+				toHaveTrait: .italicFontMask
+			)
+		}
+
 		func nativeWeight(_ weight: TypographyTokens.Weight) -> NSFont.Weight
 		{
 			switch weight

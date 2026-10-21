@@ -252,7 +252,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		updateNavigatorToggleAppearance()
 
 		statusLabel.isHidden = true
-		let layout = NSStackView(views: [tab, toolbarScroll, statusLabel, banner, body])
+		let toolbarDivider = DesktopSurface(AppKitColorTokens.subtleEdge)
+		toolbarDivider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+		let rows = [tab, toolbarScroll, toolbarDivider, statusLabel, banner, body]
+		let layout = NSStackView(views: rows)
 		layout.orientation = .vertical
 		layout.alignment = .leading
 		layout.spacing = 0
@@ -261,7 +264,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			to: surface,
 			inset: 0
 		)
-		for row in [tab, toolbarScroll, statusLabel, banner, body]
+		for row in rows
 		{
 			row.widthAnchor.constraint(equalTo: layout.widthAnchor).isActive = true
 		}
@@ -963,6 +966,8 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	private func updateNavigatorToggleAppearance()
 	{
 		let visible = navigatorSplit?.isNavigatorVisible == true
+		navigatorToggle?.state = visible ? .on : .off
+		navigatorToggle?.needsDisplay = true
 		navigatorToggle?.contentTintColor = visible ? .systemBlue : .secondaryLabelColor
 		navigatorToggle?.setAccessibilityValue(visible ? "Visible" : "Hidden")
 	}
@@ -1083,6 +1088,8 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 
 	private func updateWordWrapButton()
 	{
+		wordWrapButton?.state = documentController.wrapsCode ? .on : .off
+		wordWrapButton?.needsDisplay = true
 		wordWrapButton?.setAccessibilityLabel(
 			documentController.wrapsCode ? "Stop wrapping code lines" : "Wrap code lines"
 		)

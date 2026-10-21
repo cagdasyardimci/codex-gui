@@ -46,6 +46,13 @@ enum FileViewerIcons
 		accessibilityDescription: String? = nil
 	) -> NSImage?
 	{
+		if icon == .fileSearch
+		{
+			return WorkspaceFileIcon.searchImage(
+				size: size,
+				accessibilityDescription: accessibilityDescription
+			)
+		}
 		if icon == .swift
 		{
 			return WorkspaceFileIcon.swiftImage(

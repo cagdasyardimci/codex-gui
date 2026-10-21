@@ -4,16 +4,25 @@ import AppKit
 @MainActor
 final class ViewerToolbarGroup: DesktopSurface
 {
+	enum Presentation
+	{
+		case flat, capsule
+	}
+
 	init(
 		_ content: NSView,
+		presentation: Presentation = .flat,
 		radius: CGFloat = 20,
 		horizontalInset: CGFloat = 10,
 		verticalInset: CGFloat = 10
 	)
 	{
 		super.init(
-			AppKitColorTokens.elevated,
-			cornerRadius: radius
+			presentation == .capsule ? AppKitColorTokens.canvas : AppKitColorTokens.elevated,
+			cornerRadius: radius,
+			bordered: presentation == .capsule,
+			borderColor: AppKitColorTokens.subtleEdge,
+			shadows: presentation == .capsule ? [ShadowTokens.fileViewerControl] : []
 		)
 		addSubview(content)
 		content.translatesAutoresizingMaskIntoConstraints = false

@@ -22,6 +22,7 @@ struct ViewerToolbarControlsTests
 			capsule.image = icon
 			capsule.imagePosition = .imageLeading
 			capsule.trailingImage = DesktopIcons.image(.chevronDown)
+			capsule.presentation = .grouped
 			capsule.setAccessibilityLabel("Open file actions")
 			capsule.toolTip = "Open file actions"
 			let grouped = ViewerToolbarButton.icon(
@@ -32,6 +33,7 @@ struct ViewerToolbarControlsTests
 			)
 			let group = ViewerToolbarGroup(
 				grouped,
+				presentation: .capsule,
 				horizontalInset: 6,
 				verticalInset: 3
 			)
@@ -74,7 +76,7 @@ struct ViewerToolbarControlsTests
 			{
 				window.appearance = NSAppearance(named: appearance)
 				host.layoutSubtreeIfNeeded()
-				#expect(capsule.bounds.height == 34)
+				#expect(capsule.bounds.height == 28)
 				#expect(grouped.bounds.size == NSSize(
 					width: 28,
 					height: 28
@@ -110,7 +112,8 @@ struct ViewerToolbarControlsTests
 		}
 	}
 
-	@Test func capsuleSelectedPressedAndDisabledStatesHaveDistinctRendering() async throws
+	@Test(arguments: [false, true])
+	func selectedPressedAndDisabledStatesHaveDistinctRendering(grouped: Bool) async throws
 	{
 		try await AppKitTestIsolation.perform
 		{
@@ -121,6 +124,7 @@ struct ViewerToolbarControlsTests
 				action: nil
 			)
 			button.image = DesktopIcons.image(.folders)
+			button.presentation = grouped ? .grouped : .capsule
 			button.showsSelection = true
 			button.setButtonType(.toggle)
 			let host = DesktopSurface(AppKitColorTokens.canvas)

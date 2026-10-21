@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import Testing
 
 @testable import CodexGUI
@@ -72,6 +73,26 @@ struct ToolsTabFilesIntegrationTests
 		#expect(tabs.filesLandingTabID == nil)
 		#expect(tabs.selectedFileDocumentID == second.id)
 		#expect(files.parent === tabs)
+		let previewButton = try #require(button(
+			"one.swift 1",
+			in: tabs.tabBarView
+		))
+		let retainedButton = try #require(button(
+			"one.swift 2",
+			in: tabs.tabBarView
+		))
+		#expect(NSFontManager.shared.traits(of: try #require(previewButton.font))
+			.contains(.italicFontMask))
+		#expect(!NSFontManager.shared.traits(of: try #require(retainedButton.font))
+			.contains(.italicFontMask))
+		#expect(previewButton.font?.familyName == retainedButton.font?.familyName)
+		#expect(previewButton.font?.pointSize == retainedButton.font?.pointSize)
+		let previewFont = try #require(previewButton.font)
+		let retainedFont = try #require(retainedButton.font)
+		#expect(CTFontCopyVariation(previewFont as CTFont) as? [NSNumber: NSNumber]
+			== CTFontCopyVariation(retainedFont as CTFont) as? [NSNumber: NSNumber])
+		#expect(previewButton.image?.isTemplate == true)
+		#expect(previewButton.image?.accessibilityDescription == "Swift source")
 		tabs.showChanges(controller())
 		tabs.showSources(controller())
 		tabs.showSubagents(controller())
@@ -640,6 +661,14 @@ struct ToolsTabFilesIntegrationTests
 				) === retained)
 				#expect(window.firstResponder === retained)
 				#expect(surface.frame == frame)
+				if let directory = ProcessInfo.processInfo.environment["CODEX_FILES_QA_DIR"]
+				{
+					try AppTestPNGWriter.write(
+						header,
+						to: URL(fileURLWithPath: directory)
+							.appendingPathComponent("file-tabs-\(appearance.rawValue).png")
+					)
+				}
 			}
 		}
 	}

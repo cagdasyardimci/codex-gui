@@ -297,6 +297,9 @@ struct FilesViewControllerIntegrationTests
 					"Open file actions",
 					in: files.view
 				))
+				let actionGroup = try #require(search.superview?.superview as? ViewerToolbarGroup)
+				#expect(toggle.superview?.superview === actionGroup)
+				#expect(actions.superview?.superview === actionGroup)
 				for width in [CGFloat(320), 568, 892, 320]
 				{
 					window.setContentSize(NSSize(
@@ -320,7 +323,7 @@ struct FilesViewControllerIntegrationTests
 					#expect(abs(navigator.minX - document.maxX - 5) < 1)
 					#expect(document.width >= 159)
 					#expect(navigator.width >= 119)
-					let toolbar = try #require(search.superview?.superview)
+					let toolbar = try #require(files.breadcrumb.superview)
 					let searchFrame = search.convert(
 						search.bounds,
 						to: toolbar
@@ -383,7 +386,7 @@ struct FilesViewControllerIntegrationTests
 				#expect(files.document.isShowingSource)
 				try requireToolbarPainted(
 					files.view,
-					toolbar: try #require(search.superview?.superview),
+					toolbar: try #require(files.breadcrumb.superview),
 					controls: [search, mode, toggle, actions]
 				)
 				let menu = files.makeFileActionsMenu()
@@ -624,7 +627,9 @@ struct FilesViewControllerIntegrationTests
 							expected.greenComponent,
 							expected.blueComponent
 						)
-					guard saturation > 0.35 || (dark ? brightness > 0.7 : brightness < 0.4)
+					// Grouped actions use secondary ink; include it without counting the
+					// white capsule or its pale selected background as control artwork.
+					guard saturation > 0.35 || (dark ? brightness > 0.45 : brightness < 0.8)
 					else
 					{
 						continue

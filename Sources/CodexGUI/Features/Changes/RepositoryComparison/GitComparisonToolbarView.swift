@@ -18,8 +18,8 @@ final class GitComparisonToolbarView: NSStackView
 		let navigator: Selector
 	}
 
-	let scopeButton = NSButton(
-		title: "Uncommitted ▾",
+	let scopeButton = ViewerToolbarButton(
+		title: "Uncommitted",
 		target: nil,
 		action: nil
 	)
@@ -77,6 +77,12 @@ final class GitComparisonToolbarView: NSStackView
 		orientation = .horizontal
 		alignment = .centerY
 		spacing = 3.5
+		edgeInsets = NSEdgeInsets(
+			top: 0,
+			left: 8,
+			bottom: 0,
+			right: 8
+		)
 		for control in [scope, refs, GitReviewControls.spacer(), tools]
 		{
 			addArrangedSubview(control)
@@ -91,7 +97,6 @@ final class GitComparisonToolbarView: NSStackView
 		scopeButton.target = target
 		scopeButton.action = action
 		scopeButton.isBordered = false
-		scopeButton.focusRingType = .none
 		scopeButton.font = .systemFont(ofSize: 13)
 		scopeButton.image = NSImage(
 			systemSymbolName: "chevron.down",
@@ -108,10 +113,10 @@ final class GitComparisonToolbarView: NSStackView
 		{
 			count.font = .systemFont(ofSize: 13)
 		}
-		let scope = ViewerToolbarGroup(AppKitLayout.horizontalStack(
+		let scope = AppKitLayout.horizontalStack(
 			[scopeButton, additionsLabel, deletionsLabel],
 			spacing: 6
-		))
+		)
 		return scope
 	}
 
@@ -162,6 +167,7 @@ final class GitComparisonToolbarView: NSStackView
 				[baseField, arrow, targetField, revisionMenu],
 				spacing: 8
 			),
+			presentation: .capsule,
 			verticalInset: 4
 		)
 		refs.heightAnchor.constraint(equalToConstant: 36).isActive = true
@@ -200,6 +206,7 @@ final class GitComparisonToolbarView: NSStackView
 			action: actions.wordWrap
 		)
 		wordWrapButton = boundary
+		(boundary as? ViewerToolbarButton)?.showsSelection = true
 		let collapse = referenceButton(
 			"Collapse all diffs",
 			image: GitReviewReferenceIcons.image(.collapse),
@@ -218,6 +225,7 @@ final class GitComparisonToolbarView: NSStackView
 			action: actions.navigator
 		)
 		navigatorToggle = toggle
+		(toggle as? ViewerToolbarButton)?.showsSelection = true
 		let tools = ViewerToolbarGroup(
 			AppKitLayout.horizontalStack(
 				[optionsButton,
@@ -229,6 +237,7 @@ final class GitComparisonToolbarView: NSStackView
 					toggle],
 				spacing: 2
 			),
+			presentation: .capsule,
 			horizontalInset: 6,
 			verticalInset: 2.5
 		)

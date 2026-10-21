@@ -18,6 +18,13 @@ enum GitReviewReferenceIcons
 		accessibilityDescription: String? = nil
 	) -> NSImage
 	{
+		if kind == .documentSearch
+		{
+			return WorkspaceFileIcon.searchImage(
+				size: size,
+				accessibilityDescription: accessibilityDescription
+			)
+		}
 		if let asset = packagedAsset(kind)
 		{
 			return DesktopIcons.image(
@@ -109,28 +116,6 @@ enum GitReviewReferenceIcons
 		NSColor.black.setFill()
 		switch kind
 		{
-		case .documentSearch:
-			let page = NSBezierPath()
-			page.move(to: point((10, 21)))
-			page.line(to: point((5, 21)))
-			page.curve(
-				to: point((3, 19)),
-				controlPoint1: point((3.5, 21)),
-				controlPoint2: point((3, 20.5))
-			)
-			page.line(to: point((3, 5)))
-			page.curve(
-				to: point((5, 3)),
-				controlPoint1: point((3, 3.5)),
-				controlPoint2: point((3.5, 3))
-			)
-			page.line(to: point((14, 3)))
-			page.line(to: point((19, 8)))
-			page.line(to: point((19, 10)))
-			stroke(page)
-			line([(13, 3), (13, 8), (19, 8)])
-			stroke(NSBezierPath(ovalIn: rect((12, 13, 7, 7))))
-			line([(18, 19), (21, 22)])
 		case .collapse:
 			line([(12, 3), (12, 10)])
 			line([(9, 7), (12, 10), (15, 7)])

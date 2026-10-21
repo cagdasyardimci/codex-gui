@@ -18,6 +18,23 @@ struct GitReviewToolbarBehaviorTests
 		{
 			$0 as? GitAdaptiveDiffView
 		}.count == 2)
+		if let directory = ProcessInfo.processInfo.environment["CODEX_FILES_QA_DIR"]
+		{
+			window.setContentSize(NSSize(
+				width: 900,
+				height: 640
+			))
+			for appearance in [NSAppearance.Name.aqua, .darkAqua, .aqua]
+			{
+				window.appearance = NSAppearance(named: appearance)
+				controller.view.layoutSubtreeIfNeeded()
+				try AppTestPNGWriter.write(
+					controller.view,
+					to: URL(fileURLWithPath: directory)
+						.appendingPathComponent("changes-\(appearance.rawValue).png")
+				)
+			}
+		}
 		let directories = controller.runtime.state.expandedDirectories
 		let selectedFileID = controller.runtime.state.selectedFileID
 		let initialProjections = controller.projectionCache.projectionCount
@@ -124,11 +141,19 @@ struct GitReviewToolbarBehaviorTests
 		#expect(controller.runtime.state.pendingRequest == nil)
 
 		#expect(diffViews(in: controller).map(\.wrapsCode) == [true, true])
+		#expect(try button(
+			"Stop wrapping code lines",
+			in: controller.view
+		).state == .on)
 		try dispatchMenuItem(
 			"Stop wrapping code lines",
 			in: controller
 		)
 		#expect(diffViews(in: controller).map(\.wrapsCode) == [false, false])
+		#expect(try button(
+			"Wrap code lines",
+			in: controller.view
+		).state == .off)
 		#expect(controller.makeDiffDisplayMenu().items.first
 		{
 			$0.title == "Wrap code lines"
@@ -138,6 +163,10 @@ struct GitReviewToolbarBehaviorTests
 			in: controller
 		)
 		#expect(diffViews(in: controller).map(\.wrapsCode) == [true, true])
+		#expect(try button(
+			"Stop wrapping code lines",
+			in: controller.view
+		).state == .on)
 
 		#expect(diffViews(in: controller).map(\.layoutPreference) == [.automatic, .automatic])
 		for expected: GitDiffLayoutPreference in [.unified, .split, .automatic]
