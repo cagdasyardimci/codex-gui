@@ -1,6 +1,7 @@
 .build/
 .DS_Store
 /.swift-semantic-check.yaml
+/.swift-semantic-provider.yaml
 .swiftpm/
 .vscode/
 .idea/
