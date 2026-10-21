@@ -120,6 +120,7 @@ struct GitDiffScrollingTests
 					try #require(source.frame.maxX > inner.contentView.bounds.maxX)
 					let forwardedCount = outer.events.count
 					let clip = inner.contentView
+					let horizontal = clip.bounds.origin.x
 					let previousPostsBoundsChanges = clip.postsBoundsChangedNotifications
 					clip.postsBoundsChangedNotifications = true
 					let (movements, continuation) = AsyncStream<Void>.makeStream()
@@ -169,6 +170,17 @@ struct GitDiffScrollingTests
 					}
 					#expect(inner.contentView.bounds.origin.x > horizontal)
 					#expect(outer.events.count == forwardedCount)
+					// Shift stays with the code pane. This synthetic event checks routing;
+					// native Shift-axis normalization is outside the subclass fixture.
+					let shiftedEvent = try wheel(
+						x: 0,
+						y: -40,
+						flags: .maskShift,
+						in: inner
+					)
+					inner.scrollWheel(with: shiftedEvent)
+					#expect(outer.events.count == forwardedCount)
+					#expect(source.selectedRange() == selection)
 				}
 			}
 		}
@@ -177,17 +189,30 @@ struct GitDiffScrollingTests
 	private func wheel(
 		x: Int32,
 		y: Int32,
+		flags: CGEventFlags = [],
 		in scroll: NSScrollView
 	) throws -> NSEvent
 	{
+		// Keep physical keyboard state out of the requested synthetic wheel gesture.
+		let eventSource = try #require(CGEventSource(stateID: .privateState))
 		let event = try #require(CGEvent(
-			scrollWheelEvent2Source: nil,
+			scrollWheelEvent2Source: eventSource,
 			units: .pixel,
 			wheelCount: 2,
 			wheel1: y,
 			wheel2: x,
 			wheel3: 0
 		))
+		event.flags = flags
+		let base = try #require(NSEvent(cgEvent: event))
+		try #require(base.type == .scrollWheel)
+		try #require(base.modifierFlags.contains(.shift) == flags.contains(.maskShift))
+		if flags.isEmpty
+		{
+			try #require(base.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty)
+			try #require(base.scrollingDeltaX == CGFloat(x))
+			try #require(base.scrollingDeltaY == CGFloat(y))
+		}
 		let window = try #require(scroll.window)
 		// The inner code scroll view spans the full document height, while the outer
 		// viewer clips it. A bounds midpoint can be outside the presented window.
@@ -226,7 +251,7 @@ struct GitDiffScrollingTests
 			timing.end()
 		}
 		return LocatedWheelEvent(
-			base: try #require(NSEvent(cgEvent: event)),
+			base: base,
 			window: window,
 			point: point
 		)
