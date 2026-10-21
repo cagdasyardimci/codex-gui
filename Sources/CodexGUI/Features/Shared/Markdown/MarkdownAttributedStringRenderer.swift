@@ -25,11 +25,13 @@ enum MarkdownAttributedStringRenderer
 
 	static func render(
 		_ runs: [MarkdownTextRun],
-		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
+		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:],
+		richBlockMaximumPixels: Int = 2_000_000,
+		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)? = nil
 	) -> NSAttributedString
 	{
 		let result = NSMutableAttributedString(string: "")
-		var richBudget = MarkdownRichBlockBudget()
+		var richBudget = MarkdownRichBlockBudget(maximumPixels: richBlockMaximumPixels)
 		let columnWidths = tableColumnWidths(in: runs)
 		var tables: [Int: NSTextTable] = [:]
 		var cells: [CellKey: NSTextTableBlock] = [:]
@@ -62,7 +64,8 @@ enum MarkdownAttributedStringRenderer
 				for: run,
 				to: &attributes,
 				budget: &richBudget,
-				imageThumbnails: imageThumbnails
+				imageThumbnails: imageThumbnails,
+				mathFontSize: mathFontSize
 			)
 			result.append(NSAttributedString(
 				string: displayText(for: run),
@@ -225,7 +228,8 @@ enum MarkdownAttributedStringRenderer
 		for run: MarkdownTextRun,
 		to attributes: inout [NSAttributedString.Key: Any],
 		budget: inout MarkdownRichBlockBudget,
-		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail]
+		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail],
+		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)?
 	)
 	{
 		if let rich = run.style.richBlock, run.text == "\u{FFFC}"
@@ -234,11 +238,31 @@ enum MarkdownAttributedStringRenderer
 			switch rich.kind
 			{
 			case .math:
-				attachment = MarkdownRichBlockRenderer.mathAttachment(
-					latex: rich.payload,
-					source: rich.source,
-					budget: &budget
-				)
+				if rich.isInline
+				{
+					let inlineFont = mathFontSize.map
+					{
+						NSFont.systemFont(ofSize: $0(
+							run.style,
+							true
+						))
+					} ?? font(for: run.style)
+					attachment = MarkdownInlineMathAttachment(
+						latex: rich.payload,
+						source: rich.source,
+						font: inlineFont,
+						budget: &budget
+					)
+				}
+				else
+				{
+					attachment = MarkdownRichBlockRenderer.mathAttachment(
+						latex: rich.payload,
+						source: rich.source,
+						budget: &budget,
+						fontSize: mathFontSize?(run.style, false)
+					)
+				}
 			case .diagram:
 				attachment = MarkdownRichBlockRenderer.diagramAttachment(
 					code: rich.payload,
@@ -428,7 +452,7 @@ enum MarkdownAttributedStringRenderer
 			paragraph.paragraphSpacing = MarkdownLayoutManager.codeBottomPadding
 				+ MarkdownLayoutManager.codeBlockSpacing
 		}
-		if style.richBlock != nil
+		if let rich = style.richBlock, !rich.isInline
 		{
 			paragraph.alignment = .center
 		}

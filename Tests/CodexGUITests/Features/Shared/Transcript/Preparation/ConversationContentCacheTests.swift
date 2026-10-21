@@ -69,11 +69,34 @@ struct ConversationContentCacheTests
 		}
 	}
 
-	@Test func richImageCostsEvictCachedMessagesBeforeTheEntryLimit() async throws
+	@Test(arguments: [false, true])
+	func richImageCostsEvictCachedMessagesBeforeTheEntryLimit(inlineMath: Bool) async throws
 	{
 		_ = NSApplication.shared
 		let cache = ConversationContentCache()
-		let firstSource = "```mermaid\nflowchart LR\nA[First cached source] --> B[Result]\n```"
+		func source(index: Int) -> String
+		{
+			if inlineMath
+			{
+				let latex = #"\frac{"# + String(
+					repeating: "x+",
+					count: 24
+				) + "\(index + 1)}{"
+					+ String(
+						repeating: "y+",
+						count: 24
+					) + "1}"
+				return Array(
+					repeating: #"\("# + latex + #"\)"#,
+					count: 4
+				)
+				.joined(separator: " ") + "\n\nMessage \(index)"
+			}
+			return "```mermaid\nflowchart LR\n"
+				+ "A[Independent message \(index)] --> B[Cache pressure]\n```"
+		}
+		let firstSource = inlineMath ? source(index: -1)
+			: "```mermaid\nflowchart LR\nA[First cached source] --> B[Result]\n```"
 		let first = await cache.content(
 			body: firstSource,
 			markdown: true
@@ -90,8 +113,7 @@ struct ConversationContentCacheTests
 		var latest = first
 		for index in 0 ..< 32
 		{
-			latestSource = "```mermaid\nflowchart LR\n"
-				+ "A[Independent message \(index)] --> B[Cache pressure]\n```"
+			latestSource = source(index: index)
 			latest = await cache.content(
 				body: latestSource,
 				markdown: true

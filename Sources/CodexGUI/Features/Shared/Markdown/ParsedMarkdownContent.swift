@@ -81,6 +81,7 @@ struct MarkdownRichBlock: Sendable
 	let source: String
 	let payload: String
 	var imagePaths: [String] = []
+	var isInline = false
 }
 
 /// Shared paragraph and decoration geometry for native measurement and drawing.

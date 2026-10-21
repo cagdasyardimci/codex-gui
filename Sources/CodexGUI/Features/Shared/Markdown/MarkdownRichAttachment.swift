@@ -14,14 +14,15 @@ final class MarkdownRichAttachment: NSTextAttachment
 	init(
 		source: String,
 		lightImage: NSImage?,
-		darkImage: NSImage?
+		darkImage: NSImage?,
+		imageByteCount: Int? = nil
 	)
 	{
 		self.source = source
 		let hasBothImages = lightImage != nil && darkImage != nil
 		let acceptedLightImage = hasBothImages ? lightImage : nil
 		let acceptedDarkImage = hasBothImages ? darkImage : nil
-		estimatedRichImageBytes = [acceptedLightImage, acceptedDarkImage].compactMap
+		let estimatedBytes = [acceptedLightImage, acceptedDarkImage].compactMap
 		{
 			$0
 		}
@@ -30,6 +31,7 @@ final class MarkdownRichAttachment: NSTextAttachment
 			total, image in
 			total + MarkdownRichBlockBudget.estimatedPixels(for: image.size) * 4
 		}
+		estimatedRichImageBytes = hasBothImages ? imageByteCount ?? estimatedBytes : 0
 		super.init(
 			data: nil,
 			ofType: nil

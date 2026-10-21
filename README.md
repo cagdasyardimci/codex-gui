@@ -117,7 +117,7 @@ Messages support selectable headings, nested and task lists, emphasis, strikethr
 | Display math | Closed blocks using `$$` or `\[...\]` render with SwiftMath. |
 | Mermaid diagrams | A limited native `flowchart`/`graph` subset supports simple nodes and `-->` edges. Other types and syntax appear as readable source. |
 | Incomplete or unsupported content | Malformed or unsupported math and diagrams, and open streaming fences, retain readable text. |
-| HTML and inline math | HTML and inline `$...$` math remain literal text. |
+| HTML and inline math | HTML and inline `$...$` math remain literal text; parenthesized TeX delimiters render inline with SwiftMath. |
 | Markdown images | Images appear as labels with their source. |
 | Command and tool output | Output retains its literal text. |
 
@@ -155,7 +155,7 @@ Dependency versions and the icon-port revision are pinned in [Package.swift](Pac
 | [Apps SDK UI Swift port](https://github.com/Pmen225/apps-sdk-ui-swift) | Interface icons | MIT |
 | [Swift Markdown](https://github.com/swiftlang/swift-markdown) | Markdown parsing, with its Swift cmark dependency | Apache 2.0 with the Runtime Library Exception |
 | [HighlighterSwift](https://github.com/smittytone/HighlighterSwift) | Code coloring | MIT, with BSD 3-Clause Highlight.js assets |
-| [SwiftMath](https://github.com/mgriebling/SwiftMath) | Display math | MIT, with separate math-font notices |
+| [SwiftMath](https://github.com/mgriebling/SwiftMath) | Display and inline math | MIT, with separate math-font notices |
 | [swift-mermaid](https://github.com/Australware/swift-mermaid) | Native flowchart layout | MIT, including its vendored MermaidLayoutDagre notice |
 
 The [avatar notice](Sources/CodexGUI/Resources/SubagentAvatars/NOTICE.txt) credits DiceBear and identifies the artwork license. No DiceBear service or runtime library is required.

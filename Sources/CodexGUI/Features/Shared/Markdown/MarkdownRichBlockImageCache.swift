@@ -22,16 +22,22 @@ final class MarkdownRichBlockImageCache
 		let dark: CGImage
 		let lightSize: NSSize
 		let darkSize: NSSize
+		var baselineDescent: CGFloat = 0
 
 		var pixelCount: Int
 		{
-			MarkdownRichBlockBudget.estimatedPixels(for: lightSize)
-				+ MarkdownRichBlockBudget.estimatedPixels(for: darkSize)
+			light.width * light.height + dark.width * dark.height
 		}
 
 		var byteCount: Int
 		{
 			light.bytesPerRow * light.height + dark.bytesPerRow * dark.height
+		}
+
+		/// Charge row padding to the shared RGBA pixel budget as well as visible pixels.
+		var budgetPixelCost: Int
+		{
+			(byteCount + 3) / 4
 		}
 
 		@MainActor
@@ -47,7 +53,8 @@ final class MarkdownRichBlockImageCache
 				darkImage: NSImage(
 					cgImage: dark,
 					size: darkSize
-				)
+				),
+				imageByteCount: byteCount
 			)
 		}
 	}

@@ -156,7 +156,7 @@ struct ConversationRichBlockImageCacheTests
 			budget: &initialBudget
 		))
 		var budget = MarkdownRichBlockBudget(
-			maximumPixels: images.pixelCount,
+			maximumPixels: images.budgetPixelCost,
 			maximumBlocks: 2
 		)
 		let first = try richMath(
@@ -188,7 +188,7 @@ struct ConversationRichBlockImageCacheTests
 			budget: &warmBudget
 		))
 		var diagramBudget = MarkdownRichBlockBudget(
-			maximumPixels: diagram.pixelCount,
+			maximumPixels: diagram.budgetPixelCost,
 			maximumBlocks: 2
 		)
 		#expect(MarkdownRichBlockRenderer.diagramImages(
@@ -206,7 +206,7 @@ struct ConversationRichBlockImageCacheTests
 		) == nil)
 	}
 
-	@Test func fractionalSizesSharePixelEstimatesButRetainActualRowByteAccounting() throws
+	@Test func displaySizesDoNotChangeRetainedRasterCosts() throws
 	{
 		let original = try fixtureImages()
 		let size = NSSize(
@@ -226,16 +226,70 @@ struct ConversationRichBlockImageCacheTests
 			for: cacheKey
 		)
 		let cached = try #require(cache.images(for: cacheKey))
-		// Each image rounds up to 3 by 2 pixels at scale 2.
-		#expect(cached.pixelCount == 12)
-		#expect(cached.attachment(source: "fractional").estimatedRichImageBytes == 48)
+		#expect(cached.pixelCount == original.pixelCount)
+		#expect(cached.attachment(source: "fractional").estimatedRichImageBytes == cached.byteCount)
 		#expect(cached.byteCount == original.light.bytesPerRow * original.light.height
 			+ original.dark.bytesPerRow * original.dark.height)
-		var budget = MarkdownRichBlockBudget(maximumPixels: 12)
-		let firstReservation = budget.reservePixels(cached.pixelCount)
-		let secondReservation = budget.reservePixels(cached.pixelCount)
+		#expect(cached.budgetPixelCost * 4 >= cached.byteCount)
+		var budget = MarkdownRichBlockBudget(maximumPixels: cached.budgetPixelCost)
+		let firstReservation = budget.reservePixels(cached.budgetPixelCost)
+		let secondReservation = budget.reservePixels(cached.budgetPixelCost)
 		#expect(firstReservation)
 		#expect(!secondReservation)
+	}
+
+	@Test func inlineMathChargesActualRasterBytesAndFallbacksCostNothing() throws
+	{
+		_ = NSApplication.shared
+		let latex = #"\frac{17}{19}"#
+		let content = PreparedConversationContent(MarkdownContentParser.parse(
+			#"\("# + latex + #"\) and \(\definitelyUnknownCommand{x}\)"#,
+			markdown: true
+		))
+		var attachments: [(NSRange, MarkdownInlineMathAttachment)] = []
+		content.attributedString.enumerateAttribute(
+			.attachment,
+			in: NSRange(
+				location: 0,
+				length: content.attributedString.length
+			)
+		)
+		{
+			value, range, _ in
+			if let attachment = value as? MarkdownInlineMathAttachment
+			{
+				attachments.append((range, attachment))
+			}
+		}
+		try #require(attachments.count == 2)
+		let font = try #require(content.attributedString.attribute(
+			.font,
+			at: attachments[0].0.location,
+			effectiveRange: nil
+		) as? NSFont)
+		var budget = MarkdownRichBlockBudget()
+		let images = try #require(MarkdownRichBlockRenderer.mathImages(
+			latex: latex,
+			budget: &budget,
+			fontSize: font.pointSize,
+			inline: true
+		))
+		let actualBytes = images.light.bytesPerRow * images.light.height
+			+ images.dark.bytesPerRow * images.dark.height
+		#expect(attachments[0].1.rendersNativeImage)
+		#expect(attachments[0].1.estimatedRichImageBytes == actualBytes)
+		#expect(content.estimatedRichImageBytes == actualBytes)
+		#expect(!attachments[1].1.rendersNativeImage)
+		#expect(attachments[1].1.estimatedRichImageBytes == 0)
+		var exhaustedBudget = MarkdownRichBlockBudget(maximumPixels: 0)
+		let rejected = MarkdownInlineMathAttachment(
+			latex: latex,
+			source: #"\("# + latex + #"\)"#,
+			font: font,
+			budget: &exhaustedBudget
+		)
+		#expect(!rejected.rendersNativeImage)
+		#expect(rejected.estimatedRichImageBytes == 0)
 	}
 
 	@Test func aRejectedBudgetDoesNotMemoizeRenderingFailure() throws

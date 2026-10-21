@@ -25,14 +25,23 @@ enum MarkdownContentParser
 			)
 		}
 
-		let document = Document(
+		let initialDocument = Document(
 			parsing: body,
+			options: [.disableSmartOpts]
+		)
+		let inlineMath = MarkdownInlineMathParser.prepare(
+			body,
+			document: initialDocument
+		)
+		let document = inlineMath.blocks.isEmpty ? initialDocument : Document(
+			parsing: inlineMath.source,
 			options: [.disableSmartOpts]
 		)
 		var builder = PresentationBuilder(
 			source: body,
 			preserveSoftBreaks: preserveSoftBreaks,
-			imageBaseDirectory: imageBaseDirectory
+			imageBaseDirectory: imageBaseDirectory,
+			inlineMath: inlineMath.blocks
 		)
 		builder.appendBlocks(
 			document.children,
@@ -47,6 +56,7 @@ enum MarkdownContentParser
 		let sourceLineOffsets: [Int]
 		let preserveSoftBreaks: Bool
 		let imageBaseDirectory: URL?
+		let inlineMath: [Character: MarkdownInlineMathParser.Block]
 		var runs: [MarkdownTextRun] = []
 		var codeBlocks: [String] = []
 		var codeBlockRanges: [NSRange] = []
@@ -62,7 +72,8 @@ enum MarkdownContentParser
 		init(
 			source: String,
 			preserveSoftBreaks: Bool,
-			imageBaseDirectory: URL?
+			imageBaseDirectory: URL?,
+			inlineMath: [Character: MarkdownInlineMathParser.Block]
 		)
 		{
 			let bytes = Array(source.utf8)
@@ -73,6 +84,7 @@ enum MarkdownContentParser
 			}
 			self.preserveSoftBreaks = preserveSoftBreaks
 			self.imageBaseDirectory = imageBaseDirectory
+			self.inlineMath = inlineMath
 		}
 
 		var content: ParsedMarkdownContent
@@ -658,7 +670,7 @@ enum MarkdownContentParser
 				switch inline
 				{
 				case let text as Markdown.Text:
-					appendTextWithWebLinks(
+					appendTextWithMath(
 						text.string,
 						style: style
 					)
@@ -780,6 +792,44 @@ enum MarkdownContentParser
 					)
 				}
 			}
+		}
+
+		mutating func appendTextWithMath(
+			_ text: String,
+			style: MarkdownTextStyle
+		)
+		{
+			var start = text.startIndex
+			var index = start
+			while index < text.endIndex
+			{
+				guard let block = inlineMath[text[index]],
+						text[index...].hasPrefix(block.placeholder)
+				else
+				{
+					index = text.index(after: index)
+					continue
+				}
+				appendTextWithWebLinks(
+					String(text[start ..< index]),
+					style: style
+				)
+				var mathStyle = style
+				mathStyle.richBlock = block.math
+				append(
+					"\u{FFFC}",
+					style: mathStyle
+				)
+				index = text.index(
+					index,
+					offsetBy: block.placeholder.count
+				)
+				start = index
+			}
+			appendTextWithWebLinks(
+				String(text[start...]),
+				style: style
+			)
 		}
 
 		mutating func appendTextWithWebLinks(

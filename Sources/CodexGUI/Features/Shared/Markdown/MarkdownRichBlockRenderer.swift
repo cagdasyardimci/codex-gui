@@ -30,12 +30,14 @@ enum MarkdownRichBlockRenderer
 	static func mathAttachment(
 		latex: String,
 		source: String,
-		budget: inout MarkdownRichBlockBudget
+		budget: inout MarkdownRichBlockBudget,
+		fontSize: CGFloat? = nil
 	) -> NSTextAttachment
 	{
 		guard let images = mathImages(
 			latex: latex,
-			budget: &budget
+			budget: &budget,
+			fontSize: fontSize ?? mathFontSize
 		)
 		else
 		{
@@ -76,7 +78,9 @@ enum MarkdownRichBlockRenderer
 
 	static func mathImages(
 		latex: String,
-		budget: inout MarkdownRichBlockBudget
+		budget: inout MarkdownRichBlockBudget,
+		fontSize: CGFloat = mathFontSize,
+		inline: Bool = false
 	) -> MarkdownRichBlockImageCache.Images?
 	{
 		guard budget.beginBlock(), !latex.isEmpty, latex.utf16.count <= maximumMathLength,
@@ -90,33 +94,38 @@ enum MarkdownRichBlockRenderer
 		let key = MarkdownRichBlockImageCache.Key(
 			kind: .math,
 			payload: Data(latex.utf8),
-			parameters: [mathFontSize, imageScale] + colorComponents(lightColor)
+			parameters: [fontSize, imageScale, inline ? 1 : 0] + colorComponents(lightColor)
 				+ colorComponents(darkColor)
 		)
 		if let images = imageCache.images(for: key)
 		{
-			return budget.reservePixels(images.pixelCount) ? images : nil
+			return budget.reservePixels(images.budgetPixelCost) ? images : nil
 		}
-		guard let lightImage = mathImage(
+		guard let lightLayout = mathImageLayout(
 			latex,
-			textColor: lightColor
+			textColor: lightColor,
+			fontSize: fontSize,
+			inline: inline
 		),
-			let darkImage = mathImage(
+			let darkLayout = mathImageLayout(
 				latex,
-				textColor: darkColor
+				textColor: darkColor,
+				fontSize: fontSize,
+				inline: inline
 			)
 		else
 		{
 			return nil
 		}
-		let pixelCount = MarkdownRichBlockBudget.estimatedPixels(for: lightImage.size)
-			+ MarkdownRichBlockBudget.estimatedPixels(for: darkImage.size)
+		let pixelCount = MarkdownRichBlockBudget.estimatedPixels(for: lightLayout.image.size)
+			+ MarkdownRichBlockBudget.estimatedPixels(for: darkLayout.image.size)
 		guard budget.reservePixels(pixelCount)
 		else
 		{
 			return nil
 		}
-		guard let light = rasterizeMathImage(lightImage), let dark = rasterizeMathImage(darkImage)
+		guard let light = rasterizeMathImage(lightLayout.image),
+				let dark = rasterizeMathImage(darkLayout.image)
 		else
 		{
 			budget.releasePixels(pixelCount)
@@ -125,9 +134,16 @@ enum MarkdownRichBlockRenderer
 		let images = MarkdownRichBlockImageCache.Images(
 			light: light,
 			dark: dark,
-			lightSize: lightImage.size,
-			darkSize: darkImage.size
+			lightSize: lightLayout.image.size,
+			darkSize: darkLayout.image.size,
+			baselineDescent: lightLayout.descent
 		)
+		budget.releasePixels(pixelCount)
+		guard budget.reservePixels(images.budgetPixelCost)
+		else
+		{
+			return nil
+		}
 		imageCache.insert(
 			images,
 			for: key
@@ -153,7 +169,7 @@ enum MarkdownRichBlockRenderer
 		)
 		if let images = imageCache.images(for: key)
 		{
-			return budget.reservePixels(images.pixelCount) ? images : nil
+			return budget.reservePixels(images.budgetPixelCost) ? images : nil
 		}
 		guard let lightScene = diagramScene(
 			code,
@@ -187,6 +203,12 @@ enum MarkdownRichBlockRenderer
 			lightSize: lightScene.size,
 			darkSize: darkScene.size
 		)
+		budget.releasePixels(pixelCount)
+		guard budget.reservePixels(images.budgetPixelCost)
+		else
+		{
+			return nil
+		}
 		imageCache.insert(
 			images,
 			for: key
@@ -219,6 +241,21 @@ enum MarkdownRichBlockRenderer
 		textColor: NSColor
 	) -> NSImage?
 	{
+		mathImageLayout(
+			latex,
+			textColor: textColor,
+			fontSize: mathFontSize,
+			inline: false
+		)?.image
+	}
+
+	private static func mathImageLayout(
+		_ latex: String,
+		textColor: NSColor,
+		fontSize: CGFloat,
+		inline: Bool
+	) -> (image: NSImage, descent: CGFloat)?
+	{
 		guard !latex.isEmpty, latex.utf16.count <= maximumMathLength,
 				hasBoundedBraceNesting(latex)
 		else
@@ -227,13 +264,13 @@ enum MarkdownRichBlockRenderer
 		}
 		var formula = MathImage(
 			latex: latex,
-			fontSize: mathFontSize,
+			fontSize: fontSize,
 			textColor: textColor,
-			labelMode: .display,
+			labelMode: inline ? .text : .display,
 			textAlignment: .center
 		)
-		let (error, image, _) = formula.asImage()
-		guard error == nil, let image, hasBoundedImageSize(
+		let (error, image, layout) = formula.asImage()
+		guard error == nil, let image, let layout, hasBoundedImageSize(
 			image.size,
 			scale: imageScale
 		)
@@ -241,7 +278,11 @@ enum MarkdownRichBlockRenderer
 		{
 			return nil
 		}
-		return image
+		let contentHeight = max(
+			layout.ascent + layout.descent,
+			fontSize / 2
+		)
+		return (image, layout.descent + (image.size.height - contentHeight) / 2)
 	}
 
 	private static func rasterizeMathImage(_ image: NSImage) -> CGImage?

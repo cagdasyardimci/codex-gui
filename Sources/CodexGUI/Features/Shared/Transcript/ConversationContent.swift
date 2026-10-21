@@ -63,7 +63,8 @@ final class PreparedConversationContent: @unchecked Sendable
 				return
 			}
 			bytes += (attachment as? MarkdownRichAttachment)?.estimatedRichImageBytes
-				?? (attachment as? MarkdownImageGalleryAttachment)?.estimatedRichImageBytes ?? 0
+				?? (attachment as? MarkdownImageGalleryAttachment)?.estimatedRichImageBytes
+				?? (attachment as? MarkdownInlineMathAttachment)?.estimatedRichImageBytes ?? 0
 		}
 		return bytes
 	}
