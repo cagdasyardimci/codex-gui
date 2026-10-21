@@ -13,21 +13,22 @@ extension NavigationViewController
 		_ = view
 		projectActionsPopover.performClose(nil)
 		projectInfoPopover.performClose(nil)
+		renderChatSearchResults()
 		if !searchPopover.isShown
 		{
 			searchPopover.show(
 				relativeTo: searchButton.bounds,
-				of: searchButton,
-				preferredEdge: .maxX
+				of: searchButton
 			)
 		}
+		chatSearchController.revealSelection()
 	}
 
 	@objc func toggleSearch()
 	{
 		if searchPopover.isShown
 		{
-			searchPopover.performClose(nil)
+			searchPopover.close()
 			projectInfoPopover.performClose(nil)
 		}
 		else
@@ -71,6 +72,63 @@ extension NavigationViewController
 				taskMatchesSearch($0)
 			}
 		updateManagementButtons()
+		if searchPopover.isShown
+		{
+			renderChatSearchResults()
+		}
+	}
+
+	func control(
+		_ control: NSControl,
+		textView: NSTextView,
+		doCommandBy selector: Selector
+	) -> Bool
+	{
+		chatSearchController.handle(selector)
+	}
+
+	func chooseSearchThread(_ thread: ThreadSummary)
+	{
+		searchPopover.close()
+		markTaskRead(thread.id)
+		guard thread.id != selectedThreadID
+		else
+		{
+			return
+		}
+		if pinnedTasks.contains(where:
+			{
+				$0.id == thread.id
+			})
+		{
+			onSelectPinnedTask?(thread)
+		}
+		else
+		{
+			onSelectThread?(thread.id)
+		}
+	}
+
+	private func renderChatSearchResults()
+	{
+		var seen = Set<String>()
+		let matches = (pinnedTasks.filter
+		{
+			taskMatchesSearch($0)
+		} + visibleThreads).filter
+		{
+			seen.insert($0.id).inserted
+		}
+		chatSearchController.render(
+			entries: matches.map
+			{
+				ChatSearchController.Entry(
+					thread: $0,
+					context: displayName(for: URL(fileURLWithPath: $0.cwd))
+				)
+			},
+			canCreateChat: newChatButton.isEnabled
+		)
 	}
 
 	private func rebuildSidebarItems()
@@ -422,7 +480,7 @@ extension NavigationViewController
 			}
 			self.projectInfoPopover.performClose(nil)
 			self.projectActionsPopover.performClose(nil)
-			self.searchPopover.performClose(nil)
+			self.searchPopover.close()
 			self.onNewChatInProject?(project)
 		}
 		return cell

@@ -55,7 +55,7 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 
 	private let index: GitFileJumpIndex
 	private let search = ViewerSearchField()
-	private let results = NSStackView()
+	private let results = FileJumpResultsStack()
 	private var visibleEntries: [GitFileJumpIndex.Entry] = []
 	private var resultButtons: [DesktopLayerButton] = []
 	private var selectedIndex = 0
@@ -76,13 +76,18 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 
 	override func loadView()
 	{
-		let root = DesktopSurface(AppKitColorTokens.elevated)
+		let root = DesktopSurface(AppKitColorTokens.searchPanel)
 		view = root
-		search.placeholderString = "Jump to file…"
+		search.placeholderString = "Jump to file"
+		search.drawsSurface = false
+		(search.cell as? NSSearchFieldCell)?.searchButtonCell = nil
+		search.isBordered = false
+		search.drawsBackground = false
+		search.focusRingType = .none
+		search.font = .systemFont(ofSize: 14)
+		search.sendsSearchStringImmediately = true
 		search.setAccessibilityLabel("Search changed files")
 		search.delegate = self
-		search.target = self
-		search.action = #selector(chooseFirst)
 		let scroll = NSScrollView()
 		scroll.hasVerticalScroller = true
 		scroll.autohidesScrollers = true
@@ -93,7 +98,15 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 		results.translatesAutoresizingMaskIntoConstraints = false
 		scroll.documentView = results
 		results.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
-		let layout = NSStackView(views: [search, scroll])
+		let icon = NSImageView(image: DesktopIcons.image(.search))
+		icon.contentTintColor = .secondaryLabelColor
+		icon.imageScaling = .scaleProportionallyDown
+		icon.setAccessibilityElement(false)
+		let header = AppKitLayout.horizontalStack(
+			[icon, search],
+			spacing: 8
+		)
+		let layout = NSStackView(views: [header, scroll])
 		layout.orientation = .vertical
 		layout.alignment = .leading
 		layout.spacing = 8
@@ -103,7 +116,12 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 			inset: 8
 		)
 		NSLayoutConstraint.activate([
-			search.widthAnchor.constraint(equalTo: layout.widthAnchor),
+			header.widthAnchor.constraint(equalTo: layout.widthAnchor),
+			header.heightAnchor.constraint(equalToConstant: 32),
+			icon.widthAnchor.constraint(equalToConstant: 16),
+			icon.heightAnchor.constraint(equalToConstant: 16),
+			search.heightAnchor.constraint(equalToConstant: 20),
+			scroll.bottomAnchor.constraint(equalTo: layout.bottomAnchor),
 			scroll.widthAnchor.constraint(equalTo: layout.widthAnchor),
 		])
 		reloadResults()
@@ -111,6 +129,8 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 
 	func focusSearch()
 	{
+		view.layoutSubtreeIfNeeded()
+		updateSelection()
 		view.window?.makeFirstResponder(search)
 	}
 
@@ -174,10 +194,9 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 			resultButtons.append(button)
 			NSLayoutConstraint.activate([
 				button.widthAnchor.constraint(equalTo: results.widthAnchor),
-				button.heightAnchor.constraint(equalToConstant: 30),
+				button.heightAnchor.constraint(equalToConstant: 32),
 			])
 		}
-		updateSelection()
 		if matches.isEmpty || matches.count > Self.maximumVisibleResultCount
 		{
 			let message = matches.isEmpty ? "No matching files" : "Refine search to see more files"
@@ -185,29 +204,23 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 			label.textColor = .secondaryLabelColor
 			results.addArrangedSubview(label)
 		}
+		view.layoutSubtreeIfNeeded()
+		updateSelection()
 	}
 
 	private func makeResultButton(_ entry: GitFileJumpIndex.Entry) -> DesktopLayerButton
 	{
-		let button = DesktopLayerButton(
-			title: "",
+		let button = DesktopSearchResultButton(
+			title: entry.filename,
+			context: entry.directory,
+			inlineContext: true,
 			target: self,
 			action: #selector(choose(_:))
 		)
-		button.isBordered = false
-		button.alignment = .left
 		button.identifier = NSUserInterfaceItemIdentifier(entry.id)
 		button.setAccessibilityLabel(entry.path)
 		button.toolTip = entry.path
-		let result = ViewerFileSearchResultView(relativePath: entry.path)
-		result.translatesAutoresizingMaskIntoConstraints = false
-		button.addSubview(result)
-		NSLayoutConstraint.activate([
-			result.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-			result.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-			result.topAnchor.constraint(equalTo: button.topAnchor),
-			result.bottomAnchor.constraint(equalTo: button.bottomAnchor),
-		])
+		button.layer?.cornerRadius = 12
 		button.wantsLayer = true
 		return button
 	}
@@ -231,14 +244,23 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	{
 		for (index, button) in resultButtons.enumerated()
 		{
-			button.layerBackgroundAlpha = index == selectedIndex ? 0.18 : nil
+			button.layerBackgroundAlpha = nil
 			button.layerBackgroundColor = index == selectedIndex
-				? .selectedContentBackgroundColor : .clear
+				? AppKitColorTokens.searchResultSelection : .clear
 		}
 		if resultButtons.indices.contains(selectedIndex)
 		{
 			let button = resultButtons[selectedIndex]
 			button.scrollToVisible(button.bounds)
 		}
+	}
+}
+
+@MainActor
+private final class FileJumpResultsStack: NSStackView
+{
+	override var isFlipped: Bool
+	{
+		true
 	}
 }

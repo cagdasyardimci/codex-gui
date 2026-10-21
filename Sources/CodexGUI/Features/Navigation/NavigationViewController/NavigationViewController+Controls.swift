@@ -142,29 +142,36 @@ extension NavigationViewController
 
 	func configureSearchPopover()
 	{
-		searchField.placeholderString = "Search titles and previews"
-		searchField.controlSize = .small
+		searchField.placeholderString = "Search chats"
 		searchField.font = .systemFont(ofSize: 14)
+		searchField.drawsSurface = false
+		(searchField.cell as? NSSearchFieldCell)?.searchButtonCell = nil
+		searchField.isBordered = false
+		searchField.drawsBackground = false
+		searchField.focusRingType = .none
 		searchField.textColor = AppKitColorTokens.primaryText
 		searchField.setAccessibilityLabel("Search conversation titles and previews")
 		searchField.delegate = self
 		searchField.sendsSearchStringImmediately = true
-
-		let searchController = NSViewController()
-		let searchContainer = NSView()
-		AppKitLayout.pin(
-			searchField,
-			to: searchContainer,
-			inset: 12
-		)
-		searchController.view = searchContainer
-		searchPopover.contentViewController = searchController
-		searchPopover.contentSize = NSSize(
-			width: 280,
-			height: 57
-		)
-		searchPopover.behavior = .transient
-		searchField.heightAnchor.constraint(equalToConstant: 33).isActive = true
+		chatSearchController.onChoose =
+		{
+			[weak self] thread in
+			self?.chooseSearchThread(thread)
+		}
+		chatSearchController.onNewChat =
+		{
+			[weak self] in
+			self?.searchPopover.close()
+			self?.onNewChat?()
+		}
+		chatSearchController.onCancel =
+		{
+			[weak self] in self?.searchPopover.close()
+		}
+		searchPopover.onKeyDown =
+		{
+			[weak self] event in self?.chatSearchController.handleKeyEquivalent(event) ?? false
+		}
 	}
 
 	func configureThreadManagementControls()

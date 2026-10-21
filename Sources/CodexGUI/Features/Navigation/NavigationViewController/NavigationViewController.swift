@@ -43,13 +43,21 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		action: nil
 	)
 	let chatsTable = NavigationTasksTableView()
-	let searchField = NSSearchField()
+	let searchField = ViewerSearchField()
 	let searchButton = NSButton(
 		title: "Search",
 		target: nil,
 		action: nil
 	)
-	let searchPopover = NSPopover()
+	lazy var chatSearchController = ChatSearchController(searchField: searchField)
+	lazy var searchPopover = DesktopSearchPanel(
+		controller: chatSearchController,
+		placement: .centered,
+		size: NSSize(
+			width: 520,
+			height: 480
+		)
+	)
 	let projectActionsButton = NSButton(
 		title: "Project Actions",
 		target: nil,

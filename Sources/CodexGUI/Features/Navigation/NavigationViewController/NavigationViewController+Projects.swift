@@ -68,7 +68,7 @@ extension NavigationViewController
 		}
 		else
 		{
-			searchPopover.performClose(nil)
+			searchPopover.close()
 			resizeProjectActionsPopover()
 			let anchor = sender ?? projectActionsButton
 			projectActionsPopover.show(
@@ -114,7 +114,7 @@ extension NavigationViewController
 			return
 		}
 		projectActionsPopover.performClose(nil)
-		searchPopover.performClose(nil)
+		searchPopover.close()
 		projectInfoProject = project
 		projectInfoView.onTogglePin =
 		{

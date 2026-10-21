@@ -33,6 +33,7 @@ struct GitFileJumpSelectionTests
 		{
 			$0 as? NSSearchField
 		}.first)
+		#expect(field.action == nil)
 		var selected: [String] = []
 		controller.onSelect =
 		{
@@ -48,6 +49,7 @@ struct GitFileJumpSelectionTests
 			in: field,
 			controller: controller
 		)
+		#expect(selected.isEmpty)
 		#expect(controller.control(
 			field,
 			textView: NSTextView(),

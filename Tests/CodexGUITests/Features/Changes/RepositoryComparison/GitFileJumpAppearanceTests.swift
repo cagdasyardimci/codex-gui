@@ -77,9 +77,9 @@ struct GitFileJumpAppearanceTests
 				.bestMatch(from: [.aqua, .darkAqua]) == appearance)
 			try expectColor(
 				buttons[1].layer?.backgroundColor,
-				.selectedContentBackgroundColor,
+				AppKitColorTokens.searchResultSelection,
 				in: buttons[1],
-				alpha: 0.18
+				alpha: 1
 			)
 			#expect(buttons[0].layer?.backgroundColor?.alpha == 0)
 			#expect(search.stringValue == "Sources")

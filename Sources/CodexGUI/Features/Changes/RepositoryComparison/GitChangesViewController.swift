@@ -108,7 +108,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	{
 		comparisonToolbarView.collapseDiffsButton
 	}
-	private var fileJumpPopover: NSPopover?
+	private var fileJumpPopover: DesktopSearchPanel?
 	private var expandHostButton: NSButton?
 	private var panelHostButton: NSButton?
 	private var usesCompactComparisonToolbar: Bool
@@ -1037,14 +1037,16 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		{
 			return
 		}
-		let popover = NSPopover()
-		popover.behavior = .transient
-		popover.contentSize = NSSize(
-			width: 380,
-			height: 350
-		)
 		let controller =
 			GitFileJumpPopoverController(index: GitFileJumpIndex(files: snapshot.files))
+		let popover = DesktopSearchPanel(
+			controller: controller,
+			placement: .belowAnchor,
+			size: NSSize(
+				width: 400,
+				height: 280
+			)
+		)
 		controller.onSelect =
 		{
 			[weak self, weak popover] id in
@@ -1064,13 +1066,11 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		{
 			[weak popover] in popover?.close()
 		}
-		popover.contentViewController = controller
 		fileJumpPopover?.close()
 		fileJumpPopover = popover
 		popover.show(
 			relativeTo: fileJumpButton.bounds,
-			of: fileJumpButton,
-			preferredEdge: .maxY
+			of: fileJumpButton
 		)
 		controller.focusSearch()
 	}

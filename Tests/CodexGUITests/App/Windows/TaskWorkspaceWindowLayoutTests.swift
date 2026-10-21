@@ -298,7 +298,7 @@ struct TaskWorkspaceWindowLayoutTests
 			defer
 			{
 				navigation.projectActionsPopover.performClose(nil)
-				navigation.searchPopover.performClose(nil)
+				navigation.searchPopover.close()
 			}
 			let conversation = try #require(
 				split.splitViewItems[1].viewController.children.first as? ConversationViewController

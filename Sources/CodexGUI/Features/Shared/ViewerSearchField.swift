@@ -3,6 +3,14 @@ import AppKit
 @MainActor
 final class ViewerSearchField: NSSearchField
 {
+	var drawsSurface = true
+	{
+		didSet
+		{
+			needsDisplay = true
+		}
+	}
+
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
@@ -37,18 +45,21 @@ final class ViewerSearchField: NSSearchField
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		let path = NSBezierPath(
-			roundedRect: bounds.insetBy(
-				dx: 0.5,
-				dy: 0.5
-			),
-			xRadius: 9,
-			yRadius: 9
-		)
-		AppKitColorTokens.canvas.setFill()
-		path.fill()
-		AppKitColorTokens.subtleEdge.setStroke()
-		path.stroke()
+		if drawsSurface
+		{
+			let path = NSBezierPath(
+				roundedRect: bounds.insetBy(
+					dx: 0.5,
+					dy: 0.5
+				),
+				xRadius: 9,
+				yRadius: 9
+			)
+			AppKitColorTokens.canvas.setFill()
+			path.fill()
+			AppKitColorTokens.subtleEdge.setStroke()
+			path.stroke()
+		}
 		super.draw(dirtyRect)
 	}
 }
@@ -83,7 +94,8 @@ private final class ViewerSearchFieldCell: NSSearchFieldCell
 			rect.height,
 			ceil(font.ascender - font.descender + font.leading)
 		)
-		let leading = searchButtonRect(forBounds: rect).maxX + 6
+		let leading = searchButtonCell == nil ? rect.minX
+			: searchButtonRect(forBounds: rect).maxX + 6
 		let trailing = stringValue.isEmpty ? rect.maxX - 10
 			: cancelButtonRect(forBounds: rect).minX - 6
 		return NSRect(

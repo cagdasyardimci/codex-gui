@@ -20,6 +20,14 @@ enum AppKitColorTokens
 		light: 0xFBFBFB,
 		dark: 0x1E1E1E
 	)
+	static let searchPanel = AppKitColorResolution.color(
+		light: 0xFFFFFF,
+		dark: 0x272727
+	)
+	static let searchResultSelection = AppKitColorResolution.color(
+		light: 0xF2F2F2,
+		dark: 0x363636
+	)
 	static let elevated = AppKitColorResolution.color(
 		light: 0xF5F5F5,
 		dark: 0x272727
