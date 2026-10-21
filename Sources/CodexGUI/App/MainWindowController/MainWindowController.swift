@@ -50,7 +50,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	)
 	let titleLabel = NSTextField(labelWithString: "New chat")
 	let titleContainer = NSView()
-	let navigationToolbarSeparator = ToolbarSeparatorView(constrained: false)
 	let toolsToolbar = ToolsToolbarCoordinator()
 	var statusPopover: NSPopover?
 	let paneController: WindowPaneController
@@ -95,13 +94,13 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		configureFilesIntegration()
 		configureToolbarControls()
 
-		installConversationToolbar(in: window)
-		windowButtonAlignment.update(in: window)
-		// Installing the toolbar reshapes the window. Attach panes after that layout pass.
+		// AppKit requires a tracked split view to belong to the window before its toolbar appears.
 		window.contentViewController = WindowChromeViewController(
 			split: paneController.split,
 			accountButton: statusButton
 		)
+		installConversationToolbar(in: window)
+		windowButtonAlignment.update(in: window)
 		updateMinimumWindowSize()
 		observeWindowChrome(in: window)
 		paneController.restoreLayout(in: window)
@@ -410,7 +409,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		// Apply the supported full-window minimum after the toolbar has been laid out.
 		window?.layoutIfNeeded()
 		updateMinimumWindowSize()
-		updateNavigationToolbarSeparator()
 		paneController.didPresentWindow()
 	}
 
@@ -421,7 +419,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			windowButtonAlignment.update(in: window)
 		}
 		updateMinimumWindowSize()
-		updateNavigationToolbarSeparator()
 		updateToolsToolbarControls()
 	}
 

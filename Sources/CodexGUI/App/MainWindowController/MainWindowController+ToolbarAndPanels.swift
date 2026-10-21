@@ -109,49 +109,6 @@ extension MainWindowController
 		).isActive = true
 	}
 
-	func updateNavigationToolbarSeparator()
-	{
-		guard let window,
-				titleContainer.window === window,
-				window.toolbar?.isVisible == true,
-				let navigationView = paneController.split.splitView.subviews.first
-		else
-		{
-			navigationToolbarSeparator.isHidden = true
-			return
-		}
-
-		let toolbarView = titleContainer
-		let splitView = paneController.split.splitView
-		let dividerPosition = NSPoint(
-			x: navigationView.frame.maxX + splitView.dividerThickness / 2,
-			y: splitView.bounds.midY
-		)
-		let dividerInToolbar = splitView.convert(
-			dividerPosition,
-			to: toolbarView
-		)
-		let separatorFrame = ToolbarSeparatorView.frame(
-			dividerPosition: dividerInToolbar,
-			hostBounds: toolbarView.bounds,
-			backingScale: window.backingScaleFactor
-		)
-		// Keep the marker in our toolbar view and pass dragging through to the native separator.
-		if navigationToolbarSeparator.superview !== toolbarView
-		{
-			toolbarView.addSubview(navigationToolbarSeparator)
-		}
-		if navigationToolbarSeparator.frame != separatorFrame
-		{
-			navigationToolbarSeparator.frame = separatorFrame
-		}
-		let isHidden = paneController.split.splitViewItems[0].isCollapsed || titleContainer.isHidden
-		if navigationToolbarSeparator.isHidden != isHidden
-		{
-			navigationToolbarSeparator.isHidden = isHidden
-		}
-	}
-
 	private func configureSummaryToggle()
 	{
 		summaryToggleButton.target = self

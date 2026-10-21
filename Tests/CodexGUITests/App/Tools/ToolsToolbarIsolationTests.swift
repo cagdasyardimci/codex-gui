@@ -86,7 +86,13 @@ struct ToolsToolbarIsolationTests
 			first.updateToolsToolbarControls()
 			#expect(first.paneController.isToolsExpanded)
 			let firstExpandedItems = firstToolbar.items.map(\.itemIdentifier)
-			#expect(firstExpandedItems != firstOpenItems)
+			#expect(firstExpandedItems == [
+				MainWindowController.ToolbarItem.navigationControls,
+				MainWindowController.ToolbarItem.navigationSeparator,
+				MainWindowController.ToolbarItem.toolsTabBar,
+			])
+			#expect(first.titleContainer.window == nil)
+			try expectNavigationSeparatorTracksAttachedSplit(first)
 			#expect(secondToolbar.items.map(\.itemIdentifier) == secondClosedItems)
 
 			second.inspector.showToolsPane()
@@ -138,5 +144,18 @@ struct ToolsToolbarIsolationTests
 		await controller.paneController.waitForToolsTransition()
 		try #require(!controller.paneController.isAnimatingToolsExpansion)
 		controller.window?.layoutIfNeeded()
+	}
+
+	private func expectNavigationSeparatorTracksAttachedSplit(
+		_ controller: MainWindowController
+	) throws
+	{
+		let window = try #require(controller.window)
+		let separator = try #require(window.toolbar?.items.first
+		{
+			$0.itemIdentifier == MainWindowController.ToolbarItem.navigationSeparator
+		} as? NSTrackingSeparatorToolbarItem)
+		#expect(separator.splitView === controller.paneController.split.splitView)
+		#expect(separator.splitView.window === window)
 	}
 }

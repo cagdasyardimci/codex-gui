@@ -161,9 +161,9 @@ final class ToolsToolbarCoordinator
 			let identifiers: [NSToolbarItem.Identifier]
 			if isOpen, isExpanded
 			{
+				// Keep the tab bar adjacent: flexible space displaces the tracking rule.
 				identifiers = [MainWindowController.ToolbarItem.navigationControls,
 								MainWindowController.ToolbarItem.navigationSeparator,
-								.flexibleSpace,
 								MainWindowController.ToolbarItem.toolsTabBar]
 			}
 			else if isOpen
