@@ -1,0 +1,4 @@
+schema: semantic-rules-v1
+rules:
+  - ../semantic-checker/scripts/semantic_lint/rule.yaml
+  - ../semantic-checker/docs/rules/error-handling.yaml
