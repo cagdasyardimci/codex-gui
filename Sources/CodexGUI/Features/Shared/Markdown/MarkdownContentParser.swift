@@ -203,10 +203,15 @@ enum MarkdownContentParser
 
 		mutating func appendBlock(
 			_ block: any Markup,
-			style: MarkdownTextStyle,
+			style baseStyle: MarkdownTextStyle,
 			marker: String = ""
 		)
 		{
+			var style = baseStyle
+			if let line = block.range?.lowerBound.line
+			{
+				style.sourceBlankLinesBefore = precedingBlankLines(before: line)
+			}
 			switch block
 			{
 			case let paragraph as Paragraph:
@@ -326,6 +331,29 @@ enum MarkdownContentParser
 					style: style
 				)
 			}
+		}
+
+		private func precedingBlankLines(before line: Int) -> Int
+		{
+			var index = line - 2
+			var count = 0
+			while index >= 0, index + 1 < sourceLineOffsets.count, count < 2
+			{
+				let start = sourceLineOffsets[index]
+				let end = sourceLineOffsets[index + 1]
+				guard sourceBytes[start ..< end].allSatisfy(
+					{
+						[9, 10, 13, 32].contains($0)
+					}
+				)
+				else
+				{
+					break
+				}
+				count += 1
+				index -= 1
+			}
+			return count
 		}
 
 		mutating func appendList(
@@ -983,6 +1011,10 @@ enum MarkdownContentParser
 			}
 			var runStyle = style
 			runStyle.paragraphContinuation = paragraphContinuation
+			if paragraphContinuation
+			{
+				runStyle.sourceBlankLinesBefore = 0
+			}
 			runs.append(MarkdownTextRun(
 				text: text,
 				style: runStyle

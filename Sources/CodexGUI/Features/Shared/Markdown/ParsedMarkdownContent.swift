@@ -25,6 +25,7 @@ struct MarkdownTextRun: Sendable
 struct MarkdownTextStyle: Sendable
 {
 	var heading = 0
+	var sourceBlankLinesBefore = 0
 	var bold = false
 	var italic = false
 	var code = false

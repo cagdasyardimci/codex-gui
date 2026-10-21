@@ -103,7 +103,13 @@ enum MarkdownAttributedStringRenderer
 			.font: font(for: run.style),
 			.foregroundColor: foregroundColor(for: run.style),
 			.paragraphStyle: paragraph,
+			.markdownParagraphRole: paragraphRole(for: run.style),
+			.markdownBlankLinesBefore: run.style.sourceBlankLinesBefore,
 		]
+		if run.style.heading > 0
+		{
+			attributes[.markdownHeadingLevel] = run.style.heading
+		}
 		if run.style.listDepth > 0, ["• ", "◦ ", "▪ "].contains(run.text)
 		{
 			attributes[.font] = NSFont.systemFont(
@@ -183,6 +189,27 @@ enum MarkdownAttributedStringRenderer
 			}
 		}
 		return attributes
+	}
+
+	private static func paragraphRole(for style: MarkdownTextStyle) -> String
+	{
+		if style.tableCell != nil
+		{
+			return "table"
+		}
+		if style.codeBlock || style.monospaced
+		{
+			return "code"
+		}
+		if style.listDepth > 0
+		{
+			return "list"
+		}
+		if style.heading > 0
+		{
+			return "heading"
+		}
+		return "prose"
 	}
 
 	private static func makeFileLinkAttachment() -> NSTextAttachment

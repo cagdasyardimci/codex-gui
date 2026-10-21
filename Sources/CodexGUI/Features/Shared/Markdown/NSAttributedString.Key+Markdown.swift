@@ -11,4 +11,7 @@ extension NSAttributedString.Key
 	static let markdownQuoteDepth = NSAttributedString.Key("conversationQuoteDepth")
 	static let markdownQuoteRailOffsets = NSAttributedString.Key("conversationQuoteRailOffsets")
 	static let markdownThematicBreak = NSAttributedString.Key("conversationThematicBreak")
+	static let markdownHeadingLevel = NSAttributedString.Key("markdownHeadingLevel")
+	static let markdownBlankLinesBefore = NSAttributedString.Key("markdownBlankLinesBefore")
+	static let markdownParagraphRole = NSAttributedString.Key("markdownParagraphRole")
 }

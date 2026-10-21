@@ -10,6 +10,14 @@ enum LayoutTokens
 	static let tabContent = TabContent()
 	static let window = Window()
 
+	enum FileMarkdown
+	{
+		static let linePadding: CGFloat = 4
+		static let contentInset: CGFloat = 16
+		static let metadataBottomSpacing: CGFloat = 12
+		static let maximumMetadataHeightFraction: CGFloat = 0.4
+	}
+
 	struct Sidebar: Sendable
 	{
 		static let headingActionSize: CGFloat = 24

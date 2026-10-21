@@ -105,6 +105,31 @@ enum TypographyTokens
 		)
 	}
 
+	enum FileMarkdown
+	{
+		static let mathScale: CGFloat = 1.21
+		static let prose = Role(
+			size: 14,
+			lineHeight: 19.6
+		)
+
+		static func heading(level: Int) -> Role
+		{
+			let size: CGFloat = switch level
+			{
+			case 1: 24
+			case 2: 20
+			case 3: 18
+			default: 14
+			}
+			return Role(
+				size: size,
+				selection: .interface(weight: 500),
+				lineHeight: size * 1.4
+			)
+		}
+	}
+
 	enum Transcript
 	{
 		static let prose = Role(

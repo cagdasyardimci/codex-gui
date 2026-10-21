@@ -34,6 +34,9 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	private var task: Task<Void, Never>?
 	private var content: NSView?
 	private var markdownRuns: [MarkdownTextRun]?
+	private var metadataPanel: MarkdownFileMetadataView?
+	private let onMetadata: (([MarkdownFileMetadata.Entry]) -> Void)?
+	private let matchesFileMarkdownStyling: Bool
 	private var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
 	private let loadingFailureMessage: String
 	private let imageBaseDirectory: URL?
@@ -48,12 +51,16 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		imageBaseDirectory: URL? = nil,
 		markdownImageLoader: RichFileMarkdownImageLoader? = nil,
 		onOpenLink: ((URL) -> Bool)? = nil,
+		onMetadata: (([MarkdownFileMetadata.Entry]) -> Void)? = nil,
+		matchesFileMarkdownStyling: Bool = false,
 		loadContent: @escaping @Sendable () async throws -> Data
 	)
 	{
 		self.loadingFailureMessage = loadingFailureMessage
 		self.imageBaseDirectory = imageBaseDirectory
 		self.onOpenLink = onOpenLink
+		self.onMetadata = onMetadata
+		self.matchesFileMarkdownStyling = matchesFileMarkdownStyling
 		super.init(frame: .zero)
 		// The mutable height follows measured Markdown or the image's aspect ratio.
 		contentHeight.isActive = true
@@ -72,6 +79,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				let runs: [MarkdownTextRun]?
 				let thumbnail: SourceThumbnailLoader.Thumbnail?
 				var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
+				var metadata: MarkdownFileMetadata?
 				if case .markdown = kind
 				{
 					guard let source = String(
@@ -82,14 +90,19 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 					{
 						throw RichFilePreviewFailure.unsupportedTextEncoding
 					}
-					runs = await Task.detached
+					let prepared = await Task.detached
 					{
-						MarkdownContentParser.parse(
-							source,
+						let metadata = MarkdownFileMetadata.parse(source)
+						let parsed = MarkdownContentParser.parse(
+							metadata?.body ?? source,
 							markdown: true,
+							preserveSoftBreaks: matchesFileMarkdownStyling,
 							imageBaseDirectory: imageBaseDirectory
-						).runs
+						)
+						return (parsed, metadata)
 					}.value
+					runs = prepared.0.runs
+					metadata = prepared.1
 					if let runs, let markdownImageLoader
 					{
 						let plan = MarkdownImagePreparation.preloadPlan(in: runs)
@@ -146,7 +159,8 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 					kind: kind,
 					runs: runs,
 					thumbnail: thumbnail,
-					imageThumbnails: imageThumbnails
+					imageThumbnails: imageThumbnails,
+					metadata: metadata
 				)
 			}
 			catch
@@ -204,7 +218,8 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		kind: RichFilePreviewKind,
 		runs: [MarkdownTextRun]?,
 		thumbnail: SourceThumbnailLoader.Thumbnail?,
-		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail]
+		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail],
+		metadata: MarkdownFileMetadata?
 	)
 	{
 		switch kind
@@ -230,13 +245,27 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			}
 			text.isVerticallyResizable = false
 			text.drawsBackground = false
+			if matchesFileMarkdownStyling
+			{
+				container.lineFragmentPadding = 0
+			}
 			text.textContainerInset = NSSize(
-				width: 20,
-				height: 20
+				width: onMetadata == nil ? 20 : 16,
+				height: onMetadata == nil ? 20 : 0
 			)
 			markdownRuns = runs
 			self.imageThumbnails = imageThumbnails
 			install(text)
+			if let onMetadata
+			{
+				onMetadata(metadata?.entries ?? [])
+			}
+			else if let metadata
+			{
+				let panel = MarkdownFileMetadataView(entries: metadata.entries)
+				metadataPanel = panel
+				addSubview(panel)
+			}
 			refreshMarkdownAppearance()
 		case .image:
 			guard let thumbnail
@@ -384,24 +413,45 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		if let text = content as? MarkdownTextView,
 			let container = text.textContainer, let layout = text.layoutManager
 		{
+			let inset = text.textContainerInset
+			let panelHeight = metadataPanel.map
+			{
+				$0.height(forWidth: max(
+					1,
+					bounds.width - 32
+				)) + 32
+			} ?? 0
 			container.containerSize = NSSize(
 				width: max(
 					1,
-					bounds.width - 40
+					bounds.width - inset.width * 2
 				),
 				height: CGFloat.greatestFiniteMagnitude
 			)
 			layout.ensureLayout(for: container)
-			let height = ceil(layout.usedRect(for: container).maxY) + 40
+			let textHeight = ceil(layout.usedRect(for: container).maxY) + inset.height * 2
+			let height = textHeight + panelHeight
 			if contentHeight.constant != height
 			{
 				contentHeight.constant = height
 			}
 			text.frame = NSRect(
 				x: 0,
-				y: 0,
+				y: isFlipped ? panelHeight : 0,
 				width: bounds.width,
-				height: height
+				height: textHeight
+			)
+			metadataPanel?.frame = NSRect(
+				x: 16,
+				y: isFlipped ? 16 : textHeight + 16,
+				width: max(
+					1,
+					bounds.width - 32
+				),
+				height: max(
+					0,
+					panelHeight - 32
+				)
 			)
 		}
 		else if let image = (content as? NSImageView)?.image
@@ -458,14 +508,31 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			return
 		}
 		let selection = text.selectedRange()
+		let mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)?
+		if matchesFileMarkdownStyling
+		{
+			mathFontSize =
+			{
+				style, inline in
+				FileMarkdownStyling.mathFontSize(
+					style: style,
+					inline: inline
+				)
+			}
+		}
+		else
+		{
+			mathFontSize = nil
+		}
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
-			text.installContent(
-				MarkdownAttributedStringRenderer.render(
-					markdownRuns,
-					imageThumbnails: imageThumbnails
-				)
+			let rendered = MarkdownAttributedStringRenderer.render(
+				markdownRuns,
+				imageThumbnails: imageThumbnails,
+				mathFontSize: mathFontSize
 			)
+			text.installContent(matchesFileMarkdownStyling ?
+				FileMarkdownStyling.apply(to: rendered) : rendered)
 		}
 		text.setSelectedRange(selection)
 		needsLayout = true

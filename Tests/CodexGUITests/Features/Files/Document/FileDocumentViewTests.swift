@@ -1502,6 +1502,378 @@ struct FileDocumentViewTests
 		}
 	}
 
+	@Test func metadataStaysAboveScrollingBodyAndDisappearsForNextFile() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			controller.showsHeader = false
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 900,
+					height: 500
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentView = controller.view
+			defer
+			{
+				window.close()
+			}
+			let fields = (0 ..< 30).map
+			{
+				"field_\($0): value\n"
+			}.joined()
+			let source = "---\ntitle: Benchmark\ntags: [markdown, rendering]\n"
+				+ fields + "---\n\n# Body\n\n"
+				+ String(
+					repeating: "A paragraph.\n\n",
+					count: 100
+				)
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "metadata.md"
+				),
+				isRetained: true,
+				content: .text(source)
+			)
+			document.status = .ready
+			controller.render(document)
+			let preview = try #require(findPreview(in: controller.view))
+			await preview.waitForLoading()
+			controller.view.layoutSubtreeIfNeeded()
+			let scroll = try #require(findPreviewScroll(in: controller.view))
+			let metadata = try #require(findMetadata(in: controller.view))
+			let metadataScroll = try #require(metadata.enclosingScrollView)
+			#expect(metadata.frame.height > metadataScroll.contentView.bounds.height)
+			#expect(window.contentLayoutRect.height == 500)
+			#expect(scroll.contentView.bounds.height >= 250)
+			let before = metadata.convert(
+				metadata.bounds,
+				to: controller.view
+			)
+			scroll.contentView.scroll(to: NSPoint(
+				x: 0,
+				y: 300
+			))
+			scroll.reflectScrolledClipView(scroll.contentView)
+			controller.view.layoutSubtreeIfNeeded()
+			#expect(metadata.convert(
+				metadata.bounds,
+				to: controller.view
+			) == before)
+			#expect(scroll.contentView.bounds.origin.y > 0)
+			let body = try #require(findMarkdownText(in: preview))
+			#expect(!body.string.contains("title:"))
+			#expect(body.string.contains("Body"))
+			controller.setSourceVisible(true)
+			controller.view.layoutSubtreeIfNeeded()
+			let copy = try #require(findButton(
+				"Copy Markdown",
+				in: controller.view
+			))
+			let copyRect = copy.convert(
+				copy.bounds,
+				to: controller.view
+			)
+			#expect(abs(copyRect.maxY - controller.view.bounds.maxY) < 20)
+			#expect(findMetadata(in: controller.view) == nil)
+			document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "plain.md"
+				),
+				isRetained: true,
+				content: .text("# Plain")
+			)
+			document.status = .ready
+			controller.render(document)
+			let plain = try #require(findPreview(in: controller.view))
+			await plain.waitForLoading()
+			#expect(findMetadata(in: controller.view) == nil)
+		}
+	}
+
+	@Test func metadataReflowsAtActualViewportWidthWhenWindowShrinksAndGrows() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			controller.showsHeader = false
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 1000,
+					height: 600
+				),
+				styleMask: [.titled, .resizable],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentView = controller.view
+			defer
+			{
+				window.close()
+			}
+			let description = String(
+				repeating: "A description that wraps as the window changes. ",
+				count: 4
+			)
+			let source = "---\ntitle: Responsive metadata\ndescription: " + description +
+				"\ntags: [markdown, benchmark, rendering, mermaid]\n---\n\n# Body\n\n" +
+				String(
+					repeating: "A paragraph.\n\n",
+					count: 30
+				)
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "metadata.md"
+				),
+				isRetained: true,
+				content: .text(source)
+			)
+			document.status = .ready
+			controller.render(document)
+			let preview = try #require(findPreview(in: controller.view))
+			await preview.waitForLoading()
+			let metadata = try #require(findMetadata(in: controller.view))
+			let scroll = try #require(metadata.enclosingScrollView)
+			var heights: [CGFloat] = []
+			var widths: [CGFloat] = []
+			for width in [CGFloat(1000), 600, 1000]
+			{
+				window.setContentSize(NSSize(
+					width: width,
+					height: 600
+				))
+				controller.view.layoutSubtreeIfNeeded()
+				let viewportWidth = scroll.contentView.bounds.width
+				#expect(abs(metadata.frame.width - viewportWidth) < 1)
+				#expect(abs(metadata.superview!.frame.width - viewportWidth) < 1)
+				#expect(abs(metadata.frame.height - metadata.height(forWidth: viewportWidth)) < 1)
+				for label in metadata.subviews.compactMap(
+					{
+						$0 as? NSTextField
+					}
+				)
+				{
+					#expect(label.frame.maxX <= metadata.bounds.maxX)
+				}
+				heights.append(metadata.frame.height)
+				widths.append(viewportWidth)
+			}
+			#expect(widths[1] < widths[0])
+			#expect(widths[2] == widths[0])
+			#expect(heights[1] > heights[0])
+			#expect(heights[2] == heights[0])
+			#expect(metadata.entries[1]
+				.values == [description.trimmingCharacters(in: .whitespaces)])
+		}
+	}
+
+	@Test func newMetadataStartsAtTopWhileResizePreservesCurrentScrollOffset() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = FileDocumentViewController()
+			controller.showsHeader = false
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 900,
+					height: 500
+				),
+				styleMask: [.titled, .resizable],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.contentView = controller.view
+			defer
+			{
+				window.close()
+			}
+			let fields = (0 ..< 40).map
+			{
+				"field_\($0): value\n"
+			}.joined()
+			var firstMetadata: MarkdownFileMetadataView?
+			var firstScroll: NSScrollView?
+			var firstHeight: CGFloat = 0
+			for name in ["first", "other"]
+			{
+				let source = "---\ntitle: \(name)\n" + fields + "---\n\n# Body"
+				var document = FileViewerDocument(
+					id: UUID(),
+					location: FileLocation(
+						root: "/tmp",
+						relativePath: "\(name).md"
+					),
+					isRetained: true,
+					content: .text(source)
+				)
+				document.status = .ready
+				controller.render(document)
+				let preview = try #require(findPreview(in: controller.view))
+				await preview.waitForLoading()
+				controller.view.layoutSubtreeIfNeeded()
+				let metadata = try #require(findMetadata(in: controller.view))
+				let scroll = try #require(metadata.enclosingScrollView)
+				#expect(metadata.frame.height > scroll.contentView.bounds.height)
+				#expect(metadata.entries.first?.values == [name])
+				if firstMetadata == nil
+				{
+					firstMetadata = metadata
+					firstScroll = scroll
+					firstHeight = metadata.frame.height
+					scroll.contentView.scroll(to: NSPoint(
+						x: 0,
+						y: 240
+					))
+					scroll.reflectScrolledClipView(scroll.contentView)
+					let origin = scroll.contentView.bounds.origin
+					#expect(origin.y > 0)
+					window.setContentSize(NSSize(
+						width: 840,
+						height: 500
+					))
+					controller.view.layoutSubtreeIfNeeded()
+					#expect(scroll.contentView.bounds.origin == origin)
+				}
+				else
+				{
+					#expect(metadata !== firstMetadata)
+					#expect(scroll === firstScroll)
+					#expect(metadata.frame.height == firstHeight)
+					#expect(scroll.contentView.bounds.origin == .zero)
+				}
+			}
+		}
+	}
+
+	@Test func metadataInitialInsertionAndResizeSettleInsideFilesContainer() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let files = FilesViewController()
+			files.loadViewIfNeeded()
+			let description = "Standard Markdown, GitHub-flavored Markdown, " +
+				"common extensions, and Mermaid diagrams"
+			let source = "---\ntitle: Markdown rendering benchmark\ndescription: " + description +
+				"\ntags: [markdown, benchmark, rendering, mermaid]\n---\n\n# Body\n\n" +
+				String(
+					repeating: "A paragraph.\n\n",
+					count: 30
+				)
+			var document = FileViewerDocument(
+				id: UUID(),
+				location: FileLocation(
+					root: "/tmp",
+					relativePath: "metadata.md"
+				),
+				isRetained: true,
+				content: .text(source)
+			)
+			document.status = .ready
+			files.document.render(document)
+			let preview = try #require(findPreview(in: files.document.view))
+			await preview.waitForLoading()
+			await files.document.waitForMetadataLayout()
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 1200,
+					height: 700
+				),
+				styleMask: [.titled, .resizable],
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			defer
+			{
+				window.close()
+			}
+			window.contentViewController = files
+			let metadata = try #require(findMetadata(in: files.document.view))
+			let scroll = try #require(metadata.enclosingScrollView)
+			var heights: [CGFloat] = []
+			for width in [CGFloat(1200), 800, 1200]
+			{
+				window.setContentSize(NSSize(
+					width: width,
+					height: 700
+				))
+				files.view.layoutSubtreeIfNeeded()
+				await files.document.waitForMetadataLayout()
+				let expectedHeight = metadata.height(forWidth: scroll.contentView.bounds.width)
+				let expectedViewport = min(
+					expectedHeight,
+					files.document.view.bounds.height *
+						LayoutTokens.FileMarkdown
+						.maximumMetadataHeightFraction
+				)
+				#expect(abs(metadata.frame.width - scroll.contentView.bounds.width) < 1)
+				#expect(abs(metadata.frame.height - expectedHeight) < 1)
+				#expect(
+					abs(scroll.contentView.bounds.height - expectedViewport) < 1,
+					Comment(rawValue: "width=\(width) expected=\(expectedViewport) " +
+						"metadata=\(metadata.frame) holder=\(scroll.superview!.frame) " +
+						"scroll=\(scroll.frame) clip=\(scroll.contentView.frame) " +
+						"clipbounds=\(scroll.contentView.bounds) " +
+						"insets=\(scroll.contentInsets) " +
+						"auto=\(scroll.automaticallyAdjustsContentInsets) " +
+						"horizontal=\(scroll.hasHorizontalScroller) " +
+						"vertical=\(scroll.hasVerticalScroller)")
+				)
+				let viewport = scroll.convert(
+					scroll.bounds,
+					to: files.document.view
+				)
+				#expect(viewport.minY >= files.document.view.bounds.minY)
+				#expect(viewport.maxY <= files.document.view.bounds.maxY)
+				#expect(scroll.contentView.bounds.origin == .zero)
+				heights.append(metadata.frame.height)
+			}
+			#expect(heights[1] > heights[0])
+			#expect(heights[2] == heights[0])
+		}
+	}
+
+	private func findMetadata(in view: NSView) -> MarkdownFileMetadataView?
+	{
+		if let metadata = view as? MarkdownFileMetadataView
+		{
+			return metadata
+		}
+		return view.subviews.lazy.compactMap
+		{
+			findMetadata(in: $0)
+		}.first
+	}
+
 	private func findPreview(in view: NSView) -> RichFilePreviewView?
 	{
 		if let preview = view as? RichFilePreviewView

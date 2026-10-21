@@ -393,6 +393,94 @@ struct RichFilePreviewViewTests
 		}
 	}
 
+	@Test func metadataCanLiveOutsideScrollingMarkdownAndBodyRetainsLinks() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			var entries: [MarkdownFileMetadata.Entry] = []
+			let preview = RichFilePreviewView(
+				kind: .markdown,
+				onMetadata:
+				{
+					entries = $0
+				},
+				loadContent:
+				{
+					Data("---\ntitle: A document\ntags: [one, two]\n---\n".utf8) +
+						Data("# Body\n\n[Guide](https://example.com/guide)".utf8)
+				}
+			)
+			defer
+			{
+				preview.cancelLoading()
+			}
+			await preview.waitForLoading()
+			let text = try #require(preview.subviews.first as? MarkdownTextView)
+			#expect(entries.map(\.key) == ["title", "tags"])
+			#expect(!preview.subviews.contains
+			{
+				$0 is MarkdownFileMetadataView
+			})
+			#expect(!text.string.contains("title:"))
+			#expect(text.string.contains("Body"))
+			#expect(text.textContainerInset == NSSize(
+				width: 16,
+				height: 0
+			))
+			let guide = (text.string as NSString).range(of: "Guide")
+			#expect(text.textStorage?.attribute(
+				.link,
+				at: guide.location,
+				effectiveRange: nil
+			) != nil)
+		}
+	}
+
+	@Test func inlineMetadataWrapsWithoutChangingBodySelectionAcrossAppearance() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let preview = RichFilePreviewView(kind: .markdown)
+			{
+				Data(("---\ntitle: Metadata\ndescription: " +
+						String(
+							repeating: "A long description ",
+							count: 8
+						) +
+						"\ntags: [markdown, benchmark, rendering, mermaid]\n---\n# Body").utf8)
+			}
+			let window = attachedWindow(for: preview)
+			defer
+			{
+				preview.cancelLoading()
+				window.close()
+			}
+			await preview.waitForLoading()
+			let text = try #require(preview.subviews.first as? MarkdownTextView)
+			let panel = try #require(preview.subviews.compactMap
+			{
+				$0 as? MarkdownFileMetadataView
+			}.first)
+			#expect(panel.height(forWidth: 240) > panel.height(forWidth: 900))
+			#expect(panel.entries[2].values == ["markdown", "benchmark", "rendering", "mermaid"])
+			let selected = (text.string as NSString).range(of: "Body")
+			text.setSelectedRange(selected)
+			for name in [NSAppearance.Name.darkAqua, .aqua]
+			{
+				window.appearance = NSAppearance(named: name)
+				window.contentView?.layoutSubtreeIfNeeded()
+				#expect(text.selectedRange() == selected)
+				#expect(panel.window === window)
+				#expect(panel.frame.height > 0)
+				#expect(text.frame.maxY <= panel.frame.minY)
+			}
+		}
+	}
+
 	private func pngBytes() throws -> Data
 	{
 		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))

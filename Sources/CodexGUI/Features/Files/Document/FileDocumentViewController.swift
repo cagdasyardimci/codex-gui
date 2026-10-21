@@ -32,6 +32,16 @@ private final class FileMarkdownPreviewView: RichFilePreviewView
 	}
 }
 
+/// The scroll document exposes an extent without making metadata height a viewport minimum.
+@MainActor
+private final class FileMarkdownMetadataDocumentView: NSView
+{
+	override var isFlipped: Bool
+	{
+		true
+	}
+}
+
 @MainActor
 final class FileDocumentViewController: NSViewController
 {
@@ -86,6 +96,16 @@ final class FileDocumentViewController: NSViewController
 	private var headerTrailing: NSLayoutConstraint?
 	private var statusCollapsedHeight: NSLayoutConstraint?
 	private let previewScroll = NSScrollView()
+	private let previewContainer = NSStackView()
+	private let metadataHolder = NSView()
+	private let metadataScroll = NSScrollView()
+	private let metadataDocument = FileMarkdownMetadataDocumentView()
+	private var metadataView: MarkdownFileMetadataView?
+	private var metadataHeight: NSLayoutConstraint?
+	private var isUpdatingMetadataGeometry = false
+	private var metadataLayoutTask: Task<Void, Never>?
+	private var previewGeneration = UUID()
+	private var copyBarTop: NSLayoutConstraint?
 	private var current: FileViewerDocument?
 	private var preview: RichFilePreviewView?
 	private var showingSource = false
@@ -136,6 +156,11 @@ final class FileDocumentViewController: NSViewController
 			let capabilities = FileContentCapabilities(path: $0.location.relativePath)
 			return capabilities.hasSource && (showingSource || !capabilities.hasRichPreview)
 		} ?? true
+	}
+
+	deinit
+	{
+		NotificationCenter.default.removeObserver(self)
 	}
 
 	var isShowingSource: Bool
@@ -199,6 +224,46 @@ final class FileDocumentViewController: NSViewController
 		previewScroll.hasVerticalScroller = true
 		previewScroll.autohidesScrollers = true
 		previewScroll.drawsBackground = false
+		previewContainer.orientation = .vertical
+		previewContainer.alignment = .width
+		previewContainer.spacing = LayoutTokens.FileMarkdown.metadataBottomSpacing
+		previewContainer.edgeInsets = NSEdgeInsets(
+			top: LayoutTokens.FileMarkdown.contentInset,
+			left: 0,
+			bottom: 0,
+			right: 0
+		)
+		let metadataInset = LayoutTokens.FileMarkdown.contentInset
+		metadataHolder.frame = NSRect(
+			x: 0,
+			y: 0,
+			width: metadataInset * 2,
+			height: 0
+		)
+		metadataScroll.frame = NSRect(
+			x: metadataInset,
+			y: 0,
+			width: 0,
+			height: 0
+		)
+		metadataScroll.autoresizingMask = [.width, .height]
+		metadataHolder.addSubview(metadataScroll)
+		previewContainer.addArrangedSubview(metadataHolder)
+		previewContainer.addArrangedSubview(previewScroll)
+		metadataHolder.isHidden = true
+		metadataScroll.hasVerticalScroller = true
+		metadataScroll.autohidesScrollers = true
+		metadataScroll.drawsBackground = false
+		metadataScroll.documentView = metadataDocument
+		metadataScroll.contentView.postsFrameChangedNotifications = true
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(metadataViewportDidResize),
+			name: NSView.frameDidChangeNotification,
+			object: metadataScroll.contentView
+		)
+		metadataHeight = metadataHolder.heightAnchor.constraint(equalToConstant: 0)
+		metadataHeight?.isActive = true
 		root.addSubview(header)
 		root.addSubview(statusLabel)
 		root.addSubview(contentHolder)
@@ -215,7 +280,6 @@ final class FileDocumentViewController: NSViewController
 			copyBar.widthAnchor.constraint(equalToConstant: 44),
 			copyBar.heightAnchor.constraint(equalToConstant: 36),
 			copyBar.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-			copyBar.topAnchor.constraint(equalTo: contentHolder.topAnchor),
 			statusLabel.leadingAnchor.constraint(
 				equalTo: root.leadingAnchor,
 				constant: 12
@@ -229,6 +293,8 @@ final class FileDocumentViewController: NSViewController
 			contentHolder.topAnchor.constraint(equalTo: statusLabel.bottomAnchor),
 			contentHolder.bottomAnchor.constraint(equalTo: root.bottomAnchor)
 		])
+		copyBarTop = copyBar.topAnchor.constraint(equalTo: contentHolder.topAnchor)
+		copyBarTop?.isActive = true
 		contentTrailing = contentHolder.trailingAnchor.constraint(equalTo: root.trailingAnchor)
 		contentTrailing?.isActive = true
 		headerCollapsedHeight = header.heightAnchor.constraint(equalToConstant: 0)
@@ -503,10 +569,13 @@ final class FileDocumentViewController: NSViewController
 			previewBytes == content,
 			preview != nil
 		{
-			show(previewScroll)
+			show(previewContainer)
 			return
 		}
 		preview?.cancelLoading()
+		previewGeneration = UUID()
+		let generation = previewGeneration
+		setMetadata([])
 		let location = document.location
 		let imageLoader: RichFileMarkdownImageLoader?
 		if let loader = markdownImageLoader
@@ -564,6 +633,18 @@ final class FileDocumentViewController: NSViewController
 				imageBaseDirectory: location.fileURL.deletingLastPathComponent(),
 				markdownImageLoader: imageLoader,
 				onOpenLink: openLink,
+				onMetadata:
+				{
+					[weak self] entries in
+					guard let self, self.previewGeneration == generation,
+							self.current?.id == document.id
+					else
+					{
+						return
+					}
+					self.setMetadata(entries)
+				},
+				matchesFileMarkdownStyling: true,
 				loadContent: loadContent
 			)
 		}
@@ -584,7 +665,130 @@ final class FileDocumentViewController: NSViewController
 		preview.translatesAutoresizingMaskIntoConstraints = false
 		preview.widthAnchor.constraint(equalTo: previewScroll.contentView.widthAnchor)
 			.isActive = true
-		show(previewScroll)
+		show(previewContainer)
+	}
+
+	private func setMetadata(_ entries: [MarkdownFileMetadata.Entry])
+	{
+		metadataView?.removeFromSuperview()
+		metadataView = nil
+		metadataHolder.isHidden = entries.isEmpty
+		guard !entries.isEmpty
+		else
+		{
+			return
+		}
+		let metadata = MarkdownFileMetadataView(entries: entries)
+		metadataView = metadata
+		metadataDocument.addSubview(metadata)
+		updateMetadataGeometry()
+		metadataScroll.contentView.scroll(to: .zero)
+		metadataScroll.reflectScrolledClipView(metadataScroll.contentView)
+	}
+
+	private func updateMetadataGeometry()
+	{
+		guard let metadataView, !isUpdatingMetadataGeometry
+		else
+		{
+			return
+		}
+		isUpdatingMetadataGeometry = true
+		defer
+		{
+			isUpdatingMetadataGeometry = false
+		}
+		let width = max(
+			1,
+			metadataScroll.contentView.bounds.width
+		)
+		let height = metadataView.height(forWidth: width)
+		metadataView.frame = NSRect(
+			x: 0,
+			y: 0,
+			width: width,
+			height: height
+		)
+		metadataView.needsLayout = true
+		metadataDocument.frame = metadataView.frame
+		let viewportHeight = min(
+			height,
+			contentHolder.bounds.height * LayoutTokens.FileMarkdown.maximumMetadataHeightFraction
+		)
+		if metadataHeight?.constant != viewportHeight
+		{
+			metadataHeight?.constant = viewportHeight
+			scheduleMetadataLayout()
+		}
+	}
+
+	func waitForMetadataLayout() async
+	{
+		while let task = metadataLayoutTask
+		{
+			await task.value
+		}
+	}
+
+	private func scheduleMetadataLayout()
+	{
+		metadataScroll.needsLayout = true
+		metadataHolder.needsLayout = true
+		previewContainer.needsUpdateConstraints = true
+		view.needsUpdateConstraints = true
+		previewContainer.needsLayout = true
+		contentHolder.needsLayout = true
+		view.needsLayout = true
+		guard metadataLayoutTask == nil
+		else
+		{
+			return
+		}
+		// Clip notifications can arrive during ancestor layout. Apply the new height afterwards.
+		metadataLayoutTask = Task
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.metadataLayoutTask = nil
+			guard self.previewContainer.superview === self.contentHolder
+			else
+			{
+				return
+			}
+			self.view.updateConstraintsForSubtreeIfNeeded()
+			self.view.layoutSubtreeIfNeeded()
+		}
+	}
+
+	@objc private func metadataViewportDidResize()
+	{
+		// The clip finishes resizing after the controller's layout callback during pane changes.
+		updateMetadataGeometry()
+		scheduleMetadataLayout()
+	}
+
+	override func viewDidLayout()
+	{
+		super.viewDidLayout()
+		guard previewContainer.superview === contentHolder
+		else
+		{
+			copyBarTop?.constant = 0
+			return
+		}
+		updateMetadataGeometry()
+		let viewport = previewScroll.convert(
+			previewScroll.bounds,
+			to: contentHolder
+		)
+		copyBarTop?.constant = max(
+			0,
+			contentHolder.bounds.maxY - viewport.maxY
+		)
 	}
 
 	private func showMessage(_ message: String)
@@ -603,7 +807,7 @@ final class FileDocumentViewController: NSViewController
 	private func setCopyMarkdownVisible(_ visible: Bool)
 	{
 		copyBar.isHidden = !visible
-		contentTrailing?.constant = visible ? -44 : 0
+		contentTrailing?.constant = visible && sourceIsVisible ? -44 : 0
 	}
 
 	private func show(_ child: NSView)

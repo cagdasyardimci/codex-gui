@@ -93,6 +93,18 @@ The file viewer places its breadcrumb and capsule actions in a row spanning both
 
 ## Native adaptation rationale
 
+Files Markdown uses [FileMarkdownStyling](../Sources/CodexGUI/Features/Shared/Markdown/FileMarkdownStyling.swift)
+for Desktop reading typography: medium headings, source-aware heading gaps, preserved soft line
+breaks and bare monospace inline code. Syntax-highlighted code cards, semantic list markers,
+resolved links and table column alignment retain their shared native behavior. Transcript styling
+remains independently owned. Typography and layout inputs live in the `FileMarkdown` token roles.
+
+Recognized front matter appears in a native Metadata grid above the Files scrolling body. Scalar
+values wrap and scalar sequences use wrapping chips. [MarkdownFileMetadata](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownFileMetadata.swift)
+owns the bounded YAML subset; malformed or unsupported structures remain literal Markdown.
+Switching files or modes retires the visible metadata with its document. Shared Git previews can
+place the same panel inline with their content.
+
 Each main window has its own toolbar identifier because its tools-pane composition can differ from other windows. AppKit synchronizes items between toolbars with the same identifier, including when configuration autosaving is disabled. Toolbar composition belongs to the window's controller; configuration autosaving stays disabled because the application supplies that composition.
 
 The composer editor paints the same surface color as its enclosing view so AppKit can repaint the previous insertion point. Its setup belongs to [composer configuration](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+Composer.swift).
