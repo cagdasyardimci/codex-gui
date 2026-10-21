@@ -1,0 +1,2 @@
+# Preserve the pinned upstream distribution, including template literal whitespace.
+Sources/CodexGUI/Resources/Mermaid/mermaid.min.js -whitespace

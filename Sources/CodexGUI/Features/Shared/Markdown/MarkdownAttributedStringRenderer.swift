@@ -26,6 +26,7 @@ enum MarkdownAttributedStringRenderer
 	static func render(
 		_ runs: [MarkdownTextRun],
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:],
+		preparedDiagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:],
 		richBlockMaximumPixels: Int = 2_000_000,
 		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)? = nil
 	) -> NSAttributedString
@@ -65,6 +66,7 @@ enum MarkdownAttributedStringRenderer
 				to: &attributes,
 				budget: &richBudget,
 				imageThumbnails: imageThumbnails,
+				preparedDiagramImages: preparedDiagramImages,
 				mathFontSize: mathFontSize
 			)
 			result.append(NSAttributedString(
@@ -256,6 +258,7 @@ enum MarkdownAttributedStringRenderer
 		to attributes: inout [NSAttributedString.Key: Any],
 		budget: inout MarkdownRichBlockBudget,
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail],
+		preparedDiagramImages: [Data: MarkdownRichBlockImageCache.Images],
 		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)?
 	)
 	{
@@ -294,7 +297,8 @@ enum MarkdownAttributedStringRenderer
 				attachment = MarkdownRichBlockRenderer.diagramAttachment(
 					code: rich.payload,
 					source: rich.source,
-					budget: &budget
+					budget: &budget,
+					preparedImages: preparedDiagramImages[Data(rich.payload.utf8)]
 				)
 			case .imageGallery:
 				attachment = MarkdownImageGalleryAttachment.make(

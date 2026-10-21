@@ -59,6 +59,19 @@ baseline-aware native attachments; single-dollar expressions remain literal. Cod
 URLs are excluded from inline math recognition. Exact TeX remains available to selection copy and
 accessibility. Display equations retain the shared native math renderer.
 
+Rich file previews prepare Mermaid diagrams asynchronously with the pinned, bundled offline
+renderer in [MarkdownMermaidRenderer](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownMermaidRenderer.swift).
+A serial, cancellable WebKit preparation queue produces bounded light/dark raster pairs before
+native text installation. Preparation shares its allocation across diagrams and reserves space
+for other rich content. Natural display dimensions remain independent of raster resolution;
+retention budgets charge actual image bytes, including row padding. Input, queue, time and retained-pixel limits belong to that owner;
+invalid or over-budget diagrams retain their exact source. Transcript preparation retains its
+synchronous native flowchart path. Preview replacement cancels pending preparation and rejects
+obsolete installation. No diagram assets are fetched at runtime.
+Page-load deadlines perform one bounded readiness probe before failing, so delayed native
+navigation callbacks cannot discard a guest page that has already finished loading. The probe
+has its own watchdog; rendering deadlines and cancellation still retain source fallback.
+
 Files owns workspace directory browsing, document presentation and its navigator and search surfaces. Its controller-facing runtime keeps document state separate from native focus, reading positions and undo histories. Documents capture their workspace root and relative path; switching the browser root does not retarget an existing document. Reducers accept scoped read, search and save results, while the filesystem service performs bounded reads and revision-checked writes. Pending edits remain available after save failures or external-change conflicts. Close and quit paths settle pending saves and require an explicit decision before discarding unresolved edits. Rendered Markdown is read-only; source editing uses the same current document text as copy and export actions.
 
 Code selection reads contained UTF-8 files off the main actor with a 500,000-byte limit and revalidates its captured selection before presentation. Submission accepts captured absolute or project-relative file references, validates their resolved project containment, and emits relative context descriptions with absolute backend mentions. Shared file capabilities govern source and rich-preview controls; SVG retains editable, searchable source alongside its preview. GitHub opening uses the captured file's repository-relative path even when the Files browser starts in a subfolder.

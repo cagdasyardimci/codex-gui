@@ -35,6 +35,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	private var content: NSView?
 	private var markdownRuns: [MarkdownTextRun]?
 	private var metadataPanel: MarkdownFileMetadataView?
+	private var diagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:]
 	private let onMetadata: (([MarkdownFileMetadata.Entry]) -> Void)?
 	private let matchesFileMarkdownStyling: Bool
 	private var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
@@ -80,6 +81,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				let thumbnail: SourceThumbnailLoader.Thumbnail?
 				var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
 				var metadata: MarkdownFileMetadata?
+				var diagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:]
 				if case .markdown = kind
 				{
 					guard let source = String(
@@ -103,6 +105,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 					}.value
 					runs = prepared.0.runs
 					metadata = prepared.1
+					diagramImages = await MarkdownMermaidRenderer.prepare(parsed: prepared.0)
 					if let runs, let markdownImageLoader
 					{
 						let plan = MarkdownImagePreparation.preloadPlan(in: runs)
@@ -160,7 +163,8 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 					runs: runs,
 					thumbnail: thumbnail,
 					imageThumbnails: imageThumbnails,
-					metadata: metadata
+					metadata: metadata,
+					diagramImages: diagramImages
 				)
 			}
 			catch
@@ -219,7 +223,8 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		runs: [MarkdownTextRun]?,
 		thumbnail: SourceThumbnailLoader.Thumbnail?,
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail],
-		metadata: MarkdownFileMetadata?
+		metadata: MarkdownFileMetadata?,
+		diagramImages: [Data: MarkdownRichBlockImageCache.Images]
 	)
 	{
 		switch kind
@@ -255,6 +260,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			)
 			markdownRuns = runs
 			self.imageThumbnails = imageThumbnails
+			self.diagramImages = diagramImages
 			install(text)
 			if let onMetadata
 			{
@@ -529,6 +535,8 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			let rendered = MarkdownAttributedStringRenderer.render(
 				markdownRuns,
 				imageThumbnails: imageThumbnails,
+				preparedDiagramImages: diagramImages,
+				richBlockMaximumPixels: MarkdownMermaidRenderer.maximumPreparedPixels,
 				mathFontSize: mathFontSize
 			)
 			text.installContent(matchesFileMarkdownStyling ?

@@ -67,6 +67,7 @@ cp -f .build/checkouts/swift-cmark/COPYING "$cmark_licenses/COPYING"
 highlighter_licenses="$app/Contents/Resources/ThirdPartyLicenses/HighlighterSwift"
 math_licenses="$app/Contents/Resources/ThirdPartyLicenses/SwiftMath"
 mermaid_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-mermaid"
+mermaid_js_licenses="$app/Contents/Resources/ThirdPartyLicenses/mermaid"
 mkdir -p "$highlighter_licenses/Sources/Assets" \
   "$math_licenses/Sources/SwiftMath/mathFonts.bundle" \
   "$mermaid_licenses/Vendor/MermaidLayoutDagre"
@@ -83,5 +84,7 @@ cp -f .build/checkouts/swift-mermaid/THIRD-PARTY-NOTICES.md \
   "$mermaid_licenses/THIRD-PARTY-NOTICES.md"
 cp -f .build/checkouts/swift-mermaid/Vendor/MermaidLayoutDagre/LICENSE \
   "$mermaid_licenses/Vendor/MermaidLayoutDagre/LICENSE"
+mkdir -p "$mermaid_js_licenses"
+cp -f Sources/CodexGUI/Resources/Mermaid/LICENSE "$mermaid_js_licenses/LICENSE"
 codesign --force --sign "$signing_identity" "$app"
 print "Built $app ($configuration)"

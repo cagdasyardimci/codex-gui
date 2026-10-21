@@ -62,9 +62,19 @@ enum MarkdownRichBlockRenderer
 	static func diagramAttachment(
 		code: String,
 		source: String,
-		budget: inout MarkdownRichBlockBudget
+		budget: inout MarkdownRichBlockBudget,
+		preparedImages: MarkdownRichBlockImageCache.Images? = nil
 	) -> NSTextAttachment
 	{
+		if let preparedImages
+		{
+			guard budget.beginBlock(), budget.reservePixels(preparedImages.budgetPixelCost)
+			else
+			{
+				return sourceAttachment(source)
+			}
+			return preparedImages.attachment(source: source)
+		}
 		guard let images = diagramImages(
 			code: code,
 			budget: &budget
