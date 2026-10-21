@@ -99,12 +99,14 @@ struct ConversationContentCacheTests
 			: "```mermaid\nflowchart LR\nA[First cached source] --> B[Result]\n```"
 		let first = await cache.content(
 			body: firstSource,
-			markdown: true
+			markdown: true,
+			prepareDiagrams: !inlineMath
 		)
 		try #require(first.estimatedRichImageBytes > 0)
 		#expect(await cache.content(
 			body: firstSource,
-			markdown: true
+			markdown: true,
+			prepareDiagrams: !inlineMath
 		) === first)
 		let capacity = 6 * 1024 * 1024
 		var aggregateCost = firstSource.utf8.count + first.estimatedRichImageBytes
@@ -116,7 +118,8 @@ struct ConversationContentCacheTests
 			latestSource = source(index: index)
 			latest = await cache.content(
 				body: latestSource,
-				markdown: true
+				markdown: true,
+				prepareDiagrams: !inlineMath
 			)
 			try #require(latest.estimatedRichImageBytes > 0)
 			aggregateCost += latestSource.utf8.count + latest.estimatedRichImageBytes
@@ -134,7 +137,8 @@ struct ConversationContentCacheTests
 		) === latest)
 		let reloadedFirst = await cache.content(
 			body: firstSource,
-			markdown: true
+			markdown: true,
+			prepareDiagrams: !inlineMath
 		)
 		#expect(reloadedFirst !== first)
 		#expect(reloadedFirst.codeBlocks == first.codeBlocks)

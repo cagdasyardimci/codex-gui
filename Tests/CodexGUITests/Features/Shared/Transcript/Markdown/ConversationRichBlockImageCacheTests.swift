@@ -117,35 +117,6 @@ struct ConversationRichBlockImageCacheTests
 		#expect(lightBytes != darkBytes)
 	}
 
-	@Test func diagramPayloadBytesAreExactAndCellsKeepTheirCurrentSource() throws
-	{
-		_ = NSApplication.shared
-		let composed = "flowchart LR\nA[Caf\u{E9}] --> B[Done]"
-		let decomposed = "flowchart LR\nA[Cafe\u{0301}] --> B[Done]"
-		var budget = MarkdownRichBlockBudget()
-		let first = try #require(MarkdownRichBlockRenderer.diagramImages(
-			code: composed,
-			budget: &budget
-		))
-		budget = MarkdownRichBlockBudget()
-		let second = try #require(MarkdownRichBlockRenderer.diagramImages(
-			code: decomposed,
-			budget: &budget
-		))
-		#expect(first.light !== second.light)
-		budget = MarkdownRichBlockBudget()
-		let repeated = try #require(MarkdownRichBlockRenderer.diagramImages(
-			code: composed,
-			budget: &budget
-		))
-		#expect(first.light === repeated.light)
-		let one = first.attachment(source: "```mermaid\n" + composed + "\n```")
-		let two = repeated.attachment(source: "~~~mermaid\n" + composed + "\n~~~")
-		#expect(one !== two)
-		#expect(one.attachmentCell !== two.attachmentCell)
-		#expect(two.source.hasPrefix("~~~mermaid"))
-	}
-
 	@Test func cacheHitsConsumeEveryMessagePixelAndBlockBudget() throws
 	{
 		_ = NSApplication.shared
@@ -181,29 +152,27 @@ struct ConversationRichBlockImageCacheTests
 			budget: &freshBudget
 		).rendersNativeImage)
 
-		let code = "flowchart LR\nA[Cached budget] --> B[Result]"
-		var warmBudget = MarkdownRichBlockBudget()
-		let diagram = try #require(MarkdownRichBlockRenderer.diagramImages(
-			code: code,
-			budget: &warmBudget
-		))
+		let diagram = try fixtureImages()
 		var diagramBudget = MarkdownRichBlockBudget(
 			maximumPixels: diagram.budgetPixelCost,
 			maximumBlocks: 2
 		)
-		#expect(MarkdownRichBlockRenderer.diagramImages(
-			code: code,
-			budget: &diagramBudget
-		) != nil)
-		#expect(MarkdownRichBlockRenderer.diagramImages(
-			code: code,
-			budget: &diagramBudget
-		) == nil)
+		#expect((MarkdownRichBlockRenderer.diagramAttachment(
+			source: "diagram",
+			budget: &diagramBudget,
+			preparedImages: diagram
+		) as? MarkdownRichAttachment)?.rendersNativeImage == true)
+		#expect((MarkdownRichBlockRenderer.diagramAttachment(
+			source: "diagram",
+			budget: &diagramBudget,
+			preparedImages: diagram
+		) as? MarkdownRichAttachment)?.rendersNativeImage == false)
 		var noDiagramBlocks = MarkdownRichBlockBudget(maximumBlocks: 0)
-		#expect(MarkdownRichBlockRenderer.diagramImages(
-			code: code,
-			budget: &noDiagramBlocks
-		) == nil)
+		#expect((MarkdownRichBlockRenderer.diagramAttachment(
+			source: "diagram",
+			budget: &noDiagramBlocks,
+			preparedImages: diagram
+		) as? MarkdownRichAttachment)?.rendersNativeImage == false)
 	}
 
 	@Test func displaySizesDoNotChangeRetainedRasterCosts() throws
@@ -290,24 +259,6 @@ struct ConversationRichBlockImageCacheTests
 		)
 		#expect(!rejected.rendersNativeImage)
 		#expect(rejected.estimatedRichImageBytes == 0)
-	}
-
-	@Test func aRejectedBudgetDoesNotMemoizeRenderingFailure() throws
-	{
-		_ = NSApplication.shared
-		let code = "flowchart LR\nA[" + UUID().uuidString + "] --> B[Result]"
-		var rejectedBudget = MarkdownRichBlockBudget(maximumPixels: 0)
-		#expect(MarkdownRichBlockRenderer
-			.diagramImages(
-				code: code,
-				budget: &rejectedBudget
-			) == nil)
-		var freshBudget = MarkdownRichBlockBudget()
-		#expect(MarkdownRichBlockRenderer
-			.diagramImages(
-				code: code,
-				budget: &freshBudget
-			) != nil)
 	}
 
 	private func key(

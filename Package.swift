@@ -22,10 +22,6 @@ let package = Package(
 			exact: "1.7.3"
 		),
 		.package(
-			url: "https://github.com/Australware/swift-mermaid",
-			exact: "0.3.0"
-		),
-		.package(
 			url: "https://github.com/Pmen225/apps-sdk-ui-swift",
 			revision: "07cd708b3670948155d913f863ed4f0d8529ab2e"
 		),
@@ -49,10 +45,6 @@ let package = Package(
 				.product(
 					name: "SwiftMath",
 					package: "SwiftMath"
-				),
-				.product(
-					name: "Mermaid",
-					package: "swift-mermaid"
 				),
 			],
 			resources: [

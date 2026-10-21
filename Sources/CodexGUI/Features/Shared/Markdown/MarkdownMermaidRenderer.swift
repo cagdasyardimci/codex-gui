@@ -2,7 +2,7 @@ import AppKit
 import ImageIO
 import WebKit
 
-/// Prepares offline Mermaid pixels for file previews without blocking AppKit's event loop.
+/// Prepares offline Mermaid pixels for Markdown without blocking AppKit's event loop.
 @MainActor
 enum MarkdownMermaidRenderer
 {
@@ -25,14 +25,18 @@ enum MarkdownMermaidRenderer
 	}
 
 	static let maximumPreparedPixels = 16_000_000
+	static let transcriptMaximumPreparedPixels = 2_000_000
 	// Leave the shared renderer room for local images and math earlier in the document.
-	private static let maximumDiagramPreparedPixels = maximumPreparedPixels - 4_000_000
+	private static let filePreviewReservePixels = 4_000_000
 	private static let maximumDiagramPixels = 2_000_000
 	private static var occupied = false
 	private static var waiters: [(UUID, CheckedContinuation<Bool, Never>)] = []
+	private static var retainedSession: Session?
+	private static let imageCache = MarkdownRichBlockImageCache()
 
 	static func prepare(
 		parsed: ParsedMarkdownContent,
+		maximumPreparedPixels: Int = MarkdownMermaidRenderer.maximumPreparedPixels,
 		onDiagnostic: (@MainActor (Diagnostic) -> Void)? = nil
 	) async
 		-> [Data: MarkdownRichBlockImageCache.Images]
@@ -58,6 +62,11 @@ enum MarkdownMermaidRenderer
 		{
 			return [:]
 		}
+		guard maximumPreparedPixels > 16_384
+		else
+		{
+			return [:]
+		}
 		guard await acquire()
 		else
 		{
@@ -74,18 +83,43 @@ enum MarkdownMermaidRenderer
 		{
 			release()
 		}
-		let session = Session(onDiagnostic: onDiagnostic)
-		defer
+		let session: Session
+		if let existing = retainedSession, existing.isValid
 		{
-			session.invalidate()
+			session = existing
 		}
-		guard await session.load()
 		else
 		{
-			return [:]
+			session = Session(onDiagnostic: onDiagnostic)
+		}
+		retainedSession = session
+		session.setDiagnostics(onDiagnostic)
+		defer
+		{
+			session.setDiagnostics(nil)
+			if !session.isValid
+			{
+				retainedSession = nil
+			}
+		}
+		if !session.isLoaded
+		{
+			guard await session.load()
+			else
+			{
+				session.invalidate()
+				return [:]
+			}
 		}
 		var images: [Data: MarkdownRichBlockImageCache.Images] = [:]
-		var remainingPixels = maximumDiagramPreparedPixels
+		let reserve = min(
+			filePreviewReservePixels,
+			maximumPreparedPixels / 4
+		)
+		var remainingPixels = max(
+			0,
+			maximumPreparedPixels - reserve
+		)
 		for (index, source) in sources.enumerated()
 		{
 			guard !Task.isCancelled, session.isValid, remainingPixels > 16_384
@@ -97,6 +131,18 @@ enum MarkdownMermaidRenderer
 				maximumDiagramPixels,
 				remainingPixels / ((sources.count - index) * 2)
 			)
+			let key = MarkdownRichBlockImageCache.Key(
+				kind: .diagram,
+				payload: Data(source.utf8),
+				parameters: [CGFloat(allowance)]
+			)
+			if let cached = imageCache.images(for: key),
+				cached.budgetPixelCost <= remainingPixels
+			{
+				remainingPixels -= cached.budgetPixelCost
+				images[key.payload] = cached
+				continue
+			}
 			guard let light = await session.render(
 				source,
 				dark: false,
@@ -122,7 +168,11 @@ enum MarkdownMermaidRenderer
 				continue
 			}
 			remainingPixels -= pair.budgetPixelCost
-			images[Data(source.utf8)] = pair
+			images[key.payload] = pair
+			imageCache.insert(
+				pair,
+				for: key
+			)
 		}
 		return Task.isCancelled ? [:] : images
 	}
@@ -216,9 +266,13 @@ enum MarkdownMermaidRenderer
 		private var operationID: UUID?
 		private var phase = "page"
 		private var operationStarted = ContinuousClock.now
-		private let onDiagnostic: (@MainActor (Diagnostic) -> Void)?
+		private var onDiagnostic: (@MainActor (Diagnostic) -> Void)?
 		private var loaded = false
 		private(set) var isValid = true
+		var isLoaded: Bool
+		{
+			loaded
+		}
 
 		init(onDiagnostic: (@MainActor (Diagnostic) -> Void)?)
 		{
@@ -237,6 +291,11 @@ enum MarkdownMermaidRenderer
 			)
 			super.init()
 			webView.navigationDelegate = self
+		}
+
+		func setDiagnostics(_ callback: (@MainActor (Diagnostic) -> Void)?)
+		{
+			onDiagnostic = callback
 		}
 
 		func load() async -> Bool

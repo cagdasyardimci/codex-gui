@@ -133,7 +133,6 @@ struct MarkdownMermaidRendererTests
 				#expect(lightBytes != darkBytes)
 				let source = "```mermaid\n" + code + "```"
 				let attachment = try #require(MarkdownRichBlockRenderer.diagramAttachment(
-					code: code,
 					source: source,
 					budget: &budget,
 					preparedImages: pair
@@ -160,7 +159,6 @@ struct MarkdownMermaidRendererTests
 			let block = try #require(parsed.runs.compactMap(\.style.richBlock).first)
 			var budget = MarkdownRichBlockBudget()
 			let attachment = try #require(MarkdownRichBlockRenderer.diagramAttachment(
-				code: block.payload,
 				source: block.source,
 				budget: &budget,
 				preparedImages: images[Data(block.payload.utf8)]

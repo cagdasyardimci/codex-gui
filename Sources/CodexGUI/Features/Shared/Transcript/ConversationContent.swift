@@ -8,6 +8,7 @@ final class PreparedConversationContent: @unchecked Sendable
 	let codeBlockRanges: [NSRange]
 	let estimatedRichImageBytes: Int
 	let hasLocalImageDependencies: Bool
+	let hasUnpreparedDiagrams: Bool
 	private struct SizeKey: Hashable
 	{
 		let width: CGFloat
@@ -24,12 +25,15 @@ final class PreparedConversationContent: @unchecked Sendable
 	@MainActor
 	init(
 		_ parsed: ParsedMarkdownContent,
-		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
+		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:],
+		preparedDiagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:],
+		diagramsPrepared: Bool = false
 	)
 	{
 		attributedString = MarkdownAttributedStringRenderer.render(
 			parsed.runs,
-			imageThumbnails: imageThumbnails
+			imageThumbnails: imageThumbnails,
+			preparedDiagramImages: preparedDiagramImages
 		)
 		codeBlocks = parsed.codeBlocks
 		codeBlockRanges = parsed.codeBlockRanges
@@ -39,6 +43,10 @@ final class PreparedConversationContent: @unchecked Sendable
 			{
 				!InlineImageData.isDataURL($0) && LocalAttachmentURL.resolve($0) != nil
 			}
+		hasUnpreparedDiagrams = !diagramsPrepared && parsed.runs.contains
+		{
+			$0.style.richBlock?.kind == .diagram
+		}
 	}
 
 	@MainActor
@@ -180,7 +188,8 @@ actor ConversationContentCache
 	func content(
 		body: String,
 		markdown: Bool,
-		preserveSoftBreaks: Bool = false
+		preserveSoftBreaks: Bool = false,
+		prepareDiagrams: Bool = false
 	) async -> PreparedConversationContent
 	{
 		let key = Key(
@@ -188,7 +197,7 @@ actor ConversationContentCache
 			markdown: markdown,
 			preserveSoftBreaks: preserveSoftBreaks
 		)
-		if let cached = values[key]
+		if let cached = values[key], !prepareDiagrams || !cached.hasUnpreparedDiagrams
 		{
 			return cached
 		}
@@ -212,15 +221,41 @@ actor ConversationContentCache
 				maximumPixelSize: plan.maximumPixelSize
 			)
 		}
+		let hasDiagrams = parsed.runs.contains
+		{
+			$0.style.richBlock?.kind == .diagram
+		}
+		let diagramImages: [Data: MarkdownRichBlockImageCache.Images]
+		if prepareDiagrams && hasDiagrams && !Task.isCancelled
+		{
+			diagramImages = await MarkdownMermaidRenderer.prepare(
+				parsed: parsed,
+				maximumPreparedPixels: MarkdownMermaidRenderer.transcriptMaximumPreparedPixels
+			)
+		}
+		else
+		{
+			diagramImages = [:]
+		}
 		let prepared = await PreparedConversationContent(
 			parsed,
-			imageThumbnails: imageThumbnails
+			imageThumbnails: imageThumbnails,
+			preparedDiagramImages: diagramImages,
+			diagramsPrepared: prepareDiagrams && !Task.isCancelled
 		)
 		let byteCount = body.utf8.count + prepared.estimatedRichImageBytes
 		// A later entry with the same Markdown must consult the thumbnail loader again.
 		// Its metadata-aware cache owns freshness for mutable local image paths.
-		if !prepared.hasLocalImageDependencies && values[key] == nil && byteCount <= byteCapacity
+		if !Task.isCancelled, !prepared.hasLocalImageDependencies && byteCount <= byteCapacity
 		{
+			if values[key] != nil
+			{
+				storedBytes -= storedCosts.removeValue(forKey: key) ?? 0
+				insertionOrder.removeAll
+				{
+					$0 == key
+				}
+			}
 			values[key] = prepared
 			storedCosts[key] = byteCount
 			insertionOrder.append(key)

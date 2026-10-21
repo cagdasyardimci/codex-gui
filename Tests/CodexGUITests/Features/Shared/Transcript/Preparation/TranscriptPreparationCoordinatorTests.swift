@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 
 @testable import CodexGUI
@@ -6,6 +7,98 @@ import Testing
 @Suite @MainActor
 struct TranscriptPreparationCoordinatorTests
 {
+	@Test func diagramPreparationPublishesSourceBeforeItsRaster() async throws
+	{
+		_ = NSApplication.shared
+		let body = "```mermaid\nflowchart LR\nA[Source] --> B[Result]\n```"
+		let entry = ConversationEntry(
+			id: "turn:reply",
+			kind: .agent,
+			title: "Answer",
+			body: body
+		)
+		let coordinator = TranscriptPreparationCoordinator()
+		var published: [PreparedConversationContent] = []
+		coordinator.prepare(
+			[entry],
+			keys: [TranscriptPreparationCoordinator.ContentKey.make(
+				for: entry,
+				expanded: true
+			)]
+		)
+		{
+			if let content = $0[entry.id]
+			{
+				published.append(content)
+			}
+		}
+		await coordinator.waitForRendering()
+		try #require(published.count == 2)
+		#expect(published[0].hasUnpreparedDiagrams)
+		#expect(!published[1].hasUnpreparedDiagrams)
+		let firstRange = try #require(published[0].codeBlockRanges.first)
+		let secondRange = try #require(published[1].codeBlockRanges.first)
+		let first = try #require(published[0].attributedString.attribute(
+			.attachment,
+			at: firstRange.location,
+			effectiveRange: nil
+		) as? MarkdownRichAttachment)
+		let second = try #require(published[1].attributedString.attribute(
+			.attachment,
+			at: secondRange.location,
+			effectiveRange: nil
+		) as? MarkdownRichAttachment)
+		#expect(!first.rendersNativeImage)
+		#expect(second.rendersNativeImage)
+		#expect(first.source == body && second.source == body)
+	}
+
+	@Test(.timeLimit(.minutes(1)))
+	func supersededDiagramPreparationCannotReplaceStreamedText() async throws
+	{
+		let old = "```mermaid\nflowchart LR\nA[Old] --> B[Result]\n```"
+		let gate = TranscriptPreparationTestGate(heldBody: old)
+		defer
+		{
+			gate.release()
+		}
+		let coordinator = TranscriptPreparationCoordinator(prepareDiagramContent: gate.prepare)
+		let entry = ConversationEntry(
+			id: "turn:reply",
+			kind: .agent,
+			title: "Answer",
+			body: old
+		)
+		var published: [String] = []
+		coordinator.prepare(
+			[entry],
+			keys: [TranscriptPreparationCoordinator.ContentKey(
+				body: old,
+				markdown: true
+			)]
+		)
+		{
+			published.append($0[entry.id]?.attributedString.string ?? "")
+		}
+		let obsolete = coordinator.preparationTask
+		try #require(await gate.waitUntilStarted())
+		coordinator.prepare(
+			[entry],
+			keys: [TranscriptPreparationCoordinator.ContentKey(
+				body: "Latest reply",
+				markdown: true
+			)]
+		)
+		{
+			published.append($0[entry.id]?.attributedString.string ?? "")
+		}
+		await coordinator.waitForRendering()
+		gate.release()
+		await obsolete?.value
+		#expect(published.count == 2)
+		#expect(published.last == "Latest reply")
+	}
+
 	@Test func supersededPreparationCannotPublishAnOlderTranscript() async
 	{
 		let coordinator = TranscriptPreparationCoordinator()

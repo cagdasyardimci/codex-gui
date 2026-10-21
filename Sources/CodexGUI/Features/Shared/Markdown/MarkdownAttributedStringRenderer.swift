@@ -295,7 +295,6 @@ enum MarkdownAttributedStringRenderer
 				}
 			case .diagram:
 				attachment = MarkdownRichBlockRenderer.diagramAttachment(
-					code: rich.payload,
 					source: rich.source,
 					budget: &budget,
 					preparedImages: preparedDiagramImages[Data(rich.payload.utf8)]

@@ -1,13 +1,11 @@
 import AppKit
-import Mermaid
 import SwiftMath
 
-/// Native math and diagram adapters, with source-preserving text fallback on any failure.
+/// Native math and prepared diagram attachments, with source-preserving fallback.
 @MainActor
 enum MarkdownRichBlockRenderer
 {
 	private static let maximumMathLength = 4_096
-	private static let maximumDiagramLength = 8_192
 	private static let maximumImageDimension: CGFloat = 4_096
 	private static let maximumPixelCount: CGFloat = 8_000_000
 	private static let imageScale = MarkdownRichBlockRasterSize.scale
@@ -47,43 +45,18 @@ enum MarkdownRichBlockRenderer
 	}
 
 	static func diagramAttachment(
-		code: String,
-		source: String
-	) -> NSTextAttachment
-	{
-		var budget = MarkdownRichBlockBudget()
-		return diagramAttachment(
-			code: code,
-			source: source,
-			budget: &budget
-		)
-	}
-
-	static func diagramAttachment(
-		code: String,
 		source: String,
 		budget: inout MarkdownRichBlockBudget,
 		preparedImages: MarkdownRichBlockImageCache.Images? = nil
 	) -> NSTextAttachment
 	{
-		if let preparedImages
-		{
-			guard budget.beginBlock(), budget.reservePixels(preparedImages.budgetPixelCost)
-			else
-			{
-				return sourceAttachment(source)
-			}
-			return preparedImages.attachment(source: source)
-		}
-		guard let images = diagramImages(
-			code: code,
-			budget: &budget
-		)
+		guard budget.beginBlock(), let preparedImages,
+				budget.reservePixels(preparedImages.budgetPixelCost)
 		else
 		{
 			return sourceAttachment(source)
 		}
-		return images.attachment(source: source)
+		return preparedImages.attachment(source: source)
 	}
 
 	static func mathImages(
@@ -147,71 +120,6 @@ enum MarkdownRichBlockRenderer
 			lightSize: lightLayout.image.size,
 			darkSize: darkLayout.image.size,
 			baselineDescent: lightLayout.descent
-		)
-		budget.releasePixels(pixelCount)
-		guard budget.reservePixels(images.budgetPixelCost)
-		else
-		{
-			return nil
-		}
-		imageCache.insert(
-			images,
-			for: key
-		)
-		return images
-	}
-
-	static func diagramImages(
-		code: String,
-		budget: inout MarkdownRichBlockBudget
-	) -> MarkdownRichBlockImageCache.Images?
-	{
-		guard budget.beginBlock(), code.utf16.count <= maximumDiagramLength
-		else
-		{
-			return nil
-		}
-		// Diagram rendering always uses the default/dark theme pair and Dagre layout.
-		let key = MarkdownRichBlockImageCache.Key(
-			kind: .diagram,
-			payload: Data(code.utf8),
-			parameters: [imageScale]
-		)
-		if let images = imageCache.images(for: key)
-		{
-			return budget.reservePixels(images.budgetPixelCost) ? images : nil
-		}
-		guard let lightScene = diagramScene(
-			code,
-			dark: false
-		),
-			let darkScene = diagramScene(
-				code,
-				dark: true
-			)
-		else
-		{
-			return nil
-		}
-		let pixelCount = MarkdownRichBlockBudget.estimatedPixels(for: lightScene.size)
-			+ MarkdownRichBlockBudget.estimatedPixels(for: darkScene.size)
-		guard budget.reservePixels(pixelCount)
-		else
-		{
-			return nil
-		}
-		guard let lightPixels = lightScene.cgImage(scale: imageScale),
-				let darkPixels = darkScene.cgImage(scale: imageScale)
-		else
-		{
-			budget.releasePixels(pixelCount)
-			return nil
-		}
-		let images = MarkdownRichBlockImageCache.Images(
-			light: lightPixels,
-			dark: darkPixels,
-			lightSize: lightScene.size,
-			darkSize: darkScene.size
 		)
 		budget.releasePixels(pixelCount)
 		guard budget.reservePixels(images.budgetPixelCost)
@@ -337,46 +245,6 @@ enum MarkdownRichBlockRenderer
 		return [rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent]
 	}
 
-	static func diagramImage(
-		_ source: String,
-		dark: Bool
-	) -> NSImage?
-	{
-		guard let scene = diagramScene(
-			source,
-			dark: dark
-		), let pixels = scene.cgImage(scale: imageScale)
-		else
-		{
-			return nil
-		}
-		return NSImage(
-			cgImage: pixels,
-			size: scene.size
-		)
-	}
-
-	private static func diagramScene(
-		_ source: String,
-		dark: Bool
-	) -> MermaidScene?
-	{
-		guard admitsFlowchart(source),
-				let scene = try? Mermaid.render(
-				source,
-				theme: dark ? .dark : .default,
-				layout: .dagre
-				), hasBoundedImageSize(
-				scene.size,
-				scale: imageScale
-				)
-		else
-		{
-			return nil
-		}
-		return scene
-	}
-
 	private static func labelColor(dark: Bool) -> NSColor
 	{
 		let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
@@ -434,87 +302,4 @@ enum MarkdownRichBlockRenderer
 			&& size.width * size.height * scale * scale <= maximumPixelCount
 	}
 
-	private static func admitsFlowchart(_ source: String) -> Bool
-	{
-		guard source.utf16.count <= maximumDiagramLength,
-				!source.unicodeScalars.contains(where:
-				{
-					scalar in
-					CharacterSet.newlines.contains(scalar) && scalar.value != 10 && scalar
-						.value != 13
-				})
-		else
-		{
-			return false
-		}
-		// Match upstream's CR/LF normalization; other newline scalars could drop whole edges.
-		let normalizedSource = source.replacingOccurrences(
-			of: "\r\n",
-			with: "\n"
-		)
-		.replacingOccurrences(
-			of: "\r",
-			with: "\n"
-		)
-		let lines = normalizedSource.components(separatedBy: "\n")
-		guard lines.count <= 64
-		else
-		{
-			return false
-		}
-		guard !lines.contains(where:
-			{
-				$0.trimmingCharacters(in: .whitespaces).hasPrefix("%%{")
-			})
-		else
-		{
-			return false
-		}
-		let trimmedLines = lines.map
-		{
-			$0.trimmingCharacters(in: .whitespaces)
-		}
-		let statements = trimmedLines.filter
-		{
-			!$0.isEmpty && !$0.hasPrefix("%%")
-		}
-		guard let header = statements.first,
-				header.range(
-				of: #"\A(?:flowchart|graph) (?:LR|RL|TD|TB|BT)\z"#,
-				options: .regularExpression
-				) != nil, statements.count > 1
-		else
-		{
-			return false
-		}
-
-		// Admission is deliberately narrow: upstream tolerates trailing unsupported syntax.
-		// Its parser and Dagre own all node interpretation, edge semantics and layout.
-		let reserved = "subgraph|end|direction|classdef|class|style|linkstyle|click|"
-			+ "acctitle|accdescr|default|interpolate"
-		let node = "(?!(?i:" + reserved + ")\\b)"
-			+ #"[A-Za-z_][A-Za-z0-9_]*(?:\[[^\[\]\r\n;<>%]{1,200}\])?"#
-		let statement = "\\A" + node + "(?:\\s*-->\\s*" + node + ")*;?\\z"
-		var edgeCount = 0
-		for line in statements.dropFirst()
-		{
-			guard !line.contains(":::"), !line.contains("@{"), !line.contains("&"),
-					!line.contains("\""), !line.contains("'"), !line.contains("`"),
-					!line.contains("\\"),
-					line.range(
-					of: statement,
-					options: .regularExpression
-					) != nil
-			else
-			{
-				return false
-			}
-			edgeCount += line.components(separatedBy: "-->").count - 1
-			if edgeCount > 64
-			{
-				return false
-			}
-		}
-		return true
-	}
 }

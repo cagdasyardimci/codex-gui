@@ -23,31 +23,44 @@ struct ConversationRichMarkdownTests
 		}
 	}
 
-	@Test func nativeFlowchartImagesRenderSupportedGraphsAndRejectUnsupportedSyntax() throws
+	@Test func javascriptFlowchartRendersAndInvalidSyntaxRetainsSource() async throws
 	{
 		_ = NSApplication.shared
-		let source = "flowchart LR\n    A[Markdown source] --> B[Parser]\n"
-			+ "    B --> C[Rendered content]\n"
-		for dark in [false, true]
-		{
-			let image = try #require(MarkdownRichBlockRenderer.diagramImage(
-				source,
-				dark: dark
-			))
-			#expect(image.size.width > 0 && image.size.height > 0)
-			#expect(MarkdownRichBlockRenderer.diagramImage(
-				"sequenceDiagram\nAlice->>Bob: Hello",
-				dark: dark
-			) == nil)
-			#expect(MarkdownRichBlockRenderer.diagramImage(
-				"flowchart LR\nA[Missing bracket --> B[Result]",
-				dark: dark
-			) == nil)
-			#expect(MarkdownRichBlockRenderer.diagramImage(
-				"flowchart LR\nA[\"unfinished] --> B",
-				dark: dark
-			) == nil)
-		}
+		let source = "```mermaid\nflowchart LR\nA[Source] --> B[Result]\n```"
+		let cache = ConversationContentCache()
+		let initial = await cache.content(
+			body: source,
+			markdown: true
+		)
+		#expect(initial.hasUnpreparedDiagrams)
+		let prepared = await cache.content(
+			body: source,
+			markdown: true,
+			prepareDiagrams: true
+		)
+		let preparedRange = try #require(prepared.codeBlockRanges.first)
+		let attachment = try #require(prepared.attributedString.attribute(
+			.attachment,
+			at: preparedRange.location,
+			effectiveRange: nil
+		) as? MarkdownRichAttachment)
+		#expect(attachment.rendersNativeImage)
+		#expect(attachment.source == source)
+		#expect(!prepared.hasUnpreparedDiagrams)
+		let invalid = "```mermaid\nflowchart LR\nA[Missing bracket --> B\n```"
+		let failed = await cache.content(
+			body: invalid,
+			markdown: true,
+			prepareDiagrams: true
+		)
+		let failedRange = try #require(failed.codeBlockRanges.first)
+		let fallback = try #require(failed.attributedString.attribute(
+			.attachment,
+			at: failedRange.location,
+			effectiveRange: nil
+		) as? MarkdownRichAttachment)
+		#expect(!fallback.rendersNativeImage)
+		#expect(fallback.source == invalid)
 	}
 
 	@Test func failedMathRenderingRetainsItsSourceAndWrapsTheNativeFallback() throws
@@ -201,14 +214,11 @@ struct ConversationRichMarkdownTests
 		for separator in ["\u{2028}", "\u{2029}"]
 		{
 			let code = "flowchart LR\nA --> B" + separator + "C --> D\n"
-			#expect(MarkdownRichBlockRenderer.diagramImage(
-				code,
-				dark: false
-			) == nil)
 			let source = "```mermaid\n" + code + "```"
 			let content = await ConversationContentCache().content(
 				body: source,
-				markdown: true
+				markdown: true,
+				prepareDiagrams: true
 			)
 			let range = try #require(content.codeBlockRanges.first)
 			let attachment = try #require(content.attributedString.attribute(
@@ -334,7 +344,8 @@ struct ConversationRichMarkdownTests
 		let body = sources.joined(separator: "\n\n") + "\n\nFINAL_MARKER 😀"
 		let content = await ConversationContentCache().content(
 			body: body,
-			markdown: true
+			markdown: true,
+			prepareDiagrams: true
 		)
 		let text = content.attributedString
 		var attachments: [(NSRange, MarkdownRichAttachment)] = []
@@ -397,7 +408,8 @@ struct ConversationRichMarkdownTests
 			+ "A[Markdown source] --> B[Parser] --> C[Rendered content] --> D[Selection]\n```"
 		let content = await ConversationContentCache().content(
 			body: body,
-			markdown: true
+			markdown: true,
+			prepareDiagrams: true
 		)
 		let storage = NSTextStorage(attributedString: content.attributedString)
 		let manager = MarkdownLayoutManager()

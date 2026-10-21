@@ -58,6 +58,7 @@ for resource_bundle in "$product_directory"/*.bundle(N); do
   rm -rf "$resource_destination"
   ditto "$resource_bundle" "$resource_destination"
 done
+rm -rf "$app/Contents/Resources/ThirdPartyLicenses/swift-mermaid"
 markdown_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-markdown"
 cmark_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-cmark"
 mkdir -p "$markdown_licenses" "$cmark_licenses"
@@ -66,11 +67,9 @@ cp -f .build/checkouts/swift-markdown/NOTICE.txt "$markdown_licenses/NOTICE.txt"
 cp -f .build/checkouts/swift-cmark/COPYING "$cmark_licenses/COPYING"
 highlighter_licenses="$app/Contents/Resources/ThirdPartyLicenses/HighlighterSwift"
 math_licenses="$app/Contents/Resources/ThirdPartyLicenses/SwiftMath"
-mermaid_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-mermaid"
 mermaid_js_licenses="$app/Contents/Resources/ThirdPartyLicenses/mermaid"
 mkdir -p "$highlighter_licenses/Sources/Assets" \
-  "$math_licenses/Sources/SwiftMath/mathFonts.bundle" \
-  "$mermaid_licenses/Vendor/MermaidLayoutDagre"
+  "$math_licenses/Sources/SwiftMath/mathFonts.bundle"
 cp -f .build/checkouts/HighlighterSwift/LICENCE.md "$highlighter_licenses/LICENCE.md"
 cp -f .build/checkouts/HighlighterSwift/Sources/Assets/LICENCE \
   "$highlighter_licenses/Sources/Assets/LICENCE"
@@ -79,11 +78,6 @@ cp -f .build/checkouts/SwiftMath/Sources/SwiftMath/mathFonts.bundle/LICENSE \
   "$math_licenses/Sources/SwiftMath/mathFonts.bundle/LICENSE"
 cp -f .build/checkouts/SwiftMath/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LICENSE.txt \
   "$math_licenses/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LICENSE.txt"
-cp -f .build/checkouts/swift-mermaid/LICENSE "$mermaid_licenses/LICENSE"
-cp -f .build/checkouts/swift-mermaid/THIRD-PARTY-NOTICES.md \
-  "$mermaid_licenses/THIRD-PARTY-NOTICES.md"
-cp -f .build/checkouts/swift-mermaid/Vendor/MermaidLayoutDagre/LICENSE \
-  "$mermaid_licenses/Vendor/MermaidLayoutDagre/LICENSE"
 mkdir -p "$mermaid_js_licenses"
 cp -f Sources/CodexGUI/Resources/Mermaid/LICENSE "$mermaid_js_licenses/LICENSE"
 codesign --force --sign "$signing_identity" "$app"

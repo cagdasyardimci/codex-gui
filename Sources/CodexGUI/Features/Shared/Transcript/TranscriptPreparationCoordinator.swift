@@ -75,6 +75,7 @@ final class TranscriptPreparationCoordinator
 	typealias ContentPreparation = @MainActor (ContentKey) async -> PreparedConversationContent
 
 	private let prepareContent: ContentPreparation
+	private let prepareDiagramContent: ContentPreparation
 	private let navigationCache = ConversationTurnSummary.Cache()
 	private let netChangePreparation: ConversationNetFileChangePreparation
 	private(set) var turnSummaries: [ConversationTurnSummary] = []
@@ -89,7 +90,8 @@ final class TranscriptPreparationCoordinator
 	init(
 		netChangePreparation: ConversationNetFileChangePreparation =
 			ConversationNetFileChangePreparation(),
-		prepareContent: ContentPreparation? = nil
+		prepareContent: ContentPreparation? = nil,
+		prepareDiagramContent: ContentPreparation? = nil
 	)
 	{
 		self.netChangePreparation = netChangePreparation
@@ -100,6 +102,15 @@ final class TranscriptPreparationCoordinator
 				body: $0.body,
 				markdown: $0.markdown,
 				preserveSoftBreaks: $0.preserveSoftBreaks
+			)
+		}
+		self.prepareDiagramContent = prepareDiagramContent ??
+		{
+			await contentCache.content(
+				body: $0.body,
+				markdown: $0.markdown,
+				preserveSoftBreaks: $0.preserveSoftBreaks,
+				prepareDiagrams: true
 			)
 		}
 	}
@@ -128,7 +139,11 @@ final class TranscriptPreparationCoordinator
 		)
 		preparationTask = Task
 		{
-			[weak self, prepareContent, navigationCache, netChangePreparation] in
+			[weak self,
+				prepareContent,
+				prepareDiagramContent,
+				navigationCache,
+				netChangePreparation] in
 			async let netChanges = netChangePreparation.prepare(
 				changeSources,
 				context: context
@@ -191,6 +206,33 @@ final class TranscriptPreparationCoordinator
 			self.turnSummaries = summaries
 			self.preparedNetChanges = changes
 			onPrepared(contents)
+
+			// Publish native text first, then replace only current entries as WebKit finishes.
+			for (entry, key) in Array(zip(
+				nextEntries,
+				keys
+			)).reversed()
+			{
+				guard !Task.isCancelled, generation == self.renderGeneration
+				else
+				{
+					return
+				}
+				guard let key, contents[entry.id]?.hasUnpreparedDiagrams == true
+				else
+				{
+					continue
+				}
+				let updated = await prepareDiagramContent(key)
+				guard !Task.isCancelled, generation == self.renderGeneration
+				else
+				{
+					return
+				}
+				contents[entry.id] = updated
+				self.preparedContents = contents
+				onPrepared(contents)
+			}
 		}
 	}
 

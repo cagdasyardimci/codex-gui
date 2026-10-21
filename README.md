@@ -156,8 +156,7 @@ Dependency versions and the icon-port revision are pinned in [Package.swift](Pac
 | [Swift Markdown](https://github.com/swiftlang/swift-markdown) | Markdown parsing, with its Swift cmark dependency | Apache 2.0 with the Runtime Library Exception |
 | [HighlighterSwift](https://github.com/smittytone/HighlighterSwift) | Code coloring | MIT, with BSD 3-Clause Highlight.js assets |
 | [SwiftMath](https://github.com/mgriebling/SwiftMath) | Display and inline math | MIT, with separate math-font notices |
-| [Mermaid](https://github.com/mermaid-js/mermaid) | Bundled offline diagrams in rich file previews | MIT, with bundled dependency notices; pin and checksum in the [runtime resource](Sources/CodexGUI/Resources/Mermaid/README.md) |
-| [swift-mermaid](https://github.com/Australware/swift-mermaid) | Native flowchart layout | MIT, including its vendored MermaidLayoutDagre notice |
+| [Mermaid](https://github.com/mermaid-js/mermaid) | Bundled offline diagrams in transcripts and rich file previews | MIT, with bundled dependency notices; pin and checksum in the [runtime resource](Sources/CodexGUI/Resources/Mermaid/README.md) |
 
 The [avatar notice](Sources/CodexGUI/Resources/SubagentAvatars/NOTICE.txt) credits DiceBear and identifies the artwork license. No DiceBear service or runtime library is required.
 

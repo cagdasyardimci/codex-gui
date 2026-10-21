@@ -65,9 +65,10 @@ A serial, cancellable WebKit preparation queue produces bounded light/dark raste
 native text installation. Preparation shares its allocation across diagrams and reserves space
 for other rich content. Natural display dimensions remain independent of raster resolution;
 retention budgets charge actual image bytes, including row padding. Input, queue, time and retained-pixel limits belong to that owner;
-invalid or over-budget diagrams retain their exact source. Transcript preparation retains its
-synchronous native flowchart path. Preview replacement cancels pending preparation and rejects
-obsolete installation. No diagram assets are fetched at runtime.
+invalid or over-budget diagrams retain their exact source. Transcript content installs source-backed
+attachments first, then prepares bounded diagram images and replaces only entries belonging to the
+current render generation. Preview replacement cancels pending preparation and rejects obsolete
+installation. No diagram assets are fetched at runtime.
 Page-load deadlines perform one bounded readiness probe before failing, so delayed native
 navigation callbacks cannot discard a guest page that has already finished loading. The probe
 has its own watchdog; rendering deadlines and cancellation still retain source fallback.
