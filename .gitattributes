@@ -1,3 +1,6 @@
 # Preserve the pinned upstream distribution, including template literal whitespace.
 Sources/CodexGUI/Resources/Mermaid/mermaid.min.js -whitespace
 Sources/CodexGUI/Resources/Mermaid/elk.min.js -whitespace
+
+# The benchmark includes Markdown's intentional two-space hard line break.
+docs/markdown-benchmark.md whitespace=-blank-at-eol
