@@ -14,6 +14,7 @@ final class ExpandedImageCloseButton: NSButton
 		)
 	}
 
+	var usesLightSurface = false
 	private var hover = false
 	private var hoverTracking: NSTrackingArea?
 
@@ -40,10 +41,28 @@ final class ExpandedImageCloseButton: NSButton
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		ExpandedImageHeaderDrawing.drawBackground(
-			control: self,
-			hover: hover
-		)
+		if usesLightSurface
+		{
+			NSColor.white.setFill()
+			let circle = NSBezierPath(ovalIn: bounds.insetBy(
+				dx: 1,
+				dy: 1
+			))
+			circle.fill()
+			if window?.firstResponder === self
+			{
+				NSColor.keyboardFocusIndicatorColor.setStroke()
+				circle.lineWidth = 2
+				circle.stroke()
+			}
+		}
+		else
+		{
+			ExpandedImageHeaderDrawing.drawBackground(
+				control: self,
+				hover: hover
+			)
+		}
 		let mark = NSBezierPath()
 		let center = NSPoint(
 			x: bounds.midX,
@@ -67,7 +86,8 @@ final class ExpandedImageCloseButton: NSButton
 		))
 		mark.lineWidth = 1.5
 		mark.lineCapStyle = .round
-		ExpandedImageHeaderDrawing.foreground(enabled: isEnabled).setStroke()
+		(usesLightSurface ? NSColor.darkGray
+			: ExpandedImageHeaderDrawing.foreground(enabled: isEnabled)).setStroke()
 		mark.stroke()
 	}
 }

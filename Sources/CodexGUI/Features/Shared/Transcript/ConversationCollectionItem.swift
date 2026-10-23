@@ -1024,6 +1024,17 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 					bodyTextView.string.utf16.count - 1
 				)
 			)
+			let attachment = bodyTextView.textStorage?.attribute(
+				.attachment,
+				at: characterLocation,
+				effectiveRange: nil
+			) as? MarkdownRichAttachment
+			button.isHidden = attachment?.isDiagram == true && attachment?
+				.rendersNativeImage == true
+			if button.isHidden
+			{
+				continue
+			}
 			let location = layout.glyphIndexForCharacter(at: characterLocation)
 			let header = (layout as? MarkdownLayoutManager)?.codeBlockHeaderRect(
 				atCharacter: characterLocation,

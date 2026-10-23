@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@mermaid-js/layout-elk": "0.2.0",
+    "elkjs": "0.9.3",
+    "esbuild": "0.25.10",
+    "mermaid": "11.12.1"
+  }
+}

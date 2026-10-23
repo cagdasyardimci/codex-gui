@@ -6,7 +6,7 @@ import Testing
 @Suite @MainActor
 struct ConversationLongHistoryLayoutTests
 {
-	@Test func inspectorReflowKeepsCopyControlsInsideTheirCodeAndDiagramCards() async throws
+	@Test func inspectorReflowKeepsCodeControlsAndUnframedDiagramsInsideTranscript() async throws
 	{
 		let fixture = try await makeReadingFixture()
 		defer
@@ -51,10 +51,18 @@ struct ConversationLongHistoryLayoutTests
 			let manager = try #require(text.layoutManager as? MarkdownLayoutManager)
 			let diagramRange = try #require(content.codeBlockRanges.last)
 			let container = try #require(text.textContainer)
-			let card = try #require(manager.codeBlockRect(
+			#expect(manager.codeBlockRect(
 				atCharacter: diagramRange.location,
 				in: container
-			)).offsetBy(
+			) == nil)
+			let glyphs = manager.glyphRange(
+				forCharacterRange: diagramRange,
+				actualCharacterRange: nil
+			)
+			let card = manager.boundingRect(
+				forGlyphRange: glyphs,
+				in: container
+			).offsetBy(
 				dx: text.textContainerOrigin.x,
 				dy: text.textContainerOrigin.y
 			)
@@ -273,6 +281,43 @@ struct ConversationLongHistoryLayoutTests
 			#expect(button.accessibilityLabel() == "Copy code block \(index + 1)")
 			#expect(button.title.isEmpty && button.imagePosition == .imageOnly)
 			#expect(button.superview !== text)
+			if let attachment = text.textStorage?.attribute(
+				.attachment,
+				at: range.location,
+				effectiveRange: nil
+			) as? MarkdownRichAttachment
+			{
+				#expect(manager.codeBlockRect(
+					atCharacter: range.location,
+					in: container
+				) == nil)
+				#expect(manager
+					.codeBlockHeaderRect(
+						atCharacter: range.location,
+						in: container
+					) == nil)
+				#expect(button.isHidden == attachment.rendersNativeImage)
+				if attachment.rendersNativeImage
+				{
+					(text as? MarkdownTextView)?.updateDiagramControls()
+					let controls = try #require(text.subviews.compactMap
+					{
+						$0 as? MarkdownDiagramControls
+					}.first
+					{
+						$0.attachment === attachment
+					})
+					#expect(text.bounds.contains(controls.frame))
+				}
+				else
+				{
+					#expect(text.bounds.contains(text.convert(
+						button.bounds,
+						from: button
+					)))
+				}
+				continue
+			}
 			let card = try #require(manager.codeBlockRect(
 				atCharacter: range.location,
 				in: container

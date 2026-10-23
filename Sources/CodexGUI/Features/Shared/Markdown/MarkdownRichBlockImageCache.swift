@@ -1,6 +1,6 @@
 import AppKit
 
-/// Retains immutable raster pairs independently of each message's source and attachment cells.
+/// Retains immutable image pairs independently of each message's source and attachment cells.
 @MainActor
 final class MarkdownRichBlockImageCache
 {
@@ -18,43 +18,69 @@ final class MarkdownRichBlockImageCache
 
 	struct Images
 	{
-		let light: CGImage
-		let dark: CGImage
+		let light: NSImage
+		let dark: NSImage
 		let lightSize: NSSize
 		let darkSize: NSSize
 		var baselineDescent: CGFloat = 0
+		let pixelCount: Int
+		let byteCount: Int
 
-		var pixelCount: Int
+		init(
+			light: CGImage,
+			dark: CGImage,
+			lightSize: NSSize,
+			darkSize: NSSize,
+			baselineDescent: CGFloat = 0
+		)
 		{
-			light.width * light.height + dark.width * dark.height
+			self.light = NSImage(
+				cgImage: light,
+				size: lightSize
+			)
+			self.dark = NSImage(
+				cgImage: dark,
+				size: darkSize
+			)
+			self.lightSize = lightSize
+			self.darkSize = darkSize
+			self.baselineDescent = baselineDescent
+			pixelCount = light.width * light.height + dark.width * dark.height
+			byteCount = light.bytesPerRow * light.height + dark.bytesPerRow * dark.height
 		}
 
-		var byteCount: Int
+		init(
+			light: MarkdownSVGImage,
+			dark: MarkdownSVGImage
+		)
 		{
-			light.bytesPerRow * light.height + dark.bytesPerRow * dark.height
+			self.light = light
+			self.dark = dark
+			lightSize = light.size
+			darkSize = dark.size
+			pixelCount = 0
+			byteCount = light.retainedByteCount + dark.retainedByteCount
 		}
 
-		/// Charge row padding to the shared RGBA pixel budget as well as visible pixels.
+		/// Charge retained SVG/PDF bytes or raster bytes (including row padding) in RGBA units.
 		var budgetPixelCost: Int
 		{
 			(byteCount + 3) / 4
 		}
 
 		@MainActor
-		func attachment(source: String) -> MarkdownRichAttachment
+		func attachment(
+			source: String,
+			isDiagram: Bool = false
+		) -> MarkdownRichAttachment
 		{
 			// NSImage accessibility metadata and cell geometry belong to one displayed occurrence.
 			MarkdownRichAttachment(
 				source: source,
-				lightImage: NSImage(
-					cgImage: light,
-					size: lightSize
-				),
-				darkImage: NSImage(
-					cgImage: dark,
-					size: darkSize
-				),
-				imageByteCount: byteCount
+				lightImage: light.copy() as? NSImage,
+				darkImage: dark.copy() as? NSImage,
+				imageByteCount: byteCount,
+				isDiagram: isDiagram
 			)
 		}
 	}

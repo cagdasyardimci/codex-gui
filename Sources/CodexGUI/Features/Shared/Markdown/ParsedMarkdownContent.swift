@@ -26,6 +26,7 @@ struct MarkdownTextStyle: Sendable
 {
 	var heading = 0
 	var sourceBlankLinesBefore = 0
+	var sourceBlockStartLine: Int?
 	var bold = false
 	var italic = false
 	var code = false
@@ -35,6 +36,7 @@ struct MarkdownTextStyle: Sendable
 	var codeBlockID: Int?
 	var codeLanguage: String?
 	var codeHeader = false
+	var codeFenced = false
 	var thematicBreak = false
 	var richBlock: MarkdownRichBlock?
 	var monospaced = false

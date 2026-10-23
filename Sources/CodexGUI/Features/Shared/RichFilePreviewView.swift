@@ -34,6 +34,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	private var task: Task<Void, Never>?
 	private var content: NSView?
 	private var markdownRuns: [MarkdownTextRun]?
+	private var markdownLeadingSpacing: CGFloat = 0
 	private var metadataPanel: MarkdownFileMetadataView?
 	private var diagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:]
 	private let onMetadata: (([MarkdownFileMetadata.Entry]) -> Void)?
@@ -253,6 +254,8 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			if matchesFileMarkdownStyling
 			{
 				container.lineFragmentPadding = 0
+				// Keep per-run ink (including inline code) while underlining the link's text.
+				text.linkTextAttributes = [.underlineStyle: NSUnderlineStyle.single.rawValue]
 			}
 			text.textContainerInset = NSSize(
 				width: onMetadata == nil ? 20 : 16,
@@ -435,7 +438,8 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				height: CGFloat.greatestFiniteMagnitude
 			)
 			layout.ensureLayout(for: container)
-			let textHeight = ceil(layout.usedRect(for: container).maxY) + inset.height * 2
+			let textHeight = ceil(layout.usedRect(for: container).maxY)
+				+ inset.height * 2 - markdownLeadingSpacing
 			let height = textHeight + panelHeight
 			if contentHeight.constant != height
 			{
@@ -539,8 +543,19 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				richBlockMaximumPixels: MarkdownMermaidRenderer.maximumPreparedPixels,
 				mathFontSize: mathFontSize
 			)
-			text.installContent(matchesFileMarkdownStyling ?
-				FileMarkdownStyling.apply(to: rendered) : rendered)
+			let styled = matchesFileMarkdownStyling
+				? FileMarkdownStyling.apply(to: rendered) : rendered
+			// TextKit ignores paragraphSpacingBefore on the first paragraph. Keep that
+			// source gap in the top inset without adding selectable blank characters.
+			markdownLeadingSpacing = matchesFileMarkdownStyling && styled.length > 0
+				? (styled.attribute(
+					.paragraphStyle,
+					at: 0,
+					effectiveRange: nil
+				) as? NSParagraphStyle)?.paragraphSpacingBefore ?? 0 : 0
+			text.textContainerInset.height = (onMetadata == nil ? 20 : 0)
+				+ markdownLeadingSpacing
+			text.installContent(styled)
 		}
 		text.setSelectedRange(selection)
 		needsLayout = true

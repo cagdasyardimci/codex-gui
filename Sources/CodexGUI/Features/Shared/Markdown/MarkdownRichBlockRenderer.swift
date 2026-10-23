@@ -56,7 +56,10 @@ enum MarkdownRichBlockRenderer
 		{
 			return sourceAttachment(source)
 		}
-		return preparedImages.attachment(source: source)
+		return preparedImages.attachment(
+			source: source,
+			isDiagram: true
+		)
 	}
 
 	static func mathImages(

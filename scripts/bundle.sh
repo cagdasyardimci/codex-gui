@@ -80,5 +80,6 @@ cp -f .build/checkouts/SwiftMath/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LI
   "$math_licenses/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LICENSE.txt"
 mkdir -p "$mermaid_js_licenses"
 cp -f Sources/CodexGUI/Resources/Mermaid/LICENSE "$mermaid_js_licenses/LICENSE"
+cp -f Sources/CodexGUI/Resources/Mermaid/ELK-LICENSES.txt "$mermaid_js_licenses/ELK-LICENSES.txt"
 codesign --force --sign "$signing_identity" "$app"
 print "Built $app ($configuration)"

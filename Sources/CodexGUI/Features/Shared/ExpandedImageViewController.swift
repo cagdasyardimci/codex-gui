@@ -18,6 +18,30 @@ final class ExpandedImageViewController: NSViewController
 	var onDetach: (() -> Void)?
 
 	private let statusLabel = NSTextField(labelWithString: "Loading image…")
+	private let dimmingView = ExpandedImageDimmingView()
+	private var diagramImage: NSImage?
+	private var diagramZoomLabel: NSTextField?
+	private var diagramZoomOutButton: NSButton?
+	private var diagramZoomInButton: NSButton?
+	private static let diagramZoomStops = [
+		25,
+		33,
+		50,
+		67,
+		75,
+		80,
+		90,
+		100,
+		110,
+		125,
+		150,
+		175,
+		200,
+		250,
+		300,
+		400,
+		500
+	]
 	private var fitting = true
 	private var updatingGeometry = false
 	private var backingScale: CGFloat = 1
@@ -78,7 +102,6 @@ final class ExpandedImageViewController: NSViewController
 		backdropView.isEmphasized = false
 		backdropView.setAccessibilityHidden(true)
 		backdropView.setAccessibilityIdentifier("expanded-image-blur")
-		let dimmingView = ExpandedImageDimmingView()
 		dimmingView.setAccessibilityHidden(true)
 		dimmingView.setAccessibilityIdentifier("expanded-image-dimming")
 		for background in [backdropView, dimmingView]
@@ -223,6 +246,214 @@ final class ExpandedImageViewController: NSViewController
 		}
 	}
 
+	func configureDiagram(
+		_ image: NSImage,
+		appearance: NSAppearance
+	)
+	{
+		diagramImage = image
+		backdropView.isHidden = true
+		dimmingView.fillOpacity = 0.9
+		scrollView.minMagnification = 0.25
+		scrollView.maxMagnification = 5
+		scrollView.appearance = appearance
+		view.setAccessibilityLabel("Expanded diagram viewer")
+		imageView.setAccessibilityLabel("Mermaid diagram")
+		closeButton.setAccessibilityLabel("Close diagram")
+		closeButton.toolTip = "Close diagram"
+		closeButton.usesLightSurface = true
+		for constraint in closeButton.constraints where
+			constraint.firstAttribute == .width || constraint.firstAttribute == .height
+		{
+			constraint.constant = constraint.firstAttribute == .width ? 42 : 40
+		}
+		for constraint in view.constraints where
+			(constraint.firstItem as? NSView) === closeButton && constraint
+			.firstAttribute == .trailing
+		{
+			constraint.constant = -12
+		}
+		statusLabel.isHidden = true
+		zoomButton.isHidden = true
+		NSLayoutConstraint.deactivate(view.constraints.filter
+		{
+			($0.firstItem as? NSView) === zoomButton
+				|| ($0.firstItem as? NSView) === scrollView
+		})
+		scrollView.drawsBackground = true
+		scrollView.backgroundColor = .textBackgroundColor
+		scrollView.contentView.drawsBackground = true
+		scrollView.contentView.backgroundColor = .textBackgroundColor
+		scrollView.wantsLayer = true
+		scrollView.layer?.masksToBounds = true
+		let canvas = NSView()
+		canvas.translatesAutoresizingMaskIntoConstraints = false
+		canvas.appearance = appearance
+		canvas.wantsLayer = true
+		appearance.performAsCurrentDrawingAppearance
+		{
+			canvas.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+		}
+		canvas.layer?.cornerRadius = 20
+		canvas.layer?.masksToBounds = true
+		canvas.setAccessibilityIdentifier("expanded-diagram-canvas")
+		scrollView.removeFromSuperview()
+		view.addSubview(
+			canvas,
+			positioned: .below,
+			relativeTo: closeButton
+		)
+		canvas.addSubview(scrollView)
+		let download = ExpandedImageDownloadButton(
+			image: NSImage(
+				systemSymbolName: "arrow.down.to.line",
+				accessibilityDescription: nil
+			)!,
+			target: self,
+			action: #selector(downloadDiagram(_:))
+		)
+		download.bezelStyle = .circular
+		download.isBordered = false
+		download.contentTintColor = .darkGray
+		download.wantsLayer = true
+		download.layer?.backgroundColor = NSColor.white.cgColor
+		download.layer?.cornerRadius = 20
+		download.appearance = NSAppearance(named: .aqua)
+		download.setAccessibilityLabel("Download image")
+		download.toolTip = "Download image"
+		let minus = ExpandedImageDownloadButton(
+			title: "−",
+			target: self,
+			action: #selector(zoomDiagramOut(_:))
+		)
+		let plus = ExpandedImageDownloadButton(
+			title: "+",
+			target: self,
+			action: #selector(zoomDiagramIn(_:))
+		)
+		for button in [minus, plus]
+		{
+			button.bezelStyle = .circular
+			button.font = NSFont.systemFont(ofSize: 20)
+			button.widthAnchor.constraint(equalToConstant: 36).isActive = true
+			button.heightAnchor.constraint(equalToConstant: 36).isActive = true
+		}
+		diagramZoomOutButton = minus
+		diagramZoomInButton = plus
+		minus.setAccessibilityLabel("Zoom out")
+		plus.setAccessibilityLabel("Zoom in")
+		let label = NSTextField(labelWithString: "100%")
+		label.alignment = .center
+		label.setAccessibilityLabel("Diagram zoom percentage")
+		diagramZoomLabel = label
+		let zoom = NSStackView(views: [minus, label, plus])
+		zoom.orientation = .horizontal
+		zoom.spacing = 4
+		zoom.edgeInsets = NSEdgeInsets(
+			top: 4,
+			left: 4,
+			bottom: 4,
+			right: 4
+		)
+		zoom.wantsLayer = true
+		zoom.layer?.cornerRadius = 22
+		zoom.layer?.backgroundColor = NSColor.white.cgColor
+		zoom.appearance = NSAppearance(named: .aqua)
+		for child in [download, zoom]
+		{
+			child.translatesAutoresizingMaskIntoConstraints = false
+			view.addSubview(child)
+		}
+		NSLayoutConstraint.activate([
+			download.trailingAnchor.constraint(
+				equalTo: closeButton.leadingAnchor,
+				constant: -8
+			),
+			download.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
+			download.widthAnchor.constraint(equalToConstant: 40),
+			download.heightAnchor.constraint(equalToConstant: 40),
+			canvas.topAnchor.constraint(
+				equalTo: view.topAnchor,
+				constant: 48
+			),
+			canvas.leadingAnchor.constraint(
+				equalTo: view.leadingAnchor,
+				constant: 32
+			),
+			canvas.trailingAnchor.constraint(
+				equalTo: view.trailingAnchor,
+				constant: -32
+			),
+			canvas.bottomAnchor.constraint(
+				equalTo: view.bottomAnchor,
+				constant: -96
+			),
+			scrollView.topAnchor.constraint(
+				equalTo: canvas.topAnchor,
+				constant: 16
+			),
+			scrollView.leadingAnchor.constraint(
+				equalTo: canvas.leadingAnchor,
+				constant: 16
+			),
+			scrollView.trailingAnchor.constraint(
+				equalTo: canvas.trailingAnchor,
+				constant: -16
+			),
+			scrollView.bottomAnchor.constraint(
+				equalTo: canvas.bottomAnchor,
+				constant: -16
+			),
+			zoom.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+			zoom.bottomAnchor.constraint(
+				equalTo: view.bottomAnchor,
+				constant: -32
+			),
+			label.widthAnchor.constraint(equalToConstant: 64)
+		])
+		view.nextKeyView = download
+		download.nextKeyView = closeButton
+		closeButton.nextKeyView = minus
+		minus.nextKeyView = plus
+		plus.nextKeyView = download
+		originalPixelSize = image.size
+		imageView.image = image
+		updateGeometry()
+	}
+
+	@objc private func downloadDiagram(_ sender: Any?)
+	{
+		guard let diagramImage, let window = view.window
+		else
+		{
+			return
+		}
+		MarkdownDiagramExport.save(
+			diagramImage,
+			in: window
+		)
+	}
+
+	@objc private func zoomDiagramOut(_ sender: Any?)
+	{
+		let percentage = scrollView.magnification * 100
+		let stop = Self.diagramZoomStops.last
+		{
+			CGFloat($0) < percentage - 0.0001
+		} ?? 25
+		setZoom(CGFloat(stop) / 100)
+	}
+
+	@objc private func zoomDiagramIn(_ sender: Any?)
+	{
+		let percentage = scrollView.magnification * 100
+		let stop = Self.diagramZoomStops.first
+		{
+			CGFloat($0) > percentage + 0.0001
+		} ?? 500
+		setZoom(CGFloat(stop) / 100)
+	}
+
 	func display(_ thumbnail: SourceThumbnailLoader.Thumbnail)
 	{
 		originalPixelSize = thumbnail.originalPixelSize
@@ -286,6 +517,11 @@ final class ExpandedImageViewController: NSViewController
 
 	private func updateGeometry()
 	{
+		// The diagram canvas adds a layout level between the overlay and its viewport.
+		if let canvas = scrollView.superview, canvas !== view
+		{
+			canvas.layoutSubtreeIfNeeded()
+		}
 		guard !updatingGeometry, originalPixelSize.width > 0,
 				scrollView.bounds.width > 0, scrollView.bounds.height > 0
 		else
@@ -309,10 +545,13 @@ final class ExpandedImageViewController: NSViewController
 				viewport.width / imageView.frame.width,
 				viewport.height / imageView.frame.height
 			)
-			scrollView.minMagnification = min(
-				0.01,
-				fit
-			)
+			if diagramImage == nil
+			{
+				scrollView.minMagnification = min(
+					0.01,
+					fit
+				)
+			}
 			applyMagnification(min(
 				1,
 				fit
@@ -347,6 +586,9 @@ final class ExpandedImageViewController: NSViewController
 
 	private func zoomDidChange()
 	{
+		diagramZoomLabel?.stringValue = "\(displayedZoomPercentage)%"
+		diagramZoomOutButton?.isEnabled = scrollView.magnification > 0.250001
+		diagramZoomInButton?.isEnabled = scrollView.magnification < 4.999999
 		zoomButton.menu?.item(withTag: 0)?.title = "\(displayedZoomPercentage)%"
 		zoomButton.selectItem(withTag: 0)
 		zoomButton.needsDisplay = true
@@ -491,9 +733,17 @@ private final class ExpandedImageVisualEffectView: NSVisualEffectView
 @MainActor
 private final class ExpandedImageDimmingView: NSView
 {
+	var fillOpacity: CGFloat = 0.5
+	{
+		didSet
+		{
+			needsDisplay = true
+		}
+	}
+
 	override func draw(_ dirtyRect: NSRect)
 	{
-		NSColor.black.withAlphaComponent(0.5).setFill()
+		NSColor.black.withAlphaComponent(fillOpacity).setFill()
 		dirtyRect.fill()
 	}
 

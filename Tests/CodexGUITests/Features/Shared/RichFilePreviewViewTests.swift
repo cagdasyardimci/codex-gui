@@ -393,6 +393,63 @@ struct RichFilePreviewViewTests
 		}
 	}
 
+	@Test func filesLeadingSourceGapIsTopOnlyWithOrWithoutMetadata() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			for (frontMatter, leading, filesStyle, outsideMetadata) in [
+				(false, false, true, false),
+				(false, true, true, false),
+				(true, true, true, true),
+				(true, true, false, true),
+			]
+			{
+				let source = (frontMatter ? "---\ntitle: Document\n---\n" : "")
+					+ (leading ? "\n" : "") + "# Body"
+				let preview = RichFilePreviewView(
+					kind: .markdown,
+					onMetadata: outsideMetadata ?
+					{
+						_ in
+					} : nil,
+					matchesFileMarkdownStyling: filesStyle,
+					loadContent:
+					{
+						Data(source.utf8)
+					}
+				)
+				defer
+				{
+					preview.cancelLoading()
+				}
+				await preview.waitForLoading()
+				preview.frame.size.width = 600
+				preview.layoutSubtreeIfNeeded()
+				let text = try #require(preview.subviews.first as? MarkdownTextView)
+				let layout = try #require(text.layoutManager)
+				let container = try #require(text.textContainer)
+				let baseInset = outsideMetadata ? 0.0 : 20.0
+				let leadingGap = filesStyle && leading ? 23.6 : 0
+				#expect(abs(text.textContainerInset.height - baseInset - leadingGap) < 0.01)
+				#expect(text.string == "Body")
+				layout.ensureLayout(for: container)
+				#expect(layout.lineFragmentRect(
+					forGlyphAt: 0,
+					effectiveRange: nil
+				).minY == 0)
+				let expectedHeight = ceil(layout.usedRect(for: container).maxY)
+					+ baseInset * 2 + leadingGap
+				#expect(abs(text.frame.height - expectedHeight) < 0.01)
+				preview.viewDidChangeEffectiveAppearance()
+				preview.layoutSubtreeIfNeeded()
+				#expect(abs(text.textContainerInset.height - baseInset - leadingGap) < 0.01)
+				#expect(abs(text.frame.height - expectedHeight) < 0.01)
+			}
+		}
+	}
+
 	@Test func metadataCanLiveOutsideScrollingMarkdownAndBodyRetainsLinks() async throws
 	{
 		try await AppKitTestIsolation.perform

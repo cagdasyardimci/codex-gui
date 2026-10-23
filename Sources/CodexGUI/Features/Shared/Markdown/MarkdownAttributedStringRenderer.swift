@@ -108,6 +108,10 @@ enum MarkdownAttributedStringRenderer
 			.markdownParagraphRole: paragraphRole(for: run.style),
 			.markdownBlankLinesBefore: run.style.sourceBlankLinesBefore,
 		]
+		if let line = run.style.sourceBlockStartLine
+		{
+			attributes[.markdownBlockStartLine] = line
+		}
 		if run.style.heading > 0
 		{
 			attributes[.markdownHeadingLevel] = run.style.heading
@@ -144,6 +148,7 @@ enum MarkdownAttributedStringRenderer
 		if let blockID = run.style.codeBlockID
 		{
 			attributes[.markdownCodeBlockID] = blockID
+			attributes[.markdownCodeFenced] = run.style.codeFenced
 			if run.style.codeHeader
 			{
 				attributes[.markdownCodeHeader] = true

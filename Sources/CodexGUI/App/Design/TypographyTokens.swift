@@ -107,6 +107,14 @@ enum TypographyTokens
 
 	enum FileMarkdown
 	{
+		static let inlineCode = Role(
+			size: 14,
+			selection: .monospaced(weight: .regular)
+		)
+		static let fencedCode = Role(
+			size: 12,
+			selection: .monospaced(weight: .regular)
+		)
 		static let mathScale: CGFloat = 1.21
 		static let prose = Role(
 			size: 14,

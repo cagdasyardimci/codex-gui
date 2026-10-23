@@ -61,17 +61,42 @@ accessibility. Display equations retain the shared native math renderer.
 
 Rich file previews prepare Mermaid diagrams asynchronously with the pinned, bundled offline
 renderer in [MarkdownMermaidRenderer](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownMermaidRenderer.swift).
-A serial, cancellable WebKit preparation queue produces bounded light/dark raster pairs before
+A serial, cancellable WebKit preparation queue produces bounded light/dark SVG pairs before
 native text installation. Preparation shares its allocation across diagrams and reserves space
-for other rich content. Natural display dimensions remain independent of raster resolution;
-retention budgets charge actual image bytes, including row padding. Input, queue, time and retained-pixel limits belong to that owner;
+for other rich content. WebKit creates a vector PDF display representation of each SVG because AppKit's direct SVG decoder
+loses some Mermaid CSS, text positioning and markers. AppKit draws that vector representation inline
+and at expanded zoom, while downloads preserve the original SVG. Natural SVG dimensions are bounded
+to 1,800 points per axis; wide charts keep their intrinsic width and fit to the available viewport. Retention budgets charge both SVG
+and PDF payload bytes in RGBA-equivalent units. Math images remain rasterized
+and charge actual image bytes, including row padding. Input, queue, time and retained-pixel limits belong to that owner;
 invalid or over-budget diagrams retain their exact source. Transcript content installs source-backed
 attachments first, then prepares bounded diagram images and replaces only entries belonging to the
 current render generation. Preview replacement cancels pending preparation and rejects obsolete
-installation. No diagram assets are fetched at runtime.
-Page-load deadlines perform one bounded readiness probe before failing, so delayed native
-navigation callbacks cannot discard a guest page that has already finished loading. The probe
-has its own watchdog; rendering deadlines and cancellation still retain source fallback.
+installation. No diagram assets are fetched at runtime. The captured SVG is cleared before each preparation
+operation completes, so the retained WebKit page does not keep a second diagram copy.
+Rendered diagrams use the document canvas without a code-card background or language header.
+Their options and expand controls align with the diagram's top edge through `MarkdownTextView`.
+Controls reveal on diagram hover or keyboard focus and retain accessible action labels.
+The offline integration stabilizes SVG text metrics across WebKit screen and transform scaling, and applies flowchart node and edge-label presentation before layout. It supplies appearance-aware chart colors, compact Gantt proportions and
+hierarchical mind-map layout through a pinned, locally bundled ELK adapter. The resource README
+owns its dependency lock, rebuild procedure and license notices. Presentation retains source-defined decision and entity shapes;
+relationship-label text and its background use separate ink and canvas colors.
+Copy as code preserves the complete original fenced source; Download image exports the displayed
+appearance as SVG through a save sheet. Expansion uses the shared window overlay lifecycle with a
+rounded canvas with 16-point inner padding, download and close actions, and percentage zoom with minus/plus controls. Diagram overlays use a borderless child window above the parent so they cover its titlebar and toolbar without underlying controls receiving input. They track parent movement and resizing and use a 90% black backdrop; attachment photo previews retain their native blur. Diagram
+zoom buttons follow fixed stops from 25% through 500%, including 110% between 100% and 125%;
+controls disable at the endpoints. Pinch magnification and scroll panning remain native. The initial zoom fits without enlarging the natural
+diagram dimensions; zooming redraws the retained vector representation. Replacing content or detaching its
+text view dismisses expansion and restores the previous responder.
+Page-load deadlines measure bounded phases for provisional navigation, document commit and
+completion. Each native milestone advances only once and retires the previous phase's probe;
+main-actor contention before navigation progress does not consume the next phase's timeout.
+Page-load deadlines perform a bounded readiness probe before failing. A ready guest succeeds
+immediately; a not-ready snapshot leaves the probe's watchdog armed so pending native navigation
+can still complete within that grace period. Navigation completion, failure, cancellation and
+watchdog expiry share one guarded completion path, which ignores late callbacks. The existing
+page, probe and SVG preparation deadlines remain bounded; unresponsive guests retain source fallback.
+Optional renderer diagnostics include navigation milestones and the probed document state.
 
 Files owns workspace directory browsing, document presentation and its navigator and search surfaces. Its controller-facing runtime keeps document state separate from native focus, reading positions and undo histories. Documents capture their workspace root and relative path; switching the browser root does not retarget an existing document. Reducers accept scoped read, search and save results, while the filesystem service performs bounded reads and revision-checked writes. Pending edits remain available after save failures or external-change conflicts. Close and quit paths settle pending saves and require an explicit decision before discarding unresolved edits. Rendered Markdown is read-only; source editing uses the same current document text as copy and export actions.
 

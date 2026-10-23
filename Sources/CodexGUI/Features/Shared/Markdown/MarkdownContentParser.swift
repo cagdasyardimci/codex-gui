@@ -210,7 +210,11 @@ enum MarkdownContentParser
 			var style = baseStyle
 			if let line = block.range?.lowerBound.line
 			{
-				style.sourceBlankLinesBefore = precedingBlankLines(before: line)
+				style.sourceBlankLinesBefore = precedingBlankLines(
+					before: line,
+					quoteDepth: style.quoteDepth
+				)
+				style.sourceBlockStartLine = line
 			}
 			switch block
 			{
@@ -333,7 +337,10 @@ enum MarkdownContentParser
 			}
 		}
 
-		private func precedingBlankLines(before line: Int) -> Int
+		private func precedingBlankLines(
+			before line: Int,
+			quoteDepth: Int
+		) -> Int
 		{
 			var index = line - 2
 			var count = 0
@@ -341,7 +348,21 @@ enum MarkdownContentParser
 			{
 				let start = sourceLineOffsets[index]
 				let end = sourceLineOffsets[index + 1]
-				guard sourceBytes[start ..< end].allSatisfy(
+				var bytes = sourceBytes[start ..< end]
+				for _ in 0 ..< quoteDepth
+				{
+					bytes = bytes.drop(while:
+						{
+							[9, 32].contains($0)
+						})
+					guard bytes.first == 62
+					else
+					{
+						break
+					}
+					bytes = bytes.dropFirst()
+				}
+				guard bytes.allSatisfy(
 					{
 						[9, 10, 13, 32].contains($0)
 					}
@@ -466,6 +487,25 @@ enum MarkdownContentParser
 			codeStyle.listContinuation = true
 			codeStyle.codeBlockID = codeBlocks.count
 			codeStyle.codeLanguage = block.language
+			let rawCode = sourceText(of: block)?
+				.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+			codeStyle.codeFenced = rawCode.hasPrefix("```") || rawCode.hasPrefix("~~~")
+			codeBlocks.append(block.code)
+			if let diagram = diagram(in: block)
+			{
+				var diagramStyle = style
+				diagramStyle.listContinuation = true
+				diagramStyle.richBlock = diagram
+				codeBlockRanges.append(NSRange(
+					location: textLength,
+					length: 1
+				))
+				append(
+					"\u{FFFC}",
+					style: diagramStyle
+				)
+				return
+			}
 			var headerStyle = codeStyle
 			headerStyle.codeHeader = true
 			append(
@@ -473,21 +513,6 @@ enum MarkdownContentParser
 				style: headerStyle
 			)
 			startParagraphSegment()
-			codeBlocks.append(block.code)
-			if let diagram = diagram(in: block)
-			{
-				codeStyle.richBlock = diagram
-				codeStyle.codeBlockEnd = true
-				codeBlockRanges.append(NSRange(
-					location: textLength,
-					length: 1
-				))
-				append(
-					"\u{FFFC}",
-					style: codeStyle
-				)
-				return
-			}
 			codeBlockRanges.append(NSRange(
 				location: textLength,
 				length: block.code.utf16.count
@@ -955,9 +980,13 @@ enum MarkdownContentParser
 			{
 				return
 			}
+			// A block separator is content, not the preceding inline code's decorative pad.
+			var separatorStyle = last.style
+			separatorStyle.code = false
+			separatorStyle.codePadding = false
 			append(
 				"\n",
-				style: last.style
+				style: separatorStyle
 			)
 		}
 

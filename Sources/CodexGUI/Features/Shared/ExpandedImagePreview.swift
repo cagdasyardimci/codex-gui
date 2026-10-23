@@ -46,7 +46,8 @@ final class ExpandedImagePreview
 	func present(
 		path: String,
 		name: String,
-		in parent: NSWindow
+		in parent: NSWindow,
+		preparedDiagram: NSImage? = nil
 	)
 	{
 		dismiss()
@@ -56,7 +57,42 @@ final class ExpandedImagePreview
 		{
 			return
 		}
-		let hiddenSiblings = contentView.subviews.map
+		let backgroundHost = preparedDiagram == nil ? contentView : contentView
+			.superview ?? contentView
+		let overlayWindow: NSWindow?
+		let overlayHost: NSView
+		if preparedDiagram != nil
+		{
+			// AppKit's titlebar may composite above ordinary frame subviews. A child window
+			// covers that chrome and receives its input without changing the parent layout.
+			let window = ExpandedDiagramOverlayWindow(
+				contentRect: parent.frame,
+				styleMask: .borderless,
+				backing: .buffered,
+				defer: false
+			)
+			window.isReleasedWhenClosed = false
+			window.title = "Expanded diagram"
+			window.isExcludedFromWindowsMenu = true
+			window.isOpaque = false
+			window.backgroundColor = .clear
+			window.hasShadow = false
+			window.level = parent.level
+			window.collectionBehavior = [.fullScreenAuxiliary, .transient]
+			let host = NSView(frame: NSRect(
+				origin: .zero,
+				size: parent.frame.size
+			))
+			window.contentView = host
+			overlayWindow = window
+			overlayHost = host
+		}
+		else
+		{
+			overlayWindow = nil
+			overlayHost = contentView
+		}
+		let hiddenSiblings = backgroundHost.subviews.map
 		{
 			ExpandedImageAccessibilitySnapshot(view: $0)
 		}
@@ -73,6 +109,13 @@ final class ExpandedImagePreview
 			self,
 			forKey: parent
 		)
+		if let preparedDiagram
+		{
+			controller.configureDiagram(
+				preparedDiagram,
+				appearance: parent.effectiveAppearance
+			)
+		}
 		let previousResponder = parent.firstResponder
 		requestedResolution = 2048
 		controller.onDismiss =
@@ -86,6 +129,11 @@ final class ExpandedImagePreview
 		controller.onResolutionDemand =
 		{
 			[weak self] pixels in
+			guard preparedDiagram == nil
+			else
+			{
+				return
+			}
 			self?.requestResolution(
 				pixels,
 				path: path,
@@ -93,23 +141,39 @@ final class ExpandedImagePreview
 			)
 		}
 		controller.view.translatesAutoresizingMaskIntoConstraints = false
-		contentView.addSubview(
+		overlayHost.addSubview(
 			controller.view,
 			positioned: .above,
 			relativeTo: nil
 		)
 		NSLayoutConstraint.activate([
-			controller.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-			controller.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-			controller.view.topAnchor.constraint(equalTo: contentView.topAnchor),
-			controller.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+			controller.view.leadingAnchor.constraint(equalTo: overlayHost.leadingAnchor),
+			controller.view.trailingAnchor.constraint(equalTo: overlayHost.trailingAnchor),
+			controller.view.topAnchor.constraint(equalTo: overlayHost.topAnchor),
+			controller.view.bottomAnchor.constraint(equalTo: overlayHost.bottomAnchor)
 		])
-		contentView.layoutSubtreeIfNeeded()
-		parent.makeFirstResponder(controller.view)
+		overlayHost.layoutSubtreeIfNeeded()
+		if let overlayWindow
+		{
+			parent.addChildWindow(
+				overlayWindow,
+				ordered: .above
+			)
+			overlayWindow.makeFirstResponder(controller.view)
+			if parent.isVisible
+			{
+				overlayWindow.makeKeyAndOrderFront(nil)
+			}
+		}
+		else
+		{
+			parent.makeFirstResponder(controller.view)
+		}
 		let escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown)
 		{
-			[weak self, weak parent] event in
-			guard let self, let parent, event.window === parent, event.keyCode == 53
+			[weak self, weak parent, weak overlayWindow] event in
+			guard let self, let parent,
+					event.window === (overlayWindow ?? parent), event.keyCode == 53
 			else
 			{
 				return event
@@ -129,14 +193,48 @@ final class ExpandedImagePreview
 				self?.dismiss()
 			}
 		}
+		var geometryObservers: [NSObjectProtocol] = []
+		if let overlayWindow
+		{
+			for notification in [NSWindow.didResizeNotification, NSWindow.didMoveNotification]
+			{
+				geometryObservers.append(NotificationCenter.default.addObserver(
+					forName: notification,
+					object: parent,
+					queue: .main
+				)
+				{
+					[weak parent, weak overlayWindow] _ in
+					MainActor.assumeIsolated
+					{
+						guard let parent, let overlayWindow
+						else
+						{
+							return
+						}
+						overlayWindow.setFrame(
+							parent.frame,
+							display: true
+						)
+						overlayWindow.contentView?.layoutSubtreeIfNeeded()
+					}
+				})
+			}
+		}
 		teardown = ExpandedImagePresentationTeardown(
 			controller: controller,
 			parent: parent,
 			previousResponder: previousResponder,
 			closeObserver: closeObserver,
 			escapeMonitor: escapeMonitor,
-			hiddenSiblings: hiddenSiblings
+			hiddenSiblings: hiddenSiblings,
+			overlayWindow: overlayWindow,
+			geometryObservers: geometryObservers
 		)
+		if preparedDiagram != nil
+		{
+			return
+		}
 		presentationTask = Task
 		{
 			[weak self, weak controller, weak parent] in
@@ -226,6 +324,8 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 	private var closeObserver: NSObjectProtocol?
 	private var escapeMonitor: Any?
 	private var hiddenSiblings: [ExpandedImageAccessibilitySnapshot]
+	private var overlayWindow: NSWindow?
+	private var geometryObservers: [NSObjectProtocol]
 
 	init(
 		controller: ExpandedImageViewController,
@@ -233,7 +333,9 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 		previousResponder: NSResponder?,
 		closeObserver: NSObjectProtocol,
 		escapeMonitor: Any?,
-		hiddenSiblings: [ExpandedImageAccessibilitySnapshot]
+		hiddenSiblings: [ExpandedImageAccessibilitySnapshot],
+		overlayWindow: NSWindow?,
+		geometryObservers: [NSObjectProtocol]
 	)
 	{
 		self.controller = controller
@@ -242,6 +344,8 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 		self.closeObserver = closeObserver
 		self.escapeMonitor = escapeMonitor
 		self.hiddenSiblings = hiddenSiblings
+		self.overlayWindow = overlayWindow
+		self.geometryObservers = geometryObservers
 	}
 
 	func dismiss()
@@ -261,16 +365,34 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 		}
 		closeObserver = nil
 		escapeMonitor = nil
+		for observer in geometryObservers
+		{
+			NotificationCenter.default.removeObserver(observer)
+		}
+		geometryObservers.removeAll()
 		controller.invalidate()
-		let ownsFocus = parent?.firstResponder === controller.view
-			|| (parent?.firstResponder as? NSView)?.isDescendant(of: controller.view) == true
+		let presentationWindow = overlayWindow ?? parent
+		let ownsFocus = presentationWindow?.firstResponder === controller.view
+			|| (presentationWindow?.firstResponder as? NSView)?
+			.isDescendant(of: controller.view) == true
+		let wasKey = overlayWindow?.isKeyWindow == true
 		controller.view.removeFromSuperview()
+		if let overlayWindow
+		{
+			parent?.removeChildWindow(overlayWindow)
+			overlayWindow.orderOut(nil)
+		}
+		overlayWindow = nil
 		for sibling in hiddenSiblings
 		{
 			sibling.restore()
 		}
 		hiddenSiblings.removeAll()
 		self.controller = nil
+		if wasKey, parent?.isVisible == true
+		{
+			parent?.makeKey()
+		}
 		if ownsFocus, let parent, let previousResponder
 		{
 			if let responderView = previousResponder as? NSView,
@@ -280,6 +402,20 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 			}
 			parent.makeFirstResponder(previousResponder)
 		}
+	}
+}
+
+@MainActor
+private final class ExpandedDiagramOverlayWindow: NSWindow
+{
+	override var canBecomeKey: Bool
+	{
+		true
+	}
+
+	override var canBecomeMain: Bool
+	{
+		false
 	}
 }
 

@@ -95,9 +95,13 @@ The file viewer places its breadcrumb and capsule actions in a row spanning both
 
 Files Markdown uses [FileMarkdownStyling](../Sources/CodexGUI/Features/Shared/Markdown/FileMarkdownStyling.swift)
 for Desktop reading typography: medium headings, source-aware heading gaps, preserved soft line
-breaks and bare monospace inline code. Syntax-highlighted code cards, semantic list markers,
-resolved links and table column alignment retain their shared native behavior. Transcript styling
-remains independently owned. Typography and layout inputs live in the `FileMarkdown` token roles.
+breaks and bare monospace inline code. Files uses compact, neutral code blocks with faint surfaces
+and right-aligned language labels; transcript code cards and highlighting remain independent.
+Files links omit site icons, recognize bare email addresses outside code, and exclude paragraph
+separators from link decoration. Semantic list markers, nested quotes, resolved references,
+source-preserving copy and declared table alignment retain their shared native behavior. Quote
+rails use the Files thickness and stop at paragraph gaps; quoted headings retain heading ink.
+Distinct parsed blocks retain their source identity so adjacent matching headings or paragraphs keep their blank-line gaps. Files preserves the first paragraph gap through its top inset because TextKit omits initial paragraph spacing. Raw HTML stays literal, with source-line spacing rather than repeated block gaps. Typography and layout inputs live in the `FileMarkdown` token roles.
 
 Recognized front matter appears in a native Metadata grid above the Files scrolling body. Scalar
 values wrap and scalar sequences use wrapping chips. [MarkdownFileMetadata](../Sources/CodexGUI/Features/Shared/Markdown/MarkdownFileMetadata.swift)

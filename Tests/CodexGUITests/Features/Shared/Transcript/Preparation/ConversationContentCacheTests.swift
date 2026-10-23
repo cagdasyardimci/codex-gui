@@ -92,8 +92,12 @@ struct ConversationContentCacheTests
 				)
 				.joined(separator: " ") + "\n\nMessage \(index)"
 			}
-			return "```mermaid\nflowchart LR\n"
+			let diagram = "```mermaid\nflowchart LR\n"
 				+ "A[Independent message \(index)] --> B[Cache pressure]\n```"
+			return Array(
+				repeating: diagram,
+				count: 8
+			).joined(separator: "\n\n")
 		}
 		let firstSource = inlineMath ? source(index: -1)
 			: "```mermaid\nflowchart LR\nA[First cached source] --> B[Result]\n```"

@@ -104,7 +104,8 @@ struct ConversationRichBlockImageCacheTests
 		))
 		#expect(images.light === repeated.light)
 		#expect(images.dark === repeated.dark)
-		#expect(images.light.width == Int(images.lightSize.width * 2))
+		#expect((images.light.representations.first?.pixelsWide ?? 0) ==
+			Int(images.lightSize.width * 2))
 		let firstAttachment = try attachment(in: first)
 		let nextAttachment = try attachment(in: next)
 		#expect(firstAttachment !== nextAttachment)
@@ -112,8 +113,8 @@ struct ConversationRichBlockImageCacheTests
 		#expect(firstAttachment.source.utf8.elementsEqual(source.utf8))
 		#expect(nextAttachment.source.utf8.elementsEqual(source.utf8))
 		#expect(next.attributedString.string.hasSuffix("Updated streamed tail"))
-		let lightBytes = try #require(images.light.dataProvider?.data) as Data
-		let darkBytes = try #require(images.dark.dataProvider?.data) as Data
+		let lightBytes = try #require(raster(images.light)?.dataProvider?.data) as Data
+		let darkBytes = try #require(raster(images.dark)?.dataProvider?.data) as Data
 		#expect(lightBytes != darkBytes)
 	}
 
@@ -183,8 +184,8 @@ struct ConversationRichBlockImageCacheTests
 			height: 0.75
 		)
 		let images = MarkdownRichBlockImageCache.Images(
-			light: original.light,
-			dark: original.dark,
+			light: try #require(raster(original.light)),
+			dark: try #require(raster(original.dark)),
 			lightSize: size,
 			darkSize: size
 		)
@@ -197,8 +198,7 @@ struct ConversationRichBlockImageCacheTests
 		let cached = try #require(cache.images(for: cacheKey))
 		#expect(cached.pixelCount == original.pixelCount)
 		#expect(cached.attachment(source: "fractional").estimatedRichImageBytes == cached.byteCount)
-		#expect(cached.byteCount == original.light.bytesPerRow * original.light.height
-			+ original.dark.bytesPerRow * original.dark.height)
+		#expect(cached.byteCount == original.byteCount)
 		#expect(cached.budgetPixelCost * 4 >= cached.byteCount)
 		var budget = MarkdownRichBlockBudget(maximumPixels: cached.budgetPixelCost)
 		let firstReservation = budget.reservePixels(cached.budgetPixelCost)
@@ -243,8 +243,10 @@ struct ConversationRichBlockImageCacheTests
 			fontSize: font.pointSize,
 			inline: true
 		))
-		let actualBytes = images.light.bytesPerRow * images.light.height
-			+ images.dark.bytesPerRow * images.dark.height
+		let lightRaster = try #require(raster(images.light))
+		let darkRaster = try #require(raster(images.dark))
+		let actualBytes = lightRaster.bytesPerRow * lightRaster.height
+			+ darkRaster.bytesPerRow * darkRaster.height
 		#expect(attachments[0].1.rendersNativeImage)
 		#expect(attachments[0].1.estimatedRichImageBytes == actualBytes)
 		#expect(content.estimatedRichImageBytes == actualBytes)
@@ -323,4 +325,13 @@ struct ConversationRichBlockImageCacheTests
 			budget: &budget
 		) as? MarkdownRichAttachment)
 	}
+	private func raster(_ image: NSImage) -> CGImage?
+	{
+		image.cgImage(
+			forProposedRect: nil,
+			context: nil,
+			hints: nil
+		)
+	}
+
 }

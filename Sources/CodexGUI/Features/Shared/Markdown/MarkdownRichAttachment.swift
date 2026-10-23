@@ -5,6 +5,9 @@ import AppKit
 final class MarkdownRichAttachment: NSTextAttachment
 {
 	let source: String
+	let isDiagram: Bool
+	private let lightImage: NSImage?
+	private let darkImage: NSImage?
 	let estimatedRichImageBytes: Int
 	var rendersNativeImage: Bool
 	{
@@ -15,13 +18,17 @@ final class MarkdownRichAttachment: NSTextAttachment
 		source: String,
 		lightImage: NSImage?,
 		darkImage: NSImage?,
-		imageByteCount: Int? = nil
+		imageByteCount: Int? = nil,
+		isDiagram: Bool = false
 	)
 	{
 		self.source = source
+		self.isDiagram = isDiagram
 		let hasBothImages = lightImage != nil && darkImage != nil
 		let acceptedLightImage = hasBothImages ? lightImage : nil
 		let acceptedDarkImage = hasBothImages ? darkImage : nil
+		self.lightImage = acceptedLightImage
+		self.darkImage = acceptedDarkImage
 		let estimatedBytes = [acceptedLightImage, acceptedDarkImage].compactMap
 		{
 			$0
@@ -45,6 +52,17 @@ final class MarkdownRichAttachment: NSTextAttachment
 		)
 		lightImage?.accessibilityDescription = source
 		darkImage?.accessibilityDescription = source
+	}
+
+	func diagramImage(for appearance: NSAppearance) -> NSImage?
+	{
+		guard isDiagram, rendersNativeImage
+		else
+		{
+			return nil
+		}
+		return appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+			? darkImage : lightImage
 	}
 
 	required init?(coder: NSCoder)

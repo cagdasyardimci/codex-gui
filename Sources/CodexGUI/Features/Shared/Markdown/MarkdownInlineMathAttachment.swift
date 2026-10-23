@@ -59,20 +59,8 @@ private final class MarkdownInlineMathAttachmentCell: NSTextAttachmentCell
 		font: NSFont
 	)
 	{
-		lightImage = images.map
-		{
-			NSImage(
-				cgImage: $0.light,
-				size: $0.lightSize
-			)
-		}
-		darkImage = images.map
-		{
-			NSImage(
-				cgImage: $0.dark,
-				size: $0.darkSize
-			)
-		}
+		lightImage = images?.light
+		darkImage = images?.dark
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.lineBreakMode = .byCharWrapping
 		fallback = NSAttributedString(

@@ -163,9 +163,15 @@ final class MarkdownLayoutManager: NSLayoutManager
 			at: range.location,
 			effectiveRange: nil
 		) as? NSParagraphStyle
+		let filePreview = storage.attribute(
+			.markdownFilePreview,
+			at: range.location,
+			effectiveRange: nil
+		) as? Bool == true
 		let left = max(
 			0,
-			(paragraph?.headIndent ?? Self.codeInset) - Self.codeInset
+			(paragraph?.headIndent ?? Self.codeInset)
+				- (filePreview ? 0 : Self.codeInset)
 		)
 		return NSRect(
 			x: left,
@@ -174,7 +180,8 @@ final class MarkdownLayoutManager: NSLayoutManager
 				1,
 				container.containerSize.width - left
 			),
-			height: lastContentLine.maxY - firstLine.minY + Self.codeBottomPadding
+			height: lastContentLine.maxY - firstLine
+				.minY + (filePreview ? 4 : Self.codeBottomPadding)
 		)
 	}
 
@@ -216,6 +223,19 @@ final class MarkdownLayoutManager: NSLayoutManager
 				dy: origin.y
 			)
 
+			if storage.attribute(
+				.markdownFilePreview,
+				at: range.location,
+				effectiveRange: nil
+			) as? Bool == true
+			{
+				self.drawFileCodeBlock(
+					card: card,
+					storage: storage,
+					range: range
+				)
+				return
+			}
 			let path = NSBezierPath(
 				roundedRect: card,
 				xRadius: 16,
@@ -261,6 +281,48 @@ final class MarkdownLayoutManager: NSLayoutManager
 				)
 			}
 		}
+	}
+
+	private func drawFileCodeBlock(
+		card: NSRect,
+		storage: NSTextStorage,
+		range: NSRange
+	)
+	{
+		NSColor.labelColor.withAlphaComponent(0.00549).setFill()
+		NSBezierPath(
+			roundedRect: card,
+			xRadius: 8,
+			yRadius: 8
+		).fill()
+		guard let language = storage.attribute(
+			.markdownCodeLanguage,
+			at: range.location,
+			effectiveRange: nil
+		) as? String,
+			!language.isEmpty
+		else
+		{
+			return
+		}
+		let attributes: [NSAttributedString.Key: Any] = [
+			.font: NSFont.systemFont(ofSize: 12),
+			.foregroundColor: NSColor.secondaryLabelColor,
+		]
+		let title = language.lowercased() as NSString
+		let width = min(
+			card.width,
+			title.size(withAttributes: attributes).width
+		)
+		title.draw(
+			in: NSRect(
+				x: card.maxX - width,
+				y: card.minY,
+				width: width,
+				height: 17
+			),
+			withAttributes: attributes
+		)
 	}
 
 	private static func codeLanguageTitle(_ language: String) -> String
@@ -327,23 +389,27 @@ final class MarkdownLayoutManager: NSLayoutManager
 			0,
 			(paragraph?.paragraphSpacing ?? 0) - (endsWithCode ? Self.codeBottomPadding : 0)
 		)
+		let filePreview = storage.attribute(
+			.markdownFilePreview,
+			at: range.location,
+			effectiveRange: nil
+		) as? Bool == true
+		let top = filePreview ? lineFragmentUsedRect(
+			forGlyphAt: glyphs.location,
+			effectiveRange: nil
+		).minY : firstLine.minY
 		return NSRect(
-			x: CGFloat(railOffset) + 2,
-			y: firstLine.minY,
-			width: 2,
+			x: CGFloat(railOffset) + (filePreview ? 0 : 2),
+			y: top,
+			width: filePreview ? 4 : 2,
 			height: max(
 				0,
-				lastLine.maxY - externalSpacing - firstLine.minY
+				lastLine.maxY - externalSpacing - top
 			)
 		)
 	}
 
-	private func drawQuotes(
-		in storage: NSTextStorage,
-		visibleCharacters: NSRange,
-		container: NSTextContainer,
-		origin: NSPoint
-	)
+	func quoteRailRanges(in storage: NSTextStorage) -> [Int: [NSRange]]
 	{
 		var quoteRanges: [Int: [NSRange]] = [:]
 		storage.enumerateAttribute(
@@ -361,24 +427,67 @@ final class MarkdownLayoutManager: NSLayoutManager
 			{
 				return
 			}
+			let filePreview = storage.attribute(
+				.markdownFilePreview,
+				at: range.location,
+				effectiveRange: nil
+			) as? Bool == true
+			var segments = [range]
+			if filePreview
+			{
+				segments = []
+				let text = storage.string as NSString
+				var start = range.location
+				while start < NSMaxRange(range)
+				{
+					let paragraph = text.paragraphRange(for: NSRange(
+						location: start,
+						length: 0
+					))
+					segments.append(NSIntersectionRange(
+						range,
+						paragraph
+					))
+					start = NSMaxRange(paragraph)
+				}
+			}
 			for offset in offsets
 			{
 				var ranges = quoteRanges[offset] ?? []
-				if let previous = ranges.last, NSMaxRange(previous) == range.location
+				for segment in segments
 				{
-					ranges[ranges.count - 1] = NSUnionRange(
-						previous,
-						range
-					)
-				}
-				else
-				{
-					ranges.append(range)
+					if let previous = ranges.last, NSMaxRange(previous) == segment.location,
+						!filePreview || (storage.attribute(
+						.paragraphStyle,
+						at: segment.location,
+						effectiveRange: nil
+						) as? NSParagraphStyle)?.paragraphSpacingBefore == 0
+					{
+						ranges[ranges.count - 1] = NSUnionRange(
+							previous,
+							segment
+						)
+					}
+					else
+					{
+						ranges.append(segment)
+					}
 				}
 				quoteRanges[offset] = ranges
 			}
 
 		}
+		return quoteRanges
+	}
+
+	private func drawQuotes(
+		in storage: NSTextStorage,
+		visibleCharacters: NSRange,
+		container: NSTextContainer,
+		origin: NSPoint
+	)
+	{
+		let quoteRanges = quoteRailRanges(in: storage)
 		NSColor.separatorColor.setFill()
 		for (offset, ranges) in quoteRanges
 		{

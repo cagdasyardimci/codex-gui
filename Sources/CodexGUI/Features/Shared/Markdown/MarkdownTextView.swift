@@ -6,6 +6,9 @@ final class MarkdownTextView: NSTextView
 {
 	private var updatingFrameSize = false
 	private let expandedImagePreview = ExpandedImagePreview()
+	private var diagramControls: [Int: MarkdownDiagramControls] = [:]
+	private var diagramFrames: [Int: NSRect] = [:]
+	private var diagramTrackingArea: NSTrackingArea?
 
 	override func viewDidMoveToWindow()
 	{
@@ -34,7 +37,15 @@ final class MarkdownTextView: NSTextView
 
 	func installContent(_ content: NSAttributedString)
 	{
+		expandedImagePreview.dismiss()
+		for controls in diagramControls.values
+		{
+			controls.removeFromSuperview()
+		}
+		diagramControls.removeAll()
+		diagramFrames.removeAll()
 		textStorage?.setAttributedString(content)
+		needsLayout = true
 		updateSourceAccessibilityHelp()
 		loadWebLinkFavicons()
 	}
@@ -119,6 +130,170 @@ final class MarkdownTextView: NSTextView
 			at: location,
 			in: frame
 		)
+	}
+
+	override func layout()
+	{
+		super.layout()
+		updateDiagramControls()
+	}
+
+	override func updateTrackingAreas()
+	{
+		super.updateTrackingAreas()
+		if let diagramTrackingArea
+		{
+			removeTrackingArea(diagramTrackingArea)
+		}
+		let area = NSTrackingArea(
+			rect: .zero,
+			options: [
+				.mouseMoved,
+				.mouseEnteredAndExited,
+				.activeInKeyWindow,
+				.inVisibleRect
+			],
+			owner: self,
+			userInfo: nil
+		)
+		addTrackingArea(area)
+		diagramTrackingArea = area
+	}
+
+	override func mouseMoved(with event: NSEvent)
+	{
+		super.mouseMoved(with: event)
+		updateDiagramControlVisibility(at: convert(
+			event.locationInWindow,
+			from: nil
+		))
+	}
+
+	override func scrollWheel(with event: NSEvent)
+	{
+		super.scrollWheel(with: event)
+		updateDiagramControlVisibility(at: convert(
+			event.locationInWindow,
+			from: nil
+		))
+	}
+
+	override func mouseEntered(with event: NSEvent)
+	{
+		super.mouseEntered(with: event)
+		updateDiagramControlVisibility(at: convert(
+			event.locationInWindow,
+			from: nil
+		))
+	}
+
+	override func mouseExited(with event: NSEvent)
+	{
+		super.mouseExited(with: event)
+		updateDiagramControlVisibility(at: nil)
+	}
+
+	func updateDiagramControlVisibility(at point: NSPoint?)
+	{
+		for (key, controls) in diagramControls
+		{
+			controls.setHovered(point.map
+			{
+				diagramFrames[key]?.contains($0) == true
+			} ?? false)
+		}
+	}
+
+	func updateDiagramControls()
+	{
+		guard let storage = textStorage, let manager = layoutManager,
+				let container = textContainer
+		else
+		{
+			return
+		}
+		manager.ensureLayout(for: container)
+		var active = Set<Int>()
+		storage.enumerateAttribute(
+			.attachment,
+			in: NSRange(
+				location: 0,
+				length: storage.length
+			)
+		)
+		{
+			value, range, _ in
+			guard let attachment = value as? MarkdownRichAttachment,
+					attachment.isDiagram, attachment.rendersNativeImage
+			else
+			{
+				return
+			}
+			active.insert(range.location)
+			let controls: MarkdownDiagramControls
+			if let existing = diagramControls[range.location], existing.attachment === attachment
+			{
+				controls = existing
+			}
+			else
+			{
+				diagramControls[range.location]?.removeFromSuperview()
+				controls = MarkdownDiagramControls(attachment: attachment)
+				controls.onExpand =
+				{
+					[weak self] image in
+					guard let self, let window
+					else
+					{
+						return
+					}
+					expandedImagePreview.present(
+						path: "",
+						name: "Mermaid diagram",
+						in: window,
+						preparedDiagram: image
+					)
+				}
+				diagramControls[range.location] = controls
+				addSubview(controls)
+			}
+			let glyphs = manager.glyphRange(
+				forCharacterRange: range,
+				actualCharacterRange: nil
+			)
+			let rect = manager.boundingRect(
+				forGlyphRange: glyphs,
+				in: container
+			)
+			diagramFrames[range.location] = rect.offsetBy(
+				dx: textContainerOrigin.x,
+				dy: textContainerOrigin.y
+			)
+			controls.frame = NSRect(
+				x: max(
+					0,
+					rect.maxX + textContainerOrigin.x - 72
+				),
+				y: rect.minY + textContainerOrigin.y,
+				width: min(
+					68,
+					rect.width
+				),
+				height: 32
+			)
+		}
+		for key in Array(diagramControls.keys) where !active.contains(key)
+		{
+			diagramControls.removeValue(forKey: key)?.removeFromSuperview()
+			diagramFrames.removeValue(forKey: key)
+		}
+		updateDiagramControlVisibility(at: window.map
+		{
+			convert(
+				$0.mouseLocationOutsideOfEventStream,
+				from: nil
+			)
+		})
 	}
 
 	override func draw(_ dirtyRect: NSRect)

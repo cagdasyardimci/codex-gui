@@ -1,6 +1,6 @@
 import Foundation
 
-/// Gives WebKit's queued page completion one bounded IPC turn before accepting a deadline failure.
+/// Lets pending navigation finish within a bounded grace period after the native page deadline.
 @MainActor
 final class MarkdownMermaidPageReadinessProbe
 {
@@ -44,8 +44,18 @@ final class MarkdownMermaidPageReadinessProbe
 		probe
 		{
 			[weak self] ready in
-			self?.finish(ready: ready)
+			// A negative snapshot can describe a document that is still loading.
+			// Keep the watchdog armed so native completion can still win this grace period.
+			if ready
+			{
+				self?.confirmReadiness()
+			}
 		}
+	}
+
+	func confirmReadiness()
+	{
+		finish(ready: true)
 	}
 
 	func cancel()

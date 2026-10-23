@@ -1307,6 +1307,35 @@ struct ConversationMarkdownRenderingTests
 				var cards: [NSRect] = []
 				for (index, range) in content.codeBlockRanges.enumerated()
 				{
+					if index == 2
+					{
+						#expect(manager
+							.codeBlockRect(
+								atCharacter: range.location,
+								in: container
+							) == nil)
+						#expect(manager.codeBlockHeaderRect(
+							atCharacter: range.location,
+							in: container
+						) == nil)
+						let glyphs = manager.glyphRange(
+							forCharacterRange: range,
+							actualCharacterRange: nil
+						)
+						let diagramBounds = manager.boundingRect(
+							forGlyphRange: glyphs,
+							in: container
+						)
+						#expect(diagramBounds.minY - (try #require(cards.last)).maxY >= 7.5)
+						text.setSelectedRange(range)
+						#expect(text.writeSelection(
+							to: pasteboard,
+							types: text.writablePasteboardTypes
+						))
+						#expect(pasteboard.string(forType: .string) == diagramSource)
+						cards.append(diagramBounds)
+						continue
+					}
 					let card = try #require(manager.codeBlockRect(
 						atCharacter: range.location,
 						in: container

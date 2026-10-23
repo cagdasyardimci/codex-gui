@@ -27,7 +27,7 @@ struct MarkdownMermaidPageReadinessProbeTests
 		#expect(outcomes == [true])
 	}
 
-	@Test func pageThatAnswersWithoutReadinessKeepsItsFailure()
+	@Test func loadingSnapshotDoesNotRejectNavigationThatFinishesWithinTheWatchdog()
 	{
 		var outcomes: [Bool] = []
 		let probe = MarkdownMermaidPageReadinessProbe(
@@ -41,6 +41,39 @@ struct MarkdownMermaidPageReadinessProbeTests
 			}
 		)
 		probe.start()
+		#expect(outcomes.isEmpty)
+		// WKNavigationDelegate.didFinish can arrive after the snapshot of the loading page.
+		probe.confirmReadiness()
+		#expect(outcomes == [true])
+		probe.confirmReadiness()
+		#expect(outcomes == [true])
+	}
+
+	@Test func pageThatNeverBecomesReadyStillHitsTheOriginalWatchdog() async
+	{
+		var outcomes: [Bool] = []
+		var probe: MarkdownMermaidPageReadinessProbe?
+		let ready = await withCheckedContinuation
+		{
+			continuation in
+			probe = MarkdownMermaidPageReadinessProbe(
+				maximumWait: .milliseconds(1),
+				probe:
+				{
+					$0(false)
+				},
+				completion:
+				{
+					outcomes.append($0)
+					continuation.resume(returning: $0)
+				}
+			)
+			probe?.start()
+			#expect(outcomes.isEmpty)
+		}
+		#expect(!ready)
+		#expect(outcomes == [false])
+		probe?.confirmReadiness()
 		#expect(outcomes == [false])
 	}
 
@@ -61,6 +94,7 @@ struct MarkdownMermaidPageReadinessProbeTests
 		probe.start()
 		// Session.finish cancels this probe for completion, cancellation and navigation failure.
 		probe.cancel()
+		probe.confirmReadiness()
 		guestReply?(true)
 		guestReply?(false)
 		#expect(outcomes.isEmpty)

@@ -1,8 +1,7 @@
 import AppKit
-import ImageIO
 import WebKit
 
-/// Prepares offline Mermaid pixels for Markdown without blocking AppKit's event loop.
+/// Prepares offline Mermaid SVGs for Markdown without blocking AppKit's event loop.
 @MainActor
 enum MarkdownMermaidRenderer
 {
@@ -156,11 +155,23 @@ enum MarkdownMermaidRenderer
 			{
 				continue
 			}
+			guard let lightImage = MarkdownSVGImage(
+				data: light.svg,
+				size: light.size,
+				pdfData: light.pdf
+			),
+				let darkImage = MarkdownSVGImage(
+					data: dark.svg,
+					size: dark.size,
+					pdfData: dark.pdf
+				)
+			else
+			{
+				continue
+			}
 			let pair = MarkdownRichBlockImageCache.Images(
-				light: light.image,
-				dark: dark.image,
-				lightSize: light.size,
-				darkSize: dark.size
+				light: lightImage,
+				dark: darkImage
 			)
 			guard pair.budgetPixelCost <= remainingPixels
 			else
@@ -253,20 +264,22 @@ enum MarkdownMermaidRenderer
 	@MainActor
 	private final class Session: NSObject, WKNavigationDelegate
 	{
-		struct Raster: Sendable
+		struct Vector: Sendable
 		{
-			let image: CGImage
+			let svg: Data
+			let pdf: Data
 			let size: NSSize
 		}
 
 		private let webView: WKWebView
-		private var continuation: CheckedContinuation<Raster?, Never>?
+		private var continuation: CheckedContinuation<Vector?, Never>?
 		private var timeout: Task<Void, Never>?
 		private var pageReadinessProbe: MarkdownMermaidPageReadinessProbe?
 		private var operationID: UUID?
 		private var phase = "page"
 		private var operationStarted = ContinuousClock.now
 		private var onDiagnostic: (@MainActor (Diagnostic) -> Void)?
+		private var pageLoadStage = 0
 		private var loaded = false
 		private(set) var isValid = true
 		var isLoaded: Bool
@@ -325,14 +338,14 @@ enum MarkdownMermaidRenderer
 			_ source: String,
 			dark: Bool,
 			maximumPixels: Int
-		) async -> Raster?
+		) async -> Vector?
 		{
 			guard loaded, isValid, !Task.isCancelled
 			else
 			{
 				return nil
 			}
-			return await performOperation(phase: dark ? "dark raster" : "light raster")
+			return await performOperation(phase: dark ? "dark SVG" : "light SVG")
 			{
 				id in
 				webView.callAsyncJavaScript(
@@ -348,7 +361,6 @@ enum MarkdownMermaidRenderer
 					{
 						return
 					}
-					var raster: Raster?
 					if case let .failure(error) = result
 					{
 						report(
@@ -362,44 +374,92 @@ enum MarkdownMermaidRenderer
 						let naturalHeight = values["naturalHeight"] as? Double,
 						naturalWidth.isFinite, naturalHeight.isFinite,
 						naturalWidth > 0, naturalHeight > 0,
-						naturalWidth <= 900, naturalHeight <= 1_800,
-						let png = values["png"] as? String,
-						png.hasPrefix("data:image/png;base64,"), png.utf8.count <= 16_000_000,
-						let data = Data(base64Encoded: String(png.dropFirst(22))),
-						let decoded = CGImageSourceCreateWithData(
-						data as CFData,
-						nil
+						naturalWidth <= 1_800, naturalHeight <= 1_800,
+						let svg = values["svg"] as? String,
+						svg.utf8.count <= min(
+						1_048_576,
+						maximumPixels * 4
 						)
 					{
-						if let image = CGImageSourceCreateImageAtIndex(
-							decoded,
-							0,
-							nil
-						), image.width <= 4_096, image.height <= 4_096,
-						image.width * image.height <= maximumPixels
+						let size = NSSize(
+							width: naturalWidth,
+							height: naturalHeight
+						)
+						let configuration = WKPDFConfiguration()
+						configuration.rect = NSRect(
+							origin: .zero,
+							size: size
+						)
+						configuration.allowTransparentBackground = true
+						webView.createPDF(configuration: configuration)
 						{
-							raster = Raster(
-								image: image,
-								size: NSSize(
-									width: naturalWidth,
-									height: naturalHeight
+							[weak self] result in
+							guard let self, operationID == id
+							else
+							{
+								return
+							}
+							if case let .success(pdf) = result,
+								pdf.count <= min(
+								4_194_304,
+								maximumPixels * 4
+								),
+								pdf.count + svg.utf8.count <= maximumPixels * 4
+							{
+								finishRender(
+									Vector(
+										svg: Data(svg.utf8),
+										pdf: pdf,
+										size: size
+									),
+									operationID: id
 								)
-							)
+							}
+							else
+							{
+								report("invalid vector display result")
+								finishRender(
+									nil,
+									operationID: id
+								)
+							}
 						}
+						return
 					}
-					if raster == nil, case .success = result
+					if case .success = result
 					{
-						report("invalid raster result")
+						report("invalid SVG result")
 					}
-					finish(raster)
+					finishRender(
+						nil,
+						operationID: id
+					)
 				}
+			}
+		}
+
+		/// Complete only after clearing the captured SVG, before another queued render can start.
+		private func finishRender(
+			_ vector: Vector?,
+			operationID id: UUID
+		)
+		{
+			webView.evaluateJavaScript("document.getElementById('diagram').replaceChildren();")
+			{
+				[weak self] _, _ in
+				guard let self, operationID == id
+				else
+				{
+					return
+				}
+				finish(vector)
 			}
 		}
 
 		private func performOperation(
 			phase: String,
 			_ start: (UUID) -> Void
-		) async -> Raster?
+		) async -> Vector?
 		{
 			guard isValid, !Task.isCancelled
 			else
@@ -416,16 +476,8 @@ enum MarkdownMermaidRenderer
 					self.phase = phase
 					operationStarted = .now
 					operationID = id
-					timeout = Task
-					{
-						try? await Task.sleep(for: .seconds(5))
-						guard !Task.isCancelled, operationID == id
-						else
-						{
-							return
-						}
-						deadlineExpired(for: id)
-					}
+					pageLoadStage = 0
+					armTimeout(for: id)
 					start(id)
 				}
 			} onCancel:
@@ -438,6 +490,37 @@ enum MarkdownMermaidRenderer
 			}
 		}
 
+		private func armTimeout(for id: UUID)
+		{
+			timeout?.cancel()
+			timeout = Task
+			{
+				try? await Task.sleep(for: .seconds(5))
+				guard !Task.isCancelled, operationID == id
+				else
+				{
+					return
+				}
+				deadlineExpired(for: id)
+			}
+		}
+
+		private func advancePageLoad(to stage: Int)
+		{
+			guard isValid, phase == "page", let operationID, stage > pageLoadStage
+			else
+			{
+				return
+			}
+			pageLoadStage = stage
+			// Cold WebKit startup and native callback delivery can wait behind MainActor work.
+			// Actual navigation progress starts the next bounded phase, retiring any stale
+			// snapshot watchdog. Each of the two native milestones can advance only once.
+			pageReadinessProbe?.cancel()
+			pageReadinessProbe = nil
+			armTimeout(for: operationID)
+		}
+
 		private func deadlineExpired(for id: UUID)
 		{
 			guard phase == "page"
@@ -447,8 +530,9 @@ enum MarkdownMermaidRenderer
 				invalidate()
 				return
 			}
-			// A busy MainActor can deliver its timer before WebKit's already-finished navigation.
-			// Check the guest's actual readiness instead of discarding that completed page.
+			// MainActor contention can deliver this timer before WebKit's navigation callbacks.
+			// Accept a ready guest immediately, or allow pending native completion
+			// within the probe watchdog.
 			report("page deadline checking readiness")
 			let probe = MarkdownMermaidPageReadinessProbe(
 				probe:
@@ -461,8 +545,8 @@ enum MarkdownMermaidRenderer
 						return
 					}
 					webView.evaluateJavaScript(
-						"document.readyState === 'complete' && "
-							+ "typeof renderMarkdownDiagram === 'function'"
+						"({state: document.readyState, url: document.URL, "
+							+ "renderer: typeof renderMarkdownDiagram === 'function'})"
 					)
 					{
 						[weak self] value, error in
@@ -473,7 +557,13 @@ enum MarkdownMermaidRenderer
 								error: error
 							)
 						}
-						completion(error == nil && value as? Bool == true)
+						let state = value as? [String: Any]
+						let url = (state?["url"] as? String).flatMap(URL.init(string:))
+						self?.report("page probe: " + (state?["state"] as? String ?? "unknown")
+							+ ", document=" + (url?.lastPathComponent ?? "unknown")
+							+ ", renderer=\(state?["renderer"] as? Bool == true)")
+						completion(error == nil && state?["state"] as? String == "complete"
+							&& state?["renderer"] as? Bool == true)
 					}
 				},
 				completion:
@@ -516,7 +606,7 @@ enum MarkdownMermaidRenderer
 			))
 		}
 
-		private func finish(_ image: Raster?)
+		private func finish(_ image: Vector?)
 		{
 			pageReadinessProbe?.cancel()
 			pageReadinessProbe = nil
@@ -538,6 +628,24 @@ enum MarkdownMermaidRenderer
 
 		func webView(
 			_ webView: WKWebView,
+			didStartProvisionalNavigation navigation: WKNavigation!
+		)
+		{
+			report("navigation started")
+			advancePageLoad(to: 1)
+		}
+
+		func webView(
+			_ webView: WKWebView,
+			didCommit navigation: WKNavigation!
+		)
+		{
+			report("navigation committed")
+			advancePageLoad(to: 2)
+		}
+
+		func webView(
+			_ webView: WKWebView,
 			didFinish navigation: WKNavigation!
 		)
 		{
@@ -546,8 +654,15 @@ enum MarkdownMermaidRenderer
 			{
 				return
 			}
-			loaded = true
-			finish(nil)
+			if let pageReadinessProbe
+			{
+				pageReadinessProbe.confirmReadiness()
+			}
+			else
+			{
+				loaded = true
+				finish(nil)
+			}
 		}
 
 		func webView(
@@ -588,6 +703,8 @@ enum MarkdownMermaidRenderer
 			decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
 		)
 		{
+			report("navigation policy: " +
+				(navigationAction.request.url?.lastPathComponent ?? "unknown"))
 			decisionHandler(navigationAction.request.url?.isFileURL == true ? .allow : .cancel)
 		}
 	}
