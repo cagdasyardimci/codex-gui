@@ -6,16 +6,26 @@ import Testing
 @Suite @MainActor
 struct ViewerStatusViewTests
 {
-	@Test func longFailureRemainsSelectableAndWithinPaneAcrossAppearanceAndWidth() throws
+	@Test(arguments: [false, true])
+	func longFailureRemainsSelectableAndWithinPaneAcrossAppearanceAndWidth(
+		withIconAndTitle: Bool
+	) throws
 	{
 		_ = NSApplication.shared
 		let message = "The file could not be loaded. "
 			+ "Check access to this folder and retry the operation."
-		let status = ViewerStatusView(message: message)
+		let status = ViewerStatusView(
+			icon: withIconAndTitle ? NSImage(size: NSSize(
+				width: 32,
+				height: 32
+			)) : nil,
+			title: withIconAndTitle ? "Cannot open file" : nil,
+			message: message
+		)
 		for appearance in [NSAppearance.Name.aqua, .darkAqua]
 		{
 			status.appearance = NSAppearance(named: appearance)
-			for width in [CGFloat(180), 480]
+			for width in [CGFloat(0), 16, 180, 480, 0, 180]
 			{
 				status.frame = NSRect(
 					x: 0,
@@ -31,10 +41,13 @@ struct ViewerStatusViewTests
 				)
 				#expect(label.stringValue == message)
 				#expect(label.isSelectable)
-				#expect(rect.minX >= 0)
-				#expect(rect.maxX <= width)
+				if width >= 180
+				{
+					#expect(rect.minX >= 16)
+					#expect(rect.maxX <= width - 16)
+				}
 				#expect(rect.height > 0)
-				#expect(abs(rect.midY - status.bounds.midY) < 1)
+				#expect(abs(try #require(label.superview).frame.midY - status.bounds.midY) < 1)
 			}
 		}
 		status.setMessage("Loading file…")

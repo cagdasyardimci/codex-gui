@@ -45,17 +45,22 @@ class ViewerStatusView: DesktopSurface
 		stack.spacing = 12
 		stack.translatesAutoresizingMaskIntoConstraints = false
 		addSubview(stack)
+		// Insets yield while the containing pane is collapsed or not yet sized.
+		let leadingInset = stack.leadingAnchor.constraint(
+			greaterThanOrEqualTo: leadingAnchor,
+			constant: 16
+		)
+		let trailingInset = stack.trailingAnchor.constraint(
+			lessThanOrEqualTo: trailingAnchor,
+			constant: -16
+		)
+		leadingInset.priority = NSLayoutConstraint.Priority(999)
+		trailingInset.priority = NSLayoutConstraint.Priority(999)
 		NSLayoutConstraint.activate([
 			stack.centerXAnchor.constraint(equalTo: centerXAnchor),
 			stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-			stack.leadingAnchor.constraint(
-				greaterThanOrEqualTo: leadingAnchor,
-				constant: 16
-			),
-			stack.trailingAnchor.constraint(
-				lessThanOrEqualTo: trailingAnchor,
-				constant: -16
-			),
+			leadingInset,
+			trailingInset,
 			messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
 		])
 	}
