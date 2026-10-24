@@ -637,6 +637,25 @@ struct ToolsTabLayoutTests
 			expanded: false
 		)
 		// Expansion may update the controls before the toolbar realigns with the pane.
+		for state in [false, true, false, true, false]
+		{
+			tabs.setExpanded(state)
+			window.layoutIfNeeded()
+			let summary = try #require(button(
+				"Toggle pinned summary",
+				in: header
+			))
+			let controls = try #require(summary.superview as? NSStackView)
+			#expect(summary.isHidden == !state)
+			#expect(abs(controls.frame.width - (state ? 103 : 69)) < 0.5)
+			for control in controls.arrangedSubviews where !control.isHidden
+			{
+				if control is NSButton
+				{
+					#expect(control.frame.width == 28)
+				}
+			}
+		}
 		tabs.setExpanded(expanded)
 		let scrollView = try #require(descendant(
 			NSScrollView.self,

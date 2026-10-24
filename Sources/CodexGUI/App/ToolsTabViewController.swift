@@ -769,6 +769,9 @@ final class ToolsTabViewController: NSViewController
 		let controlsWidth = controls.widthAnchor.constraint(
 			equalToConstant: controlsWidth(expanded: false)
 		)
+		// NSStackView may defer removing the hidden summary button's constraints.
+		// Keep button sizes and spacing valid until its visibility update completes.
+		controlsWidth.priority = NSLayoutConstraint.Priority(999)
 		headerControlsWidthConstraint = controlsWidth
 		let preferredWidth = tabScrollView.widthAnchor.constraint(equalToConstant: 0)
 		preferredWidth.priority = NSLayoutConstraint.Priority(998)
