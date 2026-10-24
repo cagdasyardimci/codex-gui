@@ -36,7 +36,7 @@ final class ViewerFileNavigatorView: NSView
 		stack.translatesAutoresizingMaskIntoConstraints = false
 		addSubview(stack)
 
-		var constraints = [
+		let insets = [
 			stack.topAnchor.constraint(
 				equalTo: topAnchor,
 				constant: 8
@@ -52,7 +52,14 @@ final class ViewerFileNavigatorView: NSView
 			stack.bottomAnchor.constraint(
 				equalTo: bottomAnchor,
 				constant: -8
-			),
+			)
+		]
+		// A hidden navigator has zero width during split-view transitions.
+		for inset in insets
+		{
+			inset.priority = NSLayoutConstraint.Priority(999)
+		}
+		var constraints = insets + [
 			filterField.heightAnchor.constraint(equalToConstant: 28),
 			scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 100)
 		]

@@ -41,6 +41,24 @@ struct ViewerFileTreeViewTests
 		#expect(stack.arrangedSubviews.contains(filter))
 		#expect(stack.arrangedSubviews.contains(status))
 		#expect(stack.arrangedSubviews.contains(navigator.scrollView))
+		for width: CGFloat in [0, 240, 0, 180]
+		{
+			navigator.frame = NSRect(
+				x: 0,
+				y: 0,
+				width: width,
+				height: 300
+			)
+			navigator.layoutSubtreeIfNeeded()
+			#expect(filter.frame.height == 28)
+			if width >= 180
+			{
+				#expect(abs(stack.frame.minX - 8) < 0.5)
+				#expect(abs(stack.frame.maxX - width + 8) < 0.5)
+				#expect(abs(stack.frame.minY - 8) < 0.5)
+				#expect(abs(stack.frame.maxY - 292) < 0.5)
+			}
+		}
 	}
 
 	@Test func configuredControlOwnsDisclosureKeyboardAndContextTargeting() async throws
