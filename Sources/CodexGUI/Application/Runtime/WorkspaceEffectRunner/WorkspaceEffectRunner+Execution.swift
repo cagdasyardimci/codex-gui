@@ -157,6 +157,7 @@ extension WorkspaceEffectRunner
 		case .readConversationHistory(let operation):
 			let detail = try await readConversation(
 				operation.context,
+				resumeSelectedThread: operation.purpose == .selection,
 				managedWorkspace: managedWorkspace
 			)
 			return .conversations(.historyReceived(
@@ -829,6 +830,7 @@ extension WorkspaceEffectRunner
 	func readConversation(
 		_ context: OperationContext,
 		allowsUnselectedCheckout: Bool = false,
+		resumeSelectedThread: Bool = false,
 		managedWorkspace: TaskWorkspace? = nil
 	) async throws -> ThreadDetail
 	{
@@ -847,7 +849,20 @@ extension WorkspaceEffectRunner
 			project = try conversationDirectory(context)
 		}
 		try await verifyWorkspace(managedWorkspace)
-		let detail = try await service.readThread(id: threadID)
+		// Resume the selected chat so app-server replays its latest token usage.
+		// Background and recovery reads must not subscribe to the thread.
+		let detail: ThreadDetail
+		if resumeSelectedThread
+		{
+			detail = try await service.resumeThread(
+				id: threadID,
+				expectedDirectory: project
+			)
+		}
+		else
+		{
+			detail = try await service.readThread(id: threadID)
+		}
 		try validateConversationOwnership(
 			detail.summary,
 			expectedThreadID: threadID,
