@@ -69,6 +69,12 @@ Composer and project preference controls share effort labels through [ModelPrefe
 
 ## Conversation and navigation presentation
 
+Project rows reveal their ellipsis and New Chat buttons only while hovered, including the current
+project. Project row backgrounds use the shared sidebar row highlight only while hovered,
+including when the project is current or its row is selected.
+
+The Projects / Recents heading highlights its background and reveals its ellipsis and add buttons
+while hovered. The controls keep their layout space while hidden.
 The sidebar heading's ellipsis opens an arrowless custom AppKit menu with **Organize sidebar**
 (**By project**, **In one list**) and **Sort chats by** (**Last updated**, **Manual order**).
 Its main surface is 220 points wide and submenus are 180 points wide, with 4-point gutters,

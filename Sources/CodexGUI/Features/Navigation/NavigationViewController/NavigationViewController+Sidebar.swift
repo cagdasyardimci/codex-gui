@@ -519,9 +519,9 @@ extension NavigationViewController
 	) -> NSTableRowView?
 	{
 		let rowView = ConversationSidebarRowView()
-		if sidebarItems.indices.contains(row), case .project(let project) = sidebarItems[row]
+		if sidebarItems.indices.contains(row), case .project = sidebarItems[row]
 		{
-			rowView.isCurrentProject = project == currentProject
+			rowView.isProjectRow = true
 		}
 		else
 		{

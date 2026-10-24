@@ -117,6 +117,7 @@ extension NavigationViewController
 			sidebarOptionsButton,
 			addButton
 		])
+		projectsHeader.hoverButtons = [sidebarOptionsButton, addButton]
 		sidebarOptionsButton.widthAnchor
 			.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize).isActive = true
 		sidebarOptionsButton.heightAnchor
@@ -135,9 +136,13 @@ extension NavigationViewController
 		return projectsHeader
 	}
 
-	func makeSidebarHeading(_ views: [NSView]) -> NSStackView
+	func makeSidebarHeading(_ views: [NSView]) -> SidebarHeadingView
 	{
-		let header = AppKitLayout.horizontalStack(views)
+		let header = SidebarHeadingView(views: views)
+		header.orientation = .horizontal
+		header.alignment = .centerY
+		header.spacing = LayoutTokens.LayoutDefaults.horizontalSpacing
+		header.detachesHiddenViews = false
 		header.edgeInsets = NSEdgeInsets(
 			top: 0,
 			left: NavigationSidebarLayout.cellInset,

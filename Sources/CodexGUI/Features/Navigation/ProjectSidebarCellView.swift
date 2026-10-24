@@ -17,9 +17,7 @@ final class ProjectSidebarCellView: NSTableCellView
 		action: nil
 	)
 	private let actionStack = NSStackView()
-	private var projectTrackingArea: NSTrackingArea?
 	private var isPointerInside = false
-	private var isCurrentProject = false
 	private var titleTrailingConstraint: NSLayoutConstraint?
 
 	private typealias Layout = LayoutTokens.ProjectActions
@@ -151,7 +149,6 @@ final class ProjectSidebarCellView: NSTableCellView
 		canStartChat: Bool
 	)
 	{
-		isCurrentProject = isCurrent
 		imageView?.image = DesktopIcons.image(
 			isExpanded ? .folderOpen : .folder,
 			accessibilityDescription: isExpanded ?
@@ -187,38 +184,37 @@ final class ProjectSidebarCellView: NSTableCellView
 		}
 	}
 
-	override func updateTrackingAreas()
+	override func viewDidMoveToSuperview()
 	{
-		super.updateTrackingAreas()
-		if let projectTrackingArea
-		{
-			removeTrackingArea(projectTrackingArea)
-		}
-		let tracking = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(tracking)
-		projectTrackingArea = tracking
+		super.viewDidMoveToSuperview()
+		setHovered((superview as? ConversationSidebarRowView)?.isHovered == true)
 	}
 
 	override func mouseEntered(with event: NSEvent)
 	{
-		isPointerInside = true
-		updateActions()
+		setHovered(true)
 	}
 
 	override func mouseExited(with event: NSEvent)
 	{
-		isPointerInside = false
+		setHovered(false)
+	}
+
+	func setHovered(_ hovered: Bool)
+	{
+		guard isPointerInside != hovered
+		else
+		{
+			return
+		}
+		isPointerInside = hovered
 		updateActions()
+		layoutSubtreeIfNeeded()
 	}
 
 	private func updateActions()
 	{
-		actionStack.isHidden = !isCurrentProject && !isPointerInside
+		actionStack.isHidden = !isPointerInside
 		guard let textField
 		else
 		{

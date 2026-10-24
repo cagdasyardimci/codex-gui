@@ -2,9 +2,9 @@ import AppKit
 
 final class ConversationSidebarRowView: NSTableRowView
 {
-	var isCurrentProject = false
+	var isProjectRow = false
 	var isTaskRow = false
-	private var isHovered = false
+	private(set) var isHovered = false
 	private var hoverTrackingArea: NSTrackingArea?
 
 	override var interiorBackgroundStyle: NSView.BackgroundStyle
@@ -15,13 +15,8 @@ final class ConversationSidebarRowView: NSTableRowView
 	override func drawBackground(in dirtyRect: NSRect)
 	{
 		super.drawBackground(in: dirtyRect)
-		let shouldDrawCurrentProjectBackground = isCurrentProject && !isSelected
-		let shouldDrawTaskHoverBackground = isTaskRow && isHovered && !isSelected
-		if shouldDrawCurrentProjectBackground
-		{
-			drawSelection(in: dirtyRect)
-		}
-		else if shouldDrawTaskHoverBackground
+		let shouldDrawHoverBackground = (isTaskRow || isProjectRow) && isHovered && !isSelected
+		if shouldDrawHoverBackground
 		{
 			AppKitColorTokens.rowHighlight.setFill()
 			selectionPath.fill()
@@ -30,6 +25,11 @@ final class ConversationSidebarRowView: NSTableRowView
 
 	override func drawSelection(in dirtyRect: NSRect)
 	{
+		guard !isProjectRow || isHovered
+		else
+		{
+			return
+		}
 		let path = selectionPath
 		AppKitColorTokens.rowHighlight.setFill()
 		path.fill()
@@ -77,7 +77,7 @@ final class ConversationSidebarRowView: NSTableRowView
 			removeTrackingArea(hoverTrackingArea)
 		}
 		hoverTrackingArea = nil
-		guard isTaskRow
+		guard isTaskRow || isProjectRow
 		else
 		{
 			return
@@ -94,17 +94,41 @@ final class ConversationSidebarRowView: NSTableRowView
 		)
 		addTrackingArea(tracking)
 		hoverTrackingArea = tracking
+		if let window
+		{
+			let pointer = convert(
+				window.mouseLocationOutsideOfEventStream,
+				from: nil
+			)
+			setHovered(window.isKeyWindow && visibleRect.contains(pointer))
+		}
+		else
+		{
+			setHovered(false)
+		}
 	}
 
 	override func mouseEntered(with event: NSEvent)
 	{
-		isHovered = true
-		needsDisplay = true
+		setHovered(true)
 	}
 
 	override func mouseExited(with event: NSEvent)
 	{
-		isHovered = false
+		setHovered(false)
+	}
+
+	private func setHovered(_ hovered: Bool)
+	{
+		isHovered = hovered
+		for cell in subviews.compactMap(
+			{
+				$0 as? ProjectSidebarCellView
+			}
+		)
+		{
+			cell.setHovered(hovered)
+		}
 		needsDisplay = true
 	}
 
