@@ -49,7 +49,7 @@ final class WorkspaceEffectRunner
 			Int,
 			String
 		)
-		case list, management, selectionPersistence
+		case list, sidebarList, management, selectionPersistence
 		case composerCommand
 		case response(String)
 		case sourceStartup, inputPreparation, unsentRelease, preferenceRestoration
@@ -359,7 +359,8 @@ final class WorkspaceEffectRunner
 					operation.isWindow
 				)
 			)
-		case .readConversationList(let operation): return (operation.context, .list)
+		case .readConversationList(let operation):
+			return (operation.context, operation.allProjects ? .sidebarList : .list)
 		case .forkConversation(let request): return (request.context, .composerCommand)
 		case .compactConversation(let operation), .startConversationReview(let operation):
 			return (operation.request.context, .composerCommand)

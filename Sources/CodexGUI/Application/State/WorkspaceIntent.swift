@@ -40,6 +40,8 @@ enum WorkspaceIntent
 		String
 	)
 	case refreshThreads
+	case loadSidebarThreads
+	case selectSidebarTask(ThreadSummary)
 	case setArchived(Bool)
 	case renameThread(String)
 	case archiveThread
@@ -307,6 +309,16 @@ final class WorkspaceIntentTarget
 				id,
 				name: name
 			)
+		case .loadSidebarThreads: inputs.loadSidebarThreads()
+		case .selectSidebarTask(let thread):
+			if let coordinator
+			{
+				coordinator.selectSidebarTask(thread)
+			}
+			else
+			{
+				inputs.selectSidebarTask(thread)
+			}
 		case .refreshThreads: inputs.refreshThreads()
 		case .setArchived(let enabled): inputs.setArchivedFilter(enabled)
 		case .renameThread(let name): inputs.renameSelectedThread(name)

@@ -259,6 +259,11 @@ struct WorkspaceStoreInputs
 		{
 			return
 		}
+		selectTaskInCheckout(thread)
+	}
+
+	private func selectTaskInCheckout(_ thread: ThreadSummary)
+	{
 		let projectURL = URL(fileURLWithPath: thread.cwd)
 			.standardizedFileURL.resolvingSymlinksInPath()
 		if projectURL.path == store.model.identity.canonicalCheckoutPath
@@ -914,6 +919,31 @@ struct WorkspaceStoreInputs
 		let context = store.operationContext(threadID: id)
 		store.dispatch(.conversations(.selectionRequested(context)))
 		return store.operation(for: context)
+	}
+
+	func loadSidebarThreads()
+	{
+		store.dispatch(.conversations(.threadListRequested(ConversationListOperation(
+			context: store.operationContext(),
+			archived: showingArchived,
+			allProjects: true
+		))))
+	}
+
+	func selectSidebarTask(_ thread: ThreadSummary)
+	{
+		guard store.model.conversations.sidebarThreadsArchived == showingArchived,
+				let listed = store.model.conversations.sidebarThreads?
+				.first(where:
+				{
+					$0.id == thread.id
+				}),
+				listed.cwd == thread.cwd, !listed.cwd.isEmpty
+		else
+		{
+			return
+		}
+		selectTaskInCheckout(listed)
 	}
 
 	func refreshThreads()

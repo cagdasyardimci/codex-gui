@@ -248,6 +248,27 @@ final class TaskWorkspaceCoordinator
 		{
 			return
 		}
+		selectListedTask(thread)
+	}
+
+	func selectSidebarTask(_ thread: ThreadSummary)
+	{
+		let listed = selectedStore.model.conversations.sidebarThreads?.first
+		{
+			$0.id == thread.id
+		}
+		guard selectedStore.model.conversations.sidebarThreadsArchived
+			== selectedStore.model.conversations.showingArchived,
+			let listed, listed.cwd == thread.cwd
+		else
+		{
+			return
+		}
+		selectListedTask(listed)
+	}
+
+	private func selectListedTask(_ thread: ThreadSummary)
+	{
 		if model.workspaces.values.contains(where:
 			{
 				$0.phase == .active && $0.threadID == thread.id

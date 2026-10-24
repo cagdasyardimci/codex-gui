@@ -465,6 +465,23 @@ enum ConversationReducer
 				acceptedSelection: &acceptedSelection
 			)
 		case .threadListRequested(let operation):
+			if operation.allProjects
+			{
+				guard valid(
+					operation.context,
+					model
+				), model.connection.isConnected,
+
+				operation.archived == model.conversations.showingArchived
+				else
+				{
+					return
+				}
+				model.conversations.pendingSidebarList = operation
+				model.conversations.sidebarListError = nil
+				result.effects.append(.readConversationList(operation))
+				return
+			}
 			guard valid(
 				operation.context,
 				model
@@ -482,6 +499,35 @@ enum ConversationReducer
 			let operation,
 			let observation
 		):
+			if operation.allProjects
+			{
+				guard valid(
+					operation.context,
+					model
+				),
+					model.conversations.pendingSidebarList?.context == operation.context
+				else
+				{
+					return
+				}
+				model.conversations.pendingSidebarList = nil
+				guard operation.archived == model.conversations.showingArchived
+				else
+				{
+					return
+				}
+				switch observation
+				{
+				case .succeeded(let threads):
+					model.conversations.sidebarThreads = threads
+					model.conversations.sidebarThreadsArchived = operation.archived
+					model.conversations.sidebarListError = nil
+				case .failed(let failure):
+					model.conversations.sidebarListError = "Could not load recent chats: " + failure
+						.message
+				}
+				return
+			}
 			guard valid(
 				operation.context,
 				model
@@ -1046,6 +1092,9 @@ enum ConversationReducer
 		switch event
 		{
 		case .connectionBegan, .connectionDisconnected:
+			model.conversations.pendingSidebarList = nil
+			model.conversations.sidebarThreads = nil
+			model.conversations.sidebarListError = nil
 			model.conversations.observedThreadNames.removeAll()
 			model.conversations.pendingReads.removeAll()
 			model.conversations.historyLoads.removeAll()

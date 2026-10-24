@@ -33,6 +33,7 @@ final class WorkspaceCodexService: CodexService
 	}
 	let turn = CodexTurn(json: ["id": "turn-one", "status": "inProgress", "items": []])!
 	var savedTurns: [CodexTurn] = []
+	var globalThreadSummaries: [ThreadSummary]?
 	var additionalThreads: [String: ThreadDetail] = [:]
 	/// List snapshots can lag the authoritative detail returned by read or resume.
 	var readThreadDetails: [String: ThreadDetail] = [:]
@@ -167,6 +168,11 @@ final class WorkspaceCodexService: CodexService
 	{
 		rateLimitReadCount += 1
 		return AccountRateLimitsSnapshot(json: ["rateLimits": ["primary": ["usedPercent": 0.0]]])!
+	}
+
+	func allThreads(archived: Bool) async throws -> [ThreadSummary]
+	{
+		globalThreadSummaries ?? ([thread] + additionalThreads.values.map(\.summary))
 	}
 
 	func threads(for directory: URL) async throws -> [ThreadSummary]

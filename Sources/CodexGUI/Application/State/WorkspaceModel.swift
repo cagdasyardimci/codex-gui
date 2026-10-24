@@ -542,6 +542,10 @@ enum ThreadManagementOperation
 struct ConversationsModel
 {
 	var threads: [ThreadSummary] = []
+	var sidebarThreads: [ThreadSummary]?
+	var sidebarThreadsArchived = false
+	var pendingSidebarList: ConversationListOperation?
+	var sidebarListError: String?
 	/// Notifications remain authoritative over an already pending list response.
 	var observedThreadNames: [String: String?] = [:]
 	var selectedConversation: ConversationKey = .newChat

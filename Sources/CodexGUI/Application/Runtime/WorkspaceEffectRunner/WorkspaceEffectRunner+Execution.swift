@@ -265,6 +265,13 @@ extension WorkspaceEffectRunner
 				preview: preview
 			))
 		case .readConversationList(let operation):
+			if operation.allProjects
+			{
+				return .conversations(.threadListReceived(
+					operation,
+					.succeeded(try await service.allThreads(archived: operation.archived))
+				))
+			}
 			let project = try conversationDirectory(context)
 			try await verifyWorkspace(managedWorkspace)
 			let threads = try await service.threads(

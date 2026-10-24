@@ -7,6 +7,30 @@ import Testing
 @Suite
 struct AppServerPaginationTests
 {
+	@Test func globalThreadListingOmitsCheckoutFilterAndKeepsCrossProjectPages() async throws
+	{
+		let fixture = try await AppServerListHistoryFixture.make(overlappingThreadPages: true)
+		defer
+		{
+			fixture.close()
+		}
+		try await fixture.server.connect()
+		let threads = try await fixture.server.allThreads(archived: false)
+		#expect(threads.map(\.id) == ["first", "shared", "last"])
+		#expect(Set(threads.map(\.cwd)).count == 2)
+		let requests = fixture.messages().filter
+		{
+			$0["method"] as? String == "thread/list"
+		}
+		#expect(requests.count == 2)
+		for request in requests
+		{
+			let params = try #require(request["params"] as? [String: Any])
+			#expect(params["cwd"] == nil)
+			#expect(params["archived"] as? Bool == false)
+		}
+	}
+
 	@Test(arguments: [false, true])
 	func threadListingKeepsOneRowPerIDAcrossOverlappingPages(archived: Bool) async throws
 	{

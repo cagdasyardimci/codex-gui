@@ -24,6 +24,7 @@ protocol CodexService: AnyObject
 	func models() async throws -> [ModelOption]
 	func skills(for directory: URL) async throws -> SkillCatalog
 	func rateLimits() async throws -> AccountRateLimitsSnapshot
+	func allThreads(archived: Bool) async throws -> [ThreadSummary]
 	func threads(for directory: URL) async throws -> [ThreadSummary]
 	func threads(
 		for directory: URL,
@@ -468,6 +469,11 @@ extension CodexService
 			model: model,
 			effort: effort
 		)
+	}
+
+	func allThreads(archived: Bool) async throws -> [ThreadSummary]
+	{
+		throw AppServerError.protocolError("This Codex service cannot list chats across projects.")
 	}
 
 	func threads(

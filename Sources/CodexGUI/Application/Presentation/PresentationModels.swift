@@ -65,6 +65,10 @@ struct ConversationSnapshot
 	var composerDraftLifetime = 0
 	let projectPath: String?
 	let threads: [ThreadSummary]
+	var sidebarThreads: [ThreadSummary]? = nil
+	var sidebarListLoading = false
+	var sidebarListError: String? = nil
+	var sidebarConnectionGeneration: Int? = nil
 	let selectedThreadID: String?
 	let entries: [ConversationEntry]
 	let canLoadEarlierTurns: Bool

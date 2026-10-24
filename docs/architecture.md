@@ -36,6 +36,14 @@ A synchronous local checkpoint records recoverable thread IDs before starting a 
 
 Shared persistence preserves existing project/thread keys and ordering. Task pins retain compact conversation summaries in shared local preferences, independent of the selected project. The sidebar shows pinned tasks and pinned projects in a global Pinned section, with the current project's expanded chats beneath its project row; opening a task from another project carries its thread ID through project adoption. Successful archive or permanent deletion removes its pin, and successful renames refresh its pinned title. Task context-menu mutations capture the row identity and revalidate workspace ownership and management eligibility before execution. Manual unread markers remain local to the navigation session and clear when the task is opened. Project context menus offer Pin or Unpin, Rename, Reveal in Finder, Archive chats and Remove project in that order. Rename changes only the local display name. Its custom AppKit sheet preselects that name and provides Save, Cancel and Close; Return or keypad Enter commits the field and saves, while Escape cancels. Completion retains the captured project and callback and revalidates the modal scope. Removal persistently hides the project and removes its project pin without deleting its folder, chats, individual task pins or drafts; explicitly reopening the folder restores its sidebar entry. Archive chats lists all unarchived conversations in the target checkout, validates their ownership and active status, then archives them sequentially. It removes individual pins only for confirmed archived chats and reports partial failures. A pending project archive blocks new work and checkout cleanup until completion.
 
+The sidebar's cross-project conversation listing has a separate result, pending operation and error
+from the current checkout's list. Both use the conversation-list effect, with independent runtime
+slots and request identities. Global listing omits the protocol's checkout filter, paginates with
+cursor-cycle detection, validates absolute checkout paths and deduplicates thread IDs. Results
+remain guarded by workspace, connection generation, request identity and archived filter. They do
+not replace the selected checkout's conversations or hydrate foreign histories. Cross-project
+selection revalidates the listed thread and checkout and uses the existing project-adoption path.
+
 ## Presentation
 
 Task-management controls evaluate the captured target conversation's execution eligibility, and reducers revalidate that target when a deferred action is accepted. Workspace-wide submission and recovery barriers still apply. Execution chrome and navigation retain the same outcome uncertainty; an unresolved outcome is not presented as a confirmed failure. Accepted turn-status aliases share one lifecycle interpretation for live reduction, recovery, labels and elapsed-time refresh.

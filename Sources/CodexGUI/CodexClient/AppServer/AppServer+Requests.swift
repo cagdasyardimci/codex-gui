@@ -120,7 +120,26 @@ extension AppServer
 		archived: Bool
 	) async throws -> [ThreadSummary]
 	{
-		let cwd = directory.standardizedFileURL.path
+		try await conversationList(
+			directory: directory,
+			archived: archived
+		)
+	}
+
+	func allThreads(archived: Bool) async throws -> [ThreadSummary]
+	{
+		try await conversationList(
+			directory: nil,
+			archived: archived
+		)
+	}
+
+	private func conversationList(
+		directory: URL?,
+		archived: Bool
+	) async throws -> [ThreadSummary]
+	{
+		let cwd = directory?.standardizedFileURL.path
 		var threadSummaries: [ThreadSummary] = []
 		var seenThreadIDs: Set<String> = []
 		var cursorTracker = PaginationCursorTracker(
@@ -131,10 +150,13 @@ extension AppServer
 		{
 			var parameters: [String: Any] = [
 				"archived": archived,
-				"cwd": cwd,
 				"limit": 100,
 				"sourceKinds": ["appServer", "cli", "vscode"],
 			]
+			if let cwd
+			{
+				parameters["cwd"] = cwd
+			}
 			if let cursor
 			{
 				parameters["cursor"] = cursor
@@ -151,13 +173,18 @@ extension AppServer
 			let page = rows.compactMap(ThreadSummary.init(json:))
 			guard page.count == rows.count, page.allSatisfy(
 				{
-					$0.cwd == cwd
+					thread in cwd.map
+					{
+						thread.cwd == $0
+					} ?? thread.cwd.hasPrefix("/")
 				}
 			)
 			else
 			{
 				throw AppServerError
-					.protocolError("Codex returned a conversation from another checkout.")
+					.protocolError(cwd == nil
+						? "Codex returned an invalid checkout in the global conversation list."
+						: "Codex returned a conversation from another checkout.")
 			}
 			// The backend can repeat task IDs within a page or across pages.
 			threadSummaries += page.filter

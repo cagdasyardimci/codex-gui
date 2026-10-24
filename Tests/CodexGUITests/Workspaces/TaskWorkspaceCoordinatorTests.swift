@@ -516,6 +516,49 @@ struct TaskWorkspaceCoordinatorTests
 		}
 	}
 
+	@Test func globalSidebarOpeningAdoptsUnpinnedChatAndRejectsSubstitutedCheckout() async throws
+	{
+		let fixture = try await TaskExecutionFixture()
+		defer
+		{
+			fixture.remove()
+		}
+		await fixture.sourceState.inputs.connect()
+		let next = fixture.root.appendingPathComponent("global-source")
+		try await BackgroundTestWork.perform
+		{
+			try FileManager.default.createDirectory(
+				at: next.appendingPathComponent(".git"),
+				withIntermediateDirectories: true
+			)
+		}
+		let thread = try #require(ThreadSummary(json: ["id": "global-thread", "cwd": next.path]))
+		fixture.sourceService.globalThreadSummaries = [thread]
+		fixture.sourceState.inputs.loadSidebarThreads()
+		try #require(await waitForStorePredicate(fixture.sourceState.store)
+		{
+			fixture.sourceState.currentSnapshot.sidebarThreads?
+				.contains
+				{
+					$0.id == thread.id
+				} == true
+		})
+		#expect(fixture.sourceState.currentSnapshot.threads.allSatisfy
+		{
+			$0.id != thread.id
+		})
+		let original = fixture.coordinator.sourceProjectURL
+		let substituted = try #require(ThreadSummary(json: [
+			"id": thread.id,
+			"cwd": fixture.root.path
+		]))
+		fixture.coordinator.selectSidebarTask(substituted)
+		#expect(fixture.coordinator.sourceProjectURL == original)
+		fixture.coordinator.selectSidebarTask(thread)
+		#expect(fixture.coordinator.sourceProjectURL?.path == next.path)
+		#expect(fixture.coordinator.currentSnapshot.selectedThreadID == thread.id)
+	}
+
 	@Test func pinnedTaskOpeningAdoptsItsProjectAndThreadTogether() async throws
 	{
 		let timing = TestTiming.begin("test.body")

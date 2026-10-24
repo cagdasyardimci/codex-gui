@@ -498,6 +498,12 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		snapshot.sidebarThreads = model.conversations.sidebarThreadsArchived == model.conversations
+			.showingArchived
+			? model.conversations.sidebarThreads : nil
+		snapshot.sidebarListLoading = model.conversations.pendingSidebarList != nil
+		snapshot.sidebarListError = model.conversations.sidebarListError
+		snapshot.sidebarConnectionGeneration = isConnected ? connectionGeneration : nil
 		if selectedThreadID == activeThreadID,
 			viewedContent.content.liveChangeTurnID == activeTurnID,
 			viewedContent.content.hasAggregateDiff

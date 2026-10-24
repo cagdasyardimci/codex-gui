@@ -53,7 +53,9 @@ struct AppServerListHistoryFixture
 		        if method == 'thread/list' and overlapping_thread_pages:
 		            page = list_counts[method]
 		            ids = ['first', 'first', 'shared'] if page == 1 else ['shared', 'last']
-		            rows = [{'id': id, 'cwd': message['params']['cwd'],
+		            default_cwd = str(directory if page == 1 else directory / 'other')
+		            cwd = message['params'].get('cwd', default_cwd)
+		            rows = [{'id': id, 'cwd': cwd,
 		                     'name': 'Same title', 'preview': 'page-' + str(page)} for id in ids]
 		            if page == invalid_duplicate_page:
 		                rows[1 if page == 1 else 0]['cwd'] = '/foreign-checkout'

@@ -117,6 +117,7 @@ struct ConversationListOperation
 	let context: OperationContext
 	let archived: Bool
 	var boundThreadID: String? = nil
+	var allProjects = false
 }
 
 struct ContextLoadOperation
