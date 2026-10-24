@@ -64,11 +64,11 @@ extension NavigationViewController
 		newChatButton.setAccessibilityLabel("Start a new conversation")
 		AppKitControlStyling.styleButton(
 			newChatButton,
-			icon: .chatCompose
+			icon: .composeEditSquare
 		)
 		newChatButton.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
 		newChatButton.contentTintColor = AppKitColorTokens.sidebarText
-		newChatButton.image = DesktopIcons.image(.chatCompose)
+		newChatButton.image = DesktopIcons.image(.composeEditSquare)
 		newChatButton.alignment = .left
 	}
 

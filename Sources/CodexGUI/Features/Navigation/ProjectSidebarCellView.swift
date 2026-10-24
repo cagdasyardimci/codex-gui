@@ -122,7 +122,7 @@ final class ProjectSidebarCellView: NSTableCellView
 		newChatButton.action = #selector(startChat)
 		AppKitControlStyling.styleButton(
 			newChatButton,
-			icon: .chatCompose
+			icon: .composeEditSquare
 		)
 		newChatButton.imagePosition = .imageOnly
 		infoButton.image = DesktopIcons.image(
@@ -130,7 +130,7 @@ final class ProjectSidebarCellView: NSTableCellView
 			size: Layout.actionIconSize
 		)
 		newChatButton.image = DesktopIcons.image(
-			.chatCompose,
+			.composeEditSquare,
 			size: Layout.actionIconSize
 		)
 	}
