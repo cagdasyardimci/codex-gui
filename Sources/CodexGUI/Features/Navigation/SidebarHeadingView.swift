@@ -64,10 +64,10 @@ final class SidebarHeadingView: NSStackView
 		if isHovered && !hoverButtons.isEmpty
 		{
 			AppKitColorTokens.rowHighlight.setFill()
-			NSBezierPath(
-				roundedRect: bounds,
-				xRadius: ShapeTokens.SidebarSelection.cornerRadius,
-				yRadius: ShapeTokens.SidebarSelection.cornerRadius
+			AppKitShapePath.roundedRect(
+				bounds,
+				radius: ShapeTokens.SidebarSelection.cornerRadius,
+				curve: ShapeTokens.SidebarSelection.cornerCurve
 			).fill()
 		}
 		super.draw(dirtyRect)

@@ -72,6 +72,8 @@ Composer and project preference controls share effort labels through [ModelPrefe
 Project rows reveal their ellipsis and New Chat buttons only while hovered, including the current
 project. Project row backgrounds use the shared sidebar row highlight only while hovered,
 including when the project is current or its row is selected.
+Project, chat and section-heading hover backgrounds share the sidebar superellipse contour;
+high-contrast row outlines follow the same contour.
 
 The Projects / Recents heading highlights its background and reveals its ellipsis and add buttons
 while hovered. The controls keep their layout space while hidden.

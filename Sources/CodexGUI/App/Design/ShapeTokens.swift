@@ -37,6 +37,7 @@ enum ShapeTokens
 	enum SidebarSelection
 	{
 		static let cornerRadius: CGFloat = 12.5
+		static let cornerCurve = CornerCurve.superellipse(1.5)
 		static let outlineWidth: CGFloat = 1
 
 		static var outlineInset: CGFloat

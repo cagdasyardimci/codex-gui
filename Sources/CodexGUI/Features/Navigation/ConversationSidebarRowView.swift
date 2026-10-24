@@ -36,13 +36,13 @@ final class ConversationSidebarRowView: NSTableRowView
 		if NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
 		{
 			NSColor.secondaryLabelColor.setStroke()
-			let outline = NSBezierPath(
-				roundedRect: selectionRect.insetBy(
+			let outline = AppKitShapePath.roundedRect(
+				selectionRect.insetBy(
 					dx: ShapeTokens.SidebarSelection.outlineInset,
 					dy: ShapeTokens.SidebarSelection.outlineInset
 				),
-				xRadius: ShapeTokens.SidebarSelection.outlineRadius,
-				yRadius: ShapeTokens.SidebarSelection.outlineRadius
+				radius: ShapeTokens.SidebarSelection.outlineRadius,
+				curve: ShapeTokens.SidebarSelection.cornerCurve
 			)
 			outline.lineWidth = ShapeTokens.SidebarSelection.outlineWidth
 			outline.stroke()
@@ -62,10 +62,10 @@ final class ConversationSidebarRowView: NSTableRowView
 	}
 	private var selectionPath: NSBezierPath
 	{
-		NSBezierPath(
-			roundedRect: selectionRect,
-			xRadius: ShapeTokens.SidebarSelection.cornerRadius,
-			yRadius: ShapeTokens.SidebarSelection.cornerRadius
+		AppKitShapePath.roundedRect(
+			selectionRect,
+			radius: ShapeTokens.SidebarSelection.cornerRadius,
+			curve: ShapeTokens.SidebarSelection.cornerCurve
 		)
 	}
 
