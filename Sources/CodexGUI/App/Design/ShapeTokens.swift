@@ -77,6 +77,11 @@ enum ShapeTokens
 		static let darkRowRadius: CGFloat = 15
 	}
 
+	enum SidebarMenu
+	{
+		static let rowRadius: CGFloat = 15
+	}
+
 	enum ModelList
 	{
 		static let rowRadius: CGFloat = 15

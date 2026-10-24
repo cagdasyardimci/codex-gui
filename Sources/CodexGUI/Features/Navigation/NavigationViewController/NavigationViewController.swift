@@ -4,6 +4,10 @@ import AppKit
 final class NavigationViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate,
 	NSSearchFieldDelegate
 {
+	var onLoadSidebarThreads: (() -> Void)?
+	var onSelectSidebarTask: ((ThreadSummary) -> Void)?
+	let sidebarMenu = SidebarOrganizationMenu()
+	var sidebarLoadTask: Task<Void, Never>?
 	var onOpenProject: (() -> Void)?
 	var onSelectRecentProject: ((URL) -> Void)?
 	var onNewChat: (() -> Void)?
@@ -27,6 +31,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	var onRemoveProject: ((URL) -> Void)?
 	var onRenameProject: ((URL, String) -> Void)?
 	var onNewChatInProject: ((URL) -> Void)?
+
+	var sidebarPreferences = SidebarPreferences()
 
 	let recentProjectsButton = NSPopUpButton()
 	let taskPicker = NSPopUpButton()
@@ -58,6 +64,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			height: 480
 		)
 	)
+	let sidebarOptionsButton = NSButton()
 	let projectActionsButton = NSButton(
 		title: "Project Actions",
 		target: nil,
@@ -215,6 +222,32 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			projectPath: snapshot.projectPath
 		)
 		let previousPresentation = renderedPresentation
+		if previousPresentation?.owner.projectIdentity != snapshot.owner.projectIdentity
+		{
+			sidebarMenu.close()
+		}
+		let sidebarRefreshNeeded = snapshot.sidebarConnectionGeneration != nil && (
+			previousPresentation?.owner.projectIdentity != snapshot.owner.projectIdentity
+				|| previousPresentation?.sidebarConnectionGeneration != snapshot
+				.sidebarConnectionGeneration
+				|| previousPresentation?.threads != snapshot.threads
+				|| previousPresentation?.showingArchived != snapshot.showingArchived
+		)
+		if sidebarPreferences.organization == .oneList && sidebarRefreshNeeded
+		{
+			sidebarLoadTask?.cancel()
+			let callback = onLoadSidebarThreads
+			sidebarLoadTask = Task
+			{
+				@MainActor in
+				guard !Task.isCancelled
+				else
+				{
+					return
+				}
+				callback?()
+			}
+		}
 		guard previousPresentation != snapshot
 		else
 		{
@@ -281,7 +314,11 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		renderThreadAvailability(snapshot)
 
 		let shouldReloadSidebar =
-			threads != snapshot.threads || selectedThreadID != snapshot.selectedThreadID
+			threads != snapshot.threads || previousPresentation?.sidebarThreads != snapshot
+				.sidebarThreads
+				|| previousPresentation?.sidebarListLoading != snapshot.sidebarListLoading
+				|| previousPresentation?.sidebarListError != snapshot.sidebarListError
+				|| selectedThreadID != snapshot.selectedThreadID
 				|| activeThreadChanged || activeStateChanged || projectsChanged || unreadChanged
 				|| previousPresentation?.threadExecutions != snapshot.threadExecutions
 				|| previousPresentation?.threadManagementAvailability
@@ -390,6 +427,10 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	}
 	@objc func refresh()
 	{
+		if sidebarPreferences.organization == .oneList
+		{
+			onLoadSidebarThreads?()
+		}
 		onRefresh?()
 	}
 

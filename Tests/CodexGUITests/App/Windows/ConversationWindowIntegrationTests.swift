@@ -464,7 +464,7 @@ struct ConversationWindowIntegrationTests
 			row: 1,
 			makeIfNecessary: true
 		))
-		#expect(projectActions.toolTip?.contains("Task: Stopped") == true)
+		#expect(projectActions.toolTip == "Add new project")
 		#expect(row.accessibilityLabel()?.contains("Stopped task") == true)
 	}
 

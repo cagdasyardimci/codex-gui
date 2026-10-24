@@ -395,17 +395,14 @@ struct TaskWorkspaceWindowLayoutTests
 		let openActions = try #require(
 			findControl(
 				in: navigation.view,
-				label: "Project and conversation actions"
+				label: "Add new project"
 			) as? NSButton
 		)
 		window.makeKeyAndOrderFront(nil)
 		try #require(openActions.isEnabled)
-		// Open the real popover through its configured action; click-animation polling is unrelated
-		// to layout coverage and can stop SwiftPM's async-main run loop via HIToolbox's wakeup.
-		try #require(openActions.sendAction(
-			try #require(openActions.action),
-			to: openActions.target
-		))
+		// Management remains available from the heading's context menu; the plus adds a project.
+		// This fixture covers the retained popover's layout directly.
+		navigation.toggleProjectActions(openActions)
 		// Scope popover queries to this fixture, even when other tests have visible windows.
 		try #require(navigation.projectActionsPopover.isShown)
 		let actionsView = try #require(navigation.projectActionsPopover.contentViewController?.view)
@@ -465,10 +462,7 @@ struct TaskWorkspaceWindowLayoutTests
 				#expect(control.frame.height > 0)
 			}
 		}
-		try #require(openActions.sendAction(
-			try #require(openActions.action),
-			to: openActions.target
-		))
+		navigation.toggleProjectActions(openActions)
 		// Open the real search popover; layout coverage does not require text-input focus.
 		navigation.showSearch()
 		try #require(navigation.searchPopover.isShown)

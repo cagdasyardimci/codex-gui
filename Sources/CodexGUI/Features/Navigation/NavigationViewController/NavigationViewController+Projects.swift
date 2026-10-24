@@ -62,6 +62,7 @@ extension NavigationViewController
 
 	@objc func toggleProjectActions(_ sender: NSButton? = nil)
 	{
+		sidebarMenu.close()
 		if projectActionsPopover.isShown
 		{
 			projectActionsPopover.performClose(nil)
@@ -108,6 +109,7 @@ extension NavigationViewController
 
 	func showProjectInfo(_ project: URL)
 	{
+		sidebarMenu.close()
 		if projectInfoPopover.isShown && projectInfoProject == project
 		{
 			projectInfoPopover.performClose(nil)

@@ -5,6 +5,10 @@ struct NavigationPresentation: Equatable
 	let owner: FeaturePresentationOwner
 	let projectPath: String?
 	let threads: [ThreadSummary]
+	let sidebarThreads: [ThreadSummary]?
+	let sidebarListLoading: Bool
+	let sidebarListError: String?
+	let sidebarConnectionGeneration: Int?
 	let selectedThreadID: String?
 	let executionState: ExecutionState
 	let activeThreadID: String?
@@ -37,6 +41,10 @@ struct NavigationPresentation: Equatable
 		)
 		projectPath = snapshot.projectPath
 		threads = snapshot.threads
+		sidebarThreads = snapshot.sidebarThreads
+		sidebarListLoading = snapshot.sidebarListLoading
+		sidebarListError = snapshot.sidebarListError
+		sidebarConnectionGeneration = snapshot.sidebarConnectionGeneration
 		selectedThreadID = snapshot.selectedThreadID
 		executionState = snapshot.executionState
 		activeThreadID = snapshot.activeThreadID

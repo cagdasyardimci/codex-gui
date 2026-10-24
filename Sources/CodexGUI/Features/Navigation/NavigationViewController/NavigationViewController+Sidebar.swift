@@ -11,6 +11,7 @@ extension NavigationViewController
 	func showSearch()
 	{
 		_ = view
+		sidebarMenu.close()
 		projectActionsPopover.performClose(nil)
 		projectInfoPopover.performClose(nil)
 		renderChatSearchResults()
@@ -45,7 +46,7 @@ extension NavigationViewController
 	func filterThreads()
 	{
 		let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-		visibleThreads = threads.filter
+		visibleThreads = sidebarThreads.filter
 		{
 			thread in
 			guard !query.isEmpty
@@ -66,11 +67,24 @@ extension NavigationViewController
 		searchButton.contentTintColor = query.isEmpty ? .secondaryLabelColor : .controlAccentColor
 		searchButton.toolTip = query.isEmpty ? "Search conversation titles and previews" : query
 		emptyLabel.stringValue = query.isEmpty ? "No projects." : "No matching conversations."
+		if sidebarPreferences.organization == .oneList && query.isEmpty
+		{
+			emptyLabel.stringValue = renderedPresentation?.sidebarListError
+				??
+				(renderedPresentation?
+					.sidebarListLoading == true ? "Loading recent chats…" : "No recent chats.")
+		}
 		emptyLabel.isHidden = query.isEmpty ? !sidebarItems.isEmpty
 			: !visibleThreads.isEmpty || pinnedTasks.contains
 			{
 				taskMatchesSearch($0)
 			}
+		if sidebarPreferences.organization == .oneList,
+			renderedPresentation?.sidebarListError != nil || renderedPresentation?
+			.sidebarListLoading == true
+		{
+			emptyLabel.isHidden = false
+		}
 		updateManagementButtons()
 		if searchPopover.isShown
 		{
@@ -105,7 +119,7 @@ extension NavigationViewController
 		}
 		else
 		{
-			onSelectThread?(thread.id)
+			chooseSidebarThread(thread)
 		}
 	}
 
@@ -144,8 +158,20 @@ extension NavigationViewController
 			},
 			isCurrentProjectCollapsed: isCurrentProjectCollapsed,
 			projectTaskLimit: projectTaskLimit,
-			removedProjectPaths: removedProjectPaths
+			removedProjectPaths: removedProjectPaths,
+			organization: sidebarPreferences.organization,
+			sortOrder: sidebarPreferences.sortOrder,
+			manualThreadIDs: sidebarPreferences.manualThreadIDs
 		)
+		(projectsHeader?.arrangedSubviews.first as? NSTextField)?.stringValue =
+			sidebarPreferences.organization == .oneList ? "Recents" : "Projects"
+		if let addButton = projectsHeader?.arrangedSubviews.last as? NSButton
+		{
+			let flat = sidebarPreferences.organization == .oneList
+			addButton.action = flat ? #selector(newChat) : #selector(openProject)
+			addButton.setAccessibilityLabel(flat ? "New chat" : "Add new project")
+			addButton.toolTip = flat ? "New chat" : "Add new project"
+		}
 		projectsHeader?.isHidden = sidebarItems.contains
 		{
 			if case .sectionHeader = $0
@@ -290,7 +316,7 @@ extension NavigationViewController
 	{
 		let cell = NSTableCellView(frame: .zero)
 		let header: NSView
-		if title == "Projects"
+		if title == "Projects" || title == "Recents"
 		{
 			header = makeProjectsHeader(actionsButton: NSButton())
 		}
@@ -371,7 +397,7 @@ extension NavigationViewController
 		{
 			$0.id == thread.id
 		}
-		cell.setPinnedRow(isPinnedRow)
+		cell.setPinnedRow(isPinnedRow || sidebarPreferences.organization == .oneList)
 		cell.onRename =
 		{
 			[weak self] in self?.presentRenameTask(thread)
@@ -449,7 +475,8 @@ extension NavigationViewController
 			project: project,
 			name: displayName(for: project),
 			isCurrent: project == currentProject,
-			isExpanded: project == currentProject && !isCurrentProjectCollapsed,
+			isExpanded: sidebarPreferences.organization == .byProject
+				&& project == currentProject && !isCurrentProjectCollapsed,
 			isPinned: pinnedProjectPaths.contains(projectKey(for: project)),
 			canStartChat: canStartProjectChat
 		)
@@ -542,7 +569,7 @@ extension NavigationViewController
 			markTaskRead(thread.id)
 			if thread.id != selectedThreadID
 			{
-				onSelectThread?(thread.id)
+				chooseSidebarThread(thread)
 			}
 		}
 	}

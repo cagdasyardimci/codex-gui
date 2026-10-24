@@ -240,6 +240,15 @@ enum TypographyTokens
 		static let explanation = Role(size: 12)
 	}
 
+	enum SidebarMenu
+	{
+		static let lineHeight: CGFloat = 18.5703125
+		static let row = Role(
+			size: 13,
+			lineHeight: lineHeight
+		)
+	}
+
 	enum ModelPopover
 	{
 		static let effort = Role(

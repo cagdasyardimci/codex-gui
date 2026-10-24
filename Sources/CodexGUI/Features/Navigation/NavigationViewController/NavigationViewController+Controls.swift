@@ -74,24 +74,64 @@ extension NavigationViewController
 
 	func makeProjectsHeader(actionsButton: NSButton? = nil) -> NSStackView
 	{
-		let projectActionsButton = actionsButton ?? self.projectActionsButton
-		let projectsCaption = SidebarTextField(labelWithString: "Projects")
+		let sidebarOptionsButton = actionsButton ?? self.sidebarOptionsButton
+		let projectsCaption = SidebarTextField(
+			labelWithString: sidebarPreferences.organization == .oneList ? "Recents" : "Projects"
+		)
 		projectsCaption.font = AppKitFontResolver.font(TypographyTokens.Sidebar.section)
 		projectsCaption.textColor = AppKitColorTokens.secondaryText
-		projectActionsButton.target = self
-		projectActionsButton.action = #selector(toggleProjectActions(_:))
-		projectActionsButton.setAccessibilityLabel("Project and conversation actions")
+		sidebarOptionsButton.target = self
+		sidebarOptionsButton.action = #selector(showSidebarMenu(_:))
+		sidebarOptionsButton.setAccessibilityLabel("Organize sidebar and sort chats")
 		AppKitControlStyling.styleButton(
-			projectActionsButton,
+			sidebarOptionsButton,
 			icon: .dotsHorizontal
 		)
-		projectActionsButton.imagePosition = .imageOnly
-		projectActionsButton.toolTip = "Project and conversation actions"
-		let projectsHeader = makeSidebarHeading([projectsCaption, NSView(), projectActionsButton])
-		projectActionsButton.widthAnchor
+		sidebarOptionsButton.imagePosition = .imageOnly
+		sidebarOptionsButton.toolTip = "Organize sidebar and sort chats"
+		let addButton = actionsButton == nil ? projectActionsButton : NSButton(
+			title: "Project Actions",
+			target: nil,
+			action: nil
+		)
+		addButton.target = self
+		addButton.action = sidebarPreferences.organization == .oneList
+			? #selector(newChat) : #selector(openProject)
+		AppKitControlStyling.styleButton(
+			addButton,
+			icon: .plus
+		)
+		addButton.imagePosition = .imageOnly
+		addButton.setAccessibilityLabel(
+			sidebarPreferences.organization == .oneList ? "New chat" : "Add new project"
+		)
+		addButton.toolTip =
+			sidebarPreferences.organization == .oneList ? "New chat" : "Add new project"
+		addButton.widthAnchor.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize)
+			.isActive = true
+		addButton.heightAnchor.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize)
+			.isActive = true
+		let projectsHeader = makeSidebarHeading([
+			projectsCaption,
+			NSView(),
+			sidebarOptionsButton,
+			addButton
+		])
+		sidebarOptionsButton.widthAnchor
 			.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize).isActive = true
-		projectActionsButton.heightAnchor
+		sidebarOptionsButton.heightAnchor
 			.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize).isActive = true
+		let management = NavigationContextMenu(title: "Project management")
+		management.addAction(
+			title: "Project and conversation actions",
+			icon: .folder,
+			callback:
+			{
+				[weak self, weak addButton] in
+				self?.toggleProjectActions(addButton)
+			}
+		)
+		projectsHeader.menu = management
 		return projectsHeader
 	}
 
@@ -217,6 +257,11 @@ extension NavigationViewController
 		chatsTable.action = #selector(sidebarClicked)
 		chatsTable.delegate = self
 		chatsTable.dataSource = self
+		chatsTable.registerForDraggedTypes([Self.sidebarThreadPasteboardType])
+		chatsTable.setDraggingSourceOperationMask(
+			.move,
+			forLocal: true
+		)
 		chatsTable.onContextMenuForRow =
 		{
 			[weak self] row in self?.taskContextMenu(for: row)

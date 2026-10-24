@@ -74,18 +74,9 @@ extension NavigationViewController
 		returnToTaskButton.isEnabled =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID != snapshot.selectedThreadID
 		returnToTaskButton.isHidden = !returnToTaskButton.isEnabled
-		projectActionsButton.contentTintColor =
-			snapshot
-				.showingArchived || activeState != nil ? .controlAccentColor : .secondaryLabelColor
+		projectActionsButton.contentTintColor = AppKitColorTokens.secondaryText
 		projectActionsButton.toolTip =
-			[
-				"Project and conversation actions",
-				activeTaskLabel.stringValue,
-				taskSummaryLabel.stringValue,
-			].filter
-			{
-				!$0.isEmpty
-			}.joined(separator: "\n")
+			sidebarPreferences.organization == .oneList ? "New chat" : "Add new project"
 		return activeState
 	}
 

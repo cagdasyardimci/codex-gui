@@ -69,6 +69,28 @@ Composer and project preference controls share effort labels through [ModelPrefe
 
 ## Conversation and navigation presentation
 
+The sidebar heading's ellipsis opens an arrowless custom AppKit menu with **Organize sidebar**
+(**By project**, **In one list**) and **Sort chats by** (**Last updated**, **Manual order**).
+Its main surface is 220 points wide and submenus are 180 points wide, with 4-point gutters,
+13-point interface text, 28.5703125-point rows and right-aligned checkmarks. Checkmarks use
+75% opacity at rest and full opacity while their row is hovered or keyboard-highlighted.
+The surfaces use
+shared popover blur, border and shadow styling. Hover or click opens a submenu; arrows navigate,
+Return, keypad Enter or Space chooses, Left closes a submenu, and Escape dismisses. Outside clicks,
+window deactivation, closure and anchor removal dismiss without taking focus. The panel follows
+its anchor's appearance and restores the prior responder after explicit dismissal.
+
+The adjacent plus adds a project in grouped mode and starts a chat in flat mode. The heading's
+context menu retains access to project and conversation management. By project retains
+current-project expansion and Show more. In one list displays unarchived chats across projects
+under **Recents**, sourced from the backend's global conversation listing; the existing archived
+filter requests the corresponding global archived list. Pins remain separate. Loading and failure
+states stay visible, and selecting a cross-project chat adopts its validated checkout before opening
+its history. Last updated sorts newest first, preserving source order for equal or missing dates.
+Manual order starts from that order and supports dragging ordinary chat rows while search is empty.
+Reordering preserves selection and saved positions for other projects; newly listed chats follow
+saved chats. Pins and project membership are independent of this presentation order.
+
 Hiding the pinned summary releases the inspector pane when it has no detail or tool content. The transcript and composer center within the resulting conversation pane at their existing reading width. Content visibility does not overwrite saved inspector visibility or detail width; an expanded conversation keeps its containing pane and releases only its summary aside.
 
 Chat search and changed-file jump use the shared arrowless `DesktopSearchPanel`. Its explicit

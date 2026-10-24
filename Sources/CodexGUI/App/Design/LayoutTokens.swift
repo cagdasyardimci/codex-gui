@@ -3,6 +3,27 @@ import Foundation
 /// Design inputs and simple derived measurements in AppKit points; layout policy is feature-local.
 enum LayoutTokens
 {
+	enum SidebarMenu
+	{
+		static let mainWidth: CGFloat = 220
+		static let submenuWidth: CGFloat = 180
+		static let gutter: CGFloat = 4
+		static let horizontalInset: CGFloat = 8
+		static let verticalInset: CGFloat = 5
+		static let iconSize: CGFloat = 16
+		static let iconSpacing: CGFloat = 6
+		static let submenuGap: CGFloat = 5
+		static let shadowOutset: CGFloat = 24
+		static var rowHeight: CGFloat
+		{
+			TypographyTokens.SidebarMenu.lineHeight + 2 * verticalInset
+		}
+		static var height: CGFloat
+		{
+			2 * gutter + 2 * rowHeight
+		}
+	}
+
 	static let sidebar = Sidebar()
 	static let composer = Composer()
 	static let permission = Permission()

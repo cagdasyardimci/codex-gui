@@ -51,6 +51,14 @@ extension MainWindowController
 		{
 			target.dispatch(.refreshThreads)
 		}
+		navigation.onLoadSidebarThreads =
+		{
+			target.dispatch(.loadSidebarThreads)
+		}
+		navigation.onSelectSidebarTask =
+		{
+			target.dispatch(.selectSidebarTask($0))
+		}
 		navigation.onSelectThread =
 		{
 			target.dispatch(.selectThread($0))
