@@ -58,7 +58,7 @@ final class ModelEffortPopoverView: NSViewController
 
 	override func loadView()
 	{
-		let surface = EffortPopoverSurface()
+		let surface = DesktopPopoverSurface()
 		configureEffortLabel()
 		configureActionButtons()
 		configureModelMenuButton()

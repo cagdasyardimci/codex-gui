@@ -115,7 +115,7 @@ The composer editor paints the same surface color as its enclosing view so AppKi
 
 Project/location strips and voice controls are outside the existing composer components. Matching the reference does not require reserving footer space for omitted controls. The Tools landing page places Changes and Files side by side when two columns fit, and stacks full-width tiles in narrow panes. Use the source owners above for sizing calculations.
 
-Popover surface shadows need transparent panel padding to avoid clipping; adding a second native window shadow would darken the result. AppKit controls backdrop blur, which requires paired visual acceptance against the reference. See [popover styling](../Sources/CodexGUI/Features/Conversation/Composer/EffortPopoverStyle.swift) and the panel owner above for implementation.
+Popover surface shadows need transparent panel padding to avoid clipping; adding a second native window shadow would darken the result. AppKit controls backdrop blur, which requires paired visual acceptance against the reference. See [popover surface](../Sources/CodexGUI/Features/Shared/DesktopPopoverSurface.swift) and the panel owner above for implementation.
 
 Effort hover motion approximates the observed trajectory and respects Reduce Motion. Hover and particle implementation belongs to [EffortSlider](../Sources/CodexGUI/Features/Conversation/Composer/EffortSlider.swift).
 
