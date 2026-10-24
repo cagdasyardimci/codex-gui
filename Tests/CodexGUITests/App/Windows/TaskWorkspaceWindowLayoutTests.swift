@@ -224,6 +224,11 @@ struct TaskWorkspaceWindowLayoutTests
 		#expect(controller.statusButton.fittingSize.width <= 36)
 		#expect(controller.statusButton.toolTip
 			== "\(snapshot.accountDescription) · Awaiting approval")
+		let stop = try #require(findControl(
+			in: conversation.view,
+			label: "Stop current task"
+		))
+		#expect(stop.isHidden)
 		let details = try #require(findRequestDetails(in: conversation.view))
 		#expect(!details.isHidden)
 		#expect(details.frame.height >= 36 && details.frame.height <= 140)
@@ -231,7 +236,6 @@ struct TaskWorkspaceWindowLayoutTests
 		for label in [
 			"Add attachments or inspect request context",
 			"Send message",
-			"Stop current task",
 		]
 		{
 			let control = try #require(findControl(

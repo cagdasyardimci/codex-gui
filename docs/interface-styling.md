@@ -139,6 +139,8 @@ place the same panel inline with their content.
 
 Each main window has its own toolbar identifier because its tools-pane composition can differ from other windows. AppKit synchronizes items between toolbars with the same identifier, including when configuration autosaving is disabled. Toolbar composition belongs to the window's controller; configuration autosaving stays disabled because the application supplies that composition.
 
+The composer footer shows one submission control at a time. While viewing a stoppable active task, an empty draft shows Stop; text, attached context or a pending image import replaces it with the send arrow. Running turns retain the existing steering action, and pending image imports keep submission disabled.
+
 The composer editor paints the same surface color as its enclosing view so AppKit can repaint the previous insertion point. Its setup belongs to [composer configuration](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+Composer.swift).
 
 Project/location strips and voice controls are outside the existing composer components. Matching the reference does not require reserving footer space for omitted controls. The Tools landing page places Changes and Files side by side when two columns fit, and stacks full-width tiles in narrow panes. Use the source owners above for sizing calculations.

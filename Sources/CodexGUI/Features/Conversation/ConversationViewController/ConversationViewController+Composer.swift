@@ -443,8 +443,6 @@ extension ConversationViewController
 
 		let imagesAreReady = imageImportTasks.isEmpty
 		sendButton.isEnabled = canSubmitMessage && hasMessageContent && imagesAreReady
-		steerButton.isHidden = !isViewingActiveTask || snapshot.activeExecutionState != .running
-		sendButton.isHidden = !steerButton.isHidden
 		steerButton.isEnabled = canSteerMessage && hasMessageContent && imagesAreReady
 		sendButton.toolTip = imagesAreReady
 			? "Send message (⌘Return)" : "Preparing image attachment…"
@@ -459,7 +457,13 @@ extension ConversationViewController
 				|| snapshot.activeExecutionState == .awaitingApproval
 				|| snapshot.activeExecutionState == .awaitingAnswer
 		stopButton.isEnabled = isViewingActiveTask && hasStoppableExecution
-		stopButton.isHidden = !stopButton.isEnabled
+		let hasDraftContent = hasMessageContent || !imagesAreReady
+		let showsStop = stopButton.isEnabled && !hasDraftContent
+		let showsSteer = isViewingActiveTask && snapshot.activeExecutionState == .running
+			&& !showsStop
+		stopButton.isHidden = !showsStop
+		steerButton.isHidden = !showsSteer
+		sendButton.isHidden = showsStop || showsSteer
 	}
 
 	func textDidChange(_ notification: Notification)

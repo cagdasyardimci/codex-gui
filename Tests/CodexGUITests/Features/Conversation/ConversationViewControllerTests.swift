@@ -851,6 +851,89 @@ struct ConversationViewControllerTests
 		#expect(collection.bounds.maxY - scroll.contentView.bounds.maxY < 48)
 	}
 
+	@Test(arguments: [
+		ExecutionState.running,
+		.awaitingApproval,
+		.awaitingAnswer,
+	])
+	func composerSharesOneActionSlotAcrossDraftChanges(state: ExecutionState) throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		func activeSnapshot(draft: String = "") -> ConversationSnapshot
+		{
+			var active = snapshot(
+				[],
+				draft: draft,
+				canSend: true
+			)
+			active.activeThreadID = "replay"
+			active.activeExecutionState = state
+			active.canSteer = true
+			return active
+		}
+		var stops = 0
+		var sends = 0
+		var steered: [String] = []
+		controller.onStop =
+		{
+			stops += 1
+		}
+		controller.onSend =
+		{
+			sends += 1
+		}
+		controller.onSteer =
+		{
+			steered.append($0)
+		}
+		let buttons = [controller.sendButton, controller.steerButton, controller.stopButton]
+
+		for draft in ["", "Follow up", "", " \n"]
+		{
+			controller.render(activeSnapshot(draft: draft))
+			let visible = buttons.filter
+			{
+				!$0.isHidden
+			}
+			#expect(visible.count == 1)
+			let button = try #require(visible.first)
+			#expect(button.isEnabled)
+			if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			{
+				#expect(button === controller.stopButton)
+			}
+			else
+			{
+				#expect(button === (state == .running
+						? controller.steerButton : controller.sendButton))
+			}
+			try #require(button.dispatchConfiguredAction())
+		}
+		#expect(stops == 3)
+		#expect(sends == (state == .running ? 0 : 1))
+		#expect(steered == (state == .running ? ["Follow up"] : []))
+
+		var active = activeSnapshot()
+		active.draftContext = [ComposerContextItem(
+			kind: .fileReference,
+			title: "File"
+		)]
+		controller.render(active)
+		#expect(controller.stopButton.isHidden)
+		#expect(buttons.filter
+		{
+			!$0.isHidden
+		}.count == 1)
+
+		active.draftContext = []
+		active.activeThreadID = "another-thread"
+		controller.render(active)
+		#expect(controller.stopButton.isHidden)
+		#expect(controller.steerButton.isHidden)
+		#expect(!controller.sendButton.isHidden)
+	}
+
 	@Test func browsingAnotherConversationKeepsDraftEditableAndRoutesBackToTask() throws
 	{
 		_ = NSApplication.shared
@@ -1606,6 +1689,7 @@ struct ConversationViewControllerTests
 		threads: [ThreadSummary] = [],
 		selectedThreadID: String = "replay",
 		draft: String = "",
+		canSend: Bool = false,
 		canLoadEarlierTurns: Bool = false
 	) -> ConversationSnapshot
 	{
@@ -1618,7 +1702,7 @@ struct ConversationViewControllerTests
 			changedFiles: [],
 			diff: "",
 			draft: draft,
-			canSend: false,
+			canSend: canSend,
 			accountDescription: "Mock",
 			backendDescription: "Mock",
 			executionState: executionState,
