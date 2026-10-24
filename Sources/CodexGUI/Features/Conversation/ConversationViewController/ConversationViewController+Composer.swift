@@ -273,7 +273,7 @@ extension ConversationViewController
 		for button in [sendButton, steerButton, stopButton]
 		{
 			let symbol: DesktopIcon = button === stopButton
-				? .stopCircleFilled : (button === sendButton ? .arrowUpLg : .arrowUp)
+				? .stopCircleFilled : .arrowUpLg
 			AppKitControlStyling.styleButton(
 				button,
 				icon: symbol,
@@ -281,8 +281,8 @@ extension ConversationViewController
 			)
 			button.image = DesktopIcons.image(
 				symbol,
-				size: button === sendButton ? LayoutTokens.Composer.sendIconSize : LayoutTokens
-					.composer.controlHeight
+				size: button === stopButton ? LayoutTokens.composer.controlHeight
+					: LayoutTokens.Composer.sendIconSize
 			)
 			button.imagePosition = .imageOnly
 			button.widthAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
@@ -290,10 +290,13 @@ extension ConversationViewController
 			button.heightAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
 				.isActive = true
 		}
-		sendButton.wantsLayer = true
-		sendButton.layer?.cornerRadius = ShapeTokens.Composer
-			.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
-		sendButton.contentTintColor = .white
+		for button in [sendButton, steerButton]
+		{
+			button.wantsLayer = true
+			button.layer?.cornerRadius = ShapeTokens.Composer
+				.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
+			button.contentTintColor = .white
+		}
 		sendButton.toolTip = "Send message (⌘Return)"
 		steerButton.toolTip = "Steer the active turn (⇧⌘Return)"
 	}
@@ -424,6 +427,7 @@ extension ConversationViewController
 			sendButton.isEnabled = false
 			sendButton.layerBackgroundColor = .tertiaryLabelColor
 			steerButton.isEnabled = false
+			steerButton.layerBackgroundColor = .tertiaryLabelColor
 			return
 		}
 		let isSlashInput: Bool
@@ -448,10 +452,10 @@ extension ConversationViewController
 			? "Send message (⌘Return)" : "Preparing image attachment…"
 		steerButton.toolTip = imagesAreReady
 			? "Steer the active turn (⇧⌘Return)" : "Preparing image attachment…"
-		sendButton.contentTintColor = .white
 		sendButton.layerBackgroundColor = sendButton.isEnabled
 			? AppKitColorTokens.composerSend : NSColor.tertiaryLabelColor
-		steerButton.contentTintColor = steerButton.isEnabled ? .systemBlue : .tertiaryLabelColor
+		steerButton.layerBackgroundColor = steerButton.isEnabled
+			? AppKitColorTokens.composerSend : NSColor.tertiaryLabelColor
 		let hasStoppableExecution =
 			snapshot.activeExecutionState == .running
 				|| snapshot.activeExecutionState == .awaitingApproval

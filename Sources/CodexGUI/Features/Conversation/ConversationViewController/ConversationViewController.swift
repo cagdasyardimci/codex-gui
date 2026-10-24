@@ -171,7 +171,7 @@ final class ConversationViewController: NSViewController,
 		target: nil,
 		action: nil
 	)
-	let steerButton = NSButton(
+	let steerButton = DesktopLayerButton(
 		title: "Steer",
 		target: nil,
 		action: nil
