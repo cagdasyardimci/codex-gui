@@ -6,6 +6,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 {
 	var onChooseSkill: ((AvailableSkill) -> Void)?
 	var availableSkills: [AvailableSkill] = []
+	var threadTokenUsage: ThreadTokenUsage?
 	private(set) var matchingSkills: [AvailableSkill] = []
 	var selectedSkill: AvailableSkill?
 	{
@@ -24,6 +25,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	private(set) var commands: [SlashCommandDescriptor] = []
 	private var catalog = SlashCommandMenuCatalog()
 	private var commandUnavailableReasons: [String?] = []
+	private var commandDescriptions: [String] = []
 	private var hasRenderedPresentation = false
 	private var localeObserver: (any NSObjectProtocol)?
 	private let notificationCenter: NotificationCenter
@@ -144,6 +146,13 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		{
 			unavailableReason?($0.id)
 		}
+		let descriptions = matching.commands.map
+		{
+			SlashCommandMenuPresentation.description(
+				for: $0,
+				threadTokenUsage: threadTokenUsage
+			)
+		}
 		let sameCommands = commands.count == matching.commands.count
 			&& zip(
 				commands,
@@ -163,7 +172,13 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 					$1
 				)
 			}
+		let sameDescriptions = commandDescriptions.count == descriptions.count
+			&& zip(commandDescriptions, descriptions).allSatisfy
+			{
+				SlashCommandMenuCatalog.sameText($0, $1)
+			}
 		let retainsPresentation = hasRenderedPresentation && sameCommands && sameReasons
+			&& sameDescriptions
 			&& SlashCommandMenuCatalog.sameSkills(
 				matchingSkills,
 				matching.skills
@@ -173,6 +188,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		commands = matching.commands
 		matchingSkills = matching.skills
 		commandUnavailableReasons = reasons
+		commandDescriptions = descriptions
 		guard !retainsPresentation
 		else
 		{
@@ -316,12 +332,14 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		}
 		return commandCell(
 			commands[row],
+			description: commandDescriptions[row],
 			reason: commandUnavailableReasons[row]
 		)
 	}
 
 	private func commandCell(
 		_ command: SlashCommandDescriptor,
+		description: String,
 		reason: String?
 	) -> NSView
 	{
@@ -330,8 +348,17 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 			presentation.title,
 			isAvailable: reason == nil
 		)
-		let detail = makeDescriptionLabel(command.description)
-		let icon = makeRowIcon(symbol: presentation.symbol)
+		let detail = makeDescriptionLabel(description)
+		let icon: NSView
+		if command.id == .compact,
+			let percent = SlashCommandMenuPresentation.contextFillPercent(threadTokenUsage)
+		{
+			icon = CompactContextProgressIcon(percent: percent)
+		}
+		else
+		{
+			icon = makeRowIcon(symbol: presentation.symbol)
+		}
 
 		let contents = AppKitLayout.horizontalStack(
 			[icon, title, detail],
@@ -344,8 +371,8 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		}
 		contents.distribution = .fill
 		let cell = makeInlineCell(contents: contents)
-		cell.toolTip = reason ?? command.description
-		cell.setAccessibilityLabel("/\(command.name). \(command.description)"
+		cell.toolTip = reason ?? description
+		cell.setAccessibilityLabel("/\(command.name). \(description)"
 			+ (reason.map
 			{
 				". " + $0

@@ -6,6 +6,43 @@ struct SlashCommandMenuPresentation
 	let symbol: String
 	let opensPicker: Bool
 
+	static func contextFillPercent(_ usage: ThreadTokenUsage?) -> Int?
+	{
+		guard let usage,
+				usage.last.totalTokens > 0,
+				let window = usage.modelContextWindow,
+				window > 0
+		else
+		{
+			return nil
+		}
+		return Int(min(
+			100,
+			max(0, (Double(usage.last.totalTokens) / Double(window) * 100).rounded())
+		))
+	}
+
+	static func description(
+		for command: SlashCommandDescriptor,
+		threadTokenUsage: ThreadTokenUsage?
+	) -> String
+	{
+		guard command.id == .compact,
+				let usage = threadTokenUsage,
+				usage.last.totalTokens > 0
+		else
+		{
+			return command.description
+		}
+		guard let percent = contextFillPercent(usage)
+		else
+		{
+			let tokens = usage.last.totalTokens.formatted()
+			return "Compact this chat's context (\(tokens) tokens)"
+		}
+		return "Compact this chat's context (\(percent)% full)"
+	}
+
 	init(_ id: SlashCommandID)
 	{
 		switch id

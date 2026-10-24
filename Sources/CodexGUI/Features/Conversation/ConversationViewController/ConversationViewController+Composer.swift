@@ -376,6 +376,7 @@ extension ConversationViewController
 		planModeLabel.toolTip = snapshot.planModeStatus == nil ? "Plan mode enabled"
 			: "Run /plan to choose Reapply Plan or Reset Default after reconnecting."
 		slashCommandController.availableSkills = snapshot.availableSkills
+		slashCommandController.threadTokenUsage = snapshot.threadTokenUsage
 		slashCommandController.unavailableReason =
 		{
 			snapshot.slashCommandUnavailableReasons[$0]

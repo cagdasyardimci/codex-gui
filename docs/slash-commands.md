@@ -35,9 +35,11 @@ Fast mode requires a service tier advertised by the selected model's catalog and
 
 Compaction's `{}` reply acknowledges the request, rather than proving completion. Review and compaction may publish lifecycle events before their replies.
 
+The Compact completion row shows the selected chat's latest reported context usage as a percentage of the reported model context window. Its icon draws the same percentage as a circular progress arc. Selecting a saved chat resumes it so app-server can replay its latest usage report; background reads do not subscribe. When the window is unavailable but context tokens are reported, the row shows the token count and retains the generic icon. It updates when token usage notifications arrive, retains the last value after a turn finishes, and falls back to the generic description and icon when usage is unavailable.
+
 An uncertain plan update needs a matching settings event or an acknowledged explicit reapply; conversation read/resume responses do not report collaboration mode. After reconnecting, `/plan` presents **Reapply Plan**, **Reset Default** and **Cancel**.
 
-Last-request input and cumulative conversation usage are token counts, not current context occupancy. Occupancy is labeled **not reported**, and absent server values remain unavailable.
+Last-request input and cumulative conversation usage are token counts, not context occupancy. The Compact row uses the last usage report's active context size; the status popover continues to label occupancy **not reported**. Absent server values remain unavailable.
 
 ## Validation routing
 

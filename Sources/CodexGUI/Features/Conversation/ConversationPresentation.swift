@@ -106,6 +106,7 @@ struct ConversationPresentation: Equatable
 		let planModeStatus: String?
 		var availableSkills: [AvailableSkill] = []
 		let slashCommandUnavailableReasons: [SlashCommandID: String]
+		let threadTokenUsage: ThreadTokenUsage?
 		let activeThreadID: String?
 		let activeTurnID: String?
 		let activeExecutionState: ExecutionState?
@@ -284,6 +285,7 @@ struct ConversationPresentation: Equatable
 			planModeStatus: snapshot.planModeStatus,
 			availableSkills: snapshot.skillCatalog?.skills.filter(\.enabled) ?? [],
 			slashCommandUnavailableReasons: snapshot.slashCommandUnavailableReasons,
+			threadTokenUsage: snapshot.threadTokenUsage,
 			activeThreadID: snapshot.activeThreadID,
 			activeTurnID: snapshot.activeTurnID,
 			activeExecutionState: snapshot.activeExecutionState,
