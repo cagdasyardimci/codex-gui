@@ -36,13 +36,7 @@ final class FileBreadcrumbView: DesktopSurface
 		stack.alignment = .centerY
 		stack.distribution = .fill
 		stack.spacing = 6
-		// The manually sized stack must fit its edge insets before its first layout.
-		stack.frame = NSRect(
-			x: 0,
-			y: 0,
-			width: 20,
-			height: Geometry.height
-		)
+		stack.translatesAutoresizingMaskIntoConstraints = false
 		stack.edgeInsets = NSEdgeInsets(
 			top: 0,
 			left: 10,
@@ -50,6 +44,15 @@ final class FileBreadcrumbView: DesktopSurface
 			right: 10
 		)
 		pathContent.addSubview(stack)
+		// Rebuilding can temporarily require more space than the old document frame.
+		let preferredWidth = stack.widthAnchor.constraint(equalTo: pathContent.widthAnchor)
+		preferredWidth.priority = NSLayoutConstraint.Priority(999)
+		NSLayoutConstraint.activate([
+			stack.leadingAnchor.constraint(equalTo: pathContent.leadingAnchor),
+			stack.topAnchor.constraint(equalTo: pathContent.topAnchor),
+			stack.heightAnchor.constraint(equalToConstant: Geometry.height),
+			preferredWidth,
+		])
 		scroll.documentView = pathContent
 		scroll.wantsLayer = true
 		scroll.layer?.masksToBounds = true
@@ -72,17 +75,34 @@ final class FileBreadcrumbView: DesktopSurface
 	override func layout()
 	{
 		super.layout()
+		// Resolve new segment constraints before measuring the scroll document.
+		stack.layoutSubtreeIfNeeded()
+		let segmentWidth = stack.arrangedSubviews.reduce(
+			stack.edgeInsets.left + stack.edgeInsets.right
+		)
+		{
+			$0 + $1.fittingSize.width
+		} + CGFloat(max(
+			0,
+			stack.arrangedSubviews.count - 1
+		)) * stack.spacing
 		pathContent.frame = NSRect(
 			x: 0,
 			y: 0,
 			width: max(
+				segmentWidth,
 				stack.fittingSize.width,
 				scroll.contentSize.width
 			),
 			height: scroll.contentSize.height
 		)
-		stack.frame = pathContent.bounds
 		stack.layoutSubtreeIfNeeded()
+		// AppKit may update a rebuilt stack's fitting width after its first sizing pass.
+		for _ in 0 ..< 3 where stack.fittingSize.width > pathContent.frame.width
+		{
+			pathContent.frame.size.width = stack.fittingSize.width
+			stack.layoutSubtreeIfNeeded()
+		}
 		let maximumX = max(
 			0,
 			pathContent.bounds.width - scroll.contentSize.width

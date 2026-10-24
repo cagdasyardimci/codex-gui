@@ -250,7 +250,6 @@ struct FileNavigationViewTests
 		{
 			$0 as? NSStackView
 		}.first)
-		#expect(stack.frame.width >= stack.edgeInsets.left + stack.edgeInsets.right)
 		breadcrumb.frame = NSRect(
 			x: 0,
 			y: 0,
@@ -259,6 +258,29 @@ struct FileNavigationViewTests
 		)
 		breadcrumb.layoutSubtreeIfNeeded()
 		#expect(stack.frame.width >= stack.fittingSize.width)
+		for path in ["Sources/Features/Files/FileBreadcrumbView.swift", "README.md", "a/b/c/d/e"]
+		{
+			breadcrumb.frame.size.width = 34
+			breadcrumb.layoutSubtreeIfNeeded()
+			breadcrumb.render(
+				location: FileLocation(
+					root: "/tmp/workspace",
+					relativePath: path
+				),
+				state: FileViewerState()
+			)
+			breadcrumb.layoutSubtreeIfNeeded()
+			#expect(stack.frame.width >= stack.fittingSize.width)
+			let minimumWidth = stack.arrangedSubviews.reduce(CGFloat(20))
+			{
+				$0 + $1.fittingSize.width
+			} + CGFloat(stack.arrangedSubviews.count - 1) * stack.spacing
+			#expect(stack.frame.width >= minimumWidth - 1)
+			let scroll = try #require(stack.enclosingScrollView)
+			let document = try #require(scroll.documentView)
+			#expect(abs(document.frame.width - stack.frame.width) < 1)
+			#expect(abs(scroll.contentView.bounds.maxX - document.frame.maxX) < 1)
+		}
 	}
 
 	@Test func lazyFolderResultAndFilterPreserveTreeContext() async throws
