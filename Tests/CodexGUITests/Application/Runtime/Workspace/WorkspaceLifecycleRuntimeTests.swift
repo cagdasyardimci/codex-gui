@@ -107,6 +107,20 @@ struct WorkspaceLifecycleRuntimeTests
 		store.thawInputsAfterQuit(quit)
 		#expect(store.model.lifecycle.quitReservation == nil)
 		store.shutdown()
+		#expect(store.model.lifecycle.isShutdown)
+		let lateEdit = WorkspaceAction.composer(.draftEdited(
+			context,
+			conversation: .newChat,
+			text: "After shutdown",
+			revision: 3
+		))
+		#expect(!WorkspaceLifecycleReducer.accepts(
+			lateEdit,
+			model: store.model
+		))
+		store.dispatch(lateEdit)
+		#expect(store.model.composer.drafts[.newChat]?.text == "accepted")
+		#expect(written == ["accepted"])
 	}
 
 	@Test("Exact cleanup lease survives generation change and rejects a replaced lease")
