@@ -9,13 +9,16 @@ struct GitTurnBaselinePatchNormalizerTests
 	{
 		let original = """
 		diff --git a/after/dir/a/before/file b/after/dir/a/before/file
-		new file mode 100644
-		--- /dev/null
+		--- a/before/dir/a/before/file
 		+++ b/after/dir/a/before/file
-		@@ -0,0 +1,3 @@
+		@@ -1 +1,6 @@
 		+--- a/before/source
 		+rename from before/source
 		+Binary files a/before/content and b/after/content differ
+		--- a/before/hunk-old
+		+++ b/after/hunk-new
+		+
+		+
 		diff --git a/before/deleted b/before/deleted
 		deleted file mode 100644
 		--- a/before/deleted
@@ -27,12 +30,26 @@ struct GitTurnBaselinePatchNormalizerTests
 			decoding: GitTurnBaselinePatchNormalizer.normalize(Data(original.utf8)),
 			as: UTF8.self
 		)
-		#expect(normalized.contains("diff --git a/dir/a/before/file b/dir/a/before/file"))
-		#expect(normalized.contains("+++ b/dir/a/before/file"))
-		#expect(normalized.contains("diff --git a/deleted b/deleted"))
-		#expect(normalized.contains("+--- a/before/source"))
-		#expect(normalized.contains("+rename from before/source"))
-		#expect(normalized.contains("+Binary files a/before/content and b/after/content differ"))
+		let expected = """
+		diff --git a/dir/a/before/file b/dir/a/before/file
+		--- a/dir/a/before/file
+		+++ b/dir/a/before/file
+		@@ -1 +1,6 @@
+		+--- a/before/source
+		+rename from before/source
+		+Binary files a/before/content and b/after/content differ
+		--- a/before/hunk-old
+		+++ b/after/hunk-new
+		+
+		+
+		diff --git a/deleted b/deleted
+		deleted file mode 100644
+		--- a/deleted
+		+++ /dev/null
+		@@ -1 +0,0 @@
+		-old
+		"""
+		#expect(normalized.utf8.elementsEqual(expected.utf8))
 	}
 
 	@Test func binaryAddedAndDeletedMarkersRetainNullSide()
@@ -53,14 +70,24 @@ struct GitTurnBaselinePatchNormalizerTests
 
 	@Test func quotedRenamePathsAndSourceBytesSurvive()
 	{
-		let original = "diff --git \"a/before/old\\tname\" \"b/after/new\\tname\"\n"
-			+ "similarity index 100%\nrename from \"before/old\\tname\"\n"
-			+ "rename to \"after/new\\tname\"\n"
-		let normalized = GitTurnBaselinePatchNormalizer.normalize(Data(original.utf8))
-		let file = GitComparisonPatchParser.files(in: normalized).first
-		#expect(file?.oldPath == "old\tname")
-		#expect(file?.newPath == "new\tname")
-		#expect(file?.kind == .renamed)
+		for operation in ["rename", "copy"]
+		{
+			let original = "diff --git \"a/before/old\\tname\" \"b/after/new\\rname\"\n"
+				+ "similarity index 100%\n\(operation) from \"before/old\\tname\"\n"
+				+ "\(operation) to \"after/new\\rname\"\n"
+			let expected = "diff --git \"a/old\\tname\" \"b/new\\rname\"\n"
+				+ "similarity index 100%\n\(operation) from \"old\\tname\"\n"
+				+ "\(operation) to \"new\\rname\"\n"
+			let normalized = GitTurnBaselinePatchNormalizer.normalize(Data(original.utf8))
+			#expect(normalized == Data(expected.utf8))
+			if operation == "rename"
+			{
+				let file = GitComparisonPatchParser.files(in: normalized).first
+				#expect(file?.oldPath == "old\tname")
+				#expect(file?.newPath == "new\rname")
+				#expect(file?.kind == .renamed)
+			}
+		}
 	}
 
 	@Test func typeChangesCoalescePathIdentityWithoutLosingCountsOrHunks() throws
