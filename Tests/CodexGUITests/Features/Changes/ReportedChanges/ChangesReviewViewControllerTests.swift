@@ -90,6 +90,14 @@ struct ChangesReviewViewControllerTests
 		turn.selectItem(at: 1)
 		sendAction(from: turn)
 		#expect(selectedTurnID == "turn-2")
+		#expect(controller.openButton.isEnabled)
+		controller.render(snapshot(
+			turns: [first, second],
+			selected: first,
+			projectPath: nil
+		))
+		#expect(!controller.openButton.isHidden)
+		#expect(!controller.openButton.isEnabled)
 	}
 
 	@Test func binaryChangeIsLabeledWithoutInventingTextSections() throws
@@ -314,7 +322,7 @@ struct ChangesReviewViewControllerTests
 	private func snapshot(
 		turns: [ReviewTurn],
 		selected: ReviewTurn,
-		projectPath: String = "/tmp/project"
+		projectPath: String? = "/tmp/project"
 	) -> ConversationSnapshot
 	{
 		var snapshot = ConversationSnapshot(
