@@ -8,7 +8,13 @@ final class CompactContextProgressIcon: NSView
 
 	init(percent: Int)
 	{
-		self.percent = min(100, max(0, percent))
+		self.percent = min(
+			100,
+			max(
+				0,
+				percent
+			)
+		)
 		super.init(frame: .zero)
 		widthAnchor.constraint(equalToConstant: 16).isActive = true
 		heightAnchor.constraint(equalToConstant: 16).isActive = true
@@ -22,8 +28,14 @@ final class CompactContextProgressIcon: NSView
 	override func draw(_ dirtyRect: NSRect)
 	{
 		super.draw(dirtyRect)
-		let center = NSPoint(x: bounds.midX, y: bounds.midY)
-		let radius = min(bounds.width, bounds.height) / 2 - 2
+		let center = NSPoint(
+			x: bounds.midX,
+			y: bounds.midY
+		)
+		let radius = min(
+			bounds.width,
+			bounds.height
+		) / 2 - 2
 		let track = NSBezierPath(ovalIn: NSRect(
 			x: center.x - radius,
 			y: center.y - radius,

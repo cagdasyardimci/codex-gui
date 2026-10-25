@@ -18,7 +18,10 @@ struct SlashCommandMenuPresentation
 		}
 		return Int(min(
 			100,
-			max(0, (Double(usage.last.totalTokens) / Double(window) * 100).rounded())
+			max(
+				0,
+				(Double(usage.last.totalTokens) / Double(window) * 100).rounded()
+			)
 		))
 	}
 

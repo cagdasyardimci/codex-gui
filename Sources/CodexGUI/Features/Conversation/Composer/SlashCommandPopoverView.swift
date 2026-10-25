@@ -173,9 +173,15 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 				)
 			}
 		let sameDescriptions = commandDescriptions.count == descriptions.count
-			&& zip(commandDescriptions, descriptions).allSatisfy
+			&& zip(
+				commandDescriptions,
+				descriptions
+			).allSatisfy
 			{
-				SlashCommandMenuCatalog.sameText($0, $1)
+				SlashCommandMenuCatalog.sameText(
+					$0,
+					$1
+				)
 			}
 		let retainsPresentation = hasRenderedPresentation && sameCommands && sameReasons
 			&& sameDescriptions
