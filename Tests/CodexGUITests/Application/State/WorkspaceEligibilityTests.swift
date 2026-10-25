@@ -262,6 +262,16 @@ struct WorkspaceEligibilityTests
 		{
 			#expect(!WorkspaceEligibility(model: model).acceptsSubmission(withInputs(inputs)))
 		}
+		for kind: ComposerContextKind in [.image, .fileReference]
+		{
+			var missingPath = model
+			missingPath.composer.drafts[.newChat]?.context = [ComposerContextItem(
+				kind: kind,
+				title: "Missing attachment path"
+			)]
+			#expect(!WorkspaceEligibility(model: missingPath)
+				.acceptsSubmission(proposal(missingPath)))
+		}
 	}
 
 	@Test func sidebarRenameAcceptsKnownUnselectedAndPinnedTasksButRejectsUnknownIDs()
