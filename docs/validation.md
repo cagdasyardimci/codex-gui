@@ -6,9 +6,9 @@ Use [conventions](../CONVENTIONS.md#formatting-and-tooling) for formatting and [
 
 Run `make check` without `-j` for Swift formatting, the application build and tests. Do not change source or build settings during a run, or run competing builds in the same checkout. Use separate checkouts for independent builds. Apply the [test-completion requirements](#test-completion) before reporting results. See [native QA](native-qa.md#manual-preparation-and-isolation) for manual fixture isolation.
 
-The default `make test` and the test step of `make check` run the 668 functions listed in the [default selection](../Tests/Selections/default.txt), in one process with parallel execution enabled (`PARALLEL=1`). The manifest selects whole functions, including every parameterized case. The [completion wrapper](../Tests/run-swift-tests.py) treats each function ID literally and requires a successful summary with exactly the manifest's function count; missing, empty or duplicate selections fail rather than falling back to all tests. Tests require Swift and macOS Command Line Tools.
+The default `make test` and the test step of `make check` run all 668 functions discovered by SwiftPM, in one process with parallel execution enabled (`PARALLEL=1`). The [completion wrapper](../Tests/run-swift-tests.py) requires a successful, nonempty Swift Testing completion summary. Tests require Swift and macOS Command Line Tools.
 
-The SwiftPM target contains only these 668 test functions and their supporting fixtures. A direct `swift test` also discovers the same retained functions. Use unfiltered discovery when changing the inventory to check that it still matches the manifest.
+The SwiftPM target contains only these 668 test functions and their supporting fixtures. A direct `swift test` also discovers the same retained functions. Use unfiltered discovery when changing the inventory to check that new and renamed functions are included.
 
 Use `make test PARALLEL=0` or `make check PARALLEL=0` to disable parallel execution. `PARALLEL` accepts only `0` or `1` and applies to named and custom selections too. Tests that intentionally change application-wide UI state use [AppKitTestIsolation](../Tests/CodexGUITests/Support/AppKitTestIsolation.swift) to coordinate native key-window and focus changes, sheets, popovers and transient panels across suites. Prefer scoped `AppKitTestIsolation.perform` inside the admitted MainActor test method, covering native construction, presentation, relevant asynchronous work, assertions and cleanup. Preserve `.serialized` on parameterized functions or their existing suites; each protected case must restore its owned native state before releasing the permit.
 
@@ -69,7 +69,7 @@ make test:composer-appearance
 make test
 ```
 
-Run named selections with `make test:<group>`. Each command runs only its matching tests in one process and then stops. Named groups and `FILTER` select from the full inventory independently of the default manifest. `make help` lists commands and test selections. [Tests/Workflow.mk](../Tests/Workflow.mk) owns toolchain flags and explicit targets that call the shared `run-tests` function.
+Run named selections with `make test:<group>`. Each command runs only its matching tests in one process and then stops. The default run uses no filter; named groups and `FILTER` select their configured subsets from the full inventory. `make help` lists commands and test selections. [Tests/Workflow.mk](../Tests/Workflow.mk) owns toolchain flags and explicit targets that call the shared `run-tests` function.
 
 For a custom regular expression, use:
 
@@ -77,9 +77,9 @@ For a custom regular expression, use:
 make test FILTER='ApprovalPolicyPopoverTests|ComposerAppearanceTests'
 ```
 
-A custom selection runs through SwiftPM and the completion wrapper in one fresh process with the selected `PARALLEL` setting. Quote regular expressions to preserve shell characters and apply the [test-completion requirements](#test-completion). `FILTER` must be nonempty and is supported only by `make test`. Named group commands and `make check` reject it. `make check` validates the complete default manifest.
+A custom selection runs through SwiftPM and the completion wrapper in one fresh process with the selected `PARALLEL` setting. Quote regular expressions to preserve shell characters and apply the [test-completion requirements](#test-completion). `FILTER` must be nonempty and is supported only by `make test`. Named group commands and `make check` reject it. `make check` validates the complete SwiftPM test inventory.
 
-When adding or renaming default tests, update the manifest deliberately and check that the configured selections still match and cover the intended cases. Focused runs add evidence but do not replace validation of the default selection or explicit full inventory. Do not relax assertions to make verification pass. Report failures and baseline comparisons separately.
+When adding or renaming tests, check unfiltered discovery and verify that configured selections still match and cover the intended cases. Focused runs add evidence but do not replace validation of the full test inventory. Do not relax assertions to make verification pass. Report failures and baseline comparisons separately.
 
 For synthetic AppKit tests that verify a button's action routing or resulting layout, use [dispatchConfiguredAction](../Tests/CodexGUITests/Support/ControlActionTestSupport.swift) or the enabled control's `sendAction(_:to:)` with its configured action and target. Require that the action exists and dispatch succeeds, and preserve the resulting state and layout assertions. `performClick(_:)` can poll AppKit's native event queue; HIToolbox's wakeup can stop the standard SwiftPM async-main run loop before testing completes. Direct action dispatch does not establish native press animation, pointer tracking or keyboard behavior; keep those acceptance checks in [native QA](native-qa.md).
 

@@ -29,9 +29,9 @@ help:
 		'  make build                        Build the executable' \
 		'  make build:bundle                 Build the debug app bundle' \
 		'  make build:bundle:release         Build the release app bundle' \
-		'  make check                        Run formatting, build, and default tests' \
-		'  make test                         Run the 668 selected default tests' \
-		'  make test PARALLEL=0              Run the default selection sequentially' \
+		'  make check                        Run formatting, build, and all tests' \
+		'  make test                         Run all 668 discovered tests' \
+		'  make test PARALLEL=0              Run the full suite sequentially' \
 		'  make test:<group>                 Run only that group in one process' \
 		'  make test FILTER="regex"          Run a custom selection in one process' \
 		'  make help                         Show this help' \

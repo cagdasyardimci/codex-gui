@@ -41,7 +41,7 @@ define run-tests
 endef
 
 test: FORCE
-	$(call run-tests,$(value FILTER),$(if $(value FILTER),,Tests/Selections/default.txt))
+	$(call run-tests,$(value FILTER))
 
 TEST_GROUPS += summary
 test\:summary: FORCE
