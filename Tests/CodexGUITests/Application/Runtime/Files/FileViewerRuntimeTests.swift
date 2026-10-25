@@ -33,6 +33,11 @@ struct FileViewerRuntimeTests
 			)
 			await service.setSaveFailure(.conflict)
 			#expect(await runtime.save(id) == .conflict)
+			runtime.edit(
+				id,
+				text: "Blocked until the conflict is resolved"
+			)
+			#expect(runtime.state.selectedDocument?.currentText == "local one")
 			await service.setSaveFailure(nil)
 			await runtime.useDisk(id)
 			await service.waitForRead(location)
@@ -87,8 +92,18 @@ struct FileViewerRuntimeTests
 
 			runtime.edit(
 				id,
+				text: "Retain this failed save"
+			)
+			let writeFailure = FileViewerFailure.io("Write failed")
+			await service.setSaveFailure(writeFailure)
+			#expect(await runtime.save(id) == writeFailure)
+			#expect(runtime.state.selectedDocument?.currentText == "Retain this failed save")
+			#expect(runtime.state.selectedDocument?.isDirty == true)
+			runtime.edit(
+				id,
 				text: "discard me"
 			)
+			#expect(runtime.state.selectedDocument?.currentText == "discard me")
 			await service.setSaveFailure(.conflict)
 			#expect(await runtime.save(id) == .conflict)
 			let savedBeforeDiscard = await service.savedTexts()
