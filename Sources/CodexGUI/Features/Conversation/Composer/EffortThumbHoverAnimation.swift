@@ -1,6 +1,6 @@
 import AppKit
 
-/// Frame scheduling can be controlled without replacing the native interpolation.
+/// Frame scheduling can be controlled without replacing the spring interpolation.
 @MainActor
 protocol EffortThumbHoverAnimating: AnyObject
 {
@@ -16,60 +16,95 @@ protocol EffortThumbHoverAnimating: AnyObject
 	func stop()
 }
 
-/// Native interpolation approximates the observed spring trajectory, not its unknown physics.
-// Preserve NSAnimation's nonisolated overrides; the driver protocol must not infer class isolation.
-nonisolated final class EffortThumbHoverAnimation: NSAnimation, EffortThumbHoverAnimating
+/// Interpolation approximates the observed spring trajectory, not its unknown physics.
+@MainActor
+final class EffortThumbHoverAnimation: EffortThumbHoverAnimating
 {
 	var onProgress: (@MainActor @Sendable (CGFloat) -> Void)?
 	private let expanding: Bool
+	private var timer: Timer?
+	let duration: TimeInterval
+	var isAnimating: Bool
+	{
+		timer != nil
+	}
+	var currentProgress: Float = 0
+	{
+		didSet
+		{
+			onProgress?(interpolatedProgress(CGFloat(currentProgress)))
+		}
+	}
+
 	private enum Configuration
 	{
 		static let enterDuration: TimeInterval = 0.35
 		static let leaveDuration: TimeInterval = 0.45
-		static let frameRate: Float = 120
+		static let frameRate: Double = 120
 		static let enterProgress: [CGFloat] = [0, 0.15, 0.53, 0.79, 0.92, 0.975, 0.994, 1]
 		static let leaveProgress: [CGFloat] =
 			[0, 0.1, 0.39, 0.65, 0.82, 0.921, 0.972, 0.994, 1.0015, 1]
 	}
 
-	@MainActor init(expanding: Bool)
+	init(expanding: Bool)
 	{
 		self.expanding = expanding
-		super.init(
-			duration: expanding ? Configuration.enterDuration : Configuration.leaveDuration,
-			animationCurve: .linear
+		duration = expanding ? Configuration.enterDuration : Configuration.leaveDuration
+	}
+
+	isolated deinit
+	{
+		timer?.invalidate()
+	}
+
+	func start()
+	{
+		stop()
+		let startedAt = ContinuousClock.now
+		let timer = Timer(
+			timeInterval: 1 / Configuration.frameRate,
+			repeats: true
 		)
-		animationBlockingMode = .nonblocking
-		frameRate = Configuration.frameRate
-	}
-
-	required init?(coder: NSCoder)
-	{
-		nil
-	}
-
-	override var runLoopModesForAnimating: [RunLoop.Mode]?
-	{
-		[.common, .eventTracking]
-	}
-
-	override var currentProgress: NSAnimation.Progress
-	{
-		get
 		{
-			super.currentProgress
-		}
-		set
-		{
-			super.currentProgress = newValue
-			let callback = onProgress
-			let progress = interpolatedProgress(CGFloat(newValue))
-			// Nonblocking NSAnimation runs on the starting main run loop, including dragging.
+			[weak self] timer in
+			let timerID = ObjectIdentifier(timer)
 			MainActor.assumeIsolated
 			{
-				callback?(progress)
+				guard let self, let activeTimer = self.timer,
+						ObjectIdentifier(activeTimer) == timerID
+				else
+				{
+					return
+				}
+				let elapsed = startedAt.duration(to: .now).components
+				let seconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+				let progress = min(
+					1,
+					seconds / self.duration
+				)
+				if progress >= 1
+				{
+					self.stop()
+				}
+				self.currentProgress = Float(progress)
 			}
 		}
+		self.timer = timer
+		RunLoop.main.add(
+			timer,
+			forMode: .common
+		)
+		RunLoop.main.add(
+			timer,
+			forMode: .eventTracking
+		)
+		currentProgress = 0
+	}
+
+	func stop()
+	{
+		timer?.invalidate()
+		timer = nil
 	}
 
 	private func interpolatedProgress(_ progress: CGFloat) -> CGFloat

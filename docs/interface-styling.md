@@ -156,7 +156,7 @@ Project/location strips and voice controls are outside the existing composer com
 
 Popover surface shadows need transparent panel padding to avoid clipping; adding a second native window shadow would darken the result. AppKit controls backdrop blur, which requires paired visual acceptance against the reference. See [popover surface](../Sources/CodexGUI/Features/Shared/DesktopPopoverSurface.swift) and the panel owner above for implementation.
 
-Effort hover motion approximates the observed trajectory and respects Reduce Motion. Hover and particle implementation belongs to [EffortSlider](../Sources/CodexGUI/Features/Conversation/Composer/EffortSlider.swift).
+Effort hover motion approximates the observed trajectory and respects Reduce Motion. Its main-run-loop timer advances the unchanged trajectory by monotonic elapsed time and stops when completed, hidden or detached. Hover and particle implementation belongs to [EffortSlider](../Sources/CodexGUI/Features/Conversation/Composer/EffortSlider.swift).
 
 ## Reference and acceptance
 
