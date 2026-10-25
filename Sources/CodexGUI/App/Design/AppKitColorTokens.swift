@@ -8,6 +8,25 @@ enum AppKitColorTokens
 		light: 0xFFFFFF,
 		dark: 0x181818
 	)
+	/// ChatGPT's primary outline role, resolved over the notice surface.
+	static let chatLockEdge = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.117,
+		darkAlpha: 0.156
+	)
+	static let chatLockDivider = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.08,
+		darkAlpha: 0.082
+	)
+	static let chatLockActionHover = AppKitColorResolution.color(
+		light: 0x1A1C1F,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.055,
+		darkAlpha: 0.08
+	)
 	static let slashMenu = AppKitColorResolution.color(
 		light: 0xFFFFFF,
 		dark: 0x2D2D2D

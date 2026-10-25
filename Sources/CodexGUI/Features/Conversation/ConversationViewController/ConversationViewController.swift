@@ -11,6 +11,8 @@ final class ConversationViewController: NSViewController,
 	var onSelectSkill: ((AvailableSkill) -> Void)?
 	var onSlashCommand: ((SlashCommandInvocation) -> Void)?
 	var onSend: (() -> Void)?
+	var onRetryLockedChat: (() -> Void)?
+	var onForkLockedChat: (() -> Void)?
 	var onSteer: ((String) -> Void)?
 	var onStop: (() -> Void)?
 	var onReturnToActiveTask: (() -> Void)?
@@ -139,6 +141,7 @@ final class ConversationViewController: NSViewController,
 	private var paneResizeControlConstraints: [NSLayoutConstraint] = []
 	private let emptyStateLabel = NSTextField(wrappingLabelWithString: "What can I help with?")
 	let composer = ContextComposerTextView()
+	let chatLockView = ConversationLockView()
 	let composerScrollView = NSScrollView()
 	let composerSurface = DesktopSurface(
 		AppKitColorTokens.composer,
@@ -598,9 +601,10 @@ final class ConversationViewController: NSViewController,
 	{
 		stateLabel.stringValue = snapshot.statusMessage ?? snapshot.executionState.title
 		stateLabel.toolTip = stateLabel.stringValue
-		stateLabel.isHidden =
-			snapshot.statusMessage == nil && snapshot.executionState != .disconnected
+		stateLabel.isHidden = snapshot.isLocked ||
+			(snapshot.statusMessage == nil && snapshot.executionState != .disconnected
 				&& snapshot.executionState != .failed
+			)
 		let isViewingActiveTask =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
 		let taskIsElsewhere = snapshot.activeExecutionState != nil && !isViewingActiveTask

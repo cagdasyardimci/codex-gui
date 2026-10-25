@@ -31,6 +31,7 @@ struct ConversationPresentation: Equatable
 	{
 		let owner: FeaturePresentationOwner
 		let executionState: ExecutionState
+		let isLocked: Bool
 		let statusMessage: String?
 		let activeThreadID: String?
 		let activeExecutionState: ExecutionState?
@@ -101,6 +102,9 @@ struct ConversationPresentation: Equatable
 		let draftContext: [ComposerContextItem]
 		let reusableReferences: [ComposerContextItem]
 		let canSend: Bool
+		let isLocked: Bool
+		let isRetryingLockedChat: Bool
+		let canForkLockedChat: Bool
 		let canSteer: Bool
 		let planMode: Bool
 		let planModeStatus: String?
@@ -252,6 +256,7 @@ struct ConversationPresentation: Equatable
 		status = Status(
 			owner: owner,
 			executionState: snapshot.executionState,
+			isLocked: snapshot.chatLocked,
 			statusMessage: snapshot.statusMessage,
 			activeThreadID: snapshot.activeThreadID,
 			activeExecutionState: snapshot.activeExecutionState,
@@ -280,6 +285,9 @@ struct ConversationPresentation: Equatable
 			draftContext: snapshot.draftContext,
 			reusableReferences: snapshot.reusableReferences,
 			canSend: snapshot.canSend,
+			isLocked: snapshot.chatLocked,
+			isRetryingLockedChat: snapshot.chatLockRetrying,
+			canForkLockedChat: snapshot.slashCommandUnavailableReasons[.fork] == nil,
 			canSteer: snapshot.canSteer,
 			planMode: snapshot.planMode,
 			planModeStatus: snapshot.planModeStatus,

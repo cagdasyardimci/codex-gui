@@ -79,6 +79,8 @@ struct ConversationSnapshot
 	var draftContext: [ComposerContextItem] = []
 	var reusableReferences: [ComposerContextItem] = []
 	let canSend: Bool
+	var chatLocked = false
+	var chatLockRetrying = false
 	let accountDescription: String
 	let backendDescription: String
 	let executionState: ExecutionState

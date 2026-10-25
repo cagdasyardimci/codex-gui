@@ -268,6 +268,22 @@ extension MainWindowController
 		{
 			target.dispatch(.send)
 		}
+		conversation.onRetryLockedChat =
+		{
+			target.dispatch(.retryLockedChat)
+		}
+		conversation.onForkLockedChat =
+		{
+			guard let id = target.store.currentSnapshot.selectedThreadID,
+					target.store.model.conversations.lockedThreadIDs.contains(id),
+					case .command(let command) = SlashCommandParser.parse("/fork"),
+					target.accepts(.slashCommand(command))
+			else
+			{
+				return
+			}
+			target.dispatch(.slashCommand(command))
+		}
 		conversation.onSteer =
 		{
 			target.dispatch(.steer($0))

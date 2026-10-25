@@ -26,6 +26,25 @@ enum LayoutTokens
 
 	static let sidebar = Sidebar()
 	static let composer = Composer()
+
+	enum ChatLock
+	{
+		static let height: CGFloat = 74
+		static let leadingInset: CGFloat = 20
+		static let trailingInset: CGFloat = 12
+		static let iconWidth: CGFloat = 18
+		static let iconHeight: CGFloat = 18
+		static let iconTextSpacing: CGFloat = 12
+		static let messageSpacing: CGFloat = 2
+		static let verticalInset: CGFloat = 16
+		static let textActionSpacing: CGFloat = 12
+		static let dividerActionSpacing: CGFloat = 12
+		static let actionSpacing: CGFloat = 8
+		static let retryMinimumWidth: CGFloat = 50.5
+		static let forkMinimumWidth: CGFloat = 75.5
+		static let actionHeight: CGFloat = 24
+		static let dividerWidth: CGFloat = 1
+	}
 	static let permission = Permission()
 	static let modelSelector = ModelSelector()
 	static let tabContent = TabContent()

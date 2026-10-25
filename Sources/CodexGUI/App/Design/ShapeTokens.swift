@@ -20,6 +20,13 @@ enum ShapeTokens
 		}
 	}
 
+	enum ChatLock
+	{
+		static let cornerRadius: CGFloat = 25
+		static let edgeWidth: CGFloat = 0.5
+		static let actionRadius: CGFloat = 12
+	}
+
 	enum Inspector
 	{
 		static let summaryRadius: CGFloat = 20

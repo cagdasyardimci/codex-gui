@@ -1,5 +1,7 @@
 # Interface styling
 
+When a selected chat has a cross-app lock, the conversation replaces its composer with a rounded, outlined notice containing a lock icon and the ownership message on the left, plus Retry and Fork chat at the right edge after a divider. The transcript remains visible. Its light and dark surface, primary text, secondary text, outer ring, subtler divider and hover fill follow the live ChatGPT component's resolved roles. Native geometry and typography follow that component's rendered bounds and font styles.
+
 The overlapping desktop components use the measured reference typography, geometry and appearance colors. Native AppKit points are used for nominal CSS pixel dimensions; this does not establish identical glyph rasterization or window chrome.
 
 ## Token ownership and changes
@@ -44,6 +46,7 @@ Use the shared color catalogue for semantic color roles. Follow [AppKit conventi
 | Styling concern | Source owner |
 | --- | --- |
 | Composer placement and shared reading-column alignment | [ConversationViewController](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController.swift) |
+| Locked-chat notice and artwork | [ConversationLockView](../Sources/CodexGUI/Features/Conversation/ConversationLockView.swift) |
 | Composer editor/footer constraints and control reflow | [ComposerSurfaceLayout](../Sources/CodexGUI/Features/Conversation/Composer/ComposerSurfaceLayout.swift), [ComposerToolbarView](../Sources/CodexGUI/Features/Conversation/Composer/ComposerToolbarView.swift) |
 | Permission and model menus | [ApprovalPolicyPopoverView](../Sources/CodexGUI/Features/Conversation/Composer/ApprovalPolicyPopoverView.swift), [ModelEffortPopoverView](../Sources/CodexGUI/Features/Conversation/Composer/ModelEffortPopoverView.swift), [ComposerPopoverPanel](../Sources/CodexGUI/Features/Conversation/Composer/ComposerPopoverPanel.swift) |
 | Task hover cards | [TaskHoverCard](../Sources/CodexGUI/Features/Navigation/TaskHoverCard.swift), [TaskSidebarCellView](../Sources/CodexGUI/Features/Navigation/TaskSidebarCellView.swift) |

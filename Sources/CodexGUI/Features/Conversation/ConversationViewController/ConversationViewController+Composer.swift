@@ -16,18 +16,33 @@ extension ConversationViewController
 		let composerToolbar = makeComposerToolbar()
 		installComposerStack(toolbar: composerToolbar)
 		let composerArea = AppKitLayout.verticalStack(
-			[turnChangeSummaryButton, composerSurface],
+			[turnChangeSummaryButton, composerSurface, chatLockView],
 			spacing: LayoutTokens.Composer.summarySpacing
 		)
 		composerArea.alignment = .centerX
 		turnChangeSummaryButton.isHidden = true
+		chatLockView.isHidden = true
+		chatLockView.onRetry =
+		{
+			[weak self] in self?.onRetryLockedChat?()
+		}
+		chatLockView.onFork =
+		{
+			[weak self] in self?.onForkLockedChat?()
+		}
 		turnChangeSummaryButton.target = self
 		turnChangeSummaryButton.action = #selector(showTurnChanges)
 		turnChangeSummaryLoader.onChange =
 		{
-			[weak self] in self?.turnChangeSummaryButton.render($0)
+			[weak self] summary in
+			self?.turnChangeSummaryButton.render(summary)
+			if self?.composerSubmissionPresentation?.isLocked == true
+			{
+				self?.turnChangeSummaryButton.isHidden = true
+			}
 		}
 		composerSurface.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
+		chatLockView.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
 
 		return composerArea
 	}
@@ -365,10 +380,19 @@ extension ConversationViewController
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)
 	{
 		composerSubmissionPresentation = snapshot
+		chatLockView.isHidden = !snapshot.isLocked
+		chatLockView.isRetrying = snapshot.isRetryingLockedChat
+		chatLockView.canFork = snapshot.canForkLockedChat
+		composerSurface.isHidden = snapshot.isLocked
 		turnChangeSummaryLoader.render(
 			request: snapshot.turnChangeRequest,
 			activeTurnID: snapshot.activeTurnID
 		)
+		turnChangeSummaryButton.render(turnChangeSummaryLoader.currentSummary)
+		if snapshot.isLocked
+		{
+			turnChangeSummaryButton.isHidden = true
+		}
 		planModeLabel.stringValue = snapshot.planModeStatus ?? "Plan mode"
 		planModeLabel.isHidden = !snapshot.planMode && snapshot.planModeStatus == nil
 		planModeLabel.textColor = snapshot.planModeStatus == nil ? .systemBlue : .systemOrange

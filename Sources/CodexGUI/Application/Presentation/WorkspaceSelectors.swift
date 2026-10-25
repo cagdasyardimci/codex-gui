@@ -498,6 +498,12 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		snapshot.chatLocked = isConnected && (selectedThreadID.map
+		{
+			model.conversations.lockedThreadIDs.contains($0)
+		} ?? false)
+		snapshot.chatLockRetrying = snapshot.chatLocked
+			&& model.conversations.pendingSelection?.threadID == selectedThreadID
 		snapshot.sidebarThreads = model.conversations.sidebarThreadsArchived == model.conversations
 			.showingArchived
 			? model.conversations.sidebarThreads : nil

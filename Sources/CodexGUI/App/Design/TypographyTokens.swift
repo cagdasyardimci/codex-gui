@@ -105,6 +105,25 @@ enum TypographyTokens
 		)
 	}
 
+	enum ChatLock
+	{
+		static let title = Role(
+			size: 13,
+			selection: .interface(weight: interfaceStrongWeight),
+			lineHeight: 18.5714
+		)
+		static let detail = Role(
+			size: 13,
+			selection: .interface(weight: interfaceWeight),
+			lineHeight: 21.125
+		)
+		static let action = Role(
+			size: 13,
+			selection: .interface(weight: interfaceWeight),
+			lineHeight: 18
+		)
+	}
+
 	enum FileMarkdown
 	{
 		static let inlineCode = Role(

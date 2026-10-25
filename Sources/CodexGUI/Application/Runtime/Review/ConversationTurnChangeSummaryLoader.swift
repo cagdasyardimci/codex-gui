@@ -9,6 +9,10 @@ final class ConversationTurnChangeSummaryLoader
 	private var activeTurnID: String?
 	private(set) var readTask: Task<Void, Never>?
 	private var published: ConversationTurnChangeSummary?
+	var currentSummary: ConversationTurnChangeSummary?
+	{
+		published
+	}
 	var onChange: ((ConversationTurnChangeSummary?) -> Void)?
 
 	init(service: any GitComparisonService = LocalGitComparisonService())
