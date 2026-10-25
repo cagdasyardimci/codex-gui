@@ -84,6 +84,26 @@ struct GitSummaryReconciliationTests
 			canonical: wrongScope
 		)
 		#expect(!scopeAccepted)
+		for incomplete in [
+			projection(
+				owner: owner,
+				revision: 5,
+				id: nil
+			),
+			projection(
+				owner: owner,
+				revision: 5,
+				snapshotScope: nil
+			)
+		]
+		{
+			let accepted = sink.accept(
+				incomplete,
+				canonical: incomplete
+			)
+			#expect(!accepted)
+			#expect(sink.projection == current)
+		}
 		let oldComparison = projection(
 			owner: owner,
 			revision: 5,
