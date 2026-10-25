@@ -16,6 +16,9 @@ Follow-up conversation reads return through `WorkspaceStoreInputs`, which captur
 
 Captured `RunPreferences` and the serialized `ApprovalMode` values belong to `Application/State/`, shared by persistence, submission capture, reducers and protocol requests. The approval labels and explanations belong to `Application/Presentation/ApprovalMode+Presentation`. Changing next-turn controls does not alter a running turn's captured preferences.
 
+Remote-access management uses the source workspace connection and its reducer-owned state.
+See [remote access](remote-access.md) for host lifetime, pairing, status ordering, and device ownership.
+
 ## Ownership and recovery
 
 An app-server rejection that says a thread already has an active writer, or explicitly names another app, client, instance or process as its owner, records a lock for that thread. If selecting the chat cannot resume it for this reason, the runtime reads its saved history without subscribing to the external turn or adopting its execution ownership. While locked, message submission is unavailable. Retry requests a fresh selected-thread resume without changing selection or resending a prompt; the button shows its pending state, and only a successful resume clears the lock. Fork chat uses the existing fork command with its checkout validation and recovery rules; a lock alone does not block a fork when no local turn or uncertain request is pending. A rejected submission with this ownership reason is a known failure, so it does not create an uncertain turn outcome. Other errors do not imply a cross-app lock.

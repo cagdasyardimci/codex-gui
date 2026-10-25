@@ -10,6 +10,7 @@ final class LocalStorage
 		static let selectedThreads = "CodexGUI.selectedThreads"
 		static let modelPreference = "CodexGUI.modelPreference"
 		static let runPreferences = "CodexGUI.runPreferences"
+		static let remoteAccessEnabled = "CodexGUI.remoteAccessEnabled"
 		static let pinnedTasks = "CodexGUI.pinnedTasks"
 		static let removedProjects = "CodexGUI.removedProjects"
 		static let pinnedProjects = "CodexGUI.pinnedProjects"
@@ -28,6 +29,7 @@ final class LocalStorage
 	private static let maximumReferencesPerThread = 100
 
 	private let defaults: UserDefaults
+	private let remoteAccessDefaults: UserDefaults
 	private let imageStore: DraftImageStore
 	private let sentReferenceDecoder: JSONDecoder
 	private let resolveProjectPath: (URL) -> String
@@ -95,6 +97,7 @@ final class LocalStorage
 				effort: preference.effort
 			)
 		case .run(let preference): saveRunPreferences(preference)
+		case .remoteAccess(let enabled): saveRemoteAccessEnabled(enabled)
 		case .pin(
 			let path,
 			let pinned
@@ -143,7 +146,7 @@ final class LocalStorage
 	}
 
 	init(
-		defaults: UserDefaults = ApplicationPreferences.defaultStore,
+		defaults: UserDefaults? = nil,
 		imageStore: DraftImageStore = DraftImageStore(),
 		sentReferenceDecoder: JSONDecoder = JSONDecoder(),
 		resolveProjectPath: @escaping (URL) -> String =
@@ -152,10 +155,19 @@ final class LocalStorage
 		}
 	)
 	{
-		self.defaults = defaults
+		self.defaults = defaults ?? ApplicationPreferences.defaultStore
+		self.remoteAccessDefaults = defaults ?? ApplicationPreferences.remoteAccessStore
 		self.imageStore = imageStore
 		self.sentReferenceDecoder = sentReferenceDecoder
 		self.resolveProjectPath = resolveProjectPath
+		if remoteAccessDefaults.object(forKey: Key.remoteAccessEnabled) == nil,
+			let enabled = self.defaults.object(forKey: Key.remoteAccessEnabled) as? Bool
+		{
+			remoteAccessDefaults.set(
+				enabled,
+				forKey: Key.remoteAccessEnabled
+			)
+		}
 		migrateLegacyValues()
 	}
 
@@ -289,6 +301,19 @@ final class LocalStorage
 			forKey: Key.runPreferences
 		)
 		publishPreferences()
+	}
+
+	var remoteAccessEnabled: Bool
+	{
+		remoteAccessDefaults.bool(forKey: Key.remoteAccessEnabled)
+	}
+
+	func saveRemoteAccessEnabled(_ enabled: Bool)
+	{
+		remoteAccessDefaults.set(
+			enabled,
+			forKey: Key.remoteAccessEnabled
+		)
 	}
 
 	var removedProjectPaths: Set<String>

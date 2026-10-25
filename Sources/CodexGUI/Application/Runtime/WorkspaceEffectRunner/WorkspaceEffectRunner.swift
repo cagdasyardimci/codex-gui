@@ -10,6 +10,7 @@ final class WorkspaceEffectRunner
 
 	enum Purpose: Hashable
 	{
+		case remoteAccess
 		case connection, version, selection, account, preparation, submission, draft, interruption,
 				steering, recovery, completedHistory, adoption, acknowledgement
 		case reviewRead(
@@ -325,6 +326,7 @@ final class WorkspaceEffectRunner
 					}
 				)
 			)
+		case .remoteAccess(let operation): return (operation.context, .remoteAccess)
 		case .connect(let context): return (context, .connection)
 		case .readExecutableVersion(let context): return (context, .version)
 		case .readSelection(let context): return (context, .selection)

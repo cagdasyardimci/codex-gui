@@ -68,6 +68,13 @@ extension WorkspaceEffectRunner
 		message: String
 	) -> OperationFailure
 	{
+		if case .remoteAccess(let operation) = effect
+		{
+			return OperationFailure(
+				message: BackendDiagnosticsBuffer.displaySafeText(message),
+				outcomeIsUncertain: operation.command != .refresh
+			)
+		}
 		let uncertain: Bool
 		switch effect
 		{
@@ -129,6 +136,12 @@ extension WorkspaceEffectRunner
 		case .writeReviewMarker(let operation): return .review(.markerPersistenceFinished(
 				operation,
 				.failed(failure)
+			))
+		case .remoteAccess(let operation):
+			return .remoteAccess(.finished(
+				operation,
+				.failed(failure),
+				usageRuntime.now()
 			))
 		case .connect: return .connection(.connectionFinished(
 				context,

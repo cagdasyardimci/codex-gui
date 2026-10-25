@@ -17,6 +17,15 @@ protocol CodexService: AnyObject
 	}
 
 	func executableVersion() async throws -> String
+	func remoteControlStatus() async throws -> RemoteControlStatus
+	func setRemoteControlEnabled(_ enabled: Bool) async throws -> RemoteControlStatus
+	func startRemoteControlPairing() async throws -> RemoteControlPairing
+	func remoteControlPairingClaimed(_ pairing: RemoteControlPairing) async throws -> Bool
+	func remoteControlClients(environmentID: String) async throws -> [RemoteControlClient]
+	func revokeRemoteControlClient(
+		environmentID: String,
+		clientID: String
+	) async throws
 	func connect() async throws
 	func disconnect()
 	func accountStatus() async throws -> AccountStatus
@@ -511,5 +520,41 @@ extension CodexService
 	func unarchiveThread(id: String) async throws
 	{
 		throw AppServerError.protocolError("This Codex service cannot unarchive conversations.")
+	}
+}
+
+// Older and fixture services expose an explicit unsupported result.
+extension CodexService
+{
+	func remoteControlStatus() async throws -> RemoteControlStatus
+	{
+		throw AppServerError.protocolError("Remote access requires a compatible Codex CLI.")
+	}
+	func setRemoteControlEnabled(_ enabled: Bool) async throws -> RemoteControlStatus
+	{
+		throw AppServerError.protocolError("Remote access requires a compatible Codex CLI.")
+	}
+	func startRemoteControlPairing() async throws -> RemoteControlPairing
+	{
+		throw AppServerError.protocolError("Remote access requires a compatible Codex CLI.")
+	}
+	func remoteControlClients(environmentID: String) async throws -> [RemoteControlClient]
+	{
+		throw AppServerError.protocolError("Remote access requires a compatible Codex CLI.")
+	}
+	func revokeRemoteControlClient(
+		environmentID: String,
+		clientID: String
+	) async throws
+	{
+		throw AppServerError.protocolError("Remote access requires a compatible Codex CLI.")
+	}
+}
+
+extension CodexService
+{
+	func remoteControlPairingClaimed(_ pairing: RemoteControlPairing) async throws -> Bool
+	{
+		throw AppServerError.protocolError("Remote access requires a compatible Codex CLI.")
 	}
 }

@@ -130,6 +130,7 @@ extension WorkspaceEffectRunner
 				operation,
 				valid
 			))
+		case .remoteAccess(let operation): return try await performRemoteAccess(operation)
 		case .connect:
 			try await verifyWorkspace(managedWorkspace)
 			try await service.connect()

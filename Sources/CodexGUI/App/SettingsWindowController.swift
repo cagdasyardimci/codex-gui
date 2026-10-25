@@ -11,6 +11,7 @@ final class SettingsWindowController: NSWindowController
 		wrappingLabelWithString: "Checking notification access…"
 	)
 	private let editorOpeningService = EditorOpeningService()
+	let remoteAccess = RemoteAccessWindowController()
 	var onLogin: (() -> Void)?
 	var onReconnect: (() -> Void)?
 	var onShowBackendDetails: (() -> Void)?
@@ -104,6 +105,11 @@ final class SettingsWindowController: NSWindowController
 			target: self,
 			action: #selector(reconnect)
 		)
+		let remote = NSButton(
+			title: "Remote Access…",
+			target: self,
+			action: #selector(showRemoteAccess)
+		)
 		let details = NSButton(
 			title: "Backend Details…",
 			target: self,
@@ -117,7 +123,7 @@ final class SettingsWindowController: NSWindowController
 			[
 				AppKitLayout.title("Backend"),
 				backendLabel,
-				AppKitLayout.horizontalStack([reconnect, details]),
+				AppKitLayout.horizontalStack([reconnect, details, remote]),
 			],
 			spacing: 5
 		)
@@ -196,6 +202,10 @@ final class SettingsWindowController: NSWindowController
 	@objc private func reconnect()
 	{
 		onReconnect?()
+	}
+	@objc private func showRemoteAccess()
+	{
+		remoteAccess.present()
 	}
 	@objc private func showBackendDetails()
 	{

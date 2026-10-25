@@ -76,6 +76,7 @@ enum AppServerEvent
 		threadId: String,
 		requestID: String
 	)
+	case remoteControlStatusChanged(RemoteControlStatus)
 	case accountUpdated
 	case skillsChanged
 	case rateLimitsUpdated

@@ -7,7 +7,7 @@ struct PreferenceWrite
 
 	enum Key: Hashable
 	{
-		case model, run, recent
+		case model, run, recent, remoteAccess
 		case pin(String)
 		case taskPin(String)
 		case name(String)
@@ -19,6 +19,7 @@ struct PreferenceWrite
 		{
 		case .model: .model
 		case .run: .run
+		case .remoteAccess: .remoteAccess
 		case .recent, .removeProject: .recent
 		case .taskPin(
 			let task,
@@ -39,6 +40,7 @@ struct PreferenceWrite
 	{
 		case model(ProjectModelPreference)
 		case run(RunPreferences)
+		case remoteAccess(Bool)
 		case pin(
 			path: String,
 			pinned: Bool

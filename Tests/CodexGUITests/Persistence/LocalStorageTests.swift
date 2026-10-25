@@ -8,6 +8,31 @@ import Testing
 )
 struct LocalStorageTests
 {
+	@Test("Remote access choice persists across storage instances")
+	@MainActor
+	func remoteAccessChoicePersists() throws
+	{
+		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "LocalStorageTests")
+		defer
+		{
+			defaultsFixture.cleanup()
+		}
+		let first = LocalStorage(defaults: defaultsFixture.defaults)
+		#expect(!first.remoteAccessEnabled)
+		first.saveRemoteAccessEnabled(true)
+		#expect(LocalStorage(defaults: defaultsFixture.defaults).remoteAccessEnabled)
+		let restored = WorkspaceStoreFactory.makeSource(
+			dependencies: WorkspaceStoreDependencies(
+				service: MockCodexService(),
+				storage: LocalStorage(defaults: defaultsFixture.defaults)
+			)
+		)
+		#expect(restored.model.remoteAccess.desiredEnabled)
+		restored.shutdown()
+		first.saveRemoteAccessEnabled(false)
+		#expect(!LocalStorage(defaults: defaultsFixture.defaults).remoteAccessEnabled)
+	}
+
 	@Test("Recent projects are unique, newest first, and limited to ten")
 	@MainActor
 	func recentProjectsAreUniqueNewestFirstAndLimited() throws

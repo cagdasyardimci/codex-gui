@@ -93,6 +93,10 @@ enum WorkspaceStoreFactory
 	{
 		var model = WorkspaceModel(identity: configuration.reference.workspace)
 		model.lifecycle.owner = configuration.reference.owner
+		if case .source = configuration.reference.owner
+		{
+			model.remoteAccess.desiredEnabled = dependencies.storage.remoteAccessEnabled
+		}
 		model.lifecycle.managedWorkspace = configuration.managedWorkspace
 		model.conversations.boundThreadID = configuration.managedWorkspace?.threadID
 		let selected = configuration.managedWorkspace?.threadID
@@ -107,6 +111,7 @@ enum WorkspaceStoreFactory
 			persistence: dependencies.storage.workspacePersistenceScheduler,
 			projectContextStore: dependencies.projectContextStore,
 			reducers: [ConnectionReducer.reducer,
+						RemoteAccessReducer.reducer,
 						WorkspaceFeatureComposition.reducer,
 						PreferenceReducer.reducer,
 						UsageReducer.reducer,
@@ -138,6 +143,13 @@ enum WorkspaceStoreFactory
 			observedAt: Date()
 		))]
 
+		if case .remoteControlStatusChanged(let status) = event
+		{
+			actions.append(.remoteAccess(.statusObserved(
+				observation,
+				status
+			)))
+		}
 		if case .accountUpdated = event
 		{
 			actions.append(.preferences(.accountRefreshRequested(observation)))

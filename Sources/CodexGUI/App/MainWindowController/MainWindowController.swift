@@ -10,6 +10,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		coordinator?.selectedStore ?? sourceStore
 	}
 	private var publicationObserver: WorkspacePublicationCoordinator?
+	private var remoteAccessObserver: UUID?
 	// These members are shared by the action-binding and toolbar extensions.
 	let onOpenProjectRequest: () -> Void
 	let onInsertPathRequest: () -> Void
@@ -105,6 +106,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		observeWindowChrome(in: window)
 		paneController.restoreLayout(in: window)
 		observeWorkspacePublications()
+		configureRemoteAccessHost()
 		NotificationCenter.default.addObserver(
 			self,
 			selector: #selector(windowDidClose),
@@ -197,6 +199,46 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			name: NSSplitView.didResizeSubviewsNotification,
 			object: paneController.split.splitView
 		)
+	}
+
+	private func configureRemoteAccessHost()
+	{
+		settings.remoteAccess.onCommand =
+		{
+			[weak store = sourceStore] command in
+			guard let store
+			else
+			{
+				return
+			}
+			store.inputs.remoteAccess(command)
+		}
+		settings.remoteAccess.onShowDiagnostics =
+		{
+			[weak self] in
+			guard let self, let window = self.settings.remoteAccess.window
+			else
+			{
+				return
+			}
+			let report = WorkspaceSelectors(
+				model: self.sourceStore.model,
+				now: Date()
+			)
+			.backendDiagnosticsReport
+			self.presentBackendDetails(
+				report: report,
+				in: window
+			)
+		}
+		remoteAccessObserver = sourceStore.observe
+		{
+			[weak self] model in
+			self?.settings.remoteAccess.render(
+				model.remoteAccess,
+				connected: model.connection.isConnected
+			)
+		}
 	}
 
 	private func observeWorkspacePublications()
@@ -354,6 +396,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		publicationObserver?.cancel()
 		publicationObserver = nil
 		coordinator?.onChange = nil
+		if let remoteAccessObserver
+		{
+			sourceStore.removeObserver(remoteAccessObserver)
+		}
+		remoteAccessObserver = nil
+		settings.remoteAccess.close()
 		messageSearch.dismiss()
 	}
 

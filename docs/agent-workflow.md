@@ -14,6 +14,7 @@ Start at [AGENTS.md](../AGENTS.md) for working rules and completion reporting. T
 | State transitions, effects, async ownership, execution and recovery | [Architecture](architecture.md) |
 | Transcript residency and Git editing-turn identity | [Residency](architecture.md#conversation-content-residency), [latest Git turn](architecture.md#recorded-latest-git-turn) |
 | CLI version assessment, capability claims, framing and protocol safeguards | [CLI compatibility](cli-compatibility.md) |
+| Remote host enablement, pairing, device management and lifetime | [Remote access](remote-access.md) |
 | Composer slash-command syntax and lifecycle | [Slash commands](slash-commands.md) |
 | Transcript activity grouping and disclosure | [Activity presentation](activity-presentation-design.md) |
 | Automated checks, host-filter maintenance and evidence requirements | [Validation](validation.md) |

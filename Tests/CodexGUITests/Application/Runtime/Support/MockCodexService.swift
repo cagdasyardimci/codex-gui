@@ -164,6 +164,7 @@ final class MockCodexService: CodexService
 	var capturedTurnServiceTiers: [String?] = []
 	var startTurnError: Error?
 	var readThreadError: Error?
+	var remoteControlEnableRequests: [Bool] = []
 	var readThreadCount = 0
 	{
 		didSet
@@ -496,6 +497,17 @@ final class MockCodexService: CodexService
 	func resumeThread(id: String) async throws -> ThreadDetail
 	{
 		try await readThread(id: id)
+	}
+
+	func setRemoteControlEnabled(_ enabled: Bool) async throws -> RemoteControlStatus
+	{
+		remoteControlEnableRequests.append(enabled)
+		return RemoteControlStatus(
+			status: enabled ? .connected : .disabled,
+			serverName: "Fixture Mac",
+			installationId: "fixture-installation",
+			environmentId: enabled ? "fixture-environment" : nil
+		)
 	}
 
 	func resumeThread(

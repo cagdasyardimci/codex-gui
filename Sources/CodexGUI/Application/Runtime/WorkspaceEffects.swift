@@ -3,6 +3,7 @@ import Foundation
 /// Descriptions capture input values. They never capture a mutable application model.
 enum WorkspaceEffect
 {
+	case remoteAccess(RemoteAccessOperation)
 	case restoreSourceStartup(OperationContext)
 	case readReviewMarkers(ReviewMarkerReadOperation)
 	case writeReviewMarker(ReviewMarkerWriteOperation)

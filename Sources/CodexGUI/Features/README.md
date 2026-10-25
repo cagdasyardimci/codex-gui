@@ -18,6 +18,7 @@ This map owns feature-directory routing. Follow [conventions](../../../CONVENTIO
 | [Shared/Transcript](Shared/Transcript/) | Reusable transcript controller, preparation, message rows, selection, scrolling and turn navigation. |
 | [Sources](Sources/) | Source inventory, detail presentation, result cards and tab hover previews. |
 | [Subagents](Subagents/) | Delegated-work lifecycle, list, and tab-contained read-only child conversations. |
+| [RemoteAccess](RemoteAccess/) | Native host status, pairing and device management window. |
 | [Usage](Usage/) | Native usage controls and details; shared usage projection belongs to Application/Presentation. |
 
 For shared component ownership and presentation contracts, see [interface styling](../../../docs/interface-styling.md#component-ownership), including [conversation and navigation](../../../docs/interface-styling.md#conversation-and-navigation-presentation) and [file viewers](../../../docs/interface-styling.md#file-viewers). Transcript activity grouping and disclosure follow [activity presentation](../../../docs/activity-presentation-design.md).

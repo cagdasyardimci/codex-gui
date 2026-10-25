@@ -698,6 +698,17 @@ extension MainWindowController
 			now: Date()
 		)
 		.backendDiagnosticsReport
+		presentBackendDetails(
+			report: report,
+			in: hostWindow
+		)
+	}
+
+	func presentBackendDetails(
+		report: String,
+		in hostWindow: NSWindow
+	)
+	{
 		let alert = NSAlert()
 		alert.messageText = "Backend Details"
 		alert.informativeText =

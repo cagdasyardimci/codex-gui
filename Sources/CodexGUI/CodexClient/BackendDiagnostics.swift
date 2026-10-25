@@ -114,7 +114,7 @@ final class BackendDiagnosticsBuffer: @unchecked Sendable
 		return words.joined(separator: " ")
 	}
 
-	private static func displaySafeText(_ value: String) -> String
+	static func displaySafeText(_ value: String) -> String
 	{
 		let withoutTerminalSequences = removingTerminalSequences(from: value)
 		let normalized = normalizingControls(in: withoutTerminalSequences)
@@ -174,7 +174,8 @@ final class BackendDiagnosticsBuffer: @unchecked Sendable
 		let patterns = [
 			(
 				#"(?i)\b(OPENAI_API_KEY|CODEX_API_KEY|API_KEY|ACCESS_TOKEN|"#
-					+ #"REFRESH_TOKEN|PASSWORD|SECRET)\b["']?\s*[:=]\s*"#
+					+ #"REFRESH_TOKEN|REMOTE_CONTROL_TOKEN|PAIRING_CODE|pairingCode|"#
+					+ #"manualPairingCode|manual_pairing_code|PASSWORD|SECRET)\b["']?\s*[:=]\s*"#
 					+ #"("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;]+)"#,
 				"$1=[REDACTED]"
 			),

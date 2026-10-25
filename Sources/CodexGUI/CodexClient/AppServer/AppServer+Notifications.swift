@@ -172,6 +172,11 @@ extension AppServer
 			)
 		case "serverRequest/resolved":
 			resolvePendingInteraction(from: parameters)
+		case "remoteControl/status/changed":
+			if let status: RemoteControlStatus = try? decodeRemoteControl(parameters)
+			{
+				onEvent?(.remoteControlStatusChanged(status))
+			}
 		case "account/updated", "account/login/completed":
 			onEvent?(.accountUpdated)
 		case "skills/changed":

@@ -39,6 +39,9 @@ Update the tested-version record only after these checks pass. A successful hand
 
 Distinguish app-server APIs, configured agent tools, host facilities and GUI controls. Trace support through `CodexService`, wire requests/responses, notifications and server requests, scoped state transitions and presentation. Schema entries and enabled flags alone do not establish GUI support. Host-dependent facilities such as computer use also require a functioning tool provider and permission path.
 
+Remote-control management is an optional experimental capability. Its protocol version, lifecycle,
+and acceptance limits are owned by [remote access](remote-access.md).
+
 ## Protocol lifecycle safeguards
 
 JSONL framing uses byte LF (`0x0A`); Unicode line separators may occur inside JSON strings. Resolve unsupported interactive requests with the appropriate error, decline or cancellation response and visible feedback. Preserve method-specific acknowledgement/completion handling, events arriving before responses and uncertain-write recovery. Do not automatically replay possibly accepted mutations or approvals. See [interaction handling](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Interactions.swift), [notifications](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Notifications.swift), and [slash-command lifecycle contracts](slash-commands.md).

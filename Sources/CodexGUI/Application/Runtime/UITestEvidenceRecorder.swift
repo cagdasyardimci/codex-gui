@@ -112,6 +112,7 @@ final class UITestEvidenceRecorder
 		{
 		case .workspaceLifecycle: "workspaceLifecycle"
 		case .connection: "connection"
+		case .remoteAccess: "remoteAccess"
 		case .execution: "execution"
 		case .composer: "composer"
 		case .composerCommand: "composerCommand"
