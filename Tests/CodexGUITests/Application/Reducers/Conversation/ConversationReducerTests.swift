@@ -76,6 +76,116 @@ struct ConversationReducerTests
 		return result
 	}
 
+	@Test func historyReadsSubscribeForSelectionAndDisplayedRecoveryOnly() throws
+	{
+		let cases: [(ConversationReadPurpose, String, Bool)] = [
+			(.selection, "thread", true),
+			(.recovery, "thread", true),
+			(.recovery, "background", false),
+			(.search, "thread", false),
+			(.completion, "thread", false),
+		]
+		for (purpose, threadID, expected) in cases
+		{
+			var model = fixture()
+			let requested = ConversationReadOperation(
+				context: context(
+					model,
+					threadID: threadID
+				),
+				commandRevision: 0,
+				purpose: purpose
+			)
+			_ = reduce(
+				&model,
+				.conversations(.historyRequested(requested))
+			)
+			let captured = try #require(model.conversations.pendingReads[requested.key])
+			#expect(captured.resumesThread == expected)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	func selectingAnActiveChatEnsuresItsSubscription(_ alreadySubscribed: Bool)
+	{
+		var model = fixture()
+		model.execution.activeThreadID = "thread"
+		model.execution.state = .running
+		if alreadySubscribed
+		{
+			model.conversations.subscribedThreadIDs.insert("thread")
+		}
+		_ = reduce(
+			&model,
+			.conversations(.selectionRequested(context(model)))
+		)
+		let pending = model.conversations.pendingReads.values.first
+		#expect((pending != nil) == !alreadySubscribed)
+		#expect(alreadySubscribed || pending?.resumesThread == true)
+	}
+
+	@Test(arguments: ["content", "notification", "local-choice"])
+	func resumedSettingsRespectIndependentFreshness(_ newer: String) throws
+	{
+		var model = fixture()
+		let requested = ConversationReadOperation(
+			context: context(model),
+			commandRevision: 0,
+			purpose: .recovery
+		)
+		_ = reduce(
+			&model,
+			.conversations(.historyRequested(requested))
+		)
+		let captured = try #require(model.conversations.pendingReads[requested.key])
+		var resumed = detail()
+		resumed.settings = try #require(ThreadSettings(json: [
+			"cwd": "/tmp/conversation",
+			"model": "resumed-model",
+			"effort": "medium",
+		]))
+		switch newer
+		{
+		case "content": model.conversations.contentRevisions["thread", default: 0] += 1
+		case "notification":
+			let fresh = try #require(ThreadSettings(json: [
+				"cwd": "/tmp/conversation",
+				"model": "phone-model",
+				"effort": "low",
+			]))
+			var reduction = WorkspaceReduction()
+			ComposerCommandReducer.observeThreadState(
+				.threadSettingsUpdated(
+					threadId: "thread",
+					settings: fresh
+				),
+				model: &model,
+				result: &reduction
+			)
+		default:
+			model.preferences.localThreadSelections["thread"] = ComposerSelection(
+				modelID: "local-model",
+				effort: "high",
+				fastMode: false
+			)
+		}
+		_ = reduce(
+			&model,
+			.conversations(.historyReceived(
+				captured,
+				.succeeded(resumed)
+			))
+		)
+		#expect(model.conversations.subscribedThreadIDs.contains("thread"))
+		let expected = newer == "content" ? "resumed-model"
+			: newer == "notification" ? "phone-model" : "local-model"
+		#expect(model.composerSelection.modelID == expected)
+		if newer == "content"
+		{
+			#expect(model.conversations.content[.thread("thread")] == nil)
+		}
+	}
+
 	@Test func directConversationReducerKeepsListRequestsFeatureLocal()
 	{
 		var model = fixture()

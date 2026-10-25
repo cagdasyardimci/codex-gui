@@ -97,6 +97,9 @@ struct ConversationReadOperation
 	let commandRevision: Int
 	let purpose: ConversationReadPurpose
 	var contentRevision = 0
+	var resumesThread = false
+	var threadSettingsRevision = 0
+	var localComposerSelection: ComposerSelection?
 	var key: ConversationReadKey
 	{
 		ConversationReadKey(

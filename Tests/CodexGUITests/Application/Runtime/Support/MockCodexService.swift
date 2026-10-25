@@ -164,6 +164,8 @@ final class MockCodexService: CodexService
 	var capturedTurnServiceTiers: [String?] = []
 	var startTurnError: Error?
 	var readThreadError: Error?
+	var resumedSettings: ThreadSettings?
+	var resumedThreadIDs: [String] = []
 	var remoteControlEnableRequests: [Bool] = []
 	var readThreadCount = 0
 	{
@@ -496,7 +498,10 @@ final class MockCodexService: CodexService
 
 	func resumeThread(id: String) async throws -> ThreadDetail
 	{
-		try await readThread(id: id)
+		resumedThreadIDs.append(id)
+		var detail = try await readThread(id: id)
+		detail.settings = resumedSettings
+		return detail
 	}
 
 	func setRemoteControlEnabled(_ enabled: Bool) async throws -> RemoteControlStatus

@@ -69,6 +69,19 @@ advance a revision so a late read cannot replace newer status. Environment chang
 and device state. Views
 send commands through `WorkspaceStoreInputs`; the effect runner owns backend work.
 
+The selected chat resumes when restored after startup or reconnection, establishing its live
+thread subscription. Selecting an active chat also establishes a subscription if the GUI has only
+read its saved history. Background recovery, search, and completion reads remain unsubscribed.
+
+Remote thread settings notifications and the accepted `thread/resume` response update the selected
+conversation’s composer model, effort, and fast-mode controls. A local composer choice takes
+precedence for that thread until the corresponding backend setting changes. Unrelated backend
+settings updates preserve the local choice. New chats continue
+to use the locally saved preference. The same effective selection is captured for a GUI-submitted
+turn. A resume snapshot cannot replace settings from a newer notification or discard a local
+composer choice made while the read was pending. Transcript revisions do not discard an otherwise
+current settings snapshot.
+
 The existing conversation and approval reducers retain their ownership and uncertain-outcome
 contracts. Remote setup does not prove that mobile chat discovery, project catalogs, active-turn
 sharing, or approval recovery work with every mobile app version. Validate those behaviors with an

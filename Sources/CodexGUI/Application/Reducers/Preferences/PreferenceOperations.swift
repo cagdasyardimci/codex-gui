@@ -81,7 +81,11 @@ extension PreferencesModel
 		selectedEffort = preference?.effort
 	}
 
-	func warning(skillWarning: String?) -> String?
+	func warning(
+		selectedModelID: String?,
+		selectedEffort: String?,
+		skillWarning: String?
+	) -> String?
 	{
 		if let modelListError
 		{

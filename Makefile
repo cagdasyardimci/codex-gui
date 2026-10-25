@@ -30,7 +30,7 @@ help:
 		'  make build:bundle                 Build the debug app bundle' \
 		'  make build:bundle:release         Build the release app bundle' \
 		'  make check                        Run formatting, build, and all tests' \
-		'  make test                         Run all 682 discovered tests' \
+		'  make test                         Run all 689 discovered tests' \
 		'  make test PARALLEL=0              Run the full suite sequentially' \
 		'  make test:<group>                 Run only that group in one process' \
 		'  make test FILTER="regex"          Run a custom selection in one process' \

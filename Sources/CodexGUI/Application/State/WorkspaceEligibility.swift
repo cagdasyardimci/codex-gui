@@ -18,15 +18,19 @@ struct WorkspaceEligibility
 		{
 			return "Project context is loading."
 		}
-		if model.preferences.runPreferences.fastMode,
+		if model.composerSelection.fastMode,
 			let reason = FastModeAvailability.unavailableReason(in: model)
 		{
 			return "\(reason) Disable fast mode before sending."
 		}
-		return model.preferences.warning(skillWarning: ProjectProductivity.skillWarning(
-			context: model.contextNavigation.projectContext,
-			in: model.contextNavigation.skillCatalog
-		))
+		return model.preferences.warning(
+			selectedModelID: model.composerSelection.modelID,
+			selectedEffort: model.composerSelection.effort,
+			skillWarning: ProjectProductivity.skillWarning(
+				context: model.contextNavigation.projectContext,
+				in: model.contextNavigation.skillCatalog
+			)
+		)
 	}
 
 	var ownerAvailable: Bool
@@ -305,9 +309,12 @@ struct WorkspaceEligibility
 			{
 				[$0]
 			} ?? []))
-			&& submission.modelID == model.preferences.selectedModelID
-			&& submission.effort == model.preferences.selectedEffort
-			&& submission.preferences == model.preferences.runPreferences
+			&& submission.modelID == model.composerSelection.modelID
+			&& submission.effort == model.composerSelection.effort
+			&& submission.preferences == RunPreferences(
+				approvalMode: model.preferences.runPreferences.approvalMode,
+				fastMode: model.composerSelection.fastMode
+			)
 			&& (steering || !submission.preferences.fastMode
 				|| submission.serviceTier == FastModeAvailability.serviceTier(in: model))
 	}

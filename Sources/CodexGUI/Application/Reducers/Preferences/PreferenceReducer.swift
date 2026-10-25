@@ -90,6 +90,7 @@ enum PreferenceReducer
 			{
 				return result
 			}
+			let current = model.composerSelection
 			let preference = ProjectModelPreference(
 				modelID: id,
 				effort: nil
@@ -99,6 +100,11 @@ enum PreferenceReducer
 				context: context,
 				model: &model
 			)
+			model.recordLocalComposerSelection(ComposerSelection(
+				modelID: id,
+				effort: nil,
+				fastMode: current.fastMode
+			))
 		case .effortSelected(
 			let context,
 			let effort
@@ -111,8 +117,9 @@ enum PreferenceReducer
 			{
 				return result
 			}
+			let current = model.composerSelection
 			let preference = ProjectModelPreference(
-				modelID: model.preferences.selectedModelID,
+				modelID: current.modelID,
 				effort: effort
 			)
 			result = select(
@@ -120,6 +127,11 @@ enum PreferenceReducer
 				context: context,
 				model: &model
 			)
+			model.recordLocalComposerSelection(ComposerSelection(
+				modelID: current.modelID,
+				effort: effort,
+				fastMode: current.fastMode
+			))
 		case .approvalModeSelected(
 			let context,
 			let mode
@@ -154,6 +166,7 @@ enum PreferenceReducer
 			{
 				return result
 			}
+			let current = model.composerSelection
 			if enabled, let reason = FastModeAvailability.unavailableReason(in: model)
 			{
 				model.preferences.statusMessage = reason
@@ -169,6 +182,11 @@ enum PreferenceReducer
 				value: .run(model.preferences
 					.runPreferences)
 			))]
+			model.recordLocalComposerSelection(ComposerSelection(
+				modelID: current.modelID,
+				effort: current.effort,
+				fastMode: enabled
+			))
 		case .taskPinToggled(
 			let context,
 			let task

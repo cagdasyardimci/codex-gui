@@ -158,7 +158,7 @@ extension WorkspaceEffectRunner
 		case .readConversationHistory(let operation):
 			let detail = try await readConversation(
 				operation.context,
-				resumeSelectedThread: operation.purpose == .selection,
+				resumeSelectedThread: operation.resumesThread,
 				managedWorkspace: managedWorkspace
 			)
 			return .conversations(.historyReceived(
@@ -851,7 +851,7 @@ extension WorkspaceEffectRunner
 		}
 		try await verifyWorkspace(managedWorkspace)
 		// Resume the selected chat so app-server replays its latest token usage.
-		// Background and recovery reads must not subscribe to the thread.
+		// Selected-chat restoration also resumes; background reads remain unsubscribed.
 		var detail: ThreadDetail
 		if resumeSelectedThread
 		{

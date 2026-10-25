@@ -167,6 +167,7 @@ struct ConcurrentChatRuntimeTests
 		#expect(fixture.store.model.execution(for: .thread("chat-a")).hasUncertainRequest)
 		#expect(fixture.store.model.execution(for: .thread("chat-b")).hasUncertainRequest)
 		let readsBeforeReconnect = service.reads.count
+		let resumesBeforeReconnect = service.resumeDirectories.count
 		await fixture.inputs.connect()
 		let recoveryHandles = fixture.store.model.allExecutions.compactMap
 		{
@@ -180,7 +181,10 @@ struct ConcurrentChatRuntimeTests
 			#expect(await handle.wait() == .finished)
 		}
 		let recoveredThreads = Set(service.reads.dropFirst(readsBeforeReconnect))
-		#expect(recoveredThreads == Set(["chat-a", "chat-b"]))
+		let resumedThreads = service.resumeDirectories.dropFirst(resumesBeforeReconnect)
+			.map(\.threadID)
+		#expect(recoveredThreads == Set(["chat-a"]))
+		#expect(resumedThreads == ["chat-b"])
 		#expect(service.starts.count == 2)
 		#expect(service.connectionCount == 2)
 		#expect(fixture.store.model.execution(for: .thread("chat-a")).state == .running)

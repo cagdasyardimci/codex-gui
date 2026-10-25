@@ -8,6 +8,154 @@ import Testing
 )
 struct PreferenceReducerTests
 {
+	@Test func remoteThreadSettingsReachComposerAndLaterLocalChoicesWin() throws
+	{
+		var model = fixture()
+		model.preferences.models = [ModelOption(json: [
+			"model": "test-model",
+			"isDefault": true,
+			"supportedReasoningEfforts": [
+				["reasoningEffort": "low"],
+				["reasoningEffort": "medium"],
+				["reasoningEffort": "high"],
+			],
+			"serviceTiers": [["id": "priority", "name": "Fast", "description": "Fast"]],
+		])!]
+		model.preferences.globalModelPreference = ProjectModelPreference(
+			modelID: "test-model",
+			effort: "medium"
+		)
+		model.preferences.resolveSelection()
+		model.conversations.selectedConversation = .thread("phone")
+		let operation = context(model)
+		let remote = ThreadSettings(json: [
+			"model": "test-model",
+			"cwd": "/project",
+			"effort": "low",
+			"serviceTier": "priority",
+		])!
+		_ = ComposerCommandReducer.reduce(
+			&model,
+			.composerCommand(.backendObserved(
+				operation,
+				.threadSettingsUpdated(
+					threadId: "phone",
+					settings: remote
+				)
+			))
+		)
+		var displayed = WorkspaceSelectors(
+			model: model,
+			now: Date()
+		)
+		#expect(displayed.selectedEffort == "low")
+		#expect(displayed.runPreferences.fastMode)
+		#expect(model.preferences.selectedEffort == "medium")
+		#expect(!model.preferences.runPreferences.fastMode)
+
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.effortSelected(
+				operation,
+				"high"
+			))
+		)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.fastModeSelected(
+				operation,
+				false
+			))
+		)
+		displayed = WorkspaceSelectors(
+			model: model,
+			now: Date()
+		)
+		#expect(displayed.selectedEffort == "high")
+		#expect(!displayed.runPreferences.fastMode)
+
+		model.conversations.selectedConversation = .newChat
+		displayed = WorkspaceSelectors(
+			model: model,
+			now: Date()
+		)
+		#expect(displayed.selectedEffort == "high")
+		#expect(!displayed.runPreferences.fastMode)
+
+		model.conversations.selectedConversation = .thread("phone")
+		_ = ComposerCommandReducer.reduce(
+			&model,
+			.composerCommand(.backendObserved(
+				operation,
+				.threadSettingsUpdated(
+					threadId: "phone",
+					settings: remote
+				)
+			))
+		)
+		displayed = WorkspaceSelectors(
+			model: model,
+			now: Date()
+		)
+		#expect(displayed.selectedEffort == "high")
+		#expect(!displayed.runPreferences.fastMode)
+
+		let phoneEffort = ThreadSettings(json: [
+			"model": "test-model",
+			"cwd": "/project",
+			"effort": "medium",
+			"serviceTier": "priority",
+		])!
+		_ = ComposerCommandReducer.reduce(
+			&model,
+			.composerCommand(.backendObserved(
+				operation,
+				.threadSettingsUpdated(
+					threadId: "phone",
+					settings: phoneEffort
+				)
+			))
+		)
+		displayed = WorkspaceSelectors(
+			model: model,
+			now: Date()
+		)
+		#expect(displayed.selectedEffort == "medium")
+		#expect(!displayed.runPreferences.fastMode)
+
+		let phoneFast = ThreadSettings(json: [
+			"model": "test-model",
+			"cwd": "/project",
+			"effort": "medium",
+			"serviceTier": "default",
+		])!
+		_ = ComposerCommandReducer.reduce(
+			&model,
+			.composerCommand(.backendObserved(
+				operation,
+				.threadSettingsUpdated(
+					threadId: "phone",
+					settings: phoneFast
+				)
+			))
+		)
+		_ = ComposerCommandReducer.reduce(
+			&model,
+			.composerCommand(.backendObserved(
+				operation,
+				.threadSettingsUpdated(
+					threadId: "phone",
+					settings: phoneEffort
+				)
+			))
+		)
+		displayed = WorkspaceSelectors(
+			model: model,
+			now: Date()
+		)
+		#expect(displayed.selectedEffort == "medium")
+		#expect(displayed.runPreferences.fastMode)
+	}
 
 	@Test func sharedStoresObserveGlobalWritesBeforeNextInputAndHydrateNewStores() async
 	{

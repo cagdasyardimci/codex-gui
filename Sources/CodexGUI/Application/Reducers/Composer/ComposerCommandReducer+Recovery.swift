@@ -111,7 +111,13 @@ extension ComposerCommandReducer
 			{
 				return
 			}
+			model.reconcileRemoteComposerSelection(
+				threadID: id,
+				previous: model.composerCommands.threadSettings[id],
+				updated: settings
+			)
 			model.composerCommands.threadSettings[id] = settings
+			model.composerCommands.threadSettingsRevisions[id, default: 0] += 1
 			if let mode = settings.collaborationMode
 			{
 				model.composerCommands.planModes[.thread(id)] = mode.mode

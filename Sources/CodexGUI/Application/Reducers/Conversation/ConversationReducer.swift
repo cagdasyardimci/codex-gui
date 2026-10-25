@@ -285,6 +285,12 @@ enum ConversationReducer
 		}
 		var captured = operation
 		captured.contentRevision = model.conversations.contentRevisions[threadID, default: 0]
+		captured.resumesThread = operation.purpose == .selection
+			|| (operation.purpose == .recovery
+				&& model.conversations.selectedConversation == .thread(threadID))
+		captured.threadSettingsRevision = model.composerCommands
+			.threadSettingsRevisions[threadID, default: 0]
+		captured.localComposerSelection = model.preferences.localThreadSelections[threadID]
 		model.conversations.pendingReads[operation.key] = captured
 		if operation.purpose == .selection
 		{
@@ -434,6 +440,7 @@ enum ConversationReducer
 			)
 			let execution = model.execution(for: .thread(threadID))
 			let shouldKeepExistingHistory = execution.activeThreadID == threadID
+				&& model.conversations.subscribedThreadIDs.contains(threadID)
 				&& (execution.state.isBusy
 					|| (!execution.needsReconciliation && previous != .thread(threadID)))
 
@@ -649,6 +656,33 @@ enum ConversationReducer
 			if operation.purpose == .selection
 			{
 				model.conversations.pendingSelection = nil
+			}
+			if case .succeeded(let detail) = observation,
+				pending.resumesThread, detail.summary.id == threadID,
+				detail.summary.cwd == model.identity.canonicalCheckoutPath,
+				!detail.isReadOnlyDueToActiveWriter
+			{
+				model.conversations.subscribedThreadIDs.insert(threadID)
+			}
+			if case .succeeded(let detail) = observation,
+				pending.resumesThread,
+				detail.summary.id == threadID,
+				!detail.isReadOnlyDueToActiveWriter,
+				let settings = detail.settings,
+				settings.cwd == model.identity.canonicalCheckoutPath,
+				model.composerCommands.threadSettingsRevisions[threadID, default: 0]
+				== pending.threadSettingsRevision
+			{
+				if model.preferences.localThreadSelections[threadID] == pending
+					.localComposerSelection
+				{
+					model.reconcileRemoteComposerSelection(
+						threadID: threadID,
+						previous: model.composerCommands.threadSettings[threadID],
+						updated: settings
+					)
+				}
+				model.composerCommands.threadSettings[threadID] = settings
 			}
 			guard ConversationReducer.commandRevision(
 				threadID: threadID,
@@ -1136,6 +1170,7 @@ enum ConversationReducer
 		switch event
 		{
 		case .connectionBegan, .connectionDisconnected:
+			model.conversations.subscribedThreadIDs.removeAll()
 			model.conversations.pendingSidebarList = nil
 			model.conversations.sidebarThreads = nil
 			model.conversations.sidebarListError = nil
@@ -1197,6 +1232,7 @@ enum ConversationReducer
 				result: &result
 			)
 		case .submissionPrepared(let prepared):
+			model.conversations.subscribedThreadIDs.insert(prepared.thread.summary.id)
 			model.conversations.contentRevisions[prepared.thread.summary.id, default: 0] += 1
 			if prepared.submission.context.threadID == nil
 			{
@@ -1293,7 +1329,17 @@ enum ConversationReducer
 				_,
 				_
 			):
+				model.conversations.subscribedThreadIDs.insert(threadID)
 				model.conversations.contentRevisions[threadID, default: 0] += 1
+			case .threadSettingsUpdated(
+				let threadID,
+				_
+			), .tokenUsageUpdated(
+				let threadID,
+				_,
+				_
+			):
+				model.conversations.subscribedThreadIDs.insert(threadID)
 			default: break
 			}
 			if let identity = event.turnContentIdentity

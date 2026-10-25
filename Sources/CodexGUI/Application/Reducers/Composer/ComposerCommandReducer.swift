@@ -50,6 +50,7 @@ enum ComposerCommandReducer
 				identity == model.identity, !model.composerCommands.blocksNewWork
 			{
 				model.composerCommands = ComposerCommandModel()
+				model.preferences.localThreadSelections.removeAll()
 			}
 			return result
 		}
@@ -458,7 +459,7 @@ enum ComposerCommandReducer
 				result: &result
 			)
 		case .fast:
-			let enabled = argument.isEmpty ? !model.preferences.runPreferences.fastMode
+			let enabled = argument.isEmpty ? !model.composerSelection.fastMode
 				: argument == "on"
 			if enabled, let reason = FastModeAvailability.unavailableReason(in: model)
 			{
@@ -523,7 +524,7 @@ enum ComposerCommandReducer
 			}
 			let nextMode: CollaborationModeKind =
 				model.composerCommands.planModes[request.conversation] == .plan ? .default : .plan
-			let reasoningEffort = model.preferences.selectedEffort
+			let reasoningEffort = model.composerSelection.effort
 				?? selectedModel.defaultReasoningEffort
 			let mode = CollaborationMode(
 				mode: nextMode,
@@ -556,7 +557,7 @@ enum ComposerCommandReducer
 
 	static func resolvedModel(_ model: WorkspaceModel) -> ModelOption?
 	{
-		if let id = model.preferences.selectedModelID
+		if let id = model.composerSelection.modelID
 		{
 			return model.preferences.models.first(where:
 				{

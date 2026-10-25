@@ -31,6 +31,7 @@ struct ComposerCommandModel
 	var tokenUsage: [String: ThreadTokenUsage] = [:]
 	var threadStatuses: [String: ThreadStatus] = [:]
 	var threadSettings: [String: ThreadSettings] = [:]
+	var threadSettingsRevisions: [String: Int] = [:]
 	var pendingTurn: ComposerCommandTurnOperation?
 	var pendingSettings: ComposerCommandSettingsOperation?
 	var planModes: [ConversationKey: CollaborationModeKind] = [:]

@@ -610,6 +610,100 @@ struct ComposerCommandRuntimeTests
 	}
 
 	@Test
+	func resumedThreadSettingsDetermineTheNextGuiTurn() async throws
+	{
+		let fixture = try ComposerCommandRuntimeHarness()
+		defer
+		{
+			fixture.close()
+		}
+		fixture.service.base.availableModels = [
+			ModelOption(json: [
+				"model": "phone-model",
+				"isDefault": true,
+				"defaultReasoningEffort": "medium",
+				"supportedReasoningEfforts": [
+					["reasoningEffort": "low"],
+					["reasoningEffort": "medium"],
+				],
+			])!,
+		]
+		fixture.service.base.resumedSettings = try #require(ThreadSettings(json: [
+			"model": "phone-model",
+			"cwd": fixture.project.path,
+			"effort": "low",
+			"serviceTier": "default",
+		]))
+		try await fixture.start()
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.state.currentSnapshot.selectedModelID == "phone-model"
+					&& fixture.state.currentSnapshot.selectedEffort == "low"
+					&& !fixture.state.currentSnapshot.fastMode
+			}))
+		fixture.state.inputs.updateDraft("Use the resumed settings")
+		let operation = try #require(fixture.state.inputs.send())
+		#expect(await operation.wait() == .finished)
+		let captured = try #require(fixture.service.base.capturedTurnPreferences.first)
+		#expect(captured.modelID == "phone-model")
+		#expect(captured.effort == "low")
+		#expect(!captured.preferences.fastMode)
+	}
+
+	@Test
+	func remoteThreadSettingsDetermineTheNextGuiTurn() async throws
+	{
+		let fixture = try ComposerCommandRuntimeHarness()
+		defer
+		{
+			fixture.close()
+		}
+		fixture.service.base.availableModels = [
+			ModelOption(json: [
+				"model": "fixture-model",
+				"isDefault": true,
+				"defaultReasoningEffort": "medium",
+				"supportedReasoningEfforts": [["reasoningEffort": "medium"]],
+			])!,
+			ModelOption(json: [
+				"model": "phone-model",
+				"isDefault": false,
+				"defaultReasoningEffort": "medium",
+				"supportedReasoningEfforts": [["reasoningEffort": "low"]],
+				"serviceTiers": [["id": "priority",
+									"name": "Fast",
+									"description": "Fixture fast tier"]],
+			])!,
+		]
+		try await fixture.start()
+		let remote = try #require(ThreadSettings(json: [
+			"model": "phone-model",
+			"cwd": fixture.project.path,
+			"effort": "low",
+			"serviceTier": "priority",
+		]))
+		fixture.service.base.emit(.threadSettingsUpdated(
+			threadId: fixture.service.base.thread.id,
+			settings: remote
+		))
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.state.currentSnapshot.selectedModelID == "phone-model"
+					&& fixture.state.currentSnapshot.selectedEffort == "low"
+					&& fixture.state.currentSnapshot.fastMode
+			}))
+		fixture.state.inputs.updateDraft("Use the phone settings")
+		let operation = try #require(fixture.state.inputs.send())
+		#expect(await operation.wait() == .finished)
+		let captured = try #require(fixture.service.base.capturedTurnPreferences.first)
+		#expect(captured.modelID == "phone-model")
+		#expect(captured.effort == "low")
+		#expect(captured.preferences.fastMode)
+		#expect(fixture.service.turnServiceTiers == ["priority"])
+		#expect(fixture.service.base.turnStartCount == 1)
+	}
+
+	@Test
 	func disconnectForkRetainsTypedUncertaintyUntilResume() async throws
 	{
 		let fixture = try ComposerCommandRuntimeHarness()

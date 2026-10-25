@@ -160,15 +160,18 @@ struct WorkspaceSelectors
 	}
 	var selectedModelID: String?
 	{
-		model.preferences.selectedModelID
+		model.composerSelection.modelID
 	}
 	var selectedEffort: String?
 	{
-		model.preferences.selectedEffort
+		model.composerSelection.effort
 	}
 	var runPreferences: RunPreferences
 	{
-		model.preferences.runPreferences
+		RunPreferences(
+			approvalMode: model.preferences.runPreferences.approvalMode,
+			fastMode: model.composerSelection.fastMode
+		)
 	}
 	var hasStoredModelPreference: Bool
 	{

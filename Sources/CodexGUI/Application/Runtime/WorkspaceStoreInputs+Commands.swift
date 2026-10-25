@@ -75,7 +75,7 @@ extension WorkspaceStoreInputs
 		return CollaborationMode(
 			mode: kind,
 			model: selected.id,
-			reasoningEffort: store.model.preferences.selectedEffort ?? selected
+			reasoningEffort: store.model.composerSelection.effort ?? selected
 				.defaultReasoningEffort
 		)
 	}

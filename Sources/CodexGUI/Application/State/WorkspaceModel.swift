@@ -554,6 +554,7 @@ struct ConversationsModel
 	var pendingNewChatContent: [Int: ConversationContentModel] = [:]
 	var historyErrors: [String: String] = [:]
 	var lockedThreadIDs: Set<String> = []
+	var subscribedThreadIDs: Set<String> = []
 	var contentRevisions: [String: Int] = [:]
 	var showingArchived = false
 	var pendingList: ConversationListOperation?
@@ -625,6 +626,7 @@ struct PreferencesModel
 {
 	var pendingPreferenceWrites: [PreferenceWrite.Key: OperationContext] = [:]
 	var preferenceWriteErrors: [PreferenceWrite.Key: String] = [:]
+	var localThreadSelections: [String: ComposerSelection] = [:]
 	var globalModelPreference: ProjectModelPreference?
 	var projectModelPreference: ProjectModelPreference?
 	var statusMessage: String?
