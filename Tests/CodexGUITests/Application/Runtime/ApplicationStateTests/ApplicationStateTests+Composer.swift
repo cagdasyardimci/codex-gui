@@ -83,6 +83,7 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.draft == (newerEdit ? "Next input" : ""))
 		#expect(state.currentSnapshot.draftContext.isEmpty)
 		#expect(state.store.model.composer.clearedSubmissionDrafts.isEmpty)
+		#expect(state.currentSnapshot.reusableReferences == [attachment])
 		#expect(storage.draft(
 			for: project,
 			threadID: service.thread.id
