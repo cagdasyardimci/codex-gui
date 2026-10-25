@@ -146,6 +146,8 @@ Each main window has its own toolbar identifier because its tools-pane compositi
 
 The composer footer shows one submission control at a time. While viewing a stoppable active task, an empty draft shows Stop; text, attached context or a pending image import replaces it with the send arrow. Running turns retain the existing steering action. Its arrow uses the same icon, circular fill and enabled or disabled colors as the normal send control. Pending image imports keep submission disabled.
 
+The model and effort button keeps its opening width while its picker is shown, so changing effort does not move the centered popover. It sizes to the selected model and effort again when the picker closes.
+
 The composer editor paints the same surface color as its enclosing view so AppKit can repaint the previous insertion point. Its setup belongs to [composer configuration](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+Composer.swift).
 
 Project/location strips and voice controls are outside the existing composer components. Matching the reference does not require reserving footer space for omitted controls. The Tools landing page places Changes and Files side by side when two columns fit, and stacks full-width tiles in narrow panes. Use the source owners above for sizing calculations.

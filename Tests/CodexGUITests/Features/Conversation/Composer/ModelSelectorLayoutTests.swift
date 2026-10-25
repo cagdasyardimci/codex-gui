@@ -5,7 +5,7 @@ import Testing
 
 struct ModelSelectorLayoutTests
 {
-	@Test @MainActor func openingPickerRetainsSelectionWidthAndTracksUpdatedSummary()
+	@Test @MainActor func openingPickerKeepsAnchorWidthUntilDismissal()
 	{
 		let button = ModelEffortSelectionButton(frame: .zero)
 		let fallbackWidth = button.intrinsicContentSize.width
@@ -35,16 +35,28 @@ struct ModelSelectorLayoutTests
 		button.update(
 			summary: replacement,
 			fastMode: true,
+			isPickerPresented: true
+		)
+		#expect(button.intrinsicContentSize.width == closedWidth)
+		button.update(
+			summary: "Short model Low",
+			fastMode: true,
+			isPickerPresented: true
+		)
+		#expect(button.intrinsicContentSize.width == closedWidth)
+		button.update(
+			summary: replacement,
+			fastMode: true,
 			isPickerPresented: false
 		)
 		let replacementWidth = button.intrinsicContentSize.width
+		#expect(replacementWidth > closedWidth)
 		button.update(
 			summary: replacement,
 			fastMode: true,
 			isPickerPresented: true
 		)
 		#expect(button.intrinsicContentSize.width == replacementWidth)
-		#expect(replacementWidth > closedWidth)
 	}
 
 	@Test func modelRequestAndAllocatedTextSpaceResolveDifferentLimits()

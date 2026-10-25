@@ -11,6 +11,7 @@ final class ModelEffortSelectionButton: NSButton
 	private var fastMode = false
 	private var isPickerPresented = false
 	private var isModelListPresented = false
+	private var presentedWidth: CGFloat?
 	private weak var observedWindow: NSWindow?
 
 	override init(frame frameRect: NSRect)
@@ -63,6 +64,8 @@ final class ModelEffortSelectionButton: NSButton
 		isModelListPresented: Bool = false
 	)
 	{
+		let widthBeforePresentation = isPickerPresented && !self.isPickerPresented
+			? intrinsicContentSize.width : nil
 		self.summary = summary.flatMap
 		{
 			$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
@@ -72,6 +75,21 @@ final class ModelEffortSelectionButton: NSButton
 		self.isPickerPresented = isPickerPresented
 		self.isModelListPresented = isModelListPresented
 		title = displayedTitle
+		if let widthBeforePresentation
+		{
+			let displayedWidth = contentLayout.requestedWidth(
+				titleWidth: naturalTextSize.width,
+				displaysBolt: displaysBolt
+			)
+			presentedWidth = max(
+				widthBeforePresentation,
+				displayedWidth
+			)
+		}
+		else if !isPickerPresented
+		{
+			presentedWidth = nil
+		}
 
 		let selectionDescription = self.summary ?? "Select effort"
 		toolTip = fastMode ? "\(selectionDescription) · Fast mode enabled" : selectionDescription
@@ -115,11 +133,12 @@ final class ModelEffortSelectionButton: NSButton
 			titleWidth: naturalTextSize.width,
 			displaysBolt: displaysBolt
 		)
+		let requestedWidth = isPickerPresented ? max(
+			closedWidth,
+			displayedWidth
+		) : closedWidth
 		return NSSize(
-			width: isPickerPresented ? max(
-				closedWidth,
-				displayedWidth
-			) : closedWidth,
+			width: presentedWidth ?? requestedWidth,
 			height: LayoutTokens.composer.controlHeight
 		)
 	}
