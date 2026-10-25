@@ -91,6 +91,35 @@ struct LocalStorageImageLeaseOptimizationTests
 		#expect(fixture.exists(sent))
 		#expect(fixture.exists(foreign))
 		#expect(fixture.exists(userFile))
+
+		other.saveDraftContext(
+			[],
+			for: fixture.root,
+			threadID: "draft"
+		)
+		#expect(!fixture.exists(draft))
+		#expect(fixture.exists(sent))
+		let replacements = (0 ..< 100).map
+		{
+			ComposerContextItem(
+				kind: .textExcerpt,
+				title: "Replacement \($0)",
+				path: "replacement.swift",
+				excerpt: "replacement"
+			)
+		}
+		other.rememberSentReferences(
+			replacements,
+			for: fixture.root,
+			threadID: "sent"
+		)
+		#expect(other.sentReferences(
+			for: fixture.root,
+			threadID: "sent"
+		) == replacements)
+		#expect(!fixture.exists(sent))
+		#expect(fixture.exists(foreign))
+		#expect(fixture.exists(userFile))
 	}
 
 	@Test(arguments: ["CodexGUI.draftContext", "CodexGUI.sentReferences"])
