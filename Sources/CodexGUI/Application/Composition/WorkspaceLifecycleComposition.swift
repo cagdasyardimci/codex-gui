@@ -374,7 +374,6 @@ enum WorkspaceLifecycleComposition
 		}
 		execution.activeThreadID = threadID
 		execution.needsReconciliation = true
-		execution.hasUncertainRequest = true
 		model.executions.entries[.thread(threadID)] = execution
 		return true
 	}

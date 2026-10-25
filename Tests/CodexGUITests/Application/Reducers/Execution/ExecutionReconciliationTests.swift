@@ -79,6 +79,52 @@ struct ExecutionReconciliationTests
 		)
 	}
 
+	@Test(arguments: [false, true])
+	func observedTurnDoesNotClearAnUncertainLocalRequest(_ retainsOwner: Bool) throws
+	{
+		var (model, context) = fixture(state: .failed)
+		model.conversations.selectedConversation = .thread("worker")
+		if !retainsOwner
+		{
+			model.execution.owner = nil
+		}
+		let running = try #require(CodexTurn(json: [
+			"id": "live",
+			"status": "inProgress",
+			"items": [],
+		]))
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.backendObserved(
+				context,
+				.turnStarted(
+					threadId: "worker",
+					turn: running
+				)
+			))
+		)
+		#expect(model.execution.needsReconciliation)
+		#expect(model.execution.hasUncertainRequest)
+		let completed = try #require(CodexTurn(json: [
+			"id": "live",
+			"status": "completed",
+			"items": [],
+		]))
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.backendObserved(
+				context,
+				.turnCompleted(
+					threadId: "worker",
+					turn: completed
+				)
+			))
+		)
+		#expect(model.execution.needsReconciliation)
+		#expect(model.execution.hasUncertainRequest)
+		#expect(!WorkspaceEligibility(model: model).canSend)
+	}
+
 	@Test func uncertainSteeringHistoryPreservesBusyOwnerAndStopTransport()
 	{
 		for state in [ExecutionState.running, .awaitingApproval, .awaitingAnswer, .stopping]
@@ -194,6 +240,41 @@ struct ExecutionReconciliationTests
 		#expect(!execution.needsReconciliation)
 		#expect(execution.commandLifetime.hasPendingCommands)
 		#expect(model.blocksExecutionCleanup)
+		model.conversations.selectedConversation = .thread("worker")
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.backendObserved(
+				context,
+				.turnCompleted(
+					threadId: "worker",
+					turn: detail(status: "completed").turns[0]
+				)
+			))
+		)
+		#expect(model.execution.needsReconciliation)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.backendObserved(
+				context,
+				.turnStarted(
+					threadId: "worker",
+					turn: CodexTurn(
+						id: "next-turn",
+						status: "inProgress",
+						items: [],
+						error: nil
+					)
+				)
+			))
+		)
+		#expect(model.execution.activeTurnID == "next-turn")
+		#expect(model.execution.needsReconciliation)
+		#expect(model.execution.commandLifetime.pending.contains(TaskCommandOwnership(
+			threadID: "worker",
+			turnID: "live",
+			itemID: "command"
+		)))
+		#expect(!WorkspaceEligibility(model: model).canSteer)
 	}
 
 	@Test(arguments: ["interrupted", "stopped", "cancelled"])

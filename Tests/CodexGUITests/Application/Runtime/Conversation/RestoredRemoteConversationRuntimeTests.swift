@@ -7,6 +7,93 @@ import Testing
 @Suite(.timeLimit(.minutes(1)))
 struct RestoredRemoteConversationRuntimeTests
 {
+	@Test(arguments: [false, true])
+	func phoneTurnAllowsMacFollowupDespiteLateRecovery(_ recoveryArrivesAfterCompletion: Bool)
+		async throws
+	{
+		let fixture = try ComposerCommandRuntimeHarness()
+		defer
+		{
+			fixture.close()
+		}
+		try await fixture.start()
+		let service = fixture.service.base
+		let threadID = service.thread.id
+		service.suspendNextRead = true
+		service.emit(.threadStatusChanged(
+			threadId: threadID,
+			status: try #require(ThreadStatus(json: ["type": "active", "activeFlags": []]))
+		))
+		try #require(await service.awaitReadiness
+		{
+			service.pendingRead != nil
+		})
+		let recovery = try #require(fixture.store.model.conversations.pendingReads.values.first
+		{
+			$0.context.threadID == threadID && $0.purpose == .recovery
+		})
+		let handle = try #require(fixture.store.operation(for: recovery.context))
+		let running = try #require(CodexTurn(json: [
+			"id": "phone-turn",
+			"status": "inProgress",
+			"items": [],
+		]))
+		let delayedHistory = ThreadDetail(
+			summary: try #require(ThreadSummary(json: [
+				"id": threadID,
+				"cwd": fixture.project.path,
+				"status": ["type": "active"],
+			])),
+			turns: [running],
+			nextTurnsCursor: nil
+		)
+		service.emit(.turnStarted(
+			threadId: threadID,
+			turn: running
+		))
+		service.emit(.agentMessageDelta(
+			threadId: threadID,
+			turnId: running.id,
+			itemId: "phone-answer",
+			text: "Phone reply"
+		))
+		if !recoveryArrivesAfterCompletion
+		{
+			service.finishPendingRead(with: delayedHistory)
+			#expect(await handle.wait() == .finished)
+		}
+		let completed = try #require(CodexTurn(json: [
+			"id": running.id,
+			"status": "completed",
+			"items": [
+				["id": "phone-answer", "type": "agentMessage", "text": "Phone reply"],
+			],
+		]))
+		service.savedTurns = [completed]
+		service.emit(.turnCompleted(
+			threadId: threadID,
+			turn: completed
+		))
+		try #require(await fixture.awaitSnapshot
+		{
+			fixture.store.model.conversations.content[.thread(threadID)]?.loadedTurns.last?.status
+				== "completed"
+		})
+		if recoveryArrivesAfterCompletion
+		{
+			service.finishPendingRead(with: delayedHistory)
+			#expect(await handle.wait() == .finished)
+		}
+		#expect(!fixture.store.model.execution.needsReconciliation)
+		#expect(!fixture.store.model.execution.hasUncertainRequest)
+		#expect(fixture.state.currentSnapshot.canSend)
+		#expect(service.turnStartCount == 0)
+		fixture.state.inputs.updateDraft("Mac followup")
+		let send = try #require(fixture.state.inputs.send())
+		#expect(await send.wait() == .finished)
+		#expect(service.turnStartCount == 1)
+	}
+
 	@Test
 	func restoredChatSubscribesAndReceivesMobileSettingsAndMessages() async throws
 	{

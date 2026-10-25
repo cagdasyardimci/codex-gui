@@ -459,6 +459,28 @@ struct ComposerCommandReducerTests
 		#expect(model.composerCommands.pendingSettings?.mode.mode == .plan)
 		#expect(model.execution.needsReconciliation)
 		#expect(model.composer.drafts[request.conversation] == request.draft)
+		#expect(!model.execution.hasUncertainRequest)
+		observe(
+			.turnStarted(
+				threadId: "thread",
+				turn: turn(
+					"phone-turn",
+					status: "inProgress"
+				)
+			),
+			model: &model
+		)
+		#expect(model.execution.needsReconciliation)
+		#expect(model.composerCommands.pendingSettings?.outcomeUncertain == true)
+		observe(
+			.turnCompleted(
+				threadId: "thread",
+				turn: turn("phone-turn")
+			),
+			model: &model
+		)
+		#expect(model.execution.needsReconciliation)
+		#expect(!WorkspaceEligibility(model: model).canSend)
 		observe(
 			.threadSettingsUpdated(
 				threadId: "thread",
@@ -470,6 +492,69 @@ struct ComposerCommandReducerTests
 		#expect(model.composerCommands.planModes[request.conversation] == .plan)
 		#expect(model.composer.drafts[request.conversation]?.text == "")
 		#expect(model.composer.drafts[request.conversation]?.context == request.draft.context)
+		#expect(!model.execution.needsReconciliation)
+		#expect(WorkspaceEligibility(model: model).canSend)
+	}
+
+	@Test func remoteTurnPreservesDeferredStopAfterRejectedCompaction() throws
+	{
+		var (model, request) = try fixture("/compact")
+		let operation = try startTurn(
+			request,
+			model: &model
+		)
+		let stopContext = OperationContext(
+			workspace: model.identity,
+			generation: model.connection.generation,
+			requestID: UUID(),
+			threadID: "thread"
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.stopRequested(stopContext))
+		)
+		#expect(model.execution.stopRequested)
+		_ = ComposerCommandReducer.reduce(
+			&model,
+			.composerCommand(.compactAcknowledged(
+				operation,
+				.failed(OperationFailure(
+					message: "rejected before starting",
+					outcomeIsUncertain: false
+				))
+			))
+		)
+		#expect(model.execution.owner == nil)
+		#expect(!model.execution.hasUncertainRequest)
+		_ = WorkspaceLifecycleComposition.reduceDomainEvent(
+			&model,
+			.backendObserved(.threadStatusChanged(
+				threadId: "thread",
+				status: try #require(ThreadStatus(json: ["type": "active", "activeFlags": []]))
+			)),
+			context: request.context
+		)
+		observe(
+			.turnStarted(
+				threadId: "thread",
+				turn: turn(
+					"phone-turn",
+					status: "inProgress"
+				)
+			),
+			model: &model
+		)
+		#expect(model.execution.stopRequested)
+		#expect(model.execution.needsReconciliation)
+		observe(
+			.turnCompleted(
+				threadId: "thread",
+				turn: turn("phone-turn")
+			),
+			model: &model
+		)
+		#expect(model.execution.needsReconciliation)
+		#expect(!WorkspaceEligibility(model: model).canSend)
 	}
 
 	@Test(arguments: ["plan", "default"])

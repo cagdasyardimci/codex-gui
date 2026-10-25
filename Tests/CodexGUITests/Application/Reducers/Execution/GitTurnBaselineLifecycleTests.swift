@@ -7,6 +7,96 @@ import Testing
 @Suite
 struct GitTurnBaselineLifecycleTests
 {
+	@Test func laterRemoteTurnCannotSettleAPaginatedUncertainCapture() throws
+	{
+		var (model, context) = fixture()
+		model.conversations.selectedConversation = .thread("worker")
+		let capture = PendingGitTurnBaselineCapture(
+			context: context,
+			reference: reference(context),
+			previousTurnIDs: ["old"]
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.submissionStartFailed(
+				context,
+				OperationFailure(
+					message: "lost start reply",
+					outcomeIsUncertain: true
+				),
+				capture
+			))
+		)
+		let running = CodexTurn(
+			id: "recovered",
+			status: "inProgress",
+			items: [],
+			error: nil
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.historyObserved(
+				ReconciliationOperation(
+					context: context,
+					commandRevision: 0
+				),
+				ThreadDetail(
+					summary: try #require(ThreadSummary(json: [
+						"id": "worker",
+						"status": ["type": "active"],
+					])),
+					turns: [running],
+					nextTurnsCursor: "older-page"
+				)
+			))
+		)
+		#expect(!model.execution.hasUncertainRequest)
+		#expect(model.execution.pendingGitTurnBaselineCapture?.reference == capture.reference)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.backendObserved(
+				context,
+				.turnCompleted(
+					threadId: "worker",
+					turn: CodexTurn(
+						id: running.id,
+						status: "completed",
+						items: [],
+						error: nil
+					)
+				)
+			))
+		)
+		_ = WorkspaceLifecycleComposition.reduceDomainEvent(
+			&model,
+			.backendObserved(.threadStatusChanged(
+				threadId: "worker",
+				status: try #require(ThreadStatus(json: ["type": "active", "activeFlags": []]))
+			)),
+			context: context
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.backendObserved(
+				context,
+				.turnStarted(
+					threadId: "worker",
+					turn: CodexTurn(
+						id: "next-turn",
+						status: "inProgress",
+						items: [],
+						error: nil
+					)
+				)
+			))
+		)
+		#expect(model.execution.activeTurnID == "next-turn")
+		#expect(model.execution.pendingGitTurnBaselineCapture?.reference == capture.reference)
+		#expect(model.execution.gitTurnBaselineBindings["worker"] == nil)
+		#expect(model.execution.needsReconciliation)
+		#expect(!WorkspaceEligibility(model: model).canSteer)
+	}
+
 	@Test func acknowledgedOwnerBindsActualTurnWhileAnotherChatIsSelected()
 	{
 		var (model, context) = fixture()

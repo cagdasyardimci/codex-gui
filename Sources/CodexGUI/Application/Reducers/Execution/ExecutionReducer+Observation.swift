@@ -96,6 +96,16 @@ extension ExecutionReducer
 				model.execution.owner = ExecutionOwner(submission: ownerContext)
 				model.execution.agentOutcome = nil
 				model.execution.state = .running
+				if !model.execution.hasUncertainRequest,
+					model.execution.pendingGitTurnBaselineCapture == nil,
+					!model.execution.commandLifetime.hasPendingCommands,
+					!model.execution.stopRequested,
+					!model.composerCommands.blocksNewWork(for: .thread(threadID))
+				{
+					// A live turn resolves history-only discovery, not uncertain local mutations.
+					model.execution.needsReconciliation = false
+					model.execution.outcomeMessage = nil
+				}
 			}
 			model.execution.activeThreadID = threadID
 			model.execution.activeTurnID = turn.id
@@ -386,7 +396,7 @@ extension ExecutionReducer
 		{
 			model.execution.state = .failed
 			model.execution.statusMessage =
-				"Codex reported a task outcome after the request timed out. "
+				"Codex reported a task outcome while conversation recovery was still pending. "
 					+ "Refresh this conversation before sending again."
 		}
 		else if lifecycle == .failed
