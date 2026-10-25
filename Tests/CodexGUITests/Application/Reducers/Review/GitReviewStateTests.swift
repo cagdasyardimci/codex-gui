@@ -146,6 +146,21 @@ struct GitReviewStateTests
 		#expect(acceptedFirstReports)
 		let acceptedByteDistinctReports = state.setReportedChanges([second])
 		#expect(acceptedByteDistinctReports)
+		let repeatedReports = state.setReportedChanges([second])
+		#expect(!repeatedReports)
+		let retainedReports = try #require(state.reportedChanges)
+		#expect(retainedReports.count == 1)
+		#expect(retainedReports.first?.path.utf8.elementsEqual(decomposed.utf8) == true)
+		let clearedReports = state.setReportedChanges(nil)
+		#expect(clearedReports)
+		#expect(state.reportedChanges == nil)
+		let repeatedMissingReports = state.setReportedChanges(nil)
+		#expect(!repeatedMissingReports)
+		let emptyReports = state.setReportedChanges([])
+		#expect(emptyReports)
+		#expect(state.reportedChanges?.isEmpty == true)
+		let repeatedEmptyReports = state.setReportedChanges([])
+		#expect(!repeatedEmptyReports)
 	}
 
 	private func snapshot(
