@@ -19,13 +19,38 @@ final class GitCodeScrollView: NSScrollView, DesktopWheelInputReceiving
 				&& (!hasHorizontalScroller
 					|| abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX))
 		}
-		if routesWheelVertically, let outer = superview?.enclosingScrollView
+		if routesWheelVertically
 		{
-			outer.scrollWheel(with: event)
+			if let outer = superview?.enclosingScrollView
+			{
+				outer.scrollWheel(with: event)
+			}
+			else
+			{
+				super.scrollWheel(with: event)
+			}
+			return
 		}
+		guard hasHorizontalScroller
 		else
 		{
-			super.scrollWheel(with: event)
+			return
 		}
+		let delta = event.scrollingDeltaX != 0 ? event.scrollingDeltaX
+			: (event.modifierFlags.contains(.shift) ? event.scrollingDeltaY : 0)
+		guard delta != 0
+		else
+		{
+			return
+		}
+		let points = delta * (event.hasPreciseScrollingDeltas ? 1 : horizontalLineScroll)
+		var proposed = contentView.bounds
+		proposed.origin.x -= points
+		let constrained = contentView.constrainBoundsRect(proposed)
+		contentView.scroll(to: NSPoint(
+			x: constrained.origin.x,
+			y: contentView.bounds.origin.y
+		))
+		reflectScrolledClipView(contentView)
 	}
 }
