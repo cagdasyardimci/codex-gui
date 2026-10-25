@@ -421,6 +421,21 @@ struct ConversationStreamingReducerTests
 		)
 		#expect(model.conversations.content[conversation]?.entries[0]
 			.body == "$ printf\nonetwothree")
+		let completed = AppServerEvent.itemCompleted(
+			threadId: "worker",
+			turnId: "current",
+			item: command(
+				status: "completed",
+				output: "final output"
+			)
+		)
+		#expect(!ConversationContentReducer.isItemStarted(completed))
+		ConversationContentReducer.observe(
+			completed,
+			model: &model
+		)
+		#expect(model.conversations.content[conversation]?.entries[0]
+			.body == "$ printf\nfinal output")
 	}
 
 	@Test func admittedFragmentsRetainExecutionOwnerAndRejectStaleOrForeignContexts()
