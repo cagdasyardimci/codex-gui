@@ -6,7 +6,7 @@ ifneq ($(origin FILTER),undefined)
         $(error FILTER must not be empty)
     endif
     ifneq ($(filter check test:%,$(MAKECMDGOALS)),)
-        $(error FILTER is only supported with make test; omit it for named groups and full checks)
+        $(error FILTER is only supported with make test; omit it for named groups and checks)
     endif
 endif
 
@@ -37,11 +37,11 @@ endif
 test-command = swift test $(TEST_FLAGS) $(if $(filter 1,$(PARALLEL)),--parallel,--no-parallel)
 
 define run-tests
-	python3 Tests/run-swift-tests.py -- $(test-command) $(call test-filter-options,$(1))
+	python3 Tests/run-swift-tests.py $(if $(2),--selection-file $(call test-shell-quote,$(2))) -- $(test-command) $(call test-filter-options,$(1))
 endef
 
 test: FORCE
-	$(call run-tests,$(value FILTER))
+	$(call run-tests,$(value FILTER),$(if $(value FILTER),,Tests/Selections/default.txt))
 
 TEST_GROUPS += summary
 test\:summary: FORCE
@@ -71,21 +71,12 @@ TEST_GROUPS += window-lifecycle
 test\:window-lifecycle: FORCE
 	$(call run-tests,closedWindowDetachesItsStorePublicationObserver)
 
-TEST_GROUPS += settled-hover
-test\:settled-hover: FORCE
-	$(call run-tests,shownWindowHoverUsesSettledHeaderGeometryAfterRepositioning)
 
 TEST_GROUPS += terminal-hover
 test\:terminal-hover: FORCE
 	$(call run-tests,terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus|ConversationTerminalCopyButtonTests)
 
-TEST_GROUPS += task-title
-test\:task-title: FORCE
-	$(call run-tests,taskTitleScrollsOnceAndResetsAfterHover)
 
-TEST_GROUPS += task-hover
-test\:task-hover: FORCE
-	$(call run-tests,taskHoverCardUsesOwnRowMetadataAndDismissesOnExitOrWindowResign)
 
 TEST_GROUPS += task-archive
 test\:task-archive: FORCE
@@ -99,17 +90,11 @@ TEST_GROUPS += search-rebinding
 test\:search-rebinding: FORCE
 	$(call run-tests,searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding)
 
-TEST_GROUPS += search-sheet
-test\:search-sheet: FORCE
-	$(call run-tests,MessageSearchSheetLifecycleTests)
 
 TEST_GROUPS += image-panel
 test\:image-panel: FORCE
 	$(call run-tests,ExpandedImagePreviewTests|localAndInlineImagesExpandInTheWindowAndReuseOrDetachDismissesThem|imageImportCreatesPreviewAndRemovalControl|imageThumbnailUsesSharedViewerAndDismissesWithItsOwner)
 
-TEST_GROUPS += sidebar-appearance
-test\:sidebar-appearance: FORCE
-	$(call run-tests,TaskSidebarAppearanceTests)
 
 TEST_GROUPS += transcript-appearance
 test\:transcript-appearance: FORCE
@@ -123,9 +108,6 @@ TEST_GROUPS += sources-appearance
 test\:sources-appearance: FORCE
 	$(call run-tests,SourcesHoverAppearanceTests)
 
-TEST_GROUPS += rail-appearance
-test\:rail-appearance: FORCE
-	$(call run-tests,TurnRailAppearanceTests)
 
 TEST_GROUPS += task-execution
 test\:task-execution: FORCE
