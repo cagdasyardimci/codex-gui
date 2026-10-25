@@ -205,15 +205,20 @@ struct WorkspaceDomainCompositionTests
 			requestID: UUID()
 		)
 		let running = CodexTurn(json: ["id": "turn", "status": "inProgress", "items": []])!
+		let foreignAction = WorkspaceAction.execution(.backendObserved(
+			context,
+			.turnStarted(
+				threadId: "foreign",
+				turn: running
+			)
+		))
+		#expect(!WorkspaceExecutionScope.canResolve(
+			action: foreignAction,
+			model: model
+		))
 		_ = ExecutionReducer.reduce(
 			&model,
-			.execution(.backendObserved(
-				context,
-				.turnStarted(
-					threadId: "foreign",
-					turn: running
-				)
-			))
+			foreignAction
 		)
 		#expect(model.execution.activeThreadID == nil)
 		_ = ExecutionReducer.reduce(
