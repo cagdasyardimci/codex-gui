@@ -826,7 +826,7 @@ extension ApplicationStateTests
 		{
 			service.sentTurnRequests.count == 1
 		})
-		let request = service.sentTurnRequests[0]
+		let request = try #require(service.sentTurnRequests.first)
 		#expect(request.text.contains("Check this"))
 		#expect(request.text.contains("chosen detail"))
 		#expect(!request.text.contains("private detail"))
