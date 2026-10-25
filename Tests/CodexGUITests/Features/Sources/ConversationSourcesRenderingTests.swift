@@ -110,6 +110,16 @@ struct ConversationSourcesRenderingTests
 			(["isError": true,
 				"content": [],
 				"structuredContent": ["message": "Access denied"]], "Access denied"),
+			(["isError": true,
+				"structuredContent": [
+				"message": NSNull(),
+				"text": "Error after empty message"
+				]], "Error after empty message"),
+			(["isError": true,
+				"structuredContent": [
+				"message": false,
+				"text": "Secondary error"
+				]], "false"),
 		]
 		for (result, expected) in cases
 		{
