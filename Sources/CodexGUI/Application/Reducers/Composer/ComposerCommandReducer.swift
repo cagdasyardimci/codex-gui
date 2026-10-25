@@ -245,6 +245,10 @@ enum ComposerCommandReducer
 			{
 				return "Fork from the source checkout; this task checkout stays bound to its chat."
 			}
+			if eligibility.canForkLockedChat
+			{
+				return nil
+			}
 			fallthrough
 		case .rename, .archive, .delete, .compact, .review:
 			guard model.conversations.selectedConversation.threadID != nil

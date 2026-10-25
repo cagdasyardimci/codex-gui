@@ -9,6 +9,7 @@ enum ConversationReducer
 	{
 		let operation: ConversationReadOperation
 		let executionAction: ExecutionAction
+		let isReadOnlyDueToActiveWriter: Bool
 	}
 	struct AcceptedSelection
 	{
@@ -198,6 +199,17 @@ enum ConversationReducer
 		if let threadID = accepted.operation.context.threadID
 		{
 			model.conversations.historyErrors[threadID] = nil
+			if accepted.operation.purpose == .selection
+			{
+				if accepted.isReadOnlyDueToActiveWriter
+				{
+					model.conversations.lockedThreadIDs.insert(threadID)
+				}
+				else
+				{
+					model.conversations.lockedThreadIDs.remove(threadID)
+				}
+			}
 			if model.conversations.selectedConversation == .thread(threadID)
 			{
 				model.conversations.error = nil
@@ -441,6 +453,33 @@ enum ConversationReducer
 				model: &model,
 				result: &result
 			)
+		case .lockedChatRetryRequested(let context):
+			guard valid(
+				context,
+				model
+			), let threadID = context.threadID,
+			model.connection.isConnected,
+			model.conversations.selectedConversation == .thread(threadID),
+			model.conversations.lockedThreadIDs.contains(threadID),
+			model.conversations.pendingSelection == nil,
+			model.conversations.pendingManagement == nil,
+			model.conversations.pendingProjectArchive == nil
+			else
+			{
+				return
+			}
+			requestHistory(
+				ConversationReadOperation(
+					context: context,
+					commandRevision: ConversationReducer.commandRevision(
+						threadID: threadID,
+						model: model
+					),
+					purpose: .selection
+				),
+				model: &model,
+				result: &result
+			)
 		case .archivedFilterRequested(
 			let context,
 			let archived
@@ -629,6 +668,10 @@ enum ConversationReducer
 			switch observation
 			{
 			case .failed(let failure):
+				if ConversationLock.isAnotherApp(failure.message)
+				{
+					model.conversations.lockedThreadIDs.insert(threadID)
+				}
 				result.domainEvents.append(.conversationHistoryFinished(
 					.history(operation),
 					.failed(failure)
@@ -684,7 +727,8 @@ enum ConversationReducer
 				}
 				acceptedHistory = AcceptedHistory(
 					operation: operation,
-					executionAction: executionAction
+					executionAction: executionAction,
+					isReadOnlyDueToActiveWriter: detail.isReadOnlyDueToActiveWriter
 				)
 			}
 		case .earlierTurnsRequested(let operation):

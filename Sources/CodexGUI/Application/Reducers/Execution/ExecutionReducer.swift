@@ -564,6 +564,11 @@ enum ExecutionReducer
 		result: inout WorkspaceReduction
 	)
 	{
+		if let threadID = model.execution.activeThreadID,
+			ConversationLock.isAnotherApp(failure.message)
+		{
+			model.conversations.lockedThreadIDs.insert(threadID)
+		}
 		model.execution.submissionRequest = nil
 		model.execution.needsReconciliation = failure.outcomeIsUncertain
 		model.execution.hasUncertainRequest = failure.outcomeIsUncertain

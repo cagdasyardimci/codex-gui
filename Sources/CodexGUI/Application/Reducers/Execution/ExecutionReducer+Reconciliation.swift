@@ -101,6 +101,15 @@ extension ExecutionReducer
 				)
 				return result
 			}
+			if detail.isReadOnlyDueToActiveWriter
+			{
+				// Display saved history without adopting the other process's turn.
+				result.domainEvents = [.historyAccepted(
+					detail,
+					threadID: threadID
+				)]
+				return result
+			}
 			// An uncertain steering request does not revoke a live turn's execution ownership.
 			let preservesLiveTurn = model.execution.activeTurnID != nil
 				&& model.execution.agentOutcome == nil

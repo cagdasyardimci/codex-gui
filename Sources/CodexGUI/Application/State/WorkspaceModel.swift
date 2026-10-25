@@ -552,6 +552,7 @@ struct ConversationsModel
 	var content: [ConversationKey: ConversationContentModel] = [:]
 	var pendingNewChatContent: [Int: ConversationContentModel] = [:]
 	var historyErrors: [String: String] = [:]
+	var lockedThreadIDs: Set<String> = []
 	var contentRevisions: [String: Int] = [:]
 	var showingArchived = false
 	var pendingList: ConversationListOperation?

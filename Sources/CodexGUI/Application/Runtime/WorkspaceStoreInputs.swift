@@ -921,6 +921,19 @@ struct WorkspaceStoreInputs
 		return store.operation(for: context)
 	}
 
+	@discardableResult
+	func retryLockedChat() -> WorkspaceOperationHandle?
+	{
+		guard let id = store.model.conversations.selectedConversation.threadID
+		else
+		{
+			return nil
+		}
+		let context = store.operationContext(threadID: id)
+		store.dispatch(.conversations(.lockedChatRetryRequested(context)))
+		return store.operation(for: context)
+	}
+
 	func loadSidebarThreads()
 	{
 		store.dispatch(.conversations(.threadListRequested(ConversationListOperation(

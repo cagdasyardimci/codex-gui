@@ -36,6 +36,14 @@ extension WorkspaceEffectRunner
 		error: Error
 	) -> OperationFailure
 	{
+		if case AppServerError.requestRejected(let message) = error,
+			ConversationLock.isAnotherApp(message)
+		{
+			return OperationFailure(
+				message: message,
+				outcomeIsUncertain: false
+			)
+		}
 		if case .prepareSubmission = effect, let rejection = error as? SubmissionPreparationRejected
 		{
 			return rejection.failure

@@ -39,6 +39,8 @@ struct ThreadDetail
 	let turns: [CodexTurn]
 	let nextTurnsCursor: String?
 	var settings: ThreadSettings? = nil
+	/// History read after another process refused this app's resume request.
+	var isReadOnlyDueToActiveWriter = false
 }
 
 struct CodexTurn: Sendable

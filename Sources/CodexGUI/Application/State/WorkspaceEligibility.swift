@@ -77,6 +77,9 @@ struct WorkspaceEligibility
 			&& !hasUncertainSubmission(for: model.conversations.selectedConversation)
 			&& model.lifecycle.pendingInputPreparation == nil
 			&& !model.conversations.showingArchived
+			&& !model.conversations.lockedThreadIDs.contains(
+				model.conversations.selectedConversation.threadID ?? ""
+			)
 			&& model.conversations.pendingSelection == nil
 			&& model.conversations.pendingManagement == nil
 			&& preferenceWarning == nil
@@ -106,6 +109,34 @@ struct WorkspaceEligibility
 	var canManageThreads: Bool
 	{
 		canManage(execution: model.execution)
+	}
+
+	/// A failed resume can leave reconciliation pending without a local turn to recover.
+	var canForkLockedChat: Bool
+	{
+		guard let threadID = model.conversations.selectedConversation.threadID,
+				model.conversations.lockedThreadIDs.contains(threadID),
+				ownerAvailable, model.connection.isConnected,
+				model.lifecycle.managedWorkspace == nil,
+				model.conversations.boundThreadID == nil,
+				!model.conversations.showingArchived,
+				model.conversations.pendingSelection == nil,
+				model.conversations.pendingManagement == nil,
+				model.lifecycle.pendingInputPreparation == nil,
+				model.composer.uncertainSubmissions.isEmpty,
+				!model.composerCommands.blocksNewWork
+		else
+		{
+			return false
+		}
+		let execution = model.execution(for: .thread(threadID))
+		return !execution.state.isBusy && execution.submissionRequest == nil
+			&& execution.activeTurnID == nil
+			&& !execution.commandLifetime.hasPendingCommands
+			&& execution.pendingResponses.isEmpty
+			&& execution.pendingSteering == nil
+			&& !execution.hasUncertainRequest
+			&& execution.pendingGitTurnBaselineCapture == nil
 	}
 
 	func canManageThread(_ threadID: String) -> Bool

@@ -245,6 +245,7 @@ enum ConversationsAction
 		OperationResult<Void>
 	)
 	case selectionRequested(OperationContext)
+	case lockedChatRetryRequested(OperationContext)
 	case archivedFilterRequested(
 		OperationContext,
 		archived: Bool

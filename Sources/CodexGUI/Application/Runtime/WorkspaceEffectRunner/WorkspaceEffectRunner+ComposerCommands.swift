@@ -11,10 +11,35 @@ extension WorkspaceEffectRunner
 		// Ownership and checkout validation finish before a mutation can be sent.
 		do
 		{
-			_ = try await readConversation(
-				context,
-				managedWorkspace: managedWorkspace
-			)
+			do
+			{
+				_ = try await readConversation(
+					context,
+					managedWorkspace: managedWorkspace
+				)
+			}
+			catch
+			{
+				guard case .forkConversation = effect,
+						ConversationLock.isAnotherApp(error.localizedDescription),
+						let threadID = context.threadID,
+						let path = context.workspace.canonicalCheckoutPath
+				else
+				{
+					throw error
+				}
+				// A locked thread may reject reads. The list still validates its
+				// checkout before the fork request is sent.
+				let threads = try await service.threads(for: URL(fileURLWithPath: path))
+				guard threads.contains(where:
+					{
+						$0.id == threadID
+					})
+				else
+				{
+					throw error
+				}
+			}
 		}
 		catch
 		{

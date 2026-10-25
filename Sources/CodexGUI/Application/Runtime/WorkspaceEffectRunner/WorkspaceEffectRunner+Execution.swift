@@ -851,13 +851,26 @@ extension WorkspaceEffectRunner
 		try await verifyWorkspace(managedWorkspace)
 		// Resume the selected chat so app-server replays its latest token usage.
 		// Background and recovery reads must not subscribe to the thread.
-		let detail: ThreadDetail
+		var detail: ThreadDetail
 		if resumeSelectedThread
 		{
-			detail = try await service.resumeThread(
-				id: threadID,
-				expectedDirectory: project
-			)
+			do
+			{
+				detail = try await service.resumeThread(
+					id: threadID,
+					expectedDirectory: project
+				)
+			}
+			catch
+			{
+				guard ConversationLock.isAnotherApp(error.localizedDescription)
+				else
+				{
+					throw error
+				}
+				detail = try await service.readThread(id: threadID)
+				detail.isReadOnlyDueToActiveWriter = true
+			}
 		}
 		else
 		{

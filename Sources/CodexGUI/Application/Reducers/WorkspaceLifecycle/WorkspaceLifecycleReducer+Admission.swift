@@ -129,7 +129,9 @@ extension WorkspaceLifecycleReducer
 		case .composer(.draftEdited), .composer(.contextAttached), .composer(.contextRemoved),
 				.composer(.referenceReused): return false
 		case .conversations(.newChatRequested), .conversations(.newChatOpened),
-				.conversations(.selectionRequested), .conversations(.archivedFilterRequested),
+				.conversations(.selectionRequested),
+				.conversations(.lockedChatRetryRequested),
+				.conversations(.archivedFilterRequested),
 				.conversations(.managementRequested): return false
 		case .review(.turnSelected), .review(.markerRequested), .review(.changeRequestPrepared):
 			return false

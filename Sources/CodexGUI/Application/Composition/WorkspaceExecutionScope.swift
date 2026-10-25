@@ -423,6 +423,7 @@ enum WorkspaceExecutionScope
 			_
 		):
 			context = operation.context
+		case .lockedChatRetryRequested(let captured): context = captured
 		case .selectionRequested(let captured), .selectionReceived(
 			let captured,
 			_

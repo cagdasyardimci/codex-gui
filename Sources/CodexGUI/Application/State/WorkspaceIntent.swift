@@ -33,6 +33,7 @@ enum WorkspaceIntent
 	case newChatInProject(URL)
 	case openProject(URL)
 	case selectThread(String)
+	case retryLockedChat
 	case selectPinnedTask(ThreadSummary)
 	case toggleTaskPin(ThreadSummary)
 	case renameTask(
@@ -102,7 +103,8 @@ enum WorkspaceIntent
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
-		case .renameThread, .archiveThread, .loadEarlierTurns, .loadEarlierTurnReferences,
+		case .retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
+				.loadEarlierTurnReferences,
 				.loadTurnPreview, .updateConversationViewport,
 				.selectReview,
 				.setReviewed, .toggleBookmark, .acknowledgeJump: return .conversation
@@ -292,6 +294,7 @@ final class WorkspaceIntentTarget
 			}
 		case .openProject(let url): openProject(url)
 		case .selectThread(let id): operation = inputs.selectThread(id)
+		case .retryLockedChat: operation = inputs.retryLockedChat()
 		case .selectPinnedTask(let thread):
 			if let coordinator
 			{
