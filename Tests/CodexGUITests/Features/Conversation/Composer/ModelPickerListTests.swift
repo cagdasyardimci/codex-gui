@@ -138,7 +138,7 @@ struct ModelPickerListTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = picker
 		defer
 		{
@@ -183,7 +183,7 @@ struct ModelPickerListTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = controller
 		window.setContentSize(NSSize(
 			width: 888,

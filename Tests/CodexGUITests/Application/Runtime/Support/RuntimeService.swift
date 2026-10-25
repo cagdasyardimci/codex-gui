@@ -137,7 +137,7 @@ final class RuntimeService: CodexService
 
 	func resumeThread(id: String) async throws -> ThreadDetail
 	{
-		detail(id)
+		try await readThread(id: id)
 	}
 
 	func readThread(id: String) async throws -> ThreadDetail

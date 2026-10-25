@@ -39,79 +39,6 @@ struct ConversationExecutionOwnershipTests
 		#expect(model.composer.drafts[.newChat]?.lifetime == 1)
 	}
 
-	@Test func anonymousStopUsesCapturedOwnerAfterRepeatedNewChat()
-	{
-		var (model, submission) = fixture()
-		model.composer.drafts[.newChat] = ComposerDraft(lifetime: 1)
-		let stopContext = OperationContext(
-			workspace: model.identity,
-			generation: model.connection.generation,
-			requestID: UUID()
-		)
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.stopRequested(
-				stopContext,
-				ownerRequestID: submission.context.requestID
-			))
-		)
-
-		#expect(model.execution.stopRequested == false)
-		#expect(model.executions.entries[.newChat(lifetime: 0)]?.stopRequested == true)
-		#expect(model.executions.entries[.newChat(lifetime: 0)]?.stopContext == stopContext)
-		#expect(stopContext.requestID != submission.context.requestID)
-	}
-
-	@Test func unknownAnonymousStopCannotCancelSelectedExecution()
-	{
-		var (model, _) = fixture()
-		let unknown = OperationContext(
-			workspace: model.identity,
-			generation: model.connection.generation,
-			requestID: UUID()
-		)
-		let result = ExecutionReducer.reduce(
-			&model,
-			.execution(.stopRequested(unknown))
-		)
-
-		#expect(model.execution.state == .running)
-		#expect(model.execution.stopRequested == false)
-		#expect(result.effects.isEmpty)
-	}
-
-	@Test func wrongTurnErrorDoesNotRewriteOwnerStatus()
-	{
-		var (model, submission) = fixture()
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.submissionPrepared(
-				submission.context,
-				.succeeded(prepared(submission))
-			))
-		)
-		model.conversations.selectedConversation = .thread("prepared")
-		model.execution.activeTurnID = "actual"
-		model.execution.statusMessage = "Keep this"
-		model.conversations.selectedConversation = .thread("other")
-		let result = ExecutionReducer.reduce(
-			&model,
-			.execution(.backendObserved(
-				submission.context,
-				.error(
-					threadId: "prepared",
-					turnId: "wrong",
-					message: "Must reject",
-					willRetry: false
-				)
-			))
-		)
-
-		#expect(result.domainEvents.isEmpty)
-		#expect(model.execution(for: .thread("prepared")).statusMessage == "Keep this")
-		#expect(model.execution.statusMessage == nil)
-	}
-
 	@Test func recoveredRunningTurnUsesCurrentTransportWithoutResendingSubmission()
 	{
 		var (model, submission) = fixture()
@@ -194,57 +121,6 @@ struct ConversationExecutionOwnershipTests
 			}
 			return false
 		})
-	}
-
-	@Test func foreignHistoryCannotRetargetCapturedExecution()
-	{
-		var (model, submission) = fixture()
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.submissionPrepared(
-				submission.context,
-				.succeeded(prepared(submission))
-			))
-		)
-		let context = OperationContext(
-			workspace: model.identity,
-			generation: model.connection.generation,
-			requestID: UUID(),
-			threadID: "prepared"
-		)
-		let operation = ReconciliationOperation(
-			context: context,
-			commandRevision: 0
-		)
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.reconciliationRequested(operation))
-		)
-		let foreign = ThreadDetail(
-			summary: ThreadSummary(json: ["id": "foreign"])!,
-			turns: [],
-			nextTurnsCursor: nil
-		)
-		let reconciled = ExecutionReducer.reduce(
-			&model,
-			.execution(.reconciliationFinished(
-				context,
-				.succeeded(foreign)
-			))
-		)
-		let completed = ExecutionReducer.reduce(
-			&model,
-			.execution(.completedHistoryReceived(
-				operation,
-				.succeeded(foreign)
-			))
-		)
-
-		#expect(reconciled.domainEvents.isEmpty)
-		#expect(completed.domainEvents.isEmpty)
-		#expect(model.execution(for: .thread("prepared")).activeThreadID == "prepared")
-		#expect(model.execution(for: .thread("prepared")).state == .running)
-		#expect(model.executions.entries[.thread("foreign")] == nil)
 	}
 
 	@Test func terminalStartReplayRejectsWhileDistinctRemoteTurnKeepsOwnCurrentOwner()

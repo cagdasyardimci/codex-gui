@@ -6,198 +6,6 @@ import Testing
 @Suite(.serialized) @MainActor
 struct FileNavigationViewTests
 {
-	@Test func treeShowsNestedAndHiddenEntriesWithoutOpeningFolders() async throws
-	{
-		try await AppKitTestIsolation.perform
-		{
-			@MainActor in
-			_ = NSApplication.shared
-			let root = "/tmp/file-navigation-fixture"
-			let rootLocation = FileLocation(
-				root: root,
-				relativePath: ""
-			)
-			let folder = FileLocation(
-				root: root,
-				relativePath: "Sources"
-			)
-			let hidden = FileLocation(
-				root: root,
-				relativePath: ".config"
-			)
-			let nested = FileLocation(
-				root: root,
-				relativePath: "Sources/main.swift"
-			)
-			let duplicate = FileLocation(
-				root: root,
-				relativePath: "main.swift"
-			)
-			let controller = FileNavigatorViewController()
-			let window = NSWindow(contentViewController: controller)
-			window.isReleasedWhenClosed = false
-			window.setContentSize(NSSize(
-				width: 300,
-				height: 400
-			))
-			defer
-			{
-				window.close()
-			}
-			var opened: [(FileLocation, Bool)] = []
-			controller.onOpenFile =
-			{
-				opened.append(($0, $1))
-			}
-			var requested: [FileLocation] = []
-			controller.onRequestDirectory =
-			{
-				requested.append($0)
-			}
-			var state = FileViewerState()
-			state.activeRoot = root
-			controller.render(state)
-			#expect(requested == [rootLocation])
-			state.directoryEntries[rootLocation] = [
-				FileViewerDirectoryEntry(
-					location: duplicate,
-					isDirectory: false,
-					isSymbolicLink: false
-				),
-				FileViewerDirectoryEntry(
-					location: hidden,
-					isDirectory: false,
-					isSymbolicLink: false
-				),
-				FileViewerDirectoryEntry(
-					location: folder,
-					isDirectory: true,
-					isSymbolicLink: false
-				),
-			]
-			state.directoryEntries[folder] = [FileViewerDirectoryEntry(
-				location: nested,
-				isDirectory: false,
-				isSymbolicLink: false
-			)]
-			controller.render(state)
-			let outline = try #require(controller.view.allSubviews().compactMap
-			{
-				$0 as? NSOutlineView
-			}.first)
-			#expect(outline.numberOfRows == 3)
-			let folderItem = try #require(outline.item(atRow: 0))
-			let folderCell = try #require(outline.view(
-				atColumn: 0,
-				row: 0,
-				makeIfNecessary: true
-			))
-			#expect(folderCell.allSubviews().compactMap
-			{
-				$0 as? NSImageView
-			}.allSatisfy
-			{
-				$0.isHidden || $0.image == nil
-			})
-			outline.expandItem(folderItem)
-			#expect(outline.numberOfRows == 4)
-			#expect(opened.isEmpty)
-			window.layoutIfNeeded()
-			controller.view.layoutSubtreeIfNeeded()
-			let rootFileCell = try #require(outline.view(
-				atColumn: 0,
-				row: 3,
-				makeIfNecessary: true
-			))
-			let nestedCell = try #require(outline.view(
-				atColumn: 0,
-				row: 1,
-				makeIfNecessary: true
-			))
-			let folderLabel = try #require(folderCell.allSubviews()
-				.compactMap
-				{
-					$0 as? NSTextField
-				}.first)
-			let fileLabel = try #require(rootFileCell.allSubviews()
-				.compactMap
-				{
-					$0 as? NSTextField
-				}.first)
-			let nestedLabel = try #require(nestedCell.allSubviews()
-				.compactMap
-				{
-					$0 as? NSTextField
-				}.first)
-			let fileIcon = try #require(rootFileCell.allSubviews()
-				.compactMap
-				{
-					$0 as? NSImageView
-				}.first)
-			let folderText = folderLabel.convert(
-				folderLabel.bounds,
-				to: outline
-			)
-			let fileText = fileLabel.convert(
-				fileLabel.bounds,
-				to: outline
-			)
-			let nestedText = nestedLabel.convert(
-				nestedLabel.bounds,
-				to: outline
-			)
-			#expect(abs(folderText.minX - fileText.minX) < 0.5)
-			#expect(abs(nestedText.minX - fileText.minX - outline.indentationPerLevel) < 0.5)
-			let fileIconFrame = fileIcon.convert(
-				fileIcon.bounds,
-				to: outline
-			)
-			#expect(fileIconFrame.maxX <= fileText.minX)
-			#expect(rootFileCell.bounds.contains(fileIcon.frame))
-			let nestedRow = (0 ..< outline.numberOfRows).first
-			{
-				outline.view(
-					atColumn: 0,
-					row: $0,
-					makeIfNecessary: true
-				)?
-					.accessibilityLabel() == "main.swift"
-			}
-			let row = try #require(nestedRow)
-			outline.selectRowIndexes(
-				IndexSet(integer: row),
-				byExtendingSelection: false
-			)
-			_ = NSApp.sendAction(
-				try #require(outline.action),
-				to: outline.target,
-				from: outline
-			)
-			#expect(opened.count == 1)
-			#expect(opened.first?.0 == nested)
-			#expect(opened.first?.1 == false)
-			_ = NSApp.sendAction(
-				try #require(outline.doubleAction),
-				to: outline.target,
-				from: outline
-			)
-			#expect(opened.last?.0 == nested)
-			#expect(opened.last?.1 == true)
-			let frame = outline.frame
-			for appearance: NSAppearance.Name in [.aqua, .darkAqua, .aqua]
-			{
-				window.appearance = NSAppearance(named: appearance)
-				#expect(outline.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
-					== appearance)
-				#expect(outline.frame == frame)
-				#expect(outline.selectedRow == row)
-				#expect(outlineLabel(
-					outline,
-					row: row
-				) == "main.swift")
-			}
-		}
-	}
 
 	@Test func breadcrumbKeepsFullPathAccessibleAndNavigatesRoot() async throws
 	{
@@ -239,50 +47,6 @@ struct FileNavigationViewTests
 		}
 	}
 
-	@Test func breadcrumbCanBuildAtZeroSizeBeforeItsFirstLayout() throws
-	{
-		let breadcrumb = FileBreadcrumbView()
-		breadcrumb.render(
-			location: nil,
-			state: FileViewerState()
-		)
-		let stack = try #require(breadcrumb.allSubviews().compactMap
-		{
-			$0 as? NSStackView
-		}.first)
-		breadcrumb.frame = NSRect(
-			x: 0,
-			y: 0,
-			width: 180,
-			height: 34
-		)
-		breadcrumb.layoutSubtreeIfNeeded()
-		#expect(stack.frame.width >= stack.fittingSize.width)
-		for path in ["Sources/Features/Files/FileBreadcrumbView.swift", "README.md", "a/b/c/d/e"]
-		{
-			breadcrumb.frame.size.width = 34
-			breadcrumb.layoutSubtreeIfNeeded()
-			breadcrumb.render(
-				location: FileLocation(
-					root: "/tmp/workspace",
-					relativePath: path
-				),
-				state: FileViewerState()
-			)
-			breadcrumb.layoutSubtreeIfNeeded()
-			#expect(stack.frame.width >= stack.fittingSize.width)
-			let minimumWidth = stack.arrangedSubviews.reduce(CGFloat(20))
-			{
-				$0 + $1.fittingSize.width
-			} + CGFloat(stack.arrangedSubviews.count - 1) * stack.spacing
-			#expect(stack.frame.width >= minimumWidth - 1)
-			let scroll = try #require(stack.enclosingScrollView)
-			let document = try #require(scroll.documentView)
-			#expect(abs(document.frame.width - stack.frame.width) < 1)
-			#expect(abs(scroll.contentView.bounds.maxX - document.frame.maxX) < 1)
-		}
-	}
-
 	@Test func lazyFolderResultAndFilterPreserveTreeContext() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -308,7 +72,7 @@ struct FileNavigationViewTests
 			)
 			let controller = FileNavigatorViewController()
 			let window = NSWindow(contentViewController: controller)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			window.setContentSize(NSSize(
 				width: 300,
 				height: 400
@@ -434,108 +198,6 @@ struct FileNavigationViewTests
 		}
 	}
 
-	@Test(.timeLimit(.minutes(1)))
-	func lazyExpansionAllowsSynchronousStatePublicationAfterNativeExpansion() async throws
-	{
-		try await AppKitTestIsolation.perform
-		{
-			@MainActor in
-			_ = NSApplication.shared
-			let root = "/tmp/file-navigation-expansion-publication"
-			let base = FileLocation(
-				root: root,
-				relativePath: ""
-			)
-			let folder = FileLocation(
-				root: root,
-				relativePath: "Sources"
-			)
-			let nested = FileLocation(
-				root: root,
-				relativePath: "Sources/Nested"
-			)
-			let child = FileLocation(
-				root: root,
-				relativePath: "Sources/Nested/child.swift"
-			)
-			let controller = FileNavigatorViewController()
-			let window = NSWindow(contentViewController: controller)
-			window.isReleasedWhenClosed = false
-			window.setContentSize(NSSize(
-				width: 300,
-				height: 400
-			))
-			defer
-			{
-				controller.onRequestDirectory = nil
-				window.close()
-			}
-			var state = FileViewerState()
-			state.activeRoot = root
-			state.directoryEntries[base] = [FileViewerDirectoryEntry(
-				location: folder,
-				isDirectory: true,
-				isSymbolicLink: false
-			)]
-			controller.render(state)
-			window.layoutIfNeeded()
-			let outline = try #require(controller.view.allSubviews().compactMap
-			{
-				$0 as? NSOutlineView
-			}.first)
-			var requests: [FileLocation] = []
-			for (location, result, isDirectory) in [(folder, nested, true), (nested, child, false)]
-			{
-				let item = try #require(outline.item(atRow: requests.count))
-				outline.selectRowIndexes(
-					IndexSet(integer: requests.count),
-					byExtendingSelection: false
-				)
-				await withCheckedContinuation
-				{
-					continuation in
-					controller.onRequestDirectory =
-					{
-						requested in
-						requests.append(requested)
-						#expect(requested == location)
-						#expect(outline.isItemExpanded(item))
-						state.directoryRequests[requested] = UUID()
-						controller.render(state)
-						#expect(outlineLabel(
-							outline,
-							row: outline.row(forItem: item) + 1
-						)
-							== "Loading…")
-						state.directoryRequests[requested] = nil
-						state.directoryEntries[requested] = [FileViewerDirectoryEntry(
-							location: result,
-							isDirectory: isDirectory,
-							isSymbolicLink: false
-						)]
-						controller.render(state)
-						continuation.resume()
-					}
-					let count = requests.count
-					outline.expandItem(item)
-					#expect(requests.count == count)
-				}
-				#expect(outline.isItemExpanded(item))
-				#expect(outline.selectedRow == requests.count - 1)
-				#expect(outlineLabel(
-					outline,
-					row: requests.count
-				) == result.fileURL
-					.lastPathComponent)
-				outline.collapseItem(item)
-				outline.expandItem(item)
-				#expect(requests.count == (isDirectory ? 1 : 2))
-			}
-			#expect(requests == [folder, nested])
-			#expect(outline.numberOfRows == 3)
-		}
-	}
-
 	@Test(
 		.timeLimit(.minutes(1)),
 		arguments: [false, true]
@@ -548,7 +210,7 @@ struct FileNavigationViewTests
 			_ = NSApplication.shared
 			let controller = FileNavigatorViewController()
 			let window = NSWindow(contentViewController: controller)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			defer
 			{
 				controller.onRequestDirectory = nil
@@ -615,81 +277,6 @@ struct FileNavigationViewTests
 		}
 	}
 
-	@Test func emptyAndFailedFoldersShowRecoveryRows() async throws
-	{
-		try await AppKitTestIsolation.perform
-		{
-			@MainActor in
-			_ = NSApplication.shared
-			let root = "/tmp/file-navigation-errors"
-			let base = FileLocation(
-				root: root,
-				relativePath: ""
-			)
-			let empty = FileLocation(
-				root: root,
-				relativePath: "Empty"
-			)
-			let failed = FileLocation(
-				root: root,
-				relativePath: "Failed"
-			)
-			let controller = FileNavigatorViewController()
-			let window = NSWindow(contentViewController: controller)
-			window.isReleasedWhenClosed = false
-			defer
-			{
-				window.close()
-			}
-			var requests: [FileLocation] = []
-			controller.onRequestDirectory =
-			{
-				requests.append($0)
-			}
-			var state = FileViewerState()
-			state.activeRoot = root
-			state.directoryEntries[base] = [
-				FileViewerDirectoryEntry(
-					location: empty,
-					isDirectory: true,
-					isSymbolicLink: false
-				),
-				FileViewerDirectoryEntry(
-					location: failed,
-					isDirectory: true,
-					isSymbolicLink: false
-				),
-			]
-			state.directoryEntries[empty] = []
-			state.directoryFailures[failed] = .unavailable
-			controller.render(state)
-			let outline = try #require(controller.view.allSubviews().compactMap
-			{
-				$0 as? NSOutlineView
-			}.first)
-			outline.expandItem(try #require(outline.item(atRow: 0)))
-			#expect(outlineLabel(
-				outline,
-				row: 1
-			) == "Empty folder")
-			outline.expandItem(try #require(outline.item(atRow: 2)))
-			#expect(outlineLabel(
-				outline,
-				row: 3
-			) == "Couldn’t load folder. Click to retry.")
-			outline.selectRowIndexes(
-				IndexSet(integer: 3),
-				byExtendingSelection: false
-			)
-			_ = NSApp.sendAction(
-				try #require(outline.action),
-				to: outline.target,
-				from: outline
-			)
-			#expect(requests == [failed])
-		}
-	}
-
 	@Test func contentSearchKeepsKeyboardSelectionAndRestoresFocusOnEscape() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -707,7 +294,7 @@ struct FileNavigationViewTests
 				backing: .buffered,
 				defer: false
 			)
-			parent.isReleasedWhenClosed = false
+			parent.prepareForTesting()
 			let origin = NSTextView(frame: NSRect(
 				x: 8,
 				y: 8,

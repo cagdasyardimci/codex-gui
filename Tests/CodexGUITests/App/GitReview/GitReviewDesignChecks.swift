@@ -65,7 +65,7 @@ struct GitReviewDesignChecks
 		{
 			$0.accessibilityLabel() == "Previous changed file"
 		})
-		previous.performClick(nil)
+		#expect(previous.dispatchConfiguredAction())
 		#expect(controller.runtime.state.selectedFileID == snapshot.files.dropLast().last?.id)
 		controller.view.layoutSubtreeIfNeeded()
 		window.setContentSize(NSSize(
@@ -134,7 +134,7 @@ struct GitReviewDesignChecks
 		{
 			$0.accessibilityLabel() == "Previous changed file"
 		})
-		previous.performClick(nil)
+		#expect(previous.dispatchConfiguredAction())
 		#expect(controller.runtime.state.selectedFileID == snapshot.files.dropLast().last?.id)
 		controller.view.layoutSubtreeIfNeeded()
 		try verifyResponsiveDiff(
@@ -234,7 +234,7 @@ struct GitReviewDesignChecks
 			$0.accessibilityLabel() == "Switch diff layout"
 		})
 		#expect(try adaptiveDiff(controller).layoutPreference == .automatic)
-		switchLayout.performClick(nil)
+		#expect(switchLayout.dispatchConfiguredAction())
 		try expectLayout(
 			controller,
 			window: window,
@@ -249,7 +249,7 @@ struct GitReviewDesignChecks
 			preference: .unified,
 			mode: .unified
 		)
-		switchLayout.performClick(nil)
+		#expect(switchLayout.dispatchConfiguredAction())
 		try expectLayout(
 			controller,
 			window: window,
@@ -264,7 +264,7 @@ struct GitReviewDesignChecks
 			preference: .split,
 			mode: .split
 		)
-		switchLayout.performClick(nil)
+		#expect(switchLayout.dispatchConfiguredAction())
 		try expectLayout(
 			controller,
 			window: window,
@@ -313,7 +313,7 @@ struct GitReviewDesignChecks
 			#expect(controller.runtime.state.snapshot?.deletions == initial.deletions)
 			#expect(controller.runtime.state.options == options)
 		}
-		switchLayout.performClick(nil)
+		#expect(switchLayout.dispatchConfiguredAction())
 		#expect(try adaptiveDiff(controller).layoutPreference == .unified)
 		let alternateModel = WorkspaceModel(identity: WorkspaceIdentity(
 			sessionID: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
@@ -332,7 +332,7 @@ struct GitReviewDesignChecks
 			owner: alternateOwner
 		)
 		#expect(try adaptiveDiff(controller).layoutPreference == .automatic)
-		switchLayout.performClick(nil)
+		#expect(switchLayout.dispatchConfiguredAction())
 		#expect(try adaptiveDiff(controller).layoutPreference == .unified)
 		controller.close()
 		controller.activate(owner: owner)
@@ -451,11 +451,11 @@ struct GitReviewDesignChecks
 			#expect(navigatorToggle.accessibilityValue() as? String ==
 				"Visible")
 		}
-		navigatorToggle.performClick(nil)
+		#expect(navigatorToggle.dispatchConfiguredAction())
 		controller.view.layoutSubtreeIfNeeded()
 		#expect(navigatorToggle.accessibilityValue() as? String == "Hidden")
 		#expect(controller.runtime.state.selectedFileID == selectedFileID)
-		navigatorToggle.performClick(nil)
+		#expect(navigatorToggle.dispatchConfiguredAction())
 		controller.view.layoutSubtreeIfNeeded()
 		#expect(navigatorToggle.accessibilityValue() as? String == "Visible")
 		#expect(controller.runtime.state.snapshot == snapshot)

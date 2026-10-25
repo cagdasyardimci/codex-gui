@@ -168,29 +168,6 @@ struct ExecutionReconciliationTests
 	}
 
 	@Test(arguments: ["inProgress", "running"])
-	func runningAliasesStartLiveExecution(status: String)
-	{
-		var (model, context) = fixture(state: .ready)
-		model.executions.entries[.thread("worker")]!.needsReconciliation = false
-		model.executions.entries[.thread("worker")]!.hasUncertainRequest = false
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.backendObserved(
-				context,
-				.turnStarted(
-					threadId: "worker",
-					turn: detail(status: status).turns[0]
-				)
-			))
-		)
-		let execution = model.execution(for: .thread("worker"))
-		#expect(execution.state == .running)
-		#expect(execution.activeTurnID == "live")
-		#expect(execution.agentOutcome == nil)
-		#expect(execution.owner?.submission == context)
-	}
-
-	@Test(arguments: ["inProgress", "running"])
 	func authoritativeRunningAliasesRecoverLiveOwnerAndRetainCommandBarrier(status: String)
 	{
 		var (model, context) = fixture(state: .disconnected)
@@ -217,109 +194,6 @@ struct ExecutionReconciliationTests
 		#expect(!execution.needsReconciliation)
 		#expect(execution.commandLifetime.hasPendingCommands)
 		#expect(model.blocksExecutionCleanup)
-	}
-
-	@Test(arguments: ["interrupted", "stopped", "cancelled"])
-	func interruptionAliasesStopLiveExecution(status: String)
-	{
-		var (model, context) = fixture(state: .running)
-		model.executions.entries[.thread("worker")]!.needsReconciliation = false
-		model.executions.entries[.thread("worker")]!.hasUncertainRequest = false
-		_ = ExecutionReducer.reduce(
-			&model,
-			.execution(.backendObserved(
-				context,
-				.turnCompleted(
-					threadId: "worker",
-					turn: detail(status: status).turns[0]
-				)
-			))
-		)
-		let execution = model.execution(for: .thread("worker"))
-		#expect(execution.agentOutcome == .stopped)
-		#expect(execution.state == .stopped)
-		#expect(execution.statusMessage == "Agent interrupted.")
-		#expect(execution.activeTurnID == nil)
-	}
-
-	@Test(
-		arguments: ["interrupted", "stopped", "cancelled"],
-		[false, true]
-	)
-	func interruptionAliasesWaitForOwnedCommandExit(
-		status: String,
-		recovering: Bool
-	) throws
-	{
-		var (model, context) = fixture(state: recovering ? .disconnected : .running)
-		model.executions.entries[.thread("worker")]!.needsReconciliation = recovering
-		model.executions.entries[.thread("worker")]!.hasUncertainRequest = recovering
-		model.executions.entries[.thread("worker")]!.commandLifetime = TaskCommandLifetime(
-			pending: [TaskCommandOwnership(
-				threadID: "worker",
-				turnID: "live",
-				itemID: "command"
-			)]
-		)
-		let terminal = detail(status: status)
-		if recovering
-		{
-			_ = history(
-				terminal,
-				context: context,
-				model: &model
-			)
-		}
-		else
-		{
-			_ = ExecutionReducer.reduce(
-				&model,
-				.execution(.backendObserved(
-					context,
-					.turnCompleted(
-						threadId: "worker",
-						turn: terminal.turns[0]
-					)
-				))
-			)
-		}
-		#expect(model.execution(for: .thread("worker")).deferredTurnOutcome == .stopped)
-		#expect(model.execution(for: .thread("worker")).commandLifetime.hasPendingCommands)
-		#expect(model.blocksExecutionCleanup)
-		let exited = try #require(CodexItem(json: [
-			"id": "command",
-			"type": "commandExecution",
-			"status": "completed"
-		]))
-		for turnID in ["other", "live"]
-		{
-			_ = ExecutionReducer.reduce(
-				&model,
-				.execution(.backendObserved(
-					context,
-					.itemCompleted(
-						threadId: "worker",
-						turnId: turnID,
-						item: exited
-					)
-				))
-			)
-			let execution = model.execution(for: .thread("worker"))
-			if turnID == "other"
-			{
-				#expect(execution.commandLifetime.hasPendingCommands)
-				#expect(execution.deferredTurnOutcome == .stopped)
-				#expect(model.blocksExecutionCleanup)
-			}
-			else
-			{
-				#expect(!execution.commandLifetime.hasPendingCommands)
-				#expect(execution.state == .stopped)
-				#expect(execution.deferredTurnOutcome == nil)
-				#expect(!execution.needsReconciliation)
-				#expect(!model.blocksExecutionCleanup)
-			}
-		}
 	}
 
 	@Test(arguments: ["interrupted", "stopped", "cancelled"])

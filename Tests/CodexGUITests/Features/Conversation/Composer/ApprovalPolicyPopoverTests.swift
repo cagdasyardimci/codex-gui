@@ -22,7 +22,7 @@ struct ApprovalPolicyPopoverTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.appearance = NSAppearance(named: .aqua)
 		window.contentViewController = controller
 		window.setContentSize(controller.preferredContentSize)
@@ -130,7 +130,7 @@ struct ApprovalPolicyPopoverTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			window.contentViewController = controller
 			window.setContentSize(NSSize(
 				width: 1000,

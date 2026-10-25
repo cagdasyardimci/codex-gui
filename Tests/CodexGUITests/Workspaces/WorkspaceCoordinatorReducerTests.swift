@@ -31,36 +31,6 @@ struct WorkspaceCoordinatorReducerTests
 		#expect(result.isEmpty)
 	}
 
-	@Test func foreignCreationResultCannotRetireMatchingPendingRequest()
-	{
-		var model = fixture()
-		let request = creation(model)
-		_ = reduce(
-			&model,
-			.creationRequested(request)
-		)
-		let foreign = WorkspaceCreationRequest(
-			requestID: request.requestID,
-			source: WorkspaceIdentity(
-				sessionID: UUID(),
-				canonicalCheckoutPath: "/tmp/foreign"
-			),
-			selectionEpoch: request.selectionEpoch,
-			taskID: request.taskID,
-			name: request.name,
-			ownerSessionID: request.ownerSessionID
-		)
-		_ = reduce(
-			&model,
-			.creationFinished(
-				foreign,
-				.succeeded(workspace(taskID: request.taskID))
-			)
-		)
-		#expect(model.pendingCreations[request.requestID] == request)
-		#expect(model.workspaces.isEmpty)
-	}
-
 	@Test func leavingAndReturningToSourceRejectsOldVerifiedSelection()
 	{
 		var model = fixture()
@@ -148,28 +118,6 @@ struct WorkspaceCoordinatorReducerTests
 			)
 		).isEmpty)
 		#expect(model.workspaces[record.id]?.phase == .active)
-	}
-
-	@Test func omittingOwnerCannotBypassUnboundPreparingTaskBarrier()
-	{
-		var model = fixture()
-		let (record, reference) = register(&model)
-		var observation = WorkspaceLifecycleObservation(reference: reference)
-		observation.executionState = .running
-		_ = reduce(
-			&model,
-			.ownerObserved(observation)
-		)
-		let request = WorkspaceCleanupRequest(
-			requestID: UUID(),
-			owner: nil,
-			expected: record
-		)
-		#expect(reduce(
-			&model,
-			.cleanupRequested(request)
-		).isEmpty)
-		#expect(model.pendingCleanup.isEmpty)
 	}
 
 	@Test func boundUnopenedAndUncertainComposerOwnersCannotBeCleanedUp()

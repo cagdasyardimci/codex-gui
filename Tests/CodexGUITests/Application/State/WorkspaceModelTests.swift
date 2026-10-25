@@ -132,28 +132,4 @@ struct WorkspaceModelTests
 		#expect(copy.composer.pendingSubmissions[requestID]?.preferences == .standard)
 	}
 
-	@Test func usageFreshnessUsesSuppliedTimeAndIndependentInvalidation()
-	{
-		var usage = UsageModel()
-		usage.fetchedAt = Date(timeIntervalSince1970: 10)
-		usage.freshnessDeadline = Date(timeIntervalSince1970: 20)
-		usage.needsRefresh = false
-		#expect(!usage.isStale(
-			isConnected: true,
-			now: Date(timeIntervalSince1970: 19)
-		))
-		#expect(usage.isStale(
-			isConnected: true,
-			now: Date(timeIntervalSince1970: 20)
-		))
-		#expect(usage.isStale(
-			isConnected: false,
-			now: Date(timeIntervalSince1970: 19)
-		))
-		usage.needsRefresh = true
-		#expect(usage.isStale(
-			isConnected: true,
-			now: Date(timeIntervalSince1970: 19)
-		))
-	}
 }

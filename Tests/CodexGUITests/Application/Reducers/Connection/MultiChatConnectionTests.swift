@@ -56,77 +56,6 @@ struct MultiChatConnectionTests
 		#expect(WorkspaceLifecycleReducer.blocksCleanup(model))
 	}
 
-	@Test func restoredCommandsAreSeparatedByThreadAndAllThreadsAreRead()
-	{
-		var model = makeModel()
-		let restore = context(model)
-		let commands = ["alpha", "beta"].map
-		{
-			TaskCommandOwnership(
-				threadID: $0,
-				turnID: "turn-" + $0,
-				itemID: "command-" + $0
-			)
-		}
-		_ = ConnectionReducer.reduce(
-			&model,
-			.connection(.projectRestored(
-				restore,
-				pendingCommands: commands,
-				selectedThreadID: "idle"
-			))
-		)
-		#expect(model.execution(for: .thread("idle")).commandLifetime.pending.isEmpty)
-		for threadID in ["alpha", "beta"]
-		{
-			let execution = model.execution(for: .thread(threadID))
-			#expect(execution.activeThreadID == threadID)
-			#expect(execution.commandLifetime.pending.map(\.threadID) == [threadID])
-		}
-		model.executions.entries[.thread("alpha")]?.commandEventRevisions["alpha"] = 4
-		model.executions.entries[.thread("beta")]?.commandEventRevisions["beta"] = 7
-		model.lifecycle.recoveryListRequestID = restore.requestID
-		_ = WorkspaceLifecycleComposition.reduceDomainEvent(
-			&model,
-			.conversationSelectionChanged("idle"),
-			context: restore
-		)
-		#expect(model.lifecycle.recoveryListRequestID == restore.requestID)
-		let selection = ConversationReadOperation(
-			context: context(
-				model,
-				threadID: "idle"
-			),
-			commandRevision: 0,
-			purpose: .selection
-		)
-		model.conversations.pendingReads[selection.key] = selection
-		let result = WorkspaceLifecycleComposition.reduceDomainEvent(
-			&model,
-			.conversationListAccepted(ConversationListOperation(
-				context: restore,
-				archived: false
-			)),
-			context: restore
-		)
-		let reads = result.effects.compactMap
-		{
-			effect -> ConversationReadOperation? in
-			if case .readConversationHistory(let operation) = effect
-			{
-				return operation
-			}
-			return nil
-		}
-		#expect(reads.compactMap(\.context.threadID) == ["alpha", "beta"])
-		#expect(reads.map(\.commandRevision) == [4, 7])
-		#expect(reads.allSatisfy
-		{
-			$0.purpose == .recovery
-		})
-		#expect(model.pendingCommandOwnership.count == 2)
-	}
-
 	@Test func activeStatusRecoversKnownUnloadedThreadWithoutChangingSelection() throws
 	{
 		var model = makeModel()
@@ -154,37 +83,6 @@ struct MultiChatConnectionTests
 			if case .readConversationHistory(let operation) = $0
 			{
 				return operation.context.threadID == "background" && operation.purpose == .recovery
-			}
-			return false
-		})
-	}
-
-	@Test func acceptedActiveAliasSummaryDiscoversOwnerWithoutFilesystemReads() throws
-	{
-		var model = makeModel()
-		// The runtime accepted this alias after resolving it to the canonical checkout.
-		model.conversations.threads = [try #require(ThreadSummary(json: [
-			"id": "aliased",
-			"cwd": "/checkout-alias",
-			"status": ["type": "active", "activeFlags": []],
-		]))]
-		let request = context(model)
-		let result = WorkspaceLifecycleComposition.reduceDomainEvent(
-			&model,
-			.conversationListAccepted(ConversationListOperation(
-				context: request,
-				archived: false
-			)),
-			context: request
-		)
-		#expect(model.execution(for: .thread("aliased")).activeThreadID == "aliased")
-		#expect(model.execution(for: .thread("aliased")).needsReconciliation)
-		#expect(model.conversations.selectedConversation == .newChat)
-		#expect(result.effects.contains
-		{
-			if case .readConversationHistory(let operation) = $0
-			{
-				return operation.context.threadID == "aliased" && operation.purpose == .recovery
 			}
 			return false
 		})

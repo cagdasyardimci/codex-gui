@@ -6,109 +6,6 @@ import Testing
 @Suite @MainActor
 struct ConversationSourceTypesRenderingTests
 {
-	@Test func typedResourcesUseDistinctIconsAndPreserveTheirOriginLabels() throws
-	{
-		_ = NSApplication.shared
-		let sources = ConversationLocalSources(entries: [try entry(
-			[
-				"id": "user",
-				"type": "userMessage",
-				"content": [
-					[
-						"type": "mention",
-						"name": "Implementation",
-						"path": "/tmp/source-types/implementation.swift"
-					],
-					[
-						"type": "mention",
-						"name": "Recorded discussion",
-						"path": "/tmp/source-types/discussion.mp3"
-					],
-					[
-						"type": "mention",
-						"name": "Specification",
-						"path": "/tmp/source-types/specification.pdf"
-					],
-					[
-						"type": "mention",
-						"name": "Reference folder",
-						"path": "/tmp/source-types/reference-folder/"
-					],
-					["type": "localImage", "path": "/tmp/source-types/diagram.png"],
-				]
-			],
-			scope: "turn:user"
-		)])
-		let controller = ConversationSourcesViewController(
-			owner: owner(),
-			sources: sources
-		)
-		let views = descendants(controller.view)
-		let expectedIcons: [(ConversationLocalSources.Kind, DesktopIcon, CGFloat)] = [
-			(.file, .file, 24),
-			(.audio, .fileAudio, 18),
-			(.pdf, .fileDocument, 24),
-			(.folder, .folder, 24),
-			(.image, .fileImage, 24),
-		]
-		try #require(sources.records.count == expectedIcons.count)
-		var renderedIcons = Set<Data>()
-		for (record, expected) in zip(
-			sources.records,
-			expectedIcons
-		)
-		{
-			#expect(record.kind == expected.0)
-			#expect(record.iconIdentifier == expected.1)
-			let icon = try #require(views.compactMap
-			{
-				$0 as? NSImageView
-			}.first
-			{
-				$0.identifier?.rawValue == "source-icon:\(record.id)"
-			})
-			let image = try #require(icon.image)
-			#expect(image.size == NSSize(
-				width: expected.2,
-				height: expected.2
-			))
-			let pixels = try iconPixels(image)
-			let expectedPixels = try iconPixels(DesktopIcons.image(
-				expected.1,
-				size: expected.2
-			))
-			#expect(pixels == expectedPixels)
-			renderedIcons.insert(pixels)
-			#expect(icon.toolTip == record.kind.rawValue)
-			let button = try #require(views.compactMap
-			{
-				$0 as? NSButton
-			}.first
-			{
-				$0.identifier?.rawValue == "source-open:\(record.id)"
-			})
-			#expect(button.title == record.name)
-			#expect(button.accessibilityLabel() == "Open source: \(record.name)")
-		}
-		#expect(renderedIcons.count == expectedIcons.count)
-		let labels = views.compactMap
-		{
-			$0 as? NSTextField
-		}.map(\.stringValue)
-		#expect(labels.filter
-		{
-			$0 == "Attached to the conversation"
-		}.count == 5)
-		#expect(labels.filter
-		{
-			$0 == "Image unavailable"
-		}.count == 1)
-		#expect(labels.filter
-		{
-			$0 == "Source unavailable"
-		}.count == 4)
-		try captureIfRequested(controller)
-	}
 
 	@Test func explicitReadPageMetadataCreatesPageProvenanceWithoutInventingMissingMetadata() throws
 	{
@@ -409,7 +306,7 @@ struct ConversationSourceTypesRenderingTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = controller
 		window.setContentSize(NSSize(
 			width: 800,

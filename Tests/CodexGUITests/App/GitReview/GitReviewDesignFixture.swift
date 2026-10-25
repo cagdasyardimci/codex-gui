@@ -84,7 +84,7 @@ struct GitReviewDesignFixture
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.appearance = NSAppearance(named: appearanceName)
 		window.contentViewController = controller
 		window.setContentSize(size)

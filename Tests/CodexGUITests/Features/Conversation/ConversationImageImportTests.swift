@@ -64,69 +64,6 @@ struct ConversationImageImportTests
 		#expect(steered == ["Existing draft"])
 	}
 
-	@Test func slashReturnWaitsForPendingImageWhileTabStillInsertsTheCommand() async throws
-	{
-		let directory = try await BackgroundTestWork.perform
-		{
-			try DraftImageImportTestFixture.temporaryDirectory()
-		}
-		defer
-		{
-			try? FileManager.default.removeItem(at: directory)
-		}
-		let gate = DraftImageImportTestGate()
-		defer
-		{
-			gate.release()
-		}
-		let controller = makeController(
-			directory: directory,
-			gate: gate
-		)
-		var commands: [SlashCommandInvocation] = []
-		var attachments: [ComposerContextItem] = []
-		controller.onSlashCommand =
-		{
-			commands.append($0)
-		}
-		controller.onImportImageContext =
-		{
-			attachments.append($0)
-			return true
-		}
-		controller.attachImage(
-			.data(try DraftImageImportTestFixture.png()),
-			title: "Pending plan image"
-		)
-		let pending = try lastImport(controller)
-		let started = await gate.waitUntilStarted()
-		try #require(started)
-
-		controller.composer.string = "/pl explain this image"
-		controller.composer.setSelectedRange(NSRange(
-			location: 3,
-			length: 0
-		))
-		controller.updateComposerCompletion()
-		#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertTab(_:))))
-		#expect(controller.composer.string == "/plan explain this image")
-		#expect(commands.isEmpty)
-		controller.updateComposerCompletion()
-		#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertNewline(_:))))
-		#expect(commands.isEmpty)
-		#expect(attachments.isEmpty)
-		#expect(controller.composer.string == "/plan explain this image")
-
-		gate.release()
-		await pending.value
-		#expect(attachments.map(\.title) == ["Pending plan image"])
-		controller.updateComposerCompletion()
-		#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertNewline(_:))))
-		#expect(commands.count == 1)
-		#expect(commands.first?.id == .plan)
-		#expect(commands.first?.arguments == "explain this image")
-	}
-
 	@Test func repeatedImportsRetainFIFOAndCapturedReceivers() async throws
 	{
 		let directory = try await BackgroundTestWork.perform

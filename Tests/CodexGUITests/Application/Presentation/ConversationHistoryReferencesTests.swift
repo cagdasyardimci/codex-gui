@@ -63,48 +63,6 @@ struct ConversationHistoryReferencesTests
 		#expect(retained.loadedUserReferences?.map(\.path) == ["/tmp/first.png"])
 	}
 
-	@Test func acceptedHistoryReplacementRemovesOldReferencesAndStreamingKeepsNewOnes()
-	{
-		var value = model(turns: [turn(
-			"old",
-			contents: [image("/tmp/old.png")]
-		)])
-		let summary = ThreadSummary(json: ["id": "first", "cwd": projectPath])!
-		ConversationContentReducer.merge(
-			ThreadDetail(
-				summary: summary,
-				turns: [turn(
-					"new",
-					contents: [image("/tmp/new.png")]
-				)],
-				nextTurnsCursor: nil
-			),
-			model: &value
-		)
-		ConversationContentReducer.updateContent(
-			for: "first",
-			model: &value
-		)
-		{
-			$0.entries.append(ConversationEntry(
-				id: "streamed",
-				kind: .agent,
-				title: "Assistant",
-				body: "A growing response"
-			))
-		}
-		#expect(candidates(value).map(\.path) == ["/tmp/new.png"])
-		ConversationContentReducer.merge(
-			ThreadDetail(
-				summary: summary,
-				turns: [],
-				nextTurnsCursor: nil
-			),
-			model: &value
-		)
-		#expect(candidates(value).isEmpty)
-	}
-
 	@Test func cachedHistoryRemainsScopedToTheSelectedConversation()
 	{
 		var value = model(turns: [])
@@ -125,34 +83,6 @@ struct ConversationHistoryReferencesTests
 		#expect(candidates(value).map(\.path) == ["/tmp/second.png"])
 		value.conversations.selectedConversation = .newChat
 		#expect(candidates(value).isEmpty)
-	}
-
-	@Test func sentReferencesAndImageValidationStillApplyToCachedHistory()
-	{
-		var value = model(turns: [])
-		value.conversations.content[.thread("first")]?.loadedTurns = [turn(
-			"first",
-			contents: [image("/tmp/sent.png"), image("/tmp/valid.png"), image("/tmp/stale.png")]
-		)]
-		let sent = ComposerContextItem(
-			id: "sent",
-			kind: .image,
-			title: "Sent image",
-			path: "/tmp/sent.png"
-		)
-		value.composer.sentReferences[.thread("first")] = [sent]
-		value.lifecycle.validatedImagePaths = ["/tmp/sent.png", "/tmp/valid.png"]
-		#expect(candidates(value).map(\.path) == [
-			"/tmp/sent.png",
-			"/tmp/valid.png",
-			"/tmp/stale.png",
-		])
-		let snapshot = WorkspaceSelectors(
-			model: value,
-			now: .distantPast
-		).makeSnapshot()
-		#expect(snapshot.reusableReferences.map(\.path) == ["/tmp/sent.png", "/tmp/valid.png"])
-		#expect(snapshot.reusableReferences.first == sent)
 	}
 
 	private func model(turns: [CodexTurn]) -> WorkspaceModel

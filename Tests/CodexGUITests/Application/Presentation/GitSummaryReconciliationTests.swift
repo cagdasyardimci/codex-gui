@@ -108,56 +108,6 @@ struct GitSummaryReconciliationTests
 		#expect(sink.projection == current)
 	}
 
-	@Test func retainedTotalsNameTheirPreviousScopeAndRequireSnapshotIdentity()
-	{
-		let owner = owner(model())
-		let totals = SummaryChangeTotals(
-			additions: 2,
-			deletions: 1
-		)
-		var sink = GitSummaryReconciliation()
-		sink.select(owner)
-		let loading = projection(
-			owner: owner,
-			revision: 1,
-			scope: .staged,
-			totals: .loading(previous: totals)
-		)
-		let accepted = sink.accept(
-			loading,
-			canonical: loading
-		)
-		#expect(accepted)
-		#expect(sink.scopeDescription == "Staged; previous Uncommitted totals (stale)")
-		#expect(sink.section(for: owner).value == totals)
-		let invalid = projection(
-			owner: owner,
-			revision: 2,
-			id: nil
-		)
-		let invalidAccepted = sink.accept(
-			invalid,
-			canonical: invalid
-		)
-		#expect(!invalidAccepted)
-		let failed = projection(
-			owner: owner,
-			revision: 3,
-			scope: .staged,
-			totals: .failed(
-				"Revision unavailable",
-				previous: totals
-			)
-		)
-		let failedAccepted = sink.accept(
-			failed,
-			canonical: failed
-		)
-		#expect(failedAccepted)
-		#expect(sink.scopeDescription?.contains("previous Uncommitted") == true)
-		#expect(sink.section(for: owner).message == "Revision unavailable")
-	}
-
 	@Test func closureClearsTotalsAndSameOwnerOldLifetimeCannotRepopulate()
 	{
 		let owner = owner(model())

@@ -30,7 +30,7 @@ struct SourcesHoverAppearanceTests
 				backing: .buffered,
 				defer: false
 			)
-			parent.isReleasedWhenClosed = false
+			parent.prepareForTesting()
 			let anchor = NSButton(
 				title: "Sources",
 				target: nil,

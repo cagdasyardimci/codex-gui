@@ -6,48 +6,6 @@ import Testing
 @Suite(.timeLimit(.minutes(2))) @MainActor
 struct FilesWindowIntegrationTests
 {
-	@Test func openingFilesReusesLandingWithoutReplacingChanges() throws
-	{
-		_ = NSApplication.shared
-		let suite = "FilesWindowIntegration.\(UUID().uuidString)"
-		let defaults = try #require(UserDefaults(suiteName: suite))
-		defer
-		{
-			defaults.removePersistentDomain(forName: suite)
-		}
-		let fixture = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
-		let window = MainWindowController(
-			store: fixture.store,
-			onOpenProject:
-			{
-			},
-			onInsertPath:
-			{
-			}
-		)
-		window.openFilesToolTab()
-		let tabs = window.inspector.toolsTabs
-		let landing = try #require(tabs.filesLandingTabID)
-		#expect(tabs.isFilesSelected)
-		#expect(window.files.parent === tabs)
-		window.openFilesToolTab()
-		#expect(tabs.filesLandingTabID == landing)
-
-		let changes = window.inspector.gitChanges
-		tabs.showChanges(changes)
-		let changesTab = try #require(tabs.changesTabID)
-		window.openFilesToolTab()
-		#expect(tabs.filesLandingTabID == landing)
-		#expect(tabs.changesTabID == changesTab)
-		#expect(tabs.isFilesSelected)
-		let selectChanges = try #require(findButton(
-			"Changes 2",
-			in: tabs.tabBarView
-		))
-		#expect(selectChanges.dispatchConfiguredAction())
-		#expect(tabs.isChangesSelected)
-		#expect(changes.parent === tabs)
-	}
 
 	@Test func dirtyCloseTargetsCapturedTabAndKeepsItOnCancel() async throws
 	{

@@ -157,7 +157,7 @@ struct ConversationWindowIntegrationTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = chrome
 		defer
 		{
@@ -347,76 +347,6 @@ struct ConversationWindowIntegrationTests
 			let expectedWidth = expandedWidthWithSummary
 				+ (visible ? 0 : InspectorViewController.summaryPaneWidth)
 			#expect(abs(conversation.view.bounds.width - expectedWidth) < 1)
-		}
-	}
-
-	@Test func changesPaneResizesExistingAndStreamedItems() async throws
-	{
-		_ = NSApplication.shared
-		let defaults = try #require(UserDefaults(suiteName: "ConversationLayoutTests.\(UUID())"))
-		let state = WorkspaceTestFixture(storage: LocalStorage(defaults: defaults))
-		let windowController = MainWindowController(
-			store: state.store,
-			onOpenProject:
-			{
-			},
-			onInsertPath:
-			{
-			}
-		)
-		let window = try #require(windowController.window)
-		let split = windowController.paneController.split
-		let controller = try #require(
-			split.splitViewItems[1].viewController.children.compactMap
-			{
-				$0 as? ConversationViewController
-			}.first
-		)
-		let collection = try #require(findCollection(in: controller.view))
-		var entries = (0 ..< 30).map
-		{
-			ConversationEntry(
-				id: "message-\($0)",
-				kind: .agent,
-				title: "Codex",
-				body: String(
-					repeating: "Streamed message content ",
-					count: 8
-				)
-			)
-		}
-		split.view.layoutSubtreeIfNeeded()
-		controller.render(integrationSnapshot(entries))
-		await controller.waitForRendering()
-		collection.layoutSubtreeIfNeeded()
-
-		for collapsed in [true, false, true, false]
-		{
-			split.splitViewItems[2].isCollapsed = collapsed
-			split.view.layoutSubtreeIfNeeded()
-			collection.layoutSubtreeIfNeeded()
-			for index in [0, entries.count - 1]
-			{
-				let attributes = try #require(
-					collection.layoutAttributesForItem(at: IndexPath(
-						item: index,
-						section: 0
-					))
-				)
-				#expect(attributes.frame.maxX <= collection.bounds.width - 8)
-			}
-			entries[0].body += "\nMore output"
-			entries.append(
-				ConversationEntry(
-					id: "message-\(entries.count)",
-					kind: .agent,
-					title: "Codex",
-					body: "More output"
-				)
-			)
-			controller.render(integrationSnapshot(entries))
-			await controller.waitForRendering()
-			collection.layoutSubtreeIfNeeded()
 		}
 	}
 

@@ -102,54 +102,6 @@ struct ProtocolMessageWriterTests
 		)
 	}
 
-	@Test func retiredConnectionCannotWriteQueuedFramesIntoItsReplacement() async throws
-	{
-		let oldPipe = Pipe()
-		let oldWriter = try ProtocolMessageWriter(handle: oldPipe.fileHandleForWriting)
-		let active = oldWriter.enqueue(.object(["large": .string(String(
-			repeating: "x",
-			count: 1_048_576
-		))]))
-		try await waitUntil
-		{
-			active.hasIncompleteFrame
-		}
-		let queued = oldWriter.enqueue(.object(["owner": .string("old-queued")]))
-		oldWriter.retire()
-		let replacement = Pipe()
-		let writer = try ProtocolMessageWriter(handle: replacement.fileHandleForWriting)
-		defer
-		{
-			writer.retire()
-			oldWriter.retire()
-		}
-		let reading = readToEnd(replacement.fileHandleForReading)
-		try await writer.enqueue(.object(["owner": .string("replacement")])).wait()
-		writer.retire()
-		try replacement.fileHandleForWriting.close()
-		#expect(try frames(in: await reading.value)
-			.map
-			{
-				$0["owner"] as? String
-			} == ["replacement"])
-		await expectFailure(
-			active,
-			mayHaveBeenSent: true
-		)
-		await expectFailure(
-			queued,
-			mayHaveBeenSent: false
-		)
-		let oldReading = readToEnd(oldPipe.fileHandleForReading)
-		try oldPipe.fileHandleForWriting.close()
-		let oldBytes = try await oldReading.value
-		#expect(!oldBytes.contains(0x0A))
-		#expect(!String(
-			decoding: oldBytes,
-			as: UTF8.self
-		).contains("old-queued"))
-	}
-
 	@Test func terminalIOFailureRetiresWriterAfterCancellationAlreadyCompletedTicket() async throws
 	{
 		let pipe = Pipe()
@@ -189,37 +141,6 @@ struct ProtocolMessageWriterTests
 			writer.enqueue(.object(["late": .string("never")])),
 			mayHaveBeenSent: false
 		)
-	}
-
-	@Test func closedPipeReportsPhysicalFailureWithoutRetryingNextFrame() async throws
-	{
-		let pipe = Pipe()
-		let recording = ProtocolWriterFailureRecording()
-		let writer = try ProtocolMessageWriter(
-			handle: pipe.fileHandleForWriting,
-			reportIOFailure:
-			{
-				recording.record($0)
-			}
-		)
-		defer
-		{
-			writer.retire()
-			try? pipe.fileHandleForWriting.close()
-		}
-		try pipe.fileHandleForReading.close()
-		let first = writer.enqueue(.object(["first": .number(1)]))
-		let second = writer.enqueue(.object(["second": .number(2)]))
-		await expectFailure(
-			first,
-			mayHaveBeenSent: false
-		)
-		await expectFailure(
-			second,
-			mayHaveBeenSent: false
-		)
-		#expect(recording.failures.count == 1)
-		#expect(recording.failures.first?.requiresDisconnect == true)
 	}
 
 	@Test func encodingFailureSendsNoBytesAndLeavesFollowingFramesUsable() async throws

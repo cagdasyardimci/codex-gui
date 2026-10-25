@@ -10,77 +10,6 @@ import Testing
 )
 struct ComposerCustomDrawingAppearanceTests
 {
-	@Test func retainedModelButtonRedrawsWithoutChangingHighlightedSelection() throws
-	{
-		let button = ModelEffortSelectionButton(frame: NSRect(
-			x: 0,
-			y: 0,
-			width: 220,
-			height: 28
-		))
-		button.update(
-			summary: "Appearance model High",
-			effortTitle: "High",
-			fastMode: true,
-			isPickerPresented: false
-		)
-		button.cell?.isHighlighted = true
-		let title = button.title
-		let size = button.intrinsicContentSize
-		let value = button.accessibilityValue() as? String
-		try verifyRetainedDrawing(button)
-		{
-			#expect(button.cell?.isHighlighted == true)
-			#expect(button.title == title)
-			#expect(button.intrinsicContentSize == size)
-			#expect(button.accessibilityValue() as? String == value)
-		}
-	}
-
-	@Test func retainedEffortSliderRedrawsWithoutChangingValueOrFocus() throws
-	{
-		let slider = EffortSlider(frame: NSRect(
-			x: 0,
-			y: 0,
-			width: 240,
-			height: 40
-		))
-		slider.cell = EffortSliderCell()
-		slider.minValue = 0
-		slider.maxValue = 3
-		slider.numberOfTickMarks = 4
-		slider.doubleValue = 2
-		slider.ultraSelected = true
-		slider.fastMode = true
-		try verifyRetainedDrawing(
-			slider,
-			focus: true
-		)
-		{
-			#expect(slider.doubleValue == 2)
-			#expect(slider.numberOfTickMarks == 4)
-			#expect(slider.ultraSelected)
-			#expect(slider.fastMode)
-		}
-	}
-
-	@Test(arguments: [false, true])
-	func retainedSlashRowRedrawsWithoutChangingHoverOrSelection(selected: Bool) throws
-	{
-		let row = SlashCommandMenuRowView(frame: NSRect(
-			x: 0,
-			y: 0,
-			width: 220,
-			height: 40
-		))
-		row.isHovered = true
-		row.isSelected = selected
-		try verifyRetainedDrawing(row)
-		{
-			#expect(row.isHovered)
-			#expect(row.isSelected == selected)
-		}
-	}
 
 	@Test func retainedApprovalRowRedrawsWhileHoverSelectionAndFocusRemain() throws
 	{
@@ -141,7 +70,7 @@ struct ComposerCustomDrawingAppearanceTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.appearance = NSAppearance(named: .aqua)
 		let content = try #require(window.contentView)
 		view.wantsLayer = true

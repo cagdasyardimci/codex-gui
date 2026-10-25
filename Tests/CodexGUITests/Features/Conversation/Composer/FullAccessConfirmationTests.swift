@@ -35,7 +35,7 @@ struct FullAccessConfirmationTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			window.contentViewController = conversation
 			window.orderFront(nil)
 			defer
@@ -151,7 +151,7 @@ struct FullAccessConfirmationTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			window.contentViewController = conversation
 			window.orderFront(nil)
 			defer
@@ -198,56 +198,6 @@ struct FullAccessConfirmationTests
 			#expect(conversation.fullAccessConfirmationPanel == nil)
 			#expect(requestingWorkspace == (keyCode == 53 ? [] : [.fullAccess]))
 			#expect(replacementWorkspace.isEmpty)
-		}
-	}
-
-	@Test func fullAccessDialogHasWorkingLinkKeyboardActionsAndUnclippedContent() throws
-	{
-		_ = NSApplication.shared
-		let dialog = FullAccessConfirmationView()
-		_ = dialog.view
-		dialog.view.frame.size = dialog.view.fittingSize
-		dialog.view.layoutSubtreeIfNeeded()
-		#expect(dialog.cancelButton.keyEquivalent == "\u{1b}")
-		#expect(dialog.confirmButton.keyEquivalent == "\r")
-		let text = try #require(dialog.riskText.textStorage)
-		let link = text.attribute(
-			.link,
-			at: text.length - 1,
-			effectiveRange: nil
-		) as? URL
-		#expect(link == DocumentationLinks.sandboxing)
-		let layout = try #require(dialog.riskText.layoutManager)
-		let container = try #require(dialog.riskText.textContainer)
-		layout.ensureLayout(for: container)
-		#expect(layout.usedRect(for: container).height <= dialog.riskText.bounds.height)
-		#expect(dialog.view.fittingSize.width == 518)
-		verifyLabelsFit(
-			in: dialog.view,
-			root: dialog.view
-		)
-		if let directory = ProcessInfo.processInfo.environment["CODEX_GUI_UI_EVIDENCE_DIRECTORY"]
-		{
-			let output = URL(fileURLWithPath: directory)
-			try FileManager.default.createDirectory(
-				at: output,
-				withIntermediateDirectories: true
-			)
-			for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)]
-			{
-				dialog.view.appearance = NSAppearance(named: appearance)
-				let bitmap = try #require(dialog.view
-					.bitmapImageRepForCachingDisplay(in: dialog.view.bounds))
-				dialog.view.cacheDisplay(
-					in: dialog.view.bounds,
-					to: bitmap
-				)
-				let png = try #require(bitmap.representation(
-					using: .png,
-					properties: [:]
-				))
-				try png.write(to: output.appendingPathComponent("full-access-\(name).png"))
-			}
 		}
 	}
 

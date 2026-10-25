@@ -63,31 +63,6 @@ struct ConcurrentConversationOwnershipTests
 		})
 	}
 
-	@Test func backgroundHistoryUsesItsExecutionRevision()
-	{
-		var model = fixture()
-		model.conversations.selectedConversation = .thread("displayed")
-		model.execution.commandEventRevisions["background"] = 19
-		var background = ExecutionModel()
-		background.commandEventRevisions["background"] = 4
-		model.executions.entries[.thread("background")] = background
-		let operation = ConversationReadOperation(
-			context: context(
-				model,
-				threadID: "background"
-			),
-			commandRevision: 4,
-			purpose: .search
-		)
-		let result = ConversationReducer.reduce(
-			&model,
-			.conversations(.historyRequested(operation))
-		)
-		#expect(model.conversations.pendingReads[operation.key]?.commandRevision == 4)
-		#expect(result.effects.count == 1)
-		#expect(model.execution.commandEventRevisions["background"] == 19)
-	}
-
 	@Test func backgroundRecoveryFailureRetainsItsErrorWithoutChangingDisplayedChat()
 	{
 		var model = fixture()

@@ -495,11 +495,7 @@ final class MockCodexService: CodexService
 
 	func resumeThread(id: String) async throws -> ThreadDetail
 	{
-		ThreadDetail(
-			summary: thread,
-			turns: savedTurns,
-			nextTurnsCursor: nil
-		)
+		try await readThread(id: id)
 	}
 
 	func resumeThread(

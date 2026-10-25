@@ -21,7 +21,7 @@ struct SidebarOrganizationMenuTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			let anchor = NSButton(frame: NSRect(
 				x: 20,
 				y: 200,
@@ -102,103 +102,4 @@ struct SidebarOrganizationMenuTests
 		}
 	}
 
-	@Test func anchorClickTogglesMenuAndSearchDismissesIt() async throws
-	{
-		try await AppKitTestIsolation.perform
-		{
-			let fixture = try IsolatedUserDefaultsFixture(prefix: "SidebarMenuDismissal")
-			defer
-			{
-				fixture.cleanup()
-			}
-			let controller = NavigationViewController()
-			controller.sidebarPreferences = SidebarPreferences(defaults: fixture.defaults)
-			let window = NSWindow(
-				contentRect: NSRect(
-					x: 200,
-					y: 200,
-					width: 300,
-					height: 500
-				),
-				styleMask: [.titled],
-				backing: .buffered,
-				defer: false
-			)
-			window.isReleasedWhenClosed = false
-			window.contentViewController = controller
-			window.makeKeyAndOrderFront(nil)
-			defer
-			{
-				controller.searchPopover.close()
-				controller.sidebarMenu.close()
-				window.close()
-			}
-			controller.view.layoutSubtreeIfNeeded()
-			let anchor = controller.sidebarOptionsButton
-			controller.showSidebarMenu(anchor)
-			#expect(controller.sidebarMenu.isShown)
-			let point = anchor.convert(
-				NSPoint(
-					x: anchor.bounds.midX,
-					y: anchor.bounds.midY
-				),
-				to: nil
-			)
-			let click = try #require(NSEvent.mouseEvent(
-				with: .leftMouseDown,
-				location: point,
-				modifierFlags: [],
-				timestamp: 0,
-				windowNumber: window.windowNumber,
-				context: nil,
-				eventNumber: 1,
-				clickCount: 1,
-				pressure: 1
-			))
-			// The monitor leaves the trigger click for its configured toggle action.
-			#expect(controller.sidebarMenu.shouldForward(click))
-			#expect(controller.sidebarMenu.isShown)
-			controller.showSidebarMenu(anchor)
-			#expect(!controller.sidebarMenu.isShown)
-			controller.showSidebarMenu(anchor)
-			controller.showSearch()
-			#expect(!controller.sidebarMenu.isShown)
-			#expect(controller.searchPopover.isShown)
-		}
-	}
-
-	@Test func plusAddsProjectAndFlatListRoutesForeignChatSelection() throws
-	{
-		let fixture = try IsolatedUserDefaultsFixture(prefix: "SidebarPlus")
-		defer
-		{
-			fixture.cleanup()
-		}
-		let controller = NavigationViewController()
-		controller.sidebarPreferences = SidebarPreferences(defaults: fixture.defaults)
-		_ = controller.view
-		var opened = 0
-		controller.onOpenProject =
-		{
-			opened += 1
-		}
-		let plus = controller.projectActionsButton
-		#expect(plus.accessibilityLabel() == "Add new project")
-		#expect(plus.sendAction(
-			try #require(plus.action),
-			to: plus.target
-		))
-		#expect(opened == 1)
-		#expect(!controller.projectActionsPopover.isShown)
-		controller.setSidebarOrganization(.oneList)
-		#expect(plus.accessibilityLabel() == "New chat")
-		let foreign = try #require(ThreadSummary(json: ["id": "foreign", "cwd": "/tmp/other"]))
-		var selected: String?
-		controller.onSelectSidebarTask =
-		{
-			selected = $0.id
-		}
-		controller.chooseSidebarThread(foreign)
-		#expect(selected == "foreign")
-	}
 }

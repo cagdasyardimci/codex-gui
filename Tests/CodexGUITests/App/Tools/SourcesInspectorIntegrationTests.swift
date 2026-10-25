@@ -52,7 +52,7 @@ struct SourcesInspectorIntegrationTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = inspector
 		window.setContentSize(NSSize(
 			width: 500,

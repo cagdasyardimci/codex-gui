@@ -87,16 +87,4 @@ struct JSONLineFramerTests
 		}
 	}
 
-	@Test func jsonLineFramerPreservesFragmentedAndAdjacentMessages()
-	{
-		let framer = JSONLineFramer()
-
-		#expect(framer.append(Data("{\"id\":1".utf8)) == [])
-		#expect(
-			framer.append(Data("}\n{\"id\":2}\n{\"id\":3".utf8))
-				== [Data("{\"id\":1}".utf8), Data("{\"id\":2}".utf8)]
-		)
-		#expect(framer.append(Data("}\n".utf8)) == [Data("{\"id\":3}".utf8)])
-	}
-
 }

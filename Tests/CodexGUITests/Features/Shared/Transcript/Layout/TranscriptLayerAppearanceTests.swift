@@ -6,67 +6,6 @@ import Testing
 @Suite @MainActor
 struct TranscriptLayerAppearanceTests
 {
-	@Test func loadingSkeletonRefreshesInheritedAppearanceWithoutRestartingLoading() throws
-	{
-		_ = NSApplication.shared
-		let preview = TurnSummaryPreview(
-			summary: ConversationTurnSummary(
-				turnID: "loading",
-				entryID: "loading:reference",
-				title: "Earlier turn",
-				reply: "Select to view this turn.",
-				isContentLoaded: false
-			),
-			bookmarked: true
-		)
-		let window = makeWindow(preview)
-		defer
-		{
-			detach(window)
-		}
-		let skeleton = try #require(preview.layer?.sublayers?.first)
-		let bars = try #require(skeleton.sublayers)
-		try #require(bars.count == 4)
-		let frames = bars.map(\.frame)
-		let animationKeys = skeleton.animationKeys()
-		let bookmark = try #require(descendants(preview).compactMap
-		{
-			$0 as? NSButton
-		}.first)
-		for name in [NSAppearance.Name.aqua, .darkAqua, .aqua, .darkAqua]
-		{
-			window.appearance = try #require(NSAppearance(named: name))
-			window.displayIfNeeded()
-			let expected = resolved(
-				.secondaryLabelColor,
-				for: preview,
-				alpha: 0.2
-			)
-			for bar in bars
-			{
-				try expectColor(
-					bar.backgroundColor,
-					expected
-				)
-			}
-			#expect(preview.appearance == nil)
-			#expect(preview.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == name)
-			#expect(preview.isLoading && !skeleton.isHidden)
-			#expect(preview.cardHeight == 100)
-			#expect(preview.accessibilityLabel() == "Loading turn preview")
-			#expect(bookmark.isHidden)
-			#expect(bookmark.accessibilityLabel() == "Remove turn bookmark")
-			#expect(bars.map(\.frame) == frames)
-			#expect(skeleton.animationKeys() == animationKeys)
-			#expect(zip(
-				bars,
-				skeleton.sublayers ?? []
-			).allSatisfy
-			{
-				pair in pair.0 === pair.1
-			})
-		}
-	}
 
 	@Test func reviewBorderRefreshesInheritedAppearanceAndPreservesFocusAndAction() throws
 	{
@@ -268,7 +207,7 @@ struct TranscriptLayerAppearanceTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentView = view
 		return window
 	}

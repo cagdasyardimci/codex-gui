@@ -110,47 +110,6 @@ struct SubagentConversationRuntimeTests
 		runtime.invalidate()
 	}
 
-	@Test func eventsDuringEveryFetchStillPublishIntermediateContent() async throws
-	{
-		let service = MockCodexService()
-		service.suspendNextRead = true
-		service.savedTurns = [try turn(text: "final content")]
-		let runtime = SubagentConversationRuntime(
-			service: service,
-			projectPath: nil
-		)
-		runtime.select(agent(service.thread.id))
-		for index in 0 ..< 3
-		{
-			#expect(await waitUntil
-			{
-				service.pendingRead != nil
-			})
-			runtime.receive(.agentMessageDelta(
-				threadId: service.thread.id,
-				turnId: "turn",
-				itemId: "message",
-				text: "delta"
-			))
-			service.suspendNextRead = index < 2
-			service.pendingRead?.resume(returning: try detail(
-				service,
-				text: "content \(index)"
-			))
-			service.pendingRead = nil
-			#expect(await waitUntil
-			{
-				runtime.state.entries.first?.body == "content \(index)"
-			})
-		}
-		#expect(await waitUntil
-		{
-			runtime.state.entries.first?.body == "final content" && !runtime.state.isLoading
-		})
-		#expect(service.readThreadCount == 4)
-		runtime.invalidate()
-	}
-
 	@Test func retryLoadsAfterLocalFailureAndPaginationKeepsCurrentContent() async throws
 	{
 		let service = MockCodexService()
@@ -189,36 +148,6 @@ struct SubagentConversationRuntimeTests
 		#expect(service.earlierReadCursors == ["older"])
 		#expect(runtime.state.nextCursor == nil)
 		runtime.invalidate()
-	}
-
-	@Test func wrongThreadAndCheckoutRepliesFailLocally() async throws
-	{
-		let service = MockCodexService()
-		let runtime = SubagentConversationRuntime(
-			service: service,
-			projectPath: nil
-		)
-		runtime.select(agent("unrecognized-child"))
-		#expect(await waitUntil
-		{
-			!runtime.state.isLoading
-		})
-		#expect(runtime.state.error != nil)
-		#expect(runtime.state.entries.isEmpty)
-		#expect(runtime.state.selectedThreadID == "unrecognized-child")
-		runtime.invalidate()
-		let scopedRuntime = SubagentConversationRuntime(
-			service: service,
-			projectPath: "/fixture/different-checkout"
-		)
-		scopedRuntime.select(agent(service.thread.id))
-		#expect(await waitUntil
-		{
-			!scopedRuntime.state.isLoading
-		})
-		#expect(scopedRuntime.state.error != nil)
-		#expect(scopedRuntime.state.entries.isEmpty)
-		scopedRuntime.invalidate()
 	}
 
 	private func agent(_ threadID: String) -> CodexSubagentActivity

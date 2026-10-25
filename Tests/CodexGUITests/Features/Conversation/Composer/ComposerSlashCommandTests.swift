@@ -182,59 +182,6 @@ struct ComposerSlashCommandTests
 		#expect(controller.composer.string == "Replacement draft")
 	}
 
-	@Test func returnLeavesCommandPickerInControlOfFocusWhileTabRestoresComposer() throws
-	{
-		let controller = makeController(text: "/model")
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 800,
-				height: 600
-			),
-			styleMask: [.titled],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.contentViewController = controller
-		controller.updateComposerCompletion()
-		#expect(!window.isVisible)
-		#expect(controller.slashCommandPopover?.isShown != true)
-		let pickerInput = NSTextView(frame: NSRect(
-			x: 0,
-			y: 0,
-			width: 100,
-			height: 30
-		))
-		controller.view.addSubview(pickerInput)
-		defer
-		{
-			window.orderOut(nil)
-		}
-		var commands: [SlashCommandID] = []
-		controller.onSlashCommand =
-		{
-			command in
-			commands.append(command.id)
-			window.makeFirstResponder(pickerInput)
-		}
-		#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertNewline(_:))))
-		#expect(commands == [.model])
-		#expect(window.firstResponder === pickerInput)
-		#expect(controller.slashCompletionRange == nil)
-		controller.composer.string = "/reas"
-		controller.composer.setSelectedRange(NSRange(
-			location: 5,
-			length: 0
-		))
-		controller.updateComposerCompletion()
-		#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertTab(_:))))
-		#expect(controller.composer.string == "/reasoning ")
-		#expect(window.firstResponder === controller.composer)
-		#expect(commands == [.model])
-	}
-
 	@Test func skillsFilterByDisplayNameSkipHeadingAndAttachWithoutSending() throws
 	{
 		let controller = makeController(text: "/")

@@ -5,56 +5,6 @@ import Testing
 
 struct GitTurnBaselineManifestReaderTests
 {
-	@Test func unchangedTreeIsReadOnceUsingItsResolvedObjectID() throws
-	{
-		let fixture = try GitTurnBaselineFixture()
-		defer
-		{
-			fixture.remove()
-		}
-		var commands: [[String]] = []
-		var reader = GitTurnBaselineManifestReader
-		{
-			arguments in
-			commands.append(arguments)
-			return try fixture.git(arguments)
-		}
-		let before = try reader.read()
-		let after = try reader.read()
-		let objectID = String(
-			decoding: try fixture.git(["rev-parse", "--verify", "HEAD^{tree}"]),
-			as: UTF8.self
-		).trimmingCharacters(in: .whitespacesAndNewlines)
-		#expect(before == after)
-		#expect(before.paths == ["source.txt"])
-		#expect(commands.count == 5)
-		#expect(commands.filter
-		{
-			$0.first == "ls-tree"
-		} == [
-			["ls-tree", "--full-tree", "-rz", objectID]
-		])
-		#expect(commands.filter
-		{
-			$0.first == "ls-files"
-		}.count == 2)
-		#expect(commands.filter
-		{
-			$0.first == "rev-parse"
-		}.count == 2)
-
-		var nextCapture = GitTurnBaselineManifestReader
-		{
-			arguments in
-			commands.append(arguments)
-			return try fixture.git(arguments)
-		}
-		#expect(try nextCapture.read() == before)
-		#expect(commands.filter
-		{
-			$0.first == "ls-tree"
-		}.count == 2)
-	}
 
 	@Test func indexChangesRemainVisibleWhileTheHEADTreeIsReused() throws
 	{

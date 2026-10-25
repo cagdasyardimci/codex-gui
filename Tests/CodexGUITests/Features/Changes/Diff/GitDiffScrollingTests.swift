@@ -50,18 +50,20 @@ struct GitDiffScrollingTests
 			code.layoutPreference = layout
 			code.wrapsCode = wraps
 			let outer = RecordingScrollView()
-			let document = NSView(frame: NSRect(
+			let document = DiffScrollDocumentView(frame: NSRect(
 				x: 0,
 				y: 0,
 				width: 900,
 				height: 2_000
 			))
 			outer.documentView = document
-			AppKitLayout.pin(
-				code,
-				to: document,
-				inset: 0
-			)
+			code.translatesAutoresizingMaskIntoConstraints = false
+			document.addSubview(code)
+			NSLayoutConstraint.activate([
+				code.leadingAnchor.constraint(equalTo: document.leadingAnchor),
+				code.trailingAnchor.constraint(equalTo: document.trailingAnchor),
+				code.topAnchor.constraint(equalTo: document.topAnchor),
+			])
 			let window = NSWindow(
 				contentRect: NSRect(
 					x: 0,
@@ -73,7 +75,7 @@ struct GitDiffScrollingTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			window.contentView = outer
 			// Exercise native scrolling in a presented window, after AppKit installs its viewport.
 			// Hidden-window scroll animation is not a reliable completion checkpoint.
@@ -103,6 +105,12 @@ struct GitDiffScrollingTests
 				))
 				let selection = source.selectedRange()
 				let horizontal = inner.contentView.bounds.origin.x
+				inner.scrollWheel(with: try wheel(
+					x: 0,
+					y: 0,
+					phase: .began,
+					in: inner
+				))
 				let verticalEvent = try wheel(
 					x: 0,
 					y: -40,
@@ -114,6 +122,14 @@ struct GitDiffScrollingTests
 				#expect(outer.events.last === verticalEvent)
 				#expect(inner.contentView.bounds.origin.x == horizontal)
 				#expect(source.selectedRange() == selection)
+				let verticalEnd = try wheel(
+					x: 0,
+					y: 0,
+					phase: .ended,
+					in: inner
+				)
+				inner.scrollWheel(with: verticalEnd)
+				#expect(outer.events.last === verticalEnd)
 				if !wraps
 				{
 					try #require(inner.hasHorizontalScroller)
@@ -150,6 +166,12 @@ struct GitDiffScrollingTests
 						continuation.finish()
 						clip.postsBoundsChangedNotifications = previousPostsBoundsChanges
 					}
+					inner.scrollWheel(with: try wheel(
+						x: 0,
+						y: 0,
+						phase: .began,
+						in: inner
+					))
 					let horizontalEvent = try wheel(
 						x: -40,
 						y: 0,
@@ -157,6 +179,12 @@ struct GitDiffScrollingTests
 					)
 					native.mark("horizontal.dispatch.begin")
 					inner.scrollWheel(with: horizontalEvent)
+					inner.scrollWheel(with: try wheel(
+						x: 0,
+						y: 0,
+						phase: .ended,
+						in: inner
+					))
 					native.mark("horizontal.dispatch.end")
 					#expect(outer.events.count == forwardedCount)
 					// Observe this fixture's native movement instead of assuming AppKit's
@@ -171,7 +199,14 @@ struct GitDiffScrollingTests
 					#expect(inner.contentView.bounds.origin.x > horizontal)
 					#expect(outer.events.count == forwardedCount)
 					// Shift stays with the code pane. This synthetic event checks routing;
-					// native Shift-axis normalization is outside the subclass fixture.
+					// native Shift-axis normalization is outside this synthetic fixture.
+					inner.scrollWheel(with: try wheel(
+						x: 0,
+						y: 0,
+						phase: .began,
+						flags: .maskShift,
+						in: inner
+					))
 					let shiftedEvent = try wheel(
 						x: 0,
 						y: -40,
@@ -179,6 +214,13 @@ struct GitDiffScrollingTests
 						in: inner
 					)
 					inner.scrollWheel(with: shiftedEvent)
+					inner.scrollWheel(with: try wheel(
+						x: 0,
+						y: 0,
+						phase: .ended,
+						flags: .maskShift,
+						in: inner
+					))
 					#expect(outer.events.count == forwardedCount)
 					#expect(source.selectedRange() == selection)
 				}
@@ -189,6 +231,7 @@ struct GitDiffScrollingTests
 	private func wheel(
 		x: Int32,
 		y: Int32,
+		phase: WheelPhase = .changed,
 		flags: CGEventFlags = [],
 		in scroll: NSScrollView
 	) throws -> NSEvent
@@ -204,15 +247,15 @@ struct GitDiffScrollingTests
 			wheel3: 0
 		))
 		event.flags = flags
-		let base = try #require(NSEvent(cgEvent: event))
-		try #require(base.type == .scrollWheel)
-		try #require(base.modifierFlags.contains(.shift) == flags.contains(.maskShift))
-		if flags.isEmpty
-		{
-			try #require(base.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty)
-			try #require(base.scrollingDeltaX == CGFloat(x))
-			try #require(base.scrollingDeltaY == CGFloat(y))
-		}
+		// Keep each trackpad gesture's native phase, including its zero-delta boundaries.
+		event.setIntegerValueField(
+			.scrollWheelEventIsContinuous,
+			value: 1
+		)
+		event.setIntegerValueField(
+			.scrollWheelEventScrollPhase,
+			value: phase.rawValue
+		)
 		let window = try #require(scroll.window)
 		// The inner code scroll view spans the full document height, while the outer
 		// viewer clips it. A bounds midpoint can be outside the presented window.
@@ -231,116 +274,50 @@ struct GitDiffScrollingTests
 			from: nil
 		)
 		try #require(content.bounds.contains(contentPoint))
-		let boundsPoint = scroll.convert(
-			NSPoint(
-				x: scroll.bounds.midX,
-				y: scroll.bounds.midY
-			),
-			to: nil
+		let screenPoint = window.convertPoint(toScreen: point)
+		// CGEvent uses a top-left screen origin; AppKit screen coordinates use bottom-left.
+		event.location = CGPoint(
+			x: screenPoint.x,
+			y: CGDisplayBounds(CGMainDisplayID()).height - screenPoint.y
 		)
+		let located = try #require(NSEvent(cgEvent: event))
+		try #require(located.type == .scrollWheel)
+		try #require(located.hasPreciseScrollingDeltas)
+		try #require(located.phase == phase.nativePhase)
+		try #require(located.modifierFlags.contains(.shift) == flags.contains(.maskShift))
+		if flags.isEmpty
+		{
+			try #require(located.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty)
+			try #require(located.scrollingDeltaX == CGFloat(x))
+			try #require(located.scrollingDeltaY == CGFloat(y))
+		}
 		let timing = TestTiming.begin(
 			"native.wheel",
 			detail: "delta=\(x),\(y) bounds=\(scroll.bounds) visible=\(viewport) " +
-				"oldWindowPoint=\(boundsPoint) newWindowPoint=\(point) " +
-				"contentBounds=\(content.bounds) contentVisible=\(content.visibleRect) " +
-				"oldInside=\(content.bounds.contains(content.convert(boundsPoint, from: nil))) " +
-				"newContentPoint=\(contentPoint)"
+				"windowPoint=\(point) screenPoint=\(screenPoint) " +
+				"nativeLocation=\(located.locationInWindow) nativeWindow=\(located.windowNumber)"
 		)
 		defer
 		{
 			timing.end()
 		}
-		return LocatedWheelEvent(
-			base: base,
-			window: window,
-			point: point
-		)
+		// Preserve the real native event backing used by NSScrollView, not only its accessors.
+		return located
 	}
 
-	// Keep the CG wheel's real deltas and precision, while attaching the owning viewport.
-	private final class LocatedWheelEvent: NSEvent
+	// Core Graphics and NSEvent use different raw values for changed and ended phases.
+	private enum WheelPhase: Int64
 	{
-		let base: NSEvent
-		// Recorded events must not retain the window that owns their recording scroll view.
-		weak var targetWindow: NSWindow?
-		let point: NSPoint
+		case began = 1, changed = 2, ended = 4
 
-		init(
-			base: NSEvent,
-			window: NSWindow,
-			point: NSPoint
-		)
+		var nativePhase: NSEvent.Phase
 		{
-			self.base = base
-			targetWindow = window
-			self.point = point
-			super.init()
-		}
-
-		@available(
-			*,
-			unavailable
-		)
-		required init?(coder: NSCoder)
-		{
-			fatalError("init(coder:) has not been implemented")
-		}
-
-		override var type: NSEvent.EventType
-		{
-			.scrollWheel
-		}
-		override var window: NSWindow?
-		{
-			targetWindow
-		}
-		override var windowNumber: Int
-		{
-			targetWindow?.windowNumber ?? base.windowNumber
-		}
-		override var locationInWindow: NSPoint
-		{
-			point
-		}
-		override var deltaX: CGFloat
-		{
-			base.deltaX
-		}
-		override var deltaY: CGFloat
-		{
-			base.deltaY
-		}
-		override var scrollingDeltaX: CGFloat
-		{
-			base.scrollingDeltaX
-		}
-		override var scrollingDeltaY: CGFloat
-		{
-			base.scrollingDeltaY
-		}
-		override var hasPreciseScrollingDeltas: Bool
-		{
-			base.hasPreciseScrollingDeltas
-		}
-		override var phase: NSEvent.Phase
-		{
-			base.phase
-		}
-		override var momentumPhase: NSEvent.Phase
-		{
-			base.momentumPhase
-		}
-		override var timestamp: TimeInterval
-		{
-			base.timestamp
-		}
-		override var modifierFlags: NSEvent.ModifierFlags
-		{
-			base.modifierFlags
-		}
-		override var isDirectionInvertedFromDevice: Bool
-		{
-			base.isDirectionInvertedFromDevice
+			switch self
+			{
+			case .began: .began
+			case .changed: .changed
+			case .ended: .ended
+			}
 		}
 	}
 
@@ -352,6 +329,14 @@ struct GitDiffScrollingTests
 		}
 	}
 
+	private final class DiffScrollDocumentView: NSView
+	{
+		override var isFlipped: Bool
+		{
+			true
+		}
+	}
+
 	private final class RecordingScrollView: NSScrollView
 	{
 		var events: [NSEvent] = []
@@ -359,6 +344,7 @@ struct GitDiffScrollingTests
 		override func scrollWheel(with event: NSEvent)
 		{
 			events.append(event)
+			super.scrollWheel(with: event)
 		}
 	}
 }

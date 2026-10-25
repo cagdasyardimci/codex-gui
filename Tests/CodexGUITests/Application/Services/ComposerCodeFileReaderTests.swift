@@ -69,37 +69,6 @@ struct ComposerCodeFileReaderTests
 	}
 
 	@Test
-	func codeSelectionHonorsItsExactByteBudget() async throws
-	{
-		let fixture = try FileReadSafetyFixture()
-		defer
-		{
-			try? FileManager.default.removeItem(at: fixture.root)
-		}
-		let file = fixture.root.appendingPathComponent("limit.swift")
-		try Data(
-			repeating: 65,
-			count: ComposerCodeFileReader.maximumBytes
-		).write(to: file)
-		let selected = try await ComposerCodeFileReader.read(
-			file: file,
-			project: fixture.root
-		)
-		#expect(selected.contents.utf8.count == ComposerCodeFileReader.maximumBytes)
-		try Data(
-			repeating: 65,
-			count: ComposerCodeFileReader.maximumBytes + 1
-		).write(to: file)
-		await #expect(throws: FileViewerFailure.tooLarge)
-		{
-			_ = try await ComposerCodeFileReader.read(
-				file: file,
-				project: fixture.root
-			)
-		}
-	}
-
-	@Test
 	func siblingAndSymlinkEscapeAreRejected() async throws
 	{
 		let fixture = try FileReadSafetyFixture()

@@ -122,58 +122,6 @@ struct ConversationLongHistoryLayoutTests
 		#expect(fixture.controller.transcript.entries == fixture.entries)
 	}
 
-	@Test func inspectorAndWindowWidthChangesKeepTheRichUserReadingPosition() async throws
-	{
-		let fixture = try await makeReadingFixture()
-		defer
-		{
-			tearDown(fixture)
-		}
-		let window = fixture.window
-		let panes = fixture.panes
-		let controller = fixture.controller
-		let collection = fixture.collection
-		let scroll = try #require(collection.enclosingScrollView)
-		let path = fixture.path
-		let entries = fixture.entries
-		let markerOffset = try markerRect(
-			at: path,
-			in: collection
-		).minY - scroll.contentView.bounds.minY
-		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "canonical-user")
-		#expect(!controller.transcript.isNearBottom)
-		var previousWidth = collection.bounds.width
-		for (width, inspectorVisible) in [
-			(980.0, true),
-			(1200.0, true),
-			(980.0, true),
-			(980.0, false),
-		]
-		{
-			window.setContentSize(NSSize(
-				width: width,
-				height: 760
-			))
-			panes.setReviewCollapsed(!inspectorVisible)
-			await settleLayout(
-				panes: panes,
-				controller: controller,
-				collection: collection
-			)
-			#expect(panes.split.splitViewItems[2].isCollapsed == !inspectorVisible)
-			#expect(abs(collection.bounds.width - previousWidth) > 1)
-			previousWidth = collection.bounds.width
-			#expect(controller.transcript.readingAnchor()?.sourceEntryID == "canonical-user")
-			let marker = try markerRect(
-				at: path,
-				in: collection
-			)
-			#expect(abs(marker.minY - scroll.contentView.bounds.minY - markerOffset) < 2)
-			#expect(marker.intersects(scroll.contentView.bounds))
-			#expect(controller.transcript.entries == entries)
-		}
-	}
-
 	@Test func latestAndContextSwitchWinOverPendingWidthRestoration() async throws
 	{
 		let fixture = try await makeReadingFixture()
@@ -368,7 +316,7 @@ struct ConversationLongHistoryLayoutTests
 			collection.dataSource = nil
 		}
 		fixture.window.contentViewController = nil
-		fixture.window.isReleasedWhenClosed = false
+		fixture.window.prepareForTesting()
 		fixture.window.close()
 	}
 

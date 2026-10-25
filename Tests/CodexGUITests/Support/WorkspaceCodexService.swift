@@ -198,7 +198,7 @@ final class WorkspaceCodexService: CodexService
 
 	func resumeThread(id: String) async throws -> ThreadDetail
 	{
-		readThreadDetails[id] ?? additionalThreads[id] ?? detail()
+		try await readThread(id: id)
 	}
 
 	func readThread(id: String) async throws -> ThreadDetail

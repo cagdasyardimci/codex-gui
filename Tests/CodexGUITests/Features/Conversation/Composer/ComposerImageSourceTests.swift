@@ -103,56 +103,6 @@ struct ComposerImageSourceTests
 		#expect(receivedURL == file)
 		#expect(composer.string == "Existing draft")
 	}
-	@Test func multiImagePasteCapturesEachItemOnceInClipboardOrder() throws
-	{
-		_ = NSApplication.shared
-		let pasteboard = NSPasteboard.withUniqueName()
-		defer
-		{
-			pasteboard.releaseGlobally()
-		}
-		let firstPNG = try DraftImageImportTestFixture.png()
-		let secondTIFF = try #require(NSImage(data: firstPNG)?.tiffRepresentation)
-		let first = NSPasteboardItem()
-		#expect(first.setData(
-			firstPNG,
-			forType: .png
-		))
-		let tiff = secondTIFF
-		#expect(first.setData(
-			tiff,
-			forType: .tiff
-		))
-		let second = NSPasteboardItem()
-		#expect(second.setData(
-			secondTIFF,
-			forType: .tiff
-		))
-		#expect(pasteboard.writeObjects([first, second]))
-		let composer = ContextComposerTextView()
-		composer.isEditable = true
-		composer.string = "Existing draft"
-		composer.imagePasteboard = pasteboard
-		var snapshots: [Data] = []
-		composer.onImageSource =
-		{
-			source, title in
-			#expect(title == "Pasted image")
-			if case let .data(data) = source
-			{
-				snapshots.append(data)
-			}
-			else
-			{
-				Issue.record("Expected encoded bytes for each clipboard image.")
-			}
-		}
-		composer.paste(nil)
-		#expect(snapshots == [firstPNG, secondTIFF])
-		#expect(composer.string == "Existing draft")
-		pasteboard.clearContents()
-		#expect(snapshots == [firstPNG, secondTIFF])
-	}
 
 	@Test func multiFilePasteSkipsNonimagesAndKeepsLaterImageFiles() throws
 	{

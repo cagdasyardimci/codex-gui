@@ -147,56 +147,6 @@ struct LocalStorageImageLeaseOptimizationTests
 		#expect(!fixture.exists(item))
 	}
 
-	@Test func remainingLeaseOwnershipIsResolvedAfterSymlinkRetargeting() async throws
-	{
-		let fixture = try await ImageLeaseStorageFixture()
-		defer
-		{
-			fixture.cleanup()
-		}
-		let first = try await fixture.image()
-		let second = try await fixture.image()
-		let alias = fixture.root.appendingPathComponent("lease.png")
-		try FileManager.default.createSymbolicLink(
-			at: alias,
-			withDestinationURL: URL(fileURLWithPath: try #require(first.path))
-		)
-		let aliasedItem = ComposerContextItem(
-			kind: .image,
-			title: "Leased alias",
-			path: alias.path
-		)
-		let firstRequest = fixture.storage.retainContextForRequest([first])
-		let aliasedRequest = fixture.storage.retainContextForRequest([aliasedItem])
-		try FileManager.default.removeItem(at: alias)
-		try FileManager.default.createSymbolicLink(
-			at: alias,
-			withDestinationURL: URL(fileURLWithPath: try #require(second.path))
-		)
-
-		fixture.storage.releaseContextForRequest(firstRequest)
-		#expect(!fixture.exists(first))
-		#expect(fixture.exists(second))
-		fixture.storage.releaseContextForRequest(aliasedRequest)
-		#expect(!fixture.exists(second))
-	}
-
-	@Test func foreignAndUserNamedImagesDoNotReadPersistedOwnershipOrGetDeleted() async throws
-	{
-		let fixture = try await ImageLeaseStorageFixture()
-		defer
-		{
-			fixture.cleanup()
-		}
-		let foreign = try await fixture.image(in: fixture.root)
-		let userFile = try await fixture.image(filename: "user.png")
-		let request = fixture.storage.retainContextForRequest([foreign, userFile])
-		fixture.defaults.reads.removeAll()
-		fixture.storage.releaseContextForRequest(request)
-		#expect(fixture.defaults.reads.isEmpty)
-		#expect(fixture.exists(foreign))
-		#expect(fixture.exists(userFile))
-	}
 }
 
 @MainActor

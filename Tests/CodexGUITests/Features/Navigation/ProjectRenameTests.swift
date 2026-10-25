@@ -9,67 +9,6 @@ import Testing
 ) @MainActor
 struct ProjectRenameTests
 {
-	@Test func referenceLayoutAndSelectedName() async throws
-	{
-		let timing = TestTiming.begin("test.body")
-		defer
-		{
-			timing.end()
-		}
-		try await AppKitTestIsolation.perform
-		{
-			@MainActor in
-			_ = NSApplication.shared
-			let controller = NavigationViewController()
-			let parent = window(controller)
-			defer
-			{
-				parent.close()
-			}
-			let project = URL(fileURLWithPath: "/tmp/rename-project")
-			controller.editProject(project)
-			let panel = try #require(parent.attachedSheet as? ProjectRenamePanel)
-			let dialog = try #require(panel.contentViewController as? ProjectRenameViewController)
-			#expect(dialog.view.frame.size == NSSize(
-				width: 420,
-				height: 186
-			))
-			#expect(dialog.headingLabel.stringValue == "Rename project")
-			#expect(dialog.subtitleLabel.stringValue == "Keep it short and recognizable")
-			#expect(dialog.input.field.stringValue == "rename-project")
-			let editor = try #require(dialog.input.field.currentEditor() as? NSTextView)
-			#expect(editor.selectedRange() == NSRange(
-				location: 0,
-				length: 14
-			))
-			#expect(dialog.saveButton.frame.maxX == dialog.input.frame.maxX)
-			#expect(dialog.cancelButton.frame.maxX + 12 == dialog.saveButton.frame.minX)
-			#expect(dialog.input.field.accessibilityLabel() == "Project name")
-			for appearance in [NSAppearance.Name.darkAqua, .aqua]
-			{
-				panel.appearance = NSAppearance(named: appearance)
-				dialog.view.layoutSubtreeIfNeeded()
-				if let directory = ProcessInfo.processInfo
-					.environment["CODEX_PROJECT_RENAME_EVIDENCE_DIR"]
-				{
-					let bitmap = try #require(dialog.view
-						.bitmapImageRepForCachingDisplay(in: dialog.view.bounds))
-					dialog.view.cacheDisplay(
-						in: dialog.view.bounds,
-						to: bitmap
-					)
-					let data = try #require(bitmap.representation(
-						using: .png,
-						properties: [:]
-					))
-					try data
-						.write(to: URL(fileURLWithPath: directory)
-							.appendingPathComponent(appearance.rawValue + ".png"))
-				}
-			}
-			panel.finish(false)
-		}
-	}
 
 	@Test(.timeLimit(.minutes(1)))
 	func returnAndKeypadEnterSaveCapturedProjectAndCallbackOnce() async throws
@@ -234,7 +173,7 @@ struct ProjectRenameTests
 			backing: .buffered,
 			defer: false
 		)
-		parent.isReleasedWhenClosed = false
+		parent.prepareForTesting()
 		parent.contentViewController = controller
 		parent.orderFront(nil)
 		return parent

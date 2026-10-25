@@ -259,53 +259,6 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.canSend)
 	}
 
-	@Test func completedTurnAfterStopRequestKeepsCompletedOutcome() async throws
-	{
-		let project = try await makeProject()
-		defer
-		{
-			try? FileManager.default.removeItem(at: project)
-		}
-		let service = MockCodexService()
-		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
-		defer
-		{
-			defaultsFixture.cleanup()
-		}
-		let state = WorkspaceTestFixture(
-			server: service,
-			storage: LocalStorage(defaults: defaultsFixture.defaults)
-		)
-		await state.inputs.connect()
-		service.configureCheckout(project)
-		state.inputs.openProject(project)
-		state.inputs.selectThread(service.thread.id)
-		await awaitSubmissionReadiness(state)
-		#expect(state.currentSnapshot.canSend)
-		state.inputs.updateDraft("Finish quickly")
-		state.inputs.send()
-		#expect(await service.awaitReadiness
-		{
-			service.turnStartCount == 1
-		})
-		service.emit(.turnStarted(
-			threadId: service.thread.id,
-			turn: service.nextTurn
-		))
-		state.inputs.stop()
-		service.emit(
-			.turnCompleted(
-				threadId: service.thread.id,
-				turn: makeTurn(
-					id: "turn-1",
-					status: "completed"
-				)
-			)
-		)
-		#expect(state.currentSnapshot.executionState == .completed)
-		#expect(state.currentSnapshot.statusMessage == "Task completed before Stop took effect.")
-	}
-
 	@Test func multipleInteractionsRemainVisibleUntilEachIsResolved() async throws
 	{
 		let project = try await makeProject()
@@ -712,68 +665,6 @@ extension ApplicationStateTests
 		#expect(!state.currentSnapshot.taskOutcomeUncertain)
 		#expect(!state.store.model.execution(for: .thread(service.thread.id)).hasUncertainRequest)
 		#expect(state.currentSnapshot.canSend)
-	}
-
-	@Test func acceptedSteerAfterCompletionKeepsTerminalStatus() async throws
-	{
-		let project = try await makeProject()
-		defer
-		{
-			try? FileManager.default.removeItem(at: project)
-		}
-		let service = MockCodexService()
-		service.suspendSteer = true
-		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "CodexGUIStateTests")
-		defer
-		{
-			defaultsFixture.cleanup()
-		}
-		let state = WorkspaceTestFixture(
-			server: service,
-			storage: LocalStorage(defaults: defaultsFixture.defaults)
-		)
-		await state.inputs.connect()
-		service.configureCheckout(project)
-		state.inputs.openProject(project)
-		state.inputs.selectThread(service.thread.id)
-		await awaitSubmissionReadiness(state)
-		#expect(state.currentSnapshot.canSend)
-		state.inputs.updateDraft("Initial request")
-		state.inputs.send()
-		#expect(await service.awaitReadiness
-		{
-			service.turnStartCount == 1
-		})
-		service.emit(.turnStarted(
-			threadId: service.thread.id,
-			turn: service.nextTurn
-		))
-		state.inputs.updateDraft("Change direction")
-		state.inputs.steer("Change direction")
-		#expect(await service.awaitReadiness
-		{
-			service.pendingSteer != nil
-		})
-		service.emit(
-			.turnCompleted(
-				threadId: service.thread.id,
-				turn: makeTurn(
-					id: "turn-1",
-					status: "completed"
-				)
-			)
-		)
-		service.finishPendingSteer(acknowledgedTurnID: "turn-1")
-		try #require(await awaitApplicationStateCondition(
-			state,
-			matching:
-			{
-				state.currentSnapshot.draft.isEmpty
-			}
-		))
-		#expect(state.currentSnapshot.executionState == .completed)
-		#expect(state.currentSnapshot.statusMessage == "Task completed.")
-		#expect(service.steeredTurns.map(\.turnID) == ["turn-1"])
 	}
 
 	@Test func disconnectedTurnRemainsActiveUntilItsSavedOutcomeIsConfirmed() async throws

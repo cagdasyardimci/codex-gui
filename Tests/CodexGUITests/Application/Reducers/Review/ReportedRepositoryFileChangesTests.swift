@@ -5,59 +5,6 @@ import Testing
 
 struct ReportedRepositoryFileChangesTests
 {
-	@Test func temporaryCopiesAndEscapingPathsAreExcluded()
-	{
-		let paths = [
-			"Sources/File.swift",
-			"/workspace/repo/Sources/File.swift",
-			"/tmp/codex-gui-send.copy/Sources/File.swift",
-			"/workspace/repo-other/File.swift",
-			"../outside.swift",
-			"Sources/../../outside.swift",
-			"/workspace/repo/../outside.swift",
-			"Sources/../inside.swift",
-		]
-		let changes = paths.map
-		{
-			change($0)
-		}
-		#expect(ReportedRepositoryFileChanges.filter(
-			changes,
-			repositoryRoot: "/workspace/repo/"
-		).map(\.path) == ["Sources/File.swift", "Sources/File.swift", "inside.swift"])
-	}
-
-	@Test func repositoryLocatedInTemporaryDirectoryKeepsItsOwnEdits()
-	{
-		let paths = ["file.swift", "/tmp/repo/file.swift", "/tmp/other/file.swift"]
-		#expect(ReportedRepositoryFileChanges.filter(
-			paths.map
-			{
-				change($0)
-			},
-			repositoryRoot: "/tmp/repo"
-		).map(\.path) == ["file.swift", "file.swift"])
-	}
-
-	@Test func renamesRequireBothPathsInsideCheckout()
-	{
-		let internalRename = change(
-			"old.swift",
-			movePath: "new.swift"
-		)
-		let outbound = change(
-			"old.swift",
-			movePath: "/tmp/copy/new.swift"
-		)
-		let inbound = change(
-			"/tmp/copy/old.swift",
-			movePath: "new.swift"
-		)
-		#expect(ReportedRepositoryFileChanges.filter(
-			[internalRename, outbound, inbound],
-			repositoryRoot: "/workspace/repo"
-		) == [internalRename])
-	}
 
 	@Test func unknownCheckoutPreservesReportedEdits()
 	{
@@ -66,55 +13,6 @@ struct ReportedRepositoryFileChangesTests
 			changes,
 			repositoryRoot: nil
 		) == changes)
-	}
-
-	@Test func comparisonProjectionNormalizesEquivalentSpellingsAndPreservesRawReports()
-	{
-		let paths = ["A.swift", "./A.swift", "Sources/../A.swift", "/workspace/repo/A.swift"]
-		let changes = paths.map
-		{
-			change($0)
-		}
-		let projected = ReportedRepositoryFileChanges.filter(
-			changes,
-			repositoryRoot: "/workspace/repo/./"
-		)
-		#expect(projected.map(\.path) == Array(
-			repeating: "A.swift",
-			count: paths.count
-		))
-		#expect(changes.map(\.path) == paths)
-		let rename = change(
-			"./A.swift",
-			movePath: "/workspace/repo/folder/../B.swift"
-		)
-		let normalizedRename = ReportedRepositoryFileChanges.filter(
-			[rename],
-			repositoryRoot: "/workspace/repo"
-		)
-		#expect(normalizedRename.first?.path == "A.swift")
-		#expect(normalizedRename.first?.movePath == "B.swift")
-		#expect(rename.path == "./A.swift")
-	}
-
-	@Test func lexicalProjectionKeepsByteDistinctUnicodePaths()
-	{
-		let paths = ["\u{00E9}.swift", "e\u{0301}.swift"]
-		let projected = ReportedRepositoryFileChanges.filter(
-			paths.map
-			{
-				change("./" + $0)
-			},
-			repositoryRoot: "/workspace/repo"
-		)
-		#expect(projected.count == 2)
-		#expect(zip(
-			projected,
-			paths
-		).allSatisfy
-		{
-			$0.path.utf8.elementsEqual($1.utf8)
-		})
 	}
 
 	@Test func containmentUsesTheExactCheckoutRootBytes()

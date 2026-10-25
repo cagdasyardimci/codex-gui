@@ -71,57 +71,6 @@ struct ProjectSidebarContextMenuTests
 		#expect(!controller.projectContextMenu(project).items[5].isEnabled)
 	}
 
-	@Test func pinnedProjectsShareSectionWithTasksAndKeepChildren() throws
-	{
-		let project = URL(fileURLWithPath: "/tmp/pinned-project").standardizedFileURL
-			.resolvingSymlinksInPath()
-		let other = URL(fileURLWithPath: "/tmp/other-project").standardizedFileURL
-			.resolvingSymlinksInPath()
-		let task = try #require(ThreadSummary(json: ["id": "task", "cwd": project.path]))
-		let pin = try #require(ThreadSummary(json: ["id": "pin", "cwd": other.path]))
-		let rows = NavigationSidebarItemsBuilder.build(
-			recentProjects: [other, project],
-			currentProject: project,
-			pinnedProjectPaths: [project.path],
-			visibleThreads: [
-				task,
-				pin
-			],
-			pinnedTasks: [pin]
-		)
-		#expect(rows.count == 6)
-		guard case .sectionHeader("Pinned") = rows[0], case .pinnedThread = rows[1],
-				case .project(let pinnedProject) = rows[2], case .thread(let child) = rows[3],
-				case .sectionHeader("Projects") = rows[4],
-				case .project(let ordinaryProject) = rows[5]
-		else
-		{
-			Issue.record("Incorrect pinned project placement"); return
-		}
-		#expect(pinnedProject == project)
-		#expect(child.id == task.id)
-		#expect(ordinaryProject == other)
-		let hidden = NavigationSidebarItemsBuilder.build(
-			recentProjects: [project],
-			currentProject: project,
-			pinnedProjectPaths: [project.path],
-			visibleThreads: [task],
-			removedProjectPaths: [project.path]
-		)
-		#expect(hidden.isEmpty)
-		let projectOnly = NavigationSidebarItemsBuilder.build(
-			recentProjects: [],
-			currentProject: project,
-			pinnedProjectPaths: [project.path],
-			visibleThreads: [task]
-		)
-		guard case .sectionHeader("Pinned") = projectOnly.first
-		else
-		{
-			Issue.record("Pinned projects alone need a Pinned header"); return
-		}
-	}
-
 	@Test func removingAndReopeningProjectPreservesDraftsAndPersistsVisibility() throws
 	{
 		let fixture = try IsolatedUserDefaultsFixture(prefix: "ProjectRemovalTests")

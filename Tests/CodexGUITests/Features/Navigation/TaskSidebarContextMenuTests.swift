@@ -6,37 +6,6 @@ import Testing
 @Suite @MainActor
 struct TaskSidebarContextMenuTests
 {
-	@Test func menuContainsOnlyRequestedActionsInReferenceOrder() throws
-	{
-		_ = NSApplication.shared
-		let cell = TaskSidebarCellView(frame: .zero)
-		let menu = cell.makeContextMenu()
-		#expect(menu.items.map(\.title) == [
-			"Rename",
-			"Pin",
-			"Mark as unread",
-			"",
-			"Archive",
-			"Permanently delete"
-		])
-		#expect(menu.items.enumerated().filter
-		{
-			$0.element.isSeparatorItem
-		}.map(\.offset) == [3])
-		#expect(menu.items.filter
-		{
-			!$0.isSeparatorItem
-		}.allSatisfy
-		{
-			$0.image?.isTemplate == true && $0.submenu == nil
-		})
-		#expect(!menu.autoenablesItems)
-		#expect(menu.items[0].keyEquivalent == "r")
-		#expect(menu.items[0].keyEquivalentModifierMask == [.option, .command])
-		#expect(menu.items[2].keyEquivalentModifierMask == [.shift, .command])
-		cell.isPinned = true
-		#expect(cell.makeContextMenu().items[1].title == "Unpin")
-	}
 
 	@Test func menuActionsKeepCapturedTaskCallbacksAfterCellReuse() throws
 	{

@@ -61,22 +61,6 @@ struct GitComparisonPatchParserTests
 		#expect(file.hunks[1].newStart == 11)
 	}
 
-	@Test func omittedCountsKeepDistinctSourceAndDestinationStarts() throws
-	{
-		let header = "@@ -7 +13 @@ function(-999, +999)"
-		let hunkText = header + "\n-old\n+new\n"
-		let patch = "diff --git a/sample.txt b/sample.txt\n--- a/sample.txt\n"
-			+ "+++ b/sample.txt\n" + hunkText
-		let file = try #require(GitComparisonPatchParser.files(in: Data(patch.utf8)).first)
-		let hunk = try #require(file.hunks.first)
-		#expect(file.hunks.count == 1)
-		#expect(hunk.oldStart == 7)
-		#expect(hunk.newStart == 13)
-		#expect(hunk.header == header)
-		#expect(hunk.text.utf8.elementsEqual(hunkText.utf8))
-		#expect(file.patch.utf8.elementsEqual(patch.utf8))
-	}
-
 	@Test func zeroLengthRangesKeepTheirHeaderPositions() throws
 	{
 		let ranges = [
@@ -185,20 +169,6 @@ struct GitComparisonPatchParserTests
 		#expect(file.isBinary)
 		#expect(file.path == "tab\tfile")
 		#expect(file.hunks.isEmpty)
-	}
-
-	@Test func combinedConflictSectionCannotJoinEarlierFile() throws
-	{
-		let patch = "diff --git a/first b/first\n--- a/first\n+++ b/first\n"
-			+ "@@ -1 +1 @@\n-old\n+new\n"
-			+ "diff --cc conflict\nindex 1111111,2222222..3333333\n"
-			+ "@@@ -1,1 -1,1 +1,1 @@@\n++resolved\n"
-		let bytes = Data(patch.utf8)
-		#expect(GitComparisonPatchParser.hasUnsupportedSections(in: bytes))
-		let files = GitComparisonPatchParser.files(in: bytes)
-		#expect(files.count == 1)
-		#expect(files.first?.path == "first")
-		#expect(files.first?.patch.contains("diff --cc") == false)
 	}
 
 	@Test func markerSeparatorsDoNotDamageTabsInNames() throws

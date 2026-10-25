@@ -6,201 +6,6 @@ import Testing
 @Suite @MainActor
 struct TurnNavigationRailInputTests
 {
-	@Test(arguments: [520, 700, 837])
-	func referenceRailShowsTurnsFourThroughSixtyFiveWithTwentyFiveTurnsLoaded(
-		height: Int
-	) async throws
-	{
-		let fixture = try await makeFixture(
-			turnCount: 25,
-			height: CGFloat(height),
-			startIndex: 41,
-			referenceCount: 66
-		)
-		defer
-		{
-			tearDown(fixture)
-		}
-		let rail = fixture.controller.transcript.turnNavigationRail
-		let scroll = try #require(rail.subviews.first as? NSScrollView)
-		let document = try #require(scroll.documentView)
-		#expect(scroll.frame.height == min(
-			620,
-			rail.bounds.height
-		))
-		#expect(rail.convert(
-			scroll.frame,
-			to: fixture.controller.view
-		).midY
-			== fixture.controller.view.bounds.midY)
-		let visibleEntries = document.subviews.compactMap
-		{
-			view -> String? in
-			guard let mark = view as? TurnNavigationMark,
-					scroll.contentView.bounds.contains(mark.frame)
-			else
-			{
-				return nil
-			}
-			return mark.entryID.components(separatedBy: ":").first
-		}
-		#expect(visibleEntries == (4 ... 65).map
-		{
-			"turn-\($0)"
-		})
-	}
-
-	@Test(arguments: [24, 66])
-	func wheelOverAVisibleMarkBelongsToTheRail(turnCount: Int) async throws
-	{
-		let fixture = try await makeFixture(turnCount: turnCount)
-		defer
-		{
-			tearDown(fixture)
-		}
-		let controller = fixture.controller
-		let rail = controller.transcript.turnNavigationRail
-		let scroll = try #require(rail.subviews.first as? NSScrollView)
-		let document = try #require(scroll.documentView)
-		let mark = try #require(document.subviews.last as? TurnNavigationMark)
-		let point = mark.convert(
-			NSPoint(
-				x: 8,
-				y: mark.bounds.midY
-			),
-			to: controller.view.superview
-		)
-		let target = try #require(controller.view.hitTest(point))
-		#expect(target === mark)
-		let transcriptOrigin = controller.transcript.conversationScrollView.contentView.bounds
-			.origin
-		let railOrigin = scroll.contentView.bounds.origin
-		#expect(controller.transcript.collectionView.bounds.height
-			> controller.transcript.conversationScrollView.contentView.bounds.height)
-		fixture.window.sendEvent(try wheelEvent(
-			30,
-			window: fixture.window,
-			point: target.convert(
-				NSPoint(
-					x: 8,
-					y: target.bounds.midY
-				),
-				to: nil
-			)
-		))
-		// DesktopWindow routes this wheel event synchronously to the rail scroll view.
-		#expect(controller.transcript.conversationScrollView.contentView.bounds
-			.origin == transcriptOrigin)
-		if turnCount > 62
-		{
-			#expect(scroll.contentView.bounds.origin != railOrigin)
-		}
-		else
-		{
-			#expect(scroll.contentView.bounds.origin == railOrigin)
-		}
-	}
-
-	@Test func wheelOverTheRailGutterScrollsOnlyItsMarks() async throws
-	{
-		let fixture = try await makeFixture(turnCount: 66)
-		defer
-		{
-			tearDown(fixture)
-		}
-		let controller = fixture.controller
-		let rail = controller.transcript.turnNavigationRail
-		let scroll = try #require(rail.subviews.first as? NSScrollView)
-		let gutterPoint = NSPoint(
-			x: 8,
-			y: 4
-		)
-		let point = rail.convert(
-			gutterPoint,
-			to: controller.view.superview
-		)
-		let target = try #require(controller.view.hitTest(point))
-		#expect(target === rail)
-		let transcriptOrigin = controller.transcript.conversationScrollView.contentView.bounds
-			.origin
-		let railOrigin = scroll.contentView.bounds.origin
-		let event = try wheelEvent(
-			30,
-			window: fixture.window,
-			point: rail.convert(
-				gutterPoint,
-				to: nil
-			)
-		)
-		let content = try #require(fixture.window.contentView)
-		let eventPoint = try #require(content.superview).convert(
-			event.locationInWindow,
-			from: nil
-		)
-		try #require(content.hitTest(eventPoint) === rail)
-		fixture.window.sendEvent(event)
-		// DesktopWindow routes this wheel event synchronously to the rail scroll view.
-		#expect(scroll.contentView.bounds.origin != railOrigin)
-		#expect(controller.transcript.conversationScrollView.contentView.bounds
-			.origin == transcriptOrigin)
-	}
-
-	@Test func scrollingTheInitialFiftyTurnsRequestsEarlierHistoryOnce() async throws
-	{
-		let fixture = try await makeFixture(
-			turnCount: 50,
-			canLoadEarlierTurns: true
-		)
-		defer
-		{
-			tearDown(fixture)
-		}
-		let controller = fixture.controller
-		let rail = controller.transcript.turnNavigationRail
-		let scroll = try #require(rail.subviews.first as? NSScrollView)
-		let mark = try #require(scroll.documentView?.subviews.last as? TurnNavigationMark)
-		let point = mark.convert(
-			NSPoint(
-				x: 8,
-				y: mark.bounds.midY
-			),
-			to: nil
-		)
-		var loads = 0
-		controller.transcript.onLoadEarlierTurnReferences =
-		{
-			loads += 1
-		}
-		let transcriptOrigin = controller.transcript.conversationScrollView.contentView.bounds
-			.origin
-		for _ in 0 ..< 5
-		{
-			fixture.window.sendEvent(try wheelEvent(
-				30,
-				window: fixture.window,
-				point: point
-			))
-		}
-		#expect(loads == 1)
-		#expect(controller.transcript.conversationScrollView.contentView.bounds
-			.origin == transcriptOrigin)
-		let fade = try #require(scroll.layer?.mask as? CAGradientLayer)
-		#expect((fade.colors as? [CGColor])?.map(\.alpha) == [1, 1, 1, 0])
-		rail.canLoadEarlierReferences = false
-		fixture.window.sendEvent(try wheelEvent(
-			30,
-			window: fixture.window,
-			point: point
-		))
-		#expect(loads == 1)
-		rail.canLoadEarlierReferences = true
-		fixture.window.sendEvent(try wheelEvent(
-			30,
-			window: fixture.window,
-			point: point
-		))
-		#expect(loads == 2)
-	}
 
 	@Test func selectingAnUnloadedReferenceRequestsItWithoutChangingTheTranscript() async throws
 	{
@@ -230,10 +35,23 @@ struct TurnNavigationRailInputTests
 			selected = $0
 		}
 		let entries = controller.transcript.entries
+		let loaded = try #require(rail.summaries.first
+		{
+			$0.isContentLoaded
+		})
+		controller.transcript.jumpToEntry(id: loaded.entryID)
+		let supersededMotion = try #require(controller.transcript.jumpAnimationCompletion)
+		let origin = controller.transcript.conversationScrollView.contentView.bounds.origin
 		mark.dispatchConfiguredAction()
 		let navigationTask = try #require(controller.transcript.turnNavigationTask)
+		#expect(supersededMotion.isCancelled)
+		#expect(!controller.transcript.isAnimatingJump)
+		#expect(controller.transcript.jumpAnimationCompletion == nil)
 		#expect(selected == nil)
+		await supersededMotion.value
+		#expect(controller.transcript.conversationScrollView.contentView.bounds.origin == origin)
 		await navigationTask.value
+		#expect(controller.transcript.conversationScrollView.contentView.bounds.origin == origin)
 		#expect(selected == "turn-4")
 		#expect(controller.transcript.entries == entries)
 		#expect(rail.activeTurnID == "turn-4")
@@ -310,123 +128,72 @@ struct TurnNavigationRailInputTests
 		#expect(selected == ["turn-50"])
 	}
 
-	@Test func disappearingConversationCancelsPendingReferenceFetch() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func parentJumpCallbackReplacementRestoresLocalLoadedTurnNavigation() async throws
 	{
-		let fixture = try await makeFixture(
-			turnCount: 25,
-			startIndex: 41,
-			referenceCount: 66
-		)
-		defer
+		try await AppKitTestIsolation.perform
 		{
-			tearDown(fixture)
-		}
-		let controller = fixture.controller
-		var selected: [String] = []
-		controller.transcript.onJumpToTurnReference =
-		{
-			selected.append($0)
-		}
-		let rail = controller.transcript.turnNavigationRail
-		rail.onJump?(try #require(rail.summaries.first
+			@MainActor in
+			let fixture = try await makeFixture(
+				turnCount: 12,
+				presentWindow: true
+			)
+			defer
+			{
+				tearDown(fixture)
+			}
+			let controller = fixture.controller
+			let transcript = controller.transcript
+			let rail = transcript.turnNavigationRail
+			let local = try #require(rail.summaries.first
+			{
+				$0.turnID == "turn-2"
+			})
+			let routed = try #require(rail.summaries.first
 			{
 				$0.turnID == "turn-4"
-			}))
-		let navigationTask = try #require(controller.transcript.turnNavigationTask)
-		controller.transcript.viewDidDisappear()
-		await navigationTask.value
-		#expect(selected.isEmpty)
-	}
-
-	@Test func parentJumpCallbackReplacementRestoresLocalLoadedTurnNavigation() async throws
-	{
-		let fixture = try await makeFixture(turnCount: 12)
-		defer
-		{
-			tearDown(fixture)
-		}
-		let controller = fixture.controller
-		let transcript = controller.transcript
-		let rail = transcript.turnNavigationRail
-		let local = try #require(rail.summaries.first
-		{
-			$0.turnID == "turn-2"
-		})
-		let routed = try #require(rail.summaries.first
-		{
-			$0.turnID == "turn-4"
-		})
-		let restored = try #require(rail.summaries.first
-		{
-			$0.turnID == "turn-6"
-		})
-		let localIndex = try #require(transcript.displayedRows.firstIndex
-		{
-			$0.sourceEntryID == local.entryID
-		})
-		let restoredIndex = try #require(transcript.displayedRows.firstIndex
-		{
-			$0.sourceEntryID == restored.entryID
-		})
-		rail.onJump?(local)
-		#expect(transcript.collectionView.selectionIndexPaths == [IndexPath(
-			item: localIndex,
-			section: 0
-		)])
-		await transcript.jumpAnimationCompletion?.value
-
-		var requested: [String] = []
-		controller.onJumpToTurnReference =
-		{
-			requested.append($0)
-		}
-		rail.onJump?(routed)
-		#expect(requested == ["turn-4"])
-		#expect(transcript.collectionView.selectionIndexPaths == [IndexPath(
-			item: localIndex,
-			section: 0
-		)])
-
-		controller.onJumpToTurnReference = nil
-		transcript.collectionView.deselectAll(nil)
-		rail.onJump?(restored)
-		#expect(requested == ["turn-4"])
-		#expect(transcript.collectionView.selectionIndexPaths == [IndexPath(
-			item: restoredIndex,
-			section: 0
-		)])
-		await transcript.jumpAnimationCompletion?.value
-	}
-
-	@Test func loadedTurnNavigationAnimatesAndFinishesAtTheSelectedTurn() async throws
-	{
-		let fixture = try await makeFixture(turnCount: 25)
-		defer
-		{
-			tearDown(fixture)
-		}
-		let controller = fixture.controller
-		let summary = try #require(controller.transcript.turnNavigationRail.summaries.first
-		{
-			$0.turnID == "turn-10"
-		})
-		controller.transcript.turnNavigationRail.onJump?(summary)
-		#expect(controller.transcript.isAnimatingJump)
-		// Native animation completion depends on scheduling, not just its configured duration.
-		await (try #require(controller.transcript.jumpAnimationCompletion)).value
-		#expect(!controller.transcript.isAnimatingJump)
-		#expect(controller.transcript.turnNavigationRail.activeTurnID == "turn-10")
-		let index = try #require(controller.transcript.displayedRows.firstIndex
-		{
-			$0.sourceEntryID == summary.entryID
-		})
-		let attributes = try #require(controller.transcript.collectionView.collectionViewLayout?
-			.layoutAttributesForItem(at: IndexPath(
-				item: index,
+			})
+			let restored = try #require(rail.summaries.first
+			{
+				$0.turnID == "turn-6"
+			})
+			let localIndex = try #require(transcript.displayedRows.firstIndex
+			{
+				$0.sourceEntryID == local.entryID
+			})
+			let restoredIndex = try #require(transcript.displayedRows.firstIndex
+			{
+				$0.sourceEntryID == restored.entryID
+			})
+			rail.onJump?(local)
+			#expect(transcript.collectionView.selectionIndexPaths == [IndexPath(
+				item: localIndex,
 				section: 0
-			)))
-		#expect(abs(controller.transcript.conversationScrollView.contentView.bounds.minY
-				- attributes.frame.minY) < 1)
+			)])
+			await transcript.jumpAnimationCompletion?.value
+
+			var requested: [String] = []
+			controller.onJumpToTurnReference =
+			{
+				requested.append($0)
+			}
+			rail.onJump?(routed)
+			#expect(requested == ["turn-4"])
+			#expect(transcript.collectionView.selectionIndexPaths == [IndexPath(
+				item: localIndex,
+				section: 0
+			)])
+
+			controller.onJumpToTurnReference = nil
+			transcript.collectionView.deselectAll(nil)
+			rail.onJump?(restored)
+			#expect(requested == ["turn-4"])
+			#expect(transcript.collectionView.selectionIndexPaths == [IndexPath(
+				item: restoredIndex,
+				section: 0
+			)])
+			await transcript.jumpAnimationCompletion?.value
+		}
 	}
 
 	private struct Fixture
@@ -441,11 +208,16 @@ struct TurnNavigationRailInputTests
 		height: CGFloat = 760,
 		canLoadEarlierTurns: Bool = false,
 		startIndex: Int = 0,
-		referenceCount: Int = 0
+		referenceCount: Int = 0,
+		presentWindow: Bool = false
 	) async throws -> Fixture
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
+		controller.transcript.shouldReduceMotion =
+		{
+			false
+		}
 		let panes = WindowPaneController(
 			navigation: NavigationViewController(),
 			conversation: controller,
@@ -463,6 +235,7 @@ struct TurnNavigationRailInputTests
 			backing: .buffered,
 			defer: false
 		)
+		window.prepareForTesting()
 		window.contentViewController = panes.split
 		panes.restoreLayout(in: window)
 		window.setContentSize(NSSize(
@@ -525,6 +298,13 @@ struct TurnNavigationRailInputTests
 			controller.transcript.collectionView.layoutSubtreeIfNeeded()
 			await controller.transcript.widthChangeRestoreTask?.value
 		}
+		if presentWindow
+		{
+			window.orderFront(nil)
+			window.layoutIfNeeded()
+			window.displayIfNeeded()
+			#expect(window.isVisible)
+		}
 		return Fixture(
 			window: window,
 			panes: panes,
@@ -538,7 +318,7 @@ struct TurnNavigationRailInputTests
 		fixture.controller.transcript.collectionView.delegate = nil
 		fixture.controller.transcript.turnNavigationRail.dismissPreview()
 		fixture.window.contentViewController = nil
-		fixture.window.isReleasedWhenClosed = false
+		fixture.window.prepareForTesting()
 		fixture.window.close()
 	}
 

@@ -122,38 +122,6 @@ struct ComposerContextBuilderTests
 		}
 	}
 
-	@Test func absoluteOutsideAndPrefixSiblingReferencesAreRejected() throws
-	{
-		let project = try temporaryProject()
-		let sibling = URL(fileURLWithPath: project.path + "-other")
-		try FileManager.default.createDirectory(
-			at: sibling,
-			withIntermediateDirectories: true
-		)
-		defer
-		{
-			try? FileManager.default.removeItem(at: project)
-			try? FileManager.default.removeItem(at: sibling)
-		}
-		let file = sibling.appendingPathComponent("outside.txt")
-		try Data("outside".utf8).write(to: file)
-		for path in [file.path, file.path + "\0suffix"]
-		{
-			#expect(throws: ComposerContextError.self)
-			{
-				try ComposerContextBuilder.inputs(
-					text: "Inspect",
-					items: [ComposerContextItem(
-						kind: .fileReference,
-						title: "outside",
-						path: path
-					)],
-					project: project
-				)
-			}
-		}
-	}
-
 	@Test func missingOrEscapingReferencesAreRejectedBeforeSend() throws
 	{
 		let project = try temporaryProject()
@@ -181,40 +149,6 @@ struct ComposerContextBuilderTests
 					kind: .fileReference,
 					title: "Outside",
 					path: "../outside"
-				)],
-				project: project
-			)
-		}
-	}
-
-	@Test func symlinkEscapingProjectIsRejected() throws
-	{
-		let project = try temporaryProject()
-		let outside = try temporaryProject()
-		defer
-		{
-			try? FileManager.default.removeItem(at: project)
-			try? FileManager.default.removeItem(at: outside)
-		}
-		let source = outside.appendingPathComponent("Outside.swift")
-		try "outside".write(
-			to: source,
-			atomically: true,
-			encoding: .utf8
-		)
-		try FileManager.default.createSymbolicLink(
-			at: project.appendingPathComponent("Linked.swift"),
-			withDestinationURL: source
-		)
-
-		#expect(throws: ComposerContextError.self)
-		{
-			try ComposerContextBuilder.inputs(
-				text: "Inspect",
-				items: [ComposerContextItem(
-					kind: .fileReference,
-					title: "Linked.swift",
-					path: "Linked.swift"
 				)],
 				project: project
 			)

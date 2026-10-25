@@ -22,7 +22,7 @@ struct GitFileJumpAppearanceTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.appearance = NSAppearance(named: .aqua)
 		defer
 		{

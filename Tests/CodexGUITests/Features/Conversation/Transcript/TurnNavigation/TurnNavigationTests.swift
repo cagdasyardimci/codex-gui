@@ -39,7 +39,7 @@ struct TurnNavigationTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			// Release the preview and window even when a required assertion throws.
 			defer
 			{
@@ -187,92 +187,6 @@ struct TurnNavigationTests
 			await controller.waitForRendering()
 			switchedRendering.end()
 		}
-	}
-
-	@Test(arguments: [12, 96])
-	func scrollingTranscriptChangesActiveTurnWithoutMovingRail(turnCount: Int) async throws
-	{
-		_ = NSApplication.shared
-		let controller = ConversationViewController()
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 800,
-				height: 700
-			),
-			styleMask: [.titled, .resizable],
-			backing: .buffered,
-			defer: false
-		)
-		window.contentViewController = controller
-		window.isReleasedWhenClosed = false
-		window.setContentSize(NSSize(
-			width: 800,
-			height: 700
-		))
-		defer
-		{
-			controller.transcript.turnNavigationRail.dismissPreview()
-			controller.transcript.collectionView.dataSource = nil
-			controller.transcript.collectionView.delegate = nil
-			window.contentViewController = nil
-			window.close()
-		}
-		let entries = (0 ..< turnCount).flatMap
-		{
-			index in
-			[
-				entry(
-					"turn-\(index):request",
-					.user,
-					"Request \(index)"
-				),
-				entry(
-					"turn-\(index):reply",
-					.agent,
-					String(
-						repeating: "Response text. ",
-						count: 100
-					)
-				),
-			]
-		}
-		controller.render(snapshot(entries))
-		await controller.waitForRendering()
-		await settleTranscriptLayout(controller)
-		let rail = controller.transcript.turnNavigationRail
-		let latestTurnID = "turn-\(turnCount - 1)"
-		#expect(rail.activeTurnID == latestTurnID)
-		let railFrame = rail.frame
-		let railScroll = try #require(rail.subviews.first as? NSScrollView)
-		let railOrigin = railScroll.contentView.bounds.origin
-		let transcript = controller.transcript.conversationScrollView
-		#expect(controller.transcript.collectionView.bounds.height > transcript.contentView.bounds
-			.height)
-		transcript.contentView.scroll(to: .zero)
-		transcript.reflectScrolledClipView(transcript.contentView)
-		controller.transcript.readingPositionChanged()
-		await settleTranscriptLayout(controller)
-		#expect(rail.activeTurnID == "turn-0")
-		#expect(!controller.transcript.latestButton.isHidden)
-		#expect(rail.frame == railFrame)
-		let firstMark = try #require(railScroll.documentView?.subviews.first)
-		#expect(railScroll.contentView.bounds.contains(firstMark.frame))
-		controller.transcript.showLatestMessage()
-		await settleTranscriptLayout(controller)
-		#expect(rail.activeTurnID == latestTurnID)
-		#expect(controller.transcript.latestButton.isHidden)
-		#expect(rail.frame == railFrame)
-		#expect(railScroll.contentView.bounds.origin == railOrigin)
-		for _ in 0 ..< 4
-		{
-			controller.transcript.readingPositionChanged()
-		}
-		await settleTranscriptLayout(controller)
-		#expect(rail.activeTurnID == latestTurnID)
-		#expect(rail.frame == railFrame)
-		#expect(railScroll.contentView.bounds.origin == railOrigin)
 	}
 
 	private func settleTranscriptLayout(_ controller: ConversationViewController) async

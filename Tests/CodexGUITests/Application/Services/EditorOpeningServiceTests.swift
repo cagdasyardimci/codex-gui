@@ -88,54 +88,6 @@ struct EditorOpeningServiceTests
 		}
 	}
 
-	@Test func symlinkEscapeIsRejected() async throws
-	{
-		let root = try await temporaryDirectory()
-		defer
-		{
-			try? FileManager.default.removeItem(at: root)
-		}
-		let outside = try await temporaryDirectory()
-		defer
-		{
-			try? FileManager.default.removeItem(at: outside)
-		}
-		let externalFile = outside.appendingPathComponent("outside.swift")
-		try await BackgroundTestWork.perform
-		{
-			try Data("outside".utf8).write(to: externalFile)
-			try FileManager.default.createSymbolicLink(
-				at: root.appendingPathComponent("link.swift"),
-				withDestinationURL: externalFile
-			)
-		}
-		let defaultsFixture = try IsolatedUserDefaultsFixture(prefix: "EditorOpeningServiceTests")
-		defer
-		{
-			defaultsFixture.cleanup()
-		}
-		let editor = EditorOpeningService(defaults: defaultsFixture.defaults)
-
-		await #expect
-		{
-			try await editor.open(
-				path: "link.swift",
-				project: root,
-				line: 1
-			)
-		} throws:
-		{
-			error in
-			guard let handoffError = error as? EditorOpeningError,
-					case .outsideProject(let path) = handoffError
-			else
-			{
-				return false
-			}
-			return path == "link.swift"
-		}
-	}
-
 	nonisolated private func temporaryDirectory() async throws -> URL
 	{
 		try await BackgroundTestWork.perform

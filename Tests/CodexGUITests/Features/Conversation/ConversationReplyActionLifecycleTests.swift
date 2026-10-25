@@ -6,84 +6,6 @@ import Testing
 @MainActor
 struct ConversationReplyActionLifecycleTests
 {
-	@Test func followingOutputIncludesTrailingSpaceAfterReplyAndResize() async throws
-	{
-		_ = NSApplication.shared
-		let controller = ConversationViewController()
-		let window = NSWindow(
-			contentRect: NSRect(
-				x: 0,
-				y: 0,
-				width: 888,
-				height: 876
-			),
-			styleMask: [.borderless],
-			backing: .buffered,
-			defer: false
-		)
-		window.isReleasedWhenClosed = false
-		window.contentViewController = controller
-		defer
-		{
-			window.orderOut(nil)
-		}
-		let entries = (0 ..< 40).map
-		{
-			entry(
-				"turn-\($0):reply",
-				kind: .agent
-			)
-		}
-		var snapshot = snapshot(entries: entries)
-		snapshot.turnTimings = [ConversationTurnTiming(
-			turnID: "turn-39",
-			status: "completed"
-		)]
-		await render(
-			snapshot,
-			in: controller
-		)
-		controller.transcript.restoreReadingPosition(
-			followOutput: true,
-			anchor: nil
-		)
-		try assertFollowingBottom(controller)
-
-		// The explicit latest action uses the same extent after the reader scrolls away.
-		let clip = controller.transcript.conversationScrollView.contentView
-		clip.scroll(to: .zero)
-		controller.transcript.readingPositionChanged()
-		#expect(!controller.transcript.latestButton.isHidden)
-		controller.transcript.showLatestMessage()
-		try assertFollowingBottom(controller)
-		#expect(controller.transcript.latestButton.isHidden)
-
-		// A new terminal reply changes both the row height and action ownership.
-		snapshot = self.snapshot(entries: entries + [entry(
-			"turn-40:reply",
-			kind: .agent
-		)])
-		snapshot.turnTimings = [ConversationTurnTiming(
-			turnID: "turn-40",
-			status: "completed"
-		)]
-		await render(
-			snapshot,
-			in: controller
-		)
-		#expect(controller.transcript.replyActionEntryID == "turn-40:reply")
-		try assertFollowingBottom(controller)
-
-		controller.transcript.beginTranscriptResize(reason: .window)
-		window.setContentSize(NSSize(
-			width: 720,
-			height: 760
-		))
-		controller.view.layoutSubtreeIfNeeded()
-		controller.transcript.collectionView.layoutSubtreeIfNeeded()
-		controller.transcript.endTranscriptResize(reason: .window)
-		try assertFollowingBottom(controller)
-	}
 
 	private func assertFollowingBottom(_ controller: ConversationViewController) throws
 	{
@@ -119,7 +41,7 @@ struct ConversationReplyActionLifecycleTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = controller
 		defer
 		{

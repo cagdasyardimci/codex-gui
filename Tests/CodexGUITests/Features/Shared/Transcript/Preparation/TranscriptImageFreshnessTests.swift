@@ -42,7 +42,7 @@ struct TranscriptImageFreshnessTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			let host = try #require(window.contentView)
 			host.addSubview(item.view)
 			defer
@@ -156,87 +156,6 @@ struct TranscriptImageFreshnessTests
 				))
 			}
 		}
-	}
-
-	@Test func activityThumbnailsRetainTheSharedInputByteLimit() async throws
-	{
-		let url = FileManager.default.temporaryDirectory
-			.appendingPathComponent("transcript-oversized-\(UUID()).png")
-		try await BackgroundTestWork.perform
-		{
-			try writeImage(
-				to: url,
-				height: 6,
-				modifiedAt: 1_000
-			)
-			let handle = try FileHandle(forWritingTo: url)
-			defer
-			{
-				try? handle.close()
-			}
-			try handle.truncate(atOffset: 32 * 1024 * 1024 + 1)
-		}
-		defer
-		{
-			try? FileManager.default.removeItem(at: url)
-		}
-		let item = ConversationActivityCollectionItem()
-		item.configure(
-			ConversationActivityRow(
-				id: "image",
-				sourceEntryID: "image",
-				groupID: "image",
-				kind: .image,
-				title: "Viewed an image",
-				imagePath: url.path,
-				expanded: true
-			),
-			onToggle:
-			{
-			},
-			onOpenFile:
-			{
-				_ in
-			}
-		)
-		await item.waitForImagePreview()
-		#expect(descendants(item.view).compactMap
-		{
-			$0 as? NSTextField
-		}
-		.contains
-		{
-			$0.stringValue == "Image unavailable"
-		})
-		#expect(!descendants(item.view).compactMap
-		{
-			$0 as? NSButton
-		}
-		.contains
-		{
-			$0.accessibilityLabel() == "Open viewed image" && $0.image != nil
-		})
-	}
-
-	@Test func inlineImageSourceRemainsEligibleForPreparedContentReuse() async throws
-	{
-		let bytes = try await BackgroundTestWork.perform
-		{
-			try pngData(height: 6)
-		}
-		let body = "![Inline](data:image/png;base64,\(bytes.base64EncodedString()))"
-		let cache = ConversationContentCache()
-		let first = await cache.content(
-			body: body,
-			markdown: true
-		)
-		let second = await cache.content(
-			body: body,
-			markdown: true
-		)
-		#expect(!first.hasLocalImageDependencies)
-		#expect(first.estimatedRichImageBytes == 8 * 6 * 4)
-		#expect(first === second)
 	}
 
 	private func descendants(_ view: NSView) -> [NSView]

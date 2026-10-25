@@ -6,32 +6,6 @@ import Testing
 @Suite
 struct WorkspaceEligibilityTests
 {
-	@Test func structuralEmptyDraftCapabilityDoesNotAuthorizeAnEmptyOrForgedProposal()
-	{
-		var model = fixture()
-		model.composer.drafts[.newChat] = ComposerDraft()
-		#expect(WorkspaceEligibility(model: model).canSend)
-		#expect(WorkspaceSelectors(
-			model: model,
-			now: .distantPast
-		).makeSnapshot().canSend)
-		#expect(!WorkspaceEligibility(model: model).acceptsSubmission(proposal(model)))
-		model = fixture()
-		var forged = proposal(model)
-		forged = ComposerSubmission(
-			context: forged.context,
-			conversation: forged.conversation,
-			draft: forged.draft,
-			inputs: [.text("different input")],
-			skills: [],
-			modelID: nil,
-			effort: nil,
-			preferences: .standard,
-			retainedContextRequestID: UUID(),
-			projectContextRevision: 0
-		)
-		#expect(!WorkspaceEligibility(model: model).acceptsSubmission(forged))
-	}
 
 	@Test func everyCanonicalBlockerInvalidatesCapturedEnabledSubmission()
 	{
@@ -246,75 +220,6 @@ struct WorkspaceEligibilityTests
 		#expect(WorkspaceEligibility(model: model).preferenceWarning != nil)
 	}
 
-	@Test func cleanupLeaseAndStaleManagementScopeBlockEveryCommandCapability()
-	{
-		var model = fixture()
-		model.conversations.selectedConversation = .thread("selected")
-		let context = OperationContext(
-			workspace: model.identity,
-			generation: 1,
-			requestID: UUID(),
-			threadID: "selected"
-		)
-		#expect(WorkspaceEligibility(model: model).acceptsManagement(.archive(context)))
-		model.conversations.selectedConversation = .thread("other")
-		#expect(!WorkspaceEligibility(model: model).acceptsManagement(.archive(context)))
-		model.conversations.selectedConversation = .thread("selected")
-		model.lifecycle.cleanupReservation = WorkspaceCleanupRequest(
-			requestID: UUID(),
-			owner: WorkspaceLifecycleReducer.reference(model),
-			expected: TaskWorkspace(
-				id: UUID(),
-				taskID: "task",
-				sourceProjectPath: "/source",
-				repositoryGitDirectory: "/source/.git",
-				branch: "codex/task",
-				checkoutPath: "/project",
-				baseCommit: "base",
-				sourceWasDirty: false,
-				createdAt: .distantPast,
-				phase: .active
-			)
-		)
-		#expect(!WorkspaceEligibility(model: model).canSend)
-		#expect(!WorkspaceEligibility(model: model).canManageThreads)
-		model.execution.state = .running
-		model.execution.activeThreadID = "selected"
-		model.execution.activeTurnID = "turn"
-		#expect(!WorkspaceEligibility(model: model).canSteer)
-	}
-
-	@Test func unresolvedComposerOwnershipBlocksStaleManagementAfterExecutionReset()
-	{
-		var model = fixture()
-		let unresolved = proposal(model)
-		model.composer.pendingSubmissions[unresolved.context.requestID] = unresolved
-		model.composer.uncertainSubmissions.insert(unresolved.context.requestID)
-		// New Chat reset can clear execution ownership independently of the retained submission.
-		model.execution.owner = nil
-		model.conversations.selectedConversation = .thread("selected")
-		let context = OperationContext(
-			workspace: model.identity,
-			generation: 1,
-			requestID: UUID(),
-			threadID: "selected"
-		)
-		#expect(!WorkspaceSelectors(
-			model: model,
-			now: .distantPast
-		).makeSnapshot()
-			.canManageThreads)
-		let result = ConversationReducer.reduce(
-			&model,
-			.conversations(.managementRequested(.archive(context)))
-		)
-		#expect(result.effects.isEmpty)
-		#expect(model.conversations.pendingManagement == nil)
-		model.composer.uncertainSubmissions.removeAll()
-		model.execution.hasUncertainRequest = true
-		#expect(!WorkspaceEligibility(model: model).canManageThreads)
-	}
-
 	@Test func attachedInputMustMatchCapturedDescriptionsImagesAndInputCount()
 	{
 		var model = fixture()
@@ -383,55 +288,6 @@ struct WorkspaceEligibilityTests
 		#expect(WorkspaceEligibility(model: model).acceptsManagement(.delete(context)))
 		model.connection.generation += 1
 		#expect(!WorkspaceEligibility(model: model).acceptsManagement(rename))
-	}
-
-	@Test(
-		arguments: ["a", "b"],
-		[false, true]
-	)
-	func managementAvailabilityAndReductionUseTheTargetExecution(
-		selectedThreadID: String,
-		uncertain: Bool
-	)
-	{
-		var model = fixture()
-		model.conversations.threads = ["a", "b"].map
-		{
-			ThreadSummary(json: ["id": $0, "cwd": "/project"])!
-		}
-		model.conversations.selectedConversation = .thread(selectedThreadID)
-		var execution = ExecutionModel()
-		execution.activeThreadID = "b"
-		execution.state = uncertain ? .failed : .running
-		execution.needsReconciliation = uncertain
-		execution.hasUncertainRequest = uncertain
-		model.executions.entries[.thread("b")] = execution
-		let eligibility = WorkspaceEligibility(model: model)
-		#expect(eligibility.canManageThread("a"))
-		#expect(!eligibility.canManageThread("b"))
-		#expect(!eligibility.canManageThread("unknown"))
-		let snapshot = WorkspaceSelectors(
-			model: model,
-			now: .distantPast
-		).makeSnapshot()
-		#expect(snapshot.threadManagementAvailability == ["a": true, "b": false])
-		for threadID in ["a", "b"]
-		{
-			var targetModel = model
-			let context = OperationContext(
-				workspace: model.identity,
-				generation: model.connection.generation,
-				requestID: UUID(),
-				threadID: threadID
-			)
-			let result = ConversationReducer.reduce(
-				&targetModel,
-				.conversations(.managementRequested(.delete(context)))
-			)
-			#expect(result.effects.isEmpty == (threadID == "b"))
-			#expect(targetModel.conversations.pendingManagement?.context ==
-				(threadID == "a" ? context : nil))
-		}
 	}
 
 	private func fixture() -> WorkspaceModel

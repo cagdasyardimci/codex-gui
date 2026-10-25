@@ -338,7 +338,7 @@ struct TaskDeletionConfirmationTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = controller
 		window.orderFront(nil)
 		return window

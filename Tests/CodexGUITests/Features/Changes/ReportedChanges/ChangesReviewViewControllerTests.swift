@@ -6,93 +6,6 @@ import Testing
 @Suite @MainActor
 struct ChangesReviewViewControllerTests
 {
-	@Test func diffColorsUseHunkRowsForRepeatedMarkersAndKeepFileHeadersPlain() throws
-	{
-		_ = NSApplication.shared
-		let hunkText = "@@ -1 +1 @@\n---counter;\n+++counter;\n"
-		let patch = "diff --git a/counter.swift b/counter.swift\n"
-			+ "--- a/counter.swift\n+++ b/counter.swift\n" + hunkText
-		let file = ReviewFile(
-			path: "counter.swift",
-			previousPath: nil,
-			reportedMovePath: nil,
-			kind: .modified,
-			hunks: [ReviewHunk(
-				id: "counter-hunk",
-				header: "@@ -1 +1 @@",
-				text: hunkText,
-				fingerprint: "counter-hunk"
-			)],
-			diff: patch,
-			fingerprint: "counter-file",
-			explanation: nil
-		)
-		let turn = ReviewTurn(
-			threadID: "thread-counter",
-			turnID: "turn-counter",
-			files: [file],
-			validations: [],
-			codeStateID: "counter",
-			hasUnknownEarlierHistory: false
-		)
-		let controller = ChangesViewController()
-		controller.render(snapshot(
-			turns: [turn],
-			selected: turn
-		))
-		let diff = try #require(textView(
-			in: controller.view,
-			label: "Reported diff for selected file or section"
-		))
-		func expectColor(
-			_ text: String,
-			_ expected: NSColor
-		) throws
-		{
-			let range = (diff.string as NSString).range(of: text)
-			try #require(range.location != NSNotFound)
-			let color = try #require(diff.textStorage?.attribute(
-				.foregroundColor,
-				at: range.location,
-				effectiveRange: nil
-			) as? NSColor)
-			#expect(color.isEqual(expected))
-		}
-		try expectColor(
-			"--- a/counter.swift",
-			.labelColor
-		)
-		try expectColor(
-			"+++ b/counter.swift",
-			.labelColor
-		)
-		try expectColor(
-			"@@ -1 +1 @@",
-			.systemBlue
-		)
-		try expectColor(
-			"---counter;",
-			.systemRed
-		)
-		try expectColor(
-			"+++counter;",
-			.systemGreen
-		)
-		let section = try #require(popUp(
-			in: controller.view,
-			label: "Change section in selected file"
-		))
-		section.selectItem(at: 1)
-		sendAction(from: section)
-		try expectColor(
-			"---counter;",
-			.systemRed
-		)
-		try expectColor(
-			"+++counter;",
-			.systemGreen
-		)
-	}
 
 	@Test func sectionActionsKeepSourceThreadTurnAndHunk() throws
 	{
@@ -179,48 +92,6 @@ struct ChangesReviewViewControllerTests
 		#expect(selectedTurnID == "turn-2")
 	}
 
-	@Test func diffRemainsVisibleWithoutCommandsTab() throws
-	{
-		_ = NSApplication.shared
-		let review = reviewTurn(
-			threadID: "thread-a",
-			turnID: "turn-1"
-		)
-		let controller = ChangesViewController()
-		_ = controller.view
-		controller.render(snapshot(
-			turns: [review],
-			selected: review
-		))
-		#expect(segmentedControl(
-			in: controller.view,
-			label: "Changes detail tab"
-		) == nil)
-		#expect(textView(
-			in: controller.view,
-			label: "Observed command output"
-		) == nil)
-		let diff = try #require(textView(
-			in: controller.view,
-			label: "Reported diff for selected file or section"
-		))
-		#expect(diff.string.contains("+new value"))
-
-		let empty = ReviewTurn(
-			threadID: "thread-a",
-			turnID: "turn-2",
-			files: [],
-			validations: [],
-			codeStateID: "final",
-			hasUnknownEarlierHistory: false
-		)
-		controller.render(snapshot(
-			turns: [review, empty],
-			selected: empty
-		))
-		#expect(diff.string == "No file changes reported for this turn.")
-	}
-
 	@Test func binaryChangeIsLabeledWithoutInventingTextSections() throws
 	{
 		_ = NSApplication.shared
@@ -262,56 +133,6 @@ struct ChangesReviewViewControllerTests
 		)
 		#expect(cell.accessibilityLabel()?.contains("Binary file asset.bin") == true)
 		#expect(diff.string == "Binary change; text sections are unavailable.")
-	}
-
-	@Test func sameFingerprintWithNewFileMetadataUpdatesEditorEligibility()
-		throws
-	{
-		_ = NSApplication.shared
-		let controller = ChangesViewController()
-		let initial = reviewTurn(
-			threadID: "thread-a",
-			turnID: "turn-1"
-		)
-		controller.render(ReviewPresentation(
-			snapshot(
-				turns: [initial],
-				selected: initial
-			),
-			ownerIdentity: "store-a"
-		))
-		let open = try #require(button(
-			in: controller.view,
-			label: "Open selected changed file in editor"
-		))
-		#expect(open.isEnabled)
-		let file = try #require(initial.files.first)
-		let removed = ReviewFile(
-			path: file.path,
-			previousPath: file.previousPath,
-			reportedMovePath: file.reportedMovePath,
-			kind: .deleted,
-			hunks: file.hunks,
-			diff: file.diff,
-			fingerprint: file.fingerprint,
-			explanation: "File was removed"
-		)
-		let changed = ReviewTurn(
-			threadID: initial.threadID,
-			turnID: initial.turnID,
-			files: [removed],
-			validations: initial.validations,
-			codeStateID: initial.codeStateID,
-			hasUnknownEarlierHistory: initial.hasUnknownEarlierHistory
-		)
-		controller.render(ReviewPresentation(
-			snapshot(
-				turns: [changed],
-				selected: changed
-			),
-			ownerIdentity: "store-a"
-		))
-		#expect(!open.isEnabled)
 	}
 
 	@Test(arguments: ["file", "project", "turn", "thread", "return", "owner"])

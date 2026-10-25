@@ -141,10 +141,11 @@ struct SubagentConversationNavigationIntegrationTests
 		}
 		else
 		{
-			try #require(button(
+			let childButton = try #require(button(
 				"Open subagent chat: Child Agent",
 				in: panel.view
-			)).performClick(nil)
+			))
+			try #require(childButton.dispatchConfiguredAction())
 		}
 		#expect(await waitUntil
 		{
@@ -210,10 +211,11 @@ struct SubagentConversationNavigationIntegrationTests
 			controller,
 			store: state.store
 		)
-		try #require(button(
+		let backButton = try #require(button(
 			"Back to Subagents",
 			in: panel.view
-		)).performClick(nil)
+		))
+		try #require(backButton.dispatchConfiguredAction())
 		#expect(panel.selectedAgent == nil)
 		#expect(panel.detailController?.view.isHidden == true)
 		#expect(controller.inspector.toolsTabs.isSubagentsSelected)
@@ -269,7 +271,7 @@ struct SubagentConversationNavigationIntegrationTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.appearance = NSAppearance(named: .aqua)
 		window.contentViewController = host
 		window.setContentSize(NSSize(

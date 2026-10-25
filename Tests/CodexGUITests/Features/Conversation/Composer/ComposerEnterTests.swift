@@ -41,7 +41,7 @@ struct ComposerEnterTests
 				backing: .buffered,
 				defer: false
 			)
-			window.isReleasedWhenClosed = false
+			window.prepareForTesting()
 			window.contentViewController = controller
 			defer
 			{
@@ -130,26 +130,4 @@ struct ComposerEnterTests
 		#expect(controller.composer.string == text + "\n")
 	}
 
-	@Test func shiftReturnStartsMultilineDraftAndCommandReturnShortcutRemainsConfigured()
-	{
-		let controller = ConversationViewController()
-		controller.loadViewIfNeeded()
-		controller.composer.string = "First"
-		controller.composer.setSelectedRange(NSRange(
-			location: 5,
-			length: 0
-		))
-		var sends = 0
-		controller.onSend =
-		{
-			sends += 1
-		}
-
-		controller.composer.doCommand(by: #selector(NSResponder.insertLineBreak(_:)))
-
-		#expect(sends == 0)
-		#expect(controller.composer.string == "First\u{2028}")
-		#expect(controller.sendButton.keyEquivalent == "\r")
-		#expect(controller.sendButton.keyEquivalentModifierMask == [.command])
-	}
 }

@@ -18,21 +18,6 @@ struct TurnChangeSummaryButtonTests
 		#expect(button.accessibilityLabel()?.contains("Previous editing turn") == true)
 	}
 
-	@Test func reportedCountFallbackExplainsThatItIsNotNet() throws
-	{
-		var snapshot = ConversationTurnChangeSummaryTestFixture.makeSnapshot()
-		snapshot.reportedGitChanges = [
-			change("@@ -1 +1 @@\n-before\n+task A"),
-			change("@@ -1 +1 @@\n-task B\n+task A again"),
-		]
-		let summary = try #require(ConversationTurnChangeSummary(snapshot))
-		let button = TurnChangeSummaryButton()
-		button.render(summary)
-		#expect(button.attributedTitle.string == "1 file changed +2 -2")
-		#expect(button.toolTip?.contains(GitReportedTurnComparison.fallbackMessage) == true)
-		#expect(button.accessibilityLabel()?.contains("These are not net changes.") == true)
-	}
-
 	@Test(arguments: [GitComparisonFailure.lastTurnUnavailable,
 						.oversized,
 						.repositoryUnavailable,

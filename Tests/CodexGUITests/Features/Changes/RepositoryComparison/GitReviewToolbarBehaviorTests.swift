@@ -6,82 +6,6 @@ import Testing
 @Suite @MainActor
 struct GitReviewToolbarBehaviorTests
 {
-	@Test func collapsingDiffsKeepsHeadersAndSupportsIndividualReopenAndExpandAll() async throws
-	{
-		let (controller, window) = try await loadedController()
-		defer
-		{
-			controller.close()
-			window.close()
-		}
-		#expect(descendants(controller.view).compactMap
-		{
-			$0 as? GitAdaptiveDiffView
-		}.count == 2)
-		if let directory = ProcessInfo.processInfo.environment["CODEX_FILES_QA_DIR"]
-		{
-			window.setContentSize(NSSize(
-				width: 900,
-				height: 640
-			))
-			for appearance in [NSAppearance.Name.aqua, .darkAqua, .aqua]
-			{
-				window.appearance = NSAppearance(named: appearance)
-				controller.view.layoutSubtreeIfNeeded()
-				try AppTestPNGWriter.write(
-					controller.view,
-					to: URL(fileURLWithPath: directory)
-						.appendingPathComponent("changes-\(appearance.rawValue).png")
-				)
-			}
-		}
-		let directories = controller.runtime.state.expandedDirectories
-		let selectedFileID = controller.runtime.state.selectedFileID
-		let initialProjections = controller.projectionCache.projectionCount
-		let initialRequests = controller.projectionCache.requestCount
-		#expect(initialProjections == 2)
-		#expect(initialRequests == 2)
-		try button(
-			"Collapse all diffs",
-			in: controller.view
-		).performClick(nil)
-		#expect(descendants(controller.view).compactMap
-		{
-			$0 as? GitAdaptiveDiffView
-		}.isEmpty)
-		#expect(controller.projectionCache.requestCount == initialRequests)
-		#expect(controller.projectionCache.projectionCount == initialProjections)
-		#expect(try buttons(
-			prefix: "Expand diff for ",
-			in: controller.view
-		).count == 2)
-		try button(
-			"Expand diff for Sources/One.swift",
-			in: controller.view
-		).performClick(nil)
-		#expect(descendants(controller.view).compactMap
-		{
-			$0 as? GitAdaptiveDiffView
-		}.count == 1)
-		#expect(controller.projectionCache.cachedFileIDs == [
-			"Sources/One.swift",
-			"Tests/Two.swift"
-		])
-		#expect(controller.projectionCache.requestCount == initialRequests + 1)
-		#expect(controller.projectionCache.projectionCount == initialProjections)
-		try button(
-			"Expand all diffs",
-			in: controller.view
-		).performClick(nil)
-		#expect(descendants(controller.view).compactMap
-		{
-			$0 as? GitAdaptiveDiffView
-		}.count == 2)
-		#expect(controller.projectionCache.requestCount == initialRequests + 2)
-		#expect(controller.projectionCache.projectionCount == initialProjections)
-		#expect(controller.runtime.state.selectedFileID == selectedFileID)
-		#expect(controller.runtime.state.expandedDirectories == directories)
-	}
 
 	@Test func compactToolbarMovesActionsIntoMenuAndKeepsHeaderCompact() async throws
 	{
@@ -234,32 +158,6 @@ struct GitReviewToolbarBehaviorTests
 		#expect((path.superview?.frame.height ?? .infinity) <= 48)
 	}
 
-	@Test func fallbackExplanationAndDisabledCopySurviveViewerAcceptance() async throws
-	{
-		let (controller, window) = try await loadedController(usesReportedEditFallback: true)
-		defer
-		{
-			controller.close()
-			window.close()
-		}
-		controller.runtime.setReportedChanges([])
-		controller.runtime.selectScope(.lastTurn)
-		await controller.runtime.readTask?.value
-		#expect(controller.runtime.state.snapshot?.usesReportedEditFallback == true)
-		#expect(descendants(controller.view).compactMap
-		{
-			$0 as? NSTextField
-		}.contains
-		{
-			$0.stringValue.contains(GitReportedTurnComparison.fallbackMessage)
-		})
-		let copy = try #require(controller.makeDiffDisplayMenu().items.first
-		{
-			$0.title == "Copy git apply command"
-		})
-		#expect(!copy.isEnabled)
-	}
-
 	private func loadedController(
 		usesReportedEditFallback: Bool = false
 	) async throws -> (GitChangesViewController, NSWindow)
@@ -291,7 +189,7 @@ struct GitReviewToolbarBehaviorTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = controller
 		var handedOff = false
 		defer

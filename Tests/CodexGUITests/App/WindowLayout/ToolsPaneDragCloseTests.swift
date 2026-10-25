@@ -31,7 +31,7 @@ struct ToolsPaneDragCloseTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = chrome
 		panes.restoreLayout(in: window)
 		panes.didPresentWindow()

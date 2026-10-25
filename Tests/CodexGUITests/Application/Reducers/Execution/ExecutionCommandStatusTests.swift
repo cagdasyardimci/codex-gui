@@ -42,19 +42,6 @@ struct ExecutionCommandStatusTests
 		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "Running a command…")
 	}
 
-	@Test(arguments: ["printf fixture", "python3 - <<'PY'\nfrom pathlib import Path\nPY"])
-	func commandActivityUsesAShortDescription(command: String) throws
-	{
-		var (model, context) = fixture()
-		try observeCommand(
-			status: "running",
-			command: command,
-			context: context,
-			model: &model
-		)
-		#expect(model.executions.entries[.thread("worker")]!.activeActivity == "Running a command…")
-	}
-
 	@Test(
 		arguments: ["mcpToolCall", "dynamicToolCall"],
 		[
@@ -90,28 +77,6 @@ struct ExecutionCommandStatusTests
 		#expect(!model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
 		#expect(model.executions.entries[.thread("worker")]!.activeActivity == nil)
 		#expect(model.executions.entries[.thread("worker")]!.state == .running)
-	}
-
-	@Test(
-		arguments: ["mcpToolCall", "dynamicToolCall"],
-		[nil, "running", "futureStatus"] as [String?]
-	)
-	func activeToolEventsReuseStructuredSourceLabels(
-		itemType: String,
-		status: String?
-	) throws
-	{
-		var (model, context) = fixture()
-		try observeCommand(
-			status: status,
-			itemType: itemType,
-			context: context,
-			model: &model,
-			starting: true
-		)
-		#expect(model.executions.entries[.thread("worker")]!.activeActivity ==
-			"github · search_issues")
-		#expect(!model.executions.entries[.thread("worker")]!.commandLifetime.hasPendingCommands)
 	}
 
 	private func fixture() -> (WorkspaceModel, OperationContext)

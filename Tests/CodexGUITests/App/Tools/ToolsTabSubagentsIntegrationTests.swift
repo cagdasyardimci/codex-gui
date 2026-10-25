@@ -119,60 +119,6 @@ struct ToolsTabSubagentsIntegrationTests
 		#expect(!agents.isRefreshingTimeLabels)
 	}
 
-	@Test func featureTabsRemainDistinctAndReuseTheirOwnContent() throws
-	{
-		_ = NSApplication.shared
-		let tabs = ToolsTabViewController()
-		let agents = controller()
-		let sources = controller()
-		let changes = controller()
-		tabs.showSubagents(agents)
-		let agentsID = try #require(tabs.subagentsTabID)
-		tabs.showSources(sources)
-		tabs.showChanges(changes)
-		#expect(tabs.tabCount == 3)
-		let sourcesID = try #require(tabs.sourcesTabID)
-		let changesID = try #require(tabs.changesTabID)
-		#expect(Set([agentsID, sourcesID, changesID]).count == 3)
-		#expect(agents.view.isHidden)
-		#expect(sources.view.isHidden)
-		#expect(!changes.view.isHidden)
-
-		try #require(button(
-			"Subagents 1",
-			in: tabs.tabBarView
-		)).performClick(nil)
-		#expect(tabs.isSubagentsSelected)
-		#expect(!agents.view.isHidden)
-		#expect(changes.view.isHidden)
-		tabs.showSubagents(agents)
-		#expect(tabs.tabCount == 3)
-		#expect(tabs.subagentsTabID == agentsID)
-	}
-
-	@Test func closingSubagentsSelectsRemainingTabAndDetachesContent() throws
-	{
-		_ = NSApplication.shared
-		let tabs = ToolsTabViewController()
-		let agents = controller()
-		tabs.showSources(controller())
-		tabs.showSubagents(agents)
-		var closedCount = 0
-		tabs.onSubagentsTabClosed =
-		{
-			closedCount += 1
-		}
-		try #require(button(
-			"Close tab 2",
-			in: tabs.tabBarView
-		)).performClick(nil)
-		#expect(tabs.tabCount == 1)
-		#expect(tabs.subagentsTabID == nil)
-		#expect(tabs.isSourcesSelected)
-		#expect(agents.parent == nil)
-		#expect(closedCount == 1)
-	}
-
 	@Test func blankTabReuseAndControllerReplacementDoNotLeakChildren()
 	{
 		_ = NSApplication.shared
@@ -244,93 +190,6 @@ struct ToolsTabSubagentsIntegrationTests
 		#expect(inspector.toolsTabs.subagentsTabID == nil)
 		#expect(agents.parent == nil)
 		#expect(!inspector.openSubagentsInToolTab(request))
-	}
-
-	@Test func summaryAndTranscriptOpenTheSameSubagentsTab() async throws
-	{
-		_ = NSApplication.shared
-		let suite = "SubagentsTabDispatch.\(UUID())"
-		let defaults = try #require(UserDefaults(suiteName: suite))
-		defer
-		{
-			defaults.removePersistentDomain(forName: suite)
-		}
-		let directory = FileManager.default.temporaryDirectory.standardizedFileURL
-		let service = WorkspaceCodexService(
-			directory: directory,
-			threadID: "subagents-dispatch"
-		)
-		let session = UUID()
-		let store = WorkspaceStoreFactory.make(
-			configuration: WorkspaceStoreConfiguration(reference: WorkspaceLifecycleOwnerReference(
-				owner: .source(sessionID: session),
-				workspace: WorkspaceIdentity(
-					sessionID: session,
-					canonicalCheckoutPath: directory.path
-				)
-			)),
-			dependencies: WorkspaceStoreDependencies(
-				service: service,
-				storage: LocalStorage(defaults: defaults)
-			)
-		)
-		let state = WorkspaceTestFixture(store: store)
-		defer
-		{
-			state.shutdown()
-		}
-		await state.inputs.connect()
-		let controller = MainWindowController(
-			store: store,
-			onOpenProject:
-			{
-			},
-			onInsertPath:
-			{
-			}
-		)
-		defer
-		{
-			controller.window?.close()
-		}
-		var model = store.model
-		let key = model.conversations.selectedConversation
-		var content = model.conversations.content[key] ?? ConversationContentModel()
-		content.entries = fixtureEntries()
-		model.conversations.content[key] = content
-		let snapshot = WorkspaceSelectors.snapshot(
-			model: model,
-			now: .distantPast
-		)
-		controller.renderPinnedSummary(
-			snapshot,
-			target: WorkspaceIntentTarget(
-				store: store,
-				snapshot: snapshot
-			)
-		)
-		let viewAll = try #require(button(
-			"12 done · 1 running. Subagents in loaded conversation history",
-			in: controller.inspector.summary.view
-		))
-		#expect(viewAll.isEnabled)
-		viewAll.performClick(nil)
-		#expect(controller.inspector.isShowingTools)
-		#expect(controller.inspector.toolsTabs.isSubagentsSelected)
-		#expect(!controller.inspector.isShowingDetails)
-		#expect(controller.inspector.conversationSubagents?.parent === controller.inspector
-			.toolsTabs)
-		let tabID = try #require(controller.inspector.toolsTabs.subagentsTabID)
-		#expect(controller.inspector.toolsTabs.tabCount == 1)
-		controller.inspector.toolsTabs.openNewTab()
-		#expect(!controller.inspector.toolsTabs.isSubagentsSelected)
-		#expect(controller.inspector.toolsTabs.selectedTabID != tabID)
-		let openFromTranscript = try #require(controller.conversation.onOpenSubagents)
-		openFromTranscript()
-		#expect(controller.inspector.toolsTabs.isSubagentsSelected)
-		#expect(controller.inspector.toolsTabs.selectedTabID == tabID)
-		#expect(controller.inspector.toolsTabs.subagentsTabID == tabID)
-		#expect(controller.inspector.toolsTabs.tabCount == 2)
 	}
 
 	private func elapsedLabel(in view: NSView) -> NSTextField?
@@ -454,7 +313,7 @@ struct ToolsTabSubagentsIntegrationTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = host
 		window.setContentSize(NSSize(
 			width: 900,

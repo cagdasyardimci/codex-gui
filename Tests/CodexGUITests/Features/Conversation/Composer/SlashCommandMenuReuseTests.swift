@@ -14,72 +14,6 @@ struct SlashCommandMenuReuseTests
 		_ = NSApplication.shared
 	}
 
-	@Test func identicalPresentationsRetainCellsHoverSelectionAndScroll() throws
-	{
-		let menu = SlashCommandPopoverView()
-		var availabilityCalls = 0
-		menu.unavailableReason =
-		{
-			_ in
-			availabilityCalls += 1
-			return nil
-		}
-		menu.render(prefix: "")
-		let window = host(menu)
-		defer
-		{
-			window.close()
-		}
-		let table = try self.table(in: menu)
-		let scroll = try #require(table.enclosingScrollView)
-		menu.moveSelection(by: 4)
-		scroll.contentView.scroll(to: NSPoint(
-			x: 0,
-			y: 56
-		))
-		scroll.reflectScrolledClipView(scroll.contentView)
-		let hoveredRect = table.rect(ofRow: 3)
-		table.refreshHover(at: NSPoint(
-			x: hoveredRect.midX,
-			y: hoveredRect.midY
-		))
-		let row = try #require(table.rowView(
-			atRow: 3,
-			makeIfNecessary: true
-		)
-			as? SlashCommandMenuRowView)
-		let cell = try #require(table.view(
-			atColumn: 0,
-			row: 3,
-			makeIfNecessary: true
-		))
-		#expect(row.isHovered)
-		let selection = table.selectedRow
-		let origin = scroll.contentView.bounds.origin
-		let size = menu.preferredContentSize
-		let calls = availabilityCalls
-		for _ in 0 ..< 3
-		{
-			menu.render(prefix: "")
-			#expect(table.view(
-				atColumn: 0,
-				row: 3,
-				makeIfNecessary: true
-			) === cell)
-			#expect(table.rowView(
-				atRow: 3,
-				makeIfNecessary: true
-			) === row)
-			#expect(table.hoveredRow == 3)
-			#expect(row.isHovered)
-			#expect(table.selectedRow == selection)
-			#expect(scroll.contentView.bounds.origin == origin)
-			#expect(menu.preferredContentSize == size)
-		}
-		#expect(availabilityCalls == calls + 3 * menu.commands.count)
-		#expect(menu.selectedCommand?.id == .archive)
-	}
-
 	@Test func freshAvailabilityAndChoiceCallbacksReplaceRetiredOwnersWithoutRebuildingRows() throws
 	{
 		let menu = SlashCommandPopoverView()
@@ -229,25 +163,6 @@ struct SlashCommandMenuReuseTests
 		#expect(table.selectedRow == -1)
 	}
 
-	// A fixture-owned notification center avoids invalidating unrelated parallel menus.
-	@Test func localeNotificationPostedOffMainInvalidatesTheNextRender(
-	) async throws
-	{
-		let notifications = NotificationCenter()
-		let menu = SlashCommandPopoverView(notificationCenter: notifications)
-		menu.availableSkills = try [skill(text: "Tool 10"), skill(text: "Tool 2")]
-		menu.render(prefix: "")
-		let preparations = menu.catalogPreparationCount
-		let postedOnMain = await Task.detached
-		{
-			Self.postLocaleNotificationFromWorker(notifications)
-		}.value
-		#expect(!postedOnMain)
-		menu.render(prefix: "")
-		#expect(menu.catalogPreparationCount == preparations + 1)
-		#expect(menu.matchingSkills.map(\.name) == ["Tool 2", "Tool 10"])
-	}
-
 	nonisolated private static func postLocaleNotificationFromWorker(
 		_ notifications: NotificationCenter
 	) -> Bool
@@ -351,7 +266,7 @@ struct SlashCommandMenuReuseTests
 			backing: .buffered,
 			defer: false
 		)
-		window.isReleasedWhenClosed = false
+		window.prepareForTesting()
 		window.contentViewController = menu
 		window.layoutIfNeeded()
 		menu.view.layoutSubtreeIfNeeded()

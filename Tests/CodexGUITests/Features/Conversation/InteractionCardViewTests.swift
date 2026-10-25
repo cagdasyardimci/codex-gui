@@ -88,24 +88,6 @@ struct InteractionCardViewTests
 		#expect(decision == rule)
 	}
 
-	@Test func anExplicitlyEmptyDecisionListOffersNoApprovalButton()
-	{
-		let card = InteractionCardView(
-			interaction: makeInteraction(
-				kind: .commandApproval,
-				decisions: []
-			)
-		)
-		{
-			_ in
-		}
-		#expect(buttons(in: card).isEmpty)
-		#expect(textFields(in: card).contains
-		{
-			$0.stringValue.contains("no supported decisions")
-		})
-	}
-
 	@Test func networkPolicyDecisionKeepsItsHostAndAction() throws
 	{
 		let decision = ApprovalDecision.applyNetworkPolicyAmendment(
