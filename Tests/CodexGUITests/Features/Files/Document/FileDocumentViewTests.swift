@@ -620,6 +620,7 @@ struct FileDocumentViewTests
 			#expect(!copy.isHidden)
 			controller.setSourceVisible(true)
 			let source = try #require(findText(in: controller.view))
+			#expect(source.isEditable)
 			let scroll = try #require(findSourceScroll(in: controller.view))
 			controller.view.layoutSubtreeIfNeeded()
 			let buttonRect = copy.convert(
@@ -707,6 +708,8 @@ struct FileDocumentViewTests
 			#expect(copy.superview?.isHidden == true)
 			document.isReadOnly = true
 			controller.render(document)
+			controller.setSourceVisible(true)
+			#expect(!source.isEditable)
 			#expect(!copy.isHidden)
 			#expect(NSApp.sendAction(
 				try #require(copy.action),
