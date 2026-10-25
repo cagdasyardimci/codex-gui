@@ -79,6 +79,10 @@ struct FilesWindowIntegrationTests
 			#expect(runtime.state.documents[0].currentText == "local first")
 			#expect(window.inspector.toolsTabs.tabCount == 2)
 			#expect(await service.text(at: first) == "disk")
+			#expect(await window.settleFileWritesForClosing() == false)
+			#expect(decisions == [[firstID], [firstID]])
+			#expect(runtime.state.documents.map(\.id) == [firstID, secondID])
+			#expect(runtime.state.documents[0].currentText == "local first")
 			let nativeWindow = try #require(window.window)
 			#expect(!window.windowShouldClose(nativeWindow))
 			while window.filesCloseInProgress
