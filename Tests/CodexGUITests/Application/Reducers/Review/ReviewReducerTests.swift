@@ -92,6 +92,8 @@ struct ReviewReducerTests
 		)
 		#expect(model.review.conversations[.thread("thread")]?.pendingMarkerLoad == nil)
 		#expect(model.review.conversations[.thread("thread")]?.loadedMarkerSnapshot == nil)
+		#expect(model.review.conversations[.thread("thread")]?.sourceRevision
+			== operation.sourceRevision)
 		#expect(ReviewReducer.reviewedReferences(
 			model,
 			.thread("thread")
