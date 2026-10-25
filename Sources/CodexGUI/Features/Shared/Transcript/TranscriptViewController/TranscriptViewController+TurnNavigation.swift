@@ -43,6 +43,7 @@ extension TranscriptViewController
 				return
 			}
 			turnNavigationTask?.cancel()
+			cancelNavigationMotion()
 			pendingNavigationTurnID = summary.turnID
 			turnNavigationRail.updateActiveTurn(summary.turnID)
 			if !summary.isContentLoaded

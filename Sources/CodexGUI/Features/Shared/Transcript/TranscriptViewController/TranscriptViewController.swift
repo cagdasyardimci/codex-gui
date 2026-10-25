@@ -92,10 +92,14 @@ final class TranscriptViewController: NSViewController,
 	var turnNavigationTask: Task<Void, Never>?
 	var viewportPublicationTask: Task<Void, Never>?
 	var lastPublishedViewport: ConversationViewport?
-	// Tracks native completion separately from the elapsed animation duration.
+	// The owned motion task can be captured and awaited after cancellation retires it.
 	var jumpAnimationCompletion: Task<Void, Never>?
 	var jumpAnimationRevision = 0
 	var isAnimatingJump = false
+	var shouldReduceMotion: () -> Bool =
+	{
+		NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+	}
 
 	init(transcriptPreparation: TranscriptPreparationCoordinator =
 		TranscriptPreparationCoordinator())
@@ -116,6 +120,7 @@ final class TranscriptViewController: NSViewController,
 	{
 		turnNavigationTask?.cancel()
 		viewportPublicationTask?.cancel()
+		jumpAnimationCompletion?.cancel()
 		widthChangeRestoreTask?.cancel()
 	}
 
@@ -124,6 +129,7 @@ final class TranscriptViewController: NSViewController,
 		super.viewDidDisappear()
 		turnNavigationTask?.cancel()
 		viewportPublicationTask?.cancel()
+		cancelNavigationMotion()
 		transcriptIsVisible = false
 		visibleResizeRefreshTimer?.invalidate()
 		visibleResizeRefreshTimer = nil
@@ -245,8 +251,6 @@ final class TranscriptViewController: NSViewController,
 		cancelNavigationMotion()
 		pendingNavigationTurnID = nil
 		requestedJumpItemID = nil
-		jumpAnimationRevision += 1
-		isAnimatingJump = false
 		turnNavigationRail.dismissPreview()
 		turnNavigationRail.render([])
 	}

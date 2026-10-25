@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 // Reading anchors, bookmarks, scrolling, and live-resize continuity.
 @MainActor
@@ -220,45 +221,7 @@ extension TranscriptViewController
 			var destination = clip.bounds
 			destination.origin.y = attributes.frame.minY
 			destination = clip.constrainBoundsRect(destination)
-			jumpAnimationRevision += 1
-			let revision = jumpAnimationRevision
-			isAnimatingJump = true
-			let animationCompletion = AsyncStream<Void>.makeStream()
-			jumpAnimationCompletion = Task
-			{
-				for await _ in animationCompletion.stream
-				{
-				}
-			}
-			NSAnimationContext.runAnimationGroup(
-				{
-					context in
-					context.duration = NSWorkspace.shared
-						.accessibilityDisplayShouldReduceMotion ? 0 : 0.22
-					context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-					clip.animator().setBoundsOrigin(destination.origin)
-				},
-				completionHandler:
-				{
-					[weak self] in
-					// Signal native completion even when a later jump superseded this animation.
-					defer
-					{
-						animationCompletion.continuation.finish()
-					}
-					MainActor.assumeIsolated
-					{
-						guard let self, self.jumpAnimationRevision == revision
-						else
-						{
-							return
-						}
-						self.isAnimatingJump = false
-						self.conversationScrollView.reflectScrolledClipView(clip)
-						self.readingPositionChanged()
-					}
-				}
-			)
+			animateJump(to: destination.origin)
 		}
 
 		if liveResizeInProgress
@@ -269,7 +232,90 @@ extension TranscriptViewController
 		}
 		self.requestedJumpItemID = nil
 		pendingNavigationTurnID = nil
+		if !isAnimatingJump
+		{
+			readingPositionChanged()
+		}
 		onJumpDisplayed?()
+	}
+
+	private func animateJump(to destination: NSPoint)
+	{
+		cancelNavigationMotion()
+		let clip = conversationScrollView.contentView
+		let origin = clip.bounds.origin
+		guard origin != destination,
+				!shouldReduceMotion()
+		else
+		{
+			applyJumpOrigin(destination)
+			return
+		}
+
+		let revision = jumpAnimationRevision
+		let frameRate = min(
+			120,
+			max(
+				60,
+				view.window?.screen?.maximumFramesPerSecond ?? 60
+			)
+		)
+		let started = CACurrentMediaTime()
+		isAnimatingJump = true
+		jumpAnimationCompletion = Task
+		{
+			@MainActor [weak self] in
+			while !Task.isCancelled
+			{
+				let elapsed = min(
+					1,
+					(CACurrentMediaTime() - started) / 0.22
+				)
+				let eased = CGFloat(TransitionEasing.easeInEaseOut(elapsed))
+				do
+				{
+					guard let self, self.jumpAnimationRevision == revision
+					else
+					{
+						return
+					}
+					if elapsed >= 1 || self.shouldReduceMotion()
+					{
+						self.applyJumpOrigin(destination)
+						guard self.jumpAnimationRevision == revision
+						else
+						{
+							return
+						}
+						self.isAnimatingJump = false
+						self.jumpAnimationCompletion = nil
+						self.readingPositionChanged()
+						return
+					}
+					self.applyJumpOrigin(NSPoint(
+						x: origin.x + (destination.x - origin.x) * eased,
+						y: origin.y + (destination.y - origin.y) * eased
+					))
+				}
+				do
+				{
+					try await Task.sleep(nanoseconds: UInt64(1_000_000_000 / frameRate))
+				}
+				catch
+				{
+					return
+				}
+			}
+		}
+	}
+
+	private func applyJumpOrigin(_ origin: NSPoint)
+	{
+		let clip = conversationScrollView.contentView
+		var bounds = clip.bounds
+		bounds.origin = origin
+		clip.scroll(to: clip.constrainBoundsRect(bounds).origin)
+		conversationScrollView.reflectScrolledClipView(clip)
 	}
 
 	var isNearBottom: Bool
@@ -472,20 +518,10 @@ extension TranscriptViewController
 
 	func cancelNavigationMotion()
 	{
-		guard isAnimatingJump
-		else
-		{
-			return
-		}
 		jumpAnimationRevision += 1
+		jumpAnimationCompletion?.cancel()
+		jumpAnimationCompletion = nil
 		isAnimatingJump = false
-		let clip = conversationScrollView.contentView
-		NSAnimationContext.runAnimationGroup
-		{
-			context in
-			context.duration = 0
-			clip.animator().setBoundsOrigin(clip.bounds.origin)
-		}
 	}
 
 	@objc func showLatestMessage()

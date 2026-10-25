@@ -141,6 +141,7 @@ extension TranscriptViewController
 
 	func jumpToEntry(id: String)
 	{
+		cancelNavigationMotion()
 		requestedJumpItemID = id
 		scrollToRequestedItem()
 	}
