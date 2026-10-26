@@ -1,10 +1,18 @@
 import AppKit
 
-/// Search rows truncate the primary name and secondary context independently.
+/// Complete search-result action host with shared content and AppKit-native attachment variants.
 @MainActor
 final class DesktopSearchResultButton: DesktopLayerButton
 {
-	init(
+	enum Presentation
+	{
+		case content(DesktopSearchResultContentView.Presentation)
+		case nativeAttachment(path: String)
+	}
+
+	private let content: DesktopSearchResultContentView?
+
+	convenience init(
 		title: String,
 		context: String,
 		shortcut: String = "",
@@ -13,82 +21,100 @@ final class DesktopSearchResultButton: DesktopLayerButton
 		action: Selector?
 	)
 	{
+		self.init(
+			presentation: .content(inlineContext
+				? .inlineFile(
+					title: title,
+					directory: context,
+					shortcut: shortcut
+				)
+				: .chat(
+					title: title,
+					context: context,
+					shortcut: shortcut
+				)),
+			target: target,
+			action: action
+		)
+	}
+
+	init(
+		presentation: Presentation,
+		target: AnyObject?,
+		action: Selector?
+	)
+	{
+		if case .content(let contentPresentation) = presentation
+		{
+			content = DesktopSearchResultContentView(presentation: contentPresentation)
+		}
+		else
+		{
+			content = nil
+		}
 		super.init(frame: .zero)
-		self.title = ""
 		self.target = target
 		self.action = action
-		isBordered = false
-		wantsLayer = true
-		layer?.cornerRadius = 12
-		let name = NSTextField(labelWithString: title)
-		name.font = .systemFont(ofSize: 14)
-		name.lineBreakMode = .byTruncatingMiddle
-		name.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		let detail = NSTextField(labelWithString: context)
-		detail.font = .systemFont(ofSize: 13)
-		detail.textColor = .secondaryLabelColor
-		detail.lineBreakMode = .byTruncatingMiddle
-		detail.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		let key = NSTextField(labelWithString: shortcut)
-		key.font = .systemFont(ofSize: 11)
-		key.textColor = .secondaryLabelColor
-		let keycap = DesktopSurface(
-			AppKitColorTokens.searchResultSelection,
-			cornerRadius: 7
-		)
-		AppKitLayout.pin(
-			key,
-			to: keycap,
-			inset: 2
-		)
-		key.setContentCompressionResistancePriority(
-			.required,
-			for: .horizontal
-		)
-		let spacer = NSView()
-		let row = AppKitLayout.horizontalStack(
-			inlineContext ? [name, detail, spacer, keycap] : [name, spacer, detail, keycap],
-			spacing: 8
-		)
-		row.translatesAutoresizingMaskIntoConstraints = false
-		addSubview(row)
-		NSLayoutConstraint.activate([
-			row.leadingAnchor.constraint(
-				equalTo: leadingAnchor,
-				constant: 8
-			),
-			row.trailingAnchor.constraint(
-				equalTo: trailingAnchor,
-				constant: -8
-			),
-			row.centerYAnchor.constraint(equalTo: centerYAnchor),
-		])
-		name.setContentHuggingPriority(
-			.defaultHigh,
-			for: .horizontal
-		)
-		detail.setContentHuggingPriority(
-			.defaultHigh,
-			for: .horizontal
-		)
-		detail.widthAnchor.constraint(
-			lessThanOrEqualTo: row.widthAnchor,
-			multiplier: 0.4
-		)
-		.isActive = true
-		keycap.isHidden = shortcut.isEmpty
-		setAccessibilityLabel([title, context, shortcut].filter
+		switch presentation
 		{
-			!$0.isEmpty
+		case .content:
+			guard let content
+			else
+			{
+				return
+			}
+			title = ""
+			isBordered = false
+			wantsLayer = true
+			layer?.cornerRadius = 12
+			AppKitLayout.pin(
+				content,
+				to: self,
+				inset: 0
+			)
+			setAccessibilityLabel(content.accessibilityLabel())
+			toolTip = content.toolTip
+		case .nativeAttachment(let path):
+			// Preserve AppKit's inline renderer, text metrics, truncation and natural control size.
+			let native = NSButton(
+				title: path,
+				target: target,
+				action: action
+			)
+			native.bezelStyle = .inline
+			native.alignment = .left
+			cell = native.cell?.copy() as? NSCell
+			// NSButtonCell title layout also reads its control view's initial bounds.
+			setFrameSize(native.frame.size)
+			focusRingType = native.focusRingType
+			identifier = NSUserInterfaceItemIdentifier(path)
+			setAccessibilityLabel("Attach project file \(path)")
 		}
-		.joined(separator: ", "))
-		toolTip = [title, context].joined(separator: " · ")
+	}
+
+	static func attachment(
+		path: String,
+		target: AnyObject?,
+		action: Selector?
+	) -> DesktopSearchResultButton
+	{
+		DesktopSearchResultButton(
+			presentation: .nativeAttachment(path: path),
+			target: target,
+			action: action
+		)
+	}
+
+	func setSelected(_ selected: Bool)
+	{
+		guard let content
+		else
+		{
+			return
+		}
+		layerBackgroundAlpha = nil
+		layerBackgroundColor = selected ? AppKitColorTokens.searchResultSelection : .clear
+		content.setSelected(selected)
 	}
 
 	override func hitTest(_ point: NSPoint) -> NSView?
