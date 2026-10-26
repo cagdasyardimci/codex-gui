@@ -21,7 +21,10 @@ final class ConversationSourcesViewController: NSViewController
 		[],
 		spacing: 0
 	)
-	private let status = NSTextField(wrappingLabelWithString: "")
+	private let status = DesktopStatusView(
+		message: "",
+		presentation: .inline
+	)
 	private let rawOutput = SourceRawOutputPresenter()
 
 	private struct InvocationKey: Hashable
@@ -252,9 +255,10 @@ final class ConversationSourcesViewController: NSViewController
 		var insertionIndex = 0
 		if sources.records.isEmpty
 		{
-			let empty =
-				NSTextField(wrappingLabelWithString: "No sources in loaded conversation history")
-			empty.textColor = .secondaryLabelColor
+			let empty = DesktopStatusView(
+				message: "No sources in loaded conversation history",
+				presentation: .conversation
+			)
 			sourceStack.insertArrangedSubview(
 				empty,
 				at: insertionIndex
@@ -298,9 +302,7 @@ final class ConversationSourcesViewController: NSViewController
 				divider.widthAnchor.constraint(equalTo: sourceStack.widthAnchor).isActive = true
 			}
 		}
-		status.textColor = .secondaryLabelColor
-		status.font = .systemFont(ofSize: 12)
-		status.isHidden = true
+		status.setMessage("")
 		sourceStack.insertArrangedSubview(
 			status,
 			at: insertionIndex
@@ -394,10 +396,10 @@ final class ConversationSourcesViewController: NSViewController
 			.defaultLow,
 			for: .horizontal
 		)
-		let state = NSTextField(wrappingLabelWithString: record
-			.kind == .image ? "Image unavailable" : "Source unavailable")
-		state.textColor = .secondaryLabelColor
-		state.font = .systemFont(ofSize: 11)
+		let state = DesktopStatusView(
+			message: record.kind == .image ? "Image unavailable" : "Source unavailable",
+			presentation: .inlineCompact
+		)
 		state.isHidden = button.isEnabled || record.isInlineImage
 		let duration = NSTextField(labelWithString: "")
 		duration.textColor = .secondaryLabelColor
@@ -691,43 +693,22 @@ final class ConversationSourcesViewController: NSViewController
 			group.operation,
 			count: group.invocations.count
 		)
-		let disclosure = SourceOperationDisclosureButton(
+		let disclosure = DesktopDisclosureButton(
 			title: label,
+			expanded: expandedInvocations.contains(id),
+			presentation: .hoverReveal,
 			target: self,
 			action: #selector(toggleInvocation(_:))
 		)
 		disclosure.setButtonType(.pushOnPushOff)
-		disclosure.isBordered = false
-		disclosure.imagePosition = .noImage
-		if let cell = disclosure.cell as? NSButtonCell
-		{
-			cell.highlightsBy = []
-			cell.showsStateBy = []
-		}
-		disclosure.alignment = .left
-		disclosure.font = .systemFont(ofSize: 14)
-		disclosure.contentTintColor = SourceResultCodeCard.activityLabelColor
-		disclosure.state = expandedInvocations.contains(id) ? .on : .off
-		let plainTitle = NSAttributedString(
-			string: label,
-			attributes: [
-				.font: NSFont.systemFont(ofSize: 14),
-				.foregroundColor: SourceResultCodeCard.activityLabelColor,
-			]
-		)
-		disclosure.attributedTitle = plainTitle
-		disclosure.attributedAlternateTitle = plainTitle
-		disclosure.setAccessibilityValue(disclosure.state == .on ? "Expanded" : "Collapsed")
 		disclosure.identifier = NSUserInterfaceItemIdentifier("source-disclosure:\(id)")
-		disclosure.setAccessibilityLabel(label)
-		disclosure.cell?.lineBreakMode = .byTruncatingTail
 		disclosure.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
 		let detail = AppKitLayout.verticalStack(
 			[],
-			// Each output already includes a 4pt gap and a 24pt raw-action row.
+			// Each output includes its own action row and content spacing.
 			spacing: 6
 		)
 		detail.identifier = NSUserInterfaceItemIdentifier("source-detail:\(id)")
@@ -755,7 +736,6 @@ final class ConversationSourcesViewController: NSViewController
 			populateResults(for: groupDisclosure)
 		}
 		detail.isHidden = disclosure.state == .off
-		disclosure.updateDisclosureIndicator()
 
 		content.addArrangedSubview(disclosure)
 		content.addArrangedSubview(detail)
@@ -853,8 +833,7 @@ final class ConversationSourcesViewController: NSViewController
 			sender.state == .on ? 14 : 8,
 			after: sender
 		)
-		(sender as? SourceOperationDisclosureButton)?.updateDisclosureIndicator()
-		sender.setAccessibilityValue(sender.state == .on ? "Expanded" : "Collapsed")
+		(sender as? DesktopDisclosureButton)?.setExpanded(sender.state == .on)
 	}
 
 	func select(_ request: ContextPanelRequest)
@@ -946,100 +925,6 @@ private final class ConversationSourcesScrollView: NSScrollView
 	}
 }
 
-private final class ConversationSourcesDocumentView: NSView
+private final class ConversationSourcesDocumentView: DesktopFlippedView
 {
-	override var isFlipped: Bool
-	{
-		true
-	}
-}
-
-/// Reserves the trailing icon slot so hover changes do not move the operation label.
-@MainActor
-private final class SourceOperationDisclosureButton: DesktopAttributedTitleButton
-{
-	private enum Indicator: Equatable
-	{
-		case hidden, hovered, expanded
-	}
-	private var displayedIndicator: Indicator?
-	private var disclosureTrackingArea: NSTrackingArea?
-	private var isHovered = false
-	private let reservedIcon = NSImage(size: NSSize(
-		width: 16,
-		height: 16
-	))
-
-	func updateDisclosureIndicator()
-	{
-		let indicator: Indicator = state == .on ? .expanded : (isHovered ? .hovered : .hidden)
-		guard displayedIndicator != indicator
-		else
-		{
-			return
-		}
-		displayedIndicator = indicator
-		imagePosition = .imageTrailing
-		switch indicator
-		{
-		case .expanded: image = DesktopIcons.image(.chevronDown)
-		case .hovered: image = DesktopIcons.image(.chevronRight)
-		case .hidden: image = reservedIcon
-		}
-	}
-
-	override func updateTrackingAreas()
-	{
-		super.updateTrackingAreas()
-		if let disclosureTrackingArea
-		{
-			removeTrackingArea(disclosureTrackingArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [
-				.mouseEnteredAndExited,
-				.activeInKeyWindow,
-				.inVisibleRect
-			],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(area)
-		disclosureTrackingArea = area
-		if let window, window.isKeyWindow
-		{
-			let point = convert(
-				window.mouseLocationOutsideOfEventStream,
-				from: nil
-			)
-			isHovered = !isHidden && visibleRect.contains(point)
-		}
-		else
-		{
-			isHovered = false
-		}
-		updateDisclosureIndicator()
-	}
-
-	override func mouseEntered(with event: NSEvent)
-	{
-		super.mouseEntered(with: event)
-		isHovered = true
-		updateDisclosureIndicator()
-	}
-
-	override func mouseExited(with event: NSEvent)
-	{
-		super.mouseExited(with: event)
-		isHovered = false
-		updateDisclosureIndicator()
-	}
-
-	override func viewDidMoveToWindow()
-	{
-		super.viewDidMoveToWindow()
-		isHovered = false
-		updateDisclosureIndicator()
-	}
 }

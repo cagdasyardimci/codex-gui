@@ -2,13 +2,13 @@ import AppKit
 
 /// Displays recorded result text without Markdown interpretation or link activation.
 @MainActor
-final class SourceResultCodeCard: NSView
+final class SourceResultCodeCard: DesktopOutputCard
 {
 	private let source: String
 	private let language: String
 	private let isError: Bool
 	private let textView = NSTextView()
-	private let scroll = NSScrollView()
+	private let scroll: NSScrollView
 	private let font = NSFont.monospacedSystemFont(
 		ofSize: 12,
 		weight: .light
@@ -24,70 +24,37 @@ final class SourceResultCodeCard: NSView
 		headerAccessory: NSView? = nil
 	)
 	{
-		self.source = text.count > 16384 ? String(text.prefix(16384)) + "\n[Truncated]" : text
-		self.language = language.lowercased() == "json" ? "json" : "text"
+		let boundedSource = text.count > 16384 ? String(text.prefix(16384)) + "\n[Truncated]" : text
+		let normalizedLanguage = language.lowercased() == "json" ? "json" : "text"
+		self.source = boundedSource
+		self.language = normalizedLanguage
 		self.isError = isError
-		super.init(frame: .zero)
+		let errorLabel = NSTextField(wrappingLabelWithString: boundedSource)
+		let resultScroll = NSScrollView()
+		scroll = resultScroll
+		super.init(
+			title: normalizedLanguage,
+			presentation: isError ? .error : .code,
+			body: isError ? errorLabel : resultScroll,
+			accessory: isError ? nil : headerAccessory
+		)
 		self.identifier = NSUserInterfaceItemIdentifier(identifier)
-		wantsLayer = true
-		layer?.cornerRadius = isError ? 12 : 20
-		layer?.borderWidth = 1
 		if isError
 		{
-			let notice = NSTextField(wrappingLabelWithString: source)
-			notice.font = .systemFont(
+			errorLabel.font = .systemFont(
 				ofSize: 14,
 				weight: .light
 			)
-			notice.textColor = Self.referenceColor(
-				0x191C1F,
-				dark: .white
-			)
-			notice.isSelectable = true
-			notice.identifier = NSUserInterfaceItemIdentifier(identifier + ":text")
-			notice.setContentCompressionResistancePriority(
+			errorLabel.textColor = AppKitColorTokens.primaryText
+			errorLabel.isSelectable = true
+			errorLabel.identifier = NSUserInterfaceItemIdentifier(identifier + ":text")
+			errorLabel.setContentCompressionResistancePriority(
 				.defaultLow,
 				for: .horizontal
 			)
-			notice.setAccessibilityLabel("Recorded error: \(source)")
-			AppKitLayout.pin(
-				notice,
-				to: self,
-				inset: 12
-			)
-			applyColors()
+			errorLabel.setAccessibilityLabel("Recorded error: \(boundedSource)")
 			return
 		}
-		let icon = NSImageView()
-		icon.image = DesktopIcons.image(
-			.code,
-			size: 20
-		)
-		icon.setAccessibilityElement(false)
-		icon.contentTintColor = Self.referenceColor(
-			0x191C1F,
-			dark: .white
-		)
-		icon.widthAnchor.constraint(equalToConstant: 20).isActive = true
-		icon.heightAnchor.constraint(equalToConstant: 20).isActive = true
-		let label = NSTextField(labelWithString: self.language)
-		label.font = .systemFont(
-			ofSize: 13,
-			weight: .regular
-		)
-		label.textColor = Self.referenceColor(
-			0x191C1F,
-			dark: .white
-		)
-		let headerViews: [NSView] = headerAccessory.map
-		{
-			[icon, label, NSView(), $0]
-		}
-		?? [icon, label]
-		let header = AppKitLayout.horizontalStack(
-			headerViews,
-			spacing: 6
-		)
 		textView.identifier = NSUserInterfaceItemIdentifier(identifier + ":text")
 		textView.isEditable = false
 		textView.isSelectable = true
@@ -107,7 +74,7 @@ final class SourceResultCodeCard: NSView
 			width: CGFloat.greatestFiniteMagnitude,
 			height: CGFloat.greatestFiniteMagnitude
 		)
-		textView.setAccessibilityLabel("Recorded \(self.language) result")
+		textView.setAccessibilityLabel("Recorded \(normalizedLanguage) result")
 		scroll.hasHorizontalScroller = true
 		scroll.hasVerticalScroller = true
 		scroll.autohidesScrollers = true
@@ -126,48 +93,7 @@ final class SourceResultCodeCard: NSView
 				ceil(codeSize.height) + 20
 			)
 		)
-		addSubview(header)
-		addSubview(scroll)
-		header.translatesAutoresizingMaskIntoConstraints = false
-		scroll.translatesAutoresizingMaskIntoConstraints = false
-		if headerAccessory != nil
-		{
-			header.trailingAnchor.constraint(
-				equalTo: trailingAnchor,
-				constant: -21
-			).isActive = true
-		}
-		NSLayoutConstraint.activate([
-			header.leadingAnchor.constraint(
-				equalTo: leadingAnchor,
-				constant: 21
-			),
-			header.trailingAnchor.constraint(
-				lessThanOrEqualTo: trailingAnchor,
-				constant: -21
-			),
-			header.topAnchor.constraint(
-				equalTo: topAnchor,
-				constant: 16
-			),
-			scroll.leadingAnchor.constraint(
-				equalTo: leadingAnchor,
-				constant: 21
-			),
-			scroll.trailingAnchor.constraint(
-				equalTo: trailingAnchor,
-				constant: -21
-			),
-			scroll.topAnchor.constraint(
-				equalTo: header.bottomAnchor,
-				constant: 6
-			),
-			scroll.bottomAnchor.constraint(
-				equalTo: bottomAnchor,
-				constant: -12
-			),
-			scroll.heightAnchor.constraint(equalToConstant: bodyHeight),
-		])
+		scroll.heightAnchor.constraint(equalToConstant: bodyHeight).isActive = true
 	}
 
 	required init?(coder: NSCoder)
@@ -204,12 +130,9 @@ final class SourceResultCodeCard: NSView
 	private func applyColors()
 	{
 		let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		if isError
+		guard !isError
+		else
 		{
-			layer?.backgroundColor = (dark
-				? Self.sRGB(0x270B0A) : Self.sRGB(0xFEF1F0)).cgColor
-			layer?.borderColor = (dark
-				? Self.sRGB(0x7C221F) : Self.sRGB(0xFBD5D3)).cgColor
 			return
 		}
 		let paragraph = NSMutableParagraphStyle()
@@ -246,12 +169,6 @@ final class SourceResultCodeCard: NSView
 				text.length - location
 			)
 		))
-		effectiveAppearance.performAsCurrentDrawingAppearance
-		{
-			layer?.backgroundColor = (dark
-				? Self.sRGB(0x2A2A2A) : Self.sRGB(0xF3F3F3)).cgColor
-			layer?.borderColor = (dark ? Self.sRGB(0x333333) : Self.sRGB(0xE8E8E8)).cgColor
-		}
 	}
 	private func applyJSONColors(
 		to text: NSMutableAttributedString,

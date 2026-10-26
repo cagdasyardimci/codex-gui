@@ -74,7 +74,7 @@ struct SourcesHoverAppearanceTests
 				#expect(parent.firstResponder === anchor)
 				let background = try #require(content.layer?.backgroundColor)
 				#expect(background == AppKitColorResolution.resolvedCGColor(
-					.controlBackgroundColor,
+					AppKitColorTokens.summaryCard,
 					for: content
 				))
 				backgrounds.append(background)

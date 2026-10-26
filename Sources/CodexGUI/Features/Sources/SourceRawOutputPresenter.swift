@@ -186,18 +186,13 @@ final class SourceRawOutputPresenter: NSObject
 		action: Selector
 	) -> NSButton
 	{
-		let button = NSButton(
-			title: "",
-			target: self,
-			action: action
+		let button = DesktopStyledButton(
+			icon: icon,
+			label: label
 		)
-		button.image = DesktopIcons.image(icon)
-		button.imagePosition = .imageOnly
-		button.isBordered = false
+		button.target = self
+		button.action = action
 		button.toolTip = label
-		button.setAccessibilityLabel(label)
-		button.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		button.heightAnchor.constraint(equalToConstant: 24).isActive = true
 		return button
 	}
 
@@ -230,19 +225,15 @@ final class SourceRawOutputEntryView: NSView
 	{
 		self.onOpen = onOpen
 		super.init(frame: .zero)
-		let button = SourceRawOutputButton(
-			title: "",
-			target: self,
-			action: #selector(openRawOutput)
+		let button = DesktopStyledButton(
+			icon: .code,
+			label: "Show raw tool call output",
+			presentation: .revealingIcon
 		)
-		button.imagePosition = .imageOnly
-		button.isBordered = false
-		button.contentTintColor = .secondaryLabelColor
+		button.target = self
+		button.action = #selector(openRawOutput)
 		button.toolTip = "Show raw tool call output"
-		button.setAccessibilityLabel("Show raw tool call output")
 		button.identifier = NSUserInterfaceItemIdentifier("source-show-raw:\(id)")
-		button.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		button.heightAnchor.constraint(equalToConstant: 24).isActive = true
 		let actions = AppKitLayout.horizontalStack(
 			[button, NSView()],
 			spacing: 0
@@ -268,103 +259,5 @@ final class SourceRawOutputEntryView: NSView
 	@objc private func openRawOutput()
 	{
 		onOpen()
-	}
-}
-
-@MainActor
-private final class SourceRawOutputButton: NSButton
-{
-	private var hoverArea: NSTrackingArea?
-	private var isHovered = false
-	private var isKeyboardFocused = false
-
-	override func updateTrackingAreas()
-	{
-		super.updateTrackingAreas()
-		if let hoverArea
-		{
-			removeTrackingArea(hoverArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [
-				.mouseEnteredAndExited,
-				.activeInKeyWindow,
-				.inVisibleRect
-			],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(area)
-		hoverArea = area
-		if let window, window.isKeyWindow
-		{
-			let point = convert(
-				window.mouseLocationOutsideOfEventStream,
-				from: nil
-			)
-			isHovered = !isHidden && visibleRect.contains(point)
-		}
-		else
-		{
-			isHovered = false
-		}
-		updateVisibility()
-	}
-
-	override func mouseEntered(with event: NSEvent)
-	{
-		isHovered = true
-		updateVisibility()
-	}
-
-	override func mouseExited(with event: NSEvent)
-	{
-		isHovered = false
-		updateVisibility()
-	}
-
-	override func becomeFirstResponder() -> Bool
-	{
-		let accepted = super.becomeFirstResponder()
-		if accepted
-		{
-			isKeyboardFocused = true
-			updateVisibility()
-		}
-		return accepted
-	}
-
-	override func resignFirstResponder() -> Bool
-	{
-		let accepted = super.resignFirstResponder()
-		if accepted
-		{
-			isKeyboardFocused = false
-			updateVisibility()
-		}
-		return accepted
-	}
-
-	private func updateVisibility()
-	{
-		image = isHovered || isKeyboardFocused ? DesktopIcons.image(
-			.code,
-			size: 12
-		) : nil
-		needsDisplay = true
-	}
-
-	override func draw(_ dirtyRect: NSRect)
-	{
-		if isHovered
-		{
-			NSColor.quaternaryLabelColor.setFill()
-			NSBezierPath(ovalIn: bounds.insetBy(
-				dx: 1,
-				dy: 1
-			)).fill()
-		}
-		super.draw(dirtyRect)
 	}
 }

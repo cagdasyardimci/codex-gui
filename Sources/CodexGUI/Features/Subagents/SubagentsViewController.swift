@@ -53,6 +53,31 @@ final class SubagentsViewController: NSViewController
 			alpha: 1
 		)
 	}
+	private final class SubagentShowMoreButton: DesktopStyledButton
+	{
+		init(
+			title: String,
+			target: AnyObject?,
+			action: Selector?
+		)
+		{
+			super.init(
+				title: title,
+				presentation: .nativeBorderless,
+				size: .regular
+			)
+			self.target = target
+			self.action = action
+			alignment = .left
+			contentTintColor = SubagentsViewController.secondaryTextColor
+		}
+
+		required init?(coder: NSCoder)
+		{
+			nil
+		}
+	}
+
 	private static let textPointSize: CGFloat = 13
 	private static let timePointSize: CGFloat = 12
 	private static let activeSubtitleSpacing: CGFloat = 4
@@ -94,7 +119,7 @@ final class SubagentsViewController: NSViewController
 		scroll.hasVerticalScroller = true
 		scroll.autohidesScrollers = true
 		scroll.drawsBackground = false
-		let document = SubagentsDocumentView()
+		let document = DesktopFlippedView()
 		document.translatesAutoresizingMaskIntoConstraints = false
 		scroll.documentView = document
 		document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
@@ -349,15 +374,11 @@ final class SubagentsViewController: NSViewController
 		let remainingCount = subagents.doneAgents.count - visibleDone.count
 		if remainingCount > 0
 		{
-			let button = NSButton(
+			let button = SubagentShowMoreButton(
 				title: "Show \(remainingCount) more",
 				target: self,
 				action: #selector(showMore(_:))
 			)
-			button.isBordered = false
-			button.alignment = .left
-			button.font = .systemFont(ofSize: Self.textPointSize)
-			button.contentTintColor = Self.secondaryTextColor
 			button.identifier = NSUserInterfaceItemIdentifier("subagents-show-more")
 			content.addArrangedSubview(button)
 		}
@@ -383,33 +404,13 @@ final class SubagentsViewController: NSViewController
 		avatar.widthAnchor.constraint(equalToConstant: Self.avatarDimension).isActive = true
 		avatar.heightAnchor.constraint(equalToConstant: Self.avatarDimension).isActive = true
 
-		let name = DesktopAttributedTitleButton()
-		name.cell = SubagentNameButtonCell(textCell: agent.displayName)
+		let name = SubagentNameButton(title: agent.displayName)
 		name.target = self
 		name.action = #selector(selectThread(_:))
-		name.isBordered = false
-		name.alignment = .left
-		let nameFont = NSFont.systemFont(ofSize: Self.textPointSize)
-		name.font = nameFont
-		let paragraphStyle = NSMutableParagraphStyle()
-		paragraphStyle.lineBreakMode = .byTruncatingTail
-		name.attributedTitle = NSAttributedString(
-			string: agent.displayName,
-			attributes: [
-				.font: nameFont,
-				.foregroundColor: NSColor.labelColor,
-				.paragraphStyle: paragraphStyle,
-			]
-		)
-		name.cell?.lineBreakMode = .byTruncatingTail
 		name.identifier = NSUserInterfaceItemIdentifier("subagent-open:\(agent.identity)")
 		name.setAccessibilityLabel("Open subagent chat: \(agent.name)")
 		name.isEnabled = onSelectThread != nil && agent.conversationThreadID != nil
 		agentActions[name] = agent
-		name.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
 		let status = subagents.status(for: agent)
 		let detail = NSTextField(labelWithString: status?.label ?? "Activity")
 		detail.font = .systemFont(ofSize: Self.textPointSize)
@@ -451,10 +452,11 @@ final class SubagentsViewController: NSViewController
 				rowViews.append(elapsed)
 			}
 		}
-		let row = NSStackView(views: rowViews)
-		row.orientation = .horizontal
-		row.alignment = status == .active ? .top : .centerY
-		row.spacing = Self.rowSpacing
+		let row = AppKitLayout.horizontalStack(
+			rowViews,
+			spacing: Self.rowSpacing,
+			alignment: status == .active ? .top : .centerY
+		)
 		row.identifier = NSUserInterfaceItemIdentifier("subagent:\(agent.identity)")
 		row.setAccessibilityLabel("\(agent.name), \(status?.label ?? "Activity")")
 		content.addArrangedSubview(row)
@@ -504,7 +506,40 @@ final class SubagentsViewController: NSViewController
 	}
 }
 
-/// A missing navigation target disables interaction while the recorded name stays readable.
+/// A name link keeps its recorded title readable when navigation is unavailable.
+@MainActor
+private final class SubagentNameButton: DesktopAttributedTitleButton
+{
+	init(title: String)
+	{
+		super.init(frame: .zero)
+		cell = SubagentNameButtonCell(textCell: title)
+		isBordered = false
+		alignment = .left
+		font = .systemFont(ofSize: 13)
+		let paragraph = NSMutableParagraphStyle()
+		paragraph.lineBreakMode = .byTruncatingTail
+		attributedTitle = NSAttributedString(
+			string: title,
+			attributes: [
+				.font: NSFont.systemFont(ofSize: 13),
+				.foregroundColor: NSColor.labelColor,
+				.paragraphStyle: paragraph,
+			]
+		)
+		cell?.lineBreakMode = .byTruncatingTail
+		setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+}
+
 private final class SubagentNameButtonCell: NSButtonCell
 {
 	override func drawTitle(
@@ -515,13 +550,5 @@ private final class SubagentNameButtonCell: NSButtonCell
 	{
 		attributedTitle.draw(in: frame)
 		return frame
-	}
-}
-
-private final class SubagentsDocumentView: NSView
-{
-	override var isFlipped: Bool
-	{
-		true
 	}
 }

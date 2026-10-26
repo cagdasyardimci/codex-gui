@@ -12,20 +12,15 @@ final class SubagentDetailViewController: NSViewController
 	private(set) var state: SubagentConversationState?
 	private let nameLabel = NSTextField(labelWithString: "")
 	private let metadataLabel = NSTextField(labelWithString: "")
-	private let statusLabel = NSTextField(wrappingLabelWithString: "")
 	private let avatarContainer = NSView()
-	private let loadingIndicator = NSProgressIndicator()
-	private let retryButton = NSButton(
-		title: "Retry",
-		target: nil,
-		action: nil
+	private let status = DesktopStatusView(
+		message: "",
+		presentation: .conversation
 	)
-	private let statusRow = NSStackView()
 	private static let contentInset: CGFloat = 16
 	private static let contentSpacing: CGFloat = 12
 	private static let headerSpacing: CGFloat = 10
 	private static let avatarDimension: CGFloat = 24
-	private static let backButtonWidth: CGFloat = 24
 
 	init(owner: FeaturePresentationOwner)
 	{
@@ -92,21 +87,22 @@ final class SubagentDetailViewController: NSViewController
 		metadataLabel.isHidden = metadataLabel.stringValue.isEmpty
 		renderAvatar(agent)
 		let showsInitialLoading = state.isLoading && state.entries.isEmpty
-		statusLabel.stringValue = state
-			.error ?? (showsInitialLoading ? "Loading conversation…" : "")
-		statusLabel.isHidden = statusLabel.stringValue.isEmpty
-		retryButton.isHidden = state.error == nil
-		retryButton.isEnabled = !state.isLoading
-		loadingIndicator.isHidden = !showsInitialLoading
-		statusRow.isHidden = !showsInitialLoading && state.error == nil
-		if showsInitialLoading
-		{
-			loadingIndicator.startAnimation(nil)
-		}
-		else
-		{
-			loadingIndicator.stopAnimation(nil)
-		}
+		status.setMessage(state.error ?? (showsInitialLoading ? "Loading conversation…" : ""))
+		status.setLoading(showsInitialLoading)
+		status.setActions(state.error == nil ? [] : [DesktopStatusView.Action(
+			title: "Retry",
+			isEnabled: !state.isLoading,
+			onActivate:
+			{
+				[weak self] in
+				guard let self, self.state?.error != nil, self.state?.isLoading == false
+				else
+				{
+					return
+				}
+				self.onRetry?()
+			}
+		)])
 		transcript.render(TranscriptPresentation(
 			owner: owner,
 			entries: state.entries,
@@ -168,19 +164,12 @@ final class SubagentDetailViewController: NSViewController
 
 	private func makeHeader() -> NSView
 	{
-		let backButton = NSButton(
-			title: "",
+		let backButton = DesktopBackButton(
 			target: self,
 			action: #selector(goBack)
 		)
-		backButton.isBordered = false
-		backButton.image = NSImage(
-			systemSymbolName: "chevron.left",
-			accessibilityDescription: nil
-		)
 		backButton.setAccessibilityLabel("Back to Subagents")
 		backButton.toolTip = "Back to Subagents"
-		backButton.widthAnchor.constraint(equalToConstant: Self.backButtonWidth).isActive = true
 		avatarContainer.widthAnchor.constraint(equalToConstant: Self.avatarDimension)
 			.isActive = true
 		avatarContainer.heightAnchor.constraint(equalToConstant: Self.avatarDimension)
@@ -207,36 +196,23 @@ final class SubagentDetailViewController: NSViewController
 			for: .horizontal
 		)
 		metadataLabel.alignment = .right
-		let header = NSStackView(views: [
-			backButton,
-			avatarContainer,
-			nameLabel,
-			spacer,
-			metadataLabel
-		])
-		header.orientation = .horizontal
-		header.alignment = .centerY
-		header.spacing = Self.headerSpacing
+		let header = AppKitLayout.horizontalStack(
+			[
+				backButton,
+				avatarContainer,
+				nameLabel,
+				spacer,
+				metadataLabel
+			],
+			spacing: Self.headerSpacing,
+			alignment: .centerY
+		)
 		return header
 	}
 
 	private func makeStatusRow() -> NSView
 	{
-		loadingIndicator.style = .spinning
-		loadingIndicator.controlSize = .small
-		loadingIndicator.isDisplayedWhenStopped = false
-		statusLabel.font = .systemFont(ofSize: 13)
-		statusLabel.textColor = .secondaryLabelColor
-		retryButton.target = self
-		retryButton.action = #selector(retry)
-		statusRow.setViews(
-			[loadingIndicator, statusLabel, retryButton],
-			in: .leading
-		)
-		statusRow.orientation = .horizontal
-		statusRow.alignment = .centerY
-		statusRow.spacing = 8
-		return statusRow
+		status
 	}
 
 	private func renderAvatar(_ agent: CodexSubagentActivity)
@@ -261,8 +237,4 @@ final class SubagentDetailViewController: NSViewController
 		onBack?()
 	}
 
-	@objc private func retry()
-	{
-		onRetry?()
-	}
 }
