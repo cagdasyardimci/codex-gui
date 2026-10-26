@@ -155,7 +155,85 @@ struct SettingsBackendTests
 		#expect(fixture.backend.featureStatus.isEmpty)
 	}
 
+	@Test(.timeLimit(.minutes(1)))
+	func browserSwitchWritesBrowserUseFeature() async throws
+	{
+		let fixture = try await SettingsBackendFixture.make(mode: "success")
+		defer
+		{
+			fixture.close()
+		}
+		await fixture.backend.start()
+		let page = SettingsBrowserPage(backend: fixture.backend)
+		let browser = page.descendants.compactMap
+		{
+			$0 as? RemoteConnectionsSwitch
+		}.first
+		{
+			$0.accessibilityLabel() == "Browser"
+		}
+		let control = try #require(browser)
+		#expect(control.isEnabled)
+		await withCheckedContinuation
+		{
+			continuation in
+			fixture.backend.onDidSave =
+			{
+				_ in continuation.resume()
+			}
+			control.state = .on
+			#expect(control.sendAction(
+				control.action,
+				to: control.target
+			))
+		}
+		#expect(fixture.backend.value("features.browser_use") as? Bool == true)
+	}
 
+	@Test func siteSettingsManageRevealsPermissionControls() async throws
+	{
+		let fixture = try await SettingsBackendFixture.make(mode: "success")
+		defer
+		{
+			fixture.close()
+		}
+		await fixture.backend.start()
+		let page = SettingsBrowserPage(backend: fixture.backend)
+		#expect(!page.descendants.contains
+		{
+			$0 is SettingsBrowserPermissionsTable
+		})
+		let manage = try #require(page.descendants.compactMap
+		{
+			$0 as? NSButton
+		}.first
+		{
+			$0.title == "Manage"
+		})
+		#expect(manage.sendAction(
+			manage.action,
+			to: manage.target
+		))
+		#expect(page.descendants.contains
+		{
+			$0 is SettingsBrowserPermissionsTable
+		})
+		let done = try #require(page.descendants.compactMap
+		{
+			$0 as? NSButton
+		}.first
+		{
+			$0.title == "Done"
+		})
+		#expect(done.sendAction(
+			done.action,
+			to: done.target
+		))
+		#expect(!page.descendants.contains
+		{
+			$0 is SettingsBrowserPermissionsTable
+		})
+	}
 
 	@Test(arguments: ["repeated_cursor", "catalog_unavailable"])
 	func featureCatalogFailurePreservesConfigWritesAndExplicitFallback(mode: String) async throws
