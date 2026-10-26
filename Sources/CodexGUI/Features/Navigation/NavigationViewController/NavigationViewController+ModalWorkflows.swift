@@ -38,7 +38,7 @@ extension NavigationViewController
 		let capturedScope = modalScope
 		let capturedThreadID = thread.id
 		let complete = completion ?? onDeleteTask
-		window.beginSheet(panel)
+		panel.beginSheet(in: window)
 		{
 			[weak self, panel] response in
 			panel.orderOut(nil)
@@ -101,7 +101,7 @@ extension NavigationViewController
 		}
 		let capturedScope = modalScope
 		let complete = completion ?? onRenameProject
-		window.beginSheet(panel)
+		panel.beginSheet(in: window)
 		{
 			[weak self, panel, dialog] response in
 			panel.orderOut(nil)
@@ -115,7 +115,6 @@ extension NavigationViewController
 				dialog.input.field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 			)
 		}
-		panel.makeFirstResponder(dialog.input.field)
 		dialog.input.field.selectText(nil)
 	}
 
@@ -255,33 +254,28 @@ extension NavigationViewController
 		completion: @escaping (String) -> Void
 	)
 	{
-		let alert = NSAlert()
-		alert.messageText = title
-		alert.informativeText = informativeText
-		let field = NSTextField(string: value)
-		field.placeholderString = placeholder
-		field.frame = NSRect(
-			x: 0,
-			y: 0,
-			width: 320,
-			height: 24
+		let prompt = DesktopTextEntryPrompt(
+			title: title,
+			detail: informativeText,
+			actionTitle: actionTitle,
+			fields: [DesktopTextEntryPrompt.Field(
+				value: value,
+				placeholder: placeholder,
+				accessibilityLabel: accessibilityLabel
+			)],
+			layout: .single
 		)
-		field.setAccessibilityLabel(accessibilityLabel)
-		alert.accessoryView = field
-		alert.addButton(withTitle: actionTitle)
-		alert.addButton(withTitle: "Cancel")
-		alert.window.initialFirstResponder = field
 		let capturedScope = modalScope
-		alert.beginSheetModal(for: window)
+		prompt.beginSheet(in: window)
 		{
-			[weak self] response in
-			guard response == .alertFirstButtonReturn, self?.modalScope == capturedScope,
+			[weak self] values in
+			guard let value = values?.first, self?.modalScope == capturedScope,
 					requiredThreadID == nil || self?.selectedThreadID == requiredThreadID
 			else
 			{
 				return
 			}
-			completion(field.stringValue)
+			completion(value)
 		}
 	}
 }

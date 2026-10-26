@@ -620,18 +620,15 @@ extension ConversationViewController
 		confirmation.onDecision =
 		{
 			[weak window, weak panel] confirmed in
-			guard let window, let panel
+			guard window != nil, let panel
 			else
 			{
 				return
 			}
-			window.endSheet(
-				panel,
-				returnCode: confirmed ? .OK : .cancel
-			)
+			panel.finishDecision(confirmed)
 		}
 		fullAccessConfirmationPanel = panel
-		window.beginSheet(panel)
+		panel.beginSheet(in: window)
 		{
 			[weak self, weak panel] response in
 			self?.fullAccessConfirmationPanel = nil

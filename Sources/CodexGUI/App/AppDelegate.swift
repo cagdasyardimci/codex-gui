@@ -145,14 +145,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 			{
 				return
 			}
-			let alert = NSAlert()
-			alert.messageText = "Codex is working"
-			alert.informativeText = "Stop all running tasks before quitting, or keep the app open."
-			alert.addButton(withTitle: "Keep App Open")
-			alert.addButton(withTitle: "Stop Tasks and Quit")
+			let confirmation = DesktopNativeConfirmation(
+				title: "Codex is working",
+				message: "Stop all running tasks before quitting, or keep the app open.",
+				confirmTitle: "Stop Tasks and Quit",
+				cancelTitle: "Keep App Open"
+			)
 			self.coordinator.confirmQuit(
 				request,
-				approved: alert.runModal() == .alertSecondButtonReturn
+				approved: confirmation.runModal()
 			)
 		}
 		Task

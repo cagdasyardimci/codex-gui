@@ -359,16 +359,17 @@ extension MainWindowController
 				failure
 			)
 		}
-		let alert = NSAlert()
-		alert.messageText = isWindowClosing
-			? "Some file edits could not be saved" : "Could not save file"
-		alert.informativeText = isWindowClosing
-			? "Keep this window open to resolve the edits, or discard the local edits."
-			: failure == .conflict
-			? "The file changed on disk. Keep viewing it or discard the local edits."
-			: "Keep viewing the file or discard the local edits."
-		alert.addButton(withTitle: "Keep Viewing")
-		alert.addButton(withTitle: "Discard Local Edits")
-		return alert.runModal() == .alertSecondButtonReturn
+		let confirmation = DesktopNativeConfirmation(
+			title: isWindowClosing
+				? "Some file edits could not be saved" : "Could not save file",
+			message: isWindowClosing
+				? "Keep this window open to resolve the edits, or discard the local edits."
+				: failure == .conflict
+				? "The file changed on disk. Keep viewing it or discard the local edits."
+				: "Keep viewing the file or discard the local edits.",
+			confirmTitle: "Discard Local Edits",
+			cancelTitle: "Keep Viewing"
+		)
+		return confirmation.runModal()
 	}
 }

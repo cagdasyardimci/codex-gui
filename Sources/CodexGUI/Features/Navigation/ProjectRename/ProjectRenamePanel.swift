@@ -1,15 +1,9 @@
 import AppKit
 
 @MainActor
-final class ProjectRenamePanel: NSPanel
+final class ProjectRenamePanel: DesktopConfirmationPanel
 {
 	var onSave: (() -> Void)?
-	private var hasCompleted = false
-	override var canBecomeKey: Bool
-	{
-		true
-	}
-
 	override func sendEvent(_ event: NSEvent)
 	{
 		guard event.type == .keyDown
@@ -33,7 +27,7 @@ final class ProjectRenamePanel: NSPanel
 
 	func finish(_ save: Bool)
 	{
-		guard !hasCompleted, let parent = sheetParent
+		guard !hasCompletedDecision, sheetParent != nil
 		else
 		{
 			return
@@ -42,14 +36,6 @@ final class ProjectRenamePanel: NSPanel
 		{
 			return
 		}
-		hasCompleted = true
-		parent.endSheet(
-			self,
-			returnCode: save ? .OK : .cancel
-		)
-	}
-	override func cancelOperation(_ sender: Any?)
-	{
-		finish(false)
+		finishDecision(save)
 	}
 }

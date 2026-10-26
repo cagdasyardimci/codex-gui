@@ -1,10 +1,9 @@
 import AppKit
 
 @MainActor
-final class FullAccessConfirmationPanel: NSPanel
+final class FullAccessConfirmationPanel: DesktopConfirmationPanel
 {
 	private var dismissalFinished = false
-	private var hasCompletedDecision = false
 	private var dismissalWaiters: [UUID: AsyncStream<Void>.Continuation] = [:]
 
 	/// The sheet completion, rather than animation timing, acknowledges its final state.
@@ -44,16 +43,6 @@ final class FullAccessConfirmationPanel: NSPanel
 		}
 	}
 
-	override var canBecomeKey: Bool
-	{
-		true
-	}
-
-	override func cancelOperation(_ sender: Any?)
-	{
-		finishDecision(false)
-	}
-
 	override func sendEvent(_ event: NSEvent)
 	{
 		if sheetParent != nil, event.type == .keyDown,
@@ -73,19 +62,5 @@ final class FullAccessConfirmationPanel: NSPanel
 			}
 		}
 		super.sendEvent(event)
-	}
-
-	private func finishDecision(_ confirmed: Bool)
-	{
-		guard !hasCompletedDecision, let parent = sheetParent
-		else
-		{
-			return
-		}
-		hasCompletedDecision = true
-		parent.endSheet(
-			self,
-			returnCode: confirmed ? .OK : .cancel
-		)
 	}
 }

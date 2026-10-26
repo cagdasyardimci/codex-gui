@@ -4,82 +4,31 @@ import AppKit
 final class FullAccessConfirmationView: NSViewController
 {
 	var onDecision: ((Bool) -> Void)?
-	let cancelButton = FullAccessConfirmationButton(
+	let cancelButton = DesktopStyledButton(
 		title: "Cancel",
-		target: nil,
-		action: nil
+		presentation: .secondary,
+		size: .regular
 	)
-	let confirmButton = FullAccessConfirmationButton(
+	let confirmButton = DesktopStyledButton(
 		title: "Confirm",
-		target: nil,
-		action: nil
+		presentation: .destructive,
+		size: .regular
 	)
-	let riskText = NSTextView()
+	let riskText = FullAccessRiskTextView()
 
 	override func loadView()
 	{
-		let surface = DesktopSurface(
-			AppKitColorTokens.canvas,
-			cornerRadius: 18,
-			bordered: true
-		)
-		let heading = makeHeading()
-		let introduction = makeIntroduction()
-
-		let capabilities = makeCapabilitiesSection()
-
 		configureRiskText()
-		let actions = makeActionRow()
-		let stack = AppKitLayout.verticalStack(
-			[heading, introduction, capabilities, riskText, actions],
+		let introduction = makeIntroduction()
+		let capabilities = makeCapabilitiesSection()
+		let content = AppKitLayout.verticalStack(
+			[introduction, capabilities, riskText],
 			spacing: 14
 		)
-		AppKitLayout.pin(
-			stack,
-			to: surface,
-			inset: 20
-		)
-		for row in [introduction, capabilities, riskText, actions]
+		for row in [introduction, capabilities, riskText]
 		{
-			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+			row.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
 		}
-		surface.widthAnchor.constraint(equalToConstant: 518).isActive = true
-		surface.heightAnchor.constraint(greaterThanOrEqualToConstant: 422).isActive = true
-		view = surface
-	}
-
-	private func makeHeading() -> NSStackView
-	{
-		let warning = symbol(
-			.triangleExclamationErrorWarning,
-			tint: .labelColor
-		)
-		let title = NSTextField(labelWithString: "Turn on Full Access?")
-		title.font = .systemFont(
-			ofSize: 20,
-			weight: .semibold
-		)
-		let heading = AppKitLayout.horizontalStack(
-			[warning, title],
-			spacing: 10
-		)
-		return heading
-	}
-
-	private func makeIntroduction() -> NSTextField
-	{
-		let introduction = wrappingLabel(
-			"Codex will be able to run commands, use the internet, and create and edit "
-				+ "files anywhere on this computer without your permission. This includes "
-				+ "but is not limited to:",
-			size: 14
-		)
-		introduction.preferredMaxLayoutWidth = 478
-		return introduction
-	}
-
-	private func makeActionRow() -> NSStackView
-	{
 		configureButton(
 			cancelButton,
 			confirm: false
@@ -88,11 +37,30 @@ final class FullAccessConfirmationView: NSViewController
 			confirmButton,
 			confirm: true
 		)
-		let actions = AppKitLayout.horizontalStack(
-			[NSView(), cancelButton, confirmButton],
-			spacing: 12
+		let dialog = DesktopDialogShell(
+			title: "Turn on Full Access?",
+			content: content,
+			actions: [cancelButton, confirmButton],
+			titleIcon: .triangleExclamationErrorWarning
 		)
-		return actions
+		dialog.onClose =
+		{
+			[weak self] in self?.onDecision?(false)
+		}
+		cancelButton.nextKeyView = confirmButton
+		confirmButton.nextKeyView = dialog.closeButton
+		dialog.closeButton.nextKeyView = cancelButton
+		view = dialog
+	}
+
+	private func makeIntroduction() -> NSTextField
+	{
+		wrappingLabel(
+			"Codex will be able to run commands, use the internet, and create and edit "
+				+ "files anywhere on this computer without your permission. This includes "
+				+ "but is not limited to:",
+			size: 14
+		)
 	}
 
 	private func makeCapabilitiesSection() -> NSView
@@ -168,29 +136,17 @@ final class FullAccessConfirmationView: NSViewController
 		))
 		riskText.linkTextAttributes = [.foregroundColor: NSColor.linkColor]
 		riskText.textStorage?.setAttributedString(text)
-		riskText.heightAnchor.constraint(equalToConstant: 44).isActive = true
 	}
 
 	private func configureButton(
-		_ button: FullAccessConfirmationButton,
+		_ button: DesktopStyledButton,
 		confirm: Bool
 	)
 	{
 		button.target = self
 		button.action = confirm ? #selector(confirmAccess) : #selector(cancel)
-		button.isBordered = false
-		button.bezelStyle = .inline
-		button.font = .systemFont(ofSize: 14)
-		button.contentTintColor = confirm ? .systemRed : .labelColor
-		button.confirmsFullAccess = confirm
+		button.hasDestructiveAction = confirm
 		button.keyEquivalent = confirm ? "\r" : "\u{1b}"
-		if confirm
-		{
-			button.image = DesktopIcons.image(.triangleExclamationErrorWarning)
-			button.imagePosition = .imageLeading
-		}
-		button.widthAnchor.constraint(equalToConstant: confirm ? 114 : 86).isActive = true
-		button.heightAnchor.constraint(equalToConstant: 36).isActive = true
 	}
 
 	private func capability(
@@ -270,5 +226,38 @@ final class FullAccessConfirmationView: NSViewController
 	@objc private func confirmAccess()
 	{
 		onDecision?(true)
+	}
+}
+
+/// The rich link paragraph grows with the shared dialog's available width.
+@MainActor
+final class FullAccessRiskTextView: NSTextView
+{
+	override var intrinsicContentSize: NSSize
+	{
+		guard let textContainer, let layoutManager
+		else
+		{
+			return super.intrinsicContentSize
+		}
+		textContainer.containerSize = NSSize(
+			width: bounds.width > 0 ? bounds.width : DesktopDialogShell.preferredWidth - 40,
+			height: .greatestFiniteMagnitude
+		)
+		layoutManager.ensureLayout(for: textContainer)
+		return NSSize(
+			width: NSView.noIntrinsicMetric,
+			height: ceil(layoutManager.usedRect(for: textContainer).height)
+		)
+	}
+
+	override func setFrameSize(_ newSize: NSSize)
+	{
+		let widthChanged = frame.width != newSize.width
+		super.setFrameSize(newSize)
+		if widthChanged
+		{
+			invalidateIntrinsicContentSize()
+		}
 	}
 }
