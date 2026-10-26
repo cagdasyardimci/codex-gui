@@ -192,59 +192,19 @@ extension ConversationViewController
 
 	private func configureFileSearchPopover()
 	{
-		let searchField = NSSearchField()
-		searchField.placeholderString = "Search project files"
-		searchField.delegate = self
-		searchField.setAccessibilityLabel("Search project files")
+		let searchField = DesktopSearchField()
+		searchField.configureSearch(
+			placeholder: "Search project files",
+			accessibilityLabel: "Search project files",
+			delegate: self
+		)
 
 		let resultsStack = NSStackView()
-		resultsStack.orientation = .vertical
-		resultsStack.alignment = .leading
-		resultsStack.spacing = 2
-		resultsStack.translatesAutoresizingMaskIntoConstraints = false
-
-		let resultsScrollView = NSScrollView()
-		resultsScrollView.documentView = resultsStack
-		resultsScrollView.hasVerticalScroller = true
-		resultsStack.widthAnchor.constraint(
-			equalTo: resultsScrollView.contentView.widthAnchor
-		).isActive = true
-
-		let container = NSView()
-		searchField.translatesAutoresizingMaskIntoConstraints = false
-		resultsScrollView.translatesAutoresizingMaskIntoConstraints = false
-		container.addSubview(searchField)
-		container.addSubview(resultsScrollView)
-		NSLayoutConstraint.activate([
-			searchField.topAnchor.constraint(
-				equalTo: container.topAnchor,
-				constant: 8
-			),
-			searchField.leadingAnchor.constraint(
-				equalTo: container.leadingAnchor,
-				constant: 8
-			),
-			searchField.trailingAnchor.constraint(
-				equalTo: container.trailingAnchor,
-				constant: -8
-			),
-			resultsScrollView.topAnchor.constraint(
-				equalTo: searchField.bottomAnchor,
-				constant: 6
-			),
-			resultsScrollView.leadingAnchor.constraint(
-				equalTo: container.leadingAnchor,
-				constant: 8
-			),
-			resultsScrollView.trailingAnchor.constraint(
-				equalTo: container.trailingAnchor,
-				constant: -8
-			),
-			resultsScrollView.bottomAnchor.constraint(
-				equalTo: container.bottomAnchor,
-				constant: -8
-			),
-		])
+		let container = DesktopSearchOverlayView(
+			presentation: .attachments,
+			search: searchField,
+			results: resultsStack
+		)
 
 		let controller = NSViewController()
 		controller.view = container
@@ -276,25 +236,27 @@ extension ConversationViewController
 		guard let fileIndex = fileIndexRuntime.index
 		else
 		{
-			stack.addArrangedSubview(NSTextField(labelWithString: "Searching project files…"))
+			stack.addArrangedSubview(DesktopSearchOverlayView.message(
+				"Searching project files…",
+				presentation: .nativeStatus
+			))
 			return
 		}
 		let results = fileIndex.search(query)
 		if results.isEmpty
 		{
-			stack.addArrangedSubview(NSTextField(labelWithString: "No matching files"))
+			stack.addArrangedSubview(DesktopSearchOverlayView.message(
+				"No matching files",
+				presentation: .nativeStatus
+			))
 		}
 		for path in results
 		{
-			let button = NSButton(
-				title: path,
+			let button = DesktopSearchResultButton.attachment(
+				path: path,
 				target: self,
 				action: #selector(chooseFileResult(_:))
 			)
-			button.identifier = NSUserInterfaceItemIdentifier(path)
-			button.bezelStyle = .inline
-			button.alignment = .left
-			button.setAccessibilityLabel("Attach project file \(path)")
 			stack.addArrangedSubview(button)
 		}
 	}

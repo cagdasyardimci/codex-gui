@@ -54,10 +54,10 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	private static let maximumVisibleResultCount = 200
 
 	private let index: GitFileJumpIndex
-	private let search = ViewerSearchField()
-	private let results = FileJumpResultsStack()
+	private let search = DesktopSearchField(presentation: .viewerOverlay)
+	private let results = DesktopFlippedStackView()
 	private var visibleEntries: [GitFileJumpIndex.Entry] = []
-	private var resultButtons: [DesktopLayerButton] = []
+	private var resultButtons: [DesktopSearchResultButton] = []
 	private var selectedIndex = 0
 
 	init(index: GitFileJumpIndex)
@@ -76,54 +76,17 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 
 	override func loadView()
 	{
-		let root = DesktopSurface(AppKitColorTokens.searchPanel)
-		view = root
-		search.placeholderString = "Jump to file"
-		search.drawsSurface = false
-		(search.cell as? NSSearchFieldCell)?.searchButtonCell = nil
-		search.isBordered = false
-		search.drawsBackground = false
-		search.focusRingType = .none
-		search.font = .systemFont(ofSize: 14)
-		search.sendsSearchStringImmediately = true
-		search.setAccessibilityLabel("Search changed files")
-		search.delegate = self
-		let scroll = NSScrollView()
-		scroll.hasVerticalScroller = true
-		scroll.autohidesScrollers = true
-		scroll.drawsBackground = false
-		results.orientation = .vertical
-		results.alignment = .leading
-		results.spacing = 0
-		results.translatesAutoresizingMaskIntoConstraints = false
-		scroll.documentView = results
-		results.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
-		let icon = NSImageView(image: DesktopIcons.image(.search))
-		icon.contentTintColor = .secondaryLabelColor
-		icon.imageScaling = .scaleProportionallyDown
-		icon.setAccessibilityElement(false)
-		let header = AppKitLayout.horizontalStack(
-			[icon, search],
-			spacing: 8
+		search.configureSearch(
+			placeholder: "Jump to file",
+			accessibilityLabel: "Search changed files",
+			delegate: self,
+			sendsImmediately: true
 		)
-		let layout = NSStackView(views: [header, scroll])
-		layout.orientation = .vertical
-		layout.alignment = .leading
-		layout.spacing = 8
-		AppKitLayout.pin(
-			layout,
-			to: root,
-			inset: 8
+		view = DesktopSearchOverlayView(
+			presentation: .changedFiles,
+			search: search,
+			results: results
 		)
-		NSLayoutConstraint.activate([
-			header.widthAnchor.constraint(equalTo: layout.widthAnchor),
-			header.heightAnchor.constraint(equalToConstant: 32),
-			icon.widthAnchor.constraint(equalToConstant: 16),
-			icon.heightAnchor.constraint(equalToConstant: 16),
-			search.heightAnchor.constraint(equalToConstant: 20),
-			scroll.bottomAnchor.constraint(equalTo: layout.bottomAnchor),
-			scroll.widthAnchor.constraint(equalTo: layout.widthAnchor),
-		])
 		reloadResults()
 	}
 
@@ -200,15 +163,16 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 		if matches.isEmpty || matches.count > Self.maximumVisibleResultCount
 		{
 			let message = matches.isEmpty ? "No matching files" : "Refine search to see more files"
-			let label = NSTextField(labelWithString: message)
-			label.textColor = .secondaryLabelColor
-			results.addArrangedSubview(label)
+			results.addArrangedSubview(DesktopSearchOverlayView.message(
+				message,
+				presentation: .status
+			))
 		}
 		view.layoutSubtreeIfNeeded()
 		updateSelection()
 	}
 
-	private func makeResultButton(_ entry: GitFileJumpIndex.Entry) -> DesktopLayerButton
+	private func makeResultButton(_ entry: GitFileJumpIndex.Entry) -> DesktopSearchResultButton
 	{
 		let button = DesktopSearchResultButton(
 			title: entry.filename,
@@ -244,23 +208,12 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	{
 		for (index, button) in resultButtons.enumerated()
 		{
-			button.layerBackgroundAlpha = nil
-			button.layerBackgroundColor = index == selectedIndex
-				? AppKitColorTokens.searchResultSelection : .clear
+			button.setSelected(index == selectedIndex)
 		}
 		if resultButtons.indices.contains(selectedIndex)
 		{
 			let button = resultButtons[selectedIndex]
 			button.scrollToVisible(button.bounds)
 		}
-	}
-}
-
-@MainActor
-private final class FileJumpResultsStack: NSStackView
-{
-	override var isFlipped: Bool
-	{
-		true
 	}
 }

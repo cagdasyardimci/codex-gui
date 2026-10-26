@@ -37,31 +37,13 @@ final class ChatSearchController: NSViewController
 
 	override func loadView()
 	{
-		view = DesktopSurface(AppKitColorTokens.searchPanel)
-		rows.orientation = .vertical
-		rows.alignment = .leading
-		rows.spacing = 0
-		let scroll = AppKitLayout.scrollableContent(
-			rows,
-			inset: 0
+		let content = DesktopSearchOverlayView(
+			presentation: .chats,
+			search: search,
+			results: rows
 		)
-		self.scroll = scroll
-		scroll.drawsBackground = false
-		let layout = AppKitLayout.verticalStack(
-			[search, scroll],
-			spacing: 12
-		)
-		AppKitLayout.pin(
-			layout,
-			to: view,
-			inset: 12
-		)
-		NSLayoutConstraint.activate([
-			search.widthAnchor.constraint(equalTo: layout.widthAnchor),
-			search.heightAnchor.constraint(equalToConstant: 32),
-			scroll.widthAnchor.constraint(equalTo: layout.widthAnchor),
-			scroll.bottomAnchor.constraint(equalTo: layout.bottomAnchor),
-		])
+		scroll = content.scrollView
+		view = content
 	}
 
 	func render(
@@ -163,20 +145,12 @@ final class ChatSearchController: NSViewController
 
 	private func addHeading(_ text: String)
 	{
-		let label = NSTextField(labelWithString: text)
-		label.font = .systemFont(ofSize: 12)
-		label.textColor = .secondaryLabelColor
-		let container = NSView()
-		AppKitLayout.pin(
-			label,
-			to: container,
-			inset: 8
+		let container = DesktopSearchOverlayView.message(
+			text,
+			presentation: .section
 		)
 		rows.addArrangedSubview(container)
-		NSLayoutConstraint.activate([
-			container.widthAnchor.constraint(equalTo: rows.widthAnchor),
-			container.heightAnchor.constraint(equalToConstant: 32),
-		])
+		container.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
 	}
 
 	private func addResult(
@@ -222,10 +196,7 @@ final class ChatSearchController: NSViewController
 	{
 		for (index, button) in buttons.enumerated()
 		{
-			button.layerBackgroundColor = index == selectedIndex
-				? AppKitColorTokens.searchResultSelection : .clear
-			button.layerBackgroundAlpha = nil
-			button.layer?.cornerRadius = 12
+			button.setSelected(index == selectedIndex)
 		}
 		if selectedIndex == 0, let scroll
 		{

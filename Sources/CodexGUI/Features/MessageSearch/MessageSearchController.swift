@@ -9,92 +9,45 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 	var onLoadMore: (() -> Void)?
 	var onDismiss: (() -> Void)?
 
-	private let searchField = NSSearchField()
-	private let scopeLabel = NSTextField(wrappingLabelWithString: "")
-	private let loadingLabel = NSTextField(labelWithString: "")
-	private let tableView = NSTableView()
-	private let loadMoreButton = NSButton(
-		title: "Load More History",
-		target: nil,
-		action: nil
-	)
-	private let closeButton = NSButton(
-		title: "Close",
-		target: nil,
-		action: nil
-	)
+	private let searchView = DesktopSearchSheetView(presentation: .messages)
+	private var searchField: DesktopSearchField
+	{
+		searchView.query
+	}
+	private var tableView: NSTableView
+	{
+		searchView.table
+	}
 	private var results: MessageSearchResults?
 	private var presentedSheet: NSWindow?
 
 	override func loadView()
 	{
-		let container = NSView()
 		configureSearchFields()
-		let scrollView = makeResultsScrollView()
-		configureSearchActions()
-
-		let stack = AppKitLayout.verticalStack([
-			AppKitLayout.title("Search Messages"),
-			searchField,
-			scopeLabel,
-			loadingLabel,
-			scrollView,
-			loadMoreButton,
-			closeButton,
-		])
-		AppKitLayout.pin(
-			stack,
-			to: container
-		)
-		searchField.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		scopeLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
-		view = container
-	}
-
-	private func configureSearchFields()
-	{
-		searchField.placeholderString = "Search message contents"
-		searchField.setAccessibilityLabel("Search loaded message contents")
-		searchField.delegate = self
-		searchField.sendsSearchStringImmediately = true
-
-		scopeLabel.textColor = .secondaryLabelColor
-		scopeLabel.font = .systemFont(ofSize: 11)
-		scopeLabel.setAccessibilityLabel("Message search scope and history limits")
-
-		loadingLabel.textColor = .secondaryLabelColor
-		loadingLabel.setAccessibilityLabel("Message history loading status")
-	}
-
-	private func makeResultsScrollView() -> NSScrollView
-	{
-		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("messageHit"))
-		tableView.addTableColumn(column)
-		tableView.headerView = nil
-		tableView.rowHeight = 54
 		tableView.delegate = self
 		tableView.dataSource = self
 		tableView.target = self
 		tableView.doubleAction = #selector(openSelected)
-		tableView.setAccessibilityLabel("Matching messages")
-
-		let scrollView = NSScrollView()
-		scrollView.documentView = tableView
-		scrollView.hasVerticalScroller = true
-		return scrollView
+		searchView.onLoadMore =
+		{
+			[weak self] in self?.onLoadMore?()
+		}
+		searchView.onClose =
+		{
+			[weak self] in self?.dismiss()
+		}
+		view = searchView
 	}
 
-	private func configureSearchActions()
+	private func configureSearchFields()
 	{
-		loadMoreButton.target = self
-		loadMoreButton.action = #selector(loadMore)
-		loadMoreButton.setAccessibilityLabel("Load more conversation history into message search")
+		searchField.configureSearch(
+			placeholder: "Search message contents",
+			accessibilityLabel: "Search loaded message contents",
+			delegate: self,
+			sendsImmediately: true
+		)
 
-		closeButton.target = self
-		closeButton.action = #selector(close)
-		closeButton.setAccessibilityLabel("Close message search")
 	}
 
 	func present(in window: NSWindow)
@@ -109,16 +62,10 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 		sheet.delegate = self
 		sheet.isReleasedWhenClosed = false
 		sheet.title = "Search Messages"
-		sheet.setContentSize(NSSize(
-			width: min(
-				680,
-				max(
-					440,
-					window.frame.width - 80
-				)
-			),
-			height: 480
-		))
+		searchView.resize(
+			window: sheet,
+			relativeTo: window
+		)
 		presentedSheet = sheet
 		window.beginSheet(sheet)
 		{
@@ -146,21 +93,20 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 		self.results = results
 		if let scope = results?.scope
 		{
-			scopeLabel.stringValue =
+			searchView.scopeText =
 				scope.description
 					+ (scope.isComplete
 						? "" : ". Load more history to expand search.")
 		}
 		else
 		{
-			scopeLabel.stringValue = "Search covers message history loaded into this app."
+			searchView.scopeText = "Search covers message history loaded into this app."
 		}
-		loadingLabel.stringValue =
+		searchView.statusText =
 			unavailableReason
 				?? (loading ? "Loading message history…" : "")
-		loadingLabel.isHidden = loadingLabel.stringValue.isEmpty
-		loadMoreButton.isHidden = results?.scope.canLoadMore != true
-		loadMoreButton.isEnabled = !loading
+		searchView.canLoadMore = results?.scope.canLoadMore == true
+		searchView.isLoading = loading
 		tableView.reloadData()
 	}
 
@@ -200,27 +146,17 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 			return nil
 		}
 		let cell = NSTableCellView()
-		let title = NSTextField(labelWithString: "\(hit.threadTitle) · \(hit.itemType)")
-		title.font = .systemFont(
-			ofSize: 12,
-			weight: .medium
-		)
-		title.lineBreakMode = .byTruncatingTail
-
-		let snippet = NSTextField(labelWithString: hit.snippet)
-		snippet.textColor = .secondaryLabelColor
-		snippet.lineBreakMode = .byTruncatingTail
-
-		let stack = AppKitLayout.verticalStack(
-			[title, snippet],
-			spacing: 2
-		)
+		let content = DesktopSearchResultContentView(presentation: .message(
+			title: "\(hit.threadTitle) · \(hit.itemType)",
+			snippet: hit.snippet,
+			accessibilityLabel: "\(hit.threadTitle), \(hit.itemType), \(hit.snippet)"
+		))
 		AppKitLayout.pin(
-			stack,
+			content,
 			to: cell,
-			inset: 4
+			inset: 0
 		)
-		cell.setAccessibilityLabel("\(hit.threadTitle), \(hit.itemType), \(hit.snippet)")
+		cell.setAccessibilityLabel(content.accessibilityLabel())
 		return cell
 	}
 
@@ -235,11 +171,6 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 		let openHit = onOpenHit
 		close()
 		openHit?(hit)
-	}
-
-	@objc private func loadMore()
-	{
-		onLoadMore?()
 	}
 
 	@objc private func close()
