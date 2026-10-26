@@ -1,7 +1,7 @@
 import AppKit
 import UserNotifications
 
-struct TaskNotificationEvent: Equatable
+struct TaskNotificationEvent: Equatable, Sendable
 {
 	let threadID: String
 	let title: String
@@ -138,6 +138,14 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 			onStatusChange?(statusMessage)
 		}
 	}
+	var onAuthorizationChange: ((TaskNotificationAuthorization) -> Void)?
+	{
+		didSet
+		{
+			onAuthorizationChange?(authorization)
+		}
+	}
+	private(set) var authorization = TaskNotificationAuthorization.checking
 	private(set) var statusMessage = "Checking notification access…"
 	private var tracker = TaskNotificationCollection()
 	private let center: UNUserNotificationCenter?
@@ -166,6 +174,7 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 		guard let center
 		else
 		{
+			updateAuthorization(.unavailable)
 			updateStatus(
 				"Notifications are unavailable for this executable. Run the bundled CodexGUI.app."
 			)
@@ -182,9 +191,44 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 
 	func observe(_ presentation: TaskNotificationPresentation)
 	{
-		guard let event = tracker.observe(presentation), let center
+		// Observe disabled transitions too, so re-enabling alerts does not replay them.
+		guard let event = tracker.observe(presentation), center != nil
 		else
 		{
+			return
+		}
+		let category = TaskNotificationCategory(state: presentation.executionState)
+		guard TaskNotificationPreferences().allows(
+			category,
+			appIsActive: NSApp.isActive
+		)
+		else
+		{
+			return
+		}
+		authorize
+		{
+			[weak self] in self?.post(
+				event,
+				category: category
+			)
+		}
+	}
+
+	func requestAuthorization()
+	{
+		authorize()
+	}
+
+	private func authorize(onGranted: (@MainActor @Sendable () -> Void)? = nil)
+	{
+		guard let center
+		else
+		{
+			updateAuthorization(.unavailable)
+			updateStatus(
+				"Notifications are unavailable for this executable. Run the bundled CodexGUI.app."
+			)
 			return
 		}
 		center.requestAuthorization(options: [.alert, .sound])
@@ -205,21 +249,21 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 				}
 				else if !granted
 				{
-					self
-						.updateStatus(
-							"Notifications are disabled. Review this app in macOS System Settings."
-						)
+					self.updateAuthorization(.denied)
+					self.updateStatus(
+						"Notifications are disabled. Review this app in macOS System Settings."
+					)
 				}
 				else
 				{
 					self.refreshAuthorizationStatus()
-					self.post(event)
+					onGranted?()
 				}
 			}
 		}
 	}
 
-	private func refreshAuthorizationStatus()
+	func refreshAuthorizationStatus()
 	{
 		guard let center
 		else
@@ -234,21 +278,33 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 			{
 				@MainActor [weak self] in
 				let message: String
+				let state: TaskNotificationAuthorization
 				switch authorization
 				{
 				case .notDetermined:
+					state = .notDetermined
 					message = "Permission will be requested when a task needs a notification."
 				case .denied:
+					state = .denied
 					message =
 						"Notifications are disabled. Review this app in macOS System Settings."
-				case .authorized, .provisional:
+				case .authorized, .provisional, .ephemeral:
+					state = .authorized
 					message = "Notifications are authorized by macOS."
 				@unknown default:
+					state = .unavailable
 					message = "Notification permission status is unavailable."
 				}
+				self?.updateAuthorization(state)
 				self?.updateStatus(message)
 			}
 		}
+	}
+
+	private func updateAuthorization(_ state: TaskNotificationAuthorization)
+	{
+		authorization = state
+		onAuthorizationChange?(state)
 	}
 
 	private func updateStatus(_ message: String)
@@ -257,9 +313,16 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 		onStatusChange?(message)
 	}
 
-	private func post(_ event: TaskNotificationEvent)
+	private func post(
+		_ event: TaskNotificationEvent,
+		category: TaskNotificationCategory
+	)
 	{
-		guard let center
+		let preferences = TaskNotificationPreferences()
+		guard preferences.allows(
+			category,
+			appIsActive: NSApp.isActive
+		), let center
 		else
 		{
 			return
@@ -268,6 +331,11 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 		content.title = event.title
 		content.body = event.body
 		content.userInfo = TaskNotificationPayload.userInfo(event)
+		content.userInfo["notificationCategory"] = category.rawValue
+		content.sound = TaskNotificationSoundLibrary().notificationSound(
+			for: preferences.sound,
+			customFilename: preferences.customSoundFilename
+		)
 		let request = UNNotificationRequest(
 			identifier: UUID().uuidString,
 			content: content,
@@ -325,7 +393,29 @@ final class TaskNotificationCoordinator: NSObject, UNUserNotificationCenterDeleg
 			-> Void
 	)
 	{
-		completionHandler([.banner, .sound])
+		let category = (notification.request.content.userInfo["notificationCategory"] as? String)
+			.flatMap(TaskNotificationCategory.init(rawValue:)) ?? .completion
+		let reply = TaskNotificationPresentationReply(completionHandler)
+		Task
+		{
+			@MainActor in
+			let preferences = TaskNotificationPreferences()
+			guard preferences.allows(
+				category,
+				appIsActive: NSApp.isActive
+			)
+			else
+			{
+				reply.complete([])
+				return
+			}
+			var options: UNNotificationPresentationOptions = [.banner]
+			if preferences.soundEnabled
+			{
+				options.insert(.sound)
+			}
+			reply.complete(options)
+		}
 	}
 }
 
@@ -394,5 +484,21 @@ enum TaskNotificationPayload
 				canonicalCheckoutPath: userInfo["checkoutPath"] as? String
 			)
 		)
+	}
+}
+
+/// The delegate callback is transferred once to the main actor for foreground preference checks.
+private final class TaskNotificationPresentationReply: @unchecked Sendable
+{
+	private let callback: (UNNotificationPresentationOptions) -> Void
+
+	init(_ callback: @escaping (UNNotificationPresentationOptions) -> Void)
+	{
+		self.callback = callback
+	}
+
+	func complete(_ options: UNNotificationPresentationOptions)
+	{
+		callback(options)
 	}
 }
