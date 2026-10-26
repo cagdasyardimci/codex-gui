@@ -127,6 +127,31 @@ extension MainWindowController
 
 	func configureSettingsAndStatusActions(target: WorkspaceIntentTarget)
 	{
+		settings.onSelectApprovalMode =
+		{
+			[weak self] mode in
+			self?.conversation.requestApprovalMode(mode)
+			{
+				target.dispatch(.selectApprovalMode($0))
+			}
+		}
+		settings.onApplyConfigurationDefaults =
+		{
+			values, editedKeys in
+			guard let update = RunConfigurationDefaultsUpdate(
+				effectiveConfig: values,
+				editedKeys: editedKeys
+			)
+			else
+			{
+				return
+			}
+			target.dispatch(.applyConfigurationDefaults(update))
+		}
+		settings.onClose =
+		{
+			[weak self] in self?.dismissSettings()
+		}
 		settings.onLogin =
 		{
 			target.dispatch(.signIn)
@@ -157,6 +182,13 @@ extension MainWindowController
 			[weak self] in
 			self?.statusPopover?.close()
 			self?.showSettings()
+		}
+		statusView.onShowUsage =
+		{
+			[weak self] in
+			self?.statusPopover?.close()
+			self?.showSettings()
+			self?.settings.showUsage()
 		}
 	}
 

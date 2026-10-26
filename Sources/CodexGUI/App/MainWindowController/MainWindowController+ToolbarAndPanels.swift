@@ -5,6 +5,7 @@ extension MainWindowController
 	enum ToolbarItem
 	{
 		static let navigationControls = NSToolbarItem.Identifier("navigationControls")
+		static let settingsNavigation = NSToolbarItem.Identifier("settingsNavigation")
 		static let trailingControls = NSToolbarItem.Identifier("trailingControls")
 		static let toolsSeparator = NSToolbarItem.Identifier("toolsSeparator")
 		static let toolsTabBar = NSToolbarItem.Identifier("toolsTabBar")
@@ -134,7 +135,11 @@ extension MainWindowController
 
 	func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier]
 	{
-		[
+		if toolbar.identifier == settingsToolbarIdentifier
+		{
+			return [ToolbarItem.settingsNavigation, .flexibleSpace]
+		}
+		return [
 			ToolbarItem.navigationControls,
 			ToolbarItem.trailingControls,
 			ToolbarItem.toolsSeparator,
@@ -161,7 +166,11 @@ extension MainWindowController
 
 	func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier]
 	{
-		[
+		if toolbar.identifier == settingsToolbarIdentifier
+		{
+			return [ToolbarItem.settingsNavigation, .flexibleSpace]
+		}
+		return [
 			ToolbarItem.navigationControls,
 			ToolbarItem.navigationSeparator,
 			ToolbarItem.conversationTitle,
@@ -195,6 +204,32 @@ extension MainWindowController
 		let item = NSToolbarItem(itemIdentifier: itemIdentifier)
 		switch itemIdentifier
 		{
+		case ToolbarItem.settingsNavigation:
+			item.label = "Settings navigation"
+			let back = makeToolbarButton(
+				image: DesktopIcons.image(
+					.arrowLeftLg,
+					size: 16
+				),
+				label: "Back to chat"
+			)
+			back.target = self
+			back.action = #selector(closeSettingsFromToolbar)
+			item.view = makeToolbarControlStack(
+				[
+					back,
+					makeToolbarButton(
+						image: DesktopIcons.image(
+							.arrowRightLg,
+							size: 16
+						),
+						label: "Forward",
+						isEnabled: false
+					),
+				],
+				leadingInset: -1,
+				trailingInset: -2
+			)
 		case ToolbarItem.toolsTabBar:
 			toolsToolbar.configureTabBarItem(
 				item,
@@ -390,7 +425,8 @@ extension MainWindowController
 
 	func updateToolsToolbarControls(allowDuringExpansion: Bool = false)
 	{
-		guard let toolbar = window?.toolbar
+		guard let toolbar = window?.toolbar,
+				toolbar.identifier != settingsToolbarIdentifier
 		else
 		{
 			return
@@ -649,7 +685,56 @@ extension MainWindowController
 
 	func showSettings()
 	{
+		guard let window,
+				let chrome = window.contentViewController as? WindowChromeViewController
+		else
+		{
+			return
+		}
+		statusPopover?.close()
+		if toolbarWasVisibleBeforeSettings == nil
+		{
+			responderBeforeSettings = window.firstResponder
+			toolbarWasVisibleBeforeSettings = window.toolbar?.isVisible ?? false
+			toolbarBeforeSettings = window.toolbar
+		}
+		if window.toolbar?.identifier != settingsToolbarIdentifier
+		{
+			let toolbar = NSToolbar(identifier: settingsToolbarIdentifier)
+			toolbar.delegate = self
+			toolbar.displayMode = .iconOnly
+			toolbar.sizeMode = .small
+			toolbar.allowsUserCustomization = false
+			toolbar.autosavesConfiguration = false
+			window.toolbar = toolbar
+		}
+		window.toolbar?.isVisible = true
+		chrome.showSettings(settings)
 		settings.present()
+		window.makeKeyAndOrderFront(nil)
+	}
+
+	func dismissSettings(restoreFocus: Bool = true)
+	{
+		(window?.contentViewController as? WindowChromeViewController)?.hideSettings()
+		if let visible = toolbarWasVisibleBeforeSettings
+		{
+			window?.toolbar = toolbarBeforeSettings
+			window?.toolbar?.isVisible = visible
+		}
+		toolbarBeforeSettings = nil
+		toolbarWasVisibleBeforeSettings = nil
+		if restoreFocus, let responder = responderBeforeSettings as? NSView,
+			responder.window === window
+		{
+			window?.makeFirstResponder(responder)
+		}
+		responderBeforeSettings = nil
+	}
+
+	@objc private func closeSettingsFromToolbar()
+	{
+		dismissSettings()
 	}
 	func setNotificationStatus(_ message: String)
 	{
@@ -670,7 +755,7 @@ extension MainWindowController
 
 	func showBackendDetails()
 	{
-		guard let hostWindow = settings.window?.isVisible == true ? settings.window : window
+		guard let hostWindow = window
 		else
 		{
 			return

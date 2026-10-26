@@ -14,6 +14,45 @@ final class WindowChromeViewController: NSViewController
 	private var bottomInset: NSLayoutConstraint!
 	private var topInset: NSLayoutConstraint!
 	private var splitInset: NSLayoutConstraint!
+	private weak var workspaceView: NSView?
+	private var settings: SettingsViewController?
+	private var workspaceWasAccessibilityHidden = false
+	private var workspaceWasHidden = false
+
+	func showSettings(_ settings: SettingsViewController)
+	{
+		guard self.settings == nil, let workspaceView
+		else
+		{
+			return
+		}
+		self.settings = settings
+		workspaceWasHidden = workspaceView.isHidden
+		workspaceWasAccessibilityHidden = workspaceView.isAccessibilityHidden()
+		workspaceView.isHidden = true
+		workspaceView.setAccessibilityHidden(true)
+		addChild(settings)
+		AppKitLayout.pin(
+			settings.view,
+			to: panel,
+			inset: 0
+		)
+	}
+
+	func hideSettings()
+	{
+		guard let settings
+		else
+		{
+			return
+		}
+		settings.endPresentation()
+		settings.view.removeFromSuperview()
+		settings.removeFromParent()
+		self.settings = nil
+		workspaceView?.isHidden = workspaceWasHidden
+		workspaceView?.setAccessibilityHidden(workspaceWasAccessibilityHidden)
+	}
 
 	func setGitReviewFocused(_ focused: Bool)
 	{
@@ -39,6 +78,7 @@ final class WindowChromeViewController: NSViewController
 		)
 		view = DesktopSurface(AppKitColorTokens.chrome)
 		addChild(split)
+		workspaceView = split.view
 
 		let column = DesktopSurface(AppKitColorTokens.chrome)
 		let avatar = DesktopSurface(

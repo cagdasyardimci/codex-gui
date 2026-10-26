@@ -43,8 +43,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		coordinator.start()
 	}
 
+	func applicationDidBecomeActive(_ notification: Notification)
+	{
+		notifications.refreshAuthorizationStatus()
+	}
+
 	private func configureNotificationCallbacks(controller: MainWindowController)
 	{
+		controller.settings.onRequestNotificationAuthorization =
+		{
+			[weak self] in self?.notifications.requestAuthorization()
+		}
+		controller.settings.onRefreshNotificationAuthorization =
+		{
+			[weak self] in self?.notifications.refreshAuthorizationStatus()
+		}
+		notifications.onAuthorizationChange =
+		{
+			[weak controller] state in controller?.settings.setNotificationAuthorization(state)
+		}
 		notifications.onStatusChange =
 		{
 			[weak controller] message in

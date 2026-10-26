@@ -42,7 +42,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	let messageSearch = MessageSearchController()
 	var messageSearchStoreIdentity: ObjectIdentifier?
 	var messageSearchOwner: WorkspaceLifecycleOwnerReference?
-	let settings = SettingsWindowController()
+	let settings = SettingsViewController()
+	weak var responderBeforeSettings: NSResponder?
+	var toolbarWasVisibleBeforeSettings: Bool?
+	var toolbarBeforeSettings: NSToolbar?
+	let settingsToolbarIdentifier = NSToolbar
+		.Identifier("CodexGUISettingsToolbar.\(UUID().uuidString)")
 	let statusView = StatusPopoverView(frame: .zero)
 	let statusButton = AccountAvatarText.Button(
 		title: "",
@@ -335,6 +340,11 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			ownerIdentity: target.presentationIdentity
 		)
 		self.settings.render(status)
+		self.settings.renderPermissions(
+			mode: snapshot.approvalMode,
+			enabled: target.accepts(.selectApprovalMode(snapshot.approvalMode)),
+			configurationDefaults: snapshot.configurationDefaults
+		)
 		self.statusView.render(self.sourceStore.currentSnapshot)
 		let initials = self.sourceStore.currentSnapshot.accountStatus?.email.map
 		{
@@ -405,6 +415,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			sourceStore.removeObserver(remoteAccessObserver)
 		}
 		remoteAccessObserver = nil
+		dismissSettings(restoreFocus: false)
 		settings.remoteAccess.close()
 		statusPopover?.close()
 		messageSearch.dismiss()
