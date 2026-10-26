@@ -95,6 +95,12 @@ final class EditorOpeningService
 		}
 
 		let bundleID = Bundle(url: application)?.bundleIdentifier
+		if bundleID == "com.apple.finder"
+		{
+			NSWorkspace.shared.activateFileViewerSelecting([file])
+			return nil
+		}
+		let opensFolder = bundleID == "com.apple.Terminal" || bundleID == "net.kovidgoyal.kitty"
 		let supportsLineNavigation =
 			bundleID == "com.microsoft.VSCode" || bundleID == "com.microsoft.VSCodeInsiders"
 
@@ -120,7 +126,7 @@ final class EditorOpeningService
 		{
 			try await Self.openInApplication(
 				application,
-				file: file
+				file: opensFolder ? file.deletingLastPathComponent() : file
 			)
 			return line > 1 ? "Opened in the selected editor; line navigation is unavailable." : nil
 		}
