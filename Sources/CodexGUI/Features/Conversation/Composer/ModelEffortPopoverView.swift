@@ -276,6 +276,17 @@ final class ModelEffortPopoverView: NSViewController
 		updateAnimationVisibility()
 		if presented
 		{
+			let selectedModel = models.first
+			{
+				$0.id == selectedModelID
+			}
+			?? (selectedModelID == nil ? models.first(where: \.isDefault) : nil)
+			efforts = ReasoningEffortVisibility().visibleEfforts(
+				advertised: Self.orderedEfforts(for: selectedModel),
+				retaining: effectiveEffort
+			)
+			updateEffortControls()
+			updateAvailabilityWarning()
 			if isShowingModelList
 			{
 				modelList.focusSelectedRow()
@@ -305,7 +316,10 @@ final class ModelEffortPopoverView: NSViewController
 				?? (selectedModelID == nil ? models.first(where: \.isDefault) : nil)
 		self.fastMode = fastMode
 		effectiveEffort = selectedEffort ?? selectedModel?.defaultReasoningEffort
-		efforts = Self.orderedEfforts(for: selectedModel)
+		efforts = ReasoningEffortVisibility().visibleEfforts(
+			advertised: Self.orderedEfforts(for: selectedModel),
+			retaining: effectiveEffort
+		)
 
 		updateModelSelectionTitle()
 		updateEffortControls()

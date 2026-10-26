@@ -396,7 +396,10 @@ final class ProjectContextViewController: NSViewController
 					$0.id == context.modelPreference?.modelID
 				}
 				?? models.first(where: \.isDefault)
-		let efforts = model?.supportedReasoningEfforts ?? []
+		let efforts = ReasoningEffortVisibility().visibleEfforts(
+			advertised: model?.supportedReasoningEfforts ?? [],
+			retaining: context.modelPreference?.effort ?? model?.defaultReasoningEffort
+		)
 		for effort in efforts
 		{
 			effortButton.addItem(withTitle: ModelPreferencePresentation.effortTitle(effort))
