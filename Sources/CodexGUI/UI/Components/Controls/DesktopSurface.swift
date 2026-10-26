@@ -5,6 +5,7 @@ class DesktopSurface: NSView
 {
 	private let color: NSColor
 	private let cornerRadius: CGFloat
+	private let cornerCurve: ShapeTokens.CornerCurve
 	private let bordered: Bool
 	private let borderWidth: CGFloat
 	private let borderColor: NSColor
@@ -14,6 +15,7 @@ class DesktopSurface: NSView
 	init(
 		_ color: NSColor,
 		cornerRadius: CGFloat = 0,
+		cornerCurve: ShapeTokens.CornerCurve = .circular,
 		bordered: Bool = false,
 		borderWidth: CGFloat = 1,
 		borderColor: NSColor? = nil,
@@ -22,6 +24,7 @@ class DesktopSurface: NSView
 	{
 		self.color = color
 		self.cornerRadius = cornerRadius
+		self.cornerCurve = cornerCurve
 		self.bordered = bordered
 		self.borderWidth = borderWidth
 		self.borderColor = borderColor ?? AppKitColorTokens.border
@@ -76,7 +79,8 @@ class DesktopSurface: NSView
 				shadow,
 				to: layer,
 				in: self,
-				cornerRadius: cornerRadius
+				cornerRadius: cornerRadius,
+				cornerCurve: cornerCurve
 			)
 		}
 	}
@@ -85,13 +89,13 @@ class DesktopSurface: NSView
 	{
 		color.setFill()
 		let inset: CGFloat = bordered ? borderWidth / 2 : 0
-		let path = NSBezierPath(
-			roundedRect: bounds.insetBy(
+		let path = AppKitShapePath.roundedRect(
+			bounds.insetBy(
 				dx: inset,
 				dy: inset
 			),
-			xRadius: cornerRadius,
-			yRadius: cornerRadius
+			radius: cornerRadius,
+			curve: cornerCurve
 		)
 		path.fill()
 		if bordered

@@ -1,0 +1,1 @@
+typealias RemoteConnectionsCard = DesktopFormCard
