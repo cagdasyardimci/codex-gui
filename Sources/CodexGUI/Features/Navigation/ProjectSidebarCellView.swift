@@ -6,16 +6,8 @@ final class ProjectSidebarCellView: NSTableCellView
 	var onShowInfo: ((ProjectSidebarCellView) -> Void)?
 	var onNewChat: (() -> Void)?
 
-	private let infoButton = NSButton(
-		title: "Project information",
-		target: nil,
-		action: nil
-	)
-	private let newChatButton = NSButton(
-		title: "New Chat",
-		target: nil,
-		action: nil
-	)
+	private let infoButton = SidebarIconButton(role: .projectInfo)
+	private let newChatButton = SidebarIconButton(role: .projectNewChat)
 	private let actionStack = NSStackView()
 	private var isPointerInside = false
 	private var titleTrailingConstraint: NSLayoutConstraint?
@@ -98,10 +90,6 @@ final class ProjectSidebarCellView: NSTableCellView
 			),
 			actionStack.centerYAnchor.constraint(equalTo: centerYAnchor),
 			actionStack.widthAnchor.constraint(equalToConstant: Layout.actionWidth),
-			infoButton.widthAnchor.constraint(equalToConstant: Layout.actionSize),
-			infoButton.heightAnchor.constraint(equalToConstant: Layout.actionSize),
-			newChatButton.widthAnchor.constraint(equalToConstant: Layout.actionSize),
-			newChatButton.heightAnchor.constraint(equalToConstant: Layout.actionSize),
 		])
 		imageView = folder
 		textField = label
@@ -112,27 +100,8 @@ final class ProjectSidebarCellView: NSTableCellView
 	{
 		infoButton.target = self
 		infoButton.action = #selector(showInfo)
-		AppKitControlStyling.styleButton(
-			infoButton,
-			icon: .dotsHorizontal
-		)
-		infoButton.imagePosition = .imageOnly
-
 		newChatButton.target = self
 		newChatButton.action = #selector(startChat)
-		AppKitControlStyling.styleButton(
-			newChatButton,
-			icon: .composeEditSquare
-		)
-		newChatButton.imagePosition = .imageOnly
-		infoButton.image = DesktopIcons.image(
-			.dotsHorizontal,
-			size: Layout.actionIconSize
-		)
-		newChatButton.image = DesktopIcons.image(
-			.composeEditSquare,
-			size: Layout.actionIconSize
-		)
 	}
 
 	required init?(coder: NSCoder)

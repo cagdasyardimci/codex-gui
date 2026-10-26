@@ -13,7 +13,7 @@ extension NavigationViewController
 			for: .horizontal
 		)
 		taskPicker.cell?.lineBreakMode = .byTruncatingTail
-		AppKitControlStyling.stylePopup(taskPicker)
+
 		taskPicker.font = .systemFont(ofSize: 11)
 		let taskRow = AppKitLayout.horizontalStack([taskPicker])
 
@@ -38,8 +38,8 @@ extension NavigationViewController
 		returnToTaskButton.target = self
 		returnToTaskButton.action = #selector(returnToActiveTask)
 		returnToTaskButton.setAccessibilityLabel("Return to active task")
-		AppKitControlStyling.styleButton(returnToTaskButton)
-		returnToTaskButton.font = .systemFont(ofSize: 10)
+
+		returnToTaskButton.size = .mini
 
 		let activeTaskRow = AppKitLayout.horizontalStack([activeTaskLabel, returnToTaskButton])
 		activeTaskLabel.setContentCompressionResistancePriority(

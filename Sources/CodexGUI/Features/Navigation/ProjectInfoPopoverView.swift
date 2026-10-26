@@ -9,12 +9,13 @@ final class ProjectInfoPopoverView: NSView
 	private let nameLabel = NSTextField(labelWithString: "")
 	private let countLabel = NSTextField(labelWithString: "")
 	private let pathLabel = NSTextField(labelWithString: "")
-	private let pinButton = NSButton(
+	private let pinButton = DesktopNativeIconButton(
 		title: "Pin project",
-		target: nil,
-		action: nil
+		label: "Pin project",
+		icon: .pin,
+		size: .small
 	)
-	private let editButton = NSButton(
+	private let editButton = DesktopStyledButton(
 		title: "Edit project",
 		target: nil,
 		action: nil
@@ -67,8 +68,6 @@ final class ProjectInfoPopoverView: NSView
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
-		pinButton.widthAnchor.constraint(equalToConstant: 22).isActive = true
-		pinButton.heightAnchor.constraint(equalToConstant: 22).isActive = true
 		widthAnchor.constraint(equalToConstant: 300).isActive = true
 	}
 
@@ -99,19 +98,10 @@ final class ProjectInfoPopoverView: NSView
 		pinButton.target = self
 		pinButton.action = #selector(togglePin)
 		pinButton.setButtonType(.toggle)
-		AppKitControlStyling.styleButton(
-			pinButton,
-			icon: .pin
-		)
-		pinButton.imagePosition = .imageOnly
 
 		editButton.target = self
 		editButton.action = #selector(editProject)
-		AppKitControlStyling.styleButton(
-			editButton,
-			icon: .settings
-		)
-		editButton.font = .systemFont(ofSize: 12)
+		editButton.symbol = .settings
 		editButton.alignment = .left
 	}
 
@@ -156,8 +146,10 @@ final class ProjectInfoPopoverView: NSView
 			isPinned ? .pinFilled : .pin,
 			size: 13
 		)
-		pinButton.setAccessibilityLabel(isPinned ? "Unpin project \(name)" : "Pin project \(name)")
-		pinButton.toolTip = isPinned ? "Unpin project" : "Pin project"
+		pinButton.setLabel(
+			isPinned ? "Unpin project \(name)" : "Pin project \(name)",
+			toolTip: isPinned ? "Unpin project" : "Pin project"
+		)
 	}
 
 	private func renderTaskCounts(

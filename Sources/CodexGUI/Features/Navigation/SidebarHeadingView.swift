@@ -17,18 +17,11 @@ final class SidebarHeadingView: NSStackView
 	override func updateTrackingAreas()
 	{
 		super.updateTrackingAreas()
-		if let hoverTrackingArea
-		{
-			removeTrackingArea(hoverTrackingArea)
-		}
-		let tracking = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-			owner: self,
-			userInfo: nil
+		hoverTrackingArea = DesktopHoverTracking.replace(
+			in: self,
+			previous: hoverTrackingArea,
+			options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect]
 		)
-		addTrackingArea(tracking)
-		hoverTrackingArea = tracking
 		if let window
 		{
 			let pointer = convert(

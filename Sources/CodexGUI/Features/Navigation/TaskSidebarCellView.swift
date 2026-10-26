@@ -8,12 +8,12 @@ final class TaskSidebarCellView: NSTableCellView
 	var isPinned = false
 	var onArchive: (() -> Void)?
 	var onDelete: (() -> Void)?
-	let archiveButton = NSButton(
+	let archiveButton = DesktopStyledButton(
 		title: "Archive",
 		target: nil,
 		action: nil
 	)
-	let deleteButton = NSButton(
+	let deleteButton = DesktopStyledButton(
 		title: "Delete permanently",
 		target: nil,
 		action: nil
@@ -61,19 +61,14 @@ final class TaskSidebarCellView: NSTableCellView
 	{
 		archiveButton.target = self
 		archiveButton.action = #selector(archiveTask)
-		AppKitControlStyling.styleButton(
-			archiveButton,
-			icon: .archive
-		)
+		archiveButton.presentation = .nativeIcon
+		archiveButton.symbol = .archive
 		deleteButton.target = self
 		deleteButton.action = #selector(deleteTask)
-		AppKitControlStyling.styleButton(
-			deleteButton,
-			icon: .trash
-		)
+		deleteButton.presentation = .nativeIcon
+		deleteButton.symbol = .trash
 		for button in [archiveButton, deleteButton]
 		{
-			button.imagePosition = .imageOnly
 			button.toolTip = button.title
 			button.setAccessibilityLabel(button.title + " task")
 			actions.addArrangedSubview(button)
@@ -181,22 +176,10 @@ final class TaskSidebarCellView: NSTableCellView
 	override func updateTrackingAreas()
 	{
 		super.updateTrackingAreas()
-		if let hoverTrackingArea
-		{
-			removeTrackingArea(hoverTrackingArea)
-		}
-		let tracking = NSTrackingArea(
-			rect: .zero,
-			options: [
-				.mouseEnteredAndExited,
-				.activeInKeyWindow,
-				.inVisibleRect
-			],
-			owner: self,
-			userInfo: nil
+		hoverTrackingArea = DesktopHoverTracking.replace(
+			in: self,
+			previous: hoverTrackingArea
 		)
-		addTrackingArea(tracking)
-		hoverTrackingArea = tracking
 	}
 
 	override func mouseEntered(with event: NSEvent)

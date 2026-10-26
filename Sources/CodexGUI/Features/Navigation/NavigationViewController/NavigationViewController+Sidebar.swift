@@ -64,7 +64,7 @@ extension NavigationViewController
 			}
 		}
 		rebuildSidebarItems()
-		searchButton.contentTintColor = query.isEmpty ? .secondaryLabelColor : .controlAccentColor
+		searchButton.isSearchActive = !query.isEmpty
 		searchButton.toolTip = query.isEmpty ? "Search conversation titles and previews" : query
 		emptyLabel.stringValue = query.isEmpty ? "No projects." : "No matching conversations."
 		if sidebarPreferences.organization == .oneList && query.isEmpty
@@ -318,7 +318,7 @@ extension NavigationViewController
 		let header: NSView
 		if title == "Projects" || title == "Recents"
 		{
-			header = makeProjectsHeader(actionsButton: NSButton())
+			header = makeProjectsHeader(actionsButton: SidebarIconButton(role: .options))
 		}
 		else
 		{

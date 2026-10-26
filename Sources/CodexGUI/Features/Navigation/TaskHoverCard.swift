@@ -7,8 +7,11 @@ final class TaskHoverCard
 	let title: String
 	let projectName: String
 	let updatedAt: Date?
-	private(set) var panel: NSPanel?
-	private var appearanceBinding: DesktopPanelAppearanceBinding?
+	private let preview = DesktopHoverPreview()
+	var panel: NSPanel?
+	{
+		preview.panel
+	}
 
 	init(
 		title: String,
@@ -23,36 +26,19 @@ final class TaskHoverCard
 
 	func show(beside view: NSView)
 	{
-		guard panel == nil, let parent = view.window
+		guard panel == nil
 		else
 		{
 			return
 		}
-		let visibleFrame = parent.screen?.visibleFrame ?? parent.frame
-		let content = makeCardContent(availableSize: visibleFrame.size)
-		let card = makePanel(
-			content: content.surface,
-			size: content.size
+		preview.present(
+			content: makeCardContent(),
+			relativeTo: view,
+			placement: .besideTop
 		)
-		positionCard(
-			card,
-			beside: view,
-			in: parent,
-			size: content.size
-		)
-		parent.addChildWindow(
-			card,
-			ordered: .above
-		)
-		appearanceBinding = DesktopPanelAppearanceBinding(
-			panel: card,
-			source: view
-		)
-		card.orderFront(nil)
-		panel = card
 	}
 
-	private func makeCardContent(availableSize: NSSize) -> (surface: NSView, size: NSSize)
+	private func makeCardContent() -> NSView
 	{
 		let titleLabel = NSTextField(wrappingLabelWithString: title)
 		titleLabel.font = AppKitFontResolver.font(TypographyTokens.TaskHover.title)
@@ -108,25 +94,7 @@ final class TaskHoverCard
 			[header, project],
 			spacing: LayoutTokens.TaskHover.rowSpacing
 		)
-		let surface = DesktopSurface(
-			AppKitColorTokens.summaryCard,
-			cornerRadius: ShapeTokens.TaskHover.cornerRadius,
-			bordered: true,
-			borderWidth: 0.5,
-			borderColor: AppKitColorTokens.popoverEdge
-		)
-		surface.wantsLayer = true
-		surface.layer?.cornerRadius = ShapeTokens.TaskHover.cornerRadius
-		AppKitLayout.pin(
-			stack,
-			to: surface,
-			inset: LayoutTokens.TaskHover.contentInset
-		)
-		let cardWidth = min(
-			LayoutTokens.TaskHover.width,
-			availableSize.width
-		)
-		surface.widthAnchor.constraint(equalToConstant: cardWidth).isActive = true
+
 		header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		project.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		for icon in [computer, folder]
@@ -140,18 +108,7 @@ final class TaskHoverCard
 			.required,
 			for: .horizontal
 		)
-		surface.layoutSubtreeIfNeeded()
-		let size = NSSize(
-			width: cardWidth,
-			height: min(
-				availableSize.height,
-				max(
-					LayoutTokens.TaskHover.minimumHeight,
-					surface.fittingSize.height
-				)
-			)
-		)
-		return (surface, size)
+		return stack
 	}
 
 	private func constrainLabel(
@@ -204,74 +161,9 @@ final class TaskHoverCard
 		)
 	}
 
-	private func makePanel(
-		content: NSView,
-		size: NSSize
-	) -> NSPanel
-	{
-		let card = NSPanel(
-			contentRect: NSRect(
-				origin: .zero,
-				size: size
-			),
-			styleMask: [.borderless, .nonactivatingPanel],
-			backing: .buffered,
-			defer: false
-		)
-		card.isOpaque = false
-		card.backgroundColor = .clear
-		card.hasShadow = true
-		card.ignoresMouseEvents = true
-		card.isReleasedWhenClosed = false
-		card.animationBehavior = .none
-		card.contentView = content
-		return card
-	}
-
-	private func positionCard(
-		_ card: NSPanel,
-		beside view: NSView,
-		in parent: NSWindow,
-		size: NSSize
-	)
-	{
-		let rowScreenRect = parent.convertToScreen(view.convert(
-			view.bounds,
-			to: nil
-		))
-		let visibleScreenFrame = parent.screen?.visibleFrame ?? rowScreenRect
-		let cardOriginX = max(
-			visibleScreenFrame.minX,
-			min(
-				rowScreenRect.maxX + 8,
-				visibleScreenFrame.maxX - size.width
-			)
-		)
-		let cardOriginY = max(
-			visibleScreenFrame.minY,
-			min(
-				rowScreenRect.maxY - size.height,
-				visibleScreenFrame.maxY - size.height
-			)
-		)
-		card.setFrameOrigin(NSPoint(
-			x: cardOriginX,
-			y: cardOriginY
-		))
-	}
-
 	func dismiss()
 	{
-		guard let panel
-		else
-		{
-			return
-		}
-		appearanceBinding?.invalidate()
-		appearanceBinding = nil
-		panel.parent?.removeChildWindow(panel)
-		panel.orderOut(nil)
-		self.panel = nil
+		preview.dismiss()
 	}
 
 	private func relativeTime() -> String

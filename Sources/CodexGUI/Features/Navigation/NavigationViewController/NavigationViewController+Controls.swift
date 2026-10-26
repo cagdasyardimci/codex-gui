@@ -4,18 +4,11 @@ extension NavigationViewController
 {
 	func makeBrandRow() -> NSStackView
 	{
-		let refreshButton = NSButton(
-			title: "Refresh",
+		let refreshButton = SidebarIconButton(
+			role: .refresh,
 			target: self,
 			action: #selector(refresh)
 		)
-		refreshButton.setAccessibilityLabel("Refresh conversations")
-		AppKitControlStyling.styleButton(
-			refreshButton,
-			icon: .arrowRotateCw
-		)
-		refreshButton.imagePosition = .imageOnly
-		refreshButton.toolTip = "Refresh conversations"
 
 		let wordmark = NSImageView(image: DesktopBrandWordmark.image)
 		wordmark.contentTintColor = AppKitColorTokens.primaryText
@@ -28,11 +21,6 @@ extension NavigationViewController
 		searchButton.target = self
 		searchButton.action = #selector(toggleSearch)
 		searchButton.setAccessibilityLabel("Search conversation titles and previews")
-		AppKitControlStyling.styleButton(
-			searchButton,
-			icon: .search
-		)
-		searchButton.imagePosition = .imageOnly
 		searchButton.toolTip = "Search conversation titles and previews"
 
 		let brandRow = AppKitLayout.horizontalStack(
@@ -45,34 +33,17 @@ extension NavigationViewController
 			bottom: 0,
 			right: 0
 		)
-		refreshButton.widthAnchor.constraint(equalToConstant: 26).isActive = true
-		searchButton.image = DesktopIcons.image(
-			.search,
-			size: 16
-		)
-		searchButton.contentTintColor = AppKitColorTokens.secondaryText
-		searchButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
-		searchButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
 		return brandRow
 	}
 
 	func configureNewChatButton()
 	{
-		newChatButton.cell = NewChatButtonCell(textCell: newChatButton.title)
 		newChatButton.target = self
 		newChatButton.action = #selector(newChat)
-		newChatButton.setAccessibilityLabel("Start a new conversation")
-		AppKitControlStyling.styleButton(
-			newChatButton,
-			icon: .composeEditSquare
-		)
-		newChatButton.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
-		newChatButton.contentTintColor = AppKitColorTokens.sidebarText
-		newChatButton.image = DesktopIcons.image(.composeEditSquare)
-		newChatButton.alignment = .left
 	}
 
-	func makeProjectsHeader(actionsButton: NSButton? = nil) -> NSStackView
+	func makeProjectsHeader(actionsButton: SidebarIconButton? = nil) -> NSStackView
 	{
 		let sidebarOptionsButton = actionsButton ?? self.sidebarOptionsButton
 		let projectsCaption = SidebarTextField(
@@ -83,34 +54,16 @@ extension NavigationViewController
 		sidebarOptionsButton.target = self
 		sidebarOptionsButton.action = #selector(showSidebarMenu(_:))
 		sidebarOptionsButton.setAccessibilityLabel("Organize sidebar and sort chats")
-		AppKitControlStyling.styleButton(
-			sidebarOptionsButton,
-			icon: .dotsHorizontal
-		)
-		sidebarOptionsButton.imagePosition = .imageOnly
 		sidebarOptionsButton.toolTip = "Organize sidebar and sort chats"
-		let addButton = actionsButton == nil ? projectActionsButton : NSButton(
-			title: "Project Actions",
-			target: nil,
-			action: nil
-		)
+		let addButton = actionsButton == nil ? projectActionsButton : SidebarIconButton(role: .add)
 		addButton.target = self
 		addButton.action = sidebarPreferences.organization == .oneList
 			? #selector(newChat) : #selector(openProject)
-		AppKitControlStyling.styleButton(
-			addButton,
-			icon: .plus
-		)
-		addButton.imagePosition = .imageOnly
 		addButton.setAccessibilityLabel(
 			sidebarPreferences.organization == .oneList ? "New chat" : "Add new project"
 		)
 		addButton.toolTip =
 			sidebarPreferences.organization == .oneList ? "New chat" : "Add new project"
-		addButton.widthAnchor.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize)
-			.isActive = true
-		addButton.heightAnchor.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize)
-			.isActive = true
 		let projectsHeader = makeSidebarHeading([
 			projectsCaption,
 			NSView(),
@@ -118,10 +71,6 @@ extension NavigationViewController
 			addButton
 		])
 		projectsHeader.hoverButtons = [sidebarOptionsButton, addButton]
-		sidebarOptionsButton.widthAnchor
-			.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize).isActive = true
-		sidebarOptionsButton.heightAnchor
-			.constraint(equalToConstant: LayoutTokens.Sidebar.headingActionSize).isActive = true
 		let management = NavigationContextMenu(title: "Project management")
 		management.addAction(
 			title: "Project and conversation actions",
@@ -156,17 +105,14 @@ extension NavigationViewController
 
 	func makeProjectSelectionRow() -> NSStackView
 	{
-		let openButton = NSButton(
+		let openButton = DesktopStyledButton(
 			title: "Open…",
 			target: self,
 			action: #selector(openProject)
 		)
 		openButton.setAccessibilityLabel("Open repository")
-		AppKitControlStyling.styleButton(
-			openButton,
-			icon: .folderPlus
-		)
-		openButton.font = .systemFont(ofSize: 11)
+		openButton.symbol = .folderPlus
+		openButton.size = .small
 
 		recentProjectsButton.target = self
 		recentProjectsButton.action = #selector(selectRecentProject)
@@ -176,8 +122,8 @@ extension NavigationViewController
 			for: .horizontal
 		)
 		recentProjectsButton.cell?.lineBreakMode = .byTruncatingTail
-		AppKitControlStyling.stylePopup(recentProjectsButton)
-		recentProjectsButton.font = .systemFont(ofSize: 11)
+
+		recentProjectsButton.size = .small
 
 		return AppKitLayout.horizontalStack(
 			[openButton, recentProjectsButton, NSView()],
@@ -187,17 +133,13 @@ extension NavigationViewController
 
 	func configureSearchPopover()
 	{
-		searchField.placeholderString = "Search chats"
-		searchField.font = .systemFont(ofSize: 14)
-		searchField.drawsSurface = false
-		(searchField.cell as? NSSearchFieldCell)?.searchButtonCell = nil
-		searchField.isBordered = false
-		searchField.drawsBackground = false
-		searchField.focusRingType = .none
-		searchField.textColor = AppKitColorTokens.primaryText
-		searchField.setAccessibilityLabel("Search conversation titles and previews")
-		searchField.delegate = self
-		searchField.sendsSearchStringImmediately = true
+		searchField.presentation = .viewerOverlay
+		searchField.configureSearch(
+			placeholder: "Search chats",
+			accessibilityLabel: "Search conversation titles and previews",
+			delegate: self,
+			sendsImmediately: true
+		)
 		chatSearchController.onChoose =
 		{
 			[weak self] thread in
@@ -224,23 +166,15 @@ extension NavigationViewController
 		renameButton.target = self
 		renameButton.action = #selector(renameThread)
 		renameButton.setAccessibilityLabel("Rename selected conversation")
-		AppKitControlStyling.styleButton(
-			renameButton,
-			icon: .pencil
-		)
-		renameButton.font = .systemFont(ofSize: 11)
+		renameButton.symbol = .pencil
+		renameButton.size = .small
 
 		archiveButton.target = self
 		archiveButton.action = #selector(archiveThread)
 		archiveButton.setAccessibilityLabel("Archive or restore selected conversation")
-		AppKitControlStyling.styleButton(
-			archiveButton,
-			icon: .archive
-		)
-		archiveButton.font = .systemFont(ofSize: 11)
+		archiveButton.symbol = .archive
+		archiveButton.size = .small
 
-		emptyLabel.textColor = .secondaryLabelColor
-		emptyLabel.font = .systemFont(ofSize: 11)
 	}
 
 	func makeConversationScrollView() -> NSScrollView

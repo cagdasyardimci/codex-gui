@@ -34,27 +34,19 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 
 	var sidebarPreferences = SidebarPreferences()
 
-	let recentProjectsButton = NSPopUpButton()
-	let taskPicker = NSPopUpButton()
+	let recentProjectsButton = DesktopPopupButton()
+	let taskPicker = DesktopPopupButton()
 	let taskSummaryLabel = NSTextField(labelWithString: "")
 	let activeTaskLabel = NSTextField(labelWithString: "")
-	let returnToTaskButton = NSButton(
+	let returnToTaskButton = DesktopStyledButton(
 		title: "Return to Task",
 		target: nil,
 		action: nil
 	)
-	let newChatButton = DesktopHoverButton(
-		title: "New chat",
-		target: nil,
-		action: nil
-	)
+	let newChatButton = SidebarNewChatButton()
 	let chatsTable = NavigationTasksTableView()
 	let searchField = ViewerSearchField()
-	let searchButton = NSButton(
-		title: "Search",
-		target: nil,
-		action: nil
-	)
+	let searchButton = SidebarIconButton(role: .search)
 	lazy var chatSearchController = ChatSearchController(searchField: searchField)
 	lazy var searchPopover = DesktopSearchPanel(
 		controller: chatSearchController,
@@ -64,26 +56,25 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			height: 480
 		)
 	)
-	let sidebarOptionsButton = NSButton()
-	let projectActionsButton = NSButton(
-		title: "Project Actions",
-		target: nil,
-		action: nil
-	)
+	let sidebarOptionsButton = SidebarIconButton(role: .options)
+	let projectActionsButton = SidebarIconButton(role: .add)
 	let projectActionsPopover = NSPopover()
 	let projectInfoPopover = NSPopover()
 	let projectInfoView = ProjectInfoPopoverView(frame: .zero)
-	let renameButton = NSButton(
+	let renameButton = DesktopStyledButton(
 		title: "Rename…",
 		target: nil,
 		action: nil
 	)
-	let archiveButton = NSButton(
+	let archiveButton = DesktopStyledButton(
 		title: "Archive",
 		target: nil,
 		action: nil
 	)
-	let emptyLabel = NSTextField(wrappingLabelWithString: "")
+	let emptyLabel = DesktopStatusView(
+		message: "",
+		presentation: .inlineCompact
+	)
 	struct ModalScope: Equatable
 	{
 		let owner: WorkspaceLifecycleOwnerReference?
@@ -181,7 +172,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		}
 		newChatButton.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		brandRow.heightAnchor.constraint(equalToConstant: 52).isActive = true
-		newChatButton.heightAnchor.constraint(equalToConstant: 30).isActive = true
 		chatScrollView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		emptyLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		chatScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true

@@ -56,6 +56,61 @@ struct DesktopNativeButtonTests
 			== (expected.cell as? NSButtonCell)?.titleRect(forBounds: bounds))
 	}
 
+	@Test func nativePresentationChangesKeepToggleStateAndConfiguredClosure()
+	{
+		_ = NSApplication.shared
+		var calls = 0
+		let button = DesktopActionButton(
+			title: "Pin",
+			presentation: .nativeInline
+		)
+		{
+			calls += 1
+		}
+		button.setButtonType(.toggle)
+		button.state = .on
+		button.symbol = .pin
+		button.size = .small
+		button.presentation = .nativeIcon
+		#expect(button.state == .on)
+		#expect(button.font?.pointSize == 11)
+		#expect(button.dispatchConfiguredAction())
+		#expect(calls == 1)
+		button.isEnabled = false
+		#expect(!button.dispatchConfiguredAction())
+		#expect(calls == 1)
+	}
+	@Test func sidebarRolesOwnTheirNativeGeometryAndSearchState()
+	{
+		_ = NSApplication.shared
+		let search = SidebarIconButton(role: .search)
+		let refresh = SidebarIconButton(role: .refresh)
+		let options = SidebarIconButton(role: .options)
+		let add = SidebarIconButton(role: .add)
+		for (button, expectedWidth) in [
+			(search, CGFloat(28)),
+			(refresh, 26),
+			(options, LayoutTokens.Sidebar.headingActionSize),
+			(add, LayoutTokens.Sidebar.headingActionSize)
+		]
+		{
+			#expect(button.constraints
+				.contains
+				{
+					$0.firstAttribute == .width && $0.constant == expectedWidth
+				})
+			#expect(button.imagePosition == .imageOnly)
+			#expect(button.image != nil)
+		}
+		#expect(search.image?.size == NSSize(
+			width: 16,
+			height: 16
+		))
+		search.isSearchActive = true
+		#expect(search.contentTintColor == .controlAccentColor)
+		search.isSearchActive = false
+		#expect(search.contentTintColor == .secondaryLabelColor)
+	}
 
 	@Test func defaultNativeReconfigurationRetainsConfiguredCellAndAction()
 	{

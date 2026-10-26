@@ -82,18 +82,10 @@ final class ConversationSidebarRowView: NSTableRowView
 		{
 			return
 		}
-		let tracking = NSTrackingArea(
-			rect: .zero,
-			options: [
-				.mouseEnteredAndExited,
-				.activeInKeyWindow,
-				.inVisibleRect
-			],
-			owner: self,
-			userInfo: nil
+		hoverTrackingArea = DesktopHoverTracking.replace(
+			in: self,
+			previous: nil
 		)
-		addTrackingArea(tracking)
-		hoverTrackingArea = tracking
 		if let window
 		{
 			let pointer = convert(
