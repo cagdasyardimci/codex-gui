@@ -192,8 +192,14 @@ func prepareRun(
 		atomically: true,
 		encoding: .utf8
 	)
+	try manager.copyItem(
+		at: configuration.root
+			.appendingPathComponent("Tests/E2E/Fixtures/project with spaces/activity-preview.png"),
+		to: project.appendingPathComponent("activity-preview.png")
+	)
+
 	try command(["git", "-C", project.path, "init", "-q", "--initial-branch=main"])
-	try command(["git", "-C", project.path, "add", "--", "example.swift"])
+	try command(["git", "-C", project.path, "add", "--", "example.swift", "activity-preview.png"])
 	try command(["git",
 					"-C",
 					project.path,
@@ -220,6 +226,19 @@ func prepareRun(
 		["scenario": configuration.scenario],
 		to: run.appendingPathComponent("backend-state.json")
 	)
+	for appearance in ["light", "dark"]
+	{
+		let isolated = run.appendingPathComponent("components-" + appearance)
+		try manager.createDirectory(
+			at: isolated,
+			withIntermediateDirectories: true
+		)
+		try prepareComponentState(
+			in: isolated,
+			project: project
+		)
+	}
+
 	let fingerprint = try digest(
 		run,
 		paths: filePaths(
@@ -260,4 +279,67 @@ func preferencesSuite(_ run: URL) -> String
 {
 	let batch = run.deletingLastPathComponent().lastPathComponent
 	return "local.codexgui.e2e.\(batch).\(run.lastPathComponent)"
+}
+
+func prepareComponentState(
+	in directory: URL,
+	project: URL
+) throws
+{
+	let code = "let consolidated = true\nprint(consolidated)"
+	let state: [String: Any] = [
+		"scenario": "streaming",
+		"config": ["features": ["browser_use": true, "browser_use_full_cdp_access": false],
+					"browser_use": ["origins": [:], "default_origin_policy": [:]]],
+		"threads": [
+			["id": "qa-reading",
+				"name": "Component keyboard fixture",
+				"cwd": project.path,
+				"archived": false,
+				"turns": [["id": "qa-components-turn",
+						"status": "completed",
+						"items": [
+							[
+								"id": "qa-code",
+								"type": "agentMessage",
+								"text": "Component preview\n\n```swift\n" +
+									code + "\n```"
+							],
+							[
+								"id": "qa-command",
+								"type": "commandExecution",
+								"command": "printf COMPONENT_TERMINAL",
+								"cwd": project.path,
+								"status": "completed",
+								"exitCode": 0,
+								"aggregatedOutput": "COMPONENT_TERMINAL\n",
+								"durationMs": 12
+							]
+						]]]],
+			["id": "qa-image",
+				"name": "Image component fixture",
+				"cwd": project.path,
+				"archived": false,
+				"turns": [["id": "qa-image-turn", "status": "completed", "items": [
+				["id": "qa-image-item", "type": "userMessage", "content": [
+					["type": "text", "text": "Image component fixture"],
+					[
+						"type": "localImage",
+						"path": project.appendingPathComponent("activity-preview.png").path
+					]
+				]]
+				]]]],
+
+			["id": "qa-archive",
+				"name": "Archived component fixture",
+				"cwd": project.path,
+				"archived": true,
+				"turns": []]
+		]
+	]
+	try JSONSerialization.data(
+		withJSONObject: state,
+		options: .prettyPrinted
+	)
+	.write(to: directory.appendingPathComponent("backend-state.json"))
 }

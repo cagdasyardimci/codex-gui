@@ -682,6 +682,11 @@ func report(
 ) throws -> Object
 {
 	var errors: [String] = []
+	let requiredTests: Set<String> = [
+		"StreamingStopWorkflowTests/testComponentsInDarkAppearance()",
+		"StreamingStopWorkflowTests/testComponentsInLightAppearance()",
+		"StreamingStopWorkflowTests/testSendStreamingMessageAndStop()",
+	]
 	let exportErrors = run.appendingPathComponent("export-errors.txt")
 	if let value = try? String(
 		contentsOf: exportErrors,
@@ -698,6 +703,14 @@ func report(
 		else
 		{
 			throw EvidenceError.invalid("Invalid manifest")
+		}
+		let observedTests = Set(manifest.compactMap
+		{
+			$0["testIdentifier"] as? String
+		})
+		if observedTests != requiredTests
+		{
+			errors.append("Required component and streaming test evidence is incomplete")
 		}
 		for test in manifest
 		{
@@ -835,7 +848,7 @@ func report(
 		errors += value.split(separator: "\n").map(String.init)
 	}
 	var lines = [
-		"# Streaming and Stop UI workflow",
+		"# Components, streaming and Stop UI workflows",
 		"",
 		"Xcode command exit code: \(exitCode)",
 		"",
@@ -863,7 +876,50 @@ func report(
 	{
 		lines.append("- [\(name)](\(name))")
 	}
-	lines += ["", "## Checkpoints", ""]
+	var componentCaptures: [String: [String: String]] = [:]
+	for attachment in attachments
+	{
+		let name = text(
+			attachment,
+			"suggestedHumanReadableName"
+		)
+		for appearance in ["dark", "light"]
+		{
+			let prefix = "components-" + appearance + "-"
+			guard name.hasPrefix(prefix), let marker = name.range(of: "-application_")
+			else
+			{
+				continue
+			}
+			let checkpoint = String(name.dropFirst(prefix.count).prefix(upTo: marker.lowerBound))
+			componentCaptures[checkpoint, default: [:]][appearance] =
+				text(
+					attachment,
+					"exportedFileName"
+				)
+		}
+	}
+	if !componentCaptures.isEmpty
+	{
+		lines += ["",
+					"## Component captures",
+					"",
+					"| Checkpoint | Dark | Light |",
+					"| --- | --- | --- |"]
+		for checkpoint in componentCaptures.keys.sorted()
+		{
+			let links = ["dark", "light"].map
+			{
+				appearance in
+				componentCaptures[checkpoint]?[appearance].map
+				{
+					"[View](attachments/" + $0 + ")"
+				} ?? "Missing"
+			}
+			lines.append("| " + checkpoint + " | " + links.joined(separator: " | ") + " |")
+		}
+	}
+	lines += ["", "## Streaming checkpoints", ""]
 	for checkpoint in checkpoints
 	{
 		let prefix = text(
@@ -996,7 +1052,7 @@ func report(
 		&& integer(
 			summary,
 			"passedTests"
-		) == 1
+		) == requiredTests.count
 		&& integer(
 			summary,
 			"failedTests"

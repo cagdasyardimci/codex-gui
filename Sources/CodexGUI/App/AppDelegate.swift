@@ -17,6 +17,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 
 	func applicationDidFinishLaunching(_ notification: Notification)
 	{
+		let environment = ProcessInfo.processInfo.environment
+		if environment["CODEX_GUI_E2E_STATE"]?.hasPrefix("/") == true
+		{
+			switch environment["CODEX_GUI_E2E_APPEARANCE"]
+			{
+			case "Light": NSApp.appearance = NSAppearance(named: .aqua)
+			case "Dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+			default: break
+			}
+		}
 		createMenu()
 
 		let controller = MainWindowController(

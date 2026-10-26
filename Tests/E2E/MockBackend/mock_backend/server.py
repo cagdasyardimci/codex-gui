@@ -59,6 +59,15 @@ class Server:
             return {'data': [{'id': 'qa-model', 'model': 'qa-model', 'displayName': 'QA fixture model',
                     'supportedReasoningEfforts': [{'reasoningEffort': 'medium'}],
                     'defaultReasoningEffort': 'medium', 'isDefault': True}], 'nextCursor': None}
+        if method == 'config/read' and 'config' in self.state.data:
+            return {'config': copy.deepcopy(self.state.data['config']),
+                    'layers': [{'name': {'type': 'user'}, 'version': 'component-fixture-v1'}]}
+        if method == 'configRequirements/read' and 'config' in self.state.data:
+            return {'requirements': {}}
+        if method == 'experimentalFeature/list' and 'config' in self.state.data:
+            return {'data': [{'name': name, 'enabled': enabled}
+                             for name, enabled in self.state.data['config'].get('features', {}).items()],
+                    'nextCursor': None}
         if method == 'skills/list':
             return {'data': [{'cwd': cwd, 'skills': [], 'errors': []} for cwd in p.get('cwds', [])]}
         if method == 'collaborationMode/list':
