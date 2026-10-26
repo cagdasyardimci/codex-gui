@@ -12,7 +12,7 @@ See [mock-backend scenarios and isolation](mock-backend.md#scenarios-and-isolati
 
 ## Manual preparation and isolation
 
-The QA copy keeps the main app's signature and bundle identifier. With a consistent Apple Development certificate, compatible builds can retain macOS permission grants; ad hoc signing may require approval again after rebuilds. See [signing setup](../README.md#signing-setup) for certificate selection and the certificate-free fallback. Those grants remain under the user's control; notification banner delivery requires native observation.
+The QA copy keeps the main app's signature and bundle identifier. Follow [signing setup](../README.md#signing-setup) for certificate selection and permission continuity.
 
 Manual QA uses temporary task workspaces and backend state, but standard preferences and default application-support stores remain shared with normal app launches. The launcher builds in this checkout's `.build` directory; follow the [build coordination safeguards](validation.md#automated-checks).
 
@@ -26,7 +26,7 @@ make test:ui UI_REPEAT=2
 make report:ui UI_RUN=/absolute/path/to/run-directory
 ```
 
-Use `make help` or `make help:ui` for commands. For advanced options, use the Swift command from the repository root:
+For advanced options, use the Swift command from the repository root:
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run --package-path Tests/E2E E2EWorkflow --help
@@ -34,16 +34,14 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run --package-pat
 
 The `--help` output lists available options, including `--backend` for a standalone backend executable.
 
-Use full Xcode with its license and first-run setup complete. Run on an unlocked interactive desktop without competing input. The UI runner needs development signing and may require macOS UI-testing or Automation permission. The workflow does not change global `xcode-select`.
+Use full Xcode with its license and first-run setup complete. Run on an unlocked interactive desktop without competing input or clipboard writers. The UI runner needs development signing and may require macOS UI-testing or Automation permission. The workflow does not change global `xcode-select`.
 
 Follow [validation](validation.md#automated-checks) for build coordination and source stability throughout a batch. Repetitions use separate runtime and preference state; retain every failure for review.
 
-Unlike manual QA, each automated run isolates default task workspaces, application-support files and preferences.
+Unlike manual QA, each automated run isolates default task workspaces, application-support files and preferences. Appearance cases use app-scoped Light and Dark settings without changing system appearance. See the [workflow implementation](../Tests/E2E/) for launch flags and fixture preparation.
 
 ## Evidence
 
 Each run retains a report, Xcode result and diagnostic attachments under ignored `.build/e2e/`. Captures can show surrounding applications; review artifacts before sharing them.
 
-Other desktop input or clipboard writers can disrupt the workflow.
-
-Read reports from expected versus observed outcome, then screen/target location, then state and backend history. Captures are sequential, and state history describes published values rather than the exact pixels drawn. A passing workflow establishes only the exercised behavior with this synthetic backend. Review screenshots separately, preserve failing runs, and report live-backend, notification-delivery and minimum-macOS evidence under [validation](validation.md#native-and-live-acceptance).
+Read reports from expected versus observed outcome, then screen/target location, then state and backend history. Captures are sequential, and state history describes published values rather than the exact pixels drawn. Review screenshots separately and preserve failing runs. Interpret the workflow and report remaining acceptance under [validation](validation.md#native-and-live-acceptance).

@@ -19,6 +19,4 @@ The default scenario is `streaming`. Available names are in `Tests/E2E/MockBacke
 
 Give each run its own backend process and state file. Use a fresh state file when changing scenarios; prior conversations can persist across reconnects.
 
-## Evidence limits
-
-A fixture trace shows what the backend emitted, while app captures show what the client displayed. See [native QA](native-qa.md#evidence) for interpretation. The fixture does not establish production protocol parity, real-model behavior or live service reliability.
+For fixture-trace and capture interpretation, follow [native QA evidence review](native-qa.md#evidence).

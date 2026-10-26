@@ -1,89 +1,31 @@
 # Remote access
 
-Remote Access in Settings manages Codex's remote-control relay for the main window's source
-app-server connection. The host remains the same when the user selects a managed task checkout.
-Remote access uses the host's Codex authentication, files, tools, and execution permissions.
-ChatGPT authentication is required; API-key authentication is not supported by the relay.
+Remote access uses the host Mac's Codex authentication, files, tools and execution permissions. The relay requires ChatGPT authentication; API-key authentication is unsupported. This optional experimental integration targets CLI 0.163.0; the general tested baseline belongs to [CLI compatibility](cli-compatibility.md#current-policy).
 
 ## Host lifetime
 
-The GUI retains its existing private `codex app-server --stdio` connection. Enabling and disabling
-remote access sends `ephemeral: true`: the choice applies to that running server without changing
-Codex's global remote-control configuration. The source workspace stores the user's enablement
-choice in the `local.codexgui.appkit` preferences domain and re-enables remote access after its next
-successful app-server connection. This setting is shared by bundled and direct SwiftPM launches;
-an explicit test preferences suite remains isolated. A missing shared setting is migrated from
-the launching process's existing preference when available.
-Disabling access clears that choice. Quitting or reconnecting the GUI terminates the current server
-and interrupts remote availability until the new connection is ready. The Mac must stay awake and
-online. Background daemon management is not part of this integration. Each managed task checkout
-still has its own app-server; enabling the main host does not enable or share those separate active
-sessions.
+The source workspace's private app-server is the remote host, including while a managed task checkout is selected. Enablement is ephemeral at the server and persisted locally by the GUI, avoiding changes to Codex's global remote-control configuration. Reconnection restores that local choice. Separate managed-task app-servers are not enabled by it.
 
-Remote access is an optional experimental protocol capability implemented against CLI 0.163.0.
-The application's general tested CLI baseline remains defined by [CLI compatibility](cli-compatibility.md).
-A server that rejects the remote-control methods reports its error in the Remote Access window;
-successful initialization alone does not establish remote-control availability.
+Quitting or reconnecting interrupts remote availability until the host connection returns. The Mac must remain awake and online; the GUI does not manage a background daemon. Leaving Connections stops its presentation polling without disabling the host. Keep this Mac awake applies only while connected on AC power.
 
 ## Setup and device management
 
-Open Settings > Backend > Remote Access, then enable access. An enable response can report
-`connecting`; only `connected` enables Pair iPhone. Remote status notifications update the panel,
-and the visible panel refreshes status and devices every five seconds. Disabling access can cancel a pending refresh or
-pairing operation. Refreshing does not replay
-enablement, pairing, or revocation mutations.
+1. Open Settings → Connections → Control this Mac and enable Allow connections.
+2. Choose Add, then use Phone to scan the QR code or Computer to copy the manual code. Use the same account and workspace on the paired device.
+3. Use Refresh to inspect devices and Revoke access to remove a captured device authorization.
 
-Pair iPhone requests a manual code. Enter it when adding the computer in ChatGPT on iPhone, using
-the same account and workspace. Pairing codes and their expiration remain in memory. Expiration
-uses the server's Unix timestamp in seconds. The panel checks expiry each second, polls whether
-the code was claimed, and clears it when claimed, expired, disconnected, or closed. Closing the
-window also invalidates a pending pairing result. Pairing codes and remote-control tokens are
-redacted when recognizable named fields occur in backend diagnostics or remote-access errors.
-
-The device list follows pagination with cursor-cycle detection and bounded page and row totals. Removing a
-device captures its environment and client identifiers and requires that they still match the
-current host. A confirmed revocation removes that row without depending on a subsequent read.
-Device-list and pairing-status read failures remain visible while preserving successfully read
-host status. They do not establish that a preceding mutation failed or should be resent.
+An enable response may still be connecting. Pairing and device-list reads do not prove the host is online. Read failures must not be treated as mutation failures or cause enablement, pairing or revocation to be replayed. Pairing credentials remain transient and must be retired on expiry, claim, disconnection or dismissal.
 
 ## Connection errors
 
-The relay permits one online app-server for the shared Codex installation. Running ChatGPT's
-remote host and this GUI's host at the same time can return `409 Conflict` with
-`Remote app server already online`. Disable remote access in the other app, then disable and
-re-enable it here. An existing paired iPhone can appear in the shared device list even while this
-GUI's host is unable to connect; the device list alone does not prove this host is online.
+The relay permits one online app-server for a shared Codex installation. Simultaneously hosting from ChatGPT and this GUI can return `409 Conflict` with `Remote app server already online`. Disable remote access in the other app, then disable and re-enable it here. A previously paired device may remain listed during that conflict.
 
-The window identifies that conflict when its backend log is available. Backend Details opens
-the main host's diagnostics, refreshed after remote operations. By default, the GUI enables relay
-logging with `RUST_LOG=error,codex_app_server_transport::transport::remote_control=info` for its
-subprocess. An explicitly inherited `RUST_LOG` is preserved and may suppress those diagnostics.
-The GUI does not disable another app's host automatically.
+An inherited `RUST_LOG` can suppress the GUI's default relay diagnostics. Inspect [subprocess logging configuration](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Environment.swift) when host status and diagnostics disagree. Review diagnostic output before sharing it under the [diagnostics guidance](cli-compatibility.md#current-policy).
 
 ## Ownership and validation
 
-Remote-access state belongs to `WorkspaceModel.remoteAccess`. Only the source workspace restores
-and persists the local enablement choice; managed task app-servers do not auto-enable. The reducer
-validates workspace, connection generation, and pending request identity. Status notifications
-advance a revision so a late read cannot replace newer status. Environment changes clear pairing
-and device state. Views
-send commands through `WorkspaceStoreInputs`; the effect runner owns backend work.
+Apply [asynchronous ownership and recovery](architecture.md#ownership-and-recovery) to host, pairing and device requests. Remote status notifications must take precedence over older reads; environment changes invalidate device identities and pairing state. Local composer choices must survive unrelated settings notifications and stale resume snapshots, while corresponding authoritative backend changes may supersede them.
 
-The selected chat resumes when restored after startup or reconnection, establishing its live
-thread subscription. Selecting an active chat also establishes a subscription if the GUI has only
-read its saved history. Background recovery, search, and completion reads remain unsubscribed.
+Inspect the [remote reducer](../Sources/CodexGUI/Application/Reducers/RemoteAccess/), [wire requests](../Sources/CodexGUI/CodexClient/AppServer/AppServer+RemoteAccess.swift) and [native feature](../Sources/CodexGUI/Features/RemoteAccess/) for current implementation.
 
-Remote thread settings notifications and the accepted `thread/resume` response update the selected
-conversation’s composer model, effort, and fast-mode controls. A local composer choice takes
-precedence for that thread until the corresponding backend setting changes. Unrelated backend
-settings updates preserve the local choice. New chats continue
-to use the locally saved preference. The same effective selection is captured for a GUI-submitted
-turn. A resume snapshot cannot replace settings from a newer notification or discard a local
-composer choice made while the read was pending. Transcript revisions do not discard an otherwise
-current settings snapshot.
-
-The existing conversation and approval reducers retain their ownership and uncertain-outcome
-contracts. Remote setup does not prove that mobile chat discovery, project catalogs, active-turn
-sharing, or approval recovery work with every mobile app version. Validate those behaviors with an
-authenticated iPhone before claiming complete mobile parity. Controlled fixtures establish only
-their asserted wire, state, and AppKit behaviors; see [validation](validation.md#native-and-live-acceptance).
+Validate discovery, project catalogs, active-turn sharing and approval recovery with an authenticated phone before claiming mobile parity. Follow [live acceptance](validation.md#native-and-live-acceptance); successful host setup alone does not establish those behaviors.

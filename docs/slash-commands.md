@@ -1,46 +1,19 @@
 # Composer slash commands
 
-Type `/` at the beginning of the composer to open command completion. Up/Down selects a row, Tab inserts its name, Return executes an available command, and Escape closes completion without changing the draft. IME marked text and Shift-Return keep their normal text-entry behavior. Command availability includes the current checkout, chat, active operation and supported backend settings.
+Type `/` at the start of the draft to discover available commands and enabled skills. The [command registry](../Sources/CodexGUI/Application/Reducers/Composer/SlashCommandRegistry.swift) owns command names, argument forms and descriptions; the [parser](../Sources/CodexGUI/Application/Reducers/Composer/SlashCommandParser.swift) owns recognition. Keep those definitions authoritative instead of copying a command table here.
 
-The completion panel follows the composer width and uses compact icon/title/description rows in light and dark appearances. Unavailable commands keep their descriptions; the reason is provided in the row tooltip and accessibility label.
+## Syntax and intent
 
-Enabled skills from the current checkout's catalog appear directly under a **Skills** heading, sorted by display name, with descriptions and scope labels. Typing after `/` filters command names and skill names/display names. Arrow keys skip the section heading. Clicking a skill or pressing Tab/Return selects it for the next message and removes only the slash token, preserving the rest of the draft without sending it. `/skills` remains available to open the full picker, including its **No skill** option.
+Commands are composer actions rather than shell input: arguments have no shell quoting or escape syntax. Paths, URLs and slashes later in prose remain ordinary text. Use `//status` to send literal `/status`. Invalid input retains the draft. Selecting a skill attaches it to the next message without sending that message.
 
-Only an initial `/name` token is a command; leading spaces and tabs are allowed. URLs, paths such as `/Users/example/source.swift`, fenced text and a slash later in a sentence remain ordinary text. Unknown command names and invalid arguments display an error and retain the draft. Use `//status` to send literal `/status` text. Arguments have no shell quoting or escape syntax. `/plan` removes one separating character and preserves the remaining prompt text.
+Forking copies conversation history in the source checkout; task checkout creation is a separate Git operation. Plan toggling without a prompt changes next-turn mode without starting a model turn. Preserve the remaining prompt text when invoking plan mode with a prompt.
 
-| Syntax | Behavior |
-| --- | --- |
-| `/new` | Start a fresh chat in the source checkout. |
-| `/resume [thread-id]` | Pick or resume a saved chat available in the current checkout. |
-| `/fork` | Copy the current conversation into a new conversation in the same source checkout. |
-| `/rename [name]` | Rename directly, or open the native rename dialog. |
-| `/archive` | Archive the current chat. |
-| `/delete` | Open the native deletion confirmation. |
-| `/compact` | Request server compaction and wait for its turn lifecycle. |
-| `/review [uncommitted\|base <branch>\|commit <sha>\|custom <instructions>]` | Choose a target or start an inline server review. |
-| `/model [model-id]` | Choose a model from the backend's current catalog. |
-| `/reasoning [effort]` | Choose an effort supported by the selected model. |
-| `/fast [on\|off]` | Toggle or set the advertised fast service tier. |
-| `/permissions [ask\|auto\|full]` | Choose approvals; full access uses the existing confirmation. |
-| `/plan [prompt]` | Toggle plan mode without a model turn, or send the supplied prompt in plan mode. |
-| `/status` | Show execution/account status and the selected chat's reported token usage. |
-| `/skills` | Open the skill picker. |
-| `/mention` | Open the file/context picker. |
-| `/diff` | Open the selected chat's Changes panel, which displays reported changes and the chosen review turn. |
-| `/copy` | Copy the latest nonempty assistant response in the viewed chat. |
+## Lifecycle
 
-`/fork` copies conversation history; it creates no Git branch or worktree and does not start a model turn. Managed task checkouts remain bound to their chat, so fork and new-chat actions require selecting the source checkout. Archived chats and pending or uncertain operations restrict chat-changing commands. Shared ownership, recovery and command cleanup barriers follow [architecture](architecture.md#ownership-and-recovery); deferred dialogs follow the [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility).
+Compaction acknowledgement does not establish completion. Review and compaction events can precede their request replies. Apply [protocol safeguards](cli-compatibility.md#protocol-lifecycle-safeguards) and [ownership and recovery](architecture.md#ownership-and-recovery) to command execution.
 
-Fast mode requires a service tier advertised by the selected model's catalog and sends that tier's actual ID. [FastModeAvailability](../Sources/CodexGUI/Application/Reducers/Preferences/FastModeAvailability.swift) owns tier selection. Switching to an unsupported model while fast mode is enabled blocks Send until fast mode is disabled.
+An uncertain plan update needs a matching settings event or an acknowledged explicit reapply: conversation reads do not report collaboration mode. Keep an explicit recovery choice after reconnection rather than inferring the mode from history.
 
-Compaction's `{}` reply acknowledges the request, rather than proving completion. Review and compaction may publish lifecycle events before their replies.
+Context occupancy uses the last reported active-context size and model context window. Last-request input and cumulative token totals are different quantities; absent values must remain unavailable. Selecting a saved chat resumes it to establish a subscription and replay usage, while background reads remain unsubscribed.
 
-The Compact completion row shows the selected chat's latest reported context usage as a percentage of the reported model context window. Its icon draws the same percentage as a circular progress arc. Selecting a saved chat resumes it so app-server can replay its latest usage report; background reads do not subscribe. When the window is unavailable but context tokens are reported, the row shows the token count and retains the generic icon. It updates when token usage notifications arrive, retains the last value after a turn finishes, and falls back to the generic description and icon when usage is unavailable.
-
-An uncertain plan update needs a matching settings event or an acknowledged explicit reapply; conversation read/resume responses do not report collaboration mode. After reconnecting, `/plan` presents **Reapply Plan**, **Reset Default** and **Cancel**.
-
-Last-request input and cumulative conversation usage are token counts, not context occupancy. The Compact row uses the last usage report's active context size; the status popover continues to label occupancy **not reported**. Absent server values remain unavailable.
-
-## Validation routing
-
-Follow [validation](validation.md) for test-host execution and evidence requirements, and [native QA](native-qa.md) for synthetic interaction checks and isolation limits.
+Follow [validation](validation.md) for checks and [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility) for deferred command dialogs.
