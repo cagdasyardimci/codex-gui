@@ -49,6 +49,7 @@ let package = Package(
 			],
 			resources: [
 				.copy("Resources/AppIcon.icns"),
+				.copy("Resources/RemoteAccess"),
 				.copy("Resources/Mermaid"),
 				.copy("Resources/SubagentAvatars")
 			]

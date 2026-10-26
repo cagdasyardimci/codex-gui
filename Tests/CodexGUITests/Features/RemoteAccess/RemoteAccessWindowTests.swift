@@ -1,4 +1,5 @@
 import AppKit
+import Vision
 import Testing
 
 @testable import CodexGUI
@@ -159,4 +160,57 @@ struct RemoteAccessWindowTests
 	{
 		[view] + view.subviews.flatMap(descendants)
 	}
+
+	@Test func pairingLinkPreservesTheServerTokenAsOneQueryValue() throws
+	{
+		let token = "server+token/with?reserved=& characters"
+		let url = try #require(RemotePairingQRView.pairingURL(code: token))
+		let components = try #require(URLComponents(
+			url: url,
+			resolvingAgainstBaseURL: false
+		))
+		#expect(components.scheme == "https")
+		#expect(components.host == "chatgpt.com")
+		#expect(components.path == "/codex/pair")
+		#expect(components.queryItems == [URLQueryItem(
+			name: "pairing_code",
+			value: token
+		)])
+	}
+
+
+	@Test(arguments: [180.0, 540.0])
+	func pairingQRCodeWithCenterLogoDecodesToTheServerLink(size: Double) throws
+	{
+		let qr = RemotePairingQRView(frame: NSRect(
+			x: 0,
+			y: 0,
+			width: size,
+			height: size
+		))
+		qr.pairingCode = String(
+			repeating: "synthetic-server-token-",
+			count: 5
+		)
+		let bitmap = try #require(qr.bitmapImageRepForCachingDisplay(in: qr.bounds))
+		qr.cacheDisplay(
+			in: qr.bounds,
+			to: bitmap
+		)
+		if let path = ProcessInfo.processInfo.environment["CODEX_GUI_QR_PREVIEW"]
+		{
+			let png = try #require(bitmap.representation(
+				using: .png,
+				properties: [:]
+			))
+			try png.write(to: URL(fileURLWithPath: path + "-\(Int(size)).png"))
+		}
+		let image = try #require(bitmap.cgImage)
+		let request = VNDetectBarcodesRequest()
+		request.symbologies = [.qr]
+		try VNImageRequestHandler(cgImage: image).perform([request])
+		#expect(request.results?.first?.payloadStringValue
+			== RemotePairingQRView.pairingURL(code: qr.pairingCode)?.absoluteString)
+	}
+
 }
