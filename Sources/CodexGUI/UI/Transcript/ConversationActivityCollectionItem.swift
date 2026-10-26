@@ -3,74 +3,36 @@ import AppKit
 @MainActor
 final class ConversationActivityCollectionItem: NSCollectionViewItem
 {
-	struct OutputReadingPosition
-	{
-		let origin: NSPoint
-		let selection: NSRange
-	}
+	typealias OutputReadingPosition = ConversationTerminalCard.ReadingPosition
 
 	var activityID: String?
 	{
 		row?.id
 	}
-	private var pendingOutputReadingPosition: OutputReadingPosition?
-	private static let rowHeight: CGFloat = 21
+	private static let rowHeight = DesktopDisclosureButton.Presentation.hoverReveal.rowHeight
 	private static let detailSpacing: CGFloat = 6
-	private static let minimumShellHeight: CGFloat = 100
-	private static let maximumShellSampleLength = 8000
-	private static let maximumShellHeight: CGFloat = 218
-	private static let terminalFont = NSFont(
-		name: "Menlo-Regular",
-		size: 13
-	)
-		?? NSFont.monospacedSystemFont(
-			ofSize: 13,
-			weight: .regular
-		)
-	private static let terminalLineSpacing: CGFloat = 3
-	private static let terminalLineHeight = NSLayoutManager().defaultLineHeight(for: terminalFont)
-		+ terminalLineSpacing
-	private var shellHeightConstraint: NSLayoutConstraint?
-	private var commandHeightConstraint: NSLayoutConstraint?
 	private static let imageHeight: CGFloat = 116
 	private let stack = NSStackView()
 	private var arrangedWidthConstraints: [NSLayoutConstraint] = []
 	private let header = NSStackView()
 	private var isHeaderHovered = false
-	private var displayedDisclosureIcon: DesktopIcon?
 	private var hoverSynchronizationTask: Task<Void, Never>?
 	private let icon = NSImageView()
 	private let titleLabel = NSTextField(labelWithString: "")
 	private let outcomeLabel = NSTextField(labelWithString: "")
 	private let titleClick = NSClickGestureRecognizer()
-	private let subagentsButton = NSButton(
+	private let subagentsButton = DesktopAttributedTitleButton(
 		title: "",
 		target: nil,
 		action: nil
 	)
-	private let fileButton = NSButton(
+	private let fileButton = DesktopAttributedTitleButton(
 		title: "",
 		target: nil,
 		action: nil
 	)
-	private let disclosure = NSButton(
-		title: "",
-		target: nil,
-		action: nil
-	)
-	private let shell = DesktopSurface(
-		AppKitColorTokens.elevated,
-		cornerRadius: 12,
-		bordered: true
-	)
-	private let shellLabel = NSTextField(labelWithString: "Shell")
-	private let commandLabel = NSTextField(labelWithString: "")
-	private let commandLine = NSView()
-	private let shellStatusLabel = NSTextField(labelWithString: "")
-	private let output = NSTextView()
-	private let scroll = ConversationTerminalScrollView()
-	private let copyCommandButton = ConversationTerminalCopyButton()
-	private let copyOutputButton = ConversationTerminalCopyButton()
+	private let disclosure = DesktopDisclosureButton(presentation: .hoverReveal)
+	private let terminalCard = ConversationTerminalCard()
 	private let imageButton = NSButton(
 		title: "",
 		target: nil,
@@ -107,7 +69,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		)
 		configureHeader()
 		configureActivityButtons()
-		configureShellOutput()
 		configureImagePreview()
 	}
 
@@ -147,7 +108,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func configureActivityButtons()
 	{
-		for button in [fileButton, disclosure, imageButton, subagentsButton]
+		for button in [fileButton, imageButton, subagentsButton]
 		{
 			button.isBordered = false
 			button.target = self
@@ -164,136 +125,10 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			.defaultLow,
 			for: .horizontal
 		)
+		disclosure.target = self
 		disclosure.action = #selector(toggle)
-		disclosure.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		disclosure.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
-		disclosure.refusesFirstResponder = false
-		disclosure.setAccessibilityElement(true)
-		disclosure.setAccessibilityRole(.button)
 		imageButton.action = #selector(openImage)
 		imageButton.imageScaling = .scaleProportionallyUpOrDown
-	}
-
-	private func configureShellOutput()
-	{
-		shellHeightConstraint = shell.heightAnchor
-			.constraint(equalToConstant: Self.minimumShellHeight)
-		shellHeightConstraint?.isActive = true
-		shellLabel.font = .systemFont(ofSize: 13)
-		shellLabel.textColor = AppKitColorTokens.terminalText
-		shellStatusLabel.font = .systemFont(ofSize: 13)
-		shellStatusLabel.textColor = AppKitColorTokens.terminalMutedText
-		shellStatusLabel.alignment = .right
-		shellStatusLabel.lineBreakMode = .byTruncatingTail
-		output.isEditable = false
-		output.isSelectable = true
-		output.drawsBackground = false
-		output.font = Self.terminalFont
-		output.textColor = AppKitColorTokens.terminalText
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineSpacing = Self.terminalLineSpacing
-		output.defaultParagraphStyle = paragraph
-		output.textContainerInset = NSSize(
-			width: 0,
-			height: 3
-		)
-		output.textContainer?.lineFragmentPadding = 0
-		output.isVerticallyResizable = true
-		output.isHorizontallyResizable = true
-		output.autoresizingMask = []
-		output.maxSize = NSSize(
-			width: CGFloat.greatestFiniteMagnitude,
-			height: CGFloat.greatestFiniteMagnitude
-		)
-		output.textContainer?.widthTracksTextView = false
-		output.textContainer?.containerSize = output.maxSize
-		scroll.drawsBackground = false
-		scroll.hasVerticalScroller = true
-		scroll.hasHorizontalScroller = true
-		scroll.autohidesScrollers = true
-		scroll.scrollerStyle = .overlay
-		scroll.documentView = output
-		commandLabel.font = output.font
-		commandLabel.textColor = AppKitColorTokens.terminalText
-		commandLabel.isSelectable = true
-		commandLabel.lineBreakMode = .byWordWrapping
-		commandLabel.maximumNumberOfLines = 2
-		commandLabel.cell?.truncatesLastVisibleLine = true
-		commandLabel.clipsToBounds = true
-		commandLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		commandLabel.setAccessibilityLabel("Shell command")
-		commandLabel.translatesAutoresizingMaskIntoConstraints = false
-		commandLine.addSubview(commandLabel)
-		commandHeightConstraint = commandLine.heightAnchor.constraint(equalToConstant: 24)
-		commandHeightConstraint?.isActive = true
-		NSLayoutConstraint.activate([
-			commandLabel.leadingAnchor.constraint(equalTo: commandLine.leadingAnchor),
-			commandLabel.trailingAnchor.constraint(
-				equalTo: commandLine.trailingAnchor,
-				constant: -28
-			),
-			commandLabel.topAnchor.constraint(equalTo: commandLine.topAnchor),
-			commandLabel.bottomAnchor.constraint(equalTo: commandLine.bottomAnchor)
-		])
-		let shellStack = NSStackView(views: [shellLabel, commandLine, scroll, shellStatusLabel])
-		shellStack.orientation = .vertical
-		shellStack.alignment = .leading
-		shellStack.spacing = 8
-		AppKitLayout.pin(
-			shellStack,
-			to: shell,
-			inset: 10
-		)
-		commandLine.widthAnchor.constraint(equalTo: shellStack.widthAnchor).isActive = true
-		scroll.widthAnchor.constraint(equalTo: shellStack.widthAnchor).isActive = true
-		scroll.setContentHuggingPriority(
-			.defaultLow,
-			for: .vertical
-		)
-		shellStatusLabel.widthAnchor.constraint(equalTo: shellStack.widthAnchor).isActive = true
-		configureShellCopyButton(
-			copyCommandButton,
-			label: "Copy command",
-			action: #selector(copyCommand),
-			anchor: commandLine
-		)
-		configureShellCopyButton(
-			copyOutputButton,
-			label: "Copy output",
-			action: #selector(copyOutput),
-			anchor: scroll
-		)
-	}
-
-	private func configureShellCopyButton(
-		_ button: ConversationTerminalCopyButton,
-		label: String,
-		action: Selector,
-		anchor: NSView
-	)
-	{
-		AppKitControlStyling.styleButton(button)
-		button.setCopyImage(DesktopIcons.image(
-			.copy,
-			size: 14,
-			accessibilityDescription: label
-		))
-		button.imagePosition = .imageOnly
-		button.toolTip = label
-		button.setAccessibilityLabel(label)
-		button.target = self
-		button.action = action
-		button.translatesAutoresizingMaskIntoConstraints = false
-		shell.addSubview(button)
-		NSLayoutConstraint.activate([
-			button.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
-			button.topAnchor.constraint(equalTo: anchor.topAnchor),
-			button.widthAnchor.constraint(equalToConstant: 24),
-			button.heightAnchor.constraint(equalToConstant: 24)
-		])
 	}
 
 	private func configureImagePreview()
@@ -319,26 +154,20 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		imageTask?.cancel()
 		imageTask = nil
 		row = nil
+		disclosure.setSubject(nil)
 		titleClick.isEnabled = false
-		copyCommandButton.resetHover()
-		copyOutputButton.resetHover()
+		terminalCard.resetCopyInteraction()
 		hoverSynchronizationTask?.cancel()
 		hoverSynchronizationTask = nil
 		isHeaderHovered = false
 		updateHeaderHoverAppearance()
-		pendingOutputReadingPosition = nil
-		output.setSelectedRange(NSRange(
-			location: 0,
-			length: 0
-		))
+		terminalCard.reset()
 		onToggle = nil
 		onOpenFile = nil
 		canOpenImage = nil
 		onOpenSubagents = nil
 		onSelectSubagentThread = nil
 		subagentNavigationGeneration += 1
-		output.string = ""
-		commandLabel.stringValue = ""
 		imageButton.image = nil
 		imageButton.isHidden = true
 		NSLayoutConstraint.deactivate(arrangedWidthConstraints)
@@ -367,14 +196,12 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		let previousPosition = self.row?.id == row.id ? outputReadingPosition() : nil
 		if self.row?.id != row.id || self.row?.expanded != row.expanded
 		{
-			copyCommandButton.resetHover()
-			copyOutputButton.resetHover()
+			terminalCard.resetCopyInteraction()
 		}
 		if self.row?.id != row.id
 		{
 			isHeaderHovered = false
 		}
-		pendingOutputReadingPosition = previousPosition
 		self.row = row
 		self.onToggle = onToggle
 		self.onOpenFile = onOpenFile
@@ -416,7 +243,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		fileButton.toolTip = row.filePath
 		fileButton.setAccessibilityLabel("Open \(row.filePath ?? "file")")
 		updateHeaderHoverAppearance()
-		disclosure.setAccessibilityLabel("\(row.expanded ? "Collapse" : "Expand") \(row.title)")
+		disclosure.setSubject(row.title)
+		disclosure.setExpanded(row.expanded)
 		icon.image = DesktopIcons.image(Self.icon(for: row))
 		let spacer = NSView()
 		spacer.setContentHuggingPriority(
@@ -511,52 +339,19 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		imageButton.image = nil
 		imageButton.isHidden = true
 		imageState.stringValue = ""
-		if row.expanded, let command = row.command, row.kind != .group
+		terminalCard.configure(
+			row.command,
+			expanded: row.expanded && row.kind != .group,
+			preserving: previousPosition
+		)
+		if row.expanded, row.command != nil, row.kind != .group
 		{
-			commandLabel.attributedStringValue = Self.commandText(command.command)
-			commandLabel.toolTip = command.command
-			let updatedText = command.output
-			if previousPosition != nil, updatedText.hasPrefix(output.string)
-			{
-				let existingLength = (output.string as NSString).length
-				let appendedText = (updatedText as NSString).substring(from: existingLength)
-				output.textStorage?.replaceCharacters(
-					in: NSRange(
-						location: existingLength,
-						length: 0
-					),
-					with: appendedText
-				)
-			}
-			else
-			{
-				output.string = updatedText
-			}
-			pendingOutputReadingPosition = previousPosition ?? OutputReadingPosition(
-				origin: .zero,
-				selection: NSRange(
-					location: 0,
-					length: 0
-				)
-			)
-			output.setAccessibilityLabel("Shell output")
-			shellStatusLabel.stringValue = Self.shellStatus(command)
-			shellStatusLabel.toolTip = Self.metadata(command)
-			shellStatusLabel.textColor = AppKitColorTokens.terminalMutedText
-			copyCommandButton.isEnabled = !command.command.isEmpty
-			copyOutputButton.isEnabled = !command.output.isEmpty
-			updateShellGeometry(command)
-			views.append(shell)
+			views.append(terminalCard)
 		}
-		else
+		else if row.expanded, row.kind == .image
 		{
-			output.string = ""
-			pendingOutputReadingPosition = nil
-			if row.expanded, row.kind == .image
-			{
-				views.append(imageContainer)
-				loadImage(path: row.imagePath)
-			}
+			views.append(imageContainer)
+			loadImage(path: row.imagePath)
 		}
 		return views
 	}
@@ -619,8 +414,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	override func viewDidDisappear()
 	{
 		super.viewDidDisappear()
-		copyCommandButton.resetHover()
-		copyOutputButton.resetHover()
+		terminalCard.resetCopyInteraction()
 		hoverSynchronizationTask?.cancel()
 		hoverSynchronizationTask = nil
 		isHeaderHovered = false
@@ -699,27 +493,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			fileButton.attributedTitle = highlightedLink
 		}
 
-		// Keep the button available to pointer, keyboard and accessibility interaction.
-		// Only its glyph changes, so hover never shifts the header layout.
-		let requestedIcon: DesktopIcon?
-		if isHeaderHovered, let row
-		{
-			requestedIcon = row.expanded ? .chevronDown : .chevronRight
-		}
-		else
-		{
-			requestedIcon = nil
-		}
-		guard requestedIcon != displayedDisclosureIcon
-		else
-		{
-			return
-		}
-		displayedDisclosureIcon = requestedIcon
-		disclosure.image = requestedIcon.map
-		{
-			DesktopIcons.image($0)
-		}
+		disclosure.setExpanded(row?.expanded == true)
+		disclosure.setContextHovered(isHeaderHovered && row != nil)
 	}
 
 	static func itemSize(
@@ -730,7 +505,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		let detail: CGFloat
 		if row.expanded, row.kind != .group, let command = row.command
 		{
-			detail = shellHeight(
+			detail = ConversationTerminalCard.height(
 				command: command,
 				width: width
 			) + detailSpacing
@@ -756,286 +531,34 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	{
 		super.viewDidLayout()
 
-		if let row, row.expanded, row.kind != .group, let command = row.command
-		{
-			updateShellGeometry(command)
-			updateOutputDocumentSize()
-			applyPendingOutputReadingPosition()
-		}
+		terminalCard.layoutContent(width: view.bounds.width)
 		scheduleHeaderHoverSynchronization()
 	}
 
 	func outputReadingPosition() -> OutputReadingPosition?
 	{
-		guard let row, row.expanded, row.kind != .group, row.command != nil
-		else
-		{
-			return nil
-		}
-		if let pendingOutputReadingPosition
-		{
-			return pendingOutputReadingPosition
-		}
-		return OutputReadingPosition(
-			origin: scroll.contentView.bounds.origin,
-			selection: output.selectedRange()
-		)
+		terminalCard.readingPosition()
 	}
 
 	func restoreOutputReadingPosition(_ position: OutputReadingPosition)
 	{
-		guard let row, row.expanded, row.kind != .group, row.command != nil
-		else
-		{
-			return
-		}
-		pendingOutputReadingPosition = position
+		terminalCard.restoreReadingPosition(position)
 		view.needsLayout = true
 	}
 
-	private func applyPendingOutputReadingPosition()
-	{
-		guard let position = pendingOutputReadingPosition,
-				scroll.contentSize.width > 0, scroll.contentSize.height > 0,
-				let container = output.textContainer, let manager = output.layoutManager
-		else
-		{
-			return
-		}
-		manager.ensureLayout(for: container)
-		// Finish document and clip geometry before restoring the reader's offset.
-		// Text storage updates can schedule a later resize of the scroll document.
-		output.layoutSubtreeIfNeeded()
-		scroll.layoutSubtreeIfNeeded()
-		let textLength = (output.string as NSString).length
-		let location = min(
-			position.selection.location,
-			textLength
-		)
-		let length = min(
-			position.selection.length,
-			textLength - location
-		)
-		output.setSelectedRange(NSRange(
-			location: location,
-			length: length
-		))
-		let maximumY = max(
-			0,
-			output.frame.height - scroll.contentSize.height
-		)
-		let maximumX = max(
-			0,
-			output.frame.width - scroll.contentSize.width
-		)
-		let origin = NSPoint(
-			x: min(
-				maximumX,
-				max(
-					0,
-					position.origin.x
-				)
-			),
-			y: min(
-				maximumY,
-				max(
-					0,
-					position.origin.y
-				)
-			)
-		)
-		scroll.contentView.scroll(to: origin)
-		scroll.reflectScrolledClipView(scroll.contentView)
-		pendingOutputReadingPosition = nil
-	}
-
-	private func updateOutputDocumentSize()
-	{
-		guard scroll.contentSize.width > 0,
-				let container = output.textContainer, let manager = output.layoutManager
-		else
-		{
-			return
-		}
-		manager.ensureLayout(for: container)
-		let textRect = manager.usedRect(for: container)
-		output.setFrameSize(NSSize(
-			width: max(
-				scroll.contentSize.width,
-				ceil(textRect.maxX) + 28
-			),
-			height: max(
-				scroll.contentSize.height,
-				ceil(textRect.height) + output.textContainerInset.height * 2
-			)
-		))
-		scroll.updateEdgeFades()
-	}
-
-	private func updateShellGeometry(_ command: ConversationCommand)
-	{
-		let width = view.bounds.width
-		let previewHeight = Self.commandHeight(
-			command.command,
-			width: width
-		)
-		commandHeightConstraint?.constant = previewHeight
-		shellHeightConstraint?.constant = Self.shellHeight(
-			command: command,
-			previewHeight: previewHeight
-		)
-	}
-
-	private static func commandText(_ command: String) -> NSAttributedString
-	{
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineBreakMode = .byWordWrapping
-		paragraph.lineSpacing = terminalLineSpacing
-		return NSAttributedString(
-			string: "$ \(command)",
-			attributes: [
-				.font: terminalFont,
-				.foregroundColor: AppKitColorTokens.terminalText,
-				.paragraphStyle: paragraph
-			]
-		)
-	}
-
-	private static func commandHeight(
-		_ command: String,
-		width: CGFloat
-	) -> CGFloat
-	{
-		// Match the two-line preview and keep its 24pt copy target inside the command area.
-		let text = commandText(String(command.prefix(maximumShellSampleLength)))
-		let measured = text.boundingRect(
-			with: NSSize(
-				width: max(
-					1,
-					width - 20 - 28
-				),
-				height: .greatestFiniteMagnitude
-			),
-			options: [.usesLineFragmentOrigin, .usesFontLeading]
-		).height
-		return max(
-			24,
-			min(
-				ceil(measured),
-				terminalLineHeight * 2 - terminalLineSpacing
-			)
-		)
-	}
-
-	private static func shellHeight(
-		command: ConversationCommand,
-		width: CGFloat
-	) -> CGFloat
-	{
-		// Unwrapped lines determine height independently of the transcript width.
-		return shellHeight(
-			command: command,
-			previewHeight: commandHeight(
-				command.command,
-				width: width
-			)
-		)
-	}
-
-	// Keep character-based sampling and count CRLF as one native line break.
 	static func sampledShellLineCount(_ output: String) -> Int
 	{
-		var lineCount = 1
-		var sampledCharacters = 0
-		for character in output
-		{
-			guard sampledCharacters < maximumShellSampleLength, lineCount < 20
-			else
-			{
-				break
-			}
-			sampledCharacters += 1
-			if character == "\n" || character == "\r\n"
-			{
-				lineCount += 1
-			}
-		}
-		return lineCount
-	}
-
-	private static func shellHeight(
-		command: ConversationCommand,
-		previewHeight: CGFloat
-	) -> CGFloat
-	{
-		let lineCount = sampledShellLineCount(command.output)
-		let outputHeight = max(
-			24,
-			ceil(CGFloat(min(
-				lineCount,
-				20
-			)) * terminalLineHeight) + 6
-		)
-		return min(
-			maximumShellHeight,
-			max(
-				minimumShellHeight,
-				previewHeight + outputHeight + 76
-			)
-		)
-	}
-
-	private static func shellStatus(_ command: ConversationCommand) -> String
-	{
-		ConversationCommandOutcome(command).detailTitle
+		ConversationTerminalCard.sampledShellLineCount(output)
 	}
 
 	func writeCommand(to pasteboard: NSPasteboard)
 	{
-		guard let command = row?.command
-		else
-		{
-			return
-		}
-		writeShellText(
-			command.command,
-			to: pasteboard
-		)
+		terminalCard.writeCommand(to: pasteboard)
 	}
 
 	func writeOutput(to pasteboard: NSPasteboard)
 	{
-		guard let command = row?.command
-		else
-		{
-			return
-		}
-		writeShellText(
-			command.output,
-			to: pasteboard
-		)
-	}
-
-	private func writeShellText(
-		_ text: String,
-		to pasteboard: NSPasteboard
-	)
-	{
-		pasteboard.clearContents()
-		pasteboard.setString(
-			text,
-			forType: .string
-		)
-	}
-
-	@objc private func copyCommand()
-	{
-		writeCommand(to: .general)
-	}
-
-	@objc private func copyOutput()
-	{
-		writeOutput(to: .general)
+		terminalCard.writeOutput(to: pasteboard)
 	}
 
 	private static func icon(for row: ConversationActivityRow) -> DesktopIcon
@@ -1051,30 +574,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			return row.title.hasPrefix("Read") ? .bookOpen :
 				(row.title.hasPrefix("Searched") ? .search : .terminal)
 		}
-	}
-
-	private static func metadata(_ command: ConversationCommand) -> String
-	{
-		var parts = [command.status]
-		if let cwd = command.cwd
-		{
-			parts.append(cwd)
-		}
-		if let exitCode = command.exitCode
-		{
-			parts.append("Exit \(exitCode)")
-		}
-		if let milliseconds = command.durationMs
-		{
-			parts.append(String(
-				format: "%.1fs",
-				max(
-					0,
-					milliseconds
-				) / 1000
-			))
-		}
-		return parts.joined(separator: " · ")
 	}
 
 	private func loadImage(path: String?)

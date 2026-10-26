@@ -111,6 +111,107 @@ struct ConversationActivityCollectionItemTests
 		}
 	}
 
+	@Test func activityDisclosureKeepsItsSubjectThroughHoverExpansionAndReuse() throws
+	{
+		_ = NSApplication.shared
+		let item = ConversationActivityCollectionItem()
+		var oldToggles = 0
+		var newToggles = 0
+		let collapsed = ConversationActivityRow(
+			id: "first",
+			sourceEntryID: "first",
+			groupID: "first-group",
+			kind: .group,
+			title: "Tool calls"
+		)
+		item.configure(
+			collapsed,
+			onToggle:
+			{
+				oldToggles += 1
+			},
+			onOpenFile:
+			{
+				_ in
+			}
+		)
+		let disclosure = try #require(descendants(item.view).compactMap
+		{
+			$0 as? DesktopDisclosureButton
+		}.first)
+		let enter = try hoverEvent(type: .mouseEntered)
+		let exit = try hoverEvent(type: .mouseExited)
+		for event in [enter, exit]
+		{
+			if event.type == .mouseEntered
+			{
+				disclosure.mouseEntered(with: event)
+			}
+			else
+			{
+				disclosure.mouseExited(with: event)
+			}
+			#expect(disclosure.accessibilityLabel() == "Expand Tool calls")
+			#expect(disclosure.accessibilityValue() as? String == "Collapsed")
+		}
+		var expanded = collapsed
+		expanded.expanded = true
+		item.configure(
+			expanded,
+			onToggle:
+			{
+				oldToggles += 1
+			},
+			onOpenFile:
+			{
+				_ in
+			}
+		)
+		disclosure.mouseEntered(with: enter)
+		disclosure.mouseExited(with: exit)
+		#expect(disclosure.accessibilityLabel() == "Collapse Tool calls")
+		#expect(disclosure.accessibilityValue() as? String == "Expanded")
+		var reboundToggles = 0
+		item.configure(
+			expanded,
+			onToggle:
+			{
+				reboundToggles += 1
+			},
+			onOpenFile:
+			{
+				_ in
+			}
+		)
+		#expect(disclosure.dispatchConfiguredAction())
+		#expect(reboundToggles == 1 && oldToggles == 0)
+		item.prepareForReuse()
+		disclosure.mouseEntered(with: enter)
+		#expect(disclosure.accessibilityLabel() == "Expand")
+		let next = ConversationActivityRow(
+			id: "next",
+			sourceEntryID: "next",
+			groupID: "next-group",
+			kind: .group,
+			title: "Next actions"
+		)
+		item.configure(
+			next,
+			onToggle:
+			{
+				newToggles += 1
+			},
+			onOpenFile:
+			{
+				_ in
+			}
+		)
+		disclosure.mouseExited(with: exit)
+		#expect(disclosure.accessibilityLabel() == "Expand Next actions")
+		#expect(disclosure.dispatchConfiguredAction())
+		#expect(newToggles == 1 && oldToggles == 0)
+	}
+
 	private func layout(
 		_ item: ConversationActivityCollectionItem,
 		row: ConversationActivityRow
