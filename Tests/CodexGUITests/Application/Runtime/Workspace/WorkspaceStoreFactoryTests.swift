@@ -43,7 +43,8 @@ struct WorkspaceStoreFactoryTests
 		#expect(try #require(completed.completedAt) >= start)
 	}
 
-	@Test func bootstrapUsesRealReducersAndRepeatedSelectionHydrationPreservesTheEdit() async throws
+	@Test(.timeLimit(.minutes(1)))
+	func bootstrapUsesRealReducersAndRepeatedSelectionHydrationPreservesTheEdit() async throws
 	{
 		let (store, service, storage, defaults, suite) = WorkspaceStoreFactoryFixture.make()
 		defer
@@ -60,6 +61,10 @@ struct WorkspaceStoreFactoryTests
 		#expect(service.skillReadCount == 1)
 		#expect(service.rateLimitReadCount == 1)
 		#expect(service.readThreadCount == 1)
+		await awaitWorkspaceSnapshot(store)
+		{
+			_ in store.model.contextNavigation.pendingContextLoad == nil
+		}
 		#expect(store.currentSnapshot.canSend)
 		store.inputs.updateDraft("Current visible edit")
 		try await store.awaitAcceptedPersistence()
