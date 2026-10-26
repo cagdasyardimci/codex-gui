@@ -141,23 +141,16 @@ final class MarkdownTextView: NSTextView
 	override func updateTrackingAreas()
 	{
 		super.updateTrackingAreas()
-		if let diagramTrackingArea
-		{
-			removeTrackingArea(diagramTrackingArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
+		diagramTrackingArea = DesktopHoverTracking.replace(
+			in: self,
+			previous: diagramTrackingArea,
 			options: [
 				.mouseMoved,
 				.mouseEnteredAndExited,
 				.activeInKeyWindow,
 				.inVisibleRect
-			],
-			owner: self,
-			userInfo: nil
+			]
 		)
-		addTrackingArea(area)
-		diagramTrackingArea = area
 	}
 
 	override func mouseMoved(with event: NSEvent)

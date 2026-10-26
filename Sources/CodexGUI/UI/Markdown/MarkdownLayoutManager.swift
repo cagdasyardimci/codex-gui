@@ -7,10 +7,11 @@ import AppKit
 final class MarkdownLayoutManager: NSLayoutManager
 {
 	static let quoteIndent = CGFloat(MarkdownMetrics.quoteIndent)
-	static let codeInset: CGFloat = 18
-	static let codeHeaderHeight: CGFloat = 44
-	static let codeBottomPadding: CGFloat = 16
-	static let codeBlockSpacing: CGFloat = 16
+	static let codeInset = DesktopOutputCard.TextKitPresentation.transcriptCode.contentInset
+	static let codeHeaderHeight = DesktopOutputCard.TextKitPresentation.transcriptCode.headerHeight
+	static let codeBottomPadding = DesktopOutputCard.TextKitPresentation.transcriptCode
+		.bottomPadding
+	static let codeBlockSpacing = DesktopOutputCard.TextKitPresentation.transcriptCode.blockSpacing
 
 	nonisolated override func drawBackground(
 		forGlyphRange glyphsToShow: NSRange,
@@ -181,7 +182,8 @@ final class MarkdownLayoutManager: NSLayoutManager
 				container.containerSize.width - left
 			),
 			height: lastContentLine.maxY - firstLine
-				.minY + (filePreview ? 4 : Self.codeBottomPadding)
+				.minY + (filePreview ? DesktopOutputCard.TextKitPresentation.fileCode.bottomPadding
+					: Self.codeBottomPadding)
 		)
 	}
 
@@ -223,123 +225,23 @@ final class MarkdownLayoutManager: NSLayoutManager
 				dy: origin.y
 			)
 
-			if storage.attribute(
+			let filePreview = storage.attribute(
 				.markdownFilePreview,
 				at: range.location,
 				effectiveRange: nil
 			) as? Bool == true
-			{
-				self.drawFileCodeBlock(
-					card: card,
-					storage: storage,
-					range: range
-				)
-				return
-			}
-			let path = NSBezierPath(
-				roundedRect: card,
-				xRadius: 16,
-				yRadius: 16
-			)
-			AppKitColorTokens.elevated.setFill()
-			path.fill()
-			AppKitColorTokens.border.setStroke()
-			path.lineWidth = 1
-			path.stroke()
-			if let language = storage.attribute(
+			let language = storage.attribute(
 				.markdownCodeLanguage,
 				at: range.location,
 				effectiveRange: nil
-			) as? String, !language.isEmpty
-			{
-				let headerAttributes: [NSAttributedString.Key: Any] = [
-					.font: NSFont.systemFont(
-						ofSize: 12,
-						weight: .medium
-					),
-					.foregroundColor: NSColor.labelColor,
-				]
-				("‹/›" as NSString).draw(
-					at: NSPoint(
-						x: card.minX + Self.codeInset,
-						y: card.minY + 14
-					),
-					withAttributes: headerAttributes
-				)
-				let label = NSRect(
-					x: card.minX + Self.codeInset + 26,
-					y: card.minY + 14,
-					width: max(
-						1,
-						card.width - Self.codeInset - 70
-					),
-					height: 16
-				)
-				(Self.codeLanguageTitle(language) as NSString).draw(
-					in: label,
-					withAttributes: headerAttributes
-				)
-			}
+			) as? String
+			DesktopOutputCard.drawTextKitCard(
+				in: card,
+				language: language,
+				presentation: filePreview ? .fileCode :
+					.transcriptCode
+			)
 		}
-	}
-
-	private func drawFileCodeBlock(
-		card: NSRect,
-		storage: NSTextStorage,
-		range: NSRange
-	)
-	{
-		NSColor.labelColor.withAlphaComponent(0.00549).setFill()
-		NSBezierPath(
-			roundedRect: card,
-			xRadius: 8,
-			yRadius: 8
-		).fill()
-		guard let language = storage.attribute(
-			.markdownCodeLanguage,
-			at: range.location,
-			effectiveRange: nil
-		) as? String,
-			!language.isEmpty
-		else
-		{
-			return
-		}
-		let attributes: [NSAttributedString.Key: Any] = [
-			.font: NSFont.systemFont(ofSize: 12),
-			.foregroundColor: NSColor.secondaryLabelColor,
-		]
-		let title = language.lowercased() as NSString
-		let width = min(
-			card.width,
-			title.size(withAttributes: attributes).width
-		)
-		title.draw(
-			in: NSRect(
-				x: card.maxX - width,
-				y: card.minY,
-				width: width,
-				height: 17
-			),
-			withAttributes: attributes
-		)
-	}
-
-	private static func codeLanguageTitle(_ language: String) -> String
-	{
-		let titles = [
-			"python": "Python",
-			"swift": "Swift",
-			"javascript": "JavaScript",
-			"typescript": "TypeScript",
-			"json": "JSON",
-			"html": "HTML",
-			"css": "CSS",
-			"bash": "Bash",
-			"mermaid": "Mermaid",
-			"text": "Text",
-		]
-		return titles[language.lowercased()] ?? language
 	}
 
 	func quoteRailRect(

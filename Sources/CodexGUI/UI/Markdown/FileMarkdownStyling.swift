@@ -197,11 +197,13 @@ enum FileMarkdownStyling
 			paragraph.headIndent - MarkdownLayoutManager.codeInset
 		)
 		paragraph.tailIndent = 0
-		let headerHeight: CGFloat = fenced ? 20.8 : 1
+		let headerHeight: CGFloat = fenced
+			? DesktopOutputCard.TextKitPresentation.fileCode.headerHeight : 1
 		paragraph.minimumLineHeight = header ? headerHeight : 16.8
 		paragraph.maximumLineHeight = header ? headerHeight : 16.8
 		paragraph.lineSpacing = header ? 0 : LayoutTokens.FileMarkdown.linePadding
-		paragraph.paragraphSpacing = !header && fenced && paragraph.paragraphSpacing > 0 ? 20.8 : 0
+		paragraph.paragraphSpacing = !header && fenced && paragraph.paragraphSpacing > 0
+			? DesktopOutputCard.TextKitPresentation.fileCode.blockSpacing : 0
 		let blankLines = attributes[.markdownBlankLinesBefore] as? Int ?? 0
 		paragraph.paragraphSpacingBefore = header ? CGFloat(blankLines)
 			* ((TypographyTokens.FileMarkdown.prose.lineHeight ?? 0)

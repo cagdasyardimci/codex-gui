@@ -92,7 +92,7 @@ struct MarkdownDiagramControlsTests
 			let bounds = controller.view.bounds
 			let close = controller.closeButton.frame
 			#expect(close.size == NSSize(
-				width: 42,
+				width: 40,
 				height: 40
 			))
 			#expect(abs(bounds.maxX - close.maxX - 12) < 0.01)
@@ -101,7 +101,7 @@ struct MarkdownDiagramControlsTests
 				width: 40,
 				height: 40
 			))
-			#expect(abs(bounds.maxX - download.frame.maxX - 62) < 0.01)
+			#expect(abs(bounds.maxX - download.frame.maxX - 60) < 0.01)
 			#expect(abs(bounds.maxY - download.frame.maxY - 12) < 0.01)
 			#expect(plus.frame.size == NSSize(
 				width: 36,
@@ -111,7 +111,7 @@ struct MarkdownDiagramControlsTests
 				width: 36,
 				height: 36
 			))
-			let zoomPill = try #require(plus.superview)
+			let zoomPill = try #require(plus.superview?.superview as? ExpandedImageZoomGroup)
 			#expect(zoomPill.frame.size == NSSize(
 				width: 152,
 				height: 44

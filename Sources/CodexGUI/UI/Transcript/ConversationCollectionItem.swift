@@ -1,204 +1,19 @@
 import AppKit
 
 @MainActor
-final class CodeCopyButton: NSButton, DesktopControlCursorProviding
+final class CodeCopyButton: DesktopCopyButton, DesktopControlCursorProviding
 {
-	var controlCursor: NSCursor
+	init(frame: NSRect = .zero)
 	{
-		.arrow
-	}
-	private var hoverTrackingArea: NSTrackingArea?
-	private var isHovered = false
-	// Capture the delayed operation to await completion or cancellation without timing margins.
-	private(set) var tooltipTask: Task<Void, Never>?
-	private var tooltipPanel: NSPanel?
-	private var tooltipAppearance: DesktopPanelAppearanceBinding?
-
-	override func updateTrackingAreas()
-	{
-		super.updateTrackingAreas()
-		if let hoverTrackingArea
-		{
-			removeTrackingArea(hoverTrackingArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(area)
-		hoverTrackingArea = area
-	}
-
-	override func resetCursorRects()
-	{
-		super.resetCursorRects()
-		addCursorRect(
-			bounds,
-			cursor: .arrow
+		super.init(
+			presentation: .code,
+			frame: frame
 		)
 	}
 
-	override func cursorUpdate(with event: NSEvent)
+	required init?(coder: NSCoder)
 	{
-		NSCursor.arrow.set()
-	}
-
-	override func mouseEntered(with event: NSEvent)
-	{
-		hideCopyTooltip()
-		NSCursor.arrow.set()
-		isHovered = true
-		contentTintColor = .labelColor
-		needsDisplay = true
-		tooltipTask = Task
-		{
-			[weak self] in
-			do
-			{
-				try await Task.sleep(for: .milliseconds(400))
-			}
-			catch
-			{
-				return
-			}
-			guard !Task.isCancelled, let self
-			else
-			{
-				return
-			}
-			self.showCopyTooltip()
-		}
-	}
-
-	override func mouseExited(with event: NSEvent)
-	{
-		isHovered = false
-		hideCopyTooltip()
-		contentTintColor = .secondaryLabelColor
-		needsDisplay = true
-	}
-
-	override func mouseDown(with event: NSEvent)
-	{
-		hideCopyTooltip()
-		super.mouseDown(with: event)
-	}
-
-	override func viewWillMove(toWindow newWindow: NSWindow?)
-	{
-		resetInteraction()
-		super.viewWillMove(toWindow: newWindow)
-	}
-
-	func resetInteraction()
-	{
-		hideCopyTooltip()
-		isHovered = false
-		contentTintColor = .secondaryLabelColor
-		needsDisplay = true
-	}
-
-	@objc private func showCopyTooltip()
-	{
-		guard isHovered, let window, !isHiddenOrHasHiddenAncestor
-		else
-		{
-			return
-		}
-		let label = NSTextField(labelWithString: "Copy code")
-		label.font = .systemFont(ofSize: 12)
-		label.textColor = .labelColor
-		label.sizeToFit()
-		let size = NSSize(
-			width: label.frame.width + 24,
-			height: 28
-		)
-		let surface = DesktopSurface(
-			AppKitColorTokens.inspector,
-			cornerRadius: 12,
-			bordered: true
-		)
-		surface.frame = NSRect(
-			origin: .zero,
-			size: size
-		)
-		label.frame.origin = NSPoint(
-			x: 12,
-			y: (size.height - label.frame.height) / 2
-		)
-		surface.addSubview(label)
-		let panel = NSPanel(
-			contentRect: NSRect(
-				origin: .zero,
-				size: size
-			),
-			styleMask: [.borderless, .nonactivatingPanel],
-			backing: .buffered,
-			defer: false
-		)
-		panel.isOpaque = false
-		panel.backgroundColor = .clear
-		panel.hasShadow = true
-		panel.ignoresMouseEvents = true
-		panel.contentView = surface
-		tooltipAppearance = DesktopPanelAppearanceBinding(
-			panel: panel,
-			source: self
-		)
-		let screenRect = window.convertToScreen(convert(
-			bounds,
-			to: nil
-		))
-		panel.setFrameOrigin(NSPoint(
-			x: screenRect.midX - size.width / 2,
-			y: screenRect.maxY + 4
-		))
-		window.addChildWindow(
-			panel,
-			ordered: .above
-		)
-		tooltipPanel = panel
-	}
-
-	private func hideCopyTooltip()
-	{
-		tooltipTask?.cancel()
-		tooltipTask = nil
-		tooltipAppearance?.invalidate()
-		tooltipAppearance = nil
-		if let tooltipPanel
-		{
-			tooltipPanel.parent?.removeChildWindow(tooltipPanel)
-			tooltipPanel.orderOut(nil)
-		}
-		tooltipPanel = nil
-	}
-
-	override func viewDidChangeEffectiveAppearance()
-	{
-		super.viewDidChangeEffectiveAppearance()
-		needsDisplay = true
-	}
-
-	override func draw(_ dirtyRect: NSRect)
-	{
-		if isHovered && isEnabled
-		{
-			NSColor.labelColor.withAlphaComponent(0.1).setFill()
-			let diameter = min(
-				bounds.width,
-				bounds.height
-			)
-			NSBezierPath(ovalIn: NSRect(
-				x: bounds.midX - diameter / 2,
-				y: bounds.midY - diameter / 2,
-				width: diameter,
-				height: diameter
-			)).fill()
-		}
-		super.draw(dirtyRect)
+		nil
 	}
 }
 
@@ -208,8 +23,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private static let rowSpacing = LayoutTokens.Transcript.rowSpacing
 	private static let replyActionSpacing = LayoutTokens.Transcript.replyActionSpacing
 	private static let titleHeight = LayoutTokens.Transcript.titleHeight
-	private static let buttonHeight = LayoutTokens.Transcript.buttonHeight
-	private static let codeCopyButtonSize: CGFloat = 32
+	private static let buttonHeight = DesktopDisclosureButton.Presentation.output.rowHeight
+	private static let codeCopyButtonSize = DesktopCopyButton.Presentation.code.sideLength
 	private static let bodyMeasurer = ConversationBodyMeasurer()
 
 	private let titleLabel = NSTextField(labelWithString: "")
@@ -232,11 +47,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	)
 	private var copyButtons: [CodeCopyButton] = []
 	private var configuredEntryID: Data?
-	private let expandButton = NSButton(
-		title: "Show output",
-		target: nil,
-		action: nil
-	)
+	private let expandButton = DesktopDisclosureButton(presentation: .output)
 	private var bodyHeightConstraint: NSLayoutConstraint?
 	private var messageWidthConstraint: NSLayoutConstraint?
 	private var leadingInsetConstraint: NSLayoutConstraint?
@@ -336,11 +147,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	{
 		expandButton.target = self
 		expandButton.action = #selector(toggleExpanded)
-		AppKitControlStyling.styleButton(
-			expandButton,
-			icon: .chevronDown
-		)
-		expandButton.heightAnchor.constraint(equalToConstant: Self.buttonHeight).isActive = true
+
 		expandButton.isHidden = true
 	}
 
@@ -497,10 +304,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		updateCodeCopyButtons(for: content)
 
 		expandButton.isHidden = !entry.isExpandable
-		expandButton.title = expanded ? "Hide output" : "Show output"
-		expandButton.image = DesktopIcons.image(expanded ? .chevronUp : .chevronDown)
-		expandButton.setAccessibilityLabel(expandButton.title)
-		expandButton.toolTip = expandButton.title
+		expandButton.setExpanded(expanded)
 		// Keep unused controls outside the hierarchy so collection-view reuse cannot expose them.
 		var arrangedViews: [NSView] = [bodyTextView]
 		if !titleLabel.isHidden
@@ -567,19 +371,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		removeCodeCopyButtons(startingAt: codeBlocks.count)
 		while copyButtons.count < codeBlocks.count
 		{
-			let button = CodeCopyButton(
-				title: "",
-				target: self,
-				action: #selector(copyCode(_:))
-			)
-			AppKitControlStyling.styleButton(
-				button,
-				icon: .copy
-			)
-			button.imagePosition = .imageOnly
-			button.toolTip = nil
-			button.setAccessibilityHelp("Copy code")
-			button.lineBreakMode = .byTruncatingTail
+			let button = CodeCopyButton()
 			messageContainer.addSubview(
 				button,
 				positioned: .above,
@@ -590,9 +382,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		for (index, button) in copyButtons.enumerated()
 		{
 			button.tag = index
-			button.target = self
-			button.action = #selector(copyCode(_:))
-			button.setAccessibilityLabel("Copy code block \(index + 1)")
+			button.configure(
+				label: "Copy code block \(index + 1)",
+				target: self,
+				action: #selector(copyCode(_:))
+			)
 		}
 	}
 

@@ -28,9 +28,6 @@ final class MarkdownDiagramControls: NSView
 				systemSymbolName: symbol,
 				accessibilityDescription: label
 			)
-			button.imagePosition = .imageOnly
-			button.isBordered = false
-			button.bezelStyle = .circular
 			button.toolTip = label
 			button.setAccessibilityLabel(label)
 			button.target = self
@@ -80,7 +77,11 @@ final class MarkdownDiagramControls: NSView
 		{
 			$0 === self || $0.isDescendant(of: self)
 		} ?? false
-		alphaValue = hovered || hasFocus ? 1 : 0
+		let revealState = DesktopActionRevealState(
+			isHovered: hovered,
+			isKeyboardFocused: hasFocus
+		)
+		alphaValue = revealState.isRevealed ? 1 : 0
 	}
 
 	func makeMenu() -> NSMenu
@@ -159,8 +160,22 @@ final class MarkdownDiagramControls: NSView
 
 /// Reveal hover actions when reached through keyboard focus as well.
 @MainActor
-private final class MarkdownDiagramButton: NSButton
+private final class MarkdownDiagramButton: DesktopStyledButton
 {
+	init()
+	{
+		super.init(
+			title: "",
+			presentation: .icon,
+			size: .regular
+		)
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
 	override func becomeFirstResponder() -> Bool
 	{
 		let accepted = super.becomeFirstResponder()
