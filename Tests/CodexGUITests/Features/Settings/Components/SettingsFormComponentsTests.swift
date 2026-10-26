@@ -47,6 +47,63 @@ struct SettingsFormComponentsTests
 		}
 	}
 
+	@Test func repeatedPairsKeepLiteralValuesAndReindexAfterRemoval() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			_ = NSApplication.shared
+			let component = SettingsFormEntriesField(
+				format: .pairs,
+				item: "header",
+				addTitle: "Add header"
+			)
+			component.stringValue = "TOKEN=a=b\nPATH=folder with spaces"
+			#expect(try #require(field(
+				"header 1",
+				in: component
+			)).stringValue == "TOKEN")
+			#expect(try #require(field(
+				"header value 1",
+				in: component
+			)).stringValue == "a=b")
+			var changes = 0
+			component.onChange =
+			{
+				changes += 1
+			}
+			let add = try #require(button(
+				"Add header",
+				in: component
+			))
+			#expect(add.dispatchConfiguredAction())
+			let key = try #require(field(
+				"header 3",
+				in: component
+			))
+			let value = try #require(field(
+				"header value 3",
+				in: component
+			))
+			key.stringValue = "NEW"
+			value.stringValue = "x=y z"
+			let remove = try #require(button(
+				"Remove header 1",
+				in: component
+			))
+			#expect(remove.image != nil)
+			#expect(remove.dispatchConfiguredAction())
+			#expect(component.stringValue == "PATH=folder with spaces\nNEW=x=y z")
+			#expect(field(
+				"header 3",
+				in: component
+			) == nil)
+			#expect(field(
+				"header value 2",
+				in: component
+			)?.stringValue == "x=y z")
+			#expect(changes == 2)
+		}
+	}
 
 	private func makeWindow(content: NSView) -> NSWindow
 	{
