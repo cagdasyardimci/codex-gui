@@ -187,6 +187,48 @@ struct DesktopPopoverHostTests
 		}
 	}
 
+	@Test func detachedPresentationRequestsLeaveTheCurrentMenusIntact() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = makeWindow()
+			let anchor = NSButton(frame: NSRect(
+				x: 20,
+				y: 20,
+				width: 28,
+				height: 28
+			))
+			let detached = NSButton()
+			window.contentView?.addSubview(anchor)
+			window.makeKeyAndOrderFront(nil)
+			let account = AccountMenuPanel(content: StatusPopoverView(frame: .zero))
+			let choices = SettingsChoiceMenu(
+				choices: [SettingsChoicePicker.Choice(
+					id: "one",
+					title: "One"
+				)],
+				selectedID: "one",
+				accessibilityLabel: "Choices"
+			)
+			defer
+			{
+				account.close(); choices.close(); window.close()
+			}
+			account.show(from: anchor)
+			let accountPanel = try #require(account.content.window)
+			account.show(from: detached)
+			#expect(account.isShown)
+			#expect(account.content.window === accountPanel)
+			#expect(accountPanel.parent === window)
+			account.close()
+			choices.show(from: anchor)
+			let choicePanel = try #require(window.childWindows?.first)
+			choices.show(from: detached)
+			#expect(choices.isShown)
+			#expect(choicePanel.parent === window)
+			#expect(choicePanel.isVisible)
+		}
+	}
 
 	@Test func menuAndSearchContentHitTestingUsesTheWindowContentCoordinates() async throws
 	{

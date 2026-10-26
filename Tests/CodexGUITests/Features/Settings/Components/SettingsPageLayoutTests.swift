@@ -107,6 +107,45 @@ struct SettingsPageLayoutTests
 		}
 	}
 
+	@Test(arguments: ["Account", "General", "Notifications"])
+	func adoptedPagesKeepTheirFlexibleColumnWhenResized(_ title: String) throws
+	{
+		_ = NSApplication.shared
+		let page: NSView
+		switch title
+		{
+		case "Account": page = SettingsAccountPage()
+		case "General": page = SettingsGeneralPage()
+		default: page = SettingsNotificationsPage()
+		}
+		let window = makeWindow(page: page)
+		defer
+		{
+			window.close()
+		}
+		window.layoutIfNeeded()
+		page.layoutSubtreeIfNeeded()
+		let scroll = try #require(descendants(page).compactMap
+		{
+			$0 as? NSScrollView
+		}.first)
+		let document = try #require(scroll.documentView)
+		let stack = try #require(document.subviews.compactMap
+		{
+			$0 as? NSStackView
+		}.first)
+		#expect(abs(stack.frame.width - LayoutTokens.Connections.contentWidth) < 1)
+
+		window.setContentSize(NSSize(
+			width: 600,
+			height: 600
+		))
+		window.layoutIfNeeded()
+		page.layoutSubtreeIfNeeded()
+		#expect(abs(stack.frame.width - (scroll.contentView.bounds.width - 40)) < 1)
+		#expect(abs(stack.frame.minX - 20) < 1)
+		#expect(abs(stack.frame.minY - LayoutTokens.Connections.topInset) < 1)
+	}
 
 	@Test func readOnlyValueRowsUpdateTheirRetainedValueWithoutChangingRowGeometry() throws
 	{

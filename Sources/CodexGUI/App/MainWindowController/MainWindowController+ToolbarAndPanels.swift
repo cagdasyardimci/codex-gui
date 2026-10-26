@@ -658,21 +658,14 @@ extension MainWindowController
 
 	@objc func showStatus()
 	{
-		let controller = NSViewController()
-		controller.view = statusView
-		let popover = NSPopover()
-		popover.contentViewController = controller
-		popover.contentSize = NSSize(
-			width: 380,
-			height: 320
-		)
-		popover.behavior = .transient
-		statusPopover = popover
-		popover.show(
-			relativeTo: statusButton.bounds,
-			of: statusButton,
-			preferredEdge: .maxX
-		)
+		if statusPopover?.isShown == true
+		{
+			statusPopover?.close()
+			return
+		}
+		let menu = statusPopover ?? AccountMenuPanel(content: statusView)
+		statusPopover = menu
+		menu.show(from: statusButton)
 	}
 
 	func showBackendDetails()

@@ -42,7 +42,7 @@ final class WindowChromeViewController: NSViewController
 
 		let column = DesktopSurface(AppKitColorTokens.chrome)
 		let avatar = DesktopSurface(
-			AppKitColorTokens.selection,
+			AppKitColorTokens.accountAvatar,
 			cornerRadius: Layout.avatarSize / 2
 		)
 		let panel = RoundedContentPanel()

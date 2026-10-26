@@ -82,11 +82,6 @@ struct TaskWorkspaceWindowLayoutTests
 			) as? TaskSidebarCellView)
 			#expect(taskCell.textField?.stringValue == "●  Recovering task · \(title)")
 			#expect(taskCell.accessibilityLabel() == "\(title) task, open chat Recovering task")
-			let popoverLabel = try #require(findControl(
-				in: controller.statusView,
-				label: "Current task status"
-			) as? NSTextField)
-			#expect(popoverLabel.stringValue == title)
 			#expect(controller.statusButton.toolTip == "Synthetic · \(title)")
 			#expect(controller.statusButton.accessibilityLabel()
 				== "\(title). Open account and backend status")

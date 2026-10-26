@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindowDelegate
 {
-	private let sourceStore: WorkspaceStateStore
+	let sourceStore: WorkspaceStateStore
 	let coordinator: TaskWorkspaceCoordinator?
 	var currentStore: WorkspaceStateStore
 	{
@@ -44,7 +44,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	var messageSearchOwner: WorkspaceLifecycleOwnerReference?
 	let settings = SettingsWindowController()
 	let statusView = StatusPopoverView(frame: .zero)
-	let statusButton = NSButton(
+	let statusButton = AccountAvatarText.Button(
 		title: "",
 		target: nil,
 		action: nil
@@ -52,7 +52,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	let titleLabel = NSTextField(labelWithString: "New chat")
 	let titleContainer = NSView()
 	let toolsToolbar = ToolsToolbarCoordinator()
-	var statusPopover: NSPopover?
+	var statusPopover: AccountMenuPanel?
 	let paneController: WindowPaneController
 	var summaryChangesProvider: ((FeaturePresentationOwner) -> SummarySection<SummaryChangeTotals>)?
 	var summaryVisibility = PinnedSummaryVisibility()
@@ -216,6 +216,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		remoteAccessObserver = sourceStore.observe
 		{
 			[weak self] model in
+			if let self
+			{
+				self.statusView.render(self.sourceStore.currentSnapshot)
+			}
 			self?.settings.remoteAccess.render(
 				model.remoteAccess,
 				connected: model.connection.isConnected
@@ -331,7 +335,25 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			ownerIdentity: target.presentationIdentity
 		)
 		self.settings.render(status)
-		self.statusView.render(status)
+		self.statusView.render(self.sourceStore.currentSnapshot)
+		let initials = self.sourceStore.currentSnapshot.accountStatus?.email.map
+		{
+			String($0.prefix(2)).uppercased()
+		} ?? ""
+		statusButton.title = initials
+		statusButton.font = NSFont.systemFont(ofSize: 10)
+		statusButton.image = initials.isEmpty ? DesktopIcons.image(
+			.user,
+			size: 18
+		) : nil
+		statusButton.imagePosition = initials.isEmpty ? .imageOnly : .noImage
+		if !initials.isEmpty
+		{
+			statusButton.attributedTitle = NSAttributedString(
+				string: initials,
+				attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.white]
+			)
+		}
 		let executionTitle = status.execution.title
 		self.statusButton.toolTip = "\(status.accountDescription) · \(executionTitle)"
 		self.statusButton
@@ -384,6 +406,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		}
 		remoteAccessObserver = nil
 		settings.remoteAccess.close()
+		statusPopover?.close()
 		messageSearch.dismiss()
 	}
 

@@ -147,9 +147,16 @@ extension MainWindowController
 		{
 			[weak self] in self?.showBackendDetails()
 		}
+		statusView.onLogout =
+		{
+			[weak self] in
+			self?.sourceStore.inputs.signOut()
+		}
 		statusView.onShowSettings =
 		{
-			[weak self] in self?.showSettings()
+			[weak self] in
+			self?.statusPopover?.close()
+			self?.showSettings()
 		}
 	}
 
