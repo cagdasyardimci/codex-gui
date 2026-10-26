@@ -3,19 +3,24 @@ import AppKit
 @MainActor
 enum ExpandedImageHeaderDrawing
 {
-	static func foreground(enabled: Bool) -> NSColor
+	static func foreground(
+		enabled: Bool,
+		lightSurface: Bool = false
+	) -> NSColor
 	{
-		NSColor.white.withAlphaComponent(enabled ? 0.9 : 0.4)
+		(lightSurface ? NSColor.darkGray : .white).withAlphaComponent(enabled ? 0.9 : 0.4)
 	}
 
 	static func drawBackground(
 		control: NSButton,
-		hover: Bool
+		hover: Bool,
+		lightSurface: Bool = false
 	)
 	{
 		let pressed = control.cell?.isHighlighted == true
 		let opacity: CGFloat = pressed ? 0.24 : (hover && control.isEnabled ? 0.18 : 0.12)
-		NSColor.white.withAlphaComponent(opacity).setFill()
+		(lightSurface ? NSColor.white.withAlphaComponent(control.isEnabled ? 1 : 0.4)
+			: NSColor.white.withAlphaComponent(opacity)).setFill()
 		let shape = NSBezierPath(
 			roundedRect: control.bounds.insetBy(
 				dx: 1,
@@ -32,6 +37,7 @@ enum ExpandedImageHeaderDrawing
 			shape.stroke()
 		}
 	}
+
 
 	static func updateTracking(
 		view: NSView,

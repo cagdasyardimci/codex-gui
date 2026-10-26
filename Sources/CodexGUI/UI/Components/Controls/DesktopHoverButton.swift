@@ -6,35 +6,32 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 {
 	var cornerRadius: CGFloat = 12.5
 	var cornerCurve: ShapeTokens.CornerCurve = .circular
-	private var hovered = false
+	private(set) var isHovered = false
 	private var tracking: NSTrackingArea?
 
 	override func updateTrackingAreas()
 	{
 		super.updateTrackingAreas()
-		if let tracking
-		{
-			removeTrackingArea(tracking)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
+		tracking = DesktopHoverTracking.replace(
+			in: self,
+			previous: tracking
 		)
-		addTrackingArea(area)
-		tracking = area
 	}
 
 	override func mouseEntered(with event: NSEvent)
 	{
-		hovered = true
+		isHovered = true
 		needsDisplay = true
 	}
 
 	override func mouseExited(with event: NSEvent)
 	{
-		hovered = false
+		clearHover()
+	}
+
+	func clearHover()
+	{
+		isHovered = false
 		needsDisplay = true
 	}
 
@@ -46,7 +43,13 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		if isEnabled && (hovered || isHighlighted)
+		drawBackground()
+		super.draw(dirtyRect)
+	}
+
+	func drawBackground()
+	{
+		if isEnabled && (isHovered || isHighlighted)
 		{
 			AppKitColorTokens.rowHighlight.setFill()
 			AppKitShapePath.roundedRect(
@@ -55,6 +58,5 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 				curve: cornerCurve
 			).fill()
 		}
-		super.draw(dirtyRect)
 	}
 }
