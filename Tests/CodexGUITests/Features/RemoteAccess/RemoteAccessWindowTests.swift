@@ -213,4 +213,52 @@ struct RemoteAccessWindowTests
 			== RemotePairingQRView.pairingURL(code: qr.pairingCode)?.absoluteString)
 	}
 
+
+	@Test(.appKitIsolation)
+	func computerPairingCopiesOnlyTheCurrentManualCode() throws
+	{
+		_ = NSApplication.shared
+		let pasteboard = NSPasteboard.withUniqueName()
+		defer
+		{
+			pasteboard.releaseGlobally()
+		}
+		let pairing = RemotePairingPanelController(pasteboard: pasteboard)
+		defer
+		{
+			pairing.close()
+		}
+		let content = try #require(pairing.window?.contentView)
+		let buttons = descendants(content).compactMap
+		{
+			$0 as? NSButton
+		}
+		let computer = try #require(buttons.first
+		{
+			$0.title == "Computer"
+		})
+		let copy = try #require(buttons.first
+		{
+			$0.toolTip == "Copy pairing code"
+		})
+		#expect(computer.dispatchConfiguredAction())
+		#expect(!copy.isEnabled)
+		pairing.render(RemoteControlPairing(
+			pairingCode: "server-token-one",
+			manualPairingCode: "ABCD-EFGH",
+			environmentId: "environment",
+			expiresAt: 2_000_000_000
+		))
+		#expect(copy.dispatchConfiguredAction())
+		#expect(pasteboard.string(forType: .string) == "ABCD-EFGH")
+		pairing.render(RemoteControlPairing(
+			pairingCode: "server-token-two",
+			manualPairingCode: "WXYZ-1234",
+			environmentId: "environment",
+			expiresAt: 2_000_000_000
+		))
+		#expect(copy.dispatchConfiguredAction())
+		#expect(pasteboard.string(forType: .string) == "WXYZ-1234")
+	}
+
 }
