@@ -85,10 +85,6 @@ struct RemoteAccessModel: Equatable
 	var error: String?
 	var statusRevision = 0
 	var connectionFailure: RemoteControlConnectionFailure?
-	var canPair: Bool
-	{
-		status?.status == .connected && status?.environmentId?.isEmpty == false
-	}
 }
 
 enum RemoteAccessAction

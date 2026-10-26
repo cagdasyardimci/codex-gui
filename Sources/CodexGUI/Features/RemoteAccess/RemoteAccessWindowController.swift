@@ -4,35 +4,35 @@ import AppKit
 final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 {
 	var onCommand: ((RemoteAccessCommand) -> Void)?
-	var onShowDiagnostics: (() -> Void)?
 	private let statusLabel = NSTextField(
 		wrappingLabelWithString: "Connect to Codex to check availability."
 	)
 	private let errorLabel = NSTextField(wrappingLabelWithString: "")
-	private let codeLabel = NSTextField(labelWithString: "")
-	private let expiryLabel = NSTextField(labelWithString: "")
-	private let devices = AppKitLayout.verticalStack(
+	private var emptyState = NSStackView()
+	private let emptyRow = NSView()
+	private let headerActions = AppKitLayout.horizontalStack(
 		[],
 		spacing: 8
 	)
-	private let toggle = NSButton(
-		title: "Enable Remote Access",
-		target: nil,
-		action: nil
+	private let awakeToggle = RemoteConnectionsSwitch(frame: .zero)
+	private let awakeService = RemoteAccessAwakeService()
+	private(set) var pairingController: RemotePairingPanelController?
+	private let devices = AppKitLayout.verticalStack(
+		[],
+		spacing: 0
 	)
-	private let pair = NSButton(
-		title: "Pair iPhone…",
-		target: nil,
-		action: nil
+	private let toggle = RemoteConnectionsSwitch(frame: .zero)
+	private let pair = RemoteConnectionsButton(
+		title: "Add",
+		presentation: .primary
 	)
-	private let refresh = NSButton(
-		title: "Refresh",
-		target: nil,
-		action: nil
+	private let refresh = RemoteConnectionsButton(
+		title: "",
+		presentation: .icon
 	)
 	private var current = RemoteAccessModel()
 	private var currentConnected: Bool?
-	private var deviceRows: [(RemoteControlClient, RemoteAccessDeviceButton)] = []
+	private var deviceRows: [(RemoteControlClient, DesktopActionButton, NSTextField)] = []
 	private var devicesEnvironmentID: String?
 	private var timer: Timer?
 	private var ticks = 0
@@ -51,6 +51,7 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			backing: .buffered,
 			defer: false
 		)
+		window.isReleasedWhenClosed = false
 		window.title = "Remote Access"
 		window.minSize = NSSize(
 			width: 460,
@@ -69,80 +70,244 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 
 	private func configureContent()
 	{
+		window?.title = "Connections"
+		window?.setContentSize(NSSize(
+			width: 840,
+			height: 700
+		))
 		statusLabel.setAccessibilityLabel("Remote access status")
+		statusLabel.font = AppKitFontResolver.font(TypographyTokens.Connections.body)
+		statusLabel.textColor = AppKitColorTokens.settingsSecondaryText
 		errorLabel.textColor = .systemRed
+		errorLabel.font = AppKitFontResolver.font(TypographyTokens.Connections.body)
 		errorLabel.setAccessibilityLabel("Remote access error")
-		codeLabel.isSelectable = true
-		codeLabel.font = .monospacedSystemFont(
-			ofSize: 22,
-			weight: .medium
-		)
-		codeLabel.setAccessibilityLabel("Manual pairing code")
-		expiryLabel.textColor = .secondaryLabelColor
-		let description = NSTextField(wrappingLabelWithString:
-			"Use ChatGPT on your iPhone to connect to this Mac. Sign in to the same account "
-				+ "and workspace, then add this computer using the pairing code. "
-				+ "Keep Codex GUI open and your Mac awake and online."
-		)
-		description.textColor = .secondaryLabelColor
+		errorLabel.isHidden = true
+		toggle.setAccessibilityLabel("Allow connections")
 		toggle.target = self
 		toggle.action = #selector(toggleAccess)
 		pair.target = self
 		pair.action = #selector(startPairing)
+		refresh.image = RemoteConnectionsArtwork.image(named: "Refresh")
+		refresh.toolTip = "Refresh"
+		refresh.setAccessibilityLabel("Refresh")
 		refresh.target = self
 		refresh.action = #selector(refreshStatus)
-		let details = NSButton(
-			title: "Backend Details…",
-			target: self,
-			action: #selector(showDiagnostics)
+		let heading = RemoteConnectionsLabel(
+			"Connections",
+			role: TypographyTokens.Connections.title
 		)
-		let stack = AppKitLayout.verticalStack(
-			[
-				description,
-				statusLabel,
-				errorLabel,
-				AppKitLayout.horizontalStack([toggle, pair]),
-				AppKitLayout.horizontalStack([refresh, details]),
-				codeLabel,
-				expiryLabel,
-				AppKitLayout.title("Paired Devices"),
-				devices,
-			],
+		let selected = RemoteConnectionsButton(
+			title: "Control this Mac",
+			presentation: .tab(selected: true)
+		)
+		selected.state = .on
+		let other = RemoteConnectionsButton(
+			title: "Control other devices",
+			presentation: .tab(selected: false)
+		)
+		let ssh = RemoteConnectionsButton(
+			title: "SSH",
+			presentation: .tab(selected: false)
+		)
+		other.isEnabled = false
+		ssh.isEnabled = false
+		let tabs = AppKitLayout.horizontalStack(
+			[selected, other, ssh],
+			spacing: 2
+		)
+		headerActions.addArrangedSubview(refresh)
+		let section = sectionHeader(
+			"Devices that can control this Mac",
+			accessory: headerActions
+		)
+		let artwork = RemoteConnectionsArtwork()
+		let hint = RemoteConnectionsLabel(
+			"Add device to control this Mac remotely",
+			role: TypographyTokens.Connections.body
+		)
+		hint.textColor = AppKitColorTokens.settingsSecondaryText
+
+		emptyState = AppKitLayout.verticalStack(
+			[artwork, hint, pair],
 			spacing: 12
 		)
-		let scroll = NSScrollView()
-		scroll.hasVerticalScroller = true
-		scroll.drawsBackground = false
-		let document = RemoteAccessDocumentView()
-		document.translatesAutoresizingMaskIntoConstraints = false
-		scroll.documentView = document
-		window?.contentView = scroll
-		stack.translatesAutoresizingMaskIntoConstraints = false
-		document.addSubview(stack)
+		emptyState.alignment = .centerX
+		AppKitLayout.pin(
+			emptyState,
+			to: emptyRow,
+			inset: 24
+		)
+		let allowLabel = RemoteConnectionsLabel(
+			"Allow connections",
+			role: TypographyTokens.Connections.rowLabel
+		)
+		let allowRow = NSView()
+		let allowContents = AppKitLayout.horizontalStack(
+			[allowLabel, NSView(), toggle],
+			spacing: 24
+		)
+		allowRow.addSubview(allowContents)
+		allowContents.translatesAutoresizingMaskIntoConstraints = false
 		NSLayoutConstraint.activate([
-			document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-			stack.leadingAnchor.constraint(
-				equalTo: document.leadingAnchor,
-				constant: 20
+			allowContents.leadingAnchor.constraint(
+				equalTo: allowRow.leadingAnchor,
+				constant: 16
 			),
-			stack.trailingAnchor.constraint(
-				equalTo: document.trailingAnchor,
-				constant: -20
+			allowContents.trailingAnchor.constraint(
+				equalTo: allowRow.trailingAnchor,
+				constant: -16
 			),
-			stack.topAnchor.constraint(
-				equalTo: document.topAnchor,
-				constant: 20
+			allowContents.centerYAnchor.constraint(equalTo: allowRow.centerYAnchor),
+		])
+		allowRow.heightAnchor.constraint(equalToConstant: 44).isActive = true
+		let divider = SettingsSurfaceView(color: AppKitColorTokens.connectionsEdge)
+		divider.translatesAutoresizingMaskIntoConstraints = false
+		allowRow.addSubview(divider)
+		NSLayoutConstraint.activate([
+			divider.leadingAnchor.constraint(
+				equalTo: allowRow.leadingAnchor,
+				constant: 16
 			),
-			stack.bottomAnchor.constraint(
-				equalTo: document.bottomAnchor,
-				constant: -20
+			divider.trailingAnchor.constraint(
+				equalTo: allowRow.trailingAnchor,
+				constant: -16
+			),
+			divider.bottomAnchor.constraint(equalTo: allowRow.bottomAnchor),
+			divider.heightAnchor.constraint(equalToConstant: 1),
+		])
+		let card = RemoteConnectionsCard()
+		let contents = AppKitLayout.verticalStack(
+			[allowRow, devices, emptyRow],
+			spacing: 0
+		)
+		AppKitLayout.pin(
+			contents,
+			to: card,
+			inset: 1
+		)
+		for row in [allowRow, devices, emptyRow]
+		{
+			row.widthAnchor.constraint(equalTo: contents.widthAnchor).isActive = true
+		}
+		devices.isHidden = true
+		let awakeTitle = RemoteConnectionsLabel(
+			"Keep this Mac awake",
+			role: TypographyTokens.Connections.rowLabel
+		)
+		let awakeDetail = RemoteConnectionsLabel(
+			"Prevent sleep when computer is plugged in and remote access is enabled",
+			role: TypographyTokens.Connections.caption
+		)
+		awakeDetail.textColor = AppKitColorTokens.settingsSecondaryText
+		let awakeText = AppKitLayout.verticalStack(
+			[awakeTitle, awakeDetail],
+			spacing: 2
+		)
+		awakeToggle.setAccessibilityLabel("Keep this Mac awake")
+		awakeToggle.state = .on
+		awakeToggle.target = self
+		awakeToggle.action = #selector(toggleAwake)
+		let sun = RemoteConnectionsArtwork(
+			name: "Sun",
+			size: NSSize(
+				width: 18,
+				height: 18
+			)
+		)
+		let awake = AppKitLayout.horizontalStack(
+			[sun, awakeText, NSView(), awakeToggle],
+			spacing: 12
+		)
+		awakeText.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		let awakeCard = RemoteConnectionsCard()
+		awake.translatesAutoresizingMaskIntoConstraints = false
+		awakeCard.addSubview(awake)
+		NSLayoutConstraint.activate([
+			awake.leadingAnchor.constraint(
+				equalTo: awakeCard.leadingAnchor,
+				constant: 17
+			),
+			awake.trailingAnchor.constraint(
+				equalTo: awakeCard.trailingAnchor,
+				constant: -17
+			),
+			awake.topAnchor.constraint(
+				equalTo: awakeCard.topAnchor,
+				constant: 13
+			),
+			awake.bottomAnchor.constraint(
+				equalTo: awakeCard.bottomAnchor,
+				constant: -13
 			),
 		])
-		for label in [description, statusLabel, errorLabel]
+		let deviceSection = AppKitLayout.verticalStack(
+			[section, card],
+			spacing: 0
+		)
+		let otherHeader = sectionHeader("Other settings")
+		let otherSection = AppKitLayout.verticalStack(
+			[otherHeader, awakeCard],
+			spacing: 0
+		)
+		let stack = AppKitLayout.verticalStack(
+			[heading, tabs, deviceSection, statusLabel, errorLabel, otherSection],
+			spacing: 40
+		)
+		stack.setCustomSpacing(
+			LayoutTokens.Connections.titleTabGap,
+			after: heading
+		)
+		window?.contentView = SettingsPageLayout.scrollableDocument(
+			content: stack,
+			columnWidth: .fitsViewport
+		)
+		for row in [
+			deviceSection,
+			section,
+			card,
+			statusLabel,
+			errorLabel,
+			otherSection,
+			otherHeader,
+			awakeCard
+		]
 		{
-			label.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
-		devices.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+	}
+
+	private func sectionHeader(
+		_ title: String,
+		accessory: NSView? = nil
+	) -> NSView
+	{
+		let header = NSView()
+		let label = RemoteConnectionsLabel(
+			title,
+			role: TypographyTokens.Connections.section
+		)
+		let row = AppKitLayout.horizontalStack(
+			[label, NSView()] + (accessory.map
+			{
+				[$0]
+			} ?? []),
+			spacing: 16
+		)
+		header.addSubview(row)
+		row.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			header.heightAnchor.constraint(equalToConstant: 46),
+			row.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+			row.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+			row.centerYAnchor.constraint(
+				equalTo: header.centerYAnchor,
+				constant: 3
+			),
+		])
+		return header
 	}
 
 	func render(
@@ -159,12 +324,30 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 		currentConnected = connected
 		let busy = model.pending != nil
 		let enabled = model.status?.status != nil && model.status?.status != .disabled
-		toggle.title = enabled ? "Disable Remote Access" : "Enable Remote Access"
+		toggle.state = enabled ? .on : .off
 		let canStopPendingRead = model.pending?.command == .refresh || model.pending?
 			.command == .pair
 		toggle.isEnabled = connected && (!busy || enabled && canStopPendingRead)
-		pair.isEnabled = connected && !busy && model.canPair
+		pair.isEnabled = connected && !busy
 		refresh.isEnabled = connected && !busy
+		pair.title = "Add"
+		pair.isLoading = model.pending?.command == .pair
+		let hasDevices = !model.clients.isEmpty
+		emptyRow.isHidden = hasDevices
+		let pairContainer = hasDevices ? headerActions : emptyState
+		if pair.superview !== pairContainer
+		{
+			(pair.superview as? NSStackView)?.removeArrangedSubview(pair)
+			pair.removeFromSuperview()
+			pairContainer.addArrangedSubview(pair)
+		}
+		devices.isHidden = model.clients.isEmpty
+		awakeService.update(enabled: model.status?.status == .connected
+			&& connected && awakeToggle.state == .on)
+		renderPairing(
+			model.pairing,
+			pending: model.pending?.command == .pair
+		)
 		let status: String
 		switch model.status?.status
 		{
@@ -179,12 +362,12 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			}
 			else
 			{
-				status = "The remote access connection failed. "
-					+ "Open Backend Details for the connection error."
+				status = "The remote access connection failed."
 			}
 		case nil: status = "Check availability to set up remote access."
 		}
 		statusLabel.stringValue = connected ? status : "Connect to Codex to check availability."
+		statusLabel.isHidden = connected && model.status?.status == .connected
 		let detail: String?
 		if case .reported(let message) = model.connectionFailure
 		{
@@ -196,18 +379,6 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 		}
 		errorLabel.stringValue = model.error ?? detail ?? ""
 		errorLabel.isHidden = errorLabel.stringValue.isEmpty
-		codeLabel.stringValue = model.pairing?.manualPairingCode ?? ""
-		codeLabel.isHidden = model.pairing == nil
-		expiryLabel.isHidden = model.pairing == nil
-		if let pairing = model.pairing
-		{
-			expiryLabel.stringValue = "Expires " + Date(
-				timeIntervalSince1970: Double(pairing.expiresAt)
-			).formatted(
-				date: .omitted,
-				time: .shortened
-			)
-		}
 		renderDevices(
 			model,
 			enabled: connected && !busy
@@ -226,9 +397,13 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			}
 			) == model.clients
 		{
-			for (_, button) in deviceRows
+			for (client, button, subtitle) in deviceRows
 			{
 				button.isEnabled = enabled
+				subtitle.stringValue = Self.deviceDetail(
+					client,
+					now: Date()
+				)
 			}
 			if !devices.arrangedSubviews.isEmpty
 			{
@@ -250,10 +425,29 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 		}
 		for client in model.clients
 		{
-			let name = client.displayName ?? client.deviceModel ?? "Paired device"
-			let label = NSTextField(wrappingLabelWithString: name)
-			let button = RemoteAccessDeviceButton()
-			label.setContentCompressionResistancePriority(
+			let name = client.displayName ?? client.deviceModel ?? client.platform ?? client
+				.clientId
+			let label = RemoteConnectionsLabel(
+				name,
+				role: TypographyTokens.Connections.rowLabel
+			)
+			let subtitle = RemoteConnectionsLabel(
+				Self.deviceDetail(
+					client,
+					now: Date()
+				),
+				role: TypographyTokens.Connections.caption
+			)
+			subtitle.textColor = AppKitColorTokens.settingsSecondaryText
+			let text = AppKitLayout.verticalStack(
+				[label, subtitle],
+				spacing: 2
+			)
+			let button = DesktopActionButton(
+				title: "Revoke access",
+				presentation: .secondary
+			)
+			text.setContentCompressionResistancePriority(
 				.defaultLow,
 				for: .horizontal
 			)
@@ -261,27 +455,122 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 				.required,
 				for: .horizontal
 			)
-			deviceRows.append((client, button))
+			deviceRows.append((client, button, subtitle))
 			button.isEnabled = enabled
-			button.setAccessibilityLabel("Remove \(name)")
+			button.setAccessibilityLabel("Revoke access for \(name)")
 			let command = onCommand
-			button.removeDevice =
+			button.onAction =
 			{
 				command?(.revoke(
 					environmentID: environmentID,
 					clientID: client.clientId
 				))
 			}
-			let row = AppKitLayout.horizontalStack([label, button])
+			let image: NSView
+			if client.deviceType == "phone"
+			{
+				image = RemoteConnectionsArtwork(
+					name: "PairedPhone",
+					size: NSSize(
+						width: 20,
+						height: 20
+					)
+				)
+			}
+			else
+			{
+				let icon = NSImageView(image: DesktopIcons.image(
+					.desktop,
+					size: 20
+				))
+				icon.setAccessibilityElement(false)
+				image = icon
+			}
+			let contents = AppKitLayout.horizontalStack(
+				[image, text, NSView(), button],
+				spacing: 12
+			)
+			let row = NSView()
+			row.addSubview(contents)
+			contents.translatesAutoresizingMaskIntoConstraints = false
+			NSLayoutConstraint.activate([
+				contents.leadingAnchor.constraint(
+					equalTo: row.leadingAnchor,
+					constant: 16
+				),
+				contents.trailingAnchor.constraint(
+					equalTo: row.trailingAnchor,
+					constant: -16
+				),
+				contents.topAnchor.constraint(
+					equalTo: row.topAnchor,
+					constant: 12
+				),
+				contents.bottomAnchor.constraint(
+					equalTo: row.bottomAnchor,
+					constant: -12
+				),
+			])
+			if !devices.arrangedSubviews.isEmpty
+			{
+				let divider = SettingsSurfaceView(color: AppKitColorTokens.connectionsEdge)
+				row.addSubview(divider)
+				divider.translatesAutoresizingMaskIntoConstraints = false
+				NSLayoutConstraint.activate([
+					divider.leadingAnchor.constraint(
+						equalTo: row.leadingAnchor,
+						constant: 16
+					),
+					divider.trailingAnchor.constraint(
+						equalTo: row.trailingAnchor,
+						constant: -16
+					),
+					divider.topAnchor.constraint(equalTo: row.topAnchor),
+					divider.heightAnchor.constraint(equalToConstant: 1),
+				])
+			}
 			devices.addArrangedSubview(row)
 			row.widthAnchor.constraint(equalTo: devices.widthAnchor).isActive = true
 		}
+	}
+
+	static func deviceDetail(
+		_ client: RemoteControlClient,
+		now: Date
+	) -> String
+	{
+		guard let lastSeen = client.lastSeenAt
+		else
+		{
+			return "Authorized device"
+		}
+		let date = Date(timeIntervalSince1970: Double(lastSeen))
+		if now.timeIntervalSince(date) < 60
+		{
+			return "Last connected just now"
+		}
+		let formatter = RelativeDateTimeFormatter()
+		formatter.unitsStyle = .full
+		return "Last connected " + formatter.localizedString(
+			for: date,
+			relativeTo: now
+		)
 	}
 
 	func present()
 	{
 		showWindow(nil)
 		window?.makeKeyAndOrderFront(nil)
+		beginPresentation()
+	}
+
+	func beginPresentation()
+	{
+		guard !isPolling
+		else
+		{
+			return
+		}
 		onCommand?(.refresh)
 		timer?.invalidate()
 		ticks = 0
@@ -314,21 +603,99 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 		ticks += 1
 		if ticks % 5 == 0
 		{
+			for (client, _, subtitle) in deviceRows
+			{
+				subtitle.stringValue = Self.deviceDetail(
+					client,
+					now: Date()
+				)
+			}
 			onCommand?(.refresh)
 		}
 	}
 
 	func windowWillClose(_ notification: Notification)
 	{
+		endPresentation()
+	}
+
+	func endPresentation()
+	{
+		guard isPolling || pairingController != nil
+		else
+		{
+			return
+		}
 		isPolling = false
 		timer?.invalidate()
 		timer = nil
+		dismissPairing()
 		onCommand?(.clearPairing)
 	}
 
-	@objc private func showDiagnostics()
+	private func renderPairing(
+		_ pairing: RemoteControlPairing?,
+		pending: Bool
+	)
 	{
-		onShowDiagnostics?()
+		pairingController?.setPending(pending)
+		if pending && pairingController != nil
+		{
+			return
+		}
+		guard let pairing
+		else
+		{
+			dismissPairing()
+			return
+		}
+		if pairingController == nil
+		{
+			guard isPolling, emptyState.window?.isVisible == true
+			else
+			{
+				return
+			}
+			let panel = RemotePairingPanelController()
+			panel.onClose =
+			{
+				[weak self] in self?.onCommand?(.clearPairing)
+			}
+			panel.onRefresh =
+			{
+				[weak self] in self?.onCommand?(.pair)
+			}
+			pairingController = panel
+			if let parent = emptyState.window
+			{
+				panel.present(over: parent)
+			}
+		}
+		pairingController?.render(pairing)
+	}
+
+	private func dismissPairing()
+	{
+		guard let panel = pairingController
+		else
+		{
+			return
+		}
+		panel.close()
+		pairingController = nil
+	}
+
+	@objc private func toggleAwake()
+	{
+		awakeService.update(enabled: currentConnected == true
+			&& current.status?.status == .connected && awakeToggle.state == .on)
+	}
+
+	override func close()
+	{
+		endPresentation()
+		awakeService.update(enabled: false)
+		super.close()
 	}
 
 	@objc private func toggleAccess()
@@ -343,36 +710,5 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 	@objc private func refreshStatus()
 	{
 		onCommand?(.refresh)
-	}
-}
-
-@MainActor
-private final class RemoteAccessDeviceButton: NSButton
-{
-	var removeDevice: (() -> Void)?
-	init()
-	{
-		super.init(frame: .zero)
-		title = "Remove"
-		bezelStyle = .rounded
-		target = self
-		action = #selector(remove)
-	}
-	required init?(coder: NSCoder)
-	{
-		nil
-	}
-	@objc private func remove()
-	{
-		removeDevice?()
-	}
-}
-
-@MainActor
-private final class RemoteAccessDocumentView: NSView
-{
-	override var isFlipped: Bool
-	{
-		true
 	}
 }

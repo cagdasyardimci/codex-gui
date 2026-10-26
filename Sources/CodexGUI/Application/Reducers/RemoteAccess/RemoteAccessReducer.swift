@@ -118,11 +118,6 @@ enum RemoteAccessReducer
 			}
 			if command == .pair
 			{
-				guard model.remoteAccess.canPair
-				else
-				{
-					return WorkspaceReduction()
-				}
 				model.remoteAccess.pairing = nil
 			}
 			if case .revoke(

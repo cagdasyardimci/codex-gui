@@ -213,24 +213,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			}
 			store.inputs.remoteAccess(command)
 		}
-		settings.remoteAccess.onShowDiagnostics =
-		{
-			[weak self] in
-			guard let self, let window = self.settings.remoteAccess.window
-			else
-			{
-				return
-			}
-			let report = WorkspaceSelectors(
-				model: self.sourceStore.model,
-				now: Date()
-			)
-			.backendDiagnosticsReport
-			self.presentBackendDetails(
-				report: report,
-				in: window
-			)
-		}
 		remoteAccessObserver = sourceStore.observe
 		{
 			[weak self] model in

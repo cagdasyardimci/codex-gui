@@ -66,7 +66,52 @@ struct RemoteAccessReducerTests
 			))
 		)
 		#expect(result.effects.count == 1)
-		return try #require(model.remoteAccess.pending)
+		let operation = try #require(model.remoteAccess.pending)
+		#expect(result.effects.contains
+		{
+			if case .remoteAccess(let emitted) = $0
+			{
+				return emitted == operation
+			}
+			return false
+		})
+		return operation
+	}
+
+	@Test func pairingAttemptAfterHostErrorReachesServerAndReportsFailure() throws
+	{
+		var model = fixture()
+		model.remoteAccess.status = status(.errored)
+		model.remoteAccess.connectionFailure = .hostAlreadyOnline
+		let operation = try request(
+			.pair,
+			model: &model
+		)
+		#expect(operation.command == .pair)
+		let duplicate = RemoteAccessReducer.reduce(
+			&model,
+			.remoteAccess(.requested(
+				context(model),
+				.pair,
+				now
+			))
+		)
+		#expect(duplicate.effects.isEmpty)
+		#expect(model.remoteAccess.pending == operation)
+		_ = RemoteAccessReducer.reduce(
+			&model,
+			.remoteAccess(.finished(
+				operation,
+				.failed(OperationFailure(
+					message: "Remote host is unavailable",
+					outcomeIsUncertain: false
+				)),
+				now
+			))
+		)
+		#expect(model.remoteAccess.pending == nil)
+		#expect(model.remoteAccess.error == "Remote host is unavailable")
+		#expect(model.remoteAccess.connectionFailure == .hostAlreadyOnline)
 	}
 
 	@Test func enabledSourceRestoresAccessOnEachConnectionUntilDisabled() throws
