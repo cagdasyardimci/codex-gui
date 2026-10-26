@@ -82,6 +82,10 @@ struct ConversationSnapshot
 	var chatLocked = false
 	var chatLockRetrying = false
 	let accountDescription: String
+	var accountStatus: AccountStatus? = nil
+	var accountActionPending = false
+	var canLogOut = false
+	var accountActionError: String? = nil
 	let backendDescription: String
 	let executionState: ExecutionState
 	let statusMessage: String?

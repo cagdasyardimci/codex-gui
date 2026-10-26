@@ -144,7 +144,8 @@ extension WorkspaceLifecycleReducer
 				.preferences(.approvalModeSelected), .preferences(.fastModeSelected),
 				.preferences(.configurationDefaultsApplied),
 				.preferences(.projectPinToggled), .preferences(.projectRenamed),
-				.preferences(.projectRemembered), .preferences(.signInRequested): return false
+				.preferences(.projectRemembered), .preferences(.signInRequested),
+				.preferences(.signOutRequested): return false
 		case .workspaceLifecycle(.projectPinRequested),
 				.workspaceLifecycle(.projectRenameRequested),
 				.workspaceLifecycle(.projectOpeningRequested),

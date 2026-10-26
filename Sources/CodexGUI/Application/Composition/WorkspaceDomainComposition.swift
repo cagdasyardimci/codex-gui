@@ -27,6 +27,12 @@ enum WorkspaceDomainComposition
 		_ event: WorkspaceDomainEvent
 	) -> WorkspaceReduction
 	{
+		if case .accountSignedOut = event
+		{
+			var result = UsageReducer.accountSignedOut(&model)
+			result.merge(RemoteAccessReducer.accountSignedOut(&model))
+			return result
+		}
 		var result = ConversationReviewComposition.reduceDomainEvent(
 			&model,
 			event

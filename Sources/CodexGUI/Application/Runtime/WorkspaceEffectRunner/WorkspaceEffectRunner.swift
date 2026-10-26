@@ -394,6 +394,7 @@ final class WorkspaceEffectRunner
 				operation.query
 			))
 		case .readModels(let context): return (context, .models)
+		case .signOut(let context): return (context, .signIn)
 		case .beginSignIn(let context): return (context, .signIn)
 		case .persistPreference(let write): return (write.context, .preference)
 		case .readUsage(let operation): return (operation.context, .usage(operation.attempt))

@@ -1,10 +1,11 @@
 import Foundation
 
-struct AccountStatus
+struct AccountStatus: Equatable
 {
 	let type: String?
 	let email: String?
 	let requiresOpenAIAuth: Bool
+	var planType: String? = nil
 
 	var description: String
 	{

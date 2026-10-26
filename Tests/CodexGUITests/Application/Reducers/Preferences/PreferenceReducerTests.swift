@@ -251,6 +251,168 @@ struct PreferenceReducerTests
 		#expect(model.preferences.globalModelPreference == nil)
 	}
 
+	@Test func logoutDeduplicatesAndFailurePreservesReportedAccount() throws
+	{
+		var model = fixture()
+		let account = AccountStatus(
+			type: "chatgpt",
+			email: "member@example.com",
+			requiresOpenAIAuth: true,
+			planType: "pro"
+		)
+		model.preferences.accountStatus = account
+		let operation = context(model)
+		let admitted = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutRequested(operation))
+		)
+		#expect(admitted.effects.count == 1)
+		#expect(admitted.effects.contains
+		{
+			if case .signOut(let value) = $0
+			{
+				return value == operation
+			}
+			return false
+		})
+		#expect(model.preferences.pendingSignOut == operation)
+		let repeated = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutRequested(context(model)))
+		)
+		#expect(repeated.effects.isEmpty)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutFinished(
+				operation,
+				.failed(OperationFailure(
+					message: "Unavailable",
+					outcomeIsUncertain: false
+				))
+			))
+		)
+		#expect(model.preferences.accountStatus == account)
+		#expect(model.preferences.pendingSignOut == nil)
+		#expect(model.preferences.statusMessage == "Could not log out: Unavailable")
+	}
+
+	@Test func acceptedLogoutReplacesPendingAccountReadAndIgnoresItsLateReply() throws
+	{
+		var model = fixture()
+		let account = AccountStatus(
+			type: "chatgpt",
+			email: "member@example.com",
+			requiresOpenAIAuth: true
+		)
+		model.preferences.accountStatus = account
+		let oldRead = context(model)
+		model.preferences.pendingAccount = oldRead
+		let operation = context(model)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutRequested(operation))
+		)
+		let result = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutFinished(
+				operation,
+				.succeeded(())
+			))
+		)
+		#expect(result.effects.count == 1)
+		#expect(result.domainEvents.count == 1)
+		#expect(result.domainEvents.contains
+		{
+			if case .accountSignedOut = $0
+			{
+				return true
+			}
+			return false
+		})
+		#expect(result.effects.contains
+		{
+			if case .readAccount(let value) = $0
+			{
+				return value == operation
+			}
+			return false
+		})
+		#expect(model.preferences.pendingSignOut == nil)
+		#expect(model.preferences.accountStatus == nil)
+		#expect(model.preferences.pendingAccount == operation)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.accountReceived(
+				oldRead,
+				.succeeded(account)
+			))
+		)
+		#expect(model.preferences.accountStatus == nil)
+	}
+
+	@Test func logoutReplyFromPreviousTransportCannotClearNewAccount() throws
+	{
+		var model = fixture()
+		let account = AccountStatus(
+			type: "chatgpt",
+			email: "member@example.com",
+			requiresOpenAIAuth: true
+		)
+		model.preferences.accountStatus = account
+		let operation = context(model)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutRequested(operation))
+		)
+		model.connection.generation += 1
+		let result = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutFinished(
+				operation,
+				.succeeded(())
+			))
+		)
+		#expect(result.effects.isEmpty)
+		#expect(model.preferences.accountStatus == account)
+	}
+
+	@Test(arguments: [true, false])
+	func logoutReplyForAnotherRequestCannotRetirePendingLogout(succeeded: Bool) throws
+	{
+		var model = fixture()
+		let account = AccountStatus(
+			type: "chatgpt",
+			email: "member@example.com",
+			requiresOpenAIAuth: true
+		)
+		model.preferences.accountStatus = account
+		let operation = context(model)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutRequested(operation))
+		)
+		let unrelated = context(model)
+		let observation: OperationResult<Void> = succeeded
+			? .succeeded(())
+			: .failed(OperationFailure(
+				message: "Unrelated failure",
+				outcomeIsUncertain: false
+			))
+		let result = PreferenceReducer.reduce(
+			&model,
+			.preferences(.signOutFinished(
+				unrelated,
+				observation
+			))
+		)
+		#expect(model.preferences.accountStatus == account)
+		#expect(model.preferences.pendingSignOut == operation)
+		#expect(model.preferences.signOutError == nil)
+		#expect(model.preferences.statusMessage == nil)
+		#expect(result.effects.isEmpty)
+		#expect(result.domainEvents.isEmpty)
+	}
+
 	private func fixture(path: String? = "/project") -> WorkspaceModel
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(

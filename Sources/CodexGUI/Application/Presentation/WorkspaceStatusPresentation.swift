@@ -5,6 +5,10 @@ struct WorkspaceStatusPresentation: Equatable
 {
 	let execution: ThreadExecutionPresentation
 	let accountDescription: String
+	let accountStatus: AccountStatus?
+	let accountActionPending: Bool
+	let canLogOut: Bool
+	let accountActionError: String?
 	let backendDescription: String
 	let usage: UsagePresentation
 	let threadTokenUsage: ThreadTokenUsage?
@@ -25,6 +29,10 @@ struct WorkspaceStatusPresentation: Equatable
 			outcomeUncertain: snapshot.taskOutcomeUncertain
 		)
 		accountDescription = snapshot.accountDescription
+		accountStatus = snapshot.accountStatus
+		accountActionPending = snapshot.accountActionPending
+		canLogOut = snapshot.canLogOut
+		accountActionError = snapshot.accountActionError
 		backendDescription = snapshot.backendDescription
 		threadTokenUsage = snapshot.threadTokenUsage
 		threadStatus = snapshot.threadStatus

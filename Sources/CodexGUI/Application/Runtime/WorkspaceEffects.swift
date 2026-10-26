@@ -81,6 +81,7 @@ enum WorkspaceEffect
 	)
 	case cancelMessageSearch(MessageSearchOperation)
 	case readModels(OperationContext)
+	case signOut(OperationContext)
 	case beginSignIn(OperationContext)
 	case persistPreference(PreferenceWrite)
 	case readUsage(UsageReadOperation)

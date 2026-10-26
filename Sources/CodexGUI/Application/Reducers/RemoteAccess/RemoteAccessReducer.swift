@@ -5,6 +5,17 @@ enum RemoteAccessReducer
 {
 	static let reducer = WorkspaceReducer(reduce: reduce)
 
+	static func accountSignedOut(_ model: inout WorkspaceModel) -> WorkspaceReduction
+	{
+		var result = WorkspaceReduction()
+		if let pending = model.remoteAccess.pending
+		{
+			result.effects.append(.cancel(pending.context))
+		}
+		model.remoteAccess = RemoteAccessModel(desiredEnabled: model.remoteAccess.desiredEnabled)
+		return result
+	}
+
 	static func reduce(
 		_ model: inout WorkspaceModel,
 		_ action: WorkspaceAction

@@ -8,6 +8,17 @@ enum UsageReducer
 
 	private static let maximumRefreshAttempts = 3
 
+	static func accountSignedOut(_ model: inout WorkspaceModel) -> WorkspaceReduction
+	{
+		var result = WorkspaceReduction()
+		retire(
+			model: &model,
+			result: &result
+		)
+		model.usage = UsageModel()
+		return result
+	}
+
 	static func reduce(
 		_ model: inout WorkspaceModel,
 		_ action: WorkspaceAction

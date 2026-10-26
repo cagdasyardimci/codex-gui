@@ -13,7 +13,16 @@ extension AppServer
 		return AccountStatus(
 			type: account?["type"] as? String,
 			email: account?["email"] as? String,
-			requiresOpenAIAuth: result["requiresOpenaiAuth"] as? Bool ?? true
+			requiresOpenAIAuth: result["requiresOpenaiAuth"] as? Bool ?? true,
+			planType: account?["planType"] as? String
+		)
+	}
+
+	func logout() async throws
+	{
+		_ = try await request(
+			"account/logout",
+			params: nil
 		)
 	}
 

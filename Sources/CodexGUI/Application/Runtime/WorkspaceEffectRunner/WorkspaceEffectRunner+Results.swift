@@ -246,6 +246,10 @@ extension WorkspaceEffectRunner
 				context,
 				.failed(failure)
 			))
+		case .signOut: return .preferences(.signOutFinished(
+				context,
+				.failed(failure)
+			))
 		case .beginSignIn: return .preferences(.signInURLReceived(
 				context,
 				.failed(failure)

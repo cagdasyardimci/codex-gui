@@ -448,6 +448,11 @@ enum PreferencesAction
 		OperationContext,
 		canonicalPath: String
 	)
+	case signOutRequested(OperationContext)
+	case signOutFinished(
+		OperationContext,
+		OperationResult<Void>
+	)
 	case signInRequested(OperationContext)
 	case accountRefreshRequested(OperationContext)
 	case modelsRefreshRequested(OperationContext)

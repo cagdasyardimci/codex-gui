@@ -637,6 +637,9 @@ struct PreferencesModel
 	var models: [ModelOption] = []
 	var modelListError: String?
 	var accountDescription = "Checking sign-in…"
+	var accountStatus: AccountStatus?
+	var pendingSignOut: OperationContext?
+	var signOutError: String?
 	var recentProjects: [URL] = []
 	var pinnedProjectPaths: Set<String> = []
 	var removedProjectPaths: Set<String> = []

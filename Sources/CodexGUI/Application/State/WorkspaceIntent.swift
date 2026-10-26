@@ -62,6 +62,7 @@ enum WorkspaceIntent
 		String
 	)
 	case signIn
+	case signOut
 	case reconnect
 
 	case updateProjectContext(ProjectContext)
@@ -351,6 +352,7 @@ final class WorkspaceIntentTarget
 				name: name
 			)
 		case .signIn: inputs.signIn()
+		case .signOut: inputs.signOut()
 		case .reconnect: Task
 		{
 			guard self.accepts(intent)

@@ -642,6 +642,11 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	func signOut()
+	{
+		workspaceStore.dispatch(.preferences(.signOutRequested(workspaceStore.operationContext())))
+	}
+
 	func signIn()
 	{
 		workspaceStore.dispatch(.preferences(.signInRequested(workspaceStore.operationContext())))

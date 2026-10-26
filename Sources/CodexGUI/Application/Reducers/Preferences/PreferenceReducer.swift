@@ -24,6 +24,9 @@ enum PreferenceReducer
 				model.preferences.pendingModels = nil
 				model.preferences.pendingAccount = nil
 				model.preferences.pendingSignIn = nil
+				model.preferences.pendingSignOut = nil
+				model.preferences.signOutError = nil
+				model.preferences.accountStatus = nil
 				model.preferences.statusMessage = nil
 			}
 			return result
@@ -39,7 +42,8 @@ enum PreferenceReducer
 				model: &model
 			)
 		case .accountRefreshRequested, .modelsRefreshRequested, .signInRequested,
-				.modelsReceived, .accountReceived, .signInURLReceived:
+				.modelsReceived, .accountReceived, .signInURLReceived, .signOutRequested,
+				.signOutFinished:
 			result = reduceAccountAndCatalog(
 				action,
 				model: &model
@@ -383,6 +387,47 @@ enum PreferenceReducer
 			}
 			model.preferences.pendingModels = context
 			result.effects = [.readModels(context)]
+		case .signOutRequested(let context):
+			guard PreferenceScope.accepts(
+				context,
+				model: model
+			),
+				model.connection.isConnected, model.preferences.pendingSignOut == nil,
+				model.preferences.accountStatus?.type != nil
+			else
+			{
+				return result
+			}
+			model.preferences.signOutError = nil
+			model.preferences.pendingSignOut = context
+			result.effects = [.signOut(context)]
+		case .signOutFinished(
+			let context,
+			let observation
+		):
+			guard PreferenceScope.accepts(
+				context,
+				model: model
+			),
+				model.preferences.pendingSignOut == context
+			else
+			{
+				return result
+			}
+			model.preferences.pendingSignOut = nil
+			switch observation
+			{
+			case .succeeded:
+				model.preferences.accountStatus = nil
+				model.preferences.accountDescription = "Sign in required"
+				model.preferences.statusMessage = "Logged out of Codex."
+				result.domainEvents = [.accountSignedOut]
+				model.preferences.pendingAccount = context
+				result.effects = [.readAccount(context)]
+			case .failed(let failure):
+				model.preferences.signOutError = failure.message
+				model.preferences.statusMessage = "Could not log out: \(failure.message)"
+			}
 		case .signInRequested(let context):
 			guard PreferenceScope.accepts(
 				context,
@@ -433,8 +478,11 @@ enum PreferenceReducer
 			model.preferences.pendingAccount = nil
 			switch observation
 			{
-			case .succeeded(let account): model.preferences.accountDescription = account.description
+			case .succeeded(let account):
+				model.preferences.accountDescription = account.description
+				model.preferences.accountStatus = account
 			case .failed(let failure):
+				model.preferences.accountStatus = nil
 				model.preferences.accountDescription = "Could not check sign-in: \(failure.message)"
 			}
 		case .signInURLReceived(

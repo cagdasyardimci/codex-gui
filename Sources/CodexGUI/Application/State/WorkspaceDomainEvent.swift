@@ -3,6 +3,7 @@ import Foundation
 /// Accepted feature transitions compose atomically before effects and publication.
 enum WorkspaceDomainEvent
 {
+	case accountSignedOut
 	case connectionBegan
 	case connectionDisconnected
 	case projectRestored

@@ -392,6 +392,12 @@ extension WorkspaceEffectRunner
 				context,
 				.succeeded(try await service.models())
 			))
+		case .signOut:
+			try await service.logout()
+			return .preferences(.signOutFinished(
+				context,
+				.succeeded(())
+			))
 		case .beginSignIn:
 			return .preferences(.signInURLReceived(
 				context,

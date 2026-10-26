@@ -29,6 +29,7 @@ protocol CodexService: AnyObject
 	func connect() async throws
 	func disconnect()
 	func accountStatus() async throws -> AccountStatus
+	func logout() async throws
 	func startBrowserLogin() async throws -> URL
 	func models() async throws -> [ModelOption]
 	func skills(for directory: URL) async throws -> SkillCatalog
@@ -452,6 +453,11 @@ extension CodexService
 	func skills(for directory: URL) async throws -> SkillCatalog
 	{
 		throw AppServerError.protocolError("This Codex service cannot list skills.")
+	}
+
+	func logout() async throws
+	{
+		throw AppServerError.protocolError("This backend does not support logging out.")
 	}
 
 	func rateLimits() async throws -> AccountRateLimitsSnapshot

@@ -269,7 +269,7 @@ final class AppServer: CodexService
 
 	func request(
 		_ method: String,
-		params: [String: Any]
+		params: [String: Any]?
 	) async throws -> [String: Any]
 	{
 		guard process?.isRunning == true
@@ -301,8 +301,13 @@ final class AppServer: CodexService
 
 				do
 				{
+					var payload: [String: Any] = ["id": requestID, "method": method]
+					if let params
+					{
+						payload["params"] = params
+					}
 					requestWrites[requestID] = try enqueueMessage(
-						["id": requestID, "method": method, "params": params],
+						payload,
 						ticket: ticket
 					)
 				}
