@@ -21,7 +21,7 @@ final class BoundedContentScrollView: NSScrollView
 		hasVerticalScroller = true
 		autohidesScrollers = true
 
-		let document = FlippedDocumentView()
+		let document = DesktopFlippedView()
 		AppKitLayout.pin(
 			contentStack,
 			to: document,
@@ -70,13 +70,5 @@ final class BoundedContentScrollView: NSScrollView
 			Self.maximumContentHeight,
 			minimumFittingHeight
 		)
-	}
-}
-
-private final class FlippedDocumentView: NSView
-{
-	override var isFlipped: Bool
-	{
-		true
 	}
 }

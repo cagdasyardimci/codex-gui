@@ -226,10 +226,11 @@ final class GitAdaptiveDiffView: NSView
 		splitNew = new
 		let divider = DesktopSurface(AppKitColorTokens.paneDivider)
 		divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
-		let columns = NSStackView(views: [old, divider, new])
-		columns.orientation = .horizontal
-		columns.alignment = .top
-		columns.spacing = 0
+		let columns = AppKitLayout.horizontalStack(
+			[old, divider, new],
+			spacing: 0,
+			alignment: .top
+		)
 		NSLayoutConstraint.activate([
 			old.widthAnchor.constraint(equalTo: new.widthAnchor),
 			old.heightAnchor.constraint(equalTo: columns.heightAnchor),

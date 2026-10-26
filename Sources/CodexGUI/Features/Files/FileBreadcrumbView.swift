@@ -60,14 +60,11 @@ final class FileBreadcrumbView: DesktopSurface
 		scroll.hasVerticalScroller = false
 		scroll.drawsBackground = false
 		scroll.horizontalScrollElasticity = .allowed
-		scroll.translatesAutoresizingMaskIntoConstraints = false
-		addSubview(scroll)
-		NSLayoutConstraint.activate([
-			scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
-			scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-			scroll.topAnchor.constraint(equalTo: topAnchor),
-			scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-		])
+		AppKitLayout.pin(
+			scroll,
+			to: self,
+			inset: 0
+		)
 		setAccessibilityLabel("File path")
 		rebuild()
 	}

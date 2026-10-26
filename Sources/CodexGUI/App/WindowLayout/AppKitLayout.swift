@@ -5,55 +5,86 @@ enum AppKitLayout
 {
 	static func verticalStack(
 		_ views: [NSView],
-		spacing: CGFloat = LayoutTokens.LayoutDefaults.verticalSpacing
+		spacing: CGFloat = LayoutTokens.LayoutDefaults.verticalSpacing,
+		alignment: NSLayoutConstraint.Attribute = .leading
 	) -> NSStackView
 	{
 		let stack = NSStackView(views: views)
 		stack.orientation = .vertical
-		stack.alignment = .leading
+		stack.alignment = alignment
 		stack.spacing = spacing
 		return stack
 	}
 
 	static func horizontalStack(
 		_ views: [NSView],
-		spacing: CGFloat = LayoutTokens.LayoutDefaults.horizontalSpacing
+		spacing: CGFloat = LayoutTokens.LayoutDefaults.horizontalSpacing,
+		alignment: NSLayoutConstraint.Attribute = .centerY
 	) -> NSStackView
 	{
 		let stack = NSStackView(views: views)
 		stack.orientation = .horizontal
-		stack.alignment = .centerY
+		stack.alignment = alignment
 		stack.spacing = spacing
 		return stack
 	}
 
+	@discardableResult
 	static func pin(
 		_ view: NSView,
 		to container: NSView,
-		inset: CGFloat = LayoutTokens.LayoutDefaults.contentInset
-	)
+		inset: CGFloat = LayoutTokens.LayoutDefaults.contentInset,
+		priority: NSLayoutConstraint.Priority = .required
+	) -> [NSLayoutConstraint]
+	{
+		pin(
+			view,
+			to: container,
+			insets: NSEdgeInsets(
+				top: inset,
+				left: inset,
+				bottom: inset,
+				right: inset
+			),
+			priority: priority
+		)
+	}
+
+	@discardableResult
+	static func pin(
+		_ view: NSView,
+		to container: NSView,
+		insets: NSEdgeInsets,
+		priority: NSLayoutConstraint.Priority = .required
+	) -> [NSLayoutConstraint]
 	{
 		container.addSubview(view)
 		view.translatesAutoresizingMaskIntoConstraints = false
 
-		NSLayoutConstraint.activate([
+		let constraints = [
 			view.leadingAnchor.constraint(
 				equalTo: container.leadingAnchor,
-				constant: inset
+				constant: insets.left
 			),
 			view.trailingAnchor.constraint(
 				equalTo: container.trailingAnchor,
-				constant: -inset
+				constant: -insets.right
 			),
 			view.topAnchor.constraint(
 				equalTo: container.topAnchor,
-				constant: inset
+				constant: insets.top
 			),
 			view.bottomAnchor.constraint(
 				equalTo: container.bottomAnchor,
-				constant: -inset
+				constant: -insets.bottom
 			),
-		])
+		]
+		for constraint in constraints
+		{
+			constraint.priority = priority
+		}
+		NSLayoutConstraint.activate(constraints)
+		return constraints
 	}
 
 	static func title(_ text: String) -> NSTextField
@@ -80,7 +111,7 @@ enum AppKitLayout
 		let scrollView = NSScrollView()
 		scrollView.hasVerticalScroller = true
 		scrollView.autohidesScrollers = true
-		let document = FlippedLayoutDocument()
+		let document = DesktopFlippedView()
 		pin(
 			content,
 			to: document,
@@ -94,13 +125,5 @@ enum AppKitLayout
 				.constraint(greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
 		])
 		return scrollView
-	}
-}
-
-private final class FlippedLayoutDocument: NSView
-{
-	override var isFlipped: Bool
-	{
-		true
 	}
 }
