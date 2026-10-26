@@ -19,7 +19,7 @@ final class ProjectTextEditor: NSViewController
 	private let titleField = NSTextField()
 	private let pathField = NSTextField()
 	private let bodyView = NSTextView()
-	private let kindButton = NSPopUpButton()
+	private let kindButton = DesktopPopupButton()
 	private let includeButton = NSButton(
 		checkboxWithTitle: "Include in requests",
 		target: nil,
@@ -98,16 +98,13 @@ final class ProjectTextEditor: NSViewController
 	{
 		pathField.placeholderString = "Project-relative or absolute file path"
 		pathField.setAccessibilityLabel("Reference file path")
-		let chooseFileButton = NSButton(
+		let chooseFileButton = DesktopStyledButton(
 			title: "Choose File…",
 			target: self,
 			action: #selector(chooseFile)
 		)
 		chooseFileButton.setAccessibilityLabel("Choose a reference file")
-		AppKitControlStyling.styleButton(
-			chooseFileButton,
-			icon: .folder
-		)
+		chooseFileButton.symbol = .folder
 		pathField.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
@@ -129,7 +126,7 @@ final class ProjectTextEditor: NSViewController
 			)
 		}
 		kindButton.setAccessibilityLabel("Context item type")
-		AppKitControlStyling.stylePopup(kindButton)
+
 		includeButton.setAccessibilityLabel("Include this context item in requests")
 	}
 
@@ -153,30 +150,27 @@ final class ProjectTextEditor: NSViewController
 
 	private func makeEditorActionsRow() -> NSStackView
 	{
-		let saveButton = NSButton(
+		let saveButton = DesktopStyledButton(
 			title: "Save",
 			target: self,
 			action: #selector(save)
 		)
 		saveButton.setAccessibilityLabel("Save project context")
-		AppKitControlStyling.styleButton(
-			saveButton,
-			prominent: true
-		)
-		let cancelButton = NSButton(
+		saveButton.presentation = .nativeProminent
+		let cancelButton = DesktopStyledButton(
 			title: "Cancel",
 			target: self,
 			action: #selector(cancel)
 		)
 		cancelButton.setAccessibilityLabel("Cancel editing")
-		AppKitControlStyling.styleButton(cancelButton)
-		let deleteButton = NSButton(
+
+		let deleteButton = DesktopStyledButton(
 			title: "Delete",
 			target: self,
 			action: #selector(deleteEntry)
 		)
 		deleteButton.setAccessibilityLabel("Delete project context entry")
-		AppKitControlStyling.styleButton(deleteButton)
+
 		switch kind
 		{
 		case .context(let item): deleteButton.isHidden = item == nil

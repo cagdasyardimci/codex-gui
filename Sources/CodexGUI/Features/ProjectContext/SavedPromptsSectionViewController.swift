@@ -64,22 +64,19 @@ final class SavedPromptsSectionViewController: NSViewController
 				selectedID: selectedPromptID
 			)
 		}
-		let button = NSButton(
+		let button = DesktopStyledButton(
 			title: "Add Prompt…",
 			target: self,
 			action: #selector(addPrompt)
 		)
 		button.setAccessibilityLabel("Add Prompt…")
-		AppKitControlStyling.styleButton(
-			button,
-			icon: .plus
-		)
+		button.symbol = .plus
 		add(button)
 	}
 
 	private func add(_ control: NSView)
 	{
-		if let button = control as? NSButton
+		if let button = control as? NSButton, !(button is DesktopStyledButton)
 		{
 			button.controlSize = .small
 			button.font = .systemFont(ofSize: 12)
@@ -95,7 +92,7 @@ final class SavedPromptsSectionViewController: NSViewController
 		selectedID: String?
 	)
 	{
-		let button = NSButton(
+		let button = DesktopStyledButton(
 			title: "\(prompt.id == selectedID ? "✓ " : "")\(prompt.title)…",
 			target: self,
 			action: #selector(inspectPrompt(_:))
@@ -103,10 +100,7 @@ final class SavedPromptsSectionViewController: NSViewController
 		button.identifier = NSUserInterfaceItemIdentifier(prompt.id)
 		button.toolTip = prompt.instructions
 		button.setAccessibilityLabel("Inspect saved prompt \(prompt.title)")
-		AppKitControlStyling.styleButton(
-			button,
-			icon: .quote
-		)
+		button.symbol = .quote
 		add(button)
 	}
 

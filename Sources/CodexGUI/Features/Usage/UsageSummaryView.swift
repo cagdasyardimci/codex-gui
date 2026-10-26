@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class UsageSummaryView: NSView
 {
-	private let button = NSButton(
+	private let button = DesktopStyledButton(
 		title: "Usage unavailable",
 		target: nil,
 		action: nil
@@ -15,14 +15,11 @@ final class UsageSummaryView: NSView
 	{
 		super.init(frame: frameRect)
 
-		AppKitControlStyling.styleButton(
-			button,
-			icon: .barChart
-		)
+		button.symbol = .barChart
 		button.alignment = .left
 		button.cell?.lineBreakMode = .byTruncatingTail
 		button.target = self
-		button.action = #selector(showDetails)
+		button.action = #selector(showUsageDetails)
 		button.setAccessibilityLabel("Backend usage limits and reset times")
 
 		addSubview(button)
@@ -222,7 +219,12 @@ final class UsageSummaryView: NSView
 		return formatter
 	}()
 
-	@objc private func showDetails()
+	@objc private func showUsageDetails()
+	{
+		showDetails(relativeTo: button)
+	}
+
+	func showDetails(relativeTo anchor: NSView)
 	{
 		let controller = makeDetailsController()
 
@@ -239,8 +241,8 @@ final class UsageSummaryView: NSView
 		self.popover = popover
 
 		popover.show(
-			relativeTo: button.bounds,
-			of: button,
+			relativeTo: anchor.bounds,
+			of: anchor,
 			preferredEdge: .maxY
 		)
 	}

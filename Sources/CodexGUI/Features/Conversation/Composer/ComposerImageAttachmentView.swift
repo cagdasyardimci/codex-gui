@@ -7,6 +7,46 @@ final class ComposerImageAttachmentView: NSView
 
 	private let removeButton: NSButton
 	private var pointerTrackingArea: NSTrackingArea?
+	private var revealState = DesktopActionRevealState()
+
+	convenience init(
+		image: NSImage?,
+		title: String,
+		identifier: String,
+		onPreview: @escaping (NSButton) -> Void,
+		onRemove: @escaping (NSButton) -> Void
+	)
+	{
+		let preview = NSButton(
+			title: "Expand image",
+			target: nil,
+			action: nil
+		)
+		preview.identifier = NSUserInterfaceItemIdentifier(identifier)
+		preview.setAccessibilityLabel("Expand attached image \(title)")
+		let remove = DesktopResourceRow.actionButton(DesktopResourceRow.Action(
+			title: "Remove",
+			icon: .xCircle,
+			accessibilityLabel: "Remove image \(title)",
+			identifier: identifier,
+			perform: onRemove
+		))
+		self.init(
+			image: image,
+			previewButton: preview,
+			removeButton: remove
+		)
+		previewAction = onPreview
+		preview.target = self
+		preview.action = #selector(previewImage(_:))
+	}
+
+	private var previewAction: ((NSButton) -> Void)?
+
+	@objc private func previewImage(_ sender: NSButton)
+	{
+		previewAction?(sender)
+	}
 
 	init(
 		image: NSImage?,
@@ -76,38 +116,28 @@ final class ComposerImageAttachmentView: NSView
 				object: window
 			)
 		}
-		isHovered = false
+		revealState.isHovered = false
 		updateRemovalVisibility()
 	}
 
 	override func updateTrackingAreas()
 	{
 		super.updateTrackingAreas()
-		if let pointerTrackingArea
-		{
-			removeTrackingArea(pointerTrackingArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
+		pointerTrackingArea = DesktopHoverTracking.replace(
+			in: self,
+			previous: pointerTrackingArea
 		)
-		addTrackingArea(area)
-		pointerTrackingArea = area
 	}
-
-	private var isHovered = false
 
 	override func mouseEntered(with event: NSEvent)
 	{
-		isHovered = true
+		revealState.isHovered = true
 		updateRemovalVisibility()
 	}
 
 	override func mouseExited(with event: NSEvent)
 	{
-		isHovered = false
+		revealState.isHovered = false
 		updateRemovalVisibility()
 	}
 
@@ -119,7 +149,7 @@ final class ComposerImageAttachmentView: NSView
 	private func updateRemovalVisibility()
 	{
 		let focusedView = window?.firstResponder as? NSView
-		let hasKeyboardFocus = focusedView?.isDescendant(of: self) == true
-		removeButton.alphaValue = isHovered || hasKeyboardFocus ? 1 : 0
+		revealState.isKeyboardFocused = focusedView?.isDescendant(of: self) == true
+		removeButton.alphaValue = revealState.isRevealed ? 1 : 0
 	}
 }

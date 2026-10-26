@@ -292,7 +292,7 @@ final class ProjectContextViewController: NSViewController
 
 	private func makeSkillSelectionButton() -> NSPopUpButton
 	{
-		let skillButton = NSPopUpButton()
+		let skillButton = DesktopPopupButton()
 		skillButton.addItem(withTitle: "No skill")
 		skillButton.item(at: 0)?.representedObject = ""
 		for skill in availableSkills
@@ -355,7 +355,7 @@ final class ProjectContextViewController: NSViewController
 
 	private func makeModelPreferenceButton() -> NSPopUpButton
 	{
-		let modelButton = NSPopUpButton()
+		let modelButton = DesktopPopupButton()
 		modelButton.addItem(withTitle: "Backend default")
 		modelButton.item(at: 0)?.representedObject = ""
 		for model in models
@@ -387,7 +387,7 @@ final class ProjectContextViewController: NSViewController
 
 	private func makeEffortPreferenceButton() -> NSPopUpButton
 	{
-		let effortButton = NSPopUpButton()
+		let effortButton = DesktopPopupButton()
 		effortButton.addItem(withTitle: "Backend default")
 		effortButton.item(at: 0)?.representedObject = ""
 		let model =
@@ -474,11 +474,7 @@ final class ProjectContextViewController: NSViewController
 
 	private func add(_ control: NSView)
 	{
-		if let popup = control as? NSPopUpButton
-		{
-			AppKitControlStyling.stylePopup(popup)
-		}
-		else if let button = control as? NSButton
+		if let button = control as? NSButton, !(button is DesktopStyledButton)
 		{
 			button.controlSize = .small
 			button.font = .systemFont(ofSize: 12)
@@ -495,16 +491,13 @@ final class ProjectContextViewController: NSViewController
 		action: Selector
 	)
 	{
-		let button = NSButton(
+		let button = DesktopStyledButton(
 			title: title,
 			target: self,
 			action: action
 		)
 		button.setAccessibilityLabel(title)
-		AppKitControlStyling.styleButton(
-			button,
-			icon: .plus
-		)
+		button.symbol = .plus
 		add(button)
 	}
 
@@ -523,16 +516,15 @@ final class ProjectContextViewController: NSViewController
 		inclusionButton.font = .systemFont(ofSize: 12)
 		AppKitLayout.compressHorizontally(inclusionButton)
 
-		let editButton = NSButton(
+		let editButton = DesktopStyledButton(
 			title: "Edit…",
 			target: self,
 			action: #selector(editContextItem(_:))
 		)
 		editButton.identifier = NSUserInterfaceItemIdentifier(item.id)
 		editButton.setAccessibilityLabel("Edit \(item.title)")
-		AppKitControlStyling.styleButton(editButton)
-		editButton.controlSize = .small
-		editButton.font = .systemFont(ofSize: 11)
+
+		editButton.size = .small
 
 		add(AppKitLayout.horizontalStack(
 			[inclusionButton, editButton],
@@ -542,7 +534,7 @@ final class ProjectContextViewController: NSViewController
 
 	private func addBookmarkRow(_ bookmark: ConversationBookmark)
 	{
-		let button = NSButton(
+		let button = DesktopStyledButton(
 			title: "\(bookmark.kind.displayTitle): \(bookmark.label)",
 			target: self,
 			action: #selector(openBookmark(_:))
@@ -552,10 +544,7 @@ final class ProjectContextViewController: NSViewController
 			.setAccessibilityLabel(
 				"Open bookmarked \(bookmark.kind.displayTitle): \(bookmark.label)"
 			)
-		AppKitControlStyling.styleButton(
-			button,
-			icon: .savedXs
-		)
+		button.symbol = .savedXs
 		add(button)
 	}
 

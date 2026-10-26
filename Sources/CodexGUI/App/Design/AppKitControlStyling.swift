@@ -31,15 +31,6 @@ enum AppKitControlStyling
 		)
 	}
 
-	static func stylePopup(_ popup: NSPopUpButton)
-	{
-		popup.bezelStyle = .inline
-		popup.isBordered = false
-		popup.controlSize = .small
-		popup.font = AppKitFontResolver.font(TypographyTokens.Controls.button)
-		popup.contentTintColor = .secondaryLabelColor
-	}
-
 	static func sectionLabel(_ text: String) -> NSTextField
 	{
 		let label = NSTextField(labelWithString: text)

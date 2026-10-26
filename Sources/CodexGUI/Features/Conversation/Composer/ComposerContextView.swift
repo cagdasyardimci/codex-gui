@@ -149,25 +149,23 @@ final class ComposerContextView: NSView
 
 	private func makeContextRow(for item: ComposerContextItem) -> NSView
 	{
-		var rowContents: [NSView] = []
-
 		if item.kind == .image
 		{
-			let previewButton = NSButton(
-				title: "Expand image",
-				target: self,
-				action: #selector(inspectItem(_:))
-			)
-			previewButton.identifier = NSUserInterfaceItemIdentifier(item.id)
-			previewButton.setAccessibilityLabel("Expand attached image \(item.title)")
-
 			let attachment = ComposerImageAttachmentView(
 				image: item.path.flatMap
 				{
 					NSImage(contentsOfFile: $0)
 				},
-				previewButton: previewButton,
-				removeButton: makeRemoveButton(for: item)
+				title: item.title,
+				identifier: item.id,
+				onPreview:
+				{
+					[weak self] sender in self?.inspectItem(sender)
+				},
+				onRemove:
+				{
+					[weak self] sender in self?.removeItem(sender)
+				}
 			)
 
 			let row = NSView()
@@ -181,86 +179,49 @@ final class ComposerContextView: NSView
 			return row
 		}
 
-		rowContents.append(makeDescriptionLabel(for: item))
-		rowContents.append(makeInspectButton(for: item))
-		rowContents.append(makeRemoveButton(for: item))
-
-		let contextRow = NSStackView(views: rowContents)
-
-		contextRow.orientation = .horizontal
-		contextRow.alignment = .centerY
-		contextRow.spacing = 6
-		contextRow.setAccessibilityLabel("\(item.kind.title): \(item.detail)")
-
-		return contextRow
+		return DesktopResourceRow(
+			title: item.title,
+			detail: "\(item.kind.title): \(item.detail)",
+			icon: WorkspaceFileIcon.image(relativePath: item.path ?? item.title),
+			presentation: .attachment,
+			actions: [
+				action(
+					for: item,
+					inspecting: true
+				),
+				action(
+					for: item,
+					inspecting: false
+				)
+			]
+		)
 	}
 
-	private func makeDescriptionLabel(for item: ComposerContextItem) -> NSTextField
+	private func action(
+		for item: ComposerContextItem,
+		inspecting: Bool
+	) -> DesktopResourceRow
+		.Action
 	{
-		let descriptionLabel = NSTextField(
-			wrappingLabelWithString: "\(item.kind.title): \(item.detail)"
+		DesktopResourceRow.Action(
+			title: inspecting ? "Inspect" : "Remove",
+			icon: inspecting ? .infoCircle : .xCircle,
+			accessibilityLabel: "\(inspecting ? "Inspect" : "Remove") "
+				+ "\(item.kind.title.lowercased()) \(item.title)",
+			identifier: item.id,
+			perform:
+			{
+				[weak self] sender in
+				if inspecting
+				{
+					self?.inspectItem(sender)
+				}
+				else
+				{
+					self?.removeItem(sender)
+				}
+			}
 		)
-
-		descriptionLabel.font = .systemFont(ofSize: 12)
-		descriptionLabel.textColor = .secondaryLabelColor
-
-		descriptionLabel.lineBreakMode = .byTruncatingMiddle
-		descriptionLabel.maximumNumberOfLines = 2
-
-		// Let the description yield horizontal space to the preview and action buttons.
-		descriptionLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-
-		descriptionLabel.toolTip = "\(item.kind.title): \(item.detail)"
-		descriptionLabel.setAccessibilityLabel(
-			"Attached \(item.kind.title.lowercased()): \(item.detail)"
-		)
-
-		return descriptionLabel
-	}
-
-	private func makeInspectButton(for item: ComposerContextItem) -> NSButton
-	{
-		let inspectButton = NSButton(
-			title: "Inspect",
-			target: self,
-			action: #selector(inspectItem(_:))
-		)
-
-		AppKitControlStyling.styleButton(
-			inspectButton,
-			icon: .infoCircle
-		)
-
-		inspectButton.imagePosition = .imageOnly
-		inspectButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		inspectButton.identifier = NSUserInterfaceItemIdentifier(item.id)
-		inspectButton.setAccessibilityLabel("Inspect \(item.kind.title.lowercased()) \(item.title)")
-
-		return inspectButton
-	}
-
-	private func makeRemoveButton(for item: ComposerContextItem) -> NSButton
-	{
-		let removeButton = NSButton(
-			title: "Remove",
-			target: self,
-			action: #selector(removeItem(_:))
-		)
-
-		AppKitControlStyling.styleButton(
-			removeButton,
-			icon: .xCircle
-		)
-
-		removeButton.imagePosition = .imageOnly
-		removeButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		removeButton.identifier = NSUserInterfaceItemIdentifier(item.id)
-		removeButton.setAccessibilityLabel("Remove \(item.kind.title.lowercased()) \(item.title)")
-
-		return removeButton
 	}
 
 	@objc private func removeItem(_ sender: NSButton)
