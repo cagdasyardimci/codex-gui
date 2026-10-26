@@ -2,7 +2,7 @@ import AppKit
 
 /// Retains semantic colors while AppKit keeps the button's existing layer and interaction state.
 @MainActor
-class DesktopLayerButton: NSButton
+class DesktopLayerButton: DesktopAttributedTitleButton
 {
 	var layerBackgroundColor: NSColor?
 	{
