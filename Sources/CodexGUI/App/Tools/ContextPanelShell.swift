@@ -29,13 +29,13 @@ final class ContextPanelShell: NSViewController
 	private let content = NSView()
 	private let titleLabel = NSTextField(labelWithString: "")
 	private let sourcesHeader = ContextPanelHeaderStackView()
-	private let sourcesCloseButton = NSButton(
-		title: "",
-		target: nil,
-		action: nil
+	private let sourcesCloseButton = DesktopNativeIconButton(
+		label: "Close Sources",
+		icon: .x
 	)
-	private let closeButton = NSButton(
+	private let closeButton = DesktopStyledButton(
 		title: "Close panel",
+		presentation: .nativeDefault,
 		target: nil,
 		action: nil
 	)
@@ -86,14 +86,7 @@ final class ContextPanelShell: NSViewController
 		label.setAccessibilityRoleDescription("heading")
 		sourcesCloseButton.target = self
 		sourcesCloseButton.action = #selector(closePanel)
-		sourcesCloseButton.image = DesktopIcons.image(
-			.x,
-			accessibilityDescription: "Close Sources"
-		)
-		sourcesCloseButton.isBordered = false
-		sourcesCloseButton.contentTintColor = .secondaryLabelColor
-		sourcesCloseButton.toolTip = "Close Sources"
-		sourcesCloseButton.setAccessibilityLabel("Close Sources")
+
 		sourcesCloseButton.setAccessibilityIdentifier("sources-panel-close")
 		sourcesCloseButton.isHidden = !closeControlVisible
 		sourcesHeader.orientation = .horizontal
@@ -112,8 +105,6 @@ final class ContextPanelShell: NSViewController
 		NSLayoutConstraint.activate([
 			icon.widthAnchor.constraint(equalToConstant: 18),
 			icon.heightAnchor.constraint(equalToConstant: 18),
-			sourcesCloseButton.widthAnchor.constraint(equalToConstant: 24),
-			sourcesCloseButton.heightAnchor.constraint(equalToConstant: 24),
 		])
 	}
 

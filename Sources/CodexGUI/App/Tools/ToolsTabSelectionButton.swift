@@ -54,6 +54,61 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 	var dragOwner: UUID?
 	private static let dragThreshold: CGFloat = 4
 
+	func configurePresentation(
+		selected: Bool,
+		preview: Bool = false,
+		file: Bool = false
+	)
+	{
+		let selectionCell: ToolsTabSelectionButtonCell
+		if let existing = cell as? ToolsTabSelectionButtonCell
+		{
+			selectionCell = existing
+		}
+		else
+		{
+			let previous = cell as? NSButtonCell
+			selectionCell = ToolsTabSelectionButtonCell(textCell: title)
+			if let previous
+			{
+				selectionCell.target = previous.target
+				selectionCell.action = previous.action
+				selectionCell.state = previous.state
+				selectionCell.image = previous.image
+				selectionCell.alternateImage = previous.alternateImage
+				selectionCell.alternateTitle = previous.alternateTitle
+				selectionCell.keyEquivalent = previous.keyEquivalent
+				selectionCell.keyEquivalentModifierMask = previous.keyEquivalentModifierMask
+				selectionCell.tag = previous.tag
+				selectionCell.isEnabled = previous.isEnabled
+				selectionCell.isContinuous = previous.isContinuous
+				selectionCell.allowsMixedState = previous.allowsMixedState
+				selectionCell.highlightsBy = previous.highlightsBy
+				selectionCell.showsStateBy = previous.showsStateBy
+			}
+			cell = selectionCell
+		}
+		selectionCell.documentTitleGap = file ? 5 : 0
+		bezelStyle = .inline
+		isBordered = false
+		controlSize = .small
+		font = AppKitFontResolver.font(
+			TypographyTokens.Controls.tab,
+			italic: preview
+		)
+		contentTintColor = selected ? AppKitColorTokens.primaryText : AppKitColorTokens
+			.secondaryText
+		alignment = .left
+		imagePosition = .imageLeading
+		cell?.lineBreakMode = .byTruncatingTail
+		setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		toolTip = toolTip ?? title
+		setAccessibilityValue(selected ? "Selected" : "Not selected")
+	}
+
 	override func mouseDown(with event: NSEvent)
 	{
 		guard draggedID != nil, dragOwner != nil, let window
@@ -168,4 +223,47 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 		}
 		super.keyDown(with: event)
 	}
+}
+
+@MainActor
+final class ToolsTabSelectionButtonCell: NSButtonCell
+{
+	var documentTitleGap: CGFloat = 0
+
+	override func titleRect(forBounds rect: NSRect) -> NSRect
+	{
+		let title = super.titleRect(forBounds: rect)
+		return NSRect(
+			x: title.minX + documentTitleGap,
+			y: title.minY,
+			width: max(
+				0,
+				title.width - documentTitleGap
+			),
+			height: title.height
+		)
+	}
+
+	override func drawTitle(
+		_ title: NSAttributedString,
+		withFrame frame: NSRect,
+		in controlView: NSView
+	) -> NSRect
+	{
+		DesktopTextRendering.withFontSmoothingDisabled
+		{
+			super.drawTitle(
+				title,
+				withFrame: frame,
+				in: controlView
+			)
+		}
+	}
+}
+
+enum ToolsChangesShortcut
+{
+	static let key = "g"
+	static let modifiers: NSEvent.ModifierFlags = [.control, .shift]
+	static let label = "⌃⇧G"
 }

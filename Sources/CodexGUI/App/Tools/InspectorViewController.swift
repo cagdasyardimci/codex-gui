@@ -672,27 +672,11 @@ final class InspectorViewController: NSViewController
 			[projectLabel, divider, content],
 			spacing: 12
 		)
-		box.addSubview(stack)
-		stack.translatesAutoresizingMaskIntoConstraints = false
-		contentEdgeConstraints = [
-			stack.leadingAnchor.constraint(
-				equalTo: box.leadingAnchor,
-				constant: Layout.contentInset
-			),
-			stack.trailingAnchor.constraint(
-				equalTo: box.trailingAnchor,
-				constant: -Layout.contentInset
-			),
-			stack.topAnchor.constraint(
-				equalTo: box.topAnchor,
-				constant: Layout.contentInset
-			),
-			stack.bottomAnchor.constraint(
-				equalTo: box.bottomAnchor,
-				constant: -Layout.contentInset
-			),
-		]
-		NSLayoutConstraint.activate(contentEdgeConstraints)
+		contentEdgeConstraints = AppKitLayout.pin(
+			stack,
+			to: box,
+			inset: Layout.contentInset
+		)
 		projectLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		divider.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		divider.heightAnchor.constraint(equalToConstant: 1).isActive = true

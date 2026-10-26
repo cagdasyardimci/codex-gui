@@ -727,7 +727,6 @@ final class ToolsTabViewController: NSViewController
 
 	private func configureSummaryButton()
 	{
-		AppKitControlStyling.styleButton(summaryButton)
 		summaryButton.image = PinnedSummaryIcons.image(.toggle)
 		summaryButton.imagePosition = .imageOnly
 		summaryButton.setButtonType(.toggle)
@@ -858,7 +857,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeToolsContent() -> NSStackView
 	{
-		let heading = ToolsHeadingTextField(labelWithString: "Tools")
+		let heading = DesktopTextField(labelWithString: "Tools")
 		heading.font = AppKitFontResolver.font(TypographyTokens.Controls.toolsHeading)
 		heading.textColor = AppKitColorTokens.primaryText
 		let changesTile = makeToolTile(
@@ -928,21 +927,9 @@ final class ToolsTabViewController: NSViewController
 		let tile = NSView()
 		let button = ToolsTileButton(
 			title: title,
-			target: nil,
-			action: nil
-		)
-		button.cell = ToolsTileButtonCell(
-			textCell: title,
+			image: image,
 			shortcut: shortcut
 		)
-		AppKitControlStyling.styleButton(button)
-		button.cornerRadius = ShapeTokens.TabControls.toolTileRadius
-		button.font = AppKitFontResolver.font(TypographyTokens.Controls.toolsTile)
-		button.contentTintColor = AppKitColorTokens.primaryText
-
-		button.alignment = .left
-		button.image = image
-		button.imagePosition = .imageLeading
 		button.target = self
 		button.action = action
 		button.keyEquivalent = key
@@ -1103,21 +1090,9 @@ final class ToolsTabViewController: NSViewController
 			target: self,
 			action: #selector(selectConversation)
 		)
-		selectButton.cell = ToolsTabSelectionButtonCell(textCell: conversationTitle)
-		selectButton.target = self
-		selectButton.action = #selector(selectConversation)
-		AppKitControlStyling.styleButton(
-			selectButton,
-			prominent: isConversationSelected
-		)
+		selectButton.configurePresentation(selected: isConversationSelected)
 		selectButton.image = DesktopIcons.image(.chat)
-		selectButton.imagePosition = .imageLeading
-		selectButton.alignment = .left
-		selectButton.font = AppKitFontResolver.font(TypographyTokens.Controls.tab)
-		selectButton.cell?.lineBreakMode = .byTruncatingTail
-		selectButton.toolTip = conversationTitle
 		selectButton.setAccessibilityLabel("Chat: " + conversationTitle)
-		selectButton.setAccessibilityValue(isConversationSelected ? "Selected" : "Not selected")
 		selectButton.onNavigate =
 		{
 			[weak self] keyCode in
@@ -1128,7 +1103,7 @@ final class ToolsTabViewController: NSViewController
 		}
 		let moreButton = makeIconButton(
 			.dotsHorizontal,
-			size: metrics.moreControlSize,
+			preset: .tabOverflow(metrics: metrics),
 			label: "Chat options",
 			action: nil
 		)
@@ -1163,16 +1138,11 @@ final class ToolsTabViewController: NSViewController
 			target: self,
 			action: #selector(selectTab(_:))
 		)
-		let selectionCell = ToolsTabSelectionButtonCell(textCell: displayTitle)
-		selectionCell.documentTitleGap = file == nil ? 0 : 5
-		selectButton.cell = selectionCell
-		selectButton.target = self
-		selectButton.action = #selector(selectTab(_:))
-		AppKitControlStyling.styleButton(
-			selectButton,
-			prominent: selected
+		selectButton.configurePresentation(
+			selected: selected,
+			preview: file?.isPreview == true,
+			file: file != nil
 		)
-		selectButton.alignment = .left
 		if isChanges
 		{
 			selectButton.image = ToolsPaneIcons.changes(size: Layout.iconSize)
@@ -1224,18 +1194,12 @@ final class ToolsTabViewController: NSViewController
 			selectButton.imagePosition = .imageLeading
 		}
 
-		selectButton.font = AppKitFontResolver.font(
-			TypographyTokens.Controls.tab,
-			italic: file?.isPreview == true
-		)
-
 		if let file
 		{
 			selectButton.toolTip = file.path
 		}
 		selectButton.tag = index
 		selectButton.setAccessibilityLabel("\(title) \(index + 1)")
-		selectButton.setAccessibilityValue(selected ? "Selected" : "Not selected")
 		selectButton.draggedID = id
 		selectButton.dragOwner = dragOwner
 		if file?.isPreview == true
@@ -1256,8 +1220,7 @@ final class ToolsTabViewController: NSViewController
 		}
 		let closeButton = makeIconButton(
 			.x,
-			size: metrics.closeControlSize,
-			role: .close,
+			preset: .tabClose(metrics: metrics),
 			imageSize: Layout.closeIconSize,
 			label: "Close tab \(index + 1)",
 			action: #selector(closeTab(_:))
@@ -1330,8 +1293,6 @@ final class ToolsTabViewController: NSViewController
 		selected: Bool
 	) -> NSView
 	{
-		selectButton.contentTintColor = selected ? AppKitColorTokens.primaryText : AppKitColorTokens
-			.secondaryText
 		let tab = ToolsTabSurface(isSelected: selected)
 		for child in [selectButton, trailingButton]
 		{
@@ -1488,8 +1449,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeIconButton(
 		_ icon: DesktopIcon,
-		size: CGFloat = Layout.controlSize,
-		role: ShapeTokens.TabControls.Role = .standard,
+		preset: DesktopToolbarIconButton.Preset = .toolsHeader,
 		imageSize: CGFloat = Layout.iconSize,
 		label: String,
 		action: Selector?
@@ -1500,8 +1460,7 @@ final class ToolsTabViewController: NSViewController
 				icon,
 				size: imageSize
 			),
-			size: size,
-			role: role,
+			preset: preset,
 			label: label,
 			action: action
 		)
@@ -1509,28 +1468,18 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeIconButton(
 		image: NSImage,
-		size: CGFloat = Layout.controlSize,
-		role: ShapeTokens.TabControls.Role = .standard,
+		preset: DesktopToolbarIconButton.Preset = .toolsHeader,
 		label: String,
 		action: Selector?
 	) -> NSButton
 	{
-		let button = DesktopHoverButton(
-			title: "",
+		DesktopToolbarIconButton(
+			image: image,
+			label: label,
+			preset: preset,
 			target: self,
 			action: action
 		)
-		AppKitControlStyling.styleButton(button)
-		button.image = image
-		button.imagePosition = .imageOnly
-		button.toolTip = label
-		button.setAccessibilityLabel(label)
-		button.cornerRadius = ShapeTokens.TabControls.radius(for: role)
-		button.cornerCurve = ShapeTokens.TabControls.cornerCurve
-		button.contentTintColor = AppKitColorTokens.secondaryText
-		button.widthAnchor.constraint(equalToConstant: size).isActive = true
-		button.heightAnchor.constraint(equalToConstant: size).isActive = true
-		return button
 	}
 
 	@objc private func addTab()
@@ -1724,61 +1673,6 @@ final class ToolsTabViewController: NSViewController
 }
 
 @MainActor
-private final class ToolsTabSelectionButtonCell: NSButtonCell
-{
-	var documentTitleGap: CGFloat = 0
-
-	override func titleRect(forBounds rect: NSRect) -> NSRect
-	{
-		let title = super.titleRect(forBounds: rect)
-		return NSRect(
-			x: title.minX + documentTitleGap,
-			y: title.minY,
-			width: max(
-				0,
-				title.width - documentTitleGap
-			),
-			height: title.height
-		)
-	}
-
-	override func drawTitle(
-		_ title: NSAttributedString,
-		withFrame frame: NSRect,
-		in controlView: NSView
-	) -> NSRect
-	{
-		DesktopTextRendering.withFontSmoothingDisabled
-		{
-			super.drawTitle(
-				title,
-				withFrame: frame,
-				in: controlView
-			)
-		}
-	}
-}
-
-@MainActor
-private final class ToolsHeadingTextField: NSTextField
-{
-	override func draw(_ dirtyRect: NSRect)
-	{
-		DesktopTextRendering.withFontSmoothingDisabled
-		{
-			super.draw(dirtyRect)
-		}
-	}
-}
-
-private enum ToolsChangesShortcut
-{
-	static let key = "g"
-	static let modifiers: NSEvent.ModifierFlags = [.control, .shift]
-	static let label = "⌃⇧G"
-}
-
-@MainActor
 private final class ToolsTileButtonCell: NSButtonCell
 {
 	private let shortcut: String
@@ -1797,33 +1691,17 @@ private final class ToolsTileButtonCell: NSButtonCell
 		fatalError("ToolsTileButtonCell is created in code")
 	}
 
-	private func shortcutTitle(in view: NSView) -> NSAttributedString
-	{
-		let color = NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
-			AppKitColorTokens.toolsTileIcon,
-			for: view
-		)) ?? AppKitColorTokens.toolsTileIcon
-		return NSAttributedString(
-			string: shortcut,
-			attributes: [
-				.font: AppKitFontResolver.font(TypographyTokens.Controls.toolsShortcut),
-				.foregroundColor: color,
-			]
-		)
-	}
-
 	private func shortcutRect(forBounds rect: NSRect) -> NSRect
 	{
-		let title = NSAttributedString(
-			string: shortcut,
-			attributes: [.font: AppKitFontResolver.font(TypographyTokens.Controls.toolsShortcut)]
+		let size = DesktopKeycapView.size(
+			for: shortcut,
+			presentation: .toolsShortcut
 		)
-		let width = title.size().width + 2 * LayoutTokens.Tabs.toolShortcutHorizontalInset
 		return NSRect(
-			x: rect.maxX - LayoutTokens.Tabs.toolTileInset - width,
-			y: rect.midY - LayoutTokens.Tabs.toolShortcutHeight / 2,
-			width: width,
-			height: LayoutTokens.Tabs.toolShortcutHeight
+			x: rect.maxX - LayoutTokens.Tabs.toolTileInset - size.width,
+			y: rect.midY - size.height / 2,
+			width: size.width,
+			height: size.height
 		)
 	}
 
@@ -1839,19 +1717,12 @@ private final class ToolsTileButtonCell: NSButtonCell
 				in: controlView
 			)
 			let badge = shortcutRect(forBounds: frame)
-			AppKitColorTokens.toolsShortcut.setFill()
-			NSBezierPath(
-				roundedRect: badge,
-				xRadius: ShapeTokens.TabControls.toolShortcutRadius,
-				yRadius: ShapeTokens.TabControls.toolShortcutRadius
-			).fill()
-			let text = shortcutTitle(in: controlView)
-			text.draw(in: NSRect(
-				x: badge.minX + LayoutTokens.Tabs.toolShortcutHorizontalInset,
-				y: badge.midY - text.size().height / 2,
-				width: text.size().width,
-				height: text.size().height
-			))
+			DesktopKeycapView.draw(
+				shortcut: shortcut,
+				in: badge,
+				presentation: .toolsShortcut,
+				owner: controlView
+			)
 		}
 	}
 
@@ -1904,42 +1775,41 @@ private final class ToolsTileButtonCell: NSButtonCell
 }
 
 @MainActor
-private final class ToolsTileButton: DesktopAttributedTitleButton
+private final class ToolsTileButton: DesktopHoverButton
 {
-	var cornerRadius = ShapeTokens.TabControls.toolTileRadius
-	private var isHovered = false
-	private var tracking: NSTrackingArea?
-
-	override func updateTrackingAreas()
+	init(
+		title: String,
+		image: NSImage,
+		shortcut: String
+	)
 	{
-		super.updateTrackingAreas()
-		if let tracking
-		{
-			removeTrackingArea(tracking)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
+		super.init(frame: .zero)
+		self.title = title
+		cell = ToolsTileButtonCell(
+			textCell: title,
+			shortcut: shortcut
 		)
-		addTrackingArea(area)
-		tracking = area
+		bezelStyle = .inline
+		isBordered = false
+		controlSize = .small
+		font = AppKitFontResolver.font(TypographyTokens.Controls.toolsTile)
+		contentTintColor = AppKitColorTokens.primaryText
+		setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
+		cornerRadius = ShapeTokens.TabControls.toolTileRadius
+		alignment = .left
+		self.image = image
+		imagePosition = .imageLeading
 	}
 
-	override func mouseEntered(with event: NSEvent)
+	required init?(coder: NSCoder)
 	{
-		isHovered = true
-		needsDisplay = true
+		nil
 	}
 
-	override func mouseExited(with event: NSEvent)
-	{
-		isHovered = false
-		needsDisplay = true
-	}
-
-	override func draw(_ dirtyRect: NSRect)
+	override func drawBackground()
 	{
 		let fill = isEnabled && isHovered
 			? AppKitColorTokens.rowHighlight : AppKitColorTokens.toolsTile
@@ -1949,6 +1819,5 @@ private final class ToolsTileButton: DesktopAttributedTitleButton
 			radius: cornerRadius,
 			curve: ShapeTokens.TabControls.cornerCurve
 		).fill()
-		super.draw(dirtyRect)
 	}
 }

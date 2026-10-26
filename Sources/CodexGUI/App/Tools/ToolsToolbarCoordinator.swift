@@ -4,10 +4,10 @@ import AppKit
 @MainActor
 final class ToolsToolbarCoordinator
 {
-	let openButton = DesktopHoverButton(
-		title: "",
-		target: nil,
-		action: nil
+	let openButton = DesktopToolbarIconButton(
+		image: nil,
+		label: "Open tab pane",
+		preset: .contentToolbar
 	)
 	let closedSeparator = ToolbarSeparatorView()
 	let separator = ToolbarSeparatorView(constrained: false)
@@ -43,23 +43,12 @@ final class ToolsToolbarCoordinator
 
 	func configureOpenButton(
 		target: AnyObject,
-		action: Selector,
-		controlSize: CGFloat
+		action: Selector
 	)
 	{
-		openButton.bezelStyle = .texturedRounded
-		openButton.isBordered = false
-		openButton.imagePosition = .imageOnly
-		openButton.contentTintColor = AppKitColorTokens.secondaryText
 		openButton.target = target
 		openButton.action = action
 		openButton.image = openTabPaneImage()
-		openButton.toolTip = "Open tab pane"
-		openButton.setAccessibilityLabel("Open tab pane")
-		openButton.widthAnchor.constraint(equalToConstant: controlSize)
-			.isActive = true
-		openButton.heightAnchor.constraint(equalToConstant: controlSize)
-			.isActive = true
 	}
 
 	private func toolsTabBarWidth(
@@ -133,8 +122,7 @@ final class ToolsToolbarCoordinator
 		}
 		let openLabel = retainedTabCount > 0
 			? "Open tab pane (\(retainedTabCount) tabs)" : "Open tab pane"
-		openButton.toolTip = openLabel
-		openButton.setAccessibilityLabel(openLabel)
+		openButton.label = openLabel
 	}
 
 	private func openTabPaneImage() -> NSImage?

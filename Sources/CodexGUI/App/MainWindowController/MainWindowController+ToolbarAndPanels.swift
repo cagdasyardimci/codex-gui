@@ -49,8 +49,7 @@ extension MainWindowController
 		configureSummaryToggle()
 		toolsToolbar.configureOpenButton(
 			target: self,
-			action: #selector(toggleToolsPane),
-			controlSize: ToolbarLayout.controlSize
+			action: #selector(toggleToolsPane)
 		)
 	}
 
@@ -492,10 +491,11 @@ extension MainWindowController
 		trailingInset: CGFloat
 	) -> NSView
 	{
-		let stack = NSStackView(views: controls)
-		stack.orientation = .horizontal
-		stack.alignment = .centerY
-		stack.spacing = ToolbarLayout.controlSpacing
+		let stack = AppKitLayout.horizontalStack(
+			controls,
+			spacing: ToolbarLayout.controlSpacing,
+			alignment: .centerY
+		)
 		stack.setAccessibilityElement(false)
 		stack.setContentHuggingPriority(
 			.required,
@@ -550,23 +550,12 @@ extension MainWindowController
 		isEnabled: Bool = true
 	) -> NSButton
 	{
-		let button = DesktopHoverButton(
-			title: "",
-			target: nil,
-			action: nil
+		DesktopToolbarIconButton(
+			image: image,
+			label: label,
+			preset: .windowToolbar,
+			isEnabled: isEnabled
 		)
-		button.bezelStyle = .inline
-		button.isBordered = false
-		button.image = image
-		button.imagePosition = .imageOnly
-		button.contentTintColor = AppKitColorTokens.secondaryText
-		button.cornerRadius = ShapeTokens.Toolbar.controlRadius
-		button.isEnabled = isEnabled
-		button.toolTip = label
-		button.setAccessibilityLabel(label)
-		button.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
-		button.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
-		return button
 	}
 
 	@objc private func openProjectPicker()
