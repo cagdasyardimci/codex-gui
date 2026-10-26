@@ -22,12 +22,10 @@ struct ComposerCustomDrawingAppearanceTests
 			height: 159
 		)
 		controller.render(mode: .approveForMe)
-		let stack = try #require(content.subviews.first?.subviews.first as? NSStackView)
-		let row = try #require(stack.arrangedSubviews.compactMap
-		{
-			$0 as? NSButton
-		}.dropFirst()
-		.first)
+		let row = try #require(approvalRow(
+			in: content,
+			mode: .approveForMe
+		))
 		let event = try #require(NSEvent.mouseEvent(
 			with: .mouseMoved,
 			location: .zero,
@@ -49,6 +47,24 @@ struct ComposerCustomDrawingAppearanceTests
 			#expect(row.accessibilityValue() as? String == "Selected")
 			#expect(row.accessibilityLabel() == ApprovalMode.approveForMe.title)
 		}
+	}
+
+	private func approvalRow(
+		in view: NSView,
+		mode: ApprovalMode
+	) -> NSButton?
+	{
+		if let row = view as? NSButton, row.accessibilityLabel() == mode.title
+		{
+			return row
+		}
+		return view.subviews.lazy.compactMap
+		{
+			approvalRow(
+				in: $0,
+				mode: mode
+			)
+		}.first
 	}
 
 	private func verifyRetainedDrawing(

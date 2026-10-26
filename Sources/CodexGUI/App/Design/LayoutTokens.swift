@@ -757,7 +757,7 @@ enum LayoutTokens
 		static let knobDiameter: CGFloat = 28
 		static let hoveredKnobDiameter: CGFloat = 32
 		static let trackHeight: CGFloat = 24
-		static let filledTickDiameter: CGFloat = 3
+		static let filledTickDiameter: CGFloat = 4
 		static let unfilledTickDiameter: CGFloat = 4
 	}
 

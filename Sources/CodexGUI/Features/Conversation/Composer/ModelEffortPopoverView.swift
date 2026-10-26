@@ -2,7 +2,7 @@ import AppKit
 import QuartzCore
 
 @MainActor
-final class ModelEffortPopoverView: NSViewController
+final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialContent
 {
 	var onSelectModel: ((String?) -> Void)?
 	var onSelectEffort: ((String?) -> Void)?
@@ -13,21 +13,20 @@ final class ModelEffortPopoverView: NSViewController
 
 	private var models: [ModelOption] = []
 	private var selectedModelID: String?
-	private let modelMenuButton = DesktopAttributedTitleButton(
+	private let modelMenuButton = DesktopStyledButton(
 		title: "Default model",
-		target: nil,
-		action: nil
+		presentation: .menuTrigger
 	)
 	private let effortLabel = NSTextField(labelWithString: "Default effort")
-	private let fastButton = NSButton(
+	private let fastButton = DesktopStyledButton(
 		title: "Fast mode",
-		target: nil,
-		action: nil
+		presentation: .toggle,
+		size: .regular
 	)
-	private let resetButton = NSButton(
+	private let resetButton = DesktopStyledButton(
 		title: "Reset",
-		target: nil,
-		action: nil
+		presentation: .icon,
+		size: .regular
 	)
 	private let slider = EffortSlider()
 	private let availabilityLabel = NSTextField(wrappingLabelWithString: "")
@@ -58,7 +57,7 @@ final class ModelEffortPopoverView: NSViewController
 
 	override func loadView()
 	{
-		let surface = DesktopPopoverSurface()
+		let surface = NSView()
 		configureEffortLabel()
 		configureActionButtons()
 		configureModelMenuButton()
@@ -94,48 +93,19 @@ final class ModelEffortPopoverView: NSViewController
 	{
 		fastButton.target = self
 		fastButton.action = #selector(toggleFastMode)
-		AppKitControlStyling.styleButton(
-			fastButton,
-			icon: .bolt
-		)
-		fastButton.image = DesktopIcons.image(
-			.bolt,
-			size: LayoutTokens.ModelPopover.actionIconSize
-		)
-		fastButton.imagePosition = .imageOnly
+		fastButton.image = DesktopIcons.image(.bolt)
 
 		resetButton.target = self
 		resetButton.action = #selector(resetPreferences)
-		AppKitControlStyling.styleButton(
-			resetButton,
-			icon: .arrowRotateCcw
-		)
-		resetButton.image = DesktopIcons.image(
-			.arrowRotateCcw,
-			size: LayoutTokens.ModelPopover.actionIconSize
-		)
-		resetButton.imagePosition = .imageOnly
-		resetButton.contentTintColor = AppKitColorTokens.secondaryText
+		resetButton.image = DesktopIcons.image(.arrowRotateCcw)
 		resetButton.toolTip = "Reset effort and fast mode to defaults"
 		resetButton.setAccessibilityLabel("Reset effort and fast mode to defaults")
 	}
 
 	private func configureModelMenuButton()
 	{
-		AppKitControlStyling.styleButton(
-			modelMenuButton,
-			icon: .chevronRight
-		)
 		modelMenuButton.target = self
 		modelMenuButton.action = #selector(showModelMenu)
-		modelMenuButton.font = AppKitFontResolver.font(TypographyTokens.ModelPopover.model)
-		modelMenuButton.contentTintColor = EffortPopoverStyle.model
-		modelMenuButton.image = DesktopIcons.image(
-			.chevronRight,
-			size: LayoutTokens.ModelPopover.modelChevronSize
-		)
-		modelMenuButton.imagePosition = .imageTrailing
-		modelMenuButton.lineBreakMode = .byTruncatingMiddle
 		modelMenuButton.setAccessibilityLabel("Choose Codex model")
 	}
 
@@ -184,19 +154,11 @@ final class ModelEffortPopoverView: NSViewController
 				equalTo: surface.topAnchor,
 				constant: LayoutTokens.ModelPopover.fastTopInset
 			),
-			fastButton.widthAnchor
-				.constraint(equalToConstant: LayoutTokens.ModelPopover.fastSize),
-			fastButton.heightAnchor
-				.constraint(equalToConstant: LayoutTokens.ModelPopover.fastSize),
 			resetButton.trailingAnchor.constraint(
 				equalTo: surface.trailingAnchor,
 				constant: -LayoutTokens.ModelPopover.resetTrailingInset
 			),
 			resetButton.topAnchor.constraint(equalTo: fastButton.topAnchor),
-			resetButton.widthAnchor
-				.constraint(equalToConstant: LayoutTokens.ModelPopover.resetSize),
-			resetButton.heightAnchor
-				.constraint(equalToConstant: LayoutTokens.ModelPopover.resetSize),
 			effortLabel.centerXAnchor.constraint(equalTo: surface.centerXAnchor),
 			effortLabel.topAnchor.constraint(
 				equalTo: surface.topAnchor,
@@ -208,8 +170,6 @@ final class ModelEffortPopoverView: NSViewController
 			effortLabel.trailingAnchor.constraint(lessThanOrEqualTo: resetButton.leadingAnchor),
 			modelMenuButton.centerXAnchor.constraint(equalTo: surface.centerXAnchor),
 			modelMenuButton.topAnchor.constraint(equalTo: effortLabel.bottomAnchor),
-			modelMenuButton.heightAnchor
-				.constraint(equalToConstant: LayoutTokens.ModelPopover.modelHeight),
 			modelMenuButton.widthAnchor.constraint(
 				lessThanOrEqualTo: surface.widthAnchor,
 				constant: -2 * LayoutTokens.ModelPopover.modelHorizontalInset
@@ -367,13 +327,6 @@ final class ModelEffortPopoverView: NSViewController
 			modelMenuButton.title = "Default model"
 		}
 
-		modelMenuButton.attributedTitle = NSAttributedString(
-			string: modelMenuButton.title,
-			attributes: [
-				.font: AppKitFontResolver.font(TypographyTokens.ModelPopover.model),
-				.foregroundColor: EffortPopoverStyle.model,
-			]
-		)
 		modelMenuButton.toolTip = modelMenuButton.title
 		modelMenuButton.setAccessibilityValue(modelMenuButton.title)
 	}
@@ -438,7 +391,9 @@ final class ModelEffortPopoverView: NSViewController
 
 	private nonisolated static func preferredHeight(showsWarning: Bool) -> CGFloat
 	{
-		let sliderBottom = LayoutTokens.ModelPopover.sliderBottom
+		let sliderBottom = LayoutTokens.ModelPopover.effortTopInset
+			+ LayoutTokens.ModelPopover.effortHeight + LayoutTokens.Button.compactHeight
+			+ LayoutTokens.ModelPopover.sliderTopSpacing + LayoutTokens.ModelPopover.sliderHeight
 		if showsWarning
 		{
 			return sliderBottom + LayoutTokens.ModelPopover.warningTopSpacing
@@ -453,12 +408,8 @@ final class ModelEffortPopoverView: NSViewController
 		slider.fastMode = fastMode
 		fastButton.state = fastMode ? .on : .off
 		fastButton.image = fastMode
-			? DesktopIcons.filledBoltImage(size: 13)
-			: DesktopIcons.image(
-				.bolt,
-				size: 13
-			)
-		fastButton.contentTintColor = fastMode ? EffortPopoverStyle.blue : EffortPopoverStyle.icon
+			? DesktopIcons.filledBoltImage()
+			: DesktopIcons.image(.bolt)
 		fastButton.toolTip = fastMode ? "Disable fast mode" : "Enable fast mode"
 		fastButton.setAccessibilityLabel(fastButton.toolTip)
 		fastButton.setAccessibilityValue(fastMode ? "On" : "Off")

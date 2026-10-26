@@ -36,7 +36,7 @@ struct ApprovalPolicyPopoverTests
 		#expect(abs(content.bounds.width - controller.preferredContentSize.width) < 0.51)
 		#expect(abs(content.bounds.height - controller.preferredContentSize.height) < 0.51)
 		#expect(content.accessibilityRole() == .menu)
-		let stack = try #require(content.subviews.first?.subviews.first as? NSStackView)
+		let stack = try #require(content.subviews.first as? NSStackView)
 		let header = try #require(stack.arrangedSubviews.first as? NSStackView)
 		let rows = stack.arrangedSubviews.compactMap
 		{
@@ -49,19 +49,15 @@ struct ApprovalPolicyPopoverTests
 			#expect(abs(row.bounds.width - 431.09375) < 0.51)
 			#expect(abs(row.bounds.height - 42.5703125) < 0.26)
 			#expect(row.accessibilityRole() == .menuItem)
-			let labels = row.subviews.compactMap
-			{
-				$0 as? NSTextField
-			}
-			#expect(labels[0].alignmentRect(forFrame: labels[0].frame).minX == 30)
+			let sharedRow = try #require(row as? DesktopMenuRow)
+			let labels = [sharedRow.titleLabel, sharedRow.subtitleLabel]
+			#expect(labels[0].frame.minX == 30)
+			#expect(labels[0].alignmentRect(forFrame: labels[0].frame).minX == 32)
 			#expect(abs(labels[0].bounds.height - 18.5703125) < 0.26)
 			#expect(labels[1].bounds.height == 14)
-			let images = row.subviews.compactMap
-			{
-				$0 as? NSImageView
-			}
-			#expect(images[0].frame.minX == 7)
-			#expect(images[0].bounds.width == 18)
+			let images = [sharedRow.iconView, sharedRow.trailingImageView]
+			#expect(images[0].frame.minX == 8)
+			#expect(images[0].bounds.width == 16)
 			#expect(images[1].bounds.width == 16)
 			#expect(abs(row.bounds.maxX - images[1].frame.maxX - 8) < 0.01)
 		}
@@ -189,6 +185,55 @@ struct ApprovalPolicyPopoverTests
 			)
 			#expect(!popover.isShown)
 		}
+	}
+
+	@Test func hoveringAnotherApprovalRowClearsPreviousHoverAndKeepsSelection() throws
+	{
+		_ = NSApplication.shared
+		let controller = ApprovalPolicyPopoverView()
+		controller.view.appearance = NSAppearance(named: .darkAqua)
+		controller.render(mode: .fullAccess)
+		let stack = try #require(controller.view.subviews.first as? NSStackView)
+		let rows = stack.arrangedSubviews.compactMap
+		{
+			$0 as? DesktopMenuRow
+		}
+		try #require(rows.count == 3)
+		let event = try #require(NSEvent.mouseEvent(
+			with: .mouseMoved,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: 0,
+			context: nil,
+			eventNumber: 0,
+			clickCount: 0,
+			pressure: 0
+		))
+		rows[0].mouseEntered(with: event)
+		#expect(rows[0].isHovered)
+		#expect(rows[0].subviews.compactMap
+		{
+			$0 as? NSImageView
+		}.allSatisfy
+		{
+			$0.alphaValue == 1
+		})
+		rows[1].mouseEntered(with: event)
+		#expect(!rows[0].isHovered && rows[1].isHovered)
+		#expect(rows[0].subviews.compactMap
+		{
+			$0 as? NSImageView
+		}.allSatisfy
+		{
+			$0.alphaValue == 0.75
+		})
+		controller.clearHover()
+		#expect(rows.allSatisfy
+		{
+			!$0.isHovered
+		})
+		#expect(rows[2].accessibilityValue() as? String == "Selected")
 	}
 
 	private func key(

@@ -12,7 +12,7 @@ struct ModelEffortPopoverViewTests
 		_ = NSApplication.shared
 		let picker = ModelEffortPopoverView()
 		var selections: [String?] = []
-		#expect(picker.preferredContentSize.height == 96)
+		#expect(picker.preferredContentSize.height == 104)
 		picker.onSelectModel =
 		{
 			selections.append($0)
@@ -24,7 +24,7 @@ struct ModelEffortPopoverViewTests
 			selectedEffort: "ultra",
 			fastMode: true
 		)
-		#expect(picker.preferredContentSize.height == 132)
+		#expect(picker.preferredContentSize.height == 140)
 		picker.showModelList()
 		let menu = picker.modelList
 		#expect(
@@ -69,11 +69,52 @@ struct ModelEffortPopoverViewTests
 		picker.showModelList()
 		#expect(picker.modelList.rows.count == 3)
 		picker.setPresented(false)
-		#expect(picker.preferredContentSize.height == 96)
+		#expect(picker.preferredContentSize.height == 104)
 		#expect(label(
 			in: picker.view,
 			accessibilityLabel: "Selected reasoning effort"
 		) == "Light")
+	}
+
+	@Test func modelHoverMovesBetweenRowsWithoutChangingSelection() throws
+	{
+		_ = NSApplication.shared
+		let list = ModelPickerListView()
+		list.render(
+			choices: [
+				ModelPickerChoice(
+					id: nil,
+					title: "Default"
+				),
+				ModelPickerChoice(
+					id: "first",
+					title: "First"
+				)
+			],
+			selectedID: "first"
+		)
+		let event = try #require(NSEvent.mouseEvent(
+			with: .mouseMoved,
+			location: .zero,
+			modifierFlags: [],
+			timestamp: 0,
+			windowNumber: 0,
+			context: nil,
+			eventNumber: 0,
+			clickCount: 0,
+			pressure: 0
+		))
+		try #require(list.rows.count == 2)
+		list.rows[0].mouseEntered(with: event)
+		#expect(list.rows[0].isHovered)
+		list.rows[1].mouseEntered(with: event)
+		#expect(!list.rows[0].isHovered && list.rows[1].isHovered)
+		list.rows[1].mouseExited(with: event)
+		#expect(list.rows.allSatisfy
+		{
+			!$0.isHovered
+		})
+		#expect(list.rows.map(\.state) == [.off, .on])
 	}
 
 	private func modelOptions() throws -> [ModelOption]

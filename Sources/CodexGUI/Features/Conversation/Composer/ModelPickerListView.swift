@@ -15,7 +15,7 @@ final class ModelPickerListView: NSView
 {
 	var onSelect: ((String?) -> Void)?
 	private let scrollView = NSScrollView()
-	private let document = ModelPickerDocumentView()
+	private let document = DesktopFlippedView()
 	private let stack = NSStackView()
 	private(set) var rows: [ModelPickerRow] = []
 	private typealias Layout = LayoutTokens.ModelList
@@ -184,15 +184,6 @@ final class ModelPickerListView: NSView
 }
 
 @MainActor
-private final class ModelPickerDocumentView: NSView
-{
-	override var isFlipped: Bool
-	{
-		true
-	}
-}
-
-@MainActor
 private final class ModelPickerHeading: NSView
 {
 	override func draw(_ dirtyRect: NSRect)
@@ -206,7 +197,7 @@ private final class ModelPickerHeading: NSView
 				),
 				withAttributes: [
 					.font: AppKitFontResolver.font(TypographyTokens.ModelPopover.menu),
-					.foregroundColor: AppKitColorTokens.secondaryText,
+					.foregroundColor: AppKitColorTokens.composerSecondaryText,
 				]
 			)
 		}
@@ -214,14 +205,10 @@ private final class ModelPickerHeading: NSView
 }
 
 @MainActor
-final class ModelPickerRow: NSButton
+final class ModelPickerRow: DesktopMenuRow
 {
 	let choice: ModelPickerChoice
 	var onNavigate: ((Int) -> Void)?
-	var onHover: (() -> Void)?
-	private var hovered = false
-	private var tracking: NSTrackingArea?
-	private typealias Layout = LayoutTokens.ModelList
 
 	init(
 		choice: ModelPickerChoice,
@@ -229,148 +216,22 @@ final class ModelPickerRow: NSButton
 	)
 	{
 		self.choice = choice
-		super.init(frame: .zero)
-		title = choice.title
-		isBordered = false
-		bezelStyle = .inline
-		focusRingType = .none
-		state = selected ? .on : .off
-		setAccessibilityRole(.menuItem)
-		setAccessibilityLabel(choice.title)
-		setAccessibilityHelp(choice.subtitle)
-		setAccessibilityValue(selected ? "Selected" : "Not selected")
+		super.init(content: Content(
+			title: choice.title,
+			subtitle: choice.subtitle,
+			indicator: .checkmark,
+			checked: selected
+		))
 	}
 
 	required init?(coder: NSCoder)
 	{
 		nil
 	}
-	override var acceptsFirstResponder: Bool
-	{
-		true
-	}
-	override var isFlipped: Bool
-	{
-		true
-	}
+
 	var preferredHeight: CGFloat
 	{
-		Layout.rowHeight + (choice.subtitle == nil ? 0 : Layout.secondaryHeight)
-	}
-
-	override func updateTrackingAreas()
-	{
-		super.updateTrackingAreas()
-		if let tracking
-		{
-			removeTrackingArea(tracking)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(area)
-		tracking = area
-	}
-
-	override func mouseEntered(with event: NSEvent)
-	{
-		onHover?()
-		hovered = true
-		needsDisplay = true
-	}
-	override func mouseExited(with event: NSEvent)
-	{
-		clearHover()
-	}
-	func clearHover()
-	{
-		hovered = false
-		needsDisplay = true
-	}
-	override func becomeFirstResponder() -> Bool
-	{
-		let accepted = super.becomeFirstResponder()
-		needsDisplay = true
-		return accepted
-	}
-	override func resignFirstResponder() -> Bool
-	{
-		let accepted = super.resignFirstResponder()
-		needsDisplay = true
-		return accepted
-	}
-	override func viewDidChangeEffectiveAppearance()
-	{
-		super.viewDidChangeEffectiveAppearance()
-		needsDisplay = true
-	}
-
-	override func draw(_ dirtyRect: NSRect)
-	{
-		if hovered || window?.firstResponder === self || cell?.isHighlighted == true
-		{
-			AppKitColorTokens.rowHighlight.setFill()
-			NSBezierPath(
-				roundedRect: bounds,
-				xRadius: ShapeTokens.ModelList.rowRadius,
-				yRadius: ShapeTokens.ModelList.rowRadius
-			).fill()
-		}
-		let textWidth = max(
-			0,
-			bounds.width - 2 * Layout.horizontalInset - Layout.checkSize - Layout.checkTextSpacing
-		)
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineBreakMode = .byTruncatingTail
-		DesktopTextRendering.withFontSmoothingDisabled
-		{
-			(choice.title as NSString).draw(
-				in: NSRect(
-					x: Layout.horizontalInset,
-					y: Layout.verticalInset,
-					width: textWidth,
-					height: Layout.titleHeight
-				),
-				withAttributes: [
-					.font: AppKitFontResolver.font(TypographyTokens.ModelPopover.menu),
-					.foregroundColor: AppKitColorTokens.primaryText,
-					.paragraphStyle: paragraph,
-				]
-			)
-			if let subtitle = choice.subtitle
-			{
-				(subtitle as NSString).draw(
-					in: NSRect(
-						x: Layout.horizontalInset,
-						y: Layout.verticalInset + Layout.titleHeight,
-						width: textWidth,
-						height: Layout.secondaryHeight
-					),
-					withAttributes: [
-						.font: AppKitFontResolver
-							.font(TypographyTokens.ModelPopover.modelExplanation),
-						.foregroundColor: AppKitColorTokens.secondaryText,
-						.paragraphStyle: paragraph,
-					]
-				)
-			}
-		}
-		if state == .on
-		{
-			DesktopIcons.draw(
-				ApprovalPolicyIcons.selectedCheck,
-				in: NSRect(
-					x: bounds.maxX - Layout.horizontalInset - Layout.checkSize,
-					y: bounds.midY - Layout.checkSize / 2,
-					width: Layout.checkSize,
-					height: Layout.checkSize
-				),
-				tint: AppKitColorTokens.primaryText
-			)
-		}
+		rowHeight
 	}
 
 	override func keyDown(with event: NSEvent)

@@ -62,7 +62,7 @@ struct ModelPickerListTests
 			#expect(picker.view.window === panel)
 			#expect(picker.view.bounds.size == NSSize(
 				width: 254,
-				height: 279
+				height: 277
 			))
 			#expect(panel.convertToScreen(picker.view.convert(
 				picker.view.bounds,
@@ -74,7 +74,7 @@ struct ModelPickerListTests
 			let rows = picker.modelList.rows
 			#expect(rows.count == 8)
 			#expect(rows.map(\.state) == [.off, .off, .off, .on, .off, .off, .off, .off])
-			#expect(rows[0].preferredHeight == 44.5703125)
+			#expect(rows[0].preferredHeight == 42.5703125)
 			#expect(rows[1].preferredHeight == 28.5703125)
 			#expect(abs(rows[0].frame.height - rows[0].preferredHeight) < 1 / panel
 				.backingScaleFactor)
@@ -113,7 +113,7 @@ struct ModelPickerListTests
 			#expect(limitedFrame.maxY <= screenTop - 7)
 			picker.setPresented(false)
 			#expect(!picker.isShowingModelList)
-			#expect(picker.preferredContentSize.height == 96)
+			#expect(picker.preferredContentSize.height == 104)
 		}
 	}
 

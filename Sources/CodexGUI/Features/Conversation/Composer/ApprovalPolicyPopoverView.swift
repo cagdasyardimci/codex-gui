@@ -1,26 +1,16 @@
 import AppKit
 
-private enum ApprovalTextDrawingConfiguration
-{
-	static let horizontalOffset: CGFloat = -0.5
-	static let headingBaselineOffset: CGFloat = 1
-	static let explanationBaselineOffset: CGFloat = 1.5
-	static let linkHorizontalOffset: CGFloat = 2
-	static let linkBaselineOffset = headingBaselineOffset
-}
-
 @MainActor
-final class ApprovalPolicyPopoverView: NSViewController
+final class ApprovalPolicyPopoverView: NSViewController, DesktopPopoverMaterialContent
 {
 	var onSelect: ((ApprovalMode) -> Void)?
 	var openDocumentation: (URL) -> Void =
 	{
 		NSWorkspace.shared.open($0)
 	}
-	private let learnMoreButton = ApprovalPolicyLinkButton(
+	private let learnMoreButton = DesktopStyledButton(
 		title: "Learn more",
-		target: nil,
-		action: nil
+		presentation: .link
 	)
 	private var selectedMode: ApprovalMode? = .askForApproval
 	private var rows: [ApprovalPolicyRow] = []
@@ -44,13 +34,7 @@ final class ApprovalPolicyPopoverView: NSViewController
 
 	override func loadView()
 	{
-		let surface = DesktopSurface(
-			AppKitColorTokens.popover,
-			cornerRadius: ShapeTokens.Popover.cornerRadius,
-			bordered: true,
-			borderWidth: ShapeTokens.Popover.edgeWidth,
-			borderColor: AppKitColorTokens.popoverEdge
-		)
+		let surface = NSView()
 		let header = makeHeadingRow()
 		header.heightAnchor.constraint(equalToConstant: LayoutTokens.ApprovalPopover.headerHeight)
 			.isActive = true
@@ -60,10 +44,10 @@ final class ApprovalPolicyPopoverView: NSViewController
 		{
 			row.onHover =
 			{
-				[weak self] hoveredRow in
+				[weak self, weak row] in
 				self?.rows.filter
 				{
-					$0 !== hoveredRow
+					$0 !== row
 				}.forEach
 				{
 					$0.clearHover()
@@ -85,8 +69,6 @@ final class ApprovalPolicyPopoverView: NSViewController
 		for row in rows
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-			row.heightAnchor.constraint(equalToConstant: LayoutTokens.ApprovalPopover.rowHeight)
-				.isActive = true
 		}
 
 		for index in rows.indices
@@ -97,44 +79,29 @@ final class ApprovalPolicyPopoverView: NSViewController
 		rows.last?.nextKeyView = learnMoreButton
 		learnMoreButton.nextKeyView = rows.first
 
-		let backdrop = ApprovalPolicyBackdropView()
-		backdrop.material = .popover
-		backdrop.blendingMode = .behindWindow
-		backdrop.state = .active
-		backdrop.addSubview(surface)
-		AppKitLayout.pin(
-			surface,
-			to: backdrop,
-			inset: 0
-		)
-		backdrop.setAccessibilityElement(true)
-		backdrop.setAccessibilityRole(.menu)
-		view = backdrop
+		surface.setAccessibilityElement(true)
+		surface.setAccessibilityRole(.menu)
+		view = surface
 		render(mode: selectedMode)
 	}
 
 	private func makeHeadingRow() -> NSStackView
 	{
 		let heading =
-			ApprovalPolicyTextField(labelWithString: "How should Codex actions be approved?")
+			DesktopTextField(labelWithString: "How should Codex actions be approved?")
 		heading.font = AppKitFontResolver.font(TypographyTokens.Popover.title)
-		heading.horizontalDrawingOffset = 0
-		heading.upwardBaselineOffset = ApprovalTextDrawingConfiguration.headingBaselineOffset
-		heading.textColor = AppKitColorTokens.secondaryText
+		heading.textColor = AppKitColorTokens.composerSecondaryText
 		heading.setAccessibilityLabel(heading.stringValue)
 
 		learnMoreButton.target = self
 		learnMoreButton.action = #selector(learnMore)
-		learnMoreButton.font = AppKitFontResolver.font(TypographyTokens.Popover.title)
-		learnMoreButton.isBordered = false
-		learnMoreButton.bezelStyle = .inline
 		learnMoreButton.setAccessibilityRole(.link)
 		learnMoreButton.setAccessibilityLabel("Learn more about sandboxing and approvals")
-		refreshLearnMoreStyle()
-		let header = NSStackView(views: [heading, NSView(), learnMoreButton])
-		header.orientation = .horizontal
-		header.alignment = .centerY
-		header.spacing = LayoutTokens.ApprovalPopover.headerSpacing
+		let header = AppKitLayout.horizontalStack(
+			[heading, NSView(), learnMoreButton],
+			spacing: LayoutTokens.ApprovalPopover.headerSpacing,
+			alignment: .centerY
+		)
 		header.edgeInsets = NSEdgeInsets(
 			top: LayoutTokens.ApprovalPopover.verticalInset,
 			left: LayoutTokens.ApprovalPopover.horizontalInset,
@@ -144,9 +111,6 @@ final class ApprovalPolicyPopoverView: NSViewController
 		heading.heightAnchor
 			.constraint(equalToConstant: LayoutTokens.ApprovalPopover.headerTextHeight)
 			.isActive = true
-		learnMoreButton.heightAnchor
-			.constraint(equalToConstant: LayoutTokens.ApprovalPopover.headerTextHeight)
-			.isActive = true
 
 		return header
 	}
@@ -154,18 +118,6 @@ final class ApprovalPolicyPopoverView: NSViewController
 	@objc private func learnMore()
 	{
 		openDocumentation(DocumentationLinks.sandboxing)
-	}
-
-	private func refreshLearnMoreStyle()
-	{
-		learnMoreButton.attributedTitle = NSAttributedString(
-			string: "Learn more",
-			attributes: [
-				.font: AppKitFontResolver.font(TypographyTokens.Popover.title),
-				.foregroundColor: AppKitColorTokens.secondaryText,
-				.underlineStyle: NSUnderlineStyle.single.rawValue,
-			]
-		)
 	}
 
 	private func makePolicyRows() -> [ApprovalPolicyRow]
@@ -199,7 +151,7 @@ final class ApprovalPolicyPopoverView: NSViewController
 		if let selected = rows.first(where:
 			{
 				$0.mode == selectedMode
-			})
+			}) ?? rows.first
 		{
 			view.window?.makeFirstResponder(selected)
 		}
@@ -216,7 +168,6 @@ final class ApprovalPolicyPopoverView: NSViewController
 	func render(mode: ApprovalMode?)
 	{
 		selectedMode = mode
-		refreshLearnMoreStyle()
 		for row in rows
 		{
 			row.render(selected: row.mode == mode)
@@ -258,164 +209,36 @@ final class ApprovalPolicyPopoverView: NSViewController
 	}
 }
 
-/// Mask the material itself so it cannot fill the panel's square corners.
-private final class ApprovalPolicyBackdropView: NSVisualEffectView
-{
-	private var maskedSize = NSSize.zero
-
-	override func layout()
-	{
-		super.layout()
-		let size = bounds.size
-		guard size.width > 0, size.height > 0, size != maskedSize
-		else
-		{
-			return
-		}
-		maskedSize = size
-		maskImage = NSImage(
-			size: size,
-			flipped: false
-		)
-		{
-			rect in
-			NSColor.white.setFill()
-			NSBezierPath(
-				roundedRect: rect,
-				xRadius: ShapeTokens.Popover.cornerRadius,
-				yRadius: ShapeTokens.Popover.cornerRadius
-			).fill()
-			return true
-		}
-	}
-}
-
 @MainActor
-private final class ApprovalPolicyRow: NSButton
+private final class ApprovalPolicyRow: DesktopMenuRow
 {
 	let mode: ApprovalMode
 	var onNavigate: ((Int) -> Void)?
-	var onHover: ((ApprovalPolicyRow) -> Void)?
-	private let titleLabel = ApprovalPolicyTextField(labelWithString: "")
-	private let explanation = ApprovalPolicyTextField(labelWithString: "")
-	private let symbolView = NSImageView()
-	private let checkView = NSImageView()
-	private var tracking: NSTrackingArea?
-	private var hovered = false
-	private var selected = false
 
 	init(mode: ApprovalMode)
 	{
 		self.mode = mode
-		super.init(frame: .zero)
-		title = ""
-		isBordered = false
-		bezelStyle = .inline
-		focusRingType = .exterior
-		setAccessibilityRole(.menuItem)
-		setAccessibilityLabel(mode.title)
-		setAccessibilityHelp(mode.description)
-
-		configureLabels()
-		configureSymbols()
-		installContents()
-
-		render(selected: false)
-	}
-
-	private func configureLabels()
-	{
-		titleLabel.stringValue = mode.title
-		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Popover.title)
+		let icon: NSImage
+		let explanation: String
 		switch mode
 		{
 		case .askForApproval:
-			explanation.stringValue = "Always ask to edit external files and use the internet"
+			icon = ApprovalPolicyIcons.askForApproval
+			explanation = "Always ask to edit external files and use the internet"
 		case .approveForMe:
-			explanation.stringValue = "Only ask for actions detected as potentially unsafe"
+			icon = ApprovalPolicyIcons.approveForMe
+			explanation = "Only ask for actions detected as potentially unsafe"
 		case .fullAccess:
-			explanation.stringValue =
-				"Unrestricted access to the internet and any file on your computer"
+			icon = ComposerFooterIcons.fullAccess
+			explanation = "Unrestricted access to the internet and any file on your computer"
 		}
-		explanation.font = AppKitFontResolver.font(TypographyTokens.Popover.explanation)
-		explanation.upwardBaselineOffset = ApprovalTextDrawingConfiguration
-			.explanationBaselineOffset
-		explanation.maximumNumberOfLines = 1
-		explanation.lineBreakMode = .byClipping
-	}
-
-	private func configureSymbols()
-	{
-		switch mode
-		{
-		case .askForApproval: symbolView.image = ApprovalPolicyIcons.askForApproval
-		case .approveForMe: symbolView.image = ApprovalPolicyIcons.approveForMe
-		case .fullAccess: symbolView.image = ComposerFooterIcons.fullAccess
-		}
-		symbolView.imageScaling = .scaleProportionallyUpOrDown
-		symbolView.alphaValue = LayoutTokens.ApprovalPopover.idleIconOpacity
-		checkView.image = ApprovalPolicyIcons.selectedCheck
-		checkView.alphaValue = LayoutTokens.ApprovalPopover.idleIconOpacity
-	}
-
-	private func installContents()
-	{
-		let children: [NSView] = [titleLabel, explanation, symbolView, checkView]
-		for child in children
-		{
-			child.translatesAutoresizingMaskIntoConstraints = false
-			addSubview(child)
-			child.setAccessibilityElement(false)
-		}
-		NSLayoutConstraint.activate([
-			symbolView.leadingAnchor.constraint(
-				equalTo: leadingAnchor,
-				constant: LayoutTokens.ApprovalPopover.iconInset
-			),
-			symbolView.centerYAnchor.constraint(equalTo: centerYAnchor),
-			symbolView.widthAnchor
-				.constraint(equalToConstant: LayoutTokens.ApprovalPopover.iconSize),
-			symbolView.heightAnchor
-				.constraint(equalToConstant: LayoutTokens.ApprovalPopover.iconSize),
-			titleLabel.leadingAnchor.constraint(
-				equalTo: leadingAnchor,
-				constant: LayoutTokens.ApprovalPopover.titleInset
-			),
-			titleLabel.topAnchor.constraint(
-				equalTo: topAnchor,
-				constant: LayoutTokens.ApprovalPopover.verticalInset
-			),
-			titleLabel.trailingAnchor.constraint(
-				equalTo: trailingAnchor,
-				constant: -LayoutTokens.ApprovalPopover.horizontalInset
-			),
-			titleLabel.heightAnchor
-				.constraint(equalToConstant: LayoutTokens.ApprovalPopover.titleHeight),
-			explanation.heightAnchor
-				.constraint(equalToConstant: LayoutTokens.ApprovalPopover.explanationHeight),
-			explanation.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-			explanation.topAnchor.constraint(
-				equalTo: titleLabel.bottomAnchor,
-				constant: 0
-			),
-			explanation.trailingAnchor.constraint(
-				equalTo: trailingAnchor,
-				constant: -LayoutTokens.ApprovalPopover.horizontalInset
-			),
-			explanation.bottomAnchor.constraint(
-				lessThanOrEqualTo: bottomAnchor,
-				constant: -LayoutTokens.ApprovalPopover.verticalInset
-			),
-			checkView.trailingAnchor.constraint(
-				equalTo: trailingAnchor,
-				constant: -LayoutTokens.ApprovalPopover.horizontalInset
-			),
-			checkView.centerYAnchor.constraint(equalTo: centerYAnchor),
-			checkView.widthAnchor
-				.constraint(equalToConstant: LayoutTokens.ApprovalPopover.checkSize),
-			checkView.heightAnchor
-				.constraint(equalToConstant: LayoutTokens.ApprovalPopover.checkSize),
-		])
+		super.init(content: Content(
+			title: mode.title,
+			icon: icon,
+			subtitle: explanation,
+			indicator: .checkmark
+		))
+		setAccessibilityHelp(mode.description)
 	}
 
 	required init?(coder: NSCoder)
@@ -423,112 +246,11 @@ private final class ApprovalPolicyRow: NSButton
 		nil
 	}
 
-	override var acceptsFirstResponder: Bool
-	{
-		true
-	}
-
 	func render(selected: Bool)
 	{
-		self.selected = selected
-		let highlightsFullAccess = selected && mode == .fullAccess
-		let tint: NSColor = highlightsFullAccess
-			? ApprovalPopoverStyle.fullAccess : ApprovalPopoverStyle.primary
-		titleLabel.textColor = tint
-		explanation.textColor = highlightsFullAccess ? tint : ApprovalPopoverStyle.secondary
-		symbolView.contentTintColor = highlightsFullAccess ? tint : ApprovalPopoverStyle.icon
-		checkView.contentTintColor = tint
-		checkView.isHidden = !selected
-		setAccessibilityValue(selected ? "Selected" : "Not selected")
-		needsDisplay = true
-	}
-
-	override func hitTest(_ point: NSPoint) -> NSView?
-	{
-		guard super.hitTest(point) != nil
-		else
-		{
-			return nil
-		}
-		return self
-	}
-
-	override func updateTrackingAreas()
-	{
-		super.updateTrackingAreas()
-		if let tracking
-		{
-			removeTrackingArea(tracking)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(area)
-		tracking = area
-	}
-
-	override func mouseEntered(with event: NSEvent)
-	{
-		onHover?(self)
-		hovered = true
-		updateIconOpacity()
-		needsDisplay = true
-	}
-
-	override func mouseExited(with event: NSEvent)
-	{
-		clearHover()
-	}
-
-	private func updateIconOpacity()
-	{
-		let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		let opacity = hovered && dark ? LayoutTokens.ApprovalPopover.hoveredIconOpacity
-			: LayoutTokens.ApprovalPopover.idleIconOpacity
-		symbolView.alphaValue = opacity
-		checkView.alphaValue = opacity
-	}
-
-	func clearHover()
-	{
-		guard hovered
-		else
-		{
-			return
-		}
-		hovered = false
-		updateIconOpacity()
-		needsDisplay = true
-	}
-
-	override func viewDidChangeEffectiveAppearance()
-	{
-		super.viewDidChangeEffectiveAppearance()
-		updateIconOpacity()
-		needsDisplay = true
-	}
-
-	private var rowRadius: CGFloat
-	{
-		effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-			? ShapeTokens.ApprovalPopover.darkRowRadius : ShapeTokens.ApprovalPopover.rowRadius
-	}
-
-	override func draw(_ dirtyRect: NSRect)
-	{
-		if hovered
-		{
-			ApprovalPopoverStyle.rowHover.setFill()
-			NSBezierPath(
-				roundedRect: bounds,
-				xRadius: rowRadius,
-				yRadius: rowRadius
-			).fill()
-		}
-		super.draw(dirtyRect)
+		content.role = selected && mode == .fullAccess ? .warning : .normal
+		checked = selected
+		setAccessibilityHelp(mode.description)
 	}
 
 	override func keyDown(with event: NSEvent)
@@ -553,49 +275,4 @@ enum ApprovalPopoverStyle
 	static let primary = AppKitColorTokens.approvalPrimary
 	static let secondary = AppKitColorTokens.approvalSecondary
 	static let icon = AppKitColorTokens.approvalIcon
-}
-
-/// Keep menu typography consistent with the reference's grayscale antialiasing.
-private final class ApprovalPolicyTextField: NSTextField
-{
-	var horizontalDrawingOffset = ApprovalTextDrawingConfiguration.horizontalOffset
-	var upwardBaselineOffset: CGFloat = 0
-
-	override var allowsVibrancy: Bool
-	{
-		false
-	}
-
-	override func draw(_ dirtyRect: NSRect)
-	{
-		DesktopTextRendering.withFontSmoothingDisabled
-		{
-			NSGraphicsContext.current?.cgContext.translateBy(
-				x: horizontalDrawingOffset,
-				y: isFlipped ? -upwardBaselineOffset : upwardBaselineOffset
-			)
-			super.draw(dirtyRect)
-		}
-	}
-}
-
-private final class ApprovalPolicyLinkButton: NSButton
-{
-	override var allowsVibrancy: Bool
-	{
-		false
-	}
-
-	override func draw(_ dirtyRect: NSRect)
-	{
-		DesktopTextRendering.withFontSmoothingDisabled
-		{
-			NSGraphicsContext.current?.cgContext.translateBy(
-				x: ApprovalTextDrawingConfiguration.linkHorizontalOffset,
-				y: isFlipped ? -ApprovalTextDrawingConfiguration.linkBaselineOffset
-					: ApprovalTextDrawingConfiguration.linkBaselineOffset
-			)
-			super.draw(dirtyRect)
-		}
-	}
 }

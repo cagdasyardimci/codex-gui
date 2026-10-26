@@ -81,8 +81,7 @@ enum ShapeTokens
 
 	enum ApprovalPopover
 	{
-		static let rowRadius: CGFloat = 12.5
-		static let darkRowRadius: CGFloat = 15
+		static let rowRadius: CGFloat = 15
 	}
 
 	enum SidebarMenu
