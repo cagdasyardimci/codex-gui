@@ -5,7 +5,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 {
 	private let label = NSTextField(labelWithString: "")
 	private let divider = NSBox()
-	private let disclosure = NSButton()
+	private let disclosure = DesktopDisclosureButton()
 	private var expanded = false
 	private var onToggle: (() -> Void)?
 	private var timing: ConversationTurnTiming?
@@ -19,10 +19,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		label.translatesAutoresizingMaskIntoConstraints = false
 		divider.boxType = .separator
 		divider.translatesAutoresizingMaskIntoConstraints = false
-		disclosure.isBordered = false
-		disclosure.font = label.font
-		disclosure.imagePosition = .imageRight
-		disclosure.contentTintColor = .secondaryLabelColor
+
 		disclosure.translatesAutoresizingMaskIntoConstraints = false
 		disclosure.target = self
 		disclosure.action = #selector(toggleWork)
@@ -71,15 +68,8 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 			now: now
 		)
 		label.setAccessibilityLabel(label.stringValue)
-		disclosure.attributedTitle = NSAttributedString(
-			string: label.stringValue,
-			attributes: [
-				.font: AppKitFontResolver.interfaceFont(ofSize: 14),
-				.foregroundColor: NSColor.secondaryLabelColor
-			]
-		)
-		disclosure.image = DesktopIcons.image(expanded ? .chevronDown : .chevronRight)
-		disclosure.setAccessibilityLabel("\(expanded ? "Collapse" : "Expand") \(label.stringValue)")
+		disclosure.setLabel(label.stringValue)
+		disclosure.setExpanded(expanded)
 	}
 
 	@objc private func toggleWork()

@@ -2,10 +2,10 @@ import AppKit
 import QuartzCore
 
 @MainActor
-final class TurnSummaryPreview: NSView
+final class TurnSummaryPreview: DesktopHoverPreviewSurface
 {
-	static let cardWidth: CGFloat = 320
-	private static let inset: CGFloat = 10
+	static let cardWidth = DesktopHoverPreviewSurface.preferredWidth
+	private static let inset = DesktopHoverPreviewSurface.contentInset
 	private static let minimumHeaderHeight: CGFloat = 18
 	private static let contentSpacing: CGFloat = 6
 	private static let minimumReplyHeight: CGFloat = 18
@@ -83,11 +83,7 @@ final class TurnSummaryPreview: NSView
 			[header, reply],
 			spacing: Self.contentSpacing
 		)
-		AppKitLayout.pin(
-			stack,
-			to: self,
-			inset: Self.inset
-		)
+		installContent(stack)
 		headerHeight = header.heightAnchor.constraint(equalToConstant: Self.minimumHeaderHeight)
 		headerHeight.isActive = true
 		header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -340,23 +336,6 @@ final class TurnSummaryPreview: NSView
 		return display
 	}
 
-	override func draw(_ dirtyRect: NSRect)
-	{
-		let shape = NSBezierPath(
-			roundedRect: bounds.insetBy(
-				dx: 0.5,
-				dy: 0.5
-			),
-			xRadius: 10,
-			yRadius: 10
-		)
-		NSColor.controlBackgroundColor.setFill()
-		shape.fill()
-		NSColor.separatorColor.setStroke()
-		shape.lineWidth = 0.5
-		shape.stroke()
-	}
-
 	func setBookmarked(_ selected: Bool)
 	{
 		bookmark.image = NSImage(
@@ -376,16 +355,11 @@ final class TurnSummaryPreview: NSView
 	{
 		super.updateTrackingAreas()
 		trackingAreas.forEach(removeTrackingArea)
-		addTrackingArea(NSTrackingArea(
-			rect: .zero,
-			options: [
-				.mouseEnteredAndExited,
-				.activeAlways,
-				.inVisibleRect
-			],
-			owner: self,
-			userInfo: nil
-		))
+		_ = DesktopHoverTracking.replace(
+			in: self,
+			previous: nil,
+			options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect]
+		)
 	}
 
 	override func mouseEntered(with event: NSEvent)

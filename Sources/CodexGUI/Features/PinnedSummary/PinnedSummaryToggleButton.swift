@@ -1,51 +1,25 @@
 import AppKit
 
+/// Toolbar summary toggle uses the shared selected-icon presentation.
 @MainActor
-final class PinnedSummaryToggleButton: NSButton
+final class PinnedSummaryToggleButton: DesktopStyledButton
 {
-	private var hoverTrackingArea: NSTrackingArea?
-	private(set) var isHovered = false
-
-	override func updateTrackingAreas()
+	init(
+		title: String,
+		target: AnyObject?,
+		action: Selector?
+	)
 	{
-		super.updateTrackingAreas()
-		if let hoverTrackingArea
-		{
-			removeTrackingArea(hoverTrackingArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: self,
-			userInfo: nil
+		super.init(
+			title: title,
+			presentation: .toggle
 		)
-		addTrackingArea(area)
-		hoverTrackingArea = area
+		self.target = target
+		self.action = action
 	}
 
-	override func mouseEntered(with event: NSEvent)
+	required init?(coder: NSCoder)
 	{
-		isHovered = true
-		needsDisplay = true
-	}
-
-	override func mouseExited(with event: NSEvent)
-	{
-		isHovered = false
-		needsDisplay = true
-	}
-
-	override func draw(_ dirtyRect: NSRect)
-	{
-		if state == .on || isHovered || isHighlighted
-		{
-			AppKitColorTokens.toggleHighlight.setFill()
-			NSBezierPath(
-				roundedRect: bounds,
-				xRadius: ShapeTokens.Toolbar.summaryToggleRadius,
-				yRadius: ShapeTokens.Toolbar.summaryToggleRadius
-			).fill()
-		}
-		super.draw(dirtyRect)
+		nil
 	}
 }

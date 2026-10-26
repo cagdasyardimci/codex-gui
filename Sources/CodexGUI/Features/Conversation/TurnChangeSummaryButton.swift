@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class TurnChangeSummaryButton: NSButton
+final class TurnChangeSummaryButton: DesktopLayerButton
 {
 	private var summary: ConversationTurnChangeSummary?
 
@@ -13,7 +13,9 @@ final class TurnChangeSummaryButton: NSButton
 		wantsLayer = true
 		layer?.cornerRadius = 17
 		layer?.borderWidth = 1
-		updateColors()
+		layerBackgroundColor = AppKitColorTokens.canvas
+		layerBorderColor = AppKitColorTokens.border
+		updateTitle()
 		setAccessibilityLabel("Turn file changes")
 	}
 
@@ -31,12 +33,6 @@ final class TurnChangeSummaryButton: NSButton
 		)
 	}
 
-	override func viewDidChangeEffectiveAppearance()
-	{
-		super.viewDidChangeEffectiveAppearance()
-		updateColors()
-	}
-
 	func render(_ summary: ConversationTurnChangeSummary?)
 	{
 		self.summary = summary
@@ -47,7 +43,7 @@ final class TurnChangeSummaryButton: NSButton
 			return
 		}
 		let fileText = "\(summary.fileCount) \(summary.fileCount == 1 ? "file" : "files") changed"
-		updateColors()
+		updateTitle()
 		let description: String
 		if summary.isLoading
 		{
@@ -68,16 +64,8 @@ final class TurnChangeSummaryButton: NSButton
 		isHidden = false
 	}
 
-	private func updateColors()
+	private func updateTitle()
 	{
-		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
-			AppKitColorTokens.canvas,
-			for: self
-		)
-		layer?.borderColor = AppKitColorResolution.resolvedCGColor(
-			AppKitColorTokens.border,
-			for: self
-		)
 		guard let summary
 		else
 		{
@@ -99,21 +87,17 @@ final class TurnChangeSummaryButton: NSButton
 				string: fileText,
 				attributes: [
 					.font: NSFont.systemFont(ofSize: 13),
-					.foregroundColor: NSColor.secondaryLabelColor.usingColorSpace(.deviceRGB)
-						?? NSColor.secondaryLabelColor,
+					.foregroundColor: NSColor.secondaryLabelColor,
 				]
 			)
-			let counts = !summary.isLoading
-				? [(" +\(summary.additions)", NSColor.systemGreen),
-					(" -\(summary.deletions)", NSColor.systemRed)] : []
-			for (text, color) in counts
+			if !summary.isLoading
 			{
-				title.append(NSAttributedString(
-					string: text,
-					attributes: [
-						.font: NSFont.systemFont(ofSize: 13),
-						.foregroundColor: color.usingColorSpace(.deviceRGB) ?? color,
-					]
+				title.append(DesktopDiffStats.attributedValue(
+					DesktopDiffStats.Counts(
+						additions: summary.additions,
+						deletions: summary.deletions
+					),
+					presentation: .turnSummary
 				))
 			}
 			attributedTitle = title

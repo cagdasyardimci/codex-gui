@@ -5,8 +5,14 @@ import AppKit
 final class ConversationReplyActionsView: NSStackView
 {
 	static let height = LayoutTokens.Transcript.replyControlSize
-	private let copyButton = DesktopHoverButton()
-	private let bookmarkButton = DesktopHoverButton()
+	private let copyButton = DesktopStyledButton(
+		title: "",
+		presentation: .icon
+	)
+	private let bookmarkButton = DesktopStyledButton(
+		title: "",
+		presentation: .toggle
+	)
 	private var source: String?
 	private var onToggleBookmark: (() -> Void)?
 
@@ -20,13 +26,6 @@ final class ConversationReplyActionsView: NSStackView
 		heightAnchor.constraint(equalToConstant: Self.height).isActive = true
 		for button in [copyButton, bookmarkButton]
 		{
-			AppKitControlStyling.styleButton(button)
-			button.cornerRadius = ShapeTokens.Transcript.replyControlRadius
-			button.contentTintColor = AppKitColorTokens.secondaryText
-			button.imagePosition = .imageOnly
-			button.translatesAutoresizingMaskIntoConstraints = false
-			button.widthAnchor.constraint(equalToConstant: Self.height).isActive = true
-			button.heightAnchor.constraint(equalToConstant: Self.height).isActive = true
 			addArrangedSubview(button)
 		}
 		copyButton.image = DesktopIcons.image(
@@ -69,6 +68,7 @@ final class ConversationReplyActionsView: NSStackView
 
 	func setBookmarked(_ bookmarked: Bool)
 	{
+		bookmarkButton.state = bookmarked ? .on : .off
 		let label = bookmarked ? "Remove turn bookmark" : "Bookmark turn"
 		bookmarkButton.image = NSImage(
 			systemSymbolName: bookmarked ? "bookmark.fill" : "bookmark",

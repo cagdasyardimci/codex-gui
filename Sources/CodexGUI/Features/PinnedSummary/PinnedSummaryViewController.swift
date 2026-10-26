@@ -91,7 +91,6 @@ final class PinnedSummaryViewController: NSViewController
 			symbol: nil,
 			destination: .changes
 		)
-		changes.contentTintColor = .labelColor
 		// Keep the Changes title readable beside the icon and optional totals.
 		let readableWidth = ceil(changes.attributedTitle.size().width) + 4
 		changes.widthAnchor.constraint(greaterThanOrEqualToConstant: readableWidth).isActive = true
@@ -123,22 +122,13 @@ final class PinnedSummaryViewController: NSViewController
 		row.heightAnchor.constraint(equalToConstant: Layout.contentRowHeight).isActive = true
 		if let totals = presentation.sections.changes.value
 		{
-			let additions = label(
-				"+\(formattedCount(totals.additions))",
-				color: .systemGreen
-			)
-			additions.setAccessibilityLabel("\(totals.additions) additions")
-			let deletions = label(
-				"-\(formattedCount(totals.deletions))",
-				color: .systemRed
-			)
-			deletions.setAccessibilityLabel("\(totals.deletions) deletions")
-			row.addArrangedSubview(additions)
-			row.addArrangedSubview(deletions)
-			row.setCustomSpacing(
-				4,
-				after: additions
-			)
+			row.addArrangedSubview(DesktopDiffStats(
+				counts: .init(
+					additions: totals.additions,
+					deletions: totals.deletions
+				),
+				presentation: .summary
+			))
 		}
 		return row
 	}
@@ -162,11 +152,8 @@ final class PinnedSummaryViewController: NSViewController
 		let heading = button(
 			"Subagents",
 			symbol: nil,
-			destination: .subagents
-		)
-		heading.attributedTitle = attributedTitle(
-			"Subagents",
-			color: AppKitColorTokens.captionText
+			destination: .subagents,
+			style: .caption
 		)
 		addSectionHeading(heading)
 		if let agents = section.value
@@ -233,39 +220,20 @@ final class PinnedSummaryViewController: NSViewController
 		{
 			"Sources · \(formattedCount($0))"
 		} ?? "Sources" : "Sources"
-		let sources = DesktopAttributedTitleButton(
+		let sources = DesktopDisclosureButton(
 			title: title,
+			expanded: sourcesExpanded,
+			presentation: .summary,
 			target: self,
 			action: #selector(toggleSources(_:))
 		)
-		sources.isBordered = false
-		sources.alignment = .left
-		sources.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
-		sources.attributedTitle = attributedTitle(
-			title,
-			color: AppKitColorTokens.captionText
-		)
-		sources.contentTintColor = AppKitColorTokens.captionText
-		sources.image = sourcesExpanded ? nil : DesktopIcons.image(.chevronRight)
-		sources.imagePosition = .imageTrailing
-		sources.imageScaling = .scaleProportionallyDown
 		sources.setAccessibilityIdentifier("pinned-summary-sources-disclosure")
-		sources.setAccessibilityLabel(title)
-		sources.setAccessibilityValue(sourcesExpanded ? "Expanded" : "Collapsed")
-		sources.toolTip = sourcesExpanded ? "Collapse sources" : "Expand sources"
 		sourcesDisclosureButton = sources
-		let plus = NSButton(
+		let plus = DesktopSummaryActionButton(
 			title: "Add sources",
-			target: nil,
-			action: nil
+			image: DesktopIcons.image(.plus),
+			presentation: .unavailableSource
 		)
-		plus.isBordered = false
-		plus.isEnabled = false
-		plus.image = DesktopIcons.image(.plus)
-		plus.imagePosition = .imageOnly
-		plus.contentTintColor = .tertiaryLabelColor
-		plus.widthAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
-		plus.heightAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
 		plus.setAccessibilityIdentifier("pinned-summary-add-sources")
 		plus.setAccessibilityLabel("Add sources")
 		plus.toolTip = "Add sources"
@@ -280,11 +248,8 @@ final class PinnedSummaryViewController: NSViewController
 		let all = button(
 			"View all",
 			symbol: nil,
-			destination: .sources
-		)
-		all.attributedTitle = attributedTitle(
-			"View all",
-			color: AppKitColorTokens.mutedText
+			destination: .sources,
+			style: .muted
 		)
 		let icon = iconButton(
 			DesktopIcons.image(
@@ -323,13 +288,10 @@ final class PinnedSummaryViewController: NSViewController
 			let control = button(
 				source.label,
 				symbol: nil,
-				destination: .sources
+				destination: .sources,
+				style: .caption
 			)
 			actions[control] = request
-			control.attributedTitle = attributedTitle(
-				source.label,
-				color: AppKitColorTokens.captionText
-			)
 			text = control
 		}
 		else
@@ -436,17 +398,11 @@ final class PinnedSummaryViewController: NSViewController
 		label: String
 	) -> NSButton
 	{
-		let button = NSButton(
+		let button = DesktopSummaryActionButton(
 			title: title,
-			target: nil,
-			action: nil
+			image: PinnedSummaryIcons.image(title == "+" ? .plus : .ellipsis),
+			presentation: .unavailableAction
 		)
-		button.isBordered = false
-		button.isEnabled = false
-		button.image = PinnedSummaryIcons.image(title == "+" ? .plus : .ellipsis)
-		button.imagePosition = .imageOnly
-		button.widthAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
-		button.heightAnchor.constraint(equalToConstant: Layout.actionSize).isActive = true
 		button.setAccessibilityLabel(label)
 		button.toolTip = "Action unavailable: behavior has not been defined"
 		return button
@@ -456,38 +412,23 @@ final class PinnedSummaryViewController: NSViewController
 		_ title: String,
 		symbol: String?,
 		destination: ContextPanelDestination,
-		recordID: String? = nil
+		recordID: String? = nil,
+		style: DesktopSummaryActionButton.Presentation = .primary
 	) -> NSButton
 	{
-		let button = DesktopAttributedTitleButton(
+		let button = DesktopSummaryActionButton(
 			title: title,
+			image: symbol.flatMap
+			{
+				NSImage(
+					systemSymbolName: $0,
+					accessibilityDescription: nil
+				)
+			},
+			presentation: style,
 			target: self,
 			action: #selector(navigate(_:))
 		)
-		button.isBordered = false
-		button.alignment = .left
-		button.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
-		button.contentTintColor = .labelColor
-		button.attributedTitle = attributedTitle(
-			title,
-			color: .labelColor
-		)
-		button.image = symbol.flatMap
-		{
-			NSImage(
-				systemSymbolName: $0,
-				accessibilityDescription: nil
-			)
-		}
-		button.imagePosition = .imageLeading
-		button.imageScaling = .scaleProportionallyDown
-		button.cell?.lineBreakMode = .byTruncatingTail
-		button.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		button.setAccessibilityLabel(title)
-		button.toolTip = title
 		if let request = presentation?.request(
 			destination,
 			recordID: recordID
@@ -540,12 +481,10 @@ final class PinnedSummaryViewController: NSViewController
 		let icon = button(
 			title,
 			symbol: nil,
-			destination: destination
+			destination: destination,
+			style: .navigationIcon
 		)
 		icon.image = image
-		icon.imagePosition = .imageOnly
-		icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
-		icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
 		return icon
 	}
 
@@ -555,7 +494,7 @@ final class PinnedSummaryViewController: NSViewController
 		scrollView.drawsBackground = false
 		scrollView.hasVerticalScroller = true
 		scrollView.autohidesScrollers = true
-		let document = PinnedSummaryDocumentView()
+		let document = DesktopFlippedView()
 		document.translatesAutoresizingMaskIntoConstraints = false
 		stack.translatesAutoresizingMaskIntoConstraints = false
 		document.addSubview(stack)
@@ -584,20 +523,6 @@ final class PinnedSummaryViewController: NSViewController
 		stack.setCustomSpacing(
 			8,
 			after: divider
-		)
-	}
-
-	private func attributedTitle(
-		_ text: String,
-		color: NSColor
-	) -> NSAttributedString
-	{
-		NSAttributedString(
-			string: text,
-			attributes: [
-				.font: AppKitFontResolver.font(TypographyTokens.Summary.body),
-				.foregroundColor: color,
-			]
 		)
 	}
 
@@ -632,12 +557,4 @@ final class PinnedSummaryViewController: NSViewController
 		onContentHeightChange?()
 	}
 
-}
-
-private final class PinnedSummaryDocumentView: NSView
-{
-	override var isFlipped: Bool
-	{
-		true
-	}
 }

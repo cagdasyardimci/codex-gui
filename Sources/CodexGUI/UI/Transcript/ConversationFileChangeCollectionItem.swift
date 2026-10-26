@@ -5,20 +5,18 @@ import AppKit
 final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 {
 	private let titleLabel = FileChangeTextField(labelWithString: "")
-	private let counts = FileChangeTextField(labelWithString: "")
+	private let counts = DesktopDiffStats(
+		counts: DesktopDiffStats.Counts(
+			additions: 0,
+			deletions: 0
+		),
+		presentation: .transcript
+	)
 	private let fileList = NSStackView()
 	private let separator = NSBox()
-	private let disclosure = FileChangeReviewButton(
-		title: "",
-		target: nil,
-		action: nil
-	)
+	private let disclosure = DesktopDisclosureButton(presentation: .fileList)
 	private var onToggle: (() -> Void)?
-	private let review = FileChangeReviewButton(
-		title: "View changes",
-		target: nil,
-		action: nil
-	)
+	private let review = DesktopFileChangeReviewButton()
 	private var onViewChanges: (() -> Void)?
 
 	override func loadView()
@@ -62,11 +60,11 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 			.defaultLow,
 			for: .horizontal
 		)
-		counts.font = .systemFont(ofSize: 13)
-		let labels = NSStackView(views: [titleLabel, counts])
-		labels.orientation = .vertical
-		labels.alignment = .leading
-		labels.spacing = 4
+		let labels = AppKitLayout.verticalStack(
+			[titleLabel, counts],
+			spacing: 4,
+			alignment: .leading
+		)
 		let spacer = NSView()
 		spacer.setContentHuggingPriority(
 			.defaultLow,
@@ -74,16 +72,6 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		)
 		review.target = self
 		review.action = #selector(showChanges)
-		review.bezelStyle = .inline
-		review.isBordered = false
-		review.wantsLayer = true
-		review.layer?.cornerRadius = 10
-		review.layer?.borderWidth = 1
-		review.layerBorderColor = AppKitColorTokens.border
-		review.contentTintColor = MarkdownAttributedStringRenderer.proseColor
-		review.widthAnchor.constraint(equalToConstant: 102).isActive = true
-		review.heightAnchor.constraint(equalToConstant: 28).isActive = true
-		review.font = .systemFont(ofSize: 13)
 		let row = NSStackView(views: [iconSurface, labels, spacer, review])
 		row.spacing = 10
 		row.alignment = .centerY
@@ -131,11 +119,6 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		])
 		disclosure.target = self
 		disclosure.action = #selector(toggleFiles)
-		disclosure.isBordered = false
-		disclosure.alignment = .left
-		disclosure.font = .systemFont(ofSize: 13)
-		disclosure.contentTintColor = MarkdownAttributedStringRenderer.proseColor
-		disclosure.imagePosition = .imageRight
 		disclosure.translatesAutoresizingMaskIntoConstraints = false
 		view.addSubview(disclosure)
 		NSLayoutConstraint.activate([
@@ -144,7 +127,6 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 				equalTo: view.leadingAnchor,
 				constant: 12
 			),
-			disclosure.heightAnchor.constraint(equalToConstant: 36),
 		])
 	}
 
@@ -158,10 +140,11 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 			width: width,
 			height: changes.isEmpty ? 66 : 75
 				+ CGFloat(expanded ? changes.count : min(
-					3,
+					DesktopDisclosureButton.collapsedFileCount,
 					changes.count
 				)) * 36
-				+ (changes.count > 3 ? 36 : 0)
+				+ (changes.count > DesktopDisclosureButton.collapsedFileCount
+					? DesktopDisclosureButton.Presentation.fileList.rowHeight : 0)
 		)
 	}
 
@@ -177,18 +160,10 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		_ = view
 		self.onViewChanges = onViewChanges
 		self.onToggle = onToggle
-		disclosure.isHidden = changes.count <= 3
-		let remaining = max(
-			0,
-			changes.count - 3
+		disclosure.configureFileList(
+			count: changes.count,
+			expanded: expanded
 		)
-		disclosure.title = expanded ? "Collapse files" :
-			"Show \(remaining) more \(remaining == 1 ? "file" : "files")"
-		disclosure.image = NSImage(
-			systemSymbolName: expanded ? "chevron.up" : "chevron.down",
-			accessibilityDescription: nil
-		)
-		disclosure.setAccessibilityLabel(disclosure.title)
 		let names = changes.map
 		{
 			URL(fileURLWithPath: $0.path).lastPathComponent
@@ -204,7 +179,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		}
 		titleLabel.toolTip = changes.map(\.path).joined(separator: "\n")
 		let diff = changes.map(\.diff).joined(separator: "\n")
-		counts.attributedStringValue = Self.lineCounts(for: diff)
+		counts.update(Self.lineCounts(for: diff))
 		counts.isHidden = diff.isEmpty
 		review.isEnabled = onViewChanges != nil
 		for row in fileList.arrangedSubviews
@@ -213,7 +188,8 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 			row.removeFromSuperview()
 		}
 		separator.isHidden = changes.isEmpty
-		for change in changes.prefix(expanded ? changes.count : 3)
+		for change in changes
+			.prefix(expanded ? changes.count : DesktopDisclosureButton.collapsedFileCount)
 		{
 			appendFileRow(
 				change,
@@ -238,48 +214,15 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 			}
 		}
 
-		let name = FileChangeTextField(labelWithString: path)
-		name.font = .systemFont(ofSize: 13)
-		name.textColor = MarkdownAttributedStringRenderer.proseColor
-		name.lineBreakMode = .byTruncatingMiddle
-		name.toolTip = change.path
-		name.setContentHuggingPriority(
-			.defaultLow,
-			for: .horizontal
+		let row = DesktopResourceRow(
+			title: path,
+			icon: WorkspaceFileIcon.image(relativePath: path),
+			diffStats: change.diff.isEmpty ? nil : Self.lineCounts(for: change.diff),
+			presentation: .file
 		)
-		name.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-
-		let fileCounts = FileChangeTextField(labelWithString: "")
-		fileCounts.font = .systemFont(ofSize: 13)
-		fileCounts.attributedStringValue = Self.lineCounts(for: change.diff)
-		fileCounts.isHidden = change.diff.isEmpty
-		fileCounts.setContentCompressionResistancePriority(
-			.required,
-			for: .horizontal
-		)
-
-		let row = NSView()
-		row.translatesAutoresizingMaskIntoConstraints = false
-		name.translatesAutoresizingMaskIntoConstraints = false
-		fileCounts.translatesAutoresizingMaskIntoConstraints = false
-		row.addSubview(name)
-		row.addSubview(fileCounts)
+		row.titleLabel.toolTip = change.path
 		fileList.addArrangedSubview(row)
-		NSLayoutConstraint.activate([
-			row.widthAnchor.constraint(equalTo: fileList.widthAnchor),
-			row.heightAnchor.constraint(equalToConstant: 36),
-			name.leadingAnchor.constraint(equalTo: row.leadingAnchor),
-			name.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-			name.trailingAnchor.constraint(
-				lessThanOrEqualTo: fileCounts.leadingAnchor,
-				constant: -12
-			),
-			fileCounts.trailingAnchor.constraint(equalTo: row.trailingAnchor),
-			fileCounts.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-		])
+		row.widthAnchor.constraint(equalTo: fileList.widthAnchor).isActive = true
 	}
 
 	@objc private func toggleFiles()
@@ -287,20 +230,13 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 		onToggle?()
 	}
 
-	private static func lineCounts(for diff: String) -> NSAttributedString
+	private static func lineCounts(for diff: String) -> DesktopDiffStats.Counts
 	{
 		let parsed = GitDiffParser.lineCounts(in: diff)
-		let additions = parsed.additions
-		let deletions = parsed.deletions
-		let summary = NSMutableAttributedString(
-			string: "+\(additions)",
-			attributes: [.foregroundColor: NSColor.systemGreen]
+		return DesktopDiffStats.Counts(
+			additions: parsed.additions,
+			deletions: parsed.deletions
 		)
-		summary.append(NSAttributedString(
-			string: " -\(deletions)",
-			attributes: [.foregroundColor: NSColor.systemRed]
-		))
-		return summary
 	}
 
 	@objc private func showChanges()
@@ -312,18 +248,6 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 
 @MainActor
 private final class FileChangeTextField: NSTextField
-{
-	override func draw(_ dirtyRect: NSRect)
-	{
-		MarkdownTextDrawing.withAntialiasing
-		{
-			super.draw(dirtyRect)
-		}
-	}
-}
-
-@MainActor
-private final class FileChangeReviewButton: DesktopLayerButton
 {
 	override func draw(_ dirtyRect: NSRect)
 	{

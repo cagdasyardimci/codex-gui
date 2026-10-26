@@ -4,7 +4,7 @@ import AppKit
 @MainActor
 final class ReviewValidationView: NSView
 {
-	private let commandButton = NSPopUpButton()
+	private let commandButton = DesktopPopupButton()
 	private let statusLabel = NSTextField(wrappingLabelWithString: "")
 	private let outputTextView = NSTextView()
 	private var validations: [ReviewValidation] = []
@@ -74,7 +74,7 @@ final class ReviewValidationView: NSView
 		commandButton.target = self
 		commandButton.action = #selector(commandChanged)
 		commandButton.setAccessibilityLabel("Observed commands for reviewed code state")
-		AppKitControlStyling.stylePopup(commandButton)
+
 		AppKitLayout.compressHorizontally(commandButton)
 
 		statusLabel.textColor = .secondaryLabelColor

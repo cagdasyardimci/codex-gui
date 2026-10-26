@@ -23,7 +23,7 @@ final class GitDiffDocumentController: NSViewController
 	private var fileSections: [Data: GitDiffFileSectionView] = [:]
 	private var fileSectionKeys: [Data: GitDiffFileSectionKey] = [:]
 	private var diffViews: [GitAdaptiveDiffView] = []
-	private let sections = GitChangesSectionsView()
+	private let sections = DesktopFlippedStackView()
 	private(set) var contentScroll = NSScrollView()
 
 	override func loadView()
@@ -540,14 +540,5 @@ final class GitDiffDocumentController: NSViewController
 			collapsedFileIDs.remove(identity)
 		}
 		invalidateSections()
-	}
-}
-
-@MainActor
-private final class GitChangesSectionsView: NSStackView
-{
-	override var isFlipped: Bool
-	{
-		true
 	}
 }

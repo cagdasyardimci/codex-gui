@@ -23,17 +23,17 @@ final class TranscriptViewController: NSViewController,
 
 	var renderedPresentation: TranscriptPresentation?
 	var collectionView = NSCollectionView()
-	let loadEarlierButton = NSButton(
+	let loadEarlierButton = DesktopStyledButton(
 		title: "Load Earlier Messages",
 		target: nil,
 		action: nil
 	)
 	let conversationScrollView = NSScrollView()
 	let turnNavigationRail = TurnNavigationRail()
-	let latestButton = NSButton(
+	let latestButton = DesktopNativeIconButton(
 		title: "Latest Message",
-		target: nil,
-		action: nil
+		label: "Return to latest message",
+		icon: .arrowDown
 	)
 	lazy var utilityRow = makeTranscriptUtilityRow()
 	let transcriptPreparation: TranscriptPreparationCoordinator

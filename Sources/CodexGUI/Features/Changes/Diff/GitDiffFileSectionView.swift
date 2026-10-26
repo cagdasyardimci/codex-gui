@@ -219,10 +219,13 @@ final class GitDiffFileSectionView: NSStackView
 		))
 		icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
 		let path = makeFilePathLabel(file)
-		let additions = NSTextField(labelWithString: "+\(file.additions)")
-		additions.textColor = .systemGreen
-		let deletions = NSTextField(labelWithString: "-\(file.deletions)")
-		deletions.textColor = .systemRed
+		let stats = DesktopDiffStats(
+			counts: .init(
+				additions: file.additions,
+				deletions: file.deletions
+			),
+			presentation: .fileHeader
+		)
 		let toggleDiff = referenceButton(
 			isCollapsed ? "Expand diff for \(file.path)" : "Collapse diff for \(file.path)",
 			image: GitReviewReferenceIcons.image(isCollapsed ? .chevronRight : .chevronDown),
@@ -265,7 +268,7 @@ final class GitDiffFileSectionView: NSStackView
 		more.toolTip = "Actions for the compared file version"
 		actions += [open, more]
 		let header = AppKitLayout.horizontalStack(
-			[icon, path, GitReviewControls.spacer(), additions, deletions, toggleDiff] + actions,
+			[icon, path, GitReviewControls.spacer(), stats, toggleDiff] + actions,
 			spacing: 6
 		)
 		header.edgeInsets = NSEdgeInsets(
@@ -370,14 +373,16 @@ final class GitDiffFileSectionView: NSStackView
 
 	private func makeGapExpansionControls(_ row: GitDiffRow) -> NSStackView
 	{
-		let above = button(
-			"Expand all \(row.hiddenLineCount) unmodified lines from snapshot above",
-			symbol: "chevron.down",
+		let above = DesktopGitContextExpansionButton(
+			hiddenLineCount: row.hiddenLineCount,
+			edge: .above,
+			target: self,
 			action: #selector(expandGap(_:))
 		)
-		let below = button(
-			"Expand all \(row.hiddenLineCount) unmodified lines from snapshot below",
-			symbol: "chevron.up",
+		let below = DesktopGitContextExpansionButton(
+			hiddenLineCount: row.hiddenLineCount,
+			edge: .below,
+			target: self,
 			action: #selector(expandGap(_:))
 		)
 		for control in [above, below]
@@ -392,10 +397,11 @@ final class GitDiffFileSectionView: NSStackView
 		let horizontalDivider = DesktopSurface(AppKitColorTokens.border)
 		horizontalDivider.heightAnchor.constraint(equalToConstant: GapLayout.dividerThickness)
 			.isActive = true
-		let controls = NSStackView(views: [above, horizontalDivider, below])
-		controls.orientation = .vertical
-		controls.alignment = .centerX
-		controls.spacing = 0
+		let controls = AppKitLayout.verticalStack(
+			[above, horizontalDivider, below],
+			spacing: 0,
+			alignment: .centerX
+		)
 		controls.widthAnchor.constraint(equalToConstant: GapLayout.controlWidth).isActive = true
 		for control in [above, below]
 		{
@@ -420,34 +426,6 @@ final class GitDiffFileSectionView: NSStackView
 			target: self,
 			action: action
 		)
-	}
-
-	private func button(
-		_ title: String,
-		symbol: String,
-		action: Selector?
-	) -> NSButton
-	{
-		let symbolImage = NSImage(
-			systemSymbolName: symbol,
-			accessibilityDescription: title
-		) ?? NSImage()
-		let symbolConfiguration = NSImage.SymbolConfiguration(
-			pointSize: 11,
-			weight: .medium
-		)
-		let configuredImage = symbolImage.withSymbolConfiguration(symbolConfiguration) ?? NSImage()
-		let control = NSButton(
-			image: configuredImage,
-			target: self,
-			action: action
-		)
-		control.isBordered = false
-		control.focusRingType = .none
-		control.contentTintColor = .secondaryLabelColor
-		control.toolTip = title
-		control.setAccessibilityLabel(title)
-		return control
 	}
 
 	private func message(_ text: String) -> NSView

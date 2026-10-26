@@ -49,22 +49,12 @@ extension TranscriptViewController
 	{
 		latestButton.target = self
 		latestButton.action = #selector(showLatestMessage)
-		latestButton.setAccessibilityLabel("Return to latest message")
-		AppKitControlStyling.styleButton(
-			latestButton,
-			icon: .arrowDown
-		)
-		latestButton.imagePosition = .imageOnly
-		latestButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
-		latestButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
+
 		latestButton.isHidden = true
 		loadEarlierButton.target = self
 		loadEarlierButton.action = #selector(loadEarlierTurns)
 		loadEarlierButton.setAccessibilityLabel("Load earlier messages in this conversation")
-		AppKitControlStyling.styleButton(
-			loadEarlierButton,
-			icon: .history
-		)
+		loadEarlierButton.symbol = .history
 		loadEarlierButton.widthAnchor.constraint(lessThanOrEqualToConstant: 150).isActive = true
 		loadEarlierButton.lineBreakMode = .byTruncatingTail
 	}

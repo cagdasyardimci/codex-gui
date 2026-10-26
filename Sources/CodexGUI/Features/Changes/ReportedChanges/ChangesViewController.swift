@@ -7,22 +7,22 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 	var onSetReviewed: ((Bool, ReviewReference) -> Void)?
 	var onPrepareChangeRequest: ((ReviewRequestKind, ReviewReference) -> Void)?
 
-	private let turnButton = NSPopUpButton()
+	private let turnButton = DesktopPopupButton()
 	private let originLabel = NSTextField(wrappingLabelWithString: "")
 	let filesTable = NSTableView()
 	private let filesScrollView = NSScrollView()
 	private let emptySpace = NSView()
 	private var reviewRow: NSStackView?
-	let sectionButton = NSPopUpButton()
+	let sectionButton = DesktopPopupButton()
 	private let reviewedButton = NSButton(
 		checkboxWithTitle: "Reviewed",
 		target: nil,
 		action: nil
 	)
-	private let actionsButton = NSPopUpButton()
+	private let actionsButton = DesktopPopupButton()
 	let diffTextView = NSTextView()
 	private let diffScrollView = NSScrollView()
-	let openButton = NSButton(
+	let openButton = DesktopStyledButton(
 		title: "Open",
 		target: nil,
 		action: nil
@@ -367,7 +367,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		turnButton.target = self
 		turnButton.action = #selector(selectTurn)
 		turnButton.setAccessibilityLabel("Review turn")
-		AppKitControlStyling.stylePopup(turnButton)
+
 		originLabel.textColor = .secondaryLabelColor
 		originLabel.font = .systemFont(ofSize: 11)
 		originLabel.setAccessibilityLabel("Source thread and turn of reported changes")
@@ -393,7 +393,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		sectionButton.target = self
 		sectionButton.action = #selector(selectSection)
 		sectionButton.setAccessibilityLabel("Change section in selected file")
-		AppKitControlStyling.stylePopup(sectionButton)
+
 	}
 
 	private func configureReviewActions()
@@ -409,7 +409,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		actionsButton.action = #selector(prepareChangeRequest)
 		actionsButton.setAccessibilityLabel("Ask about or request revision of selected change")
 		actionsButton.isEnabled = false
-		AppKitControlStyling.stylePopup(actionsButton)
 
 	}
 
@@ -454,10 +453,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		openButton.isEnabled = false
 		openButton.setAccessibilityLabel("Open selected changed file in editor")
 		openButton.toolTip = "Open selected file in preferred editor"
-		AppKitControlStyling.styleButton(
-			openButton,
-			icon: .externalLink
-		)
+		openButton.symbol = .externalLink
 		editorStatus.textColor = .secondaryLabelColor
 		editorStatus.font = .systemFont(ofSize: 11)
 		editorStatus.setAccessibilityLabel("Editor handoff status")

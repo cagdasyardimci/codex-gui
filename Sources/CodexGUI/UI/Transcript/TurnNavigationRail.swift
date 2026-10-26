@@ -51,10 +51,12 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 	private var hoveredEntryID: String?
 	private var highlightedIndex: Int?
 	private var needsActiveTurnReveal = false
-	private(set) var previewPanel: NSPanel?
-	private var previewAppearance: DesktopPanelAppearanceBinding?
+	private let hoverPreview = DesktopHoverPreview()
+	var previewPanel: NSPanel?
+	{
+		hoverPreview.panel
+	}
 	private var previewTurnID: String?
-	private var dismissal: DispatchWorkItem?
 
 	convenience init(
 		previewDebounceSleep: @escaping @MainActor (Duration) async throws -> Void
@@ -438,16 +440,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 	{
 		hoverLoadTask?.cancel()
 		hoverLoadTask = nil
-		dismissal?.cancel()
-		dismissal = nil
-		previewAppearance?.invalidate()
-		previewAppearance = nil
-		if let panel = previewPanel
-		{
-			panel.parent?.removeChildWindow(panel)
-			panel.orderOut(nil)
-		}
-		previewPanel = nil
+		hoverPreview.dismiss()
 		previewTurnID = nil
 	}
 
@@ -537,7 +530,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		preview.onEnter =
 		{
 			[weak self] in
-			self?.dismissal?.cancel()
+			self?.hoverPreview.cancelScheduledDismissal()
 			if let self, let current = summaries.first(where:
 				{
 					$0.turnID == summary.turnID
@@ -562,32 +555,13 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 			onBookmark?(current)
 			preview?.setBookmarked(isBookmarked?(current) == true)
 		}
-		let panel = NSPanel(
-			contentRect: preview.bounds,
-			styleMask: [.borderless, .nonactivatingPanel],
-			backing: .buffered,
-			defer: false
+		hoverPreview.present(
+			preview,
+			relativeTo: mark,
+			placement: .besideCentered,
+			interaction: .interactive,
+			height: preview.cardHeight
 		)
-		panel.isOpaque = false
-		panel.backgroundColor = .clear
-		panel.hasShadow = true
-		panel.isReleasedWhenClosed = false
-		panel.animationBehavior = .none
-		panel.contentView = preview
-		previewAppearance = DesktopPanelAppearanceBinding(
-			panel: panel,
-			source: self
-		)
-		previewPanel = panel
-		positionPreview(
-			beside: mark,
-			preview: preview
-		)
-		window?.addChildWindow(
-			panel,
-			ordered: .above
-		)
-		panel.orderFront(nil)
 	}
 
 	private func positionPreview(
@@ -595,54 +569,15 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		preview: TurnSummaryPreview
 	)
 	{
-		guard let window, let panel = previewPanel
-		else
-		{
-			return
-		}
-		let markScreenRect = window.convertToScreen(mark.convert(
-			mark.bounds,
-			to: nil
-		))
-		let visibleScreenFrame = window.screen?.visibleFrame ?? window.frame
-		let previewSize = NSSize(
-			width: TurnSummaryPreview.cardWidth,
-			height: preview.cardHeight
-		)
-		let previewOriginX = min(
-			markScreenRect.maxX + 4,
-			visibleScreenFrame.maxX - previewSize.width
-		)
-		let previewOriginY = max(
-			visibleScreenFrame.minY,
-			min(
-				markScreenRect.midY - previewSize.height / 2,
-				visibleScreenFrame.maxY - previewSize.height
-			)
-		)
-		panel.setFrame(
-			NSRect(
-				x: previewOriginX,
-				y: previewOriginY,
-				width: previewSize.width,
-				height: previewSize.height
-			),
-			display: true
-		)
+		hoverPreview.resize(height: preview.cardHeight)
 	}
 
 	private func scheduleDismissal()
 	{
-		dismissal?.cancel()
-		let work = DispatchWorkItem
+		hoverPreview.scheduleDismissal
 		{
 			[weak self] in self?.dismissPreview()
 		}
-		dismissal = work
-		DispatchQueue.main.asyncAfter(
-			deadline: .now() + 0.2,
-			execute: work
-		)
 	}
 }
 
