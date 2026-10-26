@@ -17,12 +17,13 @@ final class ExpandedImageViewController: NSViewController
 	var onResolutionDemand: ((Int) -> Void)?
 	var onDetach: (() -> Void)?
 
-	private let statusLabel = NSTextField(labelWithString: "Loading image…")
+	private let statusLabel = DesktopStatusView(
+		message: "Loading image…",
+		presentation: .imageOverlay
+	)
 	private let dimmingView = ExpandedImageDimmingView()
 	private var diagramImage: NSImage?
-	private var diagramZoomLabel: NSTextField?
-	private var diagramZoomOutButton: NSButton?
-	private var diagramZoomInButton: NSButton?
+	private var diagramZoomControls: ExpandedImageZoomGroup?
 	private static let diagramZoomStops = [
 		25,
 		33,
@@ -45,8 +46,7 @@ final class ExpandedImageViewController: NSViewController
 	private var fitting = true
 	private var updatingGeometry = false
 	private var backingScale: CGFloat = 1
-	private var boundsObserver: NSObjectProtocol?
-	private var magnificationObserver: NSObjectProtocol?
+	private let lifetime = DesktopPanelLifetime()
 
 	var displayedZoomPercentage: Int
 	{
@@ -130,8 +130,6 @@ final class ExpandedImageViewController: NSViewController
 		imageView.imageScaling = .scaleAxesIndependently
 		scrollView.documentView = imageView
 
-		zoomButton.isBordered = false
-		zoomButton.focusRingType = .none
 		zoomButton.target = self
 		zoomButton.action = #selector(selectZoom(_:))
 		let zoomMenu = NSMenu()
@@ -161,13 +159,6 @@ final class ExpandedImageViewController: NSViewController
 		zoomButton.setAccessibilityLabel("Image zoom")
 		zoomButton.setAccessibilityIdentifier("expanded-image-zoom")
 
-		closeButton.image = NSImage(
-			systemSymbolName: "xmark",
-			accessibilityDescription: "Close image"
-		)
-		closeButton.bezelStyle = .circular
-		closeButton.isBordered = false
-		closeButton.focusRingType = .none
 		closeButton.target = self
 		closeButton.action = #selector(closeImage(_:))
 		closeButton.setAccessibilityLabel("Close image")
@@ -175,8 +166,6 @@ final class ExpandedImageViewController: NSViewController
 		overlay.nextKeyView = zoomButton
 		zoomButton.nextKeyView = closeButton
 		closeButton.nextKeyView = zoomButton
-		statusLabel.textColor = .white
-		statusLabel.alignment = .center
 
 		for child in [scrollView, zoomButton, closeButton, statusLabel]
 		{
@@ -192,10 +181,6 @@ final class ExpandedImageViewController: NSViewController
 				equalTo: view.trailingAnchor,
 				constant: -16
 			),
-			closeButton.widthAnchor.constraint(equalToConstant: 32),
-			closeButton.heightAnchor.constraint(equalToConstant: 32),
-			zoomButton.widthAnchor.constraint(equalToConstant: 64),
-			zoomButton.heightAnchor.constraint(equalToConstant: 32),
 			zoomButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
 			zoomButton.trailingAnchor.constraint(
 				equalTo: closeButton.leadingAnchor,
@@ -217,10 +202,12 @@ final class ExpandedImageViewController: NSViewController
 				equalTo: view.bottomAnchor,
 				constant: -82
 			),
-			statusLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
-			statusLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor)
+			statusLabel.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+			statusLabel.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+			statusLabel.topAnchor.constraint(equalTo: scrollView.topAnchor),
+			statusLabel.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor)
 		])
-		boundsObserver = NotificationCenter.default.addObserver(
+		lifetime.addObserver(
 			forName: NSView.boundsDidChangeNotification,
 			object: scrollView.contentView,
 			queue: .main
@@ -232,7 +219,7 @@ final class ExpandedImageViewController: NSViewController
 				self?.zoomDidChange()
 			}
 		}
-		magnificationObserver = NotificationCenter.default.addObserver(
+		lifetime.addObserver(
 			forName: NSScrollView.willStartLiveMagnifyNotification,
 			object: scrollView,
 			queue: .main
@@ -262,17 +249,13 @@ final class ExpandedImageViewController: NSViewController
 		closeButton.setAccessibilityLabel("Close diagram")
 		closeButton.toolTip = "Close diagram"
 		closeButton.usesLightSurface = true
-		for constraint in closeButton.constraints where
-			constraint.firstAttribute == .width || constraint.firstAttribute == .height
-		{
-			constraint.constant = constraint.firstAttribute == .width ? 42 : 40
-		}
 		for constraint in view.constraints where
 			(constraint.firstItem as? NSView) === closeButton && constraint
 			.firstAttribute == .trailing
 		{
 			constraint.constant = -12
 		}
+		statusLabel.setLoading(false)
 		statusLabel.isHidden = true
 		zoomButton.isHidden = true
 		NSLayoutConstraint.deactivate(view.constraints.filter
@@ -312,53 +295,18 @@ final class ExpandedImageViewController: NSViewController
 			target: self,
 			action: #selector(downloadDiagram(_:))
 		)
-		download.bezelStyle = .circular
-		download.isBordered = false
-		download.contentTintColor = .darkGray
-		download.wantsLayer = true
-		download.layer?.backgroundColor = NSColor.white.cgColor
-		download.layer?.cornerRadius = 20
-		download.appearance = NSAppearance(named: .aqua)
 		download.setAccessibilityLabel("Download image")
 		download.toolTip = "Download image"
-		let minus = ExpandedImageDownloadButton(
-			title: "−",
-			target: self,
-			action: #selector(zoomDiagramOut(_:))
-		)
-		let plus = ExpandedImageDownloadButton(
-			title: "+",
-			target: self,
-			action: #selector(zoomDiagramIn(_:))
-		)
-		for button in [minus, plus]
+		let zoom = ExpandedImageZoomGroup()
+		zoom.onZoomOut =
 		{
-			button.bezelStyle = .circular
-			button.font = NSFont.systemFont(ofSize: 20)
-			button.widthAnchor.constraint(equalToConstant: 36).isActive = true
-			button.heightAnchor.constraint(equalToConstant: 36).isActive = true
+			[weak self] in self?.zoomDiagramOut(nil)
 		}
-		diagramZoomOutButton = minus
-		diagramZoomInButton = plus
-		minus.setAccessibilityLabel("Zoom out")
-		plus.setAccessibilityLabel("Zoom in")
-		let label = NSTextField(labelWithString: "100%")
-		label.alignment = .center
-		label.setAccessibilityLabel("Diagram zoom percentage")
-		diagramZoomLabel = label
-		let zoom = NSStackView(views: [minus, label, plus])
-		zoom.orientation = .horizontal
-		zoom.spacing = 4
-		zoom.edgeInsets = NSEdgeInsets(
-			top: 4,
-			left: 4,
-			bottom: 4,
-			right: 4
-		)
-		zoom.wantsLayer = true
-		zoom.layer?.cornerRadius = 22
-		zoom.layer?.backgroundColor = NSColor.white.cgColor
-		zoom.appearance = NSAppearance(named: .aqua)
+		zoom.onZoomIn =
+		{
+			[weak self] in self?.zoomDiagramIn(nil)
+		}
+		diagramZoomControls = zoom
 		for child in [download, zoom]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
@@ -370,8 +318,6 @@ final class ExpandedImageViewController: NSViewController
 				constant: -8
 			),
 			download.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-			download.widthAnchor.constraint(equalToConstant: 40),
-			download.heightAnchor.constraint(equalToConstant: 40),
 			canvas.topAnchor.constraint(
 				equalTo: view.topAnchor,
 				constant: 48
@@ -408,14 +354,13 @@ final class ExpandedImageViewController: NSViewController
 			zoom.bottomAnchor.constraint(
 				equalTo: view.bottomAnchor,
 				constant: -32
-			),
-			label.widthAnchor.constraint(equalToConstant: 64)
+			)
 		])
 		view.nextKeyView = download
 		download.nextKeyView = closeButton
-		closeButton.nextKeyView = minus
-		minus.nextKeyView = plus
-		plus.nextKeyView = download
+		closeButton.nextKeyView = zoom.zoomOutButton
+		zoom.zoomOutButton.nextKeyView = zoom.zoomInButton
+		zoom.zoomInButton.nextKeyView = download
 		originalPixelSize = image.size
 		imageView.image = image
 		updateGeometry()
@@ -461,13 +406,16 @@ final class ExpandedImageViewController: NSViewController
 			cgImage: thumbnail.image,
 			size: originalPixelSize
 		)
+		statusLabel.setLoading(false)
 		statusLabel.isHidden = true
 		updateGeometry()
 	}
 
 	func showLoadFailure()
 	{
+		statusLabel.setLoading(false)
 		statusLabel.stringValue = "Unable to load image"
+		statusLabel.isHidden = false
 		zoomButton.isEnabled = false
 	}
 
@@ -495,16 +443,7 @@ final class ExpandedImageViewController: NSViewController
 
 	func invalidate()
 	{
-		if let boundsObserver
-		{
-			NotificationCenter.default.removeObserver(boundsObserver)
-		}
-		if let magnificationObserver
-		{
-			NotificationCenter.default.removeObserver(magnificationObserver)
-		}
-		boundsObserver = nil
-		magnificationObserver = nil
+		lifetime.invalidate()
 		onDismiss = nil
 		onDetach = nil
 		onResolutionDemand = nil
@@ -586,9 +525,11 @@ final class ExpandedImageViewController: NSViewController
 
 	private func zoomDidChange()
 	{
-		diagramZoomLabel?.stringValue = "\(displayedZoomPercentage)%"
-		diagramZoomOutButton?.isEnabled = scrollView.magnification > 0.250001
-		diagramZoomInButton?.isEnabled = scrollView.magnification < 4.999999
+		diagramZoomControls?.render(
+			percentage: displayedZoomPercentage,
+			canZoomOut: scrollView.magnification > 0.250001,
+			canZoomIn: scrollView.magnification < 4.999999
+		)
 		zoomButton.menu?.item(withTag: 0)?.title = "\(displayedZoomPercentage)%"
 		zoomButton.selectItem(withTag: 0)
 		zoomButton.needsDisplay = true

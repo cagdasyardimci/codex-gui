@@ -627,6 +627,10 @@ struct FileDocumentViewTests
 				copy.bounds,
 				to: controller.view
 			)
+			#expect(buttonRect.size == NSSize(
+				width: 28,
+				height: 28
+			))
 			let sourceRect = scroll.convert(
 				scroll.bounds,
 				to: controller.view

@@ -169,10 +169,7 @@ final class FilesViewController: NSViewController
 		}
 		let actionGroup = ViewerToolbarGroup(
 			toolbarActions,
-			presentation: .capsule,
-			radius: 17,
-			horizontalInset: 3,
-			verticalInset: 3
+			presentation: .actions
 		)
 		for child in [breadcrumb, actionGroup]
 		{
@@ -193,9 +190,12 @@ final class FilesViewController: NSViewController
 		])
 
 		root.addSubview(toolbar)
-		documentColumn.addSubview(document.view)
+		AppKitLayout.pin(
+			document.view,
+			to: documentColumn,
+			inset: 0
+		)
 		toolbar.translatesAutoresizingMaskIntoConstraints = false
-		document.view.translatesAutoresizingMaskIntoConstraints = false
 		NSLayoutConstraint.activate([
 			toolbar.leadingAnchor.constraint(
 				equalTo: root.leadingAnchor,
@@ -210,10 +210,6 @@ final class FilesViewController: NSViewController
 				constant: 8
 			),
 			toolbar.heightAnchor.constraint(equalToConstant: 34),
-			document.view.leadingAnchor.constraint(equalTo: documentColumn.leadingAnchor),
-			document.view.trailingAnchor.constraint(equalTo: documentColumn.trailingAnchor),
-			document.view.topAnchor.constraint(equalTo: documentColumn.topAnchor),
-			document.view.bottomAnchor.constraint(equalTo: documentColumn.bottomAnchor),
 		])
 
 		let split = ViewerNavigatorSplitView(
@@ -663,12 +659,7 @@ final class FilesViewController: NSViewController
 			}
 		if let application
 		{
-			let icon = NSWorkspace.shared.icon(forFile: application.path)
-			icon.size = NSSize(
-				width: 16,
-				height: 16
-			)
-			actionsButton.image = icon
+			actionsButton.image = FileOpeningDestinations.menuIcon(for: application)
 		}
 		else
 		{

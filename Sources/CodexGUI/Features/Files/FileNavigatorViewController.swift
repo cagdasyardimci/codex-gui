@@ -83,7 +83,7 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 	override func loadView()
 	{
 		let container = DesktopSurface(AppKitColorTokens.canvas)
-		rootButton.cornerRadius = 9
+		rootButton.presentation = .rootSelector
 		rootButton.image = FileViewerIcons.image(.folder)
 		rootButton.imagePosition = .imageLeading
 		rootButton.alignment = .left
@@ -173,23 +173,23 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 			self?.requestExpandedDirectory(row)
 		}
 		let headerDivider = DesktopSurface(AppKitColorTokens.subtleEdge)
-		let header = NSStackView(views: [rootButton, headerDivider])
-		header.orientation = .vertical
-		header.alignment = .width
-		header.spacing = 8
+		let header = AppKitLayout.verticalStack(
+			[rootButton, headerDivider],
+			spacing: 8,
+			alignment: .width
+		)
 		navigator = ViewerFileNavigatorView(
 			filterField: filterField,
 			tree: outline,
 			headerView: header,
 			statusView: filterStatus
 		)
-		navigator.translatesAutoresizingMaskIntoConstraints = false
-		container.addSubview(navigator)
+		AppKitLayout.pin(
+			navigator,
+			to: container,
+			inset: 0
+		)
 		NSLayoutConstraint.activate([
-			navigator.topAnchor.constraint(equalTo: container.topAnchor),
-			navigator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-			navigator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-			navigator.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 			rootButton.widthAnchor.constraint(equalTo: header.widthAnchor),
 			rootButton.heightAnchor.constraint(equalToConstant: 28),
 			headerDivider.widthAnchor.constraint(equalTo: header.widthAnchor),

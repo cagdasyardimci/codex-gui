@@ -15,10 +15,7 @@ final class ViewerFileNavigatorView: NSView
 	{
 		super.init(frame: .zero)
 		filterField.placeholderString = "Filter files…"
-		filterField.font = .systemFont(ofSize: 13)
-		filterField.controlSize = .large
-		filterField.isBezeled = false
-		filterField.drawsBackground = false
+		filterField.presentation = .viewer
 		filterField.sendsSearchStringImmediately = true
 		scrollView.documentView = tree
 		scrollView.hasVerticalScroller = true
@@ -29,38 +26,19 @@ final class ViewerFileNavigatorView: NSView
 		{
 			$0
 		}
-		let stack = NSStackView(views: arranged)
-		stack.orientation = .vertical
-		stack.alignment = .width
-		stack.spacing = 8
-		stack.translatesAutoresizingMaskIntoConstraints = false
-		addSubview(stack)
-
-		let insets = [
-			stack.topAnchor.constraint(
-				equalTo: topAnchor,
-				constant: 8
-			),
-			stack.leadingAnchor.constraint(
-				equalTo: leadingAnchor,
-				constant: 8
-			),
-			stack.trailingAnchor.constraint(
-				equalTo: trailingAnchor,
-				constant: -8
-			),
-			stack.bottomAnchor.constraint(
-				equalTo: bottomAnchor,
-				constant: -8
-			)
-		]
+		let stack = AppKitLayout.verticalStack(
+			arranged,
+			spacing: 8,
+			alignment: .width
+		)
 		// A hidden navigator has zero width during split-view transitions.
-		for inset in insets
-		{
-			inset.priority = NSLayoutConstraint.Priority(999)
-		}
-		var constraints = insets + [
-			filterField.heightAnchor.constraint(equalToConstant: 28),
+		AppKitLayout.pin(
+			stack,
+			to: self,
+			inset: 8,
+			priority: NSLayoutConstraint.Priority(999)
+		)
+		var constraints = [
 			scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 100)
 		]
 		for view in arranged

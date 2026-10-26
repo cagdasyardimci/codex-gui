@@ -53,15 +53,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	{
 		comparisonToolbarView.targetField
 	}
-	private var additionsLabel: NSTextField
-	{
-		comparisonToolbarView.additionsLabel
-	}
-	private var deletionsLabel: NSTextField
-	{
-		comparisonToolbarView.deletionsLabel
-	}
-	private let statusLabel = NSTextField(wrappingLabelWithString: "")
+	private let statusLabel = DesktopStatusView(
+		message: "",
+		presentation: .inlineCompact
+	)
 	private let filterField = ViewerSearchField()
 	private let tree = ViewerFileTreeView()
 	private let navigator = NSView()
@@ -228,9 +223,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		internalChangesTab = tab
 		tab.isHidden = !showsInternalChangesTab
 		let toolbarScroll = makeComparisonToolbarScrollView()
-		AppKitLayout.compressHorizontally(statusLabel)
-		statusLabel.font = .systemFont(ofSize: 11)
-		statusLabel.textColor = .secondaryLabelColor
+		statusLabel.setContentCompressionResistancePriority(
+			.defaultLow,
+			for: .horizontal
+		)
 		statusLabel.setAccessibilityLabel("Git comparison status")
 		let banner = makeLargeComparisonBanner()
 		largeComparisonBanner = banner
@@ -255,10 +251,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		let toolbarDivider = DesktopSurface(AppKitColorTokens.subtleEdge)
 		toolbarDivider.heightAnchor.constraint(equalToConstant: 1).isActive = true
 		let rows = [tab, toolbarScroll, toolbarDivider, statusLabel, banner, body]
-		let layout = NSStackView(views: rows)
-		layout.orientation = .vertical
-		layout.alignment = .leading
-		layout.spacing = 0
+		let layout = AppKitLayout.verticalStack(
+			rows,
+			spacing: 0
+		)
 		AppKitLayout.pin(
 			layout,
 			to: surface,
@@ -314,8 +310,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				[titleIcon, title, GitReviewControls.spacer(), close],
 				spacing: 8
 			),
-			radius: 9,
-			verticalInset: 2
+			presentation: .tab
 		)
 		let tabWidth = tab.widthAnchor.constraint(equalToConstant: 240)
 		tabWidth.isActive = true
@@ -438,7 +433,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		)
 		let banner = ViewerToolbarGroup(
 			row,
-			radius: 20
+			presentation: .banner
 		)
 		let bannerHeight = banner.heightAnchor.constraint(equalToConstant: 64)
 		bannerHeight.isActive = true
@@ -654,12 +649,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		filterField.stringValue = state.filter
 		let current = state.snapshot != nil && !state.isStale && state.pendingRequest == nil
 		fileJumpButton?.isEnabled = current && !(state.snapshot?.files.isEmpty ?? true)
-		let additionCount = (state.snapshot?.additions ?? 0)
-			.formatted(.number.locale(Locale(identifier: "en_US")))
-		additionsLabel.stringValue = current ? "+\(additionCount)" : "—"
-		let deletionCount = (state.snapshot?.deletions ?? 0)
-			.formatted(.number.locale(Locale(identifier: "en_US")))
-		deletionsLabel.stringValue = current ? "-\(deletionCount)" : "—"
+		comparisonToolbarView.diffStats.update(current ? DesktopDiffStats.Counts(
+			additions: state.snapshot?.additions ?? 0,
+			deletions: state.snapshot?.deletions ?? 0
+		) : nil)
 		return current
 	}
 
@@ -848,17 +841,15 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				$0.id.utf8.elementsEqual(id.utf8)
 			})
 		{
-			if file.additions > 0
+			if file.additions > 0 || file.deletions > 0
 			{
-				let plus = NSTextField(labelWithString: "+\(file.additions)")
-				plus.textColor = .systemGreen
-				accessories.append(plus)
-			}
-			if file.deletions > 0
-			{
-				let minus = NSTextField(labelWithString: "-\(file.deletions)")
-				minus.textColor = .systemRed
-				accessories.append(minus)
+				accessories.append(DesktopDiffStats(
+					counts: DesktopDiffStats.Counts(
+						additions: file.additions,
+						deletions: file.deletions
+					),
+					presentation: .fileTree
+				))
 			}
 		}
 		return ViewerFileTreePresentation(

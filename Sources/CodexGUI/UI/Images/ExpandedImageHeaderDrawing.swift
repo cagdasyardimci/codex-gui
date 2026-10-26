@@ -38,23 +38,4 @@ enum ExpandedImageHeaderDrawing
 		}
 	}
 
-
-	static func updateTracking(
-		view: NSView,
-		previous: NSTrackingArea?
-	) -> NSTrackingArea
-	{
-		if let previous
-		{
-			view.removeTrackingArea(previous)
-		}
-		let tracking = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-			owner: view,
-			userInfo: nil
-		)
-		view.addTrackingArea(tracking)
-		return tracking
-	}
 }

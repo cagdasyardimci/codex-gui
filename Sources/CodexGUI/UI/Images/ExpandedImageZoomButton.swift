@@ -4,6 +4,33 @@ import AppKit
 @MainActor
 final class ExpandedImageZoomButton: NSPopUpButton
 {
+	override init(
+		frame buttonFrame: NSRect,
+		pullsDown flag: Bool
+	)
+	{
+		super.init(
+			frame: buttonFrame,
+			pullsDown: flag
+		)
+		isBordered = false
+		focusRingType = .none
+		font = AppKitFontResolver.font(TypographyTokens.Button.compact)
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
+	override var intrinsicContentSize: NSSize
+	{
+		NSSize(
+			width: LayoutTokens.Button.imageZoomWidth,
+			height: LayoutTokens.Button.regularHeight
+		)
+	}
+
 	override var alignmentRectInsets: NSEdgeInsets
 	{
 		NSEdgeInsets(
@@ -20,8 +47,8 @@ final class ExpandedImageZoomButton: NSPopUpButton
 	override func updateTrackingAreas()
 	{
 		super.updateTrackingAreas()
-		hoverTracking = ExpandedImageHeaderDrawing.updateTracking(
-			view: self,
+		hoverTracking = DesktopHoverTracking.replace(
+			in: self,
 			previous: hoverTracking
 		)
 	}

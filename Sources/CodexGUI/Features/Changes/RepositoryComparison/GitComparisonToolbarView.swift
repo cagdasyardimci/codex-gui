@@ -31,8 +31,21 @@ final class GitComparisonToolbarView: NSStackView
 	)
 	let baseField = NSTextField(string: "HEAD^")
 	let targetField = NSTextField(string: "HEAD")
-	let additionsLabel = NSTextField(labelWithString: "+0")
-	let deletionsLabel = NSTextField(labelWithString: "-0")
+	let diffStats = DesktopDiffStats(
+		counts: .init(
+			additions: 0,
+			deletions: 0
+		),
+		presentation: .toolbar
+	)
+	var additionsLabel: NSTextField
+	{
+		diffStats.additionsLabel
+	}
+	var deletionsLabel: NSTextField
+	{
+		diffStats.deletionsLabel
+	}
 	private(set) var revisionComparison: NSView?
 	private(set) var diffLayoutButton: NSButton?
 	private(set) var fileJumpButton: NSButton?
@@ -107,14 +120,8 @@ final class GitComparisonToolbarView: NSStackView
 		))
 		scopeButton.imagePosition = .imageTrailing
 		scopeButton.contentTintColor = .labelColor
-		additionsLabel.textColor = .systemGreen
-		deletionsLabel.textColor = .systemRed
-		for count in [additionsLabel, deletionsLabel]
-		{
-			count.font = .systemFont(ofSize: 13)
-		}
 		let scope = AppKitLayout.horizontalStack(
-			[scopeButton, additionsLabel, deletionsLabel],
+			[scopeButton, diffStats],
 			spacing: 6
 		)
 		return scope
@@ -167,10 +174,8 @@ final class GitComparisonToolbarView: NSStackView
 				[baseField, arrow, targetField, revisionMenu],
 				spacing: 8
 			),
-			presentation: .capsule,
-			verticalInset: 4
+			presentation: .revisions
 		)
-		refs.heightAnchor.constraint(equalToConstant: 36).isActive = true
 		refs.setAccessibilityElement(true)
 		refs.setAccessibilityLabel("Revision comparison")
 		revisionComparison = refs
@@ -237,9 +242,7 @@ final class GitComparisonToolbarView: NSStackView
 					toggle],
 				spacing: 2
 			),
-			presentation: .capsule,
-			horizontalInset: 6,
-			verticalInset: 2.5
+			presentation: .tools
 		)
 		return tools
 	}

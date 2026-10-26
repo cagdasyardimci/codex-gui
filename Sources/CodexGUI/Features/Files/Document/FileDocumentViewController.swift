@@ -32,16 +32,6 @@ private final class FileMarkdownPreviewView: RichFilePreviewView
 	}
 }
 
-/// The scroll document exposes an extent without making metadata height a viewport minimum.
-@MainActor
-private final class FileMarkdownMetadataDocumentView: NSView
-{
-	override var isFlipped: Bool
-	{
-		true
-	}
-}
-
 @MainActor
 final class FileDocumentViewController: NSViewController
 {
@@ -70,26 +60,30 @@ final class FileDocumentViewController: NSViewController
 	private var sourceViews: [UUID: FileSourceView] = [:]
 	private let header = NSStackView()
 	private let copyBar = NSView()
-	private let copyMarkdownButton = DesktopHoverButton()
+	private let copyMarkdownButton = DesktopToolbarIconButton(
+		image: nil,
+		label: "Copy Markdown",
+		preset: .contentToolbar
+	)
 	private let titleLabel = NSTextField(labelWithString: "")
-	private let modeButton = NSButton(
+	private let modeButton = DesktopStyledButton(
 		title: "View source",
-		target: nil,
-		action: nil
+		presentation: .nativeDefault
 	)
-	private let wrapButton = NSButton(
+	private let wrapButton = DesktopStyledButton(
 		title: "Wrap lines",
-		target: nil,
-		action: nil
+		presentation: .nativeDefault
 	)
-	private let actionsButton = NSButton(
+	private let actionsButton = DesktopStyledButton(
 		title: "Actions",
-		target: nil,
-		action: nil
+		presentation: .nativeDefault
 	)
 	private let messageLabel = ViewerStatusView(message: "")
 	private let emptyState = FileViewerEmptyStateView()
-	private let statusLabel = NSTextField(wrappingLabelWithString: "")
+	private let statusLabel = DesktopStatusView(
+		message: "",
+		presentation: .inline
+	)
 	private let contentHolder = NSView()
 	private var headerCollapsedHeight: NSLayoutConstraint?
 	private var contentTrailing: NSLayoutConstraint?
@@ -99,7 +93,7 @@ final class FileDocumentViewController: NSViewController
 	private let previewContainer = NSStackView()
 	private let metadataHolder = NSView()
 	private let metadataScroll = NSScrollView()
-	private let metadataDocument = FileMarkdownMetadataDocumentView()
+	private let metadataDocument = DesktopFlippedView()
 	private var metadataView: MarkdownFileMetadataView?
 	private var metadataHeight: NSLayoutConstraint?
 	private var isUpdatingMetadataGeometry = false
@@ -185,7 +179,6 @@ final class FileDocumentViewController: NSViewController
 		header.addArrangedSubview(NSView())
 		for button in [modeButton, wrapButton, actionsButton]
 		{
-			button.bezelStyle = .rounded
 			header.addArrangedSubview(button)
 		}
 		modeButton.target = self
@@ -194,17 +187,11 @@ final class FileDocumentViewController: NSViewController
 		wrapButton.action = #selector(toggleWrap)
 		actionsButton.target = self
 		actionsButton.action = #selector(showActions)
-		copyMarkdownButton.bezelStyle = .texturedRounded
-		copyMarkdownButton.isBordered = false
-		copyMarkdownButton.imagePosition = .imageOnly
-		copyMarkdownButton.contentTintColor = AppKitColorTokens.secondaryText
 		copyMarkdownButton.image = DesktopIcons.image(
 			.copy,
 			size: 16,
 			accessibilityDescription: "Copy Markdown"
 		)
-		copyMarkdownButton.toolTip = "Copy Markdown"
-		copyMarkdownButton.setAccessibilityLabel("Copy Markdown")
 		copyMarkdownButton.target = self
 		copyMarkdownButton.action = #selector(copyCurrentMarkdown)
 		copyBar.addSubview(copyMarkdownButton)
@@ -214,12 +201,8 @@ final class FileDocumentViewController: NSViewController
 				equalTo: copyBar.trailingAnchor,
 				constant: -8
 			),
-			copyMarkdownButton.centerYAnchor.constraint(equalTo: copyBar.centerYAnchor),
-			copyMarkdownButton.widthAnchor.constraint(equalToConstant: 28),
-			copyMarkdownButton.heightAnchor.constraint(equalToConstant: 28)
+			copyMarkdownButton.centerYAnchor.constraint(equalTo: copyBar.centerYAnchor)
 		])
-		statusLabel.textColor = .secondaryLabelColor
-		statusLabel.lineBreakMode = .byWordWrapping
 		statusLabel.isHidden = true
 		previewScroll.hasVerticalScroller = true
 		previewScroll.autohidesScrollers = true

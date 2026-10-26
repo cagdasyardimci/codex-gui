@@ -169,7 +169,8 @@ final class ExpandedImagePreview
 		{
 			parent.makeFirstResponder(controller.view)
 		}
-		let escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown)
+		let lifetime = DesktopPanelLifetime()
+		lifetime.monitorLocalEvents(matching: .keyDown)
 		{
 			[weak self, weak parent, weak overlayWindow] event in
 			guard let self, let parent,
@@ -181,7 +182,7 @@ final class ExpandedImagePreview
 			self.dismiss()
 			return nil
 		}
-		let closeObserver = NotificationCenter.default.addObserver(
+		lifetime.addObserver(
 			forName: NSWindow.willCloseNotification,
 			object: parent,
 			queue: .main
@@ -193,12 +194,11 @@ final class ExpandedImagePreview
 				self?.dismiss()
 			}
 		}
-		var geometryObservers: [NSObjectProtocol] = []
 		if let overlayWindow
 		{
 			for notification in [NSWindow.didResizeNotification, NSWindow.didMoveNotification]
 			{
-				geometryObservers.append(NotificationCenter.default.addObserver(
+				lifetime.addObserver(
 					forName: notification,
 					object: parent,
 					queue: .main
@@ -218,18 +218,16 @@ final class ExpandedImagePreview
 						)
 						overlayWindow.contentView?.layoutSubtreeIfNeeded()
 					}
-				})
+				}
 			}
 		}
 		teardown = ExpandedImagePresentationTeardown(
 			controller: controller,
 			parent: parent,
 			previousResponder: previousResponder,
-			closeObserver: closeObserver,
-			escapeMonitor: escapeMonitor,
+			lifetime: lifetime,
 			hiddenSiblings: hiddenSiblings,
-			overlayWindow: overlayWindow,
-			geometryObservers: geometryObservers
+			overlayWindow: overlayWindow
 		)
 		if preparedDiagram != nil
 		{
@@ -321,31 +319,25 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 	private var controller: ExpandedImageViewController?
 	private weak var parent: NSWindow?
 	private weak var previousResponder: NSResponder?
-	private var closeObserver: NSObjectProtocol?
-	private var escapeMonitor: Any?
+	private let lifetime: DesktopPanelLifetime
 	private var hiddenSiblings: [ExpandedImageAccessibilitySnapshot]
 	private var overlayWindow: NSWindow?
-	private var geometryObservers: [NSObjectProtocol]
 
 	init(
 		controller: ExpandedImageViewController,
 		parent: NSWindow,
 		previousResponder: NSResponder?,
-		closeObserver: NSObjectProtocol,
-		escapeMonitor: Any?,
+		lifetime: DesktopPanelLifetime,
 		hiddenSiblings: [ExpandedImageAccessibilitySnapshot],
-		overlayWindow: NSWindow?,
-		geometryObservers: [NSObjectProtocol]
+		overlayWindow: NSWindow?
 	)
 	{
 		self.controller = controller
 		self.parent = parent
 		self.previousResponder = previousResponder
-		self.closeObserver = closeObserver
-		self.escapeMonitor = escapeMonitor
+		self.lifetime = lifetime
 		self.hiddenSiblings = hiddenSiblings
 		self.overlayWindow = overlayWindow
-		self.geometryObservers = geometryObservers
 	}
 
 	func dismiss()
@@ -355,21 +347,7 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 		{
 			return
 		}
-		if let closeObserver
-		{
-			NotificationCenter.default.removeObserver(closeObserver)
-		}
-		if let escapeMonitor
-		{
-			NSEvent.removeMonitor(escapeMonitor)
-		}
-		closeObserver = nil
-		escapeMonitor = nil
-		for observer in geometryObservers
-		{
-			NotificationCenter.default.removeObserver(observer)
-		}
-		geometryObservers.removeAll()
+		lifetime.invalidate()
 		controller.invalidate()
 		let presentationWindow = overlayWindow ?? parent
 		let ownsFocus = presentationWindow?.firstResponder === controller.view

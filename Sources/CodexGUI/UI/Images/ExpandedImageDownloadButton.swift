@@ -1,16 +1,44 @@
 import AppKit
 
-/// Circular overlay actions use their full bounds rather than native bezel alignment insets.
+/// Complete diagram actions own their overlay/step presentation and semantic dimensions.
 @MainActor
-final class ExpandedImageDownloadButton: NSButton
+final class ExpandedImageDownloadButton: DesktopStyledButton
 {
-	override var alignmentRectInsets: NSEdgeInsets
+	init(
+		image: NSImage,
+		target: AnyObject?,
+		action: Selector?
+	)
 	{
-		NSEdgeInsets(
-			top: 0,
-			left: 0,
-			bottom: 0,
-			right: 0
+		super.init(
+			title: "",
+			presentation: .imageOverlay(light: true),
+			size: .regular
 		)
+		self.image = image
+		imagePosition = .imageOnly
+		self.target = target
+		self.action = action
+		setAccessibilityLabel("Download image")
+	}
+
+	init(
+		title: String,
+		target: AnyObject?,
+		action: Selector?
+	)
+	{
+		super.init(
+			title: title,
+			presentation: .zoomStep,
+			size: .regular
+		)
+		self.target = target
+		self.action = action
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
 	}
 }

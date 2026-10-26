@@ -6,7 +6,7 @@ final class ViewerToolbarButton: NSButton
 {
 	enum Presentation
 	{
-		case capsule, grouped
+		case capsule, grouped, rootSelector
 	}
 
 	var presentation: Presentation = .capsule
@@ -45,7 +45,10 @@ final class ViewerToolbarButton: NSButton
 	}
 
 	private let shadowLayer = CALayer()
-	var cornerRadius: CGFloat?
+	private var cornerRadius: CGFloat?
+	{
+		presentation == .rootSelector ? 9 : nil
+	}
 	var showsSelection = false
 	var trailingImage: NSImage?
 	{
@@ -125,7 +128,7 @@ final class ViewerToolbarButton: NSButton
 	private func updateShadow()
 	{
 		shadowLayer.isHidden = presentation == .grouped
-		guard presentation == .capsule
+		guard presentation != .grouped
 		else
 		{
 			return
@@ -151,14 +154,14 @@ final class ViewerToolbarButton: NSButton
 			xRadius: radius,
 			yRadius: radius
 		)
-		if presentation == .capsule || selected || isHighlighted
+		if presentation != .grouped || selected || isHighlighted
 		{
 			let fill = selected ? AppKitColorTokens.viewerControlSelection : AppKitColorTokens
 				.canvas
 			(isHighlighted ? AppKitColorTokens.rowHighlight : fill).setFill()
 			path.fill()
 		}
-		if presentation == .capsule
+		if presentation != .grouped
 		{
 			AppKitColorTokens.subtleEdge.setStroke()
 			path.lineWidth = 1
@@ -192,7 +195,7 @@ private final class ViewerToolbarButtonCell: NSButtonCell
 			return
 		}
 		var content = title.isEmpty ? cellFrame : cellFrame.insetBy(
-			dx: button.presentation == .capsule ? 12 : 8,
+			dx: button.presentation == .grouped ? 8 : 12,
 			dy: 0
 		)
 		if trailingImage != nil
@@ -211,7 +214,7 @@ private final class ViewerToolbarButtonCell: NSButtonCell
 			DesktopIcons.draw(
 				trailingImage,
 				in: NSRect(
-					x: cellFrame.maxX - (button.presentation == .capsule ? 24 : 20),
+					x: cellFrame.maxX - (button.presentation == .grouped ? 20 : 24),
 					y: cellFrame.midY - 6,
 					width: 12,
 					height: 12
