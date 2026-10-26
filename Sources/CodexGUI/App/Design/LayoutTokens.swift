@@ -16,7 +16,7 @@ enum LayoutTokens
 		static let shadowOutset: CGFloat = 24
 		static var rowHeight: CGFloat
 		{
-			TypographyTokens.SidebarMenu.lineHeight + 2 * verticalInset
+			LayoutTokens.MenuRow.height
 		}
 		static var height: CGFloat
 		{
@@ -660,15 +660,15 @@ enum LayoutTokens
 		static let headerTextHeight: CGFloat = 16
 		static let horizontalInset: CGFloat = 8
 		static let verticalInset: CGFloat = 5
-		static let titleHeight: CGFloat = 18.5703125
-		static let explanationHeight: CGFloat = 14
+		static let titleHeight = LayoutTokens.MenuRow.titleLineHeight
+		static let explanationHeight = LayoutTokens.MenuRow.subtitleLineHeight
 		static let iconSlotSize: CGFloat = 16
 		static let iconSize: CGFloat = 18
 		static let iconTextSpacing: CGFloat = 6
 		static let checkSize: CGFloat = 16
 		static var rowHeight: CGFloat
 		{
-			verticalInset * 2 + titleHeight + explanationHeight
+			LayoutTokens.MenuRow.detailedHeight
 		}
 		static var preferredHeight: CGFloat
 		{
@@ -739,8 +739,8 @@ enum LayoutTokens
 		static let verticalInset: CGFloat = 5
 		static let headerVerticalInset: CGFloat = 4
 		static let checkTextSpacing: CGFloat = 6
-		static let titleHeight = TypographyTokens.ModelPopover.menuLineHeight
-		static let secondaryHeight = TypographyTokens.ModelPopover.modelExplanationLineHeight
+		static let titleHeight = LayoutTokens.MenuRow.titleLineHeight
+		static let secondaryHeight = LayoutTokens.MenuRow.subtitleLineHeight
 		static let checkSize: CGFloat = 16
 		static var headerHeight: CGFloat
 		{
@@ -748,7 +748,7 @@ enum LayoutTokens
 		}
 		static var rowHeight: CGFloat
 		{
-			titleHeight + 2 * verticalInset
+			LayoutTokens.MenuRow.height
 		}
 	}
 
