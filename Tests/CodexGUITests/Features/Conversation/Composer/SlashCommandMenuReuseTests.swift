@@ -281,9 +281,13 @@ struct SlashCommandMenuReuseTests
 
 	private func title(in cell: NSView) -> NSTextField?
 	{
-		(cell.subviews.first as? NSStackView)?.arrangedSubviews.compactMap
+		if let content = cell as? DesktopSearchResultContentView
 		{
-			$0 as? NSTextField
+			return content.primaryLabel
+		}
+		return cell.subviews.lazy.compactMap
+		{
+			title(in: $0)
 		}.first
 	}
 

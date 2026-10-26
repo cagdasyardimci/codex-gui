@@ -106,7 +106,7 @@ struct ApprovalPolicyPopoverTests
 		}
 	}
 
-	// Presents a key approval panel with application event monitors, then miniaturizes its host.
+	// Presents a key approval panel with application event monitors, then restores its host.
 	@Test func panelAlignsAboveTriggerAndTogglesWithoutNativeArrow() async throws
 	{
 		let timing = TestTiming.begin("test.body")
@@ -157,10 +157,35 @@ struct ApprovalPolicyPopoverTests
 			#expect(!popover.isShown)
 			controller.showApprovalPolicy()
 			#expect(popover.isShown)
+			NotificationCenter.default.post(
+				name: NSWindow.willMiniaturizeNotification,
+				object: window
+			)
 			window.performMiniaturize(nil)
+			NotificationCenter.default.post(
+				name: NSWindow.didResignMainNotification,
+				object: window
+			)
+			NotificationCenter.default.post(
+				name: NSApplication.didResignActiveNotification,
+				object: NSApp
+			)
 			NotificationCenter.default.post(
 				name: NSWindow.didMiniaturizeNotification,
 				object: window
+			)
+			#expect(popover.isShown)
+			window.deminiaturize(nil)
+			NotificationCenter.default.post(
+				name: NSWindow.didDeminiaturizeNotification,
+				object: window
+			)
+			#expect(popover.isShown)
+			#expect(window.childWindows?.contains(panel) == true)
+			#expect(abs(panel.frame.minX - anchor.minX - 1) < 0.51)
+			NotificationCenter.default.post(
+				name: NSApplication.didResignActiveNotification,
+				object: NSApp
 			)
 			#expect(!popover.isShown)
 		}

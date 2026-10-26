@@ -2,7 +2,8 @@ import AppKit
 
 /// A native list whose selection stays separate from the composer's insertion point.
 @MainActor
-final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NSTableViewDelegate
+final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NSTableViewDelegate,
+	DesktopPopoverSearchSuggestionsContent
 {
 	var onChooseSkill: ((AvailableSkill) -> Void)?
 	var availableSkills: [AvailableSkill] = []
@@ -65,21 +66,19 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 			[scroll, emptyLabel],
 			spacing: 4
 		)
-		let container = DesktopSurface(
-			AppKitColorTokens.slashMenu,
-			cornerRadius: 22,
-			bordered: true
-		)
+		let container = NSView()
 		AppKitLayout.pin(
 			stack,
 			to: container,
-			inset: 4
+			inset: 0
 		)
 		scroll.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		view = container
 		preferredContentSize = NSSize(
-			width: 720,
-			height: 316
+			width: LayoutTokens.SearchSuggestions.preferredWidth,
+			height: LayoutTokens.SearchSuggestions.preferredHeight(
+				rowCount: LayoutTokens.SearchSuggestions.maximumVisibleRows
+			)
 		)
 	}
 
@@ -109,7 +108,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		table.addTableColumn(column)
 		table.headerView = nil
 		table.style = .plain
-		table.rowHeight = 28
+		table.rowHeight = LayoutTokens.SearchSuggestions.rowHeight
 		table.intercellSpacing = .zero
 		table.backgroundColor = .clear
 		table.selectionHighlightStyle = .regular
@@ -211,15 +210,9 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 	private func refreshCommandRows()
 	{
-		let height = CGFloat(min(
-			11,
-			max(
-				1,
-				rowCount
-			)
-		)) * table.rowHeight
 		scroll.isHidden = rowCount == 0
-		preferredContentSize.height = height + 8
+		preferredContentSize.height = LayoutTokens.SearchSuggestions
+			.preferredHeight(rowCount: rowCount)
 		table.reloadData()
 		emptyLabel.isHidden = rowCount > 0
 		if rowCount == 0
@@ -350,11 +343,6 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	) -> NSView
 	{
 		let presentation = SlashCommandMenuPresentation(command.id)
-		let title = makeCommandTitleLabel(
-			presentation.title,
-			isAvailable: reason == nil
-		)
-		let detail = makeDescriptionLabel(description)
 		let icon: NSView
 		if command.id == .compact,
 			let percent = SlashCommandMenuPresentation.contextFillPercent(threadTokenUsage)
@@ -363,20 +351,25 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		}
 		else
 		{
-			icon = makeRowIcon(symbol: presentation.symbol)
+			icon = NSImageView(image: NSImage(
+				systemSymbolName: presentation.symbol,
+				accessibilityDescription: nil
+			) ?? NSImage())
 		}
-
-		let contents = AppKitLayout.horizontalStack(
-			[icon, title, detail],
-			spacing: 8
+		let contents = DesktopSearchResultContentView(presentation: .inlineCommand(
+			title: presentation.title,
+			detail: description,
+			leadingAccessory: icon,
+			suffix: "",
+			opensPicker: presentation.opensPicker,
+			enabled: reason == nil
+		))
+		let cell = NSTableCellView()
+		AppKitLayout.pin(
+			contents,
+			to: cell,
+			inset: 0
 		)
-		if presentation.opensPicker
-		{
-			let chevron = makePickerChevron()
-			contents.addArrangedSubview(chevron)
-		}
-		contents.distribution = .fill
-		let cell = makeInlineCell(contents: contents)
 		cell.toolTip = reason ?? description
 		cell.setAccessibilityLabel("/\(command.name). \(description)"
 			+ (reason.map
@@ -426,120 +419,27 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 	private func skillCell(_ skill: AvailableSkill) -> NSView
 	{
-		let icon = makeRowIcon(symbol: "shippingbox")
-		let title = makeSkillTitleLabel(skill.displayName ?? skill.name)
-		let detail = makeDescriptionLabel(skill.shortDescription ?? skill.description)
-		let scope = makeSkillScopeLabel(skill.scope)
-		let contents = AppKitLayout.horizontalStack(
-			[icon, title, detail, scope],
-			spacing: 8
-		)
-		contents.distribution = .fill
-		let cell = makeInlineCell(contents: contents)
-		cell.toolTip = skill.description
-		cell.setAccessibilityLabel(
-			"Skill \(skill.name). \(skill.description). \(scope.stringValue)"
-		)
-		return cell
-	}
-
-	private func makeCommandTitleLabel(
-		_ text: String,
-		isAvailable: Bool
-	) -> NSTextField
-	{
-		let title = NSTextField(labelWithString: text)
-		title.font = .systemFont(ofSize: 13)
-		title.textColor = isAvailable ? .labelColor : .secondaryLabelColor
-		title.setContentCompressionResistancePriority(
-			.required,
-			for: .horizontal
-		)
-		return title
-	}
-
-	private func makeSkillTitleLabel(_ text: String) -> NSTextField
-	{
-		let title = NSTextField(labelWithString: text)
-		title.font = .systemFont(ofSize: 13)
-		title.lineBreakMode = .byTruncatingTail
-		return title
-	}
-
-	private func makeDescriptionLabel(_ text: String) -> NSTextField
-	{
-		let detail = NSTextField(labelWithString: text)
-		detail.font = .systemFont(ofSize: 13)
-		detail.textColor = .tertiaryLabelColor
-		detail.lineBreakMode = .byTruncatingTail
-		detail.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		detail.setContentHuggingPriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		return detail
-	}
-
-	private func makeRowIcon(symbol: String) -> NSImageView
-	{
-		let icon = NSImageView()
-		icon.image = NSImage(
-			systemSymbolName: symbol,
+		let scope = skill.scope == "user" ? "Personal" : skill.scope.capitalized
+		let icon = NSImageView(image: NSImage(
+			systemSymbolName: "shippingbox",
 			accessibilityDescription: nil
-		)
-		icon.contentTintColor = .secondaryLabelColor
-		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
-		return icon
-	}
-
-	private func makePickerChevron() -> NSImageView
-	{
-		let chevron = NSImageView()
-		chevron.image = NSImage(
-			systemSymbolName: "chevron.right",
-			accessibilityDescription: nil
-		)
-		chevron.contentTintColor = .tertiaryLabelColor
-		chevron.widthAnchor.constraint(equalToConstant: 10).isActive = true
-		chevron.heightAnchor.constraint(equalToConstant: 12).isActive = true
-		return chevron
-	}
-
-	private func makeSkillScopeLabel(_ scopeName: String) -> NSTextField
-	{
-		let scope = NSTextField(labelWithString: scopeName == "user" ? "Personal"
-			: scopeName.capitalized)
-		scope.font = .systemFont(ofSize: 12)
-		scope.textColor = .secondaryLabelColor
-		scope.setContentCompressionResistancePriority(
-			.required,
-			for: .horizontal
-		)
-		return scope
-	}
-
-	private func makeInlineCell(contents: NSStackView) -> NSTableCellView
-	{
-		let horizontalInset: CGFloat = 10
+		) ?? NSImage())
+		let contents = DesktopSearchResultContentView(presentation: .inlineCommand(
+			title: skill.displayName ?? skill.name,
+			detail: skill.shortDescription ?? skill.description,
+			leadingAccessory: icon,
+			suffix: scope,
+			opensPicker: false,
+			enabled: true
+		))
 		let cell = NSTableCellView()
-		cell.addSubview(contents)
-		contents.translatesAutoresizingMaskIntoConstraints = false
-
-		NSLayoutConstraint.activate([
-			contents.leadingAnchor.constraint(
-				equalTo: cell.leadingAnchor,
-				constant: horizontalInset
-			),
-			contents.trailingAnchor.constraint(
-				equalTo: cell.trailingAnchor,
-				constant: -horizontalInset
-			),
-			contents.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-		])
+		AppKitLayout.pin(
+			contents,
+			to: cell,
+			inset: 0
+		)
+		cell.toolTip = skill.description
+		cell.setAccessibilityLabel("Skill \(skill.name). \(skill.description). \(scope)")
 		return cell
 	}
 

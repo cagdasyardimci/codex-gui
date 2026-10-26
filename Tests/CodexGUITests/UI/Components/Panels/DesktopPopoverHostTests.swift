@@ -250,6 +250,45 @@ struct DesktopPopoverHostTests
 		}
 	}
 
+	@Test func inlineSuggestionsReceiveOneOpaqueHostSurfaceAndKeepTheirRowViewport() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = makeWindow()
+			let anchor = NSButton(frame: NSRect(
+				x: 20,
+				y: 20,
+				width: 28,
+				height: 28
+			))
+			window.contentView?.addSubview(anchor)
+			window.makeKeyAndOrderFront(nil)
+			let suggestions = SlashCommandPopoverView()
+			suggestions.render(prefix: "sta")
+			let host = ComposerPopoverPanel(contentViewController: suggestions)
+			defer
+			{
+				host.close(); window.close()
+			}
+			host.show(
+				relativeTo: anchor.bounds,
+				of: anchor
+			)
+			let panel = try #require(suggestions.view.window)
+			let surface = try #require(suggestions.view.superview as? DesktopSurface)
+			panel.contentView?.layoutSubtreeIfNeeded()
+			let contentBounds = suggestions.view.convert(
+				suggestions.view.bounds,
+				to: surface
+			)
+			#expect(abs(contentBounds.minX - 4) < 0.01)
+			#expect(abs(contentBounds.minY - 4) < 0.01)
+			#expect(abs(surface.bounds.width - contentBounds.maxX - 4) < 0.01)
+			#expect(abs(surface.bounds.height - contentBounds.maxY - 4) < 0.01)
+			#expect(abs(panel.frame.height - 36) < 0.01)
+			#expect(suggestions.selectedCommand?.id == .status)
+		}
+	}
 
 	private func makeWindow() -> NSWindow
 	{
