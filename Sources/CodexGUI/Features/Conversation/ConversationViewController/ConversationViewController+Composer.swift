@@ -104,17 +104,7 @@ extension ConversationViewController
 
 		approvalPolicyButton.target = self
 		approvalPolicyButton.action = #selector(showApprovalPolicy)
-		AppKitControlStyling.styleButton(
-			approvalPolicyButton,
-			icon: .handRaised
-		)
-		approvalPolicyButton.font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
-		approvalPolicyButton.lineBreakMode = .byTruncatingTail
-		approvalPolicyButton.cornerRadius = ShapeTokens.Composer
-			.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
-		approvalPolicyButton.heightAnchor
-			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
-		AppKitControlStyling.stylePopup(addContextButton)
+
 		AppKitLayout.compressHorizontally(addContextButton)
 		preferenceWarningLabel.font = AppKitFontResolver.font(TypographyTokens.Composer.warning)
 		preferenceWarningLabel.textColor = .systemOrange
@@ -169,8 +159,8 @@ extension ConversationViewController
 		composer.isAutomaticDashSubstitutionEnabled = false
 		composer.isAutomaticTextReplacementEnabled = false
 		composer.font = AppKitFontResolver.font(TypographyTokens.Composer.editor)
-		composer.textColor = AppKitColorTokens.primaryText
-		composer.insertionPointColor = AppKitColorTokens.primaryText
+		composer.textColor = AppKitColorTokens.composerPrimaryText
+		composer.insertionPointColor = AppKitColorTokens.composerPrimaryText
 		// Match the surface so AppKit can repaint the old insertion point after editing.
 		composer.backgroundColor = AppKitColorTokens.composer
 		composer.drawsBackground = true
@@ -190,7 +180,7 @@ extension ConversationViewController
 			.merging(
 				[
 					.font: AppKitFontResolver.font(TypographyTokens.Composer.editor),
-					.foregroundColor: AppKitColorTokens.primaryText,
+					.foregroundColor: AppKitColorTokens.composerPrimaryText,
 					.paragraphStyle: paragraph,
 				],
 				uniquingKeysWith:
@@ -259,7 +249,7 @@ extension ConversationViewController
 		addContextButton.setAccessibilityLabel("Add attachments or inspect request context")
 		addContextButton.item(at: 0)?.image = ComposerFooterIcons.add
 		(addContextButton.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
-		addContextButton.contentTintColor = AppKitColorTokens.primaryText
+		addContextButton.contentTintColor = AppKitColorTokens.composerPrimaryText
 		addContextButton.imagePosition = .imageOnly
 		addContextButton.widthAnchor
 			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
@@ -272,48 +262,10 @@ extension ConversationViewController
 	{
 		sendButton.target = self
 		sendButton.action = #selector(send)
-		sendButton.keyEquivalent = "\r"
-		sendButton.keyEquivalentModifierMask = [.command]
-		sendButton.setAccessibilityLabel("Send message")
-		sendButton.setAccessibilityIdentifier("conversation-send")
 		steerButton.target = self
 		steerButton.action = #selector(steer)
-		steerButton.keyEquivalent = "\r"
-		steerButton.keyEquivalentModifierMask = [.command, .shift]
-		steerButton.setAccessibilityLabel("Steer the active turn with this message")
 		stopButton.target = self
 		stopButton.action = #selector(stop)
-		stopButton.setAccessibilityLabel("Stop current task")
-		stopButton.setAccessibilityIdentifier("conversation-stop")
-		for button in [sendButton, steerButton, stopButton]
-		{
-			let symbol: DesktopIcon = button === stopButton
-				? .stopCircleFilled : .arrowUpLg
-			AppKitControlStyling.styleButton(
-				button,
-				icon: symbol,
-				prominent: true
-			)
-			button.image = DesktopIcons.image(
-				symbol,
-				size: button === stopButton ? LayoutTokens.composer.controlHeight
-					: LayoutTokens.Composer.sendIconSize
-			)
-			button.imagePosition = .imageOnly
-			button.widthAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
-				.isActive = true
-			button.heightAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
-				.isActive = true
-		}
-		for button in [sendButton, steerButton]
-		{
-			button.wantsLayer = true
-			button.layer?.cornerRadius = ShapeTokens.Composer
-				.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
-			button.contentTintColor = .white
-		}
-		sendButton.toolTip = "Send message (⌘Return)"
-		steerButton.toolTip = "Steer the active turn (⇧⌘Return)"
 	}
 
 	func renderModelAndApprovalPreferences(_ snapshot: ConversationPresentation.Preferences)
@@ -343,38 +295,17 @@ extension ConversationViewController
 		)
 
 		approvalMode = snapshot.approvalMode
-		approvalPolicyController.render(mode: approvalMode)
-		approvalPolicyButton.title = approvalMode.title
-		approvalPolicyButton.toolTip = "\(approvalMode.title): \(approvalMode.description)"
-		approvalPolicyButton.setAccessibilityLabel("Approval policy: \(approvalMode.title)")
-		let approvalTint: NSColor = approvalMode == .fullAccess
-			? ApprovalPopoverStyle.fullAccess : AppKitColorTokens.secondaryText
-		approvalPolicyButton.contentTintColor = approvalTint
-		approvalPolicyButton.attributedTitle = NSAttributedString(
-			string: approvalMode.title,
-			attributes: [
-				.font: AppKitFontResolver.font(TypographyTokens.Composer.preference),
-				.foregroundColor: approvalTint,
-			]
+		hasConfiguredPermissions = snapshot.configurationDefaults?.hasPermissionOverrides == true
+		approvalPolicyController.render(mode: hasConfiguredPermissions ? nil : approvalMode)
+		approvalPolicyButton.render(
+			mode: approvalMode,
+			configuredDescription: hasConfiguredPermissions
+				? snapshot.configurationDefaults?
+				.permissionDescription(fallback: approvalMode) : nil,
+			configuredFullAccess: hasConfiguredPermissions
+				? snapshot.configurationDefaults?.sandboxMode == .dangerFullAccess : nil
 		)
-		let approvalSymbol: DesktopIcon
-		switch approvalMode
-		{
-		case .askForApproval: approvalSymbol = .handRaised
-		case .approveForMe: approvalSymbol = .shieldCheck
-		case .fullAccess: approvalSymbol = .warning
-		}
-		if approvalMode == .fullAccess
-		{
-			approvalPolicyButton.image = ComposerFooterIcons.fullAccess
-		}
-		else
-		{
-			approvalPolicyButton.image = DesktopIcons.image(
-				approvalSymbol,
-				size: LayoutTokens.permission.iconSize
-			)
-		}
+
 	}
 
 	func renderComposer(_ snapshot: ConversationPresentation.Composer)
@@ -450,9 +381,7 @@ extension ConversationViewController
 		else
 		{
 			sendButton.isEnabled = false
-			sendButton.layerBackgroundColor = .tertiaryLabelColor
 			steerButton.isEnabled = false
-			steerButton.layerBackgroundColor = .tertiaryLabelColor
 			return
 		}
 		let isSlashInput: Bool
@@ -477,10 +406,6 @@ extension ConversationViewController
 			? "Send message (⌘Return)" : "Preparing image attachment…"
 		steerButton.toolTip = imagesAreReady
 			? "Steer the active turn (⇧⌘Return)" : "Preparing image attachment…"
-		sendButton.layerBackgroundColor = sendButton.isEnabled
-			? AppKitColorTokens.composerSend : NSColor.tertiaryLabelColor
-		steerButton.layerBackgroundColor = steerButton.isEnabled
-			? AppKitColorTokens.composerSend : NSColor.tertiaryLabelColor
 		let hasStoppableExecution =
 			snapshot.activeExecutionState == .running
 				|| snapshot.activeExecutionState == .awaitingApproval
@@ -664,7 +589,7 @@ extension ConversationViewController
 		{
 			return
 		}
-		guard mode == .fullAccess, approvalMode != .fullAccess
+		guard mode == .fullAccess, approvalMode != .fullAccess || hasConfiguredPermissions
 		else
 		{
 			(completion ?? onSelectApprovalMode)?(mode)

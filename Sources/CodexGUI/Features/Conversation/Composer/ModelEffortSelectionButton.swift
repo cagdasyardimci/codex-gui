@@ -156,11 +156,11 @@ final class ModelEffortSelectionButton: NSButton
 
 		if shouldDrawSelectionBackground
 		{
-			AppKitColorTokens.rowHighlight.setFill()
+			AppKitColorTokens.composerMenuRowHover.setFill()
 			selectionOutline().fill()
 		}
 
-		let tint: NSColor = isEnabled ? AppKitColorTokens.secondaryText : AppKitColorTokens
+		let tint: NSColor = isEnabled ? AppKitColorTokens.composerSecondaryText : AppKitColorTokens
 			.mutedText
 		let layout = makeContentLayout()
 
@@ -168,7 +168,7 @@ final class ModelEffortSelectionButton: NSButton
 		{
 			drawBolt(
 				in: layout.boltRect,
-				tint: isEnabled ? AppKitColorTokens.primaryText : tint
+				tint: isEnabled ? AppKitColorTokens.composerPrimaryText : tint
 			)
 		}
 
@@ -216,7 +216,7 @@ final class ModelEffortSelectionButton: NSButton
 			attributes: [
 				.font: textFont,
 				.foregroundColor: isEnabled && (!isPickerPresented || isModelListPresented)
-					? AppKitColorTokens.primaryText : tint,
+					? AppKitColorTokens.composerPrimaryText : tint,
 				.paragraphStyle: paragraphStyle,
 			]
 		)

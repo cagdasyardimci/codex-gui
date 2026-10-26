@@ -99,12 +99,12 @@ final class ConversationViewController: NSViewController,
 
 	private let stateLabel = NSTextField(labelWithString: "Disconnected")
 	private let activeTaskLabel = NSTextField(wrappingLabelWithString: "")
-	private let returnToTaskButton = NSButton(
+	private let returnToTaskButton = DesktopStyledButton(
 		title: "Return to Task",
 		target: nil,
 		action: nil
 	)
-	private let planButton = NSButton(
+	private let planButton = DesktopStyledButton(
 		title: "Plan",
 		target: nil,
 		action: nil
@@ -131,6 +131,7 @@ final class ConversationViewController: NSViewController,
 	var approvalPolicyPopover: ComposerPopoverPanel?
 	var fullAccessConfirmationPanel: NSPanel?
 	var approvalMode: ApprovalMode = .askForApproval
+	var hasConfiguredPermissions = false
 	let preferenceWarningLabel = NSTextField(wrappingLabelWithString: "")
 	private var requestContextText = ""
 	private var centeredReadingRows: [(
@@ -155,7 +156,7 @@ final class ConversationViewController: NSViewController,
 	let contextView = ComposerContextView()
 	lazy var attachmentDetailsScrollView = BoundedContentScrollView(views: [contextView])
 	lazy var requestDetailsScrollView = BoundedContentScrollView(views: [interactionStack])
-	let addContextButton = NSPopUpButton()
+	let addContextButton = DesktopPopupButton()
 	let planModeLabel = NSTextField(labelWithString: "Plan mode")
 	var fileSearchPopover: NSPopover?
 	var fileSelectionReceiver: ((ComposerContextItem) -> Void)?
@@ -169,21 +170,9 @@ final class ConversationViewController: NSViewController,
 	var slashCompletionText: String?
 	var fileSearchWasCompletion = false
 	let fileIndexRuntime = ProjectFileIndexRuntime()
-	let sendButton = DesktopLayerButton(
-		title: "Send",
-		target: nil,
-		action: nil
-	)
-	let steerButton = DesktopLayerButton(
-		title: "Steer",
-		target: nil,
-		action: nil
-	)
-	let stopButton = NSButton(
-		title: "Stop",
-		target: nil,
-		action: nil
-	)
+	let sendButton = ComposerSubmissionButton(role: .send)
+	let steerButton = ComposerSubmissionButton(role: .steer)
+	let stopButton = ComposerSubmissionButton(role: .stop)
 	let interactionStack = NSStackView()
 	private var renderedInteractions: ConversationPresentation.Interactions?
 	var projectPath: String?
@@ -374,17 +363,11 @@ final class ConversationViewController: NSViewController,
 		returnToTaskButton.target = self
 		returnToTaskButton.action = #selector(returnToActiveTask)
 		returnToTaskButton.setAccessibilityLabel("Return to active task conversation")
-		AppKitControlStyling.styleButton(
-			returnToTaskButton,
-			icon: .undo
-		)
+		returnToTaskButton.symbol = .undo
 		planButton.target = self
 		planButton.action = #selector(showPlan)
 		planButton.setAccessibilityLabel("Show reported task plan")
-		AppKitControlStyling.styleButton(
-			planButton,
-			icon: .notebookCheck
-		)
+		planButton.symbol = .notebookCheck
 		activityLabel.font = .systemFont(ofSize: 12)
 		activityLabel.textColor = .secondaryLabelColor
 		activityLabel.lineBreakMode = .byTruncatingTail

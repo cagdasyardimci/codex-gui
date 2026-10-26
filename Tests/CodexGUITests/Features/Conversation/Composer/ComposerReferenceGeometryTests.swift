@@ -8,6 +8,84 @@ import Testing
 ) @MainActor
 struct ComposerReferenceGeometryTests
 {
+	@Test func composerTextAndEnabledSendFillFollowAttachedWindowAppearance() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			@MainActor in
+			_ = NSApplication.shared
+			let controller = ConversationViewController()
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: -2000,
+					y: -2000,
+					width: 1000,
+					height: 700
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.prepareForTesting()
+			window.contentViewController = controller
+			window.orderFront(nil)
+			defer
+			{
+				window.close()
+			}
+			let snapshot = ConversationSnapshot(
+				projectPath: "/tmp/replay",
+				threads: [],
+				selectedThreadID: nil,
+				entries: [],
+				canLoadEarlierTurns: false,
+				changedFiles: [],
+				diff: "",
+				draft: "Ready",
+				canSend: true,
+				accountDescription: "Mock",
+				backendDescription: "Mock",
+				executionState: .ready,
+				statusMessage: nil,
+				models: [],
+				selectedModelID: nil,
+				selectedEffort: nil,
+				pendingInteractions: [],
+				recentProjects: []
+			)
+			controller.renderComposer(ConversationPresentation(snapshot).composer)
+			#expect(controller.sendButton.isEnabled)
+
+			for (appearance, primary, send) in [
+				(NSAppearance.Name.aqua, 0x0D0D0D, 0x0D0D0D),
+				(.darkAqua, 0xFFFFFF, 0x2C67C5),
+				(.aqua, 0x0D0D0D, 0x0D0D0D),
+			]
+			{
+				window.appearance = NSAppearance(named: appearance)
+				window.displayIfNeeded()
+				let editorColor = try #require(controller.composer.textColor)
+				let insertionColor = try #require(
+					controller.composer.insertionPointColor as? NSColor
+				)
+				let typingColor = try #require(
+					controller.composer.typingAttributes[.foregroundColor] as? NSColor
+				)
+				let sendFill = try #require(controller.sendButton.layer?.backgroundColor)
+				for color in [editorColor, insertionColor, typingColor]
+				{
+					#expect(try rgb(
+						color,
+						appearance: window.effectiveAppearance
+					) == primary)
+				}
+				#expect(try rgb(
+					try #require(NSColor(cgColor: sendFill)),
+					appearance: window.effectiveAppearance
+				) == send)
+			}
+		}
+	}
 
 	@Test func baselineCorrectionPreservesLineBoxesAndSelection() throws
 	{
@@ -63,5 +141,21 @@ struct ComposerReferenceGeometryTests
 		editor.unmarkText()
 		#expect(!editor.hasMarkedText())
 		#expect(editor.string == "Fi仮 line\nSecond line")
+	}
+
+	private func rgb(
+		_ color: NSColor,
+		appearance: NSAppearance
+	) throws -> Int
+	{
+		var resolved: NSColor?
+		appearance.performAsCurrentDrawingAppearance
+		{
+			resolved = color.usingColorSpace(.deviceRGB)
+		}
+		let rgb = try #require(resolved)
+		return (Int((rgb.redComponent * 255).rounded()) << 16)
+			| (Int((rgb.greenComponent * 255).rounded()) << 8)
+			| Int((rgb.blueComponent * 255).rounded())
 	}
 }

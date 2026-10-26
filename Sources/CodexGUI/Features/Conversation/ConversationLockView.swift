@@ -10,7 +10,6 @@ final class ConversationLockView: DesktopSurface
 		didSet
 		{
 			forkButton.isEnabled = canFork
-			refreshButtonTitles()
 		}
 	}
 	var isRetrying = false
@@ -21,19 +20,16 @@ final class ConversationLockView: DesktopSurface
 			retryButton.toolTip = isRetrying
 				? "Checking whether this chat is available"
 				: "Try opening this chat again"
-			refreshButtonTitles()
 		}
 	}
 
-	private let retryButton = ConversationLockActionButton(
+	private let retryButton = DesktopStyledButton(
 		title: "Retry",
-		target: nil,
-		action: nil
+		presentation: .quiet
 	)
-	private let forkButton = ConversationLockActionButton(
+	private let forkButton = DesktopStyledButton(
 		title: "Fork chat",
-		target: nil,
-		action: nil
+		presentation: .quiet
 	)
 
 	init()
@@ -82,7 +78,11 @@ final class ConversationLockView: DesktopSurface
 		for button in [retryButton, forkButton]
 		{
 			button.isBordered = false
-			button.font = AppKitFontResolver.font(TypographyTokens.ChatLock.action)
+			button.hoverTrackingOptions = [
+				.mouseEnteredAndExited,
+				.activeInActiveApp,
+				.inVisibleRect
+			]
 			button.setButtonType(.momentaryPushIn)
 			button.setContentCompressionResistancePriority(
 				.required,
@@ -97,7 +97,6 @@ final class ConversationLockView: DesktopSurface
 		forkButton.action = #selector(fork)
 		forkButton.setAccessibilityLabel("Fork locked chat")
 		forkButton.isEnabled = false
-		refreshButtonTitles()
 
 		let items: [NSView] = [lockIcon, message, divider, retryButton, forkButton]
 		for item in items
@@ -164,28 +163,6 @@ final class ConversationLockView: DesktopSurface
 		nil
 	}
 
-	override func viewDidChangeEffectiveAppearance()
-	{
-		super.viewDidChangeEffectiveAppearance()
-		refreshButtonTitles()
-	}
-
-	private func refreshButtonTitles()
-	{
-		for button in [retryButton, forkButton]
-		{
-			button.attributedTitle = NSAttributedString(
-				string: button === retryButton ? "Retry" : "Fork chat",
-				attributes: [
-					.font: AppKitFontResolver.font(TypographyTokens.ChatLock.action),
-					.foregroundColor: button.isEnabled ? AppKitColorTokens.primaryText
-						: NSColor.disabledControlTextColor,
-				]
-			)
-			button.updateHoverAppearance()
-		}
-	}
-
 	@objc private func retry()
 	{
 		onRetry?()
@@ -194,61 +171,6 @@ final class ConversationLockView: DesktopSurface
 	@objc private func fork()
 	{
 		onFork?()
-	}
-}
-
-@MainActor
-private final class ConversationLockActionButton: DesktopAttributedTitleButton
-{
-	private var hoverArea: NSTrackingArea?
-	private var isHovered = false
-
-	override func updateTrackingAreas()
-	{
-		if let hoverArea
-		{
-			removeTrackingArea(hoverArea)
-		}
-		let area = NSTrackingArea(
-			rect: .zero,
-			options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-			owner: self,
-			userInfo: nil
-		)
-		addTrackingArea(area)
-		hoverArea = area
-		super.updateTrackingAreas()
-	}
-
-	override func mouseEntered(with event: NSEvent)
-	{
-		super.mouseEntered(with: event)
-		isHovered = true
-		updateHoverAppearance()
-	}
-
-	override func mouseExited(with event: NSEvent)
-	{
-		super.mouseExited(with: event)
-		isHovered = false
-		updateHoverAppearance()
-	}
-
-	override func viewDidChangeEffectiveAppearance()
-	{
-		super.viewDidChangeEffectiveAppearance()
-		updateHoverAppearance()
-	}
-
-	func updateHoverAppearance()
-	{
-		wantsLayer = true
-		layer?.cornerRadius = ShapeTokens.ChatLock.actionRadius
-		layer?.backgroundColor = isHovered && isEnabled
-			? AppKitColorResolution.resolvedCGColor(
-				AppKitColorTokens.chatLockActionHover,
-				for: self
-			) : NSColor.clear.cgColor
 	}
 }
 

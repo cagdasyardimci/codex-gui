@@ -49,7 +49,6 @@ final class InteractionCardView: NSView
 		)
 		addResponseControls(to: content)
 		content.addArrangedSubview(messageLabel)
-		styleControls(in: content)
 
 		installCardSurface(containing: content)
 		setAccessibilityLabel(titleText)
@@ -61,7 +60,7 @@ final class InteractionCardView: NSView
 		{
 		case .question:
 			addQuestionControls(to: content)
-			let answerButton = NSButton(
+			let answerButton = DesktopStyledButton(
 				title: "Submit Answer",
 				target: self,
 				action: #selector(submitAnswers)
@@ -111,22 +110,6 @@ final class InteractionCardView: NSView
 				constant: -12
 			),
 		])
-	}
-
-	private func styleControls(in view: NSView)
-	{
-		if let popup = view as? NSPopUpButton
-		{
-			AppKitControlStyling.stylePopup(popup)
-		}
-		else if let button = view as? NSButton
-		{
-			AppKitControlStyling.styleButton(button)
-		}
-		for child in view.subviews
-		{
-			styleControls(in: child)
-		}
 	}
 
 	private var titleText: String
@@ -234,7 +217,7 @@ final class InteractionCardView: NSView
 		let buttons = approvalDecisions.enumerated().map
 		{
 			index, decision in
-			let button = NSButton(
+			let button = DesktopStyledButton(
 				title: title(for: decision),
 				target: self,
 				action: #selector(chooseApproval(_:))
@@ -268,12 +251,12 @@ final class InteractionCardView: NSView
 		var buttons: [NSView] = []
 		if let requested = interaction.requestedPermissions, !requested.isEmpty
 		{
-			let once = NSButton(
+			let once = DesktopStyledButton(
 				title: "Allow for Turn",
 				target: self,
 				action: #selector(allowOnce)
 			)
-			let session = NSButton(
+			let session = DesktopStyledButton(
 				title: "Allow for Session",
 				target: self,
 				action: #selector(allowSession)
@@ -282,7 +265,7 @@ final class InteractionCardView: NSView
 			session.setAccessibilityLabel("Allow requested access for this session")
 			buttons.append(contentsOf: [once, session])
 		}
-		let deny = NSButton(
+		let deny = DesktopStyledButton(
 			title: "Deny",
 			target: self,
 			action: #selector(denyPermission)
@@ -300,7 +283,7 @@ final class InteractionCardView: NSView
 			questionLabel.font = .systemFont(ofSize: 13)
 			content.addArrangedSubview(questionLabel)
 
-			let menu = NSPopUpButton()
+			let menu = DesktopPopupButton()
 			menu.addItem(withTitle: "Choose an answer…")
 			menu.item(at: 0)?.isEnabled = false
 			for option in question.options

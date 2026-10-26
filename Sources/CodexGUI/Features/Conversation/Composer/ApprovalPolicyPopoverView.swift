@@ -22,7 +22,7 @@ final class ApprovalPolicyPopoverView: NSViewController
 		target: nil,
 		action: nil
 	)
-	private var selectedMode: ApprovalMode = .askForApproval
+	private var selectedMode: ApprovalMode? = .askForApproval
 	private var rows: [ApprovalPolicyRow] = []
 
 	init()
@@ -213,7 +213,7 @@ final class ApprovalPolicyPopoverView: NSViewController
 		}
 	}
 
-	func render(mode: ApprovalMode)
+	func render(mode: ApprovalMode?)
 	{
 		selectedMode = mode
 		refreshLearnMoreStyle()

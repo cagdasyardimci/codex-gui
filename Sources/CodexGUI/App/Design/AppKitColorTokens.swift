@@ -176,7 +176,7 @@ enum AppKitColorTokens
 		darkAlpha: 0.498
 	)
 	static let composerPlaceholderText = AppKitColorResolution.color(
-		light: 0x1A1C1F,
+		light: 0x0D0D0D,
 		dark: 0xFFFFFF,
 		lightAlpha: 0.247,
 		darkAlpha: 0.249
@@ -213,9 +213,25 @@ enum AppKitColorTokens
 		light: 0xFFFFFF,
 		dark: 0x363636
 	)
+	static let composerPrimaryText = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF
+	)
+	static let composerSecondaryText = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.494,
+		darkAlpha: 0.498
+	)
+	static let composerMenuRowHover = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.055,
+		darkAlpha: 0.08
+	)
 	static let composerSend = AppKitColorResolution.color(
-		light: 0x3A83F7,
-		dark: 0x3A83F7
+		light: 0x0D0D0D,
+		dark: 0x2C67C5
 	)
 	static let composerEdge = AppKitColorResolution.color(
 		light: 0x000000,
@@ -260,7 +276,7 @@ enum AppKitColorTokens
 		darkAlpha: 0.9
 	)
 	static let popoverEdge = AppKitColorResolution.color(
-		light: 0x1A1C1F,
+		light: 0x0D0D0D,
 		dark: 0xFFFFFF,
 		lightAlpha: 0.08,
 		darkAlpha: 0.082
@@ -314,26 +330,24 @@ enum AppKitColorTokens
 	)
 
 	static let approvalRowHover = AppKitColorResolution.color(
-		light: 0xF4F3F3,
+		light: 0x0D0D0D,
 		dark: 0xFFFFFF,
+		lightAlpha: 0.055,
 		darkAlpha: 0.08
 	)
-	static let approvalPrimary = AppKitColorResolution.grayscaleColor(
-		light: 0.13,
-		dark: 1
+	static let approvalPrimary = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF
 	)
-	static let approvalSecondary = AppKitColorResolution.adaptiveColor
-	{
-		appearance in
-		appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-			? NSColor.white.withAlphaComponent(0.498) : NSColor(
-				white: 0.57,
-				alpha: 1
-			)
-	}
-	static let approvalIcon = AppKitColorResolution.grayscaleColor(
-		light: 0.33,
-		dark: 1
+	static let approvalSecondary = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.494,
+		darkAlpha: 0.498
+	)
+	static let approvalIcon = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF
 	)
 
 	static let transcriptLink = AppKitColorResolution.adaptiveColor
