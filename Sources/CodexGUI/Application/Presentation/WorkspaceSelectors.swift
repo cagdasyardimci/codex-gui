@@ -168,10 +168,7 @@ struct WorkspaceSelectors
 	}
 	var runPreferences: RunPreferences
 	{
-		RunPreferences(
-			approvalMode: model.preferences.runPreferences.approvalMode,
-			fastMode: model.composerSelection.fastMode
-		)
+		model.runPreferencesForSubmission
 	}
 	var hasStoredModelPreference: Bool
 	{
@@ -450,6 +447,7 @@ struct WorkspaceSelectors
 			pendingInteractions: viewingActiveThread ? pendingInteractions : [],
 			recentProjects: model.preferences.recentProjects,
 			approvalMode: runPreferences.approvalMode,
+			configurationDefaults: runPreferences.configurationDefaults,
 			fastMode: runPreferences.fastMode,
 			pinnedProjectPaths: model.preferences.pinnedProjectPaths,
 			removedProjectPaths: model.preferences.removedProjectPaths,

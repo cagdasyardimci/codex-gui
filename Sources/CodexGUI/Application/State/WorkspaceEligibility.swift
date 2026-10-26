@@ -311,12 +311,11 @@ struct WorkspaceEligibility
 			} ?? []))
 			&& submission.modelID == model.composerSelection.modelID
 			&& submission.effort == model.composerSelection.effort
-			&& submission.preferences == RunPreferences(
-				approvalMode: model.preferences.runPreferences.approvalMode,
-				fastMode: model.composerSelection.fastMode
-			)
-			&& (steering || !submission.preferences.fastMode
-				|| submission.serviceTier == FastModeAvailability.serviceTier(in: model))
+			&& submission.preferences == model.runPreferencesForSubmission
+			&& (steering
+				|| (submission.preferences.configurationDefaults?.serviceTier == nil
+					&& !submission.preferences.fastMode)
+				|| submission.serviceTier == model.serviceTierForSubmission)
 	}
 
 	private func hasSourceContent(_ draft: ComposerDraft) -> Bool

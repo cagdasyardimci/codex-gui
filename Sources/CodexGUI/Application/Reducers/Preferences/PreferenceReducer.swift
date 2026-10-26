@@ -31,7 +31,8 @@ enum PreferenceReducer
 		switch action
 		{
 		case .restored, .modelSelected, .effortSelected, .approvalModeSelected,
-				.fastModeSelected, .taskPinToggled, .projectPinToggled, .projectRenamed,
+				.configurationDefaultsApplied, .fastModeSelected, .taskPinToggled,
+				.projectPinToggled, .projectRenamed,
 				.projectRemembered, .projectRemoved:
 			result = reducePreferenceChanges(
 				action,
@@ -144,10 +145,14 @@ enum PreferenceReducer
 			{
 				return result
 			}
+			var defaults = model.preferences.runPreferences.configurationDefaults
+			defaults?.approvalPolicy = nil
+			defaults?.sandboxMode = nil
+			defaults?.networkAccess = nil
 			model.preferences.runPreferences = RunPreferences(
 				approvalMode: mode,
-				fastMode: model.preferences
-					.runPreferences.fastMode
+				fastMode: model.preferences.runPreferences.fastMode,
+				configurationDefaults: defaults?.isEmpty == false ? defaults : nil
 			)
 			result.effects = [.persistPreference(PreferenceWrite(
 				context: context,
@@ -173,9 +178,12 @@ enum PreferenceReducer
 				return result
 			}
 			model.preferences.statusMessage = nil
+			var defaults = model.preferences.runPreferences.configurationDefaults
+			defaults?.serviceTier = nil
 			model.preferences.runPreferences = RunPreferences(
 				approvalMode: model.preferences.runPreferences.approvalMode,
-				fastMode: enabled
+				fastMode: enabled,
+				configurationDefaults: defaults?.isEmpty == false ? defaults : nil
 			)
 			result.effects = [.persistPreference(PreferenceWrite(
 				context: context,
@@ -187,6 +195,40 @@ enum PreferenceReducer
 				effort: current.effort,
 				fastMode: enabled
 			))
+		case .configurationDefaultsApplied(
+			let context,
+			let update
+		):
+			guard PreferenceScope.accepts(
+				context,
+				model: model
+			)
+			else
+			{
+				return result
+			}
+			var defaults = model.preferences.runPreferences.configurationDefaults
+				?? RunConfigurationDefaults()
+			defaults.apply(update)
+			let current = model.composerSelection
+			model.preferences.runPreferences = RunPreferences(
+				approvalMode: model.preferences.runPreferences.approvalMode,
+				fastMode: current.fastMode,
+				configurationDefaults: defaults.isEmpty ? nil : defaults
+			)
+			if update.keys.contains(.serviceTier)
+			{
+				model.recordLocalComposerSelection(ComposerSelection(
+					modelID: current.modelID,
+					effort: current.effort,
+					fastMode: model.preferences.runPreferences.fastMode
+				))
+			}
+			result.effects = [.persistPreference(PreferenceWrite(
+				context: context,
+				value: .run(model.preferences.runPreferences)
+			))]
+
 		case .taskPinToggled(
 			let context,
 			let task

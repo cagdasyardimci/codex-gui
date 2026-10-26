@@ -423,6 +423,10 @@ enum PreferencesAction
 		OperationContext,
 		ApprovalMode
 	)
+	case configurationDefaultsApplied(
+		OperationContext,
+		RunConfigurationDefaultsUpdate
+	)
 	case fastModeSelected(
 		OperationContext,
 		Bool

@@ -91,6 +91,7 @@ struct ConversationPresentation: Equatable
 		let selectedEffort: String?
 		let fastMode: Bool
 		let approvalMode: ApprovalMode
+		var configurationDefaults: RunConfigurationDefaults? = nil
 		let preferenceWarning: String?
 	}
 
@@ -276,6 +277,7 @@ struct ConversationPresentation: Equatable
 			selectedEffort: snapshot.selectedEffort,
 			fastMode: snapshot.fastMode,
 			approvalMode: snapshot.approvalMode,
+			configurationDefaults: snapshot.configurationDefaults,
 			preferenceWarning: snapshot.preferenceWarning
 		)
 		composer = Composer(

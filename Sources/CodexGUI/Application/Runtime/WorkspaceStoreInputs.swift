@@ -578,6 +578,14 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	func applyConfigurationDefaults(_ update: RunConfigurationDefaultsUpdate)
+	{
+		workspaceStore.dispatch(.preferences(.configurationDefaultsApplied(
+			workspaceStore.operationContext(),
+			update
+		)))
+	}
+
 	func setFastMode(_ enabled: Bool)
 	{
 		workspaceStore.dispatch(.preferences(.fastModeSelected(
@@ -719,8 +727,7 @@ struct WorkspaceStoreInputs
 			retainedContextRequestID: UUID(),
 			projectContextRevision: store.model.contextNavigation.contextRevision,
 			collaborationMode: collaborationMode,
-			serviceTier: submittedRunPreferences.fastMode
-				? FastModeAvailability.serviceTier(in: store.model) : "default"
+			serviceTier: store.model.serviceTierForSubmission
 		)
 	}
 

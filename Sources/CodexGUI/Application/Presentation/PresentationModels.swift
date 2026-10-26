@@ -91,6 +91,7 @@ struct ConversationSnapshot
 	let pendingInteractions: [PendingInteraction]
 	let recentProjects: [URL]
 	var approvalMode: ApprovalMode = .askForApproval
+	var configurationDefaults: RunConfigurationDefaults? = nil
 	var fastMode = false
 	var pinnedProjectPaths: Set<String> = []
 	var removedProjectPaths: Set<String> = []
