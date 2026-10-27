@@ -121,7 +121,9 @@ extension ConversationViewController
 				)
 		let query = prefix.substring(from: marker.location + 1)
 		let markerStartsToken =
-			characterBeforeMarker.rangeOfCharacter(from: .whitespacesAndNewlines) != nil
+			characterBeforeMarker
+				.rangeOfCharacter(from: .whitespacesAndNewlines) != nil || characterBeforeMarker ==
+				"\u{FFFC}"
 		let queryContainsTokenSeparator = query.contains(where:
 			{
 				$0.isWhitespace || $0 == "@"
@@ -263,7 +265,7 @@ extension ConversationViewController
 				in: completionRange,
 				with: ""
 			)
-			onDraftChange?(composer.string)
+			onDraftChange?(composer.draftText)
 			updateComposerHeight()
 		}
 		self.completionRange = nil

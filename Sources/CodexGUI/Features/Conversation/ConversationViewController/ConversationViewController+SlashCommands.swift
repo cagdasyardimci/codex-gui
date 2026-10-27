@@ -17,8 +17,8 @@ extension ConversationViewController
 			return
 		}
 		if let query = SlashCommandParser.completionQuery(
-			in: composer.string,
-			selectedRange: composer.selectedRange()
+			in: composer.draftText,
+			selectedRange: composer.draftRange(for: composer.selectedRange())
 		)
 		{
 			if fileSearchWasCompletion
@@ -26,7 +26,7 @@ extension ConversationViewController
 				fileSearchPopover?.close()
 				completionRange = nil
 			}
-			slashCompletionRange = query.tokenRange
+			slashCompletionRange = composer.displayRange(for: query.tokenRange)
 			slashCompletionGeneration = selectionGeneration
 			slashCompletionText = composer.string
 			slashCommandController.render(prefix: query.prefix)
@@ -170,13 +170,13 @@ extension ConversationViewController
 			replacement,
 			replacementRange: range
 		)
-		updateDraft?(composer.string)
+		updateDraft?(composer.draftText)
 		updateComposerHeight()
 		view.window?.makeFirstResponder(composer)
 		dismissSlashCommands()
 		if shouldExecute, selectionGeneration == generation, imageImportTasks.isEmpty
 		{
-			switch SlashCommandParser.parse(composer.string)
+			switch SlashCommandParser.parse(composer.draftText)
 			{
 			case .command(let invocation): performCommand?(invocation)
 			case .error: sendCommand?()
@@ -209,7 +209,7 @@ extension ConversationViewController
 			"",
 			replacementRange: range
 		)
-		updateDraft?(composer.string)
+		updateDraft?(composer.draftText)
 		guard selectionGeneration == generation
 		else
 		{
@@ -222,7 +222,7 @@ extension ConversationViewController
 
 	func textViewDidChangeSelection(_ notification: Notification)
 	{
-		guard notification.object as? NSTextView === composer
+		guard !composer.isUpdatingSkillMention, notification.object as? NSTextView === composer
 		else
 		{
 			return

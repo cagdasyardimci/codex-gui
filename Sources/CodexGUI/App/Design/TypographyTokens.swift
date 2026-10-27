@@ -90,6 +90,11 @@ enum TypographyTokens
 			baselineCorrection: 2,
 			ligatures: 0
 		)
+		static let skillMention = Role(
+			size: 14,
+			selection: .interface(weight: 500),
+			lineHeight: 20
+		)
 		static let preference = Role(
 			size: 13,
 			selection: .interface(weight: 400)

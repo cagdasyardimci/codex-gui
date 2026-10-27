@@ -50,6 +50,7 @@ struct ConversationPresentation: Equatable
 		let owner: FeaturePresentationOwner
 		let includedItemCount: Int
 		let selectedSkill: ProjectSkillSelection?
+		let selectedSkillTitle: String?
 		let skillAvailable: Bool
 		let includedContextText: String
 		let draftContextSummary: String
@@ -62,6 +63,21 @@ struct ConversationPresentation: Equatable
 			self.owner = owner
 			includedItemCount = snapshot.projectContext.items.filter(\.isIncluded).count
 			selectedSkill = snapshot.projectContext.selectedSkill
+			selectedSkillTitle = selectedSkill.map
+			{
+				selected in
+				let matching = snapshot.skillCatalog?.skills
+					.filter
+					{
+						$0.name == selected.name
+					} ?? []
+				let skill = matching.first
+				{
+					$0.path == selected.path
+				}
+				?? (matching.count == 1 ? matching[0] : nil)
+				return skill?.displayName ?? selected.name
+			}
 			skillAvailable = selectedSkill.map
 			{
 				selected in

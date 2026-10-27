@@ -350,6 +350,11 @@ enum AppKitColorTokens
 		dark: 0xFFFFFF
 	)
 
+	static let composerSkillMention = AppKitColorResolution.color(
+		light: 0x0357A6,
+		dark: 0x5685D1
+	)
+
 	static let transcriptLink = AppKitColorResolution.adaptiveColor
 	{
 		appearance in

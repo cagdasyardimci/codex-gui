@@ -4,7 +4,7 @@ Type `/` at the start of the draft to discover available commands and enabled sk
 
 ## Syntax and intent
 
-Commands are composer actions rather than shell input: arguments have no shell quoting or escape syntax. Paths, URLs and slashes later in prose remain ordinary text. Use `//status` to send literal `/status`. Invalid input retains the draft. Selecting a skill attaches it to the next message without sending that message.
+Commands are composer actions rather than shell input: arguments have no shell quoting or escape syntax. Paths, URLs and slashes later in prose remain ordinary text. Use `//status` to send literal `/status`. Invalid input retains the draft. Selecting a skill attaches it to the next message without sending that message. The composer shows the selection as an inline mention. Normal text selection and deletion remove it while preserving other draft content and attachments. The mention remains separate from the plain draft and is submitted using its selected skill name and path. Both the inline list and `/skills` picker search internal names, display names and descriptions with case-insensitive substring matching.
 
 Forking copies conversation history in the source checkout; task checkout creation is a separate Git operation. Plan toggling without a prompt changes next-turn mode without starting a model turn. Preserve the remaining prompt text when invoking plan mode with a prompt.
 

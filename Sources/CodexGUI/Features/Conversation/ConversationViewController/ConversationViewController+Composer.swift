@@ -332,13 +332,13 @@ extension ConversationViewController
 		}
 		if slashCompletionRange != nil,
 			let query = SlashCommandParser.completionQuery(
-			in: composer.string,
-			selectedRange: composer.selectedRange()
+			in: composer.draftText,
+			selectedRange: composer.draftRange(for: composer.selectedRange())
 			)
 		{
 			slashCommandController.render(prefix: query.prefix)
 		}
-		if composer.string != snapshot.draft
+		if !isPublishingComposerEdit && composer.draftText != snapshot.draft
 		{
 			dismissSlashCommands()
 			if fileSelectionReceiver != nil || fileSearchWasCompletion
@@ -421,7 +421,40 @@ extension ConversationViewController
 		{
 			return
 		}
-		onDraftChange?(composer.string)
+		let text = composer.draftText
+		let selected = renderedPresentation?.requestContext.selectedSkill
+		let mention = composer.skillMention?.selection
+		let generation = selectionGeneration
+		let updateDraft = onDraftChange
+		isPublishingComposerEdit = true
+		if mention != selected
+		{
+			if let mention,
+				let skill = slashCommandController.availableSkills
+				.first(where:
+				{
+					$0.enabled && $0.name == mention.name && $0.path == mention.path
+				})
+			{
+				onSelectSkill?(skill)
+			}
+			else if let selected
+			{
+				onRemoveSkill?(selected)
+			}
+		}
+		if selectionGeneration == generation
+		{
+			updateDraft?(text)
+		}
+		isPublishingComposerEdit = false
+		if let context = renderedPresentation?.requestContext
+		{
+			composer.renderSkill(
+				context.selectedSkill,
+				title: context.selectedSkillTitle
+			)
+		}
 		updateComposerHeight()
 		updateComposerCompletion()
 	}
@@ -458,7 +491,7 @@ extension ConversationViewController
 			insertion,
 			replacementRange: composer.selectedRange()
 		)
-		onDraftChange?(composer.string)
+		onDraftChange?(composer.draftText)
 		view.window?.makeFirstResponder(composer)
 	}
 
@@ -478,7 +511,7 @@ extension ConversationViewController
 		{
 			return
 		}
-		onSteer?(composer.string)
+		onSteer?(composer.draftText)
 	}
 	@objc private func stop()
 	{

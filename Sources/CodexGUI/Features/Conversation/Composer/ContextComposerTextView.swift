@@ -21,6 +21,8 @@ final class ContextComposerTextView: NSTextView, NSLayoutManagerDelegate
 		return true
 	}
 
+	var isUpdatingSkillMention = false
+
 	var onImage: ((NSImage, String) -> Void)?
 	var onImageSource: ((DraftImageSource, String) -> Void)?
 	var acceptsImageAttachments = true
@@ -44,6 +46,20 @@ final class ContextComposerTextView: NSTextView, NSLayoutManagerDelegate
 	override func didChangeText()
 	{
 		super.didChangeText()
+		needsDisplay = true
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		skillMention?.refreshImage(appearance: effectiveAppearance)
+		if let storage = textStorage
+		{
+			layoutManager?.invalidateDisplay(forCharacterRange: NSRange(
+				location: 0,
+				length: storage.length
+			))
+		}
 		needsDisplay = true
 	}
 

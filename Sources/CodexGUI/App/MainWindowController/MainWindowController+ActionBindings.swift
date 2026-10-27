@@ -264,6 +264,18 @@ extension MainWindowController
 			self?.openChangesToolTab(scope: .lastTurn)
 		}
 		let skillStore = currentStore
+		conversation.onRemoveSkill =
+		{
+			skill in
+			var context = skillStore.currentSnapshot.projectContext
+			guard context.selectedSkill == skill
+			else
+			{
+				return
+			}
+			context.selectedSkill = nil
+			target.dispatch(.updateProjectContext(context))
+		}
 		conversation.onSelectSkill =
 		{
 			skill in

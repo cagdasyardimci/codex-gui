@@ -276,6 +276,157 @@ struct ComposerSlashCommandTests
 		#expect(controller.composer.string == "Replacement")
 	}
 
+	@Test func inlineSkillDeletionAndUndoPreserveDraftAttachmentsAndSubmissionIdentity() throws
+	{
+		let controller = makeController(text: "Review my changes")
+		let skill = try #require(AvailableSkill(json: [
+			"name": "internal-audit",
+			"description": "Review the repository",
+			"path": "/skills/audit/SKILL.md",
+			"scope": "user",
+			"enabled": true,
+			"interface": ["displayName": "Workspace Review"],
+		]))
+		var next = snapshot(draft: "Review my changes")
+		next.skillCatalog = SkillCatalog(
+			skills: [skill],
+			errors: []
+		)
+		next.projectContext.selectedSkill = ProjectSkillSelection(
+			name: skill.name,
+			description: skill.description,
+			path: skill.path
+		)
+		next.draftContext = [ComposerContextItem(
+			kind: .fileReference,
+			title: "Notes",
+			path: "notes.txt"
+		)]
+		let attachment = next.draftContext
+		controller.render(next)
+		#expect(controller.composer.skillMention?.selection == next.projectContext.selectedSkill)
+		#expect(!controller.attachmentDetailsScrollView.isHidden)
+		#expect(controller.composer.skillMention?.title == "Workspace Review")
+		#expect(controller.composer.draftText == "Review my changes")
+		#expect(ProjectProductivity.resolvedSkill(
+			context: next.projectContext,
+			in: next.skillCatalog
+		)
+			== SkillReference(
+				name: skill.name,
+				path: skill.path
+			))
+		var removals = 0
+		controller.onRemoveSkill =
+		{
+			selection in
+			#expect(selection == next.projectContext.selectedSkill)
+			removals += 1
+			next.projectContext.selectedSkill = nil
+			controller.render(next)
+		}
+		let window = NSWindow(contentViewController: controller)
+		window.prepareForTesting()
+		defer
+		{
+			window.close()
+		}
+		controller.onDraftChange =
+		{
+			text in
+			var updated = snapshot(draft: text)
+			updated.projectContext = next.projectContext
+			updated.skillCatalog = next.skillCatalog
+			updated.draftContext = next.draftContext
+			next = updated
+			controller.render(next)
+		}
+		controller.onSelectSkill =
+		{
+			selected in
+			next.projectContext.selectedSkill = ProjectSkillSelection(
+				name: selected.name,
+				description: selected.description,
+				path: selected.path
+			)
+			controller.render(next)
+		}
+		controller.composer.setSelectedRange(NSRange(
+			location: 1,
+			length: 0
+		))
+		controller.composer.deleteBackward(nil)
+		#expect(removals == 1)
+		#expect(controller.composer.skillMention == nil)
+		#expect(!controller.contextView.isHidden)
+		#expect(controller.composer.string == "Review my changes")
+		#expect(next.draftContext == attachment)
+		#expect(ProjectProductivity.resolvedSkill(
+			context: next.projectContext,
+			in: next.skillCatalog
+		) == nil)
+		let undo = try #require(controller.composer.undoManager)
+		#expect(undo.canUndo)
+		undo.undo()
+		#expect(controller.composer.skillMention?.selection == next.projectContext.selectedSkill)
+		#expect(next.projectContext.selectedSkill?.path == skill.path)
+		#expect(controller.composer.draftText == "Review my changes")
+		#expect(next.draftContext == attachment)
+		controller.composer.insertText(
+			"🧭 ",
+			replacementRange: NSRange(
+				location: 1,
+				length: 0
+			)
+		)
+		#expect(next.draft == "🧭 Review my changes")
+		#expect(controller.composer.skillMention?.selection == next.projectContext.selectedSkill)
+		controller.composer.setSelectedRange(NSRange(
+			location: 0,
+			length: controller.composer.string.utf16.count
+		))
+		controller.composer.deleteBackward(nil)
+		#expect(next.draft.isEmpty)
+		#expect(next.projectContext.selectedSkill == nil)
+		#expect(next.draftContext == attachment)
+	}
+
+	@Test func inlineSkillKeepsSlashCompletionAndUnicodeDraftRangesSeparate() throws
+	{
+		let controller = makeController(text: "/sta 🧭 inspect café")
+		let skill = try #require(AvailableSkill(json: [
+			"name": "review",
+			"description": "Review",
+			"path": "/skills/review",
+			"scope": "user",
+			"enabled": true
+		]))
+		var next = snapshot(draft: "/sta 🧭 inspect café")
+		next.skillCatalog = SkillCatalog(
+			skills: [skill],
+			errors: []
+		)
+		next.projectContext.selectedSkill = ProjectSkillSelection(
+			name: skill.name,
+			description: skill.description,
+			path: skill.path
+		)
+		controller.render(next)
+		controller.composer.setSelectedRange(NSRange(
+			location: 5,
+			length: 0
+		))
+		controller.updateComposerCompletion()
+		#expect(controller.slashCommandController.selectedCommand?.id == .status)
+		#expect(controller.slashCompletionRange == NSRange(
+			location: 1,
+			length: 4
+		))
+		#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertTab(_:))))
+		#expect(controller.composer.draftText == "/status 🧭 inspect café")
+		#expect(controller.composer.skillMention?.selection == next.projectContext.selectedSkill)
+	}
+
 	private func makeController(text: String) -> ConversationViewController
 	{
 		_ = NSApplication.shared

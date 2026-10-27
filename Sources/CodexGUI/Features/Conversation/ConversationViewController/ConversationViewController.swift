@@ -9,6 +9,7 @@ final class ConversationViewController: NSViewController,
 	let transcript: TranscriptViewController
 
 	var onSelectSkill: ((AvailableSkill) -> Void)?
+	var onRemoveSkill: ((ProjectSkillSelection) -> Void)?
 	var onSlashCommand: ((SlashCommandInvocation) -> Void)?
 	var onSend: (() -> Void)?
 	var onRetryLockedChat: (() -> Void)?
@@ -150,6 +151,7 @@ final class ConversationViewController: NSViewController,
 	var composerHeightConstraint: NSLayoutConstraint?
 	let contextView = ComposerContextView()
 	lazy var attachmentDetailsScrollView = BoundedContentScrollView(views: [contextView])
+	var isPublishingComposerEdit = false
 	lazy var requestDetailsScrollView = BoundedContentScrollView(views: [interactionStack])
 	let addContextButton = DesktopPopupButton()
 	let planModeLabel = NSTextField(labelWithString: "Plan mode")
@@ -441,6 +443,7 @@ final class ConversationViewController: NSViewController,
 		if previous?.owner != snapshot.owner
 			|| previous?.composer.draftLifetime != snapshot.composer.draftLifetime
 		{
+			isPublishingComposerEdit = false
 			transcript.turnNavigationRail.dismissPreview()
 			dismissSlashCommands()
 			fileSearchPopover?.close()
@@ -449,6 +452,7 @@ final class ConversationViewController: NSViewController,
 			modelEffortPopover?.close()
 			approvalPolicyPopover?.close()
 			completionRange = nil
+			composer.undoManager?.removeAllActions()
 			selectionGeneration += 1
 			cancelImageImports()
 		}
@@ -491,6 +495,14 @@ final class ConversationViewController: NSViewController,
 		if previous?.composer != snapshot.composer
 		{
 			renderComposer(snapshot.composer)
+		}
+		if !isPublishingComposerEdit
+		{
+			composer.renderSkill(
+				snapshot.requestContext.selectedSkill,
+				title: snapshot.requestContext.selectedSkillTitle
+			)
+			updateComposerHeight()
 		}
 		if previous?.interactions != snapshot
 			.interactions
