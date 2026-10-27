@@ -5,7 +5,6 @@ import AppKit
 final class ReviewValidationView: NSView
 {
 	private let commandButton = DesktopPopupButton()
-	private let statusLabel = NSTextField(wrappingLabelWithString: "")
 	private let outputTextView = NSTextView()
 	private var validations: [ReviewValidation] = []
 	private struct ValidationIdentity: Equatable
@@ -34,22 +33,19 @@ final class ReviewValidationView: NSView
 		commandButton.removeAllItems()
 		if validations.isEmpty
 		{
-			commandButton.addItem(withTitle: "No command observed")
 			commandButton.isEnabled = false
+			commandButton.isHidden = true
 			selectedIdentity = nil
-			statusLabel.stringValue = "Validation unobserved for this turn."
-			outputTextView.string = "No command output was reported."
+			outputTextView.string = ""
 			outputTextView.sizeToFit()
 			return
 		}
 
 		commandButton.isEnabled = true
+		commandButton.isHidden = false
 		for validation in validations
 		{
-			let title =
-				"Turn \(validation.turnID.prefix(8)) · \(validation.outcome.title) · "
-					+ "\(validation.command)"
-			commandButton.addItem(withTitle: title)
+			commandButton.addItem(withTitle: validation.command)
 			commandButton.lastItem?.representedObject = validation.itemID
 			commandButton.lastItem?.toolTip =
 				"Thread \(validation.threadID), turn \(validation.turnID): \(validation.command)"
@@ -77,14 +73,10 @@ final class ReviewValidationView: NSView
 
 		AppKitLayout.compressHorizontally(commandButton)
 
-		statusLabel.textColor = .secondaryLabelColor
-		statusLabel.font = .systemFont(ofSize: 11)
-		statusLabel.setAccessibilityLabel("Command outcome and code state")
-
 		let outputScrollView = makeOutputScrollView()
 
 		let stack = AppKitLayout.verticalStack(
-			[commandButton, statusLabel, outputScrollView],
+			[commandButton, outputScrollView],
 			spacing: 6
 		)
 		AppKitLayout.pin(
@@ -93,7 +85,6 @@ final class ReviewValidationView: NSView
 			inset: 0
 		)
 		commandButton.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		statusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		outputScrollView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		outputScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 70).isActive = true
 		outputScrollView.setContentHuggingPriority(
@@ -152,53 +143,22 @@ final class ReviewValidationView: NSView
 			itemID: validation.itemID
 		)
 
-		statusLabel.stringValue = statusText(for: validation)
 		outputTextView.string = evidenceText(for: validation)
 		outputTextView.sizeToFit()
 	}
 
-	private func statusText(for validation: ReviewValidation) -> String
-	{
-		let timing =
-			validation.currency == .outdated
-				? "Outdated after later reported edits."
-				: "Current repository state unverified."
-		let exit = validation.exitCode.map
-		{
-			" Exit \($0)."
-		} ?? " Exit code unavailable."
-		return "\(validation.outcome.title).\(exit) \(timing)"
-	}
-
 	private func evidenceText(for validation: ReviewValidation) -> String
 	{
-		return
-			"Command origin: thread \(validation.threadID), turn \(validation.turnID)\n"
-				+ "Reported code state: \(validation.codeStateID)\n"
-				+ "\(validation.scopeDescription)\n\n"
-				+ (validation.output.flatMap
-				{
-					$0.isEmpty ? nil : $0
-				}
-				?? "No command output was reported.")
+		guard let output = validation.output, !output.isEmpty
+		else
+		{
+			return ""
+		}
+		return output
 	}
 
 	@objc private func commandChanged()
 	{
 		selectValidation(at: commandButton.indexOfSelectedItem)
-	}
-}
-
-extension ReviewValidationOutcome
-{
-	fileprivate var title: String
-	{
-		switch self
-		{
-		case .succeeded: "Command succeeded"
-		case .failed: "Command failed"
-		case .unknown: "Command outcome unknown"
-		case .unobserved: "Command result unobserved"
-		}
 	}
 }

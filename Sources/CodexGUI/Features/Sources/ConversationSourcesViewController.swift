@@ -21,10 +21,6 @@ final class ConversationSourcesViewController: NSViewController
 		[],
 		spacing: 0
 	)
-	private let status = DesktopStatusView(
-		message: "",
-		presentation: .inline
-	)
 	private let rawOutput = SourceRawOutputPresenter()
 
 	private struct InvocationKey: Hashable
@@ -95,8 +91,6 @@ final class ConversationSourcesViewController: NSViewController
 		document.translatesAutoresizingMaskIntoConstraints = false
 		scroll.documentView = document
 		document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
-		sourceStack.addArrangedSubview(status)
-		status.widthAnchor.constraint(equalTo: sourceStack.widthAnchor).isActive = true
 		scroll.onReveal =
 		{
 			[weak self] in
@@ -245,7 +239,7 @@ final class ConversationSourcesViewController: NSViewController
 		})
 		expandedInvocations.formIntersection(currentGroups)
 		let retainedViews = Set(rows.values.map(ObjectIdentifier.init)
-			+ dividers.values.map(ObjectIdentifier.init) + [ObjectIdentifier(status)])
+			+ dividers.values.map(ObjectIdentifier.init))
 		for child in sourceStack.arrangedSubviews
 			where !retainedViews.contains(ObjectIdentifier(child))
 		{
@@ -253,18 +247,6 @@ final class ConversationSourcesViewController: NSViewController
 			child.removeFromSuperview()
 		}
 		var insertionIndex = 0
-		if sources.records.isEmpty
-		{
-			let empty = DesktopStatusView(
-				message: "No sources in loaded conversation history",
-				presentation: .conversation
-			)
-			sourceStack.insertArrangedSubview(
-				empty,
-				at: insertionIndex
-			)
-			insertionIndex += 1
-		}
 		for record in sources.records
 		{
 			let row: NSView
@@ -302,11 +284,6 @@ final class ConversationSourcesViewController: NSViewController
 				divider.widthAnchor.constraint(equalTo: sourceStack.widthAnchor).isActive = true
 			}
 		}
-		status.setMessage("")
-		sourceStack.insertArrangedSubview(
-			status,
-			at: insertionIndex
-		)
 	}
 
 	private func retainCurrentResults(
@@ -396,18 +373,13 @@ final class ConversationSourcesViewController: NSViewController
 			.defaultLow,
 			for: .horizontal
 		)
-		let state = DesktopStatusView(
-			message: record.kind == .image ? "Image unavailable" : "Source unavailable",
-			presentation: .inlineCompact
-		)
-		state.isHidden = button.isEnabled || record.isInlineImage
 		let duration = NSTextField(labelWithString: "")
 		duration.textColor = .secondaryLabelColor
 		duration.font = .systemFont(ofSize: 13)
 		duration.identifier = NSUserInterfaceItemIdentifier("source-duration:\(record.id)")
 		duration.isHidden = true
 		let labels = AppKitLayout.verticalStack(
-			[button, path, duration, provenance, state],
+			[button, path, duration, provenance],
 			spacing: 4
 		)
 		labels.setCustomSpacing(
@@ -444,7 +416,6 @@ final class ConversationSourcesViewController: NSViewController
 			path.widthAnchor.constraint(equalTo: labels.widthAnchor),
 			duration.widthAnchor.constraint(equalTo: labels.widthAnchor),
 			provenance.widthAnchor.constraint(equalTo: labels.widthAnchor),
-			state.widthAnchor.constraint(equalTo: labels.widthAnchor),
 		])
 		rows[record.id] = row
 		buttons[button] = record
@@ -482,8 +453,8 @@ final class ConversationSourcesViewController: NSViewController
 				path: sourcePath
 			)
 			{
-				[weak image, weak state] data in
-				guard let image, let state
+				[weak image] data in
+				guard let image
 				else
 				{
 					return
@@ -491,11 +462,6 @@ final class ConversationSourcesViewController: NSViewController
 				if let data, let preview = NSImage(data: data)
 				{
 					image.image = preview
-				}
-				else
-				{
-					state.stringValue = "Preview unavailable"
-					state.isHidden = false
 				}
 			}
 		}
@@ -773,8 +739,7 @@ final class ConversationSourcesViewController: NSViewController
 				let card = SourceResultCodeCard(
 					text: payload,
 					language: invocation.resultLanguage,
-					identifier: "source-result:\(disclosure.recordID):\(invocation.id)",
-					isError: invocation.isError
+					identifier: "source-result:\(disclosure.recordID):\(invocation.id)"
 				)
 				let output = SourceRawOutputEntryView(
 					card: card,
@@ -891,12 +856,7 @@ final class ConversationSourcesViewController: NSViewController
 		{
 			return
 		}
-		if onOpen?(record) != true
-		{
-			status.isHidden = false
-			status.stringValue = "Unable to open \(record.name). "
-				+ "The source may no longer be available."
-		}
+		_ = onOpen?(record)
 	}
 }
 

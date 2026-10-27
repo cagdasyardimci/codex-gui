@@ -7,6 +7,15 @@ import Testing
 @Suite @MainActor
 struct GitInlineRichPreviewTests
 {
+	@Test func missingComparedVersionDoesNotOfferRichPreview()
+	{
+		let section = makeSection(hasBlob: false)
+		#expect(!descendants(section).contains
+		{
+			($0 as? NSButton)?.accessibilityLabel() == "Rich preview of README.md"
+		})
+	}
+
 	@Test func eyeButtonExpandsCollapsedFileAndLoadsPreviewInChangesViewer() async throws
 	{
 		// Repository preparation is independent of the native viewer and can block on Git.
@@ -192,16 +201,16 @@ struct GitInlineRichPreviewTests
 		})
 	}
 
-	private func makeSection() -> GitDiffFileSectionView
+	private func makeSection(hasBlob: Bool = true) -> GitDiffFileSectionView
 	{
-		let patch = "index " + String(
+		let patch = hasBlob ? "index " + String(
 			repeating: "a",
 			count: 40
 		) + ".."
 			+ String(
 				repeating: "b",
 				count: 40
-			) + " 100644\n"
+			) + " 100644\n" : ""
 		let row = GitDiffRow(
 			id: "line",
 			kind: .addition,

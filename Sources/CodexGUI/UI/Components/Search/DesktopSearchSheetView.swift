@@ -21,35 +21,6 @@ final class DesktopSearchSheetView: NSView
 			explanationLabel.isHidden = explanation == nil
 		}
 	}
-	var emptyMessage = "No matching commands"
-	{
-		didSet
-		{
-			emptyLabel.stringValue = emptyMessage
-		}
-	}
-	var hasResults = false
-	{
-		didSet
-		{
-			emptyLabel.isHidden = hasResults
-		}
-	}
-	var scopeText = ""
-	{
-		didSet
-		{
-			scopeLabel.stringValue = scopeText
-		}
-	}
-	var statusText = ""
-	{
-		didSet
-		{
-			statusLabel.stringValue = statusText
-			statusLabel.isHidden = statusText.isEmpty
-		}
-	}
 	var canLoadMore = false
 	{
 		didSet
@@ -66,9 +37,6 @@ final class DesktopSearchSheetView: NSView
 	}
 	private let presentation: Presentation
 	private let explanationLabel = NSTextField(wrappingLabelWithString: "")
-	private let emptyLabel = NSTextField(labelWithString: "No matching commands")
-	private let scopeLabel = NSTextField(wrappingLabelWithString: "")
-	private let statusLabel = NSTextField(labelWithString: "")
 	private let loadMoreButton = DesktopActionButton(
 		title: "Load More History",
 		presentation: .nativeDefault
@@ -103,20 +71,13 @@ final class DesktopSearchSheetView: NSView
 			explanationLabel.textColor = .secondaryLabelColor
 			explanationLabel.font = .systemFont(ofSize: 12)
 			explanationLabel.isHidden = true
-			emptyLabel.textColor = .secondaryLabelColor
 			closeButton.setAccessibilityLabel("Close command palette")
 			table.rowHeight = 42
 			table.setAccessibilityLabel("Matching projects, conversations, and actions")
-			views = [explanationLabel, query, scroll, emptyLabel, closeButton]
+			views = [explanationLabel, query, scroll, closeButton]
 			minimumResultsHeight = 220
 			columnID = "command"
 		case .messages:
-			scopeLabel.textColor = .secondaryLabelColor
-			scopeLabel.font = .systemFont(ofSize: 11)
-			scopeLabel.setAccessibilityLabel("Message search scope and history limits")
-			statusLabel.textColor = .secondaryLabelColor
-			statusLabel.setAccessibilityLabel("Message history loading status")
-			statusLabel.isHidden = true
 			loadMoreButton
 				.setAccessibilityLabel("Load more conversation history into message search")
 			loadMoreButton.isHidden = true
@@ -125,8 +86,6 @@ final class DesktopSearchSheetView: NSView
 			table.setAccessibilityLabel("Matching messages")
 			views = [AppKitLayout.title("Search Messages"),
 						query,
-						scopeLabel,
-						statusLabel,
 						scroll,
 						loadMoreButton,
 						closeButton]
@@ -146,7 +105,6 @@ final class DesktopSearchSheetView: NSView
 		if presentation == .messages
 		{
 			query.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-			scopeLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
 	}
 

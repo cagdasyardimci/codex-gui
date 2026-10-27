@@ -69,8 +69,8 @@ final class SettingsNotificationControls: NSView
 		authorizationButton.target = self
 		authorizationButton.action = #selector(openAuthorizationSettings)
 		authorizationRow = SettingsPageLayout.row(
-			title: "Checking notification access…",
-			detail: "Checking macOS notification permissions.",
+			title: "",
+			detail: "",
 			control: authorizationButton
 		)
 		let rows = [
@@ -112,17 +112,14 @@ final class SettingsNotificationControls: NSView
 
 	func setNotificationStatus(_ message: String)
 	{
-		authorizationRow.setDetailHelp(message)
-		if authorization == .unavailable
-		{
-			authorizationRow.setDetail(message)
-		}
+		_ = message
 	}
 
 	func setAuthorization(_ state: TaskNotificationAuthorization)
 	{
 		authorization = state
-		authorizationRow.isHidden = state == .authorized
+		authorizationRow
+			.isHidden = state == .authorized || state == .checking || state == .unavailable
 		for control in [completion, permission, question, sound]
 		{
 			control.isEnabled = state.allowsConfiguration
@@ -143,11 +140,11 @@ final class SettingsNotificationControls: NSView
 			authorizationRow.setDetail("Allow Codex to send notifications "
 				+ "to use the options below")
 		case .checking:
-			authorizationRow.setTitle("Checking notification access…")
-			authorizationRow.setDetail("Checking macOS notification permissions.")
+			authorizationRow.setTitle("")
+			authorizationRow.setDetail("")
 		case .unavailable:
-			authorizationRow.setTitle("Notifications are unavailable")
-			authorizationRow.setDetail("Run the bundled CodexGUI.app to use notifications.")
+			authorizationRow.setTitle("")
+			authorizationRow.setDetail("")
 		case .authorized: break
 		}
 		if !state.allowsConfiguration

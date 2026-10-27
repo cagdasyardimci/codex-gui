@@ -62,7 +62,6 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		commands: [PaletteCommand],
 		title: String = "Command Palette",
 		searchPlaceholder: String = "Find a project, conversation, or action",
-		emptyMessage: String = "No matching commands",
 		informativeText: String? = nil
 	)
 	{
@@ -71,7 +70,6 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		searchView.explanation = informativeText
 		searchField.placeholderString = searchPlaceholder
 		searchField.setAccessibilityLabel(searchPlaceholder)
-		searchView.emptyMessage = emptyMessage
 		searchField.stringValue = ""
 		filterCommands()
 		let sheet = NSWindow(contentViewController: self)
@@ -147,7 +145,6 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 				byExtendingSelection: false
 			)
 		}
-		searchView.hasResults = !visibleCommands.isEmpty
 	}
 
 	func numberOfRows(in tableView: NSTableView) -> Int

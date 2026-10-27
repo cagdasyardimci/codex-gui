@@ -54,14 +54,6 @@ final class SettingsHooksPage: SettingsManagementPage
 	override func sectionsForDisplay() -> [NSView]
 	{
 		var sections: [NSView] = []
-		if !backend.status.isEmpty
-		{
-			sections.append(SettingsPageLayout.status(backend.status))
-		}
-		if !message.isEmpty
-		{
-			sections.append(SettingsPageLayout.status(message))
-		}
 		if !rows.isEmpty
 		{
 			sections.append(SettingsPageLayout.card(rows: rows))
@@ -171,14 +163,6 @@ final class SettingsHooksPage: SettingsManagementPage
 						control: self.controls(controls)
 					)
 				}
-			}
-			if rows.isEmpty
-			{
-				rows = [SettingsPageLayout.row(
-					title: "No hooks found",
-					detail: "Configured hooks will appear here",
-					control: NSView()
-				)]
 			}
 		}
 	}

@@ -6,6 +6,31 @@ import Testing
 @Suite @MainActor
 struct TurnSummaryPreviewTests
 {
+	@Test func loadingOrFailedPreviewKeepsItsAvailableContentWithoutStatusCopy() throws
+	{
+		_ = NSApplication.shared
+		let summary = ConversationTurnSummary(
+			turnID: "earlier",
+			entryID: "earlier:reference",
+			title: "Earlier request",
+			reply: "",
+			isContentLoaded: false,
+			previewError: "History unavailable"
+		)
+		let preview = TurnSummaryPreview(
+			summary: summary,
+			bookmarked: false
+		)
+		let stack = try #require(preview.subviews.first as? NSStackView)
+		let header = try #require(stack.arrangedSubviews.first as? NSStackView)
+		let title = try #require(header.arrangedSubviews.first as? NSTextField)
+		let reply = try #require(stack.arrangedSubviews.last as? NSTextField)
+		let bookmark = try #require(header.arrangedSubviews.last as? NSButton)
+		#expect(title.stringValue == "Earlier request")
+		#expect(reply.stringValue.isEmpty)
+		#expect(!bookmark.isHidden)
+		#expect(preview.accessibilityLabel() == "Turn preview")
+	}
 
 	@Test func previewHighlightsMarkdownAndVisibleWebLinks() throws
 	{

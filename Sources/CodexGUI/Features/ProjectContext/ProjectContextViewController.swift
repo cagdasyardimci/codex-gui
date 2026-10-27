@@ -11,7 +11,6 @@ final class ProjectContextViewController: NSViewController
 	private var context = ProjectContext()
 	private var models: [ModelOption] = []
 	private var availableSkills: [ProjectSkillSelection] = []
-	private var statusMessage: String?
 	private var ownerIdentity: String?
 	private var selectionGeneration = 0
 	private var draftOwnerIdentity: String?
@@ -123,7 +122,6 @@ final class ProjectContextViewController: NSViewController
 			context: presentation.context,
 			models: presentation.models,
 			skills: presentation.skills,
-			statusMessage: presentation.statusMessage,
 			ownerIdentity: presentation.ownerIdentity,
 			draftOwnerIdentity: presentation.draftOwnerIdentity
 		)
@@ -133,7 +131,6 @@ final class ProjectContextViewController: NSViewController
 		context: ProjectContext,
 		models: [ModelOption],
 		skills: [ProjectSkillSelection],
-		statusMessage: String?,
 		ownerIdentity: String? = nil,
 		draftOwnerIdentity: String? = nil
 	)
@@ -149,7 +146,7 @@ final class ProjectContextViewController: NSViewController
 		self.draftOwnerIdentity = draftOwnerIdentity
 		let shouldRebuildProjectContext =
 			context != self.context || models != self.models || skills != availableSkills
-				|| statusMessage != self.statusMessage || ownerIdentity != self.ownerIdentity
+				|| ownerIdentity != self.ownerIdentity
 		guard shouldRebuildProjectContext
 		else
 		{
@@ -159,7 +156,6 @@ final class ProjectContextViewController: NSViewController
 		self.context = context
 		self.models = models
 		availableSkills = skills
-		self.statusMessage = statusMessage
 		if isViewLoaded
 		{
 			rebuild()
@@ -263,10 +259,6 @@ final class ProjectContextViewController: NSViewController
 			"Project Context",
 			detail: "Select each item you want included in new requests."
 		)
-		if let statusMessage
-		{
-			addDetail(statusMessage)
-		}
 		for item in context.items
 		{
 			addContextRow(item)
@@ -308,7 +300,7 @@ final class ProjectContextViewController: NSViewController
 					&& ($0.path == selected.path || selected.path == nil)
 			})
 		{
-			skillButton.addItem(withTitle: "Unavailable: \(selected.name)")
+			skillButton.addItem(withTitle: selected.name)
 			skillButton.lastItem?.representedObject = selected.name
 		}
 		let selectedIndex = context.selectedSkill.flatMap
@@ -368,7 +360,7 @@ final class ProjectContextViewController: NSViewController
 				$0.id == id
 			})
 		{
-			modelButton.addItem(withTitle: "Unavailable: \(id)")
+			modelButton.addItem(withTitle: id)
 			modelButton.lastItem?.representedObject = id
 		}
 		modelButton.selectItem(
@@ -407,9 +399,7 @@ final class ProjectContextViewController: NSViewController
 		}
 		if let effort = context.modelPreference?.effort, !efforts.contains(effort)
 		{
-			effortButton.addItem(
-				withTitle: "Unavailable: \(ModelPreferencePresentation.effortTitle(effort))"
-			)
+			effortButton.addItem(withTitle: ModelPreferencePresentation.effortTitle(effort))
 			effortButton.lastItem?.representedObject = effort
 		}
 		effortButton.selectItem(

@@ -24,7 +24,7 @@ struct ModelEffortPopoverViewTests
 			selectedEffort: "ultra",
 			fastMode: true
 		)
-		#expect(picker.preferredContentSize.height == 140)
+		#expect(picker.preferredContentSize.height == 104)
 		picker.showModelList()
 		let menu = picker.modelList
 		#expect(
@@ -32,7 +32,7 @@ struct ModelEffortPopoverViewTests
 				"Default",
 				"First model",
 				"Second model",
-				"Unavailable: missing",
+				"missing",
 			]
 		)
 		#expect(menu.rows.map(\.state) == [.off, .off, .off, .on])
@@ -41,7 +41,7 @@ struct ModelEffortPopoverViewTests
 				in: picker.view,
 				accessibilityLabel: "Choose Codex model"
 			)?.title
-				== "Unavailable: missing"
+				== "missing"
 		)
 		#expect(label(
 			in: picker.view,

@@ -10,12 +10,10 @@ final class SettingsConfigurationPage: NSView
 	private let dependencies = RemoteConnectionsSwitch()
 	private var networkRow: NSView!
 	private let featureContents = NSStackView()
-	private let featureStatus = SettingsPageLayout.status("Connect to load experimental features.")
 	private var featureSwitches: [String: RemoteConnectionsSwitch] = [:]
 	private var loadedFeatures = false
 	private var loadingFeatures = false
 	private let effortContents = NSStackView()
-	private let effortStatus = SettingsPageLayout.status("Connect to load reasoning efforts.")
 	private let effortPicker = SettingsChoicePicker(choices: [])
 	private var advertisedEfforts: [String] = []
 	private var loadedEfforts = false
@@ -149,7 +147,6 @@ final class SettingsConfigurationPage: NSView
 		effortContents.orientation = .vertical
 		effortContents.alignment = .leading
 		effortContents.spacing = 0
-		effortContents.addArrangedSubview(effortStatus)
 		let effortSection = SettingsPageLayout.section(
 			title: "Model features",
 			rows: [effortContents]
@@ -157,7 +154,6 @@ final class SettingsConfigurationPage: NSView
 		featureContents.orientation = .vertical
 		featureContents.alignment = .leading
 		featureContents.spacing = 0
-		featureContents.addArrangedSubview(featureStatus)
 		let tools = SettingsPageLayout.section(
 			title: "Tools",
 			rows: [
@@ -407,7 +403,6 @@ final class SettingsConfigurationPage: NSView
 	private func loadEfforts()
 	{
 		loadingEfforts = true
-		effortStatus.stringValue = "Loading reasoning efforts…"
 		effortLoading = Task
 		{
 			[weak self] in
@@ -486,17 +481,11 @@ final class SettingsConfigurationPage: NSView
 				)
 				effortContents.addArrangedSubview(row)
 				row.widthAnchor.constraint(equalTo: effortContents.widthAnchor).isActive = true
-				effortStatus.stringValue = efforts.isEmpty
-					? "No reasoning efforts available." : ""
-				effortContents.addArrangedSubview(effortStatus)
-				effortStatus.widthAnchor.constraint(equalTo: effortContents.widthAnchor)
-					.isActive = true
 				loadedEfforts = true
 				refresh()
 			}
 			catch
 			{
-				effortStatus.stringValue = error.localizedDescription
 			}
 		}
 	}
@@ -504,7 +493,6 @@ final class SettingsConfigurationPage: NSView
 	private func loadFeatures()
 	{
 		loadingFeatures = true
-		featureStatus.stringValue = "Loading experimental features…"
 		Task
 		{
 			[weak self] in
@@ -579,15 +567,12 @@ final class SettingsConfigurationPage: NSView
 				}
 				if featureSwitches.isEmpty
 				{
-					featureStatus.stringValue = "No experimental features are available."
-					featureContents.addArrangedSubview(featureStatus)
 				}
 				loadedFeatures = true
 				refresh()
 			}
 			catch
 			{
-				featureStatus.stringValue = error.localizedDescription
 			}
 		}
 	}

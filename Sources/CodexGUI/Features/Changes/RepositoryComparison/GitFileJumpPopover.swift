@@ -160,14 +160,6 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 				button.heightAnchor.constraint(equalToConstant: 32),
 			])
 		}
-		if matches.isEmpty || matches.count > Self.maximumVisibleResultCount
-		{
-			let message = matches.isEmpty ? "No matching files" : "Refine search to see more files"
-			results.addArrangedSubview(DesktopSearchOverlayView.message(
-				message,
-				presentation: .status
-			))
-		}
 		view.layoutSubtreeIfNeeded()
 		updateSelection()
 	}

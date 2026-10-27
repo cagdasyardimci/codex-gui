@@ -241,7 +241,6 @@ extension NavigationViewController
 			[
 				projectButtons,
 				taskRow,
-				taskSummaryLabel,
 				activeTaskRow,
 				managementRow
 			],
@@ -252,7 +251,7 @@ extension NavigationViewController
 			to: actionsContainer,
 			inset: 12
 		)
-		for row in [projectButtons, taskRow, taskSummaryLabel, activeTaskRow, managementRow]
+		for row in [projectButtons, taskRow, activeTaskRow, managementRow]
 		{
 			row.widthAnchor.constraint(equalTo: actionsStack.widthAnchor).isActive = true
 		}

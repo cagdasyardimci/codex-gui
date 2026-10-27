@@ -34,7 +34,7 @@ struct PinnedSummaryPresentation: Equatable
 		contextName = snapshot.projectPath.map
 		{
 			snapshot.projectDisplayNames[$0] ?? URL(fileURLWithPath: $0).lastPathComponent
-		} ?? "Workspace unavailable"
+		} ?? ""
 		self.agentPreviews = snapshot.projectPath == nil ? [] : agentPreviews
 		var scopedSections = sections
 		if snapshot.projectPath == nil

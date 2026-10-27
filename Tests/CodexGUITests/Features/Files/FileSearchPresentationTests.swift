@@ -149,6 +149,10 @@ struct FileSearchPresentationTests
 				state.activeRoot = "/tmp/search-presentation"
 				panel.render(state)
 				panel.present(in: parent)
+				#expect(findField(
+					"Search status",
+					in: panel.view
+				) == nil)
 				let sheet = try #require(parent.attachedSheet)
 				#expect(sheet.title == (mode == .content ? "Search Files" : "Quick Open"))
 				let queryLabel = mode == .content
@@ -239,22 +243,10 @@ struct FileSearchPresentationTests
 					in: panel.view
 				))
 				#expect(table.selectedRow == 0)
-				if mode == .content
-				{
-					let status = try #require(findField(
-						"Search status",
-						in: panel.view
-					))
-					#expect(status.stringValue == "1 matching line")
-				}
-				else
-				{
-					let status = try #require(findField(
-						"Search status",
-						in: panel.view
-					))
-					#expect(status.stringValue == "1 file")
-				}
+				#expect(findField(
+					"Search status",
+					in: panel.view
+				) == nil)
 				for appearance: NSAppearance.Name in [.aqua, .darkAqua]
 				{
 					parent.appearance = NSAppearance(named: appearance)
@@ -330,11 +322,10 @@ struct FileSearchPresentationTests
 					isTruncated: true
 				)
 				panel.render(state)
-				let status = try #require(findField(
+				#expect(findField(
 					"Search status",
 					in: panel.view
-				))
-				#expect(status.stringValue.contains("incomplete"))
+				) == nil)
 				#expect(sheet.makeFirstResponder(escape))
 				sheet.cancelOperation(nil)
 				#expect(parent.attachedSheet == nil)

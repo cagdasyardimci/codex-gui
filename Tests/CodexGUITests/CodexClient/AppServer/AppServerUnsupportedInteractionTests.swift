@@ -129,7 +129,7 @@ struct AppServerUnsupportedInteractionTests
 			#expect(result["content"] is NSNull)
 			#expect(result["_meta"] is NSNull)
 			#expect(feedbackMessages == [
-				"This version of Codex GUI cannot display MCP forms. The request was declined."
+				"MCP form request declined."
 			])
 		case "execCommandApproval", "applyPatchApproval":
 			#expect(Set(response.keys) == ["id", "result"])
@@ -144,7 +144,7 @@ struct AppServerUnsupportedInteractionTests
 			#expect(error["code"] as? Int == -32601)
 			#expect(error["message"] as? String == "Unsupported by this client")
 			#expect(feedbackMessages == [
-				"This version of Codex GUI cannot handle item/tool/futureInteractiveRequest."
+				"Request declined: item/tool/futureInteractiveRequest."
 			])
 		}
 	}

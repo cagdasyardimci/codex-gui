@@ -22,7 +22,7 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 
 	private enum Kind: Hashable
 	{
-		case entry, result, loading, failed, empty, noMatches, searching, searchFailure
+		case entry, result, failed, searchFailure
 	}
 
 	private final class Row: NSObject
@@ -49,18 +49,12 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		let location: FileLocation
 	}
 
-	private enum Geometry
-	{
-		static let statusSize: CGFloat = 11
-	}
-
 	private let rootButton = ViewerToolbarButton(
 		title: "Files",
 		target: nil,
 		action: nil
 	)
 	private let filterField = ViewerSearchField()
-	private let filterStatus = NSTextField(labelWithString: "")
 	private let outline = ViewerFileTreeView()
 	private var navigator: ViewerFileNavigatorView!
 	private var scroll: NSScrollView
@@ -98,10 +92,6 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 
 		filterField.setAccessibilityLabel("Filter file navigator")
 		filterField.delegate = self
-		filterStatus.font = .systemFont(ofSize: Geometry.statusSize)
-		filterStatus.textColor = .secondaryLabelColor
-		filterStatus.isHidden = true
-		filterStatus.setAccessibilityLabel("File filter status")
 
 		outline.setAccessibilityLabel("Workspace files")
 		outline.children =
@@ -182,7 +172,7 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 			filterField: filterField,
 			tree: outline,
 			headerView: header,
-			statusView: filterStatus
+			statusView: nil
 		)
 		AppKitLayout.pin(
 			navigator,
@@ -351,35 +341,14 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		visibleRows.removeAll()
 		if !filter.isEmpty
 		{
-			filterStatus.stringValue = ""
 			if showsFilenameResults, let page = state.filenameResults
 			{
-				if page.isTruncated
-				{
-					filterStatus.stringValue = "Showing first \(page.results.count) matches"
-				}
-				if page.excludedDirectoryCount > 0
-				{
-					if !filterStatus.stringValue.isEmpty
-					{
-						filterStatus.stringValue += " · "
-					}
-					filterStatus.stringValue +=
-						"\(page.excludedDirectoryCount) generated folders skipped"
-				}
 				rootRows = page.results.map
 				{
 					row(
 						.result,
 						$0
 					)
-				}
-				if rootRows.isEmpty
-				{
-					rootRows = [row(
-						.noMatches,
-						root
-					)]
 				}
 			}
 			else if showsFilenameResults, state.searchFailure != nil
@@ -391,19 +360,14 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 			}
 			else
 			{
-				rootRows = [row(
-					.searching,
-					root
-				)]
+				rootRows = []
 			}
 		}
 		else
 		{
-			filterStatus.stringValue = ""
 			buildDirectoryRows(root)
 			rootRows = visibleRows[root] ?? []
 		}
-		filterStatus.isHidden = filterStatus.stringValue.isEmpty
 		let signature = rootRows.map
 		{
 			"\($0.kind):\($0.location.relativePath)"
@@ -453,24 +417,10 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		{
 			buildDirectoryRows(entry.location)
 		}
-		if state.directoryRequests[location] != nil
-		{
-			rows.append(row(
-				.loading,
-				location
-			))
-		}
-		else if state.directoryFailures[location] != nil
+		if state.directoryFailures[location] != nil
 		{
 			rows.append(row(
 				.failed,
-				location
-			))
-		}
-		else if rows.isEmpty, state.directoryEntries[location] != nil
-		{
-			rows.append(row(
-				.empty,
 				location
 			))
 		}
@@ -684,7 +634,6 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		case .result: onOpenFile?(row.location, retained)
 		case .failed: onRequestDirectory?(row.location)
 		case .searchFailure: onFilter?(filter)
-		case .loading, .empty, .noMatches, .searching: break
 		}
 	}
 
@@ -699,12 +648,7 @@ final class FileNavigatorViewController: NSViewController, NSSearchFieldDelegate
 		{
 		case .entry: row.entry?.name ?? ""
 		case .result: row.location.relativePath
-		case .loading: "Loading…"
-		case .failed: "Couldn’t load folder. Click to retry."
-		case .empty: "Empty folder"
-		case .noMatches: "No matching files"
-		case .searching: "Searching…"
-		case .searchFailure: "Search failed. Click to retry."
+		case .failed, .searchFailure: "Retry"
 		}
 	}
 }

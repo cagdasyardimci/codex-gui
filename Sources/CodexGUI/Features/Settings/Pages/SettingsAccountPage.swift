@@ -8,10 +8,6 @@ final class SettingsAccountPage: NSView
 		title: "Email",
 		value: "Checking…"
 	)
-	private let statusRow = SettingsReadOnlyValueRow(
-		title: "Account Status",
-		value: "Checking…"
-	)
 
 	override init(frame frameRect: NSRect)
 	{
@@ -20,7 +16,7 @@ final class SettingsAccountPage: NSView
 		AppKitLayout.pin(
 			SettingsPageDocument(
 				accountSectionTitle: "General",
-				rows: [emailRow, statusRow]
+				rows: [emailRow]
 			),
 			to: self,
 			inset: 0
@@ -41,11 +37,6 @@ final class SettingsAccountPage: NSView
 			help: accountEmail
 		)
 		emailRow.isHidden = accountEmail?.isEmpty != false
-		let plan = account?.planType ?? presentation.usage.limits?.rateLimits.planType
-		statusRow.setValue(
-			plan?.capitalized ?? presentation.accountDescription,
-			help: presentation.accountDescription
-		)
 	}
 
 }

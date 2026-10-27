@@ -144,8 +144,7 @@ struct ConversationSubagents: Equatable
 				)
 			},
 			completedCount: doneAgents.count,
-			runningCount: activeAgents.count,
-			aggregationDescription: "Subagents in loaded conversation history"
+			runningCount: activeAgents.count
 		)
 	}
 

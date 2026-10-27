@@ -55,7 +55,6 @@ struct SettingsPluginsLoadingTests
 		window.layoutIfNeeded()
 		page.layoutSubtreeIfNeeded()
 		#expect(page.operation == nil)
-		#expect(page.message.isEmpty)
 		#expect(!backend.isBusy)
 
 		let catalog = try #require(descendants(page).compactMap

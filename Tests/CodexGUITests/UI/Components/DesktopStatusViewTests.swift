@@ -91,6 +91,51 @@ struct DesktopStatusViewTests
 		#expect(status.isHidden)
 	}
 
+	@Test(.appKitIsolation)
+	func narrowRecoveryStatusKeepsMessageAndActionSeparate() throws
+	{
+		_ = NSApplication.shared
+		let status = DesktopStatusView(
+			message: "The conversation could not be loaded. Check the connection and retry.",
+			actions: [.init(
+				title: "Retry",
+				onActivate:
+				{
+				}
+			)],
+			presentation: .conversation
+		)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: -2000,
+				y: -2000,
+				width: 180,
+				height: 180
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		window.contentView = status
+		defer
+		{
+			window.close()
+		}
+		status.layoutSubtreeIfNeeded()
+		let retry = try #require(buttons(in: status).first)
+		let messageBounds = status.messageLabel.convert(
+			status.messageLabel.bounds,
+			to: status
+		)
+		let buttonBounds = retry.convert(
+			retry.bounds,
+			to: status
+		)
+		#expect(messageBounds.width >= 160)
+		#expect(!messageBounds.intersects(buttonBounds))
+	}
+
 	private func buttons(in view: NSView) -> [NSButton]
 	{
 		(view as? NSButton).map

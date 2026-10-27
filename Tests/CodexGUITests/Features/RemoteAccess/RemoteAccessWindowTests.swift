@@ -99,14 +99,13 @@ struct RemoteAccessWindowTests
 		#expect(abs(addFrame.midY - refreshFrame.midY) < 1)
 		#expect(addFrame.minX > refreshFrame.maxX)
 		#expect(abs(removeFrame.maxX - addFrame.maxX + 17) < 1)
-		let hint = try #require(descendants(content).compactMap
+		#expect(!descendants(content).compactMap
 		{
 			$0 as? NSTextField
-		}.first
+		}.contains
 		{
 			$0.stringValue == "Add device to control this Mac remotely"
 		})
-		#expect(hint.isHiddenOrHasHiddenAncestor)
 		#expect(descendants(content).compactMap
 		{
 			$0 as? NSTextField
@@ -139,14 +138,20 @@ struct RemoteAccessWindowTests
 			connected: true
 		)
 		content.layoutSubtreeIfNeeded()
-		#expect(!hint.isHiddenOrHasHiddenAncestor)
+		#expect(!descendants(content).compactMap
+		{
+			$0 as? NSTextField
+		}.contains
+		{
+			$0.stringValue == "Add device to control this Mac remotely"
+		})
 		#expect(add.superview !== refresh.superview)
 		controller.beginPresentation()
 		controller.windowWillClose(Notification(name: NSWindow.willCloseNotification))
 		#expect(commands.last == .clearPairing)
 	}
 
-	@Test func hostConflictRemainsVisibleAndAllowsPairingAttempt() throws
+	@Test func hostConflictKeepsPairingActionAvailable() throws
 	{
 		let controller = RemoteAccessWindowController()
 		var commands: [RemoteAccessCommand] = []
@@ -171,18 +176,6 @@ struct RemoteAccessWindowTests
 			connected: true
 		)
 		let content = try #require(controller.window?.contentView)
-		let labels = descendants(content).compactMap
-		{
-			$0 as? NSTextField
-		}
-		#expect(labels.contains
-		{
-			$0.stringValue.contains("Another Codex app")
-		})
-		#expect(labels.contains
-		{
-			$0.stringValue.contains("Disable remote access in that app")
-		})
 		let pair = try #require(descendants(content).compactMap
 		{
 			$0 as? NSButton
@@ -243,23 +236,13 @@ struct RemoteAccessWindowTests
 			#expect(control.state == .on)
 		}
 		#expect(add.bounds.height == 24)
-		let hint = try #require(descendants(content).compactMap
+		#expect(!descendants(content).compactMap
 		{
 			$0 as? NSTextField
-		}
-		.first
+		}.contains
 		{
 			$0.stringValue == "Add device to control this Mac remotely"
 		})
-		let addFrame = add.convert(
-			add.bounds,
-			to: content
-		)
-		let hintFrame = hint.convert(
-			hint.bounds,
-			to: content
-		)
-		#expect(abs(addFrame.midX - hintFrame.midX) < 1)
 		#expect(!buttons
 			.contains
 			{
@@ -275,11 +258,7 @@ struct RemoteAccessWindowTests
 		{
 			["Control other devices", "SSH"].contains($0.title)
 		}
-		#expect(unsupported.count == 2)
-		#expect(unsupported.allSatisfy
-		{
-			!$0.isEnabled
-		})
+		#expect(unsupported.isEmpty)
 		controller.beginPresentation()
 		controller.beginPresentation()
 		#expect(commands == [.pair, .refresh])

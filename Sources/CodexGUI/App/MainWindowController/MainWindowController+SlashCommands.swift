@@ -288,7 +288,6 @@ extension MainWindowController
 			),
 			title: "Resolve fork outcome",
 			searchPlaceholder: "Inspect refreshed saved conversations",
-			emptyMessage: "No matching conversations",
 			informativeText: "The fork may have been saved "
 				+ "even though its result was not confirmed. "
 				+ "Choose a saved conversation to continue, or Continue Original Chat. "
@@ -337,8 +336,7 @@ extension MainWindowController
 			in: window,
 			commands: commands,
 			title: "Resume conversation",
-			searchPlaceholder: "Search saved conversations",
-			emptyMessage: "No saved conversations in this list"
+			searchPlaceholder: "Search saved conversations"
 		)
 	}
 
@@ -401,8 +399,7 @@ extension MainWindowController
 			in: window,
 			commands: commands,
 			title: "Choose a skill",
-			searchPlaceholder: "Search available skills",
-			emptyMessage: "No matching skills"
+			searchPlaceholder: "Search available skills"
 		)
 	}
 

@@ -14,7 +14,7 @@ final class SettingsUsageLimitRow: SettingsContentRow
 		let remaining = Self.secondary(limit.remaining.map
 		{
 			SettingsUsagePresentation.percent($0) + " left"
-		} ?? "Unavailable")
+		} ?? "")
 		let details = NSStackView(views: [reset, NSView(), remaining])
 		details.spacing = 12
 		let views: [NSView] = [title, details] + (limit.remaining.map

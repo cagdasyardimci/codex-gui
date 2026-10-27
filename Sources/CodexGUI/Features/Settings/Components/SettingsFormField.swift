@@ -10,9 +10,6 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 	let content: NSView
 	private let titleLabel: NSTextField
 	private let detailLabel: SettingsMessageLabel
-	private let errorLabel: SettingsFormErrorLabel
-	private let statusLabel = SettingsMessageLabel(wrappingLabelWithString: "")
-	private let feedback = NSStackView()
 	private var validationError = ""
 	private var supportingStatus = ""
 
@@ -58,9 +55,7 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		set
 		{
 			validationError = newValue
-			errorLabel.stringValue = newValue
 			input?.hasValidationError = !newValue.isEmpty
-			refreshFeedback()
 		}
 	}
 	var status: String
@@ -72,8 +67,6 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		set
 		{
 			supportingStatus = newValue
-			statusLabel.stringValue = newValue
-			refreshFeedback()
 		}
 	}
 
@@ -108,7 +101,6 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		input = content as? SettingsFormTextField
 		titleLabel = NSTextField(labelWithString: title)
 		detailLabel = SettingsMessageLabel(wrappingLabelWithString: detail ?? "")
-		errorLabel = SettingsFormErrorLabel()
 		super.init(frame: .zero)
 		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Connections.body)
 		titleLabel.textColor = AppKitColorTokens.settingsSecondaryText
@@ -116,19 +108,8 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		detailLabel.font = .systemFont(ofSize: 12)
 		detailLabel.textColor = AppKitColorTokens.settingsSecondaryText
 		detailLabel.isHidden = (detail ?? "").isEmpty
-		errorLabel.setAccessibilityLabel("\(title) validation error")
-		statusLabel.font = .systemFont(ofSize: 12)
-		statusLabel.textColor = AppKitColorTokens.settingsSecondaryText
-		feedback.orientation = .vertical
-		feedback.alignment = .leading
-		feedback.spacing = 0
-		for label in [errorLabel, statusLabel]
-		{
-			feedback.addArrangedSubview(label)
-			label.widthAnchor.constraint(equalTo: feedback.widthAnchor).isActive = true
-		}
 		let stack = AppKitLayout.verticalStack(
-			[titleLabel, detailLabel, content, feedback],
+			[titleLabel, detailLabel, content],
 			spacing: 4
 		)
 		AppKitLayout.pin(
@@ -136,28 +117,16 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 			to: self,
 			inset: 0
 		)
-		for view in [titleLabel, detailLabel, content, feedback]
+		for view in [titleLabel, detailLabel, content]
 		{
 			view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
 		input?.delegate = self
-		refreshFeedback()
 	}
 
 	required init?(coder: NSCoder)
 	{
 		nil
-	}
-
-	private func refreshFeedback()
-	{
-		statusLabel.isHidden = supportingStatus.isEmpty || !validationError.isEmpty
-		feedback.isHidden = validationError.isEmpty && supportingStatus.isEmpty
-		let help = validationError.isEmpty ? supportingStatus : validationError
-		input?.setAccessibilityHelp(help.isEmpty ? nil : help)
-		feedback.invalidateIntrinsicContentSize()
-		invalidateIntrinsicContentSize()
-		needsLayout = true
 	}
 
 	func controlTextDidChange(_ notification: Notification)
@@ -168,39 +137,5 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 	func controlTextDidEndEditing(_ notification: Notification)
 	{
 		onEndEditing?(stringValue)
-	}
-}
-
-/// Validation text used by complete field components and form-level validation summaries.
-@MainActor
-final class SettingsFormErrorLabel: NSTextField
-{
-	override var stringValue: String
-	{
-		didSet
-		{
-			isHidden = stringValue.isEmpty
-		}
-	}
-
-	init()
-	{
-		super.init(frame: .zero)
-		isEditable = false
-		isSelectable = false
-		isBordered = false
-		drawsBackground = false
-		usesSingleLineMode = false
-		cell?.wraps = true
-		cell?.isScrollable = false
-		font = .systemFont(ofSize: 12)
-		textColor = AppKitColorTokens.settingsFieldError
-		isHidden = true
-		setAccessibilityRole(.staticText)
-	}
-
-	required init?(coder: NSCoder)
-	{
-		nil
 	}
 }

@@ -15,7 +15,6 @@ final class DesktopFileSearchContentView: NSView
 		maskField: NSTextField,
 		maskLabel: NSTextField,
 		escapeButton: NSButton,
-		statusLabel: NSTextField,
 		keyboardHints: NSView,
 		table: NSTableView
 	)
@@ -40,14 +39,6 @@ final class DesktopFileSearchContentView: NSView
 		maskLabel.textColor = AppKitColorTokens.captionText
 		maskLabel.font = AppKitFontResolver.font(TypographyTokens.FileSearch.maskLabel)
 		escapeButton.setAccessibilityLabel("Close search")
-		statusLabel.textColor = AppKitColorTokens.captionText
-		statusLabel.font = AppKitFontResolver.font(TypographyTokens.FileSearch.footer)
-		statusLabel.lineBreakMode = .byTruncatingTail
-		statusLabel.setAccessibilityLabel("Search status")
-		statusLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
 
 		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("result"))
 		column.resizingMask = .autoresizingMask
@@ -85,7 +76,7 @@ final class DesktopFileSearchContentView: NSView
 			item.translatesAutoresizingMaskIntoConstraints = false
 			header.addSubview(item)
 		}
-		for item in [divider, statusLabel, keyboardHints]
+		for item in [divider, keyboardHints]
 		{
 			item.translatesAutoresizingMaskIntoConstraints = false
 			footer.addSubview(item)
@@ -136,20 +127,11 @@ final class DesktopFileSearchContentView: NSView
 				equalTo: footer.trailingAnchor,
 				constant: -LayoutTokens.FileSearch.resultsHorizontalInset
 			),
-			statusLabel.leadingAnchor.constraint(
-				equalTo: footer.leadingAnchor,
-				constant: LayoutTokens.FileSearch.footerHorizontalInset
-			),
-			statusLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
 			keyboardHints.trailingAnchor.constraint(
 				equalTo: footer.trailingAnchor,
 				constant: -LayoutTokens.FileSearch.footerHorizontalInset
 			),
 			keyboardHints.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-			statusLabel.trailingAnchor.constraint(
-				lessThanOrEqualTo: keyboardHints.leadingAnchor,
-				constant: -8
-			),
 		])
 		if mode == .content
 		{

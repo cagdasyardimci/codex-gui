@@ -126,7 +126,14 @@ class DesktopStatusView: DesktopSurface
 		actionsStack.orientation = .horizontal
 		actionsStack.alignment = .centerY
 		actionsStack.spacing = 8
-		views.append(actionsStack)
+		if usesInlineLayout
+		{
+			text.addArrangedSubview(actionsStack)
+		}
+		else
+		{
+			views.append(actionsStack)
+		}
 		let stack = !usesInlineLayout
 			? AppKitLayout.verticalStack(
 				views,

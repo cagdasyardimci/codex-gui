@@ -46,7 +46,6 @@ final class SettingsMCPForm: NSView
 		item: "environment header",
 		addTitle: "Add variable"
 	)
-	private let error = SettingsFormErrorLabel()
 	private let save = DesktopStyledButton(
 		title: "Save",
 		presentation: .primary
@@ -83,7 +82,7 @@ final class SettingsMCPForm: NSView
 		{
 			field.onChange =
 			{
-				[weak self] _ in self?.validate(showError: true)
+				[weak self] _ in self?.validate()
 			}
 		}
 
@@ -97,7 +96,7 @@ final class SettingsMCPForm: NSView
 		{
 			entries.onChange =
 			{
-				[weak self] in self?.validate(showError: true)
+				[weak self] in self?.validate()
 			}
 		}
 		fields.orientation = .vertical
@@ -207,7 +206,6 @@ final class SettingsMCPForm: NSView
 				field: workingDirectory
 			)
 		}
-		fields.addArrangedSubview(error)
 		let cancel = DesktopStyledButton(
 			title: "Cancel",
 			presentation: .secondary
@@ -219,7 +217,7 @@ final class SettingsMCPForm: NSView
 		actions.orientation = .horizontal
 		actions.spacing = 8
 		fields.addArrangedSubview(actions)
-		validate(showError: false)
+		validate()
 	}
 
 	private func addField(
@@ -263,16 +261,15 @@ final class SettingsMCPForm: NSView
 		)
 	}
 
-	private func validate(showError: Bool)
+	private func validate()
 	{
 		do
 		{
-			_ = try draft.configuration(); save.isEnabled = true; error.stringValue = ""
+			_ = try draft.configuration(); save.isEnabled = true
 		}
 		catch
 		{
-			save.isEnabled = false; self.error.stringValue = showError ? error
-				.localizedDescription : ""
+			save.isEnabled = false
 		}
 	}
 	@objc private func submit()
@@ -283,7 +280,6 @@ final class SettingsMCPForm: NSView
 		}
 		catch
 		{
-			self.error.stringValue = error.localizedDescription
 		}
 	}
 	@objc private func cancel()

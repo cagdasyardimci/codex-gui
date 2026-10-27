@@ -29,13 +29,10 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		size: .regular
 	)
 	private let slider = EffortSlider()
-	private let availabilityLabel = NSTextField(wrappingLabelWithString: "")
-	private var availabilityHeight: NSLayoutConstraint?
 	private var efforts: [String] = []
 	private var fastMode = false
 	private var effectiveEffort: String?
 	private var presented = false
-	private var showsAvailabilityWarning = false
 	let modelList = ModelPickerListView()
 
 	init()
@@ -46,7 +43,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		)
 		preferredContentSize = NSSize(
 			width: LayoutTokens.ModelPopover.width,
-			height: Self.preferredHeight(showsWarning: false)
+			height: Self.preferredHeight()
 		)
 	}
 
@@ -62,7 +59,6 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		configureActionButtons()
 		configureModelMenuButton()
 		configureSlider()
-		configureAvailabilityLabel()
 		installControls(in: surface)
 		AppKitLayout.pin(
 			modelList,
@@ -121,14 +117,6 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		slider.setAccessibilityHelp("Use the arrow keys to choose a supported reasoning effort.")
 	}
 
-	private func configureAvailabilityLabel()
-	{
-		availabilityLabel.font = AppKitFontResolver.font(TypographyTokens.ModelPopover.availability)
-		availabilityLabel.textColor = .secondaryLabelColor
-		availabilityLabel.maximumNumberOfLines = 2
-		availabilityLabel.isHidden = true
-	}
-
 	private func installControls(in surface: NSView)
 	{
 		for control in [
@@ -137,14 +125,11 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 			effortLabel,
 			modelMenuButton,
 			slider,
-			availabilityLabel,
 		]
 		{
 			control.translatesAutoresizingMaskIntoConstraints = false
 			surface.addSubview(control)
 		}
-		let warningHeight = availabilityLabel.heightAnchor.constraint(equalToConstant: 0)
-		availabilityHeight = warningHeight
 		NSLayoutConstraint.activate([
 			fastButton.leadingAnchor.constraint(
 				equalTo: surface.leadingAnchor,
@@ -188,13 +173,6 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 			),
 			slider.heightAnchor
 				.constraint(equalToConstant: LayoutTokens.ModelPopover.sliderHeight),
-			availabilityLabel.leadingAnchor.constraint(equalTo: slider.leadingAnchor),
-			availabilityLabel.trailingAnchor.constraint(equalTo: slider.trailingAnchor),
-			availabilityLabel.topAnchor.constraint(
-				equalTo: slider.bottomAnchor,
-				constant: LayoutTokens.ModelPopover.warningTopSpacing
-			),
-			warningHeight,
 		])
 	}
 
@@ -246,7 +224,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 				retaining: effectiveEffort
 			)
 			updateEffortControls()
-			updateAvailabilityWarning()
+			updatePreferredContentSize()
 			if isShowingModelList
 			{
 				modelList.focusSelectedRow()
@@ -283,7 +261,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 
 		updateModelSelectionTitle()
 		updateEffortControls()
-		updateAvailabilityWarning()
+		updatePreferredContentSize()
 		slider.ultraSelected = effectiveEffort == "ultra"
 		updateFastModeControls()
 		updateAnimationVisibility()
@@ -320,7 +298,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 			{
 				$0.id == selectedModelID
 			}
-			modelMenuButton.title = selectedModel?.displayName ?? "Unavailable: \(selectedModelID)"
+			modelMenuButton.title = selectedModel?.displayName ?? selectedModelID
 		}
 		else
 		{
@@ -348,39 +326,12 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		slider.setAccessibilityValue(effortLabel.stringValue)
 	}
 
-	private func updateAvailabilityWarning()
-	{
-		let isEffortAvailable = effectiveEffort.map
-		{
-			efforts.contains($0)
-		} ?? false
-		if efforts.isEmpty
-		{
-			availabilityLabel.stringValue = "This model does not list adjustable reasoning efforts."
-		}
-		else if isEffortAvailable
-		{
-			availabilityLabel.stringValue = ""
-		}
-		else
-		{
-			availabilityLabel.stringValue =
-				"Current effort is unavailable. Choose a supported effort or reset."
-		}
-
-		let showsWarning = !availabilityLabel.stringValue.isEmpty
-		showsAvailabilityWarning = showsWarning
-		availabilityLabel.isHidden = isShowingModelList || !showsWarning
-		availabilityHeight?.constant = showsWarning ? LayoutTokens.ModelPopover.warningHeight : 0
-		updatePreferredContentSize()
-	}
-
 	private func updatePreferredContentSize()
 	{
 		let size = NSSize(
 			width: LayoutTokens.ModelPopover.width,
 			height: isShowingModelList ? modelList.preferredHeight
-				: Self.preferredHeight(showsWarning: showsAvailabilityWarning)
+				: Self.preferredHeight()
 		)
 		if preferredContentSize != size
 		{
@@ -389,17 +340,11 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		}
 	}
 
-	private nonisolated static func preferredHeight(showsWarning: Bool) -> CGFloat
+	private nonisolated static func preferredHeight() -> CGFloat
 	{
 		let sliderBottom = LayoutTokens.ModelPopover.effortTopInset
 			+ LayoutTokens.ModelPopover.effortHeight + LayoutTokens.Button.compactHeight
 			+ LayoutTokens.ModelPopover.sliderTopSpacing + LayoutTokens.ModelPopover.sliderHeight
-		if showsWarning
-		{
-			return sliderBottom + LayoutTokens.ModelPopover.warningTopSpacing
-				+ LayoutTokens.ModelPopover.warningHeight
-				+ LayoutTokens.ModelPopover.warningBottomInset
-		}
 		return sliderBottom + LayoutTokens.ModelPopover.bottomInset
 	}
 
@@ -441,7 +386,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		{
 			choices.append(ModelPickerChoice(
 				id: selectedModelID,
-				title: "Unavailable: \(selectedModelID)"
+				title: selectedModelID
 			))
 		}
 		return choices
@@ -475,7 +420,6 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		{
 			control.isHidden = visible
 		}
-		availabilityLabel.isHidden = visible || !showsAvailabilityWarning
 		updatePreferredContentSize()
 		updateAnimationVisibility()
 		onModelListPresentationChange?()

@@ -27,7 +27,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		target: nil,
 		action: nil
 	)
-	let editorStatus = NSTextField(wrappingLabelWithString: "")
 	typealias EditorOperation = @MainActor (
 		String,
 		URL,
@@ -142,7 +141,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 			reviewRow,
 			diffScrollView,
 			openButton,
-			editorStatus,
 		])
 		emptySpace.setContentHuggingPriority(
 			NSLayoutConstraint.Priority(1),
@@ -454,10 +452,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		openButton.setAccessibilityLabel("Open selected changed file in editor")
 		openButton.toolTip = "Open selected file in preferred editor"
 		openButton.symbol = .externalLink
-		editorStatus.textColor = .secondaryLabelColor
-		editorStatus.font = .systemFont(ofSize: 11)
-		editorStatus.setAccessibilityLabel("Editor handoff status")
-		editorStatus.isHidden = true
 	}
 
 	private func renderTurns(selectedID: String?)
@@ -491,14 +485,9 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 	{
 		if let review = selectedReview
 		{
-			originLabel.stringValue =
-				review.hasUnknownEarlierHistory
-					? "Reported turn \(review.turnID) · earlier history not loaded"
-					: "Reported turn \(review.turnID) · current file may differ"
+			originLabel.stringValue = "Reported turn \(review.turnID)"
 			originLabel.toolTip =
-				"Codex-reported changes from thread \(review.threadID), turn \(review.turnID). "
-					+ "This historical diff may not match the current file."
-					+ (review.hasUnknownEarlierHistory ? " Earlier turns are not loaded." : "")
+				"Codex-reported changes from thread \(review.threadID), turn \(review.turnID)."
 		}
 		else if reviewTurns.isEmpty
 		{
@@ -648,19 +637,16 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		editorHandoffTask = Task
 		{
 			[weak self, openFile] in
-			let message: String
 			do
 			{
-				let note = try await openFile(
+				_ = try await openFile(
 					path,
 					URL(fileURLWithPath: projectPath),
 					selectedDiff
 				)
-				message = note ?? "Opened in editor."
 			}
 			catch
 			{
-				message = error.localizedDescription
 			}
 			guard let self, self.editorSelectionGeneration == generation,
 					self.pendingEditorRequest == request
@@ -669,8 +655,6 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 				return
 			}
 			self.pendingEditorRequest = nil
-			self.editorStatus.stringValue = message
-			self.editorStatus.isHidden = false
 			self.openButton.isEnabled = self.canOpenSelectedFile
 		}
 	}

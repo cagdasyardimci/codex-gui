@@ -276,8 +276,7 @@ extension AppServer
 				threadId: parameters["threadId"] as? String ?? "",
 				turnId: parameters["turnId"] as? String ?? "",
 				message:
-				"This version of Codex GUI cannot display MCP forms. The request was "
-					+ "declined.",
+				"MCP form request declined.",
 				willRetry: false
 			)
 		)
@@ -317,7 +316,7 @@ extension AppServer
 			.error(
 				threadId: parameters["threadId"] as? String ?? "",
 				turnId: parameters["turnId"] as? String ?? "",
-				message: "This version of Codex GUI cannot handle \(method).",
+				message: "Request declined: \(method).",
 				willRetry: false
 			)
 		)

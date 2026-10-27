@@ -821,7 +821,15 @@ extension TranscriptViewController
 			in: allRows,
 			workEntryIDs: workEntryIDsByTurn,
 			expandedTurnIDs: expandedTurnIDs
-		)
+		).filter
+		{
+			guard case .turnStatus(let timing) = $0
+			else
+			{
+				return true
+			}
+			return workEntryIDsByTurn[timing.turnID] != nil
+		}
 		let previousRows = displayedRows
 		let previousContents = preparedContents
 		let nextReplyActionEntryID = ConversationReplyActionsView.replyEntryID(

@@ -23,8 +23,7 @@ struct GitReviewDesignFixture
 		sections.agents = .available(SummaryAgentProjection(
 			identities: [],
 			completedCount: 3,
-			runningCount: 2,
-			aggregationDescription: "Associated with this chat"
+			runningCount: 2
 		))
 		sections.sources = .available(attachments ? [
 			SummarySourceReference(

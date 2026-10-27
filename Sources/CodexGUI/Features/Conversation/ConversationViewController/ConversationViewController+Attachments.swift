@@ -236,20 +236,9 @@ extension ConversationViewController
 		guard let fileIndex = fileIndexRuntime.index
 		else
 		{
-			stack.addArrangedSubview(DesktopSearchOverlayView.message(
-				"Searching project files…",
-				presentation: .nativeStatus
-			))
 			return
 		}
 		let results = fileIndex.search(query)
-		if results.isEmpty
-		{
-			stack.addArrangedSubview(DesktopSearchOverlayView.message(
-				"No matching files",
-				presentation: .nativeStatus
-			))
-		}
 		for path in results
 		{
 			let button = DesktopSearchResultButton.attachment(

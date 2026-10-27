@@ -8,7 +8,6 @@ final class InteractionCardView: NSView
 	private var answerControls:
 		[(question: InteractionQuestion, menu: NSPopUpButton, customAnswerField: NSTextField)] = []
 	private var approvalDecisions: [ApprovalDecision] = []
-	private let messageLabel = NSTextField(labelWithString: "")
 
 	init(
 		interaction: PendingInteraction,
@@ -40,15 +39,11 @@ final class InteractionCardView: NSView
 		details.isSelectable = true
 		details.setAccessibilityLabel(detailText)
 
-		messageLabel.textColor = .systemRed
-		messageLabel.isHidden = true
-
 		let content = AppKitLayout.verticalStack(
 			[title, details],
 			spacing: 8
 		)
 		addResponseControls(to: content)
-		content.addArrangedSubview(messageLabel)
 
 		installCardSurface(containing: content)
 		setAccessibilityLabel(titleText)
@@ -71,10 +66,7 @@ final class InteractionCardView: NSView
 			addApprovalControls(to: content)
 		case .permissionApproval:
 			addPermissionControls(to: content)
-		case .unsupported:
-			content.addArrangedSubview(
-				NSTextField(wrappingLabelWithString: "Codex GUI cannot answer this request.")
-			)
+		case .unsupported: break
 		}
 	}
 
@@ -320,8 +312,6 @@ final class InteractionCardView: NSView
 			guard !answer.isEmpty, answer != "Choose an answer…", answer != "Other…"
 			else
 			{
-				messageLabel.stringValue = "Answer every question before submitting."
-				messageLabel.isHidden = false
 				return
 			}
 			answers[question.id] = [answer]

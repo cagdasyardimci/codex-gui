@@ -7,8 +7,6 @@ final class SettingsUsagePage: SettingsManagementPage
 	private var limits: AccountRateLimitsSnapshot?
 	private var planType: String?
 	private var usage: [String: Any]?
-	private var metadataWarning = ""
-	private var resetOutcome = ""
 	private lazy var usageView = SettingsUsageView()
 
 	init(backend: SettingsBackend)
@@ -42,16 +40,10 @@ final class SettingsUsagePage: SettingsManagementPage
 				inset: 0
 			)
 		}
-		let status = [message, metadataWarning, resetOutcome].filter
-		{
-			!$0.isEmpty
-		}
-		.joined(separator: "\n")
 		usageView.update(
 			limits: limits,
 			planType: planType,
 			usage: usage,
-			message: status,
 			busy: isOperating,
 			canUseReset: rawLimits.map(SettingsManagementPolicy.canReset) ?? false
 		)
@@ -64,7 +56,6 @@ final class SettingsUsagePage: SettingsManagementPage
 		{
 			return
 		}
-		resetOutcome = ""
 		run
 		{
 			[weak self] in
@@ -85,7 +76,6 @@ final class SettingsUsagePage: SettingsManagementPage
 		let limits: AccountRateLimitsSnapshot
 		let planType: String?
 		let usage: [String: Any]?
-		let warning: String
 	}
 
 	private func readMetadata() async throws -> Metadata
@@ -100,7 +90,6 @@ final class SettingsUsagePage: SettingsManagementPage
 			throw AppServerError.protocolError("Codex returned an invalid usage snapshot.")
 		}
 		try Task.checkCancellation()
-		var warnings: [String] = []
 		var plan = snapshot.rateLimits.planType
 			?? snapshot.rateLimitsByLimitId?["codex"]?.planType
 		if plan == nil
@@ -116,7 +105,6 @@ final class SettingsUsagePage: SettingsManagementPage
 			catch
 			{
 				try Task.checkCancellation()
-				warnings.append("Plan details could not be loaded: " + error.localizedDescription)
 			}
 		}
 		try Task.checkCancellation()
@@ -131,15 +119,13 @@ final class SettingsUsagePage: SettingsManagementPage
 		catch
 		{
 			try Task.checkCancellation()
-			warnings.append("Token activity could not be loaded: " + error.localizedDescription)
 		}
 		try Task.checkCancellation()
 		return Metadata(
 			rawLimits: raw,
 			limits: snapshot,
 			planType: plan,
-			usage: tokenUsage,
-			warning: warnings.joined(separator: "\n")
+			usage: tokenUsage
 		)
 	}
 
@@ -149,7 +135,6 @@ final class SettingsUsagePage: SettingsManagementPage
 		limits = metadata.limits
 		planType = metadata.planType
 		usage = metadata.usage
-		metadataWarning = metadata.warning
 	}
 
 	private func requestReset(_ creditID: String?)
@@ -183,7 +168,6 @@ final class SettingsUsagePage: SettingsManagementPage
 				return
 			}
 			let attemptID = UUID().uuidString
-			resetOutcome = ""
 			run
 			{
 				[weak self] in
@@ -226,7 +210,7 @@ final class SettingsUsagePage: SettingsManagementPage
 					params: params
 				)
 				try Task.checkCancellation()
-				resetOutcome = try Self.resetDescription(response["outcome"] as? String)
+				try Self.validateResetOutcome(response["outcome"] as? String)
 				do
 				{
 					let metadata = try await readMetadata()
@@ -237,8 +221,6 @@ final class SettingsUsagePage: SettingsManagementPage
 				{
 					try Task.checkCancellation()
 					self.rawLimits = nil
-					metadataWarning = "Usage could not be refreshed after the reset: "
-						+ error.localizedDescription
 				}
 			}
 		}
@@ -266,14 +248,11 @@ final class SettingsUsagePage: SettingsManagementPage
 		}
 	}
 
-	private static func resetDescription(_ outcome: String?) throws -> String
+	private static func validateResetOutcome(_ outcome: String?) throws
 	{
 		switch outcome
 		{
-		case "reset": "Your eligible usage limits were reset."
-		case "alreadyRedeemed": "This usage reset was already applied."
-		case "nothingToReset": "No usage window currently needs a reset."
-		case "noCredit": "No usage resets are available for this account."
+		case "reset", "alreadyRedeemed", "nothingToReset", "noCredit": return
 		default: throw AppServerError.protocolError("Codex returned an unknown usage reset result.")
 		}
 	}

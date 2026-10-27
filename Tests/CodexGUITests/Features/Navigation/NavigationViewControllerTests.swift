@@ -61,6 +61,31 @@ struct NavigationViewControllerTests
 		#expect(taskIDs().count == 5)
 	}
 
+	@Test func returnToActiveTaskActionRemainsAvailableWithoutTaskStatusText() throws
+	{
+		_ = NSApplication.shared
+		let controller = NavigationViewController()
+		_ = controller.view
+		var snapshot = try sidebarSnapshot(selectedThreadID: "history")
+		snapshot.activeThreadID = "working"
+		snapshot.activeExecutionState = .awaitingApproval
+		controller.render(snapshot)
+		var returnCount = 0
+		controller.onReturnToActiveTask =
+		{
+			returnCount += 1
+		}
+		let actionsView = try #require(controller.projectActionsPopover.contentViewController?.view)
+		let button = try #require(findNavigationButton(
+			in: actionsView,
+			title: "Return to Task"
+		))
+		#expect(button.isEnabled)
+		#expect(!button.isHidden)
+		try #require(button.dispatchConfiguredAction())
+		#expect(returnCount == 1)
+	}
+
 	// This fixture makes its window key and presents a transient hover card.
 	@Test func taskArchiveButtonRoutesToItsOwnRowWithoutChangingSelection() async throws
 	{

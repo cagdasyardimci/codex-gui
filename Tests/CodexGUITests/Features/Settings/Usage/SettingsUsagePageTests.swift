@@ -62,7 +62,6 @@ struct SettingsUsagePageTests
 			let loading = try #require(page.operation)
 			await loading.value
 			#expect(page.operation == nil)
-			#expect(page.message.isEmpty)
 			let usage = try #require(descendants(page).compactMap
 			{
 				$0 as? SettingsUsageView
@@ -70,18 +69,11 @@ struct SettingsUsagePageTests
 			.first)
 			#expect(labels(in: usage).contains("ChatGPT Pro"))
 			#expect(labels(in: usage).contains("5% left"))
-			if mode != "valid"
+			#expect(!labels(in: usage).contains
 			{
-				#expect(labels(in: usage)
-					.contains
-					{
-						$0.contains("Token activity could not be loaded")
-					})
-				#expect(labels(in: usage).contains
-				{
-					$0.contains("Activity unavailable")
-				})
-			}
+				$0.contains("Token activity could not be loaded") || $0
+					.contains("Activity unavailable")
+			})
 			if mode == "valid"
 			{
 				let analytics = try #require(descendants(usage).compactMap
@@ -126,7 +118,6 @@ struct SettingsUsagePageTests
 			)
 			if mode == "valid"
 			{
-				#expect(page.message.isEmpty)
 				#expect(counts["consumedIDs"] as? [String] == ["credit-b"])
 				let keys = try #require(counts["idempotencyKeys"] as? [String])
 				#expect(keys.count == 1)
@@ -135,11 +126,10 @@ struct SettingsUsagePageTests
 				#expect(counts["accountReads"] as? Int == 2)
 				#expect(counts["activityReads"] as? Int == 2)
 				#expect(labels(in: usage).contains("100% left"))
-				#expect(labels(in: usage)
-					.contains
-					{
-						$0.contains("Your eligible usage limits were reset.")
-					})
+				#expect(!labels(in: usage).contains
+				{
+					$0.contains("Your eligible usage limits were reset.")
+				})
 				#expect(!labels(in: usage).contains
 				{
 					$0.contains("Reset result: reset")
@@ -147,8 +137,6 @@ struct SettingsUsagePageTests
 			}
 			else
 			{
-				#expect(page.message.contains(mode == "account_changed"
-						? "The account changed" : "This usage reset is no longer available"))
 				#expect(counts["consumedIDs"] as? [String] == [])
 				#expect(counts["idempotencyKeys"] as? [String] == [])
 				#expect(counts["rateReads"] as? Int == 2)

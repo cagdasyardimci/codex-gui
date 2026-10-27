@@ -803,6 +803,17 @@ struct ConversationViewControllerTests
 		controller.render(active)
 		await controller.waitForRendering()
 		#expect(controller.transcript.turnStatusTimer != nil)
+		#expect(!controller.transcript.displayedRows.contains
+		{
+			if case .turnStatus = $0
+			{
+				true
+			}
+			else
+			{
+				false
+			}
+		})
 		var terminal = snapshot(
 			[entry],
 			executionState: .disconnected
@@ -811,15 +822,17 @@ struct ConversationViewControllerTests
 		controller.render(terminal)
 		await controller.waitForRendering()
 		#expect(controller.transcript.turnStatusTimer == nil)
-		guard case .turnStatus(let timing) = controller.transcript.displayedRows[1]
-		else
+		#expect(!controller.transcript.displayedRows.contains
 		{
-			Issue.record("Expected timing row")
-			return
-		}
-		#expect(timing.status == "statusUnknown")
-		#expect(timing.completedAt == nil)
-		#expect(timing.durationMs == nil)
+			if case .turnStatus = $0
+			{
+				true
+			}
+			else
+			{
+				false
+			}
+		})
 		controller.viewDidDisappear()
 	}
 

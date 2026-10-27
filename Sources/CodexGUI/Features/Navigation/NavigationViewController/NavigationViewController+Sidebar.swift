@@ -66,25 +66,6 @@ extension NavigationViewController
 		rebuildSidebarItems()
 		searchButton.isSearchActive = !query.isEmpty
 		searchButton.toolTip = query.isEmpty ? "Search conversation titles and previews" : query
-		emptyLabel.stringValue = query.isEmpty ? "No projects." : "No matching conversations."
-		if sidebarPreferences.organization == .oneList && query.isEmpty
-		{
-			emptyLabel.stringValue = renderedPresentation?.sidebarListError
-				??
-				(renderedPresentation?
-					.sidebarListLoading == true ? "Loading recent chats…" : "No recent chats.")
-		}
-		emptyLabel.isHidden = query.isEmpty ? !sidebarItems.isEmpty
-			: !visibleThreads.isEmpty || pinnedTasks.contains
-			{
-				taskMatchesSearch($0)
-			}
-		if sidebarPreferences.organization == .oneList,
-			renderedPresentation?.sidebarListError != nil || renderedPresentation?
-			.sidebarListLoading == true
-		{
-			emptyLabel.isHidden = false
-		}
 		updateManagementButtons()
 		if searchPopover.isShown
 		{
@@ -426,20 +407,13 @@ extension NavigationViewController
 		}
 
 		let execution = renderedPresentation?.threadExecutions[thread.id]
-		let isActiveTask = execution != nil
 		let isTurnRunning = execution?.state == .running && execution?.outcomeUncertain != true
 		cell.setTurnRunning(isTurnRunning)
 		let isUnread = unreadThreadIDs.contains(thread.id)
 		cell.setUnread(isUnread && !isTurnRunning)
-		let showsInlineStatus =
-			isActiveTask && !isTurnRunning
-				&& (execution?.state != .completed || execution?.outcomeUncertain == true)
 		let name = thread.displayTitle
-		let state = execution?.title ?? "Running"
-		cell.textField?.stringValue =
-			showsInlineStatus ? "●  \(name) · \(state)" : name
-		cell.textField?.textColor = showsInlineStatus ? activeTaskColor : AppKitColorTokens
-			.sidebarText
+		cell.textField?.stringValue = name
+		cell.textField?.textColor = AppKitColorTokens.sidebarText
 		cell.textField?.toolTip = nil
 		let project = thread.cwd.isEmpty ? currentProject : URL(fileURLWithPath: thread.cwd)
 		cell.hoverCard = TaskHoverCard(
@@ -452,8 +426,7 @@ extension NavigationViewController
 		)
 		cell.textField?.setAccessibilityIdentifier("conversation-" + thread.id)
 		cell.setAccessibilityLabel(
-			isUnread ? "Unread result, open chat \(name)"
-				: isActiveTask ? "\(state) task, open chat \(name)" : "Open chat \(name)"
+			isUnread ? "Unread result, open chat \(name)" : "Open chat \(name)"
 		)
 		return cell
 	}
@@ -669,15 +642,4 @@ extension NavigationViewController
 		unreadThreadIDs.remove(threadID)
 	}
 
-	private var activeTaskColor: NSColor
-	{
-		switch activeExecutionState
-		{
-		case .awaitingApproval, .awaitingAnswer: .systemOrange
-		case .failed, .disconnected: .systemRed
-		case .completed: .systemGreen
-		case .stopping, .stopped: .secondaryLabelColor
-		case .running, .ready, nil: .controlAccentColor
-		}
-	}
 }

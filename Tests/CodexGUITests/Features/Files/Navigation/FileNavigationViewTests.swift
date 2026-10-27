@@ -101,7 +101,7 @@ struct FileNavigationViewTests
 			controller.render(state)
 			let outline = try #require(controller.view.allSubviews().compactMap
 			{
-				$0 as? NSOutlineView
+				$0 as? ViewerFileTreeView
 			}.first)
 			let folderItem = try #require(outline.item(atRow: 0))
 			outline.selectRowIndexes(
@@ -126,12 +126,12 @@ struct FileNavigationViewTests
 			#expect(requested == [folder])
 			state.directoryRequests[folder] = UUID()
 			controller.render(state)
-			#expect(outline.numberOfRows == 2)
+			#expect(outline.numberOfRows == 1)
 			#expect(outline.isItemExpanded(folderItem))
 			#expect(outlineLabel(
 				outline,
-				row: 1
-			) == "Loading…")
+				row: 0
+			) == "Sources")
 			state.directoryRequests[folder] = nil
 			state.directoryEntries[folder] = [FileViewerDirectoryEntry(
 				location: child,
@@ -146,6 +146,16 @@ struct FileNavigationViewTests
 				outline,
 				row: 1
 			) == "child.swift")
+			state.directoryFailures[folder] = .unavailable
+			controller.render(state)
+			#expect(outline.numberOfRows == 3)
+			#expect(outlineLabel(
+				outline,
+				row: 2
+			) == "Retry")
+			let retryFolder = try #require(outline.item(atRow: 2) as? NSObject)
+			outline.onActivate?(retryFolder, false)
+			#expect(requested.last == folder)
 
 			let field = try #require(controller.view.allSubviews().compactMap
 			{
@@ -195,6 +205,22 @@ struct FileNavigationViewTests
 				outline,
 				row: 1
 			) == "child.swift")
+			field.stringValue = "retry"
+			controller.controlTextDidChange(Notification(
+				name: NSControl.textDidChangeNotification,
+				object: field
+			))
+			state.filenameResults = nil
+			state.searchFailure = .unavailable
+			controller.render(state)
+			#expect(outline.numberOfRows == 1)
+			#expect(outlineLabel(
+				outline,
+				row: 0
+			) == "Retry")
+			let retrySearch = try #require(outline.item(atRow: 0) as? NSObject)
+			outline.onActivate?(retrySearch, false)
+			#expect(filters.last == "retry")
 		}
 	}
 
@@ -335,27 +361,38 @@ struct FileNavigationViewTests
 				name: NSControl.textDidChangeNotification,
 				object: field
 			))
-			let status = try #require(panel.view.allSubviews().compactMap
+			#expect(panel.view.allSubviews().compactMap
 			{
 				$0 as? NSTextField
-			}.first
+			}.allSatisfy
 			{
-				$0.accessibilityLabel() == "Search status"
+				$0.accessibilityLabel() != "Search status"
 			})
 			state.searchRequest = UUID()
 			panel.render(state)
-			#expect(status.stringValue == "Searching…")
 			state.searchRequest = nil
 			state.searchFailure = .unavailable
 			panel.render(state)
-			#expect(status.stringValue.contains("Search failed"))
+			#expect(panel.view.allSubviews().compactMap
+			{
+				$0 as? NSTextField
+			}.allSatisfy
+			{
+				$0.accessibilityLabel() != "Search status"
+			})
 			state.searchFailure = nil
 			state.contentResults = FileViewerSearchPage(
 				results: [],
 				isTruncated: false
 			)
 			panel.render(state)
-			#expect(status.stringValue == "No matching content")
+			#expect(panel.view.allSubviews().compactMap
+			{
+				$0 as? NSTextField
+			}.allSatisfy
+			{
+				$0.accessibilityLabel() != "Search status"
+			})
 			let first = FileViewerSearchResult(
 				location: FileLocation(
 					root: state.activeRoot!,
@@ -383,8 +420,13 @@ struct FileNavigationViewTests
 				$0 as? FileSearchResultsTableView
 			}.first)
 			#expect(table.selectedRow == 0)
-			#expect(status.stringValue.contains("Showing first 2 matching lines"))
-			#expect(status.toolTip == "2 generated folders skipped")
+			#expect(panel.view.allSubviews().compactMap
+			{
+				$0 as? NSTextField
+			}.allSatisfy
+			{
+				$0.accessibilityLabel() != "Search status"
+			})
 			try sendKey(
 				119,
 				to: table,

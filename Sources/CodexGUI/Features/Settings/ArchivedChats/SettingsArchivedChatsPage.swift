@@ -12,7 +12,6 @@ final class SettingsArchivedChatsPage: SettingsManagementPage
 	private var threads: [[String: Any]] = []
 	private var projects: [[String: Any]] = []
 	private var projectContext = SettingsArchivedProjectContext()
-	private var contextWarning = ""
 	private let readProjectContext: @MainActor () async throws -> SettingsArchivedProjectContext
 	private lazy var archive = SettingsArchivedChatsView()
 
@@ -78,11 +77,6 @@ final class SettingsArchivedChatsPage: SettingsManagementPage
 		}
 		archive.update(
 			catalog: catalog,
-			message: [message, contextWarning].filter
-			{
-				!$0.isEmpty
-			}
-			.joined(separator: "\n"),
 			busy: isOperating
 		)
 	}
@@ -116,7 +110,6 @@ final class SettingsArchivedChatsPage: SettingsManagementPage
 					"sortDirection": "desc"
 				]
 			)
-			var warnings: [String] = []
 			do
 			{
 				projects = try await readList(
@@ -126,7 +119,7 @@ final class SettingsArchivedChatsPage: SettingsManagementPage
 			}
 			catch
 			{
-				warnings.append("Project names could not be loaded: " + error.localizedDescription)
+				projects = []
 			}
 			do
 			{
@@ -134,12 +127,10 @@ final class SettingsArchivedChatsPage: SettingsManagementPage
 			}
 			catch
 			{
-				warnings
-					.append("Worktree groups could not be loaded: " + error.localizedDescription)
+				projectContext = SettingsArchivedProjectContext()
 			}
 			try Task.checkCancellation()
 			threads = loaded
-			contextWarning = warnings.joined(separator: "\n")
 		}
 	}
 

@@ -142,13 +142,13 @@ enum SettingsUsagePresentation
 		guard let date
 		else
 		{
-			return "Reset time unavailable"
+			return ""
 		}
 		let seconds = date.timeIntervalSince(now)
 		guard seconds > 0
 		else
 		{
-			return "Reset pending refresh"
+			return ""
 		}
 		let minutes = max(
 			1,
@@ -170,7 +170,7 @@ enum SettingsUsagePresentation
 		guard let type, !type.isEmpty, type != "unknown"
 		else
 		{
-			return "Plan unavailable"
+			return ""
 		}
 		let names = ["free": "Free",
 						"go": "Go",
@@ -201,7 +201,7 @@ enum SettingsUsagePresentation
 		guard let credits
 		else
 		{
-			return "Credit balance unavailable"
+			return ""
 		}
 		if credits.unlimited
 		{
@@ -210,7 +210,7 @@ enum SettingsUsagePresentation
 		guard let balance = credits.balance
 		else
 		{
-			return "Credit balance unavailable"
+			return ""
 		}
 		let value = Decimal(
 			string: balance,
@@ -232,7 +232,7 @@ enum SettingsUsagePresentation
 			guard let number = summary[key] as? NSNumber
 			else
 			{
-				return (label, "Unavailable")
+				return (label, "")
 			}
 			let count = number.int64Value
 			if key.hasSuffix("Days")

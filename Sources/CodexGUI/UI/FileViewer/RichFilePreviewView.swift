@@ -40,7 +40,6 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	private let onMetadata: (([MarkdownFileMetadata.Entry]) -> Void)?
 	private let matchesFileMarkdownStyling: Bool
 	private var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
-	private let loadingFailureMessage: String
 	private let imageBaseDirectory: URL?
 	private let onOpenLink: ((URL) -> Bool)?
 	private lazy var contentHeight = heightAnchor.constraint(equalToConstant: 80)
@@ -58,7 +57,6 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		loadContent: @escaping @Sendable () async throws -> Data
 	)
 	{
-		self.loadingFailureMessage = loadingFailureMessage
 		self.imageBaseDirectory = imageBaseDirectory
 		self.onOpenLink = onOpenLink
 		self.onMetadata = onMetadata
@@ -66,7 +64,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		super.init(frame: .zero)
 		// The mutable height follows measured Markdown or the image's aspect ratio.
 		contentHeight.isActive = true
-		showMessage("Loading preview…")
+		showEmptyContent()
 		task = Task
 		{
 			[weak self] in
@@ -143,7 +141,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 							self?.installImage(image)
 							return
 						}
-						self?.showMessage("This image cannot be rendered as a rich preview.")
+						self?.showEmptyContent()
 						return
 					}
 					runs = nil
@@ -177,7 +175,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				}
 				if let self
 				{
-					self.showMessage(self.loadingFailureMessage)
+					self.showEmptyContent()
 				}
 			}
 		}
@@ -212,10 +210,10 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		needsLayout = true
 	}
 
-	private func showMessage(_ message: String)
+	private func showEmptyContent()
 	{
 		contentHeight.constant = 80
-		install(ViewerStatusView(message: message))
+		install(NSView())
 	}
 
 	private func display(
@@ -280,7 +278,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			guard let thumbnail
 			else
 			{
-				showMessage("This image cannot be rendered as a rich preview."); return
+				showEmptyContent(); return
 			}
 			let image = NSImage(
 				cgImage: thumbnail.image,
@@ -291,7 +289,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 			guard let document = PDFDocument(data: data)
 			else
 			{
-				showMessage("This PDF cannot be rendered as a rich preview."); return
+				showEmptyContent(); return
 			}
 			let view = PDFView()
 			view.document = document

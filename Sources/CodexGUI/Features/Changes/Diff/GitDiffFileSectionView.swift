@@ -160,19 +160,8 @@ final class GitDiffFileSectionView: NSStackView
 		{
 			return
 		}
-		if file.isBinary
+		if file.isBinary || file.hunks.isEmpty || rows?.isEmpty == true
 		{
-			append(message("Binary file · textual preview unavailable"))
-			return
-		}
-		if file.hunks.isEmpty
-		{
-			append(message("Metadata-only change · no textual hunks."))
-			return
-		}
-		if rows?.isEmpty == true
-		{
-			append(message("No visible textual changes with the current display filters."))
 			return
 		}
 		var chunk: [GitDiffRow] = []
@@ -233,21 +222,18 @@ final class GitDiffFileSectionView: NSStackView
 		)
 		toggleDiff.identifier = NSUserInterfaceItemIdentifier(file.id)
 		var actions: [NSButton] = []
-		if GitRichPreviewKind(path: file.path) != nil
+		if GitRichPreviewKind(path: file.path) != nil,
+			GitRichPreviewContent.blobID(for: file) != nil
 		{
 			let preview = referenceButton(
 				"Rich preview of \(file.path)",
 				image: GitReviewReferenceIcons.image(.eye),
 				action: #selector(richPreview(_:))
 			)
-			preview.isEnabled = GitRichPreviewContent.blobID(for: file) != nil
 			preview.setButtonType(.pushOnPushOff)
 			preview.identifier = NSUserInterfaceItemIdentifier(file.id)
 			previewButton = preview
-			preview.toolTip = preview.isEnabled
-				? "Rich preview of the compared file version"
-				: "Rich preview unavailable: this comparison does not contain "
-				+ "a complete file version"
+			preview.toolTip = "Rich preview of the compared file version"
 			actions.append(preview)
 		}
 		let open = referenceButton(

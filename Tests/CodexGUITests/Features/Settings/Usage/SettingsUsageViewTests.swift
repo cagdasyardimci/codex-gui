@@ -38,7 +38,6 @@ struct SettingsUsageViewTests
 									"longestStreakDays": 12,
 									"longestRunningTurnSec": 90],
 						"dailyUsageBuckets": [["startDate": "2026-10-25", "tokens": 1200]]],
-				message: "",
 				busy: false,
 				canUseReset: true
 			)
@@ -94,14 +93,15 @@ struct SettingsUsageViewTests
 				in: page
 			)
 			#expect(history.dispatchConfiguredAction())
+			let historyTab = try #require(button(
+				"History",
+				in: page
+			) as? DesktopStyledButton)
+			#expect(historyTab.presentation == .tab(selected: true))
 			#expect(buttons(page).filter
 			{
 				$0.title == "Use reset"
 			}.isEmpty)
-			#expect(labels(page).contains
-			{
-				$0.localizedCaseInsensitiveContains("history")
-			})
 			let analytics = try button(
 				"Analytics",
 				in: page
@@ -174,7 +174,7 @@ struct SettingsUsageViewTests
 			#expect(labels.contains("Resets tomorrow"))
 			if remaining == nil
 			{
-				#expect(labels.contains("Unavailable"))
+				#expect(!labels.contains("Unavailable"))
 				#expect(progress.isEmpty)
 			}
 			else
@@ -210,11 +210,10 @@ struct SettingsUsageViewTests
 				limits: nil,
 				planType: nil,
 				usage: nil,
-				message: "Usage could not be loaded.",
 				busy: false,
 				canUseReset: false
 			)
-			#expect(labels(page).contains("Usage could not be loaded."))
+			#expect(!labels(page).contains("Usage could not be loaded."))
 			#expect(progressValues(page).isEmpty)
 			#expect(try button(
 				"Analytics",
@@ -225,7 +224,7 @@ struct SettingsUsageViewTests
 			{
 				$0 as? SettingsUsageDailyChart
 			}.isEmpty)
-			#expect(missingLabels.contains
+			#expect(!missingLabels.contains
 			{
 				$0.localizedCaseInsensitiveContains("unavailable")
 			})
@@ -240,7 +239,6 @@ struct SettingsUsageViewTests
 									"currentStreakDays": 0,
 									"longestStreakDays": 0,
 									"longestRunningTurnSec": 0]],
-				message: "",
 				busy: true,
 				canUseReset: false
 			)
@@ -269,7 +267,6 @@ struct SettingsUsageViewTests
 				),
 				planType: "pro",
 				usage: nil,
-				message: "",
 				busy: true,
 				canUseReset: true
 			)
@@ -348,7 +345,6 @@ struct SettingsUsageViewTests
 				limits: limits,
 				planType: "pro",
 				usage: nil,
-				message: "",
 				busy: false,
 				canUseReset: false
 			)

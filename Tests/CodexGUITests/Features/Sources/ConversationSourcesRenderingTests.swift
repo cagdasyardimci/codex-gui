@@ -152,6 +152,45 @@ struct ConversationSourcesRenderingTests
 		}
 	}
 
+	@Test func sourceOpenActionRemainsAvailableWithoutFailureStatusFeedback() async throws
+	{
+		_ = NSApplication.shared
+		let imageURL = try await imageFile()
+		defer
+		{
+			try? FileManager.default.removeItem(at: imageURL)
+		}
+		let controller = try controller(entries: [imageEntry(imageURL)])
+		defer
+		{
+			controller.invalidate()
+		}
+		_ = controller.view
+		let source = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? NSButton
+		}.first
+		{
+			$0.identifier?.rawValue.hasPrefix("source-open:") == true
+		})
+		let record = try #require(controller.sources.records.first)
+		var opened: String?
+		controller.onOpen =
+		{
+			opened = $0.id
+			return false
+		}
+		#expect(source.isEnabled)
+		try #require(source.dispatchConfiguredAction())
+		#expect(opened == record.id)
+		#expect(descendants(controller.view).compactMap
+		{
+			$0 as? DesktopStatusView
+		}.isEmpty)
+		controller.invalidate()
+		await controller.waitForPreviews()
+	}
+
 	@Test func rawOutputAndResultCardsInvalidateOnUnicodeByteReplacement() async throws
 	{
 		try await AppKitTestIsolation.perform

@@ -53,10 +53,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	{
 		comparisonToolbarView.targetField
 	}
-	private let statusLabel = DesktopStatusView(
-		message: "",
-		presentation: .inlineCompact
-	)
 	private let filterField = ViewerSearchField()
 	private let tree = ViewerFileTreeView()
 	private let navigator = NSView()
@@ -80,7 +76,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		comparisonToolbarView.diffLayoutButton
 	}
 	private var largeComparisonBanner: NSView?
-	private let largeComparisonLabel = NSTextField(wrappingLabelWithString: "")
 	private var previousFileButton: NSButton?
 	private var nextFileButton: NSButton?
 	private var navigatorToggle: NSButton?
@@ -111,7 +106,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		comparisonToolbarView.usesCompactLayout
 	}
 	private var internalTabWidth: NSLayoutConstraint?
-	private var largeComparisonBannerHeight: NSLayoutConstraint?
 
 	init(runtime: GitReviewRuntime = GitReviewRuntime())
 	{
@@ -223,11 +217,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		internalChangesTab = tab
 		tab.isHidden = !showsInternalChangesTab
 		let toolbarScroll = makeComparisonToolbarScrollView()
-		statusLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		statusLabel.setAccessibilityLabel("Git comparison status")
 		let banner = makeLargeComparisonBanner()
 		largeComparisonBanner = banner
 		banner.isHidden = true
@@ -247,10 +236,9 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			}
 		updateNavigatorToggleAppearance()
 
-		statusLabel.isHidden = true
 		let toolbarDivider = DesktopSurface(AppKitColorTokens.subtleEdge)
 		toolbarDivider.heightAnchor.constraint(equalToConstant: 1).isActive = true
-		let rows = [tab, toolbarScroll, toolbarDivider, statusLabel, banner, body]
+		let rows = [tab, toolbarScroll, toolbarDivider, banner, body]
 		let layout = AppKitLayout.verticalStack(
 			rows,
 			spacing: 0
@@ -315,13 +303,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		let tabWidth = tab.widthAnchor.constraint(equalToConstant: 240)
 		tabWidth.isActive = true
 		internalTabWidth = tabWidth
-		let plus = referenceButton(
-			"New review tab unavailable",
-			image: PinnedSummaryIcons.image(.plus),
-			action: nil
-		)
-		plus.isEnabled = false
-		plus.toolTip = "New review tab unavailable: reference action has not been defined"
 		let expand = referenceButton(
 			"Expand Changes",
 			image: GitReviewReferenceIcons.image(.expand),
@@ -335,7 +316,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		)
 		panelHostButton = panel
 		let row = AppKitLayout.horizontalStack(
-			[tab, plus, GitReviewControls.spacer(), expand, panel],
+			[tab, GitReviewControls.spacer(), expand, panel],
 			spacing: 12
 		)
 		updateHostControls()
@@ -372,7 +353,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			return
 		}
 		internalTabWidth?.constant = narrow ? 220 : 240
-		largeComparisonBannerHeight?.constant = narrow ? 76 : 64
 	}
 
 	@objc private func switchDiffLayout()
@@ -400,21 +380,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 
 	private func makeLargeComparisonBanner() -> NSView
 	{
-		let icon = NSImageView(image: GitReviewReferenceIcons.image(
-			.info,
-			size: 18
-		))
-		icon.contentTintColor = .systemBlue
-		icon.setAccessibilityElement(false)
-		largeComparisonLabel.font = .systemFont(ofSize: 14)
-		largeComparisonLabel.lineBreakMode = .byWordWrapping
-		largeComparisonLabel.maximumNumberOfLines = 2
-		largeComparisonLabel.cell?.usesSingleLineMode = false
-		largeComparisonLabel.cell?.wraps = true
-		largeComparisonLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
 		let previous = referenceButton(
 			"Previous changed file",
 			image: DesktopIcons.image(.chevronLeft),
@@ -428,18 +393,16 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		previousFileButton = previous
 		nextFileButton = next
 		let row = AppKitLayout.horizontalStack(
-			[icon, largeComparisonLabel, GitReviewControls.spacer(), previous, next],
+			[GitReviewControls.spacer(), previous, next],
 			spacing: 12
 		)
 		let banner = ViewerToolbarGroup(
 			row,
-			presentation: .banner
+			presentation: .tools
 		)
-		let bannerHeight = banner.heightAnchor.constraint(equalToConstant: 64)
+		let bannerHeight = banner.heightAnchor.constraint(equalToConstant: 36)
 		bannerHeight.isActive = true
-		largeComparisonBannerHeight = bannerHeight
-		banner.setAccessibilityLabel("Large Git comparison")
-		banner.toolTip = "Proposed large comparison threshold: 20 files or 2,000 changed lines"
+		banner.setAccessibilityLabel("Large comparison file navigation")
 		return banner
 	}
 
@@ -556,24 +519,12 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		}
 		documentController.updateLayout(for: state)
 		updateDiffLayoutButton()
-		let previousStatus = statusLabel.stringValue
 		rendering = true
 		defer
 		{
 			rendering = false
-			if previousStatus != statusLabel.stringValue
-			{
-				scopeButton.setAccessibilityHelp(statusLabel.stringValue)
-				NSAccessibility.post(
-					element: scopeButton,
-					notification: .valueChanged
-				)
-			}
 		}
 		let current = updateComparisonControls(state)
-		updateStatusLabel(state)
-		statusLabel.isHidden = state.failure == nil && state.pendingRequest == nil
-			&& !(state.snapshot?.files.isEmpty ?? true)
 
 		guard let snapshot = state.snapshot
 		else
@@ -607,12 +558,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			state: state,
 			displayedFileID: displayedFileID
 		)
-		if tree.rootItems.isEmpty && !state.filter.isEmpty
-		{
-			statusLabel.stringValue += " · No matching filtered files."
-			statusLabel.isHidden = false
-		}
-
 		documentController.render(
 			state: state,
 			presentation: presentation,
@@ -654,61 +599,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			deletions: state.snapshot?.deletions ?? 0
 		) : nil)
 		return current
-	}
-
-	private func updateStatusLabel(_ state: GitReviewState)
-	{
-		if let failure = state.failure
-		{
-			statusLabel.stringValue = failure.message + " Refresh to retry." +
-				(state.isStale ? " Previous snapshot shown below (stale)." : "")
-		}
-		else if state.pendingRequest != nil
-		{
-			if state.isStale
-			{
-				statusLabel.stringValue =
-					"Loading comparison · previous snapshot shown below (stale)"
-			}
-			else
-			{
-				statusLabel.stringValue = "Loading comparison…"
-			}
-		}
-		else if let snapshot = state.snapshot
-		{
-			let hasDisplayFilters = state.options.ignoreWhitespace || state.options.ignoreImports
-			if snapshot.files.isEmpty
-			{
-				statusLabel.stringValue = "No changes in this comparison."
-			}
-			else
-			{
-				statusLabel.stringValue = "\(snapshot.files.count) changed files · "
-					+ "\(snapshot.resolvedBase) → \(snapshot.resolvedTarget) · raw textual totals"
-					+ (hasDisplayFilters ? " · display filters active" : "")
-			}
-		}
-		else
-		{
-			statusLabel.stringValue = "Select a workspace to inspect Git changes."
-		}
-		if state.scope == .lastTurn
-		{
-			if state.snapshot?.usesReportedEditFallback == true
-			{
-				statusLabel.stringValue += " · " + GitReportedTurnComparison.fallbackMessage
-			}
-			statusLabel.stringValue += " · " + GitReportedTurnComparison.coverageMessage
-		}
-		else if let owner = state.owner?.runtimeOwner?.owner, case .source = owner
-		{
-			statusLabel.stringValue += " · shared checkout; changes include all chats"
-		}
-		if let selectionMessage = state.selectionMessage
-		{
-			statusLabel.stringValue += " " + selectionMessage
-		}
 	}
 
 	private func displayedRevisions(_ state: GitReviewState) -> (base: String, target: String)
@@ -971,7 +861,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	{
 		let large = GitReviewDesignLayout.isLarge(snapshot)
 		largeComparisonBanner?.isHidden = !large
-		largeComparisonLabel.stringValue = "This diff is large, showing one file at a time"
 		let index = snapshot.files.firstIndex
 		{
 			Data($0.id.utf8) == selectedFileID.map
@@ -1261,6 +1150,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			"Copy git apply command"
 		].enumerated()
 		{
+			if index == 1
+			{
+				continue
+			}
 			let item = NSMenuItem(
 				title: title,
 				action: #selector(selectDisplayOption(_:)),
@@ -1279,17 +1172,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			case 5: item.image = DesktopIcons.image(.clipboard)
 			default: break
 			}
-			if index == 1
-			{
-				item.isEnabled = false
-				item.toolTip = "Rich preview unavailable; showing read-only source."
-			}
 			if index == 5
 			{
 				item.isEnabled = runtime.state.copyCommand != nil
-				item.toolTip = "Copy the exact unfiltered snapshot as "
-					+ "a base64-decoding git apply command. "
-					+ "Binary comparisons are unavailable. This never executes the command."
+				item.toolTip = "Copy git apply command"
 			}
 			menu.addItem(item)
 		}
@@ -1363,19 +1249,10 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				return
 			}
 			NSPasteboard.general.clearContents()
-			let copied = NSPasteboard.general.setString(
+			_ = NSPasteboard.general.setString(
 				command,
 				forType: .string
 			)
-			if copied
-			{
-				statusLabel.stringValue = "Copied git apply command "
-					+ "for the unfiltered snapshot."
-			}
-			else
-			{
-				statusLabel.stringValue = "Clipboard copy failed."
-			}
 			return
 		default: return
 		}

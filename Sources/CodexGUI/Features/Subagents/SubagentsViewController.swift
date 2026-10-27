@@ -80,8 +80,6 @@ final class SubagentsViewController: NSViewController
 
 	private static let textPointSize: CGFloat = 13
 	private static let timePointSize: CGFloat = 12
-	private static let activeSubtitleSpacing: CGFloat = 4
-	private static let activeRowExtraHeight: CGFloat = 16
 
 	init(
 		owner: FeaturePresentationOwner,
@@ -349,10 +347,6 @@ final class SubagentsViewController: NSViewController
 			child.removeFromSuperview()
 		}
 		appendHeading("Active · \(subagents.activeAgents.count)")
-		if subagents.activeAgents.isEmpty
-		{
-			appendHeading("No active subagents")
-		}
 		for agent in subagents.activeAgents
 		{
 			appendRow(agent)
@@ -364,7 +358,7 @@ final class SubagentsViewController: NSViewController
 				after: last
 			)
 		}
-		appendHeading("Done · \(subagents.doneAgents.count)")
+		appendHeading("Finished · \(subagents.doneAgents.count)")
 		let visibleDone = showsAllDoneAgents
 			? subagents.doneAgents : Array(subagents.doneAgents.prefix(Self.donePreviewLimit))
 		for agent in visibleDone
@@ -412,17 +406,12 @@ final class SubagentsViewController: NSViewController
 		name.isEnabled = onSelectThread != nil && agent.conversationThreadID != nil
 		agentActions[name] = agent
 		let status = subagents.status(for: agent)
-		let detail = NSTextField(labelWithString: status?.label ?? "Activity")
-		detail.font = .systemFont(ofSize: Self.textPointSize)
-		detail.textColor = Self.secondaryTextColor
-		// Completed rows match the reference; exceptional outcomes remain explicit.
-		detail.isHidden = status == .completed || status == .active
 		let spacer = NSView()
 		spacer.setContentHuggingPriority(
 			.defaultLow,
 			for: .horizontal
 		)
-		var rowViews: [NSView] = [avatar, name, spacer, detail]
+		var rowViews: [NSView] = [avatar, name, spacer]
 		if let completedAt = subagents.completedAt(for: agent)
 		{
 			let completion = makeTimeLabel(
@@ -434,14 +423,6 @@ final class SubagentsViewController: NSViewController
 		}
 		if status == .active
 		{
-			let working = NSTextField(labelWithString: "Working")
-			working.font = .systemFont(ofSize: Self.textPointSize)
-			working.textColor = .secondaryLabelColor
-			let nameColumn = AppKitLayout.verticalStack(
-				[name, working],
-				spacing: Self.activeSubtitleSpacing
-			)
-			rowViews[1] = nameColumn
 			if let startedAt = subagents.startedAt(for: agent)
 			{
 				let elapsed = makeTimeLabel(
@@ -455,15 +436,12 @@ final class SubagentsViewController: NSViewController
 		let row = AppKitLayout.horizontalStack(
 			rowViews,
 			spacing: Self.rowSpacing,
-			alignment: status == .active ? .top : .centerY
+			alignment: .centerY
 		)
 		row.identifier = NSUserInterfaceItemIdentifier("subagent:\(agent.identity)")
-		row.setAccessibilityLabel("\(agent.name), \(status?.label ?? "Activity")")
 		content.addArrangedSubview(row)
 		row.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-		let minimumHeight = Self
-			.minimumRowHeight + (status == .active ? Self.activeRowExtraHeight : 0)
-		row.heightAnchor.constraint(greaterThanOrEqualToConstant: minimumHeight)
+		row.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumRowHeight)
 			.isActive = true
 	}
 

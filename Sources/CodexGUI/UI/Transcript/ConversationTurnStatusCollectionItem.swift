@@ -51,24 +51,21 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		self.timing = timing
 		self.expanded = expanded
 		self.onToggle = onToggle
-		label.isHidden = onToggle != nil
+		label.isHidden = true
 		disclosure.isHidden = onToggle == nil
+		view.isHidden = onToggle == nil
 		refresh(now: now)
 	}
 
 	func refresh(now: Date)
 	{
-		guard let timing
+		guard timing != nil
 		else
 		{
 			return
 		}
-		label.stringValue = Self.statusText(
-			timing: timing,
-			now: now
-		)
-		label.setAccessibilityLabel(label.stringValue)
-		disclosure.setLabel(label.stringValue)
+		label.stringValue = ""
+		disclosure.setLabel(expanded ? "Hide turn work" : "Show turn work")
 		disclosure.setExpanded(expanded)
 	}
 

@@ -17,67 +17,28 @@ extension NavigationViewController
 		taskPicker.font = .systemFont(ofSize: 11)
 		let taskRow = AppKitLayout.horizontalStack([taskPicker])
 
-		taskSummaryLabel.textColor = .secondaryLabelColor
-		taskSummaryLabel.font = .systemFont(ofSize: 11)
-		taskSummaryLabel.maximumNumberOfLines = 3
-		taskSummaryLabel.lineBreakMode = .byWordWrapping
-		taskSummaryLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		taskSummaryLabel.setAccessibilityLabel("Running task summary")
 		return taskRow
 	}
 
 	func makeActiveTaskRow() -> NSStackView
 	{
-		activeTaskLabel.lineBreakMode = .byTruncatingTail
-		activeTaskLabel.font = .systemFont(ofSize: 11)
-		activeTaskLabel.setAccessibilityLabel("Active task status")
-
 		returnToTaskButton.target = self
 		returnToTaskButton.action = #selector(returnToActiveTask)
 		returnToTaskButton.setAccessibilityLabel("Return to active task")
 
 		returnToTaskButton.size = .mini
 
-		let activeTaskRow = AppKitLayout.horizontalStack([activeTaskLabel, returnToTaskButton])
-		activeTaskLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		return activeTaskRow
+		return AppKitLayout.horizontalStack([returnToTaskButton])
 	}
 
-	func renderTaskStatus(_ snapshot: NavigationPresentation) -> ExecutionState?
+	func renderTaskStatus(_ snapshot: NavigationPresentation)
 	{
-		let activeState =
-			snapshot.activeExecutionState
-				?? (snapshot.activeThreadID == nil && snapshot.executionState.isBusy
-					? snapshot.executionState : nil)
-		activeTaskLabel.stringValue = activeState.map
-		{
-			"Task: \($0.title)"
-		} ?? ""
-		activeTaskLabel.toolTip = snapshot.activeThreadID.flatMap
-		{
-			id in
-			snapshot.threads.first(where:
-				{
-					$0.id == id
-				}).flatMap
-			{
-				$0.displayTitle
-			}
-		}
-		activeTaskLabel.superview?.isHidden = activeState == nil
 		returnToTaskButton.isEnabled =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID != snapshot.selectedThreadID
 		returnToTaskButton.isHidden = !returnToTaskButton.isEnabled
 		projectActionsButton.contentTintColor = AppKitColorTokens.secondaryText
 		projectActionsButton.toolTip =
 			sidebarPreferences.organization == .oneList ? "New chat" : "Add new project"
-		return activeState
 	}
 
 	func renderTaskWorkspaces(
@@ -91,14 +52,6 @@ extension NavigationViewController
 		}
 		selectedWorkspaceID = snapshot.selectedTaskWorkspaceID
 		restoreWorkspaceSelection()
-		taskSummaryLabel.stringValue =
-			[snapshot.taskStatusSummary, snapshot.taskWorkspaceMessage].compactMap
-				{
-					$0
-				}
-				.joined(separator: " · ")
-		taskSummaryLabel.toolTip = taskSummaryLabel.stringValue
-		taskSummaryLabel.isHidden = taskSummaryLabel.stringValue.isEmpty
 	}
 
 	private func rebuildWorkspaceMenu(_ snapshot: NavigationPresentation)

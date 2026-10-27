@@ -140,7 +140,7 @@ struct GitReviewToolbarBehaviorTests
 				in: controller.view
 			).isHiddenOrHasHiddenAncestor)
 		}
-		#expect(controller.makeDiffDisplayMenu().items.count == 8)
+		#expect(controller.makeDiffDisplayMenu().items.count == 7)
 		window.setContentSize(NSSize(
 			width: 360,
 			height: 640

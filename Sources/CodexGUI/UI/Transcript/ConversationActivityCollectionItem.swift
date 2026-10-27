@@ -38,7 +38,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		target: nil,
 		action: nil
 	)
-	private let imageState = NSTextField(labelWithString: "")
 	private let imageContainer = NSView()
 	private var row: ConversationActivityRow?
 	private var onToggle: (() -> Void)?
@@ -134,7 +133,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	private func configureImagePreview()
 	{
 		imageContainer.heightAnchor.constraint(equalToConstant: Self.imageHeight).isActive = true
-		for child in [imageButton, imageState]
+		for child in [imageButton]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 			imageContainer.addSubview(child)
@@ -143,8 +142,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		}
 		imageButton.widthAnchor.constraint(equalToConstant: 108).isActive = true
 		imageButton.heightAnchor.constraint(equalToConstant: 108).isActive = true
-		imageState.textColor = .secondaryLabelColor
-		imageState.font = .systemFont(ofSize: 12)
 	}
 
 	override func prepareForReuse()
@@ -338,7 +335,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		var views: [NSView] = [header]
 		imageButton.image = nil
 		imageButton.isHidden = true
-		imageState.stringValue = ""
 		terminalCard.configure(
 			row.command,
 			expanded: row.expanded && row.kind != .group,
@@ -578,11 +574,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func loadImage(path: String?)
 	{
-		imageState.stringValue = "Loading image…"
 		guard let path, !path.isEmpty
 		else
 		{
-			imageState.stringValue = "Image unavailable"
 			return
 		}
 		imageTask = Task
@@ -600,8 +594,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			guard let thumbnail
 			else
 			{
-				self.imageState.stringValue = "Image unavailable"
-				self.imageState.toolTip = path
 				return
 			}
 			let image = NSImage(
@@ -614,7 +606,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func showImage(_ image: NSImage)
 	{
-		imageState.stringValue = ""
 		imageButton.image = image
 		imageButton.isHidden = false
 		imageButton.toolTip = row?.imagePath

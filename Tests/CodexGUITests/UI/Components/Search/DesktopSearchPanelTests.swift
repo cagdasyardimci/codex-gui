@@ -113,25 +113,32 @@ struct DesktopSearchPanelTests
 			#expect(chosen == "chat-1")
 			#expect(!navigation.searchPopover.isShown)
 			#expect(window.firstResponder === navigation.searchButton)
+			var newChatCount = 0
+			navigation.onNewChat =
+			{
+				newChatCount += 1
+			}
 			navigation.focusSearch()
 			field.stringValue = "not present"
 			navigation.controlTextDidChange(Notification(
 				name: NSControl.textDidChangeNotification,
 				object: field
 			))
-			let labels = descendants(try #require(panel.contentView))
+			let resultButtons = descendants(try #require(panel.contentView))
 				.compactMap
 				{
-					$0 as? NSTextField
+					$0 as? DesktopSearchResultButton
 				}
-			#expect(labels.contains
+			#expect(resultButtons.map
 			{
-				$0.stringValue == "No matching conversations"
-			})
+				$0.accessibilityLabel()
+			} == ["New chat, ⌘N"])
 			try capture(
 				panel,
 				name: "chat-empty"
 			)
+			try #require(resultButtons[0].dispatchConfiguredAction())
+			#expect(newChatCount == 1)
 		}
 	}
 

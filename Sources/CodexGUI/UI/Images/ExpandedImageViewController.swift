@@ -17,10 +17,6 @@ final class ExpandedImageViewController: NSViewController
 	var onResolutionDemand: ((Int) -> Void)?
 	var onDetach: (() -> Void)?
 
-	private let statusLabel = DesktopStatusView(
-		message: "Loading image…",
-		presentation: .imageOverlay
-	)
 	private let dimmingView = ExpandedImageDimmingView()
 	private var diagramImage: NSImage?
 	private var diagramZoomControls: ExpandedImageZoomGroup?
@@ -167,7 +163,7 @@ final class ExpandedImageViewController: NSViewController
 		zoomButton.nextKeyView = closeButton
 		closeButton.nextKeyView = zoomButton
 
-		for child in [scrollView, zoomButton, closeButton, statusLabel]
+		for child in [scrollView, zoomButton, closeButton]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 			view.addSubview(child)
@@ -202,10 +198,6 @@ final class ExpandedImageViewController: NSViewController
 				equalTo: view.bottomAnchor,
 				constant: -82
 			),
-			statusLabel.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-			statusLabel.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-			statusLabel.topAnchor.constraint(equalTo: scrollView.topAnchor),
-			statusLabel.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor)
 		])
 		lifetime.addObserver(
 			forName: NSView.boundsDidChangeNotification,
@@ -255,8 +247,6 @@ final class ExpandedImageViewController: NSViewController
 		{
 			constraint.constant = -12
 		}
-		statusLabel.setLoading(false)
-		statusLabel.isHidden = true
 		zoomButton.isHidden = true
 		NSLayoutConstraint.deactivate(view.constraints.filter
 		{
@@ -406,16 +396,11 @@ final class ExpandedImageViewController: NSViewController
 			cgImage: thumbnail.image,
 			size: originalPixelSize
 		)
-		statusLabel.setLoading(false)
-		statusLabel.isHidden = true
 		updateGeometry()
 	}
 
 	func showLoadFailure()
 	{
-		statusLabel.setLoading(false)
-		statusLabel.stringValue = "Unable to load image"
-		statusLabel.isHidden = false
 		zoomButton.isEnabled = false
 	}
 

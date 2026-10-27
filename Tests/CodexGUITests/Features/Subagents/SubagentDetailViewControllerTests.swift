@@ -48,6 +48,11 @@ struct SubagentDetailViewControllerTests
 		#expect(backCount == 0)
 		#expect(controller.selectedAgent == second)
 		let current = try #require(controller.detailController)
+		let labels = descendants(current.view).compactMap
+		{
+			($0 as? NSTextField)?.stringValue
+		}
+		#expect(!labels.contains("Load failed"))
 		try button(
 			in: current.view,
 			title: "Retry"

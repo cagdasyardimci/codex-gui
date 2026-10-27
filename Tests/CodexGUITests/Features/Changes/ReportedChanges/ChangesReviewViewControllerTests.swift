@@ -250,13 +250,10 @@ struct ChangesReviewViewControllerTests
 			result: .failure(CocoaError(.fileNoSuchFile))
 		)
 		await firstTask.value
-		let status = try #require(
-			label(
-				in: controller.view,
-				accessibilityLabel: "Editor handoff status"
-			)
-		)
-		#expect(status.isHidden)
+		#expect(label(
+			in: controller.view,
+			accessibilityLabel: "Editor handoff status"
+		) == nil)
 		#expect(!open.isEnabled)
 
 		operation.complete(
@@ -264,8 +261,10 @@ struct ChangesReviewViewControllerTests
 			result: .success("Current selection opened")
 		)
 		await secondTask.value
-		#expect(status.stringValue == "Current selection opened")
-		#expect(!status.isHidden)
+		#expect(label(
+			in: controller.view,
+			accessibilityLabel: "Editor handoff status"
+		) == nil)
 		#expect(open.isEnabled)
 	}
 

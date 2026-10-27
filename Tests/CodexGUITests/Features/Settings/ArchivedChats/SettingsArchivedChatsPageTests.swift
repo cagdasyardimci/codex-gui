@@ -34,7 +34,6 @@ struct SettingsArchivedChatsPageTests
 			let loading = try #require(page.operation)
 			await loading.value
 			#expect(page.operation == nil)
-			#expect(page.message.isEmpty)
 			let archive = try archiveView(in: page)
 			#expect(archive.matchingCount == 125)
 			#expect(archive.visibleChatIDs.count == 50)
@@ -102,7 +101,6 @@ struct SettingsArchivedChatsPageTests
 			let mutation = try #require(page.operation)
 			await mutation.value
 			#expect(page.operation == nil)
-			#expect(page.message.isEmpty)
 			#expect(archive.matchingCount == 0)
 			archive.setSearch("")
 			#expect(archive.matchingCount == 124)

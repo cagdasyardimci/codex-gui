@@ -179,7 +179,6 @@ final class SettingsGeneralExtrasPage: NSView
 				{
 					return
 				}
-				speed.toolTip = "Could not load service tiers: " + error.localizedDescription
 			}
 		}
 	}

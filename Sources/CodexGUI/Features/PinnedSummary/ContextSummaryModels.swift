@@ -31,7 +31,6 @@ struct SummaryAgentProjection: Equatable
 	let identities: [DelegatedAgentIdentity]
 	let completedCount: Int
 	let runningCount: Int
-	let aggregationDescription: String
 }
 
 /// Immutable projections only. Feature reducers own records, revisions and reconciliation.

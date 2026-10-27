@@ -14,15 +14,14 @@ enum ProjectContextStoreError: LocalizedError
 		switch self
 		{
 		case .unsupportedVersion(let version):
-			"Project context uses unsupported version \(version). Its file was left unchanged."
+			"Project context uses unsupported version \(version)."
 		case .wrongProject:
-			"Project context belongs to another project. Its file was left unchanged."
+			"Project context belongs to another project."
 		case .unreadable(
 			let url,
 			let cause
 		):
-			"Could not read project context at \(url.path): \(cause.localizedDescription). Its "
-				+ "file was left unchanged."
+			"Could not read project context at \(url.path): \(cause.localizedDescription)."
 		}
 	}
 }

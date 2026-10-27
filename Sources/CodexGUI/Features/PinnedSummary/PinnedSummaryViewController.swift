@@ -49,9 +49,12 @@ final class PinnedSummaryViewController: NSViewController
 		_ = view
 		clearRenderedContent()
 
-		let heading = header(presentation.contextName)
-		heading.heightAnchor.constraint(equalToConstant: Layout.headerHeight).isActive = true
-		add(heading)
+		if !presentation.contextName.isEmpty
+		{
+			let heading = header(presentation.contextName)
+			heading.heightAnchor.constraint(equalToConstant: Layout.headerHeight).isActive = true
+			add(heading)
+		}
 		addChanges(presentation)
 		addDivider()
 		addAgents(presentation)
@@ -78,10 +81,6 @@ final class PinnedSummaryViewController: NSViewController
 	{
 		let row = makeChangesRow(presentation)
 		add(row)
-		if let message = presentation.sections.changes.message
-		{
-			add(statusLabel(message))
-		}
 	}
 
 	private func makeChangesRow(_ presentation: PinnedSummaryPresentation) -> NSStackView
@@ -158,23 +157,20 @@ final class PinnedSummaryViewController: NSViewController
 		addSectionHeading(heading)
 		if let agents = section.value
 		{
-			let completed = "\(agents.completedCount) done"
+			let completed = "\(agents.completedCount) finished"
 			let text = agents.runningCount > 0
 				? completed + " · \(agents.runningCount) running" : completed
+			let label = "Loaded subagents · " + text
 			let summary = button(
-				text,
+				label,
 				symbol: nil,
 				destination: .subagents
 			)
-			summary.setAccessibilityLabel(text + ". " + agents.aggregationDescription)
+			summary.setAccessibilityLabel(label)
 			add(agentRow(
 				summary,
 				agents: presentation.agentPreviews
 			))
-		}
-		if let message = section.message
-		{
-			add(statusLabel(message))
 		}
 		addDivider()
 	}
@@ -198,14 +194,6 @@ final class PinnedSummaryViewController: NSViewController
 				2,
 				after: row
 			)
-		}
-		if presentation.sections.sources.value?.isEmpty == true
-		{
-			add(label("No sources"))
-		}
-		if let message = presentation.sections.sources.message
-		{
-			add(statusLabel(message))
 		}
 		add(makeViewAllSourcesRow())
 	}
@@ -385,27 +373,9 @@ final class PinnedSummaryViewController: NSViewController
 		title.setAccessibilityLabel(name)
 		title.toolTip = name
 		return AppKitLayout.horizontalStack(
-			[title, NSView(), unresolvedButton(
-				"…",
-				label: "Summary action unavailable"
-			)],
+			[title, NSView()],
 			spacing: 8
 		)
-	}
-
-	private func unresolvedButton(
-		_ title: String,
-		label: String
-	) -> NSButton
-	{
-		let button = DesktopSummaryActionButton(
-			title: title,
-			image: PinnedSummaryIcons.image(title == "+" ? .plus : .ellipsis),
-			presentation: .unavailableAction
-		)
-		button.setAccessibilityLabel(label)
-		button.toolTip = "Action unavailable: behavior has not been defined"
-		return button
 	}
 
 	private func button(
@@ -524,15 +494,6 @@ final class PinnedSummaryViewController: NSViewController
 			8,
 			after: divider
 		)
-	}
-
-	private func statusLabel(_ text: String) -> NSTextField
-	{
-		let status = label(text)
-		status.font = AppKitFontResolver.font(TypographyTokens.Summary.status)
-		status.toolTip = text
-		status.setAccessibilityLabel(text)
-		return status
 	}
 
 	@objc private func navigate(_ sender: NSButton)

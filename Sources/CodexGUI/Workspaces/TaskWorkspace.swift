@@ -92,17 +92,17 @@ enum TaskWorkspaceError: LocalizedError
 		case .invalidPhase(let phase):
 			"The checkout operation is not available while the workspace is \(phase.rawValue)."
 		case .dirtyCheckout(let path):
-			"The checkout contains changes or files and was left in place: \(path)."
+			"The checkout contains changes or files: \(path)."
 		case .ownershipConflict(let detail):
-			"Checkout ownership could not be verified: \(detail). No files were removed."
+			"Checkout ownership could not be verified: \(detail)."
 		case .unsafeBranchRemoval(let branch):
-			"Branch \(branch) changed or is checked out elsewhere. It was left in place."
+			"Branch \(branch) changed or is checked out elsewhere."
 		case .invalidRecord(let detail):
-			"The workspace record is invalid: \(detail). It was left unchanged."
+			"The workspace record is invalid: \(detail)."
 		case .storageFailure(let detail):
-			"Workspace records could not be locked: \(detail). No checkout operation was started."
+			"Workspace records could not be locked: \(detail)."
 		case .unsupportedRecordVersion(let version):
-			"Workspace record version \(version) is unsupported. It was left unchanged."
+			"Workspace record version \(version) is unsupported."
 		case .gitFailure(let detail):
 			"Git worktree operation failed: \(detail)"
 		}

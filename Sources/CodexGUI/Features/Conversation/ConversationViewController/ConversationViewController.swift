@@ -97,8 +97,6 @@ final class ConversationViewController: NSViewController,
 		}
 	}
 
-	private let stateLabel = NSTextField(labelWithString: "Disconnected")
-	private let activeTaskLabel = NSTextField(wrappingLabelWithString: "")
 	private let returnToTaskButton = DesktopStyledButton(
 		title: "Return to Task",
 		target: nil,
@@ -109,7 +107,6 @@ final class ConversationViewController: NSViewController,
 		target: nil,
 		action: nil
 	)
-	private let activityLabel = CurrentActionLabel(labelWithString: "")
 	private var activePlan: TurnPlanUpdate?
 	private var planPopover: NSPopover?
 	let modelEffortButton = ModelEffortSelectionButton(
@@ -132,7 +129,6 @@ final class ConversationViewController: NSViewController,
 	var fullAccessConfirmationPanel: NSPanel?
 	var approvalMode: ApprovalMode = .askForApproval
 	var hasConfiguredPermissions = false
-	let preferenceWarningLabel = NSTextField(wrappingLabelWithString: "")
 	private var requestContextText = ""
 	private var centeredReadingRows: [(
 		content: NSView,
@@ -140,7 +136,6 @@ final class ConversationViewController: NSViewController,
 		horizontalConstraints: [NSLayoutConstraint]
 	)] = []
 	private var paneResizeControlConstraints: [NSLayoutConstraint] = []
-	private let emptyStateLabel = NSTextField(wrappingLabelWithString: "What can I help with?")
 	let composer = ContextComposerTextView()
 	let chatLockView = ConversationLockView()
 	let composerScrollView = NSScrollView()
@@ -209,7 +204,6 @@ final class ConversationViewController: NSViewController,
 	{
 		super.viewDidDisappear()
 		turnChangeSummaryLoader.stop()
-		activityLabel.presentationIsVisible = false
 	}
 
 	override func viewDidAppear()
@@ -222,7 +216,6 @@ final class ConversationViewController: NSViewController,
 				activeTurnID: composerSubmissionPresentation.activeTurnID
 			)
 		}
-		activityLabel.presentationIsVisible = true
 	}
 
 	override func loadView()
@@ -237,10 +230,10 @@ final class ConversationViewController: NSViewController,
 		let composerArea = makeComposerArea()
 
 		let headerStack = AppKitLayout.verticalStack(
-			[stateLabel, activeTaskRow, progressRow, preferenceWarningLabel],
+			[activeTaskRow, progressRow],
 			spacing: 4
 		)
-		for row in [stateLabel, activeTaskRow, progressRow, preferenceWarningLabel]
+		for row in [activeTaskRow, progressRow]
 		{
 			row.widthAnchor.constraint(equalTo: headerStack.widthAnchor).isActive = true
 		}
@@ -257,7 +250,6 @@ final class ConversationViewController: NSViewController,
 			transcriptArea: transcriptArea,
 			composerArea: composerArea
 		)
-		configureEmptyState(in: container)
 		transcript.configureTurnNavigation(in: container)
 		view = container
 	}
@@ -319,47 +311,8 @@ final class ConversationViewController: NSViewController,
 		)
 	}
 
-	private func configureEmptyState(in container: NSView)
-	{
-		emptyStateLabel.font = .systemFont(
-			ofSize: 26,
-			weight: .regular
-		)
-		emptyStateLabel.alignment = .center
-		emptyStateLabel.lineBreakMode = .byWordWrapping
-		emptyStateLabel.maximumNumberOfLines = 0
-		emptyStateLabel.setAccessibilityLabel("Start a new conversation with Codex")
-		emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
-		container.addSubview(emptyStateLabel)
-		NSLayoutConstraint.activate([
-			emptyStateLabel.centerXAnchor.constraint(
-				equalTo: transcript.conversationScrollView.centerXAnchor
-			),
-			emptyStateLabel.centerYAnchor.constraint(
-				equalTo: transcript.conversationScrollView.centerYAnchor
-			),
-			emptyStateLabel.widthAnchor.constraint(
-				equalTo: transcript.conversationScrollView.widthAnchor,
-				constant: -32
-			),
-		])
-	}
-
 	private func configureTaskStatusControls() -> (NSStackView, NSStackView)
 	{
-		stateLabel.font = .systemFont(ofSize: 12)
-		stateLabel.textColor = .secondaryLabelColor
-		stateLabel.setAccessibilityLabel("Execution state")
-		stateLabel.lineBreakMode = .byTruncatingTail
-		stateLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		activeTaskLabel.font = .systemFont(ofSize: 12)
-		activeTaskLabel.textColor = .secondaryLabelColor
-		activeTaskLabel.maximumNumberOfLines = 1
-		activeTaskLabel.lineBreakMode = .byTruncatingTail
-		activeTaskLabel.setAccessibilityLabel("Active task location")
 		returnToTaskButton.target = self
 		returnToTaskButton.action = #selector(returnToActiveTask)
 		returnToTaskButton.setAccessibilityLabel("Return to active task conversation")
@@ -368,21 +321,8 @@ final class ConversationViewController: NSViewController,
 		planButton.action = #selector(showPlan)
 		planButton.setAccessibilityLabel("Show reported task plan")
 		planButton.symbol = .notebookCheck
-		activityLabel.font = .systemFont(ofSize: 12)
-		activityLabel.textColor = .secondaryLabelColor
-		activityLabel.lineBreakMode = .byTruncatingTail
-		activityLabel.maximumNumberOfLines = 1
-		activityLabel.setAccessibilityLabel("Reported task activity")
-		let activeTaskRow = AppKitLayout.horizontalStack([activeTaskLabel, returnToTaskButton])
-		activeTaskLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		let progressRow = AppKitLayout.horizontalStack([planButton, activityLabel])
-		activityLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
+		let activeTaskRow = AppKitLayout.horizontalStack([returnToTaskButton])
+		let progressRow = AppKitLayout.horizontalStack([planButton])
 
 		return (activeTaskRow, progressRow)
 	}
@@ -410,7 +350,7 @@ final class ConversationViewController: NSViewController,
 		row.addSubview(content)
 		let preferredWidth = content.widthAnchor.constraint(equalTo: row.widthAnchor)
 		// Yield to AppKit's window-resize priorities so the inner cap cannot limit the window.
-		preferredWidth.priority = .defaultLow
+		preferredWidth.priority = NSLayoutConstraint.Priority(749)
 		let horizontalConstraints = [
 			content.centerXAnchor.constraint(equalTo: row.centerXAnchor),
 			content.widthAnchor.constraint(
@@ -529,12 +469,8 @@ final class ConversationViewController: NSViewController,
 		}
 		if previous?.preferences != snapshot.preferences
 		{
-			preferenceWarningLabel.stringValue = snapshot.preferences.preferenceWarning ?? ""
-			preferenceWarningLabel.isHidden = snapshot.preferences.preferenceWarning == nil
 			renderModelAndApprovalPreferences(snapshot.preferences)
 		}
-		emptyStateLabel.isHidden = !snapshot.transcript.entries.isEmpty
-			|| snapshot.transcript.selectedThreadID != nil
 		transcript.render(TranscriptPresentation(
 			owner: snapshot.owner,
 			entries: snapshot.transcript.entries,
@@ -582,20 +518,9 @@ final class ConversationViewController: NSViewController,
 
 	private func renderTaskStatus(_ snapshot: ConversationPresentation.Status)
 	{
-		stateLabel.stringValue = snapshot.statusMessage ?? snapshot.executionState.title
-		stateLabel.toolTip = stateLabel.stringValue
-		stateLabel.isHidden = snapshot.isLocked ||
-			(snapshot.statusMessage == nil && snapshot.executionState != .disconnected
-				&& snapshot.executionState != .failed
-			)
 		let isViewingActiveTask =
 			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
 		let taskIsElsewhere = snapshot.activeExecutionState != nil && !isViewingActiveTask
-		activeTaskLabel.stringValue =
-			taskIsElsewhere
-				? "\(snapshot.activeExecutionState?.title ?? "Task active") in another conversation"
-				: ""
-		activeTaskLabel.superview?.isHidden = !taskIsElsewhere
 		returnToTaskButton.isEnabled = snapshot.activeThreadID != nil
 		returnToTaskButton.isHidden = !taskIsElsewhere
 
@@ -614,35 +539,17 @@ final class ConversationViewController: NSViewController,
 			}.count
 			planButton.title = "Plan \(finished)/\(plan.plan.count)"
 		}
-
-		let jumpStatus = snapshot
-			.jumpError ?? (snapshot.jumpLoading ? "Loading target message…" : "")
-		activityLabel.stringValue = [
-			isViewingActiveTask ? snapshot.activeActivity ?? "" : "",
-			jumpStatus,
-		]
-		.filter
-		{
-			!$0.isEmpty
-		}.joined(separator: " · ")
-		activityLabel.toolTip = activityLabel.stringValue
-		activityLabel.isHidden = activityLabel.stringValue.isEmpty
-		activityLabel.superview?.isHidden = planButton.isHidden && activityLabel.isHidden
-		activityLabel.actionIsActive = isViewingActiveTask
-			&& snapshot.activeExecutionState?.isBusy == true
-			&& !(snapshot.activeActivity ?? "").isEmpty
 	}
 
 	private func renderRequestContext(_ snapshot: ConversationPresentation.RequestContext)
 	{
 		let includedItemCount = snapshot.includedItemCount
 		let skill = snapshot.selectedSkill
-		let skillAvailable = snapshot.skillAvailable
 		let contextSummaryParts = [
 			includedItemCount == 0 ? nil : "\(includedItemCount) pinned item(s)",
 			skill.map
 			{
-				"Skill \($0.invocationText)\(skillAvailable ? "" : " unavailable")"
+				"Skill \($0.invocationText)"
 			},
 		].compactMap
 		{
@@ -664,11 +571,6 @@ final class ConversationViewController: NSViewController,
 			requestContextText +=
 				(requestContextText.isEmpty ? "" : "\n\n")
 				+ "Selected skill for a new turn: \(skill.invocationText)\n\(skill.description)"
-				+ (skillAvailable
-					? "" :
-					"\nUnavailable in the current backend skill list; it will not be invoked.")
-				+ "\nSteering an active turn sends the editable draft "
-				+ "and selected project context without this skill invocation."
 		}
 	}
 
@@ -689,7 +591,14 @@ final class ConversationViewController: NSViewController,
 			return
 		}
 		renderedInteractions = presentation
-		let interactions = presentation.values
+		let interactions = presentation.values.filter
+		{
+			if case .unsupported = $0.kind
+			{
+				return false
+			}
+			return true
+		}
 		for view in interactionStack.arrangedSubviews
 		{
 			interactionStack.removeArrangedSubview(view)

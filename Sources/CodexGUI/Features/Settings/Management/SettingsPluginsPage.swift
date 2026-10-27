@@ -13,7 +13,6 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 	private var tabCounts: [Tab: Int] = [:]
 	private var catalog: [[String: Any]] = []
 	private var catalogLoaded = false
-	private var marketplaceErrors: [String] = []
 	private var cachedRows: [Tab: [NSView]] = [:]
 	private var mcpForm: SettingsMCPForm?
 	private var pluginsView: SettingsPluginsCatalogView?
@@ -120,14 +119,6 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 			return super.sectionsForDisplay()
 		}
 		var sections: [NSView] = [toolbar()]
-		if !backend.status.isEmpty
-		{
-			sections.append(SettingsPageLayout.status(backend.status))
-		}
-		if !message.isEmpty
-		{
-			sections.append(SettingsPageLayout.status(message))
-		}
 		if !rows.isEmpty
 		{
 			if tab == .mcps
@@ -168,7 +159,6 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 			}
 			pluginsView = tab == .plugins ? cached.first as? SettingsPluginsCatalogView : nil
 			pluginsView?.setSearch(searchField.stringValue)
-			message = ""
 			render()
 			return
 		}
@@ -207,11 +197,9 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 		cachedRows.removeAll()
 		catalog = []
 		catalogLoaded = false
-		marketplaceErrors = []
 		pluginsView = nil
 		tabCounts = [:]
 		rows = []
-		message = ""
 	}
 
 	private func tabs() -> NSView
@@ -380,11 +368,6 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 				params: [:]
 			)
 			catalog = result["marketplaces"] as? [[String: Any]] ?? []
-			marketplaceErrors = (result["marketplaceLoadErrors"] as? [[String: Any]] ?? [])
-				.map
-				{
-					$0["message"] as? String ?? "Marketplace unavailable."
-				}
 			catalogLoaded = true
 			populateCatalogRows()
 		}
@@ -417,16 +400,7 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 			tabCounts[.plugins] = plugins.installedCount
 			rows.append(plugins)
 		}
-		if rows.isEmpty
-		{
-			rows.append(SettingsPageLayout.status("No \(tab.rawValue.lowercased()) found."))
-		}
-		for error in marketplaceErrors
-		{
-			rows.append(SettingsPageLayout.status(error))
-		}
 		cachedRows[tab] = rows
-		message = ""
 	}
 
 	private var userMarketplaces: [[String: Any]]
@@ -723,10 +697,6 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 				}
 			}
 			tabCounts[.skills] = skillCount
-			if rows.isEmpty
-			{
-				rows.append(SettingsPageLayout.status("No skills found."))
-			}
 			cachedRows[.skills] = rows
 		}
 	}
@@ -744,7 +714,6 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 			])
 		}
 		cachedRows[.mcps] = rows
-		message = ""
 		render()
 	}
 
@@ -911,7 +880,6 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 			var servers = backend.value("mcp_servers") as? [String: [String: Any]] ?? [:]
 			if name == nil, servers[enteredName] != nil
 			{
-				message = "A server with this name already exists."
 				render()
 				return
 			}

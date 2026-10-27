@@ -68,7 +68,6 @@ final class FileSearchPanel: NSViewController,
 		target: nil,
 		action: nil
 	)
-	private let statusLabel = FileSearchTextField(labelWithString: "")
 	private let keyboardHints = FileSearchKeyboardHintsView()
 	private let table = FileSearchResultsTableView()
 	private var sheet: NSWindow?
@@ -123,7 +122,6 @@ final class FileSearchPanel: NSViewController,
 			maskField: maskField,
 			maskLabel: maskLabel,
 			escapeButton: escapeButton,
-			statusLabel: statusLabel,
 			keyboardHints: keyboardHints,
 			table: table
 		)
@@ -267,7 +265,6 @@ final class FileSearchPanel: NSViewController,
 		guard sheet != nil, !submittedQuery.isEmpty
 		else
 		{
-			statusLabel.stringValue = "Enter a query"
 			return
 		}
 		let previousFilenames = filenameRows
@@ -277,43 +274,19 @@ final class FileSearchPanel: NSViewController,
 			awaitingCurrentResults = false
 			filenameRows = []
 			contentRows = []
-			statusLabel.stringValue = "Searching…"
 		}
-		else if awaitingCurrentResults
-		{
-			statusLabel.stringValue = "Searching…"
-		}
-		else if let failure = state.searchFailure
+		else if state.searchFailure != nil
 		{
 			filenameRows = []
 			contentRows = []
-			statusLabel.stringValue = "Search failed: \(failure)"
 		}
 		else if mode == .filename, let page = state.filenameResults
 		{
 			filenameRows = page.results
-			statusLabel.stringValue = summary(
-				count: page.results.count,
-				empty: "No matching files",
-				unit: page.results.count == 1 ? "file" : "files",
-				truncated: page.isTruncated
-			)
-			statusLabel.toolTip = excludedDirectoryTip(page.excludedDirectoryCount)
 		}
 		else if mode == .content, let page = state.contentResults
 		{
 			contentRows = page.results
-			statusLabel.stringValue = summary(
-				count: page.results.count,
-				empty: "No matching content",
-				unit: page.results.count == 1 ? "matching line" : "matching lines",
-				truncated: page.isTruncated
-			)
-			statusLabel.toolTip = excludedDirectoryTip(page.excludedDirectoryCount)
-		}
-		else
-		{
-			statusLabel.stringValue = submittedQuery.isEmpty ? "Enter a query" : "Searching…"
 		}
 		let changed = previousFilenames != filenameRows || previousContent != contentRows
 		if changed
@@ -328,27 +301,6 @@ final class FileSearchPanel: NSViewController,
 				table.scrollRowToVisible(0)
 			}
 		}
-	}
-
-	private func summary(
-		count: Int,
-		empty: String,
-		unit: String,
-		truncated: Bool
-	) -> String
-	{
-		if count == 0
-		{
-			return truncated ? "Search incomplete · no matches" : empty
-		}
-		return truncated
-			? "Showing first \(count) \(unit)"
-			: "\(count) \(unit)"
-	}
-
-	private func excludedDirectoryTip(_ count: Int) -> String?
-	{
-		count > 0 ? "\(count) generated folders skipped" : nil
 	}
 
 	func controlTextDidChange(_ notification: Notification)
@@ -392,8 +344,6 @@ final class FileSearchPanel: NSViewController,
 		{
 			table.reloadData()
 		}
-		statusLabel.stringValue = query.isEmpty ? "Enter a query" : "Searching…"
-		statusLabel.toolTip = nil
 		if query.isEmpty
 		{
 			onCancelSearch?()

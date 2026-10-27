@@ -721,7 +721,7 @@ enum LayoutTokens
 		static let sliderTopSpacing: CGFloat = 12
 		static let sliderHeight: CGFloat = 28
 		static let warningTopSpacing: CGFloat = 6
-		static let warningHeight: CGFloat = 26
+		static let warningHeight: CGFloat = 40
 		static let bottomInset: CGFloat = 10
 		static let warningBottomInset: CGFloat = 14
 		static let anchorSpacing: CGFloat = 9

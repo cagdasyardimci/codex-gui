@@ -24,7 +24,6 @@ struct TaskWorkspaceModalOwnershipTests
 			context: ProjectContext(),
 			models: [],
 			skills: [],
-			statusMessage: nil,
 			ownerIdentity: "/tmp/shared-project",
 			draftOwnerIdentity: "thread-a"
 		)
@@ -33,7 +32,6 @@ struct TaskWorkspaceModalOwnershipTests
 			context: ProjectContext(),
 			models: [],
 			skills: [],
-			statusMessage: nil,
 			ownerIdentity: "/tmp/shared-project",
 			draftOwnerIdentity: "thread-b"
 		)
@@ -139,7 +137,6 @@ struct TaskWorkspaceModalOwnershipTests
 					context: ProjectContext(),
 					models: [],
 					skills: [],
-					statusMessage: nil,
 					ownerIdentity: owner,
 					draftOwnerIdentity: owner + "|new|\(lifetime)"
 				)

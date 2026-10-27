@@ -13,9 +13,9 @@ struct TurnChangeSummaryButtonTests
 		let summary = try #require(ConversationTurnChangeSummary(snapshot))
 		let button = TurnChangeSummaryButton()
 		button.render(summary)
-		#expect(button.attributedTitle.string == "2 files changed +3 -1")
-		#expect(button.toolTip?.contains("Previous editing turn") == true)
-		#expect(button.accessibilityLabel()?.contains("Previous editing turn") == true)
+		#expect(button.attributedTitle.string == "Previous turn · 2 files +3 -1")
+		#expect(button.toolTip == "View reported changes")
+		#expect(button.accessibilityLabel()?.contains("Previous turn") == true)
 	}
 
 	@Test(arguments: [GitComparisonFailure.lastTurnUnavailable,
@@ -35,11 +35,11 @@ struct TurnChangeSummaryButtonTests
 		))
 		let button = TurnChangeSummaryButton()
 		button.render(summary)
-		#expect(button.attributedTitle.string == "2 files changed +3 -1")
+		#expect(button.attributedTitle.string == "Reported counts · 2 files +3 -1")
 		#expect(button.toolTip?.contains(failure.message) == false)
 		#expect(button.accessibilityLabel()?.contains(failure.message) == false)
 		button.render(ConversationTurnChangeSummary(unavailable: failure))
-		#expect(button.attributedTitle.string == "0 files changed +0 -0")
+		#expect(button.attributedTitle.string == "Changes unavailable")
 		#expect(button.toolTip?.contains(failure.message) == false)
 		#expect(button.accessibilityLabel()?.contains(failure.message) == false)
 	}
@@ -83,10 +83,11 @@ struct TurnChangeSummaryButtonTests
 			window.appearance = try #require(NSAppearance(named: name))
 			window.displayIfNeeded()
 			let title = button.attributedTitle
-			#expect(title.string == "2 files changed +3 -1")
+			#expect(title.string == "Reported · 2 files +3 -1")
+			let value = title.string as NSString
 			for (offset, expected) in [(0, NSColor.secondaryLabelColor),
-										(15, .systemGreen),
-										(18, .systemRed)]
+										(value.range(of: "+3").location, .systemGreen),
+										(value.range(of: "-1").location, .systemRed)]
 			{
 				let actual = try #require(title.attribute(
 					.foregroundColor,

@@ -59,8 +59,6 @@ extension ChangesViewController
 			editorSelectionGeneration += 1
 			pendingEditorRequest = nil
 		}
-		editorStatus.isHidden = true
-
 		let displayText = selectedDiffText()
 
 		let hasTextDiff =

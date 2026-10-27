@@ -86,9 +86,8 @@ final class SubagentDetailViewController: NSViewController
 		metadataLabel.stringValue = settingsDescription ?? ""
 		metadataLabel.isHidden = metadataLabel.stringValue.isEmpty
 		renderAvatar(agent)
-		let showsInitialLoading = state.isLoading && state.entries.isEmpty
-		status.setMessage(state.error ?? (showsInitialLoading ? "Loading conversation…" : ""))
-		status.setLoading(showsInitialLoading)
+		status.setMessage("")
+		status.setLoading(false)
 		status.setActions(state.error == nil ? [] : [DesktopStatusView.Action(
 			title: "Retry",
 			isEnabled: !state.isLoading,

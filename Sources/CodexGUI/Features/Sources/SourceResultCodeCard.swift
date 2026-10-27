@@ -6,7 +6,6 @@ final class SourceResultCodeCard: DesktopOutputCard
 {
 	private let source: String
 	private let language: String
-	private let isError: Bool
 	private let textView = NSTextView()
 	private let scroll: NSScrollView
 	private let font = NSFont.monospacedSystemFont(
@@ -19,7 +18,6 @@ final class SourceResultCodeCard: DesktopOutputCard
 		text: String,
 		language: String,
 		identifier: String,
-		isError: Bool = false,
 		maximumBodyHeight: CGFloat = 188,
 		headerAccessory: NSView? = nil
 	)
@@ -28,33 +26,15 @@ final class SourceResultCodeCard: DesktopOutputCard
 		let normalizedLanguage = language.lowercased() == "json" ? "json" : "text"
 		self.source = boundedSource
 		self.language = normalizedLanguage
-		self.isError = isError
-		let errorLabel = NSTextField(wrappingLabelWithString: boundedSource)
 		let resultScroll = NSScrollView()
 		scroll = resultScroll
 		super.init(
 			title: normalizedLanguage,
-			presentation: isError ? .error : .code,
-			body: isError ? errorLabel : resultScroll,
-			accessory: isError ? nil : headerAccessory
+			presentation: .code,
+			body: resultScroll,
+			accessory: headerAccessory
 		)
 		self.identifier = NSUserInterfaceItemIdentifier(identifier)
-		if isError
-		{
-			errorLabel.font = .systemFont(
-				ofSize: 14,
-				weight: .light
-			)
-			errorLabel.textColor = AppKitColorTokens.primaryText
-			errorLabel.isSelectable = true
-			errorLabel.identifier = NSUserInterfaceItemIdentifier(identifier + ":text")
-			errorLabel.setContentCompressionResistancePriority(
-				.defaultLow,
-				for: .horizontal
-			)
-			errorLabel.setAccessibilityLabel("Recorded error: \(boundedSource)")
-			return
-		}
 		textView.identifier = NSUserInterfaceItemIdentifier(identifier + ":text")
 		textView.isEditable = false
 		textView.isSelectable = true
@@ -104,11 +84,6 @@ final class SourceResultCodeCard: DesktopOutputCard
 	override func layout()
 	{
 		super.layout()
-		guard !isError
-		else
-		{
-			return
-		}
 		textView.setFrameSize(NSSize(
 			width: max(
 				scroll.contentSize.width,
@@ -130,11 +105,6 @@ final class SourceResultCodeCard: DesktopOutputCard
 	private func applyColors()
 	{
 		let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		guard !isError
-		else
-		{
-			return
-		}
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.minimumLineHeight = 20
 		paragraph.maximumLineHeight = 20

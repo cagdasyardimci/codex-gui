@@ -78,14 +78,6 @@ final class ChatSearchController: NSViewController
 				shortcut: index < 9 ? "⌃\(index + 1)" : ""
 			)
 		}
-		if entries.isEmpty
-		{
-			addHeading("No matching conversations")
-		}
-		if entries.count > 200
-		{
-			addHeading("Refine search to see more chats")
-		}
 		if canCreateChat
 		{
 			addHeading("Quick actions")

@@ -218,7 +218,7 @@ struct SettingsPageNavigationTests
 		}
 	}
 
-	@Test func appStatusGroupsRouteTheirActionsThroughSharedStatusViews() throws
+	@Test func appActionsRemainAvailableWithoutStatusMessages() throws
 	{
 		_ = NSApplication.shared
 		let controller = SettingsViewController()
@@ -239,28 +239,18 @@ struct SettingsPageNavigationTests
 		{
 			actions.append("details")
 		}
-		let statusViews = descendants(controller.view).compactMap
-		{
-			$0 as? DesktopStatusView
-		}
-		let account = try #require(statusViews.first
-		{
-			$0.messageLabel.accessibilityLabel() == "Account status"
-		})
-		let signIn = try #require(descendants(account).compactMap
+		let buttons = descendants(controller.view).compactMap
 		{
 			$0 as? NSButton
-		}.first
+		}
+		let signIn = try #require(buttons.first
 		{
 			$0.title == "Sign In…"
 		})
 		#expect(signIn.dispatchConfiguredAction())
 		for title in ["Reconnect", "Details"]
 		{
-			let action = try #require(statusViews.flatMap(descendants).compactMap
-			{
-				$0 as? NSButton
-			}.first
+			let action = try #require(buttons.first
 			{
 				$0.title == title
 			})

@@ -19,8 +19,6 @@ final class SettingsPersonalizationPage: NSView
 		title: "Reload",
 		presentation: .secondary
 	)
-	private let instructionStatus = SettingsPageLayout.status("")
-	private let actionStatus = SettingsPageLayout.status("")
 	private let instructionsURL: URL
 	private var loadedInstructions: String?
 
@@ -91,7 +89,6 @@ final class SettingsPersonalizationPage: NSView
 			[
 				SettingsPageLayout.message("Instructions that Codex follows in every project."),
 				editor,
-				instructionStatus,
 				actions,
 			],
 			spacing: 12
@@ -115,7 +112,7 @@ final class SettingsPersonalizationPage: NSView
 		AppKitLayout.pin(
 			SettingsPageLayout.document(
 				title: "Personalization",
-				sections: [memorySection, actionStatus, instructionSection]
+				sections: [memorySection, instructionSection]
 			),
 			to: self,
 			inset: 0
@@ -203,11 +200,9 @@ final class SettingsPersonalizationPage: NSView
 						"memory/reset",
 						params: [:]
 					)
-					self.actionStatus.stringValue = "Codex memories deleted."
 				}
 				catch
 				{
-					self.actionStatus.stringValue = error.localizedDescription
 				}
 				self.refresh()
 			}
@@ -222,12 +217,9 @@ final class SettingsPersonalizationPage: NSView
 			save.isEnabled = true
 			loadedInstructions = text
 			instructions.string = text
-			instructionStatus.stringValue = ""
 		}
 		catch
 		{
-			instructionStatus.stringValue = "Could not read instructions: "
-				+ error.localizedDescription
 			save.isEnabled = false
 		}
 	}
@@ -283,8 +275,6 @@ final class SettingsPersonalizationPage: NSView
 			guard try currentInstructions() == loadedInstructions
 			else
 			{
-				instructionStatus.stringValue = "Instructions changed outside the app. "
-					+ "Use Reload before saving. Your draft is kept."
 				return
 			}
 			try FileManager.default.createDirectory(
@@ -297,11 +287,9 @@ final class SettingsPersonalizationPage: NSView
 				encoding: .utf8
 			)
 			self.loadedInstructions = instructions.string
-			instructionStatus.stringValue = "Saved."
 		}
 		catch
 		{
-			instructionStatus.stringValue = error.localizedDescription
 		}
 	}
 }

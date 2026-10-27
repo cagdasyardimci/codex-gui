@@ -20,7 +20,7 @@ struct ConversationTurnChangeBadgeTests
 		await controller.turnChangeSummaryLoader.waitForLoading()
 		#expect(controller.turnChangeSummaryButton.isHidden == false)
 		#expect(controller.turnChangeSummaryButton.attributedTitle.string
-			== "2 files changed +3 -1")
+			== "Reported · 2 files +3 -1")
 		controller.turnChangeSummaryButton.performClick(nil)
 		#expect(opened == 1)
 

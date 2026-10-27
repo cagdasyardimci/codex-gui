@@ -80,8 +80,8 @@ struct TaskWorkspaceWindowLayoutTests
 				viewFor: nil,
 				row: row
 			) as? TaskSidebarCellView)
-			#expect(taskCell.textField?.stringValue == "●  Recovering task · \(title)")
-			#expect(taskCell.accessibilityLabel() == "\(title) task, open chat Recovering task")
+			#expect(taskCell.textField?.stringValue == "Recovering task")
+			#expect(taskCell.accessibilityLabel() == "Open chat Recovering task")
 			#expect(controller.statusButton.toolTip == "Synthetic · \(title)")
 			#expect(controller.statusButton.accessibilityLabel()
 				== "\(title). Open account and backend status")
@@ -162,10 +162,17 @@ struct TaskWorkspaceWindowLayoutTests
 					"cwd": "/tmp/alpha",
 				])
 			)
+			let activeThread = try #require(
+				ThreadSummary(json: [
+					"id": "beta",
+					"name": "Beta task",
+					"cwd": "/tmp/beta",
+				])
+			)
 			let id = UUID()
 			var snapshot = ConversationSnapshot(
 				projectPath: "/tmp/alpha",
-				threads: [thread],
+				threads: [thread, activeThread],
 				selectedThreadID: thread.id,
 				entries: [],
 				canLoadEarlierTurns: false,
@@ -183,7 +190,7 @@ struct TaskWorkspaceWindowLayoutTests
 				pendingInteractions: [],
 				recentProjects: []
 			)
-			snapshot.activeThreadID = thread.id
+			snapshot.activeThreadID = activeThread.id
 			snapshot.activeExecutionState = .awaitingApproval
 			snapshot.selectedTaskWorkspaceID = id
 			snapshot.taskStatusSummary = "3 running tasks · 1 need a response"
@@ -295,7 +302,7 @@ struct TaskWorkspaceWindowLayoutTests
 			))
 			for label in [
 				"Selected task checkout",
-				"Running task summary",
+				"Return to active task",
 			]
 			{
 				let control = try #require(findControl(

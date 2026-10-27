@@ -431,8 +431,7 @@ extension ExecutionReducer
 			model.execution.needsReconciliation = true
 			model.execution.state = .stopping
 			model.execution.statusMessage =
-				"The agent finished this turn. An approved command is still "
-					+ "awaiting its exit; Stop does not confirm command cancellation."
+				"The turn finished. Waiting for the approved command to exit."
 			model.execution.outcomeMessage = model.execution.statusMessage
 		}
 	}

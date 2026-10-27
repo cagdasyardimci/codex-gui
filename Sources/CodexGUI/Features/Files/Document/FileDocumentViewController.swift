@@ -78,17 +78,11 @@ final class FileDocumentViewController: NSViewController
 		title: "Actions",
 		presentation: .nativeDefault
 	)
-	private let messageLabel = ViewerStatusView(message: "")
-	private let emptyState = FileViewerEmptyStateView()
-	private let statusLabel = DesktopStatusView(
-		message: "",
-		presentation: .inline
-	)
+	private let emptyContent = NSView()
 	private let contentHolder = NSView()
 	private var headerCollapsedHeight: NSLayoutConstraint?
 	private var contentTrailing: NSLayoutConstraint?
 	private var headerTrailing: NSLayoutConstraint?
-	private var statusCollapsedHeight: NSLayoutConstraint?
 	private let previewScroll = NSScrollView()
 	private let previewContainer = NSStackView()
 	private let metadataHolder = NSView()
@@ -203,7 +197,6 @@ final class FileDocumentViewController: NSViewController
 			),
 			copyMarkdownButton.centerYAnchor.constraint(equalTo: copyBar.centerYAnchor)
 		])
-		statusLabel.isHidden = true
 		previewScroll.hasVerticalScroller = true
 		previewScroll.autohidesScrollers = true
 		previewScroll.drawsBackground = false
@@ -248,10 +241,9 @@ final class FileDocumentViewController: NSViewController
 		metadataHeight = metadataHolder.heightAnchor.constraint(equalToConstant: 0)
 		metadataHeight?.isActive = true
 		root.addSubview(header)
-		root.addSubview(statusLabel)
 		root.addSubview(contentHolder)
 		root.addSubview(copyBar)
-		for child in [header, copyBar, statusLabel, contentHolder]
+		for child in [header, copyBar, contentHolder]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 		}
@@ -263,17 +255,8 @@ final class FileDocumentViewController: NSViewController
 			copyBar.widthAnchor.constraint(equalToConstant: 44),
 			copyBar.heightAnchor.constraint(equalToConstant: 36),
 			copyBar.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-			statusLabel.leadingAnchor.constraint(
-				equalTo: root.leadingAnchor,
-				constant: 12
-			),
-			statusLabel.trailingAnchor.constraint(
-				equalTo: root.trailingAnchor,
-				constant: -12
-			),
-			statusLabel.topAnchor.constraint(equalTo: header.bottomAnchor),
 			contentHolder.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-			contentHolder.topAnchor.constraint(equalTo: statusLabel.bottomAnchor),
+			contentHolder.topAnchor.constraint(equalTo: header.bottomAnchor),
 			contentHolder.bottomAnchor.constraint(equalTo: root.bottomAnchor)
 		])
 		copyBarTop = copyBar.topAnchor.constraint(equalTo: contentHolder.topAnchor)
@@ -282,11 +265,9 @@ final class FileDocumentViewController: NSViewController
 		contentTrailing?.isActive = true
 		headerCollapsedHeight = header.heightAnchor.constraint(equalToConstant: 0)
 		copyBar.isHidden = true
-		statusCollapsedHeight = statusLabel.heightAnchor.constraint(equalToConstant: 0)
-		statusCollapsedHeight?.isActive = true
 		header.isHidden = !showsHeader
 		headerCollapsedHeight?.isActive = !showsHeader
-		show(emptyState)
+		show(emptyContent)
 	}
 
 	private func source(for document: FileViewerDocument) -> FileSourceView
@@ -341,9 +322,8 @@ final class FileDocumentViewController: NSViewController
 		else
 		{
 			setCopyMarkdownVisible(false)
-			setStatusMessage(nil)
 			titleLabel.stringValue = "No file selected"
-			show(emptyState)
+			show(emptyContent)
 			return
 		}
 		if document.requestedLine != nil,
@@ -353,36 +333,6 @@ final class FileDocumentViewController: NSViewController
 		}
 		titleLabel.stringValue = URL(fileURLWithPath: document.location.relativePath)
 			.lastPathComponent
-		if document.isReadOnly, document.currentText != nil
-		{
-			titleLabel.stringValue += " · Read-only"
-		}
-		if case .failed = document.status, document.content != nil
-		{
-			titleLabel.stringValue += " · Save failed — use Open to retry"
-		}
-		if document.status == .conflict
-		{
-			titleLabel.stringValue += " · Changed on disk — resolve from Open"
-		}
-		let statusMessage: String?
-		if document.status == .conflict
-		{
-			statusMessage = "File changed on disk. Use Open to choose a version."
-		}
-		else if case .failed(let failure) = document.status, document.content != nil
-		{
-			statusMessage = "Save failed: \(Self.message(for: failure)) Use Open to retry."
-		}
-		else if document.isReadOnly, document.currentText != nil
-		{
-			statusMessage = "Read-only source. Save as is available in Open."
-		}
-		else
-		{
-			statusMessage = nil
-		}
-		setStatusMessage(statusMessage)
 		let kind = RichFilePreviewKind(path: document.location.relativePath)
 		setCopyMarkdownVisible(kind == .markdown && !(document.currentText ?? "").isEmpty)
 		let capabilities = FileContentCapabilities(path: document.location.relativePath)
@@ -395,13 +345,13 @@ final class FileDocumentViewController: NSViewController
 		switch document.status
 		{
 		case .loading:
-			showMessage("Loading file…")
-		case .failed(let failure) where document.content == nil:
-			showMessage(Self.message(for: failure))
+			show(emptyContent)
+		case .failed where document.content == nil:
+			show(emptyContent)
 		case .conflict:
 			if document.currentText == nil
 			{
-				showMessage("The file changed on disk. Choose a version from Open.")
+				show(emptyContent)
 			}
 			else
 			{
@@ -512,7 +462,7 @@ final class FileDocumentViewController: NSViewController
 				content: bytes
 			)
 		case .unsupported, .none:
-			showMessage("This file cannot be previewed. Use Open to open it externally.")
+			show(emptyContent)
 		}
 	}
 
@@ -545,7 +495,7 @@ final class FileDocumentViewController: NSViewController
 		guard let kind = RichFilePreviewKind(path: document.location.relativePath)
 		else
 		{
-			showMessage("Preview unavailable. Use Open to open the file externally.")
+			show(emptyContent)
 			return
 		}
 		if previewDocumentID == document.id,
@@ -772,19 +722,6 @@ final class FileDocumentViewController: NSViewController
 			0,
 			contentHolder.bounds.maxY - viewport.maxY
 		)
-	}
-
-	private func showMessage(_ message: String)
-	{
-		messageLabel.setMessage(message)
-		show(messageLabel)
-	}
-
-	private func setStatusMessage(_ message: String?)
-	{
-		statusLabel.stringValue = message ?? ""
-		statusLabel.isHidden = message == nil
-		statusCollapsedHeight?.isActive = message == nil
 	}
 
 	private func setCopyMarkdownVisible(_ visible: Bool)
@@ -1263,19 +1200,4 @@ final class FileDocumentViewController: NSViewController
 		)
 	}
 
-	private static func message(for failure: FileViewerFailure) -> String
-	{
-		switch failure
-		{
-		case .invalidPath: "The file path is outside this workspace."
-		case .unavailable: "The file is unavailable. Retry or open it externally."
-		case .unsupportedEncoding: "This text encoding is unsupported. Open it externally."
-		case .binary: "This binary file has no source preview. Open it externally."
-		case .tooLarge: "This file is too large to preview. Open it externally."
-		case .readOnly: "This file is read-only."
-		case .conflict: "The file changed on disk. Choose a conflict action."
-		case .cancelled: "The file load was cancelled. Retry."
-		case .io(let message): "Could not load the file: \(message)"
-		}
-	}
 }

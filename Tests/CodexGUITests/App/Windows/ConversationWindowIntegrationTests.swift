@@ -350,7 +350,7 @@ struct ConversationWindowIntegrationTests
 		}
 	}
 
-	@Test func interruptedTaskShowsStoppedAcrossViews() throws
+	@Test func interruptedTaskKeepsTaskActionsWithoutConversationStatusLine() throws
 	{
 		_ = NSApplication.shared
 		let thread = try #require(
@@ -370,15 +370,14 @@ struct ConversationWindowIntegrationTests
 		let conversation = ConversationViewController()
 		_ = conversation.view
 		conversation.render(stopped)
-		let stateLabel = try #require(findLabel(
+		#expect(findLabel(
 			in: conversation.view,
 			label: "Execution state"
-		))
+		) == nil)
 		let stopButton = try #require(findButton(
 			in: conversation.view,
 			title: "Stop"
 		))
-		#expect(stateLabel.stringValue == "Stopped")
 		#expect(!stopButton.isEnabled)
 
 		let navigation = NavigationViewController()
@@ -395,7 +394,7 @@ struct ConversationWindowIntegrationTests
 			makeIfNecessary: true
 		))
 		#expect(projectActions.toolTip == "Add new project")
-		#expect(row.accessibilityLabel()?.contains("Stopped task") == true)
+		#expect(row.accessibilityLabel()?.contains("Stopped task") == false)
 	}
 
 	private func snapshot(draft: String = "") -> ConversationSnapshot

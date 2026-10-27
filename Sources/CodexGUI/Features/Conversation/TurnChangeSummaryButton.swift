@@ -42,24 +42,24 @@ final class TurnChangeSummaryButton: DesktopLayerButton
 			isHidden = true
 			return
 		}
-		let fileText = "\(summary.fileCount) \(summary.fileCount == 1 ? "file" : "files") changed"
+		let fileText = summaryTitle(summary)
 		updateTitle()
 		let description: String
 		if summary.isLoading
 		{
 			description = "Loading turn changes"
 		}
+		else if summary.failure != nil && summary.fileCount == 0
+		{
+			description = fileText
+		}
 		else
 		{
 			description = "\(fileText), \(summary.additions) additions, "
 				+ "\(summary.deletions) deletions."
 		}
-		let previousNote = summary.usesPreviousTurn
-			? "Previous editing turn; this active turn has no available edit reports yet. " : ""
-		let fallbackNote = previousNote + (summary.usesReportedEditFallback
-			? GitReportedTurnComparison.fallbackMessage + " " : "")
-		setAccessibilityLabel(description + " " + fallbackNote + "View changes")
-		toolTip = fallbackNote + GitReportedTurnComparison.coverageMessage
+		setAccessibilityLabel(description + " View changes")
+		toolTip = "View reported changes"
 		invalidateIntrinsicContentSize()
 		isHidden = false
 	}
@@ -80,8 +80,7 @@ final class TurnChangeSummaryButton: DesktopLayerButton
 			}
 			else
 			{
-				fileText = "\(summary.fileCount) "
-					+ "\(summary.fileCount == 1 ? "file" : "files") changed"
+				fileText = summaryTitle(summary)
 			}
 			let title = NSMutableAttributedString(
 				string: fileText,
@@ -90,7 +89,7 @@ final class TurnChangeSummaryButton: DesktopLayerButton
 					.foregroundColor: NSColor.secondaryLabelColor,
 				]
 			)
-			if !summary.isLoading
+			if !summary.isLoading && (summary.failure == nil || summary.fileCount > 0)
 			{
 				title.append(DesktopDiffStats.attributedValue(
 					DesktopDiffStats.Counts(
@@ -103,5 +102,17 @@ final class TurnChangeSummaryButton: DesktopLayerButton
 			attributedTitle = title
 		}
 		needsDisplay = true
+	}
+
+	private func summaryTitle(_ summary: ConversationTurnChangeSummary) -> String
+	{
+		if summary.failure != nil && summary.fileCount == 0
+		{
+			return "Changes unavailable"
+		}
+		let turn = summary.usesPreviousTurn ? "Previous turn" : "Reported"
+		let scope = summary.usesReportedEditFallback ? "\(turn) counts" : turn
+		let files = summary.fileCount == 1 ? "file" : "files"
+		return "\(scope) · \(summary.fileCount) \(files)"
 	}
 }

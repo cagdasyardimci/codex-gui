@@ -3,12 +3,6 @@ import Foundation
 /// Historical turn edits remain available after commits and independent working-tree edits.
 enum GitReportedTurnComparison
 {
-	static let coverageMessage = "Reported edits only; shell edits and unreported subagent edits "
-		+ "are excluded."
-
-	static let fallbackMessage = "Reported edit counts; repeated edits may be counted "
-		+ "more than once. These are not net changes."
-
 	static func compare(_ request: GitComparisonRequest) -> GitComparisonResult
 	{
 		guard request.owner.selectedThreadID != nil, request.lastTurnID != nil,

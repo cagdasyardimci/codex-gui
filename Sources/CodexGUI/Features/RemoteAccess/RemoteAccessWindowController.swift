@@ -4,10 +4,6 @@ import AppKit
 final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 {
 	var onCommand: ((RemoteAccessCommand) -> Void)?
-	private let statusLabel = NSTextField(
-		wrappingLabelWithString: "Connect to Codex to check availability."
-	)
-	private let errorLabel = NSTextField(wrappingLabelWithString: "")
 	private var emptyState = NSStackView()
 	private let emptyRow = NSView()
 	private let headerActions = AppKitLayout.horizontalStack(
@@ -75,13 +71,6 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			width: 840,
 			height: 700
 		))
-		statusLabel.setAccessibilityLabel("Remote access status")
-		statusLabel.font = AppKitFontResolver.font(TypographyTokens.Connections.body)
-		statusLabel.textColor = AppKitColorTokens.settingsSecondaryText
-		errorLabel.textColor = .systemRed
-		errorLabel.font = AppKitFontResolver.font(TypographyTokens.Connections.body)
-		errorLabel.setAccessibilityLabel("Remote access error")
-		errorLabel.isHidden = true
 		toggle.setAccessibilityLabel("Allow connections")
 		toggle.target = self
 		toggle.action = #selector(toggleAccess)
@@ -96,39 +85,14 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			"Connections",
 			role: TypographyTokens.Connections.title
 		)
-		let selected = RemoteConnectionsButton(
-			title: "Control this Mac",
-			presentation: .tab(selected: true)
-		)
-		selected.state = .on
-		let other = RemoteConnectionsButton(
-			title: "Control other devices",
-			presentation: .tab(selected: false)
-		)
-		let ssh = RemoteConnectionsButton(
-			title: "SSH",
-			presentation: .tab(selected: false)
-		)
-		other.isEnabled = false
-		ssh.isEnabled = false
-		let tabs = AppKitLayout.horizontalStack(
-			[selected, other, ssh],
-			spacing: 2
-		)
 		headerActions.addArrangedSubview(refresh)
 		let section = sectionHeader(
 			"Devices that can control this Mac",
 			accessory: headerActions
 		)
 		let artwork = RemoteConnectionsArtwork()
-		let hint = RemoteConnectionsLabel(
-			"Add device to control this Mac remotely",
-			role: TypographyTokens.Connections.body
-		)
-		hint.textColor = AppKitColorTokens.settingsSecondaryText
-
 		emptyState = AppKitLayout.verticalStack(
-			[artwork, hint, pair],
+			[artwork, pair],
 			spacing: 12
 		)
 		emptyState.alignment = .centerX
@@ -253,7 +217,7 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			spacing: 0
 		)
 		let stack = AppKitLayout.verticalStack(
-			[heading, tabs, deviceSection, statusLabel, errorLabel, otherSection],
+			[heading, deviceSection, otherSection],
 			spacing: 40
 		)
 		stack.setCustomSpacing(
@@ -268,8 +232,6 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			deviceSection,
 			section,
 			card,
-			statusLabel,
-			errorLabel,
 			otherSection,
 			otherHeader,
 			awakeCard
@@ -348,37 +310,6 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			model.pairing,
 			pending: model.pending?.command == .pair
 		)
-		let status: String
-		switch model.status?.status
-		{
-		case .disabled: status = "Remote access is disabled."
-		case .connecting: status = "Connecting to the remote access service…"
-		case .connected: status = "Available as \(model.status?.serverName ?? "this Mac")."
-		case .errored:
-			if model.connectionFailure == .hostAlreadyOnline
-			{
-				status = "Another Codex app is already using this Mac’s remote connection. "
-					+ "Disable remote access in that app, then enable it here."
-			}
-			else
-			{
-				status = "The remote access connection failed."
-			}
-		case nil: status = "Check availability to set up remote access."
-		}
-		statusLabel.stringValue = connected ? status : "Connect to Codex to check availability."
-		statusLabel.isHidden = connected && model.status?.status == .connected
-		let detail: String?
-		if case .reported(let message) = model.connectionFailure
-		{
-			detail = message
-		}
-		else
-		{
-			detail = nil
-		}
-		errorLabel.stringValue = model.error ?? detail ?? ""
-		errorLabel.isHidden = errorLabel.stringValue.isEmpty
 		renderDevices(
 			model,
 			enabled: connected && !busy
@@ -420,7 +351,6 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 		guard let environmentID = model.status?.environmentId, !model.clients.isEmpty
 		else
 		{
-			devices.addArrangedSubview(NSTextField(labelWithString: "No paired devices listed."))
 			return
 		}
 		for client in model.clients

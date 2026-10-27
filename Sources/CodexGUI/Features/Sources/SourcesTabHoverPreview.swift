@@ -84,15 +84,6 @@ final class SourcesTabHoverPreview
 			stack.addArrangedSubview(row)
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
-		if records.isEmpty
-		{
-			let empty = DesktopStatusView(
-				message: "No sources in loaded conversation history",
-				presentation: .inline
-			)
-			stack.addArrangedSubview(empty)
-		}
-
 		return stack
 	}
 

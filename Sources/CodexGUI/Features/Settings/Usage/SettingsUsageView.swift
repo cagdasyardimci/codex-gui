@@ -10,7 +10,6 @@ final class SettingsUsageView: NSView
 		[],
 		spacing: 40
 	)
-	private let status = SettingsPageLayout.status("")
 	private let refresh = SettingsUsageButton(
 		title: "Refresh",
 		presentation: .icon
@@ -48,7 +47,7 @@ final class SettingsUsageView: NSView
 		AppKitLayout.pin(
 			SettingsPageLayout.document(
 				title: "Usage & billing",
-				sections: [tabRow, status, body],
+				sections: [tabRow, body],
 				headerAccessory: refresh
 			),
 			to: self,
@@ -66,7 +65,6 @@ final class SettingsUsageView: NSView
 		limits: AccountRateLimitsSnapshot?,
 		planType: String?,
 		usage: [String: Any]?,
-		message: String,
 		busy: Bool,
 		canUseReset: Bool
 	)
@@ -77,7 +75,6 @@ final class SettingsUsageView: NSView
 		self.busy = busy
 		self.canUseReset = canUseReset
 		now = Date()
-		status.stringValue = message
 		refresh.isEnabled = !busy
 		renderBody()
 	}
@@ -120,20 +117,20 @@ final class SettingsUsageView: NSView
 			limits,
 			now: now
 		)
+		let planTitle = SettingsUsagePresentation.planTitle(planType ?? limits?.rateLimits.planType)
+		let creditBalance = SettingsUsagePresentation.credits(limits)
 		let plan = section(
 			"Your plan",
 			detail: "",
 			content: SettingsPageLayout.card(rows: [SettingsContentRow(
-				title: SettingsUsagePresentation.planTitle(planType ?? limits?.rateLimits.planType),
+				title: planTitle,
 				detail: "Current subscription"
 			)])
 		)
 		let planLimits = section(
 			"Plan limits",
 			detail: "Your remaining allowance for the usage windows on this account.",
-			content: SettingsPageLayout.card(rows: windows.isEmpty
-				? [emptyRow("Plan limits unavailable")] : windows
-				.map(limitRow))
+			content: SettingsPageLayout.card(rows: windows.map(limitRow))
 		)
 		let recent = section(
 			"Recent plan usage",
@@ -144,11 +141,12 @@ final class SettingsUsageView: NSView
 			"Credits",
 			detail: "Use credits to continue using Codex when you reach usage limits.",
 			content: SettingsPageLayout.card(rows: [SettingsContentRow(
-				title: SettingsUsagePresentation.credits(limits),
+				title: creditBalance,
 				detail: "Current balance"
 			)])
 		)
-		return [plan, planLimits, recent, credits, resetSection()]
+		return (planTitle.isEmpty ? [] : [plan]) + [planLimits, recent]
+			+ (creditBalance.isEmpty ? [] : [credits]) + [resetSection()]
 	}
 
 	private func limitRow(_ limit: SettingsUsagePresentation.Limit) -> NSView
@@ -164,8 +162,7 @@ final class SettingsUsageView: NSView
 			role: TypographyTokens.Connections.title
 		)
 		value.setAccessibilityLabel("Plan allowance remaining")
-		let caption = secondary("Balance history isn’t available yet")
-		for child in [value, caption]
+		for child in [value]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
 			card.addSubview(child)
@@ -180,19 +177,6 @@ final class SettingsUsageView: NSView
 				equalTo: card.topAnchor,
 				constant: 14
 			),
-			caption.centerXAnchor.constraint(equalTo: card.centerXAnchor),
-			caption.centerYAnchor.constraint(
-				equalTo: card.centerYAnchor,
-				constant: 28
-			),
-			caption.leadingAnchor.constraint(
-				greaterThanOrEqualTo: card.leadingAnchor,
-				constant: 16
-			),
-			caption.trailingAnchor.constraint(
-				lessThanOrEqualTo: card.trailingAnchor,
-				constant: -16
-			)
 		])
 		return card
 	}
@@ -219,11 +203,7 @@ final class SettingsUsageView: NSView
 			[tabRow],
 			spacing: 0
 		)]
-		if resetTab == "History"
-		{
-			rows.append(emptyRow("Reset history unavailable."))
-		}
-		else if let count
+		if resetTab != "History", let count
 		{
 			let available = limits?.rateLimitResetCredits?.credits?.filter
 			{
@@ -263,14 +243,6 @@ final class SettingsUsageView: NSView
 					)
 				))
 			}
-			else if available.isEmpty
-			{
-				rows.append(emptyRow("No usage resets available."))
-			}
-		}
-		else
-		{
-			rows.append(emptyRow("Usage resets unavailable."))
 		}
 		return section(
 			"Usage limit resets",
@@ -296,7 +268,10 @@ final class SettingsUsageView: NSView
 
 	private func analytics() -> [NSView]
 	{
-		let rows = SettingsUsagePresentation.activity(usage).map
+		let rows = SettingsUsagePresentation.activity(usage).filter
+		{
+			!$0.1.isEmpty
+		}.map
 		{
 			title, value in
 			SettingsPageLayout.row(
@@ -320,8 +295,7 @@ final class SettingsUsageView: NSView
 			)
 		}
 		let dailyContent: [NSView] = buckets.isEmpty
-			? [emptyRow("Daily usage history isn’t available yet.")] :
-			[paddedStack(
+			? [] : [paddedStack(
 				[SettingsUsageDailyChart(days: buckets)],
 				spacing: 0
 			)] + days
@@ -359,11 +333,6 @@ final class SettingsUsageView: NSView
 			view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
 		return SettingsContentRow(content: stack)
-	}
-
-	private func emptyRow(_ text: String) -> NSView
-	{
-		SettingsContentRow(content: SettingsPageLayout.status(text))
 	}
 
 	private func label(

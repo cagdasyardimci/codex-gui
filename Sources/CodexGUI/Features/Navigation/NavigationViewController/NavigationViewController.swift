@@ -36,8 +36,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 
 	let recentProjectsButton = DesktopPopupButton()
 	let taskPicker = DesktopPopupButton()
-	let taskSummaryLabel = NSTextField(labelWithString: "")
-	let activeTaskLabel = NSTextField(labelWithString: "")
 	let returnToTaskButton = DesktopStyledButton(
 		title: "Return to Task",
 		target: nil,
@@ -70,10 +68,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		title: "Archive",
 		target: nil,
 		action: nil
-	)
-	let emptyLabel = DesktopStatusView(
-		message: "",
-		presentation: .inlineCompact
 	)
 	struct ModalScope: Equatable
 	{
@@ -133,7 +127,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 				newChatButton,
 				projectsHeader,
 				chatScrollView,
-				emptyLabel,
 			],
 			spacing: 6
 		)
@@ -173,7 +166,6 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		newChatButton.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		brandRow.heightAnchor.constraint(equalToConstant: 52).isActive = true
 		chatScrollView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		emptyLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		chatScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
 		chatScrollView.setContentHuggingPriority(
 			.defaultLow,
@@ -300,7 +292,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		activeThreadID = snapshot.activeThreadID
 		activeExecutionState = snapshot.activeExecutionState
 
-		_ = renderTaskStatus(snapshot)
+		renderTaskStatus(snapshot)
 		renderThreadAvailability(snapshot)
 
 		let shouldReloadSidebar =

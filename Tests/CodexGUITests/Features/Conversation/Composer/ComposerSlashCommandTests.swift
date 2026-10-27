@@ -139,7 +139,7 @@ struct ComposerSlashCommandTests
 		#expect(controller.composer.string == "User edit 🧭")
 	}
 
-	@Test func localCommandStaysSubmittableWhenNormalSendIsUnavailableAndPlanModeIsVisible()
+	@Test func localCommandStaysSubmittableAndPlanModeRemainsAvailable()
 	{
 		let controller = makeController(text: "/status")
 		#expect(controller.sendButton.isEnabled)
@@ -153,8 +153,8 @@ struct ComposerSlashCommandTests
 		active.planMode = false
 		active.planModeStatus = "Plan mode unknown: run /plan to reapply or reset."
 		controller.render(active)
-		#expect(!controller.planModeLabel.isHidden)
-		#expect(controller.planModeLabel.stringValue == active.planModeStatus)
+		#expect(controller.planModeLabel.isHidden)
+		#expect(controller.planModeLabel.stringValue == "Plan mode")
 		controller.render(snapshot(draft: "Normal message"))
 		#expect(!controller.sendButton.isEnabled)
 	}

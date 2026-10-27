@@ -7,6 +7,15 @@ import Testing
 @Suite
 struct SubagentsViewControllerTests
 {
+	@Test func emptyListOmitsStatusCopy()
+	{
+		_ = NSApplication.shared
+		let controller = makeController(count: 0)
+		let visibleLabels = labels(controller.view)
+		#expect(visibleLabels.contains("Active · 0"))
+		#expect(visibleLabels.contains("Finished · 0"))
+		#expect(!visibleLabels.contains("No active subagents"))
+	}
 
 	@Test func removedAndRebuiltButtonsCannotNavigateUsingRetainedReferences() throws
 	{

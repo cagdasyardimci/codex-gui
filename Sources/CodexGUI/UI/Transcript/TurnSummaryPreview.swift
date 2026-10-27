@@ -1,5 +1,4 @@
 import AppKit
-import QuartzCore
 
 @MainActor
 final class TurnSummaryPreview: DesktopHoverPreviewSurface
@@ -10,7 +9,6 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 	private static let contentSpacing: CGFloat = 6
 	private static let minimumReplyHeight: CGFloat = 18
 	private static let maximumReplyHeight: CGFloat = 58
-	private static let loadingCardHeight: CGFloat = 100
 	var onEnter: (() -> Void)?
 	var onExit: (() -> Void)?
 	var onBookmark: (() -> Void)?
@@ -20,8 +18,6 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 	private var currentSummary: ConversationTurnSummary?
 	private var headerHeight: NSLayoutConstraint!
 	private var replyHeight: NSLayoutConstraint!
-	private let skeleton = CALayer()
-	private(set) var isLoading = false
 	private(set) var cardHeight: CGFloat = 0
 
 	init(
@@ -33,17 +29,8 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			x: 0,
 			y: 0,
 			width: Self.cardWidth,
-			height: Self.loadingCardHeight
+			height: 0
 		))
-		wantsLayer = true
-		layer?.addSublayer(skeleton)
-		for _ in 0 ..< 4
-		{
-			let bar = CALayer()
-			bar.cornerRadius = 3
-			skeleton.addSublayer(bar)
-		}
-		refreshSkeletonColors()
 		title.font = .systemFont(
 			ofSize: 13,
 			weight: .regular
@@ -103,12 +90,10 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
-		refreshSkeletonColors()
 		if let currentSummary
 		{
 			render(currentSummary)
 		}
-		needsDisplay = true
 	}
 
 	override func viewDidMoveToWindow()
@@ -129,49 +114,13 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 		)
 	}
 
-	private func refreshSkeletonColors()
-	{
-		let color = AppKitColorResolution.resolvedCGColor(
-			.secondaryLabelColor,
-			for: self,
-			alpha: 0.2
-		)
-		CATransaction.begin()
-		CATransaction.setDisableActions(true)
-		for bar in skeleton.sublayers ?? []
-		{
-			bar.backgroundColor = color
-		}
-		CATransaction.commit()
-	}
-
 	func render(_ summary: ConversationTurnSummary)
 	{
 		currentSummary = summary
-		let wasLoading = isLoading
-		isLoading = !summary.isContentLoaded && !summary.isPreviewLoaded && summary
-			.previewError == nil
-		title.isHidden = isLoading
-		reply.isHidden = isLoading
-		bookmark.isHidden = isLoading
-		skeleton.isHidden = !isLoading
-		if isLoading
-		{
-			renderLoadingPreview()
-			return
-		}
-		skeleton.removeAllAnimations()
-		setAccessibilityLabel(summary.previewError ?? "Turn preview")
-		if wasLoading && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-		{
-			alphaValue = 0
-			NSAnimationContext.runAnimationGroup
-			{
-				context in
-				context.duration = 0.15
-				animator().alphaValue = 1
-			}
-		}
+		title.isHidden = false
+		reply.isHidden = false
+		bookmark.isHidden = false
+		setAccessibilityLabel("Turn preview")
 		let titleFont = title.font ?? NSFont.systemFont(ofSize: 13)
 		let titleParagraph = NSMutableParagraphStyle()
 		titleParagraph.lineBreakMode = .byCharWrapping
@@ -215,18 +164,7 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			attributes: attributes
 		)
 		let compactReply = TurnSummaryLinkPresentation.compactLines(styledReply)
-		let text: NSAttributedString = summary.previewError.map
-		{
-			NSAttributedString(
-				string: $0,
-				attributes: attributes
-			)
-		} ?? (compactReply.length == 0
-			? NSAttributedString(
-				string: "Waiting for a reply…",
-				attributes: attributes
-			)
-			: compactReply)
+		let text = compactReply
 		func measuredHeight(_ value: NSAttributedString) -> CGFloat
 		{
 			value.boundingRect(
@@ -254,41 +192,6 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			width: Self.cardWidth,
 			height: cardHeight
 		))
-	}
-
-	private func renderLoadingPreview()
-	{
-		cardHeight = Self.loadingCardHeight
-		setFrameSize(NSSize(
-			width: Self.cardWidth,
-			height: cardHeight
-		))
-		skeleton.frame = bounds
-		for (index, bar) in (skeleton.sublayers ?? []).enumerated()
-		{
-			bar.frame = NSRect(
-				x: Self.inset,
-				y: cardHeight - 24 - CGFloat(index) * 20,
-				width: (Self.cardWidth - 2 * Self.inset) *
-					[0.6, 1, 0.92, 0.8][index],
-				height: 10
-			)
-		}
-		if skeleton.animation(forKey: "loading") == nil,
-			!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-		{
-			let pulse = CABasicAnimation(keyPath: "opacity")
-			pulse.fromValue = 0.45
-			pulse.toValue = 1
-			pulse.duration = 0.7
-			pulse.autoreverses = true
-			pulse.repeatCount = .infinity
-			skeleton.add(
-				pulse,
-				forKey: "loading"
-			)
-		}
-		setAccessibilityLabel("Loading turn preview")
 	}
 
 	private func truncatedReply(

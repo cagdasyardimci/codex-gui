@@ -197,24 +197,21 @@ struct GitReviewDesignChecks
 	private func verifyDisplayMenu(_ controller: GitChangesViewController)
 	{
 		let menu = controller.makeDiffDisplayMenu()
-		#expect(menu.items.prefix(6).map(\.title) == [
+		#expect(menu.items.prefix(5).map(\.title) == [
 			"Load full files",
-			"Rich preview",
 			"Word diffs",
 			"Hide white space",
 			"Hide imports",
 			"Copy git apply command"
 		])
-		#expect(menu.items.prefix(6).allSatisfy
+		#expect(menu.items.prefix(5).allSatisfy
 		{
 			$0.image != nil
 		})
-		#expect(menu.items.prefix(6).map(\.state) == [.on, .off, .on, .off, .off, .off])
-		#expect(menu.items.count == 8)
-		#expect(menu.items[6].isSeparatorItem)
-		#expect(menu.items[7].title == "Open reported turn changes")
-		#expect(!menu.items[1].isEnabled)
-		#expect(menu.items[1].toolTip?.contains("unavailable") == true)
+		#expect(menu.items.prefix(5).map(\.state) == [.on, .on, .off, .off, .off])
+		#expect(menu.items.count == 7)
+		#expect(menu.items[5].isSeparatorItem)
+		#expect(menu.items[6].title == "Open reported turn changes")
 	}
 
 	private func verifyManualLayoutAndScope(

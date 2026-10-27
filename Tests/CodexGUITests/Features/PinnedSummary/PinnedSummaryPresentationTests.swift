@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 
@@ -87,8 +88,46 @@ struct PinnedSummaryPresentationTests
 			snapshot(project: nil),
 			sections: sections
 		)
-		#expect(presentation.contextName == "Workspace unavailable")
+		#expect(presentation.contextName.isEmpty)
 		#expect(presentation.sourcePreviews.isEmpty)
 		#expect(presentation.sections.availableDestinations.isEmpty)
+	}
+
+	@Test func changesActionStillRoutesWithTheRenderedOwner() throws
+	{
+		_ = NSApplication.shared
+		let snapshot = snapshot()
+		let controller = PinnedSummaryViewController()
+		var sections = ContextSummarySections()
+		sections.changes = .available(SummaryChangeTotals(
+			additions: 2,
+			deletions: 1
+		))
+		sections.availableDestinations = [.changes]
+		let presentation = PinnedSummaryPresentation(
+			snapshot,
+			sections: sections
+		)
+		controller.render(presentation)
+		var request: ContextPanelRequest?
+		controller.onNavigate =
+		{
+			request = $0
+		}
+		let changes = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? NSButton
+		}.first
+		{
+			$0.title == "Changes"
+		})
+		try #require(changes.dispatchConfiguredAction())
+		#expect(request?.destination == .changes)
+		#expect(request?.owner == presentation.owner)
+	}
+
+	private func descendants(_ view: NSView) -> [NSView]
+	{
+		[view] + view.subviews.flatMap(descendants)
 	}
 }

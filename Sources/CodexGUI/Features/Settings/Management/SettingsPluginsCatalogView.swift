@@ -18,7 +18,6 @@ final class SettingsPluginsCatalogView: NSView
 	private(set) var matchingCount = 0
 	private let entries: [SettingsPluginsCatalogEntry]
 	private let makeRow: (SettingsPluginsCatalogEntry) -> NSView?
-	private let pageLabel = SettingsPageLayout.message("")
 	private let results = AppKitLayout.verticalStack(
 		[],
 		spacing: 0
@@ -31,7 +30,7 @@ final class SettingsPluginsCatalogView: NSView
 		title: "Next",
 		presentation: .secondary
 	)
-	private lazy var paging = NSStackView(views: [pageLabel, NSView(), previous, next])
+	private lazy var paging = NSStackView(views: [NSView(), previous, next])
 	private var installedOnly = true
 	private var query = ""
 	private var page = 0
@@ -180,14 +179,6 @@ final class SettingsPluginsCatalogView: NSView
 		{
 			SettingsPageLayout.addDivider(to: row)
 		}
-		if visible.isEmpty
-		{
-			results.addArrangedSubview(SettingsPageLayout.status(
-				installedOnly ? "No installed plugins match. Choose All plugins to browse."
-					: "No plugins match your search."
-			))
-		}
-		pageLabel.stringValue = "Page \(page + 1) of \(pageCount)"
 		paging.isHidden = pageCount == 1
 		previous.isEnabled = page > 0
 		next.isEnabled = page + 1 < pageCount

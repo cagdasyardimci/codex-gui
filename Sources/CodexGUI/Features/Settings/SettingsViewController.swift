@@ -7,11 +7,8 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 	private let search = SettingsSearchField()
 	private let personalHeading = AppKitControlStyling.sectionLabel("Personal")
 	private let codingHeading = AppKitControlStyling.sectionLabel("Coding")
-	private let accountStatus = SettingsPageLayout.status("Checking sign-in…")
-	private let backendState = SettingsPageLayout.status("Checking backend…")
 	private let editorOpeningService = EditorOpeningService()
 	private let pageContainer = NSView()
-	private let backendStatus = SettingsPageLayout.status("")
 	private var backendBanner: NSStackView?
 	private let generalPage = SettingsGeneralPage()
 	private let generalButton = SettingsSidebarButton(
@@ -105,7 +102,6 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 		)
 		view = SettingsSurfaceView(color: AppKitColorTokens.canvas)
 
-		configureStatusLabels()
 		updateEditorLabel()
 
 		generalPage.onChooseEditor =
@@ -246,14 +242,17 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 			view.translatesAutoresizingMaskIntoConstraints = false
 			sidebar.addSubview(view)
 		}
-		backendStatus.setActions([.init(
+		let reloadSettingsButton = DesktopActionButton(
 			title: "Reload",
-			accessibilityLabel: "Reload Codex settings"
+			presentation: .secondary,
+			size: .compact
 		)
+		reloadSettingsButton.setAccessibilityLabel("Reload Codex settings")
+		reloadSettingsButton.onAction =
 		{
 			[weak self] in self?.reloadSettings()
-		}])
-		let banner = NSStackView(views: [backendStatus])
+		}
+		let banner = NSStackView(views: [NSView(), reloadSettingsButton])
 		banner.orientation = .horizontal
 		banner.spacing = 12
 		banner.edgeInsets = NSEdgeInsets(
@@ -487,21 +486,6 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 		selectPage(.general)
 	}
 
-	private func configureStatusLabels()
-	{
-		accountStatus.messageLabel.setAccessibilityLabel("Account status")
-		accountStatus.messageLabel.maximumNumberOfLines = 1
-		accountStatus.messageLabel.lineBreakMode = .byTruncatingTail
-		accountStatus.messageLabel.setContentCompressionResistancePriority(
-			.defaultHigh,
-			for: .horizontal
-		)
-		accountStatus.messageLabel.superview?.setContentCompressionResistancePriority(
-			.defaultHigh,
-			for: .horizontal
-		)
-	}
-
 	func renderPermissions(
 		mode: ApprovalMode,
 		enabled: Bool,
@@ -517,32 +501,49 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 
 	private func makeAppStatusSection() -> NSView
 	{
-		accountStatus.setActions([.init(title: "Sign In…")
-			{
-				[weak self] in self?.signIn()
-			}])
-		backendState.setActions([
-			.init(title: "Reconnect")
-			{
-				[weak self] in self?.reconnect()
-			},
-			.init(title: "Details")
-			{
-				[weak self] in self?.showBackendDetails()
-			}
-		])
+		let signIn = DesktopActionButton(
+			title: "Sign In…",
+			presentation: .secondary,
+			size: .compact
+		)
+		signIn.onAction =
+		{
+			[weak self] in self?.signIn()
+		}
+		let reconnect = DesktopActionButton(
+			title: "Reconnect",
+			presentation: .secondary,
+			size: .compact
+		)
+		reconnect.onAction =
+		{
+			[weak self] in self?.reconnect()
+		}
+		let details = DesktopActionButton(
+			title: "Details",
+			presentation: .secondary,
+			size: .compact
+		)
+		details.onAction =
+		{
+			[weak self] in self?.showBackendDetails()
+		}
+		let backendActions = AppKitLayout.horizontalStack(
+			[reconnect, details],
+			spacing: 8
+		)
 		return SettingsPageLayout.section(
 			title: "App",
 			rows: [
 				SettingsPageLayout.row(
 					title: "Account",
 					detail: nil,
-					control: accountStatus
+					control: signIn
 				),
 				SettingsPageLayout.row(
 					title: "Backend",
 					detail: nil,
-					control: backendState
+					control: backendActions
 				),
 			]
 		)
@@ -560,10 +561,6 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 	func render(_ snapshot: WorkspaceStatusPresentation)
 	{
 		accountPage.render(snapshot)
-		accountStatus.setMessage(snapshot.accountDescription)
-		accountStatus.messageLabel.toolTip = snapshot.accountDescription
-		backendState.setMessage(snapshot.backendDescription)
-		backendState.messageLabel.toolTip = snapshot.backendDescription
 		updateEditorLabel()
 	}
 
@@ -723,12 +720,7 @@ extension SettingsViewController
 
 	private func refreshBackendPage()
 	{
-		let messages = [backend.status, backend.featureStatus].filter
-		{
-			!$0.isEmpty
-		}
-		backendStatus.stringValue = messages.joined(separator: "\n")
-		backendBanner?.isHidden = selectedPage == .connections || messages.isEmpty
+		backendBanner?.isHidden = selectedPage == .connections
 		generalExtras.refresh()
 		guard let page = additionalPages[selectedPage]
 		else

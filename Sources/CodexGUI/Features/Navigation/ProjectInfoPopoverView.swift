@@ -166,13 +166,8 @@ final class ProjectInfoPopoverView: NSView
 			String($0)
 		} ?? "—"
 		countLabel.stringValue =
-			"\(tasks) \(loadedTaskCount == 1 ? "task" : "tasks") · \(active) active"
-		countLabel.toolTip =
-			loadedTaskCount == nil
-				? "This project's conversation history and active-task count are not loaded."
-				: "Counts cover this checkout's loaded conversations and current active task. The "
-				+ "archive filter and unloaded history can change the available conversation count."
-		countLabel.setAccessibilityLabel("\(countLabel.stringValue). \(countLabel.toolTip ?? "")")
+			"\(tasks) loaded \(loadedTaskCount == 1 ? "task" : "tasks") · \(active) active"
+		countLabel.setAccessibilityLabel(countLabel.stringValue)
 	}
 
 	private func icon(_ symbol: DesktopIcon) -> NSImageView

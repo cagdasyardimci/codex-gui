@@ -22,7 +22,6 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 	var unavailableReason: ((SlashCommandID) -> String?)?
 	private let table = SlashCommandMenuTableView()
 	private let scroll = NSScrollView()
-	private let emptyLabel = NSTextField(labelWithString: "No matching commands or skills")
 	private(set) var commands: [SlashCommandDescriptor] = []
 	private var catalog = SlashCommandMenuCatalog()
 	private var commandUnavailableReasons: [String?] = []
@@ -60,10 +59,9 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 
 		configureCommandTable()
 		configureScrollView()
-		emptyLabel.textColor = .secondaryLabelColor
 
 		let stack = AppKitLayout.verticalStack(
-			[scroll, emptyLabel],
+			[scroll],
 			spacing: 4
 		)
 		let container = NSView()
@@ -214,7 +212,6 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		preferredContentSize.height = LayoutTokens.SearchSuggestions
 			.preferredHeight(rowCount: rowCount)
 		table.reloadData()
-		emptyLabel.isHidden = rowCount > 0
 		if rowCount == 0
 		{
 			table.deselectAll(nil)

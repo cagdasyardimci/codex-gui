@@ -105,9 +105,8 @@ final class UserMessageImageAttachmentsView: NSView
 			button.isBordered = false
 			button.tag = index
 			button.toolTip = reference.name
-			button.setAccessibilityLabel("Loading attached image: \(reference.name)")
+			button.setAccessibilityLabel("Attached image: \(reference.name)")
 			button.isEnabled = false
-			button.beginLoading()
 			button.setAccessibilityHelp(InlineImageData.isDataURL(reference.path)
 				? "Inline image" : reference.path)
 			addSubview(button)
@@ -127,9 +126,7 @@ final class UserMessageImageAttachmentsView: NSView
 				guard let thumbnail
 				else
 				{
-					button.unavailable = true
 					button.isEnabled = false
-					button.setAccessibilityLabel("Image unavailable: \(reference.name)")
 					return
 				}
 				let image = NSImage(
@@ -209,49 +206,10 @@ final class UserMessageImageAttachmentsView: NSView
 @MainActor
 private final class UserMessageImageButton: NSButton
 {
-	private static let progressSize: CGFloat = 16
-	private let progress = NSProgressIndicator()
-
-	func beginLoading()
-	{
-		progress.style = .spinning
-		progress.controlSize = .small
-		progress.isIndeterminate = true
-		progress.setAccessibilityElement(false)
-		addSubview(progress)
-		progress.startAnimation(nil)
-	}
-
-	override func layout()
-	{
-		super.layout()
-		progress.frame = NSRect(
-			x: bounds.midX - Self.progressSize / 2,
-			y: bounds.midY - Self.progressSize / 2,
-			width: Self.progressSize,
-			height: Self.progressSize
-		)
-	}
-
-	private func endLoading()
-	{
-		progress.stopAnimation(nil)
-		progress.removeFromSuperview()
-	}
-
 	var preview: NSImage?
 	{
 		didSet
 		{
-			endLoading()
-			needsDisplay = true
-		}
-	}
-	var unavailable = false
-	{
-		didSet
-		{
-			endLoading()
 			needsDisplay = true
 		}
 	}
@@ -282,23 +240,6 @@ private final class UserMessageImageButton: NSButton
 				preview,
 				in: bounds,
 				respectFlipped: true
-			)
-		}
-		else if unavailable
-		{
-			let label = "Image unavailable"
-			let paragraph = NSMutableParagraphStyle()
-			paragraph.alignment = .center
-			(label as NSString).draw(
-				in: bounds.insetBy(
-					dx: 5,
-					dy: 24
-				),
-				withAttributes: [
-					.font: NSFont.systemFont(ofSize: 10),
-					.foregroundColor: NSColor.secondaryLabelColor,
-					.paragraphStyle: paragraph,
-				]
 			)
 		}
 		AppKitColorTokens.border.setStroke()

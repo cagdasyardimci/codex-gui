@@ -97,7 +97,6 @@ struct ProjectContextUITests
 			context: context,
 			models: [],
 			skills: [],
-			statusMessage: nil
 		)
 		let button = try #require(
 			allSubviews(of: controller.view).compactMap

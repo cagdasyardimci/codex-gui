@@ -5,7 +5,6 @@ struct ProjectContextPresentation: Equatable
 	let context: ProjectContext
 	let models: [ModelOption]
 	let skills: [ProjectSkillSelection]
-	let statusMessage: String?
 	let ownerIdentity: String?
 	let draftOwnerIdentity: String?
 
@@ -13,7 +12,6 @@ struct ProjectContextPresentation: Equatable
 		context: ProjectContext,
 		models: [ModelOption],
 		skills: [ProjectSkillSelection],
-		statusMessage: String?,
 		ownerIdentity: String?,
 		draftOwnerIdentity: String?
 	)
@@ -21,7 +19,6 @@ struct ProjectContextPresentation: Equatable
 		self.context = context
 		self.models = models
 		self.skills = skills
-		self.statusMessage = statusMessage
 		self.ownerIdentity = ownerIdentity
 		self.draftOwnerIdentity = draftOwnerIdentity
 	}
@@ -41,12 +38,6 @@ struct ProjectContextPresentation: Equatable
 				path: $0.path
 			)
 		} ?? []
-		let status = [snapshot.projectContextError, snapshot.skillError].compactMap
-		{
-			$0
-		}
-		.joined(separator: "\n")
-		statusMessage = status.isEmpty ? nil : status
 		let owner = FeaturePresentationOwner(
 			snapshot,
 			storeIdentity: ownerIdentity

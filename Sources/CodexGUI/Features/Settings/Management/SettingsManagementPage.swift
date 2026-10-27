@@ -7,7 +7,6 @@ class SettingsManagementPage: NSView
 	let backend: SettingsBackend
 	let pageTitle: String
 	var rows: [NSView] = []
-	var message = ""
 	private var reloadPending = false
 	private var loaded = false
 	private var switchActions: [SettingsManagementSwitchAction] = []
@@ -99,7 +98,6 @@ class SettingsManagementPage: NSView
 			return
 		}
 		let identity = generation
-		message = "Loading…"
 		operation = Task
 		{
 			[weak self] in
@@ -116,7 +114,6 @@ class SettingsManagementPage: NSView
 				{
 					return
 				}
-				message = ""
 			}
 			catch
 			{
@@ -125,7 +122,6 @@ class SettingsManagementPage: NSView
 				{
 					return
 				}
-				message = error.localizedDescription
 			}
 			operation = nil
 			render()
@@ -179,14 +175,6 @@ class SettingsManagementPage: NSView
 			detail: nil,
 			control: reload
 		)] : []
-		if !backend.status.isEmpty
-		{
-			sections.append(SettingsPageLayout.status(backend.status))
-		}
-		if !message.isEmpty
-		{
-			sections.append(SettingsPageLayout.status(message))
-		}
 		if !rows.isEmpty
 		{
 			sections.append(SettingsPageLayout.section(

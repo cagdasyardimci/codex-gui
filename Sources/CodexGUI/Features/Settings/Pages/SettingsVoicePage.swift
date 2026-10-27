@@ -6,7 +6,6 @@ final class SettingsVoicePage: NSView
 {
 	private let backend: SettingsBackend
 	private let voice = SettingsChoicePicker(choices: [])
-	private let status = SettingsPageLayout.status("")
 	private var voices: [String] = []
 	private var requested = false
 	private var loading: Task<Void, Never>?
@@ -42,7 +41,7 @@ final class SettingsVoicePage: NSView
 		AppKitLayout.pin(
 			SettingsPageLayout.document(
 				title: "Voice",
-				sections: [section, status]
+				sections: [section]
 			),
 			to: self,
 			inset: 0
@@ -73,10 +72,6 @@ final class SettingsVoicePage: NSView
 			choices,
 			selectedID: selected
 		)
-		if !backend.status.isEmpty
-		{
-			status.stringValue = backend.status
-		}
 		guard backend.isConnected, !backend.isBusy, !requested, window != nil
 		else
 		{
@@ -109,8 +104,6 @@ final class SettingsVoicePage: NSView
 				}
 				let version = backend.value("realtime.version") as? String ?? "v2"
 				voices = catalog[version] as? [String] ?? []
-				status.stringValue = voices
-					.isEmpty ? "No voices are available for this realtime version." : ""
 				refresh()
 			}
 			catch
@@ -120,7 +113,6 @@ final class SettingsVoicePage: NSView
 				{
 					return
 				}
-				status.stringValue = error.localizedDescription
 			}
 		}
 	}

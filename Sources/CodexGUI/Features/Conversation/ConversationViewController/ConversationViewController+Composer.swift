@@ -106,10 +106,6 @@ extension ConversationViewController
 		approvalPolicyButton.action = #selector(showApprovalPolicy)
 
 		AppKitLayout.compressHorizontally(addContextButton)
-		preferenceWarningLabel.font = AppKitFontResolver.font(TypographyTokens.Composer.warning)
-		preferenceWarningLabel.textColor = .systemOrange
-		preferenceWarningLabel.setAccessibilityLabel("Model preference warning")
-		preferenceWarningLabel.isHidden = true
 	}
 
 	func configurePreferenceCallbacks()
@@ -324,12 +320,10 @@ extension ConversationViewController
 		{
 			turnChangeSummaryButton.isHidden = true
 		}
-		planModeLabel.stringValue = snapshot.planModeStatus ?? "Plan mode"
-		planModeLabel.isHidden = !snapshot.planMode && snapshot.planModeStatus == nil
-		planModeLabel.textColor = snapshot.planModeStatus == nil ? .systemBlue : .systemOrange
+		planModeLabel.stringValue = "Plan mode"
+		planModeLabel.isHidden = !snapshot.planMode
 		planModeLabel.setAccessibilityLabel(planModeLabel.stringValue)
-		planModeLabel.toolTip = snapshot.planModeStatus == nil ? "Plan mode enabled"
-			: "Run /plan to choose Reapply Plan or Reset Default after reconnecting."
+		planModeLabel.toolTip = "Plan mode enabled"
 		slashCommandController.availableSkills = snapshot.availableSkills
 		slashCommandController.threadTokenUsage = snapshot.threadTokenUsage
 		slashCommandController.unavailableReason =

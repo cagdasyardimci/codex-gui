@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct SettingsBrowserSitePanelTests
 {
-	@Test func sitePanelResizesForExpandedOptionsAndValidationError() async throws
+	@Test func sitePanelValidatesWithoutStatusOrErrorLabels() async throws
 	{
 		try await AppKitTestIsolation.perform
 		{
@@ -43,14 +43,6 @@ struct SettingsBrowserSitePanelTests
 				name: NSControl.textDidChangeNotification,
 				object: field
 			))
-			let status = try #require(descendants(in: content).compactMap
-			{
-				$0 as? NSTextField
-			}.first
-			{
-				$0.stringValue == "These permissions match the defaults or the existing rule."
-			})
-			#expect(!status.isHiddenOrHasHiddenAncestor)
 			let expandedHeight = panel.contentRect(forFrameRect: panel.frame).height
 			field.stringValue = "not a site"
 			panel.controlTextDidChange(Notification(
@@ -58,8 +50,7 @@ struct SettingsBrowserSitePanelTests
 				object: field
 			))
 			#expect(field.hasValidationError)
-			#expect(status.isHidden)
-			#expect(panel.contentRect(forFrameRect: panel.frame).height > expandedHeight)
+			#expect(abs(panel.contentRect(forFrameRect: panel.frame).height - expandedHeight) < 1)
 
 			for (appearanceName, expectedWhite) in [
 				(NSAppearance.Name.aqua, false),
@@ -78,22 +69,19 @@ struct SettingsBrowserSitePanelTests
 				#expect(abs(color.greenComponent - expected) < 0.001)
 				#expect(abs(color.blueComponent - expected) < 0.001)
 			}
-			let error = try #require(descendants(in: content).compactMap
+			#expect(!descendants(in: content).compactMap
 			{
-				$0 as? SettingsFormErrorLabel
-			}.first
+				$0 as? NSTextField
+			}.contains
 			{
-				$0.accessibilityLabel() == "Site validation error"
+				$0.stringValue == "These permissions match the defaults or the existing rule."
 			})
-			#expect(!error.isHidden)
 			field.stringValue = "https://example.com"
 			panel.controlTextDidChange(Notification(
 				name: NSControl.textDidChangeNotification,
 				object: field
 			))
 			#expect(!field.hasValidationError)
-			#expect(error.isHidden)
-			#expect(!status.isHiddenOrHasHiddenAncestor)
 			#expect(abs(panel.contentRect(forFrameRect: panel.frame).height - expandedHeight) < 1)
 		}
 	}

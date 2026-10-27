@@ -91,20 +91,6 @@ final class MessageSearchController: NSViewController, NSSearchFieldDelegate,
 	)
 	{
 		self.results = results
-		if let scope = results?.scope
-		{
-			searchView.scopeText =
-				scope.description
-					+ (scope.isComplete
-						? "" : ". Load more history to expand search.")
-		}
-		else
-		{
-			searchView.scopeText = "Search covers message history loaded into this app."
-		}
-		searchView.statusText =
-			unavailableReason
-				?? (loading ? "Loading message history…" : "")
 		searchView.canLoadMore = results?.scope.canLoadMore == true
 		searchView.isLoading = loading
 		tableView.reloadData()

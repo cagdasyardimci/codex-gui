@@ -386,23 +386,12 @@ struct FilesViewControllerIntegrationTests
 
 	private func assertEmptyState(_ files: FilesViewController) throws
 	{
-		let empty = try #require(descendants(in: files.document.view).compactMap
-		{
-			$0 as? FileViewerEmptyStateView
-		}.first)
-		let group = try #require(empty.subviews.compactMap
-		{
-			$0 as? NSStackView
-		}.first)
-		#expect(abs(group.frame.midX - empty.bounds.midX) < 0.5)
-		#expect(abs(group.frame.midY - empty.bounds.midY) < 0.5)
-		#expect(empty.bounds.contains(group.frame))
-		let labels = descendants(in: empty).compactMap
+		let labels = descendants(in: files.document.view).compactMap
 		{
 			$0 as? NSTextField
 		}.map(\.stringValue)
-		#expect(labels.contains("Open file"))
-		#expect(labels.contains("Select a file from the workspace tree"))
+		#expect(!labels.contains("Open file"))
+		#expect(!labels.contains("Select a file from the workspace tree"))
 		#expect(findButton(
 			"Open file actions",
 			in: files.view

@@ -15,8 +15,6 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 		[],
 		spacing: 40
 	)
-	private let status = SettingsPageLayout.status("")
-	private let pageLabel = SettingsPageLayout.message("")
 	private let previous = DesktopActionButton(title: "Previous")
 	private let next = DesktopActionButton(title: "Next")
 	private let refreshButton = DesktopActionButton(
@@ -85,7 +83,7 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 		}
 		previous.setAccessibilityLabel("Previous archived chat page")
 		next.setAccessibilityLabel("Next archived chat page")
-		paging = NSStackView(views: [pageLabel, NSView(), previous, next])
+		paging = NSStackView(views: [NSView(), previous, next])
 		paging.spacing = 8
 		refreshButton.image = NSImage(
 			systemSymbolName: "arrow.clockwise",
@@ -100,7 +98,6 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 			SettingsPageLayout.document(
 				title: "Archived chats",
 				sections: [toolbar,
-							status,
 							results,
 							paging],
 				headerAccessory: refreshButton
@@ -118,13 +115,11 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 
 	func update(
 		catalog: SettingsArchivedChatCatalog,
-		message: String,
 		busy: Bool
 	)
 	{
 		self.catalog = catalog
 		self.busy = busy
-		status.stringValue = message
 		refreshButton.isEnabled = !busy
 		renderResults()
 	}
@@ -292,9 +287,6 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 					role: TypographyTokens.Connections.section
 				),
 				NSView(),
-				SettingsPageLayout.message(
-					"\(group.chats.count) \(group.chats.count == 1 ? "chat" : "chats")"
-				),
 			])
 			header.spacing = 8
 			header.heightAnchor.constraint(equalToConstant: 46).isActive = true
@@ -316,15 +308,7 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 				break
 			}
 		}
-		if matchingCount == 0
-		{
-			results.addArrangedSubview(SettingsPageLayout.status(
-				query.isEmpty && selectedProject == nil
-					? "No archived chats." : "No matching chats."
-			))
-		}
 		paging.isHidden = pages <= 1
-		pageLabel.stringValue = "Page \(page + 1) of \(pages) · \(matchingCount) chats"
 		previous.isEnabled = page > 0
 		next.isEnabled = page + 1 < pages
 	}
@@ -338,7 +322,7 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 		)
 		return SettingsArchivedChatRow(
 			title: chat.title,
-			date: date ?? "Date unavailable",
+			date: date ?? "",
 			isEnabled: !busy,
 			onUnarchive:
 			{
