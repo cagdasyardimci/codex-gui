@@ -363,7 +363,8 @@ extension MainWindowController
 				PaletteCommand(
 					title: skill.displayName ?? skill.name,
 					detail: skill.shortDescription ?? skill.description,
-					destination: .action(String(index))
+					destination: .action(String(index)),
+					searchText: skill.searchText
 				)
 			}
 		commandPalette.onChoose =

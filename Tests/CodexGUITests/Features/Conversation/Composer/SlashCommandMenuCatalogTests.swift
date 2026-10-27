@@ -5,6 +5,39 @@ import Testing
 
 struct SlashCommandMenuCatalogTests
 {
+	@Test func bothSkillPickersMatchNamesAndDescriptions() throws
+	{
+		let skill = try skill(
+			name: "internal-audit",
+			displayName: "Workspace Review",
+			description: "Check repository conventions",
+			shortDescription: "Inspect project guidelines"
+		)
+		let paletteCommand = PaletteCommand(
+			title: skill.displayName ?? skill.name,
+			detail: skill.shortDescription ?? skill.description,
+			destination: .action("0"),
+			searchText: skill.searchText
+		)
+		var catalog = SlashCommandMenuCatalog()
+		for (query, expected) in [
+			("", true),
+			("AUDIT", true),
+			("review", true),
+			("conventions", true),
+			("guidelines", true),
+			("missing", false),
+		]
+		{
+			let matches = catalog.matching(
+				prefix: query,
+				availableSkills: [skill],
+				localeIdentifier: Locale.current.identifier
+			)
+			#expect((matches.skills == [skill]) == expected)
+			#expect(paletteCommand.matches(query) == expected)
+		}
+	}
 
 	@Test func canonicalChangesInEachSkillFieldInvalidateCachedValues() throws
 	{

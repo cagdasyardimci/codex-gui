@@ -13,6 +13,12 @@ struct PaletteCommand: Equatable
 	let detail: String
 	let destination: Destination
 	var isEnabled = true
+	var searchText: SearchText? = nil
+
+	func matches(_ query: String) -> Bool
+	{
+		(searchText ?? SearchText(terms: [title, detail])).matches(query)
+	}
 }
 
 @MainActor
@@ -130,8 +136,7 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 		visibleCommands = commands.filter
 		{
-			query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)
-				|| $0.detail.localizedCaseInsensitiveContains(query)
+			$0.matches(query)
 		}
 		tableView.reloadData()
 		if visibleCommands.isEmpty

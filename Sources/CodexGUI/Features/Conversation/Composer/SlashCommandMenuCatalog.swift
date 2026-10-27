@@ -6,8 +6,7 @@ struct SlashCommandMenuCatalog
 	private struct SearchableSkill
 	{
 		let skill: AvailableSkill
-		let normalizedName: String
-		let normalizedDisplayName: String?
+		let searchText: SearchText
 		let sourceIndex: Int
 	}
 
@@ -65,8 +64,7 @@ struct SlashCommandMenuCatalog
 			skillPrefix = normalizedPrefix
 			let matchingSkills = searchableSkills.filter
 			{
-				normalizedPrefix.isEmpty || $0.normalizedName.hasPrefix(normalizedPrefix)
-					|| ($0.normalizedDisplayName?.hasPrefix(normalizedPrefix) ?? false)
+				$0.searchText.matches(normalizedPrefix)
 			}
 			skills = matchingSkills.map(\.skill)
 			skillSearchCount += 1
@@ -93,8 +91,7 @@ struct SlashCommandMenuCatalog
 			}
 			return SearchableSkill(
 				skill: skill,
-				normalizedName: skill.name.lowercased(),
-				normalizedDisplayName: skill.displayName?.lowercased(),
+				searchText: skill.searchText,
 				sourceIndex: index
 			)
 		}
