@@ -7,6 +7,73 @@ import Testing
 @Suite
 struct AppServerThreadManagementTests
 {
+	@Test func hydrationAcceptsCheckoutAliasesAndRejectsDifferentTargets() async throws
+	{
+		let directory = try await AppServerTestExecutable.temporaryDirectory()
+		defer
+		{
+			try? FileManager.default.removeItem(at: directory)
+		}
+		let checkout = directory.appendingPathComponent("checkout")
+		let alias = directory.appendingPathComponent("checkout-alias")
+		let other = directory.appendingPathComponent("other-checkout")
+		for path in [checkout, other]
+		{
+			try FileManager.default.createDirectory(
+				at: path,
+				withIntermediateDirectories: true
+			)
+		}
+		try FileManager.default.createSymbolicLink(
+			at: alias,
+			withDestinationURL: checkout
+		)
+		let server = AppServer(
+			executableOverride: try await makeCheckoutValidationExecutable(
+				in: directory,
+				requestLog: directory.appendingPathComponent("requests.json"),
+				responseMode: directory.appendingPathComponent("response-mode")
+			),
+			requestTimeout: .seconds(3)
+		)
+		defer
+		{
+			server.disconnect()
+		}
+		try await server.connect()
+		for (summaryPath, settingsPath) in [(checkout, alias), (alias, checkout)]
+		{
+			let summary = try #require(ThreadSummary(json: [
+				"id": "saved",
+				"cwd": summaryPath.path
+			]))
+			let detail = try await server.hydrateValidatedThread(
+				summary,
+				result: ["cwd": settingsPath.path],
+				expectedDirectory: checkout,
+				invalidResponseMessage: "Invalid checkout"
+			)
+			#expect(detail.summary == summary)
+		}
+		let summary = try #require(ThreadSummary(json: ["id": "saved", "cwd": checkout.path]))
+		for result in [["cwd": other.path], ["cwd": "relative"], [:]]
+		{
+			do
+			{
+				_ = try await server.hydrateValidatedThread(
+					summary,
+					result: result,
+					expectedDirectory: checkout,
+					invalidResponseMessage: "Invalid checkout"
+				)
+				Issue.record("Accepted a foreign or missing checkout identity")
+			}
+			catch AppServerError.protocolError
+			{
+			}
+		}
+	}
+
 	@Test func checkoutCwdIsCheckedOnStartResumeListAndTurnOverride() async throws
 	{
 		let directory = try await AppServerTestExecutable.temporaryDirectory()

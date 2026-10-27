@@ -10,11 +10,16 @@ extension AppServer
 		invalidResponseMessage: String
 	) async throws -> ThreadDetail
 	{
-		guard result["cwd"] as? String == summary.cwd
+		guard let cwd = result["cwd"] as? String, cwd.hasPrefix("/"),
+				summary.cwd.hasPrefix("/")
 		else
 		{
 			throw AppServerError.protocolError(invalidResponseMessage)
 		}
+		try CheckoutIdentity.validate(
+			cwd: cwd,
+			expectedDirectory: URL(fileURLWithPath: summary.cwd)
+		)
 		try CheckoutIdentity.validate(
 			cwd: summary.cwd,
 			expectedDirectory: expectedDirectory
