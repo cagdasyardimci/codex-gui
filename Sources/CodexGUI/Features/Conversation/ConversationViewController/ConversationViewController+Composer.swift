@@ -50,7 +50,7 @@ extension ConversationViewController
 	private func makeComposerToolbar() -> ComposerToolbarView
 	{
 		let attachmentRow = AppKitLayout.horizontalStack(
-			[addContextButton, approvalPolicyButton, planModeLabel],
+			[addContextButton, approvalPolicyButton, planModeDivider, planModeButton],
 			spacing: LayoutTokens.Composer.leadingControlSpacing
 		)
 		let actionRow = AppKitLayout.horizontalStack(
@@ -130,10 +130,12 @@ extension ConversationViewController
 
 	func configureComposerControls()
 	{
-		planModeLabel.font = AppKitFontResolver.font(TypographyTokens.Composer.plan)
-		planModeLabel.textColor = .systemBlue
-		planModeLabel.setAccessibilityLabel("Plan mode enabled")
-		planModeLabel.isHidden = true
+		planModeButton.target = self
+		planModeButton.action = #selector(turnOffPlanMode)
+		planModeButton.isHidden = true
+		planModeDivider.isHidden = true
+		planModeDivider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+		planModeDivider.heightAnchor.constraint(equalToConstant: 16).isActive = true
 		interactionStack.orientation = .vertical
 		interactionStack.alignment = .leading
 		interactionStack.spacing = LayoutTokens.Composer.interactionSpacing
@@ -320,10 +322,22 @@ extension ConversationViewController
 		{
 			turnChangeSummaryButton.isHidden = true
 		}
-		planModeLabel.stringValue = "Plan mode"
-		planModeLabel.isHidden = !snapshot.planMode
-		planModeLabel.setAccessibilityLabel(planModeLabel.stringValue)
-		planModeLabel.toolTip = "Plan mode enabled"
+		planModeButton.isHidden = !snapshot.planMode
+		planModeDivider.isHidden = !snapshot.planMode
+		let canTogglePlan = snapshot.slashCommandUnavailableReasons[.plan] == nil
+		planModeButton.isEnabled = onSlashCommand != nil && canTogglePlan
+		if !snapshot.planMode
+		{
+			planModeButton.clearHover()
+		}
+		if snapshot.planMode
+		{
+			composer.placeholder = "Describe your task to generate a plan..."
+		}
+		else
+		{
+			composer.placeholder = "Do anything"
+		}
 		slashCommandController.availableSkills = snapshot.availableSkills
 		slashCommandController.threadTokenUsage = snapshot.threadTokenUsage
 		slashCommandController.unavailableReason =
@@ -362,6 +376,19 @@ extension ConversationViewController
 			addContextButton.item(at: index)?.isEnabled = snapshot.projectPath != nil
 		}
 		updateSendState()
+	}
+
+	@objc private func turnOffPlanMode()
+	{
+		guard composerSubmissionPresentation?.planMode == true,
+				slashCommandController.unavailableReason?(.plan) == nil,
+				case .command(let invocation) = SlashCommandParser.parse("/plan")
+		else
+		{
+			return
+		}
+		onSlashCommand?(invocation)
+		view.window?.makeFirstResponder(composer)
 	}
 
 	@objc private func showTurnChanges()

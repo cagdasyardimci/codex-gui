@@ -223,6 +223,13 @@ enum AppKitColorTokens
 		lightAlpha: 0.494,
 		darkAlpha: 0.498
 	)
+	static let composerControlDivider = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.055,
+		darkAlpha: 0.056
+	)
+
 	static let composerMenuRowHover = AppKitColorResolution.color(
 		light: 0x0D0D0D,
 		dark: 0xFFFFFF,

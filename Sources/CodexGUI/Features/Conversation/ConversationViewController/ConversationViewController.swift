@@ -154,7 +154,8 @@ final class ConversationViewController: NSViewController,
 	var isPublishingComposerEdit = false
 	lazy var requestDetailsScrollView = BoundedContentScrollView(views: [interactionStack])
 	let addContextButton = DesktopPopupButton()
-	let planModeLabel = NSTextField(labelWithString: "Plan mode")
+	let planModeButton = ComposerPlanModeButton(frame: .zero)
+	let planModeDivider = DesktopSurface(AppKitColorTokens.composerControlDivider)
 	var fileSearchPopover: NSPopover?
 	var fileSelectionReceiver: ((ComposerContextItem) -> Void)?
 	var fileSearchField: NSSearchField?

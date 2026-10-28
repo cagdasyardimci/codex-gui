@@ -147,16 +147,65 @@ struct ComposerSlashCommandTests
 		active.planMode = true
 		active.slashCommandUnavailableReasons = [.compact: "Wait for the current turn to finish."]
 		controller.render(active)
-		#expect(!controller.planModeLabel.isHidden)
+		#expect(!controller.planModeButton.isHidden)
+		#expect(controller.composer.placeholder == "Describe your task to generate a plan...")
 		#expect(controller.slashCommandController
 			.unavailableReason?(.compact) == "Wait for the current turn to finish.")
 		active.planMode = false
 		active.planModeStatus = "Plan mode unknown: run /plan to reapply or reset."
 		controller.render(active)
-		#expect(controller.planModeLabel.isHidden)
-		#expect(controller.planModeLabel.stringValue == "Plan mode")
+		#expect(controller.planModeButton.isHidden)
+		#expect(controller.composer.placeholder == "Do anything")
+		#expect(controller.planModeButton.title == "Plan")
 		controller.render(snapshot(draft: "Normal message"))
 		#expect(!controller.sendButton.isEnabled)
+	}
+
+	@Test(arguments: [true, false])
+	func activePlanControlRoutesOnlyAvailableModeChangesAndPreservesDraft(available: Bool) throws
+	{
+		let controller = makeController(text: "Keep this draft 🧭")
+		var commands: [SlashCommandID] = []
+		controller.onSlashCommand =
+		{
+			commands.append($0.id)
+		}
+		var active = snapshot(draft: "Keep this draft 🧭")
+		active.planMode = true
+		active
+			.slashCommandUnavailableReasons = available ? [:] :
+			[.plan: "Wait for the active operation"]
+		controller.render(active)
+		#expect(controller.planModeButton.isEnabled == available)
+		try controller.planModeButton.dispatchConfiguredAction()
+		#expect(commands == (available ? [.plan] : []))
+		#expect(controller.composer.draftText == "Keep this draft 🧭")
+	}
+
+	@Test func planControlHoverKeepsItsTitleAndSizeAndClearsWhenModeEnds()
+	{
+		let controller = makeController(text: "Keep this draft")
+		controller.onSlashCommand =
+		{
+			_ in
+		}
+		var active = snapshot(draft: "Keep this draft")
+		active.planMode = true
+		controller.render(active)
+		let button = controller.planModeButton
+		let size = button.intrinsicContentSize
+		button.mouseEntered(with: NSEvent())
+		#expect(button.image === ComposerFooterIcons.removePlan)
+		#expect(button.title == "Plan")
+		#expect(button.intrinsicContentSize == size)
+		button.mouseExited(with: NSEvent())
+		#expect(button.image === ComposerFooterIcons.plan)
+		button.mouseEntered(with: NSEvent())
+		active.planMode = false
+		controller.render(active)
+		#expect(button.isHidden)
+		#expect(controller.planModeDivider.isHidden)
+		#expect(button.image === ComposerFooterIcons.plan)
 	}
 
 	@Test func selectionChangedDuringDraftPublicationCannotExecuteInReplacementOwner()

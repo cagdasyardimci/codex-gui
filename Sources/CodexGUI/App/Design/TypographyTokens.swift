@@ -104,10 +104,7 @@ enum TypographyTokens
 			size: 12,
 			selection: .system(weight: .regular)
 		)
-		static let plan = Role(
-			size: 12,
-			selection: .system(weight: .medium)
-		)
+		static let plan = Role(size: 13)
 	}
 
 	enum ChatLock
