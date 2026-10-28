@@ -28,10 +28,21 @@ extension ConversationViewController
 				mentionPopover?.close()
 				completionRange = nil
 			}
+			slashCommandController.render(prefix: query.prefix)
+			let hasResults = !slashCommandController.commands.isEmpty
+				|| !slashCommandController.matchingSkills.isEmpty
+			if !hasResults
+			{
+				slashCommandPopover?.close()
+			}
 			slashCompletionRange = composer.displayRange(for: query.tokenRange)
 			slashCompletionGeneration = selectionGeneration
 			slashCompletionText = composer.string
-			slashCommandController.render(prefix: query.prefix)
+			guard hasResults
+			else
+			{
+				return
+			}
 			configureSlashCommandPopoverIfNeeded()
 
 			// A restored or asynchronously updated draft in a hidden window must not reveal

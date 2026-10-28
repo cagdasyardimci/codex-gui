@@ -38,6 +38,11 @@ extension ConversationViewController
 			mentionPopover = panel
 		}
 		renderMentionMenu(query: query)
+		guard mentionMenu.hasResults
+		else
+		{
+			return
+		}
 		if mentionPopover?.isShown == true
 		{
 			mentionPopover?.reposition()
@@ -64,6 +69,10 @@ extension ConversationViewController
 			allowsProjectSelection: onChooseProject != nil,
 			allowsPluginManagement: onManagePlugins != nil
 		)
+		if !mentionMenu.hasResults
+		{
+			mentionPopover?.close()
+		}
 	}
 
 	func handleMentionMenuKey(_ selector: Selector) -> Bool

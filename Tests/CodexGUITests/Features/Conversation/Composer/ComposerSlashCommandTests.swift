@@ -476,6 +476,86 @@ struct ComposerSlashCommandTests
 		#expect(controller.composer.skillMention?.selection == next.projectContext.selectedSkill)
 	}
 
+	@Test func emptySlashResultsCloseThePanelAndMatchingQueriesReopenWithoutChangingDraft(
+	) async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let controller = makeController(text: "/goa")
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 200,
+					y: 200,
+					width: 900,
+					height: 700
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.prepareForTesting()
+			window.contentViewController = controller
+			defer
+			{
+				controller.dismissSlashCommands(); window.close()
+			}
+			window.makeKeyAndOrderFront(nil)
+			window.makeFirstResponder(controller.composer)
+			window.layoutIfNeeded()
+			controller.slashCommandController.availableSkills = [try #require(AvailableSkill(json: [
+				"name": "dashboard",
+				"description": "Create a dashboard",
+				"path": "/skills/dashboard",
+				"scope": "user",
+				"enabled": true,
+			]))]
+			var sends = 0
+			controller.onSend =
+			{
+				sends += 1
+			}
+			for query in ["/goa", "/sta", "/goa", "/dashboard", "/goa", "/sta"]
+			{
+				controller.composer.string = query
+				controller.composer.setSelectedRange(NSRange(
+					location: query.utf16.count,
+					length: 0
+				))
+				controller.updateComposerCompletion()
+				#expect(controller.composer.draftText == query)
+				#expect(controller.composer.selectedRange() == NSRange(
+					location: query.utf16.count,
+					length: 0
+				))
+				#expect(window.firstResponder === controller.composer)
+				if query == "/goa"
+				{
+					#expect(controller.slashCommandPopover?.isShown != true)
+					#expect(controller.slashCommandController.view.window?.isVisible != true)
+				}
+				else
+				{
+					#expect(controller.slashCommandPopover?.isShown == true)
+					#expect(controller.slashCommandController.view.window?.isVisible == true)
+					if query ==
+						"/sta"
+					{
+						#expect(controller.slashCommandController.selectedCommand?.id == .status)
+					}
+					else
+					{
+						#expect(controller.slashCommandController.selectedSkill?
+							.name == "dashboard")
+					}
+				}
+				#expect(sends == 0)
+			}
+			#expect(controller.handleSlashCommandKey(#selector(NSResponder.insertTab(_:))))
+			#expect(controller.composer.draftText == "/status")
+			#expect(sends == 0)
+		}
+	}
+
 	private func makeController(text: String) -> ConversationViewController
 	{
 		_ = NSApplication.shared

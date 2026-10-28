@@ -22,6 +22,10 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 	}
 
 	var onChoose: ((Choice) -> Void)?
+	var hasResults: Bool
+	{
+		!rows.isEmpty
+	}
 	private var rows: [Row] = []
 	private let table = SlashCommandMenuTableView()
 	private let scroll = NSScrollView()
