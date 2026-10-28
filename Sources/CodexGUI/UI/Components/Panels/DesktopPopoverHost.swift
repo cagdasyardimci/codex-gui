@@ -428,7 +428,8 @@ final class DesktopPopoverHost
 			{
 				return true
 			}
-			if eventWindow.level.rawValue >= NSWindow.Level.popUpMenu.rawValue
+			if eventWindow === panel || eventWindow.level.rawValue >= NSWindow.Level.popUpMenu
+				.rawValue
 			{
 				return true
 			}
@@ -704,8 +705,7 @@ final class DesktopPopoverHost
 			dx: -shadowOutset,
 			dy: -shadowOutset
 		)
-		if isComposer,
-			shadowOutset > 0
+		if isComposer, panel.contentViewController !== controller
 		{
 			panel.contentViewController?.preferredContentSize = padded.size
 		}

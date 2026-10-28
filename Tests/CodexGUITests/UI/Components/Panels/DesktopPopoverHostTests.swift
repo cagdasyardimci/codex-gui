@@ -7,6 +7,59 @@ import Testing
 @Suite(.serialized)
 struct DesktopPopoverHostTests
 {
+	@Test func composerPanelClicksUseTheirEventWindowBeforeTheAmbientPointer() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = makeWindow()
+			let anchor = NSButton(frame: NSRect(
+				x: 20,
+				y: 20,
+				width: 28,
+				height: 28
+			))
+			window.contentView?.addSubview(anchor)
+			window.makeKeyAndOrderFront(nil)
+			let controller = NSViewController()
+			controller.view = NSView()
+			controller.preferredContentSize = NSSize(
+				width: 300,
+				height: 200
+			)
+			let host = DesktopPopoverHost(
+				presentation: .composer(DesktopPopoverHost.ComposerPlacement()),
+				content: controller.view,
+				controller: controller
+			)
+			defer
+			{
+				host.close(); window.close()
+			}
+			host.show(from: anchor)
+			let pointer = NSEvent.mouseLocation
+			host.panel.setFrameOrigin(NSPoint(
+				x: pointer.x + 1000,
+				y: pointer.y + 1000
+			))
+			let click = try #require(NSEvent.mouseEvent(
+				with: .leftMouseDown,
+				location: NSPoint(
+					x: 20,
+					y: 20
+				),
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: host.panel.windowNumber,
+				context: nil,
+				eventNumber: 1,
+				clickCount: 1,
+				pressure: 1
+			))
+			#expect(host.shouldForward(click))
+			#expect(host.isShown)
+		}
+	}
+
 	@Test func detachingTheAnchorDismissesTheSharedHostWithoutTakingForeignFocus() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -329,6 +382,129 @@ struct DesktopPopoverHostTests
 			#expect(abs(surface.bounds.height - contentBounds.maxY - 4) < 0.01)
 			#expect(abs(panel.frame.height - 36) < 0.01)
 			#expect(suggestions.selectedCommand?.id == .status)
+		}
+	}
+
+	@Test func composerSuggestionsKeepTrailingAccessoriesVisibleAcrossWidthChanges() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = makeWindow()
+			let anchor = NSView(frame: NSRect(
+				x: 10,
+				y: 20,
+				width: 540,
+				height: 28
+			))
+			window.contentView?.addSubview(anchor)
+			window.makeKeyAndOrderFront(nil)
+			let suggestions = SlashCommandPopoverView()
+			suggestions.availableSkills = [try #require(AvailableSkill(json: [
+				"name": "documents",
+				"description": String(
+					repeating: "A long document description ",
+					count: 20
+				),
+				"path": "/skills/documents",
+				"scope": "user",
+				"enabled": true,
+				"interface": ["displayName": "Documents"],
+			]))]
+			suggestions.render(prefix: "")
+			let host = ComposerPopoverPanel(contentViewController: suggestions)
+			host.matchesAnchorWidth = true
+			defer
+			{
+				host.close(); window.close()
+			}
+			host.show(
+				relativeTo: anchor.bounds,
+				of: anchor
+			)
+			let panel = try #require(suggestions.view.window)
+			let scroll = try #require(descendants(suggestions.view)
+				.compactMap
+				{
+					$0 as? NSScrollView
+				}.first)
+			let table = try #require(scroll.documentView as? SlashCommandMenuTableView)
+			let pickerRow = try #require(suggestions.commands
+				.firstIndex
+				{
+					SlashCommandMenuPresentation($0.id).opensPicker
+				})
+			suggestions.moveSelection(by: 1)
+			let selected = table.selectedRow
+			for width: CGFloat in [736, 300, 736]
+			{
+				anchor.setFrameSize(NSSize(
+					width: width,
+					height: 28
+				))
+				host.show(
+					relativeTo: anchor.bounds,
+					of: anchor
+				)
+				panel.contentView?.layoutSubtreeIfNeeded()
+				#expect(abs(panel.frame.width - width) < 0.01)
+				for row in [pickerRow, table.numberOfRows - 1]
+				{
+					table.scrollRowToVisible(row)
+					let cell = try #require(table.view(
+						atColumn: 0,
+						row: row,
+						makeIfNecessary: true
+					))
+					panel.contentView?.layoutSubtreeIfNeeded()
+					let content = try #require(descendants(cell)
+						.compactMap
+						{
+							$0 as? DesktopSearchResultContentView
+						}.first)
+					let accessory = try #require(descendants(content).first
+					{
+						if let label = $0 as? NSTextField
+						{
+							return label.stringValue == "Personal"
+						}
+						return $0 is NSImageView && abs($0.bounds.width - 10) < 0.01
+					})
+					let visible = scroll.contentView.bounds
+					let bounds = accessory.convert(
+						accessory.bounds,
+						to: scroll.contentView
+					)
+					let panelBounds = accessory.convert(
+						accessory.bounds,
+						to: panel.contentView
+					)
+					#expect(panelBounds.maxX <= panel.contentView!.bounds.maxX - 12)
+					#expect(bounds.minX >= visible.minX)
+					#expect(bounds.maxX <= visible.maxX - 8)
+					#expect(abs(table.bounds.width - visible.width) < 0.01)
+					#expect(abs(table.tableColumns[0].width - visible.width) < 0.01)
+					if row == table.numberOfRows - 1
+					{
+						let label = try #require(accessory as? NSTextField)
+						#expect(label.bounds.width >= label.intrinsicContentSize.width - 0.5)
+						#expect(content.detailLabel.bounds.width < content.detailLabel
+							.intrinsicContentSize.width)
+						#expect(content.detailLabel.lineBreakMode == .byTruncatingTail)
+					}
+					#expect(table.selectedRow == selected)
+				}
+			}
+			table.scrollRowToVisible(table.selectedRow)
+			suggestions.moveSelection(by: 1)
+			#expect(table.selectedRow == selected + 1)
+		}
+	}
+
+	private func descendants(_ view: NSView) -> [NSView]
+	{
+		view.subviews.flatMap
+		{
+			[$0] + descendants($0)
 		}
 	}
 
