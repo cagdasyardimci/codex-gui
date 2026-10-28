@@ -202,10 +202,7 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		}
 		let destination = visibleCommands[tableView.selectedRow].destination
 		let handler = onChoose
-		if let sheet = view.window, let parent = sheet.sheetParent
-		{
-			parent.endSheet(sheet)
-		}
+		close()
 		Task
 		{
 			@MainActor in handler?(destination)
@@ -217,6 +214,11 @@ final class CommandPaletteController: NSViewController, NSTableViewDataSource,
 		if let sheet = view.window, let parent = sheet.sheetParent
 		{
 			parent.endSheet(sheet)
+			sheet.orderOut(nil)
+			if parent.isVisible
+			{
+				parent.makeKeyAndOrderFront(nil)
+			}
 		}
 	}
 }

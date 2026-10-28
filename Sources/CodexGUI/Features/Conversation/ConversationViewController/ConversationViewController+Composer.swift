@@ -358,6 +358,7 @@ extension ConversationViewController
 			if fileSelectionReceiver != nil || fileSearchWasCompletion
 			{
 				fileSearchPopover?.close()
+				mentionPopover?.close()
 				fileSelectionReceiver = nil
 				completionRange = nil
 			}
@@ -374,6 +375,12 @@ extension ConversationViewController
 		for index in 1 ... 4
 		{
 			addContextButton.item(at: index)?.isEnabled = snapshot.projectPath != nil
+		}
+		if mentionPopover?.isShown == true, let range = completionRange,
+			NSMaxRange(range) <= (composer.string as NSString).length
+		{
+			let token = (composer.string as NSString).substring(with: range)
+			renderMentionMenu(query: String(token.dropFirst()))
 		}
 		updateSendState()
 	}

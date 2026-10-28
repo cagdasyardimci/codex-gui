@@ -20,7 +20,8 @@ extension ConversationViewController
 		doCommandBy commandSelector: Selector
 	) -> Bool
 	{
-		if textView === composer, handleSlashCommandKey(commandSelector)
+		if textView === composer,
+			handleMentionMenuKey(commandSelector) || handleSlashCommandKey(commandSelector)
 		{
 			return true
 		}
@@ -106,6 +107,7 @@ extension ConversationViewController
 			if fileSearchWasCompletion
 			{
 				fileSearchPopover?.close()
+				mentionPopover?.close()
 			}
 			completionRange = nil
 			return
@@ -134,6 +136,7 @@ extension ConversationViewController
 			if fileSearchWasCompletion
 			{
 				fileSearchPopover?.close()
+				mentionPopover?.close()
 			}
 			completionRange = nil
 			return
@@ -144,10 +147,7 @@ extension ConversationViewController
 		)
 		fileSearchWasCompletion = true
 		fileSelectionReceiver = nil
-		presentFileSearch(
-			query: query,
-			focusField: false
-		)
+		presentMentionMenu(query: query)
 	}
 
 	@objc func openFileSearch()
@@ -252,7 +252,7 @@ extension ConversationViewController
 		}
 	}
 
-	@objc private func chooseFileResult(_ sender: NSButton)
+	@objc func chooseFileResult(_ sender: NSButton)
 	{
 		guard let path = sender.identifier?.rawValue
 		else
@@ -418,7 +418,7 @@ extension ConversationViewController
 		updateSendState()
 	}
 
-	@objc private func chooseImage()
+	@objc func chooseImage()
 	{
 		guard let window = view.window
 		else
@@ -464,7 +464,7 @@ extension ConversationViewController
 		}
 	}
 
-	@objc private func chooseCodeRange()
+	@objc func chooseCodeRange()
 	{
 		guard let window = view.window, let projectPath
 		else

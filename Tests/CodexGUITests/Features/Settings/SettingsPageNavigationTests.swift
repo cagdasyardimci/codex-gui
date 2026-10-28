@@ -8,6 +8,37 @@ import Testing
 struct SettingsPageNavigationTests
 {
 	@Test(.appKitIsolation)
+	func pluginNavigationClearsFilteringAndSelectsExistingManagementPage() throws
+	{
+		_ = NSApplication.shared
+		let controller = SettingsViewController()
+		defer
+		{
+			controller.endPresentation()
+		}
+		let search = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? NSSearchField
+		}
+		.first)
+		let plugins = try #require(sidebarButton(
+			"Plugins",
+			in: controller.view
+		))
+		search.stringValue = "sandbox"
+		controller.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+		#expect(plugins.isHidden)
+		controller.showPlugins()
+		#expect(search.stringValue.isEmpty)
+		#expect(!plugins.isHidden)
+		#expect(plugins.isSelected)
+		#expect(descendants(controller.view).contains
+		{
+			$0 is SettingsPluginsPage
+		})
+	}
+
+	@Test(.appKitIsolation)
 	func accountUsageNavigationClearsFilteringAndSelectsUsage() throws
 	{
 		_ = NSApplication.shared

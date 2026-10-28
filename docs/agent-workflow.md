@@ -15,7 +15,7 @@ Start at [AGENTS.md](../AGENTS.md) for working rules and completion reporting. T
 | CLI version assessment, capability claims, framing and protocol safeguards | [CLI compatibility](cli-compatibility.md) |
 | Configuration semantics and Settings capability boundaries | [Settings](settings.md) |
 | Remote host enablement, pairing, device management and lifetime | [Remote access](remote-access.md) |
-| Composer slash-command syntax and lifecycle | [Slash commands](slash-commands.md) |
+| Composer commands, context mentions and lifecycle | [Slash commands](slash-commands.md) |
 | Transcript activity grouping and disclosure | [Activity presentation](activity-presentation-design.md) |
 | Automated checks, host-filter maintenance and evidence requirements | [Validation](validation.md) |
 | Controlled app-server protocol and mock scenarios | [Mock backend](mock-backend.md) |

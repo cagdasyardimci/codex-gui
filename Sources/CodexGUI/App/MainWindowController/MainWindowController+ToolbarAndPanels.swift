@@ -605,6 +605,16 @@ extension MainWindowController
 
 	@objc func showCommandPalette()
 	{
+		presentCommandPalette(projectsOnly: false)
+	}
+
+	func showProjectSelection()
+	{
+		presentCommandPalette(projectsOnly: true)
+	}
+
+	private func presentCommandPalette(projectsOnly: Bool)
+	{
 		guard let window, let snapshot = latestSnapshot
 		else
 		{
@@ -618,31 +628,42 @@ extension MainWindowController
 				destination: .project($0)
 			)
 		}
-		commands += snapshot.threads.map
+		if projectsOnly
 		{
-			PaletteCommand(
-				title: $0.displayTitle,
-				detail: "Conversation · \($0.id)",
-				destination: .conversation($0.id)
-			)
+			commands.append(PaletteCommand(
+				title: "Open Project…",
+				detail: "Choose a folder",
+				destination: .action("openProject")
+			))
 		}
-		commands += [
-			PaletteCommand(
-				title: "New Chat",
-				detail: "Start a conversation",
-				destination: .action("new")
-			),
-			PaletteCommand(
-				title: "Search Messages",
-				detail: "Search loaded conversation contents",
-				destination: .action("search")
-			),
-			PaletteCommand(
-				title: "Changes",
-				detail: "Compare repository changes without editing Git state",
-				destination: .action("changes")
-			),
-		]
+		else
+		{
+			commands += snapshot.threads.map
+			{
+				PaletteCommand(
+					title: $0.displayTitle,
+					detail: "Conversation · \($0.id)",
+					destination: .conversation($0.id)
+				)
+			}
+			commands += [
+				PaletteCommand(
+					title: "New Chat",
+					detail: "Start a conversation",
+					destination: .action("new")
+				),
+				PaletteCommand(
+					title: "Search Messages",
+					detail: "Search loaded conversation contents",
+					destination: .action("search")
+				),
+				PaletteCommand(
+					title: "Changes",
+					detail: "Compare repository changes without editing Git state",
+					destination: .action("changes")
+				),
+			]
+		}
 		let target = WorkspaceIntentTarget(
 			store: currentStore,
 			snapshot: snapshot,
@@ -660,6 +681,13 @@ extension MainWindowController
 			{
 			case .project(let url): target.dispatch(.openProject(url))
 			case .conversation(let id): target.dispatch(.selectThread(id))
+			case .action("openProject"):
+				guard target.accepts(.newChat)
+				else
+				{
+					return
+				}
+				self.onOpenProjectRequest()
 			case .action("new"): target.dispatch(.newChat)
 			case .action("search"): self.showMessageSearch()
 			case .action("changes"):
@@ -669,7 +697,10 @@ extension MainWindowController
 		}
 		commandPalette.present(
 			in: window,
-			commands: commands
+			commands: commands,
+			title: projectsOnly ? "Work in a project" : "Command Palette",
+			searchPlaceholder: projectsOnly
+				? "Find a project" : "Find a project, conversation, or action"
 		)
 	}
 
@@ -724,6 +755,10 @@ extension MainWindowController
 		}
 		toolbarBeforeSettings = nil
 		toolbarWasVisibleBeforeSettings = nil
+		if restoreFocus, window?.isVisible == true
+		{
+			window?.makeKeyAndOrderFront(nil)
+		}
 		if restoreFocus, let responder = responderBeforeSettings as? NSView,
 			responder.window === window
 		{

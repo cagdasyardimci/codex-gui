@@ -12,6 +12,7 @@ extension ConversationViewController
 			if fileSearchWasCompletion
 			{
 				fileSearchPopover?.close()
+				mentionPopover?.close()
 				completionRange = nil
 			}
 			return
@@ -24,6 +25,7 @@ extension ConversationViewController
 			if fileSearchWasCompletion
 			{
 				fileSearchPopover?.close()
+				mentionPopover?.close()
 				completionRange = nil
 			}
 			slashCompletionRange = composer.displayRange(for: query.tokenRange)

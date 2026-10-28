@@ -17,3 +17,11 @@ An uncertain plan update needs a matching settings event or an acknowledged expl
 Context occupancy uses the last reported active-context size and model context window. Last-request input and cumulative token totals are different quantities; absent values must remain unavailable. Selecting a saved chat resumes it to establish a subscription and replay usage, while background reads remain unsubscribed.
 
 Follow [validation](validation.md) for checks and [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility) for deferred command dialogs.
+
+## Context mentions
+
+Type `@` at a token boundary to open the [context menu](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+MentionMenu.swift) above the composer. Typing filters supported actions, enabled skills and project files while focus stays in the draft. Arrow keys select a row, Return or Tab chooses it, and Escape dismisses the menu while preserving the draft. Choosing an action replaces only the active mention token; file matches attach through the existing project-context flow. Selections expire when the draft owner changes.
+
+Project selection from the context menu uses the existing project command palette and navigation intents. The source draft remains with its current project or chat when another project is selected. Plugin management opens the existing Settings page; plugin installation and configuration retain the [Settings presentation lifetime](settings.md#configuration-ownership). Enabled skills remain the supported way to attach a skill invocation to the next message.
+
+Goal remains visible but disabled in the context menu. Plan mode uses the same availability rules and command path as `/plan`, preserving the draft outside the mention token. Disabled actions cannot be selected or invoked and are skipped by keyboard navigation.

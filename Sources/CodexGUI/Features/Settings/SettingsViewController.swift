@@ -429,6 +429,13 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 		selectPage(.connections)
 	}
 
+	func showPlugins()
+	{
+		search.stringValue = ""
+		controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+		selectPage(.plugins)
+	}
+
 	func showUsage()
 	{
 		search.stringValue = ""

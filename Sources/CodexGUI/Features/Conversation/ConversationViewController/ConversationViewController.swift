@@ -26,6 +26,8 @@ final class ConversationViewController: NSViewController,
 	var onSetFastMode: ((Bool) -> Void)?
 	var onSelectApprovalMode: ((ApprovalMode) -> Void)?
 	var onInsertPath: (() -> Void)?
+	var onChooseProject: (() -> Void)?
+	var onManagePlugins: (() -> Void)?
 	var onLoadEarlierTurns: (() -> Void)?
 	{
 		didSet
@@ -156,6 +158,10 @@ final class ConversationViewController: NSViewController,
 	let addContextButton = DesktopPopupButton()
 	let planModeButton = ComposerPlanModeButton(frame: .zero)
 	let planModeDivider = DesktopSurface(AppKitColorTokens.composerControlDivider)
+	let mentionMenu = ComposerMentionMenu()
+	var mentionPopover: ComposerPopoverPanel?
+	var mentionGeneration = 0
+	var mentionText: String?
 	var fileSearchPopover: NSPopover?
 	var fileSelectionReceiver: ((ComposerContextItem) -> Void)?
 	var fileSearchField: NSSearchField?
@@ -448,6 +454,7 @@ final class ConversationViewController: NSViewController,
 			transcript.turnNavigationRail.dismissPreview()
 			dismissSlashCommands()
 			fileSearchPopover?.close()
+			mentionPopover?.close()
 			fileSelectionReceiver = nil
 			configurePreferenceCallbacks()
 			modelEffortPopover?.close()
@@ -461,6 +468,10 @@ final class ConversationViewController: NSViewController,
 		{
 			[weak self] in
 			self?.updateFileResults(query: self?.fileSearchField?.stringValue ?? "")
+			if self?.mentionPopover?.isShown == true
+			{
+				self?.showAtFileCompletionIfNeeded()
+			}
 		}
 		fileIndexRuntime.select(snapshot.owner)
 		projectPath = snapshot.owner.projectPath

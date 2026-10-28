@@ -253,6 +253,22 @@ extension MainWindowController
 
 	func configureConversationActions(target: WorkspaceIntentTarget)
 	{
+		conversation.onChooseProject = target.accepts(.newChat) ?
+		{
+			[weak self] in
+			guard target.accepts(.newChat)
+			else
+			{
+				return
+			}
+			self?.showProjectSelection()
+		} : nil
+		conversation.onManagePlugins =
+		{
+			[weak self] in
+			self?.showSettings()
+			self?.settings.showPlugins()
+		}
 		conversation.onViewChanges =
 		{
 			[weak self] in
