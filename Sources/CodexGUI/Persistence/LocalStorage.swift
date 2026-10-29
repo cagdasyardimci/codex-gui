@@ -7,6 +7,8 @@ final class LocalStorage
 	{
 		static let recentProjects = "CodexGUI.recentProjects"
 		static let drafts = "CodexGUI.drafts"
+		static let queuedMessages = "CodexGUI.queuedMessages"
+		static let queueingEnabled = "CodexGUI.queueingEnabled"
 		static let selectedThreads = "CodexGUI.selectedThreads"
 		static let modelPreference = "CodexGUI.modelPreference"
 		static let runPreferences = "CodexGUI.runPreferences"
@@ -454,6 +456,123 @@ final class LocalStorage
 		return records[projectPath]?[draftKey] ?? []
 	}
 
+	func queueingEnabled(
+		for project: URL,
+		threadID: String?
+	) -> Bool
+	{
+		let records = defaults
+			.dictionary(forKey: Key.queueingEnabled) as? [String: [String: Bool]] ?? [:]
+		return records[canonicalPath(for: project)]?[Self.draftKey(for: threadID)] ?? true
+	}
+
+	func saveQueueingEnabled(
+		_ enabled: Bool,
+		for project: URL,
+		threadID: String?
+	)
+	{
+		var records = defaults
+			.dictionary(forKey: Key.queueingEnabled) as? [String: [String: Bool]] ?? [:]
+		records[canonicalPath(for: project), default: [:]][Self.draftKey(for: threadID)] = enabled
+		defaults.set(
+			records,
+			forKey: Key.queueingEnabled
+		)
+	}
+
+	func queuedMessages(
+		for project: URL,
+		threadID: String?
+	) -> [QueuedComposerMessage]
+	{
+		queueState(
+			for: project,
+			threadID: threadID
+		).messages
+	}
+
+	func queuedMessageEdit(
+		for project: URL,
+		threadID: String?
+	) -> QueuedComposerEdit?
+	{
+		queueState(
+			for: project,
+			threadID: threadID
+		).edit
+	}
+
+	private func queueState(
+		for project: URL,
+		threadID: String?
+	) -> ComposerQueueState
+	{
+		let records = defaults
+			.dictionary(forKey: Key.queuedMessages) as? [String: [String: Data]] ?? [:]
+		guard let data = records[canonicalPath(for: project)]?[Self.draftKey(for: threadID)]
+		else
+		{
+			return ComposerQueueState(
+				messages: [],
+				edit: nil
+			)
+		}
+		return decodedQueueState(data)
+	}
+
+	private func decodedQueueState(_ data: Data) -> ComposerQueueState
+	{
+		if let state = try? JSONDecoder()
+			.decode(
+				ComposerQueueState.self,
+				from: data
+			)
+		{
+			return state
+		}
+		let legacy = (try? JSONDecoder().decode(
+			[QueuedComposerMessage].self,
+			from: data
+		)) ?? []
+		return ComposerQueueState(
+			messages: legacy,
+			edit: nil
+		)
+	}
+
+	func saveQueuedMessages(
+		_ messages: [QueuedComposerMessage],
+		for project: URL,
+		threadID: String?,
+		editing: QueuedComposerEdit? = nil
+	)
+	{
+		var records = defaults
+			.dictionary(forKey: Key.queuedMessages) as? [String: [String: Data]] ?? [:]
+		let previous = queueState(
+			for: project,
+			threadID: threadID
+		)
+		let state = ComposerQueueState(
+			messages: messages,
+			edit: editing
+		)
+		guard let data = try? JSONEncoder().encode(state)
+		else
+		{
+			return
+		}
+		records[canonicalPath(for: project), default: [:]][Self.draftKey(for: threadID)] = messages
+			.isEmpty && editing == nil ? nil : data
+		defaults.set(
+			records,
+			forKey: Key.queuedMessages
+		)
+		pruneOwnedImages(from: previous.messages
+			.flatMap(\.context) + (previous.edit?.message.context ?? []))
+	}
+
 	func saveDraftContext(
 		_ items: [ComposerContextItem],
 		for project: URL,
@@ -876,6 +995,18 @@ final class LocalStorage
 	private func persistedOwnedImagePaths() -> Set<String>
 	{
 		var paths: Set<String> = []
+		let queueRecords = defaults
+			.dictionary(forKey: Key.queuedMessages) as? [String: [String: Data]] ?? [:]
+
+		for data in queueRecords.values.flatMap(\.values)
+		{
+			let state = decodedQueueState(data)
+			addOwnedImagePaths(
+				in: state.messages.flatMap(\.context) + (state.edit?.message.context ?? []),
+				to: &paths
+			)
+		}
+
 		for projectDrafts in contextRecords(forKey: Key.draftContext).values
 		{
 			for items in projectDrafts.values

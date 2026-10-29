@@ -1,6 +1,6 @@
 import Foundation
 
-struct SkillReference: Equatable
+struct SkillReference: Codable, Equatable
 {
 	let name: String
 	let path: String
