@@ -36,6 +36,10 @@ extension WorkspaceEffectRunner
 		error: Error
 	) -> OperationFailure
 	{
+		if let failure = error as? ServerQueueExecutionFailure
+		{
+			return failure.failure
+		}
 		if case AppServerError.requestRejected(let message) = error,
 			ConversationLock.isAnotherApp(message)
 		{
@@ -97,6 +101,10 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .serverQueue(let operation): return .composer(.serverQueueFinished(
+				operation,
+				.failed(failure)
+			))
 		case .bindGitTurnBaseline(let operation):
 			return .execution(.gitTurnBaselineBindingFinished(
 				context,

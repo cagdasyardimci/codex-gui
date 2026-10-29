@@ -10,6 +10,8 @@ Codex GUI communicates with the installed `codex app-server` process over its ne
 
 The app sends `experimentalApi: true` in `initialize` because it uses methods and fields marked experimental by the installed protocol. This is a client opt-in. It does not mean the server negotiated or guaranteed support for every experimental method the app uses.
 
+The experimental message queue subset was exercised against installed CLI 0.164.0 with an isolated local provider: pagination, add/update/reorder/delete, rejection of start during an active turn, interrupt retention and selected-entry Resume. This does not promote 0.164.0 to a fully verified baseline. Queue ownership and fallback follow [architecture](architecture.md#ownership-and-recovery).
+
 Backend diagnostic redaction is pattern-based, so unnamed secrets, unusual encodings and truncated values can remain visible. Review reports before sharing them. Buffer limits and recognized patterns belong to [BackendDiagnostics](../Sources/CodexGUI/CodexClient/Diagnostics/BackendDiagnostics.swift).
 
 ## Verifying a CLI upgrade

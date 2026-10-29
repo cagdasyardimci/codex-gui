@@ -13,6 +13,24 @@ final class ConcurrentChatService: CodexService
 		let text: String
 	}
 
+	var queueAPISupported = false
+	var canProbeThreadQueue: Bool
+	{
+		queueAPISupported
+	}
+	var serverQueue: [String: [ThreadQueuedSubmission]] = [:]
+	var serverQueueCalls: [String] = []
+	var serverQueuePaused: Set<String> = []
+	var serverQueueDeleteMissing = false
+	var serverQueueDeleteFailureAfterRemoval: Error?
+	var serverQueueSteerFailure: Error?
+	var serverQueueSteeredInputs: [Data] = []
+	var serverQueueFailure: Error?
+	var serverQueueReadGate: RuntimeSignal?
+	var serverQueueReadStarted = RuntimeSignal()
+	var queueCheckpoint: (command: String, afterMutation: Bool)?
+	var queueCheckpointReached = RuntimeSignal()
+	var queueCheckpointRelease = RuntimeSignal()
 	let processIdentity = UUID()
 	let checkout: URL
 	var onEvent: ((AppServerEvent) -> Void)?
@@ -31,6 +49,7 @@ final class ConcurrentChatService: CodexService
 	private(set) var reads: [String] = []
 	private(set) var resumeDirectories: [(threadID: String, directory: URL?)] = []
 	var turns: [String: [CodexTurn]] = [:]
+	var readOverrides: [String: ThreadDetail] = [:]
 	var resumeOverrides: [String: ThreadDetail] = [:]
 	var suspendedResumes: Set<String> = []
 	var suspendedSteering: Set<String> = []
@@ -69,6 +88,8 @@ final class ConcurrentChatService: CodexService
 
 	func releaseSuspendedOperations()
 	{
+		queueCheckpointRelease.signal()
+		serverQueueReadGate?.signal()
 		for threadID in Array(pendingResumes.keys)
 		{
 			finishResume(threadID)
@@ -127,6 +148,28 @@ final class ConcurrentChatService: CodexService
 	func emit(_ event: AppServerEvent)
 	{
 		onEvent?(event)
+		if queueAPISupported, case .turnCompleted(
+			let threadID,
+			let turn
+		) = event
+		{
+			if turn.status == "interrupted" || turn
+				.status == "failed"
+			{
+				serverQueuePaused.insert(threadID)
+			}
+			else if turn.status == "completed", !serverQueuePaused.contains(threadID),
+					serverQueue[threadID]?.isEmpty == false
+			{
+				Task
+				{
+					@MainActor in _ = try? await self.startThreadQueue(
+						threadID: threadID,
+						queuedSubmissionID: nil
+					)
+				}
+			}
+		}
 	}
 
 	func executableVersion() async throws -> String
@@ -232,7 +275,7 @@ final class ConcurrentChatService: CodexService
 	func readThread(id: String) async throws -> ThreadDetail
 	{
 		reads.append(id)
-		return detail(id)
+		return readOverrides[id] ?? detail(id)
 	}
 
 	func loadEarlierTurns(

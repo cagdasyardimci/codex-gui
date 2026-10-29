@@ -663,6 +663,15 @@ struct WorkspaceStoreInputs
 		}
 		if composerDraft.queuedMessageEdit != nil
 		{
+			if store.model.composer.serverQueues[store.model.conversations.selectedConversation]?
+				.authority == .server,
+				let edit = composerDraft.queuedMessageEdit, edit.message.serverID != nil
+			{
+				return requestServerQueue(.update(edit.message.editing(
+					text: composerDraft.text,
+					context: composerDraft.context
+				)))
+			}
 			let context = store.operationContext(threadID: selectedThreadID)
 			store.dispatch(.composer(.queuedMessageResubmitted(
 				context,
@@ -704,6 +713,11 @@ struct WorkspaceStoreInputs
 				collaborationMode: captured.collaborationMode,
 				serviceTier: captured.serviceTier
 			)
+			if store.model.composer.serverQueues[store.model.conversations.selectedConversation]?
+				.authority == .server
+			{
+				return requestServerQueue(.add(message))
+			}
 			store.dispatch(.composer(.messageQueued(
 				captured.context,
 				message

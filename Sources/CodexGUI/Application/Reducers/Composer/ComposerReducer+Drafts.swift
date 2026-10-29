@@ -11,6 +11,14 @@ extension ComposerReducer
 	{
 		switch action
 		{
+		case .serverQueueRequested, .serverQueueEnqueueBegan,
+				.serverQueueMutationAccepted,
+				.serverQueueFinished:
+			reduceServerQueue(
+				action,
+				model: &model,
+				result: &result
+			)
 		case .messageQueued, .queuedMessageRemoved, .queuedMessageStartRequested,
 				.queuedMessageResumeRequested,
 				.queuedMessagesReordered, .queuedMessageEditBegan, .queuedMessageResubmitted,

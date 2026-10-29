@@ -177,6 +177,19 @@ struct SubmissionAcknowledgement
 
 enum ComposerAction
 {
+	case serverQueueRequested(ServerQueueOperation)
+	case serverQueueEnqueueBegan(
+		ServerQueueOperation,
+		UUID
+	)
+	case serverQueueMutationAccepted(
+		ServerQueueOperation,
+		ThreadQueuedSubmission?
+	)
+	case serverQueueFinished(
+		ServerQueueOperation,
+		OperationResult<ServerQueueResult>
+	)
 	case messageQueued(
 		OperationContext,
 		QueuedComposerMessage

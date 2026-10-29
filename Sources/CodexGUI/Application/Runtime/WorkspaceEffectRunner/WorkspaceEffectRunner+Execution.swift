@@ -28,6 +28,11 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .serverQueue(let operation):
+			return try await performServerQueue(
+				operation,
+				managedWorkspace: managedWorkspace
+			)
 		case .bindGitTurnBaseline(let operation):
 			try Task.checkCancellation()
 			guard isGitTurnBaselineBindingCurrent(operation)
@@ -892,7 +897,7 @@ extension WorkspaceEffectRunner
 		return detail
 	}
 
-	private func verifyWorkspace(_ workspace: TaskWorkspace?) async throws
+	func verifyWorkspace(_ workspace: TaskWorkspace?) async throws
 	{
 		guard let workspace
 		else
@@ -912,7 +917,7 @@ extension WorkspaceEffectRunner
 		}
 	}
 
-	private func validateConversationOwnership(
+	func validateConversationOwnership(
 		_ summary: ThreadSummary,
 		expectedThreadID: String?,
 		expectedDirectory: URL?,

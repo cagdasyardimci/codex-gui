@@ -7,6 +7,18 @@ extension WorkspaceStoreInputs
 		editing: Bool
 	)
 	{
+		if !editing,
+			store.model.composer.serverQueues[store.model.conversations.selectedConversation]?
+			.authority == .server,
+			store.model.composer.drafts[store.model.conversations.selectedConversation]?
+			.queuedMessages.first(where:
+			{
+				$0.id == id
+			})?.serverID != nil
+		{
+			_ = requestServerQueue(.delete(id))
+			return
+		}
 		let context = store
 			.operationContext(threadID: store.model.conversations.selectedConversation.threadID)
 		store.dispatch(.composer(.queuedMessageRemoved(
@@ -69,6 +81,11 @@ extension WorkspaceStoreInputs
 	@discardableResult
 	func resumeMessageQueue() -> WorkspaceOperationHandle?
 	{
+		if store.model.composer.serverQueues[store.model.conversations.selectedConversation]?
+			.authority == .server
+		{
+			return requestServerQueue(.resume(nil))
+		}
 		return startQueuedMessage(
 			conversation: store.model.conversations.selectedConversation,
 			resuming: true
@@ -77,6 +94,12 @@ extension WorkspaceStoreInputs
 
 	func reorderQueuedMessages(_ ids: [UUID])
 	{
+		if store.model.composer.serverQueues[store.model.conversations.selectedConversation]?
+			.authority == .server
+		{
+			_ = requestServerQueue(.reorder(ids))
+			return
+		}
 		store.dispatch(.composer(.queuedMessagesReordered(
 			queueContext(),
 			ids
@@ -108,6 +131,14 @@ extension WorkspaceStoreInputs
 	func steerQueuedMessage(_ id: UUID) -> WorkspaceOperationHandle?
 	{
 		let conversation = store.model.conversations.selectedConversation
+		if store.model.composer.serverQueues[conversation]?.authority == .server
+		{
+			if WorkspaceEligibility(model: store.model).canResumeQueue
+			{
+				return requestServerQueue(.resume(id))
+			}
+			return nil
+		}
 		if WorkspaceEligibility(model: store.model).canResumeQueue
 		{
 			return startQueuedMessage(
@@ -200,6 +231,7 @@ extension WorkspaceStoreInputs
 
 	func continueMessageQueues()
 	{
+		_ = synchronizeServerQueues()
 		for conversation in store.model.composer.drafts.keys
 		{
 			if ComposerReducer.queueNeedsSettlement(
@@ -215,7 +247,9 @@ extension WorkspaceStoreInputs
 		}
 		for conversation in store.model.composer.automaticQueueConversations
 		{
-			guard store.model.execution(for: conversation).agentOutcome == .completed
+			guard !store.factoryDependencies.service.canProbeThreadQueue || store.model.composer
+				.serverQueues[conversation]?.authority == .local,
+				store.model.execution(for: conversation).agentOutcome == .completed
 			else
 			{
 				continue

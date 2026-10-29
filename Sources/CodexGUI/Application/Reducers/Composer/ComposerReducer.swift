@@ -30,6 +30,10 @@ enum ComposerReducer
 	) -> WorkspaceReduction
 	{
 		var result = WorkspaceReduction()
+		observeServerQueues(
+			action,
+			model: &model
+		)
 		switch action
 		{
 		case .conversations(.newChatOpened(let context)):
