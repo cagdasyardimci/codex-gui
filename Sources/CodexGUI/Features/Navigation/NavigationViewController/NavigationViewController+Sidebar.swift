@@ -453,6 +453,21 @@ extension NavigationViewController
 			isPinned: pinnedProjectPaths.contains(projectKey(for: project)),
 			canStartChat: canStartProjectChat
 		)
+		cell.hoverCard = ProjectHoverCard(
+			project: project,
+			name: displayName(for: project),
+			isPinned: pinnedProjectPaths.contains(projectKey(for: project)),
+			loadedTaskCount: project == currentProject ? threads.count : nil,
+			activeTaskCount: project == currentProject ? currentProjectActiveTaskCount : nil,
+			onTogglePin:
+			{
+				[weak self] in self?.onToggleProjectPin?(project)
+			},
+			onEditProject:
+			{
+				[weak self] in self?.editProject(project)
+			}
+		)
 		cell.onShowInfo =
 		{
 			[weak self] cell in

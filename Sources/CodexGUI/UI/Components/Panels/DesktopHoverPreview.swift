@@ -75,7 +75,7 @@ final class DesktopHoverPreview
 	private let presentation = DesktopDelayedPresentation()
 	private weak var anchor: NSView?
 	private var placement: Placement = .below
-	private var pendingDismissal: Task<Void, Never>?
+	private(set) var pendingDismissal: Task<Void, Never>?
 
 	var panel: NSPanel?
 	{
@@ -248,6 +248,10 @@ final class DesktopHoverPreview
 
 	func scheduleDismissal(
 		after delay: Duration = .milliseconds(200),
+		shouldDismiss: @escaping @MainActor () -> Bool =
+		{
+			true
+		},
 		onDismiss: @escaping @MainActor () -> Void
 	)
 	{
@@ -264,6 +268,12 @@ final class DesktopHoverPreview
 				return
 			}
 			guard !Task.isCancelled, let self
+			else
+			{
+				return
+			}
+			self.pendingDismissal = nil
+			guard shouldDismiss()
 			else
 			{
 				return

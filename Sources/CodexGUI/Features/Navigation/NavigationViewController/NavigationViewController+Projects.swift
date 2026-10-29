@@ -122,6 +122,12 @@ extension NavigationViewController
 		{
 			[weak self] in self?.onToggleProjectPin?(project)
 		}
+		projectInfoView.onOpenProject =
+		{
+			[weak self] in
+			self?.projectInfoPopover.performClose(nil)
+			NSWorkspace.shared.open(project)
+		}
 		projectInfoView.onEditProject =
 		{
 			[weak self] in self?.editProject(project)

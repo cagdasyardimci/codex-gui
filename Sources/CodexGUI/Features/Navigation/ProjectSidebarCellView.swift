@@ -5,6 +5,13 @@ final class ProjectSidebarCellView: NSTableCellView
 {
 	var onShowInfo: ((ProjectSidebarCellView) -> Void)?
 	var onNewChat: (() -> Void)?
+	var hoverCard: ProjectHoverCard?
+	{
+		willSet
+		{
+			hoverCard?.dismiss()
+		}
+	}
 
 	private let infoButton = SidebarIconButton(role: .projectInfo)
 	private let newChatButton = SidebarIconButton(role: .projectNewChat)
@@ -177,8 +184,22 @@ final class ProjectSidebarCellView: NSTableCellView
 			return
 		}
 		isPointerInside = hovered
+		if hovered
+		{
+			hoverCard?.show(beside: self)
+		}
+		else
+		{
+			hoverCard?.scheduleDismissal()
+		}
 		updateActions()
 		layoutSubtreeIfNeeded()
+	}
+
+	override func viewWillMove(toWindow newWindow: NSWindow?)
+	{
+		hoverCard?.dismiss()
+		super.viewWillMove(toWindow: newWindow)
 	}
 
 	private func updateActions()
@@ -199,10 +220,12 @@ final class ProjectSidebarCellView: NSTableCellView
 	}
 	@objc private func showInfo()
 	{
+		hoverCard?.dismiss()
 		onShowInfo?(self)
 	}
 	@objc private func startChat()
 	{
+		hoverCard?.dismiss()
 		if newChatButton.isEnabled
 		{
 			onNewChat?()
