@@ -177,6 +177,7 @@ struct SubmissionAcknowledgement
 
 enum ComposerAction
 {
+	case queuedSteeringDetached(SteeringOperation)
 	case serverQueueRequested(ServerQueueOperation)
 	case serverQueueEnqueueBegan(
 		ServerQueueOperation,

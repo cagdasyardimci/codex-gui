@@ -453,11 +453,22 @@ extension WorkspaceEffectRunner
 			let turnID: String
 			do
 			{
-				turnID = try await service.steerTurn(
-					threadId: operation.context.threadID!,
-					expectedTurnId: operation.context.turnID!,
-					inputs: operation.submission.inputs
-				)
+				if operation.submission.serverQueueEntry != nil || operation.submission
+					.queueSteeringTransfer
+				{
+					turnID = try await steerTransferredQueueMessage(
+						operation,
+						managedWorkspace: managedWorkspace
+					)
+				}
+				else
+				{
+					turnID = try await service.steerTurn(
+						threadId: operation.context.threadID!,
+						expectedTurnId: operation.context.turnID!,
+						inputs: operation.submission.inputs
+					)
+				}
 			}
 			catch
 			{

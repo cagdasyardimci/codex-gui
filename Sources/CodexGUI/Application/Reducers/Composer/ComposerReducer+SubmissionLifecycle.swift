@@ -140,6 +140,30 @@ extension ComposerReducer
 				operation.submission,
 				model: &model
 			)
+			if operation.submission.serverQueueEntry != nil || operation.submission
+				.queueSteeringTransfer,
+				var draft = model.composer.drafts[operation.submission.conversation],
+				let index = draft.queuedMessages
+				.firstIndex(where:
+					{
+						$0.id == operation.submission.queuedMessageID
+					})
+			{
+				draft.queuedMessages[index].steeringPhase = operation.submission
+					.serverQueueEntry == nil ? .sending : .deleting
+				draft.queuedMessages[index].steeringInputJSON = operation.submission
+					.serverQueueEntry?.inputJSON ?? operation.submission.queuedSteeringInput
+				draft.queuedMessages[index].enqueueUncertain = true
+				draft.revision += 1
+				persist(
+					draft,
+					conversation: operation.submission.conversation,
+					context: operation.context,
+					model: &model,
+					result: &result
+				)
+			}
+
 		case .submissionPrepared(
 			let context,
 			let observation
@@ -516,6 +540,35 @@ extension ComposerReducer
 		else
 		{
 			model.composer.uncertainSubmissions.insert(context.requestID)
+			if case .failed(let failure) = observation, !failure.outcomeIsUncertain,
+				var draft = model.composer.drafts[submission.conversation],
+				let index = draft.queuedMessages
+				.firstIndex(where:
+				{
+					$0.id == submission.queuedMessageID
+				}),
+				draft.queuedMessages[index].steeringPhase == .sending
+			{
+				draft.queuedMessages[index].steeringPhase = .ready
+				draft.queuedMessages[index].enqueueUncertain = false
+				draft.revision += 1
+				persist(
+					draft,
+					conversation: submission.conversation,
+					context: OperationContext(
+						workspace: context.workspace,
+						generation: context.generation,
+						requestID: UUID(),
+						threadID: context.threadID
+					),
+					model: &model,
+					result: &result
+				)
+			}
+		}
+		if submission.serverQueueEntry != nil || submission.queueSteeringTransfer
+		{
+			model.composer.serverQueues[submission.conversation]?.needsRefresh = true
 		}
 	}
 

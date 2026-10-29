@@ -84,6 +84,43 @@ extension ComposerReducer
 	{
 		switch action
 		{
+		case .queuedSteeringDetached(let operation):
+			guard valid(
+				operation.context,
+				model
+			),
+				model.execution(for: operation.submission.conversation)
+				.pendingSteering == operation.context,
+				var draft = model.composer.drafts[operation.submission.conversation],
+				let index = draft.queuedMessages
+				.firstIndex(where:
+					{
+						$0.id == operation.submission.queuedMessageID
+					})
+			else
+			{
+				return
+			}
+			draft.queuedMessages[index].serverID = nil
+			draft.queuedMessages[index].steeringPhase = .sending
+			draft.queuedMessages[index].enqueueUncertain = true
+			draft.revision += 1
+			model.composer.serverQueues[operation.submission.conversation]?.entries.removeAll
+			{
+				$0.localID == operation.submission.queuedMessageID
+			}
+			persist(
+				draft,
+				conversation: operation.submission.conversation,
+				context: OperationContext(
+					workspace: operation.context.workspace,
+					generation: operation.context.generation,
+					requestID: UUID(),
+					threadID: operation.context.threadID
+				),
+				model: &model,
+				result: &result
+			)
 		case .serverQueueRequested(let operation):
 			let conversation = operation.conversation
 			guard valid(

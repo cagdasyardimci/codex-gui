@@ -11,7 +11,7 @@ extension ComposerReducer
 	{
 		switch action
 		{
-		case .serverQueueRequested, .serverQueueEnqueueBegan,
+		case .queuedSteeringDetached, .serverQueueRequested, .serverQueueEnqueueBegan,
 				.serverQueueMutationAccepted,
 				.serverQueueFinished:
 			reduceServerQueue(

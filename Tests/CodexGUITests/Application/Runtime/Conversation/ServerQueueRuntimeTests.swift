@@ -49,6 +49,68 @@ struct ServerQueueRuntimeTests
 		try await harness.fixture.store.drainPersistence()
 	}
 
+	@Test func serverEditsReorderingAndDeletionKeepServerAndClientIdentity() async throws
+	{
+		let harness = try ConcurrentChatFixture()
+		defer
+		{
+			harness.cleanup()
+		}
+		harness.service.queueAPISupported = true
+		try await start(
+			harness,
+			queued: ["A", "B", "C"]
+		)
+		let original = harness.fixture.currentSnapshot.queuedMessages
+		let edited = original[1]
+		harness.fixture.inputs.beginEditingQueuedMessage(edited)
+		harness.fixture.inputs.updateDraft("Revised B")
+		let update = try #require(harness.fixture.inputs.send())
+		#expect(await update.wait() == .finished)
+		try await settled(harness)
+		let messages = harness.fixture.currentSnapshot.queuedMessages
+		#expect(messages.map(\.text) == ["A", "Revised B", "C"])
+		#expect(messages[1].id == edited.id)
+		#expect(messages[1].serverID == edited.serverID)
+		harness.fixture.inputs.reorderQueuedMessages([original[2].id, edited.id, original[0].id])
+		try await wait(harness)
+		{
+			harness.fixture.currentSnapshot.queuedMessages.first?.id == original[2].id
+		}
+		try await settled(harness)
+		harness.fixture.inputs.removeQueuedMessage(
+			edited.id,
+			editing: false
+		)
+		try await wait(harness)
+		{
+			harness.fixture.currentSnapshot.queuedMessages.count == 2
+		}
+		try await settled(harness)
+		#expect(harness.fixture.currentSnapshot.queuedMessages.map(\.text) == ["C", "A"])
+		#expect(harness.service.serverQueue["chat-a"]?.map(\.localID) == [
+			original[2].id,
+			original[0].id
+		])
+		#expect(harness.fixture.currentSnapshot.canSteerQueuedMessage)
+		let steering = try #require(harness.fixture.inputs.steerQueuedMessage(original[0].id))
+		#expect(await steering.wait() == .finished)
+		try await settled(harness)
+		#expect(harness.service.steering.map(\.text) == ["A"])
+		#expect(harness.fixture.currentSnapshot.queuedMessages.map(\.text) == ["C"])
+		#expect(harness.service.serverQueue["chat-a"]?.map(\.preview) == ["C"])
+		try harness.completeLatest(
+			"chat-a",
+			status: "completed"
+		)
+		try await wait(harness)
+		{
+			harness.service.starts.count == 2
+		}
+		#expect(harness.service.starts.map(\.text) == ["First", "C"])
+		try await harness.fixture.store.drainPersistence()
+	}
+
 	@Test func invalidatedPaginatedReadCannotPublishStaleQueueOrChangeSelectedConversation(
 	) async throws
 	{
@@ -313,6 +375,299 @@ struct ServerQueueRuntimeTests
 			$0.hasPrefix("add:")
 		})
 		try await harness.fixture.store.drainPersistence()
+	}
+
+	@Test(arguments: ["deleteMissing", "deleteLostReply", "steerRejected", "steerLostReply"])
+	func steeringFailuresNeverReplayTheDetachedInput(_ scenario: String) async throws
+	{
+		let harness = try ConcurrentChatFixture()
+		defer
+		{
+			harness.cleanup()
+		}
+		harness.service.queueAPISupported = true
+		try await start(
+			harness,
+			queued: ["Only once"]
+		)
+		let message = try #require(harness.fixture.currentSnapshot.queuedMessages.first)
+		switch scenario
+		{
+		case "deleteMissing": harness.service.serverQueueDeleteMissing = true
+		case "deleteLostReply": harness.service
+			.serverQueueDeleteFailureAfterRemoval = AppServerError.disconnected
+		case "steerRejected": harness.service.serverQueueSteerFailure = AppServerError
+			.requestRejected("Turn ended")
+		default: harness.service.serverQueueSteerFailure = AppServerError.disconnected
+		}
+		let operation = try #require(harness.fixture.inputs.steerQueuedMessage(message.id))
+		guard case .failed = await operation.wait()
+		else
+		{
+			Issue.record("Expected steering failure"); return
+		}
+		try await settled(harness)
+		let held = try #require(harness.fixture.currentSnapshot.queuedMessages.first)
+		#expect(held.id == message.id)
+		#expect(held.serverID == nil)
+		#expect(held.enqueueUncertain == (scenario != "steerRejected"))
+		#expect(harness.service.steering.count == (scenario.hasPrefix("delete") ? 0 : 1))
+		#expect(harness.service.serverQueue["chat-a"]?.isEmpty == true)
+		#expect(harness.fixture.inputs.steerQueuedMessage(message.id) == nil)
+		try harness.completeLatest(
+			"chat-a",
+			status: "interrupted"
+		)
+		try await settled(harness)
+		if scenario !=
+			"steerRejected"
+		{
+			#expect(harness.fixture.inputs.resumeMessageQueue() == nil)
+		}
+		#expect(harness.service.starts.map(\.text) == ["First"])
+		#expect(harness.service.serverQueueCalls.filter
+		{
+			$0.hasPrefix("add:")
+		}.count == 1)
+		try await harness.fixture.store.drainPersistence()
+		#expect(harness.fixture.draftStorage
+			.queuedMessages(
+				for: harness.project,
+				threadID: "chat-a"
+			).first?.steeringPhase == held
+			.steeringPhase)
+	}
+
+	@Test func queuedSteeringPersistsBeforeSendingAndRejectsDoubleClicks() async throws
+	{
+		let harness = try ConcurrentChatFixture()
+		defer
+		{
+			harness.cleanup()
+		}
+		harness.service.queueAPISupported = true
+		try await start(
+			harness,
+			queued: ["Only once"]
+		)
+		let message = try #require(harness.fixture.currentSnapshot.queuedMessages.first)
+		let old = try #require(harness.service.serverQueue["chat-a"]?.first)
+		let entry = try ThreadQueuedSubmission(json: [
+			"id": old.id,
+			"clientUserMessageId": old.clientUserMessageID,
+			"input": old.input + [["type": "image", "url": "https://example.invalid/image.png"]]
+		])
+		harness.service.serverQueue["chat-a"] = [entry]
+		harness.service.emit(.threadQueueChanged(threadId: "chat-a"))
+		try await settled(harness)
+		harness.service.suspendedSteering.insert("chat-a")
+		harness.service.queueCheckpoint = ("delete", false)
+		let operation = try #require(harness.fixture.inputs.steerQueuedMessage(message.id))
+		await harness.service.queueCheckpointReached.wait()
+		let deleting = try #require(harness.fixture.draftStorage.queuedMessages(
+			for: harness.project,
+			threadID: "chat-a"
+		).first)
+		#expect(deleting.steeringPhase == .deleting)
+		#expect(deleting.serverID == entry.id)
+		#expect(deleting.enqueueUncertain == true)
+		#expect(harness.service.serverQueue["chat-a"] == [entry])
+		#expect(harness.service.serverQueueSteeredInputs.isEmpty)
+		harness.service.queueCheckpointRelease.signal()
+		await harness.service.waitForSteering("chat-a")
+		#expect(harness.fixture.inputs.steerQueuedMessage(message.id) == nil)
+		#expect(harness.service.serverQueue["chat-a"]?.isEmpty == true)
+		#expect(harness.service.serverQueueSteeredInputs == [entry.inputJSON])
+		let persisted = try #require(harness.fixture.draftStorage.queuedMessages(
+			for: harness.project,
+			threadID: "chat-a"
+		).first)
+		#expect(persisted.steeringPhase == .sending)
+		#expect(persisted.enqueueUncertain == true)
+		#expect(persisted.serverID == nil)
+		harness.service.finishSteering("chat-a")
+		#expect(await operation.wait() == .finished)
+		try await settled(harness)
+		#expect(harness.fixture.currentSnapshot.queuedMessages.isEmpty)
+		#expect(harness.service.steering.count == 1)
+		let delete = try #require(harness.service.serverQueueCalls
+			.firstIndex
+			{
+				$0.hasPrefix("delete:")
+			})
+		let steer = try #require(harness.service.serverQueueCalls
+			.firstIndex
+			{
+				$0.hasPrefix("steer:")
+			})
+		#expect(delete < steer)
+		try await harness.fixture.store.drainPersistence()
+	}
+
+	@Test(arguments: [QueuedComposerMessage.SteeringPhase.deleting, .sending])
+	func restoredSteeringJournalCannotBecomeAFreshSubmission(_ phase: QueuedComposerMessage
+		.SteeringPhase) async throws
+	{
+		let harness = try ConcurrentChatFixture()
+		defer
+		{
+			harness.cleanup()
+		}
+		harness.service.queueAPISupported = true
+		var message = QueuedComposerMessage(
+			id: UUID(),
+			text: "Uncertain handoff",
+			context: [],
+			modelID: nil,
+			effort: nil,
+			preferences: .standard,
+			skills: [],
+			collaborationMode: nil,
+			serviceTier: nil
+		)
+		message.serverID = phase == .deleting ? "deleted-entry" : nil
+		message.steeringPhase = phase
+		message.enqueueUncertain = true
+		harness.fixture.draftStorage.saveQueuedMessages(
+			[message],
+			for: harness.project,
+			threadID: "chat-a"
+		)
+		await harness.fixture.inputs.connect()
+		try await harness.select("chat-a")
+		try await settled(harness)
+		#expect(harness.fixture.currentSnapshot.queuedMessages.first?.id == message.id)
+		#expect(harness.fixture.inputs.resumeMessageQueue() == nil)
+		#expect(harness.fixture.inputs.steerQueuedMessage(message.id) == nil)
+		#expect(harness.service.starts.isEmpty)
+		#expect(harness.service.steering.isEmpty)
+		#expect(!harness.service.serverQueueCalls.contains
+		{
+			$0.hasPrefix("add:")
+		})
+		try await harness.fixture.store.drainPersistence()
+	}
+
+	@Test(
+		arguments: ["add", "update", "delete", "steer"],
+		[false, true]
+	)
+	func retiredQueueMutationsIgnoreLateReplies(
+		command: String,
+		shutdown: Bool
+	) async throws
+	{
+		let harness = try ConcurrentChatFixture()
+		defer
+		{
+			harness.cleanup()
+		}
+		harness.service.queueAPISupported = true
+		try await start(
+			harness,
+			queued: ["Original"]
+		)
+		let original = try #require(harness.fixture.currentSnapshot.queuedMessages.first)
+		let priorCalls = harness.service.serverQueueCalls.filter
+		{
+			$0.hasPrefix(command + ":")
+		}
+		.count
+		harness.service.queueCheckpoint = (command, true)
+		let operation: WorkspaceOperationHandle
+		switch command
+		{
+		case "add":
+			harness.fixture.inputs.updateDraft("New entry")
+			operation = try #require(harness.fixture.inputs.send())
+		case "update":
+			harness.fixture.inputs.beginEditingQueuedMessage(original)
+			harness.fixture.inputs.updateDraft("Edited entry")
+			operation = try #require(harness.fixture.inputs.send())
+		case "delete":
+			operation = try #require(harness.fixture.inputs
+				.requestServerQueue(.delete(original.id)))
+		default:
+			operation = try #require(harness.fixture.inputs.steerQueuedMessage(original.id))
+		}
+		await harness.service.queueCheckpointReached.wait()
+		switch command
+		{
+		case "add": #expect(harness.service.serverQueue["chat-a"]?.map(\.preview) == [
+				"Original",
+				"New entry"
+			])
+		case "update": #expect(harness.service.serverQueue["chat-a"]?
+				.map(\.preview) == ["Edited entry"])
+		default: #expect(harness.service.serverQueue["chat-a"]?.isEmpty == true)
+		}
+		let tasks = harness.fixture.store.executionTasks(for: operation.context)
+		#expect(!tasks.isEmpty)
+		if shutdown
+		{
+			harness.fixture.shutdown()
+		}
+		else
+		{
+			harness.service.onDisconnect?("connection lost")
+		}
+		let retiredDraft = harness.fixture.store.model.composer.drafts[.thread("chat-a")]
+		let retiredExecution = harness.fixture.store.model.execution(for: .thread("chat-a"))
+		var publications: [WorkspaceModel] = []
+		let observer = harness.fixture.store.observePublications
+		{
+			publications.append($0.model)
+		}
+		defer
+		{
+			harness.fixture.store.removePublicationObserver(observer)
+		}
+		harness.service.queueCheckpointRelease.signal()
+		for task in tasks
+		{
+			await task.value
+		}
+		#expect(await operation.wait() == (shutdown ? .cancelled : .finished))
+		try await harness.fixture.store.drainPersistence()
+		#expect(harness.fixture.store.model.composer.drafts[.thread("chat-a")] == retiredDraft)
+		let afterReply = harness.fixture.store.model.execution(for: .thread("chat-a"))
+		#expect(afterReply.state == retiredExecution.state)
+		#expect(afterReply.activeTurnID == retiredExecution.activeTurnID)
+		// A disconnected transport may retire its own pending handle without accepting its reply.
+		let expectedSteering = command == "steer" && !shutdown
+			? nil : retiredExecution.pendingSteering
+		#expect(afterReply.pendingSteering == expectedSteering)
+		#expect(afterReply.needsReconciliation == retiredExecution.needsReconciliation)
+		#expect(afterReply.hasUncertainRequest == retiredExecution.hasUncertainRequest)
+		#expect(publications.isEmpty == shutdown)
+		for published in publications
+		{
+			#expect(published.composer.drafts[.thread("chat-a")] == retiredDraft)
+			let execution = published.execution(for: .thread("chat-a"))
+			#expect(execution.state == retiredExecution.state)
+			#expect(execution.activeTurnID == retiredExecution.activeTurnID)
+			#expect(execution.needsReconciliation == retiredExecution.needsReconciliation)
+			#expect(execution.hasUncertainRequest == retiredExecution.hasUncertainRequest)
+			#expect(execution.pendingSteering == retiredExecution.pendingSteering ||
+				execution.pendingSteering == expectedSteering)
+		}
+		#expect(harness.fixture.draftStorage.queuedMessages(
+			for: harness.project,
+			threadID: "chat-a"
+		) == retiredDraft?.queuedMessages ?? [])
+		#expect(harness.fixture.draftStorage.queuedMessageEdit(
+			for: harness.project,
+			threadID: "chat-a"
+		) == retiredDraft?.queuedMessageEdit)
+		#expect(harness.service.starts.map(\.text) == ["First"])
+		#expect(harness.service.serverQueueCalls.filter
+		{
+			$0.hasPrefix(command + ":")
+		}.count == priorCalls + 1)
+		if command == "steer"
+		{
+			#expect(harness.service.steering.count == 1)
+		}
 	}
 
 	private func start(

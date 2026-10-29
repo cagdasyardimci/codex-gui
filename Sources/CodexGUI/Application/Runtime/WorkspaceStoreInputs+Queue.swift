@@ -137,7 +137,11 @@ extension WorkspaceStoreInputs
 			{
 				return requestServerQueue(.resume(id))
 			}
-			return nil
+			guard store.model.composer.serverQueues[conversation]?.pending == nil
+			else
+			{
+				return nil
+			}
 		}
 		if WorkspaceEligibility(model: store.model).canResumeQueue
 		{
