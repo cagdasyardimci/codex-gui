@@ -7,7 +7,7 @@ import Testing
 struct ConversationSubagentNavigationTests
 {
 
-	@Test func reusedActivityItemClearsSubagentNavigation() throws
+	@Test func subagentActionOwnsItsTooltipAndRetiresNavigationOnReuse() throws
 	{
 		_ = NSApplication.shared
 		let item = ConversationActivityCollectionItem()
@@ -27,9 +27,19 @@ struct ConversationSubagentNavigationTests
 			}
 		)
 		let previousButton = try subagentsButton(in: item.view)
+		#expect(previousButton.toolTip?.isEmpty == false)
+		#expect(item.view.toolTip == nil)
+		var ancestor = previousButton.superview
+		while let view = ancestor
+		{
+			#expect(view.toolTip == nil)
+			ancestor = view.superview
+		}
+		#expect(previousButton.dispatchConfiguredAction())
+		#expect(openCount == 1)
 		item.prepareForReuse()
 		previousButton.dispatchConfiguredAction()
-		#expect(openCount == 0)
+		#expect(openCount == 1)
 	}
 
 	@Test func overflowMenuSelectsEachChildAndDisablesMissingIDs() throws

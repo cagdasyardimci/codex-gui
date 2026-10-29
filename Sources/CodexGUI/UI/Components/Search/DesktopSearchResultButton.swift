@@ -74,6 +74,8 @@ final class DesktopSearchResultButton: DesktopLayerButton
 			)
 			setAccessibilityLabel(content.accessibilityLabel())
 			toolTip = content.toolTip
+			content.toolTip = nil
+			content.detailLabel.toolTip = nil
 		case .nativeAttachment(let path):
 			// Preserve AppKit's inline renderer, text metrics, truncation and natural control size.
 			let native = NSButton(

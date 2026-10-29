@@ -127,12 +127,12 @@ final class ProjectSidebarCellView: NSTableCellView
 		textField?.stringValue = name
 		textField?.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
 		refreshTitleColor()
-		toolTip = (isPinned ? "Pinned project\n" : "") + project.path
+		textField?.toolTip = nil
 		setAccessibilityLabel(isCurrent ? "Selected project \(name)" : "Open project \(name)")
 		infoButton.setAccessibilityLabel("Project actions for \(name)")
-		infoButton.toolTip = "Project actions"
+		infoButton.toolTip = nil
 		newChatButton.setAccessibilityLabel("Start a new conversation in project \(name)")
-		newChatButton.toolTip = "New Chat in \(name)"
+		newChatButton.toolTip = nil
 		newChatButton.isEnabled = canStartChat
 		updateActions()
 	}

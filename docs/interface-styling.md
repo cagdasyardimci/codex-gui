@@ -14,6 +14,8 @@ Validate configuration fit separately from available-space behavior. A valid con
 
 A reusable component owns its complete appearance, composition and interaction states. Feature adapters supply semantic content, selection, operation state and callbacks. They must not independently restyle the same variant. Infrastructure helpers support complete components; assembling the same helpers repeatedly in features is not shared component ownership.
 
+Action tooltips share [the tooltip presentation](../Sources/CodexGUI/UI/Components/Controls/DesktopTooltip.swift) through [native control adaptation](../Sources/CodexGUI/UI/Components/Controls/DesktopControlTooltip.swift). Preserve native action routing and keep transient panels passive; focus, pointer exit, dismissal and owner retirement belong to the shared lifecycle. Show shortcut badges only for actions wired in the local app. Give each hover target one tooltip owner: toolbar items with custom views leave presentation to those views, row-wide native tooltips must not cover custom actions, and content embedded in a tooltip-owning control must not register a second native tooltip.
+
 Domain eligibility, persistence and asynchronous request identity remain feature responsibilities. Native composition reuse must not merge independent decision lifetimes. Apply [DRY](../CONVENTIONS.md#dry-principle) when deciding whether callers share a contract.
 
 Find existing controls and compositions in [UI/Components](../Sources/CodexGUI/UI/Components/) before adding one. Follow [placement conventions](../CONVENTIONS.md#responsibility-boundaries) to select the owning source.

@@ -212,7 +212,6 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			previousPosition: previousPosition
 		)
 		arrangeActivityViews(arrangedViews)
-		view.toolTip = row.subagents.isEmpty ? nil : titleLabel.toolTip
 		view.setAccessibilityLabel(row.subagents.isEmpty ? row.title : titleLabel.toolTip)
 		view.needsLayout = true
 	}
