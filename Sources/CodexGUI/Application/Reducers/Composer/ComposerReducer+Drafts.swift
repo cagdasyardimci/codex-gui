@@ -34,7 +34,13 @@ extension ComposerReducer
 					conversation: conversation,
 					model: &model
 				)
-				model.composer.drafts[conversation] = restored
+				restorePausedQueue(
+					restored,
+					conversation: conversation,
+					context: context,
+					model: &model,
+					result: &result
+				)
 			}
 			mergeReferences(
 				references,
@@ -59,7 +65,13 @@ extension ComposerReducer
 				conversation: conversation,
 				model: &model
 			)
-			model.composer.drafts[conversation] = restored
+			restorePausedQueue(
+				restored,
+				conversation: conversation,
+				context: context,
+				model: &model,
+				result: &result
+			)
 		case .referencesLoaded(
 			let context,
 			let conversation,
@@ -214,6 +226,33 @@ extension ComposerReducer
 		}
 	}
 
+	private static func restorePausedQueue(
+		_ restored: ComposerDraft,
+		conversation: ConversationKey,
+		context: OperationContext,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		var draft = restored
+		guard !draft.queuedMessages.isEmpty || draft.queuedMessageEdit != nil
+		else
+		{
+			model.composer.drafts[conversation] = draft
+			return
+		}
+		draft.queuePaused = !draft.queuedMessages.isEmpty
+		draft.queuedMessageEdit = nil
+		draft.revision += 1
+		persist(
+			draft,
+			conversation: conversation,
+			context: context,
+			model: &model,
+			result: &result
+		)
+	}
+
 	static func persist(
 		_ draft: ComposerDraft,
 		conversation: ConversationKey,
@@ -222,11 +261,16 @@ extension ComposerReducer
 		result: inout WorkspaceReduction
 	)
 	{
-		let draft = hydratedDraft(
+		var draft = hydratedDraft(
 			draft,
 			conversation: conversation,
 			model: &model
 		)
+		if draft.queuedMessages.isEmpty && draft
+			.queuedMessageEdit == nil
+		{
+			draft.queuePaused = false
+		}
 		model.composer.drafts[conversation] = draft
 		if model.identity.canonicalCheckoutPath != nil
 		{

@@ -70,9 +70,78 @@ struct WorkspaceEligibility
 		return true
 	}
 
+	var canResubmitQueuedMessage: Bool
+	{
+		ownerAvailable && model.composer.serverQueues[model.conversations.selectedConversation]?
+			.pending == nil && model.composer.drafts[model.conversations.selectedConversation]?
+			.queuedMessageEdit != nil
+			&& !model.conversations.showingArchived && model.conversations.pendingSelection == nil
+			&& model.conversations.pendingManagement == nil
+	}
+
+	func canAutomaticallyStartQueue(in conversation: ConversationKey) -> Bool
+	{
+		model.composer.automaticQueueConversations.contains(conversation)
+			&& model.composer.drafts[conversation]?.queuePaused != true
+			&& model.execution(for: conversation).agentOutcome == .completed
+	}
+
+	var canResumeQueue: Bool
+	{
+		guard let draft = model.composer.drafts[model.conversations.selectedConversation]
+		else
+		{
+			return false
+		}
+		let server = model.composer.serverQueues[model.conversations.selectedConversation]
+		return draft.queuePaused && !draft.queuedMessages.isEmpty && draft.queuedMessageEdit == nil
+			&& !draft.queuedMessages.contains(where:
+				{
+					$0.enqueueUncertain == true
+				})
+			&& server?.pending == nil && server?.authority != .probing
+			&& server?.lastFailure?.outcomeIsUncertain != true && canSend
+	}
+
+	var canQueue: Bool
+	{
+		guard model.composer.drafts[model.conversations.selectedConversation]?
+			.queueingEnabled != false,
+			model.composer.serverQueues[model.conversations.selectedConversation]?.pending == nil,
+			model.composer.serverQueues[model.conversations.selectedConversation]?
+			.authority != .probing,
+			model.composer.serverQueues[model.conversations.selectedConversation]?.lastFailure?
+			.outcomeIsUncertain != true,
+			model.conversations.selectedConversation.threadID != nil,
+			model.execution.state.isBusy, model.execution.activeTurnID != nil,
+			model.execution.activeThreadID == model.conversations.selectedConversation.threadID,
+			!model.execution.stopRequested,
+			!model.execution.needsReconciliation, !model.execution.hasUncertainRequest,
+			model.execution.state != .disconnected, model.execution.state != .failed
+		else
+		{
+			return false
+		}
+		var idle = model
+		idle.execution = ExecutionModel(state: .ready)
+		return WorkspaceEligibility(model: idle).canSend
+	}
+
 	var canSend: Bool
 	{
 		ownerAvailable
+			&& model.composer.serverQueues[model.conversations.selectedConversation]?.lastFailure?
+			.outcomeIsUncertain != true
+			&& model.composer.serverQueues[model.conversations.selectedConversation]?.pending?
+			.isMutation != true
+			&& model.composer.serverQueues[model.conversations.selectedConversation]?
+			.awaitingStartedTurn != true
+			&&
+			!(model.composer.drafts[model.conversations.selectedConversation]?.queuedMessages
+				.contains(where:
+					{
+						$0.enqueueUncertain == true
+					}) ?? false)
 			&& model.connection.isConnected
 			&& !model.execution.isTaskActive
 			&& model.execution.state != .disconnected
@@ -92,7 +161,8 @@ struct WorkspaceEligibility
 
 	var canSteer: Bool
 	{
-		ownerAvailable
+		model.composer.drafts[model.conversations.selectedConversation]?.queuedMessageEdit == nil
+			&& ownerAvailable
 			&& model.connection.isConnected
 			&& model.execution.state.isBusy
 			&& model.execution.state != .stopping
@@ -175,7 +245,7 @@ struct WorkspaceEligibility
 
 	func acceptsSubmission(_ submission: ComposerSubmission) -> Bool
 	{
-		canSend && matches(
+		canSubmit(submission) && matches(
 			submission,
 			steering: false
 		) && hasInput(submission)
@@ -197,7 +267,7 @@ struct WorkspaceEligibility
 		switch operation
 		{
 		case .submission(let submission):
-			return canSend && matches(
+			return canSubmit(submission) && matches(
 				submission,
 				steering: false
 			)
@@ -260,27 +330,83 @@ struct WorkspaceEligibility
 		}
 	}
 
+	private func canSubmit(_ submission: ComposerSubmission) -> Bool
+	{
+		guard submission.queuedMessageID != nil
+		else
+		{
+			return canSend
+		}
+		var scoped = model
+		scoped.conversations.selectedConversation = submission.conversation
+		return WorkspaceEligibility(model: scoped).canSend
+	}
+
+	private func queuedMessageMatches(
+		_ submission: ComposerSubmission,
+		steering: Bool
+	) -> Bool
+	{
+		guard let id = submission.queuedMessageID,
+				let messages = model.composer.drafts[submission.conversation]?.queuedMessages,
+				let message = (steering || model.composer.drafts[submission.conversation]?
+				.queuePaused == true) ? messages.first(where:
+				{
+					$0.id == id
+				}) : messages.first,
+				message.id == id
+		else
+		{
+			return false
+		}
+		if steering, let serverID = message.serverID,
+			submission.serverQueueEntry?.id != serverID
+		{
+			return false
+		}
+		return message.text == submission.draft.text && message.context == submission.draft.context
+			&& message.modelID == submission.modelID && message.effort == submission.effort
+			&& message.preferences == submission.preferences && message.skills == submission.skills
+			&& message.collaborationMode == submission.collaborationMode && message
+			.serviceTier == submission.serviceTier
+	}
+
 	private func matches(
 		_ submission: ComposerSubmission,
 		steering: Bool
 	) -> Bool
 	{
+
 		let currentDraft = model.composer.drafts[submission.conversation] ?? ComposerDraft()
-		return submission.context.belongsTo(
-			workspace: model.identity,
-			generation: model.connection.generation
-		)
-			&& submission.conversation == model.conversations.selectedConversation
-			&& submission.context.threadID == submission.conversation.threadID
-			&& matchesCapturedDraft(
+		let capturedValuesMatch: Bool
+		if submission.queuedMessageID != nil
+		{
+			capturedValuesMatch = queuedMessageMatches(
+				submission,
+				steering: steering
+			)
+		}
+		else
+		{
+			capturedValuesMatch = matchesCapturedDraft(
 				currentDraft,
 				submission: submission,
 				steering: steering
 			)
-			&& matchesCapturedPreferences(
-				submission,
-				steering: steering
-			)
+				&& matchesCapturedPreferences(
+					submission,
+					steering: steering
+				)
+		}
+		return submission.context.belongsTo(
+			workspace: model.identity,
+			generation: model.connection.generation
+		)
+			&&
+			(submission.queuedMessageID != nil || submission.conversation == model.conversations
+				.selectedConversation)
+			&& submission.context.threadID == submission.conversation.threadID
+			&& capturedValuesMatch
 			&& model.composer.pendingSubmissions[submission.context.requestID] == nil
 	}
 

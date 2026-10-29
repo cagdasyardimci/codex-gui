@@ -302,6 +302,10 @@ struct ComposerDraft: Equatable
 {
 	var text = ""
 	var context: [ComposerContextItem] = []
+	var queuedMessages: [QueuedComposerMessage] = []
+	var queueingEnabled = true
+	var queuePaused = false
+	var queuedMessageEdit: QueuedComposerEdit?
 	/// Supplied by draft actions, so acknowledging an earlier edit cannot clear a later edit.
 	var revision = 0
 	/// Distinguishes explicit New Chat interactions and later draft adoption.
@@ -322,6 +326,10 @@ struct ComposerSubmission
 	var projectContextRevision: Int? = nil
 	var collaborationMode: CollaborationMode? = nil
 	var serviceTier: String? = nil
+	var queuedMessageID: UUID? = nil
+	var serverQueueEntry: ThreadQueuedSubmission? = nil
+	var queueSteeringTransfer = false
+	var queuedSteeringInput: Data? = nil
 }
 
 enum ComposerPersistenceKey: Equatable
@@ -339,7 +347,10 @@ struct ComposerPersistenceFailure
 
 struct ComposerModel
 {
+	var serverQueues: [ConversationKey: ServerQueueState] = [:]
 	var workspace: WorkspaceIdentity?
+	/// Only explicit queueing in this session arms automatic continuation.
+	var automaticQueueConversations: Set<ConversationKey> = []
 	var preparedSubmissions: [UUID: PreparedSubmission] = [:]
 	var submissionConversations: [UUID: ConversationKey] = [:]
 	var uncertainSubmissions: Set<UUID> = []

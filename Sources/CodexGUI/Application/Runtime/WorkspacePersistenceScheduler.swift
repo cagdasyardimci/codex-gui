@@ -147,6 +147,17 @@ final class WorkspacePersistenceScheduler
 				case .newChat: threadID = nil
 				case .thread(let id): threadID = id
 				}
+				storage.saveQueueingEnabled(
+					write.draft.queueingEnabled,
+					for: project,
+					threadID: threadID
+				)
+				storage.saveQueuedMessages(
+					write.draft.queuedMessages,
+					for: project,
+					threadID: threadID,
+					editing: write.draft.queuedMessageEdit
+				)
 				storage.saveDraft(
 					write.draft.text,
 					for: project,
@@ -203,7 +214,8 @@ final class WorkspacePersistenceScheduler
 		enqueue(
 			context: write.context,
 			values: [.draft(write.conversation)],
-			retainedItems: write.draft.context,
+			retainedItems: write.draft.context + write.draft.queuedMessages.flatMap(\.context)
+				+ (write.draft.queuedMessageEdit?.message.context ?? []),
 			coalescingDraft: true
 		)
 		{

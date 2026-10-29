@@ -533,6 +533,18 @@ extension WorkspaceEffectRunner
 				context: storage.draftContext(
 					for: project,
 					threadID: context.threadID
+				),
+				queuedMessages: storage.queuedMessages(
+					for: project,
+					threadID: context.threadID
+				),
+				queueingEnabled: storage.queueingEnabled(
+					for: project,
+					threadID: context.threadID
+				),
+				queuedMessageEdit: storage.queuedMessageEdit(
+					for: project,
+					threadID: context.threadID
 				)
 			),
 			references: context.threadID

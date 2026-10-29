@@ -63,6 +63,14 @@ struct ConversationSnapshot
 	var workspaceOwner: WorkspaceLifecycleOwnerReference? = nil
 	var workspaceSelectionEpoch = 0
 	var composerDraftLifetime = 0
+	var queuedMessages: [QueuedComposerMessage] = []
+	var queuePaused = false
+	var canResumeQueue = false
+	var canSteerQueuedMessage = false
+	var canQueue = false
+	var queueingEnabled = true
+	var isEditingQueuedMessage = false
+	var reservedQueuedMessageIDs: Set<UUID> = []
 	let projectPath: String?
 	let threads: [ThreadSummary]
 	var sidebarThreads: [ThreadSummary]? = nil
