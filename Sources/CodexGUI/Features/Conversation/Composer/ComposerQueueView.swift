@@ -19,6 +19,7 @@ final class ComposerQueueView: NSView
 	private var panelHeight: NSLayoutConstraint!
 	private(set) var presentation: ConversationPresentation.Composer?
 	private var menuActions: [() -> Void] = []
+	private(set) var queueMenu: ComposerQueueMenu?
 	var onResume: (() -> Void)?
 	let resumeButton = ComposerQueueTextButton(
 		title: "Resume",
@@ -117,6 +118,7 @@ final class ComposerQueueView: NSView
 
 	func render(_ presentation: ConversationPresentation.Composer)
 	{
+		queueMenu?.close()
 		self.presentation = presentation
 		for row in rows.arrangedSubviews
 		{
@@ -312,16 +314,22 @@ final class ComposerQueueView: NSView
 		anchor: NSButton
 	)
 	{
+		queueMenu?.close()
 		clearActionHovers()
-		let menu = actionsMenu(for: message)
-		menu.popUp(
-			positioning: nil,
-			at: NSPoint(
-				x: anchor.bounds.minX,
-				y: anchor.bounds.maxY
-			),
-			in: anchor
+		let menu = ComposerQueueMenu(
+			menu: actionsMenu(for: message),
+			backingScale: anchor.window?.backingScaleFactor ?? 1
 		)
+		queueMenu = menu
+		let button = anchor as? ComposerQueueTextButton
+		button?.menuIsOpen = true
+		menu.onClose =
+		{
+			[weak self, weak button] in
+			button?.menuIsOpen = false
+			self?.clearActionHovers()
+		}
+		menu.show(from: anchor)
 	}
 	@objc private func invokeMenuAction(_ sender: NSMenuItem)
 	{
@@ -372,7 +380,7 @@ final class ComposerQueueView: NSView
 	{
 		if newWindow == nil
 		{
-			clearActionHovers()
+			queueMenu?.close(); clearActionHovers()
 		}
 		super.viewWillMove(toWindow: newWindow)
 	}
