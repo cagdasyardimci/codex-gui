@@ -18,6 +18,9 @@ final class ComposerQueueView: NSView
 	let headerDivider = DesktopSurface(AppKitColorTokens.composerQueueDivider)
 	private var panelHeight: NSLayoutConstraint!
 	private(set) var presentation: ConversationPresentation.Composer?
+	var reorderSession: ComposerQueueDragSession?
+	var reorderSettlingTask: Task<Void, Never>?
+	var pendingVisualOrder: [UUID]?
 	private var menuActions: [() -> Void] = []
 	private(set) var queueMenu: ComposerQueueMenu?
 	var onResume: (() -> Void)?
@@ -118,7 +121,21 @@ final class ComposerQueueView: NSView
 
 	func render(_ presentation: ConversationPresentation.Composer)
 	{
+		if let session = reorderSession,
+			self.presentation?.owner == presentation.owner,
+			self.presentation?.queuePaused == presentation.queuePaused,
+			presentation.queuedMessages.map(\.id) == session.originalIDs,
+			presentation.reservedQueuedMessageIDs.isEmpty
+		{
+			self.presentation = presentation
+			return
+		}
+		cancelReordering()
 		queueMenu?.close()
+		if self.presentation?.owner != presentation.owner
+		{
+			pendingVisualOrder = nil
+		}
 		self.presentation = presentation
 		for row in rows.arrangedSubviews
 		{
@@ -196,7 +213,22 @@ final class ComposerQueueView: NSView
 		}
 		let remove = onRemove
 		let steer = onSteer
-		let messages = presentation.queuedMessages
+		var messages = presentation.queuedMessages
+		if let order = pendingVisualOrder
+		{
+			if order == messages.map(\.id) || presentation.reservedQueuedMessageIDs
+				.isEmpty || Set(order) != Set(messages.map(\.id))
+			{
+				pendingVisualOrder = nil
+			}
+			else
+			{
+				messages = ComposerQueueOrdering.reordered(
+					messages,
+					by: order
+				)
+			}
+		}
 		for message in messages
 		{
 			let row = ComposerQueueRow(message: message)
@@ -211,6 +243,7 @@ final class ComposerQueueView: NSView
 					}
 			}
 			let reserved = presentation.reservedQueuedMessageIDs.contains(message.id)
+			row.canDrag = !reserved && presentation.reservedQueuedMessageIDs.isEmpty
 			let active = presentation.activeExecutionState?.isBusy == true
 			row.steer.isHidden = !active && !paused
 			row.steer
@@ -380,6 +413,7 @@ final class ComposerQueueView: NSView
 	{
 		if newWindow == nil
 		{
+			cancelReordering()
 			queueMenu?.close(); clearActionHovers()
 		}
 		super.viewWillMove(toWindow: newWindow)

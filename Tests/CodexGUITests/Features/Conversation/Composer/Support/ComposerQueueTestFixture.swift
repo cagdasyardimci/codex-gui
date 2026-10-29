@@ -67,6 +67,7 @@ final class ComposerQueueTestFixture
 
 	func close()
 	{
+		queue.cancelReordering()
 		queue.clearActionHovers()
 		window.close()
 	}

@@ -15,9 +15,22 @@ final class ComposerQueueRow: NSView
 	var onSteer: (() -> Void)?
 	var onRemove: (() -> Void)?
 	var onMenu: ((NSButton) -> Void)?
+	var canDrag = true
+	{
+		didSet
+		{
+			updateGripVisibility()
+		}
+	}
+	private let grip = QueueDragHandle()
 	private var hoverArea: NSTrackingArea?
-
 	private var isHovered = false
+	{
+		didSet
+		{
+			updateGripVisibility()
+		}
+	}
 
 	init(message: QueuedComposerMessage)
 	{
@@ -35,12 +48,13 @@ final class ComposerQueueRow: NSView
 		overflow = ComposerQueueTextButton(icon: .dotsHorizontal)
 		super.init(frame: .zero)
 		wantsLayer = true
-		let handle = NSImageView(image: DesktopIcons.image(
+		let handle = QueueDragHandle(image: DesktopIcons.image(
 			.followup,
 			size: 14
 		))
+		handle.owner = self
 		handle.contentTintColor = AppKitColorTokens.composerQueueLeadingGlyph
-		handle.setAccessibilityElement(false)
+		handle.setAccessibilityLabel("Drag queued message")
 		for button in [preview, steer, remove, overflow]
 		{
 			button.target = self
@@ -77,6 +91,19 @@ final class ComposerQueueRow: NSView
 		).isActive = true
 		actions.heightAnchor.constraint(equalToConstant: ComposerQueueTextButton.actionHeight)
 			.isActive = true
+		grip.owner = self
+		grip.setAccessibilityElement(false)
+		grip.image = Self.gripArtwork
+		grip.contentTintColor = AppKitColorTokens.composerQueueLeadingGlyph
+		grip.alphaValue = 0
+		addSubview(grip)
+		grip.translatesAutoresizingMaskIntoConstraints = false
+		NSLayoutConstraint.activate([
+			grip.leadingAnchor.constraint(equalTo: leadingAnchor),
+			grip.centerYAnchor.constraint(equalTo: centerYAnchor),
+			grip.widthAnchor.constraint(equalToConstant: 14),
+			grip.heightAnchor.constraint(equalToConstant: 14),
+		])
 		NSLayoutConstraint.activate([
 			stack.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
@@ -153,6 +180,159 @@ final class ComposerQueueRow: NSView
 	override func mouseExited(with event: NSEvent)
 	{
 		isHovered = false
+	}
+
+	override func resetCursorRects()
+	{
+		super.resetCursorRects()
+		if canDrag
+		{
+			addCursorRect(
+				NSRect(
+					x: 0,
+					y: 0,
+					width: Self.leadingInset,
+					height: bounds.height
+				),
+				cursor: .openHand
+			)
+		}
+	}
+
+	private static let gripArtwork: NSImage =
+	{
+		let image = NSImage(size: NSSize(
+			width: 14,
+			height: 14
+		))
+		image.lockFocus()
+		for x: CGFloat in [0, 3]
+		{
+			DesktopIcons.draw(
+				.dotsVertical,
+				in: NSRect(
+					x: x,
+					y: 1,
+					width: 12,
+					height: 12
+				),
+				tint: .black
+			)
+		}
+		image.unlockFocus()
+		image.isTemplate = true
+		return image
+	}()
+
+	private func updateGripVisibility()
+	{
+		NSAnimationContext.runAnimationGroup
+		{
+			context in
+			context.duration = 0.15
+			grip.animator().alphaValue = isHovered && canDrag ? 1 : 0
+		}
+	}
+
+	override func mouseDown(with event: NSEvent)
+	{
+		trackDrag(with: event)
+	}
+
+	func trackDrag(with event: NSEvent)
+	{
+		guard canDrag, let window, let queueView
+		else
+		{
+			return
+		}
+		isHovered = true
+		var moved = false
+		var released = false
+		NSCursor.closedHand.push()
+		defer
+		{
+			NSCursor.pop()
+			if !released
+			{
+				queueView.cancelReordering()
+			}
+		}
+		while queueView.window === window, canDrag
+		{
+			if moved, queueView.reorderSession?.row !== self
+			{
+				return
+			}
+			guard let next = window.nextEvent(
+				matching: [.leftMouseDragged, .leftMouseUp, .keyDown],
+				until: Date(timeIntervalSinceNow: 0.1),
+				inMode: .eventTracking,
+				dequeue: true
+			)
+			else
+			{
+				if !window.isVisible || !NSApp.isActive
+				{
+					return
+				}
+				continue
+			}
+			if next.type == .keyDown
+			{
+				if next.keyCode == 53
+				{
+					return
+				}
+				window.sendEvent(next)
+				continue
+			}
+			if next.type == .leftMouseUp
+			{
+				if moved
+				{
+					queueView.endReordering(at: next.locationInWindow)
+				}
+				released = true
+				return
+			}
+			if !moved, hypot(
+				next.locationInWindow.x - event.locationInWindow.x,
+				next.locationInWindow.y - event.locationInWindow.y
+			) > 3
+			{
+				moved = queueView.beginReordering(
+					self,
+					at: event.locationInWindow
+				)
+			}
+			if moved
+			{
+				queueView.updateReordering(
+					at: next.locationInWindow,
+					event: next
+				)
+			}
+		}
+	}
+
+}
+
+@MainActor
+private final class QueueDragHandle: NSImageView
+{
+	weak var owner: ComposerQueueRow?
+	override func resetCursorRects()
+	{
+		super.resetCursorRects()
+		addCursorRect(
+			bounds,
+			cursor: .openHand
+		)
+	}
+	override func mouseDown(with event: NSEvent)
+	{
+		owner?.trackDrag(with: event)
 	}
 
 }
