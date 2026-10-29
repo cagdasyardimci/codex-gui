@@ -63,6 +63,9 @@ final class SidebarIconButton: DesktopStyledButton
 		setAccessibilityLabel(label)
 		if role == .search
 		{
+			toolTip = "Search"
+			tooltipShortcut = "⌘K"
+			tooltipPlacement = .below
 			image = DesktopIcons.image(
 				icon,
 				size: 16

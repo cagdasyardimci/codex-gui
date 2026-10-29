@@ -65,7 +65,7 @@ extension NavigationViewController
 		}
 		rebuildSidebarItems()
 		searchButton.isSearchActive = !query.isEmpty
-		searchButton.toolTip = query.isEmpty ? "Search conversation titles and previews" : query
+		searchButton.toolTip = "Search"
 		updateManagementButtons()
 		if searchPopover.isShown
 		{

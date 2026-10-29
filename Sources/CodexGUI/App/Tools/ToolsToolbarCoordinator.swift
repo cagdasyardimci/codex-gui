@@ -49,6 +49,9 @@ final class ToolsToolbarCoordinator
 		openButton.target = target
 		openButton.action = action
 		openButton.image = openTabPaneImage()
+		openButton.keyEquivalent = "b"
+		openButton.keyEquivalentModifierMask = [.command, .shift]
+		openButton.tooltipShortcut = "⇧⌘B"
 	}
 
 	private func toolsTabBarWidth(
@@ -120,8 +123,7 @@ final class ToolsToolbarCoordinator
 			openButton.image = retainedTabCount > 0
 				? retainedTabsImage(retainedTabCount) : openTabPaneImage()
 		}
-		let openLabel = retainedTabCount > 0
-			? "Open tab pane (\(retainedTabCount) tabs)" : "Open tab pane"
+		let openLabel = "New tab"
 		openButton.label = openLabel
 	}
 

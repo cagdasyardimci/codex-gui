@@ -130,6 +130,7 @@ extension MainWindowController
 			equalToConstant: ToolbarLayout.controlSize
 		).isActive = true
 		summaryToggleButton.toolTip = "Toggle pinned summary"
+		summaryToggleButton.tooltipPlacement = .below
 		summaryToggleButton.setAccessibilityLabel("Toggle pinned summary")
 	}
 
@@ -267,13 +268,17 @@ extension MainWindowController
 				label: "Toggle sidebar"
 			)
 		case ToolbarItem.sidebar:
-			item.label = "Toggle projects navigation"
+			item.label = "Toggle sidebar"
 			let button = makeToolbarButton(
 				image: DesktopIcons.image(.sidebar),
 				label: item.label
 			)
 			button.target = self
 			button.action = #selector(toggleSidebar)
+			button.tooltipPlacement = .below
+			button.keyEquivalent = "s"
+			button.keyEquivalentModifierMask = [.command, .shift]
+			button.tooltipShortcut = "⇧⌘S"
 			item.view = button
 		case ToolbarItem.projectContext:
 			item.label = "Project context"
@@ -341,7 +346,8 @@ extension MainWindowController
 			return nil
 		}
 		item.isBordered = false
-		item.toolTip = item.label
+		// Custom toolbar views own their tooltips; the item must not register a second one.
+		item.toolTip = item.view == nil ? item.label : nil
 		return item
 	}
 
@@ -379,6 +385,10 @@ extension MainWindowController
 		)
 		sidebarButton.target = self
 		sidebarButton.action = #selector(toggleSidebar)
+		sidebarButton.tooltipPlacement = .below
+		sidebarButton.keyEquivalent = "s"
+		sidebarButton.keyEquivalentModifierMask = [.command, .shift]
+		sidebarButton.tooltipShortcut = "⇧⌘S"
 		return makeToolbarControlStack(
 			[
 				makeToolbarButton(
@@ -568,7 +578,6 @@ extension MainWindowController
 	{
 		let item = NSToolbarItem(itemIdentifier: identifier)
 		item.label = label
-		item.toolTip = label
 		item.view = makeToolbarButton(
 			image: image,
 			label: label,
@@ -584,7 +593,7 @@ extension MainWindowController
 		image: NSImage,
 		label: String,
 		isEnabled: Bool = true
-	) -> NSButton
+	) -> DesktopToolbarIconButton
 	{
 		DesktopToolbarIconButton(
 			image: image,

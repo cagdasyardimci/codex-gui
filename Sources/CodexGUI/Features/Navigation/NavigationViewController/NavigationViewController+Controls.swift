@@ -21,7 +21,7 @@ extension NavigationViewController
 		searchButton.target = self
 		searchButton.action = #selector(toggleSearch)
 		searchButton.setAccessibilityLabel("Search conversation titles and previews")
-		searchButton.toolTip = "Search conversation titles and previews"
+		searchButton.toolTip = "Search"
 
 		let brandRow = AppKitLayout.horizontalStack(
 			[wordmark, NSView(), refreshButton, searchButton],

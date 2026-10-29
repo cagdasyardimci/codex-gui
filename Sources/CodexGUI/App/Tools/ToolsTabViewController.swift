@@ -135,6 +135,7 @@ final class ToolsTabViewController: NSViewController
 	private var toolbarControlsOffset: CGFloat = 0
 	private let controlsSeparator = ToolbarSeparatorView(constrained: false)
 	private var expandButton: NSButton?
+	private var closePaneButton: DesktopToolbarIconButton?
 	private let summaryButton = PinnedSummaryToggleButton(
 		title: "",
 		target: nil,
@@ -699,12 +700,13 @@ final class ToolsTabViewController: NSViewController
 		summaryButton.isHidden = !expanded
 		headerTrailingConstraint?.constant = -Layout.headerTrailingInset
 		headerControlsWidthConstraint?.constant = controlsWidth(expanded: expanded)
-		let label = expanded ? "Restore split view" : "Expand tab pane"
+		let label = expanded ? "Exit full view" : "Enter full view"
 		expandButton?.image = DesktopIcons.image(
 			expanded ? .collapseSmall : .expand,
 			size: Layout.iconSize
 		)
-		expandButton?.toolTip = label
+		expandButton?.toolTip = expanded ? nil : label
+		closePaneButton?.label = expanded ? "Enter split view" : "Hide tabs"
 		expandButton?.setAccessibilityLabel(label)
 		renderTabs()
 		if !expanded && isChangesSelected
@@ -732,7 +734,7 @@ final class ToolsTabViewController: NSViewController
 		summaryButton.setButtonType(.toggle)
 		summaryButton.target = self
 		summaryButton.action = #selector(toggleSummary)
-		summaryButton.toolTip = "Toggle pinned summary"
+		summaryButton.toolTip = "Toggle summary"
 		summaryButton.setAccessibilityLabel("Toggle pinned summary")
 		summaryButton.widthAnchor.constraint(equalToConstant: Layout.controlSize).isActive = true
 		summaryButton.heightAnchor.constraint(equalToConstant: Layout.controlSize).isActive = true
@@ -746,20 +748,28 @@ final class ToolsTabViewController: NSViewController
 		configureSummaryButton()
 		let addButton = makeIconButton(
 			image: Self.addTabImage(),
-			label: "Add tab",
+			label: "New tab",
 			action: #selector(addTab)
 		)
 		let expandButton = makeIconButton(
 			.expand,
-			label: "Expand tab pane",
+			label: "Enter full view",
 			action: #selector(toggleExpanded)
 		)
 		self.expandButton = expandButton
+		addButton.keyEquivalent = "t"
+		addButton.keyEquivalentModifierMask = [.command]
+		addButton.tooltipShortcut = "⌘T"
 		let closePaneButton = makeIconButton(
 			image: Self.paneIcon(),
-			label: "Close tab pane",
+			label: "Hide tabs",
 			action: #selector(closePane)
 		)
+
+		self.closePaneButton = closePaneButton
+		closePaneButton.keyEquivalent = "b"
+		closePaneButton.keyEquivalentModifierMask = [.command, .shift]
+		closePaneButton.tooltipShortcut = "⇧⌘B"
 
 		let controls = AppKitLayout.horizontalStack(
 			[controlsSeparator, summaryButton, expandButton, closePaneButton],
@@ -1226,6 +1236,7 @@ final class ToolsTabViewController: NSViewController
 			action: #selector(closeTab(_:))
 		)
 		closeButton.tag = index
+		closeButton.toolTip = nil
 		let tab = makeTabSurface(
 			selectButton,
 			trailingButton: closeButton,
@@ -1453,7 +1464,7 @@ final class ToolsTabViewController: NSViewController
 		imageSize: CGFloat = Layout.iconSize,
 		label: String,
 		action: Selector?
-	) -> NSButton
+	) -> DesktopToolbarIconButton
 	{
 		makeIconButton(
 			image: DesktopIcons.image(
@@ -1471,7 +1482,7 @@ final class ToolsTabViewController: NSViewController
 		preset: DesktopToolbarIconButton.Preset = .toolsHeader,
 		label: String,
 		action: Selector?
-	) -> NSButton
+	) -> DesktopToolbarIconButton
 	{
 		DesktopToolbarIconButton(
 			image: image,
@@ -1499,7 +1510,14 @@ final class ToolsTabViewController: NSViewController
 
 	@objc private func closePane()
 	{
-		onClosePane?()
+		if isExpanded
+		{
+			onToggleExpanded?()
+		}
+		else
+		{
+			onClosePane?()
+		}
 	}
 
 	@objc private func toggleSummary()
