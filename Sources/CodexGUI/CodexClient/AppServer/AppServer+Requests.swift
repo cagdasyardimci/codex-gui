@@ -622,20 +622,11 @@ extension AppServer
 		inputs: [TurnInput]
 	) async throws -> String
 	{
-		let result = try await request(
-			"turn/steer",
-			params: [
-				"threadId": threadId,
-				"expectedTurnId": expectedTurnId,
-				"input": inputs.map(\.protocolValue),
-			]
+		try await steerQueuedInput(
+			threadID: threadId,
+			expectedTurnID: expectedTurnId,
+			inputJSON: JSONSerialization.data(withJSONObject: inputs.map(\.protocolValue))
 		)
-		guard let turnId = result["turnId"] as? String, turnId == expectedTurnId
-		else
-		{
-			throw AppServerError.protocolError("Codex returned an unexpected turn ID for steering.")
-		}
-		return turnId
 	}
 
 	func interrupt(

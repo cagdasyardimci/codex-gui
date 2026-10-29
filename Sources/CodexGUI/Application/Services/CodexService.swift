@@ -16,6 +16,39 @@ protocol CodexService: AnyObject
 		get
 	}
 
+	var canProbeThreadQueue: Bool
+	{
+		get
+	}
+	func threadQueuePage(
+		threadID: String,
+		cursor: String?,
+		limit: Int?
+	) async throws
+		-> ThreadQueuePage
+	func addThreadQueue(
+		threadID: String,
+		inputJSON: Data,
+		clientUserMessageID: String
+	) async throws -> ThreadQueuedSubmission
+	func updateThreadQueue(
+		threadID: String,
+		queuedSubmissionID: String,
+		inputJSON: Data
+	) async throws -> ThreadQueuedSubmission
+	func deleteThreadQueue(
+		threadID: String,
+		queuedSubmissionID: String
+	) async throws -> Bool
+	func reorderThreadQueue(
+		threadID: String,
+		queuedSubmissionIDs: [String]
+	) async throws
+	func startThreadQueue(
+		threadID: String,
+		queuedSubmissionID: String?
+	) async throws -> CodexTurn
+
 	func executableVersion() async throws -> String
 	func remoteControlStatus() async throws -> RemoteControlStatus
 	func setRemoteControlEnabled(_ enabled: Bool) async throws -> RemoteControlStatus
@@ -166,6 +199,12 @@ protocol CodexService: AnyObject
 		expectedTurnId: String,
 		inputs: [TurnInput]
 	) async throws -> String
+	func steerQueuedInput(
+		threadID: String,
+		expectedTurnID: String,
+		inputJSON: Data
+	) async throws
+		-> String
 	func interrupt(
 		threadId: String,
 		turnId: String

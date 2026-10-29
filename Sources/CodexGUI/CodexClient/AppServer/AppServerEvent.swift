@@ -2,6 +2,7 @@ import Foundation
 
 enum AppServerEvent
 {
+	case threadQueueChanged(threadId: String)
 	case turnStarted(
 		threadId: String,
 		turn: CodexTurn

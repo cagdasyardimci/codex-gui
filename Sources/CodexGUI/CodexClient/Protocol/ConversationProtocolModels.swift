@@ -250,6 +250,7 @@ struct FileChange: Equatable, Sendable
 struct CodexItem: Sendable
 {
 	let id: String
+	let clientID: String?
 	let type: String
 	let text: String?
 	let command: String?
@@ -273,6 +274,7 @@ struct CodexItem: Sendable
 			return nil
 		}
 		self.id = id
+		self.clientID = json["clientId"] as? String
 		self.type = type
 		self.sourceActivity = ConversationSourceActivity(json: json)
 		self.subagentActivity = type == "subAgentActivity"

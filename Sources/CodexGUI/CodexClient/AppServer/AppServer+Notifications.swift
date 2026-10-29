@@ -19,6 +19,13 @@ extension AppServer
 		let turnID = parameters["turnId"] as? String ?? ""
 		switch method
 		{
+		case "thread/queue/changed":
+			guard !threadID.isEmpty
+			else
+			{
+				return
+			}
+			onEvent?(.threadQueueChanged(threadId: threadID))
 		case "thread/name/updated":
 			guard !threadID.isEmpty
 			else

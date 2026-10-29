@@ -526,6 +526,7 @@ enum WorkspaceExecutionScope
 		{
 			switch event
 			{
+			case .threadQueueChanged(let id): threadID = id
 			case .planUpdated(let plan): threadID = plan.threadId
 			case .interaction(let interaction): threadID = interaction.threadId
 			case .interactionResolved(
