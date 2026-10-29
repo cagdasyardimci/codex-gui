@@ -217,6 +217,22 @@ enum AppKitColorTokens
 		light: 0x0D0D0D,
 		dark: 0x2D2D2D
 	)
+	static let composerQueue = AppKitColorResolution.color(
+		light: 0xFFFFFF,
+		dark: 0x2D2D2D
+	)
+	static let composerQueueLeadingGlyph = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.35,
+		darkAlpha: 0.348627
+	)
+	static let composerQueueDivider = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0xFFFFFF,
+		lightAlpha: 0.04,
+		darkAlpha: 0.043
+	)
 	static let composerPrimaryText = AppKitColorResolution.color(
 		light: 0x0D0D0D,
 		dark: 0xFFFFFF
