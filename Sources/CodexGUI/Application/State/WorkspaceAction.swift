@@ -177,6 +177,40 @@ struct SubmissionAcknowledgement
 
 enum ComposerAction
 {
+	case messageQueued(
+		OperationContext,
+		QueuedComposerMessage
+	)
+	case queuedMessageRemoved(
+		OperationContext,
+		UUID,
+		edit: Bool
+	)
+	case queuedMessageStartRequested(ComposerSubmission)
+	case queuedMessageResumeRequested(ComposerSubmission)
+	case queueLifecycleSettled(
+		OperationContext,
+		ConversationKey
+	)
+	case queuedMessagesReordered(
+		OperationContext,
+		[UUID]
+	)
+	case queuedMessageEditBegan(
+		OperationContext,
+		QueuedComposerMessage
+	)
+	case queuedMessageResubmitted(
+		OperationContext,
+		ComposerDraft
+	)
+	case queuedMessageEditCancelled(OperationContext)
+
+	case queueingEnabledChanged(
+		OperationContext,
+		Bool
+	)
+
 	case submissionReleaseFinished(
 		WorkspaceSubmissionReleaseOperation,
 		OperationResult<SubmissionReservationRelease>

@@ -95,6 +95,15 @@ extension ComposerReducer
 	{
 		switch action
 		{
+		case .stopRequested(
+			let context,
+			_
+		):
+			if model.execution.stopRequested, model.execution.stopContext == context,
+				let threadID = model.execution.activeThreadID
+			{
+				model.composer.automaticQueueConversations.remove(.thread(threadID))
+			}
 		case .submissionRequested(let submission):
 			guard model.execution.submissionRequest?.isSameRequest(as: submission.context) == true,
 					model.execution.state == .running,
@@ -107,9 +116,13 @@ extension ComposerReducer
 				submission,
 				model: &model
 			)
-			if model.composer.drafts[submission.conversation] == submission.draft
+			if submission.queuedMessageID == nil,
+				model.composer.drafts[submission.conversation] == submission.draft
 			{
 				let cleared = ComposerDraft(
+					queuedMessages: submission.draft.queuedMessages,
+					queueingEnabled: submission.draft.queueingEnabled,
+					queuePaused: submission.draft.queuePaused,
 					revision: submission.draft.revision + 1,
 					lifetime: submission.draft.lifetime
 				)
@@ -525,20 +538,46 @@ extension ComposerReducer
 			model: &model
 		)
 		var clearedDraft: ComposerDraft?
-		if let draft = model.composer.drafts[conversation],
+		if let id = submission.queuedMessageID, var draft = model.composer.drafts[conversation]
+		{
+			draft.queuedMessages.removeAll
+			{
+				$0.id == id
+			}
+			if draft.queuedMessages.isEmpty && draft
+				.queuedMessageEdit == nil
+			{
+				draft.queuePaused = false
+			}
+			draft.revision += 1
+			model.composer.drafts[conversation] = draft
+			clearedDraft = draft
+		}
+		if clearedDraft == nil, let draft = model.composer.drafts[conversation],
 			draft == model.composer.clearedSubmissionDrafts[submission.context.requestID]
 		{
 			// Persist the accepted clear only after acknowledgement makes references durable.
 			clearedDraft = draft
 		}
-		else if let draft = model.composer.drafts[conversation], draft == submission.draft
+		else if clearedDraft == nil, let draft = model.composer.drafts[conversation],
+				draft == submission.draft
 		{
 			let cleared = ComposerDraft(
+				queuedMessages: draft.queuedMessages,
+				queueingEnabled: draft.queueingEnabled,
+				queuePaused: draft.queuePaused,
 				revision: draft.revision + 1,
 				lifetime: draft.lifetime
 			)
 			model.composer.drafts[conversation] = cleared
 			clearedDraft = cleared
+		}
+		if let draft = model.composer.drafts[conversation],
+			!draft.queuedMessages.isEmpty, !draft.queuePaused,
+			!model.execution.stopRequested, model.connection.isConnected,
+			model.execution.agentOutcome != .stopped, !model.execution.needsReconciliation
+		{
+			model.composer.automaticQueueConversations.insert(conversation)
 		}
 		result.effects.append(.acknowledgeSubmission(SubmissionAcknowledgementWrite(
 			submission: submission,

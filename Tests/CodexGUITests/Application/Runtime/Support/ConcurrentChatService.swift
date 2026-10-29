@@ -24,6 +24,7 @@ final class ConcurrentChatService: CodexService
 	)
 	private(set) var connectionCount = 0
 	private(set) var starts: [TurnRequest] = []
+	private(set) var submittedPreferences: [RunPreferences] = []
 	private(set) var steering: [TurnRequest] = []
 	private(set) var interruptions: [TurnRequest] = []
 	private(set) var responses: [String] = []
@@ -272,7 +273,8 @@ final class ConcurrentChatService: CodexService
 		serviceTier: String?
 	) async throws -> CodexTurn
 	{
-		try await startTurn(
+		submittedPreferences.append(preferences)
+		return try await startTurn(
 			threadId: threadId,
 			text: text(in: inputs),
 			model: model,

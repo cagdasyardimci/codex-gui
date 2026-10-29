@@ -656,6 +656,25 @@ struct WorkspaceStoreInputs
 	@discardableResult
 	func send() -> WorkspaceOperationHandle?
 	{
+		if composerDraft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+			composerDraft.context.isEmpty, WorkspaceEligibility(model: store.model).canResumeQueue
+		{
+			return resumeMessageQueue()
+		}
+		if composerDraft.queuedMessageEdit != nil
+		{
+			let context = store.operationContext(threadID: selectedThreadID)
+			store.dispatch(.composer(.queuedMessageResubmitted(
+				context,
+				composerDraft
+			)))
+			return store.operation(for: context)
+		}
+
+		if composerDraft.queueingEnabled == false, WorkspaceEligibility(model: store.model).canSteer
+		{
+			return steer(draft)
+		}
 		let collaborationMode: CollaborationMode?
 		switch prepareComposerCommandInput(
 			draft,
@@ -667,6 +686,29 @@ struct WorkspaceStoreInputs
 			_,
 			let mode
 		): collaborationMode = mode
+		}
+		if WorkspaceEligibility(model: store.model).canQueue
+		{
+			let captured = captureSubmission(
+				draftText: draft,
+				collaborationMode: collaborationMode
+			)
+			let message = QueuedComposerMessage(
+				id: UUID(),
+				text: captured.draft.text,
+				context: captured.draft.context,
+				modelID: captured.modelID,
+				effort: captured.effort,
+				preferences: captured.preferences,
+				skills: captured.skills,
+				collaborationMode: captured.collaborationMode,
+				serviceTier: captured.serviceTier
+			)
+			store.dispatch(.composer(.messageQueued(
+				captured.context,
+				message
+			)))
+			return store.operation(for: captured.context)
 		}
 		guard WorkspaceEligibility(model: store.model).canSend
 		else
@@ -795,7 +837,8 @@ struct WorkspaceStoreInputs
 		return store.operation(for: context)
 	}
 
-	func steer(_ text: String)
+	@discardableResult
+	func steer(_ text: String) -> WorkspaceOperationHandle?
 	{
 		let submittedPrompt: String
 		switch prepareComposerCommandInput(
@@ -803,7 +846,7 @@ struct WorkspaceStoreInputs
 			steering: true
 		)
 		{
-		case .handled: return
+		case .handled: return nil
 		case .message(
 			let message,
 			_
@@ -813,14 +856,14 @@ struct WorkspaceStoreInputs
 				let activeThreadID, let activeTurnID
 		else
 		{
-			return
+			return nil
 		}
 		let instruction = submittedPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 		let submittedContext = draftContext
 		guard !instruction.isEmpty || !submittedContext.isEmpty
 		else
 		{
-			return
+			return nil
 		}
 		let requestText = ProjectProductivity.requestText(
 			context: projectContext,
@@ -835,6 +878,9 @@ struct WorkspaceStoreInputs
 			draft: ComposerDraft(
 				text: text,
 				context: submittedContext,
+				queuedMessages: composerDraft.queuedMessages,
+				queueingEnabled: composerDraft.queueingEnabled,
+				queuePaused: composerDraft.queuePaused,
 				revision: composerDraft.revision,
 				lifetime: composerDraft.lifetime
 			),
@@ -851,6 +897,7 @@ struct WorkspaceStoreInputs
 				context: context,
 				submission: submission
 			)))))
+		return store.operation(for: context)
 	}
 
 	@discardableResult

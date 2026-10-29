@@ -164,6 +164,9 @@ enum WorkspaceExecutionScope
 	{
 		switch action
 		{
+		case .composer(.queuedMessageStartRequested(let submission)),
+				.composer(.queuedMessageResumeRequested(let submission)):
+			return submissionTarget(submission)
 		case .execution(let action):
 			return executionTarget(
 				action,

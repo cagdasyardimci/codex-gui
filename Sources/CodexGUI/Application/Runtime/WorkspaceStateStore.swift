@@ -51,6 +51,7 @@ final class WorkspaceStateStore
 
 	private var queuedActions: [QueuedAction] = []
 	private var isDraining = false
+	private var isContinuingMessageQueues = false
 	private var isShutdown = false
 	private var observers: [UUID: (WorkspaceModel) -> Void] = [:]
 	private var observerOrder: [UUID] = []
@@ -456,6 +457,12 @@ final class WorkspaceStateStore
 		defer
 		{
 			isDraining = false
+			if !isShutdown && !isContinuingMessageQueues
+			{
+				isContinuingMessageQueues = true
+				inputs.continueMessageQueues()
+				isContinuingMessageQueues = false
+			}
 		}
 		var index = 0
 		while index < queuedActions.count, !isShutdown

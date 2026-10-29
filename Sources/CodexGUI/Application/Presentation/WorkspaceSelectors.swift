@@ -587,6 +587,33 @@ struct WorkspaceSelectors
 		snapshot.threadManagementAvailability = managementAvailability
 		snapshot.workspaceOwner = WorkspaceLifecycleReducer.reference(model)
 		snapshot.composerDraftLifetime = composerDraft.lifetime
+		snapshot.queuedMessages = composerDraft.queuedMessages
+		snapshot.canSteerQueuedMessage = snapshot.canSteer
+		if let server = model.composer.serverQueues[model.conversations.selectedConversation]
+		{
+			snapshot.canSteerQueuedMessage = snapshot.canSteer && server.pending == nil
+				&& server.authority != .probing
+		}
+		snapshot.queueingEnabled = composerDraft.queueingEnabled
+		snapshot.queuePaused = composerDraft.queuePaused && !composerDraft.queuedMessages.isEmpty
+		snapshot.canResumeQueue = WorkspaceEligibility(model: model).canResumeQueue
+		snapshot.isEditingQueuedMessage = composerDraft.queuedMessageEdit != nil
+
+		snapshot.canQueue = WorkspaceEligibility(model: model)
+			.canQueue || WorkspaceEligibility(model: model).canResubmitQueuedMessage
+		snapshot
+			.reservedQueuedMessageIDs = Set(composerDraft.queuedMessages
+				.filter
+				{
+					ComposerReducer.queueMessageIsReserved(
+						$0.id,
+						model: model
+					)
+				}.map(\.id))
+		if model.composer.serverQueues[model.conversations.selectedConversation]?.pending != nil
+		{
+			snapshot.reservedQueuedMessageIDs.formUnion(composerDraft.queuedMessages.map(\.id))
+		}
 		return snapshot
 	}
 	var backendDiagnosticsReport: String

@@ -11,6 +11,15 @@ extension ComposerReducer
 	{
 		switch action
 		{
+		case .messageQueued, .queuedMessageRemoved, .queuedMessageStartRequested,
+				.queuedMessageResumeRequested,
+				.queuedMessagesReordered, .queuedMessageEditBegan, .queuedMessageResubmitted,
+				.queuedMessageEditCancelled, .queueingEnabledChanged, .queueLifecycleSettled:
+			reduceQueue(
+				action,
+				model: &model,
+				result: &result
+			)
 		case .conversationRestored(
 			let context,
 			let conversation,

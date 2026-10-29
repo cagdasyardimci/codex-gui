@@ -8,6 +8,16 @@ enum WorkspaceIntent
 	case removeContext(String)
 	case reuseReference(String)
 	case send
+	case resumeMessageQueue
+	case removeQueuedMessage(
+		UUID,
+		editing: Bool
+	)
+	case steerQueuedMessage(UUID)
+	case reorderQueuedMessages([UUID])
+	case beginEditingQueuedMessage(QueuedComposerMessage)
+	case cancelQueuedMessageEdit
+	case setQueueingEnabled(Bool)
 	case steer(String)
 	case stop
 	case slashCommand(SlashCommandInvocation)
@@ -102,6 +112,9 @@ enum WorkspaceIntent
 		case .slashCommand, .acknowledgeSlashCommand, .completeSlashCommand, .retryPlanSettings,
 				.recoverFork,
 				.editDraft, .attachContext, .removeContext, .reuseReference, .send, .steer,
+				.removeQueuedMessage, .resumeMessageQueue, .steerQueuedMessage,
+				.reorderQueuedMessages, .beginEditingQueuedMessage, .cancelQueuedMessageEdit,
+				.setQueueingEnabled,
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
@@ -256,6 +269,19 @@ final class WorkspaceIntentTarget
 				mode: mode
 			)
 		case .send: operation = inputs.send()
+		case .resumeMessageQueue: operation = inputs.resumeMessageQueue()
+		case .removeQueuedMessage(
+			let id,
+			let editing
+		): inputs.removeQueuedMessage(
+				id,
+				editing: editing
+			)
+		case .steerQueuedMessage(let id): operation = inputs.steerQueuedMessage(id)
+		case .reorderQueuedMessages(let ids): inputs.reorderQueuedMessages(ids)
+		case .beginEditingQueuedMessage(let message): inputs.beginEditingQueuedMessage(message)
+		case .cancelQueuedMessageEdit: inputs.cancelQueuedMessageEdit()
+		case .setQueueingEnabled(let enabled): inputs.setQueueingEnabled(enabled)
 		case .steer(let text): inputs.steer(text)
 		case .stop:
 			guard let execution = capturedExecution,

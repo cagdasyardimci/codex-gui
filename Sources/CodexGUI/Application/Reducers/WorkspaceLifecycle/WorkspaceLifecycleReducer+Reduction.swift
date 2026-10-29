@@ -165,7 +165,11 @@ extension WorkspaceLifecycleReducer
 				projectContextRevision: captured
 					.projectContextRevision,
 				collaborationMode: captured.collaborationMode,
-				serviceTier: captured.serviceTier
+				serviceTier: captured.serviceTier,
+				queuedMessageID: captured.queuedMessageID,
+				serverQueueEntry: captured.serverQueueEntry,
+				queueSteeringTransfer: captured.queueSteeringTransfer,
+				queuedSteeringInput: captured.queuedSteeringInput
 			)
 			let action: WorkspaceAction
 			switch operation

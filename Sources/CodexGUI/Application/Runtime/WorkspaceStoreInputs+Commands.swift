@@ -18,7 +18,9 @@ extension WorkspaceStoreInputs
 		case .command(let invocation):
 			if invocation.id == .plan && !invocation.trimmedArguments.isEmpty
 			{
-				guard !steering, WorkspaceEligibility(model: store.model).canSend
+				guard !steering,
+						WorkspaceEligibility(model: store.model)
+						.canSend || WorkspaceEligibility(model: store.model).canQueue
 				else
 				{
 					store.dispatch(.composerCommand(.rejected(

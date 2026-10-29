@@ -112,6 +112,7 @@ enum ComposerReducer
 			{
 				return result
 			}
+			model.composer.automaticQueueConversations.removeAll()
 			model.composer.uncertainSubmissions.formUnion(model.composer.pendingSubmissions.keys)
 			for submission in model.composer.pendingSubmissions.values
 			{
@@ -143,6 +144,14 @@ enum ComposerReducer
 				result: &result
 			)
 		default: break
+		}
+		for conversation in model.composer.automaticQueueConversations
+		{
+			switch model.execution(for: conversation).agentOutcome
+			{
+			case .stopped, .failed: model.composer.automaticQueueConversations.remove(conversation)
+			default: break
+			}
 		}
 		return result
 	}

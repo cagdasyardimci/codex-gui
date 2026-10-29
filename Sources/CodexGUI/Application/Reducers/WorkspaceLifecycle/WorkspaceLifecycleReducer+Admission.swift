@@ -129,6 +129,12 @@ extension WorkspaceLifecycleReducer
 		case .execution(.submissionRequested), .execution(.steeringRequested): return false
 		case .composer(.draftEdited), .composer(.contextAttached), .composer(.contextRemoved),
 				.composer(.referenceReused): return false
+		case .composer(.messageQueued), .composer(.queuedMessageRemoved),
+				.composer(.queuedMessageStartRequested), .composer(.queuedMessageResumeRequested),
+				.composer(.queuedMessagesReordered),
+				.composer(.queuedMessageEditBegan), .composer(.queuedMessageResubmitted),
+				.composer(.queuedMessageEditCancelled),
+				.composer(.queueingEnabledChanged): return false
 		case .conversations(.newChatRequested), .conversations(.newChatOpened),
 				.conversations(.selectionRequested),
 				.conversations(.lockedChatRetryRequested),
