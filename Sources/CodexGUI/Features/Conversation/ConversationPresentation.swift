@@ -119,6 +119,15 @@ struct ConversationPresentation: Equatable
 		let draftContext: [ComposerContextItem]
 		let reusableReferences: [ComposerContextItem]
 		let canSend: Bool
+		var queuePaused = false
+		var queueInterrupted = false
+		var canResumeQueue = false
+		var canSteerQueuedMessage = false
+		var canQueue = false
+		var queueingEnabled = true
+		var isEditingQueuedMessage = false
+		var queuedMessages: [QueuedComposerMessage] = []
+		var reservedQueuedMessageIDs: Set<UUID> = []
 		let isLocked: Bool
 		let isRetryingLockedChat: Bool
 		let canForkLockedChat: Bool
@@ -303,6 +312,15 @@ struct ConversationPresentation: Equatable
 			draftContext: snapshot.draftContext,
 			reusableReferences: snapshot.reusableReferences,
 			canSend: snapshot.canSend,
+			queuePaused: snapshot.queuePaused,
+			queueInterrupted: snapshot.executionState == .stopped,
+			canResumeQueue: snapshot.canResumeQueue,
+			canSteerQueuedMessage: snapshot.canSteerQueuedMessage,
+			canQueue: snapshot.canQueue,
+			queueingEnabled: snapshot.queueingEnabled,
+			isEditingQueuedMessage: snapshot.isEditingQueuedMessage,
+			queuedMessages: snapshot.queuedMessages,
+			reservedQueuedMessageIDs: snapshot.reservedQueuedMessageIDs,
 			isLocked: snapshot.chatLocked,
 			isRetryingLockedChat: snapshot.chatLockRetrying,
 			canForkLockedChat: snapshot.slashCommandUnavailableReasons[.fork] == nil,

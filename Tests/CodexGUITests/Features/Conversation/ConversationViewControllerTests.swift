@@ -430,7 +430,7 @@ struct ConversationViewControllerTests
 		.awaitingApproval,
 		.awaitingAnswer,
 	])
-	func composerSharesOneActionSlotAcrossDraftChanges(state: ExecutionState) throws
+	func composerUsesSingleSendOrStopControlAcrossDraftChanges(state: ExecutionState) throws
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
@@ -439,16 +439,16 @@ struct ConversationViewControllerTests
 			var active = snapshot(
 				[],
 				draft: draft,
-				canSend: true
+				canSend: false
 			)
 			active.activeThreadID = "replay"
 			active.activeExecutionState = state
 			active.canSteer = true
+			active.canQueue = true
 			return active
 		}
 		var stops = 0
 		var sends = 0
-		var steered: [String] = []
 		controller.onStop =
 		{
 			stops += 1
@@ -457,11 +457,7 @@ struct ConversationViewControllerTests
 		{
 			sends += 1
 		}
-		controller.onSteer =
-		{
-			steered.append($0)
-		}
-		let buttons = [controller.sendButton, controller.steerButton, controller.stopButton]
+		let buttons = [controller.sendButton, controller.stopButton]
 
 		for draft in ["", "Follow up", "", " \n"]
 		{
@@ -470,23 +466,18 @@ struct ConversationViewControllerTests
 			{
 				!$0.isHidden
 			}
-			#expect(visible.count == 1)
-			let button = try #require(visible.first)
-			#expect(button.isEnabled)
-			if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+			let hasMessage = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			let expected = hasMessage ? [controller.sendButton] : [controller.stopButton]
+			#expect(visible == expected)
+			for button in visible
 			{
-				#expect(button === controller.stopButton)
+				#expect(button.isEnabled)
+				try #require(button.dispatchConfiguredAction())
 			}
-			else
-			{
-				#expect(button === (state == .running
-						? controller.steerButton : controller.sendButton))
-			}
-			try #require(button.dispatchConfiguredAction())
 		}
 		#expect(stops == 3)
-		#expect(sends == (state == .running ? 0 : 1))
-		#expect(steered == (state == .running ? ["Follow up"] : []))
+		#expect(sends == 1)
 
 		var active = activeSnapshot()
 		active.draftContext = [ComposerContextItem(
@@ -500,11 +491,19 @@ struct ConversationViewControllerTests
 			!$0.isHidden
 		}.count == 1)
 
+		active = activeSnapshot(draft: "Immediate follow up")
+		active.queueingEnabled = false
+		active.canQueue = false
+		controller.render(active)
+		#expect(!controller.sendButton.isHidden)
+		#expect(controller.sendButton.isEnabled)
+		try #require(controller.sendButton.dispatchConfiguredAction())
+		#expect(sends == 2)
+
 		active.draftContext = []
 		active.activeThreadID = "another-thread"
 		controller.render(active)
 		#expect(controller.stopButton.isHidden)
-		#expect(controller.steerButton.isHidden)
 		#expect(!controller.sendButton.isHidden)
 	}
 

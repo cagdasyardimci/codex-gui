@@ -16,10 +16,14 @@ extension ConversationViewController
 		let composerToolbar = makeComposerToolbar()
 		installComposerStack(toolbar: composerToolbar)
 		let composerArea = AppKitLayout.verticalStack(
-			[turnChangeSummaryButton, composerSurface, chatLockView],
+			[turnChangeSummaryButton, composerQueueView, composerSurface, chatLockView],
 			spacing: LayoutTokens.Composer.summarySpacing
 		)
 		composerArea.alignment = .centerX
+		composerArea.setCustomSpacing(
+			-ComposerQueueView.composerOverlap,
+			after: composerQueueView
+		)
 		turnChangeSummaryButton.isHidden = true
 		chatLockView.isHidden = true
 		chatLockView.onRetry =
@@ -42,6 +46,11 @@ extension ConversationViewController
 			}
 		}
 		composerSurface.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
+		composerQueueView.widthAnchor.constraint(
+			equalTo: composerArea.widthAnchor,
+			constant: -2 * ComposerQueueView.composerInset
+		)
+		.isActive = true
 		chatLockView.widthAnchor.constraint(equalTo: composerArea.widthAnchor).isActive = true
 
 		return composerArea
@@ -54,7 +63,7 @@ extension ConversationViewController
 			spacing: LayoutTokens.Composer.leadingControlSpacing
 		)
 		let actionRow = AppKitLayout.horizontalStack(
-			[sendButton, steerButton, stopButton],
+			[sendButton, resumeButton, stopButton],
 			spacing: LayoutTokens.composer.actionSpacing
 		)
 		let composerToolbar = ComposerToolbarView(
@@ -239,6 +248,7 @@ extension ConversationViewController
 			"Select Code…",
 			"Insert File Path…",
 			"Inspect Request Context…",
+			"Turn off queueing",
 		])
 		addContextButton.menu?.autoenablesItems = false
 		addContextButton.menu?.font = AppKitFontResolver.font(TypographyTokens.Composer.contextMenu)
@@ -260,8 +270,8 @@ extension ConversationViewController
 	{
 		sendButton.target = self
 		sendButton.action = #selector(send)
-		steerButton.target = self
-		steerButton.action = #selector(steer)
+		resumeButton.target = self
+		resumeButton.action = #selector(resumeQueue)
 		stopButton.target = self
 		stopButton.action = #selector(stop)
 	}
@@ -409,7 +419,7 @@ extension ConversationViewController
 		else
 		{
 			sendButton.isEnabled = false
-			steerButton.isEnabled = false
+			resumeButton.isEnabled = false
 			return
 		}
 		let isSlashInput: Bool
@@ -424,16 +434,46 @@ extension ConversationViewController
 		let hasMessageContent =
 			!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 				|| !snapshot.draftContext.isEmpty
-		let canSubmitMessage = snapshot.canSend || isSlashInput
-		let canSteerMessage = snapshot.canSteer || isSlashInput
+		composerQueueView.onRemove =
+		{
+			[weak self] in self?.onRemoveQueuedMessage?($0, false)
+		}
+		composerQueueView.onSteer =
+		{
+			[weak self] in self?.onSteerQueuedMessage?($0)
+		}
+		composerQueueView.onReorder =
+		{
+			[weak self] in self?.onReorderQueuedMessages?($0)
+		}
+		composerQueueView.onEdit =
+		{
+			[weak self] message in
+			guard let self
+			else
+			{
+				return
+			}
+			self.onBeginEditingQueuedMessage?(message)
+			self.view.window?.makeFirstResponder(self.composer)
+			self.composer.setSelectedRange(NSRange(
+				location: (self.composer.string as NSString).length,
+				length: 0
+			))
+		}
+		composerQueueView.onResume = onResumeMessageQueue
+		composerQueueView.onSetQueueingEnabled = onSetQueueingEnabled
+		let queueingTitle = snapshot.queueingEnabled ? "Turn off queueing" : "Turn on queueing"
+		addContextButton.item(at: 6)?.title = queueingTitle
+		composerQueueView.render(snapshot)
+		let canSubmitMessage = snapshot.canSend || snapshot.canQueue || isSlashInput
+			|| (!snapshot.queueingEnabled && snapshot.canSteer)
 
 		let imagesAreReady = imageImportTasks.isEmpty
 		sendButton.isEnabled = canSubmitMessage && hasMessageContent && imagesAreReady
-		steerButton.isEnabled = canSteerMessage && hasMessageContent && imagesAreReady
-		sendButton.toolTip = imagesAreReady
-			? "Send message (⌘Return)" : "Preparing image attachment…"
-		steerButton.toolTip = imagesAreReady
-			? "Steer the active turn (⇧⌘Return)" : "Preparing image attachment…"
+		let sendActionTitle = snapshot.canQueue ? "Queue message" : "Send message"
+		sendButton.toolTip = nil
+		sendButton.setAccessibilityLabel(sendActionTitle)
 		let hasStoppableExecution =
 			snapshot.activeExecutionState == .running
 				|| snapshot.activeExecutionState == .awaitingApproval
@@ -441,11 +481,11 @@ extension ConversationViewController
 		stopButton.isEnabled = isViewingActiveTask && hasStoppableExecution
 		let hasDraftContent = hasMessageContent || !imagesAreReady
 		let showsStop = stopButton.isEnabled && !hasDraftContent
-		let showsSteer = isViewingActiveTask && snapshot.activeExecutionState == .running
-			&& !showsStop
+		let showsResume = !showsStop && snapshot.queuePaused && !hasDraftContent
+		resumeButton.isEnabled = snapshot.canResumeQueue && imagesAreReady
+		resumeButton.isHidden = !showsResume
 		stopButton.isHidden = !showsStop
-		steerButton.isHidden = !showsSteer
-		sendButton.isHidden = showsStop || showsSteer
+		sendButton.isHidden = showsStop || showsResume
 	}
 
 	func textDidChange(_ notification: Notification)
@@ -538,14 +578,14 @@ extension ConversationViewController
 		}
 		onSend?()
 	}
-	@objc private func steer()
+	@objc private func resumeQueue()
 	{
 		guard imageImportTasks.isEmpty
 		else
 		{
 			return
 		}
-		onSteer?(composer.draftText)
+		onResumeMessageQueue?()
 	}
 	@objc private func stop()
 	{

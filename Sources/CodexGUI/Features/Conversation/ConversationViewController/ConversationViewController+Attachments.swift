@@ -460,6 +460,10 @@ extension ConversationViewController
 		case 3: chooseCodeRange()
 		case 4: choosePath()
 		case 5: inspectRequestContext()
+		case 6: if let snapshot = composerSubmissionPresentation
+			{
+				onSetQueueingEnabled?(!snapshot.queueingEnabled)
+			}
 		default: break
 		}
 	}

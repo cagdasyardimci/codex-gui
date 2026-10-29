@@ -26,14 +26,9 @@ struct ConversationImageImportTests
 			gate: gate
 		)
 		var sends = 0
-		var steered: [String] = []
 		controller.onSend =
 		{
 			sends += 1
-		}
-		controller.onSteer =
-		{
-			steered.append($0)
 		}
 		controller.onImportImageContext =
 		{
@@ -48,20 +43,14 @@ struct ConversationImageImportTests
 		let started = await gate.waitUntilStarted()
 		try #require(started)
 		#expect(!controller.sendButton.isEnabled)
-		#expect(!controller.steerButton.isEnabled)
 		#expect(controller.composer.isEditable)
 		controller.perform(NSSelectorFromString("send"))
-		controller.perform(NSSelectorFromString("steer"))
 		#expect(sends == 0)
-		#expect(steered.isEmpty)
 		gate.release()
 		await pending.value
 		#expect(controller.sendButton.isEnabled)
-		#expect(controller.steerButton.isEnabled)
 		controller.perform(NSSelectorFromString("send"))
-		controller.perform(NSSelectorFromString("steer"))
 		#expect(sends == 1)
-		#expect(steered == ["Existing draft"])
 	}
 
 	@Test func repeatedImportsRetainFIFOAndCapturedReceivers() async throws

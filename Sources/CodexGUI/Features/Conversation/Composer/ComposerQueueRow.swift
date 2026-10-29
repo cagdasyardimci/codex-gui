@@ -7,6 +7,7 @@ final class ComposerQueueRow: NSView
 	static let leadingInset: CGFloat = 10
 
 	let message: QueuedComposerMessage
+	weak var queueView: ComposerQueueView?
 	let preview: ComposerQueueTextButton
 	let steer: ComposerQueueTextButton
 	let remove: ComposerQueueTextButton
@@ -141,6 +142,7 @@ final class ComposerQueueRow: NSView
 	override func mouseEntered(with event: NSEvent)
 	{
 		isHovered = true
+		queueView?.clearRowHovers(except: self)
 	}
 
 	func clearHover()

@@ -12,9 +12,14 @@ final class ConversationViewController: NSViewController,
 	var onRemoveSkill: ((ProjectSkillSelection) -> Void)?
 	var onSlashCommand: ((SlashCommandInvocation) -> Void)?
 	var onSend: (() -> Void)?
+	var onRemoveQueuedMessage: ((UUID, Bool) -> Void)?
+	var onResumeMessageQueue: (() -> Void)?
+	var onSteerQueuedMessage: ((UUID) -> Void)?
+	var onReorderQueuedMessages: (([UUID]) -> Void)?
+	var onBeginEditingQueuedMessage: ((QueuedComposerMessage) -> Void)?
+	var onSetQueueingEnabled: ((Bool) -> Void)?
 	var onRetryLockedChat: (() -> Void)?
 	var onForkLockedChat: (() -> Void)?
-	var onSteer: ((String) -> Void)?
 	var onStop: (() -> Void)?
 	var onReturnToActiveTask: (() -> Void)?
 	var onDraftChange: ((String) -> Void)?
@@ -175,8 +180,9 @@ final class ConversationViewController: NSViewController,
 	var fileSearchWasCompletion = false
 	let fileIndexRuntime = ProjectFileIndexRuntime()
 	let sendButton = ComposerSubmissionButton(role: .send)
-	let steerButton = ComposerSubmissionButton(role: .steer)
+	let composerQueueView = ComposerQueueView()
 	let stopButton = ComposerSubmissionButton(role: .stop)
+	let resumeButton = ComposerSubmissionButton(role: .resume)
 	let interactionStack = NSStackView()
 	private var renderedInteractions: ConversationPresentation.Interactions?
 	var projectPath: String?

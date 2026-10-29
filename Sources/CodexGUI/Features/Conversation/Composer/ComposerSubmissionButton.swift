@@ -7,7 +7,7 @@ final class ComposerSubmissionButton: DesktopLayerButton
 	enum Role
 	{
 		case send
-		case steer
+		case resume
 		case stop
 	}
 
@@ -20,7 +20,7 @@ final class ComposerSubmissionButton: DesktopLayerButton
 		switch role
 		{
 		case .send: title = "Send"
-		case .steer: title = "Steer"
+		case .resume: title = "Resume"
 		case .stop: title = "Stop"
 		}
 		super.init(frame: .zero)
@@ -29,7 +29,10 @@ final class ComposerSubmissionButton: DesktopLayerButton
 		isBordered = false
 		controlSize = .small
 		font = AppKitFontResolver.font(TypographyTokens.Controls.prominentButton)
-		image = DesktopIcons.image(
+		image = role == .resume ? DesktopIcons.image(
+			.playSm,
+			size: 16
+		) : DesktopIcons.image(
 			role == .stop ? .stopCircleFilled : .arrowUpLg,
 			size: role == .stop ? LayoutTokens.composer.controlHeight : LayoutTokens.Composer
 				.sendIconSize
@@ -50,21 +53,22 @@ final class ComposerSubmissionButton: DesktopLayerButton
 			layer?.cornerRadius = ShapeTokens.Composer
 				.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
 			keyEquivalent = "\r"
-			keyEquivalentModifierMask = role == .send ? [.command] : [.command, .shift]
+			keyEquivalentModifierMask = [.command]
 		}
 		switch role
 		{
 		case .send:
 			setAccessibilityLabel("Send message")
 			setAccessibilityIdentifier("conversation-send")
-			toolTip = "Send message (⌘Return)"
-		case .steer:
-			setAccessibilityLabel("Steer the active turn with this message")
-			toolTip = "Steer the active turn (⇧⌘Return)"
+			toolTip = nil
+		case .resume:
+			setAccessibilityLabel("Resume")
+			setAccessibilityIdentifier("conversation-resume")
+			toolTip = nil
 		case .stop:
 			setAccessibilityLabel("Stop current task")
 			setAccessibilityIdentifier("conversation-stop")
-			toolTip = "Stop"
+			toolTip = nil
 		}
 		refreshEnabledPresentation()
 	}

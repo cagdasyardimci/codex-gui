@@ -7,11 +7,11 @@ import Testing
 @Suite(.serialized)
 struct ComposerCompleteControlTests
 {
-	@Test(arguments: [ComposerSubmissionButton.Role.send, .steer])
-	func disabledSubmissionRestoresItsSurfaceAndNativeAction(role: ComposerSubmissionButton.Role)
+	@Test
+	func disabledSubmissionRestoresItsSurfaceAndNativeAction()
 	{
 		_ = NSApplication.shared
-		let button = ComposerSubmissionButton(role: role)
+		let button = ComposerSubmissionButton(role: .send)
 		let receiver = ActionReceiver()
 		button.target = receiver
 		button.action = #selector(ActionReceiver.invoke)
@@ -24,10 +24,7 @@ struct ComposerCompleteControlTests
 		#expect(button.dispatchConfiguredAction())
 		#expect(receiver.calls == 1)
 		#expect(button.keyEquivalent == "\r")
-		#expect(button.keyEquivalentModifierMask == (role == .send ? [.command] : [
-			.command,
-			.shift
-		]))
+		#expect(button.keyEquivalentModifierMask == [.command])
 	}
 
 	@Test func configuredPermissionThenPresetRestoresArtworkTintAndAction()

@@ -351,10 +351,37 @@ extension MainWindowController
 			}
 			target.dispatch(.slashCommand(command))
 		}
-		conversation.onSteer =
+		conversation
+			.onRemoveQueuedMessage =
+			{
+				target.dispatch(.removeQueuedMessage(
+					$0,
+					editing: $1
+				))
+			}
+		conversation.onResumeMessageQueue =
 		{
-			target.dispatch(.steer($0))
+			target.dispatch(.resumeMessageQueue)
 		}
+		conversation.onSteerQueuedMessage =
+		{
+			target.dispatch(.steerQueuedMessage($0))
+		}
+		conversation.onReorderQueuedMessages =
+		{
+			target.dispatch(.reorderQueuedMessages($0))
+		}
+		conversation
+			.onBeginEditingQueuedMessage =
+			{
+				target.dispatch(.beginEditingQueuedMessage($0))
+			}
+
+		conversation.onSetQueueingEnabled =
+		{
+			target.dispatch(.setQueueingEnabled($0))
+		}
+
 		conversation.onStop =
 		{
 			target.dispatch(.stop)
