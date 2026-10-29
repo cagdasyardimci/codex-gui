@@ -35,9 +35,9 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			ofSize: 13,
 			weight: .regular
 		)
-		title.maximumNumberOfLines = 2
-		title.lineBreakMode = .byCharWrapping
-		title.cell?.wraps = true
+		title.maximumNumberOfLines = 1
+		title.lineBreakMode = .byTruncatingTail
+		title.cell?.wraps = false
 		title.cell?.isScrollable = false
 		title.isSelectable = true
 		title.allowsEditingTextAttributes = true
@@ -123,7 +123,7 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 		setAccessibilityLabel("Turn preview")
 		let titleFont = title.font ?? NSFont.systemFont(ofSize: 13)
 		let titleParagraph = NSMutableParagraphStyle()
-		titleParagraph.lineBreakMode = .byCharWrapping
+		titleParagraph.lineBreakMode = .byTruncatingTail
 		let titleAttributes: [NSAttributedString.Key: Any] = [
 			.font: titleFont,
 			.foregroundColor: NSColor.labelColor,
@@ -155,7 +155,7 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			Self.minimumHeaderHeight,
 			min(
 				measuredTitleHeight,
-				2 * titleLineHeight
+				titleLineHeight
 			)
 		)
 		let styledReply = TurnSummaryLinkPresentation.styled(

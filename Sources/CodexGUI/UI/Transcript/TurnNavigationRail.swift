@@ -444,6 +444,14 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 		previewTurnID = nil
 	}
 
+	override func viewDidHide()
+	{
+		super.viewDidHide()
+		hoveredMark = nil
+		hoveredEntryID = nil
+		dismissPreview()
+	}
+
 	override func viewDidMoveToWindow()
 	{
 		super.viewDidMoveToWindow()
@@ -503,7 +511,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 
 	private func showPreview(for mark: TurnNavigationMark)
 	{
-		guard window != nil,
+		guard window != nil, !isHiddenOrHasHiddenAncestor,
 				let index = entryIndices[mark.entryID]
 		else
 		{

@@ -16,6 +16,8 @@ A reusable component owns its complete appearance, composition and interaction s
 
 Action tooltips share [the tooltip presentation](../Sources/CodexGUI/UI/Components/Controls/DesktopTooltip.swift) through [native control adaptation](../Sources/CodexGUI/UI/Components/Controls/DesktopControlTooltip.swift). Preserve native action routing and keep transient panels passive; focus, pointer exit, dismissal and owner retirement belong to the shared lifecycle. Show shortcut badges only for actions wired in the local app. Give each hover target one tooltip owner: toolbar items with custom views leave presentation to those views, row-wide native tooltips must not cover custom actions, and content embedded in a tooltip-owning control must not register a second native tooltip.
 
+[Turn previews](../Sources/CodexGUI/UI/Transcript/TurnNavigationRail.swift) retire when their anchor or an ancestor is hidden. Full-view pane transitions can hide a conversation without delivering a pointer-exit event, so hidden anchors must also reject new preview presentation.
+
 Domain eligibility, persistence and asynchronous request identity remain feature responsibilities. Native composition reuse must not merge independent decision lifetimes. Apply [DRY](../CONVENTIONS.md#dry-principle) when deciding whether callers share a contract.
 
 Find existing controls and compositions in [UI/Components](../Sources/CodexGUI/UI/Components/) before adding one. Follow [placement conventions](../CONVENTIONS.md#responsibility-boundaries) to select the owning source.

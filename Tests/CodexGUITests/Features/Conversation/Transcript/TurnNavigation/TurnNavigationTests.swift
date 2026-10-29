@@ -117,6 +117,17 @@ struct TurnNavigationTests
 			#expect(panel.styleMask.contains(.nonactivatingPanel))
 			#expect(panel.contentView is TurnSummaryPreview)
 			#expect(panel.frame.width == TurnSummaryPreview.cardWidth)
+			for appearance in [NSAppearance.Name.aqua, .darkAqua]
+			{
+				window.appearance = NSAppearance(named: appearance)
+				controller.view.isHidden = true
+				#expect(rail.previewPanel == nil)
+				mark.mouseEntered(with: hover)
+				#expect(rail.previewPanel == nil)
+				controller.view.isHidden = false
+				mark.mouseEntered(with: hover)
+				#expect(rail.previewPanel?.parent === window)
+			}
 			try #require(mark.isEnabled)
 			// Test the mark's configured jump action without performClick's native event polling,
 			// whose HIToolbox wakeup can terminate SwiftPM's async-main loop before the next test.
