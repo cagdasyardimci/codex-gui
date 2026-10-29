@@ -174,25 +174,11 @@ final class SettingsChoiceMenu
 			return
 		}
 		selectedIndex = index
-		for (offset, row) in rows.enumerated()
-		{
-			row.menuHighlighted = offset == index
-		}
-		rows[index].scrollToVisible(rows[index].bounds)
-		panel.makeFirstResponder(rows[index])
-	}
-
-	private func moveHighlight(by direction: Int)
-	{
-		for distance in 1 ... choices.count
-		{
-			let index = (selectedIndex + direction * distance + choices.count) % choices.count
-			if choices[index].isEnabled
-			{
-				highlight(index)
-				return
-			}
-		}
+		DesktopMenuNavigation.highlight(
+			index,
+			rows: rows,
+			in: panel
+		)
 	}
 
 	func updateChecks(_ checkedIDs: Set<String>)
@@ -246,9 +232,20 @@ final class SettingsChoiceMenu
 		switch keyCode
 		{
 		case 53, 48: close()
-		case 125: moveHighlight(by: 1)
-		case 126: moveHighlight(by: -1)
-		case 36, 76, 49: choose(selectedIndex)
+		case 125, 126, 36, 76:
+			_ = DesktopMenuNavigation.handleKey(
+				keyCode,
+				rows: rows,
+				currentIndex: selectedIndex,
+				onHighlight: highlight,
+				onChoose:
+				{
+					index in
+					choose(index)
+					return true
+				}
+			)
+		case 49: choose(selectedIndex)
 		default: return false
 		}
 		return true

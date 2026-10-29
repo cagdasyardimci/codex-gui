@@ -61,10 +61,14 @@ struct DesktopMenuRowTests
 			height: row.rowHeight
 		)
 		row.layoutSubtreeIfNeeded()
-		#expect(row.iconView.frame.maxX < row.titleLabel.frame.minX)
-		#expect(row.titleLabel.frame.maxX < row.suffixLabel.frame.minX)
-		#expect(row.suffixLabel.frame.maxX < row.trailingImageView.frame.minX)
-		#expect(row.titleLabel.frame.maxY <= row.subtitleLabel.frame.minY)
+		#expect(row.iconView.frame.maxX < row.titleLabel
+			.alignmentRect(forFrame: row.titleLabel.frame).minX)
+		#expect(row.titleLabel.alignmentRect(forFrame: row.titleLabel.frame).maxX < row.suffixLabel
+			.alignmentRect(forFrame: row.suffixLabel.frame).minX)
+		#expect(row.suffixLabel.alignmentRect(forFrame: row.suffixLabel.frame).maxX < row
+			.trailingImageView.frame.minX)
+		#expect(row.titleLabel.alignmentRect(forFrame: row.titleLabel.frame).maxY <= row
+			.subtitleLabel.alignmentRect(forFrame: row.subtitleLabel.frame).minY)
 		#expect(!row.trailingImageView.isHidden)
 
 		row.content.subtitle = nil
@@ -75,7 +79,38 @@ struct DesktopMenuRowTests
 		#expect(row.subtitleLabel.isHidden)
 		#expect(row.suffixLabel.isHidden)
 		#expect(row.opensSubmenu)
-		#expect(row.titleLabel.frame.maxX < row.trailingImageView.frame.minX)
-		#expect(row.titleLabel.frame.maxY <= row.bounds.maxY)
+		#expect(row.titleLabel.alignmentRect(forFrame: row.titleLabel.frame).maxX < row
+			.trailingImageView.frame.minX)
+		#expect(row.titleLabel.alignmentRect(forFrame: row.titleLabel.frame).maxY <= row.bounds
+			.maxY)
+
+		for presentation in [DesktopMenuRow.TextPresentation.standard, .aligned]
+		{
+			let measured = DesktopMenuRow(
+				content: .init(title: "Model"),
+				textPresentation: presentation
+			)
+			let plainWidth = measured.preferredSize.width
+			measured.content.icon = DesktopIcons.image(.settings)
+			measured.content.subtitle = "A longer description that must fit without truncation"
+			measured.content.suffix = "Available"
+			measured.content.indicator = .checkmark
+			measured.frame = NSRect(
+				origin: .zero,
+				size: measured.preferredSize
+			)
+			measured.layoutSubtreeIfNeeded()
+			#expect(measured.bounds.width > plainWidth)
+			#expect((measured.subtitleLabel.cell?.cellSize.width ?? 0) <= measured.subtitleLabel
+				.frame.width + 0.5)
+			#expect((measured.suffixLabel.cell?.cellSize.width ?? 0) <= measured.suffixLabel.frame
+				.width + 0.5)
+			#expect(measured.subtitleLabel.alignmentRect(forFrame: measured.subtitleLabel.frame)
+				.maxX < measured.suffixLabel.alignmentRect(forFrame: measured.suffixLabel.frame)
+				.minX)
+			#expect(measured.suffixLabel.alignmentRect(forFrame: measured.suffixLabel.frame)
+				.maxX < measured.trailingImageView.frame.minX)
+		}
+
 	}
 }

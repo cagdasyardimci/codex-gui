@@ -4,6 +4,12 @@ import AppKit
 @MainActor
 class DesktopMenuRow: NSButton
 {
+	enum TextPresentation
+	{
+		case standard, aligned
+	}
+	private let textPresentation: TextPresentation
+
 	enum Indicator: Equatable
 	{
 		case none, checkmark, checkbox, submenu
@@ -83,19 +89,65 @@ class DesktopMenuRow: NSButton
 	{
 		content.subtitle == nil ? LayoutTokens.MenuRow.height : LayoutTokens.MenuRow.detailedHeight
 	}
-	let titleLabel = NSTextField(labelWithString: "")
-	let subtitleLabel = NSTextField(labelWithString: "")
+	var preferredSize: NSSize
+	{
+		let textWidth = max(
+			naturalWidth(titleLabel),
+			content.subtitle == nil ? 0 : naturalWidth(subtitleLabel)
+		)
+		let suffixWidth = content.suffix.isEmpty ? 0 : naturalSuffixWidth + Layout.iconSpacing
+		return NSSize(
+			width: textLeadingInset + textWidth + suffixWidth + textTrailingInset,
+			height: rowHeight
+		)
+	}
+
+	private var textLeadingInset: CGFloat
+	{
+		Layout.horizontalInset + (content.icon != nil || content.indicator == .checkbox
+			? Layout.iconSize + Layout.iconSpacing : 0)
+	}
+
+	private var textTrailingInset: CGFloat
+	{
+		Layout.horizontalInset + (content.indicator == .checkmark || content.indicator == .submenu
+			? Layout.iconSize + Layout.iconSpacing : 0)
+	}
+
+	private func naturalWidth(_ label: NSTextField) -> CGFloat
+	{
+		textPresentation == .aligned ? label.attributedStringValue.size().width
+			: label.cell?.cellSize.width ?? label.intrinsicContentSize.width
+	}
+
+	private var naturalSuffixWidth: CGFloat
+	{
+		ceil(naturalWidth(suffixLabel))
+	}
+
+	let titleLabel: NSTextField
+	let subtitleLabel: NSTextField
 	let iconView = NSImageView()
 	let trailingImageView = NSImageView()
-	let suffixLabel = NSTextField(labelWithString: "")
+	let suffixLabel: NSTextField
 	private(set) var isHovered = false
 	private var isKeyboardFocused = false
 	private var tracking: NSTrackingArea?
 	private var rowHeightConstraint: NSLayoutConstraint?
 	private typealias Layout = LayoutTokens.MenuRow
 
-	init(content: Content)
+	init(
+		content: Content,
+		textPresentation: TextPresentation = .standard
+	)
 	{
+		self.textPresentation = textPresentation
+		titleLabel = textPresentation == .aligned ? DesktopTextField(labelWithString: "") :
+			NSTextField(labelWithString: "")
+		subtitleLabel = textPresentation == .aligned ? DesktopTextField(labelWithString: "") :
+			NSTextField(labelWithString: "")
+		suffixLabel = textPresentation == .aligned ? DesktopTextField(labelWithString: "") :
+			NSTextField(labelWithString: "")
 		self.content = content
 		super.init(frame: .zero)
 		isBordered = false
@@ -238,45 +290,64 @@ class DesktopMenuRow: NSButton
 			width: Layout.iconSize,
 			height: Layout.iconSize
 		)
-		let hasLeadingContent = content.icon != nil || content.indicator == .checkbox
-		let textX = hasLeadingContent ? iconFrame.maxX + Layout.iconSpacing : Layout.horizontalInset
-		let reservesIndicator = content.indicator == .checkmark || content.indicator == .submenu
-		let trailing = reservesIndicator ? trailingImageView.frame.minX - Layout.iconSpacing
-			: bounds.maxX - Layout.horizontalInset
+		let textX = textLeadingInset
+		let trailing = bounds.maxX - textTrailingInset
 		let suffixWidth = min(
 			max(
 				0,
 				trailing - textX
 			),
-			ceil(suffixLabel.cell?.cellSize.width ?? suffixLabel.intrinsicContentSize.width)
+			naturalSuffixWidth
 		)
-		suffixLabel.frame = NSRect(
-			x: trailing - suffixWidth,
-			y: bounds.midY - Layout.titleLineHeight / 2,
-			width: suffixWidth,
-			height: Layout.titleLineHeight
+		suffixLabel.frame = labelFrame(
+			suffixLabel,
+			alignmentRect: NSRect(
+				x: trailing - suffixWidth,
+				y: bounds.midY - Layout.titleLineHeight / 2,
+				width: suffixWidth,
+				height: Layout.titleLineHeight
+			)
 		)
 		let textEnd = content.suffix.isEmpty ? trailing
-			: suffixLabel.frame.minX - Layout.iconSpacing
-		titleLabel.frame = NSRect(
-			x: textX,
-			y: content.subtitle == nil ? bounds.midY - Layout.titleLineHeight / 2
-				: Layout.verticalInset,
-			width: max(
-				0,
-				textEnd - textX
-			),
-			height: Layout.titleLineHeight
+			: labelRect(suffixLabel).minX - Layout.iconSpacing
+		titleLabel.frame = labelFrame(
+			titleLabel,
+			alignmentRect: NSRect(
+				x: textX,
+				y: content.subtitle == nil ? bounds.midY - Layout.titleLineHeight / 2
+					: Layout.verticalInset,
+				width: max(
+					0,
+					textEnd - textX
+				),
+				height: Layout.titleLineHeight
+			)
 		)
-		subtitleLabel.frame = NSRect(
-			x: textX,
-			y: titleLabel.frame.maxY,
-			width: max(
-				0,
-				textEnd - textX
-			),
-			height: Layout.subtitleLineHeight
+		subtitleLabel.frame = labelFrame(
+			subtitleLabel,
+			alignmentRect: NSRect(
+				x: textX,
+				y: labelRect(titleLabel).maxY,
+				width: max(
+					0,
+					textEnd - textX
+				),
+				height: Layout.subtitleLineHeight
+			)
 		)
+	}
+
+	private func labelFrame(
+		_ label: NSTextField,
+		alignmentRect: NSRect
+	) -> NSRect
+	{
+		textPresentation == .aligned ? label.frame(forAlignmentRect: alignmentRect) : alignmentRect
+	}
+
+	private func labelRect(_ label: NSTextField) -> NSRect
+	{
+		textPresentation == .aligned ? label.alignmentRect(forFrame: label.frame) : label.frame
 	}
 
 	@objc private func invoke()

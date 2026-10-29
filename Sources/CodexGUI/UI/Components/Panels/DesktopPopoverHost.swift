@@ -42,7 +42,7 @@ final class DesktopPopoverHost
 	{
 		enum Alignment
 		{
-			case centered, leading
+			case centered, leading, trailing
 		}
 		enum Width
 		{
@@ -63,6 +63,7 @@ final class DesktopPopoverHost
 		var focus = Focus.panel
 		var horizontalOffset: CGFloat = 0
 		var anchorSpacing: CGFloat = 8
+		var opensBelowAnchor = false
 	}
 
 	var onKeyDown: ((NSEvent) -> Bool)?
@@ -715,7 +716,14 @@ final class DesktopPopoverHost
 				padded,
 				display: true
 			)
-			if case .composer(let placement) = presentation, placement.alignment == .leading
+			if case .composer(let placement) = presentation, placement.opensBelowAnchor
+			{
+				panel.setFrameTopLeftPoint(NSPoint(
+					x: padded.minX.rounded(),
+					y: padded.maxY.rounded()
+				))
+			}
+			else if case .composer(let placement) = presentation, placement.alignment != .centered
 			{
 				panel.setFrameOrigin(NSPoint(
 					x: padded.minX.rounded(),
@@ -750,6 +758,16 @@ final class DesktopPopoverHost
 				),
 				size: frame.size
 			)
+		}
+		panel.contentView?.layoutSubtreeIfNeeded()
+		if case .composer(let placement) = presentation, placement.opensBelowAnchor,
+			let surface = primarySurface
+		{
+			// Keep the visible body anchored to the top after AppKit rounds the panel's size.
+			surface.setFrameOrigin(NSPoint(
+				x: shadowOutset,
+				y: root.bounds.height - shadowOutset - frame.height
+			))
 		}
 		searchSuggestionsSurface?.frame = NSRect(
 			origin: NSPoint(
@@ -884,9 +902,16 @@ final class DesktopPopoverHost
 			),
 			availableHeight
 		)
-		let requestedX = placement.alignment == .leading
-			? rect.minX + placement.horizontalOffset : rect.midX - width / 2 + placement
-			.horizontalOffset
+		let alignedX: CGFloat
+		switch placement.alignment
+		{
+		case .leading: alignedX = rect.minX
+		case .trailing: alignedX = rect.maxX - width
+		case .centered: alignedX = rect.midX - width / 2
+		}
+		let requestedX = alignedX + placement.horizontalOffset
+		let requestedY = placement.opensBelowAnchor ? rect.minY - placement
+			.anchorSpacing - height : rect.maxY + placement.anchorSpacing
 		return NSRect(
 			x: min(
 				max(
@@ -897,7 +922,7 @@ final class DesktopPopoverHost
 			),
 			y: min(
 				max(
-					rect.maxY + placement.anchorSpacing,
+					requestedY,
 					visible.minY + 8
 				),
 				visible.maxY - height - 8
