@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class ModelEffortSelectionButton: NSButton
+final class ModelEffortSelectionButton: DesktopTooltipButton
 {
 	private let contentLayout: ModelSelectorLayout
 	private typealias ContentLayout = ModelSelectorLayout.Content
@@ -41,6 +41,9 @@ final class ModelEffortSelectionButton: NSButton
 		isBordered = false
 		bezelStyle = .inline
 		focusRingType = .none
+		keyEquivalent = "m"
+		keyEquivalentModifierMask = [.control, .shift]
+		tooltipShortcut = "⌃⇧M"
 		font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
 		image = nil
 
@@ -92,7 +95,7 @@ final class ModelEffortSelectionButton: NSButton
 		}
 
 		let selectionDescription = self.summary ?? "Select effort"
-		toolTip = fastMode ? "\(selectionDescription) · Fast mode enabled" : selectionDescription
+		toolTip = "Select effort"
 		setAccessibilityLabel("Model and effort: \(selectionDescription)")
 		setAccessibilityValue(fastMode ? "Fast mode enabled" : "Standard speed")
 		setAccessibilityHelp("Open model, reasoning effort, and speed settings")

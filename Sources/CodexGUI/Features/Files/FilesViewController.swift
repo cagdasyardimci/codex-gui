@@ -132,14 +132,16 @@ final class FilesViewController: NSViewController
 		navigatorButton.alternateImage = navigatorButton.image
 		navigatorButton.showsSelection = true
 		navigatorButton.state = .on
-		navigatorButton.setAccessibilityLabel("Toggle file navigator")
+		navigatorButton.setAccessibilityLabel("Toggle file tree")
+		navigatorButton.toolTip = "Toggle file tree"
 		navigatorButton.target = self
 		navigatorButton.action = #selector(toggleNavigator)
 		searchButton.target = self
 		searchButton.action = #selector(showContentSearch)
 		searchButton.image = FileViewerIcons.image(.fileSearch)
 		searchButton.imagePosition = .imageOnly
-		searchButton.setAccessibilityLabel("Search files")
+		searchButton.setAccessibilityLabel("Search in files")
+		searchButton.toolTip = "Search in files"
 		for button in [searchButton, navigatorButton]
 		{
 			NSLayoutConstraint.activate([

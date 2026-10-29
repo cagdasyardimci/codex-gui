@@ -39,12 +39,14 @@ final class ComposerPermissionButton: DesktopHoverButton
 	{
 		let configured = configuredDescription != nil
 		let permissionTitle = configured ? "Configured permissions" : mode.title
-		let description = configuredDescription ?? mode.description
 		let fullAccess = configuredFullAccess ?? (mode == .fullAccess)
 		let tint = fullAccess ? ApprovalPopoverStyle.fullAccess : AppKitColorTokens
 			.composerSecondaryText
 		title = permissionTitle
-		toolTip = "\(permissionTitle): \(description)"
+		toolTip = configuredDescription.map
+		{
+			"\(permissionTitle): \($0)"
+		} ?? "Change permissions"
 		setAccessibilityLabel("Approval policy: \(permissionTitle)")
 		contentTintColor = tint
 		attributedTitle = NSAttributedString(

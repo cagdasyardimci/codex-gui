@@ -58,7 +58,6 @@ final class SettingsNotificationControls: NSView
 		}
 		completion.setAccessibilityLabel("Turn completion notifications")
 		sound.setAccessibilityLabel("Notification sound")
-		sound.toolTip = "Classic uses the macOS Sosumi alert sound."
 		for toggle in [permission, question]
 		{
 			toggle.target = self

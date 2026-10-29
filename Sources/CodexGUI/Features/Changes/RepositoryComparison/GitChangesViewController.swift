@@ -973,8 +973,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		wordWrapButton?.setAccessibilityLabel(
 			documentController.wrapsCode ? "Stop wrapping code lines" : "Wrap code lines"
 		)
-		wordWrapButton?.toolTip = documentController.wrapsCode
-			? "Stop wrapping code lines" : "Wrap code lines"
+		wordWrapButton?.toolTip = "Word wrap"
 		wordWrapButton?.setAccessibilityValue(documentController.wrapsCode ? "On" : "Off")
 	}
 

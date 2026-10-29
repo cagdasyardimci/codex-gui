@@ -168,7 +168,7 @@ final class SubagentDetailViewController: NSViewController
 			action: #selector(goBack)
 		)
 		backButton.setAccessibilityLabel("Back to Subagents")
-		backButton.toolTip = "Back to Subagents"
+		backButton.toolTip = nil
 		avatarContainer.widthAnchor.constraint(equalToConstant: Self.avatarDimension)
 			.isActive = true
 		avatarContainer.heightAnchor.constraint(equalToConstant: Self.avatarDimension)

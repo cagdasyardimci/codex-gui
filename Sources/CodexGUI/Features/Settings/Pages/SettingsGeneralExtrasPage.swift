@@ -97,8 +97,7 @@ final class SettingsGeneralExtrasPage: NSView
 		let requiredFeatures = backend.requirements["featureRequirements"] as? [String: Bool] ?? [:]
 		compression.isEnabled = enabled && resolvedCompression != nil
 			&& requiredFeatures["local_thread_store_compression"] == nil
-		compression.toolTip = requiredFeatures["local_thread_store_compression"] == nil ? nil
-			: "Controlled by organization policy."
+		compression.toolTip = nil
 		if !backend.isConnected
 		{
 			catalogRequested = false
@@ -166,10 +165,7 @@ final class SettingsGeneralExtrasPage: NSView
 						detail: $0.description
 					)
 				}
-				speed.toolTip = model.map
-				{
-					"Service tiers available for \($0.displayName)."
-				}
+				speed.toolTip = nil
 				refresh()
 			}
 			catch

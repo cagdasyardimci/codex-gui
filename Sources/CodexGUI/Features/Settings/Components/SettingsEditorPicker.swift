@@ -66,7 +66,6 @@ final class SettingsEditorPicker: SettingsChoicePicker
 		configured = true
 		application = url
 		rebuildChoices()
-		toolTip = url?.path ?? "Use the system default application to open files"
 	}
 
 	private func rebuildChoices()

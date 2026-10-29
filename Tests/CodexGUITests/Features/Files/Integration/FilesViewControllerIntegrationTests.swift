@@ -30,7 +30,6 @@ struct FilesViewControllerIntegrationTests
 			_ = NSApplication.shared
 			let runtime = FileViewerRuntime(autosaveDelay: .seconds(60))
 			let files = FilesViewController(runtime: runtime)
-			runtime.switchRoot(fixture.root.path)
 			let window = NSWindow(
 				contentRect: NSRect(
 					x: 0,
@@ -46,6 +45,9 @@ struct FilesViewControllerIntegrationTests
 			window.contentViewController = files
 			do
 			{
+				files.view.layoutSubtreeIfNeeded()
+				try assertEmptyState(files)
+				runtime.switchRoot(fixture.root.path)
 				for path in ["empty.png", "empty.pdf"]
 				{
 					files.open(
@@ -412,13 +414,14 @@ struct FilesViewControllerIntegrationTests
 			to: files.breadcrumb
 		)
 		#expect(abs(rootLabelFrame.midX - files.breadcrumb.bounds.midX) < 0.5)
-		for label in ["Search files", "Toggle file navigator"]
+		for label in ["Search in files", "Toggle file tree"]
 		{
 			let button = try #require(findButton(
 				label,
 				in: files.view
 			))
 			#expect(abs(button.bounds.width - button.bounds.height) < 0.5)
+			#expect(button.toolTip == label)
 		}
 	}
 

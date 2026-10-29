@@ -192,7 +192,7 @@ final class GitComparisonToolbarView: NSStackView
 		optionsButton.target = target
 		optionsButton.action = actions.displayMenu
 		optionsButton.setAccessibilityLabel("Diff display options")
-		optionsButton.toolTip = "Diff display options and reported turn changes"
+		optionsButton.toolTip = "Changes options"
 		let search = referenceButton(
 			"Jump to file",
 			image: GitReviewReferenceIcons.image(.documentSearch),
@@ -204,12 +204,14 @@ final class GitComparisonToolbarView: NSStackView
 			image: GitReviewReferenceIcons.image(.refresh),
 			action: actions.refresh
 		)
+		refresh.toolTip = "Refresh"
 		refreshButton = refresh
 		let boundary = referenceButton(
 			"Wrap code lines",
 			image: GitReviewReferenceIcons.image(.returnToBoundary),
 			action: actions.wordWrap
 		)
+		boundary.toolTip = "Word wrap"
 		wordWrapButton = boundary
 		(boundary as? ViewerToolbarButton)?.showsSelection = true
 		let collapse = referenceButton(
@@ -271,9 +273,7 @@ final class GitComparisonToolbarView: NSStackView
 		optionsButton.setAccessibilityLabel(
 			shouldUseCompactToolbar ? "More comparison actions" : "Diff display options"
 		)
-		optionsButton.toolTip = shouldUseCompactToolbar
-			? "More display and comparison actions"
-			: "Diff display options and reported turn changes"
+		optionsButton.toolTip = "Changes options"
 		baseRevisionWidth?.constant = shouldUseCompactRevisions
 			? Layout.compactBaseRevisionWidth : Layout.baseRevisionWidth
 		targetRevisionWidth?.constant = shouldUseCompactRevisions

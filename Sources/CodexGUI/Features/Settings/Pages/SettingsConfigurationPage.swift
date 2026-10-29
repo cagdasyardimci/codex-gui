@@ -203,12 +203,8 @@ final class SettingsConfigurationPage: NSView
 				{
 					allowedStrings.contains($0.id)
 				}
-				picker.toolTip = "Available choices are controlled by organization policy."
 			}
-			else
-			{
-				picker.toolTip = nil
-			}
+			picker.toolTip = nil
 			let raw = backend.value(key)
 			let value = raw as? String ?? (raw is [String: Any] ? "__custom" : "")
 			if !options.contains(where:
@@ -228,18 +224,12 @@ final class SettingsConfigurationPage: NSView
 			let customApproval = backend.value("approval_policy") is [String: Any]
 			let sandboxBlocked = key == "sandbox_mode" && customApproval
 			picker.isEnabled = enabled && options.count > 1 && !sandboxBlocked
-			if key == "sandbox_mode" && customApproval
-			{
-				picker.toolTip = "Choose a supported approval policy "
-					+ "before changing sandbox defaults."
-			}
 		}
 		network.state = (backend.value("sandbox_workspace_write.network_access") as? Bool == true)
 			? .on : .off
 		let customApproval = backend.value("approval_policy") is [String: Any]
 		network.isEnabled = enabled && !customApproval
-		network.toolTip = customApproval
-			? "Choose a supported approval policy before changing sandbox defaults." : nil
+		network.toolTip = nil
 		networkRow.isHidden = backend.value("sandbox_mode") as? String != "workspace-write"
 		let resolvedDependencies = backend.featureEnabled("workspace_dependencies")
 		dependencies.state = resolvedDependencies.map
@@ -249,8 +239,7 @@ final class SettingsConfigurationPage: NSView
 		let requiredFeatures = backend.requirements["featureRequirements"] as? [String: Bool] ?? [:]
 		dependencies.isEnabled = enabled && resolvedDependencies != nil
 			&& requiredFeatures["workspace_dependencies"] == nil
-		dependencies.toolTip = requiredFeatures["workspace_dependencies"] == nil ? nil
-			: "Controlled by organization policy."
+		dependencies.toolTip = nil
 		for (key, toggle) in featureSwitches
 		{
 			if let value = backend.featureEnabled(key)
@@ -258,8 +247,7 @@ final class SettingsConfigurationPage: NSView
 				toggle.state = value ? .on : .off
 			}
 			toggle.isEnabled = enabled && requiredFeatures[key] == nil
-			toggle.toolTip = requiredFeatures[key] == nil ? nil
-				: "Controlled by organization policy."
+			toggle.toolTip = nil
 		}
 		updateEffortSelection()
 		if backend.isConnected && !backend.isBusy && !loadedEfforts && !loadingEfforts

@@ -25,6 +25,7 @@ final class ExpandedImageCloseButton: DesktopStyledButton
 		)
 		imagePosition = .imageOnly
 		focusRingType = .none
+		toolTip = "Close viewer"
 		setAccessibilityLabel("Close image")
 	}
 

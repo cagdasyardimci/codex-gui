@@ -94,7 +94,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		resetButton.target = self
 		resetButton.action = #selector(resetPreferences)
 		resetButton.image = DesktopIcons.image(.arrowRotateCcw)
-		resetButton.toolTip = "Reset effort and fast mode to defaults"
+		resetButton.toolTip = "Reset to default"
 		resetButton.setAccessibilityLabel("Reset effort and fast mode to defaults")
 	}
 
@@ -305,7 +305,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 			modelMenuButton.title = "Default model"
 		}
 
-		modelMenuButton.toolTip = modelMenuButton.title
+		modelMenuButton.toolTip = nil
 		modelMenuButton.setAccessibilityValue(modelMenuButton.title)
 	}
 
@@ -355,8 +355,8 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		fastButton.image = fastMode
 			? DesktopIcons.filledBoltImage()
 			: DesktopIcons.image(.bolt)
-		fastButton.toolTip = fastMode ? "Disable fast mode" : "Enable fast mode"
-		fastButton.setAccessibilityLabel(fastButton.toolTip)
+		fastButton.toolTip = "1.5x speed\nMore usage"
+		fastButton.setAccessibilityLabel(fastMode ? "Disable fast mode" : "Enable fast mode")
 		fastButton.setAccessibilityValue(fastMode ? "On" : "Off")
 	}
 

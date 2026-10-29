@@ -573,24 +573,8 @@ final class ConversationViewController: NSViewController,
 
 	private func renderRequestContext(_ snapshot: ConversationPresentation.RequestContext)
 	{
-		let includedItemCount = snapshot.includedItemCount
 		let skill = snapshot.selectedSkill
-		let contextSummaryParts = [
-			includedItemCount == 0 ? nil : "\(includedItemCount) pinned item(s)",
-			skill.map
-			{
-				"Skill \($0.invocationText)"
-			},
-		].compactMap
-		{
-			$0
-		}
-		let contextDescription =
-			contextSummaryParts.isEmpty
-				? "Request Context: None…"
-				: "Request Context: \(contextSummaryParts.joined(separator: " · "))…"
-		addContextButton.toolTip = "Add attachments · \(contextDescription)"
-
+		addContextButton.toolTip = "Add files and more"
 		requestContextText = snapshot.includedContextText
 		if !snapshot.draftContextSummary.isEmpty
 		{

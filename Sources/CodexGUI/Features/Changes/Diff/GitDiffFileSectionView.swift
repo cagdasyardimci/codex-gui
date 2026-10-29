@@ -242,16 +242,14 @@ final class GitDiffFileSectionView: NSStackView
 			action: #selector(openWorkingFile(_:))
 		)
 		open.isEnabled = canOpenWorkingFile && onOpenWorkingFile != nil
-		open.toolTip = open.isEnabled
-			? "Open the current workspace file in the preferred editor"
-			: "Current workspace file unavailable"
+		open.toolTip = open.isEnabled ? "Open in preferred editor" : nil
 		let more = referenceButton(
 			"Additional file actions for \(file.path)",
 			image: GitReviewReferenceIcons.image(.ellipsis),
 			action: #selector(showFileActions(_:))
 		)
 		more.isEnabled = onFileActions != nil
-		more.toolTip = "Actions for the compared file version"
+		more.toolTip = nil
 		actions += [open, more]
 		let header = AppKitLayout.horizontalStack(
 			[icon, path, GitReviewControls.spacer(), stats, toggleDiff] + actions,
@@ -309,7 +307,7 @@ final class GitDiffFileSectionView: NSStackView
 		path.maximumNumberOfLines = 1
 		path.cell?.wraps = false
 		path.cell?.usesSingleLineMode = true
-		path.toolTip = path.stringValue
+		path.toolTip = nil
 		path.setAccessibilityLabel("\(file.kind.rawValue) file: \(path.stringValue)")
 		return path
 	}
@@ -345,15 +343,6 @@ final class GitDiffFileSectionView: NSStackView
 		surface.heightAnchor.constraint(equalToConstant: GapLayout.rowHeight).isActive = true
 		verticalDivider.heightAnchor.constraint(equalTo: surface.heightAnchor)
 			.isActive = true
-		if row.canExpand
-		{
-			surface.toolTip = "Both boundary controls expand "
-				+ "this entire unchanged region from the same snapshot."
-		}
-		else
-		{
-			surface.toolTip = "Enable Load full files to reveal snapshot context."
-		}
 		return surface
 	}
 

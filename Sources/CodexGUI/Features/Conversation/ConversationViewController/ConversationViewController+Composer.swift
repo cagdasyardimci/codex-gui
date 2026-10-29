@@ -254,7 +254,7 @@ extension ConversationViewController
 		addContextButton.menu?.font = AppKitFontResolver.font(TypographyTokens.Composer.contextMenu)
 		addContextButton.target = self
 		addContextButton.action = #selector(chooseContextAction)
-		addContextButton.setAccessibilityLabel("Add attachments or inspect request context")
+		addContextButton.setAccessibilityLabel("Add files and more")
 		addContextButton.item(at: 0)?.image = ComposerFooterIcons.add
 		(addContextButton.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
 		addContextButton.contentTintColor = AppKitColorTokens.composerPrimaryText
@@ -263,7 +263,9 @@ extension ConversationViewController
 			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
 		addContextButton.heightAnchor
 			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
-		addContextButton.toolTip = "Add Context…"
+		addContextButton.toolTip = "Add files and more"
+		addContextButton.controlTooltip.presentation.shortcut = "@"
+		addContextButton.controlTooltip.presentation.anchorGap = 4
 	}
 
 	private func configureSubmissionButtons()
