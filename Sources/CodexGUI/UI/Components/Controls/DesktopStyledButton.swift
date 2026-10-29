@@ -2,7 +2,7 @@ import AppKit
 
 /// Complete desktop button presentation. Semantic variants own typography, geometry and states.
 @MainActor
-class DesktopStyledButton: NSButton
+class DesktopStyledButton: DesktopTooltipButton
 {
 	enum Size: Equatable
 	{
@@ -535,11 +535,13 @@ class DesktopStyledButton: NSButton
 
 	override func mouseEntered(with event: NSEvent)
 	{
+		super.mouseEntered(with: event)
 		isHovered = true
 		needsDisplay = true
 	}
 	override func mouseExited(with event: NSEvent)
 	{
+		super.mouseExited(with: event)
 		isHovered = false
 		needsDisplay = true
 	}

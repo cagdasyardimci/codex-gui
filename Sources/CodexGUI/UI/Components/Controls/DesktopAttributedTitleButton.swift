@@ -2,7 +2,7 @@ import AppKit
 
 /// Keeps semantic title colors while refreshing retained button cells for their own appearance.
 @MainActor
-class DesktopAttributedTitleButton: NSButton
+class DesktopAttributedTitleButton: DesktopTooltipButton
 {
 	private var semanticTitle: NSAttributedString?
 	private var semanticAlternateTitle: NSAttributedString?

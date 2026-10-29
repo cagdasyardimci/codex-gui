@@ -213,6 +213,10 @@ enum AppKitColorTokens
 		light: 0xFFFFFF,
 		dark: 0x363636
 	)
+	static let tooltipCapsule = AppKitColorResolution.color(
+		light: 0x0D0D0D,
+		dark: 0x2D2D2D
+	)
 	static let composerPrimaryText = AppKitColorResolution.color(
 		light: 0x0D0D0D,
 		dark: 0xFFFFFF

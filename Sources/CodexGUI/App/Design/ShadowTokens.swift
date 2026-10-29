@@ -29,6 +29,16 @@ enum ShadowTokens
 		}
 	}
 
+	static let tooltipCapsule = Style(
+		color: NSColor(
+			srgbRed: 15.0 / 255,
+			green: 23.0 / 255,
+			blue: 42.0 / 255,
+			alpha: 0.2
+		),
+		offsetY: 8,
+		blur: 18
+	)
 	static let fileViewerControl = Style(
 		color: .black.withAlphaComponent(0.045),
 		offsetY: 2,

@@ -11,6 +11,18 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 	{
 		AppKitColorTokens.rowHighlight
 	}
+	var hoverTrackingOptions: NSTrackingArea.Options
+	{
+		[.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect]
+	}
+	var synchronizesHoverOnTrackingUpdate: Bool
+	{
+		false
+	}
+	var isBackgroundHighlighted: Bool
+	{
+		isEnabled && (isHovered || isHighlighted)
+	}
 	private var tracking: NSTrackingArea?
 
 	override func updateTrackingAreas()
@@ -18,25 +30,47 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 		super.updateTrackingAreas()
 		tracking = DesktopHoverTracking.replace(
 			in: self,
-			previous: tracking
+			previous: tracking,
+			options: hoverTrackingOptions
 		)
+		if synchronizesHoverOnTrackingUpdate
+		{
+			setHovered(window.map
+			{
+				visibleRect.contains(convert(
+					$0.mouseLocationOutsideOfEventStream,
+					from: nil
+				))
+			} ?? false)
+		}
 	}
 
 	override func mouseEntered(with event: NSEvent)
 	{
-		isHovered = true
-		needsDisplay = true
+		super.mouseEntered(with: event)
+		setHovered(true)
 	}
 
 	override func mouseExited(with event: NSEvent)
 	{
+		super.mouseExited(with: event)
 		clearHover()
 	}
 
 	func clearHover()
 	{
-		isHovered = false
+		setHovered(false)
+	}
+
+	func setHovered(_ hovered: Bool)
+	{
+		isHovered = hovered
 		needsDisplay = true
+		hoverDidChange()
+	}
+
+	func hoverDidChange()
+	{
 	}
 
 	override func viewDidChangeEffectiveAppearance()
@@ -53,7 +87,7 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 
 	func drawBackground()
 	{
-		if isEnabled && (isHovered || isHighlighted)
+		if isBackgroundHighlighted
 		{
 			hoverBackgroundColor.setFill()
 			AppKitShapePath.roundedRect(

@@ -2,7 +2,7 @@ import AppKit
 
 /// Keeps the native popup menu and keyboard behavior while drawing the viewer's zoom pill.
 @MainActor
-final class ExpandedImageZoomButton: NSPopUpButton
+final class ExpandedImageZoomButton: DesktopPopupButton
 {
 	override init(
 		frame buttonFrame: NSRect,
@@ -16,6 +16,7 @@ final class ExpandedImageZoomButton: NSPopUpButton
 		isBordered = false
 		focusRingType = .none
 		font = AppKitFontResolver.font(TypographyTokens.Button.compact)
+		toolTip = "Zoom"
 	}
 
 	required init?(coder: NSCoder)
