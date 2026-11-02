@@ -168,11 +168,11 @@ struct ConversationSubagents: Equatable
 	{
 		switch kind
 		{
-		case "started": .active
+		case "started", "interacted": .active
 		case "completed": .completed
 		case "failed": .failed
 		case "interrupted": .interrupted
-		// Input and unfamiliar events are observations, not lifecycle transitions.
+		// Unfamiliar events retain the last known lifecycle state.
 		default: nil
 		}
 	}
@@ -198,13 +198,25 @@ struct ConversationSubagents: Equatable
 		{
 			completedAt = previous.activity.completedAt
 		}
+		let startedAt: Date?
+		if activity.kind == "interacted", previous.status == .active
+		{
+			startedAt = previous.activity.startedAt ?? activity.startedAt
+		}
+		else if incomingStatus == .active
+		{
+			startedAt = activity.startedAt
+		}
+		else
+		{
+			startedAt = activity.startedAt ?? previous.activity.startedAt
+		}
 		return CodexSubagentActivity(
 			kind: activity.kind,
 			threadID: activity.threadID ?? previous.activity.threadID,
 			path: activity.path ?? previous.activity.path,
 			completedAt: completedAt,
-			startedAt: incomingStatus == .active
-				? activity.startedAt : activity.startedAt ?? previous.activity.startedAt
+			startedAt: startedAt
 		)
 	}
 }

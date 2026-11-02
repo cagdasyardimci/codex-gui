@@ -66,9 +66,9 @@ struct CodexSubagentActivity: Equatable, Sendable
 			retainedCompletion = nil
 		}
 		let resolvedStart: Date?
-		if kind == "started"
+		if kind == "started" || kind == "interacted"
 		{
-			let retainedStart = sameAgent && previous?.kind == "started" ? previous?.startedAt : nil
+			let retainedStart = sameAgent && previous?.kind == kind ? previous?.startedAt : nil
 			resolvedStart = startedAt ?? retainedStart ?? observedAt
 		}
 		else

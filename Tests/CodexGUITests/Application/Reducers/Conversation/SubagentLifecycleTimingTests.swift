@@ -7,6 +7,80 @@ import Testing
 @Suite
 struct SubagentLifecycleTimingTests
 {
+	@Test(arguments: ["completed", "failed", "interrupted"])
+	func followUpResumesTerminalAgentAndLaterCompletionRemainsAuthoritative(
+		terminalKind: String
+	) throws
+	{
+		var model = fixture()
+		let start = try item(
+			id: "start",
+			kind: "started"
+		)
+		let terminal = try item(
+			id: "terminal",
+			kind: terminalKind
+		)
+		let followUp = try item(
+			id: "follow-up",
+			kind: "interacted"
+		)
+		let resumedAt = Date(timeIntervalSince1970: 300)
+		observe(
+			start,
+			model: &model,
+			at: Date(timeIntervalSince1970: 100)
+		)
+		observe(
+			terminal,
+			model: &model,
+			at: Date(timeIntervalSince1970: 200)
+		)
+		#expect(projection(model).doneAgents.count == 1)
+		observe(
+			followUp,
+			model: &model,
+			at: resumedAt
+		)
+		let resumed = projection(model)
+		let agent = try #require(resumed.activeAgents.first)
+		#expect(resumed.agents.count == 1)
+		#expect(resumed.doneAgents.isEmpty)
+		#expect(resumed.status(for: agent) == .active)
+		#expect(resumed.completedAt(for: agent) == nil)
+		#expect(resumed.startedAt(for: agent) == resumedAt)
+		#expect(resumed.summary(parentThreadID: "parent").runningCount == 1)
+		try merge(
+			[start, terminal, followUp],
+			model: &model
+		)
+		#expect(projection(model) == resumed)
+		observe(
+			try item(
+				id: "more-input",
+				kind: "interacted"
+			),
+			model: &model,
+			at: Date(timeIntervalSince1970: 400)
+		)
+		#expect(projection(model).startedAt(for: agent) == resumedAt)
+		let done = try item(
+			id: "done",
+			kind: "completed"
+		)
+		let completedAt = Date(timeIntervalSince1970: 500)
+		observe(
+			done,
+			model: &model,
+			at: completedAt
+		)
+		let completed = projection(model)
+		#expect(completed.activeAgents.isEmpty)
+		#expect(completed.status(for: agent) == .completed)
+		#expect(completed.completedAt(for: agent) == completedAt)
+		#expect(completed.startedAt(for: agent) == resumedAt)
+	}
+
 	@Test func directLifecycleEventsCaptureSuppliedTimeAndRereadsRetainIt() throws
 	{
 		var model = fixture()
