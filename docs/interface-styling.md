@@ -4,7 +4,7 @@ This guide owns shared component boundaries, native adaptation rationale and ref
 
 ## Token ownership and changes
 
-Use the [design catalogues](../Sources/CodexGUI/App/Design/) for named design inputs and [UI components](../Sources/CodexGUI/UI/Components/) for reusable composition. Change a named input at its owner, then rebuild and relaunch so prepared text and measurement caches use the new configuration.
+Use the [design catalogues](../Sources/CodexGUI/App/Design/) for named design inputs and [UI components](../Sources/CodexGUI/UI/Components/) for reusable composition. [Typography configuration](../Sources/CodexGUI/App/Design/TypographyConfiguration.swift) supplies independent UI, document-content and code bases through the [role catalogue](../Sources/CodexGUI/App/Design/TypographyTokens.swift). Components consume named semantic roles; role derivation, font selection and paragraph metrics belong in the typography catalogue and resolver.
 
 [Color preferences](../Sources/CodexGUI/Persistence/ColorPreferences.swift) select per-appearance profiles, and the [palette](../Sources/CodexGUI/App/Design/ColorPalette.swift) derives semantic colors from them. Resolve colors in the owning view's effective appearance and refresh retained native layers, field editors and prepared content when preferences change; preserve interaction and navigation state during the refresh. Components select named color roles; opacity, state blending and contrast-paired surfaces belong to the central color policy. A shared resolution helper does not make a local literal or palette derivation a semantic role. Retain opaque contracts for search editors, QR quiet zones and contrast-dependent content.
 
