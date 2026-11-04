@@ -9,12 +9,15 @@ enum CodeSyntaxHighlighter
 	private static var lightHighlighter: Highlighter?
 	private static var darkHighlighter: Highlighter?
 	private static var attemptedInitialization = false
+	private static var colorObservation: ThemeColorObservation?
 	private struct CacheKey: Hashable
 	{
 		// String equality normalizes Unicode; code and copy text retain exact bytes.
 		let sourceBytes: Data
 		let language: String
 		let dark: Bool
+		let usePreset: Bool
+		let configuration: ColorThemeConfiguration
 	}
 	private struct CachedHighlight
 	{
@@ -32,7 +35,9 @@ enum CodeSyntaxHighlighter
 	static func highlightedCode(
 		_ source: String,
 		language: String?,
-		dark: Bool
+		dark: Bool,
+		usePreset: Bool = true,
+		configuration: ColorThemeConfiguration = ColorPreferences().configuration
 	) -> NSAttributedString?
 	{
 		guard !source.isEmpty, source.utf16.count <= maximumSourceLength,
@@ -41,10 +46,13 @@ enum CodeSyntaxHighlighter
 		{
 			return nil
 		}
+		let profile = configuration.profile(for: dark ? .dark : .light)
 		let key = CacheKey(
 			sourceBytes: Data(source.utf8),
 			language: language,
-			dark: dark
+			dark: dark,
+			usePreset: usePreset,
+			configuration: configuration
 		)
 		cacheClock += 1
 		if var cached = cachedHighlights[key]
@@ -54,13 +62,28 @@ enum CodeSyntaxHighlighter
 			return cached.colors
 		}
 		initializeHighlighters()
-		guard let highlighter = dark ? darkHighlighter : lightHighlighter,
-				highlighter.supportedLanguages().contains(language),
-				let highlighted = highlighter.highlight(
+		let preset = SyntaxColorTokens.theme(
+			profile: profile,
+			dark: dark,
+			markdown: !usePreset
+		)
+		.flatMap
+		{
+			PresetSyntaxRenderer.highlight(
 				source,
-				as: language,
-				doFastRender: true
-				), highlighted.string == source
+				language: language,
+				theme: $0,
+				markdownJavaScript: !usePreset && dark && profile
+					.codeThemeID == nil && language == "javascript"
+			)
+		}
+		let fallback = dark ? darkHighlighter : lightHighlighter
+		guard let highlighted = preset ?? fallback?.highlight(
+			source,
+			as: language,
+			doFastRender: true
+		),
+			Data(highlighted.string.utf8) == Data(source.utf8)
 		else
 		{
 			return nil
@@ -174,8 +197,15 @@ enum CodeSyntaxHighlighter
 			return
 		}
 		attemptedInitialization = true
-		lightHighlighter = makeHighlighter(theme: "github")
-		darkHighlighter = makeHighlighter(theme: "github-dark")
+		colorObservation = ThemeColorObservation
+		{
+			cachedHighlights.removeAll()
+			cachedBytes = 0
+		}
+		lightHighlighter = makeHighlighter(theme: SyntaxColorTokens
+			.fallbackHighlighterTheme(dark: false))
+		darkHighlighter = makeHighlighter(theme: SyntaxColorTokens
+			.fallbackHighlighterTheme(dark: true))
 	}
 
 	private static func makeHighlighter(theme: String) -> Highlighter?
