@@ -40,75 +40,75 @@ define run-tests
 	python3 Tests/run-swift-tests.py $(if $(2),--selection-file $(call test-shell-quote,$(2))) -- $(test-command) $(call test-filter-options,$(1))
 endef
 
-test: FORCE
+test: resources FORCE
 	$(call run-tests,$(value FILTER))
 
 TEST_GROUPS += summary
-test\:summary: FORCE
+test\:summary: resources FORCE
 	$(call run-tests,PinnedSummary.*Tests)
 
 TEST_GROUPS += navigation
-test\:navigation: FORCE
+test\:navigation: resources FORCE
 	$(call run-tests,NavigationViewControllerTests|taskTitleScrollsOnceAndResetsAfterHover|taskHoverCardUsesOwnRowMetadataAndDismissesOnExitOrWindowResign|taskArchiveButtonRoutesToItsOwnRowWithoutChangingSelection)
 
 TEST_GROUPS += window-layout
-test\:window-layout: FORCE
+test\:window-layout: resources FORCE
 	$(call run-tests,^CodexGUITests[.]WindowLayoutTests/)
 
 TEST_GROUPS += task-window-layout
-test\:task-window-layout: FORCE
+test\:task-window-layout: resources FORCE
 	$(call run-tests,TaskWorkspaceWindowLayoutTests)
 
 TEST_GROUPS += full-access
-test\:full-access: FORCE
+test\:full-access: resources FORCE
 	$(call run-tests,FullAccessConfirmationTests)
 
 TEST_GROUPS += desktop-layout
-test\:desktop-layout: FORCE
+test\:desktop-layout: resources FORCE
 	$(call run-tests,DesktopLayoutTests)
 
 TEST_GROUPS += window-lifecycle
-test\:window-lifecycle: FORCE
+test\:window-lifecycle: resources FORCE
 	$(call run-tests,closedWindowDetachesItsStorePublicationObserver)
 
 
 TEST_GROUPS += terminal-hover
-test\:terminal-hover: FORCE
+test\:terminal-hover: resources FORCE
 	$(call run-tests,terminalCopyHoverShowsTooltipAndDismissesWithoutTakingFocus|ConversationTerminalCopyButtonTests)
 
 
 
 TEST_GROUPS += task-archive
-test\:task-archive: FORCE
+test\:task-archive: resources FORCE
 	$(call run-tests,taskArchiveButtonRoutesToItsOwnRowWithoutChangingSelection)
 
 TEST_GROUPS += turn-rail
-test\:turn-rail: FORCE
+test\:turn-rail: resources FORCE
 	$(call run-tests,railJumpsBookmarksAndClearsOnChatSwitch)
 
 TEST_GROUPS += search-rebinding
-test\:search-rebinding: FORCE
+test\:search-rebinding: resources FORCE
 	$(call run-tests,searchSheetKeepsConversationChangesAndDismissesItsPreviousStoreOnRebinding)
 
 
 TEST_GROUPS += image-panel
-test\:image-panel: FORCE
+test\:image-panel: resources FORCE
 	$(call run-tests,ExpandedImagePreviewTests|localAndInlineImagesExpandInTheWindowAndReuseOrDetachDismissesThem|imageImportCreatesPreviewAndRemovalControl|imageThumbnailUsesSharedViewerAndDismissesWithItsOwner)
 
 
 TEST_GROUPS += transcript-appearance
-test\:transcript-appearance: FORCE
+test\:transcript-appearance: resources FORCE
 	$(call run-tests,TranscriptLayerAppearanceTests)
 
 TEST_GROUPS += composer-appearance
-test\:composer-appearance: FORCE
+test\:composer-appearance: resources FORCE
 	$(call run-tests,Composer(CustomDrawing)?AppearanceTests|ApprovalPolicyPopoverTests)
 
 TEST_GROUPS += sources-appearance
-test\:sources-appearance: FORCE
+test\:sources-appearance: resources FORCE
 	$(call run-tests,SourcesHoverAppearanceTests)
 
 
 TEST_GROUPS += task-execution
-test\:task-execution: FORCE
+test\:task-execution: resources FORCE
 	$(call run-tests,^CodexGUITests[.]TaskWorkspaceCoordinatorTests/)

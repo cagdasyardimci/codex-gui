@@ -22,7 +22,7 @@ Start at [AGENTS.md](../AGENTS.md) for working rules and completion reporting. T
 | Synthetic app preparation and native acceptance scenarios | [Native QA](native-qa.md) |
 | Exact build/test commands and dependency declarations | [Makefile](../Makefile), [Package.swift](../Package.swift) |
 | Markdown rendering sample corpus | [Benchmark](markdown-benchmark.md) |
-| Offline diagram resource provenance and rebuild procedure | [Mermaid resources](../Sources/CodexGUI/Resources/Mermaid/README.md) |
+| Offline math and diagram dependencies, generation and updates | [Markdown resources](markdown-resources.md) |
 
 Read conventions before implementation, architecture before state/runtime changes, and validation before choosing checks or interpreting results. Then read the relevant feature or protocol guide. Links into source identify owners to inspect, not additional standing rules.
 

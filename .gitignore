@@ -14,3 +14,7 @@ __pycache__/
 
 # Local test selections are not versioned.
 /Tests/Selections/default.txt
+
+# pnpm dependencies and generated offline rendering assets.
+node_modules/
+/Sources/CodexGUI/Resources/MarkdownRuntime/

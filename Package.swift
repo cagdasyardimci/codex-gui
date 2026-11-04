@@ -47,10 +47,12 @@ let package = Package(
 					package: "SwiftMath"
 				),
 			],
+			exclude: ["Resources/Mermaid", "Resources/KaTeX"],
 			resources: [
 				.copy("Resources/AppIcon.icns"),
 				.copy("Resources/RemoteAccess"),
-				.copy("Resources/Mermaid"),
+				.copy("Resources/MarkdownRuntime/Mermaid"),
+				.copy("Resources/MarkdownRuntime/KaTeX"),
 				.copy("Resources/SubagentAvatars")
 			]
 		),

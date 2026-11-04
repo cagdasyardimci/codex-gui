@@ -30,7 +30,7 @@ Each main window needs its own toolbar identifier: AppKit synchronizes items bet
 
 Composer editors paint their enclosing surface color so AppKit can erase the previous insertion point. Popover shadows need transparent panel padding to avoid clipping; adding a second native window shadow darkens the result. System-controlled blur and shadow kernels require rendered comparison.
 
-Rich Mermaid rendering uses a WebKit-prepared vector PDF for AppKit display because AppKit's direct SVG decoder loses Mermaid CSS, text positioning and markers. Exports retain SVG. Offline resource provenance and rebuild instructions belong to the [Mermaid resource guide](../Sources/CodexGUI/Resources/Mermaid/README.md).
+Rich Mermaid rendering uses a WebKit-prepared vector PDF for AppKit display because AppKit's direct SVG decoder loses Mermaid CSS, text positioning and markers. Exports retain SVG. Offline dependency installation and rebuild instructions belong to the [Markdown resource guide](markdown-resources.md).
 
 Transcript site icons make external requests to Google's favicon service, with LinkPresentation origin metadata as fallback. Requests use the host or origin rather than a link's full path. Keep this network behavior explicit when changing [favicon loading](../Sources/CodexGUI/UI/Markdown/WebLinkFaviconLoader.swift); it is separate from offline diagram rendering.
 

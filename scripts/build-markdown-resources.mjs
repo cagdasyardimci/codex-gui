@@ -1,11 +1,34 @@
-// Rebuild the offline ELK adapter; npm dependencies are needed only when updating this resource.
+// Generate offline rendering assets from the root pnpm lockfile.
 import * as esbuild from 'esbuild';
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const directory = dirname(fileURLToPath(import.meta.url));
-const resources = resolve(directory, '../../Sources/CodexGUI/Resources/Mermaid');
+const directory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const templates = resolve(directory, 'Sources/CodexGUI/Resources');
+const generated = resolve(templates, 'MarkdownRuntime');
+const resources = resolve(generated, 'Mermaid');
+// Only generated files live here; clearing them prevents stale assets after upgrades.
+await rm(generated, { recursive: true, force: true });
+for (const name of ['Mermaid', 'KaTeX']) {
+    const destination = resolve(generated, name);
+    await mkdir(destination, { recursive: true });
+    const integrationFiles = (await readdir(resolve(templates, name)))
+        .filter(file => file.endsWith('.html') || file.endsWith('.js'));
+    for (const file of integrationFiles) {
+        await cp(resolve(templates, name, file), resolve(destination, file));
+    }
+}
+for (const [source, target] of [
+    ['mermaid/dist/mermaid.min.js', 'Mermaid/mermaid.min.js'],
+    ['mermaid/LICENSE', 'Mermaid/LICENSE'],
+    ['katex/dist/katex.min.js', 'KaTeX/katex.min.js'],
+    ['katex/dist/katex.min.css', 'KaTeX/katex.min.css'],
+    ['katex/dist/fonts', 'KaTeX/fonts'],
+    ['katex/LICENSE', 'KaTeX/LICENSE']
+]) {
+    await cp(resolve(directory, 'node_modules', source), resolve(generated, target), { recursive: true });
+}
 let adaptedModules = 0;
 const result = await esbuild.build({
     absWorkingDir: directory,
@@ -47,10 +70,21 @@ const packages = new Set(Object.keys(result.metafile.inputs).flatMap(input => {
     const match = input.match(/^(.*node_modules\/(?:@[^/]+\/)?[^/]+)\//);
     return match ? [match[1]] : [];
 }));
-const notices = [];
-for (const name of [...packages].sort()) {
+// Sort by package identity, independent of the package manager's on-disk layout.
+const packageRecords = await Promise.all([...packages].map(async name => {
     const path = resolve(directory, name);
     const metadata = JSON.parse(await readFile(resolve(path, 'package.json'), 'utf8'));
+    return { path, metadata };
+}));
+packageRecords.sort((a, b) => {
+    for (const key of ['name', 'version']) {
+        if (a.metadata[key] < b.metadata[key]) return -1;
+        if (a.metadata[key] > b.metadata[key]) return 1;
+    }
+    return 0;
+});
+const notices = [];
+for (const { path, metadata } of packageRecords) {
     notices.push(`${metadata.name}@${metadata.version}\n${JSON.stringify(metadata.repository ?? '')}\n`);
     for (const file of (await readdir(path)).filter(file => /^(LICENSE|COPYING)/i.test(file)).sort()) {
         notices.push(await readFile(resolve(path, file), 'utf8'));

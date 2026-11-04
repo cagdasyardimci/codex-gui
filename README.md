@@ -13,7 +13,7 @@ Use the composer's `/` menu to discover commands and skills; see [slash-command 
 
 ## Requirements
 
-Use macOS 14 or later, Apple Command Line Tools, SwiftPM and Swift 6.2 or later for the selected dependencies. [Package.swift](Package.swift) is authoritative for deployment targets and dependency pins. Install a Codex CLI meeting the [compatibility policy](docs/cli-compatibility.md#current-policy) and sign in with a Codex account. That guide explains how to verify the executable actually selected by the app.
+Use macOS 14 or later, Apple Command Line Tools, SwiftPM and Swift 6.2 or later for the selected dependencies. [Package.swift](Package.swift) is authoritative for deployment targets and dependency pins. Install Node.js 22 or later with pnpm for the [offline rendering resources](docs/markdown-resources.md). Install a Codex CLI meeting the [compatibility policy](docs/cli-compatibility.md#current-policy) and sign in with a Codex account. That guide explains how to verify the executable actually selected by the app.
 
 ## Build, check, and run
 

@@ -44,6 +44,8 @@ else
   print "Using the selected code-signing certificate."
 fi
 
+make resources
+
 # Use the toolchain's default build system for both building and locating the executable.
 swift build -c "$configuration"
 product_directory=$(swift build -c "$configuration" --show-bin-path)
@@ -57,6 +59,10 @@ for resource_bundle in "$product_directory"/*.bundle(N); do
   resource_destination="$app/Contents/Resources/${resource_bundle:t}"
   rm -rf "$resource_destination"
   ditto "$resource_bundle" "$resource_destination"
+  if [[ "${resource_bundle:t}" == "CodexGUI_CodexGUI.bundle" ]]; then
+    # SwiftPM can retain resource folders from the previous manifest in incremental builds.
+    rm -rf "$resource_destination/MarkdownRuntime"
+  fi
 done
 rm -rf "$app/Contents/Resources/ThirdPartyLicenses/swift-mermaid"
 markdown_licenses="$app/Contents/Resources/ThirdPartyLicenses/swift-markdown"
@@ -79,7 +85,10 @@ cp -f .build/checkouts/SwiftMath/Sources/SwiftMath/mathFonts.bundle/LICENSE \
 cp -f .build/checkouts/SwiftMath/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LICENSE.txt \
   "$math_licenses/Sources/SwiftMath/mathFonts.bundle/GUST-FONT-LICENSE.txt"
 mkdir -p "$mermaid_js_licenses"
-cp -f Sources/CodexGUI/Resources/Mermaid/LICENSE "$mermaid_js_licenses/LICENSE"
-cp -f Sources/CodexGUI/Resources/Mermaid/ELK-LICENSES.txt "$mermaid_js_licenses/ELK-LICENSES.txt"
+cp -f Sources/CodexGUI/Resources/MarkdownRuntime/Mermaid/LICENSE "$mermaid_js_licenses/LICENSE"
+cp -f Sources/CodexGUI/Resources/MarkdownRuntime/Mermaid/ELK-LICENSES.txt "$mermaid_js_licenses/ELK-LICENSES.txt"
+katex_licenses="$app/Contents/Resources/ThirdPartyLicenses/KaTeX"
+mkdir -p "$katex_licenses"
+cp -f Sources/CodexGUI/Resources/MarkdownRuntime/KaTeX/LICENSE "$katex_licenses/LICENSE"
 codesign --force --sign "$signing_identity" "$app"
 print "Built $app ($configuration)"

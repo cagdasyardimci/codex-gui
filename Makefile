@@ -1,4 +1,4 @@
-.PHONY: help format lint build test check FORCE
+.PHONY: help format lint build test check resources FORCE
 
 # Commands in this checkout share one SwiftPM build directory.
 .NOTPARALLEL:
@@ -9,7 +9,11 @@ format:
 lint:
 	python3 scripts/swift-style.py --check
 
-build:
+resources:
+	pnpm install --frozen-lockfile --ignore-scripts
+	pnpm run build:resources
+
+build: resources
 	swift build
 
 # A phony prerequisite keeps colon commands unconditional on macOS Make.
@@ -26,6 +30,7 @@ help:
 		'Commands:' \
 		'  make format                       Format Swift sources' \
 		'  make lint                         Check Swift formatting' \
+		'  make resources                    Install and generate rendering resources' \
 		'  make build                        Build the executable' \
 		'  make build:bundle                 Build the debug app bundle' \
 		'  make build:bundle:release         Build the release app bundle' \
