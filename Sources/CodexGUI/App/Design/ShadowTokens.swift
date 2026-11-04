@@ -29,6 +29,11 @@ enum ShadowTokens
 		}
 	}
 
+	static let switchThumb = Style(
+		color: .black.withAlphaComponent(0.08),
+		offsetY: -1,
+		blur: 2
+	)
 	static let tooltipCapsule = Style(
 		color: NSColor(
 			srgbRed: 15.0 / 255,

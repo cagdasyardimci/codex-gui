@@ -8,14 +8,23 @@ final class DesktopSwitch: NSButton
 	private var thumbProgress: CGFloat = 0
 	private var drawnState: NSControl.StateValue = .off
 	private var animationTimer: Timer?
+	private var colorObservation: ThemeColorObservation?
+	private var focusIndicator: CAShapeLayer?
+	private var keyboardFocused = false
 
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			self?.refreshFocusIndicator()
+			self?.needsDisplay = true
+		}
 		setButtonType(.switch)
 		title = ""
 		isBordered = false
-		focusRingType = .exterior
+		focusRingType = .none
 		setContentHuggingPriority(
 			.required,
 			for: .horizontal
@@ -69,6 +78,7 @@ final class DesktopSwitch: NSButton
 			{
 				finishAnimation()
 			}
+			refreshFocusIndicator()
 			needsDisplay = true
 		}
 	}
@@ -182,7 +192,71 @@ final class DesktopSwitch: NSButton
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
+		refreshFocusIndicator()
 		needsDisplay = true
+	}
+
+	override func layout()
+	{
+		super.layout()
+		refreshFocusIndicator()
+	}
+
+	override func becomeFirstResponder() -> Bool
+	{
+		let accepted = super.becomeFirstResponder()
+		keyboardFocused = accepted && NSApp.currentEvent?.type == .keyDown
+		needsLayout = true
+		refreshFocusIndicator()
+		return accepted
+	}
+
+	override func resignFirstResponder() -> Bool
+	{
+		let accepted = super.resignFirstResponder()
+		if accepted
+		{
+			keyboardFocused = false
+		}
+		needsLayout = true
+		refreshFocusIndicator()
+		return accepted
+	}
+
+	private func refreshFocusIndicator()
+	{
+		if focusIndicator == nil
+		{
+			wantsLayer = true
+			let indicator = CAShapeLayer()
+			indicator.fillColor = nil
+			indicator.lineWidth = 2
+			layer?.addSublayer(indicator)
+			focusIndicator = indicator
+		}
+		guard let indicator = focusIndicator
+		else
+		{
+			return
+		}
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		indicator.isHidden = !isEnabled || !keyboardFocused || window?.firstResponder !== self
+		indicator.frame = bounds
+		indicator.path = CGPath(
+			roundedRect: trackBounds.insetBy(
+				dx: -1,
+				dy: -1
+			),
+			cornerWidth: 11,
+			cornerHeight: 11,
+			transform: nil
+		)
+		indicator.strokeColor = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.focus,
+			for: self
+		)
+		CATransaction.commit()
 	}
 
 	override func draw(_ dirtyRect: NSRect)
@@ -207,8 +281,8 @@ final class DesktopSwitch: NSButton
 			context?.endTransparencyLayer()
 		}
 		let trackColor = on
-			? AppKitColorTokens.connectionsSwitchOn
-			: AppKitColorTokens.settingsPrimaryText.withAlphaComponent(0.1)
+			? AppKitColorTokens.accent
+			: AppKitColorTokens.switchOff
 		trackColor.setFill()
 		NSBezierPath(
 			roundedRect: track,
@@ -221,15 +295,15 @@ final class DesktopSwitch: NSButton
 			width: 16,
 			height: 16
 		)
-		NSColor.white.setFill()
+		AppKitColorTokens.switchThumb(on: on).setFill()
 		// CSS shadow-sm: 0px 1px 2px -1px rgba(0, 0, 0, 0.08).
 		let shadow = NSShadow()
-		shadow.shadowColor = NSColor.black.withAlphaComponent(0.08)
+		shadow.shadowColor = ShadowTokens.switchThumb.color
 		shadow.shadowOffset = NSSize(
 			width: 0,
-			height: -1
+			height: ShadowTokens.switchThumb.offsetY
 		)
-		shadow.shadowBlurRadius = 2
+		shadow.shadowBlurRadius = ShadowTokens.switchThumb.blur
 		shadow.set()
 		NSBezierPath(ovalIn: thumb.insetBy(
 			dx: 1,
