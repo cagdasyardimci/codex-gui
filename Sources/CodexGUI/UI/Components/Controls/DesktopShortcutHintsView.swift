@@ -17,7 +17,7 @@ class DesktopShortcutHintsView: NSStackView
 		for hint in hints
 		{
 			let label = DesktopTextField(labelWithString: hint.title)
-			label.font = AppKitFontResolver.font(TypographyTokens.FileSearch.footer)
+			label.setTypographyRole(TypographyTokens.FileSearch.footer)
 			label.textColor = AppKitColorTokens.captionText
 			let keycap = DesktopKeycapView(
 				shortcut: hint.shortcut,

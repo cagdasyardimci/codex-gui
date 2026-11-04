@@ -4,10 +4,18 @@ import AppKit
 @MainActor
 final class DesktopKeycapButton: DesktopAttributedTitleButton
 {
+	private var widthConstraint: NSLayoutConstraint?
+	private var heightConstraint: NSLayoutConstraint?
+
 	init(
 		title: String,
 		target: AnyObject?,
-		action: Selector?
+		action: Selector?,
+		configuration: @escaping @MainActor () -> TypographyConfiguration =
+		{
+			.current
+		},
+		center: NotificationCenter = .default
 	)
 	{
 		super.init(frame: .zero)
@@ -16,7 +24,6 @@ final class DesktopKeycapButton: DesktopAttributedTitleButton
 		self.action = action
 		isBordered = false
 		let presentation = DesktopKeycapView.Presentation.fileEscape
-		font = presentation.font
 		attributedTitle = NSAttributedString(
 			string: title,
 			attributes: [
@@ -24,14 +31,30 @@ final class DesktopKeycapButton: DesktopAttributedTitleButton
 				.foregroundColor: presentation.foreground,
 			]
 		)
+		widthConstraint = widthAnchor.constraint(equalToConstant: 0)
+		heightConstraint = heightAnchor.constraint(equalToConstant: 0)
+		widthConstraint?.isActive = true
+		heightConstraint?.isActive = true
+		setTypographyRole(
+			presentation.role,
+			configuration: configuration,
+			center: center,
+			onUpdate:
+			{
+				[weak self] in self?.refreshSize()
+			}
+		)
+	}
+
+	private func refreshSize()
+	{
 		let size = DesktopKeycapView.size(
 			for: title,
-			presentation: presentation
+			presentation: .fileEscape,
+			font: font
 		)
-		NSLayoutConstraint.activate([
-			widthAnchor.constraint(equalToConstant: size.width),
-			heightAnchor.constraint(equalToConstant: size.height),
-		])
+		widthConstraint?.constant = size.width
+		heightConstraint?.constant = size.height
 	}
 
 	required init?(coder: NSCoder)

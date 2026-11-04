@@ -11,12 +11,17 @@ final class DesktopKeycapView: NSView
 
 		var font: NSFont
 		{
+			AppKitFontResolver.font(role)
+		}
+
+		var role: TypographyTokens.Role
+		{
 			switch self
 			{
-			case .fileHint: AppKitFontResolver.font(TypographyTokens.FileSearch.footer)
-			case .fileEscape: AppKitFontResolver.font(TypographyTokens.FileSearch.accessory)
-			case .searchShortcut: .systemFont(ofSize: 11)
-			case .toolsShortcut: AppKitFontResolver.font(TypographyTokens.Controls.toolsShortcut)
+			case .fileHint: TypographyTokens.FileSearch.footer
+			case .fileEscape: TypographyTokens.FileSearch.accessory
+			case .searchShortcut: TypographyTokens.Search.shortcut
+			case .toolsShortcut: TypographyTokens.Controls.toolsShortcut
 			}
 		}
 
@@ -26,7 +31,7 @@ final class DesktopKeycapView: NSView
 			{
 			case .fileHint: AppKitColorTokens.captionText
 			case .fileEscape: AppKitColorTokens.primaryText
-			case .searchShortcut: .secondaryLabelColor
+			case .searchShortcut: AppKitColorTokens.secondaryText
 			case .toolsShortcut: AppKitColorTokens.toolsTileIcon
 			}
 		}
@@ -37,7 +42,7 @@ final class DesktopKeycapView: NSView
 			{
 			case .fileHint: AppKitColorTokens.fileSearchKeycap
 			case .fileEscape: AppKitColorTokens.fileSearchEscape
-			case .searchShortcut: AppKitColorTokens.searchResultSelection
+			case .searchShortcut: AppKitColorTokens.shortcutSurface
 			case .toolsShortcut: AppKitColorTokens.toolsShortcut
 			}
 		}
@@ -74,7 +79,7 @@ final class DesktopKeycapView: NSView
 		super.init(frame: .zero)
 		let label: NSTextField = presentation == .fileHint
 			? DesktopTextField(labelWithString: shortcut) : NSTextField(labelWithString: shortcut)
-		label.font = presentation.font
+		label.setTypographyRole(presentation.role)
 		label.textColor = presentation.foreground
 		label.translatesAutoresizingMaskIntoConstraints = false
 		addSubview(label)
@@ -117,17 +122,24 @@ final class DesktopKeycapView: NSView
 
 	static func size(
 		for shortcut: String,
-		presentation: Presentation
+		presentation: Presentation,
+		font: NSFont? = nil
 	) -> NSSize
 	{
-		let text = (shortcut as NSString).size(withAttributes: [.font: presentation.font])
+		let text = (shortcut as NSString).size(withAttributes: [.font: font ?? presentation.font])
 		let height: CGFloat
 		switch presentation
 		{
 		case .fileHint: height = LayoutTokens.FileSearch.keycapHeight
 		case .fileEscape: return NSSize(
-				width: LayoutTokens.FileSearch.escapeWidth,
-				height: LayoutTokens.FileSearch.escapeHeight
+				width: max(
+					LayoutTokens.FileSearch.escapeWidth,
+					text.width + 2 * presentation.horizontalInset
+				),
+				height: max(
+					LayoutTokens.FileSearch.escapeHeight,
+					text.height
+				)
 			)
 		case .searchShortcut: height = text.height + 4
 		case .toolsShortcut: height = LayoutTokens.Tabs.toolShortcutHeight

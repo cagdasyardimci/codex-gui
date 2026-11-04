@@ -14,7 +14,7 @@ final class DesktopLineBoxLabel: NSTextField
 		self.role = role
 		super.init(frame: .zero)
 		stringValue = text
-		font = AppKitFontResolver.font(role)
+		self.setTypographyRole(role)
 		textColor = AppKitColorTokens.settingsPrimaryText
 		isEditable = false
 		isSelectable = false
@@ -39,33 +39,47 @@ final class DesktopLineBoxLabel: NSTextField
 
 	private var styledText: NSAttributedString
 	{
-		let paragraph = NSMutableParagraphStyle()
+		var attributes = AppKitFontResolver.textAttributes(
+			role,
+			font: font
+		)
+		let paragraph = (attributes[.paragraphStyle] as? NSParagraphStyle)?
+			.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
 		paragraph.alignment = alignment
-		paragraph.minimumLineHeight = role.lineHeight ?? 0
-		paragraph.maximumLineHeight = role.lineHeight ?? 0
 		paragraph.lineBreakMode = .byWordWrapping
+		attributes[.paragraphStyle] = paragraph
+		attributes[.foregroundColor] = textColor ?? AppKitColorTokens.settingsPrimaryText
 		return NSAttributedString(
 			string: stringValue,
-			attributes: [
-				.font: font ?? AppKitFontResolver.font(role),
-				.foregroundColor: textColor ?? AppKitColorTokens.settingsPrimaryText,
-				.paragraphStyle: paragraph,
-			]
+			attributes: attributes
 		)
 	}
 
 	override var intrinsicContentSize: NSSize
 	{
+		let natural = measuredSize(maximumWidth: 10000)
+		let fitting = bounds.width > 0 ? measuredSize(maximumWidth: bounds.width) : natural
+		return NSSize(
+			width: natural.width,
+			height: fitting.height
+		)
+	}
+
+	func measuredSize(maximumWidth: CGFloat) -> NSSize
+	{
 		let text = styledText
 		let fitting = text.boundingRect(
 			with: NSSize(
-				width: bounds.width > 0 ? bounds.width : 10000,
+				width: maximumWidth,
 				height: 10000
 			),
 			options: [.usesLineFragmentOrigin, .usesFontLeading]
 		)
 		return NSSize(
-			width: ceil(text.size().width),
+			width: min(
+				ceil(fitting.width),
+				maximumWidth
+			),
 			height: max(
 				role.lineHeight ?? 0,
 				ceil(fitting.height)
@@ -79,7 +93,6 @@ final class DesktopLineBoxLabel: NSTextField
 		super.setFrameSize(newSize)
 		if previousWidth != bounds.width
 		{
-			preferredMaxLayoutWidth = bounds.width
 			invalidateIntrinsicContentSize()
 		}
 	}

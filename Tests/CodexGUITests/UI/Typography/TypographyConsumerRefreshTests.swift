@@ -6,6 +6,45 @@ import Testing
 @MainActor
 struct TypographyConsumerRefreshTests
 {
+	@Test func keycapRefreshFitsTextAndPreservesItsAction()
+	{
+		_ = NSApplication.shared
+		let center = NotificationCenter()
+		let state = ConfigurationState()
+		let target = ActionTarget()
+		let button = DesktopKeycapButton(
+			title: "Escape",
+			target: target,
+			action: #selector(ActionTarget.activate),
+			configuration:
+			{
+				state.value
+			},
+			center: center
+		)
+		let originalWidth = button.fittingSize.width
+		state.value = TypographyConfiguration(uiSize: 16)
+		center.post(
+			name: TypographyPreferences.didChange,
+			object: nil
+		)
+		#expect(button.font?.pointSize == 15)
+		#expect(button.fittingSize.width > originalWidth)
+		#expect(button.fittingSize.width >= (button.title as NSString)
+			.size(withAttributes: [.font: button.font!]).width)
+		#expect(button.sendAction(
+			button.action,
+			to: button.target
+		))
+		#expect(target.activations == 1)
+		state.value = TypographyConfiguration(uiSize: 11)
+		center.post(
+			name: TypographyPreferences.didChange,
+			object: nil
+		)
+		#expect(button.fittingSize.width < originalWidth)
+		#expect(button.title == "Escape")
+	}
 
 	@Test func diagramArgumentsUseUIFamilyAndIndependentNodeMetrics()
 	{
