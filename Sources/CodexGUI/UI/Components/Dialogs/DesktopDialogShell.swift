@@ -4,12 +4,23 @@ import AppKit
 @MainActor
 final class DesktopDialogShell: DesktopSurface
 {
+	enum Style
+	{
+		case standard, projectEdit, site, textEntry
+	}
+
+	enum ActionLayout
+	{
+		case horizontal, vertical
+	}
+
 	static let preferredWidth: CGFloat = 420
 	let titleLabel: NSTextField
 	let messageLabel: NSTextField?
 	let closeButton = DesktopStyledButton(
 		title: "Close",
-		presentation: .sidebarIcon
+		presentation: .sidebarIcon,
+		size: .small
 	)
 	let actionsRow: NSStackView
 	var onClose: (() -> Void)?
@@ -21,22 +32,38 @@ final class DesktopDialogShell: DesktopSurface
 		content: NSView? = nil,
 		actions: [NSButton],
 		leadingAction: NSButton? = nil,
-		titleIcon: DesktopIcon? = nil
+		titleIcon: DesktopIcon? = nil,
+		style: Style = .standard,
+		actionLayout: ActionLayout = .horizontal
 	)
 	{
-		titleLabel = NSTextField(wrappingLabelWithString: title)
+		titleLabel = DesktopLineBoxLabel(
+			title,
+			role: TypographyTokens.Dialog.title
+		)
 		messageLabel = message.map(DesktopDialogMessageLabel.init)
 		var actionViews: [NSView] = leadingAction.map
 		{
 			[$0, NSView()]
 		} ?? [NSView()]
 		actionViews += actions
-		actionsRow = AppKitLayout.horizontalStack(
-			actionViews,
-			spacing: 12
-		)
+		if actionLayout == .vertical
+		{
+			actionsRow = AppKitLayout.verticalStack(
+				actions,
+				spacing: 8
+			)
+		}
+		else
+		{
+			actionsRow = AppKitLayout.horizontalStack(
+				actionViews,
+				spacing: 12
+			)
+		}
 		super.init(
-			AppKitColorTokens.sidebar,
+			style == .projectEdit || style == .site ? AppKitColorTokens
+				.searchPanel : AppKitColorTokens.sidebar,
 			cornerRadius: 20,
 			bordered: true,
 			borderWidth: 0.5
@@ -49,34 +76,29 @@ final class DesktopDialogShell: DesktopSurface
 		{
 			(button as? DesktopStyledButton)?.keyboardFocusPolicy = .dialog
 		}
-		titleLabel.font = .systemFont(
-			ofSize: 20,
-			weight: .semibold
-		)
-		titleLabel.textColor = .labelColor
+		titleLabel.textColor = AppKitColorTokens.primaryText
 		titleLabel.setContentCompressionResistancePriority(
 			.required,
 			for: .vertical
 		)
-		AppKitControlStyling.styleButton(
-			closeButton,
-			icon: .xCrossed
-		)
-		closeButton.imagePosition = .imageOnly
-		closeButton.contentTintColor = AppKitColorTokens.secondaryText
+		if style == .projectEdit
+		{
+			closeButton.presentation = .icon
+		}
+		closeButton.symbol = .xCrossed
 		closeButton.target = self
 		closeButton.action = #selector(closeDialog)
 		closeButton.keyEquivalent = "\u{1b}"
 		closeButton.setAccessibilityLabel("Close \(title)")
 		NSLayoutConstraint.activate([
-			closeButton.widthAnchor.constraint(equalToConstant: 16),
-			closeButton.heightAnchor.constraint(equalToConstant: 16),
+			closeButton.widthAnchor.constraint(equalToConstant: 24),
+			closeButton.heightAnchor.constraint(equalToConstant: 24),
 		])
 		var headingViews: [NSView] = []
 		if let titleIcon
 		{
 			let icon = NSImageView(image: DesktopIcons.image(titleIcon))
-			icon.contentTintColor = .labelColor
+			icon.contentTintColor = AppKitColorTokens.primaryText
 			icon.setAccessibilityElement(false)
 			NSLayoutConstraint.activate([
 				icon.widthAnchor.constraint(equalToConstant: 22),
@@ -112,13 +134,27 @@ final class DesktopDialogShell: DesktopSurface
 		{
 			rows.append(content)
 		}
+		if actionLayout == .vertical
+		{
+			if let leadingAction
+			{
+				rows.append(AppKitLayout.horizontalStack(
+					[leadingAction, NSView()],
+					spacing: 0
+				))
+			}
+			for action in actions
+			{
+				action.widthAnchor.constraint(equalTo: actionsRow.widthAnchor).isActive = true
+			}
+		}
 		rows.append(actionsRow)
 		let stack = AppKitLayout.verticalStack(
 			rows,
-			spacing: 14
+			spacing: style == .textEntry ? 12 : 14
 		)
 		stack.setCustomSpacing(
-			8,
+			style == .textEntry ? 4 : 8,
 			after: heading
 		)
 		AppKitLayout.pin(
@@ -174,7 +210,7 @@ private final class DesktopDialogMessageLabel: NSTextField
 		cell?.wraps = true
 		cell?.isScrollable = false
 		stringValue = message
-		font = .systemFont(ofSize: 14)
+		self.setTypographyRole(TypographyTokens.Dialog.message)
 		textColor = AppKitColorTokens.secondaryText
 		setContentCompressionResistancePriority(
 			.required,
@@ -196,16 +232,18 @@ private final class DesktopDialogMessageLabel: NSTextField
 
 	private func refreshText()
 	{
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.minimumLineHeight = 21
-		paragraph.maximumLineHeight = 21
+		let paragraph = (AppKitFontResolver.textAttributes(
+			TypographyTokens.Dialog.message,
+			font: font
+		)[.paragraphStyle] as? NSParagraphStyle)?
+			.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
 		paragraph.lineBreakMode = .byWordWrapping
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
 			attributedStringValue = NSAttributedString(
 				string: stringValue,
 				attributes: [
-					.font: NSFont.systemFont(ofSize: 14),
+					.font: AppKitFontResolver.font(TypographyTokens.Dialog.message),
 					.foregroundColor: AppKitColorTokens.secondaryText,
 					.paragraphStyle: paragraph,
 				]

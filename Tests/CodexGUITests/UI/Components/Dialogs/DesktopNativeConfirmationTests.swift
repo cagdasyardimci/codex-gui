@@ -99,7 +99,7 @@ struct DesktopNativeConfirmationTests
 			prompt.fields[0].stringValue = edited
 			parent.endSheet(
 				sheet,
-				returnCode: approved ? .alertFirstButtonReturn : .alertSecondButtonReturn
+				returnCode: approved ? .OK : .cancel
 			)
 			var iterator = result.stream.makeAsyncIterator()
 			let response = await iterator.next()

@@ -1,8 +1,8 @@
 import AppKit
 
-/// Complete native text prompt with owned field geometry, focus, and response extraction.
+/// Complete text prompt with owned typography, focus, and once-only response extraction.
 @MainActor
-final class DesktopTextEntryPrompt
+final class DesktopTextEntryPrompt: NSObject
 {
 	struct Field
 	{
@@ -16,7 +16,8 @@ final class DesktopTextEntryPrompt
 		case single, multiple
 	}
 
-	private let confirmation: DesktopNativeConfirmation
+	private let panel: DesktopTextEntryPanel
+	private var hasPresented = false
 	let fields: [NSTextField]
 
 	init(
@@ -27,44 +28,79 @@ final class DesktopTextEntryPrompt
 		layout: Layout
 	)
 	{
-		confirmation = DesktopNativeConfirmation(
-			title: title,
-			message: detail,
-			confirmTitle: actionTitle,
-			defaultAction: .confirm
+		if case .single = layout
+		{
+			precondition(definitions.count == 1)
+		}
+		panel = DesktopTextEntryPanel(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: DesktopDialogShell.preferredWidth,
+				height: 200
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
 		)
-		let alert = confirmation.alert
+		panel.title = title
+		panel.isReleasedWhenClosed = false
+		panel.isOpaque = false
+		panel.backgroundColor = .clear
+		panel.hasShadow = true
 		fields = definitions.map
 		{
 			definition in
-			let field = NSTextField(string: definition.value)
+			let field = SettingsFormTextField(presentation: .dialog)
+			field.stringValue = definition.value
 			field.placeholderString = definition.placeholder
 			field.setAccessibilityLabel(definition.accessibilityLabel)
 			return field
 		}
-		switch layout
+		super.init()
+		let content = AppKitLayout.verticalStack(
+			fields,
+			spacing: 8
+		)
+		for field in fields
 		{
-		case .single:
-			precondition(fields.count == 1)
-			fields[0].frame = NSRect(
-				origin: .zero,
-				size: NSSize(
-					width: 320,
-					height: 24
-				)
-			)
-			alert.accessoryView = fields[0]
-			alert.window.initialFirstResponder = fields[0]
-		case .multiple:
-			for field in fields
-			{
-				field.widthAnchor.constraint(equalToConstant: 340).isActive = true
-			}
-			alert.accessoryView = AppKitLayout.verticalStack(
-				fields,
-				spacing: 8
-			)
+			field.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
 		}
+		let cancel = DesktopStyledButton(
+			title: "Cancel",
+			presentation: .dialogCancel,
+			size: .regular
+		)
+		cancel.target = self
+		cancel.action = #selector(cancelPrompt)
+		cancel.keyEquivalent = "\u{1b}"
+		let confirm = DesktopStyledButton(
+			title: actionTitle,
+			presentation: .dialogPrimary,
+			size: .regular
+		)
+		confirm.target = self
+		confirm.action = #selector(confirmPrompt)
+		confirm.keyEquivalent = "\r"
+		let shell = DesktopDialogShell(
+			title: title,
+			message: detail.isEmpty ? nil : detail,
+			content: content,
+			actions: [cancel, confirm],
+			style: .textEntry
+		)
+		shell.onClose =
+		{
+			[weak self] in self?.finish(false)
+		}
+		panel.onConfirm =
+		{
+			[weak self] in self?.finish(true)
+		}
+		panel.contentView = shell
+		shell.resize(window: panel)
+		panel.initialFirstResponder = fields.first
+		panel.defaultButtonCell = confirm.cell as? NSButtonCell
 	}
 
 	func beginSheet(
@@ -72,10 +108,60 @@ final class DesktopTextEntryPrompt
 		completion: @escaping ([String]?) -> Void
 	)
 	{
-		confirmation.beginSheet(in: window)
+		guard !hasPresented
+		else
 		{
-			[fields] confirmed in
-			completion(confirmed ? fields.map(\.stringValue) : nil)
+			return
 		}
+		hasPresented = true
+		panel.beginSheet(in: window)
+		{
+			[self] response in
+			panel.orderOut(nil)
+			completion(response == .OK ? fields.map(\.stringValue) : nil)
+		}
+	}
+
+	@objc private func confirmPrompt()
+	{
+		finish(true)
+	}
+
+	@objc private func cancelPrompt()
+	{
+		finish(false)
+	}
+
+	private func finish(_ confirmed: Bool)
+	{
+		guard !panel.hasCompletedDecision, panel.sheetParent != nil
+		else
+		{
+			return
+		}
+		if confirmed, !panel.makeFirstResponder(nil)
+		{
+			return
+		}
+		panel.finishDecision(confirmed)
+	}
+}
+
+@MainActor
+private final class DesktopTextEntryPanel: DesktopConfirmationPanel
+{
+	var onConfirm: (() -> Void)?
+
+	override func sendEvent(_ event: NSEvent)
+	{
+		let isComposing = (firstResponder as? NSTextView)?.hasMarkedText() == true
+		if sheetParent != nil, event.type == .keyDown,
+			event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+			["\r", "\u{3}"].contains(event.charactersIgnoringModifiers ?? ""), !isComposing
+		{
+			onConfirm?()
+			return
+		}
+		super.sendEvent(event)
 	}
 }
