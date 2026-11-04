@@ -52,23 +52,38 @@ struct SettingsFormTextFieldTests
 				let focus = try borderPixel(of: field)
 				field.hasValidationError = true
 				let error = try borderPixel(of: field)
+				var focusRole: NSColor?
+				var errorRole: NSColor?
+				field.effectiveAppearance.performAsCurrentDrawingAppearance
+				{
+					focusRole = AppKitColorTokens.settingsFieldFocus.usingColorSpace(.deviceRGB)
+					errorRole = AppKitColorTokens.settingsFieldError.usingColorSpace(.deviceRGB)
+				}
+				let expectedFocus = try #require(focusRole)
+				let expectedError = try #require(errorRole)
+				#expect(preservesColorOrdering(
+					focus,
+					of: expectedFocus
+				))
+				#expect(preservesColorOrdering(
+					error,
+					of: expectedError
+				))
+				if maxChannelDelta(
+					expectedFocus,
+					expectedError
+				) > 0.2
+				{
+					#expect(maxChannelDelta(
+						focus,
+						error
+					) > 0.05)
+				}
 				observed.append((focus, error))
 			}
 			let light = observed[0]
-			let dark = observed[1]
 			let restoredLight = observed[2]
-			// The 1 pt stroke is antialiased into the surface; its theme shift and reversal
-			// distinguish the dark reference colors from the former fixed light colors.
-			#expect(light.focus.redComponent < 0.28)
-			#expect(light.focus.blueComponent > 0.75)
-			#expect(dark.focus.redComponent > light.focus.redComponent + 0.1)
-			#expect(dark.focus.greenComponent > light.focus.greenComponent + 0.07)
-			#expect(dark.focus.blueComponent > 0.9)
-			#expect(light.error.redComponent > 0.8)
-			#expect(light.error.greenComponent < 0.42)
-			#expect(dark.error.greenComponent > light.error.greenComponent + 0.12)
-			#expect(dark.error.blueComponent > light.error.blueComponent + 0.15)
-			#expect(dark.error.redComponent > 0.9)
+			// Switching appearances and back must restore the rendered border colors.
 			#expect(maxChannelDelta(
 				restoredLight.focus,
 				light.focus
@@ -157,6 +172,31 @@ struct SettingsFormTextFieldTests
 			x: x,
 			y: 0
 		)?.usingColorSpace(.deviceRGB))
+	}
+
+	private func preservesColorOrdering(
+		_ pixel: NSColor,
+		of role: NSColor
+	) -> Bool
+	{
+		let expected = [role.redComponent, role.greenComponent, role.blueComponent]
+		let actual = [pixel.redComponent, pixel.greenComponent, pixel.blueComponent]
+		for first in 0 ..< 3
+		{
+			for second in (first + 1) ..< 3
+			{
+				let expectedDifference = expected[first] - expected[second]
+				if abs(expectedDifference) > 0.1
+				{
+					let actualDifference = actual[first] - actual[second]
+					if actualDifference * expectedDifference <= 0.001
+					{
+						return false
+					}
+				}
+			}
+		}
+		return true
 	}
 
 	private func maxChannelDelta(

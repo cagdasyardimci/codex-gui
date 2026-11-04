@@ -52,22 +52,19 @@ struct SettingsBrowserSitePanelTests
 			#expect(field.hasValidationError)
 			#expect(abs(panel.contentRect(forFrameRect: panel.frame).height - expandedHeight) < 1)
 
-			for (appearanceName, expectedWhite) in [
-				(NSAppearance.Name.aqua, false),
-				(NSAppearance.Name.darkAqua, true),
-			]
+			for appearanceName in [NSAppearance.Name.aqua, .darkAqua]
 			{
 				panel.appearance = NSAppearance(named: appearanceName)
-				var actual: NSColor?
-				field.effectiveAppearance.performAsCurrentDrawingAppearance
-				{
-					actual = field.textColor?.usingColorSpace(.deviceRGB)
-				}
-				let color = try #require(actual)
-				let expected: CGFloat = expectedWhite ? 1 : 13.0 / 255.0
-				#expect(abs(color.redComponent - expected) < 0.001)
-				#expect(abs(color.greenComponent - expected) < 0.001)
-				#expect(abs(color.blueComponent - expected) < 0.001)
+				let actual = try #require(field.textColor)
+				let expected = AppKitColorTokens.settingsPrimaryText
+				#expect(AppKitColorResolution.resolvedCGColor(
+					actual,
+					for: field
+				).components
+					== AppKitColorResolution.resolvedCGColor(
+						expected,
+						for: field
+					).components)
 			}
 			#expect(!descendants(in: content).compactMap
 			{

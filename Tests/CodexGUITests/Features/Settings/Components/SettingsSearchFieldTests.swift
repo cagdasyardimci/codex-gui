@@ -56,10 +56,10 @@ struct SettingsSearchFieldTests
 			length: 2
 		))
 
-		for (appearance, expectedColor) in [
-			(NSAppearance.Name.aqua, 0x0D0D0D),
-			(.darkAqua, 0xFFFFFF),
-			(.aqua, 0x0D0D0D),
+		for (appearance, mode) in [
+			(NSAppearance.Name.aqua, ColorAppearance.light),
+			(.darkAqua, .dark),
+			(.aqua, .light),
 		]
 		{
 			window.appearance = NSAppearance(named: appearance)
@@ -70,10 +70,18 @@ struct SettingsSearchFieldTests
 				length: 2
 			))
 			#expect(field.stringValue == "draft")
+			let profile = ColorPreferences().configuration.profile(for: mode)
+			let expectedColor = ColorPalette(
+				configuration: profile,
+				mode: mode
+			).foreground
 			#expect(try rgb(
 				editor.insertionPointColor,
 				appearance: window.effectiveAppearance
-			) == expectedColor)
+			) == rgb(
+				expectedColor,
+				appearance: window.effectiveAppearance
+			))
 		}
 	}
 

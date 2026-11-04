@@ -2,94 +2,95 @@ import AppKit
 
 extension AppKitColorTokens
 {
-	static let settingsPrimaryText = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF
-	)
-	static let settingsSecondaryText = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.65,
-		darkAlpha: 0.65
-	)
-	static let settingsTertiaryText = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.495,
-		darkAlpha: 0.498
-	)
-	static let settingsSidebarSurface = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0x222222,
-		lightAlpha: 0.65,
-		darkAlpha: 0.65
-	)
-	static let settingsCatalogSearchSurface = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0x2D2D2D
-	)
-	static let settingsCatalogSearchEdge = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0x4E4E4E,
-		lightAlpha: 0.08,
-		darkAlpha: 1
-	)
-	static let settingsHeaderActionSurface = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0x1F1F1F
-	)
-	static let settingsHeaderActionEdge = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0x313131,
-		lightAlpha: 0.08,
-		darkAlpha: 1
-	)
-	static let settingsHeaderPrimaryText = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0x2D2D2D
-	)
-	static let settingsFormFieldSurface = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0x2D2D2D,
-		lightAlpha: 0.96,
-		darkAlpha: 0.96
-	)
-	static let settingsSelectorSurface = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.96,
-		darkAlpha: 0.05
-	)
-	static let settingsSelectorEdge = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.08,
-		darkAlpha: 0.082
-	)
-	static let settingsSelectorHover = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.055,
-		darkAlpha: 0.08
-	)
-	static let settingsFieldFocus = AppKitColorResolution.color(
-		light: 0x0169CC,
-		dark: 0x3A83F7
-	)
-	static let settingsFieldError = AppKitColorResolution.color(
-		light: 0xE02E2A,
-		dark: 0xFF6764
-	)
-	static let settingsSearchSurface = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.055,
-		darkAlpha: 0.08
-	)
-	static let settingsSidebarSelection = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.055,
-		darkAlpha: 0.08
-	)
+	static var settingsCard: NSColor
+	{
+		paletteColor
+		{
+			$0.formCard
+		}
+	}
+	static var settingsPrimaryText: NSColor
+	{
+		primaryText
+	}
+	static var settingsSecondaryText: NSColor
+	{
+		captionText
+	}
+	static var settingsTertiaryText: NSColor
+	{
+		secondaryText
+	}
+	static var settingsSidebarSurface: NSColor
+	{
+		paletteColor
+		{
+			$0.controlOpaque.withAlphaComponent(0.65)
+		}
+	}
+	static var settingsCatalogSearchSurface: NSColor
+	{
+		input
+	}
+	static var settingsCatalogSearchEdge: NSColor
+	{
+		heavyBorder
+	}
+	static var settingsHeaderActionSurface: NSColor
+	{
+		input
+	}
+	static var settingsHeaderActionEdge: NSColor
+	{
+		border
+	}
+	static var settingsHeaderPrimaryText: NSColor
+	{
+		controlSurface
+	}
+	static var settingsFormFieldSurface: NSColor
+	{
+		input
+	}
+	static var settingsSelectorSurface: NSColor
+	{
+		input
+	}
+	static var settingsSelectorEdge: NSColor
+	{
+		border
+	}
+	static var settingsSelectorHover: NSColor
+	{
+		hoverOverlay
+	}
+	static var settingsFieldFocus: NSColor
+	{
+		focus
+	}
+	static var settingsFieldError: NSColor
+	{
+		errorText
+	}
+	static var settingsSearchSurface: NSColor
+	{
+		hoverOverlay
+	}
+	static var settingsSidebarSelection: NSColor
+	{
+		hoverOverlay
+	}
+	static var settingsSearchEditorSurface: NSColor
+	{
+		paletteColor
+		{
+			p in
+			let overlay = p.hoverOverlay
+			return p.surface.blended(
+				withFraction: overlay.alphaComponent,
+				of: overlay.withAlphaComponent(1)
+			) ?? p.surface
+		}
+	}
+
 }

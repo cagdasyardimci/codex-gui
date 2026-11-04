@@ -20,7 +20,11 @@ struct ComposerCompleteControlTests
 		#expect(receiver.calls == 0)
 		#expect(button.layerBackgroundColor == .tertiaryLabelColor)
 		button.isEnabled = true
-		#expect(button.layerBackgroundColor == AppKitColorTokens.composerSend)
+		#expect(matchesColor(
+			button.layerBackgroundColor,
+			AppKitColorTokens.composerSend,
+			for: button
+		))
 		#expect(button.dispatchConfiguredAction())
 		#expect(receiver.calls == 1)
 		#expect(button.keyEquivalent == "\r")
@@ -40,7 +44,11 @@ struct ComposerCompleteControlTests
 			configuredFullAccess: false
 		)
 		#expect(button.title == "Configured permissions")
-		#expect(button.contentTintColor == AppKitColorTokens.composerSecondaryText)
+		#expect(matchesColor(
+			button.contentTintColor,
+			AppKitColorTokens.composerSecondaryText,
+			for: button
+		))
 		#expect(button.toolTip == "Configured permissions: Read-only files")
 		button.render(mode: .fullAccess)
 		#expect(button.image === ComposerFooterIcons.fullAccess)
@@ -48,11 +56,36 @@ struct ComposerCompleteControlTests
 		button.render(mode: .approveForMe)
 		#expect(button.title == ApprovalMode.approveForMe.title)
 		#expect(button.image !== ComposerFooterIcons.fullAccess)
-		#expect(button.contentTintColor == AppKitColorTokens.composerSecondaryText)
+		#expect(matchesColor(
+			button.contentTintColor,
+			AppKitColorTokens.composerSecondaryText,
+			for: button
+		))
 		#expect(button
 			.accessibilityLabel() == "Approval policy: \(ApprovalMode.approveForMe.title)")
 		#expect(button.dispatchConfiguredAction())
 		#expect(receiver.calls == 1)
+	}
+
+	private func matchesColor(
+		_ actual: NSColor?,
+		_ expected: NSColor,
+		for view: NSView
+	) -> Bool
+	{
+		guard let actual
+		else
+		{
+			return false
+		}
+		return AppKitColorResolution.resolvedCGColor(
+			actual,
+			for: view
+		).components
+			== AppKitColorResolution.resolvedCGColor(
+				expected,
+				for: view
+			).components
 	}
 
 	@MainActor

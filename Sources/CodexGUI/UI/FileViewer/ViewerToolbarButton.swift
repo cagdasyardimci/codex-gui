@@ -156,7 +156,8 @@ final class ViewerToolbarButton: NSButton
 		)
 		if presentation != .grouped || selected || isHighlighted
 		{
-			let fill = selected ? AppKitColorTokens.viewerControlSelection : AppKitColorTokens
+			let fill = selected ? AppKitColorTokens
+				.viewerControlSelection(active: isHighlighted) : AppKitColorTokens
 				.canvas
 			(isHighlighted ? AppKitColorTokens.rowHighlight : fill).setFill()
 			path.fill()

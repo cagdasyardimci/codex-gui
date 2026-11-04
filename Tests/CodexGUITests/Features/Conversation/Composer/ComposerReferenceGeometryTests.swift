@@ -56,11 +56,7 @@ struct ComposerReferenceGeometryTests
 			controller.renderComposer(ConversationPresentation(snapshot).composer)
 			#expect(controller.sendButton.isEnabled)
 
-			for (appearance, primary, send) in [
-				(NSAppearance.Name.aqua, 0x0D0D0D, 0x0D0D0D),
-				(.darkAqua, 0xFFFFFF, 0x2C67C5),
-				(.aqua, 0x0D0D0D, 0x0D0D0D),
-			]
+			for appearance in [NSAppearance.Name.aqua, .darkAqua, .aqua]
 			{
 				window.appearance = NSAppearance(named: appearance)
 				window.displayIfNeeded()
@@ -74,15 +70,21 @@ struct ComposerReferenceGeometryTests
 				let sendFill = try #require(controller.sendButton.layer?.backgroundColor)
 				for color in [editorColor, insertionColor, typingColor]
 				{
-					#expect(try rgb(
+					#expect(try rgba(
 						color,
 						appearance: window.effectiveAppearance
-					) == primary)
+					) == rgba(
+						AppKitColorTokens.composerPrimaryText,
+						appearance: window.effectiveAppearance
+					))
 				}
-				#expect(try rgb(
+				#expect(try rgba(
 					try #require(NSColor(cgColor: sendFill)),
 					appearance: window.effectiveAppearance
-				) == send)
+				) == rgba(
+					AppKitColorTokens.composerSend,
+					appearance: window.effectiveAppearance
+				))
 			}
 		}
 	}
@@ -143,7 +145,7 @@ struct ComposerReferenceGeometryTests
 		#expect(editor.string == "Fi仮 line\nSecond line")
 	}
 
-	private func rgb(
+	private func rgba(
 		_ color: NSColor,
 		appearance: NSAppearance
 	) throws -> Int
@@ -154,8 +156,9 @@ struct ComposerReferenceGeometryTests
 			resolved = color.usingColorSpace(.deviceRGB)
 		}
 		let rgb = try #require(resolved)
-		return (Int((rgb.redComponent * 255).rounded()) << 16)
-			| (Int((rgb.greenComponent * 255).rounded()) << 8)
-			| Int((rgb.blueComponent * 255).rounded())
+		return (Int((rgb.redComponent * 255).rounded()) << 24)
+			| (Int((rgb.greenComponent * 255).rounded()) << 16)
+			| (Int((rgb.blueComponent * 255).rounded()) << 8)
+			| Int((rgb.alphaComponent * 255).rounded())
 	}
 }
