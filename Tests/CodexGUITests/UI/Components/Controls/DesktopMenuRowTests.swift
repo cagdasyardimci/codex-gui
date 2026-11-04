@@ -7,6 +7,69 @@ import Testing
 @Suite
 struct DesktopMenuRowTests
 {
+	@Test func stableMenuGeometryDoesNotReadPreferencesAgainOrNotifyForSelectionChanges()
+	{
+		let center = NotificationCenter()
+		var configuration = TypographyConfiguration(uiSize: 11)
+		var reads = 0
+		let row = DesktopMenuRow(
+			content: .init(
+				title: "Font family",
+				indicator: .checkmark
+			),
+			configuration:
+			{
+				reads += 1
+				return configuration
+			},
+			center: center
+		)
+		let original = row.preferredSize
+		var changes = 0
+		row.onPreferredSizeChanged =
+		{
+			changes += 1
+		}
+		reads = 0
+		for _ in 0 ..< 200
+		{
+			#expect(row.rowHeight == original.height)
+			#expect(row.preferredSize == original)
+		}
+		#expect(reads == 0)
+		row.checked = true
+		row.checked = false
+		#expect(changes == 0)
+		configuration = TypographyConfiguration(uiSize: 16)
+		center.post(
+			name: TypographyPreferences.didChange,
+			object: nil
+		)
+		#expect(row.rowHeight > original.height)
+		#expect(row.preferredSize.width > original.width)
+		#expect(changes > 0)
+	}
+
+	@Test(arguments: [CGFloat(11), 16])
+	func menuRowsRetainTheirMinimumTargetAndScaleTheirTextLine(_ uiSize: CGFloat)
+	{
+		_ = NSApplication.shared
+		let row = DesktopMenuRow(
+			content: .init(title: "150%"),
+			configuration:
+			{
+				TypographyConfiguration(uiSize: uiSize)
+			}
+		)
+		let expected: CGFloat = uiSize == 11 ? 26 : 31.42857142857143
+		#expect(abs(row.rowHeight - expected) < 0.001)
+		row.frame = NSRect(
+			origin: .zero,
+			size: row.preferredSize
+		)
+		row.layoutSubtreeIfNeeded()
+		#expect(row.bounds.contains(row.titleLabel.alignmentRect(forFrame: row.titleLabel.frame)))
+	}
 	@Test func enabledPressRoutesOnceAndSelectionRemainsOwnedByTheMenu()
 	{
 		_ = NSApplication.shared

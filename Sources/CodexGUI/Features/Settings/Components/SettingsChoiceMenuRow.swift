@@ -21,7 +21,9 @@ final class SettingsChoiceMenuRow: DesktopMenuRow
 		icon: NSImage?,
 		checked: Bool,
 		detail: String?,
-		showsCheckbox: Bool
+		showsCheckbox: Bool,
+		titleRole: TypographyTokens.Role = TypographyTokens.MenuRow.title,
+		detailRole: TypographyTokens.Role = TypographyTokens.MenuRow.subtitle
 	)
 	{
 		super.init(
@@ -31,7 +33,9 @@ final class SettingsChoiceMenuRow: DesktopMenuRow
 				subtitle: detail,
 				indicator: showsCheckbox ? .checkbox : .checkmark,
 				checked: checked
-			)
+			),
+			titleRole: titleRole,
+			subtitleRole: detailRole
 		)
 	}
 

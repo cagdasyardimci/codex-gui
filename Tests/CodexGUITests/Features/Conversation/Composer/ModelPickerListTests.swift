@@ -74,8 +74,13 @@ struct ModelPickerListTests
 			let rows = picker.modelList.rows
 			#expect(rows.count == 8)
 			#expect(rows.map(\.state) == [.off, .off, .off, .on, .off, .off, .off, .off])
-			#expect(rows[0].preferredHeight == 42.5703125)
-			#expect(rows[1].preferredHeight == 28.5703125)
+			let supportFont = try #require(rows[0].subtitleLabel.font)
+			let supportHeight = max(
+				14,
+				supportFont.ascender - supportFont.descender + supportFont.leading
+			)
+			#expect(abs(rows[0].preferredHeight - (13 * 10.0 / 7 + 10 + supportHeight)) < 0.01)
+			#expect(abs(rows[1].preferredHeight - (13 * 10.0 / 7 + 10)) < 0.01)
 			#expect(abs(rows[0].frame.height - rows[0].preferredHeight) < 1 / panel
 				.backingScaleFactor)
 			#expect(abs(rows[1].frame.height - rows[1].preferredHeight) < 1 / panel

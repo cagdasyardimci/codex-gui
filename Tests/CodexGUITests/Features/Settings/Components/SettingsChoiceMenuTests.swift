@@ -6,6 +6,75 @@ import Testing
 @MainActor
 struct SettingsChoiceMenuTests
 {
+	@Test func dismissedPickerRetiresItsRowsWithoutDroppingTheSelectedAction() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			_ = NSApplication.shared
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 100,
+					y: 100,
+					width: 400,
+					height: 300
+				),
+				styleMask: [.borderless],
+				backing: .buffered,
+				defer: false
+			)
+			window.prepareForTesting()
+			defer
+			{
+				window.close()
+			}
+			let picker = SettingsChoicePicker(choices: [
+				.init(
+					id: "a",
+					title: "Arial"
+				),
+				.init(
+					id: "b",
+					title: "Georgia"
+				)
+			])
+			picker.frame = NSRect(
+				x: 80,
+				y: 180,
+				width: 120,
+				height: 28
+			)
+			window.contentView?.addSubview(picker)
+			var selected: String?
+			picker.onSelect =
+			{
+				selected = $0
+			}
+			window.orderFront(nil)
+			#expect(picker.dispatchConfiguredAction())
+			let panel = try #require(window.childWindows?.first)
+			let content = try #require(panel.contentView)
+			let row = try #require(descendants(in: content)
+				.compactMap
+				{
+					$0 as? SettingsChoiceMenuRow
+				}.last)
+			#expect(row.accessibilityPerformPress())
+			#expect(selected == "b")
+			#expect(!panel.isVisible)
+			#expect(panel.contentView == nil)
+			#expect(picker.dispatchConfiguredAction())
+			let reopened = try #require(window.childWindows?.first)
+			#expect(reopened !== panel)
+			#expect(reopened.isVisible)
+			NSApp.sendEvent(try key(
+				53,
+				window: reopened
+			))
+			#expect(!reopened.isVisible)
+			#expect(reopened.contentView == nil)
+		}
+	}
+
 	@Test func multipleSelectionKeepsChecksIndependentOfNavigationAndStaysOpen() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -169,6 +238,11 @@ struct SettingsChoiceMenuTests
 				$0.identifier?.rawValue == "settings-menu-section-heading"
 			}
 			#expect(headers.map(\.stringValue) == ["Type", "Sort"])
+			#expect(headers
+				.allSatisfy
+				{
+					$0.font?.pointSize == TypographyConfiguration.current.uiSize - 1
+				})
 			let cloud = try #require(buttons.first
 			{
 				$0.title == "Cloud"

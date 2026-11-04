@@ -4,6 +4,7 @@ import AppKit
 @MainActor
 final class SettingsChoiceMenu
 {
+	var onClose: (() -> Void)?
 	var onSelect: ((String) -> Void)?
 	var onToggle: ((String, Bool) -> Void)?
 	private(set) var checkedIDs: Set<String>?
@@ -23,6 +24,8 @@ final class SettingsChoiceMenu
 	}
 	private let scroll = NSScrollView()
 	private var contentHeight: CGFloat = 8
+	private var rowHeights: [CGFloat] = []
+	private var sizeUpdateTask: Task<Void, Never>?
 	private let choices: [SettingsChoicePicker.Choice]
 	private var rows: [SettingsChoiceMenuRow] = []
 	private var selectedIndex = 0
@@ -34,7 +37,9 @@ final class SettingsChoiceMenu
 		accessibilityLabel: String,
 		width: CGFloat = 240,
 		checkedIDs: Set<String>? = nil,
-		showsCheckboxes: Bool = true
+		showsCheckboxes: Bool = true,
+		titleRole: TypographyTokens.Role = TypographyTokens.MenuRow.title,
+		detailRole: TypographyTokens.Role = TypographyTokens.MenuRow.subtitle
 	)
 	{
 		self.checkedIDs = checkedIDs
@@ -79,7 +84,9 @@ final class SettingsChoiceMenu
 				checked: checkedIDs?.contains(choice.id)
 					?? choice.isSelected ?? (choice.id == selectedID),
 				detail: choice.detail,
-				showsCheckbox: checkedIDs != nil && showsCheckboxes
+				showsCheckbox: checkedIDs != nil && showsCheckboxes,
+				titleRole: titleRole,
+				detailRole: detailRole
 			)
 			row.isEnabled = choice.isEnabled
 			row.toolTip = choice.help
@@ -95,7 +102,25 @@ final class SettingsChoiceMenu
 			stack.addArrangedSubview(row)
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 			rows.append(row)
+			rowHeights.append(row.rowHeight)
 			contentHeight += row.rowHeight
+			row.onPreferredSizeChanged =
+			{
+				[weak self, weak row] in
+				guard let self, let row
+				else
+				{
+					return
+				}
+				let height = row.rowHeight
+				let delta = height - self.rowHeights[index]
+				self.rowHeights[index] = height
+				self.contentHeight += delta
+				if delta != 0
+				{
+					self.scheduleSizeUpdate()
+				}
+			}
 		}
 		scroll.hasVerticalScroller = true
 		scroll.autohidesScrollers = true
@@ -132,6 +157,19 @@ final class SettingsChoiceMenu
 			highlight(index)
 		}
 
+		host.onPresentationChange =
+		{
+			[weak self] shown in
+			guard let self, !shown
+			else
+			{
+				return
+			}
+			self.sizeUpdateTask?.cancel()
+			self.sizeUpdateTask = nil
+			self.onClose?()
+		}
+
 	}
 
 	func show(from anchor: NSView)
@@ -145,10 +183,7 @@ final class SettingsChoiceMenu
 		{
 			row.menuHighlighted = false
 		}
-		host.update(.choice(
-			width: menuWidth,
-			contentHeight: contentHeight
-		))
+		refreshSize()
 		host.onKeyDown =
 		{
 			[weak self] event in self?.handleKey(event.keyCode) ?? false
@@ -159,6 +194,45 @@ final class SettingsChoiceMenu
 			panel.makeFirstResponder(rows[selectedIndex])
 			rows[selectedIndex].scrollToVisible(rows[selectedIndex].bounds)
 		}
+	}
+
+	isolated deinit
+	{
+		sizeUpdateTask?.cancel()
+		// AppKit can retain ordered-out panels. Retiring the menu must release its row observers.
+		host.panel.contentView = nil
+		host.panel.close()
+	}
+
+	private func scheduleSizeUpdate()
+	{
+		guard isShown, sizeUpdateTask == nil
+		else
+		{
+			return
+		}
+		sizeUpdateTask = Task
+		{
+			@MainActor [weak self] in
+			guard let self, !Task.isCancelled
+			else
+			{
+				return
+			}
+			self.sizeUpdateTask = nil
+			if self.isShown
+			{
+				self.refreshSize()
+			}
+		}
+	}
+
+	private func refreshSize()
+	{
+		host.update(.choice(
+			width: menuWidth,
+			contentHeight: contentHeight
+		))
 	}
 
 	func close(restoreFocus: Bool = true)
@@ -258,7 +332,7 @@ final class SettingsChoiceMenu
 		label.identifier = NSUserInterfaceItemIdentifier("settings-menu-section-heading")
 		label.setAccessibilityRole(.staticText)
 		label.setAccessibilityRoleDescription("heading")
-		label.font = .systemFont(ofSize: 12)
+		label.setTypographyRole(TypographyTokens.Settings.choiceSection)
 		label.textColor = AppKitColorTokens.settingsSecondaryText
 		label.translatesAutoresizingMaskIntoConstraints = false
 		header.addSubview(label)

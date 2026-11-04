@@ -4,6 +4,11 @@ import AppKit
 @MainActor
 class SettingsChoicePicker: DesktopHoverButton
 {
+	enum Presentation
+	{
+		case standard, palette
+	}
+
 	struct Choice
 	{
 		let id: String
@@ -16,6 +21,14 @@ class SettingsChoicePicker: DesktopHoverButton
 		var help: String? = nil
 	}
 
+	var swatchColor: NSColor?
+	{
+		didSet
+		{
+			invalidateIntrinsicContentSize(); needsDisplay = true
+		}
+	}
+
 	var leadingIcon: NSImage?
 	{
 		didSet
@@ -23,11 +36,24 @@ class SettingsChoicePicker: DesktopHoverButton
 			invalidateIntrinsicContentSize(); needsDisplay = true
 		}
 	}
+	private let presentation: Presentation
 	private var selectionIcon: NSImage?
 	{
 		leadingIcon ?? selection?.icon
 	}
 	var menuWidth: CGFloat = 240
+	var subduedSelectionIDs: Set<String> = []
+	{
+		didSet
+		{
+			needsDisplay = true
+		}
+	}
+	var menuTitleRole: TypographyTokens.Role
+	{
+		TypographyTokens.MenuRow.title
+	}
+	var menuDetailRole = TypographyTokens.MenuRow.subtitle
 	var usesCheckboxesForMultipleSelection = true
 	var onSelect: ((String) -> Void)?
 	var onToggle: ((String, Bool) -> Void)?
@@ -44,15 +70,17 @@ class SettingsChoicePicker: DesktopHoverButton
 
 	init(
 		choices: [Choice],
-		selectedID: String? = nil
+		selectedID: String? = nil,
+		presentation: Presentation = .standard
 	)
 	{
+		self.presentation = presentation
 		self.choices = choices
 		self.selectedID = selectedID ?? choices.first?.id
 		super.init(frame: .zero)
 		isBordered = false
 		setButtonType(.momentaryChange)
-		font = AppKitFontResolver.font(TypographyTokens.Connections.body)
+		self.setTypographyRole(TypographyTokens.Connections.body)
 		focusRingType = .exterior
 		target = self
 		action = #selector(showChoices)
@@ -161,7 +189,9 @@ class SettingsChoicePicker: DesktopHoverButton
 			accessibilityLabel: accessibilityLabel() ?? "Settings choices",
 			width: menuWidth,
 			checkedIDs: checkedIDs,
-			showsCheckboxes: usesCheckboxesForMultipleSelection
+			showsCheckboxes: usesCheckboxesForMultipleSelection,
+			titleRole: menuTitleRole,
+			detailRole: menuDetailRole
 		)
 		menu.onSelect =
 		{
@@ -179,6 +209,16 @@ class SettingsChoicePicker: DesktopHoverButton
 		menu.onToggle =
 		{
 			[weak self] id, checked in self?.onToggle?(id, checked)
+		}
+		menu.onClose =
+		{
+			[weak self, weak menu] in
+			guard let self, self.pickerMenu === menu
+			else
+			{
+				return
+			}
+			self.pickerMenu = nil
 		}
 		pickerMenu = menu
 		menu.show(from: self)
@@ -203,7 +243,12 @@ class SettingsChoicePicker: DesktopHoverButton
 			.font: font ?? AppKitFontResolver.font(TypographyTokens.Connections.body)
 		]).width)
 		return NSSize(
-			width: textWidth + 44 + (selectionIcon == nil ? 0 : 22),
+			width: textWidth + 36 +
+				(
+					swatchColor != nil ? 18 : selectionIcon == nil ? 0 : presentation == .palette ?
+						26 :
+						22
+				),
 			height: 28
 		)
 	}
@@ -223,7 +268,7 @@ class SettingsChoicePicker: DesktopHoverButton
 				dx: 0.5,
 				dy: 0.5
 			),
-			radius: 12.5,
+			radius: bounds.height / 2,
 			curve: ShapeTokens.Connections.curve
 		)
 	}
@@ -237,20 +282,38 @@ class SettingsChoicePicker: DesktopHoverButton
 		}
 		bounds.clip()
 		let active = isEnabled && (isHovered || isHighlighted || pickerMenu?.isShown == true)
-		let foreground = AppKitColorTokens.settingsPrimaryText
-		(active ? AppKitColorTokens.settingsSelectorHover : AppKitColorTokens
-			.settingsSelectorSurface).setFill()
+		let foreground = selectedID.map
+		{
+			subduedSelectionIDs.contains($0)
+		} == true
+		? AppKitColorTokens.settingsSecondaryText : AppKitColorTokens.settingsPrimaryText
+		(active ? AppKitColorTokens
+			.settingsSelectorHover :
+			(presentation == .palette ? AppKitColorTokens.canvas : AppKitColorTokens
+				.settingsSelectorSurface)).setFill()
 		outline.fill()
 		AppKitColorTokens.settingsSelectorEdge.setStroke()
 		outline.stroke()
-		var textX: CGFloat = 12
-		if let image = selectionIcon
+		var textX: CGFloat = 8
+		if let swatchColor
 		{
+			swatchColor.setFill()
+			NSBezierPath(ovalIn: NSRect(
+				x: textX,
+				y: bounds.midY - 6,
+				width: 12,
+				height: 12
+			)).fill()
+			textX += 18
+		}
+		else if let image = selectionIcon
+		{
+			let side: CGFloat = presentation == .palette ? 20 : 16
 			let iconRect = NSRect(
 				x: textX,
-				y: bounds.midY - 8,
-				width: 16,
-				height: 16
+				y: bounds.midY - side / 2,
+				width: side,
+				height: side
 			)
 			if image.isTemplate
 			{
@@ -264,13 +327,16 @@ class SettingsChoicePicker: DesktopHoverButton
 			{
 				image.draw(in: iconRect)
 			}
-			textX += 22
+			textX += side + 6
 		}
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.lineBreakMode = .byTruncatingTail
 		let attributes: [NSAttributedString.Key: Any] = [
 			.font: font ?? AppKitFontResolver.font(TypographyTokens.Connections.body),
-			.foregroundColor: foreground.withAlphaComponent(isEnabled ? 1 : 0.4),
+			.foregroundColor: AppKitColorTokens.enabledForeground(
+				foreground,
+				enabled: isEnabled
+			),
 			.paragraphStyle: paragraph
 		]
 		let textSize = (title as NSString).size(withAttributes: attributes)
@@ -280,7 +346,7 @@ class SettingsChoicePicker: DesktopHoverButton
 				y: bounds.midY - textSize.height / 2,
 				width: max(
 					0,
-					bounds.maxX - 32 - textX
+					bounds.maxX - 28 - textX
 				),
 				height: textSize.height
 			),
@@ -289,7 +355,7 @@ class SettingsChoicePicker: DesktopHoverButton
 		DesktopIcons.draw(
 			chevron,
 			in: NSRect(
-				x: bounds.maxX - 24,
+				x: bounds.maxX - 20,
 				y: bounds.midY - 6,
 				width: 12,
 				height: 12

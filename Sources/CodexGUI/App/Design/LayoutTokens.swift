@@ -660,8 +660,14 @@ enum LayoutTokens
 		static let headerTextHeight: CGFloat = 16
 		static let horizontalInset: CGFloat = 8
 		static let verticalInset: CGFloat = 5
-		static let titleHeight = LayoutTokens.MenuRow.titleLineHeight
-		static let explanationHeight = LayoutTokens.MenuRow.subtitleLineHeight
+		static var titleHeight: CGFloat
+		{
+			LayoutTokens.MenuRow.titleLineHeight
+		}
+		static var explanationHeight: CGFloat
+		{
+			LayoutTokens.MenuRow.subtitleLineHeight
+		}
 		static let iconSlotSize: CGFloat = 16
 		static let iconSize: CGFloat = 18
 		static let iconTextSpacing: CGFloat = 6
@@ -739,8 +745,14 @@ enum LayoutTokens
 		static let verticalInset: CGFloat = 5
 		static let headerVerticalInset: CGFloat = 4
 		static let checkTextSpacing: CGFloat = 6
-		static let titleHeight = LayoutTokens.MenuRow.titleLineHeight
-		static let secondaryHeight = LayoutTokens.MenuRow.subtitleLineHeight
+		static var titleHeight: CGFloat
+		{
+			LayoutTokens.MenuRow.titleLineHeight
+		}
+		static var secondaryHeight: CGFloat
+		{
+			LayoutTokens.MenuRow.subtitleLineHeight
+		}
 		static let checkSize: CGFloat = 16
 		static var headerHeight: CGFloat
 		{

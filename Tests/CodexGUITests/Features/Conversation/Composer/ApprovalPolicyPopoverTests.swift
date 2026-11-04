@@ -47,14 +47,19 @@ struct ApprovalPolicyPopoverTests
 		for row in rows
 		{
 			#expect(abs(row.bounds.width - 431.09375) < 0.51)
-			#expect(abs(row.bounds.height - 42.5703125) < 0.26)
 			#expect(row.accessibilityRole() == .menuItem)
 			let sharedRow = try #require(row as? DesktopMenuRow)
+			#expect(abs(row.bounds.height - sharedRow.rowHeight) <= 0.5)
 			let labels = [sharedRow.titleLabel, sharedRow.subtitleLabel]
 			#expect(labels[0].frame.minX == 30)
 			#expect(labels[0].alignmentRect(forFrame: labels[0].frame).minX == 32)
 			#expect(abs(labels[0].bounds.height - 18.5703125) < 0.26)
-			#expect(labels[1].bounds.height == 14)
+			let supportFont = try #require(labels[1].font)
+			#expect(labels[1].bounds.height == max(
+				14,
+				supportFont.ascender - supportFont
+					.descender + supportFont.leading
+			))
 			let images = [sharedRow.iconView, sharedRow.trailingImageView]
 			#expect(images[0].frame.minX == 8)
 			#expect(images[0].bounds.width == 16)

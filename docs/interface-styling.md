@@ -20,6 +20,8 @@ Choose token roles by purpose: equal values do not establish a shared design rul
 
 Validate configuration fit separately from available-space behavior. A valid configuration still needs truncation, reflow, scrolling or collapse when space shrinks. Measure in the component's coordinate space; a clipped viewport, intrinsic request and final frame can differ.
 
+Menu row geometry derives from its resolved title and supporting-text recipes and retains a minimum interaction target; native fields also reserve the selected face’s glyph height. [Action menus](../Sources/CodexGUI/UI/Components/Controls/DesktopActionMenu.swift) reuse the shared rows, surface, keyboard navigation and dismissal lifecycle for queue actions and viewer zoom. Open menus preserve selection and focus while their presentation resizes.
+
 ## Component ownership
 
 A reusable component owns its complete appearance, composition and interaction states. Feature adapters supply semantic content, selection, operation state and callbacks. They must not independently restyle the same variant. Infrastructure helpers support complete components; assembling the same helpers repeatedly in features is not shared component ownership.

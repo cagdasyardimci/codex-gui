@@ -46,7 +46,7 @@ struct SidebarOrganizationMenuTests
 				)
 				#expect(menu.mainRows.map(\.title) == ["Organize sidebar", "Sort chats by"])
 				#expect(menu.mainRows[0].frame.width == 212)
-				#expect(menu.mainRows[0].frame.height == 28.5703125)
+				#expect(abs(menu.mainRows[0].frame.height - (13 * 10.0 / 7 + 10)) < 0.01)
 				menu.openSubmenu(
 					0,
 					focusOptions: false

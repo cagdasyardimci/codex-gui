@@ -129,6 +129,75 @@ struct TypographyBindingTests
 		#expect(defaults.dictionary(forKey: "appearance.typography")?["code"] as? Int == 16)
 	}
 
+	@Test func menuTypographyRefreshResizesRowsAndPreservesSelectionAndAction() throws
+	{
+		let center = NotificationCenter()
+		let state = ConfigurationState()
+		state.value = TypographyConfiguration(uiSize: 11)
+		let parent = NSView(frame: NSRect(
+			x: 0,
+			y: 0,
+			width: 400,
+			height: 300
+		))
+		let row = DesktopMenuRow(
+			content: .init(
+				title: "Selected model",
+				subtitle: "Supporting text",
+				indicator: .checkmark,
+				checked: true
+			),
+			configuration:
+			{
+				state.value
+			},
+			center: center
+		)
+		row.translatesAutoresizingMaskIntoConstraints = false
+		parent.addSubview(row)
+		NSLayoutConstraint.activate([
+			row.widthAnchor.constraint(equalToConstant: 360),
+			row.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
+			row.topAnchor.constraint(equalTo: parent.topAnchor)
+		])
+		parent.layoutSubtreeIfNeeded()
+		let smallHeight = row.frame.height
+		var invocations = 0
+		row.onInvoke =
+		{
+			invocations += 1
+		}
+		for size: CGFloat in [16, 11]
+		{
+			state.value = TypographyConfiguration(uiSize: size)
+			center.post(
+				name: TypographyPreferences.didChange,
+				object: nil
+			)
+			parent.layoutSubtreeIfNeeded()
+			let height = try #require(row.constraints.first
+			{
+				$0.firstAttribute == .height
+			})
+			#expect(height.constant == row.rowHeight)
+			// Auto Layout aligns the fractional typography request to the device pixel grid.
+			#expect(abs(row.frame.height - row.rowHeight) <= 0.5)
+			#expect(size == 16 ? row.frame
+				.height > smallHeight : abs(row.frame.height - smallHeight) < 0.01)
+			#expect(row.titleLabel.font?.pointSize == size - 1)
+			let font = try #require(row.subtitleLabel.font)
+			#expect(row.subtitleLabel.frame.height >= font.ascender - font.descender)
+			#expect(row.subtitleLabel.frame.maxY <= row.bounds.maxY)
+			#expect(row.checked)
+			#expect(row.titleLabel.stringValue == "Selected model")
+		}
+		#expect(row.sendAction(
+			row.action,
+			to: row.target
+		))
+		#expect(invocations == 1)
+	}
+
 	@Test func typographyRefreshKeepsSidebarActionsIconOnly()
 	{
 		let center = NotificationCenter()

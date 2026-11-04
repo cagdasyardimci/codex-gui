@@ -6,12 +6,28 @@ extension LayoutTokens
 	{
 		static let horizontalInset: CGFloat = 8
 		static let verticalInset: CGFloat = 5
+		static let minimumHeight: CGFloat = 26
 		static let iconSize: CGFloat = 16
 		static let iconSpacing: CGFloat = 6
-		static let titleLineHeight: CGFloat = 18.5703125
-		static let subtitleLineHeight: CGFloat = 14
-		static let height = titleLineHeight + 2 * verticalInset
-		static let detailedHeight = height + subtitleLineHeight
+		static var titleLineHeight: CGFloat
+		{
+			TypographyTokens.MenuRow.title.lineHeight!
+		}
+		static var subtitleLineHeight: CGFloat
+		{
+			TypographyTokens.MenuRow.subtitle.lineHeight!
+		}
+		static var height: CGFloat
+		{
+			max(
+				minimumHeight,
+				titleLineHeight + 2 * verticalInset
+			)
+		}
+		static var detailedHeight: CGFloat
+		{
+			height + subtitleLineHeight
+		}
 	}
 	/// Inline search suggestions retain their native table line box and bounded viewport.
 	enum SearchSuggestions

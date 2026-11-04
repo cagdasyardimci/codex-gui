@@ -4,6 +4,11 @@ import AppKit
 @MainActor
 class DesktopPopupButton: NSPopUpButton
 {
+	override var alignmentRectInsets: NSEdgeInsets
+	{
+		isBordered ? super.alignmentRectInsets : NSEdgeInsetsZero
+	}
+
 	let controlTooltip = DesktopControlTooltip()
 	override var toolTip: String?
 	{
@@ -84,8 +89,8 @@ class DesktopPopupButton: NSPopUpButton
 	{
 		didSet
 		{
-			font = size == .small ? .systemFont(ofSize: 11)
-				: AppKitFontResolver.font(TypographyTokens.Controls.button)
+			setTypographyRole(size == .small ? TypographyTokens.Controls
+				.smallPopup : TypographyTokens.Controls.button)
 		}
 	}
 
@@ -109,8 +114,8 @@ class DesktopPopupButton: NSPopUpButton
 		bezelStyle = .inline
 		isBordered = false
 		controlSize = .small
-		font = AppKitFontResolver.font(TypographyTokens.Controls.button)
-		contentTintColor = .secondaryLabelColor
+		self.setTypographyRole(TypographyTokens.Controls.button)
+		contentTintColor = AppKitColorTokens.secondaryText
 	}
 
 	required init?(coder: NSCoder)

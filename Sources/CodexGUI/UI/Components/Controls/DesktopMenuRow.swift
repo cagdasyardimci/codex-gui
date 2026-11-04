@@ -9,6 +9,30 @@ class DesktopMenuRow: NSButton
 		case standard, aligned
 	}
 	private let textPresentation: TextPresentation
+	private let titleRole: TypographyTokens.Role
+	private let subtitleRole: TypographyTokens.Role
+	private let configuration: @MainActor () -> TypographyConfiguration
+	private let typographyCenter: NotificationCenter
+	private var titleLineHeight: CGFloat = 0
+	private var subtitleLineHeight: CGFloat = 0
+	private var lastPreferredSize: NSSize?
+
+	private func lineHeight(
+		for role: TypographyTokens.Role,
+		label: NSTextField,
+		fallback: TypographyTokens.Role
+	) -> CGFloat
+	{
+		let config = configuration()
+		let metricsRole = role.lineHeightRule == nil ? fallback : role
+		// Geometry uses the same native line fitting as retained attributed text.
+		let attributes = AppKitFontResolver.textAttributes(
+			metricsRole,
+			font: label.font,
+			configuration: config
+		)
+		return (attributes[.paragraphStyle] as! NSParagraphStyle).minimumLineHeight
+	}
 
 	enum Indicator: Equatable
 	{
@@ -45,6 +69,7 @@ class DesktopMenuRow: NSButton
 		}
 	}
 	var onHover: (() -> Void)?
+	var onPreferredSizeChanged: (() -> Void)?
 	var onInvoke: (() -> Void)?
 	var onKeyDown: ((NSEvent) -> Bool)?
 	var menuHighlighted = false
@@ -87,7 +112,11 @@ class DesktopMenuRow: NSButton
 	}
 	var rowHeight: CGFloat
 	{
-		content.subtitle == nil ? LayoutTokens.MenuRow.height : LayoutTokens.MenuRow.detailedHeight
+		max(
+			Layout.minimumHeight,
+			titleLineHeight + 2 * Layout
+				.verticalInset + (content.subtitle == nil ? 0 : subtitleLineHeight)
+		)
 	}
 	var preferredSize: NSSize
 	{
@@ -134,14 +163,26 @@ class DesktopMenuRow: NSButton
 	private var isKeyboardFocused = false
 	private var tracking: NSTrackingArea?
 	private var rowHeightConstraint: NSLayoutConstraint?
+	private var colorObservation: ThemeColorObservation?
 	private typealias Layout = LayoutTokens.MenuRow
 
 	init(
 		content: Content,
-		textPresentation: TextPresentation = .standard
+		textPresentation: TextPresentation = .standard,
+		titleRole: TypographyTokens.Role = TypographyTokens.MenuRow.title,
+		subtitleRole: TypographyTokens.Role = TypographyTokens.MenuRow.subtitle,
+		configuration: @escaping @MainActor () -> TypographyConfiguration =
+		{
+			.current
+		},
+		center: NotificationCenter = .default
 	)
 	{
 		self.textPresentation = textPresentation
+		self.titleRole = titleRole
+		self.subtitleRole = subtitleRole
+		self.configuration = configuration
+		self.typographyCenter = center
 		titleLabel = textPresentation == .aligned ? DesktopTextField(labelWithString: "") :
 			NSTextField(labelWithString: "")
 		subtitleLabel = textPresentation == .aligned ? DesktopTextField(labelWithString: "") :
@@ -150,6 +191,10 @@ class DesktopMenuRow: NSButton
 			NSTextField(labelWithString: "")
 		self.content = content
 		super.init(frame: .zero)
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshAppearance()
+		}
 		isBordered = false
 		focusRingType = .none
 		setButtonType(.momentaryChange)
@@ -223,41 +268,80 @@ class DesktopMenuRow: NSButton
 		suffixLabel.isHidden = content.suffix.isEmpty
 		iconView.image = content.icon
 		iconView.isHidden = content.icon == nil || content.indicator == .checkbox
-		titleLabel.font = AppKitFontResolver.font(TypographyTokens.MenuRow.title)
+		titleLabel.setTypographyRole(
+			titleRole,
+			configuration: configuration,
+			center: typographyCenter,
+			onUpdate:
+			{
+				[weak self] in self?.refreshMetrics()
+			}
+		)
 		font = titleLabel.font
-		subtitleLabel.font = AppKitFontResolver.font(TypographyTokens.MenuRow.subtitle)
-		suffixLabel.font = AppKitFontResolver.font(content.suffixStyle == .shortcut
-			? TypographyTokens.MenuRow.subtitle : TypographyTokens.MenuRow.title)
-		rowHeightConstraint?.constant = rowHeight
+		subtitleLabel.setTypographyRole(
+			subtitleRole,
+			configuration: configuration,
+			center: typographyCenter,
+			onUpdate:
+			{
+				[weak self] in self?.refreshMetrics()
+			}
+		)
+		suffixLabel.setTypographyRole(
+			content.suffixStyle == .shortcut
+				? TypographyTokens.MenuRow.subtitle : TypographyTokens.MenuRow.title,
+			configuration: configuration,
+			center: typographyCenter
+		)
+		refreshMetrics()
 		refreshAppearance()
 		needsLayout = true
+	}
+
+	private func refreshMetrics()
+	{
+		font = titleLabel.font
+		titleLineHeight = lineHeight(
+			for: titleRole,
+			label: titleLabel,
+			fallback: TypographyTokens.MenuRow.title
+		)
+		subtitleLineHeight = content.subtitle == nil ? 0 : lineHeight(
+			for: subtitleRole,
+			label: subtitleLabel,
+			fallback: TypographyTokens.MenuRow.subtitle
+		)
+		let size = preferredSize
+		rowHeightConstraint?.constant = size.height
+		invalidateIntrinsicContentSize()
+		needsLayout = true
+		superview?.needsLayout = true
+		if lastPreferredSize != size
+		{
+			lastPreferredSize = size
+			onPreferredSizeChanged?()
+		}
 	}
 
 	private func refreshAppearance()
 	{
 		let foreground: NSColor
-		if !isEnabled
+		switch content.role
 		{
-			foreground = AppKitColorTokens.settingsTertiaryText
+		case .normal: foreground = AppKitColorTokens.primaryText
+		case .destructive: foreground = AppKitColorTokens.errorText
+		case .warning: foreground = AppKitColorTokens.warningText
 		}
-		else
-		{
-			switch content.role
-			{
-			case .normal: foreground = AppKitColorTokens.primaryText
-			case .destructive: foreground = .systemRed
-			case .warning: foreground = .systemOrange
-			}
-		}
+		alphaValue = isEnabled ? 1 : AppKitColorTokens.disabledMenuOpacity
 		titleLabel.textColor = foreground
-		subtitleLabel.textColor = !isEnabled ? AppKitColorTokens.settingsTertiaryText
-			: content.role == .normal ? AppKitColorTokens.secondaryText : foreground
+		subtitleLabel.textColor = content.role == .normal
+			? AppKitColorTokens.secondaryText : foreground
 		suffixLabel.textColor = AppKitColorTokens.settingsTertiaryText
 		iconView.contentTintColor = content.icon?.isTemplate == true ? foreground : nil
 		trailingImageView.contentTintColor = foreground
 		let isActive = menuHighlighted || isHovered || isKeyboardFocused || isHighlighted
-		iconView.alphaValue = isEnabled ? (isActive ? 1 : 0.75) : 0.5
-		trailingImageView.alphaValue = isEnabled ? (isActive ? 1 : 0.75) : 0.5
+		iconView.alphaValue = isActive ? 1 : AppKitColorTokens.inactiveMenuIconOpacity
+		trailingImageView.alphaValue = isActive ? 1 : AppKitColorTokens.inactiveMenuIconOpacity
 		if content.indicator == .submenu
 		{
 			trailingImageView.image = DesktopIcons.image(.chevronRight)
@@ -303,9 +387,9 @@ class DesktopMenuRow: NSButton
 			suffixLabel,
 			alignmentRect: NSRect(
 				x: trailing - suffixWidth,
-				y: bounds.midY - Layout.titleLineHeight / 2,
+				y: bounds.midY - titleLineHeight / 2,
 				width: suffixWidth,
-				height: Layout.titleLineHeight
+				height: titleLineHeight
 			)
 		)
 		let textEnd = content.suffix.isEmpty ? trailing
@@ -314,13 +398,13 @@ class DesktopMenuRow: NSButton
 			titleLabel,
 			alignmentRect: NSRect(
 				x: textX,
-				y: content.subtitle == nil ? bounds.midY - Layout.titleLineHeight / 2
+				y: content.subtitle == nil ? bounds.midY - titleLineHeight / 2
 					: Layout.verticalInset,
 				width: max(
 					0,
 					textEnd - textX
 				),
-				height: Layout.titleLineHeight
+				height: titleLineHeight
 			)
 		)
 		subtitleLabel.frame = labelFrame(
@@ -332,7 +416,7 @@ class DesktopMenuRow: NSButton
 					0,
 					textEnd - textX
 				),
-				height: Layout.subtitleLineHeight
+				height: subtitleLineHeight
 			)
 		)
 	}
@@ -474,7 +558,7 @@ class DesktopMenuRow: NSButton
 		)
 		if checked
 		{
-			(isEnabled ? NSColor.controlAccentColor : NSColor.disabledControlTextColor).setFill()
+			AppKitColorTokens.accent.setFill()
 			path.fill()
 			DesktopIcons.draw(
 				.check,
@@ -482,12 +566,12 @@ class DesktopMenuRow: NSButton
 					dx: 2,
 					dy: 2
 				),
-				tint: .white
+				tint: AppKitColorTokens.onAccent
 			)
 		}
 		else
 		{
-			AppKitColorTokens.secondaryText.withAlphaComponent(0.25).setStroke()
+			AppKitColorTokens.uncheckedControlEdge.setStroke()
 			path.lineWidth = 1
 			path.stroke()
 		}
