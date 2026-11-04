@@ -36,8 +36,8 @@ struct DesktopSearchPanelTests
 			#expect(abs(panel.frame.midY - window.frame.midY) < 0.5)
 			try verifyViewport(
 				field: field,
-				width: 520,
-				height: 480
+				width: 768,
+				height: 504
 			)
 			let content = try #require(panel.contentView)
 			let scroll = try #require(descendants(content)
@@ -82,8 +82,8 @@ struct DesktopSearchPanelTests
 				#expect(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == appearance)
 				try verifyViewport(
 					field: field,
-					width: 520,
-					height: 480
+					width: 768,
+					height: 504
 				)
 			}
 			window.setContentSize(NSSize(
@@ -181,7 +181,7 @@ struct DesktopSearchPanelTests
 		#expect(content.bounds.height == height)
 		#expect(field.frame.width >= width - 40)
 		#expect(field.frame
-			.height == (field.accessibilityLabel() == "Search changed files" ? 20 : 32))
+			.height == (field.accessibilityLabel() == "Search changed files" ? 20 : 46))
 		#expect(content.bounds.contains(field.convert(
 			field.bounds,
 			to: content

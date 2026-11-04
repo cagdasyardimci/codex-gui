@@ -76,6 +76,20 @@ struct ReferenceComponentFontTests
 		}
 	}
 
+	@Test func quickActionsSectionUsesCorrectedRole() throws
+	{
+		let section = DesktopSearchOverlayView.message(
+			"Quick actions",
+			presentation: .section
+		)
+		let label = try #require(descendants(section).compactMap
+		{
+			$0 as? NSTextField
+		}.first)
+		#expect(label.font?.pointSize == TypographyConfiguration.current.uiSize - 1)
+		#expect(label.stringValue == "Quick actions")
+	}
+
 	private func descendants(_ view: NSView) -> [NSView]
 	{
 		[view] + view.subviews.flatMap

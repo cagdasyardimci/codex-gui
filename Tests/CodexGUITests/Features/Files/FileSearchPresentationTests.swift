@@ -193,7 +193,7 @@ struct FileSearchPresentationTests
 				if mode == .content
 				{
 					let mask = try #require(findField(
-						"File mask",
+						"File types",
 						in: panel.view
 					))
 					let maskFrame = mask.convert(

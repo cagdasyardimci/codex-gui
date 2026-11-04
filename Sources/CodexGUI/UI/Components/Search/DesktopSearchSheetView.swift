@@ -68,8 +68,8 @@ final class DesktopSearchSheetView: NSView
 		switch presentation
 		{
 		case .commands:
-			explanationLabel.textColor = .secondaryLabelColor
-			explanationLabel.font = .systemFont(ofSize: 12)
+			explanationLabel.textColor = AppKitColorTokens.secondaryText
+			explanationLabel.setTypographyRole(TypographyTokens.Search.explanation)
 			explanationLabel.isHidden = true
 			closeButton.setAccessibilityLabel("Close command palette")
 			table.rowHeight = 42

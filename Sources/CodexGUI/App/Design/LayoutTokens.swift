@@ -495,7 +495,11 @@ enum LayoutTokens
 		static let height: CGFloat = 500
 		static let headerHeight: CGFloat = 57
 		static let footerHeight: CGFloat = 37
-		static let filenameRowHeight: CGFloat = 34
+		static let resultVerticalInset: CGFloat = 7
+		static var filenameRowHeight: CGFloat
+		{
+			TypographyTokens.Search.filename.lineHeight! + 2 * resultVerticalInset
+		}
 		static let contentRowHeight: CGFloat = 28.5
 		static let locationMaximumWidth: CGFloat = 250
 		static let resultsHorizontalInset: CGFloat = 4

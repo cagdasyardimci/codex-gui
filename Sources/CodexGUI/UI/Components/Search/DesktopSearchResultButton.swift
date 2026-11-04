@@ -17,6 +17,8 @@ final class DesktopSearchResultButton: DesktopLayerButton
 		context: String,
 		shortcut: String = "",
 		inlineContext: Bool = false,
+		query: String = "",
+		showsChatIcon: Bool = true,
 		target: AnyObject?,
 		action: Selector?
 	)
@@ -31,7 +33,9 @@ final class DesktopSearchResultButton: DesktopLayerButton
 				: .chat(
 					title: title,
 					context: context,
-					shortcut: shortcut
+					shortcut: shortcut,
+					query: query,
+					showsIcon: showsChatIcon
 				)),
 			target: target,
 			action: action

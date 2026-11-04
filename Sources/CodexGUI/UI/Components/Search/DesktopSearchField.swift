@@ -9,6 +9,7 @@ class DesktopSearchField: NSSearchField
 		case native
 		case viewer
 		case viewerOverlay
+		case chatQuery
 		case settingsFilled
 		case settingsOutlined
 		case settingsCatalog
@@ -30,6 +31,10 @@ class DesktopSearchField: NSSearchField
 			applyPresentation()
 		}
 	}
+	override var alignmentRectInsets: NSEdgeInsets
+	{
+		presentation == .chatQuery ? NSEdgeInsetsZero : super.alignmentRectInsets
+	}
 	var searchPrompt = "Search"
 	{
 		didSet
@@ -50,6 +55,7 @@ class DesktopSearchField: NSSearchField
 	}
 	private var nativeStyle: NativeStyle?
 	private var placeholderText = NSAttributedString(string: "Search")
+	private var colorObservation: ThemeColorObservation?
 
 	override init(frame frameRect: NSRect)
 	{
@@ -78,6 +84,10 @@ class DesktopSearchField: NSSearchField
 
 	private func preparePresentation()
 	{
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshThemeColors()
+		}
 		nativeStyle = NativeStyle(
 			font: font,
 			textColor: textColor,
@@ -88,6 +98,20 @@ class DesktopSearchField: NSSearchField
 			controlSize: controlSize
 		)
 		applyPresentation()
+	}
+
+	private func refreshThemeColors()
+	{
+		guard presentation != .native
+		else
+		{
+			return
+		}
+		textColor = presentation.isSettings
+			? AppKitColorTokens.settingsPrimaryText : AppKitColorTokens.primaryText
+		refreshPlaceholder()
+		styleCurrentEditor()
+		needsDisplay = true
 	}
 
 	required init?(coder: NSCoder)
@@ -155,7 +179,7 @@ class DesktopSearchField: NSSearchField
 		if presentation.isSettings
 		{
 			focusRingType = .none
-			font = AppKitFontResolver.font(TypographyTokens.Settings.search)
+			self.setTypographyRole(TypographyTokens.Settings.search)
 			textColor = AppKitColorTokens.settingsPrimaryText
 			searchCell?.searchButtonCell = nil
 			placeholderAttributedString = NSAttributedString(string: "")
@@ -163,8 +187,10 @@ class DesktopSearchField: NSSearchField
 		}
 		else
 		{
-			let overlay = presentation == .viewerOverlay
-			font = .systemFont(ofSize: overlay ? 14 : 13)
+			let overlay = presentation == .viewerOverlay || presentation == .chatQuery
+			self
+				.setTypographyRole(presentation == .chatQuery ? TypographyTokens.Search
+					.query : TypographyTokens.Search.input(overlay: overlay))
 			textColor = AppKitColorTokens.primaryText
 			focusRingType = overlay ? .none : .default
 			controlSize = overlay ? .regular : .large
@@ -199,6 +225,7 @@ class DesktopSearchField: NSSearchField
 		case .native: break
 		case .viewer: size.height = 28
 		case .viewerOverlay: size.height = 32
+		case .chatQuery: size.height = 46
 		case .settingsFilled, .settingsOutlined, .settingsCatalog: size.height = 36
 		}
 		return size
@@ -329,6 +356,7 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 	private struct EditorStyle
 	{
 		let insertionPointColor: NSColor
+		let selectedTextAttributes: [NSAttributedString.Key: Any]
 		let backgroundColor: NSColor
 		let drawsBackground: Bool
 		let inset: NSSize
@@ -348,6 +376,7 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 			return
 		}
 		editor.insertionPointColor = original.insertionPointColor
+		editor.selectedTextAttributes = original.selectedTextAttributes
 		editor.backgroundColor = original.backgroundColor
 		editor.drawsBackground = original.drawsBackground
 		editor.textContainerInset = original.inset
@@ -364,7 +393,8 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 		in controlView: NSView
 	)
 	{
-		guard (controlView as? DesktopSearchField)?.presentation.isSettings == true,
+		guard let field = controlView as? DesktopSearchField,
+				field.presentation != .native,
 				let editor = textObj as? NSTextView
 		else
 		{
@@ -374,6 +404,7 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 		{
 			originalEditorStyle = EditorStyle(
 				insertionPointColor: editor.insertionPointColor,
+				selectedTextAttributes: editor.selectedTextAttributes,
 				backgroundColor: editor.backgroundColor,
 				drawsBackground: editor.drawsBackground,
 				inset: editor.textContainerInset,
@@ -383,23 +414,36 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 		}
 		controlView.effectiveAppearance.performAsCurrentDrawingAppearance
 		{
-			editor.insertionPointColor = AppKitColorTokens.settingsPrimaryText
-			if (controlView as? DesktopSearchField)?.presentation == .settingsCatalog
+			let foreground = field.presentation.isSettings
+				? AppKitColorTokens.settingsPrimaryText : AppKitColorTokens.primaryText
+			editor.insertionPointColor = foreground
+			var selection = editor.selectedTextAttributes
+			selection[.backgroundColor] = AppKitColorTokens.selectionBackground
+			selection[.foregroundColor] = foreground
+			editor.selectedTextAttributes = selection
+			guard field.presentation.isSettings
+			else
+			{
+				return
+			}
+			if field.presentation == .settingsCatalog
 			{
 				editor.backgroundColor = AppKitColorTokens.settingsCatalogSearchSurface
 			}
-			else if (controlView as? DesktopSearchField)?.presentation == .settingsOutlined
+			else if field.presentation == .settingsOutlined
 			{
 				editor.backgroundColor = AppKitColorTokens.canvas
 			}
 			else
 			{
-				let surface = AppKitColorTokens.settingsSearchSurface
-				editor.backgroundColor = AppKitColorTokens.canvas.blended(
-					withFraction: surface.alphaComponent,
-					of: surface.withAlphaComponent(1)
-				) ?? AppKitColorTokens.canvas
+				editor.backgroundColor = AppKitColorTokens.settingsSearchEditorSurface
 			}
+		}
+		guard field.presentation.isSettings
+		else
+		{
+			editor.needsDisplay = true
+			return
 		}
 		// Match the composer's caret repainting without covering the custom empty prompt.
 		editor.drawsBackground = !editor.string.isEmpty
@@ -410,11 +454,7 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 
 	override func titleRect(forBounds rect: NSRect) -> NSRect
 	{
-		if isSettings
-		{
-			return searchTextRect(forBounds: rect)
-		}
-		return super.titleRect(forBounds: rect)
+		searchTextRect(forBounds: rect)
 	}
 
 	override func edit(
@@ -477,11 +517,6 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 		bounds: NSRect
 	)
 	{
-		guard isSettings
-		else
-		{
-			return
-		}
 		let textRect = searchTextRect(forBounds: bounds)
 		// A scrollable field editor lives inside a clip view. Move that viewport,
 		// leaving the editor's local origin and horizontal scrolling to AppKit.
@@ -521,12 +556,14 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 	{
 		if !isSettings
 		{
-			let font = font ?? NSFont.systemFont(ofSize: 13)
+			let font = font ?? AppKitFontResolver
+				.font(TypographyTokens.Search.input(overlay: false))
 			let height = min(
 				rect.height,
 				ceil(font.ascender - font.descender + font.leading)
 			)
-			let leading = searchButtonCell == nil ? rect.minX
+			let leading = searchButtonCell == nil ? rect
+				.minX + (presentation == .chatQuery ? 16 : 0)
 				: searchButtonRect(forBounds: rect).maxX + 6
 			let trailing = stringValue.isEmpty ? rect.maxX - 10
 				: cancelButtonRect(forBounds: rect).minX - 6

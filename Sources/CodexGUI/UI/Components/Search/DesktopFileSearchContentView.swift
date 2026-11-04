@@ -4,6 +4,9 @@ import AppKit
 @MainActor
 final class DesktopFileSearchContentView: NSView
 {
+	private var colorObservation: ThemeColorObservation?
+	private var typographyObservation: TypographyObservation?
+
 	enum Mode
 	{
 		case filename, content
@@ -25,19 +28,24 @@ final class DesktopFileSearchContentView: NSView
 		container.layer?.cornerRadius = ShapeTokens.FileSearch.panelRadius
 		container.layer?.masksToBounds = true
 		container.refreshBackground()
+		colorObservation = ThemeColorObservation(view: self)
+		{
+			[weak self] in
+			self?.refreshBackground()
+		}
 		queryField.placeholderString = mode == .filename
 			? "Open file by name" : "Search file contents"
 		queryField.setAccessibilityLabel(queryField.placeholderString ?? "Search files")
 		queryField.isBordered = false
 		queryField.drawsBackground = false
 		queryField.focusRingType = .none
-		queryField.font = AppKitFontResolver.font(TypographyTokens.FileSearch.query)
+		queryField.setTypographyRole(TypographyTokens.FileSearch.query)
 		maskField.placeholderString = "*.swift,*.md"
-		maskField.setAccessibilityLabel("File mask")
-		maskField.font = AppKitFontResolver.font(TypographyTokens.FileSearch.accessory)
+		maskField.setAccessibilityLabel("File types")
+		maskField.setTypographyRole(TypographyTokens.FileSearch.accessory)
 		maskField.bezelStyle = .roundedBezel
 		maskLabel.textColor = AppKitColorTokens.captionText
-		maskLabel.font = AppKitFontResolver.font(TypographyTokens.FileSearch.maskLabel)
+		maskLabel.setTypographyRole(TypographyTokens.FileSearch.maskLabel)
 		escapeButton.setAccessibilityLabel("Close search")
 
 		let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("result"))
@@ -48,6 +56,14 @@ final class DesktopFileSearchContentView: NSView
 		table.headerView = nil
 		table.rowHeight = mode == .content
 			? LayoutTokens.FileSearch.contentRowHeight : LayoutTokens.FileSearch.filenameRowHeight
+		typographyObservation = TypographyObservation(view: self)
+		{
+			[weak table] in
+			if mode == .filename
+			{
+				table?.rowHeight = LayoutTokens.FileSearch.filenameRowHeight
+			}
+		}
 		table.backgroundColor = .clear
 		table.intercellSpacing = NSSize(
 			width: 0,
@@ -182,7 +198,7 @@ final class DesktopFileSearchContentView: NSView
 	private func refreshBackground()
 	{
 		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
-			.textBackgroundColor,
+			AppKitColorTokens.editorSurface,
 			for: self
 		)
 	}

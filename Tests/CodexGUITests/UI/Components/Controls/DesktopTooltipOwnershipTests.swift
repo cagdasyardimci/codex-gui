@@ -117,7 +117,9 @@ struct DesktopTooltipOwnershipTests
 				.chat(
 					title: "Chat",
 					context: "Project",
-					shortcut: ""
+					shortcut: "",
+					query: "",
+					showsIcon: false
 				),
 			.content(
 				result: result,

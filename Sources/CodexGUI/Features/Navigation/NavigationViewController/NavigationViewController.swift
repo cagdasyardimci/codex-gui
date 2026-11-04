@@ -43,16 +43,13 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 	)
 	let newChatButton = SidebarNewChatButton()
 	let chatsTable = NavigationTasksTableView()
-	let searchField = ViewerSearchField()
+	let searchField = DesktopSearchField(presentation: .chatQuery)
 	let searchButton = SidebarIconButton(role: .search)
 	lazy var chatSearchController = ChatSearchController(searchField: searchField)
 	lazy var searchPopover = DesktopSearchPanel(
 		controller: chatSearchController,
 		placement: .centered,
-		size: NSSize(
-			width: 520,
-			height: 480
-		)
+		size: DesktopSearchOverlayView.chatPreferredSize
 	)
 	let sidebarOptionsButton = SidebarIconButton(role: .options)
 	let projectActionsButton = SidebarIconButton(role: .add)

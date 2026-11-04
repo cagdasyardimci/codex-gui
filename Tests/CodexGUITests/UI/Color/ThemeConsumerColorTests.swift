@@ -34,6 +34,53 @@ struct ThemeConsumerColorTests
 		}
 	}
 
+	@Test(.appKitIsolation) func retainedSearchSurfaceRefreshesWithoutReplacingInputs() throws
+	{
+		let query = NSTextField(string: "draft query")
+		let mask = NSTextField(string: "*.swift")
+		let panel = DesktopFileSearchContentView(
+			mode: .content,
+			queryField: query,
+			maskField: mask,
+			maskLabel: NSTextField(labelWithString: "Types"),
+			escapeButton: NSButton(),
+			keyboardHints: NSView(),
+			table: NSTableView()
+		)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 600,
+				height: 400
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		window.contentView = panel
+		defer
+		{
+			window.close()
+		}
+		for name in [NSAppearance.Name.aqua, .darkAqua, .aqua]
+		{
+			window.appearance = NSAppearance(named: name)
+			panel.layer?.backgroundColor = NSColor.magenta.cgColor
+			NotificationCenter.default.post(
+				name: ColorPreferences.didChange,
+				object: nil
+			)
+			#expect(panel.layer?.backgroundColor == AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.editorSurface,
+				for: panel
+			))
+			#expect(query.stringValue == "draft query")
+			#expect(mask.stringValue == "*.swift")
+		}
+	}
+
 	private func contrast(
 		_ first: NSColor,
 		_ second: NSColor

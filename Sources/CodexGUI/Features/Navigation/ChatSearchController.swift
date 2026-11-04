@@ -84,7 +84,8 @@ final class ChatSearchController: NSViewController
 			addResult(
 				title: "New chat",
 				context: "",
-				shortcut: "⌘N"
+				shortcut: "⌘N",
+				showsChatIcon: false
 			)
 		}
 		view.layoutSubtreeIfNeeded()
@@ -148,13 +149,16 @@ final class ChatSearchController: NSViewController
 	private func addResult(
 		title: String,
 		context: String,
-		shortcut: String
+		shortcut: String,
+		showsChatIcon: Bool = true
 	)
 	{
 		let button = DesktopSearchResultButton(
 			title: title,
 			context: context,
 			shortcut: shortcut,
+			query: showsChatIcon ? search.stringValue : "",
+			showsChatIcon: showsChatIcon,
 			target: self,
 			action: #selector(choose(_:))
 		)

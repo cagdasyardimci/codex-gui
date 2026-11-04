@@ -62,7 +62,7 @@ final class FileSearchPanel: NSViewController,
 	private let mode: Mode
 	private let queryField = FileSearchTextField()
 	private let maskField = FileSearchTextField()
-	private let maskLabel = FileSearchTextField(labelWithString: "File mask:")
+	private let maskLabel = FileSearchTextField(labelWithString: "File types")
 	private let escapeButton = DesktopKeycapButton(
 		title: "Esc",
 		target: nil,

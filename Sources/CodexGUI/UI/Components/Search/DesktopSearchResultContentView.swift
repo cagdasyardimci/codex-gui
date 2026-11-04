@@ -9,7 +9,9 @@ class DesktopSearchResultContentView: NSView
 		case chat(
 			title: String,
 			context: String,
-			shortcut: String
+			shortcut: String,
+			query: String,
+			showsIcon: Bool
 		)
 		case inlineFile(
 			title: String,
@@ -64,18 +66,23 @@ class DesktopSearchResultContentView: NSView
 			detailLabel = NSTextField(labelWithString: "")
 		}
 		super.init(frame: .zero)
+		primaryLabel.textColor = AppKitColorTokens.primaryText
 		switch presentation
 		{
 		case .chat(
 			let title,
 			let context,
-			let shortcut
+			let shortcut,
+			let query,
+			let showsIcon
 		):
 			configureInline(
 				title: title,
 				detail: context,
 				shortcut: shortcut,
-				inline: false
+				inline: false,
+				query: query,
+				showsIcon: showsIcon
 			)
 		case .inlineFile(
 			let title,
@@ -113,10 +120,11 @@ class DesktopSearchResultContentView: NSView
 			configureStacked(
 				title: title,
 				detail: detail,
-				titleSize: 13,
-				detailSize: 11
+				titleRole: TypographyTokens.Search.commandTitle,
+				detailRole: TypographyTokens.Search.commandDetail
 			)
-			primaryLabel.textColor = enabled ? .labelColor : .tertiaryLabelColor
+			primaryLabel.textColor = enabled ? AppKitColorTokens.primaryText : AppKitColorTokens
+				.mutedText
 			detailLabel.lineBreakMode = .byTruncatingMiddle
 			setAccessibilityLabel("\(title), \(detail)")
 		case .message(
@@ -127,8 +135,8 @@ class DesktopSearchResultContentView: NSView
 			configureStacked(
 				title: title,
 				detail: snippet,
-				titleSize: 12,
-				detailSize: nil
+				titleRole: TypographyTokens.Search.messageTitle,
+				detailRole: TypographyTokens.Search.messageSnippet
 			)
 			setAccessibilityLabel(accessibilityLabel)
 		case .content(
@@ -145,15 +153,18 @@ class DesktopSearchResultContentView: NSView
 		title: String,
 		detail: String,
 		shortcut: String,
-		inline: Bool
+		inline: Bool,
+		query: String = "",
+		showsIcon: Bool = false,
+		leadingImage: NSImage? = nil
 	)
 	{
 		primaryLabel.stringValue = title
-		primaryLabel.font = .systemFont(ofSize: 14)
+		primaryLabel.setTypographyRole(TypographyTokens.Search.resultTitle)
 		primaryLabel.lineBreakMode = .byTruncatingMiddle
 		detailLabel.stringValue = detail
-		detailLabel.font = .systemFont(ofSize: 13)
-		detailLabel.textColor = .secondaryLabelColor
+		detailLabel.setTypographyRole(TypographyTokens.Search.resultDetail)
+		detailLabel.textColor = AppKitColorTokens.secondaryText
 		detailLabel.lineBreakMode = .byTruncatingMiddle
 		for label in [primaryLabel, detailLabel]
 		{
@@ -172,9 +183,59 @@ class DesktopSearchResultContentView: NSView
 		)
 		keycap.isHidden = shortcut.isEmpty
 		let spacer = NSView()
+		var items: [NSView] = inline ? [primaryLabel, detailLabel, spacer, keycap]
+			: [primaryLabel, spacer, detailLabel, keycap]
+		if showsIcon || leadingImage != nil
+		{
+			let icon = NSImageView(image: leadingImage ?? NSImage(
+				systemSymbolName: "bubble.left",
+				accessibilityDescription: nil
+			) ?? NSImage())
+			icon.contentTintColor = AppKitColorTokens.secondaryText
+			icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+			icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+			items.insert(
+				icon,
+				at: 0
+			)
+		}
+		if !query.isEmpty
+		{
+			let text = NSMutableAttributedString(
+				string: title,
+				attributes: [
+					.font: AppKitFontResolver.font(TypographyTokens.Search.resultTitle),
+					.foregroundColor: AppKitColorTokens.secondaryText,
+				]
+			)
+			let source = title as NSString
+			var start = 0
+			while start < source.length
+			{
+				let match = source.range(
+					of: query,
+					options: [.caseInsensitive, .literal],
+					range: NSRange(
+						location: start,
+						length: source.length - start
+					)
+				)
+				guard match.location != NSNotFound, match.length > 0
+				else
+				{
+					break
+				}
+				text.addAttribute(
+					.foregroundColor,
+					value: AppKitColorTokens.primaryText,
+					range: match
+				)
+				start = NSMaxRange(match)
+			}
+			primaryLabel.attributedStringValue = text
+		}
 		let row = AppKitLayout.horizontalStack(
-			inline ? [primaryLabel, detailLabel, spacer, keycap]
-				: [primaryLabel, spacer, detailLabel, keycap],
+			items,
 			spacing: 8
 		)
 		installCentered(
@@ -204,8 +265,9 @@ class DesktopSearchResultContentView: NSView
 	)
 	{
 		primaryLabel.stringValue = title
-		primaryLabel.font = .systemFont(ofSize: 13)
-		primaryLabel.textColor = enabled ? .labelColor : .secondaryLabelColor
+		primaryLabel.setTypographyRole(TypographyTokens.Search.resultDetail)
+		primaryLabel.textColor = enabled ? AppKitColorTokens.primaryText : AppKitColorTokens
+			.secondaryText
 		if suffix.isEmpty
 		{
 			primaryLabel.setContentCompressionResistancePriority(
@@ -218,8 +280,8 @@ class DesktopSearchResultContentView: NSView
 			primaryLabel.lineBreakMode = .byTruncatingTail
 		}
 		detailLabel.stringValue = detail
-		detailLabel.font = .systemFont(ofSize: 13)
-		detailLabel.textColor = .tertiaryLabelColor
+		detailLabel.setTypographyRole(TypographyTokens.Search.resultDetail)
+		detailLabel.textColor = AppKitColorTokens.mutedText
 		detailLabel.lineBreakMode = .byTruncatingTail
 		detailLabel.setContentCompressionResistancePriority(
 			.defaultLow,
@@ -231,7 +293,7 @@ class DesktopSearchResultContentView: NSView
 		)
 		if let icon = leadingAccessory as? NSImageView
 		{
-			icon.contentTintColor = .secondaryLabelColor
+			icon.contentTintColor = AppKitColorTokens.secondaryText
 		}
 		NSLayoutConstraint.activate([
 			leadingAccessory.widthAnchor.constraint(equalToConstant: 16),
@@ -245,8 +307,8 @@ class DesktopSearchResultContentView: NSView
 		if !suffix.isEmpty
 		{
 			let scope = NSTextField(labelWithString: suffix)
-			scope.font = .systemFont(ofSize: 12)
-			scope.textColor = .secondaryLabelColor
+			scope.setTypographyRole(TypographyTokens.Search.resultSection)
+			scope.textColor = AppKitColorTokens.secondaryText
 			scope.setContentCompressionResistancePriority(
 				.required,
 				for: .horizontal
@@ -259,7 +321,7 @@ class DesktopSearchResultContentView: NSView
 				systemSymbolName: "chevron.right",
 				accessibilityDescription: nil
 			) ?? NSImage())
-			chevron.contentTintColor = .tertiaryLabelColor
+			chevron.contentTintColor = AppKitColorTokens.mutedText
 			NSLayoutConstraint.activate([
 				chevron.widthAnchor.constraint(equalToConstant: 10),
 				chevron.heightAnchor.constraint(equalToConstant: 12),
@@ -280,57 +342,14 @@ class DesktopSearchResultContentView: NSView
 	private func configureFilename(_ relativePath: String)
 	{
 		let path = relativePath as NSString
-		primaryLabel.stringValue = path.lastPathComponent
 		let directory = path.deletingLastPathComponent
-		detailLabel.stringValue = directory == "." || directory.isEmpty ? "Top level" : directory
-		primaryLabel.font = .systemFont(
-			ofSize: 12,
-			weight: .medium
+		configureInline(
+			title: path.lastPathComponent,
+			detail: directory == "." || directory.isEmpty ? "Top level" : directory,
+			shortcut: "",
+			inline: false,
+			leadingImage: WorkspaceFileIcon.image(relativePath: relativePath)
 		)
-		detailLabel.font = .systemFont(ofSize: 11)
-		detailLabel.textColor = .secondaryLabelColor
-		for label in [primaryLabel, detailLabel]
-		{
-			label.lineBreakMode = .byTruncatingMiddle
-			label.setContentCompressionResistancePriority(
-				.defaultLow,
-				for: .horizontal
-			)
-		}
-		let icon = NSImageView(image: WorkspaceFileIcon.image(relativePath: relativePath))
-		icon.imageScaling = .scaleProportionallyDown
-		icon.setContentHuggingPriority(
-			.required,
-			for: .horizontal
-		)
-		icon.setContentCompressionResistancePriority(
-			.required,
-			for: .horizontal
-		)
-		let labels = AppKitLayout.verticalStack(
-			[primaryLabel, detailLabel],
-			spacing: 1
-		)
-		labels.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		let row = AppKitLayout.horizontalStack(
-			[icon, labels],
-			spacing: 8
-		)
-		installCentered(
-			row,
-			inset: 8
-		)
-		NSLayoutConstraint.activate([
-			icon.widthAnchor.constraint(equalToConstant: 16),
-			icon.heightAnchor.constraint(equalToConstant: 16),
-			labels.widthAnchor.constraint(
-				lessThanOrEqualTo: row.widthAnchor,
-				constant: -24
-			),
-		])
 		setAccessibilityLabel(relativePath)
 		toolTip = relativePath
 	}
@@ -338,22 +357,16 @@ class DesktopSearchResultContentView: NSView
 	private func configureStacked(
 		title: String,
 		detail: String,
-		titleSize: CGFloat,
-		detailSize: CGFloat?
+		titleRole: TypographyTokens.Role,
+		detailRole: TypographyTokens.Role
 	)
 	{
 		primaryLabel.stringValue = title
-		primaryLabel.font = .systemFont(
-			ofSize: titleSize,
-			weight: .medium
-		)
+		primaryLabel.setTypographyRole(titleRole)
 		primaryLabel.lineBreakMode = .byTruncatingTail
 		detailLabel.stringValue = detail
-		if let detailSize
-		{
-			detailLabel.font = .systemFont(ofSize: detailSize)
-		}
-		detailLabel.textColor = .secondaryLabelColor
+		detailLabel.setTypographyRole(detailRole)
+		detailLabel.textColor = AppKitColorTokens.secondaryText
 		detailLabel.lineBreakMode = .byTruncatingTail
 		AppKitLayout.pin(
 			AppKitLayout.verticalStack(
@@ -410,7 +423,7 @@ class DesktopSearchResultContentView: NSView
 			.defaultLow,
 			for: .horizontal
 		)
-		detailLabel.font = AppKitFontResolver.font(TypographyTokens.FileSearch.location)
+		detailLabel.setTypographyRole(TypographyTokens.FileSearch.location)
 		detailLabel.lineBreakMode = .byTruncatingMiddle
 		detailLabel.maximumNumberOfLines = 1
 		detailLabel.toolTip = "\(result.location.relativePath):\(result.lineNumber)"
@@ -422,14 +435,28 @@ class DesktopSearchResultContentView: NSView
 			.defaultHigh,
 			for: .horizontal
 		)
+		let icon = NSImageView(image: NSImage(
+			systemSymbolName: "doc",
+			accessibilityDescription: nil
+		) ?? NSImage())
+		icon.contentTintColor = AppKitColorTokens.secondaryText
+		icon.translatesAutoresizingMaskIntoConstraints = false
+		addSubview(icon)
 		for label in [primaryLabel, detailLabel]
 		{
 			label.translatesAutoresizingMaskIntoConstraints = false
 			addSubview(label)
 		}
 		NSLayoutConstraint.activate([
-			primaryLabel.leadingAnchor.constraint(
+			icon.leadingAnchor.constraint(
 				equalTo: leadingAnchor,
+				constant: 8
+			),
+			icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+			icon.widthAnchor.constraint(equalToConstant: 16),
+			icon.heightAnchor.constraint(equalToConstant: 16),
+			primaryLabel.leadingAnchor.constraint(
+				equalTo: icon.trailingAnchor,
 				constant: 8
 			),
 			primaryLabel.trailingAnchor.constraint(
@@ -527,48 +554,7 @@ class DesktopSearchResultContentView: NSView
 		availableWidth: CGFloat
 	) -> String
 	{
-		let font = AppKitFontResolver.font(TypographyTokens.FileSearch.source)
-		let prefix = text.prefix(256)
-		if prefix.endIndex == text.endIndex,
-			String(prefix).size(withAttributes: [.font: font]).width <= availableWidth
-		{
-			return text
-		}
-		guard !query.isEmpty
-		else
-		{
-			return clippedPrefix(text)
-		}
-		let source = text as NSString
-		let match = source.range(
-			of: query,
-			options: [.caseInsensitive, .literal]
-		)
-		guard let range = Range(
-			match,
-			in: text
-		)
-		else
-		{
-			return clippedPrefix(text)
-		}
-		let context = text[..<range.lowerBound].suffix(32)
-		var before = String(context)
-		let budget = availableWidth / 3
-		var leading = context.startIndex == text.startIndex ? "" : "…"
-		while !before.isEmpty,
-				(leading + before).size(withAttributes: [.font: font]).width > budget
-		{
-			before.removeFirst()
-			leading = "…"
-		}
-		if (leading + before).size(withAttributes: [.font: font]).width > budget
-		{
-			leading = ""
-		}
-		let after = text[range.lowerBound...].prefix(224)
-		let trailing = after.endIndex == text.endIndex ? "" : "…"
-		return leading + before + String(after) + trailing
+		clippedPrefix(text)
 	}
 
 	private static func clippedPrefix(_ text: String) -> String

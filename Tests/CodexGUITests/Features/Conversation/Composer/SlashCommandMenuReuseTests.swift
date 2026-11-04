@@ -99,7 +99,15 @@ struct SlashCommandMenuReuseTests
 		))
 		#expect(unavailable !== available)
 		#expect(unavailable.toolTip?.utf8.elementsEqual("Wait for café.".utf8) == true)
-		#expect(title(in: unavailable)?.textColor == .secondaryLabelColor)
+		let unavailableColor = try #require(title(in: unavailable)?.textColor)
+		#expect(AppKitColorResolution.resolvedCGColor(
+			unavailableColor,
+			for: unavailable
+		).components
+			== AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.secondaryText,
+				for: unavailable
+			).components)
 		reason = "Wait for cafe\u{0301}."
 		menu.render(prefix: "sta")
 		let exact = try #require(table.view(
@@ -119,7 +127,16 @@ struct SlashCommandMenuReuseTests
 			row: 0,
 			makeIfNecessary: true
 		))
-		#expect(title(in: restored)?.textColor == .labelColor)
+		let restoredColor = try #require(title(in: restored)?.textColor)
+		#expect(AppKitColorResolution.resolvedCGColor(
+			restoredColor,
+			for: restored
+		).components
+			== AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.primaryText,
+				for: restored
+			)
+			.components)
 	}
 
 	@Test func exactSkillTextAndPathsRefreshWhileRemovalClearsTheSelection() throws

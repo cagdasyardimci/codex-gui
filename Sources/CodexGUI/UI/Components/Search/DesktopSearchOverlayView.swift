@@ -13,6 +13,10 @@ final class DesktopSearchOverlayView: NSView
 		case section, status, nativeStatus
 	}
 	let scrollView: NSScrollView
+	static let chatPreferredSize = NSSize(
+		width: 768,
+		height: 504
+	)
 	private let presentation: Presentation
 
 	init(
@@ -48,13 +52,12 @@ final class DesktopSearchOverlayView: NSView
 			}
 		}
 		super.init(frame: .zero)
-		let inset: CGFloat = presentation == .chats ? 12 : 8
-		let spacing: CGFloat = presentation == .chats ? 12 : (presentation == .changedFiles ? 8 : 6)
+		let spacing: CGFloat = presentation == .chats ? 0 : (presentation == .changedFiles ? 8 : 6)
 		let header: NSView
 		if presentation == .changedFiles
 		{
 			let icon = NSImageView(image: DesktopIcons.image(.search))
-			icon.contentTintColor = .secondaryLabelColor
+			icon.contentTintColor = AppKitColorTokens.secondaryText
 			icon.imageScaling = .scaleProportionallyDown
 			icon.setAccessibilityElement(false)
 			header = AppKitLayout.horizontalStack(
@@ -68,13 +71,28 @@ final class DesktopSearchOverlayView: NSView
 				search.heightAnchor.constraint(equalToConstant: 20),
 			])
 		}
+		else if presentation == .chats
+		{
+			header = NSView()
+			AppKitLayout.pin(
+				search,
+				to: header,
+				inset: 0
+			)
+			search.heightAnchor.constraint(equalToConstant: 46).isActive = true
+			let divider = DesktopSurface(AppKitColorTokens.subtleEdge)
+			divider.translatesAutoresizingMaskIntoConstraints = false
+			header.addSubview(divider)
+			NSLayoutConstraint.activate([
+				divider.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+				divider.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+				divider.bottomAnchor.constraint(equalTo: header.bottomAnchor),
+				divider.heightAnchor.constraint(equalToConstant: 1)
+			])
+		}
 		else
 		{
 			header = search
-			if presentation == .chats
-			{
-				search.heightAnchor.constraint(equalToConstant: 32).isActive = true
-			}
 		}
 		let layout = AppKitLayout.verticalStack(
 			[header, scrollView],
@@ -83,7 +101,18 @@ final class DesktopSearchOverlayView: NSView
 		AppKitLayout.pin(
 			layout,
 			to: self,
-			inset: inset
+			insets: presentation == .chats ? NSEdgeInsets(
+				top: 5,
+				left: 1,
+				bottom: 4,
+				right: 1
+			) :
+				NSEdgeInsets(
+					top: 8,
+					left: 8,
+					bottom: 8,
+					right: 8
+				)
 		)
 		NSLayoutConstraint.activate([
 			header.widthAnchor.constraint(equalTo: layout.widthAnchor),
@@ -105,14 +134,14 @@ final class DesktopSearchOverlayView: NSView
 		let label = NSTextField(labelWithString: text)
 		if presentation != .nativeStatus
 		{
-			label.textColor = .secondaryLabelColor
+			label.textColor = AppKitColorTokens.secondaryText
 		}
 		guard presentation == .section
 		else
 		{
 			return label
 		}
-		label.font = .systemFont(ofSize: 12)
+		label.setTypographyRole(TypographyTokens.Search.section)
 		let container = NSView()
 		AppKitLayout.pin(
 			label,

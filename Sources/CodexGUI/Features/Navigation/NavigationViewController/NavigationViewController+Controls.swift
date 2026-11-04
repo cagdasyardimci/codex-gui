@@ -133,7 +133,6 @@ extension NavigationViewController
 
 	func configureSearchPopover()
 	{
-		searchField.presentation = .viewerOverlay
 		searchField.configureSearch(
 			placeholder: "Search chats",
 			accessibilityLabel: "Search conversation titles and previews",
