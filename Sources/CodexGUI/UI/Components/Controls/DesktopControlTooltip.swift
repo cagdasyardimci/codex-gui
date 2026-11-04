@@ -23,6 +23,10 @@ final class DesktopControlTooltip: NSObject
 	func bind(to control: NSControl)
 	{
 		self.control = control
+		presentation.preservesFocusedEscape =
+		{
+			[weak self] in self?.focused == true
+		}
 	}
 
 	func updateTracking(in control: NSControl)
@@ -59,7 +63,7 @@ final class DesktopControlTooltip: NSObject
 		in control: NSControl
 	)
 	{
-		self.control = control
+		bind(to: control)
 		self.focused = focused
 		if focused
 		{

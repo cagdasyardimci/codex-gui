@@ -25,6 +25,7 @@ final class DesktopTooltip
 	var placement: Placement = .above
 	var anchorGap: CGFloat?
 	var shortcut: String?
+	var preservesFocusedEscape: (() -> Bool)?
 	private let lifetime = DesktopPanelLifetime()
 
 	init(style: Style = .standard)
@@ -170,11 +171,10 @@ final class DesktopTooltip
 				[weak self, weak parent] event in
 				if event.window === parent
 				{
-					let dismissesWithEscape = event.type == .keyDown && event.keyCode == 53
-					self?.dismiss()
-					if dismissesWithEscape
+					let isEscape = event.type == .keyDown && event.keyCode == 53
+					if !isEscape || self?.preservesFocusedEscape?() != true
 					{
-						return nil
+						self?.dismiss()
 					}
 				}
 				return event
@@ -250,6 +250,19 @@ final class DesktopTooltipView: DesktopSurface
 	private let style: DesktopTooltip.Style
 	let shortcutBadge: DesktopSurface?
 	private let shortcutLabel: NSTextField?
+	private var themeObservation: ThemeColorObservation?
+	private static var controlSurface: NSColor
+	{
+		AppKitColorTokens.tooltipCapsule
+	}
+	private static var controlBorder: NSColor
+	{
+		AppKitColorTokens.tooltipBorder
+	}
+	private static var controlKeycap: NSColor
+	{
+		AppKitColorTokens.tooltipKeycap
+	}
 
 	init(
 		text: String,
@@ -261,31 +274,52 @@ final class DesktopTooltipView: DesktopSurface
 		if style.isCapsule, let shortcut, !shortcut.isEmpty
 		{
 			shortcutBadge = DesktopSurface(
-				.white.withAlphaComponent(0.25),
-				cornerRadius: 12.5
+				style == .control ? Self.controlKeycap : AppKitColorTokens.tooltipKeycap,
+				cornerRadius: 12.5,
+				colorProvider: style == .control ?
+				{
+					Self.controlKeycap
+				} : nil
 			)
-			shortcutLabel = DesktopTextField(labelWithString: shortcut)
+			shortcutLabel = DesktopLineBoxLabel(
+				shortcut,
+				role: style.typography
+			)
 		}
 		else
 		{
 			shortcutBadge = nil
 			shortcutLabel = nil
 		}
-		label = style.isCapsule ? DesktopTextField(wrappingLabelWithString: text) :
+		label = style.isCapsule ? DesktopLineBoxLabel(
+			text,
+			role: style.typography
+		) :
 			NSTextField(wrappingLabelWithString: text)
 		super.init(
-			style.isCapsule ? AppKitColorTokens.tooltipCapsule : AppKitColorTokens.inspector,
+			style == .control ? Self.controlSurface : style.isCapsule ? AppKitColorTokens
+				.tooltipCapsule : AppKitColorTokens.inspector,
 			cornerRadius: style.isCapsule ? ShapeTokens.Tooltip.capsuleRadius : 12,
 			cornerCurve: style.isCapsule ? .superellipse(1.5) : .circular,
 			bordered: true,
-			borderColor: style.isCapsule ? NSColor.white.withAlphaComponent(0.05) : nil,
+			borderColor: style == .control ? Self.controlBorder : style
+				.isCapsule ? AppKitColorTokens.tooltipBorder : nil,
+			colorProvider: style == .control ?
+			{
+				Self.controlSurface
+			} : nil,
+			borderColorProvider: style == .control ?
+			{
+				Self.controlBorder
+			} : nil,
 			shadows: style.isCapsule ? [ShadowTokens.tooltipCapsule] : []
 		)
-		label.font = style.isCapsule ? AppKitFontResolver
-			.font(style.typography) : .systemFont(ofSize: 12)
-		label.textColor = style.isCapsule ? .white : .labelColor
+		label.setTypographyRole(style.isCapsule ? style.typography : TypographyTokens.UI.caption)
+		label.textColor = style.isCapsule ? AppKitColorTokens.tooltipText : AppKitColorTokens
+			.primaryText
 		if style.isCapsule
 		{
+			label.alignment = .center
 			let typography = style.typography
 			var attributes = AppKitFontResolver.textAttributes(
 				typography,
@@ -296,7 +330,7 @@ final class DesktopTooltipView: DesktopSurface
 			paragraph.minimumLineHeight = typography.lineHeight!
 			paragraph.maximumLineHeight = typography.lineHeight!
 			attributes[.paragraphStyle] = paragraph
-			attributes[.foregroundColor] = NSColor.white
+			attributes[.foregroundColor] = AppKitColorTokens.tooltipText
 			label.attributedStringValue = NSAttributedString(
 				string: text,
 				attributes: attributes
@@ -308,15 +342,16 @@ final class DesktopTooltipView: DesktopSurface
 		addSubview(label)
 		if let shortcutBadge, let shortcutLabel
 		{
+			shortcutLabel.alignment = .center
 			shortcutLabel.font = label.font
-			shortcutLabel.textColor = .white
+			shortcutLabel.textColor = AppKitColorTokens.tooltipText
 			shortcutLabel.attributedStringValue = NSAttributedString(
 				string: shortcutLabel.stringValue,
 				attributes: AppKitFontResolver.textAttributes(
 					style.typography,
 					font: label.font
 				)
-				.merging([.foregroundColor: NSColor.white])
+				.merging([.foregroundColor: AppKitColorTokens.tooltipText])
 				{
 					_, new in new
 				}
@@ -324,6 +359,43 @@ final class DesktopTooltipView: DesktopSurface
 			shortcutBadge.addSubview(shortcutLabel)
 			addSubview(shortcutBadge)
 		}
+		themeObservation = ThemeColorObservation(view: self)
+		{
+			[weak self] in self?.refreshControlColors()
+		}
+		refreshControlColors()
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		refreshControlColors()
+	}
+
+	private func refreshControlColors()
+	{
+		let foreground = style.isCapsule ? AppKitColorTokens.tooltipText : AppKitColorTokens
+			.primaryText
+		for field in [label, shortcutLabel].compactMap(
+			{
+				$0
+			}
+		)
+		{
+			let text = NSMutableAttributedString(attributedString: field.attributedStringValue)
+			text.addAttribute(
+				.foregroundColor,
+				value: foreground,
+				range: NSRange(
+					location: 0,
+					length: text.length
+				)
+			)
+			field.attributedStringValue = text
+			field.textColor = foreground
+		}
+		needsDisplay = true
+		shortcutBadge?.needsDisplay = true
 	}
 
 	required init?(coder: NSCoder)
@@ -342,7 +414,10 @@ final class DesktopTooltipView: DesktopSurface
 			{
 				Self.alignmentSize(of: $0).width + 12
 			} ?? 0
-			let badgeSpace: CGFloat = shortcutBadge == nil ? 0 : badgeWidth + 8 - 7
+			let shortcutGap = LayoutTokens.Tooltip.Capsule.shortcutGap
+			let trailingInset = LayoutTokens.Tooltip.Capsule.shortcutTrailingInset
+			let badgeSpace: CGFloat = shortcutBadge == nil ? 0 :
+				badgeWidth + shortcutGap + trailingInset - horizontalInset
 			let textWidth = min(
 				natural,
 				max(
@@ -374,7 +449,7 @@ final class DesktopTooltipView: DesktopSurface
 			if let shortcutBadge, let shortcutLabel
 			{
 				shortcutBadge.frame = NSRect(
-					x: horizontalInset + textWidth + 8,
+					x: horizontalInset + textWidth + shortcutGap,
 					y: size.height / 2 - 9,
 					width: badgeWidth,
 					height: 18
@@ -424,6 +499,10 @@ final class DesktopTooltipView: DesktopSurface
 		maximumWidth: CGFloat = .greatestFiniteMagnitude
 	) -> NSSize
 	{
+		if let label = label as? DesktopLineBoxLabel
+		{
+			return label.measuredSize(maximumWidth: maximumWidth)
+		}
 		let insets = label.alignmentRectInsets
 		let cellWidth = maximumWidth == .greatestFiniteMagnitude ? maximumWidth :
 			maximumWidth + insets.left + insets.right

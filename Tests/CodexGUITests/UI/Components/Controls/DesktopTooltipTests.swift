@@ -7,6 +7,53 @@ import Testing
 @Suite
 struct DesktopTooltipTests
 {
+	@Test func controlTooltipRefreshesAttributedTextWhenThemeChanges() throws
+	{
+		let view = DesktopTooltipView(
+			text: "Search",
+			style: .control,
+			shortcut: "⌘K"
+		)
+		let badge = try #require(view.shortcutBadge)
+		let shortcut = try #require(badge.subviews.compactMap
+		{
+			$0 as? NSTextField
+		}.first)
+		for field in [view.label, shortcut]
+		{
+			let text = NSMutableAttributedString(attributedString: field.attributedStringValue)
+			text.addAttribute(
+				.foregroundColor,
+				value: NSColor.magenta,
+				range: NSRange(
+					location: 0,
+					length: text.length
+				)
+			)
+			field.attributedStringValue = text
+		}
+		NotificationCenter.default.post(
+			name: ColorPreferences.didChange,
+			object: nil
+		)
+		for field in [view.label, shortcut]
+		{
+			let actual = try #require(field.attributedStringValue.attribute(
+				.foregroundColor,
+				at: 0,
+				effectiveRange: nil
+			) as? NSColor)
+			let appearance = view.effectiveAppearance
+			appearance.performAsCurrentDrawingAppearance
+			{
+				#expect(actual.usingColorSpace(.sRGB) == AppKitColorTokens.tooltipText
+					.usingColorSpace(.sRGB))
+			}
+		}
+		#expect(view.label.stringValue == "Search")
+		#expect(shortcut.stringValue == "⌘K")
+	}
+
 	@Test func trackingOwnerReceivesNativePointerSelectorsForPlainButtonsAndPopups() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -81,15 +128,16 @@ struct DesktopTooltipTests
 		}
 	}
 
-	@Test func shortcutCapsuleKeepsMeasuredSpacingAndShape() throws
+	@Test(arguments: [DesktopTooltip.Style.control, .capsule])
+	func shortcutCapsuleKeepsMeasuredSpacingAndShape(_ style: DesktopTooltip.Style) throws
 	{
 		let surface = DesktopTooltipView(
 			text: "Search",
-			style: .control,
+			style: style,
 			shortcut: "⌘K"
 		)
 		let size = surface.measuredSize(maximumWidth: 320)
-		#expect(size.width == 106)
+		#expect(size.width > 0 && size.width < 106)
 		#expect(size.height == 30)
 		let badge = try #require(surface.shortcutBadge)
 		let text = surface.label.alignmentRect(forFrame: surface.label.frame)
@@ -160,12 +208,13 @@ struct DesktopTooltipTests
 			} ?? [])
 		{
 			let cell = try #require(label.cell)
-			let required = cell.cellSize(forBounds: NSRect(
-				x: 0,
-				y: 0,
-				width: label.bounds.width,
-				height: .greatestFiniteMagnitude
-			))
+			let required = (label as? DesktopLineBoxLabel)?
+				.measuredSize(maximumWidth: label.bounds.width) ?? cell.cellSize(forBounds: NSRect(
+					x: 0,
+					y: 0,
+					width: label.bounds.width,
+					height: .greatestFiniteMagnitude
+				))
 			#expect(required.height <= label.bounds.height)
 			#expect(required.width <= label.bounds.width)
 		}

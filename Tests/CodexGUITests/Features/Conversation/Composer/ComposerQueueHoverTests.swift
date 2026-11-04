@@ -135,14 +135,12 @@ struct ComposerQueueHoverTests
 				}.first)
 			#expect(surface.label.stringValue == "Submit without interrupting the model")
 			#expect(surface.label.font?.pointSize == 13)
-			#expect(surface.bounds.width == 257)
+			let label = try #require(surface.label as? DesktopLineBoxLabel)
+			let natural = label.measuredSize(maximumWidth: .greatestFiniteMagnitude)
+			#expect(abs(surface.bounds.width - natural.width - 2 * LayoutTokens.Tooltip.Capsule
+					.horizontalInset) < 0.01)
 			#expect(surface.bounds.height == 30)
-			let requiredText = try #require(surface.label.cell).cellSize(forBounds: NSRect(
-				x: 0,
-				y: 0,
-				width: surface.label.bounds.width,
-				height: .greatestFiniteMagnitude
-			))
+			let requiredText = label.measuredSize(maximumWidth: surface.label.bounds.width)
 			#expect(requiredText.height <= surface.label.bounds.height)
 			let anchor = window.convertToScreen(row.steer.convert(
 				row.steer.bounds,

@@ -8,6 +8,8 @@ extension LayoutTokens
 		{
 			static let maximumWidth: CGFloat = 320
 			static let horizontalInset: CGFloat = 13
+			static let shortcutGap: CGFloat = 8
+			static let shortcutTrailingInset: CGFloat = 6
 			static let verticalInset: CGFloat = 6
 			static let anchorGap: CGFloat = 2
 			static let shadowOutset: CGFloat = 30
