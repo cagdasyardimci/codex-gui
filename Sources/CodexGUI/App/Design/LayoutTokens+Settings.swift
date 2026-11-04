@@ -4,6 +4,8 @@ extension LayoutTokens
 {
 	enum Settings
 	{
+		static let sizeInputWidth: CGFloat = 64
+		static let sizeInputHeight: CGFloat = 28
 		static let sidebarWidth: CGFloat = 240.703125
 		static let sidebarRowHeight: CGFloat = 30
 		static let sidebarGutter: CGFloat = 8

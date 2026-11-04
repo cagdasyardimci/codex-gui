@@ -6,6 +6,90 @@ import Testing
 @MainActor
 struct SettingsFormTextFieldTests
 {
+	@Test(.appKitIsolation)
+	func hexFieldSelectionUsesThemeAndRestoresSharedEditor() throws
+	{
+		_ = NSApplication.shared
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 100,
+				y: 100,
+				width: 320,
+				height: 140
+			),
+			styleMask: [.titled],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		let previous = NSTextField(frame: NSRect(
+			x: 20,
+			y: 20,
+			width: 260,
+			height: 28
+		))
+		let field = SettingsFormTextField(
+			frame: NSRect(
+				x: 20,
+				y: 70,
+				width: 260,
+				height: 36
+			),
+			presentation: .outlined
+		)
+		field.stringValue = "#FF5C5C"
+		window.contentView?.addSubview(previous)
+		window.contentView?.addSubview(field)
+		defer
+		{
+			window.close()
+		}
+		window.makeKeyAndOrderFront(nil)
+		#expect(window.makeFirstResponder(previous))
+		let shared = try #require(previous.currentEditor() as? NSTextView)
+		let originalSelection = shared.selectedTextAttributes
+		let originalCaret = shared.insertionPointColor
+		#expect(window.makeFirstResponder(field))
+		let editor = try #require(field.currentEditor() as? NSTextView)
+		#expect(editor === shared)
+		editor.setSelectedRange(NSRange(
+			location: 0,
+			length: 7
+		))
+		let actual = try #require(editor.selectedTextAttributes[.backgroundColor] as? NSColor)
+		let expected = AppKitColorTokens.paletteColor
+		{
+			$0.selectionBackground
+		}
+		var resolvedActual: NSColor?
+		var resolvedExpected: NSColor?
+		window.effectiveAppearance.performAsCurrentDrawingAppearance
+		{
+			resolvedActual = actual.usingColorSpace(.sRGB)
+			resolvedExpected = expected.usingColorSpace(.sRGB)
+		}
+		let actualColor = try #require(resolvedActual)
+		let expectedColor = try #require(resolvedExpected)
+		#expect(maxChannelDelta(
+			actualColor,
+			expectedColor
+		) < 0.001)
+		#expect(abs(actualColor.alphaComponent - expectedColor.alphaComponent) < 0.001)
+		NotificationCenter.default.post(
+			name: ColorPreferences.didChange,
+			object: nil
+		)
+		#expect(field.stringValue == "#FF5C5C")
+		#expect(editor.selectedRange() == NSRange(
+			location: 0,
+			length: 7
+		))
+		#expect(window.makeFirstResponder(nil))
+		#expect(shared.insertionPointColor == originalCaret)
+		#expect(NSDictionary(dictionary: shared.selectedTextAttributes)
+			.isEqual(to: originalSelection))
+	}
+
 	@Test func attachedFieldUsesThemeFocusAndValidationBorders() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -161,6 +245,17 @@ struct SettingsFormTextFieldTests
 
 	private func borderPixel(of field: SettingsFormTextField) throws -> NSColor
 	{
+		try pixel(
+			of: field,
+			y: 0
+		)
+	}
+
+	private func pixel(
+		of field: SettingsFormTextField,
+		y: Int
+	) throws -> NSColor
+	{
 		let bitmap = try #require(field.bitmapImageRepForCachingDisplay(in: field.bounds))
 		field.cacheDisplay(
 			in: field.bounds,
@@ -170,10 +265,12 @@ struct SettingsFormTextFieldTests
 		let x = Int(field.bounds.midX * scale)
 		return try #require(bitmap.colorAt(
 			x: x,
-			y: 0
+			y: y
 		)?.usingColorSpace(.deviceRGB))
 	}
 
+	// Antialiasing and the translucent surface alter rendered channel values.
+	// Check the role's distinct channel ordering rather than assuming opacity.
 	private func preservesColorOrdering(
 		_ pixel: NSColor,
 		of role: NSColor

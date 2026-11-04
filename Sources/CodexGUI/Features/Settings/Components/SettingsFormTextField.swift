@@ -6,12 +6,15 @@ final class SettingsFormTextField: NSTextField
 {
 	enum Presentation
 	{
+		case compact
 		case outlined
 		case dialog
 		case nativeRounded
 	}
 
 	private let presentation: Presentation
+	private let leadingIcon: DesktopIcon?
+	private var colorObservation: ThemeColorObservation?
 
 	var hasValidationError = false
 	{
@@ -29,38 +32,68 @@ final class SettingsFormTextField: NSTextField
 		)
 	}
 
-	convenience init(presentation: Presentation)
+	convenience init(
+		presentation: Presentation,
+		leadingIcon: DesktopIcon? = nil
+	)
 	{
 		self.init(
 			frame: .zero,
-			presentation: presentation
+			presentation: presentation,
+			leadingIcon: leadingIcon
 		)
 	}
 
 	init(
 		frame frameRect: NSRect,
-		presentation: Presentation
+		presentation: Presentation,
+		leadingIcon: DesktopIcon? = nil
 	)
 	{
 		self.presentation = presentation
+		self.leadingIcon = leadingIcon
 		super.init(frame: frameRect)
-		heightAnchor.constraint(equalToConstant: 36).isActive = true
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshThemeColors()
+		}
+		heightAnchor.constraint(equalToConstant: fieldHeight).isActive = true
 		if presentation == .nativeRounded
 		{
-			font = AppKitFontResolver.font(TypographyTokens.Connections.body)
+			self.setTypographyRole(TypographyTokens.Connections.body)
 			bezelStyle = .roundedBezel
 			usesSingleLineMode = true
 			return
 		}
-		cell = SettingsFormTextFieldCell(textCell: "")
+		let fieldCell = SettingsFormTextFieldCell(textCell: "")
+		fieldCell.hasLeadingIcon = leadingIcon != nil
+		fieldCell.isCompact = presentation == .compact
+		fieldCell.typography = typographyRole
+		cell = fieldCell
+		usesSingleLineMode = true
 		isEditable = true
 		isSelectable = true
 		isBezeled = false
 		isBordered = false
 		drawsBackground = false
 		focusRingType = .none
-		font = .systemFont(ofSize: presentation == .dialog ? 14 : 13)
-		textColor = presentation == .dialog ? .labelColor : AppKitColorTokens.settingsPrimaryText
+		self.setTypographyRole(
+			typographyRole,
+			onUpdate:
+			{
+				[weak self] in
+				self?.refreshThemeColors()
+				self?.positionCurrentEditor()
+			}
+		)
+		if presentation == .compact
+		{
+			alignment = .right
+			widthAnchor.constraint(equalToConstant: LayoutTokens.Settings.sizeInputWidth)
+				.isActive = true
+		}
+
+		textColor = AppKitColorTokens.settingsPrimaryText
 		cell?.isScrollable = true
 		for name in [
 			NSControl.textDidBeginEditingNotification,
@@ -84,13 +117,71 @@ final class SettingsFormTextField: NSTextField
 	override var intrinsicContentSize: NSSize
 	{
 		var size = super.intrinsicContentSize
-		size.height = 36
+		size.height = fieldHeight
 		return size
+	}
+
+	private var typographyRole: TypographyTokens.Role
+	{
+		switch presentation
+		{
+		case .dialog: TypographyTokens.Dialog.input
+		case .compact: TypographyTokens.Settings.sizeInput
+		case .outlined: TypographyTokens.Settings.formInput
+		case .nativeRounded: TypographyTokens.Connections.body
+		}
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		refreshThemeColors()
+	}
+
+	private var fieldHeight: CGFloat
+	{
+		presentation == .compact ? LayoutTokens.Settings.sizeInputHeight : 36
+	}
+
+	override var alignmentRectInsets: NSEdgeInsets
+	{
+		presentation == .nativeRounded ? super.alignmentRectInsets : NSEdgeInsetsZero
 	}
 
 	@objc private func refreshBorder()
 	{
 		positionCurrentEditor()
+		refreshThemeColors()
+		needsDisplay = true
+	}
+
+	private func refreshThemeColors()
+	{
+		guard presentation != .nativeRounded
+		else
+		{
+			return
+		}
+		textColor = AppKitColorTokens.settingsPrimaryText
+		if let placeholderString
+		{
+			var attributes = AppKitFontResolver.textAttributes(
+				typographyRole,
+				font: font
+			)
+			attributes[.foregroundColor] = AppKitColorTokens.settingsTertiaryText
+			placeholderAttributedString = NSAttributedString(
+				string: placeholderString,
+				attributes: attributes
+			)
+		}
+		if let editor = currentEditor(), let cell = cell as? SettingsFormTextFieldCell
+		{
+			cell.styleEditor(
+				editor,
+				in: self
+			)
+		}
 		needsDisplay = true
 	}
 
@@ -122,31 +213,12 @@ final class SettingsFormTextField: NSTextField
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
-		needsDisplay = true
+		refreshThemeColors()
 	}
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		if presentation == .dialog
-		{
-			let outline = NSBezierPath(
-				roundedRect: bounds.insetBy(
-					dx: 0.5,
-					dy: 0.5
-				),
-				xRadius: 8,
-				yRadius: 8
-			)
-			AppKitColorTokens.elevated.setFill()
-			outline.fill()
-			super.draw(dirtyRect)
-			(currentEditor() != nil ? NSColor.controlAccentColor : AppKitColorTokens.border)
-				.setStroke()
-			outline.lineWidth = 1
-			outline.stroke()
-			return
-		}
-		guard presentation == .outlined
+		guard presentation != .nativeRounded
 		else
 		{
 			super.draw(dirtyRect)
@@ -159,9 +231,10 @@ final class SettingsFormTextField: NSTextField
 			curve: ShapeTokens.Connections.curve
 		).fill()
 		super.draw(dirtyRect)
+		drawLeadingIcon()
 		if hasValidationError
 		{
-			AppKitColorTokens.settingsFieldError.withAlphaComponent(0.2).setStroke()
+			AppKitColorTokens.fieldErrorEdge.setStroke()
 			let halo = AppKitShapePath.roundedRect(
 				bounds.insetBy(
 					dx: 1,
@@ -176,7 +249,7 @@ final class SettingsFormTextField: NSTextField
 		let focused = currentEditor() != nil
 		let border = hasValidationError ? AppKitColorTokens.settingsFieldError
 			: (focused ? AppKitColorTokens.settingsFieldFocus
-				: AppKitColorTokens.settingsPrimaryText.withAlphaComponent(0.118))
+				: AppKitColorTokens.heavyBorder)
 		border.setStroke()
 		let path = AppKitShapePath.roundedRect(
 			bounds.insetBy(
@@ -189,11 +262,51 @@ final class SettingsFormTextField: NSTextField
 		path.lineWidth = 1
 		path.stroke()
 	}
+	private func drawLeadingIcon()
+	{
+		guard let leadingIcon
+		else
+		{
+			return
+		}
+		DesktopIcons.draw(
+			leadingIcon,
+			in: NSRect(
+				x: 12,
+				y: bounds.midY - 7,
+				width: 14,
+				height: 14
+			),
+			tint: AppKitColorTokens.settingsSecondaryText
+		)
+	}
 }
 
 @MainActor
 private final class SettingsFormTextFieldCell: NSTextFieldCell
 {
+	private let editorStyle = ThemeFieldEditorStyle()
+	var hasLeadingIcon = false
+	var isCompact = false
+	var typography = TypographyTokens.Settings.formInput
+
+	override func endEditing(_ textObj: NSText)
+	{
+		super.endEditing(textObj)
+		editorStyle.restore(textObj)
+	}
+
+	func styleEditor(
+		_ textObj: NSText,
+		in controlView: NSView
+	)
+	{
+		editorStyle.apply(
+			to: textObj,
+			in: controlView
+		)
+	}
+
 	override func edit(
 		withFrame rect: NSRect,
 		in controlView: NSView,
@@ -210,6 +323,10 @@ private final class SettingsFormTextFieldCell: NSTextFieldCell
 			event: event
 		)
 		positionEditor(
+			textObj,
+			in: controlView
+		)
+		styleEditor(
 			textObj,
 			in: controlView
 		)
@@ -233,6 +350,10 @@ private final class SettingsFormTextFieldCell: NSTextFieldCell
 			length: selLength
 		)
 		positionEditor(
+			textObj,
+			in: controlView
+		)
+		styleEditor(
 			textObj,
 			in: controlView
 		)
@@ -263,14 +384,16 @@ private final class SettingsFormTextFieldCell: NSTextFieldCell
 
 	override func drawingRect(forBounds rect: NSRect) -> NSRect
 	{
-		NSRect(
-			x: rect.minX + 10,
-			y: rect.midY - 9,
+		let inset: CGFloat = isCompact ? 8 : 10
+		let height = typography.lineHeight ?? TypographyTokens.Text.compactControl.lineHeight!
+		return NSRect(
+			x: rect.minX + (hasLeadingIcon ? 38 : inset),
+			y: rect.midY - height / 2,
 			width: max(
 				0,
-				rect.width - 20
+				rect.width - (hasLeadingIcon ? 38 + inset : 2 * inset)
 			),
-			height: 18
+			height: height
 		)
 	}
 }
