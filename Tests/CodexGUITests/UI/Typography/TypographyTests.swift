@@ -6,6 +6,55 @@ import Testing
 struct TypographyTests
 {
 	static let measurements: [CGFloat] = [11, 13, 14, 15, 16]
+	@Test(arguments: measurements)
+	func measuredUIHierarchy(sample: CGFloat)
+	{
+		let config = TypographyConfiguration(uiSize: sample)
+		#expect(TypographyTokens.Transcript.prose.resolved(using: config).size == sample)
+		#expect(TypographyTokens.UI.small.resolved(using: config).size == sample - 1)
+		#expect(TypographyTokens.Transcript.heading(level: 1).resolved(using: config)
+			.size == sample * 1.5)
+		#expect(TypographyTokens.Transcript.heading(level: 2).resolved(using: config)
+			.size == sample * 1.25)
+		#expect(TypographyTokens.Transcript.heading(level: 3).resolved(using: config)
+			.size == sample * 1.125)
+		#expect(TypographyTokens.Transcript.heading(level: 3).resolved(using: config)
+			.lineHeight == sample * 1.75)
+		#expect(TypographyTokens.Transcript.prose.resolved(using: config)
+			.lineHeight == sample * 1.625)
+		#expect(TypographyTokens.Transcript.inlineCode.resolved(using: config)
+			.size == sample * 0.92)
+		#expect(TypographyTokens.Code.source.resolved(using: config).size == 12)
+		let row = TypographyTokens.Connections.rowLabel.resolved(using: config)
+		#expect(abs((row.lineHeight ?? 0) - (sample - 1) * (10.0 / 7)) < 0.000001)
+		#expect(TypographyTokens.Sources.provider.resolved(using: config).lineHeight == row
+			.lineHeight)
+		#expect(TypographyTokens.Button.value.resolved(using: config).size == sample - 1)
+		#expect(TypographyTokens.Button.value.resolved(using: config).lineHeight == 20)
+		#expect(TypographyTokens.Button.dialog.resolved(using: config).lineHeight == 18)
+		#expect(TypographyTokens.Button.value.weight == .text)
+		#expect(TypographyTokens.Button.dialog.weight == .text)
+		#expect(TypographyTokens.Button.regular.weight == .regular)
+	}
+
+	@Test func independentCodeBaseAndTableFloor()
+	{
+		let smallCode = TypographyConfiguration(
+			uiSize: 14,
+			codeSize: 10
+		)
+		let largeCode = TypographyConfiguration(
+			uiSize: 14,
+			codeSize: 16
+		)
+		#expect(TypographyTokens.Transcript.table.resolved(using: smallCode).size == 12.25)
+		#expect(TypographyTokens.Transcript.table.resolved(using: largeCode).size == 16)
+		#expect(TypographyTokens.Code.diff.resolved(using: largeCode).lineHeight == 28.8)
+		#expect(TypographyTokens.Code.source.resolved(using: largeCode).lineHeight == 29)
+		#expect(TypographyTokens.FileSearch.source.resolved(using: largeCode).size == 13)
+		#expect(TypographyTokens.FileMarkdown.inlineCode.resolved(using: largeCode).size == 14)
+		#expect(TypographyTokens.Transcript.codeHeader.resolved(using: largeCode).size == 13)
+	}
 
 	@Test func invalidPreferencesAreNormalized()
 	{
@@ -32,6 +81,19 @@ struct TypographyTests
 		))
 	}
 
+	@Test func filePreviewFollowsUIWhilePageContentAndCodeRemainIndependent()
+	{
+		let config = TypographyConfiguration(
+			uiSize: 11,
+			contentSize: 24,
+			codeSize: 8
+		)
+		#expect(TypographyTokens.FileMarkdown.prose.resolved(using: config).size == 11)
+		#expect(TypographyTokens.FileMarkdown.inlineCode.resolved(using: config).size == 11)
+		#expect(TypographyTokens.FileMarkdown.heading(level: 1).resolved(using: config).size == 19)
+		#expect(TypographyTokens.Transcript.prose.resolved(using: config).size == 11)
+		#expect(TypographyTokens.Code.source.resolved(using: config).size == 8)
+	}
 }
 
 @MainActor
@@ -67,6 +129,18 @@ struct TypographyBindingTests
 		#expect(defaults.dictionary(forKey: "appearance.typography")?["code"] as? Int == 16)
 	}
 
+	@Test func nativeLineBoxesAccommodateGlyphMetrics() throws
+	{
+		let role = TypographyTokens.Composer.editor
+		let config = TypographyConfiguration(uiSize: 16)
+		let attributes = AppKitFontResolver.textAttributes(
+			role,
+			configuration: config
+		)
+		let font = try #require(attributes[.font] as? NSFont)
+		let paragraph = try #require(attributes[.paragraphStyle] as? NSParagraphStyle)
+		#expect(paragraph.minimumLineHeight >= font.ascender - font.descender + font.leading)
+	}
 }
 
 @MainActor

@@ -567,7 +567,7 @@ enum MarkdownAttributedStringRenderer
 			default: size = TypographyTokens.Transcript.prose.size
 			}
 		}
-		let weight: TypographyTokens.Weight
+		let weight: TypographyTokens.NativeWeight
 		if style.heading > 0
 		{
 			weight = .bold
@@ -587,7 +587,8 @@ enum MarkdownAttributedStringRenderer
 		let role = TypographyTokens.Role(
 			size: size,
 			selection: style.code || style.codeBlock || style.monospaced
-				? .monospaced(weight: weight) : .system(weight: weight)
+				? TypographyTokens.Transcript.code.emphasized(style.bold || style.heading > 0)
+				.selection : .system(weight: weight)
 		)
 		let base = AppKitFontResolver.font(role)
 		return style.italic

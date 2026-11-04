@@ -17,33 +17,22 @@ extension TypographyTokens
 	enum Connections
 	{
 		static let title = Role(
-			size: 28,
-			selection: .interface(weight: 500),
-			lineHeight: 33.6
+			rule: .heading(28),
+			selection: .interface(weight: .medium),
+			lineHeight: .multiple(1.2)
 		)
-		static let modalTitle = Role(
-			size: 20,
-			selection: .interface(weight: 500),
-			lineHeight: 28
+		static let modalTitle = TypographyTokens.Text.heading(
+			20,
+			weight: .medium
 		)
 		static let section = Role(
-			size: 14,
-			selection: .interface(weight: 500),
-			lineHeight: 21
+			rule: .ui(offset: 0),
+			selection: .interface(weight: .medium),
+			lineHeight: .multiple(1.5)
 		)
-		static let rowLabel = Role(
-			size: 13,
-			selection: .interface(weight: 500),
-			lineHeight: 18.5714
-		)
-		static let body = Role(
-			size: 13,
-			lineHeight: 18.5714
-		)
-		static let caption = Role(
-			size: 12,
-			lineHeight: 16
-		)
+		static let rowLabel = TypographyTokens.Text.rowLabel
+		static let body = TypographyTokens.Text.menu
+		static let caption = TypographyTokens.Text.captionLine
 	}
 }
 

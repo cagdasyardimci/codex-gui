@@ -328,7 +328,7 @@ extension NavigationViewController
 		let label = SidebarTextField(labelWithString: "Show more")
 		label.font = AppKitFontResolver.interfaceFont(
 			ofSize: 14,
-			weight: 400
+			weight: .regular
 		)
 		label.textColor = AppKitColorTokens.secondaryText
 		label.setAccessibilityElement(false)

@@ -32,16 +32,8 @@ extension TypographyTokens
 {
 	enum AccountMenu
 	{
-		static let row = Role(
-			size: 13,
-			selection: .interface(weight: 430),
-			lineHeight: 18.5703125
-		)
-		static let subtitle = Role(
-			size: 12,
-			selection: .interface(weight: 430),
-			lineHeight: 14
-		)
+		static let row = TypographyTokens.Text.menu
+		static let subtitle = TypographyTokens.MenuRow.subtitle
 	}
 }
 

@@ -41,15 +41,16 @@ extension TypographyTokens
 {
 	enum Button
 	{
-		static let compact = Role(
-			size: 13,
-			lineHeight: 18.5714
+		static let compact = TypographyTokens.Text.button(compact: true)
+		static let regular = TypographyTokens.Text.button(compact: false)
+		static let dialog = TypographyTokens.Text.action
+		// Header value pickers use detail text in the regular control line box.
+		static let value = Role(
+			rule: TypographyTokens.Text.detail.sizeRule,
+			lineHeight: TypographyTokens.Text.control.lineHeightRule
 		)
-		static let regular = Role(
-			size: 14,
-			lineHeight: 20
-		)
-		static let zoomStep = Role(size: 20)
+		// The zoom symbol is fitted to a fixed artwork slot rather than a text line.
+		static let zoomStep = Role(rule: .fixed(20))
 	}
 }
 

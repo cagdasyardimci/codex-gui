@@ -32,10 +32,6 @@ extension TypographyTokens
 			lineHeight: 18,
 			tracking: -0.15
 		)
-		static let capsule = Role(
-			size: 13,
-			lineHeight: 17.875,
-			tracking: -0.15
-		)
+		static let capsule = control
 	}
 }
