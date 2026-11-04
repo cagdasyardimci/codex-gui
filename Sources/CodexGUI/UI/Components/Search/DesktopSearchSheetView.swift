@@ -39,11 +39,11 @@ final class DesktopSearchSheetView: NSView
 	private let explanationLabel = NSTextField(wrappingLabelWithString: "")
 	private let loadMoreButton = DesktopActionButton(
 		title: "Load More History",
-		presentation: .nativeDefault
+		presentation: .secondary
 	)
 	private let closeButton = DesktopActionButton(
 		title: "Close",
-		presentation: .nativeDefault
+		presentation: .secondary
 	)
 
 	init(presentation: Presentation)

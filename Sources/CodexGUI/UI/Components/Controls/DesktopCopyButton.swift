@@ -69,8 +69,8 @@ class DesktopCopyButton: NSButton
 		bezelStyle = .inline
 		isBordered = false
 		controlSize = .small
-		font = AppKitFontResolver.font(TypographyTokens.Controls.button)
-		contentTintColor = .secondaryLabelColor
+		self.setTypographyRole(TypographyTokens.Controls.button)
+		contentTintColor = AppKitColorTokens.secondaryText
 		imagePosition = .imageOnly
 		lineBreakMode = .byTruncatingTail
 		if presentation == .terminal
@@ -256,7 +256,7 @@ class DesktopCopyButton: NSButton
 	{
 		if isHovered && (presentation == .terminal || isEnabled)
 		{
-			NSColor.labelColor.withAlphaComponent(presentation == .code ? 0.1 : 0.06).setFill()
+			AppKitColorTokens.copySurface(code: presentation == .code).setFill()
 			let diameter = min(
 				bounds.width,
 				bounds.height
@@ -294,7 +294,8 @@ class DesktopCopyButton: NSButton
 	private func updateGlyphAppearance()
 	{
 		image = isGlyphVisible ? copyImage : nil
-		contentTintColor = presentation == .code && isHovered ? .labelColor : .secondaryLabelColor
+		contentTintColor = presentation == .code && isHovered ? AppKitColorTokens
+			.primaryText : AppKitColorTokens.secondaryText
 		needsDisplay = true
 	}
 

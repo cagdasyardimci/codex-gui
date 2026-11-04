@@ -11,7 +11,7 @@ final class ProjectInfoPopoverView: NSView
 	private let countLabel = NSTextField(labelWithString: "")
 	private let pathLabel = NSTextField(labelWithString: "")
 	private lazy var pathButton = ProjectPathButton(label: pathLabel)
-	private let pinButton = DesktopNativeIconButton(
+	private let pinButton = DesktopIconButton(
 		title: "Pin project",
 		label: "Pin project",
 		icon: .pin,

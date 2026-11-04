@@ -106,7 +106,8 @@ extension NSControl
 			if let button = self as? NSButton,
 				!(button is NSPopUpButton)
 			{
-				retained = button.attributedTitle
+				retained = (button as? DesktopAttributedTitleButton)?
+					.semanticAttributedTitle ?? button.attributedTitle
 			}
 			else if let field = self as? NSTextField
 			{

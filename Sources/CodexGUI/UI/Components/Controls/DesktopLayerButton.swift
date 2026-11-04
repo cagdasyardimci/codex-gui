@@ -4,6 +4,18 @@ import AppKit
 @MainActor
 class DesktopLayerButton: DesktopAttributedTitleButton
 {
+	private lazy var layerColorObservation = ThemeColorObservation
+	{
+		[weak self] in self?.refreshLayerColors()
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		_ = layerColorObservation
+		refreshLayerColors()
+	}
+
 	var layerBackgroundColor: NSColor?
 	{
 		didSet

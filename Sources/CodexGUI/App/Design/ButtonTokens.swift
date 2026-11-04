@@ -12,6 +12,10 @@ extension LayoutTokens
 		static let compactIconSize: CGFloat = 26
 		static let regularIconSize: CGFloat = 32
 		static let artworkSize: CGFloat = 16
+		static let contentSpacing: CGFloat = 6
+		static let miniIconSize: CGFloat = 20
+		static let smallIconSize: CGFloat = 24
+		static let searchIconSize: CGFloat = 28
 		static let progressAllowance: CGFloat = 16
 		static let progressSize: CGFloat = 12
 		static let progressInset: CGFloat = 8
@@ -20,6 +24,7 @@ extension LayoutTokens
 		static let tabHeight: CGFloat = 28
 		static let overlayIconSize: CGFloat = 32
 		static let diagramIconSize: CGFloat = 40
+		static let diagramCloseWidth: CGFloat = 42
 		static let zoomStepSize: CGFloat = 36
 		static let imageZoomWidth: CGFloat = 64
 	}
@@ -56,26 +61,31 @@ extension TypographyTokens
 
 extension AppKitColorTokens
 {
-	static let buttonPrimarySurface = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF
-	)
-	static let buttonPrimaryText = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0x0D0D0D
-	)
-	static let buttonSecondarySurface = AppKitColorResolution.color(
-		light: 0xFFFFFF,
-		dark: 0x2D2D2D
-	)
-	static let buttonSecondaryEdge = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.12,
-		darkAlpha: 0.16
-	)
-	static let buttonDestructiveText = AppKitColorResolution.color(
-		light: 0xE02E2A,
-		dark: 0xFF6764
-	)
+	static var buttonPrimarySurface: NSColor
+	{
+		foreground
+	}
+	static var buttonPrimaryText: NSColor
+	{
+		controlSurface
+	}
+	static var buttonDialogSecondarySurface: NSColor
+	{
+		paletteColor
+		{
+			$0.foreground.withAlphaComponent(0.03)
+		}
+	}
+	static var buttonSecondarySurface: NSColor
+	{
+		elevated
+	}
+	static var buttonSecondaryEdge: NSColor
+	{
+		heavyBorder
+	}
+	static var buttonDestructiveText: NSColor
+	{
+		errorText
+	}
 }

@@ -170,7 +170,15 @@ struct TranscriptLayerAppearanceTests
 				#expect(panel.contentView === surface)
 				#expect(panel.frame == frame && button.frame == buttonFrame)
 				#expect(window.firstResponder === button)
-				#expect(button.contentTintColor == NSColor.labelColor)
+				let tint = try #require(button.contentTintColor)
+				#expect(AppKitColorResolution.resolvedCGColor(
+					tint,
+					for: button
+				).components
+					== AppKitColorResolution.resolvedCGColor(
+						AppKitColorTokens.primaryText,
+						for: button
+					).components)
 				#expect(label.stringValue == "Copy code")
 				#expect(button.accessibilityLabel() == "Copy code block 1")
 				try expectTooltipFill(
@@ -195,7 +203,15 @@ struct TranscriptLayerAppearanceTests
 			button.mouseExited(with: try hoverEvent(.mouseExited))
 			native.mark("dismiss.end")
 			#expect(window.childWindows?.isEmpty != false)
-			#expect(button.contentTintColor == NSColor.secondaryLabelColor)
+			let tint = try #require(button.contentTintColor)
+			#expect(AppKitColorResolution.resolvedCGColor(
+				tint,
+				for: button
+			).components
+				== AppKitColorResolution.resolvedCGColor(
+					AppKitColorTokens.secondaryText,
+					for: button
+				).components)
 		}
 	}
 

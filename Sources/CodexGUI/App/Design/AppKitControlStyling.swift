@@ -10,11 +10,22 @@ enum AppKitControlStyling
 		prominent: Bool = false
 	)
 	{
+		if let styled = button as? DesktopStyledButton
+		{
+			if prominent
+			{
+				styled.presentation = .primary
+			}
+			if let icon
+			{
+				styled.symbol = icon
+			}
+			return
+		}
 		button.bezelStyle = .inline
 		button.isBordered = false
 		button.controlSize = .small
-		button.setTypographyRole(prominent
-			? TypographyTokens.Controls.prominentButton : TypographyTokens.Controls.button)
+		button.setTypographyRole(TypographyTokens.Controls.inline(prominent: prominent))
 		button.contentTintColor = prominent ? AppKitColorTokens.primaryText : AppKitColorTokens
 			.secondaryText
 		if let icon

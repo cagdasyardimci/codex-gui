@@ -52,10 +52,11 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 		isBordered = false
 		switch presentation
 		{
-		case .summary: font = AppKitFontResolver.font(TypographyTokens.Summary.body)
-		case .output: font = AppKitFontResolver.font(TypographyTokens.Controls.button)
-		case .fileList: font = .systemFont(ofSize: 13)
-		default: font = .systemFont(ofSize: presentation == .compact ? 13 : 14)
+		case .summary: setTypographyRole(TypographyTokens.Summary.body)
+		case .output: setTypographyRole(TypographyTokens.Controls.button)
+		case .fileList: setTypographyRole(TypographyTokens.UI.small)
+		default: setTypographyRole(TypographyTokens.Controls
+				.disclosure(compact: presentation == .compact))
 		}
 		if presentation == .output
 		{
@@ -66,7 +67,7 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 		{
 		case .summary: contentTintColor = AppKitColorTokens.captionText
 		case .fileList: contentTintColor = MarkdownAttributedStringRenderer.proseColor
-		default: contentTintColor = .secondaryLabelColor
+		default: contentTintColor = AppKitColorTokens.secondaryText
 		}
 		alignment = .left
 		imagePosition = title.isEmpty ? .imageOnly : .imageTrailing
@@ -161,9 +162,9 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 		else
 		{
 			let attributes: [NSAttributedString.Key: Any] = [
-				.font: font ?? NSFont.systemFont(ofSize: 14),
+				.font: font ?? AppKitFontResolver.font(TypographyTokens.UI.body),
 				.foregroundColor: presentation == .summary
-					? AppKitColorTokens.captionText : NSColor.secondaryLabelColor
+					? AppKitColorTokens.captionText : AppKitColorTokens.secondaryText
 			]
 			attributedTitle = NSAttributedString(
 				string: label,

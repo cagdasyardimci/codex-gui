@@ -70,7 +70,17 @@ struct DesktopCompletePresentationTests
 			let terminalTooltip = try #require(terminalPanel.contentView as? DesktopTooltipView)
 			#expect(codeTooltip.label.stringValue == terminalTooltip.label.stringValue)
 			#expect(codeTooltip.label.font == terminalTooltip.label.font)
-			#expect(codeTooltip.label.textColor == terminalTooltip.label.textColor)
+			let codeColor = try #require(codeTooltip.label.textColor)
+			let terminalColor = try #require(terminalTooltip.label.textColor)
+			#expect(AppKitColorResolution.resolvedCGColor(
+				codeColor,
+				for: codeTooltip
+			).components
+				== AppKitColorResolution.resolvedCGColor(
+					terminalColor,
+					for: terminalTooltip
+				)
+				.components)
 			#expect(codeTooltip.bounds.size == terminalTooltip.bounds.size)
 			#expect(codeTooltip.label.frame == terminalTooltip.label.frame)
 			#expect(window.firstResponder === originalResponder)

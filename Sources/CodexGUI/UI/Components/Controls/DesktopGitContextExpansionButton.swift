@@ -32,7 +32,7 @@ final class DesktopGitContextExpansionButton: NSButton
 		self.action = action
 		isBordered = false
 		focusRingType = .none
-		contentTintColor = .secondaryLabelColor
+		contentTintColor = AppKitColorTokens.secondaryText
 		toolTip = label
 		setAccessibilityLabel(label)
 	}

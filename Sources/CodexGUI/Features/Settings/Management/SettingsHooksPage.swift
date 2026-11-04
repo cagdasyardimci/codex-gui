@@ -25,7 +25,7 @@ final class SettingsHooksPage: SettingsManagementPage
 			target: self,
 			action: #selector(openDocumentation)
 		)
-		link.presentation = .nativeLink
+		link.presentation = .link
 		let stack = NSStackView(views: [description, link, NSView()])
 		stack.orientation = .horizontal
 		stack.spacing = 4

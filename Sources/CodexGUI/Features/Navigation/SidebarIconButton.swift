@@ -1,5 +1,6 @@
 import AppKit
 
+/// Supplies sidebar actions; the shared button owns their rendering and focus states.
 @MainActor
 final class SidebarIconButton: DesktopStyledButton
 {
@@ -12,7 +13,7 @@ final class SidebarIconButton: DesktopStyledButton
 	{
 		didSet
 		{
-			contentTintColor = isSearchActive ? .controlAccentColor : .secondaryLabelColor
+			state = isSearchActive ? .on : .off
 		}
 	}
 
@@ -54,7 +55,8 @@ final class SidebarIconButton: DesktopStyledButton
 		}
 		super.init(
 			title: title,
-			presentation: .nativeIcon
+			presentation: role == .search ? .searchIcon : .sidebarIcon,
+			size: role == .projectInfo || role == .projectNewChat ? .mini : .small
 		)
 		self.target = target
 		self.action = action
@@ -63,30 +65,10 @@ final class SidebarIconButton: DesktopStyledButton
 		setAccessibilityLabel(label)
 		if role == .search
 		{
+			keyboardFocusPolicy = .dialog
 			toolTip = "Search"
 			tooltipShortcut = "⌘K"
 			tooltipPlacement = .below
-			image = DesktopIcons.image(
-				icon,
-				size: 16
-			)
-			contentTintColor = AppKitColorTokens.secondaryText
-		}
-		let isProjectRow = role == .projectInfo || role == .projectNewChat
-		if isProjectRow
-		{
-			image = DesktopIcons.image(
-				icon,
-				size: LayoutTokens.ProjectActions.actionIconSize
-			)
-		}
-		let width: CGFloat = isProjectRow ? LayoutTokens.ProjectActions
-			.actionSize : role == .refresh ? 26 : role == .search ? 28 : LayoutTokens.Sidebar
-			.headingActionSize
-		widthAnchor.constraint(equalToConstant: width).isActive = true
-		if role != .refresh
-		{
-			heightAnchor.constraint(equalToConstant: width).isActive = true
 		}
 	}
 

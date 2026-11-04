@@ -30,7 +30,7 @@ final class TranscriptViewController: NSViewController,
 	)
 	let conversationScrollView = NSScrollView()
 	let turnNavigationRail = TurnNavigationRail()
-	let latestButton = DesktopNativeIconButton(
+	let latestButton = DesktopIconButton(
 		title: "Latest Message",
 		label: "Return to latest message",
 		icon: .arrowDown

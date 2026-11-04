@@ -15,7 +15,7 @@ final class DesktopFileChangeReviewButton: DesktopLayerButton
 		layer?.borderWidth = 1
 		layerBorderColor = AppKitColorTokens.border
 		contentTintColor = MarkdownAttributedStringRenderer.proseColor
-		font = .systemFont(ofSize: 13)
+		self.setTypographyRole(TypographyTokens.Changes.fileReview)
 		NSLayoutConstraint.activate([
 			widthAnchor.constraint(equalToConstant: 102),
 			heightAnchor.constraint(equalToConstant: 28),

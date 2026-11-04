@@ -61,11 +61,11 @@ final class TaskSidebarCellView: NSTableCellView
 	{
 		archiveButton.target = self
 		archiveButton.action = #selector(archiveTask)
-		archiveButton.presentation = .nativeIcon
+		archiveButton.presentation = .sidebarIcon
 		archiveButton.symbol = .archive
 		deleteButton.target = self
 		deleteButton.action = #selector(deleteTask)
-		deleteButton.presentation = .nativeIcon
+		deleteButton.presentation = .sidebarIcon
 		deleteButton.symbol = .trash
 		for button in [archiveButton, deleteButton]
 		{

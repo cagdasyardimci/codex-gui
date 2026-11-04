@@ -465,21 +465,6 @@ final class SettingsUsageDailyChart: NSView
 @MainActor
 private final class SettingsUsageButton: DesktopActionButton
 {
-	override func draw(_ dirtyRect: NSRect)
-	{
-		guard !isEnabled, let context = NSGraphicsContext.current?.cgContext
-		else
-		{
-			super.draw(dirtyRect)
-			return
-		}
-		context.saveGState()
-		context.setAlpha(0.4)
-		context.beginTransparencyLayer(auxiliaryInfo: nil)
-		super.draw(dirtyRect)
-		context.endTransparencyLayer()
-		context.restoreGState()
-	}
 	override func invokeAction()
 	{
 		if isEnabled

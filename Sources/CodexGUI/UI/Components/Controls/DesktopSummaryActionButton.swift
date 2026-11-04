@@ -31,7 +31,7 @@ final class DesktopSummaryActionButton: DesktopAttributedTitleButton
 			imagePosition = .imageOnly
 			if presentation == .unavailableSource
 			{
-				contentTintColor = .tertiaryLabelColor
+				contentTintColor = AppKitColorTokens.mutedText
 			}
 			NSLayoutConstraint.activate([
 				widthAnchor.constraint(equalToConstant: LayoutTokens.Summary.actionSize),
@@ -40,13 +40,13 @@ final class DesktopSummaryActionButton: DesktopAttributedTitleButton
 			return
 		}
 		alignment = .left
-		font = AppKitFontResolver.font(TypographyTokens.Summary.body)
+		self.setTypographyRole(TypographyTokens.Summary.body)
 		let color: NSColor
 		switch presentation
 		{
 		case .caption: color = AppKitColorTokens.captionText
 		case .muted: color = AppKitColorTokens.mutedText
-		default: color = .labelColor
+		default: color = AppKitColorTokens.primaryText
 		}
 		attributedTitle = NSAttributedString(
 			string: title,
@@ -55,7 +55,7 @@ final class DesktopSummaryActionButton: DesktopAttributedTitleButton
 				.foregroundColor: color,
 			]
 		)
-		contentTintColor = .labelColor
+		contentTintColor = AppKitColorTokens.primaryText
 		imagePosition = presentation == .navigationIcon ? .imageOnly : .imageLeading
 		imageScaling = .scaleProportionallyDown
 		cell?.lineBreakMode = .byTruncatingTail

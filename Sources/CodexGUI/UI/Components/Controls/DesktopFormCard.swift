@@ -4,6 +4,18 @@ import AppKit
 final class DesktopFormCard: NSView
 {
 	var isPairingFrame = false
+	var isSettingsCard = false
+	private lazy var colorObservation = ThemeColorObservation
+	{
+		[weak self] in self?.needsDisplay = true
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		_ = colorObservation
+		needsDisplay = true
+	}
 
 	override func draw(_ dirtyRect: NSRect)
 	{
@@ -14,12 +26,15 @@ final class DesktopFormCard: NSView
 			),
 			radius: isPairingFrame ? ShapeTokens.Connections
 				.pairingFrameRadius
-				: ShapeTokens.Connections.cardRadius,
+				:
+				(isSettingsCard ? ShapeTokens.Settings.cardRadius : ShapeTokens.Connections
+					.cardRadius),
 			curve: ShapeTokens.Connections.curve
 		)
 		if !isPairingFrame
 		{
-			AppKitColorTokens.connectionsCard.setFill()
+			(isSettingsCard ? AppKitColorTokens.settingsCard : AppKitColorTokens.connectionsCard)
+				.setFill()
 			path.fill()
 		}
 		(isPairingFrame ? AppKitColorTokens.pairingEdge : AppKitColorTokens.connectionsEdge)

@@ -5,17 +5,18 @@ final class DesktopBackButton: DesktopStyledButton
 {
 	init(
 		target: AnyObject? = nil,
-		action: Selector? = nil
+		action: Selector? = nil,
+		symbol: DesktopIcon = .chevronLeft
 	)
 	{
 		super.init(
 			title: "Back",
-			presentation: .nativeIcon
+			presentation: .sidebarIcon,
+			size: .small
 		)
 		self.target = target
 		self.action = action
-		symbol = .chevronLeft
-		widthAnchor.constraint(equalToConstant: 24).isActive = true
+		self.symbol = symbol
 	}
 
 	required init?(coder: NSCoder)

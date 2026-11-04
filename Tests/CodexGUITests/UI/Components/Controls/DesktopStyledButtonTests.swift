@@ -142,6 +142,30 @@ struct DesktopStyledButtonTests
 		#expect(images[0] == images[2])
 	}
 
+	@Test func headerHoverKeepsItsOverlayTranslucentAcrossAppearances() throws
+	{
+		for mode in [NSAppearance.Name.aqua, .darkAqua]
+		{
+			let appearance = try #require(NSAppearance(named: mode))
+			appearance.performAsCurrentDrawingAppearance
+			{
+				let surface = AppKitColorTokens.headerButtonSurface(
+					primary: false,
+					active: true,
+					enabled: true
+				).usingColorSpace(.sRGB)!
+				// Hover ink overlays the page instead of replacing it with opaque ink.
+				#expect(surface.alphaComponent > 0 && surface.alphaComponent < 0.5)
+				let disabled = AppKitColorTokens.headerButtonSurface(
+					primary: false,
+					active: true,
+					enabled: false
+				).usingColorSpace(.sRGB)!
+				#expect(disabled.alphaComponent < surface.alphaComponent)
+			}
+		}
+	}
+
 	private func image(_ view: NSView) throws -> Data
 	{
 		let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))

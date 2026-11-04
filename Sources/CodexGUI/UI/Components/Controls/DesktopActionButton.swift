@@ -61,6 +61,11 @@ class DesktopActionButton: DesktopStyledButton
 
 	@objc func invokeAction()
 	{
+		guard isEnabled
+		else
+		{
+			return
+		}
 		onAction?()
 	}
 }

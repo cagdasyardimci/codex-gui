@@ -156,7 +156,7 @@ final class ProjectTextEditor: NSViewController
 			action: #selector(save)
 		)
 		saveButton.setAccessibilityLabel("Save project context")
-		saveButton.presentation = .nativeProminent
+		saveButton.presentation = .primary
 		let cancelButton = DesktopStyledButton(
 			title: "Cancel",
 			target: self,

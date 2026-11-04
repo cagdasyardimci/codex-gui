@@ -29,13 +29,13 @@ final class ContextPanelShell: NSViewController
 	private let content = NSView()
 	private let titleLabel = NSTextField(labelWithString: "")
 	private let sourcesHeader = ContextPanelHeaderStackView()
-	private let sourcesCloseButton = DesktopNativeIconButton(
+	private let sourcesCloseButton = DesktopIconButton(
 		label: "Close Sources",
 		icon: .x
 	)
 	private let closeButton = DesktopStyledButton(
 		title: "Close panel",
-		presentation: .nativeDefault,
+		presentation: .secondary,
 		target: nil,
 		action: nil
 	)

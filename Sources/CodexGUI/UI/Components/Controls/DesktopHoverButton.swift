@@ -6,10 +6,35 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 {
 	var cornerRadius: CGFloat = 12.5
 	var cornerCurve: ShapeTokens.CornerCurve = .circular
+	var usesThemedKeyboardFocus = false
+	{
+		didSet
+		{
+			if usesThemedKeyboardFocus
+			{
+				focusRingType = .none
+			}
+			needsLayout = true
+		}
+	}
+	var keyboardFocusCornerRadius: CGFloat
+	{
+		cornerRadius
+	}
+	private var keyboardFocused = false
+	private var focusIndicator: CAShapeLayer?
+	private lazy var focusColorObservation = ThemeColorObservation
+	{
+		[weak self] in self?.refreshFocusIndicator()
+	}
 	private(set) var isHovered = false
 	var hoverBackgroundColor: NSColor
 	{
 		AppKitColorTokens.rowHighlight
+	}
+	var pressedBackgroundColor: NSColor
+	{
+		hoverBackgroundColor
 	}
 	var hoverTrackingOptions: NSTrackingArea.Options
 	{
@@ -24,6 +49,91 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 		isEnabled && (isHovered || isHighlighted)
 	}
 	private var tracking: NSTrackingArea?
+
+	override var isEnabled: Bool
+	{
+		didSet
+		{
+			needsLayout = true
+		}
+	}
+
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		if usesThemedKeyboardFocus
+		{
+			_ = focusColorObservation
+		}
+		refreshFocusIndicator()
+	}
+
+	override func layout()
+	{
+		super.layout()
+		refreshFocusIndicator()
+	}
+
+	override func becomeFirstResponder() -> Bool
+	{
+		let accepted = super.becomeFirstResponder()
+		keyboardFocused = accepted && NSApp.currentEvent?.type == .keyDown
+		needsLayout = true
+		return accepted
+	}
+
+	override func resignFirstResponder() -> Bool
+	{
+		let accepted = super.resignFirstResponder()
+		if accepted
+		{
+			keyboardFocused = false
+		}
+		needsLayout = true
+		return accepted
+	}
+
+	private func refreshFocusIndicator()
+	{
+		guard usesThemedKeyboardFocus
+		else
+		{
+			focusIndicator?.isHidden = true
+			return
+		}
+		if focusIndicator == nil
+		{
+			wantsLayer = true
+			let indicator = CAShapeLayer()
+			indicator.fillColor = nil
+			indicator.lineWidth = 2
+			layer?.addSublayer(indicator)
+			focusIndicator = indicator
+		}
+		guard let indicator = focusIndicator
+		else
+		{
+			return
+		}
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		indicator.isHidden = !isEnabled || !keyboardFocused || window?.firstResponder !== self
+		indicator.frame = bounds
+		indicator.path = CGPath(
+			roundedRect: bounds.insetBy(
+				dx: 1,
+				dy: 1
+			),
+			cornerWidth: keyboardFocusCornerRadius,
+			cornerHeight: keyboardFocusCornerRadius,
+			transform: nil
+		)
+		indicator.strokeColor = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.focus,
+			for: self
+		)
+		CATransaction.commit()
+	}
 
 	override func updateTrackingAreas()
 	{
@@ -76,6 +186,7 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
+		refreshFocusIndicator()
 		needsDisplay = true
 	}
 
@@ -89,7 +200,7 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 	{
 		if isBackgroundHighlighted
 		{
-			hoverBackgroundColor.setFill()
+			(isHighlighted ? pressedBackgroundColor : hoverBackgroundColor).setFill()
 			AppKitShapePath.roundedRect(
 				bounds,
 				radius: cornerRadius,

@@ -12,7 +12,7 @@ final class ExpandedImageDownloadButton: DesktopStyledButton
 	{
 		super.init(
 			title: "",
-			presentation: .imageOverlay(light: true),
+			presentation: .imageOverlay(diagram: true),
 			size: .regular
 		)
 		self.image = image

@@ -5,8 +5,16 @@ import AppKit
 class DesktopAttributedTitleButton: DesktopTooltipButton
 {
 	private var semanticTitle: NSAttributedString?
+	var semanticAttributedTitle: NSAttributedString?
+	{
+		semanticTitle
+	}
 	private var semanticAlternateTitle: NSAttributedString?
 	private var installingTitle = false
+	private lazy var colorObservation = ThemeColorObservation
+	{
+		[weak self] in self?.refreshTitleColors()
+	}
 
 	override var attributedTitle: NSAttributedString
 	{
@@ -87,6 +95,7 @@ class DesktopAttributedTitleButton: DesktopTooltipButton
 	override func viewDidMoveToWindow()
 	{
 		super.viewDidMoveToWindow()
+		_ = colorObservation
 		refreshTitleColors()
 	}
 

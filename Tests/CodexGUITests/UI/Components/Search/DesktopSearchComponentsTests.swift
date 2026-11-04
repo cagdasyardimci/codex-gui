@@ -33,21 +33,14 @@ struct DesktopSearchComponentsTests
 		#expect(close is DesktopStyledButton)
 		for button in [load, close]
 		{
-			let native = NSButton(
-				title: button.title,
-				target: nil,
-				action: nil
-			)
-			#expect(button.intrinsicContentSize == native.intrinsicContentSize)
-			#expect(button.font == native.font)
-			#expect(button.bezelStyle == native.bezelStyle)
-			#expect(button.isBordered == native.isBordered)
+			let styled = try #require(button as? DesktopStyledButton)
+			#expect(styled.presentation == .secondary)
+			#expect(styled.font == AppKitFontResolver.font(TypographyTokens.Button.compact))
 			let bounds = NSRect(
 				origin: .zero,
-				size: native.intrinsicContentSize
+				size: styled.intrinsicContentSize
 			)
-			#expect(button.cell?.titleRect(forBounds: bounds) == native.cell?
-				.titleRect(forBounds: bounds))
+			#expect(bounds.contains(styled.contentLayout(in: bounds).title))
 		}
 		#expect(load.isHidden)
 		component.canLoadMore = true

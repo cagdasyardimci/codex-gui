@@ -63,7 +63,7 @@ final class SubagentsViewController: NSViewController
 		{
 			super.init(
 				title: title,
-				presentation: .nativeBorderless,
+				presentation: .quiet,
 				size: .regular
 			)
 			self.target = target

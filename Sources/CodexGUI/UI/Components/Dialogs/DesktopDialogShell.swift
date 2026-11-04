@@ -9,7 +9,7 @@ final class DesktopDialogShell: DesktopSurface
 	let messageLabel: NSTextField?
 	let closeButton = DesktopStyledButton(
 		title: "Close",
-		presentation: .nativeIcon
+		presentation: .sidebarIcon
 	)
 	let actionsRow: NSStackView
 	var onClose: (() -> Void)?

@@ -26,7 +26,7 @@ final class SettingsNotificationControls: NSView
 	private let permission = RemoteConnectionsSwitch()
 	private let question = RemoteConnectionsSwitch()
 	private let sound = SettingsChoicePicker(choices: [])
-	private let authorizationButton = SettingsNotificationAuthorizationButton(
+	private let authorizationButton = DesktopStyledButton(
 		title: "Open System Settings",
 		presentation: .secondary
 	)
@@ -343,32 +343,5 @@ final class SettingsNotificationControls: NSView
 				_ = await alert.beginSheetModal(for: window)
 			}
 		}
-	}
-}
-
-@MainActor
-private final class SettingsNotificationAuthorizationButton: RemoteConnectionsButton
-{
-	override func draw(_ dirtyRect: NSRect)
-	{
-		super.draw(dirtyRect)
-		AppKitColorTokens.settingsSelectorEdge.setStroke()
-		let edge = AppKitShapePath.roundedRect(
-			bounds.insetBy(
-				dx: 0.5,
-				dy: 0.5
-			),
-			radius: 12.5,
-			curve: ShapeTokens.Connections.curve
-		)
-		edge.lineWidth = 1
-		edge.stroke()
-	}
-
-	override var intrinsicContentSize: NSSize
-	{
-		var size = super.intrinsicContentSize
-		size.height = 28
-		return size
 	}
 }

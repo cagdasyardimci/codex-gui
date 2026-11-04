@@ -1,15 +1,13 @@
 import AppKit
 
-/// Complete native inline icon action with semantic sizes and platform focus/activation.
+/// App-styled icon action with semantic sizes and platform activation.
 @MainActor
-final class DesktopNativeIconButton: DesktopStyledButton
+final class DesktopIconButton: DesktopStyledButton
 {
 	enum IconSize
 	{
 		case small, standard
 	}
-
-	private let side: CGFloat
 
 	init(
 		title: String = "",
@@ -20,10 +18,10 @@ final class DesktopNativeIconButton: DesktopStyledButton
 		action: Selector? = nil
 	)
 	{
-		side = size == .small ? 22 : 24
 		super.init(
 			title: title,
-			presentation: .nativeIcon
+			presentation: .sidebarIcon,
+			size: size == .small ? .mini : .small
 		)
 		self.target = target
 		self.action = action
@@ -32,23 +30,12 @@ final class DesktopNativeIconButton: DesktopStyledButton
 			label,
 			toolTip: title.isEmpty ? nil : title
 		)
-		NSLayoutConstraint.activate([
-			widthAnchor.constraint(equalToConstant: side),
-			heightAnchor.constraint(equalToConstant: side),
-		])
+
 	}
 
 	required init?(coder: NSCoder)
 	{
 		nil
-	}
-
-	override var intrinsicContentSize: NSSize
-	{
-		NSSize(
-			width: side,
-			height: side
-		)
 	}
 
 	func setLabel(

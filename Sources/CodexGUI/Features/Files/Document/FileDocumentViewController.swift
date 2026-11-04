@@ -68,15 +68,15 @@ final class FileDocumentViewController: NSViewController
 	private let titleLabel = NSTextField(labelWithString: "")
 	private let modeButton = DesktopStyledButton(
 		title: "View source",
-		presentation: .nativeDefault
+		presentation: .secondary
 	)
 	private let wrapButton = DesktopStyledButton(
 		title: "Wrap lines",
-		presentation: .nativeDefault
+		presentation: .secondary
 	)
 	private let actionsButton = DesktopStyledButton(
 		title: "Actions",
-		presentation: .nativeDefault
+		presentation: .secondary
 	)
 	private let emptyContent = NSView()
 	private let contentHolder = NSView()

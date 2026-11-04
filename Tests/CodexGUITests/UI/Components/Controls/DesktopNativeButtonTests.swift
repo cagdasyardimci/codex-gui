@@ -6,143 +6,128 @@ import Testing
 @MainActor
 struct DesktopNativeButtonTests
 {
-	@Test(arguments: [DesktopStyledButton.Presentation.nativeDefault,
-						.nativeInline,
-						.nativeProminent,
-						.nativeIcon])
-	func nativePresetsRetainPreviousCellGeometry(_ presentation: DesktopStyledButton.Presentation)
-	{
-		_ = NSApplication.shared
-		let expected = NSButton(
-			title: "Open project",
-			target: nil,
-			action: nil
-		)
-		if presentation != .nativeDefault
-		{
-			AppKitControlStyling.styleButton(
-				expected,
-				icon: .folder,
-				prominent: presentation == .nativeProminent
-			)
-			if presentation == .nativeIcon
-			{
-				expected.imagePosition = .imageOnly
-			}
-		}
-		let actual = DesktopStyledButton(
-			title: "Open project",
-			presentation: presentation
-		)
-		if presentation != .nativeDefault
-		{
-			actual.symbol = .folder
-		}
-		#expect(actual.intrinsicContentSize == expected.intrinsicContentSize)
-		#expect(actual.alignmentRectInsets.top == expected.alignmentRectInsets.top)
-		#expect(actual.alignmentRectInsets.bottom == expected.alignmentRectInsets.bottom)
-		#expect(actual.font == expected.font)
-		#expect(actual.bezelStyle == expected.bezelStyle)
-		#expect(actual.isBordered == expected.isBordered)
-		#expect(actual.controlSize == expected.controlSize)
-		#expect(actual.imagePosition == expected.imagePosition)
-		let bounds = NSRect(
-			x: 0,
-			y: 0,
-			width: 180,
-			height: 30
-		)
-		#expect((actual.cell as? NSButtonCell)?.titleRect(forBounds: bounds)
-			== (expected.cell as? NSButtonCell)?.titleRect(forBounds: bounds))
-	}
-
-	@Test func nativePresentationChangesKeepToggleStateAndConfiguredClosure()
+	@Test func reconfigurationPreservesActionSelectionShortcutAndCell()
 	{
 		_ = NSApplication.shared
 		var calls = 0
 		let button = DesktopActionButton(
 			title: "Pin",
-			presentation: .nativeInline
+			presentation: .quiet
 		)
 		{
 			calls += 1
 		}
+		let cell = button.cell
 		button.setButtonType(.toggle)
 		button.state = .on
 		button.symbol = .pin
-		button.size = .small
-		button.presentation = .nativeIcon
-		#expect(button.state == .on)
-		#expect(button.font?.pointSize == 11)
-		#expect(button.dispatchConfiguredAction())
-		#expect(calls == 1)
-		button.isEnabled = false
-		#expect(!button.dispatchConfiguredAction())
-		#expect(calls == 1)
-	}
-	@Test func sidebarRolesOwnTheirNativeGeometryAndSearchState()
-	{
-		_ = NSApplication.shared
-		let search = SidebarIconButton(role: .search)
-		let refresh = SidebarIconButton(role: .refresh)
-		let options = SidebarIconButton(role: .options)
-		let add = SidebarIconButton(role: .add)
-		for (button, expectedWidth) in [
-			(search, CGFloat(28)),
-			(refresh, 26),
-			(options, LayoutTokens.Sidebar.headingActionSize),
-			(add, LayoutTokens.Sidebar.headingActionSize)
-		]
-		{
-			#expect(button.constraints
-				.contains
-				{
-					$0.firstAttribute == .width && $0.constant == expectedWidth
-				})
-			#expect(button.imagePosition == .imageOnly)
-			#expect(button.image != nil)
-		}
-		#expect(search.image?.size == NSSize(
-			width: 16,
-			height: 16
-		))
-		search.isSearchActive = true
-		#expect(search.contentTintColor == .controlAccentColor)
-		search.isSearchActive = false
-		#expect(search.contentTintColor == .secondaryLabelColor)
-	}
-
-	@Test func defaultNativeReconfigurationRetainsConfiguredCellAndAction()
-	{
-		_ = NSApplication.shared
-		var calls = 0
-		let button = DesktopActionButton(
-			title: "Save",
-			presentation: .nativeDefault
-		)
-		{
-			calls += 1
-		}
-		let configuredCell = button.cell
-		button.setButtonType(.toggle)
-		button.state = .on
-		button.keyEquivalent = "s"
+		button.keyEquivalent = "p"
 		button.keyEquivalentModifierMask = [.command]
-		button.size = .regular
-		button.presentation = .nativeDefault
-		#expect(button.cell === configuredCell)
-		#expect(button.state == .on)
-		#expect(button.keyEquivalent == "s")
-		#expect(button.keyEquivalentModifierMask == [.command])
-		#expect(button.dispatchConfiguredAction())
-		#expect(calls == 1)
-		button.presentation = .primary
-		#expect(button.dispatchConfiguredAction())
-		button.presentation = .nativeDefault
-		#expect(button.state == .on)
-		#expect(button.keyEquivalent == "s")
-		#expect(button.dispatchConfiguredAction())
+		for presentation: DesktopStyledButton.Presentation in [.sidebarIcon, .primary, .quiet]
+		{
+			button.presentation = presentation
+			button.size = .regular
+			#expect(button.cell === cell)
+			#expect(button.state == .on)
+			#expect(button.keyEquivalent == "p")
+			#expect(button.keyEquivalentModifierMask == [.command])
+			#expect(button.dispatchConfiguredAction())
+		}
+		#expect(calls == 3)
+		button.isEnabled = false
+		// Exercise the actual dispatch boundary, not the test helper's enabled guard.
+		#expect(!button.sendAction(
+			button.action,
+			to: button.target
+		))
+		button.invokeAction()
 		#expect(calls == 3)
 	}
 
+	@Test func defaultActionsShareAppTypographyAndIncludeLeadingIcons() throws
+	{
+		_ = NSApplication.shared
+		let button = DesktopStyledButton(
+			title: "Open",
+			target: nil,
+			action: nil
+		)
+		#expect(button.presentation == .quiet)
+		let plainWidth = button.intrinsicContentSize.width
+		button.symbol = .folder
+		#expect(button.intrinsicContentSize.width == plainWidth + 22)
+		button.frame.size = button.intrinsicContentSize
+		let slots = button.contentLayout(in: button.bounds)
+		let icon = try #require(slots.image)
+		#expect(icon.width == 16 && icon.height == 16)
+		#expect(icon.maxX < slots.title.minX)
+		#expect(button.bounds.contains(slots.title))
+		button.font = .systemFont(
+			ofSize: 40,
+			weight: .bold
+		)
+		#expect(button.font == AppKitFontResolver.font(TypographyTokens.Button.compact))
+		button.size = .regular
+		#expect(button.font == AppKitFontResolver.font(TypographyTokens.Button.regular))
+		button.symbol = nil
+		#expect(button.contentLayout(in: button.bounds).image == nil)
+	}
+
+	@Test func constrainedTextReservesProgressIconAndMenuSlots() throws
+	{
+		_ = NSApplication.shared
+		let button = DesktopStyledButton(
+			title: "A long selected model name",
+			presentation: .menuTrigger
+		)
+		button.symbol = .folder
+		button.isLoading = true
+		let bounds = NSRect(
+			x: 0,
+			y: 0,
+			width: 120,
+			height: 32
+		)
+		let slots = button.contentLayout(in: bounds)
+		let progress = try #require(slots.progress)
+		let icon = try #require(slots.image)
+		let chevron = try #require(slots.chevron)
+		#expect(progress.maxX <= icon.minX)
+		#expect(icon.maxX < slots.title.minX)
+		#expect(slots.title.maxX < chevron.minX)
+		for rect in [progress, icon, slots.title, chevron]
+		{
+			#expect(bounds.contains(rect))
+		}
+		#expect(slots.title.width < (button.title as NSString)
+			.size(withAttributes: [.font: try #require(button.font)]).width)
+	}
+
+	@Test func sidebarRolesUseSharedPresentationAndState()
+	{
+		_ = NSApplication.shared
+		let search = SidebarIconButton(role: .search)
+		#expect(search.presentation == .searchIcon)
+		#expect(search.intrinsicContentSize == NSSize(
+			width: 28,
+			height: 28
+		))
+		for role: SidebarIconButton.Role in [
+			.options,
+			.add,
+			.refresh,
+			.projectInfo,
+			.projectNewChat
+		]
+		{
+			let button = SidebarIconButton(role: role)
+			#expect(button.presentation == .sidebarIcon)
+			#expect(button.imagePosition == .imageOnly)
+			#expect(button.image != nil)
+		}
+		search.isSearchActive = true
+		#expect(search.state == .on)
+		search.isSearchActive = false
+		#expect(search.state == .off)
+	}
 }

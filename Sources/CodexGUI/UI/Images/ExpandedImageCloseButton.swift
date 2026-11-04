@@ -8,7 +8,7 @@ final class ExpandedImageCloseButton: DesktopStyledButton
 	{
 		didSet
 		{
-			presentation = .imageOverlay(light: usesLightSurface)
+			presentation = .imageOverlay(diagram: usesLightSurface)
 		}
 	}
 
@@ -16,7 +16,7 @@ final class ExpandedImageCloseButton: DesktopStyledButton
 	{
 		super.init(
 			title: "Close",
-			presentation: .imageOverlay(light: false),
+			presentation: .imageOverlay(diagram: false),
 			size: .regular
 		)
 		image = DesktopIcons.image(

@@ -19,6 +19,7 @@ final class DesktopToolbarIconButton: DesktopHoverButton
 		}
 	}
 	private let side: CGFloat
+	private let usesWindowToolbarColor: Bool
 
 	init(
 		image: NSImage?,
@@ -30,6 +31,14 @@ final class DesktopToolbarIconButton: DesktopHoverButton
 	)
 	{
 		self.label = label
+		if case .windowToolbar = preset
+		{
+			usesWindowToolbarColor = true
+		}
+		else
+		{
+			usesWindowToolbarColor = false
+		}
 		switch preset
 		{
 		case .windowToolbar, .contentToolbar: side = LayoutTokens.Toolbar.controlSize
@@ -61,6 +70,10 @@ final class DesktopToolbarIconButton: DesktopHoverButton
 			}
 		}
 		isBordered = false
+		if usesWindowToolbarColor
+		{
+			usesThemedKeyboardFocus = true
+		}
 		self.image = image
 		imagePosition = .imageOnly
 		contentTintColor = AppKitColorTokens.secondaryText
@@ -89,5 +102,14 @@ final class DesktopToolbarIconButton: DesktopHoverButton
 	{
 		toolTip = label
 		setAccessibilityLabel(label)
+	}
+
+	override var pressedBackgroundColor: NSColor
+	{
+		if usesWindowToolbarColor
+		{
+			return AppKitColorTokens.toolbarPressed
+		}
+		return super.pressedBackgroundColor
 	}
 }

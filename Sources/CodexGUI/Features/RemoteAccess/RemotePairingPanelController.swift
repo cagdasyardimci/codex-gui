@@ -845,7 +845,7 @@ private final class RemotePairingIconButton: DesktopStyledButton
 	{
 		super.init(
 			title: "",
-			presentation: .nativeBorderless
+			presentation: .sidebarIcon
 		)
 		self.target = target
 		self.action = action

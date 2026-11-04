@@ -129,6 +129,47 @@ struct TypographyBindingTests
 		#expect(defaults.dictionary(forKey: "appearance.typography")?["code"] as? Int == 16)
 	}
 
+	@Test func typographyRefreshKeepsSidebarActionsIconOnly()
+	{
+		let center = NotificationCenter()
+		let state = ConfigurationState()
+		for role in [SidebarIconButton.Role.refresh, .search, .add, .projectInfo, .projectNewChat]
+		{
+			let button = SidebarIconButton(role: role)
+			let label = button.accessibilityLabel()
+			let image = button.image
+			button.setTypographyRole(
+				TypographyTokens.UI.small,
+				configuration:
+				{
+					state.value
+				},
+				center: center
+			)
+			#expect(button.imagePosition == .imageOnly)
+			state.value = TypographyConfiguration(
+				uiSize: 16,
+				codeSize: 12
+			)
+			center.post(
+				name: TypographyPreferences.didChange,
+				object: nil
+			)
+			#expect(button.imagePosition == .imageOnly)
+			state.value = TypographyConfiguration(
+				uiSize: 14,
+				codeSize: 16
+			)
+			center.post(
+				name: TypographyPreferences.didChange,
+				object: nil
+			)
+			#expect(button.imagePosition == .imageOnly)
+			#expect(button.image === image)
+			#expect(button.accessibilityLabel() == label)
+		}
+	}
+
 	@Test func liveBindingPreservesControlContentAndButtonState() throws
 	{
 		let center = NotificationCenter()

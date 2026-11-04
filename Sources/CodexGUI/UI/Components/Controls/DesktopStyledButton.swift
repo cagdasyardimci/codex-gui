@@ -41,12 +41,17 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	enum Presentation: Equatable
 	{
-		case primary, secondary, destructive, quiet, link, icon, revealingIcon, toggle, menuTrigger
-		case nativeDefault, nativeBorderless, nativeLink, nativeInline, nativeProminent, nativeIcon
+		case primary, secondary, dialogPrimary, dialogCancel, dialogOutlined, formAdd, destructive,
+				quiet, inlineAction, link, mutedLink, documentation, icon, revealingIcon, toggle,
+				menuTrigger
+		case sidebarIcon, searchIcon
 		case tab(selected: Bool)
 		case pairingTab(selected: Bool)
 		case settingsHeader(primary: Bool)
-		case imageOverlay(light: Bool)
+		case imageOverlay(
+			diagram: Bool,
+			close: Bool = false
+		)
 		case zoomStep
 	}
 
@@ -64,6 +69,19 @@ class DesktopStyledButton: DesktopTooltipButton
 			configurePresentation()
 		}
 	}
+	var showsTrailingChevron = false
+	{
+		didSet
+		{
+			invalidateIntrinsicContentSize()
+			needsDisplay = true
+		}
+	}
+	private var hasTrailingChevron: Bool
+	{
+		presentation == .menuTrigger || showsTrailingChevron
+	}
+
 	var isLoading = false
 	{
 		didSet
@@ -86,7 +104,8 @@ class DesktopStyledButton: DesktopTooltipButton
 		}
 	}
 	private var loadingIndicator: NSProgressIndicator?
-	private var dialogFocusIndicator: CAShapeLayer?
+	private let focusIndicator = DesktopControlFocusIndicator()
+	private var colorObservation: ThemeColorObservation?
 	var hoverTrackingOptions: NSTrackingArea.Options = [
 		.mouseEnteredAndExited,
 		.activeInKeyWindow,
@@ -104,19 +123,15 @@ class DesktopStyledButton: DesktopTooltipButton
 		self.presentation = presentation
 		self.size = size
 		super.init(frame: .zero)
-		if presentation == .nativeDefault
+		colorObservation = ThemeColorObservation
 		{
-			let native = NSButton(
-				title: title,
-				target: nil,
-				action: nil
-			)
-			cell = native.cell?.copy() as? NSCell
-			frame = native.frame
+			[weak self] in
+			self?.refreshDialogFocus()
+			self?.needsDisplay = true
 		}
 		self.title = title
 		isBordered = false
-		setButtonType(usesNativePresentation ? .momentaryPushIn : .momentaryChange)
+		setButtonType(.momentaryPushIn)
 		focusRingType = .exterior
 		for orientation in [NSLayoutConstraint.Orientation.horizontal, .vertical]
 		{
@@ -137,7 +152,7 @@ class DesktopStyledButton: DesktopTooltipButton
 	convenience init(
 		title: String,
 		icon: DesktopIcon? = nil,
-		presentation: Presentation = .nativeInline,
+		presentation: Presentation = .quiet,
 		size: Size = .compact,
 		target: AnyObject?,
 		action: Selector?
@@ -167,21 +182,77 @@ class DesktopStyledButton: DesktopTooltipButton
 					size: LayoutTokens.LayoutDefaults.buttonIconSize
 				)
 			}
-			imagePosition = presentation == .nativeIcon ? .imageOnly : .imageLeading
+			imagePosition = isIconOnly ? .imageOnly : .imageLeading
 		}
 	}
 
-	private var usesNativePresentation: Bool
+	private var isIconOnly: Bool
 	{
-		[
-			Presentation.nativeDefault,
-			.nativeBorderless,
-			.nativeLink,
-			.nativeInline,
-			.nativeProminent,
-			.nativeIcon
-		]
-		.contains(presentation)
+		switch presentation
+		{
+		case .icon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon, .imageOverlay: true
+		default: false
+		}
+	}
+
+	private var typographyRole: TypographyTokens.Role
+	{
+		switch presentation
+		{
+		case .zoomStep: return TypographyTokens.Button.zoomStep
+		case .dialogPrimary, .dialogCancel, .dialogOutlined: return TypographyTokens.Button.dialog
+		default: break
+		}
+		return size == .regular ? TypographyTokens.Button.regular : TypographyTokens.Button.compact
+	}
+
+	// Styling is owned here even when a caller assigns inherited AppKit font properties.
+	final override var font: NSFont?
+	{
+		get
+		{
+			AppKitFontResolver.font(
+				typographyRole,
+				appearance: effectiveAppearance
+			)
+		}
+		set
+		{
+			super.font = AppKitFontResolver.font(
+				typographyRole,
+				appearance: effectiveAppearance
+			)
+		}
+	}
+
+	final override func draw(_ dirtyRect: NSRect)
+	{
+		super.draw(dirtyRect)
+	}
+
+	final override func sendAction(
+		_ action: Selector?,
+		to target: Any?
+	) -> Bool
+	{
+		guard isEnabled
+		else
+		{
+			return false
+		}
+		return super.sendAction(
+			action,
+			to: target
+		)
+	}
+
+	override var image: NSImage?
+	{
+		didSet
+		{
+			invalidateIntrinsicContentSize()
+			needsDisplay = true
+		}
 	}
 
 	convenience init(
@@ -207,67 +278,17 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	private func configurePresentation()
 	{
-		if usesNativePresentation
-		{
-			let native = NSButton(
-				title: title,
-				target: nil,
-				action: nil
-			)
-			if cell is DesktopStyledButtonCell, let nativeCell = native.cell?.copy() as? NSCell
-			{
-				installPresentationCell(nativeCell)
-			}
-			bezelStyle = [Presentation.nativeDefault, .nativeBorderless, .nativeLink]
-				.contains(presentation)
-				? native.bezelStyle : .inline
-			isBordered = presentation == .nativeDefault && native.isBordered
-			controlSize = [Presentation.nativeDefault, .nativeBorderless, .nativeLink]
-				.contains(presentation)
-				? native.controlSize : .small
-			font = presentation == .nativeDefault ? native.font
-				: size == .mini ? .systemFont(ofSize: 10)
-				: size == .small ? .systemFont(ofSize: 11)
-				: size == .regular ? .systemFont(ofSize: 13)
-				: AppKitFontResolver.font(presentation == .nativeProminent
-					? TypographyTokens.Controls.prominentButton : TypographyTokens.Controls.button)
-			contentTintColor = presentation == .nativeDefault ? native.contentTintColor
-				: presentation == .nativeLink ? .linkColor
-				: presentation == .nativeProminent ? .labelColor : .secondaryLabelColor
-			imagePosition = presentation == .nativeIcon ? .imageOnly
-				: image == nil ? native.imagePosition : imagePosition
-			if presentation != .nativeDefault
-			{
-				toolTip = toolTip ?? title
-			}
-			for orientation in [NSLayoutConstraint.Orientation.horizontal, .vertical]
-			{
-				setContentHuggingPriority(
-					native.contentHuggingPriority(for: orientation),
-					for: orientation
-				)
-				setContentCompressionResistancePriority(
-					orientation == .horizontal && presentation != .nativeDefault
-						? .defaultLow : native
-						.contentCompressionResistancePriority(for: orientation),
-					for: orientation
-				)
-			}
-			hasDestructiveAction = false
-			setAccessibilityRole(presentation == .nativeLink ? .link : .button)
-			focusRingType = native.focusRingType
-			invalidateIntrinsicContentSize()
-			needsDisplay = true
-			return
-		}
 		if !(cell is DesktopStyledButtonCell)
 		{
 			installPresentationCell(DesktopStyledButtonCell(textCell: title))
 		}
-		let role: TypographyTokens.Role = presentation == .zoomStep
-			? TypographyTokens.Button.zoomStep : (size == .regular
-				? TypographyTokens.Button.regular : TypographyTokens.Button.compact)
-		font = AppKitFontResolver.font(role)
+		isBordered = false
+		imagePosition = isIconOnly ? .imageOnly : image == nil ? .noImage : .imageLeading
+		setTypographyRole(typographyRole)
+		setContentCompressionResistancePriority(
+			isIconOnly ? .required : .defaultLow,
+			for: .horizontal
+		)
 		hasDestructiveAction = presentation == .destructive
 		setAccessibilityRole(presentation == .link ? .link : .button)
 		invalidateIntrinsicContentSize()
@@ -299,7 +320,7 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	override var alignmentRectInsets: NSEdgeInsets
 	{
-		usesNativePresentation ? super.alignmentRectInsets : NSEdgeInsets()
+		NSEdgeInsets()
 	}
 	override var isEnabled: Bool
 	{
@@ -326,39 +347,47 @@ class DesktopStyledButton: DesktopTooltipButton
 	}
 	override var intrinsicContentSize: NSSize
 	{
-		if usesNativePresentation
-		{
-			return super.intrinsicContentSize
-		}
-		let width = ceil((title as NSString).size(withAttributes: [.font: resolvedFont]).width)
+		let width = ceil((title as NSString).size(withAttributes: [.font: resolvedFont]).width) +
+			(image == nil || isIconOnly ? 0 : LayoutTokens.Button.artworkSize + LayoutTokens.Button
+				.contentSpacing)
 		let progress = hasLeadingProgress ? LayoutTokens.Button.progressAllowance : 0
 		switch presentation
 		{
-		case .tab, .pairingTab:
+		case .dialogPrimary, .dialogCancel, .dialogOutlined:
 			return NSSize(
-				width: width + 18,
+				width: (title as NSString).size(withAttributes: [.font: resolvedFont]).width
+					+ 2 * horizontalInset + 2 * ShapeTokens.Button.outlineWidth + progress,
+				height: LayoutTokens.Button.regularHeight
+			)
+		case .tab, .pairingTab, .formAdd:
+			return NSSize(
+				width: width + 2 * horizontalInset + progress,
 				height: LayoutTokens.Button.tabHeight
 			)
 		case .settingsHeader(let primary):
 			return NSSize(
 				width: max(
 					primary ? LayoutTokens.Settings.headerPrimaryMinimumWidth : 0,
-					width + 2 * LayoutTokens.Settings.headerActionHorizontalInset
+					width + 2 * horizontalInset + progress + (hasTrailingChevron
+						? LayoutTokens.Button.menuChevronSize + LayoutTokens.Button
+						.menuChevronSpacing : 0)
 				),
 				height: LayoutTokens.Settings.headerActionHeight
 			)
-		case .icon, .revealingIcon, .toggle:
-			let side = size == .regular
-				? LayoutTokens.Button.regularIconSize : LayoutTokens.Button.compactIconSize
+		case .icon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon:
+			let side = iconSide
 			return NSSize(
 				width: side,
 				height: side
 			)
-		case .imageOverlay(let light):
-			let side = light
+		case .imageOverlay(
+			let diagram,
+			let close
+		):
+			let side = diagram
 				? LayoutTokens.Button.diagramIconSize : LayoutTokens.Button.overlayIconSize
 			return NSSize(
-				width: side,
+				width: diagram && close ? LayoutTokens.Button.diagramCloseWidth : side,
 				height: side
 			)
 		case .zoomStep:
@@ -367,14 +396,13 @@ class DesktopStyledButton: DesktopTooltipButton
 				height: LayoutTokens.Button.zoomStepSize
 			)
 		default:
-			let inset = size == .regular
-				? LayoutTokens.Button.regularHorizontalInset : LayoutTokens.Button
-				.compactHorizontalInset
-			let trailing = presentation == .menuTrigger
+			let inset = horizontalInset
+			let trailing = hasTrailingChevron
 				? LayoutTokens.Button.menuChevronSize + LayoutTokens.Button.menuChevronSpacing : 0
 			return NSSize(
 				width: max(
-					size == .regular ? LayoutTokens.Button.regularMinimumWidth : 0,
+					size == .regular && presentation != .dialogPrimary ? LayoutTokens.Button
+						.regularMinimumWidth : 0,
 					width + 2 * inset + progress + trailing
 				),
 				height: size == .regular
@@ -382,6 +410,33 @@ class DesktopStyledButton: DesktopTooltipButton
 			)
 		}
 	}
+	private var horizontalInset: CGFloat
+	{
+		switch presentation
+		{
+		case .tab, .pairingTab: LayoutTokens.Button.compactHorizontalInset
+		case .settingsHeader: LayoutTokens.Settings.headerActionHorizontalInset
+		case .zoomStep, .inlineAction, .documentation: 0
+		default: size == .regular ? LayoutTokens.Button.regularHorizontalInset : LayoutTokens.Button
+			.compactHorizontalInset
+		}
+	}
+
+	private var iconSide: CGFloat
+	{
+		if presentation == .searchIcon
+		{
+			return LayoutTokens.Button.searchIconSize
+		}
+		switch size
+		{
+		case .mini: return LayoutTokens.Button.miniIconSize
+		case .small: return LayoutTokens.Button.smallIconSize
+		case .compact: return LayoutTokens.Button.compactIconSize
+		case .regular: return LayoutTokens.Button.regularIconSize
+		}
+	}
+
 	var isGlyphVisible: Bool
 	{
 		presentation != .revealingIcon || DesktopActionRevealState(
@@ -392,20 +447,24 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	private var resolvedFont: NSFont
 	{
-		font ?? AppKitFontResolver.font(size == .regular
-			? TypographyTokens.Button.regular : TypographyTokens.Button.compact)
+		AppKitFontResolver.font(
+			typographyRole,
+			appearance: effectiveAppearance
+		)
 	}
 
 	override func layout()
 	{
 		super.layout()
 		refreshDialogFocus()
-		loadingIndicator?.frame = NSRect(
-			x: LayoutTokens.Button.progressInset,
-			y: bounds.midY - LayoutTokens.Button.progressSize / 2,
-			width: LayoutTokens.Button.progressSize,
-			height: LayoutTokens.Button.progressSize
-		)
+		loadingIndicator?.frame = isIconOnly
+			? NSRect(
+				x: bounds.midX - 6,
+				y: bounds.midY - 6,
+				width: 12,
+				height: 12
+			)
+			: contentLayout(in: bounds).progress ?? .zero
 	}
 
 	override func viewWillMove(toWindow newWindow: NSWindow?)
@@ -414,7 +473,16 @@ class DesktopStyledButton: DesktopTooltipButton
 		{
 			loadingIndicator?.stopAnimation(nil)
 		}
+		isHovered = false
+		needsDisplay = true
 		super.viewWillMove(toWindow: newWindow)
+	}
+
+	override func viewDidHide()
+	{
+		isHovered = false
+		needsDisplay = true
+		super.viewDidHide()
 	}
 
 	override func viewDidMoveToWindow()
@@ -449,7 +517,11 @@ class DesktopStyledButton: DesktopTooltipButton
 		tracking = DesktopHoverTracking.replace(
 			in: self,
 			previous: tracking,
-			options: hoverTrackingOptions
+			options: presentation == .searchIcon ? [
+				.mouseEnteredAndExited,
+				.activeAlways,
+				.inVisibleRect
+			] : hoverTrackingOptions
 		)
 		if presentation == .revealingIcon
 		{
@@ -473,56 +545,26 @@ class DesktopStyledButton: DesktopTooltipButton
 		let accepted = super.becomeFirstResponder()
 		needsLayout = true
 		needsDisplay = true
+		needsDisplay = true
 		return accepted
 	}
 
 	private func refreshDialogFocus()
 	{
-		guard keyboardFocusPolicy == .dialog
+		let shape: DesktopControlFocusIndicator.Shape?
+		if case .imageOverlay = presentation
+		{
+			shape = .capsule
+		}
 		else
 		{
-			dialogFocusIndicator?.isHidden = true
-			return
+			shape = keyboardFocusPolicy == .dialog ? .dialog : nil
 		}
-		if dialogFocusIndicator == nil
-		{
-			wantsLayer = true
-			let indicator = CAShapeLayer()
-			indicator.fillColor = nil
-			indicator.lineWidth = 2
-			indicator.zPosition = 100
-			layer?.addSublayer(indicator)
-			dialogFocusIndicator = indicator
-		}
-		guard let indicator = dialogFocusIndicator
-		else
-		{
-			return
-		}
-		CATransaction.begin()
-		CATransaction.setDisableActions(true)
-		defer
-		{
-			CATransaction.commit()
-		}
-		indicator.isHidden = !isEnabled || window?.firstResponder !== self
-		indicator.frame = bounds
-		indicator.contentsScale = window?.backingScaleFactor ?? 2
-		indicator.path = AppKitShapePath.roundedCGPath(
-			bounds.insetBy(
-				dx: 2,
-				dy: 2
-			),
-			radius: min(
-				8,
-				bounds.height / 2 - 2
-			),
-			curve: ShapeTokens.Connections.curve
+		focusIndicator.update(
+			in: self,
+			shape: shape,
+			focused: isEnabled && window?.firstResponder === self
 		)
-		effectiveAppearance.performAsCurrentDrawingAppearance
-		{
-			indicator.strokeColor = NSColor.keyboardFocusIndicatorColor.cgColor
-		}
 	}
 
 	override func resignFirstResponder() -> Bool
@@ -558,7 +600,9 @@ class DesktopStyledButton: DesktopTooltipButton
 		{
 		case .tab, .pairingTab, .toggle: ShapeTokens.Button.tabRadius
 		case .settingsHeader: ShapeTokens.Settings.headerActionRadius
-		case .icon, .revealingIcon, .zoomStep: ShapeTokens.Button.iconRadius
+		case .formAdd: ShapeTokens.Button.regularRadius
+		case .icon, .revealingIcon, .sidebarIcon, .searchIcon,
+				.zoomStep: ShapeTokens.Button.iconRadius
 		case .imageOverlay: bounds.height / 2
 		default: size == .regular ? ShapeTokens.Button.regularRadius : bounds.height / 2
 		}
@@ -581,84 +625,230 @@ class DesktopStyledButton: DesktopTooltipButton
 			NSGraphicsContext.restoreGraphicsState()
 		}
 		bounds.clip()
+		let groupDisabled = !isEnabled && keyboardFocusPolicy == .dialog &&
+			(presentation == .primary || presentation == .secondary)
+		if groupDisabled
+		{
+			NSGraphicsContext.current?.cgContext.setAlpha(0.4)
+			NSGraphicsContext.current?.cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
+		}
+		defer
+		{
+			if groupDisabled
+			{
+				NSGraphicsContext.current?.cgContext.endTransparencyLayer()
+			}
+		}
 		let active = isEnabled && (isHovered || isHighlighted)
 		let foreground = drawSurface(active: active)
-		if case .imageOverlay = presentation
+		if isIconOnly
 		{
-			drawImage(foreground)
-			return
-		}
-		if presentation == .icon || presentation == .revealingIcon || presentation == .toggle
-		{
-			if isGlyphVisible
+			if isGlyphVisible && !isLoading
 			{
 				drawImage(foreground)
 			}
 			return
 		}
-		if presentation == .menuTrigger
-		{
-			drawMenuTrigger(foreground)
-			return
-		}
-		let attributes: [NSAttributedString.Key: Any] = [
-			.font: resolvedFont,
-			.foregroundColor: foreground,
-		]
-		let measured = (title as NSString).size(withAttributes: attributes)
-		let origin = NSPoint(
-			x: bounds.midX - measured.width / 2
-				+ (hasLeadingProgress ? LayoutTokens.Button.progressAllowance / 2 : 0),
-			y: bounds.midY - measured.height / 2
+		let layout = contentLayout(in: bounds)
+		var attributes = AppKitFontResolver.textAttributes(
+			typographyRole,
+			font: resolvedFont
 		)
+		let paragraph = (attributes[.paragraphStyle] as? NSParagraphStyle)?
+			.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+		paragraph.lineBreakMode = .byTruncatingTail
+		attributes[.foregroundColor] = foreground
+		attributes[.paragraphStyle] = paragraph
+		if let image, let rect = layout.image
+		{
+			DesktopIcons.draw(
+				image,
+				in: rect,
+				tint: foreground
+			)
+		}
 		(title as NSString).draw(
-			at: origin,
+			in: layout.title,
 			withAttributes: attributes
 		)
-		if presentation == .link && active
+		if let rect = layout.chevron
+		{
+			DesktopIcons.draw(
+				DesktopIcons.image(showsTrailingChevron ? .chevronDown : .chevronRight),
+				in: rect,
+				tint: foreground
+			)
+		}
+		if (presentation == .link && active) || presentation == .mutedLink
 		{
 			foreground.setFill()
 			NSRect(
-				x: origin.x,
-				y: origin.y,
-				width: measured.width,
+				x: layout.title.minX,
+				y: layout.title.minY,
+				width: layout.title.width,
 				height: 1
-			).fill()
+			)
+			.fill()
 		}
+	}
+
+	struct ContentLayout
+	{
+		let title: NSRect
+		let image: NSRect?
+		let progress: NSRect?
+		let chevron: NSRect?
+	}
+
+	// Measurement and painting share the same content slots, including constrained widths.
+	func contentLayout(in bounds: NSRect) -> ContentLayout
+	{
+		let inset = horizontalInset
+		let imageWidth = image == nil ? 0 : LayoutTokens.Button.artworkSize
+		let imageSpace = imageWidth == 0 ? 0 : imageWidth + LayoutTokens.Button.contentSpacing
+		let progressSpace = isLoading ? LayoutTokens.Button.progressAllowance : 0
+		let chevronSpace = hasTrailingChevron ? LayoutTokens.Button
+			.menuChevronSize + LayoutTokens.Button.menuChevronSpacing : 0
+		let available = max(
+			0,
+			bounds.width - 2 * inset
+		)
+		let natural = (title as NSString).size(withAttributes: [.font: resolvedFont])
+		let titleWidth = min(
+			natural.width,
+			max(
+				0,
+				available - imageSpace - progressSpace - chevronSpace
+			)
+		)
+		let width = min(
+			available,
+			titleWidth + imageSpace + progressSpace + chevronSpace
+		)
+		let x = alignment == .left ? bounds.minX + inset : alignment == .right ? bounds
+			.maxX - inset - width : bounds.midX - width / 2
+		func rect(
+			_ x: CGFloat,
+			_ width: CGFloat,
+			_ height: CGFloat
+		) -> NSRect
+		{
+			NSRect(
+				x: x,
+				y: bounds.midY - height / 2,
+				width: width,
+				height: height
+			)
+		}
+		return ContentLayout(
+			title: rect(
+				x + progressSpace + (presentation == .documentation ? 0 : imageSpace),
+				titleWidth,
+				max(
+					natural.height,
+					typographyRole.lineHeight ?? 0
+				)
+			),
+			image: imageWidth == 0 ? nil : rect(
+				x + progressSpace +
+					(presentation == .documentation ? titleWidth + LayoutTokens.Button
+						.contentSpacing : 0),
+				imageWidth,
+				imageWidth
+			),
+			progress: !isLoading ? nil : rect(
+				x,
+				LayoutTokens.Button.progressSize,
+				LayoutTokens.Button.progressSize
+			),
+			chevron: chevronSpace == 0 ? nil : rect(
+				x + width - LayoutTokens.Button.menuChevronSize,
+				LayoutTokens.Button.menuChevronSize,
+				LayoutTokens.Button.menuChevronSize
+			)
+		)
 	}
 
 	private func drawSurface(active: Bool) -> NSColor
 	{
-		let enabledAlpha: CGFloat = isEnabled ? 1 : 0.4
+		let grouped = keyboardFocusPolicy == .dialog &&
+			(presentation == .primary || presentation == .secondary)
+		let foregroundEnabled = isEnabled || grouped
 		let primaryText = AppKitColorTokens.settingsPrimaryText
 		switch presentation
 		{
-		case .nativeDefault, .nativeBorderless, .nativeLink, .nativeInline, .nativeProminent,
-				.nativeIcon:
-			return contentTintColor ?? .secondaryLabelColor
-		case .primary:
-			AppKitColorTokens.buttonPrimarySurface.withAlphaComponent(
-				!isEnabled ? 0.4 : (active ? 0.8 : 1)
-			).setFill()
+		case .sidebarIcon, .searchIcon:
+			let selected = state == .on
+			if active || selected
+			{
+				AppKitColorTokens.sidebarButtonSurface(pressed: isHighlighted).setFill()
+				outline.fill()
+			}
+			let color = (active || selected ? AppKitColorTokens.primaryText : AppKitColorTokens
+				.secondaryText)
+			return AppKitColorTokens.enabledForeground(
+				color,
+				enabled: foregroundEnabled
+			)
+		case .primary, .dialogPrimary:
+			AppKitColorTokens.primaryButtonSurface(
+				enabled: foregroundEnabled,
+				active: active
+			)
+			.setFill()
 			outline.fill()
-			return AppKitColorTokens.buttonPrimaryText.withAlphaComponent(enabledAlpha)
-		case .secondary:
-			(active ? AppKitColorTokens.connectionsSecondaryHover
-				: AppKitColorTokens.buttonSecondarySurface).setFill()
+			return AppKitColorTokens.enabledForeground(
+				AppKitColorTokens.buttonPrimaryText,
+				enabled: foregroundEnabled
+			)
+		case .dialogOutlined, .dialogCancel:
+			(active ? AppKitColorTokens.settingsSelectorHover : AppKitColorTokens
+				.buttonSecondarySurface).setFill()
 			outline.fill()
-			AppKitColorTokens.buttonSecondaryEdge.withAlphaComponent(
-				AppKitColorTokens.buttonSecondaryEdge.alphaComponent * enabledAlpha
-			).setStroke()
+			AppKitColorTokens.buttonSecondaryEdge.setStroke()
 			outline.lineWidth = ShapeTokens.Button.outlineWidth
 			outline.stroke()
-			return primaryText.withAlphaComponent(enabledAlpha)
+			return AppKitColorTokens.enabledForeground(
+				primaryText,
+				enabled: foregroundEnabled
+			)
+		case .formAdd:
+			AppKitColorTokens.selectedButtonTab(active: active).setFill()
+			outline.fill()
+			return AppKitColorTokens.enabledForeground(
+				AppKitColorTokens.secondaryText,
+				enabled: foregroundEnabled
+			)
+		case .secondary:
+			(active ? AppKitColorTokens.settingsSelectorHover
+				: (grouped ? AppKitColorTokens.buttonDialogSecondarySurface
+					: AppKitColorTokens.buttonSecondarySurface)).setFill()
+			outline.fill()
+			if !grouped
+			{
+				AppKitColorTokens.enabledForeground(
+					AppKitColorTokens.buttonSecondaryEdge,
+					enabled: foregroundEnabled
+				).setStroke()
+				outline.lineWidth = ShapeTokens.Button.outlineWidth
+				outline.stroke()
+			}
+			return AppKitColorTokens.enabledForeground(
+				primaryText,
+				enabled: foregroundEnabled
+			)
 		case .destructive:
-			AppKitColorTokens.buttonDestructiveText.withAlphaComponent(
-				isEnabled ? (active ? 0.2 : 0.1) : 0.04
+			AppKitColorTokens.destructiveButtonSurface(
+				enabled: isEnabled,
+				active: active
 			).setFill()
 			outline.fill()
-			return AppKitColorTokens.buttonDestructiveText.withAlphaComponent(enabledAlpha)
-		case .quiet, .icon, .revealingIcon, .link, .zoomStep, .toggle, .menuTrigger:
+			return AppKitColorTokens.enabledForeground(
+				AppKitColorTokens.buttonDestructiveText,
+				enabled: foregroundEnabled
+			)
+		case .quiet, .inlineAction, .icon, .revealingIcon, .link, .mutedLink, .zoomStep, .toggle,
+				.menuTrigger, .documentation:
 			if active || (presentation == .toggle && state == .on)
 			{
 				AppKitColorTokens.settingsSelectorHover.setFill()
@@ -667,43 +857,67 @@ class DesktopStyledButton: DesktopTooltipButton
 			if presentation ==
 				.zoomStep
 			{
-				return NSColor.darkGray.withAlphaComponent(enabledAlpha)
+				return AppKitColorTokens.enabledForeground(
+					AppKitColorTokens.imageControlText,
+					enabled: foregroundEnabled
+				)
+			}
+			if presentation == .mutedLink || presentation == .documentation
+			{
+				return AppKitColorTokens.enabledForeground(
+					AppKitColorTokens.secondaryText,
+					enabled: foregroundEnabled
+				)
 			}
 			if presentation == .link
 			{
-				return NSColor.linkColor.withAlphaComponent(enabledAlpha)
+				return AppKitColorTokens.enabledForeground(
+					AppKitColorTokens.accentText,
+					enabled: foregroundEnabled
+				)
 			}
-			return primaryText.withAlphaComponent(enabledAlpha)
-		case .imageOverlay(let light):
+			return AppKitColorTokens.enabledForeground(
+				primaryText,
+				enabled: foregroundEnabled
+			)
+		case .imageOverlay:
 			ExpandedImageHeaderDrawing.drawBackground(
 				control: self,
-				hover: isHovered,
-				lightSurface: light
+				hover: isHovered
 			)
-			return ExpandedImageHeaderDrawing.foreground(
-				enabled: isEnabled,
-				lightSurface: light
-			)
+			return ExpandedImageHeaderDrawing.foreground(enabled: isEnabled)
 		case .tab(let selected):
-			if selected || active
+			if selected
 			{
-				primaryText.withAlphaComponent(selected ? (active ? 0.1 : 0.05) : 0.055).setFill()
+				AppKitColorTokens.selectedButtonTab(active: active).setFill()
 				outline.fill()
 			}
-			return (selected ? primaryText : AppKitColorTokens.settingsTertiaryText)
-				.withAlphaComponent(enabledAlpha)
+			else if active
+			{
+				AppKitColorTokens.settingsSelectorHover.setFill()
+				outline.fill()
+			}
+			let color = selected ? primaryText : AppKitColorTokens.settingsTertiaryText
+			return isEnabled ? color : AppKitColorTokens.enabledForeground(
+				color,
+				enabled: foregroundEnabled
+			)
 		case .pairingTab(let selected):
 			if selected
 			{
 				AppKitColorTokens.pairingSegmentSelected.setFill(); outline.fill()
 			}
-			return (selected ? primaryText : AppKitColorTokens.settingsSecondaryText)
-				.withAlphaComponent(enabledAlpha)
+			let color = selected ? primaryText : AppKitColorTokens.settingsSecondaryText
+			return isEnabled ? color : AppKitColorTokens.enabledForeground(
+				color,
+				enabled: foregroundEnabled
+			)
 		case .settingsHeader(let primary):
-			let fill = primary ? AppKitColorTokens.buttonPrimarySurface
-				: (active ? AppKitColorTokens.connectionsSecondaryHover
-					: AppKitColorTokens.settingsHeaderActionSurface)
-			fill.withAlphaComponent(!isEnabled ? 0.4 : (primary && active ? 0.8 : 1)).setFill()
+			AppKitColorTokens.headerButtonSurface(
+				primary: primary,
+				active: active,
+				enabled: isEnabled
+			).setFill()
 			outline.fill()
 			if !primary
 			{
@@ -711,48 +925,11 @@ class DesktopStyledButton: DesktopTooltipButton
 				outline.lineWidth = 1
 				outline.stroke()
 			}
-			return (primary ? AppKitColorTokens.settingsHeaderPrimaryText : primaryText)
-				.withAlphaComponent(enabledAlpha)
+			return AppKitColorTokens.enabledForeground(
+				primary ? AppKitColorTokens.settingsHeaderPrimaryText : primaryText,
+				enabled: foregroundEnabled
+			)
 		}
-	}
-
-	private func drawMenuTrigger(_ tint: NSColor)
-	{
-		let inset = size == .regular
-			? LayoutTokens.Button.regularHorizontalInset : LayoutTokens.Button
-			.compactHorizontalInset
-		let side = LayoutTokens.Button.menuChevronSize
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineBreakMode = .byTruncatingMiddle
-		let attributes: [NSAttributedString.Key: Any] = [
-			.font: resolvedFont,
-			.foregroundColor: tint,
-			.paragraphStyle: paragraph
-		]
-		let height = (title as NSString).size(withAttributes: attributes).height
-		(title as NSString).draw(
-			in: NSRect(
-				x: inset,
-				y: bounds.midY - height / 2,
-				width: max(
-					0,
-					bounds.width - 2 * inset - side
-						- LayoutTokens.Button.menuChevronSpacing
-				),
-				height: height
-			),
-			withAttributes: attributes
-		)
-		DesktopIcons.draw(
-			DesktopIcons.image(.chevronRight),
-			in: NSRect(
-				x: bounds.maxX - inset - side,
-				y: bounds.midY - side / 2,
-				width: side,
-				height: side
-			),
-			tint: tint
-		)
 	}
 
 	private func drawImage(_ tint: NSColor)
@@ -776,18 +953,11 @@ class DesktopStyledButton: DesktopTooltipButton
 	}
 	override var focusRingMaskBounds: NSRect
 	{
-		usesNativePresentation ? super.focusRingMaskBounds : bounds
+		bounds
 	}
 	override func drawFocusRingMask()
 	{
-		if usesNativePresentation
-		{
-			super.drawFocusRingMask()
-		}
-		else
-		{
-			outline.fill()
-		}
+		outline.fill()
 	}
 }
 
