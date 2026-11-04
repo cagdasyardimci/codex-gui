@@ -13,9 +13,10 @@ enum AppKitControlStyling
 		button.bezelStyle = .inline
 		button.isBordered = false
 		button.controlSize = .small
-		button.font = AppKitFontResolver.font(prominent
+		button.setTypographyRole(prominent
 			? TypographyTokens.Controls.prominentButton : TypographyTokens.Controls.button)
-		button.contentTintColor = prominent ? .labelColor : .secondaryLabelColor
+		button.contentTintColor = prominent ? AppKitColorTokens.primaryText : AppKitColorTokens
+			.secondaryText
 		if let icon
 		{
 			button.image = DesktopIcons.image(
@@ -34,8 +35,8 @@ enum AppKitControlStyling
 	static func sectionLabel(_ text: String) -> NSTextField
 	{
 		let label = NSTextField(labelWithString: text)
-		label.font = AppKitFontResolver.font(TypographyTokens.Controls.section)
-		label.textColor = .secondaryLabelColor
+		label.setTypographyRole(TypographyTokens.Controls.section)
+		label.textColor = AppKitColorTokens.secondaryText
 		return label
 	}
 

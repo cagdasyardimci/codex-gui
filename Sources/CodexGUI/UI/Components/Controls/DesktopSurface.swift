@@ -3,14 +3,15 @@ import AppKit
 @MainActor
 class DesktopSurface: NSView
 {
-	private let color: NSColor
+	private let colorProvider: () -> NSColor
 	private let cornerRadius: CGFloat
 	private let cornerCurve: ShapeTokens.CornerCurve
 	private let bordered: Bool
 	private let borderWidth: CGFloat
-	private let borderColor: NSColor
+	private let borderColorProvider: () -> NSColor
 	private let shadows: [ShadowTokens.Style]
 	private var shadowLayers: [CALayer] = []
+	private var colorObservation: ThemeColorObservation?
 
 	init(
 		_ color: NSColor,
@@ -19,17 +20,31 @@ class DesktopSurface: NSView
 		bordered: Bool = false,
 		borderWidth: CGFloat = 1,
 		borderColor: NSColor? = nil,
+		colorProvider: (() -> NSColor)? = nil,
+		borderColorProvider: (() -> NSColor)? = nil,
 		shadows: [ShadowTokens.Style] = []
 	)
 	{
-		self.color = color
+		self.colorProvider = colorProvider ??
+		{
+			color
+		}
 		self.cornerRadius = cornerRadius
 		self.cornerCurve = cornerCurve
 		self.bordered = bordered
 		self.borderWidth = borderWidth
-		self.borderColor = borderColor ?? AppKitColorTokens.border
+		self.borderColorProvider = borderColorProvider ??
+		{
+			borderColor ?? AppKitColorTokens.border
+		}
 		self.shadows = shadows
 		super.init(frame: .zero)
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			self?.updateShadows()
+			self?.needsDisplay = true
+		}
 		if !shadows.isEmpty
 		{
 			wantsLayer = true
@@ -87,7 +102,7 @@ class DesktopSurface: NSView
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		color.setFill()
+		colorProvider().setFill()
 		let inset: CGFloat = bordered ? borderWidth / 2 : 0
 		let path = AppKitShapePath.roundedRect(
 			bounds.insetBy(
@@ -100,7 +115,7 @@ class DesktopSurface: NSView
 		path.fill()
 		if bordered
 		{
-			borderColor.setStroke()
+			borderColorProvider().setStroke()
 			path.lineWidth = borderWidth
 			path.stroke()
 		}

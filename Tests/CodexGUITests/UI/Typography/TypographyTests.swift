@@ -129,6 +129,53 @@ struct TypographyBindingTests
 		#expect(defaults.dictionary(forKey: "appearance.typography")?["code"] as? Int == 16)
 	}
 
+	@Test func liveBindingPreservesControlContentAndButtonState() throws
+	{
+		let center = NotificationCenter()
+		let state = ConfigurationState()
+		let button = NSButton(
+			checkboxWithTitle: "Keep selected",
+			target: nil,
+			action: nil
+		)
+		button.state = .on
+		button.setTypographyRole(
+			TypographyTokens.UI.small,
+			configuration:
+			{
+				state.value
+			},
+			center: center
+		)
+		let field = NSTextField(labelWithString: "Retained value")
+		field.setTypographyRole(
+			TypographyTokens.UI.body,
+			configuration:
+			{
+				state.value
+			},
+			center: center
+		)
+		state.value = TypographyConfiguration(
+			uiSize: 16,
+			codeSize: 10
+		)
+		center.post(
+			name: TypographyPreferences.didChange,
+			object: nil
+		)
+		#expect(button.state == .on)
+		#expect(button.title == "Keep selected")
+		#expect(button.font?.pointSize == 15)
+		#expect(field.stringValue == "Retained value")
+		#expect(field.font?.pointSize == 16)
+		#expect((field.attributedStringValue.attribute(
+			.font,
+			at: 0,
+			effectiveRange: nil
+		) as? NSFont)?.pointSize == 16)
+	}
+
 	@Test func nativeLineBoxesAccommodateGlyphMetrics() throws
 	{
 		let role = TypographyTokens.Composer.editor

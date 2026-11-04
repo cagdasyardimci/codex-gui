@@ -6,6 +6,17 @@ import Testing
 @MainActor
 struct PresetFontSelectionTests
 {
+	@Test func typographyBindingDoesNotRetainItsView()
+	{
+		weak var retained: NSTextField?
+		autoreleasepool
+		{
+			let field = NSTextField(labelWithString: "Label")
+			field.setTypographyRole(TypographyTokens.Role(size: 14))
+			retained = field
+		}
+		#expect(retained == nil)
+	}
 	@Test func presetFamiliesFollowAppearanceAndRetainSizeAndWeight() throws
 	{
 		let matrix = try #require(ColorThemePresets.preset(
