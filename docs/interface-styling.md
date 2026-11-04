@@ -42,7 +42,7 @@ Find existing controls and compositions in [UI/Components](../Sources/CodexGUI/U
 
 Each main window needs its own toolbar identifier: AppKit synchronizes items between toolbars sharing an identifier even when configuration autosaving is disabled. The application supplies toolbar composition, so autosaving remains disabled.
 
-Composer editors paint their enclosing surface color so AppKit can erase the previous insertion point. Popover shadows need transparent panel padding to avoid clipping; adding a second native window shadow darkens the result. System-controlled blur and shadow kernels require rendered comparison.
+Composer editors paint their enclosing surface color so AppKit can erase the previous insertion point. Popover hosts establish their preferred geometry before attaching constrained content, so initial layout never evaluates padded controls against a zero-width surface. Popover shadows need transparent panel padding to avoid clipping; adding a second native window shadow darkens the result. System-controlled blur and shadow kernels require rendered comparison.
 
 Rich Mermaid rendering uses a WebKit-prepared vector PDF for AppKit display because AppKit's direct SVG decoder loses Mermaid CSS, text positioning and markers. Exports retain SVG. Offline dependency installation and rebuild instructions belong to the [Markdown resource guide](markdown-resources.md).
 

@@ -4,6 +4,7 @@ import AppKit
 @MainActor
 class DesktopHoverPreviewSurface: DesktopSurface
 {
+	private var themeColorObservation: ThemeColorObservation?
 	static let preferredWidth: CGFloat = 320
 	static let contentInset: CGFloat = 10
 	static let minimumHeight: CGFloat = 60
@@ -17,6 +18,10 @@ class DesktopHoverPreviewSurface: DesktopSurface
 			borderWidth: 0.5,
 			borderColor: AppKitColorTokens.popoverEdge
 		)
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshSurfaceColor()
+		}
 		self.frame = frame
 		wantsLayer = true
 		layer?.cornerRadius = 12

@@ -100,6 +100,8 @@ final class DesktopPopoverHost
 	private var dimmer: NSView?
 	private var typeaheadPrefix = ""
 	private var lastTypeaheadTime: TimeInterval?
+	private var typographyObservation: TypographyObservation?
+	private var menuRows: (main: [NSView], submenu: [NSView]) = ([], [])
 
 	init(
 		presentation: Presentation,
@@ -171,12 +173,22 @@ final class DesktopPopoverHost
 				if shadowOutset > 0 || usesMenuSurface || usesSearchSurface
 				{
 					let wrapper = NSViewController()
+					wrapper.preferredContentSize = NSSize(
+						width: controller.preferredContentSize.width + 2 * shadowOutset,
+						height: controller.preferredContentSize.height + 2 * shadowOutset
+					)
+					// Seed geometry before installing constraints or attaching the controller.
+					panel.setContentSize(wrapper.preferredContentSize)
 					wrapper.view = root
 					wrapper.addChild(controller)
 					if usesMenuSurface
 					{
 						let surface = DesktopPopoverSurface()
 						primarySurface = surface
+						surface.frame = root.bounds.insetBy(
+							dx: shadowOutset,
+							dy: shadowOutset
+						)
 						root.addSubview(surface)
 						AppKitLayout.pin(
 							content,
@@ -192,6 +204,10 @@ final class DesktopPopoverHost
 							bordered: true
 						)
 						searchSuggestionsSurface = surface
+						surface.frame = root.bounds.insetBy(
+							dx: shadowOutset,
+							dy: shadowOutset
+						)
 						root.addSubview(surface)
 						AppKitLayout.pin(
 							content,
@@ -207,10 +223,6 @@ final class DesktopPopoverHost
 							inset: shadowOutset
 						)
 					}
-					wrapper.preferredContentSize = NSSize(
-						width: controller.preferredContentSize.width + 2 * shadowOutset,
-						height: controller.preferredContentSize.height + 2 * shadowOutset
-					)
 					panel.contentViewController = wrapper
 				}
 				else
@@ -219,6 +231,21 @@ final class DesktopPopoverHost
 				}
 			}
 		}
+		typographyObservation = TypographyObservation(view: root)
+		{
+			[weak self] in
+			guard let self, isShown
+			else
+			{
+				return
+			}
+			reposition()
+			layoutMenuRows(
+				main: menuRows.main,
+				submenu: menuRows.submenu
+			)
+		}
+
 	}
 
 	func layoutMenuRows(
@@ -226,6 +253,7 @@ final class DesktopPopoverHost
 		submenu: [NSView]
 	)
 	{
+		menuRows = (main, submenu)
 		for (surface, rows) in [(primarySurface, main), (submenuSurface, submenu)]
 		{
 			guard let surface
@@ -297,7 +325,7 @@ final class DesktopPopoverHost
 		) = presentation, placement == .centered,
 			let contentView = parent.contentView
 		{
-			let dimmer = DesktopSurface(NSColor.black.withAlphaComponent(0.14))
+			let dimmer = DesktopSurface(AppKitColorTokens.popoverScrim)
 			dimmer.frame = contentView.bounds
 			dimmer.autoresizingMask = [.width, .height]
 			contentView.addSubview(dimmer)
@@ -795,11 +823,33 @@ final class DesktopPopoverHost
 			content.bounds,
 			to: nil
 		))
-		let available = contentFrame.intersection(parent.screen?.visibleFrame ?? contentFrame)
-			.insetBy(
-				dx: 12,
-				dy: 12
-			)
+		let viewport = placement == .centered ? parent.frame : contentFrame
+		let frame = Self.searchFrame(
+			viewport: viewport,
+			visibleFrame: parent.screen?.visibleFrame ?? viewport,
+			anchorRect: anchorRect,
+			placement: placement,
+			requestedSize: requestedSize
+		)
+		if controller?.preferredContentSize != frame.size
+		{
+			controller?.preferredContentSize = frame.size
+		}
+		return frame
+	}
+
+	static func searchFrame(
+		viewport: NSRect,
+		visibleFrame: NSRect,
+		anchorRect: NSRect,
+		placement: SearchPlacement,
+		requestedSize: NSSize
+	) -> NSRect
+	{
+		let available = viewport.intersection(visibleFrame).insetBy(
+			dx: 12,
+			dy: 12
+		)
 		let size = NSSize(
 			width: min(
 				requestedSize.width,
@@ -816,13 +866,9 @@ final class DesktopPopoverHost
 				)
 			)
 		)
-		if controller?.preferredContentSize != size
-		{
-			controller?.preferredContentSize = size
-		}
-		let x = placement == .centered ? available.midX - size.width / 2
+		let x = placement == .centered ? viewport.midX - size.width / 2
 			: anchorRect.midX - size.width / 2
-		let y = placement == .centered ? available.midY - size.height / 2
+		let y = placement == .centered ? viewport.midY - size.height / 2
 			: anchorRect.minY - 8 - size.height
 		return NSRect(
 			x: min(

@@ -1,13 +1,13 @@
 import AppKit
 
-/// A separate panel follows its anchor's appearance, including local view overrides.
+/// A separate window follows its anchor's appearance, including local view overrides.
 @MainActor
 final class DesktopPanelAppearanceBinding
 {
 	private var observation: NSKeyValueObservation?
 
 	init(
-		panel: NSPanel,
+		panel: NSWindow,
 		source: NSView
 	)
 	{

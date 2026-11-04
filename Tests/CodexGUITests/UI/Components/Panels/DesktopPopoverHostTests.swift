@@ -7,6 +7,26 @@ import Testing
 @Suite(.serialized)
 struct DesktopPopoverHostTests
 {
+	@Test func materialComposerHasUsableGeometryBeforePresentation() throws
+	{
+		_ = NSApplication.shared
+		let picker = ModelEffortPopoverView()
+		let host = DesktopPopoverHost(
+			presentation: .composer(DesktopPopoverHost.ComposerPlacement()),
+			content: picker.view,
+			controller: picker
+		)
+		defer
+		{
+			host.close()
+		}
+		let surface = try #require(host.primarySurface)
+		#expect(surface.bounds.size == picker.preferredContentSize)
+		surface.layoutSubtreeIfNeeded()
+		#expect(picker.view.bounds.size == picker.preferredContentSize)
+		#expect(!picker.view.hasAmbiguousLayout)
+	}
+
 	@Test func composerPanelClicksUseTheirEventWindowBeforeTheAmbientPointer() async throws
 	{
 		try await AppKitTestIsolation.perform
@@ -98,6 +118,68 @@ struct DesktopPopoverHostTests
 			host.close()
 			#expect(changes == [true, false])
 		}
+	}
+
+	@Test func centeredSearchUsesParentMidpointBeforeClampingToVisibleBounds()
+	{
+		let viewport = NSRect(
+			x: 0,
+			y: 0,
+			width: 1000,
+			height: 800
+		)
+		let visible = NSRect(
+			x: 0,
+			y: 1,
+			width: 1000,
+			height: 799
+		)
+		let anchor = NSRect(
+			x: 100,
+			y: 400,
+			width: 40,
+			height: 20
+		)
+		let centered = DesktopPopoverHost.searchFrame(
+			viewport: viewport,
+			visibleFrame: visible,
+			anchorRect: anchor,
+			placement: .centered,
+			requestedSize: NSSize(
+				width: 400,
+				height: 300
+			)
+		)
+		#expect(centered.midX == viewport.midX)
+		#expect(centered.midY == viewport.midY)
+		let clamped = DesktopPopoverHost.searchFrame(
+			viewport: viewport,
+			visibleFrame: NSRect(
+				x: 300,
+				y: 1,
+				width: 700,
+				height: 799
+			),
+			anchorRect: anchor,
+			placement: .centered,
+			requestedSize: NSSize(
+				width: 600,
+				height: 300
+			)
+		)
+		#expect(clamped.minX == 312)
+		let anchored = DesktopPopoverHost.searchFrame(
+			viewport: viewport,
+			visibleFrame: visible,
+			anchorRect: anchor,
+			placement: .belowAnchor,
+			requestedSize: NSSize(
+				width: 100,
+				height: 100
+			)
+		)
+		#expect(anchored.midX == anchor.midX)
+		#expect(anchored.maxY == anchor.minY - 8)
 	}
 
 	@Test func materialMenuAndSearchShareDismissalButKeepTheirParentClickPolicy() async throws

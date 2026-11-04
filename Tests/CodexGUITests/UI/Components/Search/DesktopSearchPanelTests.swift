@@ -33,6 +33,7 @@ struct DesktopSearchPanelTests
 			let panel = try #require(field.window)
 			#expect(navigation.searchPopover.isShown)
 			#expect(panel.parent === window)
+			#expect(abs(panel.frame.midY - window.frame.midY) < 0.5)
 			try verifyViewport(
 				field: field,
 				width: 520,
@@ -94,7 +95,7 @@ struct DesktopSearchPanelTests
 				object: window
 			)
 			#expect(panel.frame.width == 436)
-			#expect(panel.frame.height == 336)
+			#expect(panel.frame.height == window.frame.height - 24)
 			try capture(
 				panel,
 				name: "chat-narrow"
