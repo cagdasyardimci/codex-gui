@@ -6,8 +6,21 @@ final class TaskSidebarCellView: NSTableCellView
 	var onTogglePin: (() -> Void)?
 	var onMarkUnread: (() -> Void)?
 	var isPinned = false
+	{
+		didSet
+		{
+			pinButton.symbol = isPinned ? .pinFilled : .pin
+			pinButton.toolTip = isPinned ? "Unpin" : "Pin"
+			pinButton.setAccessibilityLabel(isPinned ? "Unpin task" : "Pin task")
+		}
+	}
 	var onArchive: (() -> Void)?
 	var onDelete: (() -> Void)?
+	let pinButton = DesktopStyledButton(
+		title: "Pin",
+		target: nil,
+		action: nil
+	)
 	let archiveButton = DesktopStyledButton(
 		title: "Archive",
 		target: nil,
@@ -66,15 +79,22 @@ final class TaskSidebarCellView: NSTableCellView
 
 	private func configureActionButtons()
 	{
+		pinButton.target = self
+		pinButton.action = #selector(togglePin)
+		pinButton.presentation = .sidebarIcon
+		pinButton.size = .mini
+		pinButton.symbol = .pin
 		archiveButton.target = self
 		archiveButton.action = #selector(archiveTask)
 		archiveButton.presentation = .sidebarIcon
+		archiveButton.size = .mini
 		archiveButton.symbol = .archive
 		deleteButton.target = self
 		deleteButton.action = #selector(deleteTask)
 		deleteButton.presentation = .sidebarIcon
+		deleteButton.size = .mini
 		deleteButton.symbol = .trash
-		for button in [archiveButton, deleteButton]
+		for button in [pinButton, archiveButton]
 		{
 			button.toolTip = button.title
 			button.setAccessibilityLabel(button.title + " task")
@@ -311,6 +331,12 @@ final class TaskSidebarCellView: NSTableCellView
 			dismissHoverCard()
 			onArchive?()
 		}
+	}
+
+	@objc private func togglePin()
+	{
+		dismissHoverCard()
+		onTogglePin?()
 	}
 
 	@objc private func deleteTask()

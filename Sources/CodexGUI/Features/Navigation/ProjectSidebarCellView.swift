@@ -18,12 +18,17 @@ final class ProjectSidebarCellView: NSTableCellView
 	private let actionStack = NSStackView()
 	private var isPointerInside = false
 	private var titleTrailingConstraint: NSLayoutConstraint?
+	private var themeColorObservation: ThemeColorObservation?
 
 	private typealias Layout = LayoutTokens.ProjectActions
 
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshTitleColor()
+		}
 		actionStack.orientation = .horizontal
 		actionStack.alignment = .centerY
 		actionStack.spacing = Layout.actionSpacing
@@ -45,7 +50,7 @@ final class ProjectSidebarCellView: NSTableCellView
 	{
 		let folder = NSImageView()
 		folder.image = DesktopIcons.image(.folder)
-		folder.contentTintColor = .secondaryLabelColor
+		folder.contentTintColor = AppKitColorTokens.secondaryText
 		folder.setAccessibilityElement(false)
 
 		return folder
@@ -54,7 +59,7 @@ final class ProjectSidebarCellView: NSTableCellView
 	private func makeProjectTitle() -> NSTextField
 	{
 		let label = SidebarTextField(labelWithString: "")
-		label.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
+		label.setTypographyRole(TypographyTokens.Sidebar.row)
 		label.lineBreakMode = .byTruncatingTail
 		label.setContentCompressionResistancePriority(
 			.defaultLow,
@@ -132,7 +137,7 @@ final class ProjectSidebarCellView: NSTableCellView
 				"Collapsed project"
 		)
 		textField?.stringValue = name
-		textField?.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
+		textField?.setTypographyRole(TypographyTokens.Sidebar.row)
 		refreshTitleColor()
 		textField?.toolTip = nil
 		setAccessibilityLabel(isCurrent ? "Selected project \(name)" : "Open project \(name)")
@@ -155,6 +160,7 @@ final class ProjectSidebarCellView: NSTableCellView
 		// The label can still have its previous appearance during the cell's appearance callback.
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
+			imageView?.contentTintColor = AppKitColorTokens.secondaryText
 			textField?.textColor = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
 				? AppKitColorTokens.primaryText : AppKitColorTokens.sidebarText
 		}
