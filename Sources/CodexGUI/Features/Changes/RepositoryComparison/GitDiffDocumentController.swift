@@ -407,6 +407,7 @@ final class GitDiffDocumentController: NSViewController
 			snapshot: snapshot
 		)
 		let menu = NSMenu(title: "File actions")
+		menu.setTypographyRole(TypographyTokens.MenuRow.title)
 		actions.addContentActions(
 			to: menu,
 			copyContentsTitle: file.isBinary ? nil : "Copy compared contents",

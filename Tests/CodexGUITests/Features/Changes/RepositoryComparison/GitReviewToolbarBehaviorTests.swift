@@ -7,6 +7,94 @@ import Testing
 struct GitReviewToolbarBehaviorTests
 {
 
+	@Test func changesTabFitsNarrowPaneWithoutBreakingRequiredWidths() throws
+	{
+		let controller = GitChangesViewController()
+		defer
+		{
+			controller.close()
+		}
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 220,
+				height: 500
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		window.contentViewController = controller
+		defer
+		{
+			window.close()
+		}
+		let root = controller.view
+		// A tools pane imposes its width; a standalone NSWindow otherwise grows to fitting size.
+		let paneWidth = root.widthAnchor.constraint(equalToConstant: 220)
+		paneWidth.isActive = true
+		defer
+		{
+			paneWidth.isActive = false
+		}
+		let tab = try #require(descendants(root).compactMap
+		{
+			$0 as? ViewerToolbarGroup
+		}
+		.first
+		{
+			group in
+			descendants(group).contains
+			{
+				($0 as? NSTextField)?.stringValue == "Changes"
+			}
+		})
+		let row = try #require(tab.superview)
+		for width: CGFloat in [220, 640, 220]
+		{
+			paneWidth.constant = width
+			window.setContentSize(NSSize(
+				width: width,
+				height: 500
+			))
+			window.layoutIfNeeded()
+			root.layoutSubtreeIfNeeded()
+			#expect(root.bounds.width == width)
+			#expect(row.bounds.width <= root.bounds.width + 0.5)
+			for label in [
+				"Close Changes",
+				"Show conversation beside Changes",
+				"Toggle conversation panel"
+			]
+			{
+				let action = try button(
+					label,
+					in: root
+				)
+				#expect(!action.isHiddenOrHasHiddenAncestor)
+				#expect(root.convert(
+					action.bounds,
+					from: action
+				).maxX <= width + 0.5)
+			}
+			#expect(tab.frame.width <= 240)
+			#expect(tab.frame.width > 0)
+			for child in row.subviews where !child.isHidden
+			{
+				#expect(child.frame.minX >= -0.5)
+				#expect(child.frame.maxX <= row.bounds.maxX + 0.5)
+			}
+			for constraint in tab.constraints where constraint.isActive
+				&& constraint.priority == .required && constraint.firstAttribute == .width
+				&& constraint.relation == .equal && constraint.secondItem == nil
+			{
+				#expect(abs(tab.frame.width - constraint.constant) < 0.5)
+			}
+		}
+	}
+
 	@Test func compactToolbarMovesActionsIntoMenuAndKeepsHeaderCompact() async throws
 	{
 		let (controller, window) = try await loadedController()

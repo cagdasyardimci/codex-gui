@@ -173,7 +173,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 			for: .horizontal
 		)
 		reviewedButton.controlSize = .small
-		reviewedButton.font = .systemFont(ofSize: 11)
+		reviewedButton.setTypographyRole(TypographyTokens.Changes.reviewAction)
 		return reviewRow
 	}
 
@@ -302,7 +302,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		if cell.textField == nil
 		{
 			let label = NSTextField(labelWithString: "")
-			label.font = .systemFont(ofSize: 12)
+			label.setTypographyRole(TypographyTokens.UI.caption)
 			label.lineBreakMode = .byTruncatingMiddle
 			cell.addSubview(label)
 			label.translatesAutoresizingMaskIntoConstraints = false
@@ -366,8 +366,8 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 		turnButton.action = #selector(selectTurn)
 		turnButton.setAccessibilityLabel("Review turn")
 
-		originLabel.textColor = .secondaryLabelColor
-		originLabel.font = .systemFont(ofSize: 11)
+		originLabel.textColor = AppKitColorTokens.secondaryText
+		originLabel.setTypographyRole(TypographyTokens.UI.metadata)
 		originLabel.setAccessibilityLabel("Source thread and turn of reported changes")
 	}
 
@@ -427,10 +427,7 @@ final class ChangesViewController: NSViewController, NSTableViewDataSource, NSTa
 			height: CGFloat.greatestFiniteMagnitude
 		)
 		diffTextView.textContainer?.widthTracksTextView = true
-		diffTextView.font = .monospacedSystemFont(
-			ofSize: 11,
-			weight: .regular
-		)
+		diffTextView.setTypographyRole(TypographyTokens.Code.output)
 		diffTextView.textContainerInset = NSSize(
 			width: 8,
 			height: 8

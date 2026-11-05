@@ -110,7 +110,7 @@ final class GitComparisonToolbarView: NSStackView
 		scopeButton.target = target
 		scopeButton.action = action
 		scopeButton.isBordered = false
-		scopeButton.font = .systemFont(ofSize: 13)
+		scopeButton.setTypographyRole(TypographyTokens.Toolbar.control)
 		scopeButton.image = NSImage(
 			systemSymbolName: "chevron.down",
 			accessibilityDescription: nil
@@ -119,12 +119,16 @@ final class GitComparisonToolbarView: NSStackView
 			weight: .regular
 		))
 		scopeButton.imagePosition = .imageTrailing
-		scopeButton.contentTintColor = .labelColor
+		scopeButton.contentTintColor = AppKitColorTokens.primaryText
+		scopeButton.presentation = .grouped
 		let scope = AppKitLayout.horizontalStack(
 			[scopeButton, diffStats],
 			spacing: 6
 		)
-		return scope
+		return ViewerToolbarGroup(
+			scope,
+			presentation: .actions
+		)
 	}
 
 	private func makeRevisionControls(
@@ -138,7 +142,7 @@ final class GitComparisonToolbarView: NSStackView
 			field.action = actions.revisions
 			field.isBezeled = false
 			field.drawsBackground = false
-			field.font = .systemFont(ofSize: 13)
+			field.setTypographyRole(TypographyTokens.Toolbar.control)
 			let width = field === baseField
 				? Layout.baseRevisionWidth : Layout.targetRevisionWidth
 			let constraint = field.widthAnchor.constraint(equalToConstant: width)
@@ -159,7 +163,7 @@ final class GitComparisonToolbarView: NSStackView
 		baseField.placeholderString = "Base revision"
 		targetField.placeholderString = "Target revision"
 		let arrow = NSImageView(image: DesktopIcons.image(.arrowRight))
-		arrow.contentTintColor = .secondaryLabelColor
+		arrow.contentTintColor = AppKitColorTokens.secondaryText
 		arrow.setAccessibilityElement(false)
 		let revisionMenu = referenceButton(
 			"Revision options",

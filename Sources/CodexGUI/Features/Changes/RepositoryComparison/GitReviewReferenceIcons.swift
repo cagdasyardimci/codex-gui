@@ -1,5 +1,7 @@
 import AppKit
 
+// Black constructs template masks; semantic red/green display-mode regions use theme diff roles.
+
 /// Review controls reuse packaged artwork and native paths for the supplied reference forms.
 @MainActor
 enum GitReviewReferenceIcons
@@ -57,6 +59,7 @@ enum GitReviewReferenceIcons
 			return true
 		}
 		image.isTemplate = kind != .displayMode && kind != .unifiedDisplayMode
+		image.cacheMode = .never
 		image.accessibilityDescription = accessibilityDescription
 		return image
 	}
@@ -155,17 +158,9 @@ enum GitReviewReferenceIcons
 				xRadius: 2,
 				yRadius: 2
 			)
-			NSColor(
-				calibratedWhite: 0.58,
-				alpha: 1
-			).setStroke()
+			AppKitColorTokens.secondaryText.setStroke()
 			stroke(frame)
-			NSColor(
-				calibratedRed: 0.65,
-				green: 0.22,
-				blue: 0.24,
-				alpha: 1
-			).setFill()
+			AppKitColorTokens.diffRemoved.setFill()
 			if kind == .unifiedDisplayMode
 			{
 				rect((6, 6, 12, 5)).fill()
@@ -174,12 +169,7 @@ enum GitReviewReferenceIcons
 			{
 				triangle([(6, 6), (18, 6), (6, 18)]).fill()
 			}
-			NSColor(
-				calibratedRed: 0.18,
-				green: 0.48,
-				blue: 0.28,
-				alpha: 1
-			).setFill()
+			AppKitColorTokens.diffAdded.setFill()
 			if kind == .unifiedDisplayMode
 			{
 				rect((6, 13, 12, 5)).fill()

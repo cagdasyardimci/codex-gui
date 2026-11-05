@@ -284,9 +284,9 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	private func makeInternalChangesTab() -> NSView
 	{
 		let title = NSTextField(labelWithString: "Changes")
-		title.font = .systemFont(ofSize: 14)
+		title.setTypographyRole(TypographyTokens.UI.body)
 		let titleIcon = NSImageView(image: PinnedSummaryIcons.image(.changes))
-		titleIcon.contentTintColor = .labelColor
+		titleIcon.contentTintColor = AppKitColorTokens.primaryText
 		titleIcon.setAccessibilityElement(false)
 		let close = referenceButton(
 			"Close Changes",
@@ -301,6 +301,8 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			presentation: .tab
 		)
 		let tabWidth = tab.widthAnchor.constraint(equalToConstant: 240)
+		// Keep the tab's preferred width without forcing a narrow host wider than its pane.
+		tabWidth.priority = .defaultHigh
 		tabWidth.isActive = true
 		internalTabWidth = tabWidth
 		let expand = referenceButton(
@@ -849,7 +851,8 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		let visible = navigatorSplit?.isNavigatorVisible == true
 		navigatorToggle?.state = visible ? .on : .off
 		navigatorToggle?.needsDisplay = true
-		navigatorToggle?.contentTintColor = visible ? .systemBlue : .secondaryLabelColor
+		navigatorToggle?.contentTintColor = visible ? AppKitColorTokens
+			.accentText : AppKitColorTokens.secondaryText
 		navigatorToggle?.setAccessibilityValue(visible ? "Visible" : "Hidden")
 	}
 
@@ -1049,6 +1052,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	@objc private func showScopeMenu()
 	{
 		let menu = NSMenu()
+		menu.setTypographyRole(TypographyTokens.MenuRow.title)
 		for scope in GitComparisonScope.allCases
 		{
 			if scope == .uncommitted || scope == .committed
@@ -1067,6 +1071,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			{
 				item.action = nil
 				let submenu = NSMenu(title: "Committed")
+				submenu.setTypographyRole(TypographyTokens.MenuRow.title)
 				for (title, tag) in [("HEAD parent → HEAD", 0), ("Custom revision pair…", 1)]
 				{
 					let child = NSMenuItem(
@@ -1123,6 +1128,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 	func makeDiffDisplayMenu() -> NSMenu
 	{
 		let menu = NSMenu()
+		menu.setTypographyRole(TypographyTokens.MenuRow.title)
 		menu.autoenablesItems = false
 		let reported = NSMenuItem(
 			title: "Open reported turn changes",

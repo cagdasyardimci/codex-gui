@@ -74,13 +74,13 @@ extension ChangesViewController
 		{
 			let paragraphStyle = NSMutableParagraphStyle()
 			paragraphStyle.lineBreakMode = .byWordWrapping
-			paragraphStyle.lineSpacing = 3
+			paragraphStyle.lineSpacing = TypographyTokens.Changes.description.lineSpacing ?? 0
 			diffTextView.textStorage?.setAttributedString(
 				NSAttributedString(
 					string: displayText,
 					attributes: [
-						.font: NSFont.systemFont(ofSize: 12),
-						.foregroundColor: NSColor.secondaryLabelColor,
+						.font: AppKitFontResolver.font(TypographyTokens.Changes.description),
+						.foregroundColor: AppKitColorTokens.secondaryText,
 						.paragraphStyle: paragraphStyle,
 					]
 				)
@@ -133,11 +133,8 @@ extension ChangesViewController
 		let attributed = NSMutableAttributedString(
 			string: text,
 			attributes: [
-				.font: NSFont.monospacedSystemFont(
-					ofSize: 11,
-					weight: .regular
-				),
-				.foregroundColor: NSColor.labelColor,
+				.font: AppKitFontResolver.font(TypographyTokens.Code.output),
+				.foregroundColor: AppKitColorTokens.primaryText,
 				.paragraphStyle: paragraphStyle,
 			]
 		)
@@ -146,9 +143,9 @@ extension ChangesViewController
 			let color: NSColor?
 			switch line.kind
 			{
-			case .source(.addition): color = .systemGreen
-			case .source(.deletion): color = .systemRed
-			case .hunkHeader: color = .systemBlue
+			case .source(.addition): color = AppKitColorTokens.diffAdded
+			case .source(.deletion): color = AppKitColorTokens.diffRemoved
+			case .hunkHeader: color = AppKitColorTokens.accentText
 			default: color = nil
 			}
 			if let color, line.range.length > 0

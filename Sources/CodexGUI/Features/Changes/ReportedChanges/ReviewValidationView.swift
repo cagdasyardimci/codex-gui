@@ -110,10 +110,7 @@ final class ReviewValidationView: NSView
 			height: CGFloat.greatestFiniteMagnitude
 		)
 		outputTextView.textContainer?.widthTracksTextView = true
-		outputTextView.font = .monospacedSystemFont(
-			ofSize: 11,
-			weight: .regular
-		)
+		outputTextView.setTypographyRole(TypographyTokens.Code.output)
 		outputTextView.textContainerInset = NSSize(
 			width: 8,
 			height: 8
