@@ -12,6 +12,7 @@ final class RemotePairingPanelController: NSWindowController
 	private weak var previousResponder: NSResponder?
 	private let lifetime = DesktopPanelLifetime()
 	private var dimmer: NSWindow?
+	private var colorObservation: ThemeColorObservation?
 	private var refreshButtonReference: NSButton?
 	private var expandButtonReference: NSButton?
 	private var copyButtonReference: NSButton?
@@ -62,6 +63,13 @@ final class RemotePairingPanelController: NSWindowController
 			[weak self] in self?.onClose?()
 		}
 		configure()
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			self?.dimmer?.backgroundColor = AppKitColorTokens.pairingScrim
+			self?.fullscreen?.backgroundColor = AppKitColorTokens.imageScrim
+			self?.qr.needsDisplay = true
+		}
 	}
 
 	required init?(coder: NSCoder)
@@ -120,7 +128,7 @@ final class RemotePairingPanelController: NSWindowController
 		content.addSubview(close)
 		let title = NSTextField(wrappingLabelWithString:
 			"Approve on your device to control this Mac remotely")
-		title.font = AppKitFontResolver.font(TypographyTokens.Connections.modalTitle)
+		title.setTypographyRole(TypographyTokens.Connections.modalTitle)
 		title.alignment = .center
 		let phone = RemoteConnectionsButton(
 			title: "Phone",
@@ -171,10 +179,7 @@ final class RemotePairingPanelController: NSWindowController
 		qr.setAccessibilityLabel("Remote connection pairing QR code")
 		qr.translatesAutoresizingMaskIntoConstraints = false
 		frame.addSubview(qr)
-		manualCode.font = NSFont.systemFont(
-			ofSize: 36,
-			weight: .semibold
-		)
+		manualCode.setTypographyRole(TypographyTokens.Connections.pairingCode)
 		manualCode.alignment = .center
 		manualCode.textColor = AppKitColorTokens.settingsPrimaryText
 		manualCode.isHidden = true
@@ -221,7 +226,7 @@ final class RemotePairingPanelController: NSWindowController
 		let instructions = NSTextField(wrappingLabelWithString:
 			"On your other computer, open ChatGPT Settings > Connections > "
 				+ "Control other devices, then enter this code.")
-		instructions.font = AppKitFontResolver.font(TypographyTokens.Connections.caption)
+		instructions.setTypographyRole(TypographyTokens.Connections.caption)
 		instructions.textColor = AppKitColorTokens.settingsSecondaryText
 		instructions.alignment = .center
 		instructions.isHidden = true
@@ -341,7 +346,7 @@ final class RemotePairingPanelController: NSWindowController
 			backing: .buffered,
 			defer: false
 		)
-		dimmer.backgroundColor = NSColor.black.withAlphaComponent(0.3)
+		dimmer.backgroundColor = AppKitColorTokens.pairingScrim
 		dimmer.isReleasedWhenClosed = false
 		dimmer.isOpaque = false
 		dimmer.ignoresMouseEvents = true
@@ -446,11 +451,8 @@ final class RemotePairingPanelController: NSWindowController
 		manualCode.attributedStringValue = NSAttributedString(
 			string: pairing.manualPairingCode ?? "",
 			attributes: [
-				.font: NSFont.systemFont(
-					ofSize: 36,
-					weight: .semibold
-				),
-				.kern: 6.48,
+				.font: AppKitFontResolver.font(TypographyTokens.Connections.pairingCode),
+				.kern: TypographyTokens.Connections.pairingCode.tracking ?? 0,
 				.foregroundColor: AppKitColorTokens.settingsPrimaryText,
 			]
 		)
@@ -541,7 +543,7 @@ final class RemotePairingPanelController: NSWindowController
 			backing: .buffered,
 			defer: false
 		)
-		panel.backgroundColor = NSColor.black.withAlphaComponent(0.92)
+		panel.backgroundColor = AppKitColorTokens.imageScrim
 		panel.isReleasedWhenClosed = false
 		panel.isOpaque = false
 		let view = RemotePairingQRView()
@@ -678,6 +680,20 @@ final class RemotePairingSegmentTrack: NSView
 @MainActor
 final class RemotePairingQRView: NSView
 {
+	private var colorObservation: ThemeColorObservation?
+	override func viewDidMoveToWindow()
+	{
+		super.viewDidMoveToWindow()
+		if colorObservation ==
+			nil
+		{
+			colorObservation = ThemeColorObservation(view: self)
+			{
+				[weak self] in
+				self?.needsDisplay = true
+			}
+		}
+	}
 	var pairingCode = ""
 	{
 		didSet
@@ -732,7 +748,7 @@ final class RemotePairingQRView: NSView
 		}
 		let background = showsLogo ? AppKitColorTokens.pairingQR
 			: AppKitColorTokens.fullscreenQR
-		let ink = AppKitColorTokens.pairingQRInk
+		let ink = showsLogo ? AppKitColorTokens.pairingQRInk : AppKitColorTokens.fullscreenQRInk
 		background.setFill()
 		NSBezierPath(
 			roundedRect: bounds,

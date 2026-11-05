@@ -375,7 +375,7 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			)
 			let button = DesktopActionButton(
 				title: "Revoke access",
-				presentation: .secondary
+				presentation: .tab(selected: true)
 			)
 			text.setContentCompressionResistancePriority(
 				.defaultLow,
@@ -480,7 +480,7 @@ final class RemoteAccessWindowController: NSWindowController, NSWindowDelegate
 			return "Last connected just now"
 		}
 		let formatter = RelativeDateTimeFormatter()
-		formatter.unitsStyle = .full
+		formatter.unitsStyle = .abbreviated
 		return "Last connected " + formatter.localizedString(
 			for: date,
 			relativeTo: now

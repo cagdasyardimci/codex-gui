@@ -133,7 +133,7 @@ final class ProjectTextEditor: NSViewController
 	private func makeBodyScrollView() -> NSScrollView
 	{
 		bodyView.isRichText = false
-		bodyView.font = .systemFont(ofSize: 13)
+		bodyView.setTypographyRole(TypographyTokens.UI.editor)
 		bodyView.textContainerInset = NSSize(
 			width: 10,
 			height: 10

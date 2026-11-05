@@ -457,8 +457,8 @@ final class ProjectContextViewController: NSViewController
 	private func addDetail(_ text: String)
 	{
 		let label = NSTextField(wrappingLabelWithString: text)
-		label.textColor = .secondaryLabelColor
-		label.font = .systemFont(ofSize: 11)
+		label.textColor = AppKitColorTokens.secondaryText
+		label.setTypographyRole(TypographyTokens.UI.metadata)
 		add(label)
 	}
 
@@ -467,7 +467,7 @@ final class ProjectContextViewController: NSViewController
 		if let button = control as? NSButton, !(button is DesktopStyledButton)
 		{
 			button.controlSize = .small
-			button.font = .systemFont(ofSize: 12)
+			button.setTypographyRole(TypographyTokens.UI.caption)
 			AppKitLayout.compressHorizontally(button)
 			button.toolTip = button.toolTip ?? button.title
 		}
@@ -503,7 +503,7 @@ final class ProjectContextViewController: NSViewController
 		inclusionButton.toolTip = item.referencePath ?? item.body
 		inclusionButton.setAccessibilityLabel("Include \(item.title) in requests")
 		inclusionButton.controlSize = .small
-		inclusionButton.font = .systemFont(ofSize: 12)
+		inclusionButton.setTypographyRole(TypographyTokens.UI.caption)
 		AppKitLayout.compressHorizontally(inclusionButton)
 
 		let editButton = DesktopStyledButton(

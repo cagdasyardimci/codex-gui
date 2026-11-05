@@ -54,8 +54,8 @@ final class SavedPromptsSectionViewController: NSViewController
 			wrappingLabelWithString:
 			"Inspect instructions, then insert them into the editable draft."
 		)
-		detail.textColor = .secondaryLabelColor
-		detail.font = .systemFont(ofSize: 11)
+		detail.textColor = AppKitColorTokens.secondaryText
+		detail.setTypographyRole(TypographyTokens.UI.metadata)
 		add(detail)
 		for prompt in prompts
 		{
@@ -79,7 +79,7 @@ final class SavedPromptsSectionViewController: NSViewController
 		if let button = control as? NSButton, !(button is DesktopStyledButton)
 		{
 			button.controlSize = .small
-			button.font = .systemFont(ofSize: 12)
+			button.setTypographyRole(TypographyTokens.UI.caption)
 			AppKitLayout.compressHorizontally(button)
 			button.toolTip = button.toolTip ?? button.title
 		}
@@ -217,7 +217,7 @@ final class SavedPromptsSectionViewController: NSViewController
 		instructions.string = prompt.instructions
 		instructions.isEditable = false
 		instructions.isSelectable = true
-		instructions.font = .systemFont(ofSize: 13)
+		instructions.setTypographyRole(TypographyTokens.UI.editor)
 		instructions.setAccessibilityLabel("Saved prompt instructions")
 		let scrollView = NSScrollView()
 		scrollView.documentView = instructions

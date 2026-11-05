@@ -514,7 +514,7 @@ struct RemoteAccessWindowTests
 				blue: 247 / 255,
 				alpha: 1
 			), NSColor(
-				white: 24 / 255,
+				white: 17 / 255,
 				alpha: 1
 			)),
 		]

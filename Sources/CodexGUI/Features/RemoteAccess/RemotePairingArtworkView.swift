@@ -1,5 +1,7 @@
 import AppKit
 
+// This illustration owns its multicolor artwork; surrounding controls use semantic theme colors.
+
 /// Decorative device artwork sized to the pairing dialog's reference header.
 @MainActor
 final class RemotePairingArtworkView: NSView
