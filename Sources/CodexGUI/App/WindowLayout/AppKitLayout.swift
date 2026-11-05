@@ -90,7 +90,7 @@ enum AppKitLayout
 	static func title(_ text: String) -> NSTextField
 	{
 		let label = NSTextField(labelWithString: text)
-		label.font = AppKitFontResolver.font(TypographyTokens.Controls.title)
+		label.setTypographyRole(TypographyTokens.Controls.title)
 		return label
 	}
 

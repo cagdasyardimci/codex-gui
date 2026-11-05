@@ -40,7 +40,7 @@ extension MainWindowController
 			size: 18
 		)
 		statusButton.imagePosition = .imageOnly
-		statusButton.contentTintColor = .labelColor
+		statusButton.contentTintColor = AppKitColorTokens.primaryText
 		statusButton.setAccessibilityLabel("Open account and backend status")
 		statusButton.setAccessibilityIdentifier("workspace-status")
 		statusButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
@@ -94,7 +94,7 @@ extension MainWindowController
 
 	private func configureTitleLabel()
 	{
-		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Toolbar.title)
+		titleLabel.setTypographyRole(TypographyTokens.Toolbar.title)
 		titleLabel.isBordered = false
 		titleLabel.isBezeled = false
 		titleLabel.drawsBackground = false
@@ -362,7 +362,7 @@ extension MainWindowController
 			width: 15,
 			height: 16
 		)
-		imageView.contentTintColor = .labelColor
+		imageView.contentTintColor = AppKitColorTokens.primaryText
 		imageView.setAccessibilityLabel("Project context")
 		imageView.widthAnchor.constraint(equalToConstant: ToolbarLayout.controlSize).isActive = true
 		imageView.heightAnchor.constraint(equalToConstant: ToolbarLayout.controlSize)

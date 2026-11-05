@@ -11,11 +11,17 @@ extension LayoutTokens
 		static let iconSize: CGFloat = 16
 		static let iconSpacing: CGFloat = 6
 		static let avatarSize: CGFloat = 18
-		static let rowHeight = LayoutTokens.MenuRow.height
+		static var rowHeight: CGFloat
+		{
+			LayoutTokens.MenuRow.height
+		}
 		static let profileHeight: CGFloat = 42.5703125
 		static let separatorHeight: CGFloat = 9
 		static let shadowOutset: CGFloat = 24
-		static let height = 2 * gutter + profileHeight + 3 * rowHeight + 2 * separatorHeight
+		static var height: CGFloat
+		{
+			2 * gutter + profileHeight + 3 * rowHeight + 2 * separatorHeight
+		}
 	}
 }
 
@@ -39,16 +45,12 @@ extension TypographyTokens
 
 extension AppKitColorTokens
 {
-	static let accountMenuRowHighlight = AppKitColorResolution.color(
-		light: 0x0D0D0D,
-		dark: 0xFFFFFF,
-		lightAlpha: 0.055,
-		darkAlpha: 0.08
-	)
-	static let accountAvatar = NSColor(
-		srgbRed: 0.20,
-		green: 0.28,
-		blue: 0.34,
-		alpha: 1
-	)
+	static var accountMenuRowHighlight: NSColor
+	{
+		hoverOverlay
+	}
+	static var accountAvatar: NSColor
+	{
+		accentSurface
+	}
 }

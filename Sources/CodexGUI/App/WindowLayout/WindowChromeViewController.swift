@@ -164,7 +164,7 @@ private final class RoundedContentShadow: NSView
 		super.init(frame: frameRect)
 		wantsLayer = true
 		layer?.cornerCurve = .circular
-		layer?.shadowColor = NSColor.black.cgColor
+		layer?.shadowColor = ShadowTokens.windowChrome.color.cgColor
 		layer?.shadowOffset = .zero
 		layer?.shadowRadius = 8
 		updateAppearance()

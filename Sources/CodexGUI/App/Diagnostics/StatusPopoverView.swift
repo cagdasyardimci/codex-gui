@@ -35,15 +35,15 @@ final class StatusPopoverView: NSView
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
-		accountLabel.font = AppKitFontResolver.font(TypographyTokens.AccountMenu.row)
+		accountLabel.setTypographyRole(TypographyTokens.AccountMenu.row)
 		accountLabel.lineBreakMode = .byTruncatingTail
 		accountLabel.setAccessibilityLabel("Account identity")
-		planLabel.font = AppKitFontResolver.font(TypographyTokens.AccountMenu.subtitle)
-		planLabel.textColor = .tertiaryLabelColor
+		planLabel.setTypographyRole(TypographyTokens.AccountMenu.subtitle)
+		planLabel.textColor = AppKitColorTokens.mutedText
 		planLabel.setAccessibilityLabel("Account plan")
-		avatar.font = .systemFont(ofSize: 7)
+		avatar.setTypographyRole(TypographyTokens.AccountMenu.avatar)
 		avatar.alignment = .center
-		avatar.textColor = .white
+		avatar.textColor = AppKitColorTokens.avatarText
 		avatar.wantsLayer = true
 		avatar.layer?.backgroundColor = AppKitColorTokens.accountAvatar.cgColor
 		avatar.layer?.cornerRadius = 9
@@ -185,7 +185,7 @@ final class StatusPopoverView: NSView
 		?? plan?.capitalized ?? ""
 		planLabel.toolTip = planLabel.stringValue
 		planLabel.textColor = presentation
-			.accountActionError == nil ? .tertiaryLabelColor : .systemRed
+			.accountActionError == nil ? AppKitColorTokens.mutedText : AppKitColorTokens.errorText
 		planLabel.isHidden = plan == nil && presentation.accountActionError == nil
 		avatar.stringValue = account?.email.map
 		{

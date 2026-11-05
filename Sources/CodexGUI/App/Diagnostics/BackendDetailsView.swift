@@ -47,10 +47,7 @@ final class BackendDetailsView: NSScrollView
 			height: CGFloat.greatestFiniteMagnitude
 		)
 		textView.textContainer?.widthTracksTextView = true
-		textView.font = .monospacedSystemFont(
-			ofSize: 12,
-			weight: .regular
-		)
+		textView.setTypographyRole(TypographyTokens.Code.output)
 		textView.setAccessibilityLabel("Codex backend diagnostic details")
 		return textView
 	}

@@ -11,6 +11,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	}
 	private var publicationObserver: WorkspacePublicationCoordinator?
 	private var remoteAccessObserver: UUID?
+	private var themeColorObservation: ThemeColorObservation?
 	// These members are shared by the action-binding and toolbar extensions.
 	let onOpenProjectRequest: () -> Void
 	let onInsertPathRequest: () -> Void
@@ -107,6 +108,11 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			split: paneController.split,
 			accountButton: statusButton
 		)
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshWindowTheme()
+		}
+		refreshWindowTheme()
 		installConversationToolbar(in: window)
 		windowButtonAlignment.update(in: window)
 		updateMinimumWindowSize()
@@ -147,6 +153,35 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		window.center()
 
 		return window
+	}
+
+	private func refreshWindowTheme()
+	{
+		guard let window
+		else
+		{
+			return
+		}
+		switch ColorPreferences().configuration.mode
+		{
+		case .system: window.appearance = nil
+		case .light: window.appearance = NSAppearance(named: .aqua)
+		case .dark: window.appearance = NSAppearance(named: .darkAqua)
+		}
+		window.backgroundColor = AppKitColorTokens.chrome
+		if let content = window.contentView
+		{
+			invalidateThemeDisplay(in: content)
+		}
+	}
+
+	private func invalidateThemeDisplay(in view: NSView)
+	{
+		view.needsDisplay = true
+		for child in view.subviews
+		{
+			invalidateThemeDisplay(in: child)
+		}
 	}
 
 	private func configureInspectorCallbacks()
@@ -355,7 +390,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			String($0.prefix(2)).uppercased()
 		} ?? ""
 		statusButton.title = initials
-		statusButton.font = NSFont.systemFont(ofSize: 10)
+		statusButton.setTypographyRole(TypographyTokens.AccountMenu.toolbarInitials)
 		statusButton.image = initials.isEmpty ? DesktopIcons.image(
 			.user,
 			size: 18
@@ -365,7 +400,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		{
 			statusButton.attributedTitle = NSAttributedString(
 				string: initials,
-				attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.white]
+				attributes: [
+					.font: AppKitFontResolver.font(TypographyTokens.AccountMenu.toolbarInitials),
+					.foregroundColor: AppKitColorTokens.avatarText
+				]
 			)
 		}
 		let executionTitle = status.execution.title

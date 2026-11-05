@@ -70,8 +70,8 @@ enum AccountAvatarText
 				NSAttributedString(
 					string: stringValue,
 					attributes: [
-						.font: font ?? NSFont.systemFont(ofSize: 7),
-						.foregroundColor: textColor ?? NSColor.white,
+						.font: font ?? AppKitFontResolver.font(TypographyTokens.AccountMenu.avatar),
+						.foregroundColor: textColor ?? AppKitColorTokens.avatarText,
 					]
 				),
 				in: self

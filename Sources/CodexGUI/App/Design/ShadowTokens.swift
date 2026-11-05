@@ -34,6 +34,12 @@ enum ShadowTokens
 		offsetY: -1,
 		blur: 2
 	)
+	static let windowChrome = Style(
+		color: .black,
+		offsetY: 0,
+		blur: 0
+	)
+
 	static let tooltipCapsule = Style(
 		color: NSColor(
 			srgbRed: 15.0 / 255,
