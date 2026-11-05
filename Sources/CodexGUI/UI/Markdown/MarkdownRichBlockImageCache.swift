@@ -14,6 +14,8 @@ final class MarkdownRichBlockImageCache
 		let kind: Kind
 		let payload: Data
 		let parameters: [CGFloat]
+		var typography: TypographyConfiguration? = nil
+		var colorTheme: ColorThemeConfiguration? = nil
 	}
 
 	struct Images
@@ -60,6 +62,21 @@ final class MarkdownRichBlockImageCache
 			darkSize = dark.size
 			pixelCount = 0
 			byteCount = light.retainedByteCount + dark.retainedByteCount
+		}
+
+		init(
+			light: MarkdownPDFImage,
+			dark: MarkdownPDFImage,
+			baselineDescent: CGFloat
+		)
+		{
+			self.light = light
+			self.dark = dark
+			lightSize = light.size
+			darkSize = dark.size
+			self.baselineDescent = baselineDescent
+			pixelCount = 0
+			byteCount = light.pdfData.count + dark.pdfData.count
 		}
 
 		/// Charge retained SVG/PDF bytes or raster bytes (including row padding) in RGBA units.

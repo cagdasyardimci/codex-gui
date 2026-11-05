@@ -12,18 +12,16 @@ final class MarkdownInlineMathAttachment: NSTextAttachment
 	}
 
 	init(
-		latex: String,
 		source: String,
 		font: NSFont,
-		budget: inout MarkdownRichBlockBudget
+		budget: inout MarkdownRichBlockBudget,
+		preparedImages: MarkdownRichBlockImageCache.Images? = nil
 	)
 	{
 		self.source = source
-		let images = MarkdownRichBlockRenderer.mathImages(
-			latex: latex,
-			budget: &budget,
-			fontSize: font.pointSize,
-			inline: true
+		let images = MarkdownRichBlockRenderer.admittedImages(
+			preparedImages,
+			budget: &budget
 		)
 		estimatedRichImageBytes = images?.byteCount ?? 0
 		super.init(
@@ -67,7 +65,7 @@ private final class MarkdownInlineMathAttachmentCell: NSTextAttachmentCell
 			string: source,
 			attributes: [
 				.font: font,
-				.foregroundColor: NSColor.labelColor,
+				.foregroundColor: AppKitColorTokens.primaryText,
 				.paragraphStyle: paragraph,
 			]
 		)

@@ -3,6 +3,17 @@ import Foundation
 /// Bounds retained native images across every rich block in one prepared message.
 struct MarkdownRichBlockBudget: Sendable
 {
+	static func mathPreparationPixels(total: Int) -> Int
+	{
+		min(
+			4_000_000,
+			max(
+				0,
+				total / 4
+			)
+		)
+	}
+
 	private var remainingPixels: Int
 	private var remainingBlocks: Int
 

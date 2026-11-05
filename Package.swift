@@ -18,10 +18,6 @@ let package = Package(
 			exact: "3.1.0"
 		),
 		.package(
-			url: "https://github.com/mgriebling/SwiftMath",
-			exact: "1.7.3"
-		),
-		.package(
 			url: "https://github.com/Pmen225/apps-sdk-ui-swift",
 			revision: "07cd708b3670948155d913f863ed4f0d8529ab2e"
 		),
@@ -41,10 +37,6 @@ let package = Package(
 				.product(
 					name: "Highlighter",
 					package: "HighlighterSwift"
-				),
-				.product(
-					name: "SwiftMath",
-					package: "SwiftMath"
 				),
 			],
 			exclude: ["Resources/Mermaid", "Resources/KaTeX"],

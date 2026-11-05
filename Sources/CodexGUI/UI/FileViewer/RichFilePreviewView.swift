@@ -31,12 +31,19 @@ enum RichFilePreviewKind
 @MainActor
 class RichFilePreviewView: NSView, NSTextViewDelegate
 {
+	private let kind: RichFilePreviewKind
 	private var task: Task<Void, Never>?
+	private var typographyObservation: TypographyObservation?
+	private var richBlockRefreshTask: Task<Void, Never>?
+	private var parsedMarkdown: ParsedMarkdownContent?
+	private var preparedTypography = TypographyConfiguration.current
+	private var preparedColors = ColorPreferences().configuration
 	private var content: NSView?
 	private var markdownRuns: [MarkdownTextRun]?
 	private var markdownLeadingSpacing: CGFloat = 0
 	private var metadataPanel: MarkdownFileMetadataView?
 	private var diagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:]
+	private var mathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images] = [:]
 	private let onMetadata: (([MarkdownFileMetadata.Entry]) -> Void)?
 	private let matchesFileMarkdownStyling: Bool
 	private var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
@@ -45,6 +52,14 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	private lazy var contentHeight = heightAnchor.constraint(equalToConstant: 80)
 	private static let maximumImagePixelEdge = 2048
 	private static let maximumSVGBytes = 32 * 1024 * 1024
+	private static let imageInset: CGFloat = 12
+	private static let minimumImageCanvasHeight: CGFloat = 160
+
+	override var isFlipped: Bool
+	{
+		// Short scroll documents need a top origin; Files Markdown uses the same convention.
+		kind == .image || matchesFileMarkdownStyling
+	}
 
 	init(
 		kind: RichFilePreviewKind,
@@ -57,11 +72,16 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		loadContent: @escaping @Sendable () async throws -> Data
 	)
 	{
+		self.kind = kind
 		self.imageBaseDirectory = imageBaseDirectory
 		self.onOpenLink = onOpenLink
 		self.onMetadata = onMetadata
 		self.matchesFileMarkdownStyling = matchesFileMarkdownStyling
 		super.init(frame: .zero)
+		typographyObservation = TypographyObservation(view: self)
+		{
+			[weak self] in self?.refreshMarkdownConfiguration()
+		}
 		// The mutable height follows measured Markdown or the image's aspect ratio.
 		contentHeight.isActive = true
 		showEmptyContent()
@@ -80,7 +100,12 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				let thumbnail: SourceThumbnailLoader.Thumbnail?
 				var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
 				var metadata: MarkdownFileMetadata?
+				var parsedMarkdown: ParsedMarkdownContent?
+				let typography = TypographyConfiguration.current
+				let colors = ColorPreferences().configuration
 				var diagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:]
+				var mathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images] =
+					[:]
 				if case .markdown = kind
 				{
 					guard let source = String(
@@ -102,9 +127,23 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 						)
 						return (parsed, metadata)
 					}.value
+					parsedMarkdown = prepared.0
 					runs = prepared.0.runs
 					metadata = prepared.1
-					diagramImages = await MarkdownMermaidRenderer.prepare(parsed: prepared.0)
+					mathImages = await MarkdownMathRenderer.prepare(
+						parsed: prepared.0,
+						maximumPreparedPixels: MarkdownRichBlockBudget.mathPreparationPixels(
+							total: MarkdownMermaidRenderer.maximumPreparedPixels
+						),
+						typography: typography,
+						colorTheme: colors,
+						filePreview: matchesFileMarkdownStyling
+					)
+					diagramImages = await MarkdownMermaidRenderer.prepare(
+						parsed: prepared.0,
+						typography: typography,
+						colorTheme: colors
+					)
 					if let runs, let markdownImageLoader
 					{
 						let plan = MarkdownImagePreparation.preloadPlan(in: runs)
@@ -156,6 +195,10 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				{
 					return
 				}
+				self?.parsedMarkdown = parsedMarkdown
+				self?.preparedTypography = typography
+				self?.preparedColors = colors
+				self?.mathImages = mathImages
 				self?.display(
 					data,
 					kind: kind,
@@ -165,6 +208,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 					metadata: metadata,
 					diagramImages: diagramImages
 				)
+				self?.refreshMarkdownConfiguration()
 			}
 			catch
 			{
@@ -189,17 +233,20 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	deinit
 	{
 		task?.cancel()
+		richBlockRefreshTask?.cancel()
 	}
 
 	func cancelLoading()
 	{
 		task?.cancel()
+		richBlockRefreshTask?.cancel()
 		task = nil
 	}
 
 	func waitForLoading() async
 	{
 		await task?.value
+		await richBlockRefreshTask?.value
 	}
 
 	private func install(_ view: NSView)
@@ -302,7 +349,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	private func installImage(_ image: NSImage)
 	{
 		let view = NSImageView(image: image)
-		view.imageScaling = .scaleProportionallyUpOrDown
+		view.imageScaling = .scaleProportionallyDown
 		install(view)
 	}
 
@@ -464,32 +511,34 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 		}
 		else if let image = (content as? NSImageView)?.image
 		{
-			let height = min(
-				600,
+			let padding = 2 * Self.imageInset
+			let scale = min(
+				1,
 				max(
-					100,
-					(bounds.width - 40) * image.size.height
-						/ max(
-							1,
-							image.size.width
-						) + 40
+					1,
+					bounds.width - padding
+				) / max(
+					1,
+					image.size.width
 				)
+			)
+			let imageSize = NSSize(
+				width: image.size.width * scale,
+				height: image.size.height * scale
+			)
+			let height = max(
+				Self.minimumImageCanvasHeight,
+				imageSize.height + padding
 			)
 			if contentHeight.constant != height
 			{
 				contentHeight.constant = height
 			}
 			content.frame = NSRect(
-				x: 20,
-				y: 20,
-				width: max(
-					1,
-					bounds.width - 40
-				),
-				height: max(
-					1,
-					height - 40
-				)
+				x: (bounds.width - imageSize.width) / 2,
+				y: (height - imageSize.height) / 2,
+				width: imageSize.width,
+				height: imageSize.height
 			)
 		}
 		else
@@ -506,6 +555,53 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 	{
 		super.viewDidChangeEffectiveAppearance()
 		refreshMarkdownAppearance()
+	}
+
+	private func refreshMarkdownConfiguration()
+	{
+		let typography = TypographyConfiguration.current
+		let colors = ColorPreferences().configuration
+		let changed = preparedTypography != typography || preparedColors != colors
+		preparedTypography = typography
+		preparedColors = colors
+		guard changed, let parsedMarkdown,
+				parsedMarkdown.runs.contains(where:
+				{
+					$0.style.richBlock?.kind == .diagram || $0.style.richBlock?.kind == .math
+				})
+		else
+		{
+			refreshMarkdownAppearance()
+			return
+		}
+		richBlockRefreshTask?.cancel()
+		richBlockRefreshTask = Task
+		{
+			[weak self] in
+			let math = await MarkdownMathRenderer.prepare(
+				parsed: parsedMarkdown,
+				maximumPreparedPixels: MarkdownRichBlockBudget.mathPreparationPixels(
+					total: MarkdownMermaidRenderer.maximumPreparedPixels
+				),
+				typography: typography,
+				colorTheme: colors,
+				filePreview: self?.matchesFileMarkdownStyling == true
+			)
+			let images = await MarkdownMermaidRenderer.prepare(
+				parsed: parsedMarkdown,
+				typography: typography,
+				colorTheme: colors
+			)
+			guard let self, !Task.isCancelled,
+					self.preparedTypography == typography, self.preparedColors == colors
+			else
+			{
+				return
+			}
+			self.diagramImages = images
+			self.mathImages = math
+			self.refreshMarkdownAppearance()
+		}
 	}
 
 	private func refreshMarkdownAppearance()
@@ -538,6 +634,7 @@ class RichFilePreviewView: NSView, NSTextViewDelegate
 				markdownRuns,
 				imageThumbnails: imageThumbnails,
 				preparedDiagramImages: diagramImages,
+				preparedMathImages: mathImages,
 				richBlockMaximumPixels: MarkdownMermaidRenderer.maximumPreparedPixels,
 				mathFontSize: mathFontSize
 			)

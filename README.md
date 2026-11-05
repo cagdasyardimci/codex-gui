@@ -73,7 +73,7 @@ Bundled notices are installed under `Contents/Resources/ThirdPartyLicenses`.
 | [Apps SDK UI Swift port](https://github.com/Pmen225/apps-sdk-ui-swift) | MIT; unofficial port of original OpenAI artwork |
 | [Swift Markdown](https://github.com/swiftlang/swift-markdown) | Apache 2.0 with the Runtime Library Exception, including its cmark dependency |
 | [HighlighterSwift](https://github.com/smittytone/HighlighterSwift) | MIT, with BSD 3-Clause Highlight.js assets |
-| [SwiftMath](https://github.com/mgriebling/SwiftMath) | MIT, with separate math-font notices |
+| [KaTeX](Sources/CodexGUI/Resources/KaTeX/README.md) | Pinned offline runtime and fonts, MIT |
 | [Mermaid and ELK](Sources/CodexGUI/Resources/Mermaid/README.md) | Resource provenance, rebuild procedure and bundled license notices |
 
 ## License

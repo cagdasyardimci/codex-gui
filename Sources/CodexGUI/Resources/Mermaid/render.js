@@ -29,14 +29,16 @@ mermaid.registerLayoutLoaders(markdownElkLayouts.default.map(entry => ({
 })));
 
 // Give ELK the complete pill bounds before it places connectors or groups.
+let markdownDiagramTypography;
+
 function sizeMarkdownFlowchartEdgeLabel(label, edge) {
     const text = label.querySelector("text");
     const background = label.querySelector("rect.background");
     if (!text || !background) return;
     for (const span of [text, ...text.querySelectorAll("tspan")]) {
-        if (!/font-size\s*:/i.test(edge.labelStyle || "")) span.style.fontSize = "13px";
+        if (!/font-size\s*:/i.test(edge.labelStyle || "")) span.style.fontSize = `${markdownDiagramTypography.edgeSize}px`;
     }
-    if (!/font-weight\s*:/i.test(edge.labelStyle || "")) text.style.fontWeight = "600";
+    if (!/font-weight\s*:/i.test(edge.labelStyle || "")) text.style.fontWeight = String(markdownDiagramTypography.edgeWeight);
     const ink = text.getBBox();
     const height = Math.max(26, ink.height + 10);
     background.setAttribute("x", String(ink.x - 13));
@@ -55,11 +57,15 @@ function sizeMarkdownFlowchartEdgeLabel(label, edge) {
 const markdownDiagramTextRendering = "geometricPrecision";
 document.documentElement.style.textRendering = markdownDiagramTextRendering;
 
-globalThis.renderMarkdownDiagram = async function (source, dark, maximumPixels) {
-    const fontFamily = "-apple-system, system-ui, Segoe UI, sans-serif";
-    const textColor = dark ? "#e4e9f2" : "#1a1c1f";
-    const fillColor = dark ? "#1f3554" : "#e0edfe";
-    const borderColor = dark ? "#5c81b2" : "#5796ff";
+globalThis.renderMarkdownDiagram = async function (source, dark, maximumPixels, typography, colors) {
+    markdownDiagramTypography = typography;
+    const fontFamily = typography.fontFamily;
+    document.documentElement.style.fontFamily = fontFamily;
+    document.documentElement.style.fontSize = `${typography.bodySize}px`;
+    document.documentElement.style.fontWeight = String(typography.bodyWeight);
+    const textColor = colors.text;
+    const fillColor = colors.fill;
+    const borderColor = colors.border;
     mermaid.initialize({
         startOnLoad: false,
         securityLevel: "strict",
@@ -67,60 +73,60 @@ globalThis.renderMarkdownDiagram = async function (source, dark, maximumPixels) 
         themeVariables: {
             darkMode: dark,
             fontFamily,
-            fontSize: "14px",
-            background: dark ? "#161719" : "#ffffff",
+            fontSize: `${typography.bodySize}px`,
+            background: colors.canvas,
             primaryColor: fillColor,
             primaryTextColor: textColor,
             primaryBorderColor: borderColor,
-            secondaryColor: dark ? "#293b52" : "#eef4ff",
+            secondaryColor: colors.secondary,
             secondaryTextColor: textColor,
             secondaryBorderColor: borderColor,
-            tertiaryColor: dark ? "#243044" : "#f6f9ff",
+            tertiaryColor: colors.tertiary,
             tertiaryTextColor: textColor,
             tertiaryBorderColor: borderColor,
-            lineColor: dark ? "#9aafcc" : "rgba(26, 28, 31, 0.494)",
+            lineColor: colors.edge,
             textColor,
             mainBkg: fillColor,
             nodeBorder: borderColor,
-            clusterBkg: dark ? "#1d2939" : "#f5f8fe",
+            clusterBkg: colors.cluster,
             clusterBorder: borderColor,
             titleColor: textColor,
-            edgeLabelBackground: dark ? "#161719" : "#ffffff",
+            edgeLabelBackground: colors.canvas,
             actorBkg: fillColor,
             actorBorder: borderColor,
-            actorLineColor: dark ? "#9aafcc" : "rgba(26, 28, 31, 0.494)",
+            actorLineColor: colors.edge,
             actorTextColor: textColor,
-            signalColor: dark ? "#9aafcc" : "rgba(26, 28, 31, 0.494)",
+            signalColor: colors.edge,
             signalTextColor: textColor,
-            labelBoxBkgColor: dark ? "#161719" : "#ffffff",
-            labelBoxBorderColor: dark ? "#41464e" : "#e5e5e5",
+            labelBoxBkgColor: colors.canvas,
+            labelBoxBorderColor: colors.outline,
             labelTextColor: textColor,
             loopTextColor: textColor,
-            activationBkgColor: dark ? "#161719" : "#ffffff",
-            activationBorderColor: dark ? "#41464e" : "#e5e5e5",
-            noteBkgColor: dark ? "#161719" : "#ffffff",
-            noteBorderColor: dark ? "#5bb96c" : "#56c568",
+            activationBkgColor: colors.canvas,
+            activationBorderColor: colors.outline,
+            noteBkgColor: colors.canvas,
+            noteBorderColor: colors.noteBorder,
             noteTextColor: textColor,
-            doneTaskBkgColor: dark ? "#161719" : "#ffffff",
-            doneTaskBorderColor: dark ? "#41464e" : "#e5e5e5",
+            doneTaskBkgColor: colors.canvas,
+            doneTaskBorderColor: colors.outline,
             taskBkgColor: fillColor,
             taskBorderColor: borderColor,
             activeTaskBkgColor: fillColor,
             activeTaskBorderColor: borderColor,
-            pie1: "#539bff",
-            pie2: "#62c780",
-            pie3: "#f48b52",
-            pieStrokeColor: dark ? "#161719" : "#ffffff",
+            pie1: colors.chart1,
+            pie2: colors.chart2,
+            pie3: colors.chart3,
+            pieStrokeColor: colors.canvas,
             pieOuterStrokeWidth: "0px",
-            cScale0: dark ? "#2866ad" : "#539bff",
-            cScale1: dark ? "#27673e" : "#62c780",
-            cScale2: dark ? "#894521" : "#f48b52",
-            cScale3: dark ? "#735d18" : "#f9d65d"
+            cScale0: colors.root,
+            cScale1: colors.chart2,
+            cScale2: colors.chart3,
+            cScale3: colors.chart4
         },
         fontFamily,
         // Measure the same weight that will be displayed, so node widths include bold ink.
         themeCSS: /^\s*(?:flowchart|graph)\b/m.test(source)
-            ? ".node text, .node tspan { font-weight: 600; }"
+            ? `.node text, .node tspan { font-size: ${typography.nodeSize}px; font-weight: ${typography.nodeWeight}; }`
             : "",
         layout: "elk",
         htmlLabels: false,
@@ -135,7 +141,7 @@ globalThis.renderMarkdownDiagram = async function (source, dark, maximumPixels) 
         flowchart: { htmlLabels: false, useMaxWidth: false, curve: "linear", rankSpacing: 60 },
         sequence: { useMaxWidth: false },
         state: { rankSpacing: /^\s*stateDiagram/m.test(source) ? 75 : 50 },
-        gantt: { useMaxWidth: false, useWidth: 1512, fontSize: 14, sectionFontSize: 14,
+        gantt: { useMaxWidth: false, useWidth: 1512, fontSize: typography.bodySize, sectionFontSize: typography.bodySize,
             barHeight: 20, barGap: 4, leftPadding: 75, rightPadding: 50 },
         mindmap: { useMaxWidth: false }
     });
@@ -146,7 +152,7 @@ globalThis.renderMarkdownDiagram = async function (source, dark, maximumPixels) 
         host.innerHTML = result.svg;
         const svg = host.querySelector("svg");
         if (!svg) return null;
-        styleMarkdownDiagram(svg, dark, textColor);
+        styleMarkdownDiagram(svg, dark, textColor, typography, colors);
         const box = svg.viewBox.baseVal;
         if (!(box.width > 0 && box.height > 0)
             || !Number.isFinite(box.width * box.height)) return null;
@@ -211,33 +217,32 @@ function hasExternalMarkdownSVGResource(value) {
 }
 
 // Keep semantic shapes and source class definitions; only the default presentation changes.
-function styleMarkdownDiagram(svg, dark, textColor) {
+function styleMarkdownDiagram(svg, dark, textColor, typography, colors) {
     const selector = "#" + svg.id;
     const rules = document.createElementNS("http://www.w3.org/2000/svg", "style");
-    const canvas = dark ? "#161719" : "#ffffff";
-    const outline = dark ? "#414b58" : "#dce1e5";
-    const ink = dark ? "#8bbdff" : "#075aaf";
+    const canvas = colors.canvas;
+    const outline = colors.outline;
+    const ink = colors.ink;
     rules.textContent = `
         ${selector} .edgeLabel .label text { fill: ${textColor}; }
         ${selector} .edgeLabel .label rect { fill: ${canvas}; }
         ${selector} .mindmap-node text { fill: ${textColor}; }
-        ${selector} .slice { fill: #1a1c1f; }
-        ${selector} .section-root circle { fill: ${dark ? "#2866ad" : "#539bff"}; }
+        ${selector} .slice { fill: ${colors.text}; }
+        ${selector} .section-root circle { fill: ${colors.root}; }
         ${selector} .mindmap-node line { stroke: none; }
         ${selector} .section, ${selector} .section0, ${selector} .section1 { fill: ${canvas}; }
-        ${selector} .pieCircle { opacity: 0.7; }
+        ${selector} .pieCircle { opacity: ${colors.pieOpacity}; }
     `;
     const role = svg.getAttribute("aria-roledescription");
     if (svg.classList.contains("classDiagram") || role === "stateDiagram") {
-        const labelFill = dark ? "#1f3554" : "#e0edfe";
-        const opacity = role === "stateDiagram" ? 0.5 : 1;
+        const labelFill = role === "stateDiagram" ? colors.stateLabelFill : colors.fill;
         rules.textContent += `
-            ${selector} .edgeLabel .label rect { fill: ${labelFill}; opacity: ${opacity}; }
+            ${selector} .edgeLabel .label rect { fill: ${labelFill}; }
         `;
     }
     if (role === "sequence") {
         // Separate translucent fill and stroke reproduce the reference's overlapping outline.
-        const markerColor = dark ? "#9aafcc" : "rgba(26, 28, 31, 0.494)";
+        const markerColor = colors.edge;
         rules.textContent += `
             ${selector} #arrowhead path { fill: ${markerColor}; stroke: ${markerColor}; }
         `;
@@ -246,7 +251,7 @@ function styleMarkdownDiagram(svg, dark, textColor) {
         rules.textContent += `
             ${selector} .node rect { stroke: ${outline}; }
             ${selector} .node polygon, ${selector} .node path { stroke: ${outline}; }
-            ${selector} .node text, ${selector} .node tspan { fill: ${ink}; font-weight: 600; }
+            ${selector} .node text, ${selector} .node tspan { fill: ${ink}; font-size: ${typography.nodeSize}px; font-weight: ${typography.nodeWeight}; }
             ${selector} .cluster rect { fill: ${canvas}; stroke: ${outline}; }
             ${selector} .edgeLabel rect { rx: 14; ry: 14; stroke: ${outline}; }
             ${selector} .edgeLabel text, ${selector} .edgeLabel tspan { fill: ${ink}; }

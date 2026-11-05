@@ -12,6 +12,8 @@ enum MarkdownAttributedStringRenderer
 		_ runs: [MarkdownTextRun],
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:],
 		preparedDiagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:],
+		preparedMathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images] =
+			[:],
 		richBlockMaximumPixels: Int = 2_000_000,
 		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)? = nil
 	) -> NSAttributedString
@@ -52,6 +54,7 @@ enum MarkdownAttributedStringRenderer
 				budget: &richBudget,
 				imageThumbnails: imageThumbnails,
 				preparedDiagramImages: preparedDiagramImages,
+				preparedMathImages: preparedMathImages,
 				mathFontSize: mathFontSize
 			)
 			result.append(NSAttributedString(
@@ -251,6 +254,7 @@ enum MarkdownAttributedStringRenderer
 		budget: inout MarkdownRichBlockBudget,
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail],
 		preparedDiagramImages: [Data: MarkdownRichBlockImageCache.Images],
+		preparedMathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images],
 		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)?
 	)
 	{
@@ -260,36 +264,38 @@ enum MarkdownAttributedStringRenderer
 			switch rich.kind
 			{
 			case .math:
+				let size = mathFontSize?(run.style, rich.isInline)
+					?? Self.mathFontSize(style: run.style)
+				let formula = MarkdownMathRenderer.Formula(
+					latex: rich.payload,
+					fontSize: size,
+					inline: rich.isInline
+				)
 				if rich.isInline
 				{
-					let inlineFont = mathFontSize.map
-					{
-						NSFont.systemFont(ofSize: $0(
-							run.style,
-							true
-						))
-					} ?? font(for: run.style)
+					let inlineFont = AppKitFontResolver
+						.font(TypographyTokens.Math.inline(size: size))
 					attachment = MarkdownInlineMathAttachment(
-						latex: rich.payload,
 						source: rich.source,
 						font: inlineFont,
-						budget: &budget
+						budget: &budget,
+						preparedImages: preparedMathImages[formula]
 					)
 				}
 				else
 				{
-					attachment = MarkdownRichBlockRenderer.mathAttachment(
-						latex: rich.payload,
+					attachment = MarkdownRichBlockRenderer.attachment(
 						source: rich.source,
 						budget: &budget,
-						fontSize: mathFontSize?(run.style, false)
+						preparedImages: preparedMathImages[formula]
 					)
 				}
 			case .diagram:
-				attachment = MarkdownRichBlockRenderer.diagramAttachment(
+				attachment = MarkdownRichBlockRenderer.attachment(
 					source: rich.source,
 					budget: &budget,
-					preparedImages: preparedDiagramImages[Data(rich.payload.utf8)]
+					preparedImages: preparedDiagramImages[Data(rich.payload.utf8)],
+					isDiagram: true
 				)
 			case .imageGallery:
 				attachment = MarkdownImageGalleryAttachment.make(
@@ -302,6 +308,15 @@ enum MarkdownAttributedStringRenderer
 			attributes[.attachment] = attachment
 			attributes[.markdownSourceText] = rich.source
 		}
+	}
+
+	static func mathFontSize(
+		style: MarkdownTextStyle,
+		configuration: TypographyConfiguration = .current
+	) -> CGFloat
+	{
+		typography(for: style).resolved(using: configuration).size
+			* TypographyTokens.FileMarkdown.mathScale
 	}
 
 	private static func applyCodeHighlighting(to text: NSMutableAttributedString)

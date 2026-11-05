@@ -8,7 +8,7 @@ final class PreparedConversationContent: @unchecked Sendable
 	let codeBlockRanges: [NSRange]
 	let estimatedRichImageBytes: Int
 	let hasLocalImageDependencies: Bool
-	let hasUnpreparedDiagrams: Bool
+	let hasUnpreparedRichBlocks: Bool
 	private struct SizeKey: Hashable
 	{
 		let width: CGFloat
@@ -27,13 +27,16 @@ final class PreparedConversationContent: @unchecked Sendable
 		_ parsed: ParsedMarkdownContent,
 		imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:],
 		preparedDiagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:],
-		diagramsPrepared: Bool = false
+		preparedMathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images] =
+			[:],
+		richBlocksPrepared: Bool = false
 	)
 	{
 		attributedString = MarkdownAttributedStringRenderer.render(
 			parsed.runs,
 			imageThumbnails: imageThumbnails,
-			preparedDiagramImages: preparedDiagramImages
+			preparedDiagramImages: preparedDiagramImages,
+			preparedMathImages: preparedMathImages
 		)
 		codeBlocks = parsed.codeBlocks
 		codeBlockRanges = parsed.codeBlockRanges
@@ -43,9 +46,9 @@ final class PreparedConversationContent: @unchecked Sendable
 			{
 				!InlineImageData.isDataURL($0) && LocalAttachmentURL.resolve($0) != nil
 			}
-		hasUnpreparedDiagrams = !diagramsPrepared && parsed.runs.contains
+		hasUnpreparedRichBlocks = !richBlocksPrepared && parsed.runs.contains
 		{
-			$0.style.richBlock?.kind == .diagram
+			$0.style.richBlock?.kind == .diagram || $0.style.richBlock?.kind == .math
 		}
 	}
 
@@ -176,6 +179,8 @@ actor ConversationContentCache
 		let body: Data
 		let markdown: Bool
 		let preserveSoftBreaks: Bool
+		let typography: TypographyConfiguration
+		let colorTheme: ColorThemeConfiguration
 	}
 
 	private var values: [Key: PreparedConversationContent] = [:]
@@ -189,15 +194,18 @@ actor ConversationContentCache
 		body: String,
 		markdown: Bool,
 		preserveSoftBreaks: Bool = false,
-		prepareDiagrams: Bool = false
+		prepareRichBlocks: Bool = false,
+		colorTheme: ColorThemeConfiguration = ColorPreferences().configuration
 	) async -> PreparedConversationContent
 	{
 		let key = Key(
 			body: Data(body.utf8),
 			markdown: markdown,
-			preserveSoftBreaks: preserveSoftBreaks
+			preserveSoftBreaks: preserveSoftBreaks,
+			typography: .current,
+			colorTheme: colorTheme
 		)
-		if let cached = values[key], !prepareDiagrams || !cached.hasUnpreparedDiagrams
+		if let cached = values[key], !prepareRichBlocks || !cached.hasUnpreparedRichBlocks
 		{
 			return cached
 		}
@@ -221,32 +229,47 @@ actor ConversationContentCache
 				maximumPixelSize: plan.maximumPixelSize
 			)
 		}
-		let hasDiagrams = parsed.runs.contains
+		let hasRichBlocks = parsed.runs.contains
 		{
-			$0.style.richBlock?.kind == .diagram
+			$0.style.richBlock?.kind == .diagram || $0.style.richBlock?.kind == .math
 		}
 		let diagramImages: [Data: MarkdownRichBlockImageCache.Images]
-		if prepareDiagrams && hasDiagrams && !Task.isCancelled
+		let mathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images]
+		if prepareRichBlocks && hasRichBlocks && !Task.isCancelled
 		{
+			mathImages = await MarkdownMathRenderer.prepare(
+				parsed: parsed,
+				maximumPreparedPixels: MarkdownRichBlockBudget.mathPreparationPixels(
+					total: MarkdownMermaidRenderer.transcriptMaximumPreparedPixels
+				),
+				typography: key.typography,
+				colorTheme: key.colorTheme
+			)
 			diagramImages = await MarkdownMermaidRenderer.prepare(
 				parsed: parsed,
-				maximumPreparedPixels: MarkdownMermaidRenderer.transcriptMaximumPreparedPixels
+				maximumPreparedPixels: MarkdownMermaidRenderer.transcriptMaximumPreparedPixels,
+				typography: key.typography,
+				colorTheme: key.colorTheme
 			)
 		}
 		else
 		{
 			diagramImages = [:]
+			mathImages = [:]
 		}
 		let prepared = await PreparedConversationContent(
 			parsed,
 			imageThumbnails: imageThumbnails,
 			preparedDiagramImages: diagramImages,
-			diagramsPrepared: prepareDiagrams && !Task.isCancelled
+			preparedMathImages: mathImages,
+			richBlocksPrepared: prepareRichBlocks && !Task.isCancelled
 		)
 		let byteCount = body.utf8.count + prepared.estimatedRichImageBytes
 		// A later entry with the same Markdown must consult the thumbnail loader again.
 		// Its metadata-aware cache owns freshness for mutable local image paths.
-		if !Task.isCancelled, !prepared.hasLocalImageDependencies && byteCount <= byteCapacity
+		if !Task.isCancelled, key.typography == .current,
+			key.colorTheme == ColorPreferences().configuration,
+			!prepared.hasLocalImageDependencies && byteCount <= byteCapacity
 		{
 			if values[key] != nil
 			{

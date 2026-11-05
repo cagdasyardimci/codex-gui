@@ -9,14 +9,20 @@ final class TranscriptPreparationCoordinator
 		let body: String
 		let markdown: Bool
 		let preserveSoftBreaks: Bool
+		let typography: TypographyConfiguration
+		let colorTheme: ColorThemeConfiguration
 
 		init(
 			body: String,
 			markdown: Bool,
-			preserveSoftBreaks: Bool = false
+			preserveSoftBreaks: Bool = false,
+			typography: TypographyConfiguration = .current,
+			colorTheme: ColorThemeConfiguration = ColorPreferences().configuration
 		)
 		{
 			self.body = body
+			self.typography = typography
+			self.colorTheme = colorTheme
 			self.markdown = markdown
 			self.preserveSoftBreaks = preserveSoftBreaks
 		}
@@ -26,6 +32,8 @@ final class TranscriptPreparationCoordinator
 			lhs.body.utf8.elementsEqual(rhs.body.utf8)
 				&& lhs.markdown == rhs.markdown
 				&& lhs.preserveSoftBreaks == rhs.preserveSoftBreaks
+				&& lhs.typography == rhs.typography
+				&& lhs.colorTheme == rhs.colorTheme
 		}
 
 		static func make(
@@ -75,7 +83,7 @@ final class TranscriptPreparationCoordinator
 	typealias ContentPreparation = @MainActor (ContentKey) async -> PreparedConversationContent
 
 	private let prepareContent: ContentPreparation
-	private let prepareDiagramContent: ContentPreparation
+	private let prepareRichContent: ContentPreparation
 	private let navigationCache = ConversationTurnSummary.Cache()
 	private let netChangePreparation: ConversationNetFileChangePreparation
 	private(set) var turnSummaries: [ConversationTurnSummary] = []
@@ -91,7 +99,7 @@ final class TranscriptPreparationCoordinator
 		netChangePreparation: ConversationNetFileChangePreparation =
 			ConversationNetFileChangePreparation(),
 		prepareContent: ContentPreparation? = nil,
-		prepareDiagramContent: ContentPreparation? = nil
+		prepareRichContent: ContentPreparation? = nil
 	)
 	{
 		self.netChangePreparation = netChangePreparation
@@ -101,23 +109,34 @@ final class TranscriptPreparationCoordinator
 			await contentCache.content(
 				body: $0.body,
 				markdown: $0.markdown,
-				preserveSoftBreaks: $0.preserveSoftBreaks
+				preserveSoftBreaks: $0.preserveSoftBreaks,
+				colorTheme: $0.colorTheme
 			)
 		}
-		self.prepareDiagramContent = prepareDiagramContent ??
+		self.prepareRichContent = prepareRichContent ??
 		{
 			await contentCache.content(
 				body: $0.body,
 				markdown: $0.markdown,
 				preserveSoftBreaks: $0.preserveSoftBreaks,
-				prepareDiagrams: true
+				prepareRichBlocks: true,
+				colorTheme: $0.colorTheme
 			)
 		}
 	}
 
-	func waitForRendering() async
+	func waitForRendering(onAwait: (() -> Void)? = nil) async
 	{
-		await preparationTask?.value
+		while let task = preparationTask
+		{
+			let generation = renderGeneration
+			onAwait?()
+			await task.value
+			if generation == renderGeneration
+			{
+				return
+			}
+		}
 	}
 
 	func prepare(
@@ -141,7 +160,7 @@ final class TranscriptPreparationCoordinator
 		{
 			[weak self,
 				prepareContent,
-				prepareDiagramContent,
+				prepareRichContent,
 				navigationCache,
 				netChangePreparation] in
 			async let netChanges = netChangePreparation.prepare(
@@ -218,12 +237,12 @@ final class TranscriptPreparationCoordinator
 				{
 					return
 				}
-				guard let key, contents[entry.id]?.hasUnpreparedDiagrams == true
+				guard let key, contents[entry.id]?.hasUnpreparedRichBlocks == true
 				else
 				{
 					continue
 				}
-				let updated = await prepareDiagramContent(key)
+				let updated = await prepareRichContent(key)
 				guard !Task.isCancelled, generation == self.renderGeneration
 				else
 				{
