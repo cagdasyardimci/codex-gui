@@ -1070,6 +1070,12 @@ final class ToolsTabViewController: NSViewController
 			wasFilesPresentationVisible = filesVisible
 			onFilesPresentationVisible?(filesVisible)
 		}
+		if let window = view.window
+		{
+			// Newly mounted tools join native navigation without moving the current editor.
+			view.layoutSubtreeIfNeeded()
+			window.recalculateKeyViewLoop()
+		}
 	}
 
 	private func addTabView(

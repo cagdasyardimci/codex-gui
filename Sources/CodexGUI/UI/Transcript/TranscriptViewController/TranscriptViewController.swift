@@ -23,7 +23,7 @@ final class TranscriptViewController: NSViewController,
 	}
 
 	var renderedPresentation: TranscriptPresentation?
-	var collectionView = NSCollectionView()
+	var collectionView = ConversationCollectionView()
 	let loadEarlierButton = DesktopStyledButton(
 		title: "Load Earlier Messages",
 		target: nil,

@@ -137,6 +137,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		)
 		window.title = "Codex GUI"
 		window.acceptsMouseMovedEvents = true
+		// Transcript cells and tools enter the native key loop after the initial layout.
+		window.autorecalculatesKeyViewLoop = true
 		window.titleVisibility = .hidden
 		window.titlebarAppearsTransparent = true
 		window.titlebarSeparatorStyle = .none

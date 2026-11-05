@@ -118,7 +118,7 @@ extension TranscriptViewController
 		// conversation. Give each conversation its own document-view lifecycle.
 		collectionView.dataSource = nil
 		collectionView.delegate = nil
-		collectionView = NSCollectionView(
+		collectionView = ConversationCollectionView(
 			frame: NSRect(
 				origin: .zero,
 				size: conversationScrollView.contentSize
