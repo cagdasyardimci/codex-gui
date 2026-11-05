@@ -7,12 +7,13 @@ final class ExpandedImageDownloadButton: DesktopStyledButton
 	init(
 		image: NSImage,
 		target: AnyObject?,
-		action: Selector?
+		action: Selector?,
+		diagram: Bool = true
 	)
 	{
 		super.init(
 			title: "",
-			presentation: .imageOverlay(diagram: true),
+			presentation: .imageOverlay(diagram: diagram),
 			size: .regular
 		)
 		self.image = image

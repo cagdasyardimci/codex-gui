@@ -1,4 +1,7 @@
 import AppKit
+import CoreImage
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Owns one cancellable expanded image presentation within its initiating window.
 @MainActor
@@ -16,6 +19,8 @@ final class ExpandedImagePreview
 	private let loadImage: ImageLoader
 	private weak var parent: NSWindow?
 	private var resolutionTask: Task<Void, Never>?
+	private var downloadTask: Task<Void, Never>?
+	private weak var savePanel: NSSavePanel?
 	private var teardown: ExpandedImagePresentationTeardown?
 	private var generation = 0
 	private var requestedResolution = 2048
@@ -36,6 +41,7 @@ final class ExpandedImagePreview
 	{
 		presentationTask?.cancel()
 		resolutionTask?.cancel()
+		downloadTask?.cancel()
 		let teardown = teardown
 		Task
 		{
@@ -57,22 +63,21 @@ final class ExpandedImagePreview
 		{
 			return
 		}
-		let backgroundHost = preparedDiagram == nil ? contentView : contentView
-			.superview ?? contentView
+		let backgroundHost = contentView.superview ?? contentView
 		let overlayWindow: NSWindow?
 		let overlayHost: NSView
-		if preparedDiagram != nil
+		do
 		{
 			// AppKit's titlebar may composite above ordinary frame subviews. A child window
 			// covers that chrome and receives its input without changing the parent layout.
-			let window = ExpandedDiagramOverlayWindow(
+			let window = ExpandedImageOverlayWindow(
 				contentRect: parent.frame,
 				styleMask: .borderless,
 				backing: .buffered,
 				defer: false
 			)
 			window.isReleasedWhenClosed = false
-			window.title = "Expanded diagram"
+			window.title = preparedDiagram == nil ? "Expanded image" : "Expanded diagram"
 			window.isExcludedFromWindowsMenu = true
 			window.isOpaque = false
 			window.backgroundColor = .clear
@@ -87,11 +92,6 @@ final class ExpandedImagePreview
 			overlayWindow = window
 			overlayHost = host
 		}
-		else
-		{
-			overlayWindow = nil
-			overlayHost = contentView
-		}
 		let hiddenSiblings = backgroundHost.subviews.map
 		{
 			ExpandedImageAccessibilitySnapshot(view: $0)
@@ -99,6 +99,22 @@ final class ExpandedImagePreview
 		for sibling in hiddenSiblings
 		{
 			sibling.hide()
+		}
+		let blurView: ExpandedImageParentBlurView?
+		if preparedDiagram == nil
+		{
+			let blur = ExpandedImageParentBlurView(frame: backgroundHost.bounds)
+			blur.autoresizingMask = [.width, .height]
+			backgroundHost.addSubview(
+				blur,
+				positioned: .above,
+				relativeTo: nil
+			)
+			blurView = blur
+		}
+		else
+		{
+			blurView = nil
 		}
 		let generation = generation
 		let loadImage = loadImage
@@ -121,6 +137,15 @@ final class ExpandedImagePreview
 		controller.onDismiss =
 		{
 			[weak self] in self?.dismiss()
+		}
+		controller.onDownload =
+		{
+			[weak self] in
+			self?.download(
+				path: path,
+				name: name,
+				generation: generation
+			)
 		}
 		controller.onDetach =
 		{
@@ -170,6 +195,13 @@ final class ExpandedImagePreview
 			parent.makeFirstResponder(controller.view)
 		}
 		let lifetime = DesktopPanelLifetime()
+		let appearanceBinding = overlayWindow.map
+		{
+			DesktopPanelAppearanceBinding(
+				panel: $0,
+				source: contentView
+			)
+		}
 		lifetime.monitorLocalEvents(matching: .keyDown)
 		{
 			[weak self, weak parent, weak overlayWindow] event in
@@ -226,8 +258,10 @@ final class ExpandedImagePreview
 			parent: parent,
 			previousResponder: previousResponder,
 			lifetime: lifetime,
+			appearanceBinding: appearanceBinding,
 			hiddenSiblings: hiddenSiblings,
-			overlayWindow: overlayWindow
+			overlayWindow: overlayWindow,
+			blurView: blurView
 		)
 		if preparedDiagram != nil
 		{
@@ -241,7 +275,8 @@ final class ExpandedImagePreview
 				2048
 			)
 			guard !Task.isCancelled, let self, self.generation == generation,
-					let controller, let parent, controller.view.window === parent
+					let controller, let parent, self.parent === parent,
+					controller.view.window?.parent === parent
 			else
 			{
 				return
@@ -262,11 +297,24 @@ final class ExpandedImagePreview
 		generation += 1
 		presentationTask?.cancel()
 		resolutionTask?.cancel()
+		downloadTask?.cancel()
+		downloadTask = nil
+		if let panel = savePanel, let parent = panel.sheetParent
+		{
+			parent.endSheet(
+				panel,
+				returnCode: .cancel
+			)
+		}
+		savePanel = nil
 		presentationTask = nil
 		resolutionTask = nil
 		if let parent, Self.activeOwners.object(forKey: parent) === self
 		{
 			Self.activeOwners.removeObject(forKey: parent)
+		}
+		if let controller
+		{
 		}
 		teardown?.dismiss()
 		teardown = nil
@@ -277,6 +325,86 @@ final class ExpandedImagePreview
 	func waitForPresentation() async
 	{
 		await presentationTask?.value
+	}
+
+	private func download(
+		path: String,
+		name: String,
+		generation: Int
+	)
+	{
+		guard downloadTask == nil, savePanel?.sheetParent == nil
+		else
+		{
+			return
+		}
+		downloadTask = Task
+		{
+			[weak self] in
+			defer
+			{
+				if self?.generation == generation
+				{
+					self?.downloadTask = nil
+				}
+			}
+			guard let data = await SourceThumbnailLoader.originalData(path: path),
+					!Task.isCancelled, let self, self.generation == generation,
+					let window = self.controller?.view.window,
+					let file = Self.exportFile(
+					data: data,
+					name: name
+					)
+			else
+			{
+				return
+			}
+			self.savePanel = MarkdownDiagramExport.save(
+				file,
+				in: window
+			)
+		}
+	}
+
+	static func exportFile(
+		data: Data,
+		name: String
+	) -> MarkdownDiagramExport.File?
+	{
+		guard let source = CGImageSourceCreateWithData(
+			data as CFData,
+			nil
+		),
+			let identifier = CGImageSourceGetType(source) as String?,
+			let type = UTType(identifier), type.conforms(to: .image)
+		else
+		{
+			return nil
+		}
+		let proposed = URL(fileURLWithPath: name).lastPathComponent
+		let base = proposed.isEmpty || proposed == "." || proposed == ".." ? "Image" : proposed
+		let url = URL(fileURLWithPath: base)
+		let suppliedType = UTType(filenameExtension: url.pathExtension)
+		let fileName: String
+		if let suppliedType, suppliedType.conforms(to: type)
+		{
+			fileName = base
+		}
+		else if let ext = type.preferredFilenameExtension
+		{
+			let stem = url.pathExtension.isEmpty ? base : url.deletingPathExtension()
+				.lastPathComponent
+			fileName = "\(stem).\(ext)"
+		}
+		else
+		{
+			fileName = base
+		}
+		return MarkdownDiagramExport.File(
+			data: data,
+			contentType: type,
+			name: fileName
+		)
 	}
 
 	private func requestResolution(
@@ -302,7 +430,7 @@ final class ExpandedImagePreview
 			)
 			guard !Task.isCancelled, let self, self.generation == generation,
 					let controller, let thumbnail,
-					controller.view.window === self.parent
+					controller.view.window?.parent === self.parent
 			else
 			{
 				return
@@ -320,22 +448,28 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 	private weak var parent: NSWindow?
 	private weak var previousResponder: NSResponder?
 	private let lifetime: DesktopPanelLifetime
+	private let appearanceBinding: DesktopPanelAppearanceBinding?
 	private var hiddenSiblings: [ExpandedImageAccessibilitySnapshot]
 	private var overlayWindow: NSWindow?
+	private var blurView: NSView?
 
 	init(
 		controller: ExpandedImageViewController,
 		parent: NSWindow,
 		previousResponder: NSResponder?,
 		lifetime: DesktopPanelLifetime,
+		appearanceBinding: DesktopPanelAppearanceBinding?,
 		hiddenSiblings: [ExpandedImageAccessibilitySnapshot],
-		overlayWindow: NSWindow?
+		overlayWindow: NSWindow?,
+		blurView: NSView?
 	)
 	{
+		self.blurView = blurView
 		self.controller = controller
 		self.parent = parent
 		self.previousResponder = previousResponder
 		self.lifetime = lifetime
+		self.appearanceBinding = appearanceBinding
 		self.hiddenSiblings = hiddenSiblings
 		self.overlayWindow = overlayWindow
 	}
@@ -348,8 +482,16 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 			return
 		}
 		lifetime.invalidate()
+		appearanceBinding?.invalidate()
 		controller.invalidate()
 		let presentationWindow = overlayWindow ?? parent
+		if let sheet = presentationWindow?.attachedSheet
+		{
+			presentationWindow?.endSheet(
+				sheet,
+				returnCode: .cancel
+			)
+		}
 		let ownsFocus = presentationWindow?.firstResponder === controller.view
 			|| (presentationWindow?.firstResponder as? NSView)?
 			.isDescendant(of: controller.view) == true
@@ -361,6 +503,8 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 			overlayWindow.orderOut(nil)
 		}
 		overlayWindow = nil
+		blurView?.removeFromSuperview()
+		blurView = nil
 		for sibling in hiddenSiblings
 		{
 			sibling.restore()
@@ -384,7 +528,7 @@ private final class ExpandedImagePresentationTeardown: @unchecked Sendable
 }
 
 @MainActor
-private final class ExpandedDiagramOverlayWindow: NSWindow
+private final class ExpandedImageOverlayWindow: NSWindow
 {
 	override var canBecomeKey: Bool
 	{
@@ -394,6 +538,36 @@ private final class ExpandedDiagramOverlayWindow: NSWindow
 	override var canBecomeMain: Bool
 	{
 		false
+	}
+}
+
+/// A background filter samples its parent layer tree, so it lives beneath the child viewer.
+/// Input, focus and accessibility remain with the child presentation.
+@MainActor
+private final class ExpandedImageParentBlurView: NSView
+{
+	override init(frame: NSRect)
+	{
+		super.init(frame: frame)
+		wantsLayer = true
+		let blur = CIFilter(name: "CIGaussianBlur")!
+		blur.setValue(
+			1,
+			forKey: kCIInputRadiusKey
+		)
+		backgroundFilters = [blur]
+		setAccessibilityHidden(true)
+		setAccessibilityIdentifier("expanded-image-blur")
+	}
+
+	required init?(coder: NSCoder)
+	{
+		nil
+	}
+
+	override func hitTest(_ point: NSPoint) -> NSView?
+	{
+		nil
 	}
 }
 

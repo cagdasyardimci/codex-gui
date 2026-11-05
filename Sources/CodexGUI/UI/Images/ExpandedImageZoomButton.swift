@@ -1,6 +1,6 @@
 import AppKit
 
-/// Keeps the native popup menu and keyboard behavior while drawing the viewer's zoom pill.
+/// Image zoom uses the shared action menu and the viewer's value typography.
 @MainActor
 final class ExpandedImageZoomButton: DesktopPopupButton
 {
@@ -15,8 +15,9 @@ final class ExpandedImageZoomButton: DesktopPopupButton
 		)
 		isBordered = false
 		focusRingType = .none
-		font = AppKitFontResolver.font(TypographyTokens.Button.compact)
+		self.setTypographyRole(TypographyTokens.Button.value)
 		toolTip = "Zoom"
+		_ = colorObservation
 	}
 
 	required init?(coder: NSCoder)
@@ -26,8 +27,14 @@ final class ExpandedImageZoomButton: DesktopPopupButton
 
 	override var intrinsicContentSize: NSSize
 	{
-		NSSize(
-			width: LayoutTokens.Button.imageZoomWidth,
+		let attributes = AppKitFontResolver.textAttributes(
+			TypographyTokens.Button.value,
+			font: font
+		)
+		let width = ((selectedItem?.title ?? "100%") as NSString).size(withAttributes: attributes)
+			.width
+		return NSSize(
+			width: width + 2 * LayoutTokens.Button.regularHorizontalInset,
 			height: LayoutTokens.Button.regularHeight
 		)
 	}
@@ -42,8 +49,118 @@ final class ExpandedImageZoomButton: DesktopPopupButton
 		)
 	}
 
+	private let focusIndicator = DesktopControlFocusIndicator()
+	private lazy var colorObservation = ThemeColorObservation(view: self)
+	{
+		[weak self] in
+		self?.needsDisplay = true
+		self?.refreshFocus()
+	}
 	private var hover = false
 	private var hoverTracking: NSTrackingArea?
+	private var actionMenu: DesktopActionMenu?
+
+	override func layout()
+	{
+		super.layout()
+		refreshFocus()
+	}
+
+	override func becomeFirstResponder() -> Bool
+	{
+		let accepted = super.becomeFirstResponder()
+		refreshFocus()
+		return accepted
+	}
+
+	override func resignFirstResponder() -> Bool
+	{
+		let accepted = super.resignFirstResponder()
+		needsLayout = true
+		return accepted
+	}
+
+	private func refreshFocus()
+	{
+		focusIndicator.update(
+			in: self,
+			shape: .capsule,
+			focused: isEnabled && window?.firstResponder === self
+		)
+	}
+
+	func dismissMenu()
+	{
+		actionMenu?.close()
+		actionMenu = nil
+		needsDisplay = true
+	}
+
+	private func showMenu()
+	{
+		guard isEnabled, let menu
+		else
+		{
+			return
+		}
+		controlTooltip.dismiss()
+		dismissMenu()
+		for item in menu.items where !item.isHidden && !item.isSeparatorItem
+		{
+			item.target = self
+			item.action = #selector(chooseZoom(_:))
+		}
+		let presentation = DesktopActionMenu(
+			menu: menu,
+			backingScale: window?.backingScaleFactor ?? 1,
+			minimumWidth: 160,
+			accessibilityLabel: "Image zoom"
+		)
+		presentation.onClose =
+		{
+			[weak self] in self?.needsDisplay = true
+		}
+		actionMenu = presentation
+		presentation.show(from: self)
+		needsDisplay = true
+	}
+
+	@objc private func chooseZoom(_ item: NSMenuItem)
+	{
+		select(item)
+		_ = sendAction(
+			action,
+			to: target
+		)
+	}
+
+	override func mouseDown(with event: NSEvent)
+	{
+		showMenu()
+	}
+
+	override func keyDown(with event: NSEvent)
+	{
+		if [UInt16(36), 49, 125, 126].contains(event.keyCode)
+		{
+			showMenu()
+		}
+		else
+		{
+			super.keyDown(with: event)
+		}
+	}
+
+	override func accessibilityPerformPress() -> Bool
+	{
+		guard isEnabled
+		else
+		{
+			return false
+		}
+		showMenu()
+		return true
+	}
 
 	override func updateTrackingAreas()
 	{
@@ -70,13 +187,18 @@ final class ExpandedImageZoomButton: DesktopPopupButton
 	{
 		ExpandedImageHeaderDrawing.drawBackground(
 			control: self,
-			hover: hover
+			hover: hover || actionMenu?.host.isShown == true
 		)
 		let title = selectedItem?.title ?? ""
-		let attributes: [NSAttributedString.Key: Any] = [
-			.font: NSFont.systemFont(ofSize: 13),
-			.foregroundColor: ExpandedImageHeaderDrawing.foreground(enabled: isEnabled)
-		]
+		var attributes = AppKitFontResolver.textAttributes(
+			TypographyTokens.Button.value,
+			font: font ?? AppKitFontResolver.font(
+				TypographyTokens.Button.value,
+				appearance: effectiveAppearance
+			)
+		)
+		attributes[.foregroundColor] = ExpandedImageHeaderDrawing.foreground(enabled: isEnabled)
+
 		let size = (title as NSString).size(withAttributes: attributes)
 		(title as NSString).draw(
 			at: NSPoint(

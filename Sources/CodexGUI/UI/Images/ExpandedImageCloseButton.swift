@@ -4,11 +4,14 @@ import AppKit
 @MainActor
 final class ExpandedImageCloseButton: DesktopStyledButton
 {
-	var usesLightSurface = false
+	var usesDiagramLayout = false
 	{
 		didSet
 		{
-			presentation = .imageOverlay(diagram: usesLightSurface)
+			presentation = .imageOverlay(
+				diagram: usesDiagramLayout,
+				close: true
+			)
 		}
 	}
 
@@ -16,7 +19,10 @@ final class ExpandedImageCloseButton: DesktopStyledButton
 	{
 		super.init(
 			title: "Close",
-			presentation: .imageOverlay(diagram: false),
+			presentation: .imageOverlay(
+				diagram: false,
+				close: true
+			),
 			size: .regular
 		)
 		image = DesktopIcons.image(

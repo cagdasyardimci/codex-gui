@@ -61,19 +61,15 @@ struct UserMessageImageAttachmentsTests
 			defer
 			{
 				strip.configure([])
-				parent.orderOut(nil)
+				parent.close()
 			}
 			strip.configure([reference])
 			await strip.waitForImages()
 			let button = try #require(strip.subviews.first as? NSButton)
-			button.dispatchConfiguredAction()
+			#expect(button.dispatchConfiguredAction())
 			await strip.waitForExpandedPreview()
-			let preview = try #require(descendants(strip).first
-			{
-				$0.accessibilityIdentifier() == "expanded-image-preview"
-			})
+			let preview = try ExpandedImageTestSupport.preview(in: parent)
 			#expect(parent.attachedSheet == nil)
-			#expect(parent.childWindows?.isEmpty != false)
 			let imageView = try #require(descendants(preview).compactMap
 			{
 				$0 as? NSImageView
@@ -87,12 +83,9 @@ struct UserMessageImageAttachmentsTests
 			strip.configure([reference])
 			await strip.waitForImages()
 			let current = try #require(strip.subviews.first as? NSButton)
-			current.dispatchConfiguredAction()
+			#expect(current.dispatchConfiguredAction())
 			await strip.waitForExpandedPreview()
-			let reopened = try #require(descendants(strip).first
-			{
-				$0.accessibilityIdentifier() == "expanded-image-preview"
-			})
+			let reopened = try ExpandedImageTestSupport.preview(in: parent)
 			parent.contentView = NSView()
 			#expect(parent.childWindows?.isEmpty != false)
 			#expect(reopened.superview == nil)

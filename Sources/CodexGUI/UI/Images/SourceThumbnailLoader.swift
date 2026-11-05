@@ -35,6 +35,32 @@ actor SourceThumbnailLoader
 		cache.totalCostLimit = 16 * 1024 * 1024
 	}
 
+	/// Return the original encoded bytes under the same local-source and size limits as previews.
+	static func originalData(path: String) async -> Data?
+	{
+		await worker.originalData(path: path)
+	}
+
+	private func originalData(path: String) -> Data?
+	{
+		if InlineImageData.isDataURL(path)
+		{
+			return InlineImageData.decode(
+				path,
+				maximumBytes: Self.maximumBytes
+			)
+		}
+		guard let url = LocalAttachmentURL.resolve(path), !Task.isCancelled,
+				let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+				values.isRegularFile == true, let size = values.fileSize,
+				size <= Self.maximumBytes
+		else
+		{
+			return nil
+		}
+		return readFile(url)
+	}
+
 	static func load(path: String) async -> Data?
 	{
 		await worker.thumbnailData(path: path)

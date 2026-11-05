@@ -287,7 +287,7 @@ private final class MarkdownImageGalleryCell: NSTextAttachmentCell
 			outline.addClip()
 			image.draw(in: destination)
 			NSGraphicsContext.restoreGraphicsState()
-			NSColor.separatorColor.setStroke()
+			AppKitColorTokens.paneDivider.setStroke()
 			outline.lineWidth = 0.5
 			outline.stroke()
 		}

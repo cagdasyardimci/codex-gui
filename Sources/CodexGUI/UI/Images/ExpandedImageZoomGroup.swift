@@ -21,7 +21,7 @@ final class ExpandedImageZoomGroup: DesktopSurface
 	init()
 	{
 		super.init(
-			.white,
+			AppKitColorTokens.imageControlSurface,
 			cornerRadius: 22
 		)
 		appearance = NSAppearance(named: .aqua)
@@ -31,8 +31,8 @@ final class ExpandedImageZoomGroup: DesktopSurface
 		zoomInButton.target = self
 		zoomInButton.action = #selector(zoomIn)
 		zoomInButton.setAccessibilityLabel("Zoom in")
-		percentageLabel.font = AppKitFontResolver.font(TypographyTokens.Button.compact)
-		percentageLabel.textColor = .darkGray
+		percentageLabel.setTypographyRole(TypographyTokens.Button.compact)
+		percentageLabel.textColor = AppKitColorTokens.imageControlText
 		percentageLabel.alignment = .center
 		percentageLabel.setAccessibilityLabel("Diagram zoom percentage")
 		percentageLabel.widthAnchor.constraint(equalToConstant: 64).isActive = true
