@@ -25,21 +25,17 @@ enum MarkdownSourceStyling
 		dark: Bool
 	)
 	{
-		// Light colors sampled from the supplied Display P3 reference and converted to sRGB.
-		let red = color(
-			dark: dark,
-			light: (CGFloat(213) / 255, CGFloat(53) / 255, CGFloat(56) / 255),
-			darkValue: (1, 0.49, 0.48)
+		let red = SyntaxColorTokens.color(
+			"keyword",
+			dark: dark
 		)
-		let green = color(
-			dark: dark,
-			light: (0, CGFloat(136) / 255, CGFloat(9) / 255),
-			darkValue: (0.53, 0.82, 0.55)
+		let green = SyntaxColorTokens.color(
+			"string",
+			dark: dark
 		)
-		let orange = color(
-			dark: dark,
-			light: (CGFloat(189) / 255, CGFloat(88) / 255, CGFloat(1) / 255),
-			darkValue: (1, 0.68, 0.36)
+		let orange = SyntaxColorTokens.color(
+			"number",
+			dark: dark
 		)
 		let nsSource = source as NSString
 		var activeFence: (character: Character, count: Int)?
@@ -171,18 +167,4 @@ enum MarkdownSourceStyling
 		}
 	}
 
-	private static func color(
-		dark: Bool,
-		light: (CGFloat, CGFloat, CGFloat),
-		darkValue: (CGFloat, CGFloat, CGFloat)
-	) -> NSColor
-	{
-		let channels = dark ? darkValue : light
-		return NSColor(
-			srgbRed: channels.0,
-			green: channels.1,
-			blue: channels.2,
-			alpha: 1
-		)
-	}
 }

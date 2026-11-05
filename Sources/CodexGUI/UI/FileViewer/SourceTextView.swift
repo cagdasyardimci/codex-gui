@@ -4,12 +4,39 @@ import AppKit
 @MainActor
 class SourceTextView: NSTextView
 {
-	static let sourceFont = AppKitFontResolver.font(TypographyTokens.Transcript.code)
-	static let sourceLineHeight: CGFloat = 22
+	static var sourceFont: NSFont
+	{
+		AppKitFontResolver.font(TypographyTokens.Code.source)
+	}
+	static var sourceLineHeight: CGFloat
+	{
+		TypographyTokens.Code.source.lineHeight ?? 22
+	}
+	private var typographyObservation: TypographyObservation?
+	private var themeColorObservation: ThemeColorObservation?
+	var onTypographyChange: (() -> Void)?
 	private var sourceWrapsLines = true
+	class var typographyRole: TypographyTokens.Role
+	{
+		TypographyTokens.Code.source
+	}
 
 	func configureSourceText(wrapsLines: Bool)
 	{
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.refreshSourceAppearance(
+				appearance: self.effectiveAppearance,
+				wrapsLines: self.sourceWrapsLines
+			)
+			self.needsDisplay = true
+		}
 		isRichText = false
 		importsGraphics = false
 		isSelectable = true
@@ -22,6 +49,41 @@ class SourceTextView: NSTextView
 		isGrammarCheckingEnabled = false
 		isAutomaticDataDetectionEnabled = false
 		font = Self.sourceFont
+		typographyObservation = TypographyObservation(view: self)
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			let selection = self.selectedRanges
+			let font = AppKitFontResolver.font(
+				type(of: self).typographyRole,
+				appearance: self.effectiveAppearance
+			)
+			self.font = font
+			let paragraph = Self.paragraphStyle(
+				wrapsLines: self.sourceWrapsLines,
+				role: type(of: self).typographyRole
+			)
+			self.defaultParagraphStyle = paragraph
+			self.typingAttributes[.font] = font
+			self.typingAttributes[.paragraphStyle] = paragraph
+			if let storage = self.textStorage, storage.length > 0
+			{
+				storage.addAttributes(
+					[.font: font, .paragraphStyle: paragraph],
+					range: NSRange(
+						location: 0,
+						length: storage.length
+					)
+				)
+			}
+			self.selectedRanges = selection
+			self.onTypographyChange?()
+			self.needsDisplay = true
+		}
 		refreshSourceAppearance(
 			appearance: effectiveAppearance,
 			wrapsLines: wrapsLines
@@ -34,23 +96,31 @@ class SourceTextView: NSTextView
 	)
 	{
 		sourceWrapsLines = wrapsLines
-		backgroundColor = .textBackgroundColor
-		let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		let baseColor: NSColor = dark ? .labelColor : .black
+		backgroundColor = AppKitColorTokens.editorSurface
+		let baseColor = AppKitColorTokens.primaryText
 		// NSTextView.textColor rewrites all glyph attributes after the owner applies syntax colors.
 		insertionPointColor = baseColor
-		let style = Self.paragraphStyle(wrapsLines: wrapsLines)
+		let style = Self.paragraphStyle(
+			wrapsLines: wrapsLines,
+			role: type(of: self).typographyRole
+		)
 		defaultParagraphStyle = style
-		typingAttributes[.font] = Self.sourceFont
+		typingAttributes[.font] = AppKitFontResolver.font(
+			type(of: self).typographyRole,
+			appearance: appearance
+		)
 		typingAttributes[.paragraphStyle] = style
 		typingAttributes[.foregroundColor] = baseColor
 	}
 
-	static func paragraphStyle(wrapsLines: Bool) -> NSMutableParagraphStyle
+	static func paragraphStyle(
+		wrapsLines: Bool,
+		role: TypographyTokens.Role = TypographyTokens.Code.source
+	) -> NSMutableParagraphStyle
 	{
 		let style = NSMutableParagraphStyle()
-		style.minimumLineHeight = sourceLineHeight
-		style.maximumLineHeight = sourceLineHeight
+		style.minimumLineHeight = role.lineHeight ?? sourceLineHeight
+		style.maximumLineHeight = role.lineHeight ?? sourceLineHeight
 		style.lineBreakMode = wrapsLines ? .byCharWrapping : .byClipping
 		style.tabStops = []
 		style.defaultTabInterval = ("    " as NSString).size(
@@ -65,7 +135,8 @@ class SourceTextView: NSTextView
 		text: String,
 		path: String,
 		appearance: NSAppearance,
-		wrapsLines: Bool
+		wrapsLines: Bool,
+		role: TypographyTokens.Role = TypographyTokens.Code.source
 	)
 	{
 		guard attributed.length > 0
@@ -80,9 +151,15 @@ class SourceTextView: NSTextView
 		)
 		attributed.addAttributes(
 			[
-				.font: sourceFont,
-				.foregroundColor: dark ? NSColor.labelColor : NSColor.black,
-				.paragraphStyle: paragraphStyle(wrapsLines: wrapsLines)
+				.font: AppKitFontResolver.font(
+					role,
+					appearance: appearance
+				),
+				.foregroundColor: AppKitColorTokens.primaryText,
+				.paragraphStyle: paragraphStyle(
+					wrapsLines: wrapsLines,
+					role: role
+				)
 			],
 			range: range
 		)

@@ -30,6 +30,7 @@ final class FileSourceView: NSView, NSTextViewDelegate
 	private var wrapsLines = true
 	private var needsTextSizing = true
 	private var sizedViewportWidth: CGFloat = 0
+	private var themeColorObservation: ThemeColorObservation?
 
 	init()
 	{
@@ -47,8 +48,25 @@ final class FileSourceView: NSView, NSTextViewDelegate
 		)
 		ruler = FileSourceLineRuler(scrollView: scrollView)
 		super.init(frame: .zero)
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshAppearance()
+		}
 
 		textView.delegate = self
+		textView.onTypographyChange =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.needsTextSizing = true
+			self.needsLayout = true
+			self.ruler.update(text: self.textView.string)
+			self.ruler.needsDisplay = true
+		}
 		SourceTextViewport.configure(
 			textView,
 			wrapsLines: true
@@ -302,13 +320,18 @@ final class FileSourceView: NSView, NSTextViewDelegate
 
 	private func refreshAppearance()
 	{
-		scrollView.backgroundColor = .textBackgroundColor
+		scrollView.backgroundColor = AppKitColorTokens.editorSurface
 		textView.refreshSourceAppearance(
 			appearance: effectiveAppearance,
 			wrapsLines: wrapsLines
 		)
 		ruler.needsDisplay = true
+		let selection = textView.selectedRanges
+		let scrollOrigin = scrollView.contentView.bounds.origin
 		applySyntaxColors()
+		textView.selectedRanges = selection
+		scrollView.contentView.scroll(to: scrollOrigin)
+		scrollView.reflectScrolledClipView(scrollView.contentView)
 	}
 
 	private func applySyntaxColors()
@@ -363,8 +386,8 @@ final class FileSourceLineRuler: NSRulerView
 	private var labelAttributes: [NSAttributedString.Key: Any]
 	{
 		[
-			.font: AppKitFontResolver.font(TypographyTokens.Transcript.codeHeader),
-			.foregroundColor: NSColor.secondaryLabelColor
+			.font: AppKitFontResolver.font(TypographyTokens.Code.source),
+			.foregroundColor: AppKitColorTokens.secondaryText
 		]
 	}
 

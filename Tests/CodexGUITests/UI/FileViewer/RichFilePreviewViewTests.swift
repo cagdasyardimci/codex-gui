@@ -9,6 +9,106 @@ import UniformTypeIdentifiers
 @Suite(.serialized) @MainActor
 struct RichFilePreviewViewTests
 {
+	struct ImageLayoutCase: Sendable
+	{
+		let pixelSize: NSSize
+		let expectedImageRect: NSRect
+		let expectedCanvasHeight: CGFloat
+	}
+
+	@Test(arguments: [
+		ImageLayoutCase(
+			pixelSize: NSSize(
+				width: 64,
+				height: 64
+			),
+			expectedImageRect: NSRect(
+				x: 168,
+				y: 48,
+				width: 64,
+				height: 64
+			),
+			expectedCanvasHeight: 160
+		),
+		ImageLayoutCase(
+			pixelSize: NSSize(
+				width: 800,
+				height: 400
+			),
+			expectedImageRect: NSRect(
+				x: 12,
+				y: 12,
+				width: 376,
+				height: 188
+			),
+			expectedCanvasHeight: 212
+		),
+		ImageLayoutCase(
+			pixelSize: NSSize(
+				width: 200,
+				height: 1000
+			),
+			expectedImageRect: NSRect(
+				x: 100,
+				y: 12,
+				width: 200,
+				height: 1000
+			),
+			expectedCanvasHeight: 1024
+		),
+	])
+	func imageDocumentsPreserveNaturalSizeAndFitFromTheViewportTop(
+		_ sample: ImageLayoutCase
+	) async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let bytes = try pngBytes(
+				width: Int(sample.pixelSize.width),
+				height: Int(sample.pixelSize.height)
+			)
+			let preview = RichFilePreviewView(
+				kind: .image,
+				loadContent:
+				{
+					bytes
+				}
+			)
+			let scroll = NSScrollView(frame: NSRect(
+				x: 0,
+				y: 0,
+				width: 400,
+				height: 300
+			))
+			scroll.borderType = .noBorder
+			scroll.heightAnchor.constraint(equalToConstant: 300).isActive = true
+			scroll.documentView = preview
+			preview.translatesAutoresizingMaskIntoConstraints = false
+			preview.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
+			let window = attachedWindow(for: scroll)
+			defer
+			{
+				preview.cancelLoading()
+				window.close()
+			}
+			await preview.waitForLoading()
+			window.contentView?.layoutSubtreeIfNeeded()
+			scroll.layoutSubtreeIfNeeded()
+			preview.layoutSubtreeIfNeeded()
+			let image = try #require(preview.subviews.first as? NSImageView)
+			let viewport = scroll.contentView
+			let imageRect = viewport.convert(
+				image.bounds,
+				from: image
+			)
+			let topInset = viewport.isFlipped ? imageRect.minY - viewport.bounds.minY : viewport
+				.bounds.maxY - imageRect.maxY
+			#expect(abs(topInset - sample.expectedImageRect.minY) < 0.5)
+			#expect(image.frame == sample.expectedImageRect)
+			#expect(preview.frame.height == sample.expectedCanvasHeight)
+			#expect(image.imageScaling == .scaleProportionallyDown)
+		}
+	}
 
 	@Test func markdownImageLoaderReceivesResolvedPathAndDeniedImageKeepsSource() async throws
 	{
@@ -88,15 +188,18 @@ struct RichFilePreviewViewTests
 		}
 	}
 
-	private func pngBytes() throws -> Data
+	private func pngBytes(
+		width: Int = 16,
+		height: Int = 8
+	) throws -> Data
 	{
 		let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
 		let context = try #require(CGContext(
 			data: nil,
-			width: 16,
-			height: 8,
+			width: width,
+			height: height,
 			bitsPerComponent: 8,
-			bytesPerRow: 64,
+			bytesPerRow: width * 4,
 			space: colorSpace,
 			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
 		))
@@ -109,8 +212,8 @@ struct RichFilePreviewViewTests
 		context.fill(CGRect(
 			x: 0,
 			y: 0,
-			width: 16,
-			height: 8
+			width: width,
+			height: height
 		))
 		let image = try #require(context.makeImage())
 		let data = NSMutableData()

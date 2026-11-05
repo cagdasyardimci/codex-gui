@@ -34,6 +34,52 @@ struct ThemeConsumerColorTests
 		}
 	}
 
+	@Test func selectedCodeThemeRecolorsBothSourceAndMarkdownWithoutLosingBytes() throws
+	{
+		let source = "const value = 42; // 😄\r\n"
+		var colors: [NSColor] = []
+		for id in ["ayu-dark", "Lobster Dark", "ayu-dark"]
+		{
+			let configuration = ColorThemeConfiguration(dark: ColorThemeProfile(
+				background: 0x102030,
+				foreground: 0xE0E8F0,
+				accent: 0xCCAA55,
+				contrast: 60,
+				codeThemeID: id
+			))
+			let normal = try #require(CodeSyntaxHighlighter.highlightedCode(
+				source,
+				language: "javascript",
+				dark: true,
+				configuration: configuration
+			))
+			let markdown = try #require(CodeSyntaxHighlighter.highlightedCode(
+				source,
+				language: "javascript",
+				dark: true,
+				usePreset: false,
+				configuration: configuration
+			))
+			#expect(Data(normal.string.utf8) == Data(source.utf8))
+			#expect(Data(markdown.string.utf8) == Data(source.utf8))
+			let offset = (source as NSString).range(of: "42").location
+			let normalColor = try #require(normal.attribute(
+				.foregroundColor,
+				at: offset,
+				effectiveRange: nil
+			) as? NSColor)
+			let markdownColor = try #require(markdown.attribute(
+				.foregroundColor,
+				at: offset,
+				effectiveRange: nil
+			) as? NSColor)
+			#expect(normalColor == markdownColor)
+			colors.append(normalColor)
+		}
+		#expect(colors[0] != colors[1])
+		#expect(colors[0] == colors[2])
+	}
+
 	@Test(.appKitIsolation) func retainedSearchSurfaceRefreshesWithoutReplacingInputs() throws
 	{
 		let query = NSTextField(string: "draft query")
@@ -79,6 +125,43 @@ struct ThemeConsumerColorTests
 			#expect(query.stringValue == "draft query")
 			#expect(mask.stringValue == "*.swift")
 		}
+	}
+
+	@Test(.appKitIsolation) func mermaidUsesProfileColorsAndInvalidatesPreparedVectors(
+	) async throws
+	{
+		let source = "```mermaid\nflowchart LR\nA[Theme] --> B[Refresh]\n```"
+		let parsed = MarkdownContentParser.parse(
+			source,
+			markdown: true
+		)
+		var vectors: [Data] = []
+		for accent: UInt32 in [0xFF5566, 0x55DD88]
+		{
+			let configuration = ColorThemeConfiguration(dark: ColorThemeProfile(
+				background: 0x102030,
+				foreground: 0xE0E8F0,
+				accent: accent,
+				contrast: 60
+			))
+			let images = await MarkdownMermaidRenderer.prepare(
+				parsed: parsed,
+				colorTheme: configuration
+			)
+			let image = try #require(images.values.first?.dark as? MarkdownSVGImage)
+			let markup = try #require(String(
+				data: image.svgData,
+				encoding: .utf8
+			))
+			let colors = AppKitColorTokens.richContentColors(
+				appearance: NSAppearance(named: .darkAqua)!,
+				configuration: configuration
+			)
+			let ink = try #require(colors["ink"])
+			#expect(markup.contains(ink))
+			vectors.append(image.svgData)
+		}
+		#expect(vectors[0] != vectors[1])
 	}
 
 	private func contrast(
