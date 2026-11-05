@@ -10,7 +10,7 @@ struct ConversationTerminalCardTests
 	{
 		_ = NSApplication.shared
 		let card = ConversationTerminalCard()
-		let command = command(output: "first\r\nsecond\n👩🏽‍💻\n")
+		let command = command(output: "first\r\n\u{1b}[1msecond\u{1b}[0m\n👩🏽‍💻\n")
 		card.configure(
 			command,
 			expanded: true,
@@ -72,14 +72,14 @@ struct ConversationTerminalCardTests
 		{
 			window.close()
 		}
-		let output = Array(
+		let output = "\u{1b}[1m" + Array(
 			repeating: String(
 				repeating: "wide output ",
 				count: 20
 			),
 			count: 40
 		)
-		.joined(separator: "\n")
+		.joined(separator: "\n") + "\u{1b}[0m"
 		card.configure(
 			command(output: output),
 			expanded: true,
@@ -117,6 +117,34 @@ struct ConversationTerminalCardTests
 		let retained = try #require(card.readingPosition())
 		#expect(retained.origin == position.origin)
 		#expect(retained.selection == position.selection)
+		let text = try #require(descendants(card).compactMap
+		{
+			$0 as? NSTextView
+		}.first)
+		#expect(!text.string.contains("\u{1b}"))
+		#expect((text.textStorage?.attribute(
+			.font,
+			at: 0,
+			effectiveRange: nil
+		) as? NSFont)?
+			.fontName == "Menlo-Bold")
+		NotificationCenter.default.post(
+			name: TypographyPreferences.didChange,
+			object: nil
+		)
+		NotificationCenter.default.post(
+			name: ColorPreferences.didChange,
+			object: nil
+		)
+		card.layoutContent(width: 400)
+		#expect(card.readingPosition()?.selection == position.selection)
+		#expect(card.readingPosition()?.origin == position.origin)
+		#expect((text.textStorage?.attribute(
+			.font,
+			at: 0,
+			effectiveRange: nil
+		) as? NSFont)?
+			.fontName == "Menlo-Bold")
 		card.configure(
 			command(output: "short"),
 			expanded: true,
@@ -143,5 +171,10 @@ struct ConversationTerminalCardTests
 			durationMs: 100,
 			actions: []
 		)
+	}
+
+	private func descendants(_ view: NSView) -> [NSView]
+	{
+		[view] + view.subviews.flatMap(descendants)
 	}
 }

@@ -90,6 +90,47 @@ struct ReferenceComponentFontTests
 		#expect(label.stringValue == "Quick actions")
 	}
 
+	@Test func expandedShellUsesCorrectedRoleInActualTextStorage() throws
+	{
+		let card = ConversationTerminalCard()
+		card.configure(
+			ConversationCommand(
+				command: "printf 'font fixture'",
+				cwd: "/tmp",
+				output: "font fixture",
+				status: "completed",
+				exitCode: 0,
+				durationMs: 1,
+				actions: []
+			),
+			expanded: true,
+			preserving: nil
+		)
+		let output = try #require(descendants(card).compactMap
+		{
+			$0 as? NSTextView
+		}.first)
+		let font = try #require(output.textStorage?.attribute(
+			.font,
+			at: 0,
+			effectiveRange: nil
+		) as? NSFont)
+		#expect(font.fontName == "Menlo-Regular")
+		#expect(font.pointSize == TypographyConfiguration.current.uiSize - 1)
+		let paragraph = try #require(output.textStorage?.attribute(
+			.paragraphStyle,
+			at: 0,
+			effectiveRange: nil
+		) as? NSParagraphStyle)
+		#expect(paragraph.minimumLineHeight == (TypographyConfiguration.current.uiSize - 1) * 1.5)
+		let foreground = try #require(output.textStorage?.attribute(
+			.foregroundColor,
+			at: 0,
+			effectiveRange: nil
+		) as? NSColor)
+		#expect(foreground.alphaComponent == 0.7)
+	}
+
 	private func descendants(_ view: NSView) -> [NSView]
 	{
 		[view] + view.subviews.flatMap

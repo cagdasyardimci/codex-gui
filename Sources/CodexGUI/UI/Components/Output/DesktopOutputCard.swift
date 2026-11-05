@@ -27,14 +27,10 @@ class DesktopOutputCard: DesktopSurface
 		bodyView = body
 		titleLabel = NSTextField(labelWithString: title)
 		let error = presentation == .error
-		let fill = error ? AppKitColorResolution.color(
-			light: 0xFEF1F0,
-			dark: 0x270B0A
-		) : AppKitColorTokens.elevated
-		let edge = error ? AppKitColorResolution.color(
-			light: 0xFBD5D3,
-			dark: 0x7C221F
-		) : AppKitColorTokens.border
+		let fill = error ? AppKitColorTokens
+			.errorCardSurface :
+			(presentation == .terminal ? AppKitColorTokens.sidebar : AppKitColorTokens.elevated)
+		let edge = error ? AppKitColorTokens.errorCardEdge : AppKitColorTokens.border
 		super.init(
 			fill,
 			cornerRadius: 12,
@@ -45,22 +41,27 @@ class DesktopOutputCard: DesktopSurface
 		var content: [NSView] = []
 		if !error
 		{
-			let icon = NSImageView(image: DesktopIcons.image(
-				presentation == .terminal ? .terminal : .code,
-				size: 16
-			))
-			icon.contentTintColor = AppKitColorTokens.secondaryText
-			icon.setAccessibilityElement(false)
-			icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-			icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
-			titleLabel.font = .systemFont(ofSize: 13)
+			var views: [NSView] = []
+			if presentation == .code
+			{
+				let icon = NSImageView(image: DesktopIcons.image(
+					.code,
+					size: 16
+				))
+				icon.contentTintColor = AppKitColorTokens.secondaryText
+				icon.setAccessibilityElement(false)
+				icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+				icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+				views.append(icon)
+			}
+			titleLabel.setTypographyRole(TypographyTokens.Transcript.codeHeader)
 			titleLabel.textColor = AppKitColorTokens.primaryText
 			titleLabel.lineBreakMode = .byTruncatingTail
 			titleLabel.setContentCompressionResistancePriority(
 				.defaultLow,
 				for: .horizontal
 			)
-			let views: [NSView] = [icon, titleLabel, NSView()] + (accessory.map
+			views += [titleLabel, NSView()] + (accessory.map
 			{
 				[$0]
 			} ?? [])

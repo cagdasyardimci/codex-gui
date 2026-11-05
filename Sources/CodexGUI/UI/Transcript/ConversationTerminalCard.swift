@@ -12,21 +12,22 @@ final class ConversationTerminalCard: NSView
 
 	private var pendingOutputReadingPosition: ReadingPosition?
 	private var command: ConversationCommand?
+	private var outputRenderer = TerminalOutputRenderer()
 	private var isExpanded = false
 	private static let minimumShellHeight: CGFloat = 100
 	private static let maximumShellSampleLength = 8000
 	private static let maximumShellHeight: CGFloat = 218
-	private static let terminalFont = NSFont(
-		name: "Menlo-Regular",
-		size: 13
-	)
-		?? NSFont.monospacedSystemFont(
-			ofSize: 13,
-			weight: .regular
-		)
-	private static let terminalLineSpacing: CGFloat = 3
-	private static let terminalLineHeight = NSLayoutManager().defaultLineHeight(for: terminalFont)
-		+ terminalLineSpacing
+	private static var terminalFont: NSFont
+	{
+		AppKitFontResolver.font(TypographyTokens.Terminal.text)
+	}
+	private static var terminalLineHeight: CGFloat
+	{
+		TypographyTokens.Terminal.text.lineHeight!
+	}
+	private var typographyObservation: TypographyObservation?
+	private var colorObservation: ThemeColorObservation?
+
 	private var shellHeightConstraint: NSLayoutConstraint?
 	private var commandHeightConstraint: NSLayoutConstraint?
 	private let bodyView = NSView()
@@ -65,6 +66,7 @@ final class ConversationTerminalCard: NSView
 		preserving position: ReadingPosition?
 	)
 	{
+		let previousSource = self.command?.output
 		self.command = command
 		isExpanded = expanded && command != nil
 		guard isExpanded, let command
@@ -75,20 +77,20 @@ final class ConversationTerminalCard: NSView
 		}
 		commandLabel.attributedStringValue = Self.commandText(command.command)
 		commandLabel.toolTip = command.command
-		if position != nil, command.output.hasPrefix(output.string)
+		if position != nil, let previousSource, command.output.hasPrefix(previousSource)
 		{
-			let length = (output.string as NSString).length
-			output.textStorage?.replaceCharacters(
-				in: NSRange(
-					location: length,
-					length: 0
-				),
-				with: (command.output as NSString).substring(from: length)
-			)
+			output.textStorage?.append(outputRenderer.append(
+				(command.output as NSString).substring(from: (previousSource as NSString).length),
+				appearance: effectiveAppearance
+			))
 		}
 		else
 		{
-			output.string = command.output
+			outputRenderer = TerminalOutputRenderer()
+			output.textStorage?.setAttributedString(outputRenderer.append(
+				command.output,
+				appearance: effectiveAppearance
+			))
 		}
 		pendingOutputReadingPosition = position ?? ReadingPosition(
 			origin: .zero,
@@ -122,6 +124,7 @@ final class ConversationTerminalCard: NSView
 	private func clearPresentation()
 	{
 		pendingOutputReadingPosition = nil
+		outputRenderer = TerminalOutputRenderer()
 		output.string = ""
 		output.setSelectedRange(NSRange(
 			location: 0,
@@ -250,7 +253,7 @@ final class ConversationTerminalCard: NSView
 		shellHeightConstraint = heightAnchor
 			.constraint(equalToConstant: Self.minimumShellHeight)
 		shellHeightConstraint?.isActive = true
-		shellStatusLabel.font = .systemFont(ofSize: 13)
+		shellStatusLabel.setTypographyRole(TypographyTokens.Terminal.status)
 		shellStatusLabel.textColor = AppKitColorTokens.terminalMutedText
 		shellStatusLabel.alignment = .right
 		shellStatusLabel.lineBreakMode = .byTruncatingTail
@@ -258,10 +261,39 @@ final class ConversationTerminalCard: NSView
 		output.isSelectable = true
 		output.drawsBackground = false
 		output.font = Self.terminalFont
-		output.textColor = AppKitColorTokens.terminalText
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineSpacing = Self.terminalLineSpacing
-		output.defaultParagraphStyle = paragraph
+		typographyObservation = TypographyObservation(view: self)
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			if let command = self
+				.command
+			{
+				self.commandLabel.attributedStringValue = Self.commandText(command.command)
+			}
+			self.refreshOutput()
+			self.needsLayout = true
+		}
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.refreshOutput()
+			self.shellStatusLabel.textColor = AppKitColorTokens.terminalMutedText
+			if let command = self.command
+			{
+				self.commandLabel.attributedStringValue = Self.commandText(command.command)
+			}
+			self.needsDisplay = true
+		}
+		output.textColor = AppKitColorTokens.terminalOutputText
 		output.textContainerInset = NSSize(
 			width: 0,
 			height: 3
@@ -336,6 +368,23 @@ final class ConversationTerminalCard: NSView
 			action: #selector(copyOutput),
 			anchor: scroll
 		)
+	}
+
+	private func refreshOutput()
+	{
+		guard isExpanded, let command
+		else
+		{
+			return
+		}
+		let position = readingPosition()
+		outputRenderer = TerminalOutputRenderer()
+		output.textStorage?.setAttributedString(outputRenderer.append(
+			command.output,
+			appearance: effectiveAppearance
+		))
+		pendingOutputReadingPosition = position
+		needsLayout = true
 	}
 
 	private func configureShellCopyButton(
@@ -439,16 +488,11 @@ final class ConversationTerminalCard: NSView
 
 	private static func commandText(_ command: String) -> NSAttributedString
 	{
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineBreakMode = .byWordWrapping
-		paragraph.lineSpacing = terminalLineSpacing
+		var attributes = AppKitFontResolver.textAttributes(TypographyTokens.Terminal.text)
+		attributes[.foregroundColor] = AppKitColorTokens.terminalText
 		return NSAttributedString(
 			string: "$ \(command)",
-			attributes: [
-				.font: terminalFont,
-				.foregroundColor: AppKitColorTokens.terminalText,
-				.paragraphStyle: paragraph
-			]
+			attributes: attributes
 		)
 	}
 
@@ -473,7 +517,7 @@ final class ConversationTerminalCard: NSView
 			24,
 			min(
 				ceil(measured),
-				terminalLineHeight * 2 - terminalLineSpacing
+				terminalLineHeight * 2
 			)
 		)
 	}

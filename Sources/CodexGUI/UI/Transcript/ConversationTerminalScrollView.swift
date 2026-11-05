@@ -108,10 +108,11 @@ private final class ConversationTerminalEdgeFade: NSView
 			NSGraphicsContext.restoreGraphicsState()
 		}
 		NSBezierPath(rect: bounds).addClip()
-		let color = AppKitColorTokens.elevated
 		let gradient = NSGradient(
-			starting: color.withAlphaComponent(reversed ? 0 : 0.95),
-			ending: color.withAlphaComponent(reversed ? 0.95 : 0)
+			starting: reversed ? AppKitColorTokens.terminalFadeClear : AppKitColorTokens
+				.terminalFadeOpaque,
+			ending: reversed ? AppKitColorTokens.terminalFadeOpaque : AppKitColorTokens
+				.terminalFadeClear
 		)
 		gradient?.draw(
 			from: NSPoint(
