@@ -143,6 +143,10 @@ final class ToolsTabViewController: NSViewController
 		target: nil,
 		action: nil
 	)
+	var summaryAnchor: NSView
+	{
+		summaryButton
+	}
 
 	var tabBarView: NSView
 	{

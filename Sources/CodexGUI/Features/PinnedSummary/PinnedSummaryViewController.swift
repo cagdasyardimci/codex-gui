@@ -6,6 +6,10 @@ final class PinnedSummaryViewController: NSViewController
 	var onNavigate: ((ContextPanelRequest) -> Void)?
 	var onContentHeightChange: (() -> Void)?
 	private var presentation: PinnedSummaryPresentation?
+	var currentPresentation: PinnedSummaryPresentation?
+	{
+		presentation
+	}
 	private var sourcesExpanded = true
 	private weak var sourcesDisclosureButton: NSButton?
 	private let stack = NSStackView()
@@ -158,9 +162,8 @@ final class PinnedSummaryViewController: NSViewController
 		if let agents = section.value
 		{
 			let completed = "\(agents.completedCount) finished"
-			let text = agents.runningCount > 0
+			let label = agents.runningCount > 0
 				? completed + " · \(agents.runningCount) running" : completed
-			let label = "Loaded subagents · " + text
 			let summary = button(
 				label,
 				symbol: nil,
@@ -247,7 +250,7 @@ final class PinnedSummaryViewController: NSViewController
 			title: "View all",
 			destination: .sources
 		)
-		icon.contentTintColor = .tertiaryLabelColor
+		icon.contentTintColor = AppKitColorTokens.mutedText
 		let row = AppKitLayout.horizontalStack(
 			[icon, all],
 			spacing: 12
@@ -264,7 +267,7 @@ final class PinnedSummaryViewController: NSViewController
 		let imageView = NSImageView()
 		let iconSize = Layout.sourceIconSize
 		imageView.image = sourceImage(for: source)
-		imageView.contentTintColor = .secondaryLabelColor
+		imageView.contentTintColor = AppKitColorTokens.secondaryText
 		imageView.imageScaling = .scaleProportionallyUpOrDown
 		imageView.setAccessibilityElement(false)
 		imageView.widthAnchor.constraint(equalToConstant: iconSize).isActive = true
@@ -415,7 +418,7 @@ final class PinnedSummaryViewController: NSViewController
 
 	private func label(
 		_ text: String,
-		color: NSColor = .secondaryLabelColor
+		color: NSColor = AppKitColorTokens.secondaryText
 	) -> NSTextField
 	{
 		let label = NSTextField(labelWithString: text)
@@ -425,7 +428,7 @@ final class PinnedSummaryViewController: NSViewController
 			.defaultLow,
 			for: .horizontal
 		)
-		label.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
+		label.setTypographyRole(TypographyTokens.Summary.body)
 		label.textColor = color
 		return label
 	}

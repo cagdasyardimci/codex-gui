@@ -120,18 +120,22 @@ extension MainWindowController
 		{
 			[weak self] displayed in
 			self?.summaryToggleButton.state = displayed ? .on : .off
-			self?.inspector.toolsTabs.setSummaryVisible(displayed)
+			self?.inspector.toolsTabs.setSummaryVisible(
+				displayed || (self?.expandedSummaryPopover?.isShown ?? false)
+			)
 			self?.summaryToggleButton.setAccessibilityValue(displayed ? "Visible" : "Hidden")
 		}
+		let presentation = PinnedSummaryPresentation(
+			snapshot,
+			ownerIdentity: target.presentationIdentity,
+			sections: sections,
+			agentPreviews: subagents.agents
+		)
 		inspector.renderSummary(
-			PinnedSummaryPresentation(
-				snapshot,
-				ownerIdentity: target.presentationIdentity,
-				sections: sections,
-				agentPreviews: subagents.agents
-			),
+			presentation,
 			visible: visible
 		)
+		expandedSummaryController?.render(presentation)
 		if inspector.isShowingDetails, inspector.panels.destination == .sources,
 			target.accepts(.loadEarlierTurns), !target.store.isRetired
 		{
@@ -258,6 +262,11 @@ extension MainWindowController
 		{
 			return
 		}
+		if paneController.isToolsExpanded && !paneController.isShowingExpandedConversation
+		{
+			toggleExpandedSummary()
+			return
+		}
 		let owner = FeaturePresentationOwner(
 			snapshot,
 			storeIdentity: String(describing: ObjectIdentifier(currentStore))
@@ -305,6 +314,55 @@ extension MainWindowController
 				paneController.setReviewCollapsed(false)
 			}
 		}
+	}
+
+	private func toggleExpandedSummary()
+	{
+		if let popover = expandedSummaryPopover, popover.isShown
+		{
+			popover.close()
+			return
+		}
+		guard let presentation = inspector.summary.currentPresentation
+		else
+		{
+			return
+		}
+		let controller = PinnedSummaryViewController()
+		controller.render(presentation)
+		controller.onNavigate =
+		{
+			[weak self] request in
+			self?.expandedSummaryPopover?.close()
+			self?.inspector.summary.onNavigate?(request)
+		}
+		let popover = DesktopPopoverHost(
+			presentation: .choice(
+				width: 320,
+				contentHeight: min(
+					500,
+					max(
+						100,
+						controller.preferredContentHeight
+					)
+				)
+			),
+			content: controller.view,
+			controller: controller
+		)
+		popover.onPresentationChange =
+		{
+			[weak self] shown in
+			self?.inspector.toolsTabs.setSummaryVisible(shown)
+			if !shown
+			{
+				self?.expandedSummaryController = nil
+				self?.expandedSummaryPopover = nil
+			}
+		}
+		expandedSummaryController = controller
+		expandedSummaryPopover = popover
+		popover.show(from: inspector.toolsTabs.summaryAnchor)
 	}
 
 	func openCurrentChanges(toggleIfShowing: Bool = false)

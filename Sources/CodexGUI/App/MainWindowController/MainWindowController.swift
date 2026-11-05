@@ -62,6 +62,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	var summaryChangesProvider: ((FeaturePresentationOwner) -> SummarySection<SummaryChangeTotals>)?
 	var summaryVisibility = PinnedSummaryVisibility()
 	var summaryReconciliation = ContextSummaryReconciliation()
+	var expandedSummaryPopover: DesktopPopoverHost?
+	var expandedSummaryController: PinnedSummaryViewController?
 	var subagentConversationSession: SubagentConversationSession?
 	let summaryToggleButton = PinnedSummaryToggleButton(
 		title: "",

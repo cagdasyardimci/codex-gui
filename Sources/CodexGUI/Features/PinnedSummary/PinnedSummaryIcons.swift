@@ -1,5 +1,7 @@
 import AppKit
 
+// Black constructs template masks; the owning summary control supplies its semantic tint.
+
 /// Native vector artwork transcribed from the supplied pinned-summary screenshots.
 @MainActor
 enum PinnedSummaryIcons
