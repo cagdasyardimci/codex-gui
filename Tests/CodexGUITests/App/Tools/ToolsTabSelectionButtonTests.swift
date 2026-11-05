@@ -6,6 +6,37 @@ import Testing
 @MainActor
 struct ToolsTabSelectionButtonTests
 {
+	@Test func constrainedTabTitleKeepsOneLineThroughPresentationChanges() throws
+	{
+		_ = NSApplication.shared
+		let button = ToolsTabSelectionButton(
+			title: "Sources",
+			target: nil,
+			action: nil
+		)
+		button.image = DesktopIcons.image(.folder)
+		button.frame.size = NSSize(
+			width: 53,
+			height: 28
+		)
+		for selected in [true, false, true]
+		{
+			button.configurePresentation(
+				selected: selected,
+				preview: !selected
+			)
+			let titleRect = try #require(button.cell).titleRect(forBounds: button.bounds)
+			let titleBounds = button.attributedTitle.boundingRect(
+				with: NSSize(
+					width: titleRect.width,
+					height: 1000
+				),
+				options: [.usesLineFragmentOrigin, .usesFontLeading]
+			)
+			#expect(titleBounds.height <= button.bounds.height)
+		}
+	}
+
 	@Test func presentationKeepsNativeRoutingAndSelectionThroughCellInstallation()
 	{
 		_ = NSApplication.shared

@@ -7,6 +7,107 @@ import Testing
 @Suite @MainActor
 struct ToolsTabFilesIntegrationTests
 {
+	@Test func newlyVisibleToolContentJoinsKeyboardNavigationWithoutTakingFocus() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 700,
+					height: 400
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.prepareForTesting()
+			defer
+			{
+				window.close()
+			}
+			window.autorecalculatesKeyViewLoop = false
+			let root = try #require(window.contentView)
+			let draft = NSTextField(frame: NSRect(
+				x: 10,
+				y: 10,
+				width: 150,
+				height: 28
+			))
+			draft.stringValue = "Retained draft"
+			root.addSubview(draft)
+			let tabs = ToolsTabViewController()
+			tabs.view.frame = NSRect(
+				x: 200,
+				y: 0,
+				width: 500,
+				height: 400
+			)
+			tabs.view.isHidden = true
+			root.addSubview(tabs.view)
+			window.recalculateKeyViewLoop()
+			#expect(window.makeFirstResponder(draft))
+			let editor = try #require(window.firstResponder as? NSTextView)
+			let selection = NSRange(
+				location: 2,
+				length: 4
+			)
+			editor.setSelectedRange(selection)
+			let content = controller()
+			let action = KeyboardAction(frame: NSRect(
+				x: 10,
+				y: 10,
+				width: 100,
+				height: 28
+			))
+			content.view.addSubview(action)
+			let file = document("visible.swift")
+			tabs.updateFileTabs(
+				presentations: [file],
+				selectedID: file.id,
+				controller: content
+			)
+			tabs.view.isHidden = false
+			tabs.setContentVisible(true)
+			root.layoutSubtreeIfNeeded()
+			#expect(window.firstResponder === editor)
+			#expect(editor.selectedRange() == selection)
+			#expect(draft.stringValue == "Retained draft")
+			var candidate: NSView? = draft
+			var visited: Set<ObjectIdentifier> = []
+			var reachable = false
+			for _ in 0 ..< 30
+			{
+				guard let next = candidate?.nextValidKeyView,
+						visited.insert(ObjectIdentifier(next)).inserted
+				else
+				{
+					break
+				}
+				if next === action
+				{
+					reachable = true
+					break
+				}
+				candidate = next
+			}
+			#expect(reachable)
+		}
+	}
+
+	@MainActor
+	private final class KeyboardAction: NSButton
+	{
+		override var acceptsFirstResponder: Bool
+		{
+			true
+		}
+		override var canBecomeKeyView: Bool
+		{
+			!isHiddenOrHasHiddenAncestor
+		}
+	}
 
 	@Test func requestedCloseWaitsForPublishedDocumentRemoval() throws
 	{

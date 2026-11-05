@@ -46,7 +46,7 @@ final class ToolbarSeparatorView: NSView
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		NSColor.separatorColor.setFill()
+		AppKitColorTokens.paneDivider.setFill()
 		bounds.fill()
 	}
 }

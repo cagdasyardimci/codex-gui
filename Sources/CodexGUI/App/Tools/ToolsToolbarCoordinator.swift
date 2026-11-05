@@ -1,5 +1,7 @@
 import AppKit
 
+// Black in template images defines the alpha mask; toolbar controls supply the displayed tint.
+
 /// Owns the tools button, retained-tab display, toolbar composition, and separator geometry.
 @MainActor
 final class ToolsToolbarCoordinator
@@ -123,8 +125,10 @@ final class ToolsToolbarCoordinator
 			openButton.image = retainedTabCount > 0
 				? retainedTabsImage(retainedTabCount) : openTabPaneImage()
 		}
-		let openLabel = "New tab"
+		let openLabel = retainedTabCount > 0 ? "Show tabs" : "New tab"
 		openButton.label = openLabel
+		openButton.setAccessibilityHelp(retainedTabCount > 0
+			? "\(retainedTabCount) open \(retainedTabCount == 1 ? "tab" : "tabs")" : nil)
 	}
 
 	private func openTabPaneImage() -> NSImage?
@@ -266,6 +270,7 @@ final class ToolsToolbarCoordinator
 			)
 			outline.lineWidth = 1.2
 			outline.stroke()
+			// Fixed native lettering keeps this template count inside its 16-point icon.
 			let text = (count > 99 ? "99+" : String(count)) as NSString
 			let attributes: [NSAttributedString.Key: Any] = [
 				.font: NSFont.systemFont(ofSize: count > 99 ? 6 : 9),

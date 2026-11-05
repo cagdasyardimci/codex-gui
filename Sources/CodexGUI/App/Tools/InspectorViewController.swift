@@ -655,8 +655,8 @@ final class InspectorViewController: NSViewController
 
 	private func configureHeaderControls()
 	{
-		projectLabel.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
-		projectLabel.textColor = .secondaryLabelColor
+		projectLabel.setTypographyRole(TypographyTokens.Summary.body)
+		projectLabel.textColor = AppKitColorTokens.secondaryText
 		projectLabel.lineBreakMode = .byTruncatingMiddle
 		projectLabel.setContentCompressionResistancePriority(
 			.defaultLow,

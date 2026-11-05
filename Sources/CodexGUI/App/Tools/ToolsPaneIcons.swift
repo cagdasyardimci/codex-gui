@@ -1,5 +1,7 @@
 import AppKit
 
+// Black is a template alpha mask; the owning control supplies the semantic display tint.
+
 /// Tools artwork uses the reference's 16-unit canvas independently of summary icons.
 @MainActor
 enum ToolsPaneIcons

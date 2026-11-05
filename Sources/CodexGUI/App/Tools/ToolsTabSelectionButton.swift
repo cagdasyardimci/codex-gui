@@ -92,15 +92,16 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 		bezelStyle = .inline
 		isBordered = false
 		controlSize = .small
-		font = AppKitFontResolver.font(
+		alignment = .left
+		imagePosition = .imageLeading
+		cell?.lineBreakMode = .byTruncatingTail
+		cell?.usesSingleLineMode = true
+		setTypographyRole(
 			TypographyTokens.Controls.tab,
 			italic: preview
 		)
 		contentTintColor = selected ? AppKitColorTokens.primaryText : AppKitColorTokens
 			.secondaryText
-		alignment = .left
-		imagePosition = .imageLeading
-		cell?.lineBreakMode = .byTruncatingTail
 		setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal

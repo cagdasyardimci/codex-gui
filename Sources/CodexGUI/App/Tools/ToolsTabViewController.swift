@@ -1,5 +1,7 @@
 import AppKit
 
+// Template artwork uses black only as its alpha mask; controls own the theme tint.
+
 @MainActor
 final class ToolsTabViewController: NSViewController
 {
@@ -124,7 +126,7 @@ final class ToolsTabViewController: NSViewController
 	private var lastFileSelectedID: UUID?
 	private let dragOwner = UUID()
 	private let sourcesHoverPreview = SourcesTabHoverPreview()
-	private let tabScrollView = NSScrollView()
+	private let tabScrollView = ToolsTabScrollView()
 	private lazy var tabBar = makeTabHeader()
 	private var tabLeadingConstraint: NSLayoutConstraint?
 	private var headerTrailingConstraint: NSLayoutConstraint?
@@ -868,7 +870,7 @@ final class ToolsTabViewController: NSViewController
 	private func makeToolsContent() -> NSStackView
 	{
 		let heading = DesktopTextField(labelWithString: "Tools")
-		heading.font = AppKitFontResolver.font(TypographyTokens.Controls.toolsHeading)
+		heading.setTypographyRole(TypographyTokens.Controls.toolsHeading)
 		heading.textColor = AppKitColorTokens.primaryText
 		let changesTile = makeToolTile(
 			title: "Changes",
@@ -957,7 +959,6 @@ final class ToolsTabViewController: NSViewController
 	private func renderTabs()
 	{
 		let restoreTabFocus = tabBar.window?.firstResponder is ToolsTabSelectionButton
-		showSelectedContent()
 		let visibleTabCount = tabCount + (isExpanded ? 1 : 0)
 		preferredTabAreaWidth?.constant = CGFloat(visibleTabCount) * metrics.maximumWidth
 			+ CGFloat(max(
@@ -977,6 +978,7 @@ final class ToolsTabViewController: NSViewController
 		{
 			tabBar.window?.makeFirstResponder(selectedButton)
 		}
+		showSelectedContent()
 	}
 
 	private func rebuildTabViews() -> NSView?
@@ -1023,14 +1025,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func revealSelectedTab(_ selectedTab: NSView?)
 	{
-		if tabBar.superview != nil, tabBar.bounds.width > 0
-		{
-			tabBar.layoutSubtreeIfNeeded()
-			if let selectedTab
-			{
-				tabStack.scrollToVisible(selectedTab.frame)
-			}
-		}
+		tabScrollView.revealSelectedTab(selectedTab)
 	}
 
 	private func showSelectedContent()
@@ -1810,14 +1805,24 @@ private final class ToolsTileButton: DesktopHoverButton
 		bezelStyle = .inline
 		isBordered = false
 		controlSize = .small
-		font = AppKitFontResolver.font(TypographyTokens.Controls.toolsTile)
+		alignment = .left
+		self.setTypographyRole(TypographyTokens.Controls.toolsTile)
+		let titleText = NSMutableAttributedString(attributedString: attributedTitle)
+		titleText.addAttribute(
+			.foregroundColor,
+			value: AppKitColorTokens.primaryText,
+			range: NSRange(
+				location: 0,
+				length: titleText.length
+			)
+		)
+		attributedTitle = titleText
 		contentTintColor = AppKitColorTokens.primaryText
 		setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
 		cornerRadius = ShapeTokens.TabControls.toolTileRadius
-		alignment = .left
 		self.image = image
 		imagePosition = .imageLeading
 	}

@@ -6,6 +6,74 @@ import Testing
 @Suite @MainActor
 struct ToolsTabSourcesIntegrationTests
 {
+	@Test(.appKitIsolation)
+	func selectedTabIsRevealedAfterHeaderAttachmentAndResize() throws
+	{
+		_ = NSApplication.shared
+		let tabs = ToolsTabViewController()
+		tabs.openNewTab()
+		tabs.openNewTab()
+		let changes = NSViewController()
+		changes.view = NSView()
+		tabs.showChanges(changes)
+		let sources = NSViewController()
+		sources.view = NSView()
+		tabs.showSources(sources)
+		try #require(tabs.tabCount == 3)
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: -2000,
+				y: -2000,
+				width: 640,
+				height: 40
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		defer
+		{
+			window.close()
+		}
+		let host = try #require(window.contentView)
+		AppKitLayout.pin(
+			tabs.tabBarView,
+			to: host,
+			inset: 0
+		)
+		for width in [640.0, 320.0, 280.0]
+		{
+			window.setContentSize(NSSize(
+				width: width,
+				height: 40
+			))
+			window.layoutIfNeeded()
+			host.layoutSubtreeIfNeeded()
+			let selected = try #require(button(
+				"Sources 3",
+				in: tabs.tabBarView
+			))
+			let scroll = try #require(selected.enclosingScrollView)
+			let document = try #require(scroll.documentView)
+			let frame = selected.convert(
+				selected.bounds,
+				to: document
+			)
+			let visible = scroll.documentVisibleRect
+			#expect(frame.minX >= visible.minX)
+			#expect(frame.maxX <= visible.maxX)
+		}
+		let selected = try #require(button(
+			"Sources 3",
+			in: tabs.tabBarView
+		))
+		let scroll = try #require(selected.enclosingScrollView)
+		scroll.contentView.scroll(to: .zero)
+		scroll.reflectScrolledClipView(scroll.contentView)
+		tabs.tabBarView.layoutSubtreeIfNeeded()
+		#expect(scroll.contentView.bounds.origin.x == 0)
+	}
 
 	@Test func inspectorRejectsStaleOwnerAndRemovesSourcesTabWhenChatChanges() throws
 	{

@@ -45,10 +45,7 @@ final class ContextPanelShell: NSViewController
 		view = NSView()
 		closeButton.target = self
 		closeButton.action = #selector(closePanel)
-		titleLabel.font = .systemFont(
-			ofSize: 15,
-			weight: .semibold
-		)
+		titleLabel.setTypographyRole(TypographyTokens.Controls.panelTitle)
 		titleLabel.setAccessibilityRole(.staticText)
 		titleLabel.setAccessibilityRoleDescription("heading")
 		configureSourcesHeader()
@@ -78,10 +75,7 @@ final class ContextPanelShell: NSViewController
 		icon.imageScaling = .scaleProportionallyDown
 		icon.setAccessibilityElement(false)
 		let label = NSTextField(labelWithString: "Sources")
-		label.font = .systemFont(
-			ofSize: 15,
-			weight: .medium
-		)
+		label.setTypographyRole(TypographyTokens.Controls.panelHeading)
 		label.setAccessibilityRole(.staticText)
 		label.setAccessibilityRoleDescription("heading")
 		sourcesCloseButton.target = self
@@ -194,6 +188,8 @@ final class ContextPanelShell: NSViewController
 @MainActor
 private final class ContextPanelHeaderStackView: NSStackView
 {
+	private var colorObservation: ThemeColorObservation?
+
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
@@ -203,13 +199,22 @@ private final class ContextPanelHeaderStackView: NSStackView
 	override func viewDidMoveToWindow()
 	{
 		super.viewDidMoveToWindow()
+		if colorObservation ==
+			nil
+		{
+			colorObservation = ThemeColorObservation(view: self)
+			{
+				[weak self] in
+				self?.refreshBackground()
+			}
+		}
 		refreshBackground()
 	}
 
 	private func refreshBackground()
 	{
 		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
-			.controlBackgroundColor,
+			AppKitColorTokens.controlSurface,
 			for: self
 		)
 	}
