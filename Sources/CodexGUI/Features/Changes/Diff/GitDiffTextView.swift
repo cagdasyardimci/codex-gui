@@ -3,6 +3,22 @@ import AppKit
 @MainActor
 final class GitDiffTextView: SourceTextView
 {
+	override func refreshSourceAppearance(
+		appearance: NSAppearance,
+		wrapsLines: Bool
+	)
+	{
+		super.refreshSourceAppearance(
+			appearance: appearance,
+			wrapsLines: wrapsLines
+		)
+		backgroundColor = AppKitColorTokens.canvas
+	}
+
+	override class var typographyRole: TypographyTokens.Role
+	{
+		TypographyTokens.Code.diff
+	}
 	var rows: [GitDiffRow] = []
 	{
 		didSet
@@ -367,7 +383,7 @@ final class GitDiffTextView: SourceTextView
 		}
 		let rowStart = rowStartOffsets[index]
 		let rowLength = (row.text as NSString).length
-		color.withAlphaComponent(0.24).setFill()
+		AppKitColorTokens.diffSpan(added: row.kind == .addition).setFill()
 		for span in row.changedRanges where span.length > 0
 			&& span.location >= 0 && NSMaxRange(span) <= rowLength
 		{
@@ -434,7 +450,7 @@ final class GitDiffTextView: SourceTextView
 		NSBezierPath(rect: stripe).addClip()
 		AppKitColorTokens.elevated.setFill()
 		stripe.fill()
-		NSColor.separatorColor.withAlphaComponent(0.35).setStroke()
+		AppKitColorTokens.diffDivider.setStroke()
 		let hatch = NSBezierPath()
 		for x in stride(
 			from: -stripe.height,

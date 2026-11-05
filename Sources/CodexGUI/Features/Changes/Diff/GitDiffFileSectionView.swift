@@ -107,7 +107,7 @@ final class GitDiffFileSectionView: NSStackView
 				body.isHidden = false
 			}
 			previewButton?.state = .off
-			previewButton?.contentTintColor = .secondaryLabelColor
+			previewButton?.contentTintColor = AppKitColorTokens.secondaryText
 			previewButton?.toolTip = "Rich preview of the compared file version"
 			previewButton?.setAccessibilityLabel("Rich preview of \(filePath)")
 		}
@@ -122,7 +122,7 @@ final class GitDiffFileSectionView: NSStackView
 			addArrangedSubview(preview)
 			preview.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
 			previewButton?.state = .on
-			previewButton?.contentTintColor = .systemBlue
+			previewButton?.contentTintColor = AppKitColorTokens.accentText
 			previewButton?.toolTip = "Show diff for \(filePath)"
 			previewButton?.setAccessibilityLabel("Show diff for \(filePath)")
 		}
@@ -277,14 +277,14 @@ final class GitDiffFileSectionView: NSStackView
 		}
 
 		let path = NSTextField(labelWithString: displayPath)
-		path.font = .systemFont(ofSize: 14)
+		path.setTypographyRole(TypographyTokens.Files.path)
 		let pathStyle = NSMutableParagraphStyle()
 		pathStyle.lineBreakMode = .byTruncatingHead
 		let pathText = NSMutableAttributedString(
 			string: path.stringValue,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 14),
-				.foregroundColor: NSColor.secondaryLabelColor,
+				.font: AppKitFontResolver.font(TypographyTokens.Files.path),
+				.foregroundColor: AppKitColorTokens.secondaryText,
 				.paragraphStyle: pathStyle
 			]
 		)
@@ -297,7 +297,7 @@ final class GitDiffFileSectionView: NSStackView
 		{
 			pathText.addAttribute(
 				.foregroundColor,
-				value: NSColor.labelColor,
+				value: AppKitColorTokens.primaryText,
 				range: filenameRange
 			)
 		}
@@ -315,8 +315,8 @@ final class GitDiffFileSectionView: NSStackView
 	private func makeContextGap(_ row: GitDiffRow) -> NSView
 	{
 		let label = NSTextField(labelWithString: "\(row.hiddenLineCount) unmodified lines")
-		label.textColor = .secondaryLabelColor
-		label.font = .systemFont(ofSize: 13)
+		label.textColor = AppKitColorTokens.secondaryText
+		label.setTypographyRole(TypographyTokens.UI.small)
 
 		let controls = makeGapExpansionControls(row)
 
@@ -406,7 +406,7 @@ final class GitDiffFileSectionView: NSStackView
 	private func message(_ text: String) -> NSView
 	{
 		let label = NSTextField(wrappingLabelWithString: text)
-		label.textColor = .secondaryLabelColor
+		label.textColor = AppKitColorTokens.secondaryText
 		let row = AppKitLayout.horizontalStack(
 			[label, GitReviewControls.spacer()],
 			spacing: 0

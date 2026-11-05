@@ -6,7 +6,12 @@ final class GitDiffLineRuler: NSRulerView
 	private static let lineNumberVerticalOffset: CGFloat = 2
 
 	private let rows: [GitDiffRow]
-	private let font: NSFont
+	private var font: NSFont
+	{
+		SourceTextView.sourceFont
+	}
+	private var typographyObservation: TypographyObservation?
+	private var colorObservation: ThemeColorObservation?
 	private let gutterMode: GitUnifiedCodeView.GutterMode
 	private weak var source: GitDiffTextView?
 
@@ -14,12 +19,10 @@ final class GitDiffLineRuler: NSRulerView
 		scrollView: NSScrollView,
 		source: GitDiffTextView,
 		rows: [GitDiffRow],
-		font: NSFont,
 		gutterMode: GitUnifiedCodeView.GutterMode
 	)
 	{
 		self.rows = rows
-		self.font = font
 		self.gutterMode = gutterMode
 		self.source = source
 		super.init(
@@ -27,6 +30,32 @@ final class GitDiffLineRuler: NSRulerView
 			orientation: .verticalRuler
 		)
 		clientView = source
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.needsDisplay = true
+		}
+		typographyObservation = TypographyObservation
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			let number = self.rows.flatMap
+			{
+				[$0.oldLine ?? 0, $0.newLine ?? 0]
+			}.max() ?? 0
+			let width = (String(number) as NSString).size(withAttributes: [.font: self.font]).width
+			self.ruleThickness = self.gutterMode == .unified ? max(
+				52,
+				width + 24
+			) : max(
+				42,
+				width + 22
+			)
+			self.needsDisplay = true
+		}
 		let maximumLineNumber = rows.flatMap
 		{
 			[$0.oldLine ?? 0, $0.newLine ?? 0]

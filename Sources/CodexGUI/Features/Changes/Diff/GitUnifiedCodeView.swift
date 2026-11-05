@@ -16,8 +16,9 @@ final class GitUnifiedCodeView: NSView
 	private let gutterMode: GutterMode
 	private var measuredCodeWidth = GitCodeViewport.minimumDocumentWidth
 	private var heightConstraint: NSLayoutConstraint?
+	private var colorObservation: ThemeColorObservation?
 	private var additionalVisualLines: [Int] = []
-	private let unwrappedDocumentHeight: CGFloat
+	private var unwrappedDocumentHeight: CGFloat
 	private(set) var naturalContentHeight: CGFloat
 	var visualLineCounts: [Int]
 	{
@@ -50,8 +51,14 @@ final class GitUnifiedCodeView: NSView
 			needsLayout = true
 		}
 	}
-	private let font = SourceTextView.sourceFont
-	static let lineHeight = SourceTextView.sourceLineHeight
+	private var font: NSFont
+	{
+		SourceTextView.sourceFont
+	}
+	static var lineHeight: CGFloat
+	{
+		TypographyTokens.Code.diff.lineHeight ?? SourceTextView.sourceLineHeight
+	}
 
 	static func contentHeight(rowCount: Int) -> CGFloat
 	{
@@ -79,6 +86,32 @@ final class GitUnifiedCodeView: NSView
 		wantsLayer = true
 		layer?.masksToBounds = true
 		configureSourceText(placeholderIndices: placeholderIndices)
+		source.onTypographyChange =
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			let count = self.rows
+				.reduce(0)
+				{
+					$0 + 1 + $1.text.unicodeScalars.filter(CharacterSet.newlines.contains).count
+				}
+			self.unwrappedDocumentHeight = CGFloat(count) * Self.lineHeight + 2
+			self.measuredCodeWidth = max(
+				GitCodeViewport.minimumDocumentWidth,
+				(self.rows
+					.map
+					{
+						($0.text as NSString).size(withAttributes: [.font: self.font]).width
+					}
+					.max() ?? 0) + 30
+			)
+			self.render()
+			self.needsLayout = true
+		}
 		let height = unwrappedDocumentHeight
 		let longestSourceLineWidth = rows.map
 		{
@@ -96,6 +129,12 @@ final class GitUnifiedCodeView: NSView
 			height: height
 		)
 		installSourceScrollView()
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			self?.render()
+			self?.source.needsDisplay = true
+		}
 		render()
 	}
 
@@ -147,7 +186,6 @@ final class GitUnifiedCodeView: NSView
 			scrollView: scroll,
 			source: source,
 			rows: rows,
-			font: font,
 			gutterMode: gutterMode
 		)
 		SourceTextViewport.install(
@@ -305,11 +343,15 @@ final class GitUnifiedCodeView: NSView
 			text: text,
 			path: path,
 			appearance: effectiveAppearance,
-			wrapsLines: wrapsCode
+			wrapsLines: wrapsCode,
+			role: TypographyTokens.Code.diff
 		)
 		applySplitRowSpacing(
 			to: attributed,
-			paragraphStyle: SourceTextView.paragraphStyle(wrapsLines: wrapsCode)
+			paragraphStyle: SourceTextView.paragraphStyle(
+				wrapsLines: wrapsCode,
+				role: TypographyTokens.Code.diff
+			)
 		)
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
@@ -373,15 +415,17 @@ final class GitUnifiedCodeView: NSView
 		for row in rows
 		{
 			let length = (row.text as NSString).length
-			let color: NSColor? = row.kind == .addition ? .systemGreen : row
-				.kind == .deletion ? .systemRed : nil
-			if let color, !source.drawsRoundedChangeHighlights
+			if (row.kind == .addition || row.kind == .deletion),
+				!source.drawsRoundedChangeHighlights
 			{
 				for span in row.changedRanges where span.location >= 0 && NSMaxRange(span) <= length
 				{
 					attributed.addAttribute(
 						.backgroundColor,
-						value: color.withAlphaComponent(0.30),
+						value: AppKitColorTokens.diffSpan(
+							added: row.kind == .addition,
+							unified: true
+						),
 						range: NSRange(
 							location: offset + span.location,
 							length: span.length
