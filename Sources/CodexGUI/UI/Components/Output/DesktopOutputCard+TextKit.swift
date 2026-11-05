@@ -43,7 +43,7 @@ extension DesktopOutputCard
 		)
 		if presentation == .fileCode
 		{
-			NSColor.labelColor.withAlphaComponent(0.00549).setFill()
+			AppKitColorTokens.fileCodeSurface.setFill()
 			path.fill()
 		}
 		else
@@ -62,8 +62,8 @@ extension DesktopOutputCard
 		if presentation == .fileCode
 		{
 			let attributes: [NSAttributedString.Key: Any] = [
-				.font: NSFont.systemFont(ofSize: 12),
-				.foregroundColor: NSColor.secondaryLabelColor,
+				.font: AppKitFontResolver.font(TypographyTokens.FileMarkdown.codeLanguage),
+				.foregroundColor: AppKitColorTokens.secondaryText,
 			]
 			let title = language.lowercased() as NSString
 			let width = min(
@@ -82,11 +82,8 @@ extension DesktopOutputCard
 			return
 		}
 		let attributes: [NSAttributedString.Key: Any] = [
-			.font: NSFont.systemFont(
-				ofSize: 12,
-				weight: .medium
-			),
-			.foregroundColor: NSColor.labelColor,
+			.font: AppKitFontResolver.font(TypographyTokens.Transcript.codeLanguage),
+			.foregroundColor: AppKitColorTokens.primaryText,
 		]
 		("‹/›" as NSString).draw(
 			at: NSPoint(

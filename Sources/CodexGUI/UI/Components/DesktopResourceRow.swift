@@ -21,6 +21,8 @@ final class DesktopResourceRow: NSView
 	let titleLabel: NSTextField
 	let detailLabel: NSTextField?
 	private(set) var actionButtons: [NSButton] = []
+	private var filePath: String?
+	private var colorObservation: ThemeColorObservation?
 
 	init(
 		title: String,
@@ -38,10 +40,9 @@ final class DesktopResourceRow: NSView
 			NSTextField(wrappingLabelWithString: $0)
 		}
 		super.init(frame: .zero)
-		titleLabel.font = .systemFont(
-			ofSize: 13,
-			weight: presentation == .attachment ? .medium : .regular
-		)
+		titleLabel
+			.setTypographyRole(TypographyTokens.Resource
+				.title(attachment: presentation == .attachment))
 		titleLabel.textColor = AppKitColorTokens.primaryText
 		titleLabel
 			.lineBreakMode = presentation == .compact ? .byTruncatingTail : .byTruncatingMiddle
@@ -50,10 +51,19 @@ final class DesktopResourceRow: NSView
 			for: .horizontal
 		)
 		titleLabel.toolTip = title
+		if presentation == .file
+		{
+			filePath = title
+			colorObservation = ThemeColorObservation
+			{
+				[weak self] in self?.refreshFilePathColors()
+			}
+			refreshFilePathColors()
+		}
 		var labels: [NSView] = [titleLabel]
 		if let detailLabel
 		{
-			detailLabel.font = .systemFont(ofSize: 12)
+			detailLabel.setTypographyRole(TypographyTokens.Resource.detail)
 			detailLabel.textColor = AppKitColorTokens.secondaryText
 			detailLabel.lineBreakMode = .byTruncatingMiddle
 			detailLabel.maximumNumberOfLines = 2
@@ -87,7 +97,7 @@ final class DesktopResourceRow: NSView
 		if let badge
 		{
 			let badgeLabel = NSTextField(labelWithString: badge)
-			badgeLabel.font = .systemFont(ofSize: 12)
+			badgeLabel.setTypographyRole(TypographyTokens.Resource.detail)
 			badgeLabel.textColor = AppKitColorTokens.secondaryText
 			badgeLabel.setContentCompressionResistancePriority(
 				.required,
@@ -135,6 +145,59 @@ final class DesktopResourceRow: NSView
 		{
 			$0
 		}.joined(separator: ": "))
+	}
+
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		refreshFilePathColors()
+	}
+
+	private func refreshFilePathColors()
+	{
+		guard let filePath
+		else
+		{
+			return
+		}
+		let text = NSMutableAttributedString(attributedString: titleLabel.attributedStringValue)
+		let length = (filePath as NSString).length
+		guard text.length == length
+		else
+		{
+			return
+		}
+		func color(_ semantic: NSColor) -> NSColor
+		{
+			NSColor(cgColor: AppKitColorResolution.resolvedCGColor(
+				semantic,
+				for: self
+			)) ?? semantic
+		}
+		text.addAttribute(
+			.foregroundColor,
+			value: color(AppKitColorTokens.primaryText),
+			range: NSRange(
+				location: 0,
+				length: length
+			)
+		)
+		let separator = (filePath as NSString).range(
+			of: "/",
+			options: .backwards
+		)
+		if separator.location != NSNotFound
+		{
+			text.addAttribute(
+				.foregroundColor,
+				value: color(AppKitColorTokens.secondaryText),
+				range: NSRange(
+					location: 0,
+					length: separator.location + separator.length
+				)
+			)
+		}
+		titleLabel.attributedStringValue = text
 	}
 
 	static func actionButton(_ action: Action) -> NSButton

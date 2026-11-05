@@ -91,19 +91,21 @@ class DesktopStatusView: DesktopSurface
 		}
 		hasTitle = title?.isEmpty == false
 		titleLabel.stringValue = title ?? ""
-		titleLabel.font = .systemFont(
-			ofSize: presentation == .inlineCompact ? 11 : (presentation == .inline ? 12 : 16),
-			weight: .medium
-		)
-		titleLabel.textColor = presentation == .imageOverlay ? .white : AppKitColorTokens
+		titleLabel
+			.setTypographyRole(TypographyTokens.Status
+				.title(presentation: presentation == .inlineCompact ? .compact : presentation ==
+					.inline ? .inline : .regular))
+		titleLabel.textColor = presentation == .imageOverlay ? AppKitColorTokens
+			.imageControlText : AppKitColorTokens
 			.primaryText
 		titleLabel.isHidden = !hasTitle
 		titleLabel.setAccessibilityRoleDescription("heading")
 		messageLabel
-			.font =
-			.systemFont(ofSize: presentation == .inlineCompact ? 11 :
-				(presentation == .inline ? 12 : 13))
-		messageLabel.textColor = presentation == .imageOverlay ? .white : AppKitColorTokens
+			.setTypographyRole(TypographyTokens.Status
+				.message(presentation: presentation == .inlineCompact ? .compact : presentation ==
+					.inline ? .inline : .regular))
+		messageLabel.textColor = presentation == .imageOverlay ? AppKitColorTokens
+			.imageControlText : AppKitColorTokens
 			.secondaryText
 		messageLabel.isSelectable = true
 		for label in [titleLabel, messageLabel]

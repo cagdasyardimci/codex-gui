@@ -39,13 +39,13 @@ final class DesktopDiffStats: NSStackView
 		}
 		else
 		{
-			additionsLabel.textColor = .systemGreen
-			deletionsLabel.textColor = .systemRed
+			additionsLabel.textColor = AppKitColorTokens.diffAdded
+			deletionsLabel.textColor = AppKitColorTokens.diffRemoved
 			for label in [additionsLabel, deletionsLabel]
 			{
 				if presentation == .summary
 				{
-					label.font = AppKitFontResolver.font(TypographyTokens.Summary.body)
+					label.setTypographyRole(TypographyTokens.Summary.body)
 					label.lineBreakMode = .byTruncatingTail
 					label.maximumNumberOfLines = 1
 					label.setContentCompressionResistancePriority(
@@ -55,7 +55,7 @@ final class DesktopDiffStats: NSStackView
 				}
 				else if presentation == .toolbar
 				{
-					label.font = .systemFont(ofSize: 13)
+					label.setTypographyRole(TypographyTokens.Changes.statistics)
 				}
 				addArrangedSubview(label)
 			}
@@ -117,7 +117,7 @@ final class DesktopDiffStats: NSStackView
 		presentation: Presentation
 	)
 	{
-		label.font = .systemFont(ofSize: 13)
+		label.setTypographyRole(TypographyTokens.Changes.statistics)
 		label.attributedStringValue = attributedValue(
 			counts,
 			presentation: presentation
@@ -136,7 +136,7 @@ final class DesktopDiffStats: NSStackView
 				grouped: grouped
 			),
 			attributes: attributes(
-				color: .systemGreen,
+				color: AppKitColorTokens.diffAdded,
 				presentation: presentation
 			)
 		)
@@ -146,7 +146,7 @@ final class DesktopDiffStats: NSStackView
 				grouped: grouped
 			),
 			attributes: attributes(
-				color: .systemRed,
+				color: AppKitColorTokens.diffRemoved,
 				presentation: presentation
 			)
 		))
@@ -162,7 +162,7 @@ final class DesktopDiffStats: NSStackView
 		var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: color]
 		if presentation == .turnSummary
 		{
-			attributes[.font] = NSFont.systemFont(ofSize: 13)
+			attributes[.font] = AppKitFontResolver.font(TypographyTokens.Changes.statistics)
 		}
 		return attributes
 	}

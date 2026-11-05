@@ -338,10 +338,7 @@ final class ConversationSourcesViewController: NSViewController
 		)
 		button.isBordered = false
 		button.alignment = .left
-		button.font = .systemFont(
-			ofSize: 14,
-			weight: .medium
-		)
+		button.setTypographyRole(TypographyTokens.Sources.title)
 		button.toolTip = record.displayPath
 		button.cell?.lineBreakMode = .byTruncatingTail
 		button.setContentCompressionResistancePriority(
@@ -356,8 +353,8 @@ final class ConversationSourcesViewController: NSViewController
 				!$0.isFileURL || FileManager.default.isReadableFile(atPath: $0.path)
 			} ?? false
 		let path = NSTextField(wrappingLabelWithString: record.displayPath)
-		path.textColor = .tertiaryLabelColor
-		path.font = .systemFont(ofSize: 13)
+		path.textColor = AppKitColorTokens.mutedText
+		path.setTypographyRole(TypographyTokens.Sources.metadata)
 		path.isSelectable = true
 		path.identifier = NSUserInterfaceItemIdentifier("source-path:\(record.id)")
 		path.toolTip = record.displayPath
@@ -366,16 +363,16 @@ final class ConversationSourcesViewController: NSViewController
 			for: .horizontal
 		)
 		let provenance = NSTextField(labelWithString: record.association)
-		provenance.textColor = .secondaryLabelColor
-		provenance.font = .systemFont(ofSize: 13)
+		provenance.textColor = AppKitColorTokens.secondaryText
+		provenance.setTypographyRole(TypographyTokens.Sources.metadata)
 		provenance.lineBreakMode = .byTruncatingTail
 		provenance.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
 		let duration = NSTextField(labelWithString: "")
-		duration.textColor = .secondaryLabelColor
-		duration.font = .systemFont(ofSize: 13)
+		duration.textColor = AppKitColorTokens.secondaryText
+		duration.setTypographyRole(TypographyTokens.Sources.metadata)
 		duration.identifier = NSUserInterfaceItemIdentifier("source-duration:\(record.id)")
 		duration.isHidden = true
 		let labels = AppKitLayout.verticalStack(
@@ -503,7 +500,7 @@ final class ConversationSourcesViewController: NSViewController
 		case "list_threads": return "Listed chats " + (count == 1 ? "once" : "\(count) times")
 		case "list_artifacts", "list_attached_artifacts":
 			return "Listed attached artifacts " + (count == 1 ? "once" : "\(count) times")
-		case "Search": return "Searched \(count) " + (count == 1 ? "time" : "times")
+		case "Search": return "Searched " + (count == 1 ? "once" : "\(count) times")
 		case "Open": return "Opened \(count) " + (count == 1 ? "page" : "pages")
 		case "Find": return "Found text on \(count) " + (count == 1 ? "page" : "pages")
 		case "Command": return "Ran \(count) " + (count == 1 ? "command" : "commands")
@@ -519,7 +516,7 @@ final class ConversationSourcesViewController: NSViewController
 	private func makeActivityRow(for record: ConversationLocalSources.Record) -> NSView
 	{
 		let title = NSTextField(labelWithString: record.name)
-		title.font = .systemFont(ofSize: 13)
+		title.setTypographyRole(TypographyTokens.Sources.provider)
 		title.textColor = SourceResultCodeCard.activityTitleColor
 		title.lineBreakMode = .byTruncatingTail
 		title.setContentCompressionResistancePriority(
@@ -539,8 +536,8 @@ final class ConversationSourcesViewController: NSViewController
 		if groups.isEmpty, !record.association.isEmpty
 		{
 			let association = NSTextField(wrappingLabelWithString: record.association)
-			association.textColor = .secondaryLabelColor
-			association.font = .systemFont(ofSize: 13)
+			association.textColor = AppKitColorTokens.secondaryText
+			association.setTypographyRole(TypographyTokens.Sources.metadata)
 			content.addArrangedSubview(association)
 		}
 		for group in groups

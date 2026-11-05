@@ -165,7 +165,8 @@ final class SubagentDetailViewController: NSViewController
 	{
 		let backButton = DesktopBackButton(
 			target: self,
-			action: #selector(goBack)
+			action: #selector(goBack),
+			symbol: .arrowLeft
 		)
 		backButton.setAccessibilityLabel("Back to Subagents")
 		backButton.toolTip = nil
@@ -173,17 +174,14 @@ final class SubagentDetailViewController: NSViewController
 			.isActive = true
 		avatarContainer.heightAnchor.constraint(equalToConstant: Self.avatarDimension)
 			.isActive = true
-		nameLabel.font = .systemFont(
-			ofSize: 15,
-			weight: .semibold
-		)
+		nameLabel.setTypographyRole(TypographyTokens.Controls.panelTitle)
 		nameLabel.lineBreakMode = .byTruncatingTail
 		nameLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
-		metadataLabel.font = .systemFont(ofSize: 12)
-		metadataLabel.textColor = .secondaryLabelColor
+		metadataLabel.setTypographyRole(TypographyTokens.UI.caption)
+		metadataLabel.textColor = AppKitColorTokens.secondaryText
 		metadataLabel.lineBreakMode = .byTruncatingTail
 		metadataLabel.setContentCompressionResistancePriority(
 			.defaultLow,

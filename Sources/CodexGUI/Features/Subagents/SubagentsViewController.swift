@@ -44,14 +44,9 @@ final class SubagentsViewController: NSViewController
 	private static let avatarDimension: CGFloat = 24
 	private static let rowSpacing: CGFloat = 12
 	private static let minimumRowHeight: CGFloat = 30
-	private static let secondaryTextColor = NSColor(name: "SubagentsSecondaryText")
+	private static var secondaryTextColor: NSColor
 	{
-		appearance in
-		let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-		return isDark ? .secondaryLabelColor : NSColor(
-			calibratedWhite: 0.58,
-			alpha: 1
-		)
+		AppKitColorTokens.secondaryText
 	}
 	private final class SubagentShowMoreButton: DesktopStyledButton
 	{
@@ -69,7 +64,6 @@ final class SubagentsViewController: NSViewController
 			self.target = target
 			self.action = action
 			alignment = .left
-			contentTintColor = SubagentsViewController.secondaryTextColor
 		}
 
 		required init?(coder: NSCoder)
@@ -77,9 +71,6 @@ final class SubagentsViewController: NSViewController
 			nil
 		}
 	}
-
-	private static let textPointSize: CGFloat = 13
-	private static let timePointSize: CGFloat = 12
 
 	init(
 		owner: FeaturePresentationOwner,
@@ -383,7 +374,7 @@ final class SubagentsViewController: NSViewController
 	private func appendHeading(_ text: String)
 	{
 		let label = NSTextField(labelWithString: text)
-		label.font = .systemFont(ofSize: Self.textPointSize)
+		label.setTypographyRole(TypographyTokens.Subagents.section)
 		label.textColor = Self.secondaryTextColor
 		content.addArrangedSubview(label)
 		label.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
@@ -451,7 +442,7 @@ final class SubagentsViewController: NSViewController
 	) -> NSTextField
 	{
 		let label = NSTextField(labelWithString: "")
-		label.font = .systemFont(ofSize: Self.timePointSize)
+		label.setTypographyRole(TypographyTokens.Subagents.timing)
 		label.textColor = Self.secondaryTextColor
 		label.alignment = .right
 		label.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix):\(agent.identity)")
@@ -494,14 +485,14 @@ private final class SubagentNameButton: DesktopAttributedTitleButton
 		cell = SubagentNameButtonCell(textCell: title)
 		isBordered = false
 		alignment = .left
-		font = .systemFont(ofSize: 13)
+		self.setTypographyRole(TypographyTokens.Subagents.name)
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.lineBreakMode = .byTruncatingTail
 		attributedTitle = NSAttributedString(
 			string: title,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 13),
-				.foregroundColor: NSColor.labelColor,
+				.font: AppKitFontResolver.font(TypographyTokens.Subagents.name),
+				.foregroundColor: AppKitColorTokens.primaryText,
 				.paragraphStyle: paragraph,
 			]
 		)

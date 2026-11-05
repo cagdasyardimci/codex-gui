@@ -250,7 +250,7 @@ final class UsageSummaryView: NSView
 	private func makeDetailsController() -> NSViewController
 	{
 		let label = NSTextField(wrappingLabelWithString: details)
-		label.font = .systemFont(ofSize: 12)
+		label.setTypographyRole(TypographyTokens.UI.caption)
 		label.setAccessibilityLabel("Backend reported usage details")
 
 		let controller = NSViewController()

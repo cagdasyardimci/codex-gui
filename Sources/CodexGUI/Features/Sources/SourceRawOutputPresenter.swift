@@ -76,10 +76,7 @@ final class SourceRawOutputPresenter: NSObject
 		let container = NSView()
 		container.widthAnchor.constraint(equalToConstant: width).isActive = true
 		let heading = NSTextField(labelWithString: title)
-		heading.font = .systemFont(
-			ofSize: 17,
-			weight: .semibold
-		)
+		heading.setTypographyRole(TypographyTokens.Controls.title)
 		heading.lineBreakMode = .byTruncatingTail
 		heading.setContentCompressionResistancePriority(
 			.defaultLow,
@@ -110,8 +107,8 @@ final class SourceRawOutputPresenter: NSObject
 		)
 		let limit =
 			NSTextField(labelWithString: "Recorded details are bounded; omitted content is marked.")
-		limit.font = .systemFont(ofSize: 11)
-		limit.textColor = .secondaryLabelColor
+		limit.setTypographyRole(TypographyTokens.UI.metadata)
+		limit.textColor = AppKitColorTokens.secondaryText
 		let stack = AppKitLayout.verticalStack(
 			[header, code, limit],
 			spacing: 12

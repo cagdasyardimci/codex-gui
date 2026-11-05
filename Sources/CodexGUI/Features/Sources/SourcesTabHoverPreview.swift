@@ -59,15 +59,12 @@ final class SourcesTabHoverPreview
 		let records = resources.isEmpty
 			? Array(sources.records.prefix(5)) : Array(resources.suffix(5).reversed())
 		let title = NSTextField(labelWithString: "Sources")
-		title.font = .systemFont(
-			ofSize: 13,
-			weight: .medium
-		)
+		title.setTypographyRole(TypographyTokens.Sources.previewTitle)
 
 		let count = NSTextField(labelWithString:
 			"\(sources.records.count) \(sources.records.count == 1 ? "source" : "sources")")
-		count.font = .systemFont(ofSize: 12)
-		count.textColor = .secondaryLabelColor
+		count.setTypographyRole(TypographyTokens.UI.caption)
+		count.textColor = AppKitColorTokens.secondaryText
 
 		let stack = AppKitLayout.verticalStack(
 			[title, count],
