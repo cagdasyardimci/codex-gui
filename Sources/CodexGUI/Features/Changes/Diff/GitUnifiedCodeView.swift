@@ -11,6 +11,18 @@ final class GitUnifiedCodeView: NSView
 
 	private let source: GitDiffTextView
 	private let scroll = GitCodeScrollView()
+	var onHorizontalOriginChange: ((CGFloat) -> Void)?
+	{
+		didSet
+		{
+			scroll.onHorizontalOriginChange = onHorizontalOriginChange
+		}
+	}
+
+	func setHorizontalOrigin(_ x: CGFloat)
+	{
+		scroll.setHorizontalOrigin(x)
+	}
 	private let rows: [GitDiffRow]
 	private let path: String
 	private let gutterMode: GutterMode
@@ -33,6 +45,15 @@ final class GitUnifiedCodeView: NSView
 		scroll.hasHorizontalScroller
 	}
 	var onContentHeightChange: (() -> Void)?
+	var onSelectLine: ((String) -> Void)?
+	var selectedLineID: String?
+	{
+		didSet
+		{
+			source.selectedLineID = selectedLineID
+			scroll.verticalRulerView?.needsDisplay = true
+		}
+	}
 	var wrapsCode = false
 	{
 		didSet
@@ -188,6 +209,10 @@ final class GitUnifiedCodeView: NSView
 			rows: rows,
 			gutterMode: gutterMode
 		)
+		ruler.onSelectLine =
+		{
+			[weak self] id in self?.onSelectLine?(id)
+		}
 		SourceTextViewport.install(
 			source,
 			in: scroll,

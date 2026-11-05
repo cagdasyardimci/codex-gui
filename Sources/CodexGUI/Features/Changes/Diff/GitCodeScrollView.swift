@@ -5,6 +5,33 @@ import AppKit
 final class GitCodeScrollView: NSScrollView, DesktopWheelInputReceiving
 {
 	private var routesWheelVertically = false
+	var onHorizontalOriginChange: ((CGFloat) -> Void)?
+
+	override func reflectScrolledClipView(_ clipView: NSClipView)
+	{
+		super.reflectScrolledClipView(clipView)
+		if clipView === contentView
+		{
+			onHorizontalOriginChange?(clipView.bounds.origin.x)
+		}
+	}
+
+	func setHorizontalOrigin(_ x: CGFloat)
+	{
+		var proposed = contentView.bounds
+		proposed.origin.x = x
+		let constrained = contentView.constrainBoundsRect(proposed)
+		guard constrained.origin.x != contentView.bounds.origin.x
+		else
+		{
+			return
+		}
+		contentView.scroll(to: NSPoint(
+			x: constrained.origin.x,
+			y: contentView.bounds.origin.y
+		))
+		reflectScrolledClipView(contentView)
+	}
 
 	override func scrollWheel(with event: NSEvent)
 	{

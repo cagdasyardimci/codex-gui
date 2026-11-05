@@ -30,17 +30,35 @@ struct GitDiffScrollingTests
 				native.end()
 			}
 			_ = NSApplication.shared
-			let rows = (1 ... 60).map
+			let rows: [GitDiffRow] = (1 ... 60).map
 			{
-				GitDiffRow(
-					id: String($0),
-					kind: .context,
-					text: String(
-						repeating: "wide source ",
-						count: 30
-					),
-					oldLine: $0,
-					newLine: $0
+				index in
+				let kind: GitDiffRowKind
+				let repetitions: Int
+				switch index
+				{
+				case 1:
+					kind = .deletion
+					repetitions = 45
+				case 2:
+					kind = .addition
+					repetitions = 30
+				default:
+					kind = .context
+					repetitions = 20
+				}
+				let text = String(
+					repeating: "wide source ",
+					count: repetitions
+				)
+				let oldLine: Int? = index == 2 ? nil : index
+				let newLine: Int? = index == 1 ? nil : index
+				return GitDiffRow(
+					id: String(index),
+					kind: kind,
+					text: text,
+					oldLine: oldLine,
+					newLine: newLine
 				)
 			}
 			let code = GitAdaptiveDiffView(
@@ -198,6 +216,18 @@ struct GitDiffScrollingTests
 					}
 					#expect(inner.contentView.bounds.origin.x > horizontal)
 					#expect(outer.events.count == forwardedCount)
+					if layout == .split
+					{
+						let peer = try #require(sources.first
+						{
+							$0 !== source
+						}?
+						.enclosingScrollView)
+						var proposed = peer.contentView.bounds
+						proposed.origin.x = inner.contentView.bounds.origin.x
+						let expected = peer.contentView.constrainBoundsRect(proposed).origin.x
+						#expect(abs(peer.contentView.bounds.origin.x - expected) < 0.01)
+					}
 					// Shift stays with the code pane. This synthetic event checks routing;
 					// native Shift-axis normalization is outside this synthetic fixture.
 					inner.scrollWheel(with: try wheel(
@@ -224,6 +254,20 @@ struct GitDiffScrollingTests
 					#expect(outer.events.count == forwardedCount)
 					#expect(source.selectedRange() == selection)
 				}
+			}
+			if layout == .split && !wraps
+			{
+				let old = try #require(sources.first?.enclosingScrollView)
+				let new = try #require(sources.last?.enclosingScrollView)
+				var far = old.contentView.bounds
+				far.origin.x = 100_000
+				old.contentView.scroll(to: old.contentView.constrainBoundsRect(far).origin)
+				old.reflectScrolledClipView(old.contentView)
+				var peerTarget = new.contentView.bounds
+				peerTarget.origin.x = old.contentView.bounds.origin.x
+				let clamped = new.contentView.constrainBoundsRect(peerTarget).origin.x
+				#expect(abs(new.contentView.bounds.origin.x - clamped) < 0.01)
+				#expect(old.contentView.bounds.origin.x > new.contentView.bounds.origin.x)
 			}
 		}
 	}

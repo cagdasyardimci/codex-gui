@@ -80,6 +80,24 @@ final class GitAdaptiveDiffView: NSView
 	private var splitOld: GitUnifiedCodeView?
 	private var splitNew: GitUnifiedCodeView?
 	private var aligningSplitRows = false
+	private var synchronizingHorizontalScroll = false
+	private var selectedLineID: String?
+	{
+		didSet
+		{
+			unified.selectedLineID = selectedLineID
+			splitOld?.selectedLineID = selectedLineID
+			splitNew?.selectedLineID = selectedLineID
+		}
+	}
+	private func configureSelection(_ code: GitUnifiedCodeView)
+	{
+		code.selectedLineID = selectedLineID
+		code.onSelectLine =
+		{
+			[weak self] id in self?.selectedLineID = id
+		}
+	}
 	private lazy var unified: GitUnifiedCodeView =
 	{
 		let code = GitUnifiedCodeView(
@@ -87,6 +105,7 @@ final class GitAdaptiveDiffView: NSView
 			path: path
 		)
 		code.manageHeightFromParent()
+		configureSelection(code)
 		code.wrapsCode = wrapsCode
 		code.onContentHeightChange =
 		{
@@ -224,6 +243,22 @@ final class GitAdaptiveDiffView: NSView
 		)
 		splitOld = old
 		splitNew = new
+		old.onHorizontalOriginChange =
+		{
+			[weak self, weak new] x in
+			self?.synchronizeHorizontalOrigin(
+				x,
+				to: new
+			)
+		}
+		new.onHorizontalOriginChange =
+		{
+			[weak self, weak old] x in
+			self?.synchronizeHorizontalOrigin(
+				x,
+				to: old
+			)
+		}
 		let divider = DesktopSurface(AppKitColorTokens.paneDivider)
 		divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
 		let columns = AppKitLayout.horizontalStack(
@@ -238,6 +273,24 @@ final class GitAdaptiveDiffView: NSView
 			divider.heightAnchor.constraint(equalTo: columns.heightAnchor),
 		])
 		return columns
+	}
+
+	private func synchronizeHorizontalOrigin(
+		_ x: CGFloat,
+		to peer: GitUnifiedCodeView?
+	)
+	{
+		guard layoutMode == .split, !synchronizingHorizontalScroll, let peer
+		else
+		{
+			return
+		}
+		synchronizingHorizontalScroll = true
+		defer
+		{
+			synchronizingHorizontalScroll = false
+		}
+		peer.setHorizontalOrigin(x)
 	}
 
 	private func makeColumn(
@@ -269,6 +322,7 @@ final class GitAdaptiveDiffView: NSView
 			placeholderIndices: placeholderIndices
 		)
 		code.manageHeightFromParent()
+		configureSelection(code)
 		code.wrapsCode = wrapsCode
 		code.onContentHeightChange =
 		{

@@ -14,6 +14,8 @@ final class GitDiffLineRuler: NSRulerView
 	private var colorObservation: ThemeColorObservation?
 	private let gutterMode: GitUnifiedCodeView.GutterMode
 	private weak var source: GitDiffTextView?
+	var onSelectLine: ((String) -> Void)?
+	private var pressedRow: Int?
 
 	init(
 		scrollView: NSScrollView,
@@ -92,6 +94,56 @@ final class GitDiffLineRuler: NSRulerView
 		true
 	}
 
+	private func row(at point: NSPoint) -> Int?
+	{
+		guard bounds.contains(point), let source
+		else
+		{
+			return nil
+		}
+		let y = source.convert(
+			point,
+			from: self
+		).y
+		return source.visualRowIndices(
+			from: y,
+			through: y
+		).first
+		{
+			source.visualRowRect(at: $0).contains(NSPoint(
+				x: 0,
+				y: y
+			)) && !source.placeholderIndices
+				.contains($0)
+		}
+	}
+
+	override func mouseDown(with event: NSEvent)
+	{
+		pressedRow = row(at: convert(
+			event.locationInWindow,
+			from: nil
+		))
+	}
+
+	override func mouseUp(with event: NSEvent)
+	{
+		defer
+		{
+			pressedRow = nil
+		}
+		guard let pressedRow,
+				row(at: convert(
+				event.locationInWindow,
+				from: nil
+				)) == pressedRow
+		else
+		{
+			return
+		}
+		onSelectLine?(rows[pressedRow].id)
+	}
+
 	override func drawHashMarksAndLabels(in rect: NSRect)
 	{
 		// AppKit can pass the scroll viewport's dirty rect, wider than this ruler.
@@ -141,11 +193,29 @@ final class GitDiffLineRuler: NSRulerView
 			{
 				continue
 			}
-			let color: NSColor = row.kind == .addition ? .systemGreen : row
-				.kind == .deletion ? .systemRed : .secondaryLabelColor
+			let color: NSColor = row.kind == .addition ? GitDiffThemeColors.added : row
+				.kind == .deletion ? GitDiffThemeColors.removed : AppKitColorTokens.secondaryText
+			if row.kind == .context, row.id == source.selectedLineID
+			{
+				GitDiffThemeColors.selected(
+					AppKitColorTokens.canvas,
+					gutter: true
+				).setFill()
+				NSRect(
+					x: 0,
+					y: position.y - Self.lineNumberVerticalOffset,
+					width: ruleThickness,
+					height: sourceRect.height
+				).fill()
+			}
 			if row.kind == .addition || row.kind == .deletion
 			{
-				color.withAlphaComponent(0.06).setFill()
+				let background = row.kind == .addition ? GitDiffThemeColors
+					.addedGutter : GitDiffThemeColors.removedGutter
+				(row.id == source.selectedLineID ? GitDiffThemeColors.selected(
+					background,
+					gutter: true
+				) : background).setFill()
 				NSRect(
 					x: 0,
 					y: position.y - Self.lineNumberVerticalOffset,
@@ -180,7 +250,12 @@ final class GitDiffLineRuler: NSRulerView
 					rail.fill()
 				}
 			}
-			let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+			let numberColor = row.id == source.selectedLineID
+				? AppKitColorTokens.accentText : color
+			let attributes: [NSAttributedString.Key: Any] = [
+				.font: font,
+				.foregroundColor: numberColor
+			]
 			func draw(
 				_ text: String,
 				right: CGFloat

@@ -37,6 +37,13 @@ final class GitDiffTextView: SourceTextView
 		}
 	}
 	var placeholderIndices: Set<Int> = []
+	var selectedLineID: String?
+	{
+		didSet
+		{
+			needsDisplay = true
+		}
+	}
 	var drawsRoundedChangeHighlights = false
 	var additionalVisualLines: [Int] = []
 	{
@@ -350,14 +357,28 @@ final class GitDiffTextView: SourceTextView
 				drawPlaceholder(in: stripe)
 				continue
 			}
-			let color: NSColor? = row.kind == .addition ? .systemGreen
-				: row.kind == .deletion ? .systemRed : nil
+			let color: NSColor? = row.kind == .addition ? GitDiffThemeColors.added
+				: row.kind == .deletion ? GitDiffThemeColors.removed : nil
+			if color == nil, row.id == selectedLineID
+			{
+				GitDiffThemeColors.selected(
+					AppKitColorTokens.canvas,
+					gutter: false
+				).setFill()
+				stripe.fill()
+			}
 			guard let color
 			else
 			{
 				continue
 			}
-			color.withAlphaComponent(0.12).setFill()
+			let background = row.kind == .addition ? GitDiffThemeColors
+				.addedContent : GitDiffThemeColors.removedContent
+			(row.id == selectedLineID ? GitDiffThemeColors
+				.selected(
+					background,
+					gutter: false
+				) : background).setFill()
 			stripe.fill()
 			if drawsRoundedChangeHighlights
 			{
