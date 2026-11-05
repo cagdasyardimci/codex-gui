@@ -140,9 +140,10 @@ struct TranscriptImageFreshnessTests
 					hints: nil
 				))
 				#expect(inlineImage.width == 8 && inlineImage.height == height)
-				button.dispatchConfiguredAction()
+				#expect(button.dispatchConfiguredAction())
 				await item.waitForImagePreview()
-				let expanded = try #require(descendants(host).compactMap
+				let preview = try ExpandedImageTestSupport.preview(in: window)
+				let expanded = try #require(descendants(preview).compactMap
 				{
 					$0 as? NSImageView
 				}

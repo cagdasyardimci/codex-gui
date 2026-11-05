@@ -38,6 +38,10 @@ final class TranscriptViewController: NSViewController,
 	lazy var utilityRow = makeTranscriptUtilityRow()
 	let transcriptPreparation: TranscriptPreparationCoordinator
 	var preparedContents: [String: PreparedConversationContent] = [:]
+	private var typographyObservation: TypographyObservation?
+	private var themeColorObservation: ThemeColorObservation?
+	private var observedTypography = TypographyConfiguration.current
+	private var observedColorTheme = ColorPreferences().configuration
 	struct MeasuredItemSize
 	{
 		let content: PreparedConversationContent
@@ -147,6 +151,38 @@ final class TranscriptViewController: NSViewController,
 	override func loadView()
 	{
 		configureTranscriptControls()
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			guard let self, self.observedColorTheme != ColorPreferences().configuration
+			else
+			{
+				return
+			}
+			self.observedColorTheme = ColorPreferences().configuration
+			self.prepareEntries(
+				self.requestedEntries,
+				context: self.requestedContext,
+				force: true
+			)
+		}
+		typographyObservation = TypographyObservation
+		{
+			[weak self] in
+			guard let self, self.observedTypography != TypographyConfiguration.current
+			else
+			{
+				return
+			}
+			self.observedTypography = .current
+			self.prepareEntries(
+				self.requestedEntries,
+				context: self.requestedContext,
+				force: true
+			)
+			(self.collectionView.collectionViewLayout as? ConversationFlowLayout)?
+				.invalidateContentMetrics()
+		}
 		let transcriptArea = NSView()
 		transcriptArea.addSubview(conversationScrollView)
 		transcriptArea.addSubview(latestButton)
