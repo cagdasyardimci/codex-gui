@@ -73,7 +73,6 @@ final class ProjectHoverCard
 			placement: .besideTop,
 			interaction: .interactive
 		)
-		panel?.hasShadow = false
 		for name in [NSWindow.didResignKeyNotification,
 						NSWindow.willCloseNotification,
 						NSWindow.willMoveNotification,

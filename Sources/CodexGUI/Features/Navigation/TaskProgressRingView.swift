@@ -4,11 +4,16 @@ import AppKit
 final class TaskProgressRingView: NSView
 {
 	private let ring = CAShapeLayer()
+	private var colorObservation: ThemeColorObservation?
 	private(set) var isRunning = false
 
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.needsLayout = true
+		}
 		wantsLayer = true
 		ring.fillColor = nil
 		ring.lineWidth = 1.5
@@ -46,7 +51,7 @@ final class TaskProgressRingView: NSView
 		ring.strokeStart = 0.08
 		ring.strokeEnd = 0.88
 		ring.strokeColor = AppKitColorResolution.resolvedCGColor(
-			.secondaryLabelColor,
+			AppKitColorTokens.secondaryText,
 			for: self
 		)
 		CATransaction.commit()

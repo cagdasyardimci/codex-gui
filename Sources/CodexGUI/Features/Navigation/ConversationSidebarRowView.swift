@@ -35,7 +35,7 @@ final class ConversationSidebarRowView: NSTableRowView
 		path.fill()
 		if NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
 		{
-			NSColor.secondaryLabelColor.setStroke()
+			AppKitColorTokens.secondaryText.setStroke()
 			let outline = AppKitShapePath.roundedRect(
 				selectionRect.insetBy(
 					dx: ShapeTokens.SidebarSelection.outlineInset,

@@ -14,7 +14,7 @@ extension NavigationViewController
 		)
 		taskPicker.cell?.lineBreakMode = .byTruncatingTail
 
-		taskPicker.font = .systemFont(ofSize: 11)
+		taskPicker.setTypographyRole(TypographyTokens.Sidebar.workspacePicker)
 		let taskRow = AppKitLayout.horizontalStack([taskPicker])
 
 		return taskRow

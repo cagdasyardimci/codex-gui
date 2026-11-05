@@ -101,7 +101,7 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 
 	override func loadView()
 	{
-		let container = DesktopSurface(AppKitColorTokens.sidebar)
+		let container = SidebarBackgroundView()
 
 		let brandRow = makeBrandRow()
 		configureNewChatButton()

@@ -32,14 +32,21 @@ final class TaskSidebarCellView: NSTableCellView
 	private var isHovered = false
 	private var titleTrailingConstraint: NSLayoutConstraint?
 	private var titleLeadingConstraint: NSLayoutConstraint?
+	private var themeColorObservation: ThemeColorObservation?
 
 	private typealias Layout = LayoutTokens.TaskActions
 
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			self?.refreshUnreadColor()
+			self?.textField?.textColor = AppKitColorTokens.sidebarText
+		}
 		let label = HoverScrollingTextField(labelWithString: "")
-		label.font = AppKitFontResolver.font(TypographyTokens.Sidebar.row)
+		label.setTypographyRole(TypographyTokens.Sidebar.row)
 		label.textColor = AppKitColorTokens.sidebarText
 		label.lineBreakMode = .byTruncatingTail
 		label.maximumNumberOfLines = 1
@@ -101,7 +108,7 @@ final class TaskSidebarCellView: NSTableCellView
 	{
 		// Descendants receive the inherited change after their parent callback.
 		unreadDot.layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
-			.systemBlue,
+			AppKitColorTokens.accentText,
 			for: self
 		)
 	}

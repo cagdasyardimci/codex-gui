@@ -304,7 +304,7 @@ extension NavigationViewController
 		else
 		{
 			let caption = SidebarTextField(labelWithString: title)
-			caption.font = AppKitFontResolver.font(TypographyTokens.Sidebar.section)
+			caption.setTypographyRole(TypographyTokens.Sidebar.section)
 			caption.textColor = AppKitColorTokens.secondaryText
 			cell.textField = caption
 			header = makeSidebarHeading([caption, NSView()])
@@ -326,11 +326,8 @@ extension NavigationViewController
 	{
 		let cell = NSTableCellView(frame: .zero)
 		let label = SidebarTextField(labelWithString: "Show more")
-		label.font = AppKitFontResolver.interfaceFont(
-			ofSize: 14,
-			weight: .regular
-		)
-		label.textColor = AppKitColorTokens.secondaryText
+		label.setTypographyRole(TypographyTokens.Sidebar.placeholder)
+		label.textColor = AppKitColorTokens.sidebarMoreText
 		label.setAccessibilityElement(false)
 		label.translatesAutoresizingMaskIntoConstraints = false
 		cell.textField = label

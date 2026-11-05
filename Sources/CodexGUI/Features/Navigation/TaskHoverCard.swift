@@ -41,7 +41,7 @@ final class TaskHoverCard
 	private func makeCardContent() -> NSView
 	{
 		let titleLabel = NSTextField(wrappingLabelWithString: title)
-		titleLabel.font = AppKitFontResolver.font(TypographyTokens.TaskHover.title)
+		titleLabel.setTypographyRole(TypographyTokens.TaskHover.title)
 		titleLabel.textColor = AppKitColorTokens.primaryText
 		constrainLabel(
 			titleLabel,
@@ -53,7 +53,7 @@ final class TaskHoverCard
 			for: .horizontal
 		)
 		let timeLabel = NSTextField(labelWithString: relativeTime())
-		timeLabel.font = AppKitFontResolver.font(TypographyTokens.TaskHover.metadata)
+		timeLabel.setTypographyRole(TypographyTokens.TaskHover.metadata)
 		timeLabel.textColor = AppKitColorTokens.secondaryText
 		applyLineHeight(
 			to: timeLabel,
@@ -63,7 +63,7 @@ final class TaskHoverCard
 			systemSymbolName: "laptopcomputer",
 			accessibilityDescription: "This computer"
 		) ?? NSImage())
-		computer.contentTintColor = .secondaryLabelColor
+		computer.contentTintColor = AppKitColorTokens.secondaryText
 		let metadata = AppKitLayout.horizontalStack(
 			[computer, timeLabel],
 			spacing: LayoutTokens.TaskHover.rowSpacing
@@ -77,9 +77,9 @@ final class TaskHoverCard
 			systemSymbolName: "folder",
 			accessibilityDescription: "Project"
 		) ?? NSImage())
-		folder.contentTintColor = .secondaryLabelColor
+		folder.contentTintColor = AppKitColorTokens.secondaryText
 		let projectLabel = NSTextField(wrappingLabelWithString: projectName)
-		projectLabel.font = AppKitFontResolver.font(TypographyTokens.TaskHover.project)
+		projectLabel.setTypographyRole(TypographyTokens.TaskHover.project)
 		projectLabel.textColor = AppKitColorTokens.primaryText
 		constrainLabel(
 			projectLabel,

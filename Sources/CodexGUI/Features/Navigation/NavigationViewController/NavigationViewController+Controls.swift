@@ -49,7 +49,7 @@ extension NavigationViewController
 		let projectsCaption = SidebarTextField(
 			labelWithString: sidebarPreferences.organization == .oneList ? "Recents" : "Projects"
 		)
-		projectsCaption.font = AppKitFontResolver.font(TypographyTokens.Sidebar.section)
+		projectsCaption.setTypographyRole(TypographyTokens.Sidebar.section)
 		projectsCaption.textColor = AppKitColorTokens.secondaryText
 		sidebarOptionsButton.target = self
 		sidebarOptionsButton.action = #selector(showSidebarMenu(_:))

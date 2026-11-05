@@ -24,8 +24,8 @@ final class HoverScrollingTextField: SidebarTextField
 		NSAttributedString(
 			string: stringValue,
 			attributes: [
-				.font: font ?? NSFont.systemFont(ofSize: 14),
-				.foregroundColor: textColor ?? NSColor.labelColor,
+				.font: font ?? AppKitFontResolver.font(TypographyTokens.Sidebar.row),
+				.foregroundColor: textColor ?? AppKitColorTokens.primaryText,
 			]
 		)
 	}
