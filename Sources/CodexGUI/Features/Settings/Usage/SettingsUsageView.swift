@@ -405,7 +405,7 @@ final class SettingsUsageDailyChart: NSView
 			width: bounds.width - 24,
 			height: bounds.height - 40
 		)
-		AppKitColorTokens.settingsSecondaryText.withAlphaComponent(0.18).setStroke()
+		AppKitColorTokens.usageGrid.setStroke()
 		for fraction in [0.0, 0.5, 1.0]
 		{
 			let y = plot.minY + plot.height * fraction
@@ -429,7 +429,7 @@ final class SettingsUsageDailyChart: NSView
 				slot * 0.65
 			)
 		)
-		AppKitColorTokens.settingsPrimaryText.withAlphaComponent(0.82).setFill()
+		AppKitColorTokens.usageLabel.setFill()
 		for (index, fraction) in fractions.enumerated()
 		{
 			guard fraction > 0

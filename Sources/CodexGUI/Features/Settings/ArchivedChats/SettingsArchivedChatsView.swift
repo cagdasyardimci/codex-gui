@@ -1,5 +1,7 @@
 import AppKit
 
+// Black template artwork is tinted by the owning control, independently of source mask color.
+
 /// Search and filters retain their controls while only a bounded page of grouped results changes.
 @MainActor
 final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
@@ -41,7 +43,7 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 		search.delegate = self
 		search.heightAnchor.constraint(equalToConstant: 32).isActive = true
 		type.menuWidth = 208
-		type.leadingIcon = DesktopIcons.image(.filter)
+		type.leadingIcon = Self.chatFilterIcon()
 		type.setAccessibilityLabel("Archived chat type and sort")
 		type.onSelect =
 		{
@@ -133,6 +135,40 @@ final class SettingsArchivedChatsView: NSView, NSSearchFieldDelegate
 		}
 		page = 0
 		renderResults()
+	}
+
+	private static func chatFilterIcon() -> NSImage
+	{
+		let image = NSImage(
+			size: NSSize(
+				width: 16,
+				height: 16
+			),
+			flipped: false
+		)
+		{
+			_ in
+			let path = NSBezierPath()
+			path.lineWidth = 1.25
+			path.lineCapStyle = .round
+			let lines: [(CGFloat, CGFloat)] = [(12, 1.5), (8, 3.5), (4, 5.5)]
+			for (y, inset) in lines
+			{
+				path.move(to: NSPoint(
+					x: inset,
+					y: y
+				))
+				path.line(to: NSPoint(
+					x: 16 - inset,
+					y: y
+				))
+			}
+			NSColor.black.setStroke()
+			path.stroke()
+			return true
+		}
+		image.isTemplate = true
+		return image
 	}
 
 	func selectFilter(_ id: String)

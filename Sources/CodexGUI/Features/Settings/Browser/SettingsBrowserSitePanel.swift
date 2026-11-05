@@ -6,13 +6,13 @@ final class SettingsBrowserSitePanel: NSPanel, NSTextFieldDelegate
 	var onSave: ((String, [String: String]) -> Void)?
 	private let site = SettingsFormField(
 		title: "Site",
-		placeholder: "https://example.com",
-		showsTitle: false
+		placeholder: "https://example.com"
 	)
 	private var shell: DesktopDialogShell?
 	private let save = DesktopStyledButton(
 		title: "Add",
-		presentation: .primary
+		presentation: .primary,
+		size: .regular
 	)
 	private let originalSite: String?
 	private let initialPolicy: [String: String]
@@ -21,7 +21,8 @@ final class SettingsBrowserSitePanel: NSPanel, NSTextFieldDelegate
 	private var extraRows: [NSView] = []
 	private let more = DesktopStyledButton(
 		title: "More options",
-		presentation: .secondary
+		presentation: .secondary,
+		size: .regular
 	)
 
 	init(
@@ -77,6 +78,7 @@ final class SettingsBrowserSitePanel: NSPanel, NSTextFieldDelegate
 				selectedID: selections[field.key] ?? "default"
 			)
 			picker.setAccessibilityLabel(field.title)
+			picker.subduedSelectionIDs = ["default"]
 			picker.onSelect =
 			{
 				[weak self, weak picker] value in
@@ -84,10 +86,9 @@ final class SettingsBrowserSitePanel: NSPanel, NSTextFieldDelegate
 				self?.selections[field.key] = value == "default" ? nil : value
 				self?.validate(showError: false)
 			}
-			let row = SettingsPageLayout.row(
+			let row = SettingsFormField(
 				title: field.title,
-				detail: nil,
-				control: picker
+				content: picker
 			)
 			if index > 0
 			{
@@ -98,7 +99,8 @@ final class SettingsBrowserSitePanel: NSPanel, NSTextFieldDelegate
 		}
 		let cancel = DesktopStyledButton(
 			title: "Cancel",
-			presentation: .secondary
+			presentation: .dialogOutlined,
+			size: .regular
 		)
 		cancel.target = self
 		cancel.action = #selector(cancelAction)
@@ -124,7 +126,9 @@ final class SettingsBrowserSitePanel: NSPanel, NSTextFieldDelegate
 			message: "Choose permissions for a website.",
 			content: content,
 			actions: [cancel, save],
-			leadingAction: more
+			leadingAction: more,
+			style: .site,
+			actionLayout: .vertical
 		)
 		shell.onClose =
 		{

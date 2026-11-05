@@ -49,10 +49,7 @@ final class SettingsBrowserPermissionsTable: NSView
 		for site in sites
 		{
 			let label = NSTextField(labelWithString: site)
-			label.font = .systemFont(
-				ofSize: 13,
-				weight: .medium
-			)
+			label.setTypographyRole(TypographyTokens.Settings.tableColumn)
 			label.lineBreakMode = .byTruncatingMiddle
 			label.toolTip = site
 			let edit = SettingsBrowserActionButton(title: "Edit")
@@ -249,11 +246,8 @@ final class SettingsBrowserPermissionsTable: NSView
 	) -> NSView
 	{
 		let label = NSTextField(labelWithString: title)
-		label.font = .systemFont(
-			ofSize: header ? 12 : 13,
-			weight: header ? .regular : .medium
-		)
-		label.textColor = header ? .secondaryLabelColor : .labelColor
+		label.setTypographyRole(TypographyTokens.Settings.tableCell(header: header))
+		label.textColor = header ? AppKitColorTokens.secondaryText : AppKitColorTokens.primaryText
 		return controlCell(
 			label,
 			height: header ? 42 : rowHeight

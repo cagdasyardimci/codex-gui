@@ -217,10 +217,18 @@ private final class SettingsCatalogArtwork: DesktopSurface
 		super.draw(dirtyRect)
 		if let logo
 		{
-			logo.draw(in: bounds.insetBy(
-				dx: 2,
-				dy: 2
-			))
+			let imageBounds = bounds.insetBy(
+				dx: 1,
+				dy: 1
+			)
+			NSGraphicsContext.saveGraphicsState()
+			AppKitShapePath.roundedRect(
+				imageBounds,
+				radius: 8,
+				curve: ShapeTokens.Connections.curve
+			).addClip()
+			logo.draw(in: imageBounds)
+			NSGraphicsContext.restoreGraphicsState()
 		}
 		else
 		{

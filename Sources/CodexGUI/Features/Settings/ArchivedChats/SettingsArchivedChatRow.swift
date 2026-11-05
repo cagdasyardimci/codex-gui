@@ -27,7 +27,7 @@ final class SettingsArchivedChatRow: NSView
 		let actions = NSStackView(views: [delete, unarchive])
 		actions.spacing = 8
 		let titleLabel = NSTextField(labelWithString: title)
-		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Connections.rowLabel)
+		titleLabel.setTypographyRole(TypographyTokens.Connections.rowLabel)
 		titleLabel.textColor = AppKitColorTokens.settingsPrimaryText
 		titleLabel.lineBreakMode = .byTruncatingTail
 		titleLabel.toolTip = title

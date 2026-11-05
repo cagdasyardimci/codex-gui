@@ -50,6 +50,7 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 		pluginFilter.onSelect =
 		{
 			[weak self] id in
+			self?.pluginFilter.select(id: id)
 			self?.installedOnly = id == "installed"
 			self?.pluginsView?.setFilter(installedOnly: id == "installed")
 		}
@@ -71,7 +72,7 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 
 	override var displayTitle: String
 	{
-		mcpForm == nil ? pageTitle : "MCP server"
+		mcpForm == nil ? pageTitle : "Connect to a custom MCP"
 	}
 
 	override var showsRefresh: Bool
@@ -84,9 +85,35 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 		mcpForm == nil ? "Manage plugins, skills, and MCPs" : nil
 	}
 
+	override var pagePresentation: SettingsPageDocument.Presentation
+	{
+		mcpForm == nil ? .standard : .editor
+	}
+
+	override var subtitleView: NSView?
+	{
+		guard mcpForm != nil
+		else
+		{
+			return nil
+		}
+		let docs = DesktopActionButton(
+			title: "Docs",
+			presentation: .documentation
+		)
+		{
+			NSWorkspace.shared.open(URL(string: "https://developers.openai.com/codex/mcp")!)
+		}
+		docs.symbol = .linkExternalWebsite
+		return AppKitLayout.horizontalStack(
+			[docs, NSView()],
+			spacing: 0
+		)
+	}
+
 	override var headerSpacing: SettingsPageDocument.HeaderSpacing
 	{
-		.catalog
+		mcpForm == nil ? .catalog : .standard
 	}
 
 	override var headerAccessory: NSView?
@@ -104,9 +131,10 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 			[weak self] in self?.browseDirectory()
 		}
 		let add = DesktopStyledButton(
-			title: "Add ▾",
+			title: "Add",
 			presentation: .settingsHeader(primary: true)
 		)
+		add.showsTrailingChevron = true
 		add.target = self
 		add.action = #selector(showAddMenu(_:))
 		return controls([browse, add])
@@ -114,9 +142,9 @@ final class SettingsPluginsPage: SettingsManagementPage, NSSearchFieldDelegate
 
 	override func sectionsForDisplay() -> [NSView]
 	{
-		if mcpForm != nil
+		if let mcpForm
 		{
-			return super.sectionsForDisplay()
+			return [mcpForm]
 		}
 		var sections: [NSView] = [toolbar()]
 		if !rows.isEmpty
