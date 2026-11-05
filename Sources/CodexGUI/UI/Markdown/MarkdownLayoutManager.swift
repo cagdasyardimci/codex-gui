@@ -9,6 +9,12 @@ final class MarkdownLayoutManager: NSLayoutManager
 	static let quoteIndent = CGFloat(MarkdownMetrics.quoteIndent)
 	static let codeInset = DesktopOutputCard.TextKitPresentation.transcriptCode.contentInset
 	static let codeHeaderHeight = DesktopOutputCard.TextKitPresentation.transcriptCode.headerHeight
+	// Inline-code backing follows glyph metrics; the allowance paints the chip around the text.
+	static let inlineCodeBackgroundAllowance: CGFloat = 4
+	// Synthetic padding runs do not represent prose tracking.
+	static let inlineCodePaddingKern: CGFloat = -3
+	// The dot is marker artwork; stroking it enlarges the ink without shifting list alignment.
+	static let listMarkerStrokeWidth: CGFloat = -7
 	static let codeBottomPadding = DesktopOutputCard.TextKitPresentation.transcriptCode
 		.bottomPadding
 	static let codeBlockSpacing = DesktopOutputCard.TextKitPresentation.transcriptCode.blockSpacing
@@ -390,7 +396,7 @@ final class MarkdownLayoutManager: NSLayoutManager
 	)
 	{
 		let quoteRanges = quoteRailRanges(in: storage)
-		NSColor.separatorColor.setFill()
+		AppKitColorTokens.paneDivider.setFill()
 		for (offset, ranges) in quoteRanges
 		{
 			for range in ranges
@@ -444,7 +450,7 @@ final class MarkdownLayoutManager: NSLayoutManager
 				forGlyphAt: glyph,
 				effectiveRange: nil
 			)
-			NSColor.separatorColor.setFill()
+			AppKitColorTokens.paneDivider.setFill()
 			NSRect(
 				x: origin.x + line.minX,
 				y: origin.y + line.midY,
@@ -477,37 +483,51 @@ final class MarkdownLayoutManager: NSLayoutManager
 				forCharacterRange: range,
 				actualCharacterRange: nil
 			)
-			self.enumerateEnclosingRects(
-				forGlyphRange: glyphs,
-				withinSelectedGlyphRange: NSRange(
-					location: NSNotFound,
-					length: 0
-				),
-				in: container
-			)
+			self.enumerateLineFragments(forGlyphRange: glyphs)
 			{
-				rect, _ in
-				let font = storage.attribute(
+				line, _, _, lineGlyphs, _ in
+				let segment = NSIntersectionRange(
+					glyphs,
+					lineGlyphs
+				)
+				let character = self.characterIndexForGlyph(at: segment.location)
+				guard let font = storage.attribute(
 					.font,
-					at: range.location,
+					at: character,
 					effectiveRange: nil
 				) as? NSFont
-				let height = min(
-					rect.height,
-					(font?.pointSize ?? 13) + 4
+				else
+				{
+					return
+				}
+				// Enclosing rectangles include paragraph spacing. Anchor the chip to this line's
+				// glyph baseline so surrounding prose and wrapping cannot displace its backing.
+				let baseline = line.minY + self.location(forGlyphAt: segment.location).y
+				let center = baseline - font.capHeight / 2
+				self.enumerateEnclosingRects(
+					forGlyphRange: segment,
+					withinSelectedGlyphRange: NSRange(
+						location: NSNotFound,
+						length: 0
+					),
+					in: container
 				)
-				let background = NSRect(
-					x: origin.x + rect.minX,
-					y: origin.y + rect.midY - height / 2,
-					width: rect.width,
-					height: height
-				)
-				NSColor.labelColor.withAlphaComponent(0.09).setFill()
-				NSBezierPath(
-					roundedRect: background,
-					xRadius: 6,
-					yRadius: 6
-				).fill()
+				{
+					rect, _ in
+					let height = font.pointSize + Self.inlineCodeBackgroundAllowance
+					let background = NSRect(
+						x: origin.x + rect.minX,
+						y: origin.y + center - height / 2,
+						width: rect.width,
+						height: height
+					)
+					AppKitColorTokens.inlineCode.setFill()
+					NSBezierPath(
+						roundedRect: background,
+						xRadius: 6,
+						yRadius: 6
+					).fill()
+				}
 			}
 		}
 	}

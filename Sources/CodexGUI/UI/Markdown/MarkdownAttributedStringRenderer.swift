@@ -4,24 +4,9 @@ import AppKit
 @MainActor
 enum MarkdownAttributedStringRenderer
 {
-	static let linkColor = NSColor(name: nil)
-	{
-		appearance in
-		appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-			? NSColor(
-				srgbRed: 87.0 / 255,
-				green: 133.0 / 255,
-				blue: 209.0 / 255,
-				alpha: 1
-			) : .linkColor
-	}
-
-	static let proseColor = NSColor(name: nil)
-	{
-		appearance in
-		appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-			? .white : .labelColor
-	}
+	static let linkColor = AppKitColorTokens.accentText
+	static let fileReferenceColor = AppKitColorTokens.inlineReferenceText
+	static let proseColor = AppKitColorTokens.primaryText
 
 	static func render(
 		_ runs: [MarkdownTextRun],
@@ -107,6 +92,8 @@ enum MarkdownAttributedStringRenderer
 			.paragraphStyle: paragraph,
 			.markdownParagraphRole: paragraphRole(for: run.style),
 			.markdownBlankLinesBefore: run.style.sourceBlankLinesBefore,
+			.markdownStrong: run.style.bold || run.style.tableCell?.header == true,
+			.markdownItalic: run.style.italic,
 		]
 		if let line = run.style.sourceBlockStartLine
 		{
@@ -118,14 +105,14 @@ enum MarkdownAttributedStringRenderer
 		}
 		if run.style.listDepth > 0, ["• ", "◦ ", "▪ "].contains(run.text)
 		{
-			attributes[.font] = NSFont.systemFont(
-				ofSize: 14,
-				weight: .bold
+			attributes[.font] = AppKitFontResolver.font(
+				TypographyTokens.Transcript.listMarker,
+				scope: .content
 			)
 			if run.text == "• "
 			{
 				// Enlarge the dot without changing the list's line height or tab position.
-				attributes[.strokeWidth] = -7
+				attributes[.strokeWidth] = MarkdownLayoutManager.listMarkerStrokeWidth
 			}
 		}
 		if !run.style.code, displayText(for: run) != run.text
@@ -137,7 +124,7 @@ enum MarkdownAttributedStringRenderer
 			attributes[.markdownInlineCode] = true
 			if run.style.codePadding
 			{
-				attributes[.kern] = -3
+				attributes[.kern] = MarkdownLayoutManager.inlineCodePaddingKern
 				attributes[.markdownSourceText] = ""
 			}
 			else
@@ -228,7 +215,7 @@ enum MarkdownAttributedStringRenderer
 		)
 		icon.isTemplate = false
 
-		let color = linkColor
+		let color = fileReferenceColor
 		attachment.image = NSImage(
 			size: NSSize(
 				width: 18,
@@ -371,11 +358,13 @@ enum MarkdownAttributedStringRenderer
 			guard let light = CodeSyntaxHighlighter.highlightedCode(
 				source,
 				language: language,
-				dark: false
+				dark: false,
+				usePreset: false
 			), let dark = CodeSyntaxHighlighter.highlightedCode(
 				source,
 				language: language,
-				dark: true
+				dark: true,
+				usePreset: false
 			), light.string == source, dark.string == source
 			else
 			{
@@ -411,8 +400,8 @@ enum MarkdownAttributedStringRenderer
 			location: 0,
 			length: 0
 		)
-		var lightColor = NSColor.labelColor
-		var darkColor = NSColor.labelColor
+		var lightColor = AppKitColorTokens.primaryText
+		var darkColor = AppKitColorTokens.primaryText
 		while start < light.length
 		{
 			if start >= NSMaxRange(lightRange)
@@ -422,7 +411,7 @@ enum MarkdownAttributedStringRenderer
 					at: start,
 					longestEffectiveRange: &lightRange,
 					in: fullRange
-				) as? NSColor ?? .labelColor
+				) as? NSColor ?? AppKitColorTokens.primaryText
 			}
 			if start >= NSMaxRange(darkRange)
 			{
@@ -431,7 +420,7 @@ enum MarkdownAttributedStringRenderer
 					at: start,
 					longestEffectiveRange: &darkRange,
 					in: fullRange
-				) as? NSColor ?? .labelColor
+				) as? NSColor ?? AppKitColorTokens.primaryText
 			}
 			let end = min(
 				NSMaxRange(lightRange),
@@ -467,7 +456,15 @@ enum MarkdownAttributedStringRenderer
 		let paragraph = NSMutableParagraphStyle()
 		let wrapsCharacters = style.codeBlock || style.monospaced
 		paragraph.lineBreakMode = wrapsCharacters ? .byCharWrapping : .byWordWrapping
-		paragraph.lineSpacing = wrapsCharacters ? 2 : (style.listDepth > 0 ? 3.5 : 5.5)
+		paragraph.lineSpacing = 0
+		let role = typography(for: style)
+		let native = font(for: style)
+		let height = max(
+			role.lineHeight ?? 0,
+			native.ascender - native.descender + native.leading
+		)
+		paragraph.minimumLineHeight = height
+		paragraph.maximumLineHeight = 0
 		paragraph.paragraphSpacing = style.listDepth > 0 ? (style.listEnd ? 10 : 2) : 14.5
 		if style.followedByList
 		{
@@ -530,8 +527,8 @@ enum MarkdownAttributedStringRenderer
 		}
 		if style.thematicBreak
 		{
-			paragraph.minimumLineHeight = 16
-			paragraph.maximumLineHeight = 16
+			paragraph.minimumLineHeight = TypographyTokens.Transcript.thematicBreakLineHeight
+			paragraph.maximumLineHeight = TypographyTokens.Transcript.thematicBreakLineHeight
 			paragraph.paragraphSpacingBefore = 8
 			paragraph.paragraphSpacing = 12
 		}
@@ -539,63 +536,56 @@ enum MarkdownAttributedStringRenderer
 		{
 			paragraph.firstLineHeadIndent = 0
 			paragraph.headIndent = 0
-			paragraph.lineSpacing = 3
+			paragraph.lineSpacing = 0
 			paragraph.paragraphSpacing = 0
 		}
 		return paragraph
 	}
 
-	private static func font(for style: MarkdownTextStyle) -> NSFont
+	static func typography(for style: MarkdownTextStyle) -> TypographyTokens.Role
 	{
-		let size: CGFloat
 		if style.codeHeader
 		{
-			size = 11
+			return TypographyTokens.Transcript.codeHeader
 		}
-		else if style.code || style.codeBlock || style.monospaced
+		if style.codeBlock || style
+			.monospaced
 		{
-			size = TypographyTokens.Transcript.code.size
+			return TypographyTokens.Transcript.code.emphasized(style.bold)
+		}
+		let parent: TypographyTokens.Role
+		if let cell = style.tableCell
+		{
+			parent = cell.header ? TypographyTokens.Transcript.tableHeader : TypographyTokens
+				.Transcript.table
+		}
+		else if style.heading > 0
+		{
+			parent = TypographyTokens.Transcript.heading(level: style.heading)
 		}
 		else
 		{
-			switch style.heading
-			{
-			case 1: size = 24
-			case 2: size = 20
-			case 3: size = 18
-			case 4: size = 16
-			default: size = TypographyTokens.Transcript.prose.size
-			}
+			parent = TypographyTokens.Transcript.prose
 		}
-		let weight: TypographyTokens.NativeWeight
-		if style.heading > 0
+		if style.code
 		{
-			weight = .bold
+			return TypographyTokens.Transcript.inlineCode(
+				in: parent,
+				strong: style.bold
+			)
 		}
-		else if style.bold
-		{
-			weight = .semibold
-		}
-		else if style.code
-		{
-			weight = .medium
-		}
-		else
-		{
-			weight = .regular
-		}
-		let role = TypographyTokens.Role(
-			size: size,
-			selection: style.code || style.codeBlock || style.monospaced
-				? TypographyTokens.Transcript.code.emphasized(style.bold || style.heading > 0)
-				.selection : .system(weight: weight)
+		let role = style.link.flatMap(MarkdownFileReference.init) != nil
+			? TypographyTokens.Transcript.fileReference(in: parent) : parent
+		return role.emphasized(style.bold)
+	}
+
+	private static func font(for style: MarkdownTextStyle) -> NSFont
+	{
+		AppKitFontResolver.font(
+			typography(for: style),
+			italic: style.italic,
+			scope: .content
 		)
-		let base = AppKitFontResolver.font(role)
-		return style.italic
-			? NSFontManager.shared.convert(
-				base,
-				toHaveTrait: .italicFontMask
-			) : base
 	}
 
 	private static func foregroundColor(for style: MarkdownTextStyle) -> NSColor
@@ -606,9 +596,10 @@ enum MarkdownAttributedStringRenderer
 		}
 		if style.link != nil
 		{
-			return linkColor
+			return style.link.flatMap(MarkdownFileReference.init) != nil
+				? fileReferenceColor : linkColor
 		}
-		return style.quoteDepth > 0 ? .secondaryLabelColor : proseColor
+		return style.quoteDepth > 0 ? AppKitColorTokens.captionText : proseColor
 	}
 
 	private static func tableColumnWidths(in runs: [MarkdownTextRun]) -> [Int: [CGFloat]]
@@ -726,7 +717,7 @@ enum MarkdownAttributedStringRenderer
 			for: .border,
 			edge: .maxY
 		)
-		block.setBorderColor(.separatorColor)
+		block.setBorderColor(AppKitColorTokens.paneDivider)
 		block.verticalAlignment = .topAlignment
 		return block
 	}

@@ -6,16 +6,20 @@ enum FileMarkdownStyling
 {
 	static func mathFontSize(
 		style: MarkdownTextStyle,
-		inline: Bool
+		inline: Bool,
+		configuration: TypographyConfiguration = .current
 	) -> CGFloat
 	{
 		let role = inline && style.heading > 0
 			? TypographyTokens.FileMarkdown.heading(level: style.heading)
 			: TypographyTokens.FileMarkdown.prose
-		return role.size * TypographyTokens.FileMarkdown.mathScale
+		return role.resolved(using: configuration).size * TypographyTokens.FileMarkdown.mathScale
 	}
 
-	static func apply(to content: NSAttributedString) -> NSAttributedString
+	static func apply(
+		to content: NSAttributedString,
+		configuration: TypographyConfiguration = .current
+	) -> NSAttributedString
 	{
 		let result = NSMutableAttributedString(attributedString: content)
 		var omittedRanges: [NSRange] = []
@@ -27,6 +31,9 @@ enum FileMarkdownStyling
 		{
 			attributes, range, _ in
 			let inlineCode = attributes[.markdownInlineCode] as? Bool == true
+			let heading = attributes[.markdownHeadingLevel] as? Int ?? 0
+			let strong = attributes[.markdownStrong] as? Bool == true
+			let italic = attributes[.markdownItalic] as? Bool == true
 			if (attributes[.attachment] != nil && attributes[.link] != nil
 				&& attributes[.markdownSourceText] as? String == "")
 				|| (inlineCode && attributes[.markdownSourceText] as? String == "")
@@ -52,7 +59,14 @@ enum FileMarkdownStyling
 				result.addAttribute(
 					.font,
 					value: AppKitFontResolver
-						.font(TypographyTokens.FileMarkdown.inlineCode),
+						.font(
+							TypographyTokens.FileMarkdown.inlineCode(
+								heading: heading > 0,
+								strong: strong
+							),
+							italic: italic,
+							configuration: configuration
+						),
 					range: range
 				)
 				result.addAttribute(
@@ -66,23 +80,33 @@ enum FileMarkdownStyling
 				styleCode(
 					attributes: attributes,
 					range: range,
-					in: result
+					in: result,
+					configuration: configuration
 				)
 				return
 			}
 			guard let role = attributes[.markdownParagraphRole] as? String,
-					role == "heading" || role == "prose" || role == "list",
+					role == "heading" || role == "prose" || role == "list" || role == "table",
 					attributes[.markdownThematicBreak] as? Bool != true
 			else
 			{
 				return
 			}
-			let heading = attributes[.markdownHeadingLevel] as? Int ?? 0
 			let typography = heading > 0
 				? TypographyTokens.FileMarkdown.heading(level: heading)
 				: TypographyTokens.FileMarkdown.prose
-			if attributes[.link] == nil,
-				heading > 0 || (attributes[.markdownQuoteDepth] as? Int ?? 0) == 0
+			if !inlineCode, let url = attributes[.link] as? URL,
+				MarkdownFileReference(url.absoluteString) != nil
+			{
+				// Files presents ordinary anchors after removing transcript mention artwork.
+				result.addAttribute(
+					.foregroundColor,
+					value: MarkdownAttributedStringRenderer.linkColor,
+					range: range
+				)
+			}
+			else if attributes[.link] == nil,
+					heading > 0 || (attributes[.markdownQuoteDepth] as? Int ?? 0) == 0
 			{
 				result.addAttribute(
 					.foregroundColor,
@@ -91,18 +115,20 @@ enum FileMarkdownStyling
 				)
 			}
 			if attributes[.attachment] == nil,
-				attributes[.markdownInlineCode] as? Bool != true,
-				let previous = attributes[.font] as? NSFont
+				attributes[.markdownInlineCode] as? Bool != true
 			{
-				let traits = previous.fontDescriptor.symbolicTraits
 				let font = heading > 0
 					? AppKitFontResolver.font(
 						typography,
-						italic: traits.contains(.italic)
+						italic: italic,
+						configuration: configuration,
+						scope: .ui
 					)
 					: AppKitFontResolver.font(
-						typography.emphasized(traits.contains(.bold)),
-						italic: traits.contains(.italic)
+						typography.emphasized(strong),
+						italic: italic,
+						configuration: configuration,
+						scope: .ui
 					)
 				result.addAttribute(
 					.font,
@@ -116,14 +142,16 @@ enum FileMarkdownStyling
 			{
 				return
 			}
-			paragraph.minimumLineHeight = typography.lineHeight ?? 0
+			paragraph.minimumLineHeight = typography.resolved(using: configuration).lineHeight ?? 0
 			// Fractions and other inline attachments can exceed the ordinary text line height.
 			paragraph.maximumLineHeight = 0
 			paragraph.lineSpacing = 0
 			paragraph.paragraphSpacing = LayoutTokens.FileMarkdown.linePadding
 			let blankLines = attributes[.markdownBlankLinesBefore] as? Int ?? 0
 			paragraph.paragraphSpacingBefore = CGFloat(blankLines)
-				* ((TypographyTokens.FileMarkdown.prose.lineHeight ?? 0)
+				*
+				((TypographyTokens.FileMarkdown.prose.resolved(using: configuration)
+						.lineHeight ?? 0)
 					+ LayoutTokens.FileMarkdown.linePadding)
 			result.addAttribute(
 				.paragraphStyle,
@@ -167,14 +195,18 @@ enum FileMarkdownStyling
 	private static func styleCode(
 		attributes: [NSAttributedString.Key: Any],
 		range: NSRange,
-		in result: NSMutableAttributedString
+		in result: NSMutableAttributedString,
+		configuration: TypographyConfiguration
 	)
 	{
 		let header = attributes[.markdownCodeHeader] as? Bool == true
 		let fenced = attributes[.markdownCodeFenced] as? Bool == true
 		result.addAttribute(
 			.font,
-			value: AppKitFontResolver.font(TypographyTokens.FileMarkdown.fencedCode),
+			value: AppKitFontResolver.font(
+				TypographyTokens.FileMarkdown.fencedCode,
+				configuration: configuration
+			),
 			range: range
 		)
 		result.addAttribute(
@@ -199,14 +231,17 @@ enum FileMarkdownStyling
 		paragraph.tailIndent = 0
 		let headerHeight: CGFloat = fenced
 			? DesktopOutputCard.TextKitPresentation.fileCode.headerHeight : 1
-		paragraph.minimumLineHeight = header ? headerHeight : 16.8
-		paragraph.maximumLineHeight = header ? headerHeight : 16.8
+		paragraph
+			.minimumLineHeight = header ? headerHeight :
+			(TypographyTokens.FileMarkdown.fencedCode.resolved(using: configuration)
+				.lineHeight ?? 0)
+		paragraph.maximumLineHeight = header ? headerHeight : 0
 		paragraph.lineSpacing = header ? 0 : LayoutTokens.FileMarkdown.linePadding
 		paragraph.paragraphSpacing = !header && fenced && paragraph.paragraphSpacing > 0
 			? DesktopOutputCard.TextKitPresentation.fileCode.blockSpacing : 0
 		let blankLines = attributes[.markdownBlankLinesBefore] as? Int ?? 0
 		paragraph.paragraphSpacingBefore = header ? CGFloat(blankLines)
-			* ((TypographyTokens.FileMarkdown.prose.lineHeight ?? 0)
+			* ((TypographyTokens.FileMarkdown.prose.resolved(using: configuration).lineHeight ?? 0)
 				+ LayoutTokens.FileMarkdown.linePadding) : 0
 		if header, fenced, range.location > 0, paragraph.paragraphSpacingBefore > 0
 		{

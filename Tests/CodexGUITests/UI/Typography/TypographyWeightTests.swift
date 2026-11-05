@@ -124,6 +124,115 @@ struct TypographyWeightTests
 		#expect(axes[NSNumber(value: 0x59415853)]?.intValue == 430)
 	}
 
+	@Test func inlineCodeInheritsChatEmphasisAndFileHeadingPolicy() throws
+	{
+		let parsed = MarkdownContentParser.parse(
+			"# Heading `headingCode` **`nestedCode`**\n\nPlain `plainCode` **`strongCode`**\n\n"
+				+ "| `headerCode` |\n| --- |\n| `cellCode` |",
+			markdown: true
+		)
+		let chat = MarkdownAttributedStringRenderer.render(parsed.runs)
+		let file = FileMarkdownStyling.apply(to: chat)
+		for sample in [
+			"headingCode",
+			"nestedCode",
+			"headerCode",
+			"strongCode",
+			"plainCode",
+			"cellCode"
+		]
+		{
+			let chatStrong = !["plainCode", "cellCode"].contains(sample)
+			let fileStrong = ["headerCode", "strongCode"].contains(sample)
+			#expect(try font(
+				in: chat,
+				sample: sample
+			)
+			.fontName == (chatStrong ? "Menlo-Bold" : "Menlo-Regular"))
+			#expect(try font(
+				in: file,
+				sample: sample
+			)
+			.fontName == (fileStrong ? "Menlo-Bold" : "Menlo-Regular"))
+		}
+	}
+
+	@Test func emphasisIsIdempotentAndFencedCodeStaysInCodeDomain()
+	{
+		let once = TypographyTokens.Transcript.prose.emphasized(true)
+		#expect(once.weight == .strong)
+		#expect(once.emphasized(true).weight == .strong)
+		let config = TypographyConfiguration(
+			uiSize: 16,
+			codeSize: 12
+		)
+		let font = AppKitFontResolver.font(
+			TypographyTokens.Code.source,
+			configuration: config
+		)
+		#expect(font.fontName == "Menlo-Regular")
+		#expect(font.pointSize == 12)
+		#expect(TypographyTokens.Controls.button.weight == .text)
+		#expect(TypographyTokens.Controls.prominentButton.weight == .text)
+	}
+
+	@Test func fileReferencesUseLabelEmphasisWithinTheirReadingContext() throws
+	{
+		let parsed = MarkdownContentParser.parse(
+			"[file](/tmp/file.swift) [web](https://example.com) **[strong](/tmp/strong.swift)**",
+			markdown: true
+		)
+		for size: CGFloat in [11, 16]
+		{
+			let configuration = TypographyConfiguration(
+				uiSize: size,
+				contentSize: 24
+			)
+			for (sample, expectedWeight) in [("file", 500), ("web", 430), ("strong", 600)]
+			{
+				let run = try #require(parsed.runs.first
+				{
+					$0.text == sample
+				})
+				let role = MarkdownAttributedStringRenderer.typography(for: run.style)
+				let font = AppKitFontResolver.font(
+					role,
+					configuration: configuration,
+					colorConfiguration: .init(),
+					scope: .content
+				)
+				#expect(font.pointSize == size)
+				#expect(try axisValue(
+					font,
+					identifier: 0x77676874
+				) == expectedWeight)
+				#expect(role.resolved(using: configuration).lineHeight == size * 1.625)
+			}
+		}
+		let run = try #require(parsed.runs.first
+		{
+			$0.text == "file"
+		})
+		let profile = ColorThemeProfile(
+			background: 0xFFFFFF,
+			foreground: 0x0D0D0D,
+			accent: 0x0169CC,
+			contrast: 45,
+			uiFontFamily: "Arial",
+			contentFontFamily: "Times New Roman"
+		)
+		let font = AppKitFontResolver.font(
+			MarkdownAttributedStringRenderer.typography(for: run.style),
+			configuration: .standard,
+			colorConfiguration: .init(
+				light: profile,
+				mode: .light
+			),
+			scope: .content
+		)
+		#expect(font.fontName == "TimesNewRomanPSMT")
+	}
+
 	private func axisValue(
 		_ font: NSFont,
 		identifier: Int

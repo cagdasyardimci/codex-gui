@@ -6,18 +6,6 @@ enum MarkdownTextDrawing
 {
 	static func withAntialiasing(_ draw: () -> Void)
 	{
-		guard let context = NSGraphicsContext.current?.cgContext
-		else
-		{
-			draw()
-			return
-		}
-		context.saveGState()
-		defer
-		{
-			context.restoreGState()
-		}
-		context.setShouldSmoothFonts(false)
-		draw()
+		DesktopTextRendering.withFontSmoothingDisabled(draw)
 	}
 }

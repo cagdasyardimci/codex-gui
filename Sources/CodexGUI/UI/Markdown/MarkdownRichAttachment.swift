@@ -90,15 +90,12 @@ private final class MarkdownRichAttachmentCell: NSTextAttachmentCell
 		self.darkImage = darkImage
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.lineBreakMode = .byCharWrapping
-		paragraph.lineSpacing = 2
+		paragraph.lineSpacing = TypographyTokens.Code.fallback.lineSpacing ?? 0
 		fallback = NSAttributedString(
 			string: source,
 			attributes: [
-				.font: NSFont.monospacedSystemFont(
-					ofSize: 13,
-					weight: .regular
-				),
-				.foregroundColor: NSColor.labelColor,
+				.font: AppKitFontResolver.font(TypographyTokens.Code.fallback),
+				.foregroundColor: AppKitColorTokens.primaryText,
 				.paragraphStyle: paragraph,
 			]
 		)

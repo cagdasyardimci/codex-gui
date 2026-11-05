@@ -144,7 +144,7 @@ final class WebLinkFaviconAttachment: NSTextAttachment
 			if tintInDarkAppearance,
 				NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
 			{
-				NSColor.white.setFill()
+				AppKitColorTokens.transcriptLink.setFill()
 				iconRect.fill(using: .sourceAtop)
 			}
 			return true

@@ -2,6 +2,8 @@ import AppKit
 
 extension NSAttributedString.Key
 {
+	static let markdownStrong = NSAttributedString.Key("markdownStrong")
+	static let markdownItalic = NSAttributedString.Key("markdownItalic")
 	static let markdownSourceText = NSAttributedString.Key("conversationSourceText")
 	static let markdownInlineCodeSource = NSAttributedString.Key("conversationInlineCodeSource")
 	static let markdownInlineCode = NSAttributedString.Key("conversationInlineCode")

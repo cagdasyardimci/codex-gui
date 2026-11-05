@@ -286,6 +286,130 @@ struct TypographyBindingTests
 		) as? NSFont)?.pointSize == 16)
 	}
 
+	@Test func appearanceActionsPersistIndependentBases() throws
+	{
+		let name = "TypographyTests.\(UUID().uuidString)"
+		let defaults = try #require(UserDefaults(suiteName: name))
+		defer
+		{
+			defaults.removePersistentDomain(forName: name)
+		}
+		let preferences = TypographyPreferences(defaults: defaults)
+		#expect(preferences.configuration == .standard)
+		let page = SettingsAppearancePage(
+			preferences: preferences,
+			center: NotificationCenter()
+		)
+		page.uiSizeField.integerValue = 13
+		let action = try #require(page.uiSizeField.action)
+		#expect(page.uiSizeField.sendAction(
+			action,
+			to: page.uiSizeField.target
+		))
+		#expect(TypographyPreferences(defaults: defaults)
+			.configuration == TypographyConfiguration(uiSize: 13))
+		page.codeSizeField.integerValue = 16
+		let codeAction = try #require(page.codeSizeField.action)
+		#expect(page.codeSizeField.sendAction(
+			codeAction,
+			to: page.codeSizeField.target
+		))
+		#expect(preferences.configuration == TypographyConfiguration(
+			uiSize: 13,
+			codeSize: 16
+		))
+		page.contentSizeField.integerValue = 20
+		let contentAction = try #require(page.contentSizeField.action)
+		#expect(page.contentSizeField.sendAction(
+			contentAction,
+			to: page.contentSizeField.target
+		))
+		#expect(TypographyPreferences(defaults: defaults).configuration == TypographyConfiguration(
+			uiSize: 13,
+			contentSize: 20,
+			codeSize: 16
+		))
+		let first = TranscriptPreparationCoordinator.ContentKey(
+			body: "Same text",
+			markdown: true,
+			typography: .standard
+		)
+		let changed = TranscriptPreparationCoordinator.ContentKey(
+			body: "Same text",
+			markdown: true,
+			typography: preferences.configuration
+		)
+		#expect(first != changed)
+		let contentOnly = TranscriptPreparationCoordinator.ContentKey(
+			body: "Same text",
+			markdown: true,
+			typography: TypographyConfiguration(contentSize: 20)
+		)
+		#expect(first != contentOnly)
+	}
+
+	@Test func markdownResolvesContextBeforeInlineScaling() throws
+	{
+		let config = TypographyConfiguration(
+			uiSize: 13,
+			codeSize: 16
+		)
+		let heading = MarkdownTextStyle(
+			heading: 1,
+			code: true
+		)
+		#expect(abs(MarkdownAttributedStringRenderer.typography(for: heading)
+				.resolved(using: config)
+				.size - 19.5 * 0.92) < 0.000001)
+		let table = MarkdownTextStyle(
+			code: true,
+			tableCell: MarkdownTableCell(
+				tableID: 0,
+				row: 1,
+				column: 0,
+				columnCount: 1,
+				columnSpan: 1,
+				rowSpan: 1,
+				alignment: .left,
+				header: false
+			)
+		)
+		#expect(MarkdownAttributedStringRenderer.typography(for: table).resolved(using: config)
+			.size == 16 * 0.92)
+		let source = "# Heading `inline`\n\nBody `inline`\n\n"
+			+ "| A | B |\n| - | - |\n| Cell | Value |\n\n```swift\nlet x = 1\n```"
+		let parsed = MarkdownContentParser.parse(
+			source,
+			markdown: true
+		)
+		let file = FileMarkdownStyling
+			.apply(to: MarkdownAttributedStringRenderer.render(parsed.runs))
+		let bodyInline = (file.string as NSString).range(
+			of: "inline",
+			options: .backwards
+		)
+		#expect((file.attribute(
+			.font,
+			at: bodyInline.location,
+			effectiveRange: nil
+		) as? NSFont)?
+			.pointSize == TypographyConfiguration.current.uiSize)
+		let cell = (file.string as NSString).range(of: "Cell")
+		#expect((file.attribute(
+			.font,
+			at: cell.location,
+			effectiveRange: nil
+		) as? NSFont)?
+			.pointSize == TypographyConfiguration.current.uiSize)
+		let code = (file.string as NSString).range(of: "let x")
+		#expect((file.attribute(
+			.font,
+			at: code.location,
+			effectiveRange: nil
+		) as? NSFont)?
+			.pointSize == TypographyConfiguration.current.codeSize)
+	}
+
 	@Test func nativeLineBoxesAccommodateGlyphMetrics() throws
 	{
 		let role = TypographyTokens.Composer.editor

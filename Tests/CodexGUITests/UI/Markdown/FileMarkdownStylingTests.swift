@@ -7,6 +7,89 @@ import Testing
 @MainActor
 struct FileMarkdownStylingTests
 {
+	@Test func previewUIScopePreservesInlineCodeFamilyAndIndependentFencedCode() throws
+	{
+		let parsed = MarkdownContentParser.parse(
+			"# Heading\n\nBody **strong** `inline`\n\n```swift\nlet value = 1\n```",
+			markdown: true
+		)
+		let original = MarkdownAttributedStringRenderer.render(parsed.runs)
+		let small = FileMarkdownStyling.apply(
+			to: original,
+			configuration: TypographyConfiguration(
+				uiSize: 16,
+				contentSize: 12,
+				codeSize: 10
+			)
+		)
+		let large = FileMarkdownStyling.apply(
+			to: original,
+			configuration: TypographyConfiguration(
+				uiSize: 11,
+				contentSize: 24,
+				codeSize: 10
+			)
+		)
+		for (text, smallSize, largeSize): (String, CGFloat, CGFloat) in [
+			("Heading", 27, 19),
+			("Body", 16, 11),
+			("strong", 16, 11),
+			("inline", 16, 11),
+			("let value", 10, 10)
+		]
+		{
+			for (content, size) in [(small, smallSize), (large, largeSize)]
+			{
+				let range = (content.string as NSString).range(of: text)
+				let font = try #require(content.attribute(
+					.font,
+					at: range.location,
+					effectiveRange: nil
+				) as? NSFont)
+				#expect(font.pointSize == size)
+				if text == "inline"
+				{
+					#expect(font.fontName.contains("Menlo"))
+				}
+			}
+		}
+		#expect(small.string == large.string)
+	}
+
+	@Test func fileReferencesDisplayAndResolveLineNumbers() throws
+	{
+		let parsed = MarkdownContentParser.parse(
+			"[Source](/tmp/My%20Project/File.swift:22)",
+			markdown: true
+		)
+		let rendered = MarkdownAttributedStringRenderer.render(parsed.runs)
+		#expect(rendered.string.contains("Source (line 22)"))
+		let label = (rendered.string as NSString).range(of: "Source")
+		let transcriptInk = try #require(rendered.attribute(
+			.foregroundColor,
+			at: label.location,
+			effectiveRange: nil
+		) as? NSColor)
+		#expect(transcriptInk.usingColorSpace(.sRGB) == AppKitColorTokens.inlineReferenceText
+			.usingColorSpace(.sRGB))
+		let file = FileMarkdownStyling.apply(to: rendered)
+		let fileLabel = (file.string as NSString).range(of: "Source")
+		let fileInk = try #require(file.attribute(
+			.foregroundColor,
+			at: fileLabel.location,
+			effectiveRange: nil
+		) as? NSColor)
+		#expect(fileInk.usingColorSpace(.sRGB) == MarkdownAttributedStringRenderer.linkColor
+			.usingColorSpace(.sRGB))
+		#expect(!file.string.contains("\u{FFFC}"))
+		let reference = try #require(MarkdownFileReference("/tmp/My%20Project/File.swift:22"))
+		#expect(reference.path == "/tmp/My Project/File.swift")
+		#expect(reference.line == 22)
+		let fileURL = try #require(MarkdownFileReference("file:///tmp/File.swift#L8"))
+		#expect(fileURL.path == "/tmp/File.swift")
+		#expect(fileURL.line == 8)
+		#expect(MarkdownFileReference("https://example.com/file:22") == nil)
+	}
 
 	@Test func filesQuoteRailsJoinSoftLinesAndExcludeLeadingParagraphGaps() throws
 	{
@@ -61,6 +144,14 @@ struct FileMarkdownStylingTests
 			at: label.location,
 			effectiveRange: nil
 		) != nil)
+		let inlineCode = text.range(of: "code")
+		let codeInk = try #require(file.attribute(
+			.foregroundColor,
+			at: inlineCode.location,
+			effectiveRange: nil
+		) as? NSColor)
+		#expect(codeInk.usingColorSpace(.sRGB) == AppKitColorTokens.primaryText
+			.usingColorSpace(.sRGB))
 		let newline = text.range(of: "\n")
 		#expect(file.attribute(
 			.link,
