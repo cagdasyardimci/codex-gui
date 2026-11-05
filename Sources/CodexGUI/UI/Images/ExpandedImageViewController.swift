@@ -412,6 +412,31 @@ final class ExpandedImageViewController: NSViewController
 		updateGeometry()
 	}
 
+	func refreshDiagram(
+		_ image: NSImage,
+		appearance: NSAppearance
+	)
+	{
+		guard diagramImage != nil
+		else
+		{
+			return
+		}
+		let origin = scrollView.contentView.bounds.origin
+		diagramImage = image
+		originalPixelSize = image.size
+		imageView.image = image
+		scrollView.appearance = appearance
+		diagramCanvas?.appearance = appearance
+		refreshThemeColors()
+		updateGeometry()
+		if !fitting
+		{
+			scrollView.contentView.scroll(to: origin)
+			scrollView.reflectScrolledClipView(scrollView.contentView)
+		}
+	}
+
 	@objc private func downloadDiagram(_ sender: Any?)
 	{
 		guard let diagramImage, let window = view.window

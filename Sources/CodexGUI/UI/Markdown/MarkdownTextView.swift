@@ -5,7 +5,8 @@ import AppKit
 final class MarkdownTextView: NSTextView
 {
 	private var updatingFrameSize = false
-	private let expandedImagePreview = ExpandedImagePreview()
+	let expandedImagePreview = ExpandedImagePreview()
+	private var expandedDiagram: (location: Int, source: String)?
 	private var diagramControls: [Int: MarkdownDiagramControls] = [:]
 	private var diagramFrames: [Int: NSRect] = [:]
 	private var diagramTrackingArea: NSTrackingArea?
@@ -37,7 +38,32 @@ final class MarkdownTextView: NSTextView
 
 	func installContent(_ content: NSAttributedString)
 	{
-		expandedImagePreview.dismiss()
+		if let occurrence = expandedDiagram, expandedImagePreview.controller != nil
+		{
+			if occurrence.location < content.length,
+				let attachment = content.attribute(
+				.attachment,
+				at: occurrence.location,
+				effectiveRange: nil
+				)
+				as? MarkdownRichAttachment,
+				attachment.isDiagram, attachment.source == occurrence.source
+			{
+				if let image = attachment
+					.diagramImage(for: window?.effectiveAppearance ?? effectiveAppearance)
+				{
+					expandedImagePreview.refreshDiagram(image)
+				}
+			}
+			else
+			{
+				dismissExpandedImage()
+			}
+		}
+		else
+		{
+			dismissExpandedImage()
+		}
 		for controls in diagramControls.values
 		{
 			controls.removeFromSuperview()
@@ -54,13 +80,14 @@ final class MarkdownTextView: NSTextView
 	{
 		if newWindow !== window
 		{
-			expandedImagePreview.dismiss()
+			dismissExpandedImage()
 		}
 		super.viewWillMove(toWindow: newWindow)
 	}
 
 	func dismissExpandedImage()
 	{
+		expandedDiagram = nil
 		expandedImagePreview.dismiss()
 	}
 
@@ -71,6 +98,7 @@ final class MarkdownTextView: NSTextView
 			from: nil
 		))
 		{
+			expandedDiagram = nil
 			expandedImagePreview.present(
 				path: path,
 				name: LocalAttachmentURL.resolve(path)?.lastPathComponent ?? "Image",
@@ -232,6 +260,8 @@ final class MarkdownTextView: NSTextView
 			{
 				diagramControls[range.location]?.removeFromSuperview()
 				controls = MarkdownDiagramControls(attachment: attachment)
+				let location = range.location
+				let source = attachment.source
 				controls.onExpand =
 				{
 					[weak self] image in
@@ -240,6 +270,7 @@ final class MarkdownTextView: NSTextView
 					{
 						return
 					}
+					expandedDiagram = (location, source)
 					expandedImagePreview.present(
 						path: "",
 						name: "Mermaid diagram",

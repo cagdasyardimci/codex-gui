@@ -292,6 +292,19 @@ final class ExpandedImagePreview
 		}
 	}
 
+	func refreshDiagram(_ image: NSImage)
+	{
+		guard let controller, let parent
+		else
+		{
+			return
+		}
+		controller.refreshDiagram(
+			image,
+			appearance: parent.effectiveAppearance
+		)
+	}
+
 	func dismiss()
 	{
 		generation += 1

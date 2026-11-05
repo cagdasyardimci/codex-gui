@@ -26,7 +26,6 @@ extension LayoutTokens
 		static let diagramIconSize: CGFloat = 40
 		static let diagramCloseWidth: CGFloat = 42
 		static let zoomStepSize: CGFloat = 36
-		static let imageZoomWidth: CGFloat = 64
 	}
 }
 

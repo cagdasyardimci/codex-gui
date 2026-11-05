@@ -55,7 +55,11 @@ struct MarkdownDiagramControlsTests
 			#expect(overlayWindow.canBecomeKey)
 			#expect(controller.view.bounds.size == window.frame.size)
 			#expect(controller.view.bounds.height > (window.contentView?.bounds.height ?? 0))
-			#expect(controller.backdropView.isHidden)
+			let backgroundHost = try #require(window.contentView?.superview ?? window.contentView)
+			#expect(!backgroundHost.subviews.contains
+			{
+				$0.accessibilityIdentifier() == "expanded-image-blur"
+			})
 			#expect(controller.originalPixelSize == image.size)
 			#expect(controller.displayedZoomPercentage == 100)
 			let buttons = descendants(controller.view).compactMap
@@ -92,7 +96,7 @@ struct MarkdownDiagramControlsTests
 			let bounds = controller.view.bounds
 			let close = controller.closeButton.frame
 			#expect(close.size == NSSize(
-				width: 40,
+				width: 42,
 				height: 40
 			))
 			#expect(abs(bounds.maxX - close.maxX - 12) < 0.01)
@@ -101,7 +105,7 @@ struct MarkdownDiagramControlsTests
 				width: 40,
 				height: 40
 			))
-			#expect(abs(bounds.maxX - download.frame.maxX - 60) < 0.01)
+			#expect(abs(bounds.maxX - download.frame.maxX - 62) < 0.01)
 			#expect(abs(bounds.maxY - download.frame.maxY - 12) < 0.01)
 			#expect(plus.frame.size == NSSize(
 				width: 36,
@@ -182,6 +186,94 @@ struct MarkdownDiagramControlsTests
 			properties: [:]
 		))
 		try data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".png"))
+	}
+
+	@Test func expandedDiagramSurvivesRestylingAndDismissesOnOccurrenceReplacement() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 800,
+					height: 600
+				),
+				styleMask: [.titled, .resizable],
+				backing: .buffered,
+				defer: false
+			)
+			window.prepareForTesting()
+			defer
+			{
+				window.close()
+			}
+			let text = MarkdownTextView(frame: NSRect(
+				x: 0,
+				y: 0,
+				width: 700,
+				height: 500
+			))
+			window.contentView?.addSubview(text)
+			let light = NSImage(size: NSSize(
+				width: 220,
+				height: 500
+			))
+			let dark = NSImage(size: NSSize(
+				width: 240,
+				height: 520
+			))
+			@MainActor func attachment(
+				_ source: String,
+				_ light: NSImage?,
+				_ dark: NSImage?
+			) -> NSAttributedString
+			{
+				NSAttributedString(attachment: MarkdownRichAttachment(
+					source: source,
+					lightImage: light,
+					darkImage: dark,
+					isDiagram: true
+				))
+			}
+			text.installContent(attachment(
+				"diagram",
+				light,
+				dark
+			))
+			text.updateDiagramControls()
+			let controls = try #require(text.subviews.compactMap
+			{
+				$0 as? MarkdownDiagramControls
+			}
+			.first)
+			controls.onExpand?(light)
+			let controller = try #require(text.expandedImagePreview.controller)
+			controller.setZoom(1.5)
+			let scrollOrigin = controller.scrollView.contentView.bounds.origin
+			window.appearance = NSAppearance(named: .darkAqua)
+			text.installContent(attachment(
+				"diagram",
+				nil,
+				nil
+			))
+			#expect(text.expandedImagePreview.controller === controller)
+			text.installContent(attachment(
+				"diagram",
+				light,
+				dark
+			))
+			#expect(text.expandedImagePreview.controller === controller)
+			#expect(controller.imageView.image === dark)
+			#expect(controller.displayedZoomPercentage == 150)
+			#expect(controller.scrollView.contentView.bounds.origin == scrollOrigin)
+			text.installContent(attachment(
+				"different diagram",
+				light,
+				dark
+			))
+			#expect(text.expandedImagePreview.controller == nil)
+		}
 	}
 
 	private func descendants(_ view: NSView) -> [NSView]
