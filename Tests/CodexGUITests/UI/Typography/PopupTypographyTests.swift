@@ -7,6 +7,101 @@ import Testing
 @MainActor
 struct PopupTypographyTests
 {
+	@Test func componentConfigurationAndSelectionPreserveMeasuredFonts() throws
+	{
+		let ui = TypographyConfiguration.current.uiSize
+		let model = ModelEffortPopoverView()
+		model.render(
+			models: [],
+			selectedModelID: nil,
+			selectedEffort: nil,
+			fastMode: false
+		)
+		let modelButton = try #require(descendants(model.view).compactMap
+		{
+			$0 as? NSButton
+		}
+		.first
+		{
+			$0.accessibilityLabel() == "Choose Codex model"
+		})
+		try expectFont(
+			modelButton.font,
+			size: ui - 1,
+			weight: 400
+		)
+		model.render(
+			models: [],
+			selectedModelID: nil,
+			selectedEffort: nil,
+			fastMode: true
+		)
+		try expectFont(
+			modelButton.font,
+			size: ui - 1,
+			weight: 400
+		)
+
+		let project = ProjectRenameInputView(frame: .zero)
+		try expectFont(
+			project.field.font,
+			size: ui - 1,
+			weight: 430
+		)
+		let navigation = NavigationViewController()
+		navigation.loadViewIfNeeded()
+		try expectFont(
+			navigation.searchField.font,
+			size: ui + 2,
+			weight: 430
+		)
+		let keycap = DesktopKeycapView(
+			shortcut: "⌘N",
+			presentation: .searchShortcut
+		)
+		let keyLabel = try #require(descendants(keycap).compactMap
+		{
+			$0 as? NSTextField
+		}.first)
+		try expectFont(
+			keyLabel.font,
+			size: ui - 2,
+			weight: 430
+		)
+		let menu = GitChangesViewController().makeDiffDisplayMenu()
+		try expectFont(
+			menu.font,
+			size: ui - 1,
+			weight: 430
+		)
+	}
+
+	@Test func editorRowsRetainMediumWeightWhenChecksAndContentChange() throws
+	{
+		let picker = SettingsEditorPicker()
+		let row = SettingsChoiceMenuRow(
+			title: "Default app",
+			icon: nil,
+			checked: false,
+			detail: nil,
+			showsCheckbox: false,
+			titleRole: picker.menuTitleRole
+		)
+		try expectFont(
+			row.titleLabel.font,
+			size: TypographyConfiguration.current.uiSize - 1,
+			weight: 500
+		)
+		row.checked = true
+		row.content.title = "Finder"
+		try expectFont(
+			row.titleLabel.font,
+			size: TypographyConfiguration.current.uiSize - 1,
+			weight: 500
+		)
+		#expect(row.checked)
+		#expect(row.titleLabel.stringValue == "Finder")
+	}
 
 	@Test func configurationDescriptionHasRoomForItsMeasuredLineBox() throws
 	{

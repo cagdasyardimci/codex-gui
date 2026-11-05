@@ -45,7 +45,7 @@ final class ProjectInfoPopoverView: NSView
 		let path = pathButton
 		let edit = AppKitLayout.horizontalStack(
 			[icon(.settings), editButton],
-			spacing: 7
+			spacing: 0
 		)
 		let topSeparator = separator()
 		let bottomSeparator = separator()
@@ -68,16 +68,16 @@ final class ProjectInfoPopoverView: NSView
 
 	private func configureLabels()
 	{
-		nameLabel.font = .systemFont(ofSize: 14)
+		nameLabel.setTypographyRole(TypographyTokens.Sidebar.row)
 		nameLabel.lineBreakMode = .byTruncatingTail
 		nameLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
 
-		countLabel.font = .systemFont(ofSize: 14)
+		countLabel.setTypographyRole(TypographyTokens.UI.body)
 
-		pathLabel.font = .systemFont(ofSize: 14)
+		pathLabel.setTypographyRole(TypographyTokens.UI.body)
 		pathLabel.lineBreakMode = .byTruncatingMiddle
 		pathLabel.setContentCompressionResistancePriority(
 			.defaultLow,
@@ -95,8 +95,8 @@ final class ProjectInfoPopoverView: NSView
 
 		editButton.target = self
 		editButton.action = #selector(editProject)
-		editButton.font = .systemFont(ofSize: 14)
-		editButton.contentTintColor = .labelColor
+		editButton.size = .regular
+		editButton.presentation = .inlineAction
 		editButton.alignment = .left
 	}
 
@@ -127,7 +127,7 @@ final class ProjectInfoPopoverView: NSView
 
 		pathLabel.stringValue = (project.path as NSString).abbreviatingWithTildeInPath
 		pathButton.setAccessibilityLabel("Open \(project.path) in Finder")
-		editButton.setAccessibilityLabel("Edit local display name for project \(name)")
+		editButton.setAccessibilityLabel("Edit project \(name)")
 	}
 
 	private func renderPinState(
@@ -172,7 +172,7 @@ final class ProjectInfoPopoverView: NSView
 			symbol,
 			size: 14
 		)
-		image.contentTintColor = .secondaryLabelColor
+		image.contentTintColor = AppKitColorTokens.secondaryText
 		image.setAccessibilityElement(false)
 		image.widthAnchor.constraint(equalToConstant: 14).isActive = true
 		image.heightAnchor.constraint(equalToConstant: 16).isActive = true
@@ -228,7 +228,7 @@ private final class ProjectPathButton: DesktopHoverButton
 		)
 		for image in [folder, openIndicator]
 		{
-			image.contentTintColor = .secondaryLabelColor
+			image.contentTintColor = AppKitColorTokens.secondaryText
 			image.setAccessibilityElement(false)
 			image.widthAnchor.constraint(equalToConstant: 14).isActive = true
 			image.heightAnchor.constraint(equalToConstant: 16).isActive = true

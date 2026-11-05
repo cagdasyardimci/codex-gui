@@ -4,15 +4,22 @@ import AppKit
 final class ProjectRenameViewController: NSViewController
 {
 	var onDecision: ((Bool) -> Void)?
+	var onRemove: (() -> Void)?
+	let pathLabel = NSTextField(labelWithString: "")
+	let removeButton = DesktopStyledButton(
+		title: "Remove local project",
+		presentation: .link,
+		size: .regular
+	)
 	let input = ProjectRenameInputView(frame: .zero)
 	let cancelButton = DesktopStyledButton(
 		title: "Cancel",
-		presentation: .secondary,
+		presentation: .dialogCancel,
 		size: .regular
 	)
 	let saveButton = DesktopStyledButton(
 		title: "Save",
-		presentation: .primary,
+		presentation: .dialogPrimary,
 		size: .regular
 	)
 	var headingLabel: NSTextField
@@ -28,11 +35,27 @@ final class ProjectRenameViewController: NSViewController
 		dialog.closeButton
 	}
 	private lazy var dialog = DesktopDialogShell(
-		title: "Rename project",
+		title: "Edit project",
 		message: "Keep it short and recognizable",
-		content: input,
-		actions: [cancelButton, saveButton]
+		content: makeContent(),
+		actions: [cancelButton, saveButton],
+		leadingAction: removeButton,
+		style: .projectEdit
 	)
+
+	private func makeContent() -> NSView
+	{
+		pathLabel.setTypographyRole(TypographyTokens.Connections.body)
+		pathLabel.textColor = AppKitColorTokens.secondaryText
+		pathLabel.lineBreakMode = .byTruncatingMiddle
+		let stack = AppKitLayout.verticalStack(
+			[input, pathLabel],
+			spacing: 14
+		)
+		input.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+		pathLabel.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+		return stack
+	}
 
 	override func loadView()
 	{
@@ -40,6 +63,8 @@ final class ProjectRenameViewController: NSViewController
 		{
 			button.target = self
 		}
+		removeButton.target = self
+		removeButton.action = #selector(remove)
 		saveButton.action = #selector(save)
 		saveButton.keyEquivalent = "\r"
 		cancelButton.action = #selector(cancel)
@@ -47,12 +72,18 @@ final class ProjectRenameViewController: NSViewController
 		{
 			[weak self] in self?.onDecision?(false)
 		}
-		closeButton.setAccessibilityLabel("Close project rename")
-		input.field.nextKeyView = cancelButton
+		closeButton.setAccessibilityLabel("Close project edit")
+		input.field.nextKeyView = removeButton
+		removeButton.nextKeyView = cancelButton
 		cancelButton.nextKeyView = saveButton
 		saveButton.nextKeyView = closeButton
 		closeButton.nextKeyView = input.field
 		view = dialog
+	}
+
+	@objc private func remove()
+	{
+		onRemove?()
 	}
 
 	@objc private func save()

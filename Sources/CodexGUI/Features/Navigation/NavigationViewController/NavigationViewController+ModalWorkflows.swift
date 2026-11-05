@@ -75,6 +75,8 @@ extension NavigationViewController
 		let dialog = ProjectRenameViewController()
 		_ = dialog.view
 		dialog.input.field.stringValue = displayName(for: project)
+		dialog.pathLabel.stringValue = (project.path as NSString).abbreviatingWithTildeInPath
+		dialog.removeButton.isEnabled = onRemoveProject != nil
 		let panel = ProjectRenamePanel(
 			contentRect: .zero,
 			styleMask: [.borderless],
@@ -85,7 +87,7 @@ extension NavigationViewController
 		panel.isOpaque = false
 		panel.backgroundColor = .clear
 		panel.hasShadow = true
-		panel.title = "Rename project"
+		panel.title = "Edit project"
 		panel.contentViewController = dialog
 		dialog.view.layoutSubtreeIfNeeded()
 		panel.setContentSize(dialog.view.fittingSize)
@@ -100,6 +102,26 @@ extension NavigationViewController
 			[weak panel] in panel?.finish($0)
 		}
 		let capturedScope = modalScope
+		let remove = onRemoveProject
+		dialog.onRemove =
+		{
+			[weak self, weak panel] in
+			guard let self, modalScope == capturedScope, view.window === window,
+					panel?.sheetParent === window, sidebarItems.contains(where:
+					{
+						if case .project(let candidate) = $0
+						{
+							return projectKey(for: candidate) == projectKey(for: project)
+						}
+						return false
+					})
+			else
+			{
+				return
+			}
+			panel?.finish(false)
+			remove?(project)
+		}
 		let complete = completion ?? onRenameProject
 		panel.beginSheet(in: window)
 		{
@@ -115,7 +137,13 @@ extension NavigationViewController
 				dialog.input.field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 			)
 		}
-		dialog.input.field.selectText(nil)
+		if let editor = dialog.input.field.currentEditor()
+		{
+			editor.selectedRange = NSRange(
+				location: (dialog.input.field.stringValue as NSString).length,
+				length: 0
+			)
+		}
 	}
 
 	func presentNewTask()
@@ -161,10 +189,12 @@ extension NavigationViewController
 		let complete = completion ?? onRenameThread
 		presentTextEntrySheet(
 			in: window,
-			title: "Rename Conversation",
+			title: "Rename chat",
+			informativeText: "Keep it short and recognizable",
 			value: thread.displayTitle,
-			accessibilityLabel: "Conversation name",
-			actionTitle: "Rename",
+			placeholder: "Add a title...",
+			accessibilityLabel: "Chat title",
+			actionTitle: "Save",
 			requiredThreadID: thread.id
 		)
 		{
@@ -193,10 +223,12 @@ extension NavigationViewController
 		let complete = onRenameTask
 		presentTextEntrySheet(
 			in: window,
-			title: "Rename Conversation",
+			title: "Rename chat",
+			informativeText: "Keep it short and recognizable",
 			value: thread.displayTitle,
-			accessibilityLabel: "Conversation name",
-			actionTitle: "Rename"
+			placeholder: "Add a title...",
+			accessibilityLabel: "Chat title",
+			actionTitle: "Save"
 		)
 		{
 			[weak self] value in
@@ -269,7 +301,9 @@ extension NavigationViewController
 		prompt.beginSheet(in: window)
 		{
 			[weak self] values in
-			guard let value = values?.first, self?.modalScope == capturedScope,
+			guard let value = values?.first,
+					!value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+					self?.modalScope == capturedScope,
 					requiredThreadID == nil || self?.selectedThreadID == requiredThreadID
 			else
 			{

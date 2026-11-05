@@ -7,6 +7,7 @@ final class ProjectRenameInputView: NSView
 	private let component = SettingsFormField(
 		title: "Project name",
 		presentation: .dialog,
+		leadingIcon: .folder,
 		showsTitle: false
 	)
 	var field: SettingsFormTextField
