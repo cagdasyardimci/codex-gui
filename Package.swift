@@ -50,6 +50,7 @@ let package = Package(
 			exclude: ["Resources/Mermaid", "Resources/KaTeX"],
 			resources: [
 				.copy("Resources/AppIcon.icns"),
+				.copy("Resources/AppearanceModes"),
 				.copy("Resources/RemoteAccess"),
 				.copy("Resources/MarkdownRuntime/Mermaid"),
 				.copy("Resources/MarkdownRuntime/KaTeX"),

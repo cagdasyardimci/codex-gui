@@ -6,6 +6,9 @@ extension LayoutTokens
 	{
 		static let sizeInputWidth: CGFloat = 64
 		static let sizeInputHeight: CGFloat = 28
+		static let modePreviewWidth: CGFloat = 80
+		static let modePreviewHeight: CGFloat = 60
+		static let modePreviewSpacing: CGFloat = 16
 		static let sidebarWidth: CGFloat = 240.703125
 		static let sidebarRowHeight: CGFloat = 30
 		static let sidebarGutter: CGFloat = 8
