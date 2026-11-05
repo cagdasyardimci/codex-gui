@@ -34,7 +34,7 @@ final class ComposerSkillAttachment: NSTextAttachment
 		appearance.performAsCurrentDrawingAppearance
 		{
 			resolvedColor = AppKitColorTokens.composerSkillMention
-				.usingColorSpace(.sRGB) ?? .linkColor
+				.usingColorSpace(.sRGB) ?? AppKitColorTokens.transcriptLink
 		}
 		let color = resolvedColor
 		let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]

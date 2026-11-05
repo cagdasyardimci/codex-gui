@@ -19,6 +19,7 @@ final class FullAccessConfirmationView: NSViewController
 	override func loadView()
 	{
 		configureRiskText()
+		riskText.setTypographyRole(TypographyTokens.Dialog.body)
 		let introduction = makeIntroduction()
 		let capabilities = makeCapabilitiesSection()
 		let content = AppKitLayout.verticalStack(
@@ -59,7 +60,7 @@ final class FullAccessConfirmationView: NSViewController
 			"Codex will be able to run commands, use the internet, and create and edit "
 				+ "files anywhere on this computer without your permission. This includes "
 				+ "but is not limited to:",
-			size: 14
+			role: TypographyTokens.Dialog.body
 		)
 	}
 
@@ -76,7 +77,7 @@ final class FullAccessConfirmationView: NSViewController
 					description: "Read, create, modify, upload, or delete files "
 						+ "anywhere on this computer",
 					icon: .folderOpen,
-					tint: .systemBlue
+					tint: AppKitColorTokens.accentText
 				),
 				separator(),
 				capability(
@@ -90,7 +91,7 @@ final class FullAccessConfirmationView: NSViewController
 					"Internet and connected apps",
 					description: "Access websites, send data, and use enabled plugins",
 					icon: .globeRealTimeSearch,
-					tint: .systemCyan
+					tint: AppKitColorTokens.capabilityInternet
 				),
 			],
 			spacing: 10
@@ -117,12 +118,12 @@ final class FullAccessConfirmationView: NSViewController
 		riskText.textContainer?.lineFragmentPadding = 0
 		riskText.textContainer?.widthTracksTextView = true
 		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineSpacing = 3
+		paragraph.lineSpacing = TypographyTokens.Dialog.body.lineSpacing ?? 0
 		let text = NSMutableAttributedString(
 			string: "This comes with risks like loss or exposure of sensitive data and prompt "
 				+ "injection. You can turn this off. ",
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 14),
+				.font: AppKitFontResolver.font(TypographyTokens.Dialog.body),
 				.foregroundColor: ApprovalPopoverStyle.secondary,
 				.paragraphStyle: paragraph,
 			]
@@ -130,11 +131,11 @@ final class FullAccessConfirmationView: NSViewController
 		text.append(NSAttributedString(
 			string: "Learn more",
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 14),
+				.font: AppKitFontResolver.font(TypographyTokens.Dialog.body),
 				.link: DocumentationLinks.sandboxing,
 			]
 		))
-		riskText.linkTextAttributes = [.foregroundColor: NSColor.linkColor]
+		riskText.linkTextAttributes = [.foregroundColor: AppKitColorTokens.transcriptLink]
 		riskText.textStorage?.setAttributedString(text)
 	}
 
@@ -157,13 +158,10 @@ final class FullAccessConfirmationView: NSViewController
 	) -> NSView
 	{
 		let heading = NSTextField(labelWithString: title)
-		heading.font = .systemFont(
-			ofSize: 13,
-			weight: .semibold
-		)
+		heading.setTypographyRole(TypographyTokens.Dialog.section)
 		let descriptionLabel = wrappingLabel(
 			description,
-			size: 12
+			role: TypographyTokens.UI.caption
 		)
 		let labels = AppKitLayout.verticalStack(
 			[heading, descriptionLabel],
@@ -184,11 +182,11 @@ final class FullAccessConfirmationView: NSViewController
 
 	private func wrappingLabel(
 		_ text: String,
-		size: CGFloat
+		role: TypographyTokens.Role
 	) -> NSTextField
 	{
 		let label = NSTextField(wrappingLabelWithString: text)
-		label.font = .systemFont(ofSize: size)
+		label.setTypographyRole(role)
 		label.textColor = ApprovalPopoverStyle.secondary
 		label.setContentCompressionResistancePriority(
 			.required,

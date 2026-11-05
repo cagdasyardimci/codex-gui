@@ -216,7 +216,7 @@ final class ComposerQueueRow: NSView
 					width: 12,
 					height: 12
 				),
-				tint: .black
+				tint: AppKitColorTokens.composerQueueLeadingGlyph
 			)
 		}
 		image.unlockFocus()

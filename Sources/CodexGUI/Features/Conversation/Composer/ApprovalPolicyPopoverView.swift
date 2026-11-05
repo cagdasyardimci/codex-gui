@@ -10,7 +10,7 @@ final class ApprovalPolicyPopoverView: NSViewController, DesktopPopoverMaterialC
 	}
 	private let learnMoreButton = DesktopStyledButton(
 		title: "Learn more",
-		presentation: .link
+		presentation: .mutedLink
 	)
 	private var selectedMode: ApprovalMode? = .askForApproval
 	private var rows: [ApprovalPolicyRow] = []
@@ -42,6 +42,10 @@ final class ApprovalPolicyPopoverView: NSViewController, DesktopPopoverMaterialC
 		rows = makePolicyRows()
 		for row in rows
 		{
+			row.onPreferredSizeChanged =
+			{
+				[weak self] in self?.refreshPreferredSize()
+			}
 			row.onHover =
 			{
 				[weak self, weak row] in
@@ -83,13 +87,23 @@ final class ApprovalPolicyPopoverView: NSViewController, DesktopPopoverMaterialC
 		surface.setAccessibilityRole(.menu)
 		view = surface
 		render(mode: selectedMode)
+		refreshPreferredSize()
+	}
+
+	private func refreshPreferredSize()
+	{
+		preferredContentSize.height = 2 * LayoutTokens.ApprovalPopover.contentInset
+			+ LayoutTokens.ApprovalPopover.headerHeight + rows.reduce(0)
+			{
+				$0 + $1.rowHeight
+			}
 	}
 
 	private func makeHeadingRow() -> NSStackView
 	{
 		let heading =
 			DesktopTextField(labelWithString: "How should Codex actions be approved?")
-		heading.font = AppKitFontResolver.font(TypographyTokens.Popover.title)
+		heading.setTypographyRole(TypographyTokens.Popover.title)
 		heading.textColor = AppKitColorTokens.composerSecondaryText
 		heading.setAccessibilityLabel(heading.stringValue)
 

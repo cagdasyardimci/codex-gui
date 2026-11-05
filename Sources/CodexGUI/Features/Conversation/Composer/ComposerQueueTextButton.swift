@@ -69,12 +69,26 @@ final class ComposerQueueTextButton: DesktopHoverButton
 			)
 		}
 		imagePosition = icon == nil ? .noImage : title.isEmpty ? .imageOnly : .imageLeading
-		font = .systemFont(ofSize: presentation == .preview ? 14 : 13)
+		self.setTypographyRole(
+			TypographyTokens.Composer.queue(preview: presentation == .preview),
+			onUpdate:
+			{
+				[weak self] in
+				guard let self
+				else
+				{
+					return
+				}
+				self.contentWidth?.constant = self.intrinsicContentSize.width
+			}
+		)
 		contentTintColor = presentation == .preview ? AppKitColorTokens.composerPrimaryText
 			: AppKitColorTokens.composerSecondaryText
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.minimumLineHeight = presentation == .preview ? 20 : 18
-		paragraph.maximumLineHeight = paragraph.minimumLineHeight
+		let paragraph = (AppKitFontResolver.textAttributes(
+			TypographyTokens.Composer.queue(preview: presentation == .preview),
+			font: font
+		)[.paragraphStyle] as? NSParagraphStyle)?
+			.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
 		paragraph.lineBreakMode = .byTruncatingTail
 		attributedTitle = NSAttributedString(
 			string: title,
@@ -102,7 +116,10 @@ final class ComposerQueueTextButton: DesktopHoverButton
 		let width = fixedWidth ?? (imagePosition == .imageOnly ? Self.actionHeight
 			:
 			ceil((title as NSString)
-				.size(withAttributes: [.font: font ?? .systemFont(ofSize: 13)]).width) + 16
+				.size(withAttributes: [.font: font ?? AppKitFontResolver.font(
+					TypographyTokens.Composer.queue(preview: false),
+					appearance: effectiveAppearance
+				)]).width) + 16
 			+ (imagePosition == .imageLeading ? 20 : 0))
 		return NSSize(
 			width: width,

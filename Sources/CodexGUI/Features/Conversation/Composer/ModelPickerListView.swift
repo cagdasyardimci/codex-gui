@@ -14,6 +14,9 @@ struct ModelPickerChoice
 final class ModelPickerListView: NSView
 {
 	var onSelect: ((String?) -> Void)?
+	var onPreferredHeightChanged: (() -> Void)?
+	private var typographyObservation: TypographyObservation?
+	private var headerHeightConstraint: NSLayoutConstraint?
 	private let scrollView = NSScrollView()
 	private let document = DesktopFlippedView()
 	private let stack = NSStackView()
@@ -46,6 +49,17 @@ final class ModelPickerListView: NSView
 		)
 		document.translatesAutoresizingMaskIntoConstraints = false
 		document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor).isActive = true
+		typographyObservation = TypographyObservation(view: self)
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			headerHeightConstraint?.constant = Layout.headerHeight
+			onPreferredHeightChanged?()
+		}
 	}
 
 	required init?(coder: NSCoder)
@@ -80,7 +94,9 @@ final class ModelPickerListView: NSView
 		let header = ModelPickerHeading()
 		stack.addArrangedSubview(header)
 		header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		header.heightAnchor.constraint(equalToConstant: Layout.headerHeight).isActive = true
+		let headerHeight = header.heightAnchor.constraint(equalToConstant: Layout.headerHeight)
+		headerHeight.isActive = true
+		headerHeightConstraint = headerHeight
 		rows = choices.map
 		{
 			choice in
@@ -88,6 +104,10 @@ final class ModelPickerListView: NSView
 				choice: choice,
 				selected: choice.id == selectedID
 			)
+			row.onPreferredSizeChanged =
+			{
+				[weak self] in self?.onPreferredHeightChanged?()
+			}
 			row.target = self
 			row.action = #selector(selectRow(_:))
 			row.onNavigate =
@@ -116,7 +136,6 @@ final class ModelPickerListView: NSView
 			}
 			stack.addArrangedSubview(row)
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-			row.heightAnchor.constraint(equalToConstant: row.preferredHeight).isActive = true
 			return row
 		}
 		for index in rows.indices

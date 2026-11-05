@@ -301,8 +301,8 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		if !matchingSkills.isEmpty && row == commands.count
 		{
 			let heading = NSTextField(labelWithString: "Skills")
-			heading.font = .systemFont(ofSize: 12)
-			heading.textColor = .secondaryLabelColor
+			heading.setTypographyRole(TypographyTokens.Search.explanation)
+			heading.textColor = AppKitColorTokens.secondaryText
 			let cell = NSTableCellView()
 			AppKitLayout.pin(
 				heading,
@@ -355,7 +355,7 @@ final class SlashCommandPopoverView: NSViewController, NSTableViewDataSource, NS
 		}
 		let contents = DesktopSearchResultContentView(presentation: .inlineCommand(
 			title: presentation.title,
-			detail: description,
+			detail: command.id == .model ? "" : description,
 			leadingAccessory: icon,
 			suffix: "",
 			opensPicker: presentation.opensPicker,

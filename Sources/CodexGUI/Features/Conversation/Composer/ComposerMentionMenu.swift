@@ -61,6 +61,7 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 		query: String,
 		skills: [AvailableSkill],
 		paths: [String],
+		projectPath: String? = nil,
 		hasProject: Bool,
 		planMode: Bool,
 		allowsPlanMode: Bool,
@@ -111,7 +112,10 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 			Row(
 				title: "Goal",
 				detail: "Set a goal to keep pursuing",
-				image: DesktopIcons.image(.flag),
+				image: NSImage(
+					systemSymbolName: "target",
+					accessibilityDescription: nil
+				),
 				choice: .goal,
 				isEnabled: false
 			),
@@ -189,21 +193,24 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 		)
 		if !query.isEmpty
 		{
-			appendSection(
-				"Files",
-				paths.map
+			rows.append(contentsOf: paths.map
+			{
+				let parent = ($0 as NSString).deletingLastPathComponent
+				let root = projectPath.map
 				{
-					Row(
-						title: URL(fileURLWithPath: $0).lastPathComponent,
-						detail: $0,
-						image: NSImage(
-							systemSymbolName: "doc",
-							accessibilityDescription: nil
-						),
-						choice: .file($0)
-					)
-				}
-			)
+					URL(fileURLWithPath: $0).lastPathComponent
+				} ?? ""
+				let directory = [root, parent].filter
+				{
+					!$0.isEmpty
+				}.joined(separator: "/")
+				return Row(
+					title: URL(fileURLWithPath: $0).lastPathComponent,
+					detail: directory,
+					image: DesktopIcons.image(.code),
+					choice: .file($0)
+				)
+			})
 		}
 		table.reloadData()
 		if let first = rows.firstIndex(where:
@@ -307,8 +314,8 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 		if item.choice == nil
 		{
 			let label = NSTextField(labelWithString: item.title)
-			label.font = .systemFont(ofSize: 13)
-			label.textColor = .secondaryLabelColor
+			label.setTypographyRole(TypographyTokens.Composer.contextMenu)
+			label.textColor = AppKitColorTokens.secondaryText
 			cell.addSubview(label)
 			label.translatesAutoresizingMaskIntoConstraints = false
 			NSLayoutConstraint.activate([

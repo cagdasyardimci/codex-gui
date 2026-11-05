@@ -66,6 +66,10 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 			inset: 0
 		)
 		modelList.isHidden = true
+		modelList.onPreferredHeightChanged =
+		{
+			[weak self] in self?.updatePreferredContentSize()
+		}
 		modelList.onSelect =
 		{
 			[weak self] modelID in
@@ -78,7 +82,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 
 	private func configureEffortLabel()
 	{
-		effortLabel.font = AppKitFontResolver.font(TypographyTokens.ModelPopover.effort)
+		effortLabel.setTypographyRole(TypographyTokens.ModelPopover.effort)
 		effortLabel.textColor = EffortPopoverStyle.blue
 		effortLabel.alignment = .center
 		effortLabel.lineBreakMode = .byTruncatingTail
@@ -312,7 +316,8 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 	private func updateEffortControls()
 	{
 		effortLabel.stringValue = ModelPreferencePresentation.effortTitle(effectiveEffort)
-		effortLabel.textColor = effectiveEffort == "ultra" ? .systemPurple : EffortPopoverStyle.blue
+		effortLabel.textColor = effectiveEffort == "ultra" ? AppKitColorTokens
+			.effortUltra : EffortPopoverStyle.blue
 		effortLabel.setAccessibilityValue(effortLabel.stringValue)
 
 		slider.minValue = 0

@@ -86,7 +86,7 @@ final class ComposerQueueView: NSView
 		pauseIcon.setAccessibilityElement(false)
 		pauseIcon.widthAnchor.constraint(equalToConstant: 14).isActive = true
 		pauseIcon.heightAnchor.constraint(equalToConstant: 14).isActive = true
-		pauseLabel.font = .systemFont(ofSize: 14)
+		pauseLabel.setTypographyRole(TypographyTokens.Composer.queue(preview: true))
 		pauseLabel.textColor = AppKitColorTokens.composerSecondaryText
 		pauseLabel.lineBreakMode = .byTruncatingTail
 		pauseLabel.setContentCompressionResistancePriority(
