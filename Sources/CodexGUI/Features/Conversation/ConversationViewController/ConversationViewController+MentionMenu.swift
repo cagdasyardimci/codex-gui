@@ -62,6 +62,7 @@ extension ConversationViewController
 			query: query,
 			skills: slashCommandController.availableSkills,
 			paths: fileIndexRuntime.index?.search(query) ?? [],
+			projectPath: projectPath,
 			hasProject: projectPath != nil,
 			planMode: !planModeButton.isHidden,
 			allowsPlanMode: onSlashCommand != nil && slashCommandController

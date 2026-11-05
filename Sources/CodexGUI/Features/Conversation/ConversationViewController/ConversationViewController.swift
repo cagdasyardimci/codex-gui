@@ -7,6 +7,7 @@ final class ConversationViewController: NSViewController,
 	NSTextViewDelegate, NSSearchFieldDelegate
 {
 	let transcript: TranscriptViewController
+	private var typographyObservation: TypographyObservation?
 
 	var onSelectSkill: ((AvailableSkill) -> Void)?
 	var onRemoveSkill: ((ProjectSkillSelection) -> Void)?
@@ -239,6 +240,29 @@ final class ConversationViewController: NSViewController,
 		let (activeTaskRow, progressRow) = configureTaskStatusControls()
 		configurePreferenceControls()
 		configureComposerControls()
+		typographyObservation = TypographyObservation
+		{
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			self.composer.setTypographyRole(TypographyTokens.Composer.editor)
+			self.composer.skillMention?.refreshImage(appearance: self.composer.effectiveAppearance)
+			if let storage = self.composer
+				.textStorage
+			{
+				self.composer.layoutManager?.invalidateLayout(
+					forCharacterRange: NSRange(
+						location: 0,
+						length: storage.length
+					),
+					actualCharacterRange: nil
+				)
+			}
+			self.updateComposerHeight()
+		}
 		addChild(transcript)
 		configureTranscriptCallbacks()
 

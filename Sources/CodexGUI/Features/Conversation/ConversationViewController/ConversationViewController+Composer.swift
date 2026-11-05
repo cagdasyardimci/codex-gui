@@ -165,7 +165,7 @@ extension ConversationViewController
 		composer.isAutomaticQuoteSubstitutionEnabled = false
 		composer.isAutomaticDashSubstitutionEnabled = false
 		composer.isAutomaticTextReplacementEnabled = false
-		composer.font = AppKitFontResolver.font(TypographyTokens.Composer.editor)
+		composer.setTypographyRole(TypographyTokens.Composer.editor)
 		composer.textColor = AppKitColorTokens.composerPrimaryText
 		composer.insertionPointColor = AppKitColorTokens.composerPrimaryText
 		// Match the surface so AppKit can repaint the old insertion point after editing.
@@ -178,9 +178,11 @@ extension ConversationViewController
 		composer.textContainer?.widthTracksTextView = true
 		composer.textContainer?.lineFragmentPadding = 0
 		composer.layoutManager?.delegate = composer
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.minimumLineHeight = TypographyTokens.Composer.editor.lineHeight ?? 0
-		paragraph.maximumLineHeight = TypographyTokens.Composer.editor.lineHeight ?? 0
+		let paragraph = AppKitFontResolver
+			.textAttributes(TypographyTokens.Composer.editor)[
+				.paragraphStyle
+			] as? NSParagraphStyle ??
+			NSParagraphStyle.default
 		composer.defaultParagraphStyle = paragraph
 		composer.typingAttributes = AppKitFontResolver
 			.textAttributes(TypographyTokens.Composer.editor)
@@ -251,7 +253,7 @@ extension ConversationViewController
 			"Turn off queueing",
 		])
 		addContextButton.menu?.autoenablesItems = false
-		addContextButton.menu?.font = AppKitFontResolver.font(TypographyTokens.Composer.contextMenu)
+		addContextButton.menu?.setTypographyRole(TypographyTokens.Composer.contextMenu)
 		addContextButton.target = self
 		addContextButton.action = #selector(chooseContextAction)
 		addContextButton.setAccessibilityLabel("Add files and more")

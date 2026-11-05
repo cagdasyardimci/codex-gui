@@ -13,8 +13,8 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 	override func loadView()
 	{
 		view = NSView()
-		label.font = AppKitFontResolver.interfaceFont(ofSize: 14)
-		label.textColor = .secondaryLabelColor
+		label.setTypographyRole(TypographyTokens.UI.body)
+		label.textColor = AppKitColorTokens.secondaryText
 		label.lineBreakMode = .byTruncatingTail
 		label.translatesAutoresizingMaskIntoConstraints = false
 		divider.boxType = .separator

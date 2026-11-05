@@ -85,8 +85,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		header.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
 		icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
 		icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
-		icon.contentTintColor = .secondaryLabelColor
-		titleLabel.font = .systemFont(ofSize: 14)
+		icon.contentTintColor = AppKitColorTokens.secondaryText
+		titleLabel.setTypographyRole(TypographyTokens.Activity.title)
 		titleLabel.textColor = AppKitColorTokens.activityText
 		titleLabel.lineBreakMode = .byTruncatingTail
 		titleClick.target = self
@@ -97,8 +97,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			.defaultLow,
 			for: .horizontal
 		)
-		outcomeLabel.font = .systemFont(ofSize: 12)
-		outcomeLabel.textColor = .systemRed
+		outcomeLabel.setTypographyRole(TypographyTokens.Activity.outcome)
+		outcomeLabel.textColor = AppKitColorTokens.errorText
 		outcomeLabel.setContentCompressionResistancePriority(
 			.required,
 			for: .horizontal
@@ -113,6 +113,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			button.target = self
 			button.setButtonType(.momentaryPushIn)
 		}
+		fileButton.setTypographyRole(TypographyTokens.Activity.title)
+		subagentsButton.setTypographyRole(TypographyTokens.Activity.title)
 		fileButton.action = #selector(openFile)
 		subagentsButton.action = #selector(openSubagents)
 		subagentsButton.refusesFirstResponder = false
@@ -232,9 +234,11 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			}.joined(separator: "\n")
 		fileButton.attributedTitle = NSAttributedString(
 			string: row.linkTitle ?? "",
-			attributes: [.font: NSFont.systemFont(ofSize: 14),
-							.foregroundColor: NSColor.secondaryLabelColor,
-							.underlineStyle: 1]
+			attributes: [
+				.font: AppKitFontResolver.font(TypographyTokens.Activity.title),
+				.foregroundColor: AppKitColorTokens.secondaryText,
+				.underlineStyle: 1
+			]
 		)
 		fileButton.toolTip = row.filePath
 		fileButton.setAccessibilityLabel("Open \(row.filePath ?? "file")")
@@ -291,8 +295,8 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		subagentsButton.attributedTitle = NSAttributedString(
 			string: row.title,
 			attributes: [
-				.font: NSFont.systemFont(ofSize: 14),
-				.foregroundColor: NSColor.secondaryLabelColor
+				.font: AppKitFontResolver.font(TypographyTokens.Activity.title),
+				.foregroundColor: AppKitColorTokens.secondaryText
 			]
 		)
 		subagentsButton.toolTip = titleLabel.toolTip

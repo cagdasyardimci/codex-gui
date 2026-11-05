@@ -28,14 +28,11 @@ final class InteractionCardView: NSView
 	private func buildView()
 	{
 		let title = NSTextField(labelWithString: titleText)
-		title.font = .systemFont(
-			ofSize: 13,
-			weight: .semibold
-		)
+		title.setTypographyRole(TypographyTokens.Interaction.title)
 		title.setAccessibilityLabel(titleText)
 
 		let details = NSTextField(wrappingLabelWithString: detailText)
-		details.font = .systemFont(ofSize: 12)
+		details.setTypographyRole(TypographyTokens.Interaction.detail)
 		details.isSelectable = true
 		details.setAccessibilityLabel(detailText)
 
@@ -272,7 +269,7 @@ final class InteractionCardView: NSView
 		for question in interaction.questions
 		{
 			let questionLabel = NSTextField(wrappingLabelWithString: question.question)
-			questionLabel.font = .systemFont(ofSize: 13)
+			questionLabel.setTypographyRole(TypographyTokens.Interaction.question)
 			content.addArrangedSubview(questionLabel)
 
 			let menu = DesktopPopupButton()

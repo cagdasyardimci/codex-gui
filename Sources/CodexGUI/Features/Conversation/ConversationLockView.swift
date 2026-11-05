@@ -44,7 +44,7 @@ final class ConversationLockView: DesktopSurface
 		let lockIcon = ConversationLockIconView()
 
 		let title = NSTextField(labelWithString: "This is open in another app")
-		title.font = AppKitFontResolver.font(TypographyTokens.ChatLock.title)
+		title.setTypographyRole(TypographyTokens.ChatLock.title)
 		title.textColor = AppKitColorTokens.primaryText
 		title.lineBreakMode = .byTruncatingTail
 		if let lineHeight = TypographyTokens.ChatLock.title.lineHeight
@@ -52,7 +52,7 @@ final class ConversationLockView: DesktopSurface
 			title.heightAnchor.constraint(equalToConstant: lineHeight).isActive = true
 		}
 		let detail = NSTextField(labelWithString: "Close it there to continue here.")
-		detail.font = AppKitFontResolver.font(TypographyTokens.ChatLock.detail)
+		detail.setTypographyRole(TypographyTokens.ChatLock.detail)
 		detail.textColor = AppKitColorTokens.captionText
 		detail.lineBreakMode = .byTruncatingTail
 		if let lineHeight = TypographyTokens.ChatLock.detail.lineHeight

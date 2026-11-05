@@ -85,8 +85,8 @@ final class TurnChangeSummaryButton: DesktopLayerButton
 			let title = NSMutableAttributedString(
 				string: fileText,
 				attributes: [
-					.font: NSFont.systemFont(ofSize: 13),
-					.foregroundColor: NSColor.secondaryLabelColor,
+					.font: AppKitFontResolver.font(TypographyTokens.Summary.body),
+					.foregroundColor: AppKitColorTokens.secondaryText,
 				]
 			)
 			if !summary.isLoading && (summary.failure == nil || summary.fileCount > 0)

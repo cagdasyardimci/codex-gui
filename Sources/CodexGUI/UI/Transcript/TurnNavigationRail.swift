@@ -336,6 +336,7 @@ final class TurnNavigationRail: NSView, DesktopWheelInputReceiving
 			Self.edgeFadeHeight / visible.height,
 			0.5
 		)
+		// This gradient is an alpha mask; its black does not determine the displayed color.
 		let opaque = NSColor.black.cgColor
 		let transparent = NSColor.clear.cgColor
 		CATransaction.begin()
@@ -624,14 +625,14 @@ final class TurnNavigationMark: NSButton
 	var entryID = ""
 	var isEmphasized = false
 	let lineWidth: CGFloat = 6
-	private static let highlightedColor = gray(
-		light: 0x80,
-		dark: 0xA3
-	)
-	private static let ordinaryColor = gray(
-		light: 0xD5,
-		dark: 0x46
-	)
+	private static var highlightedColor: NSColor
+	{
+		AppKitColorTokens.secondaryText
+	}
+	private static var ordinaryColor: NSColor
+	{
+		AppKitColorTokens.turnRail
+	}
 	var onEnter: (() -> Void)?
 	var onExit: (() -> Void)?
 	var onScrollWheel: ((NSEvent) -> Void)?
@@ -666,24 +667,6 @@ final class TurnNavigationMark: NSButton
 		onExit?()
 	}
 
-	private static func gray(
-		light: CGFloat,
-		dark: CGFloat
-	) -> NSColor
-	{
-		NSColor(name: nil)
-		{
-			appearance in
-			let value = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-			return NSColor(
-				srgbRed: value / 255,
-				green: value / 255,
-				blue: value / 255,
-				alpha: 1
-			)
-		}
-	}
-
 	override func viewDidChangeEffectiveAppearance()
 	{
 		super.viewDidChangeEffectiveAppearance()
@@ -705,7 +688,7 @@ final class TurnNavigationMark: NSButton
 		).fill()
 		if window?.firstResponder === self
 		{
-			NSColor.keyboardFocusIndicatorColor.setStroke()
+			AppKitColorTokens.platformFocus.setStroke()
 			NSBezierPath(
 				roundedRect: bounds.insetBy(
 					dx: 1,

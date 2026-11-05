@@ -22,21 +22,13 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 	override func loadView()
 	{
 		view = DesktopSurface(
-			NSColor(name: nil)
-			{
-				appearance in
-				appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-					? NSColor(
-						white: 34.0 / 255,
-						alpha: 1
-					) : AppKitColorTokens.elevated
-			},
+			AppKitColorTokens.fileChangeSurface,
 			cornerRadius: 10,
 			bordered: true,
 			borderWidth: 0.5
 		)
 		let iconSurface = DesktopSurface(
-			AppKitColorTokens.canvas,
+			AppKitColorTokens.sidebar,
 			cornerRadius: 10
 		)
 		let icon = FileChangeIconView()
@@ -50,10 +42,7 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 			icon.widthAnchor.constraint(equalToConstant: 20),
 			icon.heightAnchor.constraint(equalToConstant: 20),
 		])
-		titleLabel.font = .systemFont(
-			ofSize: 14,
-			weight: .medium
-		)
+		titleLabel.setTypographyRole(TypographyTokens.Changes.fileHeading)
 		titleLabel.textColor = MarkdownAttributedStringRenderer.proseColor
 		titleLabel.lineBreakMode = .byTruncatingMiddle
 		titleLabel.setContentCompressionResistancePriority(
@@ -216,7 +205,6 @@ final class ConversationFileChangeCollectionItem: NSCollectionViewItem
 
 		let row = DesktopResourceRow(
 			title: path,
-			icon: WorkspaceFileIcon.image(relativePath: path),
 			diffStats: change.diff.isEmpty ? nil : Self.lineCounts(for: change.diff),
 			presentation: .file
 		)
@@ -264,7 +252,7 @@ private final class FileChangeIconView: NSView
 {
 	override func draw(_ dirtyRect: NSRect)
 	{
-		NSColor.secondaryLabelColor.setStroke()
+		AppKitColorTokens.secondaryText.setStroke()
 		let outline = NSBezierPath(
 			roundedRect: bounds.insetBy(
 				dx: 2,

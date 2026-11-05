@@ -85,16 +85,26 @@ struct TurnChangeSummaryButtonTests
 			let title = button.attributedTitle
 			#expect(title.string == "Reported · 2 files +3 -1")
 			let value = title.string as NSString
-			for (offset, expected) in [(0, NSColor.secondaryLabelColor),
-										(value.range(of: "+3").location, .systemGreen),
-										(value.range(of: "-1").location, .systemRed)]
+			for (offset, expected) in [(0, AppKitColorTokens.secondaryText),
+										(
+										value.range(of: "+3").location,
+										AppKitColorTokens.diffAdded
+										),
+										(
+										value.range(of: "-1").location,
+										AppKitColorTokens.diffRemoved
+										)]
 			{
 				let actual = try #require(title.attribute(
 					.foregroundColor,
 					at: offset,
 					effectiveRange: nil
 				) as? NSColor)
-				#expect(actual.cgColor.components == AppKitColorResolution.resolvedCGColor(
+				#expect(AppKitColorResolution.resolvedCGColor(
+					actual,
+					for: button
+				)
+				.components == AppKitColorResolution.resolvedCGColor(
 					expected,
 					for: button
 				).components)
