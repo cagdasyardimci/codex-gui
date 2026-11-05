@@ -12,15 +12,16 @@ final class ComposerPermissionButton: DesktopHoverButton
 		bezelStyle = .inline
 		isBordered = false
 		controlSize = .small
-		font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
 		imagePosition = .imageLeading
 		lineBreakMode = .byTruncatingTail
+		cell?.usesSingleLineMode = true
+		self.setTypographyRole(TypographyTokens.Composer.preference)
 		cornerRadius = ShapeTokens.Composer
 			.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
 		heightAnchor.constraint(equalToConstant: LayoutTokens.composer.controlHeight)
 			.isActive = true
 		setContentCompressionResistancePriority(
-			.defaultLow,
+			.defaultHigh,
 			for: .horizontal
 		)
 		render(mode: .askForApproval)
@@ -49,12 +50,16 @@ final class ComposerPermissionButton: DesktopHoverButton
 		} ?? "Change permissions"
 		setAccessibilityLabel("Approval policy: \(permissionTitle)")
 		contentTintColor = tint
+		var attributes = AppKitFontResolver.textAttributes(
+			TypographyTokens.Composer.preference,
+			font: font,
+			alignment: alignment,
+			lineBreakMode: lineBreakMode
+		)
+		attributes[.foregroundColor] = tint
 		attributedTitle = NSAttributedString(
 			string: permissionTitle,
-			attributes: [
-				.font: AppKitFontResolver.font(TypographyTokens.Composer.preference),
-				.foregroundColor: tint,
-			]
+			attributes: attributes
 		)
 		let symbol: DesktopIcon
 		switch mode

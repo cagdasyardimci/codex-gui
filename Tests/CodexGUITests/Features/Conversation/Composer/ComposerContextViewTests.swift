@@ -10,7 +10,7 @@ import Testing
 @MainActor
 struct ComposerContextViewTests
 {
-	@Test func imageImportCreatesPreviewAndRemovalControl() async throws
+	@Test(.appKitIsolation) func imageImportCreatesPreviewAndRemovalControl() async throws
 	{
 		_ = NSApplication.shared
 		let directory = try await temporaryProject()
@@ -116,43 +116,33 @@ struct ComposerContextViewTests
 			in: tile,
 			title: ""
 		))
-		expand.performClick(nil)
+		#expect(expand.dispatchConfiguredAction())
 		await view.waitForExpandedPreview()
-		let expanded = try #require(findExpandedPreview(in: view))
+		let expanded = try ExpandedImageTestSupport.preview(in: window)
 		#expect(findImageView(in: expanded)?.image != nil)
 		#expect(window.attachedSheet == nil)
 		view.render(items: [])
 		#expect(expanded.superview == nil)
-		remove.performClick(nil)
+		#expect(window.childWindows?.isEmpty != false)
+		#expect(remove.dispatchConfiguredAction())
 		#expect(removedID == nil)
 		view.render(items: [item])
 		let currentRemove = try #require(findButton(
 			in: view,
 			title: "Remove"
 		))
-		currentRemove.performClick(nil)
+		#expect(currentRemove.dispatchConfiguredAction())
 		#expect(removedID == item.id)
 		let currentExpand = try #require(findButton(
 			in: view,
 			title: ""
 		))
-		currentExpand.performClick(nil)
+		#expect(currentExpand.dispatchConfiguredAction())
 		await view.waitForExpandedPreview()
-		let reopened = try #require(findExpandedPreview(in: view))
+		let reopened = try ExpandedImageTestSupport.preview(in: window)
 		window.contentView = NSView()
 		#expect(reopened.superview == nil)
-	}
-
-	private func findExpandedPreview(in view: NSView) -> NSView?
-	{
-		if view.accessibilityIdentifier() == "expanded-image-preview"
-		{
-			return view
-		}
-		return view.subviews.lazy.compactMap
-		{
-			findExpandedPreview(in: $0)
-		}.first
+		#expect(window.childWindows?.isEmpty != false)
 	}
 
 	private func imageTiles(in view: NSView) -> [ComposerImageAttachmentView]

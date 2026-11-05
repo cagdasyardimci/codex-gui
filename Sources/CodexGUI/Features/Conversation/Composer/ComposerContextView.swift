@@ -283,10 +283,7 @@ final class ComposerContextView: NSView
 					width: 440,
 					height: 220
 				),
-				font: .monospacedSystemFont(
-					ofSize: 12,
-					weight: .regular
-				),
+				role: TypographyTokens.Code.output,
 				accessibilityLabel: "Attached code excerpt"
 			).scrollView
 		}

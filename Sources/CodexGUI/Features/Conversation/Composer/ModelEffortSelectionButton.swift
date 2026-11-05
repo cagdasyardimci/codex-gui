@@ -44,7 +44,7 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 		keyEquivalent = "m"
 		keyEquivalentModifierMask = [.control, .shift]
 		tooltipShortcut = "⌃⇧M"
-		font = AppKitFontResolver.font(TypographyTokens.Composer.preference)
+		self.setTypographyRole(TypographyTokens.Composer.preference)
 		image = nil
 
 		update(
@@ -121,7 +121,10 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 
 	private var naturalTextSize: NSSize
 	{
-		(displayedTitle as NSString).size(withAttributes: [.font: textFont])
+		(displayedTitle as NSString).size(withAttributes: AppKitFontResolver.textAttributes(
+			TypographyTokens.Composer.preference,
+			font: textFont
+		))
 	}
 
 	override var intrinsicContentSize: NSSize
@@ -211,17 +214,20 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 		tint: NSColor
 	)
 	{
-		let paragraphStyle = NSMutableParagraphStyle()
+		var attributes = AppKitFontResolver.textAttributes(
+			TypographyTokens.Composer.preference,
+			font: textFont
+		)
+		let paragraphStyle = (attributes[.paragraphStyle] as? NSParagraphStyle)?.mutableCopy()
+			as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
 		paragraphStyle.lineBreakMode = .byTruncatingMiddle
+		attributes[.paragraphStyle] = paragraphStyle
+		attributes[.foregroundColor] = isEnabled && (!isPickerPresented || isModelListPresented)
+			? AppKitColorTokens.composerPrimaryText : tint
 
 		let title = NSMutableAttributedString(
 			string: displayedTitle,
-			attributes: [
-				.font: textFont,
-				.foregroundColor: isEnabled && (!isPickerPresented || isModelListPresented)
-					? AppKitColorTokens.composerPrimaryText : tint,
-				.paragraphStyle: paragraphStyle,
-			]
+			attributes: attributes
 		)
 		if !isPickerPresented || isModelListPresented,
 			let effortTitle, displayedTitle.hasSuffix(" " + effortTitle)

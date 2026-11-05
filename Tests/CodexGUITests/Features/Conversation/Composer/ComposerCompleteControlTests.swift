@@ -7,6 +7,24 @@ import Testing
 @Suite(.serialized)
 struct ComposerCompleteControlTests
 {
+	@Test func freshPermissionTitleFitsBeforeTypographyRefresh() throws
+	{
+		_ = NSApplication.shared
+		let button = ComposerPermissionButton(frame: .zero)
+		button.frame.size = button.intrinsicContentSize
+		let cell = try #require(button.cell)
+		let titleRect = cell.titleRect(forBounds: button.bounds)
+		let titleBounds = button.attributedTitle.boundingRect(
+			with: NSSize(
+				width: titleRect.width,
+				height: 1000
+			),
+			options: [.usesLineFragmentOrigin, .usesFontLeading]
+		)
+		#expect(titleBounds.height <= button.bounds.height)
+		#expect(titleRect.width >= button.attributedTitle.size().width)
+	}
+
 	@Test
 	func disabledSubmissionRestoresItsSurfaceAndNativeAction()
 	{
@@ -18,20 +36,32 @@ struct ComposerCompleteControlTests
 		button.isEnabled = false
 		#expect(!button.dispatchConfiguredAction())
 		#expect(receiver.calls == 0)
-		#expect(button.layerBackgroundColor == .tertiaryLabelColor)
+		for appearance in [NSAppearance.Name.aqua, .darkAqua]
+		{
+			button.appearance = NSAppearance(named: appearance)
+			#expect(matchesColor(
+				button.layerBackgroundColor,
+				AppKitColorTokens.mutedText,
+				for: button
+			))
+		}
 		button.isEnabled = true
-		#expect(matchesColor(
-			button.layerBackgroundColor,
-			AppKitColorTokens.composerSend,
-			for: button
-		))
+		for appearance in [NSAppearance.Name.aqua, .darkAqua]
+		{
+			button.appearance = NSAppearance(named: appearance)
+			#expect(matchesColor(
+				button.layerBackgroundColor,
+				AppKitColorTokens.composerSend,
+				for: button
+			))
+		}
 		#expect(button.dispatchConfiguredAction())
 		#expect(receiver.calls == 1)
 		#expect(button.keyEquivalent == "\r")
 		#expect(button.keyEquivalentModifierMask == [.command])
 	}
 
-	@Test func configuredPermissionThenPresetRestoresArtworkTintAndAction()
+	@Test func configuredPermissionThenPresetRestoresArtworkTintAndAction() throws
 	{
 		_ = NSApplication.shared
 		let button = ComposerPermissionButton(frame: .zero)
@@ -44,23 +74,41 @@ struct ComposerCompleteControlTests
 			configuredFullAccess: false
 		)
 		#expect(button.title == "Configured permissions")
-		#expect(matchesColor(
-			button.contentTintColor,
-			AppKitColorTokens.composerSecondaryText,
-			for: button
-		))
+		for appearance in [NSAppearance.Name.aqua, .darkAqua]
+		{
+			button.appearance = NSAppearance(named: appearance)
+			#expect(matchesColor(
+				button.contentTintColor,
+				AppKitColorTokens.composerSecondaryText,
+				for: button
+			))
+		}
 		#expect(button.toolTip == "Configured permissions: Read-only files")
 		button.render(mode: .fullAccess)
+		let paragraph = try #require(button.attributedTitle.attribute(
+			.paragraphStyle,
+			at: 0,
+			effectiveRange: nil
+		) as? NSParagraphStyle)
+		#expect(paragraph.minimumLineHeight >= 18)
 		#expect(button.image === ComposerFooterIcons.fullAccess)
-		#expect(button.contentTintColor == ApprovalPopoverStyle.fullAccess)
+		#expect(matchesColor(
+			button.contentTintColor,
+			ApprovalPopoverStyle.fullAccess,
+			for: button
+		))
 		button.render(mode: .approveForMe)
 		#expect(button.title == ApprovalMode.approveForMe.title)
 		#expect(button.image !== ComposerFooterIcons.fullAccess)
-		#expect(matchesColor(
-			button.contentTintColor,
-			AppKitColorTokens.composerSecondaryText,
-			for: button
-		))
+		for appearance in [NSAppearance.Name.aqua, .darkAqua]
+		{
+			button.appearance = NSAppearance(named: appearance)
+			#expect(matchesColor(
+				button.contentTintColor,
+				AppKitColorTokens.composerSecondaryText,
+				for: button
+			))
+		}
 		#expect(button
 			.accessibilityLabel() == "Approval policy: \(ApprovalMode.approveForMe.title)")
 		#expect(button.dispatchConfiguredAction())

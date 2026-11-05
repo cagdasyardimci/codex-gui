@@ -6,7 +6,7 @@ enum ScrollableTextPreview
 	static func make(
 		text: String,
 		size: NSSize,
-		font: NSFont,
+		role: TypographyTokens.Role,
 		accessibilityLabel: String
 	) -> (scrollView: NSScrollView, textView: NSTextView)
 	{
@@ -39,7 +39,7 @@ enum ScrollableTextPreview
 			width: 8,
 			height: 8
 		)
-		textView.font = font
+		textView.setTypographyRole(role)
 		textView.string = text
 		textView.setAccessibilityLabel(accessibilityLabel)
 

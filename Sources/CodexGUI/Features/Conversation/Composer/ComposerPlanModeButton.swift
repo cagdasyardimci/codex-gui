@@ -4,7 +4,10 @@ import AppKit
 @MainActor
 final class ComposerPlanModeButton: DesktopHoverButton
 {
-	private let titleFont = AppKitFontResolver.font(TypographyTokens.Composer.plan)
+	private var titleFont: NSFont
+	{
+		AppKitFontResolver.font(TypographyTokens.Composer.plan)
+	}
 	private let metrics = LayoutTokens.Permission(
 		leadingInset: 9,
 		trailingInset: 9
@@ -14,7 +17,7 @@ final class ComposerPlanModeButton: DesktopHoverButton
 	{
 		super.init(frame: frameRect)
 		title = "Plan"
-		font = titleFont
+		setTypographyRole(TypographyTokens.Composer.plan)
 		isBordered = false
 		bezelStyle = .inline
 		controlSize = .small
@@ -70,8 +73,8 @@ final class ComposerPlanModeButton: DesktopHoverButton
 	override func draw(_ dirtyRect: NSRect)
 	{
 		drawBackground()
-		let tint = isEnabled ? AppKitColorTokens.composerSecondaryText : NSColor
-			.disabledControlTextColor
+		let tint = isEnabled ? AppKitColorTokens.composerSecondaryText : AppKitColorTokens
+			.disabledText
 		if let image
 		{
 			DesktopIcons.draw(

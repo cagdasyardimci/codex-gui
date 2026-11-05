@@ -654,7 +654,7 @@ final class ConversationViewController: NSViewController,
 					),
 					height: 240
 				),
-				font: .systemFont(ofSize: 13),
+				role: TypographyTokens.UI.small,
 				accessibilityLabel: "Project context and skill invocation preview"
 			).scrollView
 		alert.addButton(withTitle: "Close")
@@ -698,7 +698,7 @@ final class ConversationViewController: NSViewController,
 		let preview = ScrollableTextPreview.make(
 			text: explanation + lines.joined(separator: "\n\n"),
 			size: previewSize,
-			font: .systemFont(ofSize: 13),
+			role: TypographyTokens.UI.small,
 			accessibilityLabel: "Reported task plan and step statuses"
 		)
 		preview.textView.drawsBackground = false

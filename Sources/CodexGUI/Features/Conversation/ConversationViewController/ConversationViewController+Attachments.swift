@@ -577,10 +577,7 @@ extension ConversationViewController
 				width: 540,
 				height: 300
 			),
-			font: .monospacedSystemFont(
-				ofSize: 12,
-				weight: .regular
-			),
+			role: TypographyTokens.Code.output,
 			accessibilityLabel: "Select code lines from \(path)"
 		)
 		let alert = NSAlert()

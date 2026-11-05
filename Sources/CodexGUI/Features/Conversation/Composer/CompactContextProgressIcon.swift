@@ -43,7 +43,7 @@ final class CompactContextProgressIcon: NSView
 			height: radius * 2
 		))
 		track.lineWidth = 2.5
-		NSColor.secondaryLabelColor.withAlphaComponent(0.55).setStroke()
+		AppKitColorTokens.contextProgressTrack.setStroke()
 		track.stroke()
 
 		guard percent > 0
@@ -61,7 +61,7 @@ final class CompactContextProgressIcon: NSView
 		)
 		progress.lineWidth = 2.5
 		progress.lineCapStyle = .round
-		NSColor.labelColor.setStroke()
+		AppKitColorTokens.primaryText.setStroke()
 		progress.stroke()
 	}
 }

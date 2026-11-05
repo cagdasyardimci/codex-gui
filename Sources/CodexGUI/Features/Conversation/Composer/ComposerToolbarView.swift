@@ -8,6 +8,9 @@ final class ComposerToolbarView: NSView
 	private var compactConstraints: [NSLayoutConstraint] = []
 	private var isCompact = true
 	private let composerLayout: ComposerLayout
+	private let leadingControls: NSView
+	private let preferenceControl: NSView
+	private let actionControls: NSView
 
 	init(
 		leadingControls: NSView,
@@ -32,6 +35,9 @@ final class ComposerToolbarView: NSView
 			"Composer controls must fit the action row"
 		)
 		self.composerLayout = composerLayout
+		self.leadingControls = leadingControls
+		self.preferenceControl = preferenceControl
+		self.actionControls = actionControls
 		super.init(frame: .zero)
 
 		for controls in [leadingControls, preferenceControl, actionControls]
@@ -94,7 +100,11 @@ final class ComposerToolbarView: NSView
 
 	override func layout()
 	{
+		let requiredWidth = leadingControls.fittingSize.width + preferenceControl.fittingSize.width
+			+ actionControls.fittingSize.width + LayoutTokens.Composer.leadingPreferenceSpacing
+			+ composerLayout.metrics.preferenceToActionSpacing
 		let shouldUseCompactLayout = composerLayout.usesCompactFooter(innerWidth: bounds.width)
+			|| bounds.width < requiredWidth
 		if shouldUseCompactLayout != isCompact
 		{
 			NSLayoutConstraint.deactivate(isCompact ? compactConstraints : wideConstraints)

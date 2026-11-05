@@ -232,7 +232,7 @@ final class EffortSliderCell: NSSliderCell
 		{
 			NSGradient(
 				starting: EffortPopoverStyle.blue,
-				ending: .systemPurple
+				ending: AppKitColorTokens.effortUltra
 			)?.draw(
 				in: filledTrack,
 				angle: 0
@@ -366,6 +366,7 @@ final class EffortSlider: NSSlider
 	private let filledClip = CALayer()
 	private let knobCutoutMask = CAShapeLayer()
 	private var particles: [CALayer] = []
+	private var colorObservation: ThemeColorObservation?
 	private var particleMode: ParticleMode = .hidden
 	private var trackRect = NSRect.zero
 	private var filledRect = NSRect.zero
@@ -385,12 +386,31 @@ final class EffortSlider: NSSlider
 		layer?.masksToBounds = false
 		layer?.addSublayer(thumbLayer)
 		makeParticles()
+		colorObservation = ThemeColorObservation(view: self)
+		{
+			[weak self] in
+			self?.refreshParticleColors()
+		}
 		NSWorkspace.shared.notificationCenter.addObserver(
 			self,
 			selector: #selector(thumbMotionPreferenceChanged),
 			name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
 			object: nil
 		)
+	}
+
+	private func refreshParticleColors()
+	{
+		let color = AppKitColorResolution.resolvedCGColor(
+			AppKitColorTokens.effortThumb,
+			for: self
+		)
+		for particle in particles
+		{
+			particle.backgroundColor = color
+		}
+		updateVisualThumb()
+		needsDisplay = true
 	}
 
 	private func makeParticles()
@@ -406,7 +426,10 @@ final class EffortSlider: NSSlider
 				height: size
 			)
 			dot.cornerRadius = size / 2
-			dot.backgroundColor = NSColor.white.cgColor
+			dot.backgroundColor = AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.effortThumb,
+				for: self
+			)
 			dot.opacity = 0
 			filledClip.addSublayer(dot)
 			particles.append(dot)

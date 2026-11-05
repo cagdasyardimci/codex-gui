@@ -12,6 +12,7 @@ final class ComposerSubmissionButton: DesktopLayerButton
 	}
 
 	let role: Role
+	private var colorObservation: ThemeColorObservation?
 
 	init(role: Role)
 	{
@@ -28,7 +29,7 @@ final class ComposerSubmissionButton: DesktopLayerButton
 		bezelStyle = .inline
 		isBordered = false
 		controlSize = .small
-		font = AppKitFontResolver.font(TypographyTokens.Controls.prominentButton)
+		self.setTypographyRole(TypographyTokens.Controls.prominentButton)
 		image = role == .resume ? DesktopIcons.image(
 			.playSm,
 			size: 16
@@ -38,7 +39,11 @@ final class ComposerSubmissionButton: DesktopLayerButton
 				.sendIconSize
 		)
 		imagePosition = .imageOnly
-		contentTintColor = role == .stop ? .labelColor : .white
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in
+			self?.refreshEnabledPresentation()
+		}
 		setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
@@ -88,11 +93,14 @@ final class ComposerSubmissionButton: DesktopLayerButton
 
 	private func refreshEnabledPresentation()
 	{
+		contentTintColor = role == .stop ? AppKitColorTokens.primaryText : AppKitColorTokens
+			.composerSendText
 		guard role != .stop
 		else
 		{
 			return
 		}
-		layerBackgroundColor = isEnabled ? AppKitColorTokens.composerSend : .tertiaryLabelColor
+		layerBackgroundColor = isEnabled ? AppKitColorTokens.composerSend : AppKitColorTokens
+			.mutedText
 	}
 }

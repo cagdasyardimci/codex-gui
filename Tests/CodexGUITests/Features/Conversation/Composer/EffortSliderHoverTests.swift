@@ -9,6 +9,69 @@ import Testing
 ) @MainActor
 struct EffortSliderHoverTests
 {
+	@Test(.appKitIsolation)
+	func retainedThumbPrefersWhiteOnBlueAndRefreshesForBrightAccents() throws
+	{
+		let preferences = ColorPreferences()
+		let original = preferences.configuration
+		defer
+		{
+			preferences.save(original)
+		}
+		let fixture = Fixture()
+		defer
+		{
+			fixture.close()
+		}
+		let slider = fixture.slider
+		let geometry = slider.visualKnobRect
+		for appearance: NSAppearance.Name in [.darkAqua, .aqua, .darkAqua]
+		{
+			fixture.window.appearance = NSAppearance(named: appearance)
+			for (accent, expected): (UInt32, CGFloat) in [
+				(0x3A83F7, 1),
+				(0xFFFF00, 0),
+				(0x3A83F7, 1)
+			]
+			{
+				let profile = ColorThemeProfile(
+					background: 0x303030,
+					foreground: 0xFFFFFF,
+					accent: accent,
+					contrast: 60
+				)
+				preferences.save(ColorThemeConfiguration(
+					light: profile,
+					dark: profile
+				))
+				fixture.window.displayIfNeeded()
+				CATransaction.flush()
+				let bitmap = try #require(NSBitmapImageRep(
+					bitmapDataPlanes: nil,
+					pixelsWide: Int(slider.bounds.width),
+					pixelsHigh: Int(slider.bounds.height),
+					bitsPerSample: 8,
+					samplesPerPixel: 4,
+					hasAlpha: true,
+					isPlanar: false,
+					colorSpaceName: .deviceRGB,
+					bytesPerRow: 0,
+					bitsPerPixel: 0
+				))
+				let context = try #require(NSGraphicsContext(bitmapImageRep: bitmap))
+				try #require(slider.layer).render(in: context.cgContext)
+				let color = try #require(bitmap.colorAt(
+					x: Int(geometry.midX),
+					y: Int(geometry.midY)
+				)?.usingColorSpace(.sRGB))
+				#expect(abs(color.redComponent - expected) < 0.01)
+				#expect(abs(color.greenComponent - expected) < 0.01)
+				#expect(abs(color.blueComponent - expected) < 0.01)
+				#expect(slider.visualKnobRect == geometry)
+				#expect(slider.doubleValue == 2)
+			}
+		}
+	}
 
 	@Test(.timeLimit(.minutes(1)))
 	func defaultHoverDriverDeliversScheduledFramesAndCompletesBothTransitions() async throws
