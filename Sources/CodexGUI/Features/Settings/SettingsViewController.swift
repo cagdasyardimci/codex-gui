@@ -33,6 +33,7 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 	private enum Page: String, CaseIterable
 	{
 		case general = "General"
+		case appearance = "Appearance"
 		case notifications = "Notifications"
 		case personalization = "Personalization"
 		case voice = "Voice"
@@ -47,6 +48,7 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 	}
 	private static let personalPages: [Page] = [
 		.general,
+		.appearance,
 		.notifications,
 		.configuration,
 		.personalization,
@@ -658,8 +660,9 @@ extension SettingsViewController
 	{
 		switch page
 		{
-		case .personalization: .brain
-		case .voice: .voice
+		case .appearance: .sun
+		case .personalization: .simpleSmile
+		case .voice: .mic
 		case .archivedChats: .archive
 		case .usage: .analytics
 		case .browser: .globe
@@ -703,6 +706,7 @@ extension SettingsViewController
 		let result: NSView
 		switch page
 		{
+		case .appearance: result = SettingsAppearancePage()
 		case .configuration: result = SettingsConfigurationPage(backend: backend)
 		case .personalization: result = SettingsPersonalizationPage(backend: backend)
 		case .browser: result = SettingsBrowserPage(backend: backend)
@@ -753,6 +757,7 @@ extension SettingsViewController
 		switch page
 		{
 		case .general: "speed compression permissions editor notifications"
+		case .appearance: "font typography UI code size"
 		case .configuration:
 			"approval sandbox network web search output detail reasoning summary "
 				+ "dependencies experimental features"

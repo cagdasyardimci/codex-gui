@@ -24,7 +24,8 @@ enum SettingsRowLayout
 	static func install(
 		labels: [NSView],
 		control: NSView,
-		in row: NSView
+		in row: NSView,
+		verticalPadding: CGFloat = 8
 	)
 	{
 		let text = AppKitLayout.verticalStack(
@@ -46,12 +47,13 @@ enum SettingsRowLayout
 				equalTo: row.leadingAnchor,
 				constant: 16
 			),
+			text.centerYAnchor.constraint(equalTo: row.centerYAnchor),
 			text.topAnchor.constraint(
-				equalTo: row.topAnchor,
+				greaterThanOrEqualTo: row.topAnchor,
 				constant: 12
 			),
 			text.bottomAnchor.constraint(
-				equalTo: row.bottomAnchor,
+				lessThanOrEqualTo: row.bottomAnchor,
 				constant: -12
 			),
 			accessory.leadingAnchor.constraint(
@@ -65,8 +67,9 @@ enum SettingsRowLayout
 			accessory.centerYAnchor.constraint(equalTo: row.centerYAnchor),
 			row.heightAnchor.constraint(
 				greaterThanOrEqualTo: accessory.heightAnchor,
-				constant: 24
+				constant: 2 * verticalPadding
 			),
+			row.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
 		])
 	}
 

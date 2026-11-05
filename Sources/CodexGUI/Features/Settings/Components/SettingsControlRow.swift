@@ -4,18 +4,24 @@ import AppKit
 @MainActor
 final class SettingsControlRow: NSView
 {
+	enum Presentation
+	{
+		case standard, form
+	}
 	private let titleLabel: DesktopLineBoxLabel
 	private let detailLabel: DesktopLineBoxLabel
 
 	init(
 		title: String,
 		detail: String?,
-		control: NSView
+		control: NSView,
+		presentation: Presentation = .standard
 	)
 	{
 		titleLabel = DesktopLineBoxLabel(
 			title,
-			role: TypographyTokens.Connections.rowLabel
+			role: presentation == .form ? TypographyTokens.Text.control : TypographyTokens.Settings
+				.rowLabel
 		)
 		detailLabel = DesktopLineBoxLabel(
 			detail ?? "",
@@ -27,7 +33,8 @@ final class SettingsControlRow: NSView
 		SettingsRowLayout.install(
 			labels: [titleLabel, detailLabel],
 			control: control,
-			in: self
+			in: self,
+			verticalPadding: presentation == .form ? 12 : 8
 		)
 	}
 

@@ -16,7 +16,8 @@ enum SettingsPageLayout
 		subtitle: String? = nil,
 		subtitleView: NSView? = nil,
 		headerSpacing: SettingsPageDocument.HeaderSpacing = .standard,
-		columnWidth: ColumnWidth = .fixed
+		columnWidth: ColumnWidth = .fixed,
+		presentation: SettingsPageDocument.Presentation = .standard
 	) -> SettingsPageDocument
 	{
 		SettingsPageDocument(
@@ -26,7 +27,8 @@ enum SettingsPageLayout
 			subtitle: subtitle,
 			subtitleView: subtitleView,
 			headerSpacing: headerSpacing,
-			columnWidth: columnWidth
+			columnWidth: columnWidth,
+			presentation: presentation
 		)
 	}
 
@@ -50,7 +52,8 @@ enum SettingsPageLayout
 
 	static func scrollableDocument(
 		content stack: NSStackView,
-		columnWidth: ColumnWidth = .fixed
+		columnWidth: ColumnWidth = .fixed,
+		topInset: CGFloat = LayoutTokens.Connections.topInset
 	) -> NSScrollView
 	{
 		let scroll = NSScrollView()
@@ -78,7 +81,7 @@ enum SettingsPageLayout
 			),
 			stack.topAnchor.constraint(
 				equalTo: document.topAnchor,
-				constant: LayoutTokens.Connections.topInset
+				constant: topInset
 			),
 			stack.bottomAnchor.constraint(
 				equalTo: document.bottomAnchor,
@@ -120,7 +123,7 @@ enum SettingsPageLayout
 	static func message(_ text: String) -> NSTextField
 	{
 		let label = SettingsMessageLabel(wrappingLabelWithString: text)
-		label.font = AppKitFontResolver.font(TypographyTokens.Connections.caption)
+		label.setTypographyRole(TypographyTokens.Connections.caption)
 		label.textColor = AppKitColorTokens.settingsSecondaryText
 		label.isSelectable = true
 		label.isHidden = text.isEmpty
@@ -157,6 +160,7 @@ enum SettingsPageLayout
 	) -> NSView
 	{
 		let card = RemoteConnectionsCard()
+		card.isSettingsCard = true
 		let contents = AppKitLayout.verticalStack(
 			rows,
 			spacing: 0
@@ -201,7 +205,7 @@ enum SettingsPageLayout
 		let header = NSView()
 		let label = RemoteConnectionsLabel(
 			title,
-			role: TypographyTokens.Connections.section
+			role: TypographyTokens.Settings.section
 		)
 		label.translatesAutoresizingMaskIntoConstraints = false
 		header.addSubview(label)
@@ -222,13 +226,15 @@ enum SettingsPageLayout
 	static func row(
 		title: String,
 		detail: String?,
-		control: NSView
+		control: NSView,
+		presentation: SettingsControlRow.Presentation = .standard
 	) -> SettingsControlRow
 	{
 		SettingsControlRow(
 			title: title,
 			detail: detail,
-			control: control
+			control: control,
+			presentation: presentation
 		)
 	}
 

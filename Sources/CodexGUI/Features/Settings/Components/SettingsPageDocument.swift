@@ -4,6 +4,11 @@ import AppKit
 @MainActor
 final class SettingsPageDocument: NSView
 {
+	enum Presentation
+	{
+		case standard, form, editor
+	}
+
 	enum HeaderSpacing
 	{
 		case standard, catalog
@@ -18,12 +23,15 @@ final class SettingsPageDocument: NSView
 		subtitle: String? = nil,
 		subtitleView: NSView? = nil,
 		headerSpacing: HeaderSpacing = .standard,
-		columnWidth: SettingsPageLayout.ColumnWidth = .fixed
+		columnWidth: SettingsPageLayout.ColumnWidth = .fixed,
+		presentation: Presentation = .standard
 	)
 	{
 		let heading = DesktopLineBoxLabel(
 			title,
-			role: TypographyTokens.Connections.title
+			role: presentation == .editor ? TypographyTokens.Settings
+				.editorTitle : presentation == .form ? TypographyTokens.Settings
+				.formTitle : TypographyTokens.Connections.title
 		)
 		let headingContent: NSView
 		if let detail = subtitleView ?? subtitle.map(
@@ -56,9 +64,13 @@ final class SettingsPageDocument: NSView
 		self.init(
 			header: header,
 			sections: sections,
-			sectionGap: LayoutTokens.Connections.sectionGap,
-			titleGap: Self.titleGap(for: headerSpacing),
-			columnWidth: columnWidth
+			sectionGap: presentation != .standard ? LayoutTokens.Settings.formCardGap : LayoutTokens
+				.Connections.sectionGap,
+			titleGap: presentation == .editor ? LayoutTokens.Settings.editorTitleGap : Self
+				.titleGap(for: headerSpacing),
+			columnWidth: columnWidth,
+			topInset: presentation != .standard ? LayoutTokens.Settings.formTopInset : LayoutTokens
+				.Connections.topInset
 		)
 	}
 
@@ -93,7 +105,8 @@ final class SettingsPageDocument: NSView
 			sections: [SettingsPageLayout.card(rows: rows)],
 			sectionGap: 16,
 			titleGap: 16,
-			columnWidth: .fitsViewport
+			columnWidth: .fitsViewport,
+			topInset: LayoutTokens.Connections.topInset
 		)
 	}
 
@@ -102,7 +115,8 @@ final class SettingsPageDocument: NSView
 		sections: [NSView],
 		sectionGap: CGFloat,
 		titleGap: CGFloat,
-		columnWidth: SettingsPageLayout.ColumnWidth
+		columnWidth: SettingsPageLayout.ColumnWidth,
+		topInset: CGFloat
 	)
 	{
 		stack = AppKitLayout.verticalStack(
@@ -122,7 +136,8 @@ final class SettingsPageDocument: NSView
 		AppKitLayout.pin(
 			SettingsPageLayout.scrollableDocument(
 				content: stack,
-				columnWidth: columnWidth
+				columnWidth: columnWidth,
+				topInset: topInset
 			),
 			to: self,
 			inset: 0

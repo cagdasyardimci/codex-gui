@@ -250,6 +250,20 @@ enum MarkdownDiagramExport
 		{
 			return
 		}
+		save(
+			file,
+			in: window,
+			reportError: true
+		)
+	}
+
+	@discardableResult
+	static func save(
+		_ file: File,
+		in window: NSWindow,
+		reportError: Bool = false
+	) -> NSSavePanel
+	{
 		let panel = NSSavePanel()
 		panel.allowedContentTypes = [file.contentType]
 		panel.nameFieldStringValue = file.name
@@ -261,17 +275,37 @@ enum MarkdownDiagramExport
 			{
 				return
 			}
-			do
+			let data = file.data
+			Task
 			{
-				try file.data.write(
-					to: url,
-					options: .atomic
-				)
-			}
-			catch
-			{
-				NSAlert(error: error).beginSheetModal(for: window)
+				@MainActor [weak window] in
+				let result = await Task.detached(priority: .userInitiated)
+				{
+					[data, url] in
+					Result
+					{
+						try data.write(
+							to: url,
+							options: .atomic
+						)
+					}
+				}.value
+				if case let .failure(error) = result
+				{
+					if reportError, let window
+					{
+						_ = await NSAlert(error: error).beginSheetModal(for: window)
+					}
+					else
+					{
+						NSLog(
+							"Image export failed: %@",
+							error.localizedDescription
+						)
+					}
+				}
 			}
 		}
+		return panel
 	}
 }

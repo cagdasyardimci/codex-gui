@@ -4,6 +4,9 @@ extension LayoutTokens
 {
 	enum Settings
 	{
+		static let editorTitleGap: CGFloat = 12
+		static let formTopInset: CGFloat = 32
+		static let formCardGap: CGFloat = 16
 		static let sizeInputWidth: CGFloat = 64
 		static let sizeInputHeight: CGFloat = 28
 		static let modePreviewWidth: CGFloat = 80

@@ -18,6 +18,12 @@ Archive search must cover all loaded metadata, independently of row pagination. 
 
 Editors of external configuration files must preserve unsaved drafts on conflicts and require an explicit decision before replacing them. Catalog mutations must invalidate affected cached reads without silently discarding failed form drafts.
 
+## Appearance
+
+Font families are local preferences stored independently for Light and Dark appearance. In System mode, edits apply to the currently effective appearance. UI, content and code choices override the corresponding theme families while retaining the existing size and semantic-weight rules. Unset Content follows an explicit UI family before the theme fallback; an explicit Content choice remains independent. System restores theme inheritance; selecting a theme applies its font choices and clears that appearance's overrides. Color and size edits preserve font selections. Installed-family discovery and unavailable-family fallback belong to the [font resolver](../Sources/CodexGUI/App/Design/AppKitFontResolver.swift); retained-content refresh follows [interface styling](interface-styling.md#token-ownership-and-changes).
+
+Theme copy and export capture the appearance profile being edited when the action begins. A later mode change does not redirect an open export to another profile.
+
 ## Desktop notifications
 
 Notification timing, alert categories and sound are local preferences; macOS authorization is independent. Continue observing transitions while notifications are disabled so enabling them cannot replay old alerts. Recheck preferences after authorization and before foreground presentation.
