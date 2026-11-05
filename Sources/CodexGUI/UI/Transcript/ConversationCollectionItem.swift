@@ -18,7 +18,8 @@ final class CodeCopyButton: DesktopCopyButton, DesktopControlCursorProviding
 }
 
 @MainActor
-final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDelegate
+final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDelegate,
+	NSTextViewDelegate
 {
 	private static let rowSpacing = LayoutTokens.Transcript.rowSpacing
 	private static let replyActionSpacing = LayoutTokens.Transcript.replyActionSpacing
@@ -29,6 +30,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 
 	private let titleLabel = NSTextField(labelWithString: "")
 	private let bodyTextView = MarkdownTextView()
+	var onOpenFileReference: ((MarkdownFileReference) -> Void)?
 	private let messageContainer = NSView()
 	private let imageAttachmentsView = UserMessageImageAttachmentsView()
 	private var imageAttachmentCount = 0
@@ -69,6 +71,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		super.prepareForReuse()
 		removeCodeCopyButtons(startingAt: 0)
 		configuredEntryID = nil
+		bodyTextView.dismissExpandedImage()
 		onToggle = nil
 		content = nil
 		codeBlocks.removeAll()
@@ -117,11 +120,12 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 
 	private func configureMessageText()
 	{
-		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Transcript.title)
-		titleLabel.textColor = .secondaryLabelColor
+		titleLabel.setTypographyRole(TypographyTokens.Transcript.title)
+		titleLabel.textColor = AppKitColorTokens.secondaryText
 		titleLabel.lineBreakMode = .byTruncatingTail
 		titleLabel.heightAnchor.constraint(equalToConstant: Self.titleHeight).isActive = true
 
+		bodyTextView.delegate = self
 		bodyTextView.isEditable = false
 		bodyTextView.isSelectable = true
 		bodyTextView.isHorizontallyResizable = false
@@ -141,6 +145,22 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		// Keep the measured text height unless that temporary frame cannot fit it.
 		bodyHeightConstraint?.priority = NSLayoutConstraint.Priority(999)
 		bodyHeightConstraint?.isActive = true
+	}
+
+	func textView(
+		_ textView: NSTextView,
+		clickedOnLink link: Any,
+		at charIndex: Int
+	) -> Bool
+	{
+		guard let destination = (link as? URL)?.absoluteString ?? link as? String,
+				let reference = MarkdownFileReference(destination), let onOpenFileReference
+		else
+		{
+			return false
+		}
+		onOpenFileReference(reference)
+		return true
 	}
 
 	private func configureExpansionButton()
@@ -260,12 +280,9 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		let entryID = Data(entry.id.utf8)
 		if configuredEntryID != entryID
 		{
+			bodyTextView.dismissExpandedImage()
 			removeCodeCopyButtons(startingAt: 0)
 			configuredEntryID = entryID
-		}
-		if self.content !== content
-		{
-			bodyTextView.dismissExpandedImage()
 		}
 		self.content = content
 		self.onToggle = onToggle
@@ -702,15 +719,12 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				length: text.length
 			)
 			let paragraph = NSMutableParagraphStyle()
-			paragraph.lineSpacing = 2
+			paragraph.lineSpacing = TypographyTokens.Code.fallback.lineSpacing ?? 0
 			paragraph.lineBreakMode = .byCharWrapping
 			text.addAttributes(
 				[
-					.font: NSFont.monospacedSystemFont(
-						ofSize: 11,
-						weight: .regular
-					),
-					.foregroundColor: NSColor.secondaryLabelColor,
+					.font: AppKitFontResolver.font(TypographyTokens.Code.fallback),
+					.foregroundColor: AppKitColorTokens.secondaryText,
 					.paragraphStyle: paragraph,
 				],
 				range: range

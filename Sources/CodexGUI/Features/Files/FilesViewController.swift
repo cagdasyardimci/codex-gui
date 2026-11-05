@@ -145,7 +145,8 @@ final class FilesViewController: NSViewController
 		for button in [searchButton, navigatorButton]
 		{
 			NSLayoutConstraint.activate([
-				button.widthAnchor.constraint(equalToConstant: 28),
+				button.widthAnchor
+					.constraint(equalToConstant: ViewerToolbarGroup.Geometry.controlSize),
 				button.heightAnchor.constraint(equalTo: button.widthAnchor),
 			])
 		}
@@ -211,7 +212,8 @@ final class FilesViewController: NSViewController
 				equalTo: root.topAnchor,
 				constant: 8
 			),
-			toolbar.heightAnchor.constraint(equalToConstant: 34),
+			toolbar.heightAnchor
+				.constraint(equalToConstant: ViewerToolbarGroup.Geometry.actionHeight),
 		])
 
 		let split = ViewerNavigatorSplitView(
@@ -226,7 +228,7 @@ final class FilesViewController: NSViewController
 			split.trailingAnchor.constraint(equalTo: root.trailingAnchor),
 			split.topAnchor.constraint(
 				equalTo: toolbar.bottomAnchor,
-				constant: 2
+				constant: 8
 			),
 			split.bottomAnchor.constraint(equalTo: root.bottomAnchor),
 		])

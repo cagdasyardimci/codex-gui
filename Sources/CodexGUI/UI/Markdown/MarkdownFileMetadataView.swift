@@ -9,22 +9,27 @@ final class MarkdownFileMetadataView: NSView
 	private var keys: [NSTextField] = []
 	private var values: [[NSTextField]] = []
 	private var measuredWidth: CGFloat = 0
+	private var themeColorObservation: ThemeColorObservation?
 	private static let inset: CGFloat = 12
 	private static let rowGap: CGFloat = 6
-	private static let font = NSFont.monospacedSystemFont(
-		ofSize: 12,
-		weight: .regular
-	)
+	private static var font: NSFont
+	{
+		AppKitFontResolver.font(TypographyTokens.UI.caption)
+	}
 
 	init(entries: [MarkdownFileMetadata.Entry])
 	{
 		self.entries = entries
 		super.init(frame: .zero)
+		themeColorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshAppearance()
+		}
 		wantsLayer = true
 		layer?.cornerRadius = 8
 		layer?.borderWidth = 1
 		setAccessibilityLabel("Metadata")
-		heading.font = .systemFont(ofSize: 12)
+		heading.setTypographyRole(TypographyTokens.Files.metadataHeading)
 		heading.textColor = AppKitColorTokens.secondaryText
 		addSubview(heading)
 		for entry in entries
@@ -108,7 +113,7 @@ final class MarkdownFileMetadataView: NSView
 	private func label(_ text: String) -> NSTextField
 	{
 		let field = NSTextField(wrappingLabelWithString: text)
-		field.font = Self.font
+		field.setTypographyRole(TypographyTokens.UI.caption)
 		field.textColor = AppKitColorTokens.primaryText
 		field.isSelectable = true
 		field.lineBreakMode = .byWordWrapping
@@ -258,6 +263,18 @@ final class MarkdownFileMetadataView: NSView
 
 	private func refreshAppearance()
 	{
+		heading.textColor = AppKitColorTokens.secondaryText
+		for key in keys
+		{
+			key.textColor = AppKitColorTokens.secondaryText
+		}
+		for row in values
+		{
+			for field in row
+			{
+				field.textColor = AppKitColorTokens.primaryText
+			}
+		}
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
 			layer?.backgroundColor = AppKitColorTokens.chrome.cgColor

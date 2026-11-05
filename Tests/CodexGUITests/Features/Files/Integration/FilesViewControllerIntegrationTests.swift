@@ -408,7 +408,16 @@ struct FilesViewControllerIntegrationTests
 		})
 		#expect(rootLabel.alignment == .center)
 		#expect(abs(files.breadcrumb.bounds.width - files.breadcrumb.bounds.height) < 0.5)
-		#expect(files.breadcrumb.bounds.height == 34)
+		#expect(files.breadcrumb.bounds.height == 32)
+		let toolbar = try #require(files.breadcrumb.superview)
+		#expect(toolbar.bounds.height == 32)
+		let documentRect = files.document.view.convert(
+			files.document.view.bounds,
+			to: files.view
+		)
+		let documentTop = files.view.isFlipped ? documentRect.minY
+			: files.view.bounds.maxY - documentRect.maxY
+		#expect(documentTop == 48)
 		let rootLabelFrame = rootLabel.convert(
 			rootLabel.bounds,
 			to: files.breadcrumb
@@ -422,6 +431,14 @@ struct FilesViewControllerIntegrationTests
 			))
 			#expect(abs(button.bounds.width - button.bounds.height) < 0.5)
 			#expect(button.toolTip == label)
+			#expect(button.bounds.height == 28)
+			var ancestor = button.superview
+			while let parent = ancestor, !(parent is ViewerToolbarGroup)
+			{
+				ancestor = parent.superview
+			}
+			let group = try #require(ancestor as? ViewerToolbarGroup)
+			#expect(group.bounds.height == 32)
 		}
 	}
 

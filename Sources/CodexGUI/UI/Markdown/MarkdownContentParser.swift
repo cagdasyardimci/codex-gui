@@ -799,6 +799,15 @@ enum MarkdownContentParser
 						link.children,
 						style: inlineStyle
 					)
+					if let destination = link.destination,
+						let reference = MarkdownFileReference(destination),
+						let line = reference.line
+					{
+						append(
+							" (line \(line))",
+							style: inlineStyle
+						)
+					}
 				case let image as Image:
 					if let path = localImagePath(image), let source = sourceText(of: image)
 					{

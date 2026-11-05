@@ -37,7 +37,7 @@ final class ViewerFileTreeRow: NSTableCellView
 		super.init(frame: .zero)
 		wantsLayer = true
 		iconView.setAccessibilityElement(false)
-		nameLabel.font = .systemFont(ofSize: 13)
+		nameLabel.setTypographyRole(TypographyTokens.Files.treeRow)
 		nameLabel.lineBreakMode = .byTruncatingTail
 		nameLabel.cell?.usesSingleLineMode = true
 		nameLabel.setContentCompressionResistancePriority(
@@ -83,9 +83,10 @@ final class ViewerFileTreeRow: NSTableCellView
 		directoryPath = path
 		self.onToggle = onToggle
 		nameLabel.stringValue = name
-		nameLabel.textColor = secondary ? .secondaryLabelColor : .labelColor
+		nameLabel.textColor = secondary ? AppKitColorTokens.secondaryText : AppKitColorTokens
+			.primaryText
 		iconView.image = icon
-		iconView.contentTintColor = .secondaryLabelColor
+		iconView.contentTintColor = AppKitColorTokens.secondaryText
 		iconView.isHidden = icon == nil
 		disclosure.isHidden = !isDirectory
 		if isDirectory
@@ -119,7 +120,7 @@ final class ViewerFileTreeRow: NSTableCellView
 			expanded ? .chevronSmallDown : .chevronSmallRight,
 			size: ViewerFileTreeLayout.iconSize
 		)
-		disclosure.contentTintColor = .secondaryLabelColor
+		disclosure.contentTintColor = AppKitColorTokens.secondaryText
 		disclosure.setAccessibilityLabel("\(expanded ? "Collapse" : "Expand") \(directoryPath)")
 	}
 
@@ -222,7 +223,7 @@ final class ViewerFileTreeSelectionRow: NSTableRowView
 		)
 		AppKitColorTokens.canvas.setFill()
 		outline.fill()
-		NSColor.systemBlue.setStroke()
+		AppKitColorTokens.accentText.setStroke()
 		outline.lineWidth = 1
 		outline.stroke()
 	}

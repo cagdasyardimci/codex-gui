@@ -16,6 +16,7 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 	private let title = NSTextField(labelWithString: "")
 	private let reply = NSTextField(wrappingLabelWithString: "")
 	private var currentSummary: ConversationTurnSummary?
+	private var typographyObservation: TypographyObservation?
 	private var headerHeight: NSLayoutConstraint!
 	private var replyHeight: NSLayoutConstraint!
 	private(set) var cardHeight: CGFloat = 0
@@ -31,10 +32,17 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			width: Self.cardWidth,
 			height: 0
 		))
-		title.font = .systemFont(
-			ofSize: 13,
-			weight: .regular
-		)
+		typographyObservation = TypographyObservation(view: self)
+		{
+			[weak self] in
+			guard let self, let currentSummary = self.currentSummary
+			else
+			{
+				return
+			}
+			self.render(currentSummary)
+		}
+		title.setTypographyRole(TypographyTokens.TurnPreview.title)
 		title.maximumNumberOfLines = 1
 		title.lineBreakMode = .byTruncatingTail
 		title.cell?.wraps = false
@@ -56,8 +64,8 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			spacing: Self.contentSpacing
 		)
 		header.alignment = .top
-		reply.font = .systemFont(ofSize: 13)
-		reply.textColor = .secondaryLabelColor
+		reply.setTypographyRole(TypographyTokens.TurnPreview.reply)
+		reply.textColor = AppKitColorTokens.secondaryText
 		reply.isSelectable = true
 		reply.allowsEditingTextAttributes = true
 		reply.maximumNumberOfLines = 3
@@ -116,17 +124,21 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 
 	func render(_ summary: ConversationTurnSummary)
 	{
+		let titleEditor = title.currentEditor() as? NSTextView
+		let replyEditor = reply.currentEditor() as? NSTextView
+		let titleSelection = titleEditor?.selectedRange()
+		let replySelection = replyEditor?.selectedRange()
 		currentSummary = summary
 		title.isHidden = false
 		reply.isHidden = false
 		bookmark.isHidden = false
 		setAccessibilityLabel("Turn preview")
-		let titleFont = title.font ?? NSFont.systemFont(ofSize: 13)
+		let titleFont = title.font ?? AppKitFontResolver.font(TypographyTokens.TurnPreview.title)
 		let titleParagraph = NSMutableParagraphStyle()
 		titleParagraph.lineBreakMode = .byTruncatingTail
 		let titleAttributes: [NSAttributedString.Key: Any] = [
 			.font: titleFont,
-			.foregroundColor: NSColor.labelColor,
+			.foregroundColor: AppKitColorTokens.primaryText,
 			.paragraphStyle: titleParagraph,
 		]
 		title.attributedStringValue = TurnSummaryLinkPresentation.styledTitle(
@@ -134,11 +146,11 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			attributes: titleAttributes
 		)
 		let paragraph = NSMutableParagraphStyle()
-		paragraph.lineSpacing = 4
+		paragraph.lineSpacing = TypographyTokens.TurnPreview.reply.lineSpacing ?? 0
 		paragraph.lineBreakMode = .byWordWrapping
 		let attributes: [NSAttributedString.Key: Any] = [
-			.font: NSFont.systemFont(ofSize: 13),
-			.foregroundColor: NSColor.secondaryLabelColor,
+			.font: AppKitFontResolver.font(TypographyTokens.TurnPreview.reply),
+			.foregroundColor: AppKitColorTokens.secondaryText,
 			.paragraphStyle: paragraph,
 		]
 		let width = Self.cardWidth - 2 * Self.inset
@@ -185,6 +197,16 @@ final class TurnSummaryPreview: DesktopHoverPreviewSurface
 			ceil(measuredHeight(display))
 		)
 		reply.attributedStringValue = display
+		if let titleEditor, let titleSelection,
+			NSMaxRange(titleSelection) <= titleEditor.string.utf16.count
+		{
+			titleEditor.setSelectedRange(titleSelection)
+		}
+		if let replyEditor, let replySelection,
+			NSMaxRange(replySelection) <= replyEditor.string.utf16.count
+		{
+			replyEditor.setSelectedRange(replySelection)
+		}
 		loadWebLinkFavicons()
 		replyHeight.constant = height
 		cardHeight = 2 * Self.inset + headerHeight.constant + Self.contentSpacing + height

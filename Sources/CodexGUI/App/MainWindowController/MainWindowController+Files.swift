@@ -4,6 +4,30 @@ extension MainWindowController
 {
 	func configureFilesIntegration()
 	{
+		conversation.transcript.onOpenFileReference =
+		{
+			[weak self] reference in
+			guard let self, let root = self.currentFileProjectPath
+			else
+			{
+				return
+			}
+			let path = URL(fileURLWithPath: reference.path).standardizedFileURL.path
+			let prefix = root.hasSuffix("/") ? root : root + "/"
+			guard path.hasPrefix(prefix)
+			else
+			{
+				return
+			}
+			self.openFilesToolTab()
+			self.files.open(
+				FileLocation(
+					root: root,
+					relativePath: String(path.dropFirst(prefix.count))
+				),
+				line: reference.line
+			)
+		}
 		files.captureAttachmentReceiver =
 		{
 			[weak conversation = self.conversation] in

@@ -1,18 +1,17 @@
 import AppKit
 
 @MainActor
-final class FileBreadcrumbView: DesktopSurface
+final class FileBreadcrumbView: NSView
 {
-	private enum Geometry
-	{
-		static let height: CGFloat = 34
-	}
-
 	var onNavigate: ((FileLocation) -> Void)?
 	var onOpenFile: ((FileLocation) -> Void)?
 	var onRequestDirectory: ((FileLocation) -> Void)?
 
 	private let scroll = NSScrollView()
+	private lazy var capsule = ViewerToolbarGroup(
+		scroll,
+		presentation: .actions
+	)
 	private let pathContent = NSView()
 	private let stack = NSStackView()
 	private var state = FileViewerState()
@@ -21,28 +20,20 @@ final class FileBreadcrumbView: DesktopSurface
 	private var menuGeneration = -1
 	private var viewportWidth: CGFloat = 0
 	private var revealLastSegment = true
+	private var colorObservation: ThemeColorObservation?
 
-	init(frame frameRect: NSRect = .zero)
+	override init(frame frameRect: NSRect = .zero)
 	{
-		super.init(
-			AppKitColorTokens.canvas,
-			cornerRadius: Geometry.height / 2,
-			bordered: true,
-			borderColor: AppKitColorTokens.subtleEdge,
-			shadows: [ShadowTokens.fileViewerControl]
-		)
-		frame = frameRect
+		super.init(frame: frameRect)
+		colorObservation = ThemeColorObservation
+		{
+			[weak self] in self?.refreshSegmentColors()
+		}
 		stack.orientation = .horizontal
 		stack.alignment = .centerY
 		stack.distribution = .fill
 		stack.spacing = 6
 		stack.translatesAutoresizingMaskIntoConstraints = false
-		stack.edgeInsets = NSEdgeInsets(
-			top: 0,
-			left: 10,
-			bottom: 0,
-			right: 10
-		)
 		pathContent.addSubview(stack)
 		// Rebuilding can temporarily require more space than the old document frame.
 		let preferredWidth = stack.widthAnchor.constraint(equalTo: pathContent.widthAnchor)
@@ -50,7 +41,7 @@ final class FileBreadcrumbView: DesktopSurface
 		NSLayoutConstraint.activate([
 			stack.leadingAnchor.constraint(equalTo: pathContent.leadingAnchor),
 			stack.topAnchor.constraint(equalTo: pathContent.topAnchor),
-			stack.heightAnchor.constraint(equalToConstant: Geometry.height),
+			stack.heightAnchor.constraint(equalToConstant: ViewerToolbarGroup.Geometry.controlSize),
 			preferredWidth,
 		])
 		scroll.documentView = pathContent
@@ -61,7 +52,7 @@ final class FileBreadcrumbView: DesktopSurface
 		scroll.drawsBackground = false
 		scroll.horizontalScrollElasticity = .allowed
 		AppKitLayout.pin(
-			scroll,
+			capsule,
 			to: self,
 			inset: 0
 		)
@@ -69,10 +60,46 @@ final class FileBreadcrumbView: DesktopSurface
 		rebuild()
 	}
 
+	override func viewDidChangeEffectiveAppearance()
+	{
+		super.viewDidChangeEffectiveAppearance()
+		refreshSegmentColors()
+	}
+
+	private func refreshSegmentColors()
+	{
+		effectiveAppearance.performAsCurrentDrawingAppearance
+		{
+			let buttons = stack.arrangedSubviews.compactMap
+			{
+				$0 as? DesktopAttributedTitleButton
+			}
+			for (index, button) in buttons.enumerated()
+			{
+				let title = NSMutableAttributedString(attributedString: button.attributedTitle)
+				title.addAttribute(
+					.foregroundColor,
+					value: index == buttons.count - 1 ? AppKitColorTokens
+						.primaryText : AppKitColorTokens.secondaryText,
+					range: NSRange(
+						location: 0,
+						length: title.length
+					)
+				)
+				button.attributedTitle = title
+			}
+			if let root = stack.arrangedSubviews.first as? NSTextField
+			{
+				root.textColor = AppKitColorTokens.primaryText
+			}
+		}
+	}
+
 	override func layout()
 	{
 		super.layout()
-		// Resolve new segment constraints before measuring the scroll document.
+		// Resolve the capsule and segments before measuring the retained scroll document.
+		capsule.layoutSubtreeIfNeeded()
 		stack.layoutSubtreeIfNeeded()
 		let segmentWidth = stack.arrangedSubviews.reduce(
 			stack.edgeInsets.left + stack.edgeInsets.right
@@ -125,10 +152,10 @@ final class FileBreadcrumbView: DesktopSurface
 	{
 		NSSize(
 			width: max(
-				Geometry.height,
-				stack.fittingSize.width
+				ViewerToolbarGroup.Geometry.actionHeight,
+				stack.fittingSize.width + ViewerToolbarGroup.Geometry.actionInset * 2
 			),
-			height: Geometry.height
+			height: ViewerToolbarGroup.Geometry.actionHeight
 		)
 	}
 
@@ -170,6 +197,12 @@ final class FileBreadcrumbView: DesktopSurface
 
 	private func rebuild()
 	{
+		stack.edgeInsets = location == nil ? NSEdgeInsetsZero : NSEdgeInsets(
+			top: 0,
+			left: 8,
+			bottom: 0,
+			right: 4
+		)
 		defer
 		{
 			revealLastSegment = true
@@ -186,7 +219,7 @@ final class FileBreadcrumbView: DesktopSurface
 		{
 			let label = NSTextField(labelWithString: "/")
 			label.alignment = .center
-			label.font = .systemFont(ofSize: 15)
+			label.setTypographyRole(TypographyTokens.Files.location)
 			label.textColor = AppKitColorTokens.primaryText
 			label.setAccessibilityLabel("Workspace root")
 			stack.addArrangedSubview(label)
@@ -211,7 +244,7 @@ final class FileBreadcrumbView: DesktopSurface
 				)
 				siblings.isBordered = false
 				siblings.image = FileViewerIcons.image(.chevronRight)
-				siblings.contentTintColor = .tertiaryLabelColor
+				siblings.contentTintColor = AppKitColorTokens.mutedText
 				siblings.tag = index - 1
 				siblings.setAccessibilityLabel("Browse siblings of "
 					+ (index == 1 ? rootName : names[index - 2]))
@@ -223,14 +256,13 @@ final class FileBreadcrumbView: DesktopSurface
 				action: #selector(activateSegment(_:))
 			)
 			button.isBordered = false
-			button.font = .systemFont(
-				ofSize: 13,
-				weight: index == names.count ? .medium : .regular
-			)
+			button
+				.setTypographyRole(TypographyTokens.Files.breadcrumb(current: index == names.count))
 			button.attributedTitle = NSAttributedString(
 				string: button.title,
 				attributes: [
-					.font: button.font ?? NSFont.systemFont(ofSize: 13),
+					.font: button.font ?? AppKitFontResolver
+						.font(TypographyTokens.Files.breadcrumb(current: false)),
 					.foregroundColor: index == names.count
 						? AppKitColorTokens.primaryText : AppKitColorTokens.secondaryText,
 				]

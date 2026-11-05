@@ -2,7 +2,7 @@ import AppKit
 
 /// Native toolbar actions shared by Files and Changes; feature owners supply action state.
 @MainActor
-final class ViewerToolbarButton: NSButton
+final class ViewerToolbarButton: DesktopHoverButton
 {
 	enum Presentation
 	{
@@ -13,7 +13,6 @@ final class ViewerToolbarButton: NSButton
 	{
 		didSet
 		{
-			focusRingType = presentation == .grouped ? .none : .default
 			updateShadow()
 			invalidateIntrinsicContentSize()
 			needsDisplay = true
@@ -34,20 +33,26 @@ final class ViewerToolbarButton: NSButton
 		)
 		control.presentation = .grouped
 		control.imagePosition = .imageOnly
-		control.contentTintColor = .secondaryLabelColor
+		control.contentTintColor = AppKitColorTokens.secondaryText
 		control.toolTip = title
 		control.setAccessibilityLabel(title)
 		NSLayoutConstraint.activate([
-			control.widthAnchor.constraint(equalToConstant: 28),
-			control.heightAnchor.constraint(equalToConstant: 28)
+			control.widthAnchor
+				.constraint(equalToConstant: ViewerToolbarGroup.Geometry.controlSize),
+			control.heightAnchor
+				.constraint(equalToConstant: ViewerToolbarGroup.Geometry.controlSize)
 		])
 		return control
 	}
 
 	private let shadowLayer = CALayer()
-	private var cornerRadius: CGFloat?
+	private var controlCornerRadius: CGFloat?
 	{
 		presentation == .rootSelector ? 9 : nil
+	}
+	override var keyboardFocusCornerRadius: CGFloat
+	{
+		controlCornerRadius ?? bounds.height / 2
 	}
 	var showsSelection = false
 	var trailingImage: NSImage?
@@ -76,9 +81,10 @@ final class ViewerToolbarButton: NSButton
 		if presentation == .grouped
 		{
 			return NSSize(
-				width: title.isEmpty ? 28 : super.intrinsicContentSize.width + 16
+				width: title.isEmpty ? ViewerToolbarGroup.Geometry.controlSize
+					: super.intrinsicContentSize.width + 16
 					+ (trailingImage == nil ? 0 : 16),
-				height: 28
+				height: ViewerToolbarGroup.Geometry.controlSize
 			)
 		}
 		return NSSize(
@@ -91,6 +97,7 @@ final class ViewerToolbarButton: NSButton
 	override init(frame frameRect: NSRect)
 	{
 		super.init(frame: frameRect)
+		usesThemedKeyboardFocus = true
 		cell = ViewerToolbarButtonCell(textCell: "")
 		wantsLayer = true
 		layer?.insertSublayer(
@@ -98,7 +105,7 @@ final class ViewerToolbarButton: NSButton
 			at: 0
 		)
 		isBordered = false
-		font = .systemFont(ofSize: 13)
+		self.setTypographyRole(TypographyTokens.Toolbar.control)
 		imagePosition = .imageLeading
 		imageScaling = .scaleProportionallyDown
 		setContentCompressionResistancePriority(
@@ -137,41 +144,55 @@ final class ViewerToolbarButton: NSButton
 			ShadowTokens.fileViewerControl,
 			to: shadowLayer,
 			in: self,
-			cornerRadius: cornerRadius ?? bounds.height / 2
+			cornerRadius: controlCornerRadius ?? bounds.height / 2
 		)
 	}
 
-	override func draw(_ dirtyRect: NSRect)
+	override func drawBackground()
 	{
 		let selected = showsSelection && state == .on
+		let edgeWidth: CGFloat = selected ? 1 / (window?.backingScaleFactor ?? 1) : 1
 		let rect = bounds.insetBy(
-			dx: 0.5,
-			dy: 0.5
+			dx: edgeWidth / 2,
+			dy: edgeWidth / 2
 		)
-		let radius = cornerRadius ?? rect.height / 2
+		let radius = controlCornerRadius ?? rect.height / 2
 		let path = NSBezierPath(
 			roundedRect: rect,
 			xRadius: radius,
 			yRadius: radius
 		)
-		if presentation != .grouped || selected || isHighlighted
+		let active = isEnabled && (isHighlighted || isHovered)
+		if presentation != .grouped || selected || active
 		{
-			let fill = selected ? AppKitColorTokens
-				.viewerControlSelection(active: isHighlighted) : AppKitColorTokens
-				.canvas
-			(isHighlighted ? AppKitColorTokens.rowHighlight : fill).setFill()
+			let fill = selected ? AppKitColorTokens.viewerControlSelection(active: active) :
+				active ? hoverBackgroundColor : AppKitColorTokens.controlSurface
+			fill.setFill()
 			path.fill()
 		}
-		if presentation != .grouped
+		if selected
+		{
+			AppKitColorTokens.viewerControlSelectionEdge.setStroke()
+			path.lineWidth = edgeWidth
+			path.stroke()
+		}
+		else if presentation != .grouped
 		{
 			AppKitColorTokens.subtleEdge.setStroke()
 			path.lineWidth = 1
 			path.stroke()
 		}
+	}
+
+	override func draw(_ dirtyRect: NSRect)
+	{
+		let selected = showsSelection && state == .on
 		contentTintColor = isEnabled
-			? (selected ? .systemBlue : (presentation == .grouped && title.isEmpty
+			?
+			(selected ? AppKitColorTokens
+				.viewerControlSelectedText : (presentation == .grouped && title.isEmpty
 					? AppKitColorTokens.secondaryText : AppKitColorTokens.primaryText)) :
-			.disabledControlTextColor
+			AppKitColorTokens.disabledText
 		super.draw(dirtyRect)
 	}
 }
@@ -220,7 +241,8 @@ private final class ViewerToolbarButtonCell: NSButtonCell
 					width: 12,
 					height: 12
 				),
-				tint: button.isEnabled ? AppKitColorTokens.primaryText : .disabledControlTextColor
+				tint: button.isEnabled ? AppKitColorTokens.primaryText : AppKitColorTokens
+					.disabledText
 			)
 		}
 	}

@@ -353,6 +353,17 @@ extension TranscriptViewController
 		{
 			return
 		}
+		item.onOpenFileReference =
+		{
+			[weak self] reference in
+			guard let self, self.renderedContext == context,
+					self.requestedContext == context
+			else
+			{
+				return
+			}
+			self.onOpenFileReference?(reference)
+		}
 		item.configure(
 			entry,
 			content: content,

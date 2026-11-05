@@ -1,5 +1,8 @@
 import AppKit
 
+// The orange Swift mark is brand artwork; template search masks receive their final tint
+// from callers.
+
 /// File artwork shared by workspace browsing and repository comparisons.
 @MainActor
 enum WorkspaceFileIcon

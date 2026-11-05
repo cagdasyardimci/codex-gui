@@ -10,7 +10,7 @@ private final class FileDocumentRootView: NSView
 
 	override func draw(_ dirtyRect: NSRect)
 	{
-		NSColor.textBackgroundColor.setFill()
+		AppKitColorTokens.editorSurface.setFill()
 		// AppKit may request drawing beyond bounds; never cover sibling toolbar controls.
 		NSBezierPath(rect: bounds.intersection(dirtyRect)).fill()
 	}
@@ -19,16 +19,6 @@ private final class FileDocumentRootView: NSView
 	{
 		super.viewDidChangeEffectiveAppearance()
 		needsDisplay = true
-	}
-}
-
-/// A flipped document keeps short Markdown at the scroll view's top edge.
-@MainActor
-private final class FileMarkdownPreviewView: RichFilePreviewView
-{
-	override var isFlipped: Bool
-	{
-		true
 	}
 }
 
@@ -498,6 +488,8 @@ final class FileDocumentViewController: NSViewController
 			show(emptyContent)
 			return
 		}
+		previewContainer.edgeInsets.top = kind == .image ? 0 : LayoutTokens.FileMarkdown
+			.contentInset
 		if previewDocumentID == document.id,
 			previewBytes == content,
 			preview != nil
@@ -561,7 +553,7 @@ final class FileDocumentViewController: NSViewController
 		let preview: RichFilePreviewView
 		if kind == .markdown
 		{
-			preview = FileMarkdownPreviewView(
+			preview = RichFilePreviewView(
 				kind: kind,
 				imageBaseDirectory: location.fileURL.deletingLastPathComponent(),
 				markdownImageLoader: imageLoader,
@@ -775,6 +767,7 @@ final class FileDocumentViewController: NSViewController
 	{
 		loadViewIfNeeded()
 		let menu = NSMenu(title: "Open")
+		menu.setTypographyRole(TypographyTokens.MenuRow.title)
 		guard let document = current
 		else
 		{

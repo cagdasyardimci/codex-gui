@@ -4,6 +4,13 @@ import AppKit
 @MainActor
 final class ViewerToolbarGroup: DesktopSurface
 {
+	enum Geometry
+	{
+		static let controlSize: CGFloat = 28
+		static let actionInset: CGFloat = 2
+		static let actionHeight = controlSize + actionInset * 2
+	}
+
 	enum Presentation
 	{
 		case actions, revisions, tools, tab, banner
@@ -22,7 +29,8 @@ final class ViewerToolbarGroup: DesktopSurface
 		switch presentation
 		{
 		case .actions:
-			radius = 17; horizontalInset = 3; verticalInset = 3
+			radius = Geometry.actionHeight / 2
+			horizontalInset = Geometry.actionInset; verticalInset = Geometry.actionInset
 		case .revisions:
 			radius = 20; horizontalInset = 10; verticalInset = 4
 		case .tools:
@@ -33,7 +41,7 @@ final class ViewerToolbarGroup: DesktopSurface
 			radius = 20; horizontalInset = 10; verticalInset = 10
 		}
 		super.init(
-			capsule ? AppKitColorTokens.canvas : AppKitColorTokens.elevated,
+			capsule ? AppKitColorTokens.controlSurface : AppKitColorTokens.elevated,
 			cornerRadius: radius,
 			bordered: capsule,
 			borderColor: AppKitColorTokens.subtleEdge,
