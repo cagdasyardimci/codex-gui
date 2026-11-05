@@ -7,11 +7,12 @@ final class SettingsMCPForm: NSView
 	var onSave: ((String, [String: Any]) -> Void)?
 	private let name = SettingsFormField(
 		title: "Name",
-		presentation: .nativeRounded
+		placeholder: "MCP server name",
+		layout: .cardRow
 	)
 	private let endpoint = SettingsFormField(
 		title: "Command or URL",
-		presentation: .nativeRounded
+		layout: .cardRow
 	)
 	private let arguments = SettingsFormEntriesField(
 		format: .lines,
@@ -26,15 +27,17 @@ final class SettingsMCPForm: NSView
 	private let environmentPassthrough = SettingsFormEntriesField(
 		format: .lines,
 		item: "passthrough variable",
-		addTitle: "Add variable"
+		addTitle: "Add variable",
+		placeholder: ""
 	)
 	private let workingDirectory = SettingsFormField(
 		title: "Working directory",
-		presentation: .nativeRounded
+		placeholder: "~/code",
+		layout: .cardRow
 	)
 	private let bearerTokenEnvironmentVariable = SettingsFormField(
 		title: "Bearer token env var",
-		presentation: .nativeRounded
+		layout: .cardRow
 	)
 	private let headers = SettingsFormEntriesField(
 		format: .pairs,
@@ -101,11 +104,11 @@ final class SettingsMCPForm: NSView
 		}
 		fields.orientation = .vertical
 		fields.alignment = .leading
-		fields.spacing = 16
+		fields.spacing = 6
 		AppKitLayout.pin(
 			fields,
 			to: self,
-			inset: 12
+			inset: 0
 		)
 		save.target = self
 		save.action = #selector(submit)
@@ -135,13 +138,6 @@ final class SettingsMCPForm: NSView
 		{
 			fields.removeArrangedSubview(view); view.removeFromSuperview()
 		}
-		let back = DesktopStyledButton(
-			title: "Back",
-			presentation: .secondary
-		)
-		back.target = self
-		back.action = #selector(cancel)
-		fields.addArrangedSubview(back)
 		let tabs = SettingsManagementTabs(
 			titles: ["STDIO", "Streamable HTTP"],
 			selected: transport == "HTTP" ? "Streamable HTTP" : "STDIO"
@@ -163,66 +159,85 @@ final class SettingsMCPForm: NSView
 			endpoint.stringValue = ""
 			buildFields()
 		}
-		fields.addArrangedSubview(tabs)
+		var identity: [NSView] = []
 		addField(
 			"Name",
-			field: name
+			field: name,
+			in: &identity
 		)
+		identity.append(SettingsPageLayout.row(
+			title: "Type",
+			detail: nil,
+			control: tabs,
+			presentation: .form
+		))
+		addGroup(identity)
+		var configuration: [NSView] = []
+		endpoint.input?.placeholderString = transport == "HTTP"
+			? "https://example.com/mcp" : "openai-dev-mcp serve-sqlite"
+		endpoint.input?.setAccessibilityLabel(transport == "HTTP" ? "URL" : "Command to launch")
 		addField(
 			transport == "HTTP" ? "URL" : "Command to launch",
-			field: endpoint
+			field: endpoint,
+			in: &configuration
 		)
 		if transport == "HTTP"
 		{
 			addField(
 				"Bearer token env var",
-				field: bearerTokenEnvironmentVariable
+				field: bearerTokenEnvironmentVariable,
+				in: &configuration
 			)
 			addField(
 				"Headers",
-				field: headers
+				field: headers,
+				in: &configuration
 			)
 			addField(
 				"Headers from environment variables",
-				field: environmentHeaders
+				field: environmentHeaders,
+				in: &configuration
 			)
 		}
 		else
 		{
 			addField(
 				"Arguments",
-				field: arguments
+				field: arguments,
+				in: &configuration
 			)
 			addField(
 				"Environment variables",
-				field: environment
+				field: environment,
+				in: &configuration
 			)
 			addField(
 				"Environment variable passthrough",
-				field: environmentPassthrough
+				field: environmentPassthrough,
+				in: &configuration
 			)
 			addField(
 				"Working directory",
-				field: workingDirectory
+				field: workingDirectory,
+				in: &configuration
 			)
 		}
-		let cancel = DesktopStyledButton(
-			title: "Cancel",
-			presentation: .secondary
+		addGroup(configuration)
+		let actions = AppKitLayout.horizontalStack(
+			[NSView(), save],
+			spacing: 0
 		)
-		cancel.target = self
-		cancel.action = #selector(self.cancel)
-		cancel.keyEquivalent = "\u{1b}"
-		let actions = NSStackView(views: [cancel, save])
-		actions.orientation = .horizontal
-		actions.spacing = 8
 		fields.addArrangedSubview(actions)
+		let width = actions.widthAnchor.constraint(equalTo: fields.widthAnchor)
+		width.isActive = true
+		fieldWidths.append(width)
 		validate()
 	}
 
 	private func addField(
 		_ title: String,
-		field: NSView
+		field: NSView,
+		in group: inout [NSView]
 	)
 	{
 		let component: SettingsFormField
@@ -235,11 +250,18 @@ final class SettingsMCPForm: NSView
 		{
 			component = SettingsFormField(
 				title: title,
-				content: field
+				content: field,
+				layout: .cardRow
 			)
 		}
-		fields.addArrangedSubview(component)
-		let width = component.widthAnchor.constraint(equalTo: fields.widthAnchor)
+		group.append(component)
+	}
+
+	private func addGroup(_ rows: [NSView])
+	{
+		let card = SettingsPageLayout.card(rows: rows)
+		fields.addArrangedSubview(card)
+		let width = card.widthAnchor.constraint(equalTo: fields.widthAnchor)
 		width.isActive = true
 		fieldWidths.append(width)
 	}
@@ -282,7 +304,7 @@ final class SettingsMCPForm: NSView
 		{
 		}
 	}
-	@objc private func cancel()
+	override func cancelOperation(_ sender: Any?)
 	{
 		onCancel?()
 	}

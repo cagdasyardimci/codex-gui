@@ -15,6 +15,10 @@ final class SettingsManagementTabs: NSStackView
 	{
 		super.init(frame: .zero)
 		orientation = .horizontal
+		setContentCompressionResistancePriority(
+			.required,
+			for: .horizontal
+		)
 		spacing = 4
 		for title in titles
 		{
@@ -35,8 +39,27 @@ final class SettingsManagementTabs: NSStackView
 		}
 		select(title: selected)
 	}
+	override var intrinsicContentSize: NSSize
+	{
+		NSSize(
+			width: buttons
+				.reduce(0)
+				{
+					$0 + $1.button.intrinsicContentSize.width
+				} + spacing * CGFloat(max(
+					0,
+					buttons.count - 1
+				)),
+			height: buttons.map
+			{
+				$0.button.intrinsicContentSize.height
+			}.max() ?? 0
+		)
+	}
+
 	func select(title: String)
 	{
+		invalidateIntrinsicContentSize()
 		for (id, button) in buttons
 		{
 			button.presentation = .tab(selected: id == title)

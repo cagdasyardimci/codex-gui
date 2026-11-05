@@ -25,20 +25,24 @@ final class SettingsFormEntriesField: NSStackView
 	var onChange: (() -> Void)?
 	private let format: Format
 	private let item: String
+	private let placeholder: String?
 	private let add: DesktopActionButton
 	private var rows: [Row] = []
+	private var hasImplicitEmptyRow = true
 
 	init(
 		format: Format,
 		item: String,
-		addTitle: String
+		addTitle: String,
+		placeholder: String? = nil
 	)
 	{
 		self.format = format
 		self.item = item
+		self.placeholder = placeholder
 		add = DesktopActionButton(
 			title: addTitle,
-			presentation: .secondary
+			presentation: .formAdd
 		)
 		super.init(frame: .zero)
 		orientation = .vertical
@@ -48,7 +52,9 @@ final class SettingsFormEntriesField: NSStackView
 		{
 			[weak self] in self?.addEntry()
 		}
+		add.symbol = .plus
 		addArrangedSubview(add)
+		add.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
 		stringValue = ""
 	}
 
@@ -102,6 +108,7 @@ final class SettingsFormEntriesField: NSStackView
 					second: String(line[line.index(after: split)...])
 				)
 			}
+			hasImplicitEmptyRow = entries.isEmpty
 			rebuild(entries.isEmpty
 				? [Entry(
 					first: "",
@@ -132,11 +139,20 @@ final class SettingsFormEntriesField: NSStackView
 		let row = SettingsFormEntryRow(
 			firstValue: entry.first,
 			secondValue: entry.second,
-			item: item
+			item: item,
+			placeholder: placeholder
 		)
 		row.onChange =
 		{
-			[weak self] in self?.onChange?()
+			[weak self] in
+			guard let self
+			else
+			{
+				return
+			}
+			hasImplicitEmptyRow = false
+			updateRemoveButtons()
+			onChange?()
 		}
 		row.onRemove =
 		{
@@ -170,13 +186,14 @@ final class SettingsFormEntriesField: NSStackView
 		{
 			row.view.updatePosition(
 				index + 1,
-				canRemove: rows.count > 1
+				canRemove: rows.count > 1 || !hasImplicitEmptyRow
 			)
 		}
 	}
 
 	private func addEntry()
 	{
+		hasImplicitEmptyRow = false
 		append(Entry(
 			first: "",
 			second: format == .pairs ? "" : nil
@@ -187,7 +204,7 @@ final class SettingsFormEntriesField: NSStackView
 
 	private func removeEntry(at index: Int)
 	{
-		guard rows.count > 1, rows.indices.contains(index)
+		guard rows.indices.contains(index), rows.count > 1 || !hasImplicitEmptyRow
 		else
 		{
 			return
@@ -196,6 +213,14 @@ final class SettingsFormEntriesField: NSStackView
 		row.width.isActive = false
 		removeArrangedSubview(row.view)
 		row.view.removeFromSuperview()
+		if rows.isEmpty
+		{
+			hasImplicitEmptyRow = true
+			append(Entry(
+				first: "",
+				second: format == .pairs ? "" : nil
+			))
+		}
 		updateRemoveButtons()
 		onChange?()
 	}

@@ -4,6 +4,10 @@ import AppKit
 @MainActor
 final class SettingsFormField: NSView, NSTextFieldDelegate
 {
+	enum Layout
+	{
+		case standard, cardRow
+	}
 	var onChange: ((String) -> Void)?
 	var onEndEditing: ((String) -> Void)?
 	let input: SettingsFormTextField?
@@ -76,17 +80,23 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		placeholder: String? = nil,
 		accessibilityLabel: String? = nil,
 		presentation: SettingsFormTextField.Presentation = .outlined,
-		showsTitle: Bool = true
+		leadingIcon: DesktopIcon? = nil,
+		showsTitle: Bool = true,
+		layout: Layout = .standard
 	)
 	{
-		let field = SettingsFormTextField(presentation: presentation)
+		let field = SettingsFormTextField(
+			presentation: presentation,
+			leadingIcon: leadingIcon
+		)
 		field.placeholderString = placeholder ?? title
 		field.setAccessibilityLabel(accessibilityLabel ?? title)
 		self.init(
 			title: title,
 			detail: detail,
 			content: field,
-			showsTitle: showsTitle
+			showsTitle: showsTitle,
+			layout: layout
 		)
 	}
 
@@ -94,7 +104,8 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		title: String,
 		detail: String? = nil,
 		content: NSView,
-		showsTitle: Bool = true
+		showsTitle: Bool = true,
+		layout: Layout = .standard
 	)
 	{
 		self.content = content
@@ -102,10 +113,13 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		titleLabel = NSTextField(labelWithString: title)
 		detailLabel = SettingsMessageLabel(wrappingLabelWithString: detail ?? "")
 		super.init(frame: .zero)
-		titleLabel.font = AppKitFontResolver.font(TypographyTokens.Connections.body)
-		titleLabel.textColor = AppKitColorTokens.settingsSecondaryText
+		titleLabel
+			.setTypographyRole(layout == .cardRow ? TypographyTokens.Text.control : TypographyTokens
+				.Connections.body)
+		titleLabel.textColor = layout == .cardRow ? AppKitColorTokens
+			.settingsPrimaryText : AppKitColorTokens.settingsSecondaryText
 		titleLabel.isHidden = !showsTitle
-		detailLabel.font = .systemFont(ofSize: 12)
+		detailLabel.setTypographyRole(TypographyTokens.Settings.formDescription)
 		detailLabel.textColor = AppKitColorTokens.settingsSecondaryText
 		detailLabel.isHidden = (detail ?? "").isEmpty
 		let stack = AppKitLayout.verticalStack(
@@ -115,7 +129,7 @@ final class SettingsFormField: NSView, NSTextFieldDelegate
 		AppKitLayout.pin(
 			stack,
 			to: self,
-			inset: 0
+			inset: layout == .cardRow ? 12 : 0
 		)
 		for view in [titleLabel, detailLabel, content]
 		{

@@ -6,10 +6,10 @@ final class SettingsFormEntryRow: NSView, NSTextFieldDelegate
 {
 	var onChange: (() -> Void)?
 	var onRemove: (() -> Void)?
-	private let firstInput = SettingsFormTextField(presentation: .nativeRounded)
+	private let firstInput = SettingsFormTextField(presentation: .outlined)
 	private let secondInput: SettingsFormTextField?
 	private let remove = DesktopActionButton(
-		icon: .xCrossed,
+		icon: .trash,
 		label: "Remove entry",
 		action:
 		{
@@ -29,19 +29,23 @@ final class SettingsFormEntryRow: NSView, NSTextFieldDelegate
 	init(
 		firstValue: String,
 		secondValue: String?,
-		item: String
+		item: String,
+		placeholder: String? = nil
 	)
 	{
 		self.item = item
 		secondInput = secondValue.map
 		{
-			_ in SettingsFormTextField(presentation: .nativeRounded)
+			_ in SettingsFormTextField(presentation: .outlined)
 		}
 		super.init(frame: .zero)
 		firstInput.stringValue = firstValue
 		secondInput?.stringValue = secondValue ?? ""
-		firstInput.placeholderString = item.capitalized
-		secondInput?.placeholderString = "\(item) value".capitalized
+		firstInput
+			.placeholderString = placeholder ??
+			(secondValue == nil ? (item == "argument" ? "" : item.capitalized) :
+				"Key")
+		secondInput?.placeholderString = "Value"
 		firstInput.delegate = self
 		secondInput?.delegate = self
 		let inputs: [NSView] = [firstInput] + (secondInput.map

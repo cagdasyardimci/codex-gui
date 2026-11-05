@@ -18,6 +18,8 @@ Archive search must cover all loaded metadata, independently of row pagination. 
 
 Editors of external configuration files must preserve unsaved drafts on conflicts and require an explicit decision before replacing them. Catalog mutations must invalidate affected cached reads without silently discarding failed form drafts.
 
+Repeated-entry configuration forms distinguish an implicit empty input from an explicitly added or edited row. The implicit input keeps an empty form usable without representing a configured entry; removing the last explicit row restores that empty input. Serialization continues to omit empty entries.
+
 ## Appearance
 
 Font families are local preferences stored independently for Light and Dark appearance. In System mode, edits apply to the currently effective appearance. UI, content and code choices override the corresponding theme families while retaining the existing size and semantic-weight rules. Unset Content follows an explicit UI family before the theme fallback; an explicit Content choice remains independent. System restores theme inheritance; selecting a theme applies its font choices and clears that appearance's overrides. Color and size edits preserve font selections. Installed-family discovery and unavailable-family fallback belong to the [font resolver](../Sources/CodexGUI/App/Design/AppKitFontResolver.swift); retained-content refresh follows [interface styling](interface-styling.md#token-ownership-and-changes).
