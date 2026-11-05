@@ -10,12 +10,84 @@ final class UITestEvidenceRecorder
 	private var sequence = 0
 	private var history: [Data] = []
 
-	private init()
+	init(path: String? = ProcessInfo.processInfo.environment["CODEX_GUI_E2E_STATE"])
 	{
-		let path = ProcessInfo.processInfo.environment["CODEX_GUI_E2E_STATE"]
 		destination = path.flatMap
 		{
 			$0.hasPrefix("/") ? URL(fileURLWithPath: $0) : nil
+		}
+	}
+
+	var isEnabled: Bool
+	{
+		destination != nil
+	}
+	var uiCaptureRequested: (@MainActor () -> Void)?
+	var uiViewerChanged: (@MainActor (
+		AnyObject,
+		Bool
+	) -> Void)?
+
+	func viewerChanged(
+		_ viewer: AnyObject,
+		active: Bool = true
+	)
+	{
+		guard isEnabled
+		else
+		{
+			return
+		}
+		uiViewerChanged?(viewer, active)
+	}
+
+	func requestUI()
+	{
+		guard isEnabled
+		else
+		{
+			return
+		}
+		uiCaptureRequested?()
+	}
+
+	func flush() async
+	{
+		await withCheckedContinuation
+		{
+			continuation in
+			queue.async
+			{
+				continuation.resume()
+			}
+		}
+	}
+
+	func recordUI(_ data: Data)
+	{
+		guard let destination
+		else
+		{
+			return
+		}
+		let url = destination.deletingLastPathComponent()
+			.appendingPathComponent(destination.lastPathComponent + ".ui.json")
+		queue.async
+		{
+			do
+			{
+				try data.write(
+					to: url,
+					options: .atomic
+				)
+			}
+			catch
+			{
+				fputs(
+					"UI test appearance capture failed: \(error.localizedDescription)\n",
+					stderr
+				)
+			}
 		}
 	}
 

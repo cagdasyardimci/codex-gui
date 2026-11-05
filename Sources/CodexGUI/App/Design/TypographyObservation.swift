@@ -44,6 +44,7 @@ final class TypographyObservation: NSObject
 				{
 					@MainActor [weak self] in
 					self?.update()
+					UITestEvidenceRecorder.shared.requestUI()
 				}
 			}
 		}
@@ -65,6 +66,7 @@ final class TypographyObservation: NSObject
 			return
 		}
 		update()
+		UITestEvidenceRecorder.shared.requestUI()
 	}
 }
 

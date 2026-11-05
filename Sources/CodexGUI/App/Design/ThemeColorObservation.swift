@@ -27,6 +27,7 @@ final class ThemeColorObservation: NSObject
 				{
 					@MainActor [weak self] in
 					self?.update()
+					UITestEvidenceRecorder.shared.requestUI()
 				}
 			}
 		}
@@ -41,5 +42,6 @@ final class ThemeColorObservation: NSObject
 	@objc private func changed()
 	{
 		update()
+		UITestEvidenceRecorder.shared.requestUI()
 	}
 }

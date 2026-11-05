@@ -121,6 +121,7 @@ final class ExpandedImagePreview
 		let controller = ExpandedImageViewController(name: name)
 		self.controller = controller
 		self.parent = parent
+		UITestEvidenceRecorder.shared.viewerChanged(controller)
 		Self.activeOwners.setObject(
 			self,
 			forKey: parent
@@ -328,6 +329,10 @@ final class ExpandedImagePreview
 		}
 		if let controller
 		{
+			UITestEvidenceRecorder.shared.viewerChanged(
+				controller,
+				active: false
+			)
 		}
 		teardown?.dismiss()
 		teardown = nil

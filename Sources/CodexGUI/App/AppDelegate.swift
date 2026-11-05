@@ -18,6 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 	func applicationDidFinishLaunching(_ notification: Notification)
 	{
 		let environment = ProcessInfo.processInfo.environment
+		if UITestEvidenceRecorder.shared.isEnabled
+		{
+			UITestUIEvidence.shared.install()
+		}
 		if environment["CODEX_GUI_E2E_STATE"]?.hasPrefix("/") == true
 		{
 			switch environment["CODEX_GUI_E2E_APPEARANCE"]

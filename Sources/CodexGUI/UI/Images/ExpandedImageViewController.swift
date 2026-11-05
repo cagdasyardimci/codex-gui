@@ -510,6 +510,10 @@ final class ExpandedImageViewController: NSViewController
 
 	func invalidate()
 	{
+		UITestEvidenceRecorder.shared.viewerChanged(
+			self,
+			active: false
+		)
 		lifetime.invalidate()
 		zoomButton.dismissMenu()
 		onDismiss = nil
@@ -614,6 +618,7 @@ final class ExpandedImageViewController: NSViewController
 
 	private func zoomDidChange()
 	{
+		UITestEvidenceRecorder.shared.viewerChanged(self)
 		diagramZoomControls?.render(
 			percentage: displayedZoomPercentage,
 			canZoomOut: scrollView.magnification > 0.250001,
