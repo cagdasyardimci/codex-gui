@@ -75,9 +75,15 @@ final class SettingsSurfaceView: DesktopSurface
 {
 	var showsTrailingSeparator = false
 
-	init(color: NSColor)
+	init(
+		color: NSColor,
+		colorProvider: (() -> NSColor)? = nil
+	)
 	{
-		super.init(color)
+		super.init(
+			color,
+			colorProvider: colorProvider
+		)
 		clipsToBounds = true
 	}
 

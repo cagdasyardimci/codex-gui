@@ -13,6 +13,10 @@ final class SettingsEditorPicker: SettingsChoicePicker
 	private var applications: [String: URL] = [:]
 	private static let defaultID = "system-default"
 	private static let chooseID = "choose-editor"
+	override var menuTitleRole: TypographyTokens.Role
+	{
+		TypographyTokens.Settings.editorOption
+	}
 
 	init()
 	{

@@ -36,6 +36,10 @@ class SettingsManagementPage: NSView
 	{
 		.standard
 	}
+	var pagePresentation: SettingsPageDocument.Presentation
+	{
+		.standard
+	}
 	var isOperating: Bool
 	{
 		operation != nil
@@ -156,7 +160,8 @@ class SettingsManagementPage: NSView
 				headerAccessory: headerAccessory,
 				subtitle: pageSubtitle,
 				subtitleView: subtitleView,
-				headerSpacing: headerSpacing
+				headerSpacing: headerSpacing,
+				presentation: pagePresentation
 			),
 			to: self,
 			inset: 0

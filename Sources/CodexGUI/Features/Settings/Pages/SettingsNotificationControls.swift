@@ -81,7 +81,7 @@ final class SettingsNotificationControls: NSView
 			),
 			SettingsPageLayout.row(
 				title: "Enable permission notifications",
-				detail: "Show alerts when permissions are required",
+				detail: "Show alerts when notification permissions are required.",
 				control: permission
 			),
 			SettingsPageLayout.row(

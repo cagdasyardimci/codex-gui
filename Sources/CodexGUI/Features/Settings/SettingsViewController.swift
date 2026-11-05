@@ -9,7 +9,6 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 	private let codingHeading = AppKitControlStyling.sectionLabel("Coding")
 	private let editorOpeningService = EditorOpeningService()
 	private let pageContainer = NSView()
-	private var backendBanner: NSStackView?
 	private let generalPage = SettingsGeneralPage()
 	private let generalButton = SettingsSidebarButton(
 		title: "General",
@@ -66,7 +65,10 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 	private let backend: SettingsBackend
 	private var backendStart: Task<Void, Never>?
 	private var additionalPages: [Page: NSView] = [:]
-	private lazy var generalExtras = SettingsGeneralExtrasPage(backend: backend)
+	private lazy var generalExtras = SettingsGeneralExtrasPage(
+		backend: backend,
+		editorRow: generalPage.editorRow
+	)
 	private lazy var additionalButtons: [Page: SettingsSidebarButton] =
 	{
 		var buttons: [Page: SettingsSidebarButton] = [:]
@@ -102,7 +104,13 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 			nibName: nil,
 			bundle: nil
 		)
-		view = SettingsSurfaceView(color: AppKitColorTokens.canvas)
+		view = SettingsSurfaceView(
+			color: AppKitColorTokens.canvas,
+			colorProvider:
+			{
+				AppKitColorTokens.canvas
+			}
+		)
 
 		updateEditorLabel()
 
@@ -167,15 +175,27 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 
 	private func installSettingsShell(in container: NSView)
 	{
-		let sidebar = SettingsSurfaceView(color: AppKitColorTokens.settingsSidebarSurface)
+		let sidebar = SettingsSurfaceView(
+			color: AppKitColorTokens.settingsSidebarSurface,
+			colorProvider:
+			{
+				AppKitColorTokens.settingsSidebarSurface
+			}
+		)
 		sidebar.showsTrailingSeparator = true
-		let page = SettingsSurfaceView(color: AppKitColorTokens.canvas)
+		let page = SettingsSurfaceView(
+			color: AppKitColorTokens.canvas,
+			colorProvider:
+			{
+				AppKitColorTokens.canvas
+			}
+		)
 		let title = NSTextField(labelWithString: "Settings")
-		title.font = AppKitFontResolver.font(TypographyTokens.Settings.heading)
+		title.setTypographyRole(TypographyTokens.Settings.heading)
 		title.textColor = AppKitColorTokens.settingsPrimaryText
 		for heading in [personalHeading, codingHeading]
 		{
-			heading.font = AppKitFontResolver.font(TypographyTokens.Settings.section)
+			heading.setTypographyRole(TypographyTokens.Settings.section)
 			heading.textColor = AppKitColorTokens.settingsTertiaryText
 		}
 		generalButton.target = self
@@ -244,36 +264,6 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 			view.translatesAutoresizingMaskIntoConstraints = false
 			sidebar.addSubview(view)
 		}
-		let reloadSettingsButton = DesktopActionButton(
-			title: "Reload",
-			presentation: .secondary,
-			size: .compact
-		)
-		reloadSettingsButton.setAccessibilityLabel("Reload Codex settings")
-		reloadSettingsButton.onAction =
-		{
-			[weak self] in self?.reloadSettings()
-		}
-		let banner = NSStackView(views: [NSView(), reloadSettingsButton])
-		banner.orientation = .horizontal
-		banner.spacing = 12
-		banner.edgeInsets = NSEdgeInsets(
-			top: 8,
-			left: 20,
-			bottom: 8,
-			right: 20
-		)
-		backendBanner = banner
-		let pageStack = AppKitLayout.verticalStack(
-			[banner, pageContainer],
-			spacing: 0
-		)
-		for child in [banner, pageContainer]
-		{
-			child.widthAnchor.constraint(equalTo: pageStack.widthAnchor).isActive = true
-		}
-		pageStack.translatesAutoresizingMaskIntoConstraints = false
-		page.addSubview(pageStack)
 		NSLayoutConstraint.activate([
 			sidebar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
 			sidebar.topAnchor.constraint(equalTo: container.topAnchor),
@@ -319,7 +309,7 @@ final class SettingsViewController: NSViewController, NSSearchFieldDelegate
 		])
 		sidebarScroll.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor).isActive = true
 		AppKitLayout.pin(
-			pageStack,
+			pageContainer,
 			to: page,
 			inset: 0
 		)
@@ -664,9 +654,9 @@ extension SettingsViewController
 		case .personalization: .simpleSmile
 		case .voice: .mic
 		case .archivedChats: .archive
-		case .usage: .analytics
+		case .usage: .speedometerLatencySpeed
 		case .browser: .globe
-		case .plugins: .pluginPuzzle
+		case .plugins: .loop
 		case .hooks: .code
 		default: .settings
 		}
@@ -721,17 +711,8 @@ extension SettingsViewController
 		return result
 	}
 
-	@objc private func reloadSettings()
-	{
-		Task
-		{
-			[weak self] in await self?.backend.reload()
-		}
-	}
-
 	private func refreshBackendPage()
 	{
-		backendBanner?.isHidden = selectedPage == .connections
 		generalExtras.refresh()
 		guard let page = additionalPages[selectedPage]
 		else

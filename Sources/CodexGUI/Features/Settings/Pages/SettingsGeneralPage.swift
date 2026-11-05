@@ -16,6 +16,7 @@ final class SettingsGeneralPage: NSView
 	let notificationControls = SettingsNotificationControls()
 	private var approvalMode = ApprovalMode.askForApproval
 	private var document: SettingsPageDocument?
+	private(set) var editorRow: NSView!
 
 	override init(frame frameRect: NSRect)
 	{
@@ -61,15 +62,10 @@ final class SettingsGeneralPage: NSView
 			"Permissions",
 			rows: permissionRows
 		)
-		let general = section(
-			"General",
-			rows: [
-				row(
-					"Editor",
-					detail: "Where files and folders open by default",
-					control: editor
-				),
-			]
+		editorRow = row(
+			"Default file open destination",
+			detail: "Where files and folders open by default",
+			control: editor
 		)
 		let notificationSection = SettingsPageLayout.section(
 			title: "Notifications",
@@ -78,7 +74,7 @@ final class SettingsGeneralPage: NSView
 		configuredPermissions.isHidden = true
 		let document = SettingsPageLayout.document(
 			title: "General",
-			sections: [configuredPermissions, permissions, general, notificationSection],
+			sections: [configuredPermissions, permissions, notificationSection],
 			columnWidth: .fitsViewport
 		)
 		self.document = document

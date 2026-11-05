@@ -62,7 +62,7 @@ final class SettingsPersonalizationPage: NSView
 			]
 		)
 		instructions.isRichText = false
-		instructions.font = .systemFont(ofSize: 13)
+		instructions.setTypographyRole(TypographyTokens.UI.editor)
 		instructions.textContainerInset = NSSize(
 			width: 12,
 			height: 12

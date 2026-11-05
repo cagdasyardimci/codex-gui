@@ -280,6 +280,7 @@ final class SettingsConfigurationPage: NSView
 			)
 		}
 		let picker = SettingsChoicePicker(choices: options)
+		picker.menuDetailRole = TypographyTokens.Settings.choiceDescription
 		picker.menuWidth = 360
 		pickerChoices[key] = options
 		choices[key] = picker

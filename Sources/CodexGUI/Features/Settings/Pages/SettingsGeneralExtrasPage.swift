@@ -12,7 +12,10 @@ final class SettingsGeneralExtrasPage: NSView
 
 	private let compression = RemoteConnectionsSwitch()
 
-	init(backend: SettingsBackend)
+	init(
+		backend: SettingsBackend,
+		editorRow: NSView
+	)
 	{
 		self.backend = backend
 		super.init(frame: .zero)
@@ -36,6 +39,7 @@ final class SettingsGeneralExtrasPage: NSView
 		let section = SettingsPageLayout.section(
 			title: "Codex",
 			rows: [
+				editorRow,
 				SettingsPageLayout.row(
 					title: "Speed",
 					detail: "Response speed for new chats.",
