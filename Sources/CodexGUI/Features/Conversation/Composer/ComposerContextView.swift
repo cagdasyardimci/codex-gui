@@ -4,6 +4,7 @@ import AppKit
 final class ComposerContextView: NSView
 {
 	var onRemove: ((String) -> Void)?
+	var onAnnotateImage: ((String, [ImageAnnotation]) -> Void)?
 
 	private let itemStack = NSStackView()
 	private let expandedPreview = ExpandedImagePreview()
@@ -259,7 +260,13 @@ final class ComposerContextView: NSView
 			expandedPreview.present(
 				path: path,
 				name: item.title,
-				in: window
+				in: window,
+				annotations: item.imageAnnotations ?? [],
+				onSaveAnnotations:
+				{
+					[onAnnotateImage] annotations in
+					onAnnotateImage?(id, annotations)
+				}
 			)
 			return
 		}

@@ -53,7 +53,9 @@ final class ExpandedImagePreview
 		path: String,
 		name: String,
 		in parent: NSWindow,
-		preparedDiagram: NSImage? = nil
+		preparedDiagram: NSImage? = nil,
+		annotations: [ImageAnnotation] = [],
+		onSaveAnnotations: (([ImageAnnotation]) -> Void)? = nil
 	)
 	{
 		dismiss()
@@ -132,6 +134,15 @@ final class ExpandedImagePreview
 				preparedDiagram,
 				appearance: parent.effectiveAppearance
 			)
+		}
+		if let onSaveAnnotations, preparedDiagram == nil
+		{
+			controller.configureComments(annotations: annotations)
+			{
+				[weak self] saved in
+				onSaveAnnotations(saved)
+				self?.dismiss()
+			}
 		}
 		let previousResponder = parent.firstResponder
 		requestedResolution = 2048
@@ -263,7 +274,10 @@ final class ExpandedImagePreview
 			{
 				return event
 			}
-			self.dismiss()
+			if self.controller?.cancelCommentEditing() != true
+			{
+				self.dismiss()
+			}
 			return nil
 		}
 		lifetime.addObserver(

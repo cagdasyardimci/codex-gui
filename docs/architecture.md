@@ -10,6 +10,8 @@ Compose cross-feature transitions before publication and reserve accepted effect
 
 Backend history belongs to Codex. Local persistence owns drafts, preferences and recovery records; views must not edit Codex conversation files. Capture next-turn preferences at submission so later control changes cannot retarget accepted work. Settings-specific persistence follows [Settings](settings.md#configuration-ownership).
 
+Image annotations belong to their composer attachment identity and persist with the draft. A new marker opens compact single-line entry, while an existing marker opens the multiline editor. The [image comment canvas](../Sources/CodexGUI/UI/Images/ImageCommentCanvas.swift) stages edits locally; the viewer's Save action commits them to that captured draft and returns to the composer without submitting a turn. Cancel discards staged changes. Closing or retiring the viewer also discards unsaved edits. Coordinates remain relative to the original image, independent of zoom and scrolling. [Context input construction](../Sources/CodexGUI/Application/Services/ComposerContextBuilder.swift) groups comments by the final image attachment order, including unannotated images when determining image numbers.
+
 ## Ownership and recovery
 
 Displayed selection and execution ownership are independent. Every asynchronous result must validate its captured workspace/session, connection generation, request identity and relevant thread/turn. Deferred UI actions must retain their original target rather than follow later selection. Shared eligibility rules serve presentations and reducers, with admission checked again at reduction.

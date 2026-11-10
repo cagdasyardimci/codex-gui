@@ -27,6 +27,13 @@ final class ConversationViewController: NSViewController,
 	var onAddContext: ((ComposerContextItem) -> Void)?
 	var onImportImageContext: ((ComposerContextItem) -> Bool)?
 	var onRemoveContext: ((String) -> Void)?
+	var onAnnotateImage: ((String, [ImageAnnotation]) -> Void)?
+	{
+		didSet
+		{
+			contextView.onAnnotateImage = onAnnotateImage
+		}
+	}
 	var onSelectModel: ((String?) -> Void)?
 	var onSelectEffort: ((String?) -> Void)?
 	var onSetFastMode: ((Bool) -> Void)?

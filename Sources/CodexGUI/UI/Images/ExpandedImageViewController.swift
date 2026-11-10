@@ -30,6 +30,10 @@ final class ExpandedImageViewController: NSViewController
 	var onResolutionDemand: ((Int) -> Void)?
 	var onDetach: (() -> Void)?
 
+	private(set) var commentCanvas: ImageCommentCanvas?
+	private var commentToolbar: ImageCommentToolbar?
+	private var onSaveAnnotations: (([ImageAnnotation]) -> Void)?
+
 	private let isTab: Bool
 	private let imageName: String
 	private var imageNameMenu: DesktopActionMenu?
@@ -360,6 +364,131 @@ final class ExpandedImageViewController: NSViewController
 		}
 	}
 
+	func configureComments(
+		annotations: [ImageAnnotation],
+		onSave: @escaping ([ImageAnnotation]) -> Void
+	)
+	{
+		guard diagramImage == nil, !isTab
+		else
+		{
+			return
+		}
+		let canvas = ImageCommentCanvas(annotations: annotations)
+		let toolbar = ImageCommentToolbar()
+		canvas.imageScrollView = scrollView
+		commentCanvas?.removeFromSuperview()
+		commentToolbar?.removeFromSuperview()
+		commentCanvas = canvas
+		commentToolbar = toolbar
+		onSaveAnnotations = onSave
+		canvas.translatesAutoresizingMaskIntoConstraints = false
+		toolbar.translatesAutoresizingMaskIntoConstraints = true
+		view.addSubview(canvas)
+		view.addSubview(toolbar)
+		NSLayoutConstraint.activate([
+			canvas.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+			canvas.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+			canvas.topAnchor.constraint(equalTo: scrollView.topAnchor),
+			canvas.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor)
+		])
+		for constraint in view.constraints where
+			(constraint.firstItem as? NSView) === scrollView && constraint.firstAttribute == .bottom
+		{
+			constraint.constant = -64
+		}
+		toolbar.onPlacementChange =
+		{
+			[weak self] in self?.updateCommentGeometry()
+		}
+		closeButton.nextKeyView = toolbar.moveHandle
+		toolbar.moveHandle.nextKeyView = toolbar.commentButton
+		toolbar.commentButton.nextKeyView = zoomButton
+		toolbar.saveButton.nextKeyView = toolbar.cancelButton
+		toolbar.cancelButton.nextKeyView = zoomButton
+		toolbar.commentButton.onAction =
+		{
+			[weak canvas] in canvas?.beginCommenting()
+		}
+		toolbar.cancelButton.onAction =
+		{
+			[weak canvas] in canvas?.cancelCommenting()
+		}
+		toolbar.saveButton.onAction =
+		{
+			[weak self, weak canvas] in
+			guard let canvas, canvas.commitEditing()
+			else
+			{
+				return
+			}
+			self?.onSaveAnnotations?(canvas.annotations)
+		}
+		canvas.onChange =
+		{
+			[weak self, weak toolbar, weak canvas] in
+			guard let canvas
+			else
+			{
+				return
+			}
+			toolbar?.render(
+				commenting: canvas.isCommenting,
+				count: canvas.annotations.count
+			)
+			toolbar?.moveHandle.nextKeyView = canvas.isCommenting ? canvas : toolbar?.commentButton
+			self?.updateCommentGeometry()
+			canvas.nextKeyView = toolbar?.saveButton
+			if !canvas.isCommenting
+			{
+				self?.view.window?.makeFirstResponder(toolbar?.commentButton)
+			}
+		}
+		updateCommentGeometry()
+	}
+
+	@discardableResult
+	func cancelCommentEditing() -> Bool
+	{
+		guard let canvas = commentCanvas
+		else
+		{
+			return false
+		}
+		if canvas.cancelEditing()
+		{
+			return true
+		}
+		if canvas.isCommenting
+		{
+			canvas.cancelCommenting()
+			return true
+		}
+		return false
+	}
+
+	private func updateCommentGeometry()
+	{
+		guard let canvas = commentCanvas
+		else
+		{
+			return
+		}
+		canvas.imageRect = canvas.convert(
+			imageView.bounds,
+			from: imageView
+		)
+		canvas.isHidden = imageView.image == nil
+		commentToolbar?.commentButton.isEnabled = imageView.image != nil
+		commentToolbar?.place(
+			below: view.convert(
+				imageView.bounds,
+				from: imageView
+			),
+			in: view.bounds
+		)
+	}
+
 	func configureDiagram(
 		_ image: NSImage,
 		appearance: NSAppearance
@@ -614,6 +743,8 @@ final class ExpandedImageViewController: NSViewController
 		onRevealImage = nil
 		onDetach = nil
 		onResolutionDemand = nil
+		onSaveAnnotations = nil
+		commentCanvas?.onChange = nil
 	}
 
 	private func imageContextMenu() -> ImageContextMenu?
@@ -633,6 +764,10 @@ final class ExpandedImageViewController: NSViewController
 
 	override func cancelOperation(_ sender: Any?)
 	{
+		if cancelCommentEditing()
+		{
+			return
+		}
 		onDismiss?()
 	}
 
@@ -727,6 +862,7 @@ final class ExpandedImageViewController: NSViewController
 
 	private func zoomDidChange()
 	{
+		updateCommentGeometry()
 		UITestEvidenceRecorder.shared.viewerChanged(self)
 		diagramZoomControls?.render(
 			percentage: displayedZoomPercentage,

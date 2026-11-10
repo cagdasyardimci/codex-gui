@@ -327,6 +327,13 @@ extension MainWindowController
 		{
 			target.attachImportedImage($0)
 		}
+		conversation.onAnnotateImage =
+		{
+			target.dispatch(.annotateImage(
+				$0,
+				$1
+			))
+		}
 		conversation.onRemoveContext =
 		{
 			target.dispatch(.removeContext($0))
