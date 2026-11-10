@@ -44,7 +44,7 @@ class DesktopStyledButton: DesktopTooltipButton
 		case primary, secondary, dialogPrimary, dialogCancel, dialogOutlined, formAdd, destructive,
 				quiet, inlineAction, link, mutedLink, documentation, icon, revealingIcon, toggle,
 				menuTrigger
-		case sidebarIcon, searchIcon
+		case sidebarIcon, searchIcon, attachmentRemove
 		case tab(selected: Bool)
 		case pairingTab(selected: Bool)
 		case settingsHeader(primary: Bool)
@@ -190,7 +190,8 @@ class DesktopStyledButton: DesktopTooltipButton
 	{
 		switch presentation
 		{
-		case .icon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon, .imageOverlay: true
+		case .icon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon, .imageOverlay,
+				.attachmentRemove: true
 		default: false
 		}
 	}
@@ -379,6 +380,11 @@ class DesktopStyledButton: DesktopTooltipButton
 			return NSSize(
 				width: side,
 				height: side
+			)
+		case .attachmentRemove:
+			return NSSize(
+				width: LayoutTokens.Button.miniIconSize,
+				height: LayoutTokens.Button.miniIconSize
 			)
 		case .imageOverlay(
 			let diagram,
@@ -603,7 +609,7 @@ class DesktopStyledButton: DesktopTooltipButton
 		case .formAdd: ShapeTokens.Button.regularRadius
 		case .icon, .revealingIcon, .sidebarIcon, .searchIcon,
 				.zoomStep: ShapeTokens.Button.iconRadius
-		case .imageOverlay: bounds.height / 2
+		case .imageOverlay, .attachmentRemove: bounds.height / 2
 		default: size == .regular ? ShapeTokens.Button.regularRadius : bounds.height / 2
 		}
 		let inset = presentation == .secondary ? ShapeTokens.Button.outlineWidth / 2 : 0
@@ -880,6 +886,15 @@ class DesktopStyledButton: DesktopTooltipButton
 				primaryText,
 				enabled: foregroundEnabled
 			)
+		case .attachmentRemove:
+			AppKitColorTokens.canvas.setFill()
+			outline.fill()
+			AppKitColorTokens.primaryText.setFill()
+			NSBezierPath(ovalIn: bounds.insetBy(
+				dx: 2,
+				dy: 2
+			)).fill()
+			return AppKitColorTokens.buttonPrimaryText
 		case .imageOverlay:
 			ExpandedImageHeaderDrawing.drawBackground(
 				control: self,

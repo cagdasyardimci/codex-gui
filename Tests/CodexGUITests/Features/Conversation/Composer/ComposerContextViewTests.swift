@@ -103,14 +103,16 @@ struct ComposerContextViewTests
 			window.close()
 		}
 		view.layoutSubtreeIfNeeded()
-		#expect(abs(tile.frame.width - 120) < 0.5)
-		#expect(abs(tile.frame.height - 120) < 0.5)
+		let thumbnail = try #require(findImageView(in: tile))
+		#expect(abs(thumbnail.frame.width - 120) < 0.5)
+		#expect(abs(thumbnail.frame.height - 120) < 0.5)
 		let closeFrame = tile.convert(
 			remove.bounds,
 			from: remove
 		)
-		#expect(abs(tile.bounds.maxX - closeFrame.maxX - 4) < 0.5)
-		#expect(abs(tile.bounds.maxY - closeFrame.maxY - 4) < 0.5)
+		#expect(closeFrame.maxX > thumbnail.frame.maxX)
+		#expect(closeFrame.maxY > thumbnail.frame.maxY)
+		#expect(tile.bounds.contains(closeFrame))
 		#expect(!containsTextField(in: view))
 		let expand = try #require(findButton(
 			in: tile,

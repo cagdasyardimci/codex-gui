@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class ComposerImageAttachmentView: NSView
 {
-	static let sideLength: CGFloat = 120
+	static let sideLength: CGFloat = 124
 
 	private let removeButton: NSButton
 	private var pointerTrackingArea: NSTrackingArea?
@@ -24,13 +24,23 @@ final class ComposerImageAttachmentView: NSView
 		)
 		preview.identifier = NSUserInterfaceItemIdentifier(identifier)
 		preview.setAccessibilityLabel("Expand attached image \(title)")
-		let remove = DesktopResourceRow.actionButton(DesktopResourceRow.Action(
+		let remove = DesktopActionButton(
 			title: "Remove",
-			icon: .xCircle,
-			accessibilityLabel: "Remove image \(title)",
-			identifier: identifier,
-			perform: onRemove
-		))
+			presentation: .attachmentRemove
+		)
+		remove.symbol = .xCrossed
+		remove.identifier = NSUserInterfaceItemIdentifier(identifier)
+		remove.setAccessibilityLabel("Remove image \(title)")
+		remove.onAction =
+		{
+			[weak remove] in
+			guard let remove
+			else
+			{
+				return
+			}
+			onRemove(remove)
+		}
 		self.init(
 			image: image,
 			previewButton: preview,
@@ -63,11 +73,20 @@ final class ComposerImageAttachmentView: NSView
 		imageView.wantsLayer = true
 		imageView.layer?.cornerRadius = 6
 		imageView.layer?.masksToBounds = true
-		AppKitLayout.pin(
-			imageView,
-			to: self,
-			inset: 0
-		)
+		imageView.translatesAutoresizingMaskIntoConstraints = false
+		addSubview(imageView)
+		NSLayoutConstraint.activate([
+			imageView.leadingAnchor.constraint(equalTo: leadingAnchor),
+			imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
+			imageView.topAnchor.constraint(
+				equalTo: topAnchor,
+				constant: 4
+			),
+			imageView.trailingAnchor.constraint(
+				equalTo: trailingAnchor,
+				constant: -4
+			),
+		])
 
 		previewButton.title = ""
 		previewButton.isBordered = false
@@ -85,13 +104,14 @@ final class ComposerImageAttachmentView: NSView
 			heightAnchor.constraint(equalToConstant: Self.sideLength),
 			removeButton.topAnchor.constraint(
 				equalTo: topAnchor,
-				constant: 4
+				constant: 0
 			),
 			removeButton.trailingAnchor.constraint(
 				equalTo: trailingAnchor,
-				constant: -4
+				constant: 0
 			),
-			removeButton.heightAnchor.constraint(equalToConstant: 24),
+			removeButton.widthAnchor.constraint(equalToConstant: LayoutTokens.Button.miniIconSize),
+			removeButton.heightAnchor.constraint(equalToConstant: LayoutTokens.Button.miniIconSize),
 		])
 
 		// Keep removal in keyboard navigation and accessibility while hiding its resting visual.
