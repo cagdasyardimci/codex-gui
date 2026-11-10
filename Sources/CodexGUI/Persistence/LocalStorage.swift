@@ -811,7 +811,8 @@ final class LocalStorage
 		).allSatisfy
 		{
 			left, right in
-			left.kind == right.kind && left.firstLine == right.firstLine
+			left.imageAnnotations == right.imageAnnotations
+				&& left.kind == right.kind && left.firstLine == right.firstLine
 				&& left.lastLine == right.lastLine
 				&& sameStoredText(
 					left.id,

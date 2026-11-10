@@ -547,6 +547,7 @@ struct WorkspaceEligibility
 				remainingInputs.removeFirst()
 			}
 		}
+		textParts += ComposerContextBuilder.annotationDescriptions(items: items)
 		return true
 	}
 }

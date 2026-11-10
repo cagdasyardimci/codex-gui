@@ -527,6 +527,26 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	func saveImageAnnotations(
+		id: String,
+		annotations: [ImageAnnotation]
+	)
+	{
+		guard project != nil
+		else
+		{
+			return
+		}
+		let context = workspaceStore.operationContext(threadID: selectedThreadID)
+		workspaceStore.dispatch(.composer(.imageAnnotationsSaved(
+			context,
+			conversation: workspaceStore.model.conversations.selectedConversation,
+			itemID: id,
+			annotations: annotations,
+			revision: composerDraft.revision + 1
+		)))
+	}
+
 	func removeDraftContext(id: String)
 	{
 		guard project != nil

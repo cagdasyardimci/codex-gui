@@ -52,12 +52,37 @@ enum ComposerContextBuilder
 			}
 		}
 
+		textParts += annotationDescriptions(items: items)
+
 		let nonemptyTextParts = textParts.filter
 		{
 			!$0.isEmpty
 		}
 		let combinedText = nonemptyTextParts.joined(separator: "\n\n")
 		return [.text(combinedText)] + contextInputs
+	}
+
+	static func annotationDescriptions(items: [ComposerContextItem]) -> [String]
+	{
+		items.filter
+		{
+			$0.kind == .image
+		}.enumerated().compactMap
+		{
+			index, item in
+			let annotations = (item.imageAnnotations ?? []).filter(\.isValid)
+			guard !annotations.isEmpty
+			else
+			{
+				return nil
+			}
+			let lines = annotations.enumerated().map
+			{
+				number, annotation in
+				"\(number + 1). \(annotation.coordinateDescription) \(annotation.text)"
+			}
+			return (["Image \(index + 1):"] + lines).joined(separator: "\n")
+		}
 	}
 
 	private static func validatedReferenceFile(

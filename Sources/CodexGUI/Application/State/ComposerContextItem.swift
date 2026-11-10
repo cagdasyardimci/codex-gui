@@ -10,6 +10,7 @@ struct ComposerContextItem: Codable, Equatable, Identifiable
 	let firstLine: Int?
 	let lastLine: Int?
 	let excerpt: String?
+	var imageAnnotations: [ImageAnnotation]?
 
 	init(
 		id: String = UUID().uuidString,
@@ -18,7 +19,8 @@ struct ComposerContextItem: Codable, Equatable, Identifiable
 		path: String? = nil,
 		firstLine: Int? = nil,
 		lastLine: Int? = nil,
-		excerpt: String? = nil
+		excerpt: String? = nil,
+		imageAnnotations: [ImageAnnotation]? = nil
 	)
 	{
 		self.id = id
@@ -28,6 +30,7 @@ struct ComposerContextItem: Codable, Equatable, Identifiable
 		self.firstLine = firstLine
 		self.lastLine = lastLine
 		self.excerpt = excerpt
+		self.imageAnnotations = imageAnnotations
 	}
 
 	func reused() -> ComposerContextItem
@@ -38,7 +41,8 @@ struct ComposerContextItem: Codable, Equatable, Identifiable
 			path: path,
 			firstLine: firstLine,
 			lastLine: lastLine,
-			excerpt: excerpt
+			excerpt: excerpt,
+			imageAnnotations: imageAnnotations
 		)
 	}
 

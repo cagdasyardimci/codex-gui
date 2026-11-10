@@ -104,6 +104,7 @@ extension WorkspaceLifecycleReducer
 			switch action
 			{
 			case .composer(.draftEdited), .composer(.contextAttached), .composer(.contextRemoved),
+					.composer(.imageAnnotationsSaved),
 					.composer(.referenceReused), .contextNavigation(.contextEdited),
 					.contextNavigation(.savedPromptInserted), .contextNavigation(.bookmarkToggled),
 					.preferences(.modelSelected), .preferences(.effortSelected),
@@ -128,6 +129,7 @@ extension WorkspaceLifecycleReducer
 		case .connection(.connectRequested), .connection(.projectOpened): return false
 		case .execution(.submissionRequested), .execution(.steeringRequested): return false
 		case .composer(.draftEdited), .composer(.contextAttached), .composer(.contextRemoved),
+				.composer(.imageAnnotationsSaved),
 				.composer(.referenceReused): return false
 		case .composer(.messageQueued), .composer(.queuedMessageRemoved),
 				.composer(.queuedMessageStartRequested), .composer(.queuedMessageResumeRequested),

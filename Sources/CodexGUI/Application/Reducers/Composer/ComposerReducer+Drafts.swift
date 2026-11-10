@@ -170,6 +170,38 @@ extension ComposerReducer
 				model: &model,
 				result: &result
 			)
+		case .imageAnnotationsSaved(
+			let context,
+			let conversation,
+			let itemID,
+			let annotations,
+			let revision
+		):
+			guard valid(
+				context,
+				model
+			), annotations.allSatisfy(\.isValid),
+			Set(annotations.map(\.id)).count == annotations.count,
+			var draft = model.composer.drafts[conversation], revision > draft.revision,
+			let index = draft.context
+			.firstIndex(where:
+				{
+					$0.id == itemID && $0.kind == .image
+				})
+			else
+			{
+				return
+			}
+			draft.context[index].imageAnnotations = annotations.isEmpty ? nil : annotations
+			draft.revision = revision
+			persist(
+				draft,
+				conversation: conversation,
+				context: context,
+				model: &model,
+				result: &result
+			)
+
 		case .contextRemoved(
 			let context,
 			let conversation,

@@ -247,6 +247,13 @@ enum ComposerAction
 		item: ComposerContextItem,
 		revision: Int
 	)
+	case imageAnnotationsSaved(
+		OperationContext,
+		conversation: ConversationKey,
+		itemID: String,
+		annotations: [ImageAnnotation],
+		revision: Int
+	)
 	case contextRemoved(
 		OperationContext,
 		conversation: ConversationKey,

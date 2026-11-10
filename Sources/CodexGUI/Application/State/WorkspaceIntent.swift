@@ -6,6 +6,10 @@ enum WorkspaceIntent
 	case editDraft(String)
 	case attachContext(ComposerContextItem)
 	case removeContext(String)
+	case annotateImage(
+		String,
+		[ImageAnnotation]
+	)
 	case reuseReference(String)
 	case send
 	case resumeMessageQueue
@@ -111,7 +115,8 @@ enum WorkspaceIntent
 		{
 		case .slashCommand, .acknowledgeSlashCommand, .completeSlashCommand, .retryPlanSettings,
 				.recoverFork,
-				.editDraft, .attachContext, .removeContext, .reuseReference, .send, .steer,
+				.editDraft, .attachContext, .removeContext, .annotateImage, .reuseReference, .send,
+				.steer,
 				.removeQueuedMessage, .resumeMessageQueue, .steerQueuedMessage,
 				.reorderQueuedMessages, .beginEditingQueuedMessage, .cancelQueuedMessageEdit,
 				.setQueueingEnabled,
@@ -241,6 +246,13 @@ final class WorkspaceIntentTarget
 		case .editDraft(let text): inputs.updateDraft(text)
 		case .attachContext(let item): inputs.addDraftContext(item)
 		case .removeContext(let id): inputs.removeDraftContext(id: id)
+		case .annotateImage(
+			let id,
+			let annotations
+		): inputs.saveImageAnnotations(
+				id: id,
+				annotations: annotations
+			)
 		case .reuseReference(let id): inputs.reuseReference(id: id)
 		case .slashCommand(let invocation): operation = inputs.performSlashCommand(invocation)
 		case .acknowledgeSlashCommand(let request): inputs.acknowledgeSlashCommand(request)
