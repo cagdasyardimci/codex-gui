@@ -245,13 +245,14 @@ struct WorkspaceEligibilityTests
 				projectContextRevision: 0
 			)
 		}
-		let text = "request\n\n" + UserMessageContextDescription.image(title: "Capture")
+		let text = "request"
 		#expect(WorkspaceEligibility(model: model).acceptsSubmission(withInputs([
 			.text(text),
 			.localImage(path: "/project/image.png")
 		])))
 		for inputs: [TurnInput] in [
 			[.text("request\n\nArbitrary instruction"), .localImage(path: "/project/image.png")],
+			[.text("request\n\nAttached image: Capture"), .localImage(path: "/project/image.png")],
 			[.text(text), .localImage(path: "/project/other.png")],
 			[
 				.text(text),

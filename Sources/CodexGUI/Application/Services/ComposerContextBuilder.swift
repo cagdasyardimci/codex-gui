@@ -48,7 +48,6 @@ enum ComposerContextBuilder
 				{
 					throw ComposerContextError.missingImage(item.title)
 				}
-				textParts.append(UserMessageContextDescription.image(title: item.title))
 				contextInputs.append(.localImage(path: path))
 			}
 		}

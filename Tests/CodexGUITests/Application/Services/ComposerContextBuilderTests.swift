@@ -79,7 +79,8 @@ struct ComposerContextBuilderTests
 		#expect(optimisticBody.contains("2: two\n3: three"))
 		#expect(optimisticBody.components(separatedBy: "File reference:").count == 2)
 		#expect(!optimisticBody.contains("Attached image:"))
-		#expect(history.text?.contains("Attached image: Screenshot") == true)
+		#expect(history.text == text)
+		#expect(!text.contains("Attached image:"))
 		#expect(UserMessagePresenter.imageAttachments(for: inputs).map(\.path) == [image.path])
 		#expect(!optimisticBody.contains("[Image:"))
 		#expect(!optimisticBody.contains("[File reference:"))
@@ -120,6 +121,71 @@ struct ComposerContextBuilderTests
 				),
 			])
 		}
+	}
+
+	@Test func imageOnlySubmissionKeepsAttachmentsWithoutAddingText() throws
+	{
+		let project = try temporaryProject()
+		defer
+		{
+			try? FileManager.default.removeItem(at: project)
+		}
+		let images = ["first.png", "second.png"].map
+		{
+			project.appendingPathComponent($0)
+		}
+		for image in images
+		{
+			try Data([1]).write(to: image)
+		}
+		let context = images.map
+		{
+			ComposerContextItem(
+				kind: .image,
+				title: "Pasted image",
+				path: $0.path
+			)
+		}
+		let inputs = try ComposerContextBuilder.inputs(
+			text: "",
+			items: context,
+			project: project
+		)
+		#expect(inputs == [.text("")] + images.map
+		{
+			.localImage(path: $0.path)
+		})
+
+		var model = WorkspaceModel(identity: WorkspaceIdentity(
+			sessionID: UUID(),
+			canonicalCheckoutPath: project.path
+		))
+		model.connection.generation = 1
+		model.connection.isConnected = true
+		model.execution.state = .ready
+		model.composer.drafts[.newChat] = ComposerDraft(
+			text: "",
+			revision: 1
+		)
+		model.composer.drafts[.newChat]?.context = context
+		let draft = try #require(model.composer.drafts[.newChat])
+		let submission = ComposerSubmission(
+			context: OperationContext(
+				workspace: model.identity,
+				generation: model.connection.generation,
+				requestID: UUID()
+			),
+			conversation: .newChat,
+			draft: draft,
+			inputs: inputs,
+			skills: [],
+			modelID: nil,
+			effort: nil,
+			preferences: .standard,
+			retainedContextRequestID: UUID(),
+			projectContextRevision: 0
+		)
+		#expect(WorkspaceEligibility(model: model).acceptsSubmission(submission))
 	}
 
 	@Test func missingOrEscapingReferencesAreRejectedBeforeSend() throws

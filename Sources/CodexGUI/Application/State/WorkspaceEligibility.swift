@@ -460,8 +460,7 @@ struct WorkspaceEligibility
 	private func hasInput(_ submission: ComposerSubmission) -> Bool
 	{
 		guard hasSourceContent(submission.draft),
-				case .text(let text) = submission.inputs.first,
-				!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				case .text(let text) = submission.inputs.first
 		else
 		{
 			return false
@@ -545,7 +544,6 @@ struct WorkspaceEligibility
 				{
 					return false
 				}
-				textParts.append(UserMessageContextDescription.image(title: item.title))
 				remainingInputs.removeFirst()
 			}
 		}
