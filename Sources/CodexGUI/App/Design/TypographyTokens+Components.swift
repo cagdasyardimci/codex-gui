@@ -290,3 +290,16 @@ extension TypographyTokens.FileMarkdown
 		)
 	}
 }
+
+extension TypographyTokens
+{
+	enum ImageAnnotation
+	{
+		// Metadata sizing fits the marker; bold numerals stay identifiable over image artwork.
+		static let pin = Role(
+			rule: Text.metadata.sizeRule,
+			selection: .interface(weight: .bold),
+			lineHeight: .multiple(1)
+		)
+	}
+}

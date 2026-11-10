@@ -394,6 +394,32 @@ struct ColorPalette
 	{
 		accentRGB.color()
 	}
+	// Location markers keep a light numeral and outline over arbitrary image content.
+	// Retain the selected hue, but deepen bright accents enough for that contrast pair.
+	var imageAnnotationPinSurface: NSColor
+	{
+		for amount in stride(
+			from: 0.2,
+			through: 1.0,
+			by: 0.05
+		)
+		{
+			let surface = accentRGB.mix(
+				black,
+				amount
+			).color()
+			if contrastInk(on: surface) == white.color()
+			{
+				return surface
+			}
+		}
+		return black.color()
+	}
+	var imageAnnotationPinText: NSColor
+	{
+		white.color()
+	}
+
 	var accentText: NSColor
 	{
 		namedText ?? accentTextRGB.color()

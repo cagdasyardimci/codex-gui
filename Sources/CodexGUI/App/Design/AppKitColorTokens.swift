@@ -5,13 +5,20 @@ import AppKit
 enum AppKitColorTokens
 {
 	/// Resolves a semantic role against the current theme and the owning appearance.
-	static func paletteColor(_ role: @escaping (ColorPalette) -> NSColor) -> NSColor
+	static func paletteColor(
+		fixedAppearance: ColorAppearance? = nil,
+		_ role: @escaping (ColorPalette) -> NSColor
+	) -> NSColor
 	{
 		AppKitColorResolution.adaptiveColor
 		{
 			appearance in
 			let configuration = ColorPreferences().configuration
-			let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+			let dark = fixedAppearance.map
+			{
+				$0 == .dark
+			}
+			?? (appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
 			let mode: ColorAppearance = dark ? .dark : .light
 			let profile = dark ? configuration.dark : configuration.light
 			return role(ColorPalette(

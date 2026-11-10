@@ -52,6 +52,10 @@ class DesktopStyledButton: DesktopTooltipButton
 			diagram: Bool,
 			close: Bool = false
 		)
+		case imageCommentHandle
+		case imageCommentAction(primary: Bool)
+		case imageCommentSubmit
+		case annotationPin
 		case zoomStep
 	}
 
@@ -191,7 +195,7 @@ class DesktopStyledButton: DesktopTooltipButton
 		switch presentation
 		{
 		case .icon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon, .imageOverlay,
-				.attachmentRemove: true
+				.attachmentRemove, .imageCommentHandle, .imageCommentSubmit: true
 		default: false
 		}
 	}
@@ -200,6 +204,10 @@ class DesktopStyledButton: DesktopTooltipButton
 	{
 		switch presentation
 		{
+		case .imageCommentAction:
+			return size == .regular ? TypographyTokens.Text.menu : TypographyTokens.Text
+				.composerControl
+		case .annotationPin: return TypographyTokens.ImageAnnotation.pin
 		case .zoomStep: return TypographyTokens.Button.zoomStep
 		case .inlineAction: return TypographyTokens.UI.body
 		case .dialogPrimary, .dialogCancel, .dialogOutlined: return TypographyTokens.Button.dialog
@@ -397,6 +405,26 @@ class DesktopStyledButton: DesktopTooltipButton
 				width: diagram && close ? LayoutTokens.Button.diagramCloseWidth : side,
 				height: side
 			)
+		case .imageCommentSubmit:
+			return NSSize(
+				width: 28,
+				height: 28
+			)
+		case .imageCommentHandle:
+			return NSSize(
+				width: 24,
+				height: 28
+			)
+		case .imageCommentAction:
+			return NSSize(
+				width: width + 2 * horizontalInset + progress,
+				height: size == .regular ? 36 : 28
+			)
+		case .annotationPin:
+			return NSSize(
+				width: 30,
+				height: 30
+			)
 		case .zoomStep:
 			return NSSize(
 				width: LayoutTokens.Button.zoomStepSize,
@@ -423,7 +451,8 @@ class DesktopStyledButton: DesktopTooltipButton
 		{
 		case .tab, .pairingTab: LayoutTokens.Button.compactHorizontalInset
 		case .settingsHeader: LayoutTokens.Settings.headerActionHorizontalInset
-		case .zoomStep, .inlineAction, .documentation: 0
+		case .imageCommentAction: 8
+		case .imageCommentHandle, .annotationPin, .zoomStep, .inlineAction, .documentation: 0
 		default: size == .regular ? LayoutTokens.Button.regularHorizontalInset : LayoutTokens.Button
 			.compactHorizontalInset
 		}
@@ -450,6 +479,17 @@ class DesktopStyledButton: DesktopTooltipButton
 			isHovered: isHovered,
 			isKeyboardFocused: window?.firstResponder === self
 		).isRevealed
+	}
+
+	// Single-line annotation actions center native glyph metrics; paragraph leading
+	// belongs to multiline text rather than the icon-aligned action label.
+	private var centersNativeTitleLine: Bool
+	{
+		if case .imageCommentAction = presentation
+		{
+			return true
+		}
+		return false
 	}
 
 	private var resolvedFont: NSFont
@@ -603,14 +643,116 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	private var outline: NSBezierPath
 	{
+		if presentation == .imageCommentSubmit
+		{
+			return NSBezierPath(ovalIn: bounds)
+		}
+		if presentation == .annotationPin
+		{
+			// The control is flipped on AppKit. Build the silhouette in top-down image
+			// coordinates so the small corner stays at the bottom left in either orientation.
+			let rect = bounds.insetBy(
+				dx: 0.5,
+				dy: 0.5
+			)
+			let radius = min(
+				rect.width,
+				rect.height
+			) / 2
+			let corner: CGFloat = 3
+			let k: CGFloat = 0.55228475
+			func point(
+				_ x: CGFloat,
+				_ y: CGFloat
+			) -> NSPoint
+			{
+				NSPoint(
+					x: rect.minX + x,
+					y: isFlipped ? rect.minY + y : rect.maxY - y
+				)
+			}
+			let path = NSBezierPath()
+			path.move(to: point(
+				radius,
+				0
+			))
+			path.curve(
+				to: point(
+					rect.width,
+					radius
+				),
+				controlPoint1: point(
+					radius + radius * k,
+					0
+				),
+				controlPoint2: point(
+					rect.width,
+					radius - radius * k
+				)
+			)
+			path.curve(
+				to: point(
+					radius,
+					rect.height
+				),
+				controlPoint1: point(
+					rect.width,
+					radius + radius * k
+				),
+				controlPoint2: point(
+					radius + radius * k,
+					rect.height
+				)
+			)
+			path.line(to: point(
+				corner,
+				rect.height
+			))
+			path.curve(
+				to: point(
+					0,
+					rect.height - corner
+				),
+				controlPoint1: point(
+					corner - corner * k,
+					rect.height
+				),
+				controlPoint2: point(
+					0,
+					rect.height - corner + corner * k
+				)
+			)
+			path.line(to: point(
+				0,
+				radius
+			))
+			path.curve(
+				to: point(
+					radius,
+					0
+				),
+				controlPoint1: point(
+					0,
+					radius - radius * k
+				),
+				controlPoint2: point(
+					radius - radius * k,
+					0
+				)
+			)
+			path.close()
+			return path
+		}
+
 		let radius: CGFloat = switch presentation
 		{
-		case .tab, .pairingTab, .toggle: ShapeTokens.Button.tabRadius
+		case .tab, .pairingTab, .toggle, .imageCommentAction,
+				.imageCommentHandle: ShapeTokens.Button.tabRadius
 		case .settingsHeader: ShapeTokens.Settings.headerActionRadius
 		case .formAdd: ShapeTokens.Button.regularRadius
 		case .icon, .revealingIcon, .sidebarIcon, .searchIcon,
 				.zoomStep: ShapeTokens.Button.iconRadius
-		case .imageOverlay, .attachmentRemove: bounds.height / 2
+		case .imageOverlay, .attachmentRemove, .imageCommentSubmit: bounds.height / 2
 		default: size == .regular ? ShapeTokens.Button.regularRadius : bounds.height / 2
 		}
 		let inset = presentation == .secondary ? ShapeTokens.Button.outlineWidth / 2 : 0
@@ -663,6 +805,11 @@ class DesktopStyledButton: DesktopTooltipButton
 		)
 		let paragraph = (attributes[.paragraphStyle] as? NSParagraphStyle)?
 			.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+		if centersNativeTitleLine
+		{
+			paragraph.minimumLineHeight = 0
+			paragraph.maximumLineHeight = 0
+		}
 		paragraph.lineBreakMode = .byTruncatingTail
 		attributes[.foregroundColor] = foreground
 		attributes[.paragraphStyle] = paragraph
@@ -751,7 +898,7 @@ class DesktopStyledButton: DesktopTooltipButton
 			title: rect(
 				x + progressSpace + (presentation == .documentation ? 0 : imageSpace),
 				titleWidth,
-				max(
+				centersNativeTitleLine ? natural.height : max(
 					natural.height,
 					typographyRole.lineHeight ?? 0
 				)
@@ -797,7 +944,41 @@ class DesktopStyledButton: DesktopTooltipButton
 				color,
 				enabled: foregroundEnabled
 			)
-		case .primary, .dialogPrimary:
+		case .imageCommentHandle:
+			if active
+			{
+				AppKitColorTokens.imageAnnotationHover.setFill()
+				outline.fill()
+			}
+			return AppKitColorTokens.imageAnnotationText
+		case .imageCommentAction(let primary):
+			if primary
+			{
+				AppKitColorTokens.accent.setFill()
+				outline.fill()
+			}
+			if active
+			{
+				AppKitColorTokens.imageAnnotationHover.setFill()
+				outline.fill()
+			}
+			return AppKitColorTokens.enabledForeground(
+				primary ? AppKitColorTokens.onAccent : AppKitColorTokens.imageAnnotationText,
+				enabled: foregroundEnabled
+			)
+		case .annotationPin:
+			AppKitColorTokens.imageAnnotationPinSurface.setFill()
+			outline.fill()
+			if active
+			{
+				AppKitColorTokens.hoverOverlay.setFill()
+				outline.fill()
+			}
+			AppKitColorTokens.imageAnnotationPinText.setStroke()
+			outline.lineWidth = ShapeTokens.Button.outlineWidth
+			outline.stroke()
+			return AppKitColorTokens.imageAnnotationPinText
+		case .primary, .dialogPrimary, .imageCommentSubmit:
 			AppKitColorTokens.primaryButtonSurface(
 				enabled: foregroundEnabled,
 				active: active

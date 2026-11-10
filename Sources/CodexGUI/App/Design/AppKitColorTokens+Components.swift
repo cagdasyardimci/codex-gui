@@ -113,6 +113,46 @@ extension AppKitColorTokens
 	{
 		canvas
 	}
+	static var imageAnnotationPinSurface: NSColor
+	{
+		paletteColor(fixedAppearance: .dark)
+		{
+			$0.imageAnnotationPinSurface
+		}
+	}
+	static var imageAnnotationPinText: NSColor
+	{
+		paletteColor(fixedAppearance: .dark)
+		{
+			$0.imageAnnotationPinText
+		}
+	}
+
+	// Annotation tools form an opaque contrast pair over arbitrary image artwork.
+	// They share the selected dark profile in both window appearances; header controls
+	// retain their adaptive viewer surface. Keep this policy out of individual callers.
+	static var imageAnnotationSurface: NSColor
+	{
+		paletteColor(fixedAppearance: .dark)
+		{
+			$0.elevatedSecondaryOpaque
+		}
+	}
+	static var imageAnnotationText: NSColor
+	{
+		paletteColor(fixedAppearance: .dark)
+		{
+			$0.secondaryText
+		}
+	}
+	static var imageAnnotationHover: NSColor
+	{
+		paletteColor(fixedAppearance: .dark)
+		{
+			$0.hoverOverlay
+		}
+	}
+
 	static var imageControlSurface: NSColor
 	{
 		paletteColor
