@@ -79,6 +79,13 @@ enum ShapeTokens
 		static let edgeWidth: CGFloat = 0.5
 	}
 
+	enum HoverPreview
+	{
+		static let popoverRadius: CGFloat = 15
+		static let rowRadius: CGFloat = 10
+		static let curve = CornerCurve.superellipse(1.5)
+	}
+
 	enum ApprovalPopover
 	{
 		static let rowRadius: CGFloat = 15

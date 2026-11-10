@@ -8,7 +8,10 @@ final class ProjectHoverCard
 	private let preview = DesktopHoverPreview()
 	private let lifetime = DesktopPanelLifetime()
 	private weak var hoverAnchor: NSView?
-	private lazy var surface = ProjectHoverSurface(content: content)
+	private lazy var surface = ProjectHoverSurface(
+		content: content,
+		presentation: .popover
+	)
 	var panel: NSPanel?
 	{
 		preview.panel

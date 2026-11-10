@@ -9,19 +9,17 @@ final class ProjectInfoPopoverView: NSView
 
 	private let nameLabel = NSTextField(labelWithString: "")
 	private let countLabel = NSTextField(labelWithString: "")
-	private let pathLabel = NSTextField(labelWithString: "")
-	private lazy var pathButton = ProjectPathButton(label: pathLabel)
+	private let pathButton = DesktopPreviewActionRow(
+		icon: .folder,
+		showsIndicator: true
+	)
 	private let pinButton = DesktopIconButton(
 		title: "Pin project",
 		label: "Pin project",
 		icon: .pin,
 		size: .small
 	)
-	private let editButton = DesktopStyledButton(
-		title: "Edit project",
-		target: nil,
-		action: nil
-	)
+	private let editButton = DesktopPreviewActionRow(icon: .settings)
 
 	override init(frame frameRect: NSRect)
 	{
@@ -35,23 +33,23 @@ final class ProjectInfoPopoverView: NSView
 	private func installProjectInfoLayout()
 	{
 		let header = AppKitLayout.horizontalStack(
-			[icon(.folder), nameLabel, NSView(), pinButton],
-			spacing: 7
+			[icon(
+				.folder,
+				primary: true
+			), nameLabel, NSView(), pinButton],
+			spacing: 6
 		)
 		let counts = AppKitLayout.horizontalStack(
 			[icon(.chat), countLabel],
-			spacing: 7
+			spacing: 6
 		)
 		let path = pathButton
-		let edit = AppKitLayout.horizontalStack(
-			[icon(.settings), editButton],
-			spacing: 0
-		)
+		let edit = editButton
 		let topSeparator = separator()
 		let bottomSeparator = separator()
 		let stack = AppKitLayout.verticalStack(
 			[header, counts, topSeparator, path, bottomSeparator, edit],
-			spacing: 7
+			spacing: 6
 		)
 		// The hover card or native popover owns the surrounding surface and padding.
 		AppKitLayout.pin(
@@ -63,26 +61,21 @@ final class ProjectInfoPopoverView: NSView
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
-		widthAnchor.constraint(equalToConstant: 300).isActive = true
+		widthAnchor.constraint(equalToConstant: 304).isActive = true
 	}
 
 	private func configureLabels()
 	{
-		nameLabel.setTypographyRole(TypographyTokens.Sidebar.row)
+		nameLabel.setTypographyRole(TypographyTokens.Text.title)
+		nameLabel.textColor = AppKitColorTokens.primaryText
 		nameLabel.lineBreakMode = .byTruncatingTail
 		nameLabel.setContentCompressionResistancePriority(
 			.defaultLow,
 			for: .horizontal
 		)
 
-		countLabel.setTypographyRole(TypographyTokens.UI.body)
-
-		pathLabel.setTypographyRole(TypographyTokens.UI.body)
-		pathLabel.lineBreakMode = .byTruncatingMiddle
-		pathLabel.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
+		countLabel.setTypographyRole(TypographyTokens.Text.detail)
+		countLabel.textColor = AppKitColorTokens.primaryText
 	}
 
 	private func configureActions()
@@ -95,9 +88,7 @@ final class ProjectInfoPopoverView: NSView
 
 		editButton.target = self
 		editButton.action = #selector(editProject)
-		editButton.size = .regular
-		editButton.presentation = .inlineAction
-		editButton.alignment = .left
+		editButton.setText("Edit project")
 	}
 
 	required init?(coder: NSCoder)
@@ -125,7 +116,7 @@ final class ProjectInfoPopoverView: NSView
 			activeTaskCount: activeTaskCount
 		)
 
-		pathLabel.stringValue = (project.path as NSString).abbreviatingWithTildeInPath
+		pathButton.setText((project.path as NSString).abbreviatingWithTildeInPath)
 		pathButton.setAccessibilityLabel("Open \(project.path) in Finder")
 		editButton.setAccessibilityLabel("Edit project \(name)")
 	}
@@ -165,17 +156,21 @@ final class ProjectInfoPopoverView: NSView
 		countLabel.setAccessibilityLabel(countLabel.stringValue)
 	}
 
-	private func icon(_ symbol: DesktopIcon) -> NSImageView
+	private func icon(
+		_ symbol: DesktopIcon,
+		primary: Bool = false
+	) -> NSImageView
 	{
 		let image = NSImageView()
 		image.image = DesktopIcons.image(
 			symbol,
-			size: 14
+			size: 16
 		)
-		image.contentTintColor = AppKitColorTokens.secondaryText
+		image.contentTintColor = primary ? AppKitColorTokens.primaryText : AppKitColorTokens
+			.secondaryText
 		image.setAccessibilityElement(false)
-		image.widthAnchor.constraint(equalToConstant: 14).isActive = true
-		image.heightAnchor.constraint(equalToConstant: 16).isActive = true
+		image.widthAnchor.constraint(equalToConstant: 16).isActive = true
+		image.heightAnchor.constraint(equalToConstant: 20).isActive = true
 		return image
 	}
 
@@ -198,68 +193,5 @@ final class ProjectInfoPopoverView: NSView
 	@objc private func editProject()
 	{
 		onEditProject?()
-	}
-}
-
-@MainActor
-private final class ProjectPathButton: DesktopHoverButton
-{
-	private let openIndicator = NSImageView()
-
-	override var hoverTrackingOptions: NSTrackingArea.Options
-	{
-		[.mouseEnteredAndExited, .activeAlways, .inVisibleRect]
-	}
-
-	init(label: NSTextField)
-	{
-		super.init(frame: .zero)
-		title = ""
-		isBordered = false
-		cornerRadius = 4
-		let folder = NSImageView()
-		folder.image = DesktopIcons.image(
-			.folder,
-			size: 14
-		)
-		openIndicator.image = NSImage(
-			systemSymbolName: "arrow.up.right",
-			accessibilityDescription: nil
-		)
-		for image in [folder, openIndicator]
-		{
-			image.contentTintColor = AppKitColorTokens.secondaryText
-			image.setAccessibilityElement(false)
-			image.widthAnchor.constraint(equalToConstant: 14).isActive = true
-			image.heightAnchor.constraint(equalToConstant: 16).isActive = true
-		}
-		label.setAccessibilityElement(false)
-		openIndicator.alphaValue = 0
-		let content = AppKitLayout.horizontalStack(
-			[folder, label, openIndicator],
-			spacing: 7
-		)
-		AppKitLayout.pin(
-			content,
-			to: self,
-			inset: 0
-		)
-		heightAnchor.constraint(greaterThanOrEqualToConstant: 22).isActive = true
-	}
-
-	required init?(coder: NSCoder)
-	{
-		nil
-	}
-
-	override func hitTest(_ point: NSPoint) -> NSView?
-	{
-		super.hitTest(point) == nil ? nil : self
-	}
-
-	override func hoverDidChange()
-	{
-		super.hoverDidChange()
-		openIndicator.alphaValue = isHovered ? 1 : 0
 	}
 }

@@ -4,19 +4,36 @@ import AppKit
 @MainActor
 class DesktopHoverPreviewSurface: DesktopSurface
 {
+	enum Presentation
+	{
+		case summary, popover
+	}
+
+	private let presentation: Presentation
 	private var themeColorObservation: ThemeColorObservation?
 	static let preferredWidth: CGFloat = 320
 	static let contentInset: CGFloat = 10
 	static let minimumHeight: CGFloat = 60
 
-	init(frame: NSRect = .zero)
+	init(
+		frame: NSRect = .zero,
+		presentation: Presentation = .summary
+	)
 	{
+		self.presentation = presentation
 		super.init(
-			AppKitColorTokens.summaryCard,
-			cornerRadius: 12,
+			presentation == .popover ? AppKitColorTokens.elevatedSecondaryOpaque : AppKitColorTokens
+				.summaryCard,
+			cornerRadius: presentation == .popover ? ShapeTokens.HoverPreview.popoverRadius : 12,
+			cornerCurve: presentation == .popover ? ShapeTokens.HoverPreview.curve : .circular,
 			bordered: true,
 			borderWidth: 0.5,
-			borderColor: AppKitColorTokens.popoverEdge
+			borderColor: AppKitColorTokens.popoverEdge,
+			colorProvider:
+			{
+				presentation == .popover ? AppKitColorTokens
+					.elevatedSecondaryOpaque : AppKitColorTokens.summaryCard
+			}
 		)
 		themeColorObservation = ThemeColorObservation
 		{
@@ -24,13 +41,16 @@ class DesktopHoverPreviewSurface: DesktopSurface
 		}
 		self.frame = frame
 		wantsLayer = true
-		layer?.cornerRadius = 12
+		layer?.cornerRadius = presentation == .popover ? 0 : 12
 		refreshSurfaceColor()
 	}
 
-	convenience init(content: NSView)
+	convenience init(
+		content: NSView,
+		presentation: Presentation = .summary
+	)
 	{
-		self.init()
+		self.init(presentation: presentation)
 		installContent(content)
 	}
 
@@ -47,10 +67,12 @@ class DesktopHoverPreviewSurface: DesktopSurface
 
 	private func refreshSurfaceColor()
 	{
-		layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
-			AppKitColorTokens.summaryCard,
-			for: self
-		)
+		layer?.backgroundColor = presentation == .popover ? NSColor.clear
+			.cgColor : AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.summaryCard,
+				for: self
+			)
+		needsDisplay = true
 	}
 
 	func installContent(_ content: NSView)
@@ -58,7 +80,7 @@ class DesktopHoverPreviewSurface: DesktopSurface
 		AppKitLayout.pin(
 			content,
 			to: self,
-			inset: Self.contentInset
+			inset: presentation == .popover ? 8 : Self.contentInset
 		)
 	}
 }

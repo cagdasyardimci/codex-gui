@@ -22,6 +22,10 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 		cornerRadius
 	}
 	private var keyboardFocused = false
+	var hasKeyboardFocus: Bool
+	{
+		keyboardFocused && window?.firstResponder === self
+	}
 	private var focusIndicator: CAShapeLayer?
 	private lazy var focusColorObservation = ThemeColorObservation
 	{
@@ -79,6 +83,7 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 		let accepted = super.becomeFirstResponder()
 		keyboardFocused = accepted && NSApp.currentEvent?.type == .keyDown
 		needsLayout = true
+		hoverDidChange()
 		return accepted
 	}
 
@@ -90,6 +95,7 @@ class DesktopHoverButton: DesktopAttributedTitleButton
 			keyboardFocused = false
 		}
 		needsLayout = true
+		hoverDidChange()
 		return accepted
 	}
 

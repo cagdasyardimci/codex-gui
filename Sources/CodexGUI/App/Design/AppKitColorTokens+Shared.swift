@@ -33,6 +33,13 @@ extension AppKitColorTokens
 			$0.elevatedOpaque
 		}
 	}
+	static var elevatedSecondaryOpaque: NSColor
+	{
+		paletteColor
+		{
+			$0.elevatedSecondaryOpaque
+		}
+	}
 	static var skill: NSColor
 	{
 		paletteColor

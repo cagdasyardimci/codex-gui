@@ -67,6 +67,26 @@ struct ProjectHoverCardTests
 			#expect(labels.contains("Hover Project"))
 			#expect(labels.contains("2 chats · 1 active"))
 			#expect(labels.contains("/tmp/hover-project"))
+			let path = try #require(descendants(card.content).compactMap
+			{
+				$0 as? DesktopPreviewActionRow
+			}.first
+			{
+				$0.accessibilityLabel() == "Open /tmp/hover-project in Finder"
+			})
+			let arrow = try #require(descendants(path).compactMap
+			{
+				$0 as? NSImageView
+			}.first
+			{
+				$0.alphaValue == 0
+			})
+			panel.layoutIfNeeded()
+			#expect(abs(arrow.frame.maxX - path.bounds.maxX) < 0.5)
+			path.setHovered(true)
+			#expect(arrow.alphaValue == 1)
+			path.setHovered(false)
+			#expect(arrow.alphaValue == 0)
 			for theme: NSAppearance.Name in [.aqua, .darkAqua, .aqua]
 			{
 				window.appearance = NSAppearance(named: theme)
@@ -80,7 +100,7 @@ struct ProjectHoverCardTests
 			}
 			.first
 			{
-				$0.title == "Edit project"
+				$0.accessibilityLabel() == "Edit project Hover Project"
 			})
 			#expect(edit.dispatchConfiguredAction())
 			#expect(edits == 1)
