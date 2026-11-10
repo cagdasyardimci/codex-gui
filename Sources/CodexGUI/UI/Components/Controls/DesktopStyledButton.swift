@@ -201,6 +201,7 @@ class DesktopStyledButton: DesktopTooltipButton
 		switch presentation
 		{
 		case .zoomStep: return TypographyTokens.Button.zoomStep
+		case .inlineAction: return TypographyTokens.UI.body
 		case .dialogPrimary, .dialogCancel, .dialogOutlined: return TypographyTokens.Button.dialog
 		default: break
 		}
