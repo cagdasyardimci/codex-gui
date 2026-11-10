@@ -79,17 +79,40 @@ final class TaskHoverCard
 		) ?? NSImage())
 		folder.contentTintColor = AppKitColorTokens.secondaryText
 		let projectLabel = NSTextField(wrappingLabelWithString: projectName)
-		projectLabel.setTypographyRole(TypographyTokens.TaskHover.project)
+		let folderAlignment = folder.centerYAnchor.constraint(
+			equalTo: projectLabel.firstBaselineAnchor
+		)
+		projectLabel.setTypographyRole(
+			TypographyTokens.TaskHover.project,
+			onUpdate:
+			{
+				[weak folderAlignment, weak projectLabel] in
+				folderAlignment?.constant = -(projectLabel?.font?.capHeight ?? 0) / 2
+			}
+		)
 		projectLabel.textColor = AppKitColorTokens.primaryText
 		constrainLabel(
 			projectLabel,
 			toLines: 2,
 			role: TypographyTokens.TaskHover.project
 		)
-		let project = AppKitLayout.horizontalStack(
-			[folder, projectLabel],
-			spacing: LayoutTokens.TaskHover.projectSpacing
-		)
+		let project = NSView()
+		for view in [folder, projectLabel]
+		{
+			view.translatesAutoresizingMaskIntoConstraints = false
+			project.addSubview(view)
+		}
+		NSLayoutConstraint.activate([
+			folder.leadingAnchor.constraint(equalTo: project.leadingAnchor),
+			folderAlignment,
+			projectLabel.leadingAnchor.constraint(
+				equalTo: folder.trailingAnchor,
+				constant: LayoutTokens.TaskHover.projectSpacing
+			),
+			projectLabel.trailingAnchor.constraint(equalTo: project.trailingAnchor),
+			projectLabel.topAnchor.constraint(equalTo: project.topAnchor),
+			projectLabel.bottomAnchor.constraint(equalTo: project.bottomAnchor)
+		])
 		let stack = AppKitLayout.verticalStack(
 			[header, project],
 			spacing: LayoutTokens.TaskHover.rowSpacing
