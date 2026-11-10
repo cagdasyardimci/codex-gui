@@ -148,6 +148,57 @@ final class ExpandedImagePreview
 				generation: generation
 			)
 		}
+		if preparedDiagram == nil
+		{
+			controller.onCopyImage =
+			{
+				[weak self] in
+				Task
+				{
+					guard let data = await SourceThumbnailLoader.originalData(path: path),
+							let self, self.generation == generation, let image = NSImage(data: data)
+					else
+					{
+						return
+					}
+					NSPasteboard.general.clearContents()
+					NSPasteboard.general.writeObjects([image])
+				}
+			}
+			if let owner = parent.windowController as? MainWindowController
+			{
+				controller.onOpenImage =
+				{
+					[weak self, weak owner] in
+					Task
+					{
+						guard let data = await SourceThumbnailLoader.originalData(path: path),
+								let self, self.generation == generation, let owner,
+								let file = Self.exportFile(
+								data: data,
+								name: name
+								)
+						else
+						{
+							return
+						}
+						self.dismiss()
+						owner.openImageInToolTab(
+							data: data,
+							name: file.name,
+							sourceURL: LocalAttachmentURL.resolve(path)
+						)
+					}
+				}
+			}
+			if let url = LocalAttachmentURL.resolve(path)
+			{
+				controller.onRevealImage =
+				{
+					NSWorkspace.shared.activateFileViewerSelecting([url])
+				}
+			}
+		}
 		controller.onDetach =
 		{
 			[weak self] in self?.dismiss()

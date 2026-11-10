@@ -6,6 +6,90 @@ import Testing
 @MainActor
 struct ExpandedImagePreviewTests
 {
+	@Test func imageTabControlsZoomFitAndDownload() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 0,
+					y: 0,
+					width: 500,
+					height: 400
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.prepareForTesting()
+			let controller = ExpandedImageViewController(
+				name: "attachment.png",
+				isTab: true
+			)
+			defer
+			{
+				controller.invalidate(); window.close()
+			}
+			controller.view.frame = NSRect(
+				x: 0,
+				y: 0,
+				width: 500,
+				height: 400
+			)
+			window.contentView?.addSubview(controller.view)
+			controller.view.layoutSubtreeIfNeeded()
+			let bitmap = try #require(CGContext(
+				data: nil,
+				width: 1,
+				height: 1,
+				bitsPerComponent: 8,
+				bytesPerRow: 4,
+				space: CGColorSpaceCreateDeviceRGB(),
+				bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+			))
+			let thumbnail = SourceThumbnailLoader.Thumbnail(
+				image: try #require(bitmap.makeImage()),
+				originalPixelSize: CGSize(
+					width: 1000,
+					height: 800
+				)
+			)
+			controller.display(thumbnail)
+			let fitted = controller.displayedZoomPercentage
+			#expect(fitted > 0 && fitted < 100)
+			let menu = try #require(controller.zoomButton.menu)
+			#expect(menu.item(withTag: -1)?.state == .on)
+			controller.zoomButton.selectItem(withTag: 200)
+			let zoomAction = try #require(controller.zoomButton.action)
+			#expect(NSApp.sendAction(
+				zoomAction,
+				to: controller.zoomButton.target,
+				from: controller.zoomButton
+			))
+			#expect(controller.displayedZoomPercentage == 200)
+			#expect(menu.item(withTag: 200)?.state == .on)
+			controller.zoomButton.selectItem(withTag: -1)
+			#expect(NSApp.sendAction(
+				zoomAction,
+				to: controller.zoomButton.target,
+				from: controller.zoomButton
+			))
+			#expect(controller.displayedZoomPercentage == fitted)
+			var downloads = 0
+			controller.onDownload =
+			{
+				downloads += 1
+			}
+			let downloadAction = try #require(controller.downloadButton.action)
+			#expect(NSApp.sendAction(
+				downloadAction,
+				to: controller.downloadButton.target,
+				from: controller.downloadButton
+			))
+			#expect(downloads == 1)
+		}
+	}
+
 	@Test func imageCoversWindowChromeFitsItsViewportAndRestoresTheEditor() async throws
 	{
 		try await AppKitTestIsolation.perform

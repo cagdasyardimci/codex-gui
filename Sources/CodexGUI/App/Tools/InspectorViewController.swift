@@ -361,6 +361,21 @@ final class InspectorViewController: NSViewController
 		}
 	}
 
+	func showImageInToolTab(
+		data: Data,
+		name: String,
+		sourceURL: URL?
+	)
+	{
+		prepareToolTabOpening()
+		toolsTabs.showImageTab(
+			data: data,
+			name: name,
+			sourceURL: sourceURL
+		)
+		updateContentVisibility()
+	}
+
 	func showFilesInToolTab(_ controller: NSViewController)
 	{
 		prepareToolTabOpening()

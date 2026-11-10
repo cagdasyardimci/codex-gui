@@ -113,6 +113,10 @@ final class ToolsTabViewController: NSViewController
 	private var wasFilesPresentationVisible = false
 	private var conversationTitle = "New chat"
 	private var tabIDs: [UUID] = []
+	private var imageTabs: [UUID: (name: String, controller: ExpandedImageViewController)] = [:]
+	private var imageSavePanels: [UUID: NSSavePanel] = [:]
+	private var imageLoadTasks: [UUID: Task<Void, Never>] = [:]
+	private var imageResolutions: [UUID: Int] = [:]
 	private let tabStack = NSStackView()
 	private let contentHost = NSView()
 	private var toolsContent: NSView?
@@ -399,6 +403,123 @@ final class ToolsTabViewController: NSViewController
 		removeFeatureTab(subagentsTabID)
 	}
 
+	func showImageTab(
+		data: Data,
+		name: String,
+		sourceURL: URL? = nil
+	)
+	{
+		_ = view
+		let id = UUID()
+		let controller = ExpandedImageViewController(
+			name: name,
+			isTab: true
+		)
+		controller.onOpenImage =
+		{
+			[weak self] in self?.showImageTab(
+				data: data,
+				name: name,
+				sourceURL: sourceURL
+			)
+		}
+		controller.onCopyImage =
+		{
+			guard let image = NSImage(data: data)
+			else
+			{
+				return
+			}
+			NSPasteboard.general.clearContents()
+			NSPasteboard.general.writeObjects([image])
+		}
+		controller.onRevealImage = sourceURL.map
+		{
+			url in
+			{
+				NSWorkspace.shared.activateFileViewerSelecting([url])
+			}
+		}
+		controller.onDownload =
+		{
+			[weak self, weak controller] in
+			guard let self, let window = controller?.view.window, window.attachedSheet == nil,
+					let file = ExpandedImagePreview.exportFile(
+					data: data,
+					name: name
+					)
+			else
+			{
+				return
+			}
+			self.imageSavePanels[id] = MarkdownDiagramExport.save(
+				file,
+				in: window
+			)
+		}
+		controller.onResolutionDemand =
+		{
+			[weak self] pixels in self?.loadImageTab(
+				id: id,
+				data: data,
+				pixels: pixels
+			)
+		}
+
+		imageTabs[id] = (name, controller)
+		loadImageTab(
+			id: id,
+			data: data,
+			pixels: 2048
+		)
+		installController(
+			controller,
+			replacing: nil
+		)
+		tabIDs.append(id)
+		tabCount = tabIDs.count
+		selectedTabID = id
+		isConversationSelected = false
+		renderTabs()
+		onTabSelectionChange?()
+		onChangesSelectionChange?()
+	}
+
+	private func loadImageTab(
+		id: UUID,
+		data: Data,
+		pixels: Int
+	)
+	{
+		guard pixels > (imageResolutions[id] ?? 0)
+		else
+		{
+			return
+		}
+		imageResolutions[id] = pixels
+		imageLoadTasks[id]?.cancel()
+		imageLoadTasks[id] = Task
+		{
+			[weak self] in
+			let thumbnail = await SourceThumbnailLoader.image(
+				data: data,
+				maximumPixelSize: pixels
+			)
+			guard !Task.isCancelled, let controller = self?.imageTabs[id]?.controller,
+					let thumbnail
+			else
+			{
+				return
+			}
+			controller.display(thumbnail)
+		}
+	}
+
+	func waitForImageTab(_ id: UUID) async
+	{
+		await imageLoadTasks[id]?.value
+	}
+
 	func showFilesLanding(_ controller: NSViewController)
 	{
 		_ = view
@@ -594,7 +715,7 @@ final class ToolsTabViewController: NSViewController
 								filesLandingTabID].compactMap
 		{
 			$0
-		} + fileTabPresentations.map(\.id)
+		} + fileTabPresentations.map(\.id) + Array(imageTabs.keys)
 		let tabID: UUID
 		if let existingTabID
 		{
@@ -1035,7 +1156,11 @@ final class ToolsTabViewController: NSViewController
 	private func showSelectedContent()
 	{
 		toolsContent?.isHidden = isChangesSelected || isSourcesSelected ||
-			isSubagentsSelected || isConversationSelected || isFilesSelected
+			isSubagentsSelected || isConversationSelected || isFilesSelected ||
+			(!isConversationSelected && selectedTabID.flatMap
+			{
+				imageTabs[$0]
+			} != nil)
 		if let changesController, changesController.parent === self
 		{
 			changesController.view.isHidden = !isChangesSelected
@@ -1063,6 +1188,10 @@ final class ToolsTabViewController: NSViewController
 		if let fileDocumentController, fileDocumentController.parent === self
 		{
 			fileDocumentController.view.isHidden = selectedFileDocumentID == nil
+		}
+		for (id, tab) in imageTabs
+		{
+			tab.controller.view.isHidden = isConversationSelected || selectedTabID != id
 		}
 		let filesVisible = isContentVisible && isFilesSelected
 		if filesVisible != wasFilesPresentationVisible
@@ -1146,7 +1275,7 @@ final class ToolsTabViewController: NSViewController
 		}
 		let title = isChanges ? "Changes" :
 			isSources ? "Sources" : isSubagents ? "Subagents" :
-			isFilesLanding ? "Files" : file?.title ?? "New tab"
+			isFilesLanding ? "Files" : file?.title ?? imageTabs[id]?.name ?? "New tab"
 		let displayTitle = file?.isDirty == true ? title + " •" : title
 		let selectButton = ToolsTabSelectionButton(
 			title: displayTitle,
@@ -1182,6 +1311,11 @@ final class ToolsTabViewController: NSViewController
 		else if isFilesLanding
 		{
 			selectButton.image = ToolsPaneIcons.files(size: Layout.iconSize)
+			selectButton.imagePosition = .imageLeading
+		}
+		else if let image = imageTabs[id]
+		{
+			selectButton.image = WorkspaceFileIcon.image(relativePath: image.name)
 			selectButton.imagePosition = .imageLeading
 		}
 		else if let file
@@ -1642,6 +1776,21 @@ final class ToolsTabViewController: NSViewController
 			return
 		}
 		let removedTabID = tabIDs.remove(at: index)
+		if let panel = imageSavePanels.removeValue(forKey: removedTabID),
+			let parent = panel.sheetParent
+		{
+			parent.endSheet(
+				panel,
+				returnCode: .cancel
+			)
+		}
+		imageLoadTasks.removeValue(forKey: removedTabID)?.cancel()
+		imageResolutions.removeValue(forKey: removedTabID)
+		if let image = imageTabs.removeValue(forKey: removedTabID)
+		{
+			image.controller.invalidate()
+			detachController(image.controller)
+		}
 		if removedTabID == filesLandingTabID
 		{
 			filesLandingTabID = nil

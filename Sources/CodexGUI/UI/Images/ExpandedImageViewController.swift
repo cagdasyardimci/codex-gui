@@ -19,14 +19,25 @@ final class ExpandedImageViewController: NSViewController
 		action: #selector(downloadImage(_:)),
 		diagram: false
 	)
-	let imageView = NSImageView()
+	let imageView = ExpandedImageContextView()
 	let imageFrameView = NSView()
 	private(set) var originalPixelSize = NSSize.zero
 	var onDismiss: (() -> Void)?
 	var onDownload: (() -> Void)?
+	var onOpenImage: (() -> Void)?
+	var onCopyImage: (() -> Void)?
+	var onRevealImage: (() -> Void)?
 	var onResolutionDemand: ((Int) -> Void)?
 	var onDetach: (() -> Void)?
 
+	private let isTab: Bool
+	private let imageName: String
+	private var imageNameMenu: DesktopActionMenu?
+	private let imageNameButton = ViewerToolbarButton(
+		title: "Image",
+		target: nil,
+		action: nil
+	)
 	private let dimmingView = ExpandedImageDimmingView()
 	private var colorObservation: ThemeColorObservation?
 	private weak var diagramCanvas: NSView?
@@ -59,6 +70,13 @@ final class ExpandedImageViewController: NSViewController
 	private func refreshThemeColors()
 	{
 		dimmingView.needsDisplay = true
+		if isTab
+		{
+			view.layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.toolsCanvas,
+				for: view
+			)
+		}
 		imageFrameView.layer?.borderColor = AppKitColorResolution.resolvedCGColor(
 			AppKitColorTokens.subtleEdge,
 			for: imageFrameView
@@ -85,8 +103,13 @@ final class ExpandedImageViewController: NSViewController
 		Int((scrollView.magnification * 100).rounded())
 	}
 
-	init(name: String)
+	init(
+		name: String,
+		isTab: Bool = false
+	)
 	{
+		self.isTab = isTab
+		imageName = name
 		super.init(
 			nibName: nil,
 			bundle: nil
@@ -124,12 +147,17 @@ final class ExpandedImageViewController: NSViewController
 		overlay.setAccessibilityIdentifier("expanded-image-preview")
 		overlay.setAccessibilityLabel("Expanded image viewer")
 		view = overlay
+		if isTab
+		{
+			view.wantsLayer = true
+		}
 		colorObservation = ThemeColorObservation(view: view)
 		{
 			[weak self] in
 			self?.refreshThemeColors()
 		}
 
+		dimmingView.isHidden = isTab
 		dimmingView.setAccessibilityHidden(true)
 		dimmingView.setAccessibilityIdentifier("expanded-image-dimming")
 		dimmingView.translatesAutoresizingMaskIntoConstraints = false
@@ -153,6 +181,10 @@ final class ExpandedImageViewController: NSViewController
 		scrollView.contentView = ExpandedImageClipView()
 		scrollView.contentView.drawsBackground = false
 		scrollView.contentView.postsBoundsChangedNotifications = true
+		imageView.menuProvider =
+		{
+			[weak self] in self?.imageContextMenu()
+		}
 		imageView.imageScaling = .scaleAxesIndependently
 		imageFrameView.wantsLayer = true
 		imageFrameView.addSubview(imageView)
@@ -204,47 +236,104 @@ final class ExpandedImageViewController: NSViewController
 		downloadButton.nextKeyView = closeButton
 		closeButton.nextKeyView = zoomButton
 
-		for child in [scrollView, zoomButton, downloadButton, closeButton]
+		if isTab
 		{
-			child.translatesAutoresizingMaskIntoConstraints = false
-			view.addSubview(child)
+			imageNameButton.target = self
+			imageNameButton.action = #selector(showImageName(_:))
+			imageNameButton.image = WorkspaceFileIcon.image(relativePath: imageName)
+			imageNameButton.trailingImage = DesktopIcons.image(.chevronDown)
+			imageNameButton.setAccessibilityLabel("Image details")
+			imageNameButton.setAccessibilityIdentifier("image-tab-details")
+			for child in [scrollView, imageNameButton, zoomButton, downloadButton]
+			{
+				child.translatesAutoresizingMaskIntoConstraints = false
+				view.addSubview(child)
+			}
+			NSLayoutConstraint.activate([
+				imageNameButton.leadingAnchor.constraint(
+					equalTo: view.leadingAnchor,
+					constant: 8
+				),
+				imageNameButton.topAnchor.constraint(
+					equalTo: view.topAnchor,
+					constant: 8
+				),
+				downloadButton.trailingAnchor.constraint(
+					equalTo: view.trailingAnchor,
+					constant: -8
+				),
+				downloadButton.centerYAnchor.constraint(equalTo: imageNameButton.centerYAnchor),
+				zoomButton.trailingAnchor.constraint(
+					equalTo: downloadButton.leadingAnchor,
+					constant: -6
+				),
+				zoomButton.centerYAnchor.constraint(equalTo: imageNameButton.centerYAnchor),
+				scrollView.topAnchor.constraint(
+					equalTo: imageNameButton.bottomAnchor,
+					constant: 16
+				),
+				scrollView.leadingAnchor.constraint(
+					equalTo: view.leadingAnchor,
+					constant: 32
+				),
+				scrollView.trailingAnchor.constraint(
+					equalTo: view.trailingAnchor,
+					constant: -32
+				),
+				scrollView.bottomAnchor.constraint(
+					equalTo: view.bottomAnchor,
+					constant: -16
+				)
+			])
+			imageNameButton.nextKeyView = zoomButton
+			zoomButton.nextKeyView = downloadButton
+			downloadButton.nextKeyView = imageNameButton
 		}
-		NSLayoutConstraint.activate([
-			closeButton.topAnchor.constraint(
-				equalTo: view.topAnchor,
-				constant: 8
-			),
-			closeButton.trailingAnchor.constraint(
-				equalTo: view.trailingAnchor,
-				constant: -8
-			),
-			downloadButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-			downloadButton.trailingAnchor.constraint(
-				equalTo: closeButton.leadingAnchor,
-				constant: -6
-			),
-			zoomButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-			zoomButton.trailingAnchor.constraint(
-				equalTo: downloadButton.leadingAnchor,
-				constant: -6
-			),
-			scrollView.topAnchor.constraint(
-				equalTo: view.topAnchor,
-				constant: 48
-			),
-			scrollView.leadingAnchor.constraint(
-				equalTo: view.leadingAnchor,
-				constant: 32
-			),
-			scrollView.trailingAnchor.constraint(
-				equalTo: view.trailingAnchor,
-				constant: -32
-			),
-			scrollView.bottomAnchor.constraint(
-				equalTo: view.bottomAnchor,
-				constant: -32
-			),
-		])
+		else
+		{
+			for child in [scrollView, zoomButton, downloadButton, closeButton]
+			{
+				child.translatesAutoresizingMaskIntoConstraints = false
+				view.addSubview(child)
+			}
+			NSLayoutConstraint.activate([
+				closeButton.topAnchor.constraint(
+					equalTo: view.topAnchor,
+					constant: 8
+				),
+				closeButton.trailingAnchor.constraint(
+					equalTo: view.trailingAnchor,
+					constant: -8
+				),
+				downloadButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
+				downloadButton.trailingAnchor.constraint(
+					equalTo: closeButton.leadingAnchor,
+					constant: -6
+				),
+				zoomButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
+				zoomButton.trailingAnchor.constraint(
+					equalTo: downloadButton.leadingAnchor,
+					constant: -6
+				),
+				scrollView.topAnchor.constraint(
+					equalTo: view.topAnchor,
+					constant: 48
+				),
+				scrollView.leadingAnchor.constraint(
+					equalTo: view.leadingAnchor,
+					constant: 32
+				),
+				scrollView.trailingAnchor.constraint(
+					equalTo: view.trailingAnchor,
+					constant: -32
+				),
+				scrollView.bottomAnchor.constraint(
+					equalTo: view.bottomAnchor,
+					constant: -32
+				),
+			])
+		}
+
 		lifetime.addObserver(
 			forName: NSView.boundsDidChangeNotification,
 			object: scrollView.contentView,
@@ -516,10 +605,30 @@ final class ExpandedImageViewController: NSViewController
 		)
 		lifetime.invalidate()
 		zoomButton.dismissMenu()
+		imageNameMenu?.close()
+		imageNameMenu = nil
 		onDismiss = nil
 		onDownload = nil
+		onOpenImage = nil
+		onCopyImage = nil
+		onRevealImage = nil
 		onDetach = nil
 		onResolutionDemand = nil
+	}
+
+	private func imageContextMenu() -> ImageContextMenu?
+	{
+		guard diagramImage == nil, imageView.image != nil
+		else
+		{
+			return nil
+		}
+		return ImageContextMenu(
+			open: onOpenImage,
+			copy: onCopyImage,
+			reveal: onRevealImage,
+			download: onDownload
+		)
 	}
 
 	override func cancelOperation(_ sender: Any?)
@@ -624,6 +733,15 @@ final class ExpandedImageViewController: NSViewController
 			canZoomOut: scrollView.magnification > 0.250001,
 			canZoomIn: scrollView.magnification < 4.999999
 		)
+		for item in zoomButton.menu?.items ?? [] where item.tag != 0
+		{
+			item
+				.state = (fitting && item.tag == -1) ||
+				(!fitting && item
+					.tag > 0 && abs(scrollView.magnification * 100 - CGFloat(item.tag)) < 0.01) ?
+				.on :
+				.off
+		}
 		zoomButton.menu?.item(withTag: 0)?.title = "\(displayedZoomPercentage)%"
 		zoomButton.selectItem(withTag: 0)
 		zoomButton.needsDisplay = true
@@ -645,6 +763,28 @@ final class ExpandedImageViewController: NSViewController
 				ceil(pixels)
 			)
 		)))
+	}
+
+	@objc private func showImageName(_ sender: NSButton)
+	{
+		imageNameMenu?.close()
+		let menu = NSMenu()
+		let item = NSMenuItem(
+			title: imageName,
+			action: nil,
+			keyEquivalent: ""
+		)
+		item.image = WorkspaceFileIcon.image(relativePath: imageName)
+		menu.addItem(item)
+		let presentation = DesktopActionMenu(
+			menu: menu,
+			backingScale: view.window?.backingScaleFactor ?? 1,
+			minimumWidth: 220,
+			alignment: .leading,
+			accessibilityLabel: "Image details"
+		)
+		imageNameMenu = presentation
+		presentation.show(from: sender)
 	}
 
 	@objc private func selectZoom(_ sender: NSPopUpButton)
@@ -798,5 +938,64 @@ private final class ExpandedImageDimmingView: NSView
 	override func hitTest(_ point: NSPoint) -> NSView?
 	{
 		nil
+	}
+}
+
+@MainActor
+final class ExpandedImageContextView: NSImageView
+{
+	var menuProvider: (() -> ImageContextMenu?)?
+	private var activeMenu: ImageContextMenu?
+
+	override func menu(for event: NSEvent) -> NSMenu?
+	{
+		activeMenu = menuProvider?()
+		return activeMenu?.menu
+	}
+}
+
+@MainActor
+final class ImageContextMenu: NSObject
+{
+	let menu = NSMenu()
+	private let actions: [(() -> Void)?]
+
+	init(
+		open: (() -> Void)?,
+		copy: (() -> Void)?,
+		reveal: (() -> Void)?,
+		download: (() -> Void)?
+	)
+	{
+		actions = [open, copy, reveal, download]
+		super.init()
+		menu.autoenablesItems = false
+		for (index, title) in [
+			"Open image in new tab",
+			"Copy image",
+			"Reveal in Finder",
+			"Download a copy"
+		].enumerated()
+		{
+			let item = NSMenuItem(
+				title: title,
+				action: #selector(performAction(_:)),
+				keyEquivalent: ""
+			)
+			item.target = self
+			item.tag = index
+			item.isEnabled = actions[index] != nil
+			menu.addItem(item)
+		}
+	}
+
+	@objc private func performAction(_ item: NSMenuItem)
+	{
+		guard actions.indices.contains(item.tag)
+		else
+		{
+			return
+		}
+		actions[item.tag]?()
 	}
 }

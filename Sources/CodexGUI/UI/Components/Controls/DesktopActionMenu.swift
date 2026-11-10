@@ -10,21 +10,24 @@ final class DesktopActionMenu: NSObject
 	private let content: DesktopActionMenuContent
 	private let minimumWidth: CGFloat
 	private let backingScale: CGFloat
-	private static let placement = DesktopPopoverHost.ComposerPlacement(
-		alignment: .trailing,
-		anchorSpacing: 5,
-		opensBelowAnchor: true
-	)
+	private let placement: DesktopPopoverHost.ComposerPlacement
 	var onClose: (() -> Void)?
 
 	init(
 		menu: NSMenu,
 		backingScale: CGFloat = 1,
 		minimumWidth: CGFloat = 0,
+		alignment: DesktopPopoverHost.ComposerPlacement.Alignment = .trailing,
+		showsCheckmarks: Bool = false,
 		accessibilityLabel: String = "Queued message actions"
 	)
 	{
 		self.minimumWidth = minimumWidth
+		placement = DesktopPopoverHost.ComposerPlacement(
+			alignment: alignment,
+			anchorSpacing: 5,
+			opensBelowAnchor: true
+		)
 		self.backingScale = backingScale
 		items = menu.items.filter
 		{
@@ -36,7 +39,9 @@ final class DesktopActionMenu: NSObject
 			let row = DesktopMenuRow(
 				content: .init(
 					title: item.title,
-					icon: item.image
+					icon: item.image,
+					indicator: showsCheckmarks ? .checkmark : .none,
+					checked: item.state == .on
 				),
 				textPresentation: .aligned
 			)
@@ -55,7 +60,7 @@ final class DesktopActionMenu: NSObject
 		refreshSize()
 		content.loadViewIfNeeded()
 		host = DesktopPopoverHost(
-			presentation: .composer(Self.placement),
+			presentation: .composer(placement),
 			content: content.view,
 			controller: content,
 			shadowOutset: 24
@@ -141,7 +146,7 @@ final class DesktopActionMenu: NSObject
 				} + CGFloat(content.separatorCount) *
 				DesktopActionMenuContent.separatorHeight
 		)
-		host?.update(.composer(Self.placement))
+		host?.update(.composer(placement))
 	}
 
 	func show(from anchor: NSView)

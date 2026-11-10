@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 
 /// Image zoom uses the shared action menu and the viewer's value typography.
 @MainActor
@@ -114,6 +115,7 @@ final class ExpandedImageZoomButton: DesktopPopupButton
 			menu: menu,
 			backingScale: window?.backingScaleFactor ?? 1,
 			minimumWidth: 160,
+			showsCheckmarks: true,
 			accessibilityLabel: "Image zoom"
 		)
 		presentation.onClose =
@@ -200,30 +202,50 @@ final class ExpandedImageZoomButton: DesktopPopupButton
 		attributes[.foregroundColor] = ExpandedImageHeaderDrawing.foreground(enabled: isEnabled)
 
 		let size = (title as NSString).size(withAttributes: attributes)
-		(title as NSString).draw(
-			at: NSPoint(
-				x: (bounds.width - 16 - size.width) / 2,
-				y: bounds.midY - size.height / 2
+		let caretGap: CGFloat = 2
+		let contentX = bounds.midX - (size.width + caretGap + 16) / 2 + 1.5
+		if let context = NSGraphicsContext.current?.cgContext
+		{
+			let line = CTLineCreateWithAttributedString(NSAttributedString(
+				string: title,
+				attributes: attributes
+			))
+			let glyphBounds = CTLineGetBoundsWithOptions(
+				line,
+				.useGlyphPathBounds
+			)
+			context.saveGState()
+			context.translateBy(
+				x: contentX,
+				y: bounds.midY
+			)
+			if isFlipped
+			{
+				context.scaleBy(
+					x: 1,
+					y: -1
+				)
+			}
+			context.textMatrix = .identity
+			context.textPosition = NSPoint(
+				x: 0,
+				y: -glyphBounds.midY
+			)
+			CTLineDraw(
+				line,
+				context
+			)
+			context.restoreGState()
+		}
+		DesktopIcons.draw(
+			DesktopIcons.image(.chevronSmallDown),
+			in: NSRect(
+				x: contentX + size.width + caretGap,
+				y: bounds.midY - 8,
+				width: 16,
+				height: 16
 			),
-			withAttributes: attributes
+			tint: ExpandedImageHeaderDrawing.foreground(enabled: isEnabled)
 		)
-		let direction: CGFloat = isFlipped ? -1 : 1
-		let chevron = NSBezierPath()
-		chevron.move(to: NSPoint(
-			x: bounds.maxX - 17,
-			y: bounds.midY + 2 * direction
-		))
-		chevron.line(to: NSPoint(
-			x: bounds.maxX - 14,
-			y: bounds.midY - 2 * direction
-		))
-		chevron.line(to: NSPoint(
-			x: bounds.maxX - 11,
-			y: bounds.midY + 2 * direction
-		))
-		chevron.lineWidth = 1.5
-		chevron.lineCapStyle = .round
-		ExpandedImageHeaderDrawing.foreground(enabled: isEnabled).setStroke()
-		chevron.stroke()
 	}
 }

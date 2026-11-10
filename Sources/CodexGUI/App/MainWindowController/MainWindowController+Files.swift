@@ -65,6 +65,35 @@ extension MainWindowController
 		}
 	}
 
+	func openImageInToolTab(
+		data: Data,
+		name: String,
+		sourceURL: URL?
+	)
+	{
+		configureToolsPaneClosing()
+		if !inspector.isShowingTools || paneController.isReviewCollapsed
+		{
+			paneController.openToolsPane
+			{
+				self.inspector.showImageInToolTab(
+					data: data,
+					name: name,
+					sourceURL: sourceURL
+				)
+			}
+		}
+		else
+		{
+			inspector.showImageInToolTab(
+				data: data,
+				name: name,
+				sourceURL: sourceURL
+			)
+		}
+		updateToolsToolbarControls()
+	}
+
 	func updateFilesProject(target: WorkspaceIntentTarget)
 	{
 		guard filesWereOpened

@@ -302,6 +302,116 @@ struct ToolsTabFilesIntegrationTests
 		#expect(files.parent === tabs)
 	}
 
+	@Test func imageTabsSurviveOtherToolSelectionAndCloseIndependently() throws
+	{
+		let tabs = ToolsTabViewController()
+		tabs.showImageTab(
+			data: Data(),
+			name: "attachment.png"
+		)
+		let imageID = try #require(tabs.selectedTabID)
+		#expect(tabs.tabCount == 1)
+		let imageController = try #require(tabs.children.first as? ExpandedImageViewController)
+		let files = controller()
+		tabs.showFilesLanding(files)
+		#expect(tabs.tabCount == 2)
+		#expect(imageController.view.isHidden)
+		try select(
+			"attachment.png 1",
+			in: tabs.tabBarView
+		)
+		#expect(tabs.selectedTabID == imageID)
+		#expect(!imageController.view.isHidden)
+		let close = try #require(button(
+			"Close tab 1",
+			in: tabs.tabBarView
+		))
+		let action = try #require(close.action)
+		#expect(NSApp.sendAction(
+			action,
+			to: close.target,
+			from: close
+		))
+		#expect(imageController.parent == nil)
+		#expect(tabs.tabCount == 1)
+	}
+
+	@Test func imageTabContextMenuOpensAnotherIndependentTab() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let tabs = ToolsTabViewController()
+			let bitmap = try #require(NSBitmapImageRep(
+				bitmapDataPlanes: nil,
+				pixelsWide: 1,
+				pixelsHigh: 1,
+				bitsPerSample: 8,
+				samplesPerPixel: 4,
+				hasAlpha: true,
+				isPlanar: false,
+				colorSpaceName: .deviceRGB,
+				bytesPerRow: 4,
+				bitsPerPixel: 32
+			))
+			bitmap.setColor(
+				.red,
+				atX: 0,
+				y: 0
+			)
+			let data = try #require(bitmap.representation(
+				using: .png,
+				properties: [:]
+			))
+			tabs.showImageTab(
+				data: data,
+				name: "attachment.png",
+				sourceURL: URL(fileURLWithPath: "/tmp/attachment.png")
+			)
+			let firstID = try #require(tabs.selectedTabID)
+			let firstController = try #require(tabs.children.first as? ExpandedImageViewController)
+			await tabs.waitForImageTab(firstID)
+			let image = firstController.imageView
+			let event = try #require(NSEvent.mouseEvent(
+				with: .rightMouseDown,
+				location: .zero,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: 0,
+				context: nil,
+				eventNumber: 0,
+				clickCount: 1,
+				pressure: 1
+			))
+			let menu = try #require(image.menu(for: event))
+			#expect(menu.items.map(\.title) == [
+				"Open image in new tab",
+				"Copy image",
+				"Reveal in Finder",
+				"Download a copy"
+			])
+			#expect(menu.items.filter
+			{
+				!$0.isEnabled
+			}.isEmpty)
+			let open = menu.items[0]
+			let action = try #require(open.action)
+			#expect(NSApp.sendAction(
+				action,
+				to: open.target,
+				from: open
+			))
+			#expect(tabs.tabCount == 2)
+			#expect(tabs.selectedTabID != firstID)
+			#expect(firstController.parent === tabs)
+			let secondController = try #require(tabs.children.last as? ExpandedImageViewController)
+			let secondID = try #require(tabs.selectedTabID)
+			await tabs.waitForImageTab(secondID)
+			let secondImage = secondController.imageView
+			let secondMenu = try #require(secondImage.menu(for: event))
+			#expect(secondMenu.items[2].isEnabled)
+		}
+	}
+
 	private func document(_ name: String) -> FileToolTabPresentation
 	{
 		FileToolTabPresentation(
