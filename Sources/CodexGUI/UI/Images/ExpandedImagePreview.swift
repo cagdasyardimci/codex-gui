@@ -269,7 +269,16 @@ final class ExpandedImagePreview
 		{
 			[weak self, weak parent, weak overlayWindow] event in
 			guard let self, let parent,
-					event.window === (overlayWindow ?? parent), event.keyCode == 53
+					event.window === (overlayWindow ?? parent)
+			else
+			{
+				return event
+			}
+			if self.controller?.commentCanvas?.saveCommentsOnReturn(event) == true
+			{
+				return nil
+			}
+			guard event.keyCode == 53
 			else
 			{
 				return event

@@ -6,8 +6,11 @@ import Testing
 @MainActor
 struct ImageCommentCanvasTests
 {
-	@Test(.appKitIsolation) func toolbarSavesToTheDraftClosesViewerAndRestoresPinsOnReopen(
-	) async throws
+	@Test(
+		.appKitIsolation,
+		arguments: [nil, UInt16(36), UInt16(76)]
+	)
+	func savingToTheDraftClosesViewerAndRestoresPinsOnReopen(returnKey: UInt16?) async throws
 	{
 		let window = NSWindow(
 			contentRect: NSRect(
@@ -83,7 +86,27 @@ struct ImageCommentCanvasTests
 		}.first)
 		try #require(editor.inputField).stringValue = "Center"
 		editor.textDidChange(Notification(name: NSText.didChangeNotification))
-		#expect(toolbar.saveButton.dispatchConfiguredAction())
+		if let returnKey
+		{
+			#expect(canvas.commitEditing())
+			let event = try #require(NSEvent.keyEvent(
+				with: .keyDown,
+				location: .zero,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: 0,
+				context: nil,
+				characters: "\r",
+				charactersIgnoringModifiers: "\r",
+				isARepeat: false,
+				keyCode: returnKey
+			))
+			canvas.keyDown(with: event)
+		}
+		else
+		{
+			#expect(toolbar.saveButton.dispatchConfiguredAction())
+		}
 		#expect(saved.map(\.text) == ["Original", "Center"])
 		#expect(saved.last?.x == 0.5)
 		#expect(saved.last?.y == 0.5)
@@ -132,6 +155,16 @@ struct ImageCommentCanvasTests
 		let annotation = try #require(canvas.annotations.first)
 		#expect(annotation.x == 0.25)
 		#expect(annotation.y == 0.25)
+		canvas.layoutSubtreeIfNeeded()
+		let placedPin = try #require(canvas.subviews.compactMap
+		{
+			$0 as? DesktopActionButton
+		}
+		.first)
+		#expect(placedPin.frame.origin == NSPoint(
+			x: 200,
+			y: 325
+		))
 		canvas.imageRect = NSRect(
 			x: -100,
 			y: -200,
@@ -147,8 +180,8 @@ struct ImageCommentCanvasTests
 			width: 30,
 			height: 30
 		))
-		#expect(pin.frame.midX == 100)
-		#expect(pin.frame.midY == 250)
+		#expect(pin.frame.minX == 100)
+		#expect(pin.frame.minY == 250)
 		#expect(canvas.annotations == [annotation])
 		canvas.cancelCommenting()
 		#expect(canvas.annotations.isEmpty)

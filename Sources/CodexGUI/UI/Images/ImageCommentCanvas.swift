@@ -7,6 +7,7 @@ final class ImageCommentCanvas: NSView
 	private(set) var annotations: [ImageAnnotation]
 	private(set) var isCommenting = false
 	var onChange: (() -> Void)?
+	var onSave: (() -> Void)?
 	weak var imageScrollView: NSScrollView?
 	var imageRect = NSRect.zero
 	{
@@ -104,6 +105,10 @@ final class ImageCommentCanvas: NSView
 
 	override func keyDown(with event: NSEvent)
 	{
+		if saveCommentsOnReturn(event)
+		{
+			return
+		}
 		if [36, 76, 49].contains(event.keyCode)
 		{
 			let visible = imageRect.intersection(bounds)
@@ -121,6 +126,20 @@ final class ImageCommentCanvas: NSView
 		{
 			super.keyDown(with: event)
 		}
+	}
+
+	@discardableResult
+	func saveCommentsOnReturn(_ event: NSEvent) -> Bool
+	{
+		guard [36, 76].contains(event.keyCode),
+				event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+				editor == nil, !annotations.isEmpty, let onSave
+		else
+		{
+			return false
+		}
+		onSave()
+		return true
 	}
 
 	override func scrollWheel(with event: NSEvent)
@@ -301,10 +320,10 @@ final class ImageCommentCanvas: NSView
 			displayed
 		)
 		{
-			let center = position(of: annotation)
+			let tip = position(of: annotation)
 			pin.frame = NSRect(
-				x: center.x - 15,
-				y: center.y - 15,
+				x: tip.x,
+				y: tip.y,
 				width: 30,
 				height: 30
 			)
@@ -312,7 +331,11 @@ final class ImageCommentCanvas: NSView
 		}
 		if let editor, let editingAnnotation
 		{
-			let center = position(of: editingAnnotation)
+			let tip = position(of: editingAnnotation)
+			let center = NSPoint(
+				x: tip.x + 15,
+				y: tip.y + 15
+			)
 			let width = min(
 				294,
 				max(

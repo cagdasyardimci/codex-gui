@@ -414,7 +414,7 @@ final class ExpandedImageViewController: NSViewController
 		{
 			[weak canvas] in canvas?.cancelCommenting()
 		}
-		toolbar.saveButton.onAction =
+		canvas.onSave =
 		{
 			[weak self, weak canvas] in
 			guard let canvas, canvas.commitEditing()
@@ -424,6 +424,7 @@ final class ExpandedImageViewController: NSViewController
 			}
 			self?.onSaveAnnotations?(canvas.annotations)
 		}
+		toolbar.saveButton.onAction = canvas.onSave
 		canvas.onChange =
 		{
 			[weak self, weak toolbar, weak canvas] in
