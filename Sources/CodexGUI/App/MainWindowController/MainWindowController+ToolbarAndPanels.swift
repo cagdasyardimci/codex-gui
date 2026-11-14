@@ -619,7 +619,64 @@ extension MainWindowController
 
 	func showProjectSelection()
 	{
-		presentCommandPalette(projectsOnly: true)
+		guard let snapshot = latestSnapshot
+		else
+		{
+			return
+		}
+		if projectPickerHost?.isShown == true
+		{
+			projectPickerHost?.close(); return
+		}
+		let target = WorkspaceIntentTarget(
+			store: currentStore,
+			snapshot: snapshot,
+			coordinator: coordinator
+		)
+		let picker = ProjectPickerViewController(projects: snapshot.recentProjects.map
+		{
+			url in
+			let key = url.standardizedFileURL.resolvingSymlinksInPath().path
+			return .init(
+				url: url,
+				name: snapshot.projectDisplayNames[key] ?? url.lastPathComponent
+			)
+		})
+		picker.loadViewIfNeeded()
+		let host = DesktopPopoverHost(
+			presentation: .composer(.init(alignment: .leading)),
+			content: picker.view,
+			controller: picker,
+			shadowOutset: 24
+		)
+		projectPickerHost = host
+		picker.onResize =
+		{
+			[weak host] in host?.reposition()
+		}
+		picker.onSelect =
+		{
+			[weak host] url in host?.close(); target.dispatch(.openProject(url))
+		}
+		picker.onCreate =
+		{
+			[weak self, weak host] in
+			host?.close()
+			self?.showProjectCreation(target: target)
+		}
+		host.onKeyDown =
+		{
+			[weak picker, weak host] event in
+			guard event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+					(host?.panel.firstResponder as? NSTextView)?.hasMarkedText() != true
+			else
+			{
+				return false
+			}
+			return picker?.handleKey(event.keyCode) ?? false
+		}
+		host.show(from: conversation.projectBar.projectButton)
+		host.panel.makeFirstResponder(picker.search)
 	}
 
 	private func presentCommandPalette(projectsOnly: Bool)

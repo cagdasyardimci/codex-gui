@@ -40,6 +40,8 @@ final class ConversationViewController: NSViewController,
 	var onSelectApprovalMode: ((ApprovalMode) -> Void)?
 	var onInsertPath: (() -> Void)?
 	var onChooseProject: (() -> Void)?
+	var onClearProject: (() -> Void)?
+	let projectBar = ComposerProjectBar()
 	var onManagePlugins: (() -> Void)?
 	var onLoadEarlierTurns: (() -> Void)?
 	{
@@ -512,6 +514,17 @@ final class ConversationViewController: NSViewController,
 		}
 		fileIndexRuntime.select(snapshot.owner)
 		projectPath = snapshot.owner.projectPath
+		projectBar.isHidden = snapshot.owner.selectedThreadID != nil
+		projectBar.projectSelector.isClearable = projectPath != nil
+		projectBar.projectButton.state = projectPath == nil ? .off : .on
+		projectBar.projectButton.title = projectPath
+			.map
+			{
+				URL(fileURLWithPath: $0).lastPathComponent
+			} ?? "Choose project"
+		projectBar.projectButton.toolTip = projectPath == nil
+			? "Select a project to run your chat in" : "Change the project for this chat"
+		projectBar.projectSelector.updateContent()
 		if previous?.status != snapshot.status
 		{
 			renderTaskStatus(snapshot.status)

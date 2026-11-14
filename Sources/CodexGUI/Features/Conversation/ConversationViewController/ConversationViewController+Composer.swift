@@ -15,11 +15,28 @@ extension ConversationViewController
 	{
 		let composerToolbar = makeComposerToolbar()
 		installComposerStack(toolbar: composerToolbar)
+		projectBar.onChooseProject =
+		{
+			[weak self] in self?.onChooseProject?()
+		}
+		projectBar.onClearProject =
+		{
+			[weak self] in self?.onClearProject?()
+		}
 		let composerArea = AppKitLayout.verticalStack(
-			[turnChangeSummaryButton, composerQueueView, composerSurface, chatLockView],
+			[turnChangeSummaryButton, projectBar, composerQueueView, composerSurface, chatLockView],
 			spacing: LayoutTokens.Composer.summarySpacing
 		)
 		composerArea.alignment = .centerX
+		projectBar.widthAnchor.constraint(
+			equalTo: composerArea.widthAnchor,
+			constant: -26
+		)
+		.isActive = true
+		composerArea.setCustomSpacing(
+			-4,
+			after: projectBar
+		)
 		composerArea.setCustomSpacing(
 			-ComposerQueueView.composerOverlap,
 			after: composerQueueView

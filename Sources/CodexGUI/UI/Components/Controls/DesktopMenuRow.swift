@@ -46,7 +46,7 @@ class DesktopMenuRow: NSButton
 
 	enum SuffixStyle: Equatable
 	{
-		case metadata, shortcut
+		case metadata, inlineMetadata, shortcut
 	}
 
 	struct Content
@@ -333,10 +333,18 @@ class DesktopMenuRow: NSButton
 		case .warning: foreground = AppKitColorTokens.warningText
 		}
 		alphaValue = isEnabled ? 1 : AppKitColorTokens.disabledMenuOpacity
-		titleLabel.textColor = foreground
-		subtitleLabel.textColor = content.role == .normal
-			? AppKitColorTokens.secondaryText : foreground
-		suffixLabel.textColor = AppKitColorTokens.settingsTertiaryText
+		applyForeground(
+			foreground,
+			to: titleLabel
+		)
+		applyForeground(
+			content.role == .normal ? AppKitColorTokens.secondaryText : foreground,
+			to: subtitleLabel
+		)
+		applyForeground(
+			AppKitColorTokens.secondaryText,
+			to: suffixLabel
+		)
 		iconView.contentTintColor = content.icon?.isTemplate == true ? foreground : nil
 		trailingImageView.contentTintColor = foreground
 		let isActive = menuHighlighted || isHovered || isKeyboardFocused || isHighlighted
@@ -356,6 +364,25 @@ class DesktopMenuRow: NSButton
 		}
 		trailingImageView.isHidden = trailingImageView.image == nil
 		needsDisplay = true
+	}
+
+	private func applyForeground(
+		_ color: NSColor,
+		to label: NSTextField
+	)
+	{
+		label.textColor = color
+		// Typography retains attributed line metrics; its foreground must refresh with the label.
+		let text = NSMutableAttributedString(attributedString: label.attributedStringValue)
+		text.addAttribute(
+			.foregroundColor,
+			value: color,
+			range: NSRange(
+				location: 0,
+				length: text.length
+			)
+		)
+		label.attributedStringValue = text
 	}
 
 	override func layout()
@@ -383,17 +410,22 @@ class DesktopMenuRow: NSButton
 			),
 			naturalSuffixWidth
 		)
+		let inlineSuffix = content.suffixStyle == .inlineMetadata
+		let suffixX = inlineSuffix ? min(
+			trailing - suffixWidth,
+			textX + naturalWidth(titleLabel) + 4
+		) : trailing - suffixWidth
 		suffixLabel.frame = labelFrame(
 			suffixLabel,
 			alignmentRect: NSRect(
-				x: trailing - suffixWidth,
+				x: suffixX,
 				y: bounds.midY - titleLineHeight / 2,
 				width: suffixWidth,
 				height: titleLineHeight
 			)
 		)
 		let textEnd = content.suffix.isEmpty ? trailing
-			: labelRect(suffixLabel).minX - Layout.iconSpacing
+			: labelRect(suffixLabel).minX - (inlineSuffix ? 4 : Layout.iconSpacing)
 		titleLabel.frame = labelFrame(
 			titleLabel,
 			alignmentRect: NSRect(

@@ -41,8 +41,10 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	enum Presentation: Equatable
 	{
-		case primary, secondary, dialogPrimary, dialogCancel, dialogOutlined, formAdd, destructive,
-				quiet, inlineAction, link, mutedLink, documentation, icon, revealingIcon, toggle,
+		case primary, secondary, dialogPrimary, dialogCancel, dialogDismiss, dialogOutlined,
+				formAdd,
+				folderAdd, contextSelection, inlineValue, destructive,
+				quiet, inlineAction, link, mutedLink, documentation, icon, glyphOnlyIcon, revealingIcon, toggle,
 				menuTrigger
 		case sidebarIcon, searchIcon, attachmentRemove
 		case tab(selected: Bool)
@@ -117,6 +119,13 @@ class DesktopStyledButton: DesktopTooltipButton
 	]
 	private(set) var isHovered = false
 	private var tracking: NSTrackingArea?
+	var hidesLeadingImage = false
+	{
+		didSet
+		{
+			needsDisplay = true
+		}
+	}
 
 	init(
 		title: String,
@@ -194,7 +203,7 @@ class DesktopStyledButton: DesktopTooltipButton
 	{
 		switch presentation
 		{
-		case .icon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon, .imageOverlay,
+		case .icon, .glyphOnlyIcon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon, .imageOverlay,
 				.attachmentRemove, .imageCommentHandle, .imageCommentSubmit: true
 		default: false
 		}
@@ -209,8 +218,11 @@ class DesktopStyledButton: DesktopTooltipButton
 				.composerControl
 		case .annotationPin: return TypographyTokens.ImageAnnotation.pin
 		case .zoomStep: return TypographyTokens.Button.zoomStep
+		case .contextSelection: return TypographyTokens.Text.composerControl
+		case .inlineValue, .folderAdd: return TypographyTokens.Text.menu
 		case .inlineAction: return TypographyTokens.UI.body
-		case .dialogPrimary, .dialogCancel, .dialogOutlined: return TypographyTokens.Button.dialog
+		case .dialogPrimary, .dialogCancel, .dialogDismiss,
+				.dialogOutlined: return TypographyTokens.Button.dialog
 		default: break
 		}
 		return size == .regular ? TypographyTokens.Button.regular : TypographyTokens.Button.compact
@@ -363,11 +375,21 @@ class DesktopStyledButton: DesktopTooltipButton
 		let progress = hasLeadingProgress ? LayoutTokens.Button.progressAllowance : 0
 		switch presentation
 		{
-		case .dialogPrimary, .dialogCancel, .dialogOutlined:
+		case .dialogPrimary, .dialogCancel, .dialogDismiss, .dialogOutlined:
 			return NSSize(
 				width: (title as NSString).size(withAttributes: [.font: resolvedFont]).width
 					+ 2 * horizontalInset + 2 * ShapeTokens.Button.outlineWidth + progress,
 				height: LayoutTokens.Button.regularHeight
+			)
+		case .contextSelection:
+			return NSSize(
+				width: width + 2 * horizontalInset,
+				height: 28
+			)
+		case .folderAdd:
+			return NSSize(
+				width: width + 2 * horizontalInset,
+				height: 24
 			)
 		case .tab, .pairingTab, .formAdd:
 			return NSSize(
@@ -384,7 +406,7 @@ class DesktopStyledButton: DesktopTooltipButton
 				),
 				height: LayoutTokens.Settings.headerActionHeight
 			)
-		case .icon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon:
+		case .icon, .glyphOnlyIcon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon:
 			let side = iconSide
 			return NSSize(
 				width: side,
@@ -451,8 +473,11 @@ class DesktopStyledButton: DesktopTooltipButton
 		{
 		case .tab, .pairingTab: LayoutTokens.Button.compactHorizontalInset
 		case .settingsHeader: LayoutTokens.Settings.headerActionHorizontalInset
+		case .contextSelection: 8
+		case .folderAdd: 10
 		case .imageCommentAction: 8
-		case .imageCommentHandle, .annotationPin, .zoomStep, .inlineAction, .documentation: 0
+		case .imageCommentHandle, .annotationPin, .zoomStep, .inlineAction, .inlineValue,
+				.documentation: 0
 		default: size == .regular ? LayoutTokens.Button.regularHorizontalInset : LayoutTokens.Button
 			.compactHorizontalInset
 		}
@@ -750,9 +775,10 @@ class DesktopStyledButton: DesktopTooltipButton
 				.imageCommentHandle: ShapeTokens.Button.tabRadius
 		case .settingsHeader: ShapeTokens.Settings.headerActionRadius
 		case .formAdd: ShapeTokens.Button.regularRadius
-		case .icon, .revealingIcon, .sidebarIcon, .searchIcon,
+		case .icon, .glyphOnlyIcon, .revealingIcon, .sidebarIcon, .searchIcon,
 				.zoomStep: ShapeTokens.Button.iconRadius
-		case .imageOverlay, .attachmentRemove, .imageCommentSubmit: bounds.height / 2
+		case .imageOverlay, .attachmentRemove, .imageCommentSubmit, .folderAdd,
+				.contextSelection: bounds.height / 2
 		default: size == .regular ? ShapeTokens.Button.regularRadius : bounds.height / 2
 		}
 		let inset = presentation == .secondary ? ShapeTokens.Button.outlineWidth / 2 : 0
@@ -813,7 +839,7 @@ class DesktopStyledButton: DesktopTooltipButton
 		paragraph.lineBreakMode = .byTruncatingTail
 		attributes[.foregroundColor] = foreground
 		attributes[.paragraphStyle] = paragraph
-		if let image, let rect = layout.image
+		if !hidesLeadingImage, let image, let rect = layout.image
 		{
 			DesktopIcons.draw(
 				image,
@@ -1000,6 +1026,24 @@ class DesktopStyledButton: DesktopTooltipButton
 				primaryText,
 				enabled: foregroundEnabled
 			)
+		case .folderAdd:
+			(active ? AppKitColorTokens.settingsSelectorHover : AppKitColorTokens
+				.buttonDialogSecondarySurface).setFill()
+			outline.fill()
+			return AppKitColorTokens.enabledForeground(
+				primaryText,
+				enabled: foregroundEnabled
+			)
+		case .dialogDismiss, .contextSelection:
+			if active
+			{
+				AppKitColorTokens.settingsSelectorHover.setFill(); outline.fill()
+			}
+			return AppKitColorTokens.enabledForeground(
+				presentation == .contextSelection && state == .on ? primaryText : AppKitColorTokens
+					.secondaryText,
+				enabled: foregroundEnabled
+			)
 		case .formAdd:
 			AppKitColorTokens.selectedButtonTab(active: active).setFill()
 			outline.fill()
@@ -1035,7 +1079,8 @@ class DesktopStyledButton: DesktopTooltipButton
 				AppKitColorTokens.buttonDestructiveText,
 				enabled: foregroundEnabled
 			)
-		case .quiet, .inlineAction, .icon, .revealingIcon, .link, .mutedLink, .zoomStep, .toggle,
+		case .quiet, .inlineAction, .inlineValue, .icon, .revealingIcon, .link, .mutedLink,
+				.zoomStep, .toggle,
 				.menuTrigger, .documentation:
 			if active || (presentation == .toggle && state == .on)
 			{
@@ -1068,6 +1113,8 @@ class DesktopStyledButton: DesktopTooltipButton
 				primaryText,
 				enabled: foregroundEnabled
 			)
+		case .glyphOnlyIcon:
+			return AppKitColorTokens.enabledForeground(primaryText, enabled: foregroundEnabled)
 		case .attachmentRemove:
 			AppKitColorTokens.canvas.setFill()
 			outline.fill()

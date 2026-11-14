@@ -7,6 +7,44 @@ import Testing
 @Suite
 struct DesktopMenuRowTests
 {
+	@Test func inlineMetadataFollowsItsTitleAndRemainsWithinNarrowRows()
+	{
+		let row = DesktopMenuRow(
+			content: .init(
+				title: "Swift tools",
+				icon: DesktopIcons.image(.folder),
+				suffix: "semantic-checker",
+				suffixStyle: .inlineMetadata
+			),
+			textPresentation: .aligned
+		)
+		let ink = row.suffixLabel.attributedStringValue.attribute(
+			.foregroundColor,
+			at: 0,
+			effectiveRange: nil
+		) as? NSColor
+		#expect(ink?.usingColorSpace(.sRGB) == row.suffixLabel.textColor?.usingColorSpace(.sRGB))
+		for width: CGFloat in [304, 180]
+		{
+			row.frame = NSRect(
+				x: 0,
+				y: 0,
+				width: width,
+				height: row.rowHeight
+			)
+			row.layoutSubtreeIfNeeded()
+			let title = row.titleLabel.alignmentRect(forFrame: row.titleLabel.frame)
+			let suffix = row.suffixLabel.alignmentRect(forFrame: row.suffixLabel.frame)
+			#expect(row.bounds.contains(title))
+			#expect(row.bounds.contains(suffix))
+			#expect(abs(suffix.minX - title.maxX - 4) < 0.1)
+			if width == 304
+			{
+				#expect(suffix.maxX < row.bounds.maxX - 20)
+			}
+		}
+	}
+
 	@Test func stableMenuGeometryDoesNotReadPreferencesAgainOrNotifyForSelectionChanges()
 	{
 		let center = NotificationCenter()

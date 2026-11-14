@@ -177,6 +177,39 @@ enum DesktopIcons
 		return image
 	}
 
+	/// Template artwork keeps the local-device outline consistent in controls and menus.
+	static func localComputerImage() -> NSImage
+	{
+		let key = "local-computer-outline" as NSString
+		if let cached = cache.object(forKey: key)
+		{
+			return cached.copy() as! NSImage
+		}
+		// The fixed view box and black stroke describe a template mask, not a theme palette.
+		let svg = """
+		<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+		<g fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round">
+		<path d="M4 17V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v11"/>
+		<rect x="2" y="17" width="20" height="3" rx="1"/>
+		</g></svg>
+		"""
+		guard let image = NSImage(data: Data(svg.utf8))
+		else
+		{
+			preconditionFailure("Invalid computer artwork")
+		}
+		image.size = NSSize(
+			width: 16,
+			height: 16
+		)
+		image.isTemplate = true
+		cache.setObject(
+			image,
+			forKey: key
+		)
+		return image.copy() as! NSImage
+	}
+
 	static func filledBoltImage(size: CGFloat = 16) -> NSImage
 	{
 		let image = filledBoltArtwork.copy() as! NSImage

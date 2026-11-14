@@ -137,7 +137,16 @@ enum ComposerReducer
 			}
 			if model.composer.workspace != identity
 			{
+				// The unsent new-chat draft follows a change to or from no selected project.
+				let transfer = selectedNewChatDraftForProjectChange(
+					model: model,
+					identity: identity
+				)
 				model.composer = ComposerModel()
+				if let transfer
+				{
+					model.composer.drafts[.newChat] = transfer
+				}
 			}
 			model.composer.workspace = identity
 
@@ -158,6 +167,23 @@ enum ComposerReducer
 			}
 		}
 		return result
+	}
+
+	private static func selectedNewChatDraftForProjectChange(
+		model: WorkspaceModel,
+		identity: WorkspaceIdentity
+	) -> ComposerDraft?
+	{
+		guard model.conversations.selectedConversation == .newChat,
+				identity.canonicalCheckoutPath == nil || model.composer.workspace?
+				.canonicalCheckoutPath == nil,
+				let draft = model.composer.drafts[.newChat], draft.queuedMessages.isEmpty,
+				draft.queuedMessageEdit == nil
+		else
+		{
+			return nil
+		}
+		return draft
 	}
 
 	static func valid(

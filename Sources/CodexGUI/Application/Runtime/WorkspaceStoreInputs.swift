@@ -1001,6 +1001,36 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	var canClearProject: Bool
+	{
+		guard taskWorkspace == nil, store.model.identity.canonicalCheckoutPath != nil,
+				store.model.conversations.selectedConversation == .newChat,
+				!WorkspaceLifecycleReducer.blocksCleanup(store.model)
+		else
+		{
+			return false
+		}
+		let draft = store.model.composer.drafts[.newChat]
+		return draft?.queuedMessages.isEmpty != false && draft?.queuedMessageEdit == nil
+	}
+
+	func clearProject()
+	{
+		guard canClearProject
+		else
+		{
+			return
+		}
+		let identity = WorkspaceIdentity(
+			sessionID: store.model.identity.sessionID,
+			canonicalCheckoutPath: nil
+		)
+		store.dispatch(.connection(.projectOpened(
+			identity,
+			selectedThreadID: nil
+		)))
+	}
+
 	func newChat()
 	{
 		store.dispatch(.conversations(.newChatOpened(store.operationContext())))

@@ -9,6 +9,7 @@ final class SettingsFormTextField: NSTextField
 		case compact
 		case outlined
 		case dialog
+		case projectName
 		case nativeRounded
 	}
 
@@ -67,6 +68,7 @@ final class SettingsFormTextField: NSTextField
 		}
 		let fieldCell = SettingsFormTextFieldCell(textCell: "")
 		fieldCell.hasLeadingIcon = leadingIcon != nil
+		fieldCell.hasIconDivider = presentation == .projectName
 		fieldCell.isCompact = presentation == .compact
 		fieldCell.typography = typographyRole
 		cell = fieldCell
@@ -125,7 +127,7 @@ final class SettingsFormTextField: NSTextField
 	{
 		switch presentation
 		{
-		case .dialog: TypographyTokens.Dialog.input
+		case .dialog, .projectName: TypographyTokens.Dialog.input
 		case .compact: TypographyTokens.Settings.sizeInput
 		case .outlined: TypographyTokens.Settings.formInput
 		case .nativeRounded: TypographyTokens.Connections.body
@@ -140,7 +142,8 @@ final class SettingsFormTextField: NSTextField
 
 	private var fieldHeight: CGFloat
 	{
-		presentation == .compact ? LayoutTokens.Settings.sizeInputHeight : 36
+		presentation == .projectName ? 40 :
+			(presentation == .compact ? LayoutTokens.Settings.sizeInputHeight : 36)
 	}
 
 	override var alignmentRectInsets: NSEdgeInsets
@@ -269,15 +272,26 @@ final class SettingsFormTextField: NSTextField
 		{
 			return
 		}
+		if presentation == .projectName
+		{
+			AppKitColorTokens.subtleEdge.setFill()
+			NSRect(
+				x: 40,
+				y: 1,
+				width: 1,
+				height: bounds.height - 2
+			).fill()
+		}
 		DesktopIcons.draw(
 			leadingIcon,
 			in: NSRect(
 				x: 12,
-				y: bounds.midY - 7,
-				width: 14,
-				height: 14
+				y: bounds.midY - (presentation == .projectName ? 8 : 7),
+				width: presentation == .projectName ? 16 : 14,
+				height: presentation == .projectName ? 16 : 14
 			),
-			tint: AppKitColorTokens.settingsSecondaryText
+			tint: presentation == .projectName ? AppKitColorTokens.primaryText : AppKitColorTokens
+				.settingsSecondaryText
 		)
 	}
 }
@@ -287,6 +301,7 @@ private final class SettingsFormTextFieldCell: NSTextFieldCell
 {
 	private let editorStyle = ThemeFieldEditorStyle()
 	var hasLeadingIcon = false
+	var hasIconDivider = false
 	var isCompact = false
 	var typography = TypographyTokens.Settings.formInput
 
@@ -385,13 +400,14 @@ private final class SettingsFormTextFieldCell: NSTextFieldCell
 	override func drawingRect(forBounds rect: NSRect) -> NSRect
 	{
 		let inset: CGFloat = isCompact ? 8 : 10
+		let leading: CGFloat = hasIconDivider ? 48 : (hasLeadingIcon ? 38 : inset)
 		let height = typography.lineHeight ?? TypographyTokens.Text.compactControl.lineHeight!
 		return NSRect(
-			x: rect.minX + (hasLeadingIcon ? 38 : inset),
+			x: rect.minX + leading,
 			y: rect.midY - height / 2,
 			width: max(
 				0,
-				rect.width - (hasLeadingIcon ? 38 + inset : 2 * inset)
+				rect.width - leading - inset
 			),
 			height: height
 		)

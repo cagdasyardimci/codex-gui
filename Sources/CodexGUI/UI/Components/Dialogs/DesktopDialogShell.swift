@@ -6,7 +6,7 @@ final class DesktopDialogShell: DesktopSurface
 {
 	enum Style
 	{
-		case standard, projectEdit, site, textEntry
+		case standard, projectEdit, projectCreate, site, textEntry
 	}
 
 	enum ActionLayout
@@ -25,6 +25,7 @@ final class DesktopDialogShell: DesktopSurface
 	let actionsRow: NSStackView
 	var onClose: (() -> Void)?
 	private var widthConstraint: NSLayoutConstraint!
+	private let preferredDialogWidth: CGFloat
 
 	init(
 		title: String,
@@ -37,6 +38,7 @@ final class DesktopDialogShell: DesktopSurface
 		actionLayout: ActionLayout = .horizontal
 	)
 	{
+		preferredDialogWidth = style == .projectCreate ? 520 : Self.preferredWidth
 		titleLabel = DesktopLineBoxLabel(
 			title,
 			role: TypographyTokens.Dialog.title
@@ -62,7 +64,7 @@ final class DesktopDialogShell: DesktopSurface
 			)
 		}
 		super.init(
-			style == .projectEdit || style == .site ? AppKitColorTokens
+			style == .projectEdit || style == .projectCreate || style == .site ? AppKitColorTokens
 				.searchPanel : AppKitColorTokens.sidebar,
 			cornerRadius: 20,
 			bordered: true,
@@ -81,7 +83,7 @@ final class DesktopDialogShell: DesktopSurface
 			.required,
 			for: .vertical
 		)
-		if style == .projectEdit
+		if style == .projectEdit || style == .projectCreate
 		{
 			closeButton.presentation = .icon
 		}
@@ -154,9 +156,16 @@ final class DesktopDialogShell: DesktopSurface
 			spacing: style == .textEntry ? 12 : 14
 		)
 		stack.setCustomSpacing(
-			style == .textEntry ? 4 : 8,
+			style == .projectCreate ? 12 : (style == .textEntry ? 4 : 8),
 			after: heading
 		)
+		if style == .projectCreate, let content
+		{
+			stack.setCustomSpacing(
+				32,
+				after: content
+			)
+		}
 		AppKitLayout.pin(
 			stack,
 			to: self,
@@ -166,7 +175,7 @@ final class DesktopDialogShell: DesktopSurface
 		{
 			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 		}
-		widthConstraint = widthAnchor.constraint(equalToConstant: Self.preferredWidth)
+		widthConstraint = widthAnchor.constraint(equalToConstant: preferredDialogWidth)
 		widthConstraint.isActive = true
 	}
 
@@ -177,9 +186,9 @@ final class DesktopDialogShell: DesktopSurface
 
 	func resize(window: NSWindow)
 	{
-		let available = window.sheetParent?.contentView?.bounds.width ?? Self.preferredWidth
+		let available = window.sheetParent?.contentView?.bounds.width ?? preferredDialogWidth
 		widthConstraint.constant = min(
-			Self.preferredWidth,
+			preferredDialogWidth,
 			max(
 				1,
 				available

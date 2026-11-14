@@ -5,6 +5,7 @@ import AppKit
 final class DesktopControlTooltip: NSObject
 {
 	let presentation = DesktopTooltip(style: .control)
+	var shouldPresent: (() -> Bool)?
 	var text: String?
 	{
 		didSet
@@ -95,7 +96,7 @@ final class DesktopControlTooltip: NSObject
 
 	func show(immediately: Bool = false)
 	{
-		guard let control, control.isEnabled, let text, !text.isEmpty
+		guard let control, control.isEnabled, let text, !text.isEmpty, shouldPresent?() != false
 		else
 		{
 			return
@@ -112,7 +113,8 @@ final class DesktopControlTooltip: NSObject
 			{
 				return false
 			}
-			return self.hovered || (self.focused && control.window?.firstResponder === control)
+			return (self.hovered || (self.focused && control.window?.firstResponder === control))
+				&& self.shouldPresent?() != false
 		}
 	}
 }

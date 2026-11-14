@@ -278,6 +278,23 @@ enum AppKitColorTokens
 			$0.tooltipCapsule
 		}
 	}
+	static var composerContext: NSColor
+	{
+		AppKitColorResolution.adaptiveColor
+		{
+			appearance in
+			var surface = NSColor.clear
+			appearance.performAsCurrentDrawingAppearance
+			{
+				surface = AppKitColorResolution.composite(
+					buttonDialogSecondarySurface,
+					over: canvas
+				)
+			}
+			return surface
+		}
+	}
+
 	static var composerQueue: NSColor
 	{
 		elevated

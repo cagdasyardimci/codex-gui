@@ -44,6 +44,7 @@ enum WorkspaceIntent
 	)
 
 	case newChat
+	case clearProject
 	case newChatInProject(URL)
 	case openProject(URL)
 	case selectThread(String)
@@ -121,7 +122,7 @@ enum WorkspaceIntent
 				.reorderQueuedMessages, .beginEditingQueuedMessage, .cancelQueuedMessageEdit,
 				.setQueueingEnabled,
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
-				.newChatInProject, .selectModel, .selectEffort, .selectApprovalMode,
+				.newChatInProject, .clearProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
 		case .retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
 				.loadEarlierTurnReferences,
@@ -213,6 +214,10 @@ final class WorkspaceIntentTarget
 			{
 				return false
 			}
+		}
+		if case .clearProject = intent, !store.inputs.canClearProject
+		{
+			return false
 		}
 		return true
 	}
@@ -322,6 +327,7 @@ final class WorkspaceIntentTarget
 				return false
 			}
 		case .newChat: inputs.newChat()
+		case .clearProject: inputs.clearProject()
 		case .newChatInProject(let url):
 			if store.model.identity.canonicalCheckoutPath == url.standardizedFileURL
 				.path

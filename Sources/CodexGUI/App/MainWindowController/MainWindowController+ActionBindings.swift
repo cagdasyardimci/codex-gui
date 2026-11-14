@@ -263,6 +263,10 @@ extension MainWindowController
 			}
 			self?.showProjectSelection()
 		} : nil
+		conversation.onClearProject = target.accepts(.clearProject) ?
+		{
+			_ = target.dispatch(.clearProject)
+		} : nil
 		conversation.onManagePlugins =
 		{
 			[weak self] in

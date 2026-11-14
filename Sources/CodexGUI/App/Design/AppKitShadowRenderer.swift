@@ -10,7 +10,8 @@ enum AppKitShadowRenderer
 		to layer: CALayer,
 		in view: NSView,
 		cornerRadius: CGFloat,
-		cornerCurve: ShapeTokens.CornerCurve = .circular
+		cornerCurve: ShapeTokens.CornerCurve = .circular,
+		roundedCorners: CACornerMask = AppKitShapePath.allCorners
 	)
 	{
 		CATransaction.begin()
@@ -36,7 +37,8 @@ enum AppKitShadowRenderer
 				0,
 				cornerRadius + style.spread
 			),
-			curve: cornerCurve
+			curve: cornerCurve,
+			corners: roundedCorners
 		)
 		if style.inset
 		{
@@ -44,7 +46,8 @@ enum AppKitShadowRenderer
 				style,
 				to: layer,
 				cornerRadius: cornerRadius,
-				cornerCurve: cornerCurve
+				cornerCurve: cornerCurve,
+				roundedCorners: roundedCorners
 			)
 			CATransaction.commit()
 			return
@@ -64,7 +67,8 @@ enum AppKitShadowRenderer
 				dy: outset
 			),
 			radius: cornerRadius,
-			curve: cornerCurve
+			curve: cornerCurve,
+			corners: roundedCorners
 		))
 		mask.path = maskPath
 		mask.fillRule = .evenOdd
@@ -77,7 +81,8 @@ enum AppKitShadowRenderer
 		_ style: ShadowTokens.Style,
 		to layer: CALayer,
 		cornerRadius: CGFloat,
-		cornerCurve: ShapeTokens.CornerCurve
+		cornerCurve: ShapeTokens.CornerCurve,
+		roundedCorners: CACornerMask
 	)
 	{
 		let outset = style.blur + abs(style.spread) + abs(style.offsetY) + 4
@@ -103,7 +108,8 @@ enum AppKitShadowRenderer
 				0,
 				cornerRadius - style.spread
 			),
-			curve: cornerCurve
+			curve: cornerCurve,
+			corners: roundedCorners
 		).copy(using: &reversed)!
 		shadowPath.addPath(hole)
 		layer.shadowPath = shadowPath
@@ -112,7 +118,8 @@ enum AppKitShadowRenderer
 		mask.path = AppKitShapePath.roundedCGPath(
 			mask.bounds,
 			radius: cornerRadius,
-			curve: cornerCurve
+			curve: cornerCurve,
+			corners: roundedCorners
 		)
 		mask.fillRule = .nonZero
 		mask.fillColor = NSColor.black.cgColor

@@ -9,6 +9,7 @@ class DesktopSearchField: NSSearchField
 		case native
 		case viewer
 		case viewerOverlay
+		case menuQuery
 		case chatQuery
 		case settingsFilled
 		case settingsOutlined
@@ -187,9 +188,11 @@ class DesktopSearchField: NSSearchField
 		}
 		else
 		{
-			let overlay = presentation == .viewerOverlay || presentation == .chatQuery
+			let overlay = presentation == .viewerOverlay || presentation == .chatQuery ||
+				presentation == .menuQuery
 			self
-				.setTypographyRole(presentation == .chatQuery ? TypographyTokens.Search
+				.setTypographyRole(presentation == .menuQuery ? TypographyTokens.Text
+					.menu : presentation == .chatQuery ? TypographyTokens.Search
 					.query : TypographyTokens.Search.input(overlay: overlay))
 			textColor = AppKitColorTokens.primaryText
 			focusRingType = overlay ? .none : .default
@@ -224,7 +227,7 @@ class DesktopSearchField: NSSearchField
 		{
 		case .native: break
 		case .viewer: size.height = 28
-		case .viewerOverlay: size.height = 32
+		case .viewerOverlay, .menuQuery: size.height = 32
 		case .chatQuery: size.height = 46
 		case .settingsFilled, .settingsOutlined, .settingsCatalog: size.height = 36
 		}
@@ -297,6 +300,19 @@ class DesktopSearchField: NSSearchField
 			path.fill()
 			AppKitColorTokens.subtleEdge.setStroke()
 			path.stroke()
+		}
+		if presentation == .menuQuery
+		{
+			DesktopIcons.draw(
+				.search,
+				in: NSRect(
+					x: 8,
+					y: bounds.midY - 7,
+					width: 14,
+					height: 14
+				),
+				tint: AppKitColorTokens.secondaryText
+			)
 		}
 		guard presentation.isSettings
 		else
@@ -563,7 +579,7 @@ private final class DesktopSearchFieldCell: NSSearchFieldCell
 				ceil(font.ascender - font.descender + font.leading)
 			)
 			let leading = searchButtonCell == nil ? rect
-				.minX + (presentation == .chatQuery ? 16 : 0)
+				.minX + (presentation == .menuQuery ? 28 : (presentation == .chatQuery ? 16 : 0))
 				: searchButtonRect(forBounds: rect).maxX + 6
 			let trailing = stringValue.isEmpty ? rect.maxX - 10
 				: cancelButtonRect(forBounds: rect).minX - 6

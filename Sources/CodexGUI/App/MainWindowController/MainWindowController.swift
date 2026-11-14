@@ -13,6 +13,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	private var remoteAccessObserver: UUID?
 	private var themeColorObservation: ThemeColorObservation?
 	// These members are shared by the action-binding and toolbar extensions.
+	var projectPickerHost: DesktopPopoverHost?
 	let onOpenProjectRequest: () -> Void
 	let onInsertPathRequest: () -> Void
 	let navigation = NavigationViewController()
@@ -326,6 +327,21 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			snapshot,
 			ownerIdentity: target.presentationIdentity
 		))
+		if let path = snapshot.projectPath
+		{
+			let project = URL(fileURLWithPath: path)
+			let key = project.standardizedFileURL.resolvingSymlinksInPath().path
+			conversation.projectBar.projectButton.title = snapshot
+				.projectDisplayNames[key] ?? project.lastPathComponent
+		}
+		conversation.projectBar.projectButton.setAccessibilityLabel(
+			snapshot.projectPath == nil ? "Choose project" : "Change project: " + conversation
+				.projectBar.projectButton.title
+		)
+		conversation.projectBar.projectButton.isEnabled = target.accepts(.newChat)
+		conversation.projectBar.projectSelector.isClearable = snapshot.projectPath != nil && target
+			.accepts(.clearProject)
+		conversation.projectBar.projectSelector.updateContent()
 		configureGitSummary(
 			target: target,
 			snapshot: snapshot

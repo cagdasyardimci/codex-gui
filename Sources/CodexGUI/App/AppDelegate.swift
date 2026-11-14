@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation
 {
 	private let sourceStore = WorkspaceStoreFactory.makeSource(
 		dependencies: WorkspaceStoreDependencies(
@@ -256,6 +256,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 			keyEquivalent: "o"
 		)
 		.target = self
+		let chooseProject = fileMenu.addItem(
+			withTitle: "Choose Project…",
+			action: #selector(chooseComposerProject),
+			keyEquivalent: "o"
+		)
+		chooseProject.keyEquivalentModifierMask = [.option, .shift, .command]
+		chooseProject.target = self
 		fileMenu.addItem(
 			withTitle: "New Chat",
 			action: #selector(newChat),
@@ -406,6 +413,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate
 		NSApp.helpMenu = helpMenu
 		helpItem.submenu = helpMenu
 		return helpItem
+	}
+
+	func validateMenuItem(_ menuItem: NSMenuItem) -> Bool
+	{
+		guard menuItem.action == #selector(chooseComposerProject)
+		else
+		{
+			return true
+		}
+		guard let controller = mainWindowController
+		else
+		{
+			return false
+		}
+		return !controller.conversation.projectBar.isHidden
+			&& controller.conversation.projectBar.projectButton.isEnabled
+	}
+
+	@objc private func chooseComposerProject()
+	{
+		guard let controller = mainWindowController, !controller.conversation.projectBar.isHidden,
+				controller.conversation.projectBar.projectButton.isEnabled
+		else
+		{
+			return
+		}
+		controller.showProjectSelection()
 	}
 
 	@objc private func openProject()
