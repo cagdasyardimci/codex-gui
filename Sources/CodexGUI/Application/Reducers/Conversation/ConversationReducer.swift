@@ -918,6 +918,16 @@ enum ConversationReducer
 						)
 					}
 				case .archive, .delete:
+					// Retire pre-mutation sidebar reads so they cannot restore the removed row.
+					model.conversations.pendingSidebarList = nil
+					model.conversations.sidebarThreads?.removeAll
+					{
+						$0.id == context.threadID
+					}
+					model.conversations.threads.removeAll
+					{
+						$0.id == context.threadID
+					}
 					if let task = model.preferences.pinnedTasks
 						.first(where:
 							{
@@ -951,10 +961,6 @@ enum ConversationReducer
 						model.conversations.content.removeValue(forKey: .thread(id))
 						model.conversations.cacheAccounting.removeThread(threadID: id)
 						model.conversations.turnReferenceIndices.removeValue(forKey: id)
-						model.conversations.threads.removeAll
-						{
-							$0.id == id
-						}
 					}
 				case .unarchive:
 					model.conversations.showingArchived = false
@@ -1259,6 +1265,9 @@ enum ConversationReducer
 					model.conversations.content[key] = transferred
 					model.conversations.content[.newChat] = source
 				}
+				// A list captured before creation cannot replace the newly accepted summary.
+				model.conversations.pendingList = nil
+				model.conversations.pendingSidebarList = nil
 				model.conversations.threads.removeAll
 				{
 					$0.id == prepared.thread.summary.id

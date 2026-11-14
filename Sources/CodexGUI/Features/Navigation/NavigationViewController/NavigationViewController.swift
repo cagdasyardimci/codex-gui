@@ -255,6 +255,16 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 			isCurrentProjectCollapsed = false
 			projectTaskLimit = 5
 		}
+		if snapshot.pendingChats.contains(where:
+			{
+				chat in chat.isSelected && previousPresentation?.pendingChats.contains(where:
+					{
+						$0.requestID == chat.requestID
+					}) != true
+			})
+		{
+			isCurrentProjectCollapsed = false
+		}
 		currentProject = nextProject
 		recentProjects = snapshot.recentProjects
 		pinnedProjectPaths = snapshot.pinnedProjectPaths
@@ -293,7 +303,8 @@ final class NavigationViewController: NSViewController, NSTableViewDataSource, N
 		renderThreadAvailability(snapshot)
 
 		let shouldReloadSidebar =
-			threads != snapshot.threads || previousPresentation?.sidebarThreads != snapshot
+			previousPresentation?.pendingChats != snapshot.pendingChats
+				|| threads != snapshot.threads || previousPresentation?.sidebarThreads != snapshot
 				.sidebarThreads
 				|| previousPresentation?.sidebarListLoading != snapshot.sidebarListLoading
 				|| previousPresentation?.sidebarListError != snapshot.sidebarListError

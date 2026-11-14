@@ -209,6 +209,90 @@ struct ConversationReducerTests
 		})
 	}
 
+	@Test(
+		arguments: [true, false],
+		[true, false]
+	)
+	func archiveHidesRowImmediatelyAndRestoresItOnlyOnFailure(
+		selected: Bool,
+		succeeds: Bool
+	) throws
+	{
+		var model = fixture()
+		let thread = detail().summary
+		let other = try #require(ThreadSummary(json: [
+			"id": "other",
+			"cwd": "/tmp/conversation"
+		]))
+		model.conversations.threads = [thread, other]
+		model.conversations.sidebarThreads = [thread, other]
+		model.preferences.pinnedTasks = [thread, other]
+		model.conversations.selectedConversation = .thread(selected ? "thread" : "other")
+		model.conversations
+			.content[.thread("thread")] = ConversationContentModel(hasLoadedHistory: true)
+		model.composer.drafts[.thread("thread")] = ComposerDraft(text: "Retained draft")
+		let captured = context(model)
+		let staleList = ConversationListOperation(
+			context: context(model),
+			archived: false,
+			boundThreadID: nil,
+			allProjects: true
+		)
+		model.conversations.pendingSidebarList = staleList
+
+		let accepted = reduce(
+			&model,
+			.conversations(.managementRequested(.archive(captured)))
+		)
+		#expect(accepted.effects.contains
+		{
+			if case .manageConversation(.archive(let context)) = $0
+			{
+				return context == captured
+			}
+			return false
+		})
+		let pending = WorkspaceSelectors(
+			model: model,
+			now: .distantPast
+		).makeSnapshot()
+		#expect(pending.threads.map(\.id) == ["other"])
+		#expect(pending.sidebarThreads?.map(\.id) == ["other"])
+		#expect(pending.pinnedTasks.map(\.id) == ["other"])
+		#expect(model.conversations.threads.map(\.id) == ["thread", "other"])
+
+		_ = reduce(
+			&model,
+			.conversations(.managementFinished(
+				captured,
+				succeeds ? .succeeded(()) : .failed(OperationFailure(
+					message: "Rejected",
+					outcomeIsUncertain: false
+				))
+			))
+		)
+		// A sidebar read started before archiving must not bring the row back after success.
+		_ = reduce(
+			&model,
+			.conversations(.threadListReceived(
+				staleList,
+				.succeeded([thread, other])
+			))
+		)
+		let finished = WorkspaceSelectors(
+			model: model,
+			now: .distantPast
+		).makeSnapshot()
+		let expectedIDs = succeeds ? ["other"] : ["thread", "other"]
+		#expect(finished.threads.map(\.id) == expectedIDs)
+		#expect(finished.sidebarThreads?.map(\.id) == expectedIDs)
+		#expect(finished.pinnedTasks.map(\.id) == expectedIDs)
+		#expect(finished
+			.selectedThreadID == (selected && succeeds ? nil : selected ? "thread" : "other"))
+		#expect(model.conversations.content[.thread("thread")]?.hasLoadedHistory == true)
+		#expect(model.composer.drafts[.thread("thread")]?.text == "Retained draft")
+	}
+
 	@Test func deleteRejectsUnknownTaskAndRetainsHistoryOnBackendFailure()
 	{
 		var model = fixture()

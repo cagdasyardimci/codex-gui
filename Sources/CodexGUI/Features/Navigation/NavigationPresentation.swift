@@ -5,6 +5,7 @@ struct NavigationPresentation: Equatable
 	let owner: FeaturePresentationOwner
 	let projectPath: String?
 	let threads: [ThreadSummary]
+	let pendingChats: [PendingChatPresentation]
 	let sidebarThreads: [ThreadSummary]?
 	let sidebarListLoading: Bool
 	let sidebarListError: String?
@@ -41,6 +42,7 @@ struct NavigationPresentation: Equatable
 		)
 		projectPath = snapshot.projectPath
 		threads = snapshot.threads
+		pendingChats = snapshot.pendingChats
 		sidebarThreads = snapshot.sidebarThreads
 		sidebarListLoading = snapshot.sidebarListLoading
 		sidebarListError = snapshot.sidebarListError

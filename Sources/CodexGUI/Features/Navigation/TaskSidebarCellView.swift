@@ -43,6 +43,7 @@ final class TaskSidebarCellView: NSTableCellView
 	private let actions = NSStackView()
 	private var hoverTrackingArea: NSTrackingArea?
 	private var isHovered = false
+	private var actionsAvailable = true
 	private var titleTrailingConstraint: NSLayoutConstraint?
 	private var titleLeadingConstraint: NSLayoutConstraint?
 	private var themeColorObservation: ThemeColorObservation?
@@ -194,6 +195,12 @@ final class TaskSidebarCellView: NSTableCellView
 		updateTitleLayout()
 	}
 
+	func setActionsAvailable(_ available: Bool)
+	{
+		actionsAvailable = available
+		dismissHoverCard()
+	}
+
 	func setActionsEnabled(_ enabled: Bool)
 	{
 		archiveButton.isEnabled = enabled
@@ -212,10 +219,10 @@ final class TaskSidebarCellView: NSTableCellView
 	override func mouseEntered(with event: NSEvent)
 	{
 		isHovered = true
-		actions.isHidden = false
-		actions.alphaValue = 1
-		progressRing.alphaValue = 0
-		unreadDot.alphaValue = 0
+		actions.isHidden = !actionsAvailable
+		actions.alphaValue = actionsAvailable ? 1 : 0
+		progressRing.alphaValue = actionsAvailable ? 0 : 1
+		unreadDot.alphaValue = actionsAvailable ? 0 : 1
 		updateTitleLayout()
 		layoutSubtreeIfNeeded()
 		(textField as? HoverScrollingTextField)?.setHovered(true)
@@ -275,7 +282,7 @@ final class TaskSidebarCellView: NSTableCellView
 			return
 		}
 		let visibleTrailingContent: NSLayoutXAxisAnchor
-		if isHovered
+		if isHovered && actionsAvailable
 		{
 			visibleTrailingContent = actions.leadingAnchor
 		}
@@ -302,7 +309,7 @@ final class TaskSidebarCellView: NSTableCellView
 
 	override func menu(for event: NSEvent) -> NSMenu?
 	{
-		makeContextMenu()
+		actionsAvailable ? makeContextMenu() : nil
 	}
 
 	func makeContextMenu() -> NSMenu

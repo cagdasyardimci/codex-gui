@@ -72,8 +72,61 @@ struct WorkspaceSelectors
 	}
 	var threads: [ThreadSummary]
 	{
-		model.conversations.threads
+		visibleThreads(model.conversations.threads)
 	}
+
+	private func visibleThreads(_ threads: [ThreadSummary]) -> [ThreadSummary]
+	{
+		guard case .archive(let context) = model.conversations.pendingManagement
+		else
+		{
+			return threads
+		}
+		return threads.filter
+		{
+			$0.id != context.threadID
+		}
+	}
+
+	private var pendingChats: [PendingChatPresentation]
+	{
+		guard !showingArchived
+		else
+		{
+			return []
+		}
+		return model.composer.pendingSubmissions.values.sorted
+		{
+			$0.draft.lifetime > $1.draft.lifetime
+		}.compactMap
+		{
+			submission in
+			guard submission.conversation == .newChat,
+					submission.context.belongsTo(
+					workspace: model.identity,
+					generation: model.connection.generation
+					),
+					let projectPath = submission.context.workspace.canonicalCheckoutPath,
+					let execution = model.execution(for: submission.context),
+					execution.activeThreadID == nil,
+					execution.state == .running || execution.state == .stopping,
+					execution.submissionRequest?.isSameRequest(as: submission.context) == true
+			else
+			{
+				return nil
+			}
+			let title = ThreadTitleText.normalized(submission.draft.text)
+			return PendingChatPresentation(
+				requestID: submission.context.requestID,
+				projectPath: projectPath,
+				title: title.isEmpty ? UserMessagePresenter
+					.attachmentPreviewTitle(for: submission.inputs) ?? "New chat" : title,
+				isSelected: model.conversations.selectedConversation == .newChat
+					&& model.composer.drafts[.newChat]?.lifetime == submission.draft.lifetime
+			)
+		}
+	}
+
 	var selectedThreadID: String?
 	{
 		if case .thread(let id) = model.conversations.selectedConversation
@@ -455,7 +508,7 @@ struct WorkspaceSelectors
 			fastMode: runPreferences.fastMode,
 			pinnedProjectPaths: model.preferences.pinnedProjectPaths,
 			removedProjectPaths: model.preferences.removedProjectPaths,
-			pinnedTasks: model.preferences.pinnedTasks,
+			pinnedTasks: visibleThreads(model.preferences.pinnedTasks),
 			projectDisplayNames: model.preferences.projectDisplayNames,
 			preferenceWarning: preferenceWarning,
 			showingArchived: showingArchived,
@@ -503,6 +556,7 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		snapshot.pendingChats = pendingChats
 		snapshot.chatLocked = isConnected && (selectedThreadID.map
 		{
 			model.conversations.lockedThreadIDs.contains($0)
@@ -511,7 +565,10 @@ struct WorkspaceSelectors
 			&& model.conversations.pendingSelection?.threadID == selectedThreadID
 		snapshot.sidebarThreads = model.conversations.sidebarThreadsArchived == model.conversations
 			.showingArchived
-			? model.conversations.sidebarThreads : nil
+			? model.conversations.sidebarThreads.map
+			{
+				visibleThreads($0)
+			} : nil
 		snapshot.sidebarListLoading = model.conversations.pendingSidebarList != nil
 		snapshot.sidebarListError = model.conversations.sidebarListError
 		snapshot.sidebarConnectionGeneration = isConnected ? connectionGeneration : nil

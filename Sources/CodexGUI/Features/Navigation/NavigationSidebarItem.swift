@@ -6,5 +6,6 @@ enum NavigationSidebarItem
 	case pinnedThread(ThreadSummary)
 	case project(URL)
 	case thread(ThreadSummary)
+	case pendingChat(PendingChatPresentation)
 	case showMore
 }

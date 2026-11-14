@@ -9,6 +9,7 @@ enum NavigationSidebarItemsBuilder
 		pinnedProjectPaths: Set<String>,
 		visibleThreads: [ThreadSummary],
 		pinnedTasks: [ThreadSummary] = [],
+		pendingChats: [PendingChatPresentation] = [],
 		isCurrentProjectCollapsed: Bool = false,
 		projectTaskLimit: Int = 5,
 		removedProjectPaths: Set<String> = [],
@@ -62,6 +63,10 @@ enum NavigationSidebarItemsBuilder
 			{
 				items.append(.sectionHeader("Recents"))
 			}
+			items.append(contentsOf: pendingChats.map
+			{
+				.pendingChat($0)
+			})
 			items.append(contentsOf: projectThreads.map
 			{
 				.thread($0)
@@ -79,6 +84,14 @@ enum NavigationSidebarItemsBuilder
 			let shouldShowProjectTasks = project == currentProject && !isCurrentProjectCollapsed
 			if shouldShowProjectTasks
 			{
+				let projectPendingChats = pendingChats.filter
+				{
+					$0.projectPath == project.path
+				}
+				items.append(contentsOf: projectPendingChats.map
+				{
+					.pendingChat($0)
+				})
 				let recentThreads = projectThreads
 				items.append(contentsOf: recentThreads.prefix(projectTaskLimit).map
 				{

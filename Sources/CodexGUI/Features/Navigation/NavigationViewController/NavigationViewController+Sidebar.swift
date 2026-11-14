@@ -137,6 +137,11 @@ extension NavigationViewController
 			{
 				taskMatchesSearch($0)
 			},
+			pendingChats: (renderedPresentation?.pendingChats ?? []).filter
+			{
+				let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+				return query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)
+			},
 			isCurrentProjectCollapsed: isCurrentProjectCollapsed,
 			projectTaskLimit: projectTaskLimit,
 			removedProjectPaths: removedProjectPaths,
@@ -174,6 +179,10 @@ extension NavigationViewController
 					if case .pinnedThread(let thread) = item
 					{
 						return thread.id == selectedThreadID
+					}
+					if case .pendingChat(let chat) = item
+					{
+						return chat.isSelected
 					}
 					if case .thread(let thread) = item
 					{
@@ -221,7 +230,7 @@ extension NavigationViewController
 				as? TaskSidebarCellView
 			return cell?.makeContextMenu()
 		case .project(let project): return projectContextMenu(project)
-		case .sectionHeader, .showMore: return nil
+		case .sectionHeader, .showMore, .pendingChat: return nil
 		}
 	}
 
@@ -266,6 +275,13 @@ extension NavigationViewController
 				in: tableView,
 				thread: thread,
 				isPinnedRow: true
+			)
+		}
+		if case .pendingChat(let chat) = sidebarItems[row]
+		{
+			return pendingChatCell(
+				in: tableView,
+				chat: chat
 			)
 		}
 		if case .showMore = sidebarItems[row]
@@ -354,6 +370,29 @@ extension NavigationViewController
 			button.topAnchor.constraint(equalTo: cell.topAnchor),
 			button.bottomAnchor.constraint(equalTo: cell.bottomAnchor),
 		])
+		return cell
+	}
+
+	private func pendingChatCell(
+		in tableView: NSTableView,
+		chat: PendingChatPresentation
+	) -> TaskSidebarCellView
+	{
+		let identifier = NSUserInterfaceItemIdentifier("pendingConversationTitle")
+		let cell = tableView.makeView(
+			withIdentifier: identifier,
+			owner: self
+		)
+			as? TaskSidebarCellView ?? TaskSidebarCellView(frame: .zero)
+		cell.identifier = identifier
+		cell.setActionsAvailable(false)
+		cell.setPinnedRow(sidebarPreferences.organization == .oneList)
+		cell.setTurnRunning(true)
+		cell.textField?.stringValue = chat.title
+		cell.textField?.textColor = AppKitColorTokens.sidebarText
+		cell.textField?
+			.setAccessibilityIdentifier("conversation-request-" + chat.requestID.uuidString)
+		cell.setAccessibilityLabel(chat.title)
 		return cell
 	}
 
@@ -542,7 +581,7 @@ extension NavigationViewController
 			{
 				activateProject(project)
 			}
-		case .showMore, .sectionHeader:
+		case .showMore, .sectionHeader, .pendingChat:
 			break
 		case .pinnedThread(let thread):
 			markTaskRead(thread.id)
@@ -573,7 +612,7 @@ extension NavigationViewController
 		case .thread(let thread), .pinnedThread(let thread):
 			markTaskRead(thread.id)
 			filterThreads()
-		case .sectionHeader, .showMore: break
+		case .sectionHeader, .showMore, .pendingChat: break
 		}
 	}
 
@@ -622,7 +661,7 @@ extension NavigationViewController
 		}
 		switch sidebarItems[row]
 		{
-		case .showMore, .sectionHeader: return false
+		case .showMore, .sectionHeader, .pendingChat: return false
 		default: break
 		}
 		return true

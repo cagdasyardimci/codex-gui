@@ -73,6 +73,7 @@ struct ConversationSnapshot
 	var reservedQueuedMessageIDs: Set<UUID> = []
 	let projectPath: String?
 	let threads: [ThreadSummary]
+	var pendingChats: [PendingChatPresentation] = []
 	var sidebarThreads: [ThreadSummary]? = nil
 	var sidebarListLoading = false
 	var sidebarListError: String? = nil
