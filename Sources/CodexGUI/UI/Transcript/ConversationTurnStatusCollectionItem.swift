@@ -5,7 +5,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 {
 	private let label = NSTextField(labelWithString: "")
 	private let divider = NSBox()
-	private let disclosure = DesktopDisclosureButton()
+	private let disclosure = DesktopDisclosureButton(presentation: .turnWork)
 	private var expanded = false
 	private var onToggle: (() -> Void)?
 	private var timing: ConversationTurnTiming?
@@ -59,13 +59,13 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 
 	func refresh(now: Date)
 	{
-		guard timing != nil
+		guard let timing
 		else
 		{
 			return
 		}
 		label.stringValue = ""
-		disclosure.setLabel(expanded ? "Hide turn work" : "Show turn work")
+		disclosure.setLabel(Self.statusText(timing: timing, now: now))
 		disclosure.setExpanded(expanded)
 	}
 

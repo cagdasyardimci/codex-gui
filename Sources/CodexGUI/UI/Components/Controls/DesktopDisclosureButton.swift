@@ -6,13 +6,13 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 {
 	enum Presentation
 	{
-		case normal, compact, hoverReveal, output, summary, fileList
+		case normal, compact, hoverReveal, output, summary, fileList, turnWork
 
 		var rowHeight: CGFloat
 		{
 			switch self
 			{
-			case .normal, .output: 24
+			case .normal, .output, .turnWork: 24
 			case .compact: 20
 			case .hoverReveal: 21
 			case .summary: NSView.noIntrinsicMetric
@@ -161,19 +161,6 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 		}
 		else
 		{
-			let attributes: [NSAttributedString.Key: Any] = [
-				.font: font ?? AppKitFontResolver.font(TypographyTokens.UI.body),
-				.foregroundColor: presentation == .summary
-					? AppKitColorTokens.captionText : AppKitColorTokens.secondaryText
-			]
-			attributedTitle = NSAttributedString(
-				string: label,
-				attributes: attributes
-			)
-			if presentation != .summary
-			{
-				attributedAlternateTitle = attributedTitle
-			}
 			imagePosition = label.isEmpty ? .imageOnly
 				: (presentation == .output ? .imageLeading : .imageTrailing)
 		}
@@ -259,6 +246,34 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 
 	private func refreshIndicator()
 	{
+		if presentation != .fileList
+		{
+			let foreground: NSColor
+			if presentation == .summary
+			{
+				foreground = AppKitColorTokens.captionText
+			}
+			else if presentation == .turnWork, isEnabled, isHovered || hasKeyboardFocus
+			{
+				foreground = AppKitColorTokens.primaryText
+			}
+			else
+			{
+				foreground = AppKitColorTokens.secondaryText
+			}
+			contentTintColor = foreground
+			attributedTitle = NSAttributedString(
+				string: title,
+				attributes: [
+					.font: font ?? AppKitFontResolver.font(TypographyTokens.UI.body),
+					.foregroundColor: foreground
+				]
+			)
+			if presentation != .summary
+			{
+				attributedAlternateTitle = attributedTitle
+			}
+		}
 		let expanded = presentation == .summary || presentation == .fileList
 			? semanticExpanded : state == .on
 		let visible = presentation != .hoverReveal || expanded || isHovered
