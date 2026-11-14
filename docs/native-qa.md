@@ -1,6 +1,6 @@
 # Native QA with controlled fixtures
 
-Run `./scripts/native-qa.sh` for manual inspection with the bundled, model-free [mock backend](mock-backend.md). Open the printed temporary project with **Open Project…**. You may pass an absolute backend executable as the first argument and a scenario name as the second. Verify which backend the QA app uses when another app instance is open.
+Run `./scripts/native-qa.sh` for manual inspection with the bundled [mock backend](mock-backend.md). Open the printed temporary project with **Open Project…**. You may pass an absolute backend executable as the first argument and a scenario name as the second. Verify which backend the QA app uses when another app instance is open.
 
 For example, launch the bundled backend's `backend-error` scenario from the repository root:
 
@@ -46,7 +46,7 @@ Each run retains a report, Xcode result and diagnostic attachments under ignored
 
 Read reports from expected versus observed outcome, then screen/target location, then state and backend history. Captures are sequential, and state history describes published values rather than the exact pixels drawn. Review screenshots separately and preserve failing runs. Interpret the workflow and report remaining acceptance under [validation](validation.md#native-and-live-acceptance).
 
-For appearance and retained-control inspection, set `CODEX_GUI_E2E_STATE` to an absolute isolated path. The app writes a coalesced companion `<state-file>.ui.json` on its normal main-actor lifecycle, including visible view/window identities, effective appearances, retained fonts and applied colors, semantic viewer colors, and expanded-viewer artwork and zoom state; it omits document text. Use this record and paired screenshots for live font, color and geometry evidence rather than debugger font or PDF getters. The existing state-history file remains unchanged.
+For appearance and retained-control inspection, set `CODEX_GUI_E2E_STATE` to an absolute isolated path. Use its companion `<state-file>.ui.json` and paired screenshots for live font, color and geometry evidence rather than debugger font or PDF getters. The record omits document text; its fields are defined by the [state reporter](../Sources/CodexGUI/Application/Runtime/UITestEvidenceRecorder.swift).
 
 Observe appearance transitions and responsiveness without an attached debugger, using native input and composed display captures. Debugger expressions execute target code: font-property getters, text measurement and PDF representation getters can perform framework work and synchronous IPC even when the inspection intends only to read state. Keep those calls out of suspended-process inspection; use raw stored-value inspection without target execution when debugger metadata is necessary. Changing expression thread options alone does not establish that framework calls are safe.
 

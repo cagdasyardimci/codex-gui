@@ -4,7 +4,7 @@ Type `/` at the start of the draft to discover available commands and enabled sk
 
 ## Syntax and intent
 
-Commands are composer actions rather than shell input: arguments have no shell quoting or escape syntax. Paths, URLs and slashes later in prose remain ordinary text. Use `//status` to send literal `/status`. Invalid input retains the draft. Selecting a skill attaches it to the next message without sending that message. The composer shows the selection as an inline mention. Normal text selection and deletion remove it while preserving other draft content and attachments. The mention remains separate from the plain draft and is submitted using its selected skill name and path. Both the inline list and `/skills` picker search internal names, display names and descriptions with case-insensitive substring matching.
+Commands are composer actions rather than shell input: arguments have no shell quoting or escape syntax. Paths, URLs and slashes later in prose remain ordinary text. Use `//status` to send literal `/status`. Invalid input retains the draft. Selecting a skill attaches it to the next message without sending that message; editing its inline mention must preserve other draft content and attachments.
 
 Forking copies conversation history in the source checkout; task checkout creation is a separate Git operation. Plan toggling without a prompt changes next-turn mode without starting a model turn. Preserve the remaining prompt text when invoking plan mode with a prompt.
 
@@ -20,8 +20,8 @@ Follow [validation](validation.md) for checks and [AppKit conventions](../CONVEN
 
 ## Context mentions
 
-Type `@` at a token boundary to open the [context menu](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+MentionMenu.swift) above the composer. Typing filters supported actions, enabled skills and project files while focus stays in the draft. Arrow keys select a row, Return or Tab chooses it, and Escape dismisses the menu while preserving the draft. Choosing an action replaces only the active mention token; file matches attach through the existing project-context flow. Selections expire when the draft owner changes.
+Type `@` at a token boundary to open the [context menu](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+MentionMenu.swift). Choosing an action replaces only the active mention token, and selections expire when the draft owner changes.
 
-Project selection from the context menu uses the existing project command palette and navigation intents. The source draft remains with its current project or chat when another project is selected. Plugin management opens the existing Settings page; plugin installation and configuration retain the [Settings presentation lifetime](settings.md#configuration-ownership). Enabled skills remain the supported way to attach a skill invocation to the next message.
+The source draft remains with its current project or chat when another project is selected. Plugin installation and configuration retain the [Settings presentation lifetime](settings.md#configuration-ownership).
 
-Goal remains visible but disabled in the context menu. Plan mode uses the same availability rules and command path as `/plan`, preserving the draft outside the mention token. Disabled actions cannot be selected or invoked and are skipped by keyboard navigation.
+Plan mode uses the same availability rules and command path as `/plan`, preserving the draft outside the mention token. Disabled actions cannot be selected or invoked and are skipped by keyboard navigation.

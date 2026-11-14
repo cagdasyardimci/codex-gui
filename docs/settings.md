@@ -18,7 +18,7 @@ Archive search must cover all loaded metadata, independently of row pagination. 
 
 Editors of external configuration files must preserve unsaved drafts on conflicts and require an explicit decision before replacing them. Catalog mutations must invalidate affected cached reads without silently discarding failed form drafts.
 
-Repeated-entry configuration forms distinguish an implicit empty input from an explicitly added or edited row. The implicit input keeps an empty form usable without representing a configured entry; removing the last explicit row restores that empty input. Serialization continues to omit empty entries.
+Repeated-entry configuration forms distinguish an implicit empty input from an explicitly added or edited row, keeping an empty form usable without representing a configured entry.
 
 ## Appearance
 

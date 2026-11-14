@@ -40,7 +40,7 @@ Compare repeated runs with the same instrumentation and case coverage. Elapsed s
 
 ## Native and live acceptance
 
-`make test:ui` runs separately from `make check` and occupies the interactive desktop. Use [native QA](native-qa.md#xcode-launched-app-workflow) for setup, isolation and artifact review. The default [mock backend](mock-backend.md) is model-free; an overridden backend can make model calls.
+`make test:ui` runs separately from `make check` and occupies the interactive desktop. Use [native QA](native-qa.md#xcode-launched-app-workflow) for setup, isolation and artifact review. An overridden backend can make model calls; see the [mock backend](mock-backend.md) for the default.
 
 Controlled-service and synthetic AppKit results establish only their asserted behavior. Live backend operation, OS notification delivery, audible sound, physical input, visual parity and minimum-supported-macOS behavior require separate observation in those environments. State which environment produced each result, preserve failures and review unexpected runtime exits separately.
 

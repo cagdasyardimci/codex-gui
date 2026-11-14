@@ -15,7 +15,7 @@ See [native QA](native-qa.md) to launch the app with this backend or run the UI 
 
 ## Scenarios and isolation
 
-The default scenario is `streaming`. Available names are in `Tests/E2E/MockBackend/mock_backend/scenarios/`.
+Available scenarios are in [the scenario directory](../Tests/E2E/MockBackend/mock_backend/scenarios/).
 
 Give each run its own backend process and state file. Use a fresh state file when changing scenarios; prior conversations can persist across reconnects.
 

@@ -4,9 +4,9 @@ KaTeX, Mermaid and ELK are managed by the root [package manifest](../package.jso
 
 ## Prepare and build
 
-Install Node.js 22 or later with the pnpm version pinned in `package.json`, then run `make resources` from the repository root. This performs a locked `pnpm install --frozen-lockfile` installation with dependency lifecycle scripts disabled and generates the runtime resources. The normal `make build`, `make test`, named test groups and bundle commands prepare resources automatically. Before using SwiftPM or Xcode directly in a fresh checkout, run `make resources` first.
+Install Node.js 22 or later with the pnpm version pinned in `package.json`, then run `make resources` from the repository root. Before using SwiftPM or Xcode directly in a fresh checkout, run `make resources` first. Resource preparation uses the lockfile and disables dependency lifecycle scripts; the [Makefile](../Makefile) defines which commands prepare resources automatically.
 
-The [resource builder](../scripts/build-markdown-resources.mjs) copies upstream distributions and the app-owned HTML and JavaScript integration into an ignored resource directory consumed by [SwiftPM](../Package.swift). Do not edit generated files. Local integrations remain in [KaTeX](../Sources/CodexGUI/Resources/KaTeX) and [Mermaid](../Sources/CodexGUI/Resources/Mermaid). Rendering and semantic presentation contracts belong to [interface styling](interface-styling.md#native-adaptation-rationale).
+Do not edit the generated files produced by the [resource builder](../scripts/build-markdown-resources.mjs). Local integrations remain in [KaTeX](../Sources/CodexGUI/Resources/KaTeX) and [Mermaid](../Sources/CodexGUI/Resources/Mermaid). Rendering and semantic presentation contracts belong to [interface styling](interface-styling.md#native-adaptation-rationale).
 
 ## Update dependencies
 

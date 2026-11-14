@@ -4,7 +4,7 @@ This guide records why activity is grouped and what its projection must preserve
 
 ## Grouping and disclosure
 
-Group consecutive command activities within a turn to reduce visual noise while retaining each observation. User messages, assistant commentary, image views and turn boundaries interrupt grouping. Repeated reads remain separate observations rather than being deduplicated.
+Group consecutive command activities within a turn to reduce visual noise while retaining each observation. Repeated reads remain separate observations rather than being deduplicated.
 
 Disclosure must preserve exceptional outcomes even while details are closed. Completion alone does not imply a zero exit code. Read-file navigation and command disclosure remain distinct actions. Hiding a disclosure glyph on hover exit must not remove its hit region, keyboard access or accessible name, change expansion or move text.
 
