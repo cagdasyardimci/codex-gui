@@ -11,7 +11,7 @@ struct ToolsTabFilesIntegrationTests
 	{
 		try await AppKitTestIsolation.perform
 		{
-			let window = NSWindow(
+			let window = KeyViewLoopWindow(
 				contentRect: NSRect(
 					x: 0,
 					y: 0,
@@ -93,6 +93,26 @@ struct ToolsTabFilesIntegrationTests
 				candidate = next
 			}
 			#expect(reachable)
+			let recalculations = window.keyViewLoopRecalculations
+			for _ in 0 ..< 20
+			{
+				tabs.setContentVisible(true)
+			}
+			#expect(window.keyViewLoopRecalculations == recalculations)
+			#expect(window.firstResponder === editor)
+			#expect(editor.selectedRange() == selection)
+		}
+	}
+
+	@MainActor
+	private final class KeyViewLoopWindow: NSWindow
+	{
+		var keyViewLoopRecalculations = 0
+
+		override func recalculateKeyViewLoop()
+		{
+			keyViewLoopRecalculations += 1
+			super.recalculateKeyViewLoop()
 		}
 	}
 

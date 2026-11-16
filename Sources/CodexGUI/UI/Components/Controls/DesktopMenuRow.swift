@@ -49,7 +49,7 @@ class DesktopMenuRow: NSButton
 		case metadata, inlineMetadata, shortcut, badge
 	}
 
-	struct Content
+	struct Content: Equatable
 	{
 		var title: String
 		var icon: NSImage? = nil
@@ -67,6 +67,11 @@ class DesktopMenuRow: NSButton
 	{
 		didSet
 		{
+			guard content != oldValue
+			else
+			{
+				return
+			}
 			applyContent()
 		}
 	}

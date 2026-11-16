@@ -69,8 +69,11 @@ struct DesktopMenuRowTests
 			changes += 1
 		}
 		reads = 0
+		let unchangedContent = row.content
 		for _ in 0 ..< 200
 		{
+			row.suffix = ""
+			row.content = unchangedContent
 			#expect(row.rowHeight == original.height)
 			#expect(row.preferredSize == original)
 		}

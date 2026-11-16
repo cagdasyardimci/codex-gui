@@ -6,6 +6,49 @@ import Testing
 @MainActor
 struct SettingsAppearanceColorTests
 {
+	@Test func decodedThemeCacheFollowsExternalWritesRemovalAndSeparatePreferenceDomains() throws
+	{
+		let names = (0 ..< 2).map
+		{
+			_ in "ThemeCache.\(UUID().uuidString)"
+		}
+		let stores = try names.map
+		{
+			try #require(UserDefaults(suiteName: $0))
+		}
+		defer
+		{
+			for (store, name) in zip(
+				stores,
+				names
+			)
+			{
+				store.removePersistentDomain(forName: name)
+			}
+		}
+		let light = ColorThemeConfiguration(mode: .light)
+		let dark = ColorThemeConfiguration(mode: .dark)
+		let first = ColorPreferences(defaults: stores[0])
+		let second = ColorPreferences(defaults: stores[1])
+		for value in [light, dark, light]
+		{
+			stores[0].set(
+				try JSONEncoder().encode(value),
+				forKey: "appearance.colorTheme"
+			)
+			#expect(first.configuration == value)
+			#expect(first.configuration == value)
+			#expect(second.configuration == ColorThemeConfiguration())
+		}
+		stores[0].set(
+			Data("invalid".utf8),
+			forKey: "appearance.colorTheme"
+		)
+		#expect(first.configuration == ColorThemeConfiguration())
+		stores[0].removeObject(forKey: "appearance.colorTheme")
+		#expect(first.configuration == ColorThemeConfiguration())
+	}
+
 	@Test func modeArtworkKeepsItsNeutralStageWhileSemanticAccentChanges() throws
 	{
 		for dark in [false, true]

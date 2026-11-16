@@ -2,6 +2,37 @@ import Foundation
 
 struct ColorPreferences
 {
+	private final class ConfigurationCache: @unchecked Sendable
+	{
+		private let lock = NSLock()
+		private var values: [Data: ColorThemeConfiguration] = [:]
+
+		func configuration(for data: Data) -> ColorThemeConfiguration
+		{
+			lock.lock()
+			defer
+			{
+				lock.unlock()
+			}
+			if let cached = values[data]
+			{
+				return cached
+			}
+			let value = (try? JSONDecoder().decode(
+				ColorThemeConfiguration.self,
+				from: data
+			))
+				?? ColorThemeConfiguration()
+			if values.count >= 16
+			{
+				values.removeAll(keepingCapacity: true)
+			}
+			values[data] = value
+			return value
+		}
+	}
+
+	private static let configurationCache = ConfigurationCache()
 	static let didChange = Notification.Name("CodexGUI.colorThemeDidChange")
 	static let typographyChangedKey = "typographyChanged"
 	private let defaults: UserDefaults
@@ -14,16 +45,12 @@ struct ColorPreferences
 
 	var configuration: ColorThemeConfiguration
 	{
-		guard let data = defaults.data(forKey: key),
-				let configuration = try? JSONDecoder().decode(
-				ColorThemeConfiguration.self,
-				from: data
-				)
+		guard let data = defaults.data(forKey: key)
 		else
 		{
 			return ColorThemeConfiguration()
 		}
-		return configuration
+		return Self.configurationCache.configuration(for: data)
 	}
 
 	@MainActor

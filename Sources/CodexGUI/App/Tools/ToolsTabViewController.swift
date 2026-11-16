@@ -110,6 +110,7 @@ final class ToolsTabViewController: NSViewController
 	}
 	private var isExpanded = false
 	private var isContentVisible = true
+	private var lastRequestedContentVisibility: Bool?
 	private var wasFilesPresentationVisible = false
 	private var conversationTitle = "New chat"
 	private var tabIDs: [UUID] = []
@@ -850,6 +851,12 @@ final class ToolsTabViewController: NSViewController
 
 	func setContentVisible(_ visible: Bool)
 	{
+		guard lastRequestedContentVisibility != visible
+		else
+		{
+			return
+		}
+		lastRequestedContentVisibility = visible
 		isContentVisible = visible
 		showSelectedContent()
 	}
