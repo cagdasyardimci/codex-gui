@@ -42,6 +42,7 @@ struct WorkspaceCoordinatorModel
 	var pendingRecovery: WorkspaceRecoveryRequest?
 	var pendingCancellation: [UUID: TaskWorkspace] = [:]
 	var quit: WorkspaceQuitTransition = .idle
+	var quitRecoveryFallback: WorkspaceQuitRequest?
 	var pendingQuitCompletion: WorkspaceQuitCompletion?
 	var message: String?
 
@@ -71,10 +72,15 @@ struct WorkspaceCoordinatorModel
 	var hasUncertainOwners: Bool
 	{
 		owners.values.contains(where: \.refusesOrdinaryExit)
-			|| registeredOwners.contains
-			{
-				owners[$0.key]?.reference.workspace != $0.value
-			}
+			|| hasUnobservedOwners
+	}
+
+	var hasUnobservedOwners: Bool
+	{
+		registeredOwners.contains
+		{
+			owners[$0.key]?.reference.workspace != $0.value
+		}
 	}
 }
 
@@ -137,6 +143,8 @@ enum WorkspaceCoordinatorAction
 		WorkspaceQuitRequest,
 		approved: Bool
 	)
+	case quitStopDeadlineReached(WorkspaceQuitRequest)
+	case quitCancelled(WorkspaceQuitRequest)
 	case quitReservationFailed(
 		WorkspaceQuitRequest,
 		OperationFailure

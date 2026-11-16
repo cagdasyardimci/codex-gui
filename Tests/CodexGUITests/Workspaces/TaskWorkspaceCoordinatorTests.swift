@@ -824,21 +824,27 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(recovered.currentSnapshot.taskOutcomeUncertain)
 		#expect(!recovered.beginWorkspaceCleanup())
 		#expect(!recovered.currentSnapshot.canSend)
+		recoveryCoordinator.waitForQuitStopDeadline =
+		{
+		}
 		var choseStopAndQuit = false
-		let (_, quitApproved) = await observedQuitOutcome(recoveryCoordinator)
+		let (quitRequest, quitApproved) = await observedQuitOutcome(recoveryCoordinator)
 		{
 			_ in
 			choseStopAndQuit = true
 			return true
 		}
 		#expect(choseStopAndQuit)
-		#expect(!quitApproved)
+		#expect(quitApproved)
+		#expect(recovered.currentSnapshot.taskOutcomeUncertain)
+		#expect(recovered.store.model.execution.commandLifetime.hasPendingCommands)
+		recoveryCoordinator.cancelQuit(quitRequest)
 		if case .idle = recoveryCoordinator.model.quit
 		{
 		}
 		else
 		{
-			Issue.record("Uncertain command must cancel ordinary quit.")
+			Issue.record("Canceling approved termination must restore normal recovery.")
 		}
 		#expect(recovered.currentSnapshot.taskOutcomeUncertain)
 		let completed = try command(
@@ -1942,6 +1948,115 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(fixture.coordinator.isTaskActive)
 	}
 
+	@Test func confirmedQuitDrainsDraftAndRetainsRecoveryWhenTheStopFails() async throws
+	{
+		let deadline = PublicationGate()
+		let writes = LifecyclePersistenceGate()
+		let fixture = try await TaskExecutionFixture(
+			persistenceGate: writes,
+			waitForQuitStopDeadline:
+			{
+				await deadline.wait()
+			}
+		)
+		let deadlineStarted = AsyncStream<Void>.makeStream()
+		deadline.onWaitersChanged =
+		{
+			if deadline.isWaiting
+			{
+				deadlineStarted.continuation.yield(())
+				deadlineStarted.continuation.finish()
+			}
+		}
+		defer
+		{
+			deadline.onWaitersChanged = nil
+			deadlineStarted.continuation.finish()
+			deadline.release()
+			fixture.remove()
+		}
+		await fixture.sourceState.inputs.connect()
+		let task = try await fixture.createTask("Quit with recovery")
+		do
+		{
+			task.state.inputs.updateDraft("Run task")
+			try await submitFreshTasks([task])
+			task.service.interruptError = AppServerError.protocolError("Synthetic stop failure")
+			writes.blockedPaths = [task.workspace.checkoutPath]
+			task.state.inputs.updateDraft("Keep this draft")
+			await writes.waitForWrite(at: task.workspace.checkoutPath)
+			var confirmations = 0
+			var result: Bool?
+			var finishedTasks = 0
+			var failedStops = 0
+			fixture.coordinator.onConfirmQuit =
+			{
+				confirmations += 1
+				fixture.coordinator.confirmQuit(
+					$0,
+					approved: true
+				)
+			}
+			fixture.coordinator.onQuitCompleted =
+			{
+				_, approved in result = approved
+			}
+			fixture.coordinator.onAllTasksFinished =
+			{
+				finishedTasks += 1
+			}
+			fixture.coordinator.onStopAllFailed =
+			{
+				failedStops += 1
+			}
+			let request = fixture.coordinator.requestQuit()
+			await task.service.waitForCheckpoint("interrupt:1")
+			try #require(await waitForStorePredicate(task.state.store)
+			{
+				task.state.store.model.execution.state == .failed
+			})
+			for await _ in deadlineStarted.stream
+			{
+				break
+			}
+			#expect(deadline.isWaiting)
+			#expect(result == nil)
+			#expect(confirmations == 1)
+			deadline.release()
+			try #require(await waitForCoordinatorPredicate(fixture.coordinator)
+			{
+				fixture.coordinator.model.quitRecoveryFallback == request
+			})
+			#expect(result == nil)
+			writes.release(task.workspace.checkoutPath)
+			try #require(await waitForQuitPredicate(fixture.coordinator)
+			{
+				result != nil
+			})
+			#expect(result == true)
+			#expect(confirmations == 1)
+			#expect(finishedTasks == 0)
+			#expect(failedStops == 0)
+			#expect(task.state.store.model.execution.needsReconciliation)
+			#expect(task.state.store.model.lifecycle.quitReservation?.requestID == request
+				.requestID)
+			#expect(fixture.storage.draft(
+				for: URL(fileURLWithPath: task.workspace.checkoutPath),
+				threadID: task.service.thread.id
+			) == "Keep this draft")
+			#expect(fixture.storage.activeExecutionThreadIDs(
+				for: URL(fileURLWithPath: task.workspace.checkoutPath)
+			).contains(task.service.thread.id))
+		}
+		catch
+		{
+			deadline.release()
+			writes.release(task.workspace.checkoutPath)
+			try? await task.state.store.awaitAcceptedPersistence()
+			throw error
+		}
+	}
+
 	@Test func quitWaitsForActualCommandExitAndEveryOwnersAcceptedDraftWrites() async throws
 	{
 		let timing = TestTiming.begin("test.body")
@@ -2165,7 +2280,8 @@ struct TaskWorkspaceCoordinatorTests
 		) == "Successful replacement")
 	}
 
-	@Test func unknownPreparationAfterNewChatStillRefusesNormalQuit() async throws
+	@Test func unknownPreparationRequiresConfirmationAndKeepsTheIndependentDraftOnQuit(
+	) async throws
 	{
 		let timing = TestTiming.begin("test.body")
 		defer
@@ -2178,6 +2294,9 @@ struct TaskWorkspaceCoordinatorTests
 			fixture.remove()
 		}
 		let store = fixture.sourceState.store
+		fixture.coordinator.waitForQuitStopDeadline =
+		{
+		}
 		await store.inputs.connect()
 		// Connection acknowledgement does not include independent project-context IO.
 		await awaitWorkspaceSnapshot(store)
@@ -2201,6 +2320,12 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(store.currentSnapshot.draft == "Independent later draft")
 		var canceled = 0
 		var completed = 0
+		var approve = false
+		var results: [Bool] = []
+		fixture.coordinator.onQuitCompleted =
+		{
+			_, approved in results.append(approved)
+		}
 		fixture.coordinator.onStopAllFailed =
 		{
 			canceled += 1
@@ -2213,7 +2338,7 @@ struct TaskWorkspaceCoordinatorTests
 		{
 			fixture.coordinator.confirmQuit(
 				$0,
-				approved: true
+				approved: approve
 			)
 		}
 		fixture.coordinator.requestQuit()
@@ -2225,6 +2350,23 @@ struct TaskWorkspaceCoordinatorTests
 		#expect(store.model.lifecycle.quitReservation == nil)
 		#expect(store.currentSnapshot.draft == "Independent later draft")
 		#expect(!store.model.composer.pendingSubmissions.isEmpty)
+		#expect(results == [false])
+		approve = true
+		let request = fixture.coordinator.requestQuit()
+		try #require(await waitForQuitPredicate(fixture.coordinator)
+		{
+			results.count == 2
+		})
+		#expect(results == [false, true])
+		#expect(completed == 0)
+		#expect(canceled == 1)
+		#expect(store.model.lifecycle.quitReservation?.requestID == request.requestID)
+		#expect(!store.model.composer.pendingSubmissions.isEmpty)
+		#expect(fixture.storage.draft(
+			for: fixture.source,
+			threadID: nil
+		)
+			== "Independent later draft")
 	}
 
 	@Test func reentrantQuitReservationFailureNeverStopsOrQueuesALaterFreeze() async throws
@@ -2480,6 +2622,7 @@ struct TaskWorkspaceCoordinatorTests
 		}
 		let previousFinished = coordinator.onAllTasksFinished
 		let previousFailed = coordinator.onStopAllFailed
+		let previousCompleted = coordinator.onQuitCompleted
 		let readiness = AsyncStream<Void>.makeStream()
 		var pending = true
 		defer
@@ -2488,6 +2631,7 @@ struct TaskWorkspaceCoordinatorTests
 			{
 				coordinator.onAllTasksFinished = previousFinished
 				coordinator.onStopAllFailed = previousFailed
+				coordinator.onQuitCompleted = previousCompleted
 			}
 			readiness.continuation.finish()
 		}
@@ -2502,6 +2646,7 @@ struct TaskWorkspaceCoordinatorTests
 			timing.mark("condition.satisfied")
 			coordinator.onAllTasksFinished = previousFinished
 			coordinator.onStopAllFailed = previousFailed
+			coordinator.onQuitCompleted = previousCompleted
 			readiness.continuation.yield()
 			readiness.continuation.finish()
 		}
@@ -2513,6 +2658,12 @@ struct TaskWorkspaceCoordinatorTests
 		coordinator.onStopAllFailed =
 		{
 			previousFailed?()
+			check()
+		}
+		coordinator.onQuitCompleted =
+		{
+			request, approved in
+			previousCompleted?(request, approved)
 			check()
 		}
 		// Cancellation resumes the stream iterator and restores the original callbacks.
@@ -2706,7 +2857,8 @@ private final class TaskExecutionFixture
 
 	init(
 		persistenceGate: LifecyclePersistenceGate? = nil,
-		sharedThreadID: String? = nil
+		sharedThreadID: String? = nil,
+		waitForQuitStopDeadline: (@MainActor () async throws -> Void)? = nil
 	) async throws
 	{
 		let timing = TestTiming.begin("fixture.setup")
@@ -2817,6 +2969,10 @@ private final class TaskExecutionFixture
 					manager: sharedManager
 				)
 			)
+		}
+		if let waitForQuitStopDeadline
+		{
+			coordinator.waitForQuitStopDeadline = waitForQuitStopDeadline
 		}
 		servicesProvider =
 		{

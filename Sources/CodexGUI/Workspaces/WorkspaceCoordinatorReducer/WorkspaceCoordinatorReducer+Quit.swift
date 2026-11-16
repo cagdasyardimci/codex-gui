@@ -17,7 +17,16 @@ extension WorkspaceCoordinatorReducer
 				return []
 			}
 			model.pendingQuitCompletion = nil
-			if model.hasRemoteOwners
+			model.quitRecoveryFallback = nil
+			if model.hasUnobservedOwners
+			{
+				effects.append(.completeQuit(
+					request,
+					approved: false
+				))
+			}
+			else if model.hasRemoteOwners
+				|| (request.purpose == .termination && model.hasUncertainOwners)
 			{
 				model.quit = .confirming(request)
 				effects.append(.confirmQuit(request))
@@ -46,7 +55,8 @@ extension WorkspaceCoordinatorReducer
 			{
 				return []
 			}
-			if !approved || model.hasUncertainOwners
+			if !approved || model.hasUnobservedOwners
+				|| (request.purpose == .stopAll && model.hasUncertainOwners)
 			{
 				model.quit = .idle
 				effects.append(.completeQuit(
@@ -54,13 +64,17 @@ extension WorkspaceCoordinatorReducer
 					approved: false
 				))
 			}
-			else if model.hasRemoteOwners
+			else if model.hasRemoteOwners || model.hasUncertainOwners
 			{
 				model.quit = .stopping(request)
 				effects.append(.stopOwners(
 					request,
 					model.owners.values.filter(\.requiresRemoteStop).map(\.reference)
 				))
+				if request.purpose == .termination
+				{
+					effects.append(.awaitQuitStopDeadline(request))
+				}
 			}
 			else
 			{
@@ -70,6 +84,36 @@ extension WorkspaceCoordinatorReducer
 					effects: &effects
 				)
 			}
+		case .quitStopDeadlineReached(let request):
+			guard request.purpose == .termination,
+					case .stopping(let current) = model.quit, current == request
+			else
+			{
+				return []
+			}
+			// Explicit quit can retire an unresponsive backend, but never clears its
+			// unresolved outcomes or command identities. Persistence drains them first.
+			model.quitRecoveryFallback = request
+			beginQuitDrain(
+				&model,
+				request: request,
+				effects: &effects
+			)
+		case .quitCancelled(let request):
+			guard case .terminating(
+				let current,
+				_
+			) = model.quit, current == request
+			else
+			{
+				return []
+			}
+			model.quit = .idle
+			model.quitRecoveryFallback = nil
+			effects.append(.completeQuit(
+				request,
+				approved: false
+			))
 		case .quitReservationFailed(
 			let request,
 			let failure
@@ -120,7 +164,10 @@ extension WorkspaceCoordinatorReducer
 			let approved: Bool
 			if case .succeeded = result
 			{
-				approved = ownersUnchanged && !model.hasRemoteOwners && !model.hasUncertainOwners
+				approved = ownersUnchanged && canFinishQuit(
+					model,
+					request: request
+				)
 					&& allLocalOperationsFinished
 					&& model.pendingCreations.isEmpty && model.pendingCleanup.isEmpty
 					&& model.pendingCancellation.isEmpty
@@ -150,8 +197,11 @@ extension WorkspaceCoordinatorReducer
 			}
 			model.pendingQuitCompletion = nil
 			var accepted = approved && pending
-				.owners == Set(model.owners.values.map(\.reference)) && !model
-				.hasRemoteOwners && !model.hasUncertainOwners
+				.owners == Set(model.owners.values.map(\.reference))
+				&& canFinishQuit(
+					model,
+					request: request
+				)
 			if approved && request.purpose == .termination
 			{
 				guard case .terminating(
@@ -181,6 +231,16 @@ extension WorkspaceCoordinatorReducer
 			return []
 		}
 		return effects
+	}
+
+	private static func canFinishQuit(
+		_ model: WorkspaceCoordinatorModel,
+		request: WorkspaceQuitRequest
+	) -> Bool
+	{
+		!model.hasUnobservedOwners
+			&& ((!model.hasRemoteOwners && !model.hasUncertainOwners)
+				|| (request.purpose == .termination && model.quitRecoveryFallback == request))
 	}
 
 	private static func beginQuitDrain(
@@ -214,7 +274,7 @@ extension WorkspaceCoordinatorReducer
 		{
 			$0.executionState == .failed && $0.needsReconciliation
 		}
-		if shouldRefuseQuit
+		if shouldRefuseQuit && request.purpose == .stopAll
 		{
 			model.quit = .idle
 			effects.append(.completeQuit(
@@ -222,7 +282,7 @@ extension WorkspaceCoordinatorReducer
 				approved: false
 			))
 		}
-		else if !model.hasRemoteOwners
+		else if !model.hasRemoteOwners && !model.hasUncertainOwners
 		{
 			beginQuitDrain(
 				&model,

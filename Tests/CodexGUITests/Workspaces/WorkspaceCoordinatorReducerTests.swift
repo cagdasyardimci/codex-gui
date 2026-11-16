@@ -186,7 +186,15 @@ struct WorkspaceCoordinatorReducerTests
 				approved: true
 			)
 		)
-		#expect(stop.count == 1)
+		#expect(stop.count == 2)
+		#expect(stop.contains
+		{
+			if case .awaitQuitStopDeadline(let captured) = $0
+			{
+				return captured == request
+			}
+			return false
+		})
 		if case .stopOwners(
 			_,
 			let owners
@@ -248,7 +256,7 @@ struct WorkspaceCoordinatorReducerTests
 		})
 	}
 
-	@Test func obsoleteQuitCompletionCannotApproveNewQuitAndComposerUncertaintyRefusesExit()
+	@Test func obsoleteQuitCompletionIsIgnoredAndUncertainComposerRequiresConfirmation()
 	{
 		var model = fixture()
 		let request = WorkspaceQuitRequest(requestID: UUID())
@@ -297,18 +305,15 @@ struct WorkspaceCoordinatorReducerTests
 				frozenOwners: []
 			)
 		)
-		let refusal = reduce(
+		let confirmation = reduce(
 			&model,
 			.quitRequested(foreign)
 		)
-		#expect(refusal.contains
+		#expect(confirmation.contains
 		{
-			if case .completeQuit(
-				_,
-				approved: false
-			) = $0
+			if case .confirmQuit(let captured) = $0
 			{
-				return true
+				return captured == foreign
 			}
 			return false
 		})
@@ -911,6 +916,238 @@ struct WorkspaceCoordinatorReducerTests
 		})
 		#expect(model.hasRemoteOwners)
 		#expect(model.acceptsNewWork)
+	}
+
+	@Test func confirmedQuitAttemptsStopsDespiteUncertaintyAndDrainsRecoveryAtTheDeadline()
+	{
+		var model = fixture()
+		var observation = model.owners.values.first!
+		observation.executionState = .running
+		observation.unresolvedCommands = true
+		observation.remoteOutcomeUncertain = true
+		observation.composerOutcomeUncertain = true
+		_ = reduce(
+			&model,
+			.ownerObserved(observation)
+		)
+		let request = WorkspaceQuitRequest(requestID: UUID())
+		_ = reduce(
+			&model,
+			.quitRequested(request)
+		)
+		#expect(reduce(
+			&model,
+			.quitStopDeadlineReached(request)
+		).isEmpty)
+		let effects = reduce(
+			&model,
+			.quitConfirmationFinished(
+				request,
+				approved: true
+			)
+		)
+		#expect(effects.contains
+		{
+			if case .stopOwners(
+				let captured,
+				let owners
+			) = $0
+			{
+				return captured == request && owners == [observation.reference]
+			}
+			return false
+		})
+		#expect(!model.acceptsNewWork)
+		#expect(reduce(
+			&model,
+			.quitRequested(request)
+		).isEmpty)
+		#expect(reduce(
+			&model,
+			.quitStopDeadlineReached(WorkspaceQuitRequest(requestID: UUID()))
+		).isEmpty)
+		observation.executionState = .failed
+		observation.needsReconciliation = true
+		let failedStop = reduce(
+			&model,
+			.ownerObserved(observation)
+		)
+		#expect(!failedStop.contains
+		{
+			if case .completeQuit = $0
+			{
+				return true
+			}
+			return false
+		})
+		let drain = reduce(
+			&model,
+			.quitStopDeadlineReached(request)
+		)
+		#expect(drain.contains
+		{
+			if case .freezeWritesAndDrainQuit(
+				let captured,
+				_
+			) = $0
+			{
+				return captured == request
+			}
+			return false
+		})
+		_ = reduce(
+			&model,
+			.quitPersistenceDrained(
+				request,
+				.succeeded(())
+			)
+		)
+		let completed = reduce(
+			&model,
+			.quitCompletionRequested(
+				request,
+				approved: true,
+				frozenOwners: [observation.reference]
+			)
+		)
+		#expect(completed.contains
+		{
+			if case .notifyQuitCompletion(
+				let captured,
+				approved: true
+			) = $0
+			{
+				return captured == request
+			}
+			return false
+		})
+		#expect(model.owners[observation.reference.owner] == observation)
+		#expect(model.hasRemoteOwners && model.hasUncertainOwners)
+		#expect(!model.acceptsNewWork)
+	}
+
+	@Test(arguments: [false, true])
+	func quitRecoveryFallbackCannotBypassWritesOrLostReservations(_ writesPending: Bool)
+	{
+		var model = fixture()
+		var observation = model.owners.values.first!
+		observation.executionState = .running
+		_ = reduce(
+			&model,
+			.ownerObserved(observation)
+		)
+		let request = WorkspaceQuitRequest(requestID: UUID())
+		_ = reduce(
+			&model,
+			.quitRequested(request)
+		)
+		_ = reduce(
+			&model,
+			.quitConfirmationFinished(
+				request,
+				approved: true
+			)
+		)
+		_ = reduce(
+			&model,
+			.quitStopDeadlineReached(request)
+		)
+		observation.pendingLocalWrites = writesPending
+		_ = reduce(
+			&model,
+			.ownerObserved(observation)
+		)
+		let drained = reduce(
+			&model,
+			.quitPersistenceDrained(
+				request,
+				.succeeded(())
+			)
+		)
+		if writesPending
+		{
+			#expect(drained.contains
+			{
+				if case .completeQuit(
+					_,
+					approved: false
+				) = $0
+				{
+					return true
+				}
+				return false
+			})
+		}
+		else
+		{
+			let completed = reduce(
+				&model,
+				.quitCompletionRequested(
+					request,
+					approved: true,
+					frozenOwners: []
+				)
+			)
+			#expect(completed.contains
+			{
+				if case .notifyQuitCompletion(
+					_,
+					approved: false
+				) = $0
+				{
+					return true
+				}
+				return false
+			})
+		}
+		#expect(model.acceptsNewWork)
+	}
+
+	@Test func canceledFinalFileSettlementReleasesApprovedTerminationAndRejectsOldDeadlines()
+	{
+		var model = fixture()
+		let request = WorkspaceQuitRequest(requestID: UUID())
+		_ = reduce(
+			&model,
+			.quitRequested(request)
+		)
+		_ = reduce(
+			&model,
+			.quitPersistenceDrained(
+				request,
+				.succeeded(())
+			)
+		)
+		let canceled = reduce(
+			&model,
+			.quitCancelled(request)
+		)
+		#expect(model.acceptsNewWork)
+		#expect(canceled.contains
+		{
+			if case .completeQuit(
+				let captured,
+				approved: false
+			) = $0
+			{
+				return captured == request
+			}
+			return false
+		})
+		let next = WorkspaceQuitRequest(requestID: UUID())
+		_ = reduce(
+			&model,
+			.quitRequested(next)
+		)
+		#expect(reduce(
+			&model,
+			.quitStopDeadlineReached(request)
+		).isEmpty)
+		#expect(reduce(
+			&model,
+			.quitCancelled(request)
+		).isEmpty)
+		#expect(!model.acceptsNewWork)
 	}
 
 	private func fixture() -> WorkspaceCoordinatorModel

@@ -686,17 +686,23 @@ extension ApplicationStateTests
 		#expect(state.currentSnapshot.taskOutcomeUncertain)
 		#expect(!state.beginWorkspaceCleanup())
 		let coordinator = TaskWorkspaceCoordinator(sourceStore: state.store)
-		let (_, approved) = await observedQuitOutcome(coordinator)
+		coordinator.waitForQuitStopDeadline =
+		{
+		}
+		let (request, approved) = await observedQuitOutcome(coordinator)
 		{
 			_ in true
 		}
-		#expect(!approved)
+		#expect(approved)
+		#expect(state.isTaskActive)
+		#expect(state.currentSnapshot.taskOutcomeUncertain)
+		coordinator.cancelQuit(request)
 		if case .idle = coordinator.model.quit
 		{
 		}
 		else
 		{
-			Issue.record("Disconnected uncertain turn must cancel ordinary quit.")
+			Issue.record("Canceling approved termination must release its reservations.")
 		}
 		service.savedTurns = [makeTurn(
 			id: "turn-1",

@@ -131,6 +131,8 @@ enum WorkspaceCoordinatorReducer
 			)
 		case .quitRequested,
 				.quitConfirmationFinished,
+				.quitStopDeadlineReached,
+				.quitCancelled,
 				.quitReservationFailed,
 				.quitPersistenceDrained,
 				.quitCompletionRequested:

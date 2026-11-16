@@ -24,6 +24,10 @@ final class TaskWorkspaceCoordinator
 	private(set) var model: WorkspaceCoordinatorModel
 	let manager: GitWorktreeManager
 	let makeStore: StoreFactory
+	var waitForQuitStopDeadline: @MainActor () async throws -> Void =
+	{
+		try await Task.sleep(for: .seconds(5))
+	}
 	var stores: [WorkspaceLifecycleOwner: WorkspaceStateStore] = [:]
 	var tokens: [WorkspaceLifecycleOwner: UUID] = [:]
 	var publicationTokens: [WorkspaceLifecycleOwner: UUID] = [:]
@@ -520,6 +524,11 @@ final class TaskWorkspaceCoordinator
 			request,
 			approved: approved
 		))
+	}
+
+	func cancelQuit(_ request: WorkspaceQuitRequest)
+	{
+		dispatch(.quitCancelled(request))
 	}
 
 	func stopAll()

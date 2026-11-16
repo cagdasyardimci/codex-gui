@@ -141,6 +141,7 @@ enum WorkspaceCoordinatorEffect
 		WorkspaceQuitRequest,
 		[WorkspaceLifecycleOwnerReference]
 	)
+	case awaitQuitStopDeadline(WorkspaceQuitRequest)
 	case freezeWritesAndDrainQuit(
 		WorkspaceQuitRequest,
 		Set<WorkspaceLifecycleOwnerReference>

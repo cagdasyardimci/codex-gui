@@ -78,6 +78,29 @@ extension TaskWorkspaceCoordinator
 			{
 				store(for: reference)?.inputs.stopAll()
 			}
+		case .awaitQuitStopDeadline(let request):
+			launch(request.requestID)
+			{
+				do
+				{
+					try await self.waitForQuitStopDeadline()
+					try Task.checkCancellation()
+					self.dispatch(.quitStopDeadlineReached(request))
+				}
+				catch is CancellationError
+				{
+				}
+				catch
+				{
+					self.dispatch(.quitReservationFailed(
+						request,
+						OperationFailure(
+							message: error.localizedDescription,
+							outcomeIsUncertain: false
+						)
+					))
+				}
+			}
 		case .freezeWritesAndDrainQuit(
 			let request,
 			let references
@@ -109,11 +132,11 @@ extension TaskWorkspaceCoordinator
 				request,
 				approved
 			)
-			if approved
+			if approved && !model.hasRemoteOwners && !model.hasUncertainOwners
 			{
 				onAllTasksFinished?()
 			}
-			else
+			else if !approved
 			{
 				onStopAllFailed?()
 			}

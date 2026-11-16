@@ -139,6 +139,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation
 					}
 					let filesSettled = await self.mainWindowController?
 						.settleFileWritesForClosing() ?? true
+					if !filesSettled
+					{
+						self.coordinator.cancelQuit(request)
+						self.mainWindowController?.showWindow(nil)
+					}
 					self.waitingToQuit = false
 					self.finalizingQuit = false
 					self.pendingQuit = nil
@@ -147,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation
 			}
 			else
 			{
+				self.mainWindowController?.showWindow(nil)
 				self.waitingToQuit = false
 				self.finalizingQuit = false
 				self.pendingQuit = nil
@@ -157,7 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation
 
 	func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool
 	{
-		true
+		!waitingToQuit
 	}
 
 	func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply
@@ -199,6 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation
 			guard mayQuit
 			else
 			{
+				self.mainWindowController?.showWindow(nil)
 				self.waitingToQuit = false
 				NSApp.reply(toApplicationShouldTerminate: false)
 				return
