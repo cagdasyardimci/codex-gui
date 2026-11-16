@@ -935,7 +935,8 @@ enum ConversationContentReducer
 				body: UserMessagePresenter.body(for: item),
 				attachmentPreviewTitle: UserMessagePresenter.attachmentPreviewTitle(for: item),
 				imageAttachments: UserMessagePresenter.imageAttachments(for: item),
-				sourceReferences: UserMessagePresenter.sourceReferences(for: item)
+				sourceReferences: UserMessagePresenter.sourceReferences(for: item),
+				questionPrompts: UserMessagePresenter.questionPrompts(for: item)
 			)
 		case "agentMessage":
 			return ConversationEntry(

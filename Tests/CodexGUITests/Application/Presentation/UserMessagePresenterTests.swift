@@ -6,6 +6,80 @@ import Testing
 @Suite
 struct UserMessagePresenterTests
 {
+	@Test @MainActor func questionReplyEnvelopesPresentAnswersAcrossHistoryAndPreviews() throws
+	{
+		let text = try questionEnvelope([
+			["questionItemId": "[\"request_user_input_async\",\"call_first\",0]",
+				"question": "Which area?",
+				"answer": "Chat"],
+			["questionItemId": "[\"request_user_input_async\",\"call_first\",1]",
+				"question": "What should improve?",
+				"answer": "Lag\nKeep selection."],
+		])
+		let item = try #require(CodexItem(json: [
+			"id": "reply",
+			"type": "userMessage",
+			"content": [["type": "text", "text": text]]
+		]))
+		let entry = ConversationContentReducer.entry(
+			for: item,
+			id: "turn:reply"
+		)
+		let expected = "Which area?\nChat\n\nWhat should improve?\nLag\nKeep selection."
+		#expect(entry.body == expected)
+		#expect(entry.questionPrompts == ["Which area?", "What should improve?"])
+		#expect(UserMessagePresenter.body(for: [.text(text)]) == expected)
+		#expect(UserMessagePresenter.previewRequest(in: text) == expected)
+		#expect(item.text == text)
+	}
+
+	@Test func incompleteOrQuotedQuestionRepliesRemainLiteral() throws
+	{
+		let valid = try questionEnvelope([
+			["questionItemId": "call:0", "question": "Which area?", "answer": "Chat"],
+		])
+		let cases = [
+			"Explain this:\n" + valid,
+			"```json\n" + valid + "\n```",
+			valid + "\nKeep this trailing text.",
+			String(valid.dropLast(10)),
+			"<send_user_message_question_reply>not JSON</send_user_message_question_reply>",
+			"<send_user_message_question_reply>[]</send_user_message_question_reply>",
+			try questionEnvelope([["question": "Which area?", "answer": "Chat"]]),
+			try questionEnvelope([[
+				"questionItemId": "call:0",
+				"question": "Which area?",
+				"answer": 3
+			]]),
+			try questionEnvelope([
+				["questionItemId": "call:0", "question": "Which area?", "answer": "Chat"],
+				["questionItemId": "call:1", "question": "Missing answer"],
+			]),
+		]
+		for text in cases
+		{
+			let item = try #require(CodexItem(json: [
+				"id": "literal",
+				"type": "userMessage",
+				"content": [["type": "text", "text": text]]
+			]))
+			#expect(UserMessagePresenter.body(for: item) == text)
+			#expect(UserMessagePresenter.questionPrompts(for: item).isEmpty)
+			#expect(UserMessagePresenter.previewRequest(in: text) == text)
+		}
+	}
+
+	private func questionEnvelope(_ replies: [[String: Any]]) throws -> String
+	{
+		let data = try JSONSerialization.data(withJSONObject: replies)
+		return "<send_user_message_question_reply>\n"
+			+ String(
+				decoding: data,
+				as: UTF8.self
+			)
+			+ "\n</send_user_message_question_reply>"
+	}
+
 	@Test @MainActor func attachmentTitlesAgreeAcrossInputLoadedAndCompactPreviews() throws
 	{
 		let cases: [(String, [String], String)] = [

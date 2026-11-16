@@ -52,6 +52,55 @@ enum UserMessagePresenter
 		let references: [UserMessageReference]
 	}
 
+	private struct QuestionReply: Decodable
+	{
+		let questionItemId: String
+		let question: String
+		let answer: String
+	}
+
+	static func questionPrompts(for item: CodexItem) -> [String]
+	{
+		questionReplies(in: projection(for: item).text)?.map(\.question) ?? []
+	}
+
+	/// Decode only a complete reply envelope, leaving prose and malformed payloads literal.
+	private static func questionReplies(in text: String) -> [QuestionReply]?
+	{
+		let opening = "<send_user_message_question_reply>"
+		let closing = "</send_user_message_question_reply>"
+		let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.hasPrefix(opening), trimmed.hasSuffix(closing)
+		else
+		{
+			return nil
+		}
+		let payload = trimmed.dropFirst(opening.count).dropLast(closing.count)
+		guard let replies = try? JSONDecoder().decode(
+			[QuestionReply].self,
+			from: Data(payload.utf8)
+		), !replies.isEmpty, replies.allSatisfy(
+			{
+				!$0.questionItemId.isEmpty
+					&& !$0.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			}
+		)
+		else
+		{
+			return nil
+		}
+		return replies
+	}
+
+	private static func presentingQuestionReply(in text: String) -> String
+	{
+		questionReplies(in: text)?.map
+		{
+			"\($0.question)\n\($0.answer)"
+		}
+		.joined(separator: "\n\n") ?? text
+	}
+
 	static func body(for item: CodexItem) -> String
 	{
 		render(projection(for: item))
@@ -152,7 +201,7 @@ enum UserMessagePresenter
 			}
 		}
 
-		let visibleParts = ([visibleText] + labels).filter
+		let visibleParts = ([presentingQuestionReply(in: visibleText)] + labels).filter
 		{
 			!$0.isEmpty
 		}
@@ -412,10 +461,10 @@ enum UserMessagePresenter
 	/// Thread summaries use the same complete generated-envelope validation as message bodies.
 	static func previewRequest(in text: String) -> String
 	{
-		envelope(
+		presentingQuestionReply(in: envelope(
 			in: text,
 			id: "preview"
-		)?.request ?? text
+		)?.request ?? text)
 	}
 
 	private static func containsFileDescription(
