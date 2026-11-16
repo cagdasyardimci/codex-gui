@@ -279,7 +279,6 @@ final class ConversationViewController: NSViewController,
 			self.updateComposerHeight()
 		}
 		addChild(transcript)
-		configureTranscriptCallbacks()
 
 		let composerArea = makeComposerArea()
 
@@ -291,7 +290,6 @@ final class ConversationViewController: NSViewController,
 		{
 			row.widthAnchor.constraint(equalTo: headerStack.widthAnchor).isActive = true
 		}
-		let utilityRow = transcript.utilityRow
 		// These rows only have content after a snapshot supplies it. Keep the
 		// first fitting pass from reserving their empty heights.
 		activeTaskRow.isHidden = true
@@ -300,7 +298,6 @@ final class ConversationViewController: NSViewController,
 		installConversationStack(
 			in: container,
 			headerStack: headerStack,
-			utilityRow: utilityRow,
 			transcriptArea: transcriptArea,
 			composerArea: composerArea
 		)
@@ -308,18 +305,9 @@ final class ConversationViewController: NSViewController,
 		view = container
 	}
 
-	private func configureTranscriptCallbacks()
-	{
-		transcript.onUtilityRowVisibilityChanged =
-		{
-			[weak self] in self?.updateReadingRowVisibility()
-		}
-	}
-
 	private func installConversationStack(
 		in container: NSView,
 		headerStack: NSStackView,
-		utilityRow: NSStackView,
 		transcriptArea: NSView,
 		composerArea: NSStackView
 	)
@@ -328,7 +316,6 @@ final class ConversationViewController: NSViewController,
 		let stack = AppKitLayout.verticalStack(
 			[
 				centeredReadingRow(headerStack),
-				centeredReadingRow(utilityRow),
 				transcriptArea,
 				centeredReadingRow(requestDetailsScrollView),
 				centeredReadingRow(composerArea),

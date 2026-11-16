@@ -40,7 +40,19 @@ extension TranscriptViewController
 		NotificationCenter.default.addObserver(
 			self,
 			selector: #selector(transcriptDidLiveScroll(_:)),
+			name: NSScrollView.willStartLiveScrollNotification,
+			object: conversationScrollView
+		)
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(transcriptDidLiveScroll(_:)),
 			name: NSScrollView.didLiveScrollNotification,
+			object: conversationScrollView
+		)
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(transcriptDidEndLiveScroll(_:)),
+			name: NSScrollView.didEndLiveScrollNotification,
 			object: conversationScrollView
 		)
 	}
@@ -51,12 +63,7 @@ extension TranscriptViewController
 		latestButton.action = #selector(showLatestMessage)
 
 		latestButton.isHidden = true
-		loadEarlierButton.target = self
-		loadEarlierButton.action = #selector(loadEarlierTurns)
-		loadEarlierButton.setAccessibilityLabel("Load earlier messages in this conversation")
-		loadEarlierButton.symbol = .history
-		loadEarlierButton.widthAnchor.constraint(lessThanOrEqualToConstant: 150).isActive = true
-		loadEarlierButton.lineBreakMode = .byTruncatingTail
+
 	}
 
 	private func configureCollectionView()
@@ -816,7 +823,15 @@ extension TranscriptViewController
 		{
 			captureActivityOutputPositions()
 		}
-		let shouldFollowOutput = contextChanged || isNearBottom
+		let prependsHistory = !contextChanged && entries.first.map
+		{
+			first in
+			nextEntries.first?.id != first.id && nextEntries.contains
+			{
+				$0.id == first.id
+			}
+		} == true
+		let shouldFollowOutput = contextChanged || (isNearBottom && !prependsHistory)
 		let anchor = shouldFollowOutput ? nil : readingAnchor()
 		workEntryIDsByTurn = workEntryIDs
 		let allRows = ConversationTranscriptRow.make(

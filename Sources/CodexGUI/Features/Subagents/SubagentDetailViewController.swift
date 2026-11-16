@@ -117,48 +117,12 @@ final class SubagentDetailViewController: NSViewController
 
 	private func makeTranscriptContent() -> NSView
 	{
-		let stack = AppKitLayout.verticalStack(
-			[makeTranscriptUtilityRow(), transcript.view],
-			spacing: 6
-		)
-		stack.alignment = .leading
-		for row in stack.arrangedSubviews
-		{
-			row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-		}
 		let container = DesktopSurface(AppKitColorTokens.canvas)
 		AppKitLayout.pin(
-			stack,
+			transcript.view,
 			to: container
 		)
 		return container
-	}
-
-	private func makeTranscriptUtilityRow() -> NSView
-	{
-		let utilityRow = transcript.utilityRow
-		let centeredRow = NSView()
-		centeredRow.addSubview(utilityRow)
-		utilityRow.translatesAutoresizingMaskIntoConstraints = false
-		let preferredWidth = utilityRow.widthAnchor.constraint(equalTo: centeredRow.widthAnchor)
-		preferredWidth.priority = .defaultLow
-		NSLayoutConstraint.activate([
-			utilityRow.centerXAnchor.constraint(equalTo: centeredRow.centerXAnchor),
-			utilityRow.widthAnchor.constraint(
-				lessThanOrEqualToConstant: ConversationFlowLayout.maximumContentWidth
-			),
-			utilityRow.widthAnchor.constraint(lessThanOrEqualTo: centeredRow.widthAnchor),
-			preferredWidth,
-			utilityRow.topAnchor.constraint(equalTo: centeredRow.topAnchor),
-			utilityRow.bottomAnchor.constraint(equalTo: centeredRow.bottomAnchor),
-		])
-		centeredRow.isHidden = utilityRow.isHidden
-		transcript.onUtilityRowVisibilityChanged =
-		{
-			[weak centeredRow, weak utilityRow] in
-			centeredRow?.isHidden = utilityRow?.isHidden ?? true
-		}
-		return centeredRow
 	}
 
 	private func makeHeader() -> NSView

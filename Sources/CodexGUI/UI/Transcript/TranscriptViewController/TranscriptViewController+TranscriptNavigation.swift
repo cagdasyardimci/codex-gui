@@ -422,6 +422,7 @@ extension TranscriptViewController
 	@objc func transcriptDidLiveScroll(_ notification: Notification)
 	{
 		cancelWidthChangeReadingPosition()
+		loadEarlierTurnsIfAtTop()
 		guard liveResizeInProgress
 		else
 		{
@@ -509,7 +510,6 @@ extension TranscriptViewController
 		updateTurnNavigationPosition()
 		queueViewportPublication()
 		latestButton.isHidden = entries.isEmpty || isNearBottom
-		updateTranscriptUtilityRowVisibility()
 		if liveResizeInProgress
 		{
 			updateLiveResizeVisibleItems()
@@ -544,9 +544,29 @@ extension TranscriptViewController
 		readingPositionChanged()
 	}
 
-	@objc func loadEarlierTurns()
+	@objc func transcriptDidEndLiveScroll(_ notification: Notification)
 	{
-		onLoadEarlierTurns?()
+		// Allow another gesture to retry even if a fast failure was coalesced
+		// with its loading publication. The runtime still guards in-flight reads.
+		earlierHistoryRequestPending = false
+	}
+
+	private func loadEarlierTurnsIfAtTop()
+	{
+		// Live scrolling excludes layout, initial rendering, and anchor restoration.
+		guard transcriptIsVisible, !liveResizeInProgress, !isAnimatingJump,
+				requestedJumpItemID == nil, pendingNavigationTurnID == nil,
+				renderedContext == requestedContext, !displayedRows.isEmpty,
+				renderedPresentation?.canLoadEarlierTurns == true,
+				earlierHistoryLoadingEnabled, !earlierHistoryRequestPending,
+				conversationScrollView.contentView.bounds.minY <= 1,
+				let onLoadEarlierTurns
+		else
+		{
+			return
+		}
+		earlierHistoryRequestPending = true
+		onLoadEarlierTurns()
 	}
 
 }

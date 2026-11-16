@@ -16,7 +16,6 @@ final class TranscriptViewController: NSViewController,
 	var onSelectSubagentThread: ((String) -> Void)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
 	var onJumpDisplayed: (() -> Void)?
-	var onUtilityRowVisibilityChanged: (() -> Void)?
 	var onOpenActivityFile: (String) -> Void =
 	{
 		NSWorkspace.shared.open(URL(fileURLWithPath: $0))
@@ -24,11 +23,8 @@ final class TranscriptViewController: NSViewController,
 
 	var renderedPresentation: TranscriptPresentation?
 	var collectionView = ConversationCollectionView()
-	let loadEarlierButton = DesktopStyledButton(
-		title: "Load Earlier Messages",
-		target: nil,
-		action: nil
-	)
+	var earlierHistoryRequestPending = false
+	var earlierHistoryLoadingEnabled = true
 	let conversationScrollView = NSScrollView()
 	let turnNavigationRail = TurnNavigationRail()
 	let latestButton = DesktopIconButton(
@@ -36,7 +32,6 @@ final class TranscriptViewController: NSViewController,
 		label: "Return to latest message",
 		icon: .arrowDown
 	)
-	lazy var utilityRow = makeTranscriptUtilityRow()
 	let transcriptPreparation: TranscriptPreparationCoordinator
 	var preparedContents: [String: PreparedConversationContent] = [:]
 	private var typographyObservation: TypographyObservation?
@@ -214,26 +209,6 @@ final class TranscriptViewController: NSViewController,
 		view = transcriptArea
 	}
 
-	private func makeTranscriptUtilityRow() -> NSStackView
-	{
-		let spacer = NSView()
-		spacer.setContentHuggingPriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		spacer.setContentCompressionResistancePriority(
-			.defaultLow,
-			for: .horizontal
-		)
-		let row = AppKitLayout.horizontalStack(
-			[loadEarlierButton, spacer],
-			spacing: 6
-		)
-		row.heightAnchor.constraint(equalToConstant: 24).isActive = true
-		row.isHidden = true
-		return row
-	}
-
 	func render(_ presentation: TranscriptPresentation)
 	{
 		_ = view
@@ -266,8 +241,11 @@ final class TranscriptViewController: NSViewController,
 			refreshVisibleReplyActionBookmark()
 		}
 		timingExecutionState = presentation.executionState
-		loadEarlierButton.isHidden = !presentation.canLoadEarlierTurns
-		updateTranscriptUtilityRowVisibility()
+		if !presentation.canLoadEarlierTurns
+			|| previous?.entries.first?.id != presentation.entries.first?.id
+		{
+			earlierHistoryRequestPending = false
+		}
 		if previous?.entries != presentation.entries
 			|| previous?.turnTimings != presentation.turnTimings
 			|| previous?.owner != presentation.owner
@@ -285,6 +263,7 @@ final class TranscriptViewController: NSViewController,
 		turnNavigationTask?.cancel()
 		viewportPublicationTask?.cancel()
 		lastPublishedViewport = nil
+		earlierHistoryRequestPending = false
 		cancelNavigationMotion()
 		pendingNavigationTurnID = nil
 		requestedJumpItemID = nil
@@ -294,7 +273,11 @@ final class TranscriptViewController: NSViewController,
 
 	func setLoadEarlierEnabled(_ enabled: Bool)
 	{
-		loadEarlierButton.isEnabled = enabled
+		if earlierHistoryLoadingEnabled != enabled
+		{
+			earlierHistoryRequestPending = false
+		}
+		earlierHistoryLoadingEnabled = enabled
 	}
 
 	func beginPaneResize()
@@ -307,15 +290,4 @@ final class TranscriptViewController: NSViewController,
 		endTranscriptResize(reason: .pane)
 	}
 
-	func updateTranscriptUtilityRowVisibility()
-	{
-		let hidden = loadEarlierButton.isHidden
-		guard utilityRow.isHidden != hidden
-		else
-		{
-			return
-		}
-		utilityRow.isHidden = hidden
-		onUtilityRowVisibilityChanged?()
-	}
 }

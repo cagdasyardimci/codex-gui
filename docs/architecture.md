@@ -50,4 +50,6 @@ The [review reducers](../Sources/CodexGUI/Application/Reducers/Review/) and [rev
 
 Residency bounds retained conversation payload, rather than total process memory. Native attributed strings, image decoding and layout overhead have separate owners. Protected visible or active content may exceed the payload budget; background fetching must yield rather than evict that content.
 
+Scrolling to the top of the transcript requests the next page of older content when available, with one request pending at a time. Loading older content preserves the visible reading anchor within the scrollable document bounds. Layout and programmatic navigation do not trigger history pagination.
+
 Eviction must preserve navigation metadata and reading anchors. Preview reads cannot change transcript entries or reading position. Foreground navigation supersedes neighborhood work; owner changes and manual transcript scrolling cancel obsolete navigation. Keep all residency defaults and cost estimates in [ConversationCachePolicy](../Sources/CodexGUI/Application/State/ConversationCachePolicy.swift), rather than copying limits into consumers or documentation.

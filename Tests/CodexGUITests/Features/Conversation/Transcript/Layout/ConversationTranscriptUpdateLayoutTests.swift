@@ -89,6 +89,178 @@ struct ConversationTranscriptUpdateLayoutTests
 		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "entry-20")
 	}
 
+	@Test func liveScrollingToTopLoadsOnePageAndRespectsLoadingAndHistoryAvailability() async throws
+	{
+		_ = NSApplication.shared
+		let fixture = WindowFixture(
+			width: 700,
+			height: 760
+		)
+		defer
+		{
+			fixture.tearDown()
+		}
+		let controller = fixture.controller
+		let transcript = controller.transcript
+		let scroll = transcript.conversationScrollView
+		let entries = historyEntries(0 ..< 30)
+		var requests = 0
+		transcript.onLoadEarlierTurns =
+		{
+			requests += 1
+		}
+		controller.render(snapshot(
+			entries,
+			canLoadEarlierTurns: true
+		))
+		await controller.waitForRendering()
+		controller.view.layoutSubtreeIfNeeded()
+		#expect(requests == 0)
+
+		func liveScroll(to y: CGFloat)
+		{
+			scroll.contentView.scroll(to: NSPoint(
+				x: 0,
+				y: y
+			))
+			scroll.reflectScrolledClipView(scroll.contentView)
+			NotificationCenter.default.post(
+				name: NSScrollView.didLiveScrollNotification,
+				object: scroll
+			)
+		}
+		liveScroll(to: 100)
+		#expect(requests == 0)
+		// A layout-driven bounds notification at the top must not fetch history.
+		scroll.contentView.scroll(to: .zero)
+		transcript.readingPositionChanged()
+		#expect(requests == 0)
+		liveScroll(to: 0)
+		liveScroll(to: 0)
+		#expect(requests == 1)
+
+		controller.render(snapshot(
+			entries,
+			canLoadEarlierTurns: false
+		))
+		liveScroll(to: 0)
+		#expect(requests == 1)
+		controller.render(snapshot(
+			entries,
+			canLoadEarlierTurns: true
+		))
+		transcript.setLoadEarlierEnabled(false)
+		liveScroll(to: 0)
+		#expect(requests == 1)
+		transcript.setLoadEarlierEnabled(true)
+		liveScroll(to: 0)
+		#expect(requests == 2)
+
+		controller.render(snapshot(
+			historyEntries(-10 ..< 30),
+			canLoadEarlierTurns: true
+		))
+		await controller.waitForRendering()
+		#expect(requests == 2)
+		liveScroll(to: 0)
+		#expect(requests == 3)
+		controller.render(snapshot(
+			entries,
+			canLoadEarlierTurns: true,
+			threadID: "another-chat"
+		))
+		await controller.waitForRendering()
+		#expect(requests == 3)
+		liveScroll(to: 0)
+		#expect(requests == 4)
+		// A fast failure can finish before a loading snapshot is published.
+		NotificationCenter.default.post(
+			name: NSScrollView.didEndLiveScrollNotification,
+			object: scroll
+		)
+		liveScroll(to: 0)
+		#expect(requests == 5)
+		controller.render(snapshot(
+			historyEntries(0 ..< 1),
+			canLoadEarlierTurns: true,
+			threadID: "short-chat"
+		))
+		await controller.waitForRendering()
+		#expect(requests == 5)
+		// Short content may not move, but starting a scroll at its top still loads history.
+		NotificationCenter.default.post(
+			name: NSScrollView.willStartLiveScrollNotification,
+			object: scroll
+		)
+		#expect(requests == 6)
+	}
+
+	@Test(arguments: [1, 30])
+	func prependingHistoryPreservesTheTopMessageAndOffset(existingCount: Int) async throws
+	{
+		_ = NSApplication.shared
+		let fixture = WindowFixture(
+			width: 700,
+			height: 760
+		)
+		defer
+		{
+			fixture.tearDown()
+		}
+		let controller = fixture.controller
+		let transcript = controller.transcript
+		controller.render(snapshot(
+			historyEntries(0 ..< existingCount),
+			canLoadEarlierTurns: true
+		))
+		await controller.waitForRendering()
+		controller.view.layoutSubtreeIfNeeded()
+		let clip = transcript.conversationScrollView.contentView
+		clip.scroll(to: .zero)
+		let before = try #require(transcript.readingAnchor())
+		controller.render(snapshot(
+			historyEntries(-40 ..< existingCount),
+			canLoadEarlierTurns: true
+		))
+		await controller.waitForRendering()
+		let index = try #require(transcript.displayedRows.firstIndex
+		{
+			$0.id == before.entryID
+		})
+		let frame = try #require(transcript.collectionView.layoutAttributesForItem(
+			at: IndexPath(
+				item: index,
+				section: 0
+			)
+		)).frame
+		let maximumY = max(
+			0,
+			transcript.collectionView.bounds.height - clip.bounds.height
+		)
+		let expectedY = min(
+			maximumY,
+			max(
+				0,
+				frame.minY + before.offset
+			)
+		)
+		#expect(abs(clip.bounds.minY - expectedY) < 1)
+		#expect(frame.intersects(clip.bounds))
+	}
+
+	private func historyEntries(_ indices: Range<Int>) -> [ConversationEntry]
+	{
+		indices.map
+		{
+			ConversationEntry(
+				id: "entry-\($0)",
+				kind: .agent,
+				title: "Codex",
+				body: "Message \($0)"
+			)
+		}
+	}
+
 	@MainActor
 	private struct WindowFixture
 	{
@@ -168,13 +340,14 @@ struct ConversationTranscriptUpdateLayoutTests
 
 	private func snapshot(
 		_ entries: [ConversationEntry],
-		canLoadEarlierTurns: Bool = false
+		canLoadEarlierTurns: Bool = false,
+		threadID: String = "reading"
 	) -> ConversationSnapshot
 	{
 		ConversationSnapshot(
 			projectPath: "/tmp/layout-streaming",
 			threads: [],
-			selectedThreadID: "reading",
+			selectedThreadID: threadID,
 			entries: entries,
 			canLoadEarlierTurns: canLoadEarlierTurns,
 			changedFiles: [],
