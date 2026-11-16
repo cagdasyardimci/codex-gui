@@ -311,10 +311,43 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		messageContainer.isHidden = imageAttachmentCount > 0 && content.attributedString.length == 0
 		userSurface.isHidden = kind != .user || messageContainer.isHidden
 		activitySurface.isHidden = kind == .user || kind == .agent
-		bodyTextView.installContent(Self.displayText(
+		let display = Self.displayText(
 			content,
 			kind: kind
-		))
+		)
+		if entry.questionPrompts.isEmpty
+		{
+			bodyTextView.installContent(display)
+		}
+		else
+		{
+			let styled = NSMutableAttributedString(attributedString: display)
+			let string = styled.string as NSString
+			var offset = 0
+			for prompt in entry.questionPrompts
+			{
+				let range = string.range(
+					of: prompt,
+					options: [],
+					range: NSRange(
+						location: offset,
+						length: string.length - offset
+					)
+				)
+				guard range.location != NSNotFound
+				else
+				{
+					continue
+				}
+				styled.addAttribute(
+					.foregroundColor,
+					value: AppKitColorTokens.secondaryText,
+					range: range
+				)
+				offset = NSMaxRange(range)
+			}
+			bodyTextView.installContent(styled)
+		}
 		bodyTextView.setAccessibilityLabel("\(entry.title) content")
 		view.setAccessibilityLabel(entry.title)
 

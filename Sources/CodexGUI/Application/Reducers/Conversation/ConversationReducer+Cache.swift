@@ -529,7 +529,18 @@ extension ConversationReducer
 				!known.contains(ConversationEntryPayloadCosts.turnID(for: $0.id))
 			}
 			content.loadedTurns = turns
-			content.entries = ConversationContentReducer.entries(for: turns) + provisional
+			content.entries = ConversationContentReducer.entries(
+				for: turns,
+				localQuestionAnswers: content.localQuestionAnswers
+			) + provisional
+				.filter
+				{
+					entry in
+					!content.localQuestionAnswers.contains(where:
+						{
+							$0.id == entry.id
+						})
+				}
 		}
 		var gaps: [String: Int] = [:]
 		for pair in zip(

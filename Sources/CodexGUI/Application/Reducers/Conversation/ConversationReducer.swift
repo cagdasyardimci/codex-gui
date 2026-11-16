@@ -1045,7 +1045,10 @@ enum ConversationReducer
 		content.hasLoadedHistory = true
 		content.nextTurnsCursor = page.nextCursor == operation.pageScope
 			.cursor ? nil : page.nextCursor
-		content.entries = ConversationContentReducer.entries(for: content.loadedTurns)
+		content.entries = ConversationContentReducer.entries(
+			for: content.loadedTurns,
+			localQuestionAnswers: content.content.localQuestionAnswers
+		)
 		for entry in streamedEntries
 		{
 			if let index = content.entries.firstIndex(where:

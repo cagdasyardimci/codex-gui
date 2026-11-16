@@ -95,7 +95,7 @@ final class AppServer: CodexService
 		}
 		let process = Process()
 		process.executableURL = executable
-		process.arguments = ["app-server", "--stdio"]
+		process.arguments = ["--enable", "default_mode_request_user_input", "app-server", "--stdio"]
 		process.environment = Self.subprocessEnvironment(ProcessInfo.processInfo.environment)
 
 		let stdin = Pipe()

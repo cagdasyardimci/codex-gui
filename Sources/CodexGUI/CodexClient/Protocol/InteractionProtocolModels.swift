@@ -71,6 +71,7 @@ struct PendingInteraction
 	let requestedPermissions: [String: Any]?
 	let additionalPermissions: [String: Any]?
 	let availableDecisions: [ApprovalDecision]?
+	var isBlocking: Bool = true
 }
 
 enum ApprovalDecision: Equatable

@@ -7,6 +7,96 @@ import Testing
 @Suite
 struct ExecutionInteractionResponseTests
 {
+	@Test func blockingQuestionsControlAwaitingState()
+	{
+		var execution = ExecutionModel()
+		execution.state = .running
+		var question = questionInteraction(isBlocking: false)
+		execution.pendingInteractions = [question]
+		ExecutionReducer.updateAwaitingState(&execution)
+		#expect(execution.state == .running)
+		question.isBlocking = true
+		execution.pendingInteractions = [question]
+		ExecutionReducer.updateAwaitingState(&execution)
+		#expect(execution.state == .awaitingAnswer)
+		execution.pendingInteractions = []
+		ExecutionReducer.updateAwaitingState(&execution)
+		#expect(execution.state == .running)
+	}
+
+	@Test func resolutionBeforeWriteCompletionRecordsPartialAnswerOnce()
+	{
+		var (model, _) = fixture()
+		model.executions.entries[.thread("worker")]!.pendingResponses = [:]
+		model.executions.entries[.thread("worker")]!
+			.pendingInteractions = [questionInteraction(isBlocking: true)]
+		let response = InteractionResponseOperation(
+			context: OperationContext(
+				workspace: model.identity,
+				generation: model.connection.generation,
+				requestID: UUID(),
+				threadID: "worker",
+				turnID: "turn"
+			),
+			interactionID: "question",
+			response: .answers(["first": ["Answer"]])
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.interactionResponseRequested(response))
+		)
+		observe(
+			.interactionResolved(
+				threadId: "worker",
+				requestID: "question"
+			),
+			context: response.context,
+			model: &model
+		)
+		_ = ExecutionReducer.reduce(
+			&model,
+			.execution(.interactionResponseFinished(
+				response.context,
+				.succeeded(())
+			))
+		)
+		let entries = model.conversations.content[.thread("worker")]?.localQuestionAnswers ?? []
+		#expect(entries.count == 1)
+		#expect(entries.first?.body == "First question?\nAnswer")
+		#expect(entries.first?.questionPrompts == ["First question?"])
+	}
+
+	private func questionInteraction(isBlocking: Bool) -> PendingInteraction
+	{
+		PendingInteraction(
+			id: "question",
+			threadId: "worker",
+			turnId: "turn",
+			itemId: "item",
+			approvalId: nil,
+			kind: .question,
+			reason: nil,
+			command: nil,
+			cwd: nil,
+			grantRoot: nil,
+			networkHost: nil,
+			networkProtocol: nil,
+			questions: [
+				InteractionQuestion(json: [
+					"id": "first",
+					"question": "First question?"
+				])!,
+				InteractionQuestion(json: [
+					"id": "second",
+					"question": "Second question?"
+				])!,
+			],
+			requestedPermissions: nil,
+			additionalPermissions: nil,
+			availableDecisions: nil,
+			isBlocking: isBlocking
+		)
+	}
 	private func fixture() -> (WorkspaceModel, InteractionResponseOperation)
 	{
 		var model = WorkspaceModel(identity: WorkspaceIdentity(

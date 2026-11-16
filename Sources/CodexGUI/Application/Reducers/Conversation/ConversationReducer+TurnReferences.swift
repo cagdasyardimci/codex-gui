@@ -307,7 +307,10 @@ extension ConversationReducer
 				turn: turn,
 				previous: nil
 			)
-			content.entries = ConversationContentReducer.entries(for: content.loadedTurns)
+			content.entries = ConversationContentReducer.entries(
+				for: content.loadedTurns,
+				localQuestionAnswers: content.content.localQuestionAnswers
+			)
 			for entry in streamed
 			{
 				if let index = content.entries.firstIndex(where:

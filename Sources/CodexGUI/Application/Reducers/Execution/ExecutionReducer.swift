@@ -458,6 +458,11 @@ enum ExecutionReducer
 			switch observation
 			{
 			case .succeeded:
+				recordQuestionAnswer(
+					operation,
+					model: &model,
+					result: &result
+				)
 				model.execution.pendingResponses.removeValue(forKey: operation.interactionID)
 				model.execution.pendingInteractions.removeAll
 				{
@@ -589,6 +594,72 @@ enum ExecutionReducer
 
 	}
 
+	static func recordQuestionAnswer(
+		_ operation: InteractionResponseOperation,
+		model: inout WorkspaceModel,
+		result: inout WorkspaceReduction
+	)
+	{
+		guard let interaction = model.execution.pendingInteractions
+			.first(where:
+				{
+					$0.id == operation.interactionID
+				}),
+			case .question = interaction.kind,
+			case .answers(let answers) = operation.response,
+			let threadID = operation.context.threadID,
+			let turnID = operation.context.turnID
+		else
+		{
+			return
+		}
+		let pairs = interaction.questions.compactMap
+		{
+			question -> String? in
+			guard let values = answers[question.id], !values.isEmpty
+			else
+			{
+				return nil
+			}
+			let answer = question.isSecret ? "••••••" : values.joined(separator: ", ")
+			return "\(question.question)\n\(answer)"
+		}
+		guard !pairs.isEmpty
+		else
+		{
+			return
+		}
+		let entry = ConversationEntry(
+			id: "\(turnID):question-answer-\(interaction.id)",
+			kind: .user,
+			title: "Answer",
+			body: pairs.joined(separator: "\n\n"),
+			questionPrompts: interaction.questions.filter
+			{
+				answers[$0.id]?.isEmpty == false
+			}
+			.map(\.question)
+		)
+		ConversationContentReducer.updateContent(
+			for: threadID,
+			model: &model
+		)
+		{
+			content in
+			guard !content.content.localQuestionAnswers.contains(where:
+				{
+					$0.id == entry.id
+				})
+			else
+			{
+				return
+			}
+			content.content.localQuestionAnswers.append(entry)
+			content.entries.append(entry)
+		}
+		result.domainEvents.append(.conversationContentChanged)
+	}
+
 	static func updateAwaitingState(_ execution: inout ExecutionModel)
 	{
 		guard [.running, .awaitingApproval, .awaitingAnswer].contains(execution.state)
@@ -598,7 +669,7 @@ enum ExecutionReducer
 		}
 		let hasPendingQuestion = execution.pendingInteractions.contains
 		{
-			if case .question = $0.kind
+			if case .question = $0.kind, $0.isBlocking
 			{
 				return true
 			}
@@ -611,7 +682,15 @@ enum ExecutionReducer
 		}
 		else
 		{
-			execution.state = execution.pendingInteractions.isEmpty ? .running : .awaitingApproval
+			let hasApproval = execution.pendingInteractions.contains
+			{
+				if case .question = $0.kind
+				{
+					return false
+				}
+				return true
+			}
+			execution.state = hasApproval ? .awaitingApproval : .running
 		}
 	}
 

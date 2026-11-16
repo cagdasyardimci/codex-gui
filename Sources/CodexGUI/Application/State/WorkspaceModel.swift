@@ -419,6 +419,7 @@ struct ConversationContentModel
 	}
 	/// Local user rows are matched only to the turn that accepted them.
 	var localUserMessageTurnIDs: [String: String] = [:]
+	var localQuestionAnswers: [ConversationEntry] = []
 	var entries: [ConversationEntry] = []
 	{
 		didSet

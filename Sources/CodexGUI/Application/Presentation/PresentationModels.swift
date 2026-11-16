@@ -21,6 +21,7 @@ struct ConversationEntry: Equatable
 	var imageAttachments: [UserMessageReference] = []
 	var sourceReferences: [UserMessageReference] = []
 	var sourceActivity: ConversationSourceActivity? = nil
+	var questionPrompts: [String] = []
 
 	static func == (lhs: Self, rhs: Self) -> Bool
 	{
@@ -30,7 +31,8 @@ struct ConversationEntry: Equatable
 			&& lhs.isExpandable == rhs.isExpandable && lhs.activity == rhs.activity
 			&& lhs.imageAttachments == rhs.imageAttachments
 			&& lhs.sourceReferences == rhs.sourceReferences
-			&& lhs.sourceActivity == rhs.sourceActivity
+			&& lhs.sourceActivity == rhs.sourceActivity && lhs.questionPrompts == rhs
+			.questionPrompts
 	}
 }
 

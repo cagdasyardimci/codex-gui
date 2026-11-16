@@ -14,6 +14,7 @@ from .transport import ProtocolError, Transport
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', action='store_true')
+    parser.add_argument('--enable', action='append', default=[])
     parser.add_argument('command', nargs='?', choices=['app-server'])
     parser.add_argument('--stdio', action='store_true')
     parser.add_argument('--scenario', default=None)

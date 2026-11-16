@@ -271,7 +271,10 @@ enum ConversationContentReducer
 			}
 		)
 		content.content.localUserMessageTurnIDs.removeAll()
-		content.entries = entries(for: turns).map
+		content.entries = entries(
+			for: turns,
+			localQuestionAnswers: content.content.localQuestionAnswers
+		).map
 		{
 			var entry = $0
 			if case .subagent(let activity) = entry.activity
@@ -294,6 +297,44 @@ enum ConversationContentReducer
 		{
 			resetChanges(&content)
 		}
+	}
+
+	static func entries(
+		for turns: [CodexTurn],
+		localQuestionAnswers: [ConversationEntry]
+	) -> [ConversationEntry]
+	{
+		var result = entries(for: turns)
+		for answer in localQuestionAnswers
+		{
+			let turnID = ConversationEntryPayloadCosts.turnID(for: answer.id)
+			guard turns.contains(where:
+				{
+					$0.id == turnID
+				}),
+				!result.contains(where:
+					{
+						$0.id == answer.id
+					})
+			else
+			{
+				continue
+			}
+			let index = result
+				.lastIndex(where:
+					{
+						$0.id.hasPrefix(turnID + ":") && $0.kind == .user
+					})
+				.map
+				{
+					$0 + 1
+				} ?? result.endIndex
+			result.insert(
+				answer,
+				at: index
+			)
+		}
+		return result
 	}
 
 	static func resetChanges(_ content: inout ConversationProjection)

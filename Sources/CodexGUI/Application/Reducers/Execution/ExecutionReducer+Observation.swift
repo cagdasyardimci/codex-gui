@@ -301,6 +301,15 @@ extension ExecutionReducer
 			{
 				return
 			}
+			if let operation = model.execution.pendingResponses[requestID],
+				operation.context.threadID == threadID
+			{
+				recordQuestionAnswer(
+					operation,
+					model: &model,
+					result: &result
+				)
+			}
 			model.execution.pendingInteractions.removeAll
 			{
 				$0.id == requestID && $0.threadId == threadID

@@ -260,7 +260,8 @@ extension AppServer
 					questions: questions,
 					requestedPermissions: parameters["permissions"] as? [String: Any],
 					additionalPermissions: parameters["additionalPermissions"] as? [String: Any],
-					availableDecisions: availableDecisions
+					availableDecisions: availableDecisions,
+					isBlocking: parameters["isBlocking"] as? Bool ?? true
 				)
 			)
 		)

@@ -186,6 +186,7 @@ struct ConversationPresentation: Equatable
 			let requestedPermissions: NSDictionary?
 			let additionalPermissions: NSDictionary?
 			let decisions: [ApprovalDecision]?
+			let isBlocking: Bool
 		}
 		let owner: FeaturePresentationOwner
 		let values: [PendingInteraction]
@@ -226,7 +227,8 @@ struct ConversationPresentation: Equatable
 					},
 					requestedPermissions: value.requestedPermissions.map(NSDictionary.init),
 					additionalPermissions: value.additionalPermissions.map(NSDictionary.init),
-					decisions: value.availableDecisions
+					decisions: value.availableDecisions,
+					isBlocking: value.isBlocking
 				)
 			}
 		}
