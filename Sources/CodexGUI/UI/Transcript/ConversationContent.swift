@@ -29,14 +29,16 @@ final class PreparedConversationContent: @unchecked Sendable
 		preparedDiagramImages: [Data: MarkdownRichBlockImageCache.Images] = [:],
 		preparedMathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images] =
 			[:],
-		richBlocksPrepared: Bool = false
+		richBlocksPrepared: Bool = false,
+		highlightCode: Bool = true
 	)
 	{
 		attributedString = MarkdownAttributedStringRenderer.render(
 			parsed.runs,
 			imageThumbnails: imageThumbnails,
 			preparedDiagramImages: preparedDiagramImages,
-			preparedMathImages: preparedMathImages
+			preparedMathImages: preparedMathImages,
+			highlightCode: highlightCode
 		)
 		codeBlocks = parsed.codeBlocks
 		codeBlockRanges = parsed.codeBlockRanges
@@ -174,6 +176,28 @@ final class PreparedConversationContent: @unchecked Sendable
 
 actor ConversationContentCache
 {
+	private let parse: @Sendable (
+		String,
+		Bool,
+		Bool
+	) -> ParsedMarkdownContent
+
+	init(parse: @escaping @Sendable (
+		String,
+		Bool,
+		Bool
+	) -> ParsedMarkdownContent =
+	{
+		MarkdownContentParser.parse(
+			$0,
+			markdown: $1,
+			preserveSoftBreaks: $2
+		)
+	})
+	{
+		self.parse = parse
+	}
+
 	private struct Key: Hashable
 	{
 		let body: Data
@@ -181,6 +205,7 @@ actor ConversationContentCache
 		let preserveSoftBreaks: Bool
 		let typography: TypographyConfiguration
 		let colorTheme: ColorThemeConfiguration
+		let highlightCode: Bool
 	}
 
 	private var values: [Key: PreparedConversationContent] = [:]
@@ -195,35 +220,35 @@ actor ConversationContentCache
 		markdown: Bool,
 		preserveSoftBreaks: Bool = false,
 		prepareRichBlocks: Bool = false,
-		colorTheme: ColorThemeConfiguration = ColorPreferences().configuration
-	) async -> PreparedConversationContent
+		colorTheme: ColorThemeConfiguration = ColorPreferences().configuration,
+		highlightCode: Bool = true
+	) async throws -> PreparedConversationContent
 	{
+		try Task.checkCancellation()
 		let key = Key(
 			body: Data(body.utf8),
 			markdown: markdown,
 			preserveSoftBreaks: preserveSoftBreaks,
 			typography: .current,
-			colorTheme: colorTheme
+			colorTheme: colorTheme,
+			highlightCode: highlightCode
 		)
 		if let cached = values[key], !prepareRichBlocks || !cached.hasUnpreparedRichBlocks
 		{
 			return cached
 		}
 
-		let parsed = MarkdownContentParser.parse(
+		let parsed = parse(
 			body,
-			markdown: markdown,
-			preserveSoftBreaks: preserveSoftBreaks
+			markdown,
+			preserveSoftBreaks
 		)
+		try Task.checkCancellation()
 		let plan = MarkdownImagePreparation.preloadPlan(in: parsed.runs)
 		var imageThumbnails: [String: SourceThumbnailLoader.Thumbnail] = [:]
 		for path in plan.paths
 		{
-			guard !Task.isCancelled
-			else
-			{
-				break
-			}
+			try Task.checkCancellation()
 			imageThumbnails[path] = await SourceThumbnailLoader.image(
 				path: path,
 				maximumPixelSize: plan.maximumPixelSize
@@ -257,13 +282,20 @@ actor ConversationContentCache
 			diagramImages = [:]
 			mathImages = [:]
 		}
-		let prepared = await PreparedConversationContent(
-			parsed,
-			imageThumbnails: imageThumbnails,
-			preparedDiagramImages: diagramImages,
-			preparedMathImages: mathImages,
-			richBlocksPrepared: prepareRichBlocks && !Task.isCancelled
-		)
+		try Task.checkCancellation()
+		let thumbnails = imageThumbnails
+		let prepared = try await MainActor.run
+		{
+			try Task.checkCancellation()
+			return PreparedConversationContent(
+				parsed,
+				imageThumbnails: thumbnails,
+				preparedDiagramImages: diagramImages,
+				preparedMathImages: mathImages,
+				richBlocksPrepared: prepareRichBlocks,
+				highlightCode: highlightCode
+			)
+		}
 		let byteCount = body.utf8.count + prepared.estimatedRichImageBytes
 		// A later entry with the same Markdown must consult the thumbnail loader again.
 		// Its metadata-aware cache owns freshness for mutable local image paths.

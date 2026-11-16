@@ -10,6 +10,7 @@ final class MarkdownTextView: NSTextView
 	private var diagramControls: [Int: MarkdownDiagramControls] = [:]
 	private var diagramFrames: [Int: NSRect] = [:]
 	private var diagramTrackingArea: NSTrackingArea?
+	private var hasNativeDiagrams = false
 
 	override func viewDidMoveToWindow()
 	{
@@ -70,6 +71,23 @@ final class MarkdownTextView: NSTextView
 		}
 		diagramControls.removeAll()
 		diagramFrames.removeAll()
+		hasNativeDiagrams = false
+		content.enumerateAttribute(
+			.attachment,
+			in: NSRange(
+				location: 0,
+				length: content.length
+			)
+		)
+		{
+			value, _, stop in
+			if let attachment = value as? MarkdownRichAttachment,
+				attachment.isDiagram, attachment.rendersNativeImage
+			{
+				self.hasNativeDiagrams = true
+				stop.pointee = true
+			}
+		}
 		textStorage?.setAttributedString(content)
 		needsLayout = true
 		updateSourceAccessibilityHelp()
@@ -227,7 +245,7 @@ final class MarkdownTextView: NSTextView
 
 	func updateDiagramControls()
 	{
-		guard let storage = textStorage, let manager = layoutManager,
+		guard hasNativeDiagrams, let storage = textStorage, let manager = layoutManager,
 				let container = textContainer
 		else
 		{

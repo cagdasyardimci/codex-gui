@@ -6,6 +6,32 @@ import Testing
 @Suite(.serialized) @MainActor
 struct MarkdownDiagramControlsTests
 {
+	@Test func messagesWithoutDiagramsDoNotRequestLayoutForDiagramControls()
+	{
+		let text = MarkdownTextView(frame: NSRect(
+			x: 0,
+			y: 0,
+			width: 400,
+			height: 200
+		))
+		let manager = NSLayoutManager()
+		text.textContainer?.replaceLayoutManager(manager)
+		text.installContent(NSAttributedString(string: String(
+			repeating: "Long response\n",
+			count: 200
+		)))
+		manager.invalidateLayout(
+			forCharacterRange: NSRange(
+				location: 0,
+				length: text.string.utf16.count
+			),
+			actualCharacterRange: nil
+		)
+		let unlaid = manager.firstUnlaidCharacterIndex()
+		#expect(unlaid < text.string.utf16.count)
+		text.updateDiagramControls()
+		#expect(manager.firstUnlaidCharacterIndex() == unlaid)
+	}
 
 	@Test func expandedDiagramUsesNaturalSizeAndRoutesZoomAndClose() async throws
 	{

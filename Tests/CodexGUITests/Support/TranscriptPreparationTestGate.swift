@@ -20,9 +20,9 @@ final class TranscriptPreparationTestGate
 
 	func prepare(
 		_ key: TranscriptPreparationCoordinator.ContentKey
-	) async -> PreparedConversationContent
+	) async throws -> PreparedConversationContent
 	{
-		let content = await cache.content(
+		let content = try await cache.content(
 			body: key.body,
 			markdown: key.markdown,
 			preserveSoftBreaks: key.preserveSoftBreaks

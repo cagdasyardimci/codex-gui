@@ -30,7 +30,7 @@ Protocol-specific handling belongs to [CLI lifecycle safeguards](cli-compatibili
 
 ## Presentation
 
-AppKit owns focus, selection, scrolling and layout. Prepare parsing, file reads and expensive derived content away from the main actor, then install only the current render generation. Cancellation and owner retirement must reject stale installation and dismiss transient UI. Reuse must preserve the reader's position and selection within one owner without carrying them into another conversation.
+AppKit owns focus, selection, scrolling and layout. Prepare parsing, file reads and expensive derived content away from the main actor, then install only the current render generation. Superseded preparation must check cancellation before parsing and again when admitted to native rendering, so rejected results do not consume the input event loop first. Cancellation and owner retirement must reject stale installation and dismiss transient UI. Reuse must preserve the reader's position and selection within one owner without carrying them into another conversation. Active-turn replies retain readable code and exact copy text while deferring syntax coloring until the turn settles, avoiding repeated highlighting of a changing response.
 
 Input admission reads canonical ownership directly; account-only observers project account state without constructing transcript snapshots. Draft edits update canonical state synchronously and share the streaming publication batch, while the native editor updates action visibility immediately. Repeated content and visibility updates must preserve existing geometry without forcing native layout.
 

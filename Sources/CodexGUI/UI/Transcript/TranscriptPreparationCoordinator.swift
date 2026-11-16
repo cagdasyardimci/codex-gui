@@ -11,13 +11,15 @@ final class TranscriptPreparationCoordinator
 		let preserveSoftBreaks: Bool
 		let typography: TypographyConfiguration
 		let colorTheme: ColorThemeConfiguration
+		let highlightCode: Bool
 
 		init(
 			body: String,
 			markdown: Bool,
 			preserveSoftBreaks: Bool = false,
 			typography: TypographyConfiguration = .current,
-			colorTheme: ColorThemeConfiguration = ColorPreferences().configuration
+			colorTheme: ColorThemeConfiguration = ColorPreferences().configuration,
+			highlightCode: Bool = true
 		)
 		{
 			self.body = body
@@ -25,6 +27,7 @@ final class TranscriptPreparationCoordinator
 			self.colorTheme = colorTheme
 			self.markdown = markdown
 			self.preserveSoftBreaks = preserveSoftBreaks
+			self.highlightCode = highlightCode
 		}
 
 		static func == (lhs: Self, rhs: Self) -> Bool
@@ -34,11 +37,15 @@ final class TranscriptPreparationCoordinator
 				&& lhs.preserveSoftBreaks == rhs.preserveSoftBreaks
 				&& lhs.typography == rhs.typography
 				&& lhs.colorTheme == rhs.colorTheme
+				&& lhs.highlightCode == rhs.highlightCode
 		}
 
 		static func make(
 			for entry: ConversationEntry,
-			expanded: Bool
+			expanded: Bool,
+			typography: TypographyConfiguration = .current,
+			colorTheme: ColorThemeConfiguration = ColorPreferences().configuration,
+			highlightCode: Bool = true
 		) -> Self?
 		{
 			// Commands and images use activity rows, without prepared message text.
@@ -52,7 +59,10 @@ final class TranscriptPreparationCoordinator
 			return Self(
 				body: body,
 				markdown: entry.kind == .agent || entry.kind == .user,
-				preserveSoftBreaks: entry.kind == .user
+				preserveSoftBreaks: entry.kind == .user,
+				typography: typography,
+				colorTheme: colorTheme,
+				highlightCode: highlightCode
 			)
 		}
 
@@ -80,7 +90,8 @@ final class TranscriptPreparationCoordinator
 		}
 	}
 
-	typealias ContentPreparation = @MainActor (ContentKey) async -> PreparedConversationContent
+	typealias ContentPreparation = @MainActor (ContentKey) async throws
+		-> PreparedConversationContent
 
 	private let prepareContent: ContentPreparation
 	private let prepareRichContent: ContentPreparation
@@ -106,21 +117,23 @@ final class TranscriptPreparationCoordinator
 		let contentCache = ConversationContentCache()
 		self.prepareContent = prepareContent ??
 		{
-			await contentCache.content(
+			try await contentCache.content(
 				body: $0.body,
 				markdown: $0.markdown,
 				preserveSoftBreaks: $0.preserveSoftBreaks,
-				colorTheme: $0.colorTheme
+				colorTheme: $0.colorTheme,
+				highlightCode: $0.highlightCode
 			)
 		}
 		self.prepareRichContent = prepareRichContent ??
 		{
-			await contentCache.content(
+			try await contentCache.content(
 				body: $0.body,
 				markdown: $0.markdown,
 				preserveSoftBreaks: $0.preserveSoftBreaks,
 				prepareRichBlocks: true,
-				colorTheme: $0.colorTheme
+				colorTheme: $0.colorTheme,
+				highlightCode: $0.highlightCode
 			)
 		}
 	}
@@ -191,7 +204,12 @@ final class TranscriptPreparationCoordinator
 				else
 				{
 					self?.contentPreparationRequestCount += 1
-					contents[entry.id] = await prepareContent(key)
+					guard let prepared = try? await prepareContent(key)
+					else
+					{
+						return
+					}
+					contents[entry.id] = prepared
 				}
 			}
 			guard let self, !Task.isCancelled, generation == self.renderGeneration
@@ -242,7 +260,11 @@ final class TranscriptPreparationCoordinator
 				{
 					continue
 				}
-				let updated = await prepareRichContent(key)
+				guard let updated = try? await prepareRichContent(key)
+				else
+				{
+					return
+				}
 				guard !Task.isCancelled, generation == self.renderGeneration
 				else
 				{

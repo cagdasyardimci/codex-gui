@@ -79,6 +79,7 @@ final class TranscriptViewController: NSViewController,
 		String: ConversationActivityCollectionItem.OutputReadingPosition
 	] = [:]
 	var requestedTurnTimings: [ConversationTurnTiming] = []
+	var requestedStreamingTurnID: String?
 	var turnStatusTimer: Timer?
 	var transcriptIsVisible = true
 	var timingExecutionState: ExecutionState = .disconnected

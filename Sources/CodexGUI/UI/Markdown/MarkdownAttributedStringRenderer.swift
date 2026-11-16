@@ -15,7 +15,8 @@ enum MarkdownAttributedStringRenderer
 		preparedMathImages: [MarkdownMathRenderer.Formula: MarkdownRichBlockImageCache.Images] =
 			[:],
 		richBlockMaximumPixels: Int = 2_000_000,
-		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)? = nil
+		mathFontSize: ((MarkdownTextStyle, Bool) -> CGFloat)? = nil,
+		highlightCode: Bool = true
 	) -> NSAttributedString
 	{
 		let result = NSMutableAttributedString(string: "")
@@ -62,7 +63,10 @@ enum MarkdownAttributedStringRenderer
 				attributes: attributes
 			))
 		}
-		applyCodeHighlighting(to: result)
+		if highlightCode
+		{
+			applyCodeHighlighting(to: result)
+		}
 		return NSAttributedString(attributedString: result)
 	}
 

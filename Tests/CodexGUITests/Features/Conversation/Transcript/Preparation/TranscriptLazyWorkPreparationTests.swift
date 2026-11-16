@@ -6,6 +6,39 @@ import Testing
 @Suite @MainActor
 struct TranscriptLazyWorkPreparationTests
 {
+	@Test func settlingTheTurnColorsStreamedCodeWithoutChangingItsSource() async throws
+	{
+		let controller = ConversationViewController()
+		let body = "```swift\nlet answer = 42\n```"
+		let reply = entry(
+			"turn:reply",
+			kind: .agent,
+			body: body
+		)
+		var running = snapshot(
+			[reply],
+			executionState: .running
+		)
+		running.activeThreadID = "reading"
+		running.activeTurnID = "turn"
+		controller.render(running)
+		await controller.waitForRendering()
+		let streamed = try #require(controller.transcript.preparedContents[reply.id])
+		var stopped = snapshot(
+			[reply],
+			executionState: .stopped
+		)
+		stopped.activeThreadID = "reading"
+		stopped.activeTurnID = "turn"
+		controller.render(stopped)
+		await controller.waitForRendering()
+		let settled = try #require(controller.transcript.preparedContents[reply.id])
+		#expect(settled !== streamed)
+		#expect(settled.codeBlocks == streamed.codeBlocks)
+		#expect(settled.attributedString.string == streamed.attributedString.string)
+		#expect(settled.attributedString != streamed.attributedString)
+	}
+
 	@Test func sameEntryUnicodeCorrectionReachesBothTranscriptChangeDetectionGates() async throws
 	{
 		_ = NSApplication.shared
@@ -55,7 +88,8 @@ struct TranscriptLazyWorkPreparationTests
 
 	private func snapshot(
 		_ entries: [ConversationEntry],
-		threadID: String = "reading"
+		threadID: String = "reading",
+		executionState: ExecutionState = .ready
 	) -> ConversationSnapshot
 	{
 		var result = ConversationSnapshot(
@@ -70,7 +104,7 @@ struct TranscriptLazyWorkPreparationTests
 			canSend: false,
 			accountDescription: "Mock",
 			backendDescription: "Mock",
-			executionState: .ready,
+			executionState: executionState,
 			statusMessage: nil,
 			models: [],
 			selectedModelID: nil,

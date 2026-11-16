@@ -66,7 +66,7 @@ struct TranscriptImageFreshnessTests
 						)
 					}
 				}
-				let content = await cache.content(
+				let content = try await cache.content(
 					body: body,
 					markdown: true
 				)

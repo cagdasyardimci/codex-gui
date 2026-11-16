@@ -6,6 +6,59 @@ import Testing
 @Suite @MainActor
 struct ConversationContentCacheTests
 {
+	@Test func cancellationAfterParsingRejectsNativePreparation() async throws
+	{
+		let source = "```swift\nlet value = 42\n```"
+		let parsed = AsyncStream<Void>.makeStream()
+		let release = DispatchSemaphore(value: 0)
+		defer
+		{
+			release.signal()
+			parsed.continuation.finish()
+		}
+		let cache = ConversationContentCache
+		{
+			body, markdown, softBreaks in
+			let result = MarkdownContentParser.parse(
+				body,
+				markdown: markdown,
+				preserveSoftBreaks: softBreaks
+			)
+			if body == source
+			{
+				parsed.continuation.yield(())
+				release.wait()
+			}
+			return result
+		}
+		let task = Task.detached
+		{
+			try await cache.content(
+				body: source,
+				markdown: true
+			)
+		}
+		for await _ in parsed.stream
+		{
+			break
+		}
+		task.cancel()
+		release.signal()
+		do
+		{
+			_ = try await task.value
+			Issue.record("Canceled preparation must stop before native content construction")
+		}
+		catch is CancellationError
+		{
+		}
+		let content = try await cache.content(
+			body: "Current response",
+			markdown: true
+		)
+		#expect(content.attributedString.string == "Current response")
+	}
+
 	@Test func waitForRenderingFollowsSupersededPreparation() async throws
 	{
 		_ = NSApplication.shared
@@ -21,9 +74,9 @@ struct ConversationContentCacheTests
 				key in
 				if key.body == "old"
 				{
-					return await oldGate.prepare(key)
+					return try await oldGate.prepare(key)
 				}
-				return await newGate.prepare(key)
+				return try await newGate.prepare(key)
 			})
 		let old = ConversationEntry(
 			id: "old",
@@ -145,13 +198,13 @@ struct ConversationContentCacheTests
 		_ = NSApplication.shared
 		let cache = ConversationContentCache()
 		let body = #"A formula: \(x^2 + y^2 = z^2\)."#
-		let source = await cache.content(
+		let source = try await cache.content(
 			body: body,
 			markdown: true
 		)
 		#expect(source.hasUnpreparedRichBlocks)
 		#expect(source.estimatedRichImageBytes == 0)
-		let rendered = await cache.content(
+		let rendered = try await cache.content(
 			body: body,
 			markdown: true,
 			prepareRichBlocks: true
@@ -159,7 +212,7 @@ struct ConversationContentCacheTests
 		#expect(!rendered.hasUnpreparedRichBlocks)
 		#expect(rendered.estimatedRichImageBytes > 0)
 		#expect(rendered.attributedString.string == source.attributedString.string)
-		#expect(await cache.content(
+		#expect(try await cache.content(
 			body: body,
 			markdown: true
 		) === rendered)
@@ -197,13 +250,13 @@ struct ConversationContentCacheTests
 		}
 		let firstSource = inlineMath ? source(index: -1)
 			: "```mermaid\nflowchart LR\nA[First cached source] --> B[Result]\n```"
-		let first = await cache.content(
+		let first = try await cache.content(
 			body: firstSource,
 			markdown: true,
 			prepareRichBlocks: true
 		)
 		try #require(first.estimatedRichImageBytes > 0)
-		#expect(await cache.content(
+		#expect(try await cache.content(
 			body: firstSource,
 			markdown: true,
 			prepareRichBlocks: true
@@ -216,7 +269,7 @@ struct ConversationContentCacheTests
 		for index in 0 ..< 32
 		{
 			latestSource = source(index: index)
-			latest = await cache.content(
+			latest = try await cache.content(
 				body: latestSource,
 				markdown: true,
 				prepareRichBlocks: true
@@ -231,11 +284,11 @@ struct ConversationContentCacheTests
 		}
 		try #require(aggregateCost > capacity)
 		#expect(sourceBytes < capacity)
-		#expect(await cache.content(
+		#expect(try await cache.content(
 			body: latestSource,
 			markdown: true
 		) === latest)
-		let reloadedFirst = await cache.content(
+		let reloadedFirst = try await cache.content(
 			body: firstSource,
 			markdown: true,
 			prepareRichBlocks: true

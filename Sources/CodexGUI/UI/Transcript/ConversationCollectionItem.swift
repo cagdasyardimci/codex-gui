@@ -62,6 +62,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private var isExpandable = false
 	private var codeBlocks: [String] = []
 	private var updatingCopyButtonFrames = false
+	private var cachedCopyButtonGeometry: (content: ObjectIdentifier, frame: NSRect)?
 	private weak var observedClipView: NSClipView?
 	private var cachedLayoutMetrics:
 		(availableWidth: CGFloat, messageWidth: CGFloat, bodyHeight: CGFloat)?
@@ -76,6 +77,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		content = nil
 		codeBlocks.removeAll()
 		cachedLayoutMetrics = nil
+		cachedCopyButtonGeometry = nil
 		imageAttachmentsView.configure([])
 		imageAttachmentCount = 0
 		showsReplyActions = false
@@ -285,6 +287,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			configuredEntryID = entryID
 		}
 		self.content = content
+		cachedCopyButtonGeometry = nil
 		self.onToggle = onToggle
 		kind = entry.kind
 		self.showsReplyActions = showsReplyActions && kind == .agent
@@ -849,6 +852,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		{
 			updatingCopyButtonFrames = false
 		}
+		if let cached = cachedCopyButtonGeometry,
+			cached.content == ObjectIdentifier(content), cached.frame == bodyTextView.frame
+		{
+			return
+		}
 		layout.ensureLayout(for: container)
 		for (index, button) in copyButtons.enumerated()
 		{
@@ -930,6 +938,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				button.window?.invalidateCursorRects(for: button)
 			}
 		}
+		cachedCopyButtonGeometry = (ObjectIdentifier(content), bodyTextView.frame)
 	}
 
 	nonisolated func layoutManager(
@@ -952,6 +961,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			}
 			// Attachment layout can finish after a frame update at the same bounds size.
 			// Request a native layout pass rather than querying TextKit inside its callback.
+			cachedCopyButtonGeometry = nil
 			viewIfLoaded?.needsLayout = true
 		}
 	}

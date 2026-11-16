@@ -630,10 +630,15 @@ extension TranscriptViewController
 		}
 		let timingsChanged = requestedTurnTimings != displayTimings
 		requestedTurnTimings = displayTimings
+		let streamingTurnID = snapshot.executionState.isBusy
+			&& snapshot.activeThreadID == snapshot.selectedThreadID
+			? snapshot.activeTurnID : nil
+		let streamingChanged = requestedStreamingTurnID != streamingTurnID
+		requestedStreamingTurnID = streamingTurnID
 		prepareEntries(
 			snapshot.entries,
 			context: context,
-			force: timingsChanged
+			force: timingsChanged || streamingChanged
 		)
 	}
 
@@ -671,6 +676,8 @@ extension TranscriptViewController
 			workEntryIDs: workEntryIDs,
 			expandedTurnIDs: expandedTurnIDs
 		)
+		let typography = TypographyConfiguration.current
+		let colorTheme = ColorPreferences().configuration
 		let keys = nextEntries.map
 		{
 			entry -> TranscriptPreparationCoordinator.ContentKey? in
@@ -681,7 +688,12 @@ extension TranscriptViewController
 			}
 			return TranscriptPreparationCoordinator.ContentKey.make(
 				for: entry,
-				expanded: expandedEntryIDs.contains(entry.id)
+				expanded: expandedEntryIDs.contains(entry.id),
+				typography: typography,
+				colorTheme: colorTheme,
+				highlightCode: entry.kind != .agent
+					|| ConversationEntryIdentity
+					.turnIDWithFallback(entry.id) != requestedStreamingTurnID
 			)
 		}
 		showPendingUserEntries(
