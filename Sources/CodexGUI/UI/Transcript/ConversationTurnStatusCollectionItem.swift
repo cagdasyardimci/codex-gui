@@ -65,7 +65,10 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 			return
 		}
 		label.stringValue = ""
-		disclosure.setLabel(Self.statusText(timing: timing, now: now))
+		disclosure.setLabel(Self.statusText(
+			timing: timing,
+			now: now
+		))
 		disclosure.setExpanded(expanded)
 	}
 
