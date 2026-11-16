@@ -7,6 +7,29 @@ import Testing
 @MainActor
 struct ContextComposerTextViewTests
 {
+	@Test func absentSkillSynchronizationPreservesNativeSelections()
+	{
+		let composer = ContextComposerTextView()
+		composer.string = "Keep this draft"
+		let selections = [
+			NSValue(range: NSRange(
+				location: 0,
+				length: 4
+			)),
+			NSValue(range: NSRange(
+				location: 10,
+				length: 5
+			)),
+		]
+		composer.selectedRanges = selections
+		#expect(!composer.renderSkill(
+			nil,
+			title: nil
+		))
+		#expect(composer.selectedRanges == selections)
+		#expect(composer.string == "Keep this draft")
+	}
+
 	@Test func nontextImageClipboardEnablesNativePasteAndPreservesEditableText() throws
 	{
 		_ = NSApplication.shared

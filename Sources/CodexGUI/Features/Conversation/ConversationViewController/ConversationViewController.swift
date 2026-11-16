@@ -554,11 +554,17 @@ final class ConversationViewController: NSViewController,
 		}
 		if !isPublishingComposerEdit
 		{
-			composer.renderSkill(
+			let skillChanged = composer.renderSkill(
 				snapshot.requestContext.selectedSkill,
 				title: snapshot.requestContext.selectedSkillTitle
 			)
-			updateComposerHeight()
+			// Response deltas do not change editor geometry or its native editing state.
+			if skillChanged || previous?.owner != snapshot.owner
+				|| previous?.composer.draftLifetime != snapshot.composer.draftLifetime
+				|| previous?.composer.draft != snapshot.composer.draft
+			{
+				updateComposerHeight()
+			}
 		}
 		if previous?.interactions != snapshot
 			.interactions

@@ -32,6 +32,8 @@ Protocol-specific handling belongs to [CLI lifecycle safeguards](cli-compatibili
 
 AppKit owns focus, selection, scrolling and layout. Prepare parsing, file reads and expensive derived content away from the main actor, then install only the current render generation. Cancellation and owner retirement must reject stale installation and dismiss transient UI. Reuse must preserve the reader's position and selection within one owner without carrying them into another conversation.
 
+Input admission reads canonical ownership directly; account-only observers project account state without constructing transcript snapshots. Draft edits update canonical state synchronously and share the streaming publication batch, while the native editor updates action visibility immediately. Repeated content and visibility updates must preserve existing geometry without forcing native layout.
+
 Keep shared rendering separate from consumer lifetimes: a renderer owns its resource limits and output; its feature owns loading, cancellation and presentation. Preserve exact source identity for selection, copy and caching, including byte-distinct paths and Unicode spellings. Unsupported or over-budget rich content must retain readable source. Filesystem reads and writes must remain contained, bounded and cancellable; revision conflicts must preserve unsaved edits.
 
 Do not duplicate canonical payload inventories in presentation caches. Sources, transcript activity and summaries may project the same records differently, but must agree on identity and outcomes. Activity-specific design decisions belong to [activity presentation](activity-presentation-design.md), and native adaptation rationale belongs to [interface styling](interface-styling.md#native-adaptation-rationale).

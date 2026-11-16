@@ -61,6 +61,10 @@ struct MainWindowPublicationLifecycleTests
 				drafts.append($0.draft)
 			}
 			store.inputs.updateDraft("Visible")
+			#expect(drafts.isEmpty)
+			// An explicit preference action flushes the draft batch
+			// without awaiting inside a sheet.
+			store.inputs.setFastMode(true)
 			#expect(drafts == ["Visible"])
 			controller.window?.close()
 			timing.mark("native.window.closed")
@@ -68,6 +72,7 @@ struct MainWindowPublicationLifecycleTests
 			#expect(store.model.contextNavigation.messageSearchContext == nil)
 			#expect(store.model.contextNavigation.pendingMessageSearch == nil)
 			store.inputs.updateDraft("Closed")
+			store.inputs.setFastMode(false)
 			#expect(drafts == ["Visible"])
 		}
 

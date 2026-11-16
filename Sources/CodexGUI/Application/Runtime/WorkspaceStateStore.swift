@@ -683,9 +683,11 @@ final class WorkspaceStateStore
 		var coalescible = false
 		switch action
 		{
-		case .workspaceLifecycle(.reusableReferencesReceived),
+		case .composer(.draftEdited), .composer(.draftPersistenceFinished),
+				.workspaceLifecycle(.reusableReferencesReceived),
 				.conversations(.turnReferencesRequested), .conversations(.turnReferencesReceived):
-			// Internal metadata follows the pending batch instead of flushing text deltas.
+			// Typing and internal metadata follow the pending batch
+			// instead of flushing text deltas.
 			coalescible = true
 		default: break
 		}

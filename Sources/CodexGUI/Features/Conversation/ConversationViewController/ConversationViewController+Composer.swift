@@ -444,7 +444,8 @@ extension ConversationViewController
 			return
 		}
 		let isSlashInput: Bool
-		switch SlashCommandParser.parse(snapshot.draft)
+		let draft = composer.draftText
+		switch SlashCommandParser.parse(draft)
 		{
 		case .text: isSlashInput = false
 		case .command, .error: isSlashInput = true
@@ -453,7 +454,7 @@ extension ConversationViewController
 			snapshot.activeThreadID != nil && snapshot.activeThreadID == snapshot.selectedThreadID
 
 		let hasMessageContent =
-			!snapshot.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 				|| !snapshot.draftContext.isEmpty
 		composerQueueView.onRemove =
 		{
@@ -517,6 +518,7 @@ extension ConversationViewController
 			return
 		}
 		let text = composer.draftText
+		updateSendState()
 		let selected = renderedPresentation?.requestContext.selectedSkill
 		let mention = composer.skillMention?.selection
 		let generation = selectionGeneration

@@ -10,6 +10,39 @@ import Testing
 )
 struct ComposerSlashCommandTests
 {
+	@Test func responseUpdatesPreserveDraftSelections() async
+	{
+		let draft = "Keep this draft while the response streams"
+		let controller = makeController(text: draft)
+		let selections = [
+			NSValue(range: NSRange(
+				location: 0,
+				length: 4
+			)),
+			NSValue(range: NSRange(
+				location: 10,
+				length: 5
+			)),
+		]
+		controller.composer.selectedRanges = selections
+		#expect(controller.composer.selectedRanges == selections)
+		for body in ["Working", "Working on your request", "Working on your request now"]
+		{
+			controller.render(snapshot(
+				draft: draft,
+				entries: [ConversationEntry(
+					id: "thread:turn:reply",
+					kind: .agent,
+					title: "",
+					body: body
+				)]
+			))
+			#expect(controller.composer.selectedRanges == selections)
+			#expect(controller.composer.draftText == draft)
+		}
+		await controller.waitForRendering()
+	}
+
 	@Test func arrowsChooseCommandTabInsertsWithoutExecutingAndEscapePreservesText()
 	{
 		let controller = makeController(text: "/")
@@ -569,13 +602,16 @@ struct ComposerSlashCommandTests
 		return controller
 	}
 
-	private func snapshot(draft: String) -> ConversationSnapshot
+	private func snapshot(
+		draft: String,
+		entries: [ConversationEntry] = []
+	) -> ConversationSnapshot
 	{
 		ConversationSnapshot(
 			projectPath: nil,
 			threads: [],
 			selectedThreadID: nil,
-			entries: [],
+			entries: entries,
 			canLoadEarlierTurns: false,
 			changedFiles: [],
 			diff: "",

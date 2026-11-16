@@ -104,20 +104,25 @@ extension ContextComposerTextView
 		)
 	}
 
+	@discardableResult
 	func renderSkill(
 		_ selection: ProjectSkillSelection?,
 		title: String?
-	)
+	) -> Bool
 	{
 		guard !hasMarkedText(), let storage = textStorage
 		else
 		{
-			return
+			return false
 		}
-		if let current = skillMention, current.selection == selection,
-			current.title == title
+		let current = skillMention
+		if current == nil && selection == nil
 		{
-			return
+			return false
+		}
+		if let current, current.selection == selection, current.title == (title ?? selection?.name)
+		{
+			return false
 		}
 		var attributes = typingAttributes
 		attributes.removeValue(forKey: .attachment)
@@ -174,5 +179,6 @@ extension ContextComposerTextView
 		))
 		typingAttributes = attributes
 		needsDisplay = true
+		return true
 	}
 }
