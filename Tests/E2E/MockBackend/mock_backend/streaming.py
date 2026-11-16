@@ -20,6 +20,8 @@ class Stream:
                 self.emit('turn/started', turn=self.turn)
                 for item in self.turn['items']:
                     self.emit('item/started', item=item)
+            if engine.scenario.get('questions'):
+                self.ask_question()
             if engine.scenario['mode'] == 'stall':
                 self.cancelled.wait()
             else:
@@ -44,3 +46,34 @@ class Stream:
                     'threadId': self.thread['id'], 'status': {'type': 'idle'}})
         except (BrokenPipeError, OSError) as error:
             engine.report_failure(error)
+
+    def ask_question(self):
+        text = self.turn['items'][0]['content'][0]['text'].lower()
+        blocking = 'plan' in text
+        free = 'free' in text
+        mixed = 'mixed' in text
+        options = [{'label': 'Composer', 'description': 'Review the composer'},
+                   {'label': 'Transcript', 'description': 'Review the transcript'},
+                   {'label': 'Settings', 'description': 'Review settings'}]
+        question = {'id': 'area', 'header': 'Area',
+                    'question': 'Which part of codex-gui would you like to review?',
+                    'options': options, 'isOther': True, 'isSecret': False}
+        free_question = {'id': 'details', 'header': 'Details',
+                         'question': 'What would you like to improve?',
+                         'options': None, 'isOther': True, 'isSecret': False}
+        questions = [free_question, question] if mixed else [free_question if free else question]
+        ready = threading.Event()
+        request_id = 'qa-question-' + self.turn['id']
+        with self.engine.lock:
+            self.engine.questions[request_id] = (self, ready)
+            params = {'threadId': self.thread['id'], 'turnId': self.turn['id'],
+                      'itemId': self.item['id'], 'isBlocking': blocking,
+                      'autoResolutionMs': None, 'questions': questions}
+            self.engine.transport.trace({'direction': 'server-request', 'id': request_id,
+                                         'method': 'item/tool/requestUserInput', 'params': params})
+            self.engine.transport.send({'id': request_id, 'method': 'item/tool/requestUserInput',
+                                        'params': params})
+        while not ready.wait(0.2) and not self.cancelled.is_set():
+            pass
+        with self.engine.lock:
+            self.engine.questions.pop(request_id, None)

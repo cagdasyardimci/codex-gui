@@ -1,0 +1,6 @@
+{
+  "extends": "streaming",
+  "questions": true,
+  "intervalSeconds": 0,
+  "chunks": ["Question response received."]
+}

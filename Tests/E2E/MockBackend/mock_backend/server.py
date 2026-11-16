@@ -15,6 +15,17 @@ class Server:
         self.active = {}
         self.actions = []
         self.failure = None
+        self.questions = {}
+
+    def resolve_question(self, response):
+        with self.lock:
+            pending = self.questions.pop(response['id'], None)
+            if pending:
+                stream, ready = pending
+                self.transport.trace({'direction': 'question-response', **response})
+                self.transport.event('serverRequest/resolved', {
+                    'threadId': stream.thread['id'], 'requestId': response['id']})
+                ready.set()
 
     def report_failure(self, error):
         self.failure = error
@@ -71,7 +82,8 @@ class Server:
         if method == 'skills/list':
             return {'data': [{'cwd': cwd, 'skills': [], 'errors': []} for cwd in p.get('cwds', [])]}
         if method == 'collaborationMode/list':
-            return {'data': [{'name': 'Default', 'mode': 'default', 'model': None, 'reasoning_effort': None}]}
+            return {'data': [{'name': 'Default', 'mode': 'default', 'model': None, 'reasoning_effort': None},
+                             {'name': 'Plan', 'mode': 'plan', 'model': None, 'reasoning_effort': None}]}
         if method == 'thread/list':
             cwd = p.get('cwd')
             if isinstance(cwd, list):
