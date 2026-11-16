@@ -5,13 +5,20 @@ import AppKit
 final class BoundedContentScrollView: NSScrollView
 {
 	private static let minimumContentHeight: CGFloat = 36
-	private static let maximumContentHeight: CGFloat = 140
+	private let maximumContentHeight: CGFloat
 
 	private let contentStack: NSStackView
 	private var preferredHeight: NSLayoutConstraint!
 
-	init(views: [NSView])
+	init(
+		views: [NSView],
+		maximumContentHeight: CGFloat = 140,
+		preferredHeightPriority: NSLayoutConstraint.Priority = NSLayoutConstraint.Priority(
+			rawValue: NSLayoutConstraint.Priority.fittingSizeCompression.rawValue - 1
+		)
+	)
 	{
+		self.maximumContentHeight = maximumContentHeight
 		contentStack = AppKitLayout.verticalStack(
 			views,
 			spacing: 6
@@ -37,13 +44,11 @@ final class BoundedContentScrollView: NSScrollView
 
 		heightAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumContentHeight)
 			.isActive = true
-		heightAnchor.constraint(lessThanOrEqualToConstant: Self.maximumContentHeight)
+		heightAnchor.constraint(lessThanOrEqualToConstant: maximumContentHeight)
 			.isActive = true
 		preferredHeight = heightAnchor.constraint(equalToConstant: Self.minimumContentHeight)
 		// Let window fitting use the scrollable minimum; spare space can still reveal more details.
-		preferredHeight.priority = NSLayoutConstraint.Priority(
-			rawValue: NSLayoutConstraint.Priority.fittingSizeCompression.rawValue - 1
-		)
+		preferredHeight.priority = preferredHeightPriority
 		preferredHeight.isActive = true
 		isHidden = true
 	}
@@ -67,7 +72,7 @@ final class BoundedContentScrollView: NSScrollView
 			contentStack.fittingSize.height
 		)
 		preferredHeight.constant = min(
-			Self.maximumContentHeight,
+			maximumContentHeight,
 			minimumFittingHeight
 		)
 	}

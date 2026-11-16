@@ -8,4 +8,6 @@
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSMicrophoneUsageDescription</key><string>Record spoken answers to questions.</string>
+<key>NSSpeechRecognitionUsageDescription</key><string>Convert spoken answers to text.</string>
 </dict></plist>

@@ -44,7 +44,9 @@ class DesktopStyledButton: DesktopTooltipButton
 		case primary, secondary, dialogPrimary, dialogCancel, dialogDismiss, dialogOutlined,
 				formAdd,
 				folderAdd, contextSelection, inlineValue, destructive,
-				quiet, inlineAction, link, mutedLink, documentation, icon, glyphOnlyIcon, revealingIcon, toggle,
+				quiet, inlineAction, link, mutedLink, documentation, icon, glyphOnlyIcon,
+				revealingIcon,
+				toggle,
 				menuTrigger
 		case sidebarIcon, searchIcon, attachmentRemove
 		case tab(selected: Bool)
@@ -59,6 +61,7 @@ class DesktopStyledButton: DesktopTooltipButton
 		case imageCommentSubmit
 		case annotationPin
 		case zoomStep
+		case recordingCancel, recordingStop, recordingSend
 	}
 
 	var presentation: Presentation
@@ -203,8 +206,10 @@ class DesktopStyledButton: DesktopTooltipButton
 	{
 		switch presentation
 		{
-		case .icon, .glyphOnlyIcon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon, .imageOverlay,
-				.attachmentRemove, .imageCommentHandle, .imageCommentSubmit: true
+		case .icon, .glyphOnlyIcon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon,
+				.imageOverlay,
+				.attachmentRemove, .imageCommentHandle, .imageCommentSubmit,
+				.recordingCancel, .recordingStop, .recordingSend: true
 		default: false
 		}
 	}
@@ -427,7 +432,7 @@ class DesktopStyledButton: DesktopTooltipButton
 				width: diagram && close ? LayoutTokens.Button.diagramCloseWidth : side,
 				height: side
 			)
-		case .imageCommentSubmit:
+		case .imageCommentSubmit, .recordingCancel, .recordingStop, .recordingSend:
 			return NSSize(
 				width: 28,
 				height: 28
@@ -668,7 +673,8 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	private var outline: NSBezierPath
 	{
-		if presentation == .imageCommentSubmit
+		if presentation == .imageCommentSubmit || presentation == .recordingCancel
+			|| presentation == .recordingStop || presentation == .recordingSend
 		{
 			return NSBezierPath(ovalIn: bounds)
 		}
@@ -1004,7 +1010,7 @@ class DesktopStyledButton: DesktopTooltipButton
 			outline.lineWidth = ShapeTokens.Button.outlineWidth
 			outline.stroke()
 			return AppKitColorTokens.imageAnnotationPinText
-		case .primary, .dialogPrimary, .imageCommentSubmit:
+		case .primary, .dialogPrimary, .imageCommentSubmit, .recordingSend:
 			AppKitColorTokens.primaryButtonSurface(
 				enabled: foregroundEnabled,
 				active: active
@@ -1013,6 +1019,17 @@ class DesktopStyledButton: DesktopTooltipButton
 			outline.fill()
 			return AppKitColorTokens.enabledForeground(
 				AppKitColorTokens.buttonPrimaryText,
+				enabled: foregroundEnabled
+			)
+		case .recordingCancel, .recordingStop:
+			(active ? AppKitColorTokens.settingsSelectorHover : AppKitColorTokens.elevated)
+				.setFill()
+			outline.fill()
+			AppKitColorTokens.border.setStroke()
+			outline.lineWidth = ShapeTokens.Button.outlineWidth
+			outline.stroke()
+			return AppKitColorTokens.enabledForeground(
+				primaryText,
 				enabled: foregroundEnabled
 			)
 		case .dialogOutlined, .dialogCancel:
@@ -1114,7 +1131,10 @@ class DesktopStyledButton: DesktopTooltipButton
 				enabled: foregroundEnabled
 			)
 		case .glyphOnlyIcon:
-			return AppKitColorTokens.enabledForeground(primaryText, enabled: foregroundEnabled)
+			return AppKitColorTokens.enabledForeground(
+				primaryText,
+				enabled: foregroundEnabled
+			)
 		case .attachmentRemove:
 			AppKitColorTokens.canvas.setFill()
 			outline.fill()
@@ -1178,6 +1198,78 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	private func drawImage(_ tint: NSColor)
 	{
+		// Recording artwork uses visible glyph bounds so the controls share the reference's scale.
+		if presentation == .recordingStop
+		{
+			tint.setFill()
+			NSBezierPath(
+				roundedRect: NSRect(
+					x: bounds.midX - 4,
+					y: bounds.midY - 4,
+					width: 8,
+					height: 8
+				),
+				xRadius: 1,
+				yRadius: 1
+			).fill()
+			return
+		}
+		if presentation == .recordingCancel
+		{
+			tint.setStroke()
+			let path = NSBezierPath()
+			path.lineWidth = 1.25
+			path.lineCapStyle = .round
+			path.move(to: NSPoint(
+				x: bounds.midX - 5,
+				y: bounds.midY - 5
+			))
+			path.line(to: NSPoint(
+				x: bounds.midX + 5,
+				y: bounds.midY + 5
+			))
+			path.move(to: NSPoint(
+				x: bounds.midX - 5,
+				y: bounds.midY + 5
+			))
+			path.line(to: NSPoint(
+				x: bounds.midX + 5,
+				y: bounds.midY - 5
+			))
+			path.stroke()
+			return
+		}
+		if presentation == .recordingSend
+		{
+			tint.setStroke()
+			let path = NSBezierPath()
+			path.lineWidth = 1
+			path.lineCapStyle = .round
+			path.lineJoinStyle = .round
+			let top = bounds.midY - 5
+			path.move(to: NSPoint(
+				x: bounds.midX - 4.5,
+				y: top + 4.5
+			))
+			path.line(to: NSPoint(
+				x: bounds.midX,
+				y: top
+			))
+			path.line(to: NSPoint(
+				x: bounds.midX + 4.5,
+				y: top + 4.5
+			))
+			path.move(to: NSPoint(
+				x: bounds.midX,
+				y: top
+			))
+			path.line(to: NSPoint(
+				x: bounds.midX,
+				y: top + 10
+			))
+			path.stroke()
+			return
+		}
 		guard let image
 		else
 		{

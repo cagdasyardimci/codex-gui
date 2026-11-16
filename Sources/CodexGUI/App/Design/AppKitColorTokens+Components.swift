@@ -2,6 +2,14 @@ import AppKit
 
 extension AppKitColorTokens
 {
+	/// Audio levels are passive artwork beneath the recording actions.
+	static var recordingWaveform: NSColor
+	{
+		paletteColor
+		{
+			$0.foreground.withAlphaComponent(0.2)
+		}
+	}
 	static var accentText: NSColor
 	{
 		paletteColor

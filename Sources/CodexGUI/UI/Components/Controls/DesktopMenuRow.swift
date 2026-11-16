@@ -46,13 +46,15 @@ class DesktopMenuRow: NSButton
 
 	enum SuffixStyle: Equatable
 	{
-		case metadata, inlineMetadata, shortcut
+		case metadata, inlineMetadata, shortcut, badge
 	}
 
 	struct Content
 	{
 		var title: String
 		var icon: NSImage? = nil
+		var keycap: String? = nil
+		var keycapSelected = false
 		var subtitle: String? = nil
 		var suffix = ""
 		var suffixStyle = SuffixStyle.metadata
@@ -133,8 +135,14 @@ class DesktopMenuRow: NSButton
 
 	private var textLeadingInset: CGFloat
 	{
-		Layout.horizontalInset + (content.icon != nil || content.indicator == .checkbox
-			? Layout.iconSize + Layout.iconSpacing : 0)
+		let leadingWidth = content.keycap.map
+		{
+			DesktopKeycapView.size(
+				for: $0,
+				presentation: .question
+			).width
+		} ?? (content.icon != nil || content.indicator == .checkbox ? Layout.iconSize : 0)
+		return Layout.horizontalInset + (leadingWidth > 0 ? leadingWidth + Layout.iconSpacing : 0)
 	}
 
 	private var textTrailingInset: CGFloat
@@ -151,12 +159,13 @@ class DesktopMenuRow: NSButton
 
 	private var naturalSuffixWidth: CGFloat
 	{
-		ceil(naturalWidth(suffixLabel))
+		ceil(naturalWidth(suffixLabel)) + (content.suffixStyle == .badge ? 12 : 0)
 	}
 
 	let titleLabel: NSTextField
 	let subtitleLabel: NSTextField
 	let iconView = NSImageView()
+	private var keycapView: DesktopKeycapView?
 	let trailingImageView = NSImageView()
 	let suffixLabel: NSTextField
 	private(set) var isHovered = false
@@ -266,8 +275,22 @@ class DesktopMenuRow: NSButton
 		subtitleLabel.isHidden = content.subtitle == nil
 		suffixLabel.stringValue = content.suffix
 		suffixLabel.isHidden = content.suffix.isEmpty
+		suffixLabel.wantsLayer = content.suffixStyle == .badge
+		suffixLabel.alignment = content.suffixStyle == .badge ? .center : .left
 		iconView.image = content.icon
 		iconView.isHidden = content.icon == nil || content.indicator == .checkbox
+		keycapView?.removeFromSuperview()
+		keycapView = content.keycap.map
+		{
+			shortcut in
+			let view = DesktopKeycapView(
+				shortcut: shortcut,
+				presentation: content.keycapSelected ? .questionSelected : .question
+			)
+			view.setAccessibilityElement(false)
+			addSubview(view)
+			return view
+		}
 		titleLabel.setTypographyRole(
 			titleRole,
 			configuration: configuration,
@@ -345,6 +368,14 @@ class DesktopMenuRow: NSButton
 			AppKitColorTokens.secondaryText,
 			to: suffixLabel
 		)
+		if content.suffixStyle == .badge
+		{
+			suffixLabel.layer?.backgroundColor = AppKitColorResolution.resolvedCGColor(
+				AppKitColorTokens.shortcutSurface,
+				for: self
+			)
+			suffixLabel.layer?.cornerRadius = 6
+		}
 		iconView.contentTintColor = content.icon?.isTemplate == true ? foreground : nil
 		trailingImageView.contentTintColor = foreground
 		let isActive = menuHighlighted || isHovered || isKeyboardFocused || isHighlighted
@@ -395,6 +426,19 @@ class DesktopMenuRow: NSButton
 			height: Layout.iconSize
 		)
 		iconView.frame = iconFrame
+		if let shortcut = content.keycap
+		{
+			let size = DesktopKeycapView.size(
+				for: shortcut,
+				presentation: .question
+			)
+			keycapView?.frame = NSRect(
+				x: Layout.horizontalInset,
+				y: bounds.midY - size.height / 2,
+				width: size.width,
+				height: size.height
+			)
+		}
 		trailingImageView.frame = NSRect(
 			x: bounds.maxX - Layout.horizontalInset - Layout.iconSize,
 			y: iconFrame.minY,
@@ -410,7 +454,7 @@ class DesktopMenuRow: NSButton
 			),
 			naturalSuffixWidth
 		)
-		let inlineSuffix = content.suffixStyle == .inlineMetadata
+		let inlineSuffix = content.suffixStyle == .inlineMetadata || content.suffixStyle == .badge
 		let suffixX = inlineSuffix ? min(
 			trailing - suffixWidth,
 			textX + naturalWidth(titleLabel) + 4
@@ -451,6 +495,20 @@ class DesktopMenuRow: NSButton
 				height: subtitleLineHeight
 			)
 		)
+		if content.subtitle == nil,
+			let keycapView,
+			let surfaceBounds = keycapView.questionSurfaceBounds
+		{
+			// Center the visible numeral and its aligned title within the row's hover surface.
+			let offset = convert(
+				surfaceBounds,
+				from: keycapView
+			).midY - bounds.midY
+			for child in [keycapView, titleLabel, suffixLabel, trailingImageView]
+			{
+				child.frame.origin.y -= offset
+			}
+		}
 	}
 
 	private func labelFrame(

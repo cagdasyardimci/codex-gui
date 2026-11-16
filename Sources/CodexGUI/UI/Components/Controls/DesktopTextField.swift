@@ -14,6 +14,19 @@ class DesktopTextField: NSTextField
 		usesSingleLineMode = true
 	}
 
+	/// Multiline entry centers a short value while expanding its line box as text wraps.
+	convenience init(centeredMultiline role: TypographyTokens.Role)
+	{
+		self.init(frame: .zero)
+		let centeredCell = DesktopCenteredTextFieldCell(textCell: "")
+		centeredCell.typography = role
+		centeredCell.isMultiline = true
+		cell = centeredCell
+		isEditable = true
+		isSelectable = true
+		usesSingleLineMode = false
+	}
+
 	override func layout()
 	{
 		super.layout()
@@ -55,20 +68,43 @@ class DesktopTextField: NSTextField
 private final class DesktopCenteredTextFieldCell: NSTextFieldCell
 {
 	var typography = TypographyTokens.Text.paragraph
+	var isMultiline = false
 
 	override func drawingRect(forBounds rect: NSRect) -> NSRect
 	{
+		let lineHeight = max(
+			typography.lineHeight ?? 0,
+			font.map
+			{
+				NSLayoutManager().defaultLineHeight(for: $0)
+			} ?? 0
+		)
+		var contentHeight = lineHeight
+		if isMultiline, let font
+		{
+			let editor = (controlView as? NSTextField)?.currentEditor() as? NSTextView
+			let value = editor?.string ?? stringValue
+			if !value.isEmpty
+			{
+				contentHeight = max(
+					lineHeight,
+					ceil((value as NSString).boundingRect(
+						with: NSSize(
+							width: max(
+								rect.width,
+								1
+							),
+							height: .greatestFiniteMagnitude
+						),
+						options: [.usesLineFragmentOrigin, .usesFontLeading],
+						attributes: [.font: font]
+					).height)
+				)
+			}
+		}
 		let height = min(
 			rect.height,
-			max(
-				typography.lineHeight ?? 0,
-				font
-					.map
-					{
-						NSLayoutManager().defaultLineHeight(for: $0)
-					} ??
-					0
-			)
+			contentHeight
 		)
 		return NSRect(
 			x: rect.minX,

@@ -7,6 +7,31 @@ typealias DesktopIcon = OAIIconName
 enum DesktopIcons
 {
 	private static let cache = NSCache<NSString, NSImage>()
+
+	/// Question action artwork uses the same rounded speech bubble in the card and transcript.
+	static func questionBubble() -> NSImage
+	{
+		let svg = """
+		<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" \
+		fill="none" stroke="black" stroke-width="1.7" \
+		stroke-linecap="round" stroke-linejoin="round">
+		<path d="M21 11.5a9 9 0 0 1-13.4 7.85L3 21l1.65-4.6A9 9 0 1 1 21 11.5Z"/>
+		<path d="M9.7 8.9a2.4 2.4 0 0 1 4.65.85c0 1.6-2.35 1.8-2.35 3.35"/>
+		<circle cx="12" cy="16" r="0.5" fill="black" stroke="none"/>
+		</svg>
+		"""
+		guard let image = NSImage(data: Data(svg.utf8))
+		else
+		{
+			preconditionFailure("Invalid question bubble artwork")
+		}
+		image.size = NSSize(
+			width: 16,
+			height: 16
+		)
+		image.isTemplate = true
+		return image
+	}
 	private static let filledBoltArtwork: NSImage =
 	{
 		// OpenAIStyle's Bolt.svg outer contour, with its inner cutout filled.

@@ -169,7 +169,11 @@ final class ConversationViewController: NSViewController,
 	let contextView = ComposerContextView()
 	lazy var attachmentDetailsScrollView = BoundedContentScrollView(views: [contextView])
 	var isPublishingComposerEdit = false
-	lazy var requestDetailsScrollView = BoundedContentScrollView(views: [interactionStack])
+	lazy var requestDetailsScrollView = BoundedContentScrollView(
+		views: [interactionStack],
+		maximumContentHeight: 480,
+		preferredHeightPriority: .defaultHigh
+	)
 	let addContextButton = DesktopPopupButton()
 	let planModeButton = ComposerPlanModeButton(frame: .zero)
 	let planModeDivider = DesktopSurface(AppKitColorTokens.composerControlDivider)
@@ -195,6 +199,8 @@ final class ConversationViewController: NSViewController,
 	let resumeButton = ComposerSubmissionButton(role: .resume)
 	let interactionStack = NSStackView()
 	private var renderedInteractions: ConversationPresentation.Interactions?
+	private var collapsedQuestionIDs: Set<String> = []
+	private var composerArea: NSView?
 	var projectPath: String?
 	var selectionGeneration = 0
 	var draftImageStore = DraftImageStore()
@@ -318,6 +324,7 @@ final class ConversationViewController: NSViewController,
 		composerArea: NSStackView
 	)
 	{
+		self.composerArea = composerArea
 		let stack = AppKitLayout.verticalStack(
 			[
 				centeredReadingRow(headerStack),
@@ -649,6 +656,7 @@ final class ConversationViewController: NSViewController,
 			return
 		}
 		renderedInteractions = presentation
+		collapsedQuestionIDs.formIntersection(Set(presentation.values.map(\.id)))
 		let interactions = presentation.values.filter
 		{
 			if case .unsupported = $0.kind
@@ -665,14 +673,103 @@ final class ConversationViewController: NSViewController,
 		let respond = onRespond
 		for interaction in interactions
 		{
-			let card = InteractionCardView(interaction: interaction)
+			let card: NSView
+			if case .question = interaction.kind
 			{
-				response in respond?(interaction, response)
+				if collapsedQuestionIDs.contains(interaction.id)
+				{
+					let button = DesktopStyledButton(
+						title: "Answer question",
+						presentation: .secondary,
+						target: self,
+						action: #selector(reopenQuestion(_:))
+					)
+					button.image = DesktopIcons.questionBubble()
+					button.identifier = NSUserInterfaceItemIdentifier(interaction.id)
+					let collapsed = AppKitLayout.verticalStack(
+						[],
+						spacing: 12
+					)
+					collapsed.alignment = .leading
+					for question in interaction.questions
+					{
+						let label = NSTextField(wrappingLabelWithString: question.question)
+						label.setTypographyRole(TypographyTokens.Interaction.question)
+						collapsed.addArrangedSubview(label)
+						label.widthAnchor.constraint(equalTo: collapsed.widthAnchor).isActive = true
+					}
+					collapsed.addArrangedSubview(button)
+					card = collapsed
+				}
+				else
+				{
+					let questionCard = QuestionCardView(
+						interaction: interaction,
+						onRespond:
+						{
+							response in
+							respond?(interaction, response)
+						},
+						onClose:
+						{
+							[weak self] in
+							guard let self
+							else
+							{
+								return
+							}
+							self.collapsedQuestionIDs.insert(interaction.id)
+							self.renderedInteractions = nil
+							self.renderInteractions(presentation)
+						}
+					)
+					questionCard.onContentSizeChanged =
+					{
+						[weak self] in
+						self?.requestDetailsScrollView.updateContentHeight()
+					}
+					card = questionCard
+				}
+			}
+			else
+			{
+				card = InteractionCardView(interaction: interaction)
+				{
+					response in respond?(
+						interaction,
+						response
+					)
+				}
 			}
 			interactionStack.addArrangedSubview(card)
 			card.widthAnchor.constraint(equalTo: interactionStack.widthAnchor).isActive = true
 		}
 		interactionStack.isHidden = interactions.isEmpty
+		composerArea?.isHidden = interactions.contains
+		{
+			interaction in
+			if case .question = interaction
+				.kind
+			{
+				return interaction.isBlocking && !collapsedQuestionIDs.contains(interaction.id)
+			}
+			return false
+		}
+		requestDetailsScrollView.updateContentHeight()
+		updateReadingRowVisibility()
+	}
+
+	@objc private func reopenQuestion(_ sender: NSButton)
+	{
+		guard let id = sender.identifier?.rawValue,
+				let presentation = renderedInteractions
+		else
+		{
+			return
+		}
+		collapsedQuestionIDs.remove(id)
+		renderedInteractions = nil
+		renderInteractions(presentation)
 	}
 
 	@objc func inspectRequestContext()
