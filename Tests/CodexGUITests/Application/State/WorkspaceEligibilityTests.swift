@@ -6,6 +6,33 @@ import Testing
 @Suite
 struct WorkspaceEligibilityTests
 {
+	@Test func bulkManagementAvailabilityPreservesKnownSelectedAndBusyThreadEligibility()
+	{
+		var model = fixture()
+		model.conversations.threads = ["ready", "busy"].map
+		{
+			ThreadSummary(json: ["id": $0, "cwd": "/project"])!
+		}
+		model.preferences.pinnedTasks = [ThreadSummary(json: ["id": "pinned", "cwd": "/project"])!]
+		model.conversations.selectedConversation = .thread("selected")
+		var busy = ExecutionModel()
+		busy.state = .running
+		model.executions.entries[.thread("busy")] = busy
+		let eligibility = WorkspaceEligibility(model: model)
+		#expect(eligibility.threadManagementAvailability == [
+			"ready": true,
+			"busy": false,
+			"pinned": true,
+			"selected": true,
+		])
+		#expect(!eligibility.canManageThread("unknown"))
+		model.connection.isConnected = false
+		#expect(WorkspaceEligibility(model: model).threadManagementAvailability.values
+			.allSatisfy
+			{
+				!$0
+			})
+	}
 
 	@Test func everyCanonicalBlockerInvalidatesCapturedEnabledSubmission()
 	{

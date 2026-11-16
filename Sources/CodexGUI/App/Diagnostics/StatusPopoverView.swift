@@ -4,6 +4,16 @@ import AppKit
 @MainActor
 final class StatusPopoverView: NSView
 {
+	private struct AccountContent: Equatable
+	{
+		let account: AccountStatus?
+		let description: String
+		let plan: String?
+		let error: String?
+		let canLogOut: Bool
+		let usage: String
+	}
+	private var renderedAccount: AccountContent?
 	var onShowUsage: (() -> Void)?
 	var onShowSettings: (() -> Void)?
 	var onReconnect: (() -> Void)?
@@ -175,9 +185,23 @@ final class StatusPopoverView: NSView
 	func render(_ presentation: WorkspaceStatusPresentation)
 	{
 		let account = presentation.accountStatus
+		let plan = account?.planType ?? presentation.usage.limits?.rateLimits.planType
+		let content = AccountContent(
+			account: account,
+			description: presentation.accountDescription,
+			plan: plan,
+			error: presentation.accountActionError,
+			canLogOut: presentation.canLogOut && !presentation.accountActionPending,
+			usage: Self.remainingUsage(presentation.usage)
+		)
+		guard renderedAccount != content
+		else
+		{
+			return
+		}
+		renderedAccount = content
 		accountLabel.stringValue = account?.email ?? presentation.accountDescription
 		accountLabel.toolTip = presentation.accountDescription
-		let plan = account?.planType ?? presentation.usage.limits?.rateLimits.planType
 		planLabel.stringValue = presentation.accountActionError.map
 		{
 			"Could not log out: \($0)"
@@ -191,8 +215,8 @@ final class StatusPopoverView: NSView
 		{
 			String($0.prefix(2)).uppercased()
 		} ?? ""
-		usageRow.suffix = Self.remainingUsage(presentation.usage)
-		logoutRow.isEnabled = presentation.canLogOut && !presentation.accountActionPending
+		usageRow.suffix = content.usage
+		logoutRow.isEnabled = content.canLogOut
 	}
 
 	static func remainingUsage(_ presentation: UsagePresentation) -> String

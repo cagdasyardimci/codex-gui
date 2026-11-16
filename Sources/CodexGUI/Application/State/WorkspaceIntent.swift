@@ -209,7 +209,7 @@ final class WorkspaceIntentTarget
 		}
 		if intent.scope == .draft
 		{
-			guard store.currentSnapshot.composerDraftLifetime == draftLifetime
+			guard (store.model.composer.drafts[conversation]?.lifetime ?? 0) == draftLifetime
 			else
 			{
 				return false

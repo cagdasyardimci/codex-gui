@@ -19,6 +19,50 @@ struct WorkspaceStatusPresentation: Equatable
 		execution.state
 	}
 
+	@MainActor
+	init(
+		model: WorkspaceModel,
+		now: Date
+	)
+	{
+		let selectors = WorkspaceSelectors(
+			model: model,
+			now: now
+		)
+		execution = ThreadExecutionPresentation(
+			state: selectors.executionState,
+			outcomeUncertain: selectors.needsReconciliation || selectors.hasUncertainRequest
+		)
+		accountDescription = selectors.accountDescription
+		accountStatus = model.preferences.accountStatus
+		accountActionPending = model.preferences.pendingSignOut != nil
+		canLogOut = selectors.isConnected && accountStatus?.type != nil
+		accountActionError = model.preferences.signOutError
+		backendDescription = selectors.backendDescription
+		let id = selectors.selectedThreadID
+		threadTokenUsage = id.flatMap
+		{
+			model.composerCommands.tokenUsage[$0]
+		}
+		threadStatus = id.flatMap
+		{
+			model.composerCommands.threadStatuses[$0]
+		}
+		threadSettings = id.flatMap
+		{
+			model.composerCommands.threadSettings[$0]
+		}
+		usage = UsagePresentation(
+			limits: model.usage.snapshot,
+			refreshedAt: model.usage.fetchedAt,
+			isStale: model.usage.isStale(
+				isConnected: selectors.isConnected,
+				now: now
+			),
+			unavailableReason: model.usage.error
+		)
+	}
+
 	init(
 		_ snapshot: ConversationSnapshot,
 		ownerIdentity: String? = nil

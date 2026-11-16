@@ -215,9 +215,7 @@ struct WorkspaceEligibility
 
 	func canManageThread(_ threadID: String) -> Bool
 	{
-		let execution = model.execution(for: .thread(threadID))
-		return canManage(execution: execution) && !execution.blocksCleanup
-			&& !hasUncertainSubmission(for: .thread(threadID))
+		canManageKnownThread(threadID)
 			&& (threadID == model.conversations.selectedConversation.threadID
 				|| model.conversations.threads.contains(where:
 					{
@@ -227,6 +225,27 @@ struct WorkspaceEligibility
 					{
 						$0.id == threadID
 					}))
+	}
+
+	var threadManagementAvailability: [String: Bool]
+	{
+		var ids = Set(model.conversations.threads.map(\.id))
+		ids.formUnion(model.preferences.pinnedTasks.map(\.id))
+		if let selected = model.conversations.selectedConversation.threadID
+		{
+			ids.insert(selected)
+		}
+		return Dictionary(uniqueKeysWithValues: ids.map
+		{
+			($0, canManageKnownThread($0))
+		})
+	}
+
+	private func canManageKnownThread(_ threadID: String) -> Bool
+	{
+		let execution = model.execution(for: .thread(threadID))
+		return canManage(execution: execution) && !execution.blocksCleanup
+			&& !hasUncertainSubmission(for: .thread(threadID))
 	}
 
 	private func canManage(execution: ExecutionModel) -> Bool

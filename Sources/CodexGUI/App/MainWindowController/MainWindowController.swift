@@ -263,7 +263,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			[weak self] model in
 			if let self
 			{
-				self.statusView.render(self.sourceStore.currentSnapshot)
+				self.statusView.render(WorkspaceStatusPresentation(
+					model: model,
+					now: self.sourceStore.now()
+				))
 			}
 			self?.settings.remoteAccess.render(
 				model.remoteAccess,
@@ -400,8 +403,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			enabled: target.accepts(.selectApprovalMode(snapshot.approvalMode)),
 			configurationDefaults: snapshot.configurationDefaults
 		)
-		self.statusView.render(self.sourceStore.currentSnapshot)
-		let initials = self.sourceStore.currentSnapshot.accountStatus?.email.map
+		let initials = self.sourceStore.model.preferences.accountStatus?.email.map
 		{
 			String($0.prefix(2)).uppercased()
 		} ?? ""
