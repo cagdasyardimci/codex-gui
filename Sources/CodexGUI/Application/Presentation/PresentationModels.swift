@@ -26,7 +26,10 @@ struct ConversationEntry: Equatable
 	static func == (lhs: Self, rhs: Self) -> Bool
 	{
 		lhs.id == rhs.id && lhs.kind == rhs.kind && lhs.title == rhs.title
-			&& lhs.body.utf8.elementsEqual(rhs.body.utf8)
+			&& ConversationTextIdentity.matches(
+				lhs.body,
+				rhs.body
+			)
 			&& lhs.attachmentPreviewTitle == rhs.attachmentPreviewTitle
 			&& lhs.isExpandable == rhs.isExpandable && lhs.activity == rhs.activity
 			&& lhs.imageAttachments == rhs.imageAttachments

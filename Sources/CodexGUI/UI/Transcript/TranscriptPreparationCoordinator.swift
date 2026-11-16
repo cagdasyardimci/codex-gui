@@ -32,7 +32,10 @@ final class TranscriptPreparationCoordinator
 
 		static func == (lhs: Self, rhs: Self) -> Bool
 		{
-			lhs.body.utf8.elementsEqual(rhs.body.utf8)
+			ConversationTextIdentity.matches(
+				lhs.body,
+				rhs.body
+			)
 				&& lhs.markdown == rhs.markdown
 				&& lhs.preserveSoftBreaks == rhs.preserveSoftBreaks
 				&& lhs.typography == rhs.typography
