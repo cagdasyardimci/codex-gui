@@ -3,7 +3,34 @@ import AppKit
 @MainActor
 extension ConversationViewController
 {
-	func presentMentionMenu(query: String)
+	@objc func showAddMenu()
+	{
+		if mentionPopover?.isShown == true
+		{
+			mentionPopover?.close()
+			return
+		}
+		dismissSlashCommands()
+		fileSearchPopover?.close()
+		modelEffortPopover?.close()
+		approvalPolicyPopover?.close()
+		view.window?.makeFirstResponder(composer)
+		completionRange = NSRange(
+			location: composer.selectedRange().location,
+			length: 0
+		)
+		fileSearchWasCompletion = true
+		fileSelectionReceiver = nil
+		presentMentionMenu(
+			query: "",
+			fromButton: true
+		)
+	}
+
+	func presentMentionMenu(
+		query: String,
+		fromButton: Bool = false
+	)
 	{
 		guard composer.window?.firstResponder === composer
 		else
@@ -11,6 +38,7 @@ extension ConversationViewController
 			mentionPopover?.close()
 			return
 		}
+		mentionOpenedFromButton = fromButton
 		mentionGeneration = selectionGeneration
 		mentionText = composer.string
 		if mentionPopover == nil
@@ -63,7 +91,6 @@ extension ConversationViewController
 			skills: slashCommandController.availableSkills,
 			paths: fileIndexRuntime.index?.search(query) ?? [],
 			projectPath: projectPath,
-			hasProject: projectPath != nil,
 			planMode: !planModeButton.isHidden,
 			allowsPlanMode: onSlashCommand != nil && slashCommandController
 				.unavailableReason?(.plan) == nil,
@@ -124,11 +151,14 @@ extension ConversationViewController
 			return
 		}
 		let generation = selectionGeneration
-		composer.insertText(
-			"",
-			replacementRange: range
-		)
-		onDraftChange?(composer.draftText)
+		if !mentionOpenedFromButton
+		{
+			composer.insertText(
+				"",
+				replacementRange: range
+			)
+			onDraftChange?(composer.draftText)
+		}
 		completionRange = nil
 		mentionPopover?.close()
 		view.window?.makeFirstResponder(composer)
@@ -143,9 +173,6 @@ extension ConversationViewController
 		case .project: onChooseProject?()
 		case .plugins: onManagePlugins?()
 		case .files: choosePath()
-		case .search: openFileSearch()
-		case .image: chooseImage()
-		case .code: chooseCodeRange()
 		case .plan:
 			if case .command(let invocation) = SlashCommandParser.parse("/plan")
 			{

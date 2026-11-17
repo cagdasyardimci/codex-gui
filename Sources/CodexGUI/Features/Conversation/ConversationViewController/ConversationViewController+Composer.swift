@@ -259,24 +259,10 @@ extension ConversationViewController
 
 	private func configureContextActionButton()
 	{
-		addContextButton.pullsDown = true
-		addContextButton.addItems(withTitles: [
-			"Add Context…",
-			"Search Project Files…",
-			"Attach Image…",
-			"Select Code…",
-			"Insert File Path…",
-			"Inspect Request Context…",
-			"Turn off queueing",
-		])
-		addContextButton.menu?.autoenablesItems = false
-		addContextButton.menu?.setTypographyRole(TypographyTokens.Composer.contextMenu)
 		addContextButton.target = self
-		addContextButton.action = #selector(chooseContextAction)
+		addContextButton.action = #selector(showAddMenu)
 		addContextButton.setAccessibilityLabel("Add files and more")
-		addContextButton.item(at: 0)?.image = ComposerFooterIcons.add
-		(addContextButton.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
-		addContextButton.contentTintColor = AppKitColorTokens.composerPrimaryText
+		addContextButton.image = ComposerFooterIcons.add
 		addContextButton.imagePosition = .imageOnly
 		addContextButton.widthAnchor
 			.constraint(equalToConstant: LayoutTokens.composer.controlHeight).isActive = true
@@ -403,15 +389,18 @@ extension ConversationViewController
 		attachmentDetailsScrollView.updateContentHeight()
 
 		composer.acceptsImageAttachments = snapshot.projectPath != nil
-		for index in 1 ... 4
+		if mentionPopover?.isShown == true
 		{
-			addContextButton.item(at: index)?.isEnabled = snapshot.projectPath != nil
-		}
-		if mentionPopover?.isShown == true, let range = completionRange,
-			NSMaxRange(range) <= (composer.string as NSString).length
-		{
-			let token = (composer.string as NSString).substring(with: range)
-			renderMentionMenu(query: String(token.dropFirst()))
+			if mentionOpenedFromButton
+			{
+				renderMentionMenu(query: "")
+			}
+			else if let range = completionRange,
+					NSMaxRange(range) <= (composer.string as NSString).length
+			{
+				let token = (composer.string as NSString).substring(with: range)
+				renderMentionMenu(query: String(token.dropFirst()))
+			}
 		}
 		updateSendState()
 	}
@@ -485,8 +474,6 @@ extension ConversationViewController
 		}
 		composerQueueView.onResume = onResumeMessageQueue
 		composerQueueView.onSetQueueingEnabled = onSetQueueingEnabled
-		let queueingTitle = snapshot.queueingEnabled ? "Turn off queueing" : "Turn on queueing"
-		addContextButton.item(at: 6)?.title = queueingTitle
 		composerQueueView.render(snapshot)
 		let canSubmitMessage = snapshot.canSend || snapshot.canQueue || isSlashInput
 			|| (!snapshot.queueingEnabled && snapshot.canSteer)

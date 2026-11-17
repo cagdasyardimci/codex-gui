@@ -7,7 +7,7 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 {
 	enum Choice
 	{
-		case files, search, image, code, plan, goal, project, plugins
+		case files, plan, goal, project, plugins
 		case skill(AvailableSkill)
 		case file(String)
 	}
@@ -62,7 +62,6 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 		skills: [AvailableSkill],
 		paths: [String],
 		projectPath: String? = nil,
-		hasProject: Bool,
 		planMode: Bool,
 		allowsPlanMode: Bool,
 		allowsProjectSelection: Bool,
@@ -72,33 +71,13 @@ final class ComposerMentionMenu: NSViewController, NSTableViewDataSource, NSTabl
 		_ = view
 		var actions = [
 			Row(
-				title: "Files",
+				title: "Files and folders",
 				detail: "",
 				image: DesktopIcons.image(.paperclip),
 				choice: .files
-			),
-			Row(
-				title: "Attach image",
-				detail: "",
-				image: DesktopIcons.image(.imageSquare),
-				choice: .image
 			)
 		]
-		if hasProject
-		{
-			actions.append(Row(
-				title: "Search project files",
-				detail: "",
-				image: DesktopIcons.image(.search),
-				choice: .search
-			))
-			actions.append(Row(
-				title: "Code selection",
-				detail: "Attach a code range",
-				image: DesktopIcons.image(.code),
-				choice: .code
-			))
-		}
+
 		if allowsProjectSelection
 		{
 			actions.append(Row(

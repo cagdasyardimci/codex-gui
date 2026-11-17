@@ -174,13 +174,18 @@ final class ConversationViewController: NSViewController,
 		maximumContentHeight: 480,
 		preferredHeightPriority: .defaultHigh
 	)
-	let addContextButton = DesktopPopupButton()
+	let addContextButton = DesktopStyledButton(
+		title: "",
+		presentation: .glyphOnlyIcon,
+		size: .small
+	)
 	let planModeButton = ComposerPlanModeButton(frame: .zero)
 	let planModeDivider = DesktopSurface(AppKitColorTokens.composerControlDivider)
 	let mentionMenu = ComposerMentionMenu()
 	var mentionPopover: ComposerPopoverPanel?
 	var mentionGeneration = 0
 	var mentionText: String?
+	var mentionOpenedFromButton = false
 	var fileSearchPopover: NSPopover?
 	var fileSelectionReceiver: ((ComposerContextItem) -> Void)?
 	var fileSearchField: NSSearchField?

@@ -449,25 +449,6 @@ extension ConversationViewController
 		}
 	}
 
-	@objc func chooseContextAction()
-	{
-		let selected = addContextButton.indexOfSelectedItem
-		addContextButton.selectItem(at: 0)
-		switch selected
-		{
-		case 1: openFileSearch()
-		case 2: chooseImage()
-		case 3: chooseCodeRange()
-		case 4: choosePath()
-		case 5: inspectRequestContext()
-		case 6: if let snapshot = composerSubmissionPresentation
-			{
-				onSetQueueingEnabled?(!snapshot.queueingEnabled)
-			}
-		default: break
-		}
-	}
-
 	@objc func chooseCodeRange()
 	{
 		guard let window = view.window, let projectPath

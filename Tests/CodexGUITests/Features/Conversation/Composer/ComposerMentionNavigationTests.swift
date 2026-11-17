@@ -39,7 +39,6 @@ struct ComposerMentionNavigationTests
 			query: "",
 			skills: [],
 			paths: [],
-			hasProject: true,
 			planMode: false,
 			allowsPlanMode: false,
 			allowsProjectSelection: true,
@@ -117,7 +116,6 @@ struct ComposerMentionNavigationTests
 			query: "Goal",
 			skills: [],
 			paths: [],
-			hasProject: true,
 			planMode: false,
 			allowsPlanMode: false,
 			allowsProjectSelection: true,
@@ -179,6 +177,87 @@ struct ComposerMentionNavigationTests
 		{
 			#expect(window.firstResponder === controller.composer)
 		}
+	}
+
+	@Test(
+		.appKitIsolation,
+		arguments: [false, true]
+	)
+	func plusMenuPreservesSelectedDraftAndRejectsReplacedOwner(replacesOwner: Bool) throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let window = NSWindow(contentViewController: controller)
+		window.prepareForTesting()
+		defer
+		{
+			controller.mentionPopover?.close()
+			window.close()
+		}
+		window.setContentSize(NSSize(
+			width: 900,
+			height: 700
+		))
+		window.contentView?.layoutSubtreeIfNeeded()
+		window.orderFront(nil)
+		let draft = "Keep 🧭 selected text and attachments"
+		let selection = (draft as NSString).range(of: "selected text")
+		controller.composer.string = draft
+		controller.composer.setSelectedRange(selection)
+		var projects = 0
+		var draftChanges = 0
+		var sends = 0
+		controller.onChooseProject =
+		{
+			projects += 1
+		}
+		controller.onDraftChange =
+		{
+			_ in draftChanges += 1
+		}
+		controller.onSend =
+		{
+			sends += 1
+		}
+		#expect(controller.addContextButton.sendAction(
+			try #require(controller.addContextButton.action),
+			to: controller.addContextButton.target
+		))
+		#expect(controller.mentionPopover?.isShown == true)
+		#expect(controller.composer.string == draft)
+		#expect(controller.composer.selectedRange() == selection)
+		let menu = controller.mentionMenu
+		let scroll = try #require(menu.view.subviews.first as? NSScrollView)
+		let table = try #require(scroll.documentView as? NSTableView)
+		let project = try #require((0 ..< table.numberOfRows).first
+		{
+			row in
+			menu.tableView(
+				table,
+				viewFor: nil,
+				row: row
+			)?.subviews
+				.compactMap
+				{
+					$0 as? DesktopSearchResultContentView
+				}
+				.first?.primaryLabel.stringValue == "Work in a project"
+		})
+		table.selectRowIndexes(
+			IndexSet(integer: project),
+			byExtendingSelection: false
+		)
+		if replacesOwner
+		{
+			controller.selectionGeneration += 1
+		}
+		menu.chooseSelected()
+		#expect(projects == (replacesOwner ? 0 : 1))
+		#expect(draftChanges == 0)
+		#expect(sends == 0)
+		#expect(controller.composer.string == draft)
+		#expect(controller.composer.selectedRange() == selection)
+		#expect(controller.mentionPopover?.isShown == false)
 	}
 
 	private func exercise(
