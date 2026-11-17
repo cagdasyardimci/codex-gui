@@ -305,19 +305,23 @@ enum ConversationTranscriptRow: Equatable
 		return ConversationSubagentRows.group(rows)
 	}
 
-	static func workEntryIDs(
+	static func turnEntryIDs(
 		entries: [ConversationEntry],
 		timings: [ConversationTurnTiming]
-	) -> [String: Set<String>]
+	) -> (work: [String: Set<String>], replies: Set<String>)
 	{
-		let terminalTurns = Set(timings.filter
+		let terminalTimings = timings.filter
 		{
 			ConversationTurnStatus.isTerminal($0.status)
-				&& ($0.startedAt != nil || $0.durationMs != nil)
+		}
+		let terminalTurns = Set(terminalTimings.map(\.turnID))
+		let collapsibleTurns = Set(terminalTimings.filter
+		{
+			$0.startedAt != nil || $0.durationMs != nil
 		}.map(\.turnID))
 		var work: [String: Set<String>] = [:]
 		var replies: [String: String] = [:]
-		for entry in entries
+		for entry in entries.reversed()
 		{
 			let turnID = ConversationEntryIdentity.turnIDWithFallback(entry.id)
 			guard terminalTurns.contains(turnID), entry.kind != .user, entry.kind != .notice
@@ -325,11 +329,14 @@ enum ConversationTranscriptRow: Equatable
 			{
 				continue
 			}
-			work[turnID, default: []].insert(entry.id)
-			if entry.kind == .agent
+			if collapsibleTurns.contains(turnID)
 			{
-				// The presentation model has no message phase; retain the last reply,
-				// as the turn summary does, while folding earlier commentary and tools.
+				work[turnID, default: []].insert(entry.id)
+			}
+			if entry.kind == .agent, replies[turnID] == nil,
+				!entry.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			{
+				// Display the same final nonempty reply that receives the turn's actions.
 				replies[turnID] = entry.id
 			}
 		}
@@ -337,10 +344,16 @@ enum ConversationTranscriptRow: Equatable
 		{
 			work[turnID]?.remove(replyID)
 		}
-		return work.filter
-		{
-			!$0.value.isEmpty
-		}
+		return (
+			work.filter
+			{
+				!$0.value.isEmpty
+			},
+			Set(replies.values.filter
+			{
+				ConversationEntryIdentity($0) != nil
+			})
+		)
 	}
 
 	static func collapsingWork(

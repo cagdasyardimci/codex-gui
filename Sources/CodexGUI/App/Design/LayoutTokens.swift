@@ -624,7 +624,8 @@ enum LayoutTokens
 		static let userWidthFraction: CGFloat = 0.7
 		static let replyControlSize: CGFloat = 26
 		static let replyControlSpacing: CGFloat = 2
-		static let replyIconSize: CGFloat = 16
+		static let replyIconSize: CGFloat = 15
+		static let timestampSpacing: CGFloat = 8
 	}
 
 	enum Markdown

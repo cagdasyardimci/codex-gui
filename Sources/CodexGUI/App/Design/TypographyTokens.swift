@@ -385,6 +385,7 @@ enum TypographyTokens
 
 	enum Transcript
 	{
+		static let timestamp = TypographyTokens.Text.caption
 		static let prose = Role(
 			rule: .ui(offset: 0),
 			selection: .interface(weight: interfaceWeight),

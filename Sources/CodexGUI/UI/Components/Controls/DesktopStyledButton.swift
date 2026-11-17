@@ -45,7 +45,7 @@ class DesktopStyledButton: DesktopTooltipButton
 				formAdd,
 				folderAdd, contextSelection, inlineValue, destructive,
 				quiet, inlineAction, link, mutedLink, documentation, icon, glyphOnlyIcon,
-				revealingIcon,
+				revealingIcon, transcriptAction,
 				toggle,
 				menuTrigger
 		case sidebarIcon, searchIcon, attachmentRemove
@@ -206,7 +206,8 @@ class DesktopStyledButton: DesktopTooltipButton
 	{
 		switch presentation
 		{
-		case .icon, .glyphOnlyIcon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon,
+		case .icon, .glyphOnlyIcon, .revealingIcon, .transcriptAction, .toggle, .sidebarIcon,
+				.searchIcon,
 				.imageOverlay,
 				.attachmentRemove, .imageCommentHandle, .imageCommentSubmit,
 				.recordingCancel, .recordingStop, .recordingSend: true
@@ -411,7 +412,8 @@ class DesktopStyledButton: DesktopTooltipButton
 				),
 				height: LayoutTokens.Settings.headerActionHeight
 			)
-		case .icon, .glyphOnlyIcon, .revealingIcon, .toggle, .sidebarIcon, .searchIcon:
+		case .icon, .glyphOnlyIcon, .revealingIcon, .transcriptAction, .toggle, .sidebarIcon,
+				.searchIcon:
 			let side = iconSide
 			return NSSize(
 				width: side,
@@ -490,6 +492,10 @@ class DesktopStyledButton: DesktopTooltipButton
 
 	private var iconSide: CGFloat
 	{
+		if presentation == .transcriptAction
+		{
+			return LayoutTokens.Transcript.replyControlSize
+		}
 		if presentation == .searchIcon
 		{
 			return LayoutTokens.Button.searchIconSize
@@ -783,7 +789,7 @@ class DesktopStyledButton: DesktopTooltipButton
 		case .formAdd: ShapeTokens.Button.regularRadius
 		case .icon, .glyphOnlyIcon, .revealingIcon, .sidebarIcon, .searchIcon,
 				.zoomStep: ShapeTokens.Button.iconRadius
-		case .imageOverlay, .attachmentRemove, .imageCommentSubmit, .folderAdd,
+		case .transcriptAction, .imageOverlay, .attachmentRemove, .imageCommentSubmit, .folderAdd,
 				.contextSelection: bounds.height / 2
 		default: size == .regular ? ShapeTokens.Button.regularRadius : bounds.height / 2
 		}
@@ -1130,6 +1136,16 @@ class DesktopStyledButton: DesktopTooltipButton
 				primaryText,
 				enabled: foregroundEnabled
 			)
+		case .transcriptAction:
+			if active
+			{
+				AppKitColorTokens.settingsSelectorHover.setFill()
+				outline.fill()
+			}
+			return AppKitColorTokens.enabledForeground(
+				AppKitColorTokens.tertiaryIcon,
+				enabled: foregroundEnabled
+			)
 		case .glyphOnlyIcon:
 			return AppKitColorTokens.enabledForeground(
 				primaryText,
@@ -1275,7 +1291,8 @@ class DesktopStyledButton: DesktopTooltipButton
 		{
 			return
 		}
-		let side = LayoutTokens.Button.artworkSize
+		let side = presentation == .transcriptAction ? LayoutTokens.Transcript
+			.replyIconSize : LayoutTokens.Button.artworkSize
 		DesktopIcons.draw(
 			image,
 			in: NSRect(

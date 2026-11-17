@@ -375,12 +375,13 @@ extension TranscriptViewController
 			entry,
 			content: content,
 			expanded: expandedEntryIDs.contains(entry.id),
-			showsReplyActions: replyActionEntryID == entry.id,
+			showsReplyActions: replyActionEntryIDs.contains(entry.id),
 			bookmarked: isReplyBookmarked(entry),
 			onToggleBookmark: replyBookmarkAction(
 				for: entry,
 				context: context
-			)
+			),
+			timestamp: messageTimestamp(for: entry)
 		)
 		{
 			[weak self] in
@@ -405,6 +406,30 @@ extension TranscriptViewController
 		}
 	}
 
+	private func messageTimestamp(for entry: ConversationEntry) -> Date?
+	{
+		guard let identity = ConversationEntryIdentity(entry.id),
+				let timing = requestedTurnTimings.first(where:
+				{
+					$0.turnID == identity.turnID
+				})
+		else
+		{
+			return nil
+		}
+		return entry.kind == .user ? timing.startedAt : timing.completedAt
+	}
+
+	private func canInvokeReplyAction(
+		_ entryID: String,
+		_ threadID: String,
+		_ context: String?
+	) -> Bool
+	{
+		renderedContext == context && requestedContext == context
+			&& selectedThreadID == threadID && replyActionEntryIDs.contains(entryID)
+	}
+
 	private func isReplyBookmarked(_ entry: ConversationEntry) -> Bool
 	{
 		guard let identity = ConversationEntryIdentity(entry.id)
@@ -424,7 +449,7 @@ extension TranscriptViewController
 		context: String?
 	) -> (() -> Void)?
 	{
-		guard replyActionEntryID == entry.id, let threadID = selectedThreadID,
+		guard replyActionEntryIDs.contains(entry.id), let threadID = selectedThreadID,
 				onToggleBookmark != nil, let identity = ConversationEntryIdentity(entry.id)
 		else
 		{
@@ -435,8 +460,11 @@ extension TranscriptViewController
 		let action: () -> Void =
 		{
 			[weak self] in
-			guard let self, self.renderedContext == context, self.requestedContext == context,
-					self.selectedThreadID == threadID, self.replyActionEntryID == entry.id
+			guard let self, self.canInvokeReplyAction(
+				entry.id,
+				threadID,
+				context
+			)
 			else
 			{
 				return
@@ -462,19 +490,18 @@ extension TranscriptViewController
 
 	func refreshVisibleReplyActionBookmark()
 	{
-		guard let index = displayedRows.firstIndex(where:
-			{
-				$0.id == replyActionEntryID
-			}), case .message(let entry) = displayedRows[index]
-		else
+		for path in collectionView.indexPathsForVisibleItems()
 		{
-			return
+			guard displayedRows.indices.contains(path.item),
+					case .message(let entry) = displayedRows[path.item],
+					replyActionEntryIDs.contains(entry.id),
+					let item = collectionView.item(at: path) as? ConversationCollectionItem
+			else
+			{
+				continue
+			}
+			item.setReplyBookmarked(isReplyBookmarked(entry))
 		}
-		let item = collectionView.item(at: IndexPath(
-			item: index,
-			section: 0
-		)) as? ConversationCollectionItem
-		item?.setReplyBookmarked(isReplyBookmarked(entry))
 	}
 
 	func collectionView(
@@ -520,7 +547,7 @@ extension TranscriptViewController
 				height: 72
 			)
 		}
-		let showsReplyActions = replyActionEntryID == entry.id
+		let showsReplyActions = replyActionEntryIDs.contains(entry.id)
 		if let measured = measuredItemSizes[entry.id], measured.content === content,
 			measured.kind == entry.kind, measured.expandable == entry.isExpandable,
 			measured.imageAttachmentCount == entry.imageAttachments.count,
@@ -668,12 +695,12 @@ extension TranscriptViewController
 		}
 		requestedEntries = nextEntries
 		requestedContext = context
-		let workEntryIDs = ConversationTranscriptRow.workEntryIDs(
+		let turnEntryIDs = ConversationTranscriptRow.turnEntryIDs(
 			entries: nextEntries,
 			timings: requestedTurnTimings
 		)
 		let hiddenIDs = ConversationTranscriptRow.hiddenWorkEntryIDs(
-			workEntryIDs: workEntryIDs,
+			workEntryIDs: turnEntryIDs.work,
 			expandedTurnIDs: expandedTurnIDs
 		)
 		let typography = TypographyConfiguration.current
@@ -711,7 +738,8 @@ extension TranscriptViewController
 			self?.applyEntries(
 				nextEntries,
 				contents: contents,
-				workEntryIDs: workEntryIDs,
+				workEntryIDs: turnEntryIDs.work,
+				replyEntryIDs: turnEntryIDs.replies,
 				context: context
 			)
 		}
@@ -752,13 +780,15 @@ extension TranscriptViewController
 				plainTextBoundaries: []
 			))
 		}
+		let turnEntryIDs = ConversationTranscriptRow.turnEntryIDs(
+			entries: provisionalEntries,
+			timings: requestedTurnTimings
+		)
 		applyEntries(
 			provisionalEntries,
 			contents: contents,
-			workEntryIDs: ConversationTranscriptRow.workEntryIDs(
-				entries: provisionalEntries,
-				timings: requestedTurnTimings
-			),
+			workEntryIDs: turnEntryIDs.work,
+			replyEntryIDs: turnEntryIDs.replies,
 			context: context
 		)
 	}
@@ -823,6 +853,7 @@ extension TranscriptViewController
 		_ nextEntries: [ConversationEntry],
 		contents: [String: PreparedConversationContent],
 		workEntryIDs: [String: Set<String>],
+		replyEntryIDs: Set<String>,
 		context: String?
 	)
 	{
@@ -870,10 +901,6 @@ extension TranscriptViewController
 		}
 		let previousRows = displayedRows
 		let previousContents = preparedContents
-		let nextReplyActionEntryID = ConversationReplyActionsView.replyEntryID(
-			in: nextEntries,
-			timings: requestedTurnTimings
-		)
 		let sharedCount = min(
 			previousRows.count,
 			nextRows.count
@@ -893,8 +920,8 @@ extension TranscriptViewController
 			return previousRows[$0] != nextRows[$0]
 				|| previousContents[previousRows[$0].id]?.attributedString
 				!= contents[nextRows[$0].id]?.attributedString
-				|| (previousRows[$0].id == replyActionEntryID)
-				!= (nextRows[$0].id == nextReplyActionEntryID)
+				|| replyActionEntryIDs.contains(previousRows[$0].id)
+				!= replyEntryIDs.contains(nextRows[$0].id)
 		}.map
 		{
 			IndexPath(
@@ -905,7 +932,7 @@ extension TranscriptViewController
 		let previousSizes = transcriptItemSizes(at: changed)
 
 		preparedContents = contents
-		replyActionEntryID = nextReplyActionEntryID
+		replyActionEntryIDs = replyEntryIDs
 		if contextChanged
 		{
 			measuredItemSizes.removeAll()

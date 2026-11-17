@@ -18,6 +18,7 @@ final class DesktopActionMenu: NSObject
 		backingScale: CGFloat = 1,
 		minimumWidth: CGFloat = 0,
 		alignment: DesktopPopoverHost.ComposerPlacement.Alignment = .trailing,
+		opensBelowAnchor: Bool = true,
 		showsCheckmarks: Bool = false,
 		accessibilityLabel: String = "Queued message actions"
 	)
@@ -26,7 +27,7 @@ final class DesktopActionMenu: NSObject
 		placement = DesktopPopoverHost.ComposerPlacement(
 			alignment: alignment,
 			anchorSpacing: 5,
-			opensBelowAnchor: true
+			opensBelowAnchor: opensBelowAnchor
 		)
 		self.backingScale = backingScale
 		items = menu.items.filter

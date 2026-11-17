@@ -68,7 +68,7 @@ final class TranscriptViewController: NSViewController,
 	var requestedContext: String?
 	var entries: [ConversationEntry] = []
 	var displayedRows: [ConversationTranscriptRow] = []
-	var replyActionEntryID: String?
+	var replyActionEntryIDs = Set<String>()
 	var expandedTurnIDs = Set<String>()
 	var expandedFileChangeIDs = Set<String>()
 	var workEntryIDsByTurn: [String: Set<String>] = [:]

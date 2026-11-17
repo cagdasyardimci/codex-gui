@@ -26,7 +26,9 @@ struct ConversationReplyActionLifecycleTests
 		#expect(controller.transcript.isNearBottom)
 	}
 
-	@Test func replyActionsFollowTerminalTurnsAndRejectPreviousConversationCallbacks() async throws
+	@Test(
+		.appKitIsolation
+	) func replyActionsFollowTerminalTurnsAndRejectPreviousConversationCallbacks() async throws
 	{
 		_ = NSApplication.shared
 		let controller = ConversationViewController()
@@ -58,30 +60,42 @@ struct ConversationReplyActionLifecycleTests
 				kind: .user
 			),
 			entry(
+				"first:commentary",
+				kind: .agent
+			),
+			entry(
 				"first:reply",
 				kind: .agent
+			),
+			ConversationEntry(
+				id: "first:blank",
+				kind: .agent,
+				title: "Codex",
+				body: " "
 			),
 		]
 		var snapshot = snapshot(entries: first)
 		let firstTiming = ConversationTurnTiming(
 			turnID: "first",
-			status: "completed"
+			status: "completed",
+			startedAt: Date(timeIntervalSince1970: 100)
 		)
 		snapshot.turnTimings = [firstTiming]
 		await render(
 			snapshot,
 			in: controller
 		)
-		#expect(controller.transcript.replyActionEntryID == "first:reply")
+		#expect(controller.transcript.replyActionEntryIDs == ["first:reply"])
 		let firstHeight = try frame(
 			for: "first:reply",
 			in: controller
 		).height
-		let firstBookmark = try #require(button(
+		let firstBookmark = try menuRow(
 			"Bookmark turn",
-			in: controller.transcript.collectionView
-		))
-		firstBookmark.performClick(nil)
+			for: "first:reply",
+			in: controller
+		)
+		firstBookmark.onInvoke?()
 		let bookmark = try #require(toggled.first)
 		#expect(bookmark.threadID == "chat" && bookmark.turnID == "first")
 		#expect(bookmark.itemID == "reply" && bookmark.kind == .answer)
@@ -92,37 +106,62 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		#expect(firstBookmark.accessibilityLabel() == "Remove turn bookmark")
+		_ = try menuRow(
+			"Remove turn bookmark",
+			for: "first:reply",
+			in: controller
+		)
 		#expect(try frame(
 			for: "first:reply",
 			in: controller
 		).height == firstHeight)
 
-		snapshot = self.snapshot(entries: first + [entry(
-			"second:request",
-			kind: .user
-		)])
-		snapshot.turnTimings = [firstTiming]
+		let secondEntries = first + [
+			entry(
+				"second:request",
+				kind: .user
+			),
+			entry(
+				"second:reply",
+				kind: .agent
+			),
+		]
+		snapshot = self.snapshot(entries: secondEntries)
+		snapshot.projectContext.bookmarks = [bookmark]
+		snapshot.turnTimings = [
+			firstTiming,
+			ConversationTurnTiming(
+				turnID: "second",
+				status: "inProgress"
+			),
+		]
 		await render(
 			snapshot,
 			in: controller
 		)
-		#expect(controller.transcript.replyActionEntryID == nil)
-		let bodyHeight = try frame(
+		#expect(controller.transcript.replyActionEntryIDs == ["first:reply"])
+		#expect(try frame(
 			for: "first:reply",
 			in: controller
-		).height
-		#expect(abs(firstHeight - bodyHeight - 34.5) < 0.5)
+		).height == firstHeight)
+		let firstView = try messageView(
+			for: "first:reply",
+			in: controller
+		)
+		let copy = try #require(button(
+			"Copy response",
+			in: firstView
+		))
+		#expect(copy.isEnabled)
+		let secondView = try messageView(
+			for: "second:reply",
+			in: controller
+		)
 		#expect(button(
 			"Copy response",
-			in: controller.transcript.collectionView
+			in: secondView
 		) == nil)
 
-		let secondEntries = snapshot.entries + [entry(
-			"second:reply",
-			kind: .agent
-		)]
-		snapshot = self.snapshot(entries: secondEntries)
 		let secondTiming = ConversationTurnTiming(
 			turnID: "second",
 			status: "completed"
@@ -132,15 +171,21 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		#expect(controller.transcript.replyActionEntryID == "second:reply")
+		#expect(controller.transcript.replyActionEntryIDs == ["first:reply", "second:reply"])
 		#expect(try frame(
 			for: "first:reply",
 			in: controller
-		).height == bodyHeight)
-		let previousConversationButton = try #require(button(
+		).height == firstHeight)
+		_ = try menuRow(
+			"Remove turn bookmark",
+			for: "first:reply",
+			in: controller
+		)
+		let previousConversationButton = try menuRow(
 			"Bookmark turn",
-			in: controller.transcript.collectionView
-		))
+			for: "second:reply",
+			in: controller
+		)
 
 		snapshot = self.snapshot(
 			entries: secondEntries,
@@ -151,15 +196,235 @@ struct ConversationReplyActionLifecycleTests
 			snapshot,
 			in: controller
 		)
-		previousConversationButton.performClick(nil)
+		previousConversationButton.onInvoke?()
 		#expect(toggled.count == 1)
-		let currentBookmark = try #require(button(
+		let currentBookmark = try menuRow(
 			"Bookmark turn",
-			in: controller.transcript.collectionView
-		))
-		currentBookmark.performClick(nil)
+			for: "second:reply",
+			in: controller
+		)
+		currentBookmark.onInvoke?()
 		#expect(toggled.count == 2)
 		#expect(toggled.last?.threadID == "another-chat" && toggled.last?.turnID == "second")
+	}
+
+	@Test func userActionsCopyExactSourceOutsideTheBubbleAndRetireOnReuse() throws
+	{
+		_ = NSApplication.shared
+		let source = "First line\n\n**Keep this source** 🧩"
+		let content = PreparedConversationContent(MarkdownContentParser.parse(
+			source,
+			markdown: true
+		))
+		let item = ConversationCollectionItem()
+		let entry = ConversationEntry(
+			id: "turn:user",
+			kind: .user,
+			title: "You",
+			body: source
+		)
+		let size = ConversationCollectionItem.itemSize(
+			content: content,
+			width: 480,
+			expandable: false,
+			kind: .user
+		)
+		item.view.setFrameSize(size)
+		item.configure(
+			entry,
+			content: content,
+			expanded: false,
+			timestamp: Date(timeIntervalSince1970: 0),
+			onToggle:
+			{
+			}
+		)
+		item.view.layoutSubtreeIfNeeded()
+		let edit = try #require(button(
+			"Edit message",
+			in: item.view
+		))
+		#expect(!edit.isEnabled && !edit.dispatchConfiguredAction())
+		let copy = try #require(button(
+			"Copy message",
+			in: item.view
+		))
+		let actions = try #require(copy.superview as? ConversationReplyActionsView)
+		#expect(actions.superview === item.view)
+		let actionFrame = actions.convert(
+			actions.bounds,
+			to: item.view
+		)
+		#expect(item.view.bounds.contains(actionFrame))
+		let text = try #require(descendant(
+			MarkdownTextView.self,
+			in: item.view
+		))
+		let textFrame = text.convert(
+			text.bounds,
+			to: item.view
+		)
+		#expect(textFrame.minY >= actionFrame.maxY)
+		#expect(button(
+			"Read aloud",
+			in: item.view
+		) == nil)
+		let pasteboard = NSPasteboard.withUniqueName()
+		defer
+		{
+			pasteboard.releaseGlobally()
+		}
+		actions.writeResponse(to: pasteboard)
+		#expect(pasteboard.string(forType: .string) == source)
+		item.prepareForReuse()
+		pasteboard.clearContents()
+		actions.writeResponse(to: pasteboard)
+		#expect(pasteboard.string(forType: .string) == nil)
+		#expect(!copy.dispatchConfiguredAction())
+		item.configure(
+			ConversationEntry(
+				id: "next:reply",
+				kind: .agent,
+				title: "Codex",
+				body: source
+			),
+			content: content,
+			expanded: false,
+			showsReplyActions: true,
+			onToggle:
+			{
+			}
+		)
+		#expect(button(
+			"Copy response",
+			in: item.view
+		) != nil)
+		#expect(button(
+			"Read aloud",
+			in: item.view
+		) != nil)
+		#expect(button(
+			"Copy message",
+			in: item.view
+		) == nil)
+		let feedback = try #require(button(
+			"Give feedback",
+			in: item.view
+		))
+		#expect(!feedback.isEnabled && !feedback.dispatchConfiguredAction())
+		#expect(button(
+			"Edit message",
+			in: item.view
+		) == nil)
+
+	}
+
+	@Test func messageActionsUseCatalogueArtworkAndReferenceTimestampSpacing() throws
+	{
+		_ = NSApplication.shared
+		let actions = ConversationReplyActionsView()
+		let timestamp = try #require(Calendar.current.date(from: DateComponents(
+			year: 2026,
+			month: 11,
+			day: 17,
+			hour: 13,
+			minute: 42
+		)))
+		for isUser in [true, false]
+		{
+			actions.configure(
+				source: "Message",
+				bookmarked: false,
+				onToggleBookmark: isUser ? nil :
+				{
+				},
+				isUserMessage: isUser,
+				timestamp: timestamp
+			)
+			actions.setFrameSize(NSSize(
+				width: 280,
+				height: ConversationReplyActionsView.height
+			))
+			actions.layoutSubtreeIfNeeded()
+			let labels = actions.arrangedSubviews.compactMap
+			{
+				$0 as? DesktopTextField
+			}
+			let label = try #require(labels.first)
+			#expect(label.stringValue == "1:42 PM")
+			#expect(label.font == AppKitFontResolver.font(TypographyTokens.Transcript.timestamp))
+			let copy = try #require(button(
+				isUser ? "Copy message" : "Copy response",
+				in: actions
+			) as? DesktopStyledButton)
+			#expect(copy.presentation == .transcriptAction)
+			#expect(copy.frame.width == 26)
+			if isUser
+			{
+				#expect(actions.arrangedSubviews.first === label)
+				#expect(abs(copy.alignmentRect(forFrame: copy.frame).minX - label
+						.alignmentRect(forFrame: label.frame).maxX - 8) < 0.5)
+			}
+			else
+			{
+				let more = try #require(button(
+					"More response actions",
+					in: actions
+				))
+				#expect(actions.arrangedSubviews.last === label)
+				#expect(abs(label.alignmentRect(forFrame: label.frame).minX - more
+						.alignmentRect(forFrame: more.frame).maxX - 8) < 0.5)
+				let read = try #require(button(
+					"Read aloud",
+					in: actions
+				))
+				#expect(read.image?.tiffRepresentation == DesktopIcons.image(
+					.soundOnReadOutLoudSpeaker,
+					size: LayoutTokens.Transcript.replyIconSize,
+					accessibilityDescription: "Read aloud"
+				).tiffRepresentation)
+			}
+		}
+	}
+
+	private func menuRow(
+		_ label: String,
+		for entryID: String,
+		in controller: ConversationViewController
+	) throws -> DesktopMenuRow
+	{
+		let view = try messageView(
+			for: entryID,
+			in: controller
+		)
+		let more = try #require(button(
+			"More response actions",
+			in: view
+		))
+		try #require(more.dispatchConfiguredAction())
+		let actions = try #require(more.superview as? ConversationReplyActionsView)
+		return try #require(actions.actionMenu?.rows.first
+		{
+			$0.accessibilityLabel() == label
+		})
+	}
+
+	private func descendant<T: NSView>(
+		_ type: T.Type,
+		in view: NSView
+	) -> T?
+	{
+		if let match = view as? T
+		{
+			return match
+		}
+		return view.subviews.lazy.compactMap
+		{
+			descendant(
+				type,
+				in: $0
+			)
+		}.first
 	}
 
 	private func render(
@@ -178,15 +443,57 @@ struct ConversationReplyActionLifecycleTests
 		in controller: ConversationViewController
 	) throws -> NSRect
 	{
+		let path = try indexPath(
+			for: id,
+			in: controller
+		)
+		return try #require(controller.transcript.collectionView
+			.layoutAttributesForItem(at: path)).frame
+	}
+
+	private func messageView(
+		for id: String,
+		in controller: ConversationViewController
+	) throws -> NSView
+	{
+		let path = try indexPath(
+			for: id,
+			in: controller
+		)
+		let transcript = controller.transcript
+		let collection = transcript.collectionView
+		let scroll = transcript.conversationScrollView
+		let frame = try #require(collection.collectionViewLayout?
+			.layoutAttributesForItem(at: path)).frame
+		if collection.item(at: path) == nil
+		{
+			scroll.contentView.scroll(to: NSPoint(
+				x: 0,
+				y: frame.minY
+			))
+			scroll.reflectScrolledClipView(scroll.contentView)
+			transcript.readingPositionChanged()
+			collection.layoutSubtreeIfNeeded()
+		}
+		return try #require(
+			collection.item(at: path),
+			"Expected visible row \(id)"
+		).view
+	}
+
+	private func indexPath(
+		for id: String,
+		in controller: ConversationViewController
+	) throws -> IndexPath
+	{
 		let index = try #require(controller.transcript.displayedRows.firstIndex
 		{
 			$0.id == id
 		})
-		return try #require(controller.transcript.collectionView
-			.layoutAttributesForItem(at: IndexPath(
-				item: index,
-				section: 0
-			))).frame
+		return IndexPath(
+			item: index,
+			section: 0
+		)
 	}
 
 	private func button(

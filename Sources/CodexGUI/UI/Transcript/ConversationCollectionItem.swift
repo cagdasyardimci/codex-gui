@@ -35,6 +35,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private let imageAttachmentsView = UserMessageImageAttachmentsView()
 	private var imageAttachmentCount = 0
 	private var messageTopConstraint: NSLayoutConstraint?
+	private var messageBottomConstraint: NSLayoutConstraint?
+	private var userActionConstraints: [NSLayoutConstraint] = []
 	private let contentStack = NSStackView()
 	private let replyActions = ConversationReplyActionsView()
 	private var showsReplyActions = false
@@ -103,10 +105,12 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		messageWidthConstraint = messageContainer.widthAnchor.constraint(equalToConstant: 1)
 		messageWidthConstraint?.isActive = true
 		messageTopConstraint = messageContainer.topAnchor.constraint(equalTo: container.topAnchor)
+		messageBottomConstraint = messageContainer.bottomAnchor
+			.constraint(equalTo: container.bottomAnchor)
 		NSLayoutConstraint.activate([
 			messageContainer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
 			messageTopConstraint!,
-			messageContainer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+			messageBottomConstraint!,
 		])
 		for surface in [userSurface, activitySurface]
 		{
@@ -275,6 +279,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		showsReplyActions: Bool = false,
 		bookmarked: Bool = false,
 		onToggleBookmark: (() -> Void)? = nil,
+		timestamp: Date? = nil,
 		onToggle: @escaping () -> Void
 	)
 	{
@@ -284,19 +289,22 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		{
 			bodyTextView.dismissExpandedImage()
 			removeCodeCopyButtons(startingAt: 0)
+			replyActions.reset()
 			configuredEntryID = entryID
 		}
 		self.content = content
 		cachedCopyButtonGeometry = nil
 		self.onToggle = onToggle
 		kind = entry.kind
-		self.showsReplyActions = showsReplyActions && kind == .agent
+		self.showsReplyActions = kind == .user || (showsReplyActions && kind == .agent)
 		if self.showsReplyActions
 		{
 			replyActions.configure(
 				source: entry.body,
 				bookmarked: bookmarked,
-				onToggleBookmark: onToggleBookmark
+				onToggleBookmark: onToggleBookmark,
+				isUserMessage: kind == .user,
+				timestamp: timestamp
 			)
 		}
 		else
@@ -371,10 +379,12 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		{
 			arrangedViews.append(expandButton)
 		}
-		if self.showsReplyActions
+		if self.showsReplyActions && kind == .agent
 		{
 			arrangedViews.append(replyActions)
 		}
+		NSLayoutConstraint.deactivate(userActionConstraints)
+		userActionConstraints = []
 		contentStack.setViews(
 			arrangedViews,
 			in: .top
@@ -386,13 +396,28 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				after: arrangedView
 			)
 		}
-		if self.showsReplyActions, arrangedViews.count > 1
+		if self.showsReplyActions && kind == .agent, arrangedViews.count > 1
 		{
 			contentStack.setCustomSpacing(
 				Self.replyActionSpacing,
 				after: arrangedViews[arrangedViews.count - 2]
 			)
 		}
+		if kind == .user
+		{
+			view.addSubview(replyActions)
+			userActionConstraints = [
+				replyActions.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+				replyActions.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+				replyActions.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor),
+			]
+			NSLayoutConstraint.activate(userActionConstraints)
+		}
+		else if replyActions.superview === view
+		{
+			replyActions.removeFromSuperview()
+		}
+
 		updateBodyHeight()
 		layoutImageAttachments()
 		updateCopyButtonFrames()
@@ -529,7 +554,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		)
 		return NSSize(
 			width: size.width,
-			height: content.attributedString.length == 0 ? height
+			height: content.attributedString.length == 0 ? height + replyActionAllowance(
+				kind: kind,
+				showsReplyActions: true
+			)
 				: size.height + height + UserMessageImageAttachmentsView.spacing
 		)
 	}
@@ -539,7 +567,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		showsReplyActions: Bool
 	) -> CGFloat
 	{
-		kind == .agent && showsReplyActions ? replyActionSpacing + ConversationReplyActionsView
+		(kind == .user || (kind == .agent && showsReplyActions)) ? replyActionSpacing +
+			ConversationReplyActionsView
 			.height : 0
 	}
 
@@ -819,6 +848,10 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		{
 			messageWidthConstraint?.constant = metrics.messageWidth
 		}
+		messageBottomConstraint?.constant = kind == .user ? -Self.replyActionAllowance(
+			kind: kind,
+			showsReplyActions: true
+		) : 0
 		messageTopConstraint?.constant = attachmentAllowance
 		if leadingInsetConstraint?.constant != inset.width
 		{
