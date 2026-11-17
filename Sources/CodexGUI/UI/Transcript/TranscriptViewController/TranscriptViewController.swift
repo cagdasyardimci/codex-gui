@@ -14,6 +14,8 @@ final class TranscriptViewController: NSViewController,
 	var onOpenFileReference: ((MarkdownFileReference) -> Void)?
 	var onOpenSubagents: (() -> Void)?
 	var onSelectSubagentThread: ((String) -> Void)?
+	var onReadAloud: ((String, String) -> Void)?
+	var onStopReadAloud: ((String) -> Void)?
 	var onResultFeedback: ((ResultFeedbackTarget, ResultFeedbackRating) -> Void)?
 	var onBranch: ((String, String) -> Void)?
 	var editablePrompt: ((String, String) -> String?)?
@@ -138,6 +140,10 @@ final class TranscriptViewController: NSViewController,
 		viewportPublicationTask?.cancel()
 		cancelNavigationMotion()
 		transcriptIsVisible = false
+		if let entryID = renderedPresentation?.readAloud.activeEntryID
+		{
+			onStopReadAloud?(entryID)
+		}
 		visibleResizeRefreshTimer?.invalidate()
 		visibleResizeRefreshTimer = nil
 		turnStatusTimer?.invalidate()
@@ -264,7 +270,8 @@ final class TranscriptViewController: NSViewController,
 		{
 			prepareTranscript(presentation)
 		}
-		if previous?.resultFeedback != presentation.resultFeedback
+		if previous?.readAloud != presentation.readAloud || previous?.resultFeedback != presentation
+			.resultFeedback
 		{
 			refreshVisibleReplyInteractions()
 		}

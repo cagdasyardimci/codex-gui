@@ -7,6 +7,9 @@ final class ConversationReplyActionsView: NSStackView
 	static let height = LayoutTokens.Transcript.replyControlSize
 	struct Interactions
 	{
+		var isReadingAloud = false
+		var onReadAloud: (() -> Void)? = nil
+		var onStopReadAloud: (() -> Void)? = nil
 		var onFeedback: ((ResultFeedbackRating) -> Void)? = nil
 		var feedbackRating: ResultFeedbackRating? = nil
 	}
@@ -107,6 +110,10 @@ final class ConversationReplyActionsView: NSStackView
 	)
 	{
 		actionGeneration = UUID()
+		if self.source != source
+		{
+			stopReading()
+		}
 		actionMenu?.close()
 		actionMenu = nil
 		timestampLabel.removeFromSuperview()
@@ -159,7 +166,7 @@ final class ConversationReplyActionsView: NSStackView
 		feedbackButton.action = #selector(showFeedback)
 		readButton.isHidden = isUserMessage
 		readButton.target = self
-		readButton.isEnabled = false
+		readButton.action = #selector(toggleReading)
 		moreButton.isHidden = isUserMessage || (onBranch == nil && onToggleBookmark == nil)
 		moreButton.isEnabled = !moreButton.isHidden
 		if !isUserMessage, timestamp != nil
@@ -200,6 +207,7 @@ final class ConversationReplyActionsView: NSStackView
 	func reset()
 	{
 		actionGeneration = UUID()
+		stopReading()
 		actionMenu?.close()
 		actionMenu = nil
 		onBranch = nil
@@ -223,6 +231,7 @@ final class ConversationReplyActionsView: NSStackView
 		super.viewDidMoveToWindow()
 		if window == nil
 		{
+			stopReading()
 			actionMenu?.close()
 		}
 	}
@@ -230,6 +239,7 @@ final class ConversationReplyActionsView: NSStackView
 	override func viewDidHide()
 	{
 		super.viewDidHide()
+		stopReading()
 		actionMenu?.close()
 	}
 
@@ -268,6 +278,37 @@ final class ConversationReplyActionsView: NSStackView
 			icon: feedbackIcon,
 			label: "Give feedback"
 		)
+		readButton.isEnabled = self.interactions.isReadingAloud
+			? self.interactions.onStopReadAloud != nil : self.interactions.onReadAloud != nil
+		configureIcon(
+			readButton,
+			icon: self.interactions.isReadingAloud ? .stop : .soundOnReadOutLoudSpeaker,
+			label: self.interactions.isReadingAloud ? "Stop reading" : "Read aloud"
+		)
+	}
+
+	private func stopReading()
+	{
+		guard interactions.isReadingAloud
+		else
+		{
+			return
+		}
+		let stop = interactions.onStopReadAloud
+		interactions.isReadingAloud = false
+		stop?()
+	}
+
+	@objc private func toggleReading()
+	{
+		if interactions.isReadingAloud
+		{
+			stopReading()
+		}
+		else
+		{
+			interactions.onReadAloud?()
+		}
 	}
 
 	@objc private func showFeedback()

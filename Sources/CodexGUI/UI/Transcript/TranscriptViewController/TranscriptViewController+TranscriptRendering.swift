@@ -436,9 +436,44 @@ extension TranscriptViewController
 			threadID: threadID,
 			turnID: identity.turnID
 		)
+		let isReading = presentation.readAloud.activeEntryID == entry.id
 		var interactions = ConversationReplyActionsView.Interactions(
+			isReadingAloud: isReading,
 			feedbackRating: presentation.resultFeedback.submitted[target]
 		)
+		let text = preparedContents[entry.id]?.attributedString.string ?? entry.body
+		if presentation.readAloud.canRead, onReadAloud != nil, ReadAloudTextSegments.canRead(text)
+		{
+			interactions.onReadAloud =
+			{
+				[weak self] in
+				guard let self, self.canInvokeReplyAction(
+					entry.id,
+					threadID,
+					context
+				),
+					self.renderedPresentation?.readAloud.canRead == true
+				else
+				{
+					return
+				}
+				self.onReadAloud?(entry.id, text)
+			}
+		}
+		if isReading, onStopReadAloud != nil
+		{
+			interactions.onStopReadAloud =
+			{
+				[weak self] in
+				guard let self, self.renderedContext == context, self.selectedThreadID == threadID,
+						self.renderedPresentation?.readAloud.activeEntryID == entry.id
+				else
+				{
+					return
+				}
+				self.onStopReadAloud?(entry.id)
+			}
+		}
 		if presentation.resultFeedback.canSubmit.contains(target), onResultFeedback != nil
 		{
 			interactions.onFeedback =

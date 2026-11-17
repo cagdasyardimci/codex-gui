@@ -368,6 +368,24 @@ extension MainWindowController
 			return target.operation
 		}
 
+		conversation.transcript.onReadAloud =
+		{
+			entryID, text in
+			target.dispatch(.readAloud(
+				entryID: entryID,
+				text: text
+			))
+		}
+		conversation.transcript.onStopReadAloud =
+		{
+			entryID in
+			guard target.store.currentSnapshot.readAloud.activeEntryID == entryID
+			else
+			{
+				return
+			}
+			target.dispatch(.stopReadAloud)
+		}
 		conversation.transcript.onResultFeedback =
 		{
 			feedbackTarget, rating in

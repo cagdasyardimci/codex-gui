@@ -65,6 +65,7 @@ struct WorkspaceStoreDependencies
 @MainActor
 enum WorkspaceStoreFactory
 {
+	/// Playback retirement observes the final canonical selection and lifecycle reservations.
 	static var reducers: [WorkspaceReducer]
 	{
 		[ConnectionReducer.reducer,
@@ -74,7 +75,8 @@ enum WorkspaceStoreFactory
 			PreferenceReducer.reducer,
 			UsageReducer.reducer,
 			ComposerCommandReducer.reducer,
-			WorkspaceLifecycleReducer.reducer]
+			WorkspaceLifecycleReducer.reducer,
+			ReadAloudReducer.reducer]
 	}
 
 	static func makeSource(

@@ -24,6 +24,11 @@ enum WorkspaceIntent
 	case setQueueingEnabled(Bool)
 	case steer(String)
 	case stop
+	case readAloud(
+		entryID: String,
+		text: String
+	)
+	case stopReadAloud
 	case branch(
 		threadID: String,
 		turnID: String
@@ -137,7 +142,7 @@ enum WorkspaceIntent
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .clearProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
-		case .submitResultFeedback, .branch, .editSentPrompt,
+		case .readAloud, .stopReadAloud, .submitResultFeedback, .branch, .editSentPrompt,
 				.retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
 				.loadEarlierTurnReferences,
 				.loadTurnPreview, .updateConversationViewport,
@@ -237,6 +242,14 @@ final class WorkspaceIntentTarget
 		{
 			return false
 		}
+		if case .readAloud = intent, !ReadAloudReducer.canRead(store.model)
+		{
+			return false
+		}
+		if case .stopReadAloud = intent, store.model.readAloud.active == nil
+		{
+			return false
+		}
 		if case .branch(
 			let threadID,
 			let turnID
@@ -282,6 +295,14 @@ final class WorkspaceIntentTarget
 		switch intent
 		{
 		case .editDraft(let text): inputs.updateDraft(text)
+		case .readAloud(
+			let entryID,
+			let text
+		): inputs.readAloud(
+				entryID: entryID,
+				text: text
+			)
+		case .stopReadAloud: inputs.stopReadAloud()
 		case .editSentPrompt(
 			let threadID,
 			let entryID,

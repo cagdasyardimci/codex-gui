@@ -455,7 +455,8 @@ enum WorkspaceLifecycleComposition
 			ResultFeedbackReducer.reducer,
 			WorkspaceFeatureComposition.reducer,
 			PreferenceReducer.reducer,
-			UsageReducer.reducer
+			UsageReducer.reducer,
+			ReadAloudReducer.reducer
 		]
 		for reducer in reducers
 		{

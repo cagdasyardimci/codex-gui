@@ -11,7 +11,7 @@ final class WorkspaceEffectRunner
 	enum Purpose: Hashable
 	{
 		case serverQueue
-		case resultFeedback
+		case readAloud, resultFeedback
 		case remoteAccess
 		case connection, version, selection, account, preparation, submission, draft, interruption,
 				steering, recovery, completedHistory, adoption, acknowledgement
@@ -102,6 +102,7 @@ final class WorkspaceEffectRunner
 		var isCancelled = false
 	}
 
+	lazy var readAloudRuntime = ReadAloudRuntime(service: service)
 	let usageRuntime: UsageRuntime
 	var usageDeadlineTask: Task<Void, Never>?
 	var usageDeadline: UsageDeadlineOperation?
@@ -247,6 +248,8 @@ final class WorkspaceEffectRunner
 			return
 		}
 		isShutdown = true
+		readAloudRuntime.cancel()
+		service.onReadAloudEvent = nil
 		usageDeadlineTask?.cancel()
 		usageDeadlineTask = nil
 		usageDeadline = nil
@@ -283,6 +286,7 @@ final class WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .readAloud(let operation): return (operation.context, .readAloud)
 		case .submitResultFeedback(let operation): return (operation.context, .resultFeedback)
 		case .serverQueue(let operation): return (operation.context, .serverQueue)
 		case .readReviewMarkers(let operation): return (operation.context, .reviewRead(
@@ -890,6 +894,8 @@ final class WorkspaceEffectRunner
 			return
 		}
 		subscription = nil
+		readAloudRuntime.cancel()
+		service.onReadAloudEvent = nil
 		service.onEvent = nil
 		service.onDisconnect = nil
 	}

@@ -696,6 +696,223 @@ struct ConversationReplyActionLifecycleTests
 		#expect(ratings == [.good, .bad])
 	}
 
+	@Test func readAloudUsesInjectedBackendActionsAndStopsOnlyItsActivePlaybackOnReuse() throws
+	{
+		_ = NSApplication.shared
+		let actions = ConversationReplyActionsView()
+		var starts = 0
+		var stops = 0
+		actions.configure(
+			source: "Reply",
+			bookmarked: false,
+			onToggleBookmark: nil,
+			interactions: .init(onReadAloud:
+				{
+					starts += 1
+				})
+		)
+		let read = try #require(button(
+			"Read aloud",
+			in: actions
+		))
+		try #require(read.dispatchConfiguredAction())
+		#expect(starts == 1 && stops == 0)
+		actions.setInteractions(.init(
+			isReadingAloud: true,
+			onStopReadAloud:
+			{
+				stops += 1
+			}
+		))
+		let stop = try #require(button(
+			"Stop reading",
+			in: actions
+		))
+		try #require(stop.dispatchConfiguredAction())
+		#expect(starts == 1 && stops == 1)
+		actions.reset()
+		#expect(stops == 1)
+		actions.setInteractions(.init(
+			isReadingAloud: true,
+			onStopReadAloud:
+			{
+				stops += 1
+			}
+		))
+		actions.reset()
+		#expect(stops == 2)
+		actions.reset()
+		#expect(stops == 2)
+		actions.configure(
+			source: "Next reply",
+			bookmarked: false,
+			onToggleBookmark: nil
+		)
+		let disabled = try #require(button(
+			"Read aloud",
+			in: actions
+		))
+		#expect(!disabled.dispatchConfiguredAction())
+		#expect(starts == 1)
+	}
+
+	@Test(.appKitIsolation) func historicalReplyRoutesBackendActionsAndPreservesSelection(
+	) async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 888,
+				height: 876
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		window.contentViewController = controller
+		defer
+		{
+			window.orderOut(nil)
+		}
+		var spoken: [String] = []
+		var stopped: [String] = []
+		var feedbackTargets: [ResultFeedbackTarget] = []
+		controller.transcript.onReadAloud =
+		{
+			id, _ in spoken.append(id)
+		}
+		controller.transcript.onStopReadAloud =
+		{
+			stopped.append($0)
+		}
+		controller.transcript.onResultFeedback =
+		{
+			target, _ in feedbackTargets.append(target)
+		}
+		let target = ResultFeedbackTarget(
+			threadID: "chat",
+			turnID: "first"
+		)
+		var value = snapshot(entries: [
+			entry(
+				"first:request",
+				kind: .user
+			),
+			entry(
+				"first:reply",
+				kind: .agent
+			),
+			entry(
+				"second:request",
+				kind: .user
+			),
+			entry(
+				"second:reply",
+				kind: .agent
+			)
+		])
+		value.turnTimings = [
+			ConversationTurnTiming(
+				turnID: "first",
+				status: "completed"
+			),
+			ConversationTurnTiming(
+				turnID: "second",
+				status: "completed"
+			),
+		]
+		value.readAloud = ReadAloudPresentation(canRead: true)
+		value.resultFeedback = ResultFeedbackPresentation(canSubmit: [target])
+		await render(
+			value,
+			in: controller
+		)
+		let secondView = try messageView(
+			for: "second:reply",
+			in: controller
+		)
+		#expect(button(
+			"Give feedback",
+			in: secondView
+		)?.isEnabled == false)
+		let firstView = try messageView(
+			for: "first:reply",
+			in: controller
+		)
+		let read = try #require(button(
+			"Read aloud",
+			in: firstView
+		))
+		try #require(read.dispatchConfiguredAction())
+		#expect(spoken == ["first:reply"])
+		let copy = try #require(button(
+			"Copy response",
+			in: firstView
+		))
+		let actions = try #require(copy.superview as? ConversationReplyActionsView)
+		let feedback = try #require(button(
+			"Give feedback",
+			in: actions
+		))
+		try #require(feedback.dispatchConfiguredAction())
+		try #require(actions.actionMenu?.rows.first).onInvoke?()
+		#expect(feedbackTargets == [target])
+		let parent = try #require(actions.superview)
+		let text = try #require(descendant(
+			MarkdownTextView.self,
+			in: parent
+		))
+		let selection = NSRange(
+			location: 0,
+			length: 5
+		)
+		text.setSelectedRange(selection)
+		value.readAloud = ReadAloudPresentation(
+			canRead: false,
+			activeEntryID: "first:reply",
+			phase: .speaking
+		)
+		value.resultFeedback = ResultFeedbackPresentation(pending: target)
+		await render(
+			value,
+			in: controller
+		)
+		#expect(text.selectedRange() == selection)
+		let stop = try #require(button(
+			"Stop reading",
+			in: firstView
+		))
+		try #require(stop.dispatchConfiguredAction())
+		#expect(stopped == ["first:reply"])
+		#expect(!feedback.isEnabled)
+		value.readAloud = ReadAloudPresentation()
+		await render(
+			value,
+			in: controller
+		)
+		#expect(button(
+			"Stop reading",
+			in: controller.view
+		) == nil)
+		#expect(text.selectedRange() == selection)
+		value.resultFeedback = ResultFeedbackPresentation(submitted: [target: .good])
+		await render(
+			value,
+			in: controller
+		)
+		#expect(feedback.image?.tiffRepresentation == DesktopIcons.image(
+			.thumbUpFilled,
+			size: LayoutTokens.Transcript.replyIconSize,
+			accessibilityDescription: "Give feedback"
+		).tiffRepresentation)
+		#expect(!feedback.isEnabled)
+
+	}
+
 	private func menuRow(
 		_ label: String,
 		for entryID: String,

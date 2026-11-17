@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-protocol CodexService: AnyObject
+protocol CodexService: ReadAloudService
 {
 	var onEvent: ((AppServerEvent) -> Void)?
 	{
@@ -229,6 +229,38 @@ protocol CodexService: AnyObject
 
 extension CodexService
 {
+	var onReadAloudEvent: ((String, ReadAloudBackendEvent) -> Void)?
+	{
+		get
+		{
+			nil
+		} set
+		{
+		}
+	}
+	func readAloudAvailable(in directory: URL) async throws -> Bool
+	{
+		false
+	}
+	func createReadAloudThread(in directory: URL) async throws -> String
+	{
+		throw ReadAloudError
+			.unavailable
+	}
+	func startReadAloudSession(threadID: String) async throws
+	{
+		throw ReadAloudError.unavailable
+	}
+	func appendReadAloudSpeech(
+		threadID: String,
+		text: String
+	) async throws
+	{
+		throw ReadAloudError.unavailable
+	}
+	func retireReadAloudThread(threadID: String) async
+	{
+	}
 	func submitResultFeedback(
 		_ feedback: ResultFeedbackSubmission,
 		in directory: URL

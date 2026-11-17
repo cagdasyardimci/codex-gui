@@ -256,6 +256,7 @@ extension WorkspaceEffectRunner
 					}
 				)
 			case .disconnect:
+				readAloudRuntime.cancel()
 				service.disconnect()
 			case .restoreExecution(
 				let context,

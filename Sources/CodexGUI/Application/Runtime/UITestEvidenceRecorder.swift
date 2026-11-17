@@ -185,6 +185,7 @@ final class UITestEvidenceRecorder
 		case .workspaceLifecycle: "workspaceLifecycle"
 		case .connection: "connection"
 		case .remoteAccess: "remoteAccess"
+		case .readAloud: "readAloud"
 		case .resultFeedback: "resultFeedback"
 		case .execution: "execution"
 		case .composer: "composer"

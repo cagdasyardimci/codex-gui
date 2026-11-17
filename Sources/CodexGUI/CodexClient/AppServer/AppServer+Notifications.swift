@@ -8,6 +8,13 @@ extension AppServer
 		parameters: [String: Any]
 	)
 	{
+		if receiveReadAloudNotification(
+			method: method,
+			parameters: parameters
+		)
+		{
+			return
+		}
 		let threadID = parameters["threadId"] as? String ?? ""
 		if receiveAutomaticTitleNotification(
 			method: method,

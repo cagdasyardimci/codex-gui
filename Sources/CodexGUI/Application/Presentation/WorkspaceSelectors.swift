@@ -556,6 +556,7 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		snapshot.readAloud = ReadAloudReducer.presentation(model: model)
 		snapshot.resultFeedback = ResultFeedbackReducer.presentation(model: model)
 		if let threadID = snapshot.selectedThreadID
 		{

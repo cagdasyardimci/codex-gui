@@ -42,6 +42,8 @@ final class AppServer: CodexService
 	var pendingInteractionWrites: [String: ProtocolWriteTicket] = [:]
 	private(set) var connectionGeneration = UUID()
 	private let diagnostics = BackendDiagnosticsBuffer()
+	var onReadAloudEvent: ((String, ReadAloudBackendEvent) -> Void)?
+	var readAloudThreadGenerations: [String: UUID] = [:]
 	var onEvent: ((AppServerEvent) -> Void)?
 	var onDisconnect: ((String) -> Void)?
 	var backendDiagnostics: BackendDiagnosticsSnapshot

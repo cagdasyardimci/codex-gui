@@ -8,6 +8,7 @@ struct WorkspaceModel
 	var lifecycle = WorkspaceLifecycleModel()
 	var connection = ConnectionModel()
 	var remoteAccess = RemoteAccessModel()
+	var readAloud = ReadAloudModel()
 	var resultFeedback = ResultFeedbackModel()
 	var executions = ExecutionRegistry()
 	private var executionReductionIdentity: ExecutionConversationIdentity?

@@ -101,6 +101,18 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .readAloud(let operation):
+			switch operation
+			{
+			case .probe(let context): return .readAloud(.availabilityReceived(
+					context,
+					false
+				))
+			case .play(let request): return .readAloud(.finished(
+					request,
+					failure
+				))
+			}
 		case .submitResultFeedback(let operation): return .resultFeedback(.finished(
 				operation,
 				.failed(

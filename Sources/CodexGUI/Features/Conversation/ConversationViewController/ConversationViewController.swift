@@ -551,6 +551,7 @@ final class ConversationViewController: NSViewController,
 			executionState: snapshot.status.executionState,
 			activeThreadID: snapshot.transcript.activeThreadID,
 			activeTurnID: snapshot.transcript.activeTurnID,
+			readAloud: snapshot.transcript.readAloud,
 			resultFeedback: snapshot.transcript.resultFeedback,
 			editablePromptEntryIDs: snapshot.transcript.editablePromptEntryIDs,
 			interactionRevision: selectionGeneration
