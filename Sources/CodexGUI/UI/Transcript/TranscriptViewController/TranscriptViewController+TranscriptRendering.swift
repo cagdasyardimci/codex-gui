@@ -387,7 +387,11 @@ extension TranscriptViewController
 			),
 			onBranch: branch?.invoke,
 			canBranch: branch?.isAvailable,
-			timestamp: messageTimestamp(for: entry)
+			timestamp: messageTimestamp(for: entry),
+			interactions: replyInteractions(
+				for: entry,
+				context: context
+			)
 		)
 		{
 			[weak self] in
@@ -414,6 +418,64 @@ extension TranscriptViewController
 			item,
 			entry: entry
 		)
+	}
+
+	private func replyInteractions(
+		for entry: ConversationEntry,
+		context: String?
+	) -> ConversationReplyActionsView.Interactions
+	{
+		guard replyActionEntryIDs.contains(entry.id),
+				let threadID = selectedThreadID, let identity = ConversationEntryIdentity(entry.id),
+				let presentation = renderedPresentation
+		else
+		{
+			return .init()
+		}
+		let target = ResultFeedbackTarget(
+			threadID: threadID,
+			turnID: identity.turnID
+		)
+		var interactions = ConversationReplyActionsView.Interactions(
+			feedbackRating: presentation.resultFeedback.submitted[target]
+		)
+		if presentation.resultFeedback.canSubmit.contains(target), onResultFeedback != nil
+		{
+			interactions.onFeedback =
+			{
+				[weak self] rating in
+				guard let self, self.canInvokeReplyAction(
+					entry.id,
+					threadID,
+					context
+				),
+					self.renderedPresentation?.resultFeedback.canSubmit.contains(target) == true
+				else
+				{
+					return
+				}
+				self.onResultFeedback?(target, rating)
+			}
+		}
+		return interactions
+	}
+
+	func refreshVisibleReplyInteractions()
+	{
+		for path in collectionView.indexPathsForVisibleItems()
+		{
+			guard displayedRows.indices.contains(path.item),
+					case .message(let entry) = displayedRows[path.item],
+					let item = collectionView.item(at: path) as? ConversationCollectionItem
+			else
+			{
+				continue
+			}
+			item.setReplyInteractions(replyInteractions(
+				for: entry,
+				context: renderedContext
+			))
+		}
 	}
 
 	private func messageTimestamp(for entry: ConversationEntry) -> Date?

@@ -28,6 +28,7 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .submitResultFeedback(let operation): return await performResultFeedback(operation)
 		case .serverQueue(let operation):
 			return try await performServerQueue(
 				operation,

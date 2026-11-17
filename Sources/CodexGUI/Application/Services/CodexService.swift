@@ -16,6 +16,11 @@ protocol CodexService: AnyObject
 		get
 	}
 
+	func submitResultFeedback(
+		_ feedback: ResultFeedbackSubmission,
+		in directory: URL
+	) async throws
+
 	var canProbeThreadQueue: Bool
 	{
 		get
@@ -224,6 +229,14 @@ protocol CodexService: AnyObject
 
 extension CodexService
 {
+	func submitResultFeedback(
+		_ feedback: ResultFeedbackSubmission,
+		in directory: URL
+	) async throws
+	{
+		throw AppServerError.requestRejected("This Codex service does not support result feedback.")
+	}
+
 	func loadTurnReferences(
 		threadId: String,
 		cursor: String?

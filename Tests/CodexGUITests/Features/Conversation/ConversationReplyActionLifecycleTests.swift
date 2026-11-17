@@ -461,12 +461,7 @@ struct ConversationReplyActionLifecycleTests
 			window.orderOut(nil)
 		}
 		var allowed = false
-		struct BranchTarget: Equatable
-		{
-			let threadID: String
-			let turnID: String
-		}
-		var branched: [BranchTarget] = []
+		var branched: [ResultFeedbackTarget] = []
 		controller.transcript.canBranch =
 		{
 			_, _ in allowed
@@ -527,7 +522,7 @@ struct ConversationReplyActionLifecycleTests
 		let row = try #require(menu.rows.first)
 		#expect(row.accessibilityLabel() == "Branch in new chat")
 		row.onInvoke?()
-		let expected = [BranchTarget(
+		let expected = [ResultFeedbackTarget(
 			threadID: "chat",
 			turnID: "first"
 		)]
@@ -633,6 +628,72 @@ struct ConversationReplyActionLifecycleTests
 				).tiffRepresentation)
 			}
 		}
+	}
+
+	@Test(.appKitIsolation) func feedbackChoicesUseCapturedHandlersAndRetireWithAvailability(
+	) throws
+	{
+		_ = NSApplication.shared
+		let actions = ConversationReplyActionsView()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 300,
+				height: 80
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		window.contentView?.addSubview(actions)
+		defer
+		{
+			actions.reset(); window.orderOut(nil)
+		}
+		var ratings: [ResultFeedbackRating] = []
+		actions.configure(
+			source: "Reply",
+			bookmarked: false,
+			onToggleBookmark: nil,
+			interactions: .init(onFeedback:
+				{
+					ratings.append($0)
+				})
+		)
+		actions.setFrameSize(actions.fittingSize)
+		let feedbackButton = try #require(button(
+			"Give feedback",
+			in: actions
+		))
+		try #require(feedbackButton.dispatchConfiguredAction())
+		let menu = try #require(actions.actionMenu)
+		#expect(menu.rows.map
+		{
+			$0.accessibilityLabel()
+		} == ["Good response", "Bad response"])
+		let good = try #require(menu.rows.first)
+		good.onInvoke?()
+		#expect(ratings == [.good])
+		actions.setInteractions(.init())
+		good.onInvoke?()
+		#expect(ratings == [.good])
+		#expect(!feedbackButton.dispatchConfiguredAction())
+		actions.configure(
+			source: "New reply",
+			bookmarked: false,
+			onToggleBookmark: nil,
+			interactions: .init(onFeedback:
+				{
+					ratings.append($0)
+				})
+		)
+		good.onInvoke?()
+		#expect(ratings == [.good])
+		try #require(feedbackButton.dispatchConfiguredAction())
+		try #require(actions.actionMenu?.rows.last).onInvoke?()
+		#expect(ratings == [.good, .bad])
 	}
 
 	private func menuRow(

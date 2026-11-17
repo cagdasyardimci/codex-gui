@@ -20,6 +20,7 @@ struct TranscriptPresentation: Equatable
 	let executionState: ExecutionState
 	let activeThreadID: String?
 	let activeTurnID: String?
+	var resultFeedback = ResultFeedbackPresentation()
 	var editablePromptEntryIDs: Set<String> = []
 	var interactionRevision = 0
 

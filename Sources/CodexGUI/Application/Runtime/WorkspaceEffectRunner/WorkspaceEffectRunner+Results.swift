@@ -82,7 +82,7 @@ extension WorkspaceEffectRunner
 		let uncertain: Bool
 		switch effect
 		{
-		case .prepareSubmission, .startSubmission, .steer, .forkConversation,
+		case .submitResultFeedback, .prepareSubmission, .startSubmission, .steer, .forkConversation,
 				.compactConversation, .startConversationReview,
 				.updateCommandSettings: uncertain = true
 		default: uncertain = false
@@ -101,6 +101,13 @@ extension WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .submitResultFeedback(let operation): return .resultFeedback(.finished(
+				operation,
+				.failed(
+					failure,
+					unavailable: false
+				)
+			))
 		case .serverQueue(let operation): return .composer(.serverQueueFinished(
 				operation,
 				.failed(failure)

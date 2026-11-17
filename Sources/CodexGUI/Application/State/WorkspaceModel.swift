@@ -8,6 +8,7 @@ struct WorkspaceModel
 	var lifecycle = WorkspaceLifecycleModel()
 	var connection = ConnectionModel()
 	var remoteAccess = RemoteAccessModel()
+	var resultFeedback = ResultFeedbackModel()
 	var executions = ExecutionRegistry()
 	private var executionReductionIdentity: ExecutionConversationIdentity?
 	/// Publications project the displayed conversation; reductions use captured ownership.

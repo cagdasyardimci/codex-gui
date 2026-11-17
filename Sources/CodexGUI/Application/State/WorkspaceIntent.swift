@@ -33,6 +33,10 @@ enum WorkspaceIntent
 		entryID: String,
 		text: String
 	)
+	case submitResultFeedback(
+		ResultFeedbackTarget,
+		ResultFeedbackRating
+	)
 	case slashCommand(SlashCommandInvocation)
 	case acknowledgeSlashCommand(SlashCommandPresentationRequest)
 	case completeSlashCommand(
@@ -133,7 +137,7 @@ enum WorkspaceIntent
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .clearProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
-		case .branch, .editSentPrompt,
+		case .submitResultFeedback, .branch, .editSentPrompt,
 				.retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
 				.loadEarlierTurnReferences,
 				.loadTurnPreview, .updateConversationViewport,
@@ -225,6 +229,14 @@ final class WorkspaceIntentTarget
 				return false
 			}
 		}
+		if case .submitResultFeedback(
+			let target,
+			_
+		) = intent,
+			!store.inputs.canSubmitResultFeedback(target)
+		{
+			return false
+		}
 		if case .branch(
 			let threadID,
 			let turnID
@@ -288,6 +300,14 @@ final class WorkspaceIntentTarget
 			operation = inputs.branch(
 				threadID: threadID,
 				turnID: turnID
+			)
+		case .submitResultFeedback(
+			let target,
+			let rating
+		):
+			operation = inputs.submitResultFeedback(
+				target,
+				rating: rating
 			)
 		case .attachContext(let item): inputs.addDraftContext(item)
 		case .removeContext(let id): inputs.removeDraftContext(id: id)

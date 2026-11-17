@@ -6,6 +6,7 @@ enum WorkspaceAction
 	case workspaceLifecycle(WorkspaceLifecycleAction)
 	case connection(ConnectionAction)
 	case remoteAccess(RemoteAccessAction)
+	case resultFeedback(ResultFeedbackAction)
 	case execution(ExecutionAction)
 	case composer(ComposerAction)
 	case composerCommand(ComposerCommandAction)

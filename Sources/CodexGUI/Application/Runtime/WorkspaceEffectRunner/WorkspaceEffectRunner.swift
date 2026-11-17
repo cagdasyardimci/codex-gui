@@ -11,6 +11,7 @@ final class WorkspaceEffectRunner
 	enum Purpose: Hashable
 	{
 		case serverQueue
+		case resultFeedback
 		case remoteAccess
 		case connection, version, selection, account, preparation, submission, draft, interruption,
 				steering, recovery, completedHistory, adoption, acknowledgement
@@ -282,6 +283,7 @@ final class WorkspaceEffectRunner
 	{
 		switch effect
 		{
+		case .submitResultFeedback(let operation): return (operation.context, .resultFeedback)
 		case .serverQueue(let operation): return (operation.context, .serverQueue)
 		case .readReviewMarkers(let operation): return (operation.context, .reviewRead(
 				operation.conversation,

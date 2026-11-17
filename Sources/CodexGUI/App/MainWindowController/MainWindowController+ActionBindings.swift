@@ -368,6 +368,15 @@ extension MainWindowController
 			return target.operation
 		}
 
+		conversation.transcript.onResultFeedback =
+		{
+			feedbackTarget, rating in
+			target.dispatch(.submitResultFeedback(
+				feedbackTarget,
+				rating
+			))
+		}
+
 		conversation.onDraftChange =
 		{
 			target.dispatch(.editDraft($0))

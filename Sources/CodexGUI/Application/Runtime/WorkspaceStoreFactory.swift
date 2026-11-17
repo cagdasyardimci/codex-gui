@@ -65,6 +65,18 @@ struct WorkspaceStoreDependencies
 @MainActor
 enum WorkspaceStoreFactory
 {
+	static var reducers: [WorkspaceReducer]
+	{
+		[ConnectionReducer.reducer,
+			RemoteAccessReducer.reducer,
+			ResultFeedbackReducer.reducer,
+			WorkspaceFeatureComposition.reducer,
+			PreferenceReducer.reducer,
+			UsageReducer.reducer,
+			ComposerCommandReducer.reducer,
+			WorkspaceLifecycleReducer.reducer]
+	}
+
 	static func makeSource(
 		dependencies: WorkspaceStoreDependencies = WorkspaceStoreDependencies(),
 		sessionID: UUID = UUID()
@@ -110,13 +122,7 @@ enum WorkspaceStoreFactory
 			taskWorkspaceManager: dependencies.manager,
 			persistence: dependencies.storage.workspacePersistenceScheduler,
 			projectContextStore: dependencies.projectContextStore,
-			reducers: [ConnectionReducer.reducer,
-						RemoteAccessReducer.reducer,
-						WorkspaceFeatureComposition.reducer,
-						PreferenceReducer.reducer,
-						UsageReducer.reducer,
-						ComposerCommandReducer.reducer,
-						WorkspaceLifecycleReducer.reducer],
+			reducers: reducers,
 			reduceDomainEvent: WorkspaceDomainComposition.reduceDomainEvent,
 			usageRuntime: dependencies.usageRuntime,
 			previewPreparer: dependencies.previewPreparer,

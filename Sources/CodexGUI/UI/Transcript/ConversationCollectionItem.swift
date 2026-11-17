@@ -284,6 +284,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		onBranch: (() -> Void)? = nil,
 		canBranch: (() -> Bool)? = nil,
 		timestamp: Date? = nil,
+		interactions: ConversationReplyActionsView.Interactions = .init(),
 		onToggle: @escaping () -> Void
 	)
 	{
@@ -310,7 +311,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				isUserMessage: kind == .user,
 				onBranch: onBranch,
 				canBranch: canBranch,
-				timestamp: timestamp
+				timestamp: timestamp,
+				interactions: interactions
 			)
 		}
 		else
@@ -427,6 +429,11 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		updateBodyHeight()
 		layoutImageAttachments()
 		updateCopyButtonFrames()
+	}
+
+	func setReplyInteractions(_ interactions: ConversationReplyActionsView.Interactions)
+	{
+		replyActions.setInteractions(interactions)
 	}
 
 	func setEditAction(_ action: (() -> Void)?)

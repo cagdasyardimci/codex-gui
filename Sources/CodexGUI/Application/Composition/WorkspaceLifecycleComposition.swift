@@ -452,6 +452,7 @@ enum WorkspaceLifecycleComposition
 			action
 		)
 		let reducers = [
+			ResultFeedbackReducer.reducer,
 			WorkspaceFeatureComposition.reducer,
 			PreferenceReducer.reducer,
 			UsageReducer.reducer

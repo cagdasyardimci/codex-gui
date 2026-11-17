@@ -14,6 +14,7 @@ final class TranscriptViewController: NSViewController,
 	var onOpenFileReference: ((MarkdownFileReference) -> Void)?
 	var onOpenSubagents: (() -> Void)?
 	var onSelectSubagentThread: ((String) -> Void)?
+	var onResultFeedback: ((ResultFeedbackTarget, ResultFeedbackRating) -> Void)?
 	var onBranch: ((String, String) -> Void)?
 	var editablePrompt: ((String, String) -> String?)?
 	var onRevisePrompt: ((String, String, String) -> WorkspaceOperationHandle?)?
@@ -262,6 +263,10 @@ final class TranscriptViewController: NSViewController,
 			|| previous?.activeTurnID != presentation.activeTurnID
 		{
 			prepareTranscript(presentation)
+		}
+		if previous?.resultFeedback != presentation.resultFeedback
+		{
+			refreshVisibleReplyInteractions()
 		}
 		if previous?.owner == presentation.owner,
 			previous?.editablePromptEntryIDs != presentation.editablePromptEntryIDs

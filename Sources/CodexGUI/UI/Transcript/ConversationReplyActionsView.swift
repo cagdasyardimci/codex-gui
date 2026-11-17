@@ -5,6 +5,12 @@ import AppKit
 final class ConversationReplyActionsView: NSStackView
 {
 	static let height = LayoutTokens.Transcript.replyControlSize
+	struct Interactions
+	{
+		var onFeedback: ((ResultFeedbackRating) -> Void)? = nil
+		var feedbackRating: ResultFeedbackRating? = nil
+	}
+	private var interactions = Interactions()
 	private var isUserMessage = false
 	private let copyButton = DesktopStyledButton(
 		title: "",
@@ -96,7 +102,8 @@ final class ConversationReplyActionsView: NSStackView
 		isUserMessage: Bool = false,
 		onBranch: (() -> Void)? = nil,
 		canBranch: (() -> Bool)? = nil,
-		timestamp: Date? = nil
+		timestamp: Date? = nil,
+		interactions: Interactions = Interactions()
 	)
 	{
 		actionGeneration = UUID()
@@ -149,7 +156,7 @@ final class ConversationReplyActionsView: NSStackView
 		setEditAction(nil)
 		feedbackButton.isHidden = isUserMessage
 		feedbackButton.target = self
-		feedbackButton.isEnabled = false
+		feedbackButton.action = #selector(showFeedback)
 		readButton.isHidden = isUserMessage
 		readButton.target = self
 		readButton.isEnabled = false
@@ -169,6 +176,7 @@ final class ConversationReplyActionsView: NSStackView
 		copyButton.action = #selector(copyResponse)
 
 		setBookmarked(bookmarked)
+		setInteractions(interactions)
 	}
 
 	func setEditAction(_ action: (() -> Void)?)
@@ -199,6 +207,7 @@ final class ConversationReplyActionsView: NSStackView
 		canBranch = nil
 		timestampLabel.removeFromSuperview()
 		source = nil
+		interactions = Interactions()
 		onToggleBookmark = nil
 		isHidden = true
 		for button in [copyButton, editButton, feedbackButton, readButton, moreButton]
@@ -237,6 +246,74 @@ final class ConversationReplyActionsView: NSStackView
 		)
 		button.toolTip = label
 		button.setAccessibilityLabel(label)
+	}
+
+	func setInteractions(_ interactions: Interactions)
+	{
+		if self.interactions.onFeedback != nil, interactions.onFeedback == nil
+		{
+			actionMenu?.close()
+		}
+		self.interactions = isUserMessage ? Interactions() : interactions
+		feedbackButton.isEnabled = self.interactions.onFeedback != nil
+		let feedbackIcon: DesktopIcon
+		switch self.interactions.feedbackRating
+		{
+		case .good: feedbackIcon = .thumbUpFilled
+		case .bad: feedbackIcon = .thumbDownFilled
+		case nil: feedbackIcon = .thumbs
+		}
+		configureIcon(
+			feedbackButton,
+			icon: feedbackIcon,
+			label: "Give feedback"
+		)
+	}
+
+	@objc private func showFeedback()
+	{
+		guard let onFeedback = interactions.onFeedback
+		else
+		{
+			return
+		}
+		let menu = NSMenu()
+		let choose: (ResultFeedbackRating) -> Void =
+		{
+			[weak self] rating in
+			guard self?.interactions.onFeedback != nil
+			else
+			{
+				return
+			}
+			onFeedback(rating)
+		}
+		addMenuAction(
+			to: menu,
+			title: "Good response",
+			image: DesktopIcons.image(.thumbUp),
+			action:
+			{
+				choose(.good)
+			}
+		)
+		addMenuAction(
+			to: menu,
+			title: "Bad response",
+			image: DesktopIcons.image(.thumbDown),
+			action:
+			{
+				choose(.bad)
+			}
+		)
+		actionMenu?.close()
+		actionMenu = DesktopActionMenu(
+			menu: menu,
+			alignment: .leading,
+			opensBelowAnchor: false,
+			accessibilityLabel: "Response feedback"
+		)
+		actionMenu?.show(from: feedbackButton)
 	}
 
 	@objc private func showMore()

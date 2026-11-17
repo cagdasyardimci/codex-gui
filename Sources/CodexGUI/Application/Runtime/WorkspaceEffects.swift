@@ -5,6 +5,7 @@ enum WorkspaceEffect
 {
 	case serverQueue(ServerQueueOperation)
 	case remoteAccess(RemoteAccessOperation)
+	case submitResultFeedback(ResultFeedbackOperation)
 	case restoreSourceStartup(OperationContext)
 	case readReviewMarkers(ReviewMarkerReadOperation)
 	case writeReviewMarker(ReviewMarkerWriteOperation)
