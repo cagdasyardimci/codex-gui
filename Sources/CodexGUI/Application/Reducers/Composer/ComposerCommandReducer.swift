@@ -65,6 +65,15 @@ enum ComposerCommandReducer
 			{
 				return result
 			}
+			if case .throughTurn(let turnID) = request.forkBoundary,
+				request.invocation.id != .fork || !canBranch(
+				threadID: request.context.threadID ?? "",
+				turnID: turnID,
+				model: model
+				)
+			{
+				return result
+			}
 			model.composerCommands.error = nil
 			model.composerCommands.conversationErrors[request.conversation] = nil
 			if let reason = unavailableReason(
@@ -269,6 +278,36 @@ enum ComposerCommandReducer
 				&& (model.composerCommands.pendingSettings?.outcomeUncertain == true
 					|| !model.composerCommands.blocksNewWork)
 				? nil : "Connect to an available checkout and finish the current command first."
+		}
+	}
+
+	static func canBranch(
+		threadID: String,
+		turnID: String,
+		model: WorkspaceModel
+	) -> Bool
+	{
+		let conversation = ConversationKey.thread(threadID)
+		guard !model.lifecycle.isShutdown, !threadID.isEmpty, !turnID.isEmpty,
+				model.conversations.selectedConversation == conversation,
+				model.composerCommands.uncertainFork == nil,
+				unavailableReason(
+				.fork,
+				model: model
+				) == nil,
+				let turn = model.conversations.content[conversation]?.loadedTurns.first(where:
+				{
+					$0.id == turnID
+				}),
+				ConversationTurnStatus.isTerminal(turn.status)
+		else
+		{
+			return false
+		}
+		return turn.items.contains
+		{
+			$0.type == "agentMessage" && $0.text?
+				.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
 		}
 	}
 

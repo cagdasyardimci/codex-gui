@@ -69,7 +69,8 @@ extension WorkspaceEffectRunner
 				mutationSent = true
 				let detail = try await service.forkThread(
 					id: threadID,
-					expectedDirectory: directory
+					expectedDirectory: directory,
+					boundary: request.forkBoundary
 				)
 				return .composerCommand(.forkFinished(
 					request,

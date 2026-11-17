@@ -111,6 +111,48 @@ extension WorkspaceStoreInputs
 		)))
 	}
 
+	func canBranch(
+		threadID: String,
+		turnID: String
+	) -> Bool
+	{
+		ComposerCommandReducer.canBranch(
+			threadID: threadID,
+			turnID: turnID,
+			model: store.model
+		)
+	}
+
+	@discardableResult
+	func branch(
+		threadID: String,
+		turnID: String
+	) -> WorkspaceOperationHandle?
+	{
+		guard canBranch(
+			threadID: threadID,
+			turnID: turnID
+		)
+		else
+		{
+			return nil
+		}
+		let conversation = ConversationKey.thread(threadID)
+		let descriptor = SlashCommandRegistry.descriptor(for: .fork)
+		let request = SlashCommandPresentationRequest(
+			context: store.operationContext(threadID: threadID),
+			invocation: SlashCommandInvocation(
+				descriptor: descriptor,
+				arguments: ""
+			),
+			conversation: conversation,
+			draft: store.model.composer.drafts[conversation] ?? ComposerDraft(),
+			forkBoundary: .throughTurn(turnID)
+		)
+		store.dispatch(.composerCommand(.requested(request)))
+		return store.operation(for: request.context)
+	}
+
 	func acknowledgeSlashCommand(_ request: SlashCommandPresentationRequest)
 	{
 		store.dispatch(.composerCommand(.acknowledged(request)))

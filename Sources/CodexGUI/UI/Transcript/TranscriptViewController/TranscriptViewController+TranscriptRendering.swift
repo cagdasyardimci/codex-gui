@@ -371,6 +371,10 @@ extension TranscriptViewController
 			}
 			self.onOpenFileReference?(reference)
 		}
+		let branch = replyBranchAction(
+			for: entry,
+			context: context
+		)
 		item.configure(
 			entry,
 			content: content,
@@ -381,6 +385,8 @@ extension TranscriptViewController
 				for: entry,
 				context: context
 			),
+			onBranch: branch?.invoke,
+			canBranch: branch?.isAvailable,
 			timestamp: messageTimestamp(for: entry)
 		)
 		{
@@ -428,6 +434,45 @@ extension TranscriptViewController
 	{
 		renderedContext == context && requestedContext == context
 			&& selectedThreadID == threadID && replyActionEntryIDs.contains(entryID)
+	}
+
+	private func replyBranchAction(
+		for entry: ConversationEntry,
+		context: String?
+	) -> (isAvailable: () -> Bool, invoke: () -> Void)?
+	{
+		guard replyActionEntryIDs.contains(entry.id), let threadID = selectedThreadID,
+				let identity = ConversationEntryIdentity(entry.id), onBranch != nil
+		else
+		{
+			return nil
+		}
+		let turnID = identity.turnID
+		let available: () -> Bool =
+		{
+			[weak self] in
+			guard let self, self.onBranch != nil, self.canInvokeReplyAction(
+				entry.id,
+				threadID,
+				context
+			)
+			else
+			{
+				return false
+			}
+			return self.canBranch?(threadID, turnID) == true
+		}
+		let action: () -> Void =
+		{
+			[weak self] in
+			guard available()
+			else
+			{
+				return
+			}
+			self?.onBranch?(threadID, turnID)
+		}
+		return (available, action)
 	}
 
 	private func isReplyBookmarked(_ entry: ConversationEntry) -> Bool

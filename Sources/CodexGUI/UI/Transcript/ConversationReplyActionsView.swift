@@ -30,6 +30,8 @@ final class ConversationReplyActionsView: NSStackView
 	private let timestampLabel = DesktopTextField(labelWithString: "")
 	private var actionGeneration = UUID()
 	private(set) var actionMenu: DesktopActionMenu?
+	private var onBranch: (() -> Void)?
+	private var canBranch: (() -> Bool)?
 	private var source: String?
 	private var onToggleBookmark: (() -> Void)?
 
@@ -91,6 +93,8 @@ final class ConversationReplyActionsView: NSStackView
 		bookmarked: Bool,
 		onToggleBookmark: (() -> Void)?,
 		isUserMessage: Bool = false,
+		onBranch: (() -> Void)? = nil,
+		canBranch: (() -> Bool)? = nil,
 		timestamp: Date? = nil
 	)
 	{
@@ -131,6 +135,8 @@ final class ConversationReplyActionsView: NSStackView
 				)
 			}
 		}
+		self.onBranch = onBranch
+		self.canBranch = canBranch
 		self.source = source
 		self.onToggleBookmark = onToggleBookmark
 		isHidden = false
@@ -146,7 +152,7 @@ final class ConversationReplyActionsView: NSStackView
 		readButton.isHidden = isUserMessage
 		readButton.target = self
 		readButton.isEnabled = false
-		moreButton.isHidden = isUserMessage || onToggleBookmark == nil
+		moreButton.isHidden = isUserMessage || (onBranch == nil && onToggleBookmark == nil)
 		moreButton.isEnabled = !moreButton.isHidden
 		if !isUserMessage, timestamp != nil
 		{
@@ -174,6 +180,8 @@ final class ConversationReplyActionsView: NSStackView
 		actionGeneration = UUID()
 		actionMenu?.close()
 		actionMenu = nil
+		onBranch = nil
+		canBranch = nil
 		timestampLabel.removeFromSuperview()
 		source = nil
 		onToggleBookmark = nil
@@ -218,12 +226,22 @@ final class ConversationReplyActionsView: NSStackView
 
 	@objc private func showMore()
 	{
-		guard onToggleBookmark != nil
+		let onBranch = canBranch?() == false ? nil : self.onBranch
+		guard onBranch != nil || onToggleBookmark != nil
 		else
 		{
 			return
 		}
 		let menu = NSMenu()
+		if let onBranch
+		{
+			addMenuAction(
+				to: menu,
+				title: "Branch in new chat",
+				image: DesktopIcons.image(.branch),
+				action: onBranch
+			)
+		}
 		if let onToggleBookmark
 		{
 			let title = bookmarked ? "Remove turn bookmark" : "Bookmark turn"

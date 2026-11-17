@@ -92,7 +92,8 @@ protocol CodexService: AnyObject
 	func readThread(id: String) async throws -> ThreadDetail
 	func forkThread(
 		id: String,
-		expectedDirectory: URL?
+		expectedDirectory: URL?,
+		boundary: ConversationForkBoundary?
 	) async throws -> ThreadDetail
 	func compactThread(id: String) async throws
 	func startReview(
@@ -308,6 +309,19 @@ extension CodexService
 	func forkThread(
 		id: String,
 		expectedDirectory: URL?
+	) async throws -> ThreadDetail
+	{
+		try await forkThread(
+			id: id,
+			expectedDirectory: expectedDirectory,
+			boundary: nil
+		)
+	}
+
+	func forkThread(
+		id: String,
+		expectedDirectory: URL?,
+		boundary: ConversationForkBoundary?
 	) async throws -> ThreadDetail
 	{
 		throw AppServerError.requestRejected("This Codex service cannot fork conversations.")

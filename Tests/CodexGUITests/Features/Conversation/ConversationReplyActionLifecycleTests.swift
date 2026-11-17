@@ -319,6 +319,134 @@ struct ConversationReplyActionLifecycleTests
 
 	}
 
+	@Test(.appKitIsolation) func branchMenuRoutesCapturedChatAndRejectsChangedEligibilityAndOwner(
+	) async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 888,
+				height: 876
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		window.contentViewController = controller
+		defer
+		{
+			window.orderOut(nil)
+		}
+		var allowed = false
+		struct BranchTarget: Equatable
+		{
+			let threadID: String
+			let turnID: String
+		}
+		var branched: [BranchTarget] = []
+		controller.transcript.canBranch =
+		{
+			_, _ in allowed
+		}
+		controller.transcript.onBranch =
+		{
+			threadID, turnID in branched.append(.init(
+				threadID: threadID,
+				turnID: turnID
+			))
+		}
+		controller.onToggleBookmark =
+		{
+			_ in
+		}
+		let entries = [entry(
+			"first:request",
+			kind: .user
+		), entry(
+			"first:reply",
+			kind: .agent
+		), entry(
+			"second:request",
+			kind: .user
+		), entry(
+			"second:reply",
+			kind: .agent
+		)]
+		var presentation = snapshot(entries: entries)
+		presentation.turnTimings = [ConversationTurnTiming(
+			turnID: "first",
+			status: "completed"
+		), ConversationTurnTiming(
+			turnID: "second",
+			status: "completed"
+		)]
+		await render(
+			presentation,
+			in: controller
+		)
+		let firstView = try messageView(
+			for: "first:reply",
+			in: controller
+		)
+		let more = try #require(button(
+			"More response actions",
+			in: firstView
+		))
+		let actions = try #require(more.superview as? ConversationReplyActionsView)
+		try #require(more.dispatchConfiguredAction())
+		#expect(actions.actionMenu?.rows.map
+		{
+			$0.accessibilityLabel()
+		} == ["Bookmark turn"])
+		allowed = true
+		try #require(more.dispatchConfiguredAction())
+		let menu = try #require(actions.actionMenu)
+		let row = try #require(menu.rows.first)
+		#expect(row.accessibilityLabel() == "Branch in new chat")
+		row.onInvoke?()
+		let expected = [BranchTarget(
+			threadID: "chat",
+			turnID: "first"
+		)]
+		#expect(branched == expected)
+		allowed = false
+		row.onInvoke?()
+		#expect(branched == expected)
+		allowed = true
+		var other = snapshot(
+			entries: entries,
+			threadID: "other-chat"
+		)
+		other.turnTimings = presentation.turnTimings
+		await render(
+			other,
+			in: controller
+		)
+		row.onInvoke?()
+		#expect(branched == expected)
+		#expect(!menu.host.isShown)
+		// A retained menu must not adopt a callback installed when its view is reused.
+		actions.configure(
+			source: "Different reply",
+			bookmarked: false,
+			onToggleBookmark: nil,
+			onBranch:
+			{
+				branched.append(.init(
+					threadID: "reused",
+					turnID: "reused"
+				))
+			}
+		)
+		row.onInvoke?()
+		#expect(branched == expected)
+		actions.reset()
+	}
+
 	@Test func messageActionsUseCatalogueArtworkAndReferenceTimestampSpacing() throws
 	{
 		_ = NSApplication.shared
@@ -335,10 +463,11 @@ struct ConversationReplyActionLifecycleTests
 			actions.configure(
 				source: "Message",
 				bookmarked: false,
-				onToggleBookmark: isUser ? nil :
+				onToggleBookmark: nil,
+				isUserMessage: isUser,
+				onBranch: isUser ? nil :
 				{
 				},
-				isUserMessage: isUser,
 				timestamp: timestamp
 			)
 			actions.setFrameSize(NSSize(

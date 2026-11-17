@@ -28,6 +28,7 @@ struct ComposerCommandRuntimeTests
 		#expect(fixture.store.model.composerCommands.pendingFork?.draft.context == [attachment])
 		#expect(fixture.service.forkRequests.map(\.id) == [fixture.service.base.thread.id])
 		#expect(fixture.service.forkRequests.first?.directory?.path == fixture.project.path)
+		#expect(fixture.service.forkRequests.first?.boundary == nil)
 		#expect(fixture.service.base.turnStartCount == 0)
 		#expect(!fixture.state.currentSnapshot.canSend)
 		let returned = fixture.detail(id: "forked-thread")
@@ -44,6 +45,78 @@ struct ComposerCommandRuntimeTests
 		#expect(fixture.store.model.composerCommands.pendingFork == nil)
 		#expect(fixture.draft.text.isEmpty)
 		#expect(fixture.draft.context == [attachment])
+		#expect(fixture.service.base.turnStartCount == 0)
+	}
+
+	@Test
+	func transcriptBranchForksThroughCapturedOlderTurnAndPreservesSourceDraft() async throws
+	{
+		let fixture = try ComposerCommandRuntimeHarness()
+		defer
+		{
+			fixture.close()
+		}
+		let older = CodexTurn(
+			id: "older",
+			status: "completed",
+			items: [try #require(CodexItem(json: [
+				"id": "older-reply",
+				"type": "agentMessage",
+				"text": "Older reply",
+			]))],
+			error: nil
+		)
+		let newer = CodexTurn(
+			id: "newer",
+			status: "completed",
+			items: older.items,
+			error: nil
+		)
+		fixture.service.base.savedTurns = [older, newer]
+		try await fixture.start()
+		let threadID = fixture.service.base.thread.id
+		fixture.state.inputs.updateDraft("Unsent source prompt")
+		_ = try fixture.attachFile()
+		let originalDraft = fixture.draft
+
+		#expect(fixture.state.inputs.branch(
+			threadID: threadID,
+			turnID: "missing"
+		) == nil)
+		#expect(fixture.state.inputs.branch(
+			threadID: "foreign",
+			turnID: older.id
+		) == nil)
+		#expect(fixture.service.forkRequests.isEmpty)
+		let operation = try #require(fixture.state.inputs.branch(
+			threadID: threadID,
+			turnID: older.id
+		))
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingFork != nil
+			}))
+		let request = try #require(fixture.service.forkRequests.first)
+		#expect(request.id == threadID && request.boundary == .throughTurn(older.id))
+		#expect(fixture.state.inputs.branch(
+			threadID: threadID,
+			turnID: newer.id
+		) == nil)
+		#expect(fixture.draft == originalDraft)
+
+		let fork = fixture.detail(
+			id: "historical-fork",
+			turns: [older]
+		)
+		fixture.service.finishFork(fork)
+		#expect(await operation.wait() == .finished)
+		try #require(await fixture.awaitSnapshot(matching:
+			{
+				fixture.store.model.conversations.selectedConversation == .thread(fork.summary.id)
+					&& fixture.store.model.conversations.pendingSelection == nil
+			}))
+		#expect(fixture.draft == originalDraft)
+		#expect(fixture.service.forkRequests.count == 1)
 		#expect(fixture.service.base.turnStartCount == 0)
 	}
 

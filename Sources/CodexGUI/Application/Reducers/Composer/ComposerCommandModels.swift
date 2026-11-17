@@ -1,5 +1,10 @@
 import Foundation
 
+enum ConversationForkBoundary: Equatable
+{
+	case throughTurn(String)
+}
+
 /// A presentation request retains the exact draft and workspace that proposed the command.
 struct SlashCommandPresentationRequest
 {
@@ -7,6 +12,7 @@ struct SlashCommandPresentationRequest
 	let invocation: SlashCommandInvocation
 	let conversation: ConversationKey
 	let draft: ComposerDraft
+	var forkBoundary: ConversationForkBoundary?
 	var id: UUID
 	{
 		context.requestID

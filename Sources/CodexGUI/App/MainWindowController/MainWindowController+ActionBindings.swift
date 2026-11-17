@@ -319,6 +319,23 @@ extension MainWindowController
 		{
 			target.dispatch(.slashCommand($0))
 		}
+		conversation.transcript.canBranch =
+		{
+			threadID, turnID in
+			target.accepts(.branch(
+				threadID: threadID,
+				turnID: turnID
+			))
+		}
+		conversation.transcript.onBranch =
+		{
+			threadID, turnID in
+			target.dispatch(.branch(
+				threadID: threadID,
+				turnID: turnID
+			))
+		}
+
 		conversation.onDraftChange =
 		{
 			target.dispatch(.editDraft($0))

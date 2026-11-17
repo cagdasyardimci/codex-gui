@@ -109,12 +109,61 @@ struct SlashCommandAppServerTests
 		#expect(forkParameters["threadId"] as? String == "source")
 		#expect(forkParameters["excludeTurns"] as? Bool == true)
 		#expect(forkParameters["deferGoalContinuation"] as? Bool == true)
+		#expect(forkParameters["lastTurnId"] == nil)
 		#expect(forkParameters["cwd"] == nil)
 		#expect(try parameters(
 			for: "thread/turns/list",
 			in: requests
 		)["threadId"] as? String ==
 			"forked")
+	}
+
+	@Test(arguments: ["history", "unexpected-boundary"])
+	func historicalForkSendsInclusiveCutoffAndRequiresMatchingNewestTurn(
+		cutoff: String
+	) async throws
+	{
+		let directory = try await makeDirectory()
+		defer
+		{
+			try? FileManager.default.removeItem(at: directory)
+		}
+		let server = AppServer(
+			executableOverride: try await makeExecutable(in: directory),
+			requestTimeout: .seconds(3)
+		)
+		defer
+		{
+			server.disconnect()
+		}
+		try await server.connect()
+		do
+		{
+			let detail = try await server.forkThread(
+				id: "source",
+				expectedDirectory: directory,
+				boundary: .throughTurn(cutoff)
+			)
+			#expect(cutoff == "history" && detail.turns.last?.id == cutoff)
+		}
+		catch AppServerError.protocolError
+		{
+			#expect(cutoff == "unexpected-boundary")
+		}
+		let requests = try readRequests(in: directory)
+		let forkRequests = requests.filter
+		{
+			$0["method"] as? String == "thread/fork"
+		}
+		#expect(forkRequests.count == 1)
+		let forkParameters = try parameters(
+			for: "thread/fork",
+			in: forkRequests
+		)
+		#expect(forkParameters["threadId"] as? String == "source")
+		#expect(forkParameters["lastTurnId"] as? String == cutoff)
+		#expect(forkParameters["excludeTurns"] as? Bool == true)
+		#expect(forkParameters["deferGoalContinuation"] == nil)
 	}
 
 	@Test func compactionAcknowledgementKeepsLifecycleOpen() async throws

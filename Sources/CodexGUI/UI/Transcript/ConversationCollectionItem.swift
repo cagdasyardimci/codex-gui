@@ -279,6 +279,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		showsReplyActions: Bool = false,
 		bookmarked: Bool = false,
 		onToggleBookmark: (() -> Void)? = nil,
+		onBranch: (() -> Void)? = nil,
+		canBranch: (() -> Bool)? = nil,
 		timestamp: Date? = nil,
 		onToggle: @escaping () -> Void
 	)
@@ -304,6 +306,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 				bookmarked: bookmarked,
 				onToggleBookmark: onToggleBookmark,
 				isUserMessage: kind == .user,
+				onBranch: onBranch,
+				canBranch: canBranch,
 				timestamp: timestamp
 			)
 		}

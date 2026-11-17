@@ -4,29 +4,49 @@ extension AppServer
 {
 	func forkThread(
 		id: String,
-		expectedDirectory: URL?
+		expectedDirectory: URL?,
+		boundary: ConversationForkBoundary?
 	) async throws -> ThreadDetail
 	{
+		let generation = connectionGeneration
+		var parameters: [String: Any] = ["threadId": id, "excludeTurns": true]
+		switch boundary
+		{
+		case .throughTurn(let turnID): parameters["lastTurnId"] = turnID
+		case nil: parameters["deferGoalContinuation"] = true
+		}
 		let result = try await request(
 			"thread/fork",
-			params: [
-				"threadId": id,
-				"excludeTurns": true,
-				"deferGoalContinuation": true,
-			]
+			params: parameters
 		)
+		guard connectionGeneration == generation
+		else
+		{
+			throw AppServerError.disconnected
+		}
 		guard let thread = result["thread"] as? [String: Any],
 				let summary = ThreadSummary(json: thread), summary.id != id
 		else
 		{
 			throw AppServerError.protocolError("Codex returned an invalid forked conversation.")
 		}
-		return try await hydrateValidatedThread(
+		let detail = try await hydrateValidatedThread(
 			summary,
 			result: result,
 			expectedDirectory: expectedDirectory,
 			invalidResponseMessage: "Codex returned an invalid forked conversation."
 		)
+		let matchesBoundary = switch boundary
+		{
+		case .throughTurn(let turnID): detail.turns.last?.id == turnID
+		case nil: true
+		}
+		guard matchesBoundary
+		else
+		{
+			throw AppServerError.protocolError("Codex returned an invalid forked conversation.")
+		}
+		return detail
 	}
 
 	/// Acknowledgement is separate from the compaction turn and item lifecycle.

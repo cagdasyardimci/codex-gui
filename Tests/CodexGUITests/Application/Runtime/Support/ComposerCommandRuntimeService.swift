@@ -98,7 +98,7 @@ final class ComposerCommandRuntimeService: CodexService
 			pendingCallChanged()
 		}
 	}
-	var forkRequests: [(id: String, directory: URL?)] = []
+	var forkRequests: [(id: String, directory: URL?, boundary: ConversationForkBoundary?)] = []
 	var compactRequests: [String] = []
 	var reviewRequests: [(id: String, target: ReviewTarget, delivery: ReviewDelivery)] = []
 	var settingsRequests: [(id: String, settings: ThreadSettingsUpdate)] = []
@@ -321,10 +321,11 @@ final class ComposerCommandRuntimeService: CodexService
 
 	func forkThread(
 		id: String,
-		expectedDirectory: URL?
+		expectedDirectory: URL?,
+		boundary: ConversationForkBoundary?
 	) async throws -> ThreadDetail
 	{
-		forkRequests.append((id, expectedDirectory))
+		forkRequests.append((id, expectedDirectory, boundary))
 		return try await withCheckedThrowingContinuation
 		{
 			pendingFork = $0

@@ -14,6 +14,8 @@ final class TranscriptViewController: NSViewController,
 	var onOpenFileReference: ((MarkdownFileReference) -> Void)?
 	var onOpenSubagents: (() -> Void)?
 	var onSelectSubagentThread: ((String) -> Void)?
+	var onBranch: ((String, String) -> Void)?
+	var canBranch: ((String, String) -> Bool)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
 	var onJumpDisplayed: (() -> Void)?
 	var onOpenActivityFile: (String) -> Void =

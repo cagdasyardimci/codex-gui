@@ -98,17 +98,21 @@ extension ComposerCommandReducer
 				model: model
 			), model.conversations.boundThreadID == nil
 			{
-				consumeDraft(
-					request,
-					model: &model,
-					result: &result
-				)
+				if request.forkBoundary == nil
+				{
+					consumeDraft(
+						request,
+						model: &model,
+						result: &result
+					)
+				}
 				var selection = request.context
 				selection.threadID = detail.summary.id
 				result.merge(WorkspaceFeatureComposition.reduceConversation(
 					&model,
 					.conversations(.selectionRequested(selection))
 				))
+
 			}
 		}
 	}

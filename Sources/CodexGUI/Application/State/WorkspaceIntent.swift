@@ -24,6 +24,10 @@ enum WorkspaceIntent
 	case setQueueingEnabled(Bool)
 	case steer(String)
 	case stop
+	case branch(
+		threadID: String,
+		turnID: String
+	)
 	case slashCommand(SlashCommandInvocation)
 	case acknowledgeSlashCommand(SlashCommandPresentationRequest)
 	case completeSlashCommand(
@@ -124,7 +128,8 @@ enum WorkspaceIntent
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .clearProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
-		case .retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
+		case .branch,
+				.retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
 				.loadEarlierTurnReferences,
 				.loadTurnPreview, .updateConversationViewport,
 				.selectReview,
@@ -215,6 +220,17 @@ final class WorkspaceIntentTarget
 				return false
 			}
 		}
+		if case .branch(
+			let threadID,
+			let turnID
+		) = intent,
+			!store.inputs.canBranch(
+				threadID: threadID,
+				turnID: turnID
+			)
+		{
+			return false
+		}
 		if case .clearProject = intent, !store.inputs.canClearProject
 		{
 			return false
@@ -249,6 +265,14 @@ final class WorkspaceIntentTarget
 		switch intent
 		{
 		case .editDraft(let text): inputs.updateDraft(text)
+		case .branch(
+			let threadID,
+			let turnID
+		):
+			operation = inputs.branch(
+				threadID: threadID,
+				turnID: turnID
+			)
 		case .attachContext(let item): inputs.addDraftContext(item)
 		case .removeContext(let id): inputs.removeDraftContext(id: id)
 		case .annotateImage(
