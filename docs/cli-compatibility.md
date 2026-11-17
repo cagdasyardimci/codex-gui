@@ -35,6 +35,12 @@ Distinguish app-server APIs, configured agent tools, host facilities and GUI con
 
 Remote-control management is an optional experimental capability. Its protocol version, lifecycle, and acceptance limits are owned by [remote access](remote-access.md).
 
+## Transcript speech and result feedback
+
+Read Aloud requires V3 realtime standalone speech and API-key or bearer-token credentials for the configured provider. ChatGPT sign-in alone leaves the action disabled, and a successful voice-list request can still be followed by a synthesis authorization failure. Playback uses the configured provider for the entire session, with no system voice fallback. See the [speech adapter](../Sources/CodexGUI/CodexClient/AppServer/AppServer+ReadAloud.swift) for admission and wire handling.
+
+Result feedback honors `feedback.enabled`. Reconnect after changing backend credentials or feedback policy to refresh cached eligibility. See [transcript action behavior](architecture.md#presentation) and [native and live acceptance](validation.md#native-and-live-acceptance).
+
 ## Protocol lifecycle safeguards
 
 JSONL framing must split on byte LF (`0x0A`), since Unicode line separators may occur inside JSON strings. Resolve unsupported interactive requests with the appropriate error, decline or cancellation response and visible feedback. Preserve method-specific acknowledgement/completion handling and events arriving before responses. Mutation uncertainty follows [recovery](architecture.md#ownership-and-recovery); composer-specific distinctions belong to [slash commands](slash-commands.md#lifecycle). Inspect [interaction handling](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Interactions.swift) and [notifications](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Notifications.swift) for concrete wire behavior.

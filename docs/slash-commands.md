@@ -6,7 +6,9 @@ Type `/` at the start of the draft to discover available commands and enabled sk
 
 Commands are composer actions rather than shell input: arguments have no shell quoting or escape syntax. Paths, URLs and slashes later in prose remain ordinary text. Use `//status` to send literal `/status`. Invalid input retains the draft. Selecting a skill attaches it to the next message without sending that message; editing its inline mention must preserve other draft content and attachments.
 
-Forking copies conversation history in the source checkout; task checkout creation is a separate Git operation. Plan toggling without a prompt changes next-turn mode without starting a model turn. Preserve the remaining prompt text when invoking plan mode with a prompt.
+Forking copies conversation history in the source checkout. The `/fork` command copies the saved chat, while **Branch in new chat** copies history through the selected response's turn and preserves the source draft. Task checkout creation is a separate Git operation.
+
+Plan toggling without a prompt changes next-turn mode without starting a model turn. Preserve the remaining prompt text when invoking plan mode with a prompt.
 
 ## Lifecycle
 
@@ -20,7 +22,7 @@ Follow [validation](validation.md) for checks and [AppKit conventions](../CONVEN
 
 ## Context mentions
 
-Type `@` at a token boundary to open the [context menu](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+MentionMenu.swift). Choosing an action replaces only the active mention token, and selections expire when the draft owner changes.
+Use the composer plus button or type `@` at a token boundary to open the [context menu](../Sources/CodexGUI/Features/Conversation/ConversationViewController/ConversationViewController+MentionMenu.swift). Opening it with the plus button preserves the draft and selection. Choosing an action from `@` replaces only the active mention token. Selections expire when the draft owner changes.
 
 The source draft remains with its current project or chat when another project is selected. Plugin installation and configuration retain the [Settings presentation lifetime](settings.md#configuration-ownership).
 

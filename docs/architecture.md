@@ -32,6 +32,14 @@ Protocol-specific handling belongs to [CLI lifecycle safeguards](cli-compatibili
 
 ## Presentation
 
+Read Aloud plays the displayed response without adding a turn to the chat. Playback belongs to the response that started it and stops when that response loses its presentation owner. The [playback runtime](../Sources/CodexGUI/Application/Runtime/ReadAloudRuntime.swift) coordinates backend completion with local audio playback. See [CLI compatibility](cli-compatibility.md#transcript-speech-and-result-feedback) for provider requirements.
+
+Result feedback sends a one-time report for the original chat and turn, with logs excluded. If delivery is uncertain, the [feedback reducer](../Sources/CodexGUI/Application/Reducers/ResultFeedback/ResultFeedbackReducer.swift) reserves that turn against another submission to avoid duplicate reports.
+
+Response actions remain available on loaded, finished turns while newer turns run, subject to each action's eligibility. See [transcript routing](../Sources/CodexGUI/UI/Transcript/TranscriptViewController/TranscriptViewController+TranscriptRendering.swift) and [fork behavior](slash-commands.md#syntax-and-intent).
+
+Only the first user message in a finished turn can qualify for editing because the fork boundary is the whole turn. **Send** forks before that turn and submits the revision with its recorded attachments once selection of the fork is confirmed. The edited text is sent as a prompt even if it starts with a slash command. If selection fails or is superseded, the revised draft and attachments remain available in the fork. See the [revision reducer](../Sources/CodexGUI/Application/Reducers/Composer/ComposerCommandReducer+SentPromptRevision.swift).
+
 AppKit owns focus, selection, scrolling and layout. Prepare parsing, file reads and expensive derived content away from the main actor, then install only the current render generation. Superseded preparation must check cancellation before parsing and again when admitted to native rendering, so rejected results do not consume the input event loop first. Cancellation and owner retirement must reject stale installation and dismiss transient UI. Reuse must preserve the reader's position and selection within one owner without carrying them into another conversation. Active-turn replies retain readable code and exact copy text while deferring syntax coloring until the turn settles, avoiding repeated highlighting of a changing response.
 
 Input admission reads canonical ownership directly; account-only observers project account state without constructing transcript snapshots. Draft edits update canonical state synchronously and share the streaming publication batch, while the native editor updates action visibility immediately. Repeated content and visibility updates must preserve existing geometry without forcing native layout.
