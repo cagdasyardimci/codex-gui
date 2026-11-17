@@ -15,6 +15,9 @@ final class TranscriptViewController: NSViewController,
 	var onOpenSubagents: (() -> Void)?
 	var onSelectSubagentThread: ((String) -> Void)?
 	var onBranch: ((String, String) -> Void)?
+	var editablePrompt: ((String, String) -> String?)?
+	var onRevisePrompt: ((String, String, String) -> WorkspaceOperationHandle?)?
+	var editingPrompt: (entryID: String, editor: TranscriptPromptEditor)?
 	var canBranch: ((String, String) -> Bool)?
 	var onToggleBookmark: ((ConversationBookmark) -> Void)?
 	var onJumpDisplayed: (() -> Void)?
@@ -144,6 +147,7 @@ final class TranscriptViewController: NSViewController,
 	{
 		super.viewDidAppear()
 		transcriptIsVisible = true
+		refreshVisiblePromptEditing()
 		updateTurnStatusTimer()
 	}
 
@@ -223,6 +227,7 @@ final class TranscriptViewController: NSViewController,
 		}
 		if previous?.owner != presentation.owner
 		{
+			editingPrompt = nil
 			resetTranscriptNavigation()
 		}
 		if previous?.owner != presentation.owner
@@ -257,6 +262,11 @@ final class TranscriptViewController: NSViewController,
 			|| previous?.activeTurnID != presentation.activeTurnID
 		{
 			prepareTranscript(presentation)
+		}
+		if previous?.owner == presentation.owner,
+			previous?.editablePromptEntryIDs != presentation.editablePromptEntryIDs
+		{
+			refreshVisiblePromptEditing()
 		}
 		updateTurnStatusTimer()
 	}

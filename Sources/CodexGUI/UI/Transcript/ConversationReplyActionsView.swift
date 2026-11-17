@@ -31,6 +31,7 @@ final class ConversationReplyActionsView: NSStackView
 	private var actionGeneration = UUID()
 	private(set) var actionMenu: DesktopActionMenu?
 	private var onBranch: (() -> Void)?
+	private var onEdit: (() -> Void)?
 	private var canBranch: (() -> Bool)?
 	private var source: String?
 	private var onToggleBookmark: (() -> Void)?
@@ -145,7 +146,7 @@ final class ConversationReplyActionsView: NSStackView
 		copyButton.toolTip = copyLabel
 		copyButton.setAccessibilityLabel(copyLabel)
 		editButton.isHidden = !isUserMessage
-		editButton.isEnabled = false
+		setEditAction(nil)
 		feedbackButton.isHidden = isUserMessage
 		feedbackButton.target = self
 		feedbackButton.isEnabled = false
@@ -170,6 +171,19 @@ final class ConversationReplyActionsView: NSStackView
 		setBookmarked(bookmarked)
 	}
 
+	func setEditAction(_ action: (() -> Void)?)
+	{
+		onEdit = action
+		editButton.isEnabled = isUserMessage && action != nil
+		editButton.target = self
+		editButton.action = #selector(editMessage)
+	}
+
+	@objc private func editMessage()
+	{
+		onEdit?()
+	}
+
 	func setBookmarked(_ bookmarked: Bool)
 	{
 		self.bookmarked = bookmarked
@@ -181,6 +195,7 @@ final class ConversationReplyActionsView: NSStackView
 		actionMenu?.close()
 		actionMenu = nil
 		onBranch = nil
+		onEdit = nil
 		canBranch = nil
 		timestampLabel.removeFromSuperview()
 		source = nil

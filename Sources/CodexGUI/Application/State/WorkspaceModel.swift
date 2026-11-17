@@ -330,6 +330,7 @@ struct ComposerSubmission
 	var serverQueueEntry: ThreadQueuedSubmission? = nil
 	var queueSteeringTransfer = false
 	var queuedSteeringInput: Data? = nil
+	var sendsDraftTextLiterally = false
 }
 
 enum ComposerPersistenceKey: Equatable

@@ -89,14 +89,27 @@ extension ComposerCommandReducer
 				detail.summary,
 				at: 0
 			)
-			result.domainEvents.append(.historyAccepted(
-				detail,
-				threadID: detail.summary.id
-			))
-			if isCurrent(
+			let shouldSelect = isCurrent(
 				request,
 				model: model
-			), model.conversations.boundThreadID == nil
+			)
+				&& model.conversations.boundThreadID == nil
+			// Revision submission waits for accepted history. Publishing the fork's
+			// first page here would invalidate the selection read's content revision.
+			if request.sentPromptRevision == nil || !shouldSelect
+			{
+				result.domainEvents.append(.historyAccepted(
+					detail,
+					threadID: detail.summary.id
+				))
+			}
+			let revision = prepareRevision(
+				request,
+				threadID: detail.summary.id,
+				model: &model,
+				result: &result
+			)
+			if shouldSelect
 			{
 				if request.forkBoundary == nil
 				{
@@ -112,7 +125,11 @@ extension ComposerCommandReducer
 					&model,
 					.conversations(.selectionRequested(selection))
 				))
-
+				if model.conversations.selectedConversation == .thread(detail.summary.id),
+					model.conversations.pendingSelection == selection
+				{
+					model.composerCommands.pendingRevision = revision
+				}
 			}
 		}
 	}

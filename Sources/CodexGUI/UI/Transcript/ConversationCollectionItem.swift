@@ -39,6 +39,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private var userActionConstraints: [NSLayoutConstraint] = []
 	private let contentStack = NSStackView()
 	private let replyActions = ConversationReplyActionsView()
+	private weak var promptEditor: TranscriptPromptEditor?
 	private var showsReplyActions = false
 	private let userSurface = DesktopSurface(
 		AppKitColorTokens.userBubble,
@@ -72,6 +73,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	override func prepareForReuse()
 	{
 		super.prepareForReuse()
+		setPromptEditor(nil)
 		removeCodeCopyButtons(startingAt: 0)
 		configuredEntryID = nil
 		bodyTextView.dismissExpandedImage()
@@ -427,6 +429,39 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		updateCopyButtonFrames()
 	}
 
+	func setEditAction(_ action: (() -> Void)?)
+	{
+		replyActions.setEditAction(action)
+	}
+
+	func setPromptEditor(_ editor: TranscriptPromptEditor?)
+	{
+		if promptEditor !== editor
+		{
+			if promptEditor?.superview === view
+			{
+				promptEditor?.removeFromSuperview()
+			}
+			promptEditor = editor
+			if let editor
+			{
+				editor.removeFromSuperview()
+				view.addSubview(editor)
+				editor.translatesAutoresizingMaskIntoConstraints = false
+				NSLayoutConstraint.activate([
+					editor.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+					editor.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+					editor.topAnchor.constraint(equalTo: messageContainer.topAnchor),
+					editor.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+				])
+			}
+			updateBodyHeight()
+		}
+		messageContainer.isHidden = editor != nil
+			|| (imageAttachmentCount > 0 && content?.attributedString.length == 0)
+		replyActions.isHidden = editor != nil || !showsReplyActions
+	}
+
 	func setReplyBookmarked(_ bookmarked: Bool)
 	{
 		replyActions.setBookmarked(bookmarked)
@@ -639,7 +674,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			+ bodyOriginY(for: kind) + lineY + lineOffset
 	}
 
-	private static func attachmentAllowance(
+	static func attachmentAllowance(
 		count: Int,
 		width: CGFloat
 	) -> CGFloat
@@ -810,7 +845,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 			return
 		}
 		let inset = Self.contentInset(for: kind)
-		let attachmentAllowance = content.attributedString.length == 0 ? 0
+		let attachmentAllowance = content.attributedString.length == 0 && promptEditor == nil ? 0
 			: Self.attachmentAllowance(
 				count: imageAttachmentCount,
 				width: view.bounds.width

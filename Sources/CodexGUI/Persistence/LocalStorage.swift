@@ -669,6 +669,11 @@ final class LocalStorage
 		return true
 	}
 
+	func importRecordedImage(_ url: String) async throws -> URL
+	{
+		try await imageStore.importImage(.inlineDataURL(url))
+	}
+
 	/// Draft editing must not delete an image while Codex is reading a submitted request.
 	func retainContextForRequest(_ items: [ComposerContextItem]) -> UUID
 	{
@@ -829,6 +834,10 @@ final class LocalStorage
 				&& sameStoredText(
 					left.excerpt,
 					right.excerpt
+				)
+				&& sameStoredText(
+					left.recordedMentionName,
+					right.recordedMentionName
 				)
 		}
 	}

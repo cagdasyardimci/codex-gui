@@ -10,6 +10,8 @@ struct ComposerContextItem: Codable, Equatable, Identifiable
 	let firstLine: Int?
 	let lastLine: Int?
 	let excerpt: String?
+	/// A replayed mention already has its recorded description in the prompt text.
+	let recordedMentionName: String?
 	var imageAnnotations: [ImageAnnotation]?
 
 	init(
@@ -20,7 +22,8 @@ struct ComposerContextItem: Codable, Equatable, Identifiable
 		firstLine: Int? = nil,
 		lastLine: Int? = nil,
 		excerpt: String? = nil,
-		imageAnnotations: [ImageAnnotation]? = nil
+		imageAnnotations: [ImageAnnotation]? = nil,
+		recordedMentionName: String? = nil
 	)
 	{
 		self.id = id
@@ -31,6 +34,17 @@ struct ComposerContextItem: Codable, Equatable, Identifiable
 		self.lastLine = lastLine
 		self.excerpt = excerpt
 		self.imageAnnotations = imageAnnotations
+		self.recordedMentionName = recordedMentionName
+	}
+
+	func mentionName(for path: String) -> String
+	{
+		recordedMentionName ?? URL(fileURLWithPath: path).lastPathComponent
+	}
+
+	func fileDescription(for path: String) -> String?
+	{
+		recordedMentionName == nil ? UserMessageContextDescription.file(path: path) : nil
 	}
 
 	func reused() -> ComposerContextItem

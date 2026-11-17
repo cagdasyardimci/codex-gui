@@ -13,6 +13,7 @@ extension AppServer
 		switch boundary
 		{
 		case .throughTurn(let turnID): parameters["lastTurnId"] = turnID
+		case .beforeTurn(let turnID): parameters["beforeTurnId"] = turnID
 		case nil: parameters["deferGoalContinuation"] = true
 		}
 		let result = try await request(
@@ -39,6 +40,10 @@ extension AppServer
 		let matchesBoundary = switch boundary
 		{
 		case .throughTurn(let turnID): detail.turns.last?.id == turnID
+		case .beforeTurn(let turnID): !detail.turns.contains
+		{
+			$0.id == turnID
+		}
 		case nil: true
 		}
 		guard matchesBoundary

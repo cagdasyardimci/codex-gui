@@ -5,9 +5,14 @@ enum ComposerPromptText
 {
 	static func submittedText(
 		_ draft: String,
-		collaborationMode: CollaborationMode?
+		collaborationMode: CollaborationMode?,
+		literal: Bool = false
 	) -> String?
 	{
+		if literal
+		{
+			return draft
+		}
 		switch SlashCommandParser.parse(draft)
 		{
 		case .text(let text): return text.trimmingCharacters(in: .whitespacesAndNewlines)

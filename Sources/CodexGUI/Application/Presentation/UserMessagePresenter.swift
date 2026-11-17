@@ -59,6 +59,47 @@ enum UserMessagePresenter
 		let answer: String
 	}
 
+	static func isEditableRequest(
+		_ text: String?,
+		hasAttachments: Bool
+	) -> Bool
+	{
+		guard let text,
+				hasAttachments || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+		else
+		{
+			return false
+		}
+		return envelope(
+			in: text,
+			id: ""
+		) == nil && questionReplies(in: text) == nil
+	}
+
+	static func editablePrompt(for item: CodexItem)
+		-> (text: String, attachments: [ComposerContextItem])?
+	{
+		guard item.isEditablePrompt, let text = item.text
+		else
+		{
+			return nil
+		}
+		let attachments = item.references.map
+		{
+			reference in
+			let isImage = reference.kind == .image
+			return ComposerContextItem(
+				id: reference.id,
+				kind: isImage ? .image : .fileReference,
+				title: reference.name,
+				path: isImage && InlineImageData.isDataURL(reference.path) ? reference.path
+					: LocalAttachmentURL.resolve(reference.path)?.path ?? reference.path,
+				recordedMentionName: isImage ? nil : reference.name
+			)
+		}
+		return (text, attachments)
+	}
+
 	static func questionPrompts(for item: CodexItem) -> [String]
 	{
 		questionReplies(in: projection(for: item).text)?.map(\.question) ?? []

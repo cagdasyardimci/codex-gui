@@ -153,6 +153,56 @@ extension WorkspaceStoreInputs
 		return store.operation(for: request.context)
 	}
 
+	func editableSentPrompt(
+		threadID: String,
+		entryID: String
+	) -> String?
+	{
+		ComposerCommandReducer.editableSentPrompt(
+			threadID: threadID,
+			entryID: entryID,
+			model: store.model
+		)?.text
+	}
+
+	@discardableResult
+	func editSentPrompt(
+		threadID: String,
+		entryID: String,
+		text: String
+	) -> WorkspaceOperationHandle?
+	{
+		guard let source = ComposerCommandReducer.editableSentPrompt(
+			threadID: threadID,
+			entryID: entryID,
+			model: store.model
+		), source.text != text,
+		(!source.attachments.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines)
+			.isEmpty),
+		let identity = ConversationEntryIdentity(entryID)
+		else
+		{
+			return nil
+		}
+		let request = SlashCommandPresentationRequest(
+			context: store.operationContext(threadID: threadID),
+			invocation: SlashCommandInvocation(
+				descriptor: SlashCommandRegistry.descriptor(for: .fork),
+				arguments: ""
+			),
+			conversation: .thread(threadID),
+			draft: store.model.composer.drafts[.thread(threadID)] ?? ComposerDraft(),
+			forkBoundary: .beforeTurn(identity.turnID),
+			sentPromptRevision: SentPromptRevision(
+				entryID: entryID,
+				text: text,
+				attachments: source.attachments
+			)
+		)
+		store.dispatch(.composerCommand(.requested(request)))
+		return store.operation(for: request.context)
+	}
+
 	func acknowledgeSlashCommand(_ request: SlashCommandPresentationRequest)
 	{
 		store.dispatch(.composerCommand(.acknowledged(request)))

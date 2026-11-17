@@ -208,6 +208,125 @@ struct ConversationReplyActionLifecycleTests
 		#expect(toggled.last?.threadID == "another-chat" && toggled.last?.turnID == "second")
 	}
 
+	@Test(.appKitIsolation) func editOpensExactPromptAndCancelRestoresTheMessage() async throws
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		let window = NSWindow(
+			contentRect: NSRect(
+				x: 0,
+				y: 0,
+				width: 888,
+				height: 876
+			),
+			styleMask: [.borderless],
+			backing: .buffered,
+			defer: false
+		)
+		window.prepareForTesting()
+		window.contentViewController = controller
+		defer
+		{
+			window.orderOut(nil)
+		}
+		let original = "First line\n**Exact source**"
+		let directory = try DraftImageImportTestFixture.temporaryDirectory()
+		defer
+		{
+			try? FileManager.default.removeItem(at: directory)
+		}
+		let imageURL = directory.appendingPathComponent("attachment.png")
+		try DraftImageImportTestFixture.png().write(to: imageURL)
+		let attachment = try #require(UserMessageReference(
+			json: ["type": "localImage", "path": imageURL.path],
+			id: "first:image"
+		))
+		let message = ConversationEntry(
+			id: "first:request",
+			kind: .user,
+			title: "You",
+			body: "Presented text",
+			imageAttachments: [attachment]
+		)
+		let earlier = ConversationEntry(
+			id: "other:request",
+			kind: .user,
+			title: "You",
+			body: "Earlier"
+		)
+		var editAvailable = false
+		controller.transcript.editablePrompt =
+		{
+			threadID, id in
+			guard threadID == "chat"
+			else
+			{
+				return nil
+			}
+			if id == earlier.id
+			{
+				return earlier.body
+			}
+			return editAvailable && id == message.id ? original : nil
+		}
+		controller.transcript.onRevisePrompt =
+		{
+			_, _, _ in nil
+		}
+		var presentation = snapshot(entries: [earlier, message])
+		presentation.editablePromptEntryIDs = [earlier.id]
+		await render(
+			presentation,
+			in: controller
+		)
+		let row = try messageView(
+			for: message.id,
+			in: controller
+		)
+		let edit = try #require(button(
+			"Edit message",
+			in: row
+		))
+		#expect(!edit.isEnabled)
+		editAvailable = true
+		presentation.editablePromptEntryIDs.insert(message.id)
+		await render(
+			presentation,
+			in: controller
+		)
+		#expect(edit.isEnabled)
+		try #require(edit.dispatchConfiguredAction())
+		let editor = try #require(controller.transcript.editingPrompt?.editor)
+		#expect(editor.superview === row)
+		#expect(editor.textView.string == original)
+		let strip = try #require(descendant(
+			UserMessageImageAttachmentsView.self,
+			in: row
+		))
+		#expect(!strip.isHidden && !strip.frame.isEmpty)
+		#expect(!editor.frame.intersects(strip.frame))
+		#expect(button(
+			"Send",
+			in: editor
+		)?.isEnabled == false)
+		editor.textView.string = ""
+		editor.refreshSend()
+		#expect(button(
+			"Send",
+			in: editor
+		)?.isEnabled == true)
+		let cancel = try #require(button(
+			"Cancel",
+			in: editor
+		))
+		try #require(cancel.dispatchConfiguredAction())
+		#expect(controller.transcript.editingPrompt == nil)
+		#expect(button(
+			"Edit message",
+			in: row
+		)?.isEnabled == true)
+	}
+
 	@Test func userActionsCopyExactSourceOutsideTheBubbleAndRetireOnReuse() throws
 	{
 		_ = NSApplication.shared

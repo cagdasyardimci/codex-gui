@@ -9,6 +9,7 @@ struct ConversationPresentation: Equatable
 		var turnTimings: [ConversationTurnTiming] = []
 		var activeThreadID: String? = nil
 		var activeTurnID: String? = nil
+		var editablePromptEntryIDs: Set<String> = []
 		let canLoadEarlierTurns: Bool
 		var selectedThreadID: String?
 		{
@@ -265,6 +266,7 @@ struct ConversationPresentation: Equatable
 			turnTimings: snapshot.turnTimings,
 			activeThreadID: snapshot.activeThreadID,
 			activeTurnID: snapshot.activeTurnID,
+			editablePromptEntryIDs: snapshot.editablePromptEntryIDs,
 			canLoadEarlierTurns: snapshot.canLoadEarlierTurns
 		)
 		navigation = Navigation(

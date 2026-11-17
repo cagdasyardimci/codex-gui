@@ -120,6 +120,166 @@ struct ComposerCommandRuntimeTests
 		#expect(fixture.service.base.turnStartCount == 0)
 	}
 
+	@Test(arguments: [false, true])
+	func sentPromptRevisionForksBeforeOriginalAndSubmitsOnlyInTheNewChat(
+		sourceDraftChanged: Bool
+	) async throws
+	{
+		let fixture = try ComposerCommandRuntimeHarness()
+		defer
+		{
+			fixture.close()
+		}
+		let turn = CodexTurn(
+			id: "original",
+			status: "completed",
+			items: [
+				try #require(CodexItem(json: ["id": "request",
+												"type": "userMessage",
+												"content": [[
+												"type": "text",
+												"text": "Original prompt"
+												]]])),
+			],
+			error: nil
+		)
+		fixture.service.base.savedTurns = [turn]
+		try await fixture.start()
+		let source = fixture.service.base.thread.id
+		fixture.state.inputs.updateDraft("Existing source draft")
+		let draft = fixture.draft
+		let entryID = "original:request"
+		#expect(fixture.state.currentSnapshot.editablePromptEntryIDs.contains(entryID))
+		let revision = "  /status is literal in Edit 🧩\n"
+		let selectedNote = ProjectContextItem(
+			kind: .note,
+			title: "Selected note",
+			body: "Fixture context",
+			isIncluded: true
+		)
+		fixture.state.inputs.updateProjectContext(ProjectContext(items: [selectedNote]))
+		#expect(fixture.state.inputs.editableSentPrompt(
+			threadID: source,
+			entryID: entryID
+		)
+			== "Original prompt")
+		#expect(fixture.state.inputs.editSentPrompt(
+			threadID: source,
+			entryID: entryID,
+			text: "Original prompt"
+		) == nil)
+		let operation = try #require(fixture.state.inputs.editSentPrompt(
+			threadID: source,
+			entryID: entryID,
+			text: revision
+		))
+		try #require(await fixture.service
+			.awaitPendingCall(matching:
+				{
+					fixture.service.pendingFork != nil
+				}))
+		#expect(fixture.service.forkRequests.first?.boundary == .beforeTurn(turn.id))
+		#expect(fixture.service.base.turnStartCount == 0)
+		if sourceDraftChanged
+		{
+			fixture.state.inputs.updateDraft("Newer source draft")
+		}
+		let fork = fixture.detail(id: "revision-fork")
+		fixture.service.finishFork(fork)
+		#expect(await operation.wait() == .finished)
+		if sourceDraftChanged
+		{
+			#expect(fixture.store.model.conversations.selectedConversation == .thread(source))
+			#expect(fixture.store.model.composer.drafts[.thread(fork.summary.id)]?.text == revision)
+			#expect(fixture.draft.text == "Newer source draft")
+			#expect(fixture.service.base.turnStartCount == 0)
+		}
+		else
+		{
+			#expect(fixture.store.model.conversations
+				.selectedConversation == .thread(fork.summary.id))
+			#expect(fixture.store.model.execution.activeThreadID == fork.summary.id)
+			let expected = revision + "\n\nProject context selected for this request:\n"
+				+ "[note] Selected note\nFixture context"
+			#expect(fixture.service.base.sentTurnRequests.map(\.text) == [expected])
+			#expect(fixture.draft == draft)
+			#expect(fixture.service.base.turnStartCount == 1)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	func sentPromptRevisionReplaysAttachmentsInOrderOrRejectsMissingFiles(
+		missingImage: Bool
+	) async throws
+	{
+		let fixture = try ComposerCommandRuntimeHarness()
+		defer
+		{
+			fixture.close()
+		}
+		let file = fixture.project.appendingPathComponent("record.txt")
+		let image = fixture.project.appendingPathComponent("attachment.png")
+		try Data("original file".utf8).write(to: file)
+		if !missingImage
+		{
+			try DraftImageImportTestFixture.png().write(to: image)
+		}
+		let originalText = "Original\n\nFile reference: record.txt"
+		let turn = fixture.turn(
+			id: "attached",
+			status: "completed",
+			items: [[
+				"id": "prompt",
+				"type": "userMessage",
+				"content": [
+					["type": "text", "text": originalText],
+					["type": "localImage", "path": image.path],
+					["type": "mention", "name": "Recorded alias", "path": file.path],
+					["type": "localImage", "path": image.path],
+				],
+			]]
+		)
+		fixture.service.base.savedTurns = [turn]
+		try await fixture.start()
+		let threadID = fixture.service.base.thread.id
+		let revision = "Revised\n\nFile reference: record.txt"
+		#expect(fixture.state.inputs.editableSentPrompt(
+			threadID: threadID,
+			entryID: "attached:prompt"
+		) == originalText)
+		let operation = try #require(fixture.state.inputs.editSentPrompt(
+			threadID: threadID,
+			entryID: "attached:prompt",
+			text: revision
+		))
+		if missingImage
+		{
+			_ = await operation.wait()
+			#expect(fixture.store.model.composerCommands.error?.contains("attachment.png") == true)
+			#expect(fixture.store.model.composerCommands.uncertainFork == nil)
+			#expect(fixture.service.forkRequests.isEmpty)
+			#expect(fixture.service.base.sentInputRequests.isEmpty)
+			return
+		}
+		try #require(await fixture.service.awaitPendingCall(matching:
+			{
+				fixture.service.pendingFork != nil
+			}))
+		let fork = fixture.detail(id: "attached-revision")
+		fixture.service.finishFork(fork)
+		#expect(await operation.wait() == .finished)
+		#expect(fixture.store.model.execution.activeThreadID == fork.summary.id)
+		#expect(fixture.service.base.sentInputRequests == [[
+			.text(revision),
+			.localImage(path: image.path),
+			.mention(
+				name: "Recorded alias",
+				path: file.path
+			),
+			.localImage(path: image.path),
+		]])
+	}
+
 	@Test
 	func inlinePlanSendsArgumentAndModeWhileCapturingOriginalDraftAndAttachment() async throws
 	{

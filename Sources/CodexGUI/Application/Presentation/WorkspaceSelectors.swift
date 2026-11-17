@@ -556,6 +556,13 @@ struct WorkspaceSelectors
 			searchLoading: searchLoading,
 			searchError: searchError
 		)
+		if let threadID = snapshot.selectedThreadID
+		{
+			snapshot.editablePromptEntryIDs = ComposerCommandReducer.editablePromptEntryIDs(
+				threadID: threadID,
+				model: model
+			)
+		}
 		snapshot.pendingChats = pendingChats
 		snapshot.chatLocked = isConnected && (selectedThreadID.map
 		{

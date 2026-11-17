@@ -28,6 +28,11 @@ enum WorkspaceIntent
 		threadID: String,
 		turnID: String
 	)
+	case editSentPrompt(
+		threadID: String,
+		entryID: String,
+		text: String
+	)
 	case slashCommand(SlashCommandInvocation)
 	case acknowledgeSlashCommand(SlashCommandPresentationRequest)
 	case completeSlashCommand(
@@ -128,7 +133,7 @@ enum WorkspaceIntent
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .clearProject, .selectModel, .selectEffort, .selectApprovalMode,
 				.setFastMode: return .draft
-		case .branch,
+		case .branch, .editSentPrompt,
 				.retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
 				.loadEarlierTurnReferences,
 				.loadTurnPreview, .updateConversationViewport,
@@ -265,6 +270,17 @@ final class WorkspaceIntentTarget
 		switch intent
 		{
 		case .editDraft(let text): inputs.updateDraft(text)
+		case .editSentPrompt(
+			let threadID,
+			let entryID,
+			let text
+		):
+			operation = inputs.editSentPrompt(
+				threadID: threadID,
+				entryID: entryID,
+				text: text
+			)
+			return operation != nil
 		case .branch(
 			let threadID,
 			let turnID

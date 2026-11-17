@@ -166,6 +166,36 @@ struct SlashCommandAppServerTests
 		#expect(forkParameters["deferGoalContinuation"] == nil)
 	}
 
+	@Test func sentPromptForkUsesExclusiveCutoff() async throws
+	{
+		let directory = try await makeDirectory()
+		defer
+		{
+			try? FileManager.default.removeItem(at: directory)
+		}
+		let server = AppServer(
+			executableOverride: try await makeExecutable(in: directory),
+			requestTimeout: .seconds(3)
+		)
+		defer
+		{
+			server.disconnect()
+		}
+		try await server.connect()
+		_ = try await server.forkThread(
+			id: "source",
+			expectedDirectory: directory,
+			boundary: .beforeTurn("edited")
+		)
+		let parameters = try parameters(
+			for: "thread/fork",
+			in: readRequests(in: directory)
+		)
+		#expect(parameters["beforeTurnId"] as? String == "edited")
+		#expect(parameters["lastTurnId"] == nil)
+		#expect(parameters["deferGoalContinuation"] == nil)
+	}
+
 	@Test func compactionAcknowledgementKeepsLifecycleOpen() async throws
 	{
 		let directory = try await makeDirectory()

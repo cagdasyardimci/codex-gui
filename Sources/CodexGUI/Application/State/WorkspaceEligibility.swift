@@ -486,7 +486,8 @@ struct WorkspaceEligibility
 		}
 		guard let submittedText = ComposerPromptText.submittedText(
 			submission.draft.text,
-			collaborationMode: submission.collaborationMode
+			collaborationMode: submission.collaborationMode,
+			literal: submission.sendsDraftTextLiterally
 		)
 		else
 		{
@@ -537,13 +538,16 @@ struct WorkspaceEligibility
 						let name,
 						let resolvedPath
 						) = remainingInputs.first,
-						name == URL(fileURLWithPath: path).lastPathComponent,
+						name == item.mentionName(for: path),
 						resolvedPath.hasPrefix(checkout + "/")
 				else
 				{
 					return false
 				}
-				textParts.append(UserMessageContextDescription.file(path: path))
+				if let description = item.fileDescription(for: path)
+				{
+					textParts.append(description)
+				}
 				remainingInputs.removeFirst()
 			case .textExcerpt:
 				guard let path = item.path, let excerpt = item.excerpt

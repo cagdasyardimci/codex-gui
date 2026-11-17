@@ -169,7 +169,8 @@ extension WorkspaceLifecycleReducer
 				queuedMessageID: captured.queuedMessageID,
 				serverQueueEntry: captured.serverQueueEntry,
 				queueSteeringTransfer: captured.queueSteeringTransfer,
-				queuedSteeringInput: captured.queuedSteeringInput
+				queuedSteeringInput: captured.queuedSteeringInput,
+				sendsDraftTextLiterally: captured.sendsDraftTextLiterally
 			)
 			let action: WorkspaceAction
 			switch operation

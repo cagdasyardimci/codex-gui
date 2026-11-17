@@ -230,6 +230,14 @@ enum WorkspaceFeatureComposition
 			model: &model,
 			result: &result
 		)
+		if !acceptedHistory.isReadOnlyDueToActiveWriter
+		{
+			ComposerCommandReducer.submitRevisionAfterSelection(
+				acceptedHistory.operation,
+				model: &model,
+				result: &result
+			)
+		}
 	}
 
 	static func reduceNavigation(

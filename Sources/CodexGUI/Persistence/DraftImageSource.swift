@@ -7,6 +7,7 @@ enum DraftImageSource: Sendable
 {
 	case file(URL)
 	case data(Data)
+	case inlineDataURL(String)
 	case bitmap(CGImage)
 
 	@MainActor
@@ -74,6 +75,17 @@ enum DraftImageSource: Sendable
 				from: source,
 				to: destination
 			)
+		case let .inlineDataURL(url):
+			guard let data = InlineImageData.decode(
+				url,
+				maximumBytes: DraftImageStore.maximumImageBytes
+			)
+			else
+			{
+				try Task.checkCancellation()
+				throw DraftImageStoreError.unsupported
+			}
+			try DraftImageSource.data(data).addCapturedImage(to: destination)
 		case let .data(bytes):
 			let source = CGImageSourceCreateWithData(
 				bytes as CFData,

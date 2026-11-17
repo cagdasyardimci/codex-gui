@@ -336,6 +336,38 @@ extension MainWindowController
 			))
 		}
 
+		conversation.transcript.editablePrompt =
+		{
+			threadID, entryID in
+			guard target.accepts(.editSentPrompt(
+				threadID: threadID,
+				entryID: entryID,
+				text: ""
+			))
+			else
+			{
+				return nil
+			}
+			return target.store.inputs.editableSentPrompt(
+				threadID: threadID,
+				entryID: entryID
+			)
+		}
+		conversation.transcript.onRevisePrompt =
+		{
+			threadID, entryID, text in
+			guard target.dispatch(.editSentPrompt(
+				threadID: threadID,
+				entryID: entryID,
+				text: text
+			))
+			else
+			{
+				return nil
+			}
+			return target.operation
+		}
+
 		conversation.onDraftChange =
 		{
 			target.dispatch(.editDraft($0))

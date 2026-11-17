@@ -586,6 +586,27 @@ final class WorkspaceEffectRunner
 					completion = .failed(failure)
 				}
 			}
+			let importedAttachmentLease: UUID?
+			if case .composerCommand(.forkFinished(
+				let fork,
+				.succeeded
+			)) = action
+			{
+				importedAttachmentLease = fork.sentPromptRevision?.importedAttachmentLease
+			}
+			else
+			{
+				importedAttachmentLease = nil
+			}
+			// This main-actor task delivers synchronously to the store, which reserves
+			// the draft write and its image ownership before returning.
+			defer
+			{
+				if let importedAttachmentLease
+				{
+					self.storage?.releaseContextForRequest(importedAttachmentLease)
+				}
+			}
 			// Cancellation retires the local task even if a service ignores Task cancellation.
 			guard !Task.isCancelled, self.tasks[key] != nil
 			else

@@ -263,6 +263,7 @@ struct CodexItem: Sendable
 	let durationMs: Double?
 	let changes: [FileChange]
 	let references: [UserMessageReference]
+	let isEditablePrompt: Bool
 	let subagentActivity: CodexSubagentActivity?
 	let sourceActivity: ConversationSourceActivity?
 
@@ -287,6 +288,42 @@ struct CodexItem: Sendable
 		)
 		self.text = content.text
 		self.references = content.references
+		let userInput = json["content"] as? [[String: Any]] ?? []
+		isEditablePrompt = type == "userMessage" && !userInput.isEmpty
+			&& UserMessagePresenter.isEditableRequest(
+				content.text,
+				hasAttachments: !content.references.isEmpty
+			)
+			&& userInput.enumerated().allSatisfy
+			{
+				index, input in
+				switch input["type"] as? String
+				{
+				case "text":
+					return index == 0 && input["text"] is String
+						&& (input["text_elements"] as? [Any] ?? []).isEmpty
+						&& (input["textElements"] as? [Any] ?? []).isEmpty
+				case "mention":
+					return (input["path"] as? String)?.isEmpty == false
+						&& (input["name"] as? String)?.isEmpty == false
+				case "localImage":
+					guard let path = input["path"] as? String, !path.contains("\0")
+					else
+					{
+						return false
+					}
+					return LocalAttachmentURL.resolve(path) != nil
+				case "image":
+					return UserMessageReference(
+						json: input,
+						id: ""
+					).map
+					{
+						InlineImageData.isDataURL($0.path)
+					} == true
+				default: return false
+				}
+			}
 
 		self.command = json["command"] as? String
 		self.commandActions = (json["commandActions"] as? [[String: Any]] ?? [])
@@ -360,6 +397,7 @@ struct UserMessageReference: Equatable, Sendable
 	{
 		guard let type = json["type"] as? String,
 				let path = json["path"] as? String ?? json["url"] as? String
+				?? (json["imageUrl"] as? String ?? json["image_url"] as? String)
 		else
 		{
 			return nil

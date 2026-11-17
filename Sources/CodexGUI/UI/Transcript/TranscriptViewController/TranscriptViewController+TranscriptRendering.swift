@@ -410,6 +410,10 @@ extension TranscriptViewController
 				force: true
 			)
 		}
+		configurePromptEditing(
+			item,
+			entry: entry
+		)
 	}
 
 	private func messageTimestamp(for entry: ConversationEntry) -> Date?
@@ -557,6 +561,17 @@ extension TranscriptViewController
 	{
 		let width = ConversationFlowLayout.contentWidth(in: collectionView.bounds.width)
 		let row = displayedRows[indexPath.item]
+		if row.id == editingPrompt?.entryID, case .message(let entry) = row
+		{
+			let imageAllowance = ConversationCollectionItem.attachmentAllowance(
+				count: entry.imageAttachments.count,
+				width: width
+			)
+			return NSSize(
+				width: width,
+				height: TranscriptPromptEditor.rowHeight + imageAllowance
+			)
+		}
 		switch row
 		{
 		case .activity(let activity):

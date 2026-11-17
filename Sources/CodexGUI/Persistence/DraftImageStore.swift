@@ -18,7 +18,7 @@ enum DraftImageStoreError: LocalizedError
 /// Owns only the PNG copies that the composer creates for durable draft attachments.
 struct DraftImageStore: Sendable
 {
-	private static let maximumImageBytes = 20 * 1024 * 1024
+	static let maximumImageBytes = 20 * 1024 * 1024
 
 	private let directory: URL
 	private let preparePNG: @Sendable (DraftImageSource) throws -> Data

@@ -23,10 +23,13 @@ enum ComposerContextBuilder
 					projectPath: projectPath
 				)
 				let path = reference.path
-				textParts.append(UserMessageContextDescription.file(path: path))
+				if let description = item.fileDescription(for: path)
+				{
+					textParts.append(description)
+				}
 				contextInputs.append(
 					.mention(
-						name: URL(fileURLWithPath: path).lastPathComponent,
+						name: item.mentionName(for: path),
 						path: reference.file.path
 					)
 				)
@@ -43,7 +46,11 @@ enum ComposerContextBuilder
 					lastLine: item.lastLine
 				))
 			case .image:
-				guard let path = item.path, FileManager.default.fileExists(atPath: path)
+				guard let path = item.path, !path.contains("\0"),
+						FileManager.default.isReadableFile(atPath: path),
+						let attributes = try? URL(fileURLWithPath: path).resourceValues(
+						forKeys: [.isRegularFileKey]
+						), attributes.isRegularFile == true
 				else
 				{
 					throw ComposerContextError.missingImage(item.title)
@@ -105,7 +112,7 @@ enum ComposerContextBuilder
 		{
 			throw ComposerContextError.invalidPath(path)
 		}
-		guard FileManager.default.fileExists(atPath: file.path)
+		guard FileManager.default.isReadableFile(atPath: file.path)
 		else
 		{
 			throw ComposerContextError.missingFile(path)

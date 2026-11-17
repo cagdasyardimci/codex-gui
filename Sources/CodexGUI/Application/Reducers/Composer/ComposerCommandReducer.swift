@@ -33,6 +33,10 @@ enum ComposerCommandReducer
 		guard case .composerCommand(let command) = action
 		else
 		{
+			discardStaleRevision(
+				action,
+				model: &model
+			)
 			if case .composer(.draftEdited) = action
 			{
 				model.composerCommands.error = nil
@@ -65,12 +69,11 @@ enum ComposerCommandReducer
 			{
 				return result
 			}
-			if case .throughTurn(let turnID) = request.forkBoundary,
-				request.invocation.id != .fork || !canBranch(
-				threadID: request.context.threadID ?? "",
-				turnID: turnID,
+			guard acceptsForkBoundary(
+				request,
 				model: model
-				)
+			)
+			else
 			{
 				return result
 			}

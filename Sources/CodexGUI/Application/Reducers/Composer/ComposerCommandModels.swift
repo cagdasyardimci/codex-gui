@@ -3,6 +3,22 @@ import Foundation
 enum ConversationForkBoundary: Equatable
 {
 	case throughTurn(String)
+	case beforeTurn(String)
+}
+
+struct PendingSentPromptSubmission
+{
+	let context: OperationContext
+	let conversation: ConversationKey
+	let draft: ComposerDraft
+}
+
+struct SentPromptRevision
+{
+	let entryID: String
+	let text: String
+	var attachments: [ComposerContextItem]
+	var importedAttachmentLease: UUID?
 }
 
 /// A presentation request retains the exact draft and workspace that proposed the command.
@@ -13,6 +29,7 @@ struct SlashCommandPresentationRequest
 	let conversation: ConversationKey
 	let draft: ComposerDraft
 	var forkBoundary: ConversationForkBoundary?
+	var sentPromptRevision: SentPromptRevision?
 	var id: UUID
 	{
 		context.requestID
@@ -30,6 +47,7 @@ struct ComposerCommandModel
 	var error: String?
 	var conversationErrors: [ConversationKey: String] = [:]
 	var pendingFork: SlashCommandPresentationRequest?
+	var pendingRevision: PendingSentPromptSubmission?
 	var uncertainFork: OperationContext?
 	var forkRecoveryPresentation: SlashCommandPresentationRequest?
 	var forkRecoveryListReady = false

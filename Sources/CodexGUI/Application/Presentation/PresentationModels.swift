@@ -60,6 +60,7 @@ struct TaskWorkspaceChoice: Equatable
 
 struct ConversationSnapshot
 {
+	var editablePromptEntryIDs: Set<String> = []
 	var turnReferences: [ConversationTurnReference] = []
 	var turnPreviews: [ConversationTurnPreview] = []
 	var turnPreviewErrors: [String: String] = [:]

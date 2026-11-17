@@ -2,6 +2,52 @@ import Foundation
 
 extension WorkspaceEffectRunner
 {
+	private func prepareRecordedImages(_ revision: SentPromptRevision) async throws
+		-> SentPromptRevision
+	{
+		var prepared = revision
+		var imported: [ComposerContextItem] = []
+		do
+		{
+			for (index, item) in revision.attachments.enumerated()
+			{
+				guard item.kind == .image, let path = item.path, InlineImageData.isDataURL(path)
+				else
+				{
+					continue
+				}
+				guard let storage
+				else
+				{
+					throw ComposerContextError.missingImage(item.title)
+				}
+				let file = try await storage.importRecordedImage(path)
+				let copy = ComposerContextItem(
+					id: item.id,
+					kind: .image,
+					title: item.title,
+					path: file.path,
+					imageAnnotations: item.imageAnnotations
+				)
+				imported.append(copy)
+				prepared.attachments[index] = copy
+			}
+		}
+		catch
+		{
+			if let storage, !imported.isEmpty
+			{
+				storage.releaseContextForRequest(storage.retainContextForRequest(imported))
+			}
+			throw error
+		}
+		if !imported.isEmpty
+		{
+			prepared.importedAttachmentLease = storage?.retainContextForRequest(imported)
+		}
+		return prepared
+	}
+
 	func performComposerCommand(
 		_ effect: WorkspaceEffect,
 		context: OperationContext,
@@ -65,13 +111,43 @@ extension WorkspaceEffectRunner
 			let directory = URL(fileURLWithPath: path)
 			switch effect
 			{
-			case .forkConversation(let request):
+			case .forkConversation(var request):
+				if let revision = request.sentPromptRevision
+				{
+					request.sentPromptRevision = try await prepareRecordedImages(revision)
+				}
+				let lease = request.sentPromptRevision?.importedAttachmentLease
+				var handedOff = false
+				defer
+				{
+					if !handedOff, let lease
+					{
+						storage?.releaseContextForRequest(lease)
+					}
+				}
+				if let revision = request.sentPromptRevision, !revision.attachments.isEmpty
+				{
+					_ = try ComposerContextBuilder.inputs(
+						text: revision.text,
+						items: revision.attachments,
+						project: directory
+					)
+				}
+				try Task.checkCancellation()
+				guard !hasObservedSubscription
+					|| (subscription?.workspace == context.workspace
+						&& subscription?.generation == context.generation)
+				else
+				{
+					throw AppServerError.disconnected
+				}
 				mutationSent = true
 				let detail = try await service.forkThread(
 					id: threadID,
 					expectedDirectory: directory,
 					boundary: request.forkBoundary
 				)
+				handedOff = true
 				return .composerCommand(.forkFinished(
 					request,
 					.succeeded(detail)
