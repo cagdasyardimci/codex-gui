@@ -28,40 +28,70 @@ extension MainWindowController
 				line: reference.line
 			)
 		}
+		configureChatFileActions(activeChatTools)
+	}
+
+	func configureChatFileActions(_ session: ChatToolsSession)
+	{
+		let files = session.files
+		let tabs = session.tabs
+		let runtime = files.runtime
 		files.captureAttachmentReceiver =
 		{
-			[weak conversation = self.conversation] in
-			conversation?.makeContextAttachmentReceiver()
+			[weak self, weak files] in
+			guard let self, self.files === files
+			else
+			{
+				return nil
+			}
+			return self.conversation.makeContextAttachmentReceiver()
 		}
 		files.onStateChange =
 		{
-			[weak self] state in self?.publishFileTabs(state)
-		}
-		inspector.toolsTabs.onFilesPresentationVisible =
-		{
-			[weak self] visible in self?.files.setPresentationVisible(visible)
-		}
-		inspector.toolsTabs.onOpenFiles =
-		{
-			[weak self] in self?.openFilesToolTab()
-		}
-		inspector.toolsTabs.onFileSelected =
-		{
-			[weak self] id in
-			guard let self, self.files.runtime.state.selectedDocumentID != id
+			[weak files, weak tabs] state in
+			guard let files, let tabs
 			else
 			{
 				return
 			}
-			self.files.runtime.select(id)
+			Self.publishFileTabs(
+				state,
+				files: files,
+				tabs: tabs
+			)
 		}
-		inspector.toolsTabs.onFileRetainRequested =
+		tabs.onFilesPresentationVisible =
 		{
-			[weak self] in self?.files.runtime.retain($0)
+			[weak files] visible in files?.setPresentationVisible(visible)
 		}
-		inspector.toolsTabs.onFileCloseRequested =
+		tabs.onOpenFiles =
 		{
-			[weak self] id in self?.enqueueFileClose(id)
+			[weak self] in self?.openFilesToolTab()
+		}
+		tabs.onFileSelected =
+		{
+			[weak runtime] id in
+			guard let runtime, runtime.state.selectedDocumentID != id
+			else
+			{
+				return
+			}
+			runtime.select(id)
+		}
+		tabs.onFileRetainRequested =
+		{
+			[weak runtime] in runtime?.retain($0)
+		}
+		tabs.onFileCloseRequested =
+		{
+			[weak self, weak runtime] id in
+			if let runtime
+			{
+				self?.enqueueFileClose(
+					id,
+					in: runtime
+				)
+			}
 		}
 	}
 
@@ -94,41 +124,15 @@ extension MainWindowController
 		updateToolsToolbarControls()
 	}
 
-	func updateFilesProject(target: WorkspaceIntentTarget)
-	{
-		guard filesWereOpened
-		else
-		{
-			return
-		}
-		let path = target.reference.workspace.canonicalCheckoutPath
-		guard path != filesProjectPath
-		else
-		{
-			return
-		}
-		filesProjectPath = path
-		if let path
-		{
-			files.runtime.switchRoot(path)
-		}
-		else
-		{
-			files.runtime.clearRoot()
-		}
-	}
-
 	func openFilesToolTab()
 	{
 		configureToolsPaneClosing()
-		filesWereOpened = true
-		let snapshot = coordinator?.currentSnapshot ?? currentStore.currentSnapshot
-		let target = WorkspaceIntentTarget(
-			store: currentStore,
-			snapshot: snapshot,
-			coordinator: coordinator
-		)
-		updateFilesProject(target: target)
+		let path = currentFileProjectPath
+		if activeChatTools.filesProjectPath != path
+		{
+			activeChatTools.filesProjectPath = path
+			files.runtime.switchRoot(path)
+		}
 		if !inspector.isShowingTools || paneController.isReviewCollapsed
 		{
 			paneController.openToolsPane
@@ -233,7 +237,11 @@ extension MainWindowController
 		).reference.workspace.canonicalCheckoutPath
 	}
 
-	private func publishFileTabs(_ state: FileViewerState)
+	private static func publishFileTabs(
+		_ state: FileViewerState,
+		files: FilesViewController,
+		tabs: ToolsTabViewController
+	)
 	{
 		let presentations = state.documents.map
 		{
@@ -246,21 +254,27 @@ extension MainWindowController
 				isDirty: document.isDirty
 			)
 		}
-		inspector.toolsTabs.updateFileTabs(
+		tabs.updateFileTabs(
 			presentations: presentations,
 			selectedID: state.selectedDocumentID,
 			controller: files
 		)
 	}
 
-	private func enqueueFileClose(_ id: UUID)
+	private func enqueueFileClose(
+		_ id: UUID,
+		in runtime: FileViewerRuntime
+	)
 	{
-		guard !fileCloseRequests.contains(id), !fileCloseQueue.contains(id)
+		guard !fileCloseRequests.contains(id), !fileCloseQueue.contains(where:
+			{
+				$0.id == id
+			})
 		else
 		{
 			return
 		}
-		fileCloseQueue.append(id)
+		fileCloseQueue.append((runtime, id))
 		guard !fileClosePumpRunning
 		else
 		{
@@ -272,14 +286,20 @@ extension MainWindowController
 			while !fileCloseQueue.isEmpty
 			{
 				let next = fileCloseQueue.removeFirst()
-				await closeFileTab(next)
+				await closeFileTab(
+					next.id,
+					in: next.runtime
+				)
 			}
 			fileClosePumpRunning = false
 			fileClosePumpTask = nil
 		}
 	}
 
-	private func closeFileTab(_ id: UUID) async
+	private func closeFileTab(
+		_ id: UUID,
+		in runtime: FileViewerRuntime
+	) async
 	{
 		guard fileCloseRequests.insert(id).inserted
 		else
@@ -290,12 +310,12 @@ extension MainWindowController
 		{
 			fileCloseRequests.remove(id)
 		}
-		let result = await files.runtime.close(
+		let result = await runtime.close(
 			id,
 			choice: .save
 		)
 		guard case .decisionRequired(let failure) = result,
-				let captured = files.runtime.state.documents.first(where:
+				let captured = runtime.state.documents.first(where:
 				{
 					$0.id == id
 				})
@@ -307,12 +327,12 @@ extension MainWindowController
 			ids: [id],
 			failure: failure,
 			isWindowClosing: false
-		), files.runtime.state.documents.contains(where:
+		), runtime.state.documents.contains(where:
 			{
 				$0.id == id && $0.editRevision == captured.editRevision && $0.isDirty
 			})
 		{
-			_ = await files.runtime.close(
+			_ = await runtime.close(
 				id,
 				choice: .discard
 			)
@@ -335,41 +355,60 @@ extension MainWindowController
 		return result
 	}
 
+	var hasPendingFileWrites: Bool
+	{
+		chatFileRuntimes.contains
+		{
+			$0.state.documents.contains
+			{
+				$0.isDirty || $0.isSaving
+			}
+		}
+	}
+
 	private func performFileSettlement() async -> Bool
 	{
 		if let fileClosePumpTask
 		{
 			await fileClosePumpTask.value
 		}
-		let failures = await files.runtime.flushAll()
-		guard !failures.isEmpty
+		var failure: FileViewerFailure?
+		var captured: [(runtime: FileViewerRuntime, id: UUID, revision: Int)] = []
+		for runtime in chatFileRuntimes
+		{
+			let failures = await runtime.flushAll()
+			failure = failure ?? failures.values.first
+			captured += runtime.state.documents.compactMap
+			{
+				document in
+				guard document.isDirty, failures[document.id] != nil
+				else
+				{
+					return nil
+				}
+				return (runtime, document.id, document.editRevision)
+			}
+		}
+		guard let failure
 		else
 		{
-			return true
-		}
-		let captured = files.runtime.state.documents.filter
-		{
-			failures[$0.id] != nil && $0.isDirty
-		}.map
-		{
-			($0.id, $0.editRevision)
+			return !hasPendingFileWrites
 		}
 		guard shouldDiscardFiles(
-			ids: captured.map(\.0),
-			failure: failures.values.first,
+			ids: captured.map(\.id),
+			failure: failure,
 			isWindowClosing: true
 		)
 		else
 		{
 			return false
 		}
-		let currentDocuments = files.runtime.state.documents
 		guard captured.allSatisfy(
 			{
 				item in
-				currentDocuments.contains(where:
+				item.runtime.state.documents.contains(where:
 					{
-						$0.id == item.0 && $0.editRevision == item.1
+						$0.id == item.id && $0.editRevision == item.revision
 					})
 			}
 		)
@@ -377,9 +416,9 @@ extension MainWindowController
 		{
 			return false
 		}
-		for (id, _) in captured
+		for (runtime, id, revision) in captured
 		{
-			guard let current = files.runtime.state.documents.first(where:
+			guard let current = runtime.state.documents.first(where:
 				{
 					$0.id == id
 				})
@@ -391,12 +430,17 @@ extension MainWindowController
 			{
 				continue
 			}
-			_ = await files.runtime.close(
+			guard current.editRevision == revision
+			else
+			{
+				return false
+			}
+			_ = await runtime.close(
 				id,
 				choice: .discard
 			)
 		}
-		return true
+		return !hasPendingFileWrites
 	}
 
 	private func shouldDiscardFiles(

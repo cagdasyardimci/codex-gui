@@ -6,6 +6,109 @@ import Testing
 @Suite(.timeLimit(.minutes(2))) @MainActor
 struct FilesWindowIntegrationTests
 {
+	@Test(.appKitIsolation)
+	func chatsInTheSameCheckoutRestoreTheirOwnTabsAndSaveHiddenEdits() async throws
+	{
+		_ = NSApplication.shared
+		let fixture = try await CapturedIntentStoreFixture.makeStore(threadID: "first")
+		defer
+		{
+			fixture.cleanup()
+		}
+		let store = fixture.store
+		let root = try #require(store.model.identity.canonicalCheckoutPath)
+		fixture.service.additionalThreads["second"] = ThreadDetail(
+			summary: try #require(ThreadSummary(json: ["id": "second", "cwd": root])),
+			turns: [],
+			nextTurnsCursor: nil
+		)
+		await store.inputs.connect()
+		let firstRead = try #require(store.inputs.selectThread("first"))
+		_ = await firstRead.wait()
+		let service = WindowFileService()
+		let runtime = FileViewerRuntime(
+			service: service,
+			autosaveDelay: .seconds(60)
+		)
+		let controller = MainWindowController(
+			store: store,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			},
+			filesRuntime: runtime
+		)
+		defer
+		{
+			controller.window?.close()
+		}
+		controller.window?.prepareForTesting()
+		controller.showWindow(nil)
+		let owner = try #require(controller.inspector.summary.currentPresentation?.owner)
+		#expect(controller.inspector.openSourcesInToolTab(ContextPanelRequest(
+			owner: owner,
+			destination: .sources
+		)))
+		let sourcesTab = try #require(controller.inspector.toolsTabs.sourcesTabID)
+		controller.openFilesToolTab()
+		await controller.paneController.waitForToolsTransition()
+		let firstTabs = controller.inspector.toolsTabs
+		let location = FileLocation(
+			root: root,
+			relativePath: "notes.txt"
+		)
+		controller.files.open(
+			location,
+			retained: true
+		)
+		let id = try #require(runtime.state.selectedDocumentID)
+		await runtime.readTask(for: id)?.value
+		runtime.edit(
+			id,
+			text: "edited in first chat"
+		)
+		controller.paneController.toggleToolsExpanded()
+		await controller.paneController.waitForToolsTransition()
+		try #require(controller.paneController.isToolsExpanded)
+
+		let secondRead = try #require(store.inputs.selectThread("second"))
+		_ = await secondRead.wait()
+		#expect(!controller.inspector.isShowingTools)
+		#expect(!controller.paneController.isToolsExpanded)
+		#expect(controller.inspector.toolsTabs.tabCount == 0)
+		#expect(controller.files.runtime.state.documents.isEmpty)
+		#expect(controller.toolsToolbar.openButton.tag == 0)
+		let window = try #require(controller.window)
+		#expect(await controller.settleFileWritesForClosing())
+		#expect(await service.text(at: location) == "edited in first chat")
+
+		controller.paneController.openToolsPane()
+		await controller.paneController.waitForToolsTransition()
+		let secondTab = try #require(controller.inspector.toolsTabs.selectedTabID)
+		controller.inspector.closeToolsPane()
+
+		let restoredFirst = try #require(store.inputs.selectThread("first"))
+		_ = await restoredFirst.wait()
+		let tabBar = window.toolbar?.items.first
+		{
+			$0.itemIdentifier == MainWindowController.ToolbarItem.toolsTabBar
+		}
+		#expect(tabBar?.view === firstTabs.tabBarView)
+		#expect(controller.paneController.isToolsExpanded)
+		#expect(controller.inspector.isShowingTools)
+		#expect(controller.inspector.toolsTabs.selectedFileDocumentID == id)
+		#expect(controller.inspector.toolsTabs.sourcesTabID == sourcesTab)
+		#expect(controller.inspector.conversationSources?.parent === firstTabs)
+		#expect(controller.files.runtime.state.documents.map(\.id) == [id])
+
+		let restoredSecond = try #require(store.inputs.selectThread("second"))
+		_ = await restoredSecond.wait()
+		#expect(!controller.inspector.isShowingTools)
+		#expect(controller.inspector.toolsTabs.selectedTabID == secondTab)
+		#expect(controller.toolsToolbar.openButton.tag == 1)
+	}
 
 	@Test func dirtyCloseTargetsCapturedTabAndKeepsItOnCancel() async throws
 	{

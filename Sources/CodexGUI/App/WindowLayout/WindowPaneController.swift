@@ -4,6 +4,14 @@ import AppKit
 @MainActor
 final class WindowPaneController
 {
+	struct ToolsPaneState
+	{
+		var visibility: WindowReviewVisibility?
+		var width = WindowPaneLayout.toolsMinimumWidth
+		var expanded = false
+		var conversationSelected = false
+	}
+
 	private static let workspaceFilesMaximumWidth = LayoutTokens.window.filesMaximumWidth
 
 	private weak var window: NSWindow?
@@ -25,7 +33,26 @@ final class WindowPaneController
 	private var usesToolsSizing = false
 	private var usesSummarySizing = true
 	private var hasInspectorContent = true
-	private var reviewVisibility: WindowReviewVisibility = .automatic
+	private var inspectorReviewVisibility: WindowReviewVisibility = .automatic
+	private var toolsReviewVisibility: WindowReviewVisibility = .expanded
+	private var reviewVisibility: WindowReviewVisibility
+	{
+		get
+		{
+			usesToolsSizing ? toolsReviewVisibility : inspectorReviewVisibility
+		}
+		set
+		{
+			if usesToolsSizing
+			{
+				toolsReviewVisibility = newValue
+			}
+			else
+			{
+				inspectorReviewVisibility = newValue
+			}
+		}
+	}
 	private var reviewAutomaticallyCollapsed = false
 	private var hasPresentedWindow = false
 	private var isApplyingPaneLayout = false
@@ -144,7 +171,7 @@ final class WindowPaneController
 		split.addSplitViewItem(reviewPane)
 
 		self.split = split
-		inspector.toolsTabs.onTabSelectionChange =
+		inspector.onToolsTabSelectionChange =
 		{
 			[weak self] in self?.updateExpandedTabSelection()
 		}
@@ -237,11 +264,10 @@ final class WindowPaneController
 			frame: window.frame,
 			navigationWidth: expandedNavigationWidth,
 			reviewWidth: expandedReviewWidth,
-			reviewCollapsed: (savedGitReviewLayout?.reviewVisibility ?? reviewVisibility) ==
-				.collapsed,
+			reviewCollapsed: inspectorReviewVisibility == .collapsed,
 			navigationCollapsed: navigationCollapsed,
 			paneGeometryVersion: WindowPaneLayout.version,
-			reviewVisibility: savedGitReviewLayout?.reviewVisibility ?? reviewVisibility
+			reviewVisibility: inspectorReviewVisibility
 		)
 	}
 
@@ -436,6 +462,36 @@ final class WindowPaneController
 		configureContent()
 		reviewVisibility = .expanded
 		animateToolsPane(transition)
+	}
+
+	func suspendChatTools() -> ToolsPaneState
+	{
+		cancelToolsPaneAnimation()
+		return ToolsPaneState(
+			visibility: inspector.isShowingTools ? toolsReviewVisibility : nil,
+			width: expandedToolsWidth,
+			expanded: isToolsExpanded,
+			conversationSelected: inspector.toolsTabs.isConversationSelected
+		)
+	}
+
+	func restoreChatTools(_ state: ToolsPaneState)
+	{
+		expandedToolsWidth = state.width
+		toolsReviewVisibility = state.visibility ?? .expanded
+		guard state.visibility != nil, inspector.toolsTabs.tabCount > 0
+		else
+		{
+			return
+		}
+		inspector.toolsTabs.setExpanded(state.expanded)
+		if state.conversationSelected
+		{
+			inspector.toolsTabs.selectConversation()
+		}
+		inspector.showToolsPane()
+		setToolsExpanded(state.expanded)
+		applyResponsivePaneLayout(force: true)
 	}
 
 	private func setToolsExpanded(

@@ -16,13 +16,14 @@ final class InspectorViewController: NSViewController
 	let summary = PinnedSummaryViewController()
 	var conversationSources: ConversationSourcesViewController?
 	var conversationSubagents: SubagentsViewController?
-	let toolsTabs = ToolsTabViewController()
+	private(set) var toolsTabs = ToolsTabViewController()
 	private(set) var isShowingTools = false
 	private var isShowingExpandedConversation = false
 	private var expandedConversationSummaryRevealed = false
 	var onToolsClose: ((Bool) -> Void)?
 	var onPaneContentChange: (() -> Void)?
 	var onToolChangesSelected: (() -> Void)?
+	var onToolsTabSelectionChange: (() -> Void)?
 	private var summaryVisible = true
 	private(set) var isShowingDetails = false
 	var hasPaneContent: Bool
@@ -95,9 +96,26 @@ final class InspectorViewController: NSViewController
 
 	private func configureToolsPaneCallbacks()
 	{
+		let tabs = toolsTabs
+		tabs.onTabSelectionChange =
+		{
+			[weak self, weak tabs] in
+			guard let self, self.toolsTabs === tabs
+			else
+			{
+				return
+			}
+			self.onToolsTabSelectionChange?()
+		}
 		toolsTabs.onCloseLastTab =
 		{
-			[weak self] in self?.closeToolsPane()
+			[weak self, weak tabs] in
+			guard let self, self.toolsTabs === tabs
+			else
+			{
+				return
+			}
+			self.closeToolsPane()
 		}
 		toolsTabs.onClosePane =
 		{
@@ -105,8 +123,9 @@ final class InspectorViewController: NSViewController
 		}
 		toolsTabs.onChangesSelectionChange =
 		{
-			[weak self] in
-			guard let self, self.isShowingTools, self.toolsTabs.isChangesSelected
+			[weak self, weak tabs] in
+			guard let self, self.toolsTabs === tabs, self.isShowingTools,
+					self.toolsTabs.isChangesSelected
 			else
 			{
 				return
@@ -116,8 +135,8 @@ final class InspectorViewController: NSViewController
 		}
 		toolsTabs.onChangesTabClosed =
 		{
-			[weak self] in
-			guard let self
+			[weak self, weak tabs] in
+			guard let self, self.toolsTabs === tabs
 			else
 			{
 				return
@@ -125,6 +144,26 @@ final class InspectorViewController: NSViewController
 			self.toolsTabs.detachChanges()
 			self.gitChanges.close()
 		}
+	}
+
+	func replaceToolsTabs(with tabs: ToolsTabViewController)
+	{
+		_ = view
+		cancelSummaryTransition()
+		setGitReviewFocused(false)
+		toolsTabs.suspendPresentation()
+		toolsTabs.detachChanges()
+		toolsTabs.detachSources()
+		toolsTabs.detachSubagents()
+		toolsTabs.view.removeFromSuperview()
+		toolsTabs.removeFromParent()
+		toolsTabs = tabs
+		isShowingTools = false
+		isShowingDetails = false
+		expandedConversationSummaryRevealed = false
+		installToolsPane(in: view)
+		configureToolsPaneCallbacks()
+		updateContentVisibility()
 	}
 
 	private func configureDetailPanels()
@@ -206,8 +245,22 @@ final class InspectorViewController: NSViewController
 		renderedOwner = presentation.owner
 		if ownerChanged
 		{
-			toolsTabs.removeSourcesTab()
-			toolsTabs.removeSubagentsTab()
+			if let conversationSources, conversationSources.owner == presentation.owner
+			{
+				toolsTabs.attachSources(conversationSources)
+			}
+			else
+			{
+				toolsTabs.removeSourcesTab()
+			}
+			if let conversationSubagents, conversationSubagents.owner == presentation.owner
+			{
+				toolsTabs.attachSubagents(conversationSubagents)
+			}
+			else
+			{
+				toolsTabs.removeSubagentsTab()
+			}
 		}
 		summaryVisible = visible
 		summary.render(presentation)

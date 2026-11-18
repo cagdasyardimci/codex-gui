@@ -357,14 +357,25 @@ final class ToolsTabViewController: NSViewController
 	{
 		sourcesTabID = selectFeatureTab(sourcesTabID)
 		_ = view
+		attachSources(controller)
+		renderTabs()
+		onTabSelectionChange?()
+		onChangesSelectionChange?()
+	}
+
+	func attachSources(_ controller: NSViewController)
+	{
+		guard sourcesTabID != nil
+		else
+		{
+			return
+		}
 		installController(
 			controller,
 			replacing: sourcesController
 		)
 		sourcesController = controller
-		renderTabs()
-		onTabSelectionChange?()
-		onChangesSelectionChange?()
+		showSelectedContent()
 	}
 
 	func detachSources()
@@ -383,14 +394,25 @@ final class ToolsTabViewController: NSViewController
 	{
 		subagentsTabID = selectFeatureTab(subagentsTabID)
 		_ = view
+		attachSubagents(controller)
+		renderTabs()
+		onTabSelectionChange?()
+		onChangesSelectionChange?()
+	}
+
+	func attachSubagents(_ controller: NSViewController)
+	{
+		guard subagentsTabID != nil
+		else
+		{
+			return
+		}
 		installController(
 			controller,
 			replacing: subagentsController
 		)
 		subagentsController = controller
-		renderTabs()
-		onTabSelectionChange?()
-		onChangesSelectionChange?()
+		showSelectedContent()
 	}
 
 	func detachSubagents()
@@ -819,6 +841,11 @@ final class ToolsTabViewController: NSViewController
 
 	func setExpanded(_ expanded: Bool)
 	{
+		guard expanded != isExpanded
+		else
+		{
+			return
+		}
 		_ = view
 		isExpanded = expanded
 		if !expanded
@@ -841,6 +868,20 @@ final class ToolsTabViewController: NSViewController
 		{
 			onChangesSelectionChange?()
 		}
+	}
+
+	func suspendPresentation()
+	{
+		setContentVisible(false)
+		sourcesHoverPreview.dismiss()
+		for panel in imageSavePanels.values
+		{
+			panel.sheetParent?.endSheet(
+				panel,
+				returnCode: .cancel
+			)
+		}
+		imageSavePanels.removeAll()
 	}
 
 	func setSummaryVisible(_ visible: Bool)
@@ -1182,7 +1223,7 @@ final class ToolsTabViewController: NSViewController
 		if let sourcesController, sourcesController.parent === self
 		{
 			sourcesController.view.isHidden = !isSourcesSelected
-			if isSourcesSelected
+			if isContentVisible && isSourcesSelected
 			{
 				(sourcesController as? ConversationSourcesViewController)?.prepareForDisplay()
 			}
@@ -1748,7 +1789,7 @@ final class ToolsTabViewController: NSViewController
 		return true
 	}
 
-	@objc private func selectConversation()
+	@objc func selectConversation()
 	{
 		guard isExpanded
 		else

@@ -52,6 +52,8 @@ Keep shared rendering separate from consumer lifetimes: a renderer owns its reso
 
 Do not duplicate canonical payload inventories in presentation caches. Sources, transcript activity and summaries may project the same records differently, but must agree on identity and outcomes. Activity-specific design decisions belong to [activity presentation](activity-presentation-design.md), and native adaptation rationale belongs to [interface styling](interface-styling.md#native-adaptation-rationale).
 
+The tab pane belongs to the selected chat within its checkout session. Switching chats restores that chat's tabs, selection, and pane layout for the lifetime of the window. A new chat gets its own tab set, which follows the first submission when the backend assigns a thread. File edits and pending closes keep their original tab owner across switches, and closing the window or quitting settles writes from hidden chats as well as the visible chat. See [tab pane ownership](../Sources/CodexGUI/App/MainWindowController/MainWindowController+ChatTools.swift).
+
 ## Recorded latest Git turn
 
 Last Turn attributes reported edits to the selected task's turn. Checkout-wide diffs cannot establish that attribution when chats interleave edits, even to the same file. Retain the latest known editing-turn identity independently of resident transcript bodies; older loaded edits cannot replace it without trusted ordering evidence.

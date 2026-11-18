@@ -16,6 +16,7 @@ final class ToolsToolbarCoordinator
 	private var previousIsOpen: Bool?
 	private var previousIsExpanded: Bool?
 	private var tabBarWidthConstraint: NSLayoutConstraint?
+	private weak var constrainedTabBar: NSView?
 
 	func configureTabBarItem(
 		_ item: NSToolbarItem,
@@ -30,14 +31,16 @@ final class ToolsToolbarCoordinator
 			controls: LayoutTokens.NativeChrome.toolbarControlOffset
 		)
 		tabBar.clipsToBounds = false
-		if tabBarWidthConstraint == nil
+		if constrainedTabBar !== tabBar
 		{
+			tabBarWidthConstraint?.isActive = false
 			let width = tabBar.widthAnchor.constraint(equalToConstant: toolsTabBarWidth(
 				paneController: paneController,
 				inspector: inspector
 			))
 			width.isActive = true
 			tabBarWidthConstraint = width
+			constrainedTabBar = tabBar
 		}
 		item.view = tabBar
 		item.visibilityPriority = .high
@@ -95,6 +98,17 @@ final class ToolsToolbarCoordinator
 		)
 		if isOpen
 		{
+			if let item = toolbar.items.first(where:
+				{
+					$0.itemIdentifier == MainWindowController.ToolbarItem.toolsTabBar
+				}), item.view !== inspector.toolsTabs.tabBarView
+			{
+				configureTabBarItem(
+					item,
+					paneController: paneController,
+					inspector: inspector
+				)
+			}
 			inspector.toolsTabs.setPaneWidth(paneController.tabViewportWidth)
 			inspector.toolsTabs.tabBarView.alphaValue = min(
 				1,

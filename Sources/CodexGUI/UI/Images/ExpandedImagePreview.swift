@@ -178,13 +178,15 @@ final class ExpandedImagePreview
 			}
 			if let owner = parent.windowController as? MainWindowController
 			{
+				let tabs = owner.inspector.toolsTabs
 				controller.onOpenImage =
 				{
-					[weak self, weak owner] in
+					[weak self, weak owner, weak tabs] in
 					Task
 					{
 						guard let data = await SourceThumbnailLoader.originalData(path: path),
 								let self, self.generation == generation, let owner,
+								owner.inspector.toolsTabs === tabs,
 								let file = Self.exportFile(
 								data: data,
 								name: name

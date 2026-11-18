@@ -19,14 +19,18 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	let navigation = NavigationViewController()
 	let conversation = ConversationViewController()
 	let inspector = InspectorViewController()
-	let files: FilesViewController
+	var activeChatTools: ChatToolsSession
+	var chatToolsKey: ChatToolsKey?
+	var parkedChatTools: [ChatToolsKey: ChatToolsSession] = [:]
+	var files: FilesViewController
+	{
+		activeChatTools.files
+	}
 	var onFileDiscardDecision: (([UUID], FileViewerFailure?) -> Bool)?
-	var filesProjectPath: String?
-	var filesWereOpened = false
 	var filesCloseApproved = false
 	var filesCloseInProgress = false
 	var fileCloseRequests: Set<UUID> = []
-	var fileCloseQueue: [UUID] = []
+	var fileCloseQueue: [(runtime: FileViewerRuntime, id: UUID)] = []
 	var fileClosePumpRunning = false
 	var fileClosePumpTask: Task<Void, Never>?
 	var fileSettlementTask: Task<Bool, Never>?
@@ -88,7 +92,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		self.onOpenProjectRequest = onOpenProject
 		self.onInsertPathRequest = onInsertPath
 		self.coordinator = coordinator
-		self.files = FilesViewController(runtime: filesRuntime)
+		self.activeChatTools = ChatToolsSession(
+			tabs: inspector.toolsTabs,
+			filesRuntime: filesRuntime
+		)
 		let window = Self.makeWindow()
 
 		paneController = WindowPaneController(
@@ -103,6 +110,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		configureInspectorCallbacks()
 		configureFilesIntegration()
 		configureToolbarControls()
+		configureToolsPaneClosing()
 
 		// AppKit requires a tracked split view to belong to the window before its toolbar appears.
 		window.contentViewController = WindowChromeViewController(
@@ -311,10 +319,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			snapshot: snapshot,
 			coordinator: coordinator
 		)
+		let incomingToolsPane = selectChatTools(target: target)
 		configureNavigationActions(target: target)
 		configureSettingsAndStatusActions(target: target)
 		configureInspectorActions(target: target)
-		updateFilesProject(target: target)
 		configureMessageSearchActions(target: target)
 		configureConversationActions(target: target)
 
@@ -357,6 +365,11 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 			snapshot,
 			target: target
 		)
+		if let incomingToolsPane
+		{
+			paneController.restoreChatTools(incomingToolsPane)
+			updateToolsToolbarControls()
+		}
 		self.inspector.changes.render(ReviewPresentation(
 			snapshot,
 			ownerIdentity: target.presentationIdentity
@@ -458,9 +471,13 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 
 	@objc private func windowDidClose()
 	{
+		let runtimes = chatFileRuntimes
 		Task
 		{
-			_ = await files.runtime.shutdown()
+			for runtime in runtimes
+			{
+				_ = await runtime.shutdown()
+			}
 		}
 		subagentConversationSession?.invalidate()
 		subagentConversationSession = nil
@@ -486,13 +503,9 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		if filesCloseApproved
 		{
 			filesCloseApproved = false
-			return true
+			return !hasPendingFileWrites
 		}
-		if files.runtime.state.documents.allSatisfy(
-			{
-				!$0.isDirty && !$0.isSaving
-			}
-		)
+		if !hasPendingFileWrites
 		{
 			return true
 		}
