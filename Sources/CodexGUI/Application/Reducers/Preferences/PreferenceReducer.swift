@@ -34,7 +34,8 @@ enum PreferenceReducer
 		switch action
 		{
 		case .restored, .modelSelected, .effortSelected, .approvalModeSelected,
-				.configurationDefaultsApplied, .fastModeSelected, .taskPinToggled,
+				.configurationDefaultsApplied, .fastModeSelected, .composerSpeedSelected,
+				.taskPinToggled,
 				.projectPinToggled, .projectRenamed,
 				.projectRemembered, .projectRemoved:
 			result = reducePreferenceChanges(
@@ -108,7 +109,8 @@ enum PreferenceReducer
 			model.recordLocalComposerSelection(ComposerSelection(
 				modelID: id,
 				effort: nil,
-				fastMode: current.fastMode
+				fastMode: current.fastMode,
+				serviceTier: current.serviceTier
 			))
 		case .effortSelected(
 			let context,
@@ -135,7 +137,8 @@ enum PreferenceReducer
 			model.recordLocalComposerSelection(ComposerSelection(
 				modelID: current.modelID,
 				effort: effort,
-				fastMode: current.fastMode
+				fastMode: current.fastMode,
+				serviceTier: current.serviceTier
 			))
 		case .approvalModeSelected(
 			let context,
@@ -156,7 +159,8 @@ enum PreferenceReducer
 			model.preferences.runPreferences = RunPreferences(
 				approvalMode: mode,
 				fastMode: model.preferences.runPreferences.fastMode,
-				configurationDefaults: defaults?.isEmpty == false ? defaults : nil
+				configurationDefaults: defaults?.isEmpty == false ? defaults : nil,
+				composerServiceTier: model.preferences.runPreferences.composerServiceTier
 			)
 			result.effects = [.persistPreference(PreferenceWrite(
 				context: context,
@@ -199,6 +203,43 @@ enum PreferenceReducer
 				effort: current.effort,
 				fastMode: enabled
 			))
+		case .composerSpeedSelected(
+			let context,
+			let tier
+		):
+			guard PreferenceScope.accepts(
+				context,
+				model: model
+			),
+				tier == "default" || FastModeAvailability.selectedModel(in: model)?
+				.serviceTiers.contains(where:
+					{
+						$0.id == tier
+					}) == true
+			else
+			{
+				return result
+			}
+			let current = model.composerSelection
+			var defaults = model.preferences.runPreferences.configurationDefaults
+			defaults?.serviceTier = nil
+			let preferences = RunPreferences(
+				approvalMode: model.preferences.runPreferences.approvalMode,
+				fastMode: false,
+				configurationDefaults: defaults?.isEmpty == false ? defaults : nil,
+				composerServiceTier: tier
+			)
+			model.preferences.runPreferences = preferences
+			model.recordLocalComposerSelection(ComposerSelection(
+				modelID: current.modelID,
+				effort: current.effort,
+				fastMode: preferences.fastMode,
+				serviceTier: tier
+			))
+			result.effects = [.persistPreference(PreferenceWrite(
+				context: context,
+				value: .run(preferences)
+			))]
 		case .configurationDefaultsApplied(
 			let context,
 			let update
@@ -218,14 +259,17 @@ enum PreferenceReducer
 			model.preferences.runPreferences = RunPreferences(
 				approvalMode: model.preferences.runPreferences.approvalMode,
 				fastMode: current.fastMode,
-				configurationDefaults: defaults.isEmpty ? nil : defaults
+				configurationDefaults: defaults.isEmpty ? nil : defaults,
+				composerServiceTier: update.keys.contains(.serviceTier) ? nil : model.preferences
+					.runPreferences.composerServiceTier
 			)
 			if update.keys.contains(.serviceTier)
 			{
 				model.recordLocalComposerSelection(ComposerSelection(
 					modelID: current.modelID,
 					effort: current.effort,
-					fastMode: model.preferences.runPreferences.fastMode
+					fastMode: model.preferences.runPreferences.fastMode,
+					serviceTier: defaults.serviceTier
 				))
 			}
 			result.effects = [.persistPreference(PreferenceWrite(

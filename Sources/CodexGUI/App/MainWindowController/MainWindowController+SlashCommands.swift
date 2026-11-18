@@ -92,9 +92,9 @@ extension MainWindowController
 			{
 				accept(.selectEffort($0))
 			}
-			conversation.modelEffortController.onSetFastMode =
+			conversation.modelEffortController.onSelectSpeed =
 			{
-				accept(.setFastMode($0))
+				accept(.selectComposerSpeed($0))
 			}
 		case .permissions:
 			if request.invocation.trimmedArguments == "full"

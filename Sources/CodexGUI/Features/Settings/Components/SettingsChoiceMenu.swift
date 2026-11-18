@@ -30,12 +30,15 @@ final class SettingsChoiceMenu
 	private var rows: [SettingsChoiceMenuRow] = []
 	private var selectedIndex = 0
 	private let menuWidth: CGFloat
+	private let placement: DesktopPopoverHost.ChoicePlacement
 
 	init(
 		choices: [SettingsChoicePicker.Choice],
 		selectedID: String?,
 		accessibilityLabel: String,
 		width: CGFloat = 240,
+		wrapsDetails: Bool = false,
+		placement: DesktopPopoverHost.ChoicePlacement = .below,
 		checkedIDs: Set<String>? = nil,
 		showsCheckboxes: Bool = true,
 		titleRole: TypographyTokens.Role = TypographyTokens.MenuRow.title,
@@ -44,6 +47,7 @@ final class SettingsChoiceMenu
 	{
 		self.checkedIDs = checkedIDs
 		self.menuWidth = width
+		self.placement = placement
 		self.choices = choices
 		selectedIndex = choices.firstIndex
 		{
@@ -52,7 +56,8 @@ final class SettingsChoiceMenu
 		host = DesktopPopoverHost(
 			presentation: .choice(
 				width: width,
-				contentHeight: 0
+				contentHeight: 0,
+				placement: placement
 			),
 			content: scroll
 		)
@@ -84,6 +89,7 @@ final class SettingsChoiceMenu
 				checked: checkedIDs?.contains(choice.id)
 					?? choice.isSelected ?? (choice.id == selectedID),
 				detail: choice.detail,
+				wrappingWidth: wrapsDetails ? width - 8 : nil,
 				showsCheckbox: checkedIDs != nil && showsCheckboxes,
 				titleRole: titleRole,
 				detailRole: detailRole
@@ -231,7 +237,8 @@ final class SettingsChoiceMenu
 	{
 		host.update(.choice(
 			width: menuWidth,
-			contentHeight: contentHeight
+			contentHeight: contentHeight,
+			placement: placement
 		))
 	}
 

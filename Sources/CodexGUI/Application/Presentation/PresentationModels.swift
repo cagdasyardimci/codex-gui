@@ -114,6 +114,7 @@ struct ConversationSnapshot
 	var approvalMode: ApprovalMode = .askForApproval
 	var configurationDefaults: RunConfigurationDefaults? = nil
 	var fastMode = false
+	var composerServiceTier: String? = nil
 	var pinnedProjectPaths: Set<String> = []
 	var removedProjectPaths: Set<String> = []
 	var pinnedTasks: [ThreadSummary] = []

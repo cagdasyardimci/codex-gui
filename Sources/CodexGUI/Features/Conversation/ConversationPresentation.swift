@@ -109,6 +109,7 @@ struct ConversationPresentation: Equatable
 		let selectedModelID: String?
 		let selectedEffort: String?
 		let fastMode: Bool
+		let composerServiceTier: String?
 		let approvalMode: ApprovalMode
 		var configurationDefaults: RunConfigurationDefaults? = nil
 		let preferenceWarning: String?
@@ -309,6 +310,7 @@ struct ConversationPresentation: Equatable
 			selectedModelID: snapshot.selectedModelID,
 			selectedEffort: snapshot.selectedEffort,
 			fastMode: snapshot.fastMode,
+			composerServiceTier: snapshot.composerServiceTier,
 			approvalMode: snapshot.approvalMode,
 			configurationDefaults: snapshot.configurationDefaults,
 			preferenceWarning: snapshot.preferenceWarning

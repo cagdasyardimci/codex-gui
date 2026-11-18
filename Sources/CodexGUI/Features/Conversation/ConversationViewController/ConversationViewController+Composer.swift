@@ -144,9 +144,9 @@ extension ConversationViewController
 		{
 			[weak self] in self?.onSelectEffort?($0)
 		}
-		modelEffortController.onSetFastMode =
+		modelEffortController.onSelectSpeed =
 		{
-			[weak self] in self?.onSetFastMode?($0)
+			[weak self] in self?.onSelectComposerSpeed?($0)
 		}
 		approvalPolicyController.onSelect =
 		{
@@ -301,12 +301,18 @@ extension ConversationViewController
 		}
 		latestModelEffortTitle = effortTitle
 		latestFastMode = snapshot.fastMode
+		latestComposerServiceTier = snapshot.composerServiceTier
+		latestComposerSpeedName = selectedModel?.serviceTiers.first
+		{
+			$0.id == snapshot.composerServiceTier
+		}?.name
 		refreshModelEffortButton()
 		modelEffortController.render(
 			models: snapshot.models,
 			selectedModelID: snapshot.selectedModelID,
 			selectedEffort: snapshot.selectedEffort,
-			fastMode: snapshot.fastMode
+			fastMode: snapshot.fastMode,
+			serviceTier: snapshot.composerServiceTier
 		)
 
 		approvalMode = snapshot.approvalMode
@@ -614,7 +620,9 @@ extension ConversationViewController
 			effortTitle: latestModelEffortTitle,
 			fastMode: latestFastMode,
 			isPickerPresented: modelEffortPopover?.isShown == true,
-			isModelListPresented: modelEffortController.isShowingModelList
+			isModelListPresented: modelEffortController.isShowingModelList,
+			serviceTier: latestComposerServiceTier,
+			speedName: latestComposerSpeedName
 		)
 	}
 

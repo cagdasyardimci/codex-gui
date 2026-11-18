@@ -248,6 +248,54 @@ struct ConfigurationDefaultsTests
 		#expect(model.serviceTierForSubmission == "default")
 	}
 
+	@Test func composerTierIsPersistedAndResolvesAgainstTheCurrentModel() throws
+	{
+		var model = fixture()
+		let sol = try #require(ModelOption(json: [
+			"model": "sol",
+			"isDefault": true,
+			"serviceTiers": [["id": "ultrafast", "name": "Ultrafast", "description": "Fastest"]],
+		]))
+		let astra = try #require(ModelOption(json: [
+			"model": "astra",
+			"serviceTiers": [["id": "priority", "name": "Fast", "description": "2x speed"]],
+		]))
+		model.preferences.models = [sol, astra]
+		let scope = context(model)
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.composerSpeedSelected(
+				scope,
+				"ultrafast"
+			))
+		)
+		#expect(model.serviceTierForSubmission == "ultrafast")
+		let data = try JSONEncoder().encode(model.preferences.runPreferences)
+		#expect(try JSONDecoder().decode(
+			RunPreferences.self,
+			from: data
+		)
+		.serviceTierForTurn == "ultrafast")
+
+		_ = PreferenceReducer.reduce(
+			&model,
+			.preferences(.modelSelected(
+				scope,
+				"astra"
+			))
+		)
+		#expect(model.serviceTierForSubmission == "default")
+		#expect(model.runPreferencesForSubmission.serviceTierForTurn == "default")
+		let rejected = PreferenceReducer.reduce(
+			&model,
+			.preferences(.composerSpeedSelected(
+				scope,
+				"ultrafast"
+			))
+		)
+		#expect(rejected.effects.isEmpty)
+	}
+
 	private func fixture() -> WorkspaceModel
 	{
 		WorkspaceModel(identity: WorkspaceIdentity(

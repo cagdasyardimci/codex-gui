@@ -606,6 +606,14 @@ struct WorkspaceStoreInputs
 		)))
 	}
 
+	func selectComposerSpeed(_ tier: String)
+	{
+		workspaceStore.dispatch(.preferences(.composerSpeedSelected(
+			workspaceStore.operationContext(),
+			tier
+		)))
+	}
+
 	func setFastMode(_ enabled: Bool)
 	{
 		workspaceStore.dispatch(.preferences(.fastModeSelected(

@@ -6,7 +6,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 {
 	var onSelectModel: ((String?) -> Void)?
 	var onSelectEffort: ((String?) -> Void)?
-	var onSetFastMode: ((Bool) -> Void)?
+	var onSelectSpeed: ((String) -> Void)?
 	var onPreferredContentSizeChange: (() -> Void)?
 	var onModelListPresentationChange: (() -> Void)?
 	private(set) var isShowingModelList = false
@@ -18,8 +18,8 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		presentation: .menuTrigger
 	)
 	private let effortLabel = NSTextField(labelWithString: "Default effort")
-	private let fastButton = DesktopStyledButton(
-		title: "Fast mode",
+	private let speedButton = DesktopStyledButton(
+		title: "Speed",
 		presentation: .toggle,
 		size: .regular
 	)
@@ -30,7 +30,9 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 	)
 	private let slider = EffortSlider()
 	private var efforts: [String] = []
-	private var fastMode = false
+	private var selectedTier = "default"
+	private var serviceTiers: [ModelServiceTier] = []
+	private var speedMenu: SettingsChoiceMenu?
 	private var effectiveEffort: String?
 	private var presented = false
 	let modelList = ModelPickerListView()
@@ -91,15 +93,15 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 
 	private func configureActionButtons()
 	{
-		fastButton.target = self
-		fastButton.action = #selector(toggleFastMode)
-		fastButton.image = DesktopIcons.image(.bolt)
+		speedButton.target = self
+		speedButton.action = #selector(showSpeedMenu)
+		speedButton.image = DesktopIcons.image(.bolt)
 
 		resetButton.target = self
 		resetButton.action = #selector(resetPreferences)
 		resetButton.image = DesktopIcons.image(.arrowRotateCcw)
 		resetButton.toolTip = "Reset to default"
-		resetButton.setAccessibilityLabel("Reset effort and fast mode to defaults")
+		resetButton.setAccessibilityLabel("Reset effort and speed")
 	}
 
 	private func configureModelMenuButton()
@@ -124,7 +126,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 	private func installControls(in surface: NSView)
 	{
 		for control in [
-			fastButton,
+			speedButton,
 			resetButton,
 			effortLabel,
 			modelMenuButton,
@@ -135,11 +137,11 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 			surface.addSubview(control)
 		}
 		NSLayoutConstraint.activate([
-			fastButton.leadingAnchor.constraint(
+			speedButton.leadingAnchor.constraint(
 				equalTo: surface.leadingAnchor,
 				constant: LayoutTokens.ModelPopover.fastLeadingInset
 			),
-			fastButton.topAnchor.constraint(
+			speedButton.topAnchor.constraint(
 				equalTo: surface.topAnchor,
 				constant: LayoutTokens.ModelPopover.fastTopInset
 			),
@@ -147,7 +149,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 				equalTo: surface.trailingAnchor,
 				constant: -LayoutTokens.ModelPopover.resetTrailingInset
 			),
-			resetButton.topAnchor.constraint(equalTo: fastButton.topAnchor),
+			resetButton.topAnchor.constraint(equalTo: speedButton.topAnchor),
 			effortLabel.centerXAnchor.constraint(equalTo: surface.centerXAnchor),
 			effortLabel.topAnchor.constraint(
 				equalTo: surface.topAnchor,
@@ -155,7 +157,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 			),
 			effortLabel.heightAnchor
 				.constraint(equalToConstant: LayoutTokens.ModelPopover.effortHeight),
-			effortLabel.leadingAnchor.constraint(greaterThanOrEqualTo: fastButton.trailingAnchor),
+			effortLabel.leadingAnchor.constraint(greaterThanOrEqualTo: speedButton.trailingAnchor),
 			effortLabel.trailingAnchor.constraint(lessThanOrEqualTo: resetButton.leadingAnchor),
 			modelMenuButton.centerXAnchor.constraint(equalTo: surface.centerXAnchor),
 			modelMenuButton.topAnchor.constraint(equalTo: effortLabel.bottomAnchor),
@@ -211,6 +213,10 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 	func setPresented(_ presented: Bool)
 	{
 		self.presented = presented
+		if !presented
+		{
+			speedMenu?.close()
+		}
 		if !presented, isShowingModelList
 		{
 			setModelListVisible(false)
@@ -244,7 +250,8 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		models: [ModelOption],
 		selectedModelID: String?,
 		selectedEffort: String?,
-		fastMode: Bool
+		fastMode: Bool,
+		serviceTier: String? = nil
 	)
 	{
 		_ = view
@@ -256,7 +263,14 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 					$0.id == selectedModelID
 				}
 				?? (selectedModelID == nil ? models.first(where: \.isDefault) : nil)
-		self.fastMode = fastMode
+		let tiers = selectedModel?.serviceTiers ?? []
+		let tier = serviceTier ?? (fastMode ? "priority" : "default")
+		if selectedTier != tier || serviceTiers != tiers
+		{
+			speedMenu?.close()
+		}
+		serviceTiers = tiers
+		selectedTier = tier
 		effectiveEffort = selectedEffort ?? selectedModel?.defaultReasoningEffort
 		efforts = ReasoningEffortVisibility().visibleEfforts(
 			advertised: Self.orderedEfforts(for: selectedModel),
@@ -267,7 +281,7 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		updateEffortControls()
 		updatePreferredContentSize()
 		slider.ultraSelected = effectiveEffort == "ultra"
-		updateFastModeControls()
+		updateSpeedControls()
 		updateAnimationVisibility()
 		if isShowingModelList
 		{
@@ -353,16 +367,24 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		return sliderBottom + LayoutTokens.ModelPopover.bottomInset
 	}
 
-	private func updateFastModeControls()
+	private func updateSpeedControls()
 	{
-		slider.fastMode = fastMode
-		fastButton.state = fastMode ? .on : .off
-		fastButton.image = fastMode
-			? DesktopIcons.filledBoltImage()
-			: DesktopIcons.image(.bolt)
-		fastButton.toolTip = "1.5x speed\nMore usage"
-		fastButton.setAccessibilityLabel(fastMode ? "Disable fast mode" : "Enable fast mode")
-		fastButton.setAccessibilityValue(fastMode ? "On" : "Off")
+		slider.fastMode = selectedTier != "default"
+		speedButton.state = selectedTier == "default" ? .off : .on
+		switch selectedTier
+		{
+		case "default": speedButton.image = DesktopIcons.image(.bolt)
+		case "ultrafast": speedButton.image = DesktopIcons.ultrafastBoltImage()
+		default: speedButton.image = DesktopIcons.filledBoltImage()
+		}
+		speedButton.toolTip = nil
+		speedButton.setAccessibilityLabel("Choose speed")
+		speedButton.setAccessibilityValue(
+			serviceTiers.first(where:
+				{
+					$0.id == selectedTier
+				})?.name ?? "Standard"
+		)
 	}
 
 	private static func effortOrder(_ effort: String) -> Int
@@ -419,9 +441,13 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 
 	private func setModelListVisible(_ visible: Bool)
 	{
+		if visible
+		{
+			speedMenu?.close()
+		}
 		isShowingModelList = visible
 		modelList.isHidden = !visible
-		for control in [fastButton, resetButton, effortLabel, modelMenuButton, slider]
+		for control in [speedButton, resetButton, effortLabel, modelMenuButton, slider]
 		{
 			control.isHidden = visible
 		}
@@ -466,15 +492,58 @@ final class ModelEffortPopoverView: NSViewController, DesktopPopoverMaterialCont
 		onSelectEffort?(effort)
 	}
 
-	@objc private func toggleFastMode()
+	@objc private func showSpeedMenu()
 	{
-		onSetFastMode?(!fastMode)
+		if let speedMenu, speedMenu.isShown
+		{
+			speedMenu.close()
+			return
+		}
+		let choices: [SettingsChoicePicker.Choice] = [
+			.init(
+				id: "default",
+				title: "Standard",
+				detail: "Default speed"
+			),
+		] + serviceTiers.filter
+		{
+			$0.id != "default"
+		}.map
+		{
+			.init(
+				id: $0.id,
+				title: $0.name,
+				detail: $0.description
+			)
+		}
+		let menu = SettingsChoiceMenu(
+			choices: choices,
+			selectedID: selectedTier,
+			accessibilityLabel: "Speed",
+			width: LayoutTokens.ModelPopover.width,
+			wrapsDetails: true,
+			placement: .beside
+		)
+		menu.onSelect =
+		{
+			[weak self] in self?.onSelectSpeed?($0)
+		}
+		menu.onClose =
+		{
+			[weak self, weak menu] in
+			if self?.speedMenu === menu
+			{
+				self?.speedMenu = nil
+			}
+		}
+		speedMenu = menu
+		menu.show(from: speedButton)
 	}
 
 	@objc private func resetPreferences()
 	{
 		onSelectEffort?(nil)
-		onSetFastMode?(false)
+		onSelectSpeed?("default")
 	}
 
 	@objc private func visibilityChanged()

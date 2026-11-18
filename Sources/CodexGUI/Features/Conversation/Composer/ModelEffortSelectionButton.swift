@@ -9,6 +9,7 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 	private var summary: String?
 	private var effortTitle: String?
 	private var fastMode = false
+	private var isUltrafast = false
 	private var isPickerPresented = false
 	private var isModelListPresented = false
 	private var presentedWidth: CGFloat?
@@ -64,7 +65,9 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 		effortTitle: String? = nil,
 		fastMode: Bool,
 		isPickerPresented: Bool,
-		isModelListPresented: Bool = false
+		isModelListPresented: Bool = false,
+		serviceTier: String? = nil,
+		speedName: String? = nil
 	)
 	{
 		let widthBeforePresentation = isPickerPresented && !self.isPickerPresented
@@ -74,7 +77,11 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 			$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
 		}
 		self.effortTitle = effortTitle
-		self.fastMode = fastMode
+		self.fastMode = serviceTier.map
+		{
+			$0 != "default"
+		} ?? fastMode
+		isUltrafast = serviceTier == "ultrafast"
 		self.isPickerPresented = isPickerPresented
 		self.isModelListPresented = isModelListPresented
 		title = displayedTitle
@@ -97,7 +104,7 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 		let selectionDescription = self.summary ?? "Select effort"
 		toolTip = "Select effort"
 		setAccessibilityLabel("Model and effort: \(selectionDescription)")
-		setAccessibilityValue(fastMode ? "Fast mode enabled" : "Standard speed")
+		setAccessibilityValue(speedName ?? (self.fastMode ? "Fast" : "Standard speed"))
 		setAccessibilityHelp("Open model, reasoning effort, and speed settings")
 
 		invalidateIntrinsicContentSize()
@@ -203,7 +210,7 @@ final class ModelEffortSelectionButton: DesktopTooltipButton
 	)
 	{
 		DesktopIcons.draw(
-			ComposerFooterIcons.bolt,
+			isUltrafast ? DesktopIcons.ultrafastBoltImage() : ComposerFooterIcons.bolt,
 			in: rect,
 			tint: tint
 		)

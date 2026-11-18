@@ -109,6 +109,7 @@ extension WorkspaceLifecycleReducer
 					.contextNavigation(.savedPromptInserted), .contextNavigation(.bookmarkToggled),
 					.preferences(.modelSelected), .preferences(.effortSelected),
 					.preferences(.approvalModeSelected), .preferences(.fastModeSelected),
+					.preferences(.composerSpeedSelected),
 					.preferences(.configurationDefaultsApplied),
 					.preferences(.projectPinToggled), .preferences(.projectRenamed),
 					.workspaceLifecycle(.projectPinRequested),
@@ -150,6 +151,7 @@ extension WorkspaceLifecycleReducer
 			return false
 		case .preferences(.modelSelected), .preferences(.effortSelected),
 				.preferences(.approvalModeSelected), .preferences(.fastModeSelected),
+				.preferences(.composerSpeedSelected),
 				.preferences(.configurationDefaultsApplied),
 				.preferences(.projectPinToggled), .preferences(.projectRenamed),
 				.preferences(.projectRemembered), .preferences(.signInRequested),

@@ -488,6 +488,10 @@ enum PreferencesAction
 		OperationContext,
 		Bool
 	)
+	case composerSpeedSelected(
+		OperationContext,
+		String
+	)
 	case taskPinToggled(
 		OperationContext,
 		ThreadSummary

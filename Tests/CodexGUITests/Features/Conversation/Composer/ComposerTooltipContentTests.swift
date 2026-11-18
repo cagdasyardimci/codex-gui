@@ -49,17 +49,23 @@ struct ComposerTooltipContentTests
 		}
 	}
 
-	@Test func modelMenuHoverContentsRemainStableWhenFastModeChanges() throws
+	@Test func speedControlKeepsItsActionLabelAcrossTierChanges() throws
 	{
 		let picker = ModelEffortPopoverView()
 		picker.loadViewIfNeeded()
-		for fast in [false, true, false]
+		let model = try #require(ModelOption(json: [
+			"model": "sol",
+			"isDefault": true,
+			"serviceTiers": [["id": "ultrafast", "name": "Ultrafast", "description": "Fastest"]],
+		]))
+		for (tier, name) in [("default", "Standard"), ("ultrafast", "Ultrafast")]
 		{
 			picker.render(
-				models: [],
+				models: [model],
 				selectedModelID: nil,
 				selectedEffort: nil,
-				fastMode: fast
+				fastMode: false,
+				serviceTier: tier
 			)
 			let buttons = descendants(picker.view).compactMap
 			{
@@ -68,9 +74,9 @@ struct ComposerTooltipContentTests
 			let speed = try #require(buttons
 				.first
 				{
-					$0.accessibilityLabel() == (fast ? "Disable fast mode" : "Enable fast mode")
+					$0.accessibilityLabel() == "Choose speed"
 				})
-			#expect(speed.toolTip == "1.5x speed\nMore usage")
+			#expect(speed.accessibilityValue() as? String == name)
 			let reset = try #require(buttons.first
 			{
 				$0.title == "Reset"

@@ -36,7 +36,7 @@ final class ConversationViewController: NSViewController,
 	}
 	var onSelectModel: ((String?) -> Void)?
 	var onSelectEffort: ((String?) -> Void)?
-	var onSetFastMode: ((Bool) -> Void)?
+	var onSelectComposerSpeed: ((String) -> Void)?
 	var onSelectApprovalMode: ((ApprovalMode) -> Void)?
 	var onInsertPath: (() -> Void)?
 	var onChooseProject: (() -> Void)?
@@ -136,6 +136,8 @@ final class ConversationViewController: NSViewController,
 	var latestModelEffortSummary: String?
 	var latestModelEffortTitle: String?
 	var latestFastMode = false
+	var latestComposerServiceTier: String?
+	var latestComposerSpeedName: String?
 	let modelEffortController = ModelEffortPopoverView()
 	let approvalPolicyButton = ComposerPermissionButton(
 		title: "Ask for approval",

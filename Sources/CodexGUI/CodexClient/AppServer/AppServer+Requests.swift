@@ -586,9 +586,10 @@ extension AppServer
 		for preferences: RunPreferences
 	) throws -> String
 	{
-		if let configured = preferences.configurationDefaults?.serviceTier
+		if let tier = preferences.composerServiceTier ?? preferences.configurationDefaults?
+			.serviceTier
 		{
-			return configured
+			return tier
 		}
 		guard preferences.fastMode
 		else

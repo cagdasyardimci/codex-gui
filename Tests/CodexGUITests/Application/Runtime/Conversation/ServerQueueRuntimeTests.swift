@@ -217,7 +217,7 @@ struct ServerQueueRuntimeTests
 		try await harness.fixture.store.drainPersistence()
 	}
 
-	@Test func unsupportedReadFallsBackToLocalQueueWithoutServerWrites() async throws
+	@Test func localFallbackDispatchesTheTierCapturedWhenQueued() async throws
 	{
 		let harness = try ConcurrentChatFixture()
 		defer
@@ -226,6 +226,11 @@ struct ServerQueueRuntimeTests
 		}
 		harness.service.queueAPISupported = true
 		harness.service.serverQueueFailure = ThreadQueueUnsupported()
+		harness.service.availableModels = [try #require(ModelOption(json: [
+			"model": "sol",
+			"isDefault": true,
+			"serviceTiers": [["id": "ultrafast", "name": "Ultrafast", "description": "Fastest"]],
+		]))]
 		await harness.fixture.inputs.connect()
 		try await harness.select("chat-a")
 		try await wait(harness)
@@ -233,7 +238,12 @@ struct ServerQueueRuntimeTests
 			harness.fixture.store.model.composer.serverQueues[.thread("chat-a")]?
 				.authority == .local
 		}
+		try await wait(harness)
+		{
+			harness.fixture.currentSnapshot.models.first?.id == "sol"
+		}
 		try await harness.send("First")
+		harness.fixture.inputs.selectComposerSpeed("ultrafast")
 		harness.fixture.inputs.updateDraft("Local fallback")
 		harness.fixture.inputs.send()
 		#expect(harness.fixture.currentSnapshot.queuedMessages.map(\.text) == ["Local fallback"])
@@ -241,6 +251,17 @@ struct ServerQueueRuntimeTests
 		{
 			$0.hasPrefix("add:")
 		})
+		#expect(harness.fixture.currentSnapshot.queuedMessages.first?.serviceTier == "ultrafast")
+		harness.fixture.inputs.selectComposerSpeed("default")
+		harness.complete(
+			"chat-a",
+			status: "completed"
+		)
+		try await wait(harness)
+		{
+			harness.service.starts.count == 2
+		}
+		#expect(harness.service.submittedServiceTiers == ["default", "ultrafast"])
 		try await harness.fixture.store.drainPersistence()
 	}
 

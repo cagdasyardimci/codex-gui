@@ -56,7 +56,27 @@ enum FastModeAvailability
 			nil
 	}
 
-	private static func selectedModel(in model: WorkspaceModel) -> ModelOption?
+	static func resolvedTier(
+		_ tier: String,
+		in model: WorkspaceModel
+	) -> String
+	{
+		guard tier != "default", let selected = selectedModel(in: model)
+		else
+		{
+			return tier
+		}
+		if selected.serviceTiers.contains(where:
+			{
+				$0.id == tier
+			})
+		{
+			return tier
+		}
+		return tier == "fast" ? serviceTier(in: model) ?? "default" : "default"
+	}
+
+	static func selectedModel(in model: WorkspaceModel) -> ModelOption?
 	{
 		if let id = model.composerSelection.modelID
 		{

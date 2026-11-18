@@ -18,7 +18,7 @@ struct WorkspaceEligibility
 		{
 			return "Project context is loading."
 		}
-		if model.composerSelection.fastMode,
+		if model.composerSelection.serviceTier == nil, model.composerSelection.fastMode,
 			let reason = FastModeAvailability.unavailableReason(in: model)
 		{
 			return "\(reason) Disable fast mode before sending."
@@ -459,6 +459,7 @@ struct WorkspaceEligibility
 			&& submission.preferences == model.runPreferencesForSubmission
 			&& (steering
 				|| (submission.preferences.configurationDefaults?.serviceTier == nil
+					&& submission.preferences.composerServiceTier == nil
 					&& !submission.preferences.fastMode)
 				|| submission.serviceTier == model.serviceTierForSubmission)
 	}

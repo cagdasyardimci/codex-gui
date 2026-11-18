@@ -5,17 +5,20 @@ struct RunPreferences: Codable, Equatable
 {
 	let approvalMode: ApprovalMode
 	let fastMode: Bool
+	let composerServiceTier: String?
 	let configurationDefaults: RunConfigurationDefaults?
 
 	init(
 		approvalMode: ApprovalMode,
 		fastMode: Bool,
-		configurationDefaults: RunConfigurationDefaults? = nil
+		configurationDefaults: RunConfigurationDefaults? = nil,
+		composerServiceTier: String? = nil
 	)
 	{
 		self.approvalMode = approvalMode
 		self.configurationDefaults = configurationDefaults
-		if let tier = configurationDefaults?.serviceTier
+		self.composerServiceTier = composerServiceTier
+		if let tier = composerServiceTier ?? configurationDefaults?.serviceTier
 		{
 			self.fastMode = tier == "priority" || tier == "fast"
 		}
@@ -25,12 +28,16 @@ struct RunPreferences: Codable, Equatable
 		}
 	}
 
-	func withComposerFastMode(_ fastMode: Bool) -> RunPreferences
+	func withComposerSpeed(
+		fastMode: Bool,
+		serviceTier: String?
+	) -> RunPreferences
 	{
 		RunPreferences(
 			approvalMode: approvalMode,
 			fastMode: fastMode,
-			configurationDefaults: configurationDefaults
+			configurationDefaults: configurationDefaults,
+			composerServiceTier: serviceTier
 		)
 	}
 
@@ -78,7 +85,8 @@ struct RunPreferences: Codable, Equatable
 
 	var serviceTierForTurn: String
 	{
-		configurationDefaults?.serviceTier ?? (fastMode ? "priority" : "default")
+		composerServiceTier ?? configurationDefaults?
+			.serviceTier ?? (fastMode ? "priority" : "default")
 	}
 }
 
@@ -86,13 +94,31 @@ extension WorkspaceModel
 {
 	var runPreferencesForSubmission: RunPreferences
 	{
-		preferences.runPreferences.withComposerFastMode(composerSelection.fastMode)
+		let selection = composerSelection
+		let tier = composerServiceTierForSubmission
+		return preferences.runPreferences.withComposerSpeed(
+			fastMode: selection.fastMode,
+			serviceTier: tier == preferences.runPreferences.configurationDefaults?
+				.serviceTier ? nil : tier
+		)
 	}
 
 	var serviceTierForSubmission: String?
 	{
-		let preferences = runPreferencesForSubmission
-		return preferences.configurationDefaults?.serviceTier
-			?? (preferences.fastMode ? FastModeAvailability.serviceTier(in: self) : "default")
+		composerServiceTierForSubmission
+			?? (composerSelection.fastMode ? FastModeAvailability.serviceTier(in: self) : "default")
+	}
+
+	private var composerServiceTierForSubmission: String?
+	{
+		guard let tier = composerSelection.serviceTier
+		else
+		{
+			return nil
+		}
+		return FastModeAvailability.resolvedTier(
+			tier,
+			in: self
+		)
 	}
 }

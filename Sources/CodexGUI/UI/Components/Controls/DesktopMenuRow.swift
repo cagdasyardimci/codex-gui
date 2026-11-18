@@ -56,6 +56,7 @@ class DesktopMenuRow: NSButton
 		var keycap: String? = nil
 		var keycapSelected = false
 		var subtitle: String? = nil
+		var subtitleWrappingWidth: CGFloat? = nil
 		var suffix = ""
 		var suffixStyle = SuffixStyle.metadata
 		var indicator = Indicator.none
@@ -276,6 +277,9 @@ class DesktopMenuRow: NSButton
 			setAccessibilityValue(nil)
 		}
 		titleLabel.stringValue = content.title
+		subtitleLabel.maximumNumberOfLines = content.subtitleWrappingWidth == nil ? 1 : 0
+		subtitleLabel.lineBreakMode = content
+			.subtitleWrappingWidth == nil ? .byTruncatingTail : .byWordWrapping
 		subtitleLabel.stringValue = content.subtitle ?? ""
 		subtitleLabel.isHidden = content.subtitle == nil
 		suffixLabel.stringValue = content.suffix
@@ -339,6 +343,25 @@ class DesktopMenuRow: NSButton
 			label: subtitleLabel,
 			fallback: TypographyTokens.MenuRow.subtitle
 		)
+		if let width = content.subtitleWrappingWidth, subtitleLineHeight > 0
+		{
+			let textWidth = max(
+				1,
+				width - textLeadingInset - textTrailingInset
+			)
+			let attributed = wrappingSubtitle()
+			let height = attributed.boundingRect(
+				with: NSSize(
+					width: textWidth,
+					height: .greatestFiniteMagnitude
+				),
+				options: [.usesLineFragmentOrigin, .usesFontLeading]
+			).height
+			subtitleLineHeight = max(
+				subtitleLineHeight,
+				ceil(height)
+			)
+		}
 		let size = preferredSize
 		rowHeightConstraint?.constant = size.height
 		invalidateIntrinsicContentSize()
@@ -349,6 +372,31 @@ class DesktopMenuRow: NSButton
 			lastPreferredSize = size
 			onPreferredSizeChanged?()
 		}
+	}
+
+	private func wrappingSubtitle() -> NSMutableAttributedString
+	{
+		let text = NSMutableAttributedString(attributedString: subtitleLabel.attributedStringValue)
+		if text.length > 0
+		{
+			let paragraph = (text.attribute(
+				.paragraphStyle,
+				at: 0,
+				effectiveRange: nil
+			)
+				as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle
+				?? NSMutableParagraphStyle()
+			paragraph.lineBreakMode = .byWordWrapping
+			text.addAttribute(
+				.paragraphStyle,
+				value: paragraph,
+				range: NSRange(
+					location: 0,
+					length: text.length
+				)
+			)
+		}
+		return text
 	}
 
 	private func refreshAppearance()
@@ -409,7 +457,9 @@ class DesktopMenuRow: NSButton
 	{
 		label.textColor = color
 		// Typography retains attributed line metrics; its foreground must refresh with the label.
-		let text = NSMutableAttributedString(attributedString: label.attributedStringValue)
+		let text = label === subtitleLabel && content.subtitleWrappingWidth != nil
+			? wrappingSubtitle() :
+			NSMutableAttributedString(attributedString: label.attributedStringValue)
 		text.addAttribute(
 			.foregroundColor,
 			value: color,

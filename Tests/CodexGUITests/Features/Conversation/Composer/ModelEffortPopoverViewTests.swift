@@ -49,7 +49,7 @@ struct ModelEffortPopoverViewTests
 		) == "Ultra")
 		#expect(button(
 			in: picker.view,
-			accessibilityLabel: "Disable fast mode"
+			accessibilityLabel: "Choose speed"
 		)?.state == .on)
 		let replacement = menu.rows[2]
 		#expect(
@@ -74,6 +74,112 @@ struct ModelEffortPopoverViewTests
 			in: picker.view,
 			accessibilityLabel: "Selected reasoning effort"
 		) == "Light")
+	}
+
+	@Test func speedMenuShowsAdvertisedTiersAndSelectsUltrafast() async throws
+	{
+		try await AppKitTestIsolation.perform
+		{
+			let window = NSWindow(
+				contentRect: NSRect(
+					x: 200,
+					y: 300,
+					width: 400,
+					height: 220
+				),
+				styleMask: [.titled],
+				backing: .buffered,
+				defer: false
+			)
+			window.prepareForTesting()
+			let picker = ModelEffortPopoverView()
+			let anchor = NSButton(frame: NSRect(
+				x: 40,
+				y: 95,
+				width: 40,
+				height: 30
+			))
+			window.contentView?.addSubview(anchor)
+			window.makeKeyAndOrderFront(nil)
+			let host = DesktopPopoverHost(
+				presentation: .composer(DesktopPopoverHost.ComposerPlacement()),
+				content: picker.view,
+				controller: picker
+			)
+			host.show(from: anchor)
+			defer
+			{
+				picker.setPresented(false)
+				host.close()
+				window.close()
+			}
+			let sol = try #require(ModelOption(json: [
+				"model": "sol",
+				"isDefault": true,
+				"serviceTiers": [
+					["id": "priority", "name": "Fast", "description": "2x speed"],
+					["id": "ultrafast",
+						"name": "Ultrafast",
+						"description": "The fastest responses for latency-sensitive work."],
+				],
+			]))
+			let astra = try #require(ModelOption(json: [
+				"model": "astra",
+				"serviceTiers": [["id": "priority", "name": "Fast", "description": "2x speed"]],
+			]))
+			var selections: [String] = []
+			picker.onSelectSpeed =
+			{
+				selections.append($0)
+			}
+			picker.render(
+				models: [sol, astra],
+				selectedModelID: nil,
+				selectedEffort: nil,
+				fastMode: false,
+				serviceTier: "priority"
+			)
+			let speed = try #require(button(
+				in: picker.view,
+				accessibilityLabel: "Choose speed"
+			))
+			speed.performClick(nil)
+			let menu = try #require(host.panel.childWindows?.first)
+			let content = try #require(menu.contentView)
+			let fast = try #require(button(
+				in: content,
+				accessibilityLabel: "Fast"
+			) as? DesktopMenuRow)
+			let ultra = try #require(button(
+				in: content,
+				accessibilityLabel: "Ultrafast"
+			) as? DesktopMenuRow)
+			#expect(fast.checked)
+			#expect(!ultra.checked)
+			#expect(ultra.rowHeight > fast.rowHeight)
+			ultra.performClick(nil)
+			#expect(selections == ["ultrafast"])
+			#expect(host.panel.childWindows?.contains(menu) != true)
+
+			picker.render(
+				models: [sol, astra],
+				selectedModelID: "astra",
+				selectedEffort: nil,
+				fastMode: false,
+				serviceTier: "default"
+			)
+			speed.performClick(nil)
+			let astraMenu = try #require(host.panel.childWindows?.first?.contentView)
+			#expect(button(
+				in: astraMenu,
+				accessibilityLabel: "Ultrafast"
+			) == nil)
+			#expect((button(
+				in: astraMenu,
+				accessibilityLabel: "Standard"
+			) as? DesktopMenuRow)?
+				.checked == true)
+		}
 	}
 
 	@Test func modelHoverMovesBetweenRowsWithoutChangingSelection() throws

@@ -21,6 +21,7 @@ final class SettingsChoiceMenuRow: DesktopMenuRow
 		icon: NSImage?,
 		checked: Bool,
 		detail: String?,
+		wrappingWidth: CGFloat? = nil,
 		showsCheckbox: Bool,
 		titleRole: TypographyTokens.Role = TypographyTokens.MenuRow.title,
 		detailRole: TypographyTokens.Role = TypographyTokens.MenuRow.subtitle
@@ -31,6 +32,7 @@ final class SettingsChoiceMenuRow: DesktopMenuRow
 				title: title,
 				icon: icon,
 				subtitle: detail,
+				subtitleWrappingWidth: wrappingWidth,
 				indicator: showsCheckbox ? .checkbox : .checkmark,
 				checked: checked
 			),

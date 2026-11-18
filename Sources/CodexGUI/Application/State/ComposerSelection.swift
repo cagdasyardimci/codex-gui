@@ -6,6 +6,7 @@ struct ComposerSelection: Equatable
 	let modelID: String?
 	let effort: String?
 	let fastMode: Bool
+	var serviceTier: String? = nil
 }
 
 extension WorkspaceModel
@@ -15,7 +16,9 @@ extension WorkspaceModel
 		let local = ComposerSelection(
 			modelID: preferences.selectedModelID,
 			effort: preferences.selectedEffort,
-			fastMode: preferences.runPreferences.fastMode
+			fastMode: preferences.runPreferences.fastMode,
+			serviceTier: preferences.runPreferences.composerServiceTier
+				?? preferences.runPreferences.configurationDefaults?.serviceTier
 		)
 		guard case .thread(let id) = conversations.selectedConversation
 		else
@@ -38,7 +41,8 @@ extension WorkspaceModel
 				settings.serviceTier,
 				modelID: settings.model,
 				models: preferences.models
-			)
+			),
+			serviceTier: settings.serviceTier ?? "default"
 		)
 	}
 
@@ -80,7 +84,9 @@ extension WorkspaceModel
 					updated.serviceTier,
 					modelID: updated.model,
 					models: preferences.models
-				) : local.fastMode
+				) : local.fastMode,
+			serviceTier: modelChanged || tierChanged ? updated.serviceTier ?? "default" : local
+				.serviceTier
 		)
 	}
 }

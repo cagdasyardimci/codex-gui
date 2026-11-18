@@ -501,8 +501,11 @@ enum ComposerCommandReducer
 				result: &result
 			)
 		case .fast:
-			let enabled = argument.isEmpty ? !model.composerSelection.fastMode
-				: argument == "on"
+			let fastTier = FastModeAvailability.serviceTier(in: model)
+			let isFast = model.composerSelection.serviceTier == nil ? model.composerSelection
+				.fastMode
+				: fastTier != nil && fastTier == model.serviceTierForSubmission
+			let enabled = argument.isEmpty ? !isFast : argument == "on"
 			if enabled, let reason = FastModeAvailability.unavailableReason(in: model)
 			{
 				model.composerCommands.error = reason

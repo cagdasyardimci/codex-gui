@@ -22,7 +22,8 @@ final class DesktopPopoverHost
 		case account
 		case choice(
 			width: CGFloat,
-			contentHeight: CGFloat
+			contentHeight: CGFloat,
+			placement: ChoicePlacement = .below
 		)
 		case sidebar(group: Int)
 		case composer(ComposerPlacement)
@@ -31,6 +32,11 @@ final class DesktopPopoverHost
 			size: NSSize
 		)
 
+	}
+
+	enum ChoicePlacement
+	{
+		case below, beside
 	}
 
 	enum SearchPlacement
@@ -457,8 +463,8 @@ final class DesktopPopoverHost
 			{
 				return true
 			}
-			if eventWindow === panel || eventWindow.level.rawValue >= NSWindow.Level.popUpMenu
-				.rawValue
+			if eventWindow === panel || eventWindow.parent === panel
+				|| eventWindow.level.rawValue >= NSWindow.Level.popUpMenu.rawValue
 			{
 				return true
 			}
@@ -651,7 +657,8 @@ final class DesktopPopoverHost
 			)
 		case .choice(
 			let width,
-			let contentHeight
+			let contentHeight,
+			let placement
 		):
 			let available = screen.insetBy(
 				dx: 8,
@@ -666,16 +673,31 @@ final class DesktopPopoverHost
 				)
 			)
 			let below = rect.minY - 4 - height
+			let x: CGFloat
+			let y: CGFloat
+			switch placement
+			{
+			case .below:
+				x = rect.maxX - width
+				y = below >= available.minY ? below : rect.maxY + 4
+			case .beside:
+				let right = rect.maxX + 4
+				x = right + width <= available.maxX ? right : rect.minX - 4 - width
+				y = rect.maxY + 4 - height
+			}
 			frame = NSRect(
 				x: min(
 					max(
-						rect.maxX - width,
+						x,
 						available.minX
 					),
 					available.maxX - width
 				),
-				y: below >= available.minY ? below : min(
-					rect.maxY + 4,
+				y: min(
+					max(
+						y,
+						available.minY
+					),
 					available.maxY - height
 				),
 				width: width,

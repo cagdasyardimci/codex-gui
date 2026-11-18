@@ -43,6 +43,8 @@ final class ConcurrentChatService: CodexService
 	private(set) var connectionCount = 0
 	private(set) var starts: [TurnRequest] = []
 	private(set) var submittedPreferences: [RunPreferences] = []
+	private(set) var submittedServiceTiers: [String?] = []
+	var availableModels: [ModelOption] = []
 	private(set) var steering: [TurnRequest] = []
 	private(set) var interruptions: [TurnRequest] = []
 	private(set) var responses: [String] = []
@@ -202,7 +204,7 @@ final class ConcurrentChatService: CodexService
 
 	func models() async throws -> [ModelOption]
 	{
-		[]
+		availableModels
 	}
 
 	func skills(for directory: URL) async throws -> SkillCatalog
@@ -317,6 +319,7 @@ final class ConcurrentChatService: CodexService
 	) async throws -> CodexTurn
 	{
 		submittedPreferences.append(preferences)
+		submittedServiceTiers.append(serviceTier)
 		return try await startTurn(
 			threadId: threadId,
 			text: text(in: inputs),

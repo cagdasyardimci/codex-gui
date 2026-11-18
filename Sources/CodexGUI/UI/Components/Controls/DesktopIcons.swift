@@ -246,6 +246,30 @@ enum DesktopIcons
 		return image
 	}
 
+	static func ultrafastBoltImage() -> NSImage
+	{
+		ultrafastBoltArtwork.copy() as! NSImage
+	}
+
+	private static let ultrafastBoltArtwork: NSImage =
+	{
+		// Two offset strokes distinguish Ultrafast at the same size as the standard bolt mask.
+		let svg = """
+		<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
+		  <path fill="black" d="M13.2 2 2 13.3h7.1L7.6 22l11-12.3h-7.1z"/>
+		  <path fill="none" stroke="black" stroke-width="1.7" stroke-linecap="round"
+		        stroke-linejoin="round" d="m17 3-1.1 4.3H22L11.7 21"/>
+		</svg>
+		"""
+		guard let image = NSImage(data: Data(svg.utf8))
+		else
+		{
+			preconditionFailure("Invalid Ultrafast bolt artwork")
+		}
+		image.isTemplate = true
+		return image
+	}()
+
 	private static func sourceImage(_ icon: DesktopIcon) -> NSImage
 	{
 		guard Bundle.main.bundleURL.pathExtension == "app"

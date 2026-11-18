@@ -506,6 +506,7 @@ struct WorkspaceSelectors
 			approvalMode: runPreferences.approvalMode,
 			configurationDefaults: runPreferences.configurationDefaults,
 			fastMode: runPreferences.fastMode,
+			composerServiceTier: model.serviceTierForSubmission,
 			pinnedProjectPaths: model.preferences.pinnedProjectPaths,
 			removedProjectPaths: model.preferences.removedProjectPaths,
 			pinnedTasks: visibleThreads(model.preferences.pinnedTasks),

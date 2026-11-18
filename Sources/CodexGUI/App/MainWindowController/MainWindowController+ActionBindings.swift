@@ -501,9 +501,9 @@ extension MainWindowController
 		{
 			target.dispatch(.selectApprovalMode($0))
 		}
-		conversation.onSetFastMode =
+		conversation.onSelectComposerSpeed =
 		{
-			target.dispatch(.setFastMode($0))
+			target.dispatch(.selectComposerSpeed($0))
 		}
 		conversation
 			.onInsertPath =

@@ -85,7 +85,7 @@ enum WorkspaceIntent
 	case selectModel(String?)
 	case selectEffort(String?)
 	case selectApprovalMode(ApprovalMode)
-	case setFastMode(Bool)
+	case selectComposerSpeed(String)
 	case applyConfigurationDefaults(RunConfigurationDefaultsUpdate)
 	case toggleProjectPin(URL)
 	case removeProject(URL)
@@ -141,7 +141,7 @@ enum WorkspaceIntent
 				.setQueueingEnabled,
 				.insertPrompt, .prepareChangeRequest, .createTask, .renameProject, .newChat,
 				.newChatInProject, .clearProject, .selectModel, .selectEffort, .selectApprovalMode,
-				.setFastMode: return .draft
+				.selectComposerSpeed: return .draft
 		case .readAloud, .stopReadAloud, .submitResultFeedback, .branch, .editSentPrompt,
 				.retryLockedChat, .renameThread, .archiveThread, .loadEarlierTurns,
 				.loadEarlierTurnReferences,
@@ -464,7 +464,7 @@ final class WorkspaceIntentTarget
 		case .selectModel(let id): inputs.selectModel(id)
 		case .selectEffort(let effort): inputs.selectEffort(effort)
 		case .selectApprovalMode(let mode): inputs.selectApprovalMode(mode)
-		case .setFastMode(let enabled): inputs.setFastMode(enabled)
+		case .selectComposerSpeed(let tier): inputs.selectComposerSpeed(tier)
 		case .applyConfigurationDefaults(let update): inputs.applyConfigurationDefaults(update)
 		case .toggleProjectPin(let url): inputs.toggleProjectPin(url)
 		case .removeProject(let url): inputs.removeProject(url)
