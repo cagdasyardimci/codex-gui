@@ -371,7 +371,7 @@ final class ConversationReplyActionsView: NSStackView
 			addMenuAction(
 				to: menu,
 				title: "Branch in new chat",
-				image: DesktopIcons.image(.branch),
+				image: DesktopIcons.branchMenuImage(),
 				action: onBranch
 			)
 		}
@@ -381,7 +381,7 @@ final class ConversationReplyActionsView: NSStackView
 			addMenuAction(
 				to: menu,
 				title: title,
-				image: DesktopIcons.image(bookmarked ? .savedFilledXs : .savedXs),
+				image: DesktopIcons.bookmarkMenuImage(selected: bookmarked),
 				action: onToggleBookmark
 			)
 		}

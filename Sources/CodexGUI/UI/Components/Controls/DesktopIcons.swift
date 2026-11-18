@@ -202,6 +202,17 @@ enum DesktopIcons
 		return image
 	}
 
+	static func branchMenuImage() -> NSImage
+	{
+		image(.branch, size: 14)
+	}
+
+	static func bookmarkMenuImage(selected: Bool) -> NSImage
+	{
+		// The bookmark's tighter view box needs a smaller canvas to match the branch glyph.
+		image(selected ? .savedFilledXs : .savedXs, size: 13)
+	}
+
 	/// Template artwork keeps the local-device outline consistent in controls and menus.
 	static func localComputerImage() -> NSImage
 	{

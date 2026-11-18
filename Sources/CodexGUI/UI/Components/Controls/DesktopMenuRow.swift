@@ -550,6 +550,16 @@ class DesktopMenuRow: NSButton
 				height: subtitleLineHeight
 			)
 		)
+		if textPresentation == .aligned, content.subtitle == nil, !iconView.isHidden,
+			let font = titleLabel.font
+		{
+			// Center the capitals on the artwork. The line box also reserves descender space.
+			let capitalCenter = titleLabel.frame.minY + titleLabel.firstBaselineOffsetFromTop
+				- font.capHeight / 2
+			let offset = iconFrame.midY - capitalCenter
+			titleLabel.frame.origin.y += offset
+			suffixLabel.frame.origin.y += offset
+		}
 		if content.subtitle == nil,
 			let keycapView,
 			let surfaceBounds = keycapView.questionSurfaceBounds
