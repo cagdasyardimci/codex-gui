@@ -99,6 +99,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		comparisonToolbarView.collapseDiffsButton
 	}
 	private var fileJumpPopover: DesktopSearchPanel?
+	private var branchPopover: DesktopSearchPanel?
 	private var expandHostButton: NSButton?
 	private var panelHostButton: NSButton?
 	private var usesCompactComparisonToolbar: Bool
@@ -201,6 +202,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 
 	func close()
 	{
+		branchPopover?.close()
 		for task in treeExpansionTasks.values
 		{
 			task.cancel()
@@ -343,6 +345,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 				scope: #selector(showScopeMenu),
 				revisions: #selector(changeRevisions),
 				revisionMenu: #selector(showRevisionMenu),
+				branchMenu: #selector(showBranchMenu),
 				displayMenu: #selector(showDisplayMenu),
 				fileJump: #selector(showFileJumpPopover),
 				refresh: #selector(refreshComparison),
@@ -584,6 +587,17 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		scopeButton.title = state.scope.rawValue
 		scopeButton.setAccessibilityLabel("Comparison scope: \(state.scope.rawValue)")
 		let requiresRefs = state.scope == .branch || state.scope == .committed
+		let isBranch = state.scope == .branch
+		comparisonToolbarView.showBranchTarget(isBranch)
+		if !isBranch
+		{
+			branchPopover?.close()
+		}
+		let branch = state.snapshot?.branchComparison
+		let branchButton = comparisonToolbarView.branchTargetButton
+		branchButton.title = branch?.target ?? "HEAD"
+		branchButton.setAccessibilityLabel("Comparison branch: \(branchButton.title)")
+		branchButton.isEnabled = isBranch && branch?.choices.isEmpty == false
 		if revisionComparison?.isHidden != !requiresRefs
 		{
 			revisionComparison?.isHidden = !requiresRefs
@@ -621,7 +635,8 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		case .uncommitted: ("HEAD", "Tracked working tree")
 		case .unstaged: ("Index", "Tracked working tree")
 		case .staged: ("HEAD", "Index")
-		case .branch, .committed: (state.baseRevision, state.targetRevision)
+		case .branch: (state.snapshot?.branchComparison?.currentBranch ?? "HEAD", "")
+		case .committed: (state.baseRevision, state.targetRevision)
 		case .lastTurn: ("Before selected turn edits", "Recorded task edits")
 		}
 	}
@@ -1028,6 +1043,51 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			base: baseField.stringValue,
 			target: targetField.stringValue
 		)
+	}
+
+	@objc private func showBranchMenu()
+	{
+		let state = runtime.state
+		guard state.scope == .branch, let owner = state.owner,
+				let branch = state.snapshot?.branchComparison, !branch.choices.isEmpty
+		else
+		{
+			return
+		}
+		let controller = GitFileJumpPopoverController(
+			index: GitFileJumpIndex(branches: branch.choices),
+			selectedBranch: branch.target
+		)
+		let popover = DesktopSearchPanel(
+			controller: controller,
+			placement: .belowAnchor,
+			size: NSSize(
+				width: 296,
+				height: 242
+			)
+		)
+		controller.onSelect =
+		{
+			[weak self, weak popover] target in
+			if let self, self.runtime.state.owner == owner,
+				self.runtime.state.snapshot?.branchComparison == branch
+			{
+				self.runtime.selectBranchTarget(target)
+			}
+			popover?.close()
+		}
+		controller.onCancel =
+		{
+			[weak popover] in popover?.close()
+		}
+		branchPopover?.close()
+		branchPopover = popover
+		let anchor = comparisonToolbarView.branchTargetButton
+		popover.show(
+			relativeTo: anchor.bounds,
+			of: anchor
+		)
+		controller.focusSearch()
 	}
 	@objc private func showRevisionMenu()
 	{

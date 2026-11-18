@@ -27,6 +27,7 @@ struct GitComparisonRequest: Equatable, Sendable
 	var lastTurnBaseline: GitTurnBaselineReference? = nil
 	var lastTurnID: String? = nil
 	var reportedChanges: [FileChange]? = nil
+	var comparesWorkingTreeToBranch = false
 }
 
 enum GitComparisonFailure: Error, Equatable, Sendable
@@ -111,6 +112,13 @@ struct GitComparisonFile: Identifiable, Equatable, Sendable
 }
 
 /// Immutable comparison bytes. Presentation filters must never modify this payload.
+struct GitBranchComparison: Equatable, Sendable
+{
+	let currentBranch: String
+	let target: String
+	let choices: [String]
+}
+
 struct GitComparisonSnapshot: Equatable, Sendable
 {
 	let request: GitComparisonRequest
@@ -120,6 +128,7 @@ struct GitComparisonSnapshot: Equatable, Sendable
 	let patch: Data
 	let files: [GitComparisonFile]
 	var usesReportedEditFallback: Bool = false
+	var branchComparison: GitBranchComparison? = nil
 	var additions: Int
 	{
 		files.reduce(0)

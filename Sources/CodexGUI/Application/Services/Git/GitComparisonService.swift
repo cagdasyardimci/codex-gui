@@ -95,7 +95,8 @@ private struct GitComparisonReader
 		}
 
 		let before = try fingerprint()
-		let comparison = try resolvedComparison()
+		let branch = try request.comparesWorkingTreeToBranch ? branchComparison() : nil
+		let comparison = try resolvedComparison(branch: branch)
 		let arguments = [
 			"diff",
 			"--no-ext-diff",
@@ -136,7 +137,8 @@ private struct GitComparisonReader
 			resolvedBase: comparison.base,
 			resolvedTarget: comparison.target,
 			patch: patch,
-			files: GitComparisonPatchParser.files(in: patch)
+			files: GitComparisonPatchParser.files(in: patch),
+			branchComparison: branch
 		))
 	}
 
@@ -170,8 +172,58 @@ private struct GitComparisonReader
 		}
 	}
 
-	private func resolvedComparison() throws -> (arguments: [String], base: String, target: String)
+	private func branchComparison() throws -> GitBranchComparison
 	{
+		let currentBranch = (try? text(["symbolic-ref", "--quiet", "--short", "HEAD"]))?
+			.trimmingCharacters(in: .newlines) ?? "HEAD"
+		let upstream = (try? text([
+			"rev-parse",
+			"--abbrev-ref",
+			"--symbolic-full-name",
+			"@{upstream}"
+		]))?
+			.trimmingCharacters(in: .newlines)
+		let refs = try text([
+			"for-each-ref",
+			"--format=%(refname:short)%09%(symref)",
+			"refs/heads",
+			"refs/remotes"
+		])
+		let choices = refs.split(separator: "\n").compactMap
+		{
+			line -> String? in
+			let fields = line.split(
+				separator: "\t",
+				omittingEmptySubsequences: false
+			)
+			guard fields.count == 2, fields[1].isEmpty, fields[0] != currentBranch
+			else
+			{
+				return nil
+			}
+			return String(fields[0])
+		}
+		let target = request.targetRevision
+			.flatMap
+			{
+				choices.contains($0) ? $0 : nil
+			} ?? upstream ?? "HEAD"
+		return GitBranchComparison(
+			currentBranch: currentBranch,
+			target: target,
+			choices: choices
+		)
+	}
+
+	private func resolvedComparison(
+		branch: GitBranchComparison?
+	) throws -> (arguments: [String], base: String, target: String)
+	{
+		if let branch
+		{
+			let base = try revision(branch.target)
+			return ([base], base, "Working tree (tracked files)")
+		}
 		switch request.scope
 		{
 		case .unstaged:

@@ -12,6 +12,7 @@ struct GitReviewState
 	var scope: GitComparisonScope = .uncommitted
 	var baseRevision = "HEAD^"
 	var targetRevision = "HEAD"
+	var branchTarget: String?
 	private(set) var generation = 0
 	private(set) var summaryRevision = 0
 	private(set) var snapshot: GitComparisonSnapshot?
@@ -188,10 +189,11 @@ struct GitReviewState
 			repositoryRoot: root,
 			scope: scope,
 			generation: generation,
-			baseRevision: baseRevision,
-			targetRevision: targetRevision,
+			baseRevision: scope == .branch ? nil : baseRevision,
+			targetRevision: scope == .branch ? branchTarget : targetRevision,
 			lastTurnID: scope == .lastTurn ? lastTurnID : nil,
-			reportedChanges: scope == .lastTurn ? reportedChanges : nil
+			reportedChanges: scope == .lastTurn ? reportedChanges : nil,
+			comparesWorkingTreeToBranch: scope == .branch
 		)
 		pendingRequest = request
 		failure = nil

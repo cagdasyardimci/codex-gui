@@ -27,6 +27,10 @@ class DesktopSearchResultContentView: NSView
 			enabled: Bool
 		)
 		case filename(path: String)
+		case branch(
+			name: String,
+			selected: Bool
+		)
 		case command(
 			title: String,
 			detail: String,
@@ -110,6 +114,19 @@ class DesktopSearchResultContentView: NSView
 				suffix: suffix,
 				opensPicker: opensPicker,
 				enabled: enabled
+			)
+		case .branch(
+			let name,
+			let selected
+		):
+			configureInlineCommand(
+				title: name,
+				detail: "",
+				leadingAccessory: NSImageView(image: DesktopIcons.branchMenuImage()),
+				suffix: selected ? "✓" : "",
+				opensPicker: false,
+				enabled: true,
+				allowsTitleTruncation: true
 			)
 		case .filename(let path): configureFilename(path)
 		case .command(
@@ -261,14 +278,15 @@ class DesktopSearchResultContentView: NSView
 		leadingAccessory: NSView,
 		suffix: String,
 		opensPicker: Bool,
-		enabled: Bool
+		enabled: Bool,
+		allowsTitleTruncation: Bool = false
 	)
 	{
 		primaryLabel.stringValue = title
 		primaryLabel.setTypographyRole(TypographyTokens.Search.resultDetail)
 		primaryLabel.textColor = enabled ? AppKitColorTokens.primaryText : AppKitColorTokens
 			.secondaryText
-		if suffix.isEmpty
+		if suffix.isEmpty && !allowsTitleTruncation
 		{
 			primaryLabel.setContentCompressionResistancePriority(
 				.required,

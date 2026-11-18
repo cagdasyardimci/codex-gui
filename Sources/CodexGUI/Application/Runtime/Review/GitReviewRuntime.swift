@@ -86,6 +86,11 @@ final class GitReviewRuntime
 		dispatch(.selectScope(scope))
 	}
 
+	func selectBranchTarget(_ target: String)
+	{
+		dispatch(.selectBranchTarget(target))
+	}
+
 	func setRevisions(
 		base: String,
 		target: String

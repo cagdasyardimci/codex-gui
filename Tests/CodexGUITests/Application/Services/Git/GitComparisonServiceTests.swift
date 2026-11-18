@@ -18,7 +18,7 @@ struct GitComparisonServiceTests
 		}
 		try git(
 			root,
-			["init", "-q"]
+			["init", "-q", "-b", "main"]
 		)
 		let file = root.appendingPathComponent("neutral file.txt")
 		try Data("original\ncontext\n".utf8).write(to: file)
@@ -74,6 +74,45 @@ struct GitComparisonServiceTests
 			#expect(text.contains(scope == .staged ? "+staged" : "+working"))
 			#expect(text.contains(scope == .unstaged ? "-staged" : "-original"))
 		}
+		try git(
+			root,
+			["remote", "add", "origin", root.path]
+		)
+		try git(
+			root,
+			["update-ref", "refs/remotes/origin/main", "HEAD"]
+		)
+		try git(
+			root,
+			["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]
+		)
+		try git(
+			root,
+			["branch", "--set-upstream-to=origin/main", "main"]
+		)
+		var branchRequest = request(
+			root: root.path,
+			scope: .branch
+		)
+		branchRequest.comparesWorkingTreeToBranch = true
+		guard case let .snapshot(branch) = await service.compare(branchRequest)
+		else
+		{
+			Issue.record("Expected working tree comparison against configured upstream")
+			return
+		}
+		#expect(branch.branchComparison == GitBranchComparison(
+			currentBranch: "main",
+			target: "origin/main",
+			choices: ["origin/main"]
+		))
+		#expect(branch.files.map(\.path) == ["neutral file.txt"])
+		let branchPatch = String(
+			decoding: branch.patch,
+			as: UTF8.self
+		)
+		#expect(branchPatch.contains("-original"))
+		#expect(branchPatch.contains("+working"))
 		#expect(try Data(contentsOf: index) == indexBefore)
 		#expect(try Data(contentsOf: file) == Data("working\ncontext\n".utf8))
 		#expect(try git(

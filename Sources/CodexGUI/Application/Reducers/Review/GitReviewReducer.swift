@@ -80,6 +80,15 @@ enum GitReviewReducer
 		case .selectScope(let scope):
 			state.selectScope(scope)
 			return beginRead(state: &state)
+		case .selectBranchTarget(let target):
+			guard state.scope == .branch,
+					state.snapshot?.branchComparison?.choices.contains(target) == true
+			else
+			{
+				return GitReviewTransition()
+			}
+			state.branchTarget = target
+			return beginRead(state: &state)
 		case let .setRevisions(
 			base,
 			target

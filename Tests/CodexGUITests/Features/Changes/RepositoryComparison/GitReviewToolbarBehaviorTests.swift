@@ -48,6 +48,47 @@ struct GitReviewToolbarBehaviorTests
 		}
 	}
 
+	@Test func branchRevisionCapsuleShowsCheckoutAndSelectableTarget() async throws
+	{
+		let (controller, window) = try await loadedController()
+		defer
+		{
+			controller.close()
+			window.close()
+		}
+		controller.runtime.selectScope(.branch)
+		await controller.runtime.readTask?.value
+		window.setContentSize(NSSize(
+			width: 900,
+			height: 640
+		))
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
+		let toolbar = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? GitComparisonToolbarView
+		}.first)
+		let capsule = try #require(toolbar.revisionComparison)
+		#expect(!capsule.isHidden)
+		#expect(capsule.bounds.height == 32)
+		#expect(capsule.bounds.width < 200)
+		#expect(toolbar.baseField.stringValue == "main")
+		#expect(!toolbar.baseField.isEditable)
+		#expect(toolbar.branchTargetButton.title == "origin/main")
+		#expect(toolbar.branchTargetButton.isEnabled)
+		#expect(toolbar.targetField.isHidden)
+		controller.runtime.selectBranchTarget("origin/release")
+		await controller.runtime.readTask?.value
+		#expect(toolbar.branchTargetButton.title == "origin/release")
+		#expect(controller.runtime.state.snapshot?.request.targetRevision == "origin/release")
+	}
+
+	@Test func branchSearchMatchesTheFullRefWithoutTreatingSlashesAsDirectories()
+	{
+		let index = GitFileJumpIndex(branches: ["origin/main", "release/main", "release/next"])
+		#expect(index.matches(" RELEASE/ ").map(\.filename) == ["release/main", "release/next"])
+	}
+
 	@Test(arguments: [GitDiffLayoutPreference.unified, .split])
 	func visibleDiffsRewrapDuringPaneResize(layout: GitDiffLayoutPreference) async throws
 	{
@@ -584,7 +625,12 @@ private struct ToolbarFixtureService: GitComparisonService
 			resolvedTarget: "Working tree",
 			patch: Data(patch.utf8),
 			files: files,
-			usesReportedEditFallback: usesReportedEditFallback
+			usesReportedEditFallback: usesReportedEditFallback,
+			branchComparison: request.comparesWorkingTreeToBranch ? GitBranchComparison(
+				currentBranch: "main",
+				target: request.targetRevision ?? "origin/main",
+				choices: ["origin/main", "origin/release"]
+			) : nil
 		))
 	}
 }

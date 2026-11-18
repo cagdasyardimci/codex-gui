@@ -16,6 +16,18 @@ struct GitFileJumpIndex
 
 	let entries: [Entry]
 
+	init(branches: [String])
+	{
+		entries = branches.map
+		{
+			Entry(
+				id: $0,
+				filename: $0,
+				directory: ""
+			)
+		}
+	}
+
 	init(files: [GitComparisonFile])
 	{
 		entries = files.map
@@ -54,15 +66,20 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	private static let maximumVisibleResultCount = 200
 
 	private let index: GitFileJumpIndex
+	private let selectedBranch: String?
 	private let search = DesktopSearchField(presentation: .viewerOverlay)
 	private let results = DesktopFlippedStackView()
 	private var visibleEntries: [GitFileJumpIndex.Entry] = []
 	private var resultButtons: [DesktopSearchResultButton] = []
 	private var selectedIndex = 0
 
-	init(index: GitFileJumpIndex)
+	init(
+		index: GitFileJumpIndex,
+		selectedBranch: String? = nil
+	)
 	{
 		self.index = index
+		self.selectedBranch = selectedBranch
 		super.init(
 			nibName: nil,
 			bundle: nil
@@ -77,8 +94,8 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 	override func loadView()
 	{
 		search.configureSearch(
-			placeholder: "Jump to file",
-			accessibilityLabel: "Search changed files",
+			placeholder: selectedBranch == nil ? "Jump to file" : "Search branches",
+			accessibilityLabel: selectedBranch == nil ? "Search changed files" : "Search branches",
 			delegate: self,
 			sendsImmediately: true
 		)
@@ -150,6 +167,13 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 		}
 		let matches = index.matches(search.stringValue)
 		visibleEntries = Array(matches.prefix(Self.maximumVisibleResultCount))
+		if selectedBranch != nil, !visibleEntries.isEmpty
+		{
+			results.addArrangedSubview(DesktopSearchOverlayView.message(
+				"Branches",
+				presentation: .section
+			))
+		}
 		for entry in visibleEntries
 		{
 			let button = makeResultButton(entry)
@@ -166,15 +190,33 @@ final class GitFileJumpPopoverController: NSViewController, NSSearchFieldDelegat
 
 	private func makeResultButton(_ entry: GitFileJumpIndex.Entry) -> DesktopSearchResultButton
 	{
+		let presentation: DesktopSearchResultContentView.Presentation
+		if let selectedBranch
+		{
+			presentation = .branch(
+				name: entry.filename,
+				selected: entry.id == selectedBranch
+			)
+		}
+		else
+		{
+			presentation = .inlineFile(
+				title: entry.filename,
+				directory: entry.directory,
+				shortcut: ""
+			)
+		}
 		let button = DesktopSearchResultButton(
-			title: entry.filename,
-			context: entry.directory,
-			inlineContext: true,
+			presentation: .content(presentation),
 			target: self,
 			action: #selector(choose(_:))
 		)
 		button.identifier = NSUserInterfaceItemIdentifier(entry.id)
 		button.setAccessibilityLabel(entry.path)
+		if entry.id == selectedBranch
+		{
+			button.setAccessibilityValue("Selected")
+		}
 		button.toolTip = entry.path
 		button.layer?.cornerRadius = 12
 		button.wantsLayer = true

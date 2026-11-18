@@ -9,6 +9,7 @@ final class GitComparisonToolbarView: NSStackView
 		let scope: Selector
 		let revisions: Selector
 		let revisionMenu: Selector
+		let branchMenu: Selector
 		let displayMenu: Selector
 		let fileJump: Selector
 		let refresh: Selector
@@ -31,6 +32,12 @@ final class GitComparisonToolbarView: NSStackView
 	)
 	let baseField = NSTextField(string: "HEAD^")
 	let targetField = NSTextField(string: "HEAD")
+	let branchTargetButton = ViewerToolbarButton(
+		title: "HEAD",
+		target: nil,
+		action: nil
+	)
+	private var revisionMenuButton: NSButton?
 	let diffStats = DesktopDiffStats(
 		counts: .init(
 			additions: 0,
@@ -177,8 +184,25 @@ final class GitComparisonToolbarView: NSStackView
 			),
 			action: actions.revisionMenu
 		)
+		revisionMenuButton = revisionMenu
+		branchTargetButton.target = target
+		branchTargetButton.action = actions.branchMenu
+		branchTargetButton.presentation = .groupedDropdown
+		branchTargetButton.trailingImage = GitReviewReferenceIcons.image(
+			.chevronDown,
+			size: 12
+		)
+		branchTargetButton.lineBreakMode = .byTruncatingTail
+		branchTargetButton.setContentCompressionResistancePriority(
+			.defaultHigh,
+			for: .horizontal
+		)
+		branchTargetButton.widthAnchor
+			.constraint(lessThanOrEqualToConstant: Layout.maximumRevisionWidth)
+			.isActive = true
+		branchTargetButton.isHidden = true
 		let revisionRow = AppKitLayout.horizontalStack(
-			[baseField, arrow, targetField, revisionMenu],
+			[baseField, arrow, targetField, revisionMenu, branchTargetButton],
 			spacing: 2
 		)
 		// The target dropdown supplies its own leading text inset.
@@ -199,6 +223,20 @@ final class GitComparisonToolbarView: NSStackView
 		revisionComparison = refs
 		updateRevisionWidths()
 		return refs
+	}
+
+	func showBranchTarget(_ selected: Bool)
+	{
+		guard targetField.isHidden != selected
+		else
+		{
+			return
+		}
+		baseField.isEditable = !selected
+		baseField.isSelectable = true
+		targetField.isHidden = selected
+		revisionMenuButton?.isHidden = selected
+		branchTargetButton.isHidden = !selected
 	}
 
 	func updateRevisionWidths()
