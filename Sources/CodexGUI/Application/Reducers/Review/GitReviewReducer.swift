@@ -89,6 +89,21 @@ enum GitReviewReducer
 			}
 			state.branchTarget = target
 			return beginRead(state: &state)
+		case .selectRecentCommit(let revision):
+			guard state.snapshot?.recentCommits.contains(where:
+				{
+					$0.revision == revision
+				}) == true
+			else
+			{
+				return GitReviewTransition()
+			}
+			state.setRevisions(
+				base: revision + "^",
+				target: revision
+			)
+			state.selectScope(.committed)
+			return beginRead(state: &state)
 		case let .setRevisions(
 			base,
 			target

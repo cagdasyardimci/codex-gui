@@ -89,6 +89,55 @@ struct GitReviewToolbarBehaviorTests
 		#expect(index.matches(" RELEASE/ ").map(\.filename) == ["release/main", "release/next"])
 	}
 
+	@Test func committedMenuAlignsDatesAndOpensTheSelectedCommit() async throws
+	{
+		let (controller, window) = try await loadedController()
+		defer
+		{
+			controller.close()
+			window.close()
+		}
+		let menu = try #require(controller.makeScopeMenu().items.first
+		{
+			$0.title == "Committed"
+		}?
+		.submenu)
+		let rows = menu.items
+		try #require(rows.map
+		{
+			$0.representedObject as? String
+		} == ["first", "second"])
+		let tabs = try rows.map
+		{
+			row in
+			let title = try #require(row.attributedTitle)
+			#expect(title.string.contains("\t"))
+			let paragraph = try #require(title.attribute(
+				.paragraphStyle,
+				at: 0,
+				effectiveRange: nil
+			)
+				as? NSParagraphStyle)
+			return try #require(paragraph.tabStops.first)
+		}
+		#expect(tabs.allSatisfy
+		{
+			$0.alignment == .right && $0.location == tabs[0].location
+		})
+		let selected = rows[1]
+		let action = try #require(selected.action)
+		try #require(NSApplication.shared.sendAction(
+			action,
+			to: selected.target,
+			from: selected
+		))
+		await controller.runtime.readTask?.value
+		let request = try #require(controller.runtime.state.snapshot?.request)
+		#expect(request.scope == .committed)
+		#expect(request.baseRevision == "second^")
+		#expect(request.targetRevision == "second")
+	}
+
 	@Test(arguments: [GitDiffLayoutPreference.unified, .split])
 	func visibleDiffsRewrapDuringPaneResize(layout: GitDiffLayoutPreference) async throws
 	{
@@ -630,7 +679,19 @@ private struct ToolbarFixtureService: GitComparisonService
 				currentBranch: "main",
 				target: request.targetRevision ?? "origin/main",
 				choices: ["origin/main", "origin/release"]
-			) : nil
+			) : nil,
+			recentCommits: [
+				GitRecentCommit(
+					revision: "first",
+					subject: "First commit",
+					date: .distantPast
+				),
+				GitRecentCommit(
+					revision: "second",
+					subject: "Second",
+					date: .distantPast
+				),
+			]
 		))
 	}
 }

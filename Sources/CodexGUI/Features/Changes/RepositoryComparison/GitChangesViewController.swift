@@ -1122,6 +1122,20 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 
 	@objc private func showScopeMenu()
 	{
+		let menu = makeScopeMenu()
+		menu.popUp(
+			positioning: nil,
+			at: NSPoint(
+				x: 0,
+				y: scopeButton.bounds.maxY
+			),
+			in: scopeButton
+		)
+		view.window?.makeFirstResponder(scopeButton)
+	}
+
+	func makeScopeMenu() -> NSMenu
+	{
 		let menu = NSMenu()
 		menu.setTypographyRole(TypographyTokens.MenuRow.title)
 		for scope in GitComparisonScope.allCases
@@ -1141,32 +1155,95 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			if scope == .committed
 			{
 				item.action = nil
-				let submenu = NSMenu(title: "Committed")
-				submenu.setTypographyRole(TypographyTokens.MenuRow.title)
-				for (title, tag) in [("HEAD parent → HEAD", 0), ("Custom revision pair…", 1)]
-				{
-					let child = NSMenuItem(
-						title: title,
-						action: #selector(selectCommitted(_:)),
-						keyEquivalent: ""
-					)
-					child.target = self
-					child.tag = tag
-					submenu.addItem(child)
-				}
-				item.submenu = submenu
+				item.submenu = makeCommittedMenu()
 			}
 			menu.addItem(item)
 		}
-		menu.popUp(
-			positioning: nil,
-			at: NSPoint(
-				x: 0,
-				y: scopeButton.bounds.maxY
-			),
-			in: scopeButton
-		)
-		view.window?.makeFirstResponder(scopeButton)
+		return menu
+	}
+
+	private func makeCommittedMenu() -> NSMenu
+	{
+		let menu = NSMenu(title: "Committed")
+		menu.setTypographyRole(TypographyTokens.MenuRow.title)
+		let commits = runtime.state.snapshot?.recentCommits ?? []
+		let formatter = RelativeDateTimeFormatter()
+		formatter.unitsStyle = .abbreviated
+		let now = Date()
+		let titleFont = AppKitFontResolver.font(TypographyTokens.MenuRow.title)
+		let dateFont = AppKitFontResolver.font(TypographyTokens.MenuRow.subtitle)
+		let rows = commits.map
+		{
+			commit in
+			let subject = String(commit.subject.prefix(96))
+			return (
+				commit,
+				subject == commit.subject ? subject : subject + "…",
+				formatter.localizedString(
+					for: commit.date,
+					relativeTo: now
+				)
+			)
+		}
+		let titleWidth = rows
+			.map
+			{
+				($0.1 as NSString).size(withAttributes: [.font: titleFont]).width
+			}
+			.max() ?? 0
+		let dateWidth = rows
+			.map
+			{
+				($0.2 as NSString).size(withAttributes: [.font: dateFont]).width
+			}
+			.max() ?? 0
+		let paragraph = NSMutableParagraphStyle()
+		paragraph.tabStops = [NSTextTab(
+			textAlignment: .right,
+			location: ceil(titleWidth + dateWidth + 16)
+		)]
+		for (commit, subject, date) in rows
+		{
+			let item = NSMenuItem(
+				title: subject,
+				action: #selector(selectRecentCommit(_:)),
+				keyEquivalent: ""
+			)
+			let title = NSMutableAttributedString(
+				string: subject + "\t",
+				attributes: [.font: titleFont]
+			)
+			title.append(NSAttributedString(
+				string: date,
+				attributes: [
+					.font: dateFont,
+					.foregroundColor: AppKitColorTokens.secondaryText,
+				]
+			))
+			title.addAttribute(
+				.paragraphStyle,
+				value: paragraph,
+				range: NSRange(
+					location: 0,
+					length: title.length
+				)
+			)
+			item.attributedTitle = title
+			item.representedObject = commit.revision
+			item.target = self
+			item.state = runtime.state.scope == .committed && runtime.state.targetRevision == commit
+				.revision ? .on : .off
+			menu.addItem(item)
+		}
+		return menu
+	}
+
+	@objc private func selectRecentCommit(_ sender: NSMenuItem)
+	{
+		if let revision = sender.representedObject as? String
+		{
+			runtime.selectRecentCommit(revision)
+		}
 	}
 
 	@objc private func selectScope(_ sender: NSMenuItem)
@@ -1178,22 +1255,6 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			return
 		}
 		runtime.selectScope(scope)
-	}
-
-	@objc private func selectCommitted(_ sender: NSMenuItem)
-	{
-		if sender.tag == 0
-		{
-			runtime.setRevisions(
-				base: "HEAD^",
-				target: "HEAD"
-			)
-		}
-		runtime.selectScope(.committed)
-		if sender.tag == 1
-		{
-			view.window?.makeFirstResponder(baseField)
-		}
 	}
 
 	func makeDiffDisplayMenu() -> NSMenu

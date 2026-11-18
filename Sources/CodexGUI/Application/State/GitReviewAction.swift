@@ -19,6 +19,7 @@ enum GitReviewAction
 	case repositoryChanged
 	case selectScope(GitComparisonScope)
 	case selectBranchTarget(String)
+	case selectRecentCommit(String)
 	case setRevisions(
 		base: String,
 		target: String

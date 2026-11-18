@@ -16,7 +16,14 @@ struct LocalGitComparisonService: GitComparisonService
 		{
 			return await GitSubprocessCancellation.detached
 			{
-				GitReportedTurnComparison.compare(request)
+				let result = GitReportedTurnComparison.compare(request)
+				guard case .snapshot(var snapshot) = result
+				else
+				{
+					return result
+				}
+				snapshot.recentCommits = GitComparisonReader(request: request).readRecentCommits()
+				return Task.isCancelled ? .unavailable(.cancelled) : .snapshot(snapshot)
 			}
 		}
 		return await GitSubprocessCancellation.detached
@@ -119,6 +126,7 @@ private struct GitComparisonReader
 		}
 
 		let repeatedPatch = try run(arguments)
+		let recentCommits = readRecentCommits()
 		let after = try fingerprint()
 		guard !GitComparisonPatchParser.hasUnsupportedSections(in: patch)
 		else
@@ -138,8 +146,45 @@ private struct GitComparisonReader
 			resolvedTarget: comparison.target,
 			patch: patch,
 			files: GitComparisonPatchParser.files(in: patch),
-			branchComparison: branch
+			branchComparison: branch,
+			recentCommits: recentCommits
 		))
+	}
+
+	fileprivate func readRecentCommits() -> [GitRecentCommit]
+	{
+		guard let log = try? text(["log", "-5", "-z", "--format=%H%x00%ct%x00%s", "HEAD", "--"])
+		else
+		{
+			return []
+		}
+		let fields = log.split(
+			separator: "\0",
+			omittingEmptySubsequences: false
+		)
+		return stride(
+			from: 0,
+			to: max(
+				0,
+				fields.count - 2
+			),
+			by: 3
+		).compactMap
+		{
+			index in
+			guard let seconds = TimeInterval(fields[index + 1])
+			else
+			{
+				return nil
+			}
+			let subject = fields[index + 2].split(whereSeparator: \.isWhitespace)
+				.joined(separator: " ")
+			return GitRecentCommit(
+				revision: String(fields[index]),
+				subject: subject.isEmpty ? String(fields[index].prefix(12)) : subject,
+				date: Date(timeIntervalSince1970: seconds)
+			)
+		}
 	}
 
 	/// Clean filters can run while diff converts a working-tree file to repository form.
@@ -236,11 +281,43 @@ private struct GitComparisonReader
 			return ([head], head, "Working tree (tracked files)")
 		case .branch, .committed:
 			let defaultBase = request.scope == .committed ? "HEAD^" : "HEAD"
-			let base = try revision(request.baseRevision ?? defaultBase)
-			let target = try revision(request.targetRevision ?? "HEAD")
+			let baseRef = request.baseRevision ?? defaultBase
+			let targetRef = request.targetRevision ?? "HEAD"
+			let target = try revision(targetRef)
+			let base: String
+			if request.scope == .committed, baseRef == targetRef + "^"
+			{
+				base = try firstParentOrEmptyTree(
+					baseRef,
+					commit: target
+				)
+			}
+			else
+			{
+				base = try revision(baseRef)
+			}
 			return ([base, target], base, target)
 		case .lastTurn: throw GitComparisonReadError.command
 		}
+	}
+
+	private func firstParentOrEmptyTree(
+		_ parent: String,
+		commit: String
+	) throws -> String
+	{
+		if let resolved = try? revision(parent)
+		{
+			return resolved
+		}
+		let lineage = try text(["rev-list", "--parents", "-1", commit, "--"])
+		guard lineage.split(whereSeparator: \.isWhitespace).count == 1
+		else
+		{
+			throw GitComparisonReadError.revision(parent)
+		}
+		// Use the empty tree in the repository's object format for a root commit.
+		return try text(["hash-object", "-t", "tree", "--stdin"]).trimmingCharacters(in: .newlines)
 	}
 
 	private func revision(_ value: String) throws -> String

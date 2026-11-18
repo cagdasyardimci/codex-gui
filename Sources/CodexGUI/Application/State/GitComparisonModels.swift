@@ -119,6 +119,13 @@ struct GitBranchComparison: Equatable, Sendable
 	let choices: [String]
 }
 
+struct GitRecentCommit: Equatable, Sendable
+{
+	let revision: String
+	let subject: String
+	let date: Date
+}
+
 struct GitComparisonSnapshot: Equatable, Sendable
 {
 	let request: GitComparisonRequest
@@ -129,6 +136,7 @@ struct GitComparisonSnapshot: Equatable, Sendable
 	let files: [GitComparisonFile]
 	var usesReportedEditFallback: Bool = false
 	var branchComparison: GitBranchComparison? = nil
+	var recentCommits: [GitRecentCommit] = []
 	var additions: Int
 	{
 		files.reduce(0)

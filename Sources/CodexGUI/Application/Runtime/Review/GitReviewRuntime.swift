@@ -91,6 +91,11 @@ final class GitReviewRuntime
 		dispatch(.selectBranchTarget(target))
 	}
 
+	func selectRecentCommit(_ revision: String)
+	{
+		dispatch(.selectRecentCommit(revision))
+	}
+
 	func setRevisions(
 		base: String,
 		target: String

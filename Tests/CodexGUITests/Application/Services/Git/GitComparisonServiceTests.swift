@@ -113,6 +113,26 @@ struct GitComparisonServiceTests
 		)
 		#expect(branchPatch.contains("-original"))
 		#expect(branchPatch.contains("+working"))
+		let initialCommit = try #require(branch.recentCommits.first)
+		#expect(initialCommit.subject == "Fixture")
+		var committed = request(
+			root: root.path,
+			scope: .committed
+		)
+		committed.baseRevision = initialCommit.revision + "^"
+		committed.targetRevision = initialCommit.revision
+		guard case let .snapshot(initial) = await service.compare(committed)
+		else
+		{
+			Issue.record("Expected root commit comparison")
+			return
+		}
+		#expect(initial.additions == 2)
+		#expect(initial.deletions == 0)
+		#expect(String(
+			decoding: initial.patch,
+			as: UTF8.self
+		).contains("+original"))
 		#expect(try Data(contentsOf: index) == indexBefore)
 		#expect(try Data(contentsOf: file) == Data("working\ncontext\n".utf8))
 		#expect(try git(
