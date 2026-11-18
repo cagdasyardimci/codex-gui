@@ -48,6 +48,8 @@ Each main window needs its own toolbar identifier: AppKit synchronizes items bet
 
 During a tools-divider drag, visible diffs rewrap with the viewport. The [diff document](../Sources/CodexGUI/Features/Changes/RepositoryComparison/GitDiffDocumentController.swift) defers text layout for offscreen hunks until they enter view or the drag ends, then keeps the visible diff in place as preceding hunks catch up.
 
+The Changes pane uses its one-file-at-a-time layout for comparisons with many separated edits, even when only a few files changed. Folded context creates separate native text views, so changed-line and file counts alone can understate the cost of opening the comparison. The file navigator still shows the complete comparison.
+
 Changes shows the checkout branch on the left and the selected comparison branch on the right. Branch review compares the tracked working tree against that ref, including tracked edits alongside committed changes. The configured upstream is the default. A checkout without an upstream uses its current commit until a comparison branch is selected.
 
 Selecting a recent commit under Committed compares that commit against its first parent, including for merge commits. A root commit is compared against an empty tree. The selection opens a diff without switching the checkout.

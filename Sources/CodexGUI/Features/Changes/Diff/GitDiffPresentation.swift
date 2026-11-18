@@ -68,9 +68,53 @@ struct GitDiffPatchLine
 struct GitDiffPresentation: Equatable, Sendable
 {
 	private static let wordTokenExpression = try? NSRegularExpression(pattern: #"\w+|\s+|[^\w\s]"#)
+	private static let visibleContextPerSide = 3
+	private static let unfoldedContextLimit = visibleContextPerSide * 2
 
 	let snapshot: GitComparisonSnapshot
 	var options = GitDiffPresentationOptions()
+
+	/// Each default context fold splits a file's native source viewport in two.
+	static func reachesSourceViewportLimit(
+		in files: [GitComparisonFile],
+		limit: Int
+	) -> Bool
+	{
+		var viewportCount = 0
+		for file in files where !file.isBinary && !file.hunks.isEmpty
+		{
+			viewportCount += 1
+			if viewportCount >= limit
+			{
+				return true
+			}
+			for hunk in file.hunks
+			{
+				var contextCount = 0
+				for line in patchLines(
+					in: hunk.text,
+					startsInHunk: true
+				)
+				{
+					guard case .source(let kind) = line.kind
+					else
+					{
+						continue
+					}
+					contextCount = kind == .context ? contextCount + 1 : 0
+					if contextCount == unfoldedContextLimit + 1
+					{
+						viewportCount += 1
+						if viewportCount >= limit
+						{
+							return true
+						}
+					}
+				}
+			}
+		}
+		return false
+	}
 
 	func file(_ id: String) -> GitDiffFilePresentation?
 	{
@@ -427,25 +471,26 @@ struct GitDiffPresentation: Equatable, Sendable
 			}
 			let count = index - start
 			let gapID = "\(prefix):gap:\(rows[start].id):\(rows[index - 1].id)"
-			guard count > 6,
+			guard count > Self.unfoldedContextLimit,
 					!(options.loadFullFiles && options.expandedGapIDs.contains(Data(gapID.utf8)))
 			else
 			{
 				result.append(contentsOf: rows[start ..< index])
 				continue
 			}
-			result.append(contentsOf: rows[start ..< start + 3])
+			result.append(contentsOf: rows[start ..< start + Self.visibleContextPerSide])
+			let hiddenLineCount = count - Self.unfoldedContextLimit
 			result.append(GitDiffRow(
 				id: gapID,
 				kind: .gap,
-				text: "\(count - 6) unmodified lines",
+				text: "\(hiddenLineCount) unmodified lines",
 				oldLine: nil,
 				newLine: nil,
 				gapID: gapID,
-				hiddenLineCount: count - 6,
+				hiddenLineCount: hiddenLineCount,
 				canExpand: options.loadFullFiles
 			))
-			result.append(contentsOf: rows[index - 3 ..< index])
+			result.append(contentsOf: rows[index - Self.visibleContextPerSide ..< index])
 		}
 		return result
 	}

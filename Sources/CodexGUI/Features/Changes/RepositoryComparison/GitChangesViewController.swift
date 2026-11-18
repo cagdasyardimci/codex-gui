@@ -76,6 +76,11 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		comparisonToolbarView.diffLayoutButton
 	}
 	private var largeComparisonBanner: NSView?
+	private var comparisonLayout: (
+		id: String,
+		owner: FeaturePresentationOwner,
+		usesSingleFile: Bool
+	)?
 	private var previousFileButton: NSButton?
 	private var nextFileButton: NSButton?
 	private var navigatorToggle: NSButton?
@@ -544,6 +549,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		guard let snapshot = state.snapshot
 		else
 		{
+			comparisonLayout = nil
 			documentController.render(
 				state: state,
 				presentation: nil,
@@ -556,11 +562,20 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 			tree.reloadTree()
 			return
 		}
-		let usesSingleFile = GitReviewDesignLayout.isLarge(snapshot)
+		if comparisonLayout?.id != snapshot.id || comparisonLayout?.owner != snapshot.request.owner
+		{
+			comparisonLayout = (
+				snapshot.id,
+				snapshot.request.owner,
+				GitReviewDesignLayout.isLarge(snapshot)
+			)
+		}
+		let usesSingleFile = comparisonLayout?.usesSingleFile == true
 		let displayedFileID = usesSingleFile
 			? state.selectedFileID ?? snapshot.files.first?.id : nil
 		updateLargeComparison(
 			snapshot,
+			usesSingleFile: usesSingleFile,
 			selectedFileID: displayedFileID,
 			current: current
 		)
@@ -884,12 +899,12 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 
 	private func updateLargeComparison(
 		_ snapshot: GitComparisonSnapshot,
+		usesSingleFile: Bool,
 		selectedFileID: String?,
 		current: Bool
 	)
 	{
-		let large = GitReviewDesignLayout.isLarge(snapshot)
-		largeComparisonBanner?.isHidden = !large
+		largeComparisonBanner?.isHidden = !usesSingleFile
 		let index = snapshot.files.firstIndex
 		{
 			Data($0.id.utf8) == selectedFileID.map

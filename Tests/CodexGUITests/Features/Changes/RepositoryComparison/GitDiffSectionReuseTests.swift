@@ -6,6 +6,46 @@ import Testing
 @Suite @MainActor
 struct GitDiffSectionReuseTests
 {
+	@Test func separatedEditsOpenOneFileAtATime()
+		async throws
+	{
+		let files = ["Sources/First.txt", "Sources/Second.txt"]
+		let controller = GitChangesViewController(runtime: GitReviewRuntime(
+			service: ReuseFixtureService(
+				paths: files,
+				editsPerFile: 32
+			)
+		))
+		let window = host(controller)
+		defer
+		{
+			controller.close()
+			window.close()
+		}
+		controller.activate(owner: owner("separated-edits"))
+		await controller.runtime.readTask?.value
+		settle(window)
+		let snapshot = try #require(controller.runtime.state.snapshot)
+		#expect(snapshot.files.count == 2)
+		#expect(snapshot.additions + snapshot.deletions == 128)
+		_ = try section(
+			files[0],
+			in: controller.view
+		)
+		#expect(controller.projectionCache.projectionCount == 1)
+		let nextFile = try button(
+			"Next changed file",
+			in: controller.view
+		)
+		#expect(nextFile.dispatchConfiguredAction())
+		_ = try section(
+			files[1],
+			in: controller.view
+		)
+		#expect(controller.runtime.state.selectedFileID == snapshot.files[1].id)
+		#expect(controller.projectionCache.projectionCount == 2)
+	}
+
 	@Test func canonicallyEquivalentPathsKeepDistinctSectionsAndSourceBytes() async throws
 	{
 		let paths = ["Sources/Caf\u{E9}.swift", "Sources/Cafe\u{301}.swift"]
@@ -227,33 +267,40 @@ private struct ReuseFixtureService: GitComparisonService
 {
 	var paths = ["Sources/One.swift", "Tests/Two.swift"]
 	var kinds: [GitComparisonChangeKind] = []
+	var editsPerFile = 1
 
 	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
 	{
 		let long = String(
 			repeating: "wide source ",
-			count: 60
+			count: editsPerFile == 1 ? 60 : 1
 		)
 		let files = paths.enumerated().map
 		{
 			index, path in
 			let kind = kinds.indices.contains(index) ? kinds[index] : .modified
-			let context = (1 ... 12).map
+			let contextLineCount = editsPerFile == 1 ? 12 : 8
+			let context = (1 ... contextLineCount).map
 			{
 				" \(path) \(long)\($0)"
 			}.joined(separator: "\n")
-			let hunkText = "@@ -1,13 +1,13 @@\n\(context)\n-before\n+after\n"
+			let lineCount = (contextLineCount + 1) * editsPerFile
+			let header = "@@ -1,\(lineCount) +1,\(lineCount) @@"
+			let hunkText = header + "\n" + String(
+				repeating: "\(context)\n-before\n+after\n",
+				count: editsPerFile
+			)
 			let patch = "diff --git a/\(path) b/\(path)\n--- a/\(path)\n+++ b/\(path)\n" + hunkText
 			return GitComparisonFile(
 				oldPath: kind == .added ? nil : path,
 				newPath: kind == .deleted ? nil : path,
 				kind: kind,
-				additions: 1,
-				deletions: 1,
+				additions: editsPerFile,
+				deletions: editsPerFile,
 				isBinary: false,
 				patch: patch,
 				hunks: [GitComparisonHunk(
-					header: "@@ -1,13 +1,13 @@",
+					header: header,
 					text: hunkText,
 					oldStart: 1,
 					newStart: 1
