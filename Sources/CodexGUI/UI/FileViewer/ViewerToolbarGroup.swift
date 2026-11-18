@@ -13,7 +13,7 @@ final class ViewerToolbarGroup: DesktopSurface
 
 	enum Presentation
 	{
-		case actions, revisions, tools, tab, banner
+		case actions, comparisonScope, revisions, tools, tab, banner
 	}
 
 	init(
@@ -21,18 +21,19 @@ final class ViewerToolbarGroup: DesktopSurface
 		presentation: Presentation
 	)
 	{
-		let capsule = presentation == .actions || presentation == .revisions || presentation ==
-			.tools
+		let capsule = presentation == .actions || presentation == .comparisonScope
+			|| presentation == .revisions || presentation == .tools
 		let radius: CGFloat
 		let horizontalInset: CGFloat
 		let verticalInset: CGFloat
 		switch presentation
 		{
-		case .actions:
+		case .actions, .comparisonScope:
 			radius = Geometry.actionHeight / 2
 			horizontalInset = Geometry.actionInset; verticalInset = Geometry.actionInset
 		case .revisions:
-			radius = 20; horizontalInset = 10; verticalInset = 4
+			radius = Geometry.actionHeight / 2
+			horizontalInset = 10; verticalInset = Geometry.actionInset
 		case .tools:
 			radius = 20; horizontalInset = 6; verticalInset = 2.5
 		case .tab:
@@ -54,13 +55,10 @@ final class ViewerToolbarGroup: DesktopSurface
 				top: verticalInset,
 				left: horizontalInset,
 				bottom: verticalInset,
-				right: horizontalInset
+				right: presentation == .comparisonScope ? 10
+					: presentation == .revisions ? Geometry.actionInset : horizontalInset
 			)
 		)
-		if presentation == .revisions
-		{
-			heightAnchor.constraint(equalToConstant: 36).isActive = true
-		}
 	}
 
 	required init?(coder: NSCoder)

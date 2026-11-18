@@ -6,7 +6,7 @@ final class ViewerToolbarButton: DesktopHoverButton
 {
 	enum Presentation
 	{
-		case capsule, grouped, rootSelector
+		case capsule, grouped, groupedDropdown, rootSelector
 	}
 
 	var presentation: Presentation = .capsule
@@ -46,6 +46,10 @@ final class ViewerToolbarButton: DesktopHoverButton
 	}
 
 	private let shadowLayer = CALayer()
+	private var isGrouped: Bool
+	{
+		presentation == .grouped || presentation == .groupedDropdown
+	}
 	private var controlCornerRadius: CGFloat?
 	{
 		presentation == .rootSelector ? 9 : nil
@@ -76,8 +80,31 @@ final class ViewerToolbarButton: DesktopHoverButton
 		)
 	}
 
+	override var firstBaselineOffsetFromTop: CGFloat
+	{
+		guard !title.isEmpty, let cell
+		else
+		{
+			return super.firstBaselineOffsetFromTop
+		}
+		// AppKit reports the baseline within the title rect. The cell centers that rect
+		// within the toolbar button's fixed-height presentation.
+		let titleRect = cell.titleRect(forBounds: NSRect(
+			origin: .zero,
+			size: intrinsicContentSize
+		))
+		return super.firstBaselineOffsetFromTop + titleRect.minY
+	}
+
 	override var intrinsicContentSize: NSSize
 	{
+		if presentation == .groupedDropdown, let cell = cell as? ViewerToolbarButtonCell
+		{
+			return NSSize(
+				width: super.intrinsicContentSize.width + cell.dropdownExtraWidth,
+				height: ViewerToolbarGroup.Geometry.controlSize
+			)
+		}
 		if presentation == .grouped
 		{
 			return NSSize(
@@ -134,8 +161,8 @@ final class ViewerToolbarButton: DesktopHoverButton
 
 	private func updateShadow()
 	{
-		shadowLayer.isHidden = presentation == .grouped
-		guard presentation != .grouped
+		shadowLayer.isHidden = isGrouped
+		guard !isGrouped
 		else
 		{
 			return
@@ -163,7 +190,7 @@ final class ViewerToolbarButton: DesktopHoverButton
 			yRadius: radius
 		)
 		let active = isEnabled && (isHighlighted || isHovered)
-		if presentation != .grouped || selected || active
+		if !isGrouped || selected || active
 		{
 			let fill = selected ? AppKitColorTokens.viewerControlSelection(active: active) :
 				active ? hoverBackgroundColor : AppKitColorTokens.controlSurface
@@ -176,7 +203,7 @@ final class ViewerToolbarButton: DesktopHoverButton
 			path.lineWidth = edgeWidth
 			path.stroke()
 		}
-		else if presentation != .grouped
+		else if !isGrouped
 		{
 			AppKitColorTokens.subtleEdge.setStroke()
 			path.lineWidth = 1
@@ -190,7 +217,7 @@ final class ViewerToolbarButton: DesktopHoverButton
 		contentTintColor = isEnabled
 			?
 			(selected ? AppKitColorTokens
-				.viewerControlSelectedText : (presentation == .grouped && title.isEmpty
+				.viewerControlSelectedText : (isGrouped && title.isEmpty
 					? AppKitColorTokens.secondaryText : AppKitColorTokens.primaryText)) :
 			AppKitColorTokens.disabledText
 		super.draw(dirtyRect)
@@ -200,7 +227,15 @@ final class ViewerToolbarButton: DesktopHoverButton
 @MainActor
 private final class ViewerToolbarButtonCell: NSButtonCell
 {
+	private static let dropdownLeadingInset: CGFloat = 12
+	private static let dropdownTrailingInset: CGFloat = 6
+	private static let dropdownImageSize: CGFloat = 12
 	var trailingImage: NSImage?
+	var dropdownExtraWidth: CGFloat
+	{
+		Self.dropdownLeadingInset + Self.dropdownTrailingInset
+			+ (trailingImage == nil ? 0 : Self.dropdownImageSize + 4)
+	}
 
 	override func draw(
 		withFrame cellFrame: NSRect,
@@ -214,6 +249,37 @@ private final class ViewerToolbarButtonCell: NSButtonCell
 				withFrame: cellFrame,
 				in: controlView
 			)
+			return
+		}
+		if button.presentation == .groupedDropdown
+		{
+			let titleFrame = NSRect(
+				x: cellFrame.minX + Self.dropdownLeadingInset,
+				y: cellFrame.minY,
+				width: max(
+					0,
+					cellFrame.width - dropdownExtraWidth
+				),
+				height: cellFrame.height
+			)
+			super.draw(
+				withFrame: titleFrame,
+				in: controlView
+			)
+			if let trailingImage
+			{
+				DesktopIcons.draw(
+					trailingImage,
+					in: NSRect(
+						x: cellFrame.maxX - Self.dropdownTrailingInset - Self.dropdownImageSize,
+						y: cellFrame.midY - Self.dropdownImageSize / 2,
+						width: Self.dropdownImageSize,
+						height: Self.dropdownImageSize
+					),
+					tint: button.isEnabled ? AppKitColorTokens.primaryText : AppKitColorTokens
+						.disabledText
+				)
+			}
 			return
 		}
 		var content = title.isEmpty ? cellFrame : cellFrame.insetBy(

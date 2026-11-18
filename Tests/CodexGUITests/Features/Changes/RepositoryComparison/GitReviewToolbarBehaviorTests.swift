@@ -6,6 +6,48 @@ import Testing
 @Suite @MainActor
 struct GitReviewToolbarBehaviorTests
 {
+	@Test func comparisonCountsShareTheScopeBaselineAndHaveTrailingPadding() throws
+	{
+		let controller = GitChangesViewController()
+		defer
+		{
+			controller.close()
+		}
+		let toolbar = try #require(descendants(controller.view).compactMap
+		{
+			$0 as? GitComparisonToolbarView
+		}.first)
+		toolbar.layoutSubtreeIfNeeded()
+		let scope = toolbar.scopeButton
+		let group = try #require(toolbar.arrangedSubviews.first)
+		let highlight = scope.convert(
+			scope.bounds,
+			to: group
+		)
+		#expect(highlight.height == 28)
+		#expect(abs(highlight.midY - group.bounds.midY) < 0.5)
+		let scopeBaseline = scope.convert(
+			NSPoint(
+				x: 0,
+				y: scope.firstBaselineOffsetFromTop
+			),
+			to: group
+		)
+		for label in [toolbar.additionsLabel, toolbar.deletionsLabel]
+		{
+			let baseline = label.convert(
+				NSPoint(
+					x: label.bounds.maxX,
+					y: label.isFlipped ? label.firstBaselineOffsetFromTop
+						: label.bounds.maxY - label.firstBaselineOffsetFromTop
+				),
+				to: group
+			)
+			#expect(abs(baseline.y - scopeBaseline.y) < 0.5)
+			#expect(group.bounds.maxX - baseline.x + label.alignmentRectInsets.right >= 10)
+		}
+	}
+
 	@Test(arguments: [GitDiffLayoutPreference.unified, .split])
 	func visibleDiffsRewrapDuringPaneResize(layout: GitDiffLayoutPreference) async throws
 	{

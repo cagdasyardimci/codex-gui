@@ -58,10 +58,9 @@ final class GitComparisonToolbarView: NSStackView
 	{
 		static let compactRevisionThreshold: CGFloat = 520
 		static let compactToolbarThreshold: CGFloat = 640
-		static let baseRevisionWidth: CGFloat = 100
-		static let targetRevisionWidth: CGFloat = 100
-		static let compactBaseRevisionWidth: CGFloat = 80
-		static let compactTargetRevisionWidth: CGFloat = 80
+		static let minimumRevisionWidth: CGFloat = 28
+		static let maximumRevisionWidth: CGFloat = 160
+		static let compactMaximumRevisionWidth: CGFloat = 80
 	}
 
 	private var usesCompactRevisions = false
@@ -111,23 +110,21 @@ final class GitComparisonToolbarView: NSStackView
 		scopeButton.action = action
 		scopeButton.isBordered = false
 		scopeButton.setTypographyRole(TypographyTokens.Toolbar.control)
-		scopeButton.image = NSImage(
-			systemSymbolName: "chevron.down",
-			accessibilityDescription: nil
-		)?.withSymbolConfiguration(NSImage.SymbolConfiguration(
-			pointSize: 11,
-			weight: .regular
-		))
-		scopeButton.imagePosition = .imageTrailing
+		scopeButton.trailingImage = GitReviewReferenceIcons.image(
+			.chevronDown,
+			size: 12
+		)
+		scopeButton.imagePosition = .noImage
 		scopeButton.contentTintColor = AppKitColorTokens.primaryText
-		scopeButton.presentation = .grouped
+		scopeButton.presentation = .groupedDropdown
 		let scope = AppKitLayout.horizontalStack(
 			[scopeButton, diffStats],
-			spacing: 6
+			spacing: 2,
+			alignment: .firstBaseline
 		)
 		return ViewerToolbarGroup(
 			scope,
-			presentation: .actions
+			presentation: .comparisonScope
 		)
 	}
 
@@ -143,9 +140,11 @@ final class GitComparisonToolbarView: NSStackView
 			field.isBezeled = false
 			field.drawsBackground = false
 			field.setTypographyRole(TypographyTokens.Toolbar.control)
-			let width = field === baseField
-				? Layout.baseRevisionWidth : Layout.targetRevisionWidth
-			let constraint = field.widthAnchor.constraint(equalToConstant: width)
+			field.cell?.usesSingleLineMode = true
+			field.cell?.isScrollable = true
+			field.lineBreakMode = .byTruncatingTail
+			let constraint = field.widthAnchor
+				.constraint(equalToConstant: Layout.minimumRevisionWidth)
 			constraint.isActive = true
 			if field === baseField
 			{
@@ -162,8 +161,13 @@ final class GitComparisonToolbarView: NSStackView
 		}
 		baseField.placeholderString = "Base revision"
 		targetField.placeholderString = "Target revision"
-		let arrow = NSImageView(image: DesktopIcons.image(.arrowRight))
-		arrow.contentTintColor = AppKitColorTokens.secondaryText
+		let arrow = NSTextField(labelWithString: "→")
+		arrow.setTypographyRole(TypographyTokens.Toolbar.control)
+		arrow.textColor = AppKitColorTokens.secondaryText
+		arrow.setContentCompressionResistancePriority(
+			.required,
+			for: .horizontal
+		)
 		arrow.setAccessibilityElement(false)
 		let revisionMenu = referenceButton(
 			"Revision options",
@@ -173,17 +177,56 @@ final class GitComparisonToolbarView: NSStackView
 			),
 			action: actions.revisionMenu
 		)
+		let revisionRow = AppKitLayout.horizontalStack(
+			[baseField, arrow, targetField, revisionMenu],
+			spacing: 2
+		)
+		// The target dropdown supplies its own leading text inset.
+		revisionRow.setCustomSpacing(
+			6,
+			after: baseField
+		)
+		revisionRow.setCustomSpacing(
+			0,
+			after: arrow
+		)
 		let refs = ViewerToolbarGroup(
-			AppKitLayout.horizontalStack(
-				[baseField, arrow, targetField, revisionMenu],
-				spacing: 8
-			),
+			revisionRow,
 			presentation: .revisions
 		)
 		refs.setAccessibilityElement(true)
 		refs.setAccessibilityLabel("Revision comparison")
 		revisionComparison = refs
+		updateRevisionWidths()
 		return refs
+	}
+
+	func updateRevisionWidths()
+	{
+		let maximumWidth = usesCompactRevisions
+			? Layout.compactMaximumRevisionWidth : Layout.maximumRevisionWidth
+		for (field, constraint) in [
+			(baseField, baseRevisionWidth),
+			(targetField, targetRevisionWidth)
+		]
+		{
+			guard let constraint, let cell = field.cell
+			else
+			{
+				continue
+			}
+			let width = min(
+				maximumWidth,
+				max(
+					Layout.minimumRevisionWidth,
+					ceil(cell.cellSize.width)
+				)
+			)
+			if constraint.constant != width
+			{
+				constraint.constant = width
+			}
+		}
 	}
 
 	private func makeComparisonActions(
@@ -262,13 +305,15 @@ final class GitComparisonToolbarView: NSStackView
 		}
 		let shouldUseCompactRevisions = width < Layout.compactRevisionThreshold
 		let shouldUseCompactToolbar = width < Layout.compactToolbarThreshold
-		guard shouldUseCompactRevisions != usesCompactRevisions
+		let compactRevisionsChanged = shouldUseCompactRevisions != usesCompactRevisions
+		usesCompactRevisions = shouldUseCompactRevisions
+		updateRevisionWidths()
+		guard compactRevisionsChanged
 			|| shouldUseCompactToolbar != usesCompactLayout
 		else
 		{
 			return nil
 		}
-		usesCompactRevisions = shouldUseCompactRevisions
 		usesCompactLayout = shouldUseCompactToolbar
 		for control in [refreshButton, wordWrapButton, collapseDiffsButton, diffLayoutButton]
 		{
@@ -278,10 +323,6 @@ final class GitComparisonToolbarView: NSStackView
 			shouldUseCompactToolbar ? "More comparison actions" : "Diff display options"
 		)
 		optionsButton.toolTip = "Changes options"
-		baseRevisionWidth?.constant = shouldUseCompactRevisions
-			? Layout.compactBaseRevisionWidth : Layout.baseRevisionWidth
-		targetRevisionWidth?.constant = shouldUseCompactRevisions
-			? Layout.compactTargetRevisionWidth : Layout.targetRevisionWidth
 		return shouldUseCompactRevisions
 	}
 

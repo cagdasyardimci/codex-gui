@@ -603,6 +603,7 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		targetField.setAccessibilityLabel("Target revision: \(revisions.target)")
 		baseField.isEnabled = requiresRefs
 		targetField.isEnabled = requiresRefs
+		comparisonToolbarView.updateRevisionWidths()
 		filterField.stringValue = state.filter
 		let current = state.snapshot != nil && !state.isStale && state.pendingRequest == nil
 		fileJumpButton?.isEnabled = current && !(state.snapshot?.files.isEmpty ?? true)

@@ -28,7 +28,7 @@ final class DesktopDiffStats: NSStackView
 		self.presentation = presentation
 		super.init(frame: .zero)
 		orientation = .horizontal
-		alignment = .centerY
+		alignment = presentation == .toolbar ? .firstBaseline : .centerY
 		spacing = presentation == .summary ? 4 : (presentation == .fileHeader ? 12 : 6)
 		if presentation == .resource || presentation == .transcript
 		{
