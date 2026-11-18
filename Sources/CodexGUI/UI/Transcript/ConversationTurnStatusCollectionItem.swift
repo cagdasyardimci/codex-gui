@@ -3,8 +3,6 @@ import AppKit
 @MainActor
 final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 {
-	private let label = NSTextField(labelWithString: "")
-	private let divider = NSBox()
 	private let disclosure = DesktopDisclosureButton(presentation: .turnWork)
 	private var expanded = false
 	private var onToggle: (() -> Void)?
@@ -13,30 +11,14 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 	override func loadView()
 	{
 		view = NSView()
-		label.setTypographyRole(TypographyTokens.UI.body)
-		label.textColor = AppKitColorTokens.secondaryText
-		label.lineBreakMode = .byTruncatingTail
-		label.translatesAutoresizingMaskIntoConstraints = false
-		divider.boxType = .separator
-		divider.translatesAutoresizingMaskIntoConstraints = false
-
 		disclosure.translatesAutoresizingMaskIntoConstraints = false
 		disclosure.target = self
 		disclosure.action = #selector(toggleWork)
 		view.addSubview(disclosure)
-		view.addSubview(label)
-		view.addSubview(divider)
 		NSLayoutConstraint.activate([
 			disclosure.leadingAnchor.constraint(equalTo: view.leadingAnchor),
 			disclosure.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor),
-			disclosure.topAnchor.constraint(equalTo: view.topAnchor),
-			label.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-			label.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-			label.topAnchor.constraint(equalTo: view.topAnchor),
-			divider.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-			divider.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-			divider.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-			divider.heightAnchor.constraint(equalToConstant: 1),
+			disclosure.centerYAnchor.constraint(equalTo: view.centerYAnchor)
 		])
 	}
 
@@ -51,7 +33,6 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		self.timing = timing
 		self.expanded = expanded
 		self.onToggle = onToggle
-		label.isHidden = true
 		disclosure.isHidden = onToggle == nil
 		view.isHidden = onToggle == nil
 		refresh(now: now)
@@ -64,7 +45,6 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 		{
 			return
 		}
-		label.stringValue = ""
 		disclosure.setLabel(Self.statusText(
 			timing: timing,
 			now: now
@@ -91,7 +71,7 @@ final class ConversationTurnStatusCollectionItem: NSCollectionViewItem
 				1,
 				width
 			),
-			height: 25
+			height: DesktopDisclosureButton.Presentation.turnWork.rowHeight + 1
 		)
 	}
 

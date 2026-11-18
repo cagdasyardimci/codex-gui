@@ -6,15 +6,16 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 {
 	enum Presentation
 	{
-		case normal, compact, hoverReveal, output, summary, fileList, turnWork
+		case normal, compact, hoverReveal, activity, output, summary, fileList, turnWork
 
 		var rowHeight: CGFloat
 		{
 			switch self
 			{
-			case .normal, .output, .turnWork: 24
+			case .normal, .output: 24
+			case .turnWork: 21
 			case .compact: 20
-			case .hoverReveal: 21
+			case .hoverReveal, .activity: 21
 			case .summary: NSView.noIntrinsicMetric
 			case .fileList: 36
 			}
@@ -31,10 +32,20 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 	private var isHovered = false
 	private var isContextHovered = false
 	private var hasKeyboardFocus = false
-	private let reservedIcon = NSImage(size: NSSize(
-		width: 16,
-		height: 16
-	))
+	private var indicatorSize: CGFloat
+	{
+		presentation == .activity || presentation == .turnWork ? 14 : 16
+	}
+	private lazy var reservedIcon = NSImage(
+		size: NSSize(
+			width: indicatorSize,
+			height: indicatorSize
+		),
+		flipped: false
+	)
+	{
+		_ in true
+	}
 
 	init(
 		title: String = "",
@@ -276,8 +287,12 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 		}
 		let expanded = presentation == .summary || presentation == .fileList
 			? semanticExpanded : state == .on
-		let visible = presentation != .hoverReveal || expanded || isHovered
-			|| isContextHovered || hasKeyboardFocus
+		let visible = switch presentation
+		{
+		case .activity: expanded || isContextHovered || hasKeyboardFocus
+		case .hoverReveal: expanded || isHovered || isContextHovered || hasKeyboardFocus
+		default: true
+		}
 		if presentation == .summary
 		{
 			image = expanded ? nil : DesktopIcons.image(.chevronRight)
@@ -301,7 +316,10 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 			)
 			image = indicator.icon.map
 			{
-				DesktopIcons.image($0)
+				DesktopIcons.image(
+					$0,
+					size: indicatorSize
+				)
 			} ?? reservedIcon
 		}
 		setAccessibilityValue(expanded ? "Expanded" : "Collapsed")
@@ -359,7 +377,7 @@ final class DesktopDisclosureButton: DesktopAttributedTitleButton
 		}
 		return NSSize(
 			width: max(
-				24,
+				presentation == .activity ? indicatorSize : 24,
 				native.width
 			),
 			height: presentation.rowHeight

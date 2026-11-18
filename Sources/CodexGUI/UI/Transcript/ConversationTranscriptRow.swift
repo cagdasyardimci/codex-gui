@@ -18,6 +18,7 @@ struct ConversationActivityRow: Equatable
 	var subagents: [CodexSubagentActivity] = []
 	var expanded: Bool = false
 	var isGroupedAction = false
+	var isFirstGroupedAction = false
 }
 
 enum ConversationTranscriptRow: Equatable
@@ -87,7 +88,7 @@ enum ConversationTranscriptRow: Equatable
 			}
 			let groupID = "activity-group:\(first.id)"
 			let isGrouped = pending.count > 1 || firstCommand.actions.count > 1
-			let actions = activityRows(
+			var actions = activityRows(
 				for: pending,
 				groupID: groupID,
 				isGrouped: isGrouped,
@@ -116,6 +117,7 @@ enum ConversationTranscriptRow: Equatable
 			)))
 			if expanded
 			{
+				actions[0].isFirstGroupedAction = true
 				rows.append(contentsOf: actions.map(Self.activity))
 			}
 			pending.removeAll()

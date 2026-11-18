@@ -251,7 +251,7 @@ enum AppKitColorTokens
 	}
 	static var activityText: NSColor
 	{
-		captionText
+		secondaryText
 	}
 	static var mutedText: NSColor
 	{

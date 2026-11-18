@@ -9,10 +9,16 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	{
 		row?.id
 	}
-	private static let rowHeight = DesktopDisclosureButton.Presentation.hoverReveal.rowHeight
+	private static let rowHeight = DesktopDisclosureButton.Presentation.activity.rowHeight
 	private static let detailSpacing: CGFloat = 6
+	static let groupedActionSpacing: CGFloat = 12
+	private static let groupedActionIndent: CGFloat = 24
+	private static let groupGuideInset: CGFloat = 8
+	private let groupGuide = DesktopSurface(AppKitColorTokens.border)
 	private static let imageHeight: CGFloat = 116
 	private let stack = NSStackView()
+	private var stackLeadingConstraint: NSLayoutConstraint?
+	private var stackTopConstraint: NSLayoutConstraint?
 	private var arrangedWidthConstraints: [NSLayoutConstraint] = []
 	private let header = NSStackView()
 	private var isHeaderHovered = false
@@ -31,7 +37,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		target: nil,
 		action: nil
 	)
-	private let disclosure = DesktopDisclosureButton(presentation: .hoverReveal)
+	private let disclosure = DesktopDisclosureButton(presentation: .activity)
 	private let terminalCard = ConversationTerminalCard()
 	private let imageButton = NSButton(
 		title: "",
@@ -61,11 +67,31 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		stack.orientation = .vertical
 		stack.alignment = .leading
 		stack.spacing = Self.detailSpacing
-		AppKitLayout.pin(
+		groupGuide.translatesAutoresizingMaskIntoConstraints = false
+		groupGuide.isHidden = true
+		view.addSubview(groupGuide)
+		NSLayoutConstraint.activate([
+			groupGuide.leadingAnchor.constraint(
+				equalTo: view.leadingAnchor,
+				constant: Self.groupGuideInset
+			),
+			groupGuide.topAnchor.constraint(equalTo: view.topAnchor),
+			groupGuide.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+			groupGuide.widthAnchor.constraint(equalToConstant: 1)
+		])
+		let constraints = AppKitLayout.pin(
 			stack,
 			to: view,
 			inset: 0
 		)
+		stackLeadingConstraint = constraints.first
+		{
+			$0.firstAttribute == .leading
+		}
+		stackTopConstraint = constraints.first
+		{
+			$0.firstAttribute == .top
+		}
 		configureHeader()
 		configureActivityButtons()
 		configureImagePreview()
@@ -75,7 +101,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	{
 		header.orientation = .horizontal
 		header.alignment = .centerY
-		header.spacing = 7
+		header.spacing = 8
 		header.addTrackingArea(NSTrackingArea(
 			rect: .zero,
 			options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
@@ -83,9 +109,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			userInfo: nil
 		))
 		header.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
-		icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
-		icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
-		icon.contentTintColor = AppKitColorTokens.secondaryText
+		icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+		icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+		icon.contentTintColor = AppKitColorTokens.activityText
 		titleLabel.setTypographyRole(TypographyTokens.Activity.title)
 		titleLabel.textColor = AppKitColorTokens.activityText
 		titleLabel.lineBreakMode = .byTruncatingTail
@@ -153,6 +179,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		imageTask?.cancel()
 		imageTask = nil
 		row = nil
+		groupGuide.isHidden = true
 		disclosure.setSubject(nil)
 		titleClick.isEnabled = false
 		terminalCard.resetCopyInteraction()
@@ -202,6 +229,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			isHeaderHovered = false
 		}
 		self.row = row
+		groupGuide.isHidden = !row.isGroupedAction
+		stackLeadingConstraint?.constant = Self.leadingInset(for: row)
+		stackTopConstraint?.constant = Self.topInset(for: row)
 		self.onToggle = onToggle
 		self.onOpenFile = onOpenFile
 		self.canOpenImage = canOpenImage
@@ -228,7 +258,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		{
 			titleLabel.stringValue = "Read \(linkTitle)"
 		}
-		titleLabel.toolTip = row.subagents.isEmpty ? row.command?.command ?? row.title
+		titleLabel.toolTip = row.subagents.isEmpty ? nil
 			: row.subagents.map
 			{
 				"\($0.name) \($0.action)"
@@ -263,6 +293,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			outcomeLabel.stringValue = outcome
 			headerViews.append(outcomeLabel)
 		}
+		let elementBeforeDisclosure = headerViews.last
 		if canExpand
 		{
 			headerViews.append(disclosure)
@@ -275,6 +306,27 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			headerViews,
 			in: .leading
 		)
+		for element in headerViews
+		{
+			header.setCustomSpacing(
+				header.spacing,
+				after: element
+			)
+		}
+		if hasLink
+		{
+			header.setCustomSpacing(
+				2,
+				after: titleLabel
+			)
+		}
+		if canExpand, let elementBeforeDisclosure
+		{
+			header.setCustomSpacing(
+				4,
+				after: elementBeforeDisclosure
+			)
+		}
 	}
 
 	private func activityHeaderViews(_ row: ConversationActivityRow) -> [NSView]
@@ -488,6 +540,17 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		disclosure.setContextHovered(isHeaderHovered && row != nil)
 	}
 
+	private static func leadingInset(for row: ConversationActivityRow) -> CGFloat
+	{
+		row.isGroupedAction ? groupedActionIndent : 0
+	}
+
+	// Subsequent children include their preceding gap so the guide remains continuous.
+	private static func topInset(for row: ConversationActivityRow) -> CGFloat
+	{
+		row.isGroupedAction && !row.isFirstGroupedAction ? groupedActionSpacing : 0
+	}
+
 	static func itemSize(
 		row: ConversationActivityRow,
 		width: CGFloat
@@ -498,7 +561,10 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 		{
 			detail = ConversationTerminalCard.height(
 				command: command,
-				width: width
+				width: max(
+					1,
+					width - leadingInset(for: row)
+				)
 			) + detailSpacing
 		}
 		else if row.expanded, row.kind == .image
@@ -514,7 +580,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 				1,
 				width
 			),
-			height: rowHeight + detail
+			height: rowHeight + detail + topInset(for: row)
 		)
 	}
 
@@ -522,7 +588,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	{
 		super.viewDidLayout()
 
-		terminalCard.layoutContent(width: view.bounds.width)
+		terminalCard.layoutContent(width: stack.bounds.width)
 		scheduleHeaderHoverSynchronization()
 	}
 

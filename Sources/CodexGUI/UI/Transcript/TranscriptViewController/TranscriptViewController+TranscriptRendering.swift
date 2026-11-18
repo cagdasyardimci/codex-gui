@@ -1292,16 +1292,22 @@ extension TranscriptViewController
 		if case .message(let entry) = previous, entry.kind == .user,
 			case .turnStatus = current
 		{
-			return 50
+			return 16
 		}
 		if case .message(let entry) = current, entry.kind == .user
 		{
 			return 40
 		}
 		if case .activity(let lhs) = previous, case .activity(let rhs) = current,
-			lhs.groupID == rhs.groupID
+			lhs.groupID == rhs.groupID, rhs.isGroupedAction
 		{
-			return 0
+			return rhs.isFirstGroupedAction ? ConversationActivityCollectionItem
+				.groupedActionSpacing : 0
+		}
+		if case .message(let entry) = previous, entry.kind == .agent,
+			case .activity(let activity) = current, activity.kind == .group
+		{
+			return 12
 		}
 		if case .message(let entry) = current, case .fileChanges = entry.activity,
 			case .message(let preceding) = previous, preceding.kind == .agent
@@ -1324,7 +1330,7 @@ extension TranscriptViewController
 		if case .turnStatus = previous, case .message(let entry) = current,
 			entry.kind == .agent
 		{
-			return 14
+			return 9
 		}
 		return 18
 	}
