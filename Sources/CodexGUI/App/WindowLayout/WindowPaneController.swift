@@ -786,6 +786,11 @@ final class WindowPaneController
 			canCollapseFromWindowResize: reviewPane.canCollapseFromWindowResize
 		)
 		lastDraggedReviewWidth = reviewViewportWidth
+		conversation.beginPaneResize()
+		if inspector.toolsTabs.isChangesSelected
+		{
+			inspector.gitChanges.beginPaneResize()
+		}
 		reviewPane.minimumThickness = WindowPaneLayout.toolsMinimumWidth
 		reviewPane.canCollapse = false
 		reviewPane.canCollapseFromWindowResize = false
@@ -802,6 +807,14 @@ final class WindowPaneController
 			restoreReviewDragSettings()
 			rememberDividerChoice(at: index)
 			return
+		}
+		defer
+		{
+			inspector.gitChanges.endPaneResize()
+			if !isAnimatingToolsExpansion
+			{
+				conversation.endPaneResize()
+			}
 		}
 		let endingWidth = reviewPane.isCollapsed
 			? lastDraggedReviewWidth ?? 0 : reviewViewportWidth

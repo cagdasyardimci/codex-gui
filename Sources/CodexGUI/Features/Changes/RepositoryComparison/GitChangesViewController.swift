@@ -257,6 +257,16 @@ final class GitChangesViewController: NSViewController, NSSearchFieldDelegate
 		render(runtime.state)
 	}
 
+	func beginPaneResize()
+	{
+		documentController.beginPaneResize()
+	}
+
+	func endPaneResize()
+	{
+		documentController.endPaneResize()
+	}
+
 	override func viewDidLayout()
 	{
 		super.viewDidLayout()

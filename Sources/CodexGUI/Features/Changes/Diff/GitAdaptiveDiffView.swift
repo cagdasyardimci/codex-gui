@@ -79,6 +79,8 @@ final class GitAdaptiveDiffView: NSView
 	private var contentHeight: NSLayoutConstraint?
 	private var splitOld: GitUnifiedCodeView?
 	private var splitNew: GitUnifiedCodeView?
+	weak var resizeViewport: NSClipView?
+	private var hasDeferredResizeLayout = false
 	private var aligningSplitRows = false
 	private var synchronizingHorizontalScroll = false
 	private var selectedLineID: String?
@@ -90,12 +92,22 @@ final class GitAdaptiveDiffView: NSView
 			splitNew?.selectedLineID = selectedLineID
 		}
 	}
-	private func configureSelection(_ code: GitUnifiedCodeView)
+	private func configureColumn(_ code: GitUnifiedCodeView)
 	{
+		code.manageHeightFromParent()
 		code.selectedLineID = selectedLineID
 		code.onSelectLine =
 		{
 			[weak self] id in self?.selectedLineID = id
+		}
+		code.shouldDeferResizeLayout =
+		{
+			[weak self] in self?.deferLayoutOutsideResizeViewport() == true
+		}
+		code.wrapsCode = wrapsCode
+		code.onContentHeightChange =
+		{
+			[weak self] in self?.updateContentHeight()
 		}
 	}
 	private lazy var unified: GitUnifiedCodeView =
@@ -104,13 +116,7 @@ final class GitAdaptiveDiffView: NSView
 			rows: presentation.unifiedRows,
 			path: path
 		)
-		code.manageHeightFromParent()
-		configureSelection(code)
-		code.wrapsCode = wrapsCode
-		code.onContentHeightChange =
-		{
-			[weak self] in self?.updateContentHeight()
-		}
+		configureColumn(code)
 		return code
 	}()
 	private lazy var split = makeSplitContent()
@@ -143,8 +149,48 @@ final class GitAdaptiveDiffView: NSView
 	override func layout()
 	{
 		super.layout()
+		guard !deferLayoutOutsideResizeViewport()
+		else
+		{
+			return
+		}
 		install(layoutPreference.resolvedMode(viewportWidth: bounds.width))
 		updateContentHeight()
+	}
+
+	private func deferLayoutOutsideResizeViewport() -> Bool
+	{
+		guard let resizeViewport,
+				!convert(
+				bounds,
+				to: resizeViewport
+				).intersects(resizeViewport.bounds)
+		else
+		{
+			return false
+		}
+		hasDeferredResizeLayout = true
+		return true
+	}
+
+	func resumeDeferredResizeLayout()
+	{
+		guard hasDeferredResizeLayout, !deferLayoutOutsideResizeViewport()
+		else
+		{
+			return
+		}
+		hasDeferredResizeLayout = false
+		needsLayout = true
+		if layoutMode == .split
+		{
+			splitOld?.needsLayout = true
+			splitNew?.needsLayout = true
+		}
+		else
+		{
+			unified.needsLayout = true
+		}
 	}
 
 	private func install(_ mode: LayoutMode)
@@ -321,13 +367,7 @@ final class GitAdaptiveDiffView: NSView
 			gutterMode: gutterMode,
 			placeholderIndices: placeholderIndices
 		)
-		code.manageHeightFromParent()
-		configureSelection(code)
-		code.wrapsCode = wrapsCode
-		code.onContentHeightChange =
-		{
-			[weak self] in self?.updateContentHeight()
-		}
+		configureColumn(code)
 		return code
 	}
 }

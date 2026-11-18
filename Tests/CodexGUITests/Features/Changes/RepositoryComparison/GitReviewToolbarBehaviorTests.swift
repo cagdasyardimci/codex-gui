@@ -6,6 +6,146 @@ import Testing
 @Suite @MainActor
 struct GitReviewToolbarBehaviorTests
 {
+	@Test(arguments: [GitDiffLayoutPreference.unified, .split])
+	func visibleDiffsRewrapDuringPaneResize(layout: GitDiffLayoutPreference) async throws
+	{
+		let (controller, window) = try await loadedController(addedLines: 24)
+		defer
+		{
+			controller.close()
+			window.close()
+		}
+		try dispatchMenuItem(
+			"Switch diff layout",
+			in: controller
+		)
+		if layout == .split
+		{
+			try dispatchMenuItem(
+				"Switch diff layout",
+				in: controller
+			)
+		}
+		window.setContentSize(NSSize(
+			width: 760,
+			height: 640
+		))
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
+		let diffs = diffViews(in: controller)
+		try #require(diffs.count == 2)
+		let first = diffs[0]
+		let second = diffs[1]
+		let firstSource = try sourceWithAdditions(in: first)
+		let secondSource = try sourceWithAdditions(in: second)
+		let scroll = try #require(first.enclosingScrollView)
+		let clip = scroll.contentView
+		try #require(first.convert(
+			first.bounds,
+			to: clip
+		).intersects(clip.bounds))
+		try #require(!second.convert(
+			second.bounds,
+			to: clip
+		).intersects(clip.bounds))
+		let firstContainer = try #require(firstSource.textContainer)
+		let secondContainer = try #require(secondSource.textContainer)
+		let initialFirstWidth = firstContainer.containerSize.width
+		let initialSecondWidth = secondContainer.containerSize.width
+		let initialLineCount = try #require(firstSource.visualLineCounts.max())
+		let secondInitialGeometryBuildCount = secondSource.visualGeometryBuildCount
+		let selection = NSRange(
+			location: 0,
+			length: 3
+		)
+		firstSource.setSelectedRange(selection)
+
+		controller.beginPaneResize()
+		window.setContentSize(NSSize(
+			width: 630,
+			height: 640
+		))
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
+		#expect(firstContainer.containerSize.width < initialFirstWidth)
+		#expect(try #require(firstSource.visualLineCounts.max()) > initialLineCount)
+		#expect(firstSource.selectedRange() == selection)
+		#expect(secondContainer.containerSize.width == initialSecondWidth)
+		#expect(secondSource.visualGeometryBuildCount == secondInitialGeometryBuildCount)
+
+		if layout == .split
+		{
+			let oldSource = try #require(descendants(first).compactMap
+			{
+				$0 as? GitDiffTextView
+			}.first
+			{
+				$0 !== firstSource
+			})
+			#expect(oldSource.visualRowRects.count == firstSource.visualRowRects.count)
+			for (old, new) in zip(
+				oldSource.visualRowRects,
+				firstSource.visualRowRects
+			)
+			{
+				#expect(abs(old.minY - new.minY) < 0.5)
+			}
+		}
+
+		let secondTop = second.convert(
+			second.bounds,
+			to: clip
+		).minY
+		let scrollY = secondTop + 20
+		clip.scroll(to: NSPoint(
+			x: 0,
+			y: scrollY
+		))
+		scroll.reflectScrolledClipView(clip)
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
+		try #require(second.convert(
+			second.bounds,
+			to: clip
+		).intersects(clip.bounds))
+		#expect(secondContainer.containerSize.width < initialSecondWidth)
+
+		let firstWidthBeforeSecondStep = firstContainer.containerSize.width
+		let secondWidthBeforeSecondStep = secondContainer.containerSize.width
+		window.setContentSize(NSSize(
+			width: 510,
+			height: 640
+		))
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
+		#expect(firstContainer.containerSize.width == firstWidthBeforeSecondStep)
+		#expect(secondContainer.containerSize.width < secondWidthBeforeSecondStep)
+		let readingOffset = clip.bounds.minY - second.convert(
+			second.bounds,
+			to: clip
+		).minY
+		controller.endPaneResize()
+		window.layoutIfNeeded()
+		controller.view.layoutSubtreeIfNeeded()
+		#expect(firstContainer.containerSize.width < firstWidthBeforeSecondStep)
+		let releasedOffset = clip.bounds.minY - second.convert(
+			second.bounds,
+			to: clip
+		).minY
+		#expect(abs(releasedOffset - readingOffset) < 1)
+		#expect(diffViews(in: controller).first === first)
+	}
+
+	private func sourceWithAdditions(in diff: GitAdaptiveDiffView) throws -> GitDiffTextView
+	{
+		try #require(descendants(diff).compactMap
+		{
+			$0 as? GitDiffTextView
+		}.first
+		{
+			$0.string.contains("wide source")
+		})
+	}
 
 	@Test func changesTabFitsNarrowPaneWithoutBreakingRequiredWidths() throws
 	{
@@ -247,7 +387,8 @@ struct GitReviewToolbarBehaviorTests
 	}
 
 	private func loadedController(
-		usesReportedEditFallback: Bool = false
+		usesReportedEditFallback: Bool = false,
+		addedLines: Int = 1
 	) async throws -> (GitChangesViewController, NSWindow)
 	{
 		let model = WorkspaceModel(identity: WorkspaceIdentity(
@@ -263,7 +404,8 @@ struct GitReviewToolbarBehaviorTests
 		)
 		let controller = GitChangesViewController(
 			runtime: GitReviewRuntime(service: ToolbarFixtureService(
-				usesReportedEditFallback: usesReportedEditFallback
+				usesReportedEditFallback: usesReportedEditFallback,
+				addedLines: addedLines
 			))
 		)
 		let window = NSWindow(
@@ -361,10 +503,19 @@ struct GitReviewToolbarBehaviorTests
 private struct ToolbarFixtureService: GitComparisonService
 {
 	var usesReportedEditFallback = false
+	var addedLines = 1
 
 	func compare(_ request: GitComparisonRequest) async -> GitComparisonResult
 	{
-		let patch = "@@ -1 +1 @@\n-before\n+after\n"
+		let header = addedLines == 1 ? "@@ -1 +1 @@" : "@@ -1 +1,\(addedLines) @@"
+		let addition = addedLines == 1 ? "+after\n" : "+" + String(
+			repeating: "wide source ",
+			count: 22
+		) + "\n"
+		let patch = header + "\n-before\n" + String(
+			repeating: addition,
+			count: addedLines
+		)
 		let files = ["Sources/One.swift", "Tests/Two.swift"].map
 		{
 			path in
@@ -372,12 +523,12 @@ private struct ToolbarFixtureService: GitComparisonService
 				oldPath: path,
 				newPath: path,
 				kind: .modified,
-				additions: 1,
+				additions: addedLines,
 				deletions: 1,
 				isBinary: false,
 				patch: patch,
 				hunks: [GitComparisonHunk(
-					header: "@@ -1 +1 @@",
+					header: header,
 					text: patch,
 					oldStart: 1,
 					newStart: 1

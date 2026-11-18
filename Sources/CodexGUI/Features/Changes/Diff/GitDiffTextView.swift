@@ -179,16 +179,21 @@ final class GitDiffTextView: SourceTextView
 	private func measureRowFragments(using layoutManager: NSLayoutManager) -> VisualRowMeasurements
 	{
 		let textLength = (string as NSString).length
+		let originY = textContainerOrigin.y
 		var starts: [CGFloat] = []
 		var lineCounts: [Int] = []
-		for (index, row) in rows.enumerated()
+		starts.reserveCapacity(rows.count)
+		lineCounts.reserveCapacity(rows.count)
+		for index in rows.indices
 		{
-			let length = (row.text as NSString).length + (index + 1 < rows.count ? 1 : 0)
+			let offset = rowStartOffsets[index]
+			let end = index + 1 < rows.count
+				? rowStartOffsets[index + 1] : offset + rows[index].text.utf16.count
 			let range = NSRange(
-				location: rowStartOffsets[index],
-				length: length
+				location: offset,
+				length: end - offset
 			)
-			guard length > 0, NSMaxRange(range) <= textLength
+			guard range.length > 0, end <= textLength
 			else
 			{
 				let extra = layoutManager.extraLineFragmentRect
@@ -206,7 +211,9 @@ final class GitDiffTextView: SourceTextView
 				forCharacterRange: range,
 				actualCharacterRange: nil
 			)
-			var fragmentStarts: [CGFloat] = []
+			var firstFragmentY: CGFloat?
+			var previousFragmentY: CGFloat?
+			var lineCount = 0
 			var glyphIndex = glyphs.location
 			while glyphIndex < NSMaxRange(glyphs)
 			{
@@ -215,17 +222,19 @@ final class GitDiffTextView: SourceTextView
 					forGlyphAt: glyphIndex,
 					effectiveRange: &fragment
 				)
-				let y = fragmentRect.minY + textContainerOrigin.y
-				if fragmentStarts.last != y
+				let y = fragmentRect.minY + originY
+				if previousFragmentY != y
 				{
-					fragmentStarts.append(y)
+					firstFragmentY = firstFragmentY ?? y
+					previousFragmentY = y
+					lineCount += 1
 				}
 				glyphIndex = NSMaxRange(fragment)
 			}
-			starts.append(fragmentStarts.first ?? 0)
+			starts.append(firstFragmentY ?? 0)
 			lineCounts.append(max(
 				1,
-				fragmentStarts.count
+				lineCount
 			))
 		}
 		return VisualRowMeasurements(

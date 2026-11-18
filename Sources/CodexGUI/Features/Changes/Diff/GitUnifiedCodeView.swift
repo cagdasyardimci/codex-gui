@@ -45,6 +45,7 @@ final class GitUnifiedCodeView: NSView
 		scroll.hasHorizontalScroller
 	}
 	var onContentHeightChange: (() -> Void)?
+	var shouldDeferResizeLayout: (() -> Bool)?
 	var onSelectLine: ((String) -> Void)?
 	var selectedLineID: String?
 	{
@@ -240,9 +241,18 @@ final class GitUnifiedCodeView: NSView
 		{
 			return
 		}
+		let previousCounts = additionalVisualLines
 		additionalVisualLines = counts
 		source.additionalVisualLines = counts
-		render()
+		if let storage = source.textStorage
+		{
+			storage.beginEditing()
+			applySplitRowSpacing(
+				to: storage,
+				replacing: previousCounts
+			)
+			storage.endEditing()
+		}
 		needsLayout = true
 	}
 
@@ -254,6 +264,11 @@ final class GitUnifiedCodeView: NSView
 	override func layout()
 	{
 		super.layout()
+		guard shouldDeferResizeLayout?() != true
+		else
+		{
+			return
+		}
 		scroll.tile()
 		if wrapsCode
 		{
@@ -282,13 +297,13 @@ final class GitUnifiedCodeView: NSView
 				container: container,
 				manager: manager
 			)
-			source.setFrameSize(NSSize(
-				width: width,
-				height: max(
-					1,
-					heights.used
-				)
-			))
+			if source.frame.height != heights.used
+			{
+				source.setFrameSize(NSSize(
+					width: width,
+					height: heights.used
+				))
+			}
 			scroll.verticalRulerView?.needsDisplay = true
 			updateNaturalHeight(heights.natural)
 		}
@@ -371,13 +386,7 @@ final class GitUnifiedCodeView: NSView
 			wrapsLines: wrapsCode,
 			role: TypographyTokens.Code.diff
 		)
-		applySplitRowSpacing(
-			to: attributed,
-			paragraphStyle: SourceTextView.paragraphStyle(
-				wrapsLines: wrapsCode,
-				role: TypographyTokens.Code.diff
-			)
-		)
+		applySplitRowSpacing(to: attributed)
 		effectiveAppearance.performAsCurrentDrawingAppearance
 		{
 			applyChangedRangeBackgrounds(to: attributed)
@@ -394,43 +403,56 @@ final class GitUnifiedCodeView: NSView
 
 	private func applySplitRowSpacing(
 		to attributed: NSMutableAttributedString,
-		paragraphStyle: NSMutableParagraphStyle
+		replacing previousCounts: [Int] = []
 	)
 	{
-		if !additionalVisualLines.isEmpty
+		guard !additionalVisualLines.isEmpty || !previousCounts.isEmpty
+		else
 		{
-			var paragraphOffset = 0
-			for (index, row) in rows.enumerated()
+			return
+		}
+		let paragraphStyle = SourceTextView.paragraphStyle(
+			wrapsLines: wrapsCode,
+			role: TypographyTokens.Code.diff
+		)
+		var paragraphOffset = 0
+		for (index, row) in rows.enumerated()
+		{
+			let length = row.text.utf16.count
+			let lineBreakLength = index + 1 < rows.count ? 1 : 0
+			defer
 			{
-				let length = (row.text as NSString).length
-				if additionalVisualLines.indices.contains(index), additionalVisualLines[index] > 0
-				{
-					let finalParagraphStart = row.text.utf16.enumerated().reduce(0)
-					{
-						start, element in
-						guard let scalar = UnicodeScalar(element.element),
-								CharacterSet.newlines.contains(scalar)
-						else
-						{
-							return start
-						}
-						return element.offset + 1
-					}
-					let paragraph = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
-					paragraph.paragraphSpacing = CGFloat(additionalVisualLines[index])
-						* Self.lineHeight
-					attributed.addAttribute(
-						.paragraphStyle,
-						value: paragraph,
-						range: NSRange(
-							location: paragraphOffset + finalParagraphStart,
-							length: length - finalParagraphStart
-								+ (index + 1 < rows.count ? 1 : 0)
-						)
-					)
-				}
-				paragraphOffset += length + 1
+				paragraphOffset += length + lineBreakLength
 			}
+			let count = additionalVisualLines.indices
+				.contains(index) ? additionalVisualLines[index] : 0
+			let previous = previousCounts.indices.contains(index) ? previousCounts[index] : 0
+			guard count != previous
+			else
+			{
+				continue
+			}
+			let finalParagraphStart = row.text.utf16.enumerated().reduce(0)
+			{
+				start, element in
+				guard let scalar = UnicodeScalar(element.element),
+						CharacterSet.newlines.contains(scalar)
+				else
+				{
+					return start
+				}
+				return element.offset + 1
+			}
+			let paragraph = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
+			paragraph.paragraphSpacing = CGFloat(count) * Self.lineHeight
+			attributed.addAttribute(
+				.paragraphStyle,
+				value: paragraph,
+				range: NSRange(
+					location: paragraphOffset + finalParagraphStart,
+					length: length - finalParagraphStart + lineBreakLength
+				)
+			)
 		}
 	}
 

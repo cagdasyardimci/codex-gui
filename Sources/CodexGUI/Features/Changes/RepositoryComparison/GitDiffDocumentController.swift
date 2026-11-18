@@ -25,6 +25,7 @@ final class GitDiffDocumentController: NSViewController
 	private var diffViews: [GitAdaptiveDiffView] = []
 	private let sections = DesktopFlippedStackView()
 	private(set) var contentScroll = NSScrollView()
+	private var isResizingPane = false
 
 	override func loadView()
 	{
@@ -40,9 +41,86 @@ final class GitDiffDocumentController: NSViewController
 		contentScroll.hasHorizontalScroller = false
 		contentScroll.autohidesScrollers = true
 		contentScroll.drawsBackground = false
-		sections.widthAnchor.constraint(equalTo: contentScroll.contentView.widthAnchor)
-			.isActive = true
+		let clip = contentScroll.contentView
+		clip.postsBoundsChangedNotifications = true
+		NotificationCenter.default.addObserver(
+			self,
+			selector: #selector(resumeVisibleDiffLayout),
+			name: NSView.boundsDidChangeNotification,
+			object: clip
+		)
 		view = contentScroll
+	}
+
+	func beginPaneResize()
+	{
+		isResizingPane = true
+		for diff in diffViews
+		{
+			diff.resizeViewport = contentScroll.contentView
+		}
+	}
+
+	func endPaneResize()
+	{
+		guard isResizingPane
+		else
+		{
+			return
+		}
+		isResizingPane = false
+		let clip = contentScroll.contentView
+		// Preserve the visible position when wider or narrower rows above it catch up.
+		let visibleDiff = diffViews.first
+		{
+			$0.convert(
+				$0.bounds,
+				to: clip
+			).intersects(clip.bounds)
+		}
+		let leadingY = visibleDiff.map
+		{
+			$0.convert(
+				$0.bounds,
+				to: clip
+			).minY
+		}
+		for diff in diffViews
+		{
+			diff.resizeViewport = nil
+			diff.resumeDeferredResizeLayout()
+		}
+		contentScroll.layoutSubtreeIfNeeded()
+		if let visibleDiff, let leadingY
+		{
+			let adjustment = visibleDiff.convert(
+				visibleDiff.bounds,
+				to: clip
+			).minY - leadingY
+			let proposed = clip.bounds.offsetBy(
+				dx: 0,
+				dy: adjustment
+			)
+			clip.scroll(to: clip.constrainBoundsRect(proposed).origin)
+			contentScroll.reflectScrolledClipView(clip)
+		}
+	}
+
+	override func viewDidLayout()
+	{
+		super.viewDidLayout()
+		resumeVisibleDiffLayout()
+	}
+
+	@objc private func resumeVisibleDiffLayout()
+	{
+		if isResizingPane
+		{
+			for diff in diffViews
+			{
+				diff.resumeDeferredResizeLayout()
+			}
+		}
 	}
 
 	func updateLayout(for state: GitReviewState)
@@ -270,6 +348,13 @@ final class GitDiffDocumentController: NSViewController
 		diffViews = files.flatMap
 		{
 			fileSections[Data($0.id.utf8)]?.diffViews ?? []
+		}
+		if isResizingPane
+		{
+			for diff in diffViews
+			{
+				diff.resizeViewport = contentScroll.contentView
+			}
 		}
 	}
 
