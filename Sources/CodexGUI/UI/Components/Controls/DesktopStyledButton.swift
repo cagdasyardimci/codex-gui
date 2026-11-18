@@ -861,6 +861,10 @@ class DesktopStyledButton: DesktopTooltipButton
 		paragraph.lineBreakMode = .byTruncatingTail
 		attributes[.foregroundColor] = foreground
 		attributes[.paragraphStyle] = paragraph
+		if (presentation == .link && active) || presentation == .mutedLink
+		{
+			attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+		}
 		if !hidesLeadingImage, let image, let rect = layout.image
 		{
 			DesktopIcons.draw(
@@ -880,17 +884,6 @@ class DesktopStyledButton: DesktopTooltipButton
 				in: rect,
 				tint: foreground
 			)
-		}
-		if (presentation == .link && active) || presentation == .mutedLink
-		{
-			foreground.setFill()
-			NSRect(
-				x: layout.title.minX,
-				y: layout.title.minY,
-				width: layout.title.width,
-				height: 1
-			)
-			.fill()
 		}
 	}
 
