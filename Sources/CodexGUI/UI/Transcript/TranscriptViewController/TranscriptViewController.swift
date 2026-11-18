@@ -83,6 +83,7 @@ final class TranscriptViewController: NSViewController,
 	var expandedGroupIDs = Set<String>()
 	var collapsedImageIDs = Set<String>()
 	var expandedActivityIDs = Set<String>()
+	var pendingActivityDisclosure = false
 	var activityOutputPositions: [
 		String: ConversationActivityCollectionItem.OutputReadingPosition
 	] = [:]

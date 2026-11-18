@@ -89,6 +89,69 @@ struct ConversationTranscriptUpdateLayoutTests
 		#expect(controller.transcript.readingAnchor()?.sourceEntryID == "entry-20")
 	}
 
+	@Test func openingCommandOutputNearBottomKeepsTheHeaderInPlace() async throws
+	{
+		_ = NSApplication.shared
+		let fixture = WindowFixture(
+			width: 700,
+			height: 760
+		)
+		defer
+		{
+			fixture.tearDown()
+		}
+		let controller = fixture.controller
+		let transcript = controller.transcript
+		let command = ConversationEntry(
+			id: "command",
+			kind: .command,
+			title: "Command",
+			body: "",
+			activity: .command(ConversationCommand(
+				command: "printf 'output'",
+				cwd: nil,
+				output: String(
+					repeating: "output\n",
+					count: 100
+				),
+				status: "completed",
+				exitCode: 0,
+				durationMs: nil,
+				actions: []
+			))
+		)
+		controller.render(snapshot(historyEntries(0 ..< 40) + [command]))
+		await controller.waitForRendering()
+		controller.view.layoutSubtreeIfNeeded()
+		transcript.collectionView.layoutSubtreeIfNeeded()
+		let clip = transcript.conversationScrollView.contentView
+		let index = try #require(transcript.displayedRows.firstIndex
+		{
+			$0.id == command.id
+		})
+		let path = IndexPath(
+			item: index,
+			section: 0
+		)
+		guard case .activity(let row) = transcript.displayedRows[index]
+		else
+		{
+			Issue.record("Expected a command row")
+			return
+		}
+		let before = try #require(transcript.collectionView.layoutAttributesForItem(at: path)).frame
+		try #require(transcript.isNearBottom)
+		try #require(before.intersects(clip.bounds))
+		let headerOffset = before.minY - clip.bounds.minY
+
+		transcript.toggleActivity(row)
+		await controller.waitForRendering()
+
+		let after = try #require(transcript.collectionView.layoutAttributesForItem(at: path)).frame
+		#expect(after.height > before.height)
+		#expect(abs(after.minY - clip.bounds.minY - headerOffset) < 1)
+	}
+
 	@Test func liveScrollingToTopLoadsOnePageAndRespectsLoadingAndHistoryAvailability() async throws
 	{
 		_ = NSApplication.shared

@@ -38,6 +38,7 @@ extension TranscriptViewController
 		{
 			expandedActivityIDs.remove(row.id)
 		}
+		pendingActivityDisclosure = true
 		prepareEntries(
 			requestedEntries,
 			context: requestedContext,

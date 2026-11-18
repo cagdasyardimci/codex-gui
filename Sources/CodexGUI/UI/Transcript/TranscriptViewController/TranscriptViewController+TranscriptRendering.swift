@@ -846,6 +846,7 @@ extension TranscriptViewController
 			expandedGroupIDs.removeAll()
 			collapsedImageIDs.removeAll()
 			expandedActivityIDs.removeAll()
+			pendingActivityDisclosure = false
 			activityOutputPositions.removeAll()
 			turnStatusTimer?.invalidate()
 			turnStatusTimer = nil
@@ -1031,7 +1032,10 @@ extension TranscriptViewController
 				$0.id == first.id
 			}
 		} == true
-		let shouldFollowOutput = contextChanged || (isNearBottom && !prependsHistory)
+		// An explicit disclosure grows the transcript below the reader's current position.
+		let shouldFollowOutput = contextChanged
+			|| (isNearBottom && !prependsHistory && !pendingActivityDisclosure)
+		pendingActivityDisclosure = false
 		let anchor = shouldFollowOutput ? nil : readingAnchor()
 		workEntryIDsByTurn = workEntryIDs
 		let allRows = ConversationTranscriptRow.make(
@@ -1301,6 +1305,12 @@ extension TranscriptViewController
 		}
 		if case .message(let entry) = current, case .fileChanges = entry.activity,
 			case .message(let preceding) = previous, preceding.kind == .agent
+		{
+			return 8
+		}
+		// Keep the gap above a standalone command fixed while its output opens.
+		if case .activity(let activity) = current, activity.command != nil,
+			!activity.isGroupedAction
 		{
 			return 8
 		}

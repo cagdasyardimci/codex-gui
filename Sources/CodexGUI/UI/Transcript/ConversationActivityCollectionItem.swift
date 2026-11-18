@@ -220,8 +220,9 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 
 	private func renderHeader(_ row: ConversationActivityRow)
 	{
-		titleClick.isEnabled = row.kind == .command && row.command != nil
 		let hasLink = row.filePath != nil && row.linkTitle != nil
+		let canExpand = row.kind == .group || row.kind == .image || row.command != nil
+		titleClick.isEnabled = canExpand && !hasLink
 		titleLabel.stringValue = row.title
 		if row.kind == .read, !hasLink, let linkTitle = row.linkTitle, row.title == "Read"
 		{
@@ -262,22 +263,13 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 			outcomeLabel.stringValue = outcome
 			headerViews.append(outcomeLabel)
 		}
-		let canExpand = row.kind == .group || row.kind == .image || row.command != nil
-		if row.kind == .group
+		if canExpand
 		{
 			headerViews.append(disclosure)
-			headerViews.append(spacer)
 		}
-		else
+		if hasLink || canExpand
 		{
-			if canExpand
-			{
-				headerViews.append(disclosure)
-			}
-			if hasLink || canExpand
-			{
-				headerViews.append(spacer)
-			}
+			headerViews.append(spacer)
 		}
 		header.setViews(
 			headerViews,

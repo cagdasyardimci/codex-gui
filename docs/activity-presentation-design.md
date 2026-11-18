@@ -6,9 +6,9 @@ This guide records why activity is grouped and what its projection must preserve
 
 Group consecutive command activities within a turn to reduce visual noise while retaining each observation. Mixed group summaries combine exploration into one phrase and count command executions by source item. Repeated reads remain separate observations in the expanded group.
 
-Expanded groups surface failures in the affected command rows. An individual command preserves its exceptional outcome while its output is closed. Completion alone does not imply a zero exit code. Read-file navigation and command disclosure remain distinct actions. Hiding a disclosure glyph on hover exit must not remove its hit region, keyboard access or accessible name, change expansion or move text.
+Expanded groups surface failures in the affected command rows. An individual command preserves its exceptional outcome while its output is closed. Completion alone does not imply a zero exit code. Read-file navigation and command disclosure remain distinct actions. Expandable activity titles and their carets invoke the same disclosure. Hiding a disclosure glyph on hover exit must not remove its hit region, keyboard access or accessible name, change expansion or move text.
 
-Preserve the reader's scroll anchor, output selection and inner scroll position across output updates and disclosure changes. Reset these only when their transcript owner changes. Layout measurement and rendering must share geometry.
+Preserve the reader's scroll anchor, output selection and inner scroll position across output updates and disclosure changes. When the reader opens command output, keep their transcript position so the output grows below its header even near the bottom. Reset these only when their transcript owner changes. Layout measurement and rendering must share geometry.
 
 ## Data and ownership
 
