@@ -100,6 +100,59 @@ struct FileSystemFileViewerServiceTests
 	}
 
 	@Test
+	func concurrentSavesAgainstOneRevisionKeepTheWinner() async throws
+	{
+		let root = try fixture()
+		defer
+		{
+			try? FileManager.default.removeItem(atPath: root)
+		}
+		let file = FileLocation(
+			root: root,
+			relativePath: "shared.txt"
+		)
+		try Data("original".utf8).write(to: file.fileURL)
+		let revision = try await FileSystemFileViewerService().read(at: file).revision
+		let results = await withTaskGroup(of: Result<String, FileViewerFailure>.self)
+		{
+			group in
+			for text in ["first edit", "second edit"]
+			{
+				group.addTask
+				{
+					do
+					{
+						_ = try await FileSystemFileViewerService().save(
+							at: file,
+							text: text,
+							expectedRevision: revision
+						)
+						return .success(text)
+					}
+					catch
+					{
+						return .failure(error as? FileViewerFailure ??
+							.io(error.localizedDescription))
+					}
+				}
+			}
+			return await group.reduce(into: [])
+			{
+				$0.append($1)
+			}
+		}
+		#expect(results.filter
+		{
+			$0 == .failure(.conflict)
+		}.count == 1)
+		let winner = try #require(results.compactMap
+		{
+			try? $0.get()
+		}.first)
+		#expect(try Data(contentsOf: file.fileURL) == Data(winner.utf8))
+	}
+
+	@Test
 	func textBeyondEditBudgetLoadsReadOnlyAndPermissionFailureRetainsBytes() async throws
 	{
 		let root = try fixture()

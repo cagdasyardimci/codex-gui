@@ -30,6 +30,7 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 	static let maximumReadBytes = 32 * 1024 * 1024
 	static let maximumSearchFiles = 20_000
 	static let maximumSearchResults = 500
+	private static let replacementLock = NSLock()
 	private let inventoryLock = NSLock()
 	private var cachedInventory: SearchInventory?
 
@@ -451,6 +452,13 @@ final class FileSystemFileViewerService: FileViewerService, @unchecked Sendable
 		else
 		{
 			throw FileSystemFileReader.failure(errno)
+		}
+		// Different chat tabs can edit the same file. Serialize the final revision check and
+		// replacement so only one save against the same disk revision can succeed.
+		replacementLock.lock()
+		defer
+		{
+			replacementLock.unlock()
 		}
 		let verifyFD = try FileSystemFileReader.openRegularFile(
 			in: dirFD,
