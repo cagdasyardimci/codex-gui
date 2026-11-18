@@ -17,6 +17,7 @@ struct ConversationActivityRow: Equatable
 	var command: ConversationCommand? = nil
 	var subagents: [CodexSubagentActivity] = []
 	var expanded: Bool = false
+	var isGroupedAction = false
 }
 
 enum ConversationTranscriptRow: Equatable
@@ -79,20 +80,22 @@ enum ConversationTranscriptRow: Equatable
 		}
 		func appendPendingActivityGroup()
 		{
-			guard let first = pending.first
+			guard let first = pending.first, case .command(let firstCommand) = first.activity
 			else
 			{
 				return
 			}
 			let groupID = "activity-group:\(first.id)"
+			let isGrouped = pending.count > 1 || firstCommand.actions.count > 1
 			let actions = activityRows(
 				for: pending,
 				groupID: groupID,
+				isGrouped: isGrouped,
 				projectPath: projectPath,
 				expandedActivityIDs: expandedActivityIDs
 			)
 			// A single action is already its own expandable header.
-			if actions.count == 1
+			if !isGrouped
 			{
 				rows.append(.activity(actions[0]))
 				pending.removeAll()
@@ -392,6 +395,7 @@ enum ConversationTranscriptRow: Equatable
 	private static func activityRows(
 		for entries: [ConversationEntry],
 		groupID: String,
+		isGrouped: Bool,
 		projectPath: String?,
 		expandedActivityIDs: Set<String>
 	) -> [ConversationActivityRow]
@@ -404,6 +408,7 @@ enum ConversationTranscriptRow: Equatable
 			{
 				continue
 			}
+			let outcome = ConversationCommandOutcome(command)
 			let metadata = command.actions
 			if metadata.isEmpty
 			{
@@ -412,9 +417,14 @@ enum ConversationTranscriptRow: Equatable
 					sourceEntryID: entry.id,
 					groupID: groupID,
 					kind: .command,
-					title: "Ran \(preview(command.command))",
+					title: commandTitle(
+						command.command,
+						outcome: outcome,
+						isGrouped: isGrouped
+					),
 					command: command,
-					expanded: expandedActivityIDs.contains(entry.id)
+					expanded: expandedActivityIDs.contains(entry.id),
+					isGroupedAction: isGrouped
 				))
 			}
 			for (index, action) in metadata.enumerated()
@@ -442,7 +452,11 @@ enum ConversationTranscriptRow: Equatable
 					} ?? "")
 				case .unknown:
 					kind = .command
-					title = "Ran \(preview(action.command))"
+					title = commandTitle(
+						action.command,
+						outcome: outcome,
+						isGrouped: isGrouped
+					)
 				}
 				let filePath = kind == .read ? resolvedPath(
 					action.path,
@@ -450,8 +464,20 @@ enum ConversationTranscriptRow: Equatable
 					projectPath: projectPath
 				) : nil
 				let needsReadTitleFallback = kind == .read && filePath == nil
-				let actionTitle = needsReadTitleFallback
-					? "Read " + (action.name ?? action.path ?? action.command) : title
+				let actionTitle: String
+				if case .failed = outcome, kind != .command
+				{
+					actionTitle = commandTitle(
+						action.command,
+						outcome: outcome,
+						isGrouped: isGrouped
+					)
+				}
+				else
+				{
+					actionTitle = needsReadTitleFallback
+						? "Read " + (action.name ?? action.path ?? action.command) : title
+				}
 
 				actions.append(ConversationActivityRow(
 					id: id,
@@ -462,7 +488,8 @@ enum ConversationTranscriptRow: Equatable
 					filePath: filePath,
 					linkTitle: kind == .read ? action.name ?? action.path : nil,
 					command: command,
-					expanded: expandedActivityIDs.contains(id)
+					expanded: expandedActivityIDs.contains(id),
+					isGroupedAction: isGrouped
 				))
 			}
 		}
@@ -480,17 +507,22 @@ enum ConversationTranscriptRow: Equatable
 		{
 			summary.append("Read files")
 		}
-		if kinds.contains(.search)
+		else if kinds.contains(.search)
 		{
 			summary.append("Searched files")
 		}
-		if kinds.contains(.listFiles)
+		else if kinds.contains(.listFiles)
 		{
 			summary.append("Listed files")
 		}
-		if kinds.contains(.command)
+		let commandCount = Set(actions.lazy.filter
 		{
-			summary.append("Ran commands")
+			$0.kind == .command
+		}.map(\.sourceEntryID))
+			.count
+		if commandCount > 0
+		{
+			summary.append(commandCount == 1 ? "Ran a command" : "Ran commands")
 		}
 		var title = summary.enumerated()
 			.map
@@ -511,7 +543,7 @@ enum ConversationTranscriptRow: Equatable
 				outcomes[outcome, default: 0] += 1
 			}
 		}
-		for outcome in ["failed", "declined", "interrupted"]
+		for outcome in ["declined", "interrupted"]
 		{
 			if let count = outcomes[outcome]
 			{
@@ -521,9 +553,18 @@ enum ConversationTranscriptRow: Equatable
 		return title
 	}
 
-	private static func preview(_ command: String) -> String
+	private static func commandTitle(
+		_ command: String,
+		outcome: ConversationCommandOutcome,
+		isGrouped: Bool
+	) -> String
 	{
-		command.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+		let preview = command.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+		if case .failed = outcome
+		{
+			return "Command failed (\(preview))"
+		}
+		return isGrouped ? preview : "Ran \(preview)"
 	}
 
 	private static func resolvedPath(

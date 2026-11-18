@@ -39,13 +39,9 @@ enum ConversationCommandOutcome
 	{
 		switch self
 		{
-		case .failed(let code): code.map
-		{
-			"Exit \($0)"
-		} ?? "Failed"
 		case .declined: "Declined"
 		case .interrupted: "Interrupted"
-		case .completed, .running: nil
+		case .failed, .completed, .running: nil
 		}
 	}
 
@@ -53,10 +49,9 @@ enum ConversationCommandOutcome
 	{
 		switch self
 		{
-		case .failed: "failed"
 		case .declined: "declined"
 		case .interrupted: "interrupted"
-		case .completed, .running: nil
+		case .failed, .completed, .running: nil
 		}
 	}
 

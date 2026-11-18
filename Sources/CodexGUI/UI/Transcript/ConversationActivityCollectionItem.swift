@@ -222,7 +222,7 @@ final class ConversationActivityCollectionItem: NSCollectionViewItem
 	{
 		titleClick.isEnabled = row.kind == .command && row.command != nil
 		let hasLink = row.filePath != nil && row.linkTitle != nil
-		titleLabel.stringValue = hasLink ? "Read" : row.title
+		titleLabel.stringValue = row.title
 		if row.kind == .read, !hasLink, let linkTitle = row.linkTitle, row.title == "Read"
 		{
 			titleLabel.stringValue = "Read \(linkTitle)"
