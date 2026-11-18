@@ -62,6 +62,7 @@ enum ShapeTokens
 	{
 		static let codeCopyTooltipRadius: CGFloat = 12
 		static let userRadius: CGFloat = 22
+		static let userCornerCurve = CornerCurve.superellipse(1.5)
 
 		static let resultRadius: CGFloat = 12
 		static let replyControlRadius: CGFloat = 10

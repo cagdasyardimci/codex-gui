@@ -38,7 +38,7 @@ Read Aloud plays the displayed response without adding a turn to the chat. Playb
 
 Result feedback sends a one-time report for the original chat and turn, with logs excluded. If delivery is uncertain, the [feedback reducer](../Sources/CodexGUI/Application/Reducers/ResultFeedback/ResultFeedbackReducer.swift) reserves that turn against another submission to avoid duplicate reports.
 
-Response actions remain available on loaded, finished turns while newer turns run, subject to each action's eligibility. See [transcript routing](../Sources/CodexGUI/UI/Transcript/TranscriptViewController/TranscriptViewController+TranscriptRendering.swift) and [fork behavior](slash-commands.md#syntax-and-intent).
+Response actions remain available on loaded, finished turns while newer turns run, subject to each action's eligibility. User message metadata and actions appear on hover or action focus. Reserve their space so revealing them preserves the reading position. See [transcript routing](../Sources/CodexGUI/UI/Transcript/TranscriptViewController/TranscriptViewController+TranscriptRendering.swift) and [fork behavior](slash-commands.md#syntax-and-intent).
 
 Only the first user message in a finished turn can qualify for editing because the fork boundary is the whole turn. **Send** forks before that turn and submits the revision with its recorded attachments once selection of the fork is confirmed. The edited text is sent as a prompt even if it starts with a slash command. If selection fails or is superseded, the revised draft and attachments remain available in the fork. See the [revision reducer](../Sources/CodexGUI/Application/Reducers/Composer/ComposerCommandReducer+SentPromptRevision.swift).
 

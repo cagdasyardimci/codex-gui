@@ -43,7 +43,8 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private var showsReplyActions = false
 	private let userSurface = DesktopSurface(
 		AppKitColorTokens.userBubble,
-		cornerRadius: ShapeTokens.Transcript.userRadius
+		cornerRadius: ShapeTokens.Transcript.userRadius,
+		cornerCurve: ShapeTokens.Transcript.userCornerCurve
 	)
 	private let activitySurface = DesktopSurface(
 		AppKitColorTokens.elevated,
@@ -100,6 +101,12 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	private func makeMessageContainerView() -> NSView
 	{
 		let container = NSView()
+		container.addTrackingArea(NSTrackingArea(
+			rect: .zero,
+			options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
+			owner: self,
+			userInfo: nil
+		))
 		messageContainer.translatesAutoresizingMaskIntoConstraints = false
 		container.addSubview(messageContainer)
 		container.addSubview(imageAttachmentsView)
@@ -217,6 +224,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		updateBodyHeight()
 		layoutImageAttachments()
 		updateCopyButtonFrames()
+		synchronizeMessageHover()
 	}
 
 	override func viewDidAppear()
@@ -241,6 +249,42 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 	{
 		super.viewDidDisappear()
 		stopObservingClipView()
+		replyActions.setMessageHovered(false)
+	}
+
+	override func mouseEntered(with event: NSEvent)
+	{
+		synchronizeMessageHover()
+	}
+
+	override func mouseExited(with event: NSEvent)
+	{
+		synchronizeMessageHover()
+	}
+
+	override func mouseMoved(with event: NSEvent)
+	{
+		synchronizeMessageHover()
+	}
+
+	private func synchronizeMessageHover()
+	{
+		guard kind == .user, let window = view.window, window.isKeyWindow
+		else
+		{
+			replyActions.setMessageHovered(false)
+			return
+		}
+		let point = view.convert(
+			window.mouseLocationOutsideOfEventStream,
+			from: nil
+		)
+		let messageBounds = messageContainer.isHidden ? NSRect.null : messageContainer.frame
+		let attachmentBounds = imageAttachmentsView.isHidden ? NSRect.null : imageAttachmentsView
+			.frame
+		let hoverBounds = messageBounds.union(attachmentBounds).union(replyActions.frame)
+		replyActions
+			.setMessageHovered(view.visibleRect.contains(point) && hoverBounds.contains(point))
 	}
 
 	private func stopObservingClipView()
@@ -272,6 +316,7 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		}
 		updateBodyHeight()
 		updateCopyButtonFrames()
+		synchronizeMessageHover()
 	}
 
 	func configure(
@@ -613,9 +658,13 @@ final class ConversationCollectionItem: NSCollectionViewItem, NSLayoutManagerDel
 		showsReplyActions: Bool
 	) -> CGFloat
 	{
-		(kind == .user || (kind == .agent && showsReplyActions)) ? replyActionSpacing +
-			ConversationReplyActionsView
-			.height : 0
+		if kind == .user
+		{
+			return LayoutTokens.Transcript.userReplyActionSpacing + ConversationReplyActionsView
+				.height
+		}
+		return kind == .agent && showsReplyActions
+			? replyActionSpacing + ConversationReplyActionsView.height : 0
 	}
 
 	static func textReadingAnchor(

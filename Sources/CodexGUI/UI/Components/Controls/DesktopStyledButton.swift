@@ -623,9 +623,15 @@ class DesktopStyledButton: DesktopTooltipButton
 			needsDisplay = true
 		}
 	}
+	var onFirstResponderChanged: ((Bool) -> Void)?
+
 	override func becomeFirstResponder() -> Bool
 	{
 		let accepted = super.becomeFirstResponder()
+		if accepted
+		{
+			onFirstResponderChanged?(true)
+		}
 		needsLayout = true
 		needsDisplay = true
 		needsDisplay = true
@@ -653,6 +659,10 @@ class DesktopStyledButton: DesktopTooltipButton
 	override func resignFirstResponder() -> Bool
 	{
 		let accepted = super.resignFirstResponder()
+		if accepted
+		{
+			onFirstResponderChanged?(false)
+		}
 		needsLayout = true
 		needsDisplay = true
 		return accepted

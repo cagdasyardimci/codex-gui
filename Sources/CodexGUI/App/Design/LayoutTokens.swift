@@ -611,9 +611,10 @@ enum LayoutTokens
 			width: 0,
 			height: 4
 		)
+		static let userReplyActionSpacing: CGFloat = 4
 		static let userInset = CGSize(
 			width: 16,
-			height: 10
+			height: 9
 		)
 		static let resultInset = CGSize(
 			width: 12,

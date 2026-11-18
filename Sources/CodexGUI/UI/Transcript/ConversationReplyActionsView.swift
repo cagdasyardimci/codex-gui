@@ -14,6 +14,8 @@ final class ConversationReplyActionsView: NSStackView
 		var feedbackRating: ResultFeedbackRating? = nil
 	}
 	private var interactions = Interactions()
+	private var isPointerOverMessage = false
+	private var hasActionFocus = false
 	private var isUserMessage = false
 	private let copyButton = DesktopStyledButton(
 		title: "",
@@ -86,6 +88,15 @@ final class ConversationReplyActionsView: NSStackView
 			icon: .thumbs,
 			label: "Give feedback"
 		)
+		for button in [copyButton, editButton]
+		{
+			button.onFirstResponderChanged =
+			{
+				[weak self] focused in
+				self?.hasActionFocus = focused
+				self?.updateUserActionVisibility()
+			}
+		}
 		reset()
 	}
 
@@ -156,10 +167,10 @@ final class ConversationReplyActionsView: NSStackView
 		self.onToggleBookmark = onToggleBookmark
 		isHidden = false
 		self.isUserMessage = isUserMessage
+		updateUserActionVisibility()
 		let copyLabel = isUserMessage ? "Copy message" : "Copy response"
 		copyButton.toolTip = copyLabel
 		copyButton.setAccessibilityLabel(copyLabel)
-		editButton.isHidden = !isUserMessage
 		setEditAction(nil)
 		feedbackButton.isHidden = isUserMessage
 		feedbackButton.target = self
@@ -186,10 +197,34 @@ final class ConversationReplyActionsView: NSStackView
 		setInteractions(interactions)
 	}
 
+	func setMessageHovered(_ hovered: Bool)
+	{
+		guard isPointerOverMessage != hovered
+		else
+		{
+			return
+		}
+		isPointerOverMessage = hovered
+		updateUserActionVisibility()
+	}
+
+	private func updateUserActionVisibility()
+	{
+		guard isUserMessage || wantsLayer
+		else
+		{
+			return
+		}
+		wantsLayer = true
+		// Retain the action strip's geometry and native focus targets while it is transparent.
+		layer?.opacity = !isUserMessage || isPointerOverMessage || hasActionFocus ? 1 : 0
+	}
+
 	func setEditAction(_ action: (() -> Void)?)
 	{
 		onEdit = action
 		editButton.isEnabled = isUserMessage && action != nil
+		editButton.isHidden = !editButton.isEnabled
 		editButton.target = self
 		editButton.action = #selector(editMessage)
 	}
@@ -207,6 +242,9 @@ final class ConversationReplyActionsView: NSStackView
 	func reset()
 	{
 		actionGeneration = UUID()
+		isPointerOverMessage = false
+		hasActionFocus = false
+		updateUserActionVisibility()
 		stopReading()
 		actionMenu?.close()
 		actionMenu = nil
