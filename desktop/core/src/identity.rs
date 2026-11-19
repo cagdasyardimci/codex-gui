@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
@@ -11,7 +12,7 @@ pub struct ConnectionGeneration(pub u64);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct RequestId(pub Uuid);
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq)]
 pub struct ThreadId(pub String);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

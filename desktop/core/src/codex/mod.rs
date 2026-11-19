@@ -1,3 +1,4 @@
+mod browse;
 mod compatibility;
 mod executable;
 mod framing;
@@ -8,6 +9,10 @@ mod session;
 #[cfg(test)]
 mod fixtures;
 
+pub use browse::{
+    Account, AccountSnapshot, BrowseError, CodexBrowser, ModelOption, Page, ProjectChatCursor,
+    ThreadSummary,
+};
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub use executable::{CodexExecutable, DiscoveryError, VersionProbeError};
 pub use framing::{JsonlReadError, JsonlReader, StderrTail};
