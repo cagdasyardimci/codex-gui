@@ -14,7 +14,7 @@ The [desktop workflow](../.github/workflows/desktop-core.yml) checks the core an
 
 Install the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) for the host OS and use the pinned Node and pnpm versions. From the repository root, run `pnpm --dir desktop/frontend install --frozen-lockfile` and `pnpm --dir desktop/frontend tauri dev`. The beta initializes its data and worktree root under its own application identity so it can launch alongside AppKit.
 
-The desktop build job type-checks the frontend and compiles the host with the embedded production frontend. Reproduce it with `pnpm --dir desktop/frontend check` and `pnpm --dir desktop/frontend tauri build --debug --no-bundle -- --locked`. Installed runtime checks use separately built bundles.
+The desktop build job type-checks the frontend and compiles the host with the embedded production frontend. Reproduce it with `pnpm --dir desktop/frontend check` and `pnpm --dir desktop/frontend tauri build --debug --no-bundle -- --locked`. Installed runtime checks use separately built bundles. After the build, pass the executable to [the WebView fixture check](../desktop/fixtures/verify_webview_fixture.py). The check requires positive confirmation from the mounted frontend that it received the deltas in order and rendered the exact fixture text. Run it under `xvfb-run -a` on Ubuntu when a desktop display is unavailable.
 
 ### Swift AppKit
 

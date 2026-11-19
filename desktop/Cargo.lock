@@ -365,8 +365,12 @@ dependencies = [
 name = "codex-gui-desktop"
 version = "0.1.0"
 dependencies = [
+ "codex-gui-core",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
+ "tokio",
 ]
 
 [[package]]
