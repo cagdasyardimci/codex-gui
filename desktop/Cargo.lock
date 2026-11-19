@@ -349,6 +349,9 @@ dependencies = [
 [[package]]
 name = "codex-gui-core"
 version = "0.1.0"
+dependencies = [
+ "uuid",
+]
 
 [[package]]
 name = "codex-gui-desktop"
