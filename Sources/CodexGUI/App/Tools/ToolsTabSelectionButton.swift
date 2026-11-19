@@ -55,6 +55,26 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 	private(set) weak var dragWindow: NSWindow?
 	private static let dragThreshold: CGFloat = 4
 
+	override var focusRingMaskBounds: NSRect
+	{
+		bounds
+	}
+
+	override func drawFocusRingMask()
+	{
+		bounds.fill()
+	}
+
+	override func becomeFirstResponder() -> Bool
+	{
+		let accepted = super.becomeFirstResponder()
+		if accepted
+		{
+			focusRingType = NSApp.currentEvent?.type == .keyDown ? .exterior : .none
+		}
+		return accepted
+	}
+
 	func configurePresentation(
 		selected: Bool,
 		preview: Bool = false,
@@ -90,6 +110,10 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 			cell = selectionCell
 		}
 		selectionCell.documentTitleGap = file ? 5 : 0
+		if window?.firstResponder !== self
+		{
+			focusRingType = .none
+		}
 		bezelStyle = .inline
 		isBordered = false
 		controlSize = .small
@@ -113,6 +137,7 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 
 	override func mouseDown(with event: NSEvent)
 	{
+		focusRingType = .none
 		guard draggedID != nil, dragOwner != nil, let window
 		else
 		{
@@ -120,11 +145,6 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 			return
 		}
 		window.makeFirstResponder(self)
-		highlight(true)
-		defer
-		{
-			highlight(false)
-		}
 		let start = event.locationInWindow
 		while let next = window.nextEvent(
 			matching: [.leftMouseDragged, .leftMouseUp],

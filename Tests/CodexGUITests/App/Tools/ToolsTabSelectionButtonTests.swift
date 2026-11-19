@@ -25,6 +25,8 @@ struct ToolsTabSelectionButtonTests
 				selected: selected,
 				preview: !selected
 			)
+			#expect(button.focusRingType == .none)
+			#expect(button.focusRingMaskBounds == button.bounds)
 			let titleRect = try #require(button.cell).titleRect(forBounds: button.bounds)
 			let titleBounds = button.attributedTitle.boundingRect(
 				with: NSSize(
