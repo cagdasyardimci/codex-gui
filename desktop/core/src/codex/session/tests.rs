@@ -17,7 +17,7 @@ fn transport(
     let identity = ConnectionIdentity {
         workspace: WorkspaceIdentity {
             session: CheckoutSessionId(Uuid::from_u128(1)),
-            canonical_checkout: None,
+            checkout: None,
         },
         generation: ConnectionGeneration(generation),
     };

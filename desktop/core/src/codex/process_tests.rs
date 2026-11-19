@@ -1,4 +1,4 @@
-use std::{path::Path, time::Duration};
+use std::{fs, path::Path, time::Duration};
 
 use tempfile::tempdir;
 use tokio::{
@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::{
+    checkout::CheckoutIdentity,
     codex::fixtures::shim,
     identity::{CheckoutSessionId, ConnectionGeneration, WorkspaceIdentity},
 };
@@ -16,32 +17,37 @@ use crate::{
 const TEST_DEADLINE: Duration = Duration::from_secs(8);
 
 #[cfg(unix)]
-const SERVER: &str = "#!/bin/sh\n[ \"$3\" = app-server ] && [ \"$4\" = --stdio ] || exit 2\nprintf 'ready\\n'\nprintf 'diagnostic\\n' >&2\nIFS= read -r input && printf '%s\\n' \"$input\"\nwhile IFS= read -r input; do :; done\n";
+const SERVER: &str = "#!/bin/sh\n[ \"$3\" = app-server ] && [ \"$4\" = --stdio ] || exit 2\n[ -f .codex-fixture-checkout ] || exit 3\nprintf 'ready\\n'\nprintf 'diagnostic\\n' >&2\nIFS= read -r input && printf '%s\\n' \"$input\"\nwhile IFS= read -r input; do :; done\n";
 #[cfg(windows)]
-const SERVER: &str = "@echo off\r\nif not \"%~3\"==\"app-server\" exit /b 2\r\nif not \"%~4\"==\"--stdio\" exit /b 2\r\necho ready\r\necho diagnostic 1>&2\r\nset /p input=\r\necho %input%\r\n:drain\r\nset /p input= || exit /b 0\r\ngoto drain\r\n";
+const SERVER: &str = "@echo off\r\nif not \"%~3\"==\"app-server\" exit /b 2\r\nif not \"%~4\"==\"--stdio\" exit /b 2\r\nif not exist .codex-fixture-checkout exit /b 3\r\necho ready\r\necho diagnostic 1>&2\r\nset /p input=\r\necho %input%\r\n:drain\r\nset /p input= || exit /b 0\r\ngoto drain\r\n";
 
 fn connection(checkout: &Path, generation: u64) -> ConnectionIdentity {
     ConnectionIdentity {
         workspace: WorkspaceIdentity {
             session: CheckoutSessionId(Uuid::from_u128(1)),
-            canonical_checkout: Some(checkout.to_path_buf()),
+            checkout: Some(CheckoutIdentity::capture(checkout).unwrap()),
         },
         generation: ConnectionGeneration(generation),
     }
 }
 
 fn fixture(directory: &Path) -> CodexExecutable {
+    fs::write(directory.join(".codex-fixture-checkout"), "").unwrap();
     let shim = shim(&directory.join("fixture installation"), SERVER);
     CodexExecutable::discover(Some(&shim)).unwrap()
 }
 
 #[test]
-fn spawn_reports_an_invalid_checkout() {
+fn spawn_rejects_a_captured_checkout_replaced_before_launch() {
     let root = tempdir().unwrap();
     let codex = fixture(root.path());
-    let checkout = root.path().join("missing checkout");
+    let checkout = root.path().join("checkout");
+    fs::create_dir(&checkout).unwrap();
+    let captured = connection(&checkout, 1);
+    fs::rename(&checkout, root.path().join("original checkout")).unwrap();
+    fs::create_dir(&checkout).unwrap();
 
-    assert!(AppServerProcess::spawn(&codex, connection(&checkout, 1)).is_err());
+    assert!(AppServerProcess::spawn(&codex, captured).is_err());
 }
 
 #[tokio::test]

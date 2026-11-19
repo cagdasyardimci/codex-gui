@@ -39,8 +39,9 @@ impl AppServerProcess {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        if let Some(checkout) = &connection.workspace.canonical_checkout {
-            command.current_dir(checkout);
+        if let Some(checkout) = &connection.workspace.checkout {
+            checkout.revalidate().map_err(io::Error::other)?;
+            command.current_dir(checkout.canonical_path());
         }
         let child = command.spawn()?;
         Ok(Self { connection, child })

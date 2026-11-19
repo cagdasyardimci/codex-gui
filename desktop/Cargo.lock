@@ -350,6 +350,7 @@ dependencies = [
 name = "codex-gui-core"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "semver",
  "serde",
  "serde_json",
@@ -357,6 +358,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
