@@ -7,13 +7,12 @@ extension MainWindowController
 		static let navigationControls = NSToolbarItem.Identifier("navigationControls")
 		static let settingsNavigation = NSToolbarItem.Identifier("settingsNavigation")
 		static let trailingControls = NSToolbarItem.Identifier("trailingControls")
-		static let toolsSeparator = NSToolbarItem.Identifier("toolsSeparator")
-		static let toolsTabBar = NSToolbarItem.Identifier("toolsTabBar")
 		static let back = NSToolbarItem.Identifier("back")
 		static let forward = NSToolbarItem.Identifier("forward")
 		static let sidebarPlaceholder = NSToolbarItem.Identifier("sidebarPlaceholder")
 		static let sidebar = NSToolbarItem.Identifier("sidebar")
 		static let navigationSeparator = NSToolbarItem.Identifier("navigationSeparator")
+		static let toolsSeparator = NSToolbarItem.Identifier("toolsSeparator")
 		static let projectContext = NSToolbarItem.Identifier("projectContext")
 		static let conversationTitle = NSToolbarItem.Identifier("conversationTitle")
 		static let openProject = NSToolbarItem.Identifier("openProject")
@@ -48,6 +47,16 @@ extension MainWindowController
 
 		configureToolbarTitle()
 		configureSummaryToggle()
+		navigation.searchPopover.shouldForwardParentClickAfterDismissal =
+		{
+			[weak self] event in
+			guard let self, self.inspector.isShowingTools
+			else
+			{
+				return false
+			}
+			return self.inspector.toolsTabs.tabBarView.acceptsPointerPress(event)
+		}
 		toolsToolbar.configureOpenButton(
 			target: self,
 			action: #selector(toggleToolsPane)
@@ -144,7 +153,6 @@ extension MainWindowController
 			ToolbarItem.navigationControls,
 			ToolbarItem.trailingControls,
 			ToolbarItem.toolsSeparator,
-			ToolbarItem.toolsTabBar,
 			ToolbarItem.back,
 			ToolbarItem.forward,
 			ToolbarItem.sidebarPlaceholder,
@@ -230,12 +238,6 @@ extension MainWindowController
 				],
 				leadingInset: -1,
 				trailingInset: -2
-			)
-		case ToolbarItem.toolsTabBar:
-			toolsToolbar.configureTabBarItem(
-				item,
-				paneController: paneController,
-				inspector: inspector
 			)
 		case ToolbarItem.navigationControls:
 			item.label = "Navigation"
@@ -435,19 +437,41 @@ extension MainWindowController
 
 	func updateToolsToolbarControls(allowDuringExpansion: Bool = false)
 	{
-		guard let toolbar = window?.toolbar,
-				toolbar.identifier != settingsToolbarIdentifier
+		guard let window, let toolbar = window.toolbar,
+				toolbar.identifier != settingsToolbarIdentifier,
+				allowDuringExpansion || !paneController.isAnimatingToolsExpansion,
+				let chrome = window.contentViewController as? WindowChromeViewController
 		else
 		{
 			return
 		}
-		toolsToolbar.update(
+		let tabs = toolsToolbar.update(
 			toolbar: toolbar,
-			window: window,
 			paneController: paneController,
 			inspector: inspector,
-			defaultIdentifiers: toolbarDefaultItemIdentifiers(toolbar),
-			allowDuringExpansion: allowDuringExpansion
+			defaultIdentifiers: toolbarDefaultItemIdentifiers(toolbar)
+		)
+		let fullscreenControls = toolsToolbar.fullscreenControls(
+			for: toolbar,
+			present: tabs != nil && window.styleMask.contains(.fullScreen) && !inspector
+				.isGitReviewFocused
+		)
+		let navigationPane = paneController.split.splitViewItems[0]
+		let navigationView = navigationPane.viewController.view
+		let navigationEdge = navigationPane.isCollapsed
+			? 0 : navigationView.convert(
+				navigationView.bounds,
+				to: nil
+			).maxX
+		chrome.setToolsTabHeader(
+			tabs,
+			alignedTo: paneController.reviewViewportView,
+			after: toolsToolbar.trailingEdge(
+				of: toolbar,
+				in: window
+			),
+			fullscreenControls: fullscreenControls,
+			navigationEdge: navigationEdge
 		)
 	}
 
@@ -789,6 +813,7 @@ extension MainWindowController
 			return
 		}
 		statusPopover?.close()
+		toolsToolbar.restoreNativeToolbar()
 		if toolbarWasVisibleBeforeSettings == nil
 		{
 			responderBeforeSettings = window.firstResponder

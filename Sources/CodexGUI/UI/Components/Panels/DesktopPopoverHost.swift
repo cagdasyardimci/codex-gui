@@ -77,6 +77,7 @@ final class DesktopPopoverHost
 	var onTypeaheadSelection: ((NSButton) -> Void)?
 
 	var shouldDismissForEscape: (() -> Bool)?
+	var shouldForwardParentClickAfterDismissal: ((NSEvent) -> Bool)?
 	var onPresentationChange: ((Bool) -> Void)?
 	weak var focusAfterDismissal: NSView?
 	private(set) var isShown = false
@@ -487,7 +488,8 @@ final class DesktopPopoverHost
 					_
 				) = presentation
 				{
-					consume = event.window === parent
+					consume = event.window === parent &&
+						shouldForwardParentClickAfterDismissal?(event) != true
 				}
 				else
 				{

@@ -706,13 +706,6 @@ enum LayoutTokens
 	{
 		static let windowButtonOffsetX: CGFloat = 4
 		static let windowButtonOffsetY: CGFloat = 2
-		static let toolbarTabOffset: CGFloat = 2
-		static let toolbarControlOffset: CGFloat = 2
-		static let nativeToolbarItemInset: CGFloat = 8
-		static var tabBarWidthCompensation: CGFloat
-		{
-			nativeToolbarItemInset + Chrome.panelOuterInset
-		}
 	}
 
 	enum ModelPopover

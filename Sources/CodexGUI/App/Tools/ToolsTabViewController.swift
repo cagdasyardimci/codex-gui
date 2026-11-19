@@ -129,17 +129,11 @@ final class ToolsTabViewController: NSViewController
 	private weak var filesLandingController: NSViewController?
 	private weak var fileDocumentController: NSViewController?
 	private var lastFileSelectedID: UUID?
-	private let dragOwner = UUID()
 	private let sourcesHoverPreview = SourcesTabHoverPreview()
 	private let tabScrollView = ToolsTabScrollView()
 	private lazy var tabBar = makeTabHeader()
-	private var tabLeadingConstraint: NSLayoutConstraint?
-	private var headerTrailingConstraint: NSLayoutConstraint?
 	private var headerControlsWidthConstraint: NSLayoutConstraint?
 	private var preferredTabAreaWidth: NSLayoutConstraint?
-	private var headerCenterConstraints: [NSLayoutConstraint] = []
-	private var toolbarTabOffset: CGFloat = 0
-	private var toolbarControlsOffset: CGFloat = 0
 	private let controlsSeparator = ToolbarSeparatorView(constrained: false)
 	private var expandButton: NSButton?
 	private var closePaneButton: DesktopToolbarIconButton?
@@ -153,7 +147,7 @@ final class ToolsTabViewController: NSViewController
 		summaryButton
 	}
 
-	var tabBarView: NSView
+	var tabBarView: ToolsTabHeader
 	{
 		_ = view
 		return tabBar
@@ -165,32 +159,6 @@ final class ToolsTabViewController: NSViewController
 		return minimumVisibleTabWidth + controlsWidth(expanded: !summaryButton.isHidden)
 			+ Layout.addButtonSpacing + Layout.controlSize + Layout.controlSpacing
 			+ Layout.headerLeadingInset + Layout.headerTrailingInset
-	}
-
-	func alignTabsWithPaneDivider(
-		at x: CGFloat,
-		expanded: Bool
-	)
-	{
-		let inset = (expanded ? 0 : x) + Layout.headerLeadingInset
-		if tabLeadingConstraint?.constant != inset
-		{
-			tabLeadingConstraint?.constant = inset
-		}
-	}
-
-	func setToolbarVerticalOffsets(
-		tabs: CGFloat,
-		controls: CGFloat
-	)
-	{
-		toolbarTabOffset = tabs
-		toolbarControlsOffset = controls
-		for (index, constraint) in headerCenterConstraints.enumerated()
-		{
-			constraint.constant = index < 2 ? tabs + LayoutTokens.TabControls
-				.tabCenterBias : controls
-		}
 	}
 
 	func setPaneWidth(_ width: CGFloat)
@@ -865,7 +833,6 @@ final class ToolsTabViewController: NSViewController
 			isConversationSelected = false
 		}
 		summaryButton.isHidden = !expanded
-		headerTrailingConstraint?.constant = -Layout.headerTrailingInset
 		headerControlsWidthConstraint?.constant = controlsWidth(expanded: expanded)
 		let label = expanded ? "Exit full view" : "Enter full view"
 		expandButton?.image = DesktopIcons.image(
@@ -928,9 +895,16 @@ final class ToolsTabViewController: NSViewController
 		summaryButton.isHidden = true
 	}
 
-	private func makeTabHeader() -> NSView
+	private func makeTabHeader() -> ToolsTabHeader
 	{
-		let header = ToolsTabHeader()
+		let header = ToolsTabHeader(scrollView: tabScrollView)
+		header.onActivate =
+		{
+			[weak self] target, clickCount in self?.activateTab(
+				target,
+				clickCount: clickCount
+			)
+		}
 		configureTabScrollView()
 		configureSummaryButton()
 		let addButton = makeIconButton(
@@ -981,29 +955,21 @@ final class ToolsTabViewController: NSViewController
 			equalTo: header.trailingAnchor,
 			constant: -Layout.headerTrailingInset
 		)
-		headerTrailingConstraint = trailingConstraint
 		let leadingConstraint = tabScrollView.leadingAnchor.constraint(
 			equalTo: header.leadingAnchor,
 			constant: Layout.headerLeadingInset
 		)
-		// Divider alignment can lag behind the header width during pane transitions.
-		leadingConstraint.priority = NSLayoutConstraint.Priority(999)
-		tabLeadingConstraint = leadingConstraint
-		headerCenterConstraints = [
+		NSLayoutConstraint.activate([
 			tabScrollView.centerYAnchor.constraint(
 				equalTo: header.centerYAnchor,
-				constant: toolbarTabOffset + LayoutTokens.TabControls.tabCenterBias
+				constant: LayoutTokens.TabControls.tabCenterBias
 			),
 			addButton.centerYAnchor.constraint(
 				equalTo: header.centerYAnchor,
-				constant: toolbarTabOffset + LayoutTokens.TabControls.tabCenterBias
+				constant: LayoutTokens.TabControls.tabCenterBias
 			),
-			controls.centerYAnchor.constraint(
-				equalTo: header.centerYAnchor,
-				constant: toolbarControlsOffset
-			),
-		]
-		NSLayoutConstraint.activate(headerCenterConstraints)
+			controls.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+		])
 		NSLayoutConstraint.activate([
 			header.heightAnchor.constraint(equalToConstant: Layout.headerHeight),
 			controlsWidth,
@@ -1011,7 +977,6 @@ final class ToolsTabViewController: NSViewController
 			controlsSeparator.widthAnchor.constraint(equalToConstant: Layout.separatorWidth),
 			controlsSeparator.heightAnchor.constraint(equalToConstant: Layout.separatorHeight),
 			tabScrollView.widthAnchor.constraint(greaterThanOrEqualToConstant: Layout.controlSize),
-			tabScrollView.leadingAnchor.constraint(greaterThanOrEqualTo: header.leadingAnchor),
 			leadingConstraint,
 			tabScrollView.heightAnchor.constraint(equalToConstant: Layout.tabHeight),
 			tabScrollView.trailingAnchor.constraint(
@@ -1035,7 +1000,6 @@ final class ToolsTabViewController: NSViewController
 
 	private func configureTabScrollView()
 	{
-		tabScrollView.dragOwner = dragOwner
 		tabScrollView.onDrop =
 		{
 			[weak self] id, destination, before in
@@ -1051,6 +1015,8 @@ final class ToolsTabViewController: NSViewController
 		tabStack.translatesAutoresizingMaskIntoConstraints = false
 
 		tabScrollView.drawsBackground = false
+		// The tab viewport is deliberately laid out in the title-bar row.
+		tabScrollView.automaticallyAdjustsContentInsets = false
 		// A legacy scroller would consume 17 points of this fixed-height tab strip.
 		// Wheel scrolling and revealing the selected tab still use the clip view.
 		tabScrollView.hasHorizontalScroller = false
@@ -1415,18 +1381,8 @@ final class ToolsTabViewController: NSViewController
 		{
 			selectButton.toolTip = file.path
 		}
-		selectButton.tag = index
 		selectButton.setAccessibilityLabel("\(title) \(index + 1)")
-		selectButton.draggedID = id
-		selectButton.dragOwner = dragOwner
-		if file?.isPreview == true
-		{
-			selectButton.onDoubleClick =
-			{
-				[weak self] in
-				self?.onFileRetainRequested?(id)
-			}
-		}
+		selectButton.tabID = id
 		selectButton.onNavigate =
 		{
 			[weak self] keyCode in
@@ -1442,7 +1398,7 @@ final class ToolsTabViewController: NSViewController
 			label: "Close tab \(index + 1)",
 			action: #selector(closeTab(_:))
 		)
-		closeButton.tag = index
+		closeButton.cell?.representedObject = id
 		closeButton.toolTip = nil
 		let surface = makeTabSurface(
 			selectButton,
@@ -1766,14 +1722,36 @@ final class ToolsTabViewController: NSViewController
 		onToggleExpanded?()
 	}
 
-	@objc private func selectTab(_ sender: NSButton)
+	@objc private func selectTab(_ sender: ToolsTabSelectionButton)
 	{
-		guard tabIDs.indices.contains(sender.tag)
-		else
+		if let id = sender.tabID
 		{
-			return
+			selectTabID(id)
 		}
-		selectTabID(tabIDs[sender.tag])
+	}
+
+	private func activateTab(
+		_ target: ToolsTabHeader.Target,
+		clickCount: Int
+	)
+	{
+		switch target
+		{
+		case .close(let id):
+			closeTabID(id)
+		case .select(let id?):
+			selectTabID(id)
+			if clickCount == 2,
+				fileTabPresentations.contains(where:
+				{
+					$0.id == id && $0.isPreview
+				})
+			{
+				onFileRetainRequested?(id)
+			}
+		case .select(nil):
+			selectConversation()
+		}
 	}
 
 	private func selectTabID(_ id: UUID)
@@ -1853,7 +1831,10 @@ final class ToolsTabViewController: NSViewController
 
 	@objc private func closeTab(_ sender: NSButton)
 	{
-		removeTab(at: sender.tag)
+		if let id = sender.cell?.representedObject as? UUID
+		{
+			closeTabID(id)
+		}
 	}
 
 	private func removeTab(at index: Int)
@@ -1938,16 +1919,6 @@ final class ToolsTabViewController: NSViewController
 		{
 			onTabSelectionChange?()
 		}
-	}
-}
-
-@MainActor
-private final class ToolsTabHeader: NSView
-{
-	// The toolbar hosts this view in the title bar. Tab presses need native control tracking.
-	override var mouseDownCanMoveWindow: Bool
-	{
-		false
 	}
 }
 

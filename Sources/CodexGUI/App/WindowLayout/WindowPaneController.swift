@@ -76,6 +76,11 @@ final class WindowPaneController
 		await toolsTransitionTask?.value
 	}
 
+	var reviewViewportView: NSView
+	{
+		reviewContainer.view
+	}
+
 	var reviewViewportWidth: CGFloat
 	{
 		reviewPane.isCollapsed ? 0 : reviewPane.viewController.view.frame.width
@@ -84,20 +89,6 @@ final class WindowPaneController
 	var isShowingExpandedConversation: Bool
 	{
 		isToolsExpanded && inspector.isShowingTools && inspector.toolsTabs.isConversationSelected
-	}
-
-	var tabViewportWidth: CGFloat
-	{
-		if isToolsExpanded, !isAnimatingToolsExpansion
-		{
-			let navigationWidth = split.splitViewItems[0].isCollapsed
-				? 0 : expandedNavigationWidth + split.splitView.dividerThickness
-			return max(
-				0,
-				split.splitView.bounds.width - navigationWidth
-			)
-		}
-		return reviewViewportWidth
 	}
 
 	private var workspaceFilesExpanded = false

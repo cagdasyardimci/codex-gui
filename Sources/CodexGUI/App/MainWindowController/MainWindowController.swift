@@ -113,10 +113,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		configureToolsPaneClosing()
 
 		// AppKit requires a tracked split view to belong to the window before its toolbar appears.
-		window.contentViewController = WindowChromeViewController(
+		let chrome = WindowChromeViewController(
 			split: paneController.split,
 			accountButton: statusButton
 		)
+		window.contentViewController = chrome
+		chrome.alignWorkspaceBelowTitleBar(in: window)
 		themeColorObservation = ThemeColorObservation
 		{
 			[weak self] in self?.refreshWindowTheme()
@@ -146,7 +148,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 				width: 1200,
 				height: 760
 			),
-			styleMask: [.titled, .closable, .miniaturizable, .resizable],
+			styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
 			backing: .buffered,
 			defer: false
 		)
@@ -240,12 +242,17 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 
 	private func observeWindowChrome(in window: NSWindow)
 	{
-		NotificationCenter.default.addObserver(
-			self,
-			selector: #selector(windowChromeDidUpdate),
-			name: NSWindow.didUpdateNotification,
-			object: window
-		)
+		for name in [NSWindow.didUpdateNotification,
+						NSWindow.didEnterFullScreenNotification,
+						NSWindow.didExitFullScreenNotification]
+		{
+			NotificationCenter.default.addObserver(
+				self,
+				selector: #selector(windowChromeDidUpdate),
+				name: name,
+				object: window
+			)
+		}
 		NotificationCenter.default.addObserver(
 			self,
 			selector: #selector(windowChromeDidUpdate),
@@ -449,6 +456,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		(window?.contentViewController as? WindowChromeViewController)?.setGitReviewFocused(focused)
 		if focused
 		{
+			toolsToolbar.restoreNativeToolbar()
 			if toolbarVisibilityBeforeGitReview == nil
 			{
 				toolbarVisibilityBeforeGitReview = window?.toolbar?.isVisible
@@ -566,17 +574,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		{
 			return
 		}
-		let chromeHeight = max(
-			0,
-			window.frame.height - window.contentLayoutRect.height
-		)
-		let minimumContentSize = NSSize(
+		let minimumContentSize = window.contentRect(forFrameRect: NSRect(
+			x: 0,
+			y: 0,
 			width: 800,
-			height: max(
-				1,
-				500 - chromeHeight
-			)
-		)
+			height: 500
+		)).size
 		guard window.contentMinSize != minimumContentSize
 		else
 		{

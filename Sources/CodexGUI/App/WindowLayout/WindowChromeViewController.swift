@@ -18,6 +18,267 @@ final class WindowChromeViewController: NSViewController
 	private var settings: SettingsViewController?
 	private var workspaceWasAccessibilityHidden = false
 	private var workspaceWasHidden = false
+	private let fullscreenToolbarHost = NSView()
+	private let toolsHeaderHost = NSView()
+	private weak var toolsHeader: ToolsTabHeader?
+
+	func alignWorkspaceBelowTitleBar(in window: NSWindow)
+	{
+		guard let guide = window.contentLayoutGuide as? NSLayoutGuide
+		else
+		{
+			return
+		}
+		topInset.isActive = false
+		topInset = panel.topAnchor.constraint(
+			equalTo: guide.topAnchor,
+			constant: Layout.panelTopInset
+		)
+		topInset.isActive = true
+	}
+
+	func setToolsTabHeader(
+		_ tabs: ToolsTabViewController?,
+		alignedTo viewport: NSView,
+		after toolbarEdge: CGFloat,
+		fullscreenControls: ToolsToolbarCoordinator.FullscreenControls?,
+		navigationEdge: CGFloat
+	)
+	{
+		guard let tabs, let window = view.window, viewport.window === window,
+				settings == nil, !panel.isGitReviewFocused
+		else
+		{
+			hideToolsTabHeader()
+			return
+		}
+		let viewportBounds = view.convert(
+			viewport.bounds,
+			from: viewport
+		)
+		let isFullScreen = window.styleMask.contains(.fullScreen)
+		let nativeLeading = view.convert(
+			NSPoint(
+				x: toolbarEdge,
+				y: 0
+			),
+			from: nil
+		).x
+		let fullscreenLeading = view.safeAreaRect.minX + fullscreenControlWidth(fullscreenControls)
+		let leading = max(
+			viewportBounds.minX,
+			isFullScreen ? fullscreenLeading : nativeLeading
+		)
+		let width = max(
+			0,
+			min(
+				isFullScreen ? view.safeAreaRect.maxX : view.bounds.maxX,
+				viewportBounds.maxX
+			) - leading
+		)
+		let contentTop = view.convert(
+			window.contentLayoutRect,
+			from: nil
+		).maxY
+		let nativeHeight = max(
+			0,
+			view.bounds.maxY - contentTop
+		)
+		let headerHeight = LayoutTokens.Tabs.headerHeight
+		// The fullscreen system chrome can cover the area above the safe content.
+		let bandTop = isFullScreen ? min(
+			contentTop,
+			view.safeAreaRect.maxY
+		) : view.bounds.maxY
+		let bandHeight = !isFullScreen && nativeHeight >= LayoutTokens.Tabs.tabHeight + 2
+			? nativeHeight : headerHeight
+		let bandBottom = bandTop - bandHeight
+		let inset = Layout.panelTopInset + max(
+			0,
+			contentTop - bandBottom
+		)
+		if topInset.constant != inset
+		{
+			topInset.constant = inset
+		}
+		layoutFullscreenControls(
+			fullscreenControls,
+			in: NSRect(
+				x: view.safeAreaRect.minX,
+				y: bandBottom,
+				width: max(
+					0,
+					leading - view.safeAreaRect.minX
+				),
+				height: bandHeight
+			),
+			navigationEdge: view.convert(
+				NSPoint(
+					x: navigationEdge,
+					y: 0
+				),
+				from: nil
+			).x
+		)
+		let header = tabs.tabBarView
+		if toolsHeader !== header
+		{
+			toolsHeader?.removeFromSuperview()
+			toolsHeader = header
+			toolsHeaderHost.addSubview(header)
+		}
+		let hostFrame = NSRect(
+			x: leading,
+			y: bandBottom,
+			width: width,
+			height: bandHeight
+		)
+		if toolsHeaderHost.frame != hostFrame
+		{
+			toolsHeaderHost.frame = hostFrame
+		}
+		let headerFrame = NSRect(
+			x: 0,
+			y: (bandHeight - headerHeight) / 2,
+			width: max(
+				width,
+				tabs.minimumTabBarWidth
+			),
+			height: headerHeight
+		)
+		if header.frame != headerFrame
+		{
+			header.frame = headerFrame
+		}
+		toolsHeaderHost.isHidden = width == 0
+	}
+
+	private func hideToolsTabHeader()
+	{
+		fullscreenToolbarHost.subviews.forEach
+		{
+			$0.removeFromSuperview()
+		}
+		fullscreenToolbarHost.isHidden = true
+		toolsHeader?.removeFromSuperview()
+		toolsHeader = nil
+		toolsHeaderHost.isHidden = true
+		let inset = panel.isGitReviewFocused ? 0 : Layout.panelTopInset
+		if topInset.constant != inset
+		{
+			topInset.constant = inset
+		}
+	}
+
+	private func fullscreenControlWidth(
+		_ controls: ToolsToolbarCoordinator.FullscreenControls?
+	) -> CGFloat
+	{
+		guard let controls
+		else
+		{
+			return 0
+		}
+		let navigation = controls.navigation?.fittingSize.width ?? 0
+		let actions = controls.actions?.fittingSize.width ?? 0
+		return navigation + actions + 3 * LayoutTokens.Toolbar.controlSpacing
+	}
+
+	private func layoutFullscreenControls(
+		_ controls: ToolsToolbarCoordinator.FullscreenControls?,
+		in frame: NSRect,
+		navigationEdge: CGFloat
+	)
+	{
+		guard let controls
+		else
+		{
+			fullscreenToolbarHost.subviews.forEach
+			{
+				$0.removeFromSuperview()
+			}
+			fullscreenToolbarHost.isHidden = true
+			return
+		}
+		fullscreenToolbarHost.isHidden = false
+		if fullscreenToolbarHost.frame != frame
+		{
+			fullscreenToolbarHost.frame = frame
+		}
+		let spacing = LayoutTokens.Toolbar.controlSpacing
+		let navigationWidth = controls.navigation?.fittingSize.width ?? 0
+		let actionsWidth = controls.actions?.fittingSize.width ?? 0
+		let actionsStart = max(
+			spacing,
+			frame.width - spacing - actionsWidth
+		)
+		let titleStart = max(
+			navigationWidth + 2 * spacing,
+			navigationEdge - frame.minX + spacing
+		)
+		let titleWidth = min(
+			controls.title?.fittingSize.width ?? 0,
+			actionsStart - spacing - titleStart
+		)
+		placeFullscreenControl(
+			controls.navigation,
+			x: spacing,
+			width: navigationWidth,
+			rowHeight: frame.height
+		)
+		placeFullscreenControl(
+			controls.title,
+			x: titleStart,
+			width: titleWidth,
+			rowHeight: frame.height
+		)
+		placeFullscreenControl(
+			controls.actions,
+			x: actionsStart,
+			width: actionsWidth,
+			rowHeight: frame.height
+		)
+	}
+
+	private func placeFullscreenControl(
+		_ control: NSView?,
+		x: CGFloat,
+		width: CGFloat,
+		rowHeight: CGFloat
+	)
+	{
+		guard let control
+		else
+		{
+			return
+		}
+		guard width >= LayoutTokens.Toolbar.controlSize
+		else
+		{
+			if control.superview === fullscreenToolbarHost
+			{
+				control.removeFromSuperview()
+			}
+			return
+		}
+		if control.superview !== fullscreenToolbarHost
+		{
+			control.translatesAutoresizingMaskIntoConstraints = true
+			control.autoresizingMask = []
+			fullscreenToolbarHost.addSubview(control)
+		}
+		let height = LayoutTokens.Toolbar.rowHeight
+		let frame = NSRect(
+			x: x,
+			y: (rowHeight - height) / 2,
+			width: width,
+			height: height
+		)
+		if control.frame != frame
+		{
+			control.frame = frame
+		}
+	}
 
 	func showSettings(_ settings: SettingsViewController)
 	{
@@ -27,6 +288,7 @@ final class WindowChromeViewController: NSViewController
 			return
 		}
 		self.settings = settings
+		hideToolsTabHeader()
 		workspaceWasHidden = workspaceView.isHidden
 		workspaceWasAccessibilityHidden = workspaceView.isAccessibilityHidden()
 		workspaceView.isHidden = true
@@ -64,6 +326,10 @@ final class WindowChromeViewController: NSViewController
 		splitInset.constant = focused ? 0 : Layout.splitLeadingInset
 		panel.isGitReviewFocused = focused
 		panelShadow.isHidden = focused
+		if focused
+		{
+			hideToolsTabHeader()
+		}
 		view.needsLayout = true
 	}
 
@@ -112,6 +378,12 @@ final class WindowChromeViewController: NSViewController
 			child.translatesAutoresizingMaskIntoConstraints = false
 			view.addSubview(child)
 		}
+		fullscreenToolbarHost.clipsToBounds = true
+		fullscreenToolbarHost.isHidden = true
+		view.addSubview(fullscreenToolbarHost)
+		toolsHeaderHost.clipsToBounds = true
+		toolsHeaderHost.isHidden = true
+		view.addSubview(toolsHeaderHost)
 		split.view.translatesAutoresizingMaskIntoConstraints = false
 		panel.addSubview(split.view)
 		avatar.translatesAutoresizingMaskIntoConstraints = false

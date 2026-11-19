@@ -272,8 +272,7 @@ struct ToolsTabFilesIntegrationTests
 			from: keep
 		))
 		#expect(retained == [a.id])
-		let selection = try #require(first as? ToolsTabSelectionButton)
-		selection.onDoubleClick?()
+		tabs.tabBarView.onActivate?(.select(a.id), 2)
 		#expect(retained == [a.id, a.id])
 	}
 
@@ -574,36 +573,5 @@ struct ToolsTabFilesIntegrationTests
 		{
 			scrollView(in: $0)
 		}.first
-	}
-}
-
-@Suite
-struct ToolsTabDragPayloadTests
-{
-	@Test func foreignAndSpoofedPayloadsCannotMoveTabs()
-	{
-		let owner = UUID()
-		let tab = UUID()
-		let payload = ToolsTabDragPayload(
-			ownerID: owner,
-			tabID: tab
-		)
-		#expect(ToolsTabDragPayload(string: payload.string) == payload)
-		#expect(payload.isOwned(
-			by: owner,
-			source: payload
-		))
-		#expect(!payload.isOwned(
-			by: UUID(),
-			source: payload
-		))
-		#expect(!payload.isOwned(
-			by: owner,
-			source: ToolsTabDragPayload(
-				ownerID: owner,
-				tabID: UUID()
-			)
-		))
-		#expect(ToolsTabDragPayload(string: "malformed") == nil)
 	}
 }

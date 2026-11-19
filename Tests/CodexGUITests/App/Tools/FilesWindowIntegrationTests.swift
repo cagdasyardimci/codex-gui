@@ -6,6 +6,159 @@ import Testing
 @Suite(.timeLimit(.minutes(2))) @MainActor
 struct FilesWindowIntegrationTests
 {
+	enum TabGestureInterruption
+	{
+		case rebuild, resize, releaseOutside, reorderAfterRebuild
+	}
+
+	@Test(
+		.appKitIsolation,
+		arguments: [
+			TabGestureInterruption.rebuild,
+			.resize,
+			.releaseOutside,
+			.reorderAfterRebuild,
+		]
+	)
+	func tabGesturesKeepThePressedTarget(interruption: TabGestureInterruption) async throws
+	{
+		let fixture = try await CapturedIntentStoreFixture.makeStore(threadID: "tabs")
+		defer
+		{
+			fixture.cleanup()
+		}
+		let controller = MainWindowController(
+			store: fixture.store,
+			onOpenProject:
+			{
+			},
+			onInsertPath:
+			{
+			}
+		)
+		let window = try #require(controller.window)
+		window.prepareForTesting()
+		defer
+		{
+			window.close()
+		}
+		controller.showWindow(nil)
+		controller.paneController.openToolsPane()
+		await controller.paneController.waitForToolsTransition()
+		let tabs = controller.inspector.toolsTabs
+		let firstID = try #require(tabs.selectedTabID)
+		tabs.openNewTab()
+		window.layoutIfNeeded()
+		let bar = tabs.tabBarView
+		let secondID = try #require(tabs.selectedTabID)
+		let label = interruption == .reorderAfterRebuild ? "New tab 2" : "Close tab 2"
+		let pressedButton = try #require(findButton(
+			label,
+			in: bar
+		))
+		let point = pressedButton.convert(
+			NSPoint(
+				x: pressedButton.bounds.midX,
+				y: pressedButton.bounds.midY
+			),
+			to: nil
+		)
+		let windowContent = try #require(window.contentView)
+		#expect(bar.isDescendant(of: windowContent))
+		#expect(point.y > window.contentLayoutRect.maxY)
+
+		func mouse(
+			_ type: NSEvent.EventType,
+			at location: NSPoint? = nil
+		) throws -> NSEvent
+		{
+			try #require(NSEvent.mouseEvent(
+				with: type,
+				location: location ?? point,
+				modifierFlags: [],
+				timestamp: 0,
+				windowNumber: window.windowNumber,
+				context: nil,
+				eventNumber: 1,
+				clickCount: 1,
+				pressure: 0
+			))
+		}
+
+		try bar.mouseDown(with: mouse(.leftMouseDown))
+		#expect(tabs.tabCount == 2)
+		switch interruption
+		{
+		case .rebuild:
+			let first = try #require(findButton(
+				"New tab 1",
+				in: bar
+			))
+			#expect(first.dispatchConfiguredAction())
+			window.layoutIfNeeded()
+			#expect(findButton(
+				"Close tab 2",
+				in: bar
+			) !== pressedButton)
+		case .resize:
+			var frame = window.frame
+			frame.size.width += 48
+			window.setFrame(
+				frame,
+				display: true
+			)
+			window.layoutIfNeeded()
+			try #require(!pressedButton.convert(
+				pressedButton.bounds,
+				to: nil
+			).contains(point))
+		case .releaseOutside:
+			try bar.mouseUp(with: mouse(
+				.leftMouseUp,
+				at: .zero
+			))
+			#expect(tabs.tabCount == 2)
+			return
+		case .reorderAfterRebuild:
+			let first = try #require(findButton(
+				"New tab 1",
+				in: bar
+			))
+			let destination = first.convert(
+				NSPoint(
+					x: first.bounds.midX - 10,
+					y: first.bounds.midY
+				),
+				to: nil
+			)
+			let frame = window.frame
+			try bar.mouseDragged(with: mouse(
+				.leftMouseDragged,
+				at: destination
+			))
+			#expect(first.dispatchConfiguredAction())
+			window.layoutIfNeeded()
+			try #require(findButton(
+				label,
+				in: bar
+			) !== pressedButton)
+			try bar.mouseUp(with: mouse(
+				.leftMouseUp,
+				at: destination
+			))
+			let reordered = findButton(
+				"New tab 1",
+				in: bar
+			) as? ToolsTabSelectionButton
+			#expect(reordered?.tabID == secondID)
+			#expect(window.frame == frame)
+			return
+		}
+		try bar.mouseUp(with: mouse(.leftMouseUp))
+		#expect(tabs.tabCount == 1)
+		#expect(tabs.selectedTabID == firstID)
+	}
+
 	@Test(.appKitIsolation)
 	func chatsInTheSameCheckoutRestoreTheirOwnTabsAndSaveHiddenEdits() async throws
 	{
@@ -91,11 +244,8 @@ struct FilesWindowIntegrationTests
 
 		let restoredFirst = try #require(store.inputs.selectThread("first"))
 		_ = await restoredFirst.wait()
-		let tabBar = window.toolbar?.items.first
-		{
-			$0.itemIdentifier == MainWindowController.ToolbarItem.toolsTabBar
-		}
-		#expect(tabBar?.view === firstTabs.tabBarView)
+		let windowContent = try #require(window.contentView)
+		#expect(firstTabs.tabBarView.isDescendant(of: windowContent))
 		#expect(controller.paneController.isToolsExpanded)
 		#expect(controller.inspector.isShowingTools)
 		#expect(controller.inspector.toolsTabs.selectedFileDocumentID == id)

@@ -6,6 +6,75 @@ import Testing
 @Suite @MainActor
 struct ToolsTabSubagentsIntegrationTests
 {
+	@Test func toolbarRoutesTabControlsAndClosesTheSameTabAfterReordering() throws
+	{
+		_ = NSApplication.shared
+		let tabs = ToolsTabViewController()
+		let agents = controller()
+		tabs.showSubagents(agents)
+		tabs.showChanges(controller())
+		tabs.showFilesLanding(controller())
+		tabs.showSubagents(agents)
+		let header = tabs.tabBarView
+		let host = NSView(frame: NSRect(
+			x: 0,
+			y: 0,
+			width: 740,
+			height: LayoutTokens.Tabs.headerHeight
+		))
+		host.addSubview(header)
+		header.frame = host.bounds
+		host.layoutSubtreeIfNeeded()
+
+		let subagents = try #require(button(
+			"Subagents 1",
+			in: header
+		))
+		let closeChanges = try #require(button(
+			"Close tab 2",
+			in: header
+		))
+		let files = try #require(button(
+			"Files 3",
+			in: header
+		))
+		let filesTab = try #require(files.superview)
+		let clip = try #require(files.enclosingScrollView as? ToolsTabScrollView)
+		let subagentsID = try #require(tabs.subagentsTabID)
+		let filesID = try #require(tabs.filesLandingTabID)
+		for control in [subagents, closeChanges, files]
+		{
+			let center = NSPoint(
+				x: control.bounds.midX,
+				y: control.bounds.midY
+			)
+			#expect(header.tabControl(at: control.convert(
+				center,
+				to: nil
+			)) === control)
+		}
+		let afterFiles = NSPoint(
+			x: filesTab.bounds.maxX - 4,
+			y: filesTab.bounds.midY
+		)
+		#expect(clip.dropTab(
+			subagentsID,
+			at: filesTab.convert(
+				afterFiles,
+				to: nil
+			)
+		))
+		#expect(button(
+			"Subagents 3",
+			in: header
+		) != nil)
+		#expect(tabs.isSubagentsSelected)
+		#expect(closeChanges.dispatchConfiguredAction())
+		#expect(tabs.changesTabID == nil)
+		#expect(tabs.selectedTabID == subagentsID)
+		#expect(tabs.filesLandingTabID == filesID)
+	}
+
 	@Test func workingTimersStopWhenHiddenAndResumeWhenTheirTabReturns() throws
 	{
 		_ = NSApplication.shared

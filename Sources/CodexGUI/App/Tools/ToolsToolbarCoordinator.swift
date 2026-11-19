@@ -2,49 +2,42 @@ import AppKit
 
 // Black in template images defines the alpha mask; toolbar controls supply the displayed tint.
 
-/// Owns the tools button, retained-tab display, toolbar composition, and separator geometry.
+/// Owns the window toolbar entry point for the Tools pane.
 @MainActor
 final class ToolsToolbarCoordinator
 {
+	struct FullscreenControls
+	{
+		let navigation: NSView?
+		let title: NSView?
+		let actions: NSView?
+	}
+
+	private struct HostedItem
+	{
+		let item: NSToolbarItem
+		let view: NSView
+		let translatesAutoresizingMask: Bool
+		let autoresizingMask: NSView.AutoresizingMask
+	}
+
+	private struct FullscreenPresentation
+	{
+		let toolbar: NSToolbar
+		let wasVisible: Bool
+		let items: [HostedItem]
+		let controls: FullscreenControls
+	}
+
 	let openButton = DesktopToolbarIconButton(
 		image: nil,
 		label: "Open tab pane",
 		preset: .contentToolbar
 	)
 	let closedSeparator = ToolbarSeparatorView()
-	let separator = ToolbarSeparatorView(constrained: false)
 	private var previousIsOpen: Bool?
 	private var previousIsExpanded: Bool?
-	private var tabBarWidthConstraint: NSLayoutConstraint?
-	private weak var constrainedTabBar: NSView?
-
-	func configureTabBarItem(
-		_ item: NSToolbarItem,
-		paneController: WindowPaneController,
-		inspector: InspectorViewController
-	)
-	{
-		item.label = "Tabs"
-		let tabBar = inspector.toolsTabs.tabBarView
-		inspector.toolsTabs.setToolbarVerticalOffsets(
-			tabs: LayoutTokens.NativeChrome.toolbarTabOffset,
-			controls: LayoutTokens.NativeChrome.toolbarControlOffset
-		)
-		tabBar.clipsToBounds = false
-		if constrainedTabBar !== tabBar
-		{
-			tabBarWidthConstraint?.isActive = false
-			let width = tabBar.widthAnchor.constraint(equalToConstant: toolsTabBarWidth(
-				paneController: paneController,
-				inspector: inspector
-			))
-			width.isActive = true
-			tabBarWidthConstraint = width
-			constrainedTabBar = tabBar
-		}
-		item.view = tabBar
-		item.visibilityPriority = .high
-	}
+	private var fullscreenPresentation: FullscreenPresentation?
 
 	func configureOpenButton(
 		target: AnyObject,
@@ -59,76 +52,161 @@ final class ToolsToolbarCoordinator
 		openButton.tooltipShortcut = "⇧⌘B"
 	}
 
-	private func toolsTabBarWidth(
-		paneController: WindowPaneController,
-		inspector: InspectorViewController
-	) -> CGFloat
-	{
-		// Compensate for the native item inset and the pane's 4-point outer border.
-		max(
-			inspector.toolsTabs.minimumTabBarWidth,
-			paneController.tabViewportWidth - LayoutTokens.NativeChrome.tabBarWidthCompensation
-		)
-	}
-
 	func update(
 		toolbar: NSToolbar,
-		window: NSWindow?,
 		paneController: WindowPaneController,
 		inspector: InspectorViewController,
-		defaultIdentifiers: [NSToolbarItem.Identifier],
-		allowDuringExpansion: Bool
-	)
+		defaultIdentifiers: [NSToolbarItem.Identifier]
+	) -> ToolsTabViewController?
 	{
-		guard allowDuringExpansion || !paneController.isAnimatingToolsExpansion
+		let isOpen = inspector.isShowingTools &&
+			(paneController.isToolsExpanded || !paneController.split.splitViewItems[2].isCollapsed)
+		let isExpanded = isOpen && paneController.isToolsExpanded
+		updateOpenButton(retainedTabCount: inspector.toolsTabs.tabCount)
+		openButton.isHidden = isOpen
+		closedSeparator.isHidden = isOpen
+		inspector.toolsTabs.setPaneWidth(paneController.reviewViewportWidth)
+		if previousIsOpen != isOpen || previousIsExpanded != isExpanded
+		{
+			previousIsOpen = isOpen
+			previousIsExpanded = isExpanded
+			restoreNativeToolbar()
+			let identifiers: [NSToolbarItem.Identifier]
+			if isExpanded
+			{
+				identifiers = [MainWindowController.ToolbarItem.navigationControls,
+								MainWindowController.ToolbarItem.navigationSeparator,
+								.flexibleSpace]
+			}
+			else if isOpen
+			{
+				// Flexible space passes pointer events through to full-size window content.
+				identifiers = defaultIdentifiers + [
+					MainWindowController.ToolbarItem.toolsSeparator,
+					.flexibleSpace
+				]
+			}
+			else
+			{
+				identifiers = defaultIdentifiers
+			}
+			updateToolbarItems(
+				identifiers,
+				in: toolbar
+			)
+		}
+		return isOpen ? inspector.toolsTabs : nil
+	}
+
+	func fullscreenControls(
+		for toolbar: NSToolbar,
+		present: Bool
+	) -> FullscreenControls?
+	{
+		guard present
+		else
+		{
+			restoreNativeToolbar()
+			return nil
+		}
+		if let fullscreenPresentation, fullscreenPresentation.toolbar === toolbar
+		{
+			return fullscreenPresentation.controls
+		}
+		restoreNativeToolbar()
+		let navigation = MainWindowController.ToolbarItem.navigationControls
+		let title = MainWindowController.ToolbarItem.conversationTitle
+		let actions = MainWindowController.ToolbarItem.trailingControls
+		let identifiers = [navigation, title, actions]
+		let items = toolbar.items.compactMap
+		{
+			item -> HostedItem? in
+			guard identifiers.contains(item.itemIdentifier), let view = item.view
+			else
+			{
+				return nil
+			}
+			return HostedItem(
+				item: item,
+				view: view,
+				translatesAutoresizingMask: view.translatesAutoresizingMaskIntoConstraints,
+				autoresizingMask: view.autoresizingMask
+			)
+		}
+		let controls = FullscreenControls(
+			navigation: items.first
+			{
+				$0.item.itemIdentifier == navigation
+			}?.view,
+			title: items.first
+			{
+				$0.item.itemIdentifier == title
+			}?.view,
+			actions: items.first
+			{
+				$0.item.itemIdentifier == actions
+			}?.view
+		)
+		fullscreenPresentation = FullscreenPresentation(
+			toolbar: toolbar,
+			wasVisible: toolbar.isVisible,
+			items: items,
+			controls: controls
+		)
+		// AppKit draws a separate toolbar in macOS fullscreen.
+		// Move its controls into the content row that already owns the tabs.
+		toolbar.isVisible = false
+		for hosted in items
+		{
+			hosted.item.view = nil
+		}
+		return controls
+	}
+
+	func restoreNativeToolbar()
+	{
+		guard let fullscreenPresentation
 		else
 		{
 			return
 		}
-		let isOpen = inspector
-			.isShowingTools &&
-			(paneController.isToolsExpanded || !paneController.split.splitViewItems[2].isCollapsed)
-		let isExpanded = paneController.isToolsExpanded
-		updateOpenButton(retainedTabCount: inspector.toolsTabs.tabCount)
-		updateToolbarComposition(
-			isOpen: isOpen,
-			isExpanded: isExpanded,
-			defaultIdentifiers: defaultIdentifiers,
-			toolbar: toolbar
-		)
-		if isOpen
+		self.fullscreenPresentation = nil
+		for hosted in fullscreenPresentation.items
 		{
-			if let item = toolbar.items.first(where:
-				{
-					$0.itemIdentifier == MainWindowController.ToolbarItem.toolsTabBar
-				}), item.view !== inspector.toolsTabs.tabBarView
-			{
-				configureTabBarItem(
-					item,
-					paneController: paneController,
-					inspector: inspector
-				)
-			}
-			inspector.toolsTabs.setPaneWidth(paneController.tabViewportWidth)
-			inspector.toolsTabs.tabBarView.alphaValue = min(
-				1,
-				paneController.tabViewportWidth / inspector.toolsTabs.minimumTabBarWidth
-			)
-			let width = toolsTabBarWidth(
-				paneController: paneController,
-				inspector: inspector
-			)
-			if tabBarWidthConstraint?.constant != width
-			{
-				tabBarWidthConstraint?.constant = width
-			}
-			updateToolsToolbarSeparator(
-				isExpanded: isExpanded,
-				paneController: paneController,
-				inspector: inspector,
-				window: window
-			)
+			hosted.view.removeFromSuperview()
+			hosted.view.translatesAutoresizingMaskIntoConstraints = hosted
+				.translatesAutoresizingMask
+			hosted.view.autoresizingMask = hosted.autoresizingMask
+			hosted.item.view = hosted.view
 		}
+		fullscreenPresentation.toolbar.isVisible = fullscreenPresentation.wasVisible
+	}
+
+	func trailingEdge(
+		of toolbar: NSToolbar,
+		in window: NSWindow
+	) -> CGFloat
+	{
+		guard toolbar.isVisible
+		else
+		{
+			return 0
+		}
+		return (toolbar.visibleItems ?? []).compactMap
+		{
+			item -> CGFloat? in
+			guard item.itemIdentifier != .flexibleSpace,
+					let view = item.view, view.window === window,
+					!view.isHiddenOrHasHiddenAncestor
+			else
+			{
+				return nil
+			}
+			return view.convert(
+				view.bounds,
+				to: nil
+			).maxX
+		}.max() ?? 0
 	}
 
 	private func updateOpenButton(retainedTabCount: Int)
@@ -151,46 +229,6 @@ final class ToolsToolbarCoordinator
 			.plusSquareAdd,
 			size: 16
 		)
-	}
-
-	private func updateToolbarComposition(
-		isOpen: Bool,
-		isExpanded: Bool,
-		defaultIdentifiers: [NSToolbarItem.Identifier],
-		toolbar: NSToolbar
-	)
-	{
-		if previousIsOpen != isOpen || previousIsExpanded != isExpanded
-		{
-			previousIsOpen = isOpen
-			previousIsExpanded = isExpanded
-			openButton.isHidden = isOpen
-			closedSeparator.isHidden = isOpen
-			let identifiers: [NSToolbarItem.Identifier]
-			if isOpen, isExpanded
-			{
-				// Keep the tab bar adjacent: flexible space displaces the tracking rule.
-				identifiers = [MainWindowController.ToolbarItem.navigationControls,
-								MainWindowController.ToolbarItem.navigationSeparator,
-								MainWindowController.ToolbarItem.toolsTabBar]
-			}
-			else if isOpen
-			{
-				identifiers = defaultIdentifiers
-					+ [
-						MainWindowController.ToolbarItem.toolsSeparator,
-						MainWindowController.ToolbarItem.toolsTabBar
-					]
-			}
-			else
-			{
-				identifiers = defaultIdentifiers
-			}
-			updateToolbarItems(
-				identifiers,
-				in: toolbar
-			)
-		}
 	}
 
 	private func updateToolbarItems(
@@ -218,48 +256,6 @@ final class ToolsToolbarCoordinator
 				at: index
 			)
 		}
-	}
-
-	private func updateToolsToolbarSeparator(
-		isExpanded: Bool,
-		paneController: WindowPaneController,
-		inspector: InspectorViewController,
-		window: NSWindow?
-	)
-	{
-		let tabBar = inspector.toolsTabs.tabBarView
-		guard let window, tabBar.window === window
-		else
-		{
-			return
-		}
-		if separator.superview !== tabBar
-		{
-			tabBar.addSubview(separator)
-		}
-		let splitView = paneController.split.splitView
-		let position = NSPoint(
-			x: splitView.subviews[1].frame.maxX + splitView.dividerThickness / 2,
-			y: 0
-		)
-		let divider = splitView.convert(
-			position,
-			to: tabBar
-		)
-		inspector.toolsTabs.alignTabsWithPaneDivider(
-			at: divider.x,
-			expanded: isExpanded
-		)
-		let frame = ToolbarSeparatorView.frame(
-			dividerPosition: divider,
-			hostBounds: tabBar.bounds,
-			backingScale: window.backingScaleFactor
-		)
-		if separator.frame != frame
-		{
-			separator.frame = frame
-		}
-		separator.isHidden = isExpanded
 	}
 
 	private func retainedTabsImage(_ count: Int) -> NSImage

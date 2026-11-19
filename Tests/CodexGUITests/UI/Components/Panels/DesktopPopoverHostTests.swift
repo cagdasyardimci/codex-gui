@@ -244,6 +244,12 @@ struct DesktopPopoverHostTests
 				else
 				{
 					#expect(!forwarded)
+					host.shouldForwardParentClickAfterDismissal =
+					{
+						event in event === click
+					}
+					host.show(from: anchor)
+					#expect(host.shouldForward(click))
 				}
 				#expect(!host.isShown)
 				#expect(host.panel.parent == nil)

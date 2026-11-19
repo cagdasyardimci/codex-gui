@@ -24,6 +24,17 @@ final class DesktopSearchPanel: NSObject
 	{
 		host.isShown
 	}
+	var shouldForwardParentClickAfterDismissal: ((NSEvent) -> Bool)?
+	{
+		get
+		{
+			host.shouldForwardParentClickAfterDismissal
+		}
+		set
+		{
+			host.shouldForwardParentClickAfterDismissal = newValue
+		}
+	}
 	private let host: DesktopPopoverHost
 
 	init(

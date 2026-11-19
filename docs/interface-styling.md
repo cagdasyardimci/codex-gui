@@ -46,6 +46,8 @@ Find existing controls and compositions in [UI/Components](../Sources/CodexGUI/U
 
 Each main window needs its own toolbar identifier: AppKit synchronizes items between toolbars sharing an identifier even when configuration autosaving is disabled. The application supplies toolbar composition, so autosaving remains disabled.
 
+Tools tabs align with their pane in the title-bar row. The native toolbar reserves that area with flexible space so the [content-owned strip](../Sources/CodexGUI/App/Tools/ToolsTabHeader.swift) receives pointer events directly. While tabs are open in macOS fullscreen, the existing toolbar controls join the strip in a single content row inside the window’s safe area. The strip tracks each primary press by tab identity so a refresh, relayout, or reorder cannot retarget it. Centered chat search dismisses and forwards a primary press on a visible tab to the strip.
+
 During a tools-divider drag, visible diffs rewrap with the viewport. The [diff document](../Sources/CodexGUI/Features/Changes/RepositoryComparison/GitDiffDocumentController.swift) defers text layout for offscreen hunks until they enter view or the drag ends, then keeps the visible diff in place as preceding hunks catch up.
 
 The Changes pane uses its one-file-at-a-time layout for comparisons with many separated edits, even when only a few files changed. Folded context creates separate native text views, so changed-line and file counts alone can understate the cost of opening the comparison. The file navigator still shows the complete comparison.

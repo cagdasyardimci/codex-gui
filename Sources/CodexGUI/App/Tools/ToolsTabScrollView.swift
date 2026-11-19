@@ -4,44 +4,20 @@ import AppKit
 @MainActor
 final class ToolsTabScrollView: NSScrollView
 {
-	static let dragType = NSPasteboard.PasteboardType("com.codexgui.tools-tab-id")
-	var dragOwner: UUID?
 	var onDrop: ((UUID, UUID, Bool) -> Bool)?
 	private weak var selectedTab: NSView?
 	private weak var markedTab: ToolsTabSurface?
 	private var needsSelectionReveal = false
 
-	override init(frame frameRect: NSRect)
+	func updateDropMarker(at location: NSPoint)
 	{
-		super.init(frame: frameRect)
-		registerForDraggedTypes([Self.dragType])
-	}
-
-	required init?(coder: NSCoder)
-	{
-		nil
-	}
-
-	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation
-	{
-		draggingUpdated(sender)
-	}
-
-	override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation
-	{
-		guard dragID(from: sender) != nil
-		else
-		{
-			clearDropMarker()
-			return []
-		}
 		needsSelectionReveal = false
-		scrollNearEdge(at: sender.draggingLocation)
-		guard let target = dropTarget(at: sender.draggingLocation)
+		scrollNearEdge(at: location)
+		guard let target = dropTarget(at: location)
 		else
 		{
 			clearDropMarker()
-			return []
+			return
 		}
 		if markedTab !== target.tab
 		{
@@ -49,36 +25,6 @@ final class ToolsTabScrollView: NSScrollView
 		}
 		target.tab.dropEdge = target.before ? .minXEdge : .maxXEdge
 		markedTab = target.tab
-		return .move
-	}
-
-	override func draggingExited(_ sender: NSDraggingInfo?)
-	{
-		clearDropMarker()
-	}
-
-	override func draggingEnded(_ sender: NSDraggingInfo)
-	{
-		clearDropMarker()
-	}
-
-	override func wantsPeriodicDraggingUpdates() -> Bool
-	{
-		true
-	}
-
-	override func performDragOperation(_ sender: NSDraggingInfo) -> Bool
-	{
-		clearDropMarker()
-		guard let id = dragID(from: sender)
-		else
-		{
-			return false
-		}
-		return dropTab(
-			id,
-			at: sender.draggingLocation
-		)
 	}
 
 	func dropTab(
@@ -94,32 +40,10 @@ final class ToolsTabScrollView: NSScrollView
 		return onDrop?(id, targetID, target.before) ?? false
 	}
 
-	private func clearDropMarker()
+	func clearDropMarker()
 	{
 		markedTab?.dropEdge = nil
 		markedTab = nil
-	}
-
-	private func dragID(from sender: NSDraggingInfo) -> UUID?
-	{
-		guard let window, let dragOwner,
-				let source = sender.draggingSource as? ToolsTabSelectionButton,
-				source.dragWindow === window, let sourceOwner = source.dragOwner,
-				let sourceID = source.draggedID,
-				let value = sender.draggingPasteboard.string(forType: Self.dragType),
-				let payload = ToolsTabDragPayload(string: value),
-				payload.isOwned(
-				by: dragOwner,
-				source: ToolsTabDragPayload(
-					ownerID: sourceOwner,
-					tabID: sourceID
-				)
-				)
-		else
-		{
-			return nil
-		}
-		return payload.tabID
 	}
 
 	private func dropTarget(at location: NSPoint) -> (tab: ToolsTabSurface, before: Bool)?
