@@ -52,6 +52,7 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 	var onDoubleClick: (() -> Void)?
 	var draggedID: UUID?
 	var dragOwner: UUID?
+	private(set) weak var dragWindow: NSWindow?
 	private static let dragThreshold: CGFloat = 4
 
 	func configurePresentation(
@@ -134,11 +135,11 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 		{
 			if next.type == .leftMouseUp
 			{
-				guard bounds.contains(convert(
-					next.locationInWindow,
-					from: nil
-				)), isEnabled,
-				let action
+				guard let tab = superview, let stack = tab.superview, isEnabled, let action,
+						tab.hitTest(stack.convert(
+						next.locationInWindow,
+						from: nil
+						)) === self
 				else
 				{
 					return
@@ -160,15 +161,22 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 			)
 			if distance >= Self.dragThreshold
 			{
-				beginTabDrag(with: next)
+				beginTabDrag(
+					with: event,
+					in: window
+				)
 				return
 			}
 		}
 	}
 
-	private func beginTabDrag(with event: NSEvent)
+	private func beginTabDrag(
+		with event: NSEvent,
+		in window: NSWindow
+	)
 	{
-		guard let draggedID, let dragOwner, let surface = superview as? ToolsTabSurface
+		guard self.window === window, let draggedID, let dragOwner,
+				let surface = superview as? ToolsTabSurface
 		else
 		{
 			return
@@ -180,7 +188,7 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 		let pasteboard = NSPasteboardItem()
 		pasteboard.setString(
 			payload.string,
-			forType: ToolsTabSurface.dragType
+			forType: ToolsTabScrollView.dragType
 		)
 		let item = NSDraggingItem(pasteboardWriter: pasteboard)
 		guard let bitmap = surface.bitmapImageRepForCachingDisplay(in: surface.bounds)
@@ -201,6 +209,7 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 			),
 			contents: image
 		)
+		dragWindow = window
 		beginDraggingSession(
 			with: [item],
 			event: event,
@@ -213,7 +222,16 @@ final class ToolsTabSelectionButton: NSButton, NSDraggingSource
 		sourceOperationMaskFor context: NSDraggingContext
 	) -> NSDragOperation
 	{
-		.move
+		context == .withinApplication ? .move : []
+	}
+
+	func draggingSession(
+		_ session: NSDraggingSession,
+		endedAt screenPoint: NSPoint,
+		operation: NSDragOperation
+	)
+	{
+		dragWindow = nil
 	}
 
 	override func keyDown(with event: NSEvent)

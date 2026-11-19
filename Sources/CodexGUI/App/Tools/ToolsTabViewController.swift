@@ -930,7 +930,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeTabHeader() -> NSView
 	{
-		let header = NSView()
+		let header = ToolsTabHeader()
 		configureTabScrollView()
 		configureSummaryButton()
 		let addButton = makeIconButton(
@@ -1035,6 +1035,16 @@ final class ToolsTabViewController: NSViewController
 
 	private func configureTabScrollView()
 	{
+		tabScrollView.dragOwner = dragOwner
+		tabScrollView.onDrop =
+		{
+			[weak self] id, destination, before in
+			self?.moveTab(
+				id,
+				nextTo: destination,
+				before: before
+			) ?? false
+		}
 		tabStack.orientation = .horizontal
 		tabStack.alignment = .centerY
 		tabStack.spacing = Layout.tabSpacing
@@ -1141,7 +1151,7 @@ final class ToolsTabViewController: NSViewController
 		return tile
 	}
 
-	private func renderTabs()
+	private func renderTabs(revealSelection: Bool = true)
 	{
 		let restoreTabFocus = tabBar.window?.firstResponder is ToolsTabSelectionButton
 		let visibleTabCount = tabCount + (isExpanded ? 1 : 0)
@@ -1152,7 +1162,10 @@ final class ToolsTabViewController: NSViewController
 			)) * Layout.tabSpacing
 
 		let selectedTab = rebuildTabViews()
-		revealSelectedTab(selectedTab)
+		tabScrollView.revealSelectedTab(
+			selectedTab,
+			scrollIntoView: revealSelection
+		)
 		if restoreTabFocus,
 			let selectedButton = selectedTab?.subviews.compactMap(
 			{
@@ -1206,11 +1219,6 @@ final class ToolsTabViewController: NSViewController
 			}
 		}
 		return selectedTab
-	}
-
-	private func revealSelectedTab(_ selectedTab: NSView?)
-	{
-		tabScrollView.revealSelectedTab(selectedTab)
 	}
 
 	private func showSelectedContent()
@@ -1436,40 +1444,28 @@ final class ToolsTabViewController: NSViewController
 		)
 		closeButton.tag = index
 		closeButton.toolTip = nil
-		let tab = makeTabSurface(
+		let surface = makeTabSurface(
 			selectButton,
 			trailingButton: closeButton,
-			selected: selected
+			selected: selected,
+			tabID: id
 		)
-		if let surface = tab as? ToolsTabSurface
+		surface.menu = makeTabMenu(
+			for: id,
+			at: index
+		)
+		selectButton.menu = surface.menu
+		closeButton.menu = surface.menu
+		if file != nil && !selected
 		{
-			surface.dragOwner = dragOwner
-			surface.menu = makeTabMenu(
-				for: id,
-				at: index
-			)
-			selectButton.menu = surface.menu
-			closeButton.menu = surface.menu
-			surface.onDrop =
+			closeButton.alphaValue = 0
+			surface.onHoverChange =
 			{
-				[weak self] draggedID, before in
-				self?.moveTab(
-					draggedID,
-					nextTo: id,
-					before: before
-				)
-			}
-			if file != nil && !selected
-			{
-				closeButton.alphaValue = 0
-				surface.onHoverChange =
-				{
-					hovered in
-					closeButton.alphaValue = hovered ? 1 : 0
-				}
+				hovered in
+				closeButton.alphaValue = hovered ? 1 : 0
 			}
 		}
-		if isSources, let surface = tab as? ToolsTabSurface
+		if isSources
 		{
 			surface.onHoverChange =
 			{
@@ -1494,16 +1490,21 @@ final class ToolsTabViewController: NSViewController
 				}
 			}
 		}
-		return tab
+		return surface
 	}
 
 	private func makeTabSurface(
-		_ selectButton: NSButton,
+		_ selectButton: ToolsTabSelectionButton,
 		trailingButton: NSButton,
-		selected: Bool
-	) -> NSView
+		selected: Bool,
+		tabID: UUID? = nil
+	) -> ToolsTabSurface
 	{
-		let tab = ToolsTabSurface(isSelected: selected)
+		let tab = ToolsTabSurface(
+			selectionButton: selectButton,
+			isSelected: selected,
+			tabID: tabID
+		)
 		for child in [selectButton, trailingButton]
 		{
 			child.translatesAutoresizingMaskIntoConstraints = false
@@ -1530,7 +1531,7 @@ final class ToolsTabViewController: NSViewController
 
 	private func makeTabMenu(
 		for id: UUID,
-		at _: Int
+		at index: Int
 	) -> NSMenu
 	{
 		let menu = NSMenu()
@@ -1549,6 +1550,23 @@ final class ToolsTabViewController: NSViewController
 			item.representedObject = id
 			menu.addItem(item)
 		}
+		if tabIDs.count > 1
+		{
+			menu.addItem(.separator())
+			for (title, offset) in [("Move Left", -1), ("Move Right", 1)]
+				where tabIDs.indices.contains(index + offset)
+			{
+				let item = NSMenuItem(
+					title: title,
+					action: #selector(moveMenuTab(_:)),
+					keyEquivalent: ""
+				)
+				item.target = self
+				item.representedObject = id
+				item.tag = offset
+				menu.addItem(item)
+			}
+		}
 		if fileTabPresentations.contains(where:
 			{
 				$0.id == id && $0.isPreview
@@ -1565,6 +1583,22 @@ final class ToolsTabViewController: NSViewController
 			menu.addItem(item)
 		}
 		return menu
+	}
+
+	@objc private func moveMenuTab(_ sender: NSMenuItem)
+	{
+		guard let id = sender.representedObject as? UUID,
+				let index = tabIDs.firstIndex(of: id),
+				tabIDs.indices.contains(index + sender.tag)
+		else
+		{
+			return
+		}
+		_ = moveTab(
+			id,
+			nextTo: tabIDs[index + sender.tag],
+			before: sender.tag < 0
+		)
 	}
 
 	@objc private func closeMenuTab(_ sender: NSMenuItem)
@@ -1636,25 +1670,28 @@ final class ToolsTabViewController: NSViewController
 		_ id: UUID,
 		nextTo destination: UUID,
 		before: Bool
-	)
+	) -> Bool
 	{
-		guard id != destination, let sourceIndex = tabIDs.firstIndex(of: id),
-				tabIDs.contains(destination)
+		guard let sourceIndex = tabIDs.firstIndex(of: id),
+				let targetIndex = tabIDs.firstIndex(of: destination)
 		else
 		{
-			return
+			return false
+		}
+		let insertionIndex = targetIndex + (before ? 0 : 1)
+		let adjustedIndex = insertionIndex - (sourceIndex < insertionIndex ? 1 : 0)
+		guard adjustedIndex != sourceIndex
+		else
+		{
+			return true
 		}
 		tabIDs.remove(at: sourceIndex)
-		guard let targetIndex = tabIDs.firstIndex(of: destination)
-		else
-		{
-			return
-		}
 		tabIDs.insert(
 			id,
-			at: targetIndex + (before ? 0 : 1)
+			at: adjustedIndex
 		)
-		renderTabs()
+		renderTabs(revealSelection: false)
+		return true
 	}
 
 	private func makeIconButton(
@@ -1901,6 +1938,16 @@ final class ToolsTabViewController: NSViewController
 		{
 			onTabSelectionChange?()
 		}
+	}
+}
+
+@MainActor
+private final class ToolsTabHeader: NSView
+{
+	// The toolbar hosts this view in the title bar. Tab presses need native control tracking.
+	override var mouseDownCanMoveWindow: Bool
+	{
+		false
 	}
 }
 

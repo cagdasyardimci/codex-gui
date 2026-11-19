@@ -277,7 +277,48 @@ struct ToolsTabFilesIntegrationTests
 		#expect(retained == [a.id, a.id])
 	}
 
-	@Test func reorderKeepsDocumentIdentityAndSharedController() throws
+	@Test func toolbarTabPaddingRoutesToSelectionAndCloseRetainsItsOwnHitTarget() throws
+	{
+		_ = NSApplication.shared
+		let tabs = ToolsTabViewController()
+		tabs.openNewTab()
+		let bar = tabs.tabBarView
+		bar.setFrameSize(NSSize(
+			width: 480,
+			height: LayoutTokens.Tabs.headerHeight
+		))
+		bar.layoutSubtreeIfNeeded()
+
+		let selection = try #require(button(
+			"New tab 1",
+			in: bar
+		))
+		let tab = try #require(selection.superview)
+		let close = try #require(button(
+			"Close tab 1",
+			in: bar
+		))
+		let padding = NSPoint(
+			x: tab.bounds.minX + 1,
+			y: tab.bounds.midY
+		)
+		let closeCenter = NSPoint(
+			x: close.bounds.midX,
+			y: close.bounds.midY
+		)
+		#expect(!bar.mouseDownCanMoveWindow)
+		#expect(bar.hitTest(tab.convert(
+			padding,
+			to: bar.superview
+		)) === selection)
+		#expect(bar.hitTest(close.convert(
+			closeCenter,
+			to: bar.superview
+		)) === close)
+	}
+
+	@Test(arguments: [false, true])
+	func reorderKeepsDocumentIdentityAndSharedController(expanded: Bool) throws
 	{
 		_ = NSApplication.shared
 		let tabs = ToolsTabViewController()
@@ -290,12 +331,50 @@ struct ToolsTabFilesIntegrationTests
 			selectedID: b.id,
 			controller: files
 		)
+		tabs.setExpanded(expanded)
+		let bar = tabs.tabBarView
+		bar.setFrameSize(NSSize(
+			width: 1200,
+			height: LayoutTokens.Tabs.headerHeight
+		))
+		bar.layoutSubtreeIfNeeded()
+		let strip = try #require(scrollView(in: bar) as? ToolsTabScrollView)
 		let third = try #require(button(
 			"c.swift 3",
-			in: tabs.tabBarView
+			in: bar
 		))
 		let destination = try #require(third.superview as? ToolsTabSurface)
-		destination.onDrop?(a.id, false)
+		let gap = destination.convert(
+			NSPoint(
+				x: -LayoutTokens.Tabs.tabSpacing / 2,
+				y: destination.bounds.midY
+			),
+			to: nil
+		)
+		#expect(strip.dropTab(
+			a.id,
+			at: gap
+		))
+		#expect(button(
+			"a.swift 2",
+			in: bar
+		) != nil)
+		bar.layoutSubtreeIfNeeded()
+		let lastTab = try #require(button(
+			"c.swift 3",
+			in: bar
+		)?.superview)
+		let afterLast = lastTab.convert(
+			NSPoint(
+				x: lastTab.bounds.maxX - 1,
+				y: lastTab.bounds.midY
+			),
+			to: nil
+		)
+		#expect(strip.dropTab(
+			a.id,
+			at: afterLast
+		))
 		#expect(button(
 			"b.swift 1",
 			in: tabs.tabBarView

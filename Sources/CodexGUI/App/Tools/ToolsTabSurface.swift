@@ -3,18 +3,33 @@ import AppKit
 @MainActor
 final class ToolsTabSurface: NSView
 {
-	static let dragType = NSPasteboard.PasteboardType("com.codexgui.tools-tab-id")
+	let tabID: UUID?
+	private let selectionButton: ToolsTabSelectionButton
 	private let isSelected: Bool
 	private let shadowLayer = CALayer()
 	private var isHovered = false
 	private var hoverTrackingArea: NSTrackingArea?
-	var dragOwner: UUID?
 	var onHoverChange: ((Bool) -> Void)?
-	var onDrop: ((UUID, Bool) -> Void)?
-
-	init(isSelected: Bool)
+	var dropEdge: CGRectEdge?
 	{
+		didSet
+		{
+			if oldValue != dropEdge
+			{
+				needsDisplay = true
+			}
+		}
+	}
+
+	init(
+		selectionButton: ToolsTabSelectionButton,
+		isSelected: Bool,
+		tabID: UUID?
+	)
+	{
+		self.selectionButton = selectionButton
 		self.isSelected = isSelected
+		self.tabID = tabID
 		super.init(frame: .zero)
 		if isSelected
 		{
@@ -25,7 +40,6 @@ final class ToolsTabSurface: NSView
 			)
 		}
 		setAccessibilityElement(false)
-		registerForDraggedTypes([Self.dragType])
 	}
 
 	required init?(coder: NSCoder)
@@ -33,54 +47,10 @@ final class ToolsTabSurface: NSView
 		nil
 	}
 
-	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation
+	override func hitTest(_ point: NSPoint) -> NSView?
 	{
-		guard validDrag(from: sender) != nil
-		else
-		{
-			return []
-		}
-		return .move
-	}
-
-	override func performDragOperation(_ sender: NSDraggingInfo) -> Bool
-	{
-		guard let id = validDrag(from: sender), let onDrop
-		else
-		{
-			return false
-		}
-		let before = convert(
-			sender.draggingLocation,
-			from: nil
-		).x < bounds.midX
-		onDrop(
-			id,
-			before
-		)
-		return true
-	}
-
-	private func validDrag(from sender: NSDraggingInfo) -> UUID?
-	{
-		guard let source = sender.draggingSource as? ToolsTabSelectionButton,
-				let dragOwner, source.dragOwner == dragOwner,
-				source.window === window,
-				let value = sender.draggingPasteboard.string(forType: Self.dragType),
-				let payload = ToolsTabDragPayload(string: value),
-				let sourceID = source.draggedID,
-				payload.isOwned(
-				by: dragOwner,
-				source: ToolsTabDragPayload(
-					ownerID: dragOwner,
-					tabID: sourceID
-				)
-				), onDrop != nil
-		else
-		{
-			return nil
-		}
-		return payload.tabID
+		let hit = super.hitTest(point)
+		return hit === self ? selectionButton : hit
 	}
 
 	override func updateTrackingAreas()
@@ -167,6 +137,23 @@ final class ToolsTabSurface: NSView
 	}
 
 	override func draw(_ dirtyRect: NSRect)
+	{
+		drawBackground()
+		if let dropEdge
+		{
+			let marker = bounds.insetBy(
+				dx: 0,
+				dy: 4
+			).divided(
+				atDistance: 2,
+				from: dropEdge
+			).slice
+			AppKitColorTokens.accentText.setFill()
+			marker.fill()
+		}
+	}
+
+	private func drawBackground()
 	{
 		guard isSelected || isHovered
 		else
