@@ -143,7 +143,7 @@ struct ModelEffortPopoverViewTests
 				in: picker.view,
 				accessibilityLabel: "Choose speed"
 			))
-			speed.performClick(nil)
+			try #require(speed.dispatchConfiguredAction())
 			let menu = try #require(host.panel.childWindows?.first)
 			let content = try #require(menu.contentView)
 			let fast = try #require(button(
@@ -157,7 +157,7 @@ struct ModelEffortPopoverViewTests
 			#expect(fast.checked)
 			#expect(!ultra.checked)
 			#expect(ultra.rowHeight > fast.rowHeight)
-			ultra.performClick(nil)
+			try #require(ultra.dispatchConfiguredAction())
 			#expect(selections == ["ultrafast"])
 			#expect(host.panel.childWindows?.contains(menu) != true)
 
@@ -168,7 +168,7 @@ struct ModelEffortPopoverViewTests
 				fastMode: false,
 				serviceTier: "default"
 			)
-			speed.performClick(nil)
+			try #require(speed.dispatchConfiguredAction())
 			let astraMenu = try #require(host.panel.childWindows?.first?.contentView)
 			#expect(button(
 				in: astraMenu,
