@@ -126,10 +126,11 @@ async fn bounds_a_probe_that_never_completes() {
     let path = shim(root.path(), program);
     let executable = discover(Some(&path), &HashMap::new()).unwrap();
 
-    assert!(matches!(
-        executable.probe_version(Duration::from_millis(250)).await,
-        Err(VersionProbeError::Timeout)
-    ));
+    let result = executable.probe_version(Duration::from_millis(250)).await;
+    assert!(
+        matches!(result, Err(VersionProbeError::Timeout)),
+        "{result:?}"
+    );
 }
 
 #[tokio::test]
