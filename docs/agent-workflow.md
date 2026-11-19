@@ -26,6 +26,14 @@ Start at [AGENTS.md](../AGENTS.md) for working rules and completion reporting. T
 
 Read conventions before implementation, architecture before state/runtime changes, and validation before choosing checks or interpreting results. Then read the relevant feature or protocol guide. Links into source identify owners to inspect, not additional standing rules.
 
+## AppKit maintenance through cutover
+
+The repository maintainer (`cagdasyardimci`) owns the Swift reference, its [build entry point](../Makefile), the AppKit checks, and the Swift documentation through Mac cutover. The initial reference is [`c082455`](https://github.com/cagdasyardimci/codex-gui/commit/c0824558b060d90a6486c3aef743877677f0d4f1).
+
+Qualify correctness and security fixes in each edition that implements the affected behavior. For a Swift fix to a workflow still being ported, record the corrected behavior in the owning fixture or Tauri acceptance check before accepting that workflow. When advancing the Swift reference, record the previous and new revisions, the affected workflows, and which fixture or visual evidence must be refreshed. Follow [validation](validation.md) for the checks that support the new reference.
+
+At one-way cutover, tag the final Swift source and retain its build instructions, dependency pins, and historical QA evidence. Route current support, build, and migration guidance to Tauri. Preserve the original import source and recover migrated and newer work in Tauri.
+
 ## Deliver and maintain
 
 Review the scoped diff, including new files that ordinary `git diff` does not show. When commits are requested, stage explicit paths or reviewed hunks, inspect the staged diff, and group commits by responsibility and dependency. History rewriting requires explicit task authorization. Deliver using the entry point's [completion report](../AGENTS.md#completion-report).
