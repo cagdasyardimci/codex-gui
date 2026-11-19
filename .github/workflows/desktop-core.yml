@@ -1,0 +1,48 @@
+name: Desktop core
+
+on:
+  push:
+    paths:
+      - ".github/workflows/desktop-core.yml"
+      - "desktop/**"
+      - "Tests/E2E/MockBackend/**"
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-core.yml"
+      - "desktop/**"
+      - "Tests/E2E/MockBackend/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Check Rust formatting
+        working-directory: desktop
+        run: cargo fmt --all --check
+      - name: Check the core
+        working-directory: desktop
+        run: cargo check-core
+      - name: Lint the core
+        working-directory: desktop
+        run: cargo clippy --locked -p codex-gui-core --all-targets -- -D warnings
+      - name: Run Rust tests
+        working-directory: desktop
+        run: cargo test --locked -p codex-gui-core
+      - name: Run the portable fixture test
+        run: python -m unittest discover -s desktop/fixtures -v

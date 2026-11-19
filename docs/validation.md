@@ -8,6 +8,8 @@ This guide owns check selection, test-fixture discipline and evidence interpreta
 
 Install [rustup](https://rustup.rs/) and run `cargo check-core` from [the desktop workspace](../desktop/Cargo.toml). The workspace pins the Rust toolchain and checks the core against its committed lockfile.
 
+The [desktop core workflow](../.github/workflows/desktop-core.yml) checks the core and validates the [portable fixture launch](mock-backend.md#portable-desktop-fixture) on macOS, Windows, and Ubuntu.
+
 ### Swift AppKit
 
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.
