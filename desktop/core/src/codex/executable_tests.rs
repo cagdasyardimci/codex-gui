@@ -1,25 +1,13 @@
-use std::{collections::HashMap, fs};
+use std::collections::HashMap;
+
+#[cfg(windows)]
+use std::fs;
 
 use tempfile::tempdir;
 
 use super::*;
 
-#[cfg(unix)]
-const SHIM_NAME: &str = "codex";
-#[cfg(windows)]
-const SHIM_NAME: &str = "codex.cmd";
-
-fn shim(directory: &Path, contents: &str) -> PathBuf {
-    fs::create_dir_all(directory).unwrap();
-    let path = directory.join(SHIM_NAME);
-    fs::write(&path, contents).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    path
-}
+use crate::codex::fixtures::{SHIM_NAME, shim};
 
 fn discover(
     explicit: Option<&Path>,

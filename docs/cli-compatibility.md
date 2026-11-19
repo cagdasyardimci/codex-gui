@@ -18,7 +18,7 @@ Backend diagnostic redaction is pattern-based, so unnamed secrets, unusual encod
 
 Identify the executable selected by [AppKit executable selection](../Sources/CodexGUI/CodexClient/AppServer/AppServer+Executable.swift) or [desktop executable discovery](../desktop/core/src/codex/executable.rs). The shell's `codex` may resolve differently. Use that selected executable for the version and schema commands below.
 
-The Tauri core takes an explicit absolute override, then `CODEX_EXECUTABLE`, then the launcher's `PATH` and known installation directories. An invalid override is reported so configuration does not silently pick another installation. The version probe uses the resolved path and includes its directory on the child `PATH` for package-manager shims.
+The Tauri core takes an explicit absolute override, then `CODEX_EXECUTABLE`, then the launcher's `PATH` and known installation directories. An invalid override is reported so configuration does not silently pick another installation. The version probe and [app-server process](../desktop/core/src/codex/process.rs) share the resolved executable and child `PATH`. Process exit is scoped to its captured connection. Retiring the transport is separate from confirming that an executing turn or command ended.
 
 For each CLI version proposed as supported:
 
