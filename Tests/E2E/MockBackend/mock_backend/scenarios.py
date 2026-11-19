@@ -11,7 +11,7 @@ def load(name, ancestors=()):
     if name in ancestors:
         raise ValueError('Scenario inheritance cycle')
     resource = resources.files('mock_backend').joinpath('scenarios').joinpath(name + '.json')
-    value = json.loads(resource.read_text())
+    value = json.loads(resource.read_text(encoding='utf-8'))
     parent = value.pop('extends', None)
     result = load(parent, ancestors + (name,)) if parent else {}
     result.update(value)

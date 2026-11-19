@@ -20,6 +20,9 @@ class MockBackendTests(TestCase):
                 "CODEX_GUI_QA_STATE": str(root / "unrelated state.json"),
                 "CODEX_GUI_QA_TRACE": str(root / "unrelated trace.jsonl"),
                 "CODEX_GUI_QA_SCENARIO": "unrelated-scenario",
+                "LC_ALL": "C",
+                "PYTHONCOERCECLOCALE": "0",
+                "PYTHONUTF8": "0",
             }
             requests = [
                 {"id": 1, "method": "initialize", "params": {}},
