@@ -585,6 +585,9 @@ final class ToolsTabViewController: NSViewController
 		let wasFilesSelected = isFilesSelected
 		let previousSelectedID = selectedTabID
 		let previousTabIDs = tabIDs
+		let filePresentationsChanged = presentations != fileTabPresentations
+		let fileContentNeedsAttachment = !presentations.isEmpty &&
+			(fileDocumentController !== controller || controller.parent !== self)
 		let previousSelectedIndex = previousSelectedID.flatMap
 		{
 			tabIDs.firstIndex(of: $0)
@@ -714,7 +717,16 @@ final class ToolsTabViewController: NSViewController
 		{
 			selectedTabID = tabIDs.first
 		}
-		renderTabs()
+		// File reads can publish while AppKit is tracking a press on an existing tab.
+		if filePresentationsChanged || tabIDs != previousTabIDs || selectedTabID !=
+			previousSelectedID
+		{
+			renderTabs()
+		}
+		else if fileContentNeedsAttachment
+		{
+			showSelectedContent()
+		}
 		if wasFilesSelected && closedSelectedDocument, let selectedFileDocumentID
 		{
 			onFileSelected?(selectedFileDocumentID)

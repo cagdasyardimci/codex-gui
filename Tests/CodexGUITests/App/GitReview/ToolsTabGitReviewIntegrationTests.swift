@@ -6,6 +6,45 @@ import Testing
 @Suite @MainActor
 struct ToolsTabGitReviewIntegrationTests
 {
+	@Test func fileStatePublicationKeepsTheChangesCloseButtonAttached() throws
+	{
+		_ = NSApplication.shared
+		let tabs = ToolsTabViewController()
+		let files = NSViewController()
+		files.view = NSView()
+		tabs.showFilesLanding(files)
+		let file = FileToolTabPresentation(
+			id: UUID(),
+			title: "Info.plist",
+			path: "/fixture/Resources/Info.plist",
+			isPreview: true,
+			isDirty: false
+		)
+		tabs.updateFileTabs(
+			presentations: [file],
+			selectedID: file.id,
+			controller: files
+		)
+		let changes = NSViewController()
+		changes.view = NSView()
+		tabs.showChanges(changes)
+		let bar = tabs.tabBarView
+		let close = try #require(button(
+			"Close tab 2",
+			in: bar
+		))
+
+		tabs.updateFileTabs(
+			presentations: [file],
+			selectedID: file.id,
+			controller: files
+		)
+
+		try #require(close.isDescendant(of: bar))
+		#expect(close.dispatchConfiguredAction())
+		#expect(tabs.changesTabID == nil)
+		#expect(tabs.selectedFileDocumentID == file.id)
+	}
 
 	@Test func reviewMovesBetweenToolTabAndDetailThenClosesWithTab() throws
 	{
