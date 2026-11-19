@@ -1,3 +1,4 @@
+mod compatibility;
 mod executable;
 mod framing;
 mod process;
@@ -7,6 +8,7 @@ mod session;
 #[cfg(test)]
 mod fixtures;
 
+pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub use executable::{CodexExecutable, DiscoveryError, VersionProbeError};
 pub use framing::{JsonlReadError, JsonlReader, StderrTail};
 pub use process::{AppServerExit, AppServerProcess, AppServerStdio};

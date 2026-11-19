@@ -18,8 +18,9 @@ use crate::identity::ConnectionIdentity;
 
 use super::protocol::{MAX_FRAME_BYTES, encode_frame};
 use super::{
-    AppServerExit, AppServerProcess, ClientInfo, CodexExecutable, InitializeError, JsonlReader,
-    RpcError, RpcId, ServerEvent, ServerMessage, StderrTail, initialize, read_message,
+    AppServerExit, AppServerProcess, CliCompatibility, ClientInfo, CodexExecutable,
+    CompatibilityError, InitializeError, JsonlReader, RpcError, RpcId, ServerEvent, ServerMessage,
+    StderrTail, VersionProbeError, initialize, read_message,
 };
 
 mod writer;
@@ -32,6 +33,10 @@ const MAX_STDERR_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Error)]
 pub enum ConnectError {
+    #[error(transparent)]
+    Probe(#[from] VersionProbeError),
+    #[error(transparent)]
+    Compatibility(#[from] CompatibilityError),
     #[error("could not launch Codex app-server: {0}")]
     Spawn(#[from] io::Error),
     #[error(transparent)]
@@ -57,6 +62,7 @@ pub struct AppServerConnection {
     process: AppServerProcess,
     diagnostics: StderrTail,
     stderr_task: JoinHandle<()>,
+    compatibility: CliCompatibility,
     initialization: Value,
 }
 
@@ -65,9 +71,16 @@ impl AppServerConnection {
         executable: &CodexExecutable,
         connection: ConnectionIdentity,
         info: ClientInfo<'_>,
-        initialization_timeout: Duration,
+        startup_timeout: Duration,
     ) -> Result<Self, ConnectError> {
+        let deadline = Instant::now() + startup_timeout;
+        let report = executable.probe_version(startup_timeout).await?;
+        let compatibility = CliCompatibility::from_version_output(&report)?;
+        if Instant::now() >= deadline {
+            return Err(InitializeError::Timeout.into());
+        }
         let mut process = AppServerProcess::spawn(executable, connection.clone())?;
+        let initialization_timeout = deadline.saturating_duration_since(Instant::now());
         let pipes = process
             .take_stdio()
             .expect("new app-server has all stdio pipes");
@@ -100,6 +113,7 @@ impl AppServerConnection {
             process,
             diagnostics,
             stderr_task,
+            compatibility,
             initialization,
         })
     }
@@ -110,6 +124,10 @@ impl AppServerConnection {
 
     pub fn initialization(&self) -> &Value {
         &self.initialization
+    }
+
+    pub fn compatibility(&self) -> &CliCompatibility {
+        &self.compatibility
     }
 
     pub fn diagnostics(&self) -> &StderrTail {
