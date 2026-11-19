@@ -10,6 +10,10 @@ Install [rustup](https://rustup.rs/) and run `cargo check-core` from [the deskto
 
 The [desktop core workflow](../.github/workflows/desktop-core.yml) checks the core and validates the [portable fixture launch](mock-backend.md#portable-desktop-fixture) on macOS, Windows, and Ubuntu.
 
+### Tauri diagnostic shell
+
+Install the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) for the host OS and use the pinned Node and pnpm versions. From the repository root, run `pnpm --dir desktop/frontend install --frozen-lockfile` and `pnpm --dir desktop/frontend tauri dev`. The beta initializes its data and worktree root under its own application identity so it can launch alongside AppKit.
+
 ### Swift AppKit
 
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.

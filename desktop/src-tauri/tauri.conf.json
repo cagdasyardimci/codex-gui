@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Codex GUI Beta",
+  "version": "0.1.0",
+  "identifier": "local.codexgui.tauri.beta",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      { "label": "main", "title": "Codex GUI Beta", "width": 1040, "height": 720 }
+    ],
+    "security": {
+      "csp": "default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'",
+      "devCsp": "default-src 'self'; connect-src 'self' ws://127.0.0.1:1420; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
+    "macOS": { "minimumSystemVersion": "14.0" }
+  }
+}
