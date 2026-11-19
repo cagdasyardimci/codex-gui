@@ -9,6 +9,7 @@ struct ThreadSummary: Equatable, Codable
 	let cwd: String
 	let updatedAt: Date?
 	let status: String
+	let historyMode: String?
 
 	init?(json: [String: Any])
 	{
@@ -21,6 +22,7 @@ struct ThreadSummary: Equatable, Codable
 		self.name = json["name"] as? String
 		self.preview = json["preview"] as? String
 		self.cwd = json["cwd"] as? String ?? ""
+		self.historyMode = json["historyMode"] as? String
 		if let seconds = json["updatedAt"] as? Double
 		{
 			self.updatedAt = Date(timeIntervalSince1970: seconds)

@@ -35,6 +35,16 @@ Distinguish app-server APIs, configured agent tools, host facilities and GUI con
 
 Remote-control management is an optional experimental capability. Its protocol version, lifecycle, and acceptance limits are owned by [remote access](remote-access.md).
 
+## Voice chat
+
+Voice chat uses V3 WebRTC with ChatGPT sign-in on the built-in OpenAI provider. API-key and bearer-token providers can use V3 WebSocket. If WebRTC fails during startup, the GUI can retry via WebSocket on the same thread when the credential check succeeds. Once a WebRTC start has been submitted, the retry waits for the server to confirm that the prior session closed. The provider confirms access when a session starts. After a live call drops, Reconnect starts a new session on the original thread with the same voice. The transcript belongs to the thread across both sessions.
+
+Workspace configuration can override the user default. Read the effective workspace choice at call startup so a loaded thread cannot reuse an earlier voice override. See the [voice adapter](../Sources/CodexGUI/CodexClient/AppServer/AppServer+VoiceChat.swift) for the session contract.
+
+New voice threads use paginated history. Voice history follows the loaded turn window as the user scrolls back. Once ordinary turn pagination is exhausted, restore the remaining speech, including in voice-only chats. An existing chat keeps its history format. With legacy history, CodexGUI reads live transcript events and displays saved speech from the thread’s ordinary history.
+
+Client audio is sent to the configured realtime provider while the microphone is active. The speakers control affects local playback. Speech can delegate work in the originating checkout using the coding model and permissions captured at call creation. Confirm microphone permission, audible duplex operation, a coding handoff, and chat switching on a live provider before claiming native parity.
+
 ## Transcript speech and result feedback
 
 Read Aloud requires V3 realtime standalone speech and API-key or bearer-token credentials for the configured provider. ChatGPT sign-in alone leaves the action disabled, and a successful voice-list request can still be followed by a synthesis authorization failure. Playback uses the configured provider for the entire session, with no system voice fallback. See the [speech adapter](../Sources/CodexGUI/CodexClient/AppServer/AppServer+ReadAloud.swift) for admission and wire handling.

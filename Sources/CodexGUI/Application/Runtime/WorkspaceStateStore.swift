@@ -74,6 +74,11 @@ final class WorkspaceStateStore
 		model.lifecycle.managedWorkspace
 	}
 
+	func verifyWorkspace(_ workspace: TaskWorkspace?) async throws
+	{
+		try await runner.verifyWorkspace(workspace)
+	}
+
 	func now() -> Date
 	{
 		factoryDependencies.usageRuntime.now()

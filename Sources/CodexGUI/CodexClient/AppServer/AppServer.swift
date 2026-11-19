@@ -42,6 +42,7 @@ final class AppServer: CodexService
 	var pendingInteractionWrites: [String: ProtocolWriteTicket] = [:]
 	private(set) var connectionGeneration = UUID()
 	private let diagnostics = BackendDiagnosticsBuffer()
+	var voiceChatObservers: [String: (VoiceChatEvent) -> Void] = [:]
 	var onReadAloudEvent: ((String, ReadAloudBackendEvent) -> Void)?
 	var readAloudThreadGenerations: [String: UUID] = [:]
 	var onEvent: ((AppServerEvent) -> Void)?
@@ -710,6 +711,12 @@ final class AppServer: CodexService
 	func disconnect()
 	{
 		connectionGeneration = UUID()
+		let retiringVoiceChats = voiceChatObservers.values
+		voiceChatObservers.removeAll()
+		for observer in retiringVoiceChats
+		{
+			observer(.closed)
+		}
 		for job in automaticTitleJobs.values
 		{
 			job.cancel()

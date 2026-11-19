@@ -16,6 +16,14 @@ extension AppServer
 			return
 		}
 		let threadID = parameters["threadId"] as? String ?? ""
+		if method.hasPrefix("thread/realtime/")
+		{
+			receiveVoiceChatNotification(
+				method: method,
+				threadID: threadID,
+				parameters: parameters
+			)
+		}
 		if receiveAutomaticTitleNotification(
 			method: method,
 			parameters: parameters

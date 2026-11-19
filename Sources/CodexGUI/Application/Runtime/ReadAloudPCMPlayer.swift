@@ -1,4 +1,5 @@
 import AVFoundation
+import Accelerate
 import Foundation
 
 /// Decodes interleaved signed PCM16 LE, the raw audio/pcm representation.
@@ -213,10 +214,19 @@ protocol ReadAloudAudioPlaying: AnyObject
 final class ReadAloudPCMPlayer: ReadAloudAudioPlaying
 {
 	var onDrained: (() -> Void)?
+	var onPlaybackLevel: ((Double) -> Void)?
+	private var playbackMeter: UUID?
 	private var engine: AVAudioEngine?
+	private weak var duplexEngine: AVAudioEngine?
 	private var player: AVAudioPlayerNode?
 	private var format: AVAudioFormat?
 	private var queue = ReadAloudPlaybackQueue()
+
+	func useDuplexEngine(_ engine: AVAudioEngine?)
+	{
+		stop()
+		duplexEngine = engine
+	}
 
 	func enqueue(_ chunk: ReadAloudAudioChunk) throws
 	{
@@ -276,12 +286,35 @@ final class ReadAloudPCMPlayer: ReadAloudAudioPlaying
 		}
 	}
 
+	/// Drops scheduled speech while keeping the duplex graph and its input tap running.
+	func discardQueuedAudio()
+	{
+		queue.reset()
+		player?.stop()
+		if engine?.isRunning == true
+		{
+			player?.play()
+		}
+	}
+
 	func stop()
 	{
 		queue.reset()
 		player?.stop()
-		engine?.stop()
-		engine?.reset()
+		if let player
+		{
+			if playbackMeter != nil
+			{
+				player.removeTap(onBus: 0)
+			}
+			engine?.detach(player)
+		}
+		playbackMeter = nil
+		if duplexEngine == nil
+		{
+			engine?.stop()
+			engine?.reset()
+		}
 		player = nil
 		engine = nil
 		format = nil
@@ -301,7 +334,7 @@ final class ReadAloudPCMPlayer: ReadAloudAudioPlaying
 		{
 			throw ReadAloudPCMError.invalidFormat
 		}
-		let engine = AVAudioEngine()
+		let engine = duplexEngine ?? AVAudioEngine()
 		let player = AVAudioPlayerNode()
 		engine.attach(player)
 		engine.connect(
@@ -309,20 +342,77 @@ final class ReadAloudPCMPlayer: ReadAloudAudioPlaying
 			to: engine.mainMixerNode,
 			format: format
 		)
-		engine.prepare()
-		try engine.start()
-		player.play()
 		self.engine = engine
 		self.player = player
+		if onPlaybackLevel != nil
+		{
+			installPlaybackMeter(on: player)
+		}
+		if !engine.isRunning
+		{
+			engine.prepare()
+			try engine.start()
+		}
+		player.play()
 		self.format = format
 		return format
 	}
 
+	private func installPlaybackMeter(on player: AVAudioPlayerNode)
+	{
+		let meter = UUID()
+		playbackMeter = meter
+		player.installTap(
+			onBus: 0,
+			bufferSize: 2048,
+			format: nil
+		)
+		{
+			[weak self] buffer, _ in
+			guard let channels = buffer.floatChannelData, buffer.frameLength > 0
+			else
+			{
+				return
+			}
+			var rms: Float = 0
+			for channel in 0 ..< Int(buffer.format.channelCount)
+			{
+				var channelRMS: Float = 0
+				vDSP_rmsqv(
+					channels[channel],
+					1,
+					&channelRMS,
+					vDSP_Length(buffer.frameLength)
+				)
+				rms = max(
+					rms,
+					channelRMS
+				)
+			}
+			let level = Double(rms)
+			Task
+			{
+				@MainActor [weak self] in
+				guard let self, self.playbackMeter == meter, self.queue.queuedBytes > 0
+				else
+				{
+					return
+				}
+				self.onPlaybackLevel?(level)
+			}
+		}
+	}
+
 	private func didPlay(_ ticket: ReadAloudPlaybackQueue.Ticket)
 	{
+		let hadAudio = queue.queuedBytes > 0
 		if queue.complete(ticket)
 		{
 			onDrained?()
+		}
+		if hadAudio, queue.queuedBytes == 0
+		{
+			onPlaybackLevel?(0)
 		}
 	}
 }
