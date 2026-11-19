@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "diagnostic",
+  "description": "Fixture actions for the local diagnostic window",
+  "windows": ["main"],
+  "permissions": [
+    "allow-stream-fixture",
+    "allow-fixture-verification-enabled",
+    "allow-verify-fixture-result"
+  ]
+}

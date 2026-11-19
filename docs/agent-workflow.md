@@ -7,6 +7,7 @@ Start at [AGENTS.md](../AGENTS.md) for working rules and completion reporting. T
 | Task or question | Owning document or resource |
 | --- | --- |
 | Product overview, requirements, dependencies, bundling and launch | [README](../README.md) |
+| Tauri beta artifacts, installation, platform support and signing | [Desktop packaging](desktop-packaging.md) |
 | Swift formatting, naming, DRY, file placement and test organization | [Conventions](../CONVENTIONS.md) |
 | Native controls, dialogs, accessibility and appearance | [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility) |
 | Shared presentation boundaries, adaptation rationale and UI references | [Interface styling](interface-styling.md) |

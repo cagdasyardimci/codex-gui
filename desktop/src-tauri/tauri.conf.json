@@ -14,12 +14,21 @@
       { "label": "main", "title": "Codex GUI Beta", "width": 1040, "height": 720 }
     ],
     "security": {
+      "capabilities": ["diagnostic"],
       "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'",
       "devCsp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:1420; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'"
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
+    "category": "DeveloperTool",
+    "shortDescription": "Codex GUI diagnostic shell",
+    "license": "MIT",
+    "resources": {
+      "../../LICENSE.md": "notices/LICENSE.md",
+      "../frontend/node_modules/@tauri-apps/api/LICENSE-MIT": "notices/Tauri-MIT.txt",
+      "../frontend/node_modules/svelte/LICENSE.md": "notices/Svelte-MIT.md"
+    },
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
     "macOS": { "minimumSystemVersion": "14.0" }
   }

@@ -5,11 +5,13 @@ on:
     paths:
       - ".github/workflows/desktop-core.yml"
       - "desktop/**"
+      - "LICENSE.md"
       - "Tests/E2E/MockBackend/**"
   pull_request:
     paths:
       - ".github/workflows/desktop-core.yml"
       - "desktop/**"
+      - "LICENSE.md"
       - "Tests/E2E/MockBackend/**"
   workflow_dispatch:
 
@@ -92,3 +94,57 @@ jobs:
           else
             python3 desktop/fixtures/verify_webview_fixture.py desktop/target/debug/codex-gui-desktop
           fi
+      - name: Bundle the diagnostic shell
+        working-directory: desktop/frontend
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: pnpm tauri bundle --debug --ci
+      - name: Verify the Mac disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          images=(desktop/target/debug/bundle/dmg/*.dmg)
+          test "${#images[@]}" -eq 1
+          hdiutil verify "${images[0]}"
+          mount_dir="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount_dir" "${images[0]}"
+          trap 'hdiutil detach "$mount_dir"' EXIT
+          app="$mount_dir/Codex GUI Beta.app"
+          codesign --verify --deep --strict "$app"
+          python3 desktop/fixtures/verify_bundle_notices.py "$app/Contents/Resources/notices"
+          python3 desktop/fixtures/verify_webview_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+      - name: Verify the NSIS installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem desktop/target/debug/bundle/nsis/*.exe)
+          if ($installer.Count -ne 1) { throw "Expected one NSIS installer" }
+          $destination = Join-Path $env:RUNNER_TEMP "Installed Codex GUI Beta"
+          $process = Start-Process $installer[0].FullName -ArgumentList @("/S", "/D=$destination") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "NSIS exited with code $($process.ExitCode)" }
+          python desktop/fixtures/verify_bundle_notices.py (Join-Path $destination "notices")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python desktop/fixtures/verify_webview_fixture.py (Join-Path $destination "codex-gui-desktop.exe")
+      - name: Verify the Debian installation
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          packages=(desktop/target/debug/bundle/deb/*.deb)
+          test "${#packages[@]}" -eq 1
+          artifact="$(realpath "${packages[0]}")"
+          sudo apt-get install -y "$artifact"
+          installed="$(dpkg-deb -f "$artifact" Package)"
+          license="$(dpkg -L "$installed" | grep -E '/notices/LICENSE\.md$')"
+          python3 desktop/fixtures/verify_bundle_notices.py "$(dirname "$license")"
+          xvfb-run -a python3 desktop/fixtures/verify_webview_fixture.py "$(command -v codex-gui-desktop)"
+      - name: Store diagnostic installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostic-installer-${{ matrix.os }}
+          path: |
+            desktop/target/debug/bundle/dmg/*.dmg
+            desktop/target/debug/bundle/nsis/*.exe
+            desktop/target/debug/bundle/deb/*.deb
+          if-no-files-found: error
