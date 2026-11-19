@@ -2,6 +2,7 @@ mod executable;
 mod framing;
 mod process;
 mod protocol;
+mod session;
 
 #[cfg(test)]
 mod fixtures;
@@ -13,3 +14,4 @@ pub use protocol::{
     ClientInfo, InitializeError, ProtocolReadError, RpcError, RpcId, ServerEvent, ServerMessage,
     initialize, read_message,
 };
+pub use session::{AppServerClient, AppServerConnection, ConnectError, Delivery, RequestError};
