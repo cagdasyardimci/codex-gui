@@ -283,18 +283,20 @@ struct ConversationReplyActionLifecycleTests
 			for: message.id,
 			in: controller
 		)
-		let edit = try #require(button(
+		#expect(button(
 			"Edit message",
 			in: row
-		))
-		#expect(!edit.isEnabled)
+		) == nil)
 		editAvailable = true
 		presentation.editablePromptEntryIDs.insert(message.id)
 		await render(
 			presentation,
 			in: controller
 		)
-		#expect(edit.isEnabled)
+		let edit = try #require(button(
+			"Edit message",
+			in: row
+		))
 		try #require(edit.dispatchConfiguredAction())
 		let editor = try #require(controller.transcript.editingPrompt?.editor)
 		#expect(editor.superview === row)
@@ -359,11 +361,10 @@ struct ConversationReplyActionLifecycleTests
 			}
 		)
 		item.view.layoutSubtreeIfNeeded()
-		let edit = try #require(button(
+		#expect(button(
 			"Edit message",
 			in: item.view
-		))
-		#expect(!edit.isEnabled && !edit.dispatchConfiguredAction())
+		) == nil)
 		let copy = try #require(button(
 			"Copy message",
 			in: item.view
