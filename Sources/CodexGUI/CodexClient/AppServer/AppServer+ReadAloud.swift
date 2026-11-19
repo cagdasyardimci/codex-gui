@@ -4,47 +4,76 @@ extension AppServer
 {
 	func readAloudAvailable(in directory: URL) async throws -> Bool
 	{
+		try await realtimeWebSocketAvailable(in: directory)
+	}
+
+	func realtimeWebSocketAvailable(in directory: URL) async throws -> Bool
+	{
+		guard try await realtimeWebSocketCredentialsAvailable(in: directory)
+		else
+		{
+			return false
+		}
+		return try await hasRealtimeAudioVoices()
+	}
+
+	func realtimeWebSocketCredentialsAvailable(in directory: URL) async throws -> Bool
+	{
+		guard let config = try await realtimeVoiceConfiguration(in: directory)
+		else
+		{
+			return false
+		}
+		let providerID = config["model_provider"] as? String ?? "openai"
+		let providers = config["model_providers"] as? [String: [String: Any]] ?? [:]
+		let provider = providers[providerID] ?? [:]
+		if let envName = provider["env_key"] as? String
+		{
+			// Codex requires a configured provider key before considering other credentials.
+			guard let key = subprocessEnvironmentValue(envName),
+					!key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+			else
+			{
+				return false
+			}
+		}
+		else
+		{
+			let bearer = provider["experimental_bearer_token"] as? String ?? ""
+			let isOpenAI = providerID == "openai" || provider["name"] as? String == "OpenAI"
+			let openAIKey = isOpenAI ? subprocessEnvironmentValue("OPENAI_API_KEY") ?? "" : ""
+			if bearer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+				openAIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+				try await accountStatus().type != "apiKey"
+			{
+				return false
+			}
+		}
+		return true
+	}
+
+	func realtimeVoiceConfiguration(in directory: URL) async throws -> [String: Any]?
+	{
 		let response = try await request(
 			"config/read",
 			params: ["includeLayers": false, "cwd": directory.path]
 		)
-		guard let config = response["config"] as? [String: Any]
+		guard let config = response["config"] as? [String: Any],
+				(config["features"] as? [String: Any])?["realtime_conversation"] as? Bool != false
 		else
 		{
-			return false
+			return nil
 		}
-		let providerName = config["model_provider"] as? String ?? "openai"
-		let providers = config["model_providers"] as? [String: [String: Any]] ?? [:]
-		let provider = providers[providerName] ?? [:]
-		let features = config["features"] as? [String: Any] ?? [:]
-		guard features["realtime_conversation"] as? Bool != false
-		else
-		{
-			return false
-		}
-		let account = try await accountStatus()
-		let environment = ProcessInfo.processInfo.environment
-		let envName = provider["env_key"] as? String
-		let hasEnvironmentKey = envName.flatMap
-		{
-			environment[$0]
-		}.map
-		{
-			!$0.isEmpty
-		} ?? false
-		let bearer = provider["experimental_bearer_token"] as? String ?? ""
-		let hasOpenAIKey = providerName == "openai" && !(environment["OPENAI_API_KEY"] ?? "")
-			.isEmpty
-		guard hasEnvironmentKey || !bearer.isEmpty || account.type == "apiKey" || hasOpenAIKey
-		else
-		{
-			return false
-		}
+		return config
+	}
+
+	func hasRealtimeAudioVoices() async throws -> Bool
+	{
 		let voices = try await request(
 			"thread/realtime/listVoices",
 			params: [:]
 		)
-		return !(((voices["voices"] as? [String: Any])?["v3"] as? [String]) ?? []).isEmpty
+		return try !Self.realtimeAudioVoices(from: voices).isEmpty
 	}
 
 	func createReadAloudThread(in directory: URL) async throws -> String
@@ -74,25 +103,30 @@ extension AppServer
 		return id
 	}
 
-	func startReadAloudSession(threadID: String) async throws
+	func startReadAloudSession(
+		threadID: String,
+		voice: String? = nil
+	) async throws
 	{
 		guard readAloudThreadGenerations[threadID] == connectionGeneration
 		else
 		{
 			throw AppServerError.disconnected
 		}
+		var params: [String: Any] = [
+			"threadId": threadID,
+			"version": Self.realtimeAudioVersion,
+			"outputModality": "audio",
+			"includeStartupContext": false,
+			"clientManagedHandoffs": true,
+			"flushTranscriptTailOnSessionEnd": false,
+			"backendReasoningStatus": false,
+			"transport": ["type": "websocket"],
+		]
+		params["voice"] = voice
 		_ = try await request(
 			"thread/realtime/start",
-			params: [
-				"threadId": threadID,
-				"version": "v3",
-				"outputModality": "audio",
-				"includeStartupContext": false,
-				"clientManagedHandoffs": true,
-				"flushTranscriptTailOnSessionEnd": false,
-				"backendReasoningStatus": false,
-				"transport": ["type": "websocket"]
-			]
+			params: params
 		)
 	}
 

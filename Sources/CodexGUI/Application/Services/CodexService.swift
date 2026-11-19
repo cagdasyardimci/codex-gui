@@ -247,7 +247,10 @@ extension CodexService
 		throw ReadAloudError
 			.unavailable
 	}
-	func startReadAloudSession(threadID: String) async throws
+	func startReadAloudSession(
+		threadID: String,
+		voice: String?
+	) async throws
 	{
 		throw ReadAloudError.unavailable
 	}

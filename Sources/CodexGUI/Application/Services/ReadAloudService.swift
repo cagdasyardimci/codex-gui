@@ -10,7 +10,10 @@ protocol ReadAloudService: AnyObject
 	}
 	func readAloudAvailable(in directory: URL) async throws -> Bool
 	func createReadAloudThread(in directory: URL) async throws -> String
-	func startReadAloudSession(threadID: String) async throws
+	func startReadAloudSession(
+		threadID: String,
+		voice: String?
+	) async throws
 	func appendReadAloudSpeech(
 		threadID: String,
 		text: String

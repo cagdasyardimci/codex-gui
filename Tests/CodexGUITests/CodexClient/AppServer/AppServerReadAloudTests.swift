@@ -10,6 +10,9 @@ struct AppServerReadAloudTests
 	@Test(arguments: [
 		"api-key",
 		"bearer",
+		"provider-key",
+		"missing-provider-key-with-account",
+		"missing-provider-key-with-bearer",
 		"no-credentials",
 		"disabled",
 		"no-voices",
@@ -24,13 +27,18 @@ struct AppServerReadAloudTests
 			try? FileManager.default.removeItem(at: directory)
 		}
 		try await server.connect()
-		#expect(try await server.readAloudAvailable(in: directory) == ["api-key", "bearer"]
-			.contains(mode))
+		#expect(try await server.readAloudAvailable(in: directory) == [
+			"api-key",
+			"bearer",
+			"provider-key"
+		].contains(mode))
 		let expected: [String]
 		switch mode
 		{
-		case "disabled", "missing-config": expected = ["config/read"]
+		case "disabled", "missing-config", "missing-provider-key-with-account",
+				"missing-provider-key-with-bearer": expected = ["config/read"]
 		case "no-credentials": expected = ["config/read", "account/read"]
+		case "bearer", "provider-key": expected = ["config/read", "thread/realtime/listVoices"]
 		default: expected = ["config/read", "account/read", "thread/realtime/listVoices"]
 		}
 		#expect(try await methods(in: server) == expected)
@@ -222,15 +230,22 @@ struct AppServerReadAloudTests
 				    elif method == 'config/read':
 				        assert params == {'includeLayers':False,
 				                          'cwd':os.path.dirname(__file__)}, params
-				        provider = {'env_key':'\#(absentKey)'}
-				        if mode == 'bearer': provider['experimental_bearer_token'] = 'fixture-only'
+				        provider = {}
+				        if mode.startswith('missing-provider-key'):
+				            provider['env_key'] = '\#(absentKey)'
+				        # The env-python launcher already depends on a nonempty inherited PATH.
+				        if mode == 'provider-key': provider['env_key'] = 'PATH'
+				        if mode in ('bearer', 'missing-provider-key-with-bearer'):
+				            provider['experimental_bearer_token'] = 'fixture-only'
 				        config = {'model_provider':'test-voice-provider',
 				                  'model_providers':{'test-voice-provider':provider},
 				                  'features':{'realtime_conversation':mode != 'disabled'}}
 				        result = {'config':None if mode == 'missing-config' else config}
 				    elif method == 'account/read':
 				        assert params == {'refreshToken':False}, params
-				        kind = 'apiKey' if mode in ('api-key', 'no-voices') else 'chatgpt'
+				        api_key_modes = ('api-key', 'no-voices',
+				                         'missing-provider-key-with-account')
+				        kind = 'apiKey' if mode in api_key_modes else 'chatgpt'
 				        result = {'account':{'type':kind}, 'requiresOpenaiAuth':True}
 				    elif method == 'thread/realtime/listVoices':
 				        assert params == {}, params

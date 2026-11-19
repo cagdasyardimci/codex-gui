@@ -57,13 +57,29 @@ final class ReadAloudRuntime
 		onStarted: @escaping () -> Void
 	) async throws
 	{
-		cancel()
 		guard let path = request.context.workspace.canonicalCheckoutPath
 		else
 		{
+			cancel()
 			throw ReadAloudError.unavailable
 		}
-		let parts = try ReadAloudTextSegments.make(request.text)
+		try await play(
+			text: request.text,
+			in: URL(fileURLWithPath: path),
+			voice: nil,
+			onStarted: onStarted
+		)
+	}
+
+	func play(
+		text: String,
+		in directory: URL,
+		voice: String?,
+		onStarted: () -> Void
+	) async throws
+	{
+		cancel()
+		let parts = try ReadAloudTextSegments.make(text)
 		let current = Session(player: makePlayer())
 		session = current
 		current.player.onDrained =
@@ -92,14 +108,17 @@ final class ReadAloudRuntime
 				let threadID = try await Task
 				{
 					@MainActor in
-					try await service.createReadAloudThread(in: URL(fileURLWithPath: path))
+					try await service.createReadAloudThread(in: directory)
 				}.value
 				current.threadID = threadID
 				try current.checkCancellation()
 				try await Task
 				{
 					@MainActor in
-					try await service.startReadAloudSession(threadID: threadID)
+					try await service.startReadAloudSession(
+						threadID: threadID,
+						voice: voice
+					)
 				}.value
 				try current.checkCancellation()
 				let ready = try await current.inbox.next()

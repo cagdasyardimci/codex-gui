@@ -51,6 +51,11 @@ final class AppServer: CodexService
 		diagnostics.snapshot()
 	}
 
+	func subprocessEnvironmentValue(_ name: String) -> String?
+	{
+		process?.environment?[name]
+	}
+
 	init(
 		executableOverride: URL? = nil,
 		requestTimeout: Duration = .seconds(45),

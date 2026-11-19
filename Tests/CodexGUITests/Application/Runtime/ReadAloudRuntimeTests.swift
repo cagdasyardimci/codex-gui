@@ -162,7 +162,10 @@ private final class ReadAloudTestService: ReadAloudService
 		}
 		return "private-audio"
 	}
-	func startReadAloudSession(threadID: String) async throws
+	func startReadAloudSession(
+		threadID: String,
+		voice: String?
+	) async throws
 	{
 		started.append(threadID)
 		onReadAloudEvent?("foreign-chat", .failed("Must be ignored"))
