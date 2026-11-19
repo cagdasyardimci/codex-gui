@@ -8,11 +8,13 @@ This guide owns check selection, test-fixture discipline and evidence interpreta
 
 Install [rustup](https://rustup.rs/) and run `cargo check-core` from [the desktop workspace](../desktop/Cargo.toml). The workspace pins the Rust toolchain and checks the core against its committed lockfile.
 
-The [desktop core workflow](../.github/workflows/desktop-core.yml) checks the core and validates the [portable fixture launch](mock-backend.md#portable-desktop-fixture) on macOS, Windows, and Ubuntu.
+The [desktop workflow](../.github/workflows/desktop-core.yml) checks the core and validates the [portable fixture launch](mock-backend.md#portable-desktop-fixture) on macOS, Windows, and Ubuntu.
 
 ### Tauri diagnostic shell
 
 Install the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) for the host OS and use the pinned Node and pnpm versions. From the repository root, run `pnpm --dir desktop/frontend install --frozen-lockfile` and `pnpm --dir desktop/frontend tauri dev`. The beta initializes its data and worktree root under its own application identity so it can launch alongside AppKit.
+
+The desktop build job type-checks the frontend and compiles the host with the embedded production frontend. Reproduce it with `pnpm --dir desktop/frontend check` and `pnpm --dir desktop/frontend tauri build --debug --no-bundle -- --locked`. Installed runtime checks use separately built bundles.
 
 ### Swift AppKit
 

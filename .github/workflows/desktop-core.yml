@@ -1,4 +1,4 @@
-name: Desktop core
+name: Desktop checks
 
 on:
   push:
@@ -46,3 +46,37 @@ jobs:
         run: cargo test --locked -p codex-gui-core
       - name: Run the portable fixture test
         run: python -m unittest discover -s desktop/fixtures -v
+
+  desktop:
+    name: Desktop build on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: desktop/.node-version
+          package-manager-cache: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          package_json_file: desktop/frontend/package.json
+      - name: Install Linux WebView dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Install frontend dependencies
+        working-directory: desktop/frontend
+        run: pnpm install --frozen-lockfile
+      - name: Check frontend types
+        working-directory: desktop/frontend
+        run: pnpm check
+      - name: Build the desktop shell
+        working-directory: desktop/frontend
+        run: pnpm tauri build --debug --no-bundle -- --locked
