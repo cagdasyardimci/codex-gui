@@ -68,3 +68,5 @@ JSONL framing must split on byte LF (`0x0A`), since Unicode line separators may 
 The [Tauri transport](../desktop/core/src/codex/session.rs) starts each request deadline before queue admission. Expiry or retirement before the writer accepts any bytes establishes that a request was unsent. Once the writer accepts bytes, a missing reply leaves delivery uncertain. Retire a stream with an abandoned partial frame and keep request correlation scoped to its connection.
 
 The [Tauri browsing adapter](../desktop/core/src/codex/browse.rs) reads account, models, and project chats without resuming a thread or refreshing credentials. It verifies each reported chat checkout against the captured native directory identity before handing the page to the caller. A project-list cursor belongs to the originating connection and archive filter.
+
+The [chat read adapter](../desktop/core/src/codex/browse/history.rs) reads metadata and lightweight turn status independently from transcript items. Keep turn-page cursors scoped to their thread, connection, and item view. Check a result against the active selection when applying it.

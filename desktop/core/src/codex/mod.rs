@@ -10,8 +10,9 @@ mod session;
 mod fixtures;
 
 pub use browse::{
-    Account, AccountSnapshot, BrowseError, CodexBrowser, ModelOption, Page, ProjectChatCursor,
-    ThreadSummary,
+    Account, AccountSnapshot, BrowseError, ChatRead, ChatSummary, CodexBrowser, HistoryTurn,
+    ModelOption, Page, ProjectChatCursor, ThreadActivity, ThreadSummary, TurnActivity, TurnCursor,
+    TurnStatus,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub use executable::{CodexExecutable, DiscoveryError, VersionProbeError};

@@ -15,7 +15,7 @@ pub struct RequestId(pub Uuid);
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq)]
 pub struct ThreadId(pub String);
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq)]
 pub struct TurnId(pub String);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

@@ -11,6 +11,12 @@ use crate::{
 
 use super::{AppServerClient, RequestError};
 
+mod history;
+
+pub use history::{
+    ChatRead, ChatSummary, HistoryTurn, ThreadActivity, TurnActivity, TurnCursor, TurnStatus,
+};
+
 const PAGE_LIMIT: u32 = 100;
 
 #[derive(Debug, Error)]
@@ -23,8 +29,12 @@ pub enum BrowseError {
     MissingCheckout,
     #[error("checkout path cannot be represented in the Codex protocol")]
     NonUnicodeCheckout,
-    #[error("pagination cursor belongs to another chat list")]
+    #[error("pagination cursor belongs to another read scope")]
     CursorScope,
+    #[error("chat read belongs to a previous selection or connection")]
+    StaleChatRead,
+    #[error("app-server returned a different chat")]
+    WrongThread,
     #[error("invalid response from {method}: {source}")]
     Response {
         method: &'static str,
