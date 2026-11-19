@@ -45,6 +45,7 @@ class DesktopStyledButton: DesktopTooltipButton
 				formAdd,
 				folderAdd, contextSelection, inlineValue, destructive,
 				quiet, inlineAction, link, mutedLink, documentation, icon, glyphOnlyIcon,
+				subduedGlyphOnlyIcon, mutedMicrophone, mutedSpeaker,
 				revealingIcon, transcriptAction,
 				toggle,
 				menuTrigger
@@ -206,7 +207,11 @@ class DesktopStyledButton: DesktopTooltipButton
 	{
 		switch presentation
 		{
-		case .icon, .glyphOnlyIcon, .revealingIcon, .transcriptAction, .toggle, .sidebarIcon,
+		case .icon, .glyphOnlyIcon, .subduedGlyphOnlyIcon, .mutedMicrophone, .mutedSpeaker,
+				.revealingIcon,
+				.transcriptAction,
+				.toggle,
+				.sidebarIcon,
 				.searchIcon,
 				.imageOverlay,
 				.attachmentRemove, .imageCommentHandle, .imageCommentSubmit,
@@ -412,7 +417,11 @@ class DesktopStyledButton: DesktopTooltipButton
 				),
 				height: LayoutTokens.Settings.headerActionHeight
 			)
-		case .icon, .glyphOnlyIcon, .revealingIcon, .transcriptAction, .toggle, .sidebarIcon,
+		case .icon, .glyphOnlyIcon, .subduedGlyphOnlyIcon, .mutedMicrophone, .mutedSpeaker,
+				.revealingIcon,
+				.transcriptAction,
+				.toggle,
+				.sidebarIcon,
 				.searchIcon:
 			let side = iconSide
 			return NSSize(
@@ -691,6 +700,7 @@ class DesktopStyledButton: DesktopTooltipButton
 	{
 		if presentation == .imageCommentSubmit || presentation == .recordingCancel
 			|| presentation == .recordingStop || presentation == .recordingSend
+			|| presentation == .mutedMicrophone || presentation == .mutedSpeaker
 		{
 			return NSBezierPath(ovalIn: bounds)
 		}
@@ -797,7 +807,8 @@ class DesktopStyledButton: DesktopTooltipButton
 				.imageCommentHandle: ShapeTokens.Button.tabRadius
 		case .settingsHeader: ShapeTokens.Settings.headerActionRadius
 		case .formAdd: ShapeTokens.Button.regularRadius
-		case .icon, .glyphOnlyIcon, .revealingIcon, .sidebarIcon, .searchIcon,
+		case .icon, .glyphOnlyIcon, .subduedGlyphOnlyIcon, .revealingIcon, .sidebarIcon,
+				.searchIcon,
 				.zoomStep: ShapeTokens.Button.iconRadius
 		case .transcriptAction, .imageOverlay, .attachmentRemove, .imageCommentSubmit, .folderAdd,
 				.contextSelection: bounds.height / 2
@@ -1152,6 +1163,41 @@ class DesktopStyledButton: DesktopTooltipButton
 		case .glyphOnlyIcon:
 			return AppKitColorTokens.enabledForeground(
 				primaryText,
+				enabled: foregroundEnabled
+			)
+		case .subduedGlyphOnlyIcon:
+			return AppKitColorTokens.enabledForeground(
+				AppKitColorTokens.tertiaryIcon,
+				enabled: foregroundEnabled
+			)
+		case .mutedSpeaker:
+			let surface = NSBezierPath(ovalIn: bounds.insetBy(
+				dx: ShapeTokens.Button.outlineWidth / 2,
+				dy: ShapeTokens.Button.outlineWidth / 2
+			))
+			AppKitColorTokens.selectedOverlay.setFill()
+			surface.fill()
+			if active
+			{
+				AppKitColorTokens.hoverOverlay.setFill()
+				surface.fill()
+			}
+			AppKitColorTokens.buttonSecondaryEdge.setStroke()
+			surface.lineWidth = ShapeTokens.Button.outlineWidth
+			surface.stroke()
+			return AppKitColorTokens.enabledForeground(
+				primaryText,
+				enabled: foregroundEnabled
+			)
+		case .mutedMicrophone:
+			AppKitColorTokens.mutedMicrophoneSurface(
+				enabled: foregroundEnabled,
+				active: active
+			)
+			.setFill()
+			outline.fill()
+			return AppKitColorTokens.enabledForeground(
+				AppKitColorTokens.mutedMicrophoneGlyph,
 				enabled: foregroundEnabled
 			)
 		case .attachmentRemove:

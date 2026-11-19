@@ -134,6 +134,11 @@ struct ProjectContext: Codable, Equatable, Sendable
 		}
 	}
 
+	var hasSubmissionContext: Bool
+	{
+		selectedSkill != nil || items.contains(where: \.isIncluded)
+	}
+
 	/// Builds only the context the user has marked for this request. Callers decide whether to send
 	/// it.
 	var includedContextText: String

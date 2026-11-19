@@ -24,7 +24,14 @@ extension ConversationViewController
 			[weak self] in self?.onClearProject?()
 		}
 		let composerArea = AppKitLayout.verticalStack(
-			[turnChangeSummaryButton, projectBar, composerQueueView, composerSurface, chatLockView],
+			[
+				turnChangeSummaryButton,
+				projectBar,
+				composerQueueView,
+				voiceChatOrb,
+				composerSurface,
+				chatLockView,
+			],
 			spacing: LayoutTokens.Composer.summarySpacing
 		)
 		composerArea.alignment = .centerX
@@ -41,6 +48,9 @@ extension ConversationViewController
 			-ComposerQueueView.composerOverlap,
 			after: composerQueueView
 		)
+		voiceChatOrb.isHidden = true
+		voiceChatControls.isHidden = true
+		startVoiceChatButton.isHidden = true
 		turnChangeSummaryButton.isHidden = true
 		chatLockView.isHidden = true
 		chatLockView.onRetry =
@@ -80,7 +90,7 @@ extension ConversationViewController
 			spacing: LayoutTokens.Composer.leadingControlSpacing
 		)
 		let actionRow = AppKitLayout.horizontalStack(
-			[sendButton, resumeButton, stopButton],
+			[voiceChatControls, sendButton, resumeButton, stopButton, startVoiceChatButton],
 			spacing: LayoutTokens.composer.actionSpacing
 		)
 		let composerToolbar = ComposerToolbarView(
@@ -497,10 +507,27 @@ extension ConversationViewController
 		let hasDraftContent = hasMessageContent || !imagesAreReady
 		let showsStop = stopButton.isEnabled && !hasDraftContent
 		let showsResume = !showsStop && snapshot.queuePaused && !hasDraftContent
+		let showsVoice = canStartVoiceChat && !voiceChatShowing && !snapshot.isLocked
+			&& !hasDraftContent && !showsStop && !showsResume
+		startVoiceChatButton.setVoiceChatTarget(isExistingChat: snapshot.selectedThreadID != nil)
+		startVoiceChatButton.isHidden = !showsVoice
 		resumeButton.isEnabled = snapshot.canResumeQueue && imagesAreReady
 		resumeButton.isHidden = !showsResume
 		stopButton.isHidden = !showsStop
-		sendButton.isHidden = showsStop || showsResume
+		sendButton.isHidden = showsStop || showsResume || showsVoice
+		if voiceChatShowing
+		{
+			voiceChatControls.end.isHidden = hasMessageContent
+			sendButton.isHidden = !hasMessageContent
+			if snapshot.draftContext.isEmpty, !snapshot.isEditingQueuedMessage,
+				!snapshot.hasProjectSubmissionContext, !isSlashInput
+			{
+				sendButton.isEnabled = voiceChatAcceptsText && hasMessageContent && imagesAreReady
+				sendButton.setAccessibilityLabel("Send voice chat message")
+			}
+			resumeButton.isHidden = true
+			stopButton.isHidden = !stopButton.isEnabled
+		}
 	}
 
 	func textDidChange(_ notification: Notification)

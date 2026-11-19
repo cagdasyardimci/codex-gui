@@ -200,6 +200,21 @@ final class ConversationViewController: NSViewController,
 	var slashCompletionText: String?
 	var fileSearchWasCompletion = false
 	let fileIndexRuntime = ProjectFileIndexRuntime()
+	var voiceChatShowing = false
+	var voiceChatAcceptsText = false
+	let voiceChatOrb = VoiceChatOrb(diameter: 90)
+	let voiceChatControls = VoiceChatControls()
+	var canStartVoiceChat = false
+	{
+		didSet
+		{
+			if oldValue != canStartVoiceChat
+			{
+				updateSendState()
+			}
+		}
+	}
+	let startVoiceChatButton = ComposerSubmissionButton(role: .startVoiceChat)
 	let sendButton = ComposerSubmissionButton(role: .send)
 	let composerQueueView = ComposerQueueView()
 	let stopButton = ComposerSubmissionButton(role: .stop)

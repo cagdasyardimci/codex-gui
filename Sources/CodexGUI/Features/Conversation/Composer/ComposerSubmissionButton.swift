@@ -9,10 +9,23 @@ final class ComposerSubmissionButton: DesktopLayerButton
 		case send
 		case resume
 		case stop
+		case startVoiceChat
+		case endVoiceChat
 	}
 
 	let role: Role
 	private var colorObservation: ThemeColorObservation?
+	private var targetsExistingChat = false
+	var reconnectsVoiceChat = false
+	{
+		didSet
+		{
+			if oldValue != reconnectsVoiceChat
+			{
+				setVoiceChatTarget(isExistingChat: targetsExistingChat)
+			}
+		}
+	}
 
 	init(role: Role)
 	{
@@ -23,6 +36,7 @@ final class ComposerSubmissionButton: DesktopLayerButton
 		case .send: title = "Send"
 		case .resume: title = "Resume"
 		case .stop: title = "Stop"
+		case .startVoiceChat, .endVoiceChat: title = ""
 		}
 		super.init(frame: .zero)
 		self.title = title
@@ -30,14 +44,34 @@ final class ComposerSubmissionButton: DesktopLayerButton
 		isBordered = false
 		controlSize = .small
 		self.setTypographyRole(TypographyTokens.Controls.prominentButton)
-		image = role == .resume ? DesktopIcons.image(
-			.playSm,
-			size: 16
-		) : DesktopIcons.image(
-			role == .stop ? .stopCircleFilled : .arrowUpLg,
-			size: role == .stop ? LayoutTokens.composer.controlHeight : LayoutTokens.Composer
-				.sendIconSize
-		)
+		switch role
+		{
+		case .send:
+			image = DesktopIcons.image(
+				.arrowUpLg,
+				size: LayoutTokens.Composer.sendIconSize
+			)
+		case .resume:
+			image = DesktopIcons.image(
+				.playSm,
+				size: 16
+			)
+		case .stop:
+			image = DesktopIcons.image(
+				.stopCircleFilled,
+				size: LayoutTokens.composer.controlHeight
+			)
+		case .startVoiceChat:
+			image = DesktopIcons.image(
+				.voice5BarsSoundwave,
+				size: LayoutTokens.Composer.sendIconSize
+			)
+		case .endVoiceChat:
+			image = DesktopIcons.image(
+				.x,
+				size: LayoutTokens.Composer.sendIconSize
+			)
+		}
 		imagePosition = .imageOnly
 		colorObservation = ThemeColorObservation
 		{
@@ -57,6 +91,9 @@ final class ComposerSubmissionButton: DesktopLayerButton
 			wantsLayer = true
 			layer?.cornerRadius = ShapeTokens.Composer
 				.controlRadius(forControlHeight: LayoutTokens.composer.controlHeight)
+		}
+		if role == .send || role == .resume
+		{
 			keyEquivalent = "\r"
 			keyEquivalentModifierMask = [.command]
 		}
@@ -70,6 +107,13 @@ final class ComposerSubmissionButton: DesktopLayerButton
 			setAccessibilityLabel("Resume")
 			setAccessibilityIdentifier("conversation-resume")
 			toolTip = nil
+		case .startVoiceChat:
+			setAccessibilityIdentifier("conversation-start-voice-chat")
+			setVoiceChatTarget(isExistingChat: false)
+		case .endVoiceChat:
+			setAccessibilityLabel("End voice chat")
+			setAccessibilityIdentifier("conversation-end-voice-chat")
+			toolTip = "End voice chat"
 		case .stop:
 			setAccessibilityLabel("Stop current task")
 			setAccessibilityIdentifier("conversation-stop")
@@ -81,6 +125,31 @@ final class ComposerSubmissionButton: DesktopLayerButton
 	required init?(coder: NSCoder)
 	{
 		nil
+	}
+
+	func setVoiceChatTarget(isExistingChat: Bool)
+	{
+		targetsExistingChat = isExistingChat
+		let label = reconnectsVoiceChat ? "Reconnect voice chat"
+			: (isExistingChat ? "Start voice chat" : "Start new voice chat")
+		guard role == .startVoiceChat, toolTip != label
+		else
+		{
+			return
+		}
+		// Setting the native title changes the cell from image-only to overlapping text.
+		image = DesktopIcons.image(
+			reconnectsVoiceChat ? .regenerate : .voice5BarsSoundwave,
+			size: LayoutTokens.Composer.sendIconSize
+		)
+		setAccessibilityLabel(label)
+		toolTip = label
+	}
+
+	// The layer paints the full frame. Native inline insets would expand it beyond the square slot.
+	override var alignmentRectInsets: NSEdgeInsets
+	{
+		NSEdgeInsetsZero
 	}
 
 	override var isEnabled: Bool
@@ -100,7 +169,9 @@ final class ComposerSubmissionButton: DesktopLayerButton
 		{
 			return
 		}
-		layerBackgroundColor = isEnabled ? AppKitColorTokens.composerSend : AppKitColorTokens
-			.mutedText
+		let enabledFill = role == .startVoiceChat || role == .endVoiceChat
+			? AppKitColorTokens.composerVoice
+			: AppKitColorTokens.composerSend
+		layerBackgroundColor = isEnabled ? enabledFill : AppKitColorTokens.mutedText
 	}
 }

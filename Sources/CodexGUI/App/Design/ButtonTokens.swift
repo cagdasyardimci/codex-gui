@@ -87,4 +87,18 @@ extension AppKitColorTokens
 	{
 		errorText
 	}
+	static func mutedMicrophoneSurface(
+		enabled: Bool,
+		active: Bool
+	) -> NSColor
+	{
+		paletteColor
+		{
+			$0.mutedMicrophoneFill.withAlphaComponent(enabled ? (active ? 0.86 : 1) : 0.4)
+		}
+	}
+	static var mutedMicrophoneGlyph: NSColor
+	{
+		.white
+	}
 }

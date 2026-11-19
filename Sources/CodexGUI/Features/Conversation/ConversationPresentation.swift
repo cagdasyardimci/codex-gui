@@ -121,6 +121,7 @@ struct ConversationPresentation: Equatable
 		let draftLifetime: Int
 		let draft: String
 		let draftContext: [ComposerContextItem]
+		let hasProjectSubmissionContext: Bool
 		let reusableReferences: [ComposerContextItem]
 		let canSend: Bool
 		var queuePaused = false
@@ -256,7 +257,9 @@ struct ConversationPresentation: Equatable
 
 	init(
 		_ snapshot: ConversationSnapshot,
-		ownerIdentity: String? = nil
+		ownerIdentity: String? = nil,
+		transcriptEntries: [ConversationEntry]? = nil,
+		voiceChatActive: Bool = false
 	)
 	{
 		let owner = FeaturePresentationOwner(
@@ -265,11 +268,11 @@ struct ConversationPresentation: Equatable
 		)
 		transcript = Transcript(
 			owner: owner,
-			entries: snapshot.entries,
+			entries: transcriptEntries ?? snapshot.entries,
 			turnTimings: snapshot.turnTimings,
 			activeThreadID: snapshot.activeThreadID,
 			activeTurnID: snapshot.activeTurnID,
-			readAloud: snapshot.readAloud,
+			readAloud: voiceChatActive ? ReadAloudPresentation() : snapshot.readAloud,
 			resultFeedback: snapshot.resultFeedback,
 			editablePromptEntryIDs: snapshot.editablePromptEntryIDs,
 			canLoadEarlierTurns: snapshot.canLoadEarlierTurns
@@ -320,6 +323,7 @@ struct ConversationPresentation: Equatable
 			draftLifetime: snapshot.composerDraftLifetime,
 			draft: snapshot.draft,
 			draftContext: snapshot.draftContext,
+			hasProjectSubmissionContext: snapshot.projectContext.hasSubmissionContext,
 			reusableReferences: snapshot.reusableReferences,
 			canSend: snapshot.canSend,
 			queuePaused: snapshot.queuePaused,

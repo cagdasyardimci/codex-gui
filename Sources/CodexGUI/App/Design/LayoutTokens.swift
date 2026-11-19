@@ -151,6 +151,9 @@ enum LayoutTokens
 		static let leadingPreferenceSpacing: CGFloat = 12
 		static let summarySpacing: CGFloat = 8
 		static let interactionSpacing: CGFloat = 8
+		static let voiceAudioControlSpacing: CGFloat = 2
+		static let floatingVoiceControlHeight: CGFloat = 40
+		static let floatingVoiceControlWidth: CGFloat = 41
 		static let sendIconSize: CGFloat = 16
 		static let paneBottomInset: CGFloat = 16
 

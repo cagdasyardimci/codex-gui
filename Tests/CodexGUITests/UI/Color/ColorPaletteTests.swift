@@ -6,6 +6,49 @@ import Testing
 @MainActor
 struct ColorPaletteTests
 {
+	@Test func voiceUsesDefaultLightInkAndPreservesExplicitComposerAccents()
+	{
+		let light = ColorPalette(
+			configuration: ColorThemeProfile(
+				background: 0xFFFFFF,
+				foreground: 0x0D0D0D,
+				accent: 0x0169CC,
+				contrast: 45,
+				namedAccent: .default
+			),
+			mode: .light
+		)
+		expectColor(
+			light.composerVoiceFill,
+			0x0D0D0D
+		)
+		expectColor(
+			light.composerFill,
+			0x000000
+		)
+
+		for (appearance, accent, fill) in [
+			(ColorAppearance.light, ColorNamedAccent.black, UInt32(0x000000)),
+			(.dark, .default, 0xFFFFFF),
+		]
+		{
+			let palette = ColorPalette(
+				configuration: ColorThemeProfile(
+					background: 0xFFFFFF,
+					foreground: 0x0D0D0D,
+					accent: 0x0169CC,
+					contrast: 45,
+					namedAccent: accent
+				),
+				mode: appearance
+			)
+			expectColor(
+				palette.composerVoiceFill,
+				fill
+			)
+		}
+	}
+
 	@Test func viewerSelectionUsesInformationBlueAndCanvasAcrossNamedChatAccents() throws
 	{
 		for chatAccent: ColorNamedAccent? in [nil, .pink]

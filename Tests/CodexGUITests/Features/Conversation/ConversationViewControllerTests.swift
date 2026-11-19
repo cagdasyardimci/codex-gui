@@ -507,6 +507,214 @@ struct ConversationViewControllerTests
 		#expect(!controller.sendButton.isHidden)
 	}
 
+	@Test func voiceSharesThePrimarySlotWithSubmissionActions()
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		controller.render(snapshot(
+			[],
+			canSend: true
+		))
+		let buttons = [
+			controller.sendButton,
+			controller.stopButton,
+			controller.resumeButton,
+			controller.startVoiceChatButton,
+		]
+		func visibleButtons() -> [ComposerSubmissionButton]
+		{
+			buttons.filter
+			{
+				!$0.isHidden
+			}
+		}
+
+		#expect(visibleButtons() == [controller.sendButton])
+		controller.canStartVoiceChat = true
+		#expect(visibleButtons() == [controller.startVoiceChatButton])
+		controller.view.frame.size = NSSize(
+			width: 900,
+			height: 600
+		)
+		controller.view.layoutSubtreeIfNeeded()
+		let surface = controller.composerSurface
+		let voiceButton = controller.startVoiceChatButton
+		#expect(voiceButton.toolTip == "Start voice chat")
+		#expect(voiceButton.accessibilityLabel() == "Start voice chat")
+		#expect(voiceButton.imagePosition == .imageOnly)
+		#expect(voiceButton.attributedTitle.length == 0)
+		let voice = surface.convert(
+			voiceButton.bounds,
+			from: voiceButton
+		)
+		let bottomInset = surface.isFlipped ? surface.bounds.maxY - voice.maxY
+			: voice.minY - surface.bounds.minY
+		#expect(voice.size == NSSize(
+			width: 28,
+			height: 28
+		))
+		#expect(abs(surface.bounds.maxX - voice.maxX - 8) < 0.01)
+		#expect(abs(bottomInset - 8) < 0.01)
+		#expect(voiceButton.image?.size == NSSize(
+			width: 16,
+			height: 16
+		))
+		for draft in ["Hello", " \n"]
+		{
+			controller.composer.string = draft
+			controller.textDidChange(Notification(
+				name: NSText.didChangeNotification,
+				object: controller.composer
+			))
+			let expected = draft == "Hello" ? controller.sendButton : controller
+				.startVoiceChatButton
+			#expect(visibleButtons() == [expected])
+		}
+
+		var attached = snapshot(
+			[],
+			canSend: true
+		)
+		attached.draftContext = [ComposerContextItem(
+			kind: .fileReference,
+			title: "File"
+		)]
+		controller.render(attached)
+		#expect(visibleButtons() == [controller.sendButton])
+
+		var running = snapshot(
+			[],
+			canSend: false
+		)
+		running.activeThreadID = "replay"
+		running.activeExecutionState = .running
+		controller.render(running)
+		#expect(visibleButtons() == [controller.stopButton])
+
+		var paused = snapshot(
+			[],
+			canSend: false
+		)
+		paused.queuePaused = true
+		controller.render(paused)
+		#expect(visibleButtons() == [controller.resumeButton])
+
+		controller.render(snapshot(
+			[],
+			selectedThreadID: nil,
+			canSend: true
+		))
+		#expect(visibleButtons() == [voiceButton])
+		#expect(voiceButton.toolTip == "Start new voice chat")
+		#expect(voiceButton.accessibilityLabel() == "Start new voice chat")
+		#expect(voiceButton.imagePosition == .imageOnly)
+		#expect(voiceButton.attributedTitle.length == 0)
+	}
+
+	@Test func activeVoiceDraftReplacesEndWithSendInTheSameSlot()
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		controller.render(snapshot(
+			[],
+			canSend: true
+		))
+		controller.view.frame.size = NSSize(
+			width: 900,
+			height: 600
+		)
+		controller.voiceChatShowing = true
+		controller.voiceChatAcceptsText = true
+		controller.voiceChatControls.isHidden = false
+		controller.updateSendState()
+		controller.view.layoutSubtreeIfNeeded()
+
+		let surface = controller.composerSurface
+		let end = controller.voiceChatControls.end
+		let slot = surface.convert(
+			end.bounds,
+			from: end
+		)
+		#expect(!end.isHidden && controller.sendButton.isHidden)
+
+		controller.composer.string = "hi"
+		controller.textDidChange(Notification(
+			name: NSText.didChangeNotification,
+			object: controller.composer
+		))
+		controller.view.layoutSubtreeIfNeeded()
+		#expect(end.isHidden && !controller.sendButton.isHidden)
+		#expect(controller.sendButton.isEnabled)
+		let sendSlot = surface.convert(
+			controller.sendButton.bounds,
+			from: controller.sendButton
+		)
+		#expect(sendSlot == slot)
+
+		controller.composer.string = " "
+		controller.textDidChange(Notification(
+			name: NSText.didChangeNotification,
+			object: controller.composer
+		))
+		#expect(!end.isHidden && controller.sendButton.isHidden)
+	}
+
+	@Test func activeVoiceCallKeepsAttachmentOnlyDraftsEligibleForNormalSubmission()
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		var state = snapshot(
+			[],
+			canSend: true
+		)
+		state.draftContext = [ComposerContextItem(
+			kind: .image,
+			title: "Reference image",
+			path: "/tmp/reference.png"
+		)]
+		controller.voiceChatShowing = true
+		controller.voiceChatAcceptsText = false
+		controller.render(state)
+
+		#expect(!controller.sendButton.isHidden)
+		#expect(controller.sendButton.isEnabled)
+		#expect(controller.sendButton.accessibilityLabel() == "Send message")
+	}
+
+	@Test func selectingProjectContextDuringACallUsesNormalSubmissionEligibility()
+	{
+		_ = NSApplication.shared
+		let controller = ConversationViewController()
+		controller.voiceChatShowing = true
+		controller.voiceChatAcceptsText = false
+		var state = snapshot(
+			[],
+			draft: "Review this",
+			canSend: true
+		)
+		state.projectContext.items = [ProjectContextItem(
+			kind: .note,
+			title: "Review scope"
+		)]
+		controller.render(state)
+		#expect(!controller.sendButton.isEnabled)
+		#expect(controller.sendButton.accessibilityLabel() == "Send voice chat message")
+
+		state.projectContext.items[0].isIncluded = true
+		controller.render(state)
+		#expect(controller.sendButton.isEnabled)
+		#expect(controller.sendButton.accessibilityLabel() == "Send message")
+
+		state.projectContext.items[0].isIncluded = false
+		state.projectContext.selectedSkill = ProjectSkillSelection(
+			name: "review",
+			description: "Review changes"
+		)
+		controller.render(state)
+		#expect(controller.sendButton.isEnabled)
+		#expect(controller.sendButton.accessibilityLabel() == "Send message")
+	}
+
 	@Test func browsingAnotherConversationKeepsDraftEditableAndRoutesBackToTask() throws
 	{
 		_ = NSApplication.shared
@@ -952,7 +1160,7 @@ struct ConversationViewControllerTests
 		_ entries: [ConversationEntry],
 		executionState: ExecutionState = .running,
 		threads: [ThreadSummary] = [],
-		selectedThreadID: String = "replay",
+		selectedThreadID: String? = "replay",
 		draft: String = "",
 		canSend: Bool = false,
 		canLoadEarlierTurns: Bool = false

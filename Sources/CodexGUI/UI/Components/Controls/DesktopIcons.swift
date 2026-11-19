@@ -8,6 +8,119 @@ enum DesktopIcons
 {
 	private static let cache = NSCache<NSString, NSImage>()
 
+	static let voiceSpeaker = voiceControlImage(
+		.soundOnReadOutLoudSpeaker,
+		dx: -0.65,
+		dy: 0.25
+	)
+	{
+		artwork in
+		// Cover the cavity with a mask that overlaps the bundled outline.
+		fillVoiceSpeakerBody(
+			[
+				(2.5, 7.5),
+				(5.6, 7.25),
+				(12.5, 2.9),
+				(12.5, 21.1),
+				(5.6, 16.75),
+				(2.5, 16.5),
+			],
+			in: artwork
+		)
+	}
+
+	static let mutedVoiceSpeaker = voiceControlImage(
+		.soundOffSimpleMute,
+		dx: -0.35,
+		dy: -0.35
+	)
+	{
+		artwork in
+		// Fill each half of the bundled speaker silhouette while preserving the slash.
+		fillVoiceSpeakerBody(
+			[(11.7, 5.65), (15.7, 3.7), (16, 9.95)],
+			in: artwork
+		)
+		fillVoiceSpeakerBody(
+			[(7.25, 8.35),
+				(15.85, 16.95),
+				(15.85, 20.1),
+				(13.7, 20.35),
+				(9.5, 16.9),
+				(6.2, 16.6),
+				(6.2, 9.45)],
+			in: artwork
+		)
+	}
+
+	private static func fillVoiceSpeakerBody(
+		_ points: [(CGFloat, CGFloat)],
+		in artwork: NSRect
+	)
+	{
+		let body = NSBezierPath()
+		for (index, point) in points.enumerated()
+		{
+			let vertex = CGPoint(
+				x: artwork.minX + point.0 * artwork.width / 24,
+				y: artwork.minY + point.1 * artwork.height / 24
+			)
+			if index == 0
+			{
+				body.move(to: vertex)
+			}
+			else
+			{
+				body.line(to: vertex)
+			}
+		}
+		body.close()
+		NSColor.black.setFill()
+		body.fill()
+	}
+
+	static let mutedVoiceMicrophone = voiceControlImage(
+		.micOff,
+		dx: 0,
+		dy: -1.15
+	)
+
+	private static func voiceControlImage(
+		_ icon: DesktopIcon,
+		dx: CGFloat,
+		dy: CGFloat,
+		overlay: @escaping (NSRect) -> Void =
+		{
+			_ in
+		}
+	) -> NSImage
+	{
+		let source = image(icon)
+		let artwork = NSImage(
+			size: source.size,
+			flipped: true
+		)
+		{
+			bounds in
+			let rect = bounds.insetBy(
+				dx: dx,
+				dy: dy
+			)
+			source.draw(
+				in: rect,
+				from: .zero,
+				operation: .sourceOver,
+				fraction: 1,
+				respectFlipped: true,
+				hints: nil
+			)
+			overlay(rect)
+			return true
+		}
+		artwork.isTemplate = true
+		return artwork
+	}
+
 	/// Question action artwork uses the same rounded speech bubble in the card and transcript.
 	static func questionBubble() -> NSImage
 	{
@@ -204,13 +317,19 @@ enum DesktopIcons
 
 	static func branchMenuImage() -> NSImage
 	{
-		image(.branch, size: 14)
+		image(
+			.branch,
+			size: 14
+		)
 	}
 
 	static func bookmarkMenuImage(selected: Bool) -> NSImage
 	{
 		// The bookmark's tighter view box needs a smaller canvas to match the branch glyph.
-		image(selected ? .savedFilledXs : .savedXs, size: 13)
+		image(
+			selected ? .savedFilledXs : .savedXs,
+			size: 13
+		)
 	}
 
 	/// Template artwork keeps the local-device outline consistent in controls and menus.

@@ -18,6 +18,15 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 	let onInsertPathRequest: () -> Void
 	let navigation = NavigationViewController()
 	let conversation = ConversationViewController()
+	let voiceChat = VoiceChatRuntime()
+	let floatingVoiceChatControls = VoiceChatControls(floating: true)
+	let floatingVoiceChatSurface = DesktopSurface(
+		AppKitColorTokens.composer,
+		cornerRadius: LayoutTokens.Composer.floatingVoiceControlHeight / 2,
+		bordered: true,
+		shadows: ShadowTokens.composer
+	)
+
 	let inspector = InspectorViewController()
 	var activeChatTools: ChatToolsSession
 	var chatToolsKey: ChatToolsKey?
@@ -129,6 +138,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		updateMinimumWindowSize()
 		observeWindowChrome(in: window)
 		paneController.restoreLayout(in: window)
+		configureVoiceChat(in: window)
 		observeWorkspacePublications()
 		configureRemoteAccessHost()
 		NotificationCenter.default.addObserver(
@@ -318,9 +328,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		}
 	}
 
-	func renderSnapshot(_ snapshot: ConversationSnapshot)
+	func renderSnapshot(_ canonicalSnapshot: ConversationSnapshot)
 	{
-		self.latestSnapshot = snapshot
+		self.latestSnapshot = canonicalSnapshot
+		let snapshot = voiceChatNavigationSnapshot(canonicalSnapshot)
 		let target = WorkspaceIntentTarget(
 			store: currentStore,
 			snapshot: snapshot,
@@ -341,9 +352,20 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		)
 
 		self.navigation.render(NavigationPresentation(snapshot))
+		voiceChat.loadHistory(
+			store: currentStore,
+			threadID: snapshot.selectedThreadID
+		)
+		refreshVoiceChatControls(snapshot)
 		self.conversation.render(ConversationPresentation(
 			snapshot,
-			ownerIdentity: target.presentationIdentity
+			ownerIdentity: target.presentationIdentity,
+			transcriptEntries: voiceChat.transcript(
+				snapshot.entries,
+				store: currentStore,
+				threadID: snapshot.selectedThreadID
+			),
+			voiceChatActive: voiceChat.hasCall
 		))
 		if let path = snapshot.projectPath
 		{
@@ -395,7 +417,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 		self.onSnapshot?(snapshot)
 	}
 
-	private func updateConversationTitle(_ snapshot: ConversationSnapshot)
+	func updateConversationTitle(_ snapshot: ConversationSnapshot)
 	{
 		let selectedThread = snapshot.threads.first
 		{
@@ -479,6 +501,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSWindo
 
 	@objc private func windowDidClose()
 	{
+		voiceChat.stop()
 		let runtimes = chatFileRuntimes
 		Task
 		{

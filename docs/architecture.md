@@ -34,6 +34,10 @@ Protocol-specific handling belongs to [CLI lifecycle safeguards](cli-compatibili
 
 ## Presentation
 
+Voice uses the primary composer action when the draft is empty and voice chat is available. Stop and queue resume take precedence. Voice joins the selected writable chat and creates a thread from the new-chat composer. A live call retains the checkout, connection and thread that opened it. Changing the visible chat leaves the call running and moves its microphone, end-call orb and speaker controls into the window’s floating pill. The orb shows overlapping currents of light moving in opposite directions while listening. During playback the flow speeds up, speech peaks send ripples through the liquid and the orb expands within a fixed layout. Reduce Motion displays the orb without animation. Ending the call or losing its connection retires capture and playback. The thread owns the transcript, including voice exchanges that do not start a coding turn. The transcript displays spoken utterances and explicitly shared Markdown. Backend voice coordination and duplicate speech records stay out of the conversation. See [voice compatibility](cli-compatibility.md#voice-chat) for provider and history requirements.
+
+During a call, plain text enters the realtime conversation. Drafts carrying attachments, selected project context or skills use the normal composer path, as do slash commands and queued-message edits.
+
 Read Aloud plays the displayed response without adding a turn to the chat. Playback belongs to the response that started it and stops when that response loses its presentation owner. The [playback runtime](../Sources/CodexGUI/Application/Runtime/ReadAloudRuntime.swift) coordinates backend completion with local audio playback. See [CLI compatibility](cli-compatibility.md#transcript-speech-and-result-feedback) for provider requirements.
 
 Result feedback sends a one-time report for the original chat and turn, with logs excluded. If delivery is uncertain, the [feedback reducer](../Sources/CodexGUI/Application/Reducers/ResultFeedback/ResultFeedbackReducer.swift) reserves that turn against another submission to avoid duplicate reports.

@@ -370,7 +370,12 @@ extension MainWindowController
 
 		conversation.transcript.onReadAloud =
 		{
-			entryID, text in
+			[weak self] entryID, text in
+			guard self?.voiceChat.hasCall == false
+			else
+			{
+				return
+			}
 			target.dispatch(.readAloud(
 				entryID: entryID,
 				text: text
@@ -420,7 +425,16 @@ extension MainWindowController
 		}
 		conversation.onSend =
 		{
-			target.dispatch(.send)
+			[weak self] in
+			guard let self, target.accepts(.send)
+			else
+			{
+				return
+			}
+			if !self.handleVoiceChatSend(store: target.store)
+			{
+				target.dispatch(.send)
+			}
 		}
 		conversation.onRetryLockedChat =
 		{

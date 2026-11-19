@@ -660,6 +660,14 @@ struct ColorPalette
 		}
 		return RGB(namedColors(name)[dark && name != .pink ? 5 : 4]).color()
 	}
+	var composerVoiceFill: NSColor
+	{
+		!dark && profile.namedAccent == .default ? foreground : composerFill
+	}
+	var mutedMicrophoneFill: NSColor
+	{
+		RGB(0xE02E2A).color()
+	}
 	var composerText: NSColor
 	{
 		guard let name = profile.namedAccent

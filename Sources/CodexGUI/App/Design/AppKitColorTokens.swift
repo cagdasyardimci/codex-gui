@@ -331,6 +331,10 @@ enum AppKitColorTokens
 			$0.composerFill
 		}
 	}
+	static var composerVoice: NSColor
+	{
+		paletteColor(\.composerVoiceFill)
+	}
 	static var composerEdge: NSColor
 	{
 		subtleEdge
