@@ -4,13 +4,19 @@ This guide owns check selection, test-fixture discipline and evidence interpreta
 
 ## Automated checks
 
+### Rust desktop core
+
+Install [rustup](https://rustup.rs/) and run `cargo check-core` from [the desktop workspace](../desktop/Cargo.toml). The workspace pins the Rust toolchain and checks the core against its committed lockfile.
+
+### Swift AppKit
+
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.
 
 Use `make test:<group>` for a named selection, or `make test FILTER='SuiteOne|SuiteTwo'` for a custom regular expression. Quote filters. `FILTER` is supported only by `make test`; omit it for a full check. Use `PARALLEL=0` when a sequential run is needed. Focused results do not replace full-inventory validation.
 
 When adding or renaming tests, inspect unfiltered discovery with the toolchain flags in `Tests/Workflow.mk`, then verify that configured selections still cover the intended cases. Do not hard-code current test counts in guides. Do not relax assertions to make verification pass; report failures and baseline comparisons separately.
 
-### Test completion
+#### Test completion
 
 Confirm a successful, nonempty Swift Testing completion summary and the intended selection before reporting a pass. A command-line runtime can exit early with status zero, so exit status alone is insufficient. The [completion wrapper](../Tests/run-swift-tests.py) rejects missing or zero-test summaries. Counts describe test functions, including parameterized functions, rather than individual argument cases.
 

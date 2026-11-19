@@ -1,0 +1,2 @@
+[alias]
+check-core = "check --locked -p codex-gui-core"
