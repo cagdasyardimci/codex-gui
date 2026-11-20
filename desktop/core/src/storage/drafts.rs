@@ -73,13 +73,28 @@ pub fn save_draft(
     patch: &DraftPatch,
 ) -> Result<DraftSave, DraftStoreError> {
     let transaction = database.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let result = save_in_transaction(
+        &transaction,
+        id,
+        expected,
+        revision,
+        patch.text.as_deref(),
+        patch.context.as_deref(),
+    )?;
+    transaction.commit()?;
+    Ok(result)
+}
+
+pub(super) fn save_in_transaction(
+    transaction: &Transaction<'_>,
+    id: DraftId,
+    expected: Option<DraftRevision>,
+    revision: DraftRevision,
+    text: Option<&str>,
+    context: Option<&[Value]>,
+) -> Result<DraftSave, DraftStoreError> {
     let id = id.0.as_bytes().as_slice();
-    let text = patch.text.as_deref();
-    let context = patch
-        .context
-        .as_ref()
-        .map(serde_json::to_string)
-        .transpose()?;
+    let context = context.map(serde_json::to_string).transpose()?;
 
     let existing = transaction
         .query_row(
@@ -124,7 +139,6 @@ pub fn save_draft(
             params![id, revision.0],
         )?,
     };
-    transaction.commit()?;
     Ok(DraftSave::Applied)
 }
 

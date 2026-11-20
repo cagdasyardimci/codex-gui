@@ -7,11 +7,18 @@ use std::{
 };
 
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use thiserror::Error;
 
-use super::{DatabaseOpenError, drafts::DraftId, open_workspace_database};
+use crate::identity::ThreadId;
+
+use super::{
+    DatabaseOpenError,
+    drafts::{DraftId, DraftRevision, DraftStoreError, read_draft, save_in_transaction},
+    open_workspace_database,
+};
 
 const PARTIAL_PREFIX: &str = ".partial-";
 
@@ -40,6 +47,12 @@ pub enum AttachmentError {
     InvalidFile(BlobId),
     #[error("the draft no longer owns a storage record")]
     MissingDraft,
+    #[error("the captured attachment belongs to a different workspace store")]
+    ForeignLease,
+    #[error("the prepared thread or draft already has a different binding")]
+    ConflictingThreadDraft,
+    #[error(transparent)]
+    Draft(#[from] DraftStoreError),
 }
 
 #[derive(Clone)]
@@ -206,28 +219,75 @@ impl AttachmentStore {
             return Err(AttachmentError::MissingDraft);
         }
 
-        let requested: BTreeSet<_> = blobs.iter().copied().collect();
-        let existing = {
-            let mut statement =
-                transaction.prepare("SELECT blob_id FROM draft_attachments WHERE draft_id = ?1")?;
-            statement
-                .query_map([id], |row| row.get::<_, [u8; 32]>(0).map(BlobId))?
-                .collect::<Result<BTreeSet<_>, _>>()?
+        let removed =
+            replace_references(&transaction, &self.inner.blobs, id, blobs.iter().copied())?;
+        transaction.commit()?;
+        state.candidates.extend(removed);
+        Ok(())
+    }
+
+    pub(crate) fn bind_thread_draft(
+        &self,
+        thread: &ThreadId,
+        draft: DraftId,
+        revision: DraftRevision,
+        text: &str,
+        context: &[Value],
+        leases: &[BlobLease],
+    ) -> Result<(), AttachmentError> {
+        if leases
+            .iter()
+            .any(|lease| !Arc::ptr_eq(&self.inner, &lease.store))
+        {
+            return Err(AttachmentError::ForeignLease);
+        }
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let id = draft.0.as_bytes().as_slice();
+        let binding = transaction
+            .query_row(
+                "SELECT thread_id, draft_id FROM thread_drafts
+                 WHERE thread_id = ?1 OR draft_id = ?2
+                 LIMIT 1",
+                params![thread.0, id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, [u8; 16]>(1)?)),
+            )
+            .optional()?;
+        if let Some((bound_thread, bound_draft)) = binding {
+            return if bound_thread == thread.0 && bound_draft == *draft.0.as_bytes() {
+                Ok(())
+            } else {
+                Err(AttachmentError::ConflictingThreadDraft)
+            };
+        }
+
+        let current = read_draft(&transaction, draft)?.map(|saved| saved.revision);
+        if current.is_none_or(|saved| saved < revision) {
+            save_in_transaction(
+                &transaction,
+                draft,
+                current,
+                revision,
+                Some(text),
+                Some(context),
+            )?;
+        }
+        let removed = if current.is_none_or(|saved| saved <= revision) {
+            replace_references(
+                &transaction,
+                &self.inner.blobs,
+                id,
+                leases.iter().map(BlobLease::id),
+            )?
+        } else {
+            Vec::new()
         };
-        let removed: Vec<_> = existing.difference(&requested).copied().collect();
-        for blob in requested.difference(&existing) {
-            verify_saved_file(&transaction, &self.inner.blobs, *blob)?;
-            transaction.execute(
-                "INSERT INTO draft_attachments (draft_id, blob_id) VALUES (?1, ?2)",
-                params![id, blob.0.as_slice()],
-            )?;
-        }
-        for blob in &removed {
-            transaction.execute(
-                "DELETE FROM draft_attachments WHERE draft_id = ?1 AND blob_id = ?2",
-                params![id, blob.0.as_slice()],
-            )?;
-        }
+        transaction.execute(
+            "INSERT INTO thread_drafts (thread_id, draft_id) VALUES (?1, ?2)",
+            params![thread.0, id],
+        )?;
         transaction.commit()?;
         state.candidates.extend(removed);
         Ok(())
@@ -246,6 +306,46 @@ impl AttachmentStore {
         }
         Ok(())
     }
+}
+
+fn replace_references(
+    transaction: &Transaction<'_>,
+    root: &Path,
+    draft_id: &[u8],
+    blobs: impl Iterator<Item = BlobId>,
+) -> Result<Vec<BlobId>, AttachmentError> {
+    let requested: BTreeSet<_> = blobs.collect();
+    let existing = {
+        let mut statement =
+            transaction.prepare("SELECT blob_id FROM draft_attachments WHERE draft_id = ?1")?;
+        statement
+            .query_map([draft_id], |row| row.get::<_, [u8; 32]>(0).map(BlobId))?
+            .collect::<Result<BTreeSet<_>, _>>()?
+    };
+    let removed: Vec<_> = existing.difference(&requested).copied().collect();
+    for blob in requested.difference(&existing) {
+        verify_saved_file(transaction, root, *blob)?;
+        transaction.execute(
+            "INSERT INTO draft_attachments (draft_id, blob_id) VALUES (?1, ?2)",
+            params![draft_id, blob.0.as_slice()],
+        )?;
+    }
+    for blob in &removed {
+        transaction.execute(
+            "DELETE FROM draft_attachments WHERE draft_id = ?1 AND blob_id = ?2",
+            params![draft_id, blob.0.as_slice()],
+        )?;
+    }
+    Ok(removed)
+}
+
+pub(super) fn migrate_thread_drafts(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "CREATE TABLE thread_drafts (
+            thread_id TEXT NOT NULL PRIMARY KEY CHECK (length(thread_id) > 0),
+            draft_id BLOB NOT NULL UNIQUE REFERENCES drafts (id) ON DELETE CASCADE
+        ) STRICT, WITHOUT ROWID;",
+    )
 }
 
 fn verify_file(id: BlobId, metadata: &fs::Metadata, size: u64) -> Result<(), AttachmentError> {

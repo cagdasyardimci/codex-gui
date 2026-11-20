@@ -2,15 +2,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use indexmap::IndexMap;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::{Mutex, mpsc, oneshot, watch};
 
 use crate::{
     identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId},
     storage::drafts::DraftId,
 };
 
+mod prepare;
 mod send;
 
+pub use prepare::PrepareError;
 pub use send::{SendDraft, SendIntent, SendSettings};
 
 const ACTION_CAPACITY: usize = 32;
@@ -51,7 +53,7 @@ pub enum WorkspaceAction {
 }
 
 pub struct PrepareThread {
-    pub intent: Arc<SendIntent>,
+    intent: Arc<SendIntent>,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -80,6 +82,7 @@ pub enum WorkspaceError {
 pub struct WorkspaceEngine {
     actions: mpsc::Sender<Message>,
     snapshots: watch::Receiver<Arc<WorkspaceSnapshot>>,
+    preparation_commit: Arc<Mutex<()>>,
 }
 
 struct Message {
@@ -95,18 +98,28 @@ impl WorkspaceEngine {
         let (publish, snapshots) = watch::channel(state.snapshot());
         tokio::spawn(async move {
             while let Some(message) = incoming.recv().await {
-                let outcome = state.apply(message.action, &effects).map(|()| {
+                let outcome = state.apply(message.action, &effects).map(|prepared| {
                     state.revision = state
                         .revision
                         .checked_add(1)
                         .expect("workspace revision exhausted");
                     publish.send_replace(state.snapshot());
+                    if let Some((slot, effect)) = prepared {
+                        slot.send(effect);
+                    }
                     state.revision
                 });
                 let _ = message.completion.send(outcome);
             }
         });
-        (Self { actions, snapshots }, pending_effects)
+        (
+            Self {
+                actions,
+                snapshots,
+                preparation_commit: Arc::new(Mutex::new(())),
+            },
+            pending_effects,
+        )
     }
 
     pub fn snapshot(&self) -> Arc<WorkspaceSnapshot> {
@@ -114,6 +127,14 @@ impl WorkspaceEngine {
     }
 
     pub async fn apply(&self, action: WorkspaceAction) -> Result<u64, WorkspaceError> {
+        if matches!(action, WorkspaceAction::AdmitFirstMessage(_)) {
+            return self.dispatch(action).await;
+        }
+        let _commit = self.preparation_commit.lock().await;
+        self.dispatch(action).await
+    }
+
+    async fn dispatch(&self, action: WorkspaceAction) -> Result<u64, WorkspaceError> {
         let (completion, received) = oneshot::channel();
         self.actions
             .send(Message { action, completion })
@@ -130,6 +151,8 @@ struct State {
     pending: HashMap<RequestId, Arc<SendIntent>>,
     threads: HashMap<ThreadId, DraftId>,
 }
+
+type ReservedPreparation = (mpsc::OwnedPermit<PrepareThread>, PrepareThread);
 
 impl State {
     fn new(connection: ConnectionIdentity) -> Self {
@@ -161,22 +184,24 @@ impl State {
         &mut self,
         action: WorkspaceAction,
         effects: &mpsc::Sender<PrepareThread>,
-    ) -> Result<(), WorkspaceError> {
+    ) -> Result<Option<ReservedPreparation>, WorkspaceError> {
         match action {
-            WorkspaceAction::AdmitFirstMessage(intent) => self.admit(intent, effects),
+            WorkspaceAction::AdmitFirstMessage(intent) => self.admit(intent, effects).map(Some),
             WorkspaceAction::ThreadPrepared { operation, thread } => {
-                self.bind_thread(&operation, thread)
+                self.bind_thread(&operation, thread).map(|()| None)
             }
             WorkspaceAction::PreparationFailed { operation } => {
                 let draft = self.pending_draft(&operation)?;
                 self.pending.remove(&operation.request);
                 self.rows.shift_remove(&draft);
-                Ok(())
+                Ok(None)
             }
             WorkspaceAction::ReplaceConnection {
                 expected,
                 replacement,
-            } => self.replace_connection(expected, replacement),
+            } => self
+                .replace_connection(expected, replacement)
+                .map(|()| None),
         }
     }
 
@@ -184,7 +209,7 @@ impl State {
         &mut self,
         intent: Arc<SendIntent>,
         effects: &mpsc::Sender<PrepareThread>,
-    ) -> Result<(), WorkspaceError> {
+    ) -> Result<ReservedPreparation, WorkspaceError> {
         self.validate_owner(&intent.operation)?;
         if self.connection.workspace.checkout.is_none() {
             return Err(WorkspaceError::MissingCheckout);
@@ -197,15 +222,17 @@ impl State {
         if self.pending.contains_key(&request) || self.rows.contains_key(&draft) {
             return Err(WorkspaceError::AlreadyAdmitted);
         }
-        let slot = effects.try_reserve().map_err(|error| match error {
-            mpsc::error::TrySendError::Full(()) => WorkspaceError::EffectQueueFull,
-            mpsc::error::TrySendError::Closed(()) => WorkspaceError::EffectQueueClosed,
-        })?;
+        let slot = effects
+            .clone()
+            .try_reserve_owned()
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => WorkspaceError::EffectQueueFull,
+                mpsc::error::TrySendError::Closed(_) => WorkspaceError::EffectQueueClosed,
+            })?;
         self.pending.insert(request, intent.clone());
         self.rows
             .insert(draft, NavigationTarget::Preparing(request));
-        slot.send(PrepareThread { intent });
-        Ok(())
+        Ok((slot, PrepareThread { intent }))
     }
 
     fn bind_thread(

@@ -15,6 +15,7 @@ const MIGRATIONS: &[Migration] = &[
     |transaction| transaction.pragma_update(None, "application_id", APPLICATION_ID),
     drafts::migrate,
     attachments::migrate,
+    attachments::migrate_thread_drafts,
 ];
 
 #[derive(Debug, Error)]

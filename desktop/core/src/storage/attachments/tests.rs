@@ -9,6 +9,78 @@ const SECOND: DraftId = DraftId(Uuid::from_u128(2));
 const IMAGE: &[u8] = b"attachment bytes";
 
 #[test]
+fn a_binding_failure_rolls_back_draft_changes_and_retry_preserves_newer_edits() {
+    let scratch = tempdir().unwrap();
+    let path = scratch.path().join("workspace.sqlite3");
+    let store = AttachmentStore::open(&path).unwrap();
+    let mut db = open_workspace_database(&path).unwrap();
+    let thread = ThreadId("thread".into());
+    let captured = store.stage(IMAGE).unwrap();
+    let captured_id = captured.id();
+    let initial = DraftRevision::INITIAL;
+    db.execute_batch(
+        "CREATE TRIGGER fail_binding BEFORE INSERT ON thread_drafts
+         BEGIN SELECT RAISE(ABORT, 'simulated binding failure'); END;",
+    )
+    .unwrap();
+    assert!(matches!(
+        store.bind_thread_draft(
+            &thread,
+            FIRST,
+            initial,
+            "visible",
+            &[],
+            std::slice::from_ref(&captured)
+        ),
+        Err(AttachmentError::Database(_))
+    ));
+    assert!(read_draft(&db, FIRST).unwrap().is_none());
+    let edges: i64 = db
+        .query_row("SELECT COUNT(*) FROM draft_attachments", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(edges, 0);
+    db.execute_batch("DROP TRIGGER fail_binding").unwrap();
+
+    let edited = initial.next().unwrap();
+    let new_blob = store.stage(&b"new image"[..]).unwrap();
+    save_draft(
+        &mut db,
+        FIRST,
+        None,
+        edited,
+        &DraftPatch {
+            text: Some("newer draft".into()),
+            context: None,
+        },
+    )
+    .unwrap();
+    store
+        .replace_draft_references(FIRST, &[new_blob.id()])
+        .unwrap();
+    store
+        .bind_thread_draft(&thread, FIRST, initial, "visible", &[], &[captured])
+        .unwrap();
+    let saved = read_draft(&db, FIRST).unwrap().unwrap();
+    assert_eq!(saved.revision, edited);
+    assert_eq!(saved.text, "newer draft");
+    let path = new_blob.path();
+    drop(new_blob);
+    store.collect().unwrap();
+    assert!(path.is_file());
+    assert!(matches!(
+        store.lease(captured_id),
+        Err(AttachmentError::Missing(_))
+    ));
+    assert!(matches!(
+        store.bind_thread_draft(&thread, SECOND, initial, "other", &[], &[]),
+        Err(AttachmentError::ConflictingThreadDraft)
+    ));
+    assert!(read_draft(&db, SECOND).unwrap().is_none());
+}
+
+#[test]
 fn shared_draft_references_and_leases_protect_the_same_blob() {
     let scratch = tempdir().unwrap();
     let database = scratch.path().join("Workspace café.sqlite3");
