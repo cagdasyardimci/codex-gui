@@ -40,6 +40,7 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 mod account;
 mod composer_attachments;
 mod composer_settings;
+mod conversation_fork;
 pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
 mod interactions;
 mod ownership;
@@ -404,6 +405,21 @@ impl Navigation {
             NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
+            NavigationIntent::SetResponseBookmark(request) => {
+                self.set_response_bookmark(request)?
+            }
+            NavigationIntent::BranchResponse(row) => self.branch_response(row).await?,
+            NavigationIntent::ForkChat(source) => {
+                self.start_conversation_fork(
+                    source,
+                    codex_gui_core::codex::ForkBoundary::SavedChat,
+                    None,
+                )
+                .await?
+            }
+            NavigationIntent::RecoverFork(request) => {
+                self.recover_conversation_fork(request).await?
+            }
             NavigationIntent::CancelQuit(decision) => self.cancel_quit(decision)?,
             NavigationIntent::StopAll => self.begin_stop_all(),
             NavigationIntent::EditDraft(edit) => self.edit(edit)?,
@@ -606,7 +622,8 @@ impl Navigation {
         };
         self.set_editor(draft)?;
         self.view.selected_chat = thread.as_ref().map(|thread| thread.0.clone());
-        self.view.project_has_input = self.project_context()?.has_submission_context();
+        let context = self.project_context()?;
+        self.project_context_changed(&context);
         self.load_composer_settings()?;
         self.view.retryable = false;
         self.retire_history_pages();

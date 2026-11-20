@@ -171,6 +171,11 @@ class Server:
             return {'thread': self.summary(thread), **self.settings(thread)}
         if method in ('thread/read', 'thread/resume'):
             thread = self.thread(p.get('threadId'))
+            if (method == 'thread/resume' and self.scenario.get('desktopConversationFork')
+                    and thread['id'] == 'history-second' and not self.state.data.get('branchWriterObserved')):
+                self.state.data['branchWriterObserved'] = True
+                self.state.save()
+                raise ProtocolError(-32000, 'Thread already has an active writer')
             if (method == 'thread/resume' and self.scenario.get('desktopPromptRevision')
                     and thread['id'] == 'revision-fork-2' and not self.state.data.get('forkBlockedOnce')):
                 self.state.data['forkBlockedOnce'] = True
@@ -185,6 +190,8 @@ class Server:
                 if p.get('excludeTurns') or p.get('includeTurns') is False:
                     turns = []
             return {'thread': {**self.summary(thread), 'turns': turns}, **self.settings(thread)}
+        if method == 'thread/fork' and self.scenario.get('desktopConversationFork'):
+            return self.conversation_fork(p)
         if method == 'thread/fork' and self.scenario.get('desktopPromptRevision'):
             source = self.thread(p['threadId'])
             boundary = next((index for index, turn in enumerate(source['turns'])
@@ -272,6 +279,30 @@ class Server:
             'tokenUsage': {'last': {'inputTokens': 1024, 'totalTokens': tokens},
                            'total': {'totalTokens': 133_700}, 'modelContextWindow': 10_240},
         })
+
+    def conversation_fork(self, params):
+        source = self.thread(params['threadId'])
+        capture = params.get('lastTurnId')
+        if capture:
+            count = next((index + 1 for index, turn in enumerate(source['turns']) if turn['id'] == capture), None)
+        else:
+            count = len(source['turns']) if params.get('deferGoalContinuation') else None
+        if count is None or not params.get('excludeTurns'):
+            raise ProtocolError(-32602, 'Invalid captured branch target')
+        number = self.state.data.get('conversationForks', 0) + 1
+        self.state.data['conversationForks'] = number
+        fork = {**source, 'id': f'conversation-fork-{number}', 'name': f'Conversation Fork {number}',
+                'turns': copy.deepcopy(source['turns'][:count])}
+        self.state.threads.append(fork)
+        if number == 1:
+            source['turns'].extend({
+                'id': f'more-recent-{index}', 'status': 'completed',
+                'items': [{'id': f'new-answer-{index}', 'type': 'agentMessage', 'text': f'More recent response {index}.'}],
+            } for index in range(105))
+        if number == 3:
+            self.state.save()
+            raise UnconfirmedMutation()
+        return {'thread': self.summary(fork), **self.settings(fork)}
 
     def slash_settings(self, params):
         thread = self.thread(params['threadId'])

@@ -29,10 +29,11 @@
   import { verifyProjectContext } from './projectContextProbe';
   import { verifySlashCommands } from './slashCommandProbe';
   import { verifyPromptRevision } from './promptRevisionProbe';
+  import { verifyConversationFork } from './conversationForkProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -74,6 +75,8 @@
   const attachmentScope = $derived(workspaceId && displayedDraft
     ? { workspaceId, chatId: selectedChat ?? null, draftId: displayedDraft } : undefined);
   const draftAttachments = $derived(navigation?.draft?.attachments ?? []);
+  const finishedTurns = $derived(new Set(navigation?.turnRail?.turns.filter((turn) => turn.finished).map((turn) => turn.id)));
+  const responseBookmarks = $derived(new Set(navigation?.bookmarkedResponses));
   const slashMatches = $derived(slashToken ? (navigation?.slashCommands.available ?? [])
     .filter((command) => command.startsWith(slashToken!.prefix)) : []);
   const mayExecuteSlash = $derived(!navigation?.literalForkRevision && /^[ \t]*\/[^/\s]/u.test(text) &&
@@ -81,7 +84,7 @@
   const editablePrompts = $derived.by(() => {
     const result = new Set<string>();
     if (!navigation?.canEditSentPrompt) return result;
-    const finished = new Set(navigation.turnRail?.turns.filter((turn) => turn.finished).map((turn) => turn.id));
+    const finished = new Set(finishedTurns);
     for (const row of snapshot?.transcript.items ?? []) {
       if (row.role === 'user' && finished.delete(row.turnId) && row.editablePrompt) result.add(row.itemId);
     }
@@ -108,6 +111,23 @@
   function copyResponse(item: TranscriptItem) {
     const request = rowRequest(item);
     if (request) return copyTranscriptRow(request);
+  }
+
+  function branchResponse(item: TranscriptItem) {
+    const request = rowRequest(item);
+    if (request) void act(() => navigateWorkspace({ branchResponse: request }));
+  }
+
+  function setResponseBookmark(item: TranscriptItem, bookmarked: boolean) {
+    const row = rowRequest(item);
+    if (row) void act(() => navigateWorkspace({ setResponseBookmark: { row, bookmarked } }));
+  }
+
+  function forkChat() {
+    const draft = sendRequest();
+    if (!draft?.chatId) return;
+    if (navigation?.recoverFork) commandPanel = { command: 'fork', draft, fullAccess: false, inline: false };
+    else void act(() => navigateWorkspace({ forkChat: { workspaceId: draft.workspaceId, chatId: draft.chatId! } }));
   }
 
   function editSentPrompt(item: TranscriptItem) {
@@ -364,15 +384,20 @@
     if (ticket) void act(() => navigateWorkspace({ cancelSignIn: { ticket } }));
   }
 
-  async function sendDraft() {
-    if (!workspace || !draftId || !navigation || (!navigation.actions.send && !mayExecuteSlash) ||
-        (!text.trim() && !draftAttachments.length && !navigation.projectHasInput) || composing || actionPending) return;
-    const send = {
+  function sendRequest(): SendRequest | undefined {
+    if (!workspace || !draftId || !navigation) return;
+    return {
       workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text,
       attachmentIds: draftAttachments.map((attachment) => attachment.id),
       composerRevision: navigation.composerSettings?.revision ?? null,
       expectedTurn: queue?.activeTurn ?? null,
     };
+  }
+
+  async function sendDraft() {
+    const send = sendRequest();
+    if (!send || !navigation || (!navigation.actions.send && !mayExecuteSlash) ||
+        (!text.trim() && !draftAttachments.length && !navigation.projectHasInput) || composing || actionPending) return;
     const literal = navigation.literalForkRevision;
     admittingDraft = true;
     try {
@@ -417,6 +442,16 @@
   function finishSlash(choice: string | null, confirmed: boolean) {
     const panel = commandPanel;
     if (!panel) return;
+    if (panel.command === 'fork') {
+      const chatId = panel.draft.chatId;
+      if (!confirmed || !chatId) return;
+      const source = { workspaceId: panel.draft.workspaceId, chatId };
+      void act(async () => {
+        await navigateWorkspace({ recoverFork: { source, fork: choice } });
+        commandPanel = undefined;
+      }, true);
+      return;
+    }
     if (panel.command === 'permissions' && choice === 'full' && !confirmed) {
       commandPanel = { ...panel, fullAccess: true };
       return;
@@ -631,6 +666,7 @@
     else if (verify === 'projectContext') void verifyProjectContext(() => snapshot);
     else if (verify === 'slashCommands') void verifySlashCommands(() => snapshot);
     else if (verify === 'promptRevision') void verifyPromptRevision(() => snapshot);
+    else if (verify === 'conversationFork') void verifyConversationFork(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -651,6 +687,11 @@
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
+      {#if navigation?.canFork || navigation?.recoverFork}
+        <button type="button" disabled={actionPending} onclick={forkChat}>
+          {navigation.recoverFork ? 'Resolve Fork' : 'Fork Chat'}
+        </button>
+      {/if}
       <button type="button" bind:this={projectContextButton} aria-expanded={showingProjectContext}
         disabled={!attachmentScope || !!quit}
         onclick={() => { showingProjectContext = !showingProjectContext; }}>Project Context</button>
@@ -691,9 +732,13 @@
           onwheel={transcriptWheel} onkeydown={transcriptKey} onscroll={transcriptScroll}>
           {#each viewport.entries as entry (entry.key)}
             {#if 'item' in entry}
+              {@const response = entry.item.role === 'assistant' && entry.item.completed && !!entry.item.text.trim() && finishedTurns.has(entry.item.turnId)}
               <div class="transcript-row-slot" data-transcript-slot={entry.item.itemId} use:measureTranscriptRow>
                 <TranscriptRow item={entry.item} request={rowRequest(entry.item)} attachmentScope={queue?.editing ? undefined : attachmentScope} copy={copyResponse}
-                  onCopyFocus={focusResponseAction} edit={editablePrompts.has(entry.item.itemId) ? editSentPrompt : undefined} />
+                  onCopyFocus={focusResponseAction} edit={editablePrompts.has(entry.item.itemId) ? editSentPrompt : undefined}
+                  branch={response && navigation?.canFork ? branchResponse : undefined}
+                  bookmark={response ? setResponseBookmark : undefined}
+                  bookmarked={responseBookmarks.has(entry.item.itemId)} />
               </div>
             {:else}
               <div style:block-size={`${entry.gap}px`} aria-hidden="true"></div>
@@ -808,12 +853,14 @@
     {#if showingProjectContext && attachmentScope && navigation}
       {#key `${attachmentScope.workspaceId}/${attachmentScope.draftId}`}
         <ProjectContextPanel scope={attachmentScope} models={navigation.account.models} draftText={text}
+          bookmarkKey={navigation.bookmarkedResponses.join('\n')}
           blocked={actionPending || !!queue?.editing || !!quit} submit={updateProjectContext} close={closeProjectContext} />
       {/key}
     {/if}
   </div>
   {#if commandPanel && workspace && navigation}
     <SlashCommandPanel command={commandPanel.command} fullAccess={commandPanel.fullAccess}
+      sourceId={commandPanel.draft.chatId}
       chats={navigation.chats} models={navigation.account.models} usage={navigation.slashCommands.context}
       workspace={workspace.projectPath} chat={navigation.chats.find((chat) => chat.id === selectedChat)?.title}
       effective={navigation.account.models.find((model) => model.id === navigation.composerSettings?.effectiveModelId)}

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import type { AccountModel, ChatRow, ContextUsage, SlashCommand } from './generated/workspace';
 
-  let { command, chats, models, effective, usage, workspace, chat, fullAccess, choose, close } : {
+  let { command, chats, models, effective, usage, workspace, chat, sourceId, fullAccess, choose, close } : {
     command: SlashCommand;
     chats: ChatRow[];
     models: AccountModel[];
@@ -10,6 +10,7 @@
     usage: ContextUsage | null;
     workspace: string;
     chat?: string;
+    sourceId?: string | null;
     fullAccess: boolean;
     choose: (choice: string | null, confirmed: boolean) => void;
     close: () => void;
@@ -19,6 +20,7 @@
   const matchingChats = $derived(chats.filter((row) =>
     row.title.toLowerCase().includes(query.toLowerCase()) || row.id.toLowerCase().includes(query.toLowerCase())));
   const title = $derived(command === 'status' ? 'Conversation Details' : command === 'plan' ? 'Conversation Mode' :
+    command === 'fork' ? 'Resolve Fork' :
     command === 'permissions' ? (fullAccess ? 'Full Access' : 'Permissions') :
     command === 'resume' ? 'Resume Chat' : command === 'model' ? 'Choose Model' : 'Reasoning Effort');
 
@@ -52,6 +54,14 @@
     <div class="choices">
       {#each matchingChats as row (row.id)}
         <button type="button" onclick={() => choose(row.id, false)}>{row.title}</button>
+      {/each}
+    </div>
+  {:else if command === 'fork'}
+    <input type="search" aria-label="Find Saved Chat" bind:value={query} />
+    <div class="choices">
+      <button type="button" onclick={() => choose(null, true)}>Continue Original Chat</button>
+      {#each matchingChats.filter((row) => row.id !== sourceId) as row (row.id)}
+        <button type="button" onclick={() => choose(row.id, true)}>{row.title}</button>
       {/each}
     </div>
   {:else if command === 'model'}

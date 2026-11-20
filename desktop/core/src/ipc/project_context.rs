@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::storage::project_context::{ProjectContextItemKind, ProjectModelPreference};
 
-use super::DraftAttachmentScope;
+use super::{DraftAttachmentScope, TranscriptRowRequest};
 
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -26,6 +26,14 @@ pub enum ProjectContextChange {
     SetModel(Option<ProjectModelPreference>),
     InsertPrompt(InsertProjectPrompt),
     OpenBookmark(String),
+    RemoveBookmark(String),
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResponseBookmarkRequest {
+    pub row: TranscriptRowRequest,
+    pub bookmarked: bool,
 }
 
 #[derive(Debug, Deserialize, TS)]

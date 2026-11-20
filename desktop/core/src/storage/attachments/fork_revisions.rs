@@ -155,6 +155,49 @@ impl AttachmentStore {
             |row| row.get(0),
         )?)
     }
+
+    pub fn conversation_fork_receipt(
+        &self,
+        checkout: &CheckoutIdentity,
+        source: &ThreadId,
+    ) -> Result<Option<Uuid>, AttachmentError> {
+        checkout.revalidate().map_err(io::Error::other)?;
+        let state = self.inner.state();
+        let receipt: Option<[u8; 16]> = state.database.query_row(
+            "SELECT operation FROM conversation_forks WHERE checkout_key = ?1 AND source_thread = ?2",
+            params![checkout.storage_key(), source.0], |row| row.get(0),
+        ).optional()?;
+        Ok(receipt.map(Uuid::from_bytes))
+    }
+
+    pub fn reserve_conversation_fork(
+        &self,
+        checkout: &CheckoutIdentity,
+        source: &ThreadId,
+        operation: Uuid,
+    ) -> Result<bool, AttachmentError> {
+        checkout.revalidate().map_err(io::Error::other)?;
+        let state = self.inner.state();
+        Ok(state.database.execute(
+            "INSERT INTO conversation_forks (checkout_key, source_thread, operation) VALUES (?1, ?2, ?3)
+             ON CONFLICT(checkout_key, source_thread) DO NOTHING",
+            params![checkout.storage_key(), source.0, operation.as_bytes()],
+        )? == 1)
+    }
+
+    pub fn retire_conversation_fork(
+        &self,
+        checkout: &CheckoutIdentity,
+        source: &ThreadId,
+        operation: Uuid,
+    ) -> Result<bool, AttachmentError> {
+        checkout.revalidate().map_err(io::Error::other)?;
+        let state = self.inner.state();
+        Ok(state.database.execute(
+            "DELETE FROM conversation_forks WHERE checkout_key = ?1 AND source_thread = ?2 AND operation = ?3",
+            params![checkout.storage_key(), source.0, operation.as_bytes()],
+        )? == 1)
+    }
 }
 
 pub(in crate::storage) fn migrate(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
@@ -168,5 +211,18 @@ pub(in crate::storage) fn migrate(transaction: &Transaction<'_>) -> rusqlite::Re
         ) STRICT, WITHOUT ROWID;
         CREATE UNIQUE INDEX unbound_fork_revision ON fork_revisions (checkout_key, source_thread)
         WHERE target_thread IS NULL;",
+    )
+}
+
+pub(in crate::storage) fn migrate_fork_receipts(
+    transaction: &Transaction<'_>,
+) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "CREATE TABLE conversation_forks (
+            checkout_key TEXT NOT NULL,
+            source_thread TEXT NOT NULL CHECK (length(source_thread) > 0),
+            operation BLOB NOT NULL CHECK (length(operation) = 16),
+            PRIMARY KEY (checkout_key, source_thread)
+        ) STRICT, WITHOUT ROWID;",
     )
 }

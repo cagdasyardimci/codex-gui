@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
     options = parser.add_mutually_exclusive_group()
-    for name in ("annotations", "context", "settings", "project-context", "slash-commands", "prompt-revision"):
+    for name in ("annotations", "context", "settings", "project-context", "slash-commands", "prompt-revision", "conversation-fork"):
         options.add_argument(f"--{name}", dest="mode", action="store_const", const=name)
     parser.set_defaults(mode="attachments")
     args = parser.parse_args()
@@ -82,6 +82,11 @@ def main():
                     ]},
                 ],
             })
+        if args.mode == "conversation-fork":
+            first["turns"].append({
+                "id": "newer-before-fork", "status": "completed",
+                "items": [{"id": "subsequent-response", "type": "agentMessage", "text": "A turn after the chosen branch."}],
+            })
         if args.mode in ("settings", "project-context", "slash-commands"):
             backend_state["config"] = {"model": "baseline-model", "model_reasoning_effort": "low", "service_tier": "default",
                                        "approval_policy": "untrusted", "sandbox_mode": "read-only", "approvals_reviewer": "user"}
@@ -94,6 +99,7 @@ def main():
             "project-context": ("--verify-project-context", "desktop-project-context", "Verified installed Project Context"),
             "slash-commands": ("--verify-slash-commands", "desktop-slash-commands", "Verified installed slash commands"),
             "prompt-revision": ("--verify-prompt-revision", "desktop-prompt-revision", "Verified installed sent prompt revisions"),
+            "conversation-fork": ("--verify-conversation-fork", "desktop-conversation-fork", "Verified installed response branches"),
         }[args.mode]
         result = subprocess.run(
             [str(executable), fixture, str(data), str(checkout)],
@@ -120,6 +126,9 @@ def main():
             return
         if args.mode == "prompt-revision":
             verify_prompt_revision(starts, requests, checkout, data, colors)
+            return
+        if args.mode == "conversation-fork":
+            verify_conversation_fork(starts, requests, state, data)
             return
         assert len(starts) == 1 and starts[0]["threadId"] == "history-first", starts
         inputs = starts[0]["input"]
@@ -281,6 +290,32 @@ def verify_prompt_revision(starts, requests, checkout, data, colors):
     assert drafts["revision-fork-2"] == "Keep the fork draft after writer lock.", drafts
     assert [item["kind"] for item in json.loads(context)] == ["fileReference", "image", "image"], context
     print("Verified the before-turn boundary, independent durable drafts and exact retained attachments")
+
+
+def verify_conversation_fork(starts, requests, state, data):
+    assert not starts, starts
+    assert [entry["params"] for entry in requests if entry["method"] == "thread/fork"] == [
+        {"threadId": "history-first", "excludeTurns": True, "lastTurnId": "first-saved-turn"},
+        {"threadId": "history-second", "excludeTurns": True, "deferGoalContinuation": True},
+        {"threadId": "history-first", "excludeTurns": True, "deferGoalContinuation": True},
+    ]
+    threads = {thread["id"]: thread for thread in json.loads(state.read_text(encoding="utf-8"))["threads"]}
+    assert [turn["id"] for turn in threads["conversation-fork-1"]["turns"]] == ["first-saved-turn"]
+    assert [turn["id"] for turn in threads["history-first"]["turns"][:2]] == ["first-saved-turn", "newer-before-fork"]
+    assert any(entry["method"] == "thread/turns/list" and entry["threadId"] == "history-first"
+               and entry["itemsView"] == "notLoaded" and entry.get("cursor") for entry in requests)
+    targeted = [entry for entry in requests if entry["method"] == "thread/items/list"]
+    assert [(entry["threadId"], entry["turnId"]) for entry in targeted] == [("history-first", "first-saved-turn")]
+    with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
+        drafts = dict(database.execute(
+            "SELECT thread_id, text FROM thread_drafts JOIN drafts ON thread_drafts.draft_id = drafts.id"
+        ))
+        assert database.execute("SELECT COUNT(*) FROM conversation_forks").fetchone() == (0,)
+        assert database.execute("SELECT json_array_length(content, '$.bookmarks') FROM project_contexts").fetchone() == (0,)
+    assert drafts["history-second"] == "Keep the writer-locked source draft."
+    assert drafts["conversation-fork-1"] == "A different draft in the response branch."
+    assert drafts["history-first"] == "/fork", drafts
+    print("Verified branch boundaries, a nonresident bookmark, independent drafts and no fork replay")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 use codex_gui_core::{
-    ipc::{ProjectContextChange, ProjectContextRequest},
+    ipc::{ProjectContextChange, ProjectContextRequest, ResponseBookmarkRequest},
     storage::{
         attachments::AttachmentError,
         project_context::{
-            ProjectContext, ProjectContextError, ProjectContextItem, ProjectSkillSelection,
-            SavedPrompt, put_project_entry, remove_project_entry,
+            ConversationBookmark, ConversationBookmarkKind, ProjectContext, ProjectContextError,
+            ProjectContextItem, ProjectSkillSelection, SavedPrompt, put_project_entry,
+            remove_project_entry,
         },
     },
 };
@@ -23,6 +24,104 @@ impl Navigation {
                 .context),
             None => Ok(ProjectContext::default()),
         }
+    }
+
+    pub(super) fn project_context_changed(&mut self, context: &ProjectContext) {
+        self.view.project_has_input = context.has_submission_context();
+        self.view.bookmarked_responses = context
+            .bookmarks
+            .iter()
+            .filter(|bookmark| {
+                self.view.selected_chat.as_ref() == Some(&bookmark.thread_id)
+                    && bookmark.file_path.is_none()
+            })
+            .filter_map(|bookmark| {
+                bookmark
+                    .item_id
+                    .as_deref()
+                    .map(|item| transcript_id(&bookmark.turn_id, item))
+            })
+            .collect();
+    }
+
+    pub(super) fn set_response_bookmark(
+        &mut self,
+        request: ResponseBookmarkRequest,
+    ) -> Result<(), IpcError> {
+        let row = request.row;
+        let (turn, label) = self.finished_response(&row)?;
+        let item = row
+            .item_id
+            .strip_prefix(&format!("{turn}/"))
+            .filter(|id| !id.is_empty())
+            .ok_or(IpcError::StaleSelection)?;
+        let checkout = &self
+            .selection
+            .as_ref()
+            .ok_or(IpcError::RetiredWorkspace)?
+            .checkout;
+        let _write = self
+            .owners
+            .acquire_write(checkout)
+            .map_err(|error| report(error.into()))?;
+        let view = self
+            .store
+            .project_context_view(checkout)
+            .map_err(project_error)?;
+        let current = view.context.bookmarks.iter().find(|bookmark| {
+            bookmark.thread_id == row.chat_id
+                && bookmark.turn_id == turn
+                && bookmark.item_id.as_deref() == Some(item)
+                && bookmark.file_path.is_none()
+        });
+        if current.is_some() == request.bookmarked {
+            return Ok(());
+        }
+        let existing = current.map(|bookmark| bookmark.id.clone());
+        self.store
+            .edit_project_context(checkout, view.revision, |context| {
+                if let Some(id) = existing {
+                    remove_project_entry(&mut context.bookmarks, &id, |bookmark| &bookmark.id)?;
+                } else {
+                    context.bookmarks.push(ConversationBookmark {
+                        id: Uuid::new_v4().to_string(),
+                        thread_id: row.chat_id,
+                        turn_id: turn,
+                        item_id: Some(item.to_owned()),
+                        kind: ConversationBookmarkKind::Answer,
+                        label,
+                        file_path: None,
+                    });
+                }
+                Ok(())
+            })
+            .map_err(project_error)?;
+        let context = self.project_context().map_err(report)?;
+        self.project_context_changed(&context);
+        self.publish_navigation();
+        Ok(())
+    }
+
+    pub(super) fn finished_response(
+        &self,
+        row: &codex_gui_core::ipc::TranscriptRowRequest,
+    ) -> Result<(String, String), IpcError> {
+        self.require(row.workspace_id)?;
+        let (turn, response) = self
+            .model
+            .lock()
+            .expect("workspace state lock poisoned")
+            .projection
+            .finished_response(row)?;
+        if self.view.turn_rail.as_ref().is_none_or(|rail| {
+            !rail
+                .turns
+                .iter()
+                .any(|entry| entry.id == turn && entry.finished)
+        }) {
+            return Err(IpcError::StaleSelection);
+        }
+        Ok((turn, response))
     }
 
     pub(super) async fn edit_project_context(
@@ -144,10 +243,8 @@ impl Navigation {
                         apply_edit(context, change, skill)
                     })
                     .map_err(project_error)?;
-                self.view.project_has_input = self
-                    .project_context()
-                    .map_err(report)?
-                    .has_submission_context();
+                let context = self.project_context().map_err(report)?;
+                self.project_context_changed(&context);
                 if changes_model {
                     self.reconcile_composer_models();
                     if let Some(settings) = self.view.composer_settings.as_mut() {
@@ -235,6 +332,9 @@ fn apply_edit(
         }
         ProjectContextChange::SetSkill(_) => context.selected_skill = skill,
         ProjectContextChange::SetModel(preference) => context.model_preference = preference,
+        ProjectContextChange::RemoveBookmark(id) => {
+            remove_project_entry(&mut context.bookmarks, &id, |bookmark| &bookmark.id)?
+        }
         _ => return Err(ProjectContextError::InvalidEdit),
     }
     Ok(())

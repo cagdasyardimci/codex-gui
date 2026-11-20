@@ -54,9 +54,9 @@ pub use navigation::{
 };
 pub use project_context::{
     InsertProjectPrompt, ProjectContextChange, ProjectContextRequest, ProjectItemEdit,
-    ProjectItemInclusion, ProjectPromptEdit,
+    ProjectItemInclusion, ProjectPromptEdit, ResponseBookmarkRequest,
 };
-pub use prompt_revision::{ReviseSentPrompt, SentPromptEdit};
+pub use prompt_revision::{RecoverFork, ReviseSentPrompt, SentPromptEdit};
 pub use question_reply::present_question_reply;
 pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
@@ -261,6 +261,7 @@ pub fn workspace_typescript() -> String {
         ProjectItemInclusion::decl(),
         ProjectPromptEdit::decl(),
         InsertProjectPrompt::decl(),
+        ResponseBookmarkRequest::decl(),
         crate::storage::project_context::ProjectContextView::decl(),
         crate::storage::project_context::ProjectContext::decl(),
         crate::storage::project_context::ProjectContextItem::decl(),
@@ -276,6 +277,7 @@ pub fn workspace_typescript() -> String {
         ReuseAttachmentRequest::decl(),
         TranscriptView::decl(),
         ReviseSentPrompt::decl(),
+        RecoverFork::decl(),
         SentPromptEdit::decl(),
         TranscriptRole::decl(),
         NavigationView::decl(),

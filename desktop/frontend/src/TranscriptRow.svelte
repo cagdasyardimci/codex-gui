@@ -4,13 +4,16 @@
   import ImagePreview from './ImagePreview.svelte';
   import { loadTranscriptAttachment, reuseComposerAttachment } from './projectIpc';
 
-  let { item, request, attachmentScope, copy, onCopyFocus, edit }: {
+  let { item, request, attachmentScope, copy, onCopyFocus, edit, branch, bookmark, bookmarked }: {
     item: TranscriptItem;
     request?: TranscriptRowRequest;
     attachmentScope?: DraftAttachmentScope;
     copy: (item: TranscriptItem) => Promise<void> | void;
     onCopyFocus: () => void;
     edit?: (item: TranscriptItem) => void;
+    branch?: (item: TranscriptItem) => void;
+    bookmark?: (item: TranscriptItem, bookmarked: boolean) => void;
+    bookmarked?: boolean;
   } = $props();
 
   async function copyResponse() {
@@ -40,7 +43,8 @@
   <article class="transcript-item" data-item-id={item.itemId} data-turn-id={item.turnId} aria-label={item.role === 'user' ? 'You' : 'Codex'}>
     <div class="transcript-item-header">
       <span aria-hidden="true">{item.role === 'user' ? 'You' : 'Codex'}</span>
-      {#if item.role === 'assistant' && item.completed && item.text}
+    <div class="transcript-row-actions">
+    {#if item.role === 'assistant' && item.completed && item.text}
         <button class="transcript-copy" type="button" aria-label="Copy response"
           onpointerdown={(event) => event.preventDefault()} onfocus={onCopyFocus} onclick={copyResponse}>Copy</button>
       {/if}
@@ -48,6 +52,17 @@
       <button class="transcript-copy transcript-edit" type="button" aria-label="Edit sent prompt"
         onpointerdown={(event) => event.preventDefault()} onclick={() => edit?.(item)}>Edit</button>
     {/if}
+    {#if bookmark}
+      <button class="transcript-copy" type="button" aria-pressed={!!bookmarked}
+        aria-label={bookmarked ? 'Remove response bookmark' : 'Bookmark response'}
+        onpointerdown={(event) => event.preventDefault()}
+        onclick={() => bookmark?.(item, !bookmarked)}>{bookmarked ? 'Remove Bookmark' : 'Bookmark'}</button>
+    {/if}
+    {#if branch}
+      <button class="transcript-copy" type="button" aria-label="Branch in new chat"
+        onpointerdown={(event) => event.preventDefault()} onclick={() => branch?.(item)}>Branch</button>
+    {/if}
+    </div>
     </div>
     {#if item.text}
       <MarkdownView source={item.text} request={item.role === 'assistant' && item.completed ? request : undefined} />

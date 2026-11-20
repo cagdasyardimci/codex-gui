@@ -36,6 +36,7 @@ pub enum Verification {
     ProjectContext,
     SlashCommands,
     PromptRevision,
+    ConversationFork,
     Account,
     WindowsSetup,
     Turn,
@@ -264,6 +265,7 @@ pub fn verify_attachments_result(
             | Verification::ProjectContext
             | Verification::SlashCommands
             | Verification::PromptRevision
+            | Verification::ConversationFork
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -291,6 +293,10 @@ pub fn verify_attachments_result(
             );
         } else if *verification == Verification::PromptRevision {
             println!("Verified installed sent prompt revisions and retained fork drafts");
+        } else if *verification == Verification::ConversationFork {
+            println!(
+                "Verified installed response branches, saved bookmarks, and writer-locked forks"
+            );
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

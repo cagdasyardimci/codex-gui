@@ -170,6 +170,22 @@ impl Navigation {
         };
         let visible = SlashCommandOutcome::Present(command);
         match command {
+            Command::Fork => {
+                if self.view.recover_fork {
+                    return Ok(visible);
+                }
+                let source = codex_gui_core::ipc::ChatRequest {
+                    workspace_id: draft.workspace_id,
+                    chat_id: draft.chat_id.ok_or(IpcError::StaleSelection)?,
+                };
+                self.start_conversation_fork(
+                    source,
+                    codex_gui_core::codex::ForkBoundary::SavedChat,
+                    Some(draft.text),
+                )
+                .await?;
+                return Ok(SlashCommandOutcome::Applied);
+            }
             Command::New => {
                 self.consume_command(draft_id, &draft.text)?;
                 self.focus(None).await.map_err(report)?;
@@ -231,11 +247,7 @@ impl Navigation {
             Command::Resume | Command::Skills | Command::Mention | Command::Copy => {
                 return Ok(visible);
             }
-            Command::Fork
-            | Command::Rename
-            | Command::Archive
-            | Command::Delete
-            | Command::Review => {
+            Command::Rename | Command::Archive | Command::Delete | Command::Review => {
                 return Err(IpcError::StaleSelection);
             }
         }

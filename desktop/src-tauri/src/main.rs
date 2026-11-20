@@ -34,6 +34,7 @@ fn main() {
         Some("--verify-project-context") => fixture::Verification::ProjectContext,
         Some("--verify-slash-commands") => fixture::Verification::SlashCommands,
         Some("--verify-prompt-revision") => fixture::Verification::PromptRevision,
+        Some("--verify-conversation-fork") => fixture::Verification::ConversationFork,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -62,6 +63,7 @@ fn main() {
             | fixture::Verification::ProjectContext
             | fixture::Verification::SlashCommands
             | fixture::Verification::PromptRevision
+            | fixture::Verification::ConversationFork
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn

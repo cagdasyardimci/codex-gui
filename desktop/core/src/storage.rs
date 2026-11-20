@@ -36,6 +36,7 @@ const MIGRATIONS: &[Migration] = &[
     project_context::migrate_revisions,
     attachments::composer_plan::migrate,
     attachments::fork_revisions::migrate,
+    attachments::fork_revisions::migrate_fork_receipts,
 ];
 
 #[derive(Debug, Error)]

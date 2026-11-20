@@ -23,8 +23,9 @@ const MAX_PROMPT_BYTES: usize = 1024 * 1024;
 
 pub(super) struct PromptRevisions {
     editor: Option<PromptEditor>,
-    sender: mpsc::Sender<Box<ForkCompletion>>,
+    pub(super) sender: mpsc::Sender<Box<ForkCompletion>>,
     pub(super) completed: mpsc::Receiver<Box<ForkCompletion>>,
+    pub(super) active_forks: std::collections::HashSet<Uuid>,
 }
 
 impl Default for PromptRevisions {
@@ -34,6 +35,7 @@ impl Default for PromptRevisions {
             editor: None,
             sender,
             completed,
+            active_forks: Default::default(),
         }
     }
 }
@@ -67,7 +69,12 @@ struct PromptEditor {
     attachments: Vec<RecordedAttachment>,
 }
 
-pub(super) struct ForkCompletion {
+pub(super) enum ForkCompletion {
+    Revision(RevisionForkCompletion),
+    Conversation(super::conversation_fork::ConversationForkCompletion),
+}
+
+pub(super) struct RevisionForkCompletion {
     row: TranscriptRowRequest,
     rail: Uuid,
     connection: ConnectionIdentity,
@@ -93,13 +100,6 @@ impl NavigationHandle {
 
 impl Navigation {
     pub(super) fn sync_prompt_revision(&mut self) {
-        self.view.can_edit_sent_prompt = self.prompt_fork_scope().is_ok_and(|(selection, _, _)| {
-            selection.thread.as_ref().is_some_and(|thread| {
-                self.store
-                    .has_pending_fork_revision(&selection.checkout, thread)
-                    .is_ok_and(|pending| !pending)
-            })
-        });
         self.view.literal_fork_revision = self
             .editor_id()
             .is_some_and(|draft| self.is_literal_revision(draft).unwrap_or(false));
@@ -120,7 +120,7 @@ impl Navigation {
         }
     }
 
-    fn prompt_fork_scope(
+    pub(super) fn prompt_fork_scope(
         &self,
     ) -> Result<(&Selection, &Backend, &codex_gui_core::ipc::TurnRailView), IpcError> {
         let selection = self.selection.as_ref().ok_or(IpcError::RetiredWorkspace)?;
@@ -319,7 +319,7 @@ impl Navigation {
                 )
                 .await;
             let _ = complete
-                .send(Box::new(ForkCompletion {
+                .send(Box::new(ForkCompletion::Revision(RevisionForkCompletion {
                     row: editor.row,
                     rail: editor.rail,
                     connection: editor.client.identity().clone(),
@@ -330,7 +330,7 @@ impl Navigation {
                     choice,
                     result,
                     _lease: lease,
-                }))
+                })))
                 .await;
         });
         self.sync_actions();
@@ -341,7 +341,17 @@ impl Navigation {
         &mut self,
         completion: ForkCompletion,
     ) -> Result<(), Failure> {
-        let ForkCompletion {
+        match completion {
+            ForkCompletion::Revision(revision) => self.complete_revision_fork(revision).await,
+            ForkCompletion::Conversation(fork) => self.complete_conversation_fork(fork).await,
+        }
+    }
+
+    async fn complete_revision_fork(
+        &mut self,
+        completion: RevisionForkCompletion,
+    ) -> Result<(), Failure> {
+        let RevisionForkCompletion {
             row,
             rail,
             connection,
@@ -367,15 +377,6 @@ impl Navigation {
         else {
             return Ok(());
         };
-        self.view.chats.retain(|chat| chat.id != fork.id.0);
-        self.view.chats.insert(
-            0,
-            ChatRow {
-                id: fork.id.0.clone(),
-                title: fork.name.unwrap_or_else(|| "Forked Chat".into()),
-                preview: fork.preview,
-            },
-        );
         let still_selected = bound
             && selection.id == row.workspace_id
             && selection
@@ -398,11 +399,12 @@ impl Navigation {
                 .store
                 .read_editor_draft(source_draft.0)
                 .is_ok_and(|saved| saved.revision == source_draft.1);
+        let thread = self.remember_fork(fork);
         self.sync_actions();
         if !still_selected {
             return Ok(());
         }
-        self.focus(Some(fork.id.clone())).await?;
+        self.focus(Some(thread.clone())).await?;
         if self.view.retryable
             || !self.view.actions.send
             || self.editor_id() != Some(draft)
@@ -417,7 +419,7 @@ impl Navigation {
         let saved = self.store.read_editor_draft(draft)?;
         let request = SendRequest {
             workspace_id: row.workspace_id,
-            chat_id: Some(fork.id.0),
+            chat_id: Some(thread.0),
             draft_id: draft.0.to_string(),
             text: saved.text,
             attachment_ids: super::composer_attachments::views(&saved.context)

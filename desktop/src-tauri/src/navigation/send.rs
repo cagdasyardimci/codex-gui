@@ -370,6 +370,7 @@ impl Navigation {
         let Some(backend) = &self.backend else {
             self.sync_slash_commands();
             self.sync_prompt_revision();
+            self.sync_fork_controls();
             self.publish_navigation();
             return;
         };
@@ -429,6 +430,7 @@ impl Navigation {
         }
         self.sync_slash_commands();
         self.sync_prompt_revision();
+        self.sync_fork_controls();
         self.publish_navigation();
     }
 

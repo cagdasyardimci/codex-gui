@@ -6,11 +6,12 @@
   } from './generated/workspace';
   import { composerContextCatalog, readProjectContext } from './projectIpc';
 
-  let { scope, models, blocked, draftText, submit, close }: {
+  let { scope, models, blocked, draftText, bookmarkKey, submit, close }: {
     scope: DraftAttachmentScope;
     models: AccountModel[];
     blocked: boolean;
     draftText: string;
+    bookmarkKey: string;
     submit: (scope: DraftAttachmentScope, revision: number, change: ProjectContextChange) => Promise<void>;
     close: () => void;
   } = $props();
@@ -44,11 +45,15 @@
   }
 
   onMount(() => {
-    void refresh().catch(report);
     void composerContextCatalog(scope).then((choices) => {
       if (current) skills = choices.filter((choice) => choice.kind === 'skill');
     }).catch(report);
     return () => { current = false; };
+  });
+
+  $effect(() => {
+    bookmarkKey;
+    void refresh().catch(report);
   });
 
   async function change(change: ProjectContextChange, completed?: () => void, refreshAfter = true) {
@@ -212,8 +217,12 @@
     <section aria-labelledby="project-bookmarks">
       <h3 id="project-bookmarks">Bookmarks</h3>
       {#each context.bookmarks as bookmark (bookmark.id)}
-        <button type="button" disabled={busy || blocked}
-          onclick={() => void change({ openBookmark: bookmark.id }, close, false)}>{bookmark.label}</button>
+        <div class="project-entry">
+          <button type="button" disabled={busy || blocked}
+            onclick={() => void change({ openBookmark: bookmark.id }, close, false)}>{bookmark.label}</button>
+          <button type="button" disabled={busy || blocked} aria-label={`Remove bookmark ${bookmark.label}`}
+            onclick={() => void change({ removeBookmark: bookmark.id })}>Remove</button>
+        </div>
       {/each}
     </section>
   {/if}

@@ -1,3 +1,4 @@
+use super::ChatRequest;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
@@ -15,4 +16,11 @@ pub struct SentPromptEdit {
 pub struct ReviseSentPrompt {
     pub ticket: Uuid,
     pub text: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecoverFork {
+    pub source: ChatRequest,
+    pub fork: Option<String>,
 }

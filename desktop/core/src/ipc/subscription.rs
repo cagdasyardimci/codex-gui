@@ -367,6 +367,23 @@ impl WorkspaceProjection {
         })
     }
 
+    pub fn finished_response(
+        &self,
+        request: &TranscriptRowRequest,
+    ) -> Result<(String, String), IpcError> {
+        self.read_transcript_row(request, |row| {
+            if row.role != TranscriptRole::Assistant || !row.completed {
+                return None;
+            }
+            let label = row
+                .text
+                .lines()
+                .map(str::trim)
+                .find(|line| !line.is_empty())?;
+            Some((row.turn_id.clone(), label.chars().take(120).collect()))
+        })
+    }
+
     pub fn transcript_images(
         &self,
         request: &TranscriptRowRequest,

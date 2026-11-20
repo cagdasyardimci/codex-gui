@@ -6,9 +6,9 @@ use crate::git::turn_edits::LastTurnView;
 
 use super::{
     ComposerSelectionView, ComposerSettingsRequest, ConversationActions, DraftAttachmentView,
-    ModelEffort, ModelServiceTier, ProjectContextRequest, QueueRequest, QueueView,
-    RecoverSendRequest, RespondRequest, ReviseSentPrompt, SendRequest, SlashCommandView,
-    StopRequest, WorkspaceId, WorkspaceRequest,
+    ModelEffort, ModelServiceTier, ProjectContextRequest, QueueRequest, QueueView, RecoverFork,
+    RecoverSendRequest, RespondRequest, ResponseBookmarkRequest, ReviseSentPrompt, SendRequest,
+    SlashCommandView, StopRequest, TranscriptRowRequest, WorkspaceId, WorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -22,6 +22,9 @@ pub struct NavigationView {
     pub slash_commands: SlashCommandView,
     pub can_edit_sent_prompt: bool,
     pub literal_fork_revision: bool,
+    pub bookmarked_responses: Vec<String>,
+    pub can_fork: bool,
+    pub recover_fork: bool,
     pub retryable: bool,
     pub account: AccountView,
     pub write_access: WriteAccess,
@@ -208,6 +211,10 @@ pub enum NavigationIntent {
     EditProjectContext(ProjectContextRequest),
     ReviseSentPrompt(ReviseSentPrompt),
     CancelSentPromptEdit(Uuid),
+    SetResponseBookmark(ResponseBookmarkRequest),
+    BranchResponse(TranscriptRowRequest),
+    ForkChat(ChatRequest),
+    RecoverFork(RecoverFork),
     OpenChat(ChatRequest),
     LoadOlderHistory(OlderHistoryRequest),
     TranscriptViewport(TranscriptViewportRequest),
