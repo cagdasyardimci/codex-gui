@@ -13,11 +13,13 @@ use super::{AppServerClient, RequestError};
 
 mod account;
 mod history;
+mod relay;
 mod settings;
 mod voice;
 mod windows_sandbox;
 
 pub use account::{BrowserLogin, LoginCancellation, LoginCompletion};
+pub use relay::{RelayPhase, RelayStatus};
 pub use settings::{
     EffectiveConfiguration, IntegrationCatalogs, ResetCandidate, SettingsRateLimits,
     UsageResetOutcome,

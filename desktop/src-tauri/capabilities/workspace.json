@@ -38,6 +38,8 @@
     "allow-speech-segment-drained",
     "allow-start-question-dictation",
     "allow-end-question-dictation",
+    "allow-change-remote-host",
+    "allow-remote-host-snapshot",
     "allow-read-voice-call",
     "allow-prepare-voice-call",
     "allow-start-voice-transport",

@@ -18,9 +18,10 @@ use codex_gui_core::{
     },
     ipc::{
         CommandUpdate, DictationEvent, DictationTarget, DraftAttachmentScope, DraftEdit,
-        EditorDraft, IpcError, NavigationIntent, NavigationView, PrepareVoiceCall, SidebarChatKey,
-        SpeechEvent, StreamChange, TextBatcher, TranscriptRowRequest, TranscriptView,
-        VoiceCallView, WorkspaceId, WorkspaceRequest, WriteAccess,
+        EditorDraft, IpcError, NavigationIntent, NavigationView, PrepareVoiceCall,
+        RemoteHostCommand, RemoteHostView, SidebarChatKey, SpeechEvent, StreamChange, TextBatcher,
+        TranscriptRowRequest, TranscriptView, VoiceCallView, WorkspaceId, WorkspaceRequest,
+        WriteAccess,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -42,6 +43,7 @@ use crate::{
     file_search_ipc::PreparedFileHit,
     fixture::Verification,
     project_ipc::ProjectState,
+    relay_ipc::RelayHost,
     speech_ipc::{Speak, SpeechOwner, SpeechPlayback, response_text},
 };
 
@@ -66,6 +68,7 @@ mod project_context;
 mod prompt_revision;
 mod queue;
 mod quit;
+mod relay;
 mod review;
 mod sandbox;
 mod send;
@@ -111,6 +114,7 @@ enum Action {
     SpeechClient(WorkspaceId, oneshot::Sender<AppServerClient>),
     ReadAloud(TranscriptRowRequest, Uuid, Channel<SpeechEvent>),
     StartQuestionDictation(DictationTarget, Uuid, Channel<DictationEvent>),
+    RemoteHost(Uuid, RemoteHostCommand, oneshot::Sender<RemoteHostView>),
     VoiceTextSaved(DraftId),
     RequestQuit(tauri::AppHandle),
     FileTools(
@@ -413,6 +417,17 @@ impl NavigationHandle {
             .map(|_| ())
     }
 
+    pub async fn change_remote_host(
+        &self,
+        session: Uuid,
+        command: RemoteHostCommand,
+    ) -> Result<RemoteHostView, IpcError> {
+        let (reply, result) = oneshot::channel();
+        self.request(Action::RemoteHost(session, command, reply))
+            .await?;
+        result.await.map_err(|_| IpcError::StaleSelection)
+    }
+
     async fn request(&self, action: Action) -> Outcome {
         let (reply, result) = oneshot::channel();
         self.0
@@ -436,6 +451,7 @@ impl Navigation {
         if let Err(error) = self.restore(saved, fixture_project).await {
             eprintln!("{error}");
         }
+        self.restore_relay().await;
         let mut timer = tokio::time::interval(Duration::from_millis(20));
         timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
         loop {
@@ -520,6 +536,7 @@ impl Navigation {
                         eprintln!("{error}");
                     }
                     self.sync_actions();
+                    self.restore_relay().await;
                 }
                 Input::Backend(Some(event)) => {
                     if let Err(error) = self.handle_backend(event).await {
@@ -529,6 +546,7 @@ impl Navigation {
                 Input::Backend(None) => {
                     self.flush_stream();
                     self.disconnect().await;
+                    self.restore_relay().await;
                 }
                 Input::Flush => {
                     self.flush_stream();
@@ -590,6 +608,16 @@ impl Navigation {
                 self.require(workspace)?;
                 let backend = self.backend.as_ref().ok_or(IpcError::StaleSelection)?;
                 let _ = reply.send(backend.connection.client());
+                return Ok(None);
+            }
+            Action::RemoteHost(session, command, reply) => {
+                self.app
+                    .state::<crate::settings_ipc::SettingsIpc>()
+                    .authorize_session(session)?;
+                if self.quit.is_some() {
+                    return Err(IpcError::StaleSelection);
+                }
+                let _ = reply.send(self.apply_relay(command).await?);
                 return Ok(None);
             }
             Action::StartQuestionDictation(target, id, events) => {
@@ -859,6 +887,7 @@ impl Navigation {
                 self.require_request(request)?;
                 self.disconnect().await;
                 self.refresh().await.map_err(report)?;
+                self.restore_relay().await;
             }
             NavigationIntent::Retry(request) => {
                 self.require(request.workspace_id)?;
@@ -1114,6 +1143,9 @@ impl Navigation {
         if let Some(backend) = self.backend.take() {
             tauri::Manager::state::<crate::voice_ipc::VoiceIpc>(&self.app)
                 .connection_closed(&self.app, backend.connection.client().identity());
+            self.app
+                .state::<RelayHost>()
+                .disconnected(backend.connection.client().identity());
             self.titles
                 .retire_connection(backend.connection.client().identity());
             if let Err(error) = self.login.retire(&backend.connection.client()).await {
@@ -1128,7 +1160,6 @@ impl Navigation {
 
     async fn connect(&mut self) -> Result<AppServerClient, Failure> {
         if self.backend.is_none() {
-            let executable = CodexExecutable::discover(None)?;
             let (workspace, generation) = match self.selection.as_mut() {
                 Some(selected) => (
                     WorkspaceIdentity {
@@ -1152,29 +1183,35 @@ impl Navigation {
                 workspace,
                 generation: ConnectionGeneration(*generation),
             };
-            let connection = AppServerConnection::connect(
-                &executable,
-                identity.clone(),
-                desktop_client_info(),
-                RPC_TIMEOUT,
-            )
-            .await?;
-            let (engine, effects) = WorkspaceEngine::start(identity.clone());
-            if identity.workspace.checkout.is_some() {
-                self.owners.register(engine.clone())?;
-            }
-            let client = connection.client();
-            self.backend = Some(Backend {
-                connection,
-                engine,
-                effects,
-                edits: TurnEditReports::new(identity),
-                commands: slash_commands::CommandRuntime::default(),
-            });
+            let backend = self.open_backend(identity).await?;
+            let client = backend.connection.client();
+            self.backend = Some(backend);
             self.recover_hidden_owners(client);
         }
         let backend = self.backend.as_ref().expect("backend connected");
         Ok(backend.connection.client())
+    }
+
+    async fn open_backend(&self, identity: ConnectionIdentity) -> Result<Backend, Failure> {
+        let executable = CodexExecutable::discover(None)?;
+        let connection = AppServerConnection::connect(
+            &executable,
+            identity.clone(),
+            desktop_client_info(),
+            RPC_TIMEOUT,
+        )
+        .await?;
+        let (engine, effects) = WorkspaceEngine::start(identity.clone());
+        if identity.workspace.checkout.is_some() {
+            self.owners.register(engine.clone())?;
+        }
+        Ok(Backend {
+            connection,
+            engine,
+            effects,
+            edits: TurnEditReports::new(identity),
+            commands: slash_commands::CommandRuntime::default(),
+        })
     }
 
     async fn refresh_account(&mut self, client: AppServerClient) -> Result<(), Failure> {
@@ -1340,6 +1377,13 @@ impl Navigation {
             return Ok(());
         };
         let client = backend.connection.client();
+        if self
+            .app
+            .state::<RelayHost>()
+            .observe(&self.app, client.identity(), &event)
+        {
+            return Ok(());
+        }
         if let ServerEvent::Notification { method, params } = &event
             && method == "thread/realtime/itemAdded"
         {

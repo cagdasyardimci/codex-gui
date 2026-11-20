@@ -40,6 +40,7 @@ mod project_context;
 mod prompt_revision;
 mod question_reply;
 mod queue;
+mod relay;
 mod review;
 mod settings;
 mod sidebar;
@@ -107,6 +108,7 @@ pub use question_reply::present_question_reply;
 pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
 };
+pub use relay::{RemoteHostCommand, RemoteHostPhase, RemoteHostView};
 pub use review::StartReviewRequest;
 pub use settings::{
     BrowserChoice, BrowserPermission, BrowserPermissionEdit, BrowserPermissionSetting,
@@ -405,6 +407,9 @@ pub fn workspace_typescript() -> String {
         SpeechEvent::decl(),
         DictationTarget::decl(),
         DictationEvent::decl(),
+        RemoteHostCommand::decl(),
+        RemoteHostPhase::decl(),
+        RemoteHostView::decl(),
         SettingsSelection::decl(),
         SettingsToggle::decl(),
         SettingsEffort::decl(),

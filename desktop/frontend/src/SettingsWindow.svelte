@@ -12,6 +12,7 @@
   import SettingsAppearance from './settings/SettingsAppearance.svelte';
   import SettingsVoice from './settings/SettingsVoice.svelte';
   import SettingsNotifications from './settings/SettingsNotifications.svelte';
+  import SettingsConnections from './settings/SettingsConnections.svelte';
   import { matchSettings, settingsSections, type SettingsMatch, type SettingsSection } from './settings/settingsSearch';
 
   let { close, accountBusy, appearance, appearanceChanged, workspaceId, syntheticSpeech }: {
@@ -278,6 +279,8 @@
     <SettingsAppearance view={appearance} changed={appearanceChanged} />
   {:else if tab === 'notifications'}
     <SettingsNotifications />
+  {:else if tab === 'connections'}
+    <SettingsConnections {session} />
   {:else if tab === 'voice' && view?.voice}
     <SettingsVoice view={view.voice} selection={{ session, revision: view.revision }} {workspaceId}
       synthetic={syntheticSpeech} save={(voice) => {

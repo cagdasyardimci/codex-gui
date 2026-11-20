@@ -669,6 +669,7 @@ dependencies = [
  "uuid",
  "whisper-rs",
  "windows",
+ "zbus 5.19.0",
 ]
 
 [[package]]

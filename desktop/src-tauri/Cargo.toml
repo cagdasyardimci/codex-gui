@@ -32,7 +32,7 @@ whisper-rs = "=0.16.0"
 
 [target.'cfg(windows)'.dependencies]
 dunce = "1"
-windows = { version = "0.62", features = ["UI_Notifications"] }
+windows = { version = "0.62", features = ["UI_Notifications", "Win32_System_Power"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-usernotifications = "=0.3.1"
@@ -44,3 +44,4 @@ rodio = { version = "=0.22.2", default-features = false, features = ["playback"]
 gstreamer = { version = "0.25", features = ["v1_22"] }
 gstreamer-sdp = { version = "0.25", features = ["v1_22"] }
 gstreamer-webrtc = { version = "=0.25.4", features = ["v1_22"] }
+zbus = "=5.19.0"

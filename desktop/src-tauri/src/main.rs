@@ -18,6 +18,7 @@ mod fixture;
 mod navigation;
 mod project_ipc;
 mod quit_ipc;
+mod relay_ipc;
 mod settings_ipc;
 mod speech_ipc;
 mod task_notifications;
@@ -69,6 +70,7 @@ fn main() {
         Some("--verify-voice-history-restore") => fixture::Verification::VoiceHistoryRestore,
         Some("--verify-read-aloud") => fixture::Verification::ReadAloud,
         Some("--verify-question-dictation") => fixture::Verification::QuestionDictation,
+        Some("--verify-relay-host") => fixture::Verification::RelayHost,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -121,6 +123,7 @@ fn main() {
             | fixture::Verification::VoiceHistoryRestore
             | fixture::Verification::ReadAloud
             | fixture::Verification::QuestionDictation
+            | fixture::Verification::RelayHost
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -160,6 +163,7 @@ fn main() {
             | fixture::Verification::VoiceHistoryRestore
             | fixture::Verification::ReadAloud
             | fixture::Verification::QuestionDictation
+            | fixture::Verification::RelayHost
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -182,6 +186,7 @@ fn main() {
         .manage(voice_ipc::VoiceIpc::default())
         .manage(speech_ipc::SpeechPlayback::default())
         .manage(dictation_ipc::QuestionDictation::default())
+        .manage(relay_ipc::RelayHost::default())
         .manage(quit_ipc::QuitLifecycle::default())
         .on_window_event(move |window, event| {
             desktop_presentation::on_window_event(window, event);
@@ -271,6 +276,9 @@ fn main() {
             speech_ipc::speech_segment_drained,
             dictation_ipc::start_question_dictation,
             dictation_ipc::end_question_dictation,
+            relay_ipc::change_remote_host,
+            relay_ipc::remote_host_snapshot,
+            relay_ipc::relay_host_fixture_view,
             voice_ipc::read_voice_call,
             voice_ipc::prepare_voice_call,
             voice_ipc::start_voice_transport,
@@ -373,6 +381,9 @@ fn main() {
                     None => (app.path().app_data_dir()?, None),
                 };
                 std::fs::create_dir_all(beta_data.join("worktrees"))?;
+                if let Err(error) = app.state::<relay_ipc::RelayHost>().load(&beta_data) {
+                    eprintln!("Could not read remote host preferences: {error}");
+                }
                 app.manage(task_notifications::TaskNotifications::open(
                     Some(&beta_data),
                     verification,

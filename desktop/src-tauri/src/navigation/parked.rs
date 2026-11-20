@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 use tauri::Manager;
 
 use codex_gui_core::{
-    codex::{AppServerClient, QueueSnapshot, ServerEvent},
+    codex::{AppServerClient, QueueSnapshot, ServerEvent, StderrTail},
     ipc::SidebarChatKey,
     storage::attachments::LegacyQueueStatus,
     workspace::{RoutedEvent, RuntimeOwners, WorkspaceEngine},
@@ -13,9 +13,16 @@ use super::{Backend, CheckoutIdentity, Navigation, RPC_TIMEOUT, queue::read_queu
 
 pub(super) struct ParkedRuntime {
     client: AppServerClient,
+    diagnostics: StderrTail,
     engine: WorkspaceEngine,
     reattach: oneshot::Sender<()>,
     task: JoinHandle<Option<Backend>>,
+}
+
+impl ParkedRuntime {
+    pub(super) fn relay_connection(&self) -> Option<(AppServerClient, StderrTail)> {
+        (!self.task.is_finished()).then(|| (self.client.clone(), self.diagnostics.clone()))
+    }
 }
 
 impl Navigation {
@@ -35,17 +42,27 @@ impl Navigation {
                 .app
                 .state::<crate::voice_ipc::VoiceIpc>()
                 .owns_connection(&snapshot.connection)
+            && !self
+                .app
+                .state::<crate::relay_ipc::RelayHost>()
+                .owns(&snapshot.connection)
         {
             self.disconnect().await;
             return;
         }
-        let mut backend = self.backend.take().expect("selected runtime");
+        let backend = self.backend.take().expect("selected runtime");
         let client = backend.connection.client();
         if let Err(error) = self.login.retire(&client).await {
             eprintln!("{error}");
         }
         self.sandbox_setup = None;
         self.queues = Default::default();
+        self.park_backend(checkout, backend);
+    }
+
+    pub(super) fn park_backend(&mut self, checkout: CheckoutIdentity, mut backend: Backend) {
+        let client = backend.connection.client();
+        let diagnostics = backend.connection.diagnostics().clone();
         let owners = self.owners.clone();
         let store = self.store.clone();
         let shutdown = self.shutdown_pending.clone();
@@ -68,6 +85,10 @@ impl Navigation {
                     event = backend.connection.next_event() => event,
                 };
                 let Some(event) = event else { break };
+                let relay = app.state::<crate::relay_ipc::RelayHost>();
+                if relay.observe(&app, backend_client.identity(), &event) {
+                    continue;
+                }
                 let before = backend.engine.snapshot();
                 backend.observe_edits(&event);
                 if let ServerEvent::Notification { method, params } = &event
@@ -176,12 +197,15 @@ impl Navigation {
                     && current.execution.unresolved_commands.is_empty()
                     && !owners.has_local_work(current.connection.workspace.checkout.as_ref())
                     && !voice.owns_connection(&current.connection)
+                    && !relay.owns(&current.connection)
                 {
                     break;
                 }
             }
             app.state::<crate::voice_ipc::VoiceIpc>()
                 .connection_closed(&app, backend_client.identity());
+            app.state::<crate::relay_ipc::RelayHost>()
+                .disconnected(backend_client.identity());
             close_backend(&owners, backend).await;
             let _ = changed.try_send(());
             None
@@ -190,6 +214,7 @@ impl Navigation {
             checkout,
             ParkedRuntime {
                 client,
+                diagnostics,
                 engine,
                 reattach,
                 task,

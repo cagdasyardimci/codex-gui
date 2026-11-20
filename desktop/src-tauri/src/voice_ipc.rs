@@ -789,6 +789,7 @@ fn fixture_root(window: &WebviewWindow) -> Result<PathBuf, IpcError> {
             | crate::fixture::Verification::VoiceHistoryRestore
             | crate::fixture::Verification::ReadAloud
             | crate::fixture::Verification::QuestionDictation
+            | crate::fixture::Verification::RelayHost
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }

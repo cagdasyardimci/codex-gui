@@ -156,6 +156,7 @@ OUTGOING_RESPONSES = {
 }
 REMOTE_ACCESS_TARGET = {
     "remoteControl/enable": (),
+    "remoteControl/disable": (),
     "remoteControl/status/read": (),
 }
 
@@ -226,8 +227,15 @@ def check_schema(root, *, remote_access_target):
 
     if remote_access_target:
         check_methods(root, "ClientRequest", REMOTE_ACCESS_TARGET, request=True, outbound=True)
-        check_fields(load_schema(root, "v2/RemoteControlStatusReadResponse"),
-                     ("status", "serverName", "installationId"), "RemoteControlStatusReadResponse")
+        status_fields = ("status", "installationId", "environmentId")
+        check_methods(root, "ServerNotification", {"remoteControl/status/changed": status_fields}, request=False)
+        for operation in ("Enable", "Disable"):
+            document = load_schema(root, f"v2/NullableRemoteControl{operation}Params")
+            schema = document["definitions"][f"RemoteControl{operation}Params"]
+            check_fields(schema, ("ephemeral",), f"RemoteControl{operation}Params", outbound=True)
+        for operation in ("Enable", "Disable", "StatusRead"):
+            name = f"RemoteControl{operation}Response"
+            check_fields(load_schema(root, f"v2/{name}"), status_fields, name)
 
 
 def check_executable(executable, version, *, remote_access_target=False):

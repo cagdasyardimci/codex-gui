@@ -12,6 +12,7 @@ from .queue_fixture import queue_request, steer_request
 from .review_fixture import start_review
 from .settings_fixture import METHODS as SETTINGS_METHODS, settings_request
 from .voice_fixture import voice_config, voice_request
+from .relay_fixture import relay_host_request
 from .transport import ProtocolError, UnconfirmedMutation
 
 
@@ -85,7 +86,8 @@ class Server:
         with self.lock:
             result = self.dispatch(method, params)
             voice_reader = self.scenario.get('desktopVoice') and self.client_name in ('codex_gui_settings', 'codex_gui_speech')
-            if not voice_reader and not self.scenario.get('desktopSettings') and (method != 'initialize' or not self.scenario.get('desktopAutomaticTitles')):
+            if (not voice_reader and not self.scenario.get('desktopSettings') and not self.scenario.get('desktopRelayHost')
+                    and (method != 'initialize' or not self.scenario.get('desktopAutomaticTitles'))):
                 self.state.save()
             return copy.deepcopy(result)
 
@@ -95,6 +97,8 @@ class Server:
             action()
 
     def dispatch(self, method, p):
+        if self.scenario.get('desktopRelayHost') and method.startswith('remoteControl/'):
+            return relay_host_request(self, method, p)
         if method == 'initialize':
             self.client_name = p.get('clientInfo', {}).get('name')
             if self.scenario.get('desktopSettings') or self.scenario.get('desktopVoice'):

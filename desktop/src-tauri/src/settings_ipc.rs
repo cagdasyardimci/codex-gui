@@ -78,6 +78,16 @@ struct IntegrationOwner {
 }
 
 impl SettingsIpc {
+    pub(crate) fn authorize_session(&self, session: Uuid) -> Result<(), IpcError> {
+        self.selected
+            .lock()
+            .expect("settings lock poisoned")
+            .as_ref()
+            .filter(|view| view.id == session)
+            .map(|_| ())
+            .ok_or(IpcError::StaleSelection)
+    }
+
     fn mutation(
         &self,
         selection: &SettingsSelection,
