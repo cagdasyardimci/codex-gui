@@ -61,6 +61,43 @@ impl Fixture {
             self.checkouts.clone(),
         )
     }
+
+    async fn interrupt_creation(&self) -> WorktreeRecord {
+        let hooks = self.source.join("fixture-hooks");
+        let hook = hooks.join("post-checkout");
+        fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        git(
+            &self.source,
+            &[
+                "config",
+                "--local",
+                "core.hooksPath",
+                hooks.to_str().unwrap(),
+            ],
+        );
+        let manager = self.manager();
+        let source = CheckoutIdentity::capture(&self.source).unwrap();
+        let result = manager.create(source, "interrupted", "Incomplete").await;
+        assert!(
+            matches!(result, Err(WorktreeError::Git(GitError::Exit(_)))),
+            "{result:?}"
+        );
+        let snapshot = manager.store.snapshot().unwrap();
+        assert_eq!(snapshot.records.len(), 1);
+        let record = snapshot.records.into_iter().next().unwrap();
+        assert_eq!(record.phase, WorktreePhase::Preparing);
+        assert!(record.checkout_identity.is_some());
+        assert_eq!(
+            fs::read(record.checkout_path.join("tracked.txt")).unwrap(),
+            b"committed"
+        );
+        record
+    }
 }
 
 #[tokio::test]
@@ -140,4 +177,90 @@ async fn declines_a_managed_root_within_an_existing_git_checkout() {
     ));
     assert!(manager.store.snapshot().unwrap().records.is_empty());
     assert_eq!(fs::read_dir(nested).unwrap().count(), 0);
+}
+
+#[tokio::test]
+async fn adopts_the_original_checkout_after_git_reports_a_failed_hook() {
+    let fixture = Fixture::new();
+    let preparing = fixture.interrupt_creation().await;
+    let restarted = fixture.manager();
+    let results = restarted.recover().await.unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].kind, RecoveryKind::Active);
+    assert_eq!(results[0].record.phase, WorktreePhase::Active);
+    assert_eq!(
+        results[0].record.checkout_identity,
+        preparing.checkout_identity
+    );
+    assert_eq!(fixture.manager().recover().await.unwrap(), results);
+}
+
+#[tokio::test]
+async fn rejects_a_substitute_even_when_it_reuses_the_git_registration_and_branch() {
+    let fixture = Fixture::new();
+    let preparing = fixture.interrupt_creation().await;
+    let path = &preparing.checkout_path;
+    let original = path.with_extension("original");
+    fs::rename(path, &original).unwrap();
+    fs::create_dir(path).unwrap();
+    fs::copy(original.join(".git"), path.join(".git")).unwrap();
+    fs::copy(original.join("tracked.txt"), path.join("tracked.txt")).unwrap();
+    let branch = git(path, &["symbolic-ref", "--quiet", "HEAD"]);
+    assert_eq!(
+        terminated_line(&branch).unwrap(),
+        format!("refs/heads/{}", preparing.branch).as_bytes()
+    );
+    let results = fixture.manager().recover().await.unwrap();
+    assert_eq!(
+        results,
+        [WorktreeRecovery {
+            record: preparing,
+            kind: RecoveryKind::OwnershipConflict
+        }]
+    );
+    assert!(original.join("tracked.txt").is_file());
+}
+
+#[tokio::test]
+async fn reconciles_removal_only_from_the_actual_checkout_and_registration() {
+    let fixture = Fixture::new();
+    let manager = fixture.manager();
+    let created = manager
+        .create(
+            CheckoutIdentity::capture(&fixture.source).unwrap(),
+            "task",
+            "Temporary",
+        )
+        .await
+        .unwrap();
+    let mut removing = created.clone();
+    removing.phase = WorktreePhase::Removing;
+    let mark_removing = || {
+        let lock = manager.store.lock_for(Edition::Tauri).unwrap();
+        lock.save(Some(&created), &removing).unwrap();
+    };
+    mark_removing();
+    assert_eq!(
+        manager.recover().await.unwrap(),
+        [WorktreeRecovery {
+            record: created.clone(),
+            kind: RecoveryKind::RemovalInterrupted
+        }]
+    );
+    mark_removing();
+    let target = git_path(&created.checkout_path).to_str().unwrap();
+    git(&fixture.source, &["worktree", "remove", "--", target]);
+    let results = manager.recover().await.unwrap();
+    assert_eq!(results[0].kind, RecoveryKind::CheckoutRemoved);
+    assert_eq!(results[0].record.phase, WorktreePhase::CheckoutRemoved);
+    assert_eq!(fixture.manager().recover().await.unwrap(), results);
+    git(
+        &fixture.source,
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{}", created.branch),
+        ],
+    );
 }

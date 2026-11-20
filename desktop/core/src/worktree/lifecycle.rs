@@ -4,6 +4,9 @@ use crate::git::{CheckoutGit, GitError, decode_path, nul_fields, parse_oid, term
 
 use super::*;
 
+mod recovery;
+pub use recovery::{RecoveryKind, WorktreeRecovery};
+
 const GIT_RESPONSE_BYTES: usize = 512 * 1024;
 const FOUNDATION_EPOCH: f64 = 978_307_200.0;
 const BRANCH_PREFIX: &str = "codex/task/";
@@ -101,7 +104,7 @@ impl WorktreeManager {
             Err(GitError::Limit) => true,
             Err(error) => return Err(error.into()),
         };
-        let preparing = WorktreeRecord {
+        let mut preparing = WorktreeRecord {
             id,
             task_id: task_id.trim().to_owned(),
             thread_id: None,
@@ -121,8 +124,17 @@ impl WorktreeManager {
             phase: WorktreePhase::Preparing,
         };
         locked.save(None, &preparing)?;
+        fs::create_dir(&preparing.checkout_path)?;
+        let target = CheckoutIdentity::capture(&preparing.checkout_path)?;
+        if target.canonical_path() != preparing.checkout_path {
+            return Err(WorktreeError::Ownership);
+        }
+        let previous = preparing.clone();
+        preparing.checkout_identity = Some(target.storage_key());
+        locked.save(Some(&previous), &preparing)?;
         repository.revalidate()?;
         self.checkouts.revalidate()?;
+        target.revalidate()?;
         let path = git_path(&preparing.checkout_path);
         source
             .success(
@@ -145,7 +157,6 @@ impl WorktreeManager {
         }
         let mut active = preparing.clone();
         active.phase = WorktreePhase::Active;
-        active.checkout_identity = Some(checkout.checkout.storage_key());
         locked.save(Some(&preparing), &active)?;
         Ok(active)
     }
@@ -170,6 +181,20 @@ impl WorktreeManager {
     }
 
     async fn verify_checkout(&self, record: &WorktreeRecord) -> Result<CheckoutGit, WorktreeError> {
+        let (source, source_repository) = self.recorded_source(record).await?;
+        if !registered_paths(&source)
+            .await?
+            .contains(&record.checkout_path)
+        {
+            return Err(WorktreeError::Ownership);
+        }
+        self.verify_registered(record, &source_repository).await
+    }
+
+    async fn recorded_source(
+        &self,
+        record: &WorktreeRecord,
+    ) -> Result<(CheckoutGit, CheckoutIdentity), WorktreeError> {
         self.checkouts.revalidate()?;
         let name = record
             .branch
@@ -188,12 +213,17 @@ impl WorktreeManager {
                 .repository_identity
                 .as_ref()
                 .is_some_and(|id| *id != source_repository.storage_key())
-            || !registered_paths(&source)
-                .await?
-                .contains(&record.checkout_path)
         {
             return Err(WorktreeError::Ownership);
         }
+        Ok((source, source_repository))
+    }
+
+    async fn verify_registered(
+        &self,
+        record: &WorktreeRecord,
+        source_repository: &CheckoutIdentity,
+    ) -> Result<CheckoutGit, WorktreeError> {
         let identity = CheckoutIdentity::capture(&record.checkout_path)?;
         if identity.canonical_path() != record.checkout_path
             || record
@@ -204,7 +234,7 @@ impl WorktreeManager {
             return Err(WorktreeError::Ownership);
         }
         let checkout = CheckoutGit::new(identity)?;
-        if repository(&checkout).await? != source_repository {
+        if &repository(&checkout).await? != source_repository {
             return Err(WorktreeError::Ownership);
         }
         let (status, branch) = checkout

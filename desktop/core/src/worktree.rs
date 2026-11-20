@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::checkout::{CheckoutError, CheckoutIdentity, NativeFileIdentity};
 
 mod lifecycle;
-pub use lifecycle::{WorktreeError, WorktreeManager};
+pub use lifecycle::{RecoveryKind, WorktreeError, WorktreeManager, WorktreeRecovery};
 
 const LOCK_NAME: &str = ".lock";
 const AUTHORITY_NAME: &str = ".authority";
