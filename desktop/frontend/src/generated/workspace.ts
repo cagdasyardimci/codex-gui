@@ -44,3 +44,6 @@ export type QuestionAnswer = { id: string, values: Array<string>, };
 export type GrantedPermissions = { keys: Array<string>, forSession: boolean, };
 export type InteractionAnswer = { "decision": number } | { "permissions": GrantedPermissions } | { "answers": Array<QuestionAnswer> };
 export type RespondRequest = { workspaceId: WorkspaceId, interactionId: string, response: InteractionAnswer, };
+export type DiffFileView = { fileId: string, path: string, };
+export type DiffPatchRequest = { workspaceId: WorkspaceId, fileId: string, };
+export type DiffPatchView = { fileId: string, text: string, };

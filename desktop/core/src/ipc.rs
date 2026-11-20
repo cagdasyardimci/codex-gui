@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::checkout::CheckoutIdentity;
 
 mod actions;
+mod git;
 mod navigation;
 mod question_reply;
 mod stream;
@@ -17,6 +18,7 @@ pub use actions::{
     QuestionView, RecoverSendRequest, RespondRequest, SendRequest, StopRequest, StopTarget,
     TurnTarget,
 };
+pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
     LoginTicket, NavigationIntent, NavigationView, WriteAccess,
@@ -101,27 +103,40 @@ impl WorkspaceGrants {
         window: &str,
         request: WorkspaceRequest,
     ) -> Result<WorkspaceView, IpcError> {
+        Ok(self.authorized_grant(window, request.workspace_id)?.view())
+    }
+
+    pub fn checkout(&self, window: &str, id: WorkspaceId) -> Result<CheckoutIdentity, IpcError> {
+        Ok(self.authorized_grant(window, id)?.checkout.clone())
+    }
+
+    fn authorized_grant(&self, window: &str, id: WorkspaceId) -> Result<&Grant, IpcError> {
         authorize_window(window)?;
-        let selected = self
+        let grant = self
             .selected
             .as_ref()
-            .filter(|grant| grant.id == request.workspace_id)
+            .filter(|grant| grant.id == id)
             .ok_or(IpcError::RetiredWorkspace)?;
-        selected.view().ok_or(IpcError::RetiredWorkspace)
+        grant
+            .checkout
+            .revalidate()
+            .map_err(|_| IpcError::RetiredWorkspace)?;
+        Ok(grant)
     }
 
     pub fn current_view(&self) -> Option<WorkspaceView> {
-        self.selected.as_ref().and_then(Grant::view)
+        let grant = self.selected.as_ref()?;
+        grant.checkout.revalidate().ok()?;
+        Some(grant.view())
     }
 }
 
 impl Grant {
-    fn view(&self) -> Option<WorkspaceView> {
-        self.checkout.revalidate().ok()?;
-        Some(WorkspaceView {
+    fn view(&self) -> WorkspaceView {
+        WorkspaceView {
             workspace_id: self.id,
             project_path: self.display_path.clone(),
-        })
+        }
     }
 }
 
@@ -181,6 +196,9 @@ pub fn workspace_typescript() -> String {
         GrantedPermissions::decl(),
         InteractionAnswer::decl(),
         RespondRequest::decl(),
+        DiffFileView::decl(),
+        DiffPatchRequest::decl(),
+        DiffPatchView::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

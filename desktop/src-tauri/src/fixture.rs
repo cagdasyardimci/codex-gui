@@ -32,6 +32,7 @@ pub enum Verification {
     Account,
     WindowsSetup,
     Turn,
+    Diff,
 }
 
 #[derive(Deserialize)]
@@ -290,6 +291,25 @@ pub fn verify_turn_result(
         app.exit(1);
     } else {
         println!("Verified installed Send, recovery, approval, questions, and scoped Stop");
+        app.exit(0);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn verify_diff_result(
+    app: AppHandle,
+    verification: State<'_, Verification>,
+    failure: Option<String>,
+) -> Result<(), String> {
+    if *verification != Verification::Diff {
+        return Err("diff verification was not requested at launch".into());
+    }
+    if let Some(failure) = failure {
+        eprintln!("Diff verification failed: {failure}");
+        app.exit(1);
+    } else {
+        println!("Verified installed checkout changes and lazy patches");
         app.exit(0);
     }
     Ok(())

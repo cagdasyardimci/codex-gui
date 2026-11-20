@@ -16,6 +16,7 @@ pub use browse::{
     TurnStatus, WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
+pub(crate) use executable::is_executable;
 pub use executable::{CodexExecutable, DiscoveryError, VersionProbeError};
 pub use framing::{JsonlReadError, JsonlReader, StderrTail};
 pub use process::{AppServerExit, AppServerProcess, AppServerStdio};

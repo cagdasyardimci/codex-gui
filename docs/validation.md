@@ -24,6 +24,8 @@ The [installed account fixture](../desktop/fixtures/verify_account_fixture.py) e
 
 The [installed turn fixture](../desktop/fixtures/verify_turn_fixture.py) recovers a submission with an ambiguous reply, answers a captured approval after switching chats, and checks ordered answers in the transcript and preview. It switches chats and reloads the WebView while a turn is active, then verifies the backend interrupted the original turn. The trace and database check the exact submission identities and accepted outcomes.
 
+The [installed diff fixture](../desktop/fixtures/verify_diff_fixture.py) creates its own Git checkout. It verifies a tracked edit and an untracked patch with Unicode names, checks that selecting a file triggers the patch request, and compares the Git index and source bytes before and after the read.
+
 ### Swift AppKit
 
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.

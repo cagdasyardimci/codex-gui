@@ -8,6 +8,8 @@
     "allow-pick-workspace",
     "allow-workspace-snapshot",
     "allow-navigate-workspace",
+    "allow-checkout-changes",
+    "allow-checkout-patch",
     "allow-subscribe-workspace",
     "allow-next-workspace-update"
   ]

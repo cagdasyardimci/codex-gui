@@ -2,14 +2,16 @@
   import { onMount, tick } from 'svelte';
   import type { DraftEdit, InteractionAnswer, NavigationIntent, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
+  import WorkspaceChanges from './WorkspaceChanges.svelte';
   import { navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
   import { verifyTurn } from './turnProbe';
+  import { verifyDiff } from './diffProbe';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'diff' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let draftId: string | undefined;
@@ -17,6 +19,7 @@
   let composing = false;
   let actionPending = $state(false);
   let admittingDraft = $state(false);
+  let showingChanges = $state(false);
   let pending: DraftEdit | null = null;
   let saving: Promise<void> | null = null;
   const workspace = $derived(snapshot?.workspace);
@@ -25,6 +28,7 @@
 
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
+    if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) showingChanges = false;
     snapshot = current;
     if (draftId !== current.navigation.draft?.id) {
       draftId = current.navigation.draft?.id;
@@ -170,6 +174,7 @@
     if (verify === 'account') void verifyAccount(() => snapshot);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn') void verifyTurn(() => snapshot);
+    else if (verify === 'diff') void verifyDiff(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -185,6 +190,7 @@
       <button type="button" disabled={actionPending || !!stopTarget} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
+      <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
     {/if}
     {#if navigation?.writeAccess === 'setupSandbox' || navigation?.writeAccess === 'settingUpSandbox'}
       <button type="button" disabled={actionPending || navigation.writeAccess === 'settingUpSandbox'}
@@ -249,5 +255,8 @@
         </div>
       {/if}
     </section>
+    {#if showingChanges && workspace}
+      <WorkspaceChanges workspaceId={workspace.workspaceId} />
+    {/if}
   </div>
 </main>

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use tauri::{Manager, WebviewWindowBuilder, webview::NewWindowResponse};
 
 mod coding_probe;
+mod diff_ipc;
 mod fixture;
 mod navigation;
 mod project_ipc;
@@ -25,6 +26,7 @@ fn main() {
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
+        Some("--verify-diff") => fixture::Verification::Diff,
         _ => fixture::Verification::None,
     };
     let coding_report = if mode.as_deref() == Some(coding_probe::ARGUMENT.as_ref()) {
@@ -42,6 +44,7 @@ fn main() {
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
+            | fixture::Verification::Diff
     )
     .then(|| {
         let data = PathBuf::from(
@@ -56,6 +59,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(verification)
         .manage(project_ipc::ProjectIpc::default())
+        .manage(diff_ipc::DiffIpc::default())
         .invoke_handler(tauri::generate_handler![
             fixture::stream_fixture,
             fixture::verification_mode,
@@ -65,12 +69,15 @@ fn main() {
             fixture::verify_account_result,
             fixture::verify_windows_setup_result,
             fixture::verify_turn_result,
+            fixture::verify_diff_result,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::navigate_workspace,
             project_ipc::subscribe_workspace,
             project_ipc::next_workspace_update,
             project_ipc::change_workspace_fixture,
+            diff_ipc::checkout_changes,
+            diff_ipc::checkout_patch,
         ])
         .setup(move |app| {
             if let Some(report) = coding_report {
@@ -95,6 +102,7 @@ fn main() {
                     | fixture::Verification::Account
                     | fixture::Verification::WindowsSetup
                     | fixture::Verification::Turn
+                    | fixture::Verification::Diff
             ) {
                 let (beta_data, initial_project) = match desktop_fixture {
                     Some(fixture) => fixture,

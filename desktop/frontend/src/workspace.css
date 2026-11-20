@@ -196,6 +196,45 @@ body {
   gap: 0.4rem;
 }
 
+.workspace-changes {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 27rem;
+  min-width: 13rem;
+  max-width: 48vw;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border-left: 1px solid var(--workspace-divider);
+  background: var(--workspace-panel);
+}
+
+.workspace-changes > button {
+  align-self: flex-start;
+}
+
+.changes-files {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  overflow: auto;
+  max-height: 40%;
+  gap: 0.25rem;
+}
+
+.changes-files button {
+  overflow-wrap: anywhere;
+}
+
+.workspace-changes pre {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  font: 0.85rem / 1.45 ui-monospace, monospace;
+  tab-size: 4;
+}
+
 .composer-actions {
   justify-content: flex-end;
   padding-top: 0.35rem;

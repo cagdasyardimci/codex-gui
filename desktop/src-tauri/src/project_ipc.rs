@@ -4,6 +4,7 @@ use std::sync::{
 };
 use std::{path::Path, time::Duration};
 
+use codex_gui_core::checkout::CheckoutIdentity;
 use codex_gui_core::ipc::{
     IpcError, NavigationIntent, StreamChange, WorkspaceGrants, WorkspaceId, WorkspaceProjection,
     WorkspaceRequest, WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest,
@@ -52,6 +53,17 @@ impl Drop for Picker<'_> {
 }
 
 impl ProjectIpc {
+    pub(crate) fn checkout(
+        &self,
+        window: &str,
+        workspace: WorkspaceId,
+    ) -> Result<CheckoutIdentity, IpcError> {
+        self.state
+            .lock()
+            .expect("workspace state lock poisoned")
+            .grants
+            .checkout(window, workspace)
+    }
     fn reserve_picker(&self) -> Result<Picker<'_>, IpcError> {
         self.picking
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -110,7 +122,7 @@ pub fn allows_navigation(base: &Url, destination: &Url) -> bool {
         && matches!(destination.path(), "" | "/" | "/index.html")
 }
 
-fn authorize_view(window: &WebviewWindow) -> Result<(), IpcError> {
+pub(crate) fn authorize_view(window: &WebviewWindow) -> Result<(), IpcError> {
     authorize_window(window.label())?;
     let config = window.app_handle().config();
     let main = config
