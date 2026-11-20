@@ -6,7 +6,7 @@ use std::{
 };
 
 use codex_gui_core::codex::{JsonlReader, ServerEvent, ServerMessage, read_message};
-use codex_gui_core::ipc::{StreamChange, TextBatcher, TranscriptItem, WorkspaceId};
+use codex_gui_core::ipc::{StreamChange, TextBatcher, TranscriptItem, TranscriptRole, WorkspaceId};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
@@ -27,6 +27,8 @@ pub enum Verification {
     None,
     Streaming,
     Media,
+    History,
+    HistoryRestore,
 }
 
 #[derive(Deserialize)]
@@ -212,6 +214,28 @@ pub fn verification_mode(verification: State<'_, Verification>) -> Verification 
 }
 
 #[tauri::command]
+pub fn verify_history_result(
+    app: AppHandle,
+    verification: State<'_, Verification>,
+    failure: Option<String>,
+) -> Result<(), String> {
+    if !matches!(
+        *verification,
+        Verification::History | Verification::HistoryRestore
+    ) {
+        return Err("history verification was not requested at launch".into());
+    }
+    if let Some(failure) = failure {
+        eprintln!("History verification failed: {failure}");
+        app.exit(1);
+    } else {
+        println!("Verified installed project history, drafts, streaming, and writer recovery");
+        app.exit(0);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn verify_fixture_result(
     app: AppHandle,
     verification: State<'_, Verification>,
@@ -242,11 +266,13 @@ pub fn verify_fixture_result(
             item_id: PRIMARY_ITEM.into(),
             text: chunks.concat(),
             completed: true,
+            role: TranscriptRole::Assistant,
         },
         TranscriptItem {
             item_id: SECONDARY_ITEM.into(),
             text: SECONDARY_TEXT.concat(),
             completed: true,
+            role: TranscriptRole::Assistant,
         },
     ];
     let expected_text = expected

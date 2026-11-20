@@ -64,6 +64,10 @@ pub enum ResumedMode {
 pub enum RoutedEvent {
     Interaction(Arc<PendingInteraction>),
     QueueChanged(ThreadId),
+    Conversation {
+        thread: ThreadId,
+        event: ServerEvent,
+    },
 }
 
 #[derive(Deserialize)]
@@ -234,6 +238,14 @@ impl WorkspaceEngine {
         }
         self.observe_submission_event(owner, &event, store).await?;
         self.observe_execution_event(owner, &event).await?;
+        if let Some(thread) = thread
+            && matches!(&event, ServerEvent::Notification { method, params }
+                if matches!(method.as_str(), "turn/completed" | "item/agentMessage/delta")
+                   || (method == "item/completed"
+                       && matches!(params["item"]["type"].as_str(), Some("agentMessage" | "userMessage"))))
+        {
+            return Ok(Some(RoutedEvent::Conversation { thread, event }));
+        }
         Ok(self
             .receive_interaction(client, event, timeout)
             .await?

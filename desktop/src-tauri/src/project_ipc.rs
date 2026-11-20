@@ -1,31 +1,33 @@
 use std::sync::{
-    Mutex,
+    Arc, Mutex, OnceLock,
     atomic::{AtomicBool, Ordering},
 };
 use std::{path::Path, time::Duration};
 
 use codex_gui_core::ipc::{
-    IpcError, StreamChange, WorkspaceGrants, WorkspaceId, WorkspaceProjection, WorkspaceRequest,
-    WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
-    authorize_window,
+    IpcError, NavigationIntent, StreamChange, WorkspaceGrants, WorkspaceId, WorkspaceProjection,
+    WorkspaceRequest, WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest,
+    WorkspaceView, authorize_window,
 };
 use tauri::{Config, Manager, State, Url, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
 
 use crate::fixture::Verification;
+use crate::navigation::NavigationHandle;
 
 #[derive(Default)]
 pub struct ProjectIpc {
-    state: Mutex<ProjectState>,
+    pub(crate) state: Arc<Mutex<ProjectState>>,
+    pub(crate) navigation: OnceLock<NavigationHandle>,
     picking: AtomicBool,
     fixture_started: AtomicBool,
 }
 
 #[derive(Default)]
-struct ProjectState {
-    grants: WorkspaceGrants,
-    projection: WorkspaceProjection,
+pub(crate) struct ProjectState {
+    pub(crate) grants: WorkspaceGrants,
+    pub(crate) projection: WorkspaceProjection,
     fixture_directory: Option<tempfile::TempDir>,
 }
 
@@ -36,7 +38,7 @@ impl ProjectState {
         Ok(id)
     }
 
-    fn publish(&mut self) {
+    pub(crate) fn publish(&mut self) {
         self.projection.publish(self.grants.current_view());
     }
 }
@@ -148,12 +150,19 @@ pub async fn pick_workspace(
     let folder = selected
         .into_path()
         .map_err(|_| IpcError::InvalidCheckout)?;
-    state
-        .state
-        .lock()
-        .expect("workspace state lock poisoned")
-        .select(window.label(), &folder)
-        .map(Some)
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.select(folder).await
+}
+
+#[tauri::command]
+pub async fn navigate_workspace(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    intent: NavigationIntent,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.apply(intent).await
 }
 
 #[tauri::command]

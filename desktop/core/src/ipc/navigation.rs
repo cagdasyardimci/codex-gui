@@ -1,0 +1,53 @@
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+use super::{WorkspaceId, WorkspaceRequest};
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct NavigationView {
+    pub chats: Vec<ChatRow>,
+    pub selected_chat: Option<String>,
+    pub draft: Option<EditorDraft>,
+    pub retryable: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatRow {
+    pub id: String,
+    pub title: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorDraft {
+    pub id: String,
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ChatRequest {
+    pub workspace_id: WorkspaceId,
+    pub chat_id: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DraftEdit {
+    pub draft_id: String,
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum NavigationIntent {
+    OpenChat(ChatRequest),
+    NewChat(WorkspaceRequest),
+    ClearProject(WorkspaceRequest),
+    Refresh(WorkspaceRequest),
+    Reconnect(WorkspaceRequest),
+    Retry(ChatRequest),
+    EditDraft(DraftEdit),
+}

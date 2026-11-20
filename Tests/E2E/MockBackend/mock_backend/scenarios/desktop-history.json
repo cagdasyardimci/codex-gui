@@ -1,0 +1,36 @@
+{
+  "mode": "stream",
+  "desktopHistory": true,
+  "intervalSeconds": 0.2,
+  "threads": [
+    {
+      "id": "history-first",
+      "name": "First fixture chat",
+      "preview": "First project conversation",
+      "turns": [
+        {
+          "id": "first-saved-turn",
+          "status": "completed",
+          "items": [
+            {"id": "first-history", "type": "agentMessage", "text": "History in the first chat."}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history-second",
+      "name": "Second fixture chat",
+      "preview": "Second project conversation",
+      "turns": [
+        {
+          "id": "second-saved-turn",
+          "status": "completed",
+          "items": [
+            {"id": "second-history", "type": "agentMessage", "text": "History in the second chat."}
+          ]
+        }
+      ]
+    }
+  ],
+  "chunks": ["A streamed reply", " with café ", "日本語 ", "👩🏽‍💻."]
+}

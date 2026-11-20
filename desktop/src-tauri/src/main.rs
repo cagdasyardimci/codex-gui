@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use codex_gui_core::ipc::WORKSPACE_WINDOW;
+use std::path::PathBuf;
 use tauri::{Manager, WebviewWindowBuilder, webview::NewWindowResponse};
 
 mod coding_probe;
 mod fixture;
+mod navigation;
 mod project_ipc;
 
 fn main() {
@@ -18,6 +20,8 @@ fn main() {
     let verification = match mode.as_deref().and_then(|value| value.to_str()) {
         Some("--verify-fixture") => fixture::Verification::Streaming,
         Some("--verify-media") => fixture::Verification::Media,
+        Some("--verify-history") => fixture::Verification::History,
+        Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
         _ => fixture::Verification::None,
     };
     let coding_report = if mode.as_deref() == Some(coding_probe::ARGUMENT.as_ref()) {
@@ -28,6 +32,19 @@ fn main() {
     } else {
         None
     };
+    let history_fixture = matches!(
+        verification,
+        fixture::Verification::History | fixture::Verification::HistoryRestore
+    )
+    .then(|| {
+        let data = PathBuf::from(
+            arguments
+                .next()
+                .expect("expected isolated application data"),
+        );
+        let project = arguments.next().map(PathBuf::from);
+        (data, project)
+    });
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(verification)
@@ -37,8 +54,10 @@ fn main() {
             fixture::verification_mode,
             fixture::verify_fixture_result,
             fixture::verify_media_result,
+            fixture::verify_history_result,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
+            project_ipc::navigate_workspace,
             project_ipc::subscribe_workspace,
             project_ipc::next_workspace_update,
             project_ipc::change_workspace_fixture,
@@ -58,6 +77,26 @@ fn main() {
                 });
                 return Ok(());
             }
+            if matches!(
+                verification,
+                fixture::Verification::None
+                    | fixture::Verification::History
+                    | fixture::Verification::HistoryRestore
+            ) {
+                let (beta_data, initial_project) = match history_fixture {
+                    Some(fixture) => fixture,
+                    None => (app.path().app_data_dir()?, None),
+                };
+                std::fs::create_dir_all(beta_data.join("worktrees"))?;
+                let project = app.state::<project_ipc::ProjectIpc>();
+                let navigation = navigation::NavigationHandle::start(
+                    &beta_data.join("workspace.sqlite3"),
+                    project.state.clone(),
+                    initial_project,
+                )
+                .map_err(|error| -> Box<dyn std::error::Error> { error })?;
+                assert!(project.navigation.set(navigation).is_ok());
+            }
             let window = app
                 .config()
                 .app
@@ -70,11 +109,6 @@ fn main() {
                 .on_navigation(move |url| project_ipc::allows_navigation(&base, url))
                 .on_new_window(|_, _| NewWindowResponse::Deny)
                 .build()?;
-            if verification != fixture::Verification::None {
-                return Ok(());
-            }
-            let beta_data = app.path().app_data_dir()?;
-            std::fs::create_dir_all(beta_data.join("worktrees"))?;
             Ok(())
         })
         .run(tauri::generate_context!())

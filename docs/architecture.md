@@ -22,6 +22,8 @@ The [workspace subscription](../desktop/core/src/ipc/subscription.rs) attaches t
 
 [Stream batches](../desktop/core/src/ipc/stream.rs) keep text in order within each item and flush pending deltas before item or turn completion. Incremental reads send the latest change. A snapshot carries the assembled text so a renderer can resume without replaying notifications. Replacing the workspace clears its visible transcript and retires its stream updates.
 
+The [desktop navigation runtime](../desktop/src-tauri/src/navigation.rs) validates restored project authority against the saved directory identity and reads chat history through Codex. The editor persists text against the original draft identity, including when navigation has already changed. Clearing a project retires its grant and returns to the unsent draft. Retry reacquires writer ownership for the captured chat and preserves its draft and readable history.
+
 ## Ownership and recovery
 
 Displayed selection and execution ownership are independent. An accepted first message appears in project navigation using its captured request identity while the backend creates the conversation. The assigned thread replaces that row atomically; a failed preparation retires it without changing an independently opened draft. Every asynchronous result must validate its captured workspace/session, connection generation, request identity and relevant thread/turn. Deferred UI actions must retain their original target rather than follow later selection. Shared eligibility rules serve presentations and reducers, with admission checked again at reduction.

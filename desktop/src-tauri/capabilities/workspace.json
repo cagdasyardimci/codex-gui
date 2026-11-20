@@ -7,6 +7,7 @@
   "permissions": [
     "allow-pick-workspace",
     "allow-workspace-snapshot",
+    "allow-navigate-workspace",
     "allow-subscribe-workspace",
     "allow-next-workspace-update"
   ]

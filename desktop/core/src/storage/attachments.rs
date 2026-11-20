@@ -23,6 +23,7 @@ use super::{
 const PARTIAL_PREFIX: &str = ".partial-";
 
 pub mod appkit_drafts;
+pub mod navigation;
 mod submissions;
 pub(crate) use submissions::{JournalEntry, JournalOutcome, JournalPhase, SubmissionWrite};
 pub use submissions::{JournalError, SubmissionAcknowledgement};

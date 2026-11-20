@@ -18,6 +18,8 @@ The desktop build job type-checks the frontend and compiles the host with the em
 
 After changing the [workspace IPC contract](../desktop/core/src/ipc.rs), regenerate the frontend types with `cargo run --manifest-path desktop/Cargo.toml --locked -p codex-gui-core --example export_workspace_ipc > desktop/frontend/src/generated/workspace.ts`. Core tests compare the checked-in output against Rust. The launched WebView fixture checks typed grant rejection and workspace snapshot recovery after a revision gap and renderer reload.
 
+Run the [installed history fixture](../desktop/fixtures/verify_history_fixture.py) with the packaged executable. It exercises chat switching, draft writes, composer focus and synthetic composition, a competing writer, cold resume streaming, manual reconnect, and native process restart. It checks the backend trace for any thread or turn creation and verifies both drafts still exist after clearing the checkout. Physical IME acceptance belongs to the [native and live checks](#native-and-live-acceptance).
+
 ### Swift AppKit
 
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.

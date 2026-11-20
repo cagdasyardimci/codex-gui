@@ -7,7 +7,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use super::{
-    WorkspaceId, WorkspaceView,
+    NavigationView, WorkspaceId, WorkspaceView,
     stream::{StreamChange, TranscriptView},
 };
 
@@ -20,6 +20,7 @@ pub struct WorkspaceSnapshot {
     pub revision: u32,
     pub workspace: Option<WorkspaceView>,
     pub transcript: TranscriptView,
+    pub navigation: NavigationView,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -45,9 +46,17 @@ pub struct RevisionedStream {
 
 #[derive(Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct RevisionedNavigation {
+    pub revision: u32,
+    pub navigation: NavigationView,
+}
+
+#[derive(Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub enum WorkspaceUpdate {
     Changed(WorkspaceSnapshot),
     Stream(RevisionedStream),
+    Navigation(RevisionedNavigation),
     Resync,
     Retired,
     Idle,
@@ -57,26 +66,38 @@ pub enum WorkspaceUpdate {
 struct Publication {
     subscriber: Option<SubscriptionId>,
     snapshot: WorkspaceSnapshot,
-    stream_change: Option<StreamChange>,
+    change: Change,
+}
+
+#[derive(Default)]
+enum Change {
+    #[default]
+    Snapshot,
+    Stream(StreamChange),
+    Navigation,
 }
 
 impl Publication {
-    fn advance(&mut self, stream_change: Option<StreamChange>) {
+    fn advance(&mut self, change: Change) {
         self.snapshot.revision = self
             .snapshot
             .revision
             .checked_add(1)
             .expect("workspace projection exhausted its revision range");
-        self.stream_change = stream_change;
+        self.change = change;
     }
 
     fn adjacent_update(&self) -> WorkspaceUpdate {
-        match &self.stream_change {
-            Some(change) => WorkspaceUpdate::Stream(RevisionedStream {
+        match &self.change {
+            Change::Stream(change) => WorkspaceUpdate::Stream(RevisionedStream {
                 revision: self.snapshot.revision,
                 change: change.clone(),
             }),
-            None => WorkspaceUpdate::Changed(self.snapshot.clone()),
+            Change::Navigation => WorkspaceUpdate::Navigation(RevisionedNavigation {
+                revision: self.snapshot.revision,
+                navigation: self.snapshot.navigation.clone(),
+            }),
+            Change::Snapshot => WorkspaceUpdate::Changed(self.snapshot.clone()),
         }
     }
 }
@@ -104,7 +125,33 @@ impl WorkspaceProjection {
             }
             publication.snapshot.workspace = workspace;
             publication.snapshot.transcript = TranscriptView::default();
-            publication.advance(None);
+            publication.snapshot.navigation = NavigationView::default();
+            publication.advance(Change::Snapshot);
+            true
+        });
+    }
+
+    pub fn replace_history(
+        &mut self,
+        workspace: Option<WorkspaceView>,
+        navigation: NavigationView,
+        transcript: TranscriptView,
+    ) {
+        self.publication.send_modify(|publication| {
+            publication.snapshot.workspace = workspace;
+            publication.snapshot.navigation = navigation;
+            publication.snapshot.transcript = transcript;
+            publication.advance(Change::Snapshot);
+        });
+    }
+
+    pub fn update_navigation(&mut self, navigation: NavigationView) {
+        self.publication.send_if_modified(|publication| {
+            if publication.snapshot.navigation == navigation {
+                return false;
+            }
+            publication.snapshot.navigation = navigation;
+            publication.advance(Change::Navigation);
             true
         });
     }
@@ -121,7 +168,7 @@ impl WorkspaceProjection {
             {
                 return false;
             }
-            publication.advance(Some(change));
+            publication.advance(Change::Stream(change));
             true
         })
     }

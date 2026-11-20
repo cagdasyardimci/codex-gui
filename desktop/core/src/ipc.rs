@@ -6,11 +6,17 @@ use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
 
+mod navigation;
 mod stream;
 mod subscription;
-pub use stream::{StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptView};
+pub use navigation::{
+    ChatRequest, ChatRow, DraftEdit, EditorDraft, NavigationIntent, NavigationView,
+};
+pub use stream::{
+    StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptRole, TranscriptView,
+};
 pub use subscription::{
-    RevisionedStream, SubscriptionId, WorkspaceProjection, WorkspaceSnapshot,
+    RevisionedNavigation, RevisionedStream, SubscriptionId, WorkspaceProjection, WorkspaceSnapshot,
     WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest,
 };
 
@@ -39,6 +45,8 @@ pub enum IpcError {
     PickerBusy,
     InvalidCheckout,
     RetiredWorkspace,
+    ProjectUnavailable,
+    StaleSelection,
 }
 
 #[derive(Default)]
@@ -61,13 +69,21 @@ impl WorkspaceGrants {
         authorize_window(window)?;
         let checkout =
             CheckoutIdentity::capture(selected).map_err(|_| IpcError::InvalidCheckout)?;
+        Ok(self.select_checkout(selected, checkout))
+    }
+
+    pub fn select_checkout(&mut self, selected: &Path, checkout: CheckoutIdentity) -> WorkspaceId {
         let id = WorkspaceId(Uuid::new_v4());
         self.selected = Some(Grant {
             id,
             display_path: selected.display().to_string(),
             checkout,
         });
-        Ok(id)
+        id
+    }
+
+    pub fn clear(&mut self) {
+        self.selected = None;
     }
 
     pub fn snapshot(
@@ -125,6 +141,14 @@ pub fn workspace_typescript() -> String {
         StreamChange::decl(),
         TranscriptItem::decl(),
         TranscriptView::decl(),
+        TranscriptRole::decl(),
+        NavigationView::decl(),
+        ChatRow::decl(),
+        EditorDraft::decl(),
+        ChatRequest::decl(),
+        DraftEdit::decl(),
+        NavigationIntent::decl(),
+        RevisionedNavigation::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

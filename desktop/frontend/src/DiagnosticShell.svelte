@@ -1,27 +1,16 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, tick } from 'svelte';
+  import WorkspaceShell from './WorkspaceShell.svelte';
   import { probeMedia } from './mediaProbe';
-  import { observeWorkspace, pickWorkspace, readWorkspace } from './projectIpc';
+  import { observeWorkspace, readWorkspace } from './projectIpc';
   import { verifyWorkspaceSubscription } from './workspaceProbe';
-  import type { IpcError, TranscriptItem, WorkspaceView } from './generated/workspace';
+  import type { IpcError, TranscriptItem } from './generated/workspace';
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
-  let mode = $state<'none' | 'streaming' | 'media' | null>(null);
-  let workspace = $state<WorkspaceView | null>(null);
-  let picking = $state(false);
-
-  async function openProject() {
-    picking = true;
-    try {
-      await pickWorkspace();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      picking = false;
-    }
-  }
+  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore';
+  let mode = $state<Mode | null>(null);
 
   async function workspaceScopeVerified(): Promise<boolean> {
     const expected: IpcError = 'retiredWorkspace';
@@ -65,13 +54,10 @@
 
   onMount(() => {
     const lifecycle = new AbortController();
-    void invoke<'none' | 'streaming' | 'media'>('verification_mode')
+    void invoke<Mode>('verification_mode')
       .then(async (verification) => {
         if (lifecycle.signal.aborted) return;
         mode = verification;
-        if (verification === 'none') {
-          await observeWorkspace((snapshot) => { workspace = snapshot.workspace; }, lifecycle.signal);
-        }
         if (verification === 'streaming') {
           const subscription = await verifyWorkspaceSubscription();
           if (subscription === 'reload') window.location.reload();
@@ -84,36 +70,24 @@
   });
 </script>
 
-<main aria-label="Codex GUI Beta">
-  {#if mode === 'none'}
-    <button type="button" disabled={picking} onclick={() => void openProject()}>Open Project…</button>
-    {#if workspace}<h1>{workspace.projectPath}</h1>{/if}
-  {:else if mode === 'streaming'}
+{#if mode === 'none'}
+  <WorkspaceShell />
+{:else if mode === 'history'}
+  <WorkspaceShell verify="initial" />
+{:else if mode === 'historyRestore'}
+  <WorkspaceShell verify="restore" />
+{:else if mode === 'streaming'}
+  <main aria-label="Codex GUI Beta">
     <pre aria-label="Fixture output" bind:this={transcript}>{text}</pre>
-  {/if}
-</main>
+  </main>
+{/if}
 
 <style>
-  :global(html) {
-    color-scheme: light dark;
-    background: Canvas;
-    color: CanvasText;
-  }
-
-  :global(body) {
-    margin: 0;
-  }
-
   main {
     box-sizing: border-box;
     margin-inline: auto;
     max-width: 52rem;
     padding: 2rem;
-  }
-
-  button {
-    font: inherit;
-    padding: 0.4rem 0.7rem;
   }
 
   pre {

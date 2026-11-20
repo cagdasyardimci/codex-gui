@@ -40,7 +40,7 @@ class Stream:
                         break
             with engine.lock:
                 self.turn['status'] = 'interrupted' if self.cancelled.is_set() else 'completed'
-                self.turn['completedAt'] = time.time()
+                self.turn['completedAt'] = int(time.time()) if engine.scenario.get('desktopHistory') else time.time()
                 self.turn['durationMs'] = (self.turn['completedAt'] - self.turn['startedAt']) * 1000
                 self.emit('item/completed', item=self.item)
                 engine.active.pop(self.thread['id'], None)

@@ -45,6 +45,12 @@ class Server:
         raise ProtocolError(-32001, 'Unknown thread: ' + str(identity))
 
     def summary(self, thread):
+        if self.scenario.get('desktopHistory'):
+            status = ({'type': 'active', 'activeFlags': []}
+                      if thread['id'] in self.active else {'type': 'idle'})
+            return {k: copy.deepcopy(v) for k, v in thread.items() if k != 'turns'} | {
+                'cwd': thread['cwd'], 'createdAt': 1, 'updatedAt': int(time.time()),
+                'status': status, 'turns': []}
         return {k: copy.deepcopy(v) for k, v in thread.items() if k != 'turns'} | {
             'cwd': thread.get('cwd', ''), 'updatedAt': time.time(),
             'status': {'type': 'active' if thread['id'] in self.active else 'idle'}, 'turns': []}
@@ -113,7 +119,15 @@ class Server:
             return {'thread': self.summary(thread), **self.settings(thread)}
         if method in ('thread/read', 'thread/resume'):
             thread = self.thread(p.get('threadId'))
-            return {'thread': {**self.summary(thread), 'turns': thread['turns']}, **self.settings(thread)}
+            turns = thread['turns']
+            if self.scenario.get('desktopHistory'):
+                if method == 'thread/resume':
+                    self.resume_history_fixture(thread)
+                if p.get('excludeTurns') or p.get('includeTurns') is False:
+                    turns = []
+            return {'thread': {**self.summary(thread), 'turns': turns}, **self.settings(thread)}
+        if method == 'thread/queue/list' and self.scenario.get('desktopHistory'):
+            return {'data': [], 'nextCursor': None}
         if method in ('thread/turns/list', 'thread/items/list'):
             thread = self.thread(p.get('threadId'))
             if method == 'thread/turns/list':
@@ -146,6 +160,20 @@ class Server:
             return {}
         raise ProtocolError(-32601, 'Unsupported fixture method: ' + method)
 
+    def resume_history_fixture(self, thread):
+        if thread['id'] != 'history-first':
+            return
+        if not self.state.data.get('writerLockObserved'):
+            self.state.data['writerLockObserved'] = True
+            self.state.save()
+            raise ProtocolError(-32000, 'Thread already has an active writer')
+        if not self.state.data.get('queuedFixtureDispatch'):
+            self.state.data['queuedFixtureDispatch'] = True
+            self.start({
+                'threadId': thread['id'],
+                'input': [{'type': 'text', 'text': 'Queued request from another client'}],
+            })
+
     def start(self, p):
         thread = self.thread(p.get('threadId'))
         if thread['id'] in self.active:
@@ -160,7 +188,8 @@ class Server:
         turn_id = self.state.identity('turn')
         user = {'id': self.state.identity('user'), 'type': 'userMessage', 'content': inputs}
         assistant = {'id': self.state.identity('assistant'), 'type': 'agentMessage', 'text': ''}
-        turn = {'id': turn_id, 'status': 'inProgress', 'startedAt': time.time(),
+        started = int(time.time()) if self.scenario.get('desktopHistory') else time.time()
+        turn = {'id': turn_id, 'status': 'inProgress', 'startedAt': started,
                 'items': [user, assistant], 'error': None}
         thread['turns'].append(turn)
         stream = Stream(self, thread, turn, assistant)

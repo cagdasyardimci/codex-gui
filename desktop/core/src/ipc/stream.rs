@@ -16,7 +16,15 @@ pub struct TextBatch {
 pub enum StreamChange {
     Text(Vec<TextBatch>),
     ItemCompleted(String),
+    FinalItem(TranscriptItem),
     Completed,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TranscriptRole {
+    User,
+    Assistant,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, TS)]
@@ -25,6 +33,7 @@ pub struct TranscriptItem {
     pub item_id: String,
     pub text: String,
     pub completed: bool,
+    pub role: TranscriptRole,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -58,6 +67,14 @@ impl TranscriptView {
                 let item = self.item(id);
                 !std::mem::replace(&mut item.completed, true)
             }
+            StreamChange::FinalItem(final_item) => {
+                let item = self.item(&final_item.item_id);
+                if item == final_item {
+                    return false;
+                }
+                *item = final_item.clone();
+                true
+            }
             StreamChange::Completed => {
                 self.completed = true;
                 true
@@ -73,6 +90,7 @@ impl TranscriptView {
             item_id: id.to_owned(),
             text: String::new(),
             completed: false,
+            role: TranscriptRole::Assistant,
         });
         self.items.last_mut().expect("inserted transcript item")
     }

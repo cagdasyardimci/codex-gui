@@ -1,0 +1,131 @@
+:root {
+  color-scheme: light dark;
+  --workspace-canvas: Canvas;
+  --workspace-text: CanvasText;
+  --workspace-panel: color-mix(in srgb, CanvasText 4%, Canvas);
+  --workspace-divider: color-mix(in srgb, CanvasText 15%, Canvas);
+  --workspace-hover: color-mix(in srgb, CanvasText 8%, Canvas);
+  --workspace-focus: Highlight;
+  background: var(--workspace-canvas);
+  color: var(--workspace-text);
+  font: 14px system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.workspace :is(button, textarea) {
+  font: inherit;
+  color: inherit;
+  background: var(--workspace-canvas);
+  border: 1px solid var(--workspace-divider);
+  border-radius: 0.45rem;
+}
+
+.workspace :is(button, textarea):focus-visible {
+  outline: 2px solid var(--workspace-focus);
+  outline-offset: 2px;
+}
+
+.workspace button {
+  padding: 0.45rem 0.65rem;
+  text-align: start;
+}
+
+.workspace button:enabled:hover,
+.workspace button[aria-current="true"] {
+  background: var(--workspace-hover);
+}
+
+.workspace button:disabled {
+  opacity: 0.6;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--workspace-divider);
+}
+
+.workspace-header h1 {
+  flex: 1 1 8rem;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-body {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-sidebar {
+  flex: 0 0 clamp(9rem, 24vw, 17rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border-right: 1px solid var(--workspace-divider);
+  background: var(--workspace-panel);
+}
+
+.workspace-sidebar .chat-row {
+  border-color: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-conversation {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0.75rem clamp(1rem, 5vw, 4rem);
+}
+
+.workspace-transcript {
+  flex: 1;
+  overflow: auto;
+}
+
+.transcript-item {
+  margin: 0.8rem 0;
+}
+
+.transcript-item span {
+  font-weight: 600;
+}
+
+.transcript-item p {
+  margin: 0.35rem 0 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.workspace-retry {
+  align-self: flex-start;
+  margin-block: 0.45rem;
+}
+
+.workspace-composer {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.75rem;
+  resize: vertical;
+}

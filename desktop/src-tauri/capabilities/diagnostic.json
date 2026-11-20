@@ -8,6 +8,7 @@
     "allow-verification-mode",
     "allow-verify-fixture-result",
     "allow-verify-media-result",
+    "allow-verify-history-result",
     "allow-change-workspace-fixture"
   ]
 }
