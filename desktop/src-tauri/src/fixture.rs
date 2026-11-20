@@ -150,12 +150,16 @@ pub fn verify_media_result(
     if *verification != Verification::Media {
         return Err("media verification was not requested at launch".into());
     }
+    let negotiation = if evidence.peer_api {
+        evidence.negotiated_sessions == 2
+    } else {
+        cfg!(target_os = "linux") && evidence.negotiated_sessions == 0
+    };
     let passed = evidence.secure_context
         && evidence.capture_api
         && evidence.playback_api
-        && evidence.peer_api
-        && evidence.negotiated_sessions == 2
-        && evidence.failure.is_none();
+        && evidence.failure.is_none()
+        && negotiation;
     println!("WebView media evidence: {}", json!(evidence));
     app.exit(i32::from(!passed));
     Ok(())

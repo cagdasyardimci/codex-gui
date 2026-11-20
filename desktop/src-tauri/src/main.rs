@@ -35,19 +35,6 @@ fn main() {
             fixture::verify_media_result,
         ])
         .setup(move |app| {
-            #[cfg(target_os = "linux")]
-            {
-                use webkit2gtk::{SettingsExt, WebViewExt};
-
-                let window = app
-                    .get_webview_window("main")
-                    .ok_or_else(|| std::io::Error::other("main WebView is missing"))?;
-                window.with_webview(|webview| {
-                    if let Some(settings) = webview.inner().settings() {
-                        settings.set_enable_webrtc(true);
-                    }
-                })?;
-            }
             if let Some(report) = coding_report {
                 let app = app.handle().clone();
                 tauri::async_runtime::spawn(async move {

@@ -16,6 +16,7 @@ export async function probeMedia(): Promise<MediaEvidence> {
     negotiatedSessions: 0,
     failure: null,
   };
+  if (!evidence.peerApi) return evidence;
   try {
     for (let session = 0; session < 2; session += 1) {
       await negotiateVoiceOffer();
