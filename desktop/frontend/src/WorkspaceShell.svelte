@@ -18,6 +18,8 @@
   import MessageSearch from './MessageSearch.svelte';
   import PinnedSummary, { type SummarySource } from './PinnedSummary.svelte';
   import ConversationInspector, { type InspectorSelection, type InspectorTab } from './ConversationInspector.svelte';
+  import WorkspaceFiles from './WorkspaceFiles.svelte';
+  import { FileEdits, type FileViewPositions } from './fileTools';
   import { MessageSearchIndex, type SearchHit } from './messageSearchIndex';
   import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
   import TranscriptRow from './TranscriptRow.svelte';
@@ -47,11 +49,12 @@
   import { verifyAutomaticTitles } from './automaticTitlesProbe';
   import { verifyPinnedSummary } from './pinnedSummaryProbe';
   import { verifyInspector } from './inspectorProbe';
+  import { verifyFileTools } from './fileToolsProbe';
   import { verifyFeedback } from './feedbackProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -110,6 +113,10 @@
   let hiddenSummaries = $state.raw(new Set<string>());
   let checkoutRevision = $state(0);
   let inspectorViews = $state.raw(new Map<string, { opened: boolean; selection: InspectorSelection }>());
+  let filePane = $state<ReturnType<typeof WorkspaceFiles>>();
+  let filesOpened = $state(false);
+  const fileEdits = new FileEdits();
+  const filePositions: FileViewPositions = { tabs: new Map(), folders: new Map() };
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
@@ -702,6 +709,7 @@
     actionPending = true;
     try {
       await flushEdits();
+      await fileEdits.flush();
       await action();
       if (focusEditor) {
         await tick();
@@ -995,6 +1003,7 @@
         acceptText(editor.value, false);
       }
       await flushEdits();
+      if (!quit?.stopOnly) await fileEdits.flush();
       await navigateWorkspace({ confirmQuit: { ticket } });
     } catch (error) {
       console.error(error);
@@ -1067,6 +1076,7 @@
     else if (verify === 'pinnedSummary') void verifyPinnedSummary(() => snapshot);
     else if (verify === 'inspector') void verifyInspector(() => snapshot);
     else if (verify === 'feedback') void verifyFeedback(() => snapshot);
+    else if (verify === 'fileTools') void verifyFileTools(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -1099,6 +1109,9 @@
       <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+F Control+Shift+F"
         onclick={showMessageSearch}>Search Messages</button>
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
+      {#if attachmentScope}
+        <button type="button" aria-expanded={filesOpened} disabled={!!quit} onclick={() => void filePane?.toggle()}>Files</button>
+      {/if}
       {#if summaryScope}
         <button type="button" aria-expanded={summaryVisible} disabled={!!quit} onclick={toggleSummary}>Pinned Summary</button>
         {@const scope = summaryScope}
@@ -1279,6 +1292,12 @@
     {#if showingChanges && workspace}
       <WorkspaceChanges workspaceId={workspace.workspaceId} />
     {/if}
+    {#if attachmentScope}
+      {#key JSON.stringify([attachmentScope.workspaceId, attachmentScope.draftId])}
+        <WorkspaceFiles scope={attachmentScope} edits={fileEdits} positions={filePositions}
+          blocked={!!quit} bind:opened={filesOpened} bind:this={filePane} />
+      {/key}
+    {/if}
     {#if summaryScope && inspector?.opened && navigation && !quit}
       {@const scope = summaryScope}
       {@const selection = inspector.selection}
@@ -1327,7 +1346,7 @@
       load={loadSearchPage} choose={chooseSearchHit} close={closeSearch} />
   {/if}
   {#if quit?.confirm && !quit.draining}
-    <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}
+    <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly} fileAction={quit.fileAction}
       cancel={() => { if (quit) void cancelQuit(quit.ticket).catch(console.error); }}
       confirm={() => { if (quit) void confirmQuit(quit.ticket); }} />
   {/if}

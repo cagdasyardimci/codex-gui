@@ -264,6 +264,9 @@ impl Navigation {
         checkout: &CheckoutIdentity,
         thread: &ThreadId,
     ) -> Result<(), Failure> {
+        if self.file_tools.has_edits(Some(checkout)) {
+            return Ok(());
+        }
         let store = WorktreeStore::open(&self.worktree_records)?;
         let snapshot = store.snapshot()?;
         if snapshot.authority != Edition::Tauri {

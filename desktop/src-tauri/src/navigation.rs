@@ -44,6 +44,7 @@ mod composer_attachments;
 mod composer_settings;
 mod conversation_fork;
 mod feedback;
+mod file_tools;
 pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
 mod inspector;
 mod interactions;
@@ -94,6 +95,17 @@ enum Action {
     SelectFolder(PathBuf),
     Intent(NavigationIntent),
     RequestQuit(tauri::AppHandle),
+    FileTools(
+        codex_gui_core::ipc::FileToolsRequest,
+        Option<PathBuf>,
+        oneshot::Sender<codex_gui_core::ipc::FileToolsView>,
+    ),
+    ReadFileTab(
+        codex_gui_core::ipc::FileTabRead,
+        bool,
+        oneshot::Sender<Vec<u8>>,
+    ),
+    EditFileTab(codex_gui_core::ipc::FileTabEdit),
     ComposerAttachment(composer_attachments::Mutation),
     ComposerContextClient(
         codex_gui_core::ipc::DraftAttachmentScope,
@@ -210,6 +222,7 @@ struct Navigation {
     message_search: Option<message_search::SearchSession>,
     titles: automatic_titles::AutomaticTitles,
     feedback: feedback::Feedback,
+    file_tools: file_tools::FileTools,
     worktree_records: PathBuf,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
@@ -272,6 +285,7 @@ impl NavigationHandle {
                 Verification::None | Verification::AutomaticTitles
             )),
             feedback: feedback::Feedback::default(),
+            file_tools: file_tools::FileTools::default(),
             worktree_records,
             view: NavigationView::default(),
             editable: HashMap::new(),
@@ -452,6 +466,18 @@ impl Navigation {
             }
             Action::ComposerAttachment(mutation) => {
                 self.update_composer_attachments(mutation)?;
+                return Ok(None);
+            }
+            Action::FileTools(request, path, reply) => {
+                let _ = reply.send(self.change_file_tools(request, path)?);
+                return Ok(None);
+            }
+            Action::ReadFileTab(request, raster, reply) => {
+                let _ = reply.send(self.read_file_tools(request, raster)?);
+                return Ok(None);
+            }
+            Action::EditFileTab(request) => {
+                self.edit_file_tools(request)?;
                 return Ok(None);
             }
             Action::ComposerContextClient(scope, reply) => {

@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::atomic::Ordering, time::Duration};
 
 use codex_gui_core::{
     identity::{ConnectionIdentity, OperationIdentity, RequestId},
-    ipc::{IpcError, QuitDecision, QuitView},
+    ipc::{FileQuitAction, IpcError, QuitDecision, QuitView},
     workspace::{ExecutionSnapshot, ExecutionTarget, WorkspaceAction},
 };
 use tauri::{AppHandle, Manager};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{fixture::Verification, quit_ipc::QuitLifecycle};
 
-use super::{Failure, Navigation, report};
+use super::{Failure, Navigation, file_tools::CapturedFileDiscard, report};
 
 const QUIT_GRACE: Duration = Duration::from_secs(2);
 
@@ -19,6 +19,7 @@ pub(super) struct Quit {
     action: Shutdown,
     ticket: String,
     drain: Option<Drain>,
+    discard_files: Option<Vec<CapturedFileDiscard>>,
 }
 
 enum Shutdown {
@@ -53,12 +54,14 @@ impl Navigation {
         if self.quit.is_some() {
             return;
         }
-        let confirm = !self.inflight.is_empty()
+        let stop_only = matches!(action, Shutdown::StopAll);
+        let dirty_files = !stop_only && self.file_tools.has_edits(None);
+        let confirm = dirty_files
+            || !self.inflight.is_empty()
             || self.queues.has_mutations()
             || self
                 .runtime_connections()
                 .any(|(_, engine)| has_work(&engine.snapshot().execution));
-        let stop_only = matches!(action, Shutdown::StopAll);
         let ticket = Uuid::new_v4().to_string();
         self.shutdown_pending.store(true, Ordering::SeqCst);
         self.view.quit = Some(QuitView {
@@ -66,11 +69,13 @@ impl Navigation {
             confirm,
             draining: false,
             stop_only,
+            file_action: dirty_files.then_some(FileQuitAction::Save),
         });
         self.quit = Some(Quit {
             action,
             ticket,
             drain: None,
+            discard_files: None,
         });
         self.publish_navigation();
     }
@@ -90,6 +95,34 @@ impl Navigation {
         if let Err(error) = self.owners.persist_retired() {
             self.release_quit();
             return Err(report(error.into()));
+        }
+        let quit = self.quit.as_mut().expect("authorized quit");
+        if !matches!(quit.action, Shutdown::StopAll) {
+            let files_settled = if let Some(discard) = quit.discard_files.take() {
+                self.file_tools.discard_all(&discard)
+            } else {
+                let failures = self.file_tools.save_all(&self.owners);
+                if failures.is_empty() {
+                    true
+                } else {
+                    quit.discard_files = Some(failures);
+                    false
+                }
+            };
+            if !files_settled {
+                let next_ticket = Uuid::new_v4().to_string();
+                quit.ticket.clone_from(&next_ticket);
+                let view = self.view.quit.as_mut().expect("published quit");
+                view.ticket = next_ticket;
+                view.confirm = true;
+                view.file_action = Some(if quit.discard_files.is_some() {
+                    FileQuitAction::Discard
+                } else {
+                    FileQuitAction::Save
+                });
+                self.publish_navigation();
+                return Ok(());
+            }
         }
         for (client, engine) in self.runtime_connections() {
             for pending in self
@@ -188,6 +221,9 @@ impl Navigation {
             println!(
                 "Verified desktop quit drained drafts and retained unresolved execution evidence"
             );
+        }
+        if *app.state::<Verification>() == Verification::FileTools {
+            println!("Verified installed file tools and hidden-tab quit settlement");
         }
         app.exit(0);
         true

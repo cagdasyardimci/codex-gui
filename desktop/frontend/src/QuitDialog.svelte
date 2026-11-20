@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import type { FileQuitAction } from './generated/workspace';
 
-  let { busy, stopOnly, cancel, confirm }: {
+  let { busy, stopOnly, fileAction, cancel, confirm }: {
     busy: boolean;
     stopOnly: boolean;
+    fileAction: FileQuitAction | null;
     cancel: () => void;
     confirm: () => void;
   } = $props();
@@ -21,6 +23,12 @@
   <h2 id="quit-heading">{stopOnly ? 'Stop All Codex Work' : 'Quit Codex GUI'}</h2>
   <div class="quit-actions">
     <button type="button" bind:this={cancelButton} disabled={busy} onclick={cancel}>Cancel</button>
-    <button type="button" disabled={busy} onclick={confirm}>{stopOnly ? 'Stop All' : 'Stop and Quit'}</button>
+    <button type="button" disabled={busy} onclick={confirm}>
+      {#if stopOnly}Stop All
+      {:else if fileAction === 'save'}Save and Quit
+      {:else if fileAction === 'discard'}Discard Changes and Quit
+      {:else}Stop and Quit
+      {/if}
+    </button>
   </div>
 </dialog>

@@ -50,6 +50,7 @@ pub enum Verification {
     PinnedSummary,
     Inspector,
     Feedback,
+    FileTools,
     Account,
     WindowsSetup,
     Turn,
@@ -528,12 +529,30 @@ pub fn report_quit_failure(
     verification: State<'_, Verification>,
     failure: String,
 ) -> Result<(), String> {
-    if *verification != Verification::Quit {
+    if !matches!(*verification, Verification::Quit | Verification::FileTools) {
         return Err("quit verification was not requested at launch".into());
     }
     eprintln!("Quit verification failed: {failure}");
     app.exit(1);
     Ok(())
+}
+
+#[tauri::command]
+pub fn overwrite_file_tools_fixture(
+    window: tauri::WebviewWindow,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+) -> Result<(), IpcError> {
+    crate::project_ipc::authorize_view(&window)?;
+    if *verification != Verification::FileTools {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let path = checkouts
+        .primary
+        .as_ref()
+        .ok_or(IpcError::InvalidCheckout)?
+        .join("conflict.txt");
+    std::fs::write(path, b"An external change\n").map_err(|_| IpcError::ProjectUnavailable)
 }
 
 #[tauri::command]

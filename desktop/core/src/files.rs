@@ -17,6 +17,7 @@ use crate::checkout::{CheckoutError, CheckoutIdentity, NativeFileIdentity};
 pub mod index;
 mod native;
 mod save;
+pub use save::MAX_EDIT_BYTES;
 
 pub const MAX_READ_BYTES: u64 = 32 * 1024 * 1024;
 
@@ -96,8 +97,12 @@ impl CheckoutFiles {
     }
 
     pub fn read(&self, handle: FileHandle) -> Result<FileRead, FileError> {
+        self.read_limited(handle, MAX_READ_BYTES)
+    }
+
+    pub fn read_limited(&self, handle: FileHandle, limit: u64) -> Result<FileRead, FileError> {
         let file = self.files.get(&handle).ok_or(FileError::InvalidHandle)?;
-        file.read(&self.checkout, MAX_READ_BYTES)
+        file.read(&self.checkout, limit.min(MAX_READ_BYTES))
     }
 
     pub fn close(&mut self, handle: FileHandle) {

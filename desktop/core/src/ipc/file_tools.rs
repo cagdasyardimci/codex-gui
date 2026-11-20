@@ -1,0 +1,107 @@
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+use uuid::Uuid;
+
+use super::{DraftAttachmentScope, WorkspaceId};
+use crate::files::index::{ProjectFolderId, ProjectPathId};
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectBrowseRequest {
+    pub workspace_id: WorkspaceId,
+    pub folder: Option<ProjectFolderId>,
+    pub offset: u32,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileToolsRequest {
+    pub scope: DraftAttachmentScope,
+    pub change: FileToolsChange,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FileToolsChange {
+    Inspect,
+    Show(bool),
+    Widen(bool),
+    Open(FileTabOpen),
+    Select(Uuid),
+    Keep(Uuid),
+    Move(FileTabMove),
+    Close(Uuid),
+    Discard(FileTabDiscard),
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileTabOpen {
+    pub path: ProjectPathId,
+    pub keep: bool,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileTabMove {
+    pub tab_id: Uuid,
+    pub before: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileToolsView {
+    pub session_id: Uuid,
+    pub open: bool,
+    pub wide: bool,
+    pub selected: Option<Uuid>,
+    pub tabs: Vec<FileTabView>,
+    pub discard: Option<FileTabDiscard>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileTabView {
+    pub id: Uuid,
+    pub path: String,
+    pub kind: FileTabKind,
+    pub preview: bool,
+    pub dirty: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FileTabKind {
+    Text,
+    Raster,
+    Other,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileTabDiscard {
+    pub tab_id: Uuid,
+    pub revision: u32,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileTabRead {
+    pub scope: DraftAttachmentScope,
+    pub tab_id: Uuid,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileTabEdit {
+    pub session_id: Uuid,
+    pub tab_id: Uuid,
+    pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FileQuitAction {
+    Save,
+    Discard,
+}

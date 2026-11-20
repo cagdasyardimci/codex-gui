@@ -7,7 +7,10 @@ use uuid::Uuid;
 use crate::checkout::CheckoutIdentity;
 use crate::files::{
     FileRevision,
-    index::{ProjectPathId, ProjectPathMatch},
+    index::{
+        ProjectBrowseEntry, ProjectBrowsePage, ProjectFolder, ProjectFolderId, ProjectPathId,
+        ProjectPathMatch,
+    },
 };
 use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
@@ -17,6 +20,7 @@ mod chat_deletion;
 mod composer_settings;
 mod context;
 mod feedback;
+mod file_tools;
 mod git;
 mod inspector;
 mod markdown;
@@ -50,6 +54,11 @@ pub use context::{
     ComposerFileContext, ComposerSourceLines, ComposerTokenRange,
 };
 pub use feedback::{FeedbackRating, FeedbackRequest, FeedbackView};
+pub use file_tools::{
+    FileQuitAction, FileTabDiscard, FileTabEdit, FileTabKind, FileTabMove, FileTabOpen,
+    FileTabRead, FileTabView, FileToolsChange, FileToolsRequest, FileToolsView,
+    ProjectBrowseRequest,
+};
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use inspector::{
     ChildHistoryAction, ChildHistoryPage, ChildHistoryRequest, ChildHistoryTarget, InspectorAgent,
@@ -244,6 +253,11 @@ pub fn workspace_typescript() -> String {
         ProjectPathRequest::decl(),
         ProjectPathId::decl(),
         ProjectPathMatch::decl(),
+        ProjectFolderId::decl(),
+        ProjectFolder::decl(),
+        ProjectBrowseEntry::decl(),
+        ProjectBrowsePage::decl(),
+        ProjectBrowseRequest::decl(),
         WorkspaceView::decl(),
         IpcError::decl(),
         SubscriptionId::decl(),
@@ -345,6 +359,17 @@ pub fn workspace_typescript() -> String {
         FeedbackRating::decl(),
         FeedbackRequest::decl(),
         FeedbackView::decl(),
+        FileToolsRequest::decl(),
+        FileToolsChange::decl(),
+        FileToolsView::decl(),
+        FileTabView::decl(),
+        FileTabOpen::decl(),
+        FileTabMove::decl(),
+        FileTabKind::decl(),
+        FileTabDiscard::decl(),
+        FileTabRead::decl(),
+        FileTabEdit::decl(),
+        FileQuitAction::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

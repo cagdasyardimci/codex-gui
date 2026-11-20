@@ -52,6 +52,8 @@ Run the [conversation inspector fixture](../desktop/fixtures/verify_inspector_fi
 
 Run the [turn feedback fixture](../desktop/fixtures/verify_feedback_fixture.py) against the installed executable to verify completed-turn scope, fresh feedback policy, log-free submissions, and durable duplicate suppression after a lost reply.
 
+Run the [file tabs fixture](../desktop/fixtures/verify_file_tools_fixture.py) against the installed executable to verify per-chat file ownership, draft adoption, preview and layout restoration, and settlement of hidden buffers during Quit. The fixture checks exact file bytes after the app exits.
+
 Run it with `--settings` to verify model-specific effort and speed, cancellation and retirement of Full Access confirmation, and the exact settings in three captured Send requests across a pending change and a return to configured permissions.
 
 The [installed turn checkpoint](../desktop/fixtures/verify_turn_fixture.py) uses two fresh profiles. One recovers an ambiguous submission, answers a captured approval and questions, verifies the totals from the backend's attributed edit report, and opens the Git patch for the resulting checkout edit. The other switches chats and reloads the WebView during an active turn, then checks that stopping it targets the original owner and preserves that chat's draft. The package workflow also runs the installed account and history fixtures for first-launch sign-in and draft restoration. Use release-candidate acceptance for the real-account workflow.

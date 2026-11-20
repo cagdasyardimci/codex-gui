@@ -124,6 +124,7 @@ pub struct QuitView {
     pub confirm: bool,
     pub draining: bool,
     pub stop_only: bool,
+    pub file_action: Option<super::FileQuitAction>,
 }
 
 #[derive(Debug, Deserialize, TS)]

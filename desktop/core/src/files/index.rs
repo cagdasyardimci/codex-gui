@@ -14,8 +14,10 @@ use uuid::Uuid;
 
 use super::{CheckoutIdentity, FileError, native};
 
+mod browse;
 mod directory;
 mod watch;
+pub use browse::{ProjectBrowseEntry, ProjectBrowsePage, ProjectFolder, ProjectFolderId};
 use directory::EntryKind;
 pub use watch::WatchedProjectPaths;
 

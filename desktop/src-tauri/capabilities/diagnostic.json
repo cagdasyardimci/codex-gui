@@ -20,6 +20,7 @@
     "allow-select-fixture-checkout",
     "allow-seed-deletion-fixture",
     "allow-report-quit-failure",
+    "allow-overwrite-file-tools-fixture",
     "allow-change-workspace-fixture"
   ]
 }

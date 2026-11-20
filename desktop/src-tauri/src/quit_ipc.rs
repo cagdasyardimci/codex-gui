@@ -42,7 +42,7 @@ pub fn request_quit_fixture(
     application: bool,
 ) -> Result<(), IpcError> {
     authorize_view(&window)?;
-    if *verification != Verification::Quit {
+    if !matches!(*verification, Verification::Quit | Verification::FileTools) {
         return Err(IpcError::UnauthorizedWindow);
     }
     if application {

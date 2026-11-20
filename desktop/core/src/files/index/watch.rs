@@ -48,6 +48,14 @@ impl WatchedProjectPaths {
         Ok(self.refresh()?.relative_path(id)?.to_owned())
     }
 
+    pub fn browse(
+        &mut self,
+        folder: Option<ProjectFolderId>,
+        offset: u32,
+    ) -> Result<ProjectBrowsePage, FileError> {
+        self.refresh()?.browse(folder, offset)
+    }
+
     fn refresh(&mut self) -> Result<&ProjectPathIndex, FileError> {
         if let Err(error) = self.checkout.revalidate() {
             self.watcher = None;

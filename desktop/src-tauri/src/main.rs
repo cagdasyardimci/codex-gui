@@ -8,6 +8,7 @@ mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
 mod diff_ipc;
+mod file_tools_ipc;
 mod fixture;
 mod navigation;
 mod project_ipc;
@@ -45,6 +46,7 @@ fn main() {
         Some("--verify-pinned-summary") => fixture::Verification::PinnedSummary,
         Some("--verify-inspector") => fixture::Verification::Inspector,
         Some("--verify-feedback") => fixture::Verification::Feedback,
+        Some("--verify-file-tools") => fixture::Verification::FileTools,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -84,6 +86,7 @@ fn main() {
             | fixture::Verification::PinnedSummary
             | fixture::Verification::Inspector
             | fixture::Verification::Feedback
+            | fixture::Verification::FileTools
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -103,11 +106,14 @@ fn main() {
     });
     let handle_desktop_quit = matches!(
         verification,
-        fixture::Verification::None | fixture::Verification::Quit
+        fixture::Verification::None
+            | fixture::Verification::Quit
+            | fixture::Verification::FileTools
     );
     let fixture_checkouts = matches!(
         verification,
         fixture::Verification::Quit
+            | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
             | fixture::Verification::ChatDeletion
@@ -159,9 +165,14 @@ fn main() {
             fixture::verify_turn_result,
             fixture::verify_diff_result,
             fixture::report_quit_failure,
+            fixture::overwrite_file_tools_fixture,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::search_project_paths,
+            file_tools_ipc::change_file_tools,
+            file_tools_ipc::browse_project_files,
+            file_tools_ipc::read_file_tab,
+            file_tools_ipc::edit_file_tab,
             composer_ipc::pick_composer_attachments,
             composer_context_ipc::composer_context_catalog,
             composer_context_ipc::read_project_context,
@@ -256,8 +267,10 @@ fn main() {
         if handle_desktop_quit
             && let RunEvent::ExitRequested { api, code, .. } = event
             && (code.is_none()
-                || verification == fixture::Verification::Quit
-                    && code == Some(quit_ipc::FIXTURE_APP_QUIT))
+                || matches!(
+                    verification,
+                    fixture::Verification::Quit | fixture::Verification::FileTools
+                ) && code == Some(quit_ipc::FIXTURE_APP_QUIT))
             && !app.state::<quit_ipc::QuitLifecycle>().allowed()
         {
             api.prevent_exit();
