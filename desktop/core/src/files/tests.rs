@@ -3,6 +3,19 @@ use std::fs;
 use super::*;
 
 #[test]
+fn creating_a_text_document_never_clobbers_an_existing_entry() {
+    let root = tempfile::tempdir().unwrap();
+    let relative = Path::new("AGENTS.md");
+    let target = root.path().join(relative);
+    let mut files = CheckoutFiles::new(CheckoutIdentity::capture(root.path()).unwrap());
+    let (link, revision) = files.create_text(relative, "initial café\n").unwrap();
+    assert_eq!(files.read(link.id).unwrap().revision, revision);
+    assert!(files.create_text(relative, "stale create").is_err());
+    assert_eq!(fs::read_to_string(target).unwrap(), "initial café\n");
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
 fn reads_by_scoped_handle_and_detects_replacement() {
     let root = tempfile::tempdir().unwrap();
     let relative = Path::new("code").join("source.txt");

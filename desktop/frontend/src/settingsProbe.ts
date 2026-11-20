@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WorkspaceSnapshot } from './generated/workspace';
 import { click, waitFor } from './fixtureControls';
-import { closeSettings, openSettings, refreshSettings, signOutSettings, writeSettings } from './settingsIpc';
+import { closeSettings, openSettings, readSettingsInstructions, refreshSettings, saveSettingsInstructions, signOutSettings, writeSettings } from './settingsIpc';
 import { rejectsStale } from './markdownProbe';
 
 export async function verifySettings(visible: () => WorkspaceSnapshot | null) {
@@ -79,6 +79,54 @@ export async function verifySettings(visible: () => WorkspaceSnapshot | null) {
     await closeSettings(edits);
     await click('Settings');
     await waitFor('Settings did not reopen after a version conflict', () => contains('first@example.invalid'));
+    await click('Personalization', window()!);
+    const instructions = () => window()?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Codex Instructions"]');
+    function editInstructions(text: string) {
+      const field = instructions()!;
+      field.value = text;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await waitFor('Personalization did not expose the scoped memories and instructions', () =>
+      !!checkbox('Enable Codex Memories') && instructions()?.readOnly === false);
+    if (instructions()!.value !== '') throw new Error('Missing instructions did not open as an empty editor');
+    checkbox('Enable Codex Memories')!.click();
+    await click('Save Enable Codex Memories', window()!);
+    await waitFor('The memory group did not publish its effective setting', () =>
+      settled('Refresh Settings') && checkbox('Enable Codex Memories')?.checked === true &&
+      checkbox('Allow Memories from Tool-assisted Chats')?.disabled === false);
+    checkbox('Allow Memories from Tool-assisted Chats')!.click();
+    await click('Save Allow Memories from Tool-assisted Chats', window()!);
+    await waitFor('Tool-assisted memory policy did not persist', () =>
+      settled('Refresh Settings') && checkbox('Allow Memories from Tool-assisted Chats')?.checked === false);
+    await click('Delete Memories…', window()!);
+    await click('Cancel', window()!);
+    await waitFor('Cancelling memory deletion did not restore the original control', () => settled('Delete Memories…'));
+    await click('Delete Memories…', window()!);
+    await click('Delete Memories', window()!);
+    await waitFor('Confirmed memory deletion did not return to Personalization', () =>
+      settled('Delete Memories…') && instructions()?.readOnly === false);
+
+    editInstructions('Created instructions café.\n');
+    await click('Save Instructions', window()!);
+    await waitFor('Saving from an absent instructions file did not establish a revision', () =>
+      instructions()?.readOnly === false && !settled('Save Instructions') && instructions()?.value === 'Created instructions café.\n');
+    await invoke('external_settings_instructions_fixture');
+    const retainedText = 'Keep this unsaved draft 日本語.\n';
+    editInstructions(retainedText);
+    await click('Save Instructions', window()!);
+    await waitFor('An external instructions edit replaced the unsaved draft', () =>
+      instructions()?.value === retainedText && settled('Save Instructions'));
+    await click('Reload Instructions…', window()!);
+    await click('Cancel Reload', window()!);
+    if (instructions()?.value !== retainedText) throw new Error('Cancelling reload replaced the editor draft');
+    await click('Reload Instructions…', window()!);
+    await click('Reload Instructions', window()!);
+    await waitFor('Reload did not retrieve the external instructions', () =>
+      instructions()?.value === 'External instructions\nReview the next draft.\n');
+    editInstructions('# Final Codex instructions\nPreserve café and 日本語.\n');
+    await click('Save Instructions', window()!);
+    await waitFor('The reloaded instruction revision did not save', () =>
+      instructions()?.readOnly === false && !settled('Save Instructions'));
     await click('Configuration', window()!);
 
     await profile('bedrock');
@@ -127,7 +175,9 @@ export async function verifySettings(visible: () => WorkspaceSnapshot | null) {
     } catch (error) {
       if (error !== 'staleSelection') throw error;
     }
+    const instructionRevision = (await readSettingsInstructions(fresh)).revision;
     await closeSettings(fresh);
+    await rejectsStale(saveSettingsInstructions({ session: fresh, revision: instructionRevision, text: 'Retired edit' }));
 
     await click('Settings');
     await waitFor('Reopening Settings did not show only the current account', () => contains('second@example.invalid') &&

@@ -47,14 +47,25 @@ pub(super) fn publish_stage(
     stage: &OsStr,
     file: &File,
     name: &OsStr,
+    replace: bool,
 ) -> io::Result<()> {
     verify_stage(parent, stage, file)?;
-    let stage = CString::new(stage.as_bytes())?;
+    let source = CString::new(stage.as_bytes())?;
     let name = CString::new(name.as_bytes())?;
     let dir = parent.as_raw_fd();
     // Both names are single components relative to the same open directory.
-    if unsafe { libc::renameat(dir, stage.as_ptr(), dir, name.as_ptr()) } != 0 {
+    let result = unsafe {
+        if replace {
+            libc::renameat(dir, source.as_ptr(), dir, name.as_ptr())
+        } else {
+            libc::linkat(dir, source.as_ptr(), dir, name.as_ptr(), 0)
+        }
+    };
+    if result != 0 {
         return Err(io::Error::last_os_error());
+    }
+    if !replace {
+        remove_stage(parent, stage, file);
     }
     Ok(())
 }

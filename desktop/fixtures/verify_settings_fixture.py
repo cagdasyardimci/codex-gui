@@ -23,6 +23,7 @@ def main():
         data = root / "desktop"
         for directory in (checkout, profile, data):
             directory.mkdir()
+        (profile / "fixture-memory.txt").write_bytes(b"Isolated synthetic Codex memory\n")
         account = data / "fixture-account.json"
         account.write_text(json.dumps({"profile": "first"}), encoding="utf-8")
         trace = root / "trace.jsonl"
@@ -48,13 +49,22 @@ def main():
             ("model_verbosity", "high", "layer-first-0"),
             ("features.local_thread_store_compression", True, "layer-first-1"),
             ("model_reasoning_summary", "concise", "layer-first-2"),
+            ("memories.disable_on_external_context", True, "layer-first-1"),
         ], writes
         assert all(Path(entry["filePath"]).samefile(account) for entry in writes)
         with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
             assert database.execute("SELECT effort FROM desktop_hidden_reasoning_efforts").fetchall() == [("minimal",)]
-        assert not list(profile.iterdir())
+        (memory_write,) = [entry["params"] for entry in requests if entry["method"] == "config/batchWrite"]
+        assert memory_write["expectedVersion"] == "layer-first-0" and Path(memory_write["filePath"]).samefile(account)
+        assert [edit["keyPath"] for edit in memory_write["edits"]] == [
+            "features.memories", "memories.generate_memories", "memories.use_memories",
+        ]
+        assert sum(entry["method"] == "memory/reset" for entry in requests) == 1
+        assert [path.name for path in profile.iterdir()] == ["AGENTS.md"]
+        assert (profile / "AGENTS.md").read_bytes() == "\ufeff# Final Codex instructions\r\nPreserve café and 日本語.\r\n".encode("utf-8")
         print("Verified provider and policy rotation, stale sensitive reads, one captured sign-out, and restarted workspace credentials")
         print("Verified versioned writes, newer configuration after lost acknowledgement, and persistent effort visibility")
+        print("Verified atomic memory preferences, one confirmed reset, and revision-checked global instructions")
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@
     "allow-verify-account-result",
     "allow-set-settings-fixture-profile",
     "allow-settings-usage-fixture-started",
+    "allow-external-settings-instructions-fixture",
     "allow-verify-windows-setup-result",
     "allow-verify-turn-result",
     "allow-verify-diff-result",

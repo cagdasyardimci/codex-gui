@@ -41,9 +41,44 @@ pub async fn write_settings(
         eprintln!("{error:?}");
     }
     settings.retire_backend(session, request)?;
-    let client = settings.install(session, request, SettingsBackend::connect().await?)?;
+    let client = settings.install(session, request, SettingsBackend::connect(&window).await?)?;
     let view = read_settings_view(&window, &settings, session, request, client, None).await?;
     Ok(SettingsWriteOutcome { view, confirmed })
+}
+
+#[tauri::command]
+pub async fn delete_settings_memories(
+    window: WebviewWindow,
+    settings: State<'_, SettingsIpc>,
+    selection: SettingsSelection,
+) -> Result<SettingsView, IpcError> {
+    authorize_view(&window)?;
+    let session = selection.session;
+    let (request, client, captured) = settings.mutation(&selection, |snapshot| {
+        snapshot.authority.configuration.memories.is_some()
+    })?;
+    if SettingsAuthority::read(&client).await? != captured.authority {
+        settings.retire_backend(session, request)?;
+        return Err(IpcError::StaleSelection);
+    }
+    authorize_view(&window)?;
+    settings.validate_request(session, request)?;
+    let result = CodexBrowser::new(client.clone())
+        .reset_settings_memories(TIMEOUT)
+        .await;
+    if let Err(error) = result {
+        settings.retire_backend(session, request)?;
+        return Err(report(error));
+    }
+    read_settings_view(
+        &window,
+        &settings,
+        session,
+        request,
+        client,
+        Some(captured.authority),
+    )
+    .await
 }
 
 #[tauri::command]

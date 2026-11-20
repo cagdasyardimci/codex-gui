@@ -504,6 +504,28 @@ pub fn settings_usage_fixture_started(
 }
 
 #[tauri::command]
+pub fn external_settings_instructions_fixture(
+    window: WebviewWindow,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    if *verification != Verification::Settings {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let root = checkouts
+        .data
+        .as_ref()
+        .and_then(|path| path.parent())
+        .ok_or(IpcError::UnauthorizedWindow)?;
+    std::fs::write(
+        root.join("isolated Codex profile").join("AGENTS.md"),
+        b"\xef\xbb\xbfExternal instructions\r\nReview the next draft.\r\n",
+    )
+    .map_err(|_| IpcError::ProjectUnavailable)
+}
+
+#[tauri::command]
 pub fn verify_windows_setup_result(
     app: AppHandle,
     verification: State<'_, Verification>,

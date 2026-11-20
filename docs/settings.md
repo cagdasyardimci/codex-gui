@@ -8,6 +8,8 @@ Settings uses a presentation-scoped backend connection so user configuration wor
 
 The [Tauri Settings session](../desktop/src-tauri/src/settings_ipc.rs) rechecks account and policy around usage reads and replaces its connection when that authority changes. Confirmed sign-out uses the captured account owner and refreshes workspace credentials while preserving workspace selection and drafts. Usage presentation distinguishes absent data from a reported zero.
 
+The [Tauri instructions editor](../desktop/src-tauri/src/settings_ipc/instructions.rs) anchors the file to the profile used by Settings. Its first save creates the file exclusively. Subsequent saves require the original file and disk revision. A version conflict preserves the editor draft until the user explicitly reloads or changes it.
+
 Write against the active user layer and its version when available. Replace origin maps as a table: dots in site names must not become configuration path separators. Feature availability comes from the advertised catalog; missing config keys do not establish disabled features, and catalog failures must not prevent unrelated configuration work. Managed requirements take precedence over editable defaults.
 
 A [Tauri configuration write](../desktop/src-tauri/src/settings_ipc/writes.rs) rechecks the captured account, layer and policy before sending. A fresh read after an uncertain outcome preserves the effective values and leaves the pending edit available for an explicit save. Local chat-history compression follows Codex's advertised feature and takes effect when Codex starts with the saved configuration.

@@ -91,6 +91,8 @@ class Server:
     def dispatch(self, method, p):
         if method == 'initialize':
             self.client_name = p.get('clientInfo', {}).get('name')
+            if self.scenario.get('desktopSettings'):
+                return {'userAgent': 'structured-qa-backend/1', 'codexHome': os.environ['CODEX_HOME']}
             return {'userAgent': 'structured-qa-backend/1'}
         if self.scenario.get('desktopSettings') and method in SETTINGS_METHODS:
             return settings_request(self, method, p)

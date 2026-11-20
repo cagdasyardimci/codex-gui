@@ -1,10 +1,12 @@
 use std::{
     collections::{BTreeSet, HashSet},
+    path::PathBuf,
     sync::Mutex,
     time::Duration,
 };
 
 use codex_gui_core::{
+    checkout::CheckoutIdentity,
     codex::{
         Account, AccountSnapshot, AppServerClient, AppServerConnection, ClientInfo, CodexBrowser,
         CodexExecutable, EffectiveConfiguration, SettingsRateLimits,
@@ -20,6 +22,7 @@ use uuid::Uuid;
 use crate::project_ipc::{ProjectIpc, authorize_view};
 
 const TIMEOUT: Duration = Duration::from_secs(8);
+pub(crate) mod instructions;
 pub(crate) mod writes;
 
 #[derive(Default)]
@@ -33,10 +36,12 @@ struct Session {
     backend: Option<SettingsBackend>,
     snapshot: Option<Published>,
     last_authority: Option<SettingsAuthority>,
+    instructions: Option<instructions::InstructionsFile>,
 }
 
 struct SettingsBackend {
     client: AppServerClient,
+    home: Option<CheckoutIdentity>,
     _lifetime: watch::Sender<()>,
 }
 
@@ -113,13 +118,21 @@ impl SettingsIpc {
         let client = backend.client.clone();
         let mut selected = self.selected.lock().expect("settings lock poisoned");
         let view = match_session(&mut selected, session, request)?;
+        if view
+            .instructions
+            .as_ref()
+            .is_some_and(|file| !file.matches_home(backend.home.as_ref()))
+        {
+            view.instructions = None;
+        }
         view.backend = Some(backend);
         Ok(client)
     }
 
     fn retire_backend(&self, session: Uuid, request: Uuid) -> Result<(), IpcError> {
         let mut selected = self.selected.lock().expect("settings lock poisoned");
-        match_session(&mut selected, session, request)?.backend = None;
+        let view = match_session(&mut selected, session, request)?;
+        view.backend = None;
         Ok(())
     }
 
@@ -159,9 +172,10 @@ pub async fn open_settings(
             backend: None,
             snapshot: None,
             last_authority: None,
+            instructions: None,
         });
     }
-    let backend = SettingsBackend::connect().await?;
+    let backend = SettingsBackend::connect(&window).await?;
     let client = settings.install(session, request, backend)?;
     read_settings_view(&window, &settings, session, request, client, None).await
 }
@@ -176,7 +190,7 @@ pub async fn refresh_settings(
     let (request, client, previous) = settings.request(session)?;
     let client = match client {
         Some(client) => client,
-        None => settings.install(session, request, SettingsBackend::connect().await?)?,
+        None => settings.install(session, request, SettingsBackend::connect(&window).await?)?,
     };
     read_settings_view(&window, &settings, session, request, client, previous).await
 }
@@ -226,13 +240,13 @@ pub async fn sign_out_settings(
         .sign_out_settings(client, captured.authority.account)
         .await?;
     settings.retire_backend(session, request)?;
-    let backend = SettingsBackend::connect().await?;
+    let backend = SettingsBackend::connect(&window).await?;
     let client = settings.install(session, request, backend)?;
     read_settings_view(&window, &settings, session, request, client, None).await
 }
 
 impl SettingsBackend {
-    async fn connect() -> Result<Self, IpcError> {
+    async fn connect(window: &WebviewWindow) -> Result<Self, IpcError> {
         let executable = CodexExecutable::discover(None).map_err(report)?;
         let identity = ConnectionIdentity {
             workspace: WorkspaceIdentity {
@@ -254,6 +268,25 @@ impl SettingsBackend {
         .await
         .map_err(report)?;
         let client = connection.client();
+        let expected = std::env::var_os("CODEX_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                window
+                    .path()
+                    .home_dir()
+                    .ok()
+                    .map(|path| path.join(".codex"))
+            });
+        let reported = connection.initialization()["codexHome"]
+            .as_str()
+            .map(PathBuf::from);
+        let home = expected
+            .and_then(|path| CheckoutIdentity::capture(&path).ok())
+            .filter(|home| {
+                reported
+                    .as_ref()
+                    .is_none_or(|path| home.validate_reported(path).is_ok())
+            });
         let (lifetime, mut release) = watch::channel(());
         tauri::async_runtime::spawn(async move {
             loop {
@@ -270,6 +303,7 @@ impl SettingsBackend {
         });
         Ok(Self {
             client,
+            home,
             _lifetime: lifetime,
         })
     }
@@ -326,7 +360,7 @@ async fn read_settings_view(
     };
     let authority = if previous.as_ref().is_some_and(|previous| previous != &first) {
         settings.retire_backend(session, request)?;
-        client = settings.install(session, request, SettingsBackend::connect().await?)?;
+        client = settings.install(session, request, SettingsBackend::connect(window).await?)?;
         SettingsAuthority::read(&client).await?
     } else {
         first
@@ -356,6 +390,13 @@ async fn read_settings_view(
     }
     authorize_view(window)?;
     let revision = Uuid::new_v4();
+    let instructions_available = {
+        let mut selected = settings.selected.lock().expect("settings lock poisoned");
+        match_session(&mut selected, session, request)?
+            .backend
+            .as_ref()
+            .is_some_and(|backend| backend.home.is_some())
+    };
     let account_id = limits.as_ref().and_then(|rates| rates.account_id.clone());
     let view = SettingsView {
         revision,
@@ -365,6 +406,8 @@ async fn read_settings_view(
         configuration: authority.configuration.entries.clone(),
         compression: authority.configuration.compression.clone(),
         network_access: authority.configuration.network_access.clone(),
+        memories: authority.configuration.memories.clone(),
+        instructions_available,
         efforts: efforts
             .iter()
             .map(|effort| SettingsEffort {

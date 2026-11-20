@@ -806,10 +806,16 @@
 
   async function changeSidebar(revision: string, change: SidebarChange) {
     if (actionPending || composing || quit) throw 'staleSelection';
+    const current = snapshot;
+    const open = 'openChat' in change && current?.workspace &&
+      current.navigation.sidebar.activeProject === change.openChat.projectId &&
+      current.navigation.chats.some((chat) => chat.id === change.openChat.chatId)
+      ? { workspaceId: current.workspace.workspaceId, chatId: change.openChat.chatId }
+      : undefined;
     actionPending = true;
     try {
       await flushEdits();
-      await navigateWorkspace({ sidebar: { revision, change } });
+      await navigateWorkspace(open ? { openChat: open } : { sidebar: { revision, change } });
     } finally {
       actionPending = false;
     }

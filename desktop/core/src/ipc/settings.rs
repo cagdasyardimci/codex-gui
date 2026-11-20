@@ -53,6 +53,28 @@ pub struct SettingsEffort {
     pub required: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySettingsView {
+    pub enabled: SettingsToggle,
+    pub allow_external_context: SettingsToggle,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct InstructionsView {
+    pub revision: Uuid,
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveInstructions {
+    pub session: Uuid,
+    pub revision: Uuid,
+    pub text: String,
+}
+
 #[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
@@ -64,6 +86,8 @@ pub struct SettingsView {
     pub compression: Option<SettingsToggle>,
     pub network_access: Option<SettingsToggle>,
     pub efforts: Vec<SettingsEffort>,
+    pub memories: Option<MemorySettingsView>,
+    pub instructions_available: bool,
 }
 
 #[derive(Debug, Deserialize, TS)]

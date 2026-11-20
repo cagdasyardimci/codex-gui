@@ -10,6 +10,7 @@ from .transport import ProtocolError, UnconfirmedMutation
 METHODS = {
     "account/read", "account/logout", "account/rateLimits/read", "account/usage/read",
     "config/read", "configRequirements/read", "config/value/write", "experimentalFeature/list", "model/list",
+    "config/batchWrite", "memory/reset",
 }
 
 
@@ -52,27 +53,39 @@ def settings_request(server, method, params):
         return {"requirements": {"allowedApprovalPolicies": ["never"] if provider == "bedrock" else ["on-request"],
                                  "featureRequirements": {"local_thread_store_compression": False} if provider == "bedrock" else {}}}
     if method == "experimentalFeature/list":
-        return {"data": [{"name": "local_thread_store_compression",
-                          "enabled": state.get("config", {}).get("features", {}).get("local_thread_store_compression", False)}],
+        features = state.get("config", {}).get("features", {})
+        return {"data": [{"name": name, "enabled": features.get(name, False)}
+                         for name in ("local_thread_store_compression", "memories")],
                 "nextCursor": None}
-    if method == "config/value/write":
-        if params.get("expectedVersion") != version or params.get("mergeStrategy") != "replace":
+    if method in {"config/value/write", "config/batchWrite"}:
+        if params.get("expectedVersion") != version:
             raise ProtocolError(-32602, "Settings used a stale user layer")
         if not Path(params["filePath"]).samefile(source):
             raise ProtocolError(-32602, "Settings wrote a different profile")
-        key, value = params["keyPath"], params["value"]
         config = state.setdefault("config", {})
-        if key == "model_verbosity" and value == "high":
-            config[key] = value
-        elif key == "features.local_thread_store_compression" and value is True:
-            config.setdefault("features", {})["local_thread_store_compression"] = value
-        elif key == "model_reasoning_summary" and value == "concise":
-            config[key] = "detailed"
-            state["version"] = state.get("version", 0) + 2
-            save_state(source, state)
-            raise UnconfirmedMutation()
+        if method == "config/batchWrite":
+            keys = ("features.memories", "memories.generate_memories", "memories.use_memories")
+            if params.get("edits") != [dict(keyPath=key, value=True, mergeStrategy="replace") for key in keys]:
+                raise ProtocolError(-32602, "The memory preference must be changed atomically")
+            config.setdefault("features", {})["memories"] = True
+            config.setdefault("memories", {}).update(generate_memories=True, use_memories=True)
         else:
-            raise ProtocolError(-32602, "Settings wrote a managed or unexpected field")
+            if params.get("mergeStrategy") != "replace":
+                raise ProtocolError(-32602, "Settings must replace the captured choice")
+            key, value = params["keyPath"], params["value"]
+            if key == "model_verbosity" and value == "high":
+                config[key] = value
+            elif key == "features.local_thread_store_compression" and value is True:
+                config.setdefault("features", {})["local_thread_store_compression"] = value
+            elif key == "memories.disable_on_external_context" and value is True:
+                config.setdefault("memories", {})["disable_on_external_context"] = value
+            elif key == "model_reasoning_summary" and value == "concise":
+                config[key] = "detailed"
+                state["version"] = state.get("version", 0) + 2
+                save_state(source, state)
+                raise UnconfirmedMutation()
+            else:
+                raise ProtocolError(-32602, "Settings wrote a managed or unexpected field")
         state["version"] = state.get("version", 0) + 1
         save_state(source, state)
         return {"status": "ok", "filePath": str(source), "version": f"layer-{profile}-{state['version']}"}
@@ -94,6 +107,11 @@ def settings_request(server, method, params):
             raise ProtocolError(-32602, "The captured account changed before sign-out")
         state["signedOut"] = True
         save_state(source, state)
+        return {}
+    if method == "memory/reset":
+        if params:
+            raise ProtocolError(-32602, "The fake memory reset has no arguments")
+        (Path(os.environ["CODEX_HOME"]) / "fixture-memory.txt").unlink()
         return {}
     raise AssertionError(method)
 

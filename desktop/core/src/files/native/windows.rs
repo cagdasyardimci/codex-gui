@@ -150,6 +150,7 @@ pub(super) fn publish_stage(
     _stage: &OsStr,
     file: &File,
     name: &OsStr,
+    replace: bool,
 ) -> io::Result<()> {
     let units = wide_name(name)?;
     let name_len = units.len() * size_of::<u16>();
@@ -161,7 +162,11 @@ pub(super) fn publish_stage(
     // The initialized, aligned buffer contains the header and the complete counted name.
     // A null RootDirectory and a single component rename in the open file's own directory.
     let status = unsafe {
-        (*info).Anonymous.Flags = FILE_RENAME_REPLACE_IF_EXISTS | FILE_RENAME_POSIX_SEMANTICS;
+        (*info).Anonymous.Flags = if replace {
+            FILE_RENAME_REPLACE_IF_EXISTS | FILE_RENAME_POSIX_SEMANTICS
+        } else {
+            0
+        };
         (*info).FileNameLength = name_len as u32;
         std::ptr::copy_nonoverlapping(
             units.as_ptr(),

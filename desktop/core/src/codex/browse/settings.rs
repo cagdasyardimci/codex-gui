@@ -8,11 +8,20 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{BrowseError, CodexBrowser, WirePage};
-use crate::ipc::{DailyUsageView, EffectiveSettingView, SettingsToggle, UsageWindowView};
+use crate::ipc::{
+    DailyUsageView, EffectiveSettingView, MemorySettingsView, SettingsToggle, UsageWindowView,
+};
 
 const COMPRESSION: &str = "local_thread_store_compression";
 const COMPRESSION_KEY: &str = "features.local_thread_store_compression";
 const NETWORK_KEY: &str = "sandbox_workspace_write.network_access";
+const MEMORY_KEY: &str = "features.memories";
+const MEMORY_EXTERNAL_KEY: &str = "memories.disable_on_external_context";
+const MEMORY_GROUP: &[&str] = &[
+    MEMORY_KEY,
+    "memories.generate_memories",
+    "memories.use_memories",
+];
 
 const CONFIGURATION_KEYS: &[(&str, Option<&str>, &[&str])] = &[
     ("model_provider", None, &[]),
@@ -57,6 +66,7 @@ pub struct EffectiveConfiguration {
     file: Option<PathBuf>,
     pub compression: Option<SettingsToggle>,
     pub network_access: Option<SettingsToggle>,
+    pub memories: Option<MemorySettingsView>,
     authority: Vec<Value>,
 }
 
@@ -76,6 +86,19 @@ impl EffectiveConfiguration {
                         .network_access
                         .as_ref()
                         .is_some_and(|setting| !setting.managed)
+            }
+            MEMORY_KEY => {
+                value.is_boolean()
+                    && self
+                        .memories
+                        .as_ref()
+                        .is_some_and(|memory| !memory.enabled.managed)
+            }
+            MEMORY_EXTERNAL_KEY => {
+                value.is_boolean()
+                    && self.memories.as_ref().is_some_and(|memory| {
+                        memory.enabled.enabled && !memory.allow_external_context.managed
+                    })
             }
             _ => self
                 .entries
@@ -260,22 +283,56 @@ impl CodexBrowser {
                     || policy["network"]["enabled"] == false,
             });
         let compression_policy = policy["featureRequirements"][COMPRESSION].as_bool();
-        let compression = self
-            .local_compression_feature(timeout)
-            .await
-            .ok()
-            .flatten()
+        let features = self.settings_features(timeout).await.unwrap_or_default();
+        let compression = features
+            .get(COMPRESSION)
+            .copied()
             .map(|effective| SettingsToggle {
                 enabled: compression_policy
                     .or_else(|| config["features"][COMPRESSION].as_bool())
                     .unwrap_or(effective),
                 managed: compression_policy.is_some() || managed_origin(&origins[COMPRESSION_KEY]),
             });
+        let memory_policy = policy["featureRequirements"]["memories"].as_bool();
+        let generate = config["memories"]["generate_memories"].as_bool();
+        let use_memories = config["memories"]["use_memories"].as_bool();
+        let external = config["memories"]["disable_on_external_context"].as_bool();
+        let memories = features
+            .get("memories")
+            .copied()
+            .map(|effective| MemorySettingsView {
+                enabled: SettingsToggle {
+                    enabled: memory_policy
+                        .or_else(|| config["features"]["memories"].as_bool())
+                        .unwrap_or(effective)
+                        && generate != Some(false)
+                        && use_memories != Some(false),
+                    managed: memory_policy.is_some()
+                        || MEMORY_GROUP
+                            .iter()
+                            .any(|key| managed_origin(&origins[*key])),
+                },
+                allow_external_context: SettingsToggle {
+                    enabled: external != Some(true),
+                    managed: managed_origin(&origins[MEMORY_EXTERNAL_KEY]),
+                },
+            });
         authority.push(json!([
             origins[NETWORK_KEY],
             policy["network"]["enabled"],
             origins[COMPRESSION_KEY],
             compression_policy
+        ]));
+        authority.push(json!([
+            memory_policy,
+            generate,
+            use_memories,
+            external,
+            origins[MEMORY_EXTERNAL_KEY],
+            MEMORY_GROUP
+                .iter()
+                .map(|key| &origins[*key])
+                .collect::<Vec<_>>()
         ]));
         Ok(EffectiveConfiguration {
             provider: nonempty(&config["model_provider"]),
@@ -284,6 +341,7 @@ impl CodexBrowser {
             file,
             network_access,
             compression,
+            memories,
             authority,
         })
     }
@@ -298,17 +356,31 @@ impl CodexBrowser {
         if !scope.accepts(key, &value) {
             return Err(BrowseError::SettingsScope);
         }
-        let receipt: ConfigurationReceipt = self
-            .read(
+        let (method, request) = if key == MEMORY_KEY {
+            let edits = MEMORY_GROUP
+                .iter()
+                .map(|key| {
+                    json!({
+                        "keyPath": key, "value": value, "mergeStrategy": "replace",
+                    })
+                })
+                .collect::<Vec<_>>();
+            (
+                "config/batchWrite",
+                json!({"edits": edits, "expectedVersion": scope.version,
+                "filePath": scope.file, "reloadUserConfig": true}),
+            )
+        } else {
+            (
                 "config/value/write",
                 json!({
                     "keyPath": key, "value": value, "mergeStrategy": "replace",
                     "expectedVersion": scope.version,
                     "filePath": scope.file,
                 }),
-                timeout,
             )
-            .await?;
+        };
+        let receipt: ConfigurationReceipt = self.read(method, request, timeout).await?;
         if receipt.version.is_empty()
             || !receipt.file_path.is_absolute()
             || scope.file.as_ref().is_some_and(|path| {
@@ -327,10 +399,10 @@ impl CodexBrowser {
         }
     }
 
-    async fn local_compression_feature(
+    async fn settings_features(
         &self,
         timeout: Duration,
-    ) -> Result<Option<bool>, BrowseError> {
+    ) -> Result<BTreeMap<String, bool>, BrowseError> {
         #[derive(Deserialize)]
         struct Feature {
             name: String,
@@ -338,6 +410,7 @@ impl CodexBrowser {
         }
         let mut cursor = None;
         let mut seen = HashSet::new();
+        let mut features = BTreeMap::new();
         for _ in 0..10 {
             let page: WirePage<Feature> = self
                 .read(
@@ -348,19 +421,27 @@ impl CodexBrowser {
                     timeout,
                 )
                 .await?;
-            if let Some(feature) = page
-                .data
-                .into_iter()
-                .find(|feature| feature.name == COMPRESSION)
-            {
-                return Ok(Some(feature.enabled));
+            features.extend(
+                page.data
+                    .into_iter()
+                    .filter(|feature| matches!(feature.name.as_str(), COMPRESSION | "memories"))
+                    .map(|feature| (feature.name, feature.enabled)),
+            );
+            if features.len() == 2 {
+                break;
             }
             match page.next_cursor {
                 Some(next) if seen.insert(next.clone()) => cursor = Some(next),
                 _ => break,
             }
         }
-        Ok(None)
+        Ok(features)
+    }
+
+    pub async fn reset_settings_memories(&self, timeout: Duration) -> Result<(), BrowseError> {
+        self.read::<BTreeMap<String, Value>>("memory/reset", json!({}), timeout)
+            .await?;
+        Ok(())
     }
 
     pub async fn settings_rate_limits(

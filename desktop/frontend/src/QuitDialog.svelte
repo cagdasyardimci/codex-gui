@@ -16,6 +16,7 @@
   onMount(() => {
     dialog.showModal();
     cancelButton.focus();
+    return () => { if (dialog.open) dialog.close(); };
   });
 </script>
 

@@ -68,7 +68,13 @@ impl<'a> StagedFile<'a> {
     }
 
     pub(super) fn publish(mut self, name: &OsStr) -> io::Result<()> {
-        os::publish_stage(self.parent, &self.name, &self.file, name)?;
+        os::publish_stage(self.parent, &self.name, &self.file, name, true)?;
+        self.published = true;
+        Ok(())
+    }
+
+    pub(super) fn publish_new(mut self, name: &OsStr) -> io::Result<()> {
+        os::publish_stage(self.parent, &self.name, &self.file, name, false)?;
         self.published = true;
         Ok(())
     }

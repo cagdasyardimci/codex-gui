@@ -1,17 +1,27 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { SettingsView } from './generated/workspace';
-  import { closeSettings, openSettings, refreshSettings, setEffortVisibility, signOutSettings, writeSettings } from './settingsIpc';
+  import type { InstructionsView, SettingsView } from './generated/workspace';
+  import {
+    closeSettings, deleteSettingsMemories, openSettings, readSettingsInstructions, refreshSettings,
+    saveSettingsInstructions, setEffortVisibility, signOutSettings, writeSettings,
+  } from './settingsIpc';
 
   let { close, accountBusy }: { close: () => void; accountBusy: boolean } = $props();
   const session = crypto.randomUUID();
   let dialog: HTMLDialogElement;
-  let tab = $state<'account' | 'usage' | 'configuration'>('account');
+  type Section = 'account' | 'usage' | 'configuration' | 'personalization';
+  let tab = $state<Section>('account');
   let view = $state<SettingsView>();
   let confirming = $state(false);
   let busy = $state(false);
   let edits = $state<Record<string, string | boolean | null>>({});
   let retired = false;
+  let deleteMemories = $state(false);
+  let reloadInstructions = $state(false);
+  let instructions = $state<InstructionsView>();
+  let instructionText = $state('');
+  let instructionsBusy = $state(false);
+  const instructionDirty = $derived(!!instructions && instructionText !== instructions.text);
 
   const labels: Record<string, string> = {
     model_provider: 'Provider', model: 'Default Model', review_model: 'Review Model',
@@ -51,10 +61,60 @@
     void read(() => signOutSettings(selection));
   }
 
+  function selectTab(next: Section) {
+    tab = next;
+    confirming = false;
+    deleteMemories = false;
+    reloadInstructions = false;
+    if (next === 'personalization' && view?.instructionsAvailable && !instructions) void loadInstructions();
+  }
+
+  function clearMemories() {
+    if (!view?.memories || busy) return;
+    const selection = { session, revision: view.revision };
+    deleteMemories = false;
+    void read(() => deleteSettingsMemories(selection));
+  }
+
+  async function loadInstructions() {
+    if (instructionsBusy) return;
+    reloadInstructions = false;
+    instructionsBusy = true;
+    try {
+      const next = await readSettingsInstructions(session);
+      if (!retired) {
+        instructions = next;
+        instructionText = next.text;
+      }
+    } catch (error) {
+      if (!retired) console.error(error);
+    } finally {
+      if (!retired) instructionsBusy = false;
+    }
+  }
+
+  async function saveInstructions() {
+    if (!instructions || !instructionDirty || instructionsBusy) return;
+    const text = instructionText;
+    instructionsBusy = true;
+    try {
+      const next = await saveSettingsInstructions({ session, revision: instructions.revision, text });
+      if (!retired) {
+        instructions = next;
+        if (instructionText === text) instructionText = next.text;
+      }
+    } catch (error) {
+      if (!retired) console.error(error);
+    } finally {
+      if (!retired) instructionsBusy = false;
+    }
+  }
+
   async function saveConfiguration(key: string) {
     if (!view || busy || !(key in edits)) return;
     const selection = { session, revision: view.revision };
-    const value = edits[key]!;
+    const draft = edits[key]!;
+    const value = key === 'memories.disable_on_external_context' ? !draft : draft;
     busy = true;
     try {
       const result = await writeSettings({ selection, key, value });
@@ -100,6 +160,8 @@
   function escape(event: Event) {
     event.preventDefault();
     if (confirming) confirming = false;
+    else if (deleteMemories) deleteMemories = false;
+    else if (reloadInstructions) reloadInstructions = false;
     else close();
   }
 </script>
@@ -122,9 +184,10 @@
     </div>
   </header>
   <nav aria-label="Settings Sections">
-    <button type="button" aria-pressed={tab === 'account'} onclick={() => { tab = 'account'; confirming = false; }}>Account</button>
-    <button type="button" aria-pressed={tab === 'usage'} onclick={() => { tab = 'usage'; confirming = false; }}>Usage &amp; Billing</button>
-    <button type="button" aria-pressed={tab === 'configuration'} onclick={() => { tab = 'configuration'; confirming = false; }}>Configuration</button>
+    <button type="button" aria-pressed={tab === 'account'} onclick={() => selectTab('account')}>Account</button>
+    <button type="button" aria-pressed={tab === 'usage'} onclick={() => selectTab('usage')}>Usage &amp; Billing</button>
+    <button type="button" aria-pressed={tab === 'configuration'} onclick={() => selectTab('configuration')}>Configuration</button>
+    <button type="button" aria-pressed={tab === 'personalization'} onclick={() => selectTab('personalization')}>Personalization</button>
   </nav>
 
   {#if view && tab === 'account'}
@@ -224,6 +287,42 @@
         </fieldset>
       {/if}
     </section>
+  {:else if view && tab === 'personalization'}
+    {#if view.memories}
+      <section aria-label="Memories">
+        {@render toggleSetting('features.memories', 'Enable Codex Memories',
+          view.memories.enabled.enabled, view.memories.enabled.managed)}
+        {@render toggleSetting('memories.disable_on_external_context', 'Allow Memories from Tool-assisted Chats',
+          view.memories.allowExternalContext.enabled, view.memories.allowExternalContext.managed || !view.memories.enabled.enabled)}
+        {#if deleteMemories}
+          <div class="controls" aria-label="Delete Memories">
+            <button type="button" onclick={() => { deleteMemories = false; }}>Cancel</button>
+            <button type="button" disabled={busy} onclick={clearMemories}>Delete Memories</button>
+          </div>
+        {:else}
+          <button type="button" disabled={busy} onclick={() => { deleteMemories = true; }}>Delete Memories…</button>
+        {/if}
+      </section>
+    {/if}
+    {#if view.instructionsAvailable}
+      <section class="instructions" aria-label="Codex Instructions">
+        <label>Codex Instructions
+          <textarea rows="8" aria-label="Codex Instructions" spellcheck="false"
+            readonly={!instructions || instructionsBusy} bind:value={instructionText}></textarea>
+        </label>
+        <div class="controls">
+          <button type="button" disabled={!instructionDirty || instructionsBusy}
+            onclick={() => void saveInstructions()}>Save Instructions</button>
+          {#if reloadInstructions}
+            <button type="button" onclick={() => { reloadInstructions = false; }}>Cancel Reload</button>
+            <button type="button" disabled={instructionsBusy} onclick={() => void loadInstructions()}>Reload Instructions</button>
+          {:else}
+            <button type="button" disabled={instructionsBusy}
+              onclick={() => { if (instructionDirty) reloadInstructions = true; else void loadInstructions(); }}>Reload Instructions…</button>
+          {/if}
+        </div>
+      </section>
+    {/if}
   {/if}
 </dialog>
 
@@ -240,6 +339,8 @@
   .limits dd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
   .edit-setting, fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
   fieldset { margin-block-start: 0.7rem; }
+  .instructions { display: grid; gap: 0.55rem; margin-block-start: 1rem; }
+  textarea { box-sizing: border-box; inline-size: 100%; resize: vertical; }
   meter { width: 4.5rem; }
   table { inline-size: 100%; border-collapse: collapse; }
   th, td { padding: 0.4rem; border-block-end: 1px solid var(--workspace-divider); text-align: start; }
