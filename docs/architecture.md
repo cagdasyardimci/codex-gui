@@ -30,6 +30,8 @@ The [composer runtime](../desktop/src-tauri/src/navigation/send.rs) checks the d
 
 The [checkout diff](../desktop/core/src/git.rs) reads the working tree against a captured Git baseline and keeps raw path identities in Rust. The [diff IPC](../desktop/src-tauri/src/diff_ipc.rs) accepts file identifiers issued by the current list. It verifies the checkout before returning a patch and invalidates file identifiers when the list refreshes.
 
+[Project file access](../desktop/core/src/files.rs) keeps native paths in the checkout scope and exposes a separate display name and handle. Reads use an open directory as their starting point, reject links at each path component, and verify the file and checkout identities before returning a bounded snapshot.
+
 ## Ownership and recovery
 
 Displayed selection and execution ownership are independent. An accepted first message appears in project navigation using its captured request identity while the backend creates the conversation. The assigned thread replaces that row atomically; a failed preparation retires it without changing an independently opened draft. Every asynchronous result must validate its captured workspace/session, connection generation, request identity and relevant thread/turn. Deferred UI actions must retain their original target rather than follow later selection. Shared eligibility rules serve presentations and reducers, with admission checked again at reduction.

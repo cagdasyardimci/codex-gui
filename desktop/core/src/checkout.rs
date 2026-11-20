@@ -30,9 +30,9 @@ pub enum CheckoutError {
 #[derive(Clone, Debug)]
 pub struct CheckoutIdentity {
     canonical: PathBuf,
-    key: DirectoryKey,
+    key: NativeFileIdentity,
     // A live reference prevents the old directory's identity from being reused.
-    _directory: Arc<File>,
+    directory: Arc<File>,
 }
 
 impl CheckoutIdentity {
@@ -42,12 +42,16 @@ impl CheckoutIdentity {
         Ok(Self {
             canonical,
             key,
-            _directory: Arc::new(directory),
+            directory: Arc::new(directory),
         })
     }
 
     pub fn canonical_path(&self) -> &Path {
         &self.canonical
+    }
+
+    pub(crate) fn directory(&self) -> &File {
+        &self.directory
     }
 
     pub(crate) fn storage_key(&self) -> String {
@@ -107,14 +111,14 @@ fn canonicalize(path: &Path) -> Result<PathBuf, CheckoutError> {
     })
 }
 
-fn identify_directory(path: &Path) -> Result<(File, DirectoryKey), CheckoutError> {
+fn identify_directory(path: &Path) -> Result<(File, NativeFileIdentity), CheckoutError> {
     let read = || {
         let file = open_directory(path)?;
         let metadata = file.metadata()?;
         if !metadata.is_dir() {
             return Err(io::ErrorKind::NotADirectory.into());
         }
-        let key = DirectoryKey::from_file(&file, &metadata)?;
+        let key = NativeFileIdentity::from_file(&file, &metadata)?;
         Ok((file, key))
     };
     read().map_err(|source| CheckoutError::Io {
@@ -135,14 +139,14 @@ fn open_directory(path: &Path) -> io::Result<File> {
 
 #[cfg(unix)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct DirectoryKey {
+pub(crate) struct NativeFileIdentity {
     device: u64,
     inode: u64,
 }
 
 #[cfg(unix)]
-impl DirectoryKey {
-    fn from_file(_file: &File, metadata: &Metadata) -> io::Result<Self> {
+impl NativeFileIdentity {
+    pub(crate) fn from_file(_file: &File, metadata: &Metadata) -> io::Result<Self> {
         use std::os::unix::fs::MetadataExt;
 
         Ok(Self {
@@ -165,14 +169,14 @@ fn open_directory(path: &Path) -> io::Result<File> {
 
 #[cfg(windows)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct DirectoryKey {
+pub(crate) struct NativeFileIdentity {
     volume: u64,
     id: [u8; 16],
 }
 
 #[cfg(windows)]
-impl DirectoryKey {
-    fn from_file(file: &File, _metadata: &Metadata) -> io::Result<Self> {
+impl NativeFileIdentity {
+    pub(crate) fn from_file(file: &File, _metadata: &Metadata) -> io::Result<Self> {
         use std::{mem::MaybeUninit, os::windows::io::AsRawHandle};
         use windows_sys::Win32::Storage::FileSystem::{
             FILE_ID_INFO, FileIdInfo, GetFileInformationByHandleEx,
