@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::git::turn_edits::LastTurnView;
+
 use super::{
     ConversationActions, QueueRequest, QueueView, RecoverSendRequest, RespondRequest, SendRequest,
     StopRequest, WorkspaceId, WorkspaceRequest,
@@ -17,6 +19,7 @@ pub struct NavigationView {
     pub write_access: WriteAccess,
     pub actions: ConversationActions,
     pub queue: Option<QueueView>,
+    pub last_turn: Option<LastTurnView>,
     pub quit: Option<QuitView>,
 }
 

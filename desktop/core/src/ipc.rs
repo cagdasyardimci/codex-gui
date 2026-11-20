@@ -5,6 +5,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
+use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
 mod actions;
 mod git;
@@ -209,6 +210,9 @@ pub fn workspace_typescript() -> String {
         DiffFileView::decl(),
         DiffPatchRequest::decl(),
         DiffPatchView::decl(),
+        LastTurnView::decl(),
+        EditTotals::decl(),
+        TurnEditQuality::decl(),
         QuitView::decl(),
         QuitDecision::decl(),
     ] {

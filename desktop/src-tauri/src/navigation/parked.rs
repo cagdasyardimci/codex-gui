@@ -61,6 +61,7 @@ impl Navigation {
                 };
                 let Some(event) = event else { break };
                 let before = backend.engine.snapshot();
+                backend.observe_edits(&event);
                 match backend
                     .engine
                     .route_session_event(&backend_client, &store, event, RPC_TIMEOUT)

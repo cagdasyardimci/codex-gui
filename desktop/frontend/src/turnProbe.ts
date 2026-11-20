@@ -85,6 +85,10 @@ async function verifyCompletedTurn(visible: () => WorkspaceSnapshot | null) {
     document.querySelector('.chat-row[aria-current="true"] .chat-preview')?.getAttribute('title') === QUESTION_TEXT);
   await click('Changes');
   await click('workflow-notes.txt');
+  await waitFor('The captured turn did not publish its attributed edit totals', () => {
+    const report = visible()?.navigation.lastTurn;
+    return report?.quality === 'exact' && report.totals?.additions === 1 && report.totals.deletions === 1;
+  });
   await waitFor('The completed turn’s edit was missing from the selected Git patch', () => {
     const patch = document.querySelector('[aria-label="Patch"]')?.textContent;
     return !!patch?.includes('-Before fixture approval') && patch.includes('+After fixture approval 日本語');

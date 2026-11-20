@@ -165,3 +165,15 @@ class Stream:
             if target.read_text(encoding='utf-8') != 'Before fixture approval\n':
                 raise ValueError('Expected the approved fixture checkout baseline')
             target.write_bytes('After fixture approval 日本語\n'.encode('utf-8'))
+            changes = [{
+                'path': str(target), 'kind': {'type': 'update', 'move_path': None},
+                'diff': '@@ -1 +1 @@\n-Before fixture approval\n+After fixture approval 日本語',
+            }]
+            item = {
+                'id': self.engine.state.identity('file-change'), 'type': 'fileChange',
+                'status': 'completed', 'changes': changes,
+            }
+            self.turn['items'].append(item)
+            self.engine.state.save()
+            self.emit('item/fileChange/patchUpdated', itemId=item['id'], changes=changes)
+            self.emit('item/completed', item=item)

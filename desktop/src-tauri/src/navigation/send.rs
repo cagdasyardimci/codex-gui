@@ -266,6 +266,7 @@ impl Navigation {
         self.view.actions.send = false;
         self.view.actions.stop = None;
         self.view.actions.stop_all = self.has_stoppable_work();
+        self.view.last_turn = self.last_turn_view();
         self.view.actions.interactions.clear();
         self.view.queue = self.queue_view().unwrap_or_else(|error| {
             eprintln!("{error}");

@@ -12,6 +12,7 @@ use codex_gui_core::{
         AppServerClient, AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable,
         HistoryTurn, LoginCompletion, ServerEvent, TurnStatus,
     },
+    git::turn_edits::{LastTurnView, TurnEditReports},
     identity::{
         CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, ThreadId, WorkspaceIdentity,
     },
@@ -93,6 +94,7 @@ struct Backend {
     connection: AppServerConnection,
     engine: WorkspaceEngine,
     effects: mpsc::Receiver<PrepareThread>,
+    edits: TurnEditReports,
 }
 
 struct Navigation {
@@ -517,6 +519,7 @@ impl Navigation {
         self.restored_active_items.clear();
         self.view.actions = Default::default();
         self.view.queue = None;
+        self.view.last_turn = self.last_turn_view();
         self.refresh_recovery_action();
         self.publish_history(TranscriptView::default());
         self.sync_actions();
@@ -625,6 +628,7 @@ impl Navigation {
                 connection,
                 engine,
                 effects,
+                edits: TurnEditReports::new(identity),
             });
             self.recover_hidden_owners(client);
         }
@@ -703,6 +707,11 @@ impl Navigation {
         let page = history.for_selection(client.identity(), &thread)?;
         self.owners
             .reconcile_history(client.identity(), &thread, &page.data)?;
+        if let Some(backend) = self.backend.as_mut() {
+            backend
+                .edits
+                .apply_latest_history(client.identity(), &thread, &page.data);
+        }
         let mut active = Vec::new();
         let mut before_resume = TranscriptView::default();
         for turn in page.data.iter().rev() {
@@ -740,7 +749,7 @@ impl Navigation {
     }
 
     async fn handle_backend(&mut self, event: ServerEvent) -> Result<(), Failure> {
-        let Some(backend) = &self.backend else {
+        let Some(backend) = &mut self.backend else {
             return Ok(());
         };
         let client = backend.connection.client();
@@ -789,6 +798,7 @@ impl Navigation {
             _ => None,
         };
         let before = backend.engine.snapshot();
+        backend.observe_edits(&event);
         let routed = backend
             .engine
             .route_session_event(&client, &self.store, event, RPC_TIMEOUT)
@@ -813,7 +823,7 @@ impl Navigation {
             if let Some(draft) = self.editor_id() {
                 self.refresh_draft_after_submission(draft);
             }
-        } else if update_controls {
+        } else if update_controls || self.view.last_turn != self.last_turn_view() {
             self.sync_actions();
         }
         Ok(())
@@ -905,6 +915,26 @@ impl Navigation {
                 .projection
                 .replace_history(workspace, self.view.clone(), transcript);
         }
+    }
+}
+
+impl Backend {
+    fn observe_edits(&mut self, event: &ServerEvent) {
+        if let ServerEvent::Notification { params, .. } = event
+            && let Some(thread) = params["threadId"].as_str()
+        {
+            let state = self.engine.snapshot();
+            if state.writable_threads.iter().any(|owned| owned.0 == thread) {
+                self.edits.observe(&state.connection, event);
+            }
+        }
+    }
+}
+
+impl Navigation {
+    fn last_turn_view(&self) -> Option<LastTurnView> {
+        let thread = self.selection.as_ref()?.thread.as_ref()?;
+        self.backend.as_ref()?.edits.view(thread)
     }
 }
 

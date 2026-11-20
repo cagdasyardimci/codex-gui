@@ -122,7 +122,7 @@ Missing or evicted reports differ from an authoritative empty report. Never subs
 
 Shell writes and child-thread edits require backend attribution before they can be assigned to a parent turn. Shared directories, filenames and timing are insufficient evidence. Isolated task checkouts or backend write attribution are required for complete coverage. The recorded turn identity must not become a second unbounded patch cache.
 
-The [review reducers](../Sources/CodexGUI/Application/Reducers/Review/) and [review runtime](../Sources/CodexGUI/Application/Runtime/Review/) define composition and comparison behavior; [presentation](../Sources/CodexGUI/Application/Presentation/) defines counts and badge projections.
+The [AppKit review reducers](../Sources/CodexGUI/Application/Reducers/Review/) and [review runtime](../Sources/CodexGUI/Application/Runtime/Review/) define Swift composition and comparison behavior, and [presentation](../Sources/CodexGUI/Application/Presentation/) defines counts and badges. Tauri binds [Codex file-change reports](../desktop/core/src/git/turn_edits/reports.rs) to the captured connection and thread. Totals and Changes share one [composed result](../desktop/core/src/git/turn_edits.rs), and export serializes that result without reading the checkout or loading Git references.
 
 ## Conversation content residency
 

@@ -14,6 +14,7 @@ use tokio::{io::AsyncReadExt, process::Command, time};
 use crate::checkout::{CheckoutError, CheckoutIdentity};
 
 mod comparison;
+pub mod turn_edits;
 pub use comparison::{
     BranchChoice, BranchSelectors, ComparisonFile, ComparisonFileId, ComparisonKind,
     ComparisonSide, ComparisonSpec, GitComparison, GitComparisons, RecentCommit,
