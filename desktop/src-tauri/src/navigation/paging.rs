@@ -12,6 +12,7 @@ use uuid::Uuid;
 use super::{Navigation, RPC_TIMEOUT, append_turn};
 
 mod rail;
+mod viewport;
 use rail::{RailCompletion, TurnRail};
 
 type PageRead = ChatRead<Page<HistoryTurn, TurnCursor>>;

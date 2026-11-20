@@ -124,10 +124,16 @@ body {
   flex: 1;
   min-width: 0;
   overflow: auto;
+  overflow-anchor: none;
+}
+
+.transcript-row-slot {
+  display: flow-root;
+  padding-block: 0.4rem;
 }
 
 .transcript-item {
-  margin: 0.8rem 0;
+  margin: 0;
 }
 
 .transcript-item span {

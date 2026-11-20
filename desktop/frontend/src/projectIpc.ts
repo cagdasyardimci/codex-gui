@@ -82,6 +82,12 @@ function applyStream(transcript: TranscriptView, change: StreamChange, positions
   return { ...transcript, items };
 }
 
+function evictTurns(transcript: TranscriptView, turns: string[]): TranscriptView {
+  if (!turns.length) return transcript;
+  const evicted = new Set(turns);
+  return { ...transcript, items: transcript.items.filter((item) => !evicted.has(item.turnId)) };
+}
+
 export async function observeWorkspace(
   receive: (snapshot: WorkspaceSnapshot) => void,
   signal: AbortSignal,
@@ -111,18 +117,21 @@ export async function observeWorkspace(
     } else if ('navigation' in update) {
       snapshot = { ...snapshot, ...update.navigation };
     } else if ('history' in update) {
-      const { revision, navigation, insertions } = update.history;
+      const { revision, navigation, insertions, evictedTurns } = update.history;
       const items = snapshot.transcript.items.slice();
       for (const insertion of insertions) items.splice(insertion.position, 0, ...insertion.rows);
-      const transcript = { ...snapshot.transcript, items };
+      const transcript = evictTurns({ ...snapshot.transcript, items }, evictedTurns);
       snapshot = { ...snapshot, revision, navigation, transcript };
       positions = indexRows(transcript);
     } else {
+      const { revision, change, evictedTurns } = update.stream;
+      const transcript = evictTurns(applyStream(snapshot.transcript, change, positions), evictedTurns);
       snapshot = {
         ...snapshot,
-        revision: update.stream.revision,
-        transcript: applyStream(snapshot.transcript, update.stream.change, positions),
+        revision,
+        transcript,
       };
+      if (evictedTurns.length) positions = indexRows(transcript);
     }
     receive(snapshot);
   }

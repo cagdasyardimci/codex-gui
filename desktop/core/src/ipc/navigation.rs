@@ -41,6 +41,16 @@ pub struct OlderHistoryRequest {
     pub ticket: Uuid,
 }
 
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TranscriptViewportRequest {
+    pub workspace_id: WorkspaceId,
+    pub chat_id: String,
+    pub rail_id: Uuid,
+    pub anchor_turn: Option<String>,
+    pub protected_turns: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnRailView {
@@ -182,6 +192,7 @@ pub struct DraftEdit {
 pub enum NavigationIntent {
     OpenChat(ChatRequest),
     LoadOlderHistory(OlderHistoryRequest),
+    TranscriptViewport(TranscriptViewportRequest),
     LoadTurnReferences(TurnRailTicketRequest),
     PreviewTurn(TurnRailRequest),
     CancelTurnPreview(TurnRailRequest),

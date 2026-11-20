@@ -7,6 +7,7 @@
   import QueuePanel from './QueuePanel.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
+  import { createTranscriptViewport } from './transcriptViewport.svelte';
   import { copyTranscriptRow, navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
@@ -21,10 +22,12 @@
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
+  const viewport = createTranscriptViewport();
+  const attachTranscript = viewport.attach;
+  const measureTranscriptRow = viewport.measure;
   let restoreTabSelection: (() => void) | undefined;
   let upwardHistory: { ticket: string; before: number; until: number } | undefined;
   let requestingHistory: string | undefined;
-  let transcriptInput = 0;
   let shownJump: string | undefined;
   let canceledJump: string | undefined;
   let draftId: string | undefined;
@@ -102,7 +105,7 @@
   }
 
   function recordTranscriptInput() {
-    transcriptInput += 1;
+    viewport.noteInput();
     const rail = navigation?.turnRail;
     const chatId = navigation?.selectedChat;
     const pending = rail?.pendingJump;
@@ -133,6 +136,7 @@
   }
 
   function transcriptScroll() {
+    viewport.scrolled();
     if (!transcript || !upwardHistory) return;
     const { ticket, before, until } = upwardHistory;
     if (ticket !== navigation?.olderHistory?.ticket || performance.now() > until || transcript.scrollTop >= before) {
@@ -142,44 +146,17 @@
     }
   }
 
-  function preserveReadingPosition(current: WorkspaceSnapshot) {
-    if (!transcript || !snapshot || current.transcript.generation !== snapshot.transcript.generation) return;
-    const previousFirst = snapshot.transcript.items[0]?.itemId;
-    if (!previousFirst || current.transcript.items[0]?.itemId === previousFirst ||
-        !current.transcript.items.some((row) => row.itemId === previousFirst)) return;
-    const viewport = transcript;
-    const bounds = viewport.getBoundingClientRect();
-    const anchor = Array.from(viewport.children).find((row) => {
-      const rect = row.getBoundingClientRect();
-      return rect.bottom > bounds.top && rect.top < bounds.bottom;
-    });
-    if (!anchor) return;
-    const top = anchor.getBoundingClientRect().top - bounds.top;
-    const input = transcriptInput;
-    void tick().then(() => {
-      if (snapshot?.transcript.generation !== current.transcript.generation || transcript !== viewport ||
-          input !== transcriptInput || !viewport.contains(anchor)) return;
-      const offset = anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
-      viewport.scrollTop += offset - top;
-    });
-  }
-
   function revealTurnJump(current: WorkspaceSnapshot) {
     const jump = current.navigation.turnRail?.jump;
     if (!jump || shownJump === jump.ticket || canceledJump === jump.ticket) return;
     shownJump = jump.ticket;
     upwardHistory = undefined;
-    const input = ++transcriptInput;
-    void tick().then(() => {
-      if (!transcript || transcriptInput !== input || snapshot?.navigation.turnRail?.jump?.ticket !== jump.ticket) return;
-      const target = Array.from(transcript.children).find((row) => row instanceof HTMLElement && row.dataset.turnId === jump.turnId);
-      if (target) transcript.scrollTop += target.getBoundingClientRect().top - transcript.getBoundingClientRect().top;
-    });
+    viewport.jump(jump.turnId);
   }
 
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
-    preserveReadingPosition(current);
+    viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) showingChanges = false;
     snapshot = current;
@@ -424,10 +401,16 @@
     <section class="workspace-conversation" aria-label="Conversation">
       <div class="transcript-pane">
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (The named scrolling region needs keyboard focus and scroll input.) -->
-        <div class="workspace-transcript" role="region" aria-label="Transcript" tabindex="0" bind:this={transcript}
+        <div class="workspace-transcript" role="region" aria-label="Transcript" tabindex="0" bind:this={transcript} use:attachTranscript
           onwheel={transcriptWheel} onkeydown={transcriptKey} onscroll={transcriptScroll}>
-          {#each snapshot?.transcript.items ?? [] as item (item.itemId)}
-            <TranscriptRow {item} copy={copyResponse} onCopyFocus={focusResponseAction} />
+          {#each viewport.entries as entry (entry.key)}
+            {#if 'item' in entry}
+              <div class="transcript-row-slot" data-transcript-slot={entry.item.itemId} use:measureTranscriptRow>
+                <TranscriptRow item={entry.item} copy={copyResponse} onCopyFocus={focusResponseAction} />
+              </div>
+            {:else}
+              <div style:block-size={`${entry.gap}px`} aria-hidden="true"></div>
+            {/if}
           {/each}
         </div>
         {#if workspace && navigation?.selectedChat && navigation.turnRail?.turns.length}

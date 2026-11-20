@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
 import { checkTranscriptImages, navigateWorkspace, searchProjectPaths } from './projectIpc';
 import { click, editor, typeText, waitFor } from './fixtureControls';
+import { verifyResidentHistory } from './residencyProbe';
 
 const FIRST = 'history-first';
 const SECOND = 'history-second';
@@ -35,8 +36,8 @@ async function verifyOlderHistory(visible: () => WorkspaceSnapshot | null) {
   viewport.scrollTop = 100;
   await frame();
   viewport.scrollTop = 0;
-  await frame();
-  await frame();
+  await waitFor('The original top row did not settle after scrolling', () =>
+    viewport.scrollTop <= 1 && Math.abs(anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top) <= 1);
   if (visible()?.navigation.olderHistory?.ticket !== older.ticket ||
       visible()?.navigation.olderHistory?.pending || viewport.firstElementChild !== anchor) {
     throw new Error('Programmatic scrolling requested an older history page');
@@ -48,12 +49,15 @@ async function verifyOlderHistory(visible: () => WorkspaceSnapshot | null) {
   await waitFor('The upward scroll did not prepend earlier turns', () =>
     visible()?.transcript.items[0]?.itemId === 'older-fixture-01/response' &&
     visible()?.navigation.olderHistory === null);
-  await frame();
-  const restoredTop = anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  await waitFor('The original visible row did not return to its reading position', () =>
+    anchor.isConnected && Math.abs(anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top - top) <= 1)
+    .catch(() => {
+      throw new Error(`The original reading position was ${top}, became ${anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top}, and scrollTop is ${viewport.scrollTop} (connected: ${anchor.isConnected})`);
+    });
   const retained = visible()?.transcript.items.find((row) => row.itemId === boundary.itemId);
   const ordered = [...new Set(visible()?.transcript.items.filter((row) => row.turnId.startsWith('older-fixture-'))
     .map((row) => row.turnId))];
-  if (!anchor.isConnected || Math.abs(restoredTop - top) > 1 || retained?.revision !== boundary.revision ||
+  if (retained?.revision !== boundary.revision ||
       ordered.length !== 32 || ordered.some((id, index) => id !== `older-fixture-${String(index + 1).padStart(2, '0')}`)) {
     throw new Error('Prepending history changed the visible row, its position, or its revision');
   }
@@ -99,6 +103,10 @@ async function verifySavedRows(workspaceId: WorkspaceId, snapshot: WorkspaceSnap
   if (!saved || group?.commands.length !== 2 || group.commands[1]?.output !== 'Café.md\n') {
     throw new Error('The saved turn did not group its command output');
   }
+  const viewport = document.querySelector<HTMLDivElement>('.workspace-transcript');
+  if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  await waitFor('The saved response did not mount in the visible window', () =>
+    !!document.querySelector(`[data-item-id="${saved.itemId}"]`));
   const commands = document.querySelector<HTMLDetailsElement>(`[data-item-id="${group.itemId}"] details`);
   commands?.querySelector('summary')?.click();
   if (!commands?.open || !commands.querySelector('ul')?.textContent?.includes('Café.md\n')) {
@@ -148,6 +156,11 @@ export async function verifyHistory(
       visible()?.navigation.chats.length === 2);
     const workspaceId = visible()?.workspace?.workspaceId;
     if (!workspaceId) throw new Error('Could not capture the project owner');
+    if (phase === 'initial' && visible()?.navigation.chats.some((chat) => chat.preview === 'Large transcript fixture')) {
+      await verifyResidentHistory(visible);
+      await invoke('verify_history_result', { failure: null });
+      return;
+    }
     if (phase === 'restore') {
       await waitFor('Restart did not restore the selected chat and draft', () =>
         visible()?.navigation.selectedChat === FIRST && editor().value === DRAFT && containsText(REPLY));
@@ -183,7 +196,7 @@ export async function verifyHistory(
       await click('First fixture chat');
       await waitFor('Writer lock did not leave readable history', () =>
         visible()?.navigation.selectedChat === FIRST && !!visible()?.navigation.retryable &&
-        containsText('History in the first chat.'));
+        !!visible()?.transcript.items.some((row) => row.itemId === 'first-saved-turn/first-history'));
       await verifyTurnRail(visible);
       await verifyOlderHistory(visible);
       const saved = await verifySavedRows(workspaceId, visible()!);

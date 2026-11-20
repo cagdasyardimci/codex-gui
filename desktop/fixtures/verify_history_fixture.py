@@ -23,24 +23,28 @@ def seed_history_files(project: Path) -> None:
     ))
 
 
-def seed_paginated_history(state_path: Path) -> None:
+def seed_paginated_history(state_path: Path, count: int = 32) -> None:
     scenario = ENTRY_POINT.parent / "mock_backend" / "scenarios" / "desktop-history.json"
     threads = json.loads(scenario.read_text(encoding="utf-8"))["threads"]
     first = next(thread for thread in threads if thread["id"] == "history-first")
+    if count > 32:
+        first["preview"] = "Large transcript fixture"
     earlier = []
-    for number in range(1, 33):
+    for number in range(1, count + 1):
         turn_id = f"older-fixture-{number:02}"
         items = [{
             "id": "response", "type": "agentMessage",
             "text": f"Saved history page fixture {number:02}\n" + "First line\nSecond line\nThird line",
         }]
-        if number in {3, 5}:
+        if count == 32 and number in {3, 5}:
             items = [{"type": "reasoning", "id": f"step-{step}", "content": [], "summary": []}
                      for step in range(104)] + items
-        if number == 3:
+        if count == 32 and number == 3:
             items.insert(0, {"id": "prompt", "type": "userMessage", "content": [
                 {"type": "text", "text": "A saved long turn"},
             ]})
+        if count > 32:
+            items[0]["text"] += "\nVariable-height fixture content" * (number % 7)
         earlier.append({"id": turn_id, "status": "completed", "items": items})
     first["turns"] = earlier + first["turns"]
     state_path.write_text(json.dumps({"threads": threads}, ensure_ascii=True), encoding="utf-8")
@@ -121,6 +125,37 @@ def main() -> None:
         print("Verified an unselected chat's execution and command evidence reconciled after relaunch")
         print("Verified one cursor-scoped older history request from the deliberate scroll")
         print("Verified bounded turn preview reads and a complete read for the committed jump")
+    verify_residency(executable)
+
+
+def verify_residency(executable: str) -> None:
+    with TemporaryDirectory(prefix="codex-gui-residency-") as scratch:
+        root = Path(scratch).resolve()
+        project = root / "Checkout café"
+        project.mkdir()
+        data = root / "beta data"
+        state = root / "state.json"
+        trace = root / "trace.jsonl"
+        codex_home = root / "codex home"
+        codex_home.mkdir()
+        seed_paginated_history(state, count=95)
+        result = subprocess.run([executable, "--verify-history", str(data), str(project)],
+            env={**os.environ, "CODEX_EXECUTABLE": str(fixture_executable(root)),
+                 "CODEX_HOME": str(codex_home), "CODEX_GUI_QA_SCENARIO": "desktop-history",
+                 "CODEX_GUI_QA_STATE": str(state), "CODEX_GUI_QA_TRACE": str(trace), "PYTHONIOENCODING": "utf-8"},
+            timeout=60, capture_output=True, encoding="utf-8", errors="replace")
+        print(result.stdout, end="")
+        if result.returncode or "Verified installed project history" not in result.stdout:
+            raise SystemExit(result.stderr or "The installed app did not complete transcript residency verification")
+        requests = [entry for entry in map(json.loads, trace.read_text(encoding="utf-8").splitlines())
+                    if entry["direction"] == "request"]
+        targeted = [entry for entry in requests if entry["method"] == "thread/items/list"]
+        assert len(targeted) == 2 and targeted[0]["turnId"] == targeted[1]["turnId"], targeted
+        assert all(entry["threadId"] == "history-first" and not entry.get("cursor") for entry in targeted)
+        assert len([entry for entry in requests if entry["method"] == "thread/turns/list"
+                    and entry.get("cursor") and entry.get("itemsView") == "full"]) == 4
+        assert not list(codex_home.iterdir())
+        print("Verified bounded transcript residency, mounted selection, and targeted anchor restoration")
 
 
 def seed_hidden_execution(database_path: Path, state_path: Path) -> None:

@@ -121,6 +121,10 @@ impl TurnRail {
             .collect()
     }
 
+    pub(super) fn scope_id(&self) -> Uuid {
+        self.id
+    }
+
     pub(super) fn view(&self) -> TurnRailView {
         TurnRailView {
             id: self.id,

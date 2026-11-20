@@ -6,7 +6,9 @@ use ts_rs::TS;
 use super::subscription::HistoryInsertion;
 
 mod commands;
+mod residency;
 pub use commands::{CommandUpdate, TranscriptCommand};
+use residency::{ResidentTurns, RowCost};
 
 const MAX_PENDING_BYTES: usize = 16 * 1024;
 const MAX_PENDING_ITEMS: usize = 64;
@@ -81,6 +83,9 @@ pub struct TranscriptView {
     #[serde(skip)]
     #[ts(skip)]
     commands: HashMap<String, (usize, usize)>,
+    #[serde(skip)]
+    #[ts(skip)]
+    residency: ResidentTurns,
 }
 
 impl TranscriptView {
@@ -170,6 +175,7 @@ impl TranscriptView {
                 self.commands.insert(command.id.clone(), (row, index));
             }
         }
+        self.residency.recompute(&self.items);
     }
 
     pub(super) fn apply(&mut self, change: &mut StreamChange) -> bool {
@@ -187,6 +193,8 @@ impl TranscriptView {
                     if !item.completed {
                         item.text.push_str(&batch.text);
                         item.revision += 1;
+                        let cost = RowCost::from(item);
+                        self.residency.replace(cost);
                         changed = true;
                     }
                 }
@@ -220,6 +228,7 @@ impl TranscriptView {
                 }
                 final_item.revision += 1;
                 *item = final_item.clone();
+                self.residency.replace(RowCost::from(item));
                 true
             }
             StreamChange::Completed => {
@@ -247,8 +256,28 @@ impl TranscriptView {
     fn push(&mut self, item: TranscriptItem) -> usize {
         let index = self.items.len();
         self.positions.insert(item.item_id.clone(), index);
+        self.residency.replace(RowCost::from(&item));
         self.items.push(item);
         index
+    }
+
+    pub(super) fn set_viewport(&mut self, anchor: Option<String>, protected: Vec<String>) {
+        self.residency.set_viewport(anchor, protected);
+    }
+
+    pub(super) fn protect_landing(&mut self, turn: String) {
+        self.residency.protect_landing(turn);
+    }
+
+    pub(super) fn trim(&mut self) -> Vec<String> {
+        let evicted = self.residency.evictions(&self.items);
+        if evicted.is_empty() {
+            return evicted;
+        }
+        let excluded: std::collections::HashSet<_> = evicted.iter().collect();
+        self.items.retain(|row| !excluded.contains(&row.turn_id));
+        self.reindex();
+        evicted
     }
 }
 

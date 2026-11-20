@@ -42,6 +42,7 @@ pub struct WorkspaceUpdateRequest {
 pub struct RevisionedStream {
     pub revision: u32,
     pub change: StreamChange,
+    pub evicted_turns: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, TS)]
@@ -56,6 +57,7 @@ pub struct RevisionedNavigation {
 pub struct RevisionedHistory {
     pub revision: u32,
     pub insertions: Vec<HistoryInsertion>,
+    pub evicted_turns: Vec<String>,
     pub navigation: NavigationView,
 }
 
@@ -69,7 +71,7 @@ pub struct HistoryInsertion {
 #[derive(Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceUpdate {
-    Changed(WorkspaceSnapshot),
+    Changed(Box<WorkspaceSnapshot>),
     Stream(RevisionedStream),
     Navigation(RevisionedNavigation),
     History(RevisionedHistory),
@@ -89,9 +91,15 @@ struct Publication {
 enum Change {
     #[default]
     Snapshot,
-    Stream(StreamChange),
+    Stream {
+        change: StreamChange,
+        evicted_turns: Vec<String>,
+    },
     Navigation,
-    History(Vec<HistoryInsertion>),
+    History {
+        insertions: Vec<HistoryInsertion>,
+        evicted_turns: Vec<String>,
+    },
 }
 
 impl Publication {
@@ -114,20 +122,28 @@ impl Publication {
 
     fn adjacent_update(&self) -> WorkspaceUpdate {
         match &self.change {
-            Change::Stream(change) => WorkspaceUpdate::Stream(RevisionedStream {
+            Change::Stream {
+                change,
+                evicted_turns,
+            } => WorkspaceUpdate::Stream(RevisionedStream {
                 revision: self.snapshot.revision,
                 change: change.clone(),
+                evicted_turns: evicted_turns.clone(),
             }),
             Change::Navigation => WorkspaceUpdate::Navigation(RevisionedNavigation {
                 revision: self.snapshot.revision,
                 navigation: self.snapshot.navigation.clone(),
             }),
-            Change::History(insertions) => WorkspaceUpdate::History(RevisionedHistory {
+            Change::History {
+                insertions,
+                evicted_turns,
+            } => WorkspaceUpdate::History(RevisionedHistory {
                 revision: self.snapshot.revision,
                 insertions: insertions.clone(),
+                evicted_turns: evicted_turns.clone(),
                 navigation: self.snapshot.navigation.clone(),
             }),
-            Change::Snapshot => WorkspaceUpdate::Changed(self.snapshot.clone()),
+            Change::Snapshot => WorkspaceUpdate::Changed(Box::new(self.snapshot.clone())),
         }
     }
 }
@@ -172,6 +188,7 @@ impl WorkspaceProjection {
             publication.snapshot.navigation = navigation;
             publication.advance(Change::Snapshot);
             transcript.generation = publication.snapshot.revision;
+            transcript.trim();
             publication.snapshot.transcript = transcript;
         });
     }
@@ -229,8 +246,53 @@ impl WorkspaceProjection {
             if insertions.is_empty() && publication.snapshot.navigation == navigation {
                 return false;
             }
+            let previously = publication
+                .snapshot
+                .navigation
+                .turn_rail
+                .as_ref()
+                .and_then(|rail| rail.jump.as_ref());
+            let jumping = navigation
+                .turn_rail
+                .as_ref()
+                .and_then(|rail| rail.jump.as_ref());
+            let transcript = &mut publication.snapshot.transcript;
+            if let Some(jump) = jumping.filter(|jump| Some(*jump) != previously) {
+                transcript.protect_landing(jump.turn_id.clone());
+            }
+            let evicted_turns = transcript.trim();
             publication.snapshot.navigation = navigation;
-            publication.advance(Change::History(insertions));
+            publication.advance(Change::History {
+                insertions,
+                evicted_turns,
+            });
+            true
+        })
+    }
+
+    pub fn set_viewport(
+        &mut self,
+        workspace: WorkspaceId,
+        chat: &str,
+        anchor: Option<String>,
+        protected: Vec<String>,
+    ) -> bool {
+        self.publication.send_if_modified(|publication| {
+            if !publication.owns_workspace(workspace)
+                || publication.snapshot.navigation.selected_chat.as_deref() != Some(chat)
+            {
+                return false;
+            }
+            let transcript = &mut publication.snapshot.transcript;
+            transcript.set_viewport(anchor, protected);
+            let evicted_turns = transcript.trim();
+            if evicted_turns.is_empty() {
+                return false;
+            }
+            publication.advance(Change::History {
+                insertions: Vec::new(),
+                evicted_turns,
+            });
             true
         })
     }
@@ -258,7 +320,11 @@ impl WorkspaceProjection {
             {
                 return false;
             }
-            publication.advance(Change::Stream(change));
+            let evicted_turns = publication.snapshot.transcript.trim();
+            publication.advance(Change::Stream {
+                change,
+                evicted_turns,
+            });
             true
         })
     }
@@ -276,7 +342,11 @@ impl WorkspaceProjection {
             else {
                 return false;
             };
-            publication.advance(Change::Stream(StreamChange::FinalItem(row)));
+            let evicted_turns = publication.snapshot.transcript.trim();
+            publication.advance(Change::Stream {
+                change: StreamChange::FinalItem(row),
+                evicted_turns,
+            });
             true
         })
     }
@@ -579,10 +649,10 @@ mod tests {
         let (update, ()) = tokio::join!(biased; waiting.wait(Duration::from_secs(1)), publish);
         assert_eq!(
             update,
-            WorkspaceUpdate::Changed(WorkspaceSnapshot {
+            WorkspaceUpdate::Changed(Box::new(WorkspaceSnapshot {
                 revision: 2,
                 ..WorkspaceSnapshot::default()
-            })
+            }))
         );
         let lagging = projection.poll(request(&first, 2)).unwrap();
         projection.publish(Some(view.clone()));
@@ -633,7 +703,8 @@ mod tests {
             projection.poll(request).unwrap().wait(Duration::ZERO).await,
             WorkspaceUpdate::Stream(RevisionedStream {
                 change: text,
-                revision: 2
+                revision: 2,
+                evicted_turns: Vec::new(),
             }),
         );
         let reconnect = projection.subscribe();

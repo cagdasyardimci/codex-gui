@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{TranscriptItem, TranscriptRole, TranscriptView};
+use super::{RowCost, TranscriptItem, TranscriptRole, TranscriptView};
 
 const MAX_GROUPED_COMMANDS: usize = 64;
 
@@ -49,6 +49,7 @@ impl TranscriptView {
         let item = &mut self.items[row];
         item.revision += 1;
         item.completed = item.commands.iter().all(|command| command.completed);
+        self.residency.replace(RowCost::from(item));
         Some(item)
     }
 

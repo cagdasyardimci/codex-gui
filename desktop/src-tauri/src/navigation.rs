@@ -353,6 +353,9 @@ impl Navigation {
                 self.focus(None).await.map_err(report)?;
             }
             NavigationIntent::LoadOlderHistory(request) => self.load_older_history(request)?,
+            NavigationIntent::TranscriptViewport(request) => {
+                self.record_transcript_viewport(request)?
+            }
             NavigationIntent::LoadTurnReferences(request) => self.load_turn_references(request)?,
             NavigationIntent::PreviewTurn(request) => self.preview_turn(request)?,
             NavigationIntent::CancelTurnPreview(request) => self.cancel_turn_preview(request)?,

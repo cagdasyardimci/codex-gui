@@ -28,8 +28,8 @@ pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
     LoginTicket, NavigationIntent, NavigationView, OlderHistoryRequest, OlderHistoryView,
-    QuitDecision, QuitView, TurnJump, TurnPreview, TurnRailRequest, TurnRailTicketRequest,
-    TurnRailView, TurnReferenceView, WriteAccess,
+    QuitDecision, QuitView, TranscriptViewportRequest, TurnJump, TurnPreview, TurnRailRequest,
+    TurnRailTicketRequest, TurnRailView, TurnReferenceView, WriteAccess,
 };
 pub use question_reply::present_question_reply;
 pub use queue::{
@@ -219,6 +219,7 @@ pub fn workspace_typescript() -> String {
         ChatRequest::decl(),
         OlderHistoryRequest::decl(),
         OlderHistoryView::decl(),
+        TranscriptViewportRequest::decl(),
         TurnRailView::decl(),
         TurnReferenceView::decl(),
         TurnPreview::decl(),
