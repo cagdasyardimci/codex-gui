@@ -52,7 +52,7 @@ Run the [conversation inspector fixture](../desktop/fixtures/verify_inspector_fi
 
 Run the [turn feedback fixture](../desktop/fixtures/verify_feedback_fixture.py) against the installed executable to verify completed-turn scope, fresh feedback policy, log-free submissions, and durable duplicate suppression after a lost reply.
 
-Run the [file tabs fixture](../desktop/fixtures/verify_file_tools_fixture.py) against the installed executable to verify per-chat file ownership, draft adoption, preview and layout restoration, and settlement of hidden buffers during Quit. The fixture checks exact file bytes after the app exits.
+Run the [file tabs fixture](../desktop/fixtures/verify_file_tools_fixture.py) against the installed executable to verify per-chat file ownership, keyboard Quick Open and focus restoration, draft adoption, and settlement of hidden buffers during Quit. The fixture checks exact file bytes after the app exits.
 
 Run it with `--settings` to verify model-specific effort and speed, cancellation and retirement of Full Access confirmation, and the exact settings in three captured Send requests across a pending change and a return to configured permissions.
 

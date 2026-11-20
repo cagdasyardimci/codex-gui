@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { changeFileTools, readFileTab } from './fileTools';
-import { click, clickByLabel, typeText, waitFor } from './fixtureControls';
+import { click, clickByLabel, editor, typeText, waitFor } from './fixtureControls';
 import type { DraftAttachmentScope, WorkspaceSnapshot } from './generated/workspace';
 import { rejectsStale } from './markdownProbe';
 import { navigateWorkspace } from './projectIpc';
@@ -16,6 +16,80 @@ const browser = () => panel()?.querySelector<HTMLElement>('nav[aria-label="Proje
 const field = () => panel()?.querySelector<HTMLTextAreaElement>('textarea');
 const closeDialog = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Close File"][open]');
 const quitDialog = () => document.querySelector<HTMLDialogElement>('dialog.quit-dialog[open]');
+const quickOpenField = () => document.querySelector<HTMLInputElement>('dialog[aria-label="Quick Open"][open] input');
+
+function key(target: HTMLElement, key: string, modifiers: KeyboardEventInit = {}) {
+  target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers }));
+}
+
+function searchFiles(query: string) {
+  const control = quickOpenField()!;
+  control.value = query;
+  control.dispatchEvent(new InputEvent('input', { bubbles: true }));
+}
+
+function quickOpenResults() {
+  return [...(quickOpenField()?.closest('dialog')?.querySelectorAll('[role="option"]') ?? [])]
+    .map((result) => result.firstElementChild?.textContent).join(',');
+}
+
+async function openQuickOpen() {
+  await waitFor('The workspace did not finish navigation before Quick Open', () =>
+    !!document.querySelector('button[aria-keyshortcuts="Meta+P Control+P"]:enabled'));
+  editor().focus();
+  key(editor(), 'p', { ctrlKey: true });
+  await waitFor('The keyboard shortcut did not focus Quick Open', () => !!quickOpenField() && document.activeElement === quickOpenField());
+}
+
+async function verifyQuickOpen(visible: () => WorkspaceSnapshot | null, scope: DraftAttachmentScope) {
+  const draft = 'Keep this text and its selection when choosing a file.';
+  typeText(draft);
+  await waitFor('The first draft did not settle before Quick Open', () => visible()?.navigation.draft?.text === draft);
+  const composer = editor();
+  composer.setSelectionRange(5, 14);
+  await openQuickOpen();
+  searchFiles('pix');
+  await waitFor('Incremental search did not find both image files', () => quickOpenResults() === 'pixel.png,pixel2.png');
+  searchFiles('pixel2');
+  await waitFor('Narrowing the query did not retire the previous results', () => quickOpenResults() === 'pixel2.png');
+  key(quickOpenField()!, 'Escape');
+  await waitFor('Escape changed the closed pane, focused control or selection', () =>
+    !quickOpenField() && !panel() && document.activeElement === composer && composer.value === draft &&
+    composer.selectionStart === 5 && composer.selectionEnd === 14);
+
+  await openQuickOpen();
+  searchFiles('alpha');
+  await waitFor('The nested file did not become selectable', () => quickOpenResults() === 'alpha.txt');
+  await navigateWorkspace({ openChat: { workspaceId: scope.workspaceId, chatId: SECOND } });
+  await waitFor('Changing chat left the preceding file chooser or pane open', () =>
+    visible()?.navigation.selectedChat === SECOND && !quickOpenField() && !panel());
+  await click('First fixture chat');
+  await waitFor('The first chat did not restore before selecting a file', () => visible()?.navigation.selectedChat === FIRST);
+
+  await openQuickOpen();
+  searchFiles('pixel');
+  await waitFor('The owning chat did not find both images', () => quickOpenResults() === 'pixel.png,pixel2.png');
+  key(quickOpenField()!, 'ArrowDown');
+  key(quickOpenField()!, 'Enter');
+  await waitFor('Keyboard selection did not open the second result with the pane initially closed', () =>
+    !quickOpenField() && !!panel()?.querySelector('img[alt="pixel2.png"]') && document.activeElement === editor());
+  const opened = await changeFileTools({ scope, change: 'inspect' });
+  if (opened.tabs.length !== 1 || opened.tabs[0]?.preview || opened.tabs[0]?.id !== opened.selected) {
+    throw new Error('Quick Open did not retain the selected file under the initiating chat');
+  }
+  await clickByLabel('Close pixel2.png');
+  await click('Hide Files');
+  await waitFor('The file pane did not close after Quick Open', () => !panel());
+
+  await click('Command Palette');
+  const commands = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Command Palette"][open]');
+  await waitFor('The command palette did not open', () => !!commands());
+  await click('Quick Open', commands()!);
+  await waitFor('The command palette did not transfer focus to the file chooser', () =>
+    !!quickOpenField() && document.activeElement === quickOpenField());
+  key(quickOpenField()!, 'Escape');
+  await waitFor('Cancelling from the command palette opened the file pane', () => !quickOpenField() && !panel());
+}
 
 async function browse(name: string) {
   await waitFor('The file browser did not open', () => !!browser());
@@ -46,6 +120,7 @@ export async function verifyFileTools(visible: () => WorkspaceSnapshot | null) {
     await click('First fixture chat');
     await waitFor('The first file tools owner did not select', () => selected() === FIRST);
     const first = scope();
+    await verifyQuickOpen(visible, first);
     await showFiles();
     await browse('folder');
     await browse('alpha.txt');

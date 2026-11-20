@@ -25,7 +25,7 @@
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { addComposerContext, copyTranscriptRow, executeSlashCommand, loadTranscriptAttachment, navigateWorkspace, observeWorkspace, openMessageSearch, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, prepareChatDeletion, readMessageSearchPage, revealSidebarProject } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, executeSlashCommand, loadTranscriptAttachment, navigateWorkspace, observeWorkspace, openMessageSearch, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, prepareChatDeletion, readMessageSearchPage, revealSidebarProject, searchProjectPaths } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -454,6 +454,7 @@
 
   function openPalette(mode: PaletteMode) {
     if (!snapshot || palette || archive || deletion || search || actionPending || composing || quit || promptEdit || commandPanel) return;
+    if (mode === 'files' && !attachmentScope) return;
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const selection: [number, number] | undefined = (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement) &&
       focused.selectionStart !== null && focused.selectionEnd !== null
@@ -483,6 +484,18 @@
     if (captured && restore) void focusAfterPalette(captured);
   }
 
+  async function lookupPaletteFiles(query: string): Promise<PaletteEntry[]> {
+    const captured = palette;
+    if (captured?.mode !== 'files' || !captured.workspaceId) return [];
+    const matches = await searchProjectPaths({ workspaceId: captured.workspaceId, query });
+    if (palette !== captured || !paletteMatches(captured, snapshot)) return [];
+    return matches.map(({ id, displayPath }) => {
+      const separator = displayPath.lastIndexOf('/');
+      return { id: JSON.stringify(id), title: displayPath.slice(separator + 1),
+        detail: separator < 0 ? undefined : displayPath.slice(0, separator), destination: { file: id } };
+    });
+  }
+
   async function choosePalette(entry: PaletteEntry) {
     const captured = palette;
     if (!captured || !paletteMatches(captured, snapshot) || actionPending || composing || quit) return;
@@ -491,6 +504,10 @@
       await flushEdits();
       if (!paletteMatches(captured, snapshot)) throw 'staleSelection';
       const target = entry.destination;
+      if ('file' in target) {
+        if (await filePane?.openPath(target.file, true)) closePalette();
+        return;
+      }
       if ('project' in target || 'chat' in target) {
         if (!captured.revision) throw 'staleSelection';
         const change = 'project' in target ? { openProject: target.project } : { openChat: target.chat };
@@ -512,6 +529,10 @@
       }
       const workspaceId = captured.workspaceId;
       if (!workspaceId) throw 'staleSelection';
+      if (target.action === 'quickOpen') {
+        if (attachmentScope) palette = { ...captured, mode: 'files', entries: [] };
+        return;
+      }
       if (target.action === 'messageSearch') {
         closePalette(false);
         await displayMessageSearch(workspaceId, captured.focused);
@@ -1037,6 +1058,12 @@
     }
     if (event.altKey) return;
     switch (event.key.toLowerCase()) {
+      case 'p':
+        if (attachmentScope) {
+          event.preventDefault();
+          openPalette('files');
+        }
+        break;
       case 'o':
         event.preventDefault();
         void act(pickWorkspace);
@@ -1111,6 +1138,8 @@
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
       {#if attachmentScope}
         <button type="button" aria-expanded={filesOpened} disabled={!!quit} onclick={() => void filePane?.toggle()}>Files</button>
+        <button type="button" aria-keyshortcuts="Meta+P Control+P" disabled={actionPending || !!quit}
+          onclick={() => openPalette('files')}>Quick Open</button>
       {/if}
       {#if summaryScope}
         <button type="button" aria-expanded={summaryVisible} disabled={!!quit} onclick={toggleSummary}>Pinned Summary</button>
@@ -1330,8 +1359,11 @@
     {/key}
   {/if}
   {#if palette}
-    <CommandPalette mode={palette.mode} entries={palette.entries} blocked={actionPending}
-      choose={(entry) => void choosePalette(entry)} close={closePalette} />
+    {#key palette.mode}
+      <CommandPalette mode={palette.mode} entries={palette.entries} blocked={actionPending}
+        lookup={palette.mode === 'files' ? lookupPaletteFiles : undefined}
+        choose={(entry) => void choosePalette(entry)} close={closePalette} />
+    {/key}
   {/if}
   {#if archive}
     <ArchivedChats workspaceId={archive.workspaceId} restore={restoreArchived} close={closeArchive}

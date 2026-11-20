@@ -2,9 +2,10 @@
   import { onMount, tick } from 'svelte';
   import { filterPalette, type PaletteEntry, type PaletteMode } from './commandPalette';
 
-  let { mode, entries, blocked, choose, close }: {
+  let { mode, entries, lookup, blocked, choose, close }: {
     mode: PaletteMode;
     entries: PaletteEntry[];
+    lookup?: (query: string) => Promise<PaletteEntry[]>;
     blocked: boolean;
     choose: (entry: PaletteEntry) => void;
     close: () => void;
@@ -14,15 +15,35 @@
   let search: HTMLInputElement;
   let query = $state('');
   let row = $state(0);
+  let loaded = $state.raw<{ query: string; matches: PaletteEntry[] }>();
   let composing = false;
-  const title = $derived(mode === 'commands' ? 'Command Palette' : mode === 'projects' ? 'Choose Project' : 'Choose Chat');
-  const results = $derived(filterPalette(entries, query));
+  const labels: Record<PaletteMode, { title: string; field: string }> = {
+    commands: { title: 'Command Palette', field: 'Search Commands' },
+    projects: { title: 'Choose Project', field: 'Search Projects' },
+    chats: { title: 'Choose Chat', field: 'Search Chats' },
+    files: { title: 'Quick Open', field: 'Search Project Files' },
+  };
+  const { title, field: fieldName } = $derived(labels[mode]);
+  const results = $derived.by(() => {
+    if (!lookup) return filterPalette(entries, query);
+    return loaded?.query === query ? loaded.matches : [];
+  });
   const highlighted = $derived(Math.min(row, Math.max(0, results.length - 1)));
-  const fieldName = $derived(mode === 'commands' ? 'Search Commands' : mode === 'projects' ? 'Search Projects' : 'Search Chats');
 
   onMount(() => {
     dialog.showModal();
     search.focus();
+  });
+
+  $effect(() => {
+    const read = lookup;
+    const term = query;
+    if (!read) return;
+    let current = true;
+    const timer = window.setTimeout(() => {
+      void read(term).then((matches) => { if (current) loaded = { query: term, matches }; }).catch(console.error);
+    }, term ? 75 : 0);
+    return () => { current = false; window.clearTimeout(timer); };
   });
 
   function keyboard(event: KeyboardEvent) {
@@ -51,7 +72,8 @@
 <dialog bind:this={dialog} aria-label={title} onkeydown={keyboard}
   oncancel={(event) => { event.preventDefault(); if (!composing) close(); }}>
   <h2>{title}</h2>
-  <input type="search" role="combobox" aria-label={fieldName} aria-expanded={results.length > 0}
+  <!-- svelte-ignore a11y_autofocus (Opening the dialog directs typing to its search field.) -->
+  <input type="search" role="combobox" aria-label={fieldName} aria-expanded={results.length > 0} autofocus
     aria-controls="palette-results" aria-autocomplete="list"
     aria-activedescendant={results.length ? `palette-result-${highlighted}` : undefined}
     bind:this={search} bind:value={query} oninput={() => { row = 0; }}

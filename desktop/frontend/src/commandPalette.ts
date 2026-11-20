@@ -1,11 +1,12 @@
-import type { NavigationView, SidebarChatKey } from './generated/workspace';
+import type { NavigationView, ProjectPathId, SidebarChatKey } from './generated/workspace';
 
-export type PaletteMode = 'commands' | 'projects' | 'chats';
-export type PaletteAction = 'browse' | 'newChat' | 'changes' | 'projectContext' | 'refresh' | 'reconnect' | 'archivedChats' | 'messageSearch';
+export type PaletteMode = 'commands' | 'projects' | 'chats' | 'files';
+export type PaletteAction = 'browse' | 'newChat' | 'changes' | 'projectContext' | 'refresh' | 'reconnect' | 'archivedChats' | 'messageSearch' | 'quickOpen';
 
 type PaletteDestination =
   | { project: string }
   | { chat: SidebarChatKey }
+  | { file: ProjectPathId }
   | { action: PaletteAction };
 
 export type PaletteEntry = {
@@ -16,6 +17,7 @@ export type PaletteEntry = {
 };
 
 export function paletteEntries(mode: PaletteMode, navigation: NavigationView): PaletteEntry[] {
+  if (mode === 'files') return [];
   const sidebar = navigation.sidebar;
   const projects: PaletteEntry[] = sidebar.projects.map((project) => ({
     id: `project/${project.id}`, title: project.title, detail: project.path, destination: { project: project.id },
@@ -39,6 +41,7 @@ export function paletteEntries(mode: PaletteMode, navigation: NavigationView): P
       ['changes', 'Changes'],
       ['projectContext', 'Project Context'],
       ['messageSearch', 'Search Messages'],
+      ['quickOpen', 'Quick Open'],
       ['refresh', 'Refresh'],
       ['reconnect', 'Reconnect'],
     ];

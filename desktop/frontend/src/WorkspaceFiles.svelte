@@ -55,21 +55,23 @@
   });
 
   async function update(change: FileToolsChange) {
-    if (blocked || busy || composing) return;
+    if (blocked || busy || composing) return false;
     const captured = scope;
     const expected = ++requestNumber;
     busy = true;
     try {
       await edits.flush();
       const next = await changeFileTools({ scope: captured, change });
-      if (expected !== requestNumber || !sameFileScope(scope, captured)) return;
+      if (expected !== requestNumber || !sameFileScope(scope, captured)) return false;
       const retained = new Set(next.tabs.map((tab) => tab.id));
       for (const tab of view?.tabs ?? []) {
         if (!retained.has(tab.id)) positions.tabs.delete(tab.id);
       }
       adopt(next);
+      return true;
     } catch (error) {
       if (expected === requestNumber) console.error(error);
+      return false;
     } finally {
       busy = false;
     }
@@ -80,7 +82,7 @@
   }
 
   export async function openPath(path: ProjectPathId, keep: boolean) {
-    await update({ open: { path, keep } });
+    return update({ open: { path, keep } });
   }
 
   function moveSelected(direction: -1 | 1) {
