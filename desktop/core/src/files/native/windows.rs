@@ -2,6 +2,7 @@ use std::{
     ffi::OsStr,
     fs::File,
     io,
+    mem::offset_of,
     os::windows::{
         ffi::OsStrExt,
         fs::MetadataExt,
@@ -141,8 +142,8 @@ pub(super) fn publish_stage(
 ) -> io::Result<()> {
     let units = wide_name(name)?;
     let name_len = units.len() * size_of::<u16>();
-    let size = (offset_of!(FILE_RENAME_INFORMATION, FileName) + name_len)
-        .max(size_of::<FILE_RENAME_INFORMATION>());
+    let name_offset = offset_of!(FILE_RENAME_INFORMATION, FileName);
+    let size = (name_offset + name_len).max(size_of::<FILE_RENAME_INFORMATION>());
     let mut buffer = vec![0usize; size.div_ceil(size_of::<usize>())];
     let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
     let mut io_status = IO_STATUS_BLOCK::default();
@@ -153,11 +154,7 @@ pub(super) fn publish_stage(
         (*info).FileNameLength = name_len as u32;
         std::ptr::copy_nonoverlapping(
             units.as_ptr(),
-            buffer
-                .as_mut_ptr()
-                .cast::<u8>()
-                .add(offset_of!(FILE_RENAME_INFORMATION, FileName))
-                .cast(),
+            info.cast::<u8>().add(name_offset).cast(),
             units.len(),
         );
         NtSetInformationFile(
