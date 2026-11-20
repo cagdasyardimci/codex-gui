@@ -68,10 +68,12 @@ async function verifyCompletedTurn(visible: () => WorkspaceSnapshot | null) {
     visible()?.navigation.selectedChat === OTHER && !visible()?.navigation.actions.interactions.length);
   await navigateWorkspace({ respond: { workspaceId, interactionId: approval.id, response: { decision: approve.index } } });
   await click(row.title);
-  await waitFor('The original chat did not retain its questions', () =>
-    visible()?.navigation.selectedChat === originalChat &&
-    !!visible()?.navigation.actions.interactions.some((request) => 'questions' in request.content) &&
-    !!document.querySelector('.interaction-card input'));
+  await waitFor('The original chat did not enable its question controls', () => {
+    const fields = [...document.querySelectorAll('.interaction-card input')];
+    return visible()?.navigation.selectedChat === originalChat &&
+      !!visible()?.navigation.actions.interactions.some((request) => 'questions' in request.content) &&
+      fields.length > 0 && fields.every((field) => !field.matches(':disabled'));
+  });
   completeAnswers();
   await click('Submit Answers');
   await waitFor('The transcript did not render the ordered questions and answers', () =>

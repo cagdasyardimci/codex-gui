@@ -5,6 +5,8 @@ use crate::{
     workspace::{QueueDeleteResult, QueueEditResult, QueueError, QueueStartResult},
 };
 
+const QUEUE_SCENARIO_DEADLINE: Duration = Duration::from_secs(25);
+
 fn entry(index: u128, text: &str) -> QueuedSubmission {
     QueuedSubmission {
         id: format!("queued-{index}"),
@@ -15,7 +17,7 @@ fn entry(index: u128, text: &str) -> QueuedSubmission {
 
 #[tokio::test]
 async fn only_confirmed_deletion_releases_the_captured_queue_attachment() {
-    time::timeout(DEADLINE, async {
+    time::timeout(QUEUE_SCENARIO_DEADLINE, async {
         let (mut fixture, prepared, _, draft, image) = Fixture::prepared().await;
         drop(prepared);
         let request = fixture.queue_intent(draft, 97);
@@ -143,7 +145,7 @@ async fn queue_read(
 
 #[tokio::test]
 async fn starting_a_captured_entry_preserves_its_receipt_through_idle_and_removal_races() {
-    time::timeout(DEADLINE, async {
+    time::timeout(QUEUE_SCENARIO_DEADLINE, async {
         let (mut fixture, prepared, _, draft, image) = Fixture::prepared().await;
         drop(prepared);
         let queued = entry(99, "  café\n");
@@ -278,7 +280,7 @@ async fn starting_a_captured_entry_preserves_its_receipt_through_idle_and_remova
 
 #[tokio::test]
 async fn editing_keeps_other_drafts_and_preserves_input_if_codex_consumes_the_entry() {
-    time::timeout(DEADLINE, async {
+    time::timeout(QUEUE_SCENARIO_DEADLINE, async {
         let (mut fixture, prepared, _, draft, image) = Fixture::prepared().await;
         drop(prepared);
         let db = open_workspace_database(&fixture.scratch.path().join("workspace.sqlite3")).unwrap();
@@ -381,7 +383,7 @@ async fn editing_keeps_other_drafts_and_preserves_input_if_codex_consumes_the_en
 
 #[tokio::test]
 async fn reordering_reconciles_a_concurrent_member_and_an_uncertain_reply_without_history_reads() {
-    time::timeout(DEADLINE, async {
+    time::timeout(QUEUE_SCENARIO_DEADLINE, async {
         let (mut fixture, _prepared, _, _, _) = Fixture::prepared().await;
         let client = &fixture.transport.client;
         let engine = &fixture.engine;
