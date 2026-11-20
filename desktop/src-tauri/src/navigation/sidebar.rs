@@ -43,6 +43,11 @@ impl Navigation {
             .as_ref()
             .map(|selection| selection.checkout.storage_key());
         let mut view = self.store.sidebar_view(selected)?;
+        view.chats.retain(|chat| {
+            !self
+                .deleted_chats
+                .contains(&ThreadId(chat.key.chat_id.clone()))
+        });
         view.revision = self.view.sidebar.revision;
         if view.revision.is_none() || view != self.view.sidebar {
             view.revision = Some(Uuid::new_v4());
@@ -57,7 +62,7 @@ impl Navigation {
             .map(|(path, _)| path)
     }
 
-    fn check_sidebar_revision(&self, revision: Uuid) -> Result<(), IpcError> {
+    pub(super) fn check_sidebar_revision(&self, revision: Uuid) -> Result<(), IpcError> {
         if self.view.sidebar.revision != Some(revision) || self.quit.is_some() {
             return Err(IpcError::StaleSelection);
         }

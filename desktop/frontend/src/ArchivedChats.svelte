@@ -3,10 +3,11 @@
   import type { ArchiveCatalog, ArchivedChat, ArchiveTarget, RestoreArchive, WorkspaceId } from './generated/workspace';
   import { readArchive } from './projectIpc';
 
-  let { workspaceId, restore, close }: {
+  let { workspaceId, restore, close, deleteChat }: {
     workspaceId: WorkspaceId | null;
     restore: (request: RestoreArchive) => Promise<void>;
     close: () => void;
+    deleteChat: (revision: string, chatId: string) => Promise<boolean>;
   } = $props();
 
   const pageSize = 30;
@@ -19,6 +20,8 @@
   let limit = $state(pageSize);
   let loading = $state(false);
   let restoring = $state(false);
+  let deleting = $state(false);
+  const mutating = $derived(restoring || deleting);
   let readTicket = 0;
   let mounted = false;
 
@@ -71,7 +74,7 @@
 
   async function restoreTarget(target: ArchiveTarget) {
     const captured = catalog;
-    if (restoring || !captured) return;
+    if (mutating || !captured) return;
     restoring = true;
     readTicket += 1;
     loading = false;
@@ -89,10 +92,24 @@
       }
     }
   }
+
+  async function deleteRow(chatId: string) {
+    const captured = catalog;
+    if (mutating || loading || !captured) return;
+    deleting = true;
+    try {
+      if (!await deleteChat(captured.revision, chatId) || !mounted) return;
+      catalog = { ...captured, chats: captured.chats.filter((chat) => chat.id !== chatId) };
+      await load();
+      field.focus();
+    } finally {
+      deleting = false;
+    }
+  }
 </script>
 
 <dialog bind:this={dialog} aria-label="Archived Chats"
-  oncancel={(event) => { event.preventDefault(); if (!restoring) close(); }}>
+  oncancel={(event) => { event.preventDefault(); if (!mutating) close(); }}>
   <h2>Archived Chats</h2>
   <div class="filters">
     <input type="search" aria-label="Search Archived Chats" bind:this={field} bind:value={query}
@@ -116,7 +133,7 @@
     <section aria-label={first.project}>
       <header>
         <h3 title={first.path}>{first.project}</h3>
-        <button type="button" aria-label={`Restore chats in ${first.project}`} disabled={restoring}
+        <button type="button" aria-label={`Restore chats in ${first.project}`} disabled={mutating}
           onclick={() => void restoreTarget({ project: first.path })}>Restore Project</button>
       </header>
       {#each chats as chat (chat.id)}
@@ -125,16 +142,18 @@
             <strong>{chat.title}</strong>
             {#if chat.preview && chat.preview !== chat.title}<div>{chat.preview}</div>{/if}
           </div>
-          <button type="button" aria-label={`Restore ${chat.title}`} disabled={restoring}
+          <button type="button" aria-label={`Restore ${chat.title}`} disabled={mutating}
             onclick={() => void restoreTarget({ chat: chat.id })}>Restore Chat</button>
+          <button type="button" aria-label={`Delete ${chat.title}`} disabled={mutating || loading}
+            onclick={() => void deleteRow(chat.id)}>Delete Chat…</button>
         </div>
       {/each}
     </section>
   {/each}
   <footer>
     {#if matching.length > limit}<button type="button" onclick={() => { limit += pageSize; }}>Show More</button>{/if}
-    <button type="button" disabled={loading || restoring} onclick={() => void load()}>Refresh Archive</button>
-    <button type="button" disabled={restoring} onclick={close}>Close</button>
+    <button type="button" disabled={loading || mutating} onclick={() => void load()}>Refresh Archive</button>
+    <button type="button" disabled={mutating} onclick={close}>Close</button>
   </footer>
 </dialog>
 

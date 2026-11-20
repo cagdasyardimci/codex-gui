@@ -13,6 +13,7 @@ use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
 mod actions;
 mod archive;
+mod chat_deletion;
 mod composer_settings;
 mod context;
 mod git;
@@ -34,6 +35,9 @@ pub use actions::{
     TurnTarget,
 };
 pub use archive::{ArchiveCatalog, ArchiveScope, ArchiveTarget, ArchivedChat, RestoreArchive};
+pub use chat_deletion::{
+    ArchiveDeleteSource, ConfirmDeleteChat, DeleteChatSource, SidebarDeleteSource,
+};
 pub use composer_settings::{
     ComposerPermissions, ComposerSelection, ComposerSelectionView, ComposerSettingsRequest,
     ModelEffort, ModelServiceTier,
@@ -314,6 +318,10 @@ pub fn workspace_typescript() -> String {
         ArchivedChat::decl(),
         RestoreArchive::decl(),
         ArchiveTarget::decl(),
+        ArchiveDeleteSource::decl(),
+        ConfirmDeleteChat::decl(),
+        DeleteChatSource::decl(),
+        SidebarDeleteSource::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

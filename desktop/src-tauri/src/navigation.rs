@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     error::Error,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, atomic::AtomicBool},
@@ -38,6 +38,7 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
 mod archive;
+mod chat_deletion;
 mod composer_attachments;
 mod composer_settings;
 mod conversation_fork;
@@ -114,6 +115,10 @@ enum Action {
         archive::ArchiveReadResult,
         oneshot::Sender<codex_gui_core::ipc::ArchiveCatalog>,
     ),
+    PrepareChatDeletion(
+        codex_gui_core::ipc::DeleteChatSource,
+        oneshot::Sender<codex_gui_core::ipc::ConfirmDeleteChat>,
+    ),
 }
 
 enum Input {
@@ -168,6 +173,9 @@ struct Navigation {
     pages: HistoryPaging,
     prompt_revisions: prompt_revision::PromptRevisions,
     archive: archive::ArchiveState,
+    deletion: Option<chat_deletion::CapturedDeletion>,
+    deleted_chats: HashSet<ThreadId>,
+    worktree_records: PathBuf,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
     failed_drafts: HashMap<DraftId, Option<RuntimeUse>>,
@@ -187,6 +195,11 @@ impl NavigationHandle {
     ) -> Result<Self, Failure> {
         let store = AttachmentStore::open(database)?;
         let saved = store.desktop_selection()?;
+        let deleted_chats = store.deleted_chats()?;
+        let worktree_records = database
+            .parent()
+            .ok_or("missing application data folder")?
+            .join("worktrees");
         let (sender, receiver) = mpsc::channel(32);
         let (send_completions, finished_sends) = mpsc::channel(32);
         let (queue_completions, finished_queue_jobs) = mpsc::channel(32);
@@ -215,6 +228,9 @@ impl NavigationHandle {
             pages: HistoryPaging::default(),
             prompt_revisions: prompt_revision::PromptRevisions::default(),
             archive: archive::ArchiveState::default(),
+            deletion: None,
+            deleted_chats,
+            worktree_records,
             view: NavigationView::default(),
             editable: HashMap::new(),
             failed_drafts: HashMap::new(),
@@ -417,6 +433,11 @@ impl Navigation {
                 let _ = reply.send(catalog);
                 return Ok(None);
             }
+            Action::PrepareChatDeletion(source, reply) => {
+                let deletion = self.capture_chat_deletion(source, None)?;
+                let _ = reply.send(deletion);
+                return Ok(None);
+            }
             Action::SelectFolder(folder) => {
                 if self.quit.is_some() {
                     return Err(IpcError::StaleSelection);
@@ -449,6 +470,10 @@ impl Navigation {
             NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
             NavigationIntent::Sidebar(request) => self.edit_sidebar(request).await?,
             NavigationIntent::RestoreArchive(request) => self.restore_archived(request).await?,
+            NavigationIntent::ConfirmChatDeletion(ticket) => {
+                self.confirm_chat_deletion(ticket).await?
+            }
+            NavigationIntent::CancelChatDeletion(ticket) => self.cancel_chat_deletion(ticket)?,
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::SetResponseBookmark(request) => {
@@ -833,7 +858,9 @@ impl Navigation {
         let chats: Vec<_> = chats
             .data
             .into_iter()
-            .filter(|thread| self.archive.keep_active(&thread.id))
+            .filter(|thread| {
+                self.archive.keep_active(&thread.id) && !self.deleted_chats.contains(&thread.id)
+            })
             .map(sidebar::sidebar_chat_row)
             .collect();
         let checkout = &self

@@ -61,6 +61,14 @@ impl AttachmentStore {
         )? == 1)
     }
 
+    pub fn remove_sidebar_project(&self, id: &str) -> Result<(), AttachmentError> {
+        let state = self.inner.state();
+        state
+            .database
+            .execute("DELETE FROM desktop_projects WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
     pub fn pin_sidebar_project(&self, id: &str, pinned: bool) -> Result<bool, AttachmentError> {
         let state = self.inner.state();
         Ok(state.database.execute(

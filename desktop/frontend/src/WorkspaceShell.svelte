@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -14,11 +14,12 @@
   import WorkspaceSidebar from './WorkspaceSidebar.svelte';
   import CommandPalette from './CommandPalette.svelte';
   import ArchivedChats from './ArchivedChats.svelte';
+  import DeleteChatDialog from './DeleteChatDialog.svelte';
   import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, revealSidebarProject } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, prepareChatDeletion, revealSidebarProject } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -37,10 +38,11 @@
   import { verifySidebar } from './sidebarProbe';
   import { verifyCommandPalette } from './commandPaletteProbe';
   import { verifyArchive } from './archiveProbe';
+  import { verifyChatDeletion } from './chatDeletionProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -85,6 +87,14 @@
   };
   let palette = $state.raw<PaletteScope>();
   let archive = $state.raw<{ workspaceId: WorkspaceId | null; control: HTMLElement | null }>();
+  type DeletePresentation = {
+    request: ConfirmDeleteChat;
+    workspaceId: WorkspaceId | null;
+    control: HTMLElement | null;
+    complete: (confirmed: boolean) => void;
+  };
+  let deletion = $state.raw<DeletePresentation>();
+  let finishingDeletion = $state(false);
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
@@ -288,6 +298,12 @@
         promptEdit.row.generation !== current.transcript.generation || current.navigation.quit)) cancelSentPromptEdit();
     if (palette && (!paletteMatches(palette, current) || current.navigation.quit)) closePalette(false);
     if (archive && (archive.workspaceId !== (current.workspace?.workspaceId ?? null) || current.navigation.quit)) archive = undefined;
+    if (deletion && !finishingDeletion &&
+        (deletion.workspaceId !== (current.workspace?.workspaceId ?? null) || current.navigation.quit)) {
+      const retired = deletion;
+      settleDeletion(retired, false, false);
+      void navigateWorkspace({ cancelChatDeletion: retired.request.ticket }).catch(() => {});
+    }
     viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) {
@@ -339,7 +355,7 @@
   }
 
   function openPalette(mode: PaletteMode) {
-    if (!snapshot || palette || archive || actionPending || composing || quit || promptEdit || commandPanel) return;
+    if (!snapshot || palette || archive || deletion || actionPending || composing || quit || promptEdit || commandPanel) return;
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const selection: [number, number] | undefined = (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement) &&
       focused.selectionStart !== null && focused.selectionEnd !== null
@@ -438,6 +454,62 @@
       if (archive !== capture) throw 'staleSelection';
       await navigateWorkspace({ restoreArchive: request });
     } finally {
+      actionPending = false;
+    }
+  }
+
+  function presentDeletion(request: ConfirmDeleteChat, control: HTMLElement | null) {
+    return new Promise<boolean>((complete) => {
+      deletion = { request, workspaceId: snapshot?.workspace?.workspaceId ?? null, control, complete };
+    });
+  }
+
+  async function askChatDeletion(source: DeleteChatSource) {
+    if (actionPending || composing || deletion || quit) return false;
+    const workspaceId = snapshot?.workspace?.workspaceId ?? null;
+    const control = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    actionPending = true;
+    try {
+      await flushEdits();
+      const request = await prepareChatDeletion(source);
+      if ((snapshot?.workspace?.workspaceId ?? null) !== workspaceId || quit) {
+        await navigateWorkspace({ cancelChatDeletion: request.ticket });
+        return false;
+      }
+      return presentDeletion(request, control);
+    } catch (error) {
+      if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
+      return false;
+    } finally {
+      actionPending = false;
+    }
+  }
+
+  function settleDeletion(capture: DeletePresentation, confirmed: boolean, restoreFocus: boolean) {
+    if (deletion !== capture) return;
+    deletion = undefined;
+    capture.complete(confirmed);
+    if (restoreFocus) void tick().then(() => {
+      if (capture.control?.isConnected) capture.control.focus({ preventScroll: true });
+      else editor?.focus({ preventScroll: true });
+    });
+  }
+
+  async function finishDeletion(confirm: boolean) {
+    const capture = deletion;
+    if (!capture || finishingDeletion || actionPending) return;
+    finishingDeletion = true;
+    actionPending = true;
+    let confirmed = false;
+    try {
+      const ticket = capture.request.ticket;
+      await navigateWorkspace(confirm ? { confirmChatDeletion: ticket } : { cancelChatDeletion: ticket });
+      confirmed = confirm;
+    } catch (error) {
+      if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
+    } finally {
+      settleDeletion(capture, confirmed, true);
+      finishingDeletion = false;
       actionPending = false;
     }
   }
@@ -554,6 +626,12 @@
     if (outcome === 'send' || outcome === 'applied') {
       commandPanel = undefined;
       return outcome;
+    }
+    if ('confirmDelete' in outcome) {
+      commandPanel = undefined;
+      const control = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      void presentDeletion(outcome.confirmDelete, control);
+      return 'applied';
     }
     const command = outcome.present;
     if (command === 'diff') {
@@ -819,6 +897,7 @@
     else if (verify === 'sidebar' || verify === 'sidebarRestore') void verifySidebar(verify, () => snapshot);
     else if (verify === 'commandPalette') void verifyCommandPalette(() => snapshot);
     else if (verify === 'archive') void verifyArchive(() => snapshot);
+    else if (verify === 'chatDeletion') void verifyChatDeletion(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -877,6 +956,7 @@
       <nav class="workspace-sidebar" aria-label={workspace ? 'Chats' : 'Projects'}>
         <WorkspaceSidebar view={sidebar} {selectedChat} blocked={actionPending || !!quit}
           newChat={workspace ? () => workspaceAction('newChat') : undefined} change={changeSidebar}
+          deleteChat={(revision, key) => askChatDeletion({ sidebar: { revision, key } })}
           reveal={(revision, projectId) => revealSidebarProject({ revision, projectId })} />
       </nav>
     {/if}
@@ -1031,7 +1111,12 @@
       choose={(entry) => void choosePalette(entry)} close={closePalette} />
   {/if}
   {#if archive}
-    <ArchivedChats workspaceId={archive.workspaceId} restore={restoreArchived} close={closeArchive} />
+    <ArchivedChats workspaceId={archive.workspaceId} restore={restoreArchived} close={closeArchive}
+      deleteChat={(revision, chatId) => askChatDeletion({ archive: { revision, chatId } })} />
+  {/if}
+  {#if deletion}
+    <DeleteChatDialog title={deletion.request.title} busy={finishingDeletion}
+      cancel={() => void finishDeletion(false)} confirm={() => void finishDeletion(true)} />
   {/if}
   {#if quit?.confirm && !quit.draining}
     <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}

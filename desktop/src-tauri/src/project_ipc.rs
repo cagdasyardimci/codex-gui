@@ -221,6 +221,17 @@ pub async fn read_archive(
 }
 
 #[tauri::command]
+pub async fn prepare_chat_deletion(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    source: codex_gui_core::ipc::DeleteChatSource,
+) -> Result<codex_gui_core::ipc::ConfirmDeleteChat, IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.prepare_chat_deletion(source).await
+}
+
+#[tauri::command]
 pub async fn execute_slash_command(
     window: WebviewWindow,
     state: State<'_, ProjectIpc>,

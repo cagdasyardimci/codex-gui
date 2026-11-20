@@ -44,6 +44,7 @@ pub enum Verification {
     SidebarRestore,
     CommandPalette,
     Archive,
+    ChatDeletion,
     Account,
     WindowsSetup,
     Turn,
@@ -56,6 +57,7 @@ pub enum Verification {
 pub struct FixtureCheckouts {
     pub primary: Option<PathBuf>,
     pub secondary: Option<PathBuf>,
+    pub data: Option<PathBuf>,
 }
 
 #[tauri::command]
@@ -69,7 +71,10 @@ pub async fn select_fixture_checkout(
     authorize_view(&window)?;
     if !matches!(
         *verification,
-        Verification::Quit | Verification::Sidebar | Verification::CommandPalette
+        Verification::Quit
+            | Verification::Sidebar
+            | Verification::CommandPalette
+            | Verification::ChatDeletion
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }
@@ -79,6 +84,57 @@ pub async fn select_fixture_checkout(
         &checkouts.primary
     };
     let path = path.clone().ok_or(IpcError::InvalidCheckout)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.select(path).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn seed_deletion_fixture(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+) -> Result<(), IpcError> {
+    use codex_gui_core::{
+        checkout::CheckoutIdentity,
+        worktree::{WorktreeManager, WorktreeStore},
+    };
+
+    authorize_view(&window)?;
+    if *verification != Verification::ChatDeletion {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let data = checkouts.data.as_ref().ok_or(IpcError::InvalidCheckout)?;
+    let primary = checkouts
+        .primary
+        .as_ref()
+        .ok_or(IpcError::InvalidCheckout)?;
+    let perform = async {
+        let root = data.join("managed");
+        std::fs::create_dir_all(&root)?;
+        let store = WorktreeStore::initialize_tauri(&data.join("worktrees"))?;
+        let manager = WorktreeManager::new(store, CheckoutIdentity::capture(&root)?);
+        let checkout = manager
+            .create(
+                CheckoutIdentity::capture(primary)?,
+                "managed-chat",
+                "Managed fixture",
+            )
+            .await?;
+        let bound = manager
+            .bind(checkout.id, "managed-chat", &checkout.checkout_path)
+            .await?;
+        std::fs::write(
+            bound.checkout_path.join("keep-local.txt"),
+            b"Local work must survive chat deletion.",
+        )?;
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(bound.checkout_path)
+    };
+    let path = perform.await.map_err(|error| {
+        eprintln!("{error}");
+        IpcError::ProjectUnavailable
+    })?;
     let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
     navigation.select(path).await?;
     Ok(())
@@ -308,6 +364,7 @@ pub fn verify_attachments_result(
             | Verification::SidebarRestore
             | Verification::CommandPalette
             | Verification::Archive
+            | Verification::ChatDeletion
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -348,6 +405,8 @@ pub fn verify_attachments_result(
             println!("Verified installed keyboard command palette and scoped choosers");
         } else if *verification == Verification::Archive {
             println!("Verified installed project and chat archive, restore, and search");
+        } else if *verification == Verification::ChatDeletion {
+            println!("Verified installed scoped permanent chat deletion");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

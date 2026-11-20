@@ -5,13 +5,14 @@
     SidebarView,
   } from './generated/workspace';
 
-  let { view, selectedChat, blocked, newChat, change, reveal } : {
+  let { view, selectedChat, blocked, newChat, change, reveal, deleteChat } : {
     view: SidebarView;
     selectedChat: string | null | undefined;
     blocked: boolean;
     newChat?: () => void;
     change: (revision: string, change: SidebarChange) => Promise<void>;
     reveal: (revision: string, projectId: string) => Promise<void>;
+    deleteChat: (revision: string, key: SidebarChatKey) => Promise<boolean>;
   } = $props();
 
   let dragged = $state.raw<{ key: SidebarChatKey; revision: string; pinned: boolean }>();
@@ -194,6 +195,11 @@
           closeMenu(event);
           apply({ archiveChat: chat.key });
         }} disabled={blocked}>Archive Chat</button>
+        <button type="button" onclick={(event) => {
+          const control = closeMenu(event);
+          control?.focus();
+          if (view.revision) void deleteChat(view.revision, chat.key);
+        }} disabled={blocked}>Delete Chat…</button>
       </div>
     </details>
   </div>

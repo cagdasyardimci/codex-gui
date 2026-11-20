@@ -23,6 +23,7 @@ use super::{
 const PARTIAL_PREFIX: &str = ".partial-";
 
 pub mod appkit_drafts;
+pub mod chat_deletion;
 pub mod composer;
 pub mod composer_plan;
 pub mod composer_settings;

@@ -3,7 +3,7 @@ use ts_rs::TS;
 
 use crate::slash_commands::Command;
 
-use super::SendRequest;
+use super::{ConfirmDeleteChat, SendRequest};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -35,4 +35,5 @@ pub enum SlashCommandOutcome {
     Send,
     Applied,
     Present(Command),
+    ConfirmDelete(ConfirmDeleteChat),
 }

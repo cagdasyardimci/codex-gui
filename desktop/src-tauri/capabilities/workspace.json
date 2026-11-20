@@ -26,6 +26,7 @@
     "allow-open-transcript-link",
     "allow-navigate-workspace",
     "allow-read-archive",
+    "allow-prepare-chat-deletion",
     "allow-execute-slash-command",
     "allow-open-sent-prompt",
     "allow-reveal-sidebar-project",

@@ -18,6 +18,7 @@
     "allow-verify-diff-result",
     "allow-request-quit-fixture",
     "allow-select-fixture-checkout",
+    "allow-seed-deletion-fixture",
     "allow-report-quit-failure",
     "allow-change-workspace-fixture"
   ]

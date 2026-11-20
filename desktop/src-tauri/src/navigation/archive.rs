@@ -38,6 +38,13 @@ impl ArchiveState {
             self.rows.remove(&thread.id);
         }
     }
+
+    pub(super) fn remove_deleted(&mut self, thread: &ThreadId) {
+        self.read = None;
+        self.catalog = None;
+        self.rows.remove(thread);
+        self.receipts.remove(thread);
+    }
 }
 
 pub(super) struct ArchiveRead {
@@ -59,26 +66,7 @@ impl NavigationHandle {
         let (reply, result) = oneshot::channel();
         self.request(Action::StartArchiveRead(scope, reply)).await?;
         let read = result.await.map_err(|_| IpcError::ProjectUnavailable)?;
-        let browser = CodexBrowser::new(read.client.clone());
-        let mut cursors = HashSet::new();
-        let mut cursor = None;
-        let mut rows = HashMap::new();
-        loop {
-            let page = browser
-                .archived_chats(cursor.as_deref(), RPC_TIMEOUT)
-                .await
-                .map_err(|error| report(error.into()))?;
-            for thread in page.data {
-                if !thread.id.0.is_empty() {
-                    rows.entry(thread.id.clone()).or_insert(thread);
-                }
-            }
-            let Some(next) = page.next_cursor else { break };
-            if !cursors.insert(next.clone()) {
-                return Err(report("Codex repeated an archive cursor".into()));
-            }
-            cursor = Some(next);
-        }
+        let rows = read_archive_rows(&read.client).await?;
         let (reply, result) = oneshot::channel();
         self.request(Action::FinishArchiveRead(
             ArchiveReadResult { read, rows },
@@ -87,6 +75,32 @@ impl NavigationHandle {
         .await?;
         result.await.map_err(|_| IpcError::ProjectUnavailable)
     }
+}
+
+pub(super) async fn read_archive_rows(
+    client: &AppServerClient,
+) -> Result<HashMap<ThreadId, ThreadSummary>, IpcError> {
+    let browser = CodexBrowser::new(client.clone());
+    let mut cursors = HashSet::new();
+    let mut cursor = None;
+    let mut rows = HashMap::new();
+    loop {
+        let page = browser
+            .archived_chats(cursor.as_deref(), RPC_TIMEOUT)
+            .await
+            .map_err(|error| report(error.into()))?;
+        for thread in page.data {
+            if !thread.id.0.is_empty() {
+                rows.entry(thread.id.clone()).or_insert(thread);
+            }
+        }
+        let Some(next) = page.next_cursor else { break };
+        if !cursors.insert(next.clone()) {
+            return Err(report("Codex repeated an archive cursor".into()));
+        }
+        cursor = Some(next);
+    }
+    Ok(rows)
 }
 
 impl Navigation {
@@ -116,6 +130,7 @@ impl Navigation {
         }
         self.archive.read = None;
         let mut rows = read.rows;
+        rows.retain(|id, _| !self.deleted_chats.contains(id));
         self.archive
             .receipts
             .retain(|id, (archived, _)| rows.contains_key(id) != *archived);
@@ -180,7 +195,7 @@ impl Navigation {
             .is_some_and(|backend| backend.connection.client().identity() == owner)
     }
 
-    async fn archive_client(
+    pub(super) async fn archive_client(
         &self,
         checkout: &CheckoutIdentity,
     ) -> Result<(AppServerClient, Option<AppServerConnection>), IpcError> {
@@ -192,6 +207,34 @@ impl Navigation {
         }
         let probe = open_checkout_probe(checkout).await.map_err(report)?;
         Ok((probe.client(), Some(probe)))
+    }
+
+    pub(super) fn archived_target(
+        &self,
+        ticket: Uuid,
+        thread: &ThreadId,
+    ) -> Result<(AppServerClient, ThreadSummary), IpcError> {
+        let (revision, owner) = self
+            .archive
+            .catalog
+            .as_ref()
+            .ok_or(IpcError::StaleSelection)?;
+        if *revision != ticket || !self.owns_archive_client(owner) {
+            return Err(IpcError::StaleSelection);
+        }
+        let summary = self
+            .archive
+            .rows
+            .get(thread)
+            .cloned()
+            .ok_or(IpcError::StaleSelection)?;
+        let client = self
+            .backend
+            .as_ref()
+            .expect("validated archive connection")
+            .connection
+            .client();
+        Ok((client, summary))
     }
 
     pub(super) async fn archive_chat(&mut self, key: SidebarChatKey) -> Result<(), IpcError> {
@@ -237,7 +280,9 @@ impl Navigation {
                 .await
                 .map_err(|error| report(error.into()))?;
             for chat in page.data {
-                if self.archive.keep_active(&chat.thread.id) && seen.insert(chat.thread.id.clone())
+                if self.archive.keep_active(&chat.thread.id)
+                    && !self.deleted_chats.contains(&chat.thread.id)
+                    && seen.insert(chat.thread.id.clone())
                 {
                     self.check_idle(checkout, &chat)?;
                     ids.push(chat.thread.id);
@@ -255,7 +300,7 @@ impl Navigation {
         Ok(())
     }
 
-    fn check_idle(
+    pub(super) fn check_idle(
         &self,
         checkout: &CheckoutIdentity,
         summary: &ChatSummary,
@@ -273,13 +318,12 @@ impl Navigation {
         Ok(())
     }
 
-    async fn archive_one(
-        &mut self,
+    pub(super) async fn idle_thread(
+        &self,
         client: &AppServerClient,
         checkout: &CheckoutIdentity,
         id: &ThreadId,
-        command: Option<(DraftId, String)>,
-    ) -> Result<(), IpcError> {
+    ) -> Result<ThreadSummary, IpcError> {
         let browser = CodexBrowser::new(client.clone());
         let captured = browser
             .thread_summary(id, RPC_TIMEOUT)
@@ -306,6 +350,17 @@ impl Navigation {
             .revalidate()
             .map_err(|_| IpcError::RetiredWorkspace)?;
         self.check_idle(checkout, summary)?;
+        Ok(summary.thread.clone())
+    }
+
+    async fn archive_one(
+        &mut self,
+        client: &AppServerClient,
+        checkout: &CheckoutIdentity,
+        id: &ThreadId,
+        command: Option<(DraftId, String)>,
+    ) -> Result<(), IpcError> {
+        let thread = self.idle_thread(client, checkout, id).await?;
         let response = client
             .request("thread/archive", json!({"threadId": id.0}), RPC_TIMEOUT)
             .await
@@ -320,8 +375,7 @@ impl Navigation {
         {
             eprintln!("{error}");
         }
-        self.apply_archive(&summary.thread, Some(checkout), true)
-            .await
+        self.apply_archive(&thread, Some(checkout), true).await
     }
 
     pub(super) async fn restore_archived(
@@ -448,7 +502,7 @@ impl Navigation {
     }
 }
 
-async fn close_archive_probe(probe: Option<AppServerConnection>) {
+pub(super) async fn close_archive_probe(probe: Option<AppServerConnection>) {
     if let Some(probe) = probe
         && let Err(error) = probe.disconnect().await
     {

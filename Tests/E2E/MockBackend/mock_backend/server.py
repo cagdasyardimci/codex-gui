@@ -157,6 +157,10 @@ class Server:
                 cwd = cwd[0] if cwd else None
             for thread in self.state.threads:
                 if cwd and not thread.get('cwd'):
+                    if self.scenario.get('desktopChatDeletion'):
+                        managed = Path(cwd).parent.name == 'managed'
+                        if managed != (thread['id'] == 'managed-chat'):
+                            continue
                     thread['cwd'] = cwd
             rows = [self.summary(t) for t in self.state.threads
                     if t['archived'] == p.get('archived', False) and (not cwd or t.get('cwd') == cwd)]
@@ -272,6 +276,10 @@ class Server:
             elif method == 'thread/delete':
                 if thread['id'] in self.active:
                     raise ProtocolError(-32002, 'Cannot delete active thread')
+                if self.scenario.get('desktopChatDeletion') and thread['id'] == 'uncertain-delete':
+                    self.state.data['retiredDuringDelete'] = True
+                    self.state.save()
+                    raise UnconfirmedMutation
                 self.state.threads.remove(thread)
             elif method != 'thread/unsubscribe':
                 thread['archived'] = method == 'thread/archive'

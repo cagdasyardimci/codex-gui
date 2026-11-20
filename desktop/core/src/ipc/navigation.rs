@@ -210,6 +210,8 @@ pub struct DraftEdit {
 pub enum NavigationIntent {
     Sidebar(super::SidebarRequest),
     RestoreArchive(super::RestoreArchive),
+    ConfirmChatDeletion(Uuid),
+    CancelChatDeletion(Uuid),
     SetComposerSettings(ComposerSettingsRequest),
     EditProjectContext(ProjectContextRequest),
     ReviseSentPrompt(ReviseSentPrompt),

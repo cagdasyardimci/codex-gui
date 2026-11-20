@@ -107,7 +107,9 @@ impl Navigation {
                     | Command::Skills => true,
                     Command::Copy | Command::Diff => thread.is_some(),
                     Command::Rename => idle && thread.is_some(),
-                    Command::Archive => thread.is_some() && self.view.actions.stop.is_none(),
+                    Command::Archive | Command::Delete => {
+                        thread.is_some() && self.view.actions.stop.is_none()
+                    }
                     Command::Model | Command::Reasoning => has_model,
                     Command::Fast => self.fast_tier().is_some(),
                     Command::Permissions => self.view.composer_settings.is_some(),
@@ -115,7 +117,7 @@ impl Navigation {
                         has_model && backend.commands.plans && (idle || view.recover_plan)
                     }
                     Command::Compact => compact_supported && idle && thread.is_some(),
-                    Command::Fork | Command::Delete | Command::Review => false,
+                    Command::Fork | Command::Review => false,
                 })
                 .collect();
         }
@@ -275,7 +277,22 @@ impl Navigation {
                     .await?;
                 return Ok(SlashCommandOutcome::Applied);
             }
-            Command::Delete | Command::Review => {
+            Command::Delete => {
+                let selection = self.selection.as_ref().ok_or(IpcError::RetiredWorkspace)?;
+                let project_id = selection.checkout.storage_key();
+                let chat_id = draft.chat_id.clone().ok_or(IpcError::StaleSelection)?;
+                let revision = self.view.sidebar.revision.ok_or(IpcError::StaleSelection)?;
+                let key = codex_gui_core::ipc::SidebarChatKey {
+                    project_id,
+                    chat_id,
+                };
+                let source = codex_gui_core::ipc::DeleteChatSource::Sidebar(
+                    codex_gui_core::ipc::SidebarDeleteSource { revision, key },
+                );
+                let ticket = self.capture_chat_deletion(source, Some(draft))?;
+                return Ok(SlashCommandOutcome::ConfirmDelete(ticket));
+            }
+            Command::Review => {
                 return Err(IpcError::StaleSelection);
             }
         }
