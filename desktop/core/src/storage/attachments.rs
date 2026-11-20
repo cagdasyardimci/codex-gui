@@ -32,8 +32,8 @@ pub(crate) use submissions::{
 };
 pub use submissions::{JournalError, SubmissionAcknowledgement};
 pub(super) use submissions::{
-    migrate_queue_receipts, migrate_submission_checkout, migrate_submission_outcomes,
-    migrate_submissions,
+    migrate_queue_deletions, migrate_queue_receipts, migrate_submission_checkout,
+    migrate_submission_outcomes, migrate_submissions,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

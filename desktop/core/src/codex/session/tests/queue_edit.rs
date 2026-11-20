@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     codex::{CodexBrowser, QueuedSubmission},
     storage::attachments::queue_edits::QueueEditError,
-    workspace::{QueueEditResult, QueueError},
+    workspace::{QueueDeleteResult, QueueEditResult, QueueError},
 };
 
 fn entry(index: u128, text: &str) -> QueuedSubmission {
@@ -11,6 +11,108 @@ fn entry(index: u128, text: &str) -> QueuedSubmission {
         client_user_message_id: Uuid::from_u128(index).to_string(),
         input: vec![json!({"type":"text", "text":text, "text_elements":[]})],
     }
+}
+
+#[tokio::test]
+async fn only_confirmed_deletion_releases_the_captured_queue_attachment() {
+    time::timeout(DEADLINE, async {
+        let (mut fixture, prepared, _, draft, image) = Fixture::prepared().await;
+        drop(prepared);
+        let request = fixture.queue_intent(draft, 97);
+        let client = &fixture.transport.client;
+        let engine = &fixture.engine;
+        let store = &fixture.store;
+        let checkout = &fixture.checkout;
+        let thread = ThreadId("thread-1".into());
+        let queued = entry(97, "  café\n");
+        let entries = std::slice::from_ref(&queued);
+        engine
+            .observe_execution_event(
+                client.identity(),
+                &active_turn_event("turn/started", "inProgress"),
+            )
+            .await
+            .unwrap();
+        let (added, ()) = tokio::join!(
+            engine.enqueue_follow_up(request, queue_target(), client, store, DEADLINE),
+            async {
+                let add = next_request(&mut fixture.server).await;
+                assert_eq!(add["method"], "thread/queue/add");
+                respond(
+                    &mut fixture.replies,
+                    add["id"].clone(),
+                    json!({"queuedSubmission":queued}),
+                )
+                .await;
+            }
+        );
+        assert_eq!(
+            added.unwrap().acknowledgement,
+            SubmissionAcknowledgement::Queued {
+                retired_draft: true
+            }
+        );
+        store
+            .save_editor_text(draft, "independent unsent input".into())
+            .unwrap();
+
+        let mut wrong = queued.clone();
+        wrong.client_user_message_id = Uuid::from_u128(98).to_string();
+        let (replaced, ()) = tokio::join!(
+            engine.delete_queue_entry(client, store, &thread, &wrong, DEADLINE),
+            queue_read(&mut fixture.server, &mut fixture.replies, checkout, entries),
+        );
+        assert!(matches!(replaced, Err(QueueError::Changed)));
+        let (disappeared, ()) = tokio::join!(
+            engine.delete_queue_entry(client, store, &thread, &queued, DEADLINE),
+            queue_read(&mut fixture.server, &mut fixture.replies, checkout, &[]),
+        );
+        assert_eq!(disappeared.unwrap(), QueueDeleteResult::NotConfirmed);
+        store.collect().unwrap();
+        assert!(image.is_file());
+        for deleted in [false, true] {
+            let (result, ()) = tokio::join!(
+                engine.delete_queue_entry(client, store, &thread, &queued, DEADLINE),
+                async {
+                    queue_read(&mut fixture.server, &mut fixture.replies, checkout, entries).await;
+                    let delete = next_request(&mut fixture.server).await;
+                    assert_eq!(delete["method"], "thread/queue/delete");
+                    assert_eq!(
+                        delete["params"],
+                        json!({"threadId":"thread-1","queuedSubmissionId":"queued-97"})
+                    );
+                    respond(
+                        &mut fixture.replies,
+                        delete["id"].clone(),
+                        json!({"deleted":deleted}),
+                    )
+                    .await;
+                }
+            );
+            assert_eq!(
+                result.unwrap(),
+                if deleted {
+                    QueueDeleteResult::Deleted
+                } else {
+                    QueueDeleteResult::NotConfirmed
+                }
+            );
+            store.collect().unwrap();
+            assert_eq!(image.is_file(), !deleted);
+            assert_eq!(
+                store.read_editor_draft(draft).unwrap().text,
+                "independent unsent input"
+            );
+        }
+        assert!(store.pending_submissions(checkout).unwrap().is_empty());
+        assert!(
+            time::timeout(Duration::from_millis(50), fixture.server.next_frame())
+                .await
+                .is_err()
+        );
+    })
+    .await
+    .unwrap();
 }
 
 async fn queue_read(

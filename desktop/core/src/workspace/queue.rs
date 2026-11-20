@@ -42,8 +42,10 @@ pub enum QueueError {
     Unsupported,
     #[error("the captured queue changed")]
     Changed,
-    #[error("the server returned an invalid queue update receipt")]
+    #[error("the server returned an invalid queue mutation receipt")]
     InvalidReceipt,
+    #[error(transparent)]
+    Journal(#[from] crate::storage::attachments::JournalError),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -52,7 +54,50 @@ pub enum QueueEditResult {
     Detached,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum QueueDeleteResult {
+    Deleted,
+    NotConfirmed,
+}
+
 impl WorkspaceEngine {
+    pub async fn delete_queue_entry(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        thread: &ThreadId,
+        entry: &QueuedSubmission,
+        timeout: Duration,
+    ) -> Result<QueueDeleteResult, QueueError> {
+        let _queue = self.lock_queue(thread).await;
+        let entries = self.read_queue(client, thread, timeout).await?;
+        let Some(current) = find_entry(&entries, entry)? else {
+            return Ok(QueueDeleteResult::NotConfirmed);
+        };
+        if current != entry {
+            return Err(QueueError::Changed);
+        }
+        let reply = self
+            .write_queue(
+                client,
+                thread,
+                "thread/queue/delete",
+                json!({"threadId":thread.0,"queuedSubmissionId":entry.id}),
+                timeout,
+            )
+            .await?;
+        match reply["deleted"].as_bool() {
+            Some(true) => {
+                let _commit = self.preparation_commit.lock().await;
+                let checkout = self.queue_owner(client.identity(), thread)?;
+                store.record_queue_deletion(&checkout, thread, entry)?;
+                Ok(QueueDeleteResult::Deleted)
+            }
+            Some(false) => Ok(QueueDeleteResult::NotConfirmed),
+            None => Err(QueueError::InvalidReceipt),
+        }
+    }
+
     pub async fn begin_queue_edit(
         &self,
         client: &AppServerClient,

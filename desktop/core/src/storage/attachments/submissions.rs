@@ -1,4 +1,5 @@
 use super::*;
+use crate::codex::QueuedSubmission;
 use crate::{checkout::CheckoutIdentity, identity::TurnId};
 use uuid::Uuid;
 
@@ -166,6 +167,7 @@ impl AttachmentStore {
              FROM submissions AS s
              LEFT JOIN queue_receipts AS q ON q.id = s.id
              WHERE json_extract(s.request, '$.cwd') = ?1 AND s.phase IN ('reserved', 'dispatching')
+                AND NOT COALESCE(q.deleted, FALSE)
                 AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS outcome WHERE outcome.id = s.id)
              ORDER BY s.thread_id, s.id",
         )?;
@@ -276,7 +278,8 @@ impl AttachmentStore {
                 "SELECT s.draft_id, s.draft_revision, q.id IS NOT NULL, q.queued_id
                  FROM submissions AS s LEFT JOIN queue_receipts AS q ON q.id = s.id
                  WHERE s.id = ?1 AND s.thread_id = ?2 AND s.phase = 'dispatching'
-                   AND s.checkout_key = ?3 AND json_extract(s.request, '$.cwd') = ?4",
+                   AND s.checkout_key = ?3 AND json_extract(s.request, '$.cwd') = ?4
+                   AND NOT COALESCE(q.deleted, FALSE)",
                 params![
                     id,
                     thread.0,
@@ -400,6 +403,69 @@ impl AttachmentStore {
         state.candidates.extend(released);
         Ok(acknowledgement)
     }
+
+    pub(crate) fn record_queue_deletion(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+        entry: &QueuedSubmission,
+    ) -> Result<(), JournalError> {
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let scope = checkout.storage_key();
+        let mut released = Vec::new();
+        if let Ok(client) = Uuid::parse_str(&entry.client_user_message_id) {
+            let request_id = client.as_bytes().as_slice();
+            let binding = transaction
+                .query_row(
+                    "SELECT s.draft_id, s.draft_revision, q.queued_id IS NULL
+                 FROM submissions AS s JOIN queue_receipts AS q ON s.id = q.id
+                 WHERE s.id = ?1 AND (q.queued_id = ?2 OR q.queued_id IS NULL) AND NOT q.deleted
+                   AND s.thread_id = ?3 AND s.checkout_key = ?4 AND s.phase = 'dispatching'
+                   AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS o WHERE o.id = s.id)",
+                    params![request_id, entry.id, thread.0, scope],
+                    |row| {
+                        Ok((
+                            row.get::<_, [u8; 16]>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, bool>(2)?,
+                        ))
+                    },
+                )
+                .optional()?;
+            if let Some((draft, revision, add_was_unconfirmed)) = binding {
+                transaction.execute(
+                    "UPDATE queue_receipts SET queued_id = ?2, deleted = TRUE WHERE id = ?1",
+                    params![request_id, entry.id],
+                )?;
+                released = release_submission_attachments(&transaction, request_id)?;
+                if add_was_unconfirmed
+                    && retire_submitted_revision(
+                        &transaction,
+                        DraftId(Uuid::from_bytes(draft)),
+                        DraftRevision::from_sql(revision),
+                    )?
+                {
+                    released.extend(replace_references(
+                        &transaction,
+                        &self.inner.blobs,
+                        &draft,
+                        std::iter::empty(),
+                    )?);
+                }
+            }
+        }
+        transaction.execute(
+            "DELETE FROM queue_edits WHERE checkout_key = ?1 AND thread_id = ?2 AND client_id = ?3
+               AND json_extract(entry, '$.id') = ?4",
+            params![scope, thread.0, entry.client_user_message_id, entry.id],
+        )?;
+        transaction.commit()?;
+        state.candidates.extend(released);
+        Ok(())
+    }
 }
 
 fn release_submission_attachments(
@@ -468,5 +534,14 @@ pub(in crate::storage) fn migrate_queue_receipts(
             id BLOB NOT NULL PRIMARY KEY REFERENCES submissions (id) ON DELETE CASCADE,
             queued_id TEXT CHECK (length(queued_id) > 0)
         ) STRICT, WITHOUT ROWID;",
+    )
+}
+
+pub(in crate::storage) fn migrate_queue_deletions(
+    transaction: &Transaction<'_>,
+) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "ALTER TABLE queue_receipts ADD COLUMN deleted INTEGER NOT NULL DEFAULT FALSE
+          CHECK (deleted IN (FALSE, TRUE) AND (NOT deleted OR queued_id IS NOT NULL))",
     )
 }
