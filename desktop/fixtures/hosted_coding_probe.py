@@ -110,8 +110,18 @@ def launch_windows(report: Path, environment: dict[str, str]) -> None:
     shortcuts = list(programs.rglob("Codex GUI Beta.lnk"))
     if len(shortcuts) != 1:
         raise RuntimeError("Expected one installed Codex GUI Beta Start menu shortcut")
+    arguments = subprocess.list2cmdline(["--verify-coding-turn", str(report)])
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+         "$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($env:PROBE_SHORTCUT); "
+         "$shortcut.Arguments = $env:PROBE_ARGUMENTS; $shortcut.Save()"],
+        env={**environment, "PROBE_SHORTCUT": str(shortcuts[0]), "PROBE_ARGUMENTS": arguments},
+        check=True, timeout=15,
+    )
+    for name in ("OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"):
+        os.environ.pop(name, None)
     os.environ.update(environment)
-    os.startfile(str(shortcuts[0]), arguments=subprocess.list2cmdline(["--verify-coding-turn", str(report)]))
+    os.startfile(str(shortcuts[0]))
 
 
 def launch_ubuntu(report: Path, environment: dict[str, str], stage: Path) -> None:
@@ -158,7 +168,8 @@ def finish(stage: Path) -> None:
             if report.is_file():
                 lines = report.read_text(encoding="utf-8").splitlines()
                 if len(lines) == 3 and lines[0] == "Default-policy coding probe completed":
-                    if lines[2] != f"Codex CLI version: {VERSION}":
+                    if (lines[1] != f'Codex executable: {environment["CODEX_EXECUTABLE"]}'
+                            or lines[2] != f"Codex CLI version: {VERSION}"):
                         raise RuntimeError("The installed app used an unexpected Codex CLI release")
                     print("Hosted default-policy coding probe completed with ChatGPT sign-in")
                     return
