@@ -6,6 +6,7 @@ use codex_gui_core::{
     ipc::{
         ChatRow, IpcError, SendRequest, StopTarget, TurnTarget, WriteAccess, present_question_reply,
     },
+    slash_commands::{Command, ComposerInput, parse},
     storage::drafts::DraftId,
     workspace::{
         ExecutionTarget, RuntimeUse, SendDraft, SendIntent, SubmissionError, SubmissionReply,
@@ -32,8 +33,15 @@ impl Navigation {
     pub(super) async fn send_visible(&mut self, request: SendRequest) -> Result<(), IpcError> {
         self.require(request.workspace_id)?;
         self.sync_actions();
-        if !self.view.actions.send
-            || self.view.selected_chat != request.chat_id
+        if !self.view.actions.send {
+            return Err(IpcError::StaleSelection);
+        }
+        self.validate_send_selection(&request)?;
+        self.admit_send(request).await.map_err(report)
+    }
+
+    pub(super) fn validate_send_selection(&self, request: &SendRequest) -> Result<(), IpcError> {
+        if self.view.selected_chat != request.chat_id
             || request.composer_revision.is_some_and(|revision| {
                 self.view
                     .composer_settings
@@ -54,7 +62,7 @@ impl Navigation {
         {
             return Err(IpcError::StaleSelection);
         }
-        self.admit_send(request).await.map_err(report)
+        Ok(())
     }
 
     async fn admit_send(&mut self, request: SendRequest) -> Result<(), Failure> {
@@ -73,6 +81,16 @@ impl Navigation {
         {
             return Err("the submitted input no longer matches the displayed draft".into());
         }
+        let plan = self.read_plan()?;
+        let parsed = parse(&saved.text);
+        let inline_plan = matches!(&parsed, ComposerInput::Command { command: Command::Plan, arguments }
+            if !arguments.trim().is_empty() && self.view.slash_commands.available.contains(&Command::Plan));
+        let text = match parsed {
+            ComposerInput::Text => saved.text.clone(),
+            ComposerInput::Literal(text) => text,
+            ComposerInput::Command { arguments, .. } if inline_plan => arguments.to_owned(),
+            _ => return Err("the draft requires a composer command".into()),
+        };
         let backend = self.backend.as_ref().ok_or("Codex is disconnected")?;
         let client = backend.connection.client();
         let engine = backend.engine.clone();
@@ -81,7 +99,14 @@ impl Navigation {
             .composer_settings
             .as_ref()
             .map(|view| view.selection.clone());
-        let settings = self.capture_run_settings(&project);
+        let mut settings = self.capture_run_settings(&project);
+        if inline_plan || plan.enabled {
+            settings.collaboration_mode =
+                super::slash_commands::collaboration_mode(&settings, true);
+            if settings.collaboration_mode.is_none() {
+                return Err("the selected model could not be used in plan mode".into());
+            }
+        }
         let skill = if let Some(selected) = &project.selected_skill {
             let skills = CodexBrowser::new(client.clone())
                 .composer_skills(Duration::from_secs(4))
@@ -95,7 +120,7 @@ impl Navigation {
             None
         };
         let (text, context, attachments) =
-            self.capture_composer_context(draft_id, saved.text, saved.context, project, skill)?;
+            self.capture_composer_context(draft_id, text, saved.context, project, skill)?;
         if text.trim().is_empty() && context.is_empty() && attachments.is_empty() {
             return Err("the captured project has no available submission input".into());
         }
@@ -154,6 +179,23 @@ impl Navigation {
                     )
                 {
                     eprintln!("{error}");
+                }
+                if let Some(selection) = self.selection.as_ref()
+                    && plan.enabled
+                {
+                    if let Err(error) =
+                        self.store
+                            .save_composer_plan(&selection.checkout, Some(&thread.0), &plan)
+                    {
+                        eprintln!("{error}");
+                    }
+                    if let Err(error) = self.store.save_composer_plan(
+                        &selection.checkout,
+                        None,
+                        &Default::default(),
+                    ) {
+                        eprintln!("{error}");
+                    }
                 }
                 self.source_draft = self.store.desktop_selection()?.source_draft;
                 let preview = present_question_reply(&request.text).into_owned();
@@ -322,6 +364,7 @@ impl Navigation {
             None
         });
         let Some(backend) = &self.backend else {
+            self.sync_slash_commands();
             self.publish_navigation();
             return;
         };
@@ -379,6 +422,7 @@ impl Navigation {
                 .interactions
                 .project(backend.engine.pending_interactions(), selected);
         }
+        self.sync_slash_commands();
         self.publish_navigation();
     }
 

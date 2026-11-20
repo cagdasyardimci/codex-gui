@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
     options = parser.add_mutually_exclusive_group()
-    for name in ("annotations", "context", "settings", "project-context"):
+    for name in ("annotations", "context", "settings", "project-context", "slash-commands"):
         options.add_argument(f"--{name}", dest="mode", action="store_const", const=name)
     parser.set_defaults(mode="attachments")
     args = parser.parse_args()
@@ -66,7 +66,7 @@ def main():
                 "status": "completed",
                 "items": [{"id": f"recent-answer-{number}", "type": "agentMessage", "text": f"More recent turn {number}."}],
             } for number in range(105))
-        if args.mode in ("settings", "project-context"):
+        if args.mode in ("settings", "project-context", "slash-commands"):
             backend_state["config"] = {"model": "baseline-model", "model_reasoning_effort": "low", "service_tier": "default",
                                        "approval_policy": "untrusted", "sandbox_mode": "read-only", "approvals_reviewer": "user"}
         state.write_text(json.dumps(backend_state, ensure_ascii=True), encoding="utf-8")
@@ -76,6 +76,7 @@ def main():
             "context": ("--verify-composer-context", "desktop-context", "Verified installed composer context"),
             "settings": ("--verify-composer-settings", "desktop-composer-settings", "Verified installed composer settings"),
             "project-context": ("--verify-project-context", "desktop-project-context", "Verified installed Project Context"),
+            "slash-commands": ("--verify-slash-commands", "desktop-slash-commands", "Verified installed slash commands"),
         }[args.mode]
         result = subprocess.run(
             [str(executable), fixture, str(data), str(checkout)],
@@ -87,8 +88,8 @@ def main():
         print(result.stdout, end="")
         if result.returncode or expected not in result.stdout:
             raise SystemExit(result.stderr or "The desktop attachment fixture did not complete")
-        requests = [event for line in trace.read_text(encoding="utf-8").splitlines()
-                    if (event := json.loads(line))["direction"] == "request"]
+        records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+        requests = [event for event in records if event["direction"] == "request"]
         starts = [event for event in requests if event["method"] == "turn/start"]
         assert not list(profile.iterdir())
         if args.mode == "settings":
@@ -96,6 +97,9 @@ def main():
             return
         if args.mode == "project-context":
             verify_project_context(starts, requests, checkout, data)
+            return
+        if args.mode == "slash-commands":
+            verify_slash_commands(starts, records, checkout, data)
             return
         assert len(starts) == 1 and starts[0]["threadId"] == "history-first", starts
         inputs = starts[0]["input"]
@@ -189,6 +193,45 @@ def verify_project_context(starts, requests, checkout, data):
     assert [prompt["title"] for prompt in context["savedPrompts"]] == ["Release review"], context
     assert context["bookmarks"][0]["itemID"] == "first-history", context
     print("Verified the exact native context document, one explicit Send, and scoped reads of a nonresident bookmark")
+
+
+def verify_slash_commands(starts, records, checkout, data):
+    assert len(starts) == 2 and all(turn["threadId"] == "history-first" for turn in starts), starts
+    for turn in starts:
+        assert (turn["model"], turn["effort"], turn["serviceTierForTurn"], turn["approvalsReviewer"]) == (
+            "alternative-model", "high", "priority", "auto_review",
+        ), turn
+        assert turn["collaborationMode"] == {"mode": "plan", "settings": {
+            "model": "alternative-model", "reasoning_effort": "high", "developer_instructions": None,
+        }}, turn
+    literal, skill = starts[0]["input"]
+    assert literal["type"] == "text" and literal["text"] == "  /status literal café", literal
+    assert skill["type"] == "skill" and skill["name"] == "Review fixture", skill
+    assert Path(skill["path"]).samefile(checkout / "skill" / "SKILL.md"), skill
+    (prompt,) = starts[1]["input"]
+    assert prompt["type"] == "text" and prompt["text"] == "  Preserve this plan prompt.", prompt
+    plan_updates = [record for record in records if record["direction"] == "request"
+                    and record["method"] == "thread/settings/update"]
+    assert [(update["threadId"], update["collaborationMode"]["mode"]) for update in plan_updates] == [
+        ("history-first", "plan"), ("history-first", "default"),
+        ("history-first", "plan"), ("history-first", "default"),
+    ], plan_updates
+    lost = records.index(plan_updates[2])
+    recovered = records.index(plan_updates[3])
+    reconnected = next(index for index in range(lost + 1, recovered)
+                       if records[index].get("method") == "initialize" and records[index]["direction"] == "request")
+    assert not any(record["direction"] == "response" and record["id"] == plan_updates[2]["id"]
+                   for record in records[lost + 1:reconnected])
+    (compact,) = [record for record in records if record["direction"] == "request"
+                  and record["method"] == "thread/compact/start"]
+    (end,) = [record for record in records if record["direction"] == "event" and record["method"] == "thread/compacted"]
+    acknowledged = next(record for record in records[records.index(compact) + 1:]
+                        if record["direction"] == "response" and record["id"] == compact["id"])
+    assert acknowledged["time"] < end["time"] and compact["threadId"] == end["threadId"] == "history-first"
+    with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
+        ((mode,),) = database.execute("SELECT state FROM composer_plan_modes WHERE thread_id = 'history-first'")
+    assert json.loads(mode) == {"enabled": False, "pending": None}, mode
+    print("Verified two exact prompts, scoped compaction, and explicit recovery of an unacknowledged update")
 
 
 if __name__ == "__main__":

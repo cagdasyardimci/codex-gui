@@ -25,6 +25,7 @@ pub struct ComposerContextSelection {
     pub scope: DraftAttachmentScope,
     pub expected_text: String,
     pub replace_token: Option<ComposerTokenRange>,
+    pub replace_command: Option<bool>,
     pub target: ComposerContextTarget,
 }
 

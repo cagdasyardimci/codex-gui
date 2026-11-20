@@ -50,6 +50,7 @@ mod queue;
 mod quit;
 mod sandbox;
 mod send;
+mod slash_commands;
 mod transcript;
 use account::AccountFlow;
 use interactions::InteractionProjection;
@@ -82,6 +83,10 @@ enum Action {
         codex_gui_core::ipc::DraftAttachmentScope,
         oneshot::Sender<Option<AppServerClient>>,
     ),
+    SlashCommand(
+        codex_gui_core::ipc::ExecuteSlashCommand,
+        oneshot::Sender<codex_gui_core::ipc::SlashCommandOutcome>,
+    ),
 }
 
 enum Input {
@@ -108,6 +113,7 @@ struct Backend {
     engine: WorkspaceEngine,
     effects: mpsc::Receiver<PrepareThread>,
     edits: TurnEditReports,
+    commands: slash_commands::CommandRuntime,
 }
 
 struct Navigation {
@@ -336,6 +342,11 @@ impl Navigation {
                     .as_ref()
                     .map(|backend| backend.connection.client());
                 let _ = reply.send(client);
+                return Ok(None);
+            }
+            Action::SlashCommand(request, reply) => {
+                let outcome = self.execute_slash(request).await?;
+                let _ = reply.send(outcome);
                 return Ok(None);
             }
             Action::SelectFolder(folder) => {
@@ -692,6 +703,7 @@ impl Navigation {
                 engine,
                 effects,
                 edits: TurnEditReports::new(identity),
+                commands: slash_commands::CommandRuntime::default(),
             });
             self.recover_hidden_owners(client);
         }
@@ -723,6 +735,7 @@ impl Navigation {
         if self.selection.is_none() {
             return Ok(());
         }
+        self.load_command_capabilities(&client).await;
         self.refresh_write_access(&client).await;
         self.refresh_recovery_action();
         self.sync_actions();
@@ -858,6 +871,12 @@ impl Navigation {
             }
             return Ok(());
         }
+        let command_changed = if matches!(&event, ServerEvent::Notification { method, .. } if method == "thread/tokenUsage/updated")
+        {
+            false
+        } else {
+            backend.observe_slash_event(&event, &self.store)?
+        };
         let update_controls = match &event {
             ServerEvent::Request { .. } => true,
             ServerEvent::Notification { method, .. } => matches!(
@@ -899,7 +918,7 @@ impl Navigation {
         {
             self.refresh_queue(thread);
         }
-        if sent_message {
+        if sent_message || command_changed {
             if let Some(draft) = self.editor_id() {
                 self.refresh_draft_after_submission(draft);
             }
@@ -921,6 +940,17 @@ impl Navigation {
         else {
             return;
         };
+        if method == "thread/tokenUsage/updated" {
+            if let Some(backend) = self.backend.as_mut() {
+                let event = ServerEvent::Notification { method, params };
+                match backend.observe_slash_event(&event, &self.store) {
+                    Ok(true) => self.sync_actions(),
+                    Ok(false) => {}
+                    Err(error) => eprintln!("{error}"),
+                }
+            }
+            return;
+        }
         if method == "turn/completed" && params["turn"]["status"] == "completed" {
             self.advance_legacy_queue(thread.clone());
         }

@@ -8,7 +8,7 @@ from pathlib import Path
 from . import scenarios
 from .server import Server
 from .state import State
-from .transport import ProtocolError, Transport
+from .transport import ProtocolError, Transport, UnconfirmedMutation
 
 
 def main():
@@ -68,6 +68,8 @@ def main():
                 result = server.handle(request['method'], params)
                 transport.reply(identity, result=result)
                 server.after_reply()
+            except UnconfirmedMutation:
+                break
             except json.JSONDecodeError:
                 transport.reply(None, error={'code': -32700, 'message': 'Malformed JSON'})
             except ProtocolError as error:

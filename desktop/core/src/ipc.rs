@@ -21,6 +21,7 @@ mod navigation;
 mod project_context;
 mod question_reply;
 mod queue;
+mod slash_commands;
 mod stream;
 mod subscription;
 pub use actions::{
@@ -57,6 +58,9 @@ pub use project_context::{
 pub use question_reply::present_question_reply;
 pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
+};
+pub use slash_commands::{
+    ContextUsage, ExecuteSlashCommand, SlashCommandOutcome, SlashCommandView,
 };
 pub use stream::{
     CommandUpdate, StreamChange, TextBatch, TextBatcher, TranscriptCommand, TranscriptItem,
@@ -271,6 +275,11 @@ pub fn workspace_typescript() -> String {
         TranscriptView::decl(),
         TranscriptRole::decl(),
         NavigationView::decl(),
+        crate::slash_commands::Command::decl(),
+        SlashCommandView::decl(),
+        ContextUsage::decl(),
+        ExecuteSlashCommand::decl(),
+        SlashCommandOutcome::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

@@ -12,6 +12,10 @@ class ProtocolError(Exception):
         self.code = code
 
 
+class UnconfirmedMutation(Exception):
+    """The fixture persists the mutation and retires transport before acknowledgement."""
+
+
 class Transport:
     def __init__(self, trace_path=None):
         self.lock = threading.RLock()

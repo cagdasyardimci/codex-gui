@@ -6,6 +6,7 @@ pub mod files;
 pub mod git;
 pub mod identity;
 pub mod ipc;
+pub mod slash_commands;
 pub mod storage;
 pub mod workspace;
 pub mod worktree;

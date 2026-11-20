@@ -9,6 +9,7 @@ use codex_gui_core::{
         ComposerChoice, ComposerChoiceKind, ComposerContextSelection, ComposerContextTarget,
         ComposerSourceLines, ComposerTokenRange, DraftAttachmentScope, IpcError,
     },
+    slash_commands::{Command, ComposerInput, parse},
     storage::project_context::{ProjectContextView, ProjectSkillSelection},
 };
 use serde_json::{Value, json};
@@ -184,10 +185,22 @@ pub async fn add_composer_context(
     request: ComposerContextSelection,
 ) -> Result<(), IpcError> {
     let (navigation, checkout) = capture(&window, &project, &request.scope)?;
+    let command = match (request.replace_command, parse(&request.expected_text)) {
+        (
+            Some(true),
+            ComposerInput::Command {
+                command: command @ (Command::Skills | Command::Mention),
+                arguments,
+            },
+        ) if request.replace_token.is_none() && arguments.trim().is_empty() => Some(command),
+        (Some(true), _) => return Err(IpcError::StaleSelection),
+        _ => None,
+    };
     let text = match request.replace_token {
         Some(range) => {
             remove_token(&request.expected_text, range).ok_or(IpcError::StaleSelection)?
         }
+        None if command.is_some() => String::new(),
         None => request.expected_text.clone(),
     };
     let mut item = match request.target {
@@ -232,6 +245,9 @@ pub async fn add_composer_context(
             .map_err(|_| IpcError::ProjectUnavailable)??
         }
     };
+    if command == Some(Command::Skills) && item["kind"] != "skill" {
+        return Err(IpcError::StaleSelection);
+    }
     item["id"] = json!(Uuid::new_v4());
     capture(&window, &project, &request.scope)?;
     navigation

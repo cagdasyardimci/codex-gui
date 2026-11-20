@@ -3,8 +3,9 @@
   import type { ComposerChoice, ComposerContextTarget, DraftAttachmentScope, ProjectPathMatch } from './generated/workspace';
   import { composerContextCatalog, searchProjectPaths } from './projectIpc';
 
-  let { scope, fromButton, initialQuery, choose, close }: {
+  let { scope, fromButton, initialQuery, skillsOnly = false, choose, close }: {
     scope: DraftAttachmentScope; fromButton: boolean; initialQuery: string;
+    skillsOnly?: boolean;
     choose: (target: ComposerContextTarget) => void; close: () => void;
   } = $props();
   let filter = $state('');
@@ -16,7 +17,8 @@
   let first = $state(1);
   let last = $state(1);
   const query = $derived(fromButton ? filter : initialQuery);
-  const visibleChoices = $derived(catalog.filter((choice) => choice.label.toLowerCase().includes(query.toLowerCase())));
+  const visibleChoices = $derived(catalog.filter((choice) => (!skillsOnly || choice.kind === 'skill') &&
+    choice.label.toLowerCase().includes(query.toLowerCase())));
   const matches = $derived([...files.map((file) => ({ file })), ...visibleChoices.map((choice) => ({ choice }))]);
 
   onMount(() => {
@@ -32,6 +34,7 @@
     let retired = false;
     selected = 0;
     files = [];
+    if (skillsOnly) return;
     const delay = setTimeout(() => {
       void searchProjectPaths({ workspaceId, query: input }).then((results) => {
         if (!retired) files = results;
@@ -58,8 +61,8 @@
   }
 </script>
 
-<div class="composer-context-picker" aria-label="Add context" role="group">
-  {#if fromButton}<input type="search" aria-label="Search context" bind:this={search} bind:value={filter} onkeydown={keyboard} />{/if}
+<div class="composer-context-picker" aria-label={skillsOnly ? 'Choose skill' : 'Add context'} role="group">
+  {#if fromButton}<input type="search" aria-label={skillsOnly ? 'Search skills' : 'Search context'} bind:this={search} bind:value={filter} onkeydown={keyboard} />{/if}
   {#if sourceRange}
     {@const entry = sourceRange}
     <div class="composer-context-range">

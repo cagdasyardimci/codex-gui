@@ -34,6 +34,7 @@ pub enum Verification {
     ComposerContext,
     ComposerSettings,
     ProjectContext,
+    SlashCommands,
     Account,
     WindowsSetup,
     Turn,
@@ -260,6 +261,7 @@ pub fn verify_attachments_result(
             | Verification::ComposerContext
             | Verification::ComposerSettings
             | Verification::ProjectContext
+            | Verification::SlashCommands
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -280,6 +282,10 @@ pub fn verify_attachments_result(
         } else if *verification == Verification::ProjectContext {
             println!(
                 "Verified installed Project Context, defaults, saved prompts, and bookmark ownership"
+            );
+        } else if *verification == Verification::SlashCommands {
+            println!(
+                "Verified installed slash commands, context usage, compaction, and plan recovery"
             );
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");

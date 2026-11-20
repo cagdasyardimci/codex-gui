@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .streaming import Stream
 from .queue_fixture import queue_request, steer_request
-from .transport import ProtocolError
+from .transport import ProtocolError, UnconfirmedMutation
 
 
 class Server:
@@ -121,6 +121,8 @@ class Server:
                 alternative.update(displayName='Alternative model', isDefault=False, defaultReasoningEffort='medium', supportedReasoningEfforts=[
                     {'reasoningEffort': 'medium', 'description': 'Medium'}, {'reasoningEffort': 'high', 'description': 'High'}],
                     serviceTiers=[{'id': 'fixture-turbo', 'name': 'Ultrafast'}])
+                if self.scenario.get('desktopSlash'):
+                    alternative['serviceTiers'].append({'id': 'priority', 'name': 'Fast'})
                 return {'data': [baseline, alternative], 'nextCursor': None}
             if self.scenario.get('desktopHistory'):
                 return {'data': [self.desktop_model('fixture-default', False)], 'nextCursor': None}
@@ -173,6 +175,8 @@ class Server:
             if self.scenario.get('desktopHistory'):
                 if method == 'thread/resume':
                     self.resume_history_fixture(thread)
+                    if self.scenario.get('desktopSlash'):
+                        self.actions.append(lambda: self.slash_usage(thread, 'first-saved-turn', 2560))
                 if p.get('excludeTurns') or p.get('includeTurns') is False:
                     turns = []
             return {'thread': {**self.summary(thread), 'turns': turns}, **self.settings(thread)}
@@ -224,6 +228,10 @@ class Server:
             if self.scenario.get('desktopComposerSettings'):
                 time.sleep(0.55)
             return self.start(p)
+        if method == 'thread/settings/update' and self.scenario.get('desktopSlash'):
+            return self.slash_settings(p)
+        if method == 'thread/compact/start' and self.scenario.get('desktopSlash'):
+            return self.slash_compaction(p)
         if method == 'turn/steer' and self.scenario.get('desktopQueue'):
             return steer_request(self, p)
         if method == 'turn/interrupt':
@@ -238,6 +246,52 @@ class Server:
     def desktop_model(identity, hidden):
         return {'id': identity, 'model': identity, 'displayName': 'Fixture model',
                 'description': 'Local protocol fixture', 'hidden': hidden, 'isDefault': not hidden}
+
+    def slash_usage(self, thread, turn, tokens):
+        self.transport.event('thread/tokenUsage/updated', {
+            'threadId': thread['id'], 'turnId': turn,
+            'tokenUsage': {'last': {'inputTokens': 1024, 'totalTokens': tokens},
+                           'total': {'totalTokens': 133_700}, 'modelContextWindow': 10_240},
+        })
+
+    def slash_settings(self, params):
+        thread = self.thread(params['threadId'])
+        mode = params['collaborationMode']
+        if mode.get('mode') not in ('plan', 'default') or not mode.get('settings', {}).get('model'):
+            raise ProtocolError(-32602, 'Invalid captured plan settings')
+        counter = self.state.data.get('slashSettingsCount', 0) + 1
+        self.state.data['slashSettingsCount'] = counter
+        self.state.data['slashMode'] = mode
+        if counter == 3:
+            self.state.save()
+            raise UnconfirmedMutation()
+        self.transport.event('thread/settings/updated', {
+            'threadId': thread['id'], 'threadSettings': {'cwd': thread['cwd'], 'collaborationMode': mode},
+        })
+        return {}
+
+    def slash_compaction(self, params):
+        thread = self.thread(params['threadId'])
+        if thread['id'] in self.active:
+            raise ProtocolError(-32002, 'Cannot compact an active conversation')
+        turn_id = self.state.identity('compact')
+        turn = {'id': turn_id, 'status': 'inProgress', 'items': [], 'startedAt': int(time.time())}
+        thread['turns'].append(turn)
+        self.transport.event('turn/started', {'threadId': thread['id'], 'turn': turn})
+        def finish():
+            with self.lock:
+                turn['status'] = 'completed'
+                turn['completedAt'] = int(time.time())
+                self.state.save()
+                self.slash_usage(thread, turn_id, 1024)
+                self.transport.event('thread/compacted', {'threadId': thread['id'], 'turnId': turn_id})
+                self.transport.event('turn/completed', {'threadId': thread['id'], 'turn': turn})
+        def schedule():
+            timer = threading.Timer(0.65, finish)
+            timer.daemon = True
+            timer.start()
+        self.actions.append(schedule)
+        return {}
 
     def start_fixture_login(self, params):
         if params != {'type': 'chatgpt'} or self.login_id:

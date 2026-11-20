@@ -9,7 +9,7 @@
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
-  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
+  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
   let mode = $state<Mode | null>(null);
 
   async function workspaceScopeVerified(): Promise<boolean> {
@@ -86,6 +86,8 @@
   <WorkspaceShell verify="composerSettings" />
 {:else if mode === 'projectContext'}
   <WorkspaceShell verify="projectContext" />
+{:else if mode === 'slashCommands'}
+  <WorkspaceShell verify="slashCommands" />
 {:else if mode === 'account'}
   <WorkspaceShell verify="account" />
 {:else if mode === 'windowsSetup'}

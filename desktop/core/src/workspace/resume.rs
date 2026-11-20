@@ -266,7 +266,7 @@ impl WorkspaceEngine {
         }
         if let Some(thread) = thread
             && matches!(&event, ServerEvent::Notification { method, params }
-                if matches!(method.as_str(), "turn/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta")
+                if matches!(method.as_str(), "turn/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "thread/tokenUsage/updated")
                    || (matches!(method.as_str(), "item/started" | "item/completed")
                        && matches!(params["item"]["type"].as_str(), Some("agentMessage" | "userMessage" | "commandExecution"))))
         {

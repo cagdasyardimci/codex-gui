@@ -57,7 +57,8 @@ export async function verifyComposerContext(visible: () => WorkspaceSnapshot | n
     if (!skill || choices.some((choice) => choice.label === 'Disabled fixture')) throw new Error('The skill catalog exposed an invalid choice');
     await click('Second fixture chat');
     await waitFor('The other chat inherited composer context', () => visible()?.navigation.selectedChat === 'history-second' && !labels());
-    await rejectsStale(addComposerContext({ scope, expectedText: REPLACED, replaceToken: null, target: { catalog: skill.id } }));
+    await rejectsStale(addComposerContext({ scope, expectedText: REPLACED, replaceToken: null, replaceCommand: null,
+      target: { catalog: skill.id } }));
     await click('First fixture chat');
     await waitFor('Reopening the chat did not restore its selected context', () => labels() === LABELS.join('\n') && editor().value === REPLACED);
     await click('Send');

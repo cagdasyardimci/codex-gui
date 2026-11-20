@@ -113,6 +113,15 @@ body {
   padding: 0.75rem clamp(1rem, 5vw, 4rem);
 }
 
+.slash-completion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-block-size: 7rem;
+  overflow: auto;
+  padding-block: 0.25rem;
+}
+
 .transcript-pane {
   display: flex;
   flex: 1;

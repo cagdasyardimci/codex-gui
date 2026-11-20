@@ -7,7 +7,8 @@ use crate::git::turn_edits::LastTurnView;
 use super::{
     ComposerSelectionView, ComposerSettingsRequest, ConversationActions, DraftAttachmentView,
     ModelEffort, ModelServiceTier, ProjectContextRequest, QueueRequest, QueueView,
-    RecoverSendRequest, RespondRequest, SendRequest, StopRequest, WorkspaceId, WorkspaceRequest,
+    RecoverSendRequest, RespondRequest, SendRequest, SlashCommandView, StopRequest, WorkspaceId,
+    WorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -18,6 +19,7 @@ pub struct NavigationView {
     pub draft: Option<EditorDraft>,
     pub composer_settings: Option<ComposerSelectionView>,
     pub project_has_input: bool,
+    pub slash_commands: SlashCommandView,
     pub retryable: bool,
     pub account: AccountView,
     pub write_access: WriteAccess,

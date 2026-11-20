@@ -1,6 +1,6 @@
 # Composer slash commands
 
-Type `/` at the start of the draft to discover available commands and enabled skills. The [command registry](../Sources/CodexGUI/Application/Reducers/Composer/SlashCommandRegistry.swift) owns command names, argument forms and descriptions; the [parser](../Sources/CodexGUI/Application/Reducers/Composer/SlashCommandParser.swift) owns recognition. Keep those definitions authoritative instead of copying a command table here.
+Type `/` at the start of the draft to discover available commands. The [Tauri command registry](../desktop/core/src/slash_commands.rs) owns recognition and argument forms. The [command router](../desktop/src-tauri/src/navigation/slash_commands.rs) enables actions against the selected workflow, backend capabilities and captured draft. The [Swift registry](../Sources/CodexGUI/Application/Reducers/Composer/SlashCommandRegistry.swift) defines the Mac reference.
 
 ## Syntax and intent
 

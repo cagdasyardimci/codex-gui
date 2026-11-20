@@ -32,6 +32,7 @@ fn main() {
         "load_transcript_attachment",
         "open_transcript_link",
         "navigate_workspace",
+        "execute_slash_command",
         "checkout_changes",
         "checkout_patch",
         "request_quit_fixture",

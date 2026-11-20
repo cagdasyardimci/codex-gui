@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, SendRequest, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -9,10 +9,11 @@
   import ComposerContextPicker from './ComposerContextPicker.svelte';
   import ComposerSettingsControls from './ComposerSettingsControls.svelte';
   import ProjectContextPanel from './ProjectContextPanel.svelte';
+  import SlashCommandPanel from './SlashCommandPanel.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { addComposerContext, copyTranscriptRow, navigateWorkspace, observeWorkspace, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -25,10 +26,11 @@
   import { verifyComposerContext } from './composerContextProbe';
   import { verifyComposerSettings } from './composerSettingsProbe';
   import { verifyProjectContext } from './projectContextProbe';
+  import { verifySlashCommands } from './slashCommandProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -55,7 +57,11 @@
   let contextPicker = $state<{ keyboard(event: KeyboardEvent): boolean }>();
   let contextMenu = $state.raw<{
     scope: DraftAttachmentScope; source: string; query: string; selection: [number, number]; token: ComposerTokenRange | null;
+    command?: 'skills' | 'mention';
   }>();
+  let commandPanel = $state.raw<{ command: SlashCommand; draft: SendRequest; fullAccess: boolean; inline: boolean }>();
+  let slashToken = $state.raw<{ start: number; end: number; prefix: string }>();
+  let slashIndex = $state(0);
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const workspaceId = $derived(workspace?.workspaceId);
@@ -65,6 +71,9 @@
   const attachmentScope = $derived(workspaceId && displayedDraft
     ? { workspaceId, chatId: selectedChat ?? null, draftId: displayedDraft } : undefined);
   const draftAttachments = $derived(navigation?.draft?.attachments ?? []);
+  const slashMatches = $derived(slashToken ? (navigation?.slashCommands.available ?? [])
+    .filter((command) => command.startsWith(slashToken!.prefix)) : []);
+  const mayExecuteSlash = $derived(/^[ \t]*\/[^/\s]/u.test(text) && !!navigation?.slashCommands.available.length);
   const rowRequests = new WeakMap<TranscriptItem, TranscriptRowRequest>();
   const stopTarget = $derived(navigation?.actions.stop);
   const quit = $derived(navigation?.quit);
@@ -193,6 +202,8 @@
         contextMenu.scope.workspaceId !== current.workspace?.workspaceId || current.navigation.queue?.editing || current.navigation.quit)) {
       contextMenu = undefined;
     }
+    if (commandPanel && (commandPanel.draft.draftId !== current.navigation.draft?.id ||
+        commandPanel.draft.workspaceId !== current.workspace?.workspaceId || current.navigation.quit)) commandPanel = undefined;
     viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) {
@@ -202,6 +213,7 @@
     snapshot = current;
     revealTurnJump(current);
     if (draftId !== current.navigation.draft?.id) {
+      slashToken = undefined;
       draftId = current.navigation.draft?.id;
       text = current.navigation.draft?.text ?? '';
       composing = false;
@@ -312,7 +324,7 @@
   }
 
   async function sendDraft() {
-    if (!workspace || !draftId || !navigation?.actions.send ||
+    if (!workspace || !draftId || !navigation || (!navigation.actions.send && !mayExecuteSlash) ||
         (!text.trim() && !draftAttachments.length && !navigation.projectHasInput) || composing || actionPending) return;
     const send = {
       workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text,
@@ -322,10 +334,96 @@
     };
     admittingDraft = true;
     try {
-      await act(() => navigateWorkspace({ send }));
+      await act(async () => {
+        slashToken = undefined;
+        if (!/^[ \t]*\//u.test(send.text) ||
+            await applySlash(send, null, false) === 'send') await navigateWorkspace({ send });
+      });
     } finally {
       admittingDraft = false;
     }
+  }
+
+  async function applySlash(draft: SendRequest, choice: string | null, confirmed: boolean) {
+    const outcome = await executeSlashCommand({ draft, choice, confirmed });
+    if (outcome === 'send' || outcome === 'applied') {
+      commandPanel = undefined;
+      return outcome;
+    }
+    const command = outcome.present;
+    if (command === 'diff') {
+      showingChanges = true;
+    } else if (command === 'copy') {
+      const latest = snapshot?.transcript.items.filter((row) => row.role === 'assistant' && row.completed && row.text).at(-1);
+      if (latest) {
+        await copyResponse(latest);
+        await executeSlashCommand({ draft, choice: null, confirmed: true });
+      }
+    } else if (command === 'skills' || command === 'mention') {
+      if (attachmentScope?.draftId === draft.draftId && attachmentScope.workspaceId === draft.workspaceId) {
+        const caret = editor?.selectionStart ?? draft.text.length;
+        contextMenu = { scope: attachmentScope, source: draft.text, query: '', selection: [caret, caret],
+          token: null, command };
+      }
+    } else {
+      const inline = command === 'permissions' && /\sfull\s*$/u.test(draft.text);
+      commandPanel = { command, draft, fullAccess: inline || choice === 'full', inline };
+    }
+    return 'applied';
+  }
+
+  function finishSlash(choice: string | null, confirmed: boolean) {
+    const panel = commandPanel;
+    if (!panel) return;
+    if (panel.command === 'permissions' && choice === 'full' && !confirmed) {
+      commandPanel = { ...panel, fullAccess: true };
+      return;
+    }
+    if (panel.command === 'permissions' && panel.fullAccess && !panel.inline && confirmed) choice = 'full';
+    void act(() => applySlash(panel.draft, choice, confirmed), true);
+  }
+
+  function closeSlashPanel() {
+    commandPanel = undefined;
+    void tick().then(() => editor?.focus());
+  }
+
+  function matchSlashToken(control: HTMLTextAreaElement) {
+    slashToken = undefined;
+    if (!attachmentScope || composing || quit || queue?.editing || control.selectionStart !== control.selectionEnd) return;
+    const match = /^[ \t]*\/([A-Za-z][A-Za-z0-9-]*|)(?=\s|$)/u.exec(control.value);
+    const caret = control.selectionStart;
+    if (!match) return;
+    const end = match[0].length;
+    const start = end - match[1]!.length - 1;
+    if (caret <= start || caret > end) return;
+    slashToken = { start, end, prefix: control.value.slice(start + 1, caret).toLowerCase() };
+    slashIndex = 0;
+  }
+
+  function completeSlash(command: SlashCommand) {
+    if (!slashToken || !editor) return;
+    const { start, end } = slashToken;
+    const spacer = end === text.length ? ' ' : '';
+    const replacement = `/${command}${spacer}`;
+    acceptText(text.slice(0, start) + replacement + text.slice(end), false);
+    slashToken = undefined;
+    void tick().then(() => {
+      editor?.focus();
+      editor?.setSelectionRange(start + replacement.length, start + replacement.length);
+    });
+  }
+
+  function composerKey(event: KeyboardEvent) {
+    if (event.isComposing || composing) return;
+    if (contextMenu?.token && contextPicker?.keyboard(event)) return;
+    if (!slashToken) return;
+    if (event.key === 'Escape') slashToken = undefined;
+    else if (event.key === 'ArrowDown' && slashMatches.length) slashIndex = (slashIndex + 1) % slashMatches.length;
+    else if (event.key === 'ArrowUp' && slashMatches.length) slashIndex = (slashIndex + slashMatches.length - 1) % slashMatches.length;
+    else if (event.key === 'Tab' && slashMatches[slashIndex]) completeSlash(slashMatches[slashIndex]!);
+    else return;
+    event.preventDefault();
   }
 
   function pasteAttachment(event: ClipboardEvent) {
@@ -378,15 +476,18 @@
     actionPending = true;
     try {
       await flushEdits();
-      await addComposerContext({ scope: captured.scope, expectedText: captured.source, replaceToken: captured.token, target });
+      await addComposerContext({ scope: captured.scope, expectedText: captured.source, replaceToken: captured.token,
+        replaceCommand: captured.command ? true : null, target });
       if (captured.scope.draftId !== displayedDraft) return;
       const token = captured.token;
       contextMenu = undefined;
       if (token && text === captured.source) text = captured.source.slice(0, token.start) + captured.source.slice(token.end);
+      if (captured.command && text === captured.source) text = '';
       await tick();
       if (!editor || captured.scope.draftId !== displayedDraft) return;
       editor.focus();
-      editor.setSelectionRange(token?.start ?? captured.selection[0], token?.start ?? captured.selection[1]);
+      if (captured.command) editor.setSelectionRange(0, 0);
+      else editor.setSelectionRange(token?.start ?? captured.selection[0], token?.start ?? captured.selection[1]);
     } catch (error) {
       if (error === 'staleSelection' || error === 'retiredWorkspace') contextMenu = undefined;
     } finally {
@@ -485,6 +586,7 @@
     else if (verify === 'composerContext') void verifyComposerContext(() => snapshot);
     else if (verify === 'composerSettings') void verifyComposerSettings(() => snapshot);
     else if (verify === 'projectContext') void verifyProjectContext(() => snapshot);
+    else if (verify === 'slashCommands') void verifySlashCommands(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -578,23 +680,37 @@
         {/if}
         <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor}
           onpaste={pasteAttachment}
-          onkeydown={(event) => { if (contextMenu?.token) contextPicker?.keyboard(event); }}
+          onkeydown={composerKey}
+          onclick={(event) => matchSlashToken(event.currentTarget)}
           readonly={admittingDraft || confirmingQuit || quit?.draining}
           value={text} oncompositionstart={() => { composing = true; }}
           oncompositionend={(event) => {
             composing = false;
             acceptText(event.currentTarget.value, false);
             matchComposerToken(event.currentTarget);
+            matchSlashToken(event.currentTarget);
           }}
           oninput={(event) => {
             const marked = event instanceof InputEvent && event.isComposing;
             acceptText(event.currentTarget.value, marked);
-            if (!marked) matchComposerToken(event.currentTarget);
+            if (!marked) {
+              matchComposerToken(event.currentTarget);
+              matchSlashToken(event.currentTarget);
+            }
           }}></textarea>
+        {#if slashMatches.length}
+          <div class="slash-completion" role="group" aria-label="Composer Commands">
+            {#each slashMatches as command, index (command)}
+              <button type="button" aria-current={index === slashIndex ? 'true' : undefined}
+                onclick={() => completeSlash(command)}>/{command}</button>
+            {/each}
+          </div>
+        {/if}
         {#if contextMenu}
           {#key `${contextMenu.scope.draftId}/${contextMenu.token ? 'token' : 'button'}`}
             <ComposerContextPicker bind:this={contextPicker} scope={contextMenu.scope} fromButton={!contextMenu.token}
-              initialQuery={contextMenu.query} choose={(target) => void chooseComposerContext(target)} close={closeComposerContext} />
+              skillsOnly={contextMenu.command === 'skills'} initialQuery={contextMenu.query}
+              choose={(target) => void chooseComposerContext(target)} close={closeComposerContext} />
           {/key}
         {/if}
         {#if attachmentScope && navigation.composerSettings}
@@ -634,7 +750,7 @@
               <button type="button" disabled={actionPending || !!navigation.quit}
                 onclick={() => { void pickComposerAttachments(scope).catch(() => {}); }}>Attach Files</button>
             {/if}
-            <button type="button" disabled={actionPending || !navigation.actions.send ||
+            <button type="button" disabled={actionPending || (!navigation.actions.send && !mayExecuteSlash) ||
               (!text.trim() && !draftAttachments.length && !navigation.projectHasInput)} onclick={() => void sendDraft()}>
               {queue?.activeTurn ? (queue.enabled ? 'Queue' : 'Steer') : 'Send'}
             </button>
@@ -652,6 +768,13 @@
       {/key}
     {/if}
   </div>
+  {#if commandPanel && workspace && navigation}
+    <SlashCommandPanel command={commandPanel.command} fullAccess={commandPanel.fullAccess}
+      chats={navigation.chats} models={navigation.account.models} usage={navigation.slashCommands.context}
+      workspace={workspace.projectPath} chat={navigation.chats.find((chat) => chat.id === selectedChat)?.title}
+      effective={navigation.account.models.find((model) => model.id === navigation.composerSettings?.effectiveModelId)}
+      choose={finishSlash} close={closeSlashPanel} />
+  {/if}
   {#if quit?.confirm && !quit.draining}
     <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}
       cancel={() => { if (quit) void cancelQuit(quit.ticket).catch(console.error); }}

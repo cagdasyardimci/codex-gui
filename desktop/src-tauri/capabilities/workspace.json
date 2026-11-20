@@ -25,6 +25,7 @@
     "allow-load-transcript-attachment",
     "allow-open-transcript-link",
     "allow-navigate-workspace",
+    "allow-execute-slash-command",
     "allow-checkout-changes",
     "allow-checkout-patch",
     "allow-subscribe-workspace",

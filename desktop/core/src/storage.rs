@@ -34,6 +34,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::exit_recovery::migrate_checkout_paths,
     attachments::composer_settings::migrate,
     project_context::migrate_revisions,
+    attachments::composer_plan::migrate,
 ];
 
 #[derive(Debug, Error)]
