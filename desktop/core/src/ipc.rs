@@ -16,6 +16,7 @@ mod archive;
 mod chat_deletion;
 mod composer_settings;
 mod context;
+mod feedback;
 mod git;
 mod inspector;
 mod markdown;
@@ -48,6 +49,7 @@ pub use context::{
     ComposerChoice, ComposerChoiceKind, ComposerContextSelection, ComposerContextTarget,
     ComposerFileContext, ComposerSourceLines, ComposerTokenRange,
 };
+pub use feedback::{FeedbackRating, FeedbackRequest, FeedbackView};
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use inspector::{
     ChildHistoryAction, ChildHistoryPage, ChildHistoryRequest, ChildHistoryTarget, InspectorAgent,
@@ -340,6 +342,9 @@ pub fn workspace_typescript() -> String {
         ChildHistoryTarget::decl(),
         ChildHistoryAction::decl(),
         ChildHistoryPage::decl(),
+        FeedbackRating::decl(),
+        FeedbackRequest::decl(),
+        FeedbackView::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

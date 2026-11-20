@@ -28,6 +28,7 @@ pub mod composer;
 pub mod composer_plan;
 pub mod composer_settings;
 pub(super) mod exit_recovery;
+mod feedback;
 pub mod fork_revisions;
 pub(super) mod legacy_queue;
 pub mod navigation;
@@ -37,6 +38,7 @@ pub(super) mod queue_steering;
 pub mod sidebar;
 mod submissions;
 pub use exit_recovery::ExitOwner;
+pub(super) use feedback::migrate as migrate_feedback;
 pub use legacy_queue::{LegacyQueueEntry, LegacyQueueStatus};
 pub use queue_steering::{QueueSteerPhase, QueueSteeringReceipt};
 pub(crate) use submissions::{

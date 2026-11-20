@@ -43,6 +43,7 @@ mod chat_deletion;
 mod composer_attachments;
 mod composer_settings;
 mod conversation_fork;
+mod feedback;
 pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
 mod inspector;
 mod interactions;
@@ -157,6 +158,7 @@ enum Input {
     HistoryCompleted(Option<Box<HistoryCompletion>>),
     PromptForkCompleted(Option<Box<prompt_revision::ForkCompletion>>),
     TitleCompleted(Option<automatic_titles::TitleOutcome>),
+    FeedbackCompleted(Option<Box<feedback::FeedbackOutcome>>),
     OwnerChanged,
     Flush,
 }
@@ -207,6 +209,7 @@ struct Navigation {
     deleted_chats: HashSet<ThreadId>,
     message_search: Option<message_search::SearchSession>,
     titles: automatic_titles::AutomaticTitles,
+    feedback: feedback::Feedback,
     worktree_records: PathBuf,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
@@ -268,6 +271,7 @@ impl NavigationHandle {
                 verification,
                 Verification::None | Verification::AutomaticTitles
             )),
+            feedback: feedback::Feedback::default(),
             worktree_records,
             view: NavigationView::default(),
             editable: HashMap::new(),
@@ -335,6 +339,7 @@ impl Navigation {
                     completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
+                    completion = self.feedback.completed.recv() => Input::FeedbackCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
@@ -347,6 +352,7 @@ impl Navigation {
                     completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
+                    completion = self.feedback.completed.recv() => Input::FeedbackCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                 }
             };
@@ -380,6 +386,10 @@ impl Navigation {
                     }
                 }
                 Input::TitleCompleted(None) => unreachable!("navigation owns the title sender"),
+                Input::FeedbackCompleted(Some(outcome)) => self.complete_feedback(*outcome),
+                Input::FeedbackCompleted(None) => {
+                    unreachable!("navigation owns the feedback sender")
+                }
                 Input::OwnerChanged => {
                     if let Err(error) = self.reload_sidebar() {
                         eprintln!("{error}");
@@ -557,6 +567,7 @@ impl Navigation {
                 self.open_message_search_hit(request).await?
             }
             NavigationIntent::CloseChildHistory(scope) => self.close_child_history(scope)?,
+            NavigationIntent::SubmitFeedback(request) => self.submit_feedback(request).await?,
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::SetResponseBookmark(request) => {
@@ -792,6 +803,7 @@ impl Navigation {
         if let Some(selected) = &mut self.selection {
             selected.thread = thread;
         }
+        self.reload_feedback()?;
         self.stream = TextBatcher::default();
         self.restored_active_items.clear();
         self.view.actions = Default::default();
@@ -847,6 +859,7 @@ impl Navigation {
     async fn disconnect(&mut self) {
         self.message_search = None;
         self.inspector.close_child();
+        self.view.feedback.available = false;
         self.retire_history_pages();
         self.sandbox_setup = None;
         self.queues = Queues::default();
@@ -941,6 +954,7 @@ impl Navigation {
             return Ok(());
         }
         self.load_command_capabilities(&client).await;
+        self.reload_feedback()?;
         self.refresh_write_access(&client).await;
         self.refresh_recovery_action();
         self.sync_actions();

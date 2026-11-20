@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { DraftAttachmentScope, TranscriptItem, TranscriptRowRequest } from './generated/workspace';
+  import type { DraftAttachmentScope, FeedbackRating, TranscriptItem, TranscriptRowRequest } from './generated/workspace';
   import MarkdownView from './MarkdownView.svelte';
   import ImagePreview from './ImagePreview.svelte';
   import { loadTranscriptAttachment, reuseComposerAttachment } from './projectIpc';
 
-  let { item, request, attachmentScope, copy, onCopyFocus, edit, branch, bookmark, bookmarked }: {
+  let { item, request, attachmentScope, copy, onCopyFocus, edit, branch, bookmark, bookmarked, feedback }: {
     item: TranscriptItem;
     request?: TranscriptRowRequest;
     attachmentScope?: DraftAttachmentScope;
@@ -14,6 +14,7 @@
     branch?: (item: TranscriptItem) => void;
     bookmark?: (item: TranscriptItem, bookmarked: boolean) => void;
     bookmarked?: boolean;
+    feedback?: (rating: FeedbackRating) => void;
   } = $props();
 
   async function copyResponse() {
@@ -61,6 +62,12 @@
     {#if branch}
       <button class="transcript-copy" type="button" aria-label="Branch in new chat"
         onpointerdown={(event) => event.preventDefault()} onclick={() => branch?.(item)}>Branch</button>
+    {/if}
+    {#if feedback}
+      <button class="transcript-copy" type="button" onpointerdown={(event) => event.preventDefault()}
+        onclick={() => feedback?.('good_result')}>Good Result</button>
+      <button class="transcript-copy" type="button" onpointerdown={(event) => event.preventDefault()}
+        onclick={() => feedback?.('bad_result')}>Bad Result</button>
     {/if}
     </div>
     </div>

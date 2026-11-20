@@ -44,6 +44,7 @@ fn main() {
         Some("--verify-automatic-titles") => fixture::Verification::AutomaticTitles,
         Some("--verify-pinned-summary") => fixture::Verification::PinnedSummary,
         Some("--verify-inspector") => fixture::Verification::Inspector,
+        Some("--verify-feedback") => fixture::Verification::Feedback,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -82,6 +83,7 @@ fn main() {
             | fixture::Verification::AutomaticTitles
             | fixture::Verification::PinnedSummary
             | fixture::Verification::Inspector
+            | fixture::Verification::Feedback
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn

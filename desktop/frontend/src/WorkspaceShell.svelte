@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
+  import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, FeedbackRating, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -47,10 +47,11 @@
   import { verifyAutomaticTitles } from './automaticTitlesProbe';
   import { verifyPinnedSummary } from './pinnedSummaryProbe';
   import { verifyInspector } from './inspectorProbe';
+  import { verifyFeedback } from './feedbackProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -126,6 +127,19 @@
     ? { workspaceId, chatId: selectedChat ?? null, draftId: displayedDraft } : undefined);
   const draftAttachments = $derived(navigation?.draft?.attachments ?? []);
   const finishedTurns = $derived(new Set(navigation?.turnRail?.turns.filter((turn) => turn.finished).map((turn) => turn.id)));
+  const feedbackRows = $derived.by(() => {
+    const rows = new Set<string>();
+    const feedback = navigation?.feedback;
+    if (!feedback?.available || quit) return rows;
+    const eligible = new Set(finishedTurns);
+    for (const turn of feedback.blockedTurns) eligible.delete(turn);
+    const items = snapshot?.transcript.items ?? [];
+    for (let at = items.length - 1; at >= 0; at--) {
+      const row = items[at]!;
+      if (row.role === 'assistant' && row.completed && row.text.trim() && eligible.delete(row.turnId)) rows.add(row.itemId);
+    }
+    return rows;
+  });
   const responseBookmarks = $derived(new Set(navigation?.bookmarkedResponses));
   const slashMatches = $derived(slashToken ? (navigation?.slashCommands.available ?? [])
     .filter((command) => command.startsWith(slashToken!.prefix)) : []);
@@ -208,6 +222,11 @@
   function copyResponse(item: TranscriptItem) {
     const request = rowRequest(item);
     if (request) return copyTranscriptRow(request);
+  }
+
+  function sendFeedback(row: TranscriptRowRequest, rating: FeedbackRating) {
+    if (row.workspaceId !== workspaceId || row.chatId !== selectedChat || row.generation !== transcriptGeneration) return;
+    void act(() => navigateWorkspace({ submitFeedback: { row, rating } }));
   }
 
   function branchResponse(item: TranscriptItem) {
@@ -1044,6 +1063,7 @@
     else if (verify === 'automaticTitles') void verifyAutomaticTitles(() => snapshot);
     else if (verify === 'pinnedSummary') void verifyPinnedSummary(() => snapshot);
     else if (verify === 'inspector') void verifyInspector(() => snapshot);
+    else if (verify === 'feedback') void verifyFeedback(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -1137,11 +1157,13 @@
           {#each viewport.entries as entry (entry.key)}
             {#if 'item' in entry}
               {@const response = entry.item.role === 'assistant' && entry.item.completed && !!entry.item.text.trim() && finishedTurns.has(entry.item.turnId)}
+              {@const request = rowRequest(entry.item)}
               <div class="transcript-row-slot" data-transcript-slot={entry.item.itemId} use:measureTranscriptRow>
-                <TranscriptRow item={entry.item} request={rowRequest(entry.item)} attachmentScope={queue?.editing ? undefined : attachmentScope} copy={copyResponse}
+                <TranscriptRow item={entry.item} {request} attachmentScope={queue?.editing ? undefined : attachmentScope} copy={copyResponse}
                   onCopyFocus={focusResponseAction} edit={editablePrompts.has(entry.item.itemId) ? editSentPrompt : undefined}
                   branch={response && navigation?.canFork ? branchResponse : undefined}
                   bookmark={response ? setResponseBookmark : undefined}
+                  feedback={request && feedbackRows.has(entry.item.itemId) ? (rating) => sendFeedback(request, rating) : undefined}
                   bookmarked={responseBookmarks.has(entry.item.itemId)} />
               </div>
             {:else}

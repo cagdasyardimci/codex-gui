@@ -139,6 +139,16 @@ class Server:
                     'layers': [{'name': {'type': 'user'}, 'version': 'component-fixture-v1'}]}
         if method == 'configRequirements/read' and 'config' in self.state.data:
             return {'requirements': {}}
+        if method == 'feedback/upload' and self.scenario.get('desktopFeedback'):
+            self.thread(p['threadId'])
+            if p['threadId'] == 'history-first':
+                time.sleep(0.6)
+                return {'threadId': 'fixture-feedback-receipt'}
+            if p['threadId'] == 'history-second':
+                self.state.data['config']['feedback']['enabled'] = False
+                self.state.save()
+                raise UnconfirmedMutation
+            raise ProtocolError(-32602, 'Unexpected feedback target')
         if method == 'experimentalFeature/list' and 'config' in self.state.data:
             return {'data': [{'name': name, 'enabled': enabled}
                              for name, enabled in self.state.data['config'].get('features', {}).items()],
