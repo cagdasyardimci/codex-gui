@@ -5,6 +5,7 @@ use crate::git::{CheckoutGit, GitError, decode_path, nul_fields, parse_oid, term
 use super::*;
 
 mod recovery;
+mod removal;
 pub use recovery::{RecoveryKind, WorktreeRecovery};
 
 const GIT_RESPONSE_BYTES: usize = 512 * 1024;
@@ -20,6 +21,8 @@ pub enum WorktreeError {
     #[error(transparent)]
     Git(#[from] GitError),
     #[error(transparent)]
+    Runtime(#[from] crate::workspace::OwnerError),
+    #[error(transparent)]
     Io(#[from] io::Error),
     #[error("the managed checkout root is inside a Git checkout or repository")]
     UnsafeRoot,
@@ -31,6 +34,8 @@ pub enum WorktreeError {
     Unknown,
     #[error("the workspace does not have an active checkout")]
     Inactive,
+    #[error("the recorded checkout contains changes or ignored files")]
+    Dirty,
 }
 
 pub struct WorktreeManager {
@@ -237,16 +242,21 @@ impl WorktreeManager {
         if &repository(&checkout).await? != source_repository {
             return Err(WorktreeError::Ownership);
         }
-        let (status, branch) = checkout
-            .run(["symbolic-ref", "--quiet", "HEAD"], GIT_RESPONSE_BYTES)
-            .await?;
-        let expected = format!("refs/heads/{}", record.branch);
-        if !status.success() || terminated_line(&branch)? != expected.as_bytes() {
-            return Err(WorktreeError::Ownership);
-        }
+        verify_branch(&checkout, &record.branch).await?;
         self.checkouts.revalidate()?;
         Ok(checkout)
     }
+}
+
+async fn verify_branch(checkout: &CheckoutGit, branch: &str) -> Result<(), WorktreeError> {
+    let (status, reported) = checkout
+        .run(["symbolic-ref", "--quiet", "HEAD"], GIT_RESPONSE_BYTES)
+        .await?;
+    let expected = format!("refs/heads/{branch}");
+    if !status.success() || terminated_line(&reported)? != expected.as_bytes() {
+        return Err(WorktreeError::Ownership);
+    }
+    Ok(())
 }
 
 async fn repository(git: &CheckoutGit) -> Result<CheckoutIdentity, WorktreeError> {
@@ -289,7 +299,15 @@ async fn registered_paths(git: &CheckoutGit) -> Result<Vec<PathBuf>, WorktreeErr
             }
             match path.canonicalize() {
                 Ok(canonical) => paths.push(canonical),
-                Err(error) if error.kind() == io::ErrorKind::NotFound => paths.push(path),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    // A removed checkout can remain registered. Normalize its name using
+                    // the surviving parent, including Windows' canonical volume prefix.
+                    let parent = path.parent().and_then(|parent| parent.canonicalize().ok());
+                    let normalized = parent
+                        .zip(path.file_name())
+                        .map(|(parent, name)| parent.join(name));
+                    paths.push(normalized.unwrap_or(path));
+                }
                 Err(error) => return Err(error.into()),
             }
         }

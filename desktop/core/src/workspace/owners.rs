@@ -135,10 +135,7 @@ impl RuntimeOwners {
     ) -> Result<CleanupReservation, OwnerError> {
         checkout.revalidate()?;
         let mut scopes = self.lock();
-        if scopes.get(checkout).is_some_and(Scope::busy)
-            || self.store.has_exit_evidence(checkout, None)?
-            || !self.store.pending_submissions(checkout)?.is_empty()
-        {
+        if scopes.get(checkout).is_some_and(Scope::busy) || self.has_durable_work(checkout)? {
             return Err(OwnerError::Busy);
         }
         scopes.entry(checkout.clone()).or_default().cleanup = true;
@@ -208,6 +205,11 @@ impl RuntimeOwners {
     fn lock(&self) -> MutexGuard<'_, HashMap<CheckoutIdentity, Scope>> {
         self.scopes.lock().expect("runtime ownership lock poisoned")
     }
+
+    fn has_durable_work(&self, checkout: &CheckoutIdentity) -> Result<bool, OwnerError> {
+        Ok(self.store.has_exit_evidence(checkout, None)?
+            || !self.store.pending_submissions(checkout)?.is_empty())
+    }
 }
 
 impl Scope {
@@ -219,8 +221,11 @@ impl Scope {
     }
 
     fn busy(&self) -> bool {
-        self.cleanup
-            || self.uses > 0
+        self.cleanup || self.has_work()
+    }
+
+    fn has_work(&self) -> bool {
+        self.uses > 0
             || self.recovering.is_some()
             || !self.retired.is_empty()
             || self.runtime.as_ref().is_some_and(|runtime| {
@@ -238,6 +243,19 @@ impl Scope {
 impl CleanupReservation {
     pub fn checkout(&self) -> &CheckoutIdentity {
         &self.checkout
+    }
+
+    pub(crate) fn revalidate(&self) -> Result<(), OwnerError> {
+        self.checkout.revalidate()?;
+        let scopes = self.owners.lock();
+        let scope = scopes
+            .get(&self.checkout)
+            .filter(|scope| scope.cleanup)
+            .ok_or(OwnerError::Retired)?;
+        if scope.has_work() || self.owners.has_durable_work(&self.checkout)? {
+            return Err(OwnerError::Busy);
+        }
+        Ok(())
     }
 }
 

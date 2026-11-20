@@ -20,7 +20,7 @@ fn git(path: &Path, args: &[&str]) -> Vec<u8> {
 }
 
 struct Fixture {
-    _root: tempfile::TempDir,
+    root: tempfile::TempDir,
     source: PathBuf,
     records: PathBuf,
     checkouts: CheckoutIdentity,
@@ -51,7 +51,7 @@ impl Fixture {
             records: root.path().join("records"),
             source,
             checkouts: CheckoutIdentity::capture(&checkouts).unwrap(),
-            _root: root,
+            root,
         }
     }
 
@@ -262,5 +262,83 @@ async fn reconciles_removal_only_from_the_actual_checkout_and_registration() {
             "--quiet",
             &format!("refs/heads/{}", created.branch),
         ],
+    );
+}
+
+#[tokio::test]
+async fn cleanup_refuses_ignored_files_and_preserves_the_clean_branch_and_bound_record() {
+    use crate::{storage::attachments::AttachmentStore, workspace::RuntimeOwners};
+
+    let fixture = Fixture::new();
+    let manager = fixture.manager();
+    let source = CheckoutIdentity::capture(&fixture.source).unwrap();
+    let store = AttachmentStore::open(&fixture.root.path().join("workspace.sqlite3")).unwrap();
+    let owners = RuntimeOwners::new(store);
+    let created = manager
+        .create(source.clone(), "clean", "Managed")
+        .await
+        .unwrap();
+    let bound = manager
+        .bind(created.id, "thread-1", &created.checkout_path)
+        .await
+        .unwrap();
+    let checkout = CheckoutIdentity::capture(&bound.checkout_path).unwrap();
+    let unrelated = owners.reserve_cleanup(&source).unwrap();
+    assert!(matches!(
+        manager.remove_clean(bound.id, unrelated).await,
+        Err(WorktreeError::Ownership)
+    ));
+
+    let excludes = fixture.source.join(".git").join("info").join("exclude");
+    fs::write(excludes, "settings.local\n").unwrap();
+    let ignored = bound.checkout_path.join("settings.local");
+    fs::write(&ignored, "retained settings").unwrap();
+    let reservation = owners.reserve_cleanup(&checkout).unwrap();
+    assert!(matches!(
+        manager.remove_clean(bound.id, reservation).await,
+        Err(WorktreeError::Dirty)
+    ));
+    assert_eq!(fs::read(&ignored).unwrap(), b"retained settings");
+    assert_eq!(
+        manager.store.snapshot().unwrap().records,
+        std::slice::from_ref(&bound)
+    );
+    fs::remove_file(ignored).unwrap();
+    fs::write(fixture.source.join("source-only.txt"), "untouched").unwrap();
+
+    let path = git_path(&bound.checkout_path).to_str().unwrap();
+    git(&fixture.source, &["worktree", "lock", "--", path]);
+    let reservation = owners.reserve_cleanup(&checkout).unwrap();
+    assert!(matches!(
+        manager.remove_clean(bound.id, reservation).await,
+        Err(WorktreeError::Git(GitError::Exit(_)))
+    ));
+    assert_eq!(
+        manager.store.snapshot().unwrap().records[0].phase,
+        WorktreePhase::Removing
+    );
+    assert_eq!(
+        manager.recover().await.unwrap()[0].kind,
+        RecoveryKind::RemovalInterrupted
+    );
+    git(&fixture.source, &["worktree", "unlock", "--", path]);
+
+    let reservation = owners.reserve_cleanup(&checkout).unwrap();
+    let removed = manager.remove_clean(bound.id, reservation).await.unwrap();
+    assert_eq!(removed.phase, WorktreePhase::CheckoutRemoved);
+    assert_eq!(removed.thread_id, bound.thread_id);
+    assert_eq!(removed.branch, bound.branch);
+    assert_eq!(removed.checkout_identity, bound.checkout_identity);
+    assert!(!bound.checkout_path.exists());
+    assert_eq!(
+        fs::read(fixture.source.join("source-only.txt")).unwrap(),
+        b"untouched"
+    );
+    let reference = format!("refs/heads/{}", removed.branch);
+    let returned = git(&fixture.source, &["rev-parse", "--verify", &reference]);
+    assert_eq!(parse_oid(&returned).unwrap(), removed.base_commit);
+    assert_eq!(
+        fixture.manager().store.snapshot().unwrap().records,
+        [removed]
     );
 }
