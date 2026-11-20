@@ -1,5 +1,5 @@
-export async function waitFor(description: string, condition: () => boolean) {
-  const deadline = performance.now() + 9000;
+export async function waitFor(description: string, condition: () => boolean, timeoutMs = 9000) {
+  const deadline = performance.now() + timeoutMs;
   while (!condition()) {
     if (performance.now() > deadline) throw new Error(description);
     await new Promise<void>((resolve) => setTimeout(resolve, 20));

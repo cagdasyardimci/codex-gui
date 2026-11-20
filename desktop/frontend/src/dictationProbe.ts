@@ -60,9 +60,10 @@ export async function verifyQuestionDictation(visible: () => WorkspaceSnapshot |
     const area = fill(AREA, 'Keep my draft.');
     await click('Dictate Answer', area);
     await click('Insert Dictation', area);
-    await waitFor('The local recognizer did not append speech to the second question', () =>
-      input(AREA).value.toLowerCase().includes(PHRASE));
+    await waitFor('The local recognizer did not finish within the fixture deadline', () =>
+      [...area.querySelectorAll('button')].some((button) => button.textContent === 'Dictate Answer'), 40_000);
     const speech = input(AREA).value;
+    if (!speech.toLowerCase().includes(PHRASE)) throw new Error(`Unexpected offline fixture transcription: ${speech}`);
     if (!speech.startsWith('Keep my draft. ') || input(DETAILS).value !== 'Typed answer on the first question') {
       throw new Error('Dictation replaced a manual answer or reached the wrong question');
     }
