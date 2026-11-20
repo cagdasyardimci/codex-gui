@@ -41,10 +41,12 @@ def main() -> None:
         records = [json.loads(line) for line in trace.read_text().splitlines()]
         requests = [item for item in records if item["direction"] == "request"]
         assert [item["method"] for item in requests] == [
-            "initialize", "initialized", "account/read", "account/login/start",
-            "account/login/cancel", "account/login/start", "account/read", "model/list", "model/list",
+            "initialize", "initialized", "account/read", "config/read", "account/login/start",
+            "account/login/cancel", "account/login/start", "account/read", "config/read",
+            "model/list", "model/list",
         ], requests
-        assert requests[4]["params"] == {"loginId": "browser-login-1"}, requests[4]
+        assert requests[5]["params"] == {"loginId": "browser-login-1"}, requests[5]
+        assert requests[3]["params"] == requests[8]["params"] == {"includeLayers": False, "cwd": None}
         completions = [item["loginId"] for item in records
                        if item.get("direction") == "event" and item.get("method") == "account/login/completed"]
         assert completions == ["browser-login-1", "browser-login-2"], completions
