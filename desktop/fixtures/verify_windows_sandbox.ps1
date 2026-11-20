@@ -17,6 +17,7 @@ if ($InProfile) {
     if (-not $profileDirectory) { throw 'The test user profile was not loaded' }
     $env:CODEX_HOME = Join-Path $profileDirectory '.codex'
     if (Test-Path $env:CODEX_HOME) { throw 'Expected a fresh Codex profile' }
+    New-Item -ItemType Directory -Path $env:CODEX_HOME | Out-Null
     $checkout = Join-Path $profileDirectory 'Codex GUI probe checkout'
     New-Item -ItemType Directory -Path $checkout | Out-Null
     Write-Host 'Running under a fresh standard-user profile'
