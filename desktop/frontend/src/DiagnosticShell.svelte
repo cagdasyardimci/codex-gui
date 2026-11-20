@@ -9,7 +9,7 @@
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
-  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
+  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
   let mode = $state<Mode | null>(null);
 
   async function workspaceScopeVerified(): Promise<boolean> {
@@ -92,7 +92,7 @@
   <WorkspaceShell verify="promptRevision" />
 {:else if mode === 'conversationFork'}
   <WorkspaceShell verify="conversationFork" />
-{:else if mode === 'sidebar' || mode === 'sidebarRestore' || mode === 'commandPalette' || mode === 'archive' || mode === 'chatDeletion' || mode === 'messageSearch'}
+{:else if mode === 'sidebar' || mode === 'sidebarRestore' || mode === 'commandPalette' || mode === 'archive' || mode === 'chatDeletion' || mode === 'messageSearch' || mode === 'automaticTitles'}
   <WorkspaceShell verify={mode} />
 {:else if mode === 'account'}
   <WorkspaceShell verify="account" />

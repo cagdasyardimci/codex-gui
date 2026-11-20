@@ -46,6 +46,7 @@ pub enum Verification {
     Archive,
     ChatDeletion,
     MessageSearch,
+    AutomaticTitles,
     Account,
     WindowsSetup,
     Turn,
@@ -367,6 +368,7 @@ pub fn verify_attachments_result(
             | Verification::Archive
             | Verification::ChatDeletion
             | Verification::MessageSearch
+            | Verification::AutomaticTitles
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -411,6 +413,8 @@ pub fn verify_attachments_result(
             println!("Verified installed scoped permanent chat deletion");
         } else if *verification == Verification::MessageSearch {
             println!("Verified installed incremental paged message search");
+        } else if *verification == Verification::AutomaticTitles {
+            println!("Verified installed scoped automatic chat titles");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

@@ -1,0 +1,6 @@
+{
+  "extends": "desktop-attachments",
+  "desktopAutomaticTitles": true,
+  "intervalSeconds": 0.6,
+  "chunks": ["The ordinary fixture turn completed."]
+}

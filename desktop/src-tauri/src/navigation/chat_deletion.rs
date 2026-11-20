@@ -210,6 +210,7 @@ impl Navigation {
         {
             return Err(IpcError::StaleSelection);
         }
+        self.titles.cancel_chat(thread);
         match client
             .request("thread/delete", json!({"threadId": thread.0}), RPC_TIMEOUT)
             .await

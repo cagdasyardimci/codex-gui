@@ -38,6 +38,7 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
 mod archive;
+mod automatic_titles;
 mod chat_deletion;
 mod composer_attachments;
 mod composer_settings;
@@ -138,6 +139,7 @@ enum Input {
     QueueCompleted(Option<Box<QueueCompletion>>),
     HistoryCompleted(Option<Box<HistoryCompletion>>),
     PromptForkCompleted(Option<Box<prompt_revision::ForkCompletion>>),
+    TitleCompleted(Option<automatic_titles::TitleOutcome>),
     OwnerChanged,
     Flush,
 }
@@ -186,6 +188,7 @@ struct Navigation {
     deletion: Option<chat_deletion::CapturedDeletion>,
     deleted_chats: HashSet<ThreadId>,
     message_search: Option<message_search::SearchSession>,
+    titles: automatic_titles::AutomaticTitles,
     worktree_records: PathBuf,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
@@ -242,6 +245,10 @@ impl NavigationHandle {
             deletion: None,
             deleted_chats,
             message_search: None,
+            titles: automatic_titles::AutomaticTitles::new(matches!(
+                verification,
+                Verification::None | Verification::AutomaticTitles
+            )),
             worktree_records,
             view: NavigationView::default(),
             editable: HashMap::new(),
@@ -308,6 +315,7 @@ impl Navigation {
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
                     completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
+                    completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
@@ -319,6 +327,7 @@ impl Navigation {
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
                     completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
+                    completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                 }
             };
@@ -346,6 +355,12 @@ impl Navigation {
                 Input::PromptForkCompleted(None) => {
                     unreachable!("navigation owns the completion sender")
                 }
+                Input::TitleCompleted(Some(outcome)) => {
+                    if let Err(error) = self.complete_automatic_title(outcome).await {
+                        eprintln!("{error}");
+                    }
+                }
+                Input::TitleCompleted(None) => unreachable!("navigation owns the title sender"),
                 Input::OwnerChanged => {
                     if let Err(error) = self.reload_sidebar() {
                         eprintln!("{error}");
@@ -795,6 +810,8 @@ impl Navigation {
         let had_write_access =
             std::mem::take(&mut self.view.write_access) != WriteAccess::Unavailable;
         if let Some(backend) = self.backend.take() {
+            self.titles
+                .retire_connection(backend.connection.client().identity());
             if let Err(error) = self.login.retire(&backend.connection.client()).await {
                 eprintln!("{error}");
             }

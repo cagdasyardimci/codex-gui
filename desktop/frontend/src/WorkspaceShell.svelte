@@ -42,10 +42,11 @@
   import { verifyArchive } from './archiveProbe';
   import { verifyChatDeletion } from './chatDeletionProbe';
   import { verifyMessageSearch } from './messageSearchProbe';
+  import { verifyAutomaticTitles } from './automaticTitlesProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -973,6 +974,7 @@
     else if (verify === 'archive') void verifyArchive(() => snapshot);
     else if (verify === 'chatDeletion') void verifyChatDeletion(() => snapshot);
     else if (verify === 'messageSearch') void verifyMessageSearch(() => snapshot, searchIndex);
+    else if (verify === 'automaticTitles') void verifyAutomaticTitles(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });

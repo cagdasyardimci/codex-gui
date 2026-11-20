@@ -243,6 +243,7 @@ impl Navigation {
             .owners
             .acquire(client.identity())
             .map_err(|error| report(error.into()))?;
+        self.titles.cancel_chat(&thread);
         client
             .request(
                 "thread/name/set",
@@ -347,10 +348,8 @@ pub(super) fn sidebar_chat_row(chat: ThreadSummary) -> (ChatRow, i64) {
         .name
         .filter(|name| !name.trim().is_empty())
         .or_else(|| {
-            preview
-                .lines()
-                .find(|line| !line.trim().is_empty())
-                .map(str::to_owned)
+            let title = super::automatic_titles::normalized_title(&preview);
+            (!title.is_empty()).then_some(title)
         })
         .unwrap_or_else(|| "New Chat".into());
     (

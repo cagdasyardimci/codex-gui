@@ -41,6 +41,7 @@ fn main() {
         Some("--verify-archive") => fixture::Verification::Archive,
         Some("--verify-chat-deletion") => fixture::Verification::ChatDeletion,
         Some("--verify-message-search") => fixture::Verification::MessageSearch,
+        Some("--verify-automatic-titles") => fixture::Verification::AutomaticTitles,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -76,6 +77,7 @@ fn main() {
             | fixture::Verification::Archive
             | fixture::Verification::ChatDeletion
             | fixture::Verification::MessageSearch
+            | fixture::Verification::AutomaticTitles
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn

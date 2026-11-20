@@ -15,11 +15,12 @@ use codex_gui_core::{
 };
 use uuid::Uuid;
 
-use super::{Failure, Navigation, RPC_TIMEOUT, report};
+use super::{Failure, Navigation, RPC_TIMEOUT, automatic_titles::TitleInput, report};
 
 pub(super) struct InflightSend {
     pub operation: OperationIdentity,
     pub thread: ThreadId,
+    title: Option<TitleInput>,
     _lease: RuntimeUse,
 }
 
@@ -123,6 +124,11 @@ impl Navigation {
         } else {
             None
         };
+        let title = request
+            .chat_id
+            .is_none()
+            .then(|| self.titles.input(&text, settings.model.as_deref()))
+            .flatten();
         let (text, context, attachments) =
             self.capture_composer_context(draft_id, text, saved.context, project, skill)?;
         if text.trim().is_empty() && context.is_empty() && attachments.is_empty() {
@@ -203,11 +209,10 @@ impl Navigation {
                 }
                 self.source_draft = self.store.desktop_selection()?.source_draft;
                 let preview = present_question_reply(&request.text).into_owned();
-                let title = preview
-                    .lines()
-                    .find(|line| !line.trim().is_empty())
-                    .unwrap_or("New Chat")
-                    .to_owned();
+                let mut title = super::automatic_titles::normalized_title(&preview);
+                if title.is_empty() {
+                    title = "New Chat".to_owned();
+                }
                 let chat = ChatRow {
                     id: thread.0.clone(),
                     title,
@@ -230,6 +235,7 @@ impl Navigation {
             InflightSend {
                 operation: operation.clone(),
                 thread,
+                title,
                 _lease: lease,
             },
         );
@@ -259,13 +265,22 @@ impl Navigation {
         {
             return;
         }
-        self.inflight.remove(&completion.draft);
+        let pending = self
+            .inflight
+            .remove(&completion.draft)
+            .expect("captured submission");
         match completion.result {
-            Ok(reply) => {
-                if let Err(error) = reply.response {
-                    eprintln!("{error}");
+            Ok(reply) => match reply.response {
+                Ok(value)
+                    if value["turn"]["id"].as_str().is_some() && reply.thread == pending.thread =>
+                {
+                    if let Some(title) = pending.title {
+                        self.titles.begin(reply.thread, completion.operation, title);
+                    }
                 }
-            }
+                Err(error) => eprintln!("{error}"),
+                _ => {}
+            },
             Err(error) => eprintln!("{error}"),
         }
         self.refresh_draft_after_submission(completion.draft);

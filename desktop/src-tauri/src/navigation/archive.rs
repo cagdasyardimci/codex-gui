@@ -479,6 +479,9 @@ impl Navigation {
         checkout: Option<&CheckoutIdentity>,
         archived: bool,
     ) -> Result<(), IpcError> {
+        if archived {
+            self.titles.cancel_chat(&thread.id);
+        }
         self.archive.confirm(thread, archived);
         if let Some(checkout) = checkout {
             let (row, updated_at) = sidebar_chat_row(thread.clone());

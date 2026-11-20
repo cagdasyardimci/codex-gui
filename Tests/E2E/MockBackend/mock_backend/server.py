@@ -1,5 +1,7 @@
 """Focused app-server request handlers; unsupported operations fail explicitly."""
 import copy
+import json
+import os
 import sys
 import threading
 import time
@@ -74,7 +76,8 @@ class Server:
     def handle(self, method, params):
         with self.lock:
             result = self.dispatch(method, params)
-            self.state.save()
+            if method != 'initialize' or not self.scenario.get('desktopAutomaticTitles'):
+                self.state.save()
             return copy.deepcopy(result)
 
     def after_reply(self):
@@ -185,8 +188,16 @@ class Server:
         if method == 'thread/start':
             if not p.get('cwd'):
                 raise ProtocolError(-32602, 'thread/start requires cwd')
+            if self.scenario.get('desktopAutomaticTitles') and p.get('ephemeral'):
+                self.state.path = None
+                thread = {'id': f'title-helper-{os.getpid()}', 'name': '', 'preview': '',
+                          'cwd': p['cwd'], 'archived': False, 'turns': []}
+                self.state.threads.append(thread)
+                return {'thread': self.summary(thread), **self.settings(thread)}
             thread = {'id': self.state.identity('thread'), 'name': 'New fixture conversation',
                       'cwd': p['cwd'], 'archived': False, 'turns': []}
+            if self.scenario.get('desktopAutomaticTitles'):
+                thread['name'] = ''
             if self.scenario.get('desktopHistory'):
                 thread['preview'] = ''
             self.state.threads.append(thread)
@@ -293,6 +304,17 @@ class Server:
                 return {'thread': self.summary(thread)}
             return {}
         if method == 'turn/start':
+            if self.scenario.get('desktopAutomaticTitles') and p.get('threadId', '').startswith('title-helper-'):
+                prompt = p['input'][0]['text']
+                structured = json.dumps({'title': '  Réparer   le flux  '}, ensure_ascii=False)
+                if prompt.startswith('Reject malformed'):
+                    structured = 'An invalid title response.'
+                self.scenario = {
+                    **self.scenario,
+                    'mode': 'stall' if prompt.startswith('Keep the manual') else 'stream',
+                    'chunks': [structured],
+                    'intervalSeconds': 1.5,
+                }
             if self.scenario.get('desktopComposerSettings'):
                 time.sleep(0.55)
             return self.start(p)
