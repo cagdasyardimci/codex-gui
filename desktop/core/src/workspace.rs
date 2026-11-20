@@ -9,6 +9,10 @@ use crate::{
     storage::drafts::DraftId,
 };
 
+mod send;
+
+pub use send::{SendDraft, SendIntent, SendSettings};
+
 const ACTION_CAPACITY: usize = 32;
 const EFFECT_CAPACITY: usize = 16;
 
@@ -32,10 +36,7 @@ pub struct WorkspaceSnapshot {
 }
 
 pub enum WorkspaceAction {
-    AdmitFirstMessage {
-        operation: OperationIdentity,
-        draft: DraftId,
-    },
+    AdmitFirstMessage(Arc<SendIntent>),
     ThreadPrepared {
         operation: OperationIdentity,
         thread: ThreadId,
@@ -49,10 +50,8 @@ pub enum WorkspaceAction {
     },
 }
 
-#[derive(Debug, Eq, PartialEq)]
 pub struct PrepareThread {
-    pub operation: OperationIdentity,
-    pub draft: DraftId,
+    pub intent: Arc<SendIntent>,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -63,6 +62,8 @@ pub enum WorkspaceError {
     Retired,
     #[error("select a checkout before starting a chat")]
     MissingCheckout,
+    #[error("the draft has no content to send")]
+    EmptyDraft,
     #[error("the draft or request already has a navigation owner")]
     AlreadyAdmitted,
     #[error("the preparation is no longer pending")]
@@ -126,7 +127,7 @@ struct State {
     connection: ConnectionIdentity,
     revision: u64,
     rows: IndexMap<DraftId, NavigationTarget>,
-    pending: HashMap<RequestId, DraftId>,
+    pending: HashMap<RequestId, Arc<SendIntent>>,
     threads: HashMap<ThreadId, DraftId>,
 }
 
@@ -162,9 +163,7 @@ impl State {
         effects: &mpsc::Sender<PrepareThread>,
     ) -> Result<(), WorkspaceError> {
         match action {
-            WorkspaceAction::AdmitFirstMessage { operation, draft } => {
-                self.admit(operation, draft, effects)
-            }
+            WorkspaceAction::AdmitFirstMessage(intent) => self.admit(intent, effects),
             WorkspaceAction::ThreadPrepared { operation, thread } => {
                 self.bind_thread(&operation, thread)
             }
@@ -183,25 +182,29 @@ impl State {
 
     fn admit(
         &mut self,
-        operation: OperationIdentity,
-        draft: DraftId,
+        intent: Arc<SendIntent>,
         effects: &mpsc::Sender<PrepareThread>,
     ) -> Result<(), WorkspaceError> {
-        self.validate_owner(&operation)?;
+        self.validate_owner(&intent.operation)?;
         if self.connection.workspace.checkout.is_none() {
             return Err(WorkspaceError::MissingCheckout);
         }
-        if self.pending.contains_key(&operation.request) || self.rows.contains_key(&draft) {
+        if !intent.draft.has_content() {
+            return Err(WorkspaceError::EmptyDraft);
+        }
+        let request = intent.operation.request;
+        let draft = intent.draft.id;
+        if self.pending.contains_key(&request) || self.rows.contains_key(&draft) {
             return Err(WorkspaceError::AlreadyAdmitted);
         }
         let slot = effects.try_reserve().map_err(|error| match error {
             mpsc::error::TrySendError::Full(()) => WorkspaceError::EffectQueueFull,
             mpsc::error::TrySendError::Closed(()) => WorkspaceError::EffectQueueClosed,
         })?;
-        self.pending.insert(operation.request, draft);
+        self.pending.insert(request, intent.clone());
         self.rows
-            .insert(draft, NavigationTarget::Preparing(operation.request));
-        slot.send(PrepareThread { operation, draft });
+            .insert(draft, NavigationTarget::Preparing(request));
+        slot.send(PrepareThread { intent });
         Ok(())
     }
 
@@ -224,7 +227,7 @@ impl State {
         self.validate_owner(operation)?;
         self.pending
             .get(&operation.request)
-            .copied()
+            .map(|intent| intent.draft.id)
             .ok_or(WorkspaceError::MissingPreparation)
     }
 
