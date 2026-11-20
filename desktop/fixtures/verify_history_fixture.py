@@ -83,7 +83,7 @@ def main() -> None:
             **os.environ,
             "CODEX_EXECUTABLE": str(fixture_executable(root)),
             "CODEX_HOME": str(codex_home),
-            "CODEX_GUI_QA_SCENARIO": "desktop-history",
+            "CODEX_GUI_QA_SCENARIO": "desktop-rich-history",
             "CODEX_GUI_QA_STATE": str(root / "state.json"),
             "CODEX_GUI_QA_TRACE": str(trace),
             "PYTHONIOENCODING": "utf-8",

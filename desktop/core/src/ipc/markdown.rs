@@ -23,6 +23,8 @@ pub enum MarkdownKind {
     Strike,
     Code,
     CodeBlock,
+    InlineMath,
+    DisplayMath,
     Table,
     TableHead,
     TableRow,

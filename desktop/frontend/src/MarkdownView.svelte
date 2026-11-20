@@ -2,6 +2,8 @@
   import type { MarkdownKind, MarkdownNode, TranscriptRowRequest } from './generated/workspace';
   import { openTranscriptLink, renderTranscriptMarkdown } from './projectIpc';
   import MarkdownImage from './MarkdownImage.svelte';
+  import MarkdownRichBlock from './MarkdownRichBlock.svelte';
+  import { preserveMarkdownSelection } from './markdownSelection';
 
   let { source, request }: { source: string; request?: TranscriptRowRequest } = $props();
   let rendered = $state.raw<MarkdownNode[] | null>(null);
@@ -17,22 +19,13 @@
     const row = request;
     const element = root;
     rendered = null;
-    if (!row || !element || !/[\n\r`*_[\]<>#~&\\+-]|^\s*\d+[.)]\s|^(?: {4}|\t)/.test(source)) return;
+    if (!row || !element || !/[\n\r`*_[\]<>#~&$\\+-]|^\s*\d+[.)]\s|^(?: {4}|\t)/.test(source)) return;
     const lifetime = new AbortController();
     void renderTranscriptMarkdown(row).then((result) => {
       const children = result?.[0]?.children ?? [];
       if (lifetime.signal.aborted || !result || result.length === 1 && result[0]?.kind === 'paragraph' &&
           children.every((node) => node.kind === 'text') && plain(children) === source) return;
-      function reveal() {
-        const selection = window.getSelection();
-        if (selection && !selection.isCollapsed && selection.rangeCount && selection.getRangeAt(0).intersectsNode(element!)) {
-          return false;
-        }
-        rendered = result;
-        document.removeEventListener('selectionchange', reveal);
-        return true;
-      }
-      if (!reveal()) document.addEventListener('selectionchange', reveal, { signal: lifetime.signal });
+      preserveMarkdownSelection(element, lifetime.signal, () => { rendered = result; });
     }).catch(() => {});
     return () => lifetime.abort();
   });
@@ -67,7 +60,12 @@
     {@const tag = tags[node.kind]}
     {#if node.kind === 'text'}{node.value}
     {:else if node.kind === 'code'}<code>{node.value}</code>
-    {:else if node.kind === 'codeBlock'}<pre><code data-language={node.value}>{plain(node.children)}</code></pre>
+    {:else if node.kind === 'codeBlock'}
+      {#if node.value?.toLowerCase() === 'mermaid'}
+        <MarkdownRichBlock source={plain(node.children)} fallback={plain(node.children)} kind="diagram" />
+      {:else}<pre><code data-language={node.value}>{plain(node.children)}</code></pre>{/if}
+    {:else if node.kind === 'inlineMath' || node.kind === 'displayMath'}
+      <MarkdownRichBlock source={node.value ?? ''} fallback={plain(node.children)} kind={node.kind} />
     {:else if node.kind === 'image'}
       {#if node.value && request}
         <MarkdownImage request={{ row: request, target: node.value }} alt={plain(node.children)} />

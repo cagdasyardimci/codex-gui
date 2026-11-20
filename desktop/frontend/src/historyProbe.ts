@@ -4,6 +4,7 @@ import { checkTranscriptImages, navigateWorkspace, openTranscriptLink, renderTra
 import { click, editor, typeText, waitFor } from './fixtureControls';
 import { verifyResidentHistory } from './residencyProbe';
 import { rejectsStale, verifyRenderedMarkdown } from './markdownProbe';
+import { RICH_SUFFIX, verifySettledRichMarkdown, verifyStreamingFormula } from './richMarkdownProbe';
 
 const FIRST = 'history-first';
 const SECOND = 'history-second';
@@ -238,12 +239,16 @@ export async function verifyHistory(
           row.commands.length === 2 && row.commands[1]?.output === 'Café 日本語\n' && row.completed)) {
         throw new Error('The resumed command group lost its streamed output');
       }
+      if (markdown) await verifyStreamingFormula(visible);
+      const expectedReply = markdown ? REPLY + RICH_SUFFIX : REPLY;
       await waitFor('The complete stream was not rendered exactly', () =>
-        containsText(REPLY) && !!visible()?.transcript.items.some((item) => item.completed && item.text === REPLY));
+        containsText(REPLY) && !!visible()?.transcript.items.some((item) => item.completed && item.text === expectedReply));
+      const verifyReleased = markdown ? await verifySettledRichMarkdown(visible) : undefined;
       await click('Second fixture chat');
       await waitFor('Chat switching showed stale transcript or draft', () =>
         visible()?.navigation.selectedChat === SECOND && !containsText(REPLY) &&
         containsText('History in the second chat.') && editor().value === '');
+      await verifyReleased?.();
       try {
         await checkTranscriptImages(saved.imageRequest);
         throw new Error('A retired transcript could still inspect local images');

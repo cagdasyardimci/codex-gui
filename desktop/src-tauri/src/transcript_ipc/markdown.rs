@@ -14,7 +14,10 @@ const MAX_TARGET_BYTES: usize = 4096;
 pub(super) fn events(source: &str) -> Parser<'_> {
     Parser::new_ext(
         source,
-        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS,
+        Options::ENABLE_TABLES
+            | Options::ENABLE_STRIKETHROUGH
+            | Options::ENABLE_TASKLISTS
+            | Options::ENABLE_MATH,
     )
 }
 
@@ -38,6 +41,8 @@ pub(super) fn document(source: &str, checkout: &CheckoutIdentity) -> Option<Vec<
                 leaf(Kind::Text, Some(text.into_string()))
             }
             Event::Code(text) => leaf(Kind::Code, Some(text.into_string())),
+            Event::InlineMath(text) => math(Kind::InlineMath, text.into_string(), &source[range]),
+            Event::DisplayMath(text) => math(Kind::DisplayMath, text.into_string(), &source[range]),
             Event::SoftBreak => leaf(Kind::Text, Some("\n".into())),
             Event::HardBreak => leaf(Kind::Break, None),
             Event::Rule => leaf(Kind::Rule, None),
@@ -93,6 +98,14 @@ fn leaf(kind: Kind, value: Option<String>) -> Node {
         kind,
         value,
         children: Vec::new(),
+    }
+}
+
+fn math(kind: Kind, formula: String, source: &str) -> Node {
+    Node {
+        kind,
+        value: Some(formula),
+        children: vec![leaf(Kind::Text, Some(source.into()))],
     }
 }
 

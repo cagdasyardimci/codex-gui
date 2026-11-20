@@ -136,7 +136,7 @@ body {
   margin: 0;
 }
 
-.transcript-item span {
+.transcript-item-header > span {
   font-weight: 600;
 }
 
@@ -218,6 +218,19 @@ body {
   text-align: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.markdown-display-math {
+  display: block;
+  overflow: auto;
+}
+
+.markdown-diagram-stage {
+  position: fixed;
+  inset-inline-start: -10000px;
+  inset-block-start: 0;
+  width: 1024px;
+  pointer-events: none;
 }
 
 .workspace-retry {

@@ -9,6 +9,7 @@ NOTICES = {
     "LICENSE.md": ROOT / "LICENSE.md",
     "Tauri-MIT.txt": FRONTEND_PACKAGES / "@tauri-apps" / "api" / "LICENSE-MIT",
     "Svelte-MIT.md": FRONTEND_PACKAGES / "svelte" / "LICENSE.md",
+    "frontend-licenses.md": FRONTEND_PACKAGES.parent / "dist" / "frontend-licenses.md",
 }
 
 

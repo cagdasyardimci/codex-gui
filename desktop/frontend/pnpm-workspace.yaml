@@ -1,2 +1,7 @@
 allowBuilds:
   esbuild: true
+
+packageExtensions:
+  mermaid@11.12.1:
+    dependencies:
+      type-fest: 4.41.0

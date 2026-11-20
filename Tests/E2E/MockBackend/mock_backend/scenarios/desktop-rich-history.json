@@ -1,0 +1,12 @@
+{
+  "extends": "desktop-history",
+  "intervalSeconds": 0.35,
+  "chunks": [
+    "A streamed reply",
+    " with café ",
+    "日本語 ",
+    "👩🏽‍💻.\n\nInline $x^2$.",
+    "\n\n$$\\frac{a}{b}$$",
+    "\n\n```mermaid\nflowchart LR\n  A[Local] --> B[Offline]\n```"
+  ]
+}
