@@ -126,6 +126,39 @@ body {
   font-weight: 600;
 }
 
+.transcript-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2rem;
+}
+
+.transcript-copy {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.transcript-item:is(:hover, :focus-within) .transcript-copy {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.transcript-commands summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.transcript-commands ul {
+  list-style: none;
+  margin: 0.35rem 0;
+  padding-inline-start: 1.25rem;
+}
+
+.transcript-commands pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .transcript-item p {
   margin: 0.35rem 0 0;
   line-height: 1.5;

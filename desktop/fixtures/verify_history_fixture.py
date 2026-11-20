@@ -1,6 +1,7 @@
 """Verify the installed workspace UI and restart against isolated Codex history."""
 
 import argparse
+from base64 import b64decode
 from contextlib import closing
 import json
 import os
@@ -12,10 +13,13 @@ from tempfile import TemporaryDirectory
 from verify_coding_probe import fixture_executable
 
 
-def seed_search_paths(project: Path) -> None:
+def seed_history_files(project: Path) -> None:
     for folder in ("notes", "node_modules", ".hidden"):
         (project / folder).mkdir()
         (project / folder / "Café.md").write_text("File search fixture\n", encoding="utf-8")
+    (project / "notes" / "panel.png").write_bytes(b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/WZkAAAAASUVORK5CYII="
+    ))
 
 
 def main() -> None:
@@ -27,7 +31,7 @@ def main() -> None:
         data = root / "beta data"
         project = root / "Checkout café"
         project.mkdir()
-        seed_search_paths(project)
+        seed_history_files(project)
         codex_home = root / "codex home"
         codex_home.mkdir()
         trace = root / "trace.jsonl"

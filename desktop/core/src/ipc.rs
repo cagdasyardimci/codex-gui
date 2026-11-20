@@ -5,7 +5,10 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
-use crate::files::index::{ProjectPathId, ProjectPathMatch};
+use crate::files::{
+    FileRevision,
+    index::{ProjectPathId, ProjectPathMatch},
+};
 use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
 mod actions;
@@ -31,7 +34,8 @@ pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
 };
 pub use stream::{
-    StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptRole, TranscriptView,
+    CommandUpdate, StreamChange, TextBatch, TextBatcher, TranscriptCommand, TranscriptItem,
+    TranscriptRole, TranscriptView,
 };
 pub use subscription::{
     RevisionedNavigation, RevisionedStream, SubscriptionId, WorkspaceProjection, WorkspaceSnapshot,
@@ -54,6 +58,23 @@ pub struct WorkspaceRequest {
 pub struct ProjectPathRequest {
     pub workspace_id: WorkspaceId,
     pub query: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TranscriptRowRequest {
+    pub workspace_id: WorkspaceId,
+    pub chat_id: String,
+    pub item_id: String,
+    pub generation: u32,
+    pub revision: u32,
+}
+
+#[derive(Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptImageDependency {
+    pub path: String,
+    pub revision: Option<FileRevision>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -181,6 +202,10 @@ pub fn workspace_typescript() -> String {
         TextBatch::decl(),
         StreamChange::decl(),
         TranscriptItem::decl(),
+        TranscriptCommand::decl(),
+        TranscriptRowRequest::decl(),
+        FileRevision::decl(),
+        TranscriptImageDependency::decl(),
         TranscriptView::decl(),
         TranscriptRole::decl(),
         NavigationView::decl(),

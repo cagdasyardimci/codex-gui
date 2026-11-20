@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, WorkspaceSnapshot } from './generated/workspace';
+  import type { DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, TranscriptItem, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
   import QueuePanel from './QueuePanel.svelte';
-  import { navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
+  import TranscriptRow from './TranscriptRow.svelte';
+  import { copyTranscriptRow, navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -18,6 +19,8 @@
   let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
+  let transcript = $state<HTMLDivElement>();
+  let restoreTabSelection: (() => void) | undefined;
   let draftId: string | undefined;
   let text = $state('');
   let composing = false;
@@ -35,6 +38,38 @@
   const queue = $derived(navigation?.queue);
   const resumeCommand = $derived(queue?.resume ? { resume: queue.resume } :
     queue?.resumeSaved ? { resumeSaved: queue.resumeSaved } : null);
+
+  function copyResponse(item: TranscriptItem) {
+    const chatId = snapshot?.navigation.selectedChat;
+    if (!snapshot?.workspace || !chatId) return;
+    return copyTranscriptRow({ workspaceId: snapshot.workspace.workspaceId, chatId,
+      itemId: item.itemId, generation: snapshot.transcript.generation, revision: item.revision });
+  }
+
+  function retainSelectionForTab() {
+    restoreTabSelection = undefined;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !transcript) return;
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+    if (!anchorNode || !focusNode || !transcript.contains(anchorNode) || !transcript.contains(focusNode)) return;
+    const generation = snapshot?.transcript.generation;
+    const restore = () => {
+      if (snapshot?.transcript.generation === generation && transcript?.contains(anchorNode) &&
+          transcript.contains(focusNode) && selection.isCollapsed) {
+        selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+      }
+    };
+    restoreTabSelection = restore;
+    setTimeout(() => {
+      if (restoreTabSelection === restore) restoreTabSelection = undefined;
+    }, 0);
+  }
+
+  function focusResponseAction() {
+    const restore = restoreTabSelection;
+    restoreTabSelection = undefined;
+    if (restore) requestAnimationFrame(restore);
+  }
 
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
@@ -201,6 +236,7 @@
   }
 
   function handleShortcut(event: KeyboardEvent) {
+    if (event.key === 'Tab' && !event.defaultPrevented && !event.isComposing) retainSelectionForTab();
     if (event.defaultPrevented || event.isComposing || composing ||
         !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
     switch (event.key.toLowerCase()) {
@@ -277,12 +313,9 @@
       </nav>
     {/if}
     <section class="workspace-conversation" aria-label="Conversation">
-      <div class="workspace-transcript">
+      <div class="workspace-transcript" bind:this={transcript}>
         {#each snapshot?.transcript.items ?? [] as item (item.itemId)}
-          <article class="transcript-item" aria-label={item.role === 'user' ? 'You' : 'Codex'}>
-            <span aria-hidden="true">{item.role === 'user' ? 'You' : 'Codex'}</span>
-            <p>{item.text}</p>
-          </article>
+          <TranscriptRow {item} copy={copyResponse} onCopyFocus={focusResponseAction} />
         {/each}
       </div>
       {#if navigation?.retryable && navigation.writeAccess === 'ready'}

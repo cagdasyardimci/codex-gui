@@ -10,16 +10,16 @@ use codex_gui_core::{
     checkout::CheckoutIdentity,
     codex::{
         AppServerClient, AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable,
-        HistoryTurn, LoginCompletion, ServerEvent, TurnStatus,
+        LoginCompletion, ServerEvent,
     },
     git::turn_edits::{LastTurnView, TurnEditReports},
     identity::{
         CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, ThreadId, WorkspaceIdentity,
     },
     ipc::{
-        ChatRow, DraftEdit, EditorDraft, IpcError, NavigationIntent, NavigationView, StreamChange,
-        TextBatcher, TranscriptItem, TranscriptRole, TranscriptView, WorkspaceId, WorkspaceRequest,
-        WriteAccess, present_question_reply,
+        ChatRow, CommandUpdate, DraftEdit, EditorDraft, IpcError, NavigationIntent, NavigationView,
+        StreamChange, TextBatcher, TranscriptView, WorkspaceId, WorkspaceRequest, WriteAccess,
+        present_question_reply,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -29,7 +29,6 @@ use codex_gui_core::{
         PrepareThread, ResumedMode, RoutedEvent, RuntimeOwners, RuntimeUse, WorkspaceEngine,
     },
 };
-use serde_json::Value;
 use tokio::{
     sync::{mpsc, oneshot},
     time::MissedTickBehavior,
@@ -46,6 +45,7 @@ mod queue;
 mod quit;
 mod sandbox;
 mod send;
+mod transcript;
 use account::AccountFlow;
 use interactions::InteractionProjection;
 use parked::ParkedRuntime;
@@ -53,6 +53,7 @@ use queue::{QueueCompletion, Queues};
 use quit::Quit;
 use sandbox::SandboxSetup;
 use send::{InflightSend, SendCompletion};
+use transcript::{append_turn, command_item, message_item, transcript_id};
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 type Failure = Box<dyn Error + Send + Sync>;
@@ -686,13 +687,13 @@ impl Navigation {
     }
 
     async fn open_history(&mut self, acquire_writer: bool) -> Result<(), Failure> {
-        let Some(thread) = self
-            .selection
-            .as_ref()
-            .and_then(|selection| selection.thread.clone())
-        else {
+        let Some(selection) = self.selection.as_ref() else {
             return Ok(());
         };
+        let Some(thread) = selection.thread.clone() else {
+            return Ok(());
+        };
+        let checkout = selection.checkout.clone();
         let client = self
             .backend
             .as_ref()
@@ -715,7 +716,7 @@ impl Navigation {
         let mut active = Vec::new();
         let mut before_resume = TranscriptView::default();
         for turn in page.data.iter().rev() {
-            before_resume.items.extend(read_turn(turn, &mut active));
+            append_turn(&mut before_resume, &checkout, turn, &mut active);
         }
         self.stream = TextBatcher::default();
         self.restored_active_items = active;
@@ -858,6 +859,7 @@ impl Navigation {
             return;
         };
         let workspace = selection.id;
+        let checkout = selection.checkout.clone();
         match method.as_str() {
             "item/agentMessage/delta" => {
                 if let (Some(item), Some(text)) =
@@ -872,10 +874,34 @@ impl Navigation {
                 }
             }
             "item/started" | "item/completed" => {
-                if let Some(item) = read_item(turn_id, &params["item"], true) {
-                    self.restored_active_items.retain(|id| *id != item.item_id);
+                let wire = &params["item"];
+                if let Some(command) = command_item(turn_id, wire) {
+                    self.flush_stream();
+                    self.publish_command(workspace, command);
+                } else if let Some(item) =
+                    message_item(&checkout, turn_id, wire, method == "item/completed")
+                {
+                    if !item.completed && self.restored_active_items.contains(&item.item_id) {
+                        return;
+                    }
+                    if item.completed {
+                        self.restored_active_items.retain(|id| *id != item.item_id);
+                    }
                     self.flush_stream();
                     self.publish_stream(workspace, StreamChange::FinalItem(item));
+                }
+            }
+            "item/commandExecution/outputDelta" => {
+                if let (Some(item), Some(delta)) =
+                    (params["itemId"].as_str(), params["delta"].as_str())
+                {
+                    self.publish_command(
+                        workspace,
+                        CommandUpdate::Output {
+                            item_id: transcript_id(turn_id, item),
+                            delta: delta.to_owned(),
+                        },
+                    );
                 }
             }
             "turn/completed" => self.flush_stream(),
@@ -893,6 +919,12 @@ impl Navigation {
         let mut state = self.model.lock().expect("workspace state lock poisoned");
         state.publish();
         state.projection.publish_stream(workspace, change);
+    }
+
+    fn publish_command(&self, workspace: WorkspaceId, change: CommandUpdate) {
+        let mut state = self.model.lock().expect("workspace state lock poisoned");
+        state.publish();
+        state.projection.publish_command(workspace, change);
     }
 
     fn publish_navigation(&self) {
@@ -936,56 +968,6 @@ impl Navigation {
         let thread = self.selection.as_ref()?.thread.as_ref()?;
         self.backend.as_ref()?.edits.view(thread)
     }
-}
-
-fn transcript_id(turn: &str, item: &str) -> String {
-    format!("{turn}/{item}")
-}
-
-fn read_turn(turn: &HistoryTurn, active: &mut Vec<String>) -> Vec<TranscriptItem> {
-    let completed = turn.activity.status != TurnStatus::InProgress;
-    turn.items
-        .iter()
-        .filter_map(|value| {
-            let item = read_item(&turn.activity.id.0, value, completed)?;
-            if !completed && item.role == TranscriptRole::Assistant {
-                active.push(item.item_id.clone());
-            }
-            Some(item)
-        })
-        .collect()
-}
-
-fn read_item(turn: &str, value: &Value, completed: bool) -> Option<TranscriptItem> {
-    let id = value["id"].as_str()?;
-    let (role, text) = match value["type"].as_str()? {
-        "agentMessage" => (
-            TranscriptRole::Assistant,
-            value["text"].as_str()?.to_owned(),
-        ),
-        "userMessage" => (
-            TranscriptRole::User,
-            value["content"]
-                .as_array()?
-                .iter()
-                .filter(|entry| entry["type"] == "text")
-                .filter_map(|entry| entry["text"].as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-        ),
-        _ => return None,
-    };
-    let text = if role == TranscriptRole::User {
-        present_question_reply(&text).into_owned()
-    } else {
-        text
-    };
-    Some(TranscriptItem {
-        item_id: transcript_id(turn, id),
-        text,
-        completed,
-        role,
-    })
 }
 
 fn report(error: Failure) -> IpcError {

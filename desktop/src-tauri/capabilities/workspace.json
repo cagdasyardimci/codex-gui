@@ -8,6 +8,8 @@
     "allow-pick-workspace",
     "allow-workspace-snapshot",
     "allow-search-project-paths",
+    "allow-copy-transcript-row",
+    "allow-check-transcript-images",
     "allow-navigate-workspace",
     "allow-checkout-changes",
     "allow-checkout-patch",

@@ -12,6 +12,8 @@ fn main() {
         "pick_workspace",
         "workspace_snapshot",
         "search_project_paths",
+        "copy_transcript_row",
+        "check_transcript_images",
         "navigate_workspace",
         "checkout_changes",
         "checkout_patch",

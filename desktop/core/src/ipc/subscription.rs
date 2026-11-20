@@ -7,8 +7,8 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use super::{
-    NavigationView, WorkspaceId, WorkspaceView,
-    stream::{StreamChange, TranscriptView},
+    IpcError, NavigationView, TranscriptRowRequest, WorkspaceId, WorkspaceView,
+    stream::{CommandUpdate, StreamChange, TranscriptItem, TranscriptRole, TranscriptView},
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, TS)]
@@ -78,6 +78,14 @@ enum Change {
 }
 
 impl Publication {
+    fn owns_workspace(&self, workspace: WorkspaceId) -> bool {
+        self.snapshot
+            .workspace
+            .as_ref()
+            .map(|view| view.workspace_id)
+            == Some(workspace)
+    }
+
     fn advance(&mut self, change: Change) {
         self.snapshot.revision = self
             .snapshot
@@ -135,13 +143,14 @@ impl WorkspaceProjection {
         &mut self,
         workspace: Option<WorkspaceView>,
         navigation: NavigationView,
-        transcript: TranscriptView,
+        mut transcript: TranscriptView,
     ) {
         self.publication.send_modify(|publication| {
             publication.snapshot.workspace = workspace;
             publication.snapshot.navigation = navigation;
-            publication.snapshot.transcript = transcript;
             publication.advance(Change::Snapshot);
+            transcript.generation = publication.snapshot.revision;
+            publication.snapshot.transcript = transcript;
         });
     }
 
@@ -156,21 +165,75 @@ impl WorkspaceProjection {
         });
     }
 
-    pub fn publish_stream(&mut self, workspace: WorkspaceId, change: StreamChange) -> bool {
+    pub fn publish_stream(&mut self, workspace: WorkspaceId, mut change: StreamChange) -> bool {
         self.publication.send_if_modified(|publication| {
-            if publication
-                .snapshot
-                .workspace
-                .as_ref()
-                .map(|view| view.workspace_id)
-                != Some(workspace)
-                || !publication.snapshot.transcript.apply(&change)
+            if !publication.owns_workspace(workspace)
+                || !publication.snapshot.transcript.apply(&mut change)
             {
                 return false;
             }
             publication.advance(Change::Stream(change));
             true
         })
+    }
+
+    pub fn publish_command(&mut self, workspace: WorkspaceId, change: CommandUpdate) -> bool {
+        self.publication.send_if_modified(|publication| {
+            if !publication.owns_workspace(workspace) {
+                return false;
+            }
+            let Some(row) = publication
+                .snapshot
+                .transcript
+                .apply_command(change)
+                .cloned()
+            else {
+                return false;
+            };
+            publication.advance(Change::Stream(StreamChange::FinalItem(row)));
+            true
+        })
+    }
+
+    pub fn copy_transcript_source(
+        &self,
+        request: &TranscriptRowRequest,
+    ) -> Result<String, IpcError> {
+        self.read_transcript_row(request, |row| {
+            (row.role == TranscriptRole::Assistant && row.completed && !row.text.is_empty())
+                .then(|| row.text.clone())
+        })
+    }
+
+    pub fn transcript_images(
+        &self,
+        request: &TranscriptRowRequest,
+    ) -> Result<Vec<String>, IpcError> {
+        self.read_transcript_row(request, |row| {
+            row.completed.then(|| row.local_images.clone())
+        })
+    }
+
+    fn read_transcript_row<T>(
+        &self,
+        request: &TranscriptRowRequest,
+        read: impl FnOnce(&TranscriptItem) -> Option<T>,
+    ) -> Result<T, IpcError> {
+        let publication = self.publication.borrow();
+        if !publication.owns_workspace(request.workspace_id) {
+            return Err(IpcError::RetiredWorkspace);
+        }
+        if publication.snapshot.navigation.selected_chat.as_ref() != Some(&request.chat_id)
+            || publication.snapshot.transcript.generation != request.generation
+        {
+            return Err(IpcError::StaleSelection);
+        }
+        publication
+            .snapshot
+            .transcript
+            .matching_row(&request.item_id, request.revision)
+            .and_then(read)
+            .ok_or(IpcError::StaleSelection)
     }
 
     pub fn subscribe(&mut self) -> WorkspaceSubscription {
@@ -239,7 +302,114 @@ impl WorkspacePoll {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipc::TextBatcher;
+    use crate::ipc::{TextBatcher, TranscriptCommand};
+
+    #[test]
+    fn updates_only_the_target_row_and_keeps_finished_copy_scoped_to_the_original_source() {
+        let mut projection = WorkspaceProjection::default();
+        let workspace_id = WorkspaceId(Uuid::new_v4());
+        let workspace = WorkspaceView {
+            workspace_id,
+            project_path: "project".into(),
+        };
+        let navigation = NavigationView {
+            selected_chat: Some("chat".into()),
+            ..NavigationView::default()
+        };
+        let exact = "  First \n\n```txt\n日本語 👩🏽‍💻\n```\n";
+        let mut history = TranscriptView::default();
+        history.push_message(TranscriptItem::message(
+            "turn/finished".into(),
+            "turn".into(),
+            exact.into(),
+            true,
+            TranscriptRole::Assistant,
+        ));
+        projection.replace_history(Some(workspace.clone()), navigation.clone(), history.clone());
+        let initial = projection.subscribe().snapshot;
+        let old = initial.transcript.items[0].clone();
+        let mut request = TranscriptRowRequest {
+            workspace_id,
+            chat_id: "chat".into(),
+            generation: initial.transcript.generation,
+            item_id: old.item_id.clone(),
+            revision: old.revision,
+        };
+        let mut batch = TextBatcher::default();
+        batch.append("newer/fresh".into(), "new reply".into());
+        assert!(projection.publish_stream(workspace_id, batch.flush().unwrap()));
+        let current = projection.subscribe().snapshot;
+        assert_eq!(current.transcript.items[0], old);
+        assert_eq!(projection.copy_transcript_source(&request).unwrap(), exact);
+        request.item_id = "newer/fresh".into();
+        assert_eq!(
+            projection.copy_transcript_source(&request),
+            Err(IpcError::StaleSelection)
+        );
+        request.item_id = old.item_id;
+        projection.replace_history(Some(workspace), navigation, history);
+        assert_eq!(
+            projection.copy_transcript_source(&request),
+            Err(IpcError::StaleSelection)
+        );
+    }
+
+    #[test]
+    fn appends_command_groups_and_changes_only_the_group_that_owns_the_update() {
+        let mut view = TranscriptView::default();
+        let command = |id: &str, completed, body: Option<&str>| CommandUpdate::Item {
+            turn_id: "turn".into(),
+            command: TranscriptCommand {
+                id: id.into(),
+                command: format!("command {id}"),
+                output: body.map(str::to_owned),
+                completed,
+                exit_code: completed.then_some(0),
+            },
+        };
+        let first = view
+            .apply_command(command("turn/a", false, None))
+            .unwrap()
+            .item_id
+            .clone();
+        let group = view.apply_command(command("turn/b", false, None)).unwrap();
+        assert_eq!(group.item_id, first);
+        assert_eq!(group.commands.len(), 2);
+        view.push_message(TranscriptItem::message(
+            "turn/message".into(),
+            "turn".into(),
+            "reply".into(),
+            true,
+            TranscriptRole::Assistant,
+        ));
+        let untouched = view
+            .apply_command(command("turn/c", true, Some("new group")))
+            .unwrap()
+            .clone();
+        let first_revision = view.items[0].revision;
+        let changed = view
+            .apply_command(CommandUpdate::Output {
+                item_id: "turn/a".into(),
+                delta: "local output\n".into(),
+            })
+            .unwrap();
+        assert_eq!(changed.item_id, first);
+        assert_eq!(changed.revision, first_revision + 1);
+        assert!(changed.commands[1].output.is_none());
+        assert_eq!(view.items[2], untouched);
+        let completed = view.apply_command(command("turn/a", true, None)).unwrap();
+        assert_eq!(
+            completed.commands[0].output.as_deref(),
+            Some("local output\n")
+        );
+        assert!(
+            view.apply_command(CommandUpdate::Output {
+                item_id: "turn/a".into(),
+                delta: "late".into()
+            })
+            .is_none()
+        );
+    }
 
     #[tokio::test]
     async fn bounded_subscription_catches_adjacent_updates_and_resyncs_after_replacement_or_lag() {

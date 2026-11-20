@@ -10,6 +10,7 @@ mod fixture;
 mod navigation;
 mod project_ipc;
 mod quit_ipc;
+mod transcript_ipc;
 
 fn main() {
     let mut arguments = std::env::args_os().skip(1);
@@ -75,6 +76,7 @@ fn main() {
         });
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(verification)
         .manage(project_ipc::ProjectIpc::default())
         .manage(diff_ipc::DiffIpc::default())
@@ -103,6 +105,8 @@ fn main() {
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::search_project_paths,
+            transcript_ipc::copy_transcript_row,
+            transcript_ipc::check_transcript_images,
             project_ipc::navigate_workspace,
             project_ipc::subscribe_workspace,
             project_ipc::next_workspace_update,

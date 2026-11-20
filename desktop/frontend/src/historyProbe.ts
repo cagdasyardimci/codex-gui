@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { WorkspaceSnapshot } from './generated/workspace';
-import { navigateWorkspace, searchProjectPaths } from './projectIpc';
+import type { TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
+import { checkTranscriptImages, navigateWorkspace, searchProjectPaths } from './projectIpc';
 import { click, editor, typeText, waitFor } from './fixtureControls';
 
 const FIRST = 'history-first';
@@ -15,6 +15,48 @@ function shortcut(key: string, composing = false) {
 
 function containsText(text: string) {
   return document.querySelector('.workspace-transcript')?.textContent?.includes(text) ?? false;
+}
+
+async function verifySavedRows(workspaceId: WorkspaceId, snapshot: WorkspaceSnapshot) {
+  const saved = snapshot.transcript.items.find((item) => item.itemId === 'first-saved-turn/first-history');
+  const group = snapshot.transcript.items.find((item) => item.role === 'commands');
+  if (!saved || group?.commands.length !== 2 || group.commands[1]?.output !== 'Café.md\n') {
+    throw new Error('The saved turn did not group its command output');
+  }
+  const commands = document.querySelector<HTMLDetailsElement>(`[data-item-id="${group.itemId}"] details`);
+  commands?.querySelector('summary')?.click();
+  if (!commands?.open || !commands.querySelector('ul')?.textContent?.includes('Café.md\n')) {
+    throw new Error('The command group did not reveal its saved output');
+  }
+  commands.open = false;
+  const row = document.querySelector(`[data-item-id="${saved.itemId}"]`);
+  const paragraph = row?.querySelector('p');
+  const copy = row?.querySelector<HTMLButtonElement>('button');
+  const selection = window.getSelection();
+  if (!row || !paragraph || !copy || !selection) throw new Error('The saved response action did not render');
+  const range = document.createRange();
+  range.selectNodeContents(paragraph);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  const selected = selection.toString();
+  const height = row.getBoundingClientRect().height;
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+  copy.focus({ preventScroll: true });
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const revealed = getComputedStyle(copy).opacity === '1';
+  const selectionRetained = !!selected && selection.toString() === selected && selection.containsNode(paragraph, true);
+  const geometryRetained = row.getBoundingClientRect().height === height;
+  if (!revealed || !selectionRetained || !geometryRetained) {
+    throw new Error(`Revealing a saved action failed ${JSON.stringify({ revealed, selectionRetained, geometryRetained })}`);
+  }
+  selection.removeAllRanges();
+  const request: TranscriptRowRequest = { workspaceId, chatId: FIRST, generation: snapshot.transcript.generation,
+    itemId: saved.itemId, revision: saved.revision };
+  const [image] = await checkTranscriptImages(request);
+  if (image?.path !== 'notes/panel.png' || !image.revision?.byteCount) {
+    throw new Error('The installed transcript did not project its scoped image dependency');
+  }
+  return { row, request };
 }
 
 export async function verifyHistory(
@@ -63,6 +105,7 @@ export async function verifyHistory(
       await waitFor('Writer lock did not leave readable history', () =>
         visible()?.navigation.selectedChat === FIRST && !!visible()?.navigation.retryable &&
         containsText('History in the first chat.'));
+      const saved = await verifySavedRows(workspaceId, visible()!);
       const [path, ...others] = await searchProjectPaths({ workspaceId, query: ' CAFÉ.MD ' });
       if (path?.displayPath !== 'notes/Café.md' || others.length) {
         throw new Error('Project search did not return the visible checkout file');
@@ -80,12 +123,26 @@ export async function verifyHistory(
       await click('Retry');
       await waitFor('Cold resume did not stream into the selected chat', () =>
         !visible()?.navigation.retryable && containsText('A streamed reply') && !containsText(REPLY));
+      if (!saved.row.isConnected || !saved.row.querySelector('[aria-label="Copy response"]') ||
+          visible()?.transcript.items.find((item) => item.itemId === saved.request.itemId)?.revision !== saved.request.revision) {
+        throw new Error('An unrelated delta replaced the saved response or retired its copy action');
+      }
+      if (!visible()?.transcript.items.some((row) => row.role === 'commands' &&
+          row.commands.length === 2 && row.commands[1]?.output === 'Café 日本語\n' && row.completed)) {
+        throw new Error('The resumed command group lost its streamed output');
+      }
       await waitFor('The complete stream was not rendered exactly', () =>
         containsText(REPLY) && !!visible()?.transcript.items.some((item) => item.completed && item.text === REPLY));
       await click('Second fixture chat');
       await waitFor('Chat switching showed stale transcript or draft', () =>
         visible()?.navigation.selectedChat === SECOND && !containsText(REPLY) &&
         containsText('History in the second chat.') && editor().value === '');
+      try {
+        await checkTranscriptImages(saved.request);
+        throw new Error('A retired transcript could still inspect local images');
+      } catch (error) {
+        if (error !== 'staleSelection') throw error;
+      }
       const [secondPath] = await searchProjectPaths({ workspaceId, query: 'café.md' });
       if (secondPath?.id.revision !== path.id.revision || secondPath?.id.entry !== path.id.entry) {
         throw new Error('Switching chats replaced the checkout-owned path index');

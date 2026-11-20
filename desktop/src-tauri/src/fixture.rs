@@ -370,24 +370,19 @@ pub fn verify_fixture_result(
     }
     let chunks = scenario().map_err(|error| error.to_string())?.chunks;
     let expected = [
-        TranscriptItem {
-            item_id: PRIMARY_ITEM.into(),
-            text: chunks.concat(),
-            completed: true,
-            role: TranscriptRole::Assistant,
-        },
-        TranscriptItem {
-            item_id: SECONDARY_ITEM.into(),
-            text: SECONDARY_TEXT.concat(),
-            completed: true,
-            role: TranscriptRole::Assistant,
-        },
+        (PRIMARY_ITEM, chunks.concat()),
+        (SECONDARY_ITEM, SECONDARY_TEXT.concat()),
     ];
-    let expected_text = expected
-        .iter()
-        .map(|item| item.text.as_str())
-        .collect::<String>();
-    if !stream_recovered || items != expected || rendered != expected_text {
+    let expected_text: String = expected.iter().map(|(_, text)| text.as_str()).collect();
+    let exact_rows = items.len() == expected.len()
+        && items.iter().zip(&expected).all(|(item, (id, text))| {
+            item.item_id == *id
+                && item.text == *text
+                && item.completed
+                && item.role == TranscriptRole::Assistant
+                && item.revision > 0
+        });
+    if !stream_recovered || !exact_rows || rendered != expected_text {
         eprintln!("WebView fixture differed from the expected ordered Unicode output");
         app.exit(1);
         return Ok(());

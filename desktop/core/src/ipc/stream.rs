@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+mod commands;
+pub use commands::{CommandUpdate, TranscriptCommand};
 
 const MAX_PENDING_BYTES: usize = 16 * 1024;
 const MAX_PENDING_ITEMS: usize = 64;
@@ -25,6 +30,7 @@ pub enum StreamChange {
 pub enum TranscriptRole {
     User,
     Assistant,
+    Commands,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, TS)]
@@ -34,6 +40,31 @@ pub struct TranscriptItem {
     pub text: String,
     pub completed: bool,
     pub role: TranscriptRole,
+    pub turn_id: String,
+    pub revision: u32,
+    pub commands: Vec<TranscriptCommand>,
+    pub local_images: Vec<String>,
+}
+
+impl TranscriptItem {
+    pub fn message(
+        item_id: String,
+        turn_id: String,
+        text: String,
+        completed: bool,
+        role: TranscriptRole,
+    ) -> Self {
+        Self {
+            item_id,
+            text,
+            completed,
+            role,
+            turn_id,
+            revision: 0,
+            commands: Vec::new(),
+            local_images: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -41,10 +72,31 @@ pub struct TranscriptItem {
 pub struct TranscriptView {
     pub items: Vec<TranscriptItem>,
     pub completed: bool,
+    pub generation: u32,
+    #[serde(skip)]
+    #[ts(skip)]
+    positions: HashMap<String, usize>,
+    #[serde(skip)]
+    #[ts(skip)]
+    commands: HashMap<String, (usize, usize)>,
 }
 
 impl TranscriptView {
-    pub(super) fn apply(&mut self, change: &StreamChange) -> bool {
+    pub fn push_message(&mut self, mut item: TranscriptItem) {
+        if self.positions.contains_key(&item.item_id) {
+            self.apply(&mut StreamChange::FinalItem(item));
+            return;
+        }
+        item.revision = 1;
+        self.push(item);
+    }
+
+    pub(super) fn matching_row(&self, item_id: &str, revision: u32) -> Option<&TranscriptItem> {
+        let item = self.items.get(*self.positions.get(item_id)?)?;
+        (item.revision == revision).then_some(item)
+    }
+
+    pub(super) fn apply(&mut self, change: &mut StreamChange) -> bool {
         if self.completed {
             return false;
         }
@@ -58,6 +110,7 @@ impl TranscriptView {
                     let item = self.item(&batch.item_id);
                     if !item.completed {
                         item.text.push_str(&batch.text);
+                        item.revision += 1;
                         changed = true;
                     }
                 }
@@ -65,13 +118,31 @@ impl TranscriptView {
             }
             StreamChange::ItemCompleted(id) => {
                 let item = self.item(id);
-                !std::mem::replace(&mut item.completed, true)
+                if item.completed {
+                    return false;
+                }
+                item.completed = true;
+                item.revision += 1;
+                true
             }
             StreamChange::FinalItem(final_item) => {
-                let item = self.item(&final_item.item_id);
+                let Some(&index) = self.positions.get(&final_item.item_id) else {
+                    final_item.revision = 1;
+                    self.push(final_item.clone());
+                    return true;
+                };
+                let item = &mut self.items[index];
+                if item.completed && !final_item.completed {
+                    return false;
+                }
+                if !final_item.completed && final_item.text.is_empty() && !item.text.is_empty() {
+                    final_item.text.clone_from(&item.text);
+                }
+                final_item.revision = item.revision;
                 if item == final_item {
                     return false;
                 }
+                final_item.revision += 1;
                 *item = final_item.clone();
                 true
             }
@@ -83,16 +154,25 @@ impl TranscriptView {
     }
 
     fn item(&mut self, id: &str) -> &mut TranscriptItem {
-        if let Some(index) = self.items.iter().position(|item| item.item_id == id) {
+        if let Some(&index) = self.positions.get(id) {
             return &mut self.items[index];
         }
-        self.items.push(TranscriptItem {
-            item_id: id.to_owned(),
-            text: String::new(),
-            completed: false,
-            role: TranscriptRole::Assistant,
-        });
+        let turn = id.split_once('/').map_or("", |(turn, _)| turn);
+        self.push(TranscriptItem::message(
+            id.to_owned(),
+            turn.to_owned(),
+            String::new(),
+            false,
+            TranscriptRole::Assistant,
+        ));
         self.items.last_mut().expect("inserted transcript item")
+    }
+
+    fn push(&mut self, item: TranscriptItem) -> usize {
+        let index = self.items.len();
+        self.positions.insert(item.item_id.clone(), index);
+        self.items.push(item);
+        index
     }
 }
 

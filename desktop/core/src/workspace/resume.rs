@@ -266,10 +266,9 @@ impl WorkspaceEngine {
         }
         if let Some(thread) = thread
             && matches!(&event, ServerEvent::Notification { method, params }
-                if matches!(method.as_str(), "turn/completed" | "item/agentMessage/delta")
-                   || (method == "item/completed"
-                       && matches!(params["item"]["type"].as_str(), Some("agentMessage" | "userMessage")))
-                   || (method == "item/started" && params["item"]["type"] == "userMessage"))
+                if matches!(method.as_str(), "turn/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta")
+                   || (matches!(method.as_str(), "item/started" | "item/completed")
+                       && matches!(params["item"]["type"].as_str(), Some("agentMessage" | "userMessage" | "commandExecution"))))
         {
             return Ok(Some(RoutedEvent::Conversation { thread, event }));
         }

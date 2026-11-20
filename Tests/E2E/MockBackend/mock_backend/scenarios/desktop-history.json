@@ -12,7 +12,9 @@
           "id": "first-saved-turn",
           "status": "completed",
           "items": [
-            {"id": "first-history", "type": "agentMessage", "text": "History in the first chat."}
+            {"id": "first-command", "type": "commandExecution", "command": "Inspect fixture paths", "status": "completed", "aggregatedOutput": "notes/\n", "exitCode": 0},
+            {"id": "second-command", "type": "commandExecution", "command": "Read fixture notes", "status": "completed", "aggregatedOutput": "Café.md\n", "exitCode": 0},
+            {"id": "first-history", "type": "agentMessage", "text": "History in the first chat.\n\n![Panel](notes/panel.png)"}
           ]
         }
       ]

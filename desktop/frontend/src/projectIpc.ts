@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptItem, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -16,6 +16,14 @@ export function searchProjectPaths(request: ProjectPathRequest): Promise<Project
   return invoke('search_project_paths', { request });
 }
 
+export function copyTranscriptRow(request: TranscriptRowRequest): Promise<void> {
+  return invoke('copy_transcript_row', { request });
+}
+
+export function checkTranscriptImages(request: TranscriptRowRequest): Promise<TranscriptImageDependency[]> {
+  return invoke('check_transcript_images', { request });
+}
+
 export function subscribeWorkspace(): Promise<WorkspaceSubscription> {
   return invoke('subscribe_workspace');
 }
@@ -28,24 +36,35 @@ export function navigateWorkspace(intent: NavigationIntent): Promise<void> {
   return invoke('navigate_workspace', { intent });
 }
 
-function applyStream(transcript: TranscriptView, change: StreamChange): TranscriptView {
+function indexRows(transcript: TranscriptView): Map<string, number> {
+  return new Map(transcript.items.map((item, index) => [item.itemId, index]));
+}
+
+function applyStream(transcript: TranscriptView, change: StreamChange, positions: Map<string, number>): TranscriptView {
   if (change === 'completed') return { ...transcript, completed: true };
   const items = transcript.items.slice();
   function updateItem(itemId: string, update: (item: TranscriptItem) => TranscriptItem) {
-    const index = items.findIndex((item) => item.itemId === itemId);
-    if (index === -1) {
-      items.push(update({ itemId, text: '', completed: false, role: 'assistant' }));
+    const index = positions.get(itemId);
+    if (index === undefined) {
+      positions.set(itemId, items.length);
+      const boundary = itemId.indexOf('/');
+      items.push(update({
+        itemId, text: '', completed: false, role: 'assistant', revision: 0,
+        turnId: boundary === -1 ? '' : itemId.slice(0, boundary), commands: [], localImages: [],
+      }));
     } else {
       items[index] = update(items[index]!);
     }
   }
   if ('itemCompleted' in change) {
-    updateItem(change.itemCompleted, (item) => ({ ...item, completed: true }));
+    updateItem(change.itemCompleted, (item) => item.completed ? item :
+      { ...item, completed: true, revision: item.revision + 1 });
   } else if ('finalItem' in change) {
     updateItem(change.finalItem.itemId, () => change.finalItem);
   } else {
     for (const batch of change.text) {
-      updateItem(batch.itemId, (item) => item.completed ? item : { ...item, text: item.text + batch.text });
+      if (batch.text) updateItem(batch.itemId, (item) => item.completed ? item :
+        { ...item, text: item.text + batch.text, revision: item.revision + 1 });
     }
   }
   return { ...transcript, items };
@@ -57,6 +76,7 @@ export async function observeWorkspace(
 ) {
   let { subscriptionId, snapshot } = await subscribeWorkspace();
   if (signal.aborted) return;
+  let positions = indexRows(snapshot.transcript);
   receive(snapshot);
   while (!signal.aborted) {
     const update = await nextWorkspaceUpdate({ subscriptionId, afterRevision: snapshot.revision });
@@ -69,15 +89,17 @@ export async function observeWorkspace(
     if (update === 'resync' || revision !== snapshot.revision + 1) {
       ({ subscriptionId, snapshot } = await subscribeWorkspace());
       if (signal.aborted) return;
+      positions = indexRows(snapshot.transcript);
     } else if ('changed' in update) {
       snapshot = update.changed;
+      positions = indexRows(snapshot.transcript);
     } else if ('navigation' in update) {
       snapshot = { ...snapshot, ...update.navigation };
     } else {
       snapshot = {
         ...snapshot,
         revision: update.stream.revision,
-        transcript: applyStream(snapshot.transcript, update.stream.change),
+        transcript: applyStream(snapshot.transcript, update.stream.change, positions),
       };
     }
     receive(snapshot);

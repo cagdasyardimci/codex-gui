@@ -20,14 +20,19 @@ class Stream:
     def run(self):
         engine = self.engine
         try:
+            text = self.turn['items'][0]['content'][0]['text']
+            cold_history = engine.scenario.get('desktopHistory') and text == 'Queued request from another client'
             with engine.lock:
                 self.emit('turn/started', turn=self.turn)
                 for item in self.turn['items']:
-                    self.emit('item/started', item=item)
+                    if not cold_history or item is not self.item:
+                        self.emit('item/started', item=item)
+                if cold_history:
+                    self.emit_history_commands()
+                    self.emit('item/started', item=self.item)
             if engine.scenario.get('codingProbe'):
                 self.read_probe_marker()
             desktop_turn = engine.scenario.get('desktopTurn')
-            text = self.turn['items'][0]['content'][0]['text']
             finish_during_quit = engine.scenario.get('desktopQuit') and text == 'Complete during Quit confirmation'
             hold = ((desktop_turn or engine.scenario.get('desktopQueue')) and text == 'Hold this fixture turn') or finish_during_quit
             quit_command = None
@@ -76,6 +81,18 @@ class Stream:
                     self.emit('item/completed', item=quit_command)
         except (BrokenPipeError, OSError) as error:
             engine.report_failure(error)
+
+    def emit_history_commands(self):
+        for label, output in [('Inspect fixture directory', 'notes/\n'), ('Read current fixture', 'Café 日本語\n')]:
+            command = {'id': self.engine.state.identity('command'), 'type': 'commandExecution',
+                       'command': label, 'cwd': self.thread['cwd'], 'commandActions': [],
+                       'status': 'inProgress', 'aggregatedOutput': None}
+            self.turn['items'].insert(-1, command)
+            self.emit('item/started', item=command)
+            self.emit('item/commandExecution/outputDelta', itemId=command['id'], delta=output)
+            command.update(status='completed', exitCode=0)
+            self.emit('item/completed', item=command)
+            command['aggregatedOutput'] = output
 
     def read_probe_marker(self):
         engine = self.engine
