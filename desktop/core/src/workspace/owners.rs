@@ -109,7 +109,6 @@ impl RuntimeOwners {
 
     /// A local edit already bound to a checkout can drain after its connection retires.
     pub fn acquire_write(&self, checkout: &CheckoutIdentity) -> Result<RuntimeUse, OwnerError> {
-        checkout.revalidate()?;
         let mut scopes = self.lock();
         let scope = scopes.entry(checkout.clone()).or_default();
         self.acquire_scope(checkout, scope)

@@ -204,3 +204,29 @@ async fn reopens_unselected_evidence_and_rejects_late_results_from_the_retired_r
     assert!(owners.exit_owners().unwrap().is_empty());
     assert!(owners.reserve_cleanup(&hidden).is_ok());
 }
+
+#[test]
+fn an_existing_draft_can_still_be_saved_after_its_checkout_is_replaced() {
+    let root = tempfile::tempdir().unwrap();
+    let original = checkout(root.path(), "selected");
+    let state = AttachmentStore::open(&root.path().join("workspace.sqlite3")).unwrap();
+    let draft = state
+        .editable_thread_draft(&ThreadId("original".into()))
+        .unwrap();
+    let owners = RuntimeOwners::new(state.clone());
+    fs::rename(original.canonical_path(), root.path().join("prior")).unwrap();
+    fs::create_dir(root.path().join("selected")).unwrap();
+
+    let _write = owners.acquire_write(&original).unwrap();
+    state
+        .save_editor_text(draft, "retained text".into())
+        .unwrap();
+    assert_eq!(
+        state.read_editor_draft(draft).unwrap().text,
+        "retained text"
+    );
+    assert!(matches!(
+        owners.reserve_cleanup(&original),
+        Err(OwnerError::Checkout(CheckoutError::Replaced(_)))
+    ));
+}
