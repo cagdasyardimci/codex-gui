@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { AccountModel, ChatRow, ContextUsage, SlashCommand } from './generated/workspace';
+  import { visibleEfforts } from './reasoningEfforts';
 
-  let { command, chats, models, effective, usage, workspace, chat, sourceId, fullAccess, choose, close } : {
+  let { command, chats, models, effective, hiddenEfforts, selectedEffort, usage, workspace, chat, sourceId, fullAccess, choose, close } : {
     command: SlashCommand;
     chats: ChatRow[];
     models: AccountModel[];
     effective?: AccountModel;
+    hiddenEfforts: string[];
+    selectedEffort?: string | null;
     usage: ContextUsage | null;
     workspace: string;
     chat?: string;
@@ -80,7 +83,7 @@
     </div>
   {:else if command === 'reasoning'}
     <div class="choices">
-      {#each effective?.efforts ?? [] as effort (effort.reasoningEffort)}
+      {#each visibleEfforts(effective?.efforts ?? [], hiddenEfforts, selectedEffort) as effort (effort.reasoningEffort)}
         <button type="button" onclick={() => choose(effort.reasoningEffort, false)}>{effort.reasoningEffort}</button>
       {/each}
     </div>

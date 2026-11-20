@@ -114,6 +114,8 @@ enum Action {
         oneshot::Sender<Option<Arc<TurnEdits>>>,
     ),
     SettingsSignOut(AppServerClient, codex_gui_core::codex::AccountSnapshot),
+    SettingsCommitted,
+    LoadReasoningVisibility,
     EditFileTab(codex_gui_core::ipc::FileTabEdit),
     SaveFileTab(
         codex_gui_core::ipc::FileTabRead,
@@ -318,7 +320,10 @@ impl NavigationHandle {
             reviews: review::Reviews::default(),
             file_tools: file_tools::FileTools::default(),
             worktree_records,
-            view: NavigationView::default(),
+            view: NavigationView {
+                hidden_reasoning_efforts: store.hidden_reasoning_efforts()?,
+                ..NavigationView::default()
+            },
             editable: HashMap::new(),
             failed_drafts: HashMap::new(),
             quit: None,
@@ -532,6 +537,23 @@ impl Navigation {
             }
             Action::SettingsSignOut(client, account) => {
                 self.apply_settings_sign_out(client, account).await?;
+                return Ok(None);
+            }
+            Action::SettingsCommitted => {
+                if let Some(backend) = &self.backend {
+                    self.configured_run =
+                        composer_settings::read_configured_run(backend.connection.client()).await;
+                    self.reconcile_composer_models();
+                    self.sync_actions();
+                }
+                return Ok(None);
+            }
+            Action::LoadReasoningVisibility => {
+                self.view.hidden_reasoning_efforts = self
+                    .store
+                    .hidden_reasoning_efforts()
+                    .map_err(|error| report(error.into()))?;
+                self.publish_navigation();
                 return Ok(None);
             }
             Action::EditFileTab(request) => {

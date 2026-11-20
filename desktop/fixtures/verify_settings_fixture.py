@@ -1,8 +1,10 @@
 """Verify Settings with an isolated account, provider changes, and delayed usage."""
 
 import argparse
+from contextlib import closing
 import json
 import os
+import sqlite3
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
@@ -41,8 +43,18 @@ def main():
         assert starts.count("codex_gui") >= 2 and starts.count("codex_gui_settings") >= 6, starts
         logout = [entry for entry in requests if entry["method"] == "account/logout"]
         assert len(logout) == 1 and logout[0]["params"] == {}, logout
+        writes = [entry["params"] for entry in requests if entry["method"] == "config/value/write"]
+        assert [(entry["keyPath"], entry["value"], entry["expectedVersion"]) for entry in writes] == [
+            ("model_verbosity", "high", "layer-first-0"),
+            ("features.local_thread_store_compression", True, "layer-first-1"),
+            ("model_reasoning_summary", "concise", "layer-first-2"),
+        ], writes
+        assert all(Path(entry["filePath"]).samefile(account) for entry in writes)
+        with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
+            assert database.execute("SELECT effort FROM desktop_hidden_reasoning_efforts").fetchall() == [("minimal",)]
         assert not list(profile.iterdir())
         print("Verified provider and policy rotation, stale sensitive reads, one captured sign-out, and restarted workspace credentials")
+        print("Verified versioned writes, newer configuration after lost acknowledgement, and persistent effort visibility")
 
 
 if __name__ == "__main__":

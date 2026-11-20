@@ -1,4 +1,8 @@
-use std::{sync::Mutex, time::Duration};
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Mutex,
+    time::Duration,
+};
 
 use codex_gui_core::{
     codex::{
@@ -6,15 +10,17 @@ use codex_gui_core::{
         CodexExecutable, EffectiveConfiguration, SettingsRateLimits,
     },
     identity::{CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, WorkspaceIdentity},
-    ipc::{IpcError, SettingsAccountView, SettingsSelection, SettingsView},
+    ipc::{IpcError, SettingsAccountView, SettingsEffort, SettingsSelection, SettingsView},
+    storage::attachments::reasoning_visibility::REQUIRED_EFFORTS,
 };
-use tauri::{State, WebviewWindow};
+use tauri::{Manager, State, WebviewWindow};
 use tokio::sync::watch;
 use uuid::Uuid;
 
 use crate::project_ipc::{ProjectIpc, authorize_view};
 
 const TIMEOUT: Duration = Duration::from_secs(8);
+pub(crate) mod writes;
 
 #[derive(Default)]
 pub struct SettingsIpc {
@@ -45,9 +51,43 @@ struct Published {
     account_id: Option<String>,
     sign_out: bool,
     revision: Uuid,
+    efforts: BTreeSet<String>,
 }
 
 impl SettingsIpc {
+    fn mutation(
+        &self,
+        selection: &SettingsSelection,
+        permitted: impl FnOnce(&Published) -> bool,
+    ) -> Result<(Uuid, AppServerClient, Published), IpcError> {
+        let mut selected = self.selected.lock().expect("settings lock poisoned");
+        let view = selected
+            .as_mut()
+            .filter(|view| view.id == selection.session)
+            .ok_or(IpcError::StaleSelection)?;
+        let client = view
+            .backend
+            .as_ref()
+            .ok_or(IpcError::StaleSelection)?
+            .client
+            .clone();
+        if !view
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.revision == selection.revision && permitted(snapshot))
+        {
+            return Err(IpcError::StaleSelection);
+        }
+        let snapshot = view.snapshot.take().expect("checked Settings snapshot");
+        view.request = Uuid::new_v4();
+        Ok((view.request, client, snapshot))
+    }
+
+    fn validate_request(&self, session: Uuid, request: Uuid) -> Result<(), IpcError> {
+        let mut selected = self.selected.lock().expect("settings lock poisoned");
+        match_session(&mut selected, session, request).map(|_| ())
+    }
+
     fn request(
         &self,
         session: Uuid,
@@ -164,46 +204,26 @@ pub async fn sign_out_settings(
 ) -> Result<SettingsView, IpcError> {
     authorize_view(&window)?;
     let session = selection.session;
-    let request = Uuid::new_v4();
-    let (client, expected, account_id) = {
-        let mut selected = settings.selected.lock().expect("settings lock poisoned");
-        let view = selected
-            .as_mut()
-            .filter(|view| view.id == session)
-            .ok_or(IpcError::StaleSelection)?;
-        let backend = view.backend.as_ref().ok_or(IpcError::StaleSelection)?;
-        let snapshot = view
-            .snapshot
-            .as_ref()
-            .filter(|snapshot| snapshot.revision == selection.revision && snapshot.sign_out)
-            .ok_or(IpcError::StaleSelection)?;
-        view.request = request;
-        let expected = snapshot.authority.clone();
-        let account_id = snapshot.account_id.clone();
-        view.snapshot = None;
-        (backend.client.clone(), expected, account_id)
-    };
+    let (request, client, captured) =
+        settings.mutation(&selection, |snapshot| snapshot.sign_out)?;
     let fresh = SettingsAuthority::read(&client).await?;
     let fresh_account = CodexBrowser::new(client.clone())
         .settings_rate_limits(TIMEOUT)
         .await
         .ok()
         .and_then(|rates| rates.account_id);
-    if fresh != expected || fresh_account != account_id {
+    if fresh != captured.authority || fresh_account != captured.account_id {
         settings.retire_backend(session, request)?;
         return Err(IpcError::StaleSelection);
     }
-    {
-        authorize_view(&window)?;
-        let mut selected = settings.selected.lock().expect("settings lock poisoned");
-        match_session(&mut selected, session, request)?;
-    }
+    authorize_view(&window)?;
+    settings.validate_request(session, request)?;
     let navigation = project
         .navigation
         .get()
         .ok_or(IpcError::ProjectUnavailable)?;
     navigation
-        .sign_out_settings(client, expected.account)
+        .sign_out_settings(client, captured.authority.account)
         .await?;
     settings.retire_backend(session, request)?;
     let backend = SettingsBackend::connect().await?;
@@ -321,6 +341,15 @@ async fn read_settings_view(
     } else {
         (None, None)
     };
+    let efforts = catalog_efforts(&browser).await;
+    let project = window.state::<ProjectIpc>();
+    let hidden = project
+        .navigation
+        .get()
+        .map(|navigation| navigation.attachment_store().hidden_reasoning_efforts())
+        .transpose()
+        .map_err(report)?
+        .unwrap_or_default();
     if SettingsAuthority::read(&client).await? != authority {
         settings.retire_backend(session, request)?;
         return Err(IpcError::StaleSelection);
@@ -334,6 +363,16 @@ async fn read_settings_view(
         limits: limits.map_or_else(Vec::new, |rates| rates.windows()),
         daily_usage: daily,
         configuration: authority.configuration.entries.clone(),
+        compression: authority.configuration.compression.clone(),
+        network_access: authority.configuration.network_access.clone(),
+        efforts: efforts
+            .iter()
+            .map(|effort| SettingsEffort {
+                effort: effort.clone(),
+                visible: !hidden.contains(effort),
+                required: REQUIRED_EFFORTS.contains(&effort.as_str()),
+            })
+            .collect(),
     };
     settings.publish(
         session,
@@ -343,9 +382,34 @@ async fn read_settings_view(
             account_id,
             sign_out: view.account.can_sign_out,
             revision,
+            efforts,
         },
     )?;
     Ok(view)
+}
+
+async fn catalog_efforts(browser: &CodexBrowser) -> BTreeSet<String> {
+    let mut efforts = BTreeSet::new();
+    let mut seen = HashSet::new();
+    let mut cursor = None;
+    for _ in 0..10 {
+        let Ok(page) = browser.models(cursor.as_deref(), TIMEOUT).await else {
+            break;
+        };
+        efforts.extend(
+            page.data
+                .into_iter()
+                .filter(|model| !model.hidden)
+                .flat_map(|model| model.supported_reasoning_efforts)
+                .map(|effort| effort.reasoning_effort)
+                .filter(|effort| !effort.is_empty() && effort.len() <= 80),
+        );
+        match page.next_cursor {
+            Some(next) if seen.insert(next.clone()) => cursor = Some(next),
+            _ => break,
+        }
+    }
+    efforts
 }
 
 fn report(error: impl std::fmt::Display) -> IpcError {

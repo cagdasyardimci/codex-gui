@@ -35,6 +35,22 @@ pub struct EffectiveSettingView {
     pub key: String,
     pub value: String,
     pub managed: bool,
+    pub choices: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsToggle {
+    pub enabled: bool,
+    pub managed: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsEffort {
+    pub effort: String,
+    pub visible: bool,
+    pub required: bool,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -45,6 +61,9 @@ pub struct SettingsView {
     pub limits: Vec<UsageWindowView>,
     pub daily_usage: Option<Vec<DailyUsageView>>,
     pub configuration: Vec<EffectiveSettingView>,
+    pub compression: Option<SettingsToggle>,
+    pub network_access: Option<SettingsToggle>,
+    pub efforts: Vec<SettingsEffort>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -52,4 +71,28 @@ pub struct SettingsView {
 pub struct SettingsSelection {
     pub session: Uuid,
     pub revision: Uuid,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WriteSettingsValue {
+    pub selection: SettingsSelection,
+    pub key: String,
+    #[ts(type = "string | boolean | null")]
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetEffortVisibility {
+    pub selection: SettingsSelection,
+    pub effort: String,
+    pub visible: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsWriteOutcome {
+    pub view: SettingsView,
+    pub confirmed: bool,
 }

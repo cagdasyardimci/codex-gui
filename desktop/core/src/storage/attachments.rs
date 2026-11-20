@@ -35,6 +35,7 @@ pub mod navigation;
 pub mod queue_edits;
 pub(super) mod queue_preferences;
 pub(super) mod queue_steering;
+pub mod reasoning_visibility;
 pub mod review_markers;
 pub mod review_runs;
 pub mod sidebar;

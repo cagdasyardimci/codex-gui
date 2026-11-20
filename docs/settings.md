@@ -10,6 +10,8 @@ The [Tauri Settings session](../desktop/src-tauri/src/settings_ipc.rs) rechecks 
 
 Write against the active user layer and its version when available. Replace origin maps as a table: dots in site names must not become configuration path separators. Feature availability comes from the advertised catalog; missing config keys do not establish disabled features, and catalog failures must not prevent unrelated configuration work. Managed requirements take precedence over editable defaults.
 
+A [Tauri configuration write](../desktop/src-tauri/src/settings_ipc/writes.rs) rechecks the captured account, layer and policy before sending. A fresh read after an uncertain outcome preserves the effective values and leaves the pending edit available for an explicit save. Local chat-history compression follows Codex's advertised feature and takes effect when Codex starts with the saved configuration.
+
 Confirmed permission and speed saves also update GUI submission preferences. Composer overrides and running turns follow [submission capture](architecture.md#state-transitions). Replacing a custom approval object with a supported choice must precede editing its sandbox defaults. Reasoning visibility preferences filter supported options without changing the chat's selected effort.
 
 ## Capability boundaries

@@ -11,6 +11,8 @@
     "allow-refresh-settings",
     "allow-close-settings",
     "allow-sign-out-settings",
+    "allow-write-settings",
+    "allow-set-effort-visibility",
     "allow-search-project-paths",
     "allow-change-file-tools",
     "allow-browse-project-files",

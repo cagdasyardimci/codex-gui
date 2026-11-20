@@ -3,14 +3,17 @@
   import type { AccountModel, ComposerPermissions, ComposerSelection, ComposerSelectionView, ComposerSettingsRequest,
     DraftAttachmentScope } from './generated/workspace';
   import { navigateWorkspace } from './projectIpc';
+  import { visibleEfforts } from './reasoningEfforts';
 
-  let { scope, view, models, disabled, workspaceLabel }: {
+  let { scope, view, models, hiddenEfforts, disabled, workspaceLabel }: {
     scope: DraftAttachmentScope; view: ComposerSelectionView; models: AccountModel[]; disabled: boolean; workspaceLabel: string;
+    hiddenEfforts: string[];
   } = $props();
   let busy = $state(false);
   let confirm = $state.raw<ComposerSettingsRequest>();
   let dialog = $state<HTMLDialogElement>();
   const effective = $derived(models.find((model) => model.id === view.effectiveModelId));
+  const efforts = $derived(visibleEfforts(effective?.efforts ?? [], hiddenEfforts, view.selection.effort));
 
   function chooseModel(event: Event & { currentTarget: HTMLSelectElement }) {
     const field = event.currentTarget;
@@ -80,9 +83,9 @@
     <option value="">{view.usesProjectDefaults ? 'Project Default Model' : 'Configured Model'}</option>
     {#each models as model (model.id)}<option value={model.id}>{model.name}</option>{/each}
   </select>
-  <select aria-label="Reasoning effort" value={view.selection.effort ?? ''} disabled={disabled || busy || !effective?.efforts.length} onchange={chooseEffort}>
+  <select aria-label="Reasoning effort" value={view.selection.effort ?? ''} disabled={disabled || busy || !efforts.length} onchange={chooseEffort}>
     <option value="">Default Effort</option>
-    {#each effective?.efforts ?? [] as effort (effort.reasoningEffort)}
+    {#each efforts as effort (effort.reasoningEffort)}
       <option value={effort.reasoningEffort}>{effort.reasoningEffort === 'xhigh' ? 'Extra High' : effort.reasoningEffort}</option>
     {/each}
   </select>

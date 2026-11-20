@@ -14,6 +14,18 @@ use uuid::Uuid;
 use super::{Failure, RPC_TIMEOUT};
 
 impl super::NavigationHandle {
+    pub(crate) async fn settings_committed(&self) -> Result<(), IpcError> {
+        self.request(super::Action::SettingsCommitted)
+            .await
+            .map(|_| ())
+    }
+
+    pub(crate) async fn reasoning_visibility_changed(&self) -> Result<(), IpcError> {
+        self.request(super::Action::LoadReasoningVisibility)
+            .await
+            .map(|_| ())
+    }
+
     pub(crate) async fn sign_out_settings(
         &self,
         client: AppServerClient,

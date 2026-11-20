@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { SettingsView } from './generated/workspace';
-  import { closeSettings, openSettings, refreshSettings, signOutSettings } from './settingsIpc';
+  import { closeSettings, openSettings, refreshSettings, setEffortVisibility, signOutSettings, writeSettings } from './settingsIpc';
 
   let { close, accountBusy }: { close: () => void; accountBusy: boolean } = $props();
   const session = crypto.randomUUID();
@@ -10,11 +10,13 @@
   let view = $state<SettingsView>();
   let confirming = $state(false);
   let busy = $state(false);
+  let edits = $state<Record<string, string | boolean | null>>({});
   let retired = false;
 
   const labels: Record<string, string> = {
     model_provider: 'Provider', model: 'Default Model', review_model: 'Review Model',
     model_reasoning_effort: 'Reasoning Effort', model_verbosity: 'Verbosity', service_tier: 'Service Tier',
+    model_reasoning_summary: 'Reasoning Summary',
     approval_policy: 'Approval Policy', approvals_reviewer: 'Approval Reviewer', sandbox_mode: 'Sandbox Mode',
     web_search: 'Web Search', forced_login_method: 'Sign-in Method',
   };
@@ -49,6 +51,38 @@
     void read(() => signOutSettings(selection));
   }
 
+  async function saveConfiguration(key: string) {
+    if (!view || busy || !(key in edits)) return;
+    const selection = { session, revision: view.revision };
+    const value = edits[key]!;
+    busy = true;
+    try {
+      const result = await writeSettings({ selection, key, value });
+      if (!retired) {
+        view = result.view;
+        if (result.confirmed) delete edits[key];
+      }
+    } catch (error) {
+      if (!retired) console.error(error);
+    } finally {
+      if (!retired) busy = false;
+    }
+  }
+
+  async function showEffort(effort: string, visible: boolean) {
+    if (!view || busy) return;
+    const selection = { session, revision: view.revision };
+    busy = true;
+    try {
+      const next = await setEffortVisibility({ selection, effort, visible });
+      if (!retired) view = next;
+    } catch (error) {
+      if (!retired) console.error(error);
+    } finally {
+      if (!retired) busy = false;
+    }
+  }
+
   function windowName(minutes: number | null) {
     if (!minutes) return 'Usage Limit';
     if (minutes === 10_080) return 'Weekly Limit';
@@ -69,6 +103,15 @@
     else close();
   }
 </script>
+
+{#snippet toggleSetting(key: string, label: string, current: boolean, managed: boolean)}
+  <div class="edit-setting">
+    <label><input type="checkbox" checked={key in edits ? edits[key] === true : current}
+      disabled={managed || busy} onchange={(event) => { edits[key] = event.currentTarget.checked; }} />{label}</label>
+    {#if !managed}<button type="button" disabled={busy || !(key in edits) || edits[key] === current}
+      onclick={() => void saveConfiguration(key)}>Save {label}</button>{/if}
+  </div>
+{/snippet}
 
 <dialog bind:this={dialog} aria-label="Settings" oncancel={escape} onkeydown={(event) => event.stopPropagation()}>
   <header>
@@ -137,9 +180,49 @@
     <section aria-label="Effective Configuration">
       <dl>
         {#each view.configuration as item (item.key)}
-          <dt>{item.managed ? 'Managed ' : ''}{labels[item.key]}</dt><dd>{item.value}</dd>
+          {@const label = labels[item.key] ?? item.key}
+          {@const selection = item.key in edits ? edits[item.key] ?? '' : item.value}
+          <dt>{item.managed ? 'Managed ' : ''}{label}</dt>
+          <dd>
+            {#if item.choices.length}
+              <div class="edit-setting">
+                <select aria-label={label} value={selection} disabled={busy}
+                  onchange={(event) => { edits[item.key] = event.currentTarget.value || null; }}>
+                  {#if !item.choices.includes(String(selection))}
+                    <option value={String(selection)} disabled>{selection || 'Default'}</option>
+                  {/if}
+                  {#each item.choices as choice (choice)}<option value={choice}>{choice || 'Default'}</option>{/each}
+                </select>
+                <button type="button" disabled={busy || !(item.key in edits) || (edits[item.key] ?? '') === item.value}
+                  onclick={() => void saveConfiguration(item.key)}>Save {label}</button>
+              </div>
+            {:else}
+              {item.value}
+            {/if}
+          </dd>
         {/each}
       </dl>
+      {#if view.networkAccess}
+        {@render toggleSetting('sandbox_workspace_write.network_access', 'Network Access',
+          view.networkAccess.enabled, view.networkAccess.managed)}
+      {/if}
+      {#if view.compression}
+        {@render toggleSetting('features.local_thread_store_compression', 'Compress Local Chat History',
+          view.compression.enabled, view.compression.managed)}
+      {/if}
+      {#if view.efforts.length}
+        <fieldset>
+          <legend>Available Reasoning Efforts</legend>
+          {#each view.efforts as effort (effort.effort)}
+            <label><input type="checkbox" checked={effort.visible} disabled={busy || effort.required}
+              onchange={(event) => {
+                const visible = event.currentTarget.checked;
+                event.currentTarget.checked = effort.visible;
+                void showEffort(effort.effort, visible);
+              }} />{effort.effort === 'xhigh' ? 'Extra High' : effort.effort}</label>
+          {/each}
+        </fieldset>
+      {/if}
     </section>
   {/if}
 </dialog>
@@ -155,6 +238,8 @@
   dl { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr; gap: 0.5rem 0.85rem; }
   dd { margin: 0; overflow-wrap: anywhere; }
   .limits dd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .edit-setting, fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+  fieldset { margin-block-start: 0.7rem; }
   meter { width: 4.5rem; }
   table { inline-size: 100%; border-collapse: collapse; }
   th, td { padding: 0.4rem; border-block-end: 1px solid var(--workspace-divider); text-align: start; }

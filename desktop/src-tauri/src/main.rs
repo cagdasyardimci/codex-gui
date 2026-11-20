@@ -186,6 +186,8 @@ fn main() {
             settings_ipc::refresh_settings,
             settings_ipc::close_settings,
             settings_ipc::sign_out_settings,
+            settings_ipc::writes::write_settings,
+            settings_ipc::writes::set_effort_visibility,
             project_ipc::search_project_paths,
             file_tools_ipc::change_file_tools,
             file_tools_ipc::browse_project_files,

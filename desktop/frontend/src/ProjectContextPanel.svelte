@@ -5,10 +5,12 @@
     ProjectItemEdit, ProjectPromptEdit,
   } from './generated/workspace';
   import { composerContextCatalog, readProjectContext } from './projectIpc';
+  import { visibleEfforts } from './reasoningEfforts';
 
-  let { scope, models, blocked, draftText, bookmarkKey, submit, close }: {
+  let { scope, models, hiddenEfforts, blocked, draftText, bookmarkKey, submit, close }: {
     scope: DraftAttachmentScope;
     models: AccountModel[];
+    hiddenEfforts: string[];
     blocked: boolean;
     draftText: string;
     bookmarkKey: string;
@@ -199,7 +201,7 @@
     <label>Default Effort
       <select disabled={!ready || blocked || busy} bind:value={effortChoice}>
         <option value="">Model Default</option>
-        {#each model?.efforts ?? [] as effort (effort.reasoningEffort)}
+        {#each visibleEfforts(model?.efforts ?? [], hiddenEfforts, effortChoice) as effort (effort.reasoningEffort)}
           <option value={effort.reasoningEffort}>{effort.reasoningEffort}</option>
         {/each}
       </select>

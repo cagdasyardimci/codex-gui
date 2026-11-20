@@ -49,6 +49,8 @@ pub enum BrowseError {
     TurnItemsPagination,
     #[error("app-server returned inconsistent queue pagination")]
     QueuePagination,
+    #[error("configuration write does not match the captured user layer or policy")]
+    SettingsScope,
     #[error("invalid response from {method}: {source}")]
     Response {
         method: &'static str,

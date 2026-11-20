@@ -19,6 +19,7 @@ pub struct NavigationView {
     pub selected_chat: Option<String>,
     pub draft: Option<EditorDraft>,
     pub composer_settings: Option<ComposerSelectionView>,
+    pub hidden_reasoning_efforts: Vec<String>,
     pub project_has_input: bool,
     pub slash_commands: SlashCommandView,
     pub can_edit_sent_prompt: bool,

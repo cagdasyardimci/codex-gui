@@ -19,6 +19,8 @@ fn main() {
         "refresh_settings",
         "close_settings",
         "sign_out_settings",
+        "write_settings",
+        "set_effort_visibility",
         "search_project_paths",
         "change_file_tools",
         "browse_project_files",

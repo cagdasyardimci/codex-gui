@@ -1341,6 +1341,7 @@
         {#if attachmentScope && navigation.composerSettings}
           {#key attachmentScope.draftId}
             <ComposerSettingsControls scope={attachmentScope} view={navigation.composerSettings}
+              hiddenEfforts={navigation.hiddenReasoningEfforts}
               models={navigation.account.models} disabled={!!queue?.editing || !!quit}
               workspaceLabel={workspace?.projectPath ?? ''} />
           {/key}
@@ -1408,6 +1409,7 @@
     {#if showingProjectContext && attachmentScope && navigation}
       {#key `${attachmentScope.workspaceId}/${attachmentScope.draftId}`}
         <ProjectContextPanel scope={attachmentScope} models={navigation.account.models} draftText={text}
+          hiddenEfforts={navigation.hiddenReasoningEfforts}
           bookmarkKey={navigation.bookmarkedResponses.join('\n')}
           blocked={actionPending || !!queue?.editing || !!quit} submit={updateProjectContext} close={closeProjectContext} />
       {/key}
@@ -1422,6 +1424,7 @@
       chats={navigation.chats} models={navigation.account.models} usage={navigation.slashCommands.context}
       workspace={workspace.projectPath} chat={navigation.chats.find((chat) => chat.id === selectedChat)?.title}
       effective={navigation.account.models.find((model) => model.id === navigation.composerSettings?.effectiveModelId)}
+      hiddenEfforts={navigation.hiddenReasoningEfforts} selectedEffort={navigation.composerSettings?.selection.effort}
       choose={finishSlash} close={closeSlashPanel} />
     {/if}
   {/if}
