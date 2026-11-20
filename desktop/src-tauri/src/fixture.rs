@@ -117,6 +117,7 @@ pub fn verify_fixture_result(
     app: AppHandle,
     verification: State<'_, Verification>,
     scope_verified: bool,
+    subscription_verified: bool,
     deltas: Vec<String>,
     rendered: String,
 ) -> Result<(), String> {
@@ -128,12 +129,20 @@ pub fn verify_fixture_result(
         app.exit(1);
         return Ok(());
     }
+    if !subscription_verified {
+        eprintln!(
+            "Workspace subscription did not recover the complete revision after a gap and reload"
+        );
+        app.exit(1);
+        return Ok(());
+    }
     let expected = scenario().map_err(|error| error.to_string())?.chunks;
     if deltas != expected || rendered != expected.concat() {
         eprintln!("WebView fixture differed from the expected ordered Unicode output");
         app.exit(1);
         return Ok(());
     }
+    println!("Verified workspace grant rejection and revision recovery across WebView reload");
     println!(
         "Verified {} ordered fixture deltas and exact WebView text",
         expected.len()

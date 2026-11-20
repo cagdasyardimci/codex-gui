@@ -2,7 +2,8 @@
   import { Channel, invoke } from '@tauri-apps/api/core';
   import { onMount, tick } from 'svelte';
   import { probeMedia } from './mediaProbe';
-  import { pickWorkspace, readWorkspace } from './projectIpc';
+  import { observeWorkspace, pickWorkspace, readWorkspace } from './projectIpc';
+  import { verifyWorkspaceSubscription } from './workspaceProbe';
   import type { IpcError, WorkspaceView } from './generated/workspace';
 
   type StreamMessage = { type: 'delta'; text: string } | { type: 'complete' };
@@ -16,10 +17,7 @@
   async function openProject() {
     picking = true;
     try {
-      const workspaceId = await pickWorkspace();
-      if (workspaceId !== null) {
-        workspace = await readWorkspace({ workspaceId });
-      }
+      await pickWorkspace();
     } catch (error) {
       console.error(error);
     } finally {
@@ -38,7 +36,7 @@
     return false;
   }
 
-  async function runFixture() {
+  async function runFixture(subscriptionVerified: boolean) {
     const scopeVerified = await workspaceScopeVerified();
     const deltas: string[] = [];
     const output = new Channel<StreamMessage>();
@@ -54,17 +52,29 @@
     });
     await Promise.all([invoke('stream_fixture', { output }), delivered]);
     await tick();
-    await invoke('verify_fixture_result', { scopeVerified, deltas, rendered: transcript?.textContent ?? '' });
+    await invoke('verify_fixture_result', {
+      scopeVerified, subscriptionVerified, deltas, rendered: transcript?.textContent ?? '',
+    });
   }
 
   onMount(() => {
+    const lifecycle = new AbortController();
     void invoke<'none' | 'streaming' | 'media'>('verification_mode')
       .then(async (verification) => {
+        if (lifecycle.signal.aborted) return;
         mode = verification;
-        if (verification === 'streaming') await runFixture();
+        if (verification === 'none') {
+          await observeWorkspace((snapshot) => { workspace = snapshot.workspace; }, lifecycle.signal);
+        }
+        if (verification === 'streaming') {
+          const subscription = await verifyWorkspaceSubscription();
+          if (subscription === 'reload') window.location.reload();
+          else await runFixture(subscription);
+        }
         if (verification === 'media') await invoke('verify_media_result', { evidence: await probeMedia() });
       })
       .catch(console.error);
+    return () => lifecycle.abort();
   });
 </script>
 

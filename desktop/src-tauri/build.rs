@@ -6,6 +6,9 @@ fn main() {
         "verify_media_result",
         "pick_workspace",
         "workspace_snapshot",
+        "subscribe_workspace",
+        "next_workspace_update",
+        "change_workspace_fixture",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(commands))
         .expect("build Tauri application");

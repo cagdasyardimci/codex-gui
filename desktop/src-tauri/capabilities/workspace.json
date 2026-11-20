@@ -4,5 +4,10 @@
   "description": "Local main window workspace selection and scoped reads",
   "local": true,
   "windows": ["main"],
-  "permissions": ["allow-pick-workspace", "allow-workspace-snapshot"]
+  "permissions": [
+    "allow-pick-workspace",
+    "allow-workspace-snapshot",
+    "allow-subscribe-workspace",
+    "allow-next-workspace-update"
+  ]
 }

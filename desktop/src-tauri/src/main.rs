@@ -39,6 +39,9 @@ fn main() {
             fixture::verify_media_result,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
+            project_ipc::subscribe_workspace,
+            project_ipc::next_workspace_update,
+            project_ipc::change_workspace_fixture,
         ])
         .setup(move |app| {
             if let Some(report) = coding_report {

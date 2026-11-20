@@ -6,6 +6,12 @@ use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
 
+mod subscription;
+pub use subscription::{
+    SubscriptionId, WorkspaceProjection, WorkspaceSnapshot, WorkspaceSubscription, WorkspaceUpdate,
+    WorkspaceUpdateRequest,
+};
+
 pub const WORKSPACE_WINDOW: &str = "main";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, TS)]
@@ -17,7 +23,7 @@ pub struct WorkspaceRequest {
     pub workspace_id: WorkspaceId,
 }
 
-#[derive(Debug, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceView {
     pub workspace_id: WorkspaceId,
@@ -73,13 +79,20 @@ impl WorkspaceGrants {
             .as_ref()
             .filter(|grant| grant.id == request.workspace_id)
             .ok_or(IpcError::RetiredWorkspace)?;
-        selected
-            .checkout
-            .revalidate()
-            .map_err(|_| IpcError::RetiredWorkspace)?;
-        Ok(WorkspaceView {
-            workspace_id: selected.id,
-            project_path: selected.display_path.clone(),
+        selected.view().ok_or(IpcError::RetiredWorkspace)
+    }
+
+    pub fn current_view(&self) -> Option<WorkspaceView> {
+        self.selected.as_ref().and_then(Grant::view)
+    }
+}
+
+impl Grant {
+    fn view(&self) -> Option<WorkspaceView> {
+        self.checkout.revalidate().ok()?;
+        Some(WorkspaceView {
+            workspace_id: self.id,
+            project_path: self.display_path.clone(),
         })
     }
 }
@@ -100,6 +113,11 @@ pub fn workspace_typescript() -> String {
         WorkspaceRequest::decl(),
         WorkspaceView::decl(),
         IpcError::decl(),
+        SubscriptionId::decl(),
+        WorkspaceSnapshot::decl(),
+        WorkspaceSubscription::decl(),
+        WorkspaceUpdateRequest::decl(),
+        WorkspaceUpdate::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

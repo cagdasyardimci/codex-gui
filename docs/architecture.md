@@ -18,6 +18,8 @@ Image annotations belong to their composer attachment identity and persist with 
 
 The [Tauri host](../desktop/src-tauri/src/project_ipc.rs) accepts workspace requests from the local main document. It issues a workspace ID after a native directory selection and revalidates the captured filesystem identity before returning a snapshot. Selecting another directory retires the prior grant. Keep native paths and workspace authorization on the Rust side. Use [generated IPC types](validation.md#tauri-diagnostic-shell) for the WebView contract.
 
+The [workspace subscription](../desktop/core/src/ipc/subscription.rs) attaches to the current snapshot under the same lock as publication. The host retains one projection and accepts one outstanding read from the current subscriber. The renderer applies adjacent revisions and attaches again after a gap. Reload attaches to the latest snapshot and retires the previous subscription.
+
 ## Ownership and recovery
 
 Displayed selection and execution ownership are independent. An accepted first message appears in project navigation using its captured request identity while the backend creates the conversation. The assigned thread replaces that row atomically; a failed preparation retires it without changing an independently opened draft. Every asynchronous result must validate its captured workspace/session, connection generation, request identity and relevant thread/turn. Deferred UI actions must retain their original target rather than follow later selection. Shared eligibility rules serve presentations and reducers, with admission checked again at reduction.
