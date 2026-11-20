@@ -180,6 +180,46 @@ body {
   white-space: pre-wrap;
 }
 
+.markdown-document {
+  overflow-wrap: anywhere;
+}
+
+.markdown-document pre {
+  max-inline-size: 100%;
+  overflow: auto;
+  padding: 0.75rem;
+  background: color-mix(in srgb, CanvasText 7%, Canvas);
+  border-radius: 0.4rem;
+}
+
+.markdown-document img {
+  max-inline-size: 100%;
+  max-block-size: 32rem;
+  vertical-align: middle;
+}
+
+.markdown-document table {
+  border-collapse: collapse;
+}
+
+.markdown-document :is(th, td) {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid color-mix(in srgb, CanvasText 22%, Canvas);
+  text-align: start;
+}
+
+.markdown-link {
+  display: inline;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: LinkText;
+  font: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .workspace-retry {
   align-self: flex-start;
   margin-block: 0.45rem;

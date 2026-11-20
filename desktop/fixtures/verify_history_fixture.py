@@ -19,7 +19,7 @@ def seed_history_files(project: Path) -> None:
         (project / folder).mkdir()
         (project / folder / "Café.md").write_text("File search fixture\n", encoding="utf-8")
     (project / "notes" / "panel.png").write_bytes(b64decode(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/WZkAAAAASUVORK5CYII="
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQSTnxHwAEEAJAKtk0QwAAAABJRU5ErkJggg=="
     ))
 
 
@@ -29,6 +29,22 @@ def seed_paginated_history(state_path: Path, count: int = 32) -> None:
     first = next(thread for thread in threads if thread["id"] == "history-first")
     if count > 32:
         first["preview"] = "Large transcript fixture"
+    else:
+        first["turns"][0]["items"].extend([
+            {"id": "first-markdown", "type": "agentMessage", "text": (
+                "## Markdown fixture\n\n"
+                "```rust\nlet label = \"café 日本語\";\n```\n\n"
+                "[External guide](https://example.invalid/path) | [Heading](#markdown-fixture) | "
+                "[Blocked destination](javascript:discard)\n\n"
+                "![Contained panel](notes/panel.png) ![Offline remote](https://example.invalid/panel.png) "
+                "![Escaping path](../panel.png)\n\n"
+                "<figure data-fixture-raw>Literal HTML reference</figure>\n\n"
+                "| Name | Value |\n| --- | --- |\n| Label | **café** |\n\n"
+                + "Further context for the heading link.\n\n" * 18
+            )},
+            {"id": "first-markdown-depth", "type": "agentMessage",
+             "text": "> " * 40 + "Readable source past the nesting limit"},
+        ])
     earlier = []
     for number in range(1, count + 1):
         turn_id = f"older-fixture-{number:02}"

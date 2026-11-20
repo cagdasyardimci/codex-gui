@@ -1,8 +1,10 @@
 <script lang="ts">
-  import type { TranscriptItem } from './generated/workspace';
+  import type { TranscriptItem, TranscriptRowRequest } from './generated/workspace';
+  import MarkdownView from './MarkdownView.svelte';
 
-  let { item, copy, onCopyFocus }: {
+  let { item, request, copy, onCopyFocus }: {
     item: TranscriptItem;
+    request?: TranscriptRowRequest;
     copy: (item: TranscriptItem) => Promise<void> | void;
     onCopyFocus: () => void;
   } = $props();
@@ -39,6 +41,6 @@
           onpointerdown={(event) => event.preventDefault()} onfocus={onCopyFocus} onclick={copyResponse}>Copy</button>
       {/if}
     </div>
-    <p>{item.text}</p>
+    <MarkdownView source={item.text} request={item.completed ? request : undefined} />
   </article>
 {/if}

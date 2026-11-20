@@ -180,9 +180,15 @@ pub fn local_file_revision(
     relative: &Path,
     limit: u64,
 ) -> Result<FileRevision, FileError> {
-    Ok(CapturedFile::capture(checkout, relative)?
-        .read(checkout, limit.min(MAX_READ_BYTES))?
-        .revision)
+    Ok(read_local_file(checkout, relative, limit)?.revision)
+}
+
+pub fn read_local_file(
+    checkout: &CheckoutIdentity,
+    relative: &Path,
+    limit: u64,
+) -> Result<FileRead, FileError> {
+    CapturedFile::capture(checkout, relative)?.read(checkout, limit.min(MAX_READ_BYTES))
 }
 
 fn open_regular(checkout: &CheckoutIdentity, relative: &Path) -> Result<File, FileError> {

@@ -2,20 +2,131 @@ use std::path::{Component, Path, PathBuf};
 
 use codex_gui_core::{
     checkout::CheckoutIdentity,
-    files::local_file_revision,
-    ipc::{IpcError, TranscriptImageDependency, TranscriptRowRequest},
+    files::{local_file_revision, read_local_file},
+    ipc::{
+        IpcError, MarkdownNode, MarkdownTargetRequest, TranscriptImageDependency,
+        TranscriptRowRequest,
+    },
 };
 use percent_encoding::percent_decode_str;
-use pulldown_cmark::{Event, Parser, Tag};
+use pulldown_cmark::{Event, Tag};
 use serde_json::Value;
-use tauri::{Manager, State, Url, WebviewWindow};
+use tauri::{Manager, State, Url, WebviewWindow, ipc::Response};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
-use crate::project_ipc::{ProjectIpc, authorize_view};
+use crate::{
+    fixture::Verification,
+    project_ipc::{ProjectIpc, authorize_view},
+};
+
+mod markdown;
 
 const MAX_IMAGE_SOURCES: usize = 8;
 const MAX_SOURCE_BYTES: usize = 512 * 1024;
 const MAX_DEPENDENCY_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_INLINE_BYTES: u64 = 4 * 1024 * 1024;
+
+#[tauri::command]
+pub async fn render_transcript_markdown(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: TranscriptRowRequest,
+) -> Result<Option<Vec<MarkdownNode>>, IpcError> {
+    let (checkout, source) = authorized_source(&window, &project, &request)?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || markdown::document(&source, &checkout))
+            .await
+            .map_err(|_| IpcError::ProjectUnavailable)?;
+    authorized_source(&window, &project, &request)?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn load_transcript_image(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: MarkdownTargetRequest,
+) -> Result<Response, IpcError> {
+    let checkout = authorized_image(&window, &project, &request)?;
+    let path = request.target.clone();
+    let bytes =
+        tauri::async_runtime::spawn_blocking(move || checked_inline_image(&checkout, &path))
+            .await
+            .map_err(|_| IpcError::ProjectUnavailable)??;
+    authorized_image(&window, &project, &request)?;
+    Ok(Response::new(bytes))
+}
+
+#[tauri::command]
+pub fn open_transcript_link(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    request: MarkdownTargetRequest,
+) -> Result<(), IpcError> {
+    let (checkout, source) = authorized_source(&window, &project, &request.row)?;
+    let url = markdown::external_url(&request.target).ok_or(IpcError::StaleSelection)?;
+    let nodes = markdown::document(&source, &checkout).ok_or(IpcError::StaleSelection)?;
+    if !markdown::contains_link(&nodes, url.as_str()) {
+        return Err(IpcError::StaleSelection);
+    }
+    authorized_source(&window, &project, &request.row)?;
+    if *verification.inner() == Verification::None {
+        open::that_detached(url.as_str()).map_err(|_| IpcError::ProjectUnavailable)?;
+    }
+    Ok(())
+}
+
+fn authorized_source(
+    window: &WebviewWindow,
+    project: &ProjectIpc,
+    request: &TranscriptRowRequest,
+) -> Result<(CheckoutIdentity, String), IpcError> {
+    authorize_view(window)?;
+    let state = project.state.lock().expect("workspace state lock poisoned");
+    let checkout = state
+        .grants
+        .checkout(window.label(), request.workspace_id)?;
+    Ok((checkout, state.projection.transcript_markdown(request)?))
+}
+
+fn authorized_image(
+    window: &WebviewWindow,
+    project: &ProjectIpc,
+    request: &MarkdownTargetRequest,
+) -> Result<CheckoutIdentity, IpcError> {
+    authorize_view(window)?;
+    let state = project.state.lock().expect("workspace state lock poisoned");
+    let checkout = state
+        .grants
+        .checkout(window.label(), request.row.workspace_id)?;
+    let declared = state.projection.transcript_images(&request.row)?;
+    if !declared.contains(&request.target) {
+        return Err(IpcError::StaleSelection);
+    }
+    Ok(checkout)
+}
+
+fn checked_inline_image(checkout: &CheckoutIdentity, path: &str) -> Result<Vec<u8>, IpcError> {
+    let read = read_local_file(checkout, Path::new(path), MAX_INLINE_BYTES)
+        .map_err(|_| IpcError::ProjectUnavailable)?;
+    let bytes = read.bytes;
+    let format = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        1
+    } else if bytes.starts_with(b"\xff\xd8\xff") {
+        2
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        3
+    } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+        4
+    } else {
+        return Err(IpcError::ProjectUnavailable);
+    };
+    let mut payload = Vec::with_capacity(1 + bytes.len());
+    payload.push(format);
+    payload.extend(bytes);
+    Ok(payload)
+}
 
 #[tauri::command]
 pub fn copy_transcript_row(
@@ -92,7 +203,7 @@ pub(crate) fn local_images(
         }
     }
     if markdown.len() <= MAX_SOURCE_BYTES && markdown.contains("![") {
-        for event in Parser::new(markdown) {
+        for event in markdown::events(markdown) {
             if let Event::Start(Tag::Image { dest_url, .. }) = event {
                 admit(markdown_path(&dest_url));
             }

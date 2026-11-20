@@ -1,8 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
-import { checkTranscriptImages, navigateWorkspace, searchProjectPaths } from './projectIpc';
+import { checkTranscriptImages, navigateWorkspace, openTranscriptLink, renderTranscriptMarkdown, searchProjectPaths } from './projectIpc';
 import { click, editor, typeText, waitFor } from './fixtureControls';
 import { verifyResidentHistory } from './residencyProbe';
+import { rejectsStale, verifyRenderedMarkdown } from './markdownProbe';
 
 const FIRST = 'history-first';
 const SECOND = 'history-second';
@@ -74,6 +75,10 @@ async function verifyTurnRail(visible: () => WorkspaceSnapshot | null) {
   if (!viewport || !hover || !delayed || !jump || visible()?.transcript.items.some((row) => row.turnId === 'older-fixture-03')) {
     throw new Error('The first rail target must be outside the loaded transcript');
   }
+  viewport.scrollTop = 0;
+  await waitFor('The transcript did not settle at its first loaded row before preview', () =>
+    viewport.scrollTop <= 1 && viewport.firstElementChild instanceof HTMLElement &&
+    viewport.firstElementChild.dataset.transcriptSlot === 'older-fixture-14/response');
   const viewportTop = viewport.getBoundingClientRect().top;
   const before = [...viewport.querySelectorAll<HTMLElement>('[data-transcript-slot]')].find((row) =>
     row.getBoundingClientRect().bottom > viewportTop + 1);
@@ -88,7 +93,7 @@ async function verifyTurnRail(visible: () => WorkspaceSnapshot | null) {
   const after = before.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
   if (!before.isConnected || Math.abs(after - offset) > 1 ||
       visible()?.transcript.items.map((row) => row.itemId).join('\n') !== rows) {
-    throw new Error('The hover preview changed the transcript position or resident rows');
+    throw new Error(`The hover preview changed the transcript from ${offset} to ${after} (connected: ${before.isConnected}) or changed resident rows`);
   }
   delayed.dispatchEvent(new MouseEvent('mouseenter'));
   jump.click();
@@ -206,6 +211,8 @@ export async function verifyHistory(
       await verifyTurnRail(visible);
       await verifyOlderHistory(visible);
       const saved = await verifySavedRows(workspaceId, visible()!);
+      const markdown = visible()?.transcript.items.some((item) => item.itemId === 'first-saved-turn/first-markdown')
+        ? await verifyRenderedMarkdown(visible()!, saved.request) : undefined;
       const [path, ...others] = await searchProjectPaths({ workspaceId, query: ' CAFÉ.MD ' });
       if (path?.displayPath !== 'notes/Café.md' || others.length) {
         throw new Error('Project search did not return the visible checkout file');
@@ -242,6 +249,10 @@ export async function verifyHistory(
         throw new Error('A retired transcript could still inspect local images');
       } catch (error) {
         if (error !== 'staleSelection') throw error;
+      }
+      if (markdown) {
+        await rejectsStale(renderTranscriptMarkdown(markdown));
+        await rejectsStale(openTranscriptLink({ row: markdown, target: 'https://example.invalid/path' }));
       }
       const [secondPath] = await searchProjectPaths({ workspaceId, query: 'café.md' });
       if (secondPath?.id.revision !== path.id.revision || secondPath?.id.entry !== path.id.entry) {

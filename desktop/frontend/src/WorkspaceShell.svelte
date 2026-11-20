@@ -42,17 +42,24 @@
   let saving: Promise<void> | null = null;
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
+  const workspaceId = $derived(workspace?.workspaceId);
+  const selectedChat = $derived(navigation?.selectedChat);
+  const transcriptGeneration = $derived(snapshot?.transcript.generation);
   const stopTarget = $derived(navigation?.actions.stop);
   const quit = $derived(navigation?.quit);
   const queue = $derived(navigation?.queue);
   const resumeCommand = $derived(queue?.resume ? { resume: queue.resume } :
     queue?.resumeSaved ? { resumeSaved: queue.resumeSaved } : null);
 
+  function rowRequest(item: TranscriptItem) {
+    if (!workspaceId || !selectedChat || transcriptGeneration === undefined) return;
+    return { workspaceId, chatId: selectedChat,
+      itemId: item.itemId, generation: transcriptGeneration, revision: item.revision };
+  }
+
   function copyResponse(item: TranscriptItem) {
-    const chatId = snapshot?.navigation.selectedChat;
-    if (!snapshot?.workspace || !chatId) return;
-    return copyTranscriptRow({ workspaceId: snapshot.workspace.workspaceId, chatId,
-      itemId: item.itemId, generation: snapshot.transcript.generation, revision: item.revision });
+    const request = rowRequest(item);
+    if (request) return copyTranscriptRow(request);
   }
 
   function retainSelectionForTab() {
@@ -406,7 +413,8 @@
           {#each viewport.entries as entry (entry.key)}
             {#if 'item' in entry}
               <div class="transcript-row-slot" data-transcript-slot={entry.item.itemId} use:measureTranscriptRow>
-                <TranscriptRow item={entry.item} copy={copyResponse} onCopyFocus={focusResponseAction} />
+                <TranscriptRow item={entry.item} request={rowRequest(entry.item)} copy={copyResponse}
+                  onCopyFocus={focusResponseAction} />
               </div>
             {:else}
               <div style:block-size={`${entry.gap}px`} aria-hidden="true"></div>

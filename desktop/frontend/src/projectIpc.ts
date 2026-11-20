@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -22,6 +22,18 @@ export function copyTranscriptRow(request: TranscriptRowRequest): Promise<void> 
 
 export function checkTranscriptImages(request: TranscriptRowRequest): Promise<TranscriptImageDependency[]> {
   return invoke('check_transcript_images', { request });
+}
+
+export function renderTranscriptMarkdown(request: TranscriptRowRequest): Promise<MarkdownNode[] | null> {
+  return invoke('render_transcript_markdown', { request });
+}
+
+export function loadTranscriptImage(request: MarkdownTargetRequest): Promise<ArrayBuffer> {
+  return invoke('load_transcript_image', { request });
+}
+
+export function openTranscriptLink(request: MarkdownTargetRequest): Promise<void> {
+  return invoke('open_transcript_link', { request });
 }
 
 export function subscribeWorkspace(): Promise<WorkspaceSubscription> {
