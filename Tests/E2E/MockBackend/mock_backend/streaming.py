@@ -1,4 +1,5 @@
 """Independent turn workers, with serialized state updates and cancellation."""
+from pathlib import Path
 import threading
 import time
 
@@ -20,6 +21,14 @@ class Stream:
                 self.emit('turn/started', turn=self.turn)
                 for item in self.turn['items']:
                     self.emit('item/started', item=item)
+                if engine.scenario.get('codingProbe'):
+                    fixture = Path(self.thread['cwd']) / 'codex-gui-probe.txt'
+                    command = {'id': engine.state.identity('command'), 'type': 'commandExecution',
+                               'command': 'read fixture marker', 'cwd': self.thread['cwd'],
+                               'aggregatedOutput': fixture.read_text(encoding='utf-8'),
+                               'exitCode': 0, 'status': 'completed'}
+                    self.turn['items'].append(command)
+                    self.emit('item/completed', item=command)
             if engine.scenario.get('questions'):
                 self.ask_question()
             if engine.scenario['mode'] == 'stall':

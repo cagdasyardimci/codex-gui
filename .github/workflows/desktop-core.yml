@@ -121,6 +121,7 @@ jobs:
           codesign --verify --deep --strict "$app"
           python3 desktop/fixtures/verify_bundle_notices.py "$app/Contents/Resources/notices"
           python3 desktop/fixtures/verify_webview_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_coding_probe.py "$app/Contents/MacOS/codex-gui-desktop"
       - name: Verify the NSIS installation
         if: runner.os == 'Windows'
         shell: pwsh
@@ -132,7 +133,10 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "NSIS exited with code $($process.ExitCode)" }
           python desktop/fixtures/verify_bundle_notices.py (Join-Path $destination "notices")
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python desktop/fixtures/verify_webview_fixture.py (Join-Path $destination "codex-gui-desktop.exe")
+          $app = Join-Path $destination "codex-gui-desktop.exe"
+          python desktop/fixtures/verify_webview_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python desktop/fixtures/verify_coding_probe.py $app
       - name: Verify the Debian installation
         if: runner.os == 'Linux'
         shell: bash
@@ -145,7 +149,9 @@ jobs:
           installed="$(dpkg-deb -f "$artifact" Package)"
           license="$(dpkg -L "$installed" | grep -E '/notices/LICENSE\.md$')"
           python3 desktop/fixtures/verify_bundle_notices.py "$(dirname "$license")"
-          xvfb-run -a python3 desktop/fixtures/verify_webview_fixture.py "$(command -v codex-gui-desktop)"
+          app="$(command -v codex-gui-desktop)"
+          xvfb-run -a python3 desktop/fixtures/verify_webview_fixture.py "$app"
+          xvfb-run -a python3 desktop/fixtures/verify_coding_probe.py "$app"
       - name: Store diagnostic installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -34,6 +34,7 @@ SERVER_NOTIFICATIONS = {
     "turn/started": ("threadId", "turn"),
     "turn/completed": ("threadId", "turn"),
     "item/agentMessage/delta": ("threadId", "turnId", "itemId", "delta"),
+    "item/completed": ("threadId", "turnId", "item"),
     "serverRequest/resolved": ("threadId", "requestId"),
     "windowsSandbox/setupCompleted": ("mode", "success", "error"),
 }

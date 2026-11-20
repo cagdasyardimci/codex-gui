@@ -1,0 +1,6 @@
+{
+  "extends": "streaming",
+  "intervalSeconds": 0,
+  "chunks": ["Read the diagnostic marker."],
+  "codingProbe": true
+}

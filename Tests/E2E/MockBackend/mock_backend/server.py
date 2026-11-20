@@ -62,8 +62,10 @@ class Server:
         if method == 'initialize':
             return {'userAgent': 'structured-qa-backend/1'}
         if method == 'account/read':
-            return {'account': {'type': 'chatgpt', 'email': 'fixture@example.invalid'},
-                    'requiresOpenaiAuth': False}
+            account = {'type': 'chatgpt', 'email': 'fixture@example.invalid'}
+            if self.scenario.get('codingProbe'):
+                account['planType'] = 'plus'
+            return {'account': account, 'requiresOpenaiAuth': False}
         if method == 'account/rateLimits/read':
             return {'rateLimits': {'primary': None, 'secondary': None}, 'rateLimitResetCredits': None}
         if method == 'model/list':

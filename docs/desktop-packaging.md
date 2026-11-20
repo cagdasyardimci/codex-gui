@@ -29,3 +29,9 @@ At stable cutover, quit the beta and replace its bundle in Applications with Cod
 ## Windows sandbox feasibility
 
 The [Windows sandbox probe](../desktop/core/examples/windows_sandbox.rs) runs Codex under a fresh standard-user profile through the [desktop CI harness](../desktop/fixtures/verify_windows_sandbox.ps1). On a disposable Windows runner, the harness stages the pinned CLI and creates an account in the local Users group. The probe requests Codex’s unelevated setup and verifies that readiness persists after reconnecting. This check exercises provisioning before the installed coding-turn check.
+
+## Installed coding probe
+
+Use a fresh OS profile and an existing empty directory as `CODEX_HOME`. Establish Codex sign-in in that profile, then launch the installed diagnostic shell with `--verify-coding-turn <absolute-new-report-path>` and the same profile environment. The app discovers Codex and Git, creates a disposable checkout, and starts a turn using the backend's default policy. A passing report names the selected CLI and version after a successful command emits the checkout marker and the matching turn completes. [Codex authentication](https://developers.openai.com/codex/auth)
+
+The [package workflow](../.github/workflows/desktop-core.yml) runs the [coding fixture](../desktop/fixtures/verify_coding_probe.py) from each packaged application. Use a signed-in Codex process for live acceptance.
