@@ -13,7 +13,11 @@ fn main() {
         return;
     }
 
-    let verifying = mode.as_deref() == Some("--verify-fixture".as_ref());
+    let verification = match mode.as_deref().and_then(|value| value.to_str()) {
+        Some("--verify-fixture") => fixture::Verification::Streaming,
+        Some("--verify-media") => fixture::Verification::Media,
+        _ => fixture::Verification::None,
+    };
     let coding_report = if mode.as_deref() == Some(coding_probe::ARGUMENT.as_ref()) {
         let target = arguments
             .next()
@@ -23,11 +27,12 @@ fn main() {
         None
     };
     tauri::Builder::default()
-        .manage(fixture::Verification(verifying))
+        .manage(verification)
         .invoke_handler(tauri::generate_handler![
             fixture::stream_fixture,
-            fixture::fixture_verification_enabled,
+            fixture::verification_mode,
             fixture::verify_fixture_result,
+            fixture::verify_media_result,
         ])
         .setup(move |app| {
             if let Some(report) = coding_report {
@@ -44,7 +49,7 @@ fn main() {
                 });
                 return Ok(());
             }
-            if verifying {
+            if verification != fixture::Verification::None {
                 return Ok(());
             }
             let beta_data = app.path().app_data_dir()?;

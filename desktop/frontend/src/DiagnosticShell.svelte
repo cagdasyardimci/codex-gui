@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Channel, invoke } from '@tauri-apps/api/core';
   import { onMount, tick } from 'svelte';
+  import { probeMedia } from './mediaProbe';
 
   type StreamMessage = { type: 'delta'; text: string } | { type: 'complete' };
 
@@ -37,9 +38,10 @@
   }
 
   onMount(() => {
-    void invoke<boolean>('fixture_verification_enabled')
-      .then((verify) => {
-        if (verify) void runFixture(true);
+    void invoke<'none' | 'streaming' | 'media'>('verification_mode')
+      .then(async (mode) => {
+        if (mode === 'streaming') await runFixture(true);
+        if (mode === 'media') await invoke('verify_media_result', { evidence: await probeMedia() });
       })
       .catch(console.error);
   });

@@ -15,7 +15,13 @@ pub const CHILD_ARGUMENT: &str = "--diagnostic-fixture-stdio";
 const STREAMING_SCENARIO: &str =
     include_str!("../../../Tests/E2E/MockBackend/mock_backend/scenarios/streaming.json");
 
-pub struct Verification(pub bool);
+#[derive(Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Verification {
+    None,
+    Streaming,
+    Media,
+}
 
 #[derive(Deserialize)]
 struct Scenario {
@@ -96,8 +102,8 @@ async fn send_fixture(
 }
 
 #[tauri::command]
-pub fn fixture_verification_enabled(verification: State<'_, Verification>) -> bool {
-    verification.0
+pub fn verification_mode(verification: State<'_, Verification>) -> Verification {
+    *verification
 }
 
 #[tauri::command]
@@ -107,7 +113,7 @@ pub fn verify_fixture_result(
     deltas: Vec<String>,
     rendered: String,
 ) -> Result<(), String> {
-    if !verification.0 {
+    if *verification != Verification::Streaming {
         return Err("fixture verification was not requested at launch".into());
     }
     let expected = scenario().map_err(|error| error.to_string())?.chunks;
@@ -121,5 +127,36 @@ pub fn verify_fixture_result(
         expected.len()
     );
     app.exit(0);
+    Ok(())
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaEvidence {
+    secure_context: bool,
+    capture_api: bool,
+    playback_api: bool,
+    peer_api: bool,
+    negotiated_sessions: u8,
+    failure: Option<String>,
+}
+
+#[tauri::command]
+pub fn verify_media_result(
+    app: AppHandle,
+    verification: State<'_, Verification>,
+    evidence: MediaEvidence,
+) -> Result<(), String> {
+    if *verification != Verification::Media {
+        return Err("media verification was not requested at launch".into());
+    }
+    let passed = evidence.secure_context
+        && evidence.capture_api
+        && evidence.playback_api
+        && evidence.peer_api
+        && evidence.negotiated_sessions == 2
+        && evidence.failure.is_none();
+    println!("WebView media evidence: {}", json!(evidence));
+    app.exit(i32::from(!passed));
     Ok(())
 }

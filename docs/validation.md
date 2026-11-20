@@ -14,7 +14,7 @@ The [desktop workflow](../.github/workflows/desktop-core.yml) checks the core an
 
 Install the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) for the host OS and use the pinned Node and pnpm versions. From the repository root, run `pnpm --dir desktop/frontend install --frozen-lockfile` and `pnpm --dir desktop/frontend tauri dev`. The beta initializes its data and worktree root under its own application identity so it can launch alongside AppKit.
 
-The desktop build job type-checks the frontend and compiles the host with the embedded production frontend. Reproduce it with `pnpm --dir desktop/frontend check` and `pnpm --dir desktop/frontend tauri build --debug --no-bundle -- --locked`. Build and install artifacts using the [Tauri package guide](desktop-packaging.md). After the build, pass the executable to [the WebView fixture check](../desktop/fixtures/verify_webview_fixture.py). The check requires positive confirmation from the mounted frontend that it received the deltas in order and rendered the exact fixture text. Run it under `xvfb-run -a` on Ubuntu when a desktop display is unavailable.
+The desktop build job type-checks the frontend and compiles the host with the embedded production frontend. Reproduce it with `pnpm --dir desktop/frontend check` and `pnpm --dir desktop/frontend tauri build --debug --no-bundle -- --locked`. Build and install artifacts using the [Tauri package guide](desktop-packaging.md). After the build, pass the executable to [the WebView fixture check](../desktop/fixtures/verify_webview_fixture.py). The check requires positive confirmation from the mounted frontend that it received the deltas in order and rendered the exact fixture text. Run it under `xvfb-run -a` on Ubuntu when a desktop display is unavailable. Pass `--media` to verify the secure WebView context, media APIs, and repeatable Opus and data channel negotiation. Qualify microphone grants and audible provider audio in [native and live acceptance](#native-and-live-acceptance).
 
 ### Swift AppKit
 
@@ -53,6 +53,8 @@ Set `TEST_TIMING_OUTPUT` to a distinct JSON file for each diagnostic run. [TestT
 Compare repeated runs with the same instrumentation and case coverage. Elapsed spans include waiting and may overlap; do not sum them as run time or call them CPU time. Distinguish producer readiness from waiter resumption, actor admission from native execution, and worker queue time from blocking execution. Preserve cleanup inside measured fixture intervals and verify that protected AppKit intervals remain disjoint when changing isolation scope.
 
 ## Native and live acceptance
+
+For the Tauri migration, run automated checks and installed fixtures during implementation. Consolidate the remaining real account, provider, and physical-device checks on the release candidates before cutover.
 
 `make test:ui` runs separately from `make check` and occupies the interactive desktop. Use [native QA](native-qa.md#xcode-launched-app-workflow) for setup, isolation and artifact review. An overridden backend can make model calls; see the [mock backend](mock-backend.md) for the default.
 

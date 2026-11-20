@@ -5,7 +5,8 @@
   "windows": ["main"],
   "permissions": [
     "allow-stream-fixture",
-    "allow-fixture-verification-enabled",
-    "allow-verify-fixture-result"
+    "allow-verification-mode",
+    "allow-verify-fixture-result",
+    "allow-verify-media-result"
   ]
 }
