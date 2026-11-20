@@ -9,6 +9,8 @@
     "allow-workspace-snapshot",
     "allow-search-project-paths",
     "allow-pick-composer-attachments",
+    "allow-composer-context-catalog",
+    "allow-add-composer-context",
     "allow-paste-composer-image",
     "allow-remove-composer-attachment",
     "allow-load-composer-image",

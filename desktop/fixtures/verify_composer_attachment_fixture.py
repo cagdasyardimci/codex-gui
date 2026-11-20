@@ -29,7 +29,9 @@ def colored_pixel(rgb):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
-    parser.add_argument("--annotations", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--annotations", action="store_true")
+    mode.add_argument("--context", action="store_true")
     args = parser.parse_args()
     executable = args.app.resolve(strict=True)
     with TemporaryDirectory(prefix="codex-gui-composer-attachments-") as directory:
@@ -40,7 +42,9 @@ def main():
         colors = [PIXEL, colored_pixel((20, 220, 50)), colored_pixel((210, 30, 100))]
         (checkout / "unannotated.png").write_bytes(colors[1])
         (checkout / "last.png").write_bytes(colors[2])
-        (checkout / "notes.txt").write_text("Fixture note\n", encoding="utf-8")
+        (checkout / "notes.txt").write_text("Fixture note\nCafé code\nInspect this line\n", encoding="utf-8")
+        (checkout / "skill").mkdir()
+        (checkout / "skill" / "SKILL.md").write_text("# Review fixture\n", encoding="utf-8")
         profile = root / "codex-home"
         profile.mkdir()
         data = root / "desktop"
@@ -55,16 +59,17 @@ def main():
             ],
         })
         state.write_text(json.dumps({"threads": threads}, ensure_ascii=True), encoding="utf-8")
-        fixture = "--verify-annotations" if args.annotations else "--verify-attachments"
+        fixture = "--verify-composer-context" if args.context else "--verify-annotations" if args.annotations else "--verify-attachments"
         result = subprocess.run(
             [str(executable), fixture, str(data), str(checkout)],
             env={**os.environ, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
-                 "CODEX_GUI_QA_SCENARIO": "desktop-attachments", "CODEX_GUI_QA_STATE": str(state),
+                 "CODEX_GUI_QA_SCENARIO": "desktop-context" if args.context else "desktop-attachments", "CODEX_GUI_QA_STATE": str(state),
                  "CODEX_GUI_QA_TRACE": str(trace), "PYTHONIOENCODING": "utf-8"},
             encoding="utf-8", capture_output=True, errors="replace", timeout=75,
         )
         print(result.stdout, end="")
-        expected = "Verified installed image annotation placement" if args.annotations else "Verified installed draft attachment capture"
+        expected = ("Verified installed composer context" if args.context else
+                    "Verified installed image annotation placement" if args.annotations else "Verified installed draft attachment capture")
         if result.returncode or expected not in result.stdout:
             raise SystemExit(result.stderr or "The desktop attachment fixture did not complete")
         starts = [event for line in trace.read_text(encoding="utf-8").splitlines()
@@ -72,6 +77,9 @@ def main():
         assert len(starts) == 1 and starts[0]["threadId"] == "history-first", starts
         inputs = starts[0]["input"]
         assert not list(profile.iterdir())
+        if args.context:
+            verify_context_inputs(inputs, checkout)
+            return
         if args.annotations:
             verify_annotation_inputs(inputs, colors, data)
             return
@@ -102,6 +110,17 @@ def verify_annotation_inputs(inputs, colors, data):
         path = Path(image["path"]).resolve(strict=True)
         assert path.is_relative_to(data) and path.read_bytes() == expected
     print("Verified one annotated send with original attachment order and bytes across three images")
+
+
+def verify_context_inputs(inputs, checkout):
+    assert [item["type"] for item in inputs] == ["text", "mention", "skill"], inputs
+    assert inputs[0]["text"] == (
+        "Before 👩🏽‍💻  after\n\nFile reference: notes.txt\n\nSelected code from notes.txt, lines 2–3:"
+        "\n2: Café code\n3: Inspect this line\n\nProject note\nUse the local fixture only."
+    ), inputs
+    assert inputs[1]["name"] == "notes.txt" and Path(inputs[1]["path"]).resolve() == checkout / "notes.txt", inputs
+    assert inputs[2]["name"] == "Review fixture" and Path(inputs[2]["path"]).resolve() == checkout / "skill" / "SKILL.md", inputs
+    print("Verified one turn with the exact replaced token, file mention, selected lines, project note, and skill")
 
 
 if __name__ == "__main__":

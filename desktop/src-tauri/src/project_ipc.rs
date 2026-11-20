@@ -32,6 +32,7 @@ pub(crate) struct ProjectState {
     pub(crate) projection: WorkspaceProjection,
     fixture_directory: Option<tempfile::TempDir>,
     file_index: Option<(WorkspaceId, Arc<AsyncMutex<WatchedProjectPaths>>)>,
+    pub(crate) composer_catalog: Option<crate::composer_context_ipc::ComposerCatalog>,
 }
 
 impl ProjectState {
@@ -63,6 +64,27 @@ impl Drop for Picker<'_> {
 }
 
 impl ProjectIpc {
+    pub(crate) fn path_index(
+        &self,
+        window: &str,
+        workspace: WorkspaceId,
+    ) -> Result<Arc<AsyncMutex<WatchedProjectPaths>>, IpcError> {
+        let mut state = self.state.lock().expect("workspace state lock poisoned");
+        let checkout = state.grants.checkout(window, workspace)?;
+        if state.file_index.as_ref().map(|(owner, _)| *owner) != Some(workspace) {
+            state.file_index = Some((
+                workspace,
+                Arc::new(AsyncMutex::new(WatchedProjectPaths::new(checkout))),
+            ));
+        }
+        Ok(state
+            .file_index
+            .as_ref()
+            .expect("index for current grant")
+            .1
+            .clone())
+    }
+
     pub(crate) fn checkout(
         &self,
         window: &str,
@@ -209,24 +231,7 @@ pub async fn search_project_paths(
     request: ProjectPathRequest,
 ) -> Result<Vec<ProjectPathMatch>, IpcError> {
     authorize_view(&window)?;
-    let cache = {
-        let mut state = project.state.lock().expect("workspace state lock poisoned");
-        let checkout = state
-            .grants
-            .checkout(window.label(), request.workspace_id)?;
-        if state.file_index.as_ref().map(|(owner, _)| *owner) != Some(request.workspace_id) {
-            state.file_index = Some((
-                request.workspace_id,
-                Arc::new(AsyncMutex::new(WatchedProjectPaths::new(checkout))),
-            ));
-        }
-        state
-            .file_index
-            .as_ref()
-            .expect("index for current grant")
-            .1
-            .clone()
-    };
+    let cache = project.path_index(window.label(), request.workspace_id)?;
     let mut index = cache.lock_owned().await;
     project.checkout(window.label(), request.workspace_id)?;
     let matches = tauri::async_runtime::spawn_blocking(move || index.search(&request.query))

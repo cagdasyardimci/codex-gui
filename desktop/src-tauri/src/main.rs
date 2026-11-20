@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent, webview::NewWindowResponse};
 
 mod coding_probe;
+mod composer_context_ipc;
 mod composer_ipc;
 mod diff_ipc;
 mod fixture;
@@ -28,6 +29,7 @@ fn main() {
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
         Some("--verify-attachments") => fixture::Verification::Attachments,
         Some("--verify-annotations") => fixture::Verification::Annotations,
+        Some("--verify-composer-context") => fixture::Verification::ComposerContext,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -51,6 +53,7 @@ fn main() {
             | fixture::Verification::HistoryRestore
             | fixture::Verification::Attachments
             | fixture::Verification::Annotations
+            | fixture::Verification::ComposerContext
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -123,6 +126,9 @@ fn main() {
             project_ipc::workspace_snapshot,
             project_ipc::search_project_paths,
             composer_ipc::pick_composer_attachments,
+            composer_context_ipc::composer_context_catalog,
+            composer_context_ipc::add_composer_context,
+            composer_context_ipc::seed_composer_context_fixture,
             composer_ipc::paste_composer_image,
             composer_ipc::remove_composer_attachment,
             composer_ipc::load_composer_image,
@@ -170,6 +176,7 @@ fn main() {
                     | fixture::Verification::HistoryRestore
                     | fixture::Verification::Attachments
                     | fixture::Verification::Annotations
+                    | fixture::Verification::ComposerContext
                     | fixture::Verification::Account
                     | fixture::Verification::WindowsSetup
                     | fixture::Verification::Turn

@@ -12,6 +12,7 @@ use crate::files::{
 use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
 mod actions;
+mod context;
 mod git;
 mod markdown;
 mod media;
@@ -25,6 +26,10 @@ pub use actions::{
     InteractionContent, InteractionView, PermissionChoice, PermissionView, QuestionAnswer,
     QuestionView, RecoverSendRequest, RespondRequest, SendRequest, StopRequest, StopTarget,
     TurnTarget,
+};
+pub use context::{
+    ComposerChoice, ComposerChoiceKind, ComposerContextSelection, ComposerContextTarget,
+    ComposerFileContext, ComposerSourceLines, ComposerTokenRange,
 };
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use markdown::{MarkdownKind, MarkdownNode, MarkdownTargetRequest};
@@ -227,6 +232,13 @@ pub fn workspace_typescript() -> String {
         DraftAttachmentView::decl(),
         DraftAttachmentScope::decl(),
         DraftAttachmentRequest::decl(),
+        ComposerChoice::decl(),
+        ComposerChoiceKind::decl(),
+        ComposerContextSelection::decl(),
+        ComposerContextTarget::decl(),
+        ComposerFileContext::decl(),
+        ComposerSourceLines::decl(),
+        ComposerTokenRange::decl(),
         ImageAnnotation::decl(),
         DraftImageAnnotations::decl(),
         SaveImageAnnotations::decl(),

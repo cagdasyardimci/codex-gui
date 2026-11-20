@@ -152,20 +152,29 @@ pub fn import_appkit_project_context(
         return Err(ProjectContextError::WrongProject);
     }
     let context: ProjectContext = serde_json::from_value(document.context)?;
-    let content = serde_json::to_string(&context)?;
+    let inserted = initialize_project_context(database, checkout, &context)?;
+    Ok(if inserted {
+        ProjectContextImport::Imported
+    } else {
+        ProjectContextImport::PreservedDestination
+    })
+}
+
+pub fn initialize_project_context(
+    database: &mut Connection,
+    checkout: &CheckoutIdentity,
+    context: &ProjectContext,
+) -> Result<bool, ProjectContextError> {
+    let content = serde_json::to_string(context)?;
     let transaction = database.transaction_with_behavior(TransactionBehavior::Immediate)?;
     checkout.revalidate()?;
     let inserted = transaction.execute(
         "INSERT INTO project_contexts (checkout_path, checkout_key, content) VALUES (?1, ?2, ?3)
          ON CONFLICT (checkout_path) DO NOTHING",
-        params![path, checkout.storage_key(), content],
+        params![project_path(checkout)?, checkout.storage_key(), content],
     )?;
     transaction.commit()?;
-    Ok(if inserted == 1 {
-        ProjectContextImport::Imported
-    } else {
-        ProjectContextImport::PreservedDestination
-    })
+    Ok(inserted == 1)
 }
 
 pub fn read_project_context(

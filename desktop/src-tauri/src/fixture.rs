@@ -31,6 +31,7 @@ pub enum Verification {
     HistoryRestore,
     Attachments,
     Annotations,
+    ComposerContext,
     Account,
     WindowsSetup,
     Turn,
@@ -252,7 +253,7 @@ pub fn verify_attachments_result(
 ) -> Result<(), String> {
     if !matches!(
         *verification,
-        Verification::Attachments | Verification::Annotations
+        Verification::Attachments | Verification::Annotations | Verification::ComposerContext
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -263,6 +264,10 @@ pub fn verify_attachments_result(
         if *verification == Verification::Annotations {
             println!(
                 "Verified installed image annotation placement, cancellation, and restoration"
+            );
+        } else if *verification == Verification::ComposerContext {
+            println!(
+                "Verified installed composer context, token replacement, and captured ownership"
             );
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");

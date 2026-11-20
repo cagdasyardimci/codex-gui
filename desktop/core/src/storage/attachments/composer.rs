@@ -29,6 +29,70 @@ pub enum ComposerAttachmentKind {
 }
 
 impl AttachmentStore {
+    pub fn composer_project_context(
+        &self,
+        checkout: &CheckoutIdentity,
+    ) -> Result<
+        Option<crate::storage::project_context::ProjectContext>,
+        crate::storage::project_context::ProjectContextError,
+    > {
+        let state = self.inner.state();
+        crate::storage::project_context::read_project_context(&state.database, checkout)
+    }
+
+    pub fn initialize_composer_project_context(
+        &self,
+        checkout: &CheckoutIdentity,
+        context: &crate::storage::project_context::ProjectContext,
+    ) -> Result<bool, crate::storage::project_context::ProjectContextError> {
+        let mut state = self.inner.state();
+        crate::storage::project_context::initialize_project_context(
+            &mut state.database,
+            checkout,
+            context,
+        )
+    }
+
+    pub fn add_composer_context(
+        &self,
+        draft: DraftId,
+        expected: &str,
+        text: &str,
+        context: Value,
+    ) -> Result<(), AttachmentError> {
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut saved = read_draft(&transaction, draft)?.ok_or(AttachmentError::MissingDraft)?;
+        if saved.text != expected {
+            return Err(AttachmentError::StaleComposerText);
+        }
+        if saved
+            .context
+            .iter()
+            .filter(|item| is_composer_attachment(item))
+            .count()
+            >= MAX_COMPOSER_ATTACHMENTS
+        {
+            return Err(io::Error::other("too many composer attachments").into());
+        }
+        saved.context.push(context);
+        let revision = saved
+            .revision
+            .next()
+            .ok_or_else(|| io::Error::other("draft revision exhausted"))?;
+        save_in_transaction(
+            &transaction,
+            draft,
+            Some(saved.revision),
+            revision,
+            Some(text),
+            Some(&saved.context),
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
     pub fn composer_image_annotations(
         &self,
         draft: DraftId,
@@ -274,5 +338,8 @@ impl BlobLease {
 }
 
 fn is_composer_attachment(item: &Value) -> bool {
-    matches!(item["kind"].as_str(), Some("image" | "fileReference"))
+    matches!(
+        item["kind"].as_str(),
+        Some("image" | "fileReference" | "textExcerpt" | "skill" | "projectContext")
+    )
 }

@@ -72,6 +72,8 @@ pub enum AttachmentError {
     ForeignLease,
     #[error("the image or its annotations changed since the editor opened")]
     StaleAnnotations,
+    #[error("the composer text changed since context selection started")]
+    StaleComposerText,
     #[error("the prepared thread or draft already has a different binding")]
     ConflictingThreadDraft,
     #[error(transparent)]

@@ -119,6 +119,24 @@ pub struct CodexBrowser {
     client: AppServerClient,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ComposerSkill {
+    pub name: String,
+    pub path: String,
+    pub enabled: bool,
+}
+
+#[derive(Deserialize)]
+struct SkillList {
+    data: Vec<SkillScope>,
+}
+
+#[derive(Deserialize)]
+struct SkillScope {
+    cwd: std::path::PathBuf,
+    skills: Vec<ComposerSkill>,
+}
+
 impl CodexBrowser {
     pub fn new(client: AppServerClient) -> Self {
         Self { client }
@@ -142,6 +160,36 @@ impl CodexBrowser {
             )
             .await?;
         Ok(response.map_cursor(|token| token))
+    }
+
+    pub async fn composer_skills(
+        &self,
+        timeout: Duration,
+    ) -> Result<Vec<ComposerSkill>, BrowseError> {
+        let checkout = self.checkout()?;
+        checkout.revalidate()?;
+        let cwd = checkout
+            .canonical_path()
+            .to_str()
+            .ok_or(BrowseError::NonUnicodeCheckout)?;
+        let response: SkillList = self
+            .read(
+                "skills/list",
+                json!({"cwds": [cwd], "forceReload": false}),
+                timeout,
+            )
+            .await?;
+        checkout.revalidate()?;
+        let mut skills = Vec::new();
+        for entry in response.data {
+            checkout.validate_reported(&entry.cwd)?;
+            skills.extend(entry.skills.into_iter().filter(|skill| {
+                skill.enabled
+                    && !skill.name.is_empty()
+                    && std::path::Path::new(&skill.path).is_absolute()
+            }));
+        }
+        Ok(skills)
     }
 
     pub async fn project_chats(

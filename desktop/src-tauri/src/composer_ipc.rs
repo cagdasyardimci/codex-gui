@@ -261,7 +261,7 @@ pub(crate) fn dropped_paths(window: WebviewWindow, project: &ProjectIpc, paths: 
     });
 }
 
-fn capture(
+pub(crate) fn capture(
     window: &WebviewWindow,
     project: &ProjectIpc,
     scope: &DraftAttachmentScope,

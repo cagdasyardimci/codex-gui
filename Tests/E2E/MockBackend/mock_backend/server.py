@@ -128,6 +128,12 @@ class Server:
                              for name, enabled in self.state.data['config'].get('features', {}).items()],
                     'nextCursor': None}
         if method == 'skills/list':
+            if self.scenario.get('desktopContext'):
+                cwd = p['cwds'][0]
+                return {'data': [{'cwd': cwd, 'errors': [], 'skills': [
+                    {'name': 'Review fixture', 'path': str(Path(cwd) / 'skill' / 'SKILL.md'), 'enabled': True},
+                    {'name': 'Disabled fixture', 'path': str(Path(cwd) / 'skill' / 'SKILL.md'), 'enabled': False},
+                ]}]}
             return {'data': [{'cwd': cwd, 'skills': [], 'errors': []} for cwd in p.get('cwds', [])]}
         if method == 'collaborationMode/list':
             return {'data': [{'name': 'Default', 'mode': 'default', 'model': None, 'reasoning_effort': None},
@@ -289,10 +295,11 @@ class Server:
             raise ProtocolError(-32602, 'Turn cwd does not match thread')
         inputs = p.get('input')
         accepts_attachments = self.scenario.get('desktopAttachments', False)
+        context_inputs = ('localImage', 'mention', 'skill') if self.scenario.get('desktopContext') else ('localImage', 'mention')
         if not isinstance(inputs, list) or not inputs or any(
             not isinstance(item, dict) or not (
                 item.get('type') == 'text' and isinstance(item.get('text'), str)
-                or accepts_attachments and item.get('type') in ('localImage', 'mention')
+                or accepts_attachments and item.get('type') in context_inputs
                 and isinstance(item.get('path'), str) and Path(item['path']).is_file()
             ) for item in inputs
         ):

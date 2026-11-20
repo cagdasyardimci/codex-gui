@@ -41,6 +41,14 @@ impl WatchedProjectPaths {
         if query.len() > MAX_QUERY_BYTES {
             return Err(FileError::TooLarge);
         }
+        self.refresh()?.search(query)
+    }
+
+    pub fn resolve(&mut self, id: ProjectPathId) -> Result<PathBuf, FileError> {
+        Ok(self.refresh()?.relative_path(id)?.to_owned())
+    }
+
+    fn refresh(&mut self) -> Result<&ProjectPathIndex, FileError> {
         if let Err(error) = self.checkout.revalidate() {
             self.watcher = None;
             self.index = None;
@@ -61,10 +69,7 @@ impl WatchedProjectPaths {
                 .rebuild();
         }
         result?;
-        self.index
-            .as_ref()
-            .expect("index after update")
-            .search(query)
+        Ok(self.index.as_ref().expect("index after update"))
     }
 
     fn update(&mut self, changes: Changes, attached: bool) -> Result<(), FileError> {

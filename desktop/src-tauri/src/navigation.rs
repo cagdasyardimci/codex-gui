@@ -76,6 +76,10 @@ enum Action {
     Intent(NavigationIntent),
     RequestQuit(tauri::AppHandle),
     ComposerAttachment(composer_attachments::Mutation),
+    ComposerContextClient(
+        codex_gui_core::ipc::DraftAttachmentScope,
+        oneshot::Sender<Option<AppServerClient>>,
+    ),
 }
 
 enum Input {
@@ -314,6 +318,20 @@ impl Navigation {
             }
             Action::ComposerAttachment(mutation) => {
                 self.update_composer_attachments(mutation)?;
+                return Ok(None);
+            }
+            Action::ComposerContextClient(scope, reply) => {
+                self.require(scope.workspace_id)?;
+                if self.view.selected_chat != scope.chat_id
+                    || self.view.draft.as_ref().map(|draft| &draft.id) != Some(&scope.draft_id)
+                {
+                    return Err(IpcError::StaleSelection);
+                }
+                let client = self
+                    .backend
+                    .as_ref()
+                    .map(|backend| backend.connection.client());
+                let _ = reply.send(client);
                 return Ok(None);
             }
             Action::SelectFolder(folder) => {

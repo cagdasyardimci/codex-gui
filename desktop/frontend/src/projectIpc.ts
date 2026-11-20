@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  ComposerChoice, ComposerContextSelection, DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -38,6 +38,14 @@ export function loadTranscriptAttachment(request: TranscriptMediaRequest): Promi
 
 export function pickComposerAttachments(scope: DraftAttachmentScope): Promise<void> {
   return invoke('pick_composer_attachments', { scope });
+}
+
+export function composerContextCatalog(scope: DraftAttachmentScope): Promise<ComposerChoice[]> {
+  return invoke('composer_context_catalog', { scope });
+}
+
+export function addComposerContext(request: ComposerContextSelection): Promise<void> {
+  return invoke('add_composer_context', { request });
 }
 
 export function pasteComposerImage(scope: DraftAttachmentScope, bytes: ArrayBuffer): Promise<void> {

@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
   import QueuePanel from './QueuePanel.svelte';
   import ComposerAttachments from './ComposerAttachments.svelte';
+  import ComposerContextPicker from './ComposerContextPicker.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { copyTranscriptRow, navigateWorkspace, observeWorkspace, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, navigateWorkspace, observeWorkspace, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -19,10 +20,11 @@
   import { verifyQuit } from './quitProbe';
   import { verifyComposerAttachments } from './composerAttachmentProbe';
   import { verifyImageAnnotations } from './imageAnnotationProbe';
+  import { verifyComposerContext } from './composerContextProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -44,6 +46,10 @@
   let quietQuitTicket: string | undefined;
   let pending: DraftEdit | null = null;
   let saving: Promise<void> | null = null;
+  let contextPicker = $state<{ keyboard(event: KeyboardEvent): boolean }>();
+  let contextMenu = $state.raw<{
+    scope: DraftAttachmentScope; source: string; query: string; selection: [number, number]; token: ComposerTokenRange | null;
+  }>();
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const workspaceId = $derived(workspace?.workspaceId);
@@ -177,6 +183,10 @@
 
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
+    if (contextMenu && (contextMenu.scope.draftId !== current.navigation.draft?.id ||
+        contextMenu.scope.workspaceId !== current.workspace?.workspaceId || current.navigation.queue?.editing || current.navigation.quit)) {
+      contextMenu = undefined;
+    }
     viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) showingChanges = false;
@@ -297,6 +307,60 @@
     })().catch(() => {});
   }
 
+  function showComposerContext() {
+    if (contextMenu && !contextMenu.token) { closeComposerContext(); return; }
+    if (!editor || !attachmentScope || queue?.editing || quit || composing) return;
+    contextMenu = { scope: attachmentScope, source: editor.value, query: '',
+      selection: [editor.selectionStart, editor.selectionEnd], token: null };
+  }
+
+  function matchComposerToken(control: HTMLTextAreaElement) {
+    if (!attachmentScope || queue?.editing || quit || composing ||
+        control.selectionStart !== control.selectionEnd || contextMenu && !contextMenu.token) return;
+    const caret = control.selectionStart;
+    const source = control.value;
+    const match = source.slice(0, caret).match(/(?:^|\s)@([^\s@]*)$/u);
+    if (!match) { contextMenu = undefined; return; }
+    const query = match[1] ?? '';
+    const end = caret + (source.slice(caret).match(/^[^\s@]*/u)?.[0].length ?? 0);
+    const start = caret - query.length - 1;
+    contextMenu = { scope: attachmentScope, source, query, selection: [caret, caret], token: { start, end } };
+  }
+
+  function closeComposerContext() {
+    const captured = contextMenu;
+    contextMenu = undefined;
+    if (!captured || captured.scope.draftId !== displayedDraft) return;
+    void tick().then(() => {
+      if (!editor || captured.scope.draftId !== displayedDraft) return;
+      editor.focus();
+      editor.setSelectionRange(...captured.selection);
+    });
+  }
+
+  async function chooseComposerContext(target: ComposerContextTarget) {
+    const captured = contextMenu;
+    if (!captured || captured.scope.draftId !== displayedDraft || captured.source !== editor?.value ||
+        actionPending || quit || composing) return;
+    actionPending = true;
+    try {
+      await flushEdits();
+      await addComposerContext({ scope: captured.scope, expectedText: captured.source, replaceToken: captured.token, target });
+      if (captured.scope.draftId !== displayedDraft) return;
+      const token = captured.token;
+      contextMenu = undefined;
+      if (token && text === captured.source) text = captured.source.slice(0, token.start) + captured.source.slice(token.end);
+      await tick();
+      if (!editor || captured.scope.draftId !== displayedDraft) return;
+      editor.focus();
+      editor.setSelectionRange(token?.start ?? captured.selection[0], token?.start ?? captured.selection[1]);
+    } catch (error) {
+      if (error === 'staleSelection' || error === 'retiredWorkspace') contextMenu = undefined;
+    } finally {
+      actionPending = false;
+    }
+  }
+
   function queueCommand(command: QueueCommand) {
     if (!workspace || !navigation?.selectedChat || !queue || queue.busy) return;
     const request = { workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, revision: queue.revision, command };
@@ -385,6 +449,7 @@
     else if (verify === 'quit') void verifyQuit(() => snapshot);
     else if (verify === 'attachments') void verifyComposerAttachments(() => snapshot);
     else if (verify === 'annotations') void verifyImageAnnotations(() => snapshot);
+    else if (verify === 'composerContext') void verifyComposerContext(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -465,7 +530,7 @@
       {/each}
       {#if queue}
         <QueuePanel {queue} disabled={actionPending || queue.busy || !!quit}
-          draftOccupied={text !== '' || !!queue.editing} command={queueCommand} />
+          draftOccupied={text !== '' || !!draftAttachments.length || !!queue.editing} command={queueCommand} />
       {/if}
       {#if navigation?.draft}
         {#if attachmentScope && draftAttachments.length && !queue?.editing}
@@ -475,13 +540,25 @@
         {/if}
         <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor}
           onpaste={pasteAttachment}
+          onkeydown={(event) => { if (contextMenu?.token) contextPicker?.keyboard(event); }}
           readonly={admittingDraft || confirmingQuit || quit?.draining}
           value={text} oncompositionstart={() => { composing = true; }}
           oncompositionend={(event) => {
             composing = false;
             acceptText(event.currentTarget.value, false);
+            matchComposerToken(event.currentTarget);
           }}
-          oninput={(event) => acceptText(event.currentTarget.value, event instanceof InputEvent && event.isComposing)}></textarea>
+          oninput={(event) => {
+            const marked = event instanceof InputEvent && event.isComposing;
+            acceptText(event.currentTarget.value, marked);
+            if (!marked) matchComposerToken(event.currentTarget);
+          }}></textarea>
+        {#if contextMenu}
+          {#key `${contextMenu.scope.draftId}/${contextMenu.token ? 'token' : 'button'}`}
+            <ComposerContextPicker bind:this={contextPicker} scope={contextMenu.scope} fromButton={!contextMenu.token}
+              initialQuery={contextMenu.query} choose={(target) => void chooseComposerContext(target)} close={closeComposerContext} />
+          {/key}
+        {/if}
         <div class="composer-actions">
           {#if queue}
             <button type="button" aria-pressed={queue.enabled}
@@ -501,12 +578,14 @@
               onclick={() => queueCommand({ cancelEdit: edit.id })}>Cancel Edit</button>
             <button type="button" disabled={actionPending || queue.busy || (!text.trim() && !edit.hasContext)}
               onclick={() => queueCommand({ saveEdit: edit.id })}>Save Queue Edit</button>
-          {:else if resumeCommand && text === ''}
+          {:else if resumeCommand && text === '' && !draftAttachments.length}
             <button type="button" disabled={actionPending || queue?.busy}
               onclick={() => { if (resumeCommand) queueCommand(resumeCommand); }}>Resume</button>
           {:else}
             {#if attachmentScope}
               {@const scope = attachmentScope}
+              <button type="button" disabled={actionPending || !!navigation.quit} aria-expanded={!!contextMenu}
+                onclick={showComposerContext}>Add Context</button>
               <button type="button" disabled={actionPending || !!navigation.quit}
                 onclick={() => { void pickComposerAttachments(scope).catch(() => {}); }}>Attach Files</button>
             {/if}
