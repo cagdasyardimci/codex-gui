@@ -2,6 +2,25 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AppearanceSelection, AppearanceUpdate, AppearanceView } from './generated/workspace';
 
+export interface WorkspacePanes {
+  navigationWidth: number | null;
+  reviewWidth: number | null;
+  navigationCollapsed: boolean;
+  reviewExpanded: boolean;
+}
+
+export function readWorkspacePanes(): Promise<WorkspacePanes> {
+  return invoke('workspace_panes');
+}
+
+export function toggleNavigationPane(): Promise<boolean> {
+  return invoke('toggle_navigation_pane');
+}
+
+export function setReviewPaneExpansion(expanded: boolean): Promise<void> {
+  return invoke('set_review_pane_expansion', { expanded });
+}
+
 export function readDesktopAppearance(): Promise<AppearanceView> {
   return invoke('read_desktop_appearance');
 }

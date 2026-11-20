@@ -330,6 +330,25 @@ pub async fn checkout_patch(
     if query.detail != detail {
         return Err(IpcError::StaleSelection);
     }
+    if let Source::Reported(edits, index) = &candidate.source
+        && let Some(thread) = &request.scope.chat_id
+        && let Some(legacy) = edits
+            .files
+            .get(*index)
+            .and_then(|file| file.appkit_review.as_ref())
+    {
+        navigation
+            .attachment_store()
+            .project_appkit_review(
+                &scope.checkout,
+                &codex_gui_core::identity::ThreadId(thread.clone()),
+                &edits.view().turn_id,
+                &capture.marker_origin,
+                legacy,
+                &capture.marks,
+            )
+            .map_err(storage_error)?;
+    }
     let view = patch_view(
         navigation.attachment_store(),
         &request.file_id,

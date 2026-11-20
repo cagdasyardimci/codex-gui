@@ -191,14 +191,31 @@ impl AttachmentStore {
                 |row| row.get(0),
             )
             .optional()?;
-        content.map_or_else(
-            || Ok(SidebarPreferences::default()),
-            |content| {
-                serde_json::from_str(&content)
-                    .map_err(io::Error::other)
-                    .map_err(Into::into)
-            },
-        )
+        let mut preferences: SidebarPreferences = content
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(io::Error::other)?
+            .unwrap_or_default();
+        let mut pending = state.database.prepare(
+            "SELECT c.project_id, c.thread_id
+             FROM appkit_sidebar_order a JOIN desktop_sidebar_chats c ON c.thread_id = a.thread_id
+             JOIN desktop_projects p ON p.id = c.project_id
+             ORDER BY a.position, c.project_id",
+        )?;
+        let legacy_keys = pending.query_map([], |row| {
+            Ok(SidebarChatKey {
+                project_id: row.get(0)?,
+                chat_id: row.get(1)?,
+            })
+        })?;
+        for key in legacy_keys {
+            let key = key?;
+            if !preferences.order.contains(&key) {
+                preferences.order.push(key);
+            }
+        }
+        Ok(preferences)
     }
 
     pub fn save_sidebar_preferences(
@@ -206,12 +223,22 @@ impl AttachmentStore {
         preferences: &SidebarPreferences,
     ) -> Result<(), AttachmentError> {
         let content = serde_json::to_string(preferences).map_err(io::Error::other)?;
-        let state = self.inner.state();
-        state.database.execute(
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute(
             "INSERT INTO desktop_sidebar_preferences (slot, content) VALUES (1, ?1)
              ON CONFLICT(slot) DO UPDATE SET content = excluded.content",
             [content],
         )?;
+        for key in &preferences.order {
+            transaction.execute(
+                "DELETE FROM appkit_sidebar_order WHERE thread_id = ?1",
+                [&key.chat_id],
+            )?;
+        }
+        transaction.commit()?;
         Ok(())
     }
 

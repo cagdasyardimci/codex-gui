@@ -16,6 +16,50 @@ pub(super) struct WindowLayout {
 }
 
 impl WindowLayout {
+    pub(super) fn from_appkit(window: &WebviewWindow, layout: &AppKitPaneLayout) -> Option<Self> {
+        let primary = window.primary_monitor().ok()??;
+        let [[x, y], [width, height]] = layout.frame;
+        let primary_scale = primary.scale_factor();
+        let top = f64::from(primary.size().height) / primary_scale - y - height;
+        let monitors = window.available_monitors().ok()?;
+        let monitor = monitors
+            .iter()
+            .filter_map(|monitor| {
+                let scale = monitor.scale_factor();
+                let left = f64::from(monitor.position().x) / scale;
+                let upper = f64::from(monitor.position().y) / scale;
+                let right = left + f64::from(monitor.size().width) / scale;
+                let lower = upper + f64::from(monitor.size().height) / scale;
+                let overlap = (right.min(x + width) - left.max(x)).max(0.0)
+                    * (lower.min(top + height) - upper.max(top)).max(0.0);
+                (overlap > 0.0).then_some((monitor, overlap))
+            })
+            .max_by(|(_, left), (_, right)| left.total_cmp(right));
+        let (monitor, visible) = monitor.map_or((&primary, false), |(monitor, _)| (monitor, true));
+        let scale = monitor.scale_factor();
+        let area = monitor.work_area();
+        let decoration = window
+            .outer_size()
+            .ok()?
+            .height
+            .saturating_sub(window.inner_size().ok()?.height);
+        Some(Self {
+            display: monitor.name().cloned(),
+            offset_x: if visible {
+                x - f64::from(area.position.x) / scale
+            } else {
+                (f64::from(area.size.width) / scale - width) / 2.0
+            },
+            offset_y: if visible {
+                top - f64::from(area.position.y) / scale
+            } else {
+                (f64::from(area.size.height) / scale - height) / 2.0
+            },
+            width,
+            height: (height - f64::from(decoration) / scale).max(1.0),
+        })
+    }
+
     pub fn capture(window: &WebviewWindow) -> Option<Self> {
         if window.is_fullscreen().ok()?
             || window.is_maximized().unwrap_or(false)
@@ -120,6 +164,7 @@ pub fn menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         })
         .build(app)?;
     let view = SubmenuBuilder::new(app, "View")
+        .text("navigationPane", "Toggle Sidebar")
         .text("messageSearch", "Search Messages")
         .separator()
         .items(&[&zoom_in, &zoom_out, &zoom_reset])
@@ -133,7 +178,7 @@ pub fn menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 
 pub fn dispatch_menu(window: &WebviewWindow, action: &str) -> Result<(), IpcError> {
     match action {
-        "settings" | "newChat" | "messageSearch" | "undo" | "redo" => {
+        "settings" | "newChat" | "messageSearch" | "navigationPane" | "undo" | "redo" => {
             window.emit("desktop:menu", action).map_err(report)
         }
         "closeWindow" => window.close().map_err(report),

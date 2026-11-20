@@ -49,7 +49,8 @@ def main():
     if trace_path and scenario.get('desktopQuit') and secondary:
         trace_path = f'{trace_path}.{os.getpid()}'
     transport = Transport(trace_path)
-    server = Server(scenario, State(scenario, state_path), transport)
+    read_only_state = os.environ.get('CODEX_GUI_QA_READ_ONLY_STATE') == '1'
+    server = Server(scenario, State(scenario, state_path, read_only_state), transport)
     transport.trace({'direction': 'fixture', 'scenario': name, 'modelCalls': False})
     try:
         for line in sys.stdin:

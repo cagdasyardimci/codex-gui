@@ -14,7 +14,10 @@ use codex_gui_core::{
         CustomAlertSound, NotificationEdit, NotificationPreferences, NotificationUpdate,
         NotificationView, TaskAlertCategory, TaskAlertSound, sound::AlertAudio,
     },
-    storage::attachments::AttachmentStore,
+    storage::attachments::{
+        AttachmentStore,
+        appkit_preferences::{AppKitPreferenceError, AppKitPreferences},
+    },
     workspace::{InteractionKind, RoutedEvent},
 };
 use serde::Serialize;
@@ -79,6 +82,32 @@ struct Alert {
 }
 
 impl TaskNotifications {
+    pub fn import_appkit(
+        root: &Path,
+        source: &AppKitPreferences,
+    ) -> Result<(), AppKitPreferenceError> {
+        let target = root.join("notifications.json");
+        if target.try_exists()? {
+            return Ok(());
+        }
+        if let Some(mut imported) = source.notification_preferences()? {
+            if let Some((name, audio)) = imported.sound {
+                let bytes = audio.wave_bytes();
+                let digest = FileRevision::from_bytes(&bytes).digest;
+                persist_sound(
+                    &root
+                        .join("notification-sounds")
+                        .join(format!("{digest}.wav")),
+                    &bytes,
+                )
+                .map_err(|error| io::Error::other(format!("{error:?}")))?;
+                imported.settings.custom = Some(CustomAlertSound { digest, name });
+            }
+            crate::appkit_import::persist_new(&target, &imported.settings)?;
+        }
+        Ok(())
+    }
+
     pub fn open(root: Option<&Path>, mode: Verification) -> Self {
         let path = root.map(|root| root.join("notifications.json"));
         let value = path

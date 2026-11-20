@@ -15,7 +15,8 @@ impl AttachmentStore {
         checkout.revalidate().map_err(io::Error::other)?;
         let state = self.inner.state();
         let content: Option<String> = state.database.query_row(
-            "SELECT selection FROM composer_selections WHERE checkout_key = ?1 AND thread_id = ?2",
+            "SELECT selection FROM composer_selections WHERE checkout_key = ?1 AND thread_id = ?2
+             UNION ALL SELECT selection FROM appkit_composer_preferences WHERE checkout_key = ?1 LIMIT 1",
             params![checkout.storage_key(), thread.unwrap_or_default()], |row| row.get(0),
         ).optional()?;
         content

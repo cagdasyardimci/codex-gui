@@ -73,7 +73,8 @@ body {
 }
 
 .workspace-sidebar {
-  flex: 0 0 clamp(9rem, 24vw, 17rem);
+  flex: 0 0 var(--workspace-navigation-width, clamp(9rem, 24vw, 17rem));
+  max-width: 36vw;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -81,6 +82,10 @@ body {
   padding: 0.75rem;
   border-right: 1px solid var(--workspace-divider);
   background: color-mix(in srgb, var(--workspace-text) var(--workspace-sidebar-contrast, 4%), var(--workspace-canvas));
+}
+
+.workspace-sidebar.preferred-width {
+  box-sizing: border-box;
 }
 
 .workspace-sidebar .chat-row {
@@ -410,7 +415,7 @@ body {
 .workspace-changes {
   display: flex;
   flex-direction: column;
-  flex: 0 1 27rem;
+  flex: 0 1 var(--workspace-review-width, 27rem);
   min-width: 13rem;
   max-width: 48vw;
   min-height: 0;

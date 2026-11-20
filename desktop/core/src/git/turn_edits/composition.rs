@@ -85,7 +85,9 @@ fn net_file(edits: &[&ReportedEdit]) -> Option<Option<TurnFileEdit>> {
     if (before.is_none() && after.is_none()) || (before == after && diff.is_empty()) {
         return Some(None);
     }
-    Some(Some(TurnFileEdit::new(before, after, diff)))
+    let mut file = TurnFileEdit::new(before, after, diff);
+    file.appkit_review = AppKitReviewFingerprints::from_reports(edits, &file.diff);
+    Some(Some(file))
 }
 
 fn endpoints(first: &ReportedEdit, last: &ReportedEdit) -> (Option<PathBuf>, Option<PathBuf>) {

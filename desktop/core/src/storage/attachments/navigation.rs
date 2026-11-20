@@ -82,7 +82,7 @@ impl AttachmentStore {
         &self,
         project: Option<(&Path, &CheckoutIdentity)>,
         thread: Option<&ThreadId>,
-    ) -> Result<(), AttachmentError> {
+    ) -> Result<DraftId, AttachmentError> {
         let (path, identity) = match project {
             Some((path, checkout)) => {
                 checkout
@@ -98,12 +98,45 @@ impl AttachmentStore {
             }
             None => (None, None),
         };
-        let state = self.inner.state();
-        state.database.execute(
-            "UPDATE desktop_selection SET project_path = ?1, project_key = ?2, thread_id = ?3 WHERE slot = 1",
-            params![path, identity, thread.map(|thread| &thread.0)],
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO desktop_source_drafts SELECT coalesce(project_key, ''), source_draft
+             FROM desktop_selection WHERE slot = 1",
+            [],
         )?;
-        Ok(())
+        let source = source_draft_for(&transaction, identity.as_deref().unwrap_or_default())?;
+        transaction.execute(
+            "UPDATE desktop_selection SET project_path = ?1, project_key = ?2, thread_id = ?3, source_draft = ?4 WHERE slot = 1",
+            params![path, identity, thread.map(|thread| &thread.0), source.0.as_bytes().as_slice()],
+        )?;
+        if let Some(identity) = identity {
+            transaction.execute(
+                "INSERT INTO desktop_project_selections VALUES (?1, ?2)
+                ON CONFLICT(project_id) DO UPDATE SET thread_id = excluded.thread_id",
+                params![identity, thread.map(|thread| &thread.0)],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(source)
+    }
+
+    pub fn selected_project_thread(
+        &self,
+        checkout: &CheckoutIdentity,
+    ) -> Result<Option<ThreadId>, AttachmentError> {
+        let state = self.inner.state();
+        let thread: Option<Option<String>> = state
+            .database
+            .query_row(
+                "SELECT thread_id FROM desktop_project_selections WHERE project_id = ?1",
+                [checkout.storage_key()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(thread.flatten().map(ThreadId))
     }
 
     pub fn editable_thread_draft(&self, thread: &ThreadId) -> Result<DraftId, AttachmentError> {
@@ -226,6 +259,28 @@ impl AttachmentStore {
     }
 }
 
+pub(super) fn source_draft_for(
+    transaction: &Transaction<'_>,
+    project: &str,
+) -> Result<DraftId, AttachmentError> {
+    let existing = transaction
+        .query_row(
+            "SELECT draft_id FROM desktop_source_drafts WHERE project_id = ?1",
+            [project],
+            |row| row.get::<_, [u8; 16]>(0),
+        )
+        .optional()?;
+    if let Some(id) = existing {
+        return Ok(DraftId(Uuid::from_bytes(id)));
+    }
+    let draft = empty_draft(transaction)?;
+    transaction.execute(
+        "INSERT INTO desktop_source_drafts VALUES (?1, ?2)",
+        params![project, draft.0.as_bytes().as_slice()],
+    )?;
+    Ok(draft)
+}
+
 fn empty_draft(transaction: &Transaction<'_>) -> Result<DraftId, AttachmentError> {
     let draft = DraftId(Uuid::new_v4());
     save_in_transaction(transaction, draft, None, DraftRevision::INITIAL, None, None)?;
@@ -245,6 +300,16 @@ pub(super) fn promote_source(
     )?;
     if matches {
         let next = empty_draft(transaction)?;
+        transaction.execute(
+            "UPDATE desktop_source_drafts SET draft_id = ?1
+             WHERE project_id = (SELECT project_key FROM desktop_selection WHERE slot = 1)",
+            [next.0.as_bytes().as_slice()],
+        )?;
+        transaction.execute(
+            "UPDATE desktop_project_selections SET thread_id = ?1
+             WHERE project_id = (SELECT project_key FROM desktop_selection WHERE slot = 1)",
+            [&thread.0],
+        )?;
         transaction.execute(
             "UPDATE desktop_selection SET source_draft = ?1, thread_id = ?2 WHERE slot = 1",
             params![next.0.as_bytes().as_slice(), thread.0],

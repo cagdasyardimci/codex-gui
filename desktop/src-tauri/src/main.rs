@@ -4,6 +4,7 @@ use codex_gui_core::ipc::WORKSPACE_WINDOW;
 use std::path::PathBuf;
 use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent, webview::NewWindowResponse};
 
+mod appkit_import;
 mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
@@ -30,6 +31,14 @@ fn main() {
     let mode = arguments.next();
     if mode.as_deref() == Some(fixture::CHILD_ARGUMENT.as_ref()) {
         fixture::write_fixture().expect("write diagnostic fixture output");
+        return;
+    }
+
+    if mode.as_deref() == Some(appkit_import::ARGUMENT.as_ref()) {
+        if let Err(error) = appkit_import::run(arguments) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
         return;
     }
 
@@ -61,6 +70,7 @@ fn main() {
         Some("--verify-settings") => fixture::Verification::Settings,
         Some("--verify-appearance") => fixture::Verification::Appearance,
         Some("--verify-appearance-restore") => fixture::Verification::AppearanceRestore,
+        Some("--verify-appkit-import") => fixture::Verification::AppKitImport,
         Some("--verify-notifications") => fixture::Verification::Notifications,
         Some("--verify-voice") => fixture::Verification::Voice,
         Some("--verify-voice-reconnect") => fixture::Verification::VoiceReconnect,
@@ -115,6 +125,7 @@ fn main() {
             | fixture::Verification::Settings
             | fixture::Verification::Appearance
             | fixture::Verification::AppearanceRestore
+            | fixture::Verification::AppKitImport
             | fixture::Verification::Notifications
             | fixture::Verification::Voice
             | fixture::Verification::VoiceReconnect
@@ -156,6 +167,7 @@ fn main() {
             | fixture::Verification::Settings
             | fixture::Verification::Appearance
             | fixture::Verification::AppearanceRestore
+            | fixture::Verification::AppKitImport
             | fixture::Verification::Notifications
             | fixture::Verification::Voice
             | fixture::Verification::VoiceReconnect
@@ -256,6 +268,9 @@ fn main() {
             settings_ipc::instructions::read_settings_instructions,
             settings_ipc::instructions::save_settings_instructions,
             desktop_presentation::read_desktop_appearance,
+            desktop_presentation::workspace_panes,
+            desktop_presentation::toggle_navigation_pane,
+            desktop_presentation::set_review_pane_expansion,
             desktop_presentation::desktop_font_families,
             desktop_presentation::update_desktop_appearance,
             desktop_presentation::copy_desktop_theme,

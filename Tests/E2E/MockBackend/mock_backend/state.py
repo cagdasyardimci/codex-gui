@@ -6,8 +6,9 @@ from pathlib import Path
 
 
 class State:
-    def __init__(self, scenario, path=None):
+    def __init__(self, scenario, path=None, read_only=False):
         self.path = Path(path) if path else None
+        self.read_only = read_only
         self.data = json.loads(self.path.read_text()) if self.path and self.path.exists() else {}
         self.threads = copy.deepcopy(self.data.get('threads', scenario['threads']))
         for thread in self.threads:
@@ -24,7 +25,7 @@ class State:
         return prefix + '-' + str(self.sequence)
 
     def save(self):
-        if self.path:
+        if self.path and not self.read_only:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self.data.update(threads=self.threads, sequence=self.sequence)
             temporary = self.path.with_suffix('.tmp')

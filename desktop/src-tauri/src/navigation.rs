@@ -1003,10 +1003,15 @@ impl Navigation {
         checkout: CheckoutIdentity,
         thread: Option<ThreadId>,
     ) -> Result<WorkspaceId, Failure> {
+        let thread = match thread {
+            Some(thread) => Some(thread),
+            None => self.store.selected_project_thread(&checkout)?,
+        };
         self.message_search = None;
         self.retire_file_search();
         self.store.remember_sidebar_project(&checkout)?;
-        self.store
+        self.source_draft = self
+            .store
             .save_desktop_selection(Some((&folder, &checkout)), thread.as_ref())?;
         self.leave_checkout().await;
         self.backend = self.take_parked(&checkout).await;
@@ -1048,7 +1053,7 @@ impl Navigation {
     async fn clear(&mut self) -> Result<(), Failure> {
         self.retire_file_search();
         self.message_search = None;
-        self.store.save_desktop_selection(None, None)?;
+        self.source_draft = self.store.save_desktop_selection(None, None)?;
         self.leave_checkout().await;
         self.selection = None;
         self.model
@@ -1072,7 +1077,7 @@ impl Navigation {
             self.publish_navigation();
             return Ok(());
         }
-        self.store.save_desktop_selection(
+        self.source_draft = self.store.save_desktop_selection(
             Some((&selected.folder, &selected.checkout)),
             thread.as_ref(),
         )?;

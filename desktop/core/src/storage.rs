@@ -45,6 +45,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::review_runs::migrate,
     attachments::reasoning_visibility::migrate,
     attachments::usage_resets::migrate,
+    attachments::appkit_preferences::migrate,
 ];
 
 #[derive(Debug, Error)]

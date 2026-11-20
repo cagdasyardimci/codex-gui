@@ -54,6 +54,26 @@ struct Source {
 }
 
 impl RelayHost {
+    pub fn import_appkit(
+        root: &Path,
+        source: &codex_gui_core::storage::attachments::appkit_preferences::AppKitPreferences,
+    ) -> io::Result<()> {
+        if let Some(enabled) = source.remote_host_enabled() {
+            crate::appkit_import::persist_new(
+                &root.join("remote-host-v1.json"),
+                &Preferences {
+                    enabled,
+                    keep_awake: false,
+                    source: source.source_checkout().map(|checkout| Source {
+                        path: checkout.canonical_path().to_owned(),
+                        identity: checkout.storage_key(),
+                    }),
+                },
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn load(&self, root: &Path) -> io::Result<()> {
         let file = root.join("remote-host-v1.json");
         let mut host = self.0.lock().expect("relay host lock poisoned");

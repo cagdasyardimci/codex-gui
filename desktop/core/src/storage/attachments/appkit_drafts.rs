@@ -175,6 +175,11 @@ impl AttachmentStore {
                     "INSERT INTO thread_drafts (thread_id, draft_id) VALUES (?1, ?2)",
                     params![thread.0, draft_id],
                 )?;
+            } else {
+                transaction.execute(
+                    "INSERT INTO desktop_source_drafts VALUES (?1, ?2)",
+                    params![key, draft_id],
+                )?;
             }
             transaction.execute(
                 "INSERT INTO appkit_draft_origins (checkout_path, checkout_key, source_bucket, thread_id, draft_id)
@@ -315,7 +320,8 @@ fn draft_already_present(
 ) -> rusqlite::Result<bool> {
     database.query_row(
         "SELECT EXISTS (SELECT 1 FROM appkit_draft_origins WHERE checkout_path = ?1 AND checkout_key = ?2 AND source_bucket = ?3)
-         OR EXISTS (SELECT 1 FROM thread_drafts WHERE thread_id = ?4)",
+         OR EXISTS (SELECT 1 FROM thread_drafts WHERE thread_id = ?4)
+         OR (?4 IS NULL AND EXISTS (SELECT 1 FROM desktop_source_drafts WHERE project_id = ?2))",
         params![path, key, bucket, thread.map(|thread| &thread.0)], |row| row.get(0),
     )
 }

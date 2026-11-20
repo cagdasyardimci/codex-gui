@@ -170,6 +170,39 @@ struct AppKitDocument {
     context: serde_json::Value,
 }
 
+pub(super) fn staged_appkit_projects(
+    copied_context_directory: &Path,
+) -> Result<Vec<String>, ProjectContextError> {
+    let entries = match fs::read_dir(copied_context_directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(digest) = name.to_str().and_then(|name| name.strip_suffix(".json")) else {
+            continue;
+        };
+        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            continue;
+        }
+        let metadata = fs::symlink_metadata(entry.path())?;
+        if !metadata.is_file() || metadata.len() > 32 * 1024 * 1024 {
+            return Err(ProjectContextError::InvalidSource);
+        }
+        let document: AppKitDocument =
+            serde_json::from_reader(BufReader::new(File::open(entry.path())?))?;
+        if name.to_str() != Some(appkit_file_name(&document.project_path).as_str()) {
+            return Err(ProjectContextError::WrongProject);
+        }
+        paths.push(document.project_path);
+    }
+    paths.sort();
+    Ok(paths)
+}
+
 pub fn import_appkit_project_context(
     database: &mut Connection,
     copied_context_directory: &Path,

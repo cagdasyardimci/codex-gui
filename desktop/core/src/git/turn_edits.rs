@@ -10,8 +10,10 @@ use uuid::Uuid;
 
 use crate::{checkout::CheckoutIdentity, identity::TurnId};
 
+mod appkit_review;
 mod composition;
 mod reports;
+pub use appkit_review::AppKitReviewFingerprints;
 pub use reports::TurnEditReports;
 
 use composition::compose;
@@ -49,6 +51,7 @@ pub struct TurnFileEdit {
     pub after: Option<PathBuf>,
     pub diff: String,
     pub totals: EditTotals,
+    pub appkit_review: Option<AppKitReviewFingerprints>,
 }
 
 #[derive(Debug)]
@@ -62,6 +65,8 @@ struct ReportedEdit {
     path: PathBuf,
     kind: EditKind,
     destination: Option<PathBuf>,
+    reported_path: String,
+    reported_destination: Option<String>,
     diff: String,
 }
 
@@ -140,6 +145,8 @@ impl ReportItem {
                 path,
                 kind: change.kind.kind,
                 destination,
+                reported_path: change.path.into(),
+                reported_destination: change.kind.move_path.map(str::to_owned),
                 diff: change.diff.to_owned(),
             });
         }
@@ -151,6 +158,8 @@ impl ReportItem {
             .iter()
             .map(|edit| {
                 edit.path.as_os_str().len()
+                    + edit.reported_path.len()
+                    + edit.reported_destination.as_ref().map_or(0, String::len)
                     + edit
                         .destination
                         .as_ref()
@@ -281,6 +290,7 @@ impl TurnFileEdit {
             after,
             diff,
             totals,
+            appkit_review: None,
         }
     }
 }

@@ -15,6 +15,9 @@ use codex_gui_core::{
         AppearanceView, preset_choices,
     },
     ipc::{IpcError, WORKSPACE_WINDOW},
+    storage::attachments::appkit_preferences::{
+        AppKitPaneLayout, AppKitPreferenceError, AppKitPreferences,
+    },
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State, Theme, WebviewWindow, Window, WindowEvent};
@@ -54,7 +57,81 @@ struct PresentationState {
 struct DesktopPreferences {
     appearance: AppearancePreferences,
     layout: Option<window::WindowLayout>,
+    appkit_layout: Option<AppKitPaneLayout>,
+    panes: PanePresentation,
     zoom_percent: u16,
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", default)]
+struct PanePresentation {
+    navigation_width: Option<f64>,
+    review_width: Option<f64>,
+    navigation_collapsed: bool,
+    review_expanded: bool,
+}
+
+impl From<&AppKitPaneLayout> for PanePresentation {
+    fn from(layout: &AppKitPaneLayout) -> Self {
+        let current = layout.pane_geometry_version == Some(2);
+        Self {
+            navigation_width: layout
+                .navigation_width
+                .filter(|width| current && (160.0..=520.0).contains(width)),
+            review_width: layout
+                .review_width
+                .filter(|width| current && (220.0..=900.0).contains(width)),
+            navigation_collapsed: layout.navigation_collapsed.unwrap_or(false),
+            review_expanded: layout.review_visibility.as_deref() == Some("expanded"),
+        }
+    }
+}
+
+#[tauri::command]
+pub(crate) fn workspace_panes(
+    window: WebviewWindow,
+    presentation: State<'_, DesktopPresentation>,
+) -> Result<impl Serialize, IpcError> {
+    authorize_view(&window)?;
+    Ok(presentation
+        .state
+        .lock()
+        .expect("appearance lock poisoned")
+        .data
+        .panes
+        .clone())
+}
+
+#[tauri::command]
+pub(crate) fn toggle_navigation_pane(
+    window: WebviewWindow,
+    presentation: State<'_, DesktopPresentation>,
+) -> Result<bool, IpcError> {
+    authorize_view(&window)?;
+    let mut state = presentation.state.lock().expect("appearance lock poisoned");
+    let mut data = state.data.clone();
+    data.panes.navigation_collapsed = !data.panes.navigation_collapsed;
+    presentation.persist(&data)?;
+    state.data = data;
+    Ok(state.data.panes.navigation_collapsed)
+}
+
+#[tauri::command]
+pub(crate) fn set_review_pane_expansion(
+    window: WebviewWindow,
+    presentation: State<'_, DesktopPresentation>,
+    expanded: bool,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    let mut state = presentation.state.lock().expect("appearance lock poisoned");
+    if state.data.appkit_layout.is_none() || state.data.panes.review_expanded == expanded {
+        return Ok(());
+    }
+    let mut data = state.data.clone();
+    data.panes.review_expanded = expanded;
+    presentation.persist(&data)?;
+    state.data = data;
+    Ok(())
 }
 
 impl Default for DesktopPreferences {
@@ -62,12 +139,42 @@ impl Default for DesktopPreferences {
         Self {
             appearance: AppearancePreferences::default(),
             layout: None,
+            appkit_layout: None,
+            panes: PanePresentation::default(),
             zoom_percent: 100,
         }
     }
 }
 
 impl DesktopPresentation {
+    pub fn import_appkit(
+        root: &Path,
+        source: &AppKitPreferences,
+    ) -> Result<(), AppKitPreferenceError> {
+        let target = root.join("presentation.json");
+        if target.try_exists()? {
+            return Ok(());
+        }
+        let imported = source.presentation()?;
+        if imported.appearance.is_none() && imported.layout.is_none() {
+            return Ok(());
+        }
+        crate::appkit_import::persist_new(
+            &target,
+            &DesktopPreferences {
+                appearance: imported.appearance.unwrap_or_default(),
+                panes: imported
+                    .layout
+                    .as_ref()
+                    .map(PanePresentation::from)
+                    .unwrap_or_default(),
+                appkit_layout: imported.layout,
+                ..Default::default()
+            },
+        )?;
+        Ok(())
+    }
+
     pub fn open(root: Option<&Path>) -> Self {
         let path = root.map(|root| root.join("presentation.json"));
         let data = path
@@ -176,7 +283,9 @@ impl DesktopPresentation {
 
     pub fn initialize_window(&self, window: &WebviewWindow) {
         let state = self.state.lock().expect("appearance lock poisoned");
-        let layout = state.data.layout.clone();
+        let layout = state.data.layout.clone().or_else(|| {
+            window::WindowLayout::from_appkit(window, state.data.appkit_layout.as_ref()?)
+        });
         let zoom = state.data.zoom_percent.clamp(80, 160);
         drop(state);
         if let Some(layout) = layout {
@@ -443,6 +552,7 @@ pub fn appearance_fixture_action(
     authorize_view(&window)?;
     if *verification != Verification::Appearance
         && !(*verification == Verification::AppearanceRestore && action == "settings")
+        && !(*verification == Verification::AppKitImport && action == "navigationPane")
     {
         return Err(IpcError::UnauthorizedWindow);
     }
@@ -453,7 +563,7 @@ pub fn appearance_fixture_action(
     }
     if !matches!(
         action.as_str(),
-        "settings" | "fullscreen" | "zoomIn" | "zoomOut" | "zoomReset"
+        "settings" | "fullscreen" | "zoomIn" | "zoomOut" | "zoomReset" | "navigationPane"
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }
@@ -480,7 +590,7 @@ pub fn appearance_fixture_state(
     authorize_view(&window)?;
     if !matches!(
         *verification,
-        Verification::Appearance | Verification::AppearanceRestore
+        Verification::Appearance | Verification::AppearanceRestore | Verification::AppKitImport
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }
@@ -514,7 +624,7 @@ pub fn verify_appearance_result(
     authorize_view(&window)?;
     if !matches!(
         *verification,
-        Verification::Appearance | Verification::AppearanceRestore
+        Verification::Appearance | Verification::AppearanceRestore | Verification::AppKitImport
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }

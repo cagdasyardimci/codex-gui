@@ -14,8 +14,9 @@
   import ReviewPanel from './ReviewPanel.svelte';
   import SettingsWindow from './SettingsWindow.svelte';
   import type { AppearanceView } from './generated/workspace';
-  import { applyDesktopAppearance, observeDesktop } from './desktopAppearance';
+  import { applyDesktopAppearance, observeDesktop, readWorkspacePanes, setReviewPaneExpansion, toggleNavigationPane, type WorkspacePanes } from './desktopAppearance';
   import { verifyAppearance } from './appearanceProbe';
+  import { verifyAppKitImport } from './appkitImportProbe';
   import VoiceControls from './VoiceControls.svelte';
   import { DesktopVoice } from './desktopVoice';
   import { SpeechPlayback } from './speechPlayback';
@@ -73,7 +74,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'appKitImport' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -91,6 +92,15 @@
   let actionPending = $state(false);
   let admittingDraft = $state(false);
   let showingChanges = $state(false);
+  let panes = $state<WorkspacePanes>();
+  let restoreReview = false;
+
+  function restoreReviewPane() {
+    if (!restoreReview || !snapshot?.workspace) return;
+    restoreReview = false;
+    preferredComparison = 'lastTurn';
+    showingChanges = true;
+  }
   let settingsOpen = $state(false);
   let call = $state.raw<VoiceCallView | null>(null);
   let reconnect = $state.raw<VoiceReconnect | null>(null);
@@ -479,6 +489,7 @@
       filesOpened = false;
     }
     snapshot = current;
+    restoreReviewPane();
     revealTurnJump(current);
     if (draftId !== current.navigation.draft?.id) {
       slashToken = undefined;
@@ -1204,7 +1215,18 @@
     const lifecycle = new AbortController();
     void observeWorkspace(receive, lifecycle.signal).catch(console.error);
     void voice.observe(lifecycle.signal).catch(console.error);
+    void readWorkspacePanes().then((layout) => {
+      if (lifecycle.signal.aborted) return;
+      panes = layout;
+      restoreReview = layout.reviewExpanded;
+      restoreReviewPane();
+    }).catch(console.error);
     void observeDesktop(updateAppearance, (action) => {
+      if (action === 'navigationPane' && panes) {
+        void toggleNavigationPane().then((collapsed) => {
+          if (panes) panes.navigationCollapsed = collapsed;
+        }).catch(console.error);
+      }
       if (action === 'settings' && !quit) settingsOpen = true;
       else if (action === 'undo' || action === 'redo') document.execCommand(action);
       else if (!settingsOpen && action === 'newChat' && workspace) workspaceAction('newChat');
@@ -1212,6 +1234,7 @@
     }, lifecycle.signal).catch(console.error);
     if (verify === 'account') void verifyAccount(() => snapshot);
     else if (verify === 'settings') void verifySettings(() => snapshot);
+    else if (verify === 'appKitImport') void verifyAppKitImport(() => snapshot, () => appearance);
     else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
     else if (verify === 'notifications') void verifyNotifications(() => snapshot);
     else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
@@ -1285,7 +1308,11 @@
       <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+F Control+Shift+F"
         onclick={showMessageSearch}>Search Messages</button>
       <button type="button" aria-expanded={showingChanges}
-        onclick={() => { preferredComparison = 'uncommitted'; showingChanges = !showingChanges; }}>Changes</button>
+        onclick={() => {
+          preferredComparison = 'uncommitted';
+          showingChanges = !showingChanges;
+          void setReviewPaneExpansion(showingChanges).catch(console.error);
+        }}>Changes</button>
       {#if attachmentScope}
         <button type="button" aria-expanded={filesOpened} disabled={!!quit} onclick={() => void filePane?.toggle()}>Files</button>
         <button type="button" aria-keyshortcuts="Meta+P Control+P" disabled={actionPending || !!quit}
@@ -1327,9 +1354,11 @@
     {/if}
   </header>
 
-  <div class="workspace-body">
-    {#if sidebar && (workspace || sidebar.projects.length)}
-      <nav class="workspace-sidebar" aria-label={workspace ? 'Chats' : 'Projects'}>
+  <div class="workspace-body"
+    style:--workspace-navigation-width={panes?.navigationWidth ? `${panes.navigationWidth}px` : undefined}
+    style:--workspace-review-width={panes?.reviewWidth ? `${panes.reviewWidth}px` : undefined}>
+    {#if sidebar && (workspace || sidebar.projects.length) && !panes?.navigationCollapsed}
+      <nav class="workspace-sidebar" class:preferred-width={panes?.navigationWidth != null} aria-label={workspace ? 'Chats' : 'Projects'}>
         <WorkspaceSidebar view={sidebar} {selectedChat} blocked={actionPending || !!quit}
           newChat={workspace ? () => workspaceAction('newChat') : undefined} change={changeSidebar}
           deleteChat={(revision, key) => askChatDeletion({ sidebar: { revision, key } })}
