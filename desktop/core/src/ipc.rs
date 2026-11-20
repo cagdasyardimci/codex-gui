@@ -55,9 +55,10 @@ pub use context::{
 };
 pub use feedback::{FeedbackRating, FeedbackRequest, FeedbackView};
 pub use file_tools::{
-    FileQuitAction, FileTabDiscard, FileTabEdit, FileTabKind, FileTabMove, FileTabOpen,
-    FileTabRead, FileTabView, FileToolsChange, FileToolsRequest, FileToolsView,
-    ProjectBrowseRequest,
+    FileQuitAction, FileSearchPage, FileSearchResult, FileTabDiscard, FileTabEdit, FileTabKind,
+    FileTabMove, FileTabOpen, FileTabRead, FileTabView, FileToolsChange, FileToolsRequest,
+    FileToolsView, OpenFileSearchHit, OpenedFileSearchHit, ProjectBrowseRequest, ReadFileSearch,
+    StartFileSearch,
 };
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use inspector::{
@@ -370,6 +371,12 @@ pub fn workspace_typescript() -> String {
         FileTabRead::decl(),
         FileTabEdit::decl(),
         FileQuitAction::decl(),
+        StartFileSearch::decl(),
+        ReadFileSearch::decl(),
+        FileSearchResult::decl(),
+        FileSearchPage::decl(),
+        OpenFileSearchHit::decl(),
+        OpenedFileSearchHit::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

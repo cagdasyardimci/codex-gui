@@ -56,6 +56,15 @@ impl WatchedProjectPaths {
         self.refresh()?.browse(folder, offset)
     }
 
+    pub fn content_candidates(&mut self) -> Result<Vec<(PathBuf, String)>, FileError> {
+        Ok(self
+            .refresh()?
+            .entries
+            .iter()
+            .map(|entry| (entry.path.clone(), entry.display.clone()))
+            .collect())
+    }
+
     fn refresh(&mut self) -> Result<&ProjectPathIndex, FileError> {
         if let Err(error) = self.checkout.revalidate() {
             self.watcher = None;

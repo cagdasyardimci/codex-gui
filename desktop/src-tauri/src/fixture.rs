@@ -542,17 +542,26 @@ pub fn overwrite_file_tools_fixture(
     window: tauri::WebviewWindow,
     verification: State<'_, Verification>,
     checkouts: State<'_, FixtureCheckouts>,
+    replacement: Option<bool>,
 ) -> Result<(), IpcError> {
     crate::project_ipc::authorize_view(&window)?;
     if *verification != Verification::FileTools {
         return Err(IpcError::UnauthorizedWindow);
     }
-    let path = checkouts
+    let root = checkouts
         .primary
         .as_ref()
-        .ok_or(IpcError::InvalidCheckout)?
-        .join("conflict.txt");
-    std::fs::write(path, b"An external change\n").map_err(|_| IpcError::ProjectUnavailable)
+        .ok_or(IpcError::InvalidCheckout)?;
+    let result = if replacement == Some(true) {
+        let path = root.join("replace.txt");
+        std::fs::read(&path).and_then(|bytes| {
+            std::fs::rename(&path, root.join("retired-search.txt"))?;
+            std::fs::write(path, bytes)
+        })
+    } else {
+        std::fs::write(root.join("conflict.txt"), b"An external change\n")
+    };
+    result.map_err(|_| IpcError::ProjectUnavailable)
 }
 
 #[tauri::command]

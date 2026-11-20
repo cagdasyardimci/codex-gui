@@ -1,14 +1,15 @@
 use codex_gui_core::{
+    checkout::CheckoutIdentity,
     files::{FileError, index::ProjectBrowsePage},
     ipc::{
-        FileTabEdit, FileTabRead, FileToolsChange, FileToolsRequest, FileToolsView, IpcError,
-        ProjectBrowseRequest,
+        DraftAttachmentScope, FileTabEdit, FileTabRead, FileToolsChange, FileToolsRequest,
+        FileToolsView, IpcError, ProjectBrowseRequest,
     },
 };
 use tauri::{State, WebviewWindow, ipc::Response};
 
 use crate::{
-    composer_ipc::capture,
+    navigation::NavigationHandle,
     project_ipc::{ProjectIpc, authorize_view},
 };
 
@@ -18,7 +19,7 @@ pub async fn change_file_tools(
     project: State<'_, ProjectIpc>,
     request: FileToolsRequest,
 ) -> Result<FileToolsView, IpcError> {
-    let (navigation, _) = capture(&window, &project, &request.scope)?;
+    let (navigation, _) = capture_file_scope(&window, &project, &request.scope)?;
     let resolved = if let FileToolsChange::Open(open) = &request.change {
         let index = project.path_index(window.label(), request.scope.workspace_id)?;
         let mut index = index.lock_owned().await;
@@ -27,7 +28,7 @@ pub async fn change_file_tools(
             .await
             .map_err(|_| IpcError::ProjectUnavailable)?
             .map_err(index_error)?;
-        capture(&window, &project, &request.scope)?;
+        capture_file_scope(&window, &project, &request.scope)?;
         Some(resolved)
     } else {
         None
@@ -54,7 +55,7 @@ pub async fn browse_project_files(
     page.map_err(index_error)
 }
 
-fn index_error(error: FileError) -> IpcError {
+pub(super) fn index_error(error: FileError) -> IpcError {
     match error {
         FileError::InvalidHandle => IpcError::StaleSelection,
         FileError::Checkout(_) => IpcError::RetiredWorkspace,
@@ -69,11 +70,30 @@ pub async fn read_file_tab(
     request: FileTabRead,
     raster: bool,
 ) -> Result<Response, IpcError> {
-    let (navigation, _) = capture(&window, &project, &request.scope)?;
+    let (navigation, _) = capture_file_scope(&window, &project, &request.scope)?;
     let scope = request.scope.clone();
     let bytes = navigation.read_file_tab(request, raster).await?;
-    capture(&window, &project, &scope)?;
+    capture_file_scope(&window, &project, &scope)?;
     Ok(Response::new(bytes))
+}
+
+pub(crate) fn capture_file_scope(
+    window: &WebviewWindow,
+    project: &ProjectIpc,
+    scope: &DraftAttachmentScope,
+) -> Result<(NavigationHandle, CheckoutIdentity), IpcError> {
+    authorize_view(window)?;
+    let state = project.state.lock().expect("workspace state lock poisoned");
+    let checkout = state.grants.checkout(window.label(), scope.workspace_id)?;
+    if state.projection.visible_file_tools_scope().as_ref() != Some(scope) {
+        return Err(IpcError::StaleSelection);
+    }
+    let navigation = project
+        .navigation
+        .get()
+        .ok_or(IpcError::ProjectUnavailable)?
+        .clone();
+    Ok((navigation, checkout))
 }
 
 #[tauri::command]

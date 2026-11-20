@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { changeFileTools, readFileTab } from './fileTools';
+import { cancelFileSearch, changeFileTools, openFileSearchHit, readFileSearch, readFileTab, startFileSearch } from './fileTools';
 import { click, clickByLabel, editor, typeText, waitFor } from './fixtureControls';
 import type { DraftAttachmentScope, WorkspaceSnapshot } from './generated/workspace';
 import { rejectsStale } from './markdownProbe';
@@ -17,15 +17,19 @@ const field = () => panel()?.querySelector<HTMLTextAreaElement>('textarea');
 const closeDialog = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Close File"][open]');
 const quitDialog = () => document.querySelector<HTMLDialogElement>('dialog.quit-dialog[open]');
 const quickOpenField = () => document.querySelector<HTMLInputElement>('dialog[aria-label="Quick Open"][open] input');
+const fileSearchDialog = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Search Files"][open]');
+
+function enterSearchText(control: HTMLInputElement, value: string) {
+  control.value = value;
+  control.dispatchEvent(new InputEvent('input', { bubbles: true }));
+}
 
 function key(target: HTMLElement, key: string, modifiers: KeyboardEventInit = {}) {
   target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers }));
 }
 
 function searchFiles(query: string) {
-  const control = quickOpenField()!;
-  control.value = query;
-  control.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  enterSearchText(quickOpenField()!, query);
 }
 
 function quickOpenResults() {
@@ -91,6 +95,58 @@ async function verifyQuickOpen(visible: () => WorkspaceSnapshot | null, scope: D
   await waitFor('Cancelling from the command palette opened the file pane', () => !quickOpenField() && !panel());
 }
 
+async function verifyFileSearch(visible: () => WorkspaceSnapshot | null, scope: DraftAttachmentScope) {
+  const before = await startFileSearch({ scope, query: 'Unique replacement target', mask: '*.txt' });
+  const first = await readFileSearch({ session: before, cursor: null });
+  const match = first.matches.find((entry) => entry.path === 'replace.txt');
+  if (!match) throw new Error('Search did not record the file identity for replacement');
+  const target = { session: before, id: match.id };
+  await invoke('overwrite_file_tools_fixture', { replacement: true });
+  await rejectsStale(openFileSearchHit(target));
+  const after = await startFileSearch({ scope, query: 'Heading', mask: '*.txt' });
+  await rejectsStale(openFileSearchHit(target));
+  await cancelFileSearch(after);
+  await rejectsStale(readFileSearch({ session: after, cursor: null }));
+
+  const retired = await startFileSearch({ scope, query: 'Café marker', mask: '*.txt' });
+  await navigateWorkspace({ openChat: { workspaceId: scope.workspaceId, chatId: SECOND } });
+  await waitFor('The new owner did not select before validating the retired file query', () =>
+    visible()?.navigation.selectedChat === SECOND);
+  await rejectsStale(readFileSearch({ session: retired, cursor: null }));
+  await click('First fixture chat');
+  await waitFor('The file search owner did not restore before typing', () => visible()?.navigation.selectedChat === FIRST);
+
+  await click('Search Files');
+  const query = () => fileSearchDialog()?.querySelector<HTMLInputElement>('input[role="combobox"]');
+  await waitFor('The file search did not focus its query', () => !!query() && document.activeElement === query());
+  const mask = fileSearchDialog()!.querySelector<HTMLInputElement>('input:not([role])')!;
+  enterSearchText(mask, '*.{txt,md}');
+  enterSearchText(query()!, 'CAFÉ MARKER');
+  const matches = () => [...(fileSearchDialog()?.querySelectorAll('[role="option"] strong') ?? [])];
+  await waitFor('The first page did not contain the scoped file matches', () =>
+    matches().length === 24 && matches()[0]?.textContent === 'search.txt:2' &&
+    matches().every((match) => match.textContent?.startsWith('search.txt:')));
+  await click('More Matches', fileSearchDialog()!);
+  await waitFor('Paging did not reach the last line of the same file', () =>
+    matches().length === 29 && matches().at(-1)?.textContent === 'search.txt:30' && document.activeElement === query());
+  key(query()!, 'ArrowUp');
+  key(query()!, 'Enter');
+  await waitFor('Keyboard selection did not reveal the exact matching source line', () => {
+    const input = field();
+    return !fileSearchDialog() && !!input && input.value.slice(input.selectionStart, input.selectionEnd) === 'Café marker 29';
+  });
+  const input = field()!;
+  input.focus();
+  key(input, 'F', { ctrlKey: true, shiftKey: true });
+  await waitFor('The shortcut in Files did not open file search', () => !!query() && document.activeElement === query());
+  key(query()!, 'Escape');
+  await waitFor('Escape did not restore the chosen file line', () => !fileSearchDialog() && document.activeElement === input &&
+    input.value.slice(input.selectionStart, input.selectionEnd) === 'Café marker 29');
+  await clickByLabel('Close search.txt');
+  await click('Hide Files');
+  await waitFor('The file pane did not close after search', () => !panel());
+}
+
 async function browse(name: string) {
   await waitFor('The file browser did not open', () => !!browser());
   await click(name, browser()!);
@@ -121,6 +177,7 @@ export async function verifyFileTools(visible: () => WorkspaceSnapshot | null) {
     await waitFor('The first file tools owner did not select', () => selected() === FIRST);
     const first = scope();
     await verifyQuickOpen(visible, first);
+    await verifyFileSearch(visible, first);
     await showFiles();
     await browse('folder');
     await browse('alpha.txt');

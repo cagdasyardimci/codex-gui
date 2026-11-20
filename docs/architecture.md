@@ -136,9 +136,11 @@ Tauri keeps file tabs and edit buffers in the [native file tools session](../des
 
 ## Project file search
 
-The [Tauri path index](../desktop/core/src/files/index.rs) belongs to the selected checkout and is shared by its chats. Recursive search follows the existing visibility policy for dot names and generated directories. Enumeration uses the captured directory and skips symbolic links and junctions to follow the [scoped file access policy](../desktop/core/src/files.rs). Results carry native path identity independently of their labels and must obtain a fresh scoped file handle before opening. The [workspace grant](../desktop/src-tauri/src/project_ipc.rs) retires results when the checkout is cleared, switched or replaced.
+The [Tauri path index](../desktop/core/src/files/index.rs) belongs to the selected checkout and is shared by its chats. Recursive search follows the existing visibility policy for dot names and generated directories. Enumeration uses the captured directory and skips symbolic links and junctions to follow the [scoped file access policy](../desktop/core/src/files.rs). Filename results carry native path identity independently of their labels and must obtain a fresh scoped file handle before opening. The [workspace grant](../desktop/src-tauri/src/project_ipc.rs) retires results when the checkout is cleared, switched or replaced.
 
 The [native observer](../desktop/core/src/files/index/watch.rs) coalesces directory scopes and applies pending changes before the next search. Overflow, an ambiguous path or an index that may need previously capped entries triggers a clean scan. A save that preserves all discovered paths preserves the index revision. Searches rebuild while the native observer is unavailable.
+
+[Content search](../desktop/src-tauri/src/file_search_ipc.rs) takes a snapshot of the path catalog and pages through captured file contents. A search belongs to its initiating chat and query. Opening a match verifies the file identity and revision before selecting its line in that chat's tab.
 
 ## Recorded latest Git turn
 

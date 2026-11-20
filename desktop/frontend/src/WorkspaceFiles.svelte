@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type {
-    DraftAttachmentScope, FileTabView, FileToolsChange, FileToolsView, ProjectBrowseEntry, ProjectFolder, ProjectPathId,
+    DraftAttachmentScope, FileTabView, FileToolsChange, FileToolsView, OpenFileSearchHit, ProjectBrowseEntry, ProjectFolder, ProjectPathId,
   } from './generated/workspace';
-  import { browseProjectFiles, changeFileTools, FileEdits, readFileTab, sameFileScope, type FileViewPositions } from './fileTools';
+  import { browseProjectFiles, changeFileTools, FileEdits, openFileSearchHit, readFileTab, sameFileScope, type FileViewPositions } from './fileTools';
   import ImagePreview from './ImagePreview.svelte';
 
   let { scope, edits, positions, blocked, opened = $bindable(false) }: {
@@ -28,6 +28,8 @@
   let loaded = $state<string>();
   let text = $state('');
   let composing = $state(false);
+  let reload = $state(0);
+  let reveal: { tab: string; line: number } | undefined;
   const active = $derived(view?.tabs.find((item) => item.id === view?.selected));
   const activeId = $derived(active?.id);
   const activeKind = $derived(active?.kind);
@@ -54,23 +56,33 @@
     if (!blocked) void refresh(scope);
   });
 
-  async function update(change: FileToolsChange) {
+  async function update(change: FileToolsChange | OpenFileSearchHit) {
     if (blocked || busy || composing) return false;
     const captured = scope;
     const expected = ++requestNumber;
     busy = true;
     try {
       await edits.flush();
-      const next = await changeFileTools({ scope: captured, change });
+      let next: FileToolsView;
+      let line: number | undefined;
+      if (typeof change === 'object' && 'session' in change) {
+        ({ view: next, line } = await openFileSearchHit(change));
+      } else {
+        next = await changeFileTools({ scope: captured, change });
+      }
       if (expected !== requestNumber || !sameFileScope(scope, captured)) return false;
       const retained = new Set(next.tabs.map((tab) => tab.id));
       for (const tab of view?.tabs ?? []) {
         if (!retained.has(tab.id)) positions.tabs.delete(tab.id);
       }
       adopt(next);
+      if (line !== undefined && next.selected) {
+        reveal = { tab: next.selected, line };
+        reload += 1;
+      }
       return true;
     } catch (error) {
-      if (expected === requestNumber) console.error(error);
+      if (expected === requestNumber && error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
       return false;
     } finally {
       busy = false;
@@ -78,11 +90,17 @@
   }
 
   export async function toggle() {
-    await update({ show: !opened });
+    const captured = scope;
+    if (!view) await refresh(captured);
+    if (sameFileScope(scope, captured)) await update({ show: !view?.open });
   }
 
   export async function openPath(path: ProjectPathId, keep: boolean) {
     return update({ open: { path, keep } });
+  }
+
+  export async function openMatch(request: OpenFileSearchHit) {
+    return update(request);
   }
 
   function moveSelected(direction: -1 | 1) {
@@ -131,6 +149,7 @@
     const captured = scope;
     const id = activeId;
     const kind = activeKind;
+    void reload;
     loaded = undefined;
     composing = false;
     if (!opened || !id || kind !== 'text') return;
@@ -144,10 +163,15 @@
         loaded = id;
         const position = positions.tabs.get(id);
         await tick();
-        if (retired || !field || !position) return;
-        field.setSelectionRange(position.first, position.last, position.direction);
-        field.scrollTop = position.top;
-        field.scrollLeft = position.left;
+        if (retired || !field) return;
+        if (reveal?.tab === id) {
+          revealLine(field, reveal.line);
+          reveal = undefined;
+        } else if (position) {
+          field.setSelectionRange(position.first, position.last, position.direction);
+          field.scrollTop = position.top;
+          field.scrollLeft = position.left;
+        }
       } catch (error) {
         if (!retired) console.error(error);
       }
@@ -176,6 +200,22 @@
       top: element.scrollTop, left: element.scrollLeft, first: element.selectionStart, last: element.selectionEnd,
       direction: element.selectionDirection ?? 'none',
     });
+  }
+
+  function revealLine(element: HTMLTextAreaElement, line: number) {
+    const value = element.value;
+    let start = 0;
+    for (let number = 1; number < line; number++) {
+      const end = value.indexOf('\n', start);
+      if (end < 0) return;
+      start = end + 1;
+    }
+    const end = value.indexOf('\n', start);
+    element.focus({ preventScroll: true });
+    element.setSelectionRange(start, end < 0 ? value.length : end);
+    const height = Number.parseFloat(getComputedStyle(element).lineHeight);
+    if (Number.isFinite(height)) element.scrollTop = Math.max(0, (line - 1) * height - element.clientHeight / 3);
+    element.scrollLeft = 0;
   }
 
   function rememberImage(tabId: string, element: HTMLDivElement) {
@@ -308,7 +348,7 @@
   .file-tab.preview { font-style: italic; }
   .file-tab.dirty { border-block-end-color: Highlight; }
   .file-tab button[aria-current="true"] { background: color-mix(in srgb, Highlight 20%, Canvas); }
-  textarea { flex: 1; font: 0.88rem ui-monospace, monospace; min-block-size: 5rem; resize: none; }
+  textarea { flex: 1; font: 0.88rem/1.4 ui-monospace, monospace; min-block-size: 5rem; resize: none; }
   .file-image { flex: 1; overflow: auto; }
   .file-image :global(img) { display: block; max-inline-size: 100%; }
 </style>

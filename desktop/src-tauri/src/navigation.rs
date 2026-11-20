@@ -34,7 +34,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use crate::{fixture::Verification, project_ipc::ProjectState};
+use crate::{file_search_ipc::PreparedFileHit, fixture::Verification, project_ipc::ProjectState};
 
 mod account;
 mod archive;
@@ -106,6 +106,10 @@ enum Action {
         oneshot::Sender<Vec<u8>>,
     ),
     EditFileTab(codex_gui_core::ipc::FileTabEdit),
+    OpenFileSearchHit(
+        Box<PreparedFileHit>,
+        oneshot::Sender<codex_gui_core::ipc::OpenedFileSearchHit>,
+    ),
     ComposerAttachment(composer_attachments::Mutation),
     ComposerContextClient(
         codex_gui_core::ipc::DraftAttachmentScope,
@@ -480,6 +484,10 @@ impl Navigation {
                 self.edit_file_tools(request)?;
                 return Ok(None);
             }
+            Action::OpenFileSearchHit(hit, reply) => {
+                let _ = reply.send(self.open_file_match(*hit)?);
+                return Ok(None);
+            }
             Action::ComposerContextClient(scope, reply) => {
                 self.require(scope.workspace_id)?;
                 if self.view.selected_chat != scope.chat_id
@@ -742,6 +750,7 @@ impl Navigation {
         thread: Option<ThreadId>,
     ) -> Result<WorkspaceId, Failure> {
         self.message_search = None;
+        self.retire_file_search();
         self.store.remember_sidebar_project(&checkout)?;
         self.store
             .save_desktop_selection(Some((&folder, &checkout)), thread.as_ref())?;
@@ -780,6 +789,7 @@ impl Navigation {
     }
 
     async fn clear(&mut self) -> Result<(), Failure> {
+        self.retire_file_search();
         self.message_search = None;
         self.store.save_desktop_selection(None, None)?;
         self.leave_checkout().await;
@@ -811,6 +821,7 @@ impl Navigation {
     }
 
     fn adopt_focus(&mut self, thread: Option<ThreadId>) -> Result<(), Failure> {
+        self.retire_file_search();
         self.prompt_revisions.retire_editor();
         self.inspector = inspector::Inspector::default();
         self.view.inspector = self.inspector.view();

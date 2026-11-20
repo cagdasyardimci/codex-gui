@@ -418,14 +418,24 @@ impl WorkspaceProjection {
 
     pub fn visible_attachment_scope(&self) -> Option<super::DraftAttachmentScope> {
         let publication = self.publication.borrow();
-        let snapshot = &publication.snapshot;
-        if snapshot.navigation.quit.is_some()
-            || snapshot
-                .navigation
-                .queue
-                .as_ref()
-                .is_some_and(|queue| queue.editing.is_some())
+        if publication
+            .snapshot
+            .navigation
+            .queue
+            .as_ref()
+            .is_some_and(|queue| queue.editing.is_some())
         {
+            return None;
+        }
+        Self::file_tools_scope(&publication.snapshot)
+    }
+
+    pub fn visible_file_tools_scope(&self) -> Option<super::DraftAttachmentScope> {
+        Self::file_tools_scope(&self.publication.borrow().snapshot)
+    }
+
+    fn file_tools_scope(snapshot: &WorkspaceSnapshot) -> Option<super::DraftAttachmentScope> {
+        if snapshot.navigation.quit.is_some() {
             return None;
         }
         Some(super::DraftAttachmentScope {

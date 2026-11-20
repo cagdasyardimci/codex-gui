@@ -54,6 +54,7 @@ impl Navigation {
         if self.quit.is_some() {
             return;
         }
+        self.retire_file_search();
         let stop_only = matches!(action, Shutdown::StopAll);
         let dirty_files = !stop_only && self.file_tools.has_edits(None);
         let confirm = dirty_files

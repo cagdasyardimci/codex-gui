@@ -105,3 +105,48 @@ pub enum FileQuitAction {
     Save,
     Discard,
 }
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StartFileSearch {
+    pub scope: DraftAttachmentScope,
+    pub query: String,
+    pub mask: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReadFileSearch {
+    pub session: Uuid,
+    pub cursor: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSearchPage {
+    pub matches: Vec<FileSearchResult>,
+    pub next_cursor: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSearchResult {
+    pub id: Uuid,
+    pub path: String,
+    pub line: u32,
+    pub excerpt: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OpenFileSearchHit {
+    pub session: Uuid,
+    pub id: Uuid,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenedFileSearchHit {
+    pub view: FileToolsView,
+    pub line: u32,
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, FeedbackRating, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
+  import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, FeedbackRating, InteractionAnswer, NavigationIntent, OpenFileSearchHit, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -19,6 +19,7 @@
   import PinnedSummary, { type SummarySource } from './PinnedSummary.svelte';
   import ConversationInspector, { type InspectorSelection, type InspectorTab } from './ConversationInspector.svelte';
   import WorkspaceFiles from './WorkspaceFiles.svelte';
+  import FileSearch from './FileSearch.svelte';
   import { FileEdits, type FileViewPositions } from './fileTools';
   import { MessageSearchIndex, type SearchHit } from './messageSearchIndex';
   import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
@@ -87,17 +88,16 @@
   let slashToken = $state.raw<{ start: number; end: number; prefix: string }>();
   let slashIndex = $state(0);
   let promptEdit = $state.raw<{ row: TranscriptRowRequest; view: SentPromptEdit }>();
-  type PaletteScope = {
-    mode: PaletteMode;
-    entries: PaletteEntry[];
-    revision: string | null;
+  type FocusScope = {
     workspaceId: string | null;
     chatId: string | null;
     draftId: string | null;
     focused: HTMLElement | null;
     selection?: [number, number];
   };
+  type PaletteScope = FocusScope & { mode: PaletteMode; entries: PaletteEntry[]; revision: string | null };
   let palette = $state.raw<PaletteScope>();
+  let fileSearch = $state.raw<FocusScope & { scope: DraftAttachmentScope }>();
   let archive = $state.raw<{ workspaceId: WorkspaceId | null; control: HTMLElement | null }>();
   type DeletePresentation = {
     request: ConfirmDeleteChat;
@@ -394,7 +394,8 @@
     if (promptEdit && (promptEdit.row.workspaceId !== current.workspace?.workspaceId ||
         promptEdit.row.chatId !== current.navigation.selectedChat ||
         promptEdit.row.generation !== current.transcript.generation || current.navigation.quit)) cancelSentPromptEdit();
-    if (palette && (!paletteMatches(palette, current) || current.navigation.quit)) closePalette(false);
+    if (palette && (!matchesFocusScope(palette, current) || current.navigation.quit)) closePalette(false);
+    if (fileSearch && (!matchesFocusScope(fileSearch, current) || current.navigation.quit)) closeFileSearch(false);
     if (archive && (archive.workspaceId !== (current.workspace?.workspaceId ?? null) || current.navigation.quit)) archive = undefined;
     if (deletion && !finishingDeletion &&
         (deletion.workspaceId !== (current.workspace?.workspaceId ?? null) || current.navigation.quit)) {
@@ -407,6 +408,9 @@
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) {
       showingChanges = false;
       showingProjectContext = false;
+    }
+    if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId || previous?.id !== current.navigation.draft?.id) {
+      filesOpened = false;
     }
     snapshot = current;
     revealTurnJump(current);
@@ -446,29 +450,33 @@
     return saving;
   }
 
-  function paletteMatches(scope: PaletteScope, current: WorkspaceSnapshot | null) {
+  function matchesFocusScope(scope: FocusScope, current: WorkspaceSnapshot | null) {
     return scope.workspaceId === (current?.workspace?.workspaceId ?? null) &&
       scope.chatId === (current?.navigation.selectedChat ?? null) &&
       scope.draftId === (current?.navigation.draft?.id ?? null);
   }
 
   function openPalette(mode: PaletteMode) {
-    if (!snapshot || palette || archive || deletion || search || actionPending || composing || quit || promptEdit || commandPanel) return;
+    if (!snapshot || palette || archive || deletion || search || fileSearch || actionPending || composing || quit || promptEdit || commandPanel) return;
     if (mode === 'files' && !attachmentScope) return;
+    palette = { ...captureFocus(snapshot), mode, entries: paletteEntries(mode, snapshot.navigation),
+      revision: snapshot.navigation.sidebar.revision };
+  }
+
+  function captureFocus(current: WorkspaceSnapshot): FocusScope {
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const selection: [number, number] | undefined = (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement) &&
       focused.selectionStart !== null && focused.selectionEnd !== null
       ? [focused.selectionStart, focused.selectionEnd] : undefined;
-    palette = {
-      mode, entries: paletteEntries(mode, snapshot.navigation), revision: snapshot.navigation.sidebar.revision,
-      workspaceId: snapshot.workspace?.workspaceId ?? null, chatId: snapshot.navigation.selectedChat,
-      draftId: snapshot.navigation.draft?.id ?? null, focused, selection,
+    return {
+      workspaceId: current.workspace?.workspaceId ?? null, chatId: current.navigation.selectedChat,
+      draftId: current.navigation.draft?.id ?? null, focused, selection,
     };
   }
 
-  async function focusAfterPalette(scope: PaletteScope, selected = false) {
+  async function restoreFocus(scope: FocusScope, selected = false) {
     await tick();
-    if (selected || !scope.focused?.isConnected || !paletteMatches(scope, snapshot)) {
+    if (selected || !scope.focused?.isConnected || !matchesFocusScope(scope, snapshot)) {
       editor?.focus({ preventScroll: true });
       return;
     }
@@ -481,14 +489,36 @@
   function closePalette(restore = true) {
     const captured = palette;
     palette = undefined;
-    if (captured && restore) void focusAfterPalette(captured);
+    if (captured && restore) void restoreFocus(captured);
+  }
+
+  function showFileSearch() {
+    if (!snapshot || !attachmentScope || fileSearch || palette || archive || deletion || search || quit || promptEdit || commandPanel || actionPending || composing) return;
+    fileSearch = { ...captureFocus(snapshot), scope: attachmentScope };
+  }
+
+  function closeFileSearch(restore = true) {
+    const captured = fileSearch;
+    fileSearch = undefined;
+    if (captured && restore) void restoreFocus(captured);
+  }
+
+  async function chooseFileSearch(hit: OpenFileSearchHit) {
+    const captured = fileSearch;
+    if (!captured || !matchesFocusScope(captured, snapshot) || actionPending || quit) return;
+    actionPending = true;
+    try {
+      if (await filePane?.openMatch(hit) && fileSearch === captured) closeFileSearch(false);
+    } finally {
+      actionPending = false;
+    }
   }
 
   async function lookupPaletteFiles(query: string): Promise<PaletteEntry[]> {
     const captured = palette;
     if (captured?.mode !== 'files' || !captured.workspaceId) return [];
     const matches = await searchProjectPaths({ workspaceId: captured.workspaceId, query });
-    if (palette !== captured || !paletteMatches(captured, snapshot)) return [];
+    if (palette !== captured || !matchesFocusScope(captured, snapshot)) return [];
     return matches.map(({ id, displayPath }) => {
       const separator = displayPath.lastIndexOf('/');
       return { id: JSON.stringify(id), title: displayPath.slice(separator + 1),
@@ -498,11 +528,11 @@
 
   async function choosePalette(entry: PaletteEntry) {
     const captured = palette;
-    if (!captured || !paletteMatches(captured, snapshot) || actionPending || composing || quit) return;
+    if (!captured || !matchesFocusScope(captured, snapshot) || actionPending || composing || quit) return;
     actionPending = true;
     try {
       await flushEdits();
-      if (!paletteMatches(captured, snapshot)) throw 'staleSelection';
+      if (!matchesFocusScope(captured, snapshot)) throw 'staleSelection';
       const target = entry.destination;
       if ('file' in target) {
         if (await filePane?.openPath(target.file, true)) closePalette();
@@ -513,13 +543,13 @@
         const change = 'project' in target ? { openProject: target.project } : { openChat: target.chat };
         await navigateWorkspace({ sidebar: { revision: captured.revision, change } });
         closePalette(false);
-        await focusAfterPalette(captured, true);
+        await restoreFocus(captured, true);
         return;
       }
       if (target.action === 'browse') {
         closePalette(false);
         const picked = await pickWorkspace();
-        await focusAfterPalette(captured, picked !== null);
+        await restoreFocus(captured, picked !== null);
         return;
       }
       if (target.action === 'archivedChats') {
@@ -533,6 +563,13 @@
         if (attachmentScope) palette = { ...captured, mode: 'files', entries: [] };
         return;
       }
+      if (target.action === 'fileSearch') {
+        if (attachmentScope) {
+          closePalette(false);
+          fileSearch = { ...captured, scope: attachmentScope };
+        }
+        return;
+      }
       if (target.action === 'messageSearch') {
         closePalette(false);
         await displayMessageSearch(workspaceId, captured.focused);
@@ -543,15 +580,15 @@
       else {
         const intent = { [target.action]: { workspaceId } } as NavigationIntent;
         await navigateWorkspace(intent);
-        if ((target.action === 'refresh' || target.action === 'reconnect') && paletteMatches(captured, snapshot)) {
+        if ((target.action === 'refresh' || target.action === 'reconnect') && matchesFocusScope(captured, snapshot)) {
           checkoutRevision += 1;
         }
       }
       closePalette(false);
-      await focusAfterPalette(captured, target.action === 'newChat');
+      await restoreFocus(captured, target.action === 'newChat');
     } catch (error) {
       if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
-      if (palette === captured && snapshot && paletteMatches(captured, snapshot)) {
+      if (palette === captured && snapshot && matchesFocusScope(captured, snapshot)) {
         palette = { ...captured, entries: paletteEntries(captured.mode, snapshot.navigation),
           revision: snapshot.navigation.sidebar.revision };
       }
@@ -571,7 +608,7 @@
 
   function showMessageSearch() {
     const workspaceId = snapshot?.workspace?.workspaceId;
-    if (!workspaceId || search || palette || archive || deletion || promptEdit || commandPanel) return;
+    if (!workspaceId || search || fileSearch || palette || archive || deletion || promptEdit || commandPanel) return;
     const control = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     void act(() => displayMessageSearch(workspaceId, control));
   }
@@ -1045,7 +1082,8 @@
       const key = event.key.toLowerCase();
       if (!event.altKey && key === 'f' && workspace) {
         event.preventDefault();
-        showMessageSearch();
+        if (event.target instanceof Element && event.target.closest('.project-files')) showFileSearch();
+        else showMessageSearch();
         return;
       }
       const mode = event.altKey && (event.code === 'KeyO' || key === 'o') ? 'projects' :
@@ -1140,6 +1178,7 @@
         <button type="button" aria-expanded={filesOpened} disabled={!!quit} onclick={() => void filePane?.toggle()}>Files</button>
         <button type="button" aria-keyshortcuts="Meta+P Control+P" disabled={actionPending || !!quit}
           onclick={() => openPalette('files')}>Quick Open</button>
+        <button type="button" disabled={actionPending || !!quit} onclick={showFileSearch}>Search Files</button>
       {/if}
       {#if summaryScope}
         <button type="button" aria-expanded={summaryVisible} disabled={!!quit} onclick={toggleSummary}>Pinned Summary</button>
@@ -1364,6 +1403,9 @@
         lookup={palette.mode === 'files' ? lookupPaletteFiles : undefined}
         choose={(entry) => void choosePalette(entry)} close={closePalette} />
     {/key}
+  {/if}
+  {#if fileSearch}
+    <FileSearch scope={fileSearch.scope} blocked={actionPending} choose={(hit) => void chooseFileSearch(hit)} close={closeFileSearch} />
   {/if}
   {#if archive}
     <ArchivedChats workspaceId={archive.workspaceId} restore={restoreArchived} close={closeArchive}

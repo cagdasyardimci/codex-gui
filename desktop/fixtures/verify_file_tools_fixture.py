@@ -28,6 +28,9 @@ def main():
             "beta.txt": b"Original beta\r\n",
             "adopt.txt": b"Original adoption\n",
             "conflict.txt": b"Original conflict\n",
+            "search.txt": ("Heading\r\n" + "".join(f"Café marker {line:02d}\r\n" for line in range(1, 30))).encode("utf-8"),
+            "filtered.log": "Café marker from an excluded log\n".encode("utf-8"),
+            "replace.txt": b"Unique replacement target\n",
             "pixel.png": PIXEL,
             "pixel2.png": PIXEL,
         }.items():
@@ -47,6 +50,7 @@ def main():
         assert (checkout / "adopt.txt").read_bytes() == b"Keep the new chat file.\n"
         assert (checkout / "conflict.txt").read_bytes() == b"An external change\n"
         assert (checkout / "folder" / "alpha.txt").read_bytes() == b"Alpha\n"
+        assert (checkout / "replace.txt").read_bytes() == (checkout / "retired-search.txt").read_bytes() == b"Unique replacement target\n"
         assert not list(profile.iterdir())
         records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
         requests = [entry for entry in records if entry["direction"] == "request"]

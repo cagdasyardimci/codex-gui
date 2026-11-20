@@ -32,10 +32,17 @@ pub(crate) struct ProjectState {
     pub(crate) projection: WorkspaceProjection,
     fixture_directory: Option<tempfile::TempDir>,
     file_index: Option<(WorkspaceId, Arc<AsyncMutex<WatchedProjectPaths>>)>,
+    pub(crate) file_search: Option<Arc<crate::file_search_ipc::FileSearchSession>>,
     pub(crate) composer_catalog: Option<crate::composer_context_ipc::ComposerCatalog>,
 }
 
 impl ProjectState {
+    pub(crate) fn retire_file_search(&mut self) {
+        if let Some(search) = self.file_search.take() {
+            search.cancel();
+        }
+    }
+
     fn select(&mut self, window: &str, folder: &Path) -> Result<WorkspaceId, IpcError> {
         let id = self.grants.select_folder(window, folder)?;
         self.publish();

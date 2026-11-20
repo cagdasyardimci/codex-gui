@@ -8,6 +8,7 @@ mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
 mod diff_ipc;
+mod file_search_ipc;
 mod file_tools_ipc;
 mod fixture;
 mod navigation;
@@ -173,6 +174,10 @@ fn main() {
             file_tools_ipc::browse_project_files,
             file_tools_ipc::read_file_tab,
             file_tools_ipc::edit_file_tab,
+            file_search_ipc::start_file_search,
+            file_search_ipc::read_file_search,
+            file_search_ipc::cancel_file_search,
+            file_search_ipc::open_file_search_hit,
             composer_ipc::pick_composer_attachments,
             composer_context_ipc::composer_context_catalog,
             composer_context_ipc::read_project_context,

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  DraftAttachmentScope, FileTabEdit, FileTabRead, FileToolsRequest, FileToolsView, ProjectBrowsePage,
-  ProjectBrowseRequest, ProjectFolder,
+  DraftAttachmentScope, FileSearchPage, FileTabEdit, FileTabRead, FileToolsRequest, FileToolsView,
+  OpenFileSearchHit, OpenedFileSearchHit, ProjectBrowsePage, ProjectBrowseRequest, ProjectFolder, ReadFileSearch, StartFileSearch,
 } from './generated/workspace';
 
 export function changeFileTools(request: FileToolsRequest): Promise<FileToolsView> {
@@ -14,6 +14,22 @@ export function browseProjectFiles(request: ProjectBrowseRequest): Promise<Proje
 
 export function readFileTab(request: FileTabRead, raster = false): Promise<ArrayBuffer> {
   return invoke('read_file_tab', { request, raster });
+}
+
+export function startFileSearch(request: StartFileSearch): Promise<string> {
+  return invoke('start_file_search', { request });
+}
+
+export function readFileSearch(request: ReadFileSearch): Promise<FileSearchPage> {
+  return invoke('read_file_search', { request });
+}
+
+export function cancelFileSearch(session: string): Promise<void> {
+  return invoke('cancel_file_search', { session });
+}
+
+export function openFileSearchHit(request: OpenFileSearchHit): Promise<OpenedFileSearchHit> {
+  return invoke('open_file_search_hit', { request });
 }
 
 export function sameFileScope(first: DraftAttachmentScope, second: DraftAttachmentScope) {

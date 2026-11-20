@@ -17,6 +17,7 @@ use crate::checkout::{CheckoutError, CheckoutIdentity, NativeFileIdentity};
 pub mod index;
 mod native;
 mod save;
+pub mod search;
 pub use save::MAX_EDIT_BYTES;
 
 pub const MAX_READ_BYTES: u64 = 32 * 1024 * 1024;
@@ -107,6 +108,27 @@ impl CheckoutFiles {
 
     pub fn close(&mut self, handle: FileHandle) {
         self.files.remove(&handle);
+    }
+
+    pub fn same_file(&self, handle: FileHandle, other: &Self, other_handle: FileHandle) -> bool {
+        let pair = self.files.get(&handle).zip(other.files.get(&other_handle));
+        self.checkout == other.checkout
+            && pair.is_some_and(|(first, second)| {
+                first.identity == second.identity && first.relative == second.relative
+            })
+    }
+
+    fn duplicate(&self, handle: FileHandle) -> Result<Self, FileError> {
+        let captured = self.files.get(&handle).ok_or(FileError::InvalidHandle)?;
+        let copy = CapturedFile {
+            relative: captured.relative.clone(),
+            identity: captured.identity.clone(),
+            _anchor: captured._anchor.try_clone()?,
+        };
+        Ok(Self {
+            checkout: self.checkout.clone(),
+            files: HashMap::from([(handle, copy)]),
+        })
     }
 }
 

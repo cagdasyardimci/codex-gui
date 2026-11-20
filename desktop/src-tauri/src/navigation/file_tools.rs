@@ -2,7 +2,7 @@ use codex_gui_core::{
     files::{CheckoutFiles, FileError, FileLink, FileRevision, MAX_EDIT_BYTES},
     ipc::{
         DraftAttachmentScope, FileTabDiscard, FileTabEdit, FileTabKind, FileTabRead, FileTabView,
-        FileToolsChange, FileToolsRequest, FileToolsView,
+        FileToolsChange, FileToolsRequest, FileToolsView, OpenedFileSearchHit,
     },
 };
 
@@ -42,6 +42,16 @@ struct Document {
 }
 
 impl NavigationHandle {
+    pub async fn open_file_search_hit(
+        &self,
+        hit: PreparedFileHit,
+    ) -> Result<OpenedFileSearchHit, IpcError> {
+        let (reply, result) = oneshot::channel();
+        self.request(Action::OpenFileSearchHit(Box::new(hit), reply))
+            .await?;
+        result.await.map_err(|_| IpcError::ProjectUnavailable)
+    }
+
     pub async fn file_tools(
         &self,
         request: FileToolsRequest,
@@ -70,6 +80,73 @@ impl NavigationHandle {
 }
 
 impl Navigation {
+    pub(super) fn retire_file_search(&self) {
+        self.model
+            .lock()
+            .expect("workspace state lock poisoned")
+            .retire_file_search();
+    }
+
+    pub(super) fn open_file_match(
+        &mut self,
+        hit: PreparedFileHit,
+    ) -> Result<OpenedFileSearchHit, IpcError> {
+        let key = self.file_tools_key(hit.scope())?;
+        if self.quit.is_some() || !hit.still_current() {
+            return Err(IpcError::StaleSelection);
+        }
+        let found = &hit.file;
+        let session = self.file_tools.sessions.entry(key).or_default();
+        let existing = session
+            .tabs
+            .iter()
+            .find(|tab| tab.relative == found.relative);
+        if existing.is_some_and(|tab| {
+            tab.is_dirty()
+                || tab.kind != FileTabKind::Text
+                || !tab
+                    .files
+                    .same_file(tab.link.id, &found.files, found.link.id)
+        }) {
+            return Err(IpcError::StaleSelection);
+        }
+        let current = found
+            .files
+            .read_limited(found.link.id, MAX_EDIT_BYTES)
+            .map_err(|_| IpcError::StaleSelection)?;
+        if current.revision != found.read.revision || !hit.still_current() {
+            return Err(IpcError::StaleSelection);
+        }
+        let line = found.line;
+        let id = if let Some(tab) = existing {
+            let id = tab.id;
+            session.keep(id);
+            id
+        } else {
+            let text = std::str::from_utf8(&current.bytes).map_err(|_| IpcError::StaleSelection)?;
+            let id = Uuid::new_v4();
+            let file = hit.file;
+            session.tabs.push(Document {
+                id,
+                relative: file.relative,
+                files: file.files,
+                link: file.link,
+                kind: FileTabKind::Text,
+                disk: Some(current.revision),
+                crlf: preserves_crlf(text),
+                edit: None,
+                revision: 0,
+            });
+            id
+        };
+        session.selected = Some(id);
+        session.open = true;
+        Ok(OpenedFileSearchHit {
+            view: session.view(None),
+            line,
+        })
+    }
+
     fn file_tools_key(
         &self,
         scope: &DraftAttachmentScope,
