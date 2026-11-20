@@ -8,7 +8,8 @@ export async function waitFor(description: string, condition: () => boolean) {
 
 function button(label: string, within: ParentNode) {
   return Array.from(within.querySelectorAll('button'))
-    .find((control) => (control.querySelector('.chat-title')?.textContent ?? control.textContent)?.trim() === label && !control.disabled);
+    .find((control) => (control.querySelector('.chat-title')?.textContent ?? control.textContent)?.trim() === label &&
+      !control.matches(':disabled') && !control.closest('[hidden]'));
 }
 
 export async function click(label: string, within: ParentNode = document) {

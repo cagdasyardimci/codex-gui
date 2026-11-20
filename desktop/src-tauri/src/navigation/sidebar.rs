@@ -176,7 +176,7 @@ impl Navigation {
         Ok(())
     }
 
-    async fn open_sidebar_chat(&mut self, key: SidebarChatKey) -> Result<(), IpcError> {
+    pub(super) async fn open_sidebar_chat(&mut self, key: SidebarChatKey) -> Result<(), IpcError> {
         self.known_sidebar_chat(&key)?;
         let (path, checkout) = self.resolve_sidebar_project(&key.project_id)?;
         let thread = ThreadId(key.chat_id);

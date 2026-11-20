@@ -15,6 +15,7 @@
   import type { AppearanceView } from './generated/workspace';
   import { applyDesktopAppearance, observeDesktop } from './desktopAppearance';
   import { verifyAppearance } from './appearanceProbe';
+  import { verifyNotifications } from './notificationProbe';
   import { verifySettings } from './settingsProbe';
   import SentPromptDialog from './SentPromptDialog.svelte';
   import WorkspaceSidebar from './WorkspaceSidebar.svelte';
@@ -61,7 +62,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -1159,6 +1160,7 @@
     if (verify === 'account') void verifyAccount(() => snapshot);
     else if (verify === 'settings') void verifySettings(() => snapshot);
     else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
+    else if (verify === 'notifications') void verifyNotifications(() => snapshot);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn' || verify === 'activeTurn') void verifyTurn(() => snapshot, verify);
     else if (verify === 'queue') void verifyQueue(() => snapshot);

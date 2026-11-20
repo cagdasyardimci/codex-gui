@@ -10,6 +10,7 @@
   import SettingsCatalog from './settings/SettingsCatalog.svelte';
   import SettingsMcp from './settings/SettingsMcp.svelte';
   import SettingsAppearance from './settings/SettingsAppearance.svelte';
+  import SettingsNotifications from './settings/SettingsNotifications.svelte';
   import { matchSettings, settingsSections, type SettingsMatch, type SettingsSection } from './settings/settingsSearch';
 
   let { close, accountBusy, appearance, appearanceChanged }: {
@@ -269,6 +270,8 @@
   <div hidden={!!search.trim()}>
   {#if tab === 'appearance'}
     <SettingsAppearance view={appearance} changed={appearanceChanged} />
+  {:else if tab === 'notifications'}
+    <SettingsNotifications />
   {:else if view && tab === 'account'}
     <section aria-label="Account">
       <dl>

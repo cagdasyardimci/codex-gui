@@ -151,6 +151,7 @@ jobs:
           python3 desktop/fixtures/verify_account_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_settings_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_appearance_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_notification_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_windows_setup_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_turn_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_queue_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
@@ -213,6 +214,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_settings_fixture.py $app
           python desktop/fixtures/verify_appearance_fixture.py $app
+          python desktop/fixtures/verify_notification_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_windows_setup_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -265,6 +267,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_account_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_settings_fixture.py "$app"
           xvfb-run -a -s "-screen 0 1280x1024x24" sh -c 'openbox >/dev/null 2>&1 & python3 desktop/fixtures/verify_appearance_fixture.py "$1"' fixture "$app"
+          xvfb-run -a python3 desktop/fixtures/verify_notification_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_windows_setup_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_turn_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_queue_fixture.py "$app"

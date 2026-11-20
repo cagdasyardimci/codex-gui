@@ -18,6 +18,10 @@ use crate::files::{
     },
 };
 use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
+use crate::notifications::{
+    NotificationEdit, NotificationUpdate, NotificationView, TaskAlertCategory, TaskAlertSound,
+    TaskCompletionAlerts,
+};
 
 mod actions;
 mod archive;
@@ -369,6 +373,12 @@ pub fn workspace_typescript() -> String {
         AppearanceEdit::decl(),
         AppearanceUpdate::decl(),
         AppearanceView::decl(),
+        TaskAlertCategory::decl(),
+        TaskAlertSound::decl(),
+        TaskCompletionAlerts::decl(),
+        NotificationEdit::decl(),
+        NotificationUpdate::decl(),
+        NotificationView::decl(),
         UsageWindowView::decl(),
         DailyUsageView::decl(),
         EffectiveSettingView::decl(),

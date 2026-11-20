@@ -44,4 +44,8 @@ The same [desktop owner](../desktop/src-tauri/src/desktop_presentation/window.rs
 
 Notification timing, alert categories and sound are local preferences; macOS authorization is independent. Continue observing transitions while notifications are disabled so enabling them cannot replay old alerts. Recheck preferences after authorization and before foreground presentation.
 
-Custom notification audio must meet UserNotifications format and duration requirements and be published atomically; failed or canceled imports preserve the saved choice. Sound options, migration and import mechanics live in [TaskNotificationSound](../Sources/CodexGUI/App/Notifications/TaskNotificationSound.swift). Stable application identity and permission setup follow [signing setup](../README.md#signing-setup). Audible delivery and OS authorization require [live acceptance](validation.md#native-and-live-acceptance).
+[Tauri task alerts](../desktop/src-tauri/src/task_notifications.rs) capture the owning project and chat from the routed execution event. Opening an alert revalidates that chat before changing focus. The compatible host service supplies built-in sounds. Import WAV, AIFF or CAF with valid mono or stereo audio under 30 seconds and 32 MiB. The selected sound changes only when the owned sound and its preference have both been saved. A cancelled or invalid import preserves the current choice.
+
+Stable application identity and permission setup follow [signing setup](../README.md#signing-setup). Audible delivery and OS authorization require [live acceptance](validation.md#native-and-live-acceptance).
+
+The alert audio decoder uses unmodified Symphonia source. The installed artifacts include the [MPL 2.0 notice](../desktop/src-tauri/notices/Symphonia-MPL-2.0.txt). [Symphonia 0.6.1 source](https://docs.rs/crate/symphonia/0.6.1/source/)

@@ -55,6 +55,7 @@ pub enum Verification {
     Settings,
     Appearance,
     AppearanceRestore,
+    Notifications,
     WindowsSetup,
     Turn,
     ActiveTurn,

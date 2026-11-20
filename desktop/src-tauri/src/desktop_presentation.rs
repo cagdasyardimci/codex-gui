@@ -426,12 +426,11 @@ pub fn appearance_fixture_state(
         .expect("appearance lock poisoned")
         .data
         .zoom_percent;
-    let captured = fixture_data(&window)?
-        .join("fixture-theme-export-captured")
-        .is_file();
+    let data = fixture_data(&window)?;
+    let captured = data.join("fixture-theme-export-captured").is_file();
     Ok(serde_json::json!({
         "width": size.width, "height": size.height, "fullscreen": window.is_fullscreen().map_err(report)?,
-        "scale": scale, "zoom": zoom, "exportCaptured": captured,
+        "scale": scale, "zoom": zoom, "exportCaptured": captured, "exportWritten": data.join("Theme.json").is_file(),
     }))
 }
 

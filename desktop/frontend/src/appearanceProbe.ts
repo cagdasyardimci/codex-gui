@@ -10,6 +10,7 @@ type WindowEvidence = {
   scale: number;
   zoom: number;
   exportCaptured: boolean;
+  exportWritten: boolean;
 };
 
 const fixtureState = () => invoke<WindowEvidence>('appearance_fixture_state');
@@ -23,14 +24,15 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
   const profile = () => visible()?.profile;
   const color = () => getComputedStyle(document.documentElement).backgroundColor;
   const contentPx = () => getComputedStyle(document.documentElement).getPropertyValue('--workspace-content-size').trim();
-  function change(label: string, value: string) {
+  async function change(label: string, value: string) {
+    await waitFor(`The appearance control ${label} was busy`, () => field(label)?.matches(':disabled') === false);
     const input = field(label);
     if (!input) throw new Error(`Missing appearance control ${label}`);
     input.value = value;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
   const mode = async (target: 'light' | 'dark') => {
-    change('Appearance Mode', target);
+    await change('Appearance Mode', target);
     await waitFor(`The ${target} mode did not settle`, () =>
       visible()?.mode === target && document.documentElement.dataset.appearance === target);
   };
@@ -68,7 +70,7 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
     await waitFor('The system font catalog was empty', () => (menu()?.options.length ?? 0) > 1);
     const families = [...menu()!.options].map(({value}) => value).filter(Boolean);
     const family = ['Arial', 'Liberation Sans', 'DejaVu Sans', 'Segoe UI'].find((candidate) => families.includes(candidate)) ?? families[0]!;
-    change('UI Font', family);
+    await change('UI Font', family);
     await waitFor('Content did not inherit the selected UI font', () =>
       profile()?.fonts.ui === family && visible()?.resolvedFonts.content === family);
     await updateDesktopAppearance({selection: visible()!.selection,
@@ -76,9 +78,9 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
     await waitFor('An uninstalled font did not fall back while retaining its preference', () =>
       profile()?.fonts.code === 'Codex Fixture Uninstalled Typeface' &&
       visible()?.resolvedFonts.code === null && !document.documentElement.style.getPropertyValue('--workspace-code-font'));
-    change('Content Font Size', '19');
+    await change('Content Font Size', '19');
     await waitFor('The content type size did not apply', () => contentPx() === '19px');
-    change('Foreground Hex', '#223344');
+    await change('Foreground Hex', '#223344');
     await waitFor('The changed color replaced the font or failed to apply', () =>
       profile()?.colors.foreground === 0x22_33_44 && profile()?.fonts.ui === family);
     await press('Copy Theme');
@@ -88,15 +90,16 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
     if (color() !== 'rgb(17, 17, 17)' || contentPx() !== '15px' || profile()?.fonts.ui !== null) {
       throw new Error('The dark appearance inherited unrelated light preferences');
     }
-    change('Theme', 'nord');
+    await change('Theme', 'nord');
     await waitFor('Selecting a preset did not apply its dark palette', () => profile()?.presetId === 'nord');
-    change('Background Hex', '#243243');
+    await change('Background Hex', '#243243');
     await waitFor('The dark profile color did not update', () => color() === 'rgb(36, 50, 67)');
     await mode('light');
     if (profile()?.fonts.ui !== family || profile()?.colors.foreground !== 0x22_33_44 || contentPx() !== '19px') {
       throw new Error('Switching modes discarded the previous profile');
     }
     await mode('dark');
+    await waitForNative('The captured theme export did not finish writing', (state) => state.exportWritten);
     await press('Close');
     await fixtureAction('resize');
     const regular = await waitForNative('The native window did not resize', normalLayout);

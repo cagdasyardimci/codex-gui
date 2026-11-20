@@ -18,6 +18,7 @@ mod navigation;
 mod project_ipc;
 mod quit_ipc;
 mod settings_ipc;
+mod task_notifications;
 mod transcript_ipc;
 
 fn main() {
@@ -56,6 +57,7 @@ fn main() {
         Some("--verify-settings") => fixture::Verification::Settings,
         Some("--verify-appearance") => fixture::Verification::Appearance,
         Some("--verify-appearance-restore") => fixture::Verification::AppearanceRestore,
+        Some("--verify-notifications") => fixture::Verification::Notifications,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -99,6 +101,7 @@ fn main() {
             | fixture::Verification::Settings
             | fixture::Verification::Appearance
             | fixture::Verification::AppearanceRestore
+            | fixture::Verification::Notifications
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -129,6 +132,7 @@ fn main() {
             | fixture::Verification::Settings
             | fixture::Verification::Appearance
             | fixture::Verification::AppearanceRestore
+            | fixture::Verification::Notifications
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -221,6 +225,15 @@ fn main() {
             desktop_presentation::appearance_fixture_action,
             desktop_presentation::appearance_fixture_state,
             desktop_presentation::verify_appearance_result,
+            task_notifications::read_notification_preferences,
+            task_notifications::update_notification_preferences,
+            task_notifications::request_notification_permission,
+            task_notifications::import_notification_sound,
+            task_notifications::configure_notification_fixture,
+            task_notifications::choose_notification_fixture_sound,
+            task_notifications::notification_fixture_outcomes,
+            task_notifications::activate_notification_fixture,
+            task_notifications::verify_notifications_result,
             project_ipc::search_project_paths,
             file_tools_ipc::change_file_tools,
             file_tools_ipc::browse_project_files,
@@ -311,8 +324,13 @@ fn main() {
                     None => (app.path().app_data_dir()?, None),
                 };
                 std::fs::create_dir_all(beta_data.join("worktrees"))?;
+                app.manage(task_notifications::TaskNotifications::open(
+                    Some(&beta_data),
+                    verification,
+                ));
                 let project = app.state::<project_ipc::ProjectIpc>();
                 let navigation = navigation::NavigationHandle::start(
+                    app.handle().clone(),
                     &beta_data.join("workspace.sqlite3"),
                     project.state.clone(),
                     initial_project,
@@ -322,6 +340,10 @@ fn main() {
                 assert!(project.navigation.set(navigation).is_ok());
                 desktop_presentation::DesktopPresentation::open(Some(&beta_data))
             } else {
+                app.manage(task_notifications::TaskNotifications::open(
+                    None,
+                    verification,
+                ));
                 desktop_presentation::DesktopPresentation::open(None)
             };
             let theme = presentation.initial_theme();
@@ -347,6 +369,9 @@ fn main() {
                 .state::<desktop_presentation::DesktopPresentation>()
                 .initialize_window(&window);
             window.show()?;
+            if desktop && let Err(error) = window.set_focus() {
+                eprintln!("{error}");
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

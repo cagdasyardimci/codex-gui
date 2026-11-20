@@ -45,6 +45,7 @@ impl Navigation {
         let store = self.store.clone();
         let shutdown = self.shutdown_pending.clone();
         let changed = self.owner_changes.clone();
+        let app = self.app.clone();
         let engine = backend.engine.clone();
         let (reattach, mut reattachment) = oneshot::channel();
         let backend_client = client.clone();
@@ -84,11 +85,26 @@ impl Navigation {
                 if let Err(error) = backend.observe_slash_event(&event, &store) {
                     eprintln!("{error}");
                 }
-                match backend
+                let routed = backend
                     .engine
                     .route_session_event(&backend_client, &store, event, RPC_TIMEOUT)
-                    .await
-                {
+                    .await;
+                if let Ok(Some(event)) = &routed {
+                    crate::task_notifications::observe(
+                        &app,
+                        &store,
+                        backend_client.identity(),
+                        event,
+                        |chat, turn| {
+                            before
+                                .execution
+                                .active_turns
+                                .iter()
+                                .any(|active| active.thread.0 == chat && active.turn.0 == turn)
+                        },
+                    );
+                }
+                match routed {
                     Ok(Some(RoutedEvent::Conversation {
                         thread,
                         event: ServerEvent::Notification { method, params },

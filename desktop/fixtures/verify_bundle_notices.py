@@ -10,6 +10,7 @@ NOTICES = {
     "Tauri-MIT.txt": FRONTEND_PACKAGES / "@tauri-apps" / "api" / "LICENSE-MIT",
     "Svelte-MIT.md": FRONTEND_PACKAGES / "svelte" / "LICENSE.md",
     "Inter-OFL.txt": FRONTEND_PACKAGES.parent / "src" / "assets" / "Inter-LICENSE.txt",
+    "Symphonia-MPL-2.0.txt": ROOT / "desktop" / "src-tauri" / "notices" / "Symphonia-MPL-2.0.txt",
     "frontend-licenses.md": FRONTEND_PACKAGES.parent / "dist" / "frontend-licenses.md",
 }
 

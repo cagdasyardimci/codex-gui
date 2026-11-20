@@ -18,8 +18,8 @@ use codex_gui_core::{
     },
     ipc::{
         CommandUpdate, DraftAttachmentScope, DraftEdit, EditorDraft, IpcError, NavigationIntent,
-        NavigationView, StreamChange, TextBatcher, TranscriptView, WorkspaceId, WorkspaceRequest,
-        WriteAccess,
+        NavigationView, SidebarChatKey, StreamChange, TextBatcher, TranscriptView, WorkspaceId,
+        WorkspaceRequest, WriteAccess,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -97,6 +97,7 @@ struct Message {
 enum Action {
     SelectFolder(PathBuf),
     Intent(NavigationIntent),
+    OpenNotificationChat(SidebarChatKey),
     RequestQuit(tauri::AppHandle),
     FileTools(
         codex_gui_core::ipc::FileToolsRequest,
@@ -214,6 +215,7 @@ struct Backend {
 }
 
 struct Navigation {
+    app: tauri::AppHandle,
     configured_run: composer_settings::ConfiguredRun,
     store: AttachmentStore,
     owners: RuntimeOwners,
@@ -257,6 +259,12 @@ struct Navigation {
 }
 
 impl NavigationHandle {
+    pub async fn open_notification_chat(&self, key: SidebarChatKey) -> Result<(), IpcError> {
+        self.request(Action::OpenNotificationChat(key))
+            .await
+            .map(|_| ())
+    }
+
     pub async fn last_turn_changes(
         &self,
         scope: DraftAttachmentScope,
@@ -268,6 +276,7 @@ impl NavigationHandle {
     }
 
     pub fn start(
+        app: tauri::AppHandle,
         database: &Path,
         model: Arc<Mutex<ProjectState>>,
         fixture_project: Option<PathBuf>,
@@ -285,6 +294,7 @@ impl NavigationHandle {
         let (queue_completions, finished_queue_jobs) = mpsc::channel(32);
         let (owner_changes, changed_owners) = mpsc::channel(1);
         let navigation = Navigation {
+            app,
             configured_run: composer_settings::ConfiguredRun::default(),
             owners: RuntimeOwners::new(store.clone()),
             store: store.clone(),
@@ -513,6 +523,13 @@ impl Navigation {
         let action = match action {
             Action::RequestQuit(app) => {
                 self.begin_quit(app);
+                return Ok(None);
+            }
+            Action::OpenNotificationChat(key) => {
+                if self.quit.is_some() {
+                    return Err(IpcError::StaleSelection);
+                }
+                self.open_sidebar_chat(key).await?;
                 return Ok(None);
             }
             Action::ComposerAttachment(mutation) => {
@@ -1271,6 +1288,19 @@ impl Navigation {
             eprintln!("{error}");
         }
         if let Some(event) = routed {
+            crate::task_notifications::observe(
+                &self.app,
+                &self.store,
+                client.identity(),
+                &event,
+                |chat, turn| {
+                    before
+                        .execution
+                        .active_turns
+                        .iter()
+                        .any(|active| active.thread.0 == chat && active.turn.0 == turn)
+                },
+            );
             self.present_event(event);
         }
         if inspector_changed {
