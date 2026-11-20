@@ -93,6 +93,8 @@ fn main() {
         return;
     }
 
+    let describe_profile = mode.as_deref() == Some("--describe-package-profile".as_ref());
+
     let verification = match mode.as_deref().and_then(|value| value.to_str()) {
         Some("--verify-fixture") => fixture::Verification::Streaming,
         Some("--verify-media") => fixture::Verification::Media,
@@ -431,6 +433,17 @@ fn main() {
             fixture::seed_deletion_fixture,
         ])
         .setup(move |app| {
+            if describe_profile {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "bundleId": app.config().identifier,
+                        "dataDirectory": app.path().app_data_dir()?,
+                    })
+                );
+                app.handle().exit(0);
+                return Ok(());
+            }
             if let Some(checkouts) = fixture_checkouts {
                 app.manage(checkouts);
             }
@@ -495,7 +508,13 @@ fn main() {
                 .find(|window| window.label == WORKSPACE_WINDOW)
                 .ok_or("missing configured main workspace window")?;
             let base = project_ipc::app_location(app.config(), window.use_https_scheme);
+            let title = app
+                .config()
+                .product_name
+                .as_deref()
+                .unwrap_or(&window.title);
             let window = WebviewWindowBuilder::from_config(app, window)?
+                .title(title)
                 .theme(theme)
                 .visible(false)
                 .on_navigation(move |url| project_ipc::allows_navigation(&base, url))
