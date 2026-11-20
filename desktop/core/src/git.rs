@@ -225,6 +225,8 @@ impl CheckoutGit {
             .args(args)
             .current_dir(self.checkout.canonical_path())
             .env_remove("GIT_DIR")
+            .env_remove("GIT_ATTR_SOURCE")
+            .env_remove("GIT_CONFIG")
             .env_remove("GIT_WORK_TREE")
             .env_remove("GIT_INDEX_FILE")
             .env_remove("GIT_COMMON_DIR")

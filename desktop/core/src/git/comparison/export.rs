@@ -7,6 +7,14 @@ const MAX_INPUT_BYTES: u64 = 64 * 1024 * 1024;
 impl GitComparison {
     pub async fn export_patch(&self) -> Result<Vec<u8>, GitError> {
         self.owner.verify_repository().await?;
+        self.verify_pinned_policy().await?;
+        if let Some(bytes) = self
+            .shared
+            .as_ref()
+            .and_then(|shared| shared.get_patch(None))
+        {
+            return Ok(bytes.to_vec());
+        }
         if self.is_mutable() {
             self.verify_snapshot().await?;
         }
@@ -23,26 +31,28 @@ impl GitComparison {
             self.verify_snapshot().await?;
         }
         self.owner.verify_repository().await?;
+        self.verify_pinned_policy().await?;
+        if let Some(shared) = &self.shared {
+            shared.store_patch(None, &patch);
+        }
         Ok(patch)
     }
 
-    pub(super) async fn capture_entries(&mut self) -> Result<(), GitError> {
+    pub(super) async fn capture_entries(&self) -> Result<Vec<Entry>, GitError> {
         let mut remaining = MAX_INPUT_BYTES;
+        let mut entries = Vec::new();
         for change in self.read_summary().await? {
             let input = self.capture_input(&change, remaining).await?;
             if let Some(input) = &input {
                 remaining -= input.byte_count as u64;
             }
-            self.entries.push(Entry {
+            entries.push(Entry {
                 id: ComparisonFileId(Uuid::new_v4()),
                 change,
                 input,
             });
         }
-        if self.is_mutable() {
-            self.verify_summary().await?;
-        }
-        Ok(())
+        Ok(entries)
     }
 
     pub(super) async fn verify_entry(&self, entry: &Entry) -> Result<(), GitError> {
@@ -63,13 +73,13 @@ impl GitComparison {
         }
         self.verify_summary().await?;
         let mut remaining = MAX_INPUT_BYTES;
-        for entry in &self.entries {
+        for entry in self.entries.iter() {
             remaining -= self.verify_input(entry, remaining).await?;
         }
         Ok(())
     }
 
-    async fn verify_summary(&self) -> Result<(), GitError> {
+    pub(super) async fn verify_summary(&self) -> Result<(), GitError> {
         let revisions = self.read_summary().await?;
         if !revisions
             .iter()

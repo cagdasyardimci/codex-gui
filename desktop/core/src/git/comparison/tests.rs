@@ -402,3 +402,75 @@ async fn captures_gitlink_head_and_local_changes_without_erasing_the_nested_chec
         Err(GitError::StaleComparison)
     ));
 }
+
+#[tokio::test]
+async fn reuses_pinned_outputs_and_keys_them_to_effective_diff_policy() {
+    let scratch = initialize();
+    let root = scratch.path();
+    fs::write(root.join("file.txt"), "before\n").unwrap();
+    git(root, &["add", "file.txt"]);
+    git(root, &["commit", "--no-gpg-sign", "-m", "Base"]);
+    fs::write(root.join("file.txt"), "after\n").unwrap();
+    git(root, &["add", "file.txt"]);
+    git(root, &["commit", "--no-gpg-sign", "-m", "Target"]);
+    let service = GitComparisons::open(CheckoutIdentity::capture(root).unwrap())
+        .await
+        .unwrap();
+    let request = ComparisonSpec::Commit("HEAD".into());
+    let first = service.compare(request.clone()).await.unwrap();
+    let expected = first.export_patch().await.unwrap();
+    let file = first.files().next().unwrap();
+    assert_eq!(first.detail(file.id).await.unwrap(), expected);
+    if first.pinned.is_none() {
+        // Older Git can still render the immutable commit pair without sharing results.
+        let uncached = service.compare(request).await.unwrap();
+        assert!(!Arc::ptr_eq(&first.entries, &uncached.entries));
+        return;
+    }
+
+    fs::write(root.join(".gitattributes"), "file.txt -diff\n").unwrap();
+    fs::write(root.join("file.txt"), "worktree update\n").unwrap();
+    let repeated = service.compare(request.clone()).await.unwrap();
+    assert!(Arc::ptr_eq(&first.entries, &repeated.entries));
+    let shared = repeated.shared.as_ref().unwrap();
+    assert_eq!(shared.get_patch(Some(file.id)).unwrap().as_ref(), expected);
+    assert_eq!(shared.get_patch(None).unwrap().as_ref(), expected);
+    assert_eq!(repeated.export_patch().await.unwrap(), expected);
+
+    let working = service.compare(ComparisonSpec::Uncommitted).await.unwrap();
+    assert!(working.shared.is_none());
+    fs::write(root.join("file.txt"), "worktree change\n").unwrap();
+    assert!(matches!(
+        working.export_patch().await,
+        Err(GitError::StaleComparison)
+    ));
+
+    git(root, &["config", "--local", "diff.algorithm", "histogram"]);
+    assert!(matches!(
+        first.export_patch().await,
+        Err(GitError::StaleComparison)
+    ));
+    let updated = service.compare(request.clone()).await.unwrap();
+    assert!(!Arc::ptr_eq(&first.entries, &updated.entries));
+    fs::write(
+        root.join(".git").join("info").join("attributes"),
+        "file.txt -diff\n",
+    )
+    .unwrap();
+    assert!(matches!(
+        updated.export_patch().await,
+        Err(GitError::StaleComparison)
+    ));
+    let binary = service
+        .compare(request)
+        .await
+        .unwrap()
+        .export_patch()
+        .await
+        .unwrap();
+    assert!(
+        binary
+            .windows(b"GIT binary patch".len())
+            .any(|bytes| bytes == b"GIT binary patch")
+    );
+}

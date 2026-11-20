@@ -1,4 +1,7 @@
-use std::{ffi::OsString, sync::Arc};
+use std::{
+    ffi::OsString,
+    sync::{Arc, Mutex},
+};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -6,9 +9,13 @@ use uuid::Uuid;
 use super::*;
 use crate::files::FileRevision;
 
+mod cache;
 mod export;
+mod policy;
 mod raw;
 mod selectors;
+use cache::{ComparisonCache, ImmutableKey, ReusableComparison};
+use policy::{PinnedPolicy, attribute_source};
 use raw::{RawChange, parse_changes as parse_raw_changes, patch_sections};
 pub use selectors::{BranchChoice, BranchSelectors, RecentCommit};
 
@@ -75,6 +82,7 @@ pub struct ComparisonFile {
 pub struct GitComparisons {
     git: Arc<CheckoutGit>,
     repository: CheckoutIdentity,
+    cache: Arc<Mutex<ComparisonCache>>,
 }
 
 pub struct GitComparison {
@@ -82,7 +90,9 @@ pub struct GitComparison {
     base: ComparisonSide,
     target: ComparisonSide,
     policy: Vec<OsString>,
-    entries: Vec<Entry>,
+    pinned: Option<PinnedPolicy>,
+    entries: Arc<[Entry]>,
+    shared: Option<Arc<ReusableComparison>>,
 }
 
 struct Entry {
@@ -95,22 +105,66 @@ impl GitComparisons {
     pub async fn open(checkout: CheckoutIdentity) -> Result<Self, GitError> {
         let git = Arc::new(CheckoutGit::new(checkout)?);
         let repository = git.repository_identity().await?;
-        Ok(Self { git, repository })
+        Ok(Self {
+            git,
+            repository,
+            cache: Arc::default(),
+        })
     }
 
     pub async fn compare(&self, spec: ComparisonSpec) -> Result<GitComparison, GitError> {
         self.verify_repository().await?;
         let (base, target) = self.resolve(spec).await?;
-        let policy = self.diff_policy().await?;
+        let mut policy = self.diff_policy().await?;
+        let mut key = None;
+        let mut pinned = None;
+        if let (ComparisonSide::Object(base), ComparisonSide::Object(target)) = (&base, &target)
+            && let Some(snapshot) = self.pinned_policy(target).await?
+        {
+            key = Some(ImmutableKey {
+                base: base.clone(),
+                target: target.clone(),
+                policy: snapshot.fingerprint(),
+            });
+            policy.push(attribute_source(target).into());
+            policy.push("--no-replace-objects".into());
+            pinned = Some(snapshot);
+        }
         let mut comparison = GitComparison {
             owner: self.clone(),
             base,
             target,
             policy,
-            entries: Vec::new(),
+            pinned,
+            entries: Arc::from([]),
+            shared: None,
         };
-        comparison.capture_entries().await?;
+        if let Some(key) = &key
+            && let Some(shared) = self
+                .cache
+                .lock()
+                .expect("comparison cache poisoned")
+                .get(key)
+        {
+            comparison.entries = shared.files.clone();
+            comparison.shared = Some(shared);
+            return Ok(comparison);
+        }
+        comparison.entries = comparison.capture_entries().await?.into();
+        if comparison.is_mutable() {
+            comparison.verify_summary().await?;
+        }
         self.verify_repository().await?;
+        comparison.verify_pinned_policy().await?;
+        if let Some(key) = key {
+            let shared = self
+                .cache
+                .lock()
+                .expect("comparison cache poisoned")
+                .share(key, comparison.entries);
+            comparison.entries = shared.files.clone();
+            comparison.shared = Some(shared);
+        }
         Ok(comparison)
     }
 
@@ -149,7 +203,17 @@ impl GitComparisons {
                 let target = self.resolve_commit(&revision).await?;
                 let lineage = self
                     .git
-                    .success(["rev-list", "--parents", "-1", &target, "--"], QUERY_BYTES)
+                    .success(
+                        [
+                            "--no-replace-objects",
+                            "rev-list",
+                            "--parents",
+                            "-1",
+                            &target,
+                            "--",
+                        ],
+                        QUERY_BYTES,
+                    )
                     .await?;
                 let mut commits = terminated_line(&lineage)?.split(|&byte| byte == b' ');
                 if commits.next() != Some(target.as_bytes()) {
@@ -173,7 +237,13 @@ impl GitComparisons {
         let (status, bytes) = self
             .git
             .run(
-                ["rev-parse", "--verify", "--end-of-options", &commit],
+                [
+                    "--no-replace-objects",
+                    "rev-parse",
+                    "--verify",
+                    "--end-of-options",
+                    &commit,
+                ],
                 QUERY_BYTES,
             )
             .await?;
@@ -277,6 +347,14 @@ impl GitComparison {
             .find(|entry| entry.id == id)
             .ok_or(GitError::RetiredFile)?;
         self.owner.verify_repository().await?;
+        self.verify_pinned_policy().await?;
+        if let Some(bytes) = self
+            .shared
+            .as_ref()
+            .and_then(|shared| shared.get_patch(Some(id)))
+        {
+            return Ok(bytes.to_vec());
+        }
         self.verify_entry(entry).await?;
         let before = entry.change.before.as_ref();
         let paths = before
@@ -297,6 +375,7 @@ impl GitComparison {
             )
             .await?;
         self.owner.verify_repository().await?;
+        self.verify_pinned_policy().await?;
         self.verify_entry(entry).await?;
         let (changes, sections) = patch_sections(&output)?;
         let section = changes
@@ -304,7 +383,17 @@ impl GitComparison {
             .zip(sections)
             .find_map(|(change, bytes)| (change == &entry.change).then_some(bytes))
             .ok_or(GitError::StaleComparison)?;
+        if let Some(shared) = &self.shared {
+            shared.store_patch(Some(id), section);
+        }
         Ok(section.to_vec())
+    }
+
+    async fn verify_pinned_policy(&self) -> Result<(), GitError> {
+        if let Some(pinned) = &self.pinned {
+            pinned.validate(&self.owner).await?;
+        }
+        Ok(())
     }
 
     async fn read_summary(&self) -> Result<Vec<RawChange>, GitError> {
