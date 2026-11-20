@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent, webview::NewWindowResponse};
 
 mod appkit_import;
+#[cfg(target_os = "macos")]
+mod appkit_retirement;
 mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
@@ -45,6 +47,24 @@ fn main() {
 
     if mode.as_deref() == Some(shared_profile_probe::ARGUMENT.as_ref()) {
         if let Err(error) = tauri::async_runtime::block_on(shared_profile_probe::run(arguments)) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    if mode.as_deref() == Some(appkit_retirement::PREFLIGHT.as_ref()) {
+        if let Err(error) = appkit_retirement::preflight(arguments) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    if mode.as_deref() == Some(appkit_retirement::ARGUMENT.as_ref()) {
+        if let Err(error) = appkit_retirement::verify(arguments) {
             eprintln!("{error}");
             std::process::exit(1);
         }

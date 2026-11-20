@@ -125,6 +125,9 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: "-"
         run: pnpm tauri bundle --debug --ci
+      - name: Fetch the pinned Mac ownership reference
+        if: runner.os == 'macOS'
+        run: git fetch --no-tags origin c0824558b060d90a6486c3aef743877677f0d4f1
       - name: Verify the Mac disk image
         if: runner.os == 'macOS'
         shell: bash
@@ -152,6 +155,7 @@ jobs:
           python3 desktop/fixtures/verify_relay_host_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --devices
           python3 desktop/fixtures/verify_appkit_import.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_shared_codex_profile.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_appkit_retirement.py "$app/Contents/MacOS/codex-gui-desktop" --appkit-repository "$PWD"
           python3 desktop/fixtures/verify_history_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --annotations

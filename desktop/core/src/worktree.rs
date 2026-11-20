@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 use crate::checkout::{CheckoutError, CheckoutIdentity, NativeFileIdentity};
 
+#[cfg(target_os = "macos")]
+mod appkit_retirement;
 mod lifecycle;
 pub use lifecycle::{RecoveryKind, WorktreeError, WorktreeManager, WorktreeRecovery};
 

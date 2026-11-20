@@ -652,6 +652,8 @@ dependencies = [
  "image",
  "mac-usernotifications",
  "notify-rust",
+ "objc2-app-kit",
+ "objc2-foundation",
  "open",
  "percent-encoding",
  "pulldown-cmark",
