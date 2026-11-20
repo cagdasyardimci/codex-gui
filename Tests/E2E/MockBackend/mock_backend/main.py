@@ -42,6 +42,9 @@ def main():
             thread['name'] = 'Other ' + thread['name']
         if state_path:
             state_path += '.other'
+    voice_secondary = os.environ.get('CODEX_GUI_QA_VOICE_SECONDARY')
+    if scenario.get('desktopVoiceHandoff') and voice_secondary and Path.cwd().samefile(voice_secondary) and state_path:
+        state_path += '.other'
     trace_path = os.environ.get('CODEX_GUI_QA_TRACE')
     if trace_path and scenario.get('desktopQuit') and secondary:
         trace_path = f'{trace_path}.{os.getpid()}'

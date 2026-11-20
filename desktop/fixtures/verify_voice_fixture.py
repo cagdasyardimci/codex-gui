@@ -16,6 +16,7 @@ def main():
     variants = parser.add_mutually_exclusive_group()
     variants.add_argument("--reconnect", action="store_true")
     variants.add_argument("--no-fallback", action="store_true")
+    variants.add_argument("--handoff", action="store_true")
     arguments = parser.parse_args()
     app = arguments.app.resolve(strict=True)
     with TemporaryDirectory(prefix="codex-gui-voice-") as scratch:
@@ -24,6 +25,10 @@ def main():
         for directory in (data, profile, checkout):
             directory.mkdir()
         subprocess.run(["git", "init", "--quiet", checkout], check=True)
+        secondary = root / "Other voice checkout"
+        if arguments.handoff:
+            secondary.mkdir()
+            subprocess.run(["git", "init", "--quiet", secondary], check=True)
         (checkout / "notes.txt").write_text("A fixture attachment\n", encoding="utf-8")
         skill = checkout / "skill"
         skill.mkdir()
@@ -32,10 +37,16 @@ def main():
         provider = {"experimental_bearer_token": "fixture-only"}
         if arguments.no_fallback:
             provider["env_key"] = "CODEX_GUI_FIXTURE_REQUIRED_VOICE_KEY"
-        state.write_text(json.dumps({"config": {
-            "model_provider": "openai", "model": "fixture-default",
-            "model_providers": {"openai": provider},
-        }}), encoding="utf-8")
+        configuration = {"model_provider": "openai", "model": "fixture-default",
+                         "model_providers": {"openai": provider}}
+        if arguments.handoff:
+            configuration.update({"model_reasoning_effort": "high", "approval_policy": "untrusted",
+                                  "sandbox_mode": "workspace-write", "approvals_reviewer": "user",
+                                  "sandbox_workspace_write": {"network_access": False}, "service_tier": "flex"})
+        state_seed = json.dumps({"config": configuration})
+        state.write_text(state_seed, encoding="utf-8")
+        if arguments.handoff:
+            Path(str(state) + ".other").write_text(state_seed, encoding="utf-8")
         voice_settings = root / "voice-settings.json"
         voice_settings.write_text(json.dumps({"voice": "cedar" if arguments.reconnect else "marin", "version": 1}),
                                   encoding="utf-8")
@@ -45,14 +56,23 @@ def main():
             fixture = "--verify-voice-reconnect"
         elif arguments.no_fallback:
             fixture = "--verify-voice-no-fallback"
+        elif arguments.handoff:
+            fixture = "--verify-voice-handoff"
         else:
             fixture = "--verify-voice"
         scenario = "desktop-voice" if fixture == "--verify-voice" else "desktop-voice-reconnect"
+        if arguments.handoff:
+            scenario = "desktop-voice-handoff"
         environment = os.environ.copy()
         environment.pop("OPENAI_API_KEY", None)
         environment.pop("CODEX_GUI_FIXTURE_REQUIRED_VOICE_KEY", None)
+        command = [app, fixture, data, checkout]
+        if arguments.handoff:
+            command.append(secondary)
+            environment["CODEX_GUI_QA_VOICE_SECONDARY"] = str(secondary)
+            environment["CODEX_GUI_QA_HANDOFF_TRIGGER"] = str(data / "voice-handoff-trigger")
         result = subprocess.run(
-            [app, fixture, data, checkout],
+            command,
             env={**environment, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
                  "CODEX_GUI_QA_SCENARIO": scenario, "CODEX_GUI_QA_STATE": str(state),
                  "CODEX_GUI_QA_TRACE": str(trace), "CODEX_GUI_QA_VOICE_EXCHANGE": str(exchange),
@@ -75,6 +95,9 @@ def main():
             assert any(row["direction"] == "event" and row.get("reason") == "fixture-startup-closed"
                        for row in trace_lines)
             print("Verified WebRTC-only admission when the effective provider key is missing")
+            return
+        if arguments.handoff:
+            verify_handoff(summary, trace_lines, checkout)
             return
         if arguments.reconnect:
             verify_reconnect(summary, trace_lines, voice_settings)
@@ -145,6 +168,36 @@ def verify_reconnect(summary, trace, voice_settings):
     assert text["text"] == "Drop this call" and text["threadId"] == owner
     assert json.loads(voice_settings.read_text(encoding="utf-8")) == {"voice": "marin", "version": 2}
     print("Verified authoritative startup closure, duplex WebSocket fallback, and reconnect with the captured voice and mute")
+
+
+def verify_handoff(summary, trace, checkout):
+    call = summary["call"]
+    owner = call["chatId"]
+    assert call["projectId"] != summary["otherProject"]
+    requests = [row for row in trace if row["direction"] == "request"]
+    (created,) = [row["params"] for row in requests if row["method"] == "thread/start"]
+    assert Path(created["cwd"]).samefile(checkout) and created["historyMode"] == "paginated"
+    assert created["model"] == "fixture-default" and created["serviceTier"] == "flex"
+    assert created["approvalPolicy"] == "untrusted" and created["approvalsReviewer"] == "user"
+    assert created["sandbox"] == "workspace-write" and created["config"] == {
+        "realtime.type": "conversational",
+        "model_reasoning_effort": "high",
+        "sandbox_workspace_write.network_access": False,
+    }
+    (started,) = [row["params"] for row in requests if row["method"] == "thread/realtime/start"]
+    assert started["threadId"] == owner and started["clientManagedHandoffs"] is False
+    assert not any(row["method"] in ("turn/start", "turn/steer") for row in requests)
+    (handoff,) = [row for row in trace if row["direction"] == "voice-handoff"]
+    (approval,) = [row for row in trace if row["direction"] == "server-request" and
+                   row["method"] == "item/commandExecution/requestApproval"]
+    (accepted,) = [row for row in trace if row["direction"] == "command-approval-response"]
+    assert Path(handoff["cwd"]).samefile(checkout) and Path(approval["params"]["cwd"]).samefile(checkout)
+    assert handoff["threadId"] == approval["params"]["threadId"] == owner
+    assert approval["id"] == accepted["id"] and accepted["result"]["decision"] == "accept"
+    (completed,) = [row for row in trace if row["direction"] == "event" and
+                    row["method"] == "turn/completed" and row["threadId"] == owner]
+    assert completed["status"] == "completed" and completed["turnId"] == approval["params"]["turnId"]
+    print("Verified backend-owned voice handoff, captured coding policy, and approval on the parked checkout")
 
 
 if __name__ == "__main__":

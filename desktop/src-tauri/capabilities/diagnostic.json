@@ -26,6 +26,7 @@
     "allow-record-voice-fixture-exchange",
     "allow-read-voice-fixture-media",
     "allow-verify-voice-result",
+    "allow-trigger-voice-handoff",
     "allow-settings-usage-fixture-started",
     "allow-external-settings-instructions-fixture",
     "allow-verify-windows-setup-result",

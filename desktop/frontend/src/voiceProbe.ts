@@ -228,3 +228,63 @@ export async function verifyVoiceNoFallback(
     await invoke('verify_voice_result', { failure: String(error), evidence: {} });
   }
 }
+
+export async function verifyVoiceHandoff(
+  visible: () => WorkspaceSnapshot | null, current: () => VoiceCallView | null,
+) {
+  const errors: string[] = [];
+  const log = console.error;
+  console.error = (...values) => { errors.push(values.map(String).join(' ')); log(...values); };
+  const nav = () => visible()?.navigation;
+  const project = () => nav()?.sidebar.activeProject;
+  const draft = () => nav()?.draft?.text;
+  const approvals = () => nav()?.actions.interactions.filter((item) => 'approval' in item.content);
+
+  try {
+    await click('New Chat');
+    await click('Start Voice Call');
+    await waitFor('The handoff call did not start', () => current()?.phase === 'active' && !!project());
+    const call = current()!;
+    typeText('Keep the initiating chat draft');
+    await waitFor('The initiating draft did not save', () => draft() === 'Keep the initiating chat draft');
+
+    await invoke('select_fixture_checkout', { secondary: true });
+    await waitFor('The other checkout did not take focus', () => project() !== call.projectId && !!project() &&
+      !!document.querySelector('.voice-floating') && current()?.id === call.id);
+    const otherProject = project();
+    typeText('Keep the other checkout draft');
+    await waitFor('The other checkout draft did not save', () => draft() === 'Keep the other checkout draft');
+    await invoke('trigger_voice_handoff');
+    await waitFor('Voice-started coding did not bind to the parked checkout', () =>
+      nav()?.actions.stopAll === true && !approvals()?.length && project() === otherProject && current()?.id === call.id);
+    if (draft() !== 'Keep the other checkout draft') throw new Error('The handoff changed the other draft');
+
+    await invoke('select_fixture_checkout', { secondary: false });
+    await waitFor('The initiating checkout did not recover its chat list', () => project() === call.projectId &&
+      nav()?.writeAccess === 'ready' && nav()?.chats.some((chat) => chat.id === call.chatId) === true);
+    const row = document.querySelector(`[data-sidebar-project-id="${CSS.escape(call.projectId)}"][data-sidebar-chat="${CSS.escape(call.chatId)}"]`);
+    if (!row) throw new Error('The initiating voice chat row was lost');
+    await click('New Voice Chat', row);
+    await waitFor('Returning to the checkout did not select the voice chat', () => nav()?.selectedChat === call.chatId);
+    await waitFor('The coding approval did not return with its thread', () => approvals()?.length === 1);
+    const approval = approvals()![0]!;
+    if (!('approval' in approval.content) || draft() !== 'Keep the initiating chat draft') {
+      throw new Error('The handoff overwrote the initiating draft or produced the wrong interaction');
+    }
+    const offered = approval.content.approval.choices.find((choice) => choice.label === 'Approve');
+    const workspaceId = visible()?.workspace?.workspaceId;
+    if (!offered || !workspaceId) throw new Error('The captured checkout did not have an approval decision');
+    await navigateWorkspace({ respond: { workspaceId, interactionId: approval.id, response: { decision: offered.index } } });
+    await waitFor('The voice coding result was not delivered to its owner', () =>
+      nav()?.actions.stop === null && current()?.id === call.id && draft() === 'Keep the initiating chat draft' &&
+      !!visible()?.transcript.items.some((item) => item.role === 'assistant' && item.completed &&
+        item.text.includes('The handoff completed in the initiating checkout.')));
+    await click('End Call');
+    await waitFor('The voice handoff call did not close', () => !current());
+    await invoke('verify_voice_result', { failure: null, evidence: { call, otherProject } });
+  } catch (error) {
+    await invoke('verify_voice_result', { failure: [String(error), ...errors.slice(-5)].join('\n'), evidence: {} });
+  } finally {
+    console.error = log;
+  }
+}

@@ -5,6 +5,7 @@ import json
 import os
 import struct
 import threading
+import time
 from pathlib import Path
 from uuid import UUID
 
@@ -75,6 +76,11 @@ def voice_request(server, method, params):
         server.transport.event('thread/realtime/sdp', {'threadId': thread, 'sdp': exchange['answer']})
         server.transport.event('thread/realtime/started', {
             'threadId': thread, 'realtimeSessionId': session, 'version': 'v3'})
+        if server.scenario.get('desktopVoiceHandoff'):
+            if params.get('clientManagedHandoffs') is not False:
+                raise ProtocolError(-32602, 'The voice call did not delegate handoffs to Codex')
+            background = threading.Thread(target=handoff, args=(server, thread), daemon=True)
+            server.actions.append(background.start)
         return {}
     if not server.voice_call or server.voice_call[0] != thread:
         raise ProtocolError(-32602, 'Realtime request was routed to the wrong chat')
@@ -127,3 +133,19 @@ def close_voice(server, thread, reason):
             if reason == 'fixture-startup-closed':
                 server.voice_initial_retired = True
             server.transport.event('thread/realtime/closed', {'threadId': thread, 'reason': reason})
+
+
+def handoff(server, thread):
+    signal = Path(os.environ['CODEX_GUI_QA_HANDOFF_TRIGGER'])
+    deadline = time.monotonic() + 12
+    while not signal.is_file():
+        if time.monotonic() > deadline:
+            return
+        time.sleep(0.025)
+    with server.lock:
+        if not server.voice_call or server.voice_call[0] != thread:
+            return
+        owner = server.thread(thread)
+        server.transport.trace({'direction': 'voice-handoff', 'threadId': thread, 'cwd': owner['cwd']})
+        server.start({'threadId': thread, 'input': [{'type': 'text', 'text': 'Inspect the approved checkout.'}]})
+        server.after_reply()

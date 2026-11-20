@@ -60,6 +60,7 @@ fn main() {
         "record_voice_fixture_exchange",
         "read_voice_fixture_media",
         "verify_voice_result",
+        "trigger_voice_handoff",
         "search_project_paths",
         "change_file_tools",
         "browse_project_files",

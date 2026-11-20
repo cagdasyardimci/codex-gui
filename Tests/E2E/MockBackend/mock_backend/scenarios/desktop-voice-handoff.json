@@ -1,0 +1,6 @@
+{
+  "extends": "desktop-voice",
+  "desktopVoiceHandoff": true,
+  "desktopTurn": true,
+  "chunks": ["The handoff completed in the initiating checkout."]
+}

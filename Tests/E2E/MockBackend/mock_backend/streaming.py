@@ -48,7 +48,8 @@ class Stream:
                     self.emit('item/started', item=quit_command)
             if desktop_turn and not hold:
                 if self.approve_probe_read('fixture-turn-command'):
-                    self.ask_question()
+                    if not engine.scenario.get('desktopVoiceHandoff'):
+                        self.ask_question()
                 else:
                     self.cancelled.set()
             elif engine.scenario.get('questions'):
@@ -123,6 +124,9 @@ class Stream:
                   'availableDecisions': ['accept', 'decline']}
         with engine.lock:
             engine.command_approvals[request_id] = prompt
+            if engine.scenario.get('desktopVoiceHandoff'):
+                engine.transport.trace({'direction': 'server-request', 'id': request_id,
+                                        'method': 'item/commandExecution/requestApproval', 'params': params})
             engine.transport.send({'method': 'item/commandExecution/requestApproval',
                                    'id': request_id, 'params': params})
         try:

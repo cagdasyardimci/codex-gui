@@ -2,6 +2,7 @@ use codex_gui_core::{
     ipc::{ChatRow, PrepareVoiceCall, VoiceCallView},
     storage::drafts::DraftRevision,
 };
+use serde_json::json;
 use tauri::Manager;
 
 use crate::{
@@ -65,8 +66,14 @@ impl Navigation {
                 let source = DraftId(
                     Uuid::parse_str(&request.draft_id).map_err(|_| IpcError::StaleSelection)?,
                 );
+                let preferences =
+                    self.capture_run_settings(&self.project_context().map_err(report)?);
+                let _lease = self
+                    .owners
+                    .acquire(client.identity())
+                    .map_err(|error| report(error.into()))?;
                 let created = browser
-                    .create_voice_thread(RPC_TIMEOUT)
+                    .create_voice_thread(&preferences, RPC_TIMEOUT)
                     .await
                     .map_err(|error| report(error.into()))?;
                 let thread = created.id;
@@ -78,9 +85,20 @@ impl Navigation {
                     .desktop_selection()
                     .map_err(|error| report(error.into()))?
                     .source_draft;
+                let name = "New Voice Chat";
+                if let Err(error) = client
+                    .request(
+                        "thread/name/set",
+                        json!({"threadId": thread.0, "name": name}),
+                        RPC_TIMEOUT,
+                    )
+                    .await
+                {
+                    eprintln!("{error}");
+                }
                 let row = ChatRow {
                     id: thread.0.clone(),
-                    title: "New Voice Chat".into(),
+                    title: name.into(),
                     preview: String::new(),
                 };
                 self.remember_sidebar_chat(&row, super::sidebar::sidebar_timestamp())

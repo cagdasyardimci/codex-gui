@@ -165,6 +165,7 @@ impl CodexBrowser {
 
     pub async fn create_voice_thread(
         &self,
+        settings: &crate::workspace::SendSettings,
         timeout: Duration,
     ) -> Result<ThreadSummary, BrowseError> {
         #[derive(Deserialize)]
@@ -178,8 +179,33 @@ impl CodexBrowser {
             .canonical_path()
             .to_str()
             .ok_or(BrowseError::NonUnicodeCheckout)?;
+        let sandbox =
+            settings
+                .sandbox_policy
+                .as_ref()
+                .and_then(|policy| match policy["type"].as_str() {
+                    Some("readOnly") => Some("read-only"),
+                    Some("workspaceWrite") => Some("workspace-write"),
+                    Some("dangerFullAccess") => Some("danger-full-access"),
+                    _ => None,
+                });
+        let mut config = json!({"realtime.type": "conversational"});
+        if let Some(effort) = settings.reasoning_effort.as_ref() {
+            config["model_reasoning_effort"] = json!(effort);
+        }
+        if sandbox == Some("workspace-write")
+            && let Some(access) = settings
+                .sandbox_policy
+                .as_ref()
+                .and_then(|policy| policy["networkAccess"].as_bool())
+        {
+            config["sandbox_workspace_write.network_access"] = json!(access);
+        }
         let result: Started = self.read("thread/start", json!({
-            "cwd": cwd, "historyMode": "paginated", "config": {"realtime.type": "conversational"},
+            "cwd": cwd, "historyMode": "paginated", "config": config, "model": settings.model,
+            "approvalPolicy": settings.approval_policy, "approvalsReviewer": settings.approvals_reviewer,
+            "serviceTier": settings.service_tier.as_deref().filter(|tier| *tier != "default"),
+            "sandbox": sandbox,
         }), timeout).await?;
         checkout.validate_reported(&result.cwd)?;
         checkout.validate_reported(&result.thread.cwd)?;
@@ -202,6 +228,7 @@ impl CodexBrowser {
             "threadId": thread.0, "realtimeSessionId": session, "outputModality": "audio",
             "version": "v3", "transport": transport,
             "flushTranscriptTailOnSessionEnd": true, "codexResponseHandoffMode": "bemTags",
+            "clientManagedHandoffs": false,
         });
         if let Some(voice) = voice {
             params["voice"] = json!(voice);

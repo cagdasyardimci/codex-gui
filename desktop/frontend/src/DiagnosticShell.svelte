@@ -9,7 +9,7 @@
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
-  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
+  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
   let mode = $state<Mode | null>(null);
 
   async function workspaceScopeVerified(): Promise<boolean> {
@@ -98,7 +98,7 @@
   <WorkspaceShell verify="account" />
 {:else if mode === 'settings'}
   <WorkspaceShell verify="settings" />
-{:else if mode === 'appearance' || mode === 'appearanceRestore' || mode === 'notifications' || mode === 'voice' || mode === 'voiceReconnect' || mode === 'voiceNoFallback'}
+{:else if mode === 'appearance' || mode === 'appearanceRestore' || mode === 'notifications' || mode === 'voice' || mode === 'voiceReconnect' || mode === 'voiceNoFallback' || mode === 'voiceHandoff'}
   <WorkspaceShell verify={mode} />
 {:else if mode === 'windowsSetup'}
   <WorkspaceShell verify="windowsSetup" />

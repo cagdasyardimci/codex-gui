@@ -59,6 +59,7 @@ pub enum Verification {
     Voice,
     VoiceReconnect,
     VoiceNoFallback,
+    VoiceHandoff,
     WindowsSetup,
     Turn,
     ActiveTurn,
@@ -88,6 +89,7 @@ pub async fn select_fixture_checkout(
             | Verification::Sidebar
             | Verification::CommandPalette
             | Verification::ChatDeletion
+            | Verification::VoiceHandoff
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }

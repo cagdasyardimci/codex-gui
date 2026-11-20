@@ -63,6 +63,7 @@ fn main() {
         Some("--verify-voice") => fixture::Verification::Voice,
         Some("--verify-voice-reconnect") => fixture::Verification::VoiceReconnect,
         Some("--verify-voice-no-fallback") => fixture::Verification::VoiceNoFallback,
+        Some("--verify-voice-handoff") => fixture::Verification::VoiceHandoff,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -110,6 +111,7 @@ fn main() {
             | fixture::Verification::Voice
             | fixture::Verification::VoiceReconnect
             | fixture::Verification::VoiceNoFallback
+            | fixture::Verification::VoiceHandoff
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -144,6 +146,7 @@ fn main() {
             | fixture::Verification::Voice
             | fixture::Verification::VoiceReconnect
             | fixture::Verification::VoiceNoFallback
+            | fixture::Verification::VoiceHandoff
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -260,6 +263,7 @@ fn main() {
             voice_ipc::record_voice_fixture_exchange,
             voice_ipc::read_voice_fixture_media,
             voice_ipc::verify_voice_result,
+            voice_ipc::trigger_voice_handoff,
             project_ipc::search_project_paths,
             file_tools_ipc::change_file_tools,
             file_tools_ipc::browse_project_files,

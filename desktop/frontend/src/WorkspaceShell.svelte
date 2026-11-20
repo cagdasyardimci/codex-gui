@@ -17,7 +17,7 @@
   import { verifyAppearance } from './appearanceProbe';
   import VoiceControls from './VoiceControls.svelte';
   import { DesktopVoice } from './desktopVoice';
-  import { verifyVoice, verifyVoiceNoFallback, verifyVoiceReconnect } from './voiceProbe';
+  import { verifyVoice, verifyVoiceHandoff, verifyVoiceNoFallback, verifyVoiceReconnect } from './voiceProbe';
   import type { VoiceCallView, VoiceReconnect } from './generated/workspace';
   import { verifyNotifications } from './notificationProbe';
   import { verifySettings } from './settingsProbe';
@@ -66,7 +66,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -90,7 +90,7 @@
   const voice = new DesktopVoice((next) => {
     call = next.call;
     reconnect = next.reconnect;
-  }, () => verify === 'voice' || verify === 'voiceReconnect' || verify === 'voiceNoFallback');
+  }, () => verify === 'voice' || verify === 'voiceReconnect' || verify === 'voiceNoFallback' || verify === 'voiceHandoff');
   let appearance = $state.raw<AppearanceView>();
   let settingsButton: HTMLButtonElement;
   let preferredComparison = $state<'uncommitted' | 'lastTurn'>('uncommitted');
@@ -1176,6 +1176,7 @@
     else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
     else if (verify === 'notifications') void verifyNotifications(() => snapshot);
     else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
+    else if (verify === 'voiceHandoff') void verifyVoiceHandoff(() => snapshot, () => call);
     else if (verify === 'voiceNoFallback') void verifyVoiceNoFallback(() => snapshot, () => call);
     else if (verify === 'voiceReconnect') void verifyVoiceReconnect(() => snapshot, () => call, voice);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);

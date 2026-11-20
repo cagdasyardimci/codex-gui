@@ -771,6 +771,7 @@ fn fixture_root(window: &WebviewWindow) -> Result<PathBuf, IpcError> {
         crate::fixture::Verification::Voice
             | crate::fixture::Verification::VoiceReconnect
             | crate::fixture::Verification::VoiceNoFallback
+            | crate::fixture::Verification::VoiceHandoff
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }
@@ -817,6 +818,15 @@ pub fn read_voice_fixture_media(
     }
     let _ = call;
     Err(IpcError::StaleSelection)
+}
+
+#[tauri::command]
+pub fn trigger_voice_handoff(window: WebviewWindow) -> Result<(), IpcError> {
+    if *window.state::<crate::fixture::Verification>() != crate::fixture::Verification::VoiceHandoff
+    {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    std::fs::write(fixture_root(&window)?.join("voice-handoff-trigger"), []).map_err(report)
 }
 
 #[tauri::command]
