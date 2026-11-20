@@ -1,14 +1,70 @@
 use std::{collections::HashSet, time::Duration};
 
 use codex_gui_core::{
-    codex::{Account, AppServerClient, BrowserLogin, CodexBrowser, LoginCompletion},
+    codex::{
+        Account, AccountSnapshot, AppServerClient, BrowseError, BrowserLogin, CodexBrowser,
+        LoginCompletion, RequestError,
+    },
     identity::ConnectionIdentity,
-    ipc::{AccountModel, AccountView},
+    ipc::{AccountModel, AccountView, IpcError},
 };
 use tauri::Url;
 use uuid::Uuid;
 
 use super::{Failure, RPC_TIMEOUT};
+
+impl super::NavigationHandle {
+    pub(crate) async fn sign_out_settings(
+        &self,
+        client: AppServerClient,
+        account: AccountSnapshot,
+    ) -> Result<(), IpcError> {
+        self.request(super::Action::SettingsSignOut(client, account))
+            .await
+            .map(|_| ())
+    }
+}
+
+impl super::Navigation {
+    pub(super) async fn apply_settings_sign_out(
+        &mut self,
+        client: AppServerClient,
+        account: AccountSnapshot,
+    ) -> Result<(), IpcError> {
+        if self.quit.is_some()
+            || self.has_stoppable_work()
+            || self.queues.has_mutations()
+            || self.view.account.login_ticket.is_some()
+            || self.runtime_connections().any(|(runtime, _)| {
+                self.owners
+                    .has_local_work(runtime.identity().workspace.checkout.as_ref())
+            })
+        {
+            return Err(IpcError::StaleSelection);
+        }
+        let browser = CodexBrowser::new(client);
+        let fresh = browser
+            .account(RPC_TIMEOUT)
+            .await
+            .map_err(|error| super::report(error.into()))?;
+        if fresh != account || !matches!(fresh.account, Some(Account::Chatgpt { .. })) {
+            return Err(IpcError::StaleSelection);
+        }
+        let result = browser.settings_logout(RPC_TIMEOUT).await;
+        let retired = !matches!(&result, Err(BrowseError::Request(error))
+            if error.is_unsent() || matches!(error, RequestError::Remote(_)));
+        if retired {
+            self.view.account = AccountView::default();
+            self.disconnect().await;
+            self.stop_parked().await;
+            self.sync_actions();
+            if let Err(error) = self.refresh().await {
+                eprintln!("{error}");
+            }
+        }
+        result.map_err(|error| super::report(error.into()))
+    }
+}
 
 const CANCEL_TIMEOUT: Duration = Duration::from_secs(3);
 

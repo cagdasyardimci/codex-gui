@@ -52,6 +52,7 @@ pub enum Verification {
     Feedback,
     FileTools,
     Account,
+    Settings,
     WindowsSetup,
     Turn,
     ActiveTurn,
@@ -442,17 +443,64 @@ pub fn verify_account_result(
     verification: State<'_, Verification>,
     failure: Option<String>,
 ) -> Result<(), String> {
-    if *verification != Verification::Account {
+    if !matches!(
+        *verification,
+        Verification::Account | Verification::Settings
+    ) {
         return Err("account verification was not requested at launch".into());
     }
     if let Some(failure) = failure {
         eprintln!("Account verification failed: {failure}");
         app.exit(1);
+    } else if *verification == Verification::Settings {
+        println!("Verified installed account, usage, configuration, and settings-owned sign-out");
+        app.exit(0);
     } else {
         println!("Verified installed ChatGPT sign-in, cancellation, and connection-scoped refresh");
         app.exit(0);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_settings_fixture_profile(
+    window: WebviewWindow,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+    profile: String,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    if *verification != Verification::Settings
+        || !matches!(profile.as_str(), "first" | "second" | "bedrock" | "delayed")
+    {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let path = checkouts
+        .data
+        .as_ref()
+        .ok_or(IpcError::UnauthorizedWindow)?
+        .join("fixture-account.json");
+    let stage = path.with_extension("profile");
+    std::fs::write(&stage, json!({"profile": profile}).to_string())
+        .and_then(|()| std::fs::rename(stage, path))
+        .map_err(|_| IpcError::ProjectUnavailable)
+}
+
+#[tauri::command]
+pub fn settings_usage_fixture_started(
+    window: WebviewWindow,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+) -> Result<bool, IpcError> {
+    authorize_view(&window)?;
+    if *verification != Verification::Settings {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let data = checkouts
+        .data
+        .as_ref()
+        .ok_or(IpcError::UnauthorizedWindow)?;
+    Ok(data.join("settings-usage-started").exists())
 }
 
 #[tauri::command]

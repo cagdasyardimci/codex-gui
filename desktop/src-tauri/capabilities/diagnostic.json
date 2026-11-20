@@ -13,6 +13,8 @@
     "allow-drop-composer-attachment-fixture",
     "allow-seed-composer-context-fixture",
     "allow-verify-account-result",
+    "allow-set-settings-fixture-profile",
+    "allow-settings-usage-fixture-started",
     "allow-verify-windows-setup-result",
     "allow-verify-turn-result",
     "allow-verify-diff-result",

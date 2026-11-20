@@ -452,9 +452,16 @@ export async function verifyFileTools(visible: () => WorkspaceSnapshot | null) {
       !!quitDialog()?.textContent?.includes('Discard Changes and Quit'));
     await rejectsStale(navigateWorkspace({ confirmQuit: { ticket: saveTicket } }));
     await click('Cancel', quitDialog()!);
+    await waitFor('Cancelling Quit did not retire its dialog', () => !visible()?.navigation.quit && !quitDialog());
     await click('Second fixture chat');
+    await waitFor('The hidden file owner did not select after cancelling Quit', () => selected() === SECOND);
     await waitFor('Cancelling quit lost the hidden edit or changed its owner', () =>
-      selected() === SECOND && field()?.value === CONFLICT_EDIT);
+      field()?.value === CONFLICT_EDIT).catch(async (error) => {
+        const captured = await inspect();
+        throw new Error(`${error.message} ${JSON.stringify({ opened: captured.open, selected: captured.selected,
+          dirty: captured.tabs.find((tab) => tab.id === captured.selected)?.dirty,
+          mounted: !!panel(), field: !!field() })}`);
+      });
     await click('First fixture chat');
     await waitFor('The first chat could not own the quit view', () => selected() === FIRST);
     await invoke('request_quit_fixture', { application: false });

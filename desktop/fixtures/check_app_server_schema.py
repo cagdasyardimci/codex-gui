@@ -14,6 +14,11 @@ import tempfile
 CLIENT_REQUESTS = {
     "initialize": ("clientInfo", "capabilities"),
     "account/read": ("refreshToken",),
+    "account/logout": (),
+    "account/rateLimits/read": (),
+    "account/usage/read": (),
+    "config/read": ("includeLayers", "cwd"),
+    "configRequirements/read": (),
     "model/list": ("cursor", "limit"),
     "thread/list": ("cwd", "archived", "cursor", "limit"),
     "thread/read": ("threadId", "includeTurns"),
@@ -60,6 +65,11 @@ SERVER_NOTIFICATIONS = {
 INCOMING_RESPONSES = {
     "v1/InitializeResponse": ("userAgent", "codexHome", "platformFamily", "platformOs"),
     "v2/GetAccountResponse": ("account", "requiresOpenaiAuth"),
+    "v2/LogoutAccountResponse": (),
+    "v2/GetAccountRateLimitsResponse": ("rateLimits", "rateLimitsByLimitId", "accountId"),
+    "v2/GetAccountTokenUsageResponse": ("dailyUsageBuckets",),
+    "v2/ConfigReadResponse": ("config", "origins", "layers"),
+    "v2/ConfigRequirementsReadResponse": ("requirements",),
     "v2/ModelListResponse": ("data", "nextCursor"),
     "v2/ThreadListResponse": ("data", "nextCursor"),
     "v2/ThreadReadResponse": ("thread",),

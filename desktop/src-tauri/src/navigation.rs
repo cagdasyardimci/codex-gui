@@ -113,6 +113,7 @@ enum Action {
         DraftAttachmentScope,
         oneshot::Sender<Option<Arc<TurnEdits>>>,
     ),
+    SettingsSignOut(AppServerClient, codex_gui_core::codex::AccountSnapshot),
     EditFileTab(codex_gui_core::ipc::FileTabEdit),
     SaveFileTab(
         codex_gui_core::ipc::FileTabRead,
@@ -527,6 +528,10 @@ impl Navigation {
             }
             Action::ReadLastTurnChanges(scope, reply) => {
                 let _ = reply.send(self.read_last_turn_changes(&scope)?);
+                return Ok(None);
+            }
+            Action::SettingsSignOut(client, account) => {
+                self.apply_settings_sign_out(client, account).await?;
                 return Ok(None);
             }
             Action::EditFileTab(request) => {

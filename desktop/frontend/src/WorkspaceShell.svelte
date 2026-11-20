@@ -11,6 +11,8 @@
   import ProjectContextPanel from './ProjectContextPanel.svelte';
   import SlashCommandPanel from './SlashCommandPanel.svelte';
   import ReviewPanel from './ReviewPanel.svelte';
+  import SettingsWindow from './SettingsWindow.svelte';
+  import { verifySettings } from './settingsProbe';
   import SentPromptDialog from './SentPromptDialog.svelte';
   import WorkspaceSidebar from './WorkspaceSidebar.svelte';
   import CommandPalette from './CommandPalette.svelte';
@@ -56,7 +58,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -74,6 +76,8 @@
   let actionPending = $state(false);
   let admittingDraft = $state(false);
   let showingChanges = $state(false);
+  let settingsOpen = $state(false);
+  let settingsButton: HTMLButtonElement;
   let preferredComparison = $state<'uncommitted' | 'lastTurn'>('uncommitted');
   let showingProjectContext = $state(false);
   let projectContextButton = $state<HTMLButtonElement>();
@@ -1137,6 +1141,7 @@
     const lifecycle = new AbortController();
     void observeWorkspace(receive, lifecycle.signal).catch(console.error);
     if (verify === 'account') void verifyAccount(() => snapshot);
+    else if (verify === 'settings') void verifySettings(() => snapshot);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn' || verify === 'activeTurn') void verifyTurn(() => snapshot, verify);
     else if (verify === 'queue') void verifyQueue(() => snapshot);
@@ -1170,6 +1175,8 @@
 <main class="workspace" aria-label="Codex GUI">
   <header class="workspace-header">
     <button type="button" disabled={actionPending} onclick={() => void act(pickWorkspace)}>Open Project…</button>
+    <button type="button" bind:this={settingsButton} disabled={actionPending || !!quit}
+      aria-haspopup="dialog" onclick={() => { settingsOpen = true; }}>Settings</button>
     <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
       onclick={() => openPalette('commands')}>Command Palette</button>
     <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Alt+Shift+O Control+Alt+Shift+O"
@@ -1417,6 +1424,10 @@
       effective={navigation.account.models.find((model) => model.id === navigation.composerSettings?.effectiveModelId)}
       choose={finishSlash} close={closeSlashPanel} />
     {/if}
+  {/if}
+  {#if settingsOpen && !quit}
+    <SettingsWindow accountBusy={!!navigation?.actions.stopAll || !!navigation?.account.loginTicket}
+      close={() => { settingsOpen = false; void tick().then(() => settingsButton.focus({ preventScroll: true })); }} />
   {/if}
   {#if promptEdit}
     {#key promptEdit.view.ticket}

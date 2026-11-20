@@ -2,6 +2,7 @@
 
 import argparse
 from base64 import b64decode
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -80,7 +81,7 @@ def main() -> None:
         assert captured_patch == (data / "diff-copied").read_bytes()
         assert b"-Before caf\xc3\xa9" in captured_patch and "+After 日本語".encode("utf-8") in captured_patch
         assert b"External revision" not in captured_patch
-        with sqlite3.connect(data / "workspace.sqlite3") as database:
+        with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
             assert database.execute("SELECT hunk FROM desktop_review_markers ORDER BY hunk").fetchall() == [(-1,), (0,)]
         assert index.read_bytes() == before
         assert tracked.read_bytes() == content("External revision")

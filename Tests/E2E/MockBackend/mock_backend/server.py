@@ -10,6 +10,7 @@ from pathlib import Path
 from .streaming import Stream
 from .queue_fixture import queue_request, steer_request
 from .review_fixture import start_review
+from .settings_fixture import METHODS as SETTINGS_METHODS, settings_request
 from .transport import ProtocolError, UnconfirmedMutation
 
 
@@ -24,6 +25,7 @@ class Server:
         self.command_approvals = {}
         self.login_id = None
         self.canceled_login_id = None
+        self.client_name = None
 
     def resolve_request(self, response):
         with self.lock:
@@ -77,7 +79,7 @@ class Server:
     def handle(self, method, params):
         with self.lock:
             result = self.dispatch(method, params)
-            if method != 'initialize' or not self.scenario.get('desktopAutomaticTitles'):
+            if not self.scenario.get('desktopSettings') and (method != 'initialize' or not self.scenario.get('desktopAutomaticTitles')):
                 self.state.save()
             return copy.deepcopy(result)
 
@@ -88,7 +90,10 @@ class Server:
 
     def dispatch(self, method, p):
         if method == 'initialize':
+            self.client_name = p.get('clientInfo', {}).get('name')
             return {'userAgent': 'structured-qa-backend/1'}
+        if self.scenario.get('desktopSettings') and method in SETTINGS_METHODS:
+            return settings_request(self, method, p)
         if method == 'windowsSandbox/readiness' and self.scenario.get('desktopHistory'):
             return {'status': self.state.data.get('windowsSandboxReadiness', 'ready')}
         if method == 'windowsSandbox/setupStart' and self.scenario.get('desktopWindowsSandbox'):

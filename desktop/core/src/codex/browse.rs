@@ -13,9 +13,11 @@ use super::{AppServerClient, RequestError};
 
 mod account;
 mod history;
+mod settings;
 mod windows_sandbox;
 
 pub use account::{BrowserLogin, LoginCancellation, LoginCompletion};
+pub use settings::{EffectiveConfiguration, SettingsRateLimits};
 pub use windows_sandbox::{
     WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
 };
@@ -55,14 +57,14 @@ pub enum BrowseError {
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSnapshot {
     pub account: Option<Account>,
     pub requires_openai_auth: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Account {
     ApiKey,

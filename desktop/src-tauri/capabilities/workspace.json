@@ -7,6 +7,10 @@
   "permissions": [
     "allow-pick-workspace",
     "allow-workspace-snapshot",
+    "allow-open-settings",
+    "allow-refresh-settings",
+    "allow-close-settings",
+    "allow-sign-out-settings",
     "allow-search-project-paths",
     "allow-change-file-tools",
     "allow-browse-project-files",

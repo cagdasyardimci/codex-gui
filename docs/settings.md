@@ -6,6 +6,8 @@ This guide owns configuration semantics and capability boundaries. Page routes, 
 
 Settings uses a presentation-scoped backend connection so user configuration work does not acquire workspace turn ownership. Order reads and saves, reject results after the presentation or connection is retired, and reread effective configuration and managed requirements after a confirmed save. Do not automatically retry failed or uncertain mutations. Connections management retains the separate [remote host lifetime](remote-access.md#host-lifetime).
 
+The [Tauri Settings session](../desktop/src-tauri/src/settings_ipc.rs) rechecks account and policy around usage reads and replaces its connection when that authority changes. Confirmed sign-out uses the captured account owner and refreshes workspace credentials while preserving workspace selection and drafts. Usage presentation distinguishes absent data from a reported zero.
+
 Write against the active user layer and its version when available. Replace origin maps as a table: dots in site names must not become configuration path separators. Feature availability comes from the advertised catalog; missing config keys do not establish disabled features, and catalog failures must not prevent unrelated configuration work. Managed requirements take precedence over editable defaults.
 
 Confirmed permission and speed saves also update GUI submission preferences. Composer overrides and running turns follow [submission capture](architecture.md#state-transitions). Replacing a custom approval object with a supported choice must precede editing its sandbox defaults. Reasoning visibility preferences filter supported options without changing the chat's selected effort.

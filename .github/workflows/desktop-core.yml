@@ -149,6 +149,7 @@ jobs:
           python3 desktop/fixtures/verify_feedback_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_file_tools_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_account_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_settings_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_windows_setup_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_turn_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_queue_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
@@ -209,6 +210,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_account_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python desktop/fixtures/verify_settings_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_windows_setup_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_turn_fixture.py $app
@@ -258,6 +261,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_feedback_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_file_tools_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_account_fixture.py "$app"
+          xvfb-run -a python3 desktop/fixtures/verify_settings_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_windows_setup_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_turn_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_queue_fixture.py "$app"

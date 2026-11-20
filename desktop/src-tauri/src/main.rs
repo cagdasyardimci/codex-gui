@@ -16,6 +16,7 @@ mod fixture;
 mod navigation;
 mod project_ipc;
 mod quit_ipc;
+mod settings_ipc;
 mod transcript_ipc;
 
 fn main() {
@@ -51,6 +52,7 @@ fn main() {
         Some("--verify-feedback") => fixture::Verification::Feedback,
         Some("--verify-file-tools") => fixture::Verification::FileTools,
         Some("--verify-account") => fixture::Verification::Account,
+        Some("--verify-settings") => fixture::Verification::Settings,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -91,6 +93,7 @@ fn main() {
             | fixture::Verification::Feedback
             | fixture::Verification::FileTools
             | fixture::Verification::Account
+            | fixture::Verification::Settings
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -118,6 +121,7 @@ fn main() {
         fixture::Verification::Quit
             | fixture::Verification::History
             | fixture::Verification::Diff
+            | fixture::Verification::Settings
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -136,6 +140,7 @@ fn main() {
         .manage(verification)
         .manage(project_ipc::ProjectIpc::default())
         .manage(diff_ipc::DiffIpc::default())
+        .manage(settings_ipc::SettingsIpc::default())
         .manage(quit_ipc::QuitLifecycle::default())
         .on_window_event(move |window, event| {
             if handle_desktop_quit
@@ -166,6 +171,8 @@ fn main() {
             fixture::verify_history_result,
             fixture::verify_attachments_result,
             fixture::verify_account_result,
+            fixture::set_settings_fixture_profile,
+            fixture::settings_usage_fixture_started,
             fixture::verify_windows_setup_result,
             fixture::verify_turn_result,
             fixture::verify_diff_result,
@@ -175,6 +182,10 @@ fn main() {
             fixture::file_save_fixture_gate,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
+            settings_ipc::open_settings,
+            settings_ipc::refresh_settings,
+            settings_ipc::close_settings,
+            settings_ipc::sign_out_settings,
             project_ipc::search_project_paths,
             file_tools_ipc::change_file_tools,
             file_tools_ipc::browse_project_files,

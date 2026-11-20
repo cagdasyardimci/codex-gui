@@ -32,6 +32,7 @@ mod prompt_revision;
 mod question_reply;
 mod queue;
 mod review;
+mod settings;
 mod sidebar;
 mod slash_commands;
 mod stream;
@@ -97,6 +98,10 @@ pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
 };
 pub use review::StartReviewRequest;
+pub use settings::{
+    DailyUsageView, EffectiveSettingView, SettingsAccountView, SettingsSelection, SettingsView,
+    UsageWindowView,
+};
 pub use sidebar::{
     SidebarChange, SidebarChat, SidebarChatFlag, SidebarChatKey, SidebarChatName,
     SidebarChatUnread, SidebarGroup, SidebarMove, SidebarProject, SidebarProjectName,
@@ -335,6 +340,12 @@ pub fn workspace_typescript() -> String {
         crate::codex::ReviewTarget::decl(),
         crate::codex::ReviewDelivery::decl(),
         StartReviewRequest::decl(),
+        SettingsAccountView::decl(),
+        UsageWindowView::decl(),
+        DailyUsageView::decl(),
+        EffectiveSettingView::decl(),
+        SettingsView::decl(),
+        SettingsSelection::decl(),
         SidebarView::decl(),
         SidebarGroup::decl(),
         SidebarSort::decl(),
