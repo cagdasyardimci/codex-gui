@@ -1,5 +1,10 @@
 {
   "bundle": {
-    "targets": ["deb"]
+    "targets": ["deb"],
+    "linux": {
+      "deb": {
+        "depends": ["gstreamer1.0-plugins-bad", "gstreamer1.0-nice"]
+      }
+    }
   }
 }

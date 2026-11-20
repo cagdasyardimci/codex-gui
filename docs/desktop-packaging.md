@@ -7,7 +7,7 @@ pnpm --dir desktop/frontend install --frozen-lockfile
 pnpm --dir desktop/frontend tauri build --debug --ci -- --locked
 ```
 
-On macOS set `APPLE_SIGNING_IDENTITY=-` for a local ad hoc signature. Open the resulting disk image and copy the beta application to the desired Applications folder before launching it from Finder. On Windows run the per-user NSIS installer, then use the Start menu entry. The installer can download WebView2 when it is missing, which requires network access. On Ubuntu install the Debian package with `sudo apt install ./package.deb` and launch Codex GUI Beta from the application menu.
+On macOS set `APPLE_SIGNING_IDENTITY=-` for a local ad hoc signature. Open the resulting disk image and copy the beta application to the desired Applications folder before launching it from Finder. On Windows run the per-user NSIS installer, then use the Start menu entry. The installer can download WebView2 when it is missing, which requires network access. On Ubuntu the Debian package pulls in the GStreamer WebRTC and ICE plugins. Install it with `sudo apt install ./package.deb` and launch Codex GUI Beta from the application menu.
 
 ## Support and ownership
 

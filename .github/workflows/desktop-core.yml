@@ -152,7 +152,8 @@ jobs:
           packages=(desktop/target/debug/bundle/deb/*.deb)
           test "${#packages[@]}" -eq 1
           artifact="$(realpath "${packages[0]}")"
-          sudo apt-get install -y "$artifact"
+          sudo timeout 480s apt-get -o "Dir::Etc::sourcelist=$RUNNER_TEMP/ubuntu-desktop.sources" \
+            -o Dir::Etc::sourceparts=- -o Acquire::Retries=1 -o Acquire::https::Timeout=25 install -y "$artifact"
           installed="$(dpkg-deb -f "$artifact" Package)"
           license="$(dpkg -L "$installed" | grep -E '/notices/LICENSE\.md$')"
           python3 desktop/fixtures/verify_bundle_notices.py "$(dirname "$license")"
