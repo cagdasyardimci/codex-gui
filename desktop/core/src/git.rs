@@ -13,6 +13,12 @@ use tokio::{io::AsyncReadExt, process::Command, time};
 
 use crate::checkout::{CheckoutError, CheckoutIdentity};
 
+mod comparison;
+pub use comparison::{
+    BranchChoice, BranchSelectors, ComparisonFile, ComparisonFileId, ComparisonKind,
+    ComparisonSide, ComparisonSpec, GitComparison, GitComparisons, RecentCommit,
+};
+
 const TIMEOUT: Duration = Duration::from_secs(8);
 const QUERY_BYTES: usize = 512 * 1024;
 const PATCH_BYTES: usize = 1024 * 1024;
@@ -43,6 +49,12 @@ pub enum GitError {
     InvalidOutput,
     #[error("the selected changed file no longer resolves inside the checkout")]
     RetiredFile,
+    #[error("the selected Git revision cannot be resolved")]
+    InvalidRevision,
+    #[error("the index contains unmerged entries")]
+    UnmergedIndex,
+    #[error("the selected comparison has changed")]
+    StaleComparison,
 }
 
 #[derive(Clone, Debug)]
@@ -173,6 +185,20 @@ impl CheckoutGit {
         decode_path(terminated_line(&root)?)
     }
 
+    pub(crate) async fn repository_identity(&self) -> Result<CheckoutIdentity, GitError> {
+        self.checkout
+            .validate_reported(&self.reported_root().await?)?;
+        let root = self
+            .success(
+                ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+                QUERY_BYTES,
+            )
+            .await?;
+        Ok(CheckoutIdentity::capture(&decode_path(terminated_line(
+            &root,
+        )?)?)?)
+    }
+
     pub(crate) async fn success(
         &self,
         args: impl IntoIterator<Item = impl AsRef<OsStr>>,
@@ -261,7 +287,11 @@ fn discover() -> Result<PathBuf, GitError> {
 }
 
 pub(crate) fn parse_oid(bytes: &[u8]) -> Result<&str, GitError> {
-    let oid = std::str::from_utf8(terminated_line(bytes)?).map_err(|_| GitError::InvalidOutput)?;
+    parse_object_id(terminated_line(bytes)?)
+}
+
+fn parse_object_id(bytes: &[u8]) -> Result<&str, GitError> {
+    let oid = std::str::from_utf8(bytes).map_err(|_| GitError::InvalidOutput)?;
     if !matches!(oid.len(), 40 | 64) || !oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(GitError::InvalidOutput);
     }
@@ -282,14 +312,7 @@ fn parse_changes(tracked: &[u8], untracked: &[u8]) -> Result<Vec<GitChange>, Git
     let mut changes = Vec::new();
     let mut tracked = nul_fields(tracked)?;
     let mut add = |bytes: &[u8], untracked| {
-        let path = decode_path(bytes)?;
-        if path.as_os_str().is_empty()
-            || !path
-                .components()
-                .all(|part| matches!(part, Component::Normal(_)))
-        {
-            return Err(GitError::InvalidOutput);
-        }
+        let path = decode_relative_path(bytes)?;
         if paths.insert(path.clone()) {
             if changes.len() == MAX_FILES {
                 return Err(GitError::Limit);
@@ -310,6 +333,18 @@ fn parse_changes(tracked: &[u8], untracked: &[u8]) -> Result<Vec<GitChange>, Git
     }
     changes.sort_unstable_by(|left, right| left.path.cmp(&right.path));
     Ok(changes)
+}
+
+fn decode_relative_path(bytes: &[u8]) -> Result<PathBuf, GitError> {
+    let path = decode_path(bytes)?;
+    if path.as_os_str().is_empty()
+        || !path
+            .components()
+            .all(|part| matches!(part, Component::Normal(_)))
+    {
+        return Err(GitError::InvalidOutput);
+    }
+    Ok(path)
 }
 
 pub(crate) fn nul_fields(bytes: &[u8]) -> Result<impl Iterator<Item = &[u8]>, GitError> {

@@ -65,7 +65,7 @@ impl WorktreeManager {
             return Err(WorktreeError::Ownership);
         }
         let source = CheckoutGit::new(root)?;
-        let repository = repository(&source).await?;
+        let repository = source.repository_identity().await?;
         let registered = registered_paths(&source).await?;
         self.checkouts.revalidate()?;
         let destination = self.checkouts.canonical_path();
@@ -212,7 +212,7 @@ impl WorktreeManager {
             return Err(WorktreeError::Ownership);
         }
         let source = CheckoutGit::new(CheckoutIdentity::capture(&record.source_project_path)?)?;
-        let source_repository = repository(&source).await?;
+        let source_repository = source.repository_identity().await?;
         if source_repository.canonical_path() != record.repository_git_directory
             || record
                 .repository_identity
@@ -239,7 +239,7 @@ impl WorktreeManager {
             return Err(WorktreeError::Ownership);
         }
         let checkout = CheckoutGit::new(identity)?;
-        if &repository(&checkout).await? != source_repository {
+        if &checkout.repository_identity().await? != source_repository {
             return Err(WorktreeError::Ownership);
         }
         verify_branch(&checkout, &record.branch).await?;
@@ -257,20 +257,6 @@ async fn verify_branch(checkout: &CheckoutGit, branch: &str) -> Result<(), Workt
         return Err(WorktreeError::Ownership);
     }
     Ok(())
-}
-
-async fn repository(git: &CheckoutGit) -> Result<CheckoutIdentity, WorktreeError> {
-    git.checkout
-        .validate_reported(&git.reported_root().await?)?;
-    let result = git
-        .success(
-            ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-            GIT_RESPONSE_BYTES,
-        )
-        .await?;
-    Ok(CheckoutIdentity::capture(&decode_path(terminated_line(
-        &result,
-    )?)?)?)
 }
 
 async fn head(git: &CheckoutGit) -> Result<String, GitError> {
