@@ -138,8 +138,8 @@ pub fn dispatch_menu(window: &WebviewWindow, action: &str) -> Result<(), IpcErro
         }
         "closeWindow" => window.close().map_err(report),
         "fullscreen" => window
-            .set_fullscreen(!window.is_fullscreen().map_err(report)?)
-            .map_err(report),
+            .state::<DesktopPresentation>()
+            .toggle_fullscreen(window),
         "zoomIn" | "zoomOut" | "zoomReset" => {
             let presentation = window.state::<DesktopPresentation>();
             let mut state = presentation.state.lock().expect("appearance lock poisoned");

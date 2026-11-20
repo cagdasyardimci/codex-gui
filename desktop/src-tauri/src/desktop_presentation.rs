@@ -36,6 +36,12 @@ pub struct DesktopPresentation {
     state: Mutex<PresentationState>,
     font_families: OnceLock<Vec<String>>,
     geometry_generation: AtomicU64,
+    fullscreen_layout: Mutex<Option<FullscreenLayout>>,
+}
+
+struct FullscreenLayout {
+    normal: window::WindowLayout,
+    entered: bool,
 }
 
 struct PresentationState {
@@ -85,6 +91,7 @@ impl DesktopPresentation {
             }),
             font_families: OnceLock::new(),
             geometry_generation: AtomicU64::new(0),
+            fullscreen_layout: Mutex::new(None),
         }
     }
 
@@ -180,13 +187,75 @@ impl DesktopPresentation {
         }
     }
 
+    fn toggle_fullscreen(&self, window: &WebviewWindow) -> Result<(), IpcError> {
+        let fullscreen = window.is_fullscreen().map_err(report)?;
+        let normal = if fullscreen {
+            None
+        } else {
+            window::WindowLayout::capture(window)
+        };
+        if let Some(layout) = normal.clone() {
+            self.save_layout(layout);
+        }
+        {
+            let mut saved = self
+                .fullscreen_layout
+                .lock()
+                .expect("fullscreen layout lock poisoned");
+            if fullscreen {
+                if let Some(layout) = saved.as_mut() {
+                    layout.entered = true;
+                }
+            } else {
+                *saved = normal.map(|normal| FullscreenLayout {
+                    normal,
+                    entered: false,
+                });
+            }
+        }
+        window.set_fullscreen(!fullscreen).map_err(report)
+    }
+
+    fn settle_geometry(&self, window: &WebviewWindow) {
+        let Ok(fullscreen) = window.is_fullscreen() else {
+            return;
+        };
+        let restore = {
+            let mut saved = self
+                .fullscreen_layout
+                .lock()
+                .expect("fullscreen layout lock poisoned");
+            if fullscreen {
+                if let Some(layout) = saved.as_mut() {
+                    layout.entered = true;
+                } else {
+                    let state = self.state.lock().expect("appearance lock poisoned");
+                    *saved = state.data.layout.clone().map(|normal| FullscreenLayout {
+                        normal,
+                        entered: true,
+                    });
+                }
+                return;
+            }
+            saved.take_if(|layout| layout.entered)
+        };
+        if let Some(layout) = restore {
+            layout.normal.restore(window);
+        } else {
+            self.refresh_layout(window);
+        }
+    }
+
     fn refresh_layout(&self, window: &WebviewWindow) {
+        if let Some(layout) = window::WindowLayout::capture(window) {
+            self.save_layout(layout);
+        }
+    }
+
+    fn save_layout(&self, layout: window::WindowLayout) {
         if self.path.is_none() {
             return;
         }
-        let Some(layout) = window::WindowLayout::capture(window) else {
-            return;
-        };
         let mut state = self.state.lock().expect("appearance lock poisoned");
         if state.data.layout.as_ref() == Some(&layout) {
             return;
@@ -242,7 +311,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 tokio::time::sleep(Duration::from_millis(260)).await;
                 let latest = web.state::<DesktopPresentation>();
                 if generation == latest.geometry_generation.load(Ordering::Acquire) {
-                    latest.refresh_layout(&web);
+                    latest.settle_geometry(&web);
                 }
             });
         }

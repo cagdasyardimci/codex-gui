@@ -34,7 +34,9 @@ class Stream:
                 self.read_probe_marker()
             desktop_turn = engine.scenario.get('desktopTurn')
             finish_during_quit = engine.scenario.get('desktopQuit') and text == 'Complete during Quit confirmation'
-            hold = ((desktop_turn or engine.scenario.get('desktopQueue')) and text == 'Hold this fixture turn') or finish_during_quit
+            hold_input = text.partition('\n')[0] if engine.scenario.get('desktopVoice') else text
+            hold = ((desktop_turn or engine.scenario.get('desktopQueue'))
+                    and hold_input == 'Hold this fixture turn') or finish_during_quit
             quit_command = None
             if hold and engine.scenario.get('desktopQuit'):
                 with engine.lock:
