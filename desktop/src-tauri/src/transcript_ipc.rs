@@ -22,6 +22,7 @@ use crate::{
 };
 
 mod markdown;
+pub(crate) use markdown::events as markdown_events;
 pub(crate) use markdown::{
     document as render_markdown_document, document_in as render_markdown_in,
     external_url as markdown_external_url,

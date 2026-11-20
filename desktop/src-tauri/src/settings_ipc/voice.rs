@@ -42,10 +42,10 @@ pub async fn preview_voice(
     window.state::<SpeechPlayback>().begin(
         window.app_handle(),
         Speak {
-            owner,
+            owner: crate::speech_ipc::SpeechOwner::Settings(owner),
             id: request.id,
             checkout,
-            voice: request.voice,
+            voice: Some(request.voice),
             text,
             events,
         },

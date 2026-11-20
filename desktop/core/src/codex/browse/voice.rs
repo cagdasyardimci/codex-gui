@@ -150,7 +150,7 @@ impl CodexBrowser {
 
     pub async fn speech_voice_available(
         &self,
-        voice: &str,
+        voice: Option<&str>,
         timeout: Duration,
     ) -> Result<bool, BrowseError> {
         let (account, config, catalog) = tokio::try_join!(
@@ -160,7 +160,7 @@ impl CodexBrowser {
         )?;
         Ok(realtime_enabled(&config)
             && has_speech_credentials(&config, account.account.as_ref())
-            && catalog.contains(voice))
+            && voice.map_or(!catalog.v3.is_empty(), |voice| catalog.contains(voice)))
     }
 
     pub async fn create_voice_thread(
@@ -262,20 +262,20 @@ impl CodexBrowser {
         &self,
         thread: &ThreadId,
         session: uuid::Uuid,
-        voice: &str,
+        voice: Option<&str>,
         timeout: Duration,
     ) -> Result<(), BrowseError> {
-        self.read::<BTreeMap<String, Value>>(
-            "thread/realtime/start",
-            json!({
-                "threadId": thread.0, "realtimeSessionId": session, "voice": voice, "version": "v3",
-                "outputModality": "audio", "includeStartupContext": false,
-                "clientManagedHandoffs": true, "flushTranscriptTailOnSessionEnd": false,
-                "transport": {"type": "websocket"},
-            }),
-            timeout,
-        )
-        .await?;
+        let mut params = json!({
+            "threadId": thread.0, "realtimeSessionId": session, "version": "v3",
+            "outputModality": "audio", "includeStartupContext": false,
+            "clientManagedHandoffs": true, "flushTranscriptTailOnSessionEnd": false,
+            "transport": {"type": "websocket"},
+        });
+        if let Some(voice) = voice {
+            params["voice"] = json!(voice);
+        }
+        self.read::<BTreeMap<String, Value>>("thread/realtime/start", params, timeout)
+            .await?;
         Ok(())
     }
 

@@ -5,11 +5,12 @@ use codex_gui_core::{
     identity::{ConnectionIdentity, ThreadId, TurnId},
     ipc::{IpcError, OlderHistoryRequest, OlderHistoryView, TranscriptView, WorkspaceId},
 };
-use tauri::async_runtime::JoinHandle;
+use tauri::{Manager, async_runtime::JoinHandle};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use super::{Navigation, RPC_TIMEOUT};
+use crate::speech_ipc::{SpeechOwner, SpeechPlayback};
 
 mod rail;
 pub(super) mod speech;
@@ -116,6 +117,9 @@ impl HistoryPaging {
 
 impl Navigation {
     pub(super) fn retire_history_pages(&mut self) {
+        self.app
+            .state::<SpeechPlayback>()
+            .retire_owner(SpeechOwner::Transcript);
         self.pages.owner = None;
         self.view.older_history = None;
         self.view.turn_rail = None;

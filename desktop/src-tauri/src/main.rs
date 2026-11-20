@@ -66,6 +66,7 @@ fn main() {
         Some("--verify-voice-handoff") => fixture::Verification::VoiceHandoff,
         Some("--verify-voice-history") => fixture::Verification::VoiceHistory,
         Some("--verify-voice-history-restore") => fixture::Verification::VoiceHistoryRestore,
+        Some("--verify-read-aloud") => fixture::Verification::ReadAloud,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -116,6 +117,7 @@ fn main() {
             | fixture::Verification::VoiceHandoff
             | fixture::Verification::VoiceHistory
             | fixture::Verification::VoiceHistoryRestore
+            | fixture::Verification::ReadAloud
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -153,6 +155,7 @@ fn main() {
             | fixture::Verification::VoiceHandoff
             | fixture::Verification::VoiceHistory
             | fixture::Verification::VoiceHistoryRestore
+            | fixture::Verification::ReadAloud
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -258,6 +261,9 @@ fn main() {
             task_notifications::verify_notifications_result,
             settings_ipc::voice::preview_voice,
             speech_ipc::stop_speech,
+            speech_ipc::can_read_aloud,
+            speech_ipc::read_aloud,
+            speech_ipc::speech_segment_drained,
             voice_ipc::read_voice_call,
             voice_ipc::prepare_voice_call,
             voice_ipc::start_voice_transport,

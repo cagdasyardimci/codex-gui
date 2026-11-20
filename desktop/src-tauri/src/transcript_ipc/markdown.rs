@@ -13,7 +13,7 @@ const MAX_NODES: usize = 8192;
 const MAX_DEPTH: usize = 32;
 const MAX_TARGET_BYTES: usize = 4096;
 
-pub(super) fn events(source: &str) -> Parser<'_> {
+pub(crate) fn events(source: &str) -> Parser<'_> {
     Parser::new_ext(
         source,
         Options::ENABLE_TABLES

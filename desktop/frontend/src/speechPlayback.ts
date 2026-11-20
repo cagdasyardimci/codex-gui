@@ -14,12 +14,12 @@ export class SpeechPlayback {
   private sink: AudioNode;
   private sources = new Set<AudioBufferSourceNode>();
   private next = 0;
-  private finished = false;
+  private draining: number | undefined;
   private closed = false;
   private opening: Promise<void> | undefined;
   private fixture: FixtureSpeech | undefined;
 
-  constructor(synthetic: boolean) {
+  constructor(synthetic: boolean, private readonly onClose?: () => void) {
     this.sink = this.context.destination;
     void this.context.resume().catch(console.error);
     if (synthetic) {
@@ -38,9 +38,9 @@ export class SpeechPlayback {
       if (this.closed) return;
       try {
         if (event.type === 'audio') this.enqueue(event.audio);
-        else if (event.type === 'finished') {
-          this.finished = true;
-          if (!this.sources.size) this.close();
+        else if (event.type === 'segmentFinished') {
+          this.draining = event.index;
+          this.acknowledgeDrain();
         } else this.close();
       } catch (error) {
         console.error(error);
@@ -70,12 +70,22 @@ export class SpeechPlayback {
     source.onended = () => {
       this.sources.delete(source);
       source.disconnect();
-      if (this.finished && !this.sources.size) this.close();
+      this.acknowledgeDrain();
     };
     const at = Math.max(this.next, this.context.currentTime + 0.025);
     source.start(at);
     this.next = at + buffer.duration;
     if (this.fixture) this.fixture.frames += buffer.length;
+  }
+
+  private acknowledgeDrain() {
+    if (this.closed || this.sources.size || this.draining === undefined) return;
+    const index = this.draining;
+    this.draining = undefined;
+    void invoke('speech_segment_drained', { id: this.id, index }).catch((error) => {
+      console.error(error);
+      this.stop();
+    });
   }
 
   private close() {
@@ -89,6 +99,7 @@ export class SpeechPlayback {
     this.sources.clear();
     const fixture = this.fixture;
     void this.context.close().then(() => { if (fixture) fixture.closed = true; }).catch(console.error);
+    this.onClose?.();
   }
 }
 

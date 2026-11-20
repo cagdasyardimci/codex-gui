@@ -62,6 +62,7 @@ pub enum Verification {
     VoiceHandoff,
     VoiceHistory,
     VoiceHistoryRestore,
+    ReadAloud,
     WindowsSetup,
     Turn,
     ActiveTurn,

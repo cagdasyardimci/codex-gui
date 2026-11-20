@@ -226,7 +226,7 @@ pub fn close_settings(
         *selected = None;
         window
             .state::<crate::speech_ipc::SpeechPlayback>()
-            .retire_owner(session);
+            .retire_owner(crate::speech_ipc::SpeechOwner::Settings(session));
     }
     Ok(())
 }

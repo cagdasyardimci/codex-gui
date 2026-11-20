@@ -116,6 +116,7 @@ pub struct SpeechAudio {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum SpeechEvent {
     Audio { audio: SpeechAudio },
+    SegmentFinished { index: u32 },
     Finished,
     Retired,
 }

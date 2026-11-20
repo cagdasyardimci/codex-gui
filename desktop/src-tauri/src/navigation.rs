@@ -18,8 +18,9 @@ use codex_gui_core::{
     },
     ipc::{
         CommandUpdate, DraftAttachmentScope, DraftEdit, EditorDraft, IpcError, NavigationIntent,
-        NavigationView, PrepareVoiceCall, SidebarChatKey, StreamChange, TextBatcher,
-        TranscriptView, VoiceCallView, WorkspaceId, WorkspaceRequest, WriteAccess,
+        NavigationView, PrepareVoiceCall, SidebarChatKey, SpeechEvent, StreamChange, TextBatcher,
+        TranscriptRowRequest, TranscriptView, VoiceCallView, WorkspaceId, WorkspaceRequest,
+        WriteAccess,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -29,13 +30,19 @@ use codex_gui_core::{
         PrepareThread, ResumedMode, RoutedEvent, RuntimeOwners, RuntimeUse, WorkspaceEngine,
     },
 };
+use tauri::{Manager, ipc::Channel};
 use tokio::{
     sync::{mpsc, oneshot},
     time::MissedTickBehavior,
 };
 use uuid::Uuid;
 
-use crate::{file_search_ipc::PreparedFileHit, fixture::Verification, project_ipc::ProjectState};
+use crate::{
+    file_search_ipc::PreparedFileHit,
+    fixture::Verification,
+    project_ipc::ProjectState,
+    speech_ipc::{Speak, SpeechOwner, SpeechPlayback, response_text},
+};
 
 mod account;
 mod archive;
@@ -100,6 +107,8 @@ enum Action {
     Intent(NavigationIntent),
     OpenNotificationChat(SidebarChatKey),
     PrepareVoice(PrepareVoiceCall, oneshot::Sender<VoiceCallView>),
+    SpeechClient(WorkspaceId, oneshot::Sender<AppServerClient>),
+    ReadAloud(TranscriptRowRequest, Uuid, Channel<SpeechEvent>),
     VoiceTextSaved(DraftId),
     RequestQuit(tauri::AppHandle),
     FileTools(
@@ -374,6 +383,23 @@ impl NavigationHandle {
         self.request(Action::RequestQuit(app)).await.map(|_| ())
     }
 
+    pub async fn speech_client(&self, workspace: WorkspaceId) -> Result<AppServerClient, IpcError> {
+        let (reply, result) = oneshot::channel();
+        self.request(Action::SpeechClient(workspace, reply)).await?;
+        result.await.map_err(|_| IpcError::StaleSelection)
+    }
+
+    pub async fn read_aloud(
+        &self,
+        row: TranscriptRowRequest,
+        id: Uuid,
+        events: Channel<SpeechEvent>,
+    ) -> Result<(), IpcError> {
+        self.request(Action::ReadAloud(row, id, events))
+            .await
+            .map(|_| ())
+    }
+
     async fn request(&self, action: Action) -> Outcome {
         let (reply, result) = oneshot::channel();
         self.0
@@ -545,6 +571,43 @@ impl Navigation {
             }
             Action::PrepareVoice(request, result) => {
                 let _ = result.send(self.reserve_voice_call(request).await?);
+                return Ok(None);
+            }
+            Action::SpeechClient(workspace, reply) => {
+                self.require(workspace)?;
+                let backend = self.backend.as_ref().ok_or(IpcError::StaleSelection)?;
+                let _ = reply.send(backend.connection.client());
+                return Ok(None);
+            }
+            Action::ReadAloud(row, id, events) => {
+                self.require(row.workspace_id)?;
+                if self.quit.is_some() || self.backend.is_none() {
+                    return Err(IpcError::StaleSelection);
+                }
+                let source = self
+                    .model
+                    .lock()
+                    .expect("workspace state lock poisoned")
+                    .projection
+                    .transcript_markdown(&row)?;
+                let text = response_text(&source)?;
+                let checkout = self
+                    .selection
+                    .as_ref()
+                    .ok_or(IpcError::RetiredWorkspace)?
+                    .checkout
+                    .clone();
+                self.app.state::<SpeechPlayback>().begin(
+                    &self.app,
+                    Speak {
+                        owner: SpeechOwner::Transcript,
+                        id,
+                        checkout,
+                        voice: None,
+                        text,
+                        events,
+                    },
+                );
                 return Ok(None);
             }
             Action::VoiceTextSaved(draft) => {

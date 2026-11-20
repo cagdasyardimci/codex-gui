@@ -4,7 +4,7 @@
   import ImagePreview from './ImagePreview.svelte';
   import { loadTranscriptAttachment, reuseComposerAttachment } from './projectIpc';
 
-  let { item, request, attachmentScope, copy, onCopyFocus, edit, branch, bookmark, bookmarked, feedback }: {
+  let { item, request, attachmentScope, copy, onCopyFocus, edit, branch, bookmark, bookmarked, feedback, readAloud, reading }: {
     item: TranscriptItem;
     request?: TranscriptRowRequest;
     attachmentScope?: DraftAttachmentScope;
@@ -15,6 +15,8 @@
     bookmark?: (item: TranscriptItem, bookmarked: boolean) => void;
     bookmarked?: boolean;
     feedback?: (rating: FeedbackRating) => void;
+    readAloud?: (item: TranscriptItem) => void;
+    reading?: boolean;
   } = $props();
 
   async function copyResponse() {
@@ -52,6 +54,10 @@
     {#if edit}
       <button class="transcript-copy transcript-edit" type="button" aria-label="Edit sent prompt"
         onpointerdown={(event) => event.preventDefault()} onclick={() => edit?.(item)}>Edit</button>
+    {/if}
+    {#if readAloud}
+      <button class="transcript-copy" type="button" onpointerdown={(event) => event.preventDefault()}
+        onclick={() => readAloud?.(item)}>{reading ? 'Stop Reading' : 'Read Aloud'}</button>
     {/if}
     {#if bookmark}
       <button class="transcript-copy" type="button" aria-pressed={!!bookmarked}

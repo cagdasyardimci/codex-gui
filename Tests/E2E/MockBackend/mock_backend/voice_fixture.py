@@ -39,7 +39,8 @@ def voice_request(server, method, params):
     standalone = server.client_name == 'codex_gui_speech'
     if method == 'thread/realtime/start' and standalone:
         session = str(UUID(params['realtimeSessionId'], version=4))
-        if (not thread.startswith('voice-sample-') or params.get('voice') not in VOICES or
+        allowed = (None,) if server.scenario.get('desktopReadAloud') else VOICES
+        if (not thread.startswith('voice-sample-') or params.get('voice') not in allowed or
                 params.get('version') != 'v3' or params.get('transport') != {'type': 'websocket'} or
                 params.get('includeStartupContext') is not False or not params.get('clientManagedHandoffs')):
             raise ProtocolError(-32602, 'Unexpected standalone speech start')
@@ -85,14 +86,24 @@ def voice_request(server, method, params):
     if not server.voice_call or server.voice_call[0] != thread:
         raise ProtocolError(-32602, 'Realtime request was routed to the wrong chat')
     if method == 'thread/realtime/appendSpeech' and standalone:
-        if not params.get('text'):
+        text = params.get('text')
+        if not text or len(text.encode('utf-8')) > 400:
             raise ProtocolError(-32602, 'Speech sample must have text')
-        frames = 16000
+        read = server.scenario.get('desktopReadAloud')
+        if read and text.startswith('Retry this reply'):
+            fault = Path(os.environ['CODEX_GUI_QA_READ_ALOUD_FAILURE'])
+            if fault.exists():
+                fault.unlink()
+                server.transport.event('thread/realtime/error', {'threadId': thread, 'message': 'Fixture provider error'})
+                return {}
+        frames = 4000 if read else 16000
         waveform = struct.pack('<' + 'h' * frames, *([1000, -1000, 250, -250] * (frames // 4)))
         server.transport.event('thread/realtime/outputAudio/delta', {'threadId': thread, 'audio': {
             'data': base64.b64encode(waveform).decode('ascii'), 'sampleRate': 8000,
             'numChannels': 1, 'samplesPerChannel': frames,
         }})
+        if read:
+            server.transport.event('thread/realtime/transcript/done', {'threadId': thread, 'role': 'assistant', 'text': text})
         return {}
     if method == 'thread/realtime/appendAudio' and server.voice_transport == 'websocket':
         audio = params.get('audio', {})

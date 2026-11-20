@@ -32,6 +32,8 @@ The [installed voice fixture](../desktop/fixtures/verify_voice_fixture.py) uses 
 
 The [speech-history fixture](../desktop/fixtures/verify_voice_history_fixture.py) checks placement beside paged coding turns, decoding the legacy envelope, filtering coordination records, and restoring and scrolling voice-only speech after a process restart.
 
+The [Read Aloud fixture](../desktop/fixtures/verify_read_aloud_fixture.py) checks private speech playback, segment drain order, repeated reading, cancellation on chat changes, and recovery after a provider error.
+
 The [installed composer attachment fixture](../desktop/fixtures/verify_composer_attachment_fixture.py) supplies fixture results to the picker and drop intake and dispatches an image paste through the WebView. It changes chats while a picker result is pending, verifies identical stored bytes on an image-only Send, and checks image and file reuse with the original draft text intact. Physical picker, clipboard and drag interactions belong to [native and live acceptance](#native-and-live-acceptance).
 
 Run the same fixture with `--annotations` to verify Cancel, point placement at two zoom levels, restoration after a chat switch, and rejection when a save carries another image digest. The outgoing turn must retain the three original image bytes in order and number the comments with the unannotated image included in the count.

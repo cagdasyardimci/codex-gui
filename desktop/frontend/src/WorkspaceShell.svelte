@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
   import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, FeedbackRating, InteractionAnswer, NavigationIntent, OpenFileSearchHit, ProjectContextChange, QueueCommand, RestoreArchive, ReviewDelivery, ReviewTarget, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
@@ -17,6 +18,8 @@
   import { verifyAppearance } from './appearanceProbe';
   import VoiceControls from './VoiceControls.svelte';
   import { DesktopVoice } from './desktopVoice';
+  import { SpeechPlayback } from './speechPlayback';
+  import { verifyReadAloud } from './readAloudProbe';
   import { verifyVoiceHistory } from './voiceHistoryProbe';
   import { verifyVoice, verifyVoiceHandoff, verifyVoiceNoFallback, verifyVoiceReconnect } from './voiceProbe';
   import type { VoiceCallView, VoiceReconnect } from './generated/workspace';
@@ -67,7 +70,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -145,6 +148,25 @@
   const projectTitle = $derived(sidebar?.projects.find((project) => project.id === sidebar?.activeProject)?.title);
   const workspaceId = $derived(workspace?.workspaceId);
   const selectedChat = $derived(navigation?.selectedChat);
+  let speechAvailable = $state(false);
+  let reading = $state.raw<{ scope: string; row: TranscriptRowRequest; player: SpeechPlayback }>();
+  const speechScope = $derived(workspaceId && selectedChat && !navigation?.quit && !settingsOpen
+    ? JSON.stringify([workspaceId, selectedChat, navigation?.account.identity, navigation?.account.permitsTurns]) : undefined);
+  $effect(() => {
+    const scope = speechScope;
+    speechAvailable = false;
+    if (!scope || !workspaceId) return;
+    let active = true;
+    void invoke<boolean>('can_read_aloud', { workspaceId }).then((available) => {
+      if (active) speechAvailable = available;
+    }).catch(() => {});
+    return () => { active = false; };
+  });
+
+  $effect(() => {
+    const current = reading;
+    if (current && (current.scope !== speechScope || current.row.generation !== transcriptGeneration)) current.player.stop();
+  });
   const reconnectHere = $derived(reconnect && sidebar?.activeProject === reconnect.projectId &&
     selectedChat === reconnect.chatId ? reconnect.id : null);
   const voiceInline = $derived(!!call && sidebar?.activeProject === call.projectId && selectedChat === call.chatId);
@@ -257,6 +279,19 @@
   function copyResponse(item: TranscriptItem) {
     const request = rowRequest(item);
     if (request) return copyTranscriptRow(request);
+  }
+
+  function readResponse(item: TranscriptItem) {
+    const row = rowRequest(item);
+    if (!row || !speechAvailable || !speechScope) return;
+    const previous = reading;
+    previous?.player.stop();
+    if (previous?.row.itemId === row.itemId && previous.row.generation === row.generation) return;
+    const player = new SpeechPlayback(verify === 'readAloud', () => {
+      if (reading?.player === player) reading = undefined;
+    });
+    reading = { scope: speechScope, row, player };
+    player.start((id, events) => invoke('read_aloud', { row, id, events }));
   }
 
   function sendFeedback(row: TranscriptRowRequest, rating: FeedbackRating) {
@@ -1178,6 +1213,7 @@
     else if (verify === 'notifications') void verifyNotifications(() => snapshot);
     else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
     else if (verify === 'voiceHistory' || verify === 'voiceHistoryRestore') void verifyVoiceHistory(verify, () => snapshot);
+    else if (verify === 'readAloud') void verifyReadAloud(() => snapshot);
     else if (verify === 'voiceHandoff') void verifyVoiceHandoff(() => snapshot, () => call);
     else if (verify === 'voiceNoFallback') void verifyVoiceNoFallback(() => snapshot, () => call);
     else if (verify === 'voiceReconnect') void verifyVoiceReconnect(() => snapshot, () => call, voice);
@@ -1318,6 +1354,8 @@
                   branch={response && navigation?.canFork ? branchResponse : undefined}
                   bookmark={response && !entry.item.spoken ? setResponseBookmark : undefined}
                   feedback={request && feedbackRows.has(entry.item.itemId) ? (rating) => sendFeedback(request, rating) : undefined}
+                  readAloud={request && response && !entry.item.spoken && speechAvailable && entry.item.text.length <= 256 * 1024 ? readResponse : undefined}
+                  reading={reading?.row.itemId === entry.item.itemId}
                   bookmarked={responseBookmarks.has(entry.item.itemId)} />
               </div>
             {:else}
