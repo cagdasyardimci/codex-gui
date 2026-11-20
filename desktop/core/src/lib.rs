@@ -4,3 +4,4 @@ pub mod checkout;
 pub mod codex;
 pub mod identity;
 pub mod storage;
+pub mod workspace;

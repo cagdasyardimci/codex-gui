@@ -351,6 +351,7 @@ name = "codex-gui-core"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "indexmap 2.14.2",
  "libc",
  "rusqlite",
  "semver",
