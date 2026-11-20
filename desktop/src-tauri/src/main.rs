@@ -22,6 +22,7 @@ fn main() {
         Some("--verify-media") => fixture::Verification::Media,
         Some("--verify-history") => fixture::Verification::History,
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
+        Some("--verify-account") => fixture::Verification::Account,
         _ => fixture::Verification::None,
     };
     let coding_report = if mode.as_deref() == Some(coding_probe::ARGUMENT.as_ref()) {
@@ -32,9 +33,11 @@ fn main() {
     } else {
         None
     };
-    let history_fixture = matches!(
+    let desktop_fixture = matches!(
         verification,
-        fixture::Verification::History | fixture::Verification::HistoryRestore
+        fixture::Verification::History
+            | fixture::Verification::HistoryRestore
+            | fixture::Verification::Account
     )
     .then(|| {
         let data = PathBuf::from(
@@ -55,6 +58,7 @@ fn main() {
             fixture::verify_fixture_result,
             fixture::verify_media_result,
             fixture::verify_history_result,
+            fixture::verify_account_result,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::navigate_workspace,
@@ -82,8 +86,9 @@ fn main() {
                 fixture::Verification::None
                     | fixture::Verification::History
                     | fixture::Verification::HistoryRestore
+                    | fixture::Verification::Account
             ) {
-                let (beta_data, initial_project) = match history_fixture {
+                let (beta_data, initial_project) = match desktop_fixture {
                     Some(fixture) => fixture,
                     None => (app.path().app_data_dir()?, None),
                 };
@@ -93,6 +98,7 @@ fn main() {
                     &beta_data.join("workspace.sqlite3"),
                     project.state.clone(),
                     initial_project,
+                    verification == fixture::Verification::Account,
                 )
                 .map_err(|error| -> Box<dyn std::error::Error> { error })?;
                 assert!(project.navigation.set(navigation).is_ok());

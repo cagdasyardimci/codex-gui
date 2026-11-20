@@ -5,6 +5,7 @@ fn main() {
         "verify_fixture_result",
         "verify_media_result",
         "verify_history_result",
+        "verify_account_result",
         "pick_workspace",
         "workspace_snapshot",
         "navigate_workspace",

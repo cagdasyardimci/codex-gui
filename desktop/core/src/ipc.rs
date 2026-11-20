@@ -10,7 +10,8 @@ mod navigation;
 mod stream;
 mod subscription;
 pub use navigation::{
-    ChatRequest, ChatRow, DraftEdit, EditorDraft, NavigationIntent, NavigationView,
+    AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
+    LoginTicket, NavigationIntent, NavigationView,
 };
 pub use stream::{
     StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptRole, TranscriptView,
@@ -149,6 +150,10 @@ pub fn workspace_typescript() -> String {
         DraftEdit::decl(),
         NavigationIntent::decl(),
         RevisionedNavigation::decl(),
+        AccountView::decl(),
+        AccountModel::decl(),
+        LoginScope::decl(),
+        LoginTicket::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

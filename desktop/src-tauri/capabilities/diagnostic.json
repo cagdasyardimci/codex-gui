@@ -9,6 +9,7 @@
     "allow-verify-fixture-result",
     "allow-verify-media-result",
     "allow-verify-history-result",
+    "allow-verify-account-result",
     "allow-change-workspace-fixture"
   ]
 }

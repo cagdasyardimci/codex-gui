@@ -9,8 +9,8 @@ use std::{
 use codex_gui_core::{
     checkout::CheckoutIdentity,
     codex::{
-        AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable, HistoryTurn, ServerEvent,
-        TurnStatus,
+        AppServerClient, AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable,
+        HistoryTurn, LoginCompletion, ServerEvent, TurnStatus,
     },
     identity::{
         CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, ThreadId, WorkspaceIdentity,
@@ -33,6 +33,9 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::project_ipc::ProjectState;
+
+mod account;
+use account::AccountFlow;
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 type Failure = Box<dyn Error + Send + Sync>;
@@ -77,6 +80,9 @@ struct Navigation {
     model: Arc<Mutex<ProjectState>>,
     selection: Option<Selection>,
     backend: Option<Backend>,
+    source_session: CheckoutSessionId,
+    source_generation: u64,
+    login: AccountFlow,
     view: NavigationView,
     editable: HashSet<DraftId>,
     stream: TextBatcher,
@@ -90,6 +96,7 @@ impl NavigationHandle {
         database: &Path,
         model: Arc<Mutex<ProjectState>>,
         fixture_project: Option<PathBuf>,
+        fixture_account: bool,
     ) -> Result<Self, Failure> {
         let store = AttachmentStore::open(database)?;
         let saved = store.desktop_selection()?;
@@ -100,6 +107,9 @@ impl NavigationHandle {
             model,
             selection: None,
             backend: None,
+            source_session: CheckoutSessionId(Uuid::new_v4()),
+            source_generation: 0,
+            login: AccountFlow::new(fixture_account),
             view: NavigationView::default(),
             editable: HashSet::new(),
             stream: TextBatcher::default(),
@@ -186,6 +196,8 @@ impl Navigation {
         } else if let Some(path) = fixture_project {
             let checkout = CheckoutIdentity::capture(&path)?;
             self.select(path, checkout, None).await?;
+        } else {
+            self.refresh().await?;
         }
         Ok(())
     }
@@ -239,6 +251,33 @@ impl Navigation {
                     return Err(IpcError::StaleSelection);
                 }
                 self.open_history(true).await.map_err(report)?;
+            }
+            NavigationIntent::SignIn(scope) => {
+                if self.selection.as_ref().map(|selected| selected.id) != scope.workspace_id {
+                    return Err(IpcError::StaleSelection);
+                }
+                if let Some(workspace) = scope.workspace_id {
+                    self.require(workspace)?;
+                }
+                let client = self.connect().await.map_err(report)?;
+                let ticket = self.login.start(&client).await.map_err(report)?;
+                self.view.account.login_ticket = Some(ticket.to_owned());
+                self.publish_navigation();
+            }
+            NavigationIntent::CancelSignIn(request) => {
+                let client = self
+                    .backend
+                    .as_ref()
+                    .ok_or(IpcError::StaleSelection)?
+                    .connection
+                    .client();
+                if !self.login.can_cancel(&client, &request.ticket) {
+                    return Err(IpcError::StaleSelection);
+                }
+                let result = self.login.retire(&client).await;
+                self.view.account.login_ticket = None;
+                self.publish_navigation();
+                result.map_err(report)?;
             }
         }
         Ok(None)
@@ -301,7 +340,8 @@ impl Navigation {
             .grants
             .clear();
         self.view = NavigationView::default();
-        self.adopt_focus(None)
+        self.adopt_focus(None)?;
+        self.refresh().await
     }
 
     async fn focus(&mut self, thread: Option<ThreadId>) -> Result<(), Failure> {
@@ -365,27 +405,44 @@ impl Navigation {
     }
 
     async fn disconnect(&mut self) {
-        if let Some(backend) = self.backend.take()
-            && let Err(error) = backend.connection.disconnect().await
-        {
-            eprintln!("{error}");
+        if let Some(backend) = self.backend.take() {
+            if let Err(error) = self.login.retire(&backend.connection.client()).await {
+                eprintln!("{error}");
+            }
+            if self.view.account.login_ticket.take().is_some() {
+                self.publish_navigation();
+            }
+            if let Err(error) = backend.connection.disconnect().await {
+                eprintln!("{error}");
+            }
         }
     }
 
-    async fn refresh(&mut self) -> Result<(), Failure> {
+    async fn connect(&mut self) -> Result<AppServerClient, Failure> {
         if self.backend.is_none() {
-            let selected = self.selection.as_mut().ok_or("missing project selection")?;
             let executable = CodexExecutable::discover(None)?;
-            selected.generation = selected
-                .generation
+            let (workspace, generation) = match self.selection.as_mut() {
+                Some(selected) => (
+                    WorkspaceIdentity {
+                        session: selected.session,
+                        checkout: Some(selected.checkout.clone()),
+                    },
+                    &mut selected.generation,
+                ),
+                None => (
+                    WorkspaceIdentity {
+                        session: self.source_session,
+                        checkout: None,
+                    },
+                    &mut self.source_generation,
+                ),
+            };
+            *generation = generation
                 .checked_add(1)
                 .ok_or("connection generation exhausted")?;
             let identity = ConnectionIdentity {
-                workspace: WorkspaceIdentity {
-                    session: selected.session,
-                    checkout: Some(selected.checkout.clone()),
-                },
-                generation: ConnectionGeneration(selected.generation),
+                workspace,
+                generation: ConnectionGeneration(*generation),
             };
             let connection = AppServerConnection::connect(
                 &executable,
@@ -406,7 +463,28 @@ impl Navigation {
             });
         }
         let backend = self.backend.as_ref().expect("backend connected");
-        let browser = CodexBrowser::new(backend.connection.client());
+        Ok(backend.connection.client())
+    }
+
+    async fn refresh_account(&mut self, client: AppServerClient) -> Result<(), Failure> {
+        let mut account = account::read_account(client).await?;
+        account
+            .login_ticket
+            .clone_from(&self.view.account.login_ticket);
+        self.view.account = account;
+        self.publish_navigation();
+        Ok(())
+    }
+
+    async fn refresh(&mut self) -> Result<(), Failure> {
+        let client = self.connect().await?;
+        if let Err(error) = self.refresh_account(client.clone()).await {
+            eprintln!("{error}");
+        }
+        if self.selection.is_none() {
+            return Ok(());
+        }
+        let browser = CodexBrowser::new(client);
         let chats = browser.project_chats(false, None, RPC_TIMEOUT).await?;
         self.view.chats = chats
             .data
@@ -483,6 +561,23 @@ impl Navigation {
             return Ok(());
         };
         let client = backend.connection.client();
+        if let ServerEvent::Notification { method, params } = &event
+            && method == "account/login/completed"
+        {
+            let notification: LoginCompletion = serde_json::from_value(params.clone())?;
+            if let Some(success) = self.login.complete(client.identity(), &notification) {
+                self.view.account.login_ticket = None;
+                if success {
+                    if let Err(error) = self.refresh_account(client).await {
+                        self.publish_navigation();
+                        return Err(error);
+                    }
+                } else {
+                    self.publish_navigation();
+                }
+            }
+            return Ok(());
+        }
         if let Some(event) = backend
             .engine
             .route_session_event(&client, &self.store, event, RPC_TIMEOUT)

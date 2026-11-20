@@ -1,41 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WorkspaceSnapshot } from './generated/workspace';
 import { navigateWorkspace } from './projectIpc';
+import { click, editor, typeText, waitFor } from './fixtureControls';
 
 const FIRST = 'history-first';
 const SECOND = 'history-second';
 const DRAFT = 'Composed café 日本語';
 const UNSENT = 'Unsent checkout draft';
 const REPLY = 'A streamed reply with café 日本語 👩🏽‍💻.';
-
-const pause = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
-
-async function waitFor(description: string, condition: () => boolean) {
-  const deadline = performance.now() + 9000;
-  while (!condition()) {
-    if (performance.now() > deadline) throw new Error(description);
-    await pause(20);
-  }
-}
-
-async function click(label: string) {
-  const find = () => Array.from(document.querySelectorAll('button'))
-    .find((button) => button.textContent?.trim() === label && !button.disabled);
-  await waitFor(`Could not press ${label}`, () => !!find());
-  find()?.click();
-}
-
-function editor() {
-  const control = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
-  if (!control) throw new Error('Could not find the mounted composer');
-  return control;
-}
-
-function typeText(value: string, composing = false) {
-  const control = editor();
-  control.value = value;
-  control.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', isComposing: composing }));
-}
 
 function shortcut(key: string, composing = false) {
   window.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, isComposing: composing }));
@@ -65,6 +37,7 @@ export async function verifyHistory(
       await click('Clear Project');
       await waitFor('Clearing the project lost the unsent draft', () =>
         visible()?.workspace === null && visible()?.navigation.draft?.text === UNSENT &&
+        visible()?.navigation.account.identity === 'fixture@example.invalid' &&
         editor().value === UNSENT && !document.querySelector('nav[aria-label="Chats"]'));
       try {
         await navigateWorkspace({ refresh: { workspaceId } });

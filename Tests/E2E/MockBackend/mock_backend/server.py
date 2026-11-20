@@ -17,6 +17,8 @@ class Server:
         self.failure = None
         self.questions = {}
         self.command_approvals = {}
+        self.login_id = None
+        self.canceled_login_id = None
 
     def resolve_request(self, response):
         with self.lock:
@@ -74,14 +76,34 @@ class Server:
     def dispatch(self, method, p):
         if method == 'initialize':
             return {'userAgent': 'structured-qa-backend/1'}
+        if self.scenario.get('desktopAccount'):
+            if method == 'account/read':
+                email = self.state.data.get('fixtureAccountEmail')
+                account = {'type': 'chatgpt', 'email': email, 'planType': 'plus'} if email else None
+                return {'account': account, 'requiresOpenaiAuth': True}
+            if method == 'account/login/start':
+                return self.start_fixture_login(p)
+            if method == 'account/login/cancel':
+                identity = p.get('loginId')
+                if identity != self.login_id or not self.login_id:
+                    return {'status': 'notFound'}
+                self.canceled_login_id = self.login_id
+                self.login_id = None
+                return {'status': 'canceled'}
+            if method == 'model/list':
+                if p.get('cursor') == 'visible-models':
+                    return {'data': [self.desktop_model('fixture-default', False)], 'nextCursor': None}
+                return {'data': [self.desktop_model('fixture-hidden', True)], 'nextCursor': 'visible-models'}
         if method == 'account/read':
             account = {'type': 'chatgpt', 'email': 'fixture@example.invalid'}
-            if self.scenario.get('codingProbe'):
+            if self.scenario.get('codingProbe') or self.scenario.get('desktopHistory'):
                 account['planType'] = 'plus'
             return {'account': account, 'requiresOpenaiAuth': False}
         if method == 'account/rateLimits/read':
             return {'rateLimits': {'primary': None, 'secondary': None}, 'rateLimitResetCredits': None}
         if method == 'model/list':
+            if self.scenario.get('desktopHistory'):
+                return {'data': [self.desktop_model('fixture-default', False)], 'nextCursor': None}
             return {'data': [{'id': 'qa-model', 'model': 'qa-model', 'displayName': 'QA fixture model',
                     'supportedReasoningEfforts': [{'reasoningEffort': 'medium'}],
                     'defaultReasoningEffort': 'medium', 'isDefault': True}], 'nextCursor': None}
@@ -159,6 +181,36 @@ class Server:
             self.actions.append(stream.cancelled.set)
             return {}
         raise ProtocolError(-32601, 'Unsupported fixture method: ' + method)
+
+    @staticmethod
+    def desktop_model(identity, hidden):
+        return {'id': identity, 'model': identity, 'displayName': 'Fixture model',
+                'description': 'Local protocol fixture', 'hidden': hidden, 'isDefault': not hidden}
+
+    def start_fixture_login(self, params):
+        if params != {'type': 'chatgpt'} or self.login_id:
+            raise ProtocolError(-32602, 'Expected a fresh ChatGPT sign-in')
+        self.login_id = self.state.identity('browser-login')
+        identity = self.login_id
+        obsolete = self.canceled_login_id
+        if obsolete:
+            def deliver():
+                self.transport.event('account/login/completed', {'loginId': obsolete, 'success': True})
+                timer = threading.Timer(0.6, self.finish_fixture_login, args=(identity,))
+                timer.daemon = True
+                timer.start()
+            self.actions.append(deliver)
+        return {'type': 'chatgpt', 'loginId': identity,
+                'authUrl': 'https://auth.openai.com/oauth/authorize?state=local-fixture'}
+
+    def finish_fixture_login(self, identity):
+        with self.lock:
+            if identity != self.login_id:
+                return
+            self.login_id = None
+            self.state.data['fixtureAccountEmail'] = 'subscriber@example.invalid'
+            self.state.save()
+            self.transport.event('account/login/completed', {'loginId': identity, 'success': True})
 
     def resume_history_fixture(self, thread):
         if thread['id'] != 'history-first':

@@ -45,7 +45,7 @@ def main() -> None:
                 raise SystemExit(result.stderr or "The installed workspace did not confirm the fixture")
         events = [json.loads(line) for line in trace.read_text().splitlines()]
         methods = [event["method"] for event in events if event["direction"] == "request"]
-        assert methods.count("initialize") == 3, methods
+        assert methods.count("initialize") == 4, methods
         assert methods.count("thread/list") >= 4, methods
         assert not {"thread/start", "turn/start"} & set(methods), methods
         assert any(event.get("error", {}).get("message") == "Thread already has an active writer"

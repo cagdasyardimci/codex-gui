@@ -20,6 +20,8 @@ After changing the [workspace IPC contract](../desktop/core/src/ipc.rs), regener
 
 Run the [installed history fixture](../desktop/fixtures/verify_history_fixture.py) with the packaged executable. It exercises chat switching, draft writes, composer focus and synthetic composition, a competing writer, cold resume streaming, manual reconnect, and native process restart. It checks the backend trace for any thread or turn creation and verifies both drafts still exist after clearing the checkout. Physical IME acceptance belongs to the [native and live checks](#native-and-live-acceptance).
 
+The [installed account fixture](../desktop/fixtures/verify_account_fixture.py) exercises cancellation, an obsolete completion, the successful account and model refresh, and retained draft text. It replaces the browser handoff with a local fixture and leaves the disposable Codex profile empty. Use the release-candidate checks for real ChatGPT sign-in.
+
 ### Swift AppKit
 
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.

@@ -11,7 +11,10 @@ use crate::{
 
 use super::{AppServerClient, RequestError};
 
+mod account;
 mod history;
+
+pub use account::{BrowserLogin, LoginCancellation, LoginCompletion};
 
 pub use history::{
     ChatRead, ChatSummary, HistoryTurn, QueueSnapshot, QueuedSubmission, ThreadActivity,

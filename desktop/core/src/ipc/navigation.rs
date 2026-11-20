@@ -10,6 +10,35 @@ pub struct NavigationView {
     pub selected_chat: Option<String>,
     pub draft: Option<EditorDraft>,
     pub retryable: bool,
+    pub account: AccountView,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountView {
+    pub login_ticket: Option<String>,
+    pub identity: Option<String>,
+    pub models: Vec<AccountModel>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountModel {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LoginScope {
+    pub workspace_id: Option<WorkspaceId>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LoginTicket {
+    pub ticket: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -50,4 +79,6 @@ pub enum NavigationIntent {
     Reconnect(WorkspaceRequest),
     Retry(ChatRequest),
     EditDraft(DraftEdit),
+    SignIn(LoginScope),
+    CancelSignIn(LoginTicket),
 }

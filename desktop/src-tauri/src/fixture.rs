@@ -29,6 +29,7 @@ pub enum Verification {
     Media,
     History,
     HistoryRestore,
+    Account,
 }
 
 #[derive(Deserialize)]
@@ -230,6 +231,25 @@ pub fn verify_history_result(
         app.exit(1);
     } else {
         println!("Verified installed project history, drafts, streaming, and writer recovery");
+        app.exit(0);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn verify_account_result(
+    app: AppHandle,
+    verification: State<'_, Verification>,
+    failure: Option<String>,
+) -> Result<(), String> {
+    if *verification != Verification::Account {
+        return Err("account verification was not requested at launch".into());
+    }
+    if let Some(failure) = failure {
+        eprintln!("Account verification failed: {failure}");
+        app.exit(1);
+    } else {
+        println!("Verified installed ChatGPT sign-in, cancellation, and connection-scoped refresh");
         app.exit(0);
     }
     Ok(())
