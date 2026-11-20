@@ -64,6 +64,8 @@ fn main() {
         Some("--verify-voice-reconnect") => fixture::Verification::VoiceReconnect,
         Some("--verify-voice-no-fallback") => fixture::Verification::VoiceNoFallback,
         Some("--verify-voice-handoff") => fixture::Verification::VoiceHandoff,
+        Some("--verify-voice-history") => fixture::Verification::VoiceHistory,
+        Some("--verify-voice-history-restore") => fixture::Verification::VoiceHistoryRestore,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -112,6 +114,8 @@ fn main() {
             | fixture::Verification::VoiceReconnect
             | fixture::Verification::VoiceNoFallback
             | fixture::Verification::VoiceHandoff
+            | fixture::Verification::VoiceHistory
+            | fixture::Verification::VoiceHistoryRestore
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -147,6 +151,8 @@ fn main() {
             | fixture::Verification::VoiceReconnect
             | fixture::Verification::VoiceNoFallback
             | fixture::Verification::VoiceHandoff
+            | fixture::Verification::VoiceHistory
+            | fixture::Verification::VoiceHistoryRestore
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette

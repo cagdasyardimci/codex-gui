@@ -133,6 +133,7 @@ jobs:
           python3 desktop/fixtures/verify_voice_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --reconnect
           python3 desktop/fixtures/verify_voice_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --no-fallback
           python3 desktop/fixtures/verify_voice_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --handoff
+          python3 desktop/fixtures/verify_voice_history_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_history_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --annotations
@@ -185,6 +186,8 @@ jobs:
           python desktop/fixtures/verify_voice_fixture.py $app --no-fallback
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_voice_fixture.py $app --handoff
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python desktop/fixtures/verify_voice_history_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -261,6 +264,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_voice_fixture.py "$app" --reconnect
           xvfb-run -a python3 desktop/fixtures/verify_voice_fixture.py "$app" --no-fallback
           xvfb-run -a python3 desktop/fixtures/verify_voice_fixture.py "$app" --handoff
+          xvfb-run -a python3 desktop/fixtures/verify_voice_history_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_history_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app" --annotations

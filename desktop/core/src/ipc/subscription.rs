@@ -230,6 +230,41 @@ impl WorkspaceProjection {
         self.change_history(workspace, navigation, |view| view.merge(added, order))
     }
 
+    pub fn merge_voice_history(
+        &mut self,
+        workspace: WorkspaceId,
+        navigation: NavigationView,
+        added: TranscriptView,
+        order: &[String],
+        voice_turns: &std::collections::HashSet<String>,
+    ) -> bool {
+        self.publication.send_if_modified(|publication| {
+            if !publication.owns_workspace(workspace)
+                || publication.snapshot.navigation.selected_chat != navigation.selected_chat
+            {
+                return false;
+            }
+            let view = &mut publication.snapshot.transcript;
+            let projected = view.project_voice_responses(voice_turns);
+            let insertions = view.merge(added, order);
+            if !projected && insertions.is_empty() && publication.snapshot.navigation == navigation
+            {
+                return false;
+            }
+            let evicted_turns = view.trim();
+            publication.snapshot.navigation = navigation;
+            publication.advance(if projected {
+                Change::Snapshot
+            } else {
+                Change::History {
+                    insertions,
+                    evicted_turns,
+                }
+            });
+            true
+        })
+    }
+
     fn change_history(
         &mut self,
         workspace: WorkspaceId,

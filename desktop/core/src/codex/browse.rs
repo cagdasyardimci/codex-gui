@@ -31,8 +31,9 @@ pub use windows_sandbox::{
 };
 
 pub use history::{
-    ChatRead, ChatSummary, ForkBoundary, HistoryTurn, QueueSnapshot, QueuedSubmission,
-    ThreadActivity, TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus,
+    ChatRead, ChatSummary, ForkBoundary, HistoryTurn, QueueSnapshot, QueuedSubmission, SpeechRole,
+    ThreadActivity, TimelineCursor, TimelineEntry, TurnActivity, TurnCursor, TurnItemRead,
+    TurnItems, TurnStatus, VoiceSegment, VoiceTimelinePage,
 };
 
 const PAGE_LIMIT: u32 = 100;
@@ -116,6 +117,7 @@ pub struct ThreadSummary {
     pub preview: String,
     pub created_at: i64,
     pub updated_at: i64,
+    pub history_mode: Option<String>,
 }
 
 #[derive(Debug)]

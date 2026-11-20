@@ -60,6 +60,8 @@ pub enum Verification {
     VoiceReconnect,
     VoiceNoFallback,
     VoiceHandoff,
+    VoiceHistory,
+    VoiceHistoryRestore,
     WindowsSetup,
     Turn,
     ActiveTurn,

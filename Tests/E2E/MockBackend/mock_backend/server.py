@@ -213,6 +213,8 @@ class Server:
                 return {'data': rows[:35], 'nextCursor': cursor if len(rows) > 35 else None}
             query = p.get('searchTerm', '').casefold()
             return {'data': [t for t in rows if query in t.get('name', '').casefold()], 'nextCursor': None}
+        if self.scenario.get('desktopVoiceHistory') and method == 'thread/timeline/list':
+            return copy.deepcopy(self.state.data['fixtureVoiceTimeline'][p['threadId']][p.get('cursor') or 'latest'])
         if self.scenario.get('desktopVoice') and method.startswith('thread/realtime/'):
             return voice_request(self, method, p)
         if method == 'thread/start':
@@ -260,6 +262,11 @@ class Server:
             if self.scenario.get('desktopHistory'):
                 if method == 'thread/resume':
                     self.resume_history_fixture(thread)
+                    if (self.scenario.get('desktopVoiceHistory') and thread['id'] == 'voice-only'
+                            and not self.state.data.get('fixtureLiveSpoken')):
+                        announced = threading.Timer(0.3, self.publish_voice_history)
+                        announced.daemon = True
+                        self.actions.append(announced.start)
                     if self.scenario.get('desktopSlash'):
                         self.actions.append(lambda: self.slash_usage(thread, 'first-saved-turn', 2560))
                 if p.get('excludeTurns') or p.get('includeTurns') is False:
@@ -556,6 +563,14 @@ class Server:
         self.active[thread['id']] = stream
         self.actions.append(stream.worker.start)
         return {'turn': turn}
+
+    def publish_voice_history(self):
+        with self.lock:
+            entry = self.state.data['fixtureLiveSpeech']
+            self.state.data['fixtureLiveSpoken'] = True
+            self.state.data['fixtureVoiceTimeline']['voice-only']['latest']['data'].append(entry)
+            self.state.save()
+            self.transport.event('thread/realtime/itemAdded', {'threadId': 'voice-only', 'item': entry['item']})
 
     def close(self):
         with self.lock:

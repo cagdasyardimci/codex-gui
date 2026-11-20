@@ -9,11 +9,13 @@ use tauri::async_runtime::JoinHandle;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use super::{Navigation, RPC_TIMEOUT, append_turn};
+use super::{Navigation, RPC_TIMEOUT};
 
 mod rail;
+pub(super) mod speech;
 mod viewport;
 use rail::{RailCompletion, TurnRail};
+use speech::{SpeechHistory, SpeechPage};
 
 type PageRead = ChatRead<Page<HistoryTurn, TurnCursor>>;
 
@@ -33,6 +35,8 @@ struct HistoryOwner {
     loaded: HashSet<TurnId>,
     pending: Option<JoinHandle<()>>,
     rail: TurnRail,
+    speech: Option<SpeechHistory>,
+    voice_turns: HashSet<String>,
 }
 
 pub(super) struct HistoryCompletion {
@@ -42,6 +46,7 @@ pub(super) struct HistoryCompletion {
 
 enum HistoryResult {
     Older(Result<PageRead, BrowseError>),
+    Speech(Result<SpeechPage, BrowseError>),
     Rail(RailCompletion),
 }
 
@@ -73,6 +78,11 @@ impl HistoryPaging {
         summary: Option<ChatRead<ChatSummary>>,
         page: &Page<HistoryTurn, TurnCursor>,
     ) {
+        let speech = summary
+            .as_ref()
+            .and_then(|summary| summary.for_selection(connection, &thread).ok())
+            .filter(|chat| chat.thread.history_mode.as_deref() == Some("paginated"))
+            .map(|_| SpeechHistory::default());
         self.owner = Some(HistoryOwner {
             workspace,
             thread,
@@ -87,15 +97,19 @@ impl HistoryPaging {
                 .collect(),
             pending: None,
             rail: TurnRail::new(&page.data),
+            speech,
+            voice_turns: HashSet::new(),
         });
     }
 
     pub(super) fn view(&self) -> Option<OlderHistoryView> {
         self.owner.as_ref().and_then(|owner| {
-            owner.cursor.as_ref().map(|_| OlderHistoryView {
-                ticket: owner.ticket,
-                pending: owner.pending.is_some(),
-            })
+            (owner.cursor.is_some() || owner.speech.as_ref().is_some_and(SpeechHistory::has_more))
+                .then_some(OlderHistoryView {
+                    ticket: owner.ticket,
+                    pending: owner.pending.is_some(),
+                    speech: owner.cursor.is_none(),
+                })
         })
     }
 }
@@ -132,8 +146,10 @@ impl Navigation {
         if owner.pending.is_some() {
             return Ok(());
         }
+        let Some(cursor) = owner.cursor.clone() else {
+            return self.start_speech_history(true);
+        };
         let summary = owner.summary.clone().ok_or(IpcError::StaleSelection)?;
-        let cursor = owner.cursor.clone().ok_or(IpcError::StaleSelection)?;
         let ticket = owner.ticket;
         let complete = self.pages.sender.clone();
         owner.pending = Some(tauri::async_runtime::spawn(async move {
@@ -155,6 +171,7 @@ impl Navigation {
     pub(super) fn complete_history_page(&mut self, completion: HistoryCompletion) {
         match completion.result {
             HistoryResult::Older(result) => self.complete_older(completion.ticket, result),
+            HistoryResult::Speech(result) => self.complete_speech(completion.ticket, result),
             HistoryResult::Rail(result) => self.complete_rail(completion.ticket, result),
         }
     }
@@ -212,7 +229,13 @@ impl Navigation {
             .rev()
             .filter(|turn| owner.loaded.insert(turn.activity.id.clone()))
         {
-            append_turn(&mut history, &selection.checkout, turn, &mut inactive);
+            super::transcript::append_turn_with_speech(
+                &mut history,
+                &selection.checkout,
+                turn,
+                &mut inactive,
+                owner.speech.is_some(),
+            );
         }
         let workspace = selection.id;
         owner.cursor = page
@@ -229,5 +252,9 @@ impl Navigation {
         state
             .projection
             .merge_history(workspace, self.view.clone(), history, &turn_order);
+        drop(state);
+        if let Err(error) = self.start_speech_history(false) {
+            eprintln!("{error:?}");
+        }
     }
 }

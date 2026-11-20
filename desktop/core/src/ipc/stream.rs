@@ -52,6 +52,8 @@ pub struct TranscriptItem {
     pub attachments: Vec<TranscriptAttachment>,
     #[serde(default)]
     pub editable_prompt: bool,
+    #[serde(default)]
+    pub spoken: bool,
 }
 
 impl TranscriptItem {
@@ -73,7 +75,33 @@ impl TranscriptItem {
             local_images: Vec::new(),
             attachments: Vec::new(),
             editable_prompt: false,
+            spoken: false,
         }
+    }
+}
+
+impl TranscriptItem {
+    pub fn show_voice_response(&mut self) -> bool {
+        if self.role != TranscriptRole::Assistant || self.spoken {
+            return true;
+        }
+        let channel = ["[STATUS]", "[COMPLETE]", "[analysis]", "[final]"]
+            .iter()
+            .find_map(|tag| {
+                self.text
+                    .strip_prefix(tag)
+                    .filter(|rest| rest.is_empty() || rest.starts_with([' ', '\n']))
+            });
+        let body = channel.map_or(self.text.as_str(), str::trim_start);
+        let directive = "::codex-realtime-inline{}";
+        if body == directive {
+            return false;
+        }
+        if let Some(markdown) = body.strip_prefix("::codex-realtime-inline{}\n") {
+            self.text = markdown.to_owned();
+            return true;
+        }
+        channel.is_none()
     }
 }
 
@@ -183,6 +211,30 @@ impl TranscriptView {
             }
         }
         self.residency.recompute(&self.items);
+    }
+
+    pub(super) fn project_voice_responses(
+        &mut self,
+        turns: &std::collections::HashSet<String>,
+    ) -> bool {
+        let mut changed = false;
+        self.items.retain_mut(|row| {
+            if !turns.contains(&row.turn_id) || row.role != TranscriptRole::Assistant || row.spoken
+            {
+                return true;
+            }
+            let previous = row.text.len();
+            let visible = row.show_voice_response();
+            if !visible || row.text.len() != previous {
+                changed = true;
+                row.revision += 1;
+            }
+            visible
+        });
+        if changed {
+            self.reindex();
+        }
+        changed
     }
 
     pub(super) fn apply(&mut self, change: &mut StreamChange) -> bool {

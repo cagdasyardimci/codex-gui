@@ -10,10 +10,12 @@ use super::{BrowseError, CodexBrowser, Page, ThreadSummary, WirePage};
 mod fork;
 mod items;
 mod queue;
+mod timeline;
 
 pub use fork::ForkBoundary;
 pub use items::{TurnItemRead, TurnItems};
 pub use queue::{QueueSnapshot, QueuedSubmission};
+pub use timeline::{SpeechRole, TimelineCursor, TimelineEntry, VoiceSegment, VoiceTimelinePage};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]

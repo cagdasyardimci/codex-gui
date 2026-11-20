@@ -1191,8 +1191,20 @@ impl Navigation {
         }
         let mut active = Vec::new();
         let mut before_resume = TranscriptView::default();
+        let canonical_speech = summary
+            .for_selection(client.identity(), &thread)?
+            .thread
+            .history_mode
+            .as_deref()
+            == Some("paginated");
         for turn in page.data.iter().rev() {
-            append_turn(&mut before_resume, &checkout, turn, &mut active);
+            transcript::append_turn_with_speech(
+                &mut before_resume,
+                &checkout,
+                turn,
+                &mut active,
+                canonical_speech,
+            );
         }
         self.stream = TextBatcher::default();
         self.restored_active_items = active;
@@ -1206,6 +1218,9 @@ impl Navigation {
         self.view.older_history = self.pages.view();
         self.start_turn_rail(client.clone());
         self.publish_history(before_resume);
+        if let Err(error) = self.start_speech_history(false) {
+            eprintln!("{error:?}");
+        }
 
         let backend = self.backend.as_mut().expect("backend connected");
         if self.view.write_access == WriteAccess::Ready
@@ -1239,6 +1254,35 @@ impl Navigation {
             return Ok(());
         };
         let client = backend.connection.client();
+        if let ServerEvent::Notification { method, params } = &event
+            && method == "thread/realtime/itemAdded"
+        {
+            if let Some(chat) = params["threadId"].as_str()
+                && backend
+                    .engine
+                    .snapshot()
+                    .writable_threads
+                    .contains(&ThreadId(chat.into()))
+                && let Some(speech) =
+                    codex_gui_core::codex::VoiceSegment::from_item(&params["item"])
+            {
+                self.present_speech(chat, speech);
+            }
+            return Ok(());
+        }
+        let voice_turn = match &event {
+            ServerEvent::Notification { method, params } if method == "turn/started" => {
+                params["threadId"]
+                    .as_str()
+                    .zip(params["turn"]["id"].as_str())
+                    .filter(|(chat, _)| {
+                        tauri::Manager::state::<crate::voice_ipc::VoiceIpc>(&self.app)
+                            .owns_chat(client.identity(), chat)
+                    })
+                    .map(|(chat, turn)| (chat.to_owned(), turn.to_owned()))
+            }
+            _ => None,
+        };
         if tauri::Manager::state::<crate::voice_ipc::VoiceIpc>(&self.app).observe(
             &self.app,
             client.identity(),
@@ -1314,6 +1358,9 @@ impl Navigation {
                 .record_execution(client.identity(), &before.execution)
         {
             eprintln!("{error}");
+        }
+        if let Some((chat, turn)) = voice_turn {
+            self.remember_voice_turn(&chat, &turn);
         }
         if let Some(event) = routed {
             crate::task_notifications::observe(
@@ -1402,8 +1449,9 @@ impl Navigation {
         let workspace = selection.id;
         let checkout = selection.checkout.clone();
         self.observe_rail_turn(&thread, turn_id, TurnStatus::InProgress);
+        let voice_turn = self.voice_turn(&thread.0, turn_id);
         match method.as_str() {
-            "item/agentMessage/delta" => {
+            "item/agentMessage/delta" if !voice_turn => {
                 if let (Some(item), Some(text)) =
                     (params["itemId"].as_str(), params["delta"].as_str())
                 {
@@ -1420,8 +1468,9 @@ impl Navigation {
                 if let Some(command) = command_item(turn_id, wire) {
                     self.flush_stream();
                     self.publish_command(workspace, command);
-                } else if let Some(item) =
+                } else if let Some(mut item) =
                     message_item(&checkout, turn_id, wire, method == "item/completed")
+                    && (!voice_turn || item.completed && item.show_voice_response())
                 {
                     if !item.completed && self.restored_active_items.contains(&item.item_id) {
                         return;

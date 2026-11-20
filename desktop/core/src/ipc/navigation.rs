@@ -48,6 +48,7 @@ pub struct NavigationView {
 pub struct OlderHistoryView {
     pub ticket: Uuid,
     pub pending: bool,
+    pub speech: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]

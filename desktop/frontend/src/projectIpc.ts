@@ -165,7 +165,7 @@ function applyStream(transcript: TranscriptView, change: StreamChange, positions
       const boundary = itemId.indexOf('/');
       items.push(update({
         itemId, text: '', completed: false, role: 'assistant', revision: 0,
-        turnId: boundary === -1 ? '' : itemId.slice(0, boundary), commands: [], localImages: [], attachments: [], editablePrompt: false,
+        turnId: boundary === -1 ? '' : itemId.slice(0, boundary), commands: [], localImages: [], attachments: [], editablePrompt: false, spoken: false,
       }));
     } else {
       items[index] = update(items[index]!);

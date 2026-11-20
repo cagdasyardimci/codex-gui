@@ -511,7 +511,9 @@ impl Navigation {
                 {
                     if mode == TurnItemRead::Preview {
                         owner.rail.preview = preview_from_items(items);
-                    } else if let Some(view) = turn_body(&selection.checkout, turn, items) {
+                    } else if let Some(view) =
+                        turn_body(&selection.checkout, turn, items, owner.speech.is_some())
+                    {
                         owner.loaded.insert(items.id.clone());
                         owner.rail.jump = Some(TurnJump {
                             ticket,
@@ -534,7 +536,8 @@ impl Navigation {
                     })) => {
                         if let Ok(items) = items.for_selection(&owner.connection, &owner.thread)
                             && items.id == turn.id
-                            && let Some(view) = turn_body(&selection.checkout, turn, items)
+                            && let Some(view) =
+                                turn_body(&selection.checkout, turn, items, owner.speech.is_some())
                             && item
                                 .as_ref()
                                 .is_none_or(|id| view.items.iter().any(|row| &row.item_id == id))
@@ -828,6 +831,7 @@ fn turn_body(
     checkout: &CheckoutIdentity,
     activity: TurnActivity,
     source: &TurnItems,
+    canonical_speech: bool,
 ) -> Option<TranscriptView> {
     let mut view = TranscriptView::default();
     append_turn_items(
@@ -836,6 +840,7 @@ fn turn_body(
         &activity,
         &source.items,
         &mut Vec::new(),
+        canonical_speech,
     );
     (!view.items.is_empty()).then_some(view)
 }

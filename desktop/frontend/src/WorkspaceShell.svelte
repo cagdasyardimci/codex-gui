@@ -17,6 +17,7 @@
   import { verifyAppearance } from './appearanceProbe';
   import VoiceControls from './VoiceControls.svelte';
   import { DesktopVoice } from './desktopVoice';
+  import { verifyVoiceHistory } from './voiceHistoryProbe';
   import { verifyVoice, verifyVoiceHandoff, verifyVoiceNoFallback, verifyVoiceReconnect } from './voiceProbe';
   import type { VoiceCallView, VoiceReconnect } from './generated/workspace';
   import { verifyNotifications } from './notificationProbe';
@@ -66,7 +67,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -167,7 +168,7 @@
     const items = snapshot?.transcript.items ?? [];
     for (let at = items.length - 1; at >= 0; at--) {
       const row = items[at]!;
-      if (row.role === 'assistant' && row.completed && row.text.trim() && eligible.delete(row.turnId)) rows.add(row.itemId);
+      if (!row.spoken && row.role === 'assistant' && row.completed && row.text.trim() && eligible.delete(row.turnId)) rows.add(row.itemId);
     }
     return rows;
   });
@@ -1176,6 +1177,7 @@
     else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
     else if (verify === 'notifications') void verifyNotifications(() => snapshot);
     else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
+    else if (verify === 'voiceHistory' || verify === 'voiceHistoryRestore') void verifyVoiceHistory(verify, () => snapshot);
     else if (verify === 'voiceHandoff') void verifyVoiceHandoff(() => snapshot, () => call);
     else if (verify === 'voiceNoFallback') void verifyVoiceNoFallback(() => snapshot, () => call);
     else if (verify === 'voiceReconnect') void verifyVoiceReconnect(() => snapshot, () => call, voice);
@@ -1314,7 +1316,7 @@
                 <TranscriptRow item={entry.item} {request} attachmentScope={queue?.editing ? undefined : attachmentScope} copy={copyResponse}
                   onCopyFocus={focusResponseAction} edit={editablePrompts.has(entry.item.itemId) ? editSentPrompt : undefined}
                   branch={response && navigation?.canFork ? branchResponse : undefined}
-                  bookmark={response ? setResponseBookmark : undefined}
+                  bookmark={response && !entry.item.spoken ? setResponseBookmark : undefined}
                   feedback={request && feedbackRows.has(entry.item.itemId) ? (rating) => sendFeedback(request, rating) : undefined}
                   bookmarked={responseBookmarks.has(entry.item.itemId)} />
               </div>
@@ -1329,6 +1331,9 @@
           {/key}
         {/if}
       </div>
+      {#if navigation?.olderHistory?.speech}
+        <button type="button" disabled={navigation.olderHistory.pending} onclick={requestOlderHistory}>Load Earlier Messages</button>
+      {/if}
       {#if navigation?.retryable && navigation.writeAccess === 'ready'}
         <button class="workspace-retry" type="button" disabled={actionPending} onclick={retryChat}>Retry</button>
       {/if}

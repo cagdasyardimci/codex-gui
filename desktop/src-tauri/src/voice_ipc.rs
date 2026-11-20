@@ -100,6 +100,19 @@ impl VoiceIpc {
             .is_some_and(|call| call.owner.identity() == owner)
     }
 
+    pub fn owns_chat(&self, owner: &ConnectionIdentity, chat: &str) -> bool {
+        self.current
+            .lock()
+            .expect("voice lock poisoned")
+            .call
+            .as_ref()
+            .is_some_and(|call| {
+                call.owner.identity() == owner
+                    && call.thread.0 == chat
+                    && call.view.phase == VoicePhase::Active
+            })
+    }
+
     pub fn resume_target(
         &self,
         id: Uuid,
@@ -772,6 +785,8 @@ fn fixture_root(window: &WebviewWindow) -> Result<PathBuf, IpcError> {
             | crate::fixture::Verification::VoiceReconnect
             | crate::fixture::Verification::VoiceNoFallback
             | crate::fixture::Verification::VoiceHandoff
+            | crate::fixture::Verification::VoiceHistory
+            | crate::fixture::Verification::VoiceHistoryRestore
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }
