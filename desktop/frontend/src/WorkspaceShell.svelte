@@ -12,6 +12,9 @@
   import SlashCommandPanel from './SlashCommandPanel.svelte';
   import ReviewPanel from './ReviewPanel.svelte';
   import SettingsWindow from './SettingsWindow.svelte';
+  import type { AppearanceView } from './generated/workspace';
+  import { applyDesktopAppearance, observeDesktop } from './desktopAppearance';
+  import { verifyAppearance } from './appearanceProbe';
   import { verifySettings } from './settingsProbe';
   import SentPromptDialog from './SentPromptDialog.svelte';
   import WorkspaceSidebar from './WorkspaceSidebar.svelte';
@@ -58,7 +61,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -77,6 +80,7 @@
   let admittingDraft = $state(false);
   let showingChanges = $state(false);
   let settingsOpen = $state(false);
+  let appearance = $state.raw<AppearanceView>();
   let settingsButton: HTMLButtonElement;
   let preferredComparison = $state<'uncommitted' | 'lastTurn'>('uncommitted');
   let showingProjectContext = $state(false);
@@ -1146,8 +1150,15 @@
   onMount(() => {
     const lifecycle = new AbortController();
     void observeWorkspace(receive, lifecycle.signal).catch(console.error);
+    void observeDesktop(updateAppearance, (action) => {
+      if (action === 'settings' && !quit) settingsOpen = true;
+      else if (action === 'undo' || action === 'redo') document.execCommand(action);
+      else if (!settingsOpen && action === 'newChat' && workspace) workspaceAction('newChat');
+      else if (!settingsOpen && action === 'messageSearch') showMessageSearch();
+    }, lifecycle.signal).catch(console.error);
     if (verify === 'account') void verifyAccount(() => snapshot);
     else if (verify === 'settings') void verifySettings(() => snapshot);
+    else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn' || verify === 'activeTurn') void verifyTurn(() => snapshot, verify);
     else if (verify === 'queue') void verifyQueue(() => snapshot);
@@ -1174,6 +1185,11 @@
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
+
+  function updateAppearance(view: AppearanceView) {
+    appearance = view;
+    applyDesktopAppearance(view);
+  }
 </script>
 
 <svelte:window onkeydown={handleShortcut} />
@@ -1436,6 +1452,7 @@
   {/if}
   {#if settingsOpen && !quit}
     <SettingsWindow accountBusy={!!navigation?.actions.stopAll || !!navigation?.account.loginTicket}
+      {appearance} appearanceChanged={updateAppearance}
       close={() => { settingsOpen = false; void tick().then(() => settingsButton.focus({ preventScroll: true })); }} />
   {/if}
   {#if promptEdit}

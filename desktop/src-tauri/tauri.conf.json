@@ -28,6 +28,7 @@
       "../../LICENSE.md": "notices/LICENSE.md",
       "../frontend/node_modules/@tauri-apps/api/LICENSE-MIT": "notices/Tauri-MIT.txt",
       "../frontend/node_modules/svelte/LICENSE.md": "notices/Svelte-MIT.md",
+      "../frontend/src/assets/Inter-LICENSE.txt": "notices/Inter-OFL.txt",
       "../frontend/dist/frontend-licenses.md": "notices/frontend-licenses.md"
     },
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],

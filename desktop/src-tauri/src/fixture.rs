@@ -53,6 +53,8 @@ pub enum Verification {
     FileTools,
     Account,
     Settings,
+    Appearance,
+    AppearanceRestore,
     WindowsSetup,
     Turn,
     ActiveTurn,

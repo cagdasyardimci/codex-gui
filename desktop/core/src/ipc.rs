@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::appearance::{
+    Appearance, AppearanceAccent, AppearanceChoice, AppearanceColors, AppearanceEdit,
+    AppearanceFonts, AppearanceMode, AppearanceProfile, AppearanceSelection, AppearanceSizes,
+    AppearanceUpdate, AppearanceView, ColorRole, TypefaceRole,
+};
 use crate::checkout::CheckoutIdentity;
 use crate::files::{
     FileRevision,
@@ -350,6 +355,20 @@ pub fn workspace_typescript() -> String {
         crate::codex::ReviewDelivery::decl(),
         StartReviewRequest::decl(),
         SettingsAccountView::decl(),
+        AppearanceMode::decl(),
+        Appearance::decl(),
+        AppearanceAccent::decl(),
+        ColorRole::decl(),
+        TypefaceRole::decl(),
+        AppearanceFonts::decl(),
+        AppearanceSizes::decl(),
+        AppearanceColors::decl(),
+        AppearanceProfile::decl(),
+        AppearanceChoice::decl(),
+        AppearanceSelection::decl(),
+        AppearanceEdit::decl(),
+        AppearanceUpdate::decl(),
+        AppearanceView::decl(),
         UsageWindowView::decl(),
         DailyUsageView::decl(),
         EffectiveSettingView::decl(),

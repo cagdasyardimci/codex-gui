@@ -2,13 +2,13 @@
   color-scheme: light dark;
   --workspace-canvas: Canvas;
   --workspace-text: CanvasText;
-  --workspace-panel: color-mix(in srgb, CanvasText 4%, Canvas);
-  --workspace-divider: color-mix(in srgb, CanvasText 15%, Canvas);
-  --workspace-hover: color-mix(in srgb, CanvasText 8%, Canvas);
+  --workspace-panel: color-mix(in srgb, var(--workspace-text) 4%, var(--workspace-canvas));
+  --workspace-divider: color-mix(in srgb, var(--workspace-text) var(--workspace-border-contrast, 15%), var(--workspace-canvas));
+  --workspace-hover: color-mix(in srgb, var(--workspace-text) 8%, var(--workspace-canvas));
   --workspace-focus: Highlight;
   background: var(--workspace-canvas);
   color: var(--workspace-text);
-  font: 14px system-ui, sans-serif;
+  font: var(--workspace-ui-size, 14px) var(--workspace-ui-font, system-ui), sans-serif;
 }
 
 body {
@@ -80,7 +80,7 @@ body {
   overflow: auto;
   padding: 0.75rem;
   border-right: 1px solid var(--workspace-divider);
-  background: var(--workspace-panel);
+  background: color-mix(in srgb, var(--workspace-text) var(--workspace-sidebar-contrast, 4%), var(--workspace-canvas));
 }
 
 .workspace-sidebar .chat-row {
@@ -190,6 +190,8 @@ body {
 }
 
 .transcript-item p {
+  font-family: var(--workspace-content-font, system-ui), sans-serif;
+  font-size: var(--workspace-content-size, 15px);
   margin: 0.35rem 0 0;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -214,14 +216,26 @@ body {
 
 .markdown-document {
   overflow-wrap: anywhere;
+  font-family: var(--workspace-content-font, system-ui), sans-serif;
+  font-size: var(--workspace-content-size, 15px);
 }
 
 .markdown-document pre {
   max-inline-size: 100%;
   overflow: auto;
   padding: 0.75rem;
-  background: color-mix(in srgb, CanvasText 7%, Canvas);
+  background: color-mix(in srgb, var(--workspace-text) 7%, var(--workspace-canvas));
   border-radius: 0.4rem;
+}
+
+.markdown-document code,
+.transcript-commands pre {
+  font-family: var(--workspace-code-font, ui-monospace), monospace;
+  font-size: var(--workspace-code-size, 12px);
+}
+
+:root[data-message-colors="on"] .transcript-item[aria-label="You"] .transcript-item-header > span {
+  color: var(--workspace-focus);
 }
 
 .markdown-document img {
@@ -428,7 +442,7 @@ body {
   flex: 1;
   overflow: auto;
   margin: 0;
-  font: 0.85rem / 1.45 ui-monospace, monospace;
+  font: var(--workspace-code-size, 12px) / 1.45 var(--workspace-code-font, ui-monospace), monospace;
   tab-size: 4;
 }
 

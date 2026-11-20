@@ -1,5 +1,6 @@
 //! Workspace state and Codex integration shared by desktop hosts.
 
+pub mod appearance;
 pub mod checkout;
 pub mod codex;
 pub mod files;

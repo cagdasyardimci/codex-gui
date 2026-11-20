@@ -82,7 +82,8 @@
             <button type="button" aria-label={`Select lines in ${file.displayPath}`} onclick={() => { sourceRange = file; }}>Lines</button>
           {:else}
             {@const choice = match.choice}
-            <button type="button" aria-label={`Add ${choice.label}`} onclick={() => choose({ catalog: choice.id })}>{choice.label}</button>
+            <button type="button" class:skill={choice.kind === 'skill'} aria-label={`Add ${choice.label}`}
+              onclick={() => choose({ catalog: choice.id })}>{choice.label}</button>
           {/if}
         </li>
       {/each}
@@ -114,6 +115,7 @@
     padding: 0.2rem;
   }
   li.chosen { background: color-mix(in srgb, Highlight 18%, Canvas); }
+  button.skill { color: var(--workspace-skill, currentColor); }
   .composer-context-range { flex-wrap: wrap; }
   .composer-context-range input { width: 5em; }
 </style>

@@ -77,7 +77,7 @@
 <style>
   .diff-patch {
     flex: 1; min-block-size: 0; overflow: auto;
-    font: 0.8rem / 1.5 ui-monospace, monospace; tab-size: 4;
+    font: var(--workspace-code-size, 12px) / 1.5 var(--workspace-code-font, ui-monospace), monospace; tab-size: 4;
   }
   .diff-patch pre { font: inherit; white-space: pre; }
   .diff-patch span:not(.line-number) { white-space: pre; }
@@ -89,6 +89,6 @@
   .split-row > div + div { border-inline-start: 1px solid var(--workspace-divider); }
   .sides span { padding-inline: 0.35rem; }
   .line-number { display: inline-block; inline-size: 3.4em; text-align: end; padding-inline-end: 0.4em; opacity: 0.7; user-select: none; }
-  .add { background: color-mix(in srgb, #27a269 16%, transparent); }
-  .delete { background: color-mix(in srgb, #df4747 16%, transparent); }
+  .add { background: color-mix(in srgb, var(--workspace-diff-added, #27a269) 16%, transparent); }
+  .delete { background: color-mix(in srgb, var(--workspace-diff-removed, #df4747) 16%, transparent); }
 </style>

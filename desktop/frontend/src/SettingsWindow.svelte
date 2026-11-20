@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import type { InstructionsView, SettingsIntegrationAction, SettingsSelection, SettingsView, UsageResetOffer } from './generated/workspace';
+  import { onMount, tick } from 'svelte';
+  import type { AppearanceView, InstructionsView, SettingsIntegrationAction, SettingsSelection, SettingsView, UsageResetOffer } from './generated/workspace';
   import {
     changeSettingsIntegration, closeSettings, deleteSettingsMemories, openSettings, readSettingsInstructions, redeemSettingsReset, refreshSettings,
     saveSettingsInstructions, setEffortVisibility, signOutSettings, writeSettings,
@@ -9,12 +9,20 @@
   import SettingsBrowser from './settings/SettingsBrowser.svelte';
   import SettingsCatalog from './settings/SettingsCatalog.svelte';
   import SettingsMcp from './settings/SettingsMcp.svelte';
+  import SettingsAppearance from './settings/SettingsAppearance.svelte';
+  import { matchSettings, settingsSections, type SettingsMatch, type SettingsSection } from './settings/settingsSearch';
 
-  let { close, accountBusy }: { close: () => void; accountBusy: boolean } = $props();
+  let { close, accountBusy, appearance, appearanceChanged }: {
+    close: () => void;
+    accountBusy: boolean;
+    appearance?: AppearanceView;
+    appearanceChanged: (value: AppearanceView) => void;
+  } = $props();
   const session = crypto.randomUUID();
   let dialog: HTMLDialogElement;
-  type Section = 'account' | 'usage' | 'configuration' | 'personalization' | 'mcp' | 'plugins' | 'skills' | 'hooks' | 'browser';
-  let tab = $state<Section>('account');
+  let tab = $state<SettingsSection>('account');
+  let search = $state('');
+  const matches = $derived(matchSettings(search));
   let view = $state<SettingsView>();
   const integrationScope = $derived(view && {
     selection: { session, revision: view.revision }, owner: view.integrationOwner,
@@ -44,6 +52,7 @@
     void read(() => openSettings(session));
     return () => {
       retired = true;
+      if (dialog.open) dialog.close();
       void closeSettings(session).catch(console.error);
     };
   });
@@ -69,13 +78,24 @@
     void read(() => signOutSettings(selection));
   }
 
-  function selectTab(next: Section) {
+  function selectTab(next: SettingsSection) {
     tab = next;
     confirming = false;
     deleteMemories = false;
     reloadInstructions = false;
     reset = undefined;
     if (next === 'personalization' && view?.instructionsAvailable && !instructions) void loadInstructions();
+  }
+
+  async function openSearchMatch(match: SettingsMatch) {
+    search = '';
+    selectTab(match.section);
+    await tick();
+    const label = match.focus;
+    const field = label && (dialog.querySelector<HTMLElement>(`[aria-label="${CSS.escape(label)}"]:not(section):not([disabled])`)
+      ?? [...dialog.querySelectorAll<HTMLButtonElement>('button:enabled')].find((button) => button.textContent?.trim() === label));
+    const target = field || dialog.querySelector<HTMLElement>('nav button[aria-pressed="true"]');
+    target?.focus();
   }
 
   function prepareReset(offer: UsageResetOffer) {
@@ -200,6 +220,7 @@
     else if (deleteMemories) deleteMemories = false;
     else if (reloadInstructions) reloadInstructions = false;
     else if (reset) reset = undefined;
+    else if (search.trim()) search = '';
     else close();
   }
 </script>
@@ -217,6 +238,13 @@
   <header>
     <h2>Settings</h2>
     <div class="controls">
+      <input type="search" aria-label="Search Settings" placeholder="Search Settings" bind:value={search}
+        onkeydown={(event) => {
+          if (event.key === 'Enter' && !event.isComposing && matches[0]) {
+            event.preventDefault();
+            void openSearchMatch(matches[0]);
+          }
+        }} />
       <button type="button" disabled={busy} onclick={() => {
         reset = undefined;
         void read(() => refreshSettings(session));
@@ -224,19 +252,24 @@
       <button type="button" onclick={close}>Close</button>
     </div>
   </header>
-  <nav aria-label="Settings Sections">
-    <button type="button" aria-pressed={tab === 'account'} onclick={() => selectTab('account')}>Account</button>
-    <button type="button" aria-pressed={tab === 'usage'} onclick={() => selectTab('usage')}>Usage &amp; Billing</button>
-    <button type="button" aria-pressed={tab === 'configuration'} onclick={() => selectTab('configuration')}>Configuration</button>
-    <button type="button" aria-pressed={tab === 'personalization'} onclick={() => selectTab('personalization')}>Personalization</button>
-    <button type="button" aria-pressed={tab === 'mcp'} onclick={() => selectTab('mcp')}>MCP Servers</button>
-    <button type="button" aria-pressed={tab === 'plugins'} onclick={() => selectTab('plugins')}>Plugins</button>
-    <button type="button" aria-pressed={tab === 'skills'} onclick={() => selectTab('skills')}>Skills</button>
-    <button type="button" aria-pressed={tab === 'hooks'} onclick={() => selectTab('hooks')}>Hooks</button>
-    <button type="button" aria-pressed={tab === 'browser'} onclick={() => selectTab('browser')}>Browser</button>
-  </nav>
+  {#if search.trim()}
+    <nav aria-label="Settings Search Results">
+      {#each matches as match (match.label)}
+        <button type="button" onclick={() => void openSearchMatch(match)}>{match.label}</button>
+      {/each}
+    </nav>
+  {:else}
+    <nav aria-label="Settings Sections">
+      {#each settingsSections as section (section.id)}
+        <button type="button" aria-pressed={tab === section.id} onclick={() => selectTab(section.id)}>{section.title}</button>
+      {/each}
+    </nav>
+  {/if}
 
-  {#if view && tab === 'account'}
+  <div hidden={!!search.trim()}>
+  {#if tab === 'appearance'}
+    <SettingsAppearance view={appearance} changed={appearanceChanged} />
+  {:else if view && tab === 'account'}
     <section aria-label="Account">
       <dl>
         {#if view.account.email}<dt>Email</dt><dd>{view.account.email}</dd>{/if}
@@ -400,14 +433,21 @@
         {busy} apply={applyIntegration} />
     {/key}
   {/if}
+  </div>
 </dialog>
 
 <style>
-  dialog { background: Canvas; color: CanvasText; inline-size: min(42rem, 86vw); min-block-size: 17rem; max-block-size: 80vh;
+  @font-face {
+    font-family: "Settings Inter";
+    src: url('./assets/Inter-SemiBold.woff2') format('woff2');
+    font-weight: 600;
+    font-display: swap;
+  }
+  dialog { background: var(--workspace-canvas); color: var(--workspace-text); inline-size: min(42rem, 86vw); min-block-size: 17rem; max-block-size: 80vh;
     border: 1px solid var(--workspace-divider); border-radius: 0.6rem; padding: 1rem; }
   header, nav, .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; }
   header { justify-content: space-between; }
-  h2 { margin: 0; font-size: 1.2rem; }
+  h2 { margin: 0; font: 600 calc(var(--workspace-ui-size, 14px) + 4px) / 1.33 var(--workspace-ui-font, "Settings Inter"), system-ui, sans-serif; }
   nav { margin-block: 1rem 0.7rem; padding-block-end: 0.5rem; border-block-end: 1px solid var(--workspace-divider); }
   nav button[aria-pressed="true"] { background: color-mix(in srgb, CanvasText 15%, Canvas); }
   dl { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr; gap: 0.5rem 0.85rem; }

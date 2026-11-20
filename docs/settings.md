@@ -36,6 +36,10 @@ Font families are local preferences stored independently for Light and Dark appe
 
 Theme copy and export capture the appearance profile being edited when the action begins. A later mode change does not redirect an open export to another profile.
 
+[Tauri appearance](../desktop/src-tauri/src/desktop_presentation.rs) keeps Light and Dark settings in the beta data root. Native System mode selects the effective profile. The Settings window can open Appearance while the Codex connection is unavailable. The workspace uses the resolved font and semantic colors from the selected profile. The sidebar preference adjusts the workspace surface tint.
+
+The same [desktop owner](../desktop/src-tauri/src/desktop_presentation/window.rs) restores view zoom and the normal window bounds relative to the display work area. Fullscreen, minimization and maximization preserve the previous normal bounds. The native View menu controls scale and fullscreen, and the Settings menu opens the in-app presentation.
+
 ## Desktop notifications
 
 Notification timing, alert categories and sound are local preferences; macOS authorization is independent. Continue observing transitions while notifications are disabled so enabling them cannot replay old alerts. Recheck preferences after authorization and before foreground presentation.

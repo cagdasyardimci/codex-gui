@@ -83,7 +83,7 @@ jobs:
             /etc/apt/sources.list.d/ubuntu.sources > "$sources"
           apt_options=(-o "Dir::Etc::sourcelist=$sources" -o Dir::Etc::sourceparts=- -o Acquire::Retries=1 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25)
           sudo timeout 150s apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
-          sudo timeout 480s apt-get "${apt_options[@]}" install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-bin xvfb xauth
+          sudo timeout 480s apt-get "${apt_options[@]}" install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-bin xvfb xauth openbox
       - name: Install frontend dependencies
         working-directory: desktop/frontend
         run: pnpm install --frozen-lockfile
@@ -150,6 +150,7 @@ jobs:
           python3 desktop/fixtures/verify_file_tools_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_account_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_settings_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_appearance_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_windows_setup_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_turn_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_queue_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
@@ -211,6 +212,7 @@ jobs:
           python desktop/fixtures/verify_account_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_settings_fixture.py $app
+          python desktop/fixtures/verify_appearance_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_windows_setup_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -262,6 +264,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_file_tools_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_account_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_settings_fixture.py "$app"
+          xvfb-run -a -s "-screen 0 1280x1024x24" sh -c 'openbox >/dev/null 2>&1 & python3 desktop/fixtures/verify_appearance_fixture.py "$1"' fixture "$app"
           xvfb-run -a python3 desktop/fixtures/verify_windows_setup_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_turn_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_queue_fixture.py "$app"

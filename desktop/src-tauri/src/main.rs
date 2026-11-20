@@ -7,6 +7,7 @@ use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent, webview::NewWi
 mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
+mod desktop_presentation;
 mod diff_ipc;
 mod file_actions_ipc;
 mod file_preview_ipc;
@@ -53,6 +54,8 @@ fn main() {
         Some("--verify-file-tools") => fixture::Verification::FileTools,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-settings") => fixture::Verification::Settings,
+        Some("--verify-appearance") => fixture::Verification::Appearance,
+        Some("--verify-appearance-restore") => fixture::Verification::AppearanceRestore,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -94,6 +97,8 @@ fn main() {
             | fixture::Verification::FileTools
             | fixture::Verification::Account
             | fixture::Verification::Settings
+            | fixture::Verification::Appearance
+            | fixture::Verification::AppearanceRestore
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -122,6 +127,8 @@ fn main() {
             | fixture::Verification::History
             | fixture::Verification::Diff
             | fixture::Verification::Settings
+            | fixture::Verification::Appearance
+            | fixture::Verification::AppearanceRestore
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -143,6 +150,7 @@ fn main() {
         .manage(settings_ipc::SettingsIpc::default())
         .manage(quit_ipc::QuitLifecycle::default())
         .on_window_event(move |window, event| {
+            desktop_presentation::on_window_event(window, event);
             if handle_desktop_quit
                 && window.label() == WORKSPACE_WINDOW
                 && let WindowEvent::CloseRequested { api, .. } = event
@@ -150,6 +158,14 @@ fn main() {
             {
                 api.prevent_close();
                 quit_ipc::handle_native_quit(window.app_handle());
+            }
+        })
+        .on_menu_event(|app, event| {
+            if let Some(window) = app.get_webview_window(WORKSPACE_WINDOW)
+                && let Err(error) =
+                    desktop_presentation::window::dispatch_menu(&window, event.id().as_ref())
+            {
+                eprintln!("{error:?}");
             }
         })
         .on_webview_event(|webview, event| {
@@ -197,6 +213,14 @@ fn main() {
             settings_ipc::integrations::change_settings_integration,
             settings_ipc::instructions::read_settings_instructions,
             settings_ipc::instructions::save_settings_instructions,
+            desktop_presentation::read_desktop_appearance,
+            desktop_presentation::desktop_font_families,
+            desktop_presentation::update_desktop_appearance,
+            desktop_presentation::copy_desktop_theme,
+            desktop_presentation::export_desktop_theme,
+            desktop_presentation::appearance_fixture_action,
+            desktop_presentation::appearance_fixture_state,
+            desktop_presentation::verify_appearance_result,
             project_ipc::search_project_paths,
             file_tools_ipc::change_file_tools,
             file_tools_ipc::browse_project_files,
@@ -280,7 +304,8 @@ fn main() {
                 });
                 return Ok(());
             }
-            if verification == fixture::Verification::None || desktop_fixture.is_some() {
+            let desktop = verification == fixture::Verification::None || desktop_fixture.is_some();
+            let presentation = if desktop {
                 let (beta_data, initial_project) = match desktop_fixture {
                     Some(fixture) => fixture,
                     None => (app.path().app_data_dir()?, None),
@@ -295,6 +320,14 @@ fn main() {
                 )
                 .map_err(|error| -> Box<dyn std::error::Error> { error })?;
                 assert!(project.navigation.set(navigation).is_ok());
+                desktop_presentation::DesktopPresentation::open(Some(&beta_data))
+            } else {
+                desktop_presentation::DesktopPresentation::open(None)
+            };
+            let theme = presentation.initial_theme();
+            app.manage(presentation);
+            if desktop {
+                app.set_menu(desktop_presentation::window::menu(app.handle())?)?;
             }
             let window = app
                 .config()
@@ -304,10 +337,16 @@ fn main() {
                 .find(|window| window.label == WORKSPACE_WINDOW)
                 .ok_or("missing configured main workspace window")?;
             let base = project_ipc::app_location(app.config(), window.use_https_scheme);
-            WebviewWindowBuilder::from_config(app, window)?
+            let window = WebviewWindowBuilder::from_config(app, window)?
+                .theme(theme)
+                .visible(false)
                 .on_navigation(move |url| project_ipc::allows_navigation(&base, url))
                 .on_new_window(|_, _| NewWindowResponse::Deny)
                 .build()?;
+            window
+                .state::<desktop_presentation::DesktopPresentation>()
+                .initialize_window(&window);
+            window.show()?;
             Ok(())
         })
         .build(tauri::generate_context!())

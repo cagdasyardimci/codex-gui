@@ -582,7 +582,7 @@
   .file-tab.preview { font-style: italic; }
   .file-tab.dirty { border-block-end-color: Highlight; }
   .file-tab button[aria-current="true"] { background: color-mix(in srgb, Highlight 20%, Canvas); }
-  textarea { flex: 1; font: 0.88rem/1.4 ui-monospace, monospace; min-block-size: 5rem; resize: none; }
+  textarea { flex: 1; font: var(--workspace-code-size, 12px) / 1.4 var(--workspace-code-font, ui-monospace), monospace; min-block-size: 5rem; resize: none; }
   .file-image, .file-preview { flex: 1; overflow: auto; }
   .file-image :global(img) { display: block; max-inline-size: 100%; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.5rem; margin: 0 0 0.5rem; }
