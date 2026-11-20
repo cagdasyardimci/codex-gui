@@ -21,6 +21,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::migrate_submission_outcomes,
     attachments::migrate_submission_checkout,
     project_context::migrate,
+    attachments::appkit_drafts::migrate,
 ];
 
 #[derive(Debug, Error)]

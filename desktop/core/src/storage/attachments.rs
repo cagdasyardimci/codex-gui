@@ -22,6 +22,7 @@ use super::{
 
 const PARTIAL_PREFIX: &str = ".partial-";
 
+pub mod appkit_drafts;
 mod submissions;
 pub(crate) use submissions::{JournalEntry, JournalOutcome, JournalPhase, SubmissionWrite};
 pub use submissions::{JournalError, SubmissionAcknowledgement};
@@ -387,7 +388,8 @@ fn collect_one(database: &mut Connection, blobs: &Path, id: BlobId) -> Result<()
     let owned: bool = transaction.query_row(
         "SELECT EXISTS (SELECT 1 FROM draft_attachments WHERE blob_id = ?1)
              OR EXISTS (SELECT 1 FROM submission_attachments WHERE blob_id = ?1)
-             OR EXISTS (SELECT 1 FROM sent_submission_attachments WHERE blob_id = ?1)",
+             OR EXISTS (SELECT 1 FROM sent_submission_attachments WHERE blob_id = ?1)
+             OR EXISTS (SELECT 1 FROM appkit_sent_references WHERE blob_id = ?1)",
         [id.0.as_slice()],
         |row| row.get(0),
     )?;
@@ -448,6 +450,8 @@ fn recovery_candidates(
            SELECT 1 FROM submission_attachments AS o WHERE o.blob_id = b.id
          ) AND NOT EXISTS (
            SELECT 1 FROM sent_submission_attachments AS o WHERE o.blob_id = b.id
+         ) AND NOT EXISTS (
+           SELECT 1 FROM appkit_sent_references AS o WHERE o.blob_id = b.id
          ) FROM attachment_blobs AS b",
     )?;
     let indexed = statement

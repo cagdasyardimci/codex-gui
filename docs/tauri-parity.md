@@ -53,3 +53,5 @@ Prepare fixture copies of supported preference domains, project data and owned a
 | macOS privacy grants and signature-bound authorization | Reestablish under the Tauri bundle identity and validate signed-upgrade behavior. C130. | [AppKit signing](https://github.com/cagdasyardimci/codex-gui/blob/c0824558b060d90a6486c3aef743877677f0d4f1/README.md#signing-setup), [Tauri packaging](desktop-packaging.md) |
 
 The [project-context importer](../desktop/core/src/storage/project_context.rs) reads the copied AppKit document for the captured checkout. Each project imports independently. An existing Tauri record takes precedence on retry. Skill and bookmark targets retain their recorded identities for validation when reopened.
+
+The [draft importer](../desktop/core/src/storage/attachments/appkit_drafts.rs) reads copied preferences and AppKit-owned images. It gives each imported draft a stable destination identity and keeps the backend thread ID on sent references. Drafts and sent references can own the same retained image. The selected CLI continues to supply the original conversation history.

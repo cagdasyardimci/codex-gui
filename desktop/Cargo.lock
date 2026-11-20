@@ -353,6 +353,7 @@ dependencies = [
  "hex",
  "indexmap 2.14.2",
  "libc",
+ "plist",
  "rusqlite",
  "semver",
  "serde",

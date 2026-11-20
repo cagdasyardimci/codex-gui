@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 hex = "0.4"
 indexmap = "2"
+plist = "1.10.4"
 rusqlite = { version = "0.43", features = ["bundled"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
@@ -16,7 +17,7 @@ sha2 = "0.11"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "sync", "time"] }
-uuid = "1"
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
