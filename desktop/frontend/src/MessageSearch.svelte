@@ -81,7 +81,8 @@
 <dialog bind:this={dialog} aria-label="Search Messages" onkeydown={keyboard}
   oncancel={(event) => { event.preventDefault(); if (!composing && !blocked) close(); }}>
   <h2>Search Messages</h2>
-  <input type="search" role="combobox" aria-label="Search Message Contents"
+  <!-- svelte-ignore a11y_autofocus (Opening the modal directs typing to its search field.) -->
+  <input type="search" role="combobox" aria-label="Search Message Contents" autofocus
     aria-controls="message-search-results" aria-expanded={hits.length > 0} aria-autocomplete="list"
     aria-activedescendant={hits.length ? `message-search-result-${selected}` : undefined}
     bind:this={field} bind:value={query}

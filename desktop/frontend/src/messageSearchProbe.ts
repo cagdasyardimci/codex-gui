@@ -31,12 +31,13 @@ function matches() {
   return [...document.querySelectorAll('#message-search-results mark')].map((mark) => mark.textContent);
 }
 
-async function open() {
+async function open(phase: string) {
   await waitFor('The workspace did not finish its preceding action', () =>
     !!document.querySelector('button[aria-keyshortcuts="Meta+Shift+F Control+Shift+F"]:enabled'));
   editor().focus();
   key(editor(), 'F', { ctrlKey: true, shiftKey: true });
-  await waitFor('Keyboard search did not open with focus', () => !!field() && document.activeElement === field());
+  await waitFor(`Keyboard search did not open during ${phase}`, () => !!field());
+  await waitFor(`The search field did not receive focus during ${phase}`, () => document.activeElement === field());
 }
 
 export async function verifyMessageSearch(visible: () => WorkspaceSnapshot | null, index: MessageSearchIndex) {
@@ -55,7 +56,7 @@ export async function verifyMessageSearch(visible: () => WorkspaceSnapshot | nul
     await saving('Trigger an unrelated stream');
     await click('Send');
     await waitFor('The unrelated stream did not start', () => text()?.includes('Unrelated first fragment') === true);
-    await open();
+    await open('streaming');
     query('CAFE WATERLINE');
     await waitFor('Unicode search did not produce the original snippet', () => matches().join() === FIRST_NEEDLE);
     const revision = index.revision;
@@ -80,7 +81,7 @@ export async function verifyMessageSearch(visible: () => WorkspaceSnapshot | nul
       index.targets().some((target) => target.chatId === FIRST && target.partial));
     await saving('Keep the draft before jumping to another chat.');
 
-    await open();
+    await open('cross-chat paging');
     query('cross chat amber');
     if (matches().length) throw new Error('A chat was indexed before its history was loaded');
     await click('Search More Messages');
@@ -104,7 +105,7 @@ export async function verifyMessageSearch(visible: () => WorkspaceSnapshot | nul
       session: canceled, workspaceId, chatId: FIRST, turnId: 'search-turn-04', itemId: 'search-turn-04/needle',
     } }));
 
-    await open();
+    await open('older-message paging');
     query('hidden target cafe quadrant');
     if (matches().length) throw new Error('The nonresident older hit was present before loading its page');
     for (let page = 0; page < 5 && !matches().length; page++) {

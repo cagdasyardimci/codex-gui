@@ -226,7 +226,10 @@
 
   function sendFeedback(row: TranscriptRowRequest, rating: FeedbackRating) {
     if (row.workspaceId !== workspaceId || row.chatId !== selectedChat || row.generation !== transcriptGeneration) return;
-    void act(() => navigateWorkspace({ submitFeedback: { row, rating } }));
+    if (quit) return;
+    void navigateWorkspace({ submitFeedback: { row, rating } }).catch((error) => {
+      if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
+    });
   }
 
   function branchResponse(item: TranscriptItem) {

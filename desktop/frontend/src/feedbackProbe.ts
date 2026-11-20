@@ -45,7 +45,8 @@ export async function verifyFeedback(visible: () => WorkspaceSnapshot | null) {
     await waitFor('The second chat did not offer its own feedback action', () =>
       selection() === SECOND && feedback()?.available === true && ratingButtons().length === 2);
     await click('Bad Result');
-    await waitFor('The second feedback did not reserve its turn', () => blocked() === 'second-feedback-turn');
+    await waitFor('The second feedback did not reserve its turn and lose its connection', () =>
+      blocked() === 'second-feedback-turn' && visible()?.navigation.writeAccess === 'unavailable');
     await click('Reconnect');
     await waitFor('An uncertain report lost its reservation after reconnect', () =>
       selection() === SECOND && feedback()?.available === true && blocked() === 'second-feedback-turn' &&
