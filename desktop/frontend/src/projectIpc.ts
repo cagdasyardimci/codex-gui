@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -30,6 +30,10 @@ export function renderTranscriptMarkdown(request: TranscriptRowRequest): Promise
 
 export function loadTranscriptImage(request: MarkdownTargetRequest): Promise<ArrayBuffer> {
   return invoke('load_transcript_image', { request });
+}
+
+export function loadTranscriptAttachment(request: TranscriptMediaRequest): Promise<ArrayBuffer> {
+  return invoke('load_transcript_attachment', { request });
 }
 
 export function openTranscriptLink(request: MarkdownTargetRequest): Promise<void> {
@@ -74,7 +78,7 @@ function applyStream(transcript: TranscriptView, change: StreamChange, positions
       const boundary = itemId.indexOf('/');
       items.push(update({
         itemId, text: '', completed: false, role: 'assistant', revision: 0,
-        turnId: boundary === -1 ? '' : itemId.slice(0, boundary), commands: [], localImages: [],
+        turnId: boundary === -1 ? '' : itemId.slice(0, boundary), commands: [], localImages: [], attachments: [],
       }));
     } else {
       items[index] = update(items[index]!);

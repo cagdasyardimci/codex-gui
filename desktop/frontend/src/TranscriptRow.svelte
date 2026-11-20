@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { TranscriptItem, TranscriptRowRequest } from './generated/workspace';
   import MarkdownView from './MarkdownView.svelte';
+  import ImagePreview from './ImagePreview.svelte';
+  import { loadTranscriptAttachment } from './projectIpc';
 
   let { item, request, copy, onCopyFocus }: {
     item: TranscriptItem;
@@ -41,6 +43,16 @@
           onpointerdown={(event) => event.preventDefault()} onfocus={onCopyFocus} onclick={copyResponse}>Copy</button>
       {/if}
     </div>
-    <MarkdownView source={item.text} request={item.role === 'assistant' && item.completed ? request : undefined} />
+    {#if item.text}
+      <MarkdownView source={item.text} request={item.role === 'assistant' && item.completed ? request : undefined} />
+    {/if}
+    {#if request && item.attachments.length}
+      {@const row = request}
+      <ul class="transcript-attachments" aria-label="Attachments">
+        {#each item.attachments as attachment (attachment.id)}
+          <li><ImagePreview load={() => loadTranscriptAttachment({ row, attachmentId: attachment.id })} alt={attachment.label} /></li>
+        {/each}
+      </ul>
+    {/if}
   </article>
 {/if}

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::subscription::HistoryInsertion;
+use super::{TranscriptAttachment, subscription::HistoryInsertion};
 
 mod commands;
 mod residency;
@@ -48,6 +48,8 @@ pub struct TranscriptItem {
     pub revision: u32,
     pub commands: Vec<TranscriptCommand>,
     pub local_images: Vec<String>,
+    #[serde(default)]
+    pub attachments: Vec<TranscriptAttachment>,
 }
 
 impl TranscriptItem {
@@ -67,6 +69,7 @@ impl TranscriptItem {
             revision: 0,
             commands: Vec::new(),
             local_images: Vec::new(),
+            attachments: Vec::new(),
         }
     }
 }

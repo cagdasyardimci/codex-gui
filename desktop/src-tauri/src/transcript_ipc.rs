@@ -4,8 +4,8 @@ use codex_gui_core::{
     checkout::CheckoutIdentity,
     files::{local_file_revision, read_local_file},
     ipc::{
-        IpcError, MarkdownNode, MarkdownTargetRequest, TranscriptImageDependency,
-        TranscriptRowRequest,
+        IpcError, MarkdownNode, MarkdownTargetRequest, TranscriptAttachment,
+        TranscriptImageDependency, TranscriptMediaRequest, TranscriptRowRequest,
     },
 };
 use percent_encoding::percent_decode_str;
@@ -54,6 +54,30 @@ pub async fn load_transcript_image(
             .await
             .map_err(|_| IpcError::ProjectUnavailable)??;
     authorized_image(&window, &project, &request)?;
+    Ok(Response::new(bytes))
+}
+
+#[tauri::command]
+pub async fn load_transcript_attachment(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: TranscriptMediaRequest,
+) -> Result<Response, IpcError> {
+    let authorize = || {
+        authorize_view(&window)?;
+        let state = project.state.lock().expect("workspace state lock poisoned");
+        let checkout = state
+            .grants
+            .checkout(window.label(), request.row.workspace_id)?;
+        let path = state.projection.transcript_attachment(&request)?;
+        Ok::<_, IpcError>((checkout, path))
+    };
+    let (checkout, path) = authorize()?;
+    let bytes =
+        tauri::async_runtime::spawn_blocking(move || checked_inline_image(&checkout, &path))
+            .await
+            .map_err(|_| IpcError::ProjectUnavailable)??;
+    authorize()?;
     Ok(Response::new(bytes))
 }
 
@@ -210,6 +234,37 @@ pub(crate) fn local_images(
         }
     }
     paths
+}
+
+pub(crate) fn local_attachments(
+    checkout: &CheckoutIdentity,
+    item: &Value,
+) -> Vec<TranscriptAttachment> {
+    item["content"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|value| {
+            if value["type"] != "localImage" {
+                return None;
+            }
+            relative_image(checkout, Path::new(value["path"].as_str()?))
+        })
+        .take(MAX_IMAGE_SOURCES)
+        .enumerate()
+        .map(|(index, relative_path)| {
+            let label = relative_path
+                .rsplit('/')
+                .next()
+                .unwrap_or(&relative_path)
+                .to_owned();
+            TranscriptAttachment {
+                id: index as u32,
+                label,
+                relative_path,
+            }
+        })
+        .collect()
 }
 
 fn markdown_path(destination: &str) -> Option<PathBuf> {

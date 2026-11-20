@@ -109,6 +109,7 @@ fn main() {
             transcript_ipc::check_transcript_images,
             transcript_ipc::render_transcript_markdown,
             transcript_ipc::load_transcript_image,
+            transcript_ipc::load_transcript_attachment,
             transcript_ipc::open_transcript_link,
             project_ipc::navigate_workspace,
             project_ipc::subscribe_workspace,

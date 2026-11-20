@@ -78,7 +78,11 @@ pub(super) fn message_item(
         role,
     );
     if item.completed {
-        item.local_images = local_images(checkout, &item.text, value);
+        if role == TranscriptRole::User {
+            item.attachments = crate::transcript_ipc::local_attachments(checkout, value);
+        } else {
+            item.local_images = local_images(checkout, &item.text, value);
+        }
     }
     Some(item)
 }

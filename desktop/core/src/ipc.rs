@@ -14,6 +14,7 @@ use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 mod actions;
 mod git;
 mod markdown;
+mod media;
 mod navigation;
 mod question_reply;
 mod queue;
@@ -27,6 +28,7 @@ pub use actions::{
 };
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use markdown::{MarkdownKind, MarkdownNode, MarkdownTargetRequest};
+pub use media::{TranscriptAttachment, TranscriptMediaRequest};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
     LoginTicket, NavigationIntent, NavigationView, OlderHistoryRequest, OlderHistoryView,
@@ -216,6 +218,8 @@ pub fn workspace_typescript() -> String {
         MarkdownTargetRequest::decl(),
         FileRevision::decl(),
         TranscriptImageDependency::decl(),
+        TranscriptAttachment::decl(),
+        TranscriptMediaRequest::decl(),
         TranscriptView::decl(),
         TranscriptRole::decl(),
         NavigationView::decl(),

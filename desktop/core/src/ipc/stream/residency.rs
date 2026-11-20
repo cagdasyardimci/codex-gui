@@ -25,6 +25,11 @@ pub(super) struct RowCost {
 impl RowCost {
     pub(super) fn from(row: &TranscriptItem) -> Self {
         let utf8 = row.local_images.iter().map(String::len).sum::<usize>();
+        let attachments = row
+            .attachments
+            .iter()
+            .map(|image| image.label.len() + image.relative_path.len() + 16)
+            .sum::<usize>();
         let commands = row
             .commands
             .iter()
@@ -37,7 +42,13 @@ impl RowCost {
         Self {
             id: row.item_id.clone(),
             turn: row.turn_id.clone(),
-            bytes: 128 + row.item_id.len() + row.turn_id.len() + row.text.len() + utf8 + commands,
+            bytes: 128
+                + row.item_id.len()
+                + row.turn_id.len()
+                + row.text.len()
+                + utf8
+                + commands
+                + attachments,
         }
     }
 }

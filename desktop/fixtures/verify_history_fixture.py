@@ -31,6 +31,11 @@ def seed_paginated_history(state_path: Path, count: int = 32) -> None:
         first["preview"] = "Large transcript fixture"
     else:
         first["turns"][0]["items"].extend([
+            {"id": "first-attached", "type": "userMessage", "content": [
+                {"type": "localImage", "path": "notes/panel.png"},
+                {"type": "localImage", "path": "../panel.png"},
+                {"type": "localImage", "path": "notes/panel.png"},
+            ]},
             {"id": "first-markdown", "type": "agentMessage", "text": (
                 "## Markdown fixture\n\n"
                 "```rust\nlet label = \"café 日本語\";\n```\n\n"

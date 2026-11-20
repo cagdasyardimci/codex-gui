@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { MarkdownKind, MarkdownNode, TranscriptRowRequest } from './generated/workspace';
-  import { openTranscriptLink, renderTranscriptMarkdown } from './projectIpc';
-  import MarkdownImage from './MarkdownImage.svelte';
+  import { loadTranscriptImage, openTranscriptLink, renderTranscriptMarkdown } from './projectIpc';
+  import ImagePreview from './ImagePreview.svelte';
   import MarkdownRichBlock from './MarkdownRichBlock.svelte';
   import { preserveMarkdownSelection } from './markdownSelection';
 
@@ -68,7 +68,9 @@
       <MarkdownRichBlock source={node.value ?? ''} fallback={plain(node.children)} kind={node.kind} />
     {:else if node.kind === 'image'}
       {#if node.value && request}
-        <MarkdownImage request={{ row: request, target: node.value }} alt={plain(node.children)} />
+        {@const target = node.value}
+        {@const row = request}
+        <ImagePreview load={() => loadTranscriptImage({ row, target })} alt={plain(node.children)} />
       {:else}{plain(node.children)}{/if}
     {:else if node.kind === 'link'}
       {#if node.value}<button class="markdown-link" type="button" onclick={() => follow(node.value!)}>{@render nodes(node.children)}</button>

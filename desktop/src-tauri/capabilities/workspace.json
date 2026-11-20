@@ -12,6 +12,7 @@
     "allow-check-transcript-images",
     "allow-render-transcript-markdown",
     "allow-load-transcript-image",
+    "allow-load-transcript-attachment",
     "allow-open-transcript-link",
     "allow-navigate-workspace",
     "allow-checkout-changes",

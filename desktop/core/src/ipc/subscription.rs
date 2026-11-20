@@ -376,6 +376,18 @@ impl WorkspaceProjection {
         })
     }
 
+    pub fn transcript_attachment(
+        &self,
+        request: &super::TranscriptMediaRequest,
+    ) -> Result<String, IpcError> {
+        self.read_transcript_row(&request.row, |row| {
+            row.attachments
+                .iter()
+                .find(|entry| entry.id == request.attachment_id)
+                .map(|entry| entry.relative_path.clone())
+        })
+    }
+
     fn read_transcript_row<T>(
         &self,
         request: &TranscriptRowRequest,

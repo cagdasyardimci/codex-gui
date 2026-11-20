@@ -16,6 +16,7 @@ fn main() {
         "check_transcript_images",
         "render_transcript_markdown",
         "load_transcript_image",
+        "load_transcript_attachment",
         "open_transcript_link",
         "navigate_workspace",
         "checkout_changes",

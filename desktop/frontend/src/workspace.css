@@ -180,6 +180,22 @@ body {
   white-space: pre-wrap;
 }
 
+.transcript-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0 0;
+}
+
+.transcript-attachments img {
+  display: block;
+  max-inline-size: min(12rem, 100%);
+  max-block-size: 8rem;
+  border-radius: 0.35rem;
+}
+
 .markdown-document {
   overflow-wrap: anywhere;
 }

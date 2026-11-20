@@ -1,10 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
-import { checkTranscriptImages, navigateWorkspace, openTranscriptLink, renderTranscriptMarkdown, searchProjectPaths } from './projectIpc';
+import { checkTranscriptImages, loadTranscriptAttachment, navigateWorkspace, openTranscriptLink, renderTranscriptMarkdown, searchProjectPaths } from './projectIpc';
 import { click, editor, typeText, waitFor } from './fixtureControls';
 import { verifyResidentHistory } from './residencyProbe';
 import { rejectsStale, verifyRenderedMarkdown } from './markdownProbe';
 import { RICH_SUFFIX, verifySettledRichMarkdown, verifyStreamingFormula } from './richMarkdownProbe';
+import { verifyTranscriptAttachments } from './attachmentProbe';
 
 const FIRST = 'history-first';
 const SECOND = 'history-second';
@@ -214,6 +215,7 @@ export async function verifyHistory(
       const saved = await verifySavedRows(workspaceId, visible()!);
       const markdown = visible()?.transcript.items.some((item) => item.itemId === 'first-saved-turn/first-markdown')
         ? await verifyRenderedMarkdown(visible()!, saved.request) : undefined;
+      const attachment = markdown ? await verifyTranscriptAttachments(visible()!, saved.request) : undefined;
       const [path, ...others] = await searchProjectPaths({ workspaceId, query: ' CAFÉ.MD ' });
       if (path?.displayPath !== 'notes/Café.md' || others.length) {
         throw new Error('Project search did not return the visible checkout file');
@@ -259,6 +261,7 @@ export async function verifyHistory(
         await rejectsStale(renderTranscriptMarkdown(markdown));
         await rejectsStale(openTranscriptLink({ row: markdown, target: 'https://example.invalid/path' }));
       }
+      if (attachment) await rejectsStale(loadTranscriptAttachment(attachment));
       const [secondPath] = await searchProjectPaths({ workspaceId, query: 'café.md' });
       if (secondPath?.id.revision !== path.id.revision || secondPath?.id.entry !== path.id.entry) {
         throw new Error('Switching chats replaced the checkout-owned path index');
