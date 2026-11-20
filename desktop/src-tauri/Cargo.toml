@@ -16,5 +16,5 @@ shlex = "2"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tempfile = "3"
-tokio = { version = "1", features = ["process", "sync", "time"] }
+tokio = { version = "1", features = ["macros", "process", "sync", "time"] }
 uuid = { version = "1", features = ["v4"] }

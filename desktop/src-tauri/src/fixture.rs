@@ -6,14 +6,20 @@ use std::{
 };
 
 use codex_gui_core::codex::{JsonlReader, ServerEvent, ServerMessage, read_message};
+use codex_gui_core::ipc::{StreamChange, TextBatcher, TranscriptItem, WorkspaceId};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tauri::{AppHandle, State, ipc::Channel};
-use tokio::process::Command;
+use serde_json::{Value, json};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
+use tokio::{process::Command, time::MissedTickBehavior};
+
+use crate::project_ipc::ProjectIpc;
 
 pub const CHILD_ARGUMENT: &str = "--diagnostic-fixture-stdio";
 const STREAMING_SCENARIO: &str =
     include_str!("../../../Tests/E2E/MockBackend/mock_backend/scenarios/streaming.json");
+const PRIMARY_ITEM: &str = "fixture-main-item";
+const SECONDARY_ITEM: &str = "fixture-secondary-item";
+const SECONDARY_TEXT: [&str; 2] = ["cafe\u{301} ", "漢字 👩🏽‍💻"];
 
 #[derive(Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,42 +40,85 @@ fn scenario() -> serde_json::Result<Scenario> {
 
 pub fn write_fixture() -> io::Result<()> {
     let mut stdout = io::stdout().lock();
-    for text in scenario()?.chunks {
-        let message = json!({
-            "method": "item/agentMessage/delta",
-            "params": {"delta": text},
-        });
-        serde_json::to_writer(&mut stdout, &message)?;
-        stdout.write_all(b"\n")?;
+    for (group, chunks) in scenario()?.chunks.chunks(4).enumerate() {
+        let mut burst = Vec::new();
+        for (index, text) in chunks.iter().enumerate() {
+            write_notification(
+                &mut burst,
+                "item/agentMessage/delta",
+                json!({"itemId": PRIMARY_ITEM, "delta": text}),
+            )?;
+            if group == 0
+                && let Some(text) = SECONDARY_TEXT.get(index)
+            {
+                write_notification(
+                    &mut burst,
+                    "item/agentMessage/delta",
+                    json!({"itemId": SECONDARY_ITEM, "delta": text}),
+                )?;
+            }
+        }
+        if group == 0 {
+            write_notification(
+                &mut burst,
+                "item/completed",
+                json!({"item": {"id": SECONDARY_ITEM}}),
+            )?;
+        }
+        stdout.write_all(&burst)?;
         stdout.flush()?;
-        std::thread::sleep(Duration::from_millis(40));
+        std::thread::sleep(Duration::from_millis(75));
     }
+    write_notification(
+        &mut stdout,
+        "item/completed",
+        json!({"item": {"id": PRIMARY_ITEM}}),
+    )?;
+    write_notification(&mut stdout, "turn/completed", json!({}))?;
+    stdout.flush()?;
     Ok(())
 }
 
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum StreamMessage {
-    Delta { text: String },
-    Complete,
+fn write_notification(mut output: impl Write, method: &str, params: Value) -> io::Result<()> {
+    serde_json::to_writer(&mut output, &json!({"method": method, "params": params}))?;
+    output.write_all(b"\n")
 }
 
 #[tauri::command]
 pub async fn stream_fixture(
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
     verification: State<'_, Verification>,
-    output: Channel<StreamMessage>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     if *verification != Verification::Streaming {
         return Err("fixture verification was not requested at launch".into());
     }
-    let result = tokio::time::timeout(Duration::from_secs(15), send_fixture(&output))
+    let Some(workspace) = state
+        .start_fixture(&window)
+        .map_err(|error| format!("{error:?}"))?
+    else {
+        return Ok(false);
+    };
+    tauri::async_runtime::spawn(async move {
+        match tokio::time::timeout(
+            Duration::from_secs(15),
+            send_fixture(&app.state::<ProjectIpc>(), workspace),
+        )
         .await
-        .map_err(|_| "fixture timed out".to_string())?;
-    result.map_err(|error| error.to_string())
+        {
+            Ok(Ok(())) => return,
+            Ok(Err(error)) => eprintln!("{error}"),
+            Err(_) => eprintln!("stream fixture timed out"),
+        }
+        app.exit(1);
+    });
+    Ok(true)
 }
 
 async fn send_fixture(
-    output: &Channel<StreamMessage>,
+    state: &ProjectIpc,
+    workspace: WorkspaceId,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut command = Command::new(env::current_exe()?);
     command
@@ -86,24 +135,74 @@ async fn send_fixture(
     let mut child = command.spawn()?;
     let stdout = child.stdout.take().expect("fixture stdout is piped");
     let mut reader = JsonlReader::new(stdout, 64 * 1024);
-    while let Some(message) = read_message(&mut reader).await? {
+    let mut timer = tokio::time::interval(Duration::from_millis(20));
+    timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut batcher = TextBatcher::default();
+    let mut input_deltas = 0;
+    let mut published_batches = 0;
+    let mut turn_finished = false;
+    let mut publish = |change: StreamChange| {
+        if matches!(&change, StreamChange::Text(_)) {
+            published_batches += 1;
+        }
+        state
+            .publish_stream(workspace, change)
+            .then_some(())
+            .ok_or("fixture stream lost its workspace")
+    };
+    loop {
+        let message = tokio::select! {
+            biased;
+            _ = timer.tick() => {
+                if let Some(batch) = batcher.flush() {
+                    publish(batch)?;
+                }
+                continue;
+            }
+            message = read_message(&mut reader) => message?,
+        };
+        let Some(message) = message else { break };
+        if turn_finished {
+            return Err("fixture sent a notification after turn completion".into());
+        }
         let ServerMessage::Event(ServerEvent::Notification { method, params }) = message else {
             return Err("fixture sent an unexpected envelope".into());
         };
-        if method != "item/agentMessage/delta" {
-            return Err("fixture sent an unexpected notification".into());
+        match method.as_str() {
+            "item/agentMessage/delta" => {
+                let id = params["itemId"]
+                    .as_str()
+                    .ok_or("invalid fixture item identity")?;
+                let text = params["delta"].as_str().ok_or("invalid fixture delta")?;
+                input_deltas += 1;
+                if let Some(batch) = batcher.append(id.to_owned(), text.to_owned()) {
+                    publish(batch)?;
+                }
+            }
+            "item/completed" => {
+                let id = params["item"]["id"]
+                    .as_str()
+                    .ok_or("invalid fixture item identity")?;
+                for change in batcher.finish(StreamChange::ItemCompleted(id.to_owned())) {
+                    publish(change)?;
+                }
+            }
+            "turn/completed" => turn_finished = true,
+            _ => return Err("fixture sent an unexpected notification".into()),
         }
-        let text = params["delta"]
-            .as_str()
-            .ok_or("fixture sent an invalid delta")?;
-        output.send(StreamMessage::Delta {
-            text: text.to_owned(),
-        })?;
     }
-    if !child.wait().await?.success() {
-        return Err("fixture child exited unsuccessfully".into());
+    if !turn_finished || !child.wait().await?.success() {
+        return Err("fixture child did not complete the stream".into());
     }
-    output.send(StreamMessage::Complete)?;
+    if let Some(batch) = batcher.flush() {
+        publish(batch)?;
+    }
+    if published_batches >= input_deltas {
+        return Err("fixture did not coalesce stream text".into());
+    }
+    if !state.publish_stream(workspace, StreamChange::Completed) {
+        return Err("fixture stream lost its workspace".into());
+    }
     Ok(())
 }
 
@@ -118,7 +217,8 @@ pub fn verify_fixture_result(
     verification: State<'_, Verification>,
     scope_verified: bool,
     subscription_verified: bool,
-    deltas: Vec<String>,
+    stream_recovered: bool,
+    items: Vec<TranscriptItem>,
     rendered: String,
 ) -> Result<(), String> {
     if *verification != Verification::Streaming {
@@ -136,8 +236,24 @@ pub fn verify_fixture_result(
         app.exit(1);
         return Ok(());
     }
-    let expected = scenario().map_err(|error| error.to_string())?.chunks;
-    if deltas != expected || rendered != expected.concat() {
+    let chunks = scenario().map_err(|error| error.to_string())?.chunks;
+    let expected = [
+        TranscriptItem {
+            item_id: PRIMARY_ITEM.into(),
+            text: chunks.concat(),
+            completed: true,
+        },
+        TranscriptItem {
+            item_id: SECONDARY_ITEM.into(),
+            text: SECONDARY_TEXT.concat(),
+            completed: true,
+        },
+    ];
+    let expected_text = expected
+        .iter()
+        .map(|item| item.text.as_str())
+        .collect::<String>();
+    if !stream_recovered || items != expected || rendered != expected_text {
         eprintln!("WebView fixture differed from the expected ordered Unicode output");
         app.exit(1);
         return Ok(());
@@ -145,7 +261,10 @@ pub fn verify_fixture_result(
     println!("Verified workspace grant rejection and revision recovery across WebView reload");
     println!(
         "Verified {} ordered fixture deltas and exact WebView text",
-        expected.len()
+        chunks.len() + SECONDARY_TEXT.len()
+    );
+    println!(
+        "Verified item batching, terminal ordering, and exact transcript recovery across reconnect"
     );
     app.exit(0);
     Ok(())

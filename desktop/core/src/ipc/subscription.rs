@@ -6,7 +6,10 @@ use tokio::{sync::watch, time::timeout};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use super::WorkspaceView;
+use super::{
+    WorkspaceId, WorkspaceView,
+    stream::{StreamChange, TranscriptView},
+};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, TS)]
 pub struct SubscriptionId(Uuid);
@@ -16,6 +19,7 @@ pub struct SubscriptionId(Uuid);
 pub struct WorkspaceSnapshot {
     pub revision: u32,
     pub workspace: Option<WorkspaceView>,
+    pub transcript: TranscriptView,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -34,8 +38,16 @@ pub struct WorkspaceUpdateRequest {
 
 #[derive(Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct RevisionedStream {
+    pub revision: u32,
+    pub change: StreamChange,
+}
+
+#[derive(Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub enum WorkspaceUpdate {
     Changed(WorkspaceSnapshot),
+    Stream(RevisionedStream),
     Resync,
     Retired,
     Idle,
@@ -45,6 +57,28 @@ pub enum WorkspaceUpdate {
 struct Publication {
     subscriber: Option<SubscriptionId>,
     snapshot: WorkspaceSnapshot,
+    stream_change: Option<StreamChange>,
+}
+
+impl Publication {
+    fn advance(&mut self, stream_change: Option<StreamChange>) {
+        self.snapshot.revision = self
+            .snapshot
+            .revision
+            .checked_add(1)
+            .expect("workspace projection exhausted its revision range");
+        self.stream_change = stream_change;
+    }
+
+    fn adjacent_update(&self) -> WorkspaceUpdate {
+        match &self.stream_change {
+            Some(change) => WorkspaceUpdate::Stream(RevisionedStream {
+                revision: self.snapshot.revision,
+                change: change.clone(),
+            }),
+            None => WorkspaceUpdate::Changed(self.snapshot.clone()),
+        }
+    }
 }
 
 pub struct WorkspaceProjection {
@@ -68,14 +102,28 @@ impl WorkspaceProjection {
             if publication.snapshot.workspace == workspace {
                 return false;
             }
-            publication.snapshot.revision = publication
-                .snapshot
-                .revision
-                .checked_add(1)
-                .expect("workspace projection exhausted its revision range");
             publication.snapshot.workspace = workspace;
+            publication.snapshot.transcript = TranscriptView::default();
+            publication.advance(None);
             true
         });
+    }
+
+    pub fn publish_stream(&mut self, workspace: WorkspaceId, change: StreamChange) -> bool {
+        self.publication.send_if_modified(|publication| {
+            if publication
+                .snapshot
+                .workspace
+                .as_ref()
+                .map(|view| view.workspace_id)
+                != Some(workspace)
+                || !publication.snapshot.transcript.apply(&change)
+            {
+                return false;
+            }
+            publication.advance(Some(change));
+            true
+        })
     }
 
     pub fn subscribe(&mut self) -> WorkspaceSubscription {
@@ -128,7 +176,7 @@ impl WorkspacePoll {
                 let revision = current.snapshot.revision;
                 if revision != self.request.after_revision {
                     return if self.request.after_revision.checked_add(1) == Some(revision) {
-                        WorkspaceUpdate::Changed(current.snapshot.clone())
+                        current.adjacent_update()
                     } else {
                         WorkspaceUpdate::Resync
                     };
@@ -144,7 +192,7 @@ impl WorkspacePoll {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipc::WorkspaceId;
+    use crate::ipc::TextBatcher;
 
     #[tokio::test]
     async fn bounded_subscription_catches_adjacent_updates_and_resyncs_after_replacement_or_lag() {
@@ -172,7 +220,7 @@ mod tests {
             update,
             WorkspaceUpdate::Changed(WorkspaceSnapshot {
                 revision: 2,
-                workspace: None
+                ..WorkspaceSnapshot::default()
             })
         );
         let lagging = projection.poll(request(&first, 2)).unwrap();
@@ -187,7 +235,8 @@ mod tests {
             fresh.snapshot,
             WorkspaceSnapshot {
                 revision: 5,
-                workspace: Some(view)
+                workspace: Some(view),
+                ..WorkspaceSnapshot::default()
             }
         );
         assert_eq!(waiting.wait(Duration::ZERO).await, WorkspaceUpdate::Retired);
@@ -195,5 +244,50 @@ mod tests {
         let idle = projection.poll(request(&fresh, 5)).unwrap();
         assert_eq!(idle.wait(Duration::ZERO).await, WorkspaceUpdate::Idle);
         assert!(projection.poll(request(&fresh, 5)).is_some());
+    }
+
+    #[tokio::test]
+    async fn transcript_batches_flush_before_terminals_and_reconnect_to_the_same_text() {
+        let mut projection = WorkspaceProjection::default();
+        let workspace_id = WorkspaceId(Uuid::new_v4());
+        projection.publish(Some(WorkspaceView {
+            workspace_id,
+            project_path: "first".into(),
+        }));
+        let initial = projection.subscribe();
+        let mut batcher = TextBatcher::default();
+        assert!(batcher.append("first".into(), "café ".into()).is_none());
+        assert!(batcher.append("second".into(), "日本語".into()).is_none());
+        assert!(batcher.append("first".into(), "👩🏽‍💻".into()).is_none());
+        let mut finishing = batcher.finish(StreamChange::ItemCompleted("first".into()));
+        let text = finishing.next().unwrap();
+        let terminal = finishing.next().unwrap();
+        assert!(finishing.next().is_none());
+        assert!(projection.publish_stream(workspace_id, text.clone()));
+        let request = WorkspaceUpdateRequest {
+            subscription_id: initial.subscription_id,
+            after_revision: initial.snapshot.revision,
+        };
+        assert_eq!(
+            projection.poll(request).unwrap().wait(Duration::ZERO).await,
+            WorkspaceUpdate::Stream(RevisionedStream {
+                change: text,
+                revision: 2
+            }),
+        );
+        let reconnect = projection.subscribe();
+        assert_eq!(reconnect.snapshot.transcript.items[0].text, "café 👩🏽‍💻");
+        assert_eq!(reconnect.snapshot.transcript.items[1].text, "日本語");
+        assert!(!reconnect.snapshot.transcript.items[0].completed);
+        assert!(projection.publish_stream(workspace_id, terminal));
+        assert!(batcher.append("first".into(), "late".into()).is_none());
+        assert!(!projection.publish_stream(workspace_id, batcher.flush().unwrap()));
+        assert!(projection.publish_stream(workspace_id, StreamChange::Completed));
+        let complete = projection.subscribe();
+        assert!(complete.snapshot.transcript.completed);
+        assert_eq!(complete.snapshot.transcript.items[0].text, "café 👩🏽‍💻");
+        projection.publish(None);
+        assert!(!projection.publish_stream(workspace_id, StreamChange::Completed));
+        assert!(projection.subscribe().snapshot.transcript.items.is_empty());
     }
 }

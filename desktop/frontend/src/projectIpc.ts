@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  StreamChange, TranscriptItem, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -20,6 +20,27 @@ export function nextWorkspaceUpdate(request: WorkspaceUpdateRequest): Promise<Wo
   return invoke('next_workspace_update', { request });
 }
 
+function applyStream(transcript: TranscriptView, change: StreamChange): TranscriptView {
+  if (change === 'completed') return { ...transcript, completed: true };
+  const items = transcript.items.slice();
+  function updateItem(itemId: string, update: (item: TranscriptItem) => TranscriptItem) {
+    const index = items.findIndex((item) => item.itemId === itemId);
+    if (index === -1) {
+      items.push(update({ itemId, text: '', completed: false }));
+    } else {
+      items[index] = update(items[index]!);
+    }
+  }
+  if ('itemCompleted' in change) {
+    updateItem(change.itemCompleted, (item) => ({ ...item, completed: true }));
+  } else {
+    for (const batch of change.text) {
+      updateItem(batch.itemId, (item) => item.completed ? item : { ...item, text: item.text + batch.text });
+    }
+  }
+  return { ...transcript, items };
+}
+
 export async function observeWorkspace(
   receive: (snapshot: WorkspaceSnapshot) => void,
   signal: AbortSignal,
@@ -31,11 +52,18 @@ export async function observeWorkspace(
     const update = await nextWorkspaceUpdate({ subscriptionId, afterRevision: snapshot.revision });
     if (signal.aborted || update === 'retired') return;
     if (update === 'idle') continue;
-    if (update === 'resync' || update.changed.revision !== snapshot.revision + 1) {
+    const revision = update === 'resync' ? null : 'changed' in update ? update.changed.revision : update.stream.revision;
+    if (update === 'resync' || revision !== snapshot.revision + 1) {
       ({ subscriptionId, snapshot } = await subscribeWorkspace());
       if (signal.aborted) return;
-    } else {
+    } else if ('changed' in update) {
       snapshot = update.changed;
+    } else {
+      snapshot = {
+        ...snapshot,
+        revision: update.stream.revision,
+        transcript: applyStream(snapshot.transcript, update.stream.change),
+      };
     }
     receive(snapshot);
   }

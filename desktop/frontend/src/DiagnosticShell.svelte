@@ -1,12 +1,10 @@
 <script lang="ts">
-  import { Channel, invoke } from '@tauri-apps/api/core';
+  import { invoke } from '@tauri-apps/api/core';
   import { onMount, tick } from 'svelte';
   import { probeMedia } from './mediaProbe';
   import { observeWorkspace, pickWorkspace, readWorkspace } from './projectIpc';
   import { verifyWorkspaceSubscription } from './workspaceProbe';
-  import type { IpcError, WorkspaceView } from './generated/workspace';
-
-  type StreamMessage = { type: 'delta'; text: string } | { type: 'complete' };
+  import type { IpcError, TranscriptItem, WorkspaceView } from './generated/workspace';
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
@@ -36,25 +34,33 @@
     return false;
   }
 
-  async function runFixture(subscriptionVerified: boolean) {
+  async function runFixture(subscriptionVerified: boolean, lifecycle: AbortController) {
     const scopeVerified = await workspaceScopeVerified();
-    const deltas: string[] = [];
-    const output = new Channel<StreamMessage>();
-    const delivered = new Promise<void>((resolve) => {
-      output.onmessage = (message) => {
-        if (message.type === 'delta') {
-          deltas.push(message.text);
-          text += message.text;
-        } else {
-          resolve();
-        }
-      };
-    });
-    await Promise.all([invoke('stream_fixture', { output }), delivered]);
-    await tick();
-    await invoke('verify_fixture_result', {
-      scopeVerified, subscriptionVerified, deltas, rendered: transcript?.textContent ?? '',
-    });
+    async function report(items: TranscriptItem[], streamRecovered: boolean) {
+      await tick();
+      await invoke('verify_fixture_result', {
+        scopeVerified, subscriptionVerified, streamRecovered, items, rendered: transcript?.textContent ?? '',
+      });
+    }
+    if (!scopeVerified || !subscriptionVerified) {
+      await report([], false);
+      return;
+    }
+    const started = await invoke<boolean>('stream_fixture');
+    let initialSnapshot = true;
+    let recoveredPrefix = false;
+    await observeWorkspace(({ transcript: current }) => {
+      text = current.items.map((item) => item.text).join('');
+      if (initialSnapshot && !started) recoveredPrefix = text.length > 0;
+      initialSnapshot = false;
+      if (started && text.length > 0) {
+        lifecycle.abort();
+        window.location.reload();
+      } else if (current.completed) {
+        lifecycle.abort();
+        void report(current.items, recoveredPrefix).catch(console.error);
+      }
+    }, lifecycle.signal);
   }
 
   onMount(() => {
@@ -69,7 +75,7 @@
         if (verification === 'streaming') {
           const subscription = await verifyWorkspaceSubscription();
           if (subscription === 'reload') window.location.reload();
-          else await runFixture(subscription);
+          else await runFixture(subscription, lifecycle);
         }
         if (verification === 'media') await invoke('verify_media_result', { evidence: await probeMedia() });
       })

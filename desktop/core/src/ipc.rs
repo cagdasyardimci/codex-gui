@@ -6,10 +6,12 @@ use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
 
+mod stream;
 mod subscription;
+pub use stream::{StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptView};
 pub use subscription::{
-    SubscriptionId, WorkspaceProjection, WorkspaceSnapshot, WorkspaceSubscription, WorkspaceUpdate,
-    WorkspaceUpdateRequest,
+    RevisionedStream, SubscriptionId, WorkspaceProjection, WorkspaceSnapshot,
+    WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest,
 };
 
 pub const WORKSPACE_WINDOW: &str = "main";
@@ -118,6 +120,11 @@ pub fn workspace_typescript() -> String {
         WorkspaceSubscription::decl(),
         WorkspaceUpdateRequest::decl(),
         WorkspaceUpdate::decl(),
+        RevisionedStream::decl(),
+        TextBatch::decl(),
+        StreamChange::decl(),
+        TranscriptItem::decl(),
+        TranscriptView::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

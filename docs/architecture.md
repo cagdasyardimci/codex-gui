@@ -20,6 +20,8 @@ The [Tauri host](../desktop/src-tauri/src/project_ipc.rs) accepts workspace requ
 
 The [workspace subscription](../desktop/core/src/ipc/subscription.rs) attaches to the current snapshot under the same lock as publication. The host retains one projection and accepts one outstanding read from the current subscriber. The renderer applies adjacent revisions and attaches again after a gap. Reload attaches to the latest snapshot and retires the previous subscription.
 
+[Stream batches](../desktop/core/src/ipc/stream.rs) keep text in order within each item and flush pending deltas before item or turn completion. Incremental reads send the latest change. A snapshot carries the assembled text so a renderer can resume without replaying notifications. Replacing the workspace clears its visible transcript and retires its stream updates.
+
 ## Ownership and recovery
 
 Displayed selection and execution ownership are independent. An accepted first message appears in project navigation using its captured request identity while the backend creates the conversation. The assigned thread replaces that row atomically; a failed preparation retires it without changing an independently opened draft. Every asynchronous result must validate its captured workspace/session, connection generation, request identity and relevant thread/turn. Deferred UI actions must retain their original target rather than follow later selection. Shared eligibility rules serve presentations and reducers, with admission checked again at reduction.

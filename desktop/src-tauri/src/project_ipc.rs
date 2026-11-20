@@ -5,7 +5,7 @@ use std::sync::{
 use std::{path::Path, time::Duration};
 
 use codex_gui_core::ipc::{
-    IpcError, WorkspaceGrants, WorkspaceId, WorkspaceProjection, WorkspaceRequest,
+    IpcError, StreamChange, WorkspaceGrants, WorkspaceId, WorkspaceProjection, WorkspaceRequest,
     WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
     authorize_window,
 };
@@ -19,6 +19,7 @@ use crate::fixture::Verification;
 pub struct ProjectIpc {
     state: Mutex<ProjectState>,
     picking: AtomicBool,
+    fixture_started: AtomicBool,
 }
 
 #[derive(Default)]
@@ -54,6 +55,28 @@ impl ProjectIpc {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .map_err(|_| IpcError::PickerBusy)?;
         Ok(Picker(&self.picking))
+    }
+
+    pub fn start_fixture(&self, window: &WebviewWindow) -> Result<Option<WorkspaceId>, IpcError> {
+        authorize_view(window)?;
+        let workspace = self
+            .state
+            .lock()
+            .expect("workspace state lock poisoned")
+            .grants
+            .current_view()
+            .ok_or(IpcError::RetiredWorkspace)?
+            .workspace_id;
+        if self.fixture_started.swap(true, Ordering::AcqRel) {
+            return Ok(None);
+        }
+        Ok(Some(workspace))
+    }
+
+    pub fn publish_stream(&self, workspace: WorkspaceId, change: StreamChange) -> bool {
+        let mut state = self.state.lock().expect("workspace state lock poisoned");
+        state.publish();
+        state.projection.publish_stream(workspace, change)
     }
 }
 
