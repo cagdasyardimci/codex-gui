@@ -3,9 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use codex_gui_core::{
     identity::ThreadId,
     ipc::{
-        ApprovalChoice, ApprovalView, InteractionAnswer, InteractionContent, InteractionView,
-        IpcError, PermissionChoice, PermissionView, QuestionAnswer, QuestionView, RespondRequest,
-        WriteAccess,
+        ApprovalChoice, ApprovalView, DictationTarget, InteractionAnswer, InteractionContent,
+        InteractionView, IpcError, PermissionChoice, PermissionView, QuestionAnswer, QuestionView,
+        RespondRequest, WriteAccess,
     },
     workspace::{InteractionKind, InteractionResponse, PendingInteraction, PermissionScope},
 };
@@ -52,6 +52,19 @@ impl InteractionProjection {
 }
 
 impl Navigation {
+    pub(super) fn can_dictate(&self, target: &DictationTarget) -> bool {
+        self.quit.is_none() && self.view.write_access == WriteAccess::Ready
+            && self.selection.as_ref().is_some_and(|selection| selection.id == target.workspace_id)
+            && self.view.actions.interactions.iter().any(|request| {
+                request.id == target.interaction_id && matches!(
+                    &request.content,
+                    InteractionContent::Questions(questions) if questions.iter().any(|question| {
+                        question.id == target.question_id && question.accepts_text && !question.secret
+                    })
+                )
+            })
+    }
+
     pub(super) async fn respond(&mut self, request: RespondRequest) -> Result<(), IpcError> {
         self.require(request.workspace_id)?;
         if self.view.write_access != WriteAccess::Ready {

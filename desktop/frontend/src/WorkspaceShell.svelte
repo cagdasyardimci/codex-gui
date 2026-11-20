@@ -19,6 +19,7 @@
   import VoiceControls from './VoiceControls.svelte';
   import { DesktopVoice } from './desktopVoice';
   import { SpeechPlayback } from './speechPlayback';
+  import { verifyQuestionDictation } from './dictationProbe';
   import { verifyReadAloud } from './readAloudProbe';
   import { verifyVoiceHistory } from './voiceHistoryProbe';
   import { verifyVoice, verifyVoiceHandoff, verifyVoiceNoFallback, verifyVoiceReconnect } from './voiceProbe';
@@ -70,7 +71,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -1213,6 +1214,7 @@
     else if (verify === 'notifications') void verifyNotifications(() => snapshot);
     else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
     else if (verify === 'voiceHistory' || verify === 'voiceHistoryRestore') void verifyVoiceHistory(verify, () => snapshot);
+    else if (verify === 'questionDictation') void verifyQuestionDictation(() => snapshot);
     else if (verify === 'readAloud') void verifyReadAloud(() => snapshot);
     else if (verify === 'voiceHandoff') void verifyVoiceHandoff(() => snapshot, () => call);
     else if (verify === 'voiceNoFallback') void verifyVoiceNoFallback(() => snapshot, () => call);
@@ -1376,7 +1378,7 @@
         <button class="workspace-retry" type="button" disabled={actionPending} onclick={retryChat}>Retry</button>
       {/if}
       {#each navigation?.actions.interactions ?? [] as interaction (interaction.id)}
-        <InteractionCard {interaction} disabled={actionPending} respond={(answer) => respond(interaction.id, answer)} />
+        <InteractionCard {interaction} {workspaceId} disabled={actionPending || !!quit} respond={(answer) => respond(interaction.id, answer)} />
       {/each}
       {#if queue}
         <QueuePanel {queue} disabled={actionPending || queue.busy || !!quit}

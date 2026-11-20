@@ -394,6 +394,9 @@ pub async fn subscribe_workspace(
     state: State<'_, ProjectIpc>,
 ) -> Result<WorkspaceSubscription, IpcError> {
     authorize_view(&window)?;
+    window
+        .state::<crate::dictation_ipc::QuestionDictation>()
+        .retain(|_| false);
     let mut state = state.state.lock().expect("workspace state lock poisoned");
     state.publish();
     Ok(state.projection.subscribe())

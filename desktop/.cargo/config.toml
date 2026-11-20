@@ -1,2 +1,11 @@
 [alias]
 check-core = "check --locked -p codex-gui-core"
+
+[env]
+WHISPER_DONT_GENERATE_BINDINGS = "1"
+GGML_NATIVE = "OFF"
+GGML_AVX = "OFF"
+GGML_AVX2 = "OFF"
+GGML_AVX512 = "OFF"
+GGML_FMA = "OFF"
+GGML_F16C = "OFF"

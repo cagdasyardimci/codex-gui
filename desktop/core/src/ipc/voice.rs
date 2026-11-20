@@ -1,5 +1,21 @@
 use super::*;
 
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DictationTarget {
+    pub workspace_id: WorkspaceId,
+    pub interaction_id: String,
+    pub question_id: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum DictationEvent {
+    Started,
+    Finished { text: String },
+    Retired,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum VoicePhase {

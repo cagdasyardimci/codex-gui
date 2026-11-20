@@ -63,6 +63,7 @@ pub enum Verification {
     VoiceHistory,
     VoiceHistoryRestore,
     ReadAloud,
+    QuestionDictation,
     WindowsSetup,
     Turn,
     ActiveTurn,

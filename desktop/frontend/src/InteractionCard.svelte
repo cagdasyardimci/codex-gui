@@ -1,8 +1,11 @@
 <script lang="ts">
-  import type { InteractionAnswer, InteractionView, QuestionView } from './generated/workspace';
+  import { Channel, invoke } from '@tauri-apps/api/core';
+  import { onDestroy, tick } from 'svelte';
+  import type { DictationEvent, InteractionAnswer, InteractionView, QuestionView, WorkspaceId } from './generated/workspace';
 
-  let { interaction, disabled, respond }: {
+  let { interaction, workspaceId, disabled, respond }: {
     interaction: InteractionView;
+    workspaceId?: WorkspaceId;
     disabled: boolean;
     respond: (response: InteractionAnswer) => void;
   } = $props();
@@ -10,6 +13,48 @@
   let selectedOptions = $state<Record<string, string[]>>({});
   let textAnswers = $state<Record<string, string>>({});
   let permissions = $state<string[]>([]);
+  const answerInputs: Record<string, HTMLInputElement | undefined> = Object.create(null);
+  let capture = $state.raw<{ id: string; question: string; opening: Promise<void> }>();
+  let captureReady = $state(false);
+
+  function dictate(question: QuestionView) {
+    if (!workspaceId || disabled) return;
+    stopDictation(true);
+    const id = crypto.randomUUID();
+    const target = { workspaceId, interactionId: interaction.id, questionId: question.id };
+    const events = new Channel<DictationEvent>();
+    const settle = () => {
+      if (capture?.id !== id) return;
+      capture = undefined;
+      captureReady = false;
+      void tick().then(() => answerInputs[question.id]?.focus({ preventScroll: true }));
+    };
+    events.onmessage = (event) => {
+      if (capture?.id !== id) return;
+      if (event.type === 'started') {
+        captureReady = true;
+        return;
+      }
+      if (event.type === 'finished' && event.text) {
+        const manual = textAnswers[question.id] ?? '';
+        textAnswers[question.id] = manual.trimEnd() ? `${manual.trimEnd()} ${event.text}` : event.text;
+      }
+      settle();
+    };
+    const opening = invoke<void>('start_question_dictation', { target, id, events });
+    capture = { id, question: question.id, opening };
+    void opening.catch(settle);
+  }
+
+  function stopDictation(cancel: boolean) {
+    const active = capture;
+    if (!active) return;
+    if (cancel) capture = undefined;
+    captureReady = false;
+    void active.opening.then(() => invoke('end_question_dictation', { id: active.id, cancel })).catch(console.error);
+  }
+
+  onDestroy(() => stopDictation(true));
 
   function questionValues(question: QuestionView) {
     const text = textAnswers[question.id];
@@ -69,7 +114,20 @@
         {/each}
         {#if question.acceptsText}
           <input class="interaction-answer" type={question.secret ? 'password' : 'text'} aria-label={question.prompt}
-            bind:value={textAnswers[question.id]} />
+            bind:this={answerInputs[question.id]} bind:value={textAnswers[question.id]} />
+          {#if !question.secret && workspaceId}
+            <div class="interaction-actions">
+              {#if capture?.question === question.id}
+                <button type="button" onclick={() => {
+                  stopDictation(true);
+                  answerInputs[question.id]?.focus({ preventScroll: true });
+                }}>Cancel Dictation</button>
+                <button type="button" disabled={!captureReady} onclick={() => stopDictation(false)}>Insert Dictation</button>
+              {:else}
+                <button type="button" onclick={() => dictate(question)}>Dictate Answer</button>
+              {/if}
+            </div>
+          {/if}
         {/if}
       </fieldset>
     {/each}

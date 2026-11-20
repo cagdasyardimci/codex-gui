@@ -9,6 +9,8 @@ pnpm --dir desktop/frontend tauri build --debug --ci -- --locked
 
 On macOS set `APPLE_SIGNING_IDENTITY=-` for a local ad hoc signature. Open the resulting disk image and copy the beta application to the desired Applications folder before launching it from Finder. On Windows run the per-user NSIS installer, then use the Start menu entry. The installer can download WebView2 when it is missing, which requires network access. On Ubuntu install the Debian package with `sudo apt install ./package.deb` and launch Codex GUI Beta from the application menu.
 
+The first build fetches a pinned [multilingual Whisper model](https://huggingface.co/ggerganov/whisper.cpp/blob/c521a4b02f422512d734391fdf08bb08c0862f68/ggml-tiny-q5_1.bin) and verifies its SHA-256 before bundling. Question dictation runs locally with the packaged model. Use the [automated dictation procedure](validation.md#tauri-diagnostic-shell) to qualify that resource in an installed artifact.
+
 ## Support and ownership
 
 The initial beta matrix covers macOS 14 or later on Apple Silicon, Windows 11 x64, and Ubuntu 24.04 LTS x64. Intel Macs are outside the initial beta matrix. The repository maintainer owns any support expansion and the platform signing credentials. Release distribution uses a Developer ID signature and notarization on macOS and a signed installer on Windows.

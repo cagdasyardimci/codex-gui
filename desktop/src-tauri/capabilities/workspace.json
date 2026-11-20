@@ -36,6 +36,8 @@
     "allow-can-read-aloud",
     "allow-read-aloud",
     "allow-speech-segment-drained",
+    "allow-start-question-dictation",
+    "allow-end-question-dictation",
     "allow-read-voice-call",
     "allow-prepare-voice-call",
     "allow-start-voice-transport",

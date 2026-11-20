@@ -12,6 +12,8 @@ NOTICES = {
     "Inter-OFL.txt": FRONTEND_PACKAGES.parent / "src" / "assets" / "Inter-LICENSE.txt",
     "GStreamer-Rust-MIT.txt": ROOT / "desktop" / "src-tauri" / "notices" / "GStreamer-Rust-MIT.txt",
     "Symphonia-MPL-2.0.txt": ROOT / "desktop" / "src-tauri" / "notices" / "Symphonia-MPL-2.0.txt",
+    "Whisper-MIT.txt": ROOT / "desktop" / "src-tauri" / "notices" / "Whisper-MIT.txt",
+    "Whisper-Rust-Unlicense.txt": ROOT / "desktop" / "src-tauri" / "notices" / "Whisper-Rust-Unlicense.txt",
     "frontend-licenses.md": FRONTEND_PACKAGES.parent / "dist" / "frontend-licenses.md",
 }
 

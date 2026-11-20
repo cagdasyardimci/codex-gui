@@ -7,9 +7,9 @@
     "node": "22.23.2"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node prepare-dictation.mjs && vite",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "build": "vite build",
+    "build": "node prepare-dictation.mjs && vite build",
     "tauri": "cd .. && tauri"
   },
   "devDependencies": {

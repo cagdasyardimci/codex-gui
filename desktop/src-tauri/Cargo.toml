@@ -11,6 +11,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 base64 = "=0.23.1"
 codex-gui-core = { path = "../core" }
+cpal = "=0.17.3"
 fontdb = "=0.23.0"
 image = { version = "=0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "tiff", "webp"] }
 notify-rust = { version = "=4.19.0", features = ["preview-macos-un"] }
@@ -27,6 +28,7 @@ tauri-plugin-opener = "=2.7.3"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "process", "sync", "time"] }
 uuid = { version = "1", features = ["v4"] }
+whisper-rs = "=0.16.0"
 
 [target.'cfg(windows)'.dependencies]
 dunce = "1"

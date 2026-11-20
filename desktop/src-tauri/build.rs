@@ -52,6 +52,8 @@ fn main() {
         "can_read_aloud",
         "read_aloud",
         "speech_segment_drained",
+        "start_question_dictation",
+        "end_question_dictation",
         "read_voice_call",
         "prepare_voice_call",
         "start_voice_transport",

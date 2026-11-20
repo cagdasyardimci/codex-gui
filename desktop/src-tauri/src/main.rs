@@ -8,6 +8,7 @@ mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
 mod desktop_presentation;
+mod dictation_ipc;
 mod diff_ipc;
 mod file_actions_ipc;
 mod file_preview_ipc;
@@ -67,6 +68,7 @@ fn main() {
         Some("--verify-voice-history") => fixture::Verification::VoiceHistory,
         Some("--verify-voice-history-restore") => fixture::Verification::VoiceHistoryRestore,
         Some("--verify-read-aloud") => fixture::Verification::ReadAloud,
+        Some("--verify-question-dictation") => fixture::Verification::QuestionDictation,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -118,6 +120,7 @@ fn main() {
             | fixture::Verification::VoiceHistory
             | fixture::Verification::VoiceHistoryRestore
             | fixture::Verification::ReadAloud
+            | fixture::Verification::QuestionDictation
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -156,6 +159,7 @@ fn main() {
             | fixture::Verification::VoiceHistory
             | fixture::Verification::VoiceHistoryRestore
             | fixture::Verification::ReadAloud
+            | fixture::Verification::QuestionDictation
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -177,6 +181,7 @@ fn main() {
         .manage(settings_ipc::SettingsIpc::default())
         .manage(voice_ipc::VoiceIpc::default())
         .manage(speech_ipc::SpeechPlayback::default())
+        .manage(dictation_ipc::QuestionDictation::default())
         .manage(quit_ipc::QuitLifecycle::default())
         .on_window_event(move |window, event| {
             desktop_presentation::on_window_event(window, event);
@@ -264,6 +269,8 @@ fn main() {
             speech_ipc::can_read_aloud,
             speech_ipc::read_aloud,
             speech_ipc::speech_segment_drained,
+            dictation_ipc::start_question_dictation,
+            dictation_ipc::end_question_dictation,
             voice_ipc::read_voice_call,
             voice_ipc::prepare_voice_call,
             voice_ipc::start_voice_transport,

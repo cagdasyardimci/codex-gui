@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Use the microphone during voice calls.</string>
+    <string>Use the microphone for voice calls and to dictate question answers.</string>
 </dict>
 </plist>

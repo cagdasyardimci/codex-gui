@@ -17,10 +17,10 @@ use codex_gui_core::{
         CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, ThreadId, WorkspaceIdentity,
     },
     ipc::{
-        CommandUpdate, DraftAttachmentScope, DraftEdit, EditorDraft, IpcError, NavigationIntent,
-        NavigationView, PrepareVoiceCall, SidebarChatKey, SpeechEvent, StreamChange, TextBatcher,
-        TranscriptRowRequest, TranscriptView, VoiceCallView, WorkspaceId, WorkspaceRequest,
-        WriteAccess,
+        CommandUpdate, DictationEvent, DictationTarget, DraftAttachmentScope, DraftEdit,
+        EditorDraft, IpcError, NavigationIntent, NavigationView, PrepareVoiceCall, SidebarChatKey,
+        SpeechEvent, StreamChange, TextBatcher, TranscriptRowRequest, TranscriptView,
+        VoiceCallView, WorkspaceId, WorkspaceRequest, WriteAccess,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -38,6 +38,7 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::{
+    dictation_ipc::QuestionDictation,
     file_search_ipc::PreparedFileHit,
     fixture::Verification,
     project_ipc::ProjectState,
@@ -109,6 +110,7 @@ enum Action {
     PrepareVoice(PrepareVoiceCall, oneshot::Sender<VoiceCallView>),
     SpeechClient(WorkspaceId, oneshot::Sender<AppServerClient>),
     ReadAloud(TranscriptRowRequest, Uuid, Channel<SpeechEvent>),
+    StartQuestionDictation(DictationTarget, Uuid, Channel<DictationEvent>),
     VoiceTextSaved(DraftId),
     RequestQuit(tauri::AppHandle),
     FileTools(
@@ -389,6 +391,17 @@ impl NavigationHandle {
         result.await.map_err(|_| IpcError::StaleSelection)
     }
 
+    pub async fn start_question_dictation(
+        &self,
+        target: DictationTarget,
+        id: Uuid,
+        events: Channel<DictationEvent>,
+    ) -> Result<(), IpcError> {
+        self.request(Action::StartQuestionDictation(target, id, events))
+            .await
+            .map(|_| ())
+    }
+
     pub async fn read_aloud(
         &self,
         row: TranscriptRowRequest,
@@ -577,6 +590,16 @@ impl Navigation {
                 self.require(workspace)?;
                 let backend = self.backend.as_ref().ok_or(IpcError::StaleSelection)?;
                 let _ = reply.send(backend.connection.client());
+                return Ok(None);
+            }
+            Action::StartQuestionDictation(target, id, events) => {
+                self.require(target.workspace_id)?;
+                if !self.can_dictate(&target) {
+                    return Err(IpcError::StaleSelection);
+                }
+                self.app
+                    .state::<QuestionDictation>()
+                    .begin(&self.app, id, target, events);
                 return Ok(None);
             }
             Action::ReadAloud(row, id, events) => {
@@ -1582,6 +1605,9 @@ impl Navigation {
     }
 
     fn publish_navigation(&self) {
+        self.app
+            .state::<QuestionDictation>()
+            .retain(|target| self.can_dictate(target));
         let mut state = self.model.lock().expect("workspace state lock poisoned");
         let workspace = state.grants.current_view();
         if self.selection.is_some() && workspace.is_none() {
