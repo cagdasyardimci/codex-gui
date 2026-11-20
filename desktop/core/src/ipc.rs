@@ -64,7 +64,11 @@ pub use file_tools::{
     FileMarkdownResource, FilePreviewKind, FilePreviewRequest, MarkdownFileProperty,
     MarkdownFileView,
 };
-pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
+pub use git::{
+    DiffAction, DiffActionRequest, DiffChangesRequest, DiffComparison, DiffContentView,
+    DiffFileView, DiffMarkerRequest, DiffMediaRequest, DiffPatchRequest, DiffPatchView,
+    DiffReference, DiffReferences, DiffRichKind, DiffSide,
+};
 pub use inspector::{
     ChildHistoryAction, ChildHistoryPage, ChildHistoryRequest, ChildHistoryTarget, InspectorAgent,
     InspectorSource, InspectorSourceRequest, InspectorView,
@@ -440,9 +444,20 @@ pub fn workspace_typescript() -> String {
         GrantedPermissions::decl(),
         InteractionAnswer::decl(),
         RespondRequest::decl(),
+        DiffComparison::decl(),
+        DiffChangesRequest::decl(),
+        DiffReference::decl(),
+        DiffReferences::decl(),
         DiffFileView::decl(),
         DiffPatchRequest::decl(),
+        DiffSide::decl(),
+        DiffRichKind::decl(),
+        DiffContentView::decl(),
         DiffPatchView::decl(),
+        DiffMarkerRequest::decl(),
+        DiffMediaRequest::decl(),
+        DiffAction::decl(),
+        DiffActionRequest::decl(),
         LastTurnView::decl(),
         EditTotals::decl(),
         TurnEditQuality::decl(),

@@ -73,6 +73,7 @@
   let actionPending = $state(false);
   let admittingDraft = $state(false);
   let showingChanges = $state(false);
+  let preferredComparison = $state<'uncommitted' | 'lastTurn'>('uncommitted');
   let showingProjectContext = $state(false);
   let projectContextButton = $state<HTMLButtonElement>();
   let confirmingQuit = $state(false);
@@ -212,7 +213,10 @@
   }
 
   function openSummaryChanges(scope: ChatRequest) {
-    if (scope.workspaceId === workspaceId && scope.chatId === selectedChat && !quit) showingChanges = true;
+    if (scope.workspaceId === workspaceId && scope.chatId === selectedChat && !quit) {
+      preferredComparison = 'lastTurn';
+      showingChanges = true;
+    }
   }
 
   function updateInspector(scope: ChatRequest, selection: InspectorSelection, opened = true) {
@@ -575,7 +579,10 @@
         await displayMessageSearch(workspaceId, captured.focused);
         return;
       }
-      if (target.action === 'changes') showingChanges = true;
+      if (target.action === 'changes') {
+        preferredComparison = 'uncommitted';
+        showingChanges = true;
+      }
       else if (target.action === 'projectContext') showingProjectContext = true;
       else {
         const intent = { [target.action]: { workspaceId } } as NavigationIntent;
@@ -860,6 +867,7 @@
     }
     const command = outcome.present;
     if (command === 'diff') {
+      preferredComparison = 'uncommitted';
       showingChanges = true;
     } else if (command === 'copy') {
       const latest = snapshot?.transcript.items.filter((row) => row.role === 'assistant' && row.completed && row.text).at(-1);
@@ -1173,7 +1181,8 @@
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
       <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+F Control+Shift+F"
         onclick={showMessageSearch}>Search Messages</button>
-      <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
+      <button type="button" aria-expanded={showingChanges}
+        onclick={() => { preferredComparison = 'uncommitted'; showingChanges = !showingChanges; }}>Changes</button>
       {#if attachmentScope}
         <button type="button" aria-expanded={filesOpened} disabled={!!quit} onclick={() => void filePane?.toggle()}>Files</button>
         <button type="button" aria-keyshortcuts="Meta+P Control+P" disabled={actionPending || !!quit}
@@ -1357,8 +1366,11 @@
         </div>
       {/if}
     </section>
-    {#if showingChanges && workspace}
-      <WorkspaceChanges workspaceId={workspace.workspaceId} />
+    {#if showingChanges && attachmentScope}
+      {#key JSON.stringify([attachmentScope.workspaceId, attachmentScope.chatId, attachmentScope.draftId])}
+        <WorkspaceChanges scope={attachmentScope} preferred={preferredComparison}
+          lastTurnId={navigation?.lastTurn?.turnId} lastTurnRevision={navigation?.lastTurn?.revision} />
+      {/key}
     {/if}
     {#if attachmentScope}
       {#key JSON.stringify([attachmentScope.workspaceId, attachmentScope.draftId])}

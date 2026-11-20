@@ -19,11 +19,11 @@ impl GitComparison {
             self.verify_snapshot().await?;
         }
         let patch = self
-            .diff(PATCH_ARGUMENTS, std::iter::empty(), COMPARISON_PATCH_BYTES)
+            .diff(&PATCH_ARGUMENTS, Vec::new(), COMPARISON_PATCH_BYTES)
             .await?;
         if self.is_mutable() {
             let repeated = self
-                .diff(PATCH_ARGUMENTS, std::iter::empty(), COMPARISON_PATCH_BYTES)
+                .diff(&PATCH_ARGUMENTS, Vec::new(), COMPARISON_PATCH_BYTES)
                 .await?;
             if repeated != patch {
                 return Err(GitError::StaleComparison);

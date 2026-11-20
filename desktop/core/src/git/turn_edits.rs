@@ -172,43 +172,17 @@ impl TurnEdits {
         }
         let mut patch = String::new();
         for file in &self.files {
-            let old = file.before.as_ref().or(file.after.as_ref())?;
-            let new = file.after.as_ref().or(file.before.as_ref())?;
-            let old_name = old.to_str()?;
-            let new_name = new.to_str()?;
-            #[cfg(windows)]
-            let (old_name, new_name) = (
-                &old_name.replace('\\', "/")[..],
-                &new_name.replace('\\', "/")[..],
-            );
-            patch.push_str(&format!(
-                "diff --git {} {}\n",
-                quoted("a/", old_name),
-                quoted("b/", new_name)
-            ));
-            if file.before.is_none() {
-                patch.push_str("new file mode 100644\n");
-            } else if file.after.is_none() {
-                patch.push_str("deleted file mode 100644\n");
-            } else if old != new {
-                patch.push_str(&format!(
-                    "rename from {}\nrename to {}\n",
-                    quoted("", old_name),
-                    quoted("", new_name)
-                ));
-            }
-            if !file.diff.is_empty() {
-                let from = file
-                    .before
-                    .as_ref()
-                    .map_or_else(|| "/dev/null".into(), |_| quoted("a/", old_name));
-                let to = file
-                    .after
-                    .as_ref()
-                    .map_or_else(|| "/dev/null".into(), |_| quoted("b/", new_name));
-                patch.push_str(&format!("--- {from}\n+++ {to}\n{}\n", file.diff));
-            }
+            append_patch(&mut patch, file)?;
         }
+        (patch.len() <= 8 * 1024 * 1024).then_some(patch)
+    }
+
+    pub fn file_patch(&self, index: usize) -> Option<String> {
+        if self.view.quality != TurnEditQuality::Exact {
+            return None;
+        }
+        let mut patch = String::new();
+        append_patch(&mut patch, self.files.get(index)?)?;
         (patch.len() <= 8 * 1024 * 1024).then_some(patch)
     }
 
@@ -224,13 +198,11 @@ impl TurnEdits {
             edits.extend(item.edits.iter());
         }
         let (files, composed) = compose(&edits);
-        let totals = files
-            .iter()
-            .fold(EditTotals::default(), |mut totals, file| {
-                totals.additions += file.totals.additions;
-                totals.deletions += file.totals.deletions;
-                totals
-            });
+        let totals = files.iter().fold(EditTotals::default(), |mut sum, file| {
+            sum.additions += file.totals.additions;
+            sum.deletions += file.totals.deletions;
+            sum
+        });
         Arc::new(Self {
             view: LastTurnView {
                 turn_id: turn.0.clone(),
@@ -245,6 +217,46 @@ impl TurnEdits {
             files,
         })
     }
+}
+
+fn append_patch(patch: &mut String, file: &TurnFileEdit) -> Option<()> {
+    let old = file.before.as_ref().or(file.after.as_ref())?;
+    let new = file.after.as_ref().or(file.before.as_ref())?;
+    let old_name = old.to_str()?;
+    let new_name = new.to_str()?;
+    #[cfg(windows)]
+    let (old_name, new_name) = (
+        &old_name.replace('\\', "/")[..],
+        &new_name.replace('\\', "/")[..],
+    );
+    patch.push_str(&format!(
+        "diff --git {} {}\n",
+        quoted("a/", old_name),
+        quoted("b/", new_name)
+    ));
+    if file.before.is_none() {
+        patch.push_str("new file mode 100644\n");
+    } else if file.after.is_none() {
+        patch.push_str("deleted file mode 100644\n");
+    } else if old != new {
+        patch.push_str(&format!(
+            "rename from {}\nrename to {}\n",
+            quoted("", old_name),
+            quoted("", new_name)
+        ));
+    }
+    if !file.diff.is_empty() {
+        let from = file
+            .before
+            .as_ref()
+            .map_or_else(|| "/dev/null".into(), |_| quoted("a/", old_name));
+        let to = file
+            .after
+            .as_ref()
+            .map_or_else(|| "/dev/null".into(), |_| quoted("b/", new_name));
+        patch.push_str(&format!("--- {from}\n+++ {to}\n{}\n", file.diff));
+    }
+    Some(())
 }
 
 impl TurnFileEdit {

@@ -115,6 +115,10 @@ impl GitChange {
     pub fn display_path(&self) -> String {
         self.path.to_string_lossy().into_owned()
     }
+
+    pub fn relative(&self) -> &Path {
+        &self.path
+    }
 }
 
 pub struct CheckoutDiff {
@@ -164,13 +168,30 @@ impl CheckoutDiff {
     }
 
     pub async fn patch(&self, change: &GitChange) -> Result<String, GitError> {
+        self.patch_bytes(change)
+            .await
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    pub async fn untracked(&self) -> Result<Vec<GitChange>, GitError> {
+        let paths = self
+            .git
+            .success(
+                ["ls-files", "--others", "--exclude-standard", "-z", "--"],
+                QUERY_BYTES,
+            )
+            .await?;
+        parse_changes(&[], &paths)
+    }
+
+    pub async fn patch_bytes(&self, change: &GitChange) -> Result<Vec<u8>, GitError> {
         let path = change.path.as_os_str();
         let (status, patch) = if change.untracked {
             self.validate_untracked(&change.path)?;
             let result = self
                 .git
                 .run(
-                    ["diff", "--no-index"]
+                    ["diff", "--no-index", "--binary"]
                         .into_iter()
                         .chain(DIFF_OPTIONS.iter().copied())
                         .chain(["--", "/dev/null"])
@@ -198,7 +219,7 @@ impl CheckoutDiff {
         if !(status.success() || compared_with_null) {
             return Err(GitError::Exit(status));
         }
-        Ok(String::from_utf8_lossy(&patch).into_owned())
+        Ok(patch)
     }
 
     fn validate_untracked(&self, path: &Path) -> Result<(), GitError> {

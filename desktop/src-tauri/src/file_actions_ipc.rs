@@ -29,7 +29,7 @@ use crate::{
     transcript_ipc::{MAX_INLINE_BYTES, raster_type},
 };
 
-mod editors;
+pub(crate) mod editors;
 mod markdown;
 
 #[tauri::command]
@@ -399,7 +399,7 @@ fn github_blob_url(link: TrackedFileLink) -> Option<Url> {
     Some(url)
 }
 
-async fn export_destination(
+pub(crate) async fn export_destination(
     window: &WebviewWindow,
     path: &Path,
 ) -> Result<Option<PathBuf>, IpcError> {
@@ -440,7 +440,7 @@ async fn preview_destination(
     export_destination(window, path).await
 }
 
-async fn persist_export(
+pub(crate) async fn persist_export(
     source: Option<PathBuf>,
     destination: PathBuf,
     bytes: Vec<u8>,
@@ -463,8 +463,11 @@ fn write_export(source: Option<&Path>, destination: &Path, bytes: &[u8]) -> Resu
         .ok_or(IpcError::ProjectUnavailable)?;
     let target = parent.join(name);
     if let Some(source) = source {
-        let original = source.canonicalize().map_err(io_error)?;
-        if target == source || target.canonicalize().is_ok_and(|path| path == original) {
+        let original = source.canonicalize();
+        if target == source
+            || original
+                .is_ok_and(|original| target.canonicalize().is_ok_and(|path| path == original))
+        {
             return Err(IpcError::StaleSelection);
         }
     }
@@ -477,7 +480,7 @@ fn write_export(source: Option<&Path>, destination: &Path, bytes: &[u8]) -> Resu
     Ok(())
 }
 
-fn fixture_data(window: &WebviewWindow) -> Result<PathBuf, IpcError> {
+pub(crate) fn fixture_data(window: &WebviewWindow) -> Result<PathBuf, IpcError> {
     window
         .state::<FixtureCheckouts>()
         .data

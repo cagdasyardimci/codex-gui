@@ -55,8 +55,14 @@
     "allow-open-sent-prompt",
     "allow-reveal-sidebar-project",
     "allow-checkout-changes",
+    "allow-close-checkout-changes",
     "allow-count-chat-changes",
     "allow-checkout-patch",
+    "allow-checkout-diff-references",
+    "allow-mark-checkout-change",
+    "allow-checkout-diff-media",
+    "allow-checkout-diff-markdown",
+    "allow-checkout-diff-action",
     "allow-subscribe-workspace",
     "allow-next-workspace-update"
   ]

@@ -202,7 +202,7 @@ impl CapturedFile {
     }
 }
 
-pub(crate) fn comparison_file_revision(
+pub fn comparison_file_revision(
     checkout: &CheckoutIdentity,
     relative: &Path,
     limit: u64,
@@ -301,7 +301,7 @@ fn read_bounded(mut file: &File, limit: u64) -> Result<FileRead, FileError> {
 }
 
 impl FileRevision {
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
+    pub fn from_bytes(bytes: &[u8]) -> Self {
         Self {
             digest: hex::encode(Sha256::digest(bytes)),
             byte_count: bytes.len(),

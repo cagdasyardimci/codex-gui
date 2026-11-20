@@ -12,6 +12,21 @@ impl RawChange {
     pub(super) fn is_gitlink(&self) -> bool {
         self.identity.split(|&byte| byte == b' ').nth(1) == Some(b"160000")
     }
+
+    pub(super) fn blob(&self, after: bool) -> Option<&str> {
+        let mut fields = self.identity.get(1..)?.split(|&byte| byte == b' ');
+        let before_mode = fields.next()?;
+        let after_mode = fields.next()?;
+        let before_oid = fields.next()?;
+        let after_oid = fields.next()?;
+        let (mode, oid) = if after {
+            (after_mode, after_oid)
+        } else {
+            (before_mode, before_oid)
+        };
+        mode.starts_with(b"100").then_some(())?;
+        parse_object_id(oid).ok()
+    }
 }
 
 pub(super) fn parse_changes(bytes: &[u8]) -> Result<Vec<RawChange>, GitError> {

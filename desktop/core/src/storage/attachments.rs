@@ -35,6 +35,7 @@ pub mod navigation;
 pub mod queue_edits;
 pub(super) mod queue_preferences;
 pub(super) mod queue_steering;
+pub mod review_markers;
 pub mod sidebar;
 mod submissions;
 pub use exit_recovery::ExitOwner;

@@ -26,9 +26,11 @@ export async function verifyPinnedSummary(visible: () => WorkspaceSnapshot | nul
     await waitFor('The summary did not reveal the actual Changes pane', () =>
       !!document.querySelector('aside[aria-label="Checkout Changes"] button[data-file-id]'));
     if (await countChatChanges(first) !== 1) throw new Error('The summary did not read the verified checkout');
+    const comparison = document.querySelector<HTMLSelectElement>('select[aria-label="Comparison"]');
+    if (comparison?.value !== JSON.stringify('lastTurn')) throw new Error('The summary did not open its attributed Last Turn comparison');
     await click('tracked.txt');
     await waitFor('Refreshing the summary invalidated an open Changes file handle', () =>
-      document.querySelector('pre[aria-label="Patch"]')?.textContent?.includes('+after') === true);
+      document.querySelector('[aria-label="Patch"]')?.textContent?.includes('+after') === true);
     await click('Changes');
 
     await click('Pinned Summary');

@@ -12,13 +12,14 @@ use codex_gui_core::{
         AppServerClient, AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable,
         LoginCompletion, ServerEvent, TurnStatus,
     },
-    git::turn_edits::{LastTurnView, TurnEditReports},
+    git::turn_edits::{LastTurnView, TurnEditReports, TurnEdits},
     identity::{
         CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, ThreadId, WorkspaceIdentity,
     },
     ipc::{
-        CommandUpdate, DraftEdit, EditorDraft, IpcError, NavigationIntent, NavigationView,
-        StreamChange, TextBatcher, TranscriptView, WorkspaceId, WorkspaceRequest, WriteAccess,
+        CommandUpdate, DraftAttachmentScope, DraftEdit, EditorDraft, IpcError, NavigationIntent,
+        NavigationView, StreamChange, TextBatcher, TranscriptView, WorkspaceId, WorkspaceRequest,
+        WriteAccess,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -106,6 +107,10 @@ enum Action {
         codex_gui_core::ipc::FileTabRead,
         bool,
         oneshot::Sender<FileTabCapture>,
+    ),
+    ReadLastTurnChanges(
+        DraftAttachmentScope,
+        oneshot::Sender<Option<Arc<TurnEdits>>>,
     ),
     EditFileTab(codex_gui_core::ipc::FileTabEdit),
     SaveFileTab(
@@ -246,6 +251,16 @@ struct Navigation {
 }
 
 impl NavigationHandle {
+    pub async fn last_turn_changes(
+        &self,
+        scope: DraftAttachmentScope,
+    ) -> Result<Option<Arc<TurnEdits>>, IpcError> {
+        let (reply, receive) = oneshot::channel();
+        self.request(Action::ReadLastTurnChanges(scope, reply))
+            .await?;
+        receive.await.map_err(|_| IpcError::ProjectUnavailable)
+    }
+
     pub fn start(
         database: &Path,
         model: Arc<Mutex<ProjectState>>,
@@ -495,6 +510,10 @@ impl Navigation {
             }
             Action::CaptureFileTab(request, bytes, reply) => {
                 let _ = reply.send(self.capture_file_tools_tab(request, bytes)?);
+                return Ok(None);
+            }
+            Action::ReadLastTurnChanges(scope, reply) => {
+                let _ = reply.send(self.read_last_turn_changes(&scope)?);
                 return Ok(None);
             }
             Action::EditFileTab(request) => {
@@ -1388,6 +1407,18 @@ impl Backend {
 }
 
 impl Navigation {
+    fn read_last_turn_changes(
+        &self,
+        scope: &DraftAttachmentScope,
+    ) -> Result<Option<Arc<TurnEdits>>, IpcError> {
+        self.file_tools_key(scope)?;
+        Ok(self
+            .selection
+            .as_ref()
+            .and_then(|selection| selection.thread.as_ref())
+            .and_then(|thread| self.backend.as_ref()?.edits.current(thread)))
+    }
+
     fn last_turn_view(&self) -> Option<LastTurnView> {
         let thread = self.selection.as_ref()?.thread.as_ref()?;
         self.backend.as_ref()?.edits.view(thread)

@@ -132,7 +132,7 @@ pub enum FileAction {
     OpenGitHub,
 }
 
-#[derive(Debug, Serialize, TS)]
+#[derive(Clone, Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEditor {
     pub id: String,

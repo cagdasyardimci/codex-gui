@@ -117,6 +117,7 @@ fn main() {
         verification,
         fixture::Verification::Quit
             | fixture::Verification::History
+            | fixture::Verification::Diff
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -168,6 +169,7 @@ fn main() {
             fixture::verify_windows_setup_result,
             fixture::verify_turn_result,
             fixture::verify_diff_result,
+            fixture::change_compared_file_fixture,
             fixture::report_quit_failure,
             fixture::overwrite_file_tools_fixture,
             fixture::file_save_fixture_gate,
@@ -226,8 +228,14 @@ fn main() {
             project_ipc::next_workspace_update,
             project_ipc::change_workspace_fixture,
             diff_ipc::checkout_changes,
+            diff_ipc::close_checkout_changes,
             diff_ipc::count_chat_changes,
             diff_ipc::checkout_patch,
+            diff_ipc::checkout_diff_references,
+            diff_ipc::mark_checkout_change,
+            diff_ipc::actions::checkout_diff_media,
+            diff_ipc::actions::checkout_diff_markdown,
+            diff_ipc::actions::checkout_diff_action,
             quit_ipc::request_quit_fixture,
             fixture::select_fixture_checkout,
             fixture::seed_deletion_fixture,

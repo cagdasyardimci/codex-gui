@@ -16,6 +16,7 @@
     "allow-verify-windows-setup-result",
     "allow-verify-turn-result",
     "allow-verify-diff-result",
+    "allow-change-compared-file-fixture",
     "allow-request-quit-fixture",
     "allow-select-fixture-checkout",
     "allow-seed-deletion-fixture",

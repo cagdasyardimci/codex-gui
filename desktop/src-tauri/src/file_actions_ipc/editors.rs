@@ -12,7 +12,7 @@ enum Launcher {
     Executable(PathBuf),
 }
 
-pub(super) struct Editor {
+pub(crate) struct Editor {
     pub id: &'static str,
     label: &'static str,
     launcher: Launcher,
@@ -53,7 +53,7 @@ impl Editor {
     }
 }
 
-pub(super) fn installed() -> Vec<Editor> {
+pub(crate) fn installed() -> Vec<Editor> {
     #[cfg(target_os = "macos")]
     let definitions = [
         ("vscode", "VS Code", "code", "Visual Studio Code.app", None),

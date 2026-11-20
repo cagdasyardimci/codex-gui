@@ -10,6 +10,7 @@ use super::*;
 use crate::files::FileRevision;
 
 mod cache;
+mod contents;
 mod export;
 mod policy;
 mod raw;
@@ -366,14 +367,11 @@ impl GitComparison {
                     .iter()
                     .filter(|path| before != Some(*path)),
             )
-            .map(|path| path.as_os_str());
-        let output = self
-            .diff(
-                ["--raw", "-z"].into_iter().chain(PATCH_ARGUMENTS),
-                paths,
-                COMPARISON_PATCH_BYTES,
-            )
-            .await?;
+            .map(|path| path.as_os_str().to_owned())
+            .collect();
+        let mut arguments = vec!["--raw", "-z"];
+        arguments.extend(PATCH_ARGUMENTS);
+        let output = self.diff(&arguments, paths, COMPARISON_PATCH_BYTES).await?;
         self.owner.verify_repository().await?;
         self.verify_pinned_policy().await?;
         self.verify_entry(entry).await?;
@@ -397,16 +395,14 @@ impl GitComparison {
     }
 
     async fn read_summary(&self) -> Result<Vec<RawChange>, GitError> {
-        let raw = self
-            .diff(["--raw", "-z"], std::iter::empty(), QUERY_BYTES)
-            .await?;
+        let raw = self.diff(&["--raw", "-z"], Vec::new(), QUERY_BYTES).await?;
         parse_raw_changes(&raw)
     }
 
-    async fn diff<'path>(
-        &'path self,
-        output: impl IntoIterator<Item = &'path str>,
-        paths: impl Iterator<Item = &'path OsStr>,
+    async fn diff(
+        &self,
+        output: &[&str],
+        paths: Vec<OsString>,
         limit: usize,
     ) -> Result<Vec<u8>, GitError> {
         let refs = [&self.base, &self.target]
@@ -415,24 +411,16 @@ impl GitComparison {
                 ComparisonSide::Object(oid) => Some(OsStr::new(oid)),
                 _ => None,
             });
-        self.owner
-            .git
-            .success(
-                self.policy
-                    .iter()
-                    .map(OsString::as_os_str)
-                    .chain(DIFF_ARGUMENTS.iter().copied().map(OsStr::new))
-                    .chain(
-                        matches!(self.target, ComparisonSide::Index)
-                            .then_some(OsStr::new("--cached")),
-                    )
-                    .chain(output.into_iter().map(OsStr::new))
-                    .chain(refs)
-                    .chain([OsStr::new("--")])
-                    .chain(paths),
-                limit,
-            )
-            .await
+        let mut arguments = self.policy.clone();
+        arguments.extend(DIFF_ARGUMENTS.iter().map(OsString::from));
+        if self.target == ComparisonSide::Index {
+            arguments.push("--cached".into());
+        }
+        arguments.extend(output.iter().map(OsString::from));
+        arguments.extend(refs.map(OsStr::to_owned));
+        arguments.push("--".into());
+        arguments.extend(paths);
+        self.owner.git.success(arguments, limit).await
     }
 }
 

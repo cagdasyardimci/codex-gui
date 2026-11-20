@@ -83,7 +83,7 @@ def verify(executable: Path, *, active: bool) -> None:
             ]
             git_commands = [json.loads(line) for line in git_trace.read_text(encoding="utf-8").splitlines()]
             patches = [entry["argv"] for entry in git_commands if entry.get("event") == "start"
-                       and "diff" in entry["argv"] and "--name-status" not in entry["argv"]]
+                       and "diff" in entry["argv"] and "--patch" in entry["argv"]]
             assert len(patches) == 1 and patches[0][-1] == target.name, patches
             assert target.read_bytes() == "After fixture approval 日本語\n".encode()
             assert index.read_bytes() == saved_index

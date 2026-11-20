@@ -150,7 +150,7 @@ impl Navigation {
         })
     }
 
-    fn file_tools_key(
+    pub(super) fn file_tools_key(
         &self,
         scope: &DraftAttachmentScope,
     ) -> Result<(CheckoutIdentity, Uuid), IpcError> {

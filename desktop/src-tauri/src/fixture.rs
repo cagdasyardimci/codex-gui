@@ -524,6 +524,38 @@ pub fn verify_diff_result(
 }
 
 #[tauri::command]
+pub fn change_compared_file_fixture(
+    window: WebviewWindow,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+    restore: bool,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    if *verification != Verification::Diff {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let root = checkouts
+        .primary
+        .as_ref()
+        .ok_or(IpcError::InvalidCheckout)?;
+    let target = root.join("notes café [draft].txt");
+    let held = checkouts
+        .data
+        .as_ref()
+        .ok_or(IpcError::ProjectUnavailable)?
+        .join("diff-fixture-next-revision");
+    let result = if restore {
+        std::fs::rename(held, target)
+    } else {
+        std::fs::read_to_string(&target).and_then(|prior| {
+            std::fs::write(held, prior.replace("After 日本語", "External revision"))?;
+            std::fs::remove_file(target)
+        })
+    };
+    result.map_err(|_| IpcError::ProjectUnavailable)
+}
+
+#[tauri::command]
 pub fn report_quit_failure(
     app: AppHandle,
     verification: State<'_, Verification>,

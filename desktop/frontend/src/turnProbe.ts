@@ -93,6 +93,16 @@ async function verifyCompletedTurn(visible: () => WorkspaceSnapshot | null) {
     const patch = document.querySelector('[aria-label="Patch"]')?.textContent;
     return !!patch?.includes('-Before fixture approval') && patch.includes('+After fixture approval 日本語');
   });
+  const comparison = document.querySelector<HTMLSelectElement>('select[aria-label="Comparison"]')!;
+  comparison.value = JSON.stringify('lastTurn');
+  comparison.dispatchEvent(new Event('change', { bubbles: true }));
+  await waitFor('The Git detail was not retired before opening the Last Turn report', () =>
+    !document.querySelector('[aria-label="Patch"]'));
+  await click('workflow-notes.txt');
+  await waitFor('Last Turn did not expose the exact attributed report', () => {
+    const patch = document.querySelector('[aria-label="Patch"]')?.textContent;
+    return !!patch?.includes('-Before fixture approval') && patch.includes('+After fixture approval 日本語');
+  });
 }
 
 async function verifyActiveTurn(visible: () => WorkspaceSnapshot | null): Promise<boolean> {
