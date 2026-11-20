@@ -11,6 +11,7 @@ from .streaming import Stream
 from .queue_fixture import queue_request, steer_request
 from .review_fixture import start_review
 from .settings_fixture import METHODS as SETTINGS_METHODS, settings_request
+from .voice_fixture import voice_request
 from .transport import ProtocolError, UnconfirmedMutation
 
 
@@ -26,6 +27,7 @@ class Server:
         self.login_id = None
         self.canceled_login_id = None
         self.client_name = None
+        self.voice_call = None
 
     def resolve_request(self, response):
         with self.lock:
@@ -205,6 +207,8 @@ class Server:
                 return {'data': rows[:35], 'nextCursor': cursor if len(rows) > 35 else None}
             query = p.get('searchTerm', '').casefold()
             return {'data': [t for t in rows if query in t.get('name', '').casefold()], 'nextCursor': None}
+        if self.scenario.get('desktopVoice') and method.startswith('thread/realtime/'):
+            return voice_request(self, method, p)
         if method == 'thread/start':
             if not p.get('cwd'):
                 raise ProtocolError(-32602, 'thread/start requires cwd')

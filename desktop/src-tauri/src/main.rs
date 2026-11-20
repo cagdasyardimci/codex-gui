@@ -20,6 +20,7 @@ mod quit_ipc;
 mod settings_ipc;
 mod task_notifications;
 mod transcript_ipc;
+mod voice_ipc;
 
 fn main() {
     let mut arguments = std::env::args_os().skip(1);
@@ -58,6 +59,7 @@ fn main() {
         Some("--verify-appearance") => fixture::Verification::Appearance,
         Some("--verify-appearance-restore") => fixture::Verification::AppearanceRestore,
         Some("--verify-notifications") => fixture::Verification::Notifications,
+        Some("--verify-voice") => fixture::Verification::Voice,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -102,6 +104,7 @@ fn main() {
             | fixture::Verification::Appearance
             | fixture::Verification::AppearanceRestore
             | fixture::Verification::Notifications
+            | fixture::Verification::Voice
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -133,6 +136,7 @@ fn main() {
             | fixture::Verification::Appearance
             | fixture::Verification::AppearanceRestore
             | fixture::Verification::Notifications
+            | fixture::Verification::Voice
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -152,6 +156,7 @@ fn main() {
         .manage(project_ipc::ProjectIpc::default())
         .manage(diff_ipc::DiffIpc::default())
         .manage(settings_ipc::SettingsIpc::default())
+        .manage(voice_ipc::VoiceIpc::default())
         .manage(quit_ipc::QuitLifecycle::default())
         .on_window_event(move |window, event| {
             desktop_presentation::on_window_event(window, event);
@@ -234,6 +239,15 @@ fn main() {
             task_notifications::notification_fixture_outcomes,
             task_notifications::activate_notification_fixture,
             task_notifications::verify_notifications_result,
+            voice_ipc::read_voice_call,
+            voice_ipc::prepare_voice_call,
+            voice_ipc::start_voice_transport,
+            voice_ipc::voice_media_ready,
+            voice_ipc::set_voice_mute,
+            voice_ipc::end_voice_call,
+            voice_ipc::record_voice_fixture_exchange,
+            voice_ipc::read_voice_fixture_media,
+            voice_ipc::verify_voice_result,
             project_ipc::search_project_paths,
             file_tools_ipc::change_file_tools,
             file_tools_ipc::browse_project_files,

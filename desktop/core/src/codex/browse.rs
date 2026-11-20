@@ -14,6 +14,7 @@ use super::{AppServerClient, RequestError};
 mod account;
 mod history;
 mod settings;
+mod voice;
 mod windows_sandbox;
 
 pub use account::{BrowserLogin, LoginCancellation, LoginCompletion};
@@ -21,6 +22,7 @@ pub use settings::{
     EffectiveConfiguration, IntegrationCatalogs, ResetCandidate, SettingsRateLimits,
     UsageResetOutcome,
 };
+pub use voice::validate_voice_sdp;
 pub use windows_sandbox::{
     WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
 };

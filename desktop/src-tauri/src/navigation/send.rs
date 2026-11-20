@@ -88,6 +88,20 @@ impl Navigation {
         } else {
             parse(&saved.text)
         };
+        if matches!(parsed, ComposerInput::Text)
+            && saved.context.is_empty()
+            && !project.has_submission_context()
+            && request.expected_turn.is_none()
+            && self
+                .view
+                .queue
+                .as_ref()
+                .is_none_or(|queue| queue.editing.is_none())
+            && let Some(chat) = request.chat_id.as_deref()
+            && self.try_voice_text(chat, draft_id, saved.revision, &saved.text)?
+        {
+            return Ok(());
+        }
         let inline_plan = matches!(&parsed, ComposerInput::Command { command: Command::Plan, arguments }
             if !arguments.trim().is_empty() && self.view.slash_commands.available.contains(&Command::Plan));
         let text = match parsed {
@@ -376,6 +390,7 @@ impl Navigation {
     }
 
     pub(super) fn sync_actions(&mut self) {
+        self.view.voice_available = false;
         self.view.actions.send = false;
         self.view.actions.stop = None;
         self.view.actions.stop_all = self.has_stoppable_work();
@@ -398,6 +413,14 @@ impl Navigation {
                 .selection
                 .as_ref()
                 .and_then(|selection| selection.thread.as_ref());
+            self.view.voice_available = self.quit.is_none()
+                && self.view.account.chatgpt
+                && self
+                    .configured_run
+                    .provider
+                    .as_deref()
+                    .is_none_or(|provider| provider == "openai")
+                && selected.is_none_or(|thread| state.writable_threads.contains(thread));
             let inflight = self
                 .inflight
                 .values()

@@ -46,6 +46,7 @@ mod sidebar;
 mod slash_commands;
 mod stream;
 mod subscription;
+mod voice;
 pub use actions::{
     ApprovalChoice, ApprovalView, ConversationActions, GrantedPermissions, InteractionAnswer,
     InteractionContent, InteractionView, PermissionChoice, PermissionView, QuestionAnswer,
@@ -136,6 +137,10 @@ pub use subscription::{
     HistoryInsertion, RevisionedHistory, RevisionedNavigation, RevisionedStream, SubscriptionId,
     WorkspaceProjection, WorkspaceSnapshot, WorkspaceSubscription, WorkspaceUpdate,
     WorkspaceUpdateRequest,
+};
+pub use voice::{
+    PrepareVoiceCall, StartVoiceCall, VoiceCallUpdate, VoiceCallView, VoiceMediaHost, VoiceMute,
+    VoicePhase,
 };
 
 pub const WORKSPACE_WINDOW: &str = "main";
@@ -359,6 +364,13 @@ pub fn workspace_typescript() -> String {
         crate::codex::ReviewDelivery::decl(),
         StartReviewRequest::decl(),
         SettingsAccountView::decl(),
+        VoicePhase::decl(),
+        VoiceMediaHost::decl(),
+        VoiceCallView::decl(),
+        VoiceCallUpdate::decl(),
+        PrepareVoiceCall::decl(),
+        StartVoiceCall::decl(),
+        VoiceMute::decl(),
         AppearanceMode::decl(),
         Appearance::decl(),
         AppearanceAccent::decl(),

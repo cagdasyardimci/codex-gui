@@ -37,3 +37,8 @@ mac-usernotifications = "=0.3.1"
 
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 rodio = { version = "=0.22.2", default-features = false, features = ["playback"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gstreamer = { version = "0.25", features = ["v1_22"] }
+gstreamer-sdp = { version = "0.25", features = ["v1_22"] }
+gstreamer-webrtc = { version = "=0.25.4", features = ["v1_22"] }

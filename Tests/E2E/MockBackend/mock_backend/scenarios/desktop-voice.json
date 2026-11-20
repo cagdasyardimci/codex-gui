@@ -1,0 +1,7 @@
+{
+  "extends": "desktop-attachments",
+  "desktopVoice": true,
+  "desktopContext": true,
+  "desktopQueue": "server",
+  "chunks": ["Completed the coding request."]
+}

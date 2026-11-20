@@ -18,8 +18,8 @@ use codex_gui_core::{
     },
     ipc::{
         CommandUpdate, DraftAttachmentScope, DraftEdit, EditorDraft, IpcError, NavigationIntent,
-        NavigationView, SidebarChatKey, StreamChange, TextBatcher, TranscriptView, WorkspaceId,
-        WorkspaceRequest, WriteAccess,
+        NavigationView, PrepareVoiceCall, SidebarChatKey, StreamChange, TextBatcher,
+        TranscriptView, VoiceCallView, WorkspaceId, WorkspaceRequest, WriteAccess,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -64,6 +64,7 @@ mod send;
 mod sidebar;
 mod slash_commands;
 mod transcript;
+mod voice;
 use account::AccountFlow;
 use interactions::InteractionProjection;
 use paging::{HistoryCompletion, HistoryPaging};
@@ -98,6 +99,8 @@ enum Action {
     SelectFolder(PathBuf),
     Intent(NavigationIntent),
     OpenNotificationChat(SidebarChatKey),
+    PrepareVoice(PrepareVoiceCall, oneshot::Sender<VoiceCallView>),
+    VoiceTextSaved(DraftId),
     RequestQuit(tauri::AppHandle),
     FileTools(
         codex_gui_core::ipc::FileToolsRequest,
@@ -259,6 +262,14 @@ struct Navigation {
 }
 
 impl NavigationHandle {
+    pub async fn prepare_voice(
+        &self,
+        request: PrepareVoiceCall,
+    ) -> Result<VoiceCallView, IpcError> {
+        let (sender, receiver) = oneshot::channel();
+        self.request(Action::PrepareVoice(request, sender)).await?;
+        receiver.await.map_err(|_| IpcError::ProjectUnavailable)
+    }
     pub async fn open_notification_chat(&self, key: SidebarChatKey) -> Result<(), IpcError> {
         self.request(Action::OpenNotificationChat(key))
             .await
@@ -530,6 +541,14 @@ impl Navigation {
                     return Err(IpcError::StaleSelection);
                 }
                 self.open_sidebar_chat(key).await?;
+                return Ok(None);
+            }
+            Action::PrepareVoice(request, result) => {
+                let _ = result.send(self.reserve_voice_call(request).await?);
+                return Ok(None);
+            }
+            Action::VoiceTextSaved(draft) => {
+                self.refresh_draft_after_submission(draft);
                 return Ok(None);
             }
             Action::ComposerAttachment(mutation) => {
@@ -1007,6 +1026,8 @@ impl Navigation {
         let had_write_access =
             std::mem::take(&mut self.view.write_access) != WriteAccess::Unavailable;
         if let Some(backend) = self.backend.take() {
+            tauri::Manager::state::<crate::voice_ipc::VoiceIpc>(&self.app)
+                .connection_closed(&self.app, backend.connection.client().identity());
             self.titles
                 .retire_connection(backend.connection.client().identity());
             if let Err(error) = self.login.retire(&backend.connection.client()).await {
@@ -1218,6 +1239,13 @@ impl Navigation {
             return Ok(());
         };
         let client = backend.connection.client();
+        if tauri::Manager::state::<crate::voice_ipc::VoiceIpc>(&self.app).observe(
+            &self.app,
+            client.identity(),
+            &event,
+        ) {
+            return Ok(());
+        }
         if let ServerEvent::Notification { method, params } = &event
             && method == "windowsSandbox/setupCompleted"
         {

@@ -15,6 +15,10 @@
   import type { AppearanceView } from './generated/workspace';
   import { applyDesktopAppearance, observeDesktop } from './desktopAppearance';
   import { verifyAppearance } from './appearanceProbe';
+  import VoiceControls from './VoiceControls.svelte';
+  import { DesktopVoice } from './desktopVoice';
+  import { verifyVoice } from './voiceProbe';
+  import type { VoiceCallView } from './generated/workspace';
   import { verifyNotifications } from './notificationProbe';
   import { verifySettings } from './settingsProbe';
   import SentPromptDialog from './SentPromptDialog.svelte';
@@ -62,7 +66,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -81,6 +85,8 @@
   let admittingDraft = $state(false);
   let showingChanges = $state(false);
   let settingsOpen = $state(false);
+  let call = $state.raw<VoiceCallView | null>(null);
+  const voice = new DesktopVoice((next) => { call = next; });
   let appearance = $state.raw<AppearanceView>();
   let settingsButton: HTMLButtonElement;
   let preferredComparison = $state<'uncommitted' | 'lastTurn'>('uncommitted');
@@ -134,6 +140,7 @@
   const projectTitle = $derived(sidebar?.projects.find((project) => project.id === sidebar?.activeProject)?.title);
   const workspaceId = $derived(workspace?.workspaceId);
   const selectedChat = $derived(navigation?.selectedChat);
+  const voiceInline = $derived(!!call && sidebar?.activeProject === call.projectId && selectedChat === call.chatId);
   const summaryScope = $derived(workspaceId && selectedChat ? { workspaceId, chatId: selectedChat } : undefined);
   const summaryKey = $derived(sidebar?.activeProject && selectedChat
     ? JSON.stringify([sidebar.activeProject, selectedChat]) : undefined);
@@ -1151,6 +1158,7 @@
   onMount(() => {
     const lifecycle = new AbortController();
     void observeWorkspace(receive, lifecycle.signal).catch(console.error);
+    void voice.observe(lifecycle.signal).catch(console.error);
     void observeDesktop(updateAppearance, (action) => {
       if (action === 'settings' && !quit) settingsOpen = true;
       else if (action === 'undo' || action === 'redo') document.execCommand(action);
@@ -1161,6 +1169,7 @@
     else if (verify === 'settings') void verifySettings(() => snapshot);
     else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
     else if (verify === 'notifications') void verifyNotifications(() => snapshot);
+    else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn' || verify === 'activeTurn') void verifyTurn(() => snapshot, verify);
     else if (verify === 'queue') void verifyQueue(() => snapshot);
@@ -1321,6 +1330,12 @@
         <QueuePanel {queue} disabled={actionPending || queue.busy || !!quit}
           draftOccupied={text !== '' || !!draftAttachments.length || !!queue.editing} command={queueCommand} />
       {/if}
+      {#if call && voiceInline}
+        {@const id = call.id}
+        <VoiceControls {call} floating={false}
+          mute={(microphone, muted) => void voice.mute(id, microphone, muted).catch(console.error)}
+          end={() => void voice.end(id).catch(console.error)} />
+      {/if}
       {#if navigation?.draft}
         {#if attachmentScope && draftAttachments.length && !queue?.editing}
           {#key attachmentScope.draftId}
@@ -1400,10 +1415,19 @@
               <button type="button" disabled={actionPending || !!navigation.quit}
                 onclick={() => { void pickComposerAttachments(scope).catch(() => {}); }}>Attach Files</button>
             {/if}
-            <button type="button" disabled={actionPending || (!navigation.actions.send && !mayExecuteSlash) ||
-              (!text.trim() && !draftAttachments.length && !navigation.projectHasInput)} onclick={() => void sendDraft()}>
-              {queue?.activeTurn ? (queue.enabled ? 'Queue' : 'Steer') : 'Send'}
-            </button>
+            {#if !call && navigation.voiceAvailable && attachmentScope && !stopTarget && !quit &&
+                !text.trim() && !draftAttachments.length && !navigation.projectHasInput}
+              {@const scope = attachmentScope}
+              <button type="button" disabled={actionPending || admittingDraft}
+                onclick={() => { if (!composing) void voice.start(scope, flushEdits, verify === 'voice'); }}>
+                Start Voice Call
+              </button>
+            {:else}
+              <button type="button" disabled={actionPending || (!navigation.actions.send && !mayExecuteSlash) ||
+                (!text.trim() && !draftAttachments.length && !navigation.projectHasInput)} onclick={() => void sendDraft()}>
+                {queue?.activeTurn ? (queue.enabled ? 'Queue' : 'Steer') : 'Send'}
+              </button>
+            {/if}
           {/if}
         </div>
       {/if}
@@ -1488,5 +1512,11 @@
     <QuitDialog busy={confirmingQuit} savingFiles={!quit.stopOnly && !!navigation?.savingFiles} stopOnly={quit.stopOnly} fileAction={quit.fileAction}
       cancel={() => { if (quit) void cancelQuit(quit.ticket).catch(console.error); }}
       confirm={() => { if (quit) void confirmQuit(quit.ticket); }} />
+  {/if}
+  {#if call && !voiceInline}
+    {@const id = call.id}
+    <VoiceControls {call} floating={true}
+      mute={(microphone, muted) => void voice.mute(id, microphone, muted).catch(console.error)}
+      end={() => void voice.end(id).catch(console.error)} />
   {/if}
 </main>

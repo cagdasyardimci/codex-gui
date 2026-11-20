@@ -138,6 +138,54 @@ impl AttachmentStore {
         read_draft(&state.database, draft)?.ok_or(AttachmentError::MissingDraft)
     }
 
+    pub fn attach_source_draft_to_voice_thread(
+        &self,
+        draft: DraftId,
+        thread: &ThreadId,
+    ) -> Result<(), AttachmentError> {
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let selected: bool = transaction.query_row(
+            "SELECT EXISTS (SELECT 1 FROM desktop_selection WHERE slot = 1 AND thread_id IS NULL AND source_draft = ?1)",
+            [draft.0.as_bytes().as_slice()], |row| row.get(0),
+        )?;
+        if !selected {
+            return Err(AttachmentError::ConflictingThreadDraft);
+        }
+        transaction.execute(
+            "INSERT INTO thread_drafts (thread_id, draft_id) VALUES (?1, ?2)",
+            params![thread.0, draft.0.as_bytes().as_slice()],
+        )?;
+        promote_source(&transaction, draft, thread)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn clear_acknowledged_voice_text(
+        &self,
+        draft: DraftId,
+        captured: DraftRevision,
+    ) -> Result<bool, AttachmentError> {
+        let mut state = self.inner.state();
+        let current = read_draft(&state.database, draft)?.ok_or(AttachmentError::MissingDraft)?;
+        if current.revision != captured {
+            return Ok(false);
+        }
+        let next = captured
+            .next()
+            .ok_or_else(|| std::io::Error::other("draft revision exhausted"))?;
+        let patch = DraftPatch {
+            text: Some(String::new()),
+            context: None,
+        };
+        Ok(
+            save_draft(&mut state.database, draft, Some(captured), next, &patch)?
+                == DraftSave::Applied,
+        )
+    }
+
     pub fn save_editor_text(&self, draft: DraftId, text: String) -> Result<(), AttachmentError> {
         self.replace_editor_text(draft, None, text)
     }

@@ -16,7 +16,7 @@ pub use browse::{
     LoginCompletion, ModelOption, Page, ProjectChatCursor, QueueSnapshot, QueuedSubmission,
     ResetCandidate, SettingsRateLimits, ThreadActivity, ThreadSummary, TurnActivity, TurnCursor,
     TurnItemRead, TurnItems, TurnStatus, UsageResetOutcome, WindowsSandboxReadiness,
-    WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
+    WindowsSandboxSetupCompleted, WindowsSandboxSetupMode, validate_voice_sdp,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub(crate) use executable::is_executable;

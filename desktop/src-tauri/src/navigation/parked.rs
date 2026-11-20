@@ -1,4 +1,5 @@
 use std::sync::atomic::Ordering;
+use tauri::Manager;
 
 use codex_gui_core::{
     codex::{AppServerClient, QueueSnapshot, ServerEvent},
@@ -30,6 +31,10 @@ impl Navigation {
         if snapshot.execution.active_turns.is_empty()
             && snapshot.execution.unresolved_commands.is_empty()
             && !self.owners.has_local_work(Some(&checkout))
+            && !self
+                .app
+                .state::<crate::voice_ipc::VoiceIpc>()
+                .owns_connection(&snapshot.connection)
         {
             self.disconnect().await;
             return;
@@ -85,10 +90,15 @@ impl Navigation {
                 if let Err(error) = backend.observe_slash_event(&event, &store) {
                     eprintln!("{error}");
                 }
-                let routed = backend
-                    .engine
-                    .route_session_event(&backend_client, &store, event, RPC_TIMEOUT)
-                    .await;
+                let voice = app.state::<crate::voice_ipc::VoiceIpc>();
+                let routed = if voice.observe(&app, backend_client.identity(), &event) {
+                    Ok(None)
+                } else {
+                    backend
+                        .engine
+                        .route_session_event(&backend_client, &store, event, RPC_TIMEOUT)
+                        .await
+                };
                 if let Ok(Some(event)) = &routed {
                     crate::task_notifications::observe(
                         &app,
@@ -165,10 +175,13 @@ impl Navigation {
                 if current.execution.active_turns.is_empty()
                     && current.execution.unresolved_commands.is_empty()
                     && !owners.has_local_work(current.connection.workspace.checkout.as_ref())
+                    && !voice.owns_connection(&current.connection)
                 {
                     break;
                 }
             }
+            app.state::<crate::voice_ipc::VoiceIpc>()
+                .connection_closed(&app, backend_client.identity());
             close_backend(&owners, backend).await;
             let _ = changed.try_send(());
             None

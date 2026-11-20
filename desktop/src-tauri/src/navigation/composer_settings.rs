@@ -12,6 +12,7 @@ use super::*;
 
 #[derive(Default)]
 pub(super) struct ConfiguredRun {
+    pub(super) provider: Option<String>,
     model: Option<String>,
     effort: Option<String>,
     tier: Option<String>,
@@ -46,6 +47,7 @@ pub(super) async fn read_configured_run(client: AppServerClient) -> ConfiguredRu
         _ => None,
     };
     ConfiguredRun {
+        provider: config["model_provider"].as_str().map(str::to_owned),
         model: config["model"].as_str().map(str::to_owned),
         effort: config["model_reasoning_effort"].as_str().map(str::to_owned),
         tier: config["service_tier"].as_str().map(str::to_owned),

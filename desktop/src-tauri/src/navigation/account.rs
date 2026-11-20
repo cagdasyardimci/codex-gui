@@ -178,6 +178,7 @@ fn authorization_url(raw: &str) -> Option<Url> {
 pub async fn read_account(client: AppServerClient) -> Result<AccountView, Failure> {
     let browser = CodexBrowser::new(client);
     let status = browser.account(RPC_TIMEOUT).await?;
+    let chatgpt = matches!(status.account, Some(Account::Chatgpt { .. }));
     let identity = status.account.map(|account| match account {
         Account::Chatgpt { email, .. } => email.unwrap_or_else(|| "ChatGPT".into()),
         Account::ApiKey => "OpenAI API key".into(),
@@ -202,6 +203,7 @@ pub async fn read_account(client: AppServerClient) -> Result<AccountView, Failur
         models,
         login_ticket: None,
         permits_turns,
+        chatgpt,
     })
 }
 

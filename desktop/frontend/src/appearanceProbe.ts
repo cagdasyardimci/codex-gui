@@ -104,7 +104,8 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
     await fixtureAction('resize');
     const regular = await waitForNative('The native window did not resize', normalLayout);
     await fixtureAction('fullscreen');
-    await waitForNative('The native menu did not enter fullscreen', (state) => state.fullscreen);
+    await waitForNative('The native menu did not enter fullscreen', (state) =>
+      state.fullscreen && (Math.abs(state.width - regular.width) > 2 || Math.abs(state.height - regular.height) > 2));
     await fixtureAction('fullscreen');
     await waitForNative('Leaving fullscreen did not restore the regular layout', normalLayout);
     const viewportBefore = innerWidth;
@@ -127,12 +128,13 @@ function normalLayout(state: WindowEvidence) {
 
 async function waitForNative(description: string, condition: (state: WindowEvidence) => boolean) {
   const deadline = performance.now() + 9000;
-  do {
-    const state = await fixtureState();
-    if (condition(state)) return state;
+  let state = await fixtureState();
+  while (!condition(state) && performance.now() < deadline) {
     await new Promise<void>((resolve) => setTimeout(resolve, 40));
-  } while (performance.now() < deadline);
-  throw new Error(description);
+    state = await fixtureState();
+  }
+  if (!condition(state)) throw new Error(`${description}: ${JSON.stringify(state)}`);
+  return state;
 }
 
 async function verifyRestored(visible: () => AppearanceView | undefined) {

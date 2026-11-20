@@ -80,7 +80,10 @@ pub async fn drop_composer_attachment_fixture(
     verification: State<'_, Verification>,
     scope: DraftAttachmentScope,
 ) -> Result<(), IpcError> {
-    if *verification != Verification::Attachments {
+    if !matches!(
+        *verification,
+        Verification::Attachments | Verification::Voice
+    ) {
         return Err(IpcError::UnauthorizedWindow);
     }
     let (navigation, checkout) = capture(&window, &project, &scope)?;

@@ -473,3 +473,21 @@ body {
   justify-content: flex-end;
   padding-top: 0.35rem;
 }
+
+.voice-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--workspace-divider);
+  border-radius: 8px;
+}
+
+.voice-floating {
+  position: fixed;
+  z-index: 4;
+  inset: auto 16px 16px auto;
+  background: var(--workspace-canvas, Canvas);
+  box-shadow: 0 4px 18px #0002;
+  max-width: calc(100vw - 32px);
+}
