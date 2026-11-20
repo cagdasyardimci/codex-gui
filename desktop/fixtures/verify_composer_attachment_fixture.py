@@ -117,7 +117,7 @@ def main():
             assert draft and draft[0] == "Keep this text when reusing attachments.", draft
             context = json.loads(draft[1])
             assert [item["kind"] for item in context] == ["image", "fileReference"], context
-            assert Path(context[0]["path"]).resolve() == sent_path and context[1]["path"] == "notes.txt", context
+            assert Path(context[0]["path"]).samefile(sent_path) and context[1]["path"] == "notes.txt", context
         print("Verified one image-only send with identical stored bytes and retained reused references")
 
 

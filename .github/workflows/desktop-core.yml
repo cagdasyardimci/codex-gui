@@ -158,8 +158,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_webview_fixture.py $app --media
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python desktop/fixtures/verify_history_fixture.py $app
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app --annotations
@@ -167,6 +165,7 @@ jobs:
           python desktop/fixtures/verify_composer_attachment_fixture.py $app --context
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app --settings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app --project-context
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_account_fixture.py $app
@@ -182,6 +181,8 @@ jobs:
           python desktop/fixtures/verify_quit_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_coding_probe.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python desktop/fixtures/verify_history_fixture.py $app
       - name: Verify the Debian installation
         if: runner.os == 'Linux'
         shell: bash
