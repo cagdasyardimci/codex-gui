@@ -3,6 +3,7 @@ use std::{path::Path, time::Duration};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use thiserror::Error;
 
+pub mod attachments;
 pub mod drafts;
 pub mod writes;
 
@@ -13,6 +14,7 @@ type Migration = fn(&Transaction<'_>) -> rusqlite::Result<()>;
 const MIGRATIONS: &[Migration] = &[
     |transaction| transaction.pragma_update(None, "application_id", APPLICATION_ID),
     drafts::migrate,
+    attachments::migrate,
 ];
 
 #[derive(Debug, Error)]
