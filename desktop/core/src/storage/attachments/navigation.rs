@@ -102,12 +102,30 @@ impl AttachmentStore {
         let transaction = state
             .database
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transaction.execute(
-            "INSERT OR IGNORE INTO desktop_source_drafts SELECT coalesce(project_key, ''), source_draft
-             FROM desktop_selection WHERE slot = 1",
+        let (current_draft, current_project) = transaction.query_row(
+            "SELECT source_draft, project_key FROM desktop_selection WHERE slot = 1",
             [],
+            |row| {
+                Ok((
+                    DraftId(Uuid::from_bytes(row.get(0)?)),
+                    row.get::<_, Option<String>>(1)?,
+                ))
+            },
         )?;
-        let source = source_draft_for(&transaction, identity.as_deref().unwrap_or_default())?;
+        let source = if let Some(project_id) = identity.as_deref() {
+            if current_project.is_none() {
+                transaction.execute(
+                    "INSERT OR IGNORE INTO desktop_source_drafts
+                     SELECT ?1, ?2 WHERE NOT EXISTS (
+                         SELECT 1 FROM desktop_source_drafts WHERE draft_id = ?2 AND project_id <> ''
+                     )",
+                    params![project_id, current_draft.0.as_bytes().as_slice()],
+                )?;
+            }
+            source_draft_for(&transaction, project_id)?
+        } else {
+            current_draft
+        };
         transaction.execute(
             "UPDATE desktop_selection SET project_path = ?1, project_key = ?2, thread_id = ?3, source_draft = ?4 WHERE slot = 1",
             params![path, identity, thread.map(|thread| &thread.0), source.0.as_bytes().as_slice()],
