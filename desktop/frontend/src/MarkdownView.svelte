@@ -5,12 +5,13 @@
   import MarkdownRichBlock from './MarkdownRichBlock.svelte';
   import { preserveMarkdownSelection } from './markdownSelection';
 
-  let { source, request, render, renderKey, loadImage, openLink }: {
+  let { source, request, render, renderKey, loadImage, downloadImage, openLink }: {
     source: string;
     request?: TranscriptRowRequest;
     render?: () => Promise<MarkdownNode[] | null>;
     renderKey?: string;
     loadImage?: (target: string) => Promise<ArrayBuffer>;
+    downloadImage?: (target: string) => Promise<void>;
     openLink?: (target: string) => Promise<void>;
   } = $props();
   let parsed = $state.raw<{ scope: string; source: string; nodes: MarkdownNode[] | null }>();
@@ -85,10 +86,11 @@
       {#if node.value && request}
         {@const target = node.value}
         {@const row = request}
-        <ImagePreview load={() => loadTranscriptImage({ row, target })} alt={plain(node.children)} />
+        <ImagePreview load={() => loadTranscriptImage({ row, target })} alt={plain(node.children)} downloadOriginal />
       {:else if node.value && loadImage}
         {@const target = node.value}
-        <ImagePreview load={() => loadImage!(target)} alt={plain(node.children)} />
+        <ImagePreview load={() => loadImage!(target)} alt={plain(node.children)}
+          download={downloadImage ? () => downloadImage!(target) : undefined} />
       {:else}{plain(node.children)}{/if}
     {:else if node.kind === 'link'}
       {#if node.value && (request || openLink || node.value.startsWith('#'))}<button class="markdown-link" type="button" onclick={() => follow(node.value!)}>{@render nodes(node.children)}</button>

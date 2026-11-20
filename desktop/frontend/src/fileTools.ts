@@ -41,6 +41,14 @@ export function fileMarkdownImage(request: FileMarkdownResource): Promise<ArrayB
   return invoke('file_markdown_image', { request });
 }
 
+export function exportFileMarkdownImage(request: FileMarkdownResource): Promise<void> {
+  return invoke('export_file_markdown_image', { request });
+}
+
+export function exportFileImage(target: FileTabRead): Promise<void> {
+  return invoke('export_file_image', { target });
+}
+
 export function openFileMarkdownLink(request: FileMarkdownResource): Promise<void> {
   return invoke('open_file_markdown_link', { request });
 }

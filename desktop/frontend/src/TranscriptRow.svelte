@@ -81,7 +81,7 @@
           {@const media = { row, attachmentId: attachment.id }}
           <li>
             {#if attachment.image}
-              <ImagePreview load={() => loadTranscriptAttachment(media)} alt={attachment.label} />
+              <ImagePreview load={() => loadTranscriptAttachment(media)} alt={attachment.label} downloadOriginal />
             {:else}<span>{attachment.label}</span>{/if}
             {#if attachmentScope}
               {@const scope = attachmentScope}

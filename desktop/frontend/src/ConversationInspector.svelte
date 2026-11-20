@@ -83,7 +83,7 @@
     {#if file}
       {@const item = file}
       {#key item.media}
-        {#if item.load}<div class="source-preview"><ImagePreview load={item.load} alt={item.label} /></div>{/if}
+        {#if item.load}<div class="source-preview"><ImagePreview load={item.load} alt={item.label} downloadOriginal /></div>{/if}
         <button type="button" disabled={opening} onclick={() => void open(() => revealInspectorAttachment(item.media))}>
           Show Source in Folder
         </button>

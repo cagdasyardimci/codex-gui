@@ -58,7 +58,7 @@ The same fixture verifies project file search with file masks, paged line matche
 
 The fixture also holds a save across a chat switch, checks the buffer after a conflict, and asserts exact copy and export bytes and captured editor, folder, and GitHub destinations.
 
-Its preview checks validate rendered PDF page pixels, page restoration, bitmap conversion, SVG source retention, and checkout-scoped Markdown images and metadata. The unsupported image opens through its captured file action.
+Its preview checks validate rendered PDF page pixels, page restoration, bitmap conversion, SVG source retention, and checkout-scoped Markdown images and metadata. They also check independent expanded zoom, focus restoration, original bytes for raster and SVG downloads, and bounded PNG export from a rendered diagram. The unsupported image opens through its captured file action.
 
 Run it with `--settings` to verify model-specific effort and speed, cancellation and retirement of Full Access confirmation, and the exact settings in three captured Send requests across a pending change and a return to configured permissions.
 

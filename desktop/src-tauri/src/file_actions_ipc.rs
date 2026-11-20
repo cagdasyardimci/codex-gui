@@ -9,11 +9,14 @@ use codex_gui_core::{
     git::{TrackedFileLink, tracked_file_link},
     ipc::{
         FileAction, FileActionRequest, FileActionsView, FileEditor, FileMarkdownResource,
-        FileTabRead, IpcError, MarkdownFileView, MarkdownKind,
+        FileTabKind, FileTabRead, IpcError, MarkdownFileView, MarkdownKind,
     },
 };
 use serde_json::{Value, json};
-use tauri::{Manager, State, Url, WebviewWindow, ipc::Response};
+use tauri::{
+    Manager, State, Url, WebviewWindow,
+    ipc::{InvokeBody, Request, Response},
+};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
@@ -22,7 +25,8 @@ use crate::{
     file_tools_ipc::capture_file_scope,
     fixture::{FixtureCheckouts, Verification},
     navigation::FileTabCapture,
-    project_ipc::ProjectIpc,
+    project_ipc::{ProjectIpc, authorize_view},
+    transcript_ipc::{MAX_INLINE_BYTES, raster_type},
 };
 
 mod editors;
@@ -80,21 +84,108 @@ pub async fn file_markdown_image(
 ) -> Result<Response, IpcError> {
     let source = capture(&window, &project, &request.target, true).await?;
     let (source, bytes) = tauri::async_runtime::spawn_blocking(move || {
-        require_markdown_resource(&source, MarkdownKind::Image, &request.resource)?;
-        let bytes = read_local_file(
-            &source.checkout,
-            Path::new(&request.resource),
-            4 * 1024 * 1024,
-        )
-        .map_err(|_| IpcError::ProjectUnavailable)?
-        .bytes;
-        let preview = crate::file_preview_ipc::raster_preview(bytes)?;
+        let preview =
+            crate::file_preview_ipc::raster_preview(markdown_image(&source, &request.resource)?)?;
         Ok::<_, IpcError>((source, preview))
     })
     .await
     .map_err(|_| IpcError::ProjectUnavailable)??;
     validate(&window, &project, &request.target, &source).await?;
     Ok(Response::new(bytes))
+}
+
+#[tauri::command]
+pub async fn export_file_markdown_image(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    request: FileMarkdownResource,
+) -> Result<(), IpcError> {
+    let source = capture(&window, &project, &request.target, true).await?;
+    let resource = request.resource;
+    let (source, path, bytes) = tauri::async_runtime::spawn_blocking(move || {
+        let bytes = markdown_image(&source, &resource)?;
+        let path = source.checkout.canonical_path().join(resource);
+        Ok::<_, IpcError>((source, path, bytes))
+    })
+    .await
+    .map_err(|_| IpcError::ProjectUnavailable)??;
+    if let Some(destination) = preview_destination(&window, *verification, &path).await? {
+        validate(&window, &project, &request.target, &source).await?;
+        persist_export(Some(path), destination, bytes).await?;
+    }
+    Ok(())
+}
+
+fn markdown_image(source: &FileTabCapture, resource: &str) -> Result<Vec<u8>, IpcError> {
+    require_markdown_resource(source, MarkdownKind::Image, resource)?;
+    let read = read_local_file(&source.checkout, Path::new(resource), 4 * 1024 * 1024)
+        .map_err(|_| IpcError::ProjectUnavailable)?;
+    Ok(read.bytes)
+}
+
+#[tauri::command]
+pub async fn export_file_image(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    target: FileTabRead,
+) -> Result<(), IpcError> {
+    let source = capture(&window, &project, &target, false).await?;
+    if source.kind != FileTabKind::Raster
+        && !(source.kind == FileTabKind::Text
+            && source
+                .relative
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("svg")))
+    {
+        return Err(IpcError::StaleSelection);
+    }
+    let (source, path, bytes) = tauri::async_runtime::spawn_blocking(move || {
+        let path = source.path()?;
+        let bytes = source.preview_bytes(MAX_INLINE_BYTES)?;
+        Ok::<_, IpcError>((source, path, bytes))
+    })
+    .await
+    .map_err(|_| IpcError::ProjectUnavailable)??;
+    if let Some(destination) = preview_destination(&window, *verification, &path).await? {
+        validate(&window, &project, &target, &source).await?;
+        persist_export(Some(path), destination, bytes).await?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_preview_image(
+    window: WebviewWindow,
+    verification: State<'_, Verification>,
+    request: Request<'_>,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err(IpcError::ProjectUnavailable);
+    };
+    if bytes.len() as u64 > MAX_INLINE_BYTES {
+        return Err(IpcError::ProjectUnavailable);
+    }
+    let kind = request
+        .headers()
+        .get("x-codex-preview-kind")
+        .and_then(|value| value.to_str().ok());
+    let name = match (kind, raster_type(bytes)) {
+        (Some("diagram"), Some(1)) => "Diagram.png",
+        (Some("image"), Some(1)) => "Image.png",
+        (Some("image"), Some(2)) => "Image.jpg",
+        (Some("image"), Some(3)) => "Image.gif",
+        (Some("image"), Some(4)) => "Image.webp",
+        _ => return Err(IpcError::ProjectUnavailable),
+    };
+    let bytes = bytes.clone();
+    if let Some(destination) = preview_destination(&window, *verification, Path::new(name)).await? {
+        authorize_view(&window)?;
+        persist_export(None, destination, bytes).await?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -188,11 +279,7 @@ pub async fn perform_file_action(
             if let Some(destination) = destination {
                 validate(&window, &project, &request.target, &source).await?;
                 let bytes = source.bytes.ok_or(IpcError::ProjectUnavailable)?;
-                tauri::async_runtime::spawn_blocking(move || {
-                    write_export(&path, &destination, &bytes)
-                })
-                .await
-                .map_err(|_| IpcError::ProjectUnavailable)??;
+                persist_export(Some(path), destination, bytes).await?;
             }
         }
         FileAction::Reveal => {
@@ -336,7 +423,36 @@ async fn export_destination(
         .transpose()
 }
 
-fn write_export(source: &Path, destination: &Path, bytes: &[u8]) -> Result<(), IpcError> {
+async fn preview_destination(
+    window: &WebviewWindow,
+    verification: Verification,
+    path: &Path,
+) -> Result<Option<PathBuf>, IpcError> {
+    if matches!(
+        verification,
+        Verification::FileTools | Verification::History
+    ) {
+        let name = path.file_name().ok_or(IpcError::StaleSelection)?;
+        return Ok(Some(
+            fixture_data(window)?.join(format!("preview-{}", name.to_string_lossy())),
+        ));
+    }
+    export_destination(window, path).await
+}
+
+async fn persist_export(
+    source: Option<PathBuf>,
+    destination: PathBuf,
+    bytes: Vec<u8>,
+) -> Result<(), IpcError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        write_export(source.as_deref(), &destination, &bytes)
+    })
+    .await
+    .map_err(|_| IpcError::ProjectUnavailable)?
+}
+
+fn write_export(source: Option<&Path>, destination: &Path, bytes: &[u8]) -> Result<(), IpcError> {
     let parent = destination
         .parent()
         .ok_or(IpcError::ProjectUnavailable)?
@@ -346,9 +462,11 @@ fn write_export(source: &Path, destination: &Path, bytes: &[u8]) -> Result<(), I
         .file_name()
         .ok_or(IpcError::ProjectUnavailable)?;
     let target = parent.join(name);
-    let original = source.canonicalize().map_err(io_error)?;
-    if target == source || target.canonicalize().is_ok_and(|path| path == original) {
-        return Err(IpcError::StaleSelection);
+    if let Some(source) = source {
+        let original = source.canonicalize().map_err(io_error)?;
+        if target == source || target.canonicalize().is_ok_and(|path| path == original) {
+            return Err(IpcError::StaleSelection);
+        }
     }
     let mut staging = tempfile::NamedTempFile::new_in(parent).map_err(io_error)?;
     staging.write_all(bytes).map_err(io_error)?;

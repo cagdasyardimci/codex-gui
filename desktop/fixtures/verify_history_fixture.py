@@ -113,6 +113,7 @@ def main() -> None:
             if result.returncode or "Verified installed project history" not in result.stdout:
                 raise SystemExit(result.stderr or "The installed workspace did not confirm the fixture")
         events = [json.loads(line) for line in trace.read_text().splitlines()]
+        assert (data / "preview-Image.png").read_bytes() == (project / "notes" / "panel.png").read_bytes()
         methods = [event["method"] for event in events if event["direction"] == "request"]
         assert methods.count("initialize") == 4, methods
         assert methods.count("thread/list") >= 4, methods
@@ -145,6 +146,7 @@ def main() -> None:
             assert database.execute("SELECT COUNT(*) FROM exit_recovery").fetchone() == (0,)
         assert not list(codex_home.iterdir())
         print("Verified selected draft and checkout retention without any thread or turn start requests")
+        print("Verified the saved attachment downloaded its original bytes")
         print("Verified an unselected chat's execution and command evidence reconciled after relaunch")
         print("Verified one cursor-scoped older history request from the deliberate scroll")
         print("Verified bounded turn preview reads and a complete read for the committed jump")

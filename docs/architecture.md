@@ -136,6 +136,8 @@ Tauri keeps file tabs and edit buffers in the [native file tools session](../des
 
 File tabs classify from a bounded prefix and fetch preview bytes for the selected tab. The [native preview scope](../desktop/src-tauri/src/file_preview_ipc.rs) verifies the captured file before the WebView receives it. [PDF pages](../desktop/frontend/src/PdfPreview.svelte) use the bundled PDF.js worker and retire rendering when the tab leaves view. [Markdown resources](../desktop/src-tauri/src/file_actions_ipc/markdown.rs) resolve relative to their document within its checkout. Files with unsupported previews remain available through file actions.
 
+The [expanded image viewer](../desktop/frontend/src/PreviewViewer.svelte) owns its fit and zoom and returns focus to the originating preview. [Native media export](../desktop/src-tauri/src/file_actions_ipc.rs) preserves original image bytes through Save As. [Diagram export](../desktop/frontend/src/previewExport.ts) renders the current diagram to a bounded PNG at a size independent of the preview zoom.
+
 ## Project file search
 
 The [Tauri path index](../desktop/core/src/files/index.rs) belongs to the selected checkout and is shared by its chats. Recursive search follows the existing visibility policy for dot names and generated directories. Enumeration uses the captured directory and skips symbolic links and junctions to follow the [scoped file access policy](../desktop/core/src/files.rs). Filename results carry native path identity independently of their labels and must obtain a fresh scoped file handle before opening. The [workspace grant](../desktop/src-tauri/src/project_ipc.rs) retires results when the checkout is cleared, switched or replaced.

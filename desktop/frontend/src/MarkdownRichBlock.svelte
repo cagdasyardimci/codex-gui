@@ -4,6 +4,8 @@
 
 <script lang="ts">
   import { preserveMarkdownSelection } from './markdownSelection';
+  import PreviewViewer from './PreviewViewer.svelte';
+  import { exportDiagram } from './previewExport';
 
   let { source, kind, fallback }: {
     source: string;
@@ -12,6 +14,7 @@
   } = $props();
   let diagramUrl = $state<string>();
   let diagramLoaded = $state(false);
+  let expanded = $state(false);
   let acceptDiagram: (() => void) | undefined;
   let discardDiagram: (() => void) | undefined;
 
@@ -71,6 +74,14 @@
     {#if diagramUrl}
       <img src={diagramUrl} alt="Mermaid diagram" hidden={!diagramLoaded}
         onload={() => acceptDiagram?.()} onerror={() => discardDiagram?.()} />
+      {#if diagramLoaded}
+        <button type="button" aria-label="Expand Diagram"
+          onclick={(event) => { event.currentTarget.focus({ preventScroll: true }); expanded = true; }}>Expand</button>
+        {#if expanded}
+          <PreviewViewer source={diagramUrl} label="Mermaid diagram" download={exportDiagram}
+            downloadLabel="Export PNG" close={() => { expanded = false; }} />
+        {/if}
+      {/if}
     {/if}
     {#if !diagramLoaded}<pre><code data-language="mermaid">{fallback}</code></pre>{/if}
   </div>

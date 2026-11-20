@@ -4,7 +4,7 @@
     DraftAttachmentScope, FileAction, FileActionsView, FileTabRead, FileTabView, FileToolsChange, FileToolsView, MarkdownFileProperty,
     OpenFileSearchHit, ProjectBrowseEntry, ProjectFolder, ProjectPathId,
   } from './generated/workspace';
-  import { browseProjectFiles, changeFileTools, FileEdits, fileMarkdownImage, fileTabActions, openFileMarkdownLink,
+  import { browseProjectFiles, changeFileTools, exportFileImage, exportFileMarkdownImage, FileEdits, fileMarkdownImage, fileTabActions, openFileMarkdownLink,
     openFileSearchHit, performFileAction, readFilePreview, readFileTab, renderFileMarkdown, sameFileScope, saveFileTab, type FileViewPositions } from './fileTools';
   import ImagePreview from './ImagePreview.svelte';
   import MarkdownView from './MarkdownView.svelte';
@@ -494,7 +494,9 @@
         {#if tab.kind === 'text' && loaded === tab.id}
           {#if preview && canPreview}
             {#if svg}
-              <div class="file-preview" aria-label="SVG Preview"><SvgPreview source={text} alt={tab.path} /></div>
+              <div class="file-preview" aria-label="SVG Preview">
+                <SvgPreview source={text} alt={tab.path} download={() => exportFileImage({ scope, tabId: tab.id })} />
+              </div>
             {:else}
               {@const target = { scope, tabId: tab.id }}
               <div class="file-preview" aria-label="Markdown Preview">
@@ -506,7 +508,9 @@
                   </dl>
                 {/if}
                 <MarkdownView source={text} render={() => loadMarkdown(tab.id)} renderKey={JSON.stringify([scope.workspaceId, scope.draftId, tab.id])}
-                  loadImage={(resource) => fileMarkdownImage({ target, resource })} openLink={(resource) => openFileMarkdownLink({ target, resource })} />
+                  loadImage={(resource) => fileMarkdownImage({ target, resource })}
+                  downloadImage={(resource) => exportFileMarkdownImage({ target, resource })}
+                  openLink={(resource) => openFileMarkdownLink({ target, resource })} />
               </div>
             {/if}
           {:else}
@@ -534,7 +538,8 @@
           {/if}
         {:else if tab.kind === 'raster'}
           <div class="file-image" bind:this={imageScroller} onscroll={(event) => rememberImage(tab.id, event.currentTarget)}>
-            <ImagePreview load={() => readFilePreview({ target: { scope, tabId: tab.id }, kind: 'raster' })} alt={tab.path} />
+            <ImagePreview load={() => readFilePreview({ target: { scope, tabId: tab.id }, kind: 'raster' })} alt={tab.path}
+              download={() => exportFileImage({ scope, tabId: tab.id })} />
           </div>
         {:else if tab.kind === 'pdf'}
           <PdfPreview name={tab.path} load={() => readFilePreview({ target: { scope, tabId: tab.id }, kind: 'pdf' })}

@@ -1,6 +1,10 @@
 <script lang="ts">
-  let { source, alt }: { source: string; alt: string } = $props();
+  import PreviewViewer from './PreviewViewer.svelte';
+
+  let { source, alt, download }: { source: string; alt: string; download: () => Promise<void> } = $props();
   let preview = $state<string>();
+  let decoded = $state(false);
+  let expanded = $state(false);
   const svgNamespace = 'http://www.w3.org/2000/svg';
   const allowed = new Set([
     'svg', 'g', 'a', 'defs', 'symbol', 'use', 'title', 'desc', 'path', 'rect', 'circle', 'ellipse', 'line',
@@ -42,6 +46,8 @@
   $effect(() => {
     const safe = sanitized(source);
     preview = undefined;
+    decoded = false;
+    expanded = false;
     if (!safe) return;
     const uri = URL.createObjectURL(new Blob([safe], { type: 'image/svg+xml' }));
     preview = uri;
@@ -50,7 +56,14 @@
 </script>
 
 {#if preview}
-  <img src={preview} {alt} onerror={() => { preview = undefined; }} />
+  <img src={preview} {alt} onload={() => { decoded = true; }} onerror={() => { preview = undefined; }} />
+  {#if decoded}
+    <button type="button" aria-label={`Expand ${alt}`}
+      onclick={(event) => { event.currentTarget.focus({ preventScroll: true }); expanded = true; }}>Expand</button>
+    {#if expanded}
+      <PreviewViewer source={preview} label={alt} {download} close={() => { expanded = false; }} />
+    {/if}
+  {/if}
 {/if}
 
 <style>

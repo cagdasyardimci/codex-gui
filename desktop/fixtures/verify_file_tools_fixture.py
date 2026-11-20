@@ -67,7 +67,8 @@ def main():
             "unsupported.heic": b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic",
             "folder/rich.md": b"---\ntitle: Local reference\ntags:\n  - alpha\n  - beta\n---\n# Nested document\n\n"
                               b"![Nested pixel](../pixel.png)\n\n![Remote pixel](https://example.invalid/not-loaded.png)\n\n"
-                              b"[Recorded link](https://example.invalid/guide)\n",
+                              b"[Recorded link](https://example.invalid/guide)\n\n"
+                              b"```mermaid\nflowchart LR\n  A[Local] --> B[Export]\n```\n",
             "pixel.png": PIXEL,
             "pixel2.png": PIXEL,
         }.items():
@@ -97,6 +98,11 @@ def main():
         assert (checkout / "replace.txt").read_bytes() == (checkout / "retired-search.txt").read_bytes() == b"Unique replacement target\n"
         saved_guide = "# Saved guide\r\n\r\nPreserve café from the first chat.\r\n".encode("utf-8")
         assert (checkout / GUIDE).read_bytes() == (data / "copied-file").read_bytes() == (data / "exported-file").read_bytes() == saved_guide
+        for name in ("picture.bmp", "graphic.svg", "pixel.png"):
+            assert (data / f"preview-{name}").read_bytes() == (checkout / name).read_bytes()
+        diagram = (data / "preview-Diagram.png").read_bytes()
+        assert diagram[:16] == b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        assert all(10 < edge <= 2400 for edge in struct.unpack_from(">II", diagram, 16))
         actions = [json.loads(line) for line in (data / "file-actions.jsonl").read_text(encoding="utf-8").splitlines()]
         assert [action["action"] for action in actions] == ["reveal", "default", "editor", "github", "default"], actions
         assert all(Path(action["target"]).samefile(checkout / GUIDE) for action in actions[:3]), actions
@@ -112,6 +118,7 @@ def main():
         ], starts
         assert Path(starts[0]["resolvedCwd"]).samefile(checkout)
         print("Verified exact save, copy and export bytes, captured destinations, and file settlement after close and quit")
+        print("Verified original image downloads, expanded preview focus and zoom, and bounded PNG diagram export")
 
 
 if __name__ == "__main__":

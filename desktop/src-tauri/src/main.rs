@@ -116,6 +116,7 @@ fn main() {
     let fixture_checkouts = matches!(
         verification,
         fixture::Verification::Quit
+            | fixture::Verification::History
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -183,6 +184,9 @@ fn main() {
             file_actions_ipc::perform_file_action,
             file_actions_ipc::render_file_markdown,
             file_actions_ipc::file_markdown_image,
+            file_actions_ipc::export_file_markdown_image,
+            file_actions_ipc::export_file_image,
+            file_actions_ipc::save_preview_image,
             file_actions_ipc::open_file_markdown_link,
             file_search_ipc::start_file_search,
             file_search_ipc::read_file_search,

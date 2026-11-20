@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { cancelFileSearch, changeFileTools, fileMarkdownImage, openFileMarkdownLink, openFileSearchHit,
+import { cancelFileSearch, changeFileTools, exportFileImage, exportFileMarkdownImage, fileMarkdownImage, openFileMarkdownLink, openFileSearchHit,
   readFilePreview, readFileSearch, readFileTab, startFileSearch } from './fileTools';
 import { click, clickByLabel, editor, typeText, waitFor } from './fixtureControls';
 import type { DraftAttachmentScope, WorkspaceSnapshot } from './generated/workspace';
@@ -22,6 +22,20 @@ const closeDialog = () => document.querySelector<HTMLDialogElement>('dialog[aria
 const quitDialog = () => document.querySelector<HTMLDialogElement>('dialog.quit-dialog[open]');
 const quickOpenField = () => document.querySelector<HTMLInputElement>('dialog[aria-label="Quick Open"][open] input');
 const fileSearchDialog = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Search Files"][open]');
+const previewViewer = () => document.querySelector<HTMLDialogElement>('dialog.expanded-preview[open]');
+
+async function openViewer(label: string) {
+  await clickByLabel(label);
+  await waitFor('The expanded preview did not decode', () => !!previewViewer()?.querySelector('img')?.naturalWidth &&
+    !previewViewer()?.querySelector<HTMLButtonElement>('button:nth-child(3)')?.disabled);
+  return previewViewer()!;
+}
+
+async function downloadPreview(label: string, dialog: HTMLDialogElement) {
+  await click(label, dialog);
+  await waitFor(`The ${label} action did not settle`, () =>
+    [...dialog.querySelectorAll('button:enabled')].some((button) => button.textContent === label));
+}
 
 function enterSearchText(control: HTMLInputElement, value: string) {
   control.value = value;
@@ -231,6 +245,25 @@ async function verifyRichPreviews(visible: () => WorkspaceSnapshot | null, scope
   await browse('picture.bmp');
   await waitFor('The portable bitmap preview did not load the converted dimensions', () =>
     panel()?.querySelector<HTMLImageElement>('img[alt="picture.bmp"]')?.naturalWidth === 2);
+  const original = panel()!.querySelector<HTMLImageElement>('img[alt="picture.bmp"]')!;
+  const before = original.getBoundingClientRect().width;
+  let viewer = await openViewer('Expand picture.bmp');
+  const preview = viewer.querySelector('img')!;
+  const fitWidth = preview.getBoundingClientRect().width;
+  await click('Zoom In', viewer);
+  await waitFor('Zoom did not change the expanded bitmap independently', () =>
+    preview.getBoundingClientRect().width > fitWidth && original.getBoundingClientRect().width === before);
+  await click('Fit', viewer);
+  await waitFor('Fit did not restore the expanded bitmap width', () => preview.getBoundingClientRect().width === fitWidth);
+  await click('Zoom In', viewer);
+  await downloadPreview('Download Original', viewer);
+  viewer.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await waitFor('Escape did not restore the source image and originating control', () => !previewViewer() &&
+    document.activeElement?.getAttribute('aria-label') === 'Expand picture.bmp' && original.isConnected);
+  viewer = await openViewer('Expand picture.bmp');
+  if (viewer.querySelector('img')!.getBoundingClientRect().width !== fitWidth) throw new Error('A new expanded viewer inherited the previous zoom');
+  await click('Close', viewer);
+  await waitFor('Close did not return from the expanded bitmap', () => !previewViewer());
   await clickByLabel('Close picture.bmp');
   await browse('graphic.svg');
   await waitFor('The SVG source did not stay available', () => field()?.value.includes('<rect') === true);
@@ -238,6 +271,9 @@ async function verifyRichPreviews(visible: () => WorkspaceSnapshot | null, scope
   await waitFor('The SVG image preview did not render', () =>
     panel()?.querySelector<HTMLImageElement>('[aria-label="SVG Preview"] img')?.naturalWidth === 40);
   if ((window as Window & { invalidSvgContent?: boolean }).invalidSvgContent) throw new Error('The SVG preview ran active content');
+  viewer = await openViewer('Expand graphic.svg');
+  await downloadPreview('Download Original', viewer);
+  await click('Close', viewer);
   await click('View Source', panel()!);
   await waitFor('The SVG preview changed its original source', () => field()?.value.includes('invalidSvgContent') === true);
   await clickByLabel('Close graphic.svg');
@@ -255,8 +291,18 @@ async function verifyRichPreviews(visible: () => WorkspaceSnapshot | null, scope
   if (panel()?.querySelector('img[alt="Remote pixel"]')) throw new Error('The Markdown preview loaded a remote image');
   const target = { scope, tabId: await active() };
   await rejectsStale(fileMarkdownImage({ target, resource: 'pixel2.png' }));
+  await rejectsStale(exportFileMarkdownImage({ target, resource: 'pixel2.png' }));
+  await rejectsStale(exportFileImage(target));
   await rejectsStale(openFileMarkdownLink({ target, resource: 'https://example.invalid/unrecorded' }));
   await openFileMarkdownLink({ target, resource: 'https://example.invalid/guide' });
+  viewer = await openViewer('Expand Nested pixel');
+  await downloadPreview('Download Original', viewer);
+  await click('Close', viewer);
+  viewer = await openViewer('Expand Diagram');
+  await downloadPreview('Export PNG', viewer);
+  await click('Close', viewer);
+  await waitFor('Closing the diagram did not restore its original preview', () => !previewViewer() &&
+    document.activeElement?.getAttribute('aria-label') === 'Expand Diagram');
   const markdownTab = panel()!.querySelector<HTMLElement>(`[data-file-tab="${target.tabId}"]`)!;
   const close = markdownTab.querySelector<HTMLButtonElement>('button[aria-label^="Close "]')!;
   close.click();

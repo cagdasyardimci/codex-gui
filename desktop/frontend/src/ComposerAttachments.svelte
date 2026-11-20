@@ -22,7 +22,7 @@
   {#each attachments as attachment (attachment.id)}
     <li>
       {#if attachment.image}
-        <ImagePreview load={() => loadComposerImage({ scope, attachmentId: attachment.id })} alt={attachment.label} />
+        <ImagePreview load={() => loadComposerImage({ scope, attachmentId: attachment.id })} alt={attachment.label} downloadOriginal />
         <button type="button" aria-label={`Annotate ${attachment.label}`} onclick={() => void annotate(attachment)}>Annotate</button>
       {/if}
       <span>{attachment.label}</span>
