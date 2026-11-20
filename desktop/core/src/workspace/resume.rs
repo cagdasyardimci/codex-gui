@@ -55,7 +55,7 @@ pub struct ResumedChat {
 pub enum ResumedMode {
     Writable {
         queue: Result<ChatRead<QueueSnapshot>, BrowseError>,
-        execution: Result<(), ResumeError>,
+        execution: Result<(), Box<ResumeError>>,
     },
     ReadOnly,
 }
@@ -204,7 +204,10 @@ impl WorkspaceEngine {
         self.check_owner(owner)?;
         Ok(ResumedChat {
             summary,
-            mode: ResumedMode::Writable { queue, execution },
+            mode: ResumedMode::Writable {
+                queue,
+                execution: execution.map_err(Box::new),
+            },
             events,
         })
     }
