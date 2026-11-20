@@ -23,9 +23,9 @@ use super::{
 const PARTIAL_PREFIX: &str = ".partial-";
 
 mod submissions;
-pub use submissions::JournalError;
-pub(super) use submissions::migrate_submissions;
-pub(crate) use submissions::{JournalEntry, JournalPhase};
+pub(crate) use submissions::{JournalEntry, JournalOutcome, JournalPhase};
+pub use submissions::{JournalError, SubmissionAcknowledgement};
+pub(super) use submissions::{migrate_submission_outcomes, migrate_submissions};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlobId([u8; 32]);
@@ -382,7 +382,8 @@ fn collect_one(database: &mut Connection, blobs: &Path, id: BlobId) -> Result<()
     let transaction = database.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let owned: bool = transaction.query_row(
         "SELECT EXISTS (SELECT 1 FROM draft_attachments WHERE blob_id = ?1)
-             OR EXISTS (SELECT 1 FROM submission_attachments WHERE blob_id = ?1)",
+             OR EXISTS (SELECT 1 FROM submission_attachments WHERE blob_id = ?1)
+             OR EXISTS (SELECT 1 FROM sent_submission_attachments WHERE blob_id = ?1)",
         [id.0.as_slice()],
         |row| row.get(0),
     )?;
@@ -441,6 +442,8 @@ fn recovery_candidates(
            SELECT 1 FROM draft_attachments AS o WHERE o.blob_id = b.id
          ) AND NOT EXISTS (
            SELECT 1 FROM submission_attachments AS o WHERE o.blob_id = b.id
+         ) AND NOT EXISTS (
+           SELECT 1 FROM sent_submission_attachments AS o WHERE o.blob_id = b.id
          ) FROM attachment_blobs AS b",
     )?;
     let indexed = statement

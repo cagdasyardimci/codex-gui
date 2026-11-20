@@ -5,11 +5,12 @@ use crate::{
     identity::{OperationIdentity, RequestId},
     storage::{
         attachments::AttachmentStore,
-        drafts::{DraftId, DraftRevision},
+        drafts::{DraftId, DraftPatch, DraftRevision, DraftSave, read_draft, save_draft},
         open_workspace_database,
     },
     workspace::{
-        PreparedThread, SendDraft, SendIntent, SendSettings, WorkspaceAction, WorkspaceEngine,
+        PreparedThread, SendDraft, SendIntent, SendSettings, SubmissionAcknowledgement,
+        WorkspaceAction, WorkspaceEngine,
     },
 };
 
@@ -108,7 +109,7 @@ impl Fixture {
 #[tokio::test]
 async fn first_turn_writes_the_exact_journaled_request_from_a_non_git_checkout() {
     let (mut fixture, prepared, operation, draft, attachment) = Fixture::prepared().await;
-    let database =
+    let mut database =
         open_workspace_database(&fixture.scratch.path().join("workspace.sqlite3")).unwrap();
     assert!(!fixture.checkout.canonical_path().join(".git").exists());
     let engine = &fixture.engine;
@@ -143,8 +144,170 @@ async fn first_turn_writes_the_exact_journaled_request_from_a_non_git_checkout()
     }).await.unwrap();
     let reply = reply.unwrap();
     assert_eq!(reply.operation, operation);
+    assert_eq!(
+        reply.acknowledgement,
+        SubmissionAcknowledgement::Accepted {
+            retired_draft: true
+        }
+    );
     assert_eq!(reply.response.unwrap()["turn"]["id"], "turn-1");
-    store.replace_draft_references(draft, &[]).unwrap();
+    let retired = read_draft(&database, draft).unwrap().unwrap();
+    assert_eq!(retired.text, "");
+    assert_eq!(retired.revision, DraftRevision::INITIAL);
+    assert_eq!(
+        save_draft(
+            &mut database,
+            draft,
+            Some(DraftRevision::INITIAL),
+            DraftRevision::INITIAL.next().unwrap(),
+            &DraftPatch {
+                text: Some("debounced next edit".into()),
+                context: None
+            },
+        )
+        .unwrap(),
+        DraftSave::Applied
+    );
+    assert_eq!(
+        read_draft(&database, draft).unwrap().unwrap().text,
+        "debounced next edit"
+    );
+    store.collect().unwrap();
+    assert!(attachment.is_file());
+}
+
+#[tokio::test]
+async fn an_exact_item_event_before_the_reply_retires_once_and_keeps_newer_draft_edits() {
+    let (mut fixture, prepared, operation, draft, attachment) = Fixture::prepared().await;
+    let mut db =
+        open_workspace_database(&fixture.scratch.path().join("workspace.sqlite3")).unwrap();
+    let client = &fixture.transport.client;
+    let inbox = &mut fixture.transport.inbox;
+    let engine = &fixture.engine;
+    let store = &fixture.store;
+    let next_revision = DraftRevision::INITIAL.next().unwrap();
+    let new_attachment = store.stage(&b"replacement image"[..]).unwrap();
+    let (reply, ()) = time::timeout(DEADLINE, async {
+        tokio::join!(
+            engine.submit_prepared(prepared, client, store, DEADLINE),
+            async {
+                let outgoing = next_request(&mut fixture.server).await;
+                save_draft(
+                    &mut db,
+                    draft,
+                    Some(DraftRevision::INITIAL),
+                    next_revision,
+                    &DraftPatch {
+                        text: Some("new draft".into()),
+                        context: Some(vec![json!("new context")]),
+                    },
+                )
+                .unwrap();
+                store
+                    .replace_draft_references(draft, &[new_attachment.id()])
+                    .unwrap();
+
+                for (client_id, expected) in [
+                    (
+                        Uuid::from_u128(404).to_string(),
+                        SubmissionAcknowledgement::Unmatched,
+                    ),
+                    (
+                        operation.request.0.to_string(),
+                        SubmissionAcknowledgement::Accepted {
+                            retired_draft: false,
+                        },
+                    ),
+                ] {
+                    let event = encode_frame(&json!({
+                        "method": "item/started",
+                        "params": {
+                            "threadId": "thread-1", "turnId": "turn-1",
+                            "item": { "type": "userMessage", "id": "item-1", "clientId": client_id }
+                        }
+                    }))
+                    .unwrap();
+                    fixture.replies.write_all(&event).await.unwrap();
+                    let event = inbox.recv().await.unwrap();
+                    assert_eq!(
+                        engine
+                            .observe_submission_event(client.identity(), &event, store)
+                            .await
+                            .unwrap(),
+                        expected
+                    );
+                }
+                respond(
+                    &mut fixture.replies,
+                    outgoing["id"].clone(),
+                    json!({"turn": {"id": "turn-1"}}),
+                )
+                .await;
+            }
+        )
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        reply.unwrap().acknowledgement,
+        SubmissionAcknowledgement::Duplicate
+    );
+    let saved = read_draft(&db, draft).unwrap().unwrap();
+    assert_eq!(saved.revision, next_revision);
+    assert_eq!(saved.text, "new draft");
+    assert_eq!(saved.context, [json!("new context")]);
+    let sent: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM sent_submission_attachments",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(sent, 1);
+    let new_path = new_attachment.path();
+    drop(new_attachment);
+    store.collect().unwrap();
+    assert!(attachment.is_file());
+    assert!(new_path.is_file());
+}
+
+#[tokio::test]
+async fn a_definite_rejection_records_the_outcome_and_preserves_the_draft() {
+    let (mut fixture, prepared, _operation, draft, attachment) = Fixture::prepared().await;
+    let engine = &fixture.engine;
+    let client = &fixture.transport.client;
+    let store = &fixture.store;
+    let (reply, ()) = time::timeout(DEADLINE, async {
+        tokio::join!(
+            engine.submit_prepared(prepared, client, store, DEADLINE),
+            async {
+                let outgoing = next_request(&mut fixture.server).await;
+                let rejection = encode_frame(&json!({
+                    "id": outgoing["id"],
+                    "error": {"code": -32000, "message": "fixture rejection"}
+                }))
+                .unwrap();
+                fixture.replies.write_all(&rejection).await.unwrap();
+            }
+        )
+    })
+    .await
+    .unwrap();
+    let reply = reply.unwrap();
+    assert!(matches!(reply.response, Err(RequestError::Remote(_))));
+    assert_eq!(reply.acknowledgement, SubmissionAcknowledgement::Rejected);
+    let db = open_workspace_database(&fixture.scratch.path().join("workspace.sqlite3")).unwrap();
+    let code: i64 = db
+        .query_row(
+            "SELECT rejection_code FROM submission_outcomes",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(code, -32000);
+    let saved = read_draft(&db, draft).unwrap().unwrap();
+    assert_eq!(saved.revision, DraftRevision::INITIAL);
+    assert_eq!(saved.text, "  café\n");
     store.collect().unwrap();
     assert!(attachment.is_file());
 }

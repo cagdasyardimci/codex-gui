@@ -1,5 +1,8 @@
 use super::*;
-use crate::identity::RequestId;
+use crate::identity::{RequestId, TurnId};
+use uuid::Uuid;
+
+use crate::storage::drafts::retire_submitted_revision;
 
 #[derive(Debug, Error)]
 pub enum JournalError {
@@ -11,6 +14,8 @@ pub enum JournalError {
     Attachment(#[from] AttachmentError),
     #[error("the submission no longer has the expected journal state")]
     InvalidPhase,
+    #[error("the submission received conflicting outcomes")]
+    ConflictingOutcome,
 }
 
 pub(crate) struct JournalEntry<'a> {
@@ -25,6 +30,19 @@ pub(crate) struct JournalEntry<'a> {
 pub(crate) enum JournalPhase {
     Dispatching,
     Unsent,
+}
+
+pub(crate) enum JournalOutcome {
+    Accepted(TurnId),
+    Rejected { code: i64 },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SubmissionAcknowledgement {
+    Accepted { retired_draft: bool },
+    Rejected,
+    Duplicate,
+    Unmatched,
 }
 
 impl AttachmentStore {
@@ -105,6 +123,89 @@ impl AttachmentStore {
         state.candidates.extend(released);
         Ok(())
     }
+
+    pub(crate) fn acknowledge_submission(
+        &self,
+        id: RequestId,
+        thread: &ThreadId,
+        outcome: JournalOutcome,
+    ) -> Result<SubmissionAcknowledgement, JournalError> {
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let id = id.0.as_bytes().as_slice();
+        let binding = transaction
+            .query_row(
+                "SELECT draft_id, draft_revision FROM submissions
+             WHERE id = ?1 AND thread_id = ?2 AND phase = 'dispatching'",
+                params![id, thread.0],
+                |row| Ok((row.get::<_, [u8; 16]>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()?;
+        let Some((draft_id, revision)) = binding else {
+            return Ok(SubmissionAcknowledgement::Unmatched);
+        };
+        let known = transaction
+            .query_row(
+                "SELECT turn_id FROM submission_outcomes WHERE id = ?1",
+                [id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?;
+        if let Some(turn) = known {
+            return match outcome {
+                JournalOutcome::Rejected { .. } => Ok(SubmissionAcknowledgement::Duplicate),
+                JournalOutcome::Accepted(incoming)
+                    if turn.as_deref() == Some(incoming.0.as_str()) =>
+                {
+                    Ok(SubmissionAcknowledgement::Duplicate)
+                }
+                JournalOutcome::Accepted(_) => Err(JournalError::ConflictingOutcome),
+            };
+        }
+
+        let mut released = Vec::new();
+        let acknowledgement = match outcome {
+            JournalOutcome::Rejected { code } => {
+                transaction.execute(
+                    "INSERT INTO submission_outcomes (id, rejection_code) VALUES (?1, ?2)",
+                    params![id, code],
+                )?;
+                SubmissionAcknowledgement::Rejected
+            }
+            JournalOutcome::Accepted(turn) => {
+                transaction.execute(
+                    "INSERT INTO submission_outcomes (id, turn_id) VALUES (?1, ?2)",
+                    params![id, turn.0],
+                )?;
+                transaction.execute(
+                    "INSERT INTO sent_submission_attachments (submission_id, blob_id)
+                     SELECT submission_id, blob_id FROM submission_attachments WHERE submission_id = ?1",
+                    [id],
+                )?;
+                transaction.execute(
+                    "DELETE FROM submission_attachments WHERE submission_id = ?1",
+                    [id],
+                )?;
+                let draft = DraftId(Uuid::from_bytes(draft_id));
+                let revision = DraftRevision::from_sql(revision);
+                let retired_draft = retire_submitted_revision(&transaction, draft, revision)?;
+                if retired_draft {
+                    released = replace_references(
+                        &transaction,
+                        &self.inner.blobs,
+                        &draft_id,
+                        std::iter::empty(),
+                    )?;
+                }
+                SubmissionAcknowledgement::Accepted { retired_draft }
+            }
+        };
+        transaction.commit()?;
+        state.candidates.extend(released);
+        Ok(acknowledgement)
+    }
 }
 
 pub(in crate::storage) fn migrate_submissions(
@@ -125,5 +226,24 @@ pub(in crate::storage) fn migrate_submissions(
             PRIMARY KEY (submission_id, blob_id)
         ) STRICT, WITHOUT ROWID;
         CREATE INDEX submission_attachments_blob ON submission_attachments (blob_id);",
+    )
+}
+
+pub(in crate::storage) fn migrate_submission_outcomes(
+    transaction: &Transaction<'_>,
+) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "CREATE TABLE submission_outcomes (
+            id BLOB NOT NULL PRIMARY KEY REFERENCES submissions (id) ON DELETE CASCADE,
+            turn_id TEXT CHECK (length(turn_id) > 0),
+            rejection_code INTEGER,
+            CHECK ((turn_id IS NULL) <> (rejection_code IS NULL))
+        ) STRICT, WITHOUT ROWID;
+        CREATE TABLE sent_submission_attachments (
+            submission_id BLOB NOT NULL REFERENCES submission_outcomes (id) ON DELETE CASCADE,
+            blob_id BLOB NOT NULL REFERENCES attachment_blobs (id) ON DELETE RESTRICT,
+            PRIMARY KEY (submission_id, blob_id)
+        ) STRICT, WITHOUT ROWID;
+        CREATE INDEX sent_submission_attachments_blob ON sent_submission_attachments (blob_id);",
     )
 }

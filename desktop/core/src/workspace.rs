@@ -13,6 +13,7 @@ mod prepare;
 mod send;
 mod submission;
 
+pub use crate::storage::attachments::SubmissionAcknowledgement;
 pub use prepare::{PrepareError, PreparedThread};
 pub use send::{SendDraft, SendIntent, SendSettings};
 pub use submission::{SubmissionError, SubmissionReply};

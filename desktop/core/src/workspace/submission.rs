@@ -2,13 +2,18 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use thiserror::Error;
+use uuid::Uuid;
 
-use super::{PreparedThread, WorkspaceAction, WorkspaceEngine, WorkspaceError};
+use super::{
+    PreparedThread, SubmissionAcknowledgement, WorkspaceAction, WorkspaceEngine, WorkspaceError,
+};
 use crate::{
     checkout::CheckoutError,
-    codex::{AppServerClient, Delivery, RequestError},
-    identity::{OperationIdentity, ThreadId},
-    storage::attachments::{AttachmentStore, JournalEntry, JournalError, JournalPhase},
+    codex::{AppServerClient, Delivery, RequestError, ServerEvent},
+    identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
+    storage::attachments::{
+        AttachmentStore, JournalEntry, JournalError, JournalOutcome, JournalPhase,
+    },
 };
 
 #[derive(Debug, Error)]
@@ -30,6 +35,7 @@ pub struct SubmissionReply {
     pub operation: OperationIdentity,
     pub thread: ThreadId,
     pub response: Result<Value, RequestError>,
+    pub acknowledgement: SubmissionAcknowledgement,
 }
 
 impl WorkspaceEngine {
@@ -45,20 +51,110 @@ impl WorkspaceEngine {
         let store = store.clone();
         tokio::spawn(async move {
             let operation = prepared.intent.operation.clone();
-            let outcome = dispatch(&prepared, &client, &store, timeout).await;
-            let _ = engine
-                .apply(WorkspaceAction::SubmissionFinished {
+            let outcome = async {
+                let response = dispatch(&prepared, &client, &store, timeout).await?;
+                let acknowledgement = match reply_outcome(&response) {
+                    Some(outcome) => {
+                        engine
+                            .acknowledge(&operation, &prepared.thread, outcome, &store)
+                            .await?
+                    }
+                    None => SubmissionAcknowledgement::Unmatched,
+                };
+                Ok(SubmissionReply {
                     operation: operation.clone(),
+                    thread: prepared.thread,
+                    response,
+                    acknowledgement,
                 })
+            }
+            .await;
+            let _ = engine
+                .apply(WorkspaceAction::SubmissionFinished { operation })
                 .await;
-            outcome.map(|response| SubmissionReply {
-                operation,
-                thread: prepared.thread,
-                response,
-            })
+            outcome
         })
         .await?
     }
+
+    pub async fn observe_submission_event(
+        &self,
+        owner: &ConnectionIdentity,
+        event: &ServerEvent,
+        store: &AttachmentStore,
+    ) -> Result<SubmissionAcknowledgement, SubmissionError> {
+        let Some((request, thread, turn)) = message_evidence(event) else {
+            return Ok(SubmissionAcknowledgement::Unmatched);
+        };
+        let operation = OperationIdentity {
+            connection: owner.clone(),
+            request,
+        };
+        self.acknowledge(&operation, &thread, JournalOutcome::Accepted(turn), store)
+            .await
+    }
+
+    async fn acknowledge(
+        &self,
+        operation: &OperationIdentity,
+        thread: &ThreadId,
+        outcome: JournalOutcome,
+        store: &AttachmentStore,
+    ) -> Result<SubmissionAcknowledgement, SubmissionError> {
+        let commit = self.preparation_commit.clone().lock_owned().await;
+        if operation.connection != self.snapshot().connection {
+            return Ok(SubmissionAcknowledgement::Unmatched);
+        }
+        let checkout = operation
+            .connection
+            .workspace
+            .checkout
+            .clone()
+            .ok_or(WorkspaceError::MissingCheckout)?;
+        let request = operation.request;
+        let thread = thread.clone();
+        let store = store.clone();
+        tokio::task::spawn_blocking(move || {
+            let _commit = commit;
+            checkout.revalidate()?;
+            Ok(store.acknowledge_submission(request, &thread, outcome)?)
+        })
+        .await?
+    }
+}
+
+fn reply_outcome(response: &Result<Value, RequestError>) -> Option<JournalOutcome> {
+    match response {
+        Ok(reply) => Some(JournalOutcome::Accepted(TurnId(nonempty_string(
+            &reply["turn"]["id"],
+        )?))),
+        Err(RequestError::Remote(error)) => Some(JournalOutcome::Rejected { code: error.code }),
+        Err(_) => None,
+    }
+}
+
+fn message_evidence(event: &ServerEvent) -> Option<(RequestId, ThreadId, TurnId)> {
+    let ServerEvent::Notification { method, params } = event else {
+        return None;
+    };
+    if !matches!(method.as_str(), "item/started" | "item/completed")
+        || params["item"]["type"] != "userMessage"
+    {
+        return None;
+    }
+    let client = Uuid::parse_str(params["item"]["clientId"].as_str()?).ok()?;
+    Some((
+        RequestId(client),
+        ThreadId(nonempty_string(&params["threadId"])?),
+        TurnId(nonempty_string(&params["turnId"])?),
+    ))
+}
+
+fn nonempty_string(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .filter(|text| !text.is_empty())
+        .map(str::to_owned)
 }
 
 async fn dispatch(

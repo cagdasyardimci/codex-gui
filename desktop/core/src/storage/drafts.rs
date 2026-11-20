@@ -19,6 +19,10 @@ impl DraftRevision {
     pub(super) fn as_sql(self) -> i64 {
         self.0
     }
+
+    pub(super) fn from_sql(revision: i64) -> Self {
+        Self(revision)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -144,6 +148,20 @@ pub(super) fn save_in_transaction(
         )?,
     };
     Ok(DraftSave::Applied)
+}
+
+pub(super) fn retire_submitted_revision(
+    transaction: &Transaction<'_>,
+    id: DraftId,
+    revision: DraftRevision,
+) -> rusqlite::Result<bool> {
+    // Keep the edit revision so a newer debounced save expecting this
+    // revision can still succeed after acknowledgement.
+    let updated = transaction.execute(
+        "UPDATE drafts SET text = '', context = '[]' WHERE id = ?1 AND revision = ?2",
+        params![id.0.as_bytes().as_slice(), revision.0],
+    )?;
+    Ok(updated == 1)
 }
 
 pub(super) fn migrate(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
