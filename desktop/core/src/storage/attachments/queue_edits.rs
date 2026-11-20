@@ -66,14 +66,8 @@ impl AttachmentStore {
         {
             return Err(QueueEditError::OccupiedDraft);
         }
-        let (text, context) = match entry.input.split_first() {
-            Some((text, context)) if text["type"] == "text" => (
-                text["text"].as_str().ok_or(QueueEditError::InvalidInput)?,
-                context,
-            ),
-            Some(_) => ("", entry.input.as_slice()),
-            None => return Err(QueueEditError::InvalidInput),
-        };
+        let (text, context) =
+            split_queue_input(&entry.input).ok_or(QueueEditError::InvalidInput)?;
         let revision = draft.revision.next().ok_or(QueueEditError::Changed)?;
         let saved = save_in_transaction(
             &tx,
@@ -212,6 +206,15 @@ pub(crate) enum QueueEditOutcome {
         entry: QueuedSubmission,
         revision: DraftRevision,
     },
+}
+
+pub(super) fn split_queue_input(input: &[Value]) -> Option<(&str, &[Value])> {
+    let (first, rest) = input.split_first()?;
+    if first["type"] == "text" {
+        Some((first["text"].as_str()?, rest))
+    } else {
+        Some(("", input))
+    }
 }
 
 fn read_queue_edit(

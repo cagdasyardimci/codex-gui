@@ -1,6 +1,7 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, hash::Hash, time::Duration};
 
 use indexmap::IndexMap;
+use serde_json::Value;
 
 use super::{
     SubmissionAcknowledgement, SubmissionError, WorkspaceEngine, WorkspaceError,
@@ -127,17 +128,24 @@ impl WorkspaceEngine {
             if requests.is_empty() {
                 continue;
             }
-            let mut evidence =
-                match history_evidence(&browser, &summary, connection, &thread, &requests, timeout)
-                    .await
-                {
-                    Ok(evidence) => evidence,
-                    Err(error) => {
-                        result.unresolved.extend(requests);
-                        result.read_failures.push((thread, error));
-                        continue;
-                    }
-                };
+            let mut evidence = match history_evidence(
+                &browser,
+                &summary,
+                connection,
+                &thread,
+                &requests,
+                timeout,
+                message_client_id,
+            )
+            .await
+            {
+                Ok(evidence) => evidence,
+                Err(error) => {
+                    result.unresolved.extend(requests);
+                    result.read_failures.push((thread, error));
+                    continue;
+                }
+            };
             for request in requests {
                 if let Some(Evidence::Unique(turn)) = evidence.remove(&request) {
                     let operation = OperationIdentity {
@@ -200,22 +208,26 @@ impl WorkspaceEngine {
     }
 }
 
-enum Evidence {
+pub(super) enum Evidence {
     Missing,
     Unique(TurnId),
     Conflicting,
 }
 
-async fn history_evidence(
+pub(super) async fn history_evidence<Id: Clone + Eq + Hash>(
     browser: &CodexBrowser,
     chat: &ChatRead<ChatSummary>,
     connection: &ConnectionIdentity,
     thread: &ThreadId,
-    requests: &[RequestId],
+    requests: &[Id],
     timeout: Duration,
-) -> Result<HashMap<RequestId, Evidence>, BrowseError> {
+    client_key: impl Fn(&Value) -> Option<Id>,
+) -> Result<HashMap<Id, Evidence>, BrowseError> {
     let mut cursor = None;
-    let mut wanted: HashMap<_, _> = requests.iter().map(|id| (*id, Evidence::Missing)).collect();
+    let mut wanted: HashMap<_, _> = requests
+        .iter()
+        .map(|id| (id.clone(), Evidence::Missing))
+        .collect();
     for _ in 0..MAX_HISTORY_PAGES {
         let page = browser
             .history(chat, cursor.as_ref(), timeout)
@@ -225,7 +237,7 @@ async fn history_evidence(
             if turn.activity.id.0.is_empty() {
                 continue;
             }
-            for client in turn.items.iter().filter_map(message_client_id) {
+            for client in turn.items.iter().filter_map(&client_key) {
                 if let Some(evidence) = wanted.get_mut(&client) {
                     match evidence {
                         Evidence::Missing => *evidence = Evidence::Unique(turn.activity.id.clone()),

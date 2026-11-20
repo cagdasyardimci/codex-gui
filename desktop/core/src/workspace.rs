@@ -34,6 +34,7 @@ pub use interactions::{
 pub use prepare::{PrepareError, PreparedThread};
 pub use queue::{
     LegacyStartResult, QueueDeleteResult, QueueEditResult, QueueError, QueueStartResult,
+    QueuedSteerResult,
 };
 pub use recovery::SubmissionRecovery;
 pub use resume::{ResumeError, ResumedChat, ResumedMode, RoutedEvent};

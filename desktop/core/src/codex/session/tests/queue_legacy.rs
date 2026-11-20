@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     codex::{ChatRead, QueueSnapshot},
-    storage::attachments::LegacyQueueStatus,
+    storage::attachments::{LegacyQueueStatus, QueueSteerPhase},
     workspace::LegacyStartResult,
 };
 
@@ -47,6 +47,61 @@ fn states(
         .into_iter()
         .map(|entry| (entry.id, entry.status))
         .collect()
+}
+
+#[tokio::test]
+async fn a_rejected_legacy_steer_restores_its_attachment_only_into_an_empty_draft() {
+    time::timeout(QUEUE_SCENARIO_DEADLINE, async {
+        let (mut f, prepared, _, draft, image) = Fixture::prepared().await;
+        drop(prepared);
+        let intent = f.queue_intent(draft, 111);
+        let client = &f.transport.client;
+        let target = queue_target();
+        let thread = &target.thread;
+        let engine = &f.engine;
+        let store = &f.store;
+        let checkout = &f.checkout;
+        let support = availability(client, &mut f.server, &mut f.replies, checkout, false).await;
+        engine.observe_execution_event(client.identity(), &active_turn_event("turn/started", "inProgress")).await.unwrap();
+        let id = engine.enqueue_legacy_follow_up(client, store, target.clone(), &support, intent).await.unwrap();
+        let (rejected, ()) = tokio::join!(
+            engine.steer_legacy_queue_entry(client, store, &target, &support, id, DEADLINE),
+            async {
+                let steer = next_request(&mut f.server).await;
+                assert_eq!(steer["method"], "turn/steer");
+                assert_eq!(steer["params"], json!({
+                    "threadId":thread.0,
+                    "expectedTurnId":target.turn.0,
+                    "clientUserMessageId":id.0.to_string(),
+                    "input":[{"type":"text","text":"  café\n"},{"type":"localImage","path":image}],
+                }));
+                let fail = encode_frame(&json!({
+                    "id":steer["id"],"error":{"code":-32600,"message":"the captured turn is unavailable"}
+                })).unwrap();
+                f.replies.write_all(&fail).await.unwrap();
+            }
+        );
+        assert!(matches!(rejected, Err(QueueError::Request(RequestError::Remote(_)))));
+        let receipt = store.queue_steering_receipts(checkout, thread).unwrap().pop().unwrap();
+        assert_eq!(receipt.phase, QueueSteerPhase::Detached);
+        store.save_editor_text(draft, "another unsent draft".into()).unwrap();
+        assert!(matches!(
+            engine.restore_detached_steering(client, store, thread, receipt.id).await,
+            Err(QueueError::Journal(JournalError::PendingDraft))
+        ));
+        assert_eq!(store.read_editor_draft(draft).unwrap().text, "another unsent draft");
+        store.save_editor_text(draft, String::new()).unwrap();
+        assert_eq!(engine.restore_detached_steering(client, store, thread, receipt.id).await.unwrap(), draft);
+        let saved = store.read_editor_draft(draft).unwrap();
+        assert_eq!(saved.text, "  café\n");
+        assert_eq!(saved.context, [json!({"type":"localImage","path":image})]);
+        assert!(store.queue_steering_receipts(checkout, thread).unwrap().is_empty());
+        assert!(states(store, client, thread).is_empty());
+        assert!(store.pending_submissions(checkout).unwrap().is_empty());
+        store.collect().unwrap();
+        assert!(image.is_file());
+        assert!(time::timeout(Duration::from_millis(50), f.server.next_frame()).await.is_err());
+    }).await.unwrap();
 }
 
 #[tokio::test]

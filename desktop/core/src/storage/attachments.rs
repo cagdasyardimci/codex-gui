@@ -27,8 +27,10 @@ pub(super) mod exit_recovery;
 pub(super) mod legacy_queue;
 pub mod navigation;
 pub mod queue_edits;
+pub(super) mod queue_steering;
 mod submissions;
 pub use legacy_queue::{LegacyQueueEntry, LegacyQueueStatus};
+pub use queue_steering::{QueueSteerPhase, QueueSteeringReceipt};
 pub(crate) use submissions::{
     JournalEntry, JournalKind, JournalOutcome, JournalPhase, PendingSubmission, SubmissionWrite,
 };

@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 mod legacy;
 pub use legacy::LegacyStartResult;
+mod steering;
+pub use steering::QueuedSteerResult;
 
 use super::{SubmissionError, WorkspaceAction, WorkspaceEngine, WorkspaceError};
 use crate::{
@@ -85,7 +87,7 @@ impl WorkspaceEngine {
     ) -> Result<QueueStartResult, QueueError> {
         let _queue = self.lock_queue(thread).await;
         let owner = client.identity();
-        self.queue_owner(owner, thread)?;
+        self.require_unreserved(client, store, thread, &entry.client_user_message_id)?;
         if self.thread_has_active_turn(thread) {
             return Ok(QueueStartResult::ActiveTurn);
         }
@@ -141,7 +143,7 @@ impl WorkspaceEngine {
             )
             .await?;
         }
-        self.detach_consumed_queue_edit(owner, store, thread, &entry.client_user_message_id)
+        self.note_queue_consumption(owner, store, thread, &turn, &entry.client_user_message_id)
             .await?;
         // Execution events are authoritative and may have already reported completion.
         Ok(QueueStartResult::Started(turn))
@@ -164,6 +166,7 @@ impl WorkspaceEngine {
         timeout: Duration,
     ) -> Result<QueueDeleteResult, QueueError> {
         let _queue = self.lock_queue(thread).await;
+        self.require_unreserved(client, store, thread, &entry.client_user_message_id)?;
         if !self
             .has_captured_entry(client, thread, entry, timeout)
             .await?
@@ -200,6 +203,7 @@ impl WorkspaceEngine {
         timeout: Duration,
     ) -> Result<QueueEdit, QueueError> {
         let _queue = self.lock_queue(thread).await;
+        self.require_unreserved(client, store, thread, &entry.client_user_message_id)?;
         if !self
             .has_captured_entry(client, thread, entry, timeout)
             .await?
@@ -236,6 +240,12 @@ impl WorkspaceEngine {
         timeout: Duration,
     ) -> Result<QueueEditResult, QueueError> {
         let _queue = self.lock_queue(&edit.thread).await;
+        self.require_unreserved(
+            client,
+            store,
+            &edit.thread,
+            &edit.entry.client_user_message_id,
+        )?;
         let checkout = self.queue_owner(client.identity(), &edit.thread)?;
         let draft = store.capture_queue_edit(&checkout, edit)?;
         let entries = self.read_queue(client, &edit.thread, timeout).await?;
@@ -357,15 +367,17 @@ impl WorkspaceEngine {
         }
     }
 
-    pub(super) async fn detach_consumed_queue_edit(
+    pub(super) async fn note_queue_consumption(
         &self,
         owner: &ConnectionIdentity,
         store: &AttachmentStore,
         thread: &ThreadId,
+        turn: &TurnId,
         client_id: &str,
     ) -> Result<(), QueueError> {
         let _commit = self.preparation_commit.lock().await;
         let checkout = self.queue_owner(owner, thread)?;
+        store.observe_steering_message(&checkout, thread, turn, client_id)?;
         Ok(store.detach_consumed_queue_edit(&checkout, thread, client_id)?)
     }
 
@@ -464,6 +476,19 @@ impl WorkspaceEngine {
         params: Value,
         timeout: Duration,
     ) -> Result<Value, QueueError> {
+        self.write_queue_for_turn(client, thread, None, method, params, timeout)
+            .await
+    }
+
+    async fn write_queue_for_turn(
+        &self,
+        client: &AppServerClient,
+        thread: &ThreadId,
+        active_turn: Option<TurnId>,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, QueueError> {
         let checkout = self.queue_owner(client.identity(), thread)?;
         let operation = OperationIdentity {
             connection: client.identity().clone(),
@@ -473,7 +498,7 @@ impl WorkspaceEngine {
         self.apply(WorkspaceAction::ReserveThreadSubmission {
             operation: operation.clone(),
             thread: thread.clone(),
-            active_turn: None,
+            active_turn,
             stopped: stop,
         })
         .await?;

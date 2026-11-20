@@ -134,7 +134,7 @@ impl WorkspaceEngine {
     }
 }
 
-fn require_legacy_queue(
+pub(super) fn require_legacy_queue(
     owner: &ConnectionIdentity,
     thread: &ThreadId,
     evidence: &ChatRead<QueueSnapshot>,

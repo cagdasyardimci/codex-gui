@@ -15,7 +15,7 @@ use crate::{
         AppServerClient, AppServerConnection, BrowseError, ChatRead, ChatSummary, CodexBrowser,
         QueueSnapshot, RequestError, ServerEvent, ThreadSummary, TurnStatus,
     },
-    identity::{ConnectionIdentity, ThreadId},
+    identity::{ConnectionIdentity, ThreadId, TurnId},
     storage::attachments::AttachmentStore,
 };
 
@@ -251,8 +251,9 @@ impl WorkspaceEngine {
             && matches!(method.as_str(), "item/started" | "item/completed")
             && params["item"]["type"] == "userMessage"
             && let Some(client_id) = params["item"]["clientId"].as_str()
+            && let Some(turn) = params["turnId"].as_str().filter(|turn| !turn.is_empty())
         {
-            self.detach_consumed_queue_edit(owner, store, thread, client_id)
+            self.note_queue_consumption(owner, store, thread, &TurnId(turn.into()), client_id)
                 .await?;
         }
         self.observe_execution_event(owner, &event).await?;

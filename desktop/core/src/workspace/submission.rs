@@ -247,12 +247,16 @@ fn message_evidence(event: &ServerEvent) -> Option<(RequestId, ThreadId, TurnId)
 }
 
 pub(super) fn message_client_id(item: &Value) -> Option<RequestId> {
+    Uuid::parse_str(message_client_key(item)?)
+        .ok()
+        .map(RequestId)
+}
+
+pub(super) fn message_client_key(item: &Value) -> Option<&str> {
     if item["type"] != "userMessage" {
         return None;
     }
-    Uuid::parse_str(item["clientId"].as_str()?)
-        .ok()
-        .map(RequestId)
+    item["clientId"].as_str().filter(|id| !id.is_empty())
 }
 
 fn nonempty_string(value: &Value) -> Option<String> {

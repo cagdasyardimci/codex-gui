@@ -9,6 +9,8 @@ const QUEUE_SCENARIO_DEADLINE: Duration = Duration::from_secs(25);
 
 #[path = "queue_legacy.rs"]
 mod legacy;
+#[path = "queue_steering.rs"]
+mod steering;
 
 fn entry(index: u128, text: &str) -> QueuedSubmission {
     QueuedSubmission {
