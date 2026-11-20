@@ -3,6 +3,8 @@ use std::{path::Path, time::Duration};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use thiserror::Error;
 
+pub mod writes;
+
 const APPLICATION_ID: i32 = i32::from_be_bytes(*b"CGUI");
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
