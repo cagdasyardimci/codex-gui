@@ -128,6 +128,8 @@ pub struct CodexBrowser {
 pub struct ComposerSkill {
     pub name: String,
     pub path: String,
+    #[serde(default)]
+    pub description: String,
     pub enabled: bool,
 }
 

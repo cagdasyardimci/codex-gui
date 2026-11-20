@@ -10,6 +10,7 @@
     "allow-search-project-paths",
     "allow-pick-composer-attachments",
     "allow-composer-context-catalog",
+    "allow-read-project-context",
     "allow-add-composer-context",
     "allow-paste-composer-image",
     "allow-remove-composer-attachment",

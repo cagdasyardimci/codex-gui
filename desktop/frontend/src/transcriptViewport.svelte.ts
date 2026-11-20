@@ -135,11 +135,12 @@ export function createTranscriptViewport() {
     schedulePublication();
   }
 
-  function jump(turnId: string) {
-    const matching = restoring?.turnId === turnId ? restoring : undefined;
+  function jump(turnId: string, itemId?: string | null) {
+    const matching = !itemId && restoring?.turnId === turnId ? restoring : undefined;
     restoring = undefined;
     const retained = matching ? restoredOffset(layout, matching) : undefined;
-    const first = rows.findIndex((row) => row.turnId === turnId);
+    const target = itemId ? layout.positions.get(itemId) : undefined;
+    const first = target ?? rows.findIndex((row) => row.turnId === turnId);
     if (first >= 0) {
       const anchor = retained === undefined ? { itemId: rows[first]!.itemId, turnId, offset: 0 } : matching;
       place(retained ?? layout.offsets[first]!, anchor);

@@ -139,8 +139,20 @@ impl AttachmentStore {
     }
 
     pub fn save_editor_text(&self, draft: DraftId, text: String) -> Result<(), AttachmentError> {
+        self.replace_editor_text(draft, None, text)
+    }
+
+    pub fn replace_editor_text(
+        &self,
+        draft: DraftId,
+        expected: Option<&str>,
+        text: String,
+    ) -> Result<(), AttachmentError> {
         let mut state = self.inner.state();
         let current = read_draft(&state.database, draft)?.ok_or(AttachmentError::MissingDraft)?;
+        if expected.is_some_and(|expected| current.text != expected) {
+            return Err(AttachmentError::StaleComposerText);
+        }
         if current.text == text {
             return Ok(());
         }

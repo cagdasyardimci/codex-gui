@@ -7,6 +7,7 @@ use crate::{
     checkout::CheckoutIdentity,
     files::read_local_file,
     ipc::{DraftImageAnnotations, ImageAnnotation},
+    storage::project_context::{self, ProjectContext, ProjectContextError, ProjectContextView},
 };
 
 use super::{
@@ -32,25 +33,37 @@ impl AttachmentStore {
     pub fn composer_project_context(
         &self,
         checkout: &CheckoutIdentity,
-    ) -> Result<
-        Option<crate::storage::project_context::ProjectContext>,
-        crate::storage::project_context::ProjectContextError,
-    > {
+    ) -> Result<Option<ProjectContext>, ProjectContextError> {
         let state = self.inner.state();
-        crate::storage::project_context::read_project_context(&state.database, checkout)
+        project_context::read_project_context(&state.database, checkout)
+    }
+
+    pub fn project_context_view(
+        &self,
+        checkout: &CheckoutIdentity,
+    ) -> Result<ProjectContextView, ProjectContextError> {
+        let state = self.inner.state();
+        Ok(project_context::project_context_view(&state.database, checkout)?.unwrap_or_default())
+    }
+
+    pub fn edit_project_context(
+        &self,
+        checkout: &CheckoutIdentity,
+        revision: u32,
+        edit: impl FnOnce(&mut ProjectContext) -> Result<(), ProjectContextError>,
+    ) -> Result<(), ProjectContextError> {
+        let mut state = self.inner.state();
+        project_context::edit_project_context(&mut state.database, checkout, revision, edit)
+            .map(|_| ())
     }
 
     pub fn initialize_composer_project_context(
         &self,
         checkout: &CheckoutIdentity,
-        context: &crate::storage::project_context::ProjectContext,
-    ) -> Result<bool, crate::storage::project_context::ProjectContextError> {
+        context: &ProjectContext,
+    ) -> Result<bool, ProjectContextError> {
         let mut state = self.inner.state();
-        crate::storage::project_context::initialize_project_context(
-            &mut state.database,
-            checkout,
-            context,
-        )
+        project_context::initialize_project_context(&mut state.database, checkout, context)
     }
 
     pub fn add_composer_context(

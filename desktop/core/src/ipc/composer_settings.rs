@@ -29,6 +29,8 @@ pub struct ComposerSelectionView {
     pub revision: Uuid,
     pub selection: ComposerSelection,
     pub effective_model_id: Option<String>,
+    pub default_model_id: Option<String>,
+    pub uses_project_defaults: bool,
 }
 
 #[derive(Debug, Deserialize, TS)]

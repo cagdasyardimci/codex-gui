@@ -8,10 +8,12 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+use ts_rs::TS;
+use uuid::Uuid;
 
 use crate::checkout::{CheckoutError, CheckoutIdentity};
 
-#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectContext {
     #[serde(default)]
@@ -26,7 +28,13 @@ pub struct ProjectContext {
     pub bookmarks: Vec<ConversationBookmark>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+impl ProjectContext {
+    pub fn has_submission_context(&self) -> bool {
+        self.selected_skill.is_some() || self.items.iter().any(|item| item.is_included)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectContextItem {
     pub id: String,
@@ -37,7 +45,7 @@ pub struct ProjectContextItem {
     pub is_included: bool,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectContextItemKind {
     Specification,
@@ -46,28 +54,53 @@ pub enum ProjectContextItemKind {
     Decision,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+impl ProjectContextItem {
+    pub fn request_text(&self) -> String {
+        let kind = match self.kind {
+            ProjectContextItemKind::Specification => "specification",
+            ProjectContextItemKind::ReferenceFile => "referenceFile",
+            ProjectContextItemKind::Note => "note",
+            ProjectContextItemKind::Decision => "decision",
+        };
+        let mut text = format!("[{kind}] {}", self.title);
+        if let Some(path) = self
+            .reference_path
+            .as_deref()
+            .filter(|path| !path.is_empty())
+        {
+            text.push_str("\nFile: ");
+            text.push_str(path);
+        }
+        if !self.body.is_empty() {
+            text.push('\n');
+            text.push_str(&self.body);
+        }
+        text
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, TS)]
 pub struct SavedPrompt {
     pub id: String,
     pub title: String,
     pub instructions: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, TS)]
 pub struct ProjectSkillSelection {
     pub name: String,
     pub description: String,
     pub path: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, TS)]
 pub struct ProjectModelPreference {
     #[serde(rename = "modelID")]
     pub model_id: Option<String>,
     pub effort: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationBookmark {
     pub id: String,
@@ -82,7 +115,7 @@ pub struct ConversationBookmark {
     pub file_path: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ConversationBookmarkKind {
     UserRequest,
@@ -90,6 +123,12 @@ pub enum ConversationBookmarkKind {
     Decision,
     ChangedFile,
     Failure,
+}
+
+#[derive(Debug, Default, Serialize, TS)]
+pub struct ProjectContextView {
+    pub revision: u32,
+    pub context: ProjectContext,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -117,6 +156,10 @@ pub enum ProjectContextError {
     WrongProject,
     #[error("the copied AppKit context is not a regular file")]
     InvalidSource,
+    #[error("the project context was edited or its checkout changed")]
+    StaleRevision,
+    #[error("the project context edit is invalid")]
+    InvalidEdit,
 }
 
 #[derive(Deserialize)]
@@ -181,18 +224,90 @@ pub fn read_project_context(
     database: &Connection,
     checkout: &CheckoutIdentity,
 ) -> Result<Option<ProjectContext>, ProjectContextError> {
+    Ok(project_context_view(database, checkout)?.map(|view| view.context))
+}
+
+pub fn project_context_view(
+    database: &Connection,
+    checkout: &CheckoutIdentity,
+) -> Result<Option<ProjectContextView>, ProjectContextError> {
     checkout.revalidate()?;
-    let content: Option<String> = database
+    let row: Option<(u32, String)> = database
         .query_row(
-            "SELECT content FROM project_contexts WHERE checkout_path = ?1 AND checkout_key = ?2",
+            "SELECT revision, content FROM project_contexts WHERE checkout_path = ?1 AND checkout_key = ?2",
             params![project_path(checkout)?, checkout.storage_key()],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?;
-    content
-        .map(|content| serde_json::from_str(&content))
-        .transpose()
-        .map_err(Into::into)
+    row.map(|(revision, content)| {
+        Ok(ProjectContextView {
+            revision,
+            context: serde_json::from_str(&content)?,
+        })
+    })
+    .transpose()
+}
+
+pub fn edit_project_context(
+    database: &mut Connection,
+    checkout: &CheckoutIdentity,
+    revision: u32,
+    edit: impl FnOnce(&mut ProjectContext) -> Result<(), ProjectContextError>,
+) -> Result<ProjectContextView, ProjectContextError> {
+    let transaction = database.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let mut view = project_context_view(&transaction, checkout)?.unwrap_or_default();
+    if view.revision != revision {
+        return Err(ProjectContextError::StaleRevision);
+    }
+    edit(&mut view.context)?;
+    let next = revision
+        .checked_add(1)
+        .ok_or(ProjectContextError::InvalidEdit)?;
+    let content = serde_json::to_string(&view.context)?;
+    let changed = transaction.execute(
+        "INSERT INTO project_contexts (checkout_path, checkout_key, content, revision)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT (checkout_path) DO UPDATE SET content = excluded.content, revision = excluded.revision
+         WHERE project_contexts.checkout_key = excluded.checkout_key",
+        params![project_path(checkout)?, checkout.storage_key(), content, next],
+    )?;
+    if changed != 1 {
+        return Err(ProjectContextError::StaleRevision);
+    }
+    transaction.commit()?;
+    view.revision = next;
+    Ok(view)
+}
+
+pub fn put_project_entry<T>(
+    entries: &mut Vec<T>,
+    id: Option<String>,
+    identity: impl Fn(&T) -> &str,
+    value: impl FnOnce(String) -> T,
+) -> Result<(), ProjectContextError> {
+    if let Some(id) = id {
+        let entry = entries
+            .iter_mut()
+            .find(|entry| identity(entry) == id)
+            .ok_or(ProjectContextError::StaleRevision)?;
+        *entry = value(id);
+    } else {
+        entries.push(value(Uuid::new_v4().to_string()));
+    }
+    Ok(())
+}
+
+pub fn remove_project_entry<T>(
+    entries: &mut Vec<T>,
+    id: &str,
+    identity: impl Fn(&T) -> &str,
+) -> Result<(), ProjectContextError> {
+    let index = entries
+        .iter()
+        .position(|entry| identity(entry) == id)
+        .ok_or(ProjectContextError::StaleRevision)?;
+    entries.remove(index);
+    Ok(())
 }
 
 fn project_path(checkout: &CheckoutIdentity) -> Result<&str, ProjectContextError> {
@@ -213,6 +328,12 @@ pub(super) fn migrate(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
             checkout_key TEXT NOT NULL,
             content TEXT NOT NULL CHECK (json_valid(content) AND json_type(content) = 'object')
         ) STRICT, WITHOUT ROWID;",
+    )
+}
+
+pub(super) fn migrate_revisions(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "ALTER TABLE project_contexts ADD COLUMN revision INTEGER NOT NULL DEFAULT 1",
     )
 }
 

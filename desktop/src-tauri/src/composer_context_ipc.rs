@@ -9,6 +9,7 @@ use codex_gui_core::{
         ComposerChoice, ComposerChoiceKind, ComposerContextSelection, ComposerContextTarget,
         ComposerSourceLines, ComposerTokenRange, DraftAttachmentScope, IpcError,
     },
+    storage::project_context::{ProjectContextView, ProjectSkillSelection},
 };
 use serde_json::{Value, json};
 use tauri::{State, WebviewWindow};
@@ -29,6 +30,41 @@ pub(crate) struct ComposerCatalog {
     entries: Vec<(ComposerChoice, Value)>,
 }
 
+impl ComposerCatalog {
+    pub(crate) fn skill(
+        &self,
+        scope: &DraftAttachmentScope,
+        connection: Option<&ConnectionIdentity>,
+        id: Uuid,
+    ) -> Option<ProjectSkillSelection> {
+        if scope != &self.scope || connection != self.connection.as_ref() {
+            return None;
+        }
+        let (_, value) = self
+            .entries
+            .iter()
+            .find(|(choice, _)| choice.id == id && choice.kind == ComposerChoiceKind::Skill)?;
+        Some(ProjectSkillSelection {
+            name: value["title"].as_str()?.into(),
+            path: Some(value["path"].as_str()?.into()),
+            description: value["description"].as_str().unwrap_or_default().into(),
+        })
+    }
+}
+
+#[tauri::command]
+pub fn read_project_context(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    scope: DraftAttachmentScope,
+) -> Result<ProjectContextView, IpcError> {
+    let (navigation, checkout) = capture(&window, &project, &scope)?;
+    navigation
+        .attachment_store()
+        .project_context_view(&checkout)
+        .map_err(|_| IpcError::ProjectUnavailable)
+}
+
 #[tauri::command]
 pub fn seed_composer_context_fixture(
     window: WebviewWindow,
@@ -36,24 +72,38 @@ pub fn seed_composer_context_fixture(
     verification: State<'_, Verification>,
     scope: DraftAttachmentScope,
 ) -> Result<(), IpcError> {
-    if *verification != Verification::ComposerContext {
+    if !matches!(
+        *verification,
+        Verification::ComposerContext | Verification::ProjectContext
+    ) {
         return Err(IpcError::UnauthorizedWindow);
     }
     use codex_gui_core::storage::project_context::{
-        ProjectContext, ProjectContextItem, ProjectContextItemKind,
+        ConversationBookmark, ConversationBookmarkKind, ProjectContext, ProjectContextItem,
+        ProjectContextItemKind,
     };
     let (navigation, checkout) = capture(&window, &project, &scope)?;
-    let context = ProjectContext {
-        items: vec![ProjectContextItem {
+    let mut context = ProjectContext::default();
+    if *verification == Verification::ProjectContext {
+        context.bookmarks.push(ConversationBookmark {
+            id: "fixture-bookmark".into(),
+            thread_id: "history-first".into(),
+            turn_id: "first-saved-turn".into(),
+            item_id: Some("first-history".into()),
+            kind: ConversationBookmarkKind::Answer,
+            label: "Original fixture response".into(),
+            file_path: None,
+        });
+    } else {
+        context.items.push(ProjectContextItem {
             id: "fixture-note".into(),
             kind: ProjectContextItemKind::Note,
             title: "Project note".into(),
             body: "Use the local fixture only.".into(),
             reference_path: None,
             is_included: true,
-        }],
-        ..ProjectContext::default()
-    };
+        });
+    }
     navigation
         .attachment_store()
         .initialize_composer_project_context(&checkout, &context)
@@ -85,7 +135,8 @@ pub async fn composer_context_catalog(
                     label: skill.name,
                     kind: ComposerChoiceKind::Skill,
                 };
-                let value = json!({"kind": "skill", "title": choice.label, "path": skill.path});
+                let value = json!({"kind": "skill", "title": choice.label, "path": skill.path,
+                    "description": skill.description});
                 entries.push((choice, value));
             }
         }
@@ -103,7 +154,7 @@ pub async fn composer_context_catalog(
                 label: note.title,
                 kind: ComposerChoiceKind::ProjectContext,
             };
-            let value = json!({"kind": "projectContext", "title": choice.label, "body": note.body});
+            let value = json!({"kind": "projectContext", "title": choice.label, "body": note.body, "projectItemId": note.id});
             entries.push((choice, value));
         }
     }

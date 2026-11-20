@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ComposerChoice, ComposerContextSelection, DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
-  WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
+  ProjectContextView, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
 export function pickWorkspace(): Promise<WorkspaceId | null> {
@@ -42,6 +42,10 @@ export function pickComposerAttachments(scope: DraftAttachmentScope): Promise<vo
 
 export function composerContextCatalog(scope: DraftAttachmentScope): Promise<ComposerChoice[]> {
   return invoke('composer_context_catalog', { scope });
+}
+
+export function readProjectContext(scope: DraftAttachmentScope): Promise<ProjectContextView> {
+  return invoke('read_project_context', { scope });
 }
 
 export function addComposerContext(request: ComposerContextSelection): Promise<void> {

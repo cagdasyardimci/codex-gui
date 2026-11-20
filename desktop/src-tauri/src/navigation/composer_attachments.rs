@@ -9,6 +9,7 @@ use codex_gui_core::{
         AttachmentError, BlobLease,
         composer::{ComposerAttachment, image_annotations},
     },
+    storage::project_context::ProjectContext,
 };
 use serde_json::{Value, json};
 
@@ -135,6 +136,8 @@ impl Navigation {
         draft: DraftId,
         mut text: String,
         source: Vec<Value>,
+        project: ProjectContext,
+        default_skill: Option<Value>,
     ) -> Result<(String, Vec<Value>, Vec<BlobLease>), Failure> {
         let selection = self
             .selection
@@ -143,6 +146,7 @@ impl Navigation {
         let mut attachments = Vec::new();
         let mut context = Vec::new();
         let mut comments = Vec::new();
+        let mut explicit_items = std::collections::HashSet::new();
         for item in source {
             match item["kind"].as_str() {
                 Some("image") => {
@@ -219,6 +223,9 @@ impl Navigation {
                     context.push(json!({"type": "skill", "name": name, "path": path}));
                 }
                 Some("projectContext") => {
+                    if let Some(id) = item["projectItemId"].as_str() {
+                        explicit_items.insert(id.to_owned());
+                    }
                     let body = item["body"]
                         .as_str()
                         .ok_or("the project item has no text")?;
@@ -229,6 +236,22 @@ impl Navigation {
                 }
                 _ => context.push(item),
             }
+        }
+        let project_text = project
+            .items
+            .iter()
+            .filter(|item| item.is_included && !explicit_items.contains(&item.id))
+            .map(|item| item.request_text())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if !project_text.is_empty() {
+            append_text(
+                &mut text,
+                &format!("Project context selected for this request:\n{project_text}"),
+            );
+        }
+        if let Some(skill) = default_skill.filter(|skill| !context.contains(skill)) {
+            context.push(skill);
         }
         for group in comments {
             append_text(&mut text, &group);

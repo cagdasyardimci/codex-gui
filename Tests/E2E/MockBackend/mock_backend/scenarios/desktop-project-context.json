@@ -1,0 +1,4 @@
+{
+  "extends": "desktop-composer-settings",
+  "desktopContext": true
+}

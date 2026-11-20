@@ -3,6 +3,7 @@ use codex_gui_core::{
         AccountModel, ComposerPermissions, ComposerSelection, ComposerSelectionView,
         ComposerSettingsRequest,
     },
+    storage::project_context::{ProjectContext, ProjectModelPreference},
     workspace::SendSettings,
 };
 use serde_json::{Value, json};
@@ -65,6 +66,8 @@ impl Navigation {
                 revision: Uuid::new_v4(),
                 selection,
                 effective_model_id: None,
+                default_model_id: None,
+                uses_project_defaults: false,
             })
         } else {
             None
@@ -74,6 +77,7 @@ impl Navigation {
     }
 
     pub(super) fn reconcile_composer_models(&mut self) {
+        let project = self.project_context().unwrap_or_default();
         let models = &self.view.account.models;
         if models.is_empty() {
             return;
@@ -90,7 +94,12 @@ impl Navigation {
         {
             selection.model_id = None;
         }
-        let model = effective_model(models, selection, &self.configured_run);
+        let model = effective_model(
+            models,
+            selection,
+            &self.configured_run,
+            project.model_preference.as_ref(),
+        );
         if selection
             .effort
             .as_ref()
@@ -106,10 +115,24 @@ impl Navigation {
             selection.service_tier = None;
         }
         let effective = model.map(|model| model.id.clone());
-        if *selection != previous || view.effective_model_id != effective {
+        let default = effective_model(
+            models,
+            &ComposerSelection::default(),
+            &self.configured_run,
+            project.model_preference.as_ref(),
+        )
+        .map(|model| model.id.clone());
+        let uses_project_defaults = project.model_preference.is_some();
+        if *selection != previous
+            || view.effective_model_id != effective
+            || view.default_model_id != default
+            || view.uses_project_defaults != uses_project_defaults
+        {
             view.revision = Uuid::new_v4();
         }
         view.effective_model_id = effective;
+        view.default_model_id = default;
+        view.uses_project_defaults = uses_project_defaults;
     }
 
     pub(super) fn change_composer_settings(
@@ -126,7 +149,13 @@ impl Navigation {
             .ok_or(IpcError::StaleSelection)?;
         let selection = request.selection;
         let models = &self.view.account.models;
-        let model = effective_model(models, &selection, &self.configured_run);
+        let project = self.project_context().map_err(report)?;
+        let model = effective_model(
+            models,
+            &selection,
+            &self.configured_run,
+            project.model_preference.as_ref(),
+        );
         if self.view.selected_chat != scope.chat_id
             || self.view.draft.as_ref().map(|draft| &draft.id) != Some(&scope.draft_id)
             || selection
@@ -158,18 +187,46 @@ impl Navigation {
             revision: Uuid::new_v4(),
             selection,
             effective_model_id: model.map(|model| model.id.clone()),
+            default_model_id: current.default_model_id.clone(),
+            uses_project_defaults: current.uses_project_defaults,
         });
         self.publish_navigation();
         Ok(())
     }
 
-    pub(super) fn capture_run_settings(&self) -> SendSettings {
+    pub(super) fn validate_project_model(
+        &self,
+        project: &ProjectModelPreference,
+    ) -> Result<(), IpcError> {
+        let models = &self.view.account.models;
+        let model = effective_model(
+            models,
+            &ComposerSelection::default(),
+            &self.configured_run,
+            Some(project),
+        );
+        if project
+            .model_id
+            .as_ref()
+            .is_some_and(|id| !models.iter().any(|model| model.id == *id))
+            || project
+                .effort
+                .as_ref()
+                .is_some_and(|effort| !valid_effort(model, effort))
+        {
+            return Err(IpcError::StaleSelection);
+        }
+        Ok(())
+    }
+
+    pub(super) fn capture_run_settings(&self, context: &ProjectContext) -> SendSettings {
         let Some(view) = &self.view.composer_settings else {
             return SendSettings::default();
         };
         let choice = &view.selection;
         let configured = &self.configured_run;
-        let model = effective_model(&self.view.account.models, choice, configured);
+        let project = context.model_preference.as_ref();
+        let model = effective_model(&self.view.account.models, choice, configured, project);
         let model_id = model
             .map(|model| model.model.clone())
             .or_else(|| configured.model.clone());
@@ -180,7 +237,16 @@ impl Navigation {
                 choice
                     .model_id
                     .is_none()
-                    .then(|| configured.effort.clone())
+                    .then(|| {
+                        if let Some(project) = project {
+                            project
+                                .effort
+                                .clone()
+                                .filter(|effort| valid_effort(model, effort))
+                        } else {
+                            configured.effort.clone()
+                        }
+                    })
                     .flatten()
             })
             .or_else(|| model.and_then(|model| model.default_effort.clone()));
@@ -235,9 +301,17 @@ fn effective_model<'a>(
     models: &'a [AccountModel],
     choice: &ComposerSelection,
     configured: &ConfiguredRun,
+    project: Option<&ProjectModelPreference>,
 ) -> Option<&'a AccountModel> {
     if let Some(id) = &choice.model_id {
         return models.iter().find(|model| model.id == *id);
+    }
+    if let Some(project) = project {
+        return project
+            .model_id
+            .as_ref()
+            .and_then(|id| models.iter().find(|model| model.id == *id))
+            .or_else(|| models.iter().find(|model| model.is_default));
     }
     configured
         .model

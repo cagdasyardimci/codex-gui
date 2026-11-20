@@ -31,6 +31,7 @@ fn main() {
         Some("--verify-annotations") => fixture::Verification::Annotations,
         Some("--verify-composer-context") => fixture::Verification::ComposerContext,
         Some("--verify-composer-settings") => fixture::Verification::ComposerSettings,
+        Some("--verify-project-context") => fixture::Verification::ProjectContext,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -56,6 +57,7 @@ fn main() {
             | fixture::Verification::Annotations
             | fixture::Verification::ComposerContext
             | fixture::Verification::ComposerSettings
+            | fixture::Verification::ProjectContext
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -129,6 +131,7 @@ fn main() {
             project_ipc::search_project_paths,
             composer_ipc::pick_composer_attachments,
             composer_context_ipc::composer_context_catalog,
+            composer_context_ipc::read_project_context,
             composer_context_ipc::add_composer_context,
             composer_context_ipc::seed_composer_context_fixture,
             composer_ipc::paste_composer_image,
@@ -171,23 +174,7 @@ fn main() {
                 });
                 return Ok(());
             }
-            if matches!(
-                verification,
-                fixture::Verification::None
-                    | fixture::Verification::History
-                    | fixture::Verification::HistoryRestore
-                    | fixture::Verification::Attachments
-                    | fixture::Verification::Annotations
-                    | fixture::Verification::ComposerContext
-                    | fixture::Verification::ComposerSettings
-                    | fixture::Verification::Account
-                    | fixture::Verification::WindowsSetup
-                    | fixture::Verification::Turn
-                    | fixture::Verification::ActiveTurn
-                    | fixture::Verification::Queue
-                    | fixture::Verification::Diff
-                    | fixture::Verification::Quit
-            ) {
+            if verification == fixture::Verification::None || desktop_fixture.is_some() {
                 let (beta_data, initial_project) = match desktop_fixture {
                     Some(fixture) => fixture,
                     None => (app.path().app_data_dir()?, None),

@@ -6,8 +6,8 @@ use crate::git::turn_edits::LastTurnView;
 
 use super::{
     ComposerSelectionView, ComposerSettingsRequest, ConversationActions, DraftAttachmentView,
-    ModelEffort, ModelServiceTier, QueueRequest, QueueView, RecoverSendRequest, RespondRequest,
-    SendRequest, StopRequest, WorkspaceId, WorkspaceRequest,
+    ModelEffort, ModelServiceTier, ProjectContextRequest, QueueRequest, QueueView,
+    RecoverSendRequest, RespondRequest, SendRequest, StopRequest, WorkspaceId, WorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -17,6 +17,7 @@ pub struct NavigationView {
     pub selected_chat: Option<String>,
     pub draft: Option<EditorDraft>,
     pub composer_settings: Option<ComposerSelectionView>,
+    pub project_has_input: bool,
     pub retryable: bool,
     pub account: AccountView,
     pub write_access: WriteAccess,
@@ -84,6 +85,7 @@ pub struct TurnPreview {
 pub struct TurnJump {
     pub ticket: Uuid,
     pub turn_id: String,
+    pub item_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
@@ -198,6 +200,7 @@ pub struct DraftEdit {
 #[serde(rename_all = "camelCase")]
 pub enum NavigationIntent {
     SetComposerSettings(ComposerSettingsRequest),
+    EditProjectContext(ProjectContextRequest),
     OpenChat(ChatRequest),
     LoadOlderHistory(OlderHistoryRequest),
     TranscriptViewport(TranscriptViewportRequest),

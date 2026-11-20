@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use codex_gui_core::{
+    codex::CodexBrowser,
     identity::{OperationIdentity, RequestId, ThreadId, TurnId},
     ipc::{
         ChatRow, IpcError, SendRequest, StopTarget, TurnTarget, WriteAccess, present_question_reply,
@@ -59,9 +60,12 @@ impl Navigation {
     async fn admit_send(&mut self, request: SendRequest) -> Result<(), Failure> {
         let draft_id = DraftId(Uuid::parse_str(&request.draft_id)?);
         let saved = self.store.read_editor_draft(draft_id)?;
+        let project = self.project_context()?;
         let displayed = super::composer_attachments::views(&saved.context);
         if saved.text != request.text
-            || (saved.text.trim().is_empty() && saved.context.is_empty())
+            || (saved.text.trim().is_empty()
+                && saved.context.is_empty()
+                && !project.has_submission_context())
             || displayed
                 .iter()
                 .map(|entry| entry.id.as_str())
@@ -77,9 +81,24 @@ impl Navigation {
             .composer_settings
             .as_ref()
             .map(|view| view.selection.clone());
-        let settings = self.capture_run_settings();
+        let settings = self.capture_run_settings(&project);
+        let skill = if let Some(selected) = &project.selected_skill {
+            let skills = CodexBrowser::new(client.clone())
+                .composer_skills(Duration::from_secs(4))
+                .await
+                .unwrap_or_default();
+            let mut matching = skills.iter().filter(|skill| skill.name == selected.name);
+            skills.iter().find(|skill| skill.name == selected.name && Some(&skill.path) == selected.path.as_ref())
+                .or_else(|| matching.next().filter(|_| matching.next().is_none()))
+                .map(|skill| serde_json::json!({"type": "skill", "name": skill.name, "path": skill.path}))
+        } else {
+            None
+        };
         let (text, context, attachments) =
-            self.capture_composer_context(draft_id, saved.text, saved.context)?;
+            self.capture_composer_context(draft_id, saved.text, saved.context, project, skill)?;
+        if text.trim().is_empty() && context.is_empty() && attachments.is_empty() {
+            return Err("the captured project has no available submission input".into());
+        }
         let operation = OperationIdentity {
             connection: client.identity().clone(),
             request: RequestId(Uuid::new_v4()),

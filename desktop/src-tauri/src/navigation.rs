@@ -45,6 +45,7 @@ mod interactions;
 mod ownership;
 mod paging;
 mod parked;
+mod project_context;
 mod queue;
 mod quit;
 mod sandbox;
@@ -363,6 +364,9 @@ impl Navigation {
             return Err(IpcError::StaleSelection);
         }
         match action {
+            NavigationIntent::EditProjectContext(request) => {
+                self.edit_project_context(request).await?
+            }
             NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
             NavigationIntent::CancelQuit(decision) => self.cancel_quit(decision)?,
             NavigationIntent::StopAll => self.begin_stop_all(),
@@ -565,6 +569,7 @@ impl Navigation {
         };
         self.set_editor(draft)?;
         self.view.selected_chat = thread.as_ref().map(|thread| thread.0.clone());
+        self.view.project_has_input = self.project_context()?.has_submission_context();
         self.load_composer_settings()?;
         self.view.retryable = false;
         self.retire_history_pages();

@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
     options = parser.add_mutually_exclusive_group()
-    for name in ("annotations", "context", "settings"):
+    for name in ("annotations", "context", "settings", "project-context"):
         options.add_argument(f"--{name}", dest="mode", action="store_const", const=name)
     parser.set_defaults(mode="attachments")
     args = parser.parse_args()
@@ -60,7 +60,13 @@ def main():
             ],
         })
         backend_state = {"threads": threads}
-        if args.mode == "settings":
+        if args.mode == "project-context":
+            first["turns"].extend({
+                "id": f"recent-context-{number}",
+                "status": "completed",
+                "items": [{"id": f"recent-answer-{number}", "type": "agentMessage", "text": f"More recent turn {number}."}],
+            } for number in range(105))
+        if args.mode in ("settings", "project-context"):
             backend_state["config"] = {"model": "baseline-model", "model_reasoning_effort": "low", "service_tier": "default",
                                        "approval_policy": "untrusted", "sandbox_mode": "read-only", "approvals_reviewer": "user"}
         state.write_text(json.dumps(backend_state, ensure_ascii=True), encoding="utf-8")
@@ -69,6 +75,7 @@ def main():
             "annotations": ("--verify-annotations", "desktop-attachments", "Verified installed image annotation placement"),
             "context": ("--verify-composer-context", "desktop-context", "Verified installed composer context"),
             "settings": ("--verify-composer-settings", "desktop-composer-settings", "Verified installed composer settings"),
+            "project-context": ("--verify-project-context", "desktop-project-context", "Verified installed Project Context"),
         }[args.mode]
         result = subprocess.run(
             [str(executable), fixture, str(data), str(checkout)],
@@ -80,11 +87,15 @@ def main():
         print(result.stdout, end="")
         if result.returncode or expected not in result.stdout:
             raise SystemExit(result.stderr or "The desktop attachment fixture did not complete")
-        starts = [event for line in trace.read_text(encoding="utf-8").splitlines()
-                  if (event := json.loads(line))["direction"] == "request" and event["method"] == "turn/start"]
+        requests = [event for line in trace.read_text(encoding="utf-8").splitlines()
+                    if (event := json.loads(line))["direction"] == "request"]
+        starts = [event for event in requests if event["method"] == "turn/start"]
         assert not list(profile.iterdir())
         if args.mode == "settings":
             verify_settings_inputs(starts)
+            return
+        if args.mode == "project-context":
+            verify_project_context(starts, requests, checkout, data)
             return
         assert len(starts) == 1 and starts[0]["threadId"] == "history-first", starts
         inputs = starts[0]["input"]
@@ -149,6 +160,35 @@ def verify_settings_inputs(starts):
         "Capture the first settings.", "Use confirmed Full Access.", "Use configured permissions.",
     ], starts
     print("Verified immutable admitted settings and explicit transitions between the permission preset and configured policy")
+
+
+def verify_project_context(starts, requests, checkout, data):
+    assert len(starts) == 1 and starts[0]["threadId"] == "history-first", starts
+    turn = starts[0]
+    assert (turn["model"], turn["effort"]) == ("alternative-model", "high"), turn
+    assert [item["type"] for item in turn["input"]] == ["text", "skill"], turn["input"]
+    assert turn["input"][0]["text"] == (
+        "Keep this draft.\n\nReview the migration boundaries.\n\nProject context selected for this request:"
+        "\n[decision] Release design\nFile: notes.txt\nQualify the captured build."
+    ), turn["input"]
+    skill = turn["input"][1]
+    assert skill["name"] == "Review fixture" and Path(skill["path"]).samefile(checkout / "skill" / "SKILL.md")
+    assert any(request["method"] == "thread/turns/list" and request["threadId"] == "history-first"
+               and request["itemsView"] == "notLoaded" and request.get("cursor") for request in requests)
+    assert not any(request["method"] == "thread/turns/list" and request["itemsView"] == "full"
+                   and request.get("cursor") for request in requests)
+    targeted = [request for request in requests if request["method"] == "thread/items/list"]
+    assert [(request["threadId"], request["turnId"]) for request in targeted] == [
+        ("history-first", "first-saved-turn"),
+    ], targeted
+    with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
+        ((path, revision, content),) = database.execute("SELECT checkout_path, revision, content FROM project_contexts")
+    assert Path(path).samefile(checkout) and revision > 1
+    context = json.loads(content)
+    assert [(item["title"], item["isIncluded"]) for item in context["items"]] == [("Release design", True)], context
+    assert [prompt["title"] for prompt in context["savedPrompts"]] == ["Release review"], context
+    assert context["bookmarks"][0]["itemID"] == "first-history", context
+    print("Verified the exact native context document, one explicit Send, and scoped reads of a nonresident bookmark")
 
 
 if __name__ == "__main__":

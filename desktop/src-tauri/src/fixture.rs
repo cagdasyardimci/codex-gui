@@ -33,6 +33,7 @@ pub enum Verification {
     Annotations,
     ComposerContext,
     ComposerSettings,
+    ProjectContext,
     Account,
     WindowsSetup,
     Turn,
@@ -258,6 +259,7 @@ pub fn verify_attachments_result(
             | Verification::Annotations
             | Verification::ComposerContext
             | Verification::ComposerSettings
+            | Verification::ProjectContext
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -275,6 +277,10 @@ pub fn verify_attachments_result(
             );
         } else if *verification == Verification::ComposerSettings {
             println!("Verified installed composer settings and captured permission confirmation");
+        } else if *verification == Verification::ProjectContext {
+            println!(
+                "Verified installed Project Context, defaults, saved prompts, and bookmark ownership"
+            );
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

@@ -62,10 +62,23 @@ fn candidate_imports_preserve_source_bytes_and_existing_destination_context() {
         ProjectContextImport::PreservedDestination
     );
 
-    database.execute(
-        "UPDATE project_contexts SET content = json_set(content, '$.savedPrompts[0].instructions', 'A newer Tauri edit')",
-        [],
-    ).unwrap();
+    let revision = project_context_view(&database, &checkout)
+        .unwrap()
+        .unwrap()
+        .revision;
+    let edited = edit_project_context(&mut database, &checkout, revision, |context| {
+        context.saved_prompts[0].instructions = "A newer Tauri edit".into();
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(edited.revision, revision + 1);
+    assert!(matches!(
+        edit_project_context(&mut database, &checkout, revision, |context| {
+            context.saved_prompts.clear();
+            Ok(())
+        }),
+        Err(ProjectContextError::StaleRevision)
+    ));
     assert_eq!(
         import_appkit_project_context(&mut database, &stage, &checkout).unwrap(),
         ProjectContextImport::PreservedDestination

@@ -15,6 +15,7 @@ fn main() {
         "search_project_paths",
         "pick_composer_attachments",
         "composer_context_catalog",
+        "read_project_context",
         "add_composer_context",
         "seed_composer_context_fixture",
         "paste_composer_image",

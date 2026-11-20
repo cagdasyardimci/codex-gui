@@ -18,6 +18,7 @@ mod git;
 mod markdown;
 mod media;
 mod navigation;
+mod project_context;
 mod question_reply;
 mod queue;
 mod stream;
@@ -48,6 +49,10 @@ pub use navigation::{
     LoginTicket, NavigationIntent, NavigationView, OlderHistoryRequest, OlderHistoryView,
     QuitDecision, QuitView, TranscriptViewportRequest, TurnJump, TurnPreview, TurnRailRequest,
     TurnRailTicketRequest, TurnRailView, TurnReferenceView, WriteAccess,
+};
+pub use project_context::{
+    InsertProjectPrompt, ProjectContextChange, ProjectContextRequest, ProjectItemEdit,
+    ProjectItemInclusion, ProjectPromptEdit,
 };
 pub use question_reply::present_question_reply;
 pub use queue::{
@@ -244,6 +249,21 @@ pub fn workspace_typescript() -> String {
         ComposerFileContext::decl(),
         ComposerSourceLines::decl(),
         ComposerTokenRange::decl(),
+        ProjectContextRequest::decl(),
+        ProjectContextChange::decl(),
+        ProjectItemEdit::decl(),
+        ProjectItemInclusion::decl(),
+        ProjectPromptEdit::decl(),
+        InsertProjectPrompt::decl(),
+        crate::storage::project_context::ProjectContextView::decl(),
+        crate::storage::project_context::ProjectContext::decl(),
+        crate::storage::project_context::ProjectContextItem::decl(),
+        crate::storage::project_context::ProjectContextItemKind::decl(),
+        crate::storage::project_context::SavedPrompt::decl(),
+        crate::storage::project_context::ProjectSkillSelection::decl(),
+        crate::storage::project_context::ProjectModelPreference::decl(),
+        crate::storage::project_context::ConversationBookmark::decl(),
+        crate::storage::project_context::ConversationBookmarkKind::decl(),
         ImageAnnotation::decl(),
         DraftImageAnnotations::decl(),
         SaveImageAnnotations::decl(),

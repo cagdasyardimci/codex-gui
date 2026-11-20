@@ -28,6 +28,8 @@ export async function verifySettledRichMarkdown(visible: () => WorkspaceSnapshot
   const row = () => surface(richRow(visible)?.itemId);
   await waitFor('The completed Markdown row did not mount its rich blocks', () =>
     !!row()?.querySelector('.markdown-diagram') && !!row()?.querySelector('.markdown-display-math'));
+  // Keep the same row mounted while measuring asynchronously decoded content.
+  row()?.querySelector<HTMLButtonElement>('.transcript-copy')?.focus({ preventScroll: true });
   const inline = row()?.querySelector('.markdown-inline-math');
   inline?.scrollIntoView({ block: 'center', inline: 'nearest' });
   await waitFor('The installed inline math assets did not render the formula', () =>

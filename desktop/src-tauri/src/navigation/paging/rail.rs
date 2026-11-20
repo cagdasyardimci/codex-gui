@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use codex_gui_core::{
     checkout::CheckoutIdentity,
     codex::{AppServerClient, TurnActivity, TurnItemRead, TurnItems, TurnStatus},
@@ -9,9 +11,10 @@ use codex_gui_core::{
 use serde_json::Value;
 
 use super::*;
-use crate::navigation::transcript::append_turn_items;
+use crate::navigation::transcript::{append_turn_items, transcript_id};
 
 type ReferencePage = ChatRead<Page<TurnActivity, TurnCursor>>;
+const BOOKMARK_PAGE_LIMIT: usize = 128;
 
 pub(super) struct ReferenceRead {
     summary: Arc<ChatRead<ChatSummary>>,
@@ -28,6 +31,16 @@ pub(super) enum RailCompletion {
         turn: TurnActivity,
         result: Result<ChatRead<TurnItems>, BrowseError>,
     },
+    Bookmark {
+        item: Option<String>,
+        result: Box<Result<Option<BookmarkRead>, BrowseError>>,
+    },
+}
+
+pub(super) struct BookmarkRead {
+    references: Vec<TurnActivity>,
+    turn: TurnActivity,
+    items: ChatRead<TurnItems>,
 }
 
 struct ReadJob {
@@ -143,6 +156,7 @@ impl TurnRail {
                 job.turn.as_ref().map(|turn| TurnJump {
                     ticket: job.ticket,
                     turn_id: turn.0.clone(),
+                    item_id: None,
                 })
             }),
         }
@@ -242,6 +256,65 @@ impl Navigation {
         self.read_rail_turn(request, TurnItemRead::Complete)
     }
 
+    pub(in crate::navigation) fn jump_to_bookmark(
+        &mut self,
+        workspace: WorkspaceId,
+        turn: String,
+        item: Option<String>,
+    ) -> Result<(), IpcError> {
+        let client = self.rail_client(workspace)?;
+        let owner = self
+            .pages
+            .owner
+            .as_mut()
+            .filter(|owner| {
+                owner.workspace == workspace
+                    && &owner.connection == client.identity()
+                    && self.view.selected_chat.as_ref() == Some(&owner.thread.0)
+            })
+            .ok_or(IpcError::StaleSelection)?;
+        let ticket = Uuid::new_v4();
+        let id = TurnId(turn);
+        let requested = id.clone();
+        let chat = owner.thread.clone();
+        let summary = owner.summary.clone();
+        let known = owner
+            .rail
+            .references
+            .iter()
+            .find(|reference| reference.activity.id == id)
+            .map(|reference| reference.activity.clone());
+        owner.rail.cancel_preview();
+        let sender = self.pages.sender.clone();
+        let task = tauri::async_runtime::spawn(async move {
+            let connection = client.identity().clone();
+            let browser = CodexBrowser::new(client);
+            let result = tokio::time::timeout(Duration::from_secs(20), async {
+                let summary = get_summary(&browser, &chat, summary).await?;
+                read_bookmark(&browser, &connection, &chat, &summary, &requested, known).await
+            })
+            .await
+            .unwrap_or(Ok(None));
+            send_result(
+                sender,
+                ticket,
+                RailCompletion::Bookmark {
+                    item,
+                    result: Box::new(result),
+                },
+            )
+            .await;
+        });
+        owner.rail.jumping = Some(ReadJob {
+            ticket,
+            turn: Some(id),
+            task,
+        });
+        self.view.turn_rail = Some(owner.rail.view());
+        self.publish_navigation();
+        Ok(())
+    }
+
     pub(in crate::navigation) fn cancel_turn_preview(
         &mut self,
         request: TurnRailRequest,
@@ -312,6 +385,7 @@ impl Navigation {
                 owner.rail.jump = Some(TurnJump {
                     ticket: Uuid::new_v4(),
                     turn_id: turn.id.0,
+                    item_id: None,
                 });
             }
             _ => owner.read_items(client, turn, mode, sender),
@@ -428,9 +502,47 @@ impl Navigation {
                         owner.rail.jump = Some(TurnJump {
                             ticket,
                             turn_id: items.id.0.clone(),
+                            item_id: None,
                         });
                         added = Some((view, owner.rail.order()));
                     }
+                }
+            }
+            RailCompletion::Bookmark { item, result } => {
+                if !take_job(&mut owner.rail.jumping, ticket) {
+                    return;
+                }
+                match *result {
+                    Ok(Some(BookmarkRead {
+                        references,
+                        turn,
+                        items,
+                    })) => {
+                        if let Ok(items) = items.for_selection(&owner.connection, &owner.thread)
+                            && items.id == turn.id
+                            && let Some(view) = turn_body(&selection.checkout, turn, items)
+                        {
+                            owner.rail.merge(
+                                references.into_iter().map(|activity| Reference {
+                                    activity,
+                                    title: None,
+                                }),
+                                true,
+                            );
+                            owner.loaded.insert(items.id.clone());
+                            owner.rail.jump = Some(TurnJump {
+                                ticket,
+                                turn_id: items.id.0.clone(),
+                                item_id: item
+                                    .as_deref()
+                                    .map(|id| transcript_id(&items.id.0, id))
+                                    .filter(|id| view.items.iter().any(|row| &row.item_id == id)),
+                            });
+                            added = Some((view, owner.rail.order()));
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => eprintln!("{error}"),
                 }
             }
         }
@@ -445,6 +557,53 @@ impl Navigation {
             self.publish_navigation();
         }
     }
+}
+
+async fn read_bookmark(
+    browser: &CodexBrowser,
+    connection: &ConnectionIdentity,
+    chat: &ThreadId,
+    summary: &ChatRead<ChatSummary>,
+    requested: &TurnId,
+    known: Option<TurnActivity>,
+) -> Result<Option<BookmarkRead>, BrowseError> {
+    let mut references = Vec::new();
+    let mut turn = known;
+    if turn.is_none() {
+        let mut cursor = None;
+        let mut cursors: Vec<TurnCursor> = Vec::new();
+        for _ in 0..BOOKMARK_PAGE_LIMIT {
+            let read = browser
+                .turn_statuses(summary, cursor.as_ref(), RPC_TIMEOUT)
+                .await?;
+            let page = read.for_selection(connection, chat)?;
+            turn = page.data.iter().find(|turn| &turn.id == requested).cloned();
+            references.extend(page.data.iter().cloned());
+            if turn.is_some() {
+                break;
+            }
+            let Some(next) = page
+                .next_cursor
+                .as_ref()
+                .filter(|next| !cursors.contains(next))
+            else {
+                break;
+            };
+            cursors.push(next.clone());
+            cursor = Some(next.clone());
+        }
+    }
+    let Some(turn) = turn else {
+        return Ok(None);
+    };
+    let items = browser
+        .turn_items(summary, requested, TurnItemRead::Complete, RPC_TIMEOUT)
+        .await?;
+    Ok(Some(BookmarkRead {
+        references,
+        turn,
+        items,
+    }))
 }
 
 impl HistoryPaging {

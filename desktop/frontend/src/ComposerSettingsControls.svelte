@@ -16,7 +16,7 @@
     const field = event.currentTarget;
     const id = field.value || null;
     field.value = view.selection.modelId ?? '';
-    const model = models.find((option) => option.id === id) ?? models.find((option) => option.isDefault);
+    const model = models.find((option) => option.id === (id ?? view.defaultModelId));
     const effort = model?.efforts.some((option) => option.reasoningEffort === view.selection.effort) ? view.selection.effort : null;
     const tier = view.selection.serviceTier === 'default' || model?.serviceTiers.some((option) => option.id === view.selection.serviceTier)
       ? view.selection.serviceTier : null;
@@ -77,7 +77,7 @@
 
 <div class="composer-settings" role="group" aria-label="Composer settings">
   <select aria-label="Model" value={view.selection.modelId ?? ''} disabled={disabled || busy || !models.length} onchange={chooseModel}>
-    <option value="">Configured Model</option>
+    <option value="">{view.usesProjectDefaults ? 'Project Default Model' : 'Configured Model'}</option>
     {#each models as model (model.id)}<option value={model.id}>{model.name}</option>{/each}
   </select>
   <select aria-label="Reasoning effort" value={view.selection.effort ?? ''} disabled={disabled || busy || !effective?.efforts.length} onchange={chooseEffort}>

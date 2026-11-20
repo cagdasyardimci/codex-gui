@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -8,6 +8,7 @@
   import ComposerAttachments from './ComposerAttachments.svelte';
   import ComposerContextPicker from './ComposerContextPicker.svelte';
   import ComposerSettingsControls from './ComposerSettingsControls.svelte';
+  import ProjectContextPanel from './ProjectContextPanel.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
@@ -23,10 +24,11 @@
   import { verifyImageAnnotations } from './imageAnnotationProbe';
   import { verifyComposerContext } from './composerContextProbe';
   import { verifyComposerSettings } from './composerSettingsProbe';
+  import { verifyProjectContext } from './projectContextProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -44,6 +46,8 @@
   let actionPending = $state(false);
   let admittingDraft = $state(false);
   let showingChanges = $state(false);
+  let showingProjectContext = $state(false);
+  let projectContextButton = $state<HTMLButtonElement>();
   let confirmingQuit = $state(false);
   let quietQuitTicket: string | undefined;
   let pending: DraftEdit | null = null;
@@ -180,7 +184,7 @@
     if (!jump || shownJump === jump.ticket || canceledJump === jump.ticket) return;
     shownJump = jump.ticket;
     upwardHistory = undefined;
-    viewport.jump(jump.turnId);
+    viewport.jump(jump.turnId, jump.itemId);
   }
 
   function receive(current: WorkspaceSnapshot) {
@@ -191,7 +195,10 @@
     }
     viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
-    if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) showingChanges = false;
+    if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) {
+      showingChanges = false;
+      showingProjectContext = false;
+    }
     snapshot = current;
     revealTurnJump(current);
     if (draftId !== current.navigation.draft?.id) {
@@ -227,6 +234,28 @@
       saving = savePending().finally(() => { saving = null; });
     }
     return saving;
+  }
+
+  async function updateProjectContext(scope: DraftAttachmentScope, revision: number, change: ProjectContextChange) {
+    if (actionPending || composing || quit) throw 'staleSelection';
+    actionPending = true;
+    try {
+      await flushEdits();
+      await navigateWorkspace({ editProjectContext: { scope, revision, change } });
+      if ('insertPrompt' in change || 'openBookmark' in change) {
+        showingProjectContext = false;
+        await tick();
+        if ('insertPrompt' in change) editor?.focus();
+        else transcript?.focus({ preventScroll: true });
+      }
+    } finally {
+      actionPending = false;
+    }
+  }
+
+  function closeProjectContext() {
+    showingProjectContext = false;
+    projectContextButton?.focus();
   }
 
   function acceptText(value: string, inComposition: boolean) {
@@ -283,7 +312,8 @@
   }
 
   async function sendDraft() {
-    if (!workspace || !draftId || !navigation?.actions.send || (!text.trim() && !draftAttachments.length) || composing || actionPending) return;
+    if (!workspace || !draftId || !navigation?.actions.send ||
+        (!text.trim() && !draftAttachments.length && !navigation.projectHasInput) || composing || actionPending) return;
     const send = {
       workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text,
       attachmentIds: draftAttachments.map((attachment) => attachment.id),
@@ -454,6 +484,7 @@
     else if (verify === 'annotations') void verifyImageAnnotations(() => snapshot);
     else if (verify === 'composerContext') void verifyComposerContext(() => snapshot);
     else if (verify === 'composerSettings') void verifyComposerSettings(() => snapshot);
+    else if (verify === 'projectContext') void verifyProjectContext(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -474,6 +505,9 @@
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
+      <button type="button" bind:this={projectContextButton} aria-expanded={showingProjectContext}
+        disabled={!attachmentScope || !!quit}
+        onclick={() => { showingProjectContext = !showingProjectContext; }}>Project Context</button>
     {/if}
     {#if navigation?.writeAccess === 'setupSandbox' || navigation?.writeAccess === 'settingUpSandbox'}
       <button type="button" disabled={actionPending || navigation.writeAccess === 'settingUpSandbox'}
@@ -600,7 +634,8 @@
               <button type="button" disabled={actionPending || !!navigation.quit}
                 onclick={() => { void pickComposerAttachments(scope).catch(() => {}); }}>Attach Files</button>
             {/if}
-            <button type="button" disabled={actionPending || !navigation.actions.send || (!text.trim() && !draftAttachments.length)} onclick={() => void sendDraft()}>
+            <button type="button" disabled={actionPending || !navigation.actions.send ||
+              (!text.trim() && !draftAttachments.length && !navigation.projectHasInput)} onclick={() => void sendDraft()}>
               {queue?.activeTurn ? (queue.enabled ? 'Queue' : 'Steer') : 'Send'}
             </button>
           {/if}
@@ -609,6 +644,12 @@
     </section>
     {#if showingChanges && workspace}
       <WorkspaceChanges workspaceId={workspace.workspaceId} />
+    {/if}
+    {#if showingProjectContext && attachmentScope && navigation}
+      {#key `${attachmentScope.workspaceId}/${attachmentScope.draftId}`}
+        <ProjectContextPanel scope={attachmentScope} models={navigation.account.models} draftText={text}
+          blocked={actionPending || !!queue?.editing || !!quit} submit={updateProjectContext} close={closeProjectContext} />
+      {/key}
     {/if}
   </div>
   {#if quit?.confirm && !quit.draining}
