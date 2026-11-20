@@ -6,14 +6,14 @@ export async function waitFor(description: string, condition: () => boolean) {
   }
 }
 
-function button(label: string) {
-  return Array.from(document.querySelectorAll('button'))
+function button(label: string, within: ParentNode) {
+  return Array.from(within.querySelectorAll('button'))
     .find((control) => (control.querySelector('.chat-title')?.textContent ?? control.textContent)?.trim() === label && !control.disabled);
 }
 
-export async function click(label: string) {
-  await waitFor(`Could not press ${label}`, () => !!button(label));
-  button(label)?.click();
+export async function click(label: string, within: ParentNode = document) {
+  await waitFor(`Could not press ${label}`, () => !!button(label, within));
+  button(label, within)?.click();
 }
 
 export async function clickByLabel(label: string) {

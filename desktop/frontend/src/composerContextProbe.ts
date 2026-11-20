@@ -25,8 +25,8 @@ export async function verifyComposerContext(visible: () => WorkspaceSnapshot | n
     await waitFor('The context fixture did not persist the draft', () => draft()?.text === ORIGINAL);
     editor().setSelectionRange(7, 11);
     await click('Add Context');
-    await filter('notes');
-    await click('notes.txt');
+    const picker = await filter('notes');
+    await click('notes.txt', picker);
     await waitFor('The plus menu did not preserve text and selection', () => labels() === LABELS[0] &&
       editor().value === ORIGINAL && document.activeElement === editor() &&
       editor().selectionStart === 7 && editor().selectionEnd === 11);
@@ -76,6 +76,9 @@ async function filter(query: string) {
   const field = control()!;
   field.value = query;
   field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  const picker = field.closest('.composer-context-picker');
+  if (!picker) throw new Error('The context search had no owning picker');
+  return picker;
 }
 
 async function setNumber(label: string, value: string) {
