@@ -58,46 +58,33 @@ impl GitChange {
 }
 
 pub struct CheckoutDiff {
-    executable: PathBuf,
-    checkout: CheckoutIdentity,
+    git: CheckoutGit,
     baseline: String,
 }
 
 impl CheckoutDiff {
     pub async fn open(checkout: CheckoutIdentity) -> Result<Self, GitError> {
-        let executable = discover()?;
-        let mut diff = Self {
-            executable,
-            checkout,
-            baseline: String::new(),
-        };
-        let root = diff
-            .success(["rev-parse", "--show-toplevel"], QUERY_BYTES)
-            .await?;
-        diff.checkout
-            .validate_reported(&decode_path(terminated_line(&root)?)?)?;
-        let (status, head) = diff
+        let git = CheckoutGit::new(checkout)?;
+        git.checkout
+            .validate_reported(&git.reported_root().await?)?;
+        let (status, head) = git
             .run(["rev-parse", "--verify", "--quiet", "HEAD"], QUERY_BYTES)
             .await?;
         let baseline = if status.success() {
             head
         } else if status.code() == Some(1) {
-            diff.success(["hash-object", "-t", "tree", "--stdin"], QUERY_BYTES)
+            git.success(["hash-object", "-t", "tree", "--stdin"], QUERY_BYTES)
                 .await?
         } else {
             return Err(GitError::Exit(status));
         };
-        let oid = std::str::from_utf8(terminated_line(&baseline)?)
-            .map_err(|_| GitError::InvalidOutput)?;
-        if !matches!(oid.len(), 40 | 64) || !oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(GitError::InvalidOutput);
-        }
-        diff.baseline = oid.to_owned();
-        Ok(diff)
+        let baseline = parse_oid(&baseline)?.to_owned();
+        Ok(Self { git, baseline })
     }
 
     pub async fn changes(&self) -> Result<Vec<GitChange>, GitError> {
         let tracked = self
+            .git
             .success(
                 ["diff", "--name-status", "-z"]
                     .into_iter()
@@ -107,6 +94,7 @@ impl CheckoutDiff {
             )
             .await?;
         let untracked = self
+            .git
             .success(
                 ["ls-files", "--others", "--exclude-standard", "-z", "--"],
                 QUERY_BYTES,
@@ -120,6 +108,7 @@ impl CheckoutDiff {
         let (status, patch) = if change.untracked {
             self.validate_untracked(&change.path)?;
             let result = self
+                .git
                 .run(
                     ["diff", "--no-index"]
                         .into_iter()
@@ -133,16 +122,17 @@ impl CheckoutDiff {
             self.validate_untracked(&change.path)?;
             result
         } else {
-            self.run(
-                ["diff"]
-                    .into_iter()
-                    .chain(DIFF_OPTIONS.iter().copied())
-                    .chain([self.baseline.as_str(), "--"])
-                    .map(OsStr::new)
-                    .chain([path]),
-                PATCH_BYTES,
-            )
-            .await?
+            self.git
+                .run(
+                    ["diff"]
+                        .into_iter()
+                        .chain(DIFF_OPTIONS.iter().copied())
+                        .chain([self.baseline.as_str(), "--"])
+                        .map(OsStr::new)
+                        .chain([path]),
+                    PATCH_BYTES,
+                )
+                .await?
         };
         let compared_with_null = change.untracked && status.code() == Some(1);
         if !(status.success() || compared_with_null) {
@@ -152,7 +142,7 @@ impl CheckoutDiff {
     }
 
     fn validate_untracked(&self, path: &Path) -> Result<(), GitError> {
-        let root = self.checkout.canonical_path();
+        let root = self.git.checkout.canonical_path();
         let full = root.join(path);
         let parent = full.parent().ok_or(GitError::RetiredFile)?.canonicalize()?;
         let kind = full.symlink_metadata()?.file_type();
@@ -161,8 +151,29 @@ impl CheckoutDiff {
         }
         Ok(())
     }
+}
 
-    async fn success(
+pub(crate) struct CheckoutGit {
+    executable: PathBuf,
+    pub(crate) checkout: CheckoutIdentity,
+}
+
+impl CheckoutGit {
+    pub(crate) fn new(checkout: CheckoutIdentity) -> Result<Self, GitError> {
+        Ok(Self {
+            executable: discover()?,
+            checkout,
+        })
+    }
+
+    pub(crate) async fn reported_root(&self) -> Result<PathBuf, GitError> {
+        let root = self
+            .success(["rev-parse", "--show-toplevel"], QUERY_BYTES)
+            .await?;
+        decode_path(terminated_line(&root)?)
+    }
+
+    pub(crate) async fn success(
         &self,
         args: impl IntoIterator<Item = impl AsRef<OsStr>>,
         limit: usize,
@@ -174,7 +185,7 @@ impl CheckoutDiff {
         Ok(output)
     }
 
-    async fn run(
+    pub(crate) async fn run(
         &self,
         args: impl IntoIterator<Item = impl AsRef<OsStr>>,
         limit: usize,
@@ -249,7 +260,15 @@ fn discover() -> Result<PathBuf, GitError> {
         .ok_or(GitError::NotFound)
 }
 
-fn terminated_line(bytes: &[u8]) -> Result<&[u8], GitError> {
+pub(crate) fn parse_oid(bytes: &[u8]) -> Result<&str, GitError> {
+    let oid = std::str::from_utf8(terminated_line(bytes)?).map_err(|_| GitError::InvalidOutput)?;
+    if !matches!(oid.len(), 40 | 64) || !oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(GitError::InvalidOutput);
+    }
+    Ok(oid)
+}
+
+pub(crate) fn terminated_line(bytes: &[u8]) -> Result<&[u8], GitError> {
     let line = bytes.strip_suffix(b"\n").ok_or(GitError::InvalidOutput)?;
     Ok(if cfg!(windows) {
         line.strip_suffix(b"\r").unwrap_or(line)
@@ -293,7 +312,7 @@ fn parse_changes(tracked: &[u8], untracked: &[u8]) -> Result<Vec<GitChange>, Git
     Ok(changes)
 }
 
-fn nul_fields(bytes: &[u8]) -> Result<impl Iterator<Item = &[u8]>, GitError> {
+pub(crate) fn nul_fields(bytes: &[u8]) -> Result<impl Iterator<Item = &[u8]>, GitError> {
     if !bytes.is_empty() && bytes.last() != Some(&0) {
         return Err(GitError::InvalidOutput);
     }
@@ -303,13 +322,13 @@ fn nul_fields(bytes: &[u8]) -> Result<impl Iterator<Item = &[u8]>, GitError> {
 }
 
 #[cfg(unix)]
-fn decode_path(bytes: &[u8]) -> Result<PathBuf, GitError> {
+pub(crate) fn decode_path(bytes: &[u8]) -> Result<PathBuf, GitError> {
     use std::os::unix::ffi::OsStringExt;
     Ok(std::ffi::OsString::from_vec(bytes.to_vec()).into())
 }
 
 #[cfg(windows)]
-fn decode_path(bytes: &[u8]) -> Result<PathBuf, GitError> {
+pub(crate) fn decode_path(bytes: &[u8]) -> Result<PathBuf, GitError> {
     Ok(std::str::from_utf8(bytes)
         .map_err(|_| GitError::InvalidOutput)?
         .into())

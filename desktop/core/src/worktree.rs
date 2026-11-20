@@ -11,6 +11,9 @@ use uuid::Uuid;
 
 use crate::checkout::{CheckoutError, CheckoutIdentity, NativeFileIdentity};
 
+mod lifecycle;
+pub use lifecycle::{WorktreeError, WorktreeManager};
+
 const LOCK_NAME: &str = ".lock";
 const AUTHORITY_NAME: &str = ".authority";
 const DOCUMENT_VERSION: u32 = 1;
@@ -43,8 +46,12 @@ pub struct WorktreeRecord {
     pub thread_id: Option<String>,
     pub source_project_path: PathBuf,
     pub repository_git_directory: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository_identity: Option<String>,
     pub branch: String,
     pub checkout_path: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkout_identity: Option<String>,
     pub base_commit: String,
     pub source_was_dirty: bool,
     /// Seconds since 2001-01-01 UTC, as encoded by Foundation's default Date strategy.
@@ -265,6 +272,13 @@ impl LockedWorktrees<'_> {
     }
 }
 
+impl Drop for LockedWorktrees<'_> {
+    fn drop(&mut self) {
+        // A concurrent fork can briefly retain the descriptor until exec closes it.
+        let _ = self.lock.unlock();
+    }
+}
+
 impl WorktreeRecord {
     fn validate(&self) -> Result<(), StoreError> {
         if self.id.is_nil()
@@ -294,6 +308,9 @@ impl WorktreeRecord {
         candidate.phase = next.phase;
         if self.thread_id.is_none() {
             candidate.thread_id = next.thread_id.clone();
+        }
+        if self.checkout_identity.is_none() {
+            candidate.checkout_identity = next.checkout_identity.clone();
         }
         &candidate == next
     }
