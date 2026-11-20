@@ -10,6 +10,8 @@ Compose cross-feature transitions before publication and reserve accepted effect
 
 Backend history belongs to Codex. Local persistence owns drafts, preferences and recovery records; views must not edit Codex conversation files. Capture next-turn preferences at submission so later control changes cannot retarget accepted work. Settings-specific persistence follows [Settings](settings.md#configuration-ownership).
 
+The Tauri workspace database validates its application identity before migrating schema versions. A single transaction advances the schema and its version markers. Add persisted feature records with their first consumers in the [storage module](../desktop/core/src/storage.rs).
+
 Image annotations belong to their composer attachment identity and persist with the draft. The [image comment canvas](../Sources/CodexGUI/UI/Images/ImageCommentCanvas.swift) stages edits locally; Save commits them to that captured draft without submitting a turn, while cancellation or retirement discards unsaved edits. Coordinates remain relative to the original image, independent of zoom and scrolling. [Context input construction](../Sources/CodexGUI/Application/Services/ComposerContextBuilder.swift) groups comments by the final image attachment order, including unannotated images when determining image numbers.
 
 ## Ownership and recovery
