@@ -372,7 +372,7 @@ impl WorkspaceProjection {
 
     pub fn transcript_markdown(&self, request: &TranscriptRowRequest) -> Result<String, IpcError> {
         self.read_transcript_row(request, |row| {
-            (row.role != TranscriptRole::Commands && row.completed).then(|| row.text.clone())
+            (row.role == TranscriptRole::Assistant && row.completed).then(|| row.text.clone())
         })
     }
 

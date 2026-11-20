@@ -41,6 +41,6 @@
           onpointerdown={(event) => event.preventDefault()} onfocus={onCopyFocus} onclick={copyResponse}>Copy</button>
       {/if}
     </div>
-    <MarkdownView source={item.text} request={item.completed ? request : undefined} />
+    <MarkdownView source={item.text} request={item.role === 'assistant' && item.completed ? request : undefined} />
   </article>
 {/if}
