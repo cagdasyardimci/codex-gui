@@ -28,6 +28,14 @@ class Stream:
                 self.read_probe_marker()
             desktop_turn = engine.scenario.get('desktopTurn')
             hold = desktop_turn and self.turn['items'][0]['content'][0]['text'] == 'Hold this fixture turn'
+            if hold and engine.scenario.get('desktopQuit'):
+                with engine.lock:
+                    command = {'id': 'fixture-pending-command', 'type': 'commandExecution',
+                               'command': 'Fixture command', 'status': 'inProgress',
+                               'cwd': self.thread['cwd']}
+                    self.turn['items'].append(command)
+                    engine.state.save()
+                    self.emit('item/started', item=command)
             if desktop_turn and not hold:
                 if self.approve_probe_read('fixture-turn-command'):
                     self.ask_question()

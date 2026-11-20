@@ -2,13 +2,14 @@
 
 use codex_gui_core::ipc::WORKSPACE_WINDOW;
 use std::path::PathBuf;
-use tauri::{Manager, WebviewWindowBuilder, webview::NewWindowResponse};
+use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent, webview::NewWindowResponse};
 
 mod coding_probe;
 mod diff_ipc;
 mod fixture;
 mod navigation;
 mod project_ipc;
+mod quit_ipc;
 
 fn main() {
     let mut arguments = std::env::args_os().skip(1);
@@ -27,6 +28,7 @@ fn main() {
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-diff") => fixture::Verification::Diff,
+        Some("--verify-quit") => fixture::Verification::Quit,
         _ => fixture::Verification::None,
     };
     let coding_report = if mode.as_deref() == Some(coding_probe::ARGUMENT.as_ref()) {
@@ -45,6 +47,7 @@ fn main() {
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::Diff
+            | fixture::Verification::Quit
     )
     .then(|| {
         let data = PathBuf::from(
@@ -55,11 +58,26 @@ fn main() {
         let project = arguments.next().map(PathBuf::from);
         (data, project)
     });
-    tauri::Builder::default()
+    let handle_desktop_quit = matches!(
+        verification,
+        fixture::Verification::None | fixture::Verification::Quit
+    );
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(verification)
         .manage(project_ipc::ProjectIpc::default())
         .manage(diff_ipc::DiffIpc::default())
+        .manage(quit_ipc::QuitLifecycle::default())
+        .on_window_event(move |window, event| {
+            if handle_desktop_quit
+                && window.label() == WORKSPACE_WINDOW
+                && let WindowEvent::CloseRequested { api, .. } = event
+                && !window.state::<quit_ipc::QuitLifecycle>().allowed()
+            {
+                api.prevent_close();
+                quit_ipc::handle_native_quit(window.app_handle());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             fixture::stream_fixture,
             fixture::verification_mode,
@@ -70,6 +88,7 @@ fn main() {
             fixture::verify_windows_setup_result,
             fixture::verify_turn_result,
             fixture::verify_diff_result,
+            fixture::report_quit_failure,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::navigate_workspace,
@@ -78,6 +97,7 @@ fn main() {
             project_ipc::change_workspace_fixture,
             diff_ipc::checkout_changes,
             diff_ipc::checkout_patch,
+            quit_ipc::request_quit_fixture,
         ])
         .setup(move |app| {
             if let Some(report) = coding_report {
@@ -103,6 +123,7 @@ fn main() {
                     | fixture::Verification::WindowsSetup
                     | fixture::Verification::Turn
                     | fixture::Verification::Diff
+                    | fixture::Verification::Quit
             ) {
                 let (beta_data, initial_project) = match desktop_fixture {
                     Some(fixture) => fixture,
@@ -133,6 +154,18 @@ fn main() {
                 .build()?;
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("run Codex GUI");
+    app.run(move |app, event| {
+        if handle_desktop_quit
+            && let RunEvent::ExitRequested { api, code, .. } = event
+            && (code.is_none()
+                || verification == fixture::Verification::Quit
+                    && code == Some(quit_ipc::FIXTURE_APP_QUIT))
+            && !app.state::<quit_ipc::QuitLifecycle>().allowed()
+        {
+            api.prevent_exit();
+            quit_ipc::handle_native_quit(app);
+        }
+    });
 }

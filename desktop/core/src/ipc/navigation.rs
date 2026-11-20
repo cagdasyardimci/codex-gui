@@ -16,6 +16,21 @@ pub struct NavigationView {
     pub account: AccountView,
     pub write_access: WriteAccess,
     pub actions: ConversationActions,
+    pub quit: Option<QuitView>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct QuitView {
+    pub ticket: String,
+    pub confirm: bool,
+    pub draining: bool,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct QuitDecision {
+    pub ticket: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, TS)]
@@ -105,4 +120,6 @@ pub enum NavigationIntent {
     Stop(StopRequest),
     Respond(RespondRequest),
     RecoverSend(RecoverSendRequest),
+    ConfirmQuit(QuitDecision),
+    CancelQuit(QuitDecision),
 }

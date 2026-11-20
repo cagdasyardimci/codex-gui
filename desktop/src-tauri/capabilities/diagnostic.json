@@ -13,6 +13,8 @@
     "allow-verify-windows-setup-result",
     "allow-verify-turn-result",
     "allow-verify-diff-result",
+    "allow-request-quit-fixture",
+    "allow-report-quit-failure",
     "allow-change-workspace-fixture"
   ]
 }

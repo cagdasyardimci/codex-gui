@@ -33,6 +33,7 @@ pub enum Verification {
     WindowsSetup,
     Turn,
     Diff,
+    Quit,
 }
 
 #[derive(Deserialize)]
@@ -312,6 +313,20 @@ pub fn verify_diff_result(
         println!("Verified installed checkout changes and lazy patches");
         app.exit(0);
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn report_quit_failure(
+    app: AppHandle,
+    verification: State<'_, Verification>,
+    failure: String,
+) -> Result<(), String> {
+    if *verification != Verification::Quit {
+        return Err("quit verification was not requested at launch".into());
+    }
+    eprintln!("Quit verification failed: {failure}");
+    app.exit(1);
     Ok(())
 }
 

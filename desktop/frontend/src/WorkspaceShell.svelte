@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import type { DraftEdit, InteractionAnswer, NavigationIntent, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
+  import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
   import { navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
@@ -9,9 +10,10 @@
   import { verifyWindowsSetup } from './windowsSetupProbe';
   import { verifyTurn } from './turnProbe';
   import { verifyDiff } from './diffProbe';
+  import { verifyQuit } from './quitProbe';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'diff' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let draftId: string | undefined;
@@ -20,11 +22,14 @@
   let actionPending = $state(false);
   let admittingDraft = $state(false);
   let showingChanges = $state(false);
+  let confirmingQuit = $state(false);
+  let quietQuitTicket: string | undefined;
   let pending: DraftEdit | null = null;
   let saving: Promise<void> | null = null;
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const stopTarget = $derived(navigation?.actions.stop);
+  const quit = $derived(navigation?.quit);
 
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
@@ -37,6 +42,11 @@
     } else if (!composing && !pending && previous?.text !== current.navigation.draft?.text &&
                text === previous?.text) {
       text = current.navigation.draft?.text ?? '';
+    }
+    const request = current.navigation.quit;
+    if (request && !request.confirm && !request.draining && request.ticket !== quietQuitTicket) {
+      quietQuitTicket = request.ticket;
+      void confirmQuit(request.ticket);
     }
   }
 
@@ -68,7 +78,7 @@
   }
 
   async function act(action: () => Promise<unknown>, focusEditor = false) {
-    if (actionPending || composing) return;
+    if (actionPending || composing || quit) return;
     actionPending = true;
     try {
       await flushEdits();
@@ -151,6 +161,31 @@
     void act(() => navigateWorkspace({ respond: request }));
   }
 
+  function cancelQuit(ticket: string) {
+    return navigateWorkspace({ cancelQuit: { ticket } });
+  }
+
+  async function confirmQuit(ticket: string) {
+    if (confirmingQuit) return;
+    confirmingQuit = true;
+    try {
+      if (composing && editor) {
+        editor.blur();
+        composing = false;
+        acceptText(editor.value, false);
+      }
+      await flushEdits();
+      await navigateWorkspace({ confirmQuit: { ticket } });
+    } catch (error) {
+      console.error(error);
+      await cancelQuit(ticket).catch((failure) => {
+        if (failure !== 'staleSelection') console.error(failure);
+      });
+    } finally {
+      confirmingQuit = false;
+    }
+  }
+
   function handleShortcut(event: KeyboardEvent) {
     if (event.defaultPrevented || event.isComposing || composing ||
         !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
@@ -175,6 +210,7 @@
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn') void verifyTurn(() => snapshot);
     else if (verify === 'diff') void verifyDiff(() => snapshot);
+    else if (verify === 'quit') void verifyQuit(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -237,7 +273,8 @@
         <InteractionCard {interaction} disabled={actionPending} respond={(answer) => respond(interaction.id, answer)} />
       {/each}
       {#if navigation?.draft}
-        <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor} readonly={admittingDraft}
+        <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor}
+          readonly={admittingDraft || confirmingQuit || quit?.draining}
           value={text} oncompositionstart={() => { composing = true; }}
           oncompositionend={(event) => {
             composing = false;
@@ -259,4 +296,9 @@
       <WorkspaceChanges workspaceId={workspace.workspaceId} />
     {/if}
   </div>
+  {#if quit?.confirm && !quit.draining}
+    <QuitDialog busy={confirmingQuit}
+      cancel={() => { if (quit) void cancelQuit(quit.ticket).catch(console.error); }}
+      confirm={() => { if (quit) void confirmQuit(quit.ticket); }} />
+  {/if}
 </main>

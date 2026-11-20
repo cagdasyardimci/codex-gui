@@ -21,7 +21,7 @@ pub use actions::{
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
-    LoginTicket, NavigationIntent, NavigationView, WriteAccess,
+    LoginTicket, NavigationIntent, NavigationView, QuitDecision, QuitView, WriteAccess,
 };
 pub use question_reply::present_question_reply;
 pub use stream::{
@@ -199,6 +199,8 @@ pub fn workspace_typescript() -> String {
         DiffFileView::decl(),
         DiffPatchRequest::decl(),
         DiffPatchView::decl(),
+        QuitView::decl(),
+        QuitDecision::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

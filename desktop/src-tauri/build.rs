@@ -14,6 +14,8 @@ fn main() {
         "navigate_workspace",
         "checkout_changes",
         "checkout_patch",
+        "request_quit_fixture",
+        "report_quit_failure",
         "subscribe_workspace",
         "next_workspace_update",
         "change_workspace_fixture",

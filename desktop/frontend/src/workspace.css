@@ -235,6 +235,29 @@ body {
   tab-size: 4;
 }
 
+.quit-dialog {
+  color: inherit;
+  background: var(--workspace-canvas);
+  border: 1px solid var(--workspace-divider);
+  border-radius: 0.65rem;
+  padding: 1rem;
+}
+
+.quit-dialog::backdrop {
+  background: rgb(0 0 0 / 36%);
+}
+
+.quit-dialog h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.quit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .composer-actions {
   justify-content: flex-end;
   padding-top: 0.35rem;

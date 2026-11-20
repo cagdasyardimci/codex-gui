@@ -24,7 +24,7 @@ use codex_gui_core::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
         drafts::DraftId,
     },
-    workspace::{PrepareThread, ResumedMode, RoutedEvent, WorkspaceEngine},
+    workspace::{ExecutionSnapshot, PrepareThread, ResumedMode, RoutedEvent, WorkspaceEngine},
 };
 use serde_json::Value;
 use tokio::{
@@ -37,10 +37,12 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
 mod interactions;
+mod quit;
 mod sandbox;
 mod send;
 use account::AccountFlow;
 use interactions::InteractionProjection;
+use quit::Quit;
 use sandbox::SandboxSetup;
 use send::{InflightSend, SendCompletion};
 
@@ -48,6 +50,7 @@ const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 type Failure = Box<dyn Error + Send + Sync>;
 type Outcome = Result<Option<WorkspaceId>, IpcError>;
 
+#[derive(Clone)]
 pub struct NavigationHandle(mpsc::Sender<Message>);
 
 struct Message {
@@ -58,6 +61,7 @@ struct Message {
 enum Action {
     SelectFolder(PathBuf),
     Intent(NavigationIntent),
+    RequestQuit(tauri::AppHandle),
 }
 
 enum Input {
@@ -98,6 +102,9 @@ struct Navigation {
     interactions: InteractionProjection,
     view: NavigationView,
     editable: HashSet<DraftId>,
+    failed_drafts: HashSet<DraftId>,
+    quit: Option<Quit>,
+    retired_executions: Vec<(CheckoutIdentity, ExecutionSnapshot)>,
     stream: TextBatcher,
     // Active messages already loaded from history have no delta offset. Use their
     // next complete item as authority so a resumed prefix is never duplicated.
@@ -131,6 +138,9 @@ impl NavigationHandle {
             interactions: InteractionProjection::default(),
             view: NavigationView::default(),
             editable: HashSet::new(),
+            failed_drafts: HashSet::new(),
+            quit: None,
+            retired_executions: Vec::new(),
             stream: TextBatcher::default(),
             restored_active_items: Vec::new(),
         };
@@ -149,6 +159,10 @@ impl NavigationHandle {
 
     pub async fn apply(&self, intent: NavigationIntent) -> Result<(), IpcError> {
         self.request(Action::Intent(intent)).await.map(|_| ())
+    }
+
+    pub async fn request_quit(&self, app: tauri::AppHandle) -> Result<(), IpcError> {
+        self.request(Action::RequestQuit(app)).await.map(|_| ())
     }
 
     async fn request(&self, action: Action) -> Outcome {
@@ -185,6 +199,7 @@ impl Navigation {
                 }
             } else {
                 tokio::select! {
+                    _ = timer.tick(), if self.draining_quit() => Input::Flush,
                     request = commands.recv() => Input::Command(request),
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
                 }
@@ -210,6 +225,9 @@ impl Navigation {
                     self.flush_stream();
                     self.expire_sandbox_setup(tokio::time::Instant::now()).await;
                 }
+            }
+            if self.advance_quit().await {
+                break;
             }
         }
         self.disconnect().await;
@@ -238,8 +256,12 @@ impl Navigation {
 
     async fn handle(&mut self, action: Action) -> Outcome {
         let action = match action {
+            Action::RequestQuit(app) => {
+                self.begin_quit(app);
+                return Ok(None);
+            }
             Action::SelectFolder(folder) => {
-                if self.view.actions.stop.is_some() {
+                if self.quit.is_some() || self.view.actions.stop.is_some() {
                     return Err(IpcError::StaleSelection);
                 }
                 let checkout =
@@ -252,7 +274,20 @@ impl Navigation {
             }
             Action::Intent(action) => action,
         };
+        if self.draining_quit()
+            || (self.quit.is_some()
+                && !matches!(
+                    &action,
+                    NavigationIntent::EditDraft(_)
+                        | NavigationIntent::CancelQuit(_)
+                        | NavigationIntent::ConfirmQuit(_)
+                ))
+        {
+            return Err(IpcError::StaleSelection);
+        }
         match action {
+            NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
+            NavigationIntent::CancelQuit(decision) => self.cancel_quit(decision)?,
             NavigationIntent::EditDraft(edit) => self.edit(edit)?,
             NavigationIntent::OpenChat(request) => {
                 self.require(request.workspace_id)?;
@@ -458,9 +493,11 @@ impl Navigation {
         if !self.editable.contains(&id) {
             return Err(IpcError::StaleSelection);
         }
-        self.store
-            .save_editor_text(id, edit.text.clone())
-            .map_err(|error| report(error.into()))?;
+        if let Err(error) = self.store.save_editor_text(id, edit.text.clone()) {
+            self.failed_drafts.insert(id);
+            return Err(report(error.into()));
+        }
+        self.failed_drafts.remove(&id);
         if let Some(draft) = self
             .view
             .draft
@@ -478,6 +515,10 @@ impl Navigation {
         let had_write_access =
             std::mem::take(&mut self.view.write_access) != WriteAccess::Unavailable;
         if let Some(backend) = self.backend.take() {
+            let state = backend.engine.snapshot();
+            if let Some(checkout) = &state.connection.workspace.checkout {
+                self.preserve_disconnected_execution(checkout, &state.execution);
+            }
             if let Err(error) = self.login.retire(&backend.connection.client()).await {
                 eprintln!("{error}");
             }
@@ -607,6 +648,10 @@ impl Navigation {
         let summary = browser.thread_summary(&thread, RPC_TIMEOUT).await?;
         let history = browser.history(&summary, None, RPC_TIMEOUT).await?;
         let page = history.for_selection(client.identity(), &thread)?;
+        if let Some(checkout) = &client.identity().workspace.checkout {
+            self.store
+                .reconcile_exit_history(checkout, &thread, &page.data)?;
+        }
         let mut active = Vec::new();
         let mut before_resume = TranscriptView::default();
         for turn in page.data.iter().rev() {

@@ -23,6 +23,7 @@ const MIGRATIONS: &[Migration] = &[
     project_context::migrate,
     attachments::appkit_drafts::migrate,
     attachments::navigation::migrate,
+    attachments::exit_recovery::migrate,
 ];
 
 #[derive(Debug, Error)]

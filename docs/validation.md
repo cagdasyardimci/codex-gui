@@ -26,6 +26,8 @@ The [installed turn fixture](../desktop/fixtures/verify_turn_fixture.py) recover
 
 The [installed diff fixture](../desktop/fixtures/verify_diff_fixture.py) creates its own Git checkout. It verifies a tracked edit and an untracked patch with Unicode names, checks that selecting a file triggers the patch request, and compares the Git index and source bytes before and after the read.
 
+The [installed quit fixture](../desktop/fixtures/verify_quit_fixture.py) injects a draft write failure using its disposable database, cancels a native Close during an active turn, then confirms application Quit. It checks the continued draft editing, the exact interrupted turn, and the retained command evidence after exit.
+
 ### Swift AppKit
 
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.
