@@ -22,7 +22,10 @@ pub use settings::{
     EffectiveConfiguration, IntegrationCatalogs, ResetCandidate, SettingsRateLimits,
     UsageResetOutcome,
 };
-pub use voice::{RealtimeVoiceCatalog, RealtimeVoiceSelection, validate_voice_sdp, voice_sample};
+pub use voice::{
+    RealtimeVoiceCatalog, RealtimeVoiceSelection, has_speech_credentials, realtime_enabled,
+    validate_voice_sdp, voice_sample,
+};
 pub use windows_sandbox::{
     WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
 };

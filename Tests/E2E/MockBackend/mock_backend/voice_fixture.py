@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import struct
+import threading
 from pathlib import Path
 from uuid import UUID
 
@@ -45,6 +46,18 @@ def voice_request(server, method, params):
         server.transport.event('thread/realtime/started', {
             'threadId': thread, 'realtimeSessionId': session, 'version': 'v3'})
         return {}
+    if method == 'thread/realtime/start' and params.get('transport') == {'type': 'websocket'}:
+        if not server.scenario.get('desktopVoiceReconnect') or server.voice_call or not server.voice_initial_retired:
+            raise ProtocolError(-32602, 'WebSocket started before the previous voice session closed')
+        session = str(UUID(params['realtimeSessionId'], version=4))
+        if params.get('voice') != 'cedar' or params.get('version') != 'v3':
+            raise ProtocolError(-32602, 'Fallback changed the captured voice')
+        server.voice_call = (thread, session)
+        server.voice_transport = 'websocket'
+        server.voice_pcm_sent = False
+        server.transport.event('thread/realtime/started', {
+            'threadId': thread, 'realtimeSessionId': session, 'version': 'v3'})
+        return {}
     if method == 'thread/realtime/start':
         exchange = json.loads(Path(os.environ['CODEX_GUI_QA_VOICE_EXCHANGE']).read_text(encoding='utf-8'))
         session = str(UUID(params['realtimeSessionId'], version=4))
@@ -54,6 +67,10 @@ def voice_request(server, method, params):
                 or params.get('transport') != {'type': 'webrtc', 'sdp': exchange['offer']}):
             raise ProtocolError(-32602, 'Unexpected voice offer')
         server.voice_call = (thread, session)
+        server.voice_transport = 'webrtc'
+        if server.scenario.get('desktopVoiceReconnect') and not server.voice_initial_retired:
+            server.transport.event('thread/realtime/error', {'threadId': thread, 'message': 'Fixture startup loss'})
+            return {}
         server.transport.event('thread/realtime/sdp', {'threadId': 'history-second', 'sdp': exchange['answer']})
         server.transport.event('thread/realtime/sdp', {'threadId': thread, 'sdp': exchange['answer']})
         server.transport.event('thread/realtime/started', {
@@ -71,12 +88,42 @@ def voice_request(server, method, params):
             'numChannels': 1, 'samplesPerChannel': frames,
         }})
         return {}
+    if method == 'thread/realtime/appendAudio' and server.voice_transport == 'websocket':
+        audio = params.get('audio', {})
+        pcm = base64.b64decode(audio.get('data', ''), validate=True)
+        if (audio.get('sampleRate') != 24000 or audio.get('numChannels') != 1
+                or len(pcm) != audio.get('samplesPerChannel', 0) * 2 or not any(pcm)):
+            raise ProtocolError(-32602, 'Invalid voice microphone audio')
+        if not server.voice_pcm_sent:
+            server.voice_pcm_sent = True
+            server.transport.event('thread/realtime/outputAudio/delta', {'threadId': thread, 'audio': audio})
+        return {}
     if method == 'thread/realtime/appendText':
         if not params.get('text') or params.get('role') != 'user':
             raise ProtocolError(-32602, 'Unexpected realtime input')
+        if server.scenario.get('desktopVoiceReconnect') and params['text'] == 'Drop this call':
+            if server.voice_transport != 'websocket' or not server.voice_pcm_sent:
+                raise ProtocolError(-32602, 'The live dropout fixture did not start from duplex audio')
+            profile = Path(os.environ['CODEX_GUI_QA_VOICE_SETTINGS'])
+            profile.write_text('{"voice":"marin","version":2}', encoding='utf-8')
+            server.actions.append(lambda: close_voice(server, thread, 'fixture-drop'))
         return {}
     if method == 'thread/realtime/stop':
-        server.voice_call = None
-        server.transport.event('thread/realtime/closed', {'threadId': thread, 'reason': 'requested'})
+        if server.scenario.get('desktopVoiceReconnect') and not standalone and not server.voice_initial_retired:
+            server.transport.event('thread/realtime/closed', {'threadId': 'history-second', 'reason': 'requested'})
+            elapsed = threading.Timer(0.65, lambda: close_voice(server, thread, 'fixture-startup-closed'))
+            elapsed.daemon = True
+            server.actions.append(elapsed.start)
+        else:
+            close_voice(server, thread, 'requested')
         return {}
     raise ProtocolError(-32601, 'Unexpected realtime request')
+
+
+def close_voice(server, thread, reason):
+    with server.lock:
+        if server.voice_call and server.voice_call[0] == thread:
+            server.voice_call = None
+            if reason == 'fixture-startup-closed':
+                server.voice_initial_retired = True
+            server.transport.event('thread/realtime/closed', {'threadId': thread, 'reason': reason})

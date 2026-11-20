@@ -57,6 +57,8 @@ pub enum Verification {
     AppearanceRestore,
     Notifications,
     Voice,
+    VoiceReconnect,
+    VoiceNoFallback,
     WindowsSetup,
     Turn,
     ActiveTurn,

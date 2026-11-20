@@ -139,8 +139,9 @@ pub use subscription::{
     WorkspaceUpdateRequest,
 };
 pub use voice::{
-    PrepareVoiceCall, PreviewVoice, SpeechAudio, SpeechEvent, StartVoiceCall, VoiceCallUpdate,
-    VoiceCallView, VoiceChoice, VoiceMediaHost, VoiceMute, VoicePhase, VoiceSettingsView,
+    PrepareVoiceCall, PreviewVoice, SpeechAudio, SpeechEvent, StartVoiceCall, VoiceAudioUpdate,
+    VoiceCallUpdate, VoiceCallView, VoiceChoice, VoiceMediaHost, VoiceMute, VoicePhase,
+    VoiceReconnect, VoiceSettingsView,
 };
 
 pub const WORKSPACE_WINDOW: &str = "main";
@@ -368,6 +369,8 @@ pub fn workspace_typescript() -> String {
         VoiceMediaHost::decl(),
         VoiceCallView::decl(),
         VoiceCallUpdate::decl(),
+        VoiceAudioUpdate::decl(),
+        VoiceReconnect::decl(),
         PrepareVoiceCall::decl(),
         StartVoiceCall::decl(),
         VoiceMute::decl(),

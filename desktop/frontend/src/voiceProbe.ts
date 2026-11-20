@@ -165,3 +165,66 @@ async function verifyVoiceSettings() {
   }
   await click('Close', dialog);
 }
+
+export async function verifyVoiceReconnect(
+  visible: () => WorkspaceSnapshot | null, current: () => VoiceCallView | null, voice: DesktopVoice,
+) {
+  const errors: string[] = [];
+  const log = console.error;
+  console.error = (...values) => { errors.push(values.map(String).join(' ')); log(...values); };
+  const selected = () => visible()?.navigation.selectedChat;
+  const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .find((control) => control.textContent?.trim() === label && !control.matches(':disabled'));
+
+  try {
+    await click('New Chat');
+    await waitFor('The new composer was not selected', () => selected() === null && !!visible()?.navigation.draft);
+    await click('Start Voice Call');
+    await waitFor('The dropped WebRTC start did not wait for teardown', () => current()?.phase === 'ending');
+    const dropped = current()!;
+    await waitFor('The fallback did not activate the captured voice chat', () => current()?.media === 'pcm' &&
+      current()?.phase === 'active' && current()?.chatId === dropped.chatId);
+    const fallback = current()!;
+    if (fallback.id === dropped.id) throw new Error('Fallback reused the retired realtime session');
+    const duplex = await untilMedia(() => voice.fixtureMedia(fallback), (media) => media.receiving && media.sending);
+    await click('Mute Speaker');
+    await untilMedia(() => voice.fixtureMedia(fallback), (media) => media.speakerMuted && !media.microphoneMuted);
+
+    typeText('Drop this call');
+    await waitFor('The voice drop fixture did not capture its input', () => visible()?.navigation.draft?.text === 'Drop this call');
+    await click('Send');
+    await waitFor('The dropped active call did not offer reconnect on its chat', () =>
+      !current() && !!button('Reconnect Voice Call') && visible()?.navigation.draft?.text === '');
+    await click('Second fixture chat');
+    await waitFor('Reconnecting followed the visible chat', () => selected() === 'history-second' && !button('Reconnect Voice Call'));
+    await click('New Voice Chat');
+    await click('Reconnect Voice Call');
+    await waitFor('Reconnect did not restore the captured voice chat and mute', () =>
+      current()?.phase === 'active' && current()?.chatId === dropped.chatId && current()?.speakerMuted === true);
+    const restored = current()!;
+    if (restored.id === fallback.id || restored.id === dropped.id) throw new Error('Reconnect reused a retired session');
+    await click('End Call');
+    await waitFor('The reconnected call did not retire', () => !current() && !button('Reconnect Voice Call'));
+    await invoke('verify_voice_result', { failure: null, evidence: { dropped, fallback, duplex, restored } });
+  } catch (error) {
+    await invoke('verify_voice_result', { failure: [String(error), ...errors.slice(-5)].join('\n'), evidence: {} });
+  } finally {
+    console.error = log;
+  }
+}
+
+export async function verifyVoiceNoFallback(
+  visible: () => WorkspaceSnapshot | null, current: () => VoiceCallView | null,
+) {
+  try {
+    await click('New Chat');
+    await waitFor('The WebRTC-only composer was not selected', () => !!visible()?.navigation.draft);
+    await click('Start Voice Call');
+    await waitFor('The failed startup did not retire its captured WebRTC session', () => current()?.phase === 'ending');
+    const closedChat = current()!.chatId;
+    await waitFor('A missing provider key left the call active', () => !current());
+    await invoke('verify_voice_result', { failure: null, evidence: { closedChat } });
+  } catch (error) {
+    await invoke('verify_voice_result', { failure: String(error), evidence: {} });
+  }
+}

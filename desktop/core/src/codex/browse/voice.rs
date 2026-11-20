@@ -42,28 +42,37 @@ impl RealtimeVoiceCatalog {
 
 pub struct RealtimeVoiceSelection {
     pub voice: Option<String>,
+    pub web_rtc: bool,
+    pub web_socket: bool,
 }
 
-pub(crate) fn realtime_enabled(config: &Value) -> bool {
+pub fn realtime_enabled(config: &Value) -> bool {
     config.is_object() && config["features"]["realtime_conversation"] != false
 }
 
-pub(crate) fn has_speech_credentials(config: &Value, account: Option<&Account>) -> bool {
-    let provider_id = config["model_provider"].as_str().unwrap_or("openai");
-    let provider = &config["model_providers"][provider_id];
-    let configured_env = |key: &str| {
+pub fn has_speech_credentials(config: &Value, account: Option<&Account>) -> bool {
+    speech_credentials(config, account, |key| {
         !key.is_empty()
             && !key.contains(['=', '\0'])
             && std::env::var(key).is_ok_and(|value| !value.trim().is_empty())
-    };
+    })
+}
+
+fn speech_credentials(
+    config: &Value,
+    account: Option<&Account>,
+    env_present: impl Fn(&str) -> bool,
+) -> bool {
+    let provider_id = config["model_provider"].as_str().unwrap_or("openai");
+    let provider = &config["model_providers"][provider_id];
     if let Some(key) = provider["env_key"].as_str() {
-        return configured_env(key);
+        return env_present(key);
     }
     provider["experimental_bearer_token"]
         .as_str()
         .is_some_and(|key| !key.trim().is_empty())
         || ((provider_id == "openai" || provider["name"] == "OpenAI")
-            && configured_env("OPENAI_API_KEY"))
+            && env_present("OPENAI_API_KEY"))
         || matches!(account, Some(Account::ApiKey))
 }
 
@@ -110,24 +119,33 @@ impl CodexBrowser {
         Ok(response["config"].take())
     }
 
-    pub async fn web_voice_selection(
+    pub async fn voice_selection(
         &self,
+        requested: Option<&str>,
         timeout: Duration,
     ) -> Result<Option<RealtimeVoiceSelection>, BrowseError> {
         let (account, config) =
             tokio::try_join!(self.account(timeout), self.realtime_configuration(timeout))?;
-        if !matches!(account.account, Some(Account::Chatgpt { .. }))
-            || !realtime_enabled(&config)
-            || !(config["model_provider"].is_null() || config["model_provider"] == "openai")
-        {
+        if !realtime_enabled(&config) {
             return Ok(None);
         }
+        let web_rtc = matches!(account.account, Some(Account::Chatgpt { .. }))
+            && (config["model_provider"].is_null() || config["model_provider"] == "openai");
         let catalog = self
             .realtime_voice_catalog(timeout)
             .await
             .unwrap_or_default();
-        let voice = catalog.resolve(config["realtime"]["voice"].as_str());
-        Ok(Some(RealtimeVoiceSelection { voice }))
+        let voice = catalog.resolve(requested.or_else(|| config["realtime"]["voice"].as_str()));
+        if requested.is_some() && voice.is_none() {
+            return Ok(None);
+        }
+        let web_socket =
+            voice.is_some() && has_speech_credentials(&config, account.account.as_ref());
+        Ok((web_rtc || web_socket).then_some(RealtimeVoiceSelection {
+            voice,
+            web_rtc,
+            web_socket,
+        }))
     }
 
     pub async fn speech_voice_available(
@@ -172,13 +190,17 @@ impl CodexBrowser {
         &self,
         thread: &ThreadId,
         session: uuid::Uuid,
-        offer: &str,
+        offer: Option<&str>,
         voice: Option<&str>,
         timeout: Duration,
     ) -> Result<(), BrowseError> {
+        let transport = offer.map_or_else(
+            || json!({"type": "websocket"}),
+            |sdp| json!({"type": "webrtc", "sdp": sdp}),
+        );
         let mut params = json!({
             "threadId": thread.0, "realtimeSessionId": session, "outputModality": "audio",
-            "version": "v3", "transport": {"type": "webrtc", "sdp": offer},
+            "version": "v3", "transport": transport,
             "flushTranscriptTailOnSessionEnd": true, "codexResponseHandoffMode": "bemTags",
         });
         if let Some(voice) = voice {
@@ -247,6 +269,23 @@ impl CodexBrowser {
         Ok(())
     }
 
+    pub async fn append_voice_audio(
+        &self,
+        thread: &ThreadId,
+        audio: &crate::ipc::SpeechAudio,
+        timeout: Duration,
+    ) -> Result<(), BrowseError> {
+        self.read::<BTreeMap<String, Value>>(
+            "thread/realtime/appendAudio",
+            json!({
+                "threadId": thread.0, "audio": audio,
+            }),
+            timeout,
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn append_voice_text(
         &self,
         thread: &ThreadId,
@@ -280,6 +319,33 @@ impl CodexBrowser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn speech_requires_the_effective_providers_configured_key() {
+        let service = json!({
+            "model_provider": "fixture",
+            "model_providers": {"fixture": {"env_key": "FIXTURE_KEY", "experimental_bearer_token": "example"}},
+        });
+        assert!(!speech_credentials(
+            &service,
+            Some(&Account::ApiKey),
+            |_| false
+        ));
+        assert!(speech_credentials(&service, None, |key| key == "FIXTURE_KEY"));
+
+        let built_in = json!({});
+        assert!(!speech_credentials(&built_in, None, |_| false));
+        assert!(speech_credentials(&built_in, None, |key| key == "OPENAI_API_KEY"));
+        assert!(speech_credentials(
+            &built_in,
+            Some(&Account::ApiKey),
+            |_| false
+        ));
+        let configured = json!({"model_provider": "fixture", "model_providers": {
+            "fixture": {"experimental_bearer_token": "example"}
+        }});
+        assert!(speech_credentials(&configured, None, |_| false));
+    }
 
     #[test]
     fn keeps_legacy_voice_catalogs_out_of_v3_settings() {

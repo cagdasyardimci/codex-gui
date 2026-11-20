@@ -1,66 +1,65 @@
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
-import type { PrepareVoiceCall, VoiceCallUpdate, VoiceCallView } from './generated/workspace';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { PrepareVoiceCall, VoiceAudioUpdate, VoiceCallUpdate, VoiceCallView } from './generated/workspace';
 import { VoicePeer, type VoiceMediaEvidence } from './voiceMedia';
+import { VoiceSocket } from './voiceSocket';
 
 export class DesktopVoice {
   private opening = false;
+  private launched: string | undefined;
+  private audio: AudioContext | undefined;
   private view: VoiceCallView | null = null;
   private web: { id: string; peer: VoicePeer; answering: boolean } | undefined;
+  private socket: { id: string; peer: VoiceSocket } | undefined;
 
-  constructor(private present: (call: VoiceCallView | null) => void) {}
+  constructor(private present: (update: VoiceCallUpdate) => void, private synthetic: () => boolean) {}
 
   async observe(signal: AbortSignal) {
     let announced = false;
-    const stop = await listen<VoiceCallUpdate>('desktop:voice', ({ payload }) => {
-      if (signal.aborted) return;
-      announced = true;
-      this.receive(payload);
-    });
+    const subscriptions: UnlistenFn[] = [];
     const retire = () => {
-      stop();
-      const web = this.web;
+      for (const stop of subscriptions.splice(0)) stop();
+      const owned = this.web?.id ?? this.socket?.id;
       this.closeMedia();
-      if (web) void this.end(web.id).catch(console.error);
+      this.closeAudio();
+      if (owned) void this.end(owned).catch(console.error);
     };
-    if (signal.aborted) {
-      retire();
-      return;
-    }
     signal.addEventListener('abort', retire, { once: true });
-    const initial = await invoke<VoiceCallUpdate>('read_voice_call');
-    if (!announced && !signal.aborted) this.receive(initial);
+    try {
+      subscriptions.push(await listen<VoiceAudioUpdate>('desktop:voice-audio', ({ payload }) => {
+        const socket = this.socket;
+        if (!signal.aborted && socket?.id === payload.id) socket.peer.play(payload.audio);
+      }));
+      subscriptions.push(await listen<VoiceCallUpdate>('desktop:voice', ({ payload }) => {
+        if (signal.aborted) return;
+        announced = true;
+        this.receive(payload);
+      }));
+      const initial = await invoke<VoiceCallUpdate>('read_voice_call');
+      if (!announced && !signal.aborted) this.receive(initial);
+    } catch (error) {
+      retire();
+      throw error;
+    } finally {
+      if (signal.aborted) retire();
+    }
   }
 
-  async start(request: PrepareVoiceCall, flush: () => Promise<void> | null, synthetic: boolean) {
+  async start(request: PrepareVoiceCall, flush: () => Promise<void> | null) {
     if (!this.canStart()) return;
     this.opening = true;
-    let audio: AudioContext | undefined;
-    let call: VoiceCallView | undefined;
     try {
-      if (typeof AudioContext !== 'undefined' && typeof RTCPeerConnection !== 'undefined') {
-        audio = new AudioContext();
-        void audio.resume().catch(console.error);
+      if (typeof AudioContext !== 'undefined') {
+        this.audio = new AudioContext();
+        void this.audio.resume().catch(console.error);
       }
       await flush();
-      call = await invoke<VoiceCallView>('prepare_voice_call', { request });
-      let offer: string | null = null;
-      if (call.media === 'webview') {
-        if (!audio) throw new Error('WebRTC audio is unavailable');
-        const peer = new VoicePeer(audio, synthetic);
-        this.web = { id: call.id, peer, answering: false };
-        audio = undefined;
-        if (this.view?.id === call.id) peer.mute(this.view.microphoneMuted, this.view.speakerMuted);
-        offer = await peer.offer();
-      }
-      await invoke('start_voice_transport', { request: { id: call.id, offer } });
+      const call = await invoke<VoiceCallView>('prepare_voice_call', { request });
+      if (!this.view || this.view.id === call.id) this.openMedia(call);
     } catch (error) {
       console.error(error);
-      if (call) {
-        try { await this.end(call.id); } catch (endError) { console.error(endError); }
-      }
+      if (!this.view) this.closeAudio();
     } finally {
-      if (audio) void audio.close().catch(console.error);
       this.opening = false;
     }
   }
@@ -70,14 +69,15 @@ export class DesktopVoice {
   }
 
   end(id: string) {
-    if (this.web?.id === id) this.closeMedia();
+    if (this.web?.id === id || this.socket?.id === id) this.closeMedia();
     return invoke<void>('end_voice_call', { id });
   }
 
   async fixtureMedia(call: VoiceCallView): Promise<VoiceMediaEvidence> {
     if (call.media === 'native') return invoke('read_voice_fixture_media', { id: call.id });
-    if (this.web?.id !== call.id) throw new Error('The fixture no longer owns the WebRTC call');
-    return this.web.peer.fixtureMedia();
+    if (this.socket?.id === call.id) return this.socket.peer.fixtureMedia();
+    if (this.web?.id === call.id) return this.web.peer.fixtureMedia();
+    throw new Error('The fixture no longer owns the call');
   }
 
   private canStart() {
@@ -87,12 +87,25 @@ export class DesktopVoice {
   private receive(update: VoiceCallUpdate) {
     const call = update.call;
     this.view = call;
-    this.present(call);
-    if (this.web && (this.web.id !== call?.id || call.phase === 'ending')) this.closeMedia();
-    if (!call || call.media !== 'webview' || call.phase === 'ending') return;
+    this.present(update);
+    const local = this.web?.id ?? this.socket?.id;
+    if (local && (local !== call?.id || call.phase === 'ending')) this.closeMedia();
+    if (!call) {
+      this.launched = undefined;
+      if (!this.opening) this.closeAudio();
+      return;
+    }
+    if (call.phase === 'ending') return;
+    if (call.phase === 'preparing' && this.audio) this.openMedia(call);
+
+    if (this.socket?.id === call.id) {
+      this.socket.peer.setActive(call.phase === 'active');
+      this.socket.peer.mute(call.microphoneMuted, call.speakerMuted);
+      return;
+    }
     const web = this.web;
     if (!web || web.id !== call.id) {
-      if (!this.opening) void this.end(call.id).catch(console.error);
+      if (!this.opening && call.media !== 'native' && !this.audio) void this.end(call.id).catch(console.error);
       return;
     }
     web.peer.mute(call.microphoneMuted, call.speakerMuted);
@@ -101,16 +114,56 @@ export class DesktopVoice {
       void web.peer.answer(update.answer).then(() => {
         if (this.web === web) return invoke('voice_media_ready', { id: call.id });
       }).catch((error) => {
-        if (this.web !== web) return;
-        console.error(error);
-        void this.end(call.id).catch(console.error);
+        if (this.web === web) this.failed(call.id, error);
       });
     }
   }
 
+  private openMedia(call: VoiceCallView) {
+    if (this.launched === call.id) return;
+    this.launched = call.id;
+    void this.launch(call).catch((error) => {
+      if (this.view?.id === call.id && this.view.phase !== 'ending') this.failed(call.id, error);
+    });
+  }
+
+  private async launch(call: VoiceCallView) {
+    let offer: string | null = null;
+    if (call.media !== 'native') {
+      const audio = this.audio;
+      if (!audio) throw new Error('Voice audio is unavailable');
+      if (call.media === 'pcm') {
+        const peer = new VoiceSocket(audio, call.id, this.synthetic(), (error) => this.failed(call.id, error));
+        this.socket = { id: call.id, peer };
+        peer.mute(call.microphoneMuted, call.speakerMuted);
+        await peer.connect();
+      } else {
+        const peer = new VoicePeer(audio, this.synthetic(), () => this.failed(call.id, 'WebRTC connection lost'));
+        this.web = { id: call.id, peer, answering: false };
+        peer.mute(call.microphoneMuted, call.speakerMuted);
+        offer = await peer.offer();
+      }
+    }
+    await invoke('start_voice_transport', { request: { id: call.id, offer } });
+  }
+
+  private failed(id: string, error: unknown) {
+    console.error(error);
+    const stopping = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
+    const action = stopping ? this.end(id) : invoke('voice_media_failed', { id });
+    void action.catch(console.error);
+  }
+
   private closeMedia() {
-    const web = this.web;
+    this.web?.peer.close();
+    this.socket?.peer.close();
     this.web = undefined;
-    web?.peer.close();
+    this.socket = undefined;
+  }
+
+  private closeAudio() {
+    const previous = this.audio;
+    this.audio = undefined;
+    if (previous) void previous.close().catch(console.error);
   }
 }

@@ -62,16 +62,7 @@ export class SpeechPlayback {
 
   private enqueue(audio: SpeechAudio) {
     if (this.next - this.context.currentTime > 60) throw new Error('Playback queued too much audio');
-    const bytes = Uint8Array.from(atob(audio.data), (byte) => byte.charCodeAt(0));
-    const reader = new DataView(bytes.buffer);
-    const frames = bytes.length / (2 * audio.numChannels);
-    const buffer = this.context.createBuffer(audio.numChannels, frames, audio.sampleRate);
-    for (let channel = 0; channel < audio.numChannels; channel += 1) {
-      const samples = buffer.getChannelData(channel);
-      for (let frame = 0; frame < frames; frame += 1) {
-        samples[frame] = reader.getInt16(2 * (frame * audio.numChannels + channel), true) / 32768;
-      }
-    }
+    const buffer = pcmBuffer(this.context, audio);
     const source = this.context.createBufferSource();
     source.buffer = buffer;
     source.connect(this.sink);
@@ -84,7 +75,7 @@ export class SpeechPlayback {
     const at = Math.max(this.next, this.context.currentTime + 0.025);
     source.start(at);
     this.next = at + buffer.duration;
-    if (this.fixture) this.fixture.frames += frames;
+    if (this.fixture) this.fixture.frames += buffer.length;
   }
 
   private close() {
@@ -99,4 +90,18 @@ export class SpeechPlayback {
     const fixture = this.fixture;
     void this.context.close().then(() => { if (fixture) fixture.closed = true; }).catch(console.error);
   }
+}
+
+export function pcmBuffer(context: AudioContext, audio: SpeechAudio) {
+  const bytes = Uint8Array.from(atob(audio.data), (byte) => byte.charCodeAt(0));
+  const reader = new DataView(bytes.buffer);
+  const frames = bytes.length / (2 * audio.numChannels);
+  const buffer = context.createBuffer(audio.numChannels, frames, audio.sampleRate);
+  for (let channel = 0; channel < audio.numChannels; channel += 1) {
+    const samples = buffer.getChannelData(channel);
+    for (let frame = 0; frame < frames; frame += 1) {
+      samples[frame] = reader.getInt16(2 * (frame * audio.numChannels + channel), true) / 32768;
+    }
+  }
+  return buffer;
 }

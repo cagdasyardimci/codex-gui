@@ -17,8 +17,8 @@
   import { verifyAppearance } from './appearanceProbe';
   import VoiceControls from './VoiceControls.svelte';
   import { DesktopVoice } from './desktopVoice';
-  import { verifyVoice } from './voiceProbe';
-  import type { VoiceCallView } from './generated/workspace';
+  import { verifyVoice, verifyVoiceNoFallback, verifyVoiceReconnect } from './voiceProbe';
+  import type { VoiceCallView, VoiceReconnect } from './generated/workspace';
   import { verifyNotifications } from './notificationProbe';
   import { verifySettings } from './settingsProbe';
   import SentPromptDialog from './SentPromptDialog.svelte';
@@ -66,7 +66,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -86,7 +86,11 @@
   let showingChanges = $state(false);
   let settingsOpen = $state(false);
   let call = $state.raw<VoiceCallView | null>(null);
-  const voice = new DesktopVoice((next) => { call = next; });
+  let reconnect = $state.raw<VoiceReconnect | null>(null);
+  const voice = new DesktopVoice((next) => {
+    call = next.call;
+    reconnect = next.reconnect;
+  }, () => verify === 'voice' || verify === 'voiceReconnect' || verify === 'voiceNoFallback');
   let appearance = $state.raw<AppearanceView>();
   let settingsButton: HTMLButtonElement;
   let preferredComparison = $state<'uncommitted' | 'lastTurn'>('uncommitted');
@@ -140,6 +144,8 @@
   const projectTitle = $derived(sidebar?.projects.find((project) => project.id === sidebar?.activeProject)?.title);
   const workspaceId = $derived(workspace?.workspaceId);
   const selectedChat = $derived(navigation?.selectedChat);
+  const reconnectHere = $derived(reconnect && sidebar?.activeProject === reconnect.projectId &&
+    selectedChat === reconnect.chatId ? reconnect.id : null);
   const voiceInline = $derived(!!call && sidebar?.activeProject === call.projectId && selectedChat === call.chatId);
   const summaryScope = $derived(workspaceId && selectedChat ? { workspaceId, chatId: selectedChat } : undefined);
   const summaryKey = $derived(sidebar?.activeProject && selectedChat
@@ -1170,6 +1176,8 @@
     else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
     else if (verify === 'notifications') void verifyNotifications(() => snapshot);
     else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
+    else if (verify === 'voiceNoFallback') void verifyVoiceNoFallback(() => snapshot, () => call);
+    else if (verify === 'voiceReconnect') void verifyVoiceReconnect(() => snapshot, () => call, voice);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn' || verify === 'activeTurn') void verifyTurn(() => snapshot, verify);
     else if (verify === 'queue') void verifyQueue(() => snapshot);
@@ -1419,8 +1427,8 @@
                 !text.trim() && !draftAttachments.length && !navigation.projectHasInput}
               {@const scope = attachmentScope}
               <button type="button" disabled={actionPending || admittingDraft}
-                onclick={() => { if (!composing) void voice.start(scope, flushEdits, verify === 'voice'); }}>
-                Start Voice Call
+                onclick={() => { if (!composing) void voice.start({ ...scope, reconnect: reconnectHere }, flushEdits); }}>
+                {reconnectHere ? 'Reconnect Voice Call' : 'Start Voice Call'}
               </button>
             {:else}
               <button type="button" disabled={actionPending || (!navigation.actions.send && !mayExecuteSlash) ||

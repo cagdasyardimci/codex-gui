@@ -61,6 +61,8 @@ fn main() {
         Some("--verify-appearance-restore") => fixture::Verification::AppearanceRestore,
         Some("--verify-notifications") => fixture::Verification::Notifications,
         Some("--verify-voice") => fixture::Verification::Voice,
+        Some("--verify-voice-reconnect") => fixture::Verification::VoiceReconnect,
+        Some("--verify-voice-no-fallback") => fixture::Verification::VoiceNoFallback,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -106,6 +108,8 @@ fn main() {
             | fixture::Verification::AppearanceRestore
             | fixture::Verification::Notifications
             | fixture::Verification::Voice
+            | fixture::Verification::VoiceReconnect
+            | fixture::Verification::VoiceNoFallback
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -138,6 +142,8 @@ fn main() {
             | fixture::Verification::AppearanceRestore
             | fixture::Verification::Notifications
             | fixture::Verification::Voice
+            | fixture::Verification::VoiceReconnect
+            | fixture::Verification::VoiceNoFallback
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -247,6 +253,8 @@ fn main() {
             voice_ipc::prepare_voice_call,
             voice_ipc::start_voice_transport,
             voice_ipc::voice_media_ready,
+            voice_ipc::voice_media_failed,
+            voice_ipc::append_voice_audio,
             voice_ipc::set_voice_mute,
             voice_ipc::end_voice_call,
             voice_ipc::record_voice_fixture_exchange,

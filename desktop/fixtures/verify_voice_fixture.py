@@ -13,7 +13,11 @@ from verify_coding_probe import fixture_executable
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
-    app = parser.parse_args().app.resolve(strict=True)
+    variants = parser.add_mutually_exclusive_group()
+    variants.add_argument("--reconnect", action="store_true")
+    variants.add_argument("--no-fallback", action="store_true")
+    arguments = parser.parse_args()
+    app = arguments.app.resolve(strict=True)
     with TemporaryDirectory(prefix="codex-gui-voice-") as scratch:
         root = Path(scratch).resolve()
         data, profile, checkout = (root / name for name in ("desktop", "isolated Codex profile", "Voice fixture"))
@@ -25,18 +29,32 @@ def main():
         skill.mkdir()
         (skill / "SKILL.md").write_text("# Review fixture\n", encoding="utf-8")
         state = root / "mock.json"
+        provider = {"experimental_bearer_token": "fixture-only"}
+        if arguments.no_fallback:
+            provider["env_key"] = "CODEX_GUI_FIXTURE_REQUIRED_VOICE_KEY"
         state.write_text(json.dumps({"config": {
             "model_provider": "openai", "model": "fixture-default",
-            "model_providers": {"openai": {"experimental_bearer_token": "fixture-only"}},
+            "model_providers": {"openai": provider},
         }}), encoding="utf-8")
         voice_settings = root / "voice-settings.json"
-        voice_settings.write_text('{"voice":"marin","version":1}', encoding="utf-8")
+        voice_settings.write_text(json.dumps({"voice": "cedar" if arguments.reconnect else "marin", "version": 1}),
+                                  encoding="utf-8")
         trace = root / "trace.jsonl"
         exchange = data / "voice-exchange.json"
+        if arguments.reconnect:
+            fixture = "--verify-voice-reconnect"
+        elif arguments.no_fallback:
+            fixture = "--verify-voice-no-fallback"
+        else:
+            fixture = "--verify-voice"
+        scenario = "desktop-voice" if fixture == "--verify-voice" else "desktop-voice-reconnect"
+        environment = os.environ.copy()
+        environment.pop("OPENAI_API_KEY", None)
+        environment.pop("CODEX_GUI_FIXTURE_REQUIRED_VOICE_KEY", None)
         result = subprocess.run(
-            [app, "--verify-voice", data, checkout],
-            env={**os.environ, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
-                 "CODEX_GUI_QA_SCENARIO": "desktop-voice", "CODEX_GUI_QA_STATE": str(state),
+            [app, fixture, data, checkout],
+            env={**environment, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
+                 "CODEX_GUI_QA_SCENARIO": scenario, "CODEX_GUI_QA_STATE": str(state),
                  "CODEX_GUI_QA_TRACE": str(trace), "CODEX_GUI_QA_VOICE_EXCHANGE": str(exchange),
                  "CODEX_GUI_QA_VOICE_SETTINGS": str(voice_settings),
                  "PYTHONIOENCODING": "utf-8"},
@@ -48,10 +66,22 @@ def main():
         if result.returncode or len(summaries) != 1:
             raise SystemExit(result.stderr or "The installed voice fixture did not finish")
         summary = json.loads(summaries[0])
+        trace_lines = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+        if arguments.no_fallback:
+            starts = [row["params"] for row in trace_lines
+                      if row["direction"] == "request" and row["method"] == "thread/realtime/start"]
+            (attempted,) = starts
+            assert attempted["transport"]["type"] == "webrtc" and attempted["threadId"] == summary["closedChat"]
+            assert any(row["direction"] == "event" and row.get("reason") == "fixture-startup-closed"
+                       for row in trace_lines)
+            print("Verified WebRTC-only admission when the effective provider key is missing")
+            return
+        if arguments.reconnect:
+            verify_reconnect(summary, trace_lines, voice_settings)
+            return
         owner = summary["owner"]["chatId"]
         assert summary["owner"]["media"] == ("native" if os.name == "posix" and os.uname().sysname == "Linux" else "webview")
         assert summary["duplex"] == {"receiving": True, "sending": True, "microphoneMuted": False, "speakerMuted": False}
-        trace_lines = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
         requests = [record for record in trace_lines if record.get("direction") == "request"]
         groups = {method: [record["params"] for record in requests if record["method"] == method] for method in
                   ("thread/start", "thread/realtime/start", "thread/realtime/appendText", "thread/realtime/stop", "turn/start",
@@ -91,6 +121,30 @@ def main():
                    and line["threadId"] == owner for line in trace_lines)
         print("Verified V3 voice selection, scoped speech preview retirement, and the saved voice on the next call")
         print("Verified duplex media, independent mute, captured text, structured coding, queue edits, and exact session closure")
+
+
+def verify_reconnect(summary, trace, voice_settings):
+    dropped, fallback, restored = (summary[key] for key in ("dropped", "fallback", "restored"))
+    owner = dropped["chatId"]
+    assert fallback["chatId"] == restored["chatId"] == owner
+    assert summary["duplex"] == {"receiving": True, "sending": True, "microphoneMuted": False, "speakerMuted": False}
+    assert restored["speakerMuted"] is True
+    requests = [(index, event) for index, event in enumerate(trace) if event["direction"] == "request"]
+    starts = [(index, row["params"]) for index, row in requests if row["method"] == "thread/realtime/start"]
+    assert [params["transport"]["type"] for _, params in starts] == ["webrtc", "websocket", "webrtc"]
+    assert all(params["voice"] == "cedar" and params["threadId"] == owner for _, params in starts)
+    assert [params["realtimeSessionId"] for _, params in starts] == [dropped["id"], fallback["id"], restored["id"]]
+    stop_requests = [(index, row["params"]) for index, row in requests if row["method"] == "thread/realtime/stop"]
+    assert [row["threadId"] for _, row in stop_requests] == [owner, owner]
+    (closure,) = [index for index, event in enumerate(trace)
+                  if event["direction"] == "event" and event.get("reason") == "fixture-startup-closed"]
+    assert starts[0][0] < stop_requests[0][0] < closure < starts[1][0]
+    pcm = [row["params"] for _, row in requests if row["method"] == "thread/realtime/appendAudio"]
+    assert pcm and all(row["threadId"] == owner and row["audio"]["samplesPerChannel"] == 2400 for row in pcm)
+    (text,) = [row["params"] for _, row in requests if row["method"] == "thread/realtime/appendText"]
+    assert text["text"] == "Drop this call" and text["threadId"] == owner
+    assert json.loads(voice_settings.read_text(encoding="utf-8")) == {"voice": "marin", "version": 2}
+    print("Verified authoritative startup closure, duplex WebSocket fallback, and reconnect with the captured voice and mute")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ pub enum VoicePhase {
 pub enum VoiceMediaHost {
     Webview,
     Native,
+    Pcm,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]
@@ -33,6 +34,22 @@ pub struct VoiceCallView {
 pub struct VoiceCallUpdate {
     pub call: Option<VoiceCallView>,
     pub answer: Option<String>,
+    pub reconnect: Option<VoiceReconnect>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceReconnect {
+    pub id: Uuid,
+    pub project_id: String,
+    pub chat_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct VoiceAudioUpdate {
+    pub id: Uuid,
+    pub audio: SpeechAudio,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -41,6 +58,7 @@ pub struct PrepareVoiceCall {
     pub workspace_id: WorkspaceId,
     pub chat_id: Option<String>,
     pub draft_id: String,
+    pub reconnect: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -85,7 +103,7 @@ pub struct PreviewVoice {
     pub voice: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SpeechAudio {
     pub data: String,

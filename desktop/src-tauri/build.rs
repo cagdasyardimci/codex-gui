@@ -53,6 +53,8 @@ fn main() {
         "prepare_voice_call",
         "start_voice_transport",
         "voice_media_ready",
+        "voice_media_failed",
+        "append_voice_audio",
         "set_voice_mute",
         "end_voice_call",
         "record_voice_fixture_exchange",

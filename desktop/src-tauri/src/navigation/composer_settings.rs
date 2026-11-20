@@ -13,6 +13,9 @@ use super::*;
 #[derive(Default)]
 pub(super) struct ConfiguredRun {
     pub(super) provider: Option<String>,
+    pub(super) realtime_enabled: bool,
+    pub(super) realtime_credentials: bool,
+    pub(super) realtime_api_key: bool,
     model: Option<String>,
     effort: Option<String>,
     tier: Option<String>,
@@ -48,6 +51,12 @@ pub(super) async fn read_configured_run(client: AppServerClient) -> ConfiguredRu
     };
     ConfiguredRun {
         provider: config["model_provider"].as_str().map(str::to_owned),
+        realtime_enabled: codex_gui_core::codex::realtime_enabled(config),
+        realtime_credentials: codex_gui_core::codex::has_speech_credentials(config, None),
+        realtime_api_key: codex_gui_core::codex::has_speech_credentials(
+            config,
+            Some(&codex_gui_core::codex::Account::ApiKey),
+        ),
         model: config["model"].as_str().map(str::to_owned),
         effort: config["model_reasoning_effort"].as_str().map(str::to_owned),
         tier: config["service_tier"].as_str().map(str::to_owned),

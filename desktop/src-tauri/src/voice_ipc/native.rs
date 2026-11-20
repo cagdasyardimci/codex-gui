@@ -189,6 +189,15 @@ impl NativePeer {
         .await?
     }
 
+    pub(super) fn connected(&self) -> bool {
+        self.pipeline.current_state() != gst::State::Null
+            && !matches!(
+                self.peer
+                    .property::<rtc::WebRTCPeerConnectionState>("connection-state"),
+                rtc::WebRTCPeerConnectionState::Closed | rtc::WebRTCPeerConnectionState::Failed
+            )
+    }
+
     pub(super) fn mute(&self, microphone: bool, muted: bool) {
         let volume = if microphone {
             &self.microphone

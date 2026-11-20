@@ -17,7 +17,8 @@ pub use browse::{
     RealtimeVoiceCatalog, RealtimeVoiceSelection, ResetCandidate, SettingsRateLimits,
     ThreadActivity, ThreadSummary, TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus,
     UsageResetOutcome, WindowsSandboxReadiness, WindowsSandboxSetupCompleted,
-    WindowsSandboxSetupMode, validate_voice_sdp, voice_sample,
+    WindowsSandboxSetupMode, has_speech_credentials, realtime_enabled, validate_voice_sdp,
+    voice_sample,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub(crate) use executable::is_executable;

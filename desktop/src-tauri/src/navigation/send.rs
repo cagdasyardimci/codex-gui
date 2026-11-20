@@ -413,13 +413,17 @@ impl Navigation {
                 .selection
                 .as_ref()
                 .and_then(|selection| selection.thread.as_ref());
-            self.view.voice_available = self.quit.is_none()
-                && self.view.account.chatgpt
-                && self
-                    .configured_run
+            let provider = &self.configured_run;
+            let web_rtc = self.view.account.chatgpt
+                && provider
                     .provider
                     .as_deref()
-                    .is_none_or(|provider| provider == "openai")
+                    .is_none_or(|provider| provider == "openai");
+            let web_socket = provider.realtime_credentials
+                || (provider.realtime_api_key && self.view.account.api_key);
+            self.view.voice_available = self.quit.is_none()
+                && provider.realtime_enabled
+                && (web_rtc || web_socket)
                 && selected.is_none_or(|thread| state.writable_threads.contains(thread));
             let inflight = self
                 .inflight

@@ -157,6 +157,7 @@ pub struct AccountView {
     pub models: Vec<AccountModel>,
     pub permits_turns: bool,
     pub chatgpt: bool,
+    pub api_key: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]

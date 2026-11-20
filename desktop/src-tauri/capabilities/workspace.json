@@ -37,6 +37,8 @@
     "allow-prepare-voice-call",
     "allow-start-voice-transport",
     "allow-voice-media-ready",
+    "allow-voice-media-failed",
+    "allow-append-voice-audio",
     "allow-set-voice-mute",
     "allow-end-voice-call",
     "allow-search-project-paths",

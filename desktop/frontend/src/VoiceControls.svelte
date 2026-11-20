@@ -18,5 +18,5 @@
     onclick={() => mute(false, !call.speakerMuted)}>
     {call.speakerMuted ? 'Unmute Speaker' : 'Mute Speaker'}
   </button>
-  <button type="button" disabled={call.phase === 'ending'} onclick={end}>End Call</button>
+  <button type="button" onclick={end}>End Call</button>
 </div>

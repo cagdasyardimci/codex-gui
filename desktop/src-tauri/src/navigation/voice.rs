@@ -4,7 +4,10 @@ use codex_gui_core::{
 };
 use tauri::Manager;
 
-use crate::{project_ipc::ProjectIpc, voice_ipc::VoiceIpc};
+use crate::{
+    project_ipc::ProjectIpc,
+    voice_ipc::{ReserveVoice, VoiceIpc},
+};
 
 use super::*;
 
@@ -41,9 +44,18 @@ impl Navigation {
             .as_ref()
             .ok_or(IpcError::StaleSelection)?;
         let project = checkout.storage_key();
+        let reconnect = request
+            .reconnect
+            .map(|id| voice.resume_target(id, &project, request.chat_id.as_deref()))
+            .transpose()?;
         let browser = CodexBrowser::new(client.clone());
         let selected = browser
-            .web_voice_selection(RPC_TIMEOUT)
+            .voice_selection(
+                reconnect
+                    .as_ref()
+                    .and_then(|target| target.voice.as_deref()),
+                RPC_TIMEOUT,
+            )
             .await
             .map_err(|error| report(error.into()))?
             .ok_or(IpcError::StaleSelection)?;
@@ -83,7 +95,16 @@ impl Navigation {
                 thread
             }
         };
-        voice.reserve(&app, client, thread, project, selected.voice)
+        voice.reserve(
+            &app,
+            ReserveVoice {
+                client,
+                thread,
+                project,
+                selection: selected,
+                reconnect,
+            },
+        )
     }
 
     pub(super) fn try_voice_text(

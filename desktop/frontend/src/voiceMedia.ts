@@ -20,11 +20,12 @@ async function gather(peer: RTCPeerConnection, description: RTCSessionDescriptio
   return sdp;
 }
 
-function testStream(audio: AudioContext) {
+function testStream(audio: AudioContext, owned: OscillatorNode[]) {
   const generated = audio.createOscillator();
   const destination = audio.createMediaStreamDestination();
   generated.connect(destination);
   generated.start();
+  owned.push(generated);
   return destination.stream;
 }
 
@@ -51,11 +52,15 @@ export class VoicePeer {
   private stream: MediaStream | undefined;
   private playback: GainNode;
   private microphoneMuted = false;
+  private generated: OscillatorNode[] = [];
   private lifetime = new AbortController();
   private channel: RTCDataChannel | undefined;
   private remoteChannels = new Set<RTCDataChannel>();
 
-  constructor(private audio: AudioContext, private synthetic: boolean) {
+  constructor(private audio: AudioContext, private synthetic: boolean, private failed: () => void) {
+    this.peer.onconnectionstatechange = () => {
+      if (!this.lifetime.signal.aborted && this.peer.connectionState === 'failed') failed();
+    };
     this.playback = audio.createGain();
     this.playback.connect(synthetic ? audio.createMediaStreamDestination() : audio.destination);
     this.peer.ontrack = ({ track }) => {
@@ -66,7 +71,7 @@ export class VoicePeer {
 
   async offer() {
     const signal = this.lifetime.signal;
-    const stream = this.synthetic ? testStream(this.audio) : await navigator.mediaDevices.getUserMedia({
+    const stream = this.synthetic ? testStream(this.audio, this.generated) : await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
     if (signal.aborted) {
@@ -79,6 +84,7 @@ export class VoicePeer {
       this.peer.addTrack(track, stream);
     }
     this.channel = this.peer.createDataChannel('oai-events');
+    this.channel.onclose = () => { if (!this.lifetime.signal.aborted) this.failed(); };
     const offer = await gather(this.peer, await this.peer.createOffer(), signal);
     if (this.synthetic) {
       const partner = new RTCPeerConnection();
@@ -87,7 +93,7 @@ export class VoicePeer {
         this.remoteChannels.add(channel);
         channel.onclose = () => { this.remoteChannels.delete(channel); };
       };
-      const response = testStream(this.audio);
+      const response = testStream(this.audio, this.generated);
       for (const track of response.getAudioTracks()) partner.addTrack(track, response);
       await partner.setRemoteDescription({ type: 'offer', sdp: offer });
       const answer = await gather(partner, await partner.createAnswer(), signal);
@@ -127,6 +133,10 @@ export class VoicePeer {
     this.channel?.close();
     this.peer.close();
     this.partner?.close();
-    void this.audio.close().catch(console.error);
+    for (const node of this.generated.splice(0)) {
+      node.stop();
+      node.disconnect();
+    }
+    this.playback.disconnect();
   }
 }

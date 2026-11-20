@@ -28,6 +28,9 @@ class Server:
         self.canceled_login_id = None
         self.client_name = None
         self.voice_call = None
+        self.voice_initial_retired = False
+        self.voice_pcm_sent = False
+        self.voice_transport = None
 
     def resolve_request(self, response):
         with self.lock:
