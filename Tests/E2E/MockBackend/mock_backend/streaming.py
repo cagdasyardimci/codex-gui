@@ -27,15 +27,18 @@ class Stream:
             if engine.scenario.get('codingProbe'):
                 self.read_probe_marker()
             desktop_turn = engine.scenario.get('desktopTurn')
-            hold = (desktop_turn or engine.scenario.get('desktopQueue')) and self.turn['items'][0]['content'][0]['text'] == 'Hold this fixture turn'
+            text = self.turn['items'][0]['content'][0]['text']
+            finish_during_quit = engine.scenario.get('desktopQuit') and text == 'Complete during Quit confirmation'
+            hold = ((desktop_turn or engine.scenario.get('desktopQueue')) and text == 'Hold this fixture turn') or finish_during_quit
+            quit_command = None
             if hold and engine.scenario.get('desktopQuit'):
                 with engine.lock:
-                    command = {'id': 'fixture-pending-command', 'type': 'commandExecution',
-                               'command': 'Fixture command', 'status': 'inProgress',
-                               'cwd': self.thread['cwd']}
-                    self.turn['items'].append(command)
+                    quit_command = {'id': 'fixture-pending-command', 'type': 'commandExecution',
+                                    'command': 'Fixture command', 'status': 'inProgress',
+                                    'cwd': self.thread['cwd']}
+                    self.turn['items'].append(quit_command)
                     engine.state.save()
-                    self.emit('item/started', item=command)
+                    self.emit('item/started', item=quit_command)
             if desktop_turn and not hold:
                 if self.approve_probe_read('fixture-turn-command'):
                     self.ask_question()
@@ -44,7 +47,7 @@ class Stream:
             elif engine.scenario.get('questions'):
                 self.ask_question()
             if hold or engine.scenario['mode'] == 'stall':
-                self.cancelled.wait()
+                self.cancelled.wait(2 if finish_during_quit else None)
             else:
                 for chunk in engine.scenario['chunks']:
                     with engine.lock:
@@ -65,6 +68,12 @@ class Stream:
                 self.emit('turn/completed', turn=self.turn)
                 engine.transport.event('thread/status/changed', {
                     'threadId': self.thread['id'], 'status': {'type': 'idle'}})
+            if quit_command and self.thread['id'].startswith('other-'):
+                time.sleep(0.2)
+                with engine.lock:
+                    quit_command['status'] = 'completed'
+                    engine.state.save()
+                    self.emit('item/completed', item=quit_command)
         except (BrokenPipeError, OSError) as error:
             engine.report_failure(error)
 

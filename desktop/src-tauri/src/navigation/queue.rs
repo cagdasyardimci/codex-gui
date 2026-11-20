@@ -398,7 +398,7 @@ impl Navigation {
     }
 }
 
-async fn read_queue(
+pub(super) async fn read_queue(
     engine: &WorkspaceEngine,
     client: &AppServerClient,
     store: &AttachmentStore,

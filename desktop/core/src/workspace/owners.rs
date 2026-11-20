@@ -149,6 +149,39 @@ impl RuntimeOwners {
         Ok(self.store.exit_owners()?)
     }
 
+    pub fn has_local_work(&self, checkout: Option<&CheckoutIdentity>) -> bool {
+        self.lock().iter().any(|(owner, scope)| {
+            checkout.is_none_or(|checkout| checkout == owner) && (scope.uses > 0 || scope.cleanup)
+        })
+    }
+
+    pub fn record_execution(
+        &self,
+        owner: &ConnectionIdentity,
+        before: &ExecutionSnapshot,
+    ) -> Result<(), OwnerError> {
+        let checkout = checkout_of(owner)?;
+        let scopes = self.lock();
+        let runtime = scopes
+            .get(checkout)
+            .ok_or(OwnerError::Retired)?
+            .match_runtime(owner)?;
+        self.store
+            .record_execution_transition(checkout, before, &runtime.snapshot().execution)?;
+        Ok(())
+    }
+
+    pub fn persist_running(&self) -> Result<(), OwnerError> {
+        let scopes = self.lock();
+        for (checkout, scope) in &*scopes {
+            if let Some(runtime) = &scope.runtime {
+                self.store
+                    .preserve_exit_executions(checkout, &runtime.snapshot().execution)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn reconcile_history(
         &self,
         owner: &ConnectionIdentity,

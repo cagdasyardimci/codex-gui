@@ -66,6 +66,13 @@ fn main() {
         verification,
         fixture::Verification::None | fixture::Verification::Quit
     );
+    let quit_fixture =
+        (verification == fixture::Verification::Quit).then(|| quit_ipc::QuitFixtureCheckouts {
+            primary: desktop_fixture
+                .as_ref()
+                .and_then(|(_, project)| project.clone()),
+            secondary: arguments.next().map(PathBuf::from),
+        });
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(verification)
@@ -102,8 +109,12 @@ fn main() {
             diff_ipc::checkout_changes,
             diff_ipc::checkout_patch,
             quit_ipc::request_quit_fixture,
+            quit_ipc::select_quit_fixture_checkout,
         ])
         .setup(move |app| {
+            if let Some(checkouts) = quit_fixture {
+                app.manage(checkouts);
+            }
             if let Some(report) = coding_report {
                 let app = app.handle().clone();
                 tauri::async_runtime::spawn(async move {

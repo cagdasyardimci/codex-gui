@@ -26,7 +26,7 @@ The [installed turn checkpoint](../desktop/fixtures/verify_turn_fixture.py) uses
 
 The [installed diff fixture](../desktop/fixtures/verify_diff_fixture.py) creates its own Git checkout. It verifies a tracked edit and an untracked patch with Unicode names, checks that selecting a file triggers the patch request, and compares the Git index and source bytes before and after the read.
 
-The [installed quit fixture](../desktop/fixtures/verify_quit_fixture.py) injects a draft write failure using its disposable database, cancels a native Close during an active turn, then confirms application Quit. It checks the continued draft editing, the exact interrupted turn, and the retained command evidence after exit.
+The [installed quit fixture](../desktop/fixtures/verify_quit_fixture.py) injects a draft write failure and cancels native Close during a turn. It runs Stop All and application Quit across two checkouts, exercising a turn that completes during confirmation and a command that exits after its turn. It checks captured interrupts, durable drafts, and unresolved execution evidence after exit.
 
 ### Swift AppKit
 

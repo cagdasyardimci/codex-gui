@@ -30,6 +30,8 @@ def main() -> None:
         data = root / "beta data"
         checkout = root / "Checkout café"
         checkout.mkdir()
+        other_checkout = root / "Other checkout"
+        other_checkout.mkdir()
         codex_home = root / "codex home"
         codex_home.mkdir()
         environment = {
@@ -51,24 +53,41 @@ def main() -> None:
             """)
             database.commit()
         trace = root / "trace.jsonl"
-        errors = invoke_app([executable, "--verify-quit", str(data), str(checkout)], {
+        quit_environment = {
             **environment,
             "CODEX_GUI_QA_SCENARIO": "desktop-quit",
-            "CODEX_GUI_QA_STATE": str(root / "quit-state.json"),
+            "CODEX_GUI_QA_SECONDARY_QUIT_CHECKOUT": str(other_checkout),
             "CODEX_GUI_QA_TRACE": str(trace),
-        }, "Verified desktop quit drained drafts and retained unresolved execution evidence")
+        }
+        quit_environment.pop("CODEX_GUI_QA_STATE", None)
+        errors = invoke_app(
+            [executable, "--verify-quit", str(data), str(checkout), str(other_checkout)], quit_environment,
+            "Verified desktop quit drained drafts and retained unresolved execution evidence",
+        )
         assert "fixture draft write rejected" in errors
-        records = [json.loads(line) for line in trace.read_text().splitlines()]
+        records = sorted(
+            (json.loads(line) for part in root.glob(f"{trace.name}.*")
+             for line in part.read_text(encoding="utf-8").splitlines()),
+            key=lambda event: event["time"],
+        )
         starts = [item["params"] for item in records
                   if item["direction"] == "request" and item["method"] == "turn/start"]
-        [start] = starts
-        assert start["threadId"] == "history-second"
+        assert [start["threadId"] for start in starts] == [
+            "history-second", "other-history-second", "history-second", "other-history-second",
+        ], starts
         interrupts = [item["params"] for item in records
                       if item["direction"] == "request" and item["method"] == "turn/interrupt"]
-        [interrupt] = interrupts
-        assert interrupt["threadId"] == "history-second"
-        assert any(item.get("method") == "turn/completed" and item.get("status") == "interrupted"
-                   and item.get("turnId") == interrupt["turnId"] for item in records)
+        assert len(interrupts) == 3, interrupts
+        assert {row["threadId"] for row in interrupts[:2]} == {"history-second", "other-history-second"}
+        assert interrupts[-1]["threadId"] == "history-second"
+        for event in records:
+            if event["direction"] == "request" and event["method"] in ("turn/start", "turn/interrupt"):
+                expected_checkout = other_checkout if event["threadId"].startswith("other-") else checkout
+                assert os.path.samefile(event["resolvedCwd"], expected_checkout), event
+        assert any(item.get("method") == "turn/completed" and item.get("status") == "completed"
+                   and item.get("threadId") == "other-history-second" for item in records)
+        assert sum(item.get("method") == "item/completed" and item.get("threadId") == "other-history-second"
+                   and (item.get("item") or {}).get("id") == "fixture-pending-command" for item in records) == 2
         with closing(sqlite3.connect(database_path)) as database:
             drafts = dict(database.execute(
                 "SELECT thread_id, text FROM thread_drafts JOIN drafts ON draft_id = id"
@@ -78,9 +97,12 @@ def main() -> None:
             unresolved = database.execute(
                 "SELECT thread_id, turn_id, item_id FROM exit_recovery"
             ).fetchall()
-            assert unresolved == [("history-second", interrupt["turnId"], "fixture-pending-command")], unresolved
+            assert set(unresolved) == {
+                ("history-second", interrupt["turnId"], "fixture-pending-command")
+                for interrupt in interrupts if interrupt["threadId"] == "history-second"
+            }, unresolved
         assert not list(codex_home.iterdir())
-        print("Verified cancel and write failure retained the app, and confirmed Quit kept the unresolved command")
+        print("Verified Stop All and Quit across both checkouts, including completion during confirmation and late command evidence")
 
 
 if __name__ == "__main__":

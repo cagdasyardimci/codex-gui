@@ -26,6 +26,7 @@ pub struct QuitView {
     pub ticket: String,
     pub confirm: bool,
     pub draining: bool,
+    pub stop_only: bool,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -119,6 +120,7 @@ pub enum NavigationIntent {
     SetupSandbox(WorkspaceRequest),
     Send(SendRequest),
     Stop(StopRequest),
+    StopAll,
     Queue(QueueRequest),
     Respond(RespondRequest),
     RecoverSend(RecoverSendRequest),

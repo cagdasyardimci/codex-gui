@@ -8,6 +8,7 @@ use super::WorkspaceId;
 pub struct ConversationActions {
     pub send: bool,
     pub stop: Option<StopTarget>,
+    pub stop_all: bool,
     pub recover: bool,
     pub interactions: Vec<InteractionView>,
 }

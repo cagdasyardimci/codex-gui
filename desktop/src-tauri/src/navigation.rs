@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     error::Error,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicBool},
     time::Duration,
 };
 
@@ -40,12 +40,14 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 mod account;
 mod interactions;
 mod ownership;
+mod parked;
 mod queue;
 mod quit;
 mod sandbox;
 mod send;
 use account::AccountFlow;
 use interactions::InteractionProjection;
+use parked::ParkedRuntime;
 use queue::{QueueCompletion, Queues};
 use quit::Quit;
 use sandbox::SandboxSetup;
@@ -74,6 +76,7 @@ enum Input {
     Backend(Option<ServerEvent>),
     SendCompleted(Option<Box<SendCompletion>>),
     QueueCompleted(Option<Box<QueueCompletion>>),
+    OwnerChanged,
     Flush,
 }
 
@@ -99,6 +102,9 @@ struct Navigation {
     model: Arc<Mutex<ProjectState>>,
     selection: Option<Selection>,
     backend: Option<Backend>,
+    parked: HashMap<CheckoutIdentity, ParkedRuntime>,
+    owner_changes: mpsc::Sender<()>,
+    shutdown_pending: Arc<AtomicBool>,
     source_session: CheckoutSessionId,
     source_generation: u64,
     login: AccountFlow,
@@ -131,6 +137,7 @@ impl NavigationHandle {
         let (sender, receiver) = mpsc::channel(32);
         let (send_completions, finished_sends) = mpsc::channel(32);
         let (queue_completions, finished_queue_jobs) = mpsc::channel(32);
+        let (owner_changes, changed_owners) = mpsc::channel(1);
         let navigation = Navigation {
             owners: RuntimeOwners::new(store.clone()),
             store,
@@ -138,6 +145,9 @@ impl NavigationHandle {
             model,
             selection: None,
             backend: None,
+            parked: HashMap::new(),
+            owner_changes,
+            shutdown_pending: Arc::default(),
             source_session: CheckoutSessionId(Uuid::new_v4()),
             source_generation: 0,
             login: AccountFlow::new(verification == Verification::Account),
@@ -161,6 +171,7 @@ impl NavigationHandle {
             receiver,
             finished_sends,
             finished_queue_jobs,
+            changed_owners,
         ));
         Ok(Self(sender))
     }
@@ -195,6 +206,7 @@ impl Navigation {
         mut commands: mpsc::Receiver<Message>,
         mut finished_sends: mpsc::Receiver<Box<SendCompletion>>,
         mut finished_queue_jobs: mpsc::Receiver<Box<QueueCompletion>>,
+        mut changed_owners: mpsc::Receiver<()>,
     ) {
         if let Err(error) = self.restore(saved, fixture_project).await {
             eprintln!("{error}");
@@ -209,6 +221,7 @@ impl Navigation {
                     request = commands.recv() => Input::Command(request),
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
+                    _ = changed_owners.recv() => Input::OwnerChanged,
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
             } else {
@@ -217,6 +230,7 @@ impl Navigation {
                     request = commands.recv() => Input::Command(request),
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
+                    _ = changed_owners.recv() => Input::OwnerChanged,
                 }
             };
             match input {
@@ -231,6 +245,7 @@ impl Navigation {
                 Input::QueueCompleted(None) => {
                     unreachable!("navigation owns the queue completion sender")
                 }
+                Input::OwnerChanged => self.sync_actions(),
                 Input::Backend(Some(event)) => {
                     if let Err(error) = self.handle_backend(event).await {
                         eprintln!("{error}");
@@ -250,6 +265,7 @@ impl Navigation {
             }
         }
         self.disconnect().await;
+        self.stop_parked().await;
     }
 
     async fn restore(
@@ -280,7 +296,7 @@ impl Navigation {
                 return Ok(None);
             }
             Action::SelectFolder(folder) => {
-                if self.quit.is_some() || self.view.actions.stop.is_some() {
+                if self.quit.is_some() {
                     return Err(IpcError::StaleSelection);
                 }
                 let checkout =
@@ -307,6 +323,7 @@ impl Navigation {
         match action {
             NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
             NavigationIntent::CancelQuit(decision) => self.cancel_quit(decision)?,
+            NavigationIntent::StopAll => self.begin_stop_all(),
             NavigationIntent::EditDraft(edit) => self.edit(edit)?,
             NavigationIntent::OpenChat(request) => {
                 self.require(request.workspace_id)?;
@@ -323,9 +340,6 @@ impl Navigation {
             }
             NavigationIntent::ClearProject(request) => {
                 self.require_request(request)?;
-                if self.view.actions.stop.is_some() {
-                    return Err(IpcError::StaleSelection);
-                }
                 self.clear().await.map_err(report)?;
             }
             NavigationIntent::Refresh(request) => {
@@ -428,7 +442,12 @@ impl Navigation {
     ) -> Result<WorkspaceId, Failure> {
         self.store
             .save_desktop_selection(Some((&folder, &checkout)), thread.as_ref())?;
-        self.disconnect().await;
+        self.leave_checkout().await;
+        self.backend = self.take_parked(&checkout).await;
+        let existing = self
+            .backend
+            .as_ref()
+            .map(|backend| backend.engine.snapshot());
         let id = self
             .model
             .lock()
@@ -437,8 +456,13 @@ impl Navigation {
             .select_checkout(&folder, checkout.clone());
         self.selection = Some(Selection {
             id,
-            session: CheckoutSessionId(Uuid::new_v4()),
-            generation: 0,
+            session: existing.as_ref().map_or_else(
+                || CheckoutSessionId(Uuid::new_v4()),
+                |state| state.connection.workspace.session,
+            ),
+            generation: existing
+                .as_ref()
+                .map_or(0, |state| state.connection.generation.0),
             checkout,
             folder,
             thread: None,
@@ -453,7 +477,7 @@ impl Navigation {
 
     async fn clear(&mut self) -> Result<(), Failure> {
         self.store.save_desktop_selection(None, None)?;
-        self.disconnect().await;
+        self.leave_checkout().await;
         self.selection = None;
         self.model
             .lock()
@@ -545,21 +569,13 @@ impl Navigation {
         let had_write_access =
             std::mem::take(&mut self.view.write_access) != WriteAccess::Unavailable;
         if let Some(backend) = self.backend.take() {
-            let state = backend.engine.snapshot();
-            if state.connection.workspace.checkout.is_some()
-                && let Err(error) = self.owners.retire(&state.connection)
-            {
-                eprintln!("{error}");
-            }
             if let Err(error) = self.login.retire(&backend.connection.client()).await {
                 eprintln!("{error}");
             }
             if self.view.account.login_ticket.take().is_some() || had_write_access {
                 self.sync_actions();
             }
-            if let Err(error) = backend.connection.disconnect().await {
-                eprintln!("{error}");
-            }
+            parked::close_backend(&self.owners, backend).await;
         }
     }
 
@@ -772,11 +788,20 @@ impl Navigation {
             }
             _ => None,
         };
-        if let Some(event) = backend
+        let before = backend.engine.snapshot();
+        let routed = backend
             .engine
             .route_session_event(&client, &self.store, event, RPC_TIMEOUT)
-            .await?
+            .await?;
+        if client.identity().workspace.checkout.is_some()
+            && before.execution != backend.engine.snapshot().execution
+            && let Err(error) = self
+                .owners
+                .record_execution(client.identity(), &before.execution)
         {
+            eprintln!("{error}");
+        }
+        if let Some(event) = routed {
             self.present_event(event);
         }
         if let Some(thread) = starting_thread

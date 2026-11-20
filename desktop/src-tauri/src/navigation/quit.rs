@@ -1,7 +1,7 @@
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, sync::atomic::Ordering, time::Duration};
 
 use codex_gui_core::{
-    identity::{OperationIdentity, RequestId},
+    identity::{ConnectionIdentity, OperationIdentity, RequestId},
     ipc::{IpcError, QuitDecision, QuitView},
     workspace::{ExecutionSnapshot, ExecutionTarget, WorkspaceAction},
 };
@@ -16,35 +16,59 @@ use super::{Failure, Navigation, report};
 const QUIT_GRACE: Duration = Duration::from_secs(2);
 
 pub(super) struct Quit {
-    app: AppHandle,
+    action: Shutdown,
     ticket: String,
     drain: Option<Drain>,
 }
 
+enum Shutdown {
+    Quit(AppHandle),
+    StopAll,
+}
+
 struct Drain {
     deadline: Instant,
-    interrupts: HashSet<ExecutionTarget>,
+    interrupts: HashSet<(ConnectionIdentity, ExecutionTarget)>,
 }
 
 impl Navigation {
     pub(super) fn begin_quit(&mut self, app: AppHandle) {
+        self.begin_shutdown(Shutdown::Quit(app));
+    }
+
+    pub(super) fn begin_stop_all(&mut self) {
+        if self.has_stoppable_work() {
+            self.begin_shutdown(Shutdown::StopAll);
+        }
+    }
+
+    pub(super) fn has_stoppable_work(&self) -> bool {
+        !self.inflight.is_empty()
+            || self
+                .runtime_connections()
+                .any(|(_, engine)| !engine.snapshot().execution.active_turns.is_empty())
+    }
+
+    fn begin_shutdown(&mut self, action: Shutdown) {
         if self.quit.is_some() {
             return;
         }
         let confirm = !self.inflight.is_empty()
             || self.queues.has_mutations()
             || self
-                .backend
-                .as_ref()
-                .is_some_and(|backend| has_work(&backend.engine.snapshot().execution));
+                .runtime_connections()
+                .any(|(_, engine)| has_work(&engine.snapshot().execution));
+        let stop_only = matches!(action, Shutdown::StopAll);
         let ticket = Uuid::new_v4().to_string();
+        self.shutdown_pending.store(true, Ordering::SeqCst);
         self.view.quit = Some(QuitView {
             ticket: ticket.clone(),
             confirm,
             draining: false,
+            stop_only,
         });
         self.quit = Some(Quit {
-            app,
+            action,
             ticket,
             drain: None,
         });
@@ -67,15 +91,13 @@ impl Navigation {
             self.release_quit();
             return Err(report(error.into()));
         }
-        if let Some(backend) = &self.backend {
-            let owner = backend.connection.client();
+        for (client, engine) in self.runtime_connections() {
             for pending in self
                 .inflight
                 .values()
-                .filter(|pending| &pending.operation.connection == owner.identity())
+                .filter(|pending| &pending.operation.connection == client.identity())
             {
-                let _ = backend
-                    .engine
+                let _ = engine
                     .apply(WorkspaceAction::StopSubmission {
                         operation: pending.operation.clone(),
                     })
@@ -108,20 +130,25 @@ impl Navigation {
     }
 
     pub(super) async fn advance_quit(&mut self) -> bool {
+        if !self.draining_quit() {
+            return false;
+        }
+        let runtimes: Vec<_> = self.runtime_connections().collect();
         let Some(drain) = self.quit.as_mut().and_then(|quit| quit.drain.as_mut()) else {
             return false;
         };
-        let execution = self
-            .backend
-            .as_ref()
-            .map(|backend| backend.engine.snapshot());
-        if let (Some(backend), Some(state)) = (&self.backend, &execution) {
-            let client = backend.connection.client();
+        let mut remote_work = false;
+        for (client, engine) in runtimes {
+            let state = engine.snapshot();
+            remote_work |= has_work(&state.execution);
             for target in &state.execution.active_turns {
-                if drain.interrupts.insert(target.clone()) {
+                if drain
+                    .interrupts
+                    .insert((state.connection.clone(), target.clone()))
+                {
                     let client = client.clone();
                     let target = target.clone();
-                    let engine = backend.engine.clone();
+                    let engine = engine.clone();
                     let operation = OperationIdentity {
                         connection: client.identity().clone(),
                         request: RequestId(Uuid::new_v4()),
@@ -137,12 +164,10 @@ impl Navigation {
                 }
             }
         }
-        if Instant::now() < drain.deadline
-            && (!self.inflight.is_empty()
-                || self.queues.has_mutations()
-                || execution
-                    .as_ref()
-                    .is_some_and(|state| has_work(&state.execution)))
+        if !self.inflight.is_empty()
+            || self.queues.has_mutations()
+            || self.owners.has_local_work(None)
+            || (Instant::now() < drain.deadline && remote_work)
         {
             return false;
         }
@@ -152,34 +177,32 @@ impl Navigation {
             return false;
         }
         let quit = self.quit.take().expect("confirmed quit is active");
+        let Shutdown::Quit(app) = quit.action else {
+            self.release_quit();
+            return false;
+        };
         self.disconnect().await;
-        quit.app.state::<QuitLifecycle>().allow_exit();
-        if *quit.app.state::<Verification>() == Verification::Quit {
+        self.stop_parked().await;
+        app.state::<QuitLifecycle>().allow_exit();
+        if *app.state::<Verification>() == Verification::Quit {
             println!(
                 "Verified desktop quit drained drafts and retained unresolved execution evidence"
             );
         }
-        quit.app.exit(0);
+        app.exit(0);
         true
     }
 
     fn persist_before_quit(&mut self) -> Result<(), Failure> {
         self.owners.persist_retired()?;
-        if let Some(state) = self
-            .backend
-            .as_ref()
-            .map(|backend| backend.engine.snapshot())
-            && let Some(checkout) = &state.connection.workspace.checkout
-        {
-            self.store
-                .preserve_exit_executions(checkout, &state.execution)?;
-        }
+        self.owners.persist_running()?;
         Ok(())
     }
 
     fn release_quit(&mut self) {
         self.quit = None;
         self.view.quit = None;
+        self.shutdown_pending.store(false, Ordering::SeqCst);
         self.sync_actions();
     }
 }

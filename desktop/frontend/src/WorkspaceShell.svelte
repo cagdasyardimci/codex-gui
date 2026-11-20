@@ -206,7 +206,7 @@
     switch (event.key.toLowerCase()) {
       case 'o':
         event.preventDefault();
-        if (!stopTarget) void act(pickWorkspace);
+        void act(pickWorkspace);
         break;
       case 'n':
         if (workspace) {
@@ -235,10 +235,14 @@
 
 <main class="workspace" aria-label="Codex GUI">
   <header class="workspace-header">
-    <button type="button" disabled={actionPending || !!stopTarget} onclick={() => void act(pickWorkspace)}>Open Project…</button>
+    <button type="button" disabled={actionPending} onclick={() => void act(pickWorkspace)}>Open Project…</button>
+    {#if navigation?.actions.stopAll}
+      <button type="button" disabled={actionPending || !!quit}
+        onclick={() => void act(() => navigateWorkspace('stopAll'))}>Stop All…</button>
+    {/if}
     {#if workspace}
       <h1 title={workspace.projectPath}>{workspace.projectPath.split(/[\/\\]+/).filter(Boolean).at(-1) ?? workspace.projectPath}</h1>
-      <button type="button" disabled={actionPending || !!stopTarget} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
+      <button type="button" disabled={actionPending} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
@@ -335,7 +339,7 @@
     {/if}
   </div>
   {#if quit?.confirm && !quit.draining}
-    <QuitDialog busy={confirmingQuit}
+    <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}
       cancel={() => { if (quit) void cancelQuit(quit.ticket).catch(console.error); }}
       confirm={() => { if (quit) void confirmQuit(quit.ticket); }} />
   {/if}

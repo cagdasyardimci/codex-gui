@@ -31,7 +31,14 @@ def main():
         scenario = scenarios.load(name)
     except (ValueError, OSError) as error:
         parser.error(str(error))
-    transport = Transport(os.environ.get('CODEX_GUI_QA_TRACE'))
+    secondary = os.environ.get('CODEX_GUI_QA_SECONDARY_QUIT_CHECKOUT')
+    if scenario.get('desktopQuit') and secondary and Path.cwd().samefile(secondary):
+        for thread in scenario['threads']:
+            thread['id'] = 'other-' + thread['id']
+    trace_path = os.environ.get('CODEX_GUI_QA_TRACE')
+    if trace_path and scenario.get('desktopQuit') and secondary:
+        trace_path = f'{trace_path}.{os.getpid()}'
+    transport = Transport(trace_path)
     server = Server(scenario, State(scenario, state_path), transport)
     transport.trace({'direction': 'fixture', 'scenario': name, 'modelCalls': False})
     try:

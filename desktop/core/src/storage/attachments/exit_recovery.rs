@@ -38,21 +38,57 @@ impl AttachmentStore {
         let transaction = state
             .database
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let path = checkout
-            .canonical_path()
-            .to_str()
-            .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
-        transaction.execute(
-            "INSERT INTO exit_checkout_paths (checkout_key, checkout_path) VALUES (?1, ?2)
-             ON CONFLICT (checkout_key) DO UPDATE SET checkout_path = excluded.checkout_path",
-            params![key, path],
-        )?;
+        remember_checkout(&transaction, checkout, &key)?;
         for target in &execution.active_turns {
             record(&transaction, &key, target, "")?;
         }
         for command in &execution.unresolved_commands {
             record(&transaction, &key, &command.target, &command.item)?;
         }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub(crate) fn record_execution_transition(
+        &self,
+        checkout: &CheckoutIdentity,
+        before: &ExecutionSnapshot,
+        after: &ExecutionSnapshot,
+    ) -> Result<(), AttachmentError> {
+        if before == after {
+            return Ok(());
+        }
+        let key = checkout.storage_key();
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if !after.active_turns.is_empty() || !after.unresolved_commands.is_empty() {
+            remember_checkout(&transaction, checkout, &key)?;
+        }
+        for target in &after.active_turns {
+            record(&transaction, &key, target, "")?;
+        }
+        for command in &after.unresolved_commands {
+            record(&transaction, &key, &command.target, &command.item)?;
+        }
+        for target in &before.active_turns {
+            if !after.active_turns.contains(target) {
+                clear(&transaction, &key, &target.thread, &target.turn.0, "")?;
+            }
+        }
+        for command in &before.unresolved_commands {
+            if !after.unresolved_commands.contains(command) {
+                clear(
+                    &transaction,
+                    &key,
+                    &command.target.thread,
+                    &command.target.turn.0,
+                    &command.item,
+                )?;
+            }
+        }
+        prune_checkout(&transaction, &key)?;
         transaction.commit()?;
         Ok(())
     }
@@ -140,14 +176,36 @@ impl AttachmentStore {
                 }
             }
         }
-        transaction.execute(
-            "DELETE FROM exit_checkout_paths WHERE checkout_key = ?1
-             AND NOT EXISTS (SELECT 1 FROM exit_recovery WHERE checkout_key = ?1)",
-            [&key],
-        )?;
+        prune_checkout(&transaction, &key)?;
         transaction.commit()?;
         Ok(())
     }
+}
+
+fn remember_checkout(
+    transaction: &Transaction<'_>,
+    checkout: &CheckoutIdentity,
+    key: &str,
+) -> Result<(), AttachmentError> {
+    let path = checkout
+        .canonical_path()
+        .to_str()
+        .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
+    transaction.execute(
+        "INSERT INTO exit_checkout_paths (checkout_key, checkout_path) VALUES (?1, ?2)
+         ON CONFLICT (checkout_key) DO UPDATE SET checkout_path = excluded.checkout_path",
+        params![key, path],
+    )?;
+    Ok(())
+}
+
+fn prune_checkout(transaction: &Transaction<'_>, key: &str) -> rusqlite::Result<()> {
+    transaction.execute(
+        "DELETE FROM exit_checkout_paths WHERE checkout_key = ?1
+         AND NOT EXISTS (SELECT 1 FROM exit_recovery WHERE checkout_key = ?1)",
+        [key],
+    )?;
+    Ok(())
 }
 
 fn record(
