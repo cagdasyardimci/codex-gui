@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use uuid::Uuid;
 
 use crate::git::turn_edits::LastTurnView;
 
@@ -20,7 +21,23 @@ pub struct NavigationView {
     pub actions: ConversationActions,
     pub queue: Option<QueueView>,
     pub last_turn: Option<LastTurnView>,
+    pub older_history: Option<OlderHistoryView>,
     pub quit: Option<QuitView>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OlderHistoryView {
+    pub ticket: Uuid,
+    pub pending: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OlderHistoryRequest {
+    pub workspace_id: WorkspaceId,
+    pub chat_id: String,
+    pub ticket: Uuid,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -112,6 +129,7 @@ pub struct DraftEdit {
 #[serde(rename_all = "camelCase")]
 pub enum NavigationIntent {
     OpenChat(ChatRequest),
+    LoadOlderHistory(OlderHistoryRequest),
     NewChat(WorkspaceRequest),
     ClearProject(WorkspaceRequest),
     Refresh(WorkspaceRequest),

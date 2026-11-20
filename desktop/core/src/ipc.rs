@@ -27,7 +27,8 @@ pub use actions::{
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
-    LoginTicket, NavigationIntent, NavigationView, QuitDecision, QuitView, WriteAccess,
+    LoginTicket, NavigationIntent, NavigationView, OlderHistoryRequest, OlderHistoryView,
+    QuitDecision, QuitView, WriteAccess,
 };
 pub use question_reply::present_question_reply;
 pub use queue::{
@@ -38,8 +39,8 @@ pub use stream::{
     TranscriptRole, TranscriptView,
 };
 pub use subscription::{
-    RevisionedNavigation, RevisionedStream, SubscriptionId, WorkspaceProjection, WorkspaceSnapshot,
-    WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest,
+    RevisionedHistory, RevisionedNavigation, RevisionedStream, SubscriptionId, WorkspaceProjection,
+    WorkspaceSnapshot, WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest,
 };
 
 pub const WORKSPACE_WINDOW: &str = "main";
@@ -199,6 +200,7 @@ pub fn workspace_typescript() -> String {
         WorkspaceUpdateRequest::decl(),
         WorkspaceUpdate::decl(),
         RevisionedStream::decl(),
+        RevisionedHistory::decl(),
         TextBatch::decl(),
         StreamChange::decl(),
         TranscriptItem::decl(),
@@ -212,6 +214,8 @@ pub fn workspace_typescript() -> String {
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),
+        OlderHistoryRequest::decl(),
+        OlderHistoryView::decl(),
         DraftEdit::decl(),
         NavigationIntent::decl(),
         QueueRequest::decl(),

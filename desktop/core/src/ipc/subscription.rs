@@ -53,10 +53,19 @@ pub struct RevisionedNavigation {
 
 #[derive(Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct RevisionedHistory {
+    pub revision: u32,
+    pub prepended: Vec<TranscriptItem>,
+    pub navigation: NavigationView,
+}
+
+#[derive(Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub enum WorkspaceUpdate {
     Changed(WorkspaceSnapshot),
     Stream(RevisionedStream),
     Navigation(RevisionedNavigation),
+    History(RevisionedHistory),
     Resync,
     Retired,
     Idle,
@@ -75,6 +84,7 @@ enum Change {
     Snapshot,
     Stream(StreamChange),
     Navigation,
+    History(Vec<TranscriptItem>),
 }
 
 impl Publication {
@@ -103,6 +113,11 @@ impl Publication {
             }),
             Change::Navigation => WorkspaceUpdate::Navigation(RevisionedNavigation {
                 revision: self.snapshot.revision,
+                navigation: self.snapshot.navigation.clone(),
+            }),
+            Change::History(items) => WorkspaceUpdate::History(RevisionedHistory {
+                revision: self.snapshot.revision,
+                prepended: items.clone(),
                 navigation: self.snapshot.navigation.clone(),
             }),
             Change::Snapshot => WorkspaceUpdate::Changed(self.snapshot.clone()),
@@ -163,6 +178,28 @@ impl WorkspaceProjection {
             publication.advance(Change::Navigation);
             true
         });
+    }
+
+    pub fn prepend_history(
+        &mut self,
+        workspace: WorkspaceId,
+        navigation: NavigationView,
+        earlier: TranscriptView,
+    ) -> bool {
+        self.publication.send_if_modified(|publication| {
+            if !publication.owns_workspace(workspace)
+                || publication.snapshot.navigation.selected_chat != navigation.selected_chat
+            {
+                return false;
+            }
+            let items = publication.snapshot.transcript.prepend(earlier);
+            if items.is_empty() && publication.snapshot.navigation == navigation {
+                return false;
+            }
+            publication.snapshot.navigation = navigation;
+            publication.advance(Change::History(items));
+            true
+        })
     }
 
     pub fn publish_stream(&mut self, workspace: WorkspaceId, mut change: StreamChange) -> bool {
@@ -303,6 +340,62 @@ impl WorkspacePoll {
 mod tests {
     use super::*;
     use crate::ipc::{TextBatcher, TranscriptCommand};
+
+    #[tokio::test]
+    async fn prepends_only_new_rows_and_retains_the_current_history_generation() {
+        let mut projection = WorkspaceProjection::default();
+        let workspace_id = WorkspaceId(Uuid::new_v4());
+        let workspace = WorkspaceView {
+            workspace_id,
+            project_path: "project".into(),
+        };
+        let navigation = NavigationView {
+            selected_chat: Some("chat".into()),
+            ..NavigationView::default()
+        };
+        let message = |id: &str, text: &str| {
+            TranscriptItem::message(
+                id.into(),
+                "turn".into(),
+                text.into(),
+                false,
+                TranscriptRole::Assistant,
+            )
+        };
+        let mut current = TranscriptView::default();
+        current.push_message(message("visible", "current content"));
+        projection.replace_history(Some(workspace), navigation.clone(), current);
+        let initial = projection.subscribe();
+        let mut earlier = TranscriptView::default();
+        earlier.push_message(message("oldest", "earlier content"));
+        earlier.push_message(message("visible", "stale overlapping content"));
+        assert!(projection.prepend_history(workspace_id, navigation.clone(), earlier));
+        let request = WorkspaceUpdateRequest {
+            subscription_id: initial.subscription_id,
+            after_revision: initial.snapshot.revision,
+        };
+        let WorkspaceUpdate::History(update) =
+            projection.poll(request).unwrap().wait(Duration::ZERO).await
+        else {
+            panic!("expected an adjacent history insertion");
+        };
+        assert_eq!(update.prepended.len(), 1);
+        assert_eq!(update.prepended[0].item_id, "oldest");
+        let after = projection.subscribe().snapshot.transcript;
+        assert_eq!(after.generation, initial.snapshot.transcript.generation);
+        assert_eq!(after.items[1], initial.snapshot.transcript.items[0]);
+        let mut batcher = TextBatcher::default();
+        batcher.append("visible".into(), " continues".into());
+        assert!(projection.publish_stream(workspace_id, batcher.flush().unwrap()));
+        let continued = projection.subscribe().snapshot.transcript;
+        assert_eq!(continued.items[0], after.items[0]);
+        assert_eq!(continued.items[1].text, "current content continues");
+        let other = NavigationView {
+            selected_chat: Some("other".into()),
+            ..navigation
+        };
+        assert!(!projection.prepend_history(workspace_id, other, TranscriptView::default()));
+    }
 
     #[test]
     fn updates_only_the_target_row_and_keeps_finished_copy_scoped_to_the_original_source() {

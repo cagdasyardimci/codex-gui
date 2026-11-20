@@ -40,6 +40,7 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 mod account;
 mod interactions;
 mod ownership;
+mod paging;
 mod parked;
 mod queue;
 mod quit;
@@ -48,6 +49,7 @@ mod send;
 mod transcript;
 use account::AccountFlow;
 use interactions::InteractionProjection;
+use paging::{HistoryCompletion, HistoryPaging};
 use parked::ParkedRuntime;
 use queue::{QueueCompletion, Queues};
 use quit::Quit;
@@ -78,6 +80,7 @@ enum Input {
     Backend(Option<ServerEvent>),
     SendCompleted(Option<Box<SendCompletion>>),
     QueueCompleted(Option<Box<QueueCompletion>>),
+    HistoryCompleted(Option<Box<HistoryCompletion>>),
     OwnerChanged,
     Flush,
 }
@@ -118,6 +121,7 @@ struct Navigation {
     queues: Queues,
     queue_completions: mpsc::Sender<Box<QueueCompletion>>,
     interactions: InteractionProjection,
+    pages: HistoryPaging,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
     failed_drafts: HashMap<DraftId, Option<RuntimeUse>>,
@@ -161,6 +165,7 @@ impl NavigationHandle {
             queues: Queues::default(),
             queue_completions,
             interactions: InteractionProjection::default(),
+            pages: HistoryPaging::default(),
             view: NavigationView::default(),
             editable: HashMap::new(),
             failed_drafts: HashMap::new(),
@@ -224,6 +229,7 @@ impl Navigation {
                     request = commands.recv() => Input::Command(request),
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
+                    completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
@@ -233,6 +239,7 @@ impl Navigation {
                     request = commands.recv() => Input::Command(request),
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
+                    completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                 }
             };
@@ -247,6 +254,10 @@ impl Navigation {
                 Input::QueueCompleted(Some(result)) => self.complete_queue(*result),
                 Input::QueueCompleted(None) => {
                     unreachable!("navigation owns the queue completion sender")
+                }
+                Input::HistoryCompleted(Some(result)) => self.complete_history_page(*result),
+                Input::HistoryCompleted(None) => {
+                    unreachable!("navigation owns the history completion sender")
                 }
                 Input::OwnerChanged => self.sync_actions(),
                 Input::Backend(Some(event)) => {
@@ -341,6 +352,7 @@ impl Navigation {
                 self.require_request(request)?;
                 self.focus(None).await.map_err(report)?;
             }
+            NavigationIntent::LoadOlderHistory(request) => self.load_older_history(request)?,
             NavigationIntent::ClearProject(request) => {
                 self.require_request(request)?;
                 self.clear().await.map_err(report)?;
@@ -513,6 +525,7 @@ impl Navigation {
         self.set_editor(draft)?;
         self.view.selected_chat = thread.as_ref().map(|thread| thread.0.clone());
         self.view.retryable = false;
+        self.retire_history_pages();
         if let Some(selected) = &mut self.selection {
             selected.thread = thread;
         }
@@ -568,6 +581,7 @@ impl Navigation {
     }
 
     async fn disconnect(&mut self) {
+        self.retire_history_pages();
         self.sandbox_setup = None;
         self.queues = Queues::default();
         let had_write_access =
@@ -694,6 +708,8 @@ impl Navigation {
             return Ok(());
         };
         let checkout = selection.checkout.clone();
+        let workspace = selection.id;
+        self.retire_history_pages();
         let client = self
             .backend
             .as_ref()
@@ -720,6 +736,9 @@ impl Navigation {
         }
         self.stream = TextBatcher::default();
         self.restored_active_items = active;
+        self.pages
+            .install(workspace, thread.clone(), client.identity(), summary, page);
+        self.view.older_history = self.pages.view();
         self.publish_history(before_resume);
 
         let backend = self.backend.as_mut().expect("backend connected");

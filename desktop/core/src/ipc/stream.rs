@@ -96,6 +96,29 @@ impl TranscriptView {
         (item.revision == revision).then_some(item)
     }
 
+    pub(super) fn prepend(&mut self, earlier: Self) -> Vec<TranscriptItem> {
+        let mut prefix: Vec<_> = earlier
+            .items
+            .into_iter()
+            .filter(|item| !self.positions.contains_key(&item.item_id))
+            .collect();
+        if prefix.is_empty() {
+            return prefix;
+        }
+        let inserted = prefix.clone();
+        prefix.append(&mut self.items);
+        self.items = prefix;
+        self.positions.clear();
+        self.commands.clear();
+        for (row, item) in self.items.iter().enumerate() {
+            self.positions.insert(item.item_id.clone(), row);
+            for (index, command) in item.commands.iter().enumerate() {
+                self.commands.insert(command.id.clone(), (row, index));
+            }
+        }
+        inserted
+    }
+
     pub(super) fn apply(&mut self, change: &mut StreamChange) -> bool {
         if self.completed {
             return false;

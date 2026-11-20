@@ -17,6 +17,45 @@ function containsText(text: string) {
   return document.querySelector('.workspace-transcript')?.textContent?.includes(text) ?? false;
 }
 
+function frame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function verifyOlderHistory(visible: () => WorkspaceSnapshot | null) {
+  const initial = visible();
+  const older = initial?.navigation.olderHistory;
+  if (!older) return;
+  const viewport = document.querySelector<HTMLDivElement>('.workspace-transcript');
+  const boundary = initial.transcript.items[0];
+  const anchor = viewport?.firstElementChild;
+  if (!viewport || !anchor || boundary?.itemId !== 'older-fixture-14/response' ||
+      viewport.scrollHeight <= viewport.clientHeight) {
+    throw new Error('The newest history page did not fill the scrollable transcript');
+  }
+  viewport.scrollTop = 100;
+  await frame();
+  viewport.scrollTop = 0;
+  await frame();
+  await frame();
+  if (visible()?.navigation.olderHistory?.ticket !== older.ticket ||
+      visible()?.navigation.olderHistory?.pending || viewport.firstElementChild !== anchor) {
+    throw new Error('Programmatic scrolling requested an older history page');
+  }
+  const top = anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  for (let count = 0; count < 2; count++) {
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+  }
+  await waitFor('The upward scroll did not prepend earlier turns', () =>
+    visible()?.transcript.items[0]?.itemId === 'older-fixture-01/response' &&
+    visible()?.navigation.olderHistory === null);
+  await frame();
+  const restoredTop = anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  const retained = visible()?.transcript.items.find((row) => row.itemId === boundary.itemId);
+  if (!anchor.isConnected || Math.abs(restoredTop - top) > 1 || retained?.revision !== boundary.revision) {
+    throw new Error('Prepending history changed the visible row, its position, or its revision');
+  }
+}
+
 async function verifySavedRows(workspaceId: WorkspaceId, snapshot: WorkspaceSnapshot) {
   const saved = snapshot.transcript.items.find((item) => item.itemId === 'first-saved-turn/first-history');
   const group = snapshot.transcript.items.find((item) => item.role === 'commands');
@@ -42,7 +81,7 @@ async function verifySavedRows(workspaceId: WorkspaceId, snapshot: WorkspaceSnap
   const height = row.getBoundingClientRect().height;
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
   copy.focus({ preventScroll: true });
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await frame();
   const revealed = getComputedStyle(copy).opacity === '1';
   const selectionRetained = !!selected && selection.toString() === selected && selection.containsNode(paragraph, true);
   const geometryRetained = row.getBoundingClientRect().height === height;
@@ -108,6 +147,7 @@ export async function verifyHistory(
       await waitFor('Writer lock did not leave readable history', () =>
         visible()?.navigation.selectedChat === FIRST && !!visible()?.navigation.retryable &&
         containsText('History in the first chat.'));
+      await verifyOlderHistory(visible);
       const saved = await verifySavedRows(workspaceId, visible()!);
       const [path, ...others] = await searchProjectPaths({ workspaceId, query: ' CAFÉ.MD ' });
       if (path?.displayPath !== 'notes/Café.md' || others.length) {

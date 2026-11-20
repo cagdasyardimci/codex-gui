@@ -21,6 +21,9 @@
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
   let restoreTabSelection: (() => void) | undefined;
+  let upwardHistory: { ticket: string; before: number; until: number } | undefined;
+  let requestingHistory: string | undefined;
+  let transcriptInput = 0;
   let draftId: string | undefined;
   let text = $state('');
   let composing = false;
@@ -71,8 +74,84 @@
     if (restore) requestAnimationFrame(restore);
   }
 
+  function requestOlderHistory() {
+    upwardHistory = undefined;
+    const older = navigation?.olderHistory;
+    const chatId = navigation?.selectedChat;
+    if (!workspace || !chatId || !older || older.pending || requestingHistory === older.ticket) return;
+    const ticket = older.ticket;
+    requestingHistory = ticket;
+    void navigateWorkspace({ loadOlderHistory: { workspaceId: workspace.workspaceId, chatId, ticket } })
+      .catch((error) => {
+        if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
+      }).finally(() => {
+        if (requestingHistory === ticket) requestingHistory = undefined;
+      });
+  }
+
+  function beginUpwardScroll() {
+    transcriptInput += 1;
+    const older = navigation?.olderHistory;
+    if (!older || older.pending || !transcript) return;
+    const before = transcript.scrollTop;
+    if (before <= 1) requestOlderHistory();
+    else upwardHistory = { ticket: older.ticket, before, until: performance.now() + 500 };
+  }
+
+  function transcriptWheel(event: WheelEvent) {
+    if (event.ctrlKey || event.deltaY === 0) return;
+    if (event.deltaY < 0) beginUpwardScroll();
+    else {
+      transcriptInput += 1;
+      upwardHistory = undefined;
+    }
+  }
+
+  function transcriptKey(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.isComposing || event.shiftKey || event.altKey) return;
+    if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) beginUpwardScroll();
+    else if (['ArrowDown', 'PageDown', 'End', ' '].includes(event.key)) {
+      transcriptInput += 1;
+      upwardHistory = undefined;
+    }
+  }
+
+  function transcriptScroll() {
+    if (!transcript || !upwardHistory) return;
+    const { ticket, before, until } = upwardHistory;
+    if (ticket !== navigation?.olderHistory?.ticket || performance.now() > until || transcript.scrollTop >= before) {
+      upwardHistory = undefined;
+    } else if (transcript.scrollTop <= 1) {
+      requestOlderHistory();
+    }
+  }
+
+  function preserveReadingPosition(current: WorkspaceSnapshot) {
+    if (!transcript || !snapshot || current.transcript.generation !== snapshot.transcript.generation) return;
+    const previousFirst = snapshot.transcript.items[0]?.itemId;
+    if (!previousFirst || current.transcript.items[0]?.itemId === previousFirst ||
+        !current.transcript.items.some((row) => row.itemId === previousFirst)) return;
+    const viewport = transcript;
+    const bounds = viewport.getBoundingClientRect();
+    const anchor = Array.from(viewport.children).find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.bottom > bounds.top && rect.top < bounds.bottom;
+    });
+    if (!anchor) return;
+    const top = anchor.getBoundingClientRect().top - bounds.top;
+    const input = transcriptInput;
+    void tick().then(() => {
+      if (snapshot?.transcript.generation !== current.transcript.generation || transcript !== viewport ||
+          input !== transcriptInput || !viewport.contains(anchor)) return;
+      const offset = anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+      viewport.scrollTop += offset - top;
+    });
+  }
+
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
+    preserveReadingPosition(current);
+    if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) showingChanges = false;
     snapshot = current;
     if (draftId !== current.navigation.draft?.id) {
@@ -313,7 +392,9 @@
       </nav>
     {/if}
     <section class="workspace-conversation" aria-label="Conversation">
-      <div class="workspace-transcript" bind:this={transcript}>
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (The named scrolling region needs keyboard focus and scroll input.) -->
+      <div class="workspace-transcript" role="region" aria-label="Transcript" tabindex="0" bind:this={transcript}
+        onwheel={transcriptWheel} onkeydown={transcriptKey} onscroll={transcriptScroll}>
         {#each snapshot?.transcript.items ?? [] as item (item.itemId)}
           <TranscriptRow {item} copy={copyResponse} onCopyFocus={focusResponseAction} />
         {/each}

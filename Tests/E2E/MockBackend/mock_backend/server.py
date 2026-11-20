@@ -170,9 +170,17 @@ class Server:
             thread = self.thread(p.get('threadId'))
             if method == 'thread/turns/list':
                 turns = list(reversed(thread['turns']))
+                if p.get('cursor'):
+                    offset = next((i for i, turn in enumerate(turns) if turn['id'] == p['cursor']), None)
+                    if offset is None:
+                        raise ProtocolError(-32602, 'Unknown turn page cursor')
+                    turns = turns[offset + 1:]
+                limit = p.get('limit') or len(turns)
+                next_cursor = turns[limit - 1]['id'] if len(turns) > limit else None
+                turns = turns[:limit]
                 if p.get('itemsView') == 'notLoaded':
                     turns = [{**t, 'items': [], 'itemsView': 'notLoaded'} for t in turns]
-                return {'data': turns, 'nextCursor': None}
+                return {'data': turns, 'nextCursor': next_cursor}
             turn = next((t for t in thread['turns'] if t['id'] == p.get('turnId')), None)
             if not turn:
                 raise ProtocolError(-32001, 'Unknown turn')

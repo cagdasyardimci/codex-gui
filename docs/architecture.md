@@ -138,4 +138,6 @@ Residency bounds retained conversation payload, rather than total process memory
 
 Scrolling to the top of the transcript requests the next page of older content when available, with one request pending at a time. Loading older content preserves the visible reading anchor within the scrollable document bounds. Layout and programmatic navigation do not trigger history pagination.
 
+Tauri’s [history pager](../desktop/src-tauri/src/navigation/paging.rs) retains the cursor under its connection, checkout and chat. It prepends turns by stable identity and retires pending reads on selection changes. The [transcript viewport](../desktop/frontend/src/WorkspaceShell.svelte) pairs an upward scroll gesture with the top boundary and restores the position of the visible row after insertion.
+
 Eviction must preserve navigation metadata and reading anchors. Preview reads cannot change transcript entries or reading position. Foreground navigation supersedes neighborhood work; owner changes and manual transcript scrolling cancel obsolete navigation. Keep all residency defaults and cost estimates in [ConversationCachePolicy](../Sources/CodexGUI/Application/State/ConversationCachePolicy.swift), rather than copying limits into consumers or documentation.

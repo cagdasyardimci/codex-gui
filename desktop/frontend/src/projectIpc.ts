@@ -40,6 +40,18 @@ function indexRows(transcript: TranscriptView): Map<string, number> {
   return new Map(transcript.items.map((item, index) => [item.itemId, index]));
 }
 
+function reuseRows(previous: WorkspaceSnapshot, incoming: WorkspaceSnapshot, positions: Map<string, number>): WorkspaceSnapshot {
+  if (incoming.workspace?.workspaceId !== previous.workspace?.workspaceId ||
+      incoming.navigation.selectedChat !== previous.navigation.selectedChat ||
+      incoming.transcript.generation !== previous.transcript.generation) return incoming;
+  const items = incoming.transcript.items.map((row) => {
+    const at = positions.get(row.itemId);
+    const prior = at === undefined ? undefined : previous.transcript.items[at];
+    return prior?.revision === row.revision ? prior : row;
+  });
+  return { ...incoming, transcript: { ...incoming.transcript, items } };
+}
+
 function applyStream(transcript: TranscriptView, change: StreamChange, positions: Map<string, number>): TranscriptView {
   if (change === 'completed') return { ...transcript, completed: true };
   const items = transcript.items.slice();
@@ -85,16 +97,24 @@ export async function observeWorkspace(
     const revision = update === 'resync' ? null
       : 'changed' in update ? update.changed.revision
       : 'navigation' in update ? update.navigation.revision
+      : 'history' in update ? update.history.revision
       : update.stream.revision;
     if (update === 'resync' || revision !== snapshot.revision + 1) {
-      ({ subscriptionId, snapshot } = await subscribeWorkspace());
+      const latest = await subscribeWorkspace();
       if (signal.aborted) return;
+      subscriptionId = latest.subscriptionId;
+      snapshot = reuseRows(snapshot, latest.snapshot, positions);
       positions = indexRows(snapshot.transcript);
     } else if ('changed' in update) {
-      snapshot = update.changed;
+      snapshot = reuseRows(snapshot, update.changed, positions);
       positions = indexRows(snapshot.transcript);
     } else if ('navigation' in update) {
       snapshot = { ...snapshot, ...update.navigation };
+    } else if ('history' in update) {
+      const { revision, navigation, prepended } = update.history;
+      const transcript = { ...snapshot.transcript, items: [...prepended, ...snapshot.transcript.items] };
+      snapshot = { ...snapshot, revision, navigation, transcript };
+      positions = indexRows(transcript);
     } else {
       snapshot = {
         ...snapshot,

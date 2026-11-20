@@ -11,6 +11,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 from verify_coding_probe import fixture_executable
+from mock_backend import ENTRY_POINT
 
 
 def seed_history_files(project: Path) -> None:
@@ -20,6 +21,21 @@ def seed_history_files(project: Path) -> None:
     (project / "notes" / "panel.png").write_bytes(b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/WZkAAAAASUVORK5CYII="
     ))
+
+
+def seed_paginated_history(state_path: Path) -> None:
+    scenario = ENTRY_POINT.parent / "mock_backend" / "scenarios" / "desktop-history.json"
+    threads = json.loads(scenario.read_text(encoding="utf-8"))["threads"]
+    first = next(thread for thread in threads if thread["id"] == "history-first")
+    earlier = []
+    for number in range(1, 33):
+        turn_id = f"older-fixture-{number:02}"
+        earlier.append({"id": turn_id, "status": "completed", "items": [{
+            "id": "response", "type": "agentMessage",
+            "text": f"Saved history page fixture {number:02}\n" + "First line\nSecond line\nThird line",
+        }]})
+    first["turns"] = earlier + first["turns"]
+    state_path.write_text(json.dumps({"threads": threads}, ensure_ascii=True), encoding="utf-8")
 
 
 def main() -> None:
@@ -47,6 +63,7 @@ def main() -> None:
         executable = str(args.app.resolve(strict=True))
         database_path = data / "workspace.sqlite3"
         state_path = Path(environment["CODEX_GUI_QA_STATE"])
+        seed_paginated_history(state_path)
         restart_offset = 0
         for index, command in enumerate([
             [executable, "--verify-history", str(data), str(project)],
@@ -65,6 +82,11 @@ def main() -> None:
         assert methods.count("initialize") == 4, methods
         assert methods.count("thread/list") >= 4, methods
         assert not {"thread/start", "turn/start"} & set(methods), methods
+        paged = [event for event in events if event["direction"] == "request"
+                 and event["method"] == "thread/turns/list" and event.get("cursor")]
+        assert [(entry.get("threadId"), entry["cursor"], entry.get("itemsView")) for entry in paged] == [
+            ("history-first", "older-fixture-14", "full"),
+        ], paged
         hidden_requests = [
             event["method"] for event in events[restart_offset:]
             if event["direction"] == "request" and event.get("threadId") == "history-second"
@@ -82,6 +104,7 @@ def main() -> None:
         assert not list(codex_home.iterdir())
         print("Verified selected draft and checkout retention without any thread or turn start requests")
         print("Verified an unselected chat's execution and command evidence reconciled after relaunch")
+        print("Verified one cursor-scoped older history request from the deliberate scroll")
 
 
 def seed_hidden_execution(database_path: Path, state_path: Path) -> None:
