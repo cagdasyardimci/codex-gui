@@ -11,6 +11,19 @@ pub struct NavigationView {
     pub draft: Option<EditorDraft>,
     pub retryable: bool,
     pub account: AccountView,
+    pub write_access: WriteAccess,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum WriteAccess {
+    #[default]
+    Unavailable,
+    SetupSandbox,
+    UpdateSandbox,
+    SettingUpSandbox,
+    UpdatingSandbox,
+    Ready,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -81,4 +94,5 @@ pub enum NavigationIntent {
     EditDraft(DraftEdit),
     SignIn(LoginScope),
     CancelSignIn(LoginTicket),
+    SetupSandbox(WorkspaceRequest),
 }

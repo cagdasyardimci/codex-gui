@@ -13,8 +13,12 @@ use super::{AppServerClient, RequestError};
 
 mod account;
 mod history;
+mod windows_sandbox;
 
 pub use account::{BrowserLogin, LoginCancellation, LoginCompletion};
+pub use windows_sandbox::{
+    WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
+};
 
 pub use history::{
     ChatRead, ChatSummary, HistoryTurn, QueueSnapshot, QueuedSubmission, ThreadActivity,

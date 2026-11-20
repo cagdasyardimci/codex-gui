@@ -76,6 +76,10 @@ class Server:
     def dispatch(self, method, p):
         if method == 'initialize':
             return {'userAgent': 'structured-qa-backend/1'}
+        if method == 'windowsSandbox/readiness' and self.scenario.get('desktopHistory'):
+            return {'status': self.state.data.get('windowsSandboxReadiness', 'ready')}
+        if method == 'windowsSandbox/setupStart' and self.scenario.get('desktopWindowsSandbox'):
+            return self.start_fixture_sandbox(p)
         if self.scenario.get('desktopAccount'):
             if method == 'account/read':
                 email = self.state.data.get('fixtureAccountEmail')
@@ -211,6 +215,26 @@ class Server:
             self.state.data['fixtureAccountEmail'] = 'subscriber@example.invalid'
             self.state.save()
             self.transport.event('account/login/completed', {'loginId': identity, 'success': True})
+
+    def start_fixture_sandbox(self, params):
+        readiness = self.state.data.get('windowsSandboxReadiness')
+        mode = {'notConfigured': 'unelevated', 'updateRequired': 'elevated'}.get(readiness)
+        if not mode or params != {'mode': mode, 'cwd': self.thread('history-first')['cwd']}:
+            raise ProtocolError(-32602, 'Sandbox setup must keep the selected checkout and mode')
+        def deliver():
+            wrong = 'elevated' if mode == 'unelevated' else 'unelevated'
+            self.transport.event('windowsSandbox/setupCompleted', {'mode': wrong, 'success': True})
+            timer = threading.Timer(0.6, self.finish_fixture_sandbox, args=(mode,))
+            timer.daemon = True
+            timer.start()
+        self.actions.append(deliver)
+        return {'started': True}
+
+    def finish_fixture_sandbox(self, mode):
+        with self.lock:
+            self.state.data['windowsSandboxReadiness'] = 'ready'
+            self.state.save()
+            self.transport.event('windowsSandbox/setupCompleted', {'mode': mode, 'success': True})
 
     def resume_history_fixture(self, thread):
         if thread['id'] != 'history-first':

@@ -13,7 +13,7 @@ pub use browse::{
     Account, AccountSnapshot, BrowseError, BrowserLogin, ChatRead, ChatSummary, CodexBrowser,
     HistoryTurn, LoginCancellation, LoginCompletion, ModelOption, Page, ProjectChatCursor,
     QueueSnapshot, QueuedSubmission, ThreadActivity, ThreadSummary, TurnActivity, TurnCursor,
-    TurnStatus,
+    TurnStatus, WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub use executable::{CodexExecutable, DiscoveryError, VersionProbeError};

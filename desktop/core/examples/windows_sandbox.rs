@@ -1,47 +1,18 @@
-use std::{
-    env,
-    error::Error,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{env, error::Error, path::PathBuf, time::Duration};
 
 use codex_gui_core::{
     checkout::CheckoutIdentity,
-    codex::{AppServerConnection, ClientInfo, CodexExecutable, ServerEvent},
+    codex::{
+        AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable, ServerEvent,
+        WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
+    },
     identity::{CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, WorkspaceIdentity},
 };
-use serde::Deserialize;
-use serde_json::{Value, json};
 use uuid::Uuid;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const SETUP_TIMEOUT: Duration = Duration::from_secs(90);
-const MODE: &str = "unelevated";
-
-#[derive(Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-enum Readiness {
-    NotConfigured,
-    UpdateRequired,
-    Ready,
-}
-
-#[derive(Deserialize)]
-struct ReadinessReply {
-    status: Readiness,
-}
-
-#[derive(Deserialize)]
-struct SetupReply {
-    started: bool,
-}
-
-#[derive(Deserialize)]
-struct SetupCompleted {
-    mode: String,
-    success: bool,
-    error: Option<String>,
-}
+const MODE: WindowsSandboxSetupMode = WindowsSandboxSetupMode::Unelevated;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -63,17 +34,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut connection = connect(&codex, &workspace, 1).await?;
     let initial = readiness(&connection).await?;
     println!("Initial Windows sandbox readiness: {initial:?}");
-    if initial != Readiness::NotConfigured {
+    if initial != WindowsSandboxReadiness::NotConfigured {
         return Err("expected a fresh Windows sandbox profile".into());
     }
-    setup(&mut connection, &checkout).await?;
+    setup(&mut connection).await?;
     connection.disconnect().await?;
 
     let connection = connect(&codex, &workspace, 2).await?;
     let persisted = readiness(&connection).await?;
     println!("Windows sandbox readiness after reconnect: {persisted:?}");
     connection.disconnect().await?;
-    if persisted != Readiness::Ready {
+    if persisted != WindowsSandboxReadiness::Ready {
         return Err("Windows sandbox setup did not persist readiness".into());
     }
     Ok(())
@@ -100,27 +71,19 @@ async fn connect(
     .await?)
 }
 
-async fn readiness(connection: &AppServerConnection) -> Result<Readiness, Box<dyn Error>> {
-    let result = connection
-        .client()
-        .request("windowsSandbox/readiness", Value::Null, REQUEST_TIMEOUT)
-        .await?;
-    Ok(serde_json::from_value::<ReadinessReply>(result)?.status)
+async fn readiness(
+    connection: &AppServerConnection,
+) -> Result<WindowsSandboxReadiness, Box<dyn Error>> {
+    Ok(CodexBrowser::new(connection.client())
+        .windows_sandbox_readiness(REQUEST_TIMEOUT)
+        .await?)
 }
 
-async fn setup(
-    connection: &mut AppServerConnection,
-    checkout: &Path,
-) -> Result<(), Box<dyn Error>> {
-    let result = connection
-        .client()
-        .request(
-            "windowsSandbox/setupStart",
-            json!({"mode": MODE, "cwd": checkout}),
-            REQUEST_TIMEOUT,
-        )
-        .await?;
-    if !serde_json::from_value::<SetupReply>(result)?.started {
+async fn setup(connection: &mut AppServerConnection) -> Result<(), Box<dyn Error>> {
+    if !CodexBrowser::new(connection.client())
+        .start_windows_sandbox_setup(MODE, REQUEST_TIMEOUT)
+        .await?
+    {
         return Err("Windows sandbox setup did not start".into());
     }
     let completed = tokio::time::timeout(SETUP_TIMEOUT, async {
@@ -128,13 +91,13 @@ async fn setup(
             if let ServerEvent::Notification { method, params } = event
                 && method == "windowsSandbox/setupCompleted"
             {
-                let completed = serde_json::from_value::<SetupCompleted>(params)?;
+                let completed: WindowsSandboxSetupCompleted = serde_json::from_value(params)?;
                 if completed.mode == MODE {
                     return Ok(completed);
                 }
             }
         }
-        Err::<SetupCompleted, Box<dyn Error>>(
+        Err::<WindowsSandboxSetupCompleted, Box<dyn Error>>(
             "connection closed before sandbox setup completed".into(),
         )
     })
@@ -145,6 +108,6 @@ async fn setup(
             .unwrap_or_else(|| "Windows sandbox setup failed".into())
             .into());
     }
-    println!("Windows sandbox setup completed in {MODE} mode");
+    println!("Windows sandbox setup completed in unelevated mode");
     Ok(())
 }

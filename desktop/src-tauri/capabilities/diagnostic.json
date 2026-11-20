@@ -10,6 +10,7 @@
     "allow-verify-media-result",
     "allow-verify-history-result",
     "allow-verify-account-result",
+    "allow-verify-windows-setup-result",
     "allow-change-workspace-fixture"
   ]
 }

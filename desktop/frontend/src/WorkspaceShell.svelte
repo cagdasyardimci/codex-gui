@@ -4,9 +4,10 @@
   import { navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
+  import { verifyWindowsSetup } from './windowsSetupProbe';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'account' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let draftId: string | undefined;
@@ -71,7 +72,7 @@
     }
   }
 
-  function workspaceAction(action: 'clearProject' | 'newChat' | 'refresh' | 'reconnect') {
+  function workspaceAction(action: 'clearProject' | 'newChat' | 'refresh' | 'reconnect' | 'setupSandbox') {
     if (!workspace) return;
     const request = { workspaceId: workspace.workspaceId };
     const intent = { [action]: request } as NavigationIntent;
@@ -121,6 +122,7 @@
     const lifecycle = new AbortController();
     void observeWorkspace(receive, lifecycle.signal).catch(console.error);
     if (verify === 'account') void verifyAccount(() => snapshot);
+    else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -136,6 +138,13 @@
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
+    {/if}
+    {#if navigation?.writeAccess === 'setupSandbox' || navigation?.writeAccess === 'settingUpSandbox'}
+      <button type="button" disabled={actionPending || navigation.writeAccess === 'settingUpSandbox'}
+        onclick={() => workspaceAction('setupSandbox')}>Set Up Sandbox</button>
+    {:else if navigation?.writeAccess === 'updateSandbox' || navigation?.writeAccess === 'updatingSandbox'}
+      <button type="button" disabled={actionPending || navigation.writeAccess === 'updatingSandbox'}
+        onclick={() => workspaceAction('setupSandbox')}>Update Sandbox</button>
     {/if}
     {#if navigation?.account.loginTicket}
       <button type="button" disabled={actionPending} onclick={cancelSignIn}>Cancel Sign-in</button>
@@ -163,7 +172,7 @@
           </article>
         {/each}
       </div>
-      {#if navigation?.retryable}
+      {#if navigation?.retryable && navigation.writeAccess === 'ready'}
         <button class="workspace-retry" type="button" disabled={actionPending} onclick={retryChat}>Retry</button>
       {/if}
       {#if navigation?.draft}

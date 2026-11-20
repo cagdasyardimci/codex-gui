@@ -11,7 +11,7 @@ mod stream;
 mod subscription;
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
-    LoginTicket, NavigationIntent, NavigationView,
+    LoginTicket, NavigationIntent, NavigationView, WriteAccess,
 };
 pub use stream::{
     StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptRole, TranscriptView,
@@ -154,6 +154,7 @@ pub fn workspace_typescript() -> String {
         AccountModel::decl(),
         LoginScope::decl(),
         LoginTicket::decl(),
+        WriteAccess::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

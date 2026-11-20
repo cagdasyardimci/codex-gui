@@ -23,6 +23,7 @@ fn main() {
         Some("--verify-history") => fixture::Verification::History,
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
         Some("--verify-account") => fixture::Verification::Account,
+        Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         _ => fixture::Verification::None,
     };
     let coding_report = if mode.as_deref() == Some(coding_probe::ARGUMENT.as_ref()) {
@@ -38,6 +39,7 @@ fn main() {
         fixture::Verification::History
             | fixture::Verification::HistoryRestore
             | fixture::Verification::Account
+            | fixture::Verification::WindowsSetup
     )
     .then(|| {
         let data = PathBuf::from(
@@ -59,6 +61,7 @@ fn main() {
             fixture::verify_media_result,
             fixture::verify_history_result,
             fixture::verify_account_result,
+            fixture::verify_windows_setup_result,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::navigate_workspace,
@@ -87,6 +90,7 @@ fn main() {
                     | fixture::Verification::History
                     | fixture::Verification::HistoryRestore
                     | fixture::Verification::Account
+                    | fixture::Verification::WindowsSetup
             ) {
                 let (beta_data, initial_project) = match desktop_fixture {
                     Some(fixture) => fixture,
@@ -98,7 +102,7 @@ fn main() {
                     &beta_data.join("workspace.sqlite3"),
                     project.state.clone(),
                     initial_project,
-                    verification == fixture::Verification::Account,
+                    verification,
                 )
                 .map_err(|error| -> Box<dyn std::error::Error> { error })?;
                 assert!(project.navigation.set(navigation).is_ok());

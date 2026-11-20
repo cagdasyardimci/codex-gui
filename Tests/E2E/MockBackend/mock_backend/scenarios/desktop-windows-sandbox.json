@@ -1,0 +1,4 @@
+{
+  "extends": "desktop-history",
+  "desktopWindowsSandbox": true
+}

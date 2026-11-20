@@ -30,6 +30,7 @@ pub enum Verification {
     History,
     HistoryRestore,
     Account,
+    WindowsSetup,
 }
 
 #[derive(Deserialize)]
@@ -250,6 +251,25 @@ pub fn verify_account_result(
         app.exit(1);
     } else {
         println!("Verified installed ChatGPT sign-in, cancellation, and connection-scoped refresh");
+        app.exit(0);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn verify_windows_setup_result(
+    app: AppHandle,
+    verification: State<'_, Verification>,
+    failure: Option<String>,
+) -> Result<(), String> {
+    if *verification != Verification::WindowsSetup {
+        return Err("Windows setup verification was not requested at launch".into());
+    }
+    if let Some(failure) = failure {
+        eprintln!("Windows setup verification failed: {failure}");
+        app.exit(1);
+    } else {
+        println!("Verified installed Windows sandbox setup and draft retention");
         app.exit(0);
     }
     Ok(())

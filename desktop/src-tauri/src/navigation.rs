@@ -18,6 +18,7 @@ use codex_gui_core::{
     ipc::{
         ChatRow, DraftEdit, EditorDraft, IpcError, NavigationIntent, NavigationView, StreamChange,
         TextBatcher, TranscriptItem, TranscriptRole, TranscriptView, WorkspaceId, WorkspaceRequest,
+        WriteAccess,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -32,10 +33,12 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use crate::project_ipc::ProjectState;
+use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
+mod sandbox;
 use account::AccountFlow;
+use sandbox::SandboxSetup;
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 type Failure = Box<dyn Error + Send + Sync>;
@@ -83,6 +86,8 @@ struct Navigation {
     source_session: CheckoutSessionId,
     source_generation: u64,
     login: AccountFlow,
+    windows_sandbox: bool,
+    sandbox_setup: Option<SandboxSetup>,
     view: NavigationView,
     editable: HashSet<DraftId>,
     stream: TextBatcher,
@@ -96,7 +101,7 @@ impl NavigationHandle {
         database: &Path,
         model: Arc<Mutex<ProjectState>>,
         fixture_project: Option<PathBuf>,
-        fixture_account: bool,
+        verification: Verification,
     ) -> Result<Self, Failure> {
         let store = AttachmentStore::open(database)?;
         let saved = store.desktop_selection()?;
@@ -109,7 +114,9 @@ impl NavigationHandle {
             backend: None,
             source_session: CheckoutSessionId(Uuid::new_v4()),
             source_generation: 0,
-            login: AccountFlow::new(fixture_account),
+            login: AccountFlow::new(verification == Verification::Account),
+            windows_sandbox: cfg!(windows) || verification == Verification::WindowsSetup,
+            sandbox_setup: None,
             view: NavigationView::default(),
             editable: HashSet::new(),
             stream: TextBatcher::default(),
@@ -175,7 +182,10 @@ impl Navigation {
                     self.flush_stream();
                     self.disconnect().await;
                 }
-                Input::Flush => self.flush_stream(),
+                Input::Flush => {
+                    self.flush_stream();
+                    self.expire_sandbox_setup(tokio::time::Instant::now()).await;
+                }
             }
         }
         self.disconnect().await;
@@ -245,7 +255,8 @@ impl Navigation {
             }
             NavigationIntent::Retry(request) => {
                 self.require(request.workspace_id)?;
-                if !self.view.retryable
+                if self.view.write_access != WriteAccess::Ready
+                    || !self.view.retryable
                     || self.view.selected_chat.as_ref() != Some(&request.chat_id)
                 {
                     return Err(IpcError::StaleSelection);
@@ -278,6 +289,10 @@ impl Navigation {
                 self.view.account.login_ticket = None;
                 self.publish_navigation();
                 result.map_err(report)?;
+            }
+            NavigationIntent::SetupSandbox(request) => {
+                self.require_request(request)?;
+                self.start_sandbox_setup().await?;
             }
         }
         Ok(None)
@@ -405,11 +420,14 @@ impl Navigation {
     }
 
     async fn disconnect(&mut self) {
+        self.sandbox_setup = None;
+        let had_write_access =
+            std::mem::take(&mut self.view.write_access) != WriteAccess::Unavailable;
         if let Some(backend) = self.backend.take() {
             if let Err(error) = self.login.retire(&backend.connection.client()).await {
                 eprintln!("{error}");
             }
-            if self.view.account.login_ticket.take().is_some() {
+            if self.view.account.login_ticket.take().is_some() || had_write_access {
                 self.publish_navigation();
             }
             if let Err(error) = backend.connection.disconnect().await {
@@ -484,6 +502,7 @@ impl Navigation {
         if self.selection.is_none() {
             return Ok(());
         }
+        self.refresh_write_access(&client).await;
         let browser = CodexBrowser::new(client);
         let chats = browser.project_chats(false, None, RPC_TIMEOUT).await?;
         self.view.chats = chats
@@ -540,7 +559,8 @@ impl Navigation {
         self.publish_history(before_resume);
 
         let backend = self.backend.as_mut().expect("backend connected");
-        if (acquire_writer || !self.view.retryable)
+        if self.view.write_access == WriteAccess::Ready
+            && (acquire_writer || !self.view.retryable)
             && !backend.engine.snapshot().writable_threads.contains(&thread)
         {
             let resumed = backend
@@ -561,6 +581,14 @@ impl Navigation {
             return Ok(());
         };
         let client = backend.connection.client();
+        if let ServerEvent::Notification { method, params } = &event
+            && method == "windowsSandbox/setupCompleted"
+        {
+            let completed = serde_json::from_value(params.clone())?;
+            return self
+                .handle_sandbox_completion(client.identity(), completed)
+                .await;
+        }
         if let ServerEvent::Notification { method, params } = &event
             && method == "account/login/completed"
         {
