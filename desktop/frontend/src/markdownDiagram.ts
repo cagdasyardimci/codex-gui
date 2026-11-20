@@ -23,11 +23,14 @@ export function diagram(source: string, signal: AbortSignal): Promise<Blob | und
     stage.className = 'markdown-diagram-stage';
     stage.setAttribute('aria-hidden', 'true');
     document.body.append(stage);
+    const removeStage = () => stage.remove();
+    signal.addEventListener('abort', removeStage, { once: true });
     try {
       const result = await mermaid.render(`markdown-diagram-${++nextId}`, source, stage);
       if (!signal.aborted) return previewSvg(result.svg);
     } finally {
-      stage.remove();
+      signal.removeEventListener('abort', removeStage);
+      removeStage();
     }
   });
   serial = result.then(() => {}, () => {});

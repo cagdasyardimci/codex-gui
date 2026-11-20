@@ -6,8 +6,10 @@
   import { preserveMarkdownSelection } from './markdownSelection';
 
   let { source, request }: { source: string; request?: TranscriptRowRequest } = $props();
-  let rendered = $state.raw<MarkdownNode[] | null>(null);
+  let parsed = $state.raw<{ scope: string; source: string; nodes: MarkdownNode[] | null }>();
   let root = $state<HTMLDivElement>();
+  const scope = $derived(request && JSON.stringify([request.workspaceId, request.chatId, request.generation, request.itemId]));
+  const rendered = $derived(parsed?.scope === scope && parsed?.source === source ? parsed?.nodes ?? null : null);
 
   const tags: Partial<Record<MarkdownKind, string>> = {
     paragraph: 'p', heading1: 'h1', heading2: 'h2', heading3: 'h3', heading4: 'h4',
@@ -18,14 +20,19 @@
   $effect(() => {
     const row = request;
     const element = root;
-    rendered = null;
+    const owner = scope;
+    const text = source;
+    if (!owner || parsed?.scope === owner && parsed.source === text) return;
     if (!row || !element || !/[\n\r`*_[\]<>#~&$\\+-]|^\s*\d+[.)]\s|^(?: {4}|\t)/.test(source)) return;
     const lifetime = new AbortController();
     void renderTranscriptMarkdown(row).then((result) => {
       const children = result?.[0]?.children ?? [];
-      if (lifetime.signal.aborted || !result || result.length === 1 && result[0]?.kind === 'paragraph' &&
-          children.every((node) => node.kind === 'text') && plain(children) === source) return;
-      preserveMarkdownSelection(element, lifetime.signal, () => { rendered = result; });
+      if (lifetime.signal.aborted) return;
+      const literal = result?.length === 1 && result[0]?.kind === 'paragraph' &&
+        children.every((node) => node.kind === 'text') && plain(children) === text;
+      preserveMarkdownSelection(element, lifetime.signal, () => {
+        parsed = { scope: owner, source: text, nodes: literal ? null : result };
+      });
     }).catch(() => {});
     return () => lifetime.abort();
   });

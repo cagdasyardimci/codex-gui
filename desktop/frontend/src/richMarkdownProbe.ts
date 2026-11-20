@@ -25,7 +25,8 @@ export async function verifyStreamingFormula(visible: () => WorkspaceSnapshot | 
 export async function verifySettledRichMarkdown(visible: () => WorkspaceSnapshot | null) {
   const viewport = document.querySelector<HTMLDivElement>('.workspace-transcript');
   if (viewport) viewport.scrollTop = viewport.scrollHeight;
-  const row = () => surface(richRow(visible)?.itemId);
+  const id = richRow(visible)?.itemId;
+  const row = () => surface(id);
   await waitFor('The completed Markdown row did not mount its rich blocks', () =>
     !!row()?.querySelector('.markdown-diagram') && !!row()?.querySelector('.markdown-display-math'));
   // Keep the same row mounted while measuring asynchronously decoded content.
@@ -56,6 +57,9 @@ export async function verifySettledRichMarkdown(visible: () => WorkspaceSnapshot
       .filter((name) => name && /markdownDiagram|flowDiagram|render-/.test(name));
     throw new Error(`${error.message} ${JSON.stringify({ pendingRender: !!document.querySelector('.markdown-diagram-stage'),
       hasImage: !!preview, hidden: preview?.hidden, loaded: preview?.complete, width: preview?.naturalWidth, resources,
+      mounted: !!row(), sourceFallback: !!row()?.querySelector('.markdown-source'),
+      focusedRow: document.activeElement?.closest('[data-item-id]')?.getAttribute('data-item-id'),
+      itemId: id, currentItem: richRow(visible)?.itemId,
       renderPhase: container ? richBlockPhase.get(container) : undefined })}`);
   });
   const preview = image()!;
