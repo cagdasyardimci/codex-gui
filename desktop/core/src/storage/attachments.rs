@@ -84,7 +84,14 @@ struct StoreInner {
     blobs: PathBuf,
     staging: PathBuf,
     state: Mutex<StoreState>,
-    _owner: File,
+    owner: File,
+}
+
+impl Drop for StoreInner {
+    fn drop(&mut self) {
+        // Release the profile lock even if a concurrent fork still holds the descriptor.
+        let _ = self.owner.unlock();
+    }
 }
 
 struct StoreState {
@@ -160,7 +167,7 @@ impl AttachmentStore {
                     leases: HashMap::new(),
                     active_submissions: HashSet::new(),
                 }),
-                _owner: owner,
+                owner,
             }),
         };
         store.collect()?;

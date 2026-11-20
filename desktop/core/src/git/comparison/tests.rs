@@ -212,3 +212,193 @@ async fn compares_working_tree_scopes_without_running_configured_clean_filters()
         }
     }
 }
+
+#[tokio::test]
+async fn exports_exact_bytes_and_rejects_a_changed_file_as_one_comparison() {
+    let scratch = initialize();
+    let root = scratch.path();
+    fs::write(root.join("a.txt"), "original a\n").unwrap();
+    fs::write(root.join("b.bin"), [0, 1, 2, 3]).unwrap();
+    git(root, &["add", "a.txt", "b.bin"]);
+    git(root, &["commit", "--no-gpg-sign", "-m", "Base"]);
+    fs::write(root.join("a.txt"), "changed  a\n").unwrap();
+    fs::write(root.join("b.bin"), [0, 1, 4, 3]).unwrap();
+    let expected = git(
+        root,
+        &[
+            "diff",
+            "--no-color",
+            "--full-index",
+            "--binary",
+            "--unified=2147483647",
+            "--find-renames",
+            "--find-copies",
+            "HEAD",
+            "--",
+        ],
+    );
+    assert!(
+        expected
+            .windows(b"GIT binary patch".len())
+            .any(|window| window == b"GIT binary patch")
+    );
+    let service = GitComparisons::open(CheckoutIdentity::capture(root).unwrap())
+        .await
+        .unwrap();
+    let snapshot = service.compare(ComparisonSpec::Uncommitted).await.unwrap();
+    fs::write(root.join("untracked.txt"), "outside the comparison").unwrap();
+    assert_eq!(snapshot.export_patch().await.unwrap(), expected);
+
+    let binary = snapshot
+        .files()
+        .find(|file| file.after.as_deref() == Some("b.bin"))
+        .unwrap();
+    fs::write(root.join("b.bin"), [0, 1, 5, 3]).unwrap();
+    assert!(matches!(
+        snapshot.detail(binary.id).await,
+        Err(GitError::StaleComparison)
+    ));
+    assert!(matches!(
+        snapshot.export_patch().await,
+        Err(GitError::StaleComparison)
+    ));
+    assert!(
+        service
+            .compare(ComparisonSpec::Uncommitted)
+            .await
+            .unwrap()
+            .export_patch()
+            .await
+            .unwrap()
+            != expected
+    );
+}
+
+#[tokio::test]
+async fn export_pins_commit_objects_and_checks_the_captured_index() {
+    let scratch = initialize();
+    let root = scratch.path();
+    fs::write(root.join("a.txt"), "base\n").unwrap();
+    git(root, &["add", "a.txt"]);
+    git(root, &["commit", "--no-gpg-sign", "-m", "Base"]);
+    fs::write(root.join("a.txt"), "committed\n").unwrap();
+    git(root, &["add", "a.txt"]);
+    git(root, &["commit", "--no-gpg-sign", "-m", "Edit"]);
+    let service = GitComparisons::open(CheckoutIdentity::capture(root).unwrap())
+        .await
+        .unwrap();
+    let commit = service
+        .compare(ComparisonSpec::Commit("HEAD".into()))
+        .await
+        .unwrap();
+    let exact_commit = git(
+        root,
+        &[
+            "diff",
+            "--no-color",
+            "--full-index",
+            "--binary",
+            "--unified=2147483647",
+            "HEAD^",
+            "HEAD",
+            "--",
+        ],
+    );
+
+    fs::write(root.join("a.txt"), "staged change\n").unwrap();
+    git(root, &["add", "a.txt"]);
+    let staged = service.compare(ComparisonSpec::Staged).await.unwrap();
+    let exact_index = git(
+        root,
+        &[
+            "diff",
+            "--cached",
+            "--no-color",
+            "--full-index",
+            "--binary",
+            "--unified=2147483647",
+            "HEAD",
+            "--",
+        ],
+    );
+    fs::write(root.join("a.txt"), "unstaged edit\n").unwrap();
+    assert_eq!(staged.export_patch().await.unwrap(), exact_index);
+    assert_eq!(commit.export_patch().await.unwrap(), exact_commit);
+    git(root, &["add", "a.txt"]);
+    assert!(matches!(
+        staged.export_patch().await,
+        Err(GitError::StaleComparison)
+    ));
+    assert_eq!(commit.export_patch().await.unwrap(), exact_commit);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn exports_link_content_without_opening_the_link_target() {
+    use std::os::unix::fs::symlink;
+
+    let scratch = initialize();
+    let root = scratch.path();
+    let tracked = root.join("alias");
+    symlink("missing-source-a", &tracked).unwrap();
+    git(root, &["add", "alias"]);
+    git(root, &["commit", "--no-gpg-sign", "-m", "Base link"]);
+    fs::remove_file(&tracked).unwrap();
+    symlink("missing-source-b", &tracked).unwrap();
+    let service = GitComparisons::open(CheckoutIdentity::capture(root).unwrap())
+        .await
+        .unwrap();
+    let snapshot = service.compare(ComparisonSpec::Uncommitted).await.unwrap();
+    let bytes = snapshot.export_patch().await.unwrap();
+    assert!(
+        String::from_utf8(bytes)
+            .unwrap()
+            .contains("+missing-source-b")
+    );
+    fs::remove_file(&tracked).unwrap();
+    symlink("missing-source-c", &tracked).unwrap();
+    assert!(matches!(
+        snapshot.export_patch().await,
+        Err(GitError::StaleComparison)
+    ));
+}
+
+#[tokio::test]
+async fn captures_gitlink_head_and_local_changes_without_erasing_the_nested_checkout() {
+    let scratch = initialize();
+    let root = scratch.path();
+    let nested = root.join("linked");
+    fs::create_dir(&nested).unwrap();
+    git(&nested, &["init", "--initial-branch=main"]);
+    git(
+        &nested,
+        &["config", "--local", "core.hooksPath", "empty-hooks"],
+    );
+    git(&nested, &["config", "--local", "user.name", "Fixture"]);
+    git(
+        &nested,
+        &["config", "--local", "user.email", "fixture@example.invalid"],
+    );
+    fs::write(nested.join("file.txt"), "base\n").unwrap();
+    git(&nested, &["add", "file.txt"]);
+    git(&nested, &["commit", "--no-gpg-sign", "-m", "Nested base"]);
+    git(root, &["add", "linked"]);
+    git(root, &["commit", "--no-gpg-sign", "-m", "Capture gitlink"]);
+    fs::write(nested.join("file.txt"), "changed\n").unwrap();
+    let service = GitComparisons::open(CheckoutIdentity::capture(root).unwrap())
+        .await
+        .unwrap();
+    let snapshot = service.compare(ComparisonSpec::Uncommitted).await.unwrap();
+    assert_eq!(snapshot.files().len(), 1);
+    let patch = String::from_utf8(snapshot.export_patch().await.unwrap()).unwrap();
+    assert!(patch.contains("Subproject commit") && patch.contains("-dirty"));
+    git(&nested, &["add", "file.txt"]);
+    git(
+        &nested,
+        &["commit", "--no-gpg-sign", "-m", "Advance gitlink"],
+    );
+    assert!(matches!(
+        snapshot.export_patch().await,
+        Err(GitError::StaleComparison)
+    ));
+}

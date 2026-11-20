@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::{File, Metadata},
+    fs::{self, File, Metadata},
     io::{self, Read},
     path::{Component, Path, PathBuf},
     time::SystemTime,
@@ -85,18 +85,9 @@ impl CheckoutFiles {
     }
 
     pub fn issue(&mut self, relative: &Path) -> Result<FileLink, FileError> {
-        let file = open_regular(&self.checkout, relative)?;
-        let identity = NativeFileIdentity::from_file(&file, &file.metadata()?)?;
-        self.checkout.revalidate()?;
+        let file = CapturedFile::capture(&self.checkout, relative)?;
         let id = FileHandle(Uuid::new_v4());
-        self.files.insert(
-            id,
-            CapturedFile {
-                relative: relative.to_path_buf(),
-                identity,
-                _anchor: file,
-            },
-        );
+        self.files.insert(id, file);
         Ok(FileLink {
             id,
             display_path: relative.to_string_lossy().into_owned(),
@@ -105,12 +96,7 @@ impl CheckoutFiles {
 
     pub fn read(&self, handle: FileHandle) -> Result<FileRead, FileError> {
         let file = self.files.get(&handle).ok_or(FileError::InvalidHandle)?;
-        let opened = file.reopen(&self.checkout)?;
-        let read = read_bounded(&opened, MAX_READ_BYTES)?;
-        // Confirm the still-published name after reading from its open descriptor.
-        file.reopen(&self.checkout)?;
-        self.checkout.revalidate()?;
-        Ok(read)
+        file.read(&self.checkout, MAX_READ_BYTES)
     }
 
     pub fn close(&mut self, handle: FileHandle) {
@@ -119,6 +105,26 @@ impl CheckoutFiles {
 }
 
 impl CapturedFile {
+    fn capture(checkout: &CheckoutIdentity, relative: &Path) -> Result<Self, FileError> {
+        let file = open_regular(checkout, relative)?;
+        let identity = NativeFileIdentity::from_file(&file, &file.metadata()?)?;
+        checkout.revalidate()?;
+        Ok(Self {
+            relative: relative.to_path_buf(),
+            identity,
+            _anchor: file,
+        })
+    }
+
+    fn read(&self, checkout: &CheckoutIdentity, limit: u64) -> Result<FileRead, FileError> {
+        let opened = self.reopen(checkout)?;
+        let read = read_bounded(&opened, limit)?;
+        // Confirm the still-published name after reading from its open descriptor.
+        self.reopen(checkout)?;
+        checkout.revalidate()?;
+        Ok(read)
+    }
+
     fn reopen(&self, checkout: &CheckoutIdentity) -> Result<File, FileError> {
         let file = open_regular(checkout, &self.relative)?;
         self.verify_identity(&file)?;
@@ -132,6 +138,40 @@ impl CapturedFile {
         }
         Ok(metadata)
     }
+}
+
+pub(crate) fn comparison_file_revision(
+    checkout: &CheckoutIdentity,
+    relative: &Path,
+    limit: u64,
+) -> Result<FileRevision, FileError> {
+    checkout.revalidate()?;
+    let components = path_components(relative)?;
+    let (_, directories) = components.split_last().ok_or(FileError::InvalidPath)?;
+    let path = checkout.canonical_path().join(relative);
+    if fs::symlink_metadata(&path)?.file_type().is_symlink() {
+        let root = checkout.directory();
+        let parent = native::open_parent(root, directories)?;
+        let parent = parent.as_ref().unwrap_or(root);
+        let parent_id = NativeFileIdentity::from_file(parent, &parent.metadata()?)?;
+        let link = fs::read_link(&path)?;
+        let recheck = native::open_parent(root, directories)?;
+        let recheck = recheck.as_ref().unwrap_or(root);
+        if parent_id != NativeFileIdentity::from_file(recheck, &recheck.metadata()?)?
+            || fs::read_link(&path)? != link
+        {
+            return Err(FileError::Changed);
+        }
+        checkout.revalidate()?;
+        let bytes = link.as_os_str().as_encoded_bytes();
+        if bytes.len() as u64 > limit {
+            return Err(FileError::TooLarge);
+        }
+        return Ok(FileRevision::from_bytes(bytes));
+    }
+    Ok(CapturedFile::capture(checkout, relative)?
+        .read(checkout, limit)?
+        .revision)
 }
 
 fn open_regular(checkout: &CheckoutIdentity, relative: &Path) -> Result<File, FileError> {
@@ -178,7 +218,7 @@ fn read_bounded(mut file: &File, limit: u64) -> Result<FileRead, FileError> {
 }
 
 impl FileRevision {
-    fn from_bytes(bytes: &[u8]) -> Self {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
         Self {
             digest: hex::encode(Sha256::digest(bytes)),
             byte_count: bytes.len(),

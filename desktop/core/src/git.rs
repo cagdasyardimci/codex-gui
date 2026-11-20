@@ -39,6 +39,8 @@ pub enum GitError {
     Checkout(#[from] CheckoutError),
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    File(#[from] crate::files::FileError),
     #[error("Git exited with {0}")]
     Exit(ExitStatus),
     #[error("Git did not complete within its query deadline")]

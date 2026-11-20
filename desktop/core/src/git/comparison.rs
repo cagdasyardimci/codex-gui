@@ -4,13 +4,16 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::*;
+use crate::files::FileRevision;
 
+mod export;
 mod raw;
 mod selectors;
 use raw::{RawChange, parse_changes as parse_raw_changes, patch_sections};
 pub use selectors::{BranchChoice, BranchSelectors, RecentCommit};
 
 const COMPARISON_PATCH_BYTES: usize = 8 * 1024 * 1024;
+const PATCH_ARGUMENTS: [&str; 3] = ["--patch", "--binary", "--unified=2147483647"];
 const DIFF_ARGUMENTS: &[&str] = &[
     "diff",
     "--no-color",
@@ -85,6 +88,7 @@ pub struct GitComparison {
 struct Entry {
     id: ComparisonFileId,
     change: RawChange,
+    input: Option<FileRevision>,
 }
 
 impl GitComparisons {
@@ -105,15 +109,7 @@ impl GitComparisons {
             policy,
             entries: Vec::new(),
         };
-        comparison.entries = comparison
-            .read_summary()
-            .await?
-            .into_iter()
-            .map(|change| Entry {
-                id: ComparisonFileId(Uuid::new_v4()),
-                change,
-            })
-            .collect();
+        comparison.capture_entries().await?;
         self.verify_repository().await?;
         Ok(comparison)
     }
@@ -281,6 +277,7 @@ impl GitComparison {
             .find(|entry| entry.id == id)
             .ok_or(GitError::RetiredFile)?;
         self.owner.verify_repository().await?;
+        self.verify_entry(entry).await?;
         let before = entry.change.before.as_ref();
         let paths = before
             .into_iter()
@@ -294,12 +291,13 @@ impl GitComparison {
             .map(|path| path.as_os_str());
         let output = self
             .diff(
-                &["--raw", "-z", "--patch", "--binary", "--unified=2147483647"],
+                ["--raw", "-z"].into_iter().chain(PATCH_ARGUMENTS),
                 paths,
                 COMPARISON_PATCH_BYTES,
             )
             .await?;
         self.owner.verify_repository().await?;
+        self.verify_entry(entry).await?;
         let (changes, sections) = patch_sections(&output)?;
         let section = changes
             .iter()
@@ -311,14 +309,14 @@ impl GitComparison {
 
     async fn read_summary(&self) -> Result<Vec<RawChange>, GitError> {
         let raw = self
-            .diff(&["--raw", "-z"], std::iter::empty(), QUERY_BYTES)
+            .diff(["--raw", "-z"], std::iter::empty(), QUERY_BYTES)
             .await?;
         parse_raw_changes(&raw)
     }
 
     async fn diff<'path>(
         &'path self,
-        output: &[&'path str],
+        output: impl IntoIterator<Item = &'path str>,
         paths: impl Iterator<Item = &'path OsStr>,
         limit: usize,
     ) -> Result<Vec<u8>, GitError> {
@@ -339,7 +337,7 @@ impl GitComparison {
                         matches!(self.target, ComparisonSide::Index)
                             .then_some(OsStr::new("--cached")),
                     )
-                    .chain(output.iter().copied().map(OsStr::new))
+                    .chain(output.into_iter().map(OsStr::new))
                     .chain(refs)
                     .chain([OsStr::new("--")])
                     .chain(paths),

@@ -8,6 +8,12 @@ pub(super) struct RawChange {
     pub(super) after: Option<PathBuf>,
 }
 
+impl RawChange {
+    pub(super) fn is_gitlink(&self) -> bool {
+        self.identity.split(|&byte| byte == b' ').nth(1) == Some(b"160000")
+    }
+}
+
 pub(super) fn parse_changes(bytes: &[u8]) -> Result<Vec<RawChange>, GitError> {
     use ComparisonKind::*;
     let mut fields = nul_fields(bytes)?;
