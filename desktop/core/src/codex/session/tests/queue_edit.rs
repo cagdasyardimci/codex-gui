@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     codex::{CodexBrowser, QueuedSubmission},
     storage::attachments::queue_edits::QueueEditError,
-    workspace::{QueueDeleteResult, QueueEditResult, QueueError},
+    workspace::{QueueDeleteResult, QueueEditResult, QueueError, QueueStartResult},
 };
 
 fn entry(index: u128, text: &str) -> QueuedSubmission {
@@ -139,6 +139,141 @@ async fn queue_read(
         json!({"data":entries,"nextCursor":null}),
     )
     .await;
+}
+
+#[tokio::test]
+async fn starting_a_captured_entry_preserves_its_receipt_through_idle_and_removal_races() {
+    time::timeout(DEADLINE, async {
+        let (mut fixture, prepared, _, draft, image) = Fixture::prepared().await;
+        drop(prepared);
+        let queued = entry(99, "  café\n");
+        let entries = std::slice::from_ref(&queued);
+        let request = fixture.queue_intent(draft, 99);
+        let client = &fixture.transport.client;
+        let engine = &fixture.engine;
+        let store = &fixture.store;
+        let checkout = &fixture.checkout;
+        let thread = ThreadId("thread-1".into());
+        engine
+            .observe_execution_event(
+                client.identity(),
+                &active_turn_event("turn/started", "inProgress"),
+            )
+            .await
+            .unwrap();
+        let (added, ()) = tokio::join!(
+            engine.enqueue_follow_up(request, queue_target(), client, store, DEADLINE),
+            async {
+                let add = next_request(&mut fixture.server).await;
+                assert_eq!(add["method"], "thread/queue/add");
+                respond(
+                    &mut fixture.replies,
+                    add["id"].clone(),
+                    json!({"queuedSubmission":queued}),
+                )
+                .await;
+            }
+        );
+        assert!(matches!(
+            added.unwrap().acknowledgement,
+            SubmissionAcknowledgement::Queued { .. }
+        ));
+        assert_eq!(
+            engine
+                .start_queue_entry(client, store, &thread, &queued, DEADLINE)
+                .await
+                .unwrap(),
+            QueueStartResult::ActiveTurn,
+        );
+        engine
+            .observe_execution_event(
+                client.identity(),
+                &active_turn_event("turn/completed", "interrupted"),
+            )
+            .await
+            .unwrap();
+        store
+            .save_editor_text(draft, "independent input".into())
+            .unwrap();
+
+        let db =
+            open_workspace_database(&fixture.scratch.path().join("workspace.sqlite3")).unwrap();
+        let references = || -> (i64, i64) {
+            db.query_row(
+                "SELECT (SELECT count(*) FROM submission_attachments),
+                        (SELECT count(*) FROM sent_submission_attachments)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap()
+        };
+        let (gone, ()) = tokio::join!(
+            engine.start_queue_entry(client, store, &thread, &queued, DEADLINE),
+            queue_read(&mut fixture.server, &mut fixture.replies, checkout, &[]),
+        );
+        assert_eq!(gone.unwrap(), QueueStartResult::Missing);
+        assert_eq!(references(), (1, 0));
+
+        for (error, expected) in [
+            (
+                Some("thread already has an active or pending turn"),
+                QueueStartResult::ActiveTurn,
+            ),
+            (
+                Some("queued submission not found: queued-99"),
+                QueueStartResult::Missing,
+            ),
+            (
+                None,
+                QueueStartResult::Started(TurnId("queued-turn".into())),
+            ),
+        ] {
+            let (started, ()) = tokio::join!(
+                engine.start_queue_entry(client, store, &thread, &queued, DEADLINE),
+                async {
+                    queue_read(&mut fixture.server, &mut fixture.replies, checkout, entries).await;
+                    let start = next_request(&mut fixture.server).await;
+                    assert_eq!(start["method"], "thread/queue/start");
+                    assert_eq!(
+                        start["params"],
+                        json!({"threadId":"thread-1", "queuedSubmissionId":"queued-99"})
+                    );
+                    if let Some(message) = error {
+                        let reject = encode_frame(&json!({
+                            "id":start["id"],"error":{"code":-32600,"message":message}
+                        }))
+                        .unwrap();
+                        fixture.replies.write_all(&reject).await.unwrap();
+                    } else {
+                        respond(
+                            &mut fixture.replies,
+                            start["id"].clone(),
+                            json!({
+                                "turn":{"id":"queued-turn","status":"inProgress"}
+                            }),
+                        )
+                        .await;
+                    }
+                }
+            );
+            assert_eq!(started.unwrap(), expected);
+            assert_eq!(references(), if error.is_some() { (1, 0) } else { (0, 1) });
+            assert_eq!(
+                store.read_editor_draft(draft).unwrap().text,
+                "independent input"
+            );
+            store.collect().unwrap();
+            assert!(image.is_file());
+        }
+        assert!(engine.snapshot().execution.active_turns.is_empty());
+        assert!(
+            time::timeout(Duration::from_millis(50), fixture.server.next_frame())
+                .await
+                .is_err()
+        );
+    })
+    .await
+    .unwrap();
 }
 
 #[tokio::test]

@@ -54,6 +54,8 @@ Routine [Tauri queue reads](../desktop/core/src/codex/browse/history/queue.rs) u
 
 Queue deletion releases local queue references only after Codex confirms removal of the captured entry. A disappeared entry retains its references until consumption or deletion is proved. Independent drafts and sent messages retain their references.
 
+Resume asks Codex to start the captured queue entry only while its thread is idle. Codex arbitrates concurrent turns. A rejection or uncertain reply keeps the receipt and attachment references for reconciliation.
+
 [Resuming a Tauri chat](../desktop/core/src/workspace/resume.rs) reserves its routes before requesting writer ownership because Codex may dispatch queued work immediately. Early events stay with the captured thread and become actionable after the reply confirms its checkout and identity. A competing writer leaves the scoped history available for reading. Reconcile active turns and command exits from backend evidence when writer ownership is reestablished.
 
 Distinguish a known rejection from an uncertain submission. A cross-app writer lock is a known rejection; reading its saved history must not adopt another client's turn. Retry reestablishes ownership without resending the prompt. Preserve submitted drafts until acknowledgement, restoring them only if the resulting empty draft remains untouched; newer edits and independent draft lifetimes take precedence.

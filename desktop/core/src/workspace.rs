@@ -32,7 +32,7 @@ pub use interactions::{
     PendingInteraction, PermissionScope,
 };
 pub use prepare::{PrepareError, PreparedThread};
-pub use queue::{QueueDeleteResult, QueueEditResult, QueueError};
+pub use queue::{QueueDeleteResult, QueueEditResult, QueueError, QueueStartResult};
 pub use recovery::SubmissionRecovery;
 pub use resume::{ResumeError, ResumedChat, ResumedMode, RoutedEvent};
 pub use send::{SendDraft, SendIntent, SendSettings};

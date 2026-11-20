@@ -9,17 +9,17 @@ use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard, watch};
 use uuid::Uuid;
 
-use super::{WorkspaceAction, WorkspaceEngine, WorkspaceError};
+use super::{SubmissionError, WorkspaceAction, WorkspaceEngine, WorkspaceError};
 use crate::{
     checkout::{CheckoutError, CheckoutIdentity},
     codex::{
         AppServerClient, BrowseError, ChatRead, CodexBrowser, QueueSnapshot, QueuedSubmission,
         RequestError,
     },
-    identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId},
+    identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
     storage::{
         attachments::{
-            AttachmentStore,
+            AttachmentStore, JournalOutcome,
             queue_edits::{QueueEdit, QueueEditError, QueueEditOutcome},
         },
         drafts::StoredDraft,
@@ -46,6 +46,8 @@ pub enum QueueError {
     InvalidReceipt,
     #[error(transparent)]
     Journal(#[from] crate::storage::attachments::JournalError),
+    #[error(transparent)]
+    Submission(#[from] SubmissionError),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -60,7 +62,94 @@ pub enum QueueDeleteResult {
     NotConfirmed,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum QueueStartResult {
+    Started(TurnId),
+    ActiveTurn,
+    Missing,
+}
+
 impl WorkspaceEngine {
+    pub async fn start_queue_entry(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        thread: &ThreadId,
+        entry: &QueuedSubmission,
+        timeout: Duration,
+    ) -> Result<QueueStartResult, QueueError> {
+        let _queue = self.lock_queue(thread).await;
+        let owner = client.identity();
+        self.queue_owner(owner, thread)?;
+        if self.thread_has_active_turn(thread) {
+            return Ok(QueueStartResult::ActiveTurn);
+        }
+        if !self
+            .has_captured_entry(client, thread, entry, timeout)
+            .await?
+        {
+            return Ok(QueueStartResult::Missing);
+        }
+        if self.thread_has_active_turn(thread) {
+            return Ok(QueueStartResult::ActiveTurn);
+        }
+        let response = self
+            .write_queue(
+                client,
+                thread,
+                "thread/queue/start",
+                json!({"threadId":thread.0,"queuedSubmissionId":entry.id}),
+                timeout,
+            )
+            .await;
+        let reply = match response {
+            Ok(reply) => reply,
+            Err(QueueError::Request(RequestError::Remote(error)))
+                if error.code == -32600
+                    && error.message == "thread already has an active or pending turn" =>
+            {
+                return Ok(QueueStartResult::ActiveTurn);
+            }
+            Err(QueueError::Request(RequestError::Remote(error)))
+                if error.code == -32600
+                    && error.message == format!("queued submission not found: {}", entry.id) =>
+            {
+                return Ok(QueueStartResult::Missing);
+            }
+            Err(error) => return Err(error),
+        };
+        let turn = reply["turn"]["id"]
+            .as_str()
+            .filter(|id| !id.is_empty() && reply["turn"]["status"] == "inProgress")
+            .map(|id| TurnId(id.to_owned()))
+            .ok_or(QueueError::InvalidReceipt)?;
+        if let Ok(request) = Uuid::parse_str(&entry.client_user_message_id) {
+            let operation = OperationIdentity {
+                connection: owner.clone(),
+                request: RequestId(request),
+            };
+            self.acknowledge(
+                &operation,
+                thread,
+                JournalOutcome::Accepted(turn.clone()),
+                store,
+            )
+            .await?;
+        }
+        self.detach_consumed_queue_edit(owner, store, thread, &entry.client_user_message_id)
+            .await?;
+        // Execution events are authoritative and may have already reported completion.
+        Ok(QueueStartResult::Started(turn))
+    }
+
+    fn thread_has_active_turn(&self, thread: &ThreadId) -> bool {
+        self.snapshot()
+            .execution
+            .active_turns
+            .iter()
+            .any(|turn| &turn.thread == thread)
+    }
+
     pub async fn delete_queue_entry(
         &self,
         client: &AppServerClient,
@@ -70,12 +159,11 @@ impl WorkspaceEngine {
         timeout: Duration,
     ) -> Result<QueueDeleteResult, QueueError> {
         let _queue = self.lock_queue(thread).await;
-        let entries = self.read_queue(client, thread, timeout).await?;
-        let Some(current) = find_entry(&entries, entry)? else {
+        if !self
+            .has_captured_entry(client, thread, entry, timeout)
+            .await?
+        {
             return Ok(QueueDeleteResult::NotConfirmed);
-        };
-        if current != entry {
-            return Err(QueueError::Changed);
         }
         let reply = self
             .write_queue(
@@ -107,8 +195,10 @@ impl WorkspaceEngine {
         timeout: Duration,
     ) -> Result<QueueEdit, QueueError> {
         let _queue = self.lock_queue(thread).await;
-        let entries = self.read_queue(client, thread, timeout).await?;
-        if find_entry(&entries, entry)? != Some(entry) {
+        if !self
+            .has_captured_entry(client, thread, entry, timeout)
+            .await?
+        {
             return Err(QueueError::Changed);
         }
         let _commit = self.preparation_commit.lock().await;
@@ -326,6 +416,21 @@ impl WorkspaceEngine {
             .ok_or(WorkspaceError::MissingCheckout)?;
         checkout.revalidate()?;
         Ok(checkout)
+    }
+
+    async fn has_captured_entry(
+        &self,
+        client: &AppServerClient,
+        thread: &ThreadId,
+        entry: &QueuedSubmission,
+        timeout: Duration,
+    ) -> Result<bool, QueueError> {
+        let entries = self.read_queue(client, thread, timeout).await?;
+        match find_entry(&entries, entry)? {
+            Some(current) if current == entry => Ok(true),
+            Some(_) => Err(QueueError::Changed),
+            None => Ok(false),
+        }
     }
 
     async fn read_queue(
