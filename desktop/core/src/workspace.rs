@@ -9,12 +9,17 @@ use crate::{
     storage::drafts::DraftId,
 };
 
+mod execution;
 mod interactions;
 mod prepare;
 mod send;
 mod submission;
 
 pub use crate::storage::attachments::SubmissionAcknowledgement;
+use execution::ExecutionState;
+pub use execution::{
+    CommandExecution, ExecutionObservation, ExecutionSnapshot, ExecutionTarget, InterruptError,
+};
 use interactions::InteractionRouter;
 pub use interactions::{
     InteractionError, InteractionIdentity, InteractionKind, InteractionResponse,
@@ -44,6 +49,7 @@ pub struct WorkspaceSnapshot {
     pub connection: ConnectionIdentity,
     pub revision: u64,
     pub rows: Vec<NavigationRow>,
+    pub execution: ExecutionSnapshot,
 }
 
 pub enum WorkspaceAction {
@@ -60,6 +66,16 @@ pub enum WorkspaceAction {
     },
     SubmissionFinished {
         operation: OperationIdentity,
+    },
+    ObserveExecution(ExecutionObservation),
+    ReserveInterrupt {
+        operation: OperationIdentity,
+        target: ExecutionTarget,
+        stopped: watch::Sender<bool>,
+    },
+    ReleaseInterrupt {
+        operation: OperationIdentity,
+        target: ExecutionTarget,
     },
     ReplaceConnection {
         expected: ConnectionIdentity,
@@ -88,6 +104,12 @@ pub enum WorkspaceError {
     MissingPreparation,
     #[error("the prepared thread is empty or already belongs to a navigation owner")]
     InvalidThread,
+    #[error("execution belongs to an unowned thread")]
+    UnownedExecution,
+    #[error("the captured turn is no longer active")]
+    InactiveTurn,
+    #[error("an interrupt is already pending for the captured turn")]
+    InterruptPending,
     #[error("the workspace effect queue is full")]
     EffectQueueFull,
     #[error("the workspace effect queue is closed")]
@@ -171,6 +193,7 @@ struct State {
     threads: HashMap<ThreadId, DraftId>,
     submissions: HashMap<RequestId, watch::Sender<bool>>,
     interactions: InteractionRouter,
+    execution: ExecutionState,
 }
 
 type ReservedPreparation = (mpsc::OwnedPermit<PrepareThread>, PrepareThread);
@@ -185,6 +208,7 @@ impl State {
             threads: HashMap::new(),
             submissions: HashMap::new(),
             interactions,
+            execution: ExecutionState::default(),
         }
     }
 
@@ -200,6 +224,7 @@ impl State {
                     target: target.clone(),
                 })
                 .collect(),
+            execution: self.execution.snapshot(),
         })
     }
 
@@ -235,6 +260,31 @@ impl State {
             WorkspaceAction::SubmissionFinished { operation } => {
                 self.validate_owner(&operation)?;
                 self.submissions.remove(&operation.request);
+                Ok(None)
+            }
+            WorkspaceAction::ObserveExecution(event) => {
+                if event.owner != self.connection {
+                    return Err(WorkspaceError::Retired);
+                }
+                if !self.threads.contains_key(&event.target.thread) {
+                    return Err(WorkspaceError::UnownedExecution);
+                }
+                self.execution.observe(event);
+                Ok(None)
+            }
+            WorkspaceAction::ReserveInterrupt {
+                operation,
+                target,
+                stopped,
+            } => {
+                self.validate_owner(&operation)?;
+                self.execution
+                    .reserve_interrupt(operation.request, target, stopped)?;
+                Ok(None)
+            }
+            WorkspaceAction::ReleaseInterrupt { operation, target } => {
+                self.validate_owner(&operation)?;
+                self.execution.release_interrupt(operation.request, &target);
                 Ok(None)
             }
             WorkspaceAction::ReplaceConnection {
@@ -326,6 +376,7 @@ impl State {
             stopped.send_replace(true);
         }
         self.interactions.replace_connection(replacement.clone());
+        self.execution.retire_connection();
         self.connection = replacement;
         Ok(())
     }

@@ -232,6 +232,7 @@ async fn timeout_after_a_complete_frame_ignores_the_late_reply_and_keeps_the_str
 }
 
 mod browse;
+mod execution;
 mod interactions;
 mod prepare;
 mod submission;
