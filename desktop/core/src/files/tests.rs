@@ -38,7 +38,7 @@ fn reads_by_scoped_handle_and_detects_replacement() {
 }
 
 #[test]
-fn rejects_invalid_paths_retired_checkouts_and_oversized_reads() {
+fn rejects_invalid_paths_oversized_reads_and_retired_checkout_scopes() {
     let parent = tempfile::tempdir().unwrap();
     let root = parent.path().join("checkout");
     fs::create_dir(&root).unwrap();
@@ -58,11 +58,13 @@ fn rejects_invalid_paths_retired_checkouts_and_oversized_reads() {
     let link = files.issue(Path::new("large")).unwrap();
     assert!(matches!(files.read(link.id), Err(FileError::TooLarge)));
 
+    // Windows prevents moving directories with an open descendant file.
+    files.close(link.id);
     fs::rename(&root, parent.path().join("old")).unwrap();
     fs::create_dir(&root).unwrap();
     fs::write(&target, "replacement").unwrap();
     assert!(matches!(
-        files.read(link.id),
+        files.issue(Path::new("large")),
         Err(FileError::Checkout(CheckoutError::Replaced(_)))
     ));
 }
