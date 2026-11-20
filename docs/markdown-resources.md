@@ -2,7 +2,7 @@
 
 The Swift reference pins KaTeX, Mermaid and ELK in the root [package manifest](../package.json) and [lockfile](../pnpm-lock.yaml). Both builds generate upstream JavaScript, stylesheets, fonts and notices from pinned dependencies. The installed apps render offline. Node.js and pnpm are build-time dependencies.
 
-Tauri pins its packages in the [frontend manifest](../desktop/frontend/package.json). The frontend production build packages lazy KaTeX and Mermaid modules, local fonts, and the license notices for the bundled dependencies. The [rich Markdown view](../desktop/frontend/src/MarkdownRichBlock.svelte) starts rendering when a completed block enters the viewport and releases its preview when the block is retired.
+Tauri pins its packages in the [frontend manifest](../desktop/frontend/package.json). The frontend production build packages lazy KaTeX and Mermaid modules, local fonts, and the license notices for the bundled dependencies. The [rich Markdown view](../desktop/frontend/src/MarkdownRichBlock.svelte) starts rendering after a complete block mounts in the transcript window and releases its preview when the block is retired.
 
 ## Prepare and build
 

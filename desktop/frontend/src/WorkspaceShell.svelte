@@ -16,6 +16,7 @@
   import { verifyQueue } from './queueProbe';
   import { verifyDiff } from './diffProbe';
   import { verifyQuit } from './quitProbe';
+  import 'katex/dist/katex.min.css';
   import './workspace.css';
 
   let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();

@@ -1,5 +1,4 @@
 import katex from 'katex';
-import 'katex/dist/katex.min.css';
 
 const MAX_FORMULA_LENGTH = 8192;
 

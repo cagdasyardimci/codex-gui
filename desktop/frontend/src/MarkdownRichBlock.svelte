@@ -10,12 +10,7 @@
   function prepare(node: HTMLElement) {
     const lifetime = new AbortController();
     let objectUrl: string | undefined;
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      observer.disconnect();
-      void render(node).catch(releaseImage);
-    });
-    observer.observe(node);
+    void render(node).catch(releaseImage);
 
     async function render(target: HTMLElement) {
       if (kind === 'diagram') {
@@ -43,7 +38,6 @@
     }
 
     return { destroy() {
-      observer.disconnect();
       lifetime.abort();
       releaseImage();
     } };
@@ -53,5 +47,6 @@
 {#if kind === 'diagram'}
   <div class="markdown-diagram" use:prepare><pre><code data-language="mermaid">{fallback}</code></pre></div>
 {:else}
-  <span class:markdown-display-math={kind === 'displayMath'} use:prepare>{fallback}</span>
+  <span class:markdown-inline-math={kind === 'inlineMath'} class:markdown-display-math={kind === 'displayMath'}
+    use:prepare>{fallback}</span>
 {/if}

@@ -27,9 +27,16 @@ export async function verifySettledRichMarkdown(visible: () => WorkspaceSnapshot
   const row = () => surface(richRow(visible)?.itemId);
   await waitFor('The completed Markdown row did not mount its rich blocks', () =>
     !!row()?.querySelector('.markdown-diagram') && !!row()?.querySelector('.markdown-display-math'));
-  row()?.querySelector('.markdown-document > p')?.scrollIntoView({ block: 'start' });
+  const inline = row()?.querySelector('.markdown-inline-math');
+  inline?.scrollIntoView({ block: 'center', inline: 'nearest' });
   await waitFor('The installed inline math assets did not render the formula', () =>
-    !!row()?.querySelector('p math'));
+    !!row()?.querySelector('.markdown-inline-math math')).catch((error) => {
+    const formula = row()?.querySelector('.markdown-inline-math');
+    const resources = performance.getEntriesByType('resource').map((entry) => entry.name.split('/').pop())
+      .filter((name) => name && /markdownFormula|[Kk]a[Tt]e[Xx]/.test(name));
+    throw new Error(`${error.message} ${JSON.stringify({ mounted: !!formula, formula: formula?.getBoundingClientRect().toJSON(),
+      viewport: viewport?.getBoundingClientRect().toJSON(), resources })}`);
+  });
   row()?.querySelector('.markdown-display-math')?.scrollIntoView({ block: 'center' });
   await waitFor('The installed display math assets did not render the fraction', () =>
     !!row()?.querySelector('.markdown-display-math math'));
