@@ -79,11 +79,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sources="$RUNNER_TEMP/ubuntu-desktop.sources"
-          sed -E 's|http://(azure\.)?archive\.ubuntu\.com/ubuntu/?|https://archive.ubuntu.com/ubuntu/|g; s|http://security\.ubuntu\.com/ubuntu/?|https://security.ubuntu.com/ubuntu/|g' \
+          sed 's|^URIs: .*|URIs: https://archive.ubuntu.com/ubuntu/|' \
             /etc/apt/sources.list.d/ubuntu.sources > "$sources"
           apt_options=(-o "Dir::Etc::sourcelist=$sources" -o Dir::Etc::sourceparts=- -o Acquire::Retries=1 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25)
           sudo timeout 150s apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
-          sudo timeout 150s apt-get "${apt_options[@]}" install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-bin xvfb xauth
+          sudo timeout 480s apt-get "${apt_options[@]}" install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-bin xvfb xauth
       - name: Install frontend dependencies
         working-directory: desktop/frontend
         run: pnpm install --frozen-lockfile
