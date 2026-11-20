@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  NavigationIntent, StreamChange, TranscriptItem, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptItem, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -10,6 +10,10 @@ export function pickWorkspace(): Promise<WorkspaceId | null> {
 
 export function readWorkspace(request: WorkspaceRequest): Promise<WorkspaceView> {
   return invoke('workspace_snapshot', { request });
+}
+
+export function searchProjectPaths(request: ProjectPathRequest): Promise<ProjectPathMatch[]> {
+  return invoke('search_project_paths', { request });
 }
 
 export function subscribeWorkspace(): Promise<WorkspaceSubscription> {

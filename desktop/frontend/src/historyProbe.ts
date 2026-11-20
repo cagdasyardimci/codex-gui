@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WorkspaceSnapshot } from './generated/workspace';
-import { navigateWorkspace } from './projectIpc';
+import { navigateWorkspace, searchProjectPaths } from './projectIpc';
 import { click, editor, typeText, waitFor } from './fixtureControls';
 
 const FIRST = 'history-first';
@@ -50,6 +50,12 @@ export async function verifyHistory(
       } catch (error) {
         if (error !== 'retiredWorkspace') throw error;
       }
+      try {
+        await searchProjectPaths({ workspaceId, query: 'café.md' });
+        throw new Error('Retired workspace could still search project files');
+      } catch (error) {
+        if (error !== 'retiredWorkspace') throw error;
+      }
     } else {
       typeText(UNSENT);
       await waitFor('Unsent draft did not persist', () => visible()?.navigation.draft?.text === UNSENT);
@@ -57,6 +63,10 @@ export async function verifyHistory(
       await waitFor('Writer lock did not leave readable history', () =>
         visible()?.navigation.selectedChat === FIRST && !!visible()?.navigation.retryable &&
         containsText('History in the first chat.'));
+      const [path, ...others] = await searchProjectPaths({ workspaceId, query: ' CAFÉ.MD ' });
+      if (path?.displayPath !== 'notes/Café.md' || others.length) {
+        throw new Error('Project search did not return the visible checkout file');
+      }
       const control = editor();
       control.focus();
       control.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
@@ -76,6 +86,10 @@ export async function verifyHistory(
       await waitFor('Chat switching showed stale transcript or draft', () =>
         visible()?.navigation.selectedChat === SECOND && !containsText(REPLY) &&
         containsText('History in the second chat.') && editor().value === '');
+      const [secondPath] = await searchProjectPaths({ workspaceId, query: 'café.md' });
+      if (secondPath?.id.revision !== path.id.revision || secondPath?.id.entry !== path.id.entry) {
+        throw new Error('Switching chats replaced the checkout-owned path index');
+      }
       await click('First fixture chat');
       await waitFor('Returning to the first chat did not restore its draft', () =>
         visible()?.navigation.selectedChat === FIRST && containsText(REPLY) && editor().value === DRAFT);

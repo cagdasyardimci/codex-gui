@@ -21,6 +21,9 @@ def main() -> None:
         data = root / "beta data"
         project = root / "Checkout café"
         project.mkdir()
+        for folder in ("notes", "node_modules", ".hidden"):
+            (project / folder).mkdir()
+            (project / folder / "Café.md").write_text("File search fixture\n", encoding="utf-8")
         codex_home = root / "codex home"
         codex_home.mkdir()
         trace = root / "trace.jsonl"

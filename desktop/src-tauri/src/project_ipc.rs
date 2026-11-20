@@ -5,14 +5,15 @@ use std::sync::{
 use std::{path::Path, time::Duration};
 
 use codex_gui_core::checkout::CheckoutIdentity;
+use codex_gui_core::files::index::{ProjectPathIndex, ProjectPathMatch};
 use codex_gui_core::ipc::{
-    IpcError, NavigationIntent, StreamChange, WorkspaceGrants, WorkspaceId, WorkspaceProjection,
-    WorkspaceRequest, WorkspaceSubscription, WorkspaceUpdate, WorkspaceUpdateRequest,
-    WorkspaceView, authorize_window,
+    IpcError, NavigationIntent, ProjectPathRequest, StreamChange, WorkspaceGrants, WorkspaceId,
+    WorkspaceProjection, WorkspaceRequest, WorkspaceSubscription, WorkspaceUpdate,
+    WorkspaceUpdateRequest, WorkspaceView, authorize_window,
 };
 use tauri::{Config, Manager, State, Url, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
-use tokio::sync::oneshot;
+use tokio::sync::{OnceCell, oneshot};
 
 use crate::fixture::Verification;
 use crate::navigation::NavigationHandle;
@@ -30,6 +31,7 @@ pub(crate) struct ProjectState {
     pub(crate) grants: WorkspaceGrants,
     pub(crate) projection: WorkspaceProjection,
     fixture_directory: Option<tempfile::TempDir>,
+    file_index: Option<(WorkspaceId, Arc<OnceCell<Arc<ProjectPathIndex>>>)>,
 }
 
 impl ProjectState {
@@ -40,7 +42,15 @@ impl ProjectState {
     }
 
     pub(crate) fn publish(&mut self) {
-        self.projection.publish(self.grants.current_view());
+        let view = self.grants.current_view();
+        if self
+            .file_index
+            .as_ref()
+            .is_some_and(|(owner, _)| view.as_ref().map(|view| view.workspace_id) != Some(*owner))
+        {
+            self.file_index = None;
+        }
+        self.projection.publish(view);
     }
 }
 
@@ -190,6 +200,52 @@ pub fn workspace_snapshot(
         .expect("workspace state lock poisoned")
         .grants
         .snapshot(window.label(), request)
+}
+
+#[tauri::command]
+pub async fn search_project_paths(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: ProjectPathRequest,
+) -> Result<Vec<ProjectPathMatch>, IpcError> {
+    authorize_view(&window)?;
+    let (checkout, cache) = {
+        let mut state = project.state.lock().expect("workspace state lock poisoned");
+        let checkout = state
+            .grants
+            .checkout(window.label(), request.workspace_id)?;
+        if state.file_index.as_ref().map(|(owner, _)| *owner) != Some(request.workspace_id) {
+            state.file_index = Some((request.workspace_id, Arc::default()));
+        }
+        let cache = state
+            .file_index
+            .as_ref()
+            .expect("index for current grant")
+            .1
+            .clone();
+        (checkout, cache)
+    };
+    let index = cache
+        .get_or_try_init(|| async {
+            tauri::async_runtime::spawn_blocking(move || ProjectPathIndex::scan(checkout))
+                .await
+                .map_err(|_| IpcError::ProjectUnavailable)?
+                .map(Arc::new)
+                .map_err(project_path_error)
+        })
+        .await?
+        .clone();
+    let matches = tauri::async_runtime::spawn_blocking(move || index.search(&request.query))
+        .await
+        .map_err(|_| IpcError::ProjectUnavailable)?;
+    authorize_view(&window)?;
+    project.checkout(window.label(), request.workspace_id)?;
+    matches.map_err(project_path_error)
+}
+
+fn project_path_error(error: codex_gui_core::files::FileError) -> IpcError {
+    eprintln!("{error}");
+    IpcError::ProjectUnavailable
 }
 
 #[tauri::command]

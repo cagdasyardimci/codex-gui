@@ -7,6 +7,7 @@
   "permissions": [
     "allow-pick-workspace",
     "allow-workspace-snapshot",
+    "allow-search-project-paths",
     "allow-navigate-workspace",
     "allow-checkout-changes",
     "allow-checkout-patch",

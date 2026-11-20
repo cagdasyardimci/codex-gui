@@ -25,9 +25,9 @@ use windows_sys::{
         Foundation::{NTSTATUS, OBJ_CASE_INSENSITIVE, RtlNtStatusToDosError, UNICODE_STRING},
         Storage::FileSystem::{
             DELETE, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT, FILE_DISPOSITION_INFO,
-            FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
-            FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE, FileDispositionInfo, SYNCHRONIZE,
-            SetFileInformationByHandle,
+            FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES,
+            FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE,
+            FileDispositionInfo, SYNCHRONIZE, SetFileInformationByHandle,
         },
         System::IO::IO_STATUS_BLOCK,
     },
@@ -41,6 +41,17 @@ pub(in crate::files) fn open_directory(parent: &File, name: &OsStr) -> io::Resul
         parent,
         name,
         FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+        SHARE_ALL,
+        FILE_OPEN,
+        FILE_DIRECTORY_FILE,
+    )
+}
+
+pub(in crate::files) fn open_index_directory(parent: &File, name: &OsStr) -> io::Result<File> {
+    open(
+        parent,
+        name,
+        FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
         SHARE_ALL,
         FILE_OPEN,
         FILE_DIRECTORY_FILE,

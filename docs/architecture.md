@@ -114,6 +114,10 @@ Do not duplicate canonical payload inventories in presentation caches. Sources, 
 
 The tab pane belongs to the selected chat within its checkout session. Switching chats restores that chat's tab order, selection, and pane layout for the lifetime of the window. Reordering tools preserves the selected tab and its content. In full view, the chat stays at the start of the strip. A new chat gets its own tab set, which follows the first submission when the backend assigns a thread. File edits and pending closes keep their original tab owner across switches, and closing the window or quitting settles writes from hidden chats as well as the visible chat. See [tab pane ownership](../Sources/CodexGUI/App/MainWindowController/MainWindowController+ChatTools.swift).
 
+## Project file search
+
+The [Tauri path index](../desktop/core/src/files/index.rs) belongs to the selected checkout and is shared by its chats. Recursive search follows the existing visibility policy for dot names and generated directories. Enumeration uses the captured directory and skips symbolic links and junctions to follow the [scoped file access policy](../desktop/core/src/files.rs). Results carry native path identity independently of their labels and must obtain a fresh scoped file handle before opening. The [workspace grant](../desktop/src-tauri/src/project_ipc.rs) retires results when the checkout is cleared, switched or replaced.
+
 ## Recorded latest Git turn
 
 Last Turn attributes reported edits to the selected task's turn. Checkout-wide diffs cannot establish that attribution when chats interleave edits, even to the same file. Retain the latest known editing-turn identity independently of resident transcript bodies; older loaded edits cannot replace it without trusted ordering evidence.

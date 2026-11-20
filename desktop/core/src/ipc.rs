@@ -5,6 +5,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
+use crate::files::index::{ProjectPathId, ProjectPathMatch};
 use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
 mod actions;
@@ -46,6 +47,13 @@ pub struct WorkspaceId(Uuid);
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkspaceRequest {
     pub workspace_id: WorkspaceId,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectPathRequest {
+    pub workspace_id: WorkspaceId,
+    pub query: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -159,6 +167,9 @@ pub fn workspace_typescript() -> String {
     for declaration in [
         WorkspaceId::decl(),
         WorkspaceRequest::decl(),
+        ProjectPathRequest::decl(),
+        ProjectPathId::decl(),
+        ProjectPathMatch::decl(),
         WorkspaceView::decl(),
         IpcError::decl(),
         SubscriptionId::decl(),

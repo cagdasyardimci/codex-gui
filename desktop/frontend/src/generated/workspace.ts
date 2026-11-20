@@ -2,6 +2,9 @@
 
 export type WorkspaceId = string;
 export type WorkspaceRequest = { workspaceId: WorkspaceId, };
+export type ProjectPathRequest = { workspaceId: WorkspaceId, query: string, };
+export type ProjectPathId = { revision: string, entry: number, };
+export type ProjectPathMatch = { id: ProjectPathId, displayPath: string, };
 export type WorkspaceView = { workspaceId: WorkspaceId, projectPath: string, };
 export type IpcError = "unauthorizedWindow" | "pickerBusy" | "invalidCheckout" | "retiredWorkspace" | "projectUnavailable" | "staleSelection";
 export type SubscriptionId = string;

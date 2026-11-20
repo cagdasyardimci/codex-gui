@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::checkout::{CheckoutError, CheckoutIdentity, NativeFileIdentity};
 
+pub mod index;
 mod native;
 mod save;
 

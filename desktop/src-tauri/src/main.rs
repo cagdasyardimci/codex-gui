@@ -102,6 +102,7 @@ fn main() {
             fixture::report_quit_failure,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
+            project_ipc::search_project_paths,
             project_ipc::navigate_workspace,
             project_ipc::subscribe_workspace,
             project_ipc::next_workspace_update,

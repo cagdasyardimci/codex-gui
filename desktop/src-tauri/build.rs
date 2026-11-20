@@ -11,6 +11,7 @@ fn main() {
         "verify_diff_result",
         "pick_workspace",
         "workspace_snapshot",
+        "search_project_paths",
         "navigate_workspace",
         "checkout_changes",
         "checkout_patch",

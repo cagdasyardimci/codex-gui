@@ -18,6 +18,10 @@ use unix as os;
 use windows as os;
 
 pub(super) use os::{open_for_save, open_read};
+#[cfg(unix)]
+pub(super) use unix::open_directory as open_index_directory;
+#[cfg(windows)]
+pub(super) use windows::open_index_directory;
 
 pub(super) fn open_parent(root: &File, components: &[&OsStr]) -> io::Result<Option<File>> {
     let mut parent = None;
