@@ -5,7 +5,7 @@ use std::sync::{
 use std::{path::Path, time::Duration};
 
 use codex_gui_core::checkout::CheckoutIdentity;
-use codex_gui_core::files::index::{ProjectPathIndex, ProjectPathMatch};
+use codex_gui_core::files::index::{ProjectPathMatch, WatchedProjectPaths};
 use codex_gui_core::ipc::{
     IpcError, NavigationIntent, ProjectPathRequest, StreamChange, WorkspaceGrants, WorkspaceId,
     WorkspaceProjection, WorkspaceRequest, WorkspaceSubscription, WorkspaceUpdate,
@@ -13,7 +13,7 @@ use codex_gui_core::ipc::{
 };
 use tauri::{Config, Manager, State, Url, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
-use tokio::sync::{OnceCell, oneshot};
+use tokio::sync::{Mutex as AsyncMutex, oneshot};
 
 use crate::fixture::Verification;
 use crate::navigation::NavigationHandle;
@@ -31,7 +31,7 @@ pub(crate) struct ProjectState {
     pub(crate) grants: WorkspaceGrants,
     pub(crate) projection: WorkspaceProjection,
     fixture_directory: Option<tempfile::TempDir>,
-    file_index: Option<(WorkspaceId, Arc<OnceCell<Arc<ProjectPathIndex>>>)>,
+    file_index: Option<(WorkspaceId, Arc<AsyncMutex<WatchedProjectPaths>>)>,
 }
 
 impl ProjectState {
@@ -209,32 +209,26 @@ pub async fn search_project_paths(
     request: ProjectPathRequest,
 ) -> Result<Vec<ProjectPathMatch>, IpcError> {
     authorize_view(&window)?;
-    let (checkout, cache) = {
+    let cache = {
         let mut state = project.state.lock().expect("workspace state lock poisoned");
         let checkout = state
             .grants
             .checkout(window.label(), request.workspace_id)?;
         if state.file_index.as_ref().map(|(owner, _)| *owner) != Some(request.workspace_id) {
-            state.file_index = Some((request.workspace_id, Arc::default()));
+            state.file_index = Some((
+                request.workspace_id,
+                Arc::new(AsyncMutex::new(WatchedProjectPaths::new(checkout))),
+            ));
         }
-        let cache = state
+        state
             .file_index
             .as_ref()
             .expect("index for current grant")
             .1
-            .clone();
-        (checkout, cache)
+            .clone()
     };
-    let index = cache
-        .get_or_try_init(|| async {
-            tauri::async_runtime::spawn_blocking(move || ProjectPathIndex::scan(checkout))
-                .await
-                .map_err(|_| IpcError::ProjectUnavailable)?
-                .map(Arc::new)
-                .map_err(project_path_error)
-        })
-        .await?
-        .clone();
+    let mut index = cache.lock_owned().await;
+    project.checkout(window.label(), request.workspace_id)?;
     let matches = tauri::async_runtime::spawn_blocking(move || index.search(&request.query))
         .await
         .map_err(|_| IpcError::ProjectUnavailable)?;

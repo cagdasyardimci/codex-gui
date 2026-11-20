@@ -118,6 +118,8 @@ The tab pane belongs to the selected chat within its checkout session. Switching
 
 The [Tauri path index](../desktop/core/src/files/index.rs) belongs to the selected checkout and is shared by its chats. Recursive search follows the existing visibility policy for dot names and generated directories. Enumeration uses the captured directory and skips symbolic links and junctions to follow the [scoped file access policy](../desktop/core/src/files.rs). Results carry native path identity independently of their labels and must obtain a fresh scoped file handle before opening. The [workspace grant](../desktop/src-tauri/src/project_ipc.rs) retires results when the checkout is cleared, switched or replaced.
 
+The [native observer](../desktop/core/src/files/index/watch.rs) coalesces directory scopes and applies pending changes before the next search. Overflow, an ambiguous path or an index that may need previously capped entries triggers a clean scan. A save that preserves all discovered paths preserves the index revision. Searches rebuild while the native observer is unavailable.
+
 ## Recorded latest Git turn
 
 Last Turn attributes reported edits to the selected task's turn. Checkout-wide diffs cannot establish that attribution when chats interleave edits, even to the same file. Retain the latest known editing-turn identity independently of resident transcript bodies; older loaded edits cannot replace it without trusted ordering evidence.

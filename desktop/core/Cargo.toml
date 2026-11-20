@@ -9,6 +9,7 @@ license.workspace = true
 base64 = "=0.23.1"
 hex = "0.4"
 indexmap = "2"
+notify = "8"
 plist = "1.10.4"
 rusqlite = { version = "0.43", features = ["bundled"] }
 semver = "1"
