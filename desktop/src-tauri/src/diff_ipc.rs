@@ -5,7 +5,10 @@ use std::{
 
 use codex_gui_core::{
     git::{CheckoutDiff, GitChange, GitError},
-    ipc::{DiffFileView, DiffPatchRequest, DiffPatchView, IpcError, WorkspaceId, WorkspaceRequest},
+    ipc::{
+        ChatRequest, DiffFileView, DiffPatchRequest, DiffPatchView, IpcError, WorkspaceId,
+        WorkspaceRequest,
+    },
 };
 use tauri::{State, WebviewWindow};
 use uuid::Uuid;
@@ -68,6 +71,32 @@ pub async fn checkout_changes(
         files,
     });
     Ok(view)
+}
+
+#[tauri::command]
+pub async fn count_chat_changes(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: ChatRequest,
+) -> Result<u32, IpcError> {
+    authorize_view(&window)?;
+    let checkout = project.checkout(window.label(), request.workspace_id)?;
+    require_chat(&project, &request)?;
+    let checkout = CheckoutDiff::open(checkout).await.map_err(report)?;
+    let count = checkout.changes().await.map_err(report)?.len();
+    authorize_view(&window)?;
+    project.checkout(window.label(), request.workspace_id)?;
+    require_chat(&project, &request)?;
+    u32::try_from(count).map_err(|_| IpcError::ProjectUnavailable)
+}
+
+fn require_chat(project: &ProjectIpc, request: &ChatRequest) -> Result<(), IpcError> {
+    project
+        .state
+        .lock()
+        .expect("workspace state lock poisoned")
+        .projection
+        .read_conversation(request.workspace_id, &request.chat_id, |_| ())
 }
 
 #[tauri::command]

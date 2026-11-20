@@ -42,6 +42,7 @@ fn main() {
         Some("--verify-chat-deletion") => fixture::Verification::ChatDeletion,
         Some("--verify-message-search") => fixture::Verification::MessageSearch,
         Some("--verify-automatic-titles") => fixture::Verification::AutomaticTitles,
+        Some("--verify-pinned-summary") => fixture::Verification::PinnedSummary,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -78,6 +79,7 @@ fn main() {
             | fixture::Verification::ChatDeletion
             | fixture::Verification::MessageSearch
             | fixture::Verification::AutomaticTitles
+            | fixture::Verification::PinnedSummary
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -186,6 +188,7 @@ fn main() {
             project_ipc::next_workspace_update,
             project_ipc::change_workspace_fixture,
             diff_ipc::checkout_changes,
+            diff_ipc::count_chat_changes,
             diff_ipc::checkout_patch,
             quit_ipc::request_quit_fixture,
             fixture::select_fixture_checkout,

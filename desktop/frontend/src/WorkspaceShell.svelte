@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
+  import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -16,12 +16,13 @@
   import ArchivedChats from './ArchivedChats.svelte';
   import DeleteChatDialog from './DeleteChatDialog.svelte';
   import MessageSearch from './MessageSearch.svelte';
+  import PinnedSummary, { type SummarySource } from './PinnedSummary.svelte';
   import { MessageSearchIndex, type SearchHit } from './messageSearchIndex';
   import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openMessageSearch, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, prepareChatDeletion, readMessageSearchPage, revealSidebarProject } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, executeSlashCommand, loadTranscriptAttachment, navigateWorkspace, observeWorkspace, openMessageSearch, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, prepareChatDeletion, readMessageSearchPage, revealSidebarProject } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -43,10 +44,11 @@
   import { verifyChatDeletion } from './chatDeletionProbe';
   import { verifyMessageSearch } from './messageSearchProbe';
   import { verifyAutomaticTitles } from './automaticTitlesProbe';
+  import { verifyPinnedSummary } from './pinnedSummaryProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -102,12 +104,18 @@
   const searchIndex = new MessageSearchIndex();
   let searchRevision = $state(0);
   let search = $state.raw<{ workspaceId: WorkspaceId; session: string; control: HTMLElement | null }>();
+  let hiddenSummaries = $state.raw(new Set<string>());
+  let checkoutRevision = $state(0);
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
   const projectTitle = $derived(sidebar?.projects.find((project) => project.id === sidebar?.activeProject)?.title);
   const workspaceId = $derived(workspace?.workspaceId);
   const selectedChat = $derived(navigation?.selectedChat);
+  const summaryScope = $derived(workspaceId && selectedChat ? { workspaceId, chatId: selectedChat } : undefined);
+  const summaryKey = $derived(sidebar?.activeProject && selectedChat
+    ? JSON.stringify([sidebar.activeProject, selectedChat]) : undefined);
+  const summaryVisible = $derived(!!summaryKey && !hiddenSummaries.has(summaryKey));
   const transcriptGeneration = $derived(snapshot?.transcript.generation);
   const displayedDraft = $derived(navigation?.draft?.id);
   const attachmentScope = $derived(workspaceId && displayedDraft
@@ -129,6 +137,7 @@
     return result;
   });
   const rowRequests = new WeakMap<TranscriptItem, TranscriptRowRequest>();
+  const summarySources = new WeakMap<TranscriptRowRequest, SummarySource[]>();
   const stopTarget = $derived(navigation?.actions.stop);
   const quit = $derived(navigation?.quit);
   const queue = $derived(navigation?.queue);
@@ -144,6 +153,38 @@
       itemId: item.itemId, generation: transcriptGeneration, revision: item.revision };
     rowRequests.set(item, request);
     return request;
+  }
+
+  function recentSources() {
+    const result: SummarySource[] = [];
+    const items = snapshot?.transcript.items ?? [];
+    for (let at = items.length - 1; at >= 0 && result.length < 3; at--) {
+      const item = items[at]!;
+      if (!item.attachments.length) continue;
+      const row = rowRequest(item);
+      if (!row) continue;
+      let sources = summarySources.get(row);
+      if (!sources) {
+        sources = item.attachments.map((attachment) => ({
+          id: JSON.stringify([row.itemId, attachment.id]), label: attachment.label,
+          load: attachment.image ? () => loadTranscriptAttachment({ row, attachmentId: attachment.id }) : undefined,
+        }));
+        summarySources.set(row, sources);
+      }
+      result.push(...sources.slice(0, 3 - result.length));
+    }
+    return result;
+  }
+
+  function toggleSummary() {
+    if (!summaryKey) return;
+    const hidden = new Set(hiddenSummaries);
+    if (!hidden.delete(summaryKey)) hidden.add(summaryKey);
+    hiddenSummaries = hidden;
+  }
+
+  function openSummaryChanges(scope: ChatRequest) {
+    if (scope.workspaceId === workspaceId && scope.chatId === selectedChat && !quit) showingChanges = true;
   }
 
   function copyResponse(item: TranscriptItem) {
@@ -434,6 +475,9 @@
       else {
         const intent = { [target.action]: { workspaceId } } as NavigationIntent;
         await navigateWorkspace(intent);
+        if ((target.action === 'refresh' || target.action === 'reconnect') && paletteMatches(captured, snapshot)) {
+          checkoutRevision += 1;
+        }
       }
       closePalette(false);
       await focusAfterPalette(captured, target.action === 'newChat');
@@ -634,7 +678,12 @@
     if (!workspace) return;
     const request = { workspaceId: workspace.workspaceId };
     const intent = { [action]: request } as NavigationIntent;
-    void act(() => navigateWorkspace(intent), action === 'newChat');
+    void act(async () => {
+      await navigateWorkspace(intent);
+      if ((action === 'refresh' || action === 'reconnect') && workspaceId === request.workspaceId) {
+        checkoutRevision += 1;
+      }
+    }, action === 'newChat');
   }
 
   async function changeSidebar(revision: string, change: SidebarChange) {
@@ -975,6 +1024,7 @@
     else if (verify === 'chatDeletion') void verifyChatDeletion(() => snapshot);
     else if (verify === 'messageSearch') void verifyMessageSearch(() => snapshot, searchIndex);
     else if (verify === 'automaticTitles') void verifyAutomaticTitles(() => snapshot);
+    else if (verify === 'pinnedSummary') void verifyPinnedSummary(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -1007,6 +1057,9 @@
       <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+F Control+Shift+F"
         onclick={showMessageSearch}>Search Messages</button>
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
+      {#if summaryScope}
+        <button type="button" aria-expanded={summaryVisible} disabled={!!quit} onclick={toggleSummary}>Pinned Summary</button>
+      {/if}
       {#if navigation?.canFork || navigation?.recoverFork}
         <button type="button" disabled={actionPending} onclick={forkChat}>
           {navigation.recoverFork ? 'Resolve Fork' : 'Fork Chat'}
@@ -1040,6 +1093,13 @@
       </nav>
     {/if}
     <section class="workspace-conversation" aria-label="Conversation">
+      {#if summaryScope && summaryVisible && !quit}
+        {@const scope = summaryScope}
+        {#key JSON.stringify([scope.workspaceId, scope.chatId])}
+          <PinnedSummary {scope} lastTurn={navigation?.lastTurn} {checkoutRevision} sources={recentSources()}
+            openChanges={() => openSummaryChanges(scope)} />
+        {/key}
+      {/if}
       <div class="transcript-pane">
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (The named scrolling region needs keyboard focus and scroll input.) -->
         <div class="workspace-transcript" role="region" aria-label="Transcript" tabindex="0" bind:this={transcript} use:attachTranscript

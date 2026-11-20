@@ -33,6 +33,7 @@
     "allow-open-sent-prompt",
     "allow-reveal-sidebar-project",
     "allow-checkout-changes",
+    "allow-count-chat-changes",
     "allow-checkout-patch",
     "allow-subscribe-workspace",
     "allow-next-workspace-update"

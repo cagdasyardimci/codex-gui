@@ -40,6 +40,7 @@ fn main() {
         "open_sent_prompt",
         "reveal_sidebar_project",
         "checkout_changes",
+        "count_chat_changes",
         "checkout_patch",
         "request_quit_fixture",
         "select_fixture_checkout",

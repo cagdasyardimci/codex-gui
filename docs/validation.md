@@ -46,6 +46,8 @@ Run the [message search fixture](../desktop/fixtures/verify_message_search_fixtu
 
 Run the [automatic title fixture](../desktop/fixtures/verify_automatic_titles_fixture.py) against the installed executable to verify bounded ephemeral inputs, naming the initiating chat after navigation, and cancellation on manual rename.
 
+Run the [pinned summary fixture](../desktop/fixtures/verify_pinned_summary_fixture.py) against the installed executable to check chat-specific visibility, source previews, edit totals, and Changes navigation across chat switches.
+
 Run it with `--settings` to verify model-specific effort and speed, cancellation and retirement of Full Access confirmation, and the exact settings in three captured Send requests across a pending change and a return to configured permissions.
 
 The [installed turn checkpoint](../desktop/fixtures/verify_turn_fixture.py) uses two fresh profiles. One recovers an ambiguous submission, answers a captured approval and questions, verifies the totals from the backend's attributed edit report, and opens the Git patch for the resulting checkout edit. The other switches chats and reloads the WebView during an active turn, then checks that stopping it targets the original owner and preserves that chat's draft. The package workflow also runs the installed account and history fixtures for first-launch sign-in and draft restoration. Use release-candidate acceptance for the real-account workflow.
