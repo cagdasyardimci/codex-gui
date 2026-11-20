@@ -45,8 +45,14 @@ export async function verifySettledRichMarkdown(visible: () => WorkspaceSnapshot
     return row()?.querySelector<HTMLImageElement>('.markdown-diagram img');
   }
   await waitFor('The installed diagram assets did not publish a decoded preview', () =>
-    !!image()?.naturalWidth && image()?.src.startsWith('blob:') === true &&
-    !document.querySelector('.markdown-diagram-stage'));
+    !!image()?.naturalWidth && image()?.hidden === false && image()?.src.startsWith('blob:') === true &&
+    !document.querySelector('.markdown-diagram-stage')).catch((error) => {
+    const preview = image();
+    const resources = performance.getEntriesByType('resource').map((entry) => entry.name.split('/').pop())
+      .filter((name) => name && /markdownDiagram|flowDiagram|render-/.test(name));
+    throw new Error(`${error.message} ${JSON.stringify({ pendingRender: !!document.querySelector('.markdown-diagram-stage'),
+      hasImage: !!preview, hidden: preview?.hidden, loaded: preview?.complete, width: preview?.naturalWidth, resources })}`);
+  });
   const preview = image()!;
   const source = preview.src;
   const revoke = URL.revokeObjectURL;

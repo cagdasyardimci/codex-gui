@@ -12,9 +12,15 @@ export async function verifyRenderedMarkdown(snapshot: WorkspaceSnapshot, scope:
   const viewport = document.querySelector<HTMLDivElement>('.workspace-transcript');
   if (viewport) viewport.scrollTop = viewport.scrollHeight;
   const surface = () => document.querySelector(`[data-item-id="${main.itemId}"] .markdown-document`);
+  await waitFor('The Markdown row did not mount', () => !!surface());
+  surface()?.scrollIntoView({ block: 'center' });
   await waitFor('The offline Markdown renderer did not decode the contained image', () => {
     const image = surface()?.querySelector<HTMLImageElement>('img[alt="Contained panel"]');
     return !!image?.naturalWidth && image.src.startsWith('blob:');
+  }).catch((error) => {
+    const image = surface()?.querySelector<HTMLImageElement>('img[alt="Contained panel"]');
+    throw new Error(`${error.message} ${JSON.stringify({ mounted: !!surface(), parsed: !!surface()?.querySelector('h2'),
+      hasImage: !!image, loaded: image?.complete, width: image?.naturalWidth })}`);
   });
   const rendered = surface()!;
   const fallbackRequest = { ...scope, itemId: fallback.itemId, revision: fallback.revision };
@@ -34,6 +40,7 @@ export async function verifyRenderedMarkdown(snapshot: WorkspaceSnapshot, scope:
   const heading = [...rendered.querySelectorAll<HTMLButtonElement>('button.markdown-link')]
     .find((control) => control.textContent === 'Heading');
   if (!heading || !viewport) throw new Error('The heading link was absent');
+  viewport.scrollTop = viewport.scrollHeight;
   const before = viewport.scrollTop;
   heading.click();
   await waitFor('The offline heading link did not move the viewport', () => viewport.scrollTop < before - 10);

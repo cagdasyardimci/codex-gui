@@ -6,6 +6,9 @@
     kind: 'inlineMath' | 'displayMath' | 'diagram';
     fallback: string;
   } = $props();
+  let diagramUrl = $state<string>();
+  let diagramLoaded = $state(false);
+  let acceptDiagram: (() => void) | undefined;
 
   function prepare(node: HTMLElement) {
     const lifetime = new AbortController();
@@ -18,11 +21,8 @@
         const result = await diagram(source, lifetime.signal);
         if (!result || lifetime.signal.aborted) return;
         objectUrl = URL.createObjectURL(result);
-        const image = new Image();
-        image.alt = 'Mermaid diagram';
-        image.src = objectUrl;
-        await image.decode();
-        preserveMarkdownSelection(target, lifetime.signal, () => target.replaceChildren(image));
+        acceptDiagram = () => preserveMarkdownSelection(target, lifetime.signal, () => { diagramLoaded = true; });
+        diagramUrl = objectUrl;
       } else {
         const { formula } = await import('./markdownFormula');
         if (lifetime.signal.aborted) return;
@@ -40,12 +40,22 @@
     return { destroy() {
       lifetime.abort();
       releaseImage();
+      acceptDiagram = undefined;
     } };
   }
 </script>
 
 {#if kind === 'diagram'}
-  <div class="markdown-diagram" use:prepare><pre><code data-language="mermaid">{fallback}</code></pre></div>
+  <div class="markdown-diagram" use:prepare>
+    {#if diagramUrl}
+      <img src={diagramUrl} alt="Mermaid diagram" hidden={!diagramLoaded}
+        onload={() => acceptDiagram?.()} onerror={() => {
+          if (diagramUrl) URL.revokeObjectURL(diagramUrl);
+          diagramUrl = undefined;
+        }} />
+    {/if}
+    {#if !diagramLoaded}<pre><code data-language="mermaid">{fallback}</code></pre>{/if}
+  </div>
 {:else}
   <span class:markdown-inline-math={kind === 'inlineMath'} class:markdown-display-math={kind === 'displayMath'}
     use:prepare>{fallback}</span>
