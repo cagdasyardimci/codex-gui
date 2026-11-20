@@ -44,12 +44,12 @@ def main():
         for name in ("first-source.png", "second-source.png"):
             (project / name).write_bytes(PNG)
         notes = project / "tracked.txt"
-        notes.write_text("before\n", encoding="utf-8")
+        notes.write_bytes(b"before\n")
         subprocess.run(["git", "init", "--quiet", project], check=True)
         subprocess.run(["git", "-C", project, "add", "."], check=True)
         subprocess.run(["git", "-C", project, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
                         "commit", "--quiet", "--no-gpg-sign", "-m", "Fixture"], check=True)
-        notes.write_text("after\n", encoding="utf-8")
+        notes.write_bytes(b"after\n")
         trace = root / "trace.jsonl"
         state = root / "backend.json"
         state.write_text(json.dumps({"threads": [
