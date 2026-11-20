@@ -159,7 +159,7 @@ jobs:
       - name: Store diagnostic installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: diagnostic-installer-${{ matrix.os }}
+          name: diagnostic-installer-${{ matrix.os }}-attempt-${{ github.run_attempt }}
           path: |
             desktop/target/debug/bundle/dmg/*.dmg
             desktop/target/debug/bundle/nsis/*.exe
@@ -180,7 +180,7 @@ jobs:
         if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != '' && (vars.CODEX_GUI_DEVICE_TARGET == '' || vars.CODEX_GUI_DEVICE_TARGET == runner.os)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: encrypted-device-${{ runner.os }}
+          name: encrypted-device-${{ runner.os }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/codex-gui-hosted-turn/device.enc
           retention-days: 1
           if-no-files-found: error
