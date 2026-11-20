@@ -21,8 +21,8 @@ pub use windows_sandbox::{
 };
 
 pub use history::{
-    ChatRead, ChatSummary, HistoryTurn, QueueSnapshot, QueuedSubmission, ThreadActivity,
-    TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus,
+    ChatRead, ChatSummary, ForkBoundary, HistoryTurn, QueueSnapshot, QueuedSubmission,
+    ThreadActivity, TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus,
 };
 
 const PAGE_LIMIT: u32 = 100;

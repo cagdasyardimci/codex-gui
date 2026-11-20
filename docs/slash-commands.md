@@ -8,6 +8,8 @@ Commands are composer actions rather than shell input: arguments have no shell q
 
 Forking copies conversation history in the source checkout. The `/fork` command copies the saved chat, while **Branch in new chat** copies history through the selected response's turn and preserves the source draft. Task checkout creation is a separate Git operation.
 
+Editing a sent prompt forks before the captured finished turn. The [revision workflow](../desktop/src-tauri/src/navigation/prompt_revision.rs) persists the revised prompt and retained attachments before requesting the fork, then sends literally when the captured selection can adopt the destination. A failed or superseded selection leaves the prepared draft with the fork.
+
 Plan toggling without a prompt changes next-turn mode without starting a model turn. Preserve the remaining prompt text when invoking plan mode with a prompt.
 
 ## Lifecycle

@@ -50,6 +50,8 @@ pub struct TranscriptItem {
     pub local_images: Vec<String>,
     #[serde(default)]
     pub attachments: Vec<TranscriptAttachment>,
+    #[serde(default)]
+    pub editable_prompt: bool,
 }
 
 impl TranscriptItem {
@@ -70,6 +72,7 @@ impl TranscriptItem {
             commands: Vec::new(),
             local_images: Vec::new(),
             attachments: Vec::new(),
+            editable_prompt: false,
         }
     }
 }

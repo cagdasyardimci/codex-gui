@@ -4,12 +4,13 @@
   import ImagePreview from './ImagePreview.svelte';
   import { loadTranscriptAttachment, reuseComposerAttachment } from './projectIpc';
 
-  let { item, request, attachmentScope, copy, onCopyFocus }: {
+  let { item, request, attachmentScope, copy, onCopyFocus, edit }: {
     item: TranscriptItem;
     request?: TranscriptRowRequest;
     attachmentScope?: DraftAttachmentScope;
     copy: (item: TranscriptItem) => Promise<void> | void;
     onCopyFocus: () => void;
+    edit?: (item: TranscriptItem) => void;
   } = $props();
 
   async function copyResponse() {
@@ -43,6 +44,10 @@
         <button class="transcript-copy" type="button" aria-label="Copy response"
           onpointerdown={(event) => event.preventDefault()} onfocus={onCopyFocus} onclick={copyResponse}>Copy</button>
       {/if}
+    {#if edit}
+      <button class="transcript-copy transcript-edit" type="button" aria-label="Edit sent prompt"
+        onpointerdown={(event) => event.preventDefault()} onclick={() => edit?.(item)}>Edit</button>
+    {/if}
     </div>
     {#if item.text}
       <MarkdownView source={item.text} request={item.role === 'assistant' && item.completed ? request : undefined} />

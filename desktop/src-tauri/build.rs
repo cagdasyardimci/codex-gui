@@ -33,6 +33,7 @@ fn main() {
         "open_transcript_link",
         "navigate_workspace",
         "execute_slash_command",
+        "open_sent_prompt",
         "checkout_changes",
         "checkout_patch",
         "request_quit_fixture",

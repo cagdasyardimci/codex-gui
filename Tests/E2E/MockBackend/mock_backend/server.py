@@ -171,6 +171,11 @@ class Server:
             return {'thread': self.summary(thread), **self.settings(thread)}
         if method in ('thread/read', 'thread/resume'):
             thread = self.thread(p.get('threadId'))
+            if (method == 'thread/resume' and self.scenario.get('desktopPromptRevision')
+                    and thread['id'] == 'revision-fork-2' and not self.state.data.get('forkBlockedOnce')):
+                self.state.data['forkBlockedOnce'] = True
+                self.state.save()
+                raise ProtocolError(-32000, 'Thread already has an active writer')
             turns = thread['turns']
             if self.scenario.get('desktopHistory'):
                 if method == 'thread/resume':
@@ -180,6 +185,20 @@ class Server:
                 if p.get('excludeTurns') or p.get('includeTurns') is False:
                     turns = []
             return {'thread': {**self.summary(thread), 'turns': turns}, **self.settings(thread)}
+        if method == 'thread/fork' and self.scenario.get('desktopPromptRevision'):
+            source = self.thread(p['threadId'])
+            boundary = next((index for index, turn in enumerate(source['turns'])
+                             if turn['id'] == p.get('beforeTurnId')), None)
+            if boundary is None or not p.get('excludeTurns'):
+                raise ProtocolError(-32602, 'Fork requires the captured before-turn boundary')
+            number = self.state.data.get('revisionForks', 0) + 1
+            self.state.data['revisionForks'] = number
+            if number == 3:
+                time.sleep(0.9)
+            fork = {**source, 'id': f'revision-fork-{number}', 'name': f'Revision Fork {number}',
+                    'turns': copy.deepcopy(source['turns'][:boundary])}
+            self.state.threads.append(fork)
+            return {'thread': self.summary(fork), **self.settings(fork)}
         if method == 'thread/queue/list' and self.scenario.get('desktopHistory'):
             if self.scenario.get('desktopQueue'):
                 return queue_request(self, method, p)

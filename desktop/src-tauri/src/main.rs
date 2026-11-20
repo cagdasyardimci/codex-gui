@@ -33,6 +33,7 @@ fn main() {
         Some("--verify-composer-settings") => fixture::Verification::ComposerSettings,
         Some("--verify-project-context") => fixture::Verification::ProjectContext,
         Some("--verify-slash-commands") => fixture::Verification::SlashCommands,
+        Some("--verify-prompt-revision") => fixture::Verification::PromptRevision,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -60,6 +61,7 @@ fn main() {
             | fixture::Verification::ComposerSettings
             | fixture::Verification::ProjectContext
             | fixture::Verification::SlashCommands
+            | fixture::Verification::PromptRevision
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -151,6 +153,7 @@ fn main() {
             transcript_ipc::open_transcript_link,
             project_ipc::navigate_workspace,
             project_ipc::execute_slash_command,
+            project_ipc::open_sent_prompt,
             project_ipc::subscribe_workspace,
             project_ipc::next_workspace_update,
             project_ipc::change_workspace_fixture,

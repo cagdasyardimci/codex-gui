@@ -80,6 +80,7 @@ pub(super) fn message_item(
     if item.completed {
         if role == TranscriptRole::User {
             item.attachments = crate::transcript_ipc::local_attachments(checkout, value);
+            item.editable_prompt = super::prompt_revision::is_editable_prompt(value);
         } else {
             item.local_images = local_images(checkout, &item.text, value);
         }

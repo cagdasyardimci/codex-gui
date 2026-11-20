@@ -7,8 +7,8 @@ use crate::git::turn_edits::LastTurnView;
 use super::{
     ComposerSelectionView, ComposerSettingsRequest, ConversationActions, DraftAttachmentView,
     ModelEffort, ModelServiceTier, ProjectContextRequest, QueueRequest, QueueView,
-    RecoverSendRequest, RespondRequest, SendRequest, SlashCommandView, StopRequest, WorkspaceId,
-    WorkspaceRequest,
+    RecoverSendRequest, RespondRequest, ReviseSentPrompt, SendRequest, SlashCommandView,
+    StopRequest, WorkspaceId, WorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -20,6 +20,8 @@ pub struct NavigationView {
     pub composer_settings: Option<ComposerSelectionView>,
     pub project_has_input: bool,
     pub slash_commands: SlashCommandView,
+    pub can_edit_sent_prompt: bool,
+    pub literal_fork_revision: bool,
     pub retryable: bool,
     pub account: AccountView,
     pub write_access: WriteAccess,
@@ -72,6 +74,7 @@ pub struct TurnRailView {
 pub struct TurnReferenceView {
     pub id: String,
     pub title: Option<String>,
+    pub finished: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -203,6 +206,8 @@ pub struct DraftEdit {
 pub enum NavigationIntent {
     SetComposerSettings(ComposerSettingsRequest),
     EditProjectContext(ProjectContextRequest),
+    ReviseSentPrompt(ReviseSentPrompt),
+    CancelSentPromptEdit(Uuid),
     OpenChat(ChatRequest),
     LoadOlderHistory(OlderHistoryRequest),
     TranscriptViewport(TranscriptViewportRequest),

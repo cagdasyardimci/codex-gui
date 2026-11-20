@@ -7,9 +7,11 @@ use crate::identity::{ConnectionIdentity, ThreadId, TurnId};
 
 use super::{BrowseError, CodexBrowser, Page, ThreadSummary, WirePage};
 
+mod fork;
 mod items;
 mod queue;
 
+pub use fork::ForkBoundary;
 pub use items::{TurnItemRead, TurnItems};
 pub use queue::{QueueSnapshot, QueuedSubmission};
 
@@ -44,6 +46,12 @@ pub enum TurnStatus {
     InProgress,
     #[serde(other)]
     Unknown,
+}
+
+impl TurnStatus {
+    pub fn is_finished(self) -> bool {
+        matches!(self, Self::Completed | Self::Interrupted | Self::Failed)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

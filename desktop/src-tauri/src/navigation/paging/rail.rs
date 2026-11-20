@@ -147,6 +147,7 @@ impl TurnRail {
                 .map(|reference| TurnReferenceView {
                     id: reference.activity.id.0.clone(),
                     title: reference.title.clone(),
+                    finished: reference.activity.status.is_finished(),
                 })
                 .collect(),
             earlier: self.cursor.as_ref().map(|(_, ticket)| *ticket),
@@ -219,7 +220,12 @@ impl Navigation {
         Ok(())
     }
 
-    pub(in crate::navigation) fn observe_rail_turn(&mut self, thread: &ThreadId, id: &str) {
+    pub(in crate::navigation) fn observe_rail_turn(
+        &mut self,
+        thread: &ThreadId,
+        id: &str,
+        status: TurnStatus,
+    ) {
         let Some(owner) = self
             .pages
             .owner
@@ -231,15 +237,23 @@ impl Navigation {
         let turn = TurnId(id.to_owned());
         if owner.rail.seen.insert(turn.clone()) {
             owner.rail.references.push(Reference {
-                activity: TurnActivity {
-                    id: turn,
-                    status: TurnStatus::InProgress,
-                },
+                activity: TurnActivity { id: turn, status },
                 title: None,
             });
-            self.view.turn_rail = Some(owner.rail.view());
-            self.publish_navigation();
+        } else if status.is_finished()
+            && let Some(reference) = owner
+                .rail
+                .references
+                .iter_mut()
+                .find(|reference| reference.activity.id == turn)
+            && reference.activity.status != status
+        {
+            reference.activity.status = status;
+        } else {
+            return;
         }
+        self.view.turn_rail = Some(owner.rail.view());
+        self.publish_navigation();
     }
 
     pub(in crate::navigation) fn preview_turn(

@@ -361,6 +361,12 @@ impl WorkspaceProjection {
         })
     }
 
+    pub fn sent_prompt_turn(&self, request: &TranscriptRowRequest) -> Result<String, IpcError> {
+        self.read_transcript_row(request, |row| {
+            (row.role == TranscriptRole::User && row.editable_prompt).then(|| row.turn_id.clone())
+        })
+    }
+
     pub fn transcript_images(
         &self,
         request: &TranscriptRowRequest,

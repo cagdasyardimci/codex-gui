@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ComposerChoice, ComposerContextSelection, DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
-  ExecuteSlashCommand, ProjectContextView, SlashCommandOutcome, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
+  ExecuteSlashCommand, ProjectContextView, SentPromptEdit, SlashCommandOutcome, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
 export function pickWorkspace(): Promise<WorkspaceId | null> {
@@ -98,6 +98,10 @@ export function executeSlashCommand(request: ExecuteSlashCommand): Promise<Slash
   return invoke('execute_slash_command', { request });
 }
 
+export function openSentPrompt(request: TranscriptRowRequest): Promise<SentPromptEdit> {
+  return invoke('open_sent_prompt', { request });
+}
+
 function indexRows(transcript: TranscriptView): Map<string, number> {
   return new Map(transcript.items.map((item, index) => [item.itemId, index]));
 }
@@ -124,7 +128,7 @@ function applyStream(transcript: TranscriptView, change: StreamChange, positions
       const boundary = itemId.indexOf('/');
       items.push(update({
         itemId, text: '', completed: false, role: 'assistant', revision: 0,
-        turnId: boundary === -1 ? '' : itemId.slice(0, boundary), commands: [], localImages: [], attachments: [],
+        turnId: boundary === -1 ? '' : itemId.slice(0, boundary), commands: [], localImages: [], attachments: [], editablePrompt: false,
       }));
     } else {
       items[index] = update(items[index]!);

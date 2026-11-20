@@ -82,7 +82,11 @@ impl Navigation {
             return Err("the submitted input no longer matches the displayed draft".into());
         }
         let plan = self.read_plan()?;
-        let parsed = parse(&saved.text);
+        let parsed = if self.is_literal_revision(draft_id)? {
+            ComposerInput::Text
+        } else {
+            parse(&saved.text)
+        };
         let inline_plan = matches!(&parsed, ComposerInput::Command { command: Command::Plan, arguments }
             if !arguments.trim().is_empty() && self.view.slash_commands.available.contains(&Command::Plan));
         let text = match parsed {
@@ -365,6 +369,7 @@ impl Navigation {
         });
         let Some(backend) = &self.backend else {
             self.sync_slash_commands();
+            self.sync_prompt_revision();
             self.publish_navigation();
             return;
         };
@@ -423,6 +428,7 @@ impl Navigation {
                 .project(backend.engine.pending_interactions(), selected);
         }
         self.sync_slash_commands();
+        self.sync_prompt_revision();
         self.publish_navigation();
     }
 

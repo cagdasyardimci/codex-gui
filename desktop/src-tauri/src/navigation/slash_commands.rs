@@ -149,6 +149,9 @@ impl Navigation {
         {
             return Err(IpcError::StaleSelection);
         }
+        if self.is_literal_revision(draft_id).map_err(report)? {
+            return Ok(SlashCommandOutcome::Send);
+        }
         let (command, original) = match parse(&draft.text) {
             ComposerInput::Text | ComposerInput::Literal(_) if choice.is_none() && !confirmed => {
                 return Ok(SlashCommandOutcome::Send);

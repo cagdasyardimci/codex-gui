@@ -11,10 +11,10 @@ mod fixtures;
 
 pub use browse::{
     Account, AccountSnapshot, BrowseError, BrowserLogin, ChatRead, ChatSummary, CodexBrowser,
-    HistoryTurn, LoginCancellation, LoginCompletion, ModelOption, Page, ProjectChatCursor,
-    QueueSnapshot, QueuedSubmission, ThreadActivity, ThreadSummary, TurnActivity, TurnCursor,
-    TurnItemRead, TurnItems, TurnStatus, WindowsSandboxReadiness, WindowsSandboxSetupCompleted,
-    WindowsSandboxSetupMode,
+    ForkBoundary, HistoryTurn, LoginCancellation, LoginCompletion, ModelOption, Page,
+    ProjectChatCursor, QueueSnapshot, QueuedSubmission, ThreadActivity, ThreadSummary,
+    TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus, WindowsSandboxReadiness,
+    WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub(crate) use executable::is_executable;

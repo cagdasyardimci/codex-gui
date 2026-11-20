@@ -32,6 +32,8 @@ Run it with `--project-context` to verify saved prompt and context editing, chec
 
 Run it with `--slash-commands` to verify command input, exact literal and inline plan prompts, context occupancy, compaction completion and explicit recovery after a lost settings reply.
 
+Run it with `--prompt-revision` to verify the edit action on the first prompt, the captured before-turn boundary, exact attachment bytes, and retained drafts after a writer lock or superseded selection.
+
 Run it with `--settings` to verify model-specific effort and speed, cancellation and retirement of Full Access confirmation, and the exact settings in three captured Send requests across a pending change and a return to configured permissions.
 
 The [installed turn checkpoint](../desktop/fixtures/verify_turn_fixture.py) uses two fresh profiles. One recovers an ambiguous submission, answers a captured approval and questions, verifies the totals from the backend's attributed edit report, and opens the Git patch for the resulting checkout edit. The other switches chats and reloads the WebView during an active turn, then checks that stopping it targets the original owner and preserves that chat's draft. The package workflow also runs the installed account and history fixtures for first-launch sign-in and draft restoration. Use release-candidate acceptance for the real-account workflow.

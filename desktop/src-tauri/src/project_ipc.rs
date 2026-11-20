@@ -221,6 +221,17 @@ pub async fn execute_slash_command(
 }
 
 #[tauri::command]
+pub async fn open_sent_prompt(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    request: codex_gui_core::ipc::TranscriptRowRequest,
+) -> Result<codex_gui_core::ipc::SentPromptEdit, IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.open_sent_prompt(request).await
+}
+
+#[tauri::command]
 pub fn workspace_snapshot(
     window: WebviewWindow,
     state: State<'_, ProjectIpc>,

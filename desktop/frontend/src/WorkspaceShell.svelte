@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, SendRequest, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, SendRequest, SentPromptEdit, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -10,10 +10,11 @@
   import ComposerSettingsControls from './ComposerSettingsControls.svelte';
   import ProjectContextPanel from './ProjectContextPanel.svelte';
   import SlashCommandPanel from './SlashCommandPanel.svelte';
+  import SentPromptDialog from './SentPromptDialog.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -27,10 +28,11 @@
   import { verifyComposerSettings } from './composerSettingsProbe';
   import { verifyProjectContext } from './projectContextProbe';
   import { verifySlashCommands } from './slashCommandProbe';
+  import { verifyPromptRevision } from './promptRevisionProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -62,6 +64,7 @@
   let commandPanel = $state.raw<{ command: SlashCommand; draft: SendRequest; fullAccess: boolean; inline: boolean }>();
   let slashToken = $state.raw<{ start: number; end: number; prefix: string }>();
   let slashIndex = $state(0);
+  let promptEdit = $state.raw<{ row: TranscriptRowRequest; view: SentPromptEdit }>();
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const workspaceId = $derived(workspace?.workspaceId);
@@ -73,7 +76,17 @@
   const draftAttachments = $derived(navigation?.draft?.attachments ?? []);
   const slashMatches = $derived(slashToken ? (navigation?.slashCommands.available ?? [])
     .filter((command) => command.startsWith(slashToken!.prefix)) : []);
-  const mayExecuteSlash = $derived(/^[ \t]*\/[^/\s]/u.test(text) && !!navigation?.slashCommands.available.length);
+  const mayExecuteSlash = $derived(!navigation?.literalForkRevision && /^[ \t]*\/[^/\s]/u.test(text) &&
+    !!navigation?.slashCommands.available.length);
+  const editablePrompts = $derived.by(() => {
+    const result = new Set<string>();
+    if (!navigation?.canEditSentPrompt) return result;
+    const finished = new Set(navigation.turnRail?.turns.filter((turn) => turn.finished).map((turn) => turn.id));
+    for (const row of snapshot?.transcript.items ?? []) {
+      if (row.role === 'user' && finished.delete(row.turnId) && row.editablePrompt) result.add(row.itemId);
+    }
+    return result;
+  });
   const rowRequests = new WeakMap<TranscriptItem, TranscriptRowRequest>();
   const stopTarget = $derived(navigation?.actions.stop);
   const quit = $derived(navigation?.quit);
@@ -95,6 +108,31 @@
   function copyResponse(item: TranscriptItem) {
     const request = rowRequest(item);
     if (request) return copyTranscriptRow(request);
+  }
+
+  function editSentPrompt(item: TranscriptItem) {
+    const row = rowRequest(item);
+    if (!row) return;
+    void act(async () => {
+      const view = await openSentPrompt(row);
+      if (workspaceId === row.workspaceId && selectedChat === row.chatId &&
+          transcriptGeneration === row.generation) promptEdit = { row, view };
+    });
+  }
+
+  function reviseSentPrompt(text: string) {
+    const captured = promptEdit;
+    if (!captured) return;
+    void act(async () => {
+      await navigateWorkspace({ reviseSentPrompt: { ticket: captured.view.ticket, text } });
+      if (promptEdit === captured) promptEdit = undefined;
+    });
+  }
+
+  function cancelSentPromptEdit() {
+    const captured = promptEdit;
+    promptEdit = undefined;
+    if (captured) void navigateWorkspace({ cancelSentPromptEdit: captured.view.ticket }).catch(() => {});
   }
 
   function retainSelectionForTab() {
@@ -204,6 +242,9 @@
     }
     if (commandPanel && (commandPanel.draft.draftId !== current.navigation.draft?.id ||
         commandPanel.draft.workspaceId !== current.workspace?.workspaceId || current.navigation.quit)) commandPanel = undefined;
+    if (promptEdit && (promptEdit.row.workspaceId !== current.workspace?.workspaceId ||
+        promptEdit.row.chatId !== current.navigation.selectedChat ||
+        promptEdit.row.generation !== current.transcript.generation || current.navigation.quit)) cancelSentPromptEdit();
     viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) {
@@ -332,11 +373,12 @@
       composerRevision: navigation.composerSettings?.revision ?? null,
       expectedTurn: queue?.activeTurn ?? null,
     };
+    const literal = navigation.literalForkRevision;
     admittingDraft = true;
     try {
       await act(async () => {
         slashToken = undefined;
-        if (!/^[ \t]*\//u.test(send.text) ||
+        if (literal || !/^[ \t]*\//u.test(send.text) ||
             await applySlash(send, null, false) === 'send') await navigateWorkspace({ send });
       });
     } finally {
@@ -390,7 +432,8 @@
 
   function matchSlashToken(control: HTMLTextAreaElement) {
     slashToken = undefined;
-    if (!attachmentScope || composing || quit || queue?.editing || control.selectionStart !== control.selectionEnd) return;
+    if (!attachmentScope || composing || quit || queue?.editing || navigation?.literalForkRevision ||
+        control.selectionStart !== control.selectionEnd) return;
     const match = /^[ \t]*\/([A-Za-z][A-Za-z0-9-]*|)(?=\s|$)/u.exec(control.value);
     const caret = control.selectionStart;
     if (!match) return;
@@ -587,6 +630,7 @@
     else if (verify === 'composerSettings') void verifyComposerSettings(() => snapshot);
     else if (verify === 'projectContext') void verifyProjectContext(() => snapshot);
     else if (verify === 'slashCommands') void verifySlashCommands(() => snapshot);
+    else if (verify === 'promptRevision') void verifyPromptRevision(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -649,7 +693,7 @@
             {#if 'item' in entry}
               <div class="transcript-row-slot" data-transcript-slot={entry.item.itemId} use:measureTranscriptRow>
                 <TranscriptRow item={entry.item} request={rowRequest(entry.item)} attachmentScope={queue?.editing ? undefined : attachmentScope} copy={copyResponse}
-                  onCopyFocus={focusResponseAction} />
+                  onCopyFocus={focusResponseAction} edit={editablePrompts.has(entry.item.itemId) ? editSentPrompt : undefined} />
               </div>
             {:else}
               <div style:block-size={`${entry.gap}px`} aria-hidden="true"></div>
@@ -774,6 +818,11 @@
       workspace={workspace.projectPath} chat={navigation.chats.find((chat) => chat.id === selectedChat)?.title}
       effective={navigation.account.models.find((model) => model.id === navigation.composerSettings?.effectiveModelId)}
       choose={finishSlash} close={closeSlashPanel} />
+  {/if}
+  {#if promptEdit}
+    {#key promptEdit.view.ticket}
+      <SentPromptDialog prompt={promptEdit.view} applying={actionPending} submit={reviseSentPrompt} cancel={cancelSentPromptEdit} />
+    {/key}
   {/if}
   {#if quit?.confirm && !quit.draining}
     <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}

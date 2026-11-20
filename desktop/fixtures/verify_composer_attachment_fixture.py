@@ -1,7 +1,7 @@
 """Verify draft attachment ownership in the packaged desktop app."""
 
 import argparse
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from contextlib import closing
 import json
 import os
@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
     options = parser.add_mutually_exclusive_group()
-    for name in ("annotations", "context", "settings", "project-context", "slash-commands"):
+    for name in ("annotations", "context", "settings", "project-context", "slash-commands", "prompt-revision"):
         options.add_argument(f"--{name}", dest="mode", action="store_const", const=name)
     parser.set_defaults(mode="attachments")
     args = parser.parse_args()
@@ -66,6 +66,22 @@ def main():
                 "status": "completed",
                 "items": [{"id": f"recent-answer-{number}", "type": "agentMessage", "text": f"More recent turn {number}."}],
             } for number in range(105))
+        if args.mode == "prompt-revision":
+            first["turns"].append({
+                "id": "revision-source-turn", "status": "completed",
+                "items": [
+                    {"id": "editable-prompt", "type": "userMessage", "content": [
+                        {"type": "text", "text": "Original prompt café"},
+                        {"type": "mention", "name": "Selected notes", "path": "notes.txt"},
+                        {"type": "localImage", "path": "picked.png"},
+                        {"type": "image", "url": "data:image/png;base64," + b64encode(colors[1]).decode("ascii")},
+                    ]},
+                    {"id": "initial-prompt-reply", "type": "agentMessage", "text": "Original answer stays saved."},
+                    {"id": "later-prompt", "type": "userMessage", "content": [
+                        {"type": "text", "text": "An in-turn follow-up."},
+                    ]},
+                ],
+            })
         if args.mode in ("settings", "project-context", "slash-commands"):
             backend_state["config"] = {"model": "baseline-model", "model_reasoning_effort": "low", "service_tier": "default",
                                        "approval_policy": "untrusted", "sandbox_mode": "read-only", "approvals_reviewer": "user"}
@@ -77,6 +93,7 @@ def main():
             "settings": ("--verify-composer-settings", "desktop-composer-settings", "Verified installed composer settings"),
             "project-context": ("--verify-project-context", "desktop-project-context", "Verified installed Project Context"),
             "slash-commands": ("--verify-slash-commands", "desktop-slash-commands", "Verified installed slash commands"),
+            "prompt-revision": ("--verify-prompt-revision", "desktop-prompt-revision", "Verified installed sent prompt revisions"),
         }[args.mode]
         result = subprocess.run(
             [str(executable), fixture, str(data), str(checkout)],
@@ -100,6 +117,9 @@ def main():
             return
         if args.mode == "slash-commands":
             verify_slash_commands(starts, records, checkout, data)
+            return
+        if args.mode == "prompt-revision":
+            verify_prompt_revision(starts, requests, checkout, data, colors)
             return
         assert len(starts) == 1 and starts[0]["threadId"] == "history-first", starts
         inputs = starts[0]["input"]
@@ -232,6 +252,35 @@ def verify_slash_commands(starts, records, checkout, data):
         ((mode,),) = database.execute("SELECT state FROM composer_plan_modes WHERE thread_id = 'history-first'")
     assert json.loads(mode) == {"enabled": False, "pending": None}, mode
     print("Verified two exact prompts, scoped compaction, and explicit recovery of an unacknowledged update")
+
+
+def verify_prompt_revision(starts, requests, checkout, data, colors):
+    forks = [request for request in requests if request["method"] == "thread/fork"]
+    assert [request["params"] for request in forks] == [
+        {"threadId": "history-first", "excludeTurns": True, "beforeTurnId": "revision-source-turn"},
+    ] * 3, forks
+    assert [(turn["threadId"], turn["input"][0]["text"]) for turn in starts] == [
+        ("revision-fork-1", "/plan Literal revised prompt café"),
+        ("revision-fork-3", "//status Keep both slashes."),
+    ], starts
+    for turn in starts:
+        assert turn["collaborationMode"] is None, turn
+        assert [item["type"] for item in turn["input"]] == ["text", "mention", "localImage", "localImage"]
+        _, mention, first, second = turn["input"]
+        assert mention["name"] == "Selected notes" and Path(mention["path"]).samefile(checkout / "notes.txt")
+        assert Path(first["path"]).read_bytes() == colors[0] and Path(second["path"]).read_bytes() == colors[1]
+    with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
+        drafts = dict(database.execute(
+            "SELECT thread_id, text FROM thread_drafts JOIN drafts ON thread_drafts.draft_id = drafts.id"
+        ))
+        ((context,),) = database.execute(
+            "SELECT context FROM thread_drafts JOIN drafts ON thread_drafts.draft_id = drafts.id "
+            "WHERE thread_id = 'revision-fork-2'"
+        )
+    assert drafts["history-first"] == "Source draft remains in its own chat.", drafts
+    assert drafts["revision-fork-2"] == "Keep the fork draft after writer lock.", drafts
+    assert [item["kind"] for item in json.loads(context)] == ["fileReference", "image", "image"], context
+    print("Verified the before-turn boundary, independent durable drafts and exact retained attachments")
 
 
 if __name__ == "__main__":

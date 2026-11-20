@@ -19,6 +19,7 @@ mod markdown;
 mod media;
 mod navigation;
 mod project_context;
+mod prompt_revision;
 mod question_reply;
 mod queue;
 mod slash_commands;
@@ -55,6 +56,7 @@ pub use project_context::{
     InsertProjectPrompt, ProjectContextChange, ProjectContextRequest, ProjectItemEdit,
     ProjectItemInclusion, ProjectPromptEdit,
 };
+pub use prompt_revision::{ReviseSentPrompt, SentPromptEdit};
 pub use question_reply::present_question_reply;
 pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
@@ -273,6 +275,8 @@ pub fn workspace_typescript() -> String {
         SaveImageAnnotations::decl(),
         ReuseAttachmentRequest::decl(),
         TranscriptView::decl(),
+        ReviseSentPrompt::decl(),
+        SentPromptEdit::decl(),
         TranscriptRole::decl(),
         NavigationView::decl(),
         crate::slash_commands::Command::decl(),

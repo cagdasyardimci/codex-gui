@@ -10,7 +10,7 @@ use codex_gui_core::{
     checkout::CheckoutIdentity,
     codex::{
         AppServerClient, AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable,
-        LoginCompletion, ServerEvent,
+        LoginCompletion, ServerEvent, TurnStatus,
     },
     git::turn_edits::{LastTurnView, TurnEditReports},
     identity::{
@@ -46,6 +46,7 @@ mod ownership;
 mod paging;
 mod parked;
 mod project_context;
+mod prompt_revision;
 mod queue;
 mod quit;
 mod sandbox;
@@ -87,6 +88,10 @@ enum Action {
         codex_gui_core::ipc::ExecuteSlashCommand,
         oneshot::Sender<codex_gui_core::ipc::SlashCommandOutcome>,
     ),
+    OpenSentPrompt(
+        codex_gui_core::ipc::TranscriptRowRequest,
+        oneshot::Sender<codex_gui_core::ipc::SentPromptEdit>,
+    ),
 }
 
 enum Input {
@@ -95,6 +100,7 @@ enum Input {
     SendCompleted(Option<Box<SendCompletion>>),
     QueueCompleted(Option<Box<QueueCompletion>>),
     HistoryCompleted(Option<Box<HistoryCompletion>>),
+    PromptForkCompleted(Option<Box<prompt_revision::ForkCompletion>>),
     OwnerChanged,
     Flush,
 }
@@ -138,6 +144,7 @@ struct Navigation {
     queue_completions: mpsc::Sender<Box<QueueCompletion>>,
     interactions: InteractionProjection,
     pages: HistoryPaging,
+    prompt_revisions: prompt_revision::PromptRevisions,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
     failed_drafts: HashMap<DraftId, Option<RuntimeUse>>,
@@ -183,6 +190,7 @@ impl NavigationHandle {
             queue_completions,
             interactions: InteractionProjection::default(),
             pages: HistoryPaging::default(),
+            prompt_revisions: prompt_revision::PromptRevisions::default(),
             view: NavigationView::default(),
             editable: HashMap::new(),
             failed_drafts: HashMap::new(),
@@ -247,6 +255,7 @@ impl Navigation {
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
                     completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
+                    completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
@@ -257,6 +266,7 @@ impl Navigation {
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
                     completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
                     completion = self.pages.completed.recv() => Input::HistoryCompleted(completion),
+                    completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                 }
             };
@@ -275,6 +285,14 @@ impl Navigation {
                 Input::HistoryCompleted(Some(result)) => self.complete_history_page(*result),
                 Input::HistoryCompleted(None) => {
                     unreachable!("navigation owns the history completion sender")
+                }
+                Input::PromptForkCompleted(Some(result)) => {
+                    if let Err(error) = self.complete_prompt_fork(*result).await {
+                        eprintln!("{error}");
+                    }
+                }
+                Input::PromptForkCompleted(None) => {
+                    unreachable!("navigation owns the completion sender")
                 }
                 Input::OwnerChanged => self.sync_actions(),
                 Input::Backend(Some(event)) => {
@@ -349,6 +367,11 @@ impl Navigation {
                 let _ = reply.send(outcome);
                 return Ok(None);
             }
+            Action::OpenSentPrompt(request, reply) => {
+                let edit = self.inspect_sent_prompt(request).await?;
+                let _ = reply.send(edit);
+                return Ok(None);
+            }
             Action::SelectFolder(folder) => {
                 if self.quit.is_some() {
                     return Err(IpcError::StaleSelection);
@@ -379,6 +402,8 @@ impl Navigation {
                 self.edit_project_context(request).await?
             }
             NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
+            NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
+            NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::CancelQuit(decision) => self.cancel_quit(decision)?,
             NavigationIntent::StopAll => self.begin_stop_all(),
             NavigationIntent::EditDraft(edit) => self.edit(edit)?,
@@ -574,6 +599,7 @@ impl Navigation {
     }
 
     fn adopt_focus(&mut self, thread: Option<ThreadId>) -> Result<(), Failure> {
+        self.prompt_revisions.retire_editor();
         let draft = match &thread {
             Some(thread) => self.store.editable_thread_draft(thread)?,
             None => self.source_draft,
@@ -963,13 +989,20 @@ impl Navigation {
         };
         let Some(turn_id) = params["turnId"].as_str() else {
             if method == "turn/completed" {
+                if let Some(turn) = params["turn"]["id"].as_str()
+                    && let Ok(status) =
+                        serde_json::from_value::<TurnStatus>(params["turn"]["status"].clone())
+                    && status.is_finished()
+                {
+                    self.observe_rail_turn(&thread, turn, status);
+                }
                 self.flush_stream();
             }
             return;
         };
         let workspace = selection.id;
         let checkout = selection.checkout.clone();
-        self.observe_rail_turn(&thread, turn_id);
+        self.observe_rail_turn(&thread, turn_id, TurnStatus::InProgress);
         match method.as_str() {
             "item/agentMessage/delta" => {
                 if let (Some(item), Some(text)) =

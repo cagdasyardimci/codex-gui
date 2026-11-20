@@ -335,7 +335,7 @@ fn markdown_path(destination: &str) -> Option<PathBuf> {
     ))
 }
 
-fn relative_image(checkout: &CheckoutIdentity, path: &Path) -> Option<String> {
+pub(crate) fn relative_image(checkout: &CheckoutIdentity, path: &Path) -> Option<String> {
     let root = checkout.canonical_path();
     #[cfg(windows)]
     let (root, path) = (dunce::simplified(root), dunce::simplified(path));

@@ -27,6 +27,7 @@ pub mod composer;
 pub mod composer_plan;
 pub mod composer_settings;
 pub(super) mod exit_recovery;
+pub mod fork_revisions;
 pub(super) mod legacy_queue;
 pub mod navigation;
 pub mod queue_edits;
