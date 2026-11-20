@@ -5,6 +5,7 @@ use thiserror::Error;
 
 pub mod attachments;
 pub mod drafts;
+pub mod project_context;
 pub mod writes;
 
 const APPLICATION_ID: i32 = i32::from_be_bytes(*b"CGUI");
@@ -19,6 +20,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::migrate_submissions,
     attachments::migrate_submission_outcomes,
     attachments::migrate_submission_checkout,
+    project_context::migrate,
 ];
 
 #[derive(Debug, Error)]

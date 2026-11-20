@@ -1,0 +1,43 @@
+{
+  "context" : {
+    "bookmarks" : [
+      {
+        "filePath" : "Sources\/Config.swift",
+        "id" : "bookmark-1",
+        "itemID" : "item-1",
+        "kind" : "changedFile",
+        "label" : "Configuration",
+        "threadID" : "chat-1",
+        "turnID" : "turn-1"
+      }
+    ],
+    "items" : [
+      {
+        "body" : "Keep identity",
+        "id" : "reference-1",
+        "isIncluded" : true,
+        "kind" : "referenceFile",
+        "referencePath" : "Sources\/Config.swift",
+        "title" : "Café settings"
+      }
+    ],
+    "modelPreference" : {
+
+    },
+    "savedPrompts" : [
+      {
+        "id" : "prompt-1",
+        "instructions" : "Review pending changes",
+        "title" : "Review"
+      }
+    ],
+    "selectedPromptID" : "prompt-1",
+    "selectedSkill" : {
+      "description" : "Review changes",
+      "name" : "reviewer",
+      "path" : "\/skills\/review"
+    }
+  },
+  "projectPath" : "\/tmp\/AppKit project café",
+  "version" : 1
+}
