@@ -49,8 +49,11 @@ export async function verifyAutomaticTitles(visible: () => WorkspaceSnapshot | n
     field()!.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
     await click('Save Name');
     await waitFor('The manual title did not retire its helper', () => !field() && title(second) === MANUAL);
+    const revision = visible()?.revision ?? 0;
     await click('Refresh');
-    await waitFor('Refreshing changed the captured titles', () =>
+    await waitFor('The chat directory did not refresh with both captured titles', () =>
+      (visible()?.revision ?? 0) > revision && [...document.querySelectorAll('button:enabled')]
+        .some((button) => button.textContent?.trim() === 'Refresh') &&
       title(first) === GENERATED && title(second) === MANUAL && !field());
     await invoke('verify_attachments_result', { failure: null });
   } catch (error) {

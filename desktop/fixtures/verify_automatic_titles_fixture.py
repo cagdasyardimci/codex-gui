@@ -39,8 +39,12 @@ def main():
         if result.returncode or "Verified installed scoped automatic chat titles" not in result.stdout:
             raise SystemExit(result.stderr or "The installed title fixture did not complete")
 
-        requests = [record for line in trace.read_text(encoding="utf-8").splitlines()
-                    if (record := json.loads(line))["direction"] == "request"]
+        requests = sorted(
+            (record for part in root.glob(f"{trace.name}.*")
+             for line in part.read_text(encoding="utf-8").splitlines()
+             if (record := json.loads(line))["direction"] == "request"),
+            key=lambda record: record["time"],
+        )
         starts = [record["params"] for record in requests if record["method"] == "thread/start" and record["params"].get("ephemeral")]
         assert len(starts) == 2, starts
         for helper in starts:
@@ -67,6 +71,9 @@ def main():
                    for record in requests[:generated])
         assert any(record["method"] == "thread/unsubscribe" and record.get("threadId") == helpers[0]["threadId"]
                    for record in requests)
+        renamed = next(index for index, request in enumerate(requests)
+                       if request["method"] == "thread/name/set" and request.get("threadId") == second)
+        assert any(request["method"] == "thread/list" for request in requests[renamed + 1:])
         saved = json.loads(state.read_text(encoding="utf-8"))["threads"]
         names = {thread["id"]: thread["name"] for thread in saved}
         assert names[first] == "Réparer le flux" and names[second] == "Manual chat title"

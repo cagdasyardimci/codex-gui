@@ -46,7 +46,9 @@ def main():
     if scenario.get('desktopVoiceHandoff') and voice_secondary and Path.cwd().samefile(voice_secondary) and state_path:
         state_path += '.other'
     trace_path = os.environ.get('CODEX_GUI_QA_TRACE')
-    if trace_path and (scenario.get('desktopRelayHost') or (scenario.get('desktopQuit') and secondary)):
+    separate_trace = (scenario.get('desktopRelayHost') or scenario.get('desktopAutomaticTitles')
+                      or (scenario.get('desktopQuit') and secondary))
+    if trace_path and separate_trace:
         trace_path = f'{trace_path}.{os.getpid()}'
     transport = Transport(trace_path)
     read_only_state = os.environ.get('CODEX_GUI_QA_READ_ONLY_STATE') == '1'
