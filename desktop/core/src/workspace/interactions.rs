@@ -10,7 +10,7 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use tokio::sync::watch;
 
-use super::{NavigationRow, NavigationTarget, WorkspaceEngine};
+use super::WorkspaceEngine;
 
 use crate::{
     codex::{AppServerClient, RequestError, RpcError, RpcId, ServerEvent},
@@ -126,7 +126,7 @@ impl InteractionRouter {
         client: &AppServerClient,
         event: ServerEvent,
         timeout: Duration,
-        rows: &[NavigationRow],
+        writable_threads: &[ThreadId],
     ) -> Result<Option<Arc<PendingInteraction>>, InteractionError> {
         match event {
             ServerEvent::Request { id, method, params } => {
@@ -157,7 +157,7 @@ impl InteractionRouter {
                     id,
                     kind,
                     params,
-                    rows,
+                    writable_threads,
                 )?))
             }
             ServerEvent::Notification { method, params } if method == "serverRequest/resolved" => {
@@ -221,7 +221,7 @@ impl State {
         request: RpcId,
         kind: InteractionKind,
         parameters: Value,
-        rows: &[NavigationRow],
+        writable_threads: &[ThreadId],
     ) -> Result<Arc<PendingInteraction>, InteractionError> {
         self.generation_scope(owner)?;
         if self.pending.contains_key(&request) {
@@ -231,10 +231,7 @@ impl State {
             return Err(InteractionError::AtCapacity);
         }
         let thread = ThreadId(required_string(&parameters["threadId"])?);
-        if !rows
-            .iter()
-            .any(|row| matches!(&row.target, NavigationTarget::Thread(id) if id == &thread))
-        {
+        if !writable_threads.contains(&thread) {
             return Err(InteractionError::Unowned);
         }
         let identity = InteractionIdentity {
@@ -321,7 +318,7 @@ impl WorkspaceEngine {
         timeout: Duration,
     ) -> Result<Option<Arc<PendingInteraction>>, InteractionError> {
         self.interactions
-            .receive(client, event, timeout, &self.snapshot().rows)
+            .receive(client, event, timeout, &self.snapshot().writable_threads)
             .await
     }
 

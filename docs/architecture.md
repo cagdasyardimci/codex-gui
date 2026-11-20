@@ -32,7 +32,9 @@ The [Tauri interaction router](../desktop/core/src/workspace/interactions.rs) ke
 
 [Submission recovery](../desktop/core/src/workspace/recovery.rs) can retire a reservation left before dispatch. Once dispatch was possible, it requires an unambiguous client message ID in the captured checkout’s history before clearing any part of the draft. A missing or conflicting match leaves the request and attachments available for reconciliation.
 
-Routine [Tauri queue reads](../desktop/core/src/codex/browse/history/queue.rs) use a checkout-validated chat summary and ordered queue pages. Full history is reserved for receipt reconciliation. Only an explicit unsupported-method response makes the server queue unavailable as a capability.
+Routine [Tauri queue reads](../desktop/core/src/codex/browse/history/queue.rs) use a checkout-validated chat summary and ordered queue pages. Full history supports receipt and execution reconciliation. Only an explicit unsupported-method response makes the server queue unavailable as a capability.
+
+[Resuming a Tauri chat](../desktop/core/src/workspace/resume.rs) reserves its routes before requesting writer ownership because Codex may dispatch queued work immediately. Early events stay with the captured thread and become actionable after the reply confirms its checkout and identity. A competing writer leaves the scoped history available for reading. Reconcile active turns and command exits from backend evidence when writer ownership is reestablished.
 
 Distinguish a known rejection from an uncertain submission. A cross-app writer lock is a known rejection; reading its saved history must not adopt another client's turn. Retry reestablishes ownership without resending the prompt. Preserve submitted drafts until acknowledgement, restoring them only if the resulting empty draft remains untouched; newer edits and independent draft lifetimes take precedence.
 

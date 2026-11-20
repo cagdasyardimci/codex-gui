@@ -153,6 +153,10 @@ impl AppServerConnection {
         self.transport.inbox.recv().await
     }
 
+    pub(crate) fn event_receiver(&mut self) -> &mut mpsc::Receiver<ServerEvent> {
+        &mut self.transport.inbox
+    }
+
     pub async fn disconnect(mut self) -> io::Result<AppServerExit> {
         self.transport.retire();
         self.process.terminate().await

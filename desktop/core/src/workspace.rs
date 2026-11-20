@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use thiserror::Error;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 
@@ -13,6 +13,7 @@ mod execution;
 mod interactions;
 mod prepare;
 mod recovery;
+mod resume;
 mod send;
 mod submission;
 
@@ -28,6 +29,7 @@ pub use interactions::{
 };
 pub use prepare::{PrepareError, PreparedThread};
 pub use recovery::SubmissionRecovery;
+pub use resume::{ResumeError, ResumedChat, ResumedMode, RoutedEvent};
 pub use send::{SendDraft, SendIntent, SendSettings};
 pub use submission::{SubmissionError, SubmissionReply};
 
@@ -52,6 +54,7 @@ pub struct WorkspaceSnapshot {
     pub revision: u64,
     pub rows: Vec<NavigationRow>,
     pub execution: ExecutionSnapshot,
+    pub writable_threads: Vec<ThreadId>,
 }
 
 pub enum WorkspaceAction {
@@ -78,6 +81,16 @@ pub enum WorkspaceAction {
     ReleaseInterrupt {
         operation: OperationIdentity,
         target: ExecutionTarget,
+    },
+    ReserveResume {
+        owner: ConnectionIdentity,
+        thread: ThreadId,
+        stopped: watch::Sender<bool>,
+    },
+    FinishResume {
+        owner: ConnectionIdentity,
+        thread: ThreadId,
+        writable: bool,
     },
     ReplaceConnection {
         expected: ConnectionIdentity,
@@ -112,6 +125,8 @@ pub enum WorkspaceError {
     InactiveTurn,
     #[error("an interrupt is already pending for the captured turn")]
     InterruptPending,
+    #[error("the thread already has a writer or a pending resume")]
+    ResumePending,
     #[error("the workspace effect queue is full")]
     EffectQueueFull,
     #[error("the workspace effect queue is closed")]
@@ -196,6 +211,8 @@ struct State {
     submissions: HashMap<RequestId, watch::Sender<bool>>,
     interactions: InteractionRouter,
     execution: ExecutionState,
+    writable: IndexSet<ThreadId>,
+    resuming: HashMap<ThreadId, watch::Sender<bool>>,
 }
 
 type ReservedPreparation = (mpsc::OwnedPermit<PrepareThread>, PrepareThread);
@@ -211,6 +228,8 @@ impl State {
             submissions: HashMap::new(),
             interactions,
             execution: ExecutionState::default(),
+            writable: IndexSet::new(),
+            resuming: HashMap::new(),
         }
     }
 
@@ -227,6 +246,7 @@ impl State {
                 })
                 .collect(),
             execution: self.execution.snapshot(),
+            writable_threads: self.writable.iter().cloned().collect(),
         })
     }
 
@@ -268,7 +288,9 @@ impl State {
                 if event.owner != self.connection {
                     return Err(WorkspaceError::Retired);
                 }
-                if !self.threads.contains_key(&event.target.thread) {
+                if !self.threads.contains_key(&event.target.thread)
+                    && !self.writable.contains(&event.target.thread)
+                {
                     return Err(WorkspaceError::UnownedExecution);
                 }
                 self.execution.observe(event);
@@ -287,6 +309,36 @@ impl State {
             WorkspaceAction::ReleaseInterrupt { operation, target } => {
                 self.validate_owner(&operation)?;
                 self.execution.release_interrupt(operation.request, &target);
+                Ok(None)
+            }
+            WorkspaceAction::ReserveResume {
+                owner,
+                thread,
+                stopped,
+            } => {
+                if owner != self.connection {
+                    return Err(WorkspaceError::Retired);
+                }
+                if self.writable.contains(&thread) || self.resuming.contains_key(&thread) {
+                    return Err(WorkspaceError::ResumePending);
+                }
+                self.resuming.insert(thread, stopped);
+                Ok(None)
+            }
+            WorkspaceAction::FinishResume {
+                owner,
+                thread,
+                writable,
+            } => {
+                if owner != self.connection {
+                    return Err(WorkspaceError::Retired);
+                }
+                self.resuming
+                    .remove(&thread)
+                    .ok_or(WorkspaceError::MissingPreparation)?;
+                if writable {
+                    self.writable.insert(thread);
+                }
                 Ok(None)
             }
             WorkspaceAction::ReplaceConnection {
@@ -341,6 +393,7 @@ impl State {
         }
         self.pending.remove(&operation.request);
         self.threads.insert(thread.clone(), draft);
+        self.writable.insert(thread.clone());
         self.rows.insert(draft, NavigationTarget::Thread(thread));
         Ok(())
     }
@@ -379,6 +432,10 @@ impl State {
         }
         self.interactions.replace_connection(replacement.clone());
         self.execution.retire_connection();
+        self.writable.clear();
+        for (_, stopped) in self.resuming.drain() {
+            stopped.send_replace(true);
+        }
         self.connection = replacement;
         Ok(())
     }

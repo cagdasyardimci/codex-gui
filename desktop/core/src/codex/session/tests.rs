@@ -236,4 +236,5 @@ mod execution;
 mod interactions;
 mod prepare;
 mod recovery;
+mod resume;
 mod submission;

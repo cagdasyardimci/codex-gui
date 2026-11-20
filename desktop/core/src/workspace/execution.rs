@@ -7,7 +7,7 @@ use tokio::sync::watch;
 
 use super::{WorkspaceAction, WorkspaceEngine, WorkspaceError};
 use crate::{
-    codex::{AppServerClient, RequestError, ServerEvent},
+    codex::{AppServerClient, HistoryTurn, RequestError, ServerEvent, TurnActivity, TurnStatus},
     identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
 };
 
@@ -130,6 +130,66 @@ impl ExecutionState {
 }
 
 impl WorkspaceEngine {
+    pub(super) async fn reconcile_turn_activity(
+        &self,
+        owner: &ConnectionIdentity,
+        thread: &ThreadId,
+        activity: &TurnActivity,
+    ) -> Result<(), WorkspaceError> {
+        if activity.id.0.is_empty() {
+            return Ok(());
+        }
+        let target = ExecutionTarget {
+            thread: thread.clone(),
+            turn: activity.id.clone(),
+        };
+        let kind = match activity.status {
+            TurnStatus::InProgress => ObservationKind::TurnStarted,
+            TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                if self.snapshot().execution.active_turns.contains(&target) =>
+            {
+                ObservationKind::TurnEnded
+            }
+            _ => return Ok(()),
+        };
+        self.apply(WorkspaceAction::ObserveExecution(ExecutionObservation {
+            owner: owner.clone(),
+            target,
+            kind,
+        }))
+        .await?;
+        Ok(())
+    }
+
+    pub(super) async fn reconcile_history_turn(
+        &self,
+        owner: &ConnectionIdentity,
+        thread: &ThreadId,
+        turn: &HistoryTurn,
+    ) -> Result<(), WorkspaceError> {
+        if turn.activity.id.0.is_empty() {
+            return Ok(());
+        }
+        let target = ExecutionTarget {
+            thread: thread.clone(),
+            turn: turn.activity.id.clone(),
+        };
+        let active = turn.activity.status == TurnStatus::InProgress;
+        self.reconcile_turn_activity(owner, thread, &turn.activity)
+            .await?;
+        for item in &turn.items {
+            if let Some(kind) = command_observation(item, active, true) {
+                self.apply(WorkspaceAction::ObserveExecution(ExecutionObservation {
+                    owner: owner.clone(),
+                    target: target.clone(),
+                    kind,
+                }))
+                .await?;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn observe_execution_event(
         &self,
         owner: &ConnectionIdentity,
@@ -218,18 +278,14 @@ fn execution_observation(
                 ObservationKind::TurnEnded,
             )
         }
-        "item/started" | "item/completed" if params["item"]["type"] == "commandExecution" => {
-            let item = &params["item"];
-            let id = identifier(&item["id"])?;
-            let kind = match (method.as_str(), item["status"].as_str()) {
-                ("item/started", Some("inProgress")) => ObservationKind::CommandStarted(id),
-                ("item/completed", Some("completed" | "failed" | "declined")) => {
-                    ObservationKind::CommandEnded(id)
-                }
-                _ => return None,
-            };
-            (identifier(&params["turnId"])?, kind)
-        }
+        "item/started" | "item/completed" => (
+            identifier(&params["turnId"])?,
+            command_observation(
+                &params["item"],
+                method == "item/started",
+                method == "item/completed",
+            )?,
+        ),
         _ => return None,
     };
     Some(ExecutionObservation {
@@ -240,6 +296,24 @@ fn execution_observation(
         },
         kind,
     })
+}
+
+fn command_observation(
+    item: &Value,
+    allow_start: bool,
+    allow_end: bool,
+) -> Option<ObservationKind> {
+    if item["type"] != "commandExecution" {
+        return None;
+    }
+    let id = identifier(&item["id"])?;
+    match item["status"].as_str() {
+        Some("inProgress") if allow_start => Some(ObservationKind::CommandStarted(id)),
+        Some("completed" | "failed" | "declined") if allow_end => {
+            Some(ObservationKind::CommandEnded(id))
+        }
+        _ => None,
+    }
 }
 
 fn identifier(value: &Value) -> Option<String> {

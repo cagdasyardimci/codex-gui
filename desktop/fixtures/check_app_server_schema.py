@@ -20,6 +20,7 @@ CLIENT_REQUESTS = {
     "thread/turns/list": ("threadId", "itemsView", "cursor", "limit"),
     "thread/queue/list": ("threadId", "cursor", "limit"),
     "thread/start": ("cwd",),
+    "thread/resume": ("threadId", "excludeTurns"),
     "turn/start": ("threadId", "input", "cwd", "clientUserMessageId"),
     "turn/interrupt": ("threadId", "turnId"),
     "windowsSandbox/readiness": (),
@@ -35,6 +36,7 @@ SERVER_REQUESTS = {
     "item/tool/requestUserInput": ("threadId", "turnId", "itemId", "isBlocking", "questions"),
 }
 SERVER_NOTIFICATIONS = {
+    "thread/queue/changed": ("threadId",),
     "turn/started": ("threadId", "turn"),
     "turn/completed": ("threadId", "turn"),
     "item/agentMessage/delta": ("threadId", "turnId", "itemId", "delta"),
@@ -51,6 +53,7 @@ INCOMING_RESPONSES = {
     "v2/ThreadTurnsListResponse": ("data", "nextCursor"),
     "v2/ThreadQueueListResponse": ("data", "nextCursor"),
     "v2/ThreadStartResponse": ("thread", "cwd"),
+    "v2/ThreadResumeResponse": ("thread", "cwd"),
     "v2/TurnStartResponse": ("turn",),
     "v2/TurnInterruptResponse": (),
     "v2/WindowsSandboxReadinessResponse": ("status",),
