@@ -22,6 +22,7 @@ CLIENT_REQUESTS = {
     "turn/start": ("threadId", "input", "cwd", "clientUserMessageId"),
     "turn/interrupt": ("threadId", "turnId"),
     "windowsSandbox/readiness": (),
+    "windowsSandbox/setupStart": ("mode", "cwd"),
 }
 SERVER_REQUESTS = {
     "item/commandExecution/requestApproval": ("threadId", "turnId", "itemId"),
@@ -34,6 +35,7 @@ SERVER_NOTIFICATIONS = {
     "turn/completed": ("threadId", "turn"),
     "item/agentMessage/delta": ("threadId", "turnId", "itemId", "delta"),
     "serverRequest/resolved": ("threadId", "requestId"),
+    "windowsSandbox/setupCompleted": ("mode", "success", "error"),
 }
 INCOMING_RESPONSES = {
     "v1/InitializeResponse": ("userAgent", "codexHome", "platformFamily", "platformOs"),
@@ -46,6 +48,7 @@ INCOMING_RESPONSES = {
     "v2/TurnStartResponse": ("turn",),
     "v2/TurnInterruptResponse": (),
     "v2/WindowsSandboxReadinessResponse": ("status",),
+    "v2/WindowsSandboxSetupStartResponse": ("started",),
 }
 OUTGOING_RESPONSES = {
     "CommandExecutionRequestApprovalResponse": ("decision",),

@@ -48,6 +48,13 @@ jobs:
         run: cargo test --locked -p codex-gui-core
       - name: Run the portable fixture test
         run: python -m unittest discover -s desktop/fixtures -v
+      - name: Verify Windows sandbox setup from a fresh user profile
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build --manifest-path desktop/Cargo.toml --locked -p codex-gui-core --example windows_sandbox
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./desktop/fixtures/verify_windows_sandbox.ps1 -Probe desktop/target/debug/examples/windows_sandbox.exe
 
   desktop:
     name: Desktop build on ${{ matrix.os }}
