@@ -9,7 +9,7 @@ use codex_gui_core::{
     storage::attachments::{
         AttachmentStore, LegacyQueueStatus, QueueSteerPhase, queue_edits::QueueEdit,
     },
-    workspace::{ExecutionTarget, SendIntent, WorkspaceEngine},
+    workspace::{ExecutionTarget, RuntimeUse, SendIntent, WorkspaceEngine},
 };
 
 use super::{Failure, Navigation, RPC_TIMEOUT, report};
@@ -37,6 +37,7 @@ pub(super) struct QueueCompletion {
     mutation: bool,
     result: Result<(), Failure>,
     snapshot: Result<ChatRead<QueueSnapshot>, Failure>,
+    lease: Option<RuntimeUse>,
 }
 
 enum Work {
@@ -187,6 +188,10 @@ impl Navigation {
             .get(&thread)
             .map(|cache| cache.read.clone());
         let job = Uuid::new_v4();
+        let lease = mutation
+            .then(|| self.owners.acquire(&owner))
+            .transpose()
+            .map_err(|error| report(error.into()))?;
         self.queues.jobs.insert(thread.clone(), (job, mutation));
         let engine = backend.engine.clone();
         let store = self.store.clone();
@@ -204,6 +209,7 @@ impl Navigation {
                     mutation,
                     result,
                     snapshot,
+                    lease,
                 }))
                 .await;
         });
@@ -219,6 +225,7 @@ impl Navigation {
             mutation,
             result,
             snapshot,
+            lease: _lease,
         } = completion;
         if self
             .backend

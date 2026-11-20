@@ -14,6 +14,7 @@ use crate::{
 
 mod execution;
 mod interactions;
+mod owners;
 mod prepare;
 mod queue;
 mod recovery;
@@ -31,6 +32,7 @@ pub use interactions::{
     InteractionError, InteractionIdentity, InteractionKind, InteractionResponse,
     PendingInteraction, PermissionScope,
 };
+pub use owners::{CleanupReservation, OwnerError, RecoveryScope, RuntimeOwners, RuntimeUse};
 pub use prepare::{PrepareError, PreparedThread};
 pub use queue::{
     LegacyStartResult, QueueDeleteResult, QueueEditResult, QueueError, QueueStartResult,

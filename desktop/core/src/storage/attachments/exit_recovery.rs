@@ -1,3 +1,5 @@
+use std::{collections::BTreeMap, io, path::PathBuf};
+
 use rusqlite::{Transaction, TransactionBehavior, params};
 
 use crate::{
@@ -8,6 +10,19 @@ use crate::{
 };
 
 use super::{AttachmentError, AttachmentStore};
+
+pub struct ExitOwner {
+    checkout_path: PathBuf,
+    checkout_key: String,
+    pub threads: Vec<ThreadId>,
+}
+
+impl ExitOwner {
+    pub fn restore(&self) -> Option<CheckoutIdentity> {
+        let checkout = CheckoutIdentity::capture(&self.checkout_path).ok()?;
+        (checkout.storage_key() == self.checkout_key).then_some(checkout)
+    }
+}
 
 impl AttachmentStore {
     pub fn preserve_exit_executions(
@@ -23,6 +38,15 @@ impl AttachmentStore {
         let transaction = state
             .database
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let path = checkout
+            .canonical_path()
+            .to_str()
+            .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
+        transaction.execute(
+            "INSERT INTO exit_checkout_paths (checkout_key, checkout_path) VALUES (?1, ?2)
+             ON CONFLICT (checkout_key) DO UPDATE SET checkout_path = excluded.checkout_path",
+            params![key, path],
+        )?;
         for target in &execution.active_turns {
             record(&transaction, &key, target, "")?;
         }
@@ -31,6 +55,49 @@ impl AttachmentStore {
         }
         transaction.commit()?;
         Ok(())
+    }
+
+    pub fn exit_owners(&self) -> Result<Vec<ExitOwner>, AttachmentError> {
+        let state = self.inner.state();
+        let mut query = state.database.prepare(
+            "SELECT DISTINCT e.checkout_key, p.checkout_path, e.thread_id
+             FROM exit_recovery e JOIN exit_checkout_paths p USING (checkout_key)
+             ORDER BY e.checkout_key, e.thread_id",
+        )?;
+        let mut grouped = BTreeMap::new();
+        let rows = query.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        for row in rows {
+            let (checkout_key, path, thread) = row?;
+            let scope = grouped
+                .entry(checkout_key.clone())
+                .or_insert_with(|| ExitOwner {
+                    checkout_path: PathBuf::from(path),
+                    checkout_key,
+                    threads: Vec::new(),
+                });
+            scope.threads.push(ThreadId(thread));
+        }
+        Ok(grouped.into_values().collect())
+    }
+
+    pub(crate) fn has_exit_evidence(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: Option<&ThreadId>,
+    ) -> Result<bool, AttachmentError> {
+        let state = self.inner.state();
+        Ok(state.database.query_row(
+            "SELECT EXISTS (SELECT 1 FROM exit_recovery
+             WHERE checkout_key = ?1 AND (?2 IS NULL OR thread_id = ?2))",
+            params![checkout.storage_key(), thread.map(|thread| &thread.0)],
+            |row| row.get(0),
+        )?)
     }
 
     pub fn reconcile_exit_history(
@@ -73,6 +140,11 @@ impl AttachmentStore {
                 }
             }
         }
+        transaction.execute(
+            "DELETE FROM exit_checkout_paths WHERE checkout_key = ?1
+             AND NOT EXISTS (SELECT 1 FROM exit_recovery WHERE checkout_key = ?1)",
+            [&key],
+        )?;
         transaction.commit()?;
         Ok(())
     }
@@ -114,6 +186,20 @@ pub(in crate::storage) fn migrate(transaction: &Transaction<'_>) -> rusqlite::Re
             item_id TEXT NOT NULL,
             PRIMARY KEY (checkout_key, thread_id, turn_id, item_id)
         ) STRICT, WITHOUT ROWID;",
+    )
+}
+
+pub(in crate::storage) fn migrate_checkout_paths(
+    transaction: &Transaction<'_>,
+) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "CREATE TABLE exit_checkout_paths (
+            checkout_key TEXT PRIMARY KEY,
+            checkout_path TEXT NOT NULL
+        ) STRICT, WITHOUT ROWID;
+        INSERT INTO exit_checkout_paths (checkout_key, checkout_path)
+        SELECT project_key, project_path FROM desktop_selection d
+        WHERE EXISTS (SELECT 1 FROM exit_recovery e WHERE e.checkout_key = d.project_key);",
     )
 }
 

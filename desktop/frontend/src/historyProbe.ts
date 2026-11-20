@@ -90,8 +90,9 @@ export async function verifyHistory(
     const navigation = visible()?.navigation;
     const control = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
     const evidence = {
-      phase, selectedChat: navigation?.selectedChat, viewText: navigation?.draft?.text,
-      editorText: control?.value, editorFocused: document.activeElement === control,
+      phase, unsentSelected: navigation?.selectedChat === null,
+      unsentDraftPublished: navigation?.draft?.text === UNSENT,
+      unsentDraftRendered: control?.value === UNSENT, editorFocused: document.activeElement === control,
       documentFocused: document.hasFocus(), activeElement: document.activeElement?.localName,
     };
     await invoke('verify_history_result', { failure: `${String(error)} ${JSON.stringify(evidence)}` });

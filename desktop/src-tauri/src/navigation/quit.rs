@@ -1,7 +1,6 @@
 use std::{collections::HashSet, time::Duration};
 
 use codex_gui_core::{
-    checkout::CheckoutIdentity,
     identity::{OperationIdentity, RequestId},
     ipc::{IpcError, QuitDecision, QuitView},
     workspace::{ExecutionSnapshot, ExecutionTarget, WorkspaceAction},
@@ -64,9 +63,9 @@ impl Navigation {
             self.release_quit();
             return Err(IpcError::ProjectUnavailable);
         }
-        if let Err(error) = self.preserve_retired_executions() {
+        if let Err(error) = self.owners.persist_retired() {
             self.release_quit();
-            return Err(report(error));
+            return Err(report(error.into()));
         }
         if let Some(backend) = &self.backend {
             let owner = backend.connection.client();
@@ -165,7 +164,7 @@ impl Navigation {
     }
 
     fn persist_before_quit(&mut self) -> Result<(), Failure> {
-        self.preserve_retired_executions()?;
+        self.owners.persist_retired()?;
         if let Some(state) = self
             .backend
             .as_ref()
@@ -176,26 +175,6 @@ impl Navigation {
                 .preserve_exit_executions(checkout, &state.execution)?;
         }
         Ok(())
-    }
-
-    fn preserve_retired_executions(&mut self) -> Result<(), Failure> {
-        for (checkout, execution) in &self.retired_executions {
-            self.store.preserve_exit_executions(checkout, execution)?;
-        }
-        self.retired_executions.clear();
-        Ok(())
-    }
-
-    pub(super) fn preserve_disconnected_execution(
-        &mut self,
-        checkout: &CheckoutIdentity,
-        execution: &ExecutionSnapshot,
-    ) {
-        if let Err(error) = self.store.preserve_exit_executions(checkout, execution) {
-            eprintln!("{error}");
-            self.retired_executions
-                .push((checkout.clone(), execution.clone()));
-        }
     }
 
     fn release_quit(&mut self) {

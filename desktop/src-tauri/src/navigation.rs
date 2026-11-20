@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     error::Error,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -24,7 +24,9 @@ use codex_gui_core::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
         drafts::DraftId,
     },
-    workspace::{ExecutionSnapshot, PrepareThread, ResumedMode, RoutedEvent, WorkspaceEngine},
+    workspace::{
+        PrepareThread, ResumedMode, RoutedEvent, RuntimeOwners, RuntimeUse, WorkspaceEngine,
+    },
 };
 use serde_json::Value;
 use tokio::{
@@ -37,6 +39,7 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
 mod interactions;
+mod ownership;
 mod queue;
 mod quit;
 mod sandbox;
@@ -91,6 +94,7 @@ struct Backend {
 
 struct Navigation {
     store: AttachmentStore,
+    owners: RuntimeOwners,
     source_draft: DraftId,
     model: Arc<Mutex<ProjectState>>,
     selection: Option<Selection>,
@@ -106,10 +110,9 @@ struct Navigation {
     queue_completions: mpsc::Sender<Box<QueueCompletion>>,
     interactions: InteractionProjection,
     view: NavigationView,
-    editable: HashSet<DraftId>,
-    failed_drafts: HashSet<DraftId>,
+    editable: HashMap<DraftId, Option<CheckoutIdentity>>,
+    failed_drafts: HashMap<DraftId, Option<RuntimeUse>>,
     quit: Option<Quit>,
-    retired_executions: Vec<(CheckoutIdentity, ExecutionSnapshot)>,
     stream: TextBatcher,
     // Active messages already loaded from history have no delta offset. Use their
     // next complete item as authority so a resumed prefix is never duplicated.
@@ -129,6 +132,7 @@ impl NavigationHandle {
         let (send_completions, finished_sends) = mpsc::channel(32);
         let (queue_completions, finished_queue_jobs) = mpsc::channel(32);
         let navigation = Navigation {
+            owners: RuntimeOwners::new(store.clone()),
             store,
             source_draft: saved.source_draft,
             model,
@@ -145,10 +149,9 @@ impl NavigationHandle {
             queue_completions,
             interactions: InteractionProjection::default(),
             view: NavigationView::default(),
-            editable: HashSet::new(),
-            failed_drafts: HashSet::new(),
+            editable: HashMap::new(),
+            failed_drafts: HashMap::new(),
             quit: None,
-            retired_executions: Vec::new(),
             stream: TextBatcher::default(),
             restored_active_items: Vec::new(),
         };
@@ -498,7 +501,12 @@ impl Navigation {
 
     fn set_editor(&mut self, draft: DraftId) -> Result<(), Failure> {
         let text = self.store.read_editor_draft(draft)?.text;
-        self.editable.insert(draft);
+        let checkout = self
+            .selection
+            .as_ref()
+            .filter(|_| draft != self.source_draft)
+            .map(|selection| selection.checkout.clone());
+        self.editable.insert(draft, checkout);
         self.view.draft = Some(EditorDraft {
             id: draft.0.to_string(),
             text,
@@ -508,11 +516,14 @@ impl Navigation {
 
     fn edit(&mut self, edit: DraftEdit) -> Result<(), IpcError> {
         let id = DraftId(Uuid::parse_str(&edit.draft_id).map_err(|_| IpcError::StaleSelection)?);
-        if !self.editable.contains(&id) {
-            return Err(IpcError::StaleSelection);
-        }
+        let checkout = self.editable.get(&id).ok_or(IpcError::StaleSelection)?;
+        let lease = checkout
+            .as_ref()
+            .map(|checkout| self.owners.acquire_write(checkout))
+            .transpose()
+            .map_err(|error| report(error.into()))?;
         if let Err(error) = self.store.save_editor_text(id, edit.text.clone()) {
-            self.failed_drafts.insert(id);
+            self.failed_drafts.entry(id).or_insert(lease);
             return Err(report(error.into()));
         }
         self.failed_drafts.remove(&id);
@@ -535,8 +546,10 @@ impl Navigation {
             std::mem::take(&mut self.view.write_access) != WriteAccess::Unavailable;
         if let Some(backend) = self.backend.take() {
             let state = backend.engine.snapshot();
-            if let Some(checkout) = &state.connection.workspace.checkout {
-                self.preserve_disconnected_execution(checkout, &state.execution);
+            if state.connection.workspace.checkout.is_some()
+                && let Err(error) = self.owners.retire(&state.connection)
+            {
+                eprintln!("{error}");
             }
             if let Err(error) = self.login.retire(&backend.connection.client()).await {
                 eprintln!("{error}");
@@ -587,12 +600,17 @@ impl Navigation {
                 RPC_TIMEOUT,
             )
             .await?;
-            let (engine, effects) = WorkspaceEngine::start(identity);
+            let (engine, effects) = WorkspaceEngine::start(identity.clone());
+            if identity.workspace.checkout.is_some() {
+                self.owners.register(engine.clone())?;
+            }
+            let client = connection.client();
             self.backend = Some(Backend {
                 connection,
                 engine,
                 effects,
             });
+            self.recover_hidden_owners(client);
         }
         let backend = self.backend.as_ref().expect("backend connected");
         Ok(backend.connection.client())
@@ -667,10 +685,8 @@ impl Navigation {
         let summary = browser.thread_summary(&thread, RPC_TIMEOUT).await?;
         let history = browser.history(&summary, None, RPC_TIMEOUT).await?;
         let page = history.for_selection(client.identity(), &thread)?;
-        if let Some(checkout) = &client.identity().workspace.checkout {
-            self.store
-                .reconcile_exit_history(checkout, &thread, &page.data)?;
-        }
+        self.owners
+            .reconcile_history(client.identity(), &thread, &page.data)?;
         let mut active = Vec::new();
         let mut before_resume = TranscriptView::default();
         for turn in page.data.iter().rev() {

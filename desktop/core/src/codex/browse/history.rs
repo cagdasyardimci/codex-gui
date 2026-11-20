@@ -97,7 +97,7 @@ impl<T> ChatRead<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TurnCursor {
     scope: ChatScope,
     view: TurnView,

@@ -7,8 +7,8 @@ use codex_gui_core::{
     },
     storage::drafts::DraftId,
     workspace::{
-        ExecutionTarget, SendDraft, SendIntent, SendSettings, SubmissionError, SubmissionReply,
-        WorkspaceAction,
+        ExecutionTarget, RuntimeUse, SendDraft, SendIntent, SendSettings, SubmissionError,
+        SubmissionReply, WorkspaceAction,
     },
 };
 use uuid::Uuid;
@@ -18,6 +18,7 @@ use super::{Failure, Navigation, RPC_TIMEOUT, report};
 pub(super) struct InflightSend {
     pub operation: OperationIdentity,
     pub thread: ThreadId,
+    _lease: RuntimeUse,
 }
 
 pub(super) struct SendCompletion {
@@ -83,6 +84,7 @@ impl Navigation {
                 },
             );
         }
+        let lease = self.owners.acquire(client.identity())?;
         let prepared = match request.chat_id {
             Some(chat) => {
                 engine
@@ -130,6 +132,7 @@ impl Navigation {
             InflightSend {
                 operation: operation.clone(),
                 thread,
+                _lease: lease,
             },
         );
         self.sync_actions();

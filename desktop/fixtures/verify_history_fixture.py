@@ -34,10 +34,16 @@ def main() -> None:
             "PYTHONIOENCODING": "utf-8",
         }
         executable = str(args.app.resolve(strict=True))
-        for command in [
+        database_path = data / "workspace.sqlite3"
+        state_path = Path(environment["CODEX_GUI_QA_STATE"])
+        restart_offset = 0
+        for index, command in enumerate([
             [executable, "--verify-history", str(data), str(project)],
             [executable, "--verify-history-restore", str(data)],
-        ]:
+        ]):
+            if index == 1:
+                restart_offset = len(trace.read_text(encoding="utf-8").splitlines())
+                seed_hidden_execution(database_path, state_path)
             result = subprocess.run(command, env=environment, timeout=60,
                                     capture_output=True, encoding="utf-8", errors="replace")
             print(result.stdout, end="")
@@ -48,16 +54,43 @@ def main() -> None:
         assert methods.count("initialize") == 4, methods
         assert methods.count("thread/list") >= 4, methods
         assert not {"thread/start", "turn/start"} & set(methods), methods
+        hidden_requests = [
+            event["method"] for event in events[restart_offset:]
+            if event["direction"] == "request" and event.get("threadId") == "history-second"
+        ]
+        assert hidden_requests == ["thread/read", "thread/turns/list"], hidden_requests
         assert any(event.get("error", {}).get("message") == "Thread already has an active writer"
                    for event in events)
         assert sum(event.get("direction") == "event" and event.get("method") == "turn/completed"
                    for event in events) == 1
-        with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
+        with closing(sqlite3.connect(database_path)) as database:
             assert database.execute("SELECT project_path, thread_id FROM desktop_selection").fetchone() == (None, None)
             drafts = {row[0] for row in database.execute("SELECT text FROM drafts")}
             assert {"Composed café 日本語", "Unsent checkout draft"} <= drafts
+            assert database.execute("SELECT COUNT(*) FROM exit_recovery").fetchone() == (0,)
         assert not list(codex_home.iterdir())
         print("Verified selected draft and checkout retention without any thread or turn start requests")
+        print("Verified an unselected chat's execution and command evidence reconciled after relaunch")
+
+
+def seed_hidden_execution(database_path: Path, state_path: Path) -> None:
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    thread = next(thread for thread in state["threads"] if thread["id"] == "history-second")
+    turn = thread["turns"][0]
+    command_id = "unselected-command"
+    turn["items"].append({
+        "id": command_id, "type": "commandExecution", "status": "completed",
+    })
+    state_path.write_text(json.dumps(state, ensure_ascii=True), encoding="utf-8")
+    with closing(sqlite3.connect(database_path)) as database, database:
+        checkout_key, checkout_path = database.execute(
+            "SELECT project_key, project_path FROM desktop_selection"
+        ).fetchone()
+        database.execute("INSERT INTO exit_checkout_paths VALUES (?, ?)", (checkout_key, checkout_path))
+        database.executemany(
+            "INSERT INTO exit_recovery VALUES (?, ?, ?, ?)",
+            [(checkout_key, thread["id"], turn["id"], item_id) for item_id in ("", command_id)],
+        )
 
 
 if __name__ == "__main__":
