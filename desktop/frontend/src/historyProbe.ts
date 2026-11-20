@@ -38,7 +38,9 @@ export async function verifyHistory(
       await waitFor('Clearing the project lost the unsent draft', () =>
         visible()?.workspace === null && visible()?.navigation.draft?.text === UNSENT &&
         visible()?.navigation.account.identity === 'fixture@example.invalid' &&
-        editor().value === UNSENT && !document.querySelector('nav[aria-label="Chats"]'));
+        editor().value === UNSENT && !document.querySelector('nav[aria-label="Chats"]') &&
+        Array.from(document.querySelectorAll('.composer-actions button'))
+          .some((button) => button instanceof HTMLButtonElement && button.textContent?.trim() === 'Send' && button.disabled));
       try {
         await navigateWorkspace({ refresh: { workspaceId } });
         throw new Error('Retired workspace could still access chat history');

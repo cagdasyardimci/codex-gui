@@ -151,3 +151,8 @@ class Stream:
         self.thread['preview'] = body
         self.engine.state.save()
         self.emit('item/completed', item=item)
+        if self.engine.scenario.get('desktopWorkflow'):
+            target = Path(self.thread['cwd']) / 'workflow-notes.txt'
+            if target.read_text(encoding='utf-8') != 'Before fixture approval\n':
+                raise ValueError('Expected the approved fixture checkout baseline')
+            target.write_bytes('After fixture approval 日本語\n'.encode('utf-8'))

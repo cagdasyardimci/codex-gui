@@ -32,6 +32,7 @@ pub enum Verification {
     Account,
     WindowsSetup,
     Turn,
+    ActiveTurn,
     Diff,
     Quit,
 }
@@ -284,14 +285,18 @@ pub fn verify_turn_result(
     verification: State<'_, Verification>,
     failure: Option<String>,
 ) -> Result<(), String> {
-    if *verification != Verification::Turn {
+    if !matches!(*verification, Verification::Turn | Verification::ActiveTurn) {
         return Err("turn verification was not requested at launch".into());
     }
     if let Some(failure) = failure {
         eprintln!("Turn verification failed: {failure}");
         app.exit(1);
     } else {
-        println!("Verified installed Send, recovery, approval, questions, and scoped Stop");
+        if *verification == Verification::Turn {
+            println!("Verified installed Send, recovery, approval, questions, and Git patch");
+        } else {
+            println!("Verified installed active-turn Stop after chat switch and reload");
+        }
         app.exit(0);
     }
     Ok(())

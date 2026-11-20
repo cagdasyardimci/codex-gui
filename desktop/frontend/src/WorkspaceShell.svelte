@@ -13,7 +13,7 @@
   import { verifyQuit } from './quitProbe';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let draftId: string | undefined;
@@ -208,7 +208,7 @@
     void observeWorkspace(receive, lifecycle.signal).catch(console.error);
     if (verify === 'account') void verifyAccount(() => snapshot);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
-    else if (verify === 'turn') void verifyTurn(() => snapshot);
+    else if (verify === 'turn' || verify === 'activeTurn') void verifyTurn(() => snapshot, verify);
     else if (verify === 'diff') void verifyDiff(() => snapshot);
     else if (verify === 'quit') void verifyQuit(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);

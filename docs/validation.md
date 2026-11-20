@@ -22,7 +22,7 @@ Run the [installed history fixture](../desktop/fixtures/verify_history_fixture.p
 
 The [installed account fixture](../desktop/fixtures/verify_account_fixture.py) exercises cancellation, an obsolete completion, the successful account and model refresh, and retained draft text. It replaces the browser handoff with a local fixture and leaves the disposable Codex profile empty. Use the release-candidate checks for real ChatGPT sign-in.
 
-The [installed turn fixture](../desktop/fixtures/verify_turn_fixture.py) recovers a submission with an ambiguous reply, answers a captured approval after switching chats, and checks ordered answers in the transcript and preview. It switches chats and reloads the WebView while a turn is active, then verifies the backend interrupted the original turn. The trace and database check the exact submission identities and accepted outcomes.
+The [installed turn checkpoint](../desktop/fixtures/verify_turn_fixture.py) uses two fresh profiles. One recovers an ambiguous submission, answers a captured approval and questions, and opens the Git patch for the resulting edit. The other switches chats and reloads the WebView during an active turn, then checks that stopping it targets the original owner and preserves that chat's draft. The package workflow also runs the installed account and history fixtures for first-launch sign-in and draft restoration. Use release-candidate acceptance for the real-account workflow.
 
 The [installed diff fixture](../desktop/fixtures/verify_diff_fixture.py) creates its own Git checkout. It verifies a tracked edit and an untracked patch with Unicode names, checks that selecting a file triggers the patch request, and compares the Git index and source bytes before and after the read.
 

@@ -27,6 +27,7 @@ fn main() {
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
+        Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
         Some("--verify-diff") => fixture::Verification::Diff,
         Some("--verify-quit") => fixture::Verification::Quit,
         _ => fixture::Verification::None,
@@ -46,6 +47,7 @@ fn main() {
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
+            | fixture::Verification::ActiveTurn
             | fixture::Verification::Diff
             | fixture::Verification::Quit
     )
@@ -122,6 +124,7 @@ fn main() {
                     | fixture::Verification::Account
                     | fixture::Verification::WindowsSetup
                     | fixture::Verification::Turn
+                    | fixture::Verification::ActiveTurn
                     | fixture::Verification::Diff
                     | fixture::Verification::Quit
             ) {
