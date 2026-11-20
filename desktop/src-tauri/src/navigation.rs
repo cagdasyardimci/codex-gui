@@ -60,6 +60,7 @@ pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
 pub(crate) use file_tools::FileTabCapture;
 mod inspector;
 mod interactions;
+mod managed_worktree;
 mod message_search;
 mod ownership;
 mod paging;
@@ -884,6 +885,10 @@ impl Navigation {
                     .await
                     .map_err(report)?;
             }
+            NavigationIntent::NewWorktree(request) => {
+                self.require_request(request)?;
+                self.create_managed_worktree().await.map_err(report)?;
+            }
             NavigationIntent::NewChat(request) => {
                 self.require_request(request)?;
                 self.focus(None).await.map_err(report)?;
@@ -1262,9 +1267,12 @@ impl Navigation {
         if let Err(error) = self.refresh_account(client.clone()).await {
             eprintln!("{error}");
         }
-        if self.selection.is_none() {
+        let Some(selection) = &self.selection else {
             return Ok(());
-        }
+        };
+        self.view.can_create_worktree =
+            codex_gui_core::worktree::WorktreeManager::can_create_from(selection.checkout.clone())
+                .await;
         self.load_command_capabilities(&client).await;
         self.reload_feedback()?;
         self.refresh_write_access(&client).await;

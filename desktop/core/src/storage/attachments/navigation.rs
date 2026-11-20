@@ -157,6 +157,14 @@ impl AttachmentStore {
         Ok(thread.flatten().map(ThreadId))
     }
 
+    pub fn has_thread_draft(&self, thread: &ThreadId) -> Result<bool, AttachmentError> {
+        Ok(self.inner.state().database.query_row(
+            "SELECT EXISTS (SELECT 1 FROM thread_drafts WHERE thread_id = ?1)",
+            [&thread.0],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn editable_thread_draft(&self, thread: &ThreadId) -> Result<DraftId, AttachmentError> {
         let mut state = self.inner.state();
         let transaction = state

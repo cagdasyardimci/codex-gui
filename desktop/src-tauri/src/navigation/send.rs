@@ -180,6 +180,7 @@ impl Navigation {
                     .await?
             }
             None => {
+                let binding = self.pending_worktree_binding()?;
                 engine
                     .apply(WorkspaceAction::AdmitFirstMessage(intent))
                     .await?;
@@ -192,7 +193,13 @@ impl Navigation {
                     .await
                     .ok_or("the thread preparation queue closed")?;
                 let prepared = engine
-                    .prepare_thread(effect, &client, &self.store, RPC_TIMEOUT)
+                    .prepare_thread_with_worktree(
+                        effect,
+                        &client,
+                        &self.store,
+                        RPC_TIMEOUT,
+                        binding,
+                    )
                     .await?;
                 let thread = prepared.thread().clone();
                 if let (Some(selection), Some(preference)) = (self.selection.as_ref(), preference)

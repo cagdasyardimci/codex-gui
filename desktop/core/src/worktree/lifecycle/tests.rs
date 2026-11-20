@@ -146,6 +146,19 @@ async fn creates_from_committed_head_and_binds_the_verified_captured_checkout() 
         .await
         .unwrap();
     assert_eq!(bound.thread_id.as_deref(), Some("thread-1"));
+    assert!(matches!(
+        manager
+            .bind(bound.id, "thread-2", &bound.checkout_path)
+            .await,
+        Err(WorktreeError::Ownership)
+    ));
+    assert_eq!(
+        manager
+            .bind(bound.id, "thread-1", &bound.checkout_path)
+            .await
+            .unwrap(),
+        bound
+    );
     assert_eq!(
         fixture.manager().store.snapshot().unwrap().records,
         std::slice::from_ref(&bound)

@@ -100,6 +100,7 @@ fn main() {
         Some("--verify-media") => fixture::Verification::Media,
         Some("--verify-history") => fixture::Verification::History,
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
+        Some("--verify-managed-worktree") => fixture::Verification::ManagedWorktree,
         Some("--verify-attachments") => fixture::Verification::Attachments,
         Some("--verify-annotations") => fixture::Verification::Annotations,
         Some("--verify-composer-context") => fixture::Verification::ComposerContext,
@@ -155,6 +156,7 @@ fn main() {
         verification,
         fixture::Verification::History
             | fixture::Verification::HistoryRestore
+            | fixture::Verification::ManagedWorktree
             | fixture::Verification::Attachments
             | fixture::Verification::Annotations
             | fixture::Verification::ComposerContext

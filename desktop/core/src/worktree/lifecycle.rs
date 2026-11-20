@@ -50,6 +50,13 @@ impl WorktreeManager {
         Self { store, checkouts }
     }
 
+    pub async fn can_create_from(selected: CheckoutIdentity) -> bool {
+        let Ok(source) = CheckoutGit::new(selected) else {
+            return false;
+        };
+        source.reported_root().await.is_ok() && head(&source).await.is_ok()
+    }
+
     pub async fn create(
         &self,
         selected: CheckoutIdentity,
@@ -181,8 +188,16 @@ impl WorktreeManager {
         }
         let checkout = self.verify_checkout(&active).await?;
         checkout.checkout.validate_reported(reported_checkout)?;
+        let thread_id = thread_id.trim();
+        if let Some(existing) = active.thread_id.as_deref() {
+            return if existing == thread_id {
+                Ok(active)
+            } else {
+                Err(WorktreeError::Ownership)
+            };
+        }
         let mut bound = active.clone();
-        bound.thread_id = Some(thread_id.trim().to_owned());
+        bound.thread_id = Some(thread_id.to_owned());
         locked.save(Some(&active), &bound)?;
         Ok(bound)
     }

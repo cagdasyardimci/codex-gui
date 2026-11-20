@@ -33,7 +33,7 @@ pub use interactions::{
     PendingInteraction, PermissionScope,
 };
 pub use owners::{CleanupReservation, OwnerError, RecoveryScope, RuntimeOwners, RuntimeUse};
-pub use prepare::{PrepareError, PreparedThread};
+pub use prepare::{PrepareError, PreparedThread, WorktreeThreadBinding};
 pub use queue::{
     LegacyStartResult, QueueDeleteResult, QueueEditResult, QueueError, QueueStartResult,
     QueuedSteerResult,

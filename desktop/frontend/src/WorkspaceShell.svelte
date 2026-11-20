@@ -16,6 +16,7 @@
   import type { AppearanceView } from './generated/workspace';
   import { applyDesktopAppearance, observeDesktop, readWorkspacePanes, setReviewPaneExpansion, toggleNavigationPane, type WorkspacePanes } from './desktopAppearance';
   import { verifyAppearance } from './appearanceProbe';
+  import { verifyManagedWorktree } from './managedWorktreeProbe';
   import { verifyAppKitImport } from './appkitImportProbe';
   import VoiceControls from './VoiceControls.svelte';
   import { DesktopVoice } from './desktopVoice';
@@ -74,7 +75,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'appKitImport' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'managedWorktree' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'appKitImport' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -860,7 +861,7 @@
     }
   }
 
-  function workspaceAction(action: 'clearProject' | 'newChat' | 'refresh' | 'reconnect' | 'setupSandbox') {
+  function workspaceAction(action: 'clearProject' | 'newChat' | 'newWorktree' | 'refresh' | 'reconnect' | 'setupSandbox') {
     if (!workspace) return;
     const request = { workspaceId: workspace.workspaceId };
     const intent = { [action]: request } as NavigationIntent;
@@ -869,7 +870,7 @@
       if ((action === 'refresh' || action === 'reconnect') && workspaceId === request.workspaceId) {
         checkoutRevision += 1;
       }
-    }, action === 'newChat');
+    }, action === 'newChat' || action === 'newWorktree');
   }
 
   async function changeSidebar(revision: string, change: SidebarChange) {
@@ -1233,6 +1234,7 @@
       else if (!settingsOpen && action === 'messageSearch') showMessageSearch();
     }, lifecycle.signal).catch(console.error);
     if (verify === 'account') void verifyAccount(() => snapshot);
+    else if (verify === 'managedWorktree') void verifyManagedWorktree(() => snapshot);
     else if (verify === 'settings') void verifySettings(() => snapshot);
     else if (verify === 'appKitImport') void verifyAppKitImport(() => snapshot, () => appearance);
     else if (verify === 'appearance' || verify === 'appearanceRestore') void verifyAppearance(verify, () => appearance);
@@ -1302,6 +1304,10 @@
     {/if}
     {#if workspace}
       <h1 title={workspace.projectPath}>{projectTitle ?? workspace.projectPath}</h1>
+      {#if navigation?.canCreateWorktree}
+        <button type="button" disabled={actionPending || !!quit || navigation.writeAccess !== 'ready'}
+          onclick={() => workspaceAction('newWorktree')}>New Chat in Worktree</button>
+      {/if}
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>

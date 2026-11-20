@@ -33,6 +33,7 @@ pub enum Verification {
     History,
     HistoryRestore,
     Attachments,
+    ManagedWorktree,
     Annotations,
     ComposerContext,
     ComposerSettings,
@@ -377,6 +378,7 @@ pub fn verify_attachments_result(
     if !matches!(
         *verification,
         Verification::Attachments
+            | Verification::ManagedWorktree
             | Verification::Annotations
             | Verification::ComposerContext
             | Verification::ComposerSettings
@@ -401,7 +403,9 @@ pub fn verify_attachments_result(
         eprintln!("Attachment verification failed: {failure}");
         app.exit(1);
     } else {
-        if *verification == Verification::Annotations {
+        if *verification == Verification::ManagedWorktree {
+            println!("Verified installed managed worktree creation and first turn");
+        } else if *verification == Verification::Annotations {
             println!(
                 "Verified installed image annotation placement, cancellation, and restoration"
             );
