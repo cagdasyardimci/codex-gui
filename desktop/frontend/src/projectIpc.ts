@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  DraftAttachmentRequest, DraftAttachmentScope, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -34,6 +34,28 @@ export function loadTranscriptImage(request: MarkdownTargetRequest): Promise<Arr
 
 export function loadTranscriptAttachment(request: TranscriptMediaRequest): Promise<ArrayBuffer> {
   return invoke('load_transcript_attachment', { request });
+}
+
+export function pickComposerAttachments(scope: DraftAttachmentScope): Promise<void> {
+  return invoke('pick_composer_attachments', { scope });
+}
+
+export function pasteComposerImage(scope: DraftAttachmentScope, bytes: ArrayBuffer): Promise<void> {
+  return invoke('paste_composer_image', bytes, {
+    headers: { 'x-codex-attachment-scope': encodeURIComponent(JSON.stringify(scope)) },
+  });
+}
+
+export function removeComposerAttachment(request: DraftAttachmentRequest): Promise<void> {
+  return invoke('remove_composer_attachment', { request });
+}
+
+export function loadComposerImage(request: DraftAttachmentRequest): Promise<ArrayBuffer> {
+  return invoke('load_composer_image', { request });
+}
+
+export function reuseComposerAttachment(request: ReuseAttachmentRequest): Promise<void> {
+  return invoke('reuse_composer_attachment', { request });
 }
 
 export function openTranscriptLink(request: MarkdownTargetRequest): Promise<void> {

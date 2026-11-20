@@ -5,8 +5,8 @@ use uuid::Uuid;
 use crate::git::turn_edits::LastTurnView;
 
 use super::{
-    ConversationActions, QueueRequest, QueueView, RecoverSendRequest, RespondRequest, SendRequest,
-    StopRequest, WorkspaceId, WorkspaceRequest,
+    ConversationActions, DraftAttachmentView, QueueRequest, QueueView, RecoverSendRequest,
+    RespondRequest, SendRequest, StopRequest, WorkspaceId, WorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -171,6 +171,7 @@ pub struct ChatRow {
 pub struct EditorDraft {
     pub id: String,
     pub text: String,
+    pub attachments: Vec<DraftAttachmentView>,
 }
 
 #[derive(Debug, Deserialize, TS)]

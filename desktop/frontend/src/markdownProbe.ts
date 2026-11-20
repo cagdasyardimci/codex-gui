@@ -37,12 +37,13 @@ export async function verifyRenderedMarkdown(snapshot: WorkspaceSnapshot, scope:
   await openTranscriptLink({ row, target: TARGET });
   await rejectsStale(openTranscriptLink({ row, target: 'https://example.invalid/unrelated' }));
   await rejectsStale(loadTranscriptImage({ row, target: '../panel.png' }));
-  const heading = [...rendered.querySelectorAll<HTMLButtonElement>('button.markdown-link')]
-    .find((control) => control.textContent === 'Heading');
-  if (!heading || !viewport) throw new Error('The heading link was absent');
+  const heading = () => [...(surface()?.querySelectorAll<HTMLButtonElement>('button.markdown-link') ?? [])]
+    .find((control) => control.textContent?.trim() === 'Heading');
+  if (!viewport) throw new Error('The Markdown viewport was absent');
+  await waitFor('The heading link was absent', () => !!heading());
   viewport.scrollTop = viewport.scrollHeight;
   const before = viewport.scrollTop;
-  heading.click();
+  heading()?.click();
   await waitFor('The offline heading link did not move the viewport', () => viewport.scrollTop < before - 10);
   viewport.scrollTop = viewport.scrollHeight;
   return row;

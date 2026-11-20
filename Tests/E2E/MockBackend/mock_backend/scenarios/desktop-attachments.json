@@ -1,0 +1,6 @@
+{
+  "extends": "desktop-history",
+  "desktopAttachments": true,
+  "intervalSeconds": 0.1,
+  "chunks": ["The attachment was received."]
+}

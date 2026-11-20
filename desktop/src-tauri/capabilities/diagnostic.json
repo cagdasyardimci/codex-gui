@@ -9,6 +9,8 @@
     "allow-verify-fixture-result",
     "allow-verify-media-result",
     "allow-verify-history-result",
+    "allow-verify-attachments-result",
+    "allow-drop-composer-attachment-fixture",
     "allow-verify-account-result",
     "allow-verify-windows-setup-result",
     "allow-verify-turn-result",

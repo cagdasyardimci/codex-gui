@@ -9,7 +9,7 @@ export async function verifyTranscriptAttachments(snapshot: WorkspaceSnapshot, s
   const captures = item.attachments;
   if (item.text || item.localImages.length || captures.length !== 2 ||
       captures.some((attachment, index) => attachment.id !== index || attachment.label !== 'panel.png' ||
-        Object.keys(attachment).length !== 2)) {
+        !attachment.image || Object.keys(attachment).length !== 3)) {
     throw new Error('Scoped attachment identities changed order or exposed a local path');
   }
   const row = { ...scope, itemId: item.itemId, revision: item.revision };

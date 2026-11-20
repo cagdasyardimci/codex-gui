@@ -3,6 +3,7 @@ import copy
 import sys
 import threading
 import time
+from pathlib import Path
 
 from .streaming import Stream
 from .queue_fixture import queue_request, steer_request
@@ -267,7 +268,7 @@ class Server:
             self.transport.event('windowsSandbox/setupCompleted', {'mode': mode, 'success': True})
 
     def resume_history_fixture(self, thread):
-        if thread['id'] != 'history-first':
+        if self.scenario.get('desktopAttachments') or thread['id'] != 'history-first':
             return
         if not self.state.data.get('writerLockObserved'):
             self.state.data['writerLockObserved'] = True
@@ -287,7 +288,14 @@ class Server:
         if p.get('cwd') and p['cwd'] != thread.get('cwd'):
             raise ProtocolError(-32602, 'Turn cwd does not match thread')
         inputs = p.get('input')
-        if not isinstance(inputs, list) or not inputs or any(not isinstance(i, dict) or i.get('type') != 'text' or not isinstance(i.get('text'), str) for i in inputs):
+        accepts_attachments = self.scenario.get('desktopAttachments', False)
+        if not isinstance(inputs, list) or not inputs or any(
+            not isinstance(item, dict) or not (
+                item.get('type') == 'text' and isinstance(item.get('text'), str)
+                or accepts_attachments and item.get('type') in ('localImage', 'mention')
+                and isinstance(item.get('path'), str) and Path(item['path']).is_file()
+            ) for item in inputs
+        ):
             raise ProtocolError(-32602, 'Fixture supports text inputs only')
         if self.scenario['mode'] == 'error':
             raise ProtocolError(self.scenario['error']['code'], self.scenario['error']['message'])

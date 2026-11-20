@@ -261,6 +261,28 @@ body {
   resize: vertical;
 }
 
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.composer-attachments li {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer-attachments img {
+  max-inline-size: 3rem;
+  max-block-size: 2rem;
+}
+
 .workspace-queue {
   display: flex;
   flex-direction: column;

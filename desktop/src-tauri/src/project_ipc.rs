@@ -54,7 +54,7 @@ impl ProjectState {
     }
 }
 
-struct Picker<'a>(&'a AtomicBool);
+pub(crate) struct Picker<'a>(&'a AtomicBool);
 
 impl Drop for Picker<'_> {
     fn drop(&mut self) {
@@ -74,7 +74,7 @@ impl ProjectIpc {
             .grants
             .checkout(window, workspace)
     }
-    fn reserve_picker(&self) -> Result<Picker<'_>, IpcError> {
+    pub(crate) fn reserve_picker(&self) -> Result<Picker<'_>, IpcError> {
         self.picking
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .map_err(|_| IpcError::PickerBusy)?;

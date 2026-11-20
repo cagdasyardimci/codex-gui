@@ -5,8 +5,10 @@ use codex_gui_core::{
     files::{local_file_revision, read_local_file},
     ipc::{
         IpcError, MarkdownNode, MarkdownTargetRequest, TranscriptAttachment,
-        TranscriptImageDependency, TranscriptMediaRequest, TranscriptRowRequest,
+        TranscriptAttachmentLocation, TranscriptImageDependency, TranscriptMediaRequest,
+        TranscriptRowRequest,
     },
+    storage::attachments::AttachmentStore,
 };
 use percent_encoding::percent_decode_str;
 use pulldown_cmark::{Event, Tag};
@@ -24,7 +26,7 @@ mod markdown;
 const MAX_IMAGE_SOURCES: usize = 8;
 const MAX_SOURCE_BYTES: usize = 512 * 1024;
 const MAX_DEPENDENCY_BYTES: u64 = 32 * 1024 * 1024;
-const MAX_INLINE_BYTES: u64 = 4 * 1024 * 1024;
+pub(crate) const MAX_INLINE_BYTES: u64 = 20 * 1024 * 1024;
 
 #[tauri::command]
 pub async fn render_transcript_markdown(
@@ -63,22 +65,59 @@ pub async fn load_transcript_attachment(
     project: State<'_, ProjectIpc>,
     request: TranscriptMediaRequest,
 ) -> Result<Response, IpcError> {
-    let authorize = || {
-        authorize_view(&window)?;
-        let state = project.state.lock().expect("workspace state lock poisoned");
-        let checkout = state
-            .grants
-            .checkout(window.label(), request.row.workspace_id)?;
-        let path = state.projection.transcript_attachment(&request)?;
-        Ok::<_, IpcError>((checkout, path))
-    };
-    let (checkout, path) = authorize()?;
-    let bytes =
-        tauri::async_runtime::spawn_blocking(move || checked_inline_image(&checkout, &path))
-            .await
-            .map_err(|_| IpcError::ProjectUnavailable)??;
-    authorize()?;
-    Ok(Response::new(bytes))
+    let (checkout, media) = scoped_attachment(&window, &project, &request)?;
+    let thread = request.row.chat_id.clone();
+    let store = project
+        .navigation
+        .get()
+        .ok_or(IpcError::ProjectUnavailable)?
+        .attachment_store()
+        .clone();
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        read_attachment_image(&checkout, &store, &thread, &media)
+    })
+    .await
+    .map_err(|_| IpcError::ProjectUnavailable)??;
+    scoped_attachment(&window, &project, &request)?;
+    Ok(Response::new(inline_raster_payload(bytes)?))
+}
+
+pub(crate) fn scoped_attachment(
+    window: &WebviewWindow,
+    project: &ProjectIpc,
+    request: &TranscriptMediaRequest,
+) -> Result<(CheckoutIdentity, TranscriptAttachmentLocation), IpcError> {
+    authorize_view(window)?;
+    let state = project.state.lock().expect("workspace state lock poisoned");
+    let checkout = state
+        .grants
+        .checkout(window.label(), request.row.workspace_id)?;
+    let media = state.projection.transcript_attachment(request)?;
+    Ok((checkout, media))
+}
+
+pub(crate) fn read_attachment_image(
+    checkout: &CheckoutIdentity,
+    store: &AttachmentStore,
+    thread: &str,
+    media: &TranscriptAttachmentLocation,
+) -> Result<Vec<u8>, IpcError> {
+    if !media.image {
+        return Err(IpcError::StaleSelection);
+    }
+    let path = Path::new(&media.path);
+    if path.is_absolute() {
+        let lease = store
+            .lease_sent_image(checkout, thread, &media.turn_id, path)
+            .map_err(|_| IpcError::StaleSelection)?;
+        lease
+            .read_preview(MAX_INLINE_BYTES)
+            .map_err(|_| IpcError::ProjectUnavailable)
+    } else {
+        read_local_file(checkout, path, MAX_INLINE_BYTES)
+            .map(|read| read.bytes)
+            .map_err(|_| IpcError::ProjectUnavailable)
+    }
 }
 
 #[tauri::command]
@@ -134,8 +173,11 @@ fn authorized_image(
 fn checked_inline_image(checkout: &CheckoutIdentity, path: &str) -> Result<Vec<u8>, IpcError> {
     let read = read_local_file(checkout, Path::new(path), MAX_INLINE_BYTES)
         .map_err(|_| IpcError::ProjectUnavailable)?;
-    let bytes = read.bytes;
-    let format = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+    inline_raster_payload(read.bytes)
+}
+
+pub(crate) fn raster_type(bytes: &[u8]) -> Option<u8> {
+    Some(if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         1
     } else if bytes.starts_with(b"\xff\xd8\xff") {
         2
@@ -144,8 +186,12 @@ fn checked_inline_image(checkout: &CheckoutIdentity, path: &str) -> Result<Vec<u
     } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
         4
     } else {
-        return Err(IpcError::ProjectUnavailable);
-    };
+        return None;
+    })
+}
+
+pub(crate) fn inline_raster_payload(bytes: Vec<u8>) -> Result<Vec<u8>, IpcError> {
+    let format = raster_type(&bytes).ok_or(IpcError::ProjectUnavailable)?;
     let mut payload = Vec::with_capacity(1 + bytes.len());
     payload.push(format);
     payload.extend(bytes);
@@ -245,25 +291,35 @@ pub(crate) fn local_attachments(
         .into_iter()
         .flatten()
         .filter_map(|value| {
-            if value["type"] != "localImage" {
-                return None;
+            let image = match value["type"].as_str()? {
+                "localImage" => true,
+                "mention" => false,
+                _ => return None,
+            };
+            let path = Path::new(value["path"].as_str()?);
+            let name = path.file_name()?.to_str()?;
+            if let Some(relative) = relative_image(checkout, path) {
+                return Some((relative, name.to_owned(), image));
             }
-            relative_image(checkout, Path::new(value["path"].as_str()?))
+            if image
+                && path.is_absolute()
+                && name.len() == 64
+                && name.bytes().all(|byte| byte.is_ascii_hexdigit())
+            {
+                return Some((path.to_str()?.to_owned(), "Image".into(), true));
+            }
+            None
         })
         .take(MAX_IMAGE_SOURCES)
         .enumerate()
-        .map(|(index, relative_path)| {
-            let label = relative_path
-                .rsplit('/')
-                .next()
-                .unwrap_or(&relative_path)
-                .to_owned();
-            TranscriptAttachment {
+        .map(
+            |(index, (relative_path, label, image))| TranscriptAttachment {
                 id: index as u32,
                 label,
+                image,
                 relative_path,
-            }
-        })
+            },
+        )
         .collect()
 }
 

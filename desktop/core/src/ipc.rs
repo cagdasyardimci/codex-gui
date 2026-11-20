@@ -28,7 +28,10 @@ pub use actions::{
 };
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use markdown::{MarkdownKind, MarkdownNode, MarkdownTargetRequest};
-pub use media::{TranscriptAttachment, TranscriptMediaRequest};
+pub use media::{
+    DraftAttachmentRequest, DraftAttachmentScope, DraftAttachmentView, ReuseAttachmentRequest,
+    TranscriptAttachment, TranscriptAttachmentLocation, TranscriptMediaRequest,
+};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
     LoginTicket, NavigationIntent, NavigationView, OlderHistoryRequest, OlderHistoryView,
@@ -220,6 +223,10 @@ pub fn workspace_typescript() -> String {
         TranscriptImageDependency::decl(),
         TranscriptAttachment::decl(),
         TranscriptMediaRequest::decl(),
+        DraftAttachmentView::decl(),
+        DraftAttachmentScope::decl(),
+        DraftAttachmentRequest::decl(),
+        ReuseAttachmentRequest::decl(),
         TranscriptView::decl(),
         TranscriptRole::decl(),
         NavigationView::decl(),

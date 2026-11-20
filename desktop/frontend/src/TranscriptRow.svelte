@@ -1,12 +1,13 @@
 <script lang="ts">
-  import type { TranscriptItem, TranscriptRowRequest } from './generated/workspace';
+  import type { DraftAttachmentScope, TranscriptItem, TranscriptRowRequest } from './generated/workspace';
   import MarkdownView from './MarkdownView.svelte';
   import ImagePreview from './ImagePreview.svelte';
-  import { loadTranscriptAttachment } from './projectIpc';
+  import { loadTranscriptAttachment, reuseComposerAttachment } from './projectIpc';
 
-  let { item, request, copy, onCopyFocus }: {
+  let { item, request, attachmentScope, copy, onCopyFocus }: {
     item: TranscriptItem;
     request?: TranscriptRowRequest;
+    attachmentScope?: DraftAttachmentScope;
     copy: (item: TranscriptItem) => Promise<void> | void;
     onCopyFocus: () => void;
   } = $props();
@@ -50,7 +51,17 @@
       {@const row = request}
       <ul class="transcript-attachments" aria-label="Attachments">
         {#each item.attachments as attachment (attachment.id)}
-          <li><ImagePreview load={() => loadTranscriptAttachment({ row, attachmentId: attachment.id })} alt={attachment.label} /></li>
+          {@const media = { row, attachmentId: attachment.id }}
+          <li>
+            {#if attachment.image}
+              <ImagePreview load={() => loadTranscriptAttachment(media)} alt={attachment.label} />
+            {:else}<span>{attachment.label}</span>{/if}
+            {#if attachmentScope}
+              {@const scope = attachmentScope}
+              <button type="button" aria-label={`Attach ${attachment.label} to draft`}
+                onclick={() => { void reuseComposerAttachment({ scope, media }).catch(() => {}); }}>Attach</button>
+            {/if}
+          </li>
         {/each}
       </ul>
     {/if}

@@ -29,6 +29,7 @@ pub enum Verification {
     Media,
     History,
     HistoryRestore,
+    Attachments,
     Account,
     WindowsSetup,
     Turn,
@@ -237,6 +238,25 @@ pub fn verify_history_result(
         app.exit(1);
     } else {
         println!("Verified installed project history, drafts, streaming, and writer recovery");
+        app.exit(0);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn verify_attachments_result(
+    app: AppHandle,
+    verification: State<'_, Verification>,
+    failure: Option<String>,
+) -> Result<(), String> {
+    if *verification != Verification::Attachments {
+        return Err("attachment verification was not requested".into());
+    }
+    if let Some(failure) = failure {
+        eprintln!("Attachment verification failed: {failure}");
+        app.exit(1);
+    } else {
+        println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         app.exit(0);
     }
     Ok(())

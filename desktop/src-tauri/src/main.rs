@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent, webview::NewWindowResponse};
 
 mod coding_probe;
+mod composer_ipc;
 mod diff_ipc;
 mod fixture;
 mod navigation;
@@ -25,6 +26,7 @@ fn main() {
         Some("--verify-media") => fixture::Verification::Media,
         Some("--verify-history") => fixture::Verification::History,
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
+        Some("--verify-attachments") => fixture::Verification::Attachments,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -46,6 +48,7 @@ fn main() {
         verification,
         fixture::Verification::History
             | fixture::Verification::HistoryRestore
+            | fixture::Verification::Attachments
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -91,12 +94,24 @@ fn main() {
                 quit_ipc::handle_native_quit(window.app_handle());
             }
         })
+        .on_webview_event(|webview, event| {
+            if webview.label() != WORKSPACE_WINDOW {
+                return;
+            }
+            if let tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
+                && let Some(window) = webview.app_handle().get_webview_window(WORKSPACE_WINDOW)
+            {
+                let project = window.state::<project_ipc::ProjectIpc>();
+                composer_ipc::dropped_paths(window.clone(), &project, paths.clone());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             fixture::stream_fixture,
             fixture::verification_mode,
             fixture::verify_fixture_result,
             fixture::verify_media_result,
             fixture::verify_history_result,
+            fixture::verify_attachments_result,
             fixture::verify_account_result,
             fixture::verify_windows_setup_result,
             fixture::verify_turn_result,
@@ -105,6 +120,12 @@ fn main() {
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::search_project_paths,
+            composer_ipc::pick_composer_attachments,
+            composer_ipc::paste_composer_image,
+            composer_ipc::remove_composer_attachment,
+            composer_ipc::load_composer_image,
+            composer_ipc::reuse_composer_attachment,
+            composer_ipc::drop_composer_attachment_fixture,
             transcript_ipc::copy_transcript_row,
             transcript_ipc::check_transcript_images,
             transcript_ipc::render_transcript_markdown,
@@ -143,6 +164,7 @@ fn main() {
                 fixture::Verification::None
                     | fixture::Verification::History
                     | fixture::Verification::HistoryRestore
+                    | fixture::Verification::Attachments
                     | fixture::Verification::Account
                     | fixture::Verification::WindowsSetup
                     | fixture::Verification::Turn

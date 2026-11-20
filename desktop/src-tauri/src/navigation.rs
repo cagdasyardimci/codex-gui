@@ -38,6 +38,8 @@ use uuid::Uuid;
 use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
+mod composer_attachments;
+pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
 mod interactions;
 mod ownership;
 mod paging;
@@ -62,7 +64,7 @@ type Failure = Box<dyn Error + Send + Sync>;
 type Outcome = Result<Option<WorkspaceId>, IpcError>;
 
 #[derive(Clone)]
-pub struct NavigationHandle(mpsc::Sender<Message>);
+pub struct NavigationHandle(mpsc::Sender<Message>, AttachmentStore);
 
 struct Message {
     action: Action,
@@ -73,6 +75,7 @@ enum Action {
     SelectFolder(PathBuf),
     Intent(NavigationIntent),
     RequestQuit(tauri::AppHandle),
+    ComposerAttachment(composer_attachments::Mutation),
 }
 
 enum Input {
@@ -147,7 +150,7 @@ impl NavigationHandle {
         let (owner_changes, changed_owners) = mpsc::channel(1);
         let navigation = Navigation {
             owners: RuntimeOwners::new(store.clone()),
-            store,
+            store: store.clone(),
             source_draft: saved.source_draft,
             model,
             selection: None,
@@ -181,7 +184,7 @@ impl NavigationHandle {
             finished_queue_jobs,
             changed_owners,
         ));
-        Ok(Self(sender))
+        Ok(Self(sender, store))
     }
 
     pub async fn select(&self, folder: PathBuf) -> Outcome {
@@ -307,6 +310,10 @@ impl Navigation {
         let action = match action {
             Action::RequestQuit(app) => {
                 self.begin_quit(app);
+                return Ok(None);
+            }
+            Action::ComposerAttachment(mutation) => {
+                self.update_composer_attachments(mutation)?;
                 return Ok(None);
             }
             Action::SelectFolder(folder) => {
@@ -549,7 +556,7 @@ impl Navigation {
     }
 
     fn set_editor(&mut self, draft: DraftId) -> Result<(), Failure> {
-        let text = self.store.read_editor_draft(draft)?.text;
+        let saved = self.store.read_editor_draft(draft)?;
         let checkout = self
             .selection
             .as_ref()
@@ -558,7 +565,8 @@ impl Navigation {
         self.editable.insert(draft, checkout);
         self.view.draft = Some(EditorDraft {
             id: draft.0.to_string(),
-            text,
+            text: saved.text,
+            attachments: composer_attachments::views(&saved.context),
         });
         Ok(())
     }

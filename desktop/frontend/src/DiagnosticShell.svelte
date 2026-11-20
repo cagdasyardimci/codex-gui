@@ -9,7 +9,7 @@
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
-  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
+  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
   let mode = $state<Mode | null>(null);
 
   async function workspaceScopeVerified(): Promise<boolean> {
@@ -76,6 +76,8 @@
   <WorkspaceShell verify="initial" />
 {:else if mode === 'historyRestore'}
   <WorkspaceShell verify="restore" />
+{:else if mode === 'attachments'}
+  <WorkspaceShell verify="attachments" />
 {:else if mode === 'account'}
   <WorkspaceShell verify="account" />
 {:else if mode === 'windowsSetup'}

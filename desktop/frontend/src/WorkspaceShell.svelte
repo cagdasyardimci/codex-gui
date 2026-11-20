@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, TranscriptItem, WorkspaceSnapshot } from './generated/workspace';
+  import type { DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
   import QueuePanel from './QueuePanel.svelte';
+  import ComposerAttachments from './ComposerAttachments.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { copyTranscriptRow, navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
+  import { copyTranscriptRow, navigateWorkspace, observeWorkspace, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -16,10 +17,11 @@
   import { verifyQueue } from './queueProbe';
   import { verifyDiff } from './diffProbe';
   import { verifyQuit } from './quitProbe';
+  import { verifyComposerAttachments } from './composerAttachmentProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -46,6 +48,11 @@
   const workspaceId = $derived(workspace?.workspaceId);
   const selectedChat = $derived(navigation?.selectedChat);
   const transcriptGeneration = $derived(snapshot?.transcript.generation);
+  const displayedDraft = $derived(navigation?.draft?.id);
+  const attachmentScope = $derived(workspaceId && displayedDraft
+    ? { workspaceId, chatId: selectedChat ?? null, draftId: displayedDraft } : undefined);
+  const draftAttachments = $derived(navigation?.draft?.attachments ?? []);
+  const rowRequests = new WeakMap<TranscriptItem, TranscriptRowRequest>();
   const stopTarget = $derived(navigation?.actions.stop);
   const quit = $derived(navigation?.quit);
   const queue = $derived(navigation?.queue);
@@ -54,8 +61,13 @@
 
   function rowRequest(item: TranscriptItem) {
     if (!workspaceId || !selectedChat || transcriptGeneration === undefined) return;
-    return { workspaceId, chatId: selectedChat,
+    const prior = rowRequests.get(item);
+    if (prior?.workspaceId === workspaceId && prior.chatId === selectedChat && prior.generation === transcriptGeneration &&
+        prior.revision === item.revision) return prior;
+    const request = { workspaceId, chatId: selectedChat,
       itemId: item.itemId, generation: transcriptGeneration, revision: item.revision };
+    rowRequests.set(item, request);
+    return request;
   }
 
   function copyResponse(item: TranscriptItem) {
@@ -258,9 +270,10 @@
   }
 
   async function sendDraft() {
-    if (!workspace || !draftId || !navigation?.actions.send || !text.trim() || composing || actionPending) return;
+    if (!workspace || !draftId || !navigation?.actions.send || (!text.trim() && !draftAttachments.length) || composing || actionPending) return;
     const send = {
       workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text,
+      attachmentIds: draftAttachments.map((attachment) => attachment.id),
       expectedTurn: queue?.activeTurn ?? null,
     };
     admittingDraft = true;
@@ -269,6 +282,18 @@
     } finally {
       admittingDraft = false;
     }
+  }
+
+  function pasteAttachment(event: ClipboardEvent) {
+    const scope = attachmentScope;
+    if (!scope || queue?.editing || admittingDraft || navigation?.quit) return;
+    const images = [...(event.clipboardData?.files ?? [])].filter((file) =>
+      file.size <= 20 * 1024 * 1024 && ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type));
+    if (!images.length) return;
+    event.preventDefault();
+    void (async () => {
+      for (const image of images.slice(0, 8)) await pasteComposerImage(scope, await image.arrayBuffer());
+    })().catch(() => {});
   }
 
   function queueCommand(command: QueueCommand) {
@@ -356,6 +381,7 @@
     else if (verify === 'queue') void verifyQueue(() => snapshot);
     else if (verify === 'diff') void verifyDiff(() => snapshot);
     else if (verify === 'quit') void verifyQuit(() => snapshot);
+    else if (verify === 'attachments') void verifyComposerAttachments(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -414,7 +440,7 @@
           {#each viewport.entries as entry (entry.key)}
             {#if 'item' in entry}
               <div class="transcript-row-slot" data-transcript-slot={entry.item.itemId} use:measureTranscriptRow>
-                <TranscriptRow item={entry.item} request={rowRequest(entry.item)} copy={copyResponse}
+                <TranscriptRow item={entry.item} request={rowRequest(entry.item)} attachmentScope={queue?.editing ? undefined : attachmentScope} copy={copyResponse}
                   onCopyFocus={focusResponseAction} />
               </div>
             {:else}
@@ -439,7 +465,11 @@
           draftOccupied={text !== '' || !!queue.editing} command={queueCommand} />
       {/if}
       {#if navigation?.draft}
+        {#if attachmentScope && draftAttachments.length && !queue?.editing}
+          <ComposerAttachments scope={attachmentScope} attachments={draftAttachments} />
+        {/if}
         <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor}
+          onpaste={pasteAttachment}
           readonly={admittingDraft || confirmingQuit || quit?.draining}
           value={text} oncompositionstart={() => { composing = true; }}
           oncompositionend={(event) => {
@@ -470,7 +500,12 @@
             <button type="button" disabled={actionPending || queue?.busy}
               onclick={() => { if (resumeCommand) queueCommand(resumeCommand); }}>Resume</button>
           {:else}
-            <button type="button" disabled={actionPending || !navigation.actions.send || !text.trim()} onclick={() => void sendDraft()}>
+            {#if attachmentScope}
+              {@const scope = attachmentScope}
+              <button type="button" disabled={actionPending || !!navigation.quit}
+                onclick={() => { void pickComposerAttachments(scope).catch(() => {}); }}>Attach Files</button>
+            {/if}
+            <button type="button" disabled={actionPending || !navigation.actions.send || (!text.trim() && !draftAttachments.length)} onclick={() => void sendDraft()}>
               {queue?.activeTurn ? (queue.enabled ? 'Queue' : 'Steer') : 'Send'}
             </button>
           {/if}

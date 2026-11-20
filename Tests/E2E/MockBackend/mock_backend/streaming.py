@@ -20,7 +20,7 @@ class Stream:
     def run(self):
         engine = self.engine
         try:
-            text = self.turn['items'][0]['content'][0]['text']
+            text = next((item['text'] for item in self.turn['items'][0]['content'] if item['type'] == 'text'), '')
             cold_history = engine.scenario.get('desktopHistory') and text == 'Queued request from another client'
             with engine.lock:
                 self.emit('turn/started', turn=self.turn)

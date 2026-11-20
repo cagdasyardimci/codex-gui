@@ -379,12 +379,36 @@ impl WorkspaceProjection {
     pub fn transcript_attachment(
         &self,
         request: &super::TranscriptMediaRequest,
-    ) -> Result<String, IpcError> {
+    ) -> Result<super::TranscriptAttachmentLocation, IpcError> {
         self.read_transcript_row(&request.row, |row| {
             row.attachments
                 .iter()
                 .find(|entry| entry.id == request.attachment_id)
-                .map(|entry| entry.relative_path.clone())
+                .map(|entry| super::TranscriptAttachmentLocation {
+                    turn_id: row.turn_id.clone(),
+                    path: entry.relative_path.clone(),
+                    label: entry.label.clone(),
+                    image: entry.image,
+                })
+        })
+    }
+
+    pub fn visible_attachment_scope(&self) -> Option<super::DraftAttachmentScope> {
+        let publication = self.publication.borrow();
+        let snapshot = &publication.snapshot;
+        if snapshot.navigation.quit.is_some()
+            || snapshot
+                .navigation
+                .queue
+                .as_ref()
+                .is_some_and(|queue| queue.editing.is_some())
+        {
+            return None;
+        }
+        Some(super::DraftAttachmentScope {
+            workspace_id: snapshot.workspace.as_ref()?.workspace_id,
+            draft_id: snapshot.navigation.draft.as_ref()?.id.clone(),
+            chat_id: snapshot.navigation.selected_chat.clone(),
         })
     }
 

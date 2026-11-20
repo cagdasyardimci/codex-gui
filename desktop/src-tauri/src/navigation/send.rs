@@ -53,13 +53,21 @@ impl Navigation {
     async fn admit_send(&mut self, request: SendRequest) -> Result<(), Failure> {
         let draft_id = DraftId(Uuid::parse_str(&request.draft_id)?);
         let saved = self.store.read_editor_draft(draft_id)?;
-        if saved.text != request.text || (saved.text.trim().is_empty() && saved.context.is_empty())
+        let displayed = super::composer_attachments::views(&saved.context);
+        if saved.text != request.text
+            || (saved.text.trim().is_empty() && saved.context.is_empty())
+            || displayed
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .ne(request.attachment_ids.iter().map(String::as_str))
         {
-            return Err("the submitted text no longer matches the displayed draft".into());
+            return Err("the submitted input no longer matches the displayed draft".into());
         }
         let backend = self.backend.as_ref().ok_or("Codex is disconnected")?;
         let client = backend.connection.client();
         let engine = backend.engine.clone();
+        let (text, context, attachments) =
+            self.capture_composer_context(draft_id, saved.text, saved.context)?;
         let operation = OperationIdentity {
             connection: client.identity().clone(),
             request: RequestId(Uuid::new_v4()),
@@ -69,9 +77,9 @@ impl Navigation {
             draft: SendDraft {
                 id: draft_id,
                 revision: saved.revision,
-                text: saved.text,
-                context: saved.context,
-                attachments: Vec::new(),
+                text,
+                context,
+                attachments,
             },
             settings: SendSettings::default(),
         });
