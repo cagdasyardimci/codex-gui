@@ -66,7 +66,7 @@ struct ChatScope {
     thread: ThreadId,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ChatRead<T> {
     scope: ChatScope,
     data: T,

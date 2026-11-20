@@ -45,6 +45,10 @@ def verify(executable: Path, legacy: bool) -> None:
         )
         print(result.stdout, end="")
         if result.returncode or "Verified installed queue controls" not in result.stdout:
+            if trace.is_file():
+                frames = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+                recent = [frame for frame in frames if frame["direction"] == "request"][-18:]
+                print(json.dumps(recent, ensure_ascii=True))
             raise SystemExit(result.stderr or "The installed app did not complete the queue fixture")
         frames = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
         requests = [frame for frame in frames if frame["direction"] == "request"]

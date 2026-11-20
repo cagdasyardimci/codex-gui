@@ -162,6 +162,8 @@ export async function verifyQueue(visible: Snapshot) {
       !!ready(visible));
     await invoke('verify_turn_result', { failure: null });
   } catch (error) {
-    await invoke('verify_turn_result', { failure: String(error) });
+    await invoke('verify_turn_result', {
+      failure: `${String(error)}. Observed queue ${JSON.stringify(visible()?.navigation.queue)}`,
+    });
   }
 }

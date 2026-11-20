@@ -17,7 +17,7 @@ pub struct QueuedSubmission {
     pub input: Vec<Value>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum QueueSnapshot {
     Available(Vec<QueuedSubmission>),
     Unsupported,

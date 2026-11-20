@@ -52,6 +52,13 @@ enum Work {
 
 impl Queues {
     pub(super) fn accept(&mut self, thread: ThreadId, read: ChatRead<QueueSnapshot>) {
+        if self
+            .snapshots
+            .get(&thread)
+            .is_some_and(|cached| cached.read.as_ref() == &read)
+        {
+            return;
+        }
         self.snapshots.insert(
             thread,
             QueueCache {
@@ -159,7 +166,12 @@ impl Navigation {
         let backend = self.backend.as_ref().ok_or(IpcError::ProjectUnavailable)?;
         let client = backend.connection.client();
         let owner = client.identity().clone();
-        if self.queues.jobs.contains_key(&thread)
+        let mutation = !matches!(work, Work::Refresh);
+        if self
+            .queues
+            .jobs
+            .get(&thread)
+            .is_some_and(|(_, pending_write)| *pending_write || !mutation)
             || !backend.engine.snapshot().writable_threads.contains(&thread)
         {
             return Err(IpcError::StaleSelection);
@@ -169,7 +181,6 @@ impl Navigation {
             .snapshots
             .get(&thread)
             .map(|cache| cache.read.clone());
-        let mutation = !matches!(work, Work::Refresh);
         let job = Uuid::new_v4();
         self.queues.jobs.insert(thread.clone(), (job, mutation));
         let engine = backend.engine.clone();
@@ -227,6 +238,9 @@ impl Navigation {
                 self.queues.snapshots.remove(&thread);
             }
         }
+        if mutation && let Some(cache) = self.queues.snapshots.get_mut(&thread) {
+            cache.revision = Uuid::new_v4();
+        }
         if mutation
             && self
                 .selection
@@ -235,9 +249,10 @@ impl Navigation {
                 == Some(&thread)
             && let Some(draft) = self.editor_id()
         {
-            self.refresh_draft_after_submission(draft);
-        } else {
-            self.sync_actions();
+            if let Err(error) = self.set_editor(draft) {
+                eprintln!("{error}");
+            }
+            self.refresh_recovery_action();
         }
         let changed = self.queues.changed.remove(&thread);
         if self.queues.advance.remove(&thread) {
@@ -245,6 +260,7 @@ impl Navigation {
         } else if changed {
             self.refresh_queue(thread);
         }
+        self.sync_actions();
     }
 
     pub(super) fn queue_view(&self) -> Result<Option<QueueView>, Failure> {
@@ -334,7 +350,11 @@ impl Navigation {
         Ok(Some(QueueView {
             revision: cache.revision.to_string(),
             enabled: self.store.queue_enabled(checkout, thread)?,
-            busy: self.queues.jobs.contains_key(thread),
+            busy: self
+                .queues
+                .jobs
+                .get(thread)
+                .is_some_and(|(_, mutation)| *mutation),
             active_turn,
             entries,
             editing,
