@@ -37,6 +37,8 @@ For the desktop transport, run the [first-workflow schema check](../desktop/fixt
 python3 desktop/fixtures/check_app_server_schema.py --baseline /path/to/0.153.2/codex --remote-access-target /path/to/0.163.0/codex
 ```
 
+Pass the same executables to the [submission recovery check](../desktop/fixtures/verify_submission_recovery.py). It uses a local model fixture and disposable profiles to verify that client message IDs survive restart in full history and that status-only reads stay lightweight.
+
 The [desktop compatibility adapter](../desktop/core/src/codex/compatibility.rs) identifies the two reference releases and marks other releases at or above the floor as unverified. Remote access still requires the live provider and host checks in [remote access](remote-access.md).
 
 ## Capability assessment

@@ -1,5 +1,5 @@
 use super::*;
-use crate::identity::{RequestId, TurnId};
+use crate::{checkout::CheckoutIdentity, identity::TurnId};
 use uuid::Uuid;
 
 use crate::storage::drafts::retire_submitted_revision;
@@ -25,6 +25,25 @@ pub(crate) struct JournalEntry<'a> {
     pub revision: DraftRevision,
     pub request: &'a Value,
     pub attachments: &'a [BlobLease],
+    pub checkout: &'a CheckoutIdentity,
+}
+
+pub(crate) struct SubmissionWrite {
+    store: AttachmentStore,
+    id: RequestId,
+}
+
+impl Drop for SubmissionWrite {
+    fn drop(&mut self) {
+        self.store.inner.state().active_submissions.remove(&self.id);
+    }
+}
+
+pub(crate) struct PendingSubmission {
+    pub id: RequestId,
+    pub thread: ThreadId,
+    pub reserved: bool,
+    pub matches_checkout: bool,
 }
 
 pub(crate) enum JournalPhase {
@@ -46,7 +65,10 @@ pub enum SubmissionAcknowledgement {
 }
 
 impl AttachmentStore {
-    pub(crate) fn reserve_submission(&self, entry: JournalEntry<'_>) -> Result<(), JournalError> {
+    pub(crate) fn reserve_submission(
+        &self,
+        entry: JournalEntry<'_>,
+    ) -> Result<SubmissionWrite, JournalError> {
         if entry
             .attachments
             .iter()
@@ -61,15 +83,16 @@ impl AttachmentStore {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let id = entry.id.0.as_bytes().as_slice();
         let inserted = transaction.execute(
-            "INSERT INTO submissions (id, thread_id, draft_id, draft_revision, request, phase)
-             SELECT ?1, thread_id, draft_id, ?4, ?5, 'reserved'
+            "INSERT INTO submissions (id, thread_id, draft_id, draft_revision, request, phase, checkout_key)
+             SELECT ?1, thread_id, draft_id, ?4, ?5, 'reserved', ?6
              FROM thread_drafts WHERE thread_id = ?2 AND draft_id = ?3",
             params![
                 id,
                 entry.thread.0,
                 entry.draft.0.as_bytes().as_slice(),
                 entry.revision.as_sql(),
-                encoded
+                encoded,
+                entry.checkout.storage_key(),
             ],
         )?;
         if inserted == 0 {
@@ -84,7 +107,44 @@ impl AttachmentStore {
             )?;
         }
         transaction.commit()?;
-        Ok(())
+        state.active_submissions.insert(entry.id);
+        Ok(SubmissionWrite {
+            store: self.clone(),
+            id: entry.id,
+        })
+    }
+
+    pub(crate) fn pending_submissions(
+        &self,
+        checkout: &CheckoutIdentity,
+    ) -> Result<Vec<PendingSubmission>, JournalError> {
+        let state = self.inner.state();
+        let mut statement = state.database.prepare(
+            "SELECT s.id, s.thread_id, s.phase = 'reserved', COALESCE(s.checkout_key = ?2, FALSE)
+             FROM submissions AS s
+             WHERE json_extract(s.request, '$.cwd') = ?1 AND s.phase IN ('reserved', 'dispatching')
+                AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS outcome WHERE outcome.id = s.id)
+             ORDER BY s.thread_id, s.id",
+        )?;
+        let records = statement.query_map(
+            params![checkout.canonical_path().to_str(), checkout.storage_key()],
+            |row| {
+                Ok(PendingSubmission {
+                    id: RequestId(Uuid::from_bytes(row.get(0)?)),
+                    thread: ThreadId(row.get(1)?),
+                    reserved: row.get(2)?,
+                    matches_checkout: row.get(3)?,
+                })
+            },
+        )?;
+        let mut pending = Vec::new();
+        for record in records {
+            let record = record?;
+            if !state.active_submissions.contains(&record.id) {
+                pending.push(record);
+            }
+        }
+        Ok(pending)
     }
 
     pub(crate) fn set_submission_phase(
@@ -108,6 +168,15 @@ impl AttachmentStore {
             )?,
         };
         if updated != 1 {
+            if matches!(phase, JournalPhase::Unsent)
+                && transaction.query_row(
+                    "SELECT EXISTS (SELECT 1 FROM submissions WHERE id = ?1 AND phase = 'unsent')",
+                    [id],
+                    |row| row.get::<_, bool>(0),
+                )?
+            {
+                return Ok(());
+            }
             return Err(JournalError::InvalidPhase);
         }
         let mut released = Vec::new();
@@ -129,6 +198,7 @@ impl AttachmentStore {
         id: RequestId,
         thread: &ThreadId,
         outcome: JournalOutcome,
+        checkout: &CheckoutIdentity,
     ) -> Result<SubmissionAcknowledgement, JournalError> {
         let mut state = self.inner.state();
         let transaction = state
@@ -138,8 +208,14 @@ impl AttachmentStore {
         let binding = transaction
             .query_row(
                 "SELECT draft_id, draft_revision FROM submissions
-             WHERE id = ?1 AND thread_id = ?2 AND phase = 'dispatching'",
-                params![id, thread.0],
+             WHERE id = ?1 AND thread_id = ?2 AND phase = 'dispatching'
+               AND checkout_key = ?3 AND json_extract(request, '$.cwd') = ?4",
+                params![
+                    id,
+                    thread.0,
+                    checkout.storage_key(),
+                    checkout.canonical_path().to_str()
+                ],
                 |row| Ok((row.get::<_, [u8; 16]>(0)?, row.get::<_, i64>(1)?)),
             )
             .optional()?;
@@ -246,4 +322,10 @@ pub(in crate::storage) fn migrate_submission_outcomes(
         ) STRICT, WITHOUT ROWID;
         CREATE INDEX sent_submission_attachments_blob ON sent_submission_attachments (blob_id);",
     )
+}
+
+pub(in crate::storage) fn migrate_submission_checkout(
+    transaction: &Transaction<'_>,
+) -> rusqlite::Result<()> {
+    transaction.execute_batch("ALTER TABLE submissions ADD COLUMN checkout_key TEXT")
 }

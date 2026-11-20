@@ -50,6 +50,18 @@ impl CheckoutIdentity {
         &self.canonical
     }
 
+    pub(crate) fn storage_key(&self) -> String {
+        #[cfg(unix)]
+        return format!(
+            "{}:{}:{}",
+            std::env::consts::OS,
+            self.key.device,
+            self.key.inode
+        );
+        #[cfg(windows)]
+        return format!("windows:{}:{}", self.key.volume, hex::encode(self.key.id));
+    }
+
     pub fn revalidate(&self) -> Result<(), CheckoutError> {
         self.validate_reported(&self.canonical)
     }

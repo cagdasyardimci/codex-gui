@@ -30,6 +30,8 @@ The [Tauri submission path](../desktop/core/src/workspace/submission.rs) commits
 
 The [Tauri interaction router](../desktop/core/src/workspace/interactions.rs) keeps approvals and questions with their original chat and connection. A response uses the exact request ID, validates the offered decision or requested permission subset, and preserves the order of each question’s answers. A reply remains reserved after possible delivery until server resolution or connection retirement. Either event cancels a reply that is still queued.
 
+[Submission recovery](../desktop/core/src/workspace/recovery.rs) can retire a reservation left before dispatch. Once dispatch was possible, it requires an unambiguous client message ID in the captured checkout’s history before clearing any part of the draft. A missing or conflicting match leaves the request and attachments available for reconciliation.
+
 Distinguish a known rejection from an uncertain submission. A cross-app writer lock is a known rejection; reading its saved history must not adopt another client's turn. Retry reestablishes ownership without resending the prompt. Preserve submitted drafts until acknowledgement, restoring them only if the resulting empty draft remains untouched; newer edits and independent draft lifetimes take precedence.
 
 The composer selects speed from the current model’s service tiers. A saved tier that the selected model does not advertise resolves to Standard. A directly submitted turn or a locally dispatched follow-up uses the tier captured with that submission.

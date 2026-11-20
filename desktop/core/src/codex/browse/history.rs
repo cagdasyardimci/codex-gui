@@ -70,6 +70,15 @@ pub struct ChatRead<T> {
 }
 
 impl<T> ChatRead<T> {
+    pub(crate) fn into_for_selection(
+        self,
+        connection: &ConnectionIdentity,
+        thread: &ThreadId,
+    ) -> Result<T, BrowseError> {
+        self.for_selection(connection, thread)?;
+        Ok(self.data)
+    }
+
     pub fn for_selection(
         &self,
         connection: &ConnectionIdentity,

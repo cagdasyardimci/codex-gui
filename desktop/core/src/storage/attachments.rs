@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
     path::{Path, PathBuf},
@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use thiserror::Error;
 
-use crate::identity::ThreadId;
+use crate::identity::{RequestId, ThreadId};
 
 use super::{
     DatabaseOpenError,
@@ -23,9 +23,11 @@ use super::{
 const PARTIAL_PREFIX: &str = ".partial-";
 
 mod submissions;
-pub(crate) use submissions::{JournalEntry, JournalOutcome, JournalPhase};
+pub(crate) use submissions::{JournalEntry, JournalOutcome, JournalPhase, SubmissionWrite};
 pub use submissions::{JournalError, SubmissionAcknowledgement};
-pub(super) use submissions::{migrate_submission_outcomes, migrate_submissions};
+pub(super) use submissions::{
+    migrate_submission_checkout, migrate_submission_outcomes, migrate_submissions,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlobId([u8; 32]);
@@ -76,6 +78,7 @@ struct StoreState {
     database: Connection,
     leases: HashMap<BlobId, usize>,
     candidates: BTreeSet<BlobId>,
+    active_submissions: HashSet<RequestId>,
 }
 
 pub struct BlobLease {
@@ -142,6 +145,7 @@ impl AttachmentStore {
                     database,
                     candidates,
                     leases: HashMap::new(),
+                    active_submissions: HashSet::new(),
                 }),
                 _owner: owner,
             }),

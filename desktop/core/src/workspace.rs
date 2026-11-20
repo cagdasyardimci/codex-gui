@@ -12,6 +12,7 @@ use crate::{
 mod execution;
 mod interactions;
 mod prepare;
+mod recovery;
 mod send;
 mod submission;
 
@@ -26,6 +27,7 @@ pub use interactions::{
     PendingInteraction, PermissionScope,
 };
 pub use prepare::{PrepareError, PreparedThread};
+pub use recovery::SubmissionRecovery;
 pub use send::{SendDraft, SendIntent, SendSettings};
 pub use submission::{SubmissionError, SubmissionReply};
 

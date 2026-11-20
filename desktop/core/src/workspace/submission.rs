@@ -12,7 +12,7 @@ use crate::{
     codex::{AppServerClient, Delivery, RequestError, ServerEvent},
     identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
     storage::attachments::{
-        AttachmentStore, JournalEntry, JournalError, JournalOutcome, JournalPhase,
+        AttachmentStore, JournalEntry, JournalError, JournalOutcome, JournalPhase, SubmissionWrite,
     },
 };
 
@@ -52,7 +52,7 @@ impl WorkspaceEngine {
         tokio::spawn(async move {
             let operation = prepared.intent.operation.clone();
             let outcome = async {
-                let response = dispatch(&prepared, &client, &store, timeout).await?;
+                let (response, _write) = dispatch(&prepared, &client, &store, timeout).await?;
                 let acknowledgement = match reply_outcome(&response) {
                     Some(outcome) => {
                         engine
@@ -94,7 +94,7 @@ impl WorkspaceEngine {
             .await
     }
 
-    async fn acknowledge(
+    pub(super) async fn acknowledge(
         &self,
         operation: &OperationIdentity,
         thread: &ThreadId,
@@ -117,7 +117,7 @@ impl WorkspaceEngine {
         tokio::task::spawn_blocking(move || {
             let _commit = commit;
             checkout.revalidate()?;
-            Ok(store.acknowledge_submission(request, &thread, outcome)?)
+            Ok(store.acknowledge_submission(request, &thread, outcome, &checkout)?)
         })
         .await?
     }
@@ -137,17 +137,23 @@ fn message_evidence(event: &ServerEvent) -> Option<(RequestId, ThreadId, TurnId)
     let ServerEvent::Notification { method, params } = event else {
         return None;
     };
-    if !matches!(method.as_str(), "item/started" | "item/completed")
-        || params["item"]["type"] != "userMessage"
-    {
+    if !matches!(method.as_str(), "item/started" | "item/completed") {
         return None;
     }
-    let client = Uuid::parse_str(params["item"]["clientId"].as_str()?).ok()?;
     Some((
-        RequestId(client),
+        message_client_id(&params["item"])?,
         ThreadId(nonempty_string(&params["threadId"])?),
         TurnId(nonempty_string(&params["turnId"])?),
     ))
+}
+
+pub(super) fn message_client_id(item: &Value) -> Option<RequestId> {
+    if item["type"] != "userMessage" {
+        return None;
+    }
+    Uuid::parse_str(item["clientId"].as_str()?)
+        .ok()
+        .map(RequestId)
 }
 
 fn nonempty_string(value: &Value) -> Option<String> {
@@ -162,7 +168,7 @@ async fn dispatch(
     client: &AppServerClient,
     store: &AttachmentStore,
     timeout: Duration,
-) -> Result<Result<Value, RequestError>, SubmissionError> {
+) -> Result<(Result<Value, RequestError>, SubmissionWrite), SubmissionError> {
     let intent = &prepared.intent;
     let owner = &intent.operation.connection;
     if client.identity() != owner {
@@ -185,7 +191,8 @@ async fn dispatch(
     let journal = store.clone();
     let thread = prepared.thread.clone();
     let payload = request.clone();
-    tokio::task::spawn_blocking(move || {
+    let captured_checkout = checkout.clone();
+    let write = tokio::task::spawn_blocking(move || {
         journal.reserve_submission(JournalEntry {
             id,
             thread: &thread,
@@ -193,6 +200,7 @@ async fn dispatch(
             revision: captured.draft.revision,
             request: &payload,
             attachments: &captured.draft.attachments,
+            checkout: &captured_checkout,
         })
     })
     .await??;
@@ -220,7 +228,7 @@ async fn dispatch(
         tokio::task::spawn_blocking(move || journal.set_submission_phase(id, JournalPhase::Unsent))
             .await??;
     }
-    Ok(response)
+    Ok((response, write))
 }
 
 fn turn_request(prepared: &PreparedThread, cwd: &str) -> Result<Value, SubmissionError> {
