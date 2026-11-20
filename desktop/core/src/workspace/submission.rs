@@ -15,7 +15,8 @@ use crate::{
     codex::{AppServerClient, Delivery, QueuedSubmission, RequestError, ServerEvent},
     identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
     storage::attachments::{
-        AttachmentStore, JournalEntry, JournalError, JournalOutcome, JournalPhase, SubmissionWrite,
+        AttachmentStore, JournalEntry, JournalError, JournalKind, JournalOutcome, JournalPhase,
+        SubmissionWrite,
     },
 };
 
@@ -283,9 +284,9 @@ async fn dispatch(
         .canonical_path()
         .to_str()
         .ok_or(SubmissionError::NonUnicodePath)?;
-    let journaled = turn_request(prepared, cwd)?;
-    let (method, request, queue_add) = match kind {
-        SubmissionKind::Turn => ("turn/start", journaled.clone(), false),
+    let journaled = turn_request(intent, &prepared.thread, cwd)?;
+    let (method, request, kind) = match kind {
+        SubmissionKind::Turn => ("turn/start", journaled.clone(), JournalKind::Direct),
         SubmissionKind::Queue => (
             "thread/queue/add",
             json!({
@@ -293,7 +294,7 @@ async fn dispatch(
                 "clientUserMessageId": journaled["clientUserMessageId"],
                 "input": journaled["input"],
             }),
-            true,
+            JournalKind::ServerQueue,
         ),
     };
 
@@ -311,7 +312,7 @@ async fn dispatch(
             request: &journaled,
             attachments: &captured.draft.attachments,
             checkout: &captured_checkout,
-            queue_add,
+            kind,
         })
     })
     .await??;
@@ -342,8 +343,11 @@ async fn dispatch(
     Ok((response, write))
 }
 
-fn turn_request(prepared: &PreparedThread, cwd: &str) -> Result<Value, SubmissionError> {
-    let intent = &prepared.intent;
+pub(super) fn turn_request(
+    intent: &SendIntent,
+    thread: &ThreadId,
+    cwd: &str,
+) -> Result<Value, SubmissionError> {
     let mut input = Vec::new();
     if !intent.draft.text.is_empty() {
         input.push(json!({ "type": "text", "text": intent.draft.text }));
@@ -356,7 +360,7 @@ fn turn_request(prepared: &PreparedThread, cwd: &str) -> Result<Value, Submissio
     }
     let settings = &intent.settings;
     Ok(json!({
-        "threadId": prepared.thread.0,
+        "threadId": thread.0,
         "cwd": cwd,
         "clientUserMessageId": intent.operation.request.0.to_string(),
         "input": input,

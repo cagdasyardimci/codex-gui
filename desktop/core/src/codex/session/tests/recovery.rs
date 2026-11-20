@@ -6,7 +6,7 @@ use super::*;
 use crate::{
     identity::{RequestId, ThreadId},
     storage::{
-        attachments::{AttachmentStore, JournalEntry, JournalPhase},
+        attachments::{AttachmentStore, JournalEntry, JournalKind, JournalPhase},
         drafts::{DraftId, DraftRevision, read_draft},
         open_workspace_database,
     },
@@ -39,7 +39,7 @@ fn seed(path: &Path, checkout: &CheckoutIdentity, index: u128, dispatched: bool)
         request: &json!({"cwd": checkout.canonical_path(), "clientUserMessageId": id.0.to_string()}),
         attachments: &attachment,
         checkout,
-        queue_add: false,
+        kind: JournalKind::Direct,
     }).unwrap();
     if dispatched {
         store

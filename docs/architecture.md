@@ -56,6 +56,8 @@ Queue deletion releases local queue references only after Codex confirms removal
 
 Resume asks Codex to start the captured queue entry only while its thread is idle. Codex arbitrates concurrent turns. A rejection or uncertain reply keeps the receipt and attachment references for reconciliation.
 
+The [local follow-up queue](../desktop/core/src/workspace/queue/legacy.rs) is available after an explicit unsupported response. It retains FIFO order and the settings captured before dispatch. A failed or interrupted turn or a replacement connection requires an explicit Resume. A possibly sent head keeps its place until matching history settles it.
+
 [Resuming a Tauri chat](../desktop/core/src/workspace/resume.rs) reserves its routes before requesting writer ownership because Codex may dispatch queued work immediately. Early events stay with the captured thread and become actionable after the reply confirms its checkout and identity. A competing writer leaves the scoped history available for reading. Reconcile active turns and command exits from backend evidence when writer ownership is reestablished.
 
 Distinguish a known rejection from an uncertain submission. A cross-app writer lock is a known rejection; reading its saved history must not adopt another client's turn. Retry reestablishes ownership without resending the prompt. Preserve submitted drafts until acknowledgement, restoring them only if the resulting empty draft remains untouched; newer edits and independent draft lifetimes take precedence.

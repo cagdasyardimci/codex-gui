@@ -24,11 +24,13 @@ const PARTIAL_PREFIX: &str = ".partial-";
 
 pub mod appkit_drafts;
 pub(super) mod exit_recovery;
+pub(super) mod legacy_queue;
 pub mod navigation;
 pub mod queue_edits;
 mod submissions;
+pub use legacy_queue::{LegacyQueueEntry, LegacyQueueStatus};
 pub(crate) use submissions::{
-    JournalEntry, JournalOutcome, JournalPhase, PendingSubmission, SubmissionWrite,
+    JournalEntry, JournalKind, JournalOutcome, JournalPhase, PendingSubmission, SubmissionWrite,
 };
 pub use submissions::{JournalError, SubmissionAcknowledgement};
 pub(super) use submissions::{

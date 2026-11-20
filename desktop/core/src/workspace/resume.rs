@@ -256,6 +256,13 @@ impl WorkspaceEngine {
                 .await?;
         }
         self.observe_execution_event(owner, &event).await?;
+        if let Some(thread) = &thread
+            && matches!(&event, ServerEvent::Notification { method, params }
+                if method == "turn/completed"
+                   && matches!(params["turn"]["status"].as_str(), Some("interrupted" | "failed")))
+        {
+            self.pause_legacy_queue(owner, store, thread).await?;
+        }
         if let Some(thread) = thread
             && matches!(&event, ServerEvent::Notification { method, params }
                 if matches!(method.as_str(), "turn/completed" | "item/agentMessage/delta")

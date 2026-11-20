@@ -9,6 +9,9 @@ use thiserror::Error;
 use tokio::sync::{Mutex, OwnedMutexGuard, watch};
 use uuid::Uuid;
 
+mod legacy;
+pub use legacy::LegacyStartResult;
+
 use super::{SubmissionError, WorkspaceAction, WorkspaceEngine, WorkspaceError};
 use crate::{
     checkout::{CheckoutError, CheckoutIdentity},
@@ -40,6 +43,8 @@ pub enum QueueError {
     Edit(#[from] QueueEditError),
     #[error("the server does not support the thread queue")]
     Unsupported,
+    #[error("the server owns the queue for this thread")]
+    ServerQueueAvailable,
     #[error("the captured queue changed")]
     Changed,
     #[error("the server returned an invalid queue mutation receipt")]

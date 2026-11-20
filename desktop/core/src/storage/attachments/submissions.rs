@@ -1,6 +1,9 @@
 use super::*;
 use crate::codex::QueuedSubmission;
-use crate::{checkout::CheckoutIdentity, identity::TurnId};
+use crate::{
+    checkout::CheckoutIdentity,
+    identity::{ConnectionIdentity, TurnId},
+};
 use uuid::Uuid;
 
 use crate::storage::drafts::retire_submitted_revision;
@@ -29,12 +32,19 @@ pub(crate) struct JournalEntry<'a> {
     pub request: &'a Value,
     pub attachments: &'a [BlobLease],
     pub checkout: &'a CheckoutIdentity,
-    pub queue_add: bool,
+    pub kind: JournalKind<'a>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum JournalKind<'a> {
+    Direct,
+    ServerQueue,
+    LegacyQueue(&'a ConnectionIdentity),
 }
 
 pub(crate) struct SubmissionWrite {
-    store: AttachmentStore,
-    id: RequestId,
+    pub(super) store: AttachmentStore,
+    pub(super) id: RequestId,
 }
 
 impl Drop for SubmissionWrite {
@@ -100,16 +110,17 @@ impl AttachmentStore {
         )? {
             return Err(JournalError::PendingDraft);
         }
-        if entry.queue_add
+        if !matches!(entry.kind, JournalKind::Direct)
             && transaction.query_row(
                 "SELECT EXISTS (
                      SELECT 1 FROM submissions AS s
                      LEFT JOIN queue_receipts AS q ON q.id = s.id
+                     LEFT JOIN legacy_queue AS l ON l.id = s.id
                      LEFT JOIN submission_outcomes AS o ON o.id = s.id
                      WHERE s.draft_id = ?1 AND s.checkout_key = ?2
                        AND s.phase IN ('reserved', 'dispatching')
-                       AND ((o.id IS NULL AND q.queued_id IS NULL)
-                            OR (s.draft_revision = ?3 AND (q.queued_id IS NOT NULL OR o.turn_id IS NOT NULL)))
+                       AND ((o.id IS NULL AND q.queued_id IS NULL AND (l.id IS NULL OR s.phase = 'dispatching'))
+                            OR (s.draft_revision = ?3 AND (q.queued_id IS NOT NULL OR l.id IS NOT NULL OR o.turn_id IS NOT NULL)))
                  )",
                 params![
                     entry.draft.0.as_bytes().as_slice(),
@@ -137,7 +148,7 @@ impl AttachmentStore {
         if inserted == 0 {
             return Err(AttachmentError::ConflictingThreadDraft.into());
         }
-        if entry.queue_add {
+        if matches!(entry.kind, JournalKind::ServerQueue) {
             transaction.execute("INSERT INTO queue_receipts (id) VALUES (?1)", [id])?;
         }
         let unique: BTreeSet<_> = entry.attachments.iter().map(BlobLease::id).collect();
@@ -148,7 +159,20 @@ impl AttachmentStore {
                 params![id, blob.0.as_slice()],
             )?;
         }
+        let mut released = Vec::new();
+        if let JournalKind::LegacyQueue(owner) = entry.kind {
+            super::legacy_queue::insert_legacy_entry(&transaction, &entry, owner)?;
+            if retire_submitted_revision(&transaction, entry.draft, entry.revision)? {
+                released = replace_references(
+                    &transaction,
+                    &self.inner.blobs,
+                    entry.draft.0.as_bytes().as_slice(),
+                    std::iter::empty(),
+                )?;
+            }
+        }
         transaction.commit()?;
+        state.candidates.extend(released);
         state.active_submissions.insert(entry.id);
         Ok(SubmissionWrite {
             store: self.clone(),
@@ -166,8 +190,10 @@ impl AttachmentStore {
                     q.id IS NOT NULL, q.queued_id
              FROM submissions AS s
              LEFT JOIN queue_receipts AS q ON q.id = s.id
+             LEFT JOIN legacy_queue AS l ON l.id = s.id
              WHERE json_extract(s.request, '$.cwd') = ?1 AND s.phase IN ('reserved', 'dispatching')
                 AND NOT COALESCE(q.deleted, FALSE)
+                AND (l.id IS NULL OR s.phase = 'dispatching')
                 AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS outcome WHERE outcome.id = s.id)
              ORDER BY s.thread_id, s.id",
         )?;
@@ -203,8 +229,10 @@ impl AttachmentStore {
         let mut query = state.database.prepare(
             "SELECT s.id FROM submissions AS s
              LEFT JOIN queue_receipts AS q ON q.id = s.id
+             LEFT JOIN legacy_queue AS l ON l.id = s.id
              WHERE s.checkout_key = ?1 AND s.draft_id = ?2
                AND s.phase IN ('reserved', 'dispatching') AND q.queued_id IS NULL
+               AND (l.id IS NULL OR s.phase = 'dispatching')
                AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS o WHERE o.id = s.id)",
         )?;
         let ids = query.query_map(
@@ -275,8 +303,9 @@ impl AttachmentStore {
         let id = id.0.as_bytes().as_slice();
         let binding = transaction
             .query_row(
-                "SELECT s.draft_id, s.draft_revision, q.id IS NOT NULL, q.queued_id
+                "SELECT s.draft_id, s.draft_revision, q.id IS NOT NULL, q.queued_id, l.id IS NOT NULL
                  FROM submissions AS s LEFT JOIN queue_receipts AS q ON q.id = s.id
+                 LEFT JOIN legacy_queue AS l ON l.id = s.id
                  WHERE s.id = ?1 AND s.thread_id = ?2 AND s.phase = 'dispatching'
                    AND s.checkout_key = ?3 AND json_extract(s.request, '$.cwd') = ?4
                    AND NOT COALESCE(q.deleted, FALSE)",
@@ -292,11 +321,12 @@ impl AttachmentStore {
                         row.get::<_, i64>(1)?,
                         row.get::<_, bool>(2)?,
                         row.get::<_, Option<String>>(3)?,
+                        row.get::<_, bool>(4)?,
                     ))
                 },
             )
             .optional()?;
-        let Some((draft_id, revision, queue_add, queued_id)) = binding else {
+        let Some((draft_id, revision, queue_add, queued_id, legacy)) = binding else {
             return Ok(SubmissionAcknowledgement::Unmatched);
         };
         if matches!(&outcome, JournalOutcome::Queued(_)) && !queue_add {
@@ -376,6 +406,7 @@ impl AttachmentStore {
                     [id],
                 )?;
                 let retired_draft = queued_id.is_none()
+                    && !legacy
                     && retire_submitted_revision(
                         &transaction,
                         DraftId(Uuid::from_bytes(draft_id)),

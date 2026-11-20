@@ -7,6 +7,9 @@ use crate::{
 
 const QUEUE_SCENARIO_DEADLINE: Duration = Duration::from_secs(25);
 
+#[path = "queue_legacy.rs"]
+mod legacy;
+
 fn entry(index: u128, text: &str) -> QueuedSubmission {
     QueuedSubmission {
         id: format!("queued-{index}"),
@@ -123,6 +126,15 @@ async fn queue_read(
     checkout: &CheckoutIdentity,
     entries: &[QueuedSubmission],
 ) {
+    let request = queue_read_request(server, replies, checkout).await;
+    respond(replies, request, json!({"data":entries,"nextCursor":null})).await;
+}
+
+async fn queue_read_request(
+    server: &mut JsonlReader<ReadHalf<DuplexStream>>,
+    replies: &mut WriteHalf<DuplexStream>,
+    checkout: &CheckoutIdentity,
+) -> Value {
     let summary = next_request(server).await;
     assert_eq!(summary["method"], "thread/read");
     assert_eq!(
@@ -135,12 +147,7 @@ async fn queue_read(
     let list = next_request(server).await;
     assert_eq!(list["method"], "thread/queue/list");
     assert_eq!(list["params"]["threadId"], "thread-1");
-    respond(
-        replies,
-        list["id"].clone(),
-        json!({"data":entries,"nextCursor":null}),
-    )
-    .await;
+    list["id"].clone()
 }
 
 #[tokio::test]

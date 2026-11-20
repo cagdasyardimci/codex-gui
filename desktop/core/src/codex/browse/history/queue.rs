@@ -83,7 +83,8 @@ fn explicitly_unsupported(error: &BrowseError) -> bool {
     };
     error.code == -32601
         || (error.code == -32600
-            && error
-                .message
-                .contains("unknown variant `thread/queue/list`"))
+            && (error.message == "user message queue is unavailable"
+                || error
+                    .message
+                    .contains("unknown variant `thread/queue/list`")))
 }
