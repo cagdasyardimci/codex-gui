@@ -8,13 +8,24 @@ export async function verifyResidentHistory(visible: () => WorkspaceSnapshot | n
     visible()?.navigation.turnRail?.turns.length === 96 && !!visible()?.navigation.olderHistory);
   const viewport = document.querySelector<HTMLDivElement>('.workspace-transcript');
   if (!viewport) throw new Error('The large transcript viewport did not mount');
+  const moveToStart = async () => {
+    viewport.scrollTop = 0;
+    await frame();
+    await waitFor('The transcript did not reach its first resident row', () => {
+      if (viewport.scrollTop > 1) {
+        viewport.scrollTop = 0;
+        return false;
+      }
+      const first = viewport.firstElementChild as HTMLElement | null;
+      return first?.dataset.transcriptSlot === visible()?.transcript.items[0]?.itemId;
+    });
+  };
   for (let page = 0; page < 4; page++) {
     const ticket = visible()?.navigation.olderHistory?.ticket;
     if (!ticket) throw new Error('The history cursor was exhausted before the fixture was read');
-    viewport.scrollTop = 0;
-    await frame();
+    await moveToStart();
     viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
-    await waitFor('The large transcript did not advance its older cursor', () =>
+    await waitFor(`The large transcript did not advance its older cursor on page ${page + 1}`, () =>
       visible()?.navigation.olderHistory?.ticket !== ticket);
     await frame();
   }
@@ -27,8 +38,7 @@ export async function verifyResidentHistory(visible: () => WorkspaceSnapshot | n
   }
   const evicted = references.slice(0, -20).find((turn) => !loaded.has(turn.id));
   if (!evicted) throw new Error('The fixture did not evict a turn outside the recent page');
-  viewport.scrollTop = 0;
-  await frame();
+  await moveToStart();
   const first = viewport.querySelector('[data-transcript-slot] p');
   const selection = window.getSelection();
   if (!first || !selection) throw new Error('A readable row did not mount for selection');
@@ -56,19 +66,23 @@ export async function verifyResidentHistory(visible: () => WorkspaceSnapshot | n
     const viewportTop = viewport.getBoundingClientRect().top;
     return Math.abs(card.getBoundingClientRect().top - viewportTop) <= 12;
   };
-  await waitFor('An evicted turn did not reload at its own reading anchor', anchored);
+  const verifyAnchor = async (description: string) => {
+    await waitFor(description, anchored).catch((error) => {
+      const snapshot = visible();
+      const card = viewport.querySelector(`[data-turn-id="${evicted.id}"]`);
+      throw new Error(`${error.message} ${JSON.stringify({ target: evicted.id, entered: snapshot?.navigation.selectedChat,
+        jump: snapshot?.navigation.turnRail?.jump?.turnId, scrollTop: viewport.scrollTop,
+        maximumScroll: viewport.scrollHeight - viewport.clientHeight,
+        rowTop: card ? card.getBoundingClientRect().top - viewport.getBoundingClientRect().top : undefined,
+        present: snapshot?.transcript.items.some((row) => row.turnId === evicted.id) })}`);
+    });
+  };
+  await verifyAnchor('An evicted turn did not reload at its own reading anchor');
   await click('Second fixture chat');
   await waitFor('The neighboring chat did not replace the viewport', () =>
     visible()?.navigation.selectedChat === 'history-second');
   await click('First fixture chat');
-  await waitFor('Returning to the chat did not reload its evicted reading anchor', anchored).catch((error) => {
-    const snapshot = visible();
-    const card = viewport.querySelector(`[data-turn-id="${evicted.id}"]`);
-    throw new Error(`${error.message} ${JSON.stringify({ target: evicted.id, entered: snapshot?.navigation.selectedChat,
-      jump: snapshot?.navigation.turnRail?.jump?.turnId, scrollTop: viewport.scrollTop,
-      rowTop: card ? card.getBoundingClientRect().top - viewport.getBoundingClientRect().top : undefined,
-      present: snapshot?.transcript.items.some((row) => row.turnId === evicted.id) })}`);
-  });
+  await verifyAnchor('Returning to the chat did not reload its evicted reading anchor');
 }
 
 function frame(): Promise<void> {

@@ -61,6 +61,8 @@ def seed_paginated_history(state_path: Path, count: int = 32) -> None:
             ]})
         if count > 32:
             items[0]["text"] += "\nVariable-height fixture content" * (number % 7)
+            if 64 <= number <= count - 19:
+                items[0]["text"] += "\nA tall landing for the reading anchor" * 45
         earlier.append({"id": turn_id, "status": "completed", "items": items})
     first["turns"] = earlier + first["turns"]
     state_path.write_text(json.dumps({"threads": threads}, ensure_ascii=True), encoding="utf-8")

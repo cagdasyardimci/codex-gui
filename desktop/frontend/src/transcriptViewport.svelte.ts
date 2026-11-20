@@ -22,6 +22,7 @@ export function createTranscriptViewport() {
   let lastRequest = '';
   let placement = 0;
   let pendingPosition = false;
+  let anchoredRow: ReadingAnchor | undefined;
   let current: WorkspaceSnapshot | undefined;
   let restoring: ReadingAnchor | undefined;
   let requestedRestore: string | undefined;
@@ -42,23 +43,47 @@ export function createTranscriptViewport() {
     }
   }
 
-  function place(next: number) {
+  function mountedOffset(target: HTMLDivElement, anchor: ReadingAnchor | undefined) {
+    if (!anchor) return;
+    const row = target.querySelector(`[data-transcript-slot="${CSS.escape(anchor.itemId)}"]`);
+    if (row) return target.scrollTop + row.getBoundingClientRect().top - target.getBoundingClientRect().top + anchor.offset;
+  }
+
+  function mountedAnchor(target: HTMLDivElement): ReadingAnchor | undefined {
+    const edge = target.getBoundingClientRect().top;
+    for (const slot of target.querySelectorAll<HTMLElement>('[data-transcript-slot]')) {
+      const bounds = slot.getBoundingClientRect();
+      if (bounds.top > edge + target.clientHeight) break;
+      if (bounds.bottom <= edge + 1) continue;
+      const itemId = slot.dataset.transcriptSlot;
+      const at = itemId ? layout.positions.get(itemId) : undefined;
+      const row = at === undefined ? undefined : rows[at];
+      if (row) return { itemId: row.itemId, turnId: row.turnId, offset: edge - bounds.top };
+    }
+  }
+
+  function place(next: number, anchor?: ReadingAnchor) {
     const target = element;
     if (!target) return;
     const position = Math.max(0, Math.min(next, layout.height - height));
-    if (Math.abs(position - top) < 0.5 && Math.abs(position - target.scrollTop) < 0.5) return;
+    anchoredRow = anchor;
+    if (Math.abs(position - top) < 0.5 && Math.abs(position - target.scrollTop) < 0.5 &&
+        Math.abs((mountedOffset(target, anchor) ?? position) - target.scrollTop) < 0.5) return;
     const ticket = ++placement;
     pendingPosition = true;
     top = position;
     void tick().then(() => {
       if (ticket !== placement || element !== target) return;
-      target.scrollTop = position;
+      target.scrollTop = mountedOffset(target, anchor) ?? position;
       pendingPosition = false;
-      scrolled();
+      top = target.scrollTop;
+      anchoredRow ??= mountedAnchor(target);
+      schedulePublication();
     });
   }
 
   function currentAnchor() {
+    if (anchoredRow && layout.positions.has(anchoredRow.itemId)) return anchoredRow;
     const offset = pendingPosition ? top : (element?.scrollTop ?? top);
     return readingAnchor(layout, offset);
   }
@@ -73,7 +98,7 @@ export function createTranscriptViewport() {
     if (position !== undefined) {
       if (requestedRestore === rail.id && rail.jump?.turnId === candidate.turnId) return;
       restoring = undefined;
-      place(position);
+      place(position, candidate);
       return;
     }
     if (requestedRestore !== rail.id && rail.turns.some((turn) => turn.id === candidate.turnId)) {
@@ -87,7 +112,8 @@ export function createTranscriptViewport() {
     const previousChat = scopedChat(current);
     const nextChat = scopedChat(snapshot);
     const sameGeneration = current?.transcript.generation === snapshot.transcript.generation && previousChat === nextChat;
-    const anchor = currentAnchor();
+    const changedRows = rows !== snapshot.transcript.items;
+    const anchor = !sameGeneration || changedRows ? currentAnchor() : undefined;
     if (!sameGeneration) {
       if (previousChat && anchor) rememberAnchor(previousChat, anchor);
       measured.clear();
@@ -97,13 +123,13 @@ export function createTranscriptViewport() {
       restoring = nextChat ? anchors.get(nextChat) : undefined;
     }
     current = snapshot;
-    if (rows !== snapshot.transcript.items) rows = snapshot.transcript.items;
+    if (changedRows) rows = snapshot.transcript.items;
     if (sameGeneration && anchor) {
       const position = restoredOffset(layout, anchor);
-      if (position !== undefined) place(position);
+      if (position !== undefined) place(position, anchor);
     } else if (!sameGeneration) {
       const position = restoring ? restoredOffset(layout, restoring) : undefined;
-      place(position ?? layout.height);
+      place(position ?? layout.height, position === undefined ? undefined : restoring);
     }
     restoreWhenAvailable();
     schedulePublication();
@@ -114,13 +140,17 @@ export function createTranscriptViewport() {
     restoring = undefined;
     const retained = matching ? restoredOffset(layout, matching) : undefined;
     const first = rows.findIndex((row) => row.turnId === turnId);
-    if (first >= 0) place(retained ?? layout.offsets[first]!);
+    if (first >= 0) {
+      const anchor = retained === undefined ? { itemId: rows[first]!.itemId, turnId, offset: 0 } : matching;
+      place(retained ?? layout.offsets[first]!, anchor);
+    }
   }
 
   function noteInput() {
     restoring = undefined;
     placement += 1;
     pendingPosition = false;
+    anchoredRow = undefined;
     if (element) top = element.scrollTop;
   }
 
@@ -132,7 +162,7 @@ export function createTranscriptViewport() {
       const chatId = current?.navigation.selectedChat;
       const railId = current?.navigation.turnRail?.id;
       if (!element || !workspaceId || !chatId || !railId) return;
-      const anchorTurn = readingAnchor(layout, top)?.turnId || null;
+      const anchorTurn = currentAnchor()?.turnId || null;
       const request: TranscriptViewportRequest = {
         workspaceId, chatId, railId, anchorTurn, protectedTurns: protectedTurns(layout, top, height, selection, focused),
       };
@@ -145,7 +175,11 @@ export function createTranscriptViewport() {
 
   function scrolled() {
     if (!element) return;
-    if (!pendingPosition) top = element.scrollTop;
+    if (!pendingPosition) {
+      const position = element.scrollTop;
+      if (Math.abs(position - top) > 0.5) anchoredRow = mountedAnchor(element);
+      top = position;
+    }
     height = element.clientHeight;
     schedulePublication();
   }
@@ -185,6 +219,7 @@ export function createTranscriptViewport() {
       clearTimeout(publication);
       publication = undefined;
       pendingPosition = false;
+      anchoredRow = undefined;
       element = undefined;
     } };
   }
@@ -205,7 +240,7 @@ export function createTranscriptViewport() {
         }
       }
       const position = anchor ? restoredOffset(layout, anchor) : undefined;
-      if (position !== undefined) place(position);
+      if (position !== undefined) place(position, anchor);
       schedulePublication();
     });
     sizes.observe(node);
