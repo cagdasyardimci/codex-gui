@@ -6,8 +6,8 @@ use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 
 use super::{
-    InteractionError, PendingInteraction, SubmissionError, WorkspaceAction, WorkspaceEngine,
-    WorkspaceError,
+    InteractionError, PendingInteraction, QueueError, SubmissionError, WorkspaceAction,
+    WorkspaceEngine, WorkspaceError,
 };
 use crate::{
     checkout::CheckoutError,
@@ -36,6 +36,8 @@ pub enum ResumeError {
     Interaction(#[from] InteractionError),
     #[error(transparent)]
     Submission(#[from] SubmissionError),
+    #[error(transparent)]
+    Queue(#[from] QueueError),
     #[error("invalid thread/resume reply: {0}")]
     Response(#[from] serde_json::Error),
     #[error("app-server event stream ended during resume")]
@@ -205,6 +207,13 @@ impl WorkspaceEngine {
                 events.push(event);
             }
         }
+        if let Ok(queue) = &queue
+            && let Err(error) = self
+                .reconcile_queue_edit(client, store, thread, queue)
+                .await
+        {
+            eprintln!("while reconciling the queue editor: {error}");
+        }
         self.check_owner(owner)?;
         Ok(ResumedChat {
             summary,
@@ -237,6 +246,15 @@ impl WorkspaceEngine {
             return Ok(thread.map(RoutedEvent::QueueChanged));
         }
         self.observe_submission_event(owner, &event, store).await?;
+        if let Some(thread) = &thread
+            && let ServerEvent::Notification { method, params } = &event
+            && matches!(method.as_str(), "item/started" | "item/completed")
+            && params["item"]["type"] == "userMessage"
+            && let Some(client_id) = params["item"]["clientId"].as_str()
+        {
+            self.detach_consumed_queue_edit(owner, store, thread, client_id)
+                .await?;
+        }
         self.observe_execution_event(owner, &event).await?;
         if let Some(thread) = thread
             && matches!(&event, ServerEvent::Notification { method, params }

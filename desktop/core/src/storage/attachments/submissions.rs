@@ -89,6 +89,16 @@ impl AttachmentStore {
             .database
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let id = entry.id.0.as_bytes().as_slice();
+        if transaction.query_row(
+            "SELECT EXISTS (SELECT 1 FROM queue_edits WHERE draft_id = ?1 AND checkout_key = ?2)",
+            params![
+                entry.draft.0.as_bytes().as_slice(),
+                entry.checkout.storage_key()
+            ],
+            |row| row.get::<_, bool>(0),
+        )? {
+            return Err(JournalError::PendingDraft);
+        }
         if entry.queue_add
             && transaction.query_row(
                 "SELECT EXISTS (

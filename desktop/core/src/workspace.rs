@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex as SyncMutex, Weak},
+};
 
 use indexmap::{IndexMap, IndexSet};
 use thiserror::Error;
@@ -12,6 +15,7 @@ use crate::{
 mod execution;
 mod interactions;
 mod prepare;
+mod queue;
 mod recovery;
 mod resume;
 mod send;
@@ -28,6 +32,7 @@ pub use interactions::{
     PendingInteraction, PermissionScope,
 };
 pub use prepare::{PrepareError, PreparedThread};
+pub use queue::{QueueEditResult, QueueError};
 pub use recovery::SubmissionRecovery;
 pub use resume::{ResumeError, ResumedChat, ResumedMode, RoutedEvent};
 pub use send::{SendDraft, SendIntent, SendSettings};
@@ -145,7 +150,10 @@ pub struct WorkspaceEngine {
     snapshots: watch::Receiver<Arc<WorkspaceSnapshot>>,
     preparation_commit: Arc<Mutex<()>>,
     interactions: InteractionRouter,
+    queue_locks: Arc<QueueLocks>,
 }
+
+type QueueLocks = SyncMutex<HashMap<ThreadId, Weak<Mutex<()>>>>;
 
 struct Message {
     action: WorkspaceAction,
@@ -181,6 +189,7 @@ impl WorkspaceEngine {
                 snapshots,
                 preparation_commit: Arc::new(Mutex::new(())),
                 interactions,
+                queue_locks: Arc::default(),
             },
             pending_effects,
         )

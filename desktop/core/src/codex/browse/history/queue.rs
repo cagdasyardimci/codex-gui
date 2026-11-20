@@ -1,6 +1,6 @@
 use std::{collections::HashSet, time::Duration};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::time::Instant;
 
@@ -9,7 +9,7 @@ use crate::codex::{Delivery, RequestError};
 
 const METHOD: &str = "thread/queue/list";
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueuedSubmission {
     pub id: String,

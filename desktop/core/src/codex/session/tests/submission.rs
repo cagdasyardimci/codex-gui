@@ -25,6 +25,9 @@ struct Fixture {
     replies: WriteHalf<DuplexStream>,
 }
 
+#[path = "queue_edit.rs"]
+mod queue_edit;
+
 impl Fixture {
     async fn prepared() -> (
         Self,

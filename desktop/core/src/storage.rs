@@ -25,6 +25,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::navigation::migrate,
     attachments::exit_recovery::migrate,
     attachments::migrate_queue_receipts,
+    attachments::queue_edits::migrate,
 ];
 
 #[derive(Debug, Error)]
