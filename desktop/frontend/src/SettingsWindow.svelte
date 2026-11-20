@@ -1,17 +1,24 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { InstructionsView, SettingsSelection, SettingsView, UsageResetOffer } from './generated/workspace';
+  import type { InstructionsView, SettingsIntegrationAction, SettingsSelection, SettingsView, UsageResetOffer } from './generated/workspace';
   import {
-    closeSettings, deleteSettingsMemories, openSettings, readSettingsInstructions, redeemSettingsReset, refreshSettings,
+    changeSettingsIntegration, closeSettings, deleteSettingsMemories, openSettings, readSettingsInstructions, redeemSettingsReset, refreshSettings,
     saveSettingsInstructions, setEffortVisibility, signOutSettings, writeSettings,
+    type IntegrationScope,
   } from './settingsIpc';
+  import SettingsBrowser from './settings/SettingsBrowser.svelte';
+  import SettingsCatalog from './settings/SettingsCatalog.svelte';
+  import SettingsMcp from './settings/SettingsMcp.svelte';
 
   let { close, accountBusy }: { close: () => void; accountBusy: boolean } = $props();
   const session = crypto.randomUUID();
   let dialog: HTMLDialogElement;
-  type Section = 'account' | 'usage' | 'configuration' | 'personalization';
+  type Section = 'account' | 'usage' | 'configuration' | 'personalization' | 'mcp' | 'plugins' | 'skills' | 'hooks' | 'browser';
   let tab = $state<Section>('account');
   let view = $state<SettingsView>();
+  const integrationScope = $derived(view && {
+    selection: { session, revision: view.revision }, owner: view.integrationOwner,
+  });
   let confirming = $state(false);
   let busy = $state(false);
   let edits = $state<Record<string, string | boolean | null>>({});
@@ -157,6 +164,22 @@
     }
   }
 
+  async function applyIntegration(action: SettingsIntegrationAction, scope: IntegrationScope): Promise<boolean> {
+    if (!view || busy || view.integrationOwner !== scope.owner || view.revision !== scope.selection.revision) return false;
+    busy = true;
+    try {
+      const result = await changeSettingsIntegration({ ...scope, action });
+      if (retired) return false;
+      view = result.view;
+      return result.confirmed;
+    } catch (error) {
+      if (!retired) console.error(error);
+      return false;
+    } finally {
+      if (!retired) busy = false;
+    }
+  }
+
   function windowName(minutes: number | null) {
     if (!minutes) return 'Usage Limit';
     if (minutes === 10_080) return 'Weekly Limit';
@@ -206,6 +229,11 @@
     <button type="button" aria-pressed={tab === 'usage'} onclick={() => selectTab('usage')}>Usage &amp; Billing</button>
     <button type="button" aria-pressed={tab === 'configuration'} onclick={() => selectTab('configuration')}>Configuration</button>
     <button type="button" aria-pressed={tab === 'personalization'} onclick={() => selectTab('personalization')}>Personalization</button>
+    <button type="button" aria-pressed={tab === 'mcp'} onclick={() => selectTab('mcp')}>MCP Servers</button>
+    <button type="button" aria-pressed={tab === 'plugins'} onclick={() => selectTab('plugins')}>Plugins</button>
+    <button type="button" aria-pressed={tab === 'skills'} onclick={() => selectTab('skills')}>Skills</button>
+    <button type="button" aria-pressed={tab === 'hooks'} onclick={() => selectTab('hooks')}>Hooks</button>
+    <button type="button" aria-pressed={tab === 'browser'} onclick={() => selectTab('browser')}>Browser</button>
   </nav>
 
   {#if view && tab === 'account'}
@@ -362,6 +390,15 @@
         </div>
       </section>
     {/if}
+  {:else if tab === 'mcp'}
+    <SettingsMcp integrations={view?.integrations} scope={integrationScope} {busy} apply={applyIntegration} />
+  {:else if tab === 'browser'}
+    <SettingsBrowser browser={view?.integrations.browser} scope={integrationScope} {busy} apply={applyIntegration} />
+  {:else if tab === 'plugins' || tab === 'skills' || tab === 'hooks'}
+    {#key tab}
+      <SettingsCatalog kind={tab} scope={integrationScope} canAddMarketplace={view?.integrations.canAddMarketplace ?? false}
+        {busy} apply={applyIntegration} />
+    {/key}
   {/if}
 </dialog>
 

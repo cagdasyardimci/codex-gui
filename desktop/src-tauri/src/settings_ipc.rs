@@ -9,7 +9,8 @@ use codex_gui_core::{
     checkout::CheckoutIdentity,
     codex::{
         Account, AccountSnapshot, AppServerClient, AppServerConnection, ClientInfo, CodexBrowser,
-        CodexExecutable, EffectiveConfiguration, ResetCandidate, SettingsRateLimits,
+        CodexExecutable, EffectiveConfiguration, IntegrationCatalogs, ResetCandidate,
+        SettingsRateLimits,
     },
     identity::{CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, WorkspaceIdentity},
     ipc::{IpcError, SettingsAccountView, SettingsEffort, SettingsSelection, SettingsView},
@@ -23,6 +24,7 @@ use crate::project_ipc::{ProjectIpc, authorize_view};
 
 const TIMEOUT: Duration = Duration::from_secs(8);
 pub(crate) mod instructions;
+pub(crate) mod integrations;
 pub(crate) mod usage_resets;
 pub(crate) mod writes;
 
@@ -38,6 +40,7 @@ struct Session {
     snapshot: Option<Published>,
     last_authority: Option<SettingsAuthority>,
     instructions: Option<instructions::InstructionsFile>,
+    integration_owner: Option<(Uuid, IntegrationOwner)>,
 }
 
 struct SettingsBackend {
@@ -59,6 +62,18 @@ struct Published {
     revision: Uuid,
     efforts: BTreeSet<String>,
     reset_candidates: Vec<ResetCandidate>,
+    catalogs: IntegrationCatalogs,
+    integration_owner: Uuid,
+    home: Option<CheckoutIdentity>,
+}
+
+#[derive(PartialEq, Eq)]
+struct IntegrationOwner {
+    account: AccountSnapshot,
+    account_id: Option<String>,
+    provider: Option<String>,
+    config_file: Option<PathBuf>,
+    home: Option<(PathBuf, String)>,
 }
 
 impl SettingsIpc {
@@ -175,6 +190,7 @@ pub async fn open_settings(
             snapshot: None,
             last_authority: None,
             instructions: None,
+            integration_owner: None,
         });
     }
     let backend = SettingsBackend::connect(&window).await?;
@@ -392,14 +408,31 @@ async fn read_settings_view(
     }
     authorize_view(window)?;
     let revision = Uuid::new_v4();
-    let instructions_available = {
+    let account_id = limits.as_ref().and_then(|rates| rates.account_id.clone());
+    let (home, integration_owner) = {
         let mut selected = settings.selected.lock().expect("settings lock poisoned");
-        match_session(&mut selected, session, request)?
+        let current = match_session(&mut selected, session, request)?;
+        let home = current
             .backend
             .as_ref()
-            .is_some_and(|backend| backend.home.is_some())
+            .and_then(|backend| backend.home.as_ref());
+        let owner = IntegrationOwner {
+            account: authority.account.clone(),
+            account_id: account_id.clone(),
+            provider: authority.configuration.provider.clone(),
+            config_file: authority.configuration.user_file().map(PathBuf::from),
+            home: home.map(|home| (home.canonical_path().to_owned(), home.storage_key())),
+        };
+        let home = home.cloned();
+        let id = current
+            .integration_owner
+            .as_ref()
+            .filter(|(_, active)| active == &owner)
+            .map(|(id, _)| *id)
+            .unwrap_or_else(Uuid::new_v4);
+        current.integration_owner = Some((id, owner));
+        (home, id)
     };
-    let account_id = limits.as_ref().and_then(|rates| rates.account_id.clone());
     let reset_balance = limits.as_ref().and_then(SettingsRateLimits::reset_balance);
     let reset_candidates = match (&account_id, limits.as_ref(), project.navigation.get()) {
         (Some(account), Some(limits), Some(navigation)) => {
@@ -424,12 +457,14 @@ async fn read_settings_view(
         compression: authority.configuration.compression.clone(),
         network_access: authority.configuration.network_access.clone(),
         memories: authority.configuration.memories.clone(),
-        instructions_available,
+        instructions_available: home.is_some(),
         reset_balance,
         reset_offers: reset_candidates
             .iter()
             .map(|candidate| candidate.offer.clone())
             .collect(),
+        integrations: authority.configuration.integrations.view(),
+        integration_owner,
         efforts: efforts
             .iter()
             .map(|effort| SettingsEffort {
@@ -449,6 +484,9 @@ async fn read_settings_view(
             revision,
             efforts,
             reset_candidates,
+            catalogs: IntegrationCatalogs::default(),
+            integration_owner,
+            home,
         },
     )?;
     Ok(view)

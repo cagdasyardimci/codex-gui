@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { ChangeSettingsIntegration, McpSettingsForm, SettingsCatalog, SettingsCatalogKind, SettingsIntegrationAction } from './generated/workspace';
 import type { InstructionsView, RedeemUsageReset, SaveInstructions, SetEffortVisibility, SettingsSelection, SettingsView, SettingsWriteOutcome, WriteSettingsValue } from './generated/workspace';
 
 export function openSettings(session: string): Promise<SettingsView> {
@@ -31,6 +32,21 @@ export function deleteSettingsMemories(selection: SettingsSelection): Promise<Se
 
 export function redeemSettingsReset(update: RedeemUsageReset): Promise<SettingsView> {
   return invoke('redeem_settings_reset', { update });
+}
+
+export type IntegrationScope = { selection: SettingsSelection; owner: string };
+export type ApplyIntegration = (action: SettingsIntegrationAction, scope: IntegrationScope) => Promise<boolean>;
+
+export function changeSettingsIntegration(update: ChangeSettingsIntegration): Promise<SettingsWriteOutcome> {
+  return invoke('change_settings_integration', { update });
+}
+
+export function readSettingsMcp(selection: SettingsSelection, name: string): Promise<McpSettingsForm> {
+  return invoke('read_settings_mcp', { selection, name });
+}
+
+export function readSettingsCatalog(selection: SettingsSelection, kind: SettingsCatalogKind): Promise<SettingsCatalog> {
+  return invoke('read_settings_catalog', { selection, kind });
 }
 
 export function readSettingsInstructions(session: string): Promise<InstructionsView> {

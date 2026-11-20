@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
+mod integrations;
+pub use integrations::*;
+
 #[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsAccountView {
@@ -90,6 +93,8 @@ pub struct SettingsView {
     pub instructions_available: bool,
     pub reset_balance: Option<u32>,
     pub reset_offers: Vec<UsageResetOffer>,
+    pub integrations: SettingsIntegrations,
+    pub integration_owner: Uuid,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]

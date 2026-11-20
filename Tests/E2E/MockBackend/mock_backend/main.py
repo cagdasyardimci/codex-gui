@@ -60,7 +60,7 @@ def main():
                     raise ProtocolError(-32600, 'Invalid request')
                 identity = request.get('id')
                 params = request.get('params', {})
-                if request['method'] == 'windowsSandbox/readiness' and params is None:
+                if request['method'] in ('windowsSandbox/readiness', 'config/mcpServer/reload') and params is None:
                     params = {}
                 if not isinstance(params, dict):
                     raise ProtocolError(-32602, 'Params must be an object')

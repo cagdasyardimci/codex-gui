@@ -10,7 +10,7 @@ The [Tauri Settings session](../desktop/src-tauri/src/settings_ipc.rs) rechecks 
 
 The [Tauri instructions editor](../desktop/src-tauri/src/settings_ipc/instructions.rs) anchors the file to the profile used by Settings. Its first save creates the file exclusively. Subsequent saves require the original file and disk revision. A version conflict preserves the editor draft until the user explicitly reloads or changes it.
 
-Write against the active user layer and its version when available. Replace origin maps as a table: dots in site names must not become configuration path separators. Feature availability comes from the advertised catalog; missing config keys do not establish disabled features, and catalog failures must not prevent unrelated configuration work. Managed requirements take precedence over editable defaults.
+Write against the active user layer and its version when available. Feature availability comes from the advertised catalog. Missing configuration keys do not establish disabled features, and catalog failures must not prevent unrelated configuration work. Managed requirements take precedence over editable defaults.
 
 A [Tauri configuration write](../desktop/src-tauri/src/settings_ipc/writes.rs) rechecks the captured account, layer and policy before sending. A fresh read after an uncertain outcome preserves the effective values and leaves the pending edit available for an explicit save. Local chat-history compression follows Codex's advertised feature and takes effect when Codex starts with the saved configuration.
 
@@ -18,13 +18,17 @@ Confirmed permission and speed saves also update GUI submission preferences. Com
 
 ## Capability boundaries
 
-Browser configuration values do not implement native browser approval services. Voice sets the default for [Codex realtime sessions](cli-compatibility.md#voice-chat). Account profile changes, purchases, hosted preferences and training controls require backend actions before being presented as working mutations.
+Voice sets the default for [Codex realtime sessions](cli-compatibility.md#voice-chat). Account profile changes, purchases, hosted preferences and training controls require backend actions before being presented as working mutations.
 
 Archive search must cover all loaded metadata, independently of row pagination. Destructive actions retain captured IDs and revalidate current membership before mutation. Usage analytics and balances must use reported values; available reset credits cannot establish complete reset history. [Reset consumption](../desktop/src-tauri/src/settings_ipc/usage_resets.rs) requires confirmation and fresh eligibility, identity and expiration checks. Keep a durable reservation through successful or uncertain redemption so an old balance cannot offer the same credit again.
 
 Editors of external configuration files must preserve unsaved drafts on conflicts and require an explicit decision before replacing them. Catalog mutations must invalidate affected cached reads without silently discarding failed form drafts.
 
 Repeated-entry configuration forms distinguish an implicit empty input from an explicitly added or edited row, keeping an empty form usable without representing a configured entry.
+
+## Integrations
+
+[Integration settings](../desktop/src-tauri/src/settings_ipc/integrations.rs) use the captured Settings profile and refresh catalogs before applying a catalog action. The skill list is scoped to that profile's user skills. A hook whose hash changed needs another confirmation. A failed form retains its input and can be saved again within the original profile. MCP and browser site edits retain unrelated user entries and leave managed entries in their owning layers. Replace the origins table in one write so dots in site names remain part of the keys. Browser controls write configuration through Codex. Native browser permissions follow their owning platform integration.
 
 ## Appearance
 

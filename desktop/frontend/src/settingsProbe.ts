@@ -3,6 +3,7 @@ import type { WorkspaceSnapshot } from './generated/workspace';
 import { click, clickByLabel, waitFor } from './fixtureControls';
 import { closeSettings, openSettings, readSettingsInstructions, refreshSettings, saveSettingsInstructions, signOutSettings, writeSettings } from './settingsIpc';
 import { rejectsStale } from './markdownProbe';
+import { verifyIntegrationSettings } from './settings/integrationProbe';
 
 export async function verifySettings(visible: () => WorkspaceSnapshot | null) {
   const window = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Settings"][open]');
@@ -182,6 +183,7 @@ export async function verifySettings(visible: () => WorkspaceSnapshot | null) {
     await click('Settings');
     await waitFor('Reopening Settings did not show only the current account', () => contains('second@example.invalid') &&
       !contains('first@example.invalid'));
+    await verifyIntegrationSettings(window);
     await click('Usage & Billing', window()!);
     await verifyUsageReset(window);
     await click('Account', window()!);

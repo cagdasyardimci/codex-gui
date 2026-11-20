@@ -99,6 +99,13 @@ pub use queue::{
 };
 pub use review::StartReviewRequest;
 pub use settings::{
+    BrowserChoice, BrowserPermission, BrowserPermissionEdit, BrowserPermissionSetting,
+    BrowserSettings, BrowserSiteSettings, ChangeSettingsIntegration, HookSettings,
+    MarketplaceSettings, McpServerSettings, McpSettingsForm, McpTransport, PluginSettings,
+    SettingsCatalog, SettingsCatalogKind, SettingsIntegrationAction, SettingsIntegrations,
+    SkillSettings,
+};
+pub use settings::{
     DailyUsageView, EffectiveSettingView, InstructionsView, MemorySettingsView, RedeemUsageReset,
     SaveInstructions, SetEffortVisibility, SettingsAccountView, SettingsEffort, SettingsSelection,
     SettingsToggle, SettingsView, SettingsWriteOutcome, UsageResetOffer, UsageWindowView,
@@ -355,6 +362,24 @@ pub fn workspace_typescript() -> String {
         SaveInstructions::decl(),
         UsageResetOffer::decl(),
         RedeemUsageReset::decl(),
+        SettingsIntegrations::decl(),
+        McpServerSettings::decl(),
+        McpSettingsForm::decl(),
+        McpTransport::decl(),
+        BrowserChoice::decl(),
+        BrowserPermission::decl(),
+        BrowserPermissionEdit::decl(),
+        BrowserPermissionSetting::decl(),
+        BrowserSettings::decl(),
+        BrowserSiteSettings::decl(),
+        MarketplaceSettings::decl(),
+        PluginSettings::decl(),
+        HookSettings::decl(),
+        SkillSettings::decl(),
+        SettingsCatalog::decl(),
+        SettingsCatalogKind::decl(),
+        SettingsIntegrationAction::decl(),
+        ChangeSettingsIntegration::decl(),
         WriteSettingsValue::decl(),
         SetEffortVisibility::decl(),
         SettingsWriteOutcome::decl(),

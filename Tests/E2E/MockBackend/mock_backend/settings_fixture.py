@@ -6,13 +6,14 @@ import time
 from pathlib import Path
 from uuid import UUID
 
+from . import integration_settings_fixture
 from .transport import ProtocolError, UnconfirmedMutation
 
 METHODS = {
     "account/read", "account/logout", "account/rateLimits/read", "account/usage/read",
     "config/read", "configRequirements/read", "config/value/write", "experimentalFeature/list", "model/list",
     "config/batchWrite", "memory/reset", "account/rateLimitResetCredit/consume",
-}
+} | integration_settings_fixture.METHODS
 
 
 def settings_request(server, method, params):
@@ -24,6 +25,7 @@ def settings_request(server, method, params):
     version = f"layer-{profile}-{state.get('version', 0)}"
     signed_out = state.get("signedOut", False)
     is_settings = server.client_name == "codex_gui_settings"
+    integrations = integration_settings_fixture.Integrations(source) if profile == "second" else None
     if method == "account/read":
         account = ({"type": "amazonBedrock", "usesCodexManagedCredentials": True}
                    if profile == "bedrock" else {"type": "chatgpt", "email": email, "planType": "plus"})
@@ -44,19 +46,30 @@ def settings_request(server, method, params):
                  "model_verbosity": "medium", "model_reasoning_summary": "auto",
                  "sandbox_mode": "workspace-write", "hidden_credential": "fixture-secret-must-stay-native"}
         value.update(state.get("config", {}))
+        if integrations:
+            value.update(integrations.configuration())
         layer = {"name": {"type": "user", "file": str(source)}, "version": version, "config": value}
-        return {"config": value, "layers": [layer], "origins": {
+        origins = {
             "approval_policy": {"name": {"type": "enterpriseManaged"}, "version": version},
-        }}
+        }
+        if integrations:
+            value = integrations.managed_configuration(value)
+            origins['mcp_servers."locked-fixture"'] = {"name": {"type": "enterpriseManaged"}, "version": "managed-1"}
+        return {"config": value, "layers": [layer], "origins": origins}
+    if not is_settings and method == "skills/list":
+        return {"data": [{"cwd": cwd, "skills": [], "errors": []} for cwd in params.get("cwds", [])]}
     if not is_settings:
         raise ProtocolError(-32602, "Usage, configuration, and sign-out belong to Settings")
     if method == "configRequirements/read":
-        return {"requirements": {"allowedApprovalPolicies": ["never"] if provider == "bedrock" else ["on-request"],
-                                 "featureRequirements": {"local_thread_store_compression": False} if provider == "bedrock" else {}}}
+        requirements = {"allowedApprovalPolicies": ["never"] if provider == "bedrock" else ["on-request"],
+                        "featureRequirements": {"local_thread_store_compression": False} if provider == "bedrock" else {}}
+        if integrations:
+            requirements.update(integrations.requirements())
+        return {"requirements": requirements}
     if method == "experimentalFeature/list":
         features = state.get("config", {}).get("features", {})
         return {"data": [{"name": name, "enabled": features.get(name, False)}
-                         for name in ("local_thread_store_compression", "memories")],
+                         for name in ("local_thread_store_compression", "memories", "browser_use", "browser_use_full_cdp_access")],
                 "nextCursor": None}
     if method in {"config/value/write", "config/batchWrite"}:
         if params.get("expectedVersion") != version:
@@ -74,7 +87,9 @@ def settings_request(server, method, params):
             if params.get("mergeStrategy") != "replace":
                 raise ProtocolError(-32602, "Settings must replace the captured choice")
             key, value = params["keyPath"], params["value"]
-            if key == "model_verbosity" and value == "high":
+            if integrations and integrations.write_configuration(key, value, config):
+                pass
+            elif key == "model_verbosity" and value == "high":
                 config[key] = value
             elif key == "features.local_thread_store_compression" and value is True:
                 config.setdefault("features", {})["local_thread_store_compression"] = value
@@ -90,6 +105,10 @@ def settings_request(server, method, params):
         state["version"] = state.get("version", 0) + 1
         save_state(source, state)
         return {"status": "ok", "filePath": str(source), "version": f"layer-{profile}-{state['version']}"}
+    if method in integration_settings_fixture.METHODS:
+        if not integrations or signed_out:
+            raise ProtocolError(-32602, "The integrations fixture requires its captured profile")
+        return integrations.request(method, params)
     if method == "account/rateLimits/read":
         stage = reset_stage(source)
         spent = state.get("usedCredit", False) and stage != "lagging"

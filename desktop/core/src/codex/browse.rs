@@ -17,7 +17,10 @@ mod settings;
 mod windows_sandbox;
 
 pub use account::{BrowserLogin, LoginCancellation, LoginCompletion};
-pub use settings::{EffectiveConfiguration, ResetCandidate, SettingsRateLimits, UsageResetOutcome};
+pub use settings::{
+    EffectiveConfiguration, IntegrationCatalogs, ResetCandidate, SettingsRateLimits,
+    UsageResetOutcome,
+};
 pub use windows_sandbox::{
     WindowsSandboxReadiness, WindowsSandboxSetupCompleted, WindowsSandboxSetupMode,
 };

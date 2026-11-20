@@ -11,7 +11,9 @@ use super::{BrowseError, CodexBrowser, WirePage};
 use crate::ipc::{
     DailyUsageView, EffectiveSettingView, MemorySettingsView, SettingsToggle, UsageWindowView,
 };
+mod integrations;
 mod usage_resets;
+pub use integrations::IntegrationCatalogs;
 pub use usage_resets::{ResetCandidate, UsageResetOutcome};
 
 const COMPRESSION: &str = "local_thread_store_compression";
@@ -69,10 +71,15 @@ pub struct EffectiveConfiguration {
     pub compression: Option<SettingsToggle>,
     pub network_access: Option<SettingsToggle>,
     pub memories: Option<MemorySettingsView>,
+    pub integrations: integrations::IntegrationConfiguration,
     authority: Vec<Value>,
 }
 
 impl EffectiveConfiguration {
+    pub fn user_file(&self) -> Option<&std::path::Path> {
+        self.file.as_deref()
+    }
+
     pub fn accepts(&self, key: &str, value: &Value) -> bool {
         match key {
             COMPRESSION_KEY => {
@@ -337,6 +344,14 @@ impl CodexBrowser {
                 .map(|key| &origins[*key])
                 .collect::<Vec<_>>()
         ]));
+        let integrations = integrations::IntegrationConfiguration::read(
+            config,
+            user_layer,
+            origins,
+            policy,
+            &features,
+            version.is_some() && file.is_some(),
+        );
         Ok(EffectiveConfiguration {
             provider: nonempty(&config["model_provider"]),
             entries,
@@ -345,6 +360,7 @@ impl CodexBrowser {
             network_access,
             compression,
             memories,
+            integrations,
             authority,
         })
     }
@@ -383,6 +399,17 @@ impl CodexBrowser {
                 }),
             )
         };
+        self.write_configuration(scope, method, request, timeout)
+            .await
+    }
+
+    async fn write_configuration(
+        &self,
+        scope: &EffectiveConfiguration,
+        method: &'static str,
+        request: Value,
+        timeout: Duration,
+    ) -> Result<(), BrowseError> {
         let receipt: ConfigurationReceipt = self.read(method, request, timeout).await?;
         if receipt.version.is_empty()
             || !receipt.file_path.is_absolute()
@@ -427,10 +454,18 @@ impl CodexBrowser {
             features.extend(
                 page.data
                     .into_iter()
-                    .filter(|feature| matches!(feature.name.as_str(), COMPRESSION | "memories"))
+                    .filter(|feature| {
+                        matches!(
+                            feature.name.as_str(),
+                            COMPRESSION
+                                | "memories"
+                                | "browser_use"
+                                | "browser_use_full_cdp_access"
+                        )
+                    })
                     .map(|feature| (feature.name, feature.enabled)),
             );
-            if features.len() == 2 {
+            if features.len() == 4 {
                 break;
             }
             match page.next_cursor {

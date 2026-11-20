@@ -111,7 +111,7 @@ impl Hash for CheckoutIdentity {
     }
 }
 
-fn canonicalize(path: &Path) -> Result<PathBuf, CheckoutError> {
+pub(crate) fn canonicalize(path: &Path) -> Result<PathBuf, CheckoutError> {
     if !path.is_absolute() {
         return Err(CheckoutError::Relative(path.to_path_buf()));
     }
