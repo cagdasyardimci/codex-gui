@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use serde::Deserialize;
 use serde_json::json;
 use thiserror::Error;
+use tokio::sync::watch;
 
 use super::{
     NavigationTarget, PrepareThread, SendIntent, WorkspaceAction, WorkspaceEngine, WorkspaceError,
@@ -44,6 +45,18 @@ struct ThreadLocation {
     cwd: PathBuf,
 }
 
+pub struct PreparedThread {
+    pub(super) intent: Arc<SendIntent>,
+    pub(super) thread: ThreadId,
+    pub(super) stopped: watch::Receiver<bool>,
+}
+
+impl PreparedThread {
+    pub fn thread(&self) -> &ThreadId {
+        &self.thread
+    }
+}
+
 impl WorkspaceEngine {
     pub async fn prepare_thread(
         &self,
@@ -51,7 +64,7 @@ impl WorkspaceEngine {
         client: &AppServerClient,
         store: &AttachmentStore,
         timeout: Duration,
-    ) -> Result<ThreadId, PrepareError> {
+    ) -> Result<PreparedThread, PrepareError> {
         // The admitted effect owns cleanup and publication even if the
         // caller stops waiting. Retirement is an explicit workspace action.
         let engine = self.clone();
@@ -61,14 +74,18 @@ impl WorkspaceEngine {
             let intent = effect.intent;
             let operation = intent.operation.clone();
             let outcome = engine
-                .prepare_and_bind(intent, &client, store, timeout)
+                .prepare_and_bind(intent.clone(), &client, store, timeout)
                 .await;
             if outcome.is_err() {
                 let _ = engine
                     .apply(WorkspaceAction::PreparationFailed { operation })
                     .await;
             }
-            outcome
+            outcome.map(|thread| PreparedThread {
+                intent,
+                thread,
+                stopped: effect.stopped,
+            })
         })
         .await?
     }

@@ -26,6 +26,8 @@ An explicitly confirmed application quit attempts to stop active work with a bou
 
 An interrupted turn does not prove command cancellation. Retain known command identities until authoritative terminal evidence arrives. Disconnects, relaunches and incomplete history must not clear uncertain outcomes or automatically resend possibly accepted work. Recovery records must become durable before starting a turn. Saved running history alone is insufficient evidence to adopt live execution ownership.
 
+The [Tauri submission path](../desktop/core/src/workspace/submission.rs) commits the exact request, stable client message ID, and protected attachment references before admitting bytes to app-server. Stop and connection retirement invalidate queued writes. The writer revalidates the captured checkout at the pipe. An unsent receipt releases journal-owned attachments and preserves the draft. A possibly sent request keeps its journal and attachment ownership for reconciliation.
+
 Distinguish a known rejection from an uncertain submission. A cross-app writer lock is a known rejection; reading its saved history must not adopt another client's turn. Retry reestablishes ownership without resending the prompt. Preserve submitted drafts until acknowledgement, restoring them only if the resulting empty draft remains untouched; newer edits and independent draft lifetimes take precedence.
 
 The composer selects speed from the current model’s service tiers. A saved tier that the selected model does not advertise resolves to Standard. A directly submitted turn or a locally dispatched follow-up uses the tier captured with that submission.

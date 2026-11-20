@@ -16,6 +16,7 @@ const MIGRATIONS: &[Migration] = &[
     drafts::migrate,
     attachments::migrate,
     attachments::migrate_thread_drafts,
+    attachments::migrate_submissions,
 ];
 
 #[derive(Debug, Error)]

@@ -11,9 +11,11 @@ use crate::{
 
 mod prepare;
 mod send;
+mod submission;
 
-pub use prepare::PrepareError;
+pub use prepare::{PrepareError, PreparedThread};
 pub use send::{SendDraft, SendIntent, SendSettings};
+pub use submission::{SubmissionError, SubmissionReply};
 
 const ACTION_CAPACITY: usize = 32;
 const EFFECT_CAPACITY: usize = 16;
@@ -46,6 +48,12 @@ pub enum WorkspaceAction {
     PreparationFailed {
         operation: OperationIdentity,
     },
+    StopSubmission {
+        operation: OperationIdentity,
+    },
+    SubmissionFinished {
+        operation: OperationIdentity,
+    },
     ReplaceConnection {
         expected: ConnectionIdentity,
         replacement: ConnectionIdentity,
@@ -54,6 +62,7 @@ pub enum WorkspaceAction {
 
 pub struct PrepareThread {
     intent: Arc<SendIntent>,
+    stopped: watch::Receiver<bool>,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -150,6 +159,7 @@ struct State {
     rows: IndexMap<DraftId, NavigationTarget>,
     pending: HashMap<RequestId, Arc<SendIntent>>,
     threads: HashMap<ThreadId, DraftId>,
+    submissions: HashMap<RequestId, watch::Sender<bool>>,
 }
 
 type ReservedPreparation = (mpsc::OwnedPermit<PrepareThread>, PrepareThread);
@@ -162,6 +172,7 @@ impl State {
             rows: IndexMap::new(),
             pending: HashMap::new(),
             threads: HashMap::new(),
+            submissions: HashMap::new(),
         }
     }
 
@@ -194,6 +205,24 @@ impl State {
                 let draft = self.pending_draft(&operation)?;
                 self.pending.remove(&operation.request);
                 self.rows.shift_remove(&draft);
+                self.submissions.remove(&operation.request);
+                Ok(None)
+            }
+            WorkspaceAction::StopSubmission { operation } => {
+                self.validate_owner(&operation)?;
+                let stopped = self
+                    .submissions
+                    .remove(&operation.request)
+                    .ok_or(WorkspaceError::MissingPreparation)?;
+                stopped.send_replace(true);
+                if let Some(intent) = self.pending.remove(&operation.request) {
+                    self.rows.shift_remove(&intent.draft.id);
+                }
+                Ok(None)
+            }
+            WorkspaceAction::SubmissionFinished { operation } => {
+                self.validate_owner(&operation)?;
+                self.submissions.remove(&operation.request);
                 Ok(None)
             }
             WorkspaceAction::ReplaceConnection {
@@ -219,7 +248,7 @@ impl State {
         }
         let request = intent.operation.request;
         let draft = intent.draft.id;
-        if self.pending.contains_key(&request) || self.rows.contains_key(&draft) {
+        if self.submissions.contains_key(&request) || self.rows.contains_key(&draft) {
             return Err(WorkspaceError::AlreadyAdmitted);
         }
         let slot = effects
@@ -232,7 +261,9 @@ impl State {
         self.pending.insert(request, intent.clone());
         self.rows
             .insert(draft, NavigationTarget::Preparing(request));
-        Ok((slot, PrepareThread { intent }))
+        let (stop, stopped) = watch::channel(false);
+        self.submissions.insert(request, stop);
+        Ok((slot, PrepareThread { intent, stopped }))
     }
 
     fn bind_thread(
@@ -279,6 +310,9 @@ impl State {
         self.rows
             .retain(|_, target| matches!(target, NavigationTarget::Thread(_)));
         self.pending.clear();
+        for (_, stopped) in self.submissions.drain() {
+            stopped.send_replace(true);
+        }
         self.connection = replacement;
         Ok(())
     }

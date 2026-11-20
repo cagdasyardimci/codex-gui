@@ -22,6 +22,11 @@ use super::{
 
 const PARTIAL_PREFIX: &str = ".partial-";
 
+mod submissions;
+pub use submissions::JournalError;
+pub(super) use submissions::migrate_submissions;
+pub(crate) use submissions::{JournalEntry, JournalPhase};
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlobId([u8; 32]);
 
@@ -376,7 +381,8 @@ fn verify_saved_file(
 fn collect_one(database: &mut Connection, blobs: &Path, id: BlobId) -> Result<(), AttachmentError> {
     let transaction = database.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let owned: bool = transaction.query_row(
-        "SELECT EXISTS (SELECT 1 FROM draft_attachments WHERE blob_id = ?1)",
+        "SELECT EXISTS (SELECT 1 FROM draft_attachments WHERE blob_id = ?1)
+             OR EXISTS (SELECT 1 FROM submission_attachments WHERE blob_id = ?1)",
         [id.0.as_slice()],
         |row| row.get(0),
     )?;
@@ -433,6 +439,8 @@ fn recovery_candidates(
     let mut statement = database.prepare(
         "SELECT b.id, NOT EXISTS (
            SELECT 1 FROM draft_attachments AS o WHERE o.blob_id = b.id
+         ) AND NOT EXISTS (
+           SELECT 1 FROM submission_attachments AS o WHERE o.blob_id = b.id
          ) FROM attachment_blobs AS b",
     )?;
     let indexed = statement

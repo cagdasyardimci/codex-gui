@@ -8,11 +8,12 @@ use std::{
 
 use tokio::{
     io::{AsyncWrite, AsyncWriteExt},
-    sync::{Notify, mpsc, oneshot},
+    sync::{Notify, mpsc, oneshot, watch},
     time::{self, Instant},
 };
 
 use super::Shared;
+use crate::checkout::CheckoutIdentity;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Delivery {
@@ -58,6 +59,12 @@ pub(super) struct Outbound {
     pub deadline: Instant,
     pub ticket: Arc<WriteTicket>,
     pub written: Option<oneshot::Sender<()>>,
+    pub scope: Option<OutboundScope>,
+}
+
+pub(super) struct OutboundScope {
+    pub checkout: CheckoutIdentity,
+    pub stopped: watch::Receiver<bool>,
 }
 
 pub(super) async fn run<W: AsyncWrite + Unpin>(
@@ -96,6 +103,12 @@ async fn write_frame<W: AsyncWrite + Unpin>(
     let mut offset = 0;
     while offset < frame.bytes.len() {
         let count = poll_fn(|cx| {
+            if let Some(scope) = &frame.scope {
+                // Check the captured directory again when the queued frame becomes writable.
+                scope.checkout.revalidate().map_err(io::Error::other)?;
+            }
+            // Hold the read guard through the poll to order writes with Stop.
+            let stopped = frame.scope.as_ref().map(|scope| scope.stopped.borrow());
             // Hold admission through this nonblocking poll to order retirement with writes.
             let connection = shared.state.lock().expect("pending request lock poisoned");
             let mut progress = frame
@@ -103,7 +116,11 @@ async fn write_frame<W: AsyncWrite + Unpin>(
                 .progress
                 .lock()
                 .expect("write ticket lock poisoned");
-            if connection.retired || progress.cancelled || Instant::now() >= frame.deadline {
+            if connection.retired
+                || progress.cancelled
+                || stopped.is_some_and(|stopped| *stopped)
+                || Instant::now() >= frame.deadline
+            {
                 return Poll::Ready(Ok(None));
             }
             let write =

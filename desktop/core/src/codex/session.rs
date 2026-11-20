@@ -14,7 +14,7 @@ use tokio::{
     time::{self, Instant},
 };
 
-use crate::identity::ConnectionIdentity;
+use crate::{checkout::CheckoutIdentity, identity::ConnectionIdentity};
 
 use super::protocol::{MAX_FRAME_BYTES, encode_frame};
 use super::{
@@ -25,7 +25,7 @@ use super::{
 
 mod writer;
 pub use writer::Delivery;
-use writer::{Outbound, WriteTicket};
+use writer::{Outbound, OutboundScope, WriteTicket};
 
 const MAX_PENDING_REQUESTS: usize = 16;
 const MAX_QUEUED_EVENTS: usize = 64;
@@ -49,6 +49,8 @@ pub enum RequestError {
     Timeout(Delivery),
     #[error("app-server connection retired ({0:?})")]
     Disconnected(Delivery),
+    #[error("app-server request stopped ({0:?})")]
+    Stopped(Delivery),
     #[error("could not encode app-server request: {0}")]
     Encode(#[from] io::Error),
     #[error(transparent)]
@@ -167,18 +169,57 @@ impl AppServerClient {
         params: Value,
         timeout: Duration,
     ) -> Result<Value, RequestError> {
+        self.request_inner(
+            method,
+            params,
+            timeout,
+            Arc::new(WriteTicket::default()),
+            None,
+        )
+        .await
+    }
+
+    pub(crate) async fn request_scoped(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+        checkout: CheckoutIdentity,
+        mut stopped: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<Value, RequestError> {
+        let ticket = Arc::new(WriteTicket::default());
+        let scope = OutboundScope {
+            checkout,
+            stopped: stopped.clone(),
+        };
+        tokio::select! {
+            biased;
+            _ = stopped.wait_for(|stopped| *stopped) => Err(RequestError::Stopped(ticket.cancel())),
+            result = self.request_inner(method, params, timeout, ticket.clone(), Some(scope)) => result,
+        }
+    }
+
+    async fn request_inner(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+        ticket: Arc<WriteTicket>,
+        scope: Option<OutboundScope>,
+    ) -> Result<Value, RequestError> {
         let deadline = Instant::now() + timeout;
         let permit = time::timeout_at(deadline, self.shared.slots.clone().acquire_owned())
             .await
             .map_err(|_| RequestError::Timeout(Delivery::Unsent))?
             .map_err(|_| RequestError::Disconnected(Delivery::Unsent))?;
-        let (request, reply) = self.shared.register(deadline, permit)?;
+        let (request, reply) = self.shared.register(deadline, permit, ticket)?;
         let bytes = encode_frame(&json!({"id": request.id, "method": method, "params": params}))?;
         let frame = Outbound {
             bytes,
             deadline,
             ticket: request.ticket.clone(),
             written: None,
+            scope,
         };
 
         self.enqueue(frame).await?;
@@ -205,6 +246,7 @@ impl AppServerClient {
             deadline,
             ticket,
             written: Some(written),
+            scope: None,
         })
         .await?;
         match time::timeout_at(deadline, receipt).await {
@@ -356,6 +398,7 @@ impl Shared {
         self: &Arc<Self>,
         deadline: Instant,
         permit: OwnedSemaphorePermit,
+        ticket: Arc<WriteTicket>,
     ) -> Result<(RequestGuard, oneshot::Receiver<Result<Value, RequestError>>), RequestError> {
         let mut state = self.state.lock().expect("pending request lock poisoned");
         if state.retired {
@@ -363,7 +406,6 @@ impl Shared {
         }
         let id = state.next_id;
         state.next_id = id.checked_add(1).ok_or(RequestError::IdExhausted)?;
-        let ticket = Arc::new(WriteTicket::default());
         let (sender, receiver) = oneshot::channel();
         state.entries.insert(
             id,

@@ -103,7 +103,7 @@ async fn thread_start_binds_the_original_visible_draft_and_attachment() {
     })
     .await
     .unwrap();
-    assert_eq!(prepared.unwrap(), thread);
+    assert_eq!(prepared.unwrap().thread(), &thread);
     assert_eq!(
         engine.snapshot().rows,
         [

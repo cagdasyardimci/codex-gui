@@ -15,6 +15,10 @@ impl DraftRevision {
     pub fn next(self) -> Option<Self> {
         self.0.checked_add(1).map(Self)
     }
+
+    pub(super) fn as_sql(self) -> i64 {
+        self.0
+    }
 }
 
 #[derive(Debug, PartialEq)]
