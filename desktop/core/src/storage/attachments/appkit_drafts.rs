@@ -10,6 +10,8 @@ use crate::checkout::{CheckoutError, CheckoutIdentity};
 const MAX_APPKIT_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 const NEW_CHAT: &str = "new-chat";
 
+pub mod queues;
+
 #[derive(Clone, Copy)]
 pub struct AppKitDraftCopy<'a> {
     pub preferences: &'a Path,

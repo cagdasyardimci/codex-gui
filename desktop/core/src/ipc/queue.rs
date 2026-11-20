@@ -13,6 +13,8 @@ pub struct QueueView {
     pub entries: Vec<QueueEntryView>,
     pub editing: Option<QueueEditView>,
     pub resume: Option<String>,
+    pub saved: Vec<QueueEntryView>,
+    pub resume_saved: Option<String>,
     pub recover: bool,
     pub detached: Vec<QueueEntryView>,
 }
@@ -51,6 +53,7 @@ pub enum QueueCommand {
     Reorder(Vec<String>),
     Delete(String),
     Resume(String),
+    ResumeSaved(String),
     Steer(QueueSteerTarget),
     Recover,
     Restore(String),

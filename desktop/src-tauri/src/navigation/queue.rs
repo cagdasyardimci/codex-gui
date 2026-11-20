@@ -110,6 +110,11 @@ impl Navigation {
         {
             return Err(IpcError::StaleSelection);
         }
+        if let QueueCommand::ResumeSaved(id) = &request.command
+            && view.resume_saved.as_ref() != Some(id)
+        {
+            return Err(IpcError::StaleSelection);
+        }
         self.launch_queue_job(thread, Work::Command(request.command))
     }
 
@@ -289,30 +294,32 @@ impl Navigation {
                     .iter()
                     .any(|receipt| receipt.client_id == client_id)
         };
-        let entries: Vec<_> = match data {
-            QueueSnapshot::Available(rows) => rows
-                .iter()
-                .map(|entry| QueueEntryView {
-                    id: entry.id.clone(),
+        let local = self
+            .store
+            .legacy_queue(checkout, thread, &state.connection)?
+            .into_iter()
+            .map(|entry| {
+                let id = entry.id.0.to_string();
+                let reserved = entry.status == LegacyQueueStatus::AwaitingEvidence || reserved(&id);
+                QueueEntryView {
+                    id,
                     text: queue_text(&entry.input),
-                    reserved: reserved(&entry.client_user_message_id),
-                })
-                .collect(),
-            QueueSnapshot::Unsupported => self
-                .store
-                .legacy_queue(checkout, thread, &state.connection)?
-                .into_iter()
-                .map(|entry| {
-                    let id = entry.id.0.to_string();
-                    let reserved =
-                        entry.status == LegacyQueueStatus::AwaitingEvidence || reserved(&id);
-                    QueueEntryView {
-                        id,
+                    reserved,
+                }
+            })
+            .collect::<Vec<_>>();
+        let (entries, saved): (Vec<_>, Vec<_>) = match data {
+            QueueSnapshot::Available(rows) => (
+                rows.iter()
+                    .map(|entry| QueueEntryView {
+                        id: entry.id.clone(),
                         text: queue_text(&entry.input),
-                        reserved,
-                    }
-                })
-                .collect(),
+                        reserved: reserved(&entry.client_user_message_id),
+                    })
+                    .collect(),
+                local,
+            ),
+            QueueSnapshot::Unsupported => (local, Vec::new()),
         };
         let active_turn = state
             .execution
@@ -322,6 +329,14 @@ impl Navigation {
             .map(|turn| turn.turn.0.clone());
         let resume = if active_turn.is_none() {
             entries
+                .first()
+                .filter(|entry| !entry.reserved)
+                .map(|entry| entry.id.clone())
+        } else {
+            None
+        };
+        let resume_saved = if active_turn.is_none() && entries.is_empty() {
+            saved
                 .first()
                 .filter(|entry| !entry.reserved)
                 .map(|entry| entry.id.clone())
@@ -347,6 +362,10 @@ impl Navigation {
                 reserved: false,
             })
             .collect();
+        let listed = match data {
+            QueueSnapshot::Available(rows) => rows.as_slice(),
+            QueueSnapshot::Unsupported => &[],
+        };
         Ok(Some(QueueView {
             revision: cache.revision.to_string(),
             enabled: self.store.queue_enabled(checkout, thread)?,
@@ -359,10 +378,15 @@ impl Navigation {
             entries,
             editing,
             resume,
+            saved,
+            resume_saved,
             detached,
             recover: receipts
                 .iter()
-                .any(|receipt| receipt.phase != QueueSteerPhase::Detached),
+                .any(|receipt| receipt.phase != QueueSteerPhase::Detached)
+                || self
+                    .store
+                    .queue_receipts_need_recovery(checkout, thread, listed)?,
         }))
     }
 }
@@ -439,6 +463,19 @@ async fn apply_queue_command(
     snapshot: &QueueSnapshot,
     command: QueueCommand,
 ) -> Result<(), Failure> {
+    if let QueueCommand::ResumeSaved(id) = &command {
+        engine
+            .start_legacy_queue(
+                client,
+                store,
+                thread,
+                captured,
+                Some(parse_id(id)?),
+                RPC_TIMEOUT,
+            )
+            .await?;
+        return Ok(());
+    }
     if let QueueSnapshot::Available(rows) = snapshot {
         let find = |id: &str| -> Result<&QueuedSubmission, Failure> {
             rows.iter()
@@ -587,6 +624,12 @@ async fn recover_queue(
 ) -> Result<(), Failure> {
     match command {
         QueueCommand::Recover => {
+            let result = engine
+                .recover_queue_submissions(client, store, thread, RPC_TIMEOUT)
+                .await?;
+            for (_, failure) in result.read_failures {
+                eprintln!("{failure}");
+            }
             engine
                 .recover_queued_steering(client, store, thread, RPC_TIMEOUT)
                 .await?;

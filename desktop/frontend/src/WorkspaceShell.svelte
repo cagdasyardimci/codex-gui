@@ -33,6 +33,8 @@
   const stopTarget = $derived(navigation?.actions.stop);
   const quit = $derived(navigation?.quit);
   const queue = $derived(navigation?.queue);
+  const resumeCommand = $derived(queue?.resume ? { resume: queue.resume } :
+    queue?.resumeSaved ? { resumeSaved: queue.resumeSaved } : null);
 
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
@@ -317,10 +319,9 @@
               onclick={() => queueCommand({ cancelEdit: edit.id })}>Cancel Edit</button>
             <button type="button" disabled={actionPending || queue.busy || (!text.trim() && !edit.hasContext)}
               onclick={() => queueCommand({ saveEdit: edit.id })}>Save Queue Edit</button>
-          {:else if queue?.resume && text === ''}
-            {@const id = queue.resume}
-            <button type="button" disabled={actionPending || queue.busy}
-              onclick={() => queueCommand({ resume: id })}>Resume</button>
+          {:else if resumeCommand && text === ''}
+            <button type="button" disabled={actionPending || queue?.busy}
+              onclick={() => { if (resumeCommand) queueCommand(resumeCommand); }}>Resume</button>
           {:else}
             <button type="button" disabled={actionPending || !navigation.actions.send || !text.trim()} onclick={() => void sendDraft()}>
               {queue?.activeTurn ? (queue.enabled ? 'Queue' : 'Steer') : 'Send'}

@@ -30,6 +30,27 @@ impl WorkspaceEngine {
         store: &AttachmentStore,
         timeout: Duration,
     ) -> Result<SubmissionRecovery, SubmissionError> {
+        self.recover_dispatches(client, store, timeout, None).await
+    }
+
+    pub async fn recover_queue_submissions(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        thread: &ThreadId,
+        timeout: Duration,
+    ) -> Result<SubmissionRecovery, SubmissionError> {
+        self.recover_dispatches(client, store, timeout, Some(thread.clone()))
+            .await
+    }
+
+    async fn recover_dispatches(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        timeout: Duration,
+        queue_thread: Option<ThreadId>,
+    ) -> Result<SubmissionRecovery, SubmissionError> {
         let connection = client.identity();
         if connection != &self.snapshot().connection {
             return Err(WorkspaceError::Retired.into());
@@ -43,7 +64,11 @@ impl WorkspaceEngine {
         let captured = checkout.clone();
         let pending = tokio::task::spawn_blocking(move || {
             captured.revalidate()?;
-            Ok::<_, SubmissionError>(journal.pending_submissions(&captured)?)
+            let pending = match queue_thread {
+                Some(thread) => journal.pending_queue_submissions(&captured, &thread),
+                None => journal.pending_submissions(&captured),
+            }?;
+            Ok::<_, SubmissionError>(pending)
         })
         .await??;
         let mut result = SubmissionRecovery::default();

@@ -62,6 +62,8 @@ The [local follow-up queue](../desktop/core/src/workspace/queue/legacy.rs) is av
 
 The [Tauri queue controller](../desktop/src-tauri/src/navigation/queue.rs) keeps its pending operations and queue reads with the original chat across selection changes and WebView reload. The conversation’s saved queue preference decides how the composer sends an active-turn follow-up. The queue panel and empty composer Resume the same captured head.
 
+The [AppKit queue importer](../desktop/core/src/storage/attachments/appkit_drafts/queues.rs) copies queued attachment ownership and imports server receipts for reconciliation by client message identity. It keeps the original queued entry and the independent draft when the import includes an unfinished edit. Saved local work starts paused. Resume can dispatch that work in order once the chat is idle and its server queue is empty.
+
 [Resuming a Tauri chat](../desktop/core/src/workspace/resume.rs) reserves its routes before requesting writer ownership because Codex may dispatch queued work immediately. Early events stay with the captured thread and become actionable after the reply confirms its checkout and identity. A competing writer leaves the scoped history available for reading. Reconcile active turns and command exits from backend evidence when writer ownership is reestablished.
 
 Distinguish a known rejection from an uncertain submission. A cross-app writer lock is a known rejection; reading its saved history must not adopt another client's turn. Retry reestablishes ownership without resending the prompt. Preserve submitted drafts until acknowledgement, restoring them only if the resulting empty draft remains untouched; newer edits and independent draft lifetimes take precedence.

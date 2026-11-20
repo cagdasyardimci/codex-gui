@@ -17,7 +17,7 @@
   }
 </script>
 
-{#if queue.entries.length || queue.detached.length || queue.recover}
+{#if queue.entries.length || queue.saved.length || queue.detached.length || queue.recover}
   <section class="workspace-queue" aria-label="Queued follow-ups">
     {#if queue.entries.length}
       <ul>
@@ -43,6 +43,9 @@
         {/each}
       </ul>
     {/if}
+    {#each queue.saved as entry (entry.id)}
+      {#if entry.text}<div class="queue-entry"><span class="queue-input">{entry.text}</span></div>{/if}
+    {/each}
     {#each queue.detached as entry (entry.id)}
       <div class="queue-entry">
         {#if entry.text}<span class="queue-input">{entry.text}</span>{/if}
@@ -55,6 +58,10 @@
     {#if queue.resume}
       {@const id = queue.resume}
       <button type="button" {disabled} onclick={() => command({ resume: id })}>Resume Queue</button>
+    {/if}
+    {#if queue.resumeSaved}
+      {@const id = queue.resumeSaved}
+      <button type="button" {disabled} onclick={() => command({ resumeSaved: id })}>Resume Saved Queue</button>
     {/if}
     {#if queue.recover}
       <button type="button" {disabled} onclick={() => command('recover')}>Recover Queue</button>

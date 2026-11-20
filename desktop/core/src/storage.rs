@@ -30,6 +30,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::legacy_queue::migrate,
     attachments::queue_steering::migrate,
     attachments::queue_preferences::migrate,
+    attachments::appkit_drafts::queues::migrate,
 ];
 
 #[derive(Debug, Error)]

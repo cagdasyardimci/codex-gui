@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     codex::{ChatRead, QueueSnapshot},
-    storage::attachments::{LegacyQueueStatus, QueueSteerPhase},
+    storage::attachments::{LegacyQueueStatus, QueueSteerPhase, appkit_drafts::AppKitDraftCopy},
     workspace::LegacyStartResult,
 };
 
@@ -47,6 +47,105 @@ fn states(
         .into_iter()
         .map(|entry| (entry.id, entry.status))
         .collect()
+}
+
+#[tokio::test]
+async fn a_saved_appkit_entry_requires_explicit_resume_even_with_a_server_queue() {
+    time::timeout(QUEUE_SCENARIO_DEADLINE, async {
+        let (mut f, prepared, _, draft, _) = Fixture::prepared().await;
+        drop(prepared);
+        let client = &f.transport.client;
+        let store = &f.store;
+        let checkout = &f.checkout;
+        let engine = &f.engine;
+        let thread = ThreadId("thread-1".into());
+        let id = RequestId(Uuid::new_v4());
+        let appkit_id = id.0.to_string().to_ascii_uppercase();
+        let payload = serde_json::to_vec(&json!([
+            {
+                "id":appkit_id,"text":"Saved AppKit follow-up","context":[],
+                "modelID":"copied-model","effort":"high","serviceTier":"fast"
+            }
+        ]))
+        .unwrap();
+        let mut chats = plist::Dictionary::new();
+        chats.insert("thread:thread-1".into(), plist::Value::Data(payload));
+        let mut projects = plist::Dictionary::new();
+        projects.insert(
+            checkout.canonical_path().to_str().unwrap().into(),
+            plist::Value::Dictionary(chats),
+        );
+        let mut preferences = plist::Dictionary::new();
+        preferences.insert(
+            "CodexGUI.queuedMessages".into(),
+            plist::Value::Dictionary(projects),
+        );
+        let source = f.scratch.path().join("copied-preferences.plist");
+        plist::to_file_xml(&source, &preferences).unwrap();
+        store
+            .import_appkit_queues(
+                AppKitDraftCopy {
+                    preferences: &source,
+                    original_images: f.scratch.path(),
+                    copied_images: f.scratch.path(),
+                },
+                checkout,
+            )
+            .unwrap();
+        let evidence = availability(client, &mut f.server, &mut f.replies, checkout, true).await;
+        assert!(matches!(
+            engine
+                .start_legacy_queue(client, store, &thread, &evidence, None, DEADLINE)
+                .await,
+            Err(QueueError::ServerQueueAvailable)
+        ));
+        assert_eq!(
+            states(store, client, &thread),
+            [(id, LegacyQueueStatus::Paused)]
+        );
+        let server_entries = [entry(17, "Server-owned entry")];
+        let (waiting, ()) = tokio::join!(
+            engine.start_legacy_queue(client, store, &thread, &evidence, Some(id), DEADLINE),
+            queue_read(&mut f.server, &mut f.replies, checkout, &server_entries),
+        );
+        assert_eq!(waiting.unwrap(), LegacyStartResult::NotReady);
+        let (resumed, ()) = tokio::join!(
+            engine.start_legacy_queue(client, store, &thread, &evidence, Some(id), DEADLINE),
+            async {
+                queue_read(&mut f.server, &mut f.replies, checkout, &[]).await;
+                let start = next_request(&mut f.server).await;
+                assert_eq!(start["method"], "turn/start");
+                assert_eq!(start["params"]["threadId"], thread.0);
+                assert_eq!(start["params"]["clientUserMessageId"], appkit_id);
+                assert_eq!(
+                    start["params"]["input"],
+                    json!([{"type":"text","text":"Saved AppKit follow-up"}])
+                );
+                assert_eq!(start["params"]["model"], "copied-model");
+                assert_eq!(start["params"]["effort"], "high");
+                assert_eq!(start["params"]["serviceTierForTurn"], "fast");
+                respond(
+                    &mut f.replies,
+                    start["id"].clone(),
+                    json!({"turn":{"id":"explicit-resume"}}),
+                )
+                .await;
+            }
+        );
+        assert_eq!(
+            resumed.unwrap(),
+            LegacyStartResult::Started(TurnId("explicit-resume".into()))
+        );
+        assert!(states(store, client, &thread).is_empty());
+        assert_eq!(store.read_editor_draft(draft).unwrap().text, "  café\n");
+        assert!(
+            time::timeout(Duration::from_millis(50), f.server.next_frame())
+                .await
+                .is_err()
+        );
+    })
+    .await
+    .unwrap();
 }
 
 #[tokio::test]

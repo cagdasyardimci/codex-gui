@@ -184,6 +184,39 @@ impl AttachmentStore {
         &self,
         checkout: &CheckoutIdentity,
     ) -> Result<Vec<PendingSubmission>, JournalError> {
+        self.read_pending_submissions(checkout, None)
+    }
+
+    pub(crate) fn pending_queue_submissions(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+    ) -> Result<Vec<PendingSubmission>, JournalError> {
+        self.read_pending_submissions(checkout, Some(thread))
+    }
+
+    pub fn queue_receipts_need_recovery(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+        listed: &[QueuedSubmission],
+    ) -> Result<bool, JournalError> {
+        Ok(self
+            .pending_queue_submissions(checkout, thread)?
+            .iter()
+            .any(|pending| {
+                !listed.iter().any(|entry| {
+                    Some(entry.id.as_str()) == pending.queued_id.as_deref()
+                        && Uuid::parse_str(&entry.client_user_message_id).ok() == Some(pending.id.0)
+                })
+            }))
+    }
+
+    fn read_pending_submissions(
+        &self,
+        checkout: &CheckoutIdentity,
+        queue_thread: Option<&ThreadId>,
+    ) -> Result<Vec<PendingSubmission>, JournalError> {
         let state = self.inner.state();
         let mut statement = state.database.prepare(
             "SELECT s.id, s.thread_id, s.phase = 'reserved', COALESCE(s.checkout_key = ?2, FALSE),
@@ -195,10 +228,21 @@ impl AttachmentStore {
                 AND NOT COALESCE(q.deleted, FALSE)
                 AND (l.id IS NULL OR s.phase = 'dispatching')
                 AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS outcome WHERE outcome.id = s.id)
+                AND (?3 IS NULL OR (
+                     s.thread_id = ?3 AND s.checkout_key = ?2 AND (q.id IS NOT NULL OR l.id IS NOT NULL)
+                     AND NOT EXISTS (
+                         SELECT 1 FROM queue_steering AS st WHERE st.checkout_key = s.checkout_key
+                           AND st.thread_id = s.thread_id AND lower(replace(st.client_id, '-', '')) = lower(hex(s.id))
+                     )
+                ))
              ORDER BY s.thread_id, s.id",
         )?;
         let records = statement.query_map(
-            params![checkout.canonical_path().to_str(), checkout.storage_key()],
+            params![
+                checkout.canonical_path().to_str(),
+                checkout.storage_key(),
+                queue_thread.map(|thread| &thread.0)
+            ],
             |row| {
                 Ok(PendingSubmission {
                     id: RequestId(Uuid::from_bytes(row.get(0)?)),

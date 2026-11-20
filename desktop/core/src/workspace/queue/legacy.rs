@@ -190,8 +190,18 @@ impl WorkspaceEngine {
         timeout: Duration,
     ) -> Result<LegacyStartResult, QueueError> {
         let owner = client.identity();
-        require_legacy_queue(owner, thread, evidence)?;
         let _queue = self.lock_queue(thread).await;
+        if matches!(
+            evidence.for_selection(owner, thread)?,
+            QueueSnapshot::Available(_)
+        ) {
+            if resume.is_none() {
+                return Err(QueueError::ServerQueueAvailable);
+            }
+            if !self.read_queue(client, thread, timeout).await?.is_empty() {
+                return Ok(LegacyStartResult::NotReady);
+            }
+        }
         let (checkout, ready) = {
             let _commit = self.preparation_commit.lock().await;
             let checkout = self.queue_owner(owner, thread)?;
