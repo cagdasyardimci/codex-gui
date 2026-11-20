@@ -31,6 +31,8 @@
     "allow-update-notification-preferences",
     "allow-request-notification-permission",
     "allow-import-notification-sound",
+    "allow-preview-voice",
+    "allow-stop-speech",
     "allow-read-voice-call",
     "allow-prepare-voice-call",
     "allow-start-voice-transport",

@@ -25,7 +25,12 @@ def main():
         skill.mkdir()
         (skill / "SKILL.md").write_text("# Review fixture\n", encoding="utf-8")
         state = root / "mock.json"
-        state.write_text('{"config":{"model_provider":"openai","model":"fixture-default"}}', encoding="utf-8")
+        state.write_text(json.dumps({"config": {
+            "model_provider": "openai", "model": "fixture-default",
+            "model_providers": {"openai": {"experimental_bearer_token": "fixture-only"}},
+        }}), encoding="utf-8")
+        voice_settings = root / "voice-settings.json"
+        voice_settings.write_text('{"voice":"marin","version":1}', encoding="utf-8")
         trace = root / "trace.jsonl"
         exchange = data / "voice-exchange.json"
         result = subprocess.run(
@@ -33,6 +38,7 @@ def main():
             env={**os.environ, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
                  "CODEX_GUI_QA_SCENARIO": "desktop-voice", "CODEX_GUI_QA_STATE": str(state),
                  "CODEX_GUI_QA_TRACE": str(trace), "CODEX_GUI_QA_VOICE_EXCHANGE": str(exchange),
+                 "CODEX_GUI_QA_VOICE_SETTINGS": str(voice_settings),
                  "PYTHONIOENCODING": "utf-8"},
             capture_output=True, encoding="utf-8", errors="replace", timeout=105,
         )
@@ -49,12 +55,24 @@ def main():
         requests = [record for record in trace_lines if record.get("direction") == "request"]
         groups = {method: [record["params"] for record in requests if record["method"] == method] for method in
                   ("thread/start", "thread/realtime/start", "thread/realtime/appendText", "thread/realtime/stop", "turn/start",
-                   "thread/queue/add", "thread/queue/update")}
-        (created,) = groups["thread/start"]
+                   "thread/queue/add", "thread/queue/update", "config/value/write", "thread/realtime/appendSpeech")}
+        (created,) = [request for request in groups["thread/start"] if not request.get("ephemeral")]
         assert created["historyMode"] == "paginated"
-        (started,) = groups["thread/realtime/start"]
+        assert len([request for request in groups["thread/start"] if request.get("ephemeral")]) == 2
+        (started,) = [request for request in groups["thread/realtime/start"] if request["transport"]["type"] == "webrtc"]
+        samples = [request for request in groups["thread/realtime/start"] if request["transport"]["type"] == "websocket"]
+        assert [sample["voice"] for sample in samples] == ["rindo", "cedar"]
+        sampled_threads = {sample["threadId"] for sample in samples}
+        speech = groups["thread/realtime/appendSpeech"]
+        assert {sample["threadId"] for sample in speech} == sampled_threads
+        assert speech[0]["text"].startswith("こんにちは") and speech[1]["text"].startswith("Hello")
+        assert sampled_threads.issubset({request["threadId"] for request in groups["thread/realtime/stop"]})
+        (saved,) = groups["config/value/write"]
+        assert saved["keyPath"] == "realtime.voice" and saved["expectedVersion"] == "1" and saved["value"] == "cedar"
+        assert json.loads(voice_settings.read_text(encoding="utf-8")) == {"voice": "cedar", "version": 2}
+        assert started["voice"] == "cedar"
         (append,) = groups["thread/realtime/appendText"]
-        (stopped,) = groups["thread/realtime/stop"]
+        (stopped,) = [request for request in groups["thread/realtime/stop"] if request["threadId"] == owner]
         assert started["threadId"] == append["threadId"] == stopped["threadId"] == owner
         assert started["realtimeSessionId"] == summary["owner"]["id"]
         assert append["text"] == "Text to the captured voice call"
@@ -71,6 +89,7 @@ def main():
         assert [item["text"] for item in edited["input"]] == ["Revised queued input"]
         assert any(line["direction"] == "event" and line["method"] == "thread/realtime/closed"
                    and line["threadId"] == owner for line in trace_lines)
+        print("Verified V3 voice selection, scoped speech preview retirement, and the saved voice on the next call")
         print("Verified duplex media, independent mute, captured text, structured coding, queue edits, and exact session closure")
 
 

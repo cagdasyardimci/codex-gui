@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { AppearanceView, InstructionsView, SettingsIntegrationAction, SettingsSelection, SettingsView, UsageResetOffer } from './generated/workspace';
+  import type { AppearanceView, InstructionsView, SettingsIntegrationAction, SettingsSelection, SettingsView, UsageResetOffer, WorkspaceId } from './generated/workspace';
   import {
     changeSettingsIntegration, closeSettings, deleteSettingsMemories, openSettings, readSettingsInstructions, redeemSettingsReset, refreshSettings,
     saveSettingsInstructions, setEffortVisibility, signOutSettings, writeSettings,
@@ -10,20 +10,23 @@
   import SettingsCatalog from './settings/SettingsCatalog.svelte';
   import SettingsMcp from './settings/SettingsMcp.svelte';
   import SettingsAppearance from './settings/SettingsAppearance.svelte';
+  import SettingsVoice from './settings/SettingsVoice.svelte';
   import SettingsNotifications from './settings/SettingsNotifications.svelte';
   import { matchSettings, settingsSections, type SettingsMatch, type SettingsSection } from './settings/settingsSearch';
 
-  let { close, accountBusy, appearance, appearanceChanged }: {
+  let { close, accountBusy, appearance, appearanceChanged, workspaceId, syntheticSpeech }: {
     close: () => void;
     accountBusy: boolean;
     appearance?: AppearanceView;
     appearanceChanged: (value: AppearanceView) => void;
+    workspaceId: WorkspaceId | null;
+    syntheticSpeech: boolean;
   } = $props();
   const session = crypto.randomUUID();
   let dialog: HTMLDialogElement;
   let tab = $state<SettingsSection>('account');
   let search = $state('');
-  const matches = $derived(matchSettings(search));
+  const matches = $derived(matchSettings(search).filter((entry) => entry.section !== 'voice' || !!view?.voice));
   let view = $state<SettingsView>();
   const integrationScope = $derived(view && {
     selection: { session, revision: view.revision }, owner: view.integrationOwner,
@@ -163,6 +166,7 @@
       if (!retired) {
         view = result.view;
         if (result.confirmed) delete edits[key];
+        return result.confirmed;
       }
     } catch (error) {
       if (!retired) console.error(error);
@@ -262,7 +266,9 @@
   {:else}
     <nav aria-label="Settings Sections">
       {#each settingsSections as section (section.id)}
-        <button type="button" aria-pressed={tab === section.id} onclick={() => selectTab(section.id)}>{section.title}</button>
+        {#if section.id !== 'voice' || view?.voice}
+          <button type="button" aria-pressed={tab === section.id} onclick={() => selectTab(section.id)}>{section.title}</button>
+        {/if}
       {/each}
     </nav>
   {/if}
@@ -272,6 +278,12 @@
     <SettingsAppearance view={appearance} changed={appearanceChanged} />
   {:else if tab === 'notifications'}
     <SettingsNotifications />
+  {:else if tab === 'voice' && view?.voice}
+    <SettingsVoice view={view.voice} selection={{ session, revision: view.revision }} {workspaceId}
+      synthetic={syntheticSpeech} save={(voice) => {
+        edits['realtime.voice'] = voice || null;
+        return saveConfiguration('realtime.voice');
+      }} />
   {:else if view && tab === 'account'}
     <section aria-label="Account">
       <dl>

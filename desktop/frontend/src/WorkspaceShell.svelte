@@ -1477,7 +1477,7 @@
     {/if}
   {/if}
   {#if settingsOpen && !quit}
-    <SettingsWindow accountBusy={!!navigation?.actions.stopAll || !!navigation?.account.loginTicket}
+    <SettingsWindow workspaceId={workspaceId ?? null} syntheticSpeech={verify === 'voice'} accountBusy={!!navigation?.actions.stopAll || !!navigation?.account.loginTicket}
       {appearance} appearanceChanged={updateAppearance}
       close={() => { settingsOpen = false; void tick().then(() => settingsButton.focus({ preventScroll: true })); }} />
   {/if}

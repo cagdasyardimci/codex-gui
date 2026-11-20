@@ -57,3 +57,69 @@ pub struct VoiceMute {
     pub microphone: bool,
     pub muted: bool,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceSettingsView {
+    pub voices: Vec<VoiceChoice>,
+    pub selected: String,
+    pub default_voice: Option<String>,
+    pub managed: bool,
+    pub preview: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceChoice {
+    pub id: String,
+    pub label: String,
+    pub language: Option<String>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewVoice {
+    pub selection: super::SettingsSelection,
+    pub workspace_id: Option<WorkspaceId>,
+    pub id: Uuid,
+    pub voice: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeechAudio {
+    pub data: String,
+    pub sample_rate: u32,
+    pub num_channels: u8,
+    pub samples_per_channel: Option<u32>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum SpeechEvent {
+    Audio { audio: SpeechAudio },
+    Finished,
+    Retired,
+}
+
+impl SpeechAudio {
+    pub fn valid(&self) -> bool {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+
+        if self.data.is_empty()
+            || self.data.len() > 512 * 1024
+            || !(8_000..=192_000).contains(&self.sample_rate)
+            || !(1..=8).contains(&self.num_channels)
+        {
+            return false;
+        }
+        let bytes_per_frame = usize::from(self.num_channels) * 2;
+        STANDARD.decode(&self.data).is_ok_and(|data| {
+            !data.is_empty()
+                && data.len() % bytes_per_frame == 0
+                && self
+                    .samples_per_channel
+                    .is_none_or(|samples| data.len() / bytes_per_frame == samples as usize)
+        })
+    }
+}

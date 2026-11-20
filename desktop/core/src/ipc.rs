@@ -139,8 +139,8 @@ pub use subscription::{
     WorkspaceUpdateRequest,
 };
 pub use voice::{
-    PrepareVoiceCall, StartVoiceCall, VoiceCallUpdate, VoiceCallView, VoiceMediaHost, VoiceMute,
-    VoicePhase,
+    PrepareVoiceCall, PreviewVoice, SpeechAudio, SpeechEvent, StartVoiceCall, VoiceCallUpdate,
+    VoiceCallView, VoiceChoice, VoiceMediaHost, VoiceMute, VoicePhase, VoiceSettingsView,
 };
 
 pub const WORKSPACE_WINDOW: &str = "main";
@@ -395,6 +395,11 @@ pub fn workspace_typescript() -> String {
         DailyUsageView::decl(),
         EffectiveSettingView::decl(),
         SettingsView::decl(),
+        VoiceSettingsView::decl(),
+        VoiceChoice::decl(),
+        PreviewVoice::decl(),
+        SpeechAudio::decl(),
+        SpeechEvent::decl(),
         SettingsSelection::decl(),
         SettingsToggle::decl(),
         SettingsEffort::decl(),

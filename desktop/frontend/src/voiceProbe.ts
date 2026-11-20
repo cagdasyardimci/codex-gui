@@ -4,6 +4,7 @@ import { click, clickByLabel, typeText, waitFor } from './fixtureControls';
 import type { VoiceCallView, WorkspaceSnapshot } from './generated/workspace';
 import type { VoiceMediaEvidence } from './voiceMedia';
 import { navigateWorkspace, readProjectContext } from './projectIpc';
+import { speechFixtureEvidence } from './speechPlayback';
 
 async function untilMedia(read: () => Promise<VoiceMediaEvidence>, matches: (value: VoiceMediaEvidence) => boolean) {
   const deadline = performance.now() + 9_000;
@@ -35,6 +36,7 @@ export async function verifyVoice(
   }
 
   try {
+    await verifyVoiceSettings();
     await click('New Chat');
     await waitFor('The new-chat composer was not selected for voice', () => selected() === null && !!draft());
     const originalDraft = draft()!.id;
@@ -128,4 +130,38 @@ export async function verifyVoice(
   } finally {
     console.error = log;
   }
+}
+
+async function verifyVoiceSettings() {
+  await click('Settings');
+  const settings = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Settings"][open]');
+  await waitFor('Settings did not open for the voice picker', () => !!settings());
+  const dialog = settings()!;
+  await click('Voice', dialog.querySelector('nav[aria-label="Settings Sections"]')!);
+  const section = () => dialog.querySelector<HTMLElement>('section[aria-label="Voice"]')!;
+  const value = () => section()?.querySelector('#configured-voice')?.textContent;
+  const press = (label: string) => click(label, section());
+
+  await waitFor('The advertised V3 default did not open', () => value() === 'Marin');
+  for (const finish of ['Cancel', 'Done']) {
+    await press('Choose Voice…');
+    const control = section().querySelector<HTMLSelectElement>('select[aria-label="Voice"]')!;
+    if (![...control.options].some((option) => option.value === '') ||
+        control.querySelector('optgroup[label="Japanese"] option[value="rindo"]')?.textContent !== 'Rindō') {
+      throw new Error('The default and grouped voice choices were not presented');
+    }
+    const before = speechFixtureEvidence()?.id;
+    control.value = finish === 'Cancel' ? 'rindo' : 'cedar';
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+    await waitFor('Provider preview did not enqueue the expected samples', () => {
+      const sound = speechFixtureEvidence();
+      return !!sound && sound.id !== before && sound.frames === 16_000 && !sound.closed;
+    });
+    const sample = speechFixtureEvidence()!;
+    await press(finish);
+    await waitFor('Closing the selector left the preview audio context running', () => sample.closed);
+    await waitFor(`Voice preference changed unexpectedly after ${finish}`, () =>
+      value() === (finish === 'Cancel' ? 'Marin' : 'Cedar'));
+  }
+  await click('Close', dialog);
 }

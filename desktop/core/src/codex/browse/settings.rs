@@ -7,9 +7,13 @@ use std::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{BrowseError, CodexBrowser, WirePage};
+use super::{
+    Account, BrowseError, CodexBrowser, WirePage,
+    voice::{has_speech_credentials, realtime_enabled},
+};
 use crate::ipc::{
     DailyUsageView, EffectiveSettingView, MemorySettingsView, SettingsToggle, UsageWindowView,
+    VoiceSettingsView,
 };
 mod integrations;
 mod usage_resets;
@@ -18,6 +22,7 @@ pub use usage_resets::{ResetCandidate, UsageResetOutcome};
 
 const COMPRESSION: &str = "local_thread_store_compression";
 const COMPRESSION_KEY: &str = "features.local_thread_store_compression";
+const VOICE_KEY: &str = "realtime.voice";
 const NETWORK_KEY: &str = "sandbox_workspace_write.network_access";
 const MEMORY_KEY: &str = "features.memories";
 const MEMORY_EXTERNAL_KEY: &str = "memories.disable_on_external_context";
@@ -71,6 +76,8 @@ pub struct EffectiveConfiguration {
     pub compression: Option<SettingsToggle>,
     pub network_access: Option<SettingsToggle>,
     pub memories: Option<MemorySettingsView>,
+    voice: Option<VoiceSettingsView>,
+    voice_with_api_key: bool,
     pub integrations: integrations::IntegrationConfiguration,
     authority: Vec<Value>,
 }
@@ -80,8 +87,22 @@ impl EffectiveConfiguration {
         self.file.as_deref()
     }
 
+    pub fn voice(&self, account: Option<&Account>) -> Option<VoiceSettingsView> {
+        self.voice.clone().map(|mut setting| {
+            setting.preview |= self.voice_with_api_key && matches!(account, Some(Account::ApiKey));
+            setting
+        })
+    }
+
     pub fn accepts(&self, key: &str, value: &Value) -> bool {
         match key {
+            VOICE_KEY => self.voice.as_ref().is_some_and(|setting| {
+                !setting.managed
+                    && (value.is_null()
+                        || value.as_str().is_some_and(|voice| {
+                            setting.voices.iter().any(|known| known.id == voice)
+                        }))
+            }),
             COMPRESSION_KEY => {
                 value.is_boolean()
                     && self
@@ -352,6 +373,33 @@ impl CodexBrowser {
             &features,
             version.is_some() && file.is_some(),
         );
+        let voice = if realtime_enabled(config)
+            && policy["featureRequirements"]["realtime_conversation"] != false
+        {
+            let catalog = self
+                .realtime_voice_catalog(timeout)
+                .await
+                .unwrap_or_default();
+            let selected = config["realtime"]["voice"]
+                .as_str()
+                .filter(|voice| catalog.contains(voice))
+                .unwrap_or_default()
+                .into();
+            let default_voice = catalog.resolve(None);
+            let voices = catalog.settings_choices();
+            (!voices.is_empty()).then(|| VoiceSettingsView {
+                selected,
+                voices,
+                default_voice,
+                managed: managed_origin(&origins[VOICE_KEY]),
+                preview: has_speech_credentials(config, None),
+            })
+        } else {
+            None
+        };
+        let voice_with_api_key =
+            voice.is_some() && has_speech_credentials(config, Some(&Account::ApiKey));
+        authority.push(json!([origins[VOICE_KEY], config["realtime"]["voice"]]));
         Ok(EffectiveConfiguration {
             provider: nonempty(&config["model_provider"]),
             entries,
@@ -360,6 +408,8 @@ impl CodexBrowser {
             network_access,
             compression,
             memories,
+            voice,
+            voice_with_api_key,
             integrations,
             authority,
         })

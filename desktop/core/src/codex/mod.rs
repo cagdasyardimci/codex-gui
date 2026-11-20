@@ -14,9 +14,10 @@ pub use browse::{
     Account, AccountSnapshot, BrowseError, BrowserLogin, ChatRead, ChatSummary, CodexBrowser,
     EffectiveConfiguration, ForkBoundary, HistoryTurn, IntegrationCatalogs, LoginCancellation,
     LoginCompletion, ModelOption, Page, ProjectChatCursor, QueueSnapshot, QueuedSubmission,
-    ResetCandidate, SettingsRateLimits, ThreadActivity, ThreadSummary, TurnActivity, TurnCursor,
-    TurnItemRead, TurnItems, TurnStatus, UsageResetOutcome, WindowsSandboxReadiness,
-    WindowsSandboxSetupCompleted, WindowsSandboxSetupMode, validate_voice_sdp,
+    RealtimeVoiceCatalog, RealtimeVoiceSelection, ResetCandidate, SettingsRateLimits,
+    ThreadActivity, ThreadSummary, TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus,
+    UsageResetOutcome, WindowsSandboxReadiness, WindowsSandboxSetupCompleted,
+    WindowsSandboxSetupMode, validate_voice_sdp, voice_sample,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub(crate) use executable::is_executable;

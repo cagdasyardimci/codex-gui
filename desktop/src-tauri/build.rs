@@ -47,6 +47,8 @@ fn main() {
         "notification_fixture_outcomes",
         "activate_notification_fixture",
         "verify_notifications_result",
+        "preview_voice",
+        "stop_speech",
         "read_voice_call",
         "prepare_voice_call",
         "start_voice_transport",

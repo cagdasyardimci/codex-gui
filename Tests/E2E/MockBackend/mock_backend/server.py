@@ -11,7 +11,7 @@ from .streaming import Stream
 from .queue_fixture import queue_request, steer_request
 from .review_fixture import start_review
 from .settings_fixture import METHODS as SETTINGS_METHODS, settings_request
-from .voice_fixture import voice_request
+from .voice_fixture import voice_config, voice_request
 from .transport import ProtocolError, UnconfirmedMutation
 
 
@@ -81,7 +81,8 @@ class Server:
     def handle(self, method, params):
         with self.lock:
             result = self.dispatch(method, params)
-            if not self.scenario.get('desktopSettings') and (method != 'initialize' or not self.scenario.get('desktopAutomaticTitles')):
+            voice_reader = self.scenario.get('desktopVoice') and self.client_name in ('codex_gui_settings', 'codex_gui_speech')
+            if not voice_reader and not self.scenario.get('desktopSettings') and (method != 'initialize' or not self.scenario.get('desktopAutomaticTitles')):
                 self.state.save()
             return copy.deepcopy(result)
 
@@ -93,7 +94,7 @@ class Server:
     def dispatch(self, method, p):
         if method == 'initialize':
             self.client_name = p.get('clientInfo', {}).get('name')
-            if self.scenario.get('desktopSettings'):
+            if self.scenario.get('desktopSettings') or self.scenario.get('desktopVoice'):
                 return {'userAgent': 'structured-qa-backend/1', 'codexHome': os.environ['CODEX_HOME']}
             return {'userAgent': 'structured-qa-backend/1'}
         if self.scenario.get('desktopSettings') and method in SETTINGS_METHODS:
@@ -144,6 +145,8 @@ class Server:
             return {'data': [{'id': 'qa-model', 'model': 'qa-model', 'displayName': 'QA fixture model',
                     'supportedReasoningEfforts': [{'reasoningEffort': 'medium'}],
                     'defaultReasoningEffort': 'medium', 'isDefault': True}], 'nextCursor': None}
+        if self.scenario.get('desktopVoice') and method in ('config/read', 'config/value/write'):
+            return voice_config(self, method, p)
         if method == 'config/read' and 'config' in self.state.data:
             return {'config': copy.deepcopy(self.state.data['config']),
                     'layers': [{'name': {'type': 'user'}, 'version': 'component-fixture-v1'}]}
@@ -212,6 +215,13 @@ class Server:
         if method == 'thread/start':
             if not p.get('cwd'):
                 raise ProtocolError(-32602, 'thread/start requires cwd')
+            if self.scenario.get('desktopVoice') and self.client_name == 'codex_gui_speech':
+                if not p.get('ephemeral') or p.get('approvalPolicy') != 'never' or p.get('sandbox') != 'read-only':
+                    raise ProtocolError(-32602, 'Speech requires an ephemeral read-only thread')
+                thread = {'id': f'voice-sample-{os.getpid()}', 'name': '', 'preview': '',
+                          'cwd': p['cwd'], 'archived': False, 'turns': []}
+                self.state.threads.append(thread)
+                return {'thread': self.summary(thread), **self.settings(thread)}
             if self.scenario.get('desktopAutomaticTitles') and p.get('ephemeral'):
                 self.state.path = None
                 thread = {'id': f'title-helper-{os.getpid()}', 'name': '', 'preview': '',

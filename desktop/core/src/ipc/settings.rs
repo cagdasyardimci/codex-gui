@@ -90,6 +90,7 @@ pub struct SettingsView {
     pub network_access: Option<SettingsToggle>,
     pub efforts: Vec<SettingsEffort>,
     pub memories: Option<MemorySettingsView>,
+    pub voice: Option<super::VoiceSettingsView>,
     pub instructions_available: bool,
     pub reset_balance: Option<u32>,
     pub reset_offers: Vec<UsageResetOffer>,

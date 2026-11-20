@@ -42,13 +42,11 @@ impl Navigation {
             .ok_or(IpcError::StaleSelection)?;
         let project = checkout.storage_key();
         let browser = CodexBrowser::new(client.clone());
-        if !browser
-            .web_voice_available(RPC_TIMEOUT)
+        let selected = browser
+            .web_voice_selection(RPC_TIMEOUT)
             .await
             .map_err(|error| report(error.into()))?
-        {
-            return Err(IpcError::StaleSelection);
-        }
+            .ok_or(IpcError::StaleSelection)?;
         let thread = match request.chat_id {
             Some(chat) => ThreadId(chat),
             None => {
@@ -85,7 +83,7 @@ impl Navigation {
                 thread
             }
         };
-        voice.reserve(&app, client, thread, project)
+        voice.reserve(&app, client, thread, project, selected.voice)
     }
 
     pub(super) fn try_voice_text(

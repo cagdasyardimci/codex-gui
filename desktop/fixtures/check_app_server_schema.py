@@ -52,7 +52,10 @@ CLIENT_REQUESTS = {
     "thread/name/set": ("threadId", "name"),
     "thread/unsubscribe": ("threadId",),
     "thread/realtime/start": ("threadId", "realtimeSessionId", "outputModality", "version", "transport",
-                              "flushTranscriptTailOnSessionEnd", "codexResponseHandoffMode"),
+                              "flushTranscriptTailOnSessionEnd", "codexResponseHandoffMode", "voice",
+                              "includeStartupContext", "clientManagedHandoffs"),
+    "thread/realtime/listVoices": (),
+    "thread/realtime/appendSpeech": ("threadId", "text"),
     "thread/realtime/appendText": ("threadId", "text", "role"),
     "thread/realtime/stop": ("threadId",),
     "feedback/upload": ("classification", "threadId", "includeLogs", "tags"),
@@ -76,6 +79,9 @@ SERVER_REQUESTS = {
 SERVER_NOTIFICATIONS = {
     "thread/queue/changed": ("threadId",),
     "thread/realtime/started": ("threadId", "realtimeSessionId", "version"),
+    "thread/realtime/outputAudio/delta": ("threadId", "audio"),
+    "thread/realtime/transcript/done": ("threadId", "role"),
+    "thread/realtime/itemAdded": ("threadId", "item"),
     "thread/realtime/sdp": ("threadId", "sdp"),
     "thread/realtime/error": ("threadId", "message"),
     "thread/realtime/closed": ("threadId", "reason"),
@@ -113,6 +119,8 @@ INCOMING_RESPONSES = {
     "v2/ThreadListResponse": ("data", "nextCursor"),
     "v2/ThreadReadResponse": ("thread",),
     "v2/ThreadRealtimeStartResponse": (),
+    "v2/ThreadRealtimeListVoicesResponse": ("voices",),
+    "v2/ThreadRealtimeAppendSpeechResponse": (),
     "v2/ThreadRealtimeAppendTextResponse": (),
     "v2/ThreadRealtimeStopResponse": (),
     "v2/ThreadArchiveResponse": (),
@@ -196,6 +204,11 @@ def check_schema(root, *, remote_access_target):
         check_fields(load_schema(root, name), fields, name, outbound=True)
     queued_submission = load_schema(root, "v2/ThreadQueueListResponse")["definitions"]["QueuedSubmission"]
     check_fields(queued_submission, ("id", "clientUserMessageId", "input"), "QueuedSubmission")
+
+    catalog = load_schema(root, "v2/ThreadRealtimeListVoicesResponse")["definitions"]["RealtimeVoicesList"]
+    check_fields(catalog, ("defaultV1", "v3") if remote_access_target else ("defaultV1",), "RealtimeVoicesList")
+    audio = load_schema(root, "v2/ThreadRealtimeOutputAudioDeltaNotification")["definitions"]["ThreadRealtimeAudioChunk"]
+    check_fields(audio, ("data", "sampleRate", "numChannels", "samplesPerChannel"), "ThreadRealtimeAudioChunk")
 
     ids = {variant["type"] for variant in load_schema(root, "RequestId")["anyOf"]}
     if ids != {"integer", "string"}:

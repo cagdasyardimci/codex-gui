@@ -34,6 +34,7 @@ struct Call {
     view: VoiceCallView,
     owner: AppServerClient,
     thread: ThreadId,
+    voice: Option<String>,
     answer: Option<String>,
     entered_backend: bool,
     started: bool,
@@ -65,6 +66,7 @@ impl VoiceIpc {
         client: AppServerClient,
         thread: ThreadId,
         project: String,
+        voice: Option<String>,
     ) -> Result<VoiceCallView, IpcError> {
         let mut current = self.current.lock().expect("voice lock poisoned");
         if current.is_some() {
@@ -87,6 +89,7 @@ impl VoiceIpc {
             view: view.clone(),
             owner: client,
             thread,
+            voice,
             answer: None,
             entered_backend: false,
             started: false,
@@ -379,7 +382,7 @@ pub async fn start_voice_transport(
         }
     };
     let gate = state.lifecycle.lock().await;
-    let (client, thread) = {
+    let (client, thread, voice) = {
         let mut current = state.current.lock().expect("voice lock poisoned");
         let call = selected(&mut current, id)?;
         if call.view.phase != VoicePhase::Preparing {
@@ -387,12 +390,12 @@ pub async fn start_voice_transport(
         }
         call.entered_backend = true;
         call.view.phase = VoicePhase::Connecting;
-        let target = (call.owner.clone(), call.thread.clone());
+        let target = (call.owner.clone(), call.thread.clone(), call.voice.clone());
         publish(app, &current);
         target
     };
     let result = CodexBrowser::new(client)
-        .start_voice_call(&thread, id, &offer, TIMEOUT)
+        .start_voice_call(&thread, id, &offer, voice.as_deref(), TIMEOUT)
         .await;
     drop(gate);
     if let Err(error) = result {

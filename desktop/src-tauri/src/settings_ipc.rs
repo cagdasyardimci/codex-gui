@@ -26,6 +26,7 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 pub(crate) mod instructions;
 pub(crate) mod integrations;
 pub(crate) mod usage_resets;
+pub(crate) mod voice;
 pub(crate) mod writes;
 
 #[derive(Default)]
@@ -223,6 +224,9 @@ pub fn close_settings(
     let mut selected = settings.selected.lock().expect("settings lock poisoned");
     if selected.as_ref().is_some_and(|view| view.id == session) {
         *selected = None;
+        window
+            .state::<crate::speech_ipc::SpeechPlayback>()
+            .retire_owner(session);
     }
     Ok(())
 }
@@ -457,6 +461,9 @@ async fn read_settings_view(
         compression: authority.configuration.compression.clone(),
         network_access: authority.configuration.network_access.clone(),
         memories: authority.configuration.memories.clone(),
+        voice: authority
+            .configuration
+            .voice(authority.account.account.as_ref()),
         instructions_available: home.is_some(),
         reset_balance,
         reset_offers: reset_candidates

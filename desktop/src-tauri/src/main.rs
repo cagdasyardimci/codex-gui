@@ -18,6 +18,7 @@ mod navigation;
 mod project_ipc;
 mod quit_ipc;
 mod settings_ipc;
+mod speech_ipc;
 mod task_notifications;
 mod transcript_ipc;
 mod voice_ipc;
@@ -157,6 +158,7 @@ fn main() {
         .manage(diff_ipc::DiffIpc::default())
         .manage(settings_ipc::SettingsIpc::default())
         .manage(voice_ipc::VoiceIpc::default())
+        .manage(speech_ipc::SpeechPlayback::default())
         .manage(quit_ipc::QuitLifecycle::default())
         .on_window_event(move |window, event| {
             desktop_presentation::on_window_event(window, event);
@@ -239,6 +241,8 @@ fn main() {
             task_notifications::notification_fixture_outcomes,
             task_notifications::activate_notification_fixture,
             task_notifications::verify_notifications_result,
+            settings_ipc::voice::preview_voice,
+            speech_ipc::stop_speech,
             voice_ipc::read_voice_call,
             voice_ipc::prepare_voice_call,
             voice_ipc::start_voice_transport,
