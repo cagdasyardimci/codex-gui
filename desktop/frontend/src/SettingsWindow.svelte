@@ -280,7 +280,7 @@
   {:else if tab === 'notifications'}
     <SettingsNotifications />
   {:else if tab === 'connections'}
-    <SettingsConnections {session} />
+    <SettingsConnections {session} {workspaceId} />
   {:else if tab === 'voice' && view?.voice}
     <SettingsVoice view={view.voice} selection={{ session, revision: view.revision }} {workspaceId}
       synthetic={syntheticSpeech} save={(voice) => {

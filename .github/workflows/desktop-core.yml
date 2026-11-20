@@ -149,6 +149,7 @@ jobs:
           python3 desktop/fixtures/verify_read_aloud_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_question_dictation_fixture.py "$app/Contents/MacOS/codex-gui-desktop" desktop/target/voice-models/jfk.wav
           python3 desktop/fixtures/verify_relay_host_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_relay_host_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --devices
           python3 desktop/fixtures/verify_history_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --annotations
@@ -206,6 +207,7 @@ jobs:
           python desktop/fixtures/verify_read_aloud_fixture.py $app
           python desktop/fixtures/verify_question_dictation_fixture.py $app desktop/target/voice-models/jfk.wav
           python desktop/fixtures/verify_relay_host_fixture.py $app
+          python desktop/fixtures/verify_relay_host_fixture.py $app --devices
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -286,6 +288,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_read_aloud_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_question_dictation_fixture.py "$app" desktop/target/voice-models/jfk.wav
           xvfb-run -a python3 desktop/fixtures/verify_relay_host_fixture.py "$app"
+          xvfb-run -a python3 desktop/fixtures/verify_relay_host_fixture.py "$app" --devices
           xvfb-run -a python3 desktop/fixtures/verify_history_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app" --annotations

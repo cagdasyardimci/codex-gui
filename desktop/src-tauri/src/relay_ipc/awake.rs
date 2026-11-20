@@ -11,7 +11,10 @@ pub(super) struct Hold {
 
 impl Hold {
     pub(super) fn start(app: &AppHandle) -> Self {
-        if *app.state::<Verification>() == Verification::RelayHost {
+        if matches!(
+            *app.state::<Verification>(),
+            Verification::RelayHost | Verification::RelayDevices
+        ) {
             let fixture =
                 std::env::var_os("CODEX_GUI_QA_RELAY_AWAKE").map(std::path::PathBuf::from);
             if let Some(path) = &fixture {

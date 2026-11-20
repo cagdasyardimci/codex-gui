@@ -19,7 +19,7 @@ mod voice;
 mod windows_sandbox;
 
 pub use account::{BrowserLogin, LoginCancellation, LoginCompletion};
-pub use relay::{RelayPhase, RelayStatus};
+pub use relay::{RelayClient, RelayPairing, RelayPhase, RelayStatus};
 pub use settings::{
     EffectiveConfiguration, IntegrationCatalogs, ResetCandidate, SettingsRateLimits,
     UsageResetOutcome,
@@ -62,6 +62,8 @@ pub enum BrowseError {
     QueuePagination,
     #[error("configuration write does not match the captured user layer or policy")]
     SettingsScope,
+    #[error("app-server returned an invalid relay device catalog")]
+    RelayDevices,
     #[error("invalid response from {method}: {source}")]
     Response {
         method: &'static str,

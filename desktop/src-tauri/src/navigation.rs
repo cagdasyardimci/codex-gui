@@ -115,6 +115,7 @@ enum Action {
     ReadAloud(TranscriptRowRequest, Uuid, Channel<SpeechEvent>),
     StartQuestionDictation(DictationTarget, Uuid, Channel<DictationEvent>),
     RemoteHost(Uuid, RemoteHostCommand, oneshot::Sender<RemoteHostView>),
+    RelayClient(ConnectionIdentity, oneshot::Sender<AppServerClient>),
     VoiceTextSaved(DraftId),
     RequestQuit(tauri::AppHandle),
     FileTools(
@@ -428,6 +429,15 @@ impl NavigationHandle {
         result.await.map_err(|_| IpcError::StaleSelection)
     }
 
+    pub async fn relay_client(
+        &self,
+        owner: ConnectionIdentity,
+    ) -> Result<AppServerClient, IpcError> {
+        let (reply, result) = oneshot::channel();
+        self.request(Action::RelayClient(owner, reply)).await?;
+        result.await.map_err(|_| IpcError::StaleSelection)
+    }
+
     async fn request(&self, action: Action) -> Outcome {
         let (reply, result) = oneshot::channel();
         self.0
@@ -618,6 +628,18 @@ impl Navigation {
                     return Err(IpcError::StaleSelection);
                 }
                 let _ = reply.send(self.apply_relay(command).await?);
+                return Ok(None);
+            }
+            Action::RelayClient(owner, reply) => {
+                if self.quit.is_some() || !self.app.state::<RelayHost>().owns(&owner) {
+                    return Err(IpcError::StaleSelection);
+                }
+                let client = self
+                    .runtime_connections()
+                    .map(|(client, _)| client)
+                    .find(|client| client.identity() == &owner)
+                    .ok_or(IpcError::StaleSelection)?;
+                let _ = reply.send(client);
                 return Ok(None);
             }
             Action::StartQuestionDictation(target, id, events) => {

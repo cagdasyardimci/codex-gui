@@ -22,6 +22,7 @@ pub struct NavigationView {
     pub hidden_reasoning_efforts: Vec<String>,
     pub project_has_input: bool,
     pub voice_available: bool,
+    pub speech_available: bool,
     pub slash_commands: SlashCommandView,
     pub can_edit_sent_prompt: bool,
     pub literal_fork_revision: bool,

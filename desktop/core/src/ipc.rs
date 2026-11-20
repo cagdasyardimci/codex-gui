@@ -108,7 +108,10 @@ pub use question_reply::present_question_reply;
 pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
 };
-pub use relay::{RemoteHostCommand, RemoteHostPhase, RemoteHostView};
+pub use relay::{
+    RemoteDeviceCommand, RemoteDeviceScope, RemoteDeviceView, RemoteDevicesView, RemoteHostCommand,
+    RemoteHostPhase, RemoteHostView, RemotePairingView,
+};
 pub use review::StartReviewRequest;
 pub use settings::{
     BrowserChoice, BrowserPermission, BrowserPermissionEdit, BrowserPermissionSetting,
@@ -410,6 +413,11 @@ pub fn workspace_typescript() -> String {
         RemoteHostCommand::decl(),
         RemoteHostPhase::decl(),
         RemoteHostView::decl(),
+        RemoteDeviceCommand::decl(),
+        RemoteDeviceScope::decl(),
+        RemoteDeviceView::decl(),
+        RemoteDevicesView::decl(),
+        RemotePairingView::decl(),
         SettingsSelection::decl(),
         SettingsToggle::decl(),
         SettingsEffort::decl(),

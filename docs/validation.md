@@ -38,6 +38,8 @@ Prepare offline sample audio with `node desktop/frontend/prepare-dictation.mjs -
 
 The [relay host fixture](../desktop/fixtures/verify_relay_host_fixture.py) starts from a managed checkout and checks that only the source app-server hosts. It exercises a duplicate-host response, reconnect, persistence of the local host preference, and acquisition and release through an isolated awake adapter. The native power behavior and relay connection follow [native and live acceptance](#native-and-live-acceptance).
 
+Run the relay fixture with `--devices` to check the phone QR and manual computer flows, credential retirement, pagination, revocation followed by a failed list read, and recovery of an active peer turn and approval after reconnect. Use the [remote access guide](remote-access.md#setup-and-device-management) for the installed workflow.
+
 The [installed composer attachment fixture](../desktop/fixtures/verify_composer_attachment_fixture.py) supplies fixture results to the picker and drop intake and dispatches an image paste through the WebView. It changes chats while a picker result is pending, verifies identical stored bytes on an image-only Send, and checks image and file reuse with the original draft text intact. Physical picker, clipboard and drag interactions belong to [native and live acceptance](#native-and-live-acceptance).
 
 Run the same fixture with `--annotations` to verify Cancel, point placement at two zoom levels, restoration after a chat switch, and rejection when a save carries another image digest. The outgoing turn must retain the three original image bytes in order and number the comments with the unannotated image included in the count.

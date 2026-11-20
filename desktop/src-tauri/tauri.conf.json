@@ -33,6 +33,7 @@
       "notices/Symphonia-MPL-2.0.txt": "notices/Symphonia-MPL-2.0.txt",
       "notices/Whisper-MIT.txt": "notices/Whisper-MIT.txt",
       "notices/Whisper-Rust-Unlicense.txt": "notices/Whisper-Rust-Unlicense.txt",
+      "notices/QRCode-Rust-MIT.txt": "notices/QRCode-Rust-MIT.txt",
       "../target/voice-models/ggml-tiny-q5_1.bin": "voice-models/ggml-tiny-q5_1.bin",
       "../frontend/dist/frontend-licenses.md": "notices/frontend-licenses.md"
     },

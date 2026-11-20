@@ -65,6 +65,7 @@ pub enum Verification {
     ReadAloud,
     QuestionDictation,
     RelayHost,
+    RelayDevices,
     WindowsSetup,
     Turn,
     ActiveTurn,
@@ -96,6 +97,7 @@ pub async fn select_fixture_checkout(
             | Verification::ChatDeletion
             | Verification::VoiceHandoff
             | Verification::RelayHost
+            | Verification::RelayDevices
     ) {
         return Err(IpcError::UnauthorizedWindow);
     }

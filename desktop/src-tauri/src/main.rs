@@ -71,6 +71,7 @@ fn main() {
         Some("--verify-read-aloud") => fixture::Verification::ReadAloud,
         Some("--verify-question-dictation") => fixture::Verification::QuestionDictation,
         Some("--verify-relay-host") => fixture::Verification::RelayHost,
+        Some("--verify-relay-devices") => fixture::Verification::RelayDevices,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
         Some("--verify-active-turn") => fixture::Verification::ActiveTurn,
@@ -124,6 +125,7 @@ fn main() {
             | fixture::Verification::ReadAloud
             | fixture::Verification::QuestionDictation
             | fixture::Verification::RelayHost
+            | fixture::Verification::RelayDevices
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
             | fixture::Verification::ActiveTurn
@@ -164,6 +166,7 @@ fn main() {
             | fixture::Verification::ReadAloud
             | fixture::Verification::QuestionDictation
             | fixture::Verification::RelayHost
+            | fixture::Verification::RelayDevices
             | fixture::Verification::FileTools
             | fixture::Verification::Sidebar
             | fixture::Verification::CommandPalette
@@ -279,6 +282,11 @@ fn main() {
             relay_ipc::change_remote_host,
             relay_ipc::remote_host_snapshot,
             relay_ipc::relay_host_fixture_view,
+            relay_ipc::devices::open_relay_devices,
+            relay_ipc::devices::close_relay_devices,
+            relay_ipc::devices::relay_devices_snapshot,
+            relay_ipc::devices::change_relay_devices,
+            relay_ipc::devices::copy_relay_pairing_code,
             voice_ipc::read_voice_call,
             voice_ipc::prepare_voice_call,
             voice_ipc::start_voice_transport,

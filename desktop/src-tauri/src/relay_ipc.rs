@@ -22,6 +22,7 @@ use crate::{
 };
 
 mod awake;
+pub(crate) mod devices;
 
 #[derive(Default)]
 pub struct RelayHost(Mutex<Host>);
@@ -32,10 +33,10 @@ struct Host {
     preferences: Preferences,
     view: RemoteHostView,
     owner: Option<ConnectionIdentity>,
-    observed: Option<RelayStatus>,
     revision: u64,
     diagnostics: Option<StderrTail>,
     awake: Option<awake::Hold>,
+    devices: devices::Devices,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -80,7 +81,7 @@ impl RelayHost {
         let mut host = self.0.lock().expect("relay host lock poisoned");
         host.view.available = false;
         host.view.phase = RemoteHostPhase::Disconnected;
-        host.observed = None;
+        host.devices.reconcile(None);
         host.update_awake(app);
     }
 
@@ -122,6 +123,7 @@ impl RelayHost {
         } else {
             RemoteHostPhase::Disabled
         };
+        host.devices.reconcile(None);
         host.update_awake(app);
         Ok(())
     }
@@ -140,9 +142,9 @@ impl RelayHost {
     pub fn attach(&self, owner: &ConnectionIdentity, diagnostics: StderrTail) -> u64 {
         let mut host = self.0.lock().expect("relay host lock poisoned");
         if host.owner.as_ref() != Some(owner) {
-            host.observed = None;
             host.owner = Some(owner.clone());
             host.diagnostics = Some(diagnostics);
+            host.devices.reconcile(None);
             host.revision += 1;
         }
         host.revision
@@ -157,9 +159,9 @@ impl RelayHost {
         let mut host = self.0.lock().expect("relay host lock poisoned");
         if host.owner.as_ref() == Some(owner) {
             host.owner = None;
-            host.observed = None;
             host.diagnostics = None;
             host.awake = None;
+            host.devices.reconcile(None);
             if host.view.enabled {
                 host.view.phase = RemoteHostPhase::Disconnected;
             }
@@ -204,13 +206,14 @@ impl RelayHost {
             Err(BrowseError::Request(RequestError::Remote(error))) if error.code == -32601 => {
                 host.view.available = false;
                 host.awake = None;
+                host.devices.reconcile(None);
             }
             Err(BrowseError::Request(RequestError::Remote(error)))
                 if error.code == 409 || duplicate(&error.message) =>
             {
                 host.view.phase = RemoteHostPhase::Duplicate;
                 host.view.available = true;
-                host.observed = None;
+                host.devices.reconcile(None);
                 host.update_awake(app);
             }
             Err(_) => {}
@@ -255,7 +258,21 @@ impl Host {
             }
             _ => RemoteHostPhase::Disconnected,
         };
-        self.observed = Some(status);
+        let authority = if self.view.enabled && self.view.phase == RemoteHostPhase::Connected {
+            self.owner
+                .clone()
+                .zip(status.environment_id.clone())
+                .and_then(|(owner, environment)| {
+                    (!status.installation_id.is_empty()).then(|| devices::Authority {
+                        owner,
+                        environment,
+                        installation: status.installation_id.clone(),
+                    })
+                })
+        } else {
+            None
+        };
+        self.devices.reconcile(authority);
         self.update_awake(app);
     }
 
@@ -311,7 +328,10 @@ pub fn relay_host_fixture_view(
     verification: State<'_, Verification>,
 ) -> Result<RemoteHostView, IpcError> {
     authorize_view(&window)?;
-    if *verification != Verification::RelayHost {
+    if !matches!(
+        *verification,
+        Verification::RelayHost | Verification::RelayDevices
+    ) {
         return Err(IpcError::UnauthorizedWindow);
     }
     Ok(window.state::<RelayHost>().view())

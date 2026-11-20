@@ -15,7 +15,9 @@ from verify_diff_fixture import git
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
-    app = parser.parse_args().app.resolve(strict=True)
+    parser.add_argument("--devices", action="store_true")
+    args = parser.parse_args()
+    app = args.app.resolve(strict=True)
     with TemporaryDirectory(prefix="codex-gui-relay-host-") as scratch:
         root = Path(scratch).resolve()
         data, profile, source, managed = (root / name for name in (
@@ -38,11 +40,17 @@ def main():
                      "createdAt": 1, "phase": "active"}
         (records / f"{record}.json").write_text(json.dumps({"version": 1, "workspace": workspace}), encoding="utf-8")
         trace, conflict, awake = (root / name for name in ("trace.jsonl", "duplicate-host", "awake.log"))
-        conflict.touch()
-        result = subprocess.run([app, "--verify-relay-host", data, managed, source], env={
+        if not args.devices:
+            conflict.touch()
+        scenario = "desktop-relay-devices" if args.devices else "desktop-relay-host"
+        mode = "--verify-relay-devices" if args.devices else "--verify-relay-host"
+        initial, secondary = (source, managed) if args.devices else (managed, source)
+        peer = root / "paired-devices.json"
+        result = subprocess.run([app, mode, data, initial, secondary], env={
             **os.environ, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
             "CODEX_GUI_QA_RELAY_CONFLICT": str(conflict), "CODEX_GUI_QA_RELAY_AWAKE": str(awake),
-            "CODEX_GUI_QA_SCENARIO": "desktop-relay-host", "CODEX_GUI_QA_STATE": str(root / "backend.json"),
+            "CODEX_GUI_QA_SCENARIO": scenario, "CODEX_GUI_QA_STATE": str(root / "backend.json"),
+            "CODEX_GUI_QA_RELAY_DEVICES": str(peer), "CODEX_GUI_QA_RELAY_SOURCE": str(source),
             "CODEX_GUI_QA_TRACE": str(trace), "PYTHONIOENCODING": "utf-8",
         }, capture_output=True, encoding="utf-8", errors="replace", timeout=100)
         print(result.stdout, end="")
@@ -50,14 +58,17 @@ def main():
         summary = [json.loads(line.removeprefix(prefix)) for line in result.stdout.splitlines() if line.startswith(prefix)]
         if result.returncode or len(summary) != 1:
             if trace.exists():
-                print("Relay fixture trace:", [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()
-                                               if '"direction": "relay-host"' in line])
+                records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+                print("Relay fixture trace:", [row for row in records if row.get("method", "").startswith("remoteControl/")][-20:])
             raise SystemExit(result.stderr or "The installed relay host fixture did not finish")
         (result,) = summary
-        assert result["first"]["phase"] == result["hidden"]["phase"] == "connected" and not result["disabled"]["enabled"]
         events = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
         relay = [row for row in events if row["direction"] == "relay-host"]
         assert relay and all(Path(event["cwd"]).samefile(source) for event in relay)
+        if args.devices:
+            verify_devices(result, events, relay, peer, data, profile, source)
+            return
+        assert result["first"]["phase"] == result["hidden"]["phase"] == "connected" and not result["disabled"]["enabled"]
         enabled = [row["process"] for row in relay if row["method"] == "remoteControl/enable"]
         disabled = [row["process"] for row in relay if row["method"] == "remoteControl/disable"]
         assert len(enabled) == 3 and enabled[0] == enabled[1] and enabled[1] != enabled[2], enabled
@@ -68,6 +79,33 @@ def main():
         assert preferences["enabled"] is False and preferences["keepAwake"] is True
         assert Path(preferences["source"]["path"]).samefile(source) and not list(profile.iterdir())
         print("Verified source-only hosting, duplicate outcome, reconnect, and awake lease release")
+
+
+def verify_devices(result, events, relay, peer, data, profile, source):
+    enabled = [row["process"] for row in relay if row["method"] == "remoteControl/enable"]
+    assert len(enabled) == 3 and len(set(enabled)) == 3, enabled
+    pairings = [row["params"] for row in relay if row["method"] == "remoteControl/pairing/start"]
+    assert pairings == [{"manualCode": True}] * 5
+    (revoke,) = [row["params"] for row in relay if row["method"] == "remoteControl/client/revoke"]
+    assert revoke == {"environmentId": f"fixture-environment-{enabled[0]}", "clientId": "fixture-device-3"}
+    assert any(row["params"].get("cursor") == "fixture-next-devices" for row in relay)
+    assert any(row.get("error", {}).get("message") == "Fixture stale device list read" for row in events)
+    assert not any(row.get("method") == "turn/start" for row in events)
+    (project,) = [row for row in events if row["direction"] == "relay-peer-project"]
+    assert Path(project["projectPath"]).samefile(source)
+    approvals = [row for row in events if row["direction"] == "relay-approval"]
+    assert [row["process"] for row in approvals] == enabled[1:]
+    assert {row["params"]["threadId"] for row in approvals} == {result["chat"]}
+    assert {row["params"]["turnId"] for row in approvals} == {"relay-mobile-turn"}
+    (ack,) = [row["result"] for row in events if row["direction"] == "command-approval-response"]
+    assert ack == {"decision": "accept"}
+    persisted = json.loads(peer.read_text(encoding="utf-8"))
+    assert persisted["peerTurn"] == "completed" and persisted["devices"] == [
+        {"clientId": "fixture-device-4", "displayName": "Fixture Computer"},
+    ]
+    assert "FIXTURE-" not in (data / "remote-host-v1.json").read_text(encoding="utf-8")
+    assert not list(profile.iterdir())
+    print("Verified phone and computer enrollment, credential retirement, exact revocation, peer discovery, and approval recovery")
 
 
 if __name__ == "__main__":

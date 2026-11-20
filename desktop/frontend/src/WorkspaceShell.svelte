@@ -20,6 +20,7 @@
   import { DesktopVoice } from './desktopVoice';
   import { SpeechPlayback } from './speechPlayback';
   import { verifyQuestionDictation } from './dictationProbe';
+  import { verifyRelayDevices } from './relayDevicesProbe';
   import { verifyRelayHost } from './relayHostProbe';
   import { verifyReadAloud } from './readAloudProbe';
   import { verifyVoiceHistory } from './voiceHistoryProbe';
@@ -72,7 +73,7 @@
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -152,7 +153,7 @@
   const selectedChat = $derived(navigation?.selectedChat);
   let speechAvailable = $state(false);
   let reading = $state.raw<{ scope: string; row: TranscriptRowRequest; player: SpeechPlayback }>();
-  const speechScope = $derived(workspaceId && selectedChat && !navigation?.quit && !settingsOpen
+  const speechScope = $derived(workspaceId && selectedChat && navigation?.speechAvailable && !navigation.quit && !settingsOpen
     ? JSON.stringify([workspaceId, selectedChat, navigation?.account.identity, navigation?.account.permitsTurns]) : undefined);
   $effect(() => {
     const scope = speechScope;
@@ -1216,6 +1217,7 @@
     else if (verify === 'voice') void verifyVoice(() => snapshot, () => call, voice);
     else if (verify === 'voiceHistory' || verify === 'voiceHistoryRestore') void verifyVoiceHistory(verify, () => snapshot);
     else if (verify === 'questionDictation') void verifyQuestionDictation(() => snapshot);
+    else if (verify === 'relayDevices') void verifyRelayDevices(() => snapshot);
     else if (verify === 'relayHost') void verifyRelayHost(() => snapshot);
     else if (verify === 'readAloud') void verifyReadAloud(() => snapshot);
     else if (verify === 'voiceHandoff') void verifyVoiceHandoff(() => snapshot, () => call);

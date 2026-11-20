@@ -158,6 +158,10 @@ REMOTE_ACCESS_TARGET = {
     "remoteControl/enable": (),
     "remoteControl/disable": (),
     "remoteControl/status/read": (),
+    "remoteControl/pairing/start": ("manualCode",),
+    "remoteControl/pairing/status": ("pairingCode",),
+    "remoteControl/client/list": ("environmentId", "cursor", "limit"),
+    "remoteControl/client/revoke": ("environmentId", "clientId"),
 }
 
 
@@ -236,6 +240,13 @@ def check_schema(root, *, remote_access_target):
         for operation in ("Enable", "Disable", "StatusRead"):
             name = f"RemoteControl{operation}Response"
             check_fields(load_schema(root, f"v2/{name}"), status_fields, name)
+        for operation, fields in {
+            "PairingStart": ("environmentId", "pairingCode", "manualPairingCode", "expiresAt"),
+            "PairingStatus": ("claimed",),
+            "ClientsList": ("data", "nextCursor"),
+        }.items():
+            name = f"RemoteControl{operation}Response"
+            check_fields(load_schema(root, f"v2/{name}"), fields, name)
 
 
 def check_executable(executable, version, *, remote_access_target=False):

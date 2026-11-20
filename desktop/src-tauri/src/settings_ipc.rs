@@ -237,6 +237,9 @@ pub fn close_settings(
         window
             .state::<crate::speech_ipc::SpeechPlayback>()
             .retire_owner(crate::speech_ipc::SpeechOwner::Settings(session));
+        window
+            .state::<crate::relay_ipc::RelayHost>()
+            .retire_device_session(session);
     }
     Ok(())
 }

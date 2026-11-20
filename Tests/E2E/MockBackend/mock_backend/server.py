@@ -12,7 +12,7 @@ from .queue_fixture import queue_request, steer_request
 from .review_fixture import start_review
 from .settings_fixture import METHODS as SETTINGS_METHODS, settings_request
 from .voice_fixture import voice_config, voice_request
-from .relay_fixture import relay_host_request
+from .relay_fixture import finish_relay_thread, relay_host_request, resume_relay_thread, sync_relay_thread
 from .transport import ProtocolError, UnconfirmedMutation
 
 
@@ -39,6 +39,8 @@ class Server:
             if command:
                 command['decision'] = response.get('result', {}).get('decision')
                 self.transport.trace({'direction': 'command-approval-response', **response})
+                if self.scenario.get('desktopRelayDevices') and response['id'] == 'fixture-relay-approval':
+                    finish_relay_thread(self, command['decision'])
                 if self.scenario.get('desktopTurn'):
                     self.transport.event('serverRequest/resolved', {
                         'threadId': command['threadId'], 'requestId': response['id']})
@@ -99,6 +101,8 @@ class Server:
     def dispatch(self, method, p):
         if self.scenario.get('desktopRelayHost') and method.startswith('remoteControl/'):
             return relay_host_request(self, method, p)
+        if self.scenario.get('desktopRelayDevices') and method in ('thread/list', 'thread/read', 'thread/resume'):
+            sync_relay_thread(self, p.get('cwd') if method == 'thread/list' else None)
         if method == 'initialize':
             self.client_name = p.get('clientInfo', {}).get('name')
             if self.scenario.get('desktopSettings') or self.scenario.get('desktopVoice'):
@@ -266,6 +270,8 @@ class Server:
             if self.scenario.get('desktopHistory'):
                 if method == 'thread/resume':
                     self.resume_history_fixture(thread)
+                    if self.scenario.get('desktopRelayDevices'):
+                        resume_relay_thread(self, thread)
                     if (self.scenario.get('desktopVoiceHistory') and thread['id'] == 'voice-only'
                             and not self.state.data.get('fixtureLiveSpoken')):
                         announced = threading.Timer(0.3, self.publish_voice_history)

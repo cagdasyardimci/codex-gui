@@ -391,6 +391,7 @@ impl Navigation {
 
     pub(super) fn sync_actions(&mut self) {
         self.view.voice_available = false;
+        self.view.speech_available = false;
         self.view.actions.send = false;
         self.view.actions.stop = None;
         self.view.actions.stop_all = self.has_stoppable_work();
@@ -408,19 +409,20 @@ impl Navigation {
             return;
         };
         let state = backend.engine.snapshot();
+        let provider = &self.configured_run;
+        let web_socket = provider.realtime_credentials
+            || (provider.realtime_api_key && self.view.account.api_key);
+        self.view.speech_available = self.quit.is_none() && provider.realtime_enabled && web_socket;
         if self.view.write_access == WriteAccess::Ready {
             let selected = self
                 .selection
                 .as_ref()
                 .and_then(|selection| selection.thread.as_ref());
-            let provider = &self.configured_run;
             let web_rtc = self.view.account.chatgpt
                 && provider
                     .provider
                     .as_deref()
                     .is_none_or(|provider| provider == "openai");
-            let web_socket = provider.realtime_credentials
-                || (provider.realtime_api_key && self.view.account.api_key);
             self.view.voice_available = self.quit.is_none()
                 && provider.realtime_enabled
                 && (web_rtc || web_socket)

@@ -14,12 +14,12 @@ pub use browse::{
     Account, AccountSnapshot, BrowseError, BrowserLogin, ChatRead, ChatSummary, CodexBrowser,
     EffectiveConfiguration, ForkBoundary, HistoryTurn, IntegrationCatalogs, LoginCancellation,
     LoginCompletion, ModelOption, Page, ProjectChatCursor, QueueSnapshot, QueuedSubmission,
-    RealtimeVoiceCatalog, RealtimeVoiceSelection, RelayPhase, RelayStatus, ResetCandidate,
-    SettingsRateLimits, SpeechRole, ThreadActivity, ThreadSummary, TimelineCursor, TimelineEntry,
-    TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus, UsageResetOutcome, VoiceSegment,
-    VoiceTimelinePage, WindowsSandboxReadiness, WindowsSandboxSetupCompleted,
-    WindowsSandboxSetupMode, has_speech_credentials, realtime_enabled, validate_voice_sdp,
-    voice_sample,
+    RealtimeVoiceCatalog, RealtimeVoiceSelection, RelayClient, RelayPairing, RelayPhase,
+    RelayStatus, ResetCandidate, SettingsRateLimits, SpeechRole, ThreadActivity, ThreadSummary,
+    TimelineCursor, TimelineEntry, TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus,
+    UsageResetOutcome, VoiceSegment, VoiceTimelinePage, WindowsSandboxReadiness,
+    WindowsSandboxSetupCompleted, WindowsSandboxSetupMode, has_speech_credentials,
+    realtime_enabled, validate_voice_sdp, voice_sample,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub(crate) use executable::is_executable;
