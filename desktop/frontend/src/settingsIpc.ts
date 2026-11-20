@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { InstructionsView, SaveInstructions, SetEffortVisibility, SettingsSelection, SettingsView, SettingsWriteOutcome, WriteSettingsValue } from './generated/workspace';
+import type { InstructionsView, RedeemUsageReset, SaveInstructions, SetEffortVisibility, SettingsSelection, SettingsView, SettingsWriteOutcome, WriteSettingsValue } from './generated/workspace';
 
 export function openSettings(session: string): Promise<SettingsView> {
   return invoke('open_settings', { session });
@@ -27,6 +27,10 @@ export function setEffortVisibility(update: SetEffortVisibility): Promise<Settin
 
 export function deleteSettingsMemories(selection: SettingsSelection): Promise<SettingsView> {
   return invoke('delete_settings_memories', { selection });
+}
+
+export function redeemSettingsReset(update: RedeemUsageReset): Promise<SettingsView> {
+  return invoke('redeem_settings_reset', { update });
 }
 
 export function readSettingsInstructions(session: string): Promise<InstructionsView> {

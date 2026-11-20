@@ -504,6 +504,32 @@ pub fn settings_usage_fixture_started(
 }
 
 #[tauri::command]
+pub fn set_settings_reset_fixture(
+    window: WebviewWindow,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+    stage: String,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    if *verification != Verification::Settings
+        || !matches!(
+            stage.as_str(),
+            "offered" | "expired" | "foreign" | "valid" | "lagging"
+        )
+    {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let data = checkouts
+        .data
+        .as_ref()
+        .ok_or(IpcError::UnauthorizedWindow)?;
+    let temporary = data.join("fixture-account.reset-pending");
+    std::fs::write(&temporary, stage)
+        .and_then(|()| std::fs::rename(temporary, data.join("fixture-account.reset")))
+        .map_err(|_| IpcError::ProjectUnavailable)
+}
+
+#[tauri::command]
 pub fn external_settings_instructions_fixture(
     window: WebviewWindow,
     verification: State<'_, Verification>,

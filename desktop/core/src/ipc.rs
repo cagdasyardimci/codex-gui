@@ -99,9 +99,10 @@ pub use queue::{
 };
 pub use review::StartReviewRequest;
 pub use settings::{
-    DailyUsageView, EffectiveSettingView, InstructionsView, MemorySettingsView, SaveInstructions,
-    SetEffortVisibility, SettingsAccountView, SettingsEffort, SettingsSelection, SettingsToggle,
-    SettingsView, SettingsWriteOutcome, UsageWindowView, WriteSettingsValue,
+    DailyUsageView, EffectiveSettingView, InstructionsView, MemorySettingsView, RedeemUsageReset,
+    SaveInstructions, SetEffortVisibility, SettingsAccountView, SettingsEffort, SettingsSelection,
+    SettingsToggle, SettingsView, SettingsWriteOutcome, UsageResetOffer, UsageWindowView,
+    WriteSettingsValue,
 };
 pub use sidebar::{
     SidebarChange, SidebarChat, SidebarChatFlag, SidebarChatKey, SidebarChatName,
@@ -352,6 +353,8 @@ pub fn workspace_typescript() -> String {
         MemorySettingsView::decl(),
         InstructionsView::decl(),
         SaveInstructions::decl(),
+        UsageResetOffer::decl(),
+        RedeemUsageReset::decl(),
         WriteSettingsValue::decl(),
         SetEffortVisibility::decl(),
         SettingsWriteOutcome::decl(),

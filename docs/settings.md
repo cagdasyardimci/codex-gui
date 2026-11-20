@@ -20,7 +20,7 @@ Confirmed permission and speed saves also update GUI submission preferences. Com
 
 Browser configuration values do not implement native browser approval services. Voice sets the default for [Codex realtime sessions](cli-compatibility.md#voice-chat). Account profile changes, purchases, hosted preferences and training controls require backend actions before being presented as working mutations.
 
-Archive search must cover all loaded metadata, independently of row pagination. Destructive actions retain captured IDs and revalidate current membership before mutation. Usage analytics and balances must use reported values; available reset credits cannot establish complete reset history. Reset consumption requires confirmation and fresh eligibility, identity and expiration checks.
+Archive search must cover all loaded metadata, independently of row pagination. Destructive actions retain captured IDs and revalidate current membership before mutation. Usage analytics and balances must use reported values; available reset credits cannot establish complete reset history. [Reset consumption](../desktop/src-tauri/src/settings_ipc/usage_resets.rs) requires confirmation and fresh eligibility, identity and expiration checks. Keep a durable reservation through successful or uncertain redemption so an old balance cannot offer the same credit again.
 
 Editors of external configuration files must preserve unsaved drafts on conflicts and require an explicit decision before replacing them. Catalog mutations must invalidate affected cached reads without silently discarding failed form drafts.
 

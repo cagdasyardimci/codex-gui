@@ -40,6 +40,7 @@ pub mod review_markers;
 pub mod review_runs;
 pub mod sidebar;
 mod submissions;
+pub mod usage_resets;
 pub use exit_recovery::ExitOwner;
 pub(super) use feedback::migrate as migrate_feedback;
 pub use legacy_queue::{LegacyQueueEntry, LegacyQueueStatus};

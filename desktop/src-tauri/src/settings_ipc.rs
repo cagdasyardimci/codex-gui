@@ -9,7 +9,7 @@ use codex_gui_core::{
     checkout::CheckoutIdentity,
     codex::{
         Account, AccountSnapshot, AppServerClient, AppServerConnection, ClientInfo, CodexBrowser,
-        CodexExecutable, EffectiveConfiguration, SettingsRateLimits,
+        CodexExecutable, EffectiveConfiguration, ResetCandidate, SettingsRateLimits,
     },
     identity::{CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, WorkspaceIdentity},
     ipc::{IpcError, SettingsAccountView, SettingsEffort, SettingsSelection, SettingsView},
@@ -23,6 +23,7 @@ use crate::project_ipc::{ProjectIpc, authorize_view};
 
 const TIMEOUT: Duration = Duration::from_secs(8);
 pub(crate) mod instructions;
+pub(crate) mod usage_resets;
 pub(crate) mod writes;
 
 #[derive(Default)]
@@ -57,6 +58,7 @@ struct Published {
     sign_out: bool,
     revision: Uuid,
     efforts: BTreeSet<String>,
+    reset_candidates: Vec<ResetCandidate>,
 }
 
 impl SettingsIpc {
@@ -398,6 +400,21 @@ async fn read_settings_view(
             .is_some_and(|backend| backend.home.is_some())
     };
     let account_id = limits.as_ref().and_then(|rates| rates.account_id.clone());
+    let reset_balance = limits.as_ref().and_then(SettingsRateLimits::reset_balance);
+    let reset_candidates = match (&account_id, limits.as_ref(), project.navigation.get()) {
+        (Some(account), Some(limits), Some(navigation)) => {
+            let reserved = navigation
+                .attachment_store()
+                .reserved_usage_resets(account)
+                .map_err(report)?;
+            limits
+                .reset_candidates()
+                .into_iter()
+                .filter(|candidate| !reserved.contains(&candidate.key))
+                .collect()
+        }
+        _ => Vec::new(),
+    };
     let view = SettingsView {
         revision,
         account: authority.account_view(limits.as_ref()),
@@ -408,6 +425,11 @@ async fn read_settings_view(
         network_access: authority.configuration.network_access.clone(),
         memories: authority.configuration.memories.clone(),
         instructions_available,
+        reset_balance,
+        reset_offers: reset_candidates
+            .iter()
+            .map(|candidate| candidate.offer.clone())
+            .collect(),
         efforts: efforts
             .iter()
             .map(|effort| SettingsEffort {
@@ -426,6 +448,7 @@ async fn read_settings_view(
             sign_out: view.account.can_sign_out,
             revision,
             efforts,
+            reset_candidates,
         },
     )?;
     Ok(view)

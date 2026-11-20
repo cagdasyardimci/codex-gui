@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WorkspaceSnapshot } from './generated/workspace';
-import { click, waitFor } from './fixtureControls';
+import { click, clickByLabel, waitFor } from './fixtureControls';
 import { closeSettings, openSettings, readSettingsInstructions, refreshSettings, saveSettingsInstructions, signOutSettings, writeSettings } from './settingsIpc';
 import { rejectsStale } from './markdownProbe';
 
@@ -182,6 +182,9 @@ export async function verifySettings(visible: () => WorkspaceSnapshot | null) {
     await click('Settings');
     await waitFor('Reopening Settings did not show only the current account', () => contains('second@example.invalid') &&
       !contains('first@example.invalid'));
+    await click('Usage & Billing', window()!);
+    await verifyUsageReset(window);
+    await click('Account', window()!);
     await click('Sign Out…', window()!);
     await click('Cancel', window()!);
     await waitFor('Cancelling sign-out changed the captured account', () => contains('second@example.invalid') && contains('Sign Out…'));
@@ -197,4 +200,44 @@ export async function verifySettings(visible: () => WorkspaceSnapshot | null) {
   } catch (error) {
     await invoke('verify_account_result', { failure: String(error) });
   }
+}
+
+async function verifyUsageReset(window: () => HTMLDialogElement | null) {
+  const stage = (stage: string) => invoke('set_settings_reset_fixture', { stage });
+  const refresh = () => click('Refresh Settings', window()!);
+  const balance = () => window()?.querySelector('dl[aria-label="Usage Resets"] dd')?.textContent;
+  const offers = () => window()?.querySelector('ul[aria-label="Available Usage Resets"]');
+  const complete = () => !window()?.querySelector('[aria-label="Use Usage Reset"]') &&
+    ![...(window()?.querySelectorAll('button') ?? [])].find((button) => button.textContent === 'Refresh Settings')?.disabled;
+
+  await stage('offered');
+  await refresh();
+  await waitFor('The available reset credits did not show their balance and expiration', () =>
+    balance() === '2' && offers()?.querySelector('time')?.dateTime.startsWith('2033-') === true);
+  await clickByLabel('Use Expiring Reset');
+  await stage('expired');
+  await click('Use Reset', window()!);
+  await waitFor('The expired credit could still be used', () => complete() && balance() === '1' &&
+    !!offers()?.textContent?.includes('Full Reset') && !offers()?.textContent?.includes('Expiring Reset'));
+
+  await clickByLabel('Use Full Reset');
+  await stage('foreign');
+  await click('Use Reset', window()!);
+  await waitFor('The account change did not close the captured confirmation', () =>
+    complete() && balance() === '1' && !!offers());
+  await stage('valid');
+  await refresh();
+  await waitFor('The original reset account did not refresh', () => complete() && !!offers());
+  await clickByLabel('Use Full Reset');
+  await click('Cancel', window()!);
+  await waitFor('Cancelling changed the available credit', () => complete() && balance() === '1' && !!offers());
+  await clickByLabel('Use Full Reset');
+  await click('Use Reset', window()!);
+  await waitFor('The reset did not refresh usage and balance', () =>
+    complete() && balance() === '0' && !offers() && window()?.querySelector('meter')?.value === 90);
+
+  await stage('lagging');
+  await refresh();
+  await waitFor('A previously redeemed credit reappeared when the server returned old data', () =>
+    complete() && balance() === '1' && !offers());
 }

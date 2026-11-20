@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { InstructionsView, SettingsView } from './generated/workspace';
+  import type { InstructionsView, SettingsSelection, SettingsView, UsageResetOffer } from './generated/workspace';
   import {
-    closeSettings, deleteSettingsMemories, openSettings, readSettingsInstructions, refreshSettings,
+    closeSettings, deleteSettingsMemories, openSettings, readSettingsInstructions, redeemSettingsReset, refreshSettings,
     saveSettingsInstructions, setEffortVisibility, signOutSettings, writeSettings,
   } from './settingsIpc';
 
@@ -16,6 +16,7 @@
   let busy = $state(false);
   let edits = $state<Record<string, string | boolean | null>>({});
   let retired = false;
+  let reset = $state.raw<{ selection: SettingsSelection; offer: UsageResetOffer }>();
   let deleteMemories = $state(false);
   let reloadInstructions = $state(false);
   let instructions = $state<InstructionsView>();
@@ -66,7 +67,20 @@
     confirming = false;
     deleteMemories = false;
     reloadInstructions = false;
+    reset = undefined;
     if (next === 'personalization' && view?.instructionsAvailable && !instructions) void loadInstructions();
+  }
+
+  function prepareReset(offer: UsageResetOffer) {
+    if (!view || busy) return;
+    reset = { selection: { session, revision: view.revision }, offer };
+  }
+
+  function useReset() {
+    const pending = reset;
+    if (!pending || busy) return;
+    reset = undefined;
+    void read(() => redeemSettingsReset({ selection: pending.selection, creditId: pending.offer.id }));
   }
 
   function clearMemories() {
@@ -162,6 +176,7 @@
     if (confirming) confirming = false;
     else if (deleteMemories) deleteMemories = false;
     else if (reloadInstructions) reloadInstructions = false;
+    else if (reset) reset = undefined;
     else close();
   }
 </script>
@@ -179,7 +194,10 @@
   <header>
     <h2>Settings</h2>
     <div class="controls">
-      <button type="button" disabled={busy} onclick={() => void read(() => refreshSettings(session))}>Refresh Settings</button>
+      <button type="button" disabled={busy} onclick={() => {
+        reset = undefined;
+        void read(() => refreshSettings(session));
+      }}>Refresh Settings</button>
       <button type="button" onclick={close}>Close</button>
     </div>
   </header>
@@ -237,6 +255,27 @@
             {/each}
           </tbody>
         </table>
+      {/if}
+      {#if view.resetBalance !== null}
+        <dl aria-label="Usage Resets"><dt>Usage Reset Credits</dt><dd>{view.resetBalance.toLocaleString()}</dd></dl>
+      {/if}
+      {#if reset}
+        <div class="controls" aria-label="Use Usage Reset">
+          <span>{reset.offer.title}</span>
+          <button type="button" onclick={() => { reset = undefined; }}>Cancel</button>
+          <button type="button" disabled={busy} onclick={useReset}>Use Reset</button>
+        </div>
+      {:else if view.resetOffers.length}
+        <ul class="reset-offers" aria-label="Available Usage Resets">
+          {#each view.resetOffers as offer (offer.id)}
+            {@const expires = resetTime(offer.expiresAt)}
+            <li>
+              <span>{offer.title}</span>
+              {#if expires}<time datetime={expires.toISOString()}>{expires.toLocaleDateString(undefined, { dateStyle: 'medium' })}</time>{/if}
+              <button type="button" disabled={busy} aria-label={`Use ${offer.title}`} onclick={() => prepareReset(offer)}>Use Reset…</button>
+            </li>
+          {/each}
+        </ul>
       {/if}
     </section>
   {:else if view && tab === 'configuration'}
@@ -339,6 +378,8 @@
   .limits dd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
   .edit-setting, fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
   fieldset { margin-block-start: 0.7rem; }
+  .reset-offers { display: grid; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  .reset-offers li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
   .instructions { display: grid; gap: 0.55rem; margin-block-start: 1rem; }
   textarea { box-sizing: border-box; inline-size: 100%; resize: vertical; }
   meter { width: 4.5rem; }

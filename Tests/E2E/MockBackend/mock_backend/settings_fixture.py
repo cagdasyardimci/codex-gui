@@ -4,13 +4,14 @@ import json
 import os
 import time
 from pathlib import Path
+from uuid import UUID
 
 from .transport import ProtocolError, UnconfirmedMutation
 
 METHODS = {
     "account/read", "account/logout", "account/rateLimits/read", "account/usage/read",
     "config/read", "configRequirements/read", "config/value/write", "experimentalFeature/list", "model/list",
-    "config/batchWrite", "memory/reset",
+    "config/batchWrite", "memory/reset", "account/rateLimitResetCredit/consume",
 }
 
 
@@ -90,9 +91,34 @@ def settings_request(server, method, params):
         save_state(source, state)
         return {"status": "ok", "filePath": str(source), "version": f"layer-{profile}-{state['version']}"}
     if method == "account/rateLimits/read":
-        return {"accountId": "fixture-" + profile,
-                "rateLimits": {"primary": {"usedPercent": 100, "windowDurationMins": 300},
-                               "secondary": {"windowDurationMins": 10080}, "planType": "plus"}}
+        stage = reset_stage(source)
+        spent = state.get("usedCredit", False) and stage != "lagging"
+        limits = {"primary": {"usedPercent": 10 if spent else 100, "windowDurationMins": 300},
+                  "secondary": {"windowDurationMins": 10080}, "planType": "plus"}
+        response = {"accountId": "fixture-foreign" if stage == "foreign" else "fixture-" + profile,
+                    "rateLimits": limits}
+        if stage and not signed_out:
+            credits = []
+            if stage in {"offered", "expired"}:
+                credits.append(dict(id="credit-expiring", title="Expiring Reset", status="available",
+                                    resetType="codexRateLimits", grantedAt=0,
+                                    expiresAt=2_000_000_000 if stage == "offered" else 1))
+            if not spent:
+                credits.append(dict(id="credit-full", title="Full Reset", status="available",
+                                    resetType="codexRateLimits", grantedAt=0))
+            response["rateLimitResetCredits"] = {
+                "availableCount": sum(credit.get("expiresAt", 2_000_000_000) > 1 for credit in credits),
+                "credits": credits,
+            }
+        return response
+    if method == "account/rateLimitResetCredit/consume":
+        attempt = UUID(params["idempotencyKey"])
+        if (profile != "second" or signed_out or state.get("usedCredit") or reset_stage(source) != "valid"
+                or params.get("creditId") != "credit-full" or attempt.version != 4):
+            raise ProtocolError(-32602, "The reset credit is ineligible")
+        state["usedCredit"] = True
+        save_state(source, state)
+        return {"outcome": "reset"}
     if method == "account/usage/read":
         if profile == "delayed":
             source.with_name("settings-usage-started").touch()
@@ -120,3 +146,8 @@ def save_state(source, state):
     temporary = source.with_suffix(".pending")
     temporary.write_text(json.dumps(state), encoding="utf-8")
     os.replace(temporary, source)
+
+
+def reset_stage(source):
+    stage = source.with_suffix(".reset")
+    return stage.read_text(encoding="utf-8") if stage.is_file() else None

@@ -8,6 +8,7 @@ import sqlite3
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
+from uuid import UUID
 
 from verify_coding_probe import fixture_executable
 
@@ -37,7 +38,9 @@ def main():
         print(result.stdout, end="")
         if result.returncode or "Verified installed account, usage, configuration" not in result.stdout:
             raise SystemExit(result.stderr or "The installed Settings verification did not complete")
-        assert json.loads(account.read_text(encoding="utf-8")) == {"profile": "second", "signedOut": True}
+        assert json.loads(account.read_text(encoding="utf-8")) == {
+            "profile": "second", "signedOut": True, "usedCredit": True,
+        }
         requests = [event for event in map(json.loads, trace.read_text(encoding="utf-8").splitlines())
                     if event["direction"] == "request"]
         starts = [entry["params"]["clientInfo"]["name"] for entry in requests if entry["method"] == "initialize"]
@@ -52,8 +55,13 @@ def main():
             ("memories.disable_on_external_context", True, "layer-first-1"),
         ], writes
         assert all(Path(entry["filePath"]).samefile(account) for entry in writes)
+        (reset,) = [entry["params"] for entry in requests if entry["method"] == "account/rateLimitResetCredit/consume"]
+        assert reset["creditId"] == "credit-full"
         with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
             assert database.execute("SELECT effort FROM desktop_hidden_reasoning_efforts").fetchall() == [("minimal",)]
+            assert database.execute("SELECT credit, attempt FROM desktop_usage_reset_attempts").fetchall() == [
+                ("named:credit-full", UUID(reset["idempotencyKey"]).bytes),
+            ]
         (memory_write,) = [entry["params"] for entry in requests if entry["method"] == "config/batchWrite"]
         assert memory_write["expectedVersion"] == "layer-first-0" and Path(memory_write["filePath"]).samefile(account)
         assert [edit["keyPath"] for edit in memory_write["edits"]] == [
@@ -65,6 +73,7 @@ def main():
         print("Verified provider and policy rotation, stale sensitive reads, one captured sign-out, and restarted workspace credentials")
         print("Verified versioned writes, newer configuration after lost acknowledgement, and persistent effort visibility")
         print("Verified atomic memory preferences, one confirmed reset, and revision-checked global instructions")
+        print("Verified reset confirmation, stale account and expiry, refreshed usage, and durable duplicate protection")
 
 
 if __name__ == "__main__":

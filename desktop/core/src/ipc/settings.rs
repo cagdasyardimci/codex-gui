@@ -88,6 +88,24 @@ pub struct SettingsView {
     pub efforts: Vec<SettingsEffort>,
     pub memories: Option<MemorySettingsView>,
     pub instructions_available: bool,
+    pub reset_balance: Option<u32>,
+    pub reset_offers: Vec<UsageResetOffer>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageResetOffer {
+    pub id: Option<String>,
+    pub title: String,
+    #[ts(type = "number | null")]
+    pub expires_at: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RedeemUsageReset {
+    pub selection: SettingsSelection,
+    pub credit_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, TS)]

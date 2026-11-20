@@ -44,6 +44,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::review_markers::migrate,
     attachments::review_runs::migrate,
     attachments::reasoning_visibility::migrate,
+    attachments::usage_resets::migrate,
 ];
 
 #[derive(Debug, Error)]

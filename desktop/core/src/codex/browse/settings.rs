@@ -11,6 +11,8 @@ use super::{BrowseError, CodexBrowser, WirePage};
 use crate::ipc::{
     DailyUsageView, EffectiveSettingView, MemorySettingsView, SettingsToggle, UsageWindowView,
 };
+mod usage_resets;
+pub use usage_resets::{ResetCandidate, UsageResetOutcome};
 
 const COMPRESSION: &str = "local_thread_store_compression";
 const COMPRESSION_KEY: &str = "features.local_thread_store_compression";
@@ -138,6 +140,7 @@ pub struct SettingsRateLimits {
     pub account_id: Option<String>,
     rate_limits: RateLimitBucket,
     rate_limits_by_limit_id: Option<BTreeMap<String, RateLimitBucket>>,
+    rate_limit_reset_credits: Option<usage_resets::CreditList>,
 }
 
 #[derive(Debug, Deserialize)]

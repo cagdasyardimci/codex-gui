@@ -14,6 +14,7 @@
     "allow-seed-composer-context-fixture",
     "allow-verify-account-result",
     "allow-set-settings-fixture-profile",
+    "allow-set-settings-reset-fixture",
     "allow-settings-usage-fixture-started",
     "allow-external-settings-instructions-fixture",
     "allow-verify-windows-setup-result",
