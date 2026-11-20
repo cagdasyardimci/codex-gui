@@ -1,0 +1,6 @@
+{
+  "extends": "desktop-attachments",
+  "desktopMessageSearch": true,
+  "intervalSeconds": 0.55,
+  "chunks": ["Unrelated first fragment", " then another fragment", " and a third fragment", " and a final fragment."]
+}

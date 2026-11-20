@@ -19,6 +19,7 @@ mod context;
 mod git;
 mod markdown;
 mod media;
+mod message_search;
 mod navigation;
 mod project_context;
 mod prompt_revision;
@@ -53,6 +54,7 @@ pub use media::{
     ImageAnnotation, ReuseAttachmentRequest, SaveImageAnnotations, TranscriptAttachment,
     TranscriptAttachmentLocation, TranscriptMediaRequest,
 };
+pub use message_search::{MessageSearchHitRequest, MessageSearchPage, MessageSearchPageRequest};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
     LoginTicket, NavigationIntent, NavigationView, OlderHistoryRequest, OlderHistoryView,
@@ -322,6 +324,9 @@ pub fn workspace_typescript() -> String {
         ConfirmDeleteChat::decl(),
         DeleteChatSource::decl(),
         SidebarDeleteSource::decl(),
+        MessageSearchPage::decl(),
+        MessageSearchPageRequest::decl(),
+        MessageSearchHitRequest::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

@@ -34,6 +34,8 @@ fn main() {
         "navigate_workspace",
         "read_archive",
         "prepare_chat_deletion",
+        "open_message_search",
+        "read_message_search_page",
         "execute_slash_command",
         "open_sent_prompt",
         "reveal_sidebar_project",

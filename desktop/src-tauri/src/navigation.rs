@@ -44,6 +44,7 @@ mod composer_settings;
 mod conversation_fork;
 pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
 mod interactions;
+mod message_search;
 mod ownership;
 mod paging;
 mod parked;
@@ -119,6 +120,15 @@ enum Action {
         codex_gui_core::ipc::DeleteChatSource,
         oneshot::Sender<codex_gui_core::ipc::ConfirmDeleteChat>,
     ),
+    OpenMessageSearch(WorkspaceId, oneshot::Sender<Uuid>),
+    PrepareSearchPage(
+        codex_gui_core::ipc::MessageSearchPageRequest,
+        oneshot::Sender<message_search::SearchRead>,
+    ),
+    FinishSearchPage(
+        Box<message_search::FinishedSearchRead>,
+        oneshot::Sender<codex_gui_core::ipc::MessageSearchPage>,
+    ),
 }
 
 enum Input {
@@ -175,6 +185,7 @@ struct Navigation {
     archive: archive::ArchiveState,
     deletion: Option<chat_deletion::CapturedDeletion>,
     deleted_chats: HashSet<ThreadId>,
+    message_search: Option<message_search::SearchSession>,
     worktree_records: PathBuf,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
@@ -230,6 +241,7 @@ impl NavigationHandle {
             archive: archive::ArchiveState::default(),
             deletion: None,
             deleted_chats,
+            message_search: None,
             worktree_records,
             view: NavigationView::default(),
             editable: HashMap::new(),
@@ -438,6 +450,18 @@ impl Navigation {
                 let _ = reply.send(deletion);
                 return Ok(None);
             }
+            Action::OpenMessageSearch(workspace, reply) => {
+                let _ = reply.send(self.open_message_search(workspace)?);
+                return Ok(None);
+            }
+            Action::PrepareSearchPage(request, reply) => {
+                let _ = reply.send(self.prepare_search_page(request)?);
+                return Ok(None);
+            }
+            Action::FinishSearchPage(result, reply) => {
+                let _ = reply.send(self.finish_search_page(*result)?);
+                return Ok(None);
+            }
             Action::SelectFolder(folder) => {
                 if self.quit.is_some() {
                     return Err(IpcError::StaleSelection);
@@ -474,6 +498,10 @@ impl Navigation {
                 self.confirm_chat_deletion(ticket).await?
             }
             NavigationIntent::CancelChatDeletion(ticket) => self.cancel_chat_deletion(ticket)?,
+            NavigationIntent::CloseMessageSearch(ticket) => self.close_message_search(ticket)?,
+            NavigationIntent::OpenMessageSearchHit(request) => {
+                self.open_message_search_hit(request).await?
+            }
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::SetResponseBookmark(request) => {
@@ -621,6 +649,7 @@ impl Navigation {
         checkout: CheckoutIdentity,
         thread: Option<ThreadId>,
     ) -> Result<WorkspaceId, Failure> {
+        self.message_search = None;
         self.store.remember_sidebar_project(&checkout)?;
         self.store
             .save_desktop_selection(Some((&folder, &checkout)), thread.as_ref())?;
@@ -659,6 +688,7 @@ impl Navigation {
     }
 
     async fn clear(&mut self) -> Result<(), Failure> {
+        self.message_search = None;
         self.store.save_desktop_selection(None, None)?;
         self.leave_checkout().await;
         self.selection = None;
@@ -758,6 +788,7 @@ impl Navigation {
     }
 
     async fn disconnect(&mut self) {
+        self.message_search = None;
         self.retire_history_pages();
         self.sandbox_setup = None;
         self.queues = Queues::default();
@@ -854,15 +885,30 @@ impl Navigation {
         self.refresh_recovery_action();
         self.sync_actions();
         let browser = CodexBrowser::new(client);
-        let chats = browser.project_chats(false, None, RPC_TIMEOUT).await?;
-        let chats: Vec<_> = chats
-            .data
-            .into_iter()
-            .filter(|thread| {
-                self.archive.keep_active(&thread.id) && !self.deleted_chats.contains(&thread.id)
-            })
-            .map(sidebar::sidebar_chat_row)
-            .collect();
+        let mut cursors = HashSet::new();
+        let mut ids = HashSet::new();
+        let mut cursor = None;
+        let mut chats = Vec::new();
+        loop {
+            let page = browser
+                .project_chats(false, cursor.as_ref(), RPC_TIMEOUT)
+                .await?;
+            chats.extend(
+                page.data
+                    .into_iter()
+                    .filter(|thread| {
+                        self.archive.keep_active(&thread.id)
+                            && !self.deleted_chats.contains(&thread.id)
+                            && ids.insert(thread.id.clone())
+                    })
+                    .map(sidebar::sidebar_chat_row),
+            );
+            let Some(next) = page.next_cursor else { break };
+            if !cursors.insert(next.clone()) {
+                return Err("Codex repeated a project chat directory cursor".into());
+            }
+            cursor = Some(next);
+        }
         let checkout = &self
             .selection
             .as_ref()

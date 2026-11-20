@@ -1,7 +1,7 @@
 import type { NavigationView, SidebarChatKey } from './generated/workspace';
 
 export type PaletteMode = 'commands' | 'projects' | 'chats';
-export type PaletteAction = 'browse' | 'newChat' | 'changes' | 'projectContext' | 'refresh' | 'reconnect' | 'archivedChats';
+export type PaletteAction = 'browse' | 'newChat' | 'changes' | 'projectContext' | 'refresh' | 'reconnect' | 'archivedChats' | 'messageSearch';
 
 type PaletteDestination =
   | { project: string }
@@ -38,6 +38,7 @@ export function paletteEntries(mode: PaletteMode, navigation: NavigationView): P
       ['newChat', 'New Chat'],
       ['changes', 'Changes'],
       ['projectContext', 'Project Context'],
+      ['messageSearch', 'Search Messages'],
       ['refresh', 'Refresh'],
       ['reconnect', 'Reconnect'],
     ];

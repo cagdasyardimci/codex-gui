@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -15,11 +15,13 @@
   import CommandPalette from './CommandPalette.svelte';
   import ArchivedChats from './ArchivedChats.svelte';
   import DeleteChatDialog from './DeleteChatDialog.svelte';
+  import MessageSearch from './MessageSearch.svelte';
+  import { MessageSearchIndex, type SearchHit } from './messageSearchIndex';
   import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, prepareChatDeletion, revealSidebarProject } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openMessageSearch, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, prepareChatDeletion, readMessageSearchPage, revealSidebarProject } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -39,10 +41,11 @@
   import { verifyCommandPalette } from './commandPaletteProbe';
   import { verifyArchive } from './archiveProbe';
   import { verifyChatDeletion } from './chatDeletionProbe';
+  import { verifyMessageSearch } from './messageSearchProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -95,6 +98,9 @@
   };
   let deletion = $state.raw<DeletePresentation>();
   let finishingDeletion = $state(false);
+  const searchIndex = new MessageSearchIndex();
+  let searchRevision = $state(0);
+  let search = $state.raw<{ workspaceId: WorkspaceId; session: string; control: HTMLElement | null }>();
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
@@ -285,8 +291,11 @@
     viewport.jump(jump.turnId, jump.itemId);
   }
 
-  function receive(current: WorkspaceSnapshot) {
+  function receive(current: WorkspaceSnapshot, change?: WorkspaceUpdate) {
     const previous = snapshot?.navigation.draft;
+    searchIndex.observe(current, change);
+    searchRevision = searchIndex.revision;
+    if (search && (search.workspaceId !== current.workspace?.workspaceId || current.navigation.quit)) closeSearch(false);
     if (contextMenu && (contextMenu.scope.draftId !== current.navigation.draft?.id ||
         contextMenu.scope.workspaceId !== current.workspace?.workspaceId || current.navigation.queue?.editing || current.navigation.quit)) {
       contextMenu = undefined;
@@ -355,7 +364,7 @@
   }
 
   function openPalette(mode: PaletteMode) {
-    if (!snapshot || palette || archive || deletion || actionPending || composing || quit || promptEdit || commandPanel) return;
+    if (!snapshot || palette || archive || deletion || search || actionPending || composing || quit || promptEdit || commandPanel) return;
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const selection: [number, number] | undefined = (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement) &&
       focused.selectionStart !== null && focused.selectionEnd !== null
@@ -414,6 +423,11 @@
       }
       const workspaceId = captured.workspaceId;
       if (!workspaceId) throw 'staleSelection';
+      if (target.action === 'messageSearch') {
+        closePalette(false);
+        await displayMessageSearch(workspaceId, captured.focused);
+        return;
+      }
       if (target.action === 'changes') showingChanges = true;
       else if (target.action === 'projectContext') showingProjectContext = true;
       else {
@@ -431,6 +445,61 @@
     } finally {
       actionPending = false;
     }
+  }
+
+  async function displayMessageSearch(workspaceId: WorkspaceId, control: HTMLElement | null) {
+    const session = await openMessageSearch(workspaceId);
+    if (snapshot?.workspace?.workspaceId !== workspaceId || quit) {
+      await navigateWorkspace({ closeMessageSearch: session }).catch(() => {});
+      return;
+    }
+    search = { workspaceId, session, control };
+  }
+
+  function showMessageSearch() {
+    const workspaceId = snapshot?.workspace?.workspaceId;
+    if (!workspaceId || search || palette || archive || deletion || promptEdit || commandPanel) return;
+    const control = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    void act(() => displayMessageSearch(workspaceId, control));
+  }
+
+  function closeSearch(restoreFocus = true) {
+    const capture = search;
+    if (!capture) return;
+    search = undefined;
+    void navigateWorkspace({ closeMessageSearch: capture.session }).catch(() => {});
+    if (restoreFocus) void tick().then(() => {
+      if (capture.control?.isConnected) capture.control.focus({ preventScroll: true });
+      else editor?.focus({ preventScroll: true });
+    });
+  }
+
+  async function loadSearchPage(chatId: string, restart: boolean) {
+    const capture = search;
+    if (!capture) throw 'staleSelection';
+    const page = await readMessageSearchPage({ session: capture.session, chatId, restart });
+    if (search !== capture) throw 'staleSelection';
+    searchIndex.recordPage(chatId, page);
+    searchRevision = searchIndex.revision;
+    return page;
+  }
+
+  function chooseSearchHit(hit: SearchHit) {
+    const capture = search;
+    if (!capture || !searchIndex.contains(hit)) return;
+    void act(async () => {
+      if (search !== capture || !searchIndex.contains(hit)) throw 'staleSelection';
+      try {
+        await navigateWorkspace({ openMessageSearchHit: {
+          workspaceId: capture.workspaceId, session: capture.session,
+          chatId: hit.chatId, turnId: hit.turnId, itemId: hit.itemId,
+        } });
+      } finally {
+        if (search === capture) search = undefined;
+      }
+      await tick();
+      transcript?.focus({ preventScroll: true });
+    });
   }
 
   function openArchive(control: HTMLElement | null) {
@@ -854,6 +923,11 @@
         !(event.metaKey || event.ctrlKey)) return;
     if (event.shiftKey) {
       const key = event.key.toLowerCase();
+      if (!event.altKey && key === 'f' && workspace) {
+        event.preventDefault();
+        showMessageSearch();
+        return;
+      }
       const mode = event.altKey && (event.code === 'KeyO' || key === 'o') ? 'projects' :
         !event.altKey && key === 'p' ? 'commands' : !event.altKey && key === 'k' ? 'chats' : undefined;
       if (mode) {
@@ -898,6 +972,7 @@
     else if (verify === 'commandPalette') void verifyCommandPalette(() => snapshot);
     else if (verify === 'archive') void verifyArchive(() => snapshot);
     else if (verify === 'chatDeletion') void verifyChatDeletion(() => snapshot);
+    else if (verify === 'messageSearch') void verifyMessageSearch(() => snapshot, searchIndex);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -927,6 +1002,8 @@
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
+      <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+F Control+Shift+F"
+        onclick={showMessageSearch}>Search Messages</button>
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
       {#if navigation?.canFork || navigation?.recoverFork}
         <button type="button" disabled={actionPending} onclick={forkChat}>
@@ -1117,6 +1194,10 @@
   {#if deletion}
     <DeleteChatDialog title={deletion.request.title} busy={finishingDeletion}
       cancel={() => void finishDeletion(false)} confirm={() => void finishDeletion(true)} />
+  {/if}
+  {#if search}
+    <MessageSearch index={searchIndex} revision={searchRevision} blocked={actionPending}
+      load={loadSearchPage} choose={chooseSearchHit} close={closeSearch} />
   {/if}
   {#if quit?.confirm && !quit.draining}
     <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}

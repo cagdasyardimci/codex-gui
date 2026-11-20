@@ -45,6 +45,7 @@ pub enum Verification {
     CommandPalette,
     Archive,
     ChatDeletion,
+    MessageSearch,
     Account,
     WindowsSetup,
     Turn,
@@ -365,6 +366,7 @@ pub fn verify_attachments_result(
             | Verification::CommandPalette
             | Verification::Archive
             | Verification::ChatDeletion
+            | Verification::MessageSearch
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -407,6 +409,8 @@ pub fn verify_attachments_result(
             println!("Verified installed project and chat archive, restore, and search");
         } else if *verification == Verification::ChatDeletion {
             println!("Verified installed scoped permanent chat deletion");
+        } else if *verification == Verification::MessageSearch {
+            println!("Verified installed incremental paged message search");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

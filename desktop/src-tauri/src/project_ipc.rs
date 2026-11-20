@@ -232,6 +232,28 @@ pub async fn prepare_chat_deletion(
 }
 
 #[tauri::command]
+pub async fn open_message_search(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    workspace_id: WorkspaceId,
+) -> Result<uuid::Uuid, IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.open_message_search(workspace_id).await
+}
+
+#[tauri::command]
+pub async fn read_message_search_page(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    request: codex_gui_core::ipc::MessageSearchPageRequest,
+) -> Result<codex_gui_core::ipc::MessageSearchPage, IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.read_message_search_page(request).await
+}
+
+#[tauri::command]
 pub async fn execute_slash_command(
     window: WebviewWindow,
     state: State<'_, ProjectIpc>,

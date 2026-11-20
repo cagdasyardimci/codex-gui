@@ -11,7 +11,7 @@ use codex_gui_core::{
 use serde_json::Value;
 
 use super::*;
-use crate::navigation::transcript::{append_turn_items, transcript_id};
+use crate::navigation::transcript::append_turn_items;
 
 type ReferencePage = ChatRead<Page<TurnActivity, TurnCursor>>;
 const BOOKMARK_PAGE_LIMIT: usize = 128;
@@ -270,7 +270,7 @@ impl Navigation {
         self.read_rail_turn(request, TurnItemRead::Complete)
     }
 
-    pub(in crate::navigation) fn jump_to_bookmark(
+    pub(in crate::navigation) fn jump_to_history_item(
         &mut self,
         workspace: WorkspaceId,
         turn: String,
@@ -535,6 +535,9 @@ impl Navigation {
                         if let Ok(items) = items.for_selection(&owner.connection, &owner.thread)
                             && items.id == turn.id
                             && let Some(view) = turn_body(&selection.checkout, turn, items)
+                            && item
+                                .as_ref()
+                                .is_none_or(|id| view.items.iter().any(|row| &row.item_id == id))
                         {
                             owner.rail.merge(
                                 references.into_iter().map(|activity| Reference {
@@ -547,10 +550,7 @@ impl Navigation {
                             owner.rail.jump = Some(TurnJump {
                                 ticket,
                                 turn_id: items.id.0.clone(),
-                                item_id: item
-                                    .as_deref()
-                                    .map(|id| transcript_id(&items.id.0, id))
-                                    .filter(|id| view.items.iter().any(|row| &row.item_id == id)),
+                                item_id: item,
                             });
                             added = Some((view, owner.rail.order()));
                         }

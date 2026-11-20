@@ -40,6 +40,7 @@ fn main() {
         Some("--verify-command-palette") => fixture::Verification::CommandPalette,
         Some("--verify-archive") => fixture::Verification::Archive,
         Some("--verify-chat-deletion") => fixture::Verification::ChatDeletion,
+        Some("--verify-message-search") => fixture::Verification::MessageSearch,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -74,6 +75,7 @@ fn main() {
             | fixture::Verification::CommandPalette
             | fixture::Verification::Archive
             | fixture::Verification::ChatDeletion
+            | fixture::Verification::MessageSearch
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -173,6 +175,8 @@ fn main() {
             project_ipc::navigate_workspace,
             project_ipc::read_archive,
             project_ipc::prepare_chat_deletion,
+            project_ipc::open_message_search,
+            project_ipc::read_message_search_page,
             project_ipc::execute_slash_command,
             project_ipc::open_sent_prompt,
             project_ipc::reveal_sidebar_project,

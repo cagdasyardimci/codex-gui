@@ -83,6 +83,7 @@ pub struct TranscriptView {
     pub items: Vec<TranscriptItem>,
     pub completed: bool,
     pub generation: u32,
+    pub has_evicted_turns: bool,
     #[serde(skip)]
     #[ts(skip)]
     positions: HashMap<String, usize>,
@@ -280,6 +281,7 @@ impl TranscriptView {
         if evicted.is_empty() {
             return evicted;
         }
+        self.has_evicted_turns = true;
         let excluded: std::collections::HashSet<_> = evicted.iter().collect();
         self.items.retain(|row| !excluded.contains(&row.turn_id));
         self.reindex();

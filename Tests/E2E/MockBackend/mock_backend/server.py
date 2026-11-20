@@ -164,6 +164,10 @@ class Server:
                     thread['cwd'] = cwd
             rows = [self.summary(t) for t in self.state.threads
                     if t['archived'] == p.get('archived', False) and (not cwd or t.get('cwd') == cwd)]
+            if self.scenario.get('desktopMessageSearch') and cwd and not p.get('archived'):
+                if p.get('cursor') == 'search-chat-directory-next':
+                    return {'data': rows[1:], 'nextCursor': None}
+                return {'data': rows[:1], 'nextCursor': 'search-chat-directory-next' if len(rows) > 1 else None}
             if self.scenario.get('desktopArchive') and not cwd and p.get('archived'):
                 if p.get('cursor') == 'archive-next':
                     return {'data': rows[35:], 'nextCursor': None}
@@ -238,6 +242,8 @@ class Server:
         if method in ('thread/turns/list', 'thread/items/list'):
             thread = self.thread(p.get('threadId'))
             if method == 'thread/turns/list':
+                if self.scenario.get('desktopMessageSearch') and thread['id'] == 'history-second':
+                    time.sleep(0.35)
                 turns = list(reversed(thread['turns']))
                 if p.get('cursor'):
                     offset = next((i for i, turn in enumerate(turns) if turn['id'] == p['cursor']), None)

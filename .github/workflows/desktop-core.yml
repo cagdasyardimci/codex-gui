@@ -142,6 +142,7 @@ jobs:
           python3 desktop/fixtures/verify_sidebar_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --command-palette
           python3 desktop/fixtures/verify_archive_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_chat_deletion_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_message_search_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_account_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_windows_setup_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_turn_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
@@ -185,6 +186,7 @@ jobs:
           python desktop/fixtures/verify_sidebar_fixture.py $app --command-palette
           python desktop/fixtures/verify_archive_fixture.py $app
           python desktop/fixtures/verify_chat_deletion_fixture.py $app
+          python desktop/fixtures/verify_message_search_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_account_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -230,6 +232,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_sidebar_fixture.py "$app" --command-palette
           xvfb-run -a python3 desktop/fixtures/verify_archive_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_chat_deletion_fixture.py "$app"
+          xvfb-run -a python3 desktop/fixtures/verify_message_search_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_account_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_windows_setup_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_turn_fixture.py "$app"

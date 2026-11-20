@@ -204,7 +204,10 @@ impl Navigation {
                         .map_err(|error| report(error.into()))?;
                     self.focus(Some(thread)).await.map_err(report)?;
                 }
-                self.jump_to_bookmark(scope.workspace_id, bookmark.turn_id, bookmark.item_id)?;
+                let item = bookmark
+                    .item_id
+                    .map(|id| transcript_id(&bookmark.turn_id, &id));
+                self.jump_to_history_item(scope.workspace_id, bookmark.turn_id, item)?;
             }
             change => {
                 let skill = match &change {

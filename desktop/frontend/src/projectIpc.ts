@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ComposerChoice, ComposerContextSelection, DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
-  ArchiveCatalog, ArchiveScope, ConfirmDeleteChat, DeleteChatSource, ExecuteSlashCommand, ProjectContextView, SentPromptEdit, SidebarProjectRequest,
+  ArchiveCatalog, ArchiveScope, ConfirmDeleteChat, DeleteChatSource, ExecuteSlashCommand, MessageSearchPage, MessageSearchPageRequest, ProjectContextView, SentPromptEdit, SidebarProjectRequest,
   SlashCommandOutcome, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -103,6 +103,14 @@ export function prepareChatDeletion(source: DeleteChatSource): Promise<ConfirmDe
   return invoke('prepare_chat_deletion', { source });
 }
 
+export function openMessageSearch(workspaceId: WorkspaceId): Promise<string> {
+  return invoke('open_message_search', { workspaceId });
+}
+
+export function readMessageSearchPage(request: MessageSearchPageRequest): Promise<MessageSearchPage> {
+  return invoke('read_message_search_page', { request });
+}
+
 export function executeSlashCommand(request: ExecuteSlashCommand): Promise<SlashCommandOutcome> {
   return invoke('execute_slash_command', { request });
 }
@@ -164,11 +172,11 @@ function applyStream(transcript: TranscriptView, change: StreamChange, positions
 function evictTurns(transcript: TranscriptView, turns: string[]): TranscriptView {
   if (!turns.length) return transcript;
   const evicted = new Set(turns);
-  return { ...transcript, items: transcript.items.filter((item) => !evicted.has(item.turnId)) };
+  return { ...transcript, hasEvictedTurns: true, items: transcript.items.filter((item) => !evicted.has(item.turnId)) };
 }
 
 export async function observeWorkspace(
-  receive: (snapshot: WorkspaceSnapshot) => void,
+  receive: (snapshot: WorkspaceSnapshot, change?: WorkspaceUpdate) => void,
   signal: AbortSignal,
 ) {
   let { subscriptionId, snapshot } = await subscribeWorkspace();
@@ -184,12 +192,14 @@ export async function observeWorkspace(
       : 'navigation' in update ? update.navigation.revision
       : 'history' in update ? update.history.revision
       : update.stream.revision;
+    let adjacent: WorkspaceUpdate | undefined = update;
     if (update === 'resync' || revision !== snapshot.revision + 1) {
       const latest = await subscribeWorkspace();
       if (signal.aborted) return;
       subscriptionId = latest.subscriptionId;
       snapshot = reuseRows(snapshot, latest.snapshot, positions);
       positions = indexRows(snapshot.transcript);
+      adjacent = undefined;
     } else if ('changed' in update) {
       snapshot = reuseRows(snapshot, update.changed, positions);
       positions = indexRows(snapshot.transcript);
@@ -212,6 +222,6 @@ export async function observeWorkspace(
       };
       if (evictedTurns.length) positions = indexRows(transcript);
     }
-    receive(snapshot);
+    receive(snapshot, adjacent);
   }
 }

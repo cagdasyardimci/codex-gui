@@ -212,6 +212,8 @@ pub enum NavigationIntent {
     RestoreArchive(super::RestoreArchive),
     ConfirmChatDeletion(Uuid),
     CancelChatDeletion(Uuid),
+    CloseMessageSearch(Uuid),
+    OpenMessageSearchHit(super::MessageSearchHitRequest),
     SetComposerSettings(ComposerSettingsRequest),
     EditProjectContext(ProjectContextRequest),
     ReviseSentPrompt(ReviseSentPrompt),
