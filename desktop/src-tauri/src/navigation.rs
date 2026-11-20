@@ -58,6 +58,7 @@ mod project_context;
 mod prompt_revision;
 mod queue;
 mod quit;
+mod review;
 mod sandbox;
 mod send;
 mod sidebar;
@@ -186,6 +187,7 @@ enum Input {
     PromptForkCompleted(Option<Box<prompt_revision::ForkCompletion>>),
     TitleCompleted(Option<automatic_titles::TitleOutcome>),
     FeedbackCompleted(Option<Box<feedback::FeedbackOutcome>>),
+    ReviewCompleted(Option<Box<review::ReviewOutcome>>),
     FileSaveCompleted(Option<Box<file_tools::FileSaveCompletion>>),
     OwnerChanged,
     Flush,
@@ -238,6 +240,7 @@ struct Navigation {
     message_search: Option<message_search::SearchSession>,
     titles: automatic_titles::AutomaticTitles,
     feedback: feedback::Feedback,
+    reviews: review::Reviews,
     file_tools: file_tools::FileTools,
     worktree_records: PathBuf,
     view: NavigationView,
@@ -311,6 +314,7 @@ impl NavigationHandle {
                 Verification::None | Verification::AutomaticTitles
             )),
             feedback: feedback::Feedback::default(),
+            reviews: review::Reviews::default(),
             file_tools: file_tools::FileTools::default(),
             worktree_records,
             view: NavigationView::default(),
@@ -380,6 +384,7 @@ impl Navigation {
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
                     completion = self.feedback.completed.recv() => Input::FeedbackCompleted(completion),
+                    completion = self.reviews.completed.recv() => Input::ReviewCompleted(completion),
                     completion = self.file_tools.completed.recv() => Input::FileSaveCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                     event = backend.connection.next_event() => Input::Backend(event),
@@ -394,6 +399,7 @@ impl Navigation {
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
                     completion = self.feedback.completed.recv() => Input::FeedbackCompleted(completion),
+                    completion = self.reviews.completed.recv() => Input::ReviewCompleted(completion),
                     completion = self.file_tools.completed.recv() => Input::FileSaveCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                 }
@@ -432,6 +438,13 @@ impl Navigation {
                 Input::FeedbackCompleted(None) => {
                     unreachable!("navigation owns the feedback sender")
                 }
+                Input::ReviewCompleted(Some(outcome)) => {
+                    if let Err(error) = self.complete_review(*outcome) {
+                        eprintln!("{error}");
+                        self.sync_actions();
+                    }
+                }
+                Input::ReviewCompleted(None) => unreachable!("navigation owns the review sender"),
                 Input::FileSaveCompleted(Some(completed)) => self.finish_file_save(*completed),
                 Input::FileSaveCompleted(None) => {
                     unreachable!("navigation owns the file save sender")
@@ -642,6 +655,7 @@ impl Navigation {
             }
             NavigationIntent::CloseChildHistory(scope) => self.close_child_history(scope)?,
             NavigationIntent::SubmitFeedback(request) => self.submit_feedback(request).await?,
+            NavigationIntent::StartReview(request) => self.start_review(request)?,
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::SetResponseBookmark(request) => {

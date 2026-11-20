@@ -88,6 +88,7 @@ impl Navigation {
                 .cloned();
             if view.recover_plan
                 || thread.is_some_and(|id| backend.commands.compactions.contains_key(id))
+                || thread.is_some_and(|id| self.review_pending(&selection.checkout, id))
             {
                 self.view.actions.send = false;
             }
@@ -117,7 +118,8 @@ impl Navigation {
                         has_model && backend.commands.plans && (idle || view.recover_plan)
                     }
                     Command::Compact => compact_supported && idle && thread.is_some(),
-                    Command::Fork | Command::Review => false,
+                    Command::Review => self.review_available(backend, selection),
+                    Command::Fork => false,
                 })
                 .collect();
         }
@@ -293,7 +295,7 @@ impl Navigation {
                 return Ok(SlashCommandOutcome::ConfirmDelete(ticket));
             }
             Command::Review => {
-                return Err(IpcError::StaleSelection);
+                return Ok(visible);
             }
         }
         self.consume_command(draft_id, &draft.text)?;

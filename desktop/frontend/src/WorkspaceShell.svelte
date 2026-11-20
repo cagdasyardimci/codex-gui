@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, FeedbackRating, InteractionAnswer, NavigationIntent, OpenFileSearchHit, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
+  import type { ChatRequest, ComposerContextTarget, ComposerTokenRange, ConfirmDeleteChat, DeleteChatSource, DraftAttachmentScope, DraftEdit, FeedbackRating, InteractionAnswer, NavigationIntent, OpenFileSearchHit, ProjectContextChange, QueueCommand, RestoreArchive, ReviewDelivery, ReviewTarget, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceUpdate } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -10,6 +10,7 @@
   import ComposerSettingsControls from './ComposerSettingsControls.svelte';
   import ProjectContextPanel from './ProjectContextPanel.svelte';
   import SlashCommandPanel from './SlashCommandPanel.svelte';
+  import ReviewPanel from './ReviewPanel.svelte';
   import SentPromptDialog from './SentPromptDialog.svelte';
   import WorkspaceSidebar from './WorkspaceSidebar.svelte';
   import CommandPalette from './CommandPalette.svelte';
@@ -914,6 +915,15 @@
     void tick().then(() => editor?.focus());
   }
 
+  function startReview(target: ReviewTarget, delivery: ReviewDelivery) {
+    const panel = commandPanel;
+    if (panel?.command !== 'review') return;
+    void act(async () => {
+      await navigateWorkspace({ startReview: { draft: panel.draft, target, delivery } });
+      if (commandPanel === panel) closeSlashPanel();
+    }, true);
+  }
+
   function matchSlashToken(control: HTMLTextAreaElement) {
     slashToken = undefined;
     if (!attachmentScope || composing || quit || queue?.editing || navigation?.literalForkRevision ||
@@ -1397,12 +1407,16 @@
     {/if}
   </div>
   {#if commandPanel && workspace && navigation}
-    <SlashCommandPanel command={commandPanel.command} fullAccess={commandPanel.fullAccess}
+    {#if commandPanel.command === 'review'}
+      <ReviewPanel source={commandPanel.draft.text} blocked={actionPending} submit={startReview} close={closeSlashPanel} />
+    {:else}
+      <SlashCommandPanel command={commandPanel.command} fullAccess={commandPanel.fullAccess}
       sourceId={commandPanel.draft.chatId}
       chats={navigation.chats} models={navigation.account.models} usage={navigation.slashCommands.context}
       workspace={workspace.projectPath} chat={navigation.chats.find((chat) => chat.id === selectedChat)?.title}
       effective={navigation.account.models.find((model) => model.id === navigation.composerSettings?.effectiveModelId)}
       choose={finishSlash} close={closeSlashPanel} />
+    {/if}
   {/if}
   {#if promptEdit}
     {#key promptEdit.view.ticket}

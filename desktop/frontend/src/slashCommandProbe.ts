@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WorkspaceSnapshot } from './generated/workspace';
 import { click, clickByLabel, typeText, waitFor } from './fixtureControls';
+import { verifyCodeReviews } from './reviewProbe';
 
 export async function verifySlashCommands(visible: () => WorkspaceSnapshot | null) {
   const navigation = () => visible()?.navigation;
@@ -80,6 +81,7 @@ export async function verifySlashCommands(visible: () => WorkspaceSnapshot | nul
     await waitFor('The explicit reapply did not resolve the original checkout and draft', () =>
       navigation()?.actions.send === true && draft()?.text === '' && !slash()?.plan && !slash()?.recoverPlan);
 
+    await verifyCodeReviews(visible);
     await invoke('verify_attachments_result', { failure: null });
   } catch (error) {
     await invoke('verify_attachments_result', { failure: String(error) });

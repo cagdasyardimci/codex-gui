@@ -30,7 +30,7 @@ Run it with `--context` to verify the plus selection, @ token replacement follow
 
 Run it with `--project-context` to verify saved prompt and context editing, checkout and draft ownership, project defaults in the outgoing turn, and targeted bookmark navigation outside resident history.
 
-Run it with `--slash-commands` to verify command input, exact literal and inline plan prompts, context occupancy, compaction completion and explicit recovery after a lost settings reply.
+Run it with `--slash-commands` to verify command input, exact literal and inline plan prompts, context occupancy, compaction completion and explicit recovery after a lost settings reply. It also checks all four review target payloads, the detached review's own transcript and Stop action, and preservation of the initiating chat's draft.
 
 Run it with `--prompt-revision` to verify the edit action on the first prompt, the captured before-turn boundary, exact attachment bytes, and retained drafts after a writer lock or superseded selection.
 

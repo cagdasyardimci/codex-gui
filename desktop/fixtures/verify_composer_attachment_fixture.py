@@ -257,10 +257,25 @@ def verify_slash_commands(starts, records, checkout, data):
     acknowledged = next(record for record in records[records.index(compact) + 1:]
                         if record["direction"] == "response" and record["id"] == compact["id"])
     assert acknowledged["time"] < end["time"] and compact["threadId"] == end["threadId"] == "history-first"
+    reviews = [record["params"] for record in records if record["direction"] == "request" and record["method"] == "review/start"]
+    assert reviews == [
+        {"threadId": "history-first", "target": {"type": "uncommittedChanges"}, "delivery": "inline"},
+        {"threadId": "history-first", "target": {"type": "baseBranch", "branch": "integration"}, "delivery": "detached"},
+        {"threadId": "history-first", "target": {"type": "commit", "sha": "0123abc"}, "delivery": "inline"},
+        {"threadId": "history-second", "target": {"type": "custom", "instructions": "Check cancellation café.\nPreserve 日本語."},
+         "delivery": "inline"},
+    ], reviews
+    (interrupt,) = [record["params"] for record in records if record["direction"] == "request" and record["method"] == "turn/interrupt"]
+    assert interrupt["threadId"].startswith("detached-review-"), interrupt
+    assert any(record["direction"] == "event" and record["method"] == "turn/completed"
+               and record["threadId"] == interrupt["threadId"] and record.get("status") == "interrupted"
+               for record in records), interrupt
     with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
         ((mode,),) = database.execute("SELECT state FROM composer_plan_modes WHERE thread_id = 'history-first'")
+        assert database.execute("SELECT COUNT(*) FROM desktop_review_reservations").fetchone() == (0,)
     assert json.loads(mode) == {"enabled": False, "pending": None}, mode
     print("Verified two exact prompts, scoped compaction, and explicit recovery of an unacknowledged update")
+    print("Verified four captured review targets, independent detached execution, and its exact interrupt")
 
 
 def verify_prompt_revision(starts, requests, checkout, data, colors):

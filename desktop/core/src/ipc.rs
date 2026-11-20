@@ -31,6 +31,7 @@ mod project_context;
 mod prompt_revision;
 mod question_reply;
 mod queue;
+mod review;
 mod sidebar;
 mod slash_commands;
 mod stream;
@@ -95,6 +96,7 @@ pub use question_reply::present_question_reply;
 pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
 };
+pub use review::StartReviewRequest;
 pub use sidebar::{
     SidebarChange, SidebarChat, SidebarChatFlag, SidebarChatKey, SidebarChatName,
     SidebarChatUnread, SidebarGroup, SidebarMove, SidebarProject, SidebarProjectName,
@@ -330,6 +332,9 @@ pub fn workspace_typescript() -> String {
         ContextUsage::decl(),
         ExecuteSlashCommand::decl(),
         SlashCommandOutcome::decl(),
+        crate::codex::ReviewTarget::decl(),
+        crate::codex::ReviewDelivery::decl(),
+        StartReviewRequest::decl(),
         SidebarView::decl(),
         SidebarGroup::decl(),
         SidebarSort::decl(),

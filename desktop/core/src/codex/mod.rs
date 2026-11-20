@@ -4,6 +4,7 @@ mod executable;
 mod framing;
 mod process;
 mod protocol;
+mod review;
 mod session;
 
 #[cfg(test)]
@@ -25,4 +26,5 @@ pub use protocol::{
     ClientInfo, InitializeError, ProtocolReadError, RpcError, RpcId, ServerEvent, ServerMessage,
     initialize, read_message,
 };
+pub use review::{ReviewDelivery, ReviewError, ReviewStarted, ReviewTarget};
 pub use session::{AppServerClient, AppServerConnection, ConnectError, Delivery, RequestError};

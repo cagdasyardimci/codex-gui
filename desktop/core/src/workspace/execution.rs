@@ -140,6 +140,43 @@ impl ExecutionState {
 }
 
 impl WorkspaceEngine {
+    pub async fn admit_review_thread(
+        &self,
+        owner: &ConnectionIdentity,
+        thread: &ThreadId,
+    ) -> Result<(), WorkspaceError> {
+        let state = self.snapshot();
+        if &state.connection != owner {
+            return Err(WorkspaceError::Retired);
+        }
+        if state.writable_threads.contains(thread) {
+            return Ok(());
+        }
+        let (stopped, _) = watch::channel(false);
+        self.apply(WorkspaceAction::ReserveResume {
+            owner: owner.clone(),
+            thread: thread.clone(),
+            stopped,
+        })
+        .await?;
+        self.apply(WorkspaceAction::FinishResume {
+            owner: owner.clone(),
+            thread: thread.clone(),
+            writable: true,
+        })
+        .await?;
+        Ok(())
+    }
+
+    pub async fn observe_review_activity(
+        &self,
+        owner: &ConnectionIdentity,
+        thread: &ThreadId,
+        activity: &TurnActivity,
+    ) -> Result<(), WorkspaceError> {
+        self.reconcile_turn_activity(owner, thread, activity).await
+    }
+
     pub(super) async fn reconcile_turn_activity(
         &self,
         owner: &ConnectionIdentity,

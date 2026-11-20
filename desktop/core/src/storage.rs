@@ -42,6 +42,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::chat_deletion::migrate,
     attachments::migrate_feedback,
     attachments::review_markers::migrate,
+    attachments::review_runs::migrate,
 ];
 
 #[derive(Debug, Error)]

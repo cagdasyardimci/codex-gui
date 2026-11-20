@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .streaming import Stream
 from .queue_fixture import queue_request, steer_request
+from .review_fixture import start_review
 from .transport import ProtocolError, UnconfirmedMutation
 
 
@@ -339,6 +340,8 @@ class Server:
             return self.slash_settings(p)
         if method == 'thread/compact/start' and self.scenario.get('desktopSlash'):
             return self.slash_compaction(p)
+        if method == 'review/start' and self.scenario.get('desktopSlash'):
+            return start_review(self, p)
         if method == 'turn/steer' and self.scenario.get('desktopQueue'):
             return steer_request(self, p)
         if method == 'turn/interrupt':

@@ -51,13 +51,20 @@ pub(super) fn message_item(
     completed: bool,
 ) -> Option<TranscriptItem> {
     let id = value["id"].as_str()?;
-    let role = match value["type"].as_str()? {
-        "agentMessage" => TranscriptRole::Assistant,
+    let kind = value["type"].as_str()?;
+    let role = match kind {
+        "agentMessage" | "exitedReviewMode" => TranscriptRole::Assistant,
         "userMessage" => TranscriptRole::User,
         _ => return None,
     };
     let text = match role {
-        TranscriptRole::Assistant => value["text"].as_str()?.to_owned(),
+        TranscriptRole::Assistant => value[if kind == "exitedReviewMode" {
+            "review"
+        } else {
+            "text"
+        }]
+        .as_str()?
+        .to_owned(),
         TranscriptRole::User => {
             let source = value["content"]
                 .as_array()?

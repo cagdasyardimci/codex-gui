@@ -221,6 +221,7 @@ pub enum NavigationIntent {
     OpenMessageSearchHit(super::MessageSearchHitRequest),
     CloseChildHistory(super::ChildHistoryTarget),
     SubmitFeedback(super::FeedbackRequest),
+    StartReview(super::StartReviewRequest),
     SetComposerSettings(ComposerSettingsRequest),
     EditProjectContext(ProjectContextRequest),
     ReviseSentPrompt(ReviseSentPrompt),
