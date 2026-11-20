@@ -9,11 +9,17 @@ use crate::{
     storage::drafts::DraftId,
 };
 
+mod interactions;
 mod prepare;
 mod send;
 mod submission;
 
 pub use crate::storage::attachments::SubmissionAcknowledgement;
+use interactions::InteractionRouter;
+pub use interactions::{
+    InteractionError, InteractionIdentity, InteractionKind, InteractionResponse,
+    PendingInteraction, PermissionScope,
+};
 pub use prepare::{PrepareError, PreparedThread};
 pub use send::{SendDraft, SendIntent, SendSettings};
 pub use submission::{SubmissionError, SubmissionReply};
@@ -93,6 +99,7 @@ pub struct WorkspaceEngine {
     actions: mpsc::Sender<Message>,
     snapshots: watch::Receiver<Arc<WorkspaceSnapshot>>,
     preparation_commit: Arc<Mutex<()>>,
+    interactions: InteractionRouter,
 }
 
 struct Message {
@@ -102,7 +109,8 @@ struct Message {
 
 impl WorkspaceEngine {
     pub fn start(connection: ConnectionIdentity) -> (Self, mpsc::Receiver<PrepareThread>) {
-        let mut state = State::new(connection);
+        let interactions = InteractionRouter::new(connection.clone());
+        let mut state = State::new(connection, interactions.clone());
         let (actions, mut incoming) = mpsc::channel::<Message>(ACTION_CAPACITY);
         let (effects, pending_effects) = mpsc::channel(EFFECT_CAPACITY);
         let (publish, snapshots) = watch::channel(state.snapshot());
@@ -127,6 +135,7 @@ impl WorkspaceEngine {
                 actions,
                 snapshots,
                 preparation_commit: Arc::new(Mutex::new(())),
+                interactions,
             },
             pending_effects,
         )
@@ -161,12 +170,13 @@ struct State {
     pending: HashMap<RequestId, Arc<SendIntent>>,
     threads: HashMap<ThreadId, DraftId>,
     submissions: HashMap<RequestId, watch::Sender<bool>>,
+    interactions: InteractionRouter,
 }
 
 type ReservedPreparation = (mpsc::OwnedPermit<PrepareThread>, PrepareThread);
 
 impl State {
-    fn new(connection: ConnectionIdentity) -> Self {
+    fn new(connection: ConnectionIdentity, interactions: InteractionRouter) -> Self {
         Self {
             connection,
             revision: 0,
@@ -174,6 +184,7 @@ impl State {
             pending: HashMap::new(),
             threads: HashMap::new(),
             submissions: HashMap::new(),
+            interactions,
         }
     }
 
@@ -314,6 +325,7 @@ impl State {
         for (_, stopped) in self.submissions.drain() {
             stopped.send_replace(true);
         }
+        self.interactions.replace_connection(replacement.clone());
         self.connection = replacement;
         Ok(())
     }

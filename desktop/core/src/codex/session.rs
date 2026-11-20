@@ -59,6 +59,19 @@ pub enum RequestError {
     IdExhausted,
 }
 
+impl RequestError {
+    pub fn is_unsent(&self) -> bool {
+        matches!(
+            self,
+            Self::Stopped(Delivery::Unsent)
+                | Self::Timeout(Delivery::Unsent)
+                | Self::Disconnected(Delivery::Unsent)
+                | Self::Encode(_)
+                | Self::IdExhausted
+        )
+    }
+}
+
 pub struct AppServerConnection {
     transport: Transport,
     process: AppServerProcess,
@@ -189,7 +202,7 @@ impl AppServerClient {
     ) -> Result<Value, RequestError> {
         let ticket = Arc::new(WriteTicket::default());
         let scope = OutboundScope {
-            checkout,
+            checkout: Some(checkout),
             stopped: stopped.clone(),
         };
         tokio::select! {
@@ -236,9 +249,49 @@ impl AppServerClient {
         result: Value,
         timeout: Duration,
     ) -> Result<(), RequestError> {
-        let deadline = Instant::now() + timeout;
-        let bytes = encode_frame(&json!({"id": id, "result": result}))?;
+        self.respond_inner(
+            id,
+            Ok(result),
+            timeout,
+            Arc::new(WriteTicket::default()),
+            None,
+        )
+        .await
+    }
+
+    pub(crate) async fn respond_scoped(
+        &self,
+        id: &RpcId,
+        result: Result<Value, RpcError>,
+        timeout: Duration,
+        mut stopped: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), RequestError> {
         let ticket = Arc::new(WriteTicket::default());
+        let scope = OutboundScope {
+            checkout: self.identity().workspace.checkout.clone(),
+            stopped: stopped.clone(),
+        };
+        tokio::select! {
+            biased;
+            _ = stopped.wait_for(|stopped| *stopped) => Err(RequestError::Stopped(ticket.cancel())),
+            result = self.respond_inner(id, result, timeout, ticket.clone(), Some(scope)) => result,
+        }
+    }
+
+    async fn respond_inner(
+        &self,
+        id: &RpcId,
+        result: Result<Value, RpcError>,
+        timeout: Duration,
+        ticket: Arc<WriteTicket>,
+        scope: Option<OutboundScope>,
+    ) -> Result<(), RequestError> {
+        let deadline = Instant::now() + timeout;
+        let reply = match result {
+            Ok(result) => json!({"id": id, "result": result}),
+            Err(error) => json!({"id": id, "error": error}),
+        };
+        let bytes = encode_frame(&reply)?;
         let pending = PendingWrite(ticket.clone());
         let (written, receipt) = oneshot::channel();
         self.enqueue(Outbound {
@@ -246,7 +299,7 @@ impl AppServerClient {
             deadline,
             ticket,
             written: Some(written),
-            scope: None,
+            scope,
         })
         .await?;
         match time::timeout_at(deadline, receipt).await {

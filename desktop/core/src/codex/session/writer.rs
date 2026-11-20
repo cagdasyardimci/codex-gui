@@ -63,7 +63,7 @@ pub(super) struct Outbound {
 }
 
 pub(super) struct OutboundScope {
-    pub checkout: CheckoutIdentity,
+    pub checkout: Option<CheckoutIdentity>,
     pub stopped: watch::Receiver<bool>,
 }
 
@@ -103,9 +103,13 @@ async fn write_frame<W: AsyncWrite + Unpin>(
     let mut offset = 0;
     while offset < frame.bytes.len() {
         let count = poll_fn(|cx| {
-            if let Some(scope) = &frame.scope {
+            if let Some(checkout) = frame
+                .scope
+                .as_ref()
+                .and_then(|scope| scope.checkout.as_ref())
+            {
                 // Check the captured directory again when the queued frame becomes writable.
-                scope.checkout.revalidate().map_err(io::Error::other)?;
+                checkout.revalidate().map_err(io::Error::other)?;
             }
             // Hold the read guard through the poll to order writes with Stop.
             let stopped = frame.scope.as_ref().map(|scope| scope.stopped.borrow());

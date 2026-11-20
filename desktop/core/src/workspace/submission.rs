@@ -215,14 +215,7 @@ async fn dispatch(
             )
             .await
     };
-    if matches!(
-        response,
-        Err(RequestError::Stopped(Delivery::Unsent)
-            | RequestError::Timeout(Delivery::Unsent)
-            | RequestError::Disconnected(Delivery::Unsent)
-            | RequestError::Encode(_)
-            | RequestError::IdExhausted)
-    ) {
+    if response.as_ref().is_err_and(RequestError::is_unsent) {
         let journal = store.clone();
         tokio::task::spawn_blocking(move || journal.set_submission_phase(id, JournalPhase::Unsent))
             .await??;
