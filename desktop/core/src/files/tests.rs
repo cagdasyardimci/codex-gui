@@ -156,3 +156,109 @@ fn display_collisions_keep_distinct_native_names() {
     assert_eq!(files.read(native.id).unwrap().bytes, b"native");
     assert_eq!(files.read(display.id).unwrap().bytes, b"display");
 }
+
+#[test]
+fn saves_only_the_captured_revision_and_keeps_new_disk_contents_readable() {
+    let root = tempfile::tempdir().unwrap();
+    let relative = Path::new("doc.txt");
+    let target = root.path().join(relative);
+    fs::write(&target, "initial").unwrap();
+    let mut files = CheckoutFiles::new(CheckoutIdentity::capture(root.path()).unwrap());
+    let active = files.issue(relative).unwrap().id;
+    let stale = files.issue(relative).unwrap().id;
+    let first = files.read(active).unwrap().revision;
+    let newer = files.save_text(active, &first, "edited λ\r\n").unwrap();
+    assert_eq!(files.read(active).unwrap().revision, newer);
+    assert_eq!(fs::read(&target).unwrap(), "edited λ\r\n".as_bytes());
+    assert!(matches!(
+        files.save_text(stale, &first, "stale"),
+        Err(FileError::Replaced)
+    ));
+    assert!(matches!(
+        files.save_text(active, &first, "earlier"),
+        Err(FileError::Changed)
+    ));
+
+    fs::write(&target, "external").unwrap();
+    let buffer = String::from("pending edit");
+    assert!(matches!(
+        files.save_text(active, &newer, &buffer),
+        Err(FileError::Changed)
+    ));
+    assert_eq!(fs::read(&target).unwrap(), b"external");
+    let revision = files.read(active).unwrap().revision;
+    let saved = files.save_text(active, &revision, &buffer).unwrap();
+    assert_eq!(files.read(active).unwrap().revision, saved);
+    assert_eq!(fs::read(&target).unwrap(), buffer.as_bytes());
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn a_contended_file_preserves_the_buffer_and_can_be_saved_after_release() {
+    let root = tempfile::tempdir().unwrap();
+    let relative = Path::new("locked.txt");
+    let target = root.path().join(relative);
+    fs::write(&target, "before").unwrap();
+    let mut files = CheckoutFiles::new(CheckoutIdentity::capture(root.path()).unwrap());
+    let handle = files.issue(relative).unwrap().id;
+    let revision = files.read(handle).unwrap().revision;
+    #[cfg(unix)]
+    let lock = {
+        let file = File::open(&target).unwrap();
+        file.try_lock().unwrap();
+        file
+    };
+    #[cfg(windows)]
+    let lock = {
+        use std::{fs::OpenOptions, os::windows::fs::OpenOptionsExt};
+        use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+
+        OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(&target)
+            .unwrap()
+    };
+    let buffer = "saved after unlocking";
+    assert!(matches!(
+        files.save_text(handle, &revision, buffer),
+        Err(FileError::Io(_))
+    ));
+    assert_eq!(fs::read(&target).unwrap(), b"before");
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+    drop(lock);
+    files.save_text(handle, &revision, buffer).unwrap();
+    assert_eq!(fs::read(&target).unwrap(), buffer.as_bytes());
+}
+
+#[test]
+fn rejects_readonly_oversized_or_binary_edits() {
+    let root = tempfile::tempdir().unwrap();
+    let relative = Path::new("project-file");
+    let target = root.path().join(relative);
+    fs::write(&target, "before").unwrap();
+    let mut files = CheckoutFiles::new(CheckoutIdentity::capture(root.path()).unwrap());
+    let handle = files.issue(relative).unwrap().id;
+    let revision = files.read(handle).unwrap().revision;
+    let original = fs::metadata(&target).unwrap().permissions();
+    let mut read_only = original.clone();
+    read_only.set_readonly(true);
+    fs::set_permissions(&target, read_only).unwrap();
+    let result = files.save_text(handle, &revision, "after");
+    fs::set_permissions(&target, original).unwrap();
+    assert!(matches!(result, Err(FileError::ReadOnly)));
+    let large = "x".repeat(super::save::MAX_EDIT_BYTES as usize + 1);
+    assert!(matches!(
+        files.save_text(handle, &revision, &large),
+        Err(FileError::TooLarge)
+    ));
+    assert_eq!(fs::read(&target).unwrap(), b"before");
+
+    fs::write(&target, [0xff, 0xfe]).unwrap();
+    let revision = files.read(handle).unwrap().revision;
+    assert!(matches!(
+        files.save_text(handle, &revision, "after"),
+        Err(FileError::UnsupportedEncoding)
+    ));
+    assert_eq!(fs::read(&target).unwrap(), [0xff, 0xfe]);
+}

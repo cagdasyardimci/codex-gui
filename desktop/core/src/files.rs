@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::checkout::{CheckoutError, CheckoutIdentity, NativeFileIdentity};
 
 mod native;
+mod save;
 
 pub const MAX_READ_BYTES: u64 = 32 * 1024 * 1024;
 
@@ -55,6 +56,10 @@ pub enum FileError {
     Changed,
     #[error("file exceeds the bounded read limit")]
     TooLarge,
+    #[error("file permissions disallow editing")]
+    ReadOnly,
+    #[error("file contents are not UTF-8 text")]
+    UnsupportedEncoding,
     #[error(transparent)]
     Io(#[from] io::Error),
 }
@@ -116,30 +121,40 @@ impl CheckoutFiles {
 impl CapturedFile {
     fn reopen(&self, checkout: &CheckoutIdentity) -> Result<File, FileError> {
         let file = open_regular(checkout, &self.relative)?;
-        if NativeFileIdentity::from_file(&file, &file.metadata()?)? != self.identity {
+        self.verify_identity(&file)?;
+        Ok(file)
+    }
+
+    fn verify_identity(&self, file: &File) -> Result<Metadata, FileError> {
+        let metadata = file.metadata()?;
+        if !metadata.is_file() || NativeFileIdentity::from_file(file, &metadata)? != self.identity {
             return Err(FileError::Replaced);
         }
-        Ok(file)
+        Ok(metadata)
     }
 }
 
 fn open_regular(checkout: &CheckoutIdentity, relative: &Path) -> Result<File, FileError> {
     checkout.revalidate()?;
-    let components: Vec<_> = relative
+    let components = path_components(relative)?;
+    let (name, directories) = components.split_last().ok_or(FileError::InvalidPath)?;
+    let root = checkout.directory();
+    let parent = native::open_parent(root, directories)?;
+    let file = native::open_read(parent.as_ref().unwrap_or(root), name)?;
+    if !file.metadata()?.is_file() {
+        return Err(FileError::InvalidPath);
+    }
+    Ok(file)
+}
+
+fn path_components(relative: &Path) -> Result<Vec<&std::ffi::OsStr>, FileError> {
+    relative
         .components()
         .map(|component| match component {
             Component::Normal(name) => Ok(name),
             _ => Err(FileError::InvalidPath),
         })
-        .collect::<Result<_, _>>()?;
-    if components.is_empty() {
-        return Err(FileError::InvalidPath);
-    }
-    let file = native::open_contained(checkout.directory(), &components)?;
-    if !file.metadata()?.is_file() {
-        return Err(FileError::InvalidPath);
-    }
-    Ok(file)
+        .collect()
 }
 
 fn read_bounded(mut file: &File, limit: u64) -> Result<FileRead, FileError> {
@@ -157,12 +172,18 @@ fn read_bounded(mut file: &File, limit: u64) -> Result<FileRead, FileError> {
         return Err(FileError::Changed);
     }
     Ok(FileRead {
-        revision: FileRevision {
-            digest: hex::encode(Sha256::digest(&bytes)),
-            byte_count: bytes.len(),
-        },
+        revision: FileRevision::from_bytes(&bytes),
         bytes,
     })
+}
+
+impl FileRevision {
+    fn from_bytes(bytes: &[u8]) -> Self {
+        Self {
+            digest: hex::encode(Sha256::digest(bytes)),
+            byte_count: bytes.len(),
+        }
+    }
 }
 
 fn fingerprint(metadata: &Metadata) -> (u64, Option<SystemTime>) {
