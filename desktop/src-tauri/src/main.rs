@@ -27,6 +27,7 @@ fn main() {
         Some("--verify-history") => fixture::Verification::History,
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
         Some("--verify-attachments") => fixture::Verification::Attachments,
+        Some("--verify-annotations") => fixture::Verification::Annotations,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -49,6 +50,7 @@ fn main() {
         fixture::Verification::History
             | fixture::Verification::HistoryRestore
             | fixture::Verification::Attachments
+            | fixture::Verification::Annotations
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -124,6 +126,8 @@ fn main() {
             composer_ipc::paste_composer_image,
             composer_ipc::remove_composer_attachment,
             composer_ipc::load_composer_image,
+            composer_ipc::read_composer_annotations,
+            composer_ipc::save_composer_annotations,
             composer_ipc::reuse_composer_attachment,
             composer_ipc::drop_composer_attachment_fixture,
             transcript_ipc::copy_transcript_row,
@@ -165,6 +169,7 @@ fn main() {
                     | fixture::Verification::History
                     | fixture::Verification::HistoryRestore
                     | fixture::Verification::Attachments
+                    | fixture::Verification::Annotations
                     | fixture::Verification::Account
                     | fixture::Verification::WindowsSetup
                     | fixture::Verification::Turn

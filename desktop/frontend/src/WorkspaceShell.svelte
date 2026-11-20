@@ -18,10 +18,11 @@
   import { verifyDiff } from './diffProbe';
   import { verifyQuit } from './quitProbe';
   import { verifyComposerAttachments } from './composerAttachmentProbe';
+  import { verifyImageAnnotations } from './imageAnnotationProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -355,6 +356,7 @@
   }
 
   function handleShortcut(event: KeyboardEvent) {
+    if (event.target instanceof HTMLElement && event.target.closest('dialog')) return;
     if (event.key === 'Tab' && !event.defaultPrevented && !event.isComposing) retainSelectionForTab();
     if (event.defaultPrevented || event.isComposing || composing ||
         !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
@@ -382,6 +384,7 @@
     else if (verify === 'diff') void verifyDiff(() => snapshot);
     else if (verify === 'quit') void verifyQuit(() => snapshot);
     else if (verify === 'attachments') void verifyComposerAttachments(() => snapshot);
+    else if (verify === 'annotations') void verifyImageAnnotations(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -466,7 +469,9 @@
       {/if}
       {#if navigation?.draft}
         {#if attachmentScope && draftAttachments.length && !queue?.editing}
-          <ComposerAttachments scope={attachmentScope} attachments={draftAttachments} />
+          {#key attachmentScope.draftId}
+            <ComposerAttachments scope={attachmentScope} attachments={draftAttachments} />
+          {/key}
         {/if}
         <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor}
           onpaste={pasteAttachment}

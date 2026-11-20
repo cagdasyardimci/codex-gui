@@ -2,8 +2,13 @@ use std::path::Path;
 
 use codex_gui_core::{
     files::CheckoutFiles,
-    ipc::{DraftAttachmentRequest, DraftAttachmentScope, DraftAttachmentView},
-    storage::attachments::{BlobLease, composer::ComposerAttachment},
+    ipc::{
+        DraftAttachmentRequest, DraftAttachmentScope, DraftAttachmentView, SaveImageAnnotations,
+    },
+    storage::attachments::{
+        AttachmentError, BlobLease,
+        composer::{ComposerAttachment, image_annotations},
+    },
 };
 use serde_json::{Value, json};
 
@@ -12,6 +17,7 @@ use super::*;
 pub(crate) enum Mutation {
     Append(DraftAttachmentScope, Vec<ComposerAttachment>),
     Remove(DraftAttachmentRequest),
+    Annotate(SaveImageAnnotations),
 }
 
 impl NavigationHandle {
@@ -34,6 +40,7 @@ impl Navigation {
         let scope = match &mutation {
             Mutation::Append(scope, _) => scope,
             Mutation::Remove(request) => &request.scope,
+            Mutation::Annotate(request) => &request.attachment.scope,
         };
         self.require(scope.workspace_id)?;
         if self.quit.is_some() {
@@ -59,8 +66,19 @@ impl Navigation {
             Mutation::Remove(request) => self
                 .store
                 .remove_composer_attachment(draft, &request.attachment_id),
+            Mutation::Annotate(request) => self.store.save_composer_image_annotations(
+                draft,
+                &request.attachment.attachment_id,
+                &request.digest,
+                &request.original,
+                &request.annotations,
+                crate::transcript_ipc::MAX_INLINE_BYTES,
+            ),
         }
-        .map_err(|error| report(error.into()))?;
+        .map_err(|error| match error {
+            AttachmentError::StaleAnnotations => IpcError::StaleSelection,
+            error => report(error.into()),
+        })?;
         if let Some(visible) = self
             .view
             .draft
@@ -90,6 +108,7 @@ impl Navigation {
             .ok_or("no checkout owns this draft")?;
         let mut attachments = Vec::new();
         let mut context = Vec::new();
+        let mut comments = Vec::new();
         for item in source {
             match item["kind"].as_str() {
                 Some("image") => {
@@ -97,6 +116,22 @@ impl Navigation {
                         .as_str()
                         .ok_or("the image has no draft identity")?;
                     attachments.push(self.store.lease_composer_image(draft, id)?);
+                    let annotations = image_annotations(&item);
+                    if !annotations.is_empty() {
+                        let mut group = format!("Image {}:", attachments.len());
+                        for (index, annotation) in annotations.into_iter().enumerate() {
+                            use std::fmt::Write;
+                            write!(
+                                group,
+                                "\n{}. (x: {}%, y: {}%) {}",
+                                index + 1,
+                                percentage(annotation.x),
+                                percentage(annotation.y),
+                                annotation.text
+                            )?;
+                        }
+                        comments.push(group);
+                    }
                 }
                 Some("fileReference") => {
                     let path = item["path"]
@@ -126,6 +161,12 @@ impl Navigation {
                 _ => context.push(item),
             }
         }
+        for group in comments {
+            if !text.is_empty() {
+                text.push_str("\n\n");
+            }
+            text.push_str(&group);
+        }
         Ok((text, context, attachments))
     }
 }
@@ -143,7 +184,19 @@ pub(super) fn views(context: &[Value]) -> Vec<DraftAttachmentView> {
                 id: item["id"].as_str()?.into(),
                 label: item["title"].as_str()?.into(),
                 image,
+                annotation_count: image_annotations(item).len(),
             })
         })
         .collect()
+}
+
+fn percentage(coordinate: f64) -> String {
+    let tenths = (coordinate * 1000.0).round() as u32;
+    let whole = tenths / 10;
+    let fraction = tenths % 10;
+    if fraction == 0 {
+        whole.to_string()
+    } else {
+        format!("{whole}.{fraction}")
+    }
 }

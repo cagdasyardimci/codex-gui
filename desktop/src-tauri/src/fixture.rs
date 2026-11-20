@@ -30,6 +30,7 @@ pub enum Verification {
     History,
     HistoryRestore,
     Attachments,
+    Annotations,
     Account,
     WindowsSetup,
     Turn,
@@ -249,14 +250,23 @@ pub fn verify_attachments_result(
     verification: State<'_, Verification>,
     failure: Option<String>,
 ) -> Result<(), String> {
-    if *verification != Verification::Attachments {
+    if !matches!(
+        *verification,
+        Verification::Attachments | Verification::Annotations
+    ) {
         return Err("attachment verification was not requested".into());
     }
     if let Some(failure) = failure {
         eprintln!("Attachment verification failed: {failure}");
         app.exit(1);
     } else {
-        println!("Verified installed draft attachment capture, ownership, Send, and reuse");
+        if *verification == Verification::Annotations {
+            println!(
+                "Verified installed image annotation placement, cancellation, and restoration"
+            );
+        } else {
+            println!("Verified installed draft attachment capture, ownership, Send, and reuse");
+        }
         app.exit(0);
     }
     Ok(())

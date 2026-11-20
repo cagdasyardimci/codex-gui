@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 use codex_gui_core::{
     checkout::CheckoutIdentity,
     files::{CheckoutFiles, read_local_file},
-    ipc::{DraftAttachmentRequest, DraftAttachmentScope, IpcError, ReuseAttachmentRequest},
+    ipc::{
+        DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, IpcError,
+        ReuseAttachmentRequest, SaveImageAnnotations,
+    },
     storage::{
         attachments::{
             AttachmentStore,
@@ -43,6 +46,13 @@ pub async fn pick_composer_attachments(
         let path = checkout.canonical_path().join("picked.png");
         tokio::time::sleep(std::time::Duration::from_millis(350)).await;
         return add_paths(navigation, checkout, scope, vec![path]).await;
+    }
+    if *verification == Verification::Annotations {
+        let paths = ["picked.png", "unannotated.png", "last.png"]
+            .into_iter()
+            .map(|name| checkout.canonical_path().join(name))
+            .collect();
+        return add_paths(navigation, checkout, scope, paths).await;
     }
     let (reply, result) = tokio::sync::oneshot::channel();
     window
@@ -128,6 +138,33 @@ pub async fn remove_composer_attachment(
     let (navigation, _) = capture(&window, &project, &request.scope)?;
     navigation
         .mutate_attachments(ComposerAttachmentMutation::Remove(request))
+        .await
+}
+
+#[tauri::command]
+pub fn read_composer_annotations(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: DraftAttachmentRequest,
+) -> Result<DraftImageAnnotations, IpcError> {
+    let (navigation, _) = capture(&window, &project, &request.scope)?;
+    let draft =
+        DraftId(Uuid::parse_str(&request.scope.draft_id).map_err(|_| IpcError::StaleSelection)?);
+    navigation
+        .attachment_store()
+        .composer_image_annotations(draft, &request.attachment_id)
+        .map_err(|_| IpcError::StaleSelection)
+}
+
+#[tauri::command]
+pub async fn save_composer_annotations(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: SaveImageAnnotations,
+) -> Result<(), IpcError> {
+    let (navigation, _) = capture(&window, &project, &request.attachment.scope)?;
+    navigation
+        .mutate_attachments(ComposerAttachmentMutation::Annotate(request))
         .await
 }
 

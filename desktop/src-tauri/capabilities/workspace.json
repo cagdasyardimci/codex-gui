@@ -12,6 +12,8 @@
     "allow-paste-composer-image",
     "allow-remove-composer-attachment",
     "allow-load-composer-image",
+    "allow-read-composer-annotations",
+    "allow-save-composer-annotations",
     "allow-reuse-composer-attachment",
     "allow-copy-transcript-row",
     "allow-check-transcript-images",

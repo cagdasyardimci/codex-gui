@@ -16,6 +16,12 @@ export async function click(label: string) {
   button(label)?.click();
 }
 
+export async function clickByLabel(label: string) {
+  const control = () => document.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label)}"]:enabled`);
+  await waitFor(`Could not press ${label}`, () => !!control());
+  control()?.click();
+}
+
 export function editor() {
   const control = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
   if (!control) throw new Error('Could not find the mounted composer');

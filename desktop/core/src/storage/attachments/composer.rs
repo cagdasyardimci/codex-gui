@@ -3,7 +3,11 @@ use std::{collections::HashSet, io, path::Path};
 use rusqlite::TransactionBehavior;
 use serde_json::{Value, json};
 
-use crate::{checkout::CheckoutIdentity, files::read_local_file};
+use crate::{
+    checkout::CheckoutIdentity,
+    files::read_local_file,
+    ipc::{DraftImageAnnotations, ImageAnnotation},
+};
 
 use super::{
     AttachmentError, AttachmentStore, BlobId, BlobLease, DraftId, read_draft, replace_references,
@@ -11,6 +15,7 @@ use super::{
 };
 
 pub const MAX_COMPOSER_ATTACHMENTS: usize = 8;
+const MAX_IMAGE_ANNOTATIONS: usize = 32;
 
 pub struct ComposerAttachment {
     pub id: String,
@@ -24,6 +29,62 @@ pub enum ComposerAttachmentKind {
 }
 
 impl AttachmentStore {
+    pub fn composer_image_annotations(
+        &self,
+        draft: DraftId,
+        id: &str,
+    ) -> Result<DraftImageAnnotations, AttachmentError> {
+        let state = self.inner.state();
+        let saved = read_draft(&state.database, draft)?.ok_or(AttachmentError::MissingDraft)?;
+        let image = image_context(&saved.context, id).ok_or(AttachmentError::StaleAnnotations)?;
+        let blob = image["path"]
+            .as_str()
+            .and_then(|path| self.composer_blob_id(Path::new(path)))
+            .ok_or(AttachmentError::StaleAnnotations)?;
+        verify_saved_file(&state.database, &self.inner.blobs, blob)?;
+        Ok(DraftImageAnnotations {
+            digest: hex::encode(blob.0),
+            annotations: image_annotations(image),
+        })
+    }
+
+    pub fn save_composer_image_annotations(
+        &self,
+        draft: DraftId,
+        id: &str,
+        digest: &str,
+        original: &[ImageAnnotation],
+        annotations: &[ImageAnnotation],
+        maximum_bytes: u64,
+    ) -> Result<(), AttachmentError> {
+        let mut ids = HashSet::new();
+        if annotations.len() > MAX_IMAGE_ANNOTATIONS.max(original.len())
+            || annotations
+                .iter()
+                .any(|annotation| !annotation.is_valid() || !ids.insert(&annotation.id))
+        {
+            return Err(io::Error::other("invalid image annotations").into());
+        }
+        let lease = self.lease_composer_image(draft, id)?;
+        if hex::encode(lease.id.0) != digest {
+            return Err(AttachmentError::StaleAnnotations);
+        }
+        lease.read_preview(maximum_bytes)?;
+        self.update_composer_attachments(draft, |context| {
+            let image = context
+                .iter_mut()
+                .find(|item| item["kind"] == "image" && item["id"] == id)
+                .ok_or(AttachmentError::StaleAnnotations)?;
+            let current = image["path"]
+                .as_str()
+                .and_then(|path| self.composer_blob_id(Path::new(path)));
+            if current != Some(lease.id) || image_annotations(image) != original {
+                return Err(AttachmentError::StaleAnnotations);
+            }
+            image["imageAnnotations"] = json!(annotations);
+            Ok(())
+        })
+    }
     pub fn owns_composer_draft(
         &self,
         draft: DraftId,
@@ -182,6 +243,22 @@ impl AttachmentStore {
         let id = BlobId(bytes);
         (id.path(&self.inner.blobs) == path).then_some(id)
     }
+}
+
+fn image_context<'a>(context: &'a [Value], id: &str) -> Option<&'a Value> {
+    context
+        .iter()
+        .find(|item| item["kind"] == "image" && item["id"] == id)
+}
+
+pub fn image_annotations(context: &Value) -> Vec<ImageAnnotation> {
+    context["imageAnnotations"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|value| serde_json::from_value::<ImageAnnotation>(value.clone()).ok())
+        .filter(ImageAnnotation::is_valid)
+        .collect()
 }
 
 impl BlobLease {

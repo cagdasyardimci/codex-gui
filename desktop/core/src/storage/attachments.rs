@@ -70,6 +70,8 @@ pub enum AttachmentError {
     MissingDraft,
     #[error("the captured attachment belongs to a different workspace store")]
     ForeignLease,
+    #[error("the image or its annotations changed since the editor opened")]
+    StaleAnnotations,
     #[error("the prepared thread or draft already has a different binding")]
     ConflictingThreadDraft,
     #[error(transparent)]

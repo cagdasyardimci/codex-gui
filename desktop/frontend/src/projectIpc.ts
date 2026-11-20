@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  DraftAttachmentRequest, DraftAttachmentScope, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
+  DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
   WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -52,6 +52,14 @@ export function removeComposerAttachment(request: DraftAttachmentRequest): Promi
 
 export function loadComposerImage(request: DraftAttachmentRequest): Promise<ArrayBuffer> {
   return invoke('load_composer_image', { request });
+}
+
+export function readComposerAnnotations(request: DraftAttachmentRequest): Promise<DraftImageAnnotations> {
+  return invoke('read_composer_annotations', { request });
+}
+
+export function saveComposerAnnotations(request: SaveImageAnnotations): Promise<void> {
+  return invoke('save_composer_annotations', { request });
 }
 
 export function reuseComposerAttachment(request: ReuseAttachmentRequest): Promise<void> {

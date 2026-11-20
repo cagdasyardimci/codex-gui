@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { DraftAttachmentScope, WorkspaceSnapshot } from './generated/workspace';
 import { loadComposerImage, pickComposerAttachments } from './projectIpc';
-import { click, editor, typeText, waitFor } from './fixtureControls';
+import { click, clickByLabel, editor, typeText, waitFor } from './fixtureControls';
 import { rejectsStale } from './markdownProbe';
 
 const FIRST = 'history-first';
@@ -41,8 +41,8 @@ export async function verifyComposerAttachments(visible: () => WorkspaceSnapshot
     await waitFor('The native drop and paste did not preserve attachment order', () => labels() === [PICK, FILE, PASTE].join('\n'));
     await waitFor('The picker and paste previews did not decode', () =>
       [...document.querySelectorAll<HTMLImageElement>('.composer-attachments img')].filter((image) => image.naturalWidth === 1).length === 2);
-    await action(`Remove ${PICK}`);
-    await action(`Remove ${FILE}`);
+    await clickByLabel(`Remove ${PICK}`);
+    await clickByLabel(`Remove ${FILE}`);
     typeText('');
     await waitFor('The image-only draft did not retain its pasted bytes', () => labels() === PASTE && draft()?.text === '');
     await click('Send');
@@ -51,9 +51,9 @@ export async function verifyComposerAttachments(visible: () => WorkspaceSnapshot
       visible()?.navigation.actions.stop === null);
     typeText(REUSED_DRAFT);
     await waitFor('The draft for reuse did not persist', () => draft()?.text === REUSED_DRAFT);
-    await action('Attach Image to draft');
+    await clickByLabel('Attach Image to draft');
     await waitFor('The sent image did not reattach to the draft', () => labels() === 'Image');
-    await action(`Attach ${FILE} to draft`);
+    await clickByLabel(`Attach ${FILE} to draft`);
     await waitFor('Reusing history attachments changed the pending text or order', () =>
       labels() === ['Image', FILE].join('\n') && editor().value === REUSED_DRAFT && draft()?.text === REUSED_DRAFT);
     const reused = draft()?.attachments[0];
@@ -68,10 +68,4 @@ export async function verifyComposerAttachments(visible: () => WorkspaceSnapshot
   } catch (error) {
     await invoke('verify_attachments_result', { failure: String(error) });
   }
-}
-
-async function action(label: string) {
-  const button = () => document.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label)}"]`);
-  await waitFor(`The attachment control ${label} did not appear`, () => !!button());
-  button()?.click();
 }

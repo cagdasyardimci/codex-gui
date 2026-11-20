@@ -17,6 +17,8 @@ fn main() {
         "paste_composer_image",
         "remove_composer_attachment",
         "load_composer_image",
+        "read_composer_annotations",
+        "save_composer_annotations",
         "reuse_composer_attachment",
         "drop_composer_attachment_fixture",
         "copy_transcript_row",
