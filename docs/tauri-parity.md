@@ -2,7 +2,7 @@
 
 Use AppKit revision [`c082455`](https://github.com/cagdasyardimci/codex-gui/commit/c0824558b060d90a6486c3aef743877677f0d4f1) as the reference for shipped workflows and recoverable local data. Advance this reference under the [AppKit maintenance policy](agent-workflow.md#appkit-maintenance-through-cutover). The C numbers identify the implementation commits that own each workflow and its acceptance. Follow [validation](validation.md#native-and-live-acceptance) for evidence requirements and the final hands-on checks.
 
-For the corresponding Swift tests and launched-app scenarios, use the [regression routes and evidence format](tauri-regression-evidence.md).
+Use the [regression routes and evidence format](tauri-regression-evidence.md) for tests and launched-app scenarios, and the [AppKit visual baseline](tauri-visual-baseline.md) for matched captures and asset provenance.
 
 ## Workflow coverage
 
