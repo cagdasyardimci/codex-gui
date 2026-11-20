@@ -155,6 +155,40 @@ impl RuntimeOwners {
         })
     }
 
+    pub fn thread_in_use(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+    ) -> Result<bool, OwnerError> {
+        let local_execution = |execution: &ExecutionSnapshot| {
+            execution
+                .active_turns
+                .iter()
+                .any(|target| &target.thread == thread)
+                || execution
+                    .unresolved_commands
+                    .iter()
+                    .any(|command| &command.target.thread == thread)
+        };
+        let scopes = self.lock();
+        let busy = scopes.get(checkout).is_some_and(|scope| {
+            scope.uses > 0
+                || scope.cleanup
+                || scope.recovering.is_some()
+                || scope.retired.iter().any(local_execution)
+                || scope
+                    .runtime
+                    .as_ref()
+                    .is_some_and(|runtime| local_execution(&runtime.snapshot().execution))
+        });
+        Ok(busy
+            || self.store.has_exit_evidence(checkout, Some(thread))?
+            || !self
+                .store
+                .pending_queue_submissions(checkout, thread)?
+                .is_empty())
+    }
+
     pub fn record_execution(
         &self,
         owner: &ConnectionIdentity,

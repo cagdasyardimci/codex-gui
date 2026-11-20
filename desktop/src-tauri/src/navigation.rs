@@ -37,6 +37,7 @@ use uuid::Uuid;
 use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
+mod archive;
 mod composer_attachments;
 mod composer_settings;
 mod conversation_fork;
@@ -105,6 +106,14 @@ enum Action {
         codex_gui_core::ipc::SidebarProjectRequest,
         oneshot::Sender<PathBuf>,
     ),
+    StartArchiveRead(
+        codex_gui_core::ipc::ArchiveScope,
+        oneshot::Sender<archive::ArchiveRead>,
+    ),
+    FinishArchiveRead(
+        archive::ArchiveReadResult,
+        oneshot::Sender<codex_gui_core::ipc::ArchiveCatalog>,
+    ),
 }
 
 enum Input {
@@ -158,6 +167,7 @@ struct Navigation {
     interactions: InteractionProjection,
     pages: HistoryPaging,
     prompt_revisions: prompt_revision::PromptRevisions,
+    archive: archive::ArchiveState,
     view: NavigationView,
     editable: HashMap<DraftId, Option<CheckoutIdentity>>,
     failed_drafts: HashMap<DraftId, Option<RuntimeUse>>,
@@ -204,6 +214,7 @@ impl NavigationHandle {
             interactions: InteractionProjection::default(),
             pages: HistoryPaging::default(),
             prompt_revisions: prompt_revision::PromptRevisions::default(),
+            archive: archive::ArchiveState::default(),
             view: NavigationView::default(),
             editable: HashMap::new(),
             failed_drafts: HashMap::new(),
@@ -396,6 +407,16 @@ impl Navigation {
                 let _ = reply.send(path);
                 return Ok(None);
             }
+            Action::StartArchiveRead(scope, reply) => {
+                let read = self.start_archive_read(scope).await?;
+                let _ = reply.send(read);
+                return Ok(None);
+            }
+            Action::FinishArchiveRead(read, reply) => {
+                let catalog = self.finish_archive_read(read)?;
+                let _ = reply.send(catalog);
+                return Ok(None);
+            }
             Action::SelectFolder(folder) => {
                 if self.quit.is_some() {
                     return Err(IpcError::StaleSelection);
@@ -427,6 +448,7 @@ impl Navigation {
             }
             NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
             NavigationIntent::Sidebar(request) => self.edit_sidebar(request).await?,
+            NavigationIntent::RestoreArchive(request) => self.restore_archived(request).await?,
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::SetResponseBookmark(request) => {
@@ -811,6 +833,7 @@ impl Navigation {
         let chats: Vec<_> = chats
             .data
             .into_iter()
+            .filter(|thread| self.archive.keep_active(&thread.id))
             .map(sidebar::sidebar_chat_row)
             .collect();
         let checkout = &self

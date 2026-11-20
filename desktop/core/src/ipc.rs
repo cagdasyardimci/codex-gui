@@ -12,6 +12,7 @@ use crate::files::{
 use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
 mod actions;
+mod archive;
 mod composer_settings;
 mod context;
 mod git;
@@ -32,6 +33,7 @@ pub use actions::{
     QuestionView, RecoverSendRequest, RespondRequest, SendRequest, StopRequest, StopTarget,
     TurnTarget,
 };
+pub use archive::{ArchiveCatalog, ArchiveScope, ArchiveTarget, ArchivedChat, RestoreArchive};
 pub use composer_settings::{
     ComposerPermissions, ComposerSelection, ComposerSelectionView, ComposerSettingsRequest,
     ModelEffort, ModelServiceTier,
@@ -307,6 +309,11 @@ pub fn workspace_typescript() -> String {
         SidebarChatUnread::decl(),
         SidebarMove::decl(),
         SidebarProjectRequest::decl(),
+        ArchiveScope::decl(),
+        ArchiveCatalog::decl(),
+        ArchivedChat::decl(),
+        RestoreArchive::decl(),
+        ArchiveTarget::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

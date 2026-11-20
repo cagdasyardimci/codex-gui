@@ -21,6 +21,9 @@
   let nameField = $state<HTMLInputElement>();
   let sourceControl: HTMLElement | null = null;
   let saving = $state(false);
+  let archive = $state.raw<{ project: SidebarProject; revision: string; control: HTMLElement | null }>();
+  let archiveDialog = $state<HTMLDialogElement>();
+  let archiveCancel = $state<HTMLButtonElement>();
   const pinnedProjects = $derived(view.projects.filter((project) => project.pinned));
   const ordinaryProjects = $derived(view.projects.filter((project) => !project.pinned));
   const pinned = $derived(view.chats.filter((chat) => chat.pinned));
@@ -119,6 +122,28 @@
     if (menu) menu.open = false;
     return menu?.querySelector('summary') ?? event.currentTarget;
   }
+
+  function askArchive(project: SidebarProject, control: HTMLElement | null) {
+    if (!view.revision || blocked) return;
+    archive = { project, revision: view.revision, control };
+    void tick().then(() => {
+      archiveDialog?.showModal();
+      archiveCancel?.focus();
+    });
+  }
+
+  function closeArchive() {
+    const capture = archive;
+    archive = undefined;
+    void tick().then(() => capture?.control?.focus());
+  }
+
+  function archiveProject() {
+    const capture = archive;
+    if (!capture || blocked) return;
+    closeArchive();
+    void change(capture.revision, { archiveProject: capture.project.id }).catch(report);
+  }
 </script>
 
 {#snippet projectRow(project: SidebarProject)}
@@ -134,6 +159,7 @@
           apply({ pinProject: { projectId: project.id, pinned: !project.pinned } });
         }} disabled={blocked}>{project.pinned ? 'Unpin Project' : 'Pin Project'}</button>
         <button type="button" onclick={(event) => { closeMenu(event); showInFolder(project); }} disabled={blocked}>Show in Folder</button>
+        <button type="button" onclick={(event) => askArchive(project, closeMenu(event))} disabled={blocked}>Archive Project Chats…</button>
       </div>
     </details>
   </div>
@@ -164,6 +190,10 @@
           closeMenu(event);
           apply({ markUnread: { key: chat.key, unread: !chat.unread } });
         }} disabled={blocked}>{chat.unread ? 'Mark Read' : 'Mark Unread'}</button>
+        <button type="button" onclick={(event) => {
+          closeMenu(event);
+          apply({ archiveChat: chat.key });
+        }} disabled={blocked}>Archive Chat</button>
       </div>
     </details>
   </div>
@@ -226,6 +256,15 @@
         <button type="submit" disabled={!draftTitle.trim() || saving}>Save Name</button>
       </div>
     </form>
+  </dialog>
+{/if}
+
+{#if archive}
+  <dialog bind:this={archiveDialog} aria-label="Archive Project Chats"
+    oncancel={(event) => { event.preventDefault(); closeArchive(); }}>
+    <h2>Archive Chats in {archive.project.title}</h2>
+    <button type="button" bind:this={archiveCancel} onclick={closeArchive}>Cancel</button>
+    <button type="button" disabled={blocked || view.revision !== archive.revision} onclick={archiveProject}>Archive Chats</button>
   </dialog>
 {/if}
 

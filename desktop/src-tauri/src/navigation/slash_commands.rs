@@ -107,6 +107,7 @@ impl Navigation {
                     | Command::Skills => true,
                     Command::Copy | Command::Diff => thread.is_some(),
                     Command::Rename => idle && thread.is_some(),
+                    Command::Archive => thread.is_some() && self.view.actions.stop.is_none(),
                     Command::Model | Command::Reasoning => has_model,
                     Command::Fast => self.fast_tier().is_some(),
                     Command::Permissions => self.view.composer_settings.is_some(),
@@ -114,7 +115,7 @@ impl Navigation {
                         has_model && backend.commands.plans && (idle || view.recover_plan)
                     }
                     Command::Compact => compact_supported && idle && thread.is_some(),
-                    Command::Fork | Command::Archive | Command::Delete | Command::Review => false,
+                    Command::Fork | Command::Delete | Command::Review => false,
                 })
                 .collect();
         }
@@ -264,7 +265,17 @@ impl Navigation {
             Command::Resume | Command::Skills | Command::Mention | Command::Copy => {
                 return Ok(visible);
             }
-            Command::Archive | Command::Delete | Command::Review => {
+            Command::Archive => {
+                let selection = self.selection.as_ref().ok_or(IpcError::RetiredWorkspace)?;
+                let key = codex_gui_core::ipc::SidebarChatKey {
+                    project_id: selection.checkout.storage_key(),
+                    chat_id: draft.chat_id.clone().ok_or(IpcError::StaleSelection)?,
+                };
+                self.archive_chat_from(key, Some((draft_id, draft.text)))
+                    .await?;
+                return Ok(SlashCommandOutcome::Applied);
+            }
+            Command::Delete | Command::Review => {
                 return Err(IpcError::StaleSelection);
             }
         }

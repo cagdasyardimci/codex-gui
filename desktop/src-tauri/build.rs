@@ -32,6 +32,7 @@ fn main() {
         "load_transcript_attachment",
         "open_transcript_link",
         "navigate_workspace",
+        "read_archive",
         "execute_slash_command",
         "open_sent_prompt",
         "reveal_sidebar_project",

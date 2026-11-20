@@ -1,7 +1,7 @@
 import type { NavigationView, SidebarChatKey } from './generated/workspace';
 
 export type PaletteMode = 'commands' | 'projects' | 'chats';
-export type PaletteAction = 'browse' | 'newChat' | 'changes' | 'projectContext' | 'refresh' | 'reconnect';
+export type PaletteAction = 'browse' | 'newChat' | 'changes' | 'projectContext' | 'refresh' | 'reconnect' | 'archivedChats';
 
 type PaletteDestination =
   | { project: string }
@@ -29,7 +29,10 @@ export function paletteEntries(mode: PaletteMode, navigation: NavigationView): P
   if (mode === 'projects') return [...projects, browse];
   if (mode === 'chats') return chats;
 
-  const actions: PaletteEntry[] = [browse];
+  const actions: PaletteEntry[] = [
+    browse,
+    { id: 'action/archivedChats', title: 'Archived Chats', destination: { action: 'archivedChats' } },
+  ];
   if (sidebar.activeProject) {
     const workspaceActions: Array<[PaletteAction, string]> = [
       ['newChat', 'New Chat'],

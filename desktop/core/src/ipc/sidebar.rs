@@ -67,6 +67,8 @@ pub struct SidebarRequest {
 pub enum SidebarChange {
     OpenProject(String),
     OpenChat(SidebarChatKey),
+    ArchiveChat(SidebarChatKey),
+    ArchiveProject(String),
     RenameProject(SidebarProjectName),
     RenameChat(SidebarChatName),
     PinProject(SidebarProjectPin),

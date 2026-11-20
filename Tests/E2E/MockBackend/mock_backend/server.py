@@ -57,7 +57,8 @@ class Server:
         if self.scenario.get('desktopHistory'):
             status = ({'type': 'active', 'activeFlags': []}
                       if thread['id'] in self.active else {'type': 'idle'})
-            timestamp = (1 if thread['id'].endswith('first') else 2) if self.scenario.get('desktopSidebar') else int(time.time())
+            timestamp = (1 if thread['id'].endswith('first') else 2) if (
+                self.scenario.get('desktopSidebar') or self.scenario.get('desktopArchive')) else int(time.time())
             return {k: copy.deepcopy(v) for k, v in thread.items() if k != 'turns'} | {
                 'cwd': thread['cwd'], 'createdAt': 1, 'updatedAt': timestamp,
                 'status': status, 'turns': []}
@@ -159,6 +160,18 @@ class Server:
                     thread['cwd'] = cwd
             rows = [self.summary(t) for t in self.state.threads
                     if t['archived'] == p.get('archived', False) and (not cwd or t.get('cwd') == cwd)]
+            if self.scenario.get('desktopArchive') and not cwd and p.get('archived'):
+                if p.get('cursor') == 'archive-next':
+                    return {'data': rows[35:], 'nextCursor': None}
+                if p.get('cursor') == 'archive-after-replay':
+                    return {'data': rows[34:], 'nextCursor': None}
+                cursor = 'archive-next'
+                if self.state.data.pop('replayArchivedThread', False):
+                    prior = self.summary(self.thread('history-first'))
+                    rows = [{**prior, 'archived': True}, *rows]
+                    self.state.data['returnedObsoleteArchive'] = True
+                    cursor = 'archive-after-replay'
+                return {'data': rows[:35], 'nextCursor': cursor if len(rows) > 35 else None}
             query = p.get('searchTerm', '').casefold()
             return {'data': [t for t in rows if query in t.get('name', '').casefold()], 'nextCursor': None}
         if method == 'thread/start':
@@ -172,6 +185,11 @@ class Server:
             return {'thread': self.summary(thread), **self.settings(thread)}
         if method in ('thread/read', 'thread/resume'):
             thread = self.thread(p.get('threadId'))
+            if (self.scenario.get('desktopArchive') and method == 'thread/read'
+                    and thread['id'] == 'history-second' and self.thread('history-first')['archived']
+                    and not self.state.data.get('becameActiveDuringArchive')):
+                self.state.data['becameActiveDuringArchive'] = True
+                return {'thread': {**self.summary(thread), 'status': {'type': 'active', 'activeFlags': []}}}
             if (method == 'thread/resume' and self.scenario.get('desktopConversationFork')
                     and thread['id'] == 'history-second' and not self.state.data.get('branchWriterObserved')):
                 self.state.data['branchWriterObserved'] = True
@@ -242,6 +260,13 @@ class Server:
             return {'data': [{'turnId': turn['id'], 'item': item} for item in items[:limit]], 'nextCursor': next_cursor}
         if method in ('thread/name/set', 'thread/archive', 'thread/unarchive', 'thread/delete', 'thread/unsubscribe'):
             thread = self.thread(p.get('threadId'))
+            if self.scenario.get('desktopArchive'):
+                if method == 'thread/archive' and thread['id'] == 'history-second':
+                    self.state.data['archiveRejected'] = True
+                    self.state.save()
+                    raise ProtocolError(-32000, 'Archive rejected by the fixture')
+                if method == 'thread/unarchive' and thread['id'] == 'history-first' and not self.state.data.get('returnedObsoleteArchive'):
+                    self.state.data['replayArchivedThread'] = True
             if method == 'thread/name/set':
                 thread['name'] = p['name']
             elif method == 'thread/delete':
@@ -250,6 +275,8 @@ class Server:
                 self.state.threads.remove(thread)
             elif method != 'thread/unsubscribe':
                 thread['archived'] = method == 'thread/archive'
+            if self.scenario.get('desktopArchive') and method == 'thread/unarchive':
+                return {'thread': self.summary(thread)}
             return {}
         if method == 'turn/start':
             if self.scenario.get('desktopComposerSettings'):

@@ -210,6 +210,17 @@ pub async fn navigate_workspace(
 }
 
 #[tauri::command]
+pub async fn read_archive(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    scope: codex_gui_core::ipc::ArchiveScope,
+) -> Result<codex_gui_core::ipc::ArchiveCatalog, IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.read_archive(scope).await
+}
+
+#[tauri::command]
 pub async fn execute_slash_command(
     window: WebviewWindow,
     state: State<'_, ProjectIpc>,

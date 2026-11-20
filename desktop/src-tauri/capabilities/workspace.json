@@ -25,6 +25,7 @@
     "allow-load-transcript-attachment",
     "allow-open-transcript-link",
     "allow-navigate-workspace",
+    "allow-read-archive",
     "allow-execute-slash-command",
     "allow-open-sent-prompt",
     "allow-reveal-sidebar-project",

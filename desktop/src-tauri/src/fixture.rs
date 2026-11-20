@@ -43,6 +43,7 @@ pub enum Verification {
     Sidebar,
     SidebarRestore,
     CommandPalette,
+    Archive,
     Account,
     WindowsSetup,
     Turn,
@@ -306,6 +307,7 @@ pub fn verify_attachments_result(
             | Verification::Sidebar
             | Verification::SidebarRestore
             | Verification::CommandPalette
+            | Verification::Archive
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -344,6 +346,8 @@ pub fn verify_attachments_result(
             println!("Verified installed sidebar projects, scoped chats, and saved organization");
         } else if *verification == Verification::CommandPalette {
             println!("Verified installed keyboard command palette and scoped choosers");
+        } else if *verification == Verification::Archive {
+            println!("Verified installed project and chat archive, restore, and search");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

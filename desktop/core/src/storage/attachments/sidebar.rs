@@ -85,7 +85,8 @@ impl AttachmentStore {
                 "INSERT INTO desktop_sidebar_chats (project_id, thread_id, title, preview, updated_at, position)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT(project_id, thread_id) DO UPDATE SET title = excluded.title,
-                   preview = excluded.preview, updated_at = excluded.updated_at, position = excluded.position",
+                   preview = excluded.preview, updated_at = excluded.updated_at, position = excluded.position,
+                   archived = 0",
             )?;
             for (index, (row, updated_at)) in rows.into_iter().enumerate() {
                 upsert.execute(params![
@@ -99,6 +100,26 @@ impl AttachmentStore {
             }
         }
         transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn set_sidebar_archived(
+        &self,
+        checkout: &CheckoutIdentity,
+        row: &ChatRow,
+        updated_at: i64,
+        archived: bool,
+    ) -> Result<(), AttachmentError> {
+        checkout.revalidate().map_err(io::Error::other)?;
+        let state = self.inner.state();
+        state.database.execute(
+            "INSERT INTO desktop_sidebar_chats (project_id, thread_id, title, preview, updated_at, position, archived)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)
+             ON CONFLICT(project_id, thread_id) DO UPDATE SET title = excluded.title, preview = excluded.preview,
+               updated_at = excluded.updated_at, archived = excluded.archived,
+               pinned = CASE WHEN excluded.archived THEN 0 ELSE desktop_sidebar_chats.pinned END",
+            params![checkout.storage_key(), row.id, row.title, row.preview, updated_at, archived],
+        )?;
         Ok(())
     }
 
@@ -197,6 +218,7 @@ impl AttachmentStore {
             .collect::<Result<Vec<_>, _>>()?;
         let mut chats = state.database.prepare(
             "SELECT project_id, thread_id, title, preview, pinned, unread FROM desktop_sidebar_chats
+             WHERE archived = 0
              ORDER BY pinned DESC, updated_at DESC, position, project_id, thread_id",
         )?;
         let mut chats = chats
@@ -275,5 +297,12 @@ pub(in crate::storage) fn migrate(transaction: &Transaction<'_>) -> rusqlite::Re
             slot INTEGER PRIMARY KEY CHECK (slot = 1),
             content TEXT NOT NULL CHECK (json_valid(content) AND json_type(content) = 'object')
         ) STRICT;",
+    )
+}
+
+pub(in crate::storage) fn migrate_archive(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "ALTER TABLE desktop_sidebar_chats
+         ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1));",
     )
 }

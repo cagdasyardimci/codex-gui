@@ -38,6 +38,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::fork_revisions::migrate,
     attachments::fork_revisions::migrate_fork_receipts,
     attachments::sidebar::migrate,
+    attachments::sidebar::migrate_archive,
 ];
 
 #[derive(Debug, Error)]

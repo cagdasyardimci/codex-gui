@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, RestoreArchive, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceId, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -13,6 +13,7 @@
   import SentPromptDialog from './SentPromptDialog.svelte';
   import WorkspaceSidebar from './WorkspaceSidebar.svelte';
   import CommandPalette from './CommandPalette.svelte';
+  import ArchivedChats from './ArchivedChats.svelte';
   import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
@@ -35,10 +36,11 @@
   import { verifyConversationFork } from './conversationForkProbe';
   import { verifySidebar } from './sidebarProbe';
   import { verifyCommandPalette } from './commandPaletteProbe';
+  import { verifyArchive } from './archiveProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -82,6 +84,7 @@
     selection?: [number, number];
   };
   let palette = $state.raw<PaletteScope>();
+  let archive = $state.raw<{ workspaceId: WorkspaceId | null; control: HTMLElement | null }>();
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
@@ -284,6 +287,7 @@
         promptEdit.row.chatId !== current.navigation.selectedChat ||
         promptEdit.row.generation !== current.transcript.generation || current.navigation.quit)) cancelSentPromptEdit();
     if (palette && (!paletteMatches(palette, current) || current.navigation.quit)) closePalette(false);
+    if (archive && (archive.workspaceId !== (current.workspace?.workspaceId ?? null) || current.navigation.quit)) archive = undefined;
     viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) {
@@ -335,7 +339,7 @@
   }
 
   function openPalette(mode: PaletteMode) {
-    if (!snapshot || palette || actionPending || composing || quit || promptEdit || commandPanel) return;
+    if (!snapshot || palette || archive || actionPending || composing || quit || promptEdit || commandPanel) return;
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const selection: [number, number] | undefined = (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement) &&
       focused.selectionStart !== null && focused.selectionEnd !== null
@@ -387,6 +391,11 @@
         await focusAfterPalette(captured, picked !== null);
         return;
       }
+      if (target.action === 'archivedChats') {
+        closePalette(false);
+        openArchive(captured.focused);
+        return;
+      }
       const workspaceId = captured.workspaceId;
       if (!workspaceId) throw 'staleSelection';
       if (target.action === 'changes') showingChanges = true;
@@ -403,6 +412,31 @@
         palette = { ...captured, entries: paletteEntries(captured.mode, snapshot.navigation),
           revision: snapshot.navigation.sidebar.revision };
       }
+    } finally {
+      actionPending = false;
+    }
+  }
+
+  function openArchive(control: HTMLElement | null) {
+    archive = { workspaceId: snapshot?.workspace?.workspaceId ?? null, control };
+  }
+
+  async function closeArchive() {
+    const capture = archive;
+    archive = undefined;
+    await tick();
+    if (capture?.control?.isConnected) capture.control.focus({ preventScroll: true });
+    else editor?.focus({ preventScroll: true });
+  }
+
+  async function restoreArchived(request: RestoreArchive) {
+    if (!archive || actionPending || quit) throw 'staleSelection';
+    const capture = archive;
+    actionPending = true;
+    try {
+      await flushEdits();
+      if (archive !== capture) throw 'staleSelection';
+      await navigateWorkspace({ restoreArchive: request });
     } finally {
       actionPending = false;
     }
@@ -784,6 +818,7 @@
     else if (verify === 'conversationFork') void verifyConversationFork(() => snapshot);
     else if (verify === 'sidebar' || verify === 'sidebarRestore') void verifySidebar(verify, () => snapshot);
     else if (verify === 'commandPalette') void verifyCommandPalette(() => snapshot);
+    else if (verify === 'archive') void verifyArchive(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -802,6 +837,8 @@
       <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+K Control+Shift+K"
         onclick={() => openPalette('chats')}>Choose Chat</button>
     {/if}
+    <button type="button" disabled={actionPending || !!quit}
+      onclick={(event) => openArchive(event.currentTarget)}>Archived Chats</button>
     {#if navigation?.actions.stopAll}
       <button type="button" disabled={actionPending || !!quit}
         onclick={() => void act(() => navigateWorkspace('stopAll'))}>Stop All…</button>
@@ -992,6 +1029,9 @@
   {#if palette}
     <CommandPalette mode={palette.mode} entries={palette.entries} blocked={actionPending}
       choose={(entry) => void choosePalette(entry)} close={closePalette} />
+  {/if}
+  {#if archive}
+    <ArchivedChats workspaceId={archive.workspaceId} restore={restoreArchived} close={closeArchive} />
   {/if}
   {#if quit?.confirm && !quit.draining}
     <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}

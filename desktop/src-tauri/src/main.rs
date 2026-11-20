@@ -38,6 +38,7 @@ fn main() {
         Some("--verify-sidebar") => fixture::Verification::Sidebar,
         Some("--verify-sidebar-restore") => fixture::Verification::SidebarRestore,
         Some("--verify-command-palette") => fixture::Verification::CommandPalette,
+        Some("--verify-archive") => fixture::Verification::Archive,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -70,6 +71,7 @@ fn main() {
             | fixture::Verification::Sidebar
             | fixture::Verification::SidebarRestore
             | fixture::Verification::CommandPalette
+            | fixture::Verification::Archive
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -165,6 +167,7 @@ fn main() {
             transcript_ipc::load_transcript_attachment,
             transcript_ipc::open_transcript_link,
             project_ipc::navigate_workspace,
+            project_ipc::read_archive,
             project_ipc::execute_slash_command,
             project_ipc::open_sent_prompt,
             project_ipc::reveal_sidebar_project,

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ComposerChoice, ComposerContextSelection, DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
-  ExecuteSlashCommand, ProjectContextView, SentPromptEdit, SidebarProjectRequest,
+  ArchiveCatalog, ArchiveScope, ExecuteSlashCommand, ProjectContextView, SentPromptEdit, SidebarProjectRequest,
   SlashCommandOutcome, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -93,6 +93,10 @@ export function nextWorkspaceUpdate(request: WorkspaceUpdateRequest): Promise<Wo
 
 export function navigateWorkspace(intent: NavigationIntent): Promise<void> {
   return invoke('navigate_workspace', { intent });
+}
+
+export function readArchive(scope: ArchiveScope): Promise<ArchiveCatalog> {
+  return invoke('read_archive', { scope });
 }
 
 export function executeSlashCommand(request: ExecuteSlashCommand): Promise<SlashCommandOutcome> {

@@ -95,7 +95,7 @@ pub struct ModelOption {
     pub service_tiers: Vec<crate::ipc::ModelServiceTier>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadSummary {
     pub id: ThreadId,
@@ -112,7 +112,7 @@ pub struct Page<T, C> {
     pub next_cursor: Option<C>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ProjectChatCursor {
     owner: ConnectionIdentity,
     archived: bool,
@@ -205,6 +205,41 @@ impl CodexBrowser {
         cursor: Option<&ProjectChatCursor>,
         timeout: Duration,
     ) -> Result<Page<ThreadSummary, ProjectChatCursor>, BrowseError> {
+        self.project_chat_page(archived, cursor, timeout, |thread| thread)
+            .await
+    }
+
+    pub async fn project_chat_activity(
+        &self,
+        cursor: Option<&ProjectChatCursor>,
+        timeout: Duration,
+    ) -> Result<Page<ChatSummary, ProjectChatCursor>, BrowseError> {
+        self.project_chat_page(false, cursor, timeout, |chat: &ChatSummary| &chat.thread)
+            .await
+    }
+
+    pub async fn archived_chats(
+        &self,
+        cursor: Option<&str>,
+        timeout: Duration,
+    ) -> Result<Page<ThreadSummary, String>, BrowseError> {
+        let response: WirePage<ThreadSummary> = self
+            .read(
+                "thread/list",
+                json!({"archived": true, "limit": PAGE_LIMIT, "cursor": cursor}),
+                timeout,
+            )
+            .await?;
+        Ok(response.map_cursor(|token| token))
+    }
+
+    async fn project_chat_page<T: DeserializeOwned>(
+        &self,
+        archived: bool,
+        cursor: Option<&ProjectChatCursor>,
+        timeout: Duration,
+        summary: impl Fn(&T) -> &ThreadSummary,
+    ) -> Result<Page<T, ProjectChatCursor>, BrowseError> {
         let owner = self.client.identity();
         let checkout = self.checkout()?;
         let token = match cursor {
@@ -219,7 +254,7 @@ impl CodexBrowser {
             .canonical_path()
             .to_str()
             .ok_or(BrowseError::NonUnicodeCheckout)?;
-        let response: WirePage<ThreadSummary> = self
+        let response: WirePage<T> = self
             .read(
                 "thread/list",
                 json!({
@@ -234,7 +269,7 @@ impl CodexBrowser {
             .await?;
         checkout.revalidate()?;
         for thread in &response.data {
-            checkout.validate_reported(&thread.cwd)?;
+            checkout.validate_reported(&summary(thread).cwd)?;
         }
         Ok(response.map_cursor(|token| ProjectChatCursor {
             owner: owner.clone(),

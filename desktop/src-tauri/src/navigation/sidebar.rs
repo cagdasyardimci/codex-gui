@@ -64,7 +64,10 @@ impl Navigation {
         Ok(())
     }
 
-    fn resolve_sidebar_project(&self, id: &str) -> Result<(PathBuf, CheckoutIdentity), IpcError> {
+    pub(super) fn resolve_sidebar_project(
+        &self,
+        id: &str,
+    ) -> Result<(PathBuf, CheckoutIdentity), IpcError> {
         let project = self
             .store
             .sidebar_project(id)
@@ -78,7 +81,7 @@ impl Navigation {
         Ok((path, checkout))
     }
 
-    fn known_sidebar_chat(&self, key: &SidebarChatKey) -> Result<(), IpcError> {
+    pub(super) fn known_sidebar_chat(&self, key: &SidebarChatKey) -> Result<(), IpcError> {
         if !self.view.sidebar.chats.iter().any(|chat| &chat.key == key) {
             return Err(IpcError::StaleSelection);
         }
@@ -100,6 +103,8 @@ impl Navigation {
                 self.select(path, checkout, None).await.map_err(report)?;
             }
             SidebarChange::OpenChat(key) => self.open_sidebar_chat(key).await?,
+            SidebarChange::ArchiveChat(key) => return self.archive_chat(key).await,
+            SidebarChange::ArchiveProject(project) => return self.archive_project(project).await,
             SidebarChange::RenameProject(project) => {
                 self.resolve_sidebar_project(&project.project_id)?;
                 let title = checked_title(&project.title)?;
@@ -373,6 +378,18 @@ async fn validate_cross_project_chat(
     checkout: &CheckoutIdentity,
     thread: &ThreadId,
 ) -> Result<(), Failure> {
+    let probe = open_checkout_probe(checkout).await?;
+    let result = CodexBrowser::new(probe.client())
+        .thread_summary(thread, RPC_TIMEOUT)
+        .await;
+    probe.disconnect().await?;
+    result?;
+    Ok(())
+}
+
+pub(super) async fn open_checkout_probe(
+    checkout: &CheckoutIdentity,
+) -> Result<AppServerConnection, Failure> {
     let executable = CodexExecutable::discover(None)?;
     let identity = ConnectionIdentity {
         workspace: WorkspaceIdentity {
@@ -381,13 +398,8 @@ async fn validate_cross_project_chat(
         },
         generation: ConnectionGeneration(1),
     };
-    let probe =
+    Ok(
         AppServerConnection::connect(&executable, identity, desktop_client_info(), RPC_TIMEOUT)
-            .await?;
-    let result = CodexBrowser::new(probe.client())
-        .thread_summary(thread, RPC_TIMEOUT)
-        .await;
-    probe.disconnect().await?;
-    result?;
-    Ok(())
+            .await?,
+    )
 }

@@ -209,6 +209,7 @@ pub struct DraftEdit {
 #[serde(rename_all = "camelCase")]
 pub enum NavigationIntent {
     Sidebar(super::SidebarRequest),
+    RestoreArchive(super::RestoreArchive),
     SetComposerSettings(ComposerSettingsRequest),
     EditProjectContext(ProjectContextRequest),
     ReviseSentPrompt(ReviseSentPrompt),
