@@ -42,6 +42,7 @@ pub enum Verification {
     ConversationFork,
     Sidebar,
     SidebarRestore,
+    CommandPalette,
     Account,
     WindowsSetup,
     Turn,
@@ -65,7 +66,10 @@ pub async fn select_fixture_checkout(
     secondary: bool,
 ) -> Result<(), IpcError> {
     authorize_view(&window)?;
-    if !matches!(*verification, Verification::Quit | Verification::Sidebar) {
+    if !matches!(
+        *verification,
+        Verification::Quit | Verification::Sidebar | Verification::CommandPalette
+    ) {
         return Err(IpcError::UnauthorizedWindow);
     }
     let path = if secondary {
@@ -301,6 +305,7 @@ pub fn verify_attachments_result(
             | Verification::ConversationFork
             | Verification::Sidebar
             | Verification::SidebarRestore
+            | Verification::CommandPalette
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -337,6 +342,8 @@ pub fn verify_attachments_result(
             Verification::Sidebar | Verification::SidebarRestore
         ) {
             println!("Verified installed sidebar projects, scoped chats, and saved organization");
+        } else if *verification == Verification::CommandPalette {
+            println!("Verified installed keyboard command palette and scoped choosers");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

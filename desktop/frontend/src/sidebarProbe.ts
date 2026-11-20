@@ -44,6 +44,7 @@ export async function verifySidebar(
     }
 
     const workspace = visible()!.workspace!;
+    const primaryPath = view()!.projects.find((project) => project.id === primary)!.path;
     const startingRevision = view()!.revision!;
     if (own().map((row) => row.key.chatId).join() !== `${SECOND},${FIRST}`) {
       throw new Error('The sidebar did not sort by backend update time');
@@ -97,7 +98,7 @@ export async function verifySidebar(
     await click(FINAL_CHAT);
     await waitFor('Opening the pinned chat used a different project or draft', () =>
       view()?.activeProject === primary && selected() === FIRST && draft() === DRAFT &&
-      visible()?.workspace?.projectPath === workspace.projectPath && visible()?.workspace?.workspaceId !== workspace.workspaceId);
+      visible()?.workspace?.projectPath === primaryPath && visible()?.workspace?.workspaceId !== workspace.workspaceId);
     await chooseOption('Organize Sidebar', 'oneList');
     await waitFor('The combined list did not retain both project identities', () =>
       view()?.group === 'oneList' && !!chat('other-history-first') && view()?.projects.length === 2);

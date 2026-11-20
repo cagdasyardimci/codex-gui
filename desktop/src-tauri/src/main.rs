@@ -37,6 +37,7 @@ fn main() {
         Some("--verify-conversation-fork") => fixture::Verification::ConversationFork,
         Some("--verify-sidebar") => fixture::Verification::Sidebar,
         Some("--verify-sidebar-restore") => fixture::Verification::SidebarRestore,
+        Some("--verify-command-palette") => fixture::Verification::CommandPalette,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -68,6 +69,7 @@ fn main() {
             | fixture::Verification::ConversationFork
             | fixture::Verification::Sidebar
             | fixture::Verification::SidebarRestore
+            | fixture::Verification::CommandPalette
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -91,7 +93,9 @@ fn main() {
     );
     let fixture_checkouts = matches!(
         verification,
-        fixture::Verification::Quit | fixture::Verification::Sidebar
+        fixture::Verification::Quit
+            | fixture::Verification::Sidebar
+            | fixture::Verification::CommandPalette
     )
     .then(|| fixture::FixtureCheckouts {
         primary: desktop_fixture

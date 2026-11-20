@@ -36,7 +36,7 @@ Run it with `--prompt-revision` to verify the edit action on the first prompt, t
 
 Run it with `--conversation-fork` to verify a response branch, a bookmark jump outside resident history, a writer-locked fork, and recovery of a saved fork after a lost reply.
 
-Run the [sidebar fixture](../desktop/fixtures/verify_sidebar_fixture.py) against the installed executable to verify chat and project rename, ordering, pins, unread marks, and cross-project navigation across a relaunch.
+Run the [sidebar fixture](../desktop/fixtures/verify_sidebar_fixture.py) against the installed executable to verify chat and project rename, ordering, pins, unread marks, and cross-project navigation across a relaunch. Run it with `--command-palette` to verify keyboard search, focus restoration, stale selection rejection, and checkout and draft ownership.
 
 Run it with `--settings` to verify model-specific effort and speed, cancellation and retirement of Full Access confirmation, and the exact settings in three captured Send requests across a pending change and a return to configured permissions.
 

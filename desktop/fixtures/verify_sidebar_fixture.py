@@ -15,6 +15,7 @@ from verify_coding_probe import fixture_executable
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
+    parser.add_argument("--command-palette", action="store_true")
     args = parser.parse_args()
     executable = args.app.resolve(strict=True)
     with TemporaryDirectory(prefix="codex-gui-sidebar-") as scratch:
@@ -38,30 +39,48 @@ def main():
             "CODEX_GUI_QA_STATE": str(state),
             "PYTHONIOENCODING": "utf-8",
         }
-        for command in (
+        commands = (
             [executable, "--verify-sidebar", data, source, other],
             [executable, "--verify-sidebar-restore", data],
-        ):
+        )
+        expected = "Verified installed sidebar projects"
+        if args.command_palette:
+            for checkout in (source, other):
+                subprocess.run(["git", "init", "--quiet", checkout], check=True)
+            commands = ([executable, "--verify-command-palette", data, source, other],)
+            expected = "Verified installed keyboard command palette"
+        for command in commands:
             result = subprocess.run(command, env=environment, capture_output=True,
                                     encoding="utf-8", errors="replace", timeout=75)
             print(result.stdout, end="")
-            if result.returncode or "Verified installed sidebar projects" not in result.stdout:
+            if result.returncode or expected not in result.stdout:
                 raise SystemExit(result.stderr or "The installed sidebar fixture did not complete")
 
         requests = [record for line in trace.read_text(encoding="utf-8").splitlines()
                     if (record := json.loads(line))["direction"] == "request"]
         renames = [request for request in requests if request["method"] == "thread/name/set"]
-        assert [(request["params"], Path(request["backendCheckout"]).samefile(source)) for request in renames] == [
+        expected_renames = [] if args.command_palette else [
             ({"threadId": "history-first", "name": "Renamed fixture chat"}, True),
             ({"threadId": "history-first", "name": "Final fixture chat"}, True),
-        ], renames
+        ]
+        assert [(request["params"], Path(request["backendCheckout"]).samefile(source)) for request in renames] == expected_renames, renames
         for request in requests:
             thread = request.get("threadId")
             if thread:
                 expected = other if thread.startswith("other-") else source
                 assert Path(request["backendCheckout"]).samefile(expected), request
         assert not any(request["method"] in ("thread/start", "turn/start") for request in requests)
+        assert not list(profile.iterdir())
         with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
+            if args.command_palette:
+                assert database.execute(
+                    "SELECT thread_id, text FROM thread_drafts JOIN drafts ON draft_id = id ORDER BY thread_id"
+                ).fetchall() == [
+                    ("history-first", "Keep this café draft."),
+                    ("other-history-first", "Keep the other checkout draft."),
+                ]
+                print("Verified keyboard selection and exact draft ownership without a coding turn")
+                return
             target, path, thread = database.execute(
                 "SELECT project_key, project_path, thread_id FROM desktop_selection"
             ).fetchone()
@@ -78,7 +97,6 @@ def main():
             assert [item["chatId"] for item in preferences["order"] if item["projectId"] == target] == [
                 "history-first", "history-second",
             ], preferences
-        assert not list(profile.iterdir())
         print("Verified two owned checkouts, exact rename requests, pinned navigation and durable manual order")
 
 

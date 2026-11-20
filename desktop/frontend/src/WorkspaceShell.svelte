@@ -12,6 +12,8 @@
   import SlashCommandPanel from './SlashCommandPanel.svelte';
   import SentPromptDialog from './SentPromptDialog.svelte';
   import WorkspaceSidebar from './WorkspaceSidebar.svelte';
+  import CommandPalette from './CommandPalette.svelte';
+  import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
@@ -32,10 +34,11 @@
   import { verifyPromptRevision } from './promptRevisionProbe';
   import { verifyConversationFork } from './conversationForkProbe';
   import { verifySidebar } from './sidebarProbe';
+  import { verifyCommandPalette } from './commandPaletteProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -68,6 +71,17 @@
   let slashToken = $state.raw<{ start: number; end: number; prefix: string }>();
   let slashIndex = $state(0);
   let promptEdit = $state.raw<{ row: TranscriptRowRequest; view: SentPromptEdit }>();
+  type PaletteScope = {
+    mode: PaletteMode;
+    entries: PaletteEntry[];
+    revision: string | null;
+    workspaceId: string | null;
+    chatId: string | null;
+    draftId: string | null;
+    focused: HTMLElement | null;
+    selection?: [number, number];
+  };
+  let palette = $state.raw<PaletteScope>();
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
@@ -269,6 +283,7 @@
     if (promptEdit && (promptEdit.row.workspaceId !== current.workspace?.workspaceId ||
         promptEdit.row.chatId !== current.navigation.selectedChat ||
         promptEdit.row.generation !== current.transcript.generation || current.navigation.quit)) cancelSentPromptEdit();
+    if (palette && (!paletteMatches(palette, current) || current.navigation.quit)) closePalette(false);
     viewport.receive(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) {
@@ -311,6 +326,86 @@
       saving = savePending().finally(() => { saving = null; });
     }
     return saving;
+  }
+
+  function paletteMatches(scope: PaletteScope, current: WorkspaceSnapshot | null) {
+    return scope.workspaceId === (current?.workspace?.workspaceId ?? null) &&
+      scope.chatId === (current?.navigation.selectedChat ?? null) &&
+      scope.draftId === (current?.navigation.draft?.id ?? null);
+  }
+
+  function openPalette(mode: PaletteMode) {
+    if (!snapshot || palette || actionPending || composing || quit || promptEdit || commandPanel) return;
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selection: [number, number] | undefined = (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement) &&
+      focused.selectionStart !== null && focused.selectionEnd !== null
+      ? [focused.selectionStart, focused.selectionEnd] : undefined;
+    palette = {
+      mode, entries: paletteEntries(mode, snapshot.navigation), revision: snapshot.navigation.sidebar.revision,
+      workspaceId: snapshot.workspace?.workspaceId ?? null, chatId: snapshot.navigation.selectedChat,
+      draftId: snapshot.navigation.draft?.id ?? null, focused, selection,
+    };
+  }
+
+  async function focusAfterPalette(scope: PaletteScope, selected = false) {
+    await tick();
+    if (selected || !scope.focused?.isConnected || !paletteMatches(scope, snapshot)) {
+      editor?.focus({ preventScroll: true });
+      return;
+    }
+    scope.focused.focus({ preventScroll: true });
+    if (scope.selection && (scope.focused instanceof HTMLInputElement || scope.focused instanceof HTMLTextAreaElement)) {
+      scope.focused.setSelectionRange(...scope.selection);
+    }
+  }
+
+  function closePalette(restore = true) {
+    const captured = palette;
+    palette = undefined;
+    if (captured && restore) void focusAfterPalette(captured);
+  }
+
+  async function choosePalette(entry: PaletteEntry) {
+    const captured = palette;
+    if (!captured || !paletteMatches(captured, snapshot) || actionPending || composing || quit) return;
+    actionPending = true;
+    try {
+      await flushEdits();
+      if (!paletteMatches(captured, snapshot)) throw 'staleSelection';
+      const target = entry.destination;
+      if ('project' in target || 'chat' in target) {
+        if (!captured.revision) throw 'staleSelection';
+        const change = 'project' in target ? { openProject: target.project } : { openChat: target.chat };
+        await navigateWorkspace({ sidebar: { revision: captured.revision, change } });
+        closePalette(false);
+        await focusAfterPalette(captured, true);
+        return;
+      }
+      if (target.action === 'browse') {
+        closePalette(false);
+        const picked = await pickWorkspace();
+        await focusAfterPalette(captured, picked !== null);
+        return;
+      }
+      const workspaceId = captured.workspaceId;
+      if (!workspaceId) throw 'staleSelection';
+      if (target.action === 'changes') showingChanges = true;
+      else if (target.action === 'projectContext') showingProjectContext = true;
+      else {
+        const intent = { [target.action]: { workspaceId } } as NavigationIntent;
+        await navigateWorkspace(intent);
+      }
+      closePalette(false);
+      await focusAfterPalette(captured, target.action === 'newChat');
+    } catch (error) {
+      if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
+      if (palette === captured && snapshot && paletteMatches(captured, snapshot)) {
+        palette = { ...captured, entries: paletteEntries(captured.mode, snapshot.navigation),
+          revision: snapshot.navigation.sidebar.revision };
+      }
+    } finally {
+      actionPending = false;
+    }
   }
 
   async function updateProjectContext(scope: DraftAttachmentScope, revision: number, change: ProjectContextChange) {
@@ -644,7 +739,18 @@
     if (event.target instanceof HTMLElement && event.target.closest('dialog')) return;
     if (event.key === 'Tab' && !event.defaultPrevented && !event.isComposing) retainSelectionForTab();
     if (event.defaultPrevented || event.isComposing || composing ||
-        !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+        !(event.metaKey || event.ctrlKey)) return;
+    if (event.shiftKey) {
+      const key = event.key.toLowerCase();
+      const mode = event.altKey && (event.code === 'KeyO' || key === 'o') ? 'projects' :
+        !event.altKey && key === 'p' ? 'commands' : !event.altKey && key === 'k' ? 'chats' : undefined;
+      if (mode) {
+        event.preventDefault();
+        openPalette(mode);
+      }
+      return;
+    }
+    if (event.altKey) return;
     switch (event.key.toLowerCase()) {
       case 'o':
         event.preventDefault();
@@ -677,6 +783,7 @@
     else if (verify === 'promptRevision') void verifyPromptRevision(() => snapshot);
     else if (verify === 'conversationFork') void verifyConversationFork(() => snapshot);
     else if (verify === 'sidebar' || verify === 'sidebarRestore') void verifySidebar(verify, () => snapshot);
+    else if (verify === 'commandPalette') void verifyCommandPalette(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -687,6 +794,14 @@
 <main class="workspace" aria-label="Codex GUI">
   <header class="workspace-header">
     <button type="button" disabled={actionPending} onclick={() => void act(pickWorkspace)}>Open Project…</button>
+    <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
+      onclick={() => openPalette('commands')}>Commands</button>
+    <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Alt+Shift+O Control+Alt+Shift+O"
+      onclick={() => openPalette('projects')}>Choose Project</button>
+    {#if sidebar?.chats.length}
+      <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+K Control+Shift+K"
+        onclick={() => openPalette('chats')}>Choose Chat</button>
+    {/if}
     {#if navigation?.actions.stopAll}
       <button type="button" disabled={actionPending || !!quit}
         onclick={() => void act(() => navigateWorkspace('stopAll'))}>Stop All…</button>
@@ -873,6 +988,10 @@
     {#key promptEdit.view.ticket}
       <SentPromptDialog prompt={promptEdit.view} applying={actionPending} submit={reviseSentPrompt} cancel={cancelSentPromptEdit} />
     {/key}
+  {/if}
+  {#if palette}
+    <CommandPalette mode={palette.mode} entries={palette.entries} blocked={actionPending}
+      choose={(entry) => void choosePalette(entry)} close={closePalette} />
   {/if}
   {#if quit?.confirm && !quit.draining}
     <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly}
