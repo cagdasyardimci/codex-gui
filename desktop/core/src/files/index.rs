@@ -59,7 +59,7 @@ impl ProjectPathIndex {
 
     fn scan_with_limit(checkout: CheckoutIdentity, limit: usize) -> Result<Self, FileError> {
         checkout.revalidate()?;
-        let directory = directory::open_root(checkout.directory())?;
+        let directory = directory::open_root(&checkout)?;
         let mut scan = Scan {
             limit,
             paths: BTreeSet::new(),

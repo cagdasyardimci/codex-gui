@@ -54,6 +54,15 @@ impl CheckoutIdentity {
         &self.directory
     }
 
+    #[cfg(windows)]
+    pub(crate) fn reopen_directory(&self) -> Result<File, CheckoutError> {
+        let (directory, key) = identify_directory(&self.canonical)?;
+        if key != self.key {
+            return Err(CheckoutError::Replaced(self.canonical.clone()));
+        }
+        Ok(directory)
+    }
+
     pub(crate) fn storage_key(&self) -> String {
         #[cfg(unix)]
         return format!(

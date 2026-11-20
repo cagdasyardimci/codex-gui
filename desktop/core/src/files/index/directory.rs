@@ -1,4 +1,6 @@
 #[cfg(unix)]
+use super::{CheckoutIdentity, FileError};
+#[cfg(unix)]
 use std::{ffi::OsStr, fs::File, io};
 
 #[derive(Clone, Copy)]
@@ -9,8 +11,8 @@ pub(super) enum EntryKind {
 }
 
 #[cfg(unix)]
-pub(super) fn open_root(file: &File) -> io::Result<File> {
-    file.try_clone()
+pub(super) fn open_root(checkout: &CheckoutIdentity) -> Result<File, FileError> {
+    Ok(checkout.directory().try_clone()?)
 }
 
 #[cfg(unix)]

@@ -3,74 +3,82 @@ use std::{
     fs::File,
     io,
     mem::offset_of,
-    os::windows::{
-        ffi::OsStringExt,
-        io::{AsRawHandle, FromRawHandle},
-    },
+    os::windows::{ffi::OsStringExt, io::AsRawHandle},
+    ptr::{null, null_mut},
 };
 
-use windows_sys::Win32::{
-    Foundation::{ERROR_NO_MORE_FILES, INVALID_HANDLE_VALUE},
-    Storage::FileSystem::{
-        FILE_ATTRIBUTE_DEVICE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_FULL_DIR_INFO, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE,
-        FILE_SHARE_READ, FILE_SHARE_WRITE, FileFullDirectoryInfo, FileFullDirectoryRestartInfo,
-        GetFileInformationByHandleEx, ReOpenFile,
+use windows_sys::{
+    Wdk::Storage::FileSystem::{
+        FILE_FULL_DIR_INFORMATION, FileFullDirectoryInformation, NtQueryDirectoryFile,
+    },
+    Win32::{
+        Foundation::{
+            RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_NO_SUCH_FILE, STATUS_SUCCESS,
+        },
+        Storage::FileSystem::{
+            FILE_ATTRIBUTE_DEVICE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
+        },
+        System::IO::IO_STATUS_BLOCK,
     },
 };
 
 use super::EntryKind;
+use crate::{checkout::CheckoutIdentity, files::FileError};
 
-pub(in crate::files::index) fn open_root(file: &File) -> io::Result<File> {
-    // Reopen the existing directory to keep this scan's cursor independent.
-    let handle = unsafe {
-        ReOpenFile(
-            file.as_raw_handle(),
-            FILE_LIST_DIRECTORY,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            FILE_FLAG_BACKUP_SEMANTICS,
-        )
-    };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
-    // ReOpenFile returned a new owned handle.
-    Ok(unsafe { File::from_raw_handle(handle) })
+pub(in crate::files::index) fn open_root(checkout: &CheckoutIdentity) -> Result<File, FileError> {
+    // Open an independent directory cursor and verify the original native identity.
+    Ok(checkout.reopen_directory()?)
 }
 
 pub(in crate::files::index) fn visit(
     file: &File,
     mut receive: impl FnMut(&OsStr, EntryKind) -> io::Result<bool>,
 ) -> io::Result<bool> {
-    const NAME_OFFSET: usize = offset_of!(FILE_FULL_DIR_INFO, FileName);
-    const ATTRIBUTES_OFFSET: usize = offset_of!(FILE_FULL_DIR_INFO, FileAttributes);
-    const LENGTH_OFFSET: usize = offset_of!(FILE_FULL_DIR_INFO, FileNameLength);
+    const NAME_OFFSET: usize = offset_of!(FILE_FULL_DIR_INFORMATION, FileName);
+    const ATTRIBUTES_OFFSET: usize = offset_of!(FILE_FULL_DIR_INFORMATION, FileAttributes);
+    const LENGTH_OFFSET: usize = offset_of!(FILE_FULL_DIR_INFORMATION, FileNameLength);
 
     let mut aligned = vec![0u64; 4096];
     let byte_len = aligned.len() * size_of::<u64>();
-    let mut mode = FileFullDirectoryRestartInfo;
+    let mut restart = true;
     loop {
+        let mut status = IO_STATUS_BLOCK::default();
         // The directory handle is borrowed and the buffer is writable and aligned.
-        let ok = unsafe {
-            GetFileInformationByHandleEx(
+        let result = unsafe {
+            NtQueryDirectoryFile(
                 file.as_raw_handle(),
-                mode,
+                null_mut(),
+                None,
+                null(),
+                &mut status,
                 aligned.as_mut_ptr().cast(),
                 byte_len as u32,
+                FileFullDirectoryInformation,
+                false,
+                null(),
+                restart,
             )
         };
-        if ok == 0 {
-            let error = io::Error::last_os_error();
-            return if error.raw_os_error() == Some(ERROR_NO_MORE_FILES as i32) {
-                Ok(true)
-            } else {
-                Err(error)
-            };
+        match result {
+            STATUS_NO_MORE_FILES | STATUS_NO_SUCH_FILE => return Ok(true),
+            STATUS_SUCCESS => {}
+            code => {
+                let source =
+                    io::Error::from_raw_os_error(unsafe { RtlNtStatusToDosError(code) } as i32);
+                return Err(io::Error::new(
+                    source.kind(),
+                    format!("enumerate captured directory: {source}"),
+                ));
+            }
         }
-        mode = FileFullDirectoryInfo;
-        // All bytes are initialized, including any unused bytes in the final record.
-        let mut remaining =
-            unsafe { std::slice::from_raw_parts(aligned.as_ptr().cast::<u8>(), byte_len) };
+        restart = false;
+        if status.Information > byte_len || status.Information == 0 {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        // The kernel returned the count of initialized directory data bytes.
+        let mut remaining = unsafe {
+            std::slice::from_raw_parts(aligned.as_ptr().cast::<u8>(), status.Information)
+        };
         loop {
             let invalid = || io::Error::from(io::ErrorKind::InvalidData);
             let next = word(remaining, 0).ok_or_else(invalid)? as usize;
