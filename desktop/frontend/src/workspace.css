@@ -113,8 +113,16 @@ body {
   padding: 0.75rem clamp(1rem, 5vw, 4rem);
 }
 
+.transcript-pane {
+  display: flex;
+  flex: 1;
+  gap: 0.4rem;
+  min-height: 0;
+}
+
 .workspace-transcript {
   flex: 1;
+  min-width: 0;
   overflow: auto;
 }
 

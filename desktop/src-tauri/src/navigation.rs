@@ -353,6 +353,11 @@ impl Navigation {
                 self.focus(None).await.map_err(report)?;
             }
             NavigationIntent::LoadOlderHistory(request) => self.load_older_history(request)?,
+            NavigationIntent::LoadTurnReferences(request) => self.load_turn_references(request)?,
+            NavigationIntent::PreviewTurn(request) => self.preview_turn(request)?,
+            NavigationIntent::CancelTurnPreview(request) => self.cancel_turn_preview(request)?,
+            NavigationIntent::JumpToTurn(request) => self.jump_to_turn(request)?,
+            NavigationIntent::CancelTurnJump(request) => self.cancel_turn_jump(request)?,
             NavigationIntent::ClearProject(request) => {
                 self.require_request(request)?;
                 self.clear().await.map_err(report)?;
@@ -736,9 +741,15 @@ impl Navigation {
         }
         self.stream = TextBatcher::default();
         self.restored_active_items = active;
-        self.pages
-            .install(workspace, thread.clone(), client.identity(), summary, page);
+        self.pages.install(
+            workspace,
+            thread.clone(),
+            client.identity(),
+            Some(summary),
+            page,
+        );
         self.view.older_history = self.pages.view();
+        self.start_turn_rail(client.clone());
         self.publish_history(before_resume);
 
         let backend = self.backend.as_mut().expect("backend connected");
@@ -879,6 +890,7 @@ impl Navigation {
         };
         let workspace = selection.id;
         let checkout = selection.checkout.clone();
+        self.observe_rail_turn(&thread, turn_id);
         match method.as_str() {
             "item/agentMessage/delta" => {
                 if let (Some(item), Some(text)) =

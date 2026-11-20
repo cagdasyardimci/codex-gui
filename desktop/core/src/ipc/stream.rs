@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::subscription::HistoryInsertion;
+
 mod commands;
 pub use commands::{CommandUpdate, TranscriptCommand};
 
@@ -96,18 +98,70 @@ impl TranscriptView {
         (item.revision == revision).then_some(item)
     }
 
-    pub(super) fn prepend(&mut self, earlier: Self) -> Vec<TranscriptItem> {
-        let mut prefix: Vec<_> = earlier
+    pub(super) fn insert(&mut self, position: usize, added: Self) -> Vec<TranscriptItem> {
+        let incoming: Vec<_> = added
             .items
             .into_iter()
             .filter(|item| !self.positions.contains_key(&item.item_id))
             .collect();
-        if prefix.is_empty() {
-            return prefix;
+        if incoming.is_empty() {
+            return incoming;
         }
-        let inserted = prefix.clone();
-        prefix.append(&mut self.items);
-        self.items = prefix;
+        self.items
+            .splice(position..position, incoming.iter().cloned());
+        self.reindex();
+        incoming
+    }
+
+    pub(super) fn merge(&mut self, added: Self, order: &[String]) -> Vec<HistoryInsertion> {
+        let rank: HashMap<_, _> = order
+            .iter()
+            .enumerate()
+            .map(|(index, turn)| (turn.as_str(), index))
+            .collect();
+        let rank_of = |row: &TranscriptItem| {
+            rank.get(row.turn_id.as_str())
+                .copied()
+                .unwrap_or(usize::MAX)
+        };
+        let mut incoming: Vec<_> = added
+            .items
+            .into_iter()
+            .filter(|item| !self.positions.contains_key(&item.item_id))
+            .collect();
+        if incoming.is_empty() {
+            return Vec::new();
+        }
+        incoming.sort_by_key(&rank_of);
+        let mut insertions: Vec<HistoryInsertion> = Vec::new();
+        let mut retained = std::mem::take(&mut self.items).into_iter().peekable();
+        for row in incoming {
+            while retained
+                .peek()
+                .is_some_and(|current| rank_of(current) <= rank_of(&row))
+            {
+                self.items.push(retained.next().expect("peeked row"));
+            }
+            let position = self.items.len() as u32;
+            if let Some(last) = insertions
+                .last_mut()
+                .filter(|last| last.position + last.rows.len() as u32 == position)
+            {
+                last.rows.push(row.clone());
+            } else {
+                insertions.push(HistoryInsertion {
+                    position,
+                    rows: vec![row.clone()],
+                });
+            }
+            self.items.push(row);
+        }
+        self.items.extend(retained);
+        self.reindex();
+        insertions
+    }
+
+    fn reindex(&mut self) {
         self.positions.clear();
         self.commands.clear();
         for (row, item) in self.items.iter().enumerate() {
@@ -116,7 +170,6 @@ impl TranscriptView {
                 self.commands.insert(command.id.clone(), (row, index));
             }
         }
-        inserted
     }
 
     pub(super) fn apply(&mut self, change: &mut StreamChange) -> bool {

@@ -22,6 +22,7 @@ pub struct NavigationView {
     pub queue: Option<QueueView>,
     pub last_turn: Option<LastTurnView>,
     pub older_history: Option<OlderHistoryView>,
+    pub turn_rail: Option<TurnRailView>,
     pub quit: Option<QuitView>,
 }
 
@@ -37,6 +38,57 @@ pub struct OlderHistoryView {
 pub struct OlderHistoryRequest {
     pub workspace_id: WorkspaceId,
     pub chat_id: String,
+    pub ticket: Uuid,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnRailView {
+    pub id: Uuid,
+    pub turns: Vec<TurnReferenceView>,
+    pub earlier: Option<Uuid>,
+    pub preview: Option<TurnPreview>,
+    pub jump: Option<TurnJump>,
+    pub pending_jump: Option<TurnJump>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnReferenceView {
+    pub id: String,
+    pub title: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnPreview {
+    pub turn_id: String,
+    pub prompt: Option<String>,
+    pub response: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnJump {
+    pub ticket: Uuid,
+    pub turn_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TurnRailRequest {
+    pub workspace_id: WorkspaceId,
+    pub chat_id: String,
+    pub rail_id: Uuid,
+    pub turn_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TurnRailTicketRequest {
+    pub workspace_id: WorkspaceId,
+    pub chat_id: String,
+    pub rail_id: Uuid,
     pub ticket: Uuid,
 }
 
@@ -130,6 +182,11 @@ pub struct DraftEdit {
 pub enum NavigationIntent {
     OpenChat(ChatRequest),
     LoadOlderHistory(OlderHistoryRequest),
+    LoadTurnReferences(TurnRailTicketRequest),
+    PreviewTurn(TurnRailRequest),
+    CancelTurnPreview(TurnRailRequest),
+    JumpToTurn(TurnRailRequest),
+    CancelTurnJump(TurnRailTicketRequest),
     NewChat(WorkspaceRequest),
     ClearProject(WorkspaceRequest),
     Refresh(WorkspaceRequest),

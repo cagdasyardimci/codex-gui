@@ -22,7 +22,7 @@ pub use windows_sandbox::{
 
 pub use history::{
     ChatRead, ChatSummary, HistoryTurn, QueueSnapshot, QueuedSubmission, ThreadActivity,
-    TurnActivity, TurnCursor, TurnStatus,
+    TurnActivity, TurnCursor, TurnItemRead, TurnItems, TurnStatus,
 };
 
 const PAGE_LIMIT: u32 = 100;
@@ -43,6 +43,8 @@ pub enum BrowseError {
     StaleChatRead,
     #[error("app-server returned a different chat")]
     WrongThread,
+    #[error("app-server returned inconsistent turn item pagination")]
+    TurnItemsPagination,
     #[error("app-server returned inconsistent queue pagination")]
     QueuePagination,
     #[error("invalid response from {method}: {source}")]

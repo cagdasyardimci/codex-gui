@@ -28,7 +28,7 @@ async function verifyOlderHistory(visible: () => WorkspaceSnapshot | null) {
   const viewport = document.querySelector<HTMLDivElement>('.workspace-transcript');
   const boundary = initial.transcript.items[0];
   const anchor = viewport?.firstElementChild;
-  if (!viewport || !anchor || boundary?.itemId !== 'older-fixture-14/response' ||
+  if (!viewport || !anchor || boundary?.itemId !== 'older-fixture-05/response' ||
       viewport.scrollHeight <= viewport.clientHeight) {
     throw new Error('The newest history page did not fill the scrollable transcript');
   }
@@ -51,8 +51,45 @@ async function verifyOlderHistory(visible: () => WorkspaceSnapshot | null) {
   await frame();
   const restoredTop = anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
   const retained = visible()?.transcript.items.find((row) => row.itemId === boundary.itemId);
-  if (!anchor.isConnected || Math.abs(restoredTop - top) > 1 || retained?.revision !== boundary.revision) {
+  const ordered = [...new Set(visible()?.transcript.items.filter((row) => row.turnId.startsWith('older-fixture-'))
+    .map((row) => row.turnId))];
+  if (!anchor.isConnected || Math.abs(restoredTop - top) > 1 || retained?.revision !== boundary.revision ||
+      ordered.length !== 32 || ordered.some((id, index) => id !== `older-fixture-${String(index + 1).padStart(2, '0')}`)) {
     throw new Error('Prepending history changed the visible row, its position, or its revision');
+  }
+}
+
+async function verifyTurnRail(visible: () => WorkspaceSnapshot | null) {
+  if (!visible()?.navigation.olderHistory) return;
+  await waitFor('The rail did not expose unloaded turn references', () =>
+    !!visible()?.navigation.turnRail?.turns.some((turn) => turn.id === 'older-fixture-03'));
+  const viewport = document.querySelector<HTMLDivElement>('.workspace-transcript');
+  const hover = document.querySelector<HTMLButtonElement>('button[data-turn-reference="older-fixture-03"]');
+  const delayed = document.querySelector<HTMLButtonElement>('button[data-turn-reference="older-fixture-04"]');
+  const jump = document.querySelector<HTMLButtonElement>('button[data-turn-reference="older-fixture-05"]');
+  if (!viewport || !hover || !delayed || !jump || visible()?.transcript.items.some((row) => row.turnId === 'older-fixture-03')) {
+    throw new Error('The first rail target must be outside the loaded transcript');
+  }
+  const before = viewport.scrollTop;
+  const rows = visible()!.transcript.items.map((row) => row.itemId).join('\n');
+  hover.dispatchEvent(new MouseEvent('mouseenter'));
+  await waitFor('The separate turn preview did not show the first and last text', () => {
+    const preview = document.querySelector('.turn-rail-preview')?.textContent;
+    return !!preview?.includes('A saved long turn') && preview.includes('Saved history page fixture 03');
+  });
+  if (viewport.scrollTop !== before || visible()?.transcript.items.map((row) => row.itemId).join('\n') !== rows) {
+    throw new Error('The hover preview changed the transcript position or resident rows');
+  }
+  delayed.dispatchEvent(new MouseEvent('mouseenter'));
+  jump.click();
+  await waitFor('The committed jump did not replace the preview and open the unloaded turn', () =>
+    !document.querySelector('.turn-rail-preview') &&
+    visible()?.transcript.items[0]?.itemId === 'older-fixture-05/response' &&
+    visible()?.navigation.turnRail?.jump?.turnId === 'older-fixture-05');
+  await frame();
+  const opened = viewport.firstElementChild?.getBoundingClientRect();
+  if (!opened || Math.abs(opened.top - viewport.getBoundingClientRect().top) > 1) {
+    throw new Error('The committed jump did not position the target turn in the viewport');
   }
 }
 
@@ -147,6 +184,7 @@ export async function verifyHistory(
       await waitFor('Writer lock did not leave readable history', () =>
         visible()?.navigation.selectedChat === FIRST && !!visible()?.navigation.retryable &&
         containsText('History in the first chat.'));
+      await verifyTurnRail(visible);
       await verifyOlderHistory(visible);
       const saved = await verifySavedRows(workspaceId, visible()!);
       const [path, ...others] = await searchProjectPaths({ workspaceId, query: ' CAFÉ.MD ' });

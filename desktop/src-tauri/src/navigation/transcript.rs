@@ -1,6 +1,6 @@
 use codex_gui_core::{
     checkout::CheckoutIdentity,
-    codex::{HistoryTurn, TurnStatus},
+    codex::{HistoryTurn, TurnActivity, TurnStatus},
     ipc::{
         CommandUpdate, TranscriptCommand, TranscriptItem, TranscriptRole, TranscriptView,
         present_question_reply,
@@ -20,9 +20,19 @@ pub(super) fn append_turn(
     turn: &HistoryTurn,
     active: &mut Vec<String>,
 ) {
-    let completed = turn.activity.status != TurnStatus::InProgress;
-    let id = &turn.activity.id.0;
-    for value in &turn.items {
+    append_turn_items(view, checkout, &turn.activity, &turn.items, active);
+}
+
+pub(super) fn append_turn_items(
+    view: &mut TranscriptView,
+    checkout: &CheckoutIdentity,
+    activity: &TurnActivity,
+    items: &[Value],
+    active: &mut Vec<String>,
+) {
+    let completed = activity.status != TurnStatus::InProgress;
+    let id = &activity.id.0;
+    for value in items {
         if let Some(command) = command_item(id, value) {
             view.apply_command(command);
         } else if let Some(item) = message_item(checkout, id, value, completed) {

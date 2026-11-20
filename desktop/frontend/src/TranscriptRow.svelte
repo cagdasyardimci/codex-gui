@@ -17,7 +17,7 @@
 </script>
 
 {#if item.role === 'commands'}
-  <article class="transcript-item" data-item-id={item.itemId}>
+  <article class="transcript-item" data-item-id={item.itemId} data-turn-id={item.turnId}>
     <details class="transcript-commands">
       <summary>{item.commands.length === 1 ? item.commands[0]?.command : 'Commands'}</summary>
       <ul>
@@ -31,7 +31,7 @@
     </details>
   </article>
 {:else}
-  <article class="transcript-item" data-item-id={item.itemId} aria-label={item.role === 'user' ? 'You' : 'Codex'}>
+  <article class="transcript-item" data-item-id={item.itemId} data-turn-id={item.turnId} aria-label={item.role === 'user' ? 'You' : 'Codex'}>
     <div class="transcript-item-header">
       <span aria-hidden="true">{item.role === 'user' ? 'You' : 'Codex'}</span>
       {#if item.role === 'assistant' && item.completed && item.text}

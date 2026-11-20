@@ -30,10 +30,18 @@ def seed_paginated_history(state_path: Path) -> None:
     earlier = []
     for number in range(1, 33):
         turn_id = f"older-fixture-{number:02}"
-        earlier.append({"id": turn_id, "status": "completed", "items": [{
+        items = [{
             "id": "response", "type": "agentMessage",
             "text": f"Saved history page fixture {number:02}\n" + "First line\nSecond line\nThird line",
-        }]})
+        }]
+        if number in {3, 5}:
+            items = [{"type": "reasoning", "id": f"step-{step}", "content": [], "summary": []}
+                     for step in range(104)] + items
+        if number == 3:
+            items.insert(0, {"id": "prompt", "type": "userMessage", "content": [
+                {"type": "text", "text": "A saved long turn"},
+            ]})
+        earlier.append({"id": turn_id, "status": "completed", "items": items})
     first["turns"] = earlier + first["turns"]
     state_path.write_text(json.dumps({"threads": threads}, ensure_ascii=True), encoding="utf-8")
 
@@ -87,6 +95,13 @@ def main() -> None:
         assert [(entry.get("threadId"), entry["cursor"], entry.get("itemsView")) for entry in paged] == [
             ("history-first", "older-fixture-14", "full"),
         ], paged
+        turn_reads = [event for event in events if event["direction"] == "request"
+                      and event["method"] == "thread/items/list"
+                      and event.get("turnId") in {"older-fixture-03", "older-fixture-04", "older-fixture-05"}]
+        assert [(entry["turnId"], entry["sortDirection"], entry.get("cursor")) for entry in turn_reads] == [
+            ("older-fixture-03", "asc", None), ("older-fixture-03", "desc", None),
+            ("older-fixture-05", "asc", None), ("older-fixture-05", "asc", "step-99"),
+        ], turn_reads
         hidden_requests = [
             event["method"] for event in events[restart_offset:]
             if event["direction"] == "request" and event.get("threadId") == "history-second"
@@ -105,6 +120,7 @@ def main() -> None:
         print("Verified selected draft and checkout retention without any thread or turn start requests")
         print("Verified an unselected chat's execution and command evidence reconciled after relaunch")
         print("Verified one cursor-scoped older history request from the deliberate scroll")
+        print("Verified bounded turn preview reads and a complete read for the committed jump")
 
 
 def seed_hidden_execution(database_path: Path, state_path: Path) -> None:

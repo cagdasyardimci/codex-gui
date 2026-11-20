@@ -55,8 +55,15 @@ pub struct RevisionedNavigation {
 #[serde(rename_all = "camelCase")]
 pub struct RevisionedHistory {
     pub revision: u32,
-    pub prepended: Vec<TranscriptItem>,
+    pub insertions: Vec<HistoryInsertion>,
     pub navigation: NavigationView,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryInsertion {
+    pub position: u32,
+    pub rows: Vec<TranscriptItem>,
 }
 
 #[derive(Debug, PartialEq, Serialize, TS)]
@@ -84,7 +91,7 @@ enum Change {
     Snapshot,
     Stream(StreamChange),
     Navigation,
-    History(Vec<TranscriptItem>),
+    History(Vec<HistoryInsertion>),
 }
 
 impl Publication {
@@ -115,9 +122,9 @@ impl Publication {
                 revision: self.snapshot.revision,
                 navigation: self.snapshot.navigation.clone(),
             }),
-            Change::History(items) => WorkspaceUpdate::History(RevisionedHistory {
+            Change::History(insertions) => WorkspaceUpdate::History(RevisionedHistory {
                 revision: self.snapshot.revision,
-                prepended: items.clone(),
+                insertions: insertions.clone(),
                 navigation: self.snapshot.navigation.clone(),
             }),
             Change::Snapshot => WorkspaceUpdate::Changed(self.snapshot.clone()),
@@ -186,20 +193,62 @@ impl WorkspaceProjection {
         navigation: NavigationView,
         earlier: TranscriptView,
     ) -> bool {
+        self.change_history(workspace, navigation, |view| {
+            let rows = view.insert(0, earlier);
+            if rows.is_empty() {
+                Vec::new()
+            } else {
+                vec![HistoryInsertion { position: 0, rows }]
+            }
+        })
+    }
+
+    pub fn merge_history(
+        &mut self,
+        workspace: WorkspaceId,
+        navigation: NavigationView,
+        added: TranscriptView,
+        order: &[String],
+    ) -> bool {
+        self.change_history(workspace, navigation, |view| view.merge(added, order))
+    }
+
+    fn change_history(
+        &mut self,
+        workspace: WorkspaceId,
+        navigation: NavigationView,
+        update: impl FnOnce(&mut TranscriptView) -> Vec<HistoryInsertion>,
+    ) -> bool {
         self.publication.send_if_modified(|publication| {
             if !publication.owns_workspace(workspace)
                 || publication.snapshot.navigation.selected_chat != navigation.selected_chat
             {
                 return false;
             }
-            let items = publication.snapshot.transcript.prepend(earlier);
-            if items.is_empty() && publication.snapshot.navigation == navigation {
+            let insertions = update(&mut publication.snapshot.transcript);
+            if insertions.is_empty() && publication.snapshot.navigation == navigation {
                 return false;
             }
             publication.snapshot.navigation = navigation;
-            publication.advance(Change::History(items));
+            publication.advance(Change::History(insertions));
             true
         })
+    }
+
+    pub fn read_conversation<T>(
+        &self,
+        workspace: WorkspaceId,
+        chat: &str,
+        read: impl FnOnce(&[TranscriptItem]) -> T,
+    ) -> Result<T, IpcError> {
+        let current = self.publication.borrow();
+        if !current.owns_workspace(workspace) {
+            return Err(IpcError::RetiredWorkspace);
+        }
+        if current.snapshot.navigation.selected_chat.as_deref() != Some(chat) {
+            return Err(IpcError::StaleSelection);
+        }
+        Ok(read(&current.snapshot.transcript.items))
     }
 
     pub fn publish_stream(&mut self, workspace: WorkspaceId, mut change: StreamChange) -> bool {
@@ -379,8 +428,10 @@ mod tests {
         else {
             panic!("expected an adjacent history insertion");
         };
-        assert_eq!(update.prepended.len(), 1);
-        assert_eq!(update.prepended[0].item_id, "oldest");
+        assert_eq!(update.insertions.len(), 1);
+        assert_eq!(update.insertions[0].position, 0);
+        assert_eq!(update.insertions[0].rows.len(), 1);
+        assert_eq!(update.insertions[0].rows[0].item_id, "oldest");
         let after = projection.subscribe().snapshot.transcript;
         assert_eq!(after.generation, initial.snapshot.transcript.generation);
         assert_eq!(after.items[1], initial.snapshot.transcript.items[0]);

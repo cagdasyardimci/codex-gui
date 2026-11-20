@@ -184,7 +184,15 @@ class Server:
             turn = next((t for t in thread['turns'] if t['id'] == p.get('turnId')), None)
             if not turn:
                 raise ProtocolError(-32001, 'Unknown turn')
-            return {'data': turn['items'], 'nextCursor': None}
+            items = list(reversed(turn['items'])) if p.get('sortDirection') == 'desc' else turn['items']
+            if p.get('cursor'):
+                offset = next((i for i, item in enumerate(items) if item['id'] == p['cursor']), None)
+                if offset is None:
+                    raise ProtocolError(-32602, 'Unknown item page cursor')
+                items = items[offset + 1:]
+            limit = p.get('limit') or len(items)
+            next_cursor = items[limit - 1]['id'] if len(items) > limit else None
+            return {'data': [{'turnId': turn['id'], 'item': item} for item in items[:limit]], 'nextCursor': next_cursor}
         if method in ('thread/name/set', 'thread/archive', 'thread/unarchive', 'thread/delete', 'thread/unsubscribe'):
             thread = self.thread(p.get('threadId'))
             if method == 'thread/name/set':

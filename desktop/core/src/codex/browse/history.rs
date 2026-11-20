@@ -7,7 +7,10 @@ use crate::identity::{ConnectionIdentity, ThreadId, TurnId};
 
 use super::{BrowseError, CodexBrowser, Page, ThreadSummary, WirePage};
 
+mod items;
 mod queue;
+
+pub use items::{TurnItemRead, TurnItems};
 pub use queue::{QueueSnapshot, QueuedSubmission};
 
 #[derive(Debug, Deserialize)]
@@ -43,7 +46,7 @@ pub enum TurnStatus {
     Unknown,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TurnActivity {
     pub id: TurnId,
     pub status: TurnStatus,

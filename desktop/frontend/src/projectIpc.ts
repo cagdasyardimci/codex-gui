@@ -111,8 +111,10 @@ export async function observeWorkspace(
     } else if ('navigation' in update) {
       snapshot = { ...snapshot, ...update.navigation };
     } else if ('history' in update) {
-      const { revision, navigation, prepended } = update.history;
-      const transcript = { ...snapshot.transcript, items: [...prepended, ...snapshot.transcript.items] };
+      const { revision, navigation, insertions } = update.history;
+      const items = snapshot.transcript.items.slice();
+      for (const insertion of insertions) items.splice(insertion.position, 0, ...insertion.rows);
+      const transcript = { ...snapshot.transcript, items };
       snapshot = { ...snapshot, revision, navigation, transcript };
       positions = indexRows(transcript);
     } else {

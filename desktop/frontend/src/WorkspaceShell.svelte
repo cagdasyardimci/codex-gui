@@ -6,6 +6,7 @@
   import WorkspaceChanges from './WorkspaceChanges.svelte';
   import QueuePanel from './QueuePanel.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
+  import TurnRail from './TurnRail.svelte';
   import { copyTranscriptRow, navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
@@ -24,6 +25,8 @@
   let upwardHistory: { ticket: string; before: number; until: number } | undefined;
   let requestingHistory: string | undefined;
   let transcriptInput = 0;
+  let shownJump: string | undefined;
+  let canceledJump: string | undefined;
   let draftId: string | undefined;
   let text = $state('');
   let composing = false;
@@ -90,7 +93,7 @@
   }
 
   function beginUpwardScroll() {
-    transcriptInput += 1;
+    recordTranscriptInput();
     const older = navigation?.olderHistory;
     if (!older || older.pending || !transcript) return;
     const before = transcript.scrollTop;
@@ -98,11 +101,24 @@
     else upwardHistory = { ticket: older.ticket, before, until: performance.now() + 500 };
   }
 
+  function recordTranscriptInput() {
+    transcriptInput += 1;
+    const rail = navigation?.turnRail;
+    const chatId = navigation?.selectedChat;
+    const pending = rail?.pendingJump;
+    if (!workspace || !rail || !chatId || !pending || canceledJump === pending.ticket) return;
+    canceledJump = pending.ticket;
+    void navigateWorkspace({ cancelTurnJump: { workspaceId: workspace.workspaceId, chatId, railId: rail.id,
+      ticket: pending.ticket } }).catch((error) => {
+      if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
+    });
+  }
+
   function transcriptWheel(event: WheelEvent) {
     if (event.ctrlKey || event.deltaY === 0) return;
     if (event.deltaY < 0) beginUpwardScroll();
     else {
-      transcriptInput += 1;
+      recordTranscriptInput();
       upwardHistory = undefined;
     }
   }
@@ -111,7 +127,7 @@
     if (event.defaultPrevented || event.isComposing || event.shiftKey || event.altKey) return;
     if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) beginUpwardScroll();
     else if (['ArrowDown', 'PageDown', 'End', ' '].includes(event.key)) {
-      transcriptInput += 1;
+      recordTranscriptInput();
       upwardHistory = undefined;
     }
   }
@@ -148,12 +164,26 @@
     });
   }
 
+  function revealTurnJump(current: WorkspaceSnapshot) {
+    const jump = current.navigation.turnRail?.jump;
+    if (!jump || shownJump === jump.ticket || canceledJump === jump.ticket) return;
+    shownJump = jump.ticket;
+    upwardHistory = undefined;
+    const input = ++transcriptInput;
+    void tick().then(() => {
+      if (!transcript || transcriptInput !== input || snapshot?.navigation.turnRail?.jump?.ticket !== jump.ticket) return;
+      const target = Array.from(transcript.children).find((row) => row instanceof HTMLElement && row.dataset.turnId === jump.turnId);
+      if (target) transcript.scrollTop += target.getBoundingClientRect().top - transcript.getBoundingClientRect().top;
+    });
+  }
+
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
     preserveReadingPosition(current);
     if (snapshot?.transcript.generation !== current.transcript.generation) upwardHistory = undefined;
     if (snapshot?.workspace?.workspaceId !== current.workspace?.workspaceId) showingChanges = false;
     snapshot = current;
+    revealTurnJump(current);
     if (draftId !== current.navigation.draft?.id) {
       draftId = current.navigation.draft?.id;
       text = current.navigation.draft?.text ?? '';
@@ -392,12 +422,19 @@
       </nav>
     {/if}
     <section class="workspace-conversation" aria-label="Conversation">
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (The named scrolling region needs keyboard focus and scroll input.) -->
-      <div class="workspace-transcript" role="region" aria-label="Transcript" tabindex="0" bind:this={transcript}
-        onwheel={transcriptWheel} onkeydown={transcriptKey} onscroll={transcriptScroll}>
-        {#each snapshot?.transcript.items ?? [] as item (item.itemId)}
-          <TranscriptRow {item} copy={copyResponse} onCopyFocus={focusResponseAction} />
-        {/each}
+      <div class="transcript-pane">
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (The named scrolling region needs keyboard focus and scroll input.) -->
+        <div class="workspace-transcript" role="region" aria-label="Transcript" tabindex="0" bind:this={transcript}
+          onwheel={transcriptWheel} onkeydown={transcriptKey} onscroll={transcriptScroll}>
+          {#each snapshot?.transcript.items ?? [] as item (item.itemId)}
+            <TranscriptRow {item} copy={copyResponse} onCopyFocus={focusResponseAction} />
+          {/each}
+        </div>
+        {#if workspace && navigation?.selectedChat && navigation.turnRail?.turns.length}
+          {#key navigation.turnRail.id}
+            <TurnRail rail={navigation.turnRail} workspaceId={workspace.workspaceId} chatId={navigation.selectedChat} />
+          {/key}
+        {/if}
       </div>
       {#if navigation?.retryable && navigation.writeAccess === 'ready'}
         <button class="workspace-retry" type="button" disabled={actionPending} onclick={retryChat}>Retry</button>

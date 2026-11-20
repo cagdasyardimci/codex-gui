@@ -123,6 +123,7 @@ impl Navigation {
                     },
                 );
                 self.adopt_focus(Some(thread))?;
+                self.start_new_chat_rail(client.clone());
                 prepared
             }
         };

@@ -11,6 +11,9 @@ use uuid::Uuid;
 
 use super::{Navigation, RPC_TIMEOUT, append_turn};
 
+mod rail;
+use rail::{RailCompletion, TurnRail};
+
 type PageRead = ChatRead<Page<HistoryTurn, TurnCursor>>;
 
 pub(super) struct HistoryPaging {
@@ -23,16 +26,22 @@ struct HistoryOwner {
     workspace: WorkspaceId,
     thread: ThreadId,
     connection: ConnectionIdentity,
-    summary: Arc<ChatRead<ChatSummary>>,
-    cursor: TurnCursor,
+    summary: Option<Arc<ChatRead<ChatSummary>>>,
+    cursor: Option<TurnCursor>,
     ticket: Uuid,
     loaded: HashSet<TurnId>,
     pending: Option<JoinHandle<()>>,
+    rail: TurnRail,
 }
 
 pub(super) struct HistoryCompletion {
     ticket: Uuid,
-    result: Result<PageRead, BrowseError>,
+    result: HistoryResult,
+}
+
+enum HistoryResult {
+    Older(Result<PageRead, BrowseError>),
+    Rail(RailCompletion),
 }
 
 impl Default for HistoryPaging {
@@ -60,15 +69,15 @@ impl HistoryPaging {
         workspace: WorkspaceId,
         thread: ThreadId,
         connection: &ConnectionIdentity,
-        summary: ChatRead<ChatSummary>,
+        summary: Option<ChatRead<ChatSummary>>,
         page: &Page<HistoryTurn, TurnCursor>,
     ) {
-        self.owner = page.next_cursor.clone().map(|cursor| HistoryOwner {
+        self.owner = Some(HistoryOwner {
             workspace,
             thread,
             connection: connection.clone(),
-            summary: Arc::new(summary),
-            cursor,
+            summary: summary.map(Arc::new),
+            cursor: page.next_cursor.clone(),
             ticket: Uuid::new_v4(),
             loaded: page
                 .data
@@ -76,13 +85,16 @@ impl HistoryPaging {
                 .map(|turn| turn.activity.id.clone())
                 .collect(),
             pending: None,
+            rail: TurnRail::new(&page.data),
         });
     }
 
     pub(super) fn view(&self) -> Option<OlderHistoryView> {
-        self.owner.as_ref().map(|owner| OlderHistoryView {
-            ticket: owner.ticket,
-            pending: owner.pending.is_some(),
+        self.owner.as_ref().and_then(|owner| {
+            owner.cursor.as_ref().map(|_| OlderHistoryView {
+                ticket: owner.ticket,
+                pending: owner.pending.is_some(),
+            })
         })
     }
 }
@@ -91,6 +103,7 @@ impl Navigation {
     pub(super) fn retire_history_pages(&mut self) {
         self.pages.owner = None;
         self.view.older_history = None;
+        self.view.turn_rail = None;
     }
 
     pub(super) fn load_older_history(
@@ -118,8 +131,8 @@ impl Navigation {
         if owner.pending.is_some() {
             return Ok(());
         }
-        let summary = owner.summary.clone();
-        let cursor = owner.cursor.clone();
+        let summary = owner.summary.clone().ok_or(IpcError::StaleSelection)?;
+        let cursor = owner.cursor.clone().ok_or(IpcError::StaleSelection)?;
         let ticket = owner.ticket;
         let complete = self.pages.sender.clone();
         owner.pending = Some(tauri::async_runtime::spawn(async move {
@@ -127,7 +140,10 @@ impl Navigation {
                 .history(&summary, Some(&cursor), RPC_TIMEOUT)
                 .await;
             let _ = complete
-                .send(Box::new(HistoryCompletion { ticket, result }))
+                .send(Box::new(HistoryCompletion {
+                    ticket,
+                    result: HistoryResult::Older(result),
+                }))
                 .await;
         }));
         self.view.older_history = self.pages.view();
@@ -136,11 +152,18 @@ impl Navigation {
     }
 
     pub(super) fn complete_history_page(&mut self, completion: HistoryCompletion) {
+        match completion.result {
+            HistoryResult::Older(result) => self.complete_older(completion.ticket, result),
+            HistoryResult::Rail(result) => self.complete_rail(completion.ticket, result),
+        }
+    }
+
+    fn complete_older(&mut self, ticket: Uuid, result: Result<PageRead, BrowseError>) {
         let Some(owner) = self
             .pages
             .owner
             .as_mut()
-            .filter(|owner| owner.ticket == completion.ticket)
+            .filter(|owner| owner.ticket == ticket)
         else {
             return;
         };
@@ -162,8 +185,7 @@ impl Navigation {
             self.publish_navigation();
             return;
         }
-        let page = match completion
-            .result
+        let page = match result
             .as_ref()
             .map_err(|error| error.to_string())
             .and_then(|response| {
@@ -190,21 +212,19 @@ impl Navigation {
             append_turn(&mut history, &selection.checkout, turn, &mut inactive);
         }
         let workspace = selection.id;
-        if let Some(next) = page
+        owner.cursor = page
             .next_cursor
-            .as_ref()
-            .filter(|next| *next != &owner.cursor)
-        {
-            owner.cursor = next.clone();
-            owner.ticket = Uuid::new_v4();
-        } else {
-            self.pages.owner = None;
-        }
+            .clone()
+            .filter(|next| Some(next) != owner.cursor.as_ref());
+        owner.ticket = Uuid::new_v4();
+        owner.rail.include_history(&page.data);
+        let turn_order = owner.rail.order();
+        self.view.turn_rail = Some(owner.rail.view());
         self.view.older_history = self.pages.view();
         let mut state = self.model.lock().expect("workspace state lock poisoned");
         state.publish();
         state
             .projection
-            .prepend_history(workspace, self.view.clone(), history);
+            .merge_history(workspace, self.view.clone(), history, &turn_order);
     }
 }
