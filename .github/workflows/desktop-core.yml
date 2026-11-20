@@ -184,6 +184,9 @@ jobs:
           path: ${{ runner.temp }}/codex-gui-hosted-turn/device.enc
           retention-days: 1
           if-no-files-found: error
+      - name: Confirm hosted ChatGPT sign-in
+        if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != '' && (vars.CODEX_GUI_DEVICE_TARGET == '' || vars.CODEX_GUI_DEVICE_TARGET == runner.os)
+        run: python desktop/fixtures/hosted_coding_probe.py authorize
       - name: Verify the signed-in installed coding turn
         if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != '' && (vars.CODEX_GUI_DEVICE_TARGET == '' || vars.CODEX_GUI_DEVICE_TARGET == runner.os)
         shell: bash

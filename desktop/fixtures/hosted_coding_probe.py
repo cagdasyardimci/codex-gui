@@ -72,8 +72,8 @@ def prepare(stage: Path) -> None:
             stdout=login_output,
             stderr=subprocess.STDOUT,
             env=environment,
-            **({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
-               else {"start_new_session": True}),
+            **({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+               if os.name == "nt" else {"start_new_session": True}),
         )
 
     deadline = time.monotonic() + 45
@@ -92,15 +92,21 @@ def prepare(stage: Path) -> None:
     raise RuntimeError("Codex did not issue a device code")
 
 
-def await_login(environment: dict[str, str]) -> None:
+def await_login(stage: Path) -> None:
+    environment = probe_env(stage)
     cli = environment["CODEX_EXECUTABLE"]
+    private_log = stage / "private-login.log"
     deadline = time.monotonic() + 12 * 60
     while time.monotonic() < deadline:
         process = subprocess.run(
             [cli, "login", "status"], env=environment, capture_output=True, timeout=15,
         )
-        if process.returncode == 0 and b"ChatGPT" in process.stdout + process.stderr:
+        if process.returncode == 0 and b"chatgpt" in (process.stdout + process.stderr).lower():
+            print("Confirmed ChatGPT sign-in for the disposable profile")
             return
+        private_output = ANSI_ESCAPE.sub("", private_log.read_text(encoding="utf-8", errors="replace"))
+        if any(line.startswith("Error:") for line in private_output.splitlines()):
+            raise RuntimeError("Codex reported a device sign-in error before authorizing the profile")
         time.sleep(3)
     raise RuntimeError("The hosted ChatGPT device authorization did not complete")
 
@@ -157,7 +163,6 @@ def launch_ubuntu(report: Path, environment: dict[str, str], stage: Path) -> Non
 def finish(stage: Path) -> None:
     environment = probe_env(stage)
     try:
-        await_login(environment)
         report = stage / "coding-turn.txt"
         if os.name == "nt":
             launch_windows(report, environment)
@@ -186,13 +191,15 @@ def finish(stage: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["prepare", "finish"])
+    parser.add_argument("phase", choices=["prepare", "authorize", "finish"])
     args = parser.parse_args()
     if os.environ.get("GITHUB_ACTIONS") != "true" or sys.platform not in ("win32", "linux"):
         raise SystemExit("Use a disposable hosted Windows or Ubuntu runner")
     stage = Path(os.environ["RUNNER_TEMP"]).resolve() / "codex-gui-hosted-turn"
     if args.phase == "prepare":
         prepare(stage)
+    elif args.phase == "authorize":
+        await_login(stage)
     else:
         finish(stage)
 
