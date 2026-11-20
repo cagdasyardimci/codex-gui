@@ -93,6 +93,9 @@ jobs:
       - name: Build the desktop shell
         working-directory: desktop/frontend
         run: pnpm tauri build --debug --no-bundle -- --locked
+      - name: Run desktop host tests
+        working-directory: desktop
+        run: cargo test --locked -p codex-gui-desktop --features tauri/custom-protocol
       - name: Verify Unicode streaming through the WebView
         shell: bash
         env:

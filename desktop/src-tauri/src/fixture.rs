@@ -55,7 +55,13 @@ pub enum StreamMessage {
 }
 
 #[tauri::command]
-pub async fn stream_fixture(output: Channel<StreamMessage>) -> Result<(), String> {
+pub async fn stream_fixture(
+    verification: State<'_, Verification>,
+    output: Channel<StreamMessage>,
+) -> Result<(), String> {
+    if *verification != Verification::Streaming {
+        return Err("fixture verification was not requested at launch".into());
+    }
     let result = tokio::time::timeout(Duration::from_secs(15), send_fixture(&output))
         .await
         .map_err(|_| "fixture timed out".to_string())?;
@@ -110,11 +116,17 @@ pub fn verification_mode(verification: State<'_, Verification>) -> Verification 
 pub fn verify_fixture_result(
     app: AppHandle,
     verification: State<'_, Verification>,
+    scope_verified: bool,
     deltas: Vec<String>,
     rendered: String,
 ) -> Result<(), String> {
     if *verification != Verification::Streaming {
         return Err("fixture verification was not requested at launch".into());
+    }
+    if !scope_verified {
+        eprintln!("Workspace IPC did not return the expected error for an unknown grant");
+        app.exit(1);
+        return Ok(());
     }
     let expected = scenario().map_err(|error| error.to_string())?.chunks;
     if deltas != expected || rendered != expected.concat() {

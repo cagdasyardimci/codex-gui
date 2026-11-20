@@ -11,12 +11,12 @@
   },
   "app": {
     "windows": [
-      { "label": "main", "title": "Codex GUI Beta", "width": 1040, "height": 720 }
+      { "label": "main", "title": "Codex GUI Beta", "width": 1040, "height": 720, "create": false }
     ],
     "security": {
-      "capabilities": ["diagnostic"],
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'",
-      "devCsp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:1420; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      "capabilities": ["diagnostic", "workspace"],
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+      "devCsp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:1420; style-src 'self' 'unsafe-inline'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
     }
   },
   "bundle": {

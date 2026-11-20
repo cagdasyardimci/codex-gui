@@ -14,6 +14,10 @@ The Tauri workspace database validates its application identity before migrating
 
 Image annotations belong to their composer attachment identity and persist with the draft. The [image comment canvas](../Sources/CodexGUI/UI/Images/ImageCommentCanvas.swift) stages edits locally; Save commits them to that captured draft without submitting a turn, while cancellation or retirement discards unsaved edits. Coordinates remain relative to the original image, independent of zoom and scrolling. [Context input construction](../Sources/CodexGUI/Application/Services/ComposerContextBuilder.swift) groups comments by the final image attachment order, including unannotated images when determining image numbers.
 
+## Desktop IPC
+
+The [Tauri host](../desktop/src-tauri/src/project_ipc.rs) accepts workspace requests from the local main document. It issues a workspace ID after a native directory selection and revalidates the captured filesystem identity before returning a snapshot. Selecting another directory retires the prior grant. Keep native paths and workspace authorization on the Rust side. Use [generated IPC types](validation.md#tauri-diagnostic-shell) for the WebView contract.
+
 ## Ownership and recovery
 
 Displayed selection and execution ownership are independent. An accepted first message appears in project navigation using its captured request identity while the backend creates the conversation. The assigned thread replaces that row atomically; a failed preparation retires it without changing an independently opened draft. Every asynchronous result must validate its captured workspace/session, connection generation, request identity and relevant thread/turn. Deferred UI actions must retain their original target rather than follow later selection. Shared eligibility rules serve presentations and reducers, with admission checked again at reduction.

@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "workspace",
+  "description": "Local main window workspace selection and scoped reads",
+  "local": true,
+  "windows": ["main"],
+  "permissions": ["allow-pick-workspace", "allow-workspace-snapshot"]
+}
