@@ -8,7 +8,10 @@ use codex_gui_core::{
     },
     files::{CheckoutFiles, read_local_file},
     identity::TurnId,
-    ipc::{ComposerSelection, ReviseSentPrompt, SendRequest, SentPromptEdit, TranscriptRowRequest},
+    ipc::{
+        ComposerSelection, ReviseSentPrompt, SendRequest, SentPromptEdit, TranscriptRowRequest,
+        present_question_reply,
+    },
     storage::attachments::{
         composer::MAX_COMPOSER_ATTACHMENTS, fork_revisions::RecordedAttachment,
     },

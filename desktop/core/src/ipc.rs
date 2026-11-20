@@ -22,6 +22,7 @@ mod project_context;
 mod prompt_revision;
 mod question_reply;
 mod queue;
+mod sidebar;
 mod slash_commands;
 mod stream;
 mod subscription;
@@ -60,6 +61,11 @@ pub use prompt_revision::{RecoverFork, ReviseSentPrompt, SentPromptEdit};
 pub use question_reply::present_question_reply;
 pub use queue::{
     QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
+};
+pub use sidebar::{
+    SidebarChange, SidebarChat, SidebarChatFlag, SidebarChatKey, SidebarChatName,
+    SidebarChatUnread, SidebarGroup, SidebarMove, SidebarProject, SidebarProjectName,
+    SidebarProjectPin, SidebarProjectRequest, SidebarRequest, SidebarSort, SidebarView,
 };
 pub use slash_commands::{
     ContextUsage, ExecuteSlashCommand, SlashCommandOutcome, SlashCommandView,
@@ -286,6 +292,21 @@ pub fn workspace_typescript() -> String {
         ContextUsage::decl(),
         ExecuteSlashCommand::decl(),
         SlashCommandOutcome::decl(),
+        SidebarView::decl(),
+        SidebarGroup::decl(),
+        SidebarSort::decl(),
+        SidebarChatKey::decl(),
+        SidebarChat::decl(),
+        SidebarProject::decl(),
+        SidebarRequest::decl(),
+        SidebarChange::decl(),
+        SidebarProjectName::decl(),
+        SidebarChatName::decl(),
+        SidebarProjectPin::decl(),
+        SidebarChatFlag::decl(),
+        SidebarChatUnread::decl(),
+        SidebarMove::decl(),
+        SidebarProjectRequest::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

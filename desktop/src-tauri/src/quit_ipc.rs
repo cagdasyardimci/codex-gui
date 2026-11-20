@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use codex_gui_core::ipc::IpcError;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
@@ -12,11 +9,6 @@ use crate::{
 };
 
 pub const FIXTURE_APP_QUIT: i32 = 42;
-
-pub struct QuitFixtureCheckouts {
-    pub primary: Option<PathBuf>,
-    pub secondary: Option<PathBuf>,
-}
 
 #[derive(Default)]
 pub struct QuitLifecycle(AtomicBool);
@@ -58,27 +50,4 @@ pub fn request_quit_fixture(
         return Ok(());
     }
     window.close().map_err(|_| IpcError::ProjectUnavailable)
-}
-
-#[tauri::command]
-pub async fn select_quit_fixture_checkout(
-    window: WebviewWindow,
-    state: State<'_, ProjectIpc>,
-    verification: State<'_, Verification>,
-    checkouts: State<'_, QuitFixtureCheckouts>,
-    secondary: bool,
-) -> Result<(), IpcError> {
-    authorize_view(&window)?;
-    if *verification != Verification::Quit {
-        return Err(IpcError::UnauthorizedWindow);
-    }
-    let path = if secondary {
-        &checkouts.secondary
-    } else {
-        &checkouts.primary
-    };
-    let path = path.clone().ok_or(IpcError::InvalidCheckout)?;
-    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
-    navigation.select(path).await?;
-    Ok(())
 }

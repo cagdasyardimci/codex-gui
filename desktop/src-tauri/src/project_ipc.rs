@@ -232,6 +232,25 @@ pub async fn open_sent_prompt(
 }
 
 #[tauri::command]
+pub async fn reveal_sidebar_project(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    request: codex_gui_core::ipc::SidebarProjectRequest,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    let path = navigation.sidebar_project_path(request).await?;
+    if *verification == Verification::None {
+        tauri_plugin_opener::reveal_item_in_dir(path).map_err(|error| {
+            eprintln!("{error}");
+            IpcError::ProjectUnavailable
+        })?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn workspace_snapshot(
     window: WebviewWindow,
     state: State<'_, ProjectIpc>,

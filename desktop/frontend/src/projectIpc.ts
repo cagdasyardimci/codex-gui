@@ -1,7 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ComposerChoice, ComposerContextSelection, DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
-  ExecuteSlashCommand, ProjectContextView, SentPromptEdit, SlashCommandOutcome, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
+  ExecuteSlashCommand, ProjectContextView, SentPromptEdit, SidebarProjectRequest,
+  SlashCommandOutcome, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
 export function pickWorkspace(): Promise<WorkspaceId | null> {
@@ -100,6 +101,10 @@ export function executeSlashCommand(request: ExecuteSlashCommand): Promise<Slash
 
 export function openSentPrompt(request: TranscriptRowRequest): Promise<SentPromptEdit> {
   return invoke('open_sent_prompt', { request });
+}
+
+export function revealSidebarProject(request: SidebarProjectRequest): Promise<void> {
+  return invoke('reveal_sidebar_project', { request });
 }
 
 function indexRows(transcript: TranscriptView): Map<string, number> {

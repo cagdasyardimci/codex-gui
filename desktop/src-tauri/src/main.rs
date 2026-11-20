@@ -35,6 +35,8 @@ fn main() {
         Some("--verify-slash-commands") => fixture::Verification::SlashCommands,
         Some("--verify-prompt-revision") => fixture::Verification::PromptRevision,
         Some("--verify-conversation-fork") => fixture::Verification::ConversationFork,
+        Some("--verify-sidebar") => fixture::Verification::Sidebar,
+        Some("--verify-sidebar-restore") => fixture::Verification::SidebarRestore,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -64,6 +66,8 @@ fn main() {
             | fixture::Verification::SlashCommands
             | fixture::Verification::PromptRevision
             | fixture::Verification::ConversationFork
+            | fixture::Verification::Sidebar
+            | fixture::Verification::SidebarRestore
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -85,13 +89,16 @@ fn main() {
         verification,
         fixture::Verification::None | fixture::Verification::Quit
     );
-    let quit_fixture =
-        (verification == fixture::Verification::Quit).then(|| quit_ipc::QuitFixtureCheckouts {
-            primary: desktop_fixture
-                .as_ref()
-                .and_then(|(_, project)| project.clone()),
-            secondary: arguments.next().map(PathBuf::from),
-        });
+    let fixture_checkouts = matches!(
+        verification,
+        fixture::Verification::Quit | fixture::Verification::Sidebar
+    )
+    .then(|| fixture::FixtureCheckouts {
+        primary: desktop_fixture
+            .as_ref()
+            .and_then(|(_, project)| project.clone()),
+        secondary: arguments.next().map(PathBuf::from),
+    });
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -156,16 +163,17 @@ fn main() {
             project_ipc::navigate_workspace,
             project_ipc::execute_slash_command,
             project_ipc::open_sent_prompt,
+            project_ipc::reveal_sidebar_project,
             project_ipc::subscribe_workspace,
             project_ipc::next_workspace_update,
             project_ipc::change_workspace_fixture,
             diff_ipc::checkout_changes,
             diff_ipc::checkout_patch,
             quit_ipc::request_quit_fixture,
-            quit_ipc::select_quit_fixture_checkout,
+            fixture::select_fixture_checkout,
         ])
         .setup(move |app| {
-            if let Some(checkouts) = quit_fixture {
+            if let Some(checkouts) = fixture_checkouts {
                 app.manage(checkouts);
             }
             if let Some(report) = coding_report {

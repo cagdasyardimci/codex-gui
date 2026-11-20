@@ -1,18 +1,21 @@
 use std::{
     env,
     io::{self, Write},
+    path::PathBuf,
     process::Stdio,
     time::Duration,
 };
 
 use codex_gui_core::codex::{JsonlReader, ServerEvent, ServerMessage, read_message};
-use codex_gui_core::ipc::{StreamChange, TextBatcher, TranscriptItem, TranscriptRole, WorkspaceId};
+use codex_gui_core::ipc::{
+    IpcError, StreamChange, TextBatcher, TranscriptItem, TranscriptRole, WorkspaceId,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tokio::{process::Command, time::MissedTickBehavior};
 
-use crate::project_ipc::ProjectIpc;
+use crate::project_ipc::{ProjectIpc, authorize_view};
 
 pub const CHILD_ARGUMENT: &str = "--diagnostic-fixture-stdio";
 const STREAMING_SCENARIO: &str =
@@ -37,6 +40,8 @@ pub enum Verification {
     SlashCommands,
     PromptRevision,
     ConversationFork,
+    Sidebar,
+    SidebarRestore,
     Account,
     WindowsSetup,
     Turn,
@@ -44,6 +49,34 @@ pub enum Verification {
     Queue,
     Diff,
     Quit,
+}
+
+pub struct FixtureCheckouts {
+    pub primary: Option<PathBuf>,
+    pub secondary: Option<PathBuf>,
+}
+
+#[tauri::command]
+pub async fn select_fixture_checkout(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    checkouts: State<'_, FixtureCheckouts>,
+    secondary: bool,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    if !matches!(*verification, Verification::Quit | Verification::Sidebar) {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let path = if secondary {
+        &checkouts.secondary
+    } else {
+        &checkouts.primary
+    };
+    let path = path.clone().ok_or(IpcError::InvalidCheckout)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.select(path).await?;
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -266,6 +299,8 @@ pub fn verify_attachments_result(
             | Verification::SlashCommands
             | Verification::PromptRevision
             | Verification::ConversationFork
+            | Verification::Sidebar
+            | Verification::SidebarRestore
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -297,6 +332,11 @@ pub fn verify_attachments_result(
             println!(
                 "Verified installed response branches, saved bookmarks, and writer-locked forks"
             );
+        } else if matches!(
+            *verification,
+            Verification::Sidebar | Verification::SidebarRestore
+        ) {
+            println!("Verified installed sidebar projects, scoped chats, and saved organization");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

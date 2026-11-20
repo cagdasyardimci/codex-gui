@@ -266,15 +266,13 @@ impl Navigation {
     }
 
     pub(super) fn remember_fork(&mut self, fork: ThreadSummary) -> ThreadId {
-        self.view.chats.retain(|chat| chat.id != fork.id.0);
-        self.view.chats.insert(
-            0,
-            ChatRow {
-                id: fork.id.0.clone(),
-                title: fork.name.unwrap_or_else(|| "Forked Chat".into()),
-                preview: fork.preview,
-            },
-        );
-        fork.id
+        let thread = fork.id.clone();
+        let (row, updated_at) = super::sidebar::sidebar_chat_row(fork);
+        if let Err(error) = self.remember_sidebar_chat(&row, updated_at) {
+            eprintln!("{error}");
+        }
+        self.view.chats.retain(|chat| chat.id != row.id);
+        self.view.chats.insert(0, row);
+        thread
     }
 }

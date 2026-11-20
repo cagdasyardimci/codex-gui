@@ -63,7 +63,8 @@ impl CheckoutIdentity {
         Ok(directory)
     }
 
-    pub(crate) fn storage_key(&self) -> String {
+    /// Identifies the captured directory in durable desktop records.
+    pub fn storage_key(&self) -> String {
         #[cfg(unix)]
         return format!(
             "{}:{}:{}",

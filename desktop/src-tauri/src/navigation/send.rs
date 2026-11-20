@@ -208,14 +208,17 @@ impl Navigation {
                     .find(|line| !line.trim().is_empty())
                     .unwrap_or("New Chat")
                     .to_owned();
-                self.view.chats.insert(
-                    0,
-                    ChatRow {
-                        id: thread.0.clone(),
-                        title,
-                        preview,
-                    },
-                );
+                let chat = ChatRow {
+                    id: thread.0.clone(),
+                    title,
+                    preview,
+                };
+                if let Err(error) =
+                    self.remember_sidebar_chat(&chat, super::sidebar::sidebar_timestamp())
+                {
+                    eprintln!("{error}");
+                }
+                self.view.chats.insert(0, chat);
                 self.adopt_focus(Some(thread))?;
                 self.start_new_chat_rail(client.clone());
                 prepared

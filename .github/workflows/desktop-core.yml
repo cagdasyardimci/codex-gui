@@ -138,6 +138,7 @@ jobs:
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --slash-commands
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --prompt-revision
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --conversation-fork
+          python3 desktop/fixtures/verify_sidebar_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_account_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_windows_setup_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_turn_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
@@ -176,6 +177,8 @@ jobs:
           python desktop/fixtures/verify_composer_attachment_fixture.py $app --prompt-revision
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app --conversation-fork
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python desktop/fixtures/verify_sidebar_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_account_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -217,6 +220,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app" --slash-commands
           xvfb-run -a python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app" --prompt-revision
           xvfb-run -a python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app" --conversation-fork
+          xvfb-run -a python3 desktop/fixtures/verify_sidebar_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_account_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_windows_setup_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_turn_fixture.py "$app"

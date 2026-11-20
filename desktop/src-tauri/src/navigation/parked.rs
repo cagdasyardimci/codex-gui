@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering;
 
 use codex_gui_core::{
     codex::{AppServerClient, QueueSnapshot, ServerEvent},
+    ipc::SidebarChatKey,
     storage::attachments::LegacyQueueStatus,
     workspace::{RoutedEvent, RuntimeOwners, WorkspaceEngine},
 };
@@ -47,6 +48,7 @@ impl Navigation {
         let engine = backend.engine.clone();
         let (reattach, mut reattachment) = oneshot::channel();
         let backend_client = client.clone();
+        let project_id = checkout.storage_key();
         let task = tokio::spawn(async move {
             loop {
                 let event = tokio::select! {
@@ -62,6 +64,23 @@ impl Navigation {
                 let Some(event) = event else { break };
                 let before = backend.engine.snapshot();
                 backend.observe_edits(&event);
+                if let ServerEvent::Notification { method, params } = &event
+                    && method == "turn/completed"
+                    && params["turn"]["status"] == "completed"
+                    && let Some(chat_id) = params["threadId"].as_str()
+                    && before
+                        .writable_threads
+                        .iter()
+                        .any(|thread| thread.0 == chat_id)
+                {
+                    let key = SidebarChatKey {
+                        project_id: project_id.clone(),
+                        chat_id: chat_id.to_owned(),
+                    };
+                    if let Err(error) = store.sidebar_chat_finished(&key, true) {
+                        eprintln!("{error}");
+                    }
+                }
                 if let Err(error) = backend.observe_slash_event(&event, &store) {
                     eprintln!("{error}");
                 }

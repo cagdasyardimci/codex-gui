@@ -15,6 +15,7 @@ use super::{
 #[serde(rename_all = "camelCase")]
 pub struct NavigationView {
     pub chats: Vec<ChatRow>,
+    pub sidebar: super::SidebarView,
     pub selected_chat: Option<String>,
     pub draft: Option<EditorDraft>,
     pub composer_settings: Option<ComposerSelectionView>,
@@ -207,6 +208,7 @@ pub struct DraftEdit {
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum NavigationIntent {
+    Sidebar(super::SidebarRequest),
     SetComposerSettings(ComposerSettingsRequest),
     EditProjectContext(ProjectContextRequest),
     ReviseSentPrompt(ReviseSentPrompt),

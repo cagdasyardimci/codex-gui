@@ -48,7 +48,7 @@ export async function verifyQuit(visible: () => WorkspaceSnapshot | null) {
     }
 
     async function select(secondary: boolean) {
-      await invoke('select_quit_fixture_checkout', { secondary });
+      await invoke('select_fixture_checkout', { secondary });
       await waitFor('Checkout switch did not load the captured project', () =>
         !!visible()?.workspace?.projectPath.includes(secondary ? 'Other checkout' : 'Checkout café') &&
         visible()?.navigation.chats.length === 2);

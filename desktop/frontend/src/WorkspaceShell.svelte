@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, SendRequest, SentPromptEdit, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
+  import type { ComposerContextTarget, ComposerTokenRange, DraftAttachmentScope, DraftEdit, InteractionAnswer, NavigationIntent, ProjectContextChange, QueueCommand, SendRequest, SentPromptEdit, SidebarChange, SlashCommand, TranscriptItem, TranscriptRowRequest, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
@@ -11,10 +11,11 @@
   import ProjectContextPanel from './ProjectContextPanel.svelte';
   import SlashCommandPanel from './SlashCommandPanel.svelte';
   import SentPromptDialog from './SentPromptDialog.svelte';
+  import WorkspaceSidebar from './WorkspaceSidebar.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
-  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace } from './projectIpc';
+  import { addComposerContext, copyTranscriptRow, executeSlashCommand, navigateWorkspace, observeWorkspace, openSentPrompt, pasteComposerImage, pickComposerAttachments, pickWorkspace, revealSidebarProject } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
@@ -30,10 +31,11 @@
   import { verifySlashCommands } from './slashCommandProbe';
   import { verifyPromptRevision } from './promptRevisionProbe';
   import { verifyConversationFork } from './conversationForkProbe';
+  import { verifySidebar } from './sidebarProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -68,6 +70,8 @@
   let promptEdit = $state.raw<{ row: TranscriptRowRequest; view: SentPromptEdit }>();
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
+  const sidebar = $derived(navigation?.sidebar);
+  const projectTitle = $derived(sidebar?.projects.find((project) => project.id === sidebar?.activeProject)?.title);
   const workspaceId = $derived(workspace?.workspaceId);
   const selectedChat = $derived(navigation?.selectedChat);
   const transcriptGeneration = $derived(snapshot?.transcript.generation);
@@ -362,10 +366,15 @@
     void act(() => navigateWorkspace(intent), action === 'newChat');
   }
 
-  function openChat(chatId: string) {
-    if (!workspace) return;
-    const openChat = { workspaceId: workspace.workspaceId, chatId };
-    void act(() => navigateWorkspace({ openChat }));
+  async function changeSidebar(revision: string, change: SidebarChange) {
+    if (actionPending || composing || quit) throw 'staleSelection';
+    actionPending = true;
+    try {
+      await flushEdits();
+      await navigateWorkspace({ sidebar: { revision, change } });
+    } finally {
+      actionPending = false;
+    }
   }
 
   function retryChat() {
@@ -667,6 +676,7 @@
     else if (verify === 'slashCommands') void verifySlashCommands(() => snapshot);
     else if (verify === 'promptRevision') void verifyPromptRevision(() => snapshot);
     else if (verify === 'conversationFork') void verifyConversationFork(() => snapshot);
+    else if (verify === 'sidebar' || verify === 'sidebarRestore') void verifySidebar(verify, () => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -682,7 +692,7 @@
         onclick={() => void act(() => navigateWorkspace('stopAll'))}>Stop All…</button>
     {/if}
     {#if workspace}
-      <h1 title={workspace.projectPath}>{workspace.projectPath.split(/[\/\\]+/).filter(Boolean).at(-1) ?? workspace.projectPath}</h1>
+      <h1 title={workspace.projectPath}>{projectTitle ?? workspace.projectPath}</h1>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
@@ -711,18 +721,11 @@
   </header>
 
   <div class="workspace-body">
-    {#if workspace}
-      <nav class="workspace-sidebar" aria-label="Chats">
-        <button type="button" disabled={actionPending} onclick={() => workspaceAction('newChat')}>New Chat</button>
-        {#each navigation?.chats ?? [] as chat (chat.id)}
-          <button type="button" class="chat-row" aria-current={chat.id === navigation?.selectedChat ? 'true' : undefined}
-            disabled={actionPending} onclick={() => openChat(chat.id)}>
-            <span class="chat-title">{chat.title}</span>
-            {#if chat.preview && chat.preview !== chat.title}
-              <span class="chat-preview" title={chat.preview}>{chat.preview}</span>
-            {/if}
-          </button>
-        {/each}
+    {#if sidebar && (workspace || sidebar.projects.length)}
+      <nav class="workspace-sidebar" aria-label={workspace ? 'Chats' : 'Projects'}>
+        <WorkspaceSidebar view={sidebar} {selectedChat} blocked={actionPending || !!quit}
+          newChat={workspace ? () => workspaceAction('newChat') : undefined} change={changeSidebar}
+          reveal={(revision, projectId) => revealSidebarProject({ revision, projectId })} />
       </nav>
     {/if}
     <section class="workspace-conversation" aria-label="Conversation">

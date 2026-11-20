@@ -57,8 +57,9 @@ class Server:
         if self.scenario.get('desktopHistory'):
             status = ({'type': 'active', 'activeFlags': []}
                       if thread['id'] in self.active else {'type': 'idle'})
+            timestamp = (1 if thread['id'].endswith('first') else 2) if self.scenario.get('desktopSidebar') else int(time.time())
             return {k: copy.deepcopy(v) for k, v in thread.items() if k != 'turns'} | {
-                'cwd': thread['cwd'], 'createdAt': 1, 'updatedAt': int(time.time()),
+                'cwd': thread['cwd'], 'createdAt': 1, 'updatedAt': timestamp,
                 'status': status, 'turns': []}
         return {k: copy.deepcopy(v) for k, v in thread.items() if k != 'turns'} | {
             'cwd': thread.get('cwd', ''), 'updatedAt': time.time(),

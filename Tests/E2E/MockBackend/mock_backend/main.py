@@ -35,6 +35,13 @@ def main():
     if scenario.get('desktopQuit') and secondary and Path.cwd().samefile(secondary):
         for thread in scenario['threads']:
             thread['id'] = 'other-' + thread['id']
+    sidebar_secondary = os.environ.get('CODEX_GUI_QA_SIDEBAR_CHECKOUT')
+    if scenario.get('desktopSidebar') and sidebar_secondary and Path.cwd().samefile(sidebar_secondary):
+        for thread in scenario['threads']:
+            thread['id'] = 'other-' + thread['id']
+            thread['name'] = 'Other ' + thread['name']
+        if state_path:
+            state_path += '.other'
     trace_path = os.environ.get('CODEX_GUI_QA_TRACE')
     if trace_path and scenario.get('desktopQuit') and secondary:
         trace_path = f'{trace_path}.{os.getpid()}'
@@ -58,6 +65,8 @@ def main():
                 if not isinstance(params, dict):
                     raise ProtocolError(-32602, 'Params must be an object')
                 record = {'direction': 'request', 'method': request['method'], 'id': identity, 'params': params, **params}
+                if scenario.get('desktopSidebar'):
+                    record['backendCheckout'] = str(Path.cwd())
                 if request['method'] in ('turn/start', 'turn/interrupt'):
                     record['resolvedCwd'] = server.thread(params.get('threadId')).get('cwd', '')
                 transport.trace(record)

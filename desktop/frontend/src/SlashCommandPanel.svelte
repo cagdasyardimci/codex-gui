@@ -17,14 +17,17 @@
   } = $props();
   let dialog: HTMLDialogElement;
   let query = $state('');
+  let editTitle = $state('');
   const matchingChats = $derived(chats.filter((row) =>
     row.title.toLowerCase().includes(query.toLowerCase()) || row.id.toLowerCase().includes(query.toLowerCase())));
   const title = $derived(command === 'status' ? 'Conversation Details' : command === 'plan' ? 'Conversation Mode' :
     command === 'fork' ? 'Resolve Fork' :
+    command === 'rename' ? 'Rename Chat' :
     command === 'permissions' ? (fullAccess ? 'Full Access' : 'Permissions') :
     command === 'resume' ? 'Resume Chat' : command === 'model' ? 'Choose Model' : 'Reasoning Effort');
 
   onMount(() => {
+    editTitle = chat ?? '';
     dialog.showModal();
   });
 </script>
@@ -64,6 +67,11 @@
         <button type="button" onclick={() => choose(row.id, true)}>{row.title}</button>
       {/each}
     </div>
+  {:else if command === 'rename'}
+    <form onsubmit={(event) => { event.preventDefault(); if (editTitle.trim()) choose(editTitle, false); }}>
+      <label>Name <input maxlength="240" bind:value={editTitle} required /></label>
+      <button type="submit" disabled={!editTitle.trim()}>Save Name</button>
+    </form>
   {:else if command === 'model'}
     <div class="choices">
       {#each models as model (model.id)}

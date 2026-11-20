@@ -106,6 +106,7 @@ impl Navigation {
                     | Command::Mention
                     | Command::Skills => true,
                     Command::Copy | Command::Diff => thread.is_some(),
+                    Command::Rename => idle && thread.is_some(),
                     Command::Model | Command::Reasoning => has_model,
                     Command::Fast => self.fast_tier().is_some(),
                     Command::Permissions => self.view.composer_settings.is_some(),
@@ -113,11 +114,7 @@ impl Navigation {
                         has_model && backend.commands.plans && (idle || view.recover_plan)
                     }
                     Command::Compact => compact_supported && idle && thread.is_some(),
-                    Command::Fork
-                    | Command::Rename
-                    | Command::Archive
-                    | Command::Delete
-                    | Command::Review => false,
+                    Command::Fork | Command::Archive | Command::Delete | Command::Review => false,
                 })
                 .collect();
         }
@@ -207,6 +204,26 @@ impl Navigation {
                 self.focus(Some(thread)).await.map_err(report)?;
                 return Ok(SlashCommandOutcome::Applied);
             }
+            Command::Rename => {
+                if argument.is_empty() {
+                    return Ok(visible);
+                }
+                let project_id = self
+                    .selection
+                    .as_ref()
+                    .ok_or(IpcError::RetiredWorkspace)?
+                    .checkout
+                    .storage_key();
+                let chat_id = draft.chat_id.clone().ok_or(IpcError::StaleSelection)?;
+                self.rename_sidebar_chat(
+                    codex_gui_core::ipc::SidebarChatKey {
+                        project_id,
+                        chat_id,
+                    },
+                    argument,
+                )
+                .await?;
+            }
             Command::Model | Command::Reasoning | Command::Fast | Command::Permissions => {
                 if matches!(
                     command,
@@ -247,7 +264,7 @@ impl Navigation {
             Command::Resume | Command::Skills | Command::Mention | Command::Copy => {
                 return Ok(visible);
             }
-            Command::Rename | Command::Archive | Command::Delete | Command::Review => {
+            Command::Archive | Command::Delete | Command::Review => {
                 return Err(IpcError::StaleSelection);
             }
         }

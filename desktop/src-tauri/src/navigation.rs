@@ -17,9 +17,8 @@ use codex_gui_core::{
         CheckoutSessionId, ConnectionGeneration, ConnectionIdentity, ThreadId, WorkspaceIdentity,
     },
     ipc::{
-        ChatRow, CommandUpdate, DraftEdit, EditorDraft, IpcError, NavigationIntent, NavigationView,
+        CommandUpdate, DraftEdit, EditorDraft, IpcError, NavigationIntent, NavigationView,
         StreamChange, TextBatcher, TranscriptView, WorkspaceId, WorkspaceRequest, WriteAccess,
-        present_question_reply,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -52,6 +51,7 @@ mod queue;
 mod quit;
 mod sandbox;
 mod send;
+mod sidebar;
 mod slash_commands;
 mod transcript;
 use account::AccountFlow;
@@ -67,6 +67,14 @@ use transcript::{append_turn, command_item, message_item, transcript_id};
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 type Failure = Box<dyn Error + Send + Sync>;
 type Outcome = Result<Option<WorkspaceId>, IpcError>;
+
+fn desktop_client_info() -> ClientInfo<'static> {
+    ClientInfo {
+        name: "codex_gui",
+        title: "Codex GUI",
+        version: env!("CARGO_PKG_VERSION"),
+    }
+}
 
 #[derive(Clone)]
 pub struct NavigationHandle(mpsc::Sender<Message>, AttachmentStore);
@@ -92,6 +100,10 @@ enum Action {
     OpenSentPrompt(
         codex_gui_core::ipc::TranscriptRowRequest,
         oneshot::Sender<codex_gui_core::ipc::SentPromptEdit>,
+    ),
+    SidebarProjectPath(
+        codex_gui_core::ipc::SidebarProjectRequest,
+        oneshot::Sender<PathBuf>,
     ),
 }
 
@@ -295,7 +307,12 @@ impl Navigation {
                 Input::PromptForkCompleted(None) => {
                     unreachable!("navigation owns the completion sender")
                 }
-                Input::OwnerChanged => self.sync_actions(),
+                Input::OwnerChanged => {
+                    if let Err(error) = self.reload_sidebar() {
+                        eprintln!("{error}");
+                    }
+                    self.sync_actions();
+                }
                 Input::Backend(Some(event)) => {
                     if let Err(error) = self.handle_backend(event).await {
                         eprintln!("{error}");
@@ -324,6 +341,7 @@ impl Navigation {
         fixture_project: Option<PathBuf>,
     ) -> Result<(), Failure> {
         self.set_editor(self.source_draft)?;
+        self.reload_sidebar()?;
         self.publish_history(TranscriptView::default());
         if let Some(project) = saved.project
             && let Some(checkout) = project.restore()
@@ -373,6 +391,11 @@ impl Navigation {
                 let _ = reply.send(edit);
                 return Ok(None);
             }
+            Action::SidebarProjectPath(request, reply) => {
+                let path = self.sidebar_path(request)?;
+                let _ = reply.send(path);
+                return Ok(None);
+            }
             Action::SelectFolder(folder) => {
                 if self.quit.is_some() {
                     return Err(IpcError::StaleSelection);
@@ -403,6 +426,7 @@ impl Navigation {
                 self.edit_project_context(request).await?
             }
             NavigationIntent::ConfirmQuit(decision) => self.confirm_quit(decision).await?,
+            NavigationIntent::Sidebar(request) => self.edit_sidebar(request).await?,
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::SetResponseBookmark(request) => {
@@ -550,6 +574,7 @@ impl Navigation {
         checkout: CheckoutIdentity,
         thread: Option<ThreadId>,
     ) -> Result<WorkspaceId, Failure> {
+        self.store.remember_sidebar_project(&checkout)?;
         self.store
             .save_desktop_selection(Some((&folder, &checkout)), thread.as_ref())?;
         self.leave_checkout().await;
@@ -604,6 +629,8 @@ impl Navigation {
     async fn focus(&mut self, thread: Option<ThreadId>) -> Result<(), Failure> {
         let selected = self.selection.as_ref().ok_or("missing project selection")?;
         if selected.thread == thread {
+            self.clear_selected_unread()?;
+            self.publish_navigation();
             return Ok(());
         }
         self.store.save_desktop_selection(
@@ -622,6 +649,7 @@ impl Navigation {
         };
         self.set_editor(draft)?;
         self.view.selected_chat = thread.as_ref().map(|thread| thread.0.clone());
+        self.clear_selected_unread()?;
         let context = self.project_context()?;
         self.project_context_changed(&context);
         self.load_composer_settings()?;
@@ -728,11 +756,7 @@ impl Navigation {
             let connection = AppServerConnection::connect(
                 &executable,
                 identity.clone(),
-                ClientInfo {
-                    name: "codex_gui",
-                    title: "Codex GUI",
-                    version: env!("CARGO_PKG_VERSION"),
-                },
+                desktop_client_info(),
                 RPC_TIMEOUT,
             )
             .await?;
@@ -784,28 +808,20 @@ impl Navigation {
         self.sync_actions();
         let browser = CodexBrowser::new(client);
         let chats = browser.project_chats(false, None, RPC_TIMEOUT).await?;
-        self.view.chats = chats
+        let chats: Vec<_> = chats
             .data
             .into_iter()
-            .map(|chat| {
-                let preview = present_question_reply(&chat.preview).into_owned();
-                let title = chat
-                    .name
-                    .filter(|name| !name.trim().is_empty())
-                    .or_else(|| {
-                        preview
-                            .lines()
-                            .find(|line| !line.trim().is_empty())
-                            .map(str::to_owned)
-                    })
-                    .unwrap_or_else(|| "New Chat".into());
-                ChatRow {
-                    id: chat.id.0,
-                    title,
-                    preview,
-                }
-            })
+            .map(sidebar::sidebar_chat_row)
             .collect();
+        let checkout = &self
+            .selection
+            .as_ref()
+            .ok_or("missing selected project")?
+            .checkout;
+        self.store
+            .remember_sidebar_chats(checkout, chats.iter().cloned())?;
+        self.view.chats = chats.into_iter().map(|(row, _)| row).collect();
+        self.clear_selected_unread()?;
         self.publish_navigation();
         self.open_history(false).await
     }
@@ -995,6 +1011,9 @@ impl Navigation {
             return;
         }
         if method == "turn/completed" && params["turn"]["status"] == "completed" {
+            if let Err(error) = self.record_chat_activity(&thread) {
+                eprintln!("{error}");
+            }
             self.advance_legacy_queue(thread.clone());
         }
         let Some(selection) = self

@@ -96,6 +96,8 @@ The first message starts a turn; only an active turn with an accepted turn ident
 
 Clearing the project from an unsent new chat retains its current draft in memory while returning the source session to an unselected project; submission still requires a project. Shared persistence and cross-project navigation must preserve project/thread identities. Matching titles, paths or visible selection cannot substitute for those identities. Archive, deletion and checkout removal must revalidate their captured targets and report partial success without replaying confirmed mutations. Archiving hides the captured chat from navigation while the request is pending, retaining canonical history and drafts so a failure restores the row. Confirmed removal retires older sidebar reads before refreshing the list.
 
+The [sidebar](../desktop/src-tauri/src/navigation/sidebar.rs) indexes chats by checkout and thread identity. Project names, pins, unread marks and ordering belong to the desktop store. Codex owns chat titles. Opening a chat in another project verifies the target checkout and thread before adopting the selection together.
+
 Protocol-specific handling belongs to [CLI lifecycle safeguards](cli-compatibility.md#protocol-lifecycle-safeguards); deferred native confirmations follow [AppKit conventions](../CONVENTIONS.md#appkit-behavior-and-accessibility).
 
 ## Presentation
