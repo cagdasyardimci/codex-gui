@@ -10,6 +10,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 from verify_coding_probe import fixture_executable
+from verify_history_fixture import seed_search_paths
 
 
 def invoke_app(command: list[str], environment: dict[str, str], confirmation: str) -> str:
@@ -30,6 +31,7 @@ def main() -> None:
         data = root / "beta data"
         checkout = root / "Checkout café"
         checkout.mkdir()
+        seed_search_paths(checkout)
         other_checkout = root / "Other checkout"
         other_checkout.mkdir()
         codex_home = root / "codex home"

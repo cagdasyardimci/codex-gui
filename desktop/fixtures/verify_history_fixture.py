@@ -12,6 +12,12 @@ from tempfile import TemporaryDirectory
 from verify_coding_probe import fixture_executable
 
 
+def seed_search_paths(project: Path) -> None:
+    for folder in ("notes", "node_modules", ".hidden"):
+        (project / folder).mkdir()
+        (project / folder / "Café.md").write_text("File search fixture\n", encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
@@ -21,9 +27,7 @@ def main() -> None:
         data = root / "beta data"
         project = root / "Checkout café"
         project.mkdir()
-        for folder in ("notes", "node_modules", ".hidden"):
-            (project / folder).mkdir()
-            (project / folder / "Café.md").write_text("File search fixture\n", encoding="utf-8")
+        seed_search_paths(project)
         codex_home = root / "codex home"
         codex_home.mkdir()
         trace = root / "trace.jsonl"
