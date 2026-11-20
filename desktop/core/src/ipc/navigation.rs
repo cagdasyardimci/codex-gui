@@ -5,8 +5,9 @@ use uuid::Uuid;
 use crate::git::turn_edits::LastTurnView;
 
 use super::{
-    ConversationActions, DraftAttachmentView, QueueRequest, QueueView, RecoverSendRequest,
-    RespondRequest, SendRequest, StopRequest, WorkspaceId, WorkspaceRequest,
+    ComposerSelectionView, ComposerSettingsRequest, ConversationActions, DraftAttachmentView,
+    ModelEffort, ModelServiceTier, QueueRequest, QueueView, RecoverSendRequest, RespondRequest,
+    SendRequest, StopRequest, WorkspaceId, WorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -15,6 +16,7 @@ pub struct NavigationView {
     pub chats: Vec<ChatRow>,
     pub selected_chat: Option<String>,
     pub draft: Option<EditorDraft>,
+    pub composer_settings: Option<ComposerSelectionView>,
     pub retryable: bool,
     pub account: AccountView,
     pub write_access: WriteAccess,
@@ -144,6 +146,10 @@ pub struct AccountModel {
     pub id: String,
     pub name: String,
     pub is_default: bool,
+    pub model: String,
+    pub efforts: Vec<ModelEffort>,
+    pub default_effort: Option<String>,
+    pub service_tiers: Vec<ModelServiceTier>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -191,6 +197,7 @@ pub struct DraftEdit {
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum NavigationIntent {
+    SetComposerSettings(ComposerSettingsRequest),
     OpenChat(ChatRequest),
     LoadOlderHistory(OlderHistoryRequest),
     TranscriptViewport(TranscriptViewportRequest),

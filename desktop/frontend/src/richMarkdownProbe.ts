@@ -1,5 +1,6 @@
 import { waitFor } from './fixtureControls';
 import type { WorkspaceSnapshot } from './generated/workspace';
+import { richBlockPhase } from './MarkdownRichBlock.svelte';
 
 const FORMULA = '$x^2$';
 export const RICH_SUFFIX = '\n\nInline $x^2$.\n\n$$\\frac{a}{b}$$\n\n```mermaid\nflowchart LR\n  A[Local] --> B[Offline]\n```';
@@ -48,10 +49,12 @@ export async function verifySettledRichMarkdown(visible: () => WorkspaceSnapshot
     !!image()?.naturalWidth && image()?.hidden === false && image()?.src.startsWith('blob:') === true &&
     !document.querySelector('.markdown-diagram-stage')).catch((error) => {
     const preview = image();
+    const container = row()?.querySelector<HTMLElement>('.markdown-diagram');
     const resources = performance.getEntriesByType('resource').map((entry) => entry.name.split('/').pop())
       .filter((name) => name && /markdownDiagram|flowDiagram|render-/.test(name));
     throw new Error(`${error.message} ${JSON.stringify({ pendingRender: !!document.querySelector('.markdown-diagram-stage'),
-      hasImage: !!preview, hidden: preview?.hidden, loaded: preview?.complete, width: preview?.naturalWidth, resources })}`);
+      hasImage: !!preview, hidden: preview?.hidden, loaded: preview?.complete, width: preview?.naturalWidth, resources,
+      renderPhase: container ? richBlockPhase.get(container) : undefined })}`);
   });
   const preview = image()!;
   const source = preview.src;

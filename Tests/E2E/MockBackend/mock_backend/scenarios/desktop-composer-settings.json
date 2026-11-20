@@ -1,0 +1,5 @@
+{
+  "extends": "desktop-attachments",
+  "desktopComposerSettings": true,
+  "intervalSeconds": 0.6
+}

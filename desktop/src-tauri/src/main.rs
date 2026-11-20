@@ -30,6 +30,7 @@ fn main() {
         Some("--verify-attachments") => fixture::Verification::Attachments,
         Some("--verify-annotations") => fixture::Verification::Annotations,
         Some("--verify-composer-context") => fixture::Verification::ComposerContext,
+        Some("--verify-composer-settings") => fixture::Verification::ComposerSettings,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -54,6 +55,7 @@ fn main() {
             | fixture::Verification::Attachments
             | fixture::Verification::Annotations
             | fixture::Verification::ComposerContext
+            | fixture::Verification::ComposerSettings
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -177,6 +179,7 @@ fn main() {
                     | fixture::Verification::Attachments
                     | fixture::Verification::Annotations
                     | fixture::Verification::ComposerContext
+                    | fixture::Verification::ComposerSettings
                     | fixture::Verification::Account
                     | fixture::Verification::WindowsSetup
                     | fixture::Verification::Turn

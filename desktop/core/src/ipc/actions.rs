@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use uuid::Uuid;
 
 use super::WorkspaceId;
 
@@ -43,6 +44,7 @@ pub struct SendRequest {
     pub text: String,
     #[serde(default)]
     pub attachment_ids: Vec<String>,
+    pub composer_revision: Option<Uuid>,
     pub expected_turn: Option<String>,
 }
 

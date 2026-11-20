@@ -39,6 +39,7 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
 mod composer_attachments;
+mod composer_settings;
 pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
 mod interactions;
 mod ownership;
@@ -109,6 +110,7 @@ struct Backend {
 }
 
 struct Navigation {
+    configured_run: composer_settings::ConfiguredRun,
     store: AttachmentStore,
     owners: RuntimeOwners,
     source_draft: DraftId,
@@ -153,6 +155,7 @@ impl NavigationHandle {
         let (queue_completions, finished_queue_jobs) = mpsc::channel(32);
         let (owner_changes, changed_owners) = mpsc::channel(1);
         let navigation = Navigation {
+            configured_run: composer_settings::ConfiguredRun::default(),
             owners: RuntimeOwners::new(store.clone()),
             store: store.clone(),
             source_draft: saved.source_draft,
@@ -441,6 +444,9 @@ impl Navigation {
                 self.start_sandbox_setup().await?;
             }
             NavigationIntent::Send(request) => self.send_visible(request).await?,
+            NavigationIntent::SetComposerSettings(request) => {
+                self.change_composer_settings(request)?
+            }
             NavigationIntent::Queue(request) => self.handle_queue(request)?,
             NavigationIntent::Stop(request) => {
                 self.require_request(WorkspaceRequest {
@@ -516,6 +522,7 @@ impl Navigation {
             thread: None,
         });
         self.view = NavigationView::default();
+        self.configured_run = composer_settings::ConfiguredRun::default();
         self.adopt_focus(thread)?;
         if let Err(error) = self.refresh().await {
             eprintln!("{error}");
@@ -533,6 +540,7 @@ impl Navigation {
             .grants
             .clear();
         self.view = NavigationView::default();
+        self.configured_run = composer_settings::ConfiguredRun::default();
         self.adopt_focus(None)?;
         self.refresh().await
     }
@@ -557,6 +565,7 @@ impl Navigation {
         };
         self.set_editor(draft)?;
         self.view.selected_chat = thread.as_ref().map(|thread| thread.0.clone());
+        self.load_composer_settings()?;
         self.view.retryable = false;
         self.retire_history_pages();
         if let Some(selected) = &mut self.selection {
@@ -686,11 +695,17 @@ impl Navigation {
     }
 
     async fn refresh_account(&mut self, client: AppServerClient) -> Result<(), Failure> {
-        let mut account = account::read_account(client).await?;
+        let (account, configured) = tokio::join!(
+            account::read_account(client.clone()),
+            composer_settings::read_configured_run(client)
+        );
+        let mut account = account?;
         account
             .login_ticket
             .clone_from(&self.view.account.login_ticket);
         self.view.account = account;
+        self.configured_run = configured;
+        self.reconcile_composer_models();
         self.sync_actions();
         Ok(())
     }

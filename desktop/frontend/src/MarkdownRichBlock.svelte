@@ -1,3 +1,7 @@
+<script module lang="ts">
+  export const richBlockPhase = new WeakMap<HTMLElement, string>();
+</script>
+
 <script lang="ts">
   import { preserveMarkdownSelection } from './markdownSelection';
 
@@ -14,16 +18,30 @@
   function prepare(node: HTMLElement) {
     const lifetime = new AbortController();
     let objectUrl: string | undefined;
-    void render(node).catch(releaseImage);
+    richBlockPhase.set(node, 'mount');
+    void render(node).catch((error: unknown) => {
+      const message = error instanceof Error && error.message.startsWith('SVG ') ? error.message : undefined;
+      richBlockPhase.set(node, message ?? (error instanceof Error ? error.name : 'render failure'));
+      releaseImage();
+    });
 
     async function render(target: HTMLElement) {
       if (kind === 'diagram') {
         const { diagram } = await import('./markdownDiagram');
+        richBlockPhase.set(node, 'render');
         const result = await diagram(source, lifetime.signal);
         if (!result || lifetime.signal.aborted) return;
         objectUrl = URL.createObjectURL(result);
-        acceptDiagram = () => preserveMarkdownSelection(target, lifetime.signal, () => { diagramLoaded = true; });
-        discardDiagram = () => { releaseImage(); diagramUrl = undefined; };
+        richBlockPhase.set(node, 'decode');
+        acceptDiagram = () => {
+          richBlockPhase.set(node, 'present');
+          preserveMarkdownSelection(target, lifetime.signal, () => { diagramLoaded = true; });
+        };
+        discardDiagram = () => {
+          richBlockPhase.set(node, 'decode failure');
+          releaseImage();
+          diagramUrl = undefined;
+        };
         diagramUrl = objectUrl;
       } else {
         const { formula } = await import('./markdownFormula');

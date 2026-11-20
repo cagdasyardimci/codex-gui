@@ -32,6 +32,7 @@ pub enum Verification {
     Attachments,
     Annotations,
     ComposerContext,
+    ComposerSettings,
     Account,
     WindowsSetup,
     Turn,
@@ -253,7 +254,10 @@ pub fn verify_attachments_result(
 ) -> Result<(), String> {
     if !matches!(
         *verification,
-        Verification::Attachments | Verification::Annotations | Verification::ComposerContext
+        Verification::Attachments
+            | Verification::Annotations
+            | Verification::ComposerContext
+            | Verification::ComposerSettings
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -269,6 +273,8 @@ pub fn verify_attachments_result(
             println!(
                 "Verified installed composer context, token replacement, and captured ownership"
             );
+        } else if *verification == Verification::ComposerSettings {
+            println!("Verified installed composer settings and captured permission confirmation");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

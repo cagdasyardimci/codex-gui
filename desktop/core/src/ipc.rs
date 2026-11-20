@@ -12,6 +12,7 @@ use crate::files::{
 use crate::git::turn_edits::{EditTotals, LastTurnView, TurnEditQuality};
 
 mod actions;
+mod composer_settings;
 mod context;
 mod git;
 mod markdown;
@@ -26,6 +27,10 @@ pub use actions::{
     InteractionContent, InteractionView, PermissionChoice, PermissionView, QuestionAnswer,
     QuestionView, RecoverSendRequest, RespondRequest, SendRequest, StopRequest, StopTarget,
     TurnTarget,
+};
+pub use composer_settings::{
+    ComposerPermissions, ComposerSelection, ComposerSelectionView, ComposerSettingsRequest,
+    ModelEffort, ModelServiceTier,
 };
 pub use context::{
     ComposerChoice, ComposerChoiceKind, ComposerContextSelection, ComposerContextTarget,
@@ -269,6 +274,12 @@ pub fn workspace_typescript() -> String {
         RevisionedNavigation::decl(),
         AccountView::decl(),
         AccountModel::decl(),
+        ModelEffort::decl(),
+        ModelServiceTier::decl(),
+        ComposerPermissions::decl(),
+        ComposerSelection::decl(),
+        ComposerSelectionView::decl(),
+        ComposerSettingsRequest::decl(),
         LoginScope::decl(),
         LoginTicket::decl(),
         WriteAccess::decl(),

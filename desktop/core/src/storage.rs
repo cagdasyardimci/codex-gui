@@ -32,6 +32,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::queue_preferences::migrate,
     attachments::appkit_drafts::queues::migrate,
     attachments::exit_recovery::migrate_checkout_paths,
+    attachments::composer_settings::migrate,
 ];
 
 #[derive(Debug, Error)]

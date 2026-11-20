@@ -151,6 +151,10 @@ async fn read_models(browser: &CodexBrowser) -> Result<Vec<AccountModel>, Failur
                     id: model.id,
                     name: model.display_name,
                     is_default: model.is_default,
+                    model: model.model,
+                    efforts: model.supported_reasoning_efforts,
+                    default_effort: model.default_reasoning_effort,
+                    service_tiers: model.service_tiers,
                 }),
         );
         let Some(next) = page.next_cursor else {

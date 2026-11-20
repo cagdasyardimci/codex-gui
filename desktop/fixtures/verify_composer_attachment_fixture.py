@@ -29,9 +29,10 @@ def colored_pixel(rgb):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--annotations", action="store_true")
-    mode.add_argument("--context", action="store_true")
+    options = parser.add_mutually_exclusive_group()
+    for name in ("annotations", "context", "settings"):
+        options.add_argument(f"--{name}", dest="mode", action="store_const", const=name)
+    parser.set_defaults(mode="attachments")
     args = parser.parse_args()
     executable = args.app.resolve(strict=True)
     with TemporaryDirectory(prefix="codex-gui-composer-attachments-") as directory:
@@ -58,34 +59,45 @@ def main():
                 {"type": "mention", "name": "notes.txt", "path": "notes.txt"},
             ],
         })
-        state.write_text(json.dumps({"threads": threads}, ensure_ascii=True), encoding="utf-8")
-        fixture = "--verify-composer-context" if args.context else "--verify-annotations" if args.annotations else "--verify-attachments"
+        backend_state = {"threads": threads}
+        if args.mode == "settings":
+            backend_state["config"] = {"model": "baseline-model", "model_reasoning_effort": "low", "service_tier": "default",
+                                       "approval_policy": "untrusted", "sandbox_mode": "read-only", "approvals_reviewer": "user"}
+        state.write_text(json.dumps(backend_state, ensure_ascii=True), encoding="utf-8")
+        fixture, scenario, expected = {
+            "attachments": ("--verify-attachments", "desktop-attachments", "Verified installed draft attachment capture"),
+            "annotations": ("--verify-annotations", "desktop-attachments", "Verified installed image annotation placement"),
+            "context": ("--verify-composer-context", "desktop-context", "Verified installed composer context"),
+            "settings": ("--verify-composer-settings", "desktop-composer-settings", "Verified installed composer settings"),
+        }[args.mode]
         result = subprocess.run(
             [str(executable), fixture, str(data), str(checkout)],
             env={**os.environ, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
-                 "CODEX_GUI_QA_SCENARIO": "desktop-context" if args.context else "desktop-attachments", "CODEX_GUI_QA_STATE": str(state),
+                 "CODEX_GUI_QA_SCENARIO": scenario, "CODEX_GUI_QA_STATE": str(state),
                  "CODEX_GUI_QA_TRACE": str(trace), "PYTHONIOENCODING": "utf-8"},
             encoding="utf-8", capture_output=True, errors="replace", timeout=75,
         )
         print(result.stdout, end="")
-        expected = ("Verified installed composer context" if args.context else
-                    "Verified installed image annotation placement" if args.annotations else "Verified installed draft attachment capture")
         if result.returncode or expected not in result.stdout:
             raise SystemExit(result.stderr or "The desktop attachment fixture did not complete")
         starts = [event for line in trace.read_text(encoding="utf-8").splitlines()
                   if (event := json.loads(line))["direction"] == "request" and event["method"] == "turn/start"]
+        assert not list(profile.iterdir())
+        if args.mode == "settings":
+            verify_settings_inputs(starts)
+            return
         assert len(starts) == 1 and starts[0]["threadId"] == "history-first", starts
         inputs = starts[0]["input"]
-        assert not list(profile.iterdir())
-        if args.context:
+        if args.mode == "context":
             verify_context_inputs(inputs, checkout)
             return
-        if args.annotations:
+        if args.mode == "annotations":
             verify_annotation_inputs(inputs, colors, data)
             return
         assert len(inputs) == 1 and inputs[0]["type"] == "localImage", inputs
         sent_path = Path(inputs[0]["path"]).resolve(strict=True)
-        assert sent_path.is_relative_to(data) and sent_path.read_bytes() == PIXEL
+        assert any(parent.samefile(data) for parent in sent_path.parents), sent_path
+        assert sent_path.read_bytes() == PIXEL, sent_path
         with closing(sqlite3.connect(data / "workspace.sqlite3")) as database:
             draft = database.execute(
                 "SELECT d.text, d.context FROM drafts AS d JOIN thread_drafts AS t ON t.draft_id = d.id "
@@ -108,7 +120,8 @@ def verify_annotation_inputs(inputs, colors, data):
     ], summary
     for image, expected in zip(inputs[1:], colors):
         path = Path(image["path"]).resolve(strict=True)
-        assert path.is_relative_to(data) and path.read_bytes() == expected
+        assert any(parent.samefile(data) for parent in path.parents), path
+        assert path.read_bytes() == expected, path
     print("Verified one annotated send with original attachment order and bytes across three images")
 
 
@@ -118,9 +131,24 @@ def verify_context_inputs(inputs, checkout):
         "Before 👩🏽‍💻  after\n\nFile reference: notes.txt\n\nSelected code from notes.txt, lines 2–3:"
         "\n2: Café code\n3: Inspect this line\n\nProject note\nUse the local fixture only."
     ), inputs
-    assert inputs[1]["name"] == "notes.txt" and Path(inputs[1]["path"]).resolve() == checkout / "notes.txt", inputs
-    assert inputs[2]["name"] == "Review fixture" and Path(inputs[2]["path"]).resolve() == checkout / "skill" / "SKILL.md", inputs
+    assert inputs[1]["name"] == "notes.txt" and Path(inputs[1]["path"]).samefile(checkout / "notes.txt"), inputs
+    assert inputs[2]["name"] == "Review fixture" and Path(inputs[2]["path"]).samefile(checkout / "skill" / "SKILL.md"), inputs
     print("Verified one turn with the exact replaced token, file mention, selected lines, project note, and skill")
+
+
+def verify_settings_inputs(starts):
+    assert len(starts) == 3 and all(turn["threadId"] == "history-first" for turn in starts), starts
+    actual = [(turn["model"], turn["effort"], turn["serviceTierForTurn"], turn["approvalPolicy"],
+               turn["approvalsReviewer"], turn["sandboxPolicy"]["type"]) for turn in starts]
+    assert actual == [
+        ("alternative-model", "high", "fixture-turbo", "on-request", "auto_review", "workspaceWrite"),
+        ("alternative-model", "high", "default", "never", "user", "dangerFullAccess"),
+        ("baseline-model", "low", "default", "untrusted", "user", "readOnly"),
+    ], actual
+    assert [turn["input"][0]["text"] for turn in starts] == [
+        "Capture the first settings.", "Use confirmed Full Access.", "Use configured permissions.",
+    ], starts
+    print("Verified immutable admitted settings and explicit transitions between the permission preset and configured policy")
 
 
 if __name__ == "__main__":

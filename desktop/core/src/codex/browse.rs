@@ -88,6 +88,11 @@ pub struct ModelOption {
     pub description: String,
     pub hidden: bool,
     pub is_default: bool,
+    #[serde(default)]
+    pub supported_reasoning_efforts: Vec<crate::ipc::ModelEffort>,
+    pub default_reasoning_effort: Option<String>,
+    #[serde(default)]
+    pub service_tiers: Vec<crate::ipc::ModelServiceTier>,
 }
 
 #[derive(Debug, Deserialize)]

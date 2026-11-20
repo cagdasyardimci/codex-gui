@@ -113,6 +113,15 @@ class Server:
         if method == 'account/rateLimits/read':
             return {'rateLimits': {'primary': None, 'secondary': None}, 'rateLimitResetCredits': None}
         if method == 'model/list':
+            if self.scenario.get('desktopComposerSettings'):
+                baseline = self.desktop_model('baseline-model', False)
+                alternative = self.desktop_model('alternative-model', False)
+                baseline.update(displayName='Baseline model', isDefault=True, defaultReasoningEffort='low', supportedReasoningEfforts=[
+                    {'reasoningEffort': 'low', 'description': 'Low'}], serviceTiers=[])
+                alternative.update(displayName='Alternative model', isDefault=False, defaultReasoningEffort='medium', supportedReasoningEfforts=[
+                    {'reasoningEffort': 'medium', 'description': 'Medium'}, {'reasoningEffort': 'high', 'description': 'High'}],
+                    serviceTiers=[{'id': 'fixture-turbo', 'name': 'Ultrafast'}])
+                return {'data': [baseline, alternative], 'nextCursor': None}
             if self.scenario.get('desktopHistory'):
                 return {'data': [self.desktop_model('fixture-default', False)], 'nextCursor': None}
             return {'data': [{'id': 'qa-model', 'model': 'qa-model', 'displayName': 'QA fixture model',
@@ -212,6 +221,8 @@ class Server:
                 thread['archived'] = method == 'thread/archive'
             return {}
         if method == 'turn/start':
+            if self.scenario.get('desktopComposerSettings'):
+                time.sleep(0.55)
             return self.start(p)
         if method == 'turn/steer' and self.scenario.get('desktopQueue'):
             return steer_request(self, p)

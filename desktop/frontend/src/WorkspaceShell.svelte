@@ -7,6 +7,7 @@
   import QueuePanel from './QueuePanel.svelte';
   import ComposerAttachments from './ComposerAttachments.svelte';
   import ComposerContextPicker from './ComposerContextPicker.svelte';
+  import ComposerSettingsControls from './ComposerSettingsControls.svelte';
   import TranscriptRow from './TranscriptRow.svelte';
   import TurnRail from './TurnRail.svelte';
   import { createTranscriptViewport } from './transcriptViewport.svelte';
@@ -21,10 +22,11 @@
   import { verifyComposerAttachments } from './composerAttachmentProbe';
   import { verifyImageAnnotations } from './imageAnnotationProbe';
   import { verifyComposerContext } from './composerContextProbe';
+  import { verifyComposerSettings } from './composerSettingsProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -285,6 +287,7 @@
     const send = {
       workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text,
       attachmentIds: draftAttachments.map((attachment) => attachment.id),
+      composerRevision: navigation.composerSettings?.revision ?? null,
       expectedTurn: queue?.activeTurn ?? null,
     };
     admittingDraft = true;
@@ -450,6 +453,7 @@
     else if (verify === 'attachments') void verifyComposerAttachments(() => snapshot);
     else if (verify === 'annotations') void verifyImageAnnotations(() => snapshot);
     else if (verify === 'composerContext') void verifyComposerContext(() => snapshot);
+    else if (verify === 'composerSettings') void verifyComposerSettings(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -557,6 +561,13 @@
           {#key `${contextMenu.scope.draftId}/${contextMenu.token ? 'token' : 'button'}`}
             <ComposerContextPicker bind:this={contextPicker} scope={contextMenu.scope} fromButton={!contextMenu.token}
               initialQuery={contextMenu.query} choose={(target) => void chooseComposerContext(target)} close={closeComposerContext} />
+          {/key}
+        {/if}
+        {#if attachmentScope && navigation.composerSettings}
+          {#key attachmentScope.draftId}
+            <ComposerSettingsControls scope={attachmentScope} view={navigation.composerSettings}
+              models={navigation.account.models} disabled={!!queue?.editing || !!quit}
+              workspaceLabel={workspace?.projectPath ?? ''} />
           {/key}
         {/if}
         <div class="composer-actions">

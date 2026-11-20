@@ -7,8 +7,8 @@ use codex_gui_core::{
     },
     storage::drafts::DraftId,
     workspace::{
-        ExecutionTarget, RuntimeUse, SendDraft, SendIntent, SendSettings, SubmissionError,
-        SubmissionReply, WorkspaceAction,
+        ExecutionTarget, RuntimeUse, SendDraft, SendIntent, SubmissionError, SubmissionReply,
+        WorkspaceAction,
     },
 };
 use uuid::Uuid;
@@ -33,6 +33,12 @@ impl Navigation {
         self.sync_actions();
         if !self.view.actions.send
             || self.view.selected_chat != request.chat_id
+            || request.composer_revision.is_some_and(|revision| {
+                self.view
+                    .composer_settings
+                    .as_ref()
+                    .is_none_or(|view| view.revision != revision)
+            })
             || request.expected_turn.as_ref()
                 != self
                     .view
@@ -66,6 +72,12 @@ impl Navigation {
         let backend = self.backend.as_ref().ok_or("Codex is disconnected")?;
         let client = backend.connection.client();
         let engine = backend.engine.clone();
+        let preference = self
+            .view
+            .composer_settings
+            .as_ref()
+            .map(|view| view.selection.clone());
+        let settings = self.capture_run_settings();
         let (text, context, attachments) =
             self.capture_composer_context(draft_id, saved.text, saved.context)?;
         let operation = OperationIdentity {
@@ -81,7 +93,7 @@ impl Navigation {
                 context,
                 attachments,
             },
-            settings: SendSettings::default(),
+            settings,
         });
         if let (Some(chat), Some(turn)) = (&request.chat_id, &request.expected_turn) {
             return self.send_follow_up(
@@ -115,6 +127,15 @@ impl Navigation {
                     .prepare_thread(effect, &client, &self.store, RPC_TIMEOUT)
                     .await?;
                 let thread = prepared.thread().clone();
+                if let (Some(selection), Some(preference)) = (self.selection.as_ref(), preference)
+                    && let Err(error) = self.store.save_composer_selection(
+                        &selection.checkout,
+                        Some(&thread.0),
+                        &preference,
+                    )
+                {
+                    eprintln!("{error}");
+                }
                 self.source_draft = self.store.desktop_selection()?.source_draft;
                 let preview = present_question_reply(&request.text).into_owned();
                 let title = preview
