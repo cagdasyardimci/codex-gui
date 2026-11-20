@@ -565,6 +565,33 @@ pub fn overwrite_file_tools_fixture(
 }
 
 #[tauri::command]
+pub fn file_save_fixture_gate(
+    window: WebviewWindow,
+    verification: State<'_, Verification>,
+    project: State<'_, ProjectIpc>,
+    hold: bool,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    if *verification != Verification::FileTools {
+        return Err(IpcError::UnauthorizedWindow);
+    }
+    let mut model = project.state.lock().expect("workspace state lock poisoned");
+    if hold {
+        if model.file_save_fixture_gate.is_some() {
+            return Err(IpcError::StaleSelection);
+        }
+        model.file_save_fixture_gate = Some(std::sync::Arc::new(tokio::sync::Semaphore::new(0)));
+    } else {
+        model
+            .file_save_fixture_gate
+            .take()
+            .ok_or(IpcError::StaleSelection)?
+            .add_permits(1);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn verify_fixture_result(
     app: AppHandle,
     verification: State<'_, Verification>,

@@ -89,6 +89,11 @@ impl Navigation {
 
     pub(super) async fn confirm_quit(&mut self, decision: QuitDecision) -> Result<(), IpcError> {
         self.authorize_quit(&decision)?;
+        if self.view.quit.as_ref().is_some_and(|quit| !quit.stop_only)
+            && self.file_tools.is_saving()
+        {
+            return Err(IpcError::StaleSelection);
+        }
         if !self.failed_drafts.is_empty() {
             self.release_quit();
             return Err(IpcError::ProjectUnavailable);

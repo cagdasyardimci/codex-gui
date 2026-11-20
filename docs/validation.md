@@ -56,6 +56,8 @@ Run the [file tabs fixture](../desktop/fixtures/verify_file_tools_fixture.py) ag
 
 The same fixture verifies project file search with file masks, paged line matches, keyboard selection, and rejection of canceled or replaced targets.
 
+The fixture also holds a save across a chat switch, checks the buffer after a conflict, and asserts exact copy and export bytes and captured editor, folder, and GitHub destinations.
+
 Run it with `--settings` to verify model-specific effort and speed, cancellation and retirement of Full Access confirmation, and the exact settings in three captured Send requests across a pending change and a return to configured permissions.
 
 The [installed turn checkpoint](../desktop/fixtures/verify_turn_fixture.py) uses two fresh profiles. One recovers an ambiguous submission, answers a captured approval and questions, verifies the totals from the backend's attributed edit report, and opens the Git patch for the resulting checkout edit. The other switches chats and reloads the WebView during an active turn, then checks that stopping it targets the original owner and preserves that chat's draft. The package workflow also runs the installed account and history fixtures for first-launch sign-in and draft restoration. Use release-candidate acceptance for the real-account workflow.

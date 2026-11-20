@@ -5,10 +5,15 @@
   import MarkdownRichBlock from './MarkdownRichBlock.svelte';
   import { preserveMarkdownSelection } from './markdownSelection';
 
-  let { source, request }: { source: string; request?: TranscriptRowRequest } = $props();
+  let { source, request, render, renderKey }: {
+    source: string;
+    request?: TranscriptRowRequest;
+    render?: () => Promise<MarkdownNode[] | null>;
+    renderKey?: string;
+  } = $props();
   let parsed = $state.raw<{ scope: string; source: string; nodes: MarkdownNode[] | null }>();
   let root = $state<HTMLDivElement>();
-  const scope = $derived(request && JSON.stringify([request.workspaceId, request.chatId, request.generation, request.itemId]));
+  const scope = $derived(request ? JSON.stringify([request.workspaceId, request.chatId, request.generation, request.itemId]) : renderKey);
   const rendered = $derived(parsed?.scope === scope && parsed?.source === source ? parsed?.nodes ?? null : null);
 
   const tags: Partial<Record<MarkdownKind, string>> = {
@@ -19,13 +24,14 @@
 
   $effect(() => {
     const row = request;
+    const loader = render;
     const element = root;
     const owner = scope;
     const text = source;
     if (!owner || parsed?.scope === owner && parsed.source === text) return;
-    if (!row || !element || !/[\n\r`*_[\]<>#~&$\\+-]|^\s*\d+[.)]\s|^(?: {4}|\t)/.test(source)) return;
+    if ((!row && !loader) || !element || !/[\n\r`*_[\]<>#~&$\\+-]|^\s*\d+[.)]\s|^(?: {4}|\t)/.test(source)) return;
     const lifetime = new AbortController();
-    void renderTranscriptMarkdown(row).then((result) => {
+    void (loader ? loader() : renderTranscriptMarkdown(row!)).then((result) => {
       const children = result?.[0]?.children ?? [];
       if (lifetime.signal.aborted) return;
       const literal = result?.length === 1 && result[0]?.kind === 'paragraph' &&
@@ -80,7 +86,7 @@
         <ImagePreview load={() => loadTranscriptImage({ row, target })} alt={plain(node.children)} />
       {:else}{plain(node.children)}{/if}
     {:else if node.kind === 'link'}
-      {#if node.value}<button class="markdown-link" type="button" onclick={() => follow(node.value!)}>{@render nodes(node.children)}</button>
+      {#if node.value && (request || node.value.startsWith('#'))}<button class="markdown-link" type="button" onclick={() => follow(node.value!)}>{@render nodes(node.children)}</button>
       {:else}{@render nodes(node.children)}{/if}
     {:else if node.kind === 'break'}<br />
     {:else if node.kind === 'rule'}<hr />

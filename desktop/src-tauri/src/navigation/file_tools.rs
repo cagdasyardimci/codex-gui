@@ -9,9 +9,15 @@ use codex_gui_core::{
 use super::*;
 use crate::transcript_ipc::{inline_raster_payload, raster_type};
 
-#[derive(Default)]
+mod actions;
+mod save;
+pub(crate) use actions::FileTabCapture;
+pub(super) use save::FileSaveCompletion;
+
 pub(super) struct FileTools {
     sessions: HashMap<(CheckoutIdentity, Uuid), FileSession>,
+    saves: mpsc::Sender<Box<FileSaveCompletion>>,
+    pub(super) completed: mpsc::Receiver<Box<FileSaveCompletion>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -39,6 +45,7 @@ struct Document {
     crlf: bool,
     edit: Option<String>,
     revision: u32,
+    saving: Option<Uuid>,
 }
 
 impl NavigationHandle {
@@ -136,6 +143,7 @@ impl Navigation {
                 crlf: preserves_crlf(text),
                 edit: None,
                 revision: 0,
+                saving: None,
             });
             id
         };
@@ -209,6 +217,9 @@ impl Navigation {
             }
             FileToolsChange::Close(id) => {
                 let document = session.document_mut(id)?;
+                if document.saving.is_some() {
+                    return Err(IpcError::StaleSelection);
+                }
                 if document.save(&checkout, &self.owners) {
                     session.remove(id);
                 } else {
@@ -348,6 +359,7 @@ impl FileSession {
                     kind: document.kind,
                     preview: self.preview == Some(document.id),
                     dirty: document.is_dirty(),
+                    saving: document.saving.is_some(),
                 })
                 .collect(),
             discard,
@@ -420,8 +432,9 @@ impl FileSession {
     }
 
     fn matches_discard(&self, target: FileTabDiscard) -> bool {
-        self.document(target.tab_id)
-            .is_ok_and(|doc| doc.is_dirty() && doc.revision == target.revision)
+        self.document(target.tab_id).is_ok_and(|doc| {
+            doc.is_dirty() && doc.revision == target.revision && doc.saving.is_none()
+        })
     }
 
     fn remove(&mut self, id: Uuid) {
@@ -461,6 +474,7 @@ impl Document {
             crlf,
             edit: None,
             revision: 0,
+            saving: None,
         })
     }
 
@@ -526,14 +540,8 @@ impl Document {
                 return false;
             }
         };
-        let encoded;
-        let text = if self.crlf {
-            encoded = text.replace("\r\n", "\n").replace('\n', "\r\n");
-            encoded.as_str()
-        } else {
-            text.as_str()
-        };
-        match self.files.save_text(self.link.id, disk, text) {
+        let text = self.encode_edit(text);
+        match self.files.save_text(self.link.id, disk, &text) {
             Ok(revision) => {
                 self.disk = Some(revision);
                 self.edit = None;
@@ -548,6 +556,14 @@ impl Document {
 
     fn is_dirty(&self) -> bool {
         self.edit.is_some()
+    }
+
+    fn encode_edit<'a>(&self, text: &'a str) -> std::borrow::Cow<'a, str> {
+        if self.crlf {
+            std::borrow::Cow::Owned(text.replace("\r\n", "\n").replace('\n', "\r\n"))
+        } else {
+            std::borrow::Cow::Borrowed(text)
+        }
     }
 
     fn discard(&self) -> FileTabDiscard {

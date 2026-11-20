@@ -46,6 +46,7 @@ mod conversation_fork;
 mod feedback;
 mod file_tools;
 pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
+pub(crate) use file_tools::FileTabCapture;
 mod inspector;
 mod interactions;
 mod message_search;
@@ -105,7 +106,16 @@ enum Action {
         bool,
         oneshot::Sender<Vec<u8>>,
     ),
+    CaptureFileTab(
+        codex_gui_core::ipc::FileTabRead,
+        bool,
+        oneshot::Sender<FileTabCapture>,
+    ),
     EditFileTab(codex_gui_core::ipc::FileTabEdit),
+    SaveFileTab(
+        codex_gui_core::ipc::FileTabRead,
+        oneshot::Sender<codex_gui_core::ipc::FileSaveView>,
+    ),
     OpenFileSearchHit(
         Box<PreparedFileHit>,
         oneshot::Sender<codex_gui_core::ipc::OpenedFileSearchHit>,
@@ -175,6 +185,7 @@ enum Input {
     PromptForkCompleted(Option<Box<prompt_revision::ForkCompletion>>),
     TitleCompleted(Option<automatic_titles::TitleOutcome>),
     FeedbackCompleted(Option<Box<feedback::FeedbackOutcome>>),
+    FileSaveCompleted(Option<Box<file_tools::FileSaveCompletion>>),
     OwnerChanged,
     Flush,
 }
@@ -358,6 +369,7 @@ impl Navigation {
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
                     completion = self.feedback.completed.recv() => Input::FeedbackCompleted(completion),
+                    completion = self.file_tools.completed.recv() => Input::FileSaveCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
@@ -371,6 +383,7 @@ impl Navigation {
                     completion = self.prompt_revisions.completed.recv() => Input::PromptForkCompleted(completion),
                     completion = self.titles.completed.recv() => Input::TitleCompleted(completion),
                     completion = self.feedback.completed.recv() => Input::FeedbackCompleted(completion),
+                    completion = self.file_tools.completed.recv() => Input::FileSaveCompleted(completion),
                     _ = changed_owners.recv() => Input::OwnerChanged,
                 }
             };
@@ -407,6 +420,10 @@ impl Navigation {
                 Input::FeedbackCompleted(Some(outcome)) => self.complete_feedback(*outcome),
                 Input::FeedbackCompleted(None) => {
                     unreachable!("navigation owns the feedback sender")
+                }
+                Input::FileSaveCompleted(Some(completed)) => self.finish_file_save(*completed),
+                Input::FileSaveCompleted(None) => {
+                    unreachable!("navigation owns the file save sender")
                 }
                 Input::OwnerChanged => {
                     if let Err(error) = self.reload_sidebar() {
@@ -480,8 +497,16 @@ impl Navigation {
                 let _ = reply.send(self.read_file_tools(request, raster)?);
                 return Ok(None);
             }
+            Action::CaptureFileTab(request, bytes, reply) => {
+                let _ = reply.send(self.capture_file_tools_tab(request, bytes)?);
+                return Ok(None);
+            }
             Action::EditFileTab(request) => {
                 self.edit_file_tools(request)?;
+                return Ok(None);
+            }
+            Action::SaveFileTab(request, reply) => {
+                self.start_file_save(request, reply)?;
                 return Ok(None);
             }
             Action::OpenFileSearchHit(hit, reply) => {
@@ -779,7 +804,10 @@ impl Navigation {
             folder,
             thread: None,
         });
-        self.view = NavigationView::default();
+        self.view = NavigationView {
+            saving_files: self.file_tools.is_saving(),
+            ..NavigationView::default()
+        };
         self.configured_run = composer_settings::ConfiguredRun::default();
         self.adopt_focus(thread)?;
         if let Err(error) = self.refresh().await {
@@ -799,7 +827,10 @@ impl Navigation {
             .expect("workspace state lock poisoned")
             .grants
             .clear();
-        self.view = NavigationView::default();
+        self.view = NavigationView {
+            saving_files: self.file_tools.is_saving(),
+            ..NavigationView::default()
+        };
         self.configured_run = composer_settings::ConfiguredRun::default();
         self.adopt_focus(None)?;
         self.refresh().await

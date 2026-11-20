@@ -22,6 +22,7 @@ use crate::{
 };
 
 mod markdown;
+pub(crate) use markdown::document as render_markdown_document;
 
 const MAX_IMAGE_SOURCES: usize = 8;
 const MAX_SOURCE_BYTES: usize = 512 * 1024;
@@ -36,7 +37,7 @@ pub async fn render_transcript_markdown(
 ) -> Result<Option<Vec<MarkdownNode>>, IpcError> {
     let (checkout, source) = authorized_source(&window, &project, &request)?;
     let result =
-        tauri::async_runtime::spawn_blocking(move || markdown::document(&source, &checkout))
+        tauri::async_runtime::spawn_blocking(move || render_markdown_document(&source, &checkout))
             .await
             .map_err(|_| IpcError::ProjectUnavailable)?;
     authorized_source(&window, &project, &request)?;

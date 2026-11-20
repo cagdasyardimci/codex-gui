@@ -2,8 +2,8 @@ use codex_gui_core::{
     checkout::CheckoutIdentity,
     files::{FileError, index::ProjectBrowsePage},
     ipc::{
-        DraftAttachmentScope, FileTabEdit, FileTabRead, FileToolsChange, FileToolsRequest,
-        FileToolsView, IpcError, ProjectBrowseRequest,
+        DraftAttachmentScope, FileSaveView, FileTabEdit, FileTabRead, FileToolsChange,
+        FileToolsRequest, FileToolsView, IpcError, ProjectBrowseRequest,
     },
 };
 use tauri::{State, WebviewWindow, ipc::Response};
@@ -109,4 +109,14 @@ pub async fn edit_file_tab(
         .ok_or(IpcError::ProjectUnavailable)?
         .edit_file_tab(request)
         .await
+}
+
+#[tauri::command]
+pub async fn save_file_tab(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: FileTabRead,
+) -> Result<FileSaveView, IpcError> {
+    let (navigation, _) = capture_file_scope(&window, &project, &request.scope)?;
+    navigation.save_file_tab(request).await
 }

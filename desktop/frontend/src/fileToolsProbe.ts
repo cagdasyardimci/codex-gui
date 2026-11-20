@@ -10,6 +10,9 @@ const SECOND = 'history-second';
 const BETA_EDIT = 'The first chat owns this file.\n';
 const ADOPT_EDIT = 'Keep the new chat file.\n';
 const CONFLICT_EDIT = 'Keep this buffer after the conflicting save.\n';
+const GUIDE = 'Guide café #.md';
+const GUIDE_ORIGINAL = '# Local guide\n\nAlpha first.\nALPHA second.\n';
+const GUIDE_EDIT = '# Saved guide\n\nPreserve café from the first chat.\n';
 
 const panel = () => document.querySelector<HTMLElement>('aside[aria-label="Project Files"]');
 const browser = () => panel()?.querySelector<HTMLElement>('nav[aria-label="Project File Browser"]');
@@ -147,6 +150,62 @@ async function verifyFileSearch(visible: () => WorkspaceSnapshot | null, scope: 
   await waitFor('The file pane did not close after search', () => !panel());
 }
 
+async function verifyFileActions(visible: () => WorkspaceSnapshot | null, scope: DraftAttachmentScope) {
+  await showFiles();
+  await browse(GUIDE);
+  await waitFor('The Markdown source did not load', () => field()?.value === GUIDE_ORIGINAL);
+  await click('Preview', panel()!);
+  await waitFor('Markdown preview did not render the owning file heading', () =>
+    panel()?.querySelector('[aria-label="Markdown Preview"] h1')?.textContent === 'Local guide');
+  await click('View Source', panel()!);
+  await waitFor('Returning to source did not preserve the document', () => field()?.value === GUIDE_ORIGINAL);
+  const source = field()!;
+  source.focus();
+  key(source, 'f', { ctrlKey: true });
+  const find = () => panel()?.querySelector<HTMLInputElement>('input[aria-label="Find Text"]');
+  await waitFor('In-file Find did not focus its query', () => !!find() && document.activeElement === find());
+  enterSearchText(find()!, 'alpha');
+  const selection = () => source.value.slice(source.selectionStart, source.selectionEnd);
+  await waitFor('Find did not select the first exact source match', () => selection() === 'Alpha');
+  await click('Next Match', panel()!);
+  await waitFor('Find did not preserve the second match’s source casing', () => selection() === 'ALPHA');
+  key(find()!, 'Escape');
+  await waitFor('Closing Find did not restore source focus', () => !find() && document.activeElement === source);
+
+  await editFile(GUIDE_ORIGINAL, GUIDE_EDIT);
+  const target = (await changeFileTools({ scope, change: 'inspect' })).selected!;
+  await invoke('file_save_fixture_gate', { hold: true });
+  try {
+    await click('Save', panel()!);
+    await waitFor('The save did not reserve the original native tab', () => visible()?.navigation.savingFiles === true);
+    await click('Second fixture chat');
+    await waitFor('The pending save blocked switching chats', () => visible()?.navigation.selectedChat === SECOND && !panel());
+    await invoke('file_save_fixture_gate', { hold: false });
+    await waitFor('The hidden save changed which chat or pane was displayed', () =>
+      visible()?.navigation.selectedChat === SECOND && visible()?.navigation.savingFiles === false && !panel());
+  } finally {
+    await invoke('file_save_fixture_gate', { hold: false }).catch(() => {});
+  }
+  await click('First fixture chat');
+  await waitFor('Returning to the saved owner did not recover the edited source', () =>
+    visible()?.navigation.selectedChat === FIRST && field()?.value === GUIDE_EDIT);
+  const restored = await changeFileTools({ scope, change: 'inspect' });
+  if (restored.selected !== target || restored.tabs.some((tab) => tab.dirty || tab.saving)) {
+    throw new Error('The save completed for a different file or retained a submitted edit as dirty');
+  }
+  for (const action of ['Copy Source', 'Save As…', 'Show in Folder', 'Open in Default App', 'Open in VS Code', 'Open in GitHub']) {
+    await click('File Actions', panel()!);
+    const menu = () => panel()?.querySelector<HTMLElement>('[role="group"][aria-label="File Actions"]');
+    await waitFor('The file action choices did not open', () => !!menu());
+    await click(action, menu()!);
+    await waitFor('The captured file action did not settle', () => !menu() &&
+      [...panel()!.querySelectorAll<HTMLButtonElement>('button:enabled')].some((button) => button.textContent?.trim() === 'File Actions'));
+  }
+  await clickByLabel(`Close ${GUIDE}`);
+  await click('Hide Files', panel()!);
+  await waitFor('The pane did not close after completing file actions', () => !panel());
+}
+
 async function browse(name: string) {
   await waitFor('The file browser did not open', () => !!browser());
   await click(name, browser()!);
@@ -178,6 +237,7 @@ export async function verifyFileTools(visible: () => WorkspaceSnapshot | null) {
     const first = scope();
     await verifyQuickOpen(visible, first);
     await verifyFileSearch(visible, first);
+    await verifyFileActions(visible, first);
     await showFiles();
     await browse('folder');
     await browse('alpha.txt');
@@ -222,6 +282,10 @@ export async function verifyFileTools(visible: () => WorkspaceSnapshot | null) {
     await browse('conflict.txt');
     await editFile('Original conflict\n', CONFLICT_EDIT);
     await invoke('overwrite_file_tools_fixture');
+    await click('Save', panel()!);
+    await waitFor('The conflicting save discarded the buffer or kept its controls locked', () =>
+      field()?.value === CONFLICT_EDIT && !visible()?.navigation.savingFiles &&
+      [...panel()!.querySelectorAll<HTMLButtonElement>('button:enabled')].some((button) => button.textContent?.trim() === 'Save'));
     await clickByLabel('Close conflict.txt');
     await waitFor('A conflicting close did not identify its captured file', () =>
       closeDialog()?.querySelector('h2')?.textContent === 'conflict.txt');

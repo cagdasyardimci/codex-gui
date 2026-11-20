@@ -21,7 +21,7 @@ pub(super) fn events(source: &str) -> Parser<'_> {
     )
 }
 
-pub(super) fn document(source: &str, checkout: &CheckoutIdentity) -> Option<Vec<Node>> {
+pub(crate) fn document(source: &str, checkout: &CheckoutIdentity) -> Option<Vec<Node>> {
     if source.len() > MAX_SOURCE_BYTES {
         return None;
     }

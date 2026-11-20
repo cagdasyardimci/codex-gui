@@ -8,6 +8,7 @@ mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
 mod diff_ipc;
+mod file_actions_ipc;
 mod file_search_ipc;
 mod file_tools_ipc;
 mod fixture;
@@ -167,6 +168,7 @@ fn main() {
             fixture::verify_diff_result,
             fixture::report_quit_failure,
             fixture::overwrite_file_tools_fixture,
+            fixture::file_save_fixture_gate,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::search_project_paths,
@@ -174,6 +176,10 @@ fn main() {
             file_tools_ipc::browse_project_files,
             file_tools_ipc::read_file_tab,
             file_tools_ipc::edit_file_tab,
+            file_tools_ipc::save_file_tab,
+            file_actions_ipc::file_tab_actions,
+            file_actions_ipc::perform_file_action,
+            file_actions_ipc::render_file_markdown,
             file_search_ipc::start_file_search,
             file_search_ipc::read_file_search,
             file_search_ipc::cancel_file_search,

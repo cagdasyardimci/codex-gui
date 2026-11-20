@@ -28,6 +28,8 @@ pub struct NavigationView {
     pub recover_fork: bool,
     pub inspector: super::InspectorView,
     pub feedback: super::FeedbackView,
+    pub file_revision: u32,
+    pub saving_files: bool,
     pub retryable: bool,
     pub account: AccountView,
     pub write_access: WriteAccess,

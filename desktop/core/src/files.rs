@@ -110,6 +110,15 @@ impl CheckoutFiles {
         self.files.remove(&handle);
     }
 
+    pub fn validate(&self, handle: FileHandle) -> Result<(), FileError> {
+        self.files
+            .get(&handle)
+            .ok_or(FileError::InvalidHandle)?
+            .reopen(&self.checkout)?;
+        self.checkout.revalidate()?;
+        Ok(())
+    }
+
     pub fn same_file(&self, handle: FileHandle, other: &Self, other_handle: FileHandle) -> bool {
         let pair = self.files.get(&handle).zip(other.files.get(&other_handle));
         self.checkout == other.checkout
@@ -118,7 +127,7 @@ impl CheckoutFiles {
             })
     }
 
-    fn duplicate(&self, handle: FileHandle) -> Result<Self, FileError> {
+    pub fn duplicate(&self, handle: FileHandle) -> Result<Self, FileError> {
         let captured = self.files.get(&handle).ok_or(FileError::InvalidHandle)?;
         let copy = CapturedFile {
             relative: captured.relative.clone(),

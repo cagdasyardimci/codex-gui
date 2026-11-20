@@ -32,6 +32,51 @@ const DIFF_OPTIONS: &[&str] = &[
     "--ignore-submodules=dirty",
 ];
 
+pub struct TrackedFileLink {
+    pub origin: String,
+    pub commit: String,
+    pub relative: String,
+}
+
+pub async fn tracked_file_link(
+    checkout: CheckoutIdentity,
+    relative: &Path,
+) -> Result<TrackedFileLink, GitError> {
+    let git = CheckoutGit::new(checkout)?;
+    let root = CheckoutIdentity::capture(&git.reported_root().await?)?;
+    let file = git.checkout.canonical_path().join(relative);
+    let relative = file
+        .strip_prefix(root.canonical_path())
+        .map_err(|_| GitError::RetiredFile)?
+        .components()
+        .map(|part| match part {
+            Component::Normal(name) => name.to_str().ok_or(GitError::InvalidOutput),
+            _ => Err(GitError::RetiredFile),
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join("/");
+    if relative.is_empty() {
+        return Err(GitError::RetiredFile);
+    }
+    let head = git.success(["rev-parse", "--verify", "HEAD"], 4096).await?;
+    let commit = parse_oid(&head)?.to_owned();
+    git.success(
+        ["cat-file", "-e", format!("{commit}:{relative}").as_str()],
+        4096,
+    )
+    .await?;
+    let origin = git.success(["remote", "get-url", "origin"], 4096).await?;
+    let origin = std::str::from_utf8(&origin)
+        .map_err(|_| GitError::InvalidOutput)?
+        .trim()
+        .to_owned();
+    Ok(TrackedFileLink {
+        origin,
+        commit,
+        relative,
+    })
+}
+
 #[derive(Debug, Error)]
 pub enum GitError {
     #[error("Git executable was not found")]

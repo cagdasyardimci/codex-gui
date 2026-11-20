@@ -1,15 +1,19 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type {
-    DraftAttachmentScope, FileTabView, FileToolsChange, FileToolsView, OpenFileSearchHit, ProjectBrowseEntry, ProjectFolder, ProjectPathId,
+    DraftAttachmentScope, FileAction, FileActionsView, FileTabRead, FileTabView, FileToolsChange, FileToolsView,
+    OpenFileSearchHit, ProjectBrowseEntry, ProjectFolder, ProjectPathId,
   } from './generated/workspace';
-  import { browseProjectFiles, changeFileTools, FileEdits, openFileSearchHit, readFileTab, sameFileScope, type FileViewPositions } from './fileTools';
+  import { browseProjectFiles, changeFileTools, FileEdits, fileTabActions, openFileSearchHit, performFileAction,
+    readFileTab, renderFileMarkdown, sameFileScope, saveFileTab, type FileViewPositions } from './fileTools';
   import ImagePreview from './ImagePreview.svelte';
+  import MarkdownView from './MarkdownView.svelte';
 
-  let { scope, edits, positions, blocked, opened = $bindable(false) }: {
+  let { scope, edits, positions, revision, blocked, opened = $bindable(false) }: {
     scope: DraftAttachmentScope;
     edits: FileEdits;
     positions: FileViewPositions;
+    revision: number;
     blocked: boolean;
     opened?: boolean;
   } = $props();
@@ -30,10 +34,17 @@
   let composing = $state(false);
   let reload = $state(0);
   let reveal: { tab: string; line: number } | undefined;
+  let preview = $state(false);
+  let wraps = $state(false);
+  let searching = $state(false);
+  let findText = $state('');
+  let findField = $state<HTMLInputElement>();
+  let actions = $state.raw<{ target: FileTabRead; available: FileActionsView }>();
   const active = $derived(view?.tabs.find((item) => item.id === view?.selected));
   const activeId = $derived(active?.id);
   const activeKind = $derived(active?.kind);
   const activeIndex = $derived(view?.tabs.findIndex((item) => item.id === activeId) ?? -1);
+  const canPreview = $derived(activeKind === 'text' && /\.(md|markdown)$/iu.test(active?.path ?? ''));
 
   function adopt(next: FileToolsView) {
     view = next;
@@ -53,7 +64,17 @@
   }
 
   $effect(() => {
+    void revision;
     if (!blocked) void refresh(scope);
+  });
+
+  $effect(() => {
+    const mode = activeId ? positions.modes.get(activeId) : undefined;
+    preview = mode?.preview ?? false;
+    wraps = mode?.wrap ?? false;
+    searching = false;
+    findText = '';
+    actions = undefined;
   });
 
   async function update(change: FileToolsChange | OpenFileSearchHit) {
@@ -73,11 +94,17 @@
       if (expected !== requestNumber || !sameFileScope(scope, captured)) return false;
       const retained = new Set(next.tabs.map((tab) => tab.id));
       for (const tab of view?.tabs ?? []) {
-        if (!retained.has(tab.id)) positions.tabs.delete(tab.id);
+        if (!retained.has(tab.id)) {
+          positions.tabs.delete(tab.id);
+          positions.modes.delete(tab.id);
+        }
       }
       adopt(next);
       if (line !== undefined && next.selected) {
         reveal = { tab: next.selected, line };
+        const mode = positions.modes.get(next.selected);
+        positions.modes.set(next.selected, { preview: false, wrap: mode?.wrap ?? false });
+        preview = false;
         reload += 1;
       }
       return true;
@@ -101,6 +128,117 @@
 
   export async function openMatch(request: OpenFileSearchHit) {
     return update(request);
+  }
+
+  async function save(tab: FileTabView) {
+    if (blocked || busy || composing || tab.saving || activeId !== tab.id) return;
+    const target = { scope, tabId: tab.id };
+    busy = true;
+    try {
+      await edits.flush();
+      await saveFileTab(target);
+    } catch (error) {
+      recordFileError(error);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function recordFileError(error: unknown) {
+    if (error !== 'staleSelection' && error !== 'retiredWorkspace') console.error(error);
+  }
+
+  function setMode(tab: string, showPreview: boolean, wrap: boolean) {
+    positions.modes.set(tab, { preview: showPreview, wrap });
+    preview = showPreview;
+    wraps = wrap;
+    if (showPreview) searching = false;
+  }
+
+  async function switchPreview(tab: string, showPreview: boolean) {
+    if (showPreview && field && loaded === tab) rememberText(tab, field);
+    setMode(tab, showPreview, wraps);
+    if (showPreview) return;
+    await tick();
+    if (activeId === tab && field) restoreTextPosition(tab, field);
+  }
+
+  async function showFind() {
+    if (!activeId || loaded !== activeId || blocked) return;
+    await switchPreview(activeId, false);
+    searching = true;
+    await tick();
+    findField?.focus({ preventScroll: true });
+  }
+
+  function matchText(direction: -1 | 1, fromStart = false) {
+    if (!field || !findText) return;
+    const pattern = [...findText].map((character) => '.+*?^$()[]{}|\\'.includes(character) ? '\\' + character : character).join('');
+    const text = field.value;
+    const cursor = fromStart ? 0 : direction > 0 ? field.selectionEnd : field.selectionStart;
+    let first: RegExpMatchArray | undefined;
+    let last: RegExpMatchArray | undefined;
+    let found: RegExpMatchArray | undefined;
+    for (const match of text.matchAll(new RegExp(pattern, 'giu'))) {
+      first ??= match;
+      last = match;
+      if (direction > 0 && match.index! >= cursor) {
+        found = match;
+        break;
+      }
+      if (direction < 0 && match.index! < cursor) found = match;
+    }
+    const selected = found ?? (direction > 0 ? first : last);
+    if (selected?.index !== undefined) scrollRange(field, selected.index, selected.index + selected[0].length);
+  }
+
+  function closeFind() {
+    searching = false;
+    field?.focus({ preventScroll: true });
+  }
+
+  function documentKey(event: KeyboardEvent) {
+    if (event.isComposing || composing || blocked || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+    if (event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      void showFind();
+    } else if (event.key.toLowerCase() === 's' && active) {
+      event.preventDefault();
+      if (active.dirty) void save(active);
+    }
+  }
+
+  async function showActions(tab: FileTabView) {
+    if (actions) { actions = undefined; return; }
+    if (busy || blocked || tab.saving) return;
+    const target = { scope, tabId: tab.id };
+    try {
+      const available = await fileTabActions(target);
+      if (activeId === tab.id && sameFileScope(scope, target.scope) && !blocked) actions = { target, available };
+    } catch (error) {
+      recordFileError(error);
+    }
+  }
+
+  async function runFileAction(action: FileAction) {
+    const shown = actions;
+    if (!shown || blocked || busy || activeId !== shown.target.tabId || !sameFileScope(scope, shown.target.scope)) return;
+    actions = undefined;
+    busy = true;
+    try {
+      await edits.flush();
+      await performFileAction({ target: shown.target, action });
+    } catch (error) {
+      recordFileError(error);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function loadMarkdown(tabId: string) {
+    const target = { scope, tabId };
+    await edits.flush();
+    return renderFileMarkdown(target);
   }
 
   function moveSelected(direction: -1 | 1) {
@@ -161,17 +299,12 @@
         if (retired) return;
         text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
         loaded = id;
-        const position = positions.tabs.get(id);
         await tick();
         if (retired || !field) return;
         if (reveal?.tab === id) {
           revealLine(field, reveal.line);
           reveal = undefined;
-        } else if (position) {
-          field.setSelectionRange(position.first, position.last, position.direction);
-          field.scrollTop = position.top;
-          field.scrollLeft = position.left;
-        }
+        } else restoreTextPosition(id, field);
       } catch (error) {
         if (!retired) console.error(error);
       }
@@ -202,6 +335,14 @@
     });
   }
 
+  function restoreTextPosition(tabId: string, field: HTMLTextAreaElement) {
+    const position = positions.tabs.get(tabId);
+    if (!position) return;
+    field.setSelectionRange(position.first, position.last, position.direction);
+    field.scrollTop = position.top;
+    field.scrollLeft = position.left;
+  }
+
   function revealLine(element: HTMLTextAreaElement, line: number) {
     const value = element.value;
     let start = 0;
@@ -212,9 +353,14 @@
     }
     const end = value.indexOf('\n', start);
     element.focus({ preventScroll: true });
-    element.setSelectionRange(start, end < 0 ? value.length : end);
+    scrollRange(element, start, end < 0 ? value.length : end);
+  }
+
+  function scrollRange(element: HTMLTextAreaElement, start: number, end: number) {
+    element.setSelectionRange(start, end);
+    const linesAbove = element.value.slice(0, start).split('\n').length - 1;
     const height = Number.parseFloat(getComputedStyle(element).lineHeight);
-    if (Number.isFinite(height)) element.scrollTop = Math.max(0, (line - 1) * height - element.clientHeight / 3);
+    if (Number.isFinite(height)) element.scrollTop = Math.max(0, linesAbove * height - element.clientHeight / 3);
     element.scrollLeft = 0;
   }
 
@@ -285,7 +431,7 @@
           <div class="file-tab" class:preview={tab.preview} class:dirty={tab.dirty} data-file-tab={tab.id}>
             <button type="button" aria-current={activeId === tab.id ? 'true' : undefined} title={tab.path}
               disabled={blocked || busy} onclick={() => void update({ select: tab.id })}>{tab.path.split(/[/\\]/).at(-1)}</button>
-            <button type="button" aria-label={`Close ${tab.path}`} disabled={blocked || busy}
+            <button type="button" aria-label={`Close ${tab.path}`} disabled={blocked || busy || tab.saving}
               onclick={() => void update({ close: tab.id })}>×</button>
           </div>
         {/each}
@@ -294,6 +440,22 @@
     {#if active}
       {@const tab = active}
       <div class="file-tab-actions">
+        {#if tab.dirty}
+          <button type="button" disabled={blocked || busy || tab.saving} onclick={() => void save(tab)}>Save</button>
+        {/if}
+        {#if canPreview}
+          <button type="button" disabled={blocked || busy} onclick={() => void switchPreview(tab.id, !preview)}>
+            {preview ? 'View Source' : 'Preview'}
+          </button>
+        {/if}
+        {#if tab.kind === 'text'}
+          {#if !preview}
+            <button type="button" disabled={blocked} aria-pressed={wraps} onclick={() => setMode(tab.id, false, !wraps)}>Wrap Lines</button>
+          {/if}
+          <button type="button" disabled={blocked || busy} onclick={() => void showFind()}>Find in File</button>
+        {/if}
+        <button type="button" aria-expanded={!!actions} disabled={blocked || busy || tab.saving}
+          onclick={() => void showActions(tab)}>File Actions</button>
         {#if tab.preview}
           <button type="button" disabled={blocked || busy} onclick={() => void update({ keep: tab.id })}>Keep Tab</button>
         {/if}
@@ -304,15 +466,47 @@
           <button type="button" disabled={blocked || busy} onclick={() => moveSelected(1)}>Move Tab Right</button>
         {/if}
       </div>
+      {#if actions}
+        <div class="file-tab-actions" role="group" aria-label="File Actions">
+          {#if tab.kind === 'text'}<button type="button" onclick={() => void runFileAction('copy')}>Copy Source</button>{/if}
+          {#if tab.kind !== 'other'}<button type="button" onclick={() => void runFileAction('export')}>Save As…</button>{/if}
+          <button type="button" onclick={() => void runFileAction('reveal')}>Show in Folder</button>
+          <button type="button" onclick={() => void runFileAction('openDefault')}>Open in Default App</button>
+          {#each actions.available.editors as editor (editor.id)}
+            <button type="button" onclick={() => void runFileAction({ openEditor: editor.id })}>Open in {editor.label}</button>
+          {/each}
+          {#if actions.available.github}<button type="button" onclick={() => void runFileAction('openGitHub')}>Open in GitHub</button>{/if}
+        </div>
+      {/if}
       {#key tab.id}
         {#if tab.kind === 'text' && loaded === tab.id}
-          <textarea bind:this={field} aria-label={`Edit ${tab.path}`} value={text} readonly={blocked || busy}
-            spellcheck="false" wrap="off"
-            oninput={(event) => edit(tab, event.currentTarget, composing || (event instanceof InputEvent && event.isComposing))}
-            oncompositionstart={() => { composing = true; }}
-            oncompositionend={(event) => { composing = false; edit(tab, event.currentTarget, false); }}
-            onselect={(event) => rememberText(tab.id, event.currentTarget)}
-            onscroll={(event) => rememberText(tab.id, event.currentTarget)}></textarea>
+          {#if preview && canPreview}
+            <div class="file-preview" aria-label="Markdown Preview">
+              <MarkdownView source={text} render={() => loadMarkdown(tab.id)} renderKey={JSON.stringify([scope.workspaceId, scope.draftId, tab.id])} />
+            </div>
+          {:else}
+            {#if searching}
+              <div class="file-find" role="search" aria-label="Find in File">
+                <input type="search" aria-label="Find Text" maxlength="4096" bind:this={findField} value={findText}
+                  oninput={(event) => { findText = event.currentTarget.value; matchText(1, true); }}
+                  onkeydown={(event) => {
+                    if (event.isComposing) return;
+                    if (event.key === 'Enter') { event.preventDefault(); matchText(event.shiftKey ? -1 : 1); }
+                    else if (event.key === 'Escape') { event.preventDefault(); closeFind(); }
+                  }} />
+                <button type="button" disabled={!findText} onclick={() => matchText(-1)}>Previous Match</button>
+                <button type="button" disabled={!findText} onclick={() => matchText(1)}>Next Match</button>
+                <button type="button" onclick={closeFind}>Close Find</button>
+              </div>
+            {/if}
+            <textarea bind:this={field} aria-label={`Edit ${tab.path}`} value={text} readonly={blocked || busy}
+              spellcheck="false" wrap={wraps ? 'soft' : 'off'} onkeydown={documentKey}
+              oninput={(event) => edit(tab, event.currentTarget, composing || (event instanceof InputEvent && event.isComposing))}
+              oncompositionstart={() => { composing = true; }}
+              oncompositionend={(event) => { composing = false; edit(tab, event.currentTarget, false); }}
+              onselect={(event) => rememberText(tab.id, event.currentTarget)}
+              onscroll={(event) => rememberText(tab.id, event.currentTarget)}></textarea>
+          {/if}
         {:else if tab.kind === 'raster'}
           <div class="file-image" bind:this={imageScroller} onscroll={(event) => rememberImage(tab.id, event.currentTarget)}>
             <ImagePreview load={() => readFileTab({ scope, tabId: tab.id }, true)} alt={tab.path} />
@@ -341,6 +535,9 @@
   }
   .project-files.wide { flex-basis: min(49vw, 46rem); }
   header, .file-tabs, .file-tab, .folder-path, .file-tab-actions { display: flex; align-items: center; gap: 0.25rem; }
+  .file-tab-actions, .file-find { flex-wrap: wrap; }
+  .file-find { display: flex; gap: 0.25rem; }
+  .file-find input { flex: 1 1 7rem; min-inline-size: 0; }
   .file-browser { display: flex; flex-direction: column; align-items: flex-start; max-block-size: 11rem; overflow: auto; }
   .folder { font-weight: 600; }
   .file-tabs { overflow: auto; flex-shrink: 0; }
@@ -349,6 +546,6 @@
   .file-tab.dirty { border-block-end-color: Highlight; }
   .file-tab button[aria-current="true"] { background: color-mix(in srgb, Highlight 20%, Canvas); }
   textarea { flex: 1; font: 0.88rem/1.4 ui-monospace, monospace; min-block-size: 5rem; resize: none; }
-  .file-image { flex: 1; overflow: auto; }
+  .file-image, .file-preview { flex: 1; overflow: auto; }
   .file-image :global(img) { display: block; max-inline-size: 100%; }
 </style>

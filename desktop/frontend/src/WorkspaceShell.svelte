@@ -116,7 +116,7 @@
   let filePane = $state<ReturnType<typeof WorkspaceFiles>>();
   let filesOpened = $state(false);
   const fileEdits = new FileEdits();
-  const filePositions: FileViewPositions = { tabs: new Map(), folders: new Map() };
+  const filePositions: FileViewPositions = { tabs: new Map(), folders: new Map(), modes: new Map() };
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
@@ -1363,7 +1363,7 @@
     {#if attachmentScope}
       {#key JSON.stringify([attachmentScope.workspaceId, attachmentScope.draftId])}
         <WorkspaceFiles scope={attachmentScope} edits={fileEdits} positions={filePositions}
-          blocked={!!quit} bind:opened={filesOpened} bind:this={filePane} />
+          revision={navigation?.fileRevision ?? 0} blocked={!!quit} bind:opened={filesOpened} bind:this={filePane} />
       {/key}
     {/if}
     {#if summaryScope && inspector?.opened && navigation && !quit}
@@ -1420,7 +1420,7 @@
       load={loadSearchPage} choose={chooseSearchHit} close={closeSearch} />
   {/if}
   {#if quit?.confirm && !quit.draining}
-    <QuitDialog busy={confirmingQuit} stopOnly={quit.stopOnly} fileAction={quit.fileAction}
+    <QuitDialog busy={confirmingQuit} savingFiles={!quit.stopOnly && !!navigation?.savingFiles} stopOnly={quit.stopOnly} fileAction={quit.fileAction}
       cancel={() => { if (quit) void cancelQuit(quit.ticket).catch(console.error); }}
       confirm={() => { if (quit) void confirmQuit(quit.ticket); }} />
   {/if}

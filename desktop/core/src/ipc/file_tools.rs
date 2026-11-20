@@ -67,6 +67,7 @@ pub struct FileTabView {
     pub kind: FileTabKind,
     pub preview: bool,
     pub dirty: bool,
+    pub saving: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, TS)]
@@ -84,11 +85,50 @@ pub struct FileTabDiscard {
     pub revision: u32,
 }
 
-#[derive(Debug, Deserialize, TS)]
+#[derive(Clone, Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FileTabRead {
     pub scope: DraftAttachmentScope,
     pub tab_id: Uuid,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSaveView {
+    pub view: Option<FileToolsView>,
+    pub saved: bool,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileActionRequest {
+    pub target: FileTabRead,
+    pub action: FileAction,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FileAction {
+    Copy,
+    Export,
+    Reveal,
+    OpenDefault,
+    OpenEditor(String),
+    OpenGitHub,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileEditor {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileActionsView {
+    pub editors: Vec<FileEditor>,
+    pub github: bool,
 }
 
 #[derive(Debug, Deserialize, TS)]

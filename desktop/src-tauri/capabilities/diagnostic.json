@@ -21,6 +21,7 @@
     "allow-seed-deletion-fixture",
     "allow-report-quit-failure",
     "allow-overwrite-file-tools-fixture",
+    "allow-file-save-fixture-gate",
     "allow-change-workspace-fixture"
   ]
 }

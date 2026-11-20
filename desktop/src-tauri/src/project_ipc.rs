@@ -33,6 +33,7 @@ pub(crate) struct ProjectState {
     fixture_directory: Option<tempfile::TempDir>,
     file_index: Option<(WorkspaceId, Arc<AsyncMutex<WatchedProjectPaths>>)>,
     pub(crate) file_search: Option<Arc<crate::file_search_ipc::FileSearchSession>>,
+    pub(crate) file_save_fixture_gate: Option<Arc<tokio::sync::Semaphore>>,
     pub(crate) composer_catalog: Option<crate::composer_context_ipc::ComposerCatalog>,
 }
 
