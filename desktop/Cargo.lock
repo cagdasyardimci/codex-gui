@@ -368,6 +368,7 @@ dependencies = [
  "codex-gui-core",
  "serde",
  "serde_json",
+ "shlex",
  "tauri",
  "tauri-build",
  "tempfile",

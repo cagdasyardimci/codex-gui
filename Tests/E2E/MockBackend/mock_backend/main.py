@@ -40,7 +40,7 @@ def main():
             try:
                 request = json.loads(line)
                 if isinstance(request, dict) and 'method' not in request and 'id' in request:
-                    server.resolve_question(request)
+                    server.resolve_request(request)
                     continue
                 if not isinstance(request, dict) or not isinstance(request.get('method'), str):
                     raise ProtocolError(-32600, 'Invalid request')

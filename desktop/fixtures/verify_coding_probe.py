@@ -67,6 +67,9 @@ def main() -> None:
         assert set(thread["params"]) == {"cwd"}
         assert set(turn["params"]) == {"threadId", "cwd", "clientUserMessageId", "input"}
         assert thread["cwd"] == turn["resolvedCwd"] == turn["cwd"]
+        approvals = [entry["result"] for entry in entries
+                     if entry["direction"] == "command-approval-response"]
+        assert approvals == ([{"decision": "accept"}] if os.name != "nt" else [])
         print("Verified the installed coding probe with the protocol fixture")
 
 

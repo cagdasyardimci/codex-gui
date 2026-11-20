@@ -16,9 +16,16 @@ class Server:
         self.actions = []
         self.failure = None
         self.questions = {}
+        self.command_approvals = {}
 
-    def resolve_question(self, response):
+    def resolve_request(self, response):
         with self.lock:
+            command = self.command_approvals.pop(response['id'], None)
+            if command:
+                command['decision'] = response.get('result', {}).get('decision')
+                self.transport.trace({'direction': 'command-approval-response', **response})
+                command['ready'].set()
+                return
             pending = self.questions.pop(response['id'], None)
             if pending:
                 stream, ready = pending

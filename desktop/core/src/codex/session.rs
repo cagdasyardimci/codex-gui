@@ -178,18 +178,60 @@ impl AppServerClient {
             bytes,
             deadline,
             ticket: request.ticket.clone(),
+            written: None,
         };
 
-        match time::timeout_at(deadline, self.outbox.send(frame)).await {
-            Ok(Ok(())) => {}
-            Ok(Err(_)) => return Err(RequestError::Disconnected(request.ticket.cancel())),
-            Err(_) => return Err(RequestError::Timeout(request.ticket.cancel())),
-        }
+        self.enqueue(frame).await?;
         match time::timeout_at(deadline, reply).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err(RequestError::Disconnected(request.ticket.cancel())),
             Err(_) => Err(RequestError::Timeout(request.ticket.cancel())),
         }
+    }
+
+    pub async fn respond(
+        &self,
+        id: &RpcId,
+        result: Value,
+        timeout: Duration,
+    ) -> Result<(), RequestError> {
+        let deadline = Instant::now() + timeout;
+        let bytes = encode_frame(&json!({"id": id, "result": result}))?;
+        let ticket = Arc::new(WriteTicket::default());
+        let pending = PendingWrite(ticket.clone());
+        let (written, receipt) = oneshot::channel();
+        self.enqueue(Outbound {
+            bytes,
+            deadline,
+            ticket,
+            written: Some(written),
+        })
+        .await?;
+        match time::timeout_at(deadline, receipt).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(_)) if Instant::now() < deadline => {
+                Err(RequestError::Disconnected(pending.0.cancel()))
+            }
+            _ => Err(RequestError::Timeout(pending.0.cancel())),
+        }
+    }
+
+    async fn enqueue(&self, frame: Outbound) -> Result<(), RequestError> {
+        let deadline = frame.deadline;
+        let ticket = frame.ticket.clone();
+        match time::timeout_at(deadline, self.outbox.send(frame)).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(_)) => Err(RequestError::Disconnected(ticket.cancel())),
+            Err(_) => Err(RequestError::Timeout(ticket.cancel())),
+        }
+    }
+}
+
+struct PendingWrite(Arc<WriteTicket>);
+
+impl Drop for PendingWrite {
+    fn drop(&mut self) {
+        self.0.cancel();
     }
 }
 

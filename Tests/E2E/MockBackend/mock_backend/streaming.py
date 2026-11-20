@@ -1,4 +1,5 @@
 """Independent turn workers, with serialized state updates and cancellation."""
+import os
 from pathlib import Path
 import threading
 import time
@@ -21,14 +22,8 @@ class Stream:
                 self.emit('turn/started', turn=self.turn)
                 for item in self.turn['items']:
                     self.emit('item/started', item=item)
-                if engine.scenario.get('codingProbe'):
-                    fixture = Path(self.thread['cwd']) / 'codex-gui-probe.txt'
-                    command = {'id': engine.state.identity('command'), 'type': 'commandExecution',
-                               'command': 'read fixture marker', 'cwd': self.thread['cwd'],
-                               'aggregatedOutput': fixture.read_text(encoding='utf-8'),
-                               'exitCode': 0, 'status': 'completed'}
-                    self.turn['items'].append(command)
-                    self.emit('item/completed', item=command)
+            if engine.scenario.get('codingProbe'):
+                self.read_probe_marker()
             if engine.scenario.get('questions'):
                 self.ask_question()
             if engine.scenario['mode'] == 'stall':
@@ -55,6 +50,43 @@ class Stream:
                     'threadId': self.thread['id'], 'status': {'type': 'idle'}})
         except (BrokenPipeError, OSError) as error:
             engine.report_failure(error)
+
+    def read_probe_marker(self):
+        engine = self.engine
+        with engine.lock:
+            command_id = engine.state.identity('command')
+        if os.name != 'nt' and not self.approve_probe_read(command_id):
+            self.cancelled.set()
+            return
+
+        fixture = Path(self.thread['cwd']) / 'codex-gui-probe.txt'
+        command = {'id': command_id, 'type': 'commandExecution',
+                   'command': 'read fixture marker', 'cwd': self.thread['cwd'],
+                   'aggregatedOutput': fixture.read_text(encoding='utf-8'),
+                   'exitCode': 0, 'status': 'completed'}
+        with engine.lock:
+            self.turn['items'].append(command)
+            self.emit('item/completed', item=command)
+
+    def approve_probe_read(self, command_id):
+        engine = self.engine
+        request_id = 'qa-approval-' + command_id
+        prompt = {'ready': threading.Event(), 'decision': None}
+        params = {'threadId': self.thread['id'], 'turnId': self.turn['id'], 'itemId': command_id,
+                  'command': "/bin/bash -lc '/bin/cat -- ./codex-gui-probe.txt'",
+                  'cwd': self.thread['cwd'], 'kind': 'command',
+                  'availableDecisions': ['accept', 'decline']}
+        with engine.lock:
+            engine.command_approvals[request_id] = prompt
+            engine.transport.send({'method': 'item/commandExecution/requestApproval',
+                                   'id': request_id, 'params': params})
+        try:
+            while not prompt['ready'].wait(0.2) and not self.cancelled.is_set():
+                pass
+            return prompt['decision'] == 'accept'
+        finally:
+            with engine.lock:
+                engine.command_approvals.pop(request_id, None)
 
     def ask_question(self):
         text = self.turn['items'][0]['content'][0]['text'].lower()

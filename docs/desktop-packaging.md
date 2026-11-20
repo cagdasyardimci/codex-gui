@@ -32,7 +32,7 @@ The [Windows sandbox probe](../desktop/core/examples/windows_sandbox.rs) runs Co
 
 ## Installed coding probe
 
-Use a fresh OS profile and an existing empty directory as `CODEX_HOME`. Establish Codex sign-in in that profile, then launch the installed diagnostic shell with `--verify-coding-turn <absolute-new-report-path>` and the same profile environment. The app discovers Codex and Git, creates a disposable checkout, and starts a turn using the backend's default policy. A passing report names the selected CLI and version after a successful command emits the checkout marker and the matching turn completes. [Codex authentication](https://developers.openai.com/codex/auth)
+Use a fresh OS profile and an existing empty directory as `CODEX_HOME`. Establish Codex sign-in in that profile, then launch the installed diagnostic shell with `--verify-coding-turn <absolute-new-report-path>` and the same profile environment. The app discovers Codex and Git, creates a disposable checkout, and starts a turn using the backend's default policy. The diagnostic can grant one command approval for its own marker read in the captured checkout. A passing report names the selected CLI and version after a successful command emits the checkout marker and the matching turn completes. [Codex authentication](https://developers.openai.com/codex/auth)
 
 The [package workflow](../.github/workflows/desktop-core.yml) runs the [coding fixture](../desktop/fixtures/verify_coding_probe.py) from each packaged application. Use a signed-in Codex process for live acceptance.
 

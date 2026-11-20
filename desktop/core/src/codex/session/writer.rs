@@ -8,7 +8,7 @@ use std::{
 
 use tokio::{
     io::{AsyncWrite, AsyncWriteExt},
-    sync::{Notify, mpsc},
+    sync::{Notify, mpsc, oneshot},
     time::{self, Instant},
 };
 
@@ -57,6 +57,7 @@ pub(super) struct Outbound {
     pub bytes: Vec<u8>,
     pub deadline: Instant,
     pub ticket: Arc<WriteTicket>,
+    pub written: Option<oneshot::Sender<()>>,
 }
 
 pub(super) async fn run<W: AsyncWrite + Unpin>(
@@ -75,7 +76,11 @@ pub(super) async fn run<W: AsyncWrite + Unpin>(
         .await;
 
         match result {
-            Ok(Ok(true)) => {}
+            Ok(Ok(true)) => {
+                if let Some(written) = frame.written {
+                    let _ = written.send(());
+                }
+            }
             Ok(Ok(false)) | Err(_) if frame.ticket.cancel() == Delivery::Unsent => {}
             // Closing stdin prevents another frame from following an incomplete line.
             _ => break,

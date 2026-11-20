@@ -25,7 +25,10 @@ CLIENT_REQUESTS = {
     "windowsSandbox/setupStart": ("mode", "cwd"),
 }
 SERVER_REQUESTS = {
-    "item/commandExecution/requestApproval": ("threadId", "turnId", "itemId"),
+    "item/commandExecution/requestApproval": (
+        "threadId", "turnId", "itemId", "command", "cwd", "kind",
+        "networkApprovalContext", "additionalPermissions", "availableDecisions",
+    ),
     "item/fileChange/requestApproval": ("threadId", "turnId", "itemId"),
     "item/permissions/requestApproval": ("threadId", "turnId", "itemId", "permissions"),
     "item/tool/requestUserInput": ("threadId", "turnId", "itemId", "isBlocking", "questions"),
