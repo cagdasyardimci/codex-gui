@@ -78,8 +78,12 @@ jobs:
       - name: Install Linux WebView dependencies
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb xauth
+          sources="$RUNNER_TEMP/ubuntu-desktop.sources"
+          sed -E 's|http://(azure\.)?archive\.ubuntu\.com/ubuntu/?|https://archive.ubuntu.com/ubuntu/|g; s|http://security\.ubuntu\.com/ubuntu/?|https://security.ubuntu.com/ubuntu/|g' \
+            /etc/apt/sources.list.d/ubuntu.sources > "$sources"
+          apt_options=(-o "Dir::Etc::sourcelist=$sources" -o Dir::Etc::sourceparts=- -o Acquire::Retries=1 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25)
+          sudo timeout 150s apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
+          sudo timeout 150s apt-get "${apt_options[@]}" install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-bin xvfb xauth
       - name: Install frontend dependencies
         working-directory: desktop/frontend
         run: pnpm install --frozen-lockfile
@@ -162,7 +166,7 @@ jobs:
             desktop/target/debug/bundle/deb/*.deb
           if-no-files-found: error
       - name: Prepare hosted ChatGPT sign-in
-        if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != ''
+        if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != '' && (vars.CODEX_GUI_DEVICE_TARGET == '' || vars.CODEX_GUI_DEVICE_TARGET == runner.os)
         shell: bash
         env:
           CODEX_GUI_DEVICE_PUBLIC_KEY: ${{ vars.CODEX_GUI_DEVICE_PUBLIC_KEY }}
@@ -170,12 +174,10 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/codex-gui-hosted-turn/cli" --no-save --no-audit --no-fund --ignore-scripts @openai/codex@0.163.0
           if [[ "$RUNNER_OS" == Windows ]]; then
             cargo build --manifest-path desktop/Cargo.toml --locked -p codex-gui-core --example windows_sandbox
-          else
-            sudo apt-get install -y libgtk-3-bin
           fi
           python desktop/fixtures/hosted_coding_probe.py prepare
       - name: Store encrypted device handoff
-        if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != ''
+        if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != '' && (vars.CODEX_GUI_DEVICE_TARGET == '' || vars.CODEX_GUI_DEVICE_TARGET == runner.os)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: encrypted-device-${{ runner.os }}
@@ -183,7 +185,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
       - name: Verify the signed-in installed coding turn
-        if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != ''
+        if: runner.os != 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/tauri-migration' && github.actor == github.repository_owner && vars.CODEX_GUI_DEVICE_PUBLIC_KEY != '' && (vars.CODEX_GUI_DEVICE_TARGET == '' || vars.CODEX_GUI_DEVICE_TARGET == runner.os)
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == Linux ]]; then
