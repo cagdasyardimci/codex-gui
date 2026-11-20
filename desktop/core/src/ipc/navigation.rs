@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{WorkspaceId, WorkspaceRequest};
+use super::{
+    ConversationActions, RecoverSendRequest, RespondRequest, SendRequest, StopRequest, WorkspaceId,
+    WorkspaceRequest,
+};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +15,7 @@ pub struct NavigationView {
     pub retryable: bool,
     pub account: AccountView,
     pub write_access: WriteAccess,
+    pub actions: ConversationActions,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, TS)]
@@ -32,6 +36,7 @@ pub struct AccountView {
     pub login_ticket: Option<String>,
     pub identity: Option<String>,
     pub models: Vec<AccountModel>,
+    pub permits_turns: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -59,6 +64,7 @@ pub struct LoginTicket {
 pub struct ChatRow {
     pub id: String,
     pub title: String,
+    pub preview: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -95,4 +101,8 @@ pub enum NavigationIntent {
     SignIn(LoginScope),
     CancelSignIn(LoginTicket),
     SetupSandbox(WorkspaceRequest),
+    Send(SendRequest),
+    Stop(StopRequest),
+    Respond(RespondRequest),
+    RecoverSend(RecoverSendRequest),
 }

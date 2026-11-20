@@ -7,6 +7,7 @@ fn main() {
         "verify_history_result",
         "verify_account_result",
         "verify_windows_setup_result",
+        "verify_turn_result",
         "pick_workspace",
         "workspace_snapshot",
         "navigate_workspace",

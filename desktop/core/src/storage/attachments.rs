@@ -299,6 +299,7 @@ impl AttachmentStore {
             "INSERT INTO thread_drafts (thread_id, draft_id) VALUES (?1, ?2)",
             params![thread.0, id],
         )?;
+        navigation::promote_source(&transaction, draft, thread)?;
         transaction.commit()?;
         state.candidates.extend(removed);
         Ok(())

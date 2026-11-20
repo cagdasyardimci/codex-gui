@@ -44,6 +44,7 @@ pub(crate) struct PendingSubmission {
     pub thread: ThreadId,
     pub reserved: bool,
     pub matches_checkout: bool,
+    pub draft: DraftId,
 }
 
 pub(crate) enum JournalPhase {
@@ -120,7 +121,7 @@ impl AttachmentStore {
     ) -> Result<Vec<PendingSubmission>, JournalError> {
         let state = self.inner.state();
         let mut statement = state.database.prepare(
-            "SELECT s.id, s.thread_id, s.phase = 'reserved', COALESCE(s.checkout_key = ?2, FALSE)
+            "SELECT s.id, s.thread_id, s.phase = 'reserved', COALESCE(s.checkout_key = ?2, FALSE), s.draft_id
              FROM submissions AS s
              WHERE json_extract(s.request, '$.cwd') = ?1 AND s.phase IN ('reserved', 'dispatching')
                 AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS outcome WHERE outcome.id = s.id)
@@ -134,6 +135,7 @@ impl AttachmentStore {
                     thread: ThreadId(row.get(1)?),
                     reserved: row.get(2)?,
                     matches_checkout: row.get(3)?,
+                    draft: DraftId(Uuid::from_bytes(row.get(4)?)),
                 })
             },
         )?;
@@ -145,6 +147,17 @@ impl AttachmentStore {
             }
         }
         Ok(pending)
+    }
+
+    pub fn has_unresolved_submission(
+        &self,
+        checkout: &CheckoutIdentity,
+        draft: DraftId,
+    ) -> Result<bool, JournalError> {
+        Ok(self
+            .pending_submissions(checkout)?
+            .iter()
+            .any(|record| record.matches_checkout && record.draft == draft))
     }
 
     pub(crate) fn set_submission_phase(

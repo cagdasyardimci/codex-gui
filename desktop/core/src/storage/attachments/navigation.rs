@@ -172,6 +172,27 @@ fn empty_draft(transaction: &Transaction<'_>) -> Result<DraftId, AttachmentError
     Ok(draft)
 }
 
+pub(super) fn promote_source(
+    transaction: &Transaction<'_>,
+    draft: DraftId,
+    thread: &ThreadId,
+) -> Result<(), AttachmentError> {
+    let matches: bool = transaction.query_row(
+        "SELECT EXISTS (SELECT 1 FROM desktop_selection WHERE slot = 1 AND project_path IS NOT NULL
+            AND thread_id IS NULL AND source_draft = ?1)",
+        [draft.0.as_bytes().as_slice()],
+        |row| row.get(0),
+    )?;
+    if matches {
+        let next = empty_draft(transaction)?;
+        transaction.execute(
+            "UPDATE desktop_selection SET source_draft = ?1, thread_id = ?2 WHERE slot = 1",
+            params![next.0.as_bytes().as_slice(), thread.0],
+        )?;
+    }
+    Ok(())
+}
+
 pub(in crate::storage) fn migrate(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
     transaction.execute_batch(
         "CREATE TABLE desktop_selection (

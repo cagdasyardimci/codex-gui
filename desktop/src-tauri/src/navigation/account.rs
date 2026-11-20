@@ -116,7 +116,8 @@ pub async fn read_account(client: AppServerClient) -> Result<AccountView, Failur
         Account::AmazonBedrock { .. } => "Amazon Bedrock".into(),
         Account::Unknown => "Codex account".into(),
     });
-    let models = if identity.is_some() || !status.requires_openai_auth {
+    let permits_turns = identity.is_some() || !status.requires_openai_auth;
+    let models = if permits_turns {
         let result = tokio::time::timeout(RPC_TIMEOUT, read_models(&browser)).await;
         match result.unwrap_or_else(|_| Err("model catalog refresh timed out".into())) {
             Ok(models) => models,
@@ -132,6 +133,7 @@ pub async fn read_account(client: AppServerClient) -> Result<AccountView, Failur
         identity,
         models,
         login_ticket: None,
+        permits_turns,
     })
 }
 

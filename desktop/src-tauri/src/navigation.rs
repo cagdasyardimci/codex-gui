@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     error::Error,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -18,7 +18,7 @@ use codex_gui_core::{
     ipc::{
         ChatRow, DraftEdit, EditorDraft, IpcError, NavigationIntent, NavigationView, StreamChange,
         TextBatcher, TranscriptItem, TranscriptRole, TranscriptView, WorkspaceId, WorkspaceRequest,
-        WriteAccess,
+        WriteAccess, present_question_reply,
     },
     storage::{
         attachments::{AttachmentStore, navigation::DesktopSelection},
@@ -36,9 +36,13 @@ use uuid::Uuid;
 use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
+mod interactions;
 mod sandbox;
+mod send;
 use account::AccountFlow;
+use interactions::InteractionProjection;
 use sandbox::SandboxSetup;
+use send::{InflightSend, SendCompletion};
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 type Failure = Box<dyn Error + Send + Sync>;
@@ -59,6 +63,7 @@ enum Action {
 enum Input {
     Command(Option<Message>),
     Backend(Option<ServerEvent>),
+    SendCompleted(Option<Box<SendCompletion>>),
     Flush,
 }
 
@@ -74,7 +79,7 @@ struct Selection {
 struct Backend {
     connection: AppServerConnection,
     engine: WorkspaceEngine,
-    _effects: mpsc::Receiver<PrepareThread>,
+    effects: mpsc::Receiver<PrepareThread>,
 }
 
 struct Navigation {
@@ -88,6 +93,9 @@ struct Navigation {
     login: AccountFlow,
     windows_sandbox: bool,
     sandbox_setup: Option<SandboxSetup>,
+    send_completions: mpsc::Sender<Box<SendCompletion>>,
+    inflight: HashMap<DraftId, InflightSend>,
+    interactions: InteractionProjection,
     view: NavigationView,
     editable: HashSet<DraftId>,
     stream: TextBatcher,
@@ -106,6 +114,7 @@ impl NavigationHandle {
         let store = AttachmentStore::open(database)?;
         let saved = store.desktop_selection()?;
         let (sender, receiver) = mpsc::channel(32);
+        let (send_completions, finished_sends) = mpsc::channel(32);
         let navigation = Navigation {
             store,
             source_draft: saved.source_draft,
@@ -117,12 +126,20 @@ impl NavigationHandle {
             login: AccountFlow::new(verification == Verification::Account),
             windows_sandbox: cfg!(windows) || verification == Verification::WindowsSetup,
             sandbox_setup: None,
+            send_completions,
+            inflight: HashMap::new(),
+            interactions: InteractionProjection::default(),
             view: NavigationView::default(),
             editable: HashSet::new(),
             stream: TextBatcher::default(),
             restored_active_items: Vec::new(),
         };
-        tauri::async_runtime::spawn(navigation.run(saved, fixture_project, receiver));
+        tauri::async_runtime::spawn(navigation.run(
+            saved,
+            fixture_project,
+            receiver,
+            finished_sends,
+        ));
         Ok(Self(sender))
     }
 
@@ -150,6 +167,7 @@ impl Navigation {
         saved: DesktopSelection,
         fixture_project: Option<PathBuf>,
         mut commands: mpsc::Receiver<Message>,
+        mut finished_sends: mpsc::Receiver<Box<SendCompletion>>,
     ) {
         if let Err(error) = self.restore(saved, fixture_project).await {
             eprintln!("{error}");
@@ -162,10 +180,14 @@ impl Navigation {
                     biased;
                     _ = timer.tick() => Input::Flush,
                     request = commands.recv() => Input::Command(request),
+                    completion = finished_sends.recv() => Input::SendCompleted(completion),
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
             } else {
-                Input::Command(commands.recv().await)
+                tokio::select! {
+                    request = commands.recv() => Input::Command(request),
+                    completion = finished_sends.recv() => Input::SendCompleted(completion),
+                }
             };
             match input {
                 Input::Command(Some(message)) => {
@@ -173,6 +195,8 @@ impl Navigation {
                     let _ = message.reply.send(result);
                 }
                 Input::Command(None) => break,
+                Input::SendCompleted(Some(result)) => self.complete_send(*result),
+                Input::SendCompleted(None) => unreachable!("navigation owns the completion sender"),
                 Input::Backend(Some(event)) => {
                     if let Err(error) = self.handle_backend(event).await {
                         eprintln!("{error}");
@@ -215,6 +239,9 @@ impl Navigation {
     async fn handle(&mut self, action: Action) -> Outcome {
         let action = match action {
             Action::SelectFolder(folder) => {
+                if self.view.actions.stop.is_some() {
+                    return Err(IpcError::StaleSelection);
+                }
                 let checkout =
                     CheckoutIdentity::capture(&folder).map_err(|_| IpcError::InvalidCheckout)?;
                 return self
@@ -242,6 +269,9 @@ impl Navigation {
             }
             NavigationIntent::ClearProject(request) => {
                 self.require_request(request)?;
+                if self.view.actions.stop.is_some() {
+                    return Err(IpcError::StaleSelection);
+                }
                 self.clear().await.map_err(report)?;
             }
             NavigationIntent::Refresh(request) => {
@@ -293,6 +323,27 @@ impl Navigation {
             NavigationIntent::SetupSandbox(request) => {
                 self.require_request(request)?;
                 self.start_sandbox_setup().await?;
+            }
+            NavigationIntent::Send(request) => self.send_visible(request).await?,
+            NavigationIntent::Stop(request) => {
+                self.require_request(WorkspaceRequest {
+                    workspace_id: request.workspace_id,
+                })?;
+                self.stop(request.target).await.map_err(report)?;
+            }
+            NavigationIntent::Respond(request) => self.respond(request).await?,
+            NavigationIntent::RecoverSend(request) => {
+                self.require(request.workspace_id)?;
+                if !self.view.actions.recover
+                    || self
+                        .view
+                        .draft
+                        .as_ref()
+                        .is_none_or(|draft| draft.id != request.draft_id)
+                {
+                    return Err(IpcError::StaleSelection);
+                }
+                self.recover_send().await.map_err(report)?;
             }
         }
         Ok(None)
@@ -385,7 +436,10 @@ impl Navigation {
         }
         self.stream = TextBatcher::default();
         self.restored_active_items.clear();
+        self.view.actions = Default::default();
+        self.refresh_recovery_action();
         self.publish_history(TranscriptView::default());
+        self.sync_actions();
         Ok(())
     }
 
@@ -428,7 +482,7 @@ impl Navigation {
                 eprintln!("{error}");
             }
             if self.view.account.login_ticket.take().is_some() || had_write_access {
-                self.publish_navigation();
+                self.sync_actions();
             }
             if let Err(error) = backend.connection.disconnect().await {
                 eprintln!("{error}");
@@ -477,7 +531,7 @@ impl Navigation {
             self.backend = Some(Backend {
                 connection,
                 engine,
-                _effects: effects,
+                effects,
             });
         }
         let backend = self.backend.as_ref().expect("backend connected");
@@ -490,7 +544,7 @@ impl Navigation {
             .login_ticket
             .clone_from(&self.view.account.login_ticket);
         self.view.account = account;
-        self.publish_navigation();
+        self.sync_actions();
         Ok(())
     }
 
@@ -503,17 +557,20 @@ impl Navigation {
             return Ok(());
         }
         self.refresh_write_access(&client).await;
+        self.refresh_recovery_action();
+        self.sync_actions();
         let browser = CodexBrowser::new(client);
         let chats = browser.project_chats(false, None, RPC_TIMEOUT).await?;
         self.view.chats = chats
             .data
             .into_iter()
             .map(|chat| {
+                let preview = present_question_reply(&chat.preview).into_owned();
                 let title = chat
                     .name
                     .filter(|name| !name.trim().is_empty())
                     .or_else(|| {
-                        chat.preview
+                        preview
                             .lines()
                             .find(|line| !line.trim().is_empty())
                             .map(str::to_owned)
@@ -522,6 +579,7 @@ impl Navigation {
                 ChatRow {
                     id: chat.id.0,
                     title,
+                    preview,
                 }
             })
             .collect();
@@ -568,11 +626,11 @@ impl Navigation {
                 .resume_thread(&mut backend.connection, &self.store, &thread, RPC_TIMEOUT)
                 .await?;
             self.view.retryable = matches!(resumed.mode, ResumedMode::ReadOnly);
-            self.publish_navigation();
             for event in resumed.events {
                 self.present_event(event);
             }
         }
+        self.sync_actions();
         Ok(())
     }
 
@@ -606,12 +664,30 @@ impl Navigation {
             }
             return Ok(());
         }
+        let update_controls = match &event {
+            ServerEvent::Request { .. } => true,
+            ServerEvent::Notification { method, .. } => matches!(
+                method.as_str(),
+                "turn/started" | "turn/completed" | "serverRequest/resolved"
+            ),
+        };
+        let sent_message = matches!(&event, ServerEvent::Notification { method, params }
+            if matches!(method.as_str(), "item/started" | "item/completed")
+            && params["item"]["type"] == "userMessage"
+            && params["item"]["clientId"].is_string());
         if let Some(event) = backend
             .engine
             .route_session_event(&client, &self.store, event, RPC_TIMEOUT)
             .await?
         {
             self.present_event(event);
+        }
+        if sent_message {
+            if let Some(draft) = self.editor_id() {
+                self.refresh_draft_after_submission(draft);
+            }
+        } else if update_controls {
+            self.sync_actions();
         }
         Ok(())
     }
@@ -651,7 +727,7 @@ impl Navigation {
                     }
                 }
             }
-            "item/completed" => {
+            "item/started" | "item/completed" => {
                 if let Some(item) = read_item(turn_id, &params["item"], true) {
                     self.restored_active_items.retain(|id| *id != item.item_id);
                     self.flush_stream();
@@ -734,6 +810,11 @@ fn read_item(turn: &str, value: &Value, completed: bool) -> Option<TranscriptIte
                 .join("\n"),
         ),
         _ => return None,
+    };
+    let text = if role == TranscriptRole::User {
+        present_question_reply(&text).into_owned()
+    } else {
+        text
     };
     Some(TranscriptItem {
         item_id: transcript_id(turn, id),

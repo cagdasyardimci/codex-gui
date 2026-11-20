@@ -59,6 +59,11 @@ pub struct WorkspaceSnapshot {
 
 pub enum WorkspaceAction {
     AdmitFirstMessage(Arc<SendIntent>),
+    ReserveThreadSubmission {
+        operation: OperationIdentity,
+        thread: ThreadId,
+        stopped: watch::Sender<bool>,
+    },
     ThreadPrepared {
         operation: OperationIdentity,
         thread: ThreadId,
@@ -257,6 +262,21 @@ impl State {
     ) -> Result<Option<ReservedPreparation>, WorkspaceError> {
         match action {
             WorkspaceAction::AdmitFirstMessage(intent) => self.admit(intent, effects).map(Some),
+            WorkspaceAction::ReserveThreadSubmission {
+                operation,
+                thread,
+                stopped,
+            } => {
+                self.validate_owner(&operation)?;
+                if !self.writable.contains(&thread) {
+                    return Err(WorkspaceError::UnownedExecution);
+                }
+                if self.submissions.contains_key(&operation.request) {
+                    return Err(WorkspaceError::AlreadyAdmitted);
+                }
+                self.submissions.insert(operation.request, stopped);
+                Ok(None)
+            }
             WorkspaceAction::ThreadPrepared { operation, thread } => {
                 self.bind_thread(&operation, thread).map(|()| None)
             }

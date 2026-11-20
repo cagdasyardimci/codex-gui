@@ -86,8 +86,23 @@ body {
 .workspace-sidebar .chat-row {
   border-color: transparent;
   overflow: hidden;
+}
+
+.chat-title {
+  display: block;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chat-preview {
+  display: -webkit-box;
+  margin-top: 0.25rem;
+  overflow: hidden;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.86em;
 }
 
 .workspace-conversation {
@@ -128,4 +143,60 @@ body {
   width: 100%;
   padding: 0.75rem;
   resize: vertical;
+}
+
+.interaction-card {
+  max-height: 35vh;
+  overflow: auto;
+  margin-block: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--workspace-divider);
+  border-radius: 0.5rem;
+}
+
+.interaction-card fieldset {
+  margin-block: 0.35rem;
+  border: none;
+  padding: 0.25rem 0;
+}
+
+.interaction-card legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.interaction-request,
+.interaction-option pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.interaction-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-block: 0.3rem;
+}
+
+.interaction-answer {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.45rem;
+  color: inherit;
+  background: var(--workspace-canvas);
+  border: 1px solid var(--workspace-divider);
+  border-radius: 0.45rem;
+  font: inherit;
+}
+
+.interaction-actions,
+.composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.composer-actions {
+  justify-content: flex-end;
+  padding-top: 0.35rem;
 }

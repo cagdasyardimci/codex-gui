@@ -24,6 +24,7 @@ fn main() {
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
+        Some("--verify-turn") => fixture::Verification::Turn,
         _ => fixture::Verification::None,
     };
     let coding_report = if mode.as_deref() == Some(coding_probe::ARGUMENT.as_ref()) {
@@ -40,6 +41,7 @@ fn main() {
             | fixture::Verification::HistoryRestore
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
+            | fixture::Verification::Turn
     )
     .then(|| {
         let data = PathBuf::from(
@@ -62,6 +64,7 @@ fn main() {
             fixture::verify_history_result,
             fixture::verify_account_result,
             fixture::verify_windows_setup_result,
+            fixture::verify_turn_result,
             project_ipc::pick_workspace,
             project_ipc::workspace_snapshot,
             project_ipc::navigate_workspace,
@@ -91,6 +94,7 @@ fn main() {
                     | fixture::Verification::HistoryRestore
                     | fixture::Verification::Account
                     | fixture::Verification::WindowsSetup
+                    | fixture::Verification::Turn
             ) {
                 let (beta_data, initial_project) = match desktop_fixture {
                     Some(fixture) => fixture,

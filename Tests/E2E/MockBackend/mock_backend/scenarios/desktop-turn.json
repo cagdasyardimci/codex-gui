@@ -1,0 +1,6 @@
+{
+  "extends": "desktop-history",
+  "desktopTurn": true,
+  "intervalSeconds": 0.05,
+  "chunks": ["Answered in order. ", "Unicode reply 日本語 👩🏽‍💻."]
+}

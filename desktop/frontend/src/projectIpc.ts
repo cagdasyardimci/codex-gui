@@ -58,7 +58,10 @@ export async function observeWorkspace(
     const update = await nextWorkspaceUpdate({ subscriptionId, afterRevision: snapshot.revision });
     if (signal.aborted || update === 'retired') return;
     if (update === 'idle') continue;
-    const revision = update === 'resync' ? null : Object.values(update)[0].revision;
+    const revision = update === 'resync' ? null
+      : 'changed' in update ? update.changed.revision
+      : 'navigation' in update ? update.navigation.revision
+      : update.stream.revision;
     if (update === 'resync' || revision !== snapshot.revision + 1) {
       ({ subscriptionId, snapshot } = await subscribeWorkspace());
       if (signal.aborted) return;

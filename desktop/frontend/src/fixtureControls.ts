@@ -8,7 +8,7 @@ export async function waitFor(description: string, condition: () => boolean) {
 
 function button(label: string) {
   return Array.from(document.querySelectorAll('button'))
-    .find((control) => control.textContent?.trim() === label && !control.disabled);
+    .find((control) => (control.querySelector('.chat-title')?.textContent ?? control.textContent)?.trim() === label && !control.disabled);
 }
 
 export async function click(label: string) {

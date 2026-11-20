@@ -11,6 +11,7 @@
     "allow-verify-history-result",
     "allow-verify-account-result",
     "allow-verify-windows-setup-result",
+    "allow-verify-turn-result",
     "allow-change-workspace-fixture"
   ]
 }

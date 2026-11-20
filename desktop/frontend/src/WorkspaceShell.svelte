@@ -1,30 +1,38 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { DraftEdit, NavigationIntent, WorkspaceSnapshot } from './generated/workspace';
+  import type { DraftEdit, InteractionAnswer, NavigationIntent, WorkspaceSnapshot } from './generated/workspace';
+  import InteractionCard from './InteractionCard.svelte';
   import { navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
+  import { verifyTurn } from './turnProbe';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let draftId: string | undefined;
   let text = $state('');
   let composing = false;
   let actionPending = $state(false);
+  let admittingDraft = $state(false);
   let pending: DraftEdit | null = null;
   let saving: Promise<void> | null = null;
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
+  const stopTarget = $derived(navigation?.actions.stop);
 
   function receive(current: WorkspaceSnapshot) {
+    const previous = snapshot?.navigation.draft;
     snapshot = current;
     if (draftId !== current.navigation.draft?.id) {
       draftId = current.navigation.draft?.id;
       text = current.navigation.draft?.text ?? '';
       composing = false;
+    } else if (!composing && !pending && previous?.text !== current.navigation.draft?.text &&
+               text === previous?.text) {
+      text = current.navigation.draft?.text ?? '';
     }
   }
 
@@ -101,13 +109,51 @@
     if (ticket) void act(() => navigateWorkspace({ cancelSignIn: { ticket } }));
   }
 
+  async function sendDraft() {
+    if (!workspace || !draftId || !navigation?.actions.send || !text.trim() || composing || actionPending) return;
+    const send = { workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text };
+    admittingDraft = true;
+    try {
+      await act(() => navigateWorkspace({ send }));
+    } finally {
+      admittingDraft = false;
+    }
+  }
+
+  function stop() {
+    if (!workspace || !stopTarget) return;
+    const request = { workspaceId: workspace.workspaceId, target: stopTarget };
+    void act(() => navigateWorkspace({ stop: request }));
+  }
+
+  function recoverSend() {
+    if (!workspace || !draftId) return;
+    const request = { workspaceId: workspace.workspaceId, draftId };
+    void act(() => navigateWorkspace({ recoverSend: request }));
+  }
+
+  function stopLabel() {
+    if (stopTarget && 'turn' in stopTarget && stopTarget.turn.threadId !== navigation?.selectedChat) {
+      const id = stopTarget.turn.threadId;
+      const title = navigation?.chats.find((chat) => chat.id === id)?.title;
+      if (title) return `Stop ${title}`;
+    }
+    return 'Stop';
+  }
+
+  function respond(interactionId: string, response: InteractionAnswer) {
+    if (!workspace) return;
+    const request = { workspaceId: workspace.workspaceId, interactionId, response };
+    void act(() => navigateWorkspace({ respond: request }));
+  }
+
   function handleShortcut(event: KeyboardEvent) {
     if (event.defaultPrevented || event.isComposing || composing ||
         !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
     switch (event.key.toLowerCase()) {
       case 'o':
         event.preventDefault();
-        void act(pickWorkspace);
+        if (!stopTarget) void act(pickWorkspace);
         break;
       case 'n':
         if (workspace) {
@@ -123,6 +169,7 @@
     void observeWorkspace(receive, lifecycle.signal).catch(console.error);
     if (verify === 'account') void verifyAccount(() => snapshot);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
+    else if (verify === 'turn') void verifyTurn(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -132,10 +179,10 @@
 
 <main class="workspace" aria-label="Codex GUI">
   <header class="workspace-header">
-    <button type="button" disabled={actionPending} onclick={() => void act(pickWorkspace)}>Open Project…</button>
+    <button type="button" disabled={actionPending || !!stopTarget} onclick={() => void act(pickWorkspace)}>Open Project…</button>
     {#if workspace}
       <h1 title={workspace.projectPath}>{workspace.projectPath.split(/[\/\\]+/).filter(Boolean).at(-1) ?? workspace.projectPath}</h1>
-      <button type="button" disabled={actionPending} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
+      <button type="button" disabled={actionPending || !!stopTarget} onclick={() => workspaceAction('clearProject')}>Clear Project</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('refresh')}>Refresh</button>
       <button type="button" disabled={actionPending} onclick={() => workspaceAction('reconnect')}>Reconnect</button>
     {/if}
@@ -159,7 +206,12 @@
         <button type="button" disabled={actionPending} onclick={() => workspaceAction('newChat')}>New Chat</button>
         {#each navigation?.chats ?? [] as chat (chat.id)}
           <button type="button" class="chat-row" aria-current={chat.id === navigation?.selectedChat ? 'true' : undefined}
-            disabled={actionPending} onclick={() => openChat(chat.id)}>{chat.title}</button>
+            disabled={actionPending} onclick={() => openChat(chat.id)}>
+            <span class="chat-title">{chat.title}</span>
+            {#if chat.preview && chat.preview !== chat.title}
+              <span class="chat-preview" title={chat.preview}>{chat.preview}</span>
+            {/if}
+          </button>
         {/each}
       </nav>
     {/if}
@@ -175,14 +227,26 @@
       {#if navigation?.retryable && navigation.writeAccess === 'ready'}
         <button class="workspace-retry" type="button" disabled={actionPending} onclick={retryChat}>Retry</button>
       {/if}
+      {#each navigation?.actions.interactions ?? [] as interaction (interaction.id)}
+        <InteractionCard {interaction} disabled={actionPending} respond={(answer) => respond(interaction.id, answer)} />
+      {/each}
       {#if navigation?.draft}
-        <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor}
+        <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor} readonly={admittingDraft}
           value={text} oncompositionstart={() => { composing = true; }}
           oncompositionend={(event) => {
             composing = false;
             acceptText(event.currentTarget.value, false);
           }}
           oninput={(event) => acceptText(event.currentTarget.value, event instanceof InputEvent && event.isComposing)}></textarea>
+        <div class="composer-actions">
+          {#if navigation.actions.recover}
+            <button type="button" disabled={actionPending} onclick={recoverSend}>Recover Send</button>
+          {/if}
+          {#if stopTarget}
+            <button type="button" disabled={actionPending} onclick={stop}>{stopLabel()}</button>
+          {/if}
+          <button type="button" disabled={actionPending || !navigation.actions.send || !text.trim()} onclick={() => void sendDraft()}>Send</button>
+        </div>
       {/if}
     </section>
   </div>

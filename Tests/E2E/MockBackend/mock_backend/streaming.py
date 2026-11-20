@@ -1,4 +1,5 @@
 """Independent turn workers, with serialized state updates and cancellation."""
+import json
 import os
 from pathlib import Path
 import threading
@@ -10,6 +11,7 @@ class Stream:
         self.engine, self.thread, self.turn, self.item = engine, thread, turn, item
         self.cancelled = threading.Event()
         self.worker = threading.Thread(target=self.run, daemon=True)
+        self.questions = []
 
     def emit(self, method, **values):
         self.engine.transport.event(method, {'threadId': self.thread['id'],
@@ -24,9 +26,16 @@ class Stream:
                     self.emit('item/started', item=item)
             if engine.scenario.get('codingProbe'):
                 self.read_probe_marker()
-            if engine.scenario.get('questions'):
+            desktop_turn = engine.scenario.get('desktopTurn')
+            hold = desktop_turn and self.turn['items'][0]['content'][0]['text'] == 'Hold this fixture turn'
+            if desktop_turn and not hold:
+                if self.approve_probe_read('fixture-turn-command'):
+                    self.ask_question()
+                else:
+                    self.cancelled.set()
+            elif engine.scenario.get('questions'):
                 self.ask_question()
-            if engine.scenario['mode'] == 'stall':
+            if hold or engine.scenario['mode'] == 'stall':
                 self.cancelled.wait()
             else:
                 for chunk in engine.scenario['chunks']:
@@ -71,7 +80,7 @@ class Stream:
     def approve_probe_read(self, command_id):
         engine = self.engine
         request_id = 'qa-approval-' + command_id
-        prompt = {'ready': threading.Event(), 'decision': None}
+        prompt = {'ready': threading.Event(), 'decision': None, 'threadId': self.thread['id']}
         params = {'threadId': self.thread['id'], 'turnId': self.turn['id'], 'itemId': command_id,
                   'command': "/bin/bash -lc '/bin/cat -- ./codex-gui-probe.txt'",
                   'cwd': self.thread['cwd'], 'kind': 'command',
@@ -103,6 +112,7 @@ class Stream:
                          'question': 'What would you like to improve?',
                          'options': None, 'isOther': True, 'isSecret': False}
         questions = [free_question, question] if mixed else [free_question if free else question]
+        self.questions = questions
         ready = threading.Event()
         request_id = 'qa-question-' + self.turn['id']
         with self.engine.lock:
@@ -118,3 +128,18 @@ class Stream:
             pass
         with self.engine.lock:
             self.engine.questions.pop(request_id, None)
+
+    def record_question_reply(self, answers):
+        replies = [
+            {'questionItemId': question['id'], 'question': question['question'],
+             'answer': '\n'.join(answers.get(question['id'], {}).get('answers', []))}
+            for question in self.questions
+        ]
+        body = ('<send_user_message_question_reply>\n' + json.dumps(replies, ensure_ascii=True)
+                + '\n</send_user_message_question_reply>')
+        item = {'id': self.engine.state.identity('reply'), 'type': 'userMessage',
+                'content': [{'type': 'text', 'text': body}]}
+        self.turn['items'].append(item)
+        self.thread['preview'] = body
+        self.engine.state.save()
+        self.emit('item/completed', item=item)

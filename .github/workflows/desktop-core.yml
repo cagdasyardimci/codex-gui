@@ -132,6 +132,7 @@ jobs:
           python3 desktop/fixtures/verify_history_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_account_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_windows_setup_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_turn_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_coding_probe.py "$app/Contents/MacOS/codex-gui-desktop"
       - name: Verify the NSIS installation
         if: runner.os == 'Windows'
@@ -155,6 +156,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_windows_setup_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python desktop/fixtures/verify_turn_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_coding_probe.py $app
       - name: Verify the Debian installation
         if: runner.os == 'Linux'
@@ -175,6 +178,7 @@ jobs:
           xvfb-run -a python3 desktop/fixtures/verify_history_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_account_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_windows_setup_fixture.py "$app"
+          xvfb-run -a python3 desktop/fixtures/verify_turn_fixture.py "$app"
           xvfb-run -a python3 desktop/fixtures/verify_coding_probe.py "$app"
       - name: Store diagnostic installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,11 +1,13 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use serde_json::{Value, json};
 use thiserror::Error;
+use tokio::sync::watch;
 use uuid::Uuid;
 
 use super::{
-    PreparedThread, SubmissionAcknowledgement, WorkspaceAction, WorkspaceEngine, WorkspaceError,
+    PreparedThread, SendIntent, SubmissionAcknowledgement, WorkspaceAction, WorkspaceEngine,
+    WorkspaceError,
 };
 use crate::{
     checkout::CheckoutError,
@@ -39,6 +41,28 @@ pub struct SubmissionReply {
 }
 
 impl WorkspaceEngine {
+    pub async fn reserve_thread_submission(
+        &self,
+        intent: Arc<SendIntent>,
+        thread: ThreadId,
+    ) -> Result<PreparedThread, WorkspaceError> {
+        if !intent.draft.has_content() {
+            return Err(WorkspaceError::EmptyDraft);
+        }
+        let (stop, stopped) = watch::channel(false);
+        self.apply(WorkspaceAction::ReserveThreadSubmission {
+            operation: intent.operation.clone(),
+            thread: thread.clone(),
+            stopped: stop,
+        })
+        .await?;
+        Ok(PreparedThread {
+            intent,
+            thread,
+            stopped,
+        })
+    }
+
     pub async fn submit_prepared(
         &self,
         prepared: PreparedThread,

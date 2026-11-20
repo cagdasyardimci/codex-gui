@@ -6,13 +6,22 @@ use uuid::Uuid;
 
 use crate::checkout::CheckoutIdentity;
 
+mod actions;
 mod navigation;
+mod question_reply;
 mod stream;
 mod subscription;
+pub use actions::{
+    ApprovalChoice, ApprovalView, ConversationActions, GrantedPermissions, InteractionAnswer,
+    InteractionContent, InteractionView, PermissionChoice, PermissionView, QuestionAnswer,
+    QuestionView, RecoverSendRequest, RespondRequest, SendRequest, StopRequest, StopTarget,
+    TurnTarget,
+};
 pub use navigation::{
     AccountModel, AccountView, ChatRequest, ChatRow, DraftEdit, EditorDraft, LoginScope,
     LoginTicket, NavigationIntent, NavigationView, WriteAccess,
 };
+pub use question_reply::present_question_reply;
 pub use stream::{
     StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptRole, TranscriptView,
 };
@@ -155,6 +164,23 @@ pub fn workspace_typescript() -> String {
         LoginScope::decl(),
         LoginTicket::decl(),
         WriteAccess::decl(),
+        ConversationActions::decl(),
+        StopTarget::decl(),
+        TurnTarget::decl(),
+        StopRequest::decl(),
+        SendRequest::decl(),
+        RecoverSendRequest::decl(),
+        InteractionView::decl(),
+        InteractionContent::decl(),
+        ApprovalView::decl(),
+        ApprovalChoice::decl(),
+        PermissionView::decl(),
+        PermissionChoice::decl(),
+        QuestionView::decl(),
+        QuestionAnswer::decl(),
+        GrantedPermissions::decl(),
+        InteractionAnswer::decl(),
+        RespondRequest::decl(),
     ] {
         output.push_str("export ");
         output.push_str(&declaration);

@@ -9,7 +9,7 @@
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
-  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'account' | 'windowsSetup';
+  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'account' | 'windowsSetup' | 'turn';
   let mode = $state<Mode | null>(null);
 
   async function workspaceScopeVerified(): Promise<boolean> {
@@ -80,6 +80,8 @@
   <WorkspaceShell verify="account" />
 {:else if mode === 'windowsSetup'}
   <WorkspaceShell verify="windowsSetup" />
+{:else if mode === 'turn'}
+  <WorkspaceShell verify="turn" />
 {:else if mode === 'streaming'}
   <main aria-label="Codex GUI Beta">
     <pre aria-label="Fixture output" bind:this={transcript}>{text}</pre>

@@ -311,6 +311,22 @@ impl State {
 }
 
 impl WorkspaceEngine {
+    pub fn pending_interactions(&self) -> Vec<Arc<PendingInteraction>> {
+        let state = self
+            .interactions
+            .state
+            .lock()
+            .expect("interaction router lock poisoned");
+        let mut requests: Vec<_> = state
+            .pending
+            .values()
+            .filter(|slot| !slot.reply_reserved)
+            .map(|slot| slot.request.clone())
+            .collect();
+        requests.sort_unstable_by_key(|request| request.identity.sequence);
+        requests
+    }
+
     pub async fn receive_interaction(
         &self,
         client: &AppServerClient,

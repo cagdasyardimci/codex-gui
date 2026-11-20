@@ -22,6 +22,8 @@ Run the [installed history fixture](../desktop/fixtures/verify_history_fixture.p
 
 The [installed account fixture](../desktop/fixtures/verify_account_fixture.py) exercises cancellation, an obsolete completion, the successful account and model refresh, and retained draft text. It replaces the browser handoff with a local fixture and leaves the disposable Codex profile empty. Use the release-candidate checks for real ChatGPT sign-in.
 
+The [installed turn fixture](../desktop/fixtures/verify_turn_fixture.py) recovers a submission with an ambiguous reply, answers a captured approval after switching chats, and checks ordered answers in the transcript and preview. It switches chats and reloads the WebView while a turn is active, then verifies the backend interrupted the original turn. The trace and database check the exact submission identities and accepted outcomes.
+
 ### Swift AppKit
 
 Run `make check` without `-j`. Keep source and build settings stable during a run; competing builds need separate checkouts because commands share the build directory. [Makefile](../Makefile) and [Tests/Workflow.mk](../Tests/Workflow.mk) define commands, toolchain flags and selections. Use `make help` to discover them rather than maintaining a separate command inventory.

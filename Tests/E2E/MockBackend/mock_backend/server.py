@@ -26,12 +26,17 @@ class Server:
             if command:
                 command['decision'] = response.get('result', {}).get('decision')
                 self.transport.trace({'direction': 'command-approval-response', **response})
+                if self.scenario.get('desktopTurn'):
+                    self.transport.event('serverRequest/resolved', {
+                        'threadId': command['threadId'], 'requestId': response['id']})
                 command['ready'].set()
                 return
             pending = self.questions.pop(response['id'], None)
             if pending:
                 stream, ready = pending
                 self.transport.trace({'direction': 'question-response', **response})
+                if self.scenario.get('desktopTurn'):
+                    stream.record_question_reply(response.get('result', {}).get('answers', {}))
                 self.transport.event('serverRequest/resolved', {
                     'threadId': stream.thread['id'], 'requestId': response['id']})
                 ready.set()
@@ -141,6 +146,8 @@ class Server:
                 raise ProtocolError(-32602, 'thread/start requires cwd')
             thread = {'id': self.state.identity('thread'), 'name': 'New fixture conversation',
                       'cwd': p['cwd'], 'archived': False, 'turns': []}
+            if self.scenario.get('desktopHistory'):
+                thread['preview'] = ''
             self.state.threads.append(thread)
             return {'thread': self.summary(thread), **self.settings(thread)}
         if method in ('thread/read', 'thread/resume'):
@@ -263,6 +270,11 @@ class Server:
             raise ProtocolError(self.scenario['error']['code'], self.scenario['error']['message'])
         turn_id = self.state.identity('turn')
         user = {'id': self.state.identity('user'), 'type': 'userMessage', 'content': inputs}
+        if self.scenario.get('desktopTurn'):
+            user['clientId'] = p.get('clientUserMessageId')
+            if inputs[0]['text'] == 'Recover this fixture receipt':
+                thread['turns'].append({'id': turn_id, 'status': 'completed', 'items': [user]})
+                return {'turn': {}}
         assistant = {'id': self.state.identity('assistant'), 'type': 'agentMessage', 'text': ''}
         started = int(time.time()) if self.scenario.get('desktopHistory') else time.time()
         turn = {'id': turn_id, 'status': 'inProgress', 'startedAt': started,
