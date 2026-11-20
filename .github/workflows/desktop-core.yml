@@ -151,6 +151,7 @@ jobs:
           python3 desktop/fixtures/verify_relay_host_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_relay_host_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --devices
           python3 desktop/fixtures/verify_appkit_import.py "$app/Contents/MacOS/codex-gui-desktop"
+          python3 desktop/fixtures/verify_shared_codex_profile.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_history_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --annotations

@@ -11,6 +11,7 @@ from .streaming import Stream
 from .queue_fixture import queue_request, steer_request
 from .review_fixture import start_review
 from .settings_fixture import METHODS as SETTINGS_METHODS, settings_request
+from .shared_profile_fixture import METHODS as SHARED_PROFILE_METHODS, request as shared_profile_request
 from .voice_fixture import voice_config, voice_request
 from .relay_fixture import finish_relay_thread, relay_host_request, resume_relay_thread, sync_relay_thread
 from .transport import ProtocolError, UnconfirmedMutation
@@ -105,9 +106,11 @@ class Server:
             sync_relay_thread(self, p.get('cwd') if method == 'thread/list' else None)
         if method == 'initialize':
             self.client_name = p.get('clientInfo', {}).get('name')
-            if self.scenario.get('desktopSettings') or self.scenario.get('desktopVoice'):
+            if self.scenario.get('desktopSettings') or self.scenario.get('desktopVoice') or self.scenario.get('desktopSharedProfile'):
                 return {'userAgent': 'structured-qa-backend/1', 'codexHome': os.environ['CODEX_HOME']}
             return {'userAgent': 'structured-qa-backend/1'}
+        if self.scenario.get('desktopSharedProfile') and method in SHARED_PROFILE_METHODS:
+            return shared_profile_request(self, method, p)
         if self.scenario.get('desktopSettings') and method in SETTINGS_METHODS:
             return settings_request(self, method, p)
         if method == 'windowsSandbox/readiness' and self.scenario.get('desktopHistory'):

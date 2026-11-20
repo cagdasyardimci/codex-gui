@@ -21,6 +21,7 @@ mod project_ipc;
 mod quit_ipc;
 mod relay_ipc;
 mod settings_ipc;
+mod shared_profile_probe;
 mod speech_ipc;
 mod task_notifications;
 mod transcript_ipc;
@@ -36,6 +37,14 @@ fn main() {
 
     if mode.as_deref() == Some(appkit_import::ARGUMENT.as_ref()) {
         if let Err(error) = appkit_import::run(arguments) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    if mode.as_deref() == Some(shared_profile_probe::ARGUMENT.as_ref()) {
+        if let Err(error) = tauri::async_runtime::block_on(shared_profile_probe::run(arguments)) {
             eprintln!("{error}");
             std::process::exit(1);
         }
