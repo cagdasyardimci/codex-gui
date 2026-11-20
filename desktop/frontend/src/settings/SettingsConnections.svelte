@@ -14,7 +14,7 @@
   let deviceBusy = $state(false);
   let deviceRevision = 0;
   let opened: Promise<RemoteDevicesView> | undefined;
-  let lastWorkspace: WorkspaceId | null;
+  let lastWorkspace: WorkspaceId | null | undefined;
   let loadedEnvironment: string | null | undefined;
   let nextPairingCheck = 0;
   let device = $state<'phone' | 'computer'>('phone');
@@ -44,7 +44,12 @@
     const captured = revision;
     try {
       const next = await invoke<RemoteHostView>('remote_host_snapshot', { session });
-      if (!retired && !busy && revision === captured) view = next;
+      if (retired || busy || revision !== captured) return;
+      view = next;
+      if (lastWorkspace !== workspaceId) {
+        lastWorkspace = workspaceId;
+        void change('refresh');
+      }
     } catch (error) {
       if (!retired) console.error(error);
     }
@@ -134,15 +139,11 @@
   }
 
   onMount(() => {
-    lastWorkspace = workspaceId;
-    void change('refresh');
+    void snapshot();
     const captured = scope;
     void readDevices();
     const timer = setInterval(() => {
-      if (!busy && lastWorkspace !== workspaceId) {
-        lastWorkspace = workspaceId;
-        void change('refresh');
-      } else if (!busy) void snapshot();
+      if (!busy) void snapshot();
       void readDevices();
     }, 400);
     return () => {

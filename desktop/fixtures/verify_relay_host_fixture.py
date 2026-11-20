@@ -46,23 +46,28 @@ def main():
         mode = "--verify-relay-devices" if args.devices else "--verify-relay-host"
         initial, secondary = (source, managed) if args.devices else (managed, source)
         peer = root / "paired-devices.json"
+        state = root / "backend.json"
+        state.write_text('{"config": {}}', encoding="utf-8")
         result = subprocess.run([app, mode, data, initial, secondary], env={
             **os.environ, "CODEX_HOME": str(profile), "CODEX_EXECUTABLE": str(fixture_executable(root)),
             "CODEX_GUI_QA_RELAY_CONFLICT": str(conflict), "CODEX_GUI_QA_RELAY_AWAKE": str(awake),
-            "CODEX_GUI_QA_SCENARIO": scenario, "CODEX_GUI_QA_STATE": str(root / "backend.json"),
+            "CODEX_GUI_QA_SCENARIO": scenario, "CODEX_GUI_QA_STATE": str(state),
             "CODEX_GUI_QA_RELAY_DEVICES": str(peer), "CODEX_GUI_QA_RELAY_SOURCE": str(source),
             "CODEX_GUI_QA_TRACE": str(trace), "PYTHONIOENCODING": "utf-8",
         }, capture_output=True, encoding="utf-8", errors="replace", timeout=100)
         print(result.stdout, end="")
         prefix = "Verified installed desktop voice: "
         summary = [json.loads(line.removeprefix(prefix)) for line in result.stdout.splitlines() if line.startswith(prefix)]
+        events = sorted(
+            (json.loads(line) for part in root.glob(f"{trace.name}.*")
+             for line in part.read_text(encoding="utf-8").splitlines()),
+            key=lambda event: event["time"],
+        )
         if result.returncode or len(summary) != 1:
-            if trace.exists():
-                records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
-                print("Relay fixture trace:", [row for row in records if row.get("method", "").startswith("remoteControl/")][-20:])
+            print("Fixture requests:", [row["method"] for row in events if row["direction"] == "request"][-24:])
+            print("Relay fixture trace:", [row for row in events if row["direction"] == "relay-host"][-20:])
             raise SystemExit(result.stderr or "The installed relay host fixture did not finish")
         (result,) = summary
-        events = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
         relay = [row for row in events if row["direction"] == "relay-host"]
         assert relay and all(Path(event["cwd"]).samefile(source) for event in relay)
         if args.devices:

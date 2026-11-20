@@ -212,9 +212,13 @@ jobs:
           python desktop/fixtures/verify_voice_fixture.py $app --handoff
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_voice_history_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_read_aloud_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_question_dictation_fixture.py $app desktop/target/voice-models/jfk.wav
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_relay_host_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_relay_host_fixture.py $app --devices
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_composer_attachment_fixture.py $app
@@ -256,7 +260,9 @@ jobs:
           python desktop/fixtures/verify_account_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_settings_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_appearance_fixture.py $app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_notification_fixture.py $app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python desktop/fixtures/verify_windows_setup_fixture.py $app
