@@ -1,7 +1,7 @@
 use codex_gui_core::{
     codex::{
         AppServerClient, AppServerConnection, ClientInfo, CodexBrowser, CodexExecutable,
-        HistoryTurn,
+        HistoryTurn, ThreadActivity,
     },
     identity::ThreadId,
     storage::attachments::ExitOwner,
@@ -46,12 +46,15 @@ async fn reconcile_hidden_owner(
         return Ok(());
     };
     if current.identity().workspace.checkout.as_ref() == Some(&checkout) {
-        return reconcile_threads(current, candidate.threads, |thread, history| {
+        return reconcile_threads(current, candidate.threads, |thread, history, idle| {
+            if idle {
+                owners.retire_idle_appkit_thread(&checkout, thread)?;
+            }
             owners.reconcile_history(current.identity(), thread, history)
         })
         .await;
     }
-    let Some(recovery) = owners.begin_recovery(checkout)? else {
+    let Some(recovery) = owners.begin_recovery(checkout.clone())? else {
         return Ok(());
     };
     let executable = CodexExecutable::discover(None)?;
@@ -69,7 +72,12 @@ async fn reconcile_hidden_owner(
     let result = reconcile_threads(
         &connection.client(),
         candidate.threads,
-        |thread, history| recovery.reconcile(thread, history),
+        |thread, history, idle| {
+            if idle {
+                owners.retire_idle_appkit_thread(&checkout, thread)?;
+            }
+            recovery.reconcile(thread, history)
+        },
     )
     .await;
     let shutdown = connection.disconnect().await;
@@ -81,19 +89,23 @@ async fn reconcile_hidden_owner(
 async fn reconcile_threads(
     client: &AppServerClient,
     threads: Vec<ThreadId>,
-    apply: impl Fn(&ThreadId, &[HistoryTurn]) -> Result<bool, OwnerError>,
+    apply: impl Fn(&ThreadId, &[HistoryTurn], bool) -> Result<bool, OwnerError>,
 ) -> Result<(), Failure> {
     let browser = CodexBrowser::new(client.clone());
     for thread in threads {
         let result: Result<(), Failure> = async {
             let summary = browser.thread_summary(&thread, RPC_TIMEOUT).await?;
+            let idle = matches!(
+                summary.for_selection(client.identity(), &thread)?.activity,
+                ThreadActivity::Idle
+            );
             let mut cursor = None;
             for _ in 0..MAX_RECOVERY_PAGES {
                 let read = browser
                     .history(&summary, cursor.as_ref(), RPC_TIMEOUT)
                     .await?;
                 let page = read.for_selection(client.identity(), &thread)?;
-                if !apply(&thread, &page.data)? {
+                if !apply(&thread, &page.data, idle)? {
                     break;
                 }
                 cursor.clone_from(&page.next_cursor);

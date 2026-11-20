@@ -7,6 +7,8 @@ use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent, webview::NewWi
 mod appkit_import;
 #[cfg(target_os = "macos")]
 mod appkit_retirement;
+#[cfg(target_os = "macos")]
+mod appkit_transfer;
 mod coding_probe;
 mod composer_context_ipc;
 mod composer_ipc;
@@ -65,6 +67,15 @@ fn main() {
     #[cfg(target_os = "macos")]
     if mode.as_deref() == Some(appkit_retirement::ARGUMENT.as_ref()) {
         if let Err(error) = appkit_retirement::verify(arguments) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    if mode.as_deref() == Some(appkit_transfer::ARGUMENT.as_ref()) {
+        if let Err(error) = tauri::async_runtime::block_on(appkit_transfer::run(arguments)) {
             eprintln!("{error}");
             std::process::exit(1);
         }
@@ -433,6 +444,8 @@ fn main() {
                     None => (app.path().app_data_dir()?, None),
                 };
                 std::fs::create_dir_all(beta_data.join("worktrees"))?;
+                #[cfg(target_os = "macos")]
+                tauri::async_runtime::block_on(appkit_transfer::resume(&beta_data))?;
                 if let Err(error) = app.state::<relay_ipc::RelayHost>().load(&beta_data) {
                     eprintln!("Could not read remote host preferences: {error}");
                 }

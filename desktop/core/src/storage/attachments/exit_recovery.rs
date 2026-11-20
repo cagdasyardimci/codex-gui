@@ -98,7 +98,9 @@ impl AttachmentStore {
         let mut query = state.database.prepare(
             "SELECT DISTINCT e.checkout_key, p.checkout_path, e.thread_id
              FROM exit_recovery e JOIN exit_checkout_paths p USING (checkout_key)
-             ORDER BY e.checkout_key, e.thread_id",
+             UNION SELECT a.checkout_key, a.checkout_path, a.thread_id
+             FROM appkit_active_threads a JOIN desktop_appkit_execution_admission USING (checkout_key)
+             ORDER BY checkout_key, thread_id",
         )?;
         let mut grouped = BTreeMap::new();
         let rows = query.query_map([], |row| {
@@ -130,10 +132,74 @@ impl AttachmentStore {
         let state = self.inner.state();
         Ok(state.database.query_row(
             "SELECT EXISTS (SELECT 1 FROM exit_recovery
+             WHERE checkout_key = ?1 AND (?2 IS NULL OR thread_id = ?2)
+             UNION ALL SELECT 1 FROM appkit_active_threads
+             JOIN desktop_appkit_execution_admission USING(checkout_key)
              WHERE checkout_key = ?1 AND (?2 IS NULL OR thread_id = ?2))",
             params![checkout.storage_key(), thread.map(|thread| &thread.0)],
             |row| row.get(0),
         )?)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn admit_appkit_execution(&self) -> Result<(), AttachmentError> {
+        let mut state = self.inner.state();
+        let transaction = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let evidence = {
+            let mut query = transaction.prepare(
+                "SELECT checkout_key, checkout_path FROM appkit_unresolved_commands
+                 UNION SELECT checkout_key, checkout_path FROM appkit_active_threads",
+            )?;
+            query
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        PathBuf::from(row.get::<_, String>(1)?),
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        for (key, path) in evidence {
+            let Ok(checkout) = CheckoutIdentity::capture(&path) else {
+                continue;
+            };
+            if checkout.storage_key() != key {
+                continue;
+            }
+            transaction.execute(
+                "INSERT OR IGNORE INTO desktop_appkit_execution_admission VALUES (?1)",
+                [&key],
+            )?;
+            remember_checkout(&transaction, &checkout, &key)?;
+            transaction.execute(
+                "INSERT OR IGNORE INTO exit_recovery
+                 SELECT checkout_key, thread_id, turn_id, item_id FROM appkit_unresolved_commands WHERE checkout_key = ?1",
+                [&key],
+            )?;
+            transaction.execute(
+                "DELETE FROM appkit_unresolved_commands WHERE checkout_key = ?1",
+                [&key],
+            )?;
+            prune_checkout(&transaction, &key)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn retire_idle_appkit_thread(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+    ) -> Result<(), AttachmentError> {
+        let state = self.inner.state();
+        state.database.execute(
+            "DELETE FROM appkit_active_threads WHERE checkout_key = ?1 AND thread_id = ?2
+             AND EXISTS (SELECT 1 FROM desktop_appkit_execution_admission WHERE checkout_key = ?1)",
+            params![checkout.storage_key(), thread.0],
+        )?;
+        Ok(())
     }
 
     pub fn reconcile_exit_history(
@@ -258,6 +324,12 @@ pub(in crate::storage) fn migrate_checkout_paths(
         INSERT INTO exit_checkout_paths (checkout_key, checkout_path)
         SELECT project_key, project_path FROM desktop_selection d
         WHERE EXISTS (SELECT 1 FROM exit_recovery e WHERE e.checkout_key = d.project_key);",
+    )
+}
+
+pub(crate) fn migrate_appkit_admission(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "CREATE TABLE desktop_appkit_execution_admission (checkout_key TEXT PRIMARY KEY) WITHOUT ROWID;",
     )
 }
 

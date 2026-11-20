@@ -31,6 +31,10 @@ pub fn preflight(mut arguments: impl Iterator<Item = OsString>) -> io::Result<()
     Ok(())
 }
 
+pub fn ensure_fixture_retired(bundle: &Path) -> io::Result<()> {
+    require_quiescent(bundle, "local.codexgui.appkit.fixture", "AppKitLockQA")
+}
+
 fn require_quiescent(bundle: &Path, bundle_identifier: &str, executable: &str) -> io::Result<()> {
     ensure_no_bundle(bundle)?;
     if !NSRunningApplication::runningApplicationsWithBundleIdentifier(&NSString::from_str(
@@ -97,7 +101,7 @@ pub fn verify(arguments: impl Iterator<Item = OsString>) -> Result<(), Box<dyn s
     // isolates this probe from the user's own edition.
     let transfer = Uuid::from_u128(1);
     let lock = store.lock_for(Edition::AppKit)?;
-    require_quiescent(bundle, "local.codexgui.appkit.fixture", "AppKitLockQA")?;
+    ensure_fixture_retired(bundle)?;
     lock.retire_appkit(transfer)?;
     if !store.retired_appkit(transfer)? || store.retired_appkit(Uuid::from_u128(2))? {
         return Err("the native records did not retain the captured AppKit retirement".into());

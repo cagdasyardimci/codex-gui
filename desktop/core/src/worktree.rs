@@ -181,7 +181,7 @@ impl WorktreeStore {
         Ok(guard)
     }
 
-    fn path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         self.directory.canonical_path()
     }
 }
@@ -212,6 +212,25 @@ impl LockedWorktrees<'_> {
         Ok(record)
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn check_adoption(&self, incoming: &[WorktreeRecord]) -> Result<(), StoreError> {
+        let mut combined = self.list()?;
+        for record in incoming {
+            record.validate()?;
+            if combined.iter().any(|existing| existing == record) {
+                continue;
+            }
+            if combined
+                .iter()
+                .any(|existing| existing.id == record.id || overlaps(existing, record))
+            {
+                return Err(StoreError::Ownership);
+            }
+            combined.push(record.clone());
+        }
+        Ok(())
+    }
+
     /// Compare against the complete record captured by the caller before changing its phase.
     pub fn save(
         &self,
@@ -225,14 +244,9 @@ impl LockedWorktrees<'_> {
             return Err(StoreError::Changed);
         }
         if current.is_some_and(|current| !current.can_update_to(record))
-            || records.iter().any(|other| {
-                other.id != record.id
-                    && (other.task_id == record.task_id
-                        || other.checkout_path == record.checkout_path
-                        || (other.repository_git_directory == record.repository_git_directory
-                            && other.branch == record.branch)
-                        || (other.thread_id.is_some() && other.thread_id == record.thread_id))
-            })
+            || records
+                .iter()
+                .any(|other| other.id != record.id && overlaps(other, record))
         {
             return Err(StoreError::Ownership);
         }
@@ -279,6 +293,14 @@ impl Drop for LockedWorktrees<'_> {
         // A concurrent fork can briefly retain the descriptor until exec closes it.
         let _ = self.lock.unlock();
     }
+}
+
+fn overlaps(left: &WorktreeRecord, right: &WorktreeRecord) -> bool {
+    left.task_id == right.task_id
+        || left.checkout_path == right.checkout_path
+        || (left.repository_git_directory == right.repository_git_directory
+            && left.branch == right.branch)
+        || (left.thread_id.is_some() && left.thread_id == right.thread_id)
 }
 
 impl WorktreeRecord {

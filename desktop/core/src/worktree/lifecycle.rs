@@ -4,6 +4,8 @@ use crate::git::{CheckoutGit, GitError, decode_path, nul_fields, parse_oid, term
 
 use super::*;
 
+#[cfg(target_os = "macos")]
+mod appkit_import;
 mod recovery;
 mod removal;
 pub use recovery::{RecoveryKind, WorktreeRecovery};

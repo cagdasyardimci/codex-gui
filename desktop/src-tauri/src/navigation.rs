@@ -1328,6 +1328,12 @@ impl Navigation {
         // Read closed turns before requesting writer ownership. Early resume
         // deltas can then follow the visibly restored history.
         let summary = browser.thread_summary(&thread, RPC_TIMEOUT).await?;
+        if matches!(
+            summary.for_selection(client.identity(), &thread)?.activity,
+            codex_gui_core::codex::ThreadActivity::Idle
+        ) {
+            self.store.retire_idle_appkit_thread(&checkout, &thread)?;
+        }
         let history = browser.history(&summary, None, RPC_TIMEOUT).await?;
         let page = history.for_selection(client.identity(), &thread)?;
         self.inspector.history(&thread, &page.data);

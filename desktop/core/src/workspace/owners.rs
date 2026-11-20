@@ -216,6 +216,15 @@ impl RuntimeOwners {
         Ok(())
     }
 
+    pub fn retire_idle_appkit_thread(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+    ) -> Result<(), OwnerError> {
+        checkout.revalidate()?;
+        Ok(self.store.retire_idle_appkit_thread(checkout, thread)?)
+    }
+
     pub fn reconcile_history(
         &self,
         owner: &ConnectionIdentity,
