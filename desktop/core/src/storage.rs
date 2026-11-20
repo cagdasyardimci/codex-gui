@@ -3,14 +3,17 @@ use std::{path::Path, time::Duration};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use thiserror::Error;
 
+pub mod drafts;
 pub mod writes;
 
 const APPLICATION_ID: i32 = i32::from_be_bytes(*b"CGUI");
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 type Migration = fn(&Transaction<'_>) -> rusqlite::Result<()>;
-const MIGRATIONS: &[Migration] =
-    &[|transaction| transaction.pragma_update(None, "application_id", APPLICATION_ID)];
+const MIGRATIONS: &[Migration] = &[
+    |transaction| transaction.pragma_update(None, "application_id", APPLICATION_ID),
+    drafts::migrate,
+];
 
 #[derive(Debug, Error)]
 pub enum DatabaseOpenError {

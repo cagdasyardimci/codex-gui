@@ -27,7 +27,10 @@ fn fresh_database_is_claimed_once_when_two_openers_race() {
         let open = || {
             start.wait();
             let database = open_workspace_database(&path).unwrap();
-            assert_eq!(metadata(&database), (APPLICATION_ID, 1, true));
+            assert_eq!(
+                metadata(&database),
+                (APPLICATION_ID, MIGRATIONS.len() as i32, true)
+            );
         };
         let first = scope.spawn(open);
         let second = scope.spawn(open);
@@ -36,7 +39,10 @@ fn fresh_database_is_claimed_once_when_two_openers_race() {
     });
 
     let reopened = open_workspace_database(&path).unwrap();
-    assert_eq!(metadata(&reopened), (APPLICATION_ID, 1, true));
+    assert_eq!(
+        metadata(&reopened),
+        (APPLICATION_ID, MIGRATIONS.len() as i32, true)
+    );
 }
 
 #[test]
@@ -54,7 +60,10 @@ fn migrating_an_older_test_database_preserves_its_records() {
     drop(old);
 
     let database = open_workspace_database(&path).unwrap();
-    assert_eq!(metadata(&database), (APPLICATION_ID, 1, true));
+    assert_eq!(
+        metadata(&database),
+        (APPLICATION_ID, MIGRATIONS.len() as i32, true)
+    );
     drop(database);
 
     let reopened = open_workspace_database(&path).unwrap();
