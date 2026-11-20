@@ -15,7 +15,7 @@ export function diagram(source: string, signal: AbortSignal): Promise<Blob | und
     if (signal.aborted) return;
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
     mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', htmlLabels: false,
-      theme: dark ? 'dark' : 'default', layout: 'elk', maxTextSize: MAX_SOURCE_LENGTH, maxEdges: 128,
+      theme: dark ? 'dark' : 'default', layout: 'dagre', maxTextSize: MAX_SOURCE_LENGTH, maxEdges: 128,
       flowchart: { htmlLabels: false },
       suppressErrorRendering: true, secure: ['secure', 'securityLevel', 'startOnLoad', 'maxTextSize',
         'maxEdges', 'htmlLabels', 'flowchart', 'suppressErrorRendering', 'themeCSS', 'themeVariables'] });

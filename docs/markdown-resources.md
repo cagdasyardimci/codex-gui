@@ -4,6 +4,8 @@ The Swift reference pins KaTeX, Mermaid and ELK in the root [package manifest](.
 
 Tauri pins its packages in the [frontend manifest](../desktop/frontend/package.json). The frontend production build packages lazy KaTeX and Mermaid modules, local fonts, and the license notices for the bundled dependencies. The [rich Markdown view](../desktop/frontend/src/MarkdownRichBlock.svelte) starts rendering after a complete block mounts in the transcript window and releases its preview when the block is retired.
 
+The [Tauri diagram renderer](../desktop/frontend/src/markdownDiagram.ts) uses Dagre by default and supplies the bundled ELK layout for diagrams that request it. It prepares bounded SVG previews with explicit dimensions and local references.
+
 ## Prepare and build
 
 Install Node.js 22 or later with the pnpm version pinned in `package.json`, then run `make resources` from the repository root. Before using SwiftPM or Xcode directly in a fresh checkout, run `make resources` first. Resource preparation uses the lockfile and disables dependency lifecycle scripts; the [Makefile](../Makefile) defines which commands prepare resources automatically.
