@@ -14,7 +14,8 @@ use super::{AppServerClient, RequestError};
 mod history;
 
 pub use history::{
-    ChatRead, ChatSummary, HistoryTurn, ThreadActivity, TurnActivity, TurnCursor, TurnStatus,
+    ChatRead, ChatSummary, HistoryTurn, QueueSnapshot, QueuedSubmission, ThreadActivity,
+    TurnActivity, TurnCursor, TurnStatus,
 };
 
 const PAGE_LIMIT: u32 = 100;
@@ -35,6 +36,8 @@ pub enum BrowseError {
     StaleChatRead,
     #[error("app-server returned a different chat")]
     WrongThread,
+    #[error("app-server returned inconsistent queue pagination")]
+    QueuePagination,
     #[error("invalid response from {method}: {source}")]
     Response {
         method: &'static str,

@@ -18,6 +18,7 @@ CLIENT_REQUESTS = {
     "thread/list": ("cwd", "archived", "cursor", "limit"),
     "thread/read": ("threadId", "includeTurns"),
     "thread/turns/list": ("threadId", "itemsView", "cursor", "limit"),
+    "thread/queue/list": ("threadId", "cursor", "limit"),
     "thread/start": ("cwd",),
     "turn/start": ("threadId", "input", "cwd", "clientUserMessageId"),
     "turn/interrupt": ("threadId", "turnId"),
@@ -48,6 +49,7 @@ INCOMING_RESPONSES = {
     "v2/ThreadListResponse": ("data", "nextCursor"),
     "v2/ThreadReadResponse": ("thread",),
     "v2/ThreadTurnsListResponse": ("data", "nextCursor"),
+    "v2/ThreadQueueListResponse": ("data", "nextCursor"),
     "v2/ThreadStartResponse": ("thread", "cwd"),
     "v2/TurnStartResponse": ("turn",),
     "v2/TurnInterruptResponse": (),
@@ -113,6 +115,8 @@ def check_schema(root, *, remote_access_target):
         check_fields(load_schema(root, name), fields, name)
     for name, fields in OUTGOING_RESPONSES.items():
         check_fields(load_schema(root, name), fields, name, outbound=True)
+    queued_submission = load_schema(root, "v2/ThreadQueueListResponse")["definitions"]["QueuedSubmission"]
+    check_fields(queued_submission, ("id", "clientUserMessageId", "input"), "QueuedSubmission")
 
     ids = {variant["type"] for variant in load_schema(root, "RequestId")["anyOf"]}
     if ids != {"integer", "string"}:

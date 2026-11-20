@@ -5,7 +5,7 @@ use tempfile::tempdir;
 use super::*;
 use crate::{
     checkout::CheckoutError,
-    codex::{Account, BrowseError, CodexBrowser, ThreadActivity, TurnStatus},
+    codex::{Account, BrowseError, CodexBrowser, QueueSnapshot, ThreadActivity, TurnStatus},
     identity::ThreadId,
 };
 
@@ -295,4 +295,138 @@ async fn summary_rejects_a_checkout_replaced_between_request_and_reply() {
         result,
         Err(BrowseError::Checkout(CheckoutError::Replaced(_)))
     ));
+}
+
+#[tokio::test]
+async fn routine_queue_refresh_preserves_every_page_without_fetching_history() {
+    let scratch = tempdir().unwrap();
+    let checkout = CheckoutIdentity::capture(scratch.path()).unwrap();
+    let (transport, input, mut replies) = transport_for(4096, 1, Some(checkout.clone()));
+    let browser = CodexBrowser::new(transport.client.clone());
+    let thread = ThreadId("chat-1".into());
+    let mut server = JsonlReader::new(input, MAX_FRAME_BYTES);
+    let (queue, ()) = time::timeout(DEADLINE, async {
+        tokio::join!(
+            async {
+                let chat = browser.thread_summary(&thread, DEADLINE).await.unwrap();
+                browser.queue_snapshot(&chat, DEADLINE).await.unwrap()
+            },
+            async {
+                reply_with_summary(&mut server, &mut replies, checkout.canonical_path()).await;
+                for (id, cursor, next) in [
+                    ("first", None, Some("next")),
+                    ("second", Some("next"), None),
+                ] {
+                    let request = next_request(&mut server).await;
+                    assert_eq!(request["method"], "thread/queue/list");
+                    assert_eq!(
+                        request["params"],
+                        json!({"threadId":"chat-1","cursor":cursor,"limit":100})
+                    );
+                    respond(
+                        &mut replies,
+                        request["id"].clone(),
+                        json!({
+                            "data":[{"id": id, "clientUserMessageId": format!("client-{id}"),
+                                "input":[{"type":"text","text":"same text"}]}],
+                            "nextCursor":next
+                        }),
+                    )
+                    .await;
+                }
+            }
+        )
+    })
+    .await
+    .unwrap();
+    let QueueSnapshot::Available(entries) = queue
+        .for_selection(transport.client.identity(), &thread)
+        .unwrap()
+    else {
+        panic!("expected both queue pages");
+    };
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>(),
+        ["first", "second"]
+    );
+    assert_eq!(entries[0].client_user_message_id, "client-first");
+    assert_eq!(entries[1].input[0]["text"], "same text");
+    assert!(matches!(
+        queue.for_selection(
+            transport.client.identity(),
+            &ThreadId("another chat".into())
+        ),
+        Err(BrowseError::StaleChatRead)
+    ));
+}
+
+#[tokio::test]
+async fn queue_distinguishes_explicit_unsupported_from_a_failed_read() {
+    let scratch = tempdir().unwrap();
+    let checkout = CheckoutIdentity::capture(scratch.path()).unwrap();
+    let (transport, input, mut replies) = transport_for(4096, 1, Some(checkout.clone()));
+    let browser = CodexBrowser::new(transport.client.clone());
+    let thread = ThreadId("chat-1".into());
+    let mut server = JsonlReader::new(input, MAX_FRAME_BYTES);
+    time::timeout(DEADLINE, async {
+        tokio::join!(
+            async {
+                let chat = browser.thread_summary(&thread, DEADLINE).await.unwrap();
+                assert!(matches!(
+                    browser.queue_snapshot(&chat, DEADLINE).await,
+                    Err(BrowseError::Request(RequestError::Remote(RpcError {
+                        code: -32000,
+                        ..
+                    })))
+                ));
+                let queue = browser.queue_snapshot(&chat, DEADLINE).await.unwrap();
+                assert!(matches!(
+                    queue
+                        .for_selection(transport.client.identity(), &thread)
+                        .unwrap(),
+                    QueueSnapshot::Unsupported
+                ));
+            },
+            async {
+                reply_with_summary(&mut server, &mut replies, checkout.canonical_path()).await;
+                for (code, message) in [
+                    (-32000, "temporary read failure"),
+                    (-32601, "Method not found"),
+                ] {
+                    let request = next_request(&mut server).await;
+                    assert_eq!(request["method"], "thread/queue/list");
+                    replies
+                        .write_all(
+                            &encode_frame(&json!({
+                                "id": request["id"], "error":{"code":code,"message":message}
+                            }))
+                            .unwrap(),
+                        )
+                        .await
+                        .unwrap();
+                }
+            }
+        )
+    })
+    .await
+    .unwrap();
+}
+
+async fn reply_with_summary(
+    server: &mut JsonlReader<ReadHalf<DuplexStream>>,
+    replies: &mut WriteHalf<DuplexStream>,
+    checkout: &Path,
+) {
+    let request = next_request(server).await;
+    assert_eq!(request["method"], "thread/read");
+    assert_eq!(
+        request["params"],
+        json!({"threadId":"chat-1","includeTurns":false})
+    );
+    let mut thread = chat_row(checkout);
+    thread["status"] = json!({"type":"idle"});
+    respond(replies, request["id"].clone(), json!({"thread":thread})).await;
 }

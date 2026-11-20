@@ -7,6 +7,9 @@ use crate::identity::{ConnectionIdentity, ThreadId, TurnId};
 
 use super::{BrowseError, CodexBrowser, Page, ThreadSummary, WirePage};
 
+mod queue;
+pub use queue::{QueueSnapshot, QueuedSubmission};
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ThreadActivity {
@@ -177,12 +180,7 @@ impl CodexBrowser {
         timeout: Duration,
     ) -> Result<ChatRead<Page<T, TurnCursor>>, BrowseError> {
         let scope = &chat.scope;
-        if &scope.connection != self.client.identity() {
-            return Err(BrowseError::StaleChatRead);
-        }
-        let checkout = self.checkout()?;
-        let cwd = &chat.data.thread.cwd;
-        checkout.validate_reported(cwd)?;
+        self.validate_chat(chat)?;
         let token = match cursor {
             Some(cursor) if &cursor.scope == scope && cursor.view == view => Some(&cursor.token),
             Some(_) => return Err(BrowseError::CursorScope),
@@ -202,7 +200,7 @@ impl CodexBrowser {
                 timeout,
             )
             .await?;
-        checkout.validate_reported(cwd)?;
+        self.validate_chat(chat)?;
         Ok(ChatRead {
             scope: scope.clone(),
             data: response.map_cursor(|token| TurnCursor {
@@ -211,5 +209,13 @@ impl CodexBrowser {
                 token,
             }),
         })
+    }
+
+    fn validate_chat(&self, chat: &ChatRead<ChatSummary>) -> Result<(), BrowseError> {
+        if &chat.scope.connection != self.client.identity() {
+            return Err(BrowseError::StaleChatRead);
+        }
+        self.checkout()?.validate_reported(&chat.data.thread.cwd)?;
+        Ok(())
     }
 }

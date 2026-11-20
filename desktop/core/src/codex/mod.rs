@@ -11,8 +11,8 @@ mod fixtures;
 
 pub use browse::{
     Account, AccountSnapshot, BrowseError, ChatRead, ChatSummary, CodexBrowser, HistoryTurn,
-    ModelOption, Page, ProjectChatCursor, ThreadActivity, ThreadSummary, TurnActivity, TurnCursor,
-    TurnStatus,
+    ModelOption, Page, ProjectChatCursor, QueueSnapshot, QueuedSubmission, ThreadActivity,
+    ThreadSummary, TurnActivity, TurnCursor, TurnStatus,
 };
 pub use compatibility::{CliCompatibility, CliQualification, CompatibilityError};
 pub use executable::{CodexExecutable, DiscoveryError, VersionProbeError};
