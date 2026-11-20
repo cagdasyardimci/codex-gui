@@ -52,11 +52,14 @@ async function verifySavedRows(workspaceId: WorkspaceId, snapshot: WorkspaceSnap
   selection.removeAllRanges();
   const request: TranscriptRowRequest = { workspaceId, chatId: FIRST, generation: snapshot.transcript.generation,
     itemId: saved.itemId, revision: saved.revision };
-  const [image] = await checkTranscriptImages(request);
+  const source = snapshot.transcript.items.find((item) => item.itemId === 'first-saved-turn/first-image');
+  if (!source) throw new Error('The fixture image response did not render');
+  const imageRequest = { ...request, itemId: source.itemId, revision: source.revision };
+  const [image] = await checkTranscriptImages(imageRequest);
   if (image?.path !== 'notes/panel.png' || !image.revision?.byteCount) {
     throw new Error('The installed transcript did not project its scoped image dependency');
   }
-  return { row, request };
+  return { row, request, imageRequest };
 }
 
 export async function verifyHistory(
@@ -138,7 +141,7 @@ export async function verifyHistory(
         visible()?.navigation.selectedChat === SECOND && !containsText(REPLY) &&
         containsText('History in the second chat.') && editor().value === '');
       try {
-        await checkTranscriptImages(saved.request);
+        await checkTranscriptImages(saved.imageRequest);
         throw new Error('A retired transcript could still inspect local images');
       } catch (error) {
         if (error !== 'staleSelection') throw error;
