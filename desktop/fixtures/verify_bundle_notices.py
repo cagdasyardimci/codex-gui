@@ -21,6 +21,8 @@ def main() -> None:
         installed = args.notices / name
         if not installed.is_file() or installed.read_bytes() != source.read_bytes():
             raise SystemExit(f"Missing or changed bundle notice: {installed}")
+    if "pdfjs-dist" not in (args.notices / "frontend-licenses.md").read_text(encoding="utf-8"):
+        raise SystemExit("The installed frontend notices omit PDF.js")
     print(f"Verified {len(NOTICES)} shared bundle notices")
 
 

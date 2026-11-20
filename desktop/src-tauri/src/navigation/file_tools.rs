@@ -7,7 +7,7 @@ use codex_gui_core::{
 };
 
 use super::*;
-use crate::transcript_ipc::{inline_raster_payload, raster_type};
+use crate::file_preview_ipc::document_kind;
 
 mod actions;
 mod save;
@@ -70,14 +70,9 @@ impl NavigationHandle {
         result.await.map_err(|_| IpcError::ProjectUnavailable)
     }
 
-    pub async fn read_file_tab(
-        &self,
-        request: FileTabRead,
-        raster: bool,
-    ) -> Result<Vec<u8>, IpcError> {
+    pub async fn read_file_tab(&self, request: FileTabRead) -> Result<Vec<u8>, IpcError> {
         let (reply, result) = oneshot::channel();
-        self.request(Action::ReadFileTab(request, raster, reply))
-            .await?;
+        self.request(Action::ReadFileTab(request, reply)).await?;
         result.await.map_err(|_| IpcError::ProjectUnavailable)
     }
 
@@ -236,11 +231,7 @@ impl Navigation {
         Ok(session.view(discard))
     }
 
-    pub(super) fn read_file_tools(
-        &mut self,
-        request: FileTabRead,
-        raster: bool,
-    ) -> Result<Vec<u8>, IpcError> {
+    pub(super) fn read_file_tools(&mut self, request: FileTabRead) -> Result<Vec<u8>, IpcError> {
         let key = self.file_tools_key(&request.scope)?;
         let document = self
             .file_tools
@@ -248,11 +239,7 @@ impl Navigation {
             .get_mut(&key)
             .ok_or(IpcError::StaleSelection)?
             .document_mut(request.tab_id)?;
-        if raster {
-            document.raster()
-        } else {
-            document.text()
-        }
+        document.text()
     }
 
     pub(super) fn edit_file_tools(&mut self, request: FileTabEdit) -> Result<(), IpcError> {
@@ -455,23 +442,15 @@ impl Document {
     fn open(checkout: CheckoutIdentity, relative: PathBuf) -> Result<Self, FileError> {
         let mut files = CheckoutFiles::new(checkout);
         let link = files.issue(&relative)?;
-        let (kind, disk, crlf) = match files.read_limited(link.id, MAX_EDIT_BYTES) {
-            Ok(read) if raster_type(&read.bytes).is_some() => (FileTabKind::Raster, None, false),
-            Ok(read) if !read.bytes.contains(&0) => match std::str::from_utf8(&read.bytes) {
-                Ok(text) => (FileTabKind::Text, Some(read.revision), preserves_crlf(text)),
-                Err(_) => (FileTabKind::Other, None, false),
-            },
-            Ok(_) | Err(FileError::TooLarge) => (FileTabKind::Other, None, false),
-            Err(error) => return Err(error),
-        };
+        let kind = document_kind(&relative, &files.prefix(link.id, 4096)?);
         Ok(Self {
             id: Uuid::new_v4(),
             relative,
             link,
             files,
             kind,
-            disk,
-            crlf,
+            disk: None,
+            crlf: false,
             edit: None,
             revision: 0,
             saving: None,
@@ -498,19 +477,8 @@ impl Document {
         Ok(read.bytes)
     }
 
-    fn raster(&self) -> Result<Vec<u8>, IpcError> {
-        if self.kind != FileTabKind::Raster {
-            return Err(IpcError::StaleSelection);
-        }
-        let read = self
-            .files
-            .read_limited(self.link.id, MAX_EDIT_BYTES)
-            .map_err(file_error)?;
-        inline_raster_payload(read.bytes)
-    }
-
     fn edit(&mut self, text: String) -> Result<(), IpcError> {
-        if self.kind != FileTabKind::Text || text.contains('\0') {
+        if self.kind != FileTabKind::Text || self.disk.is_none() || text.contains('\0') {
             return Err(IpcError::StaleSelection);
         }
         let bytes = text.len()

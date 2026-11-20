@@ -75,7 +75,22 @@ pub struct FileTabView {
 pub enum FileTabKind {
     Text,
     Raster,
+    Pdf,
     Other,
+}
+
+#[derive(Clone, Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FilePreviewRequest {
+    pub target: FileTabRead,
+    pub kind: FilePreviewKind,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FilePreviewKind {
+    Raster,
+    Pdf,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, TS)]
@@ -129,6 +144,25 @@ pub struct FileEditor {
 pub struct FileActionsView {
     pub editors: Vec<FileEditor>,
     pub github: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct MarkdownFileProperty {
+    pub key: String,
+    pub values: Vec<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct MarkdownFileView {
+    pub nodes: Option<Vec<super::MarkdownNode>>,
+    pub properties: Vec<MarkdownFileProperty>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileMarkdownResource {
+    pub target: FileTabRead,
+    pub resource: String,
 }
 
 #[derive(Debug, Deserialize, TS)]

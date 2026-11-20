@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type {
-    DraftAttachmentScope, FileAction, FileActionsView, FileTabRead, FileTabView, FileToolsChange, FileToolsView,
+    DraftAttachmentScope, FileAction, FileActionsView, FileTabRead, FileTabView, FileToolsChange, FileToolsView, MarkdownFileProperty,
     OpenFileSearchHit, ProjectBrowseEntry, ProjectFolder, ProjectPathId,
   } from './generated/workspace';
-  import { browseProjectFiles, changeFileTools, FileEdits, fileTabActions, openFileSearchHit, performFileAction,
-    readFileTab, renderFileMarkdown, sameFileScope, saveFileTab, type FileViewPositions } from './fileTools';
+  import { browseProjectFiles, changeFileTools, FileEdits, fileMarkdownImage, fileTabActions, openFileMarkdownLink,
+    openFileSearchHit, performFileAction, readFilePreview, readFileTab, renderFileMarkdown, sameFileScope, saveFileTab, type FileViewPositions } from './fileTools';
   import ImagePreview from './ImagePreview.svelte';
   import MarkdownView from './MarkdownView.svelte';
+  import PdfPreview from './PdfPreview.svelte';
+  import SvgPreview from './SvgPreview.svelte';
 
   let { scope, edits, positions, revision, blocked, opened = $bindable(false) }: {
     scope: DraftAttachmentScope;
@@ -40,11 +42,14 @@
   let findText = $state('');
   let findField = $state<HTMLInputElement>();
   let actions = $state.raw<{ target: FileTabRead; available: FileActionsView }>();
+  let properties = $state.raw<MarkdownFileProperty[]>([]);
+  let pdfPage = $state(1);
   const active = $derived(view?.tabs.find((item) => item.id === view?.selected));
   const activeId = $derived(active?.id);
   const activeKind = $derived(active?.kind);
   const activeIndex = $derived(view?.tabs.findIndex((item) => item.id === activeId) ?? -1);
-  const canPreview = $derived(activeKind === 'text' && /\.(md|markdown)$/iu.test(active?.path ?? ''));
+  const svg = $derived(activeKind === 'text' && /\.svg$/iu.test(active?.path ?? ''));
+  const canPreview = $derived(svg || activeKind === 'text' && /\.(md|markdown)$/iu.test(active?.path ?? ''));
 
   function adopt(next: FileToolsView) {
     view = next;
@@ -75,6 +80,8 @@
     searching = false;
     findText = '';
     actions = undefined;
+    properties = [];
+    pdfPage = activeId ? positions.pdfPages.get(activeId) ?? 1 : 1;
   });
 
   async function update(change: FileToolsChange | OpenFileSearchHit) {
@@ -97,6 +104,7 @@
         if (!retained.has(tab.id)) {
           positions.tabs.delete(tab.id);
           positions.modes.delete(tab.id);
+          positions.pdfPages.delete(tab.id);
         }
       }
       adopt(next);
@@ -157,6 +165,7 @@
 
   async function switchPreview(tab: string, showPreview: boolean) {
     if (showPreview && field && loaded === tab) rememberText(tab, field);
+    if (showPreview) properties = [];
     setMode(tab, showPreview, wraps);
     if (showPreview) return;
     await tick();
@@ -237,8 +246,11 @@
 
   async function loadMarkdown(tabId: string) {
     const target = { scope, tabId };
+    const source = text;
     await edits.flush();
-    return renderFileMarkdown(target);
+    const preview = await renderFileMarkdown(target);
+    if (sameFileScope(scope, target.scope) && activeId === tabId && source === text) properties = preview.properties;
+    return preview.nodes;
   }
 
   function moveSelected(direction: -1 | 1) {
@@ -481,9 +493,22 @@
       {#key tab.id}
         {#if tab.kind === 'text' && loaded === tab.id}
           {#if preview && canPreview}
-            <div class="file-preview" aria-label="Markdown Preview">
-              <MarkdownView source={text} render={() => loadMarkdown(tab.id)} renderKey={JSON.stringify([scope.workspaceId, scope.draftId, tab.id])} />
-            </div>
+            {#if svg}
+              <div class="file-preview" aria-label="SVG Preview"><SvgPreview source={text} alt={tab.path} /></div>
+            {:else}
+              {@const target = { scope, tabId: tab.id }}
+              <div class="file-preview" aria-label="Markdown Preview">
+                {#if properties.length}
+                  <dl aria-label="File Properties">
+                    {#each properties as property (property.key)}
+                      <dt>{property.key}</dt><dd>{property.values.join(', ')}</dd>
+                    {/each}
+                  </dl>
+                {/if}
+                <MarkdownView source={text} render={() => loadMarkdown(tab.id)} renderKey={JSON.stringify([scope.workspaceId, scope.draftId, tab.id])}
+                  loadImage={(resource) => fileMarkdownImage({ target, resource })} openLink={(resource) => openFileMarkdownLink({ target, resource })} />
+              </div>
+            {/if}
           {:else}
             {#if searching}
               <div class="file-find" role="search" aria-label="Find in File">
@@ -509,8 +534,15 @@
           {/if}
         {:else if tab.kind === 'raster'}
           <div class="file-image" bind:this={imageScroller} onscroll={(event) => rememberImage(tab.id, event.currentTarget)}>
-            <ImagePreview load={() => readFileTab({ scope, tabId: tab.id }, true)} alt={tab.path} />
+            <ImagePreview load={() => readFilePreview({ target: { scope, tabId: tab.id }, kind: 'raster' })} alt={tab.path} />
           </div>
+        {:else if tab.kind === 'pdf'}
+          <PdfPreview name={tab.path} load={() => readFilePreview({ target: { scope, tabId: tab.id }, kind: 'pdf' })}
+            bind:pageNumber={() => pdfPage, (page) => {
+              if (activeId !== tab.id) return;
+              pdfPage = page;
+              positions.pdfPages.set(tab.id, page);
+            }} />
         {/if}
       {/key}
     {/if}
@@ -548,4 +580,7 @@
   textarea { flex: 1; font: 0.88rem/1.4 ui-monospace, monospace; min-block-size: 5rem; resize: none; }
   .file-image, .file-preview { flex: 1; overflow: auto; }
   .file-image :global(img) { display: block; max-inline-size: 100%; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.5rem; margin: 0 0 0.5rem; }
+  dt { font-weight: 600; }
+  dd { margin: 0; overflow-wrap: anywhere; }
 </style>

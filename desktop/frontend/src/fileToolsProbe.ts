@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import { cancelFileSearch, changeFileTools, openFileSearchHit, readFileSearch, readFileTab, startFileSearch } from './fileTools';
+import { cancelFileSearch, changeFileTools, fileMarkdownImage, openFileMarkdownLink, openFileSearchHit,
+  readFilePreview, readFileSearch, readFileTab, startFileSearch } from './fileTools';
 import { click, clickByLabel, editor, typeText, waitFor } from './fixtureControls';
 import type { DraftAttachmentScope, WorkspaceSnapshot } from './generated/workspace';
 import { rejectsStale } from './markdownProbe';
@@ -206,6 +207,73 @@ async function verifyFileActions(visible: () => WorkspaceSnapshot | null, scope:
   await waitFor('The pane did not close after completing file actions', () => !panel());
 }
 
+async function verifyRichPreviews(visible: () => WorkspaceSnapshot | null, scope: DraftAttachmentScope) {
+  const active = async () => (await changeFileTools({ scope, change: 'inspect' })).selected!;
+  const pixel = (page: number, rgb: string) => {
+    const canvas = panel()?.querySelector<HTMLCanvasElement>(`canvas[data-rendered-page="${page}"]`);
+    return canvas && [...canvas.getContext('2d')!.getImageData(8, 8, 1, 1).data].join(',') === rgb;
+  };
+  await showFiles();
+  await browse('pages.pdf');
+  await waitFor('The first PDF page did not render its original pixels', () => !!pixel(1, '255,0,0,255'));
+  const pdf = await active();
+  await click('Keep Tab', panel()!);
+  await click('Next Page', panel()!);
+  await waitFor('The second PDF page did not replace the first canvas', () => !!pixel(2, '0,0,255,255'));
+  await click('Second fixture chat');
+  await waitFor('The PDF remained visible in the other chat', () => visible()?.navigation.selectedChat === SECOND && !panel());
+  await rejectsStale(readFilePreview({ target: { scope, tabId: pdf }, kind: 'pdf' }));
+  await click('First fixture chat');
+  await waitFor('The PDF did not restore its owning tab and selected page', () =>
+    visible()?.navigation.selectedChat === FIRST && !!pixel(2, '0,0,255,255'));
+  await clickByLabel('Close pages.pdf');
+
+  await browse('picture.bmp');
+  await waitFor('The portable bitmap preview did not load the converted dimensions', () =>
+    panel()?.querySelector<HTMLImageElement>('img[alt="picture.bmp"]')?.naturalWidth === 2);
+  await clickByLabel('Close picture.bmp');
+  await browse('graphic.svg');
+  await waitFor('The SVG source did not stay available', () => field()?.value.includes('<rect') === true);
+  await click('Preview', panel()!);
+  await waitFor('The SVG image preview did not render', () =>
+    panel()?.querySelector<HTMLImageElement>('[aria-label="SVG Preview"] img')?.naturalWidth === 40);
+  if ((window as Window & { invalidSvgContent?: boolean }).invalidSvgContent) throw new Error('The SVG preview ran active content');
+  await click('View Source', panel()!);
+  await waitFor('The SVG preview changed its original source', () => field()?.value.includes('invalidSvgContent') === true);
+  await clickByLabel('Close graphic.svg');
+
+  await browse('folder');
+  await browse('rich.md');
+  await waitFor('The nested Markdown source did not load', () => field()?.value.includes('Nested document') === true);
+  await click('Preview', panel()!);
+  await waitFor('The Markdown preview did not resolve the scoped image, document and metadata', () => {
+    const preview = panel()?.querySelector('[aria-label="Markdown Preview"]');
+    return preview?.querySelector('h1')?.textContent === 'Nested document' &&
+      preview.querySelector('[aria-label="File Properties"]')?.textContent?.includes('alpha, beta') === true &&
+      preview.querySelector<HTMLImageElement>('img[alt="Nested pixel"]')?.naturalWidth === 1;
+  });
+  if (panel()?.querySelector('img[alt="Remote pixel"]')) throw new Error('The Markdown preview loaded a remote image');
+  const target = { scope, tabId: await active() };
+  await rejectsStale(fileMarkdownImage({ target, resource: 'pixel2.png' }));
+  await rejectsStale(openFileMarkdownLink({ target, resource: 'https://example.invalid/unrecorded' }));
+  await openFileMarkdownLink({ target, resource: 'https://example.invalid/guide' });
+  const markdownTab = panel()!.querySelector<HTMLElement>(`[data-file-tab="${target.tabId}"]`)!;
+  const close = markdownTab.querySelector<HTMLButtonElement>('button[aria-label^="Close "]')!;
+  close.click();
+  await browse('Parent Folder');
+
+  await browse('unsupported.heic');
+  await waitFor('The unsupported file did not select its own tab', () =>
+    panel()?.querySelector('.file-tabs button[aria-current="true"]')?.textContent?.trim() === 'unsupported.heic');
+  const unsupported = await changeFileTools({ scope, change: 'inspect' });
+  if (unsupported.tabs.find((tab) => tab.id === unsupported.selected)?.kind !== 'other') throw new Error('The unsupported image claimed an in-app preview');
+  await click('File Actions', panel()!);
+  await click('Open in Default App', panel()!);
+  await clickByLabel('Close unsupported.heic');
+  await click('Hide Files', panel()!);
+  await waitFor('Closing after preview left the previous pane open', () => !panel());
+}
+
 async function browse(name: string) {
   await waitFor('The file browser did not open', () => !!browser());
   await click(name, browser()!);
@@ -238,6 +306,7 @@ export async function verifyFileTools(visible: () => WorkspaceSnapshot | null) {
     await verifyQuickOpen(visible, first);
     await verifyFileSearch(visible, first);
     await verifyFileActions(visible, first);
+    await verifyRichPreviews(visible, first);
     await showFiles();
     await browse('folder');
     await browse('alpha.txt');

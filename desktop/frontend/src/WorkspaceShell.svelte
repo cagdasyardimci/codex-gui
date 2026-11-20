@@ -116,7 +116,7 @@
   let filePane = $state<ReturnType<typeof WorkspaceFiles>>();
   let filesOpened = $state(false);
   const fileEdits = new FileEdits();
-  const filePositions: FileViewPositions = { tabs: new Map(), folders: new Map(), modes: new Map() };
+  const filePositions: FileViewPositions = { tabs: new Map(), folders: new Map(), modes: new Map(), pdfPages: new Map() };
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);

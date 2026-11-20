@@ -45,6 +45,11 @@ pub struct FileRead {
     pub revision: FileRevision,
 }
 
+pub struct FilePrefix {
+    pub bytes: Vec<u8>,
+    pub length: u64,
+}
+
 #[derive(Debug, Error)]
 pub enum FileError {
     #[error(transparent)]
@@ -104,6 +109,26 @@ impl CheckoutFiles {
     pub fn read_limited(&self, handle: FileHandle, limit: u64) -> Result<FileRead, FileError> {
         let file = self.files.get(&handle).ok_or(FileError::InvalidHandle)?;
         file.read(&self.checkout, limit.min(MAX_READ_BYTES))
+    }
+
+    pub fn prefix(&self, handle: FileHandle, limit: u64) -> Result<FilePrefix, FileError> {
+        let captured = self.files.get(&handle).ok_or(FileError::InvalidHandle)?;
+        let mut opened = captured.reopen(&self.checkout)?;
+        let before = opened.metadata()?;
+        let mut bytes = Vec::new();
+        opened
+            .by_ref()
+            .take(limit.min(MAX_READ_BYTES))
+            .read_to_end(&mut bytes)?;
+        if fingerprint(&before) != fingerprint(&opened.metadata()?) {
+            return Err(FileError::Changed);
+        }
+        captured.reopen(&self.checkout)?;
+        self.checkout.revalidate()?;
+        Ok(FilePrefix {
+            bytes,
+            length: before.len(),
+        })
     }
 
     pub fn close(&mut self, handle: FileHandle) {

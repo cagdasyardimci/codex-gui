@@ -5,6 +5,7 @@ pub(crate) struct FileTabCapture {
     pub relative: PathBuf,
     pub bytes: Option<Vec<u8>>,
     pub edit_revision: u32,
+    pub kind: FileTabKind,
     files: CheckoutFiles,
     link: FileLink,
 }
@@ -20,6 +21,13 @@ impl FileTabCapture {
             && self
                 .files
                 .same_file(self.link.id, &other.files, other.link.id)
+    }
+
+    pub fn preview_bytes(&self, limit: u64) -> Result<Vec<u8>, IpcError> {
+        self.files
+            .read_limited(self.link.id, limit)
+            .map(|read| read.bytes)
+            .map_err(file_error)
     }
 }
 
@@ -74,6 +82,7 @@ impl Navigation {
             relative: document.relative.clone(),
             bytes,
             edit_revision: document.revision,
+            kind: document.kind,
             files: document
                 .files
                 .duplicate(document.link.id)

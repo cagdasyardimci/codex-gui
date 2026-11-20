@@ -5,11 +5,13 @@
   import MarkdownRichBlock from './MarkdownRichBlock.svelte';
   import { preserveMarkdownSelection } from './markdownSelection';
 
-  let { source, request, render, renderKey }: {
+  let { source, request, render, renderKey, loadImage, openLink }: {
     source: string;
     request?: TranscriptRowRequest;
     render?: () => Promise<MarkdownNode[] | null>;
     renderKey?: string;
+    loadImage?: (target: string) => Promise<ArrayBuffer>;
+    openLink?: (target: string) => Promise<void>;
   } = $props();
   let parsed = $state.raw<{ scope: string; source: string; nodes: MarkdownNode[] | null }>();
   let root = $state<HTMLDivElement>();
@@ -64,7 +66,7 @@
       }
     } else if (request) {
       void openTranscriptLink({ row: request, target }).catch(() => {});
-    }
+    } else void openLink?.(target).catch(() => {});
   }
 </script>
 
@@ -84,9 +86,12 @@
         {@const target = node.value}
         {@const row = request}
         <ImagePreview load={() => loadTranscriptImage({ row, target })} alt={plain(node.children)} />
+      {:else if node.value && loadImage}
+        {@const target = node.value}
+        <ImagePreview load={() => loadImage!(target)} alt={plain(node.children)} />
       {:else}{plain(node.children)}{/if}
     {:else if node.kind === 'link'}
-      {#if node.value && (request || node.value.startsWith('#'))}<button class="markdown-link" type="button" onclick={() => follow(node.value!)}>{@render nodes(node.children)}</button>
+      {#if node.value && (request || openLink || node.value.startsWith('#'))}<button class="markdown-link" type="button" onclick={() => follow(node.value!)}>{@render nodes(node.children)}</button>
       {:else}{@render nodes(node.children)}{/if}
     {:else if node.kind === 'break'}<br />
     {:else if node.kind === 'rule'}<hr />

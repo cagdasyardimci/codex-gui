@@ -22,7 +22,10 @@ use crate::{
 };
 
 mod markdown;
-pub(crate) use markdown::document as render_markdown_document;
+pub(crate) use markdown::{
+    document as render_markdown_document, document_in as render_markdown_in,
+    external_url as markdown_external_url,
+};
 
 const MAX_IMAGE_SOURCES: usize = 8;
 const MAX_SOURCE_BYTES: usize = 512 * 1024;

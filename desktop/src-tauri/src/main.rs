@@ -9,6 +9,7 @@ mod composer_context_ipc;
 mod composer_ipc;
 mod diff_ipc;
 mod file_actions_ipc;
+mod file_preview_ipc;
 mod file_search_ipc;
 mod file_tools_ipc;
 mod fixture;
@@ -175,11 +176,14 @@ fn main() {
             file_tools_ipc::change_file_tools,
             file_tools_ipc::browse_project_files,
             file_tools_ipc::read_file_tab,
+            file_preview_ipc::read_file_preview,
             file_tools_ipc::edit_file_tab,
             file_tools_ipc::save_file_tab,
             file_actions_ipc::file_tab_actions,
             file_actions_ipc::perform_file_action,
             file_actions_ipc::render_file_markdown,
+            file_actions_ipc::file_markdown_image,
+            file_actions_ipc::open_file_markdown_link,
             file_search_ipc::start_file_search,
             file_search_ipc::read_file_search,
             file_search_ipc::cancel_file_search,

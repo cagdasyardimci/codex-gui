@@ -1,3 +1,5 @@
+use std::path::{Component, Path, PathBuf};
+
 use codex_gui_core::{
     checkout::CheckoutIdentity,
     ipc::{MarkdownKind as Kind, MarkdownNode as Node},
@@ -22,6 +24,14 @@ pub(super) fn events(source: &str) -> Parser<'_> {
 }
 
 pub(crate) fn document(source: &str, checkout: &CheckoutIdentity) -> Option<Vec<Node>> {
+    document_in(source, checkout, Path::new(""))
+}
+
+pub(crate) fn document_in(
+    source: &str,
+    checkout: &CheckoutIdentity,
+    base: &Path,
+) -> Option<Vec<Node>> {
     if source.len() > MAX_SOURCE_BYTES {
         return None;
     }
@@ -33,7 +43,7 @@ pub(crate) fn document(source: &str, checkout: &CheckoutIdentity) -> Option<Vec<
         }
         let node = match event {
             Event::Start(tag) => {
-                stack.push(container(tag, checkout)?);
+                stack.push(container(tag, checkout, base)?);
                 continue;
             }
             Event::End(_) => stack.pop()?,
@@ -57,7 +67,7 @@ pub(crate) fn document(source: &str, checkout: &CheckoutIdentity) -> Option<Vec<
     stack.is_empty().then_some(output)
 }
 
-fn container(tag: Tag<'_>, checkout: &CheckoutIdentity) -> Option<Node> {
+fn container(tag: Tag<'_>, checkout: &CheckoutIdentity, base: &Path) -> Option<Node> {
     let (kind, value) = match tag {
         Tag::Paragraph => (Kind::Paragraph, None),
         Tag::Heading { level, .. } => (heading(level), None),
@@ -82,7 +92,7 @@ fn container(tag: Tag<'_>, checkout: &CheckoutIdentity) -> Option<Node> {
             (dest_url.len() <= MAX_TARGET_BYTES)
                 .then(|| markdown_path(&dest_url))
                 .flatten()
-                .and_then(|path| relative_image(checkout, &path)),
+                .and_then(|path| scoped_image(checkout, base, &path)),
         ),
         Tag::Table(_) => (Kind::Table, None),
         Tag::TableHead => (Kind::TableHead, None),
@@ -130,7 +140,7 @@ fn link(raw: &str) -> Option<String> {
     external_url(raw).map(Into::into)
 }
 
-pub(super) fn external_url(raw: &str) -> Option<Url> {
+pub(crate) fn external_url(raw: &str) -> Option<Url> {
     let url = Url::parse(raw).ok()?;
     let web = matches!(url.scheme(), "http" | "https")
         && url.host().is_some()
@@ -138,6 +148,22 @@ pub(super) fn external_url(raw: &str) -> Option<Url> {
         && url.password().is_none();
     let mail = url.scheme() == "mailto" && url.path().contains('@') && url.host().is_none();
     (web || mail).then_some(url)
+}
+
+fn scoped_image(checkout: &CheckoutIdentity, base: &Path, path: &Path) -> Option<String> {
+    if base.as_os_str().is_empty() || path.is_absolute() {
+        return relative_image(checkout, path);
+    }
+    let mut relative = PathBuf::new();
+    for component in base.join(path).components() {
+        match component {
+            Component::Normal(part) => relative.push(part),
+            Component::CurDir => {}
+            Component::ParentDir if relative.pop() => {}
+            _ => return None,
+        }
+    }
+    relative_image(checkout, &relative)
 }
 
 pub(super) fn contains_link(nodes: &[Node], target: &str) -> bool {

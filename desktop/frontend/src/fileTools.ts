@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  DraftAttachmentScope, FileActionRequest, FileActionsView, FileSaveView, FileSearchPage, FileTabEdit,
-  FileTabRead, FileToolsRequest, FileToolsView, MarkdownNode, OpenFileSearchHit, OpenedFileSearchHit,
+  DraftAttachmentScope, FileActionRequest, FileActionsView, FileMarkdownResource, FilePreviewRequest,
+  FileSaveView, FileSearchPage, FileTabEdit, FileTabRead, FileToolsRequest, FileToolsView, MarkdownFileView, OpenFileSearchHit, OpenedFileSearchHit,
   ProjectBrowsePage, ProjectBrowseRequest, ProjectFolder, ReadFileSearch, StartFileSearch,
 } from './generated/workspace';
 
@@ -13,8 +13,12 @@ export function browseProjectFiles(request: ProjectBrowseRequest): Promise<Proje
   return invoke('browse_project_files', { request });
 }
 
-export function readFileTab(request: FileTabRead, raster = false): Promise<ArrayBuffer> {
-  return invoke('read_file_tab', { request, raster });
+export function readFileTab(request: FileTabRead): Promise<ArrayBuffer> {
+  return invoke('read_file_tab', { request });
+}
+
+export function readFilePreview(request: FilePreviewRequest): Promise<ArrayBuffer> {
+  return invoke('read_file_preview', { request });
 }
 
 export function saveFileTab(request: FileTabRead): Promise<FileSaveView> {
@@ -29,8 +33,16 @@ export function performFileAction(request: FileActionRequest): Promise<void> {
   return invoke('perform_file_action', { request });
 }
 
-export function renderFileMarkdown(target: FileTabRead): Promise<MarkdownNode[] | null> {
+export function renderFileMarkdown(target: FileTabRead): Promise<MarkdownFileView> {
   return invoke('render_file_markdown', { target });
+}
+
+export function fileMarkdownImage(request: FileMarkdownResource): Promise<ArrayBuffer> {
+  return invoke('file_markdown_image', { request });
+}
+
+export function openFileMarkdownLink(request: FileMarkdownResource): Promise<void> {
+  return invoke('open_file_markdown_link', { request });
 }
 
 export function startFileSearch(request: StartFileSearch): Promise<string> {
@@ -57,6 +69,7 @@ export type FileViewPositions = {
   tabs: Map<string, { top: number; left: number; first: number; last: number; direction: 'forward' | 'backward' | 'none' }>;
   folders: Map<string, ProjectFolder[]>;
   modes: Map<string, { preview: boolean; wrap: boolean }>;
+  pdfPages: Map<string, number>;
 };
 
 export class FileEdits {

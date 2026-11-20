@@ -101,11 +101,7 @@ enum Action {
         Option<PathBuf>,
         oneshot::Sender<codex_gui_core::ipc::FileToolsView>,
     ),
-    ReadFileTab(
-        codex_gui_core::ipc::FileTabRead,
-        bool,
-        oneshot::Sender<Vec<u8>>,
-    ),
+    ReadFileTab(codex_gui_core::ipc::FileTabRead, oneshot::Sender<Vec<u8>>),
     CaptureFileTab(
         codex_gui_core::ipc::FileTabRead,
         bool,
@@ -493,8 +489,8 @@ impl Navigation {
                 let _ = reply.send(self.change_file_tools(request, path)?);
                 return Ok(None);
             }
-            Action::ReadFileTab(request, raster, reply) => {
-                let _ = reply.send(self.read_file_tools(request, raster)?);
+            Action::ReadFileTab(request, reply) => {
+                let _ = reply.send(self.read_file_tools(request)?);
                 return Ok(None);
             }
             Action::CaptureFileTab(request, bytes, reply) => {

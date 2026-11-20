@@ -5,14 +5,15 @@ use std::{
 };
 
 use codex_gui_core::{
+    files::read_local_file,
     git::{TrackedFileLink, tracked_file_link},
     ipc::{
-        FileAction, FileActionRequest, FileActionsView, FileEditor, FileTabRead, IpcError,
-        MarkdownNode,
+        FileAction, FileActionRequest, FileActionsView, FileEditor, FileMarkdownResource,
+        FileTabRead, IpcError, MarkdownFileView, MarkdownKind,
     },
 };
 use serde_json::{Value, json};
-use tauri::{Manager, State, Url, WebviewWindow};
+use tauri::{Manager, State, Url, WebviewWindow, ipc::Response};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
@@ -25,6 +26,7 @@ use crate::{
 };
 
 mod editors;
+mod markdown;
 
 #[tauri::command]
 pub async fn file_tab_actions(
@@ -58,18 +60,92 @@ pub async fn render_file_markdown(
     window: WebviewWindow,
     project: State<'_, ProjectIpc>,
     target: FileTabRead,
-) -> Result<Option<Vec<MarkdownNode>>, IpcError> {
-    let mut source = capture(&window, &project, &target, true).await?;
-    let text = String::from_utf8(source.bytes.take().ok_or(IpcError::ProjectUnavailable)?)
-        .map_err(|_| IpcError::ProjectUnavailable)?;
-    let checkout = source.checkout.clone();
-    let markdown = tauri::async_runtime::spawn_blocking(move || {
-        crate::transcript_ipc::render_markdown_document(&text, &checkout)
+) -> Result<MarkdownFileView, IpcError> {
+    let source = capture(&window, &project, &target, true).await?;
+    let (source, preview) = tauri::async_runtime::spawn_blocking(move || {
+        let preview = render_markdown_capture(&source)?;
+        Ok::<_, IpcError>((source, preview))
     })
     .await
-    .map_err(|_| IpcError::ProjectUnavailable)?;
+    .map_err(|_| IpcError::ProjectUnavailable)??;
     validate(&window, &project, &target, &source).await?;
-    Ok(markdown)
+    Ok(preview)
+}
+
+#[tauri::command]
+pub async fn file_markdown_image(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    request: FileMarkdownResource,
+) -> Result<Response, IpcError> {
+    let source = capture(&window, &project, &request.target, true).await?;
+    let (source, bytes) = tauri::async_runtime::spawn_blocking(move || {
+        require_markdown_resource(&source, MarkdownKind::Image, &request.resource)?;
+        let bytes = read_local_file(
+            &source.checkout,
+            Path::new(&request.resource),
+            4 * 1024 * 1024,
+        )
+        .map_err(|_| IpcError::ProjectUnavailable)?
+        .bytes;
+        let preview = crate::file_preview_ipc::raster_preview(bytes)?;
+        Ok::<_, IpcError>((source, preview))
+    })
+    .await
+    .map_err(|_| IpcError::ProjectUnavailable)??;
+    validate(&window, &project, &request.target, &source).await?;
+    Ok(Response::new(bytes))
+}
+
+#[tauri::command]
+pub async fn open_file_markdown_link(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    request: FileMarkdownResource,
+) -> Result<(), IpcError> {
+    let url = crate::transcript_ipc::markdown_external_url(&request.resource)
+        .ok_or(IpcError::StaleSelection)?;
+    let source = capture(&window, &project, &request.target, true).await?;
+    let source = tauri::async_runtime::spawn_blocking(move || {
+        require_markdown_resource(&source, MarkdownKind::Link, &request.resource)?;
+        Ok::<_, IpcError>(source)
+    })
+    .await
+    .map_err(|_| IpcError::ProjectUnavailable)??;
+    validate(&window, &project, &request.target, &source).await?;
+    if *verification == Verification::None {
+        open::that_detached(url.as_str()).map_err(io_error)?;
+    }
+    Ok(())
+}
+
+fn render_markdown_capture(source: &FileTabCapture) -> Result<MarkdownFileView, IpcError> {
+    let text = std::str::from_utf8(
+        source
+            .bytes
+            .as_deref()
+            .ok_or(IpcError::ProjectUnavailable)?,
+    )
+    .map_err(|_| IpcError::ProjectUnavailable)?;
+    let base = source.relative.parent().unwrap_or_else(|| Path::new(""));
+    Ok(markdown::render(text, &source.checkout, base))
+}
+
+fn require_markdown_resource(
+    source: &FileTabCapture,
+    kind: MarkdownKind,
+    target: &str,
+) -> Result<(), IpcError> {
+    let preview = render_markdown_capture(source)?;
+    if !preview
+        .nodes
+        .as_ref()
+        .is_some_and(|nodes| markdown::declares(nodes, kind, target))
+    {
+        return Err(IpcError::StaleSelection);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -165,7 +241,7 @@ pub async fn perform_file_action(
     Ok(())
 }
 
-async fn capture(
+pub(crate) async fn capture(
     window: &WebviewWindow,
     project: &ProjectIpc,
     target: &FileTabRead,
@@ -177,7 +253,7 @@ async fn capture(
     Ok(source)
 }
 
-async fn validate(
+pub(crate) async fn validate(
     window: &WebviewWindow,
     project: &ProjectIpc,
     target: &FileTabRead,

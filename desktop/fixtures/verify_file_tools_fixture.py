@@ -5,6 +5,7 @@ from base64 import b64decode
 import json
 import os
 from pathlib import Path
+import struct
 import subprocess
 from tempfile import TemporaryDirectory
 from urllib.parse import quote
@@ -13,6 +14,30 @@ from verify_coding_probe import fixture_executable
 
 PIXEL = b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQSTnxHwAEEAJAKtk0QwAAAABJRU5ErkJggg==")
 GUIDE = "Guide café #.md"
+
+
+def colored_pdf():
+    objects = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>"]
+    for stream in (b"1 0 0 rg 0 0 120 80 re f", b"0 0 1 rg 0 0 120 80 re f"):
+        page = len(objects) + 1
+        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 120 80] /Resources << >> /Contents {page + 1} 0 R >>".encode())
+        objects.append(f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream")
+    output = b"%PDF-1.4\n"
+    offsets = []
+    for index, body in enumerate(objects, 1):
+        offsets.append(len(output))
+        output += f"{index} 0 obj\n".encode() + body + b"\nendobj\n"
+    index = len(output)
+    output += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    output += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+    return output + f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{index}\n%%EOF\n".encode()
+
+
+def bitmap():
+    pixels = (b"\x00\xff\x00" * 2 + b"\x00\x00") * 2
+    header = b"BM" + struct.pack("<IHHI", 54 + len(pixels), 0, 0, 54)
+    info = struct.pack("<IiiHHIIiiII", 40, 2, 2, 1, 24, 0, len(pixels), 0, 0, 0, 0)
+    return header + info + pixels
 
 
 def main():
@@ -35,6 +60,14 @@ def main():
             "filtered.log": "Café marker from an excluded log\n".encode("utf-8"),
             "replace.txt": b"Unique replacement target\n",
             GUIDE: b"# Local guide\r\n\r\nAlpha first.\r\nALPHA second.\r\n",
+            "pages.pdf": colored_pdf(),
+            "picture.bmp": bitmap(),
+            "graphic.svg": b'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20">'
+                           b'<script>window.invalidSvgContent=true</script><rect width="40" height="20" fill="green"/></svg>',
+            "unsupported.heic": b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic",
+            "folder/rich.md": b"---\ntitle: Local reference\ntags:\n  - alpha\n  - beta\n---\n# Nested document\n\n"
+                              b"![Nested pixel](../pixel.png)\n\n![Remote pixel](https://example.invalid/not-loaded.png)\n\n"
+                              b"[Recorded link](https://example.invalid/guide)\n",
             "pixel.png": PIXEL,
             "pixel2.png": PIXEL,
         }.items():
@@ -65,10 +98,11 @@ def main():
         saved_guide = "# Saved guide\r\n\r\nPreserve café from the first chat.\r\n".encode("utf-8")
         assert (checkout / GUIDE).read_bytes() == (data / "copied-file").read_bytes() == (data / "exported-file").read_bytes() == saved_guide
         actions = [json.loads(line) for line in (data / "file-actions.jsonl").read_text(encoding="utf-8").splitlines()]
-        assert [action["action"] for action in actions] == ["reveal", "default", "editor", "github"], actions
+        assert [action["action"] for action in actions] == ["reveal", "default", "editor", "github", "default"], actions
         assert all(Path(action["target"]).samefile(checkout / GUIDE) for action in actions[:3]), actions
         assert actions[2]["editor"] == "vscode", actions
         assert actions[3]["target"] == f"https://github.com/example/files/blob/{head}/{quote(GUIDE)}", actions
+        assert Path(actions[4]["target"]).samefile(checkout / "unsupported.heic"), actions
         assert not list(profile.iterdir())
         records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
         requests = [entry for entry in records if entry["direction"] == "request"]

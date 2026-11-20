@@ -60,6 +60,10 @@ pub use file_tools::{
     FileTabOpen, FileTabRead, FileTabView, FileToolsChange, FileToolsRequest, FileToolsView,
     OpenFileSearchHit, OpenedFileSearchHit, ProjectBrowseRequest, ReadFileSearch, StartFileSearch,
 };
+pub use file_tools::{
+    FileMarkdownResource, FilePreviewKind, FilePreviewRequest, MarkdownFileProperty,
+    MarkdownFileView,
+};
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
 pub use inspector::{
     ChildHistoryAction, ChildHistoryPage, ChildHistoryRequest, ChildHistoryTarget, InspectorAgent,
@@ -367,6 +371,11 @@ pub fn workspace_typescript() -> String {
         FileTabOpen::decl(),
         FileTabMove::decl(),
         FileTabKind::decl(),
+        FilePreviewKind::decl(),
+        FilePreviewRequest::decl(),
+        FileMarkdownResource::decl(),
+        MarkdownFileProperty::decl(),
+        MarkdownFileView::decl(),
         FileTabDiscard::decl(),
         FileTabRead::decl(),
         FileSaveView::decl(),

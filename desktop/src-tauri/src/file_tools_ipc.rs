@@ -68,11 +68,10 @@ pub async fn read_file_tab(
     window: WebviewWindow,
     project: State<'_, ProjectIpc>,
     request: FileTabRead,
-    raster: bool,
 ) -> Result<Response, IpcError> {
     let (navigation, _) = capture_file_scope(&window, &project, &request.scope)?;
     let scope = request.scope.clone();
-    let bytes = navigation.read_file_tab(request, raster).await?;
+    let bytes = navigation.read_file_tab(request).await?;
     capture_file_scope(&window, &project, &scope)?;
     Ok(Response::new(bytes))
 }
